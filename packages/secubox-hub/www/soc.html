@@ -4,1347 +4,490 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en" data-theme="dark">
+  Centre d'opérations de sécurité (SOC) du hub au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Variante historique /soc.html : toute lecture exige un jeton de session (sans jeton, l’ancienne page redirigeait vers la connexion ; celle-ci affiche un bandeau).
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives (adresses de documentation), aucune requête.
+  Page en lecture seule : uniquement des GET, aucun secret affiché.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox SOC Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <title>SecuBox — SOC</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        /* ═══════════════════════════════════════════════════════════════
-           SECUBOX SOC DASHBOARD — Hybrid Glass + Matrix Skin
-           ═══════════════════════════════════════════════════════════════ */
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: var(--font-display);
-            background: var(--bg-deep);
-            color: var(--text-dark);
-            min-height: 100vh;
-            line-height: 1.5;
-        }
-
-        /* Layout */
-        .layout { display: flex; min-height: 100vh; }
-
-        /* ═══════════════════════════════════════════════════════════════
-           SIDEBAR — Glass Effect
-           ═══════════════════════════════════════════════════════════════ */
-        .sidebar { display: none !important; 
-            width: 240px;
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border-right: 1px solid var(--glass-border);
-            display: flex;
-            flex-direction: column;
-            position: fixed;
-            height: 100vh;
-            z-index: 100;
-        }
-
-        .sidebar-header {
-            padding: var(--space-l);
-            border-bottom: 1px solid var(--glass-border);
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: var(--space-m);
-            text-decoration: none;
-            color: var(--text-dark);
-        }
-
-        .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--root-light), var(--mesh-light));
-            border-radius: var(--radius-md);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            box-shadow: var(--shadow-glow) rgba(20, 140, 102, 0.3);
-        }
-
-        .logo-text { font-weight: 700; font-size: 18px; letter-spacing: 2px; }
-        .logo-version { font-size: 10px; color: var(--muted-dark); font-family: var(--font-mono); }
-
-        .sidebar-nav { flex: 1; padding: var(--space-m); overflow-y: auto; }
-        .nav-section { margin-bottom: var(--space-l); }
-
-        .nav-section-title {
-            font-size: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: var(--muted-dark);
-            padding: var(--space-s) var(--space-m);
-            margin-bottom: var(--space-xs);
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: var(--space-m);
-            padding: var(--space-s) var(--space-m);
-            border-radius: var(--radius-sm);
-            color: var(--muted-dark);
-            text-decoration: none;
-            transition: all 0.2s ease;
-            font-size: 14px;
-        }
-
-        .nav-item:hover { background: var(--glass-highlight); color: var(--text-dark); }
-
-        .nav-item.active {
-            background: rgba(20, 140, 102, 0.15);
-            color: var(--root-light);
-            border-left: 2px solid var(--root-light);
-            margin-left: -2px;
-        }
-
-        .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
-        .nav-item .badge { margin-left: auto; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-family: var(--font-mono); }
-        .nav-item .badge.beta { background: rgba(245, 158, 11, 0.2); color: var(--wall-light); }
-        .nav-item .badge.alpha { background: rgba(239, 68, 68, 0.2); color: var(--boot-light); }
-        .nav-item .status-led { margin-left: auto; font-size: 10px; }
-
-        .sidebar-footer { padding: var(--space-m); border-top: 1px solid var(--glass-border); }
-        .user-info { display: flex; align-items: center; gap: var(--space-m); padding: var(--space-s); }
-        .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-size: 14px; }
-        .user-name { font-size: 13px; font-weight: 500; }
-        .user-role { font-size: 10px; color: var(--muted-dark); text-transform: uppercase; }
-
-        /* ═══════════════════════════════════════════════════════════════
-           MAIN CONTENT
-           ═══════════════════════════════════════════════════════════════ */
-        .main {
-            flex: 1;
-            margin-left: 240px;
-            padding: var(--space-xl);
-            background: linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-dark) 100%);
-            min-height: 100vh;
-        }
-
-        .page-header { margin-bottom: var(--space-xl); }
-        .page-title { font-size: 28px; font-weight: 600; margin-bottom: var(--space-xs); }
-        .page-subtitle { color: var(--muted-dark); font-size: 14px; }
-
-        /* ═══════════════════════════════════════════════════════════════
-           GLASS CARDS — Dashboard Style
-           ═══════════════════════════════════════════════════════════════ */
-        .cards-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: var(--space-l);
-            margin-bottom: var(--space-xl);
-        }
-
-        .glass-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            padding: var(--space-l);
-            position: relative;
-            overflow: hidden;
-            transition: all 0.3s ease;
-        }
-
-        .glass-card:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-lg);
-            border-color: rgba(255, 255, 255, 0.12);
-        }
-
-        .glass-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 3px;
-            background: var(--card-accent, var(--root-light));
-            opacity: 0.8;
-        }
-
-        .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-m); }
-        .card-icon { font-size: 24px; filter: drop-shadow(var(--shadow-glow) var(--card-accent, var(--root-light))); }
-
-        .card-status {
-            display: flex;
-            align-items: center;
-            gap: var(--space-xs);
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--card-accent, #148C66);
-            text-shadow: 0 0 8px currentColor;
-        }
-
-        .card-status::before {
-            content: '';
-            width: 8px; height: 8px;
-            background: currentColor;
-            border-radius: 50%;
-            box-shadow: 0 0 8px currentColor;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-        .card-status.warning { color: var(--wall-light); }
-        .card-status.danger { color: var(--boot-light); }
-
-        .card-metric {
-            font-size: 36px;
-            font-weight: 700;
-            color: var(--card-accent, var(--text-dark));
-            text-shadow: 0 0 10px var(--card-accent);
-            font-family: var(--font-mono);
-            line-height: 1;
-            margin-bottom: var(--space-s);
-            background: linear-gradient(90deg, var(--text-dark), var(--muted-dark));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .card-label { font-size: 13px; color: var(--muted-dark); margin-bottom: var(--space-m); }
-
-        .card-trend {
-            display: inline-flex;
-            align-items: center;
-            gap: var(--space-xs);
-            font-size: 12px;
-            padding: 4px 8px;
-            border-radius: var(--radius-sm);
-            font-family: var(--font-mono);
-        }
-
-        .card-trend.up { background: rgba(20, 140, 102, 0.15); color: var(--root-light); }
-        .card-trend.down { background: rgba(192, 96, 64, 0.15); color: var(--boot-light); }
-
-        /* ═══════════════════════════════════════════════════════════════
-           MATRIX PANEL — Terminal Style
-           ═══════════════════════════════════════════════════════════════ */
-        .matrix-panel {
-            background: var(--surface-dark);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-md);
-            overflow: hidden;
-            margin-bottom: var(--space-xl);
-        }
-
-        .matrix-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: var(--space-m) var(--space-l);
-            background: var(--bg-elevated);
-            border-bottom: 1px solid var(--glass-border);
-            font-family: var(--font-mono);
-            font-size: 13px;
-        }
-
-        .matrix-title {
-            display: flex;
-            align-items: center;
-            gap: var(--space-s);
-            color: var(--root-light);
-            font-weight: 500;
-        }
-
-        .matrix-title::before { content: '>'; animation: blink 1s step-end infinite; }
-        @keyframes blink { 50% { opacity: 0; } }
-
-        .matrix-body { padding: var(--space-m); font-family: var(--font-mono); font-size: 13px; line-height: 1.8; }
-        .matrix-row { display: flex; align-items: flex-start; padding: var(--space-xs) 0; border-bottom: 1px solid rgba(255, 255, 255, 0.03); }
-        .matrix-row:last-child { border-bottom: none; }
-        .matrix-label { color: var(--muted-dark); min-width: 120px; }
-        .matrix-value { color: var(--text-dark); flex: 1; }
-        .matrix-value .highlight { color: var(--root-light); }
-        .matrix-value .warning { color: var(--wall-light); }
-        .matrix-value .danger { color: var(--boot-light); }
-        .matrix-value .info { color: var(--mesh-light); }
-        .flag { font-size: 14px; margin-right: var(--space-xs); }
-
-        /* ═══════════════════════════════════════════════════════════════
-           ACTIVITY PANEL
-           ═══════════════════════════════════════════════════════════════ */
-        .row { display: flex; gap: var(--space-l); }
-        .col-2 { flex: 1; }
-
-        .activity-panel {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-        }
-
-        .activity-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: var(--space-l);
-            border-bottom: 1px solid var(--glass-border);
-        }
-
-        .activity-title { font-size: 16px; font-weight: 600; }
-        .activity-filter { display: flex; gap: var(--space-s); }
-
-        .filter-btn {
-            padding: var(--space-xs) var(--space-s);
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--glass-border);
-            background: transparent;
-            color: var(--muted-dark);
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .filter-btn:hover, .filter-btn.active {
-            background: var(--glass-highlight);
-            color: var(--text-dark);
-            border-color: rgba(255, 255, 255, 0.15);
-        }
-
-        .activity-list { max-height: 300px; overflow-y: auto; }
-
-        .activity-item {
-            display: flex;
-            align-items: flex-start;
-            gap: var(--space-m);
-            padding: var(--space-m) var(--space-l);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-            transition: background 0.2s ease;
-        }
-
-        .activity-item:hover { background: var(--glass-highlight); }
-
-        .activity-icon {
-            width: 32px; height: 32px;
-            border-radius: var(--radius-sm);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            flex-shrink: 0;
-        }
-
-        .activity-icon.waf { background: rgba(232, 132, 90, 0.15); color: var(--auth-light); }
-        .activity-icon.ssl { background: rgba(20, 140, 102, 0.15); color: var(--root-light); }
-        .activity-icon.auth { background: rgba(44, 112, 192, 0.15); color: var(--mesh-light); }
-
-        .activity-content { flex: 1; min-width: 0; }
-        .activity-text { font-size: 13px; color: var(--text-dark); margin-bottom: 2px; }
-
-        .activity-text code {
-            font-family: var(--font-mono);
-            background: var(--bg-elevated);
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 12px;
-            color: var(--wall-light);
-        }
-
-        .activity-meta { font-size: 11px; color: var(--muted-dark); font-family: var(--font-mono); }
-
-        /* ═══════════════════════════════════════════════════════════════
-           CHART CARD
-           ═══════════════════════════════════════════════════════════════ */
-        .chart-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            padding: var(--space-l);
-            margin-bottom: var(--space-xl);
-        }
-
-        .chart-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: var(--space-l);
-        }
-
-        .chart-title { font-size: 16px; font-weight: 600; }
-        .chart-legend { display: flex; gap: var(--space-m); font-size: 12px; }
-        .legend-item { display: flex; align-items: center; gap: var(--space-xs); color: var(--muted-dark); }
-        .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
-
-        .chart-area {
-            height: 120px;
-            display: flex;
-            align-items: flex-end;
-            gap: 2px;
-            padding: var(--space-s) 0;
-        }
-
-        .chart-bar {
-            flex: 1;
-            background: linear-gradient(180deg, var(--root-light), rgba(20, 140, 102, 0.3));
-            border-radius: 2px 2px 0 0;
-            min-height: 4px;
-            transition: all 0.3s ease;
-        }
-
-        .chart-bar:hover { filter: brightness(1.2); }
-
-        .chart-labels {
-            display: flex;
-            justify-content: space-between;
-            margin-top: var(--space-s);
-            font-size: 10px;
-            color: var(--muted-dark);
-            font-family: var(--font-mono);
-        }
-
-        /* Health bars */
-        .health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-m); }
-
-        .health-item {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-md);
-            padding: var(--space-m);
-        }
-
-        .health-header { display: flex; justify-content: space-between; margin-bottom: var(--space-s); font-size: 13px; }
-        .health-bar { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
-        .health-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
-        .health-fill.ok { background: linear-gradient(90deg, var(--root-light), #16a34a); }
-        .health-fill.warn { background: linear-gradient(90deg, var(--wall-light), var(--auth-light)); }
-        .health-fill.danger { background: linear-gradient(90deg, var(--boot-light), #ef4444); }
-        .health-percent { font-family: var(--font-mono); font-size: 12px; color: var(--muted-dark); margin-top: var(--space-xs); text-align: right; }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.15); }
-
-        /* Responsive */
-        @media (max-width: 1024px) { .row { flex-direction: column; } }
-        @media (max-width: 768px) {
-            .sidebar { display: none !important;  transform: translateX(-100%); transition: transform 0.3s ease; }
-            .sidebar.open { transform: translateX(0); }
-            .main { margin-left: 0; padding: var(--space-m); }
-        }
-
-        /* Loading spinner */
-        .loading { opacity: 0.5; animation: loading-pulse 1.5s infinite; }
-        @keyframes loading-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
-
-        /* ═══════════════════════════════════════════════════════════════
-           MINI HISTOGRAMS — Animated sparkline bars
-           ═══════════════════════════════════════════════════════════════ */
-        .mini-histogram {
-            display: flex;
-            align-items: flex-end;
-            justify-content: flex-end;
-            gap: 2px;
-            height: 24px;
-            margin-top: var(--space-s);
-            padding: 2px 4px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 4px;
-            overflow: hidden;
-        }
-
-        .mini-histogram .bar {
-            width: 4px;
-            min-height: 2px;
-            border-radius: 1px;
-            transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            animation: bar-grow 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-            transform-origin: bottom;
-        }
-
-        @keyframes bar-grow {
-            from { transform: scaleY(0); opacity: 0; }
-            to { transform: scaleY(1); opacity: 1; }
-        }
-
-        .mini-histogram .bar.threats { background: linear-gradient(180deg, #C06040, rgba(192, 96, 64, 0.4)); }
-        .mini-histogram .bar.decisions { background: linear-gradient(180deg, #7068D0, rgba(112, 104, 208, 0.4)); }
-        .mini-histogram .bar.throughput { background: linear-gradient(180deg, #2C70C0, rgba(44, 112, 192, 0.4)); }
-        .mini-histogram .bar.services { background: linear-gradient(180deg, #148C66, rgba(20, 140, 102, 0.4)); }
-
-        .mini-histogram .bar:last-child { opacity: 1; }
-        .mini-histogram .bar:nth-last-child(2) { opacity: 0.9; }
-        .mini-histogram .bar:nth-last-child(3) { opacity: 0.8; }
-        .mini-histogram .bar:nth-last-child(n+4) { opacity: 0.6; }
-
-        /* Three-column status layout */
-        .status-columns {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: var(--space-l);
-            margin-bottom: var(--space-xl);
-        }
-        .status-col { margin-bottom: 0; }
-        @media (max-width: 1200px) { .status-columns { grid-template-columns: 1fr; } }
-
-        /* Categories as small tags with emojis */
-        .categories-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-        .cat-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 3px;
-            padding: 2px 6px;
-            font-size: 10px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            white-space: nowrap;
-        }
-        .cat-tag.scanner { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.1); }
-        .cat-tag.bruteforce { border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.1); }
-        .cat-tag.honeypot { border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.1); }
-        .cat-tag.waf { border-color: rgba(232, 132, 90, 0.4); background: rgba(232, 132, 90, 0.1); }
-        .cat-tag.http { border-color: rgba(44, 112, 192, 0.4); background: rgba(44, 112, 192, 0.1); }
-        .cat-tag.ssh { border-color: rgba(20, 140, 102, 0.4); background: rgba(20, 140, 102, 0.1); }
-        .cat-tag.sqli { border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.15); }
-        .cat-tag.xss { border-color: rgba(251, 146, 60, 0.5); background: rgba(251, 146, 60, 0.15); }
-
-        /* Autoban panel */
-        .autoban-panel {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            margin-bottom: var(--space-xl);
-            overflow: hidden;
-        }
-        .autoban-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: var(--space-m);
-            padding: var(--space-m) var(--space-l);
-            background: var(--bg-elevated);
-            border-bottom: 1px solid var(--glass-border);
-        }
-        .autoban-title {
-            font-family: var(--font-mono);
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--boot-light);
-        }
-        .autoban-controls {
-            display: flex;
-            align-items: center;
-            gap: var(--space-s);
-            flex-wrap: wrap;
-        }
-        .ban-input, .ban-select {
-            padding: 6px 10px;
-            font-size: 12px;
-            font-family: var(--font-mono);
-            background: var(--bg-deep);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-sm);
-            color: var(--text-dark);
-        }
-        .ban-input { width: 140px; }
-        .ban-select { width: 110px; }
-        .ban-btn {
-            padding: 6px 12px;
-            font-size: 12px;
-            font-weight: 600;
-            background: linear-gradient(135deg, var(--boot-light), #ef4444);
-            border: none;
-            border-radius: var(--radius-sm);
-            color: white;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        .ban-btn:hover { filter: brightness(1.1); transform: scale(1.02); }
-        .ban-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .recent-bans {
-            padding: var(--space-m);
-            max-height: 100px;
-            overflow-y: auto;
-            font-family: var(--font-mono);
-            font-size: 11px;
-        }
-        .ban-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 4px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-        }
-        .ban-item:last-child { border-bottom: none; }
-        .ban-ip { color: var(--boot-light); }
-        .ban-meta { color: var(--muted-dark); }
-        .unban-btn {
-            padding: 2px 6px;
-            font-size: 10px;
-            background: transparent;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 3px;
-            color: var(--boot-light);
-            cursor: pointer;
-        }
-        .unban-btn:hover { background: rgba(239, 68, 68, 0.2); }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .info a{color:var(--cyan)}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}.grille.trois{grid-template-columns:repeat(3,1fr)}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .vide{color:var(--faible);padding:10px 4px;font-size:.8rem}
+        .lg{display:grid;grid-template-columns:minmax(0,1.3fr) auto minmax(50px,1fr);gap:8px;align-items:center;font-size:.8rem;padding:3px 0}
+        .lg .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .lg .c{font-variant-numeric:tabular-nums;color:var(--texte);font-weight:600}
+        .barre{height:6px;background:rgba(159,179,214,.16);border-radius:3px;overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+        .jauges{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.jauges{grid-template-columns:repeat(4,1fr)}}
+        .jg{border:1px solid var(--trait);border-radius:12px;padding:8px 10px;background:rgba(8,18,38,.55);min-width:0}
+        .jg .t{display:flex;justify-content:space-between;gap:6px;font-size:.74rem;color:var(--doux)} .jg .t b{font-size:1rem;font-variant-numeric:tabular-nums}
+        .jg .s{color:var(--faible);font-size:.66rem;margin-top:3px;overflow-wrap:anywhere}
+        .jg .barre{margin:5px 0 2px}
+        svg.sp{width:100%;height:36px;display:block;margin-top:4px} svg.gr{width:100%;height:110px;display:block}
+        .leg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.7rem;color:var(--doux);margin-top:4px} .leg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+        .onglets{display:flex;gap:6px;flex-wrap:wrap}
+        .onglets [role=tab]{font:inherit;font-size:.72rem;padding:4px 11px;min-height:30px;border-radius:999px;border:1px solid var(--trait2);background:transparent;color:var(--doux);cursor:pointer}
+        .onglets [role=tab]:hover{border-color:var(--cyan);color:var(--texte)}
+        .onglets [role=tab][aria-selected=true]{border-color:var(--cyan);background:rgba(41,182,246,.18);color:var(--texte);font-weight:700}
+        .onglets [role=tab]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        ul.activite{list-style:none;margin:8px 0 0;padding:0;max-height:300px;overflow:auto}
+        ul.activite li{display:flex;gap:10px;align-items:flex-start;padding:7px 4px;border-top:1px solid rgba(86,150,255,.12)}
+        ul.activite li:hover{background:rgba(41,182,246,.07)}
+        ul.activite .ic{flex:none;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(255,77,94,.12)} ul.activite .ic.sys{background:rgba(41,182,246,.14)}
+        ul.activite .tx{min-width:0;overflow-wrap:anywhere;font-size:.8rem} ul.activite .mt{color:var(--faible);font-size:.68rem}
+        ul.activite code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.74rem;background:rgba(8,18,38,.8);border:1px solid var(--trait);border-radius:4px;padding:0 5px;color:var(--jaune)}
+        .capteur{display:grid;grid-template-columns:120px minmax(0,1fr);gap:10px;align-items:start}
+        @media (max-width:520px){.capteur{grid-template-columns:1fr;justify-items:center}.capteur>div:last-child{width:100%}}
+        svg.don{width:120px;height:120px}
+        .puces{display:flex;flex-wrap:wrap;gap:4px}
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-    
-        <!-- SIDEBAR -->
-        <!-- MAIN CONTENT -->
-        <main class="main">
-            <header class="page-header">
-                <h1 class="page-title">Security Operations Center</h1>
-                <p class="page-subtitle">Real-time threat monitoring and system status — <span id="last-update">updating...</span></p>
-            </header>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 4.5 6v5.6c0 4.4 3.1 8.1 7.5 9.6 4.4-1.5 7.5-5.2 7.5-9.6V6z"/><circle cx="12" cy="11" r="2.6"/><path d="M12 5.8v2.6M12 13.6v2.6"/></svg>
+                <div><h1>Centre d’opérations de sécurité</h1><small>Menaces en temps réel et état du système</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, aucune requête envoyée</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a id="connexion" href="/portal/login.html">Se connecter</a></div>
 
-            <!-- GLASS CARDS GRID -->
-            <div class="cards-grid">
-                <div class="glass-card" style="--card-accent: #C06040; border-left: 3px solid #C06040;">
-                    <div class="card-header">
-                        <span class="card-icon">🛡️</span>
-                        <span class="card-status" id="waf-card-status">LOADING</span>
-                    </div>
-                    <div class="card-metric" id="threats-blocked">-</div>
-                    <div class="card-label">Threats Blocked Today</div>
-                    <span class="card-trend up" id="threats-trend">↑ -% vs yesterday</span>
-                    <div class="mini-histogram" id="hist-threats"></div>
-                </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cMenaces" title="Menaces bloquées par le WAF sur 24 h : champ blocked_24h de /api/v1/waf/stats (à défaut blocked_today). Absente : « — »."><span class="l">Menaces bloquées</span><span class="v">—</span><span class="s">WAF, 24 h</span></div>
+            <div class="tuile cy" id="cConns" title="Connexions TCP établies sur ce nœud (total_tcp de /api/v1/metrics/connections, à défaut HTTP + HTTPS + SSH). Ce n’est pas un débit : l’ancienne page l’étiquetait « MB/s » à tort."><span class="l">Connexions TCP</span><span class="v">—</span><span class="s">HTTP · HTTPS</span></div>
+            <div class="tuile cy" id="cServ" title="Modules du hub en bonne santé sur le total relevé."><span class="l">Services sains</span><span class="v">—</span><span class="s">modules du hub</span></div>
+            <div class="tuile cy" id="cFw" title="Nombre de règles nftables chargées (firewall_summary)."><span class="l">Règles du pare-feu</span><span class="v">—</span><span class="s">nftables</span></div>
+            <div class="tuile cy" id="cDrop" title="Paquets écartés par les listes noires nftables, compteur cumulé depuis leur création (firewall_summary.dropped)."><span class="l">Paquets écartés</span><span class="v">—</span><span class="s">nftables</span></div>
+            <div class="tuile cy" id="cUp" title="Durée écoulée depuis le dernier démarrage du nœud (uptime du hub, à défaut de metrics)."><span class="l">Disponibilité</span><span class="v">—</span><span class="s">depuis le démarrage</span></div>
+        </section>
 
-                <div class="glass-card" style="--card-accent: #2C70C0; border-left: 3px solid #2C70C0;">
-                    <div class="card-header">
-                        <span class="card-icon">🌐</span>
-                        <span class="card-status">ACTIVE</span>
-                    </div>
-                    <div class="card-metric" id="throughput">-</div>
-                    <div class="card-label">MB/s Throughput</div>
-                    <span class="card-trend" id="throughput-trend">- conns</span>
-                    <div class="mini-histogram" id="hist-throughput"></div>
-                </div>
-
-                <div class="glass-card" style="--card-accent: #148C66; border-left: 3px solid #148C66;">
-                    <div class="card-header">
-                        <span class="card-icon">⚡</span>
-                        <span class="card-status" id="health-status">LOADING</span>
-                    </div>
-                    <div class="card-metric" id="active-services">-</div>
-                    <div class="card-label">Active Services</div>
-                    <span class="card-trend up" id="uptime-info">-% uptime</span>
-                    <div class="mini-histogram" id="hist-services"></div>
+        <section class="grille" aria-label="WAF et pare-feu">
+            <div class="pan"><h3>WAF <i>/api/v1/waf/stats</i></h3>
+                <dl class="kv"><dt>État</dt><dd id="wEtat">—</dd><dt>Version</dt><dd id="wVer">—</dd><dt>Règles chargées</dt><dd id="wReg">—</dd><dt>Dernière menace</dt><dd id="wDern">—</dd></dl>
+                <h3 style="margin-top:12px">Pays d’origine <i>top 6</i></h3><div id="wPays"></div>
+                <h3 style="margin-top:12px">Catégories <i>top 6</i></h3><div id="wCats"></div>
+            </div>
+            <div class="pan"><h3>Pare-feu <i>/api/v1/hub/public/firewall_summary</i></h3>
+                <dl class="kv"><dt>État</dt><dd id="fEtat">—</dd><dt>Tables</dt><dd id="fTab">—</dd><dt>Chaînes</dt><dd id="fCh">—</dd><dt>Règles</dt><dd id="fRg">—</dd></dl>
+                <div id="fPaq" style="margin-top:10px">
+                    <dl class="kv"><dt>Acceptés</dt><dd id="fAcc">—</dd><dt>Écartés</dt><dd id="fDrp">—</dd><dt title="L’API ne fournit pas de compteur de paquets rejetés.">Rejetés</dt><dd id="fRej">—</dd></dl>
+                    <div class="leg"><span><i style="background:#ff4d5e"></i>Écartés par relevé</span></div><div id="fCd"></div>
+                    <div class="leg"><span><i style="background:#2ecc71"></i>Acceptés par relevé</span></div><div id="fCa"></div>
+                    <p class="note">Écart entre deux relevés successifs des compteurs cumulés (un relevé toutes les 15 s, depuis l’ouverture de la page).</p>
                 </div>
             </div>
+        </section>
 
-            <!-- THREE-COLUMN STATUS PANELS -->
-            <div class="status-columns">
-                <!-- WAF STATUS -->
-                <div class="matrix-panel status-col">
-                    <div class="matrix-header">
-                        <span class="matrix-title">🛡️ WAF</span>
-                        <span style="color: var(--muted-dark);" id="waf-version">v- · -</span>
-                    </div>
-                    <div class="matrix-body">
-                        <div class="matrix-row">
-                            <span class="matrix-label">Status</span>
-                            <span class="matrix-value" id="waf-status-detail"><span class="highlight">● LOADING</span></span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Countries</span>
-                            <span class="matrix-value" id="top-countries">Loading...</span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Categories</span>
-                            <span class="matrix-value categories-list" id="waf-categories">Loading...</span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Last Threat</span>
-                            <span class="matrix-value" id="last-threat">No recent threats</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- FIREWALL STATUS -->
-                <div class="matrix-panel status-col">
-                    <div class="matrix-header">
-                        <span class="matrix-title">🔥 FIREWALL</span>
-                        <span style="color: var(--muted-dark);" id="fw-info">nftables</span>
-                    </div>
-                    <div class="matrix-body">
-                        <div class="matrix-row">
-                            <span class="matrix-label">Status</span>
-                            <span class="matrix-value" id="fw-status"><span class="highlight">● LOADING</span></span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Tables</span>
-                            <span class="matrix-value" id="fw-tables">-</span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Chains</span>
-                            <span class="matrix-value" id="fw-chains">-</span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Rules</span>
-                            <span class="matrix-value" id="fw-rules">-</span>
-                        </div>
-                        <!-- Packet Stats - Scribe Trace Histogram -->
-                        <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--divider);">
-                            <div id="fw-scribe-trace" style="display: flex; align-items: flex-end; justify-content: center; height: 45px; gap: 2px; background: rgba(0,0,0,0.3); border-radius: 4px; padding: 4px 8px;">
-                                <!-- Histogram bars injected by JS -->
-                            </div>
-                            <div style="display: flex; justify-content: space-between; margin-top: 4px; padding: 0 4px;">
-                                <span id="fw-drop-val" style="font-size:0.65rem;color:#ef4444;">🛑 -</span>
-                                <span id="fw-accept-val" style="font-size:0.65rem;color:#22c55e;">✅ -</span>
-                                <span id="fw-reject-val" style="font-size:0.65rem;color:#f97316;">❌ -</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <section class="pan" aria-label="Santé du système"><h3>Santé du système <i>/api/v1/hub/dashboard, /api/v1/metrics/overview, /api/v1/hub/network_summary</i></h3>
+            <div class="jauges">
+                <div class="jg" title="Part du processeur utilisée. Courbe : relevés depuis l’ouverture de la page."><div class="t"><span>Processeur</span><b id="jCpuV">—</b></div><div class="barre"><i id="jCpuB"></i></div><div class="s" id="jCpuI">—</div><div id="jCpuC"></div></div>
+                <div class="jg" title="Part de la mémoire vive utilisée."><div class="t"><span>Mémoire</span><b id="jMemV">—</b></div><div class="barre"><i id="jMemB"></i></div><div class="s" id="jMemI">—</div><div id="jMemC"></div></div>
+                <div class="jg" title="Part de la partition système utilisée (dashboard.disk_percent)."><div class="t"><span>Disque</span><b id="jDskV">—</b></div><div class="barre"><i id="jDskB"></i></div><div class="s" id="jDskI">—</div><div id="jDskC"></div></div>
+                <div class="jg" title="Interfaces réseau actives sur le total (network_summary) ; l’état de la liaison WAN est en dessous."><div class="t"><span>Réseau</span><b id="jNetV">—</b></div><div class="barre"><i id="jNetB"></i></div><div class="s" id="jNetI">—</div><div id="jNetC"></div></div>
             </div>
+        </section>
 
-            <!-- SYSTEM HEALTH -->
-            <div class="health-grid" style="margin-bottom: var(--space-xl);">
-                <div class="health-item">
-                    <div class="health-header"><span>CPU</span><span id="cpu-load">-</span></div>
-                    <div class="health-bar"><div class="health-fill ok" id="cpu-bar" style="width: 0%"></div></div>
-                    <div class="health-percent" id="cpu-pct">0%</div>
+        <section class="grille" aria-label="Menaces et activité">
+            <div class="pan"><h3>Menaces bloquées <i>24 h</i></h3><div id="mCourbe"></div><p class="note" id="mNote"></p></div>
+            <div class="pan"><h3>Activité récente</h3>
+                <div class="onglets" id="filtres" role="tablist" aria-label="Filtrer l’activité">
+                    <button type="button" role="tab" id="tAll" data-f="all" aria-selected="true" tabindex="0">Tous</button>
+                    <button type="button" role="tab" id="tThreats" data-f="threats" aria-selected="false" tabindex="-1">Menaces</button>
+                    <button type="button" role="tab" id="tSystem" data-f="system" aria-selected="false" tabindex="-1">Système</button>
                 </div>
-                <div class="health-item">
-                    <div class="health-header"><span>Memory</span><span id="mem-info">-</span></div>
-                    <div class="health-bar"><div class="health-fill warn" id="mem-bar" style="width: 0%"></div></div>
-                    <div class="health-percent" id="mem-pct">0%</div>
-                </div>
-                <div class="health-item">
-                    <div class="health-header"><span>Disk</span><span id="disk-info">-</span></div>
-                    <div class="health-bar"><div class="health-fill ok" id="disk-bar" style="width: 0%"></div></div>
-                    <div class="health-percent" id="disk-pct">0%</div>
-                </div>
-                <div class="health-item">
-                    <div class="health-header"><span>Network</span><span id="net-info">-</span></div>
-                    <div class="health-bar"><div class="health-fill ok" id="net-bar" style="width: 0%"></div></div>
-                    <div class="health-percent" id="net-pct">0%</div>
-                </div>
+                <ul class="activite" id="activite" role="tabpanel" aria-live="polite"></ul>
             </div>
-
-            <!-- CHART + ACTIVITY ROW -->
-            <div class="row">
-                <div class="col-2">
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <span class="chart-title">Threat Activity (24h)</span>
-                            <div class="chart-legend">
-                                <span class="legend-item"><span class="legend-dot" style="background: var(--root-light);"></span>Blocked</span>
-                            </div>
-                        </div>
-                        <div class="chart-area" id="threat-chart">
-                            <!-- Bars will be populated by JS -->
-                        </div>
-                        <div class="chart-labels">
-                            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>Now</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-2">
-                    <div class="activity-panel">
-                        <div class="activity-header">
-                            <span class="activity-title">Recent Activity</span>
-                            <div class="activity-filter">
-                                <button class="filter-btn active" onclick="filterActivity('all')">All</button>
-                                <button class="filter-btn" onclick="filterActivity('threats')">Threats</button>
-                                <button class="filter-btn" onclick="filterActivity('system')">System</button>
-                            </div>
-                        </div>
-                        <div class="activity-list" id="activity-list">
-                            <div class="activity-item loading">
-                                <div class="activity-icon waf">🛡️</div>
-                                <div class="activity-content">
-                                    <div class="activity-text">Loading activity...</div>
-                                    <div class="activity-meta">--</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-    </div>
+        </section>
+    </div></div></main>
 
     <script src="/shared/sidebar.js"></script>
     <script>
-        const API_HUB = '/api/v1/hub';
-        const API_WAF = '/api/v1/waf';
-        const API_METRICS = '/api/v1/metrics';
+        const VAR = 'hub';          // 'hub' = soc.html (lecture exigeant un jeton) ; 'index' = soc/index.html (lectures publiques sans jeton)
+        const ONGLET = 'soc-hub';
+        const Q = new URLSearchParams(location.search), DEMO = Q.has('demo');
+        if (Q.has('embed')) document.body.classList.add('emb');
+        const API_HUB = '/api/v1/hub', API_WAF = '/api/v1/waf', API_METRICS = '/api/v1/metrics';
+        const EXIGE = VAR === 'hub';
+        const NS = 'http://www.w3.org/2000/svg';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const sv = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k])); if (parent) parent.appendChild(e); return e; };
+        const num = v => v !== null && v !== undefined && v !== '' && typeof v !== 'boolean' && isFinite(Number(v));
+        const nb = v => num(v) ? Number(v).toLocaleString('fr-FR') : '—';
+        const pc = v => num(v) ? Math.round(Number(v)) + ' %' : '—';
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const COUL = { cy: '#29b6f6', vert: '#2ecc71', rouge: '#ff4d5e', orange: '#ff9f1c', jaune: '#ffd23f', violet: '#a78bfa', bleu: '#3b82f6' };
 
-        // ════════════════��══════════════════════════════════════════════
-        // MINI HISTOGRAM — Progressive animation sparklines
-        // ═════════════════════════════════════��═════════════════════════
-        const HIST_MAX_SAMPLES = 12;
-        const historyData = {
-            threats: [],
-            decisions: [],
-            throughput: [],
-            services: []
-        };
-
-        function renderMiniHistogram(containerId, data, cssClass) {
-            const el = document.getElementById(containerId);
-            if (!el || data.length === 0) return;
-
-            const maxVal = Math.max(...data, 1);
-            const maxHeight = 20;
-
-            // Only re-render if data changed (prevent flicker)
-            const newBars = data.map((val, i) => {
-                const height = Math.max(2, (val / maxVal) * maxHeight);
-                const delay = (i * 30); // Progressive animation delay
-                return `<div class="bar ${cssClass}" style="height:${height}px;animation-delay:${delay}ms;"></div>`;
-            }).join('');
-
-            if (el.innerHTML !== newBars) {
-                el.innerHTML = newBars;
-            }
-        }
-
-        function updateHistogram(key, value) {
-            if (typeof value !== 'number' || isNaN(value)) return;
-
-            historyData[key].push(value);
-            if (historyData[key].length > HIST_MAX_SAMPLES) {
-                historyData[key].shift();
-            }
-
-            renderMiniHistogram('hist-' + key, historyData[key], key);
-        }
-
-        function getToken() {
-            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
-        }
-
-        function checkAuth() {
-            if (!getToken()) {
-                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                return false;
-            }
-            return true;
-        }
-
-        async function api(url, method = 'GET', body = null) {
-            const token = getToken();
-            if (!token) { checkAuth(); return null; }
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        // Lecture : même route, même méthode, mêmes en-têtes que l'ancienne page. `exige` : sans jeton, l'ancienne page ne partait pas.
+        async function lire(url, exige) {
+            const t = jeton();
+            if (exige && !t) return { ok: false, statut: 401, data: null };
             try {
-                const opts = {
-                    method,
-                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
-                };
-                if (body) opts.body = JSON.stringify(body);
-                const res = await fetch(url, opts);
-                if (res.status === 401) { checkAuth(); return null; }
-                return await res.json();
-            } catch (e) { console.error('API error:', url, e); return null; }
+                const h = { Accept: 'application/json', 'Content-Type': 'application/json' };
+                if (t) h.Authorization = 'Bearer ' + t;
+                const r = await fetch(url, { method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: h });
+                if (!r.ok) return { ok: false, statut: r.status, data: null };
+                return { ok: true, statut: r.status, data: await r.json() };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
         }
+        const R = d => ({ ok: true, statut: 200, data: d });
+        const NON = { ok: false, statut: 0, data: null };
 
-        // Activity items storage
-        let activityItems = [];
+        // ----- Relevés successifs (courbes « depuis l'ouverture de la page » : jamais de série inventée) -----
+        const H = {}, MAXH = 40;
+        function pousse(k, v) { if (!num(v)) return; (H[k] = H[k] || []).push(Number(v)); if (H[k].length > MAXH) H[k].shift(); }
+        const deltas = a => (a || []).slice(1).map((v, i) => Math.max(0, v - a[i]));
 
-        function addActivity(type, icon, text, meta) {
-            activityItems.unshift({ type, icon, text, meta, time: new Date() });
-            if (activityItems.length > 20) activityItems.pop();
-            renderActivity();
+        // ----- SVG à la main -----
+        function courbe(hote, vals, couleur, max, haut, libelle) {
+            hote.replaceChildren();
+            if (!vals || vals.length < 2) { hote.appendChild(el('p', 'note', 'Courbe en cours de construction : un point par relevé (15 s).')); return; }
+            const W = 300, Hh = haut || 36, m = max || Math.max(1, ...vals), n = vals.length;
+            const s = sv('svg', { class: 'sp', viewBox: '0 0 ' + W + ' ' + Hh, preserveAspectRatio: 'none', role: 'img', 'aria-label': libelle || 'courbe' }, hote);
+            sv('title', {}, s).textContent = libelle || 'courbe';
+            sv('line', { x1: 0, x2: W, y1: Hh / 2, y2: Hh / 2, stroke: 'rgba(159,179,214,.14)' }, s);
+            const pts = vals.map((v, i) => (i / Math.max(1, n - 1) * W).toFixed(1) + ',' + (Hh - 1 - Math.min(1, v / m) * (Hh - 3)).toFixed(1));
+            sv('polygon', { points: '0,' + Hh + ' ' + pts.join(' ') + ' ' + W + ',' + Hh, fill: couleur, 'fill-opacity': '.14' }, s);
+            sv('polyline', { fill: 'none', stroke: couleur, 'stroke-width': '1.4', 'vector-effect': 'non-scaling-stroke', points: pts.join(' ') }, s);
         }
-
-        function renderActivity(filter = 'all') {
-            const list = document.getElementById('activity-list');
-            const filtered = filter === 'all' ? activityItems : activityItems.filter(i => i.type === filter);
-
-            if (filtered.length === 0) {
-                list.innerHTML = '<div class="activity-item"><div class="activity-content"><div class="activity-text" style="color: var(--muted-dark);">No activity yet</div></div></div>';
-                return;
-            }
-
-            list.innerHTML = filtered.slice(0, 10).map(item => `
-                <div class="activity-item">
-                    <div class="activity-icon ${item.type}">${item.icon}</div>
-                    <div class="activity-content">
-                        <div class="activity-text">${item.text}</div>
-                        <div class="activity-meta">${item.meta}</div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function filterActivity(type) {
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
-            renderActivity(type);
-        }
-
-        function updateStatusLed(id, status) {
-            const el = document.getElementById(id);
-            if (el) el.textContent = status === 'ok' ? '🟢' : status === 'degraded' ? '🟡' : '🔴';
-        }
-
-        async function loadHealthBatch() {
-            const data = await api(API_HUB + '/health');
-            if (!data || !data.modules) return;
-
-            const modules = data.modules;
-
-            // Update sidebar status LEDs
-            if (modules.waf) updateStatusLed('waf-status', modules.waf.status);
-            if (modules.metrics) updateStatusLed('metrics-status', modules.metrics.status);
-            if (modules.dns) updateStatusLed('dns-status', modules.dns.status);
-            if (modules.wireguard) updateStatusLed('wireguard-status', modules.wireguard.status);
-
-            // Count healthy services
-            let healthy = 0, total = 0;
-            Object.values(modules).forEach(m => {
-                total++;
-                if (m.status === 'ok') healthy++;
+        function histo(hote, vals, couleur, libelle) {
+            hote.replaceChildren();
+            const W = 240, Hh = 90, n = vals.length, m = Math.max(1, ...vals), bw = W / n;
+            const s = sv('svg', { class: 'gr', viewBox: '0 0 ' + W + ' ' + Hh, preserveAspectRatio: 'none', role: 'img', 'aria-label': libelle }, hote);
+            sv('title', {}, s).textContent = libelle;
+            sv('line', { x1: 0, x2: W, y1: Hh / 2, y2: Hh / 2, stroke: 'rgba(159,179,214,.14)' }, s);
+            vals.forEach((v, i) => {
+                const h = Math.max(1, v / m * (Hh - 4));
+                const r = sv('rect', { x: (i * bw + 1).toFixed(1), y: (Hh - h).toFixed(1), width: Math.max(1, bw - 2).toFixed(1), height: h.toFixed(1), fill: couleur, 'fill-opacity': '.85', rx: 1 }, s);
+                sv('title', {}, r).textContent = nb(v) + ' bloquées (tranche ' + (i + 1) + ' sur ' + n + ')';
             });
-
-            document.getElementById('active-services').textContent = healthy;
-            document.getElementById('health-status').textContent = healthy === total ? 'HEALTHY' : 'DEGRADED';
-            document.getElementById('health-status').className = 'card-status' + (healthy === total ? '' : ' warning');
-
-            // Update mini histogram
-            updateHistogram('services', healthy);
         }
-
-        async function loadWAFStats() {
-            const data = await api(API_WAF + '/stats');
-            if (!data) return;
-
-            const blocked = data.blocked_24h || data.blocked_today || 0;
-            document.getElementById('threats-blocked').textContent = blocked.toLocaleString();
-            document.getElementById('waf-card-status').textContent = data.running ? 'ACTIVE' : 'INACTIVE';
-            document.getElementById('waf-card-status').className = 'card-status' + (data.running ? '' : ' danger');
-
-            // Update mini histogram
-            updateHistogram('threats', blocked);
-
-            // WAF matrix details
-            document.getElementById('waf-version').textContent = `v${data.version || '1.2.0'} · ${data.rules_loaded || 0} rules`;
-            document.getElementById('waf-status-detail').innerHTML = `<span class="highlight">● ${data.running ? 'ACTIVE' : 'INACTIVE'}</span> · ${data.rules_loaded || 0} rules`;
-
-            // Top countries with concentric donut
-            if (data.top_countries && data.top_countries.length > 0) {
-                document.getElementById('top-countries').innerHTML = createCountryDonut(data.top_countries, 110);
-            }
-
-            // WAF categories with emojis
-            if (data.categories_list || data.top_categories) {
-                const cats = data.categories_list || data.top_categories;
-                // Categories shown in donut only
-            } else {
-                document.getElementById('waf-categories').innerHTML = '<span class="cat-tag">-</span>';
-            }
-
-            // Last threat with full info
-            if (data.last_threat) {
-                const t = data.last_threat;
-                const vhost = t.vhost ? `<span class="info">${t.vhost}</span> · ` : '';
-                document.getElementById('last-threat').innerHTML = `${vhost}<span class="danger">${t.type || 'Attack'}</span> from ${t.ip || 'unknown'} · ${t.time_ago || 'recently'}`;
-                addActivity('waf', '🛡️', `WAF blocked <code>${t.type || 'attack'}</code> from <code>${t.ip || 'unknown'}</code>`, t.time_ago || 'just now');
-            }
-
-            // Chart data
-            if (data.hourly_blocks) {
-                const chartEl = document.getElementById('threat-chart');
-                const max = Math.max(...data.hourly_blocks, 1);
-                chartEl.innerHTML = data.hourly_blocks.map(v =>
-                    `<div class="chart-bar" style="height: ${(v / max * 100)}%;" title="${v} blocks"></div>`
-                ).join('');
-            } else {
-                // Generate random chart data for demo
-                const chartEl = document.getElementById('threat-chart');
-                chartEl.innerHTML = Array(24).fill(0).map(() => {
-                    const h = Math.random() * 100;
-                    return `<div class="chart-bar" style="height: ${h}%;"></div>`;
-                }).join('');
-            }
-
-            // Also load top attacked sites with full DNS names
-            await loadTopVhosts();
-        }
-
-        async function loadTopVhosts() {
-            const data = await api(API_WAF + '/alerts?limit=100&aggregate=true');
-            if (!data || !data.alerts) return;
-
-            // Aggregate by vhost
-            const vhostCounts = {};
-            data.alerts.forEach(a => {
-                if (a.vhost) {
-                    vhostCounts[a.vhost] = (vhostCounts[a.vhost] || 0) + (a.count || 1);
-                }
+        function barres(hote, lignes, vide) {
+            hote.replaceChildren();
+            if (!lignes.length) { hote.appendChild(el('div', 'vide', vide)); return; }
+            const m = Math.max(1, ...lignes.map(l => l.c));
+            lignes.forEach(l => {
+                const r = el('div', 'lg'); if (l.titre) r.title = l.titre;
+                r.appendChild(el('span', 'n', l.n)); r.appendChild(el('span', 'c', nb(l.c)));
+                const b = el('div', 'barre'); const i = el('i'); i.style.width = Math.max(2, l.c / m * 100) + '%'; i.style.background = l.coul || COUL.cy; b.appendChild(i); r.appendChild(b);
+                hote.appendChild(r);
             });
-
-            // Sort by count
-            const topVhosts = Object.entries(vhostCounts)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3);
-
-            if (topVhosts.length > 0) {
-                // Add to activity panel
-                topVhosts.forEach(([vhost, count]) => {
-                    if (count > 10) {
-                        addActivity('waf', '🎯', `Site <code>${vhost}</code> under attack`, `${count} hits`);
-                    }
+        }
+        function donut(hote, parts, centre, libelle) {
+            hote.replaceChildren();
+            const total = parts.reduce((s, p) => s + p.val, 0);
+            const s = sv('svg', { class: 'don', viewBox: '0 0 120 120', role: 'img', 'aria-label': libelle }, hote);
+            sv('title', {}, s).textContent = libelle;
+            sv('circle', { cx: 60, cy: 60, r: 42, fill: 'none', stroke: 'rgba(159,179,214,.16)', 'stroke-width': 14 }, s);
+            if (total > 0) {
+                const C = 2 * Math.PI * 42; let acc = 0;
+                parts.filter(p => p.val > 0).forEach(p => {
+                    const len = p.val / total * C;
+                    const c = sv('circle', { cx: 60, cy: 60, r: 42, fill: 'none', stroke: p.coul, 'stroke-width': 14, 'stroke-dasharray': len.toFixed(2) + ' ' + (C - len).toFixed(2), 'stroke-dashoffset': (-acc).toFixed(2), transform: 'rotate(-90 60 60)' }, s);
+                    sv('title', {}, c).textContent = p.nom + ' : ' + nb(p.val) + ' (' + Math.round(p.val / total * 100) + ' %)';
+                    acc += len;
                 });
             }
+            const t = sv('text', { x: 60, y: 64, 'text-anchor': 'middle', fill: '#eaf1ff', 'font-size': 16, 'font-weight': 700 }, s); t.textContent = centre;
         }
 
-        // Category emoji mapping
-        const CATEGORY_EMOJI = {
-            'scanner': '🔍', 'scanners': '🔍',
-            'bruteforce': '🔨', 'brute-force': '🔨',
-            'honeypot': '🍯', 'honeypots': '🍯',
-            'waf': '🛡️', 'http': '🌐',
-            'ssh': '🔐', 'ftp': '📁',
-            'sqli': '💉', 'sql-injection': '💉',
-            'xss': '⚠️', 'rce': '💣',
-            'lfi': '📂', 'rfi': '🔗',
-            'spam': '📧', 'botnet': '🤖', 'router_botnet': '🤖',
-            'exploit': '🎯', 'crawler': '🕷️', 'recon_crawler': '🕷️',
-            'default': '📌'
-        };
-        // Country flag emoji from ISO code
-        function countryToFlag(code) {
-            if (!code || code === "LAN" || code.length !== 2) return "🌐";
-            return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
-        }
-
-        // Concentric donut for countries with flags
-        function createCountryDonut(countries, size) {
-            size = size || 120;
-            const center = size / 2;
-            if (!countries || countries.length === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
-            
-            const total = countries.reduce((s, c) => s + (c.count || 0), 0);
-            if (total === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
-            
-            const COUNTRY_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#0ea5e9", "#6366f1", "#a855f7"];
-            const topCountries = countries.slice(0, 6);
-            const ringWidth = 7;
-            const spacing = 2;
-            
-            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
-            
-            topCountries.forEach(function(c, i) {
-                const r = center - 8 - (i * (ringWidth + spacing));
-                const pct = c.count / total;
-                const circ = 2 * Math.PI * r;
-                const dash = circ * pct;
-                const gap = circ - dash;
-                const color = COUNTRY_COLORS[i % COUNTRY_COLORS.length];
-                const code = c.country || c.code || "??";
-                const flag = countryToFlag(code);
-                
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.05)\" stroke-width=\"" + ringWidth + "\"/>";
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"" + ringWidth + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;opacity:0.85;cursor:pointer;\" onmouseover=\"this.style.opacity=1;this.style.strokeWidth=9\" onmouseout=\"this.style.opacity=0.85;this.style.strokeWidth=" + ringWidth + "\"><title>" + flag + " " + code + ": " + c.count + " (" + Math.round(pct*100) + "%)</title></circle>";
-                
-                const angle = -Math.PI/2 + (i * Math.PI / 4);
-                const iconX = center + Math.cos(angle) * (r + 2);
-                const iconY = center + Math.sin(angle) * (r + 2);
-                svg += "<text x=\"" + iconX + "\" y=\"" + iconY + "\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"10\" style=\"pointer-events:none;\">" + flag + "</text>";
+        // ----- Onglets (rôle tab, aria-selected, flèches / Début / Fin) -----
+        function onglets(liste, rappel) {
+            const tabs = Array.from(liste.querySelectorAll('[role=tab]'));
+            function choisir(t, focus) {
+                tabs.forEach(x => { x.setAttribute('aria-selected', x === t ? 'true' : 'false'); x.tabIndex = x === t ? 0 : -1; });
+                if (focus) t.focus();
+                rappel(t.dataset.f);
+            }
+            tabs.forEach((t, i) => {
+                t.addEventListener('click', () => choisir(t, false));
+                t.addEventListener('keydown', ev => {
+                    const k = ev.key; let j = -1;
+                    if (k === 'ArrowRight') j = (i + 1) % tabs.length; else if (k === 'ArrowLeft') j = (i + tabs.length - 1) % tabs.length;
+                    else if (k === 'Home') j = 0; else if (k === 'End') j = tabs.length - 1;
+                    if (j >= 0) { ev.preventDefault(); choisir(tabs[j], true); }
+                });
             });
-            
-            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text>";
-            svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--muted)\" font-size=\"6\">ATTACKS</text>";
-            svg += "</svg>";
-            
-            const legend = topCountries.slice(0, 4).map(function(c, i) {
-                const code = c.country || c.code || "??";
-                const flag = countryToFlag(code);
-                return "<span style=\"display:inline-flex;align-items:center;gap:2px;font-size:0.6rem;\"><span style=\"width:6px;height:6px;background:" + COUNTRY_COLORS[i % COUNTRY_COLORS.length] + ";border-radius:1px;\"></span>" + flag + " " + c.count + "</span>";
-            }).join(" ");
-            
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;\">" + legend + "</div></div>";
         }
 
-        const CAT_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#0ea5e9", "#14b8a6"];
-        
-        // Donut chart for categories (eyeremote style)
-        function createCategoryDonut(cats, size) {
-            size = size || 100;
-            if (!cats || cats.length === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
-            const total = cats.reduce((s, c) => s + (c.count || 0), 0);
-            if (total === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
-            const radius = size / 2 - 5;
-            const innerRadius = radius * 0.55;
-            let cumulative = 0;
-            const slices = cats.slice(0, 8).map((cat, i) => {
-                const name = cat.name || cat.category || "unknown";
-                const count = cat.count || 0;
-                const pct = count / total;
-                const startAngle = cumulative * 2 * Math.PI - Math.PI / 2;
-                cumulative += pct;
-                const endAngle = cumulative * 2 * Math.PI - Math.PI / 2;
-                const x1o = Math.cos(startAngle) * radius, y1o = Math.sin(startAngle) * radius;
-                const x2o = Math.cos(endAngle) * radius, y2o = Math.sin(endAngle) * radius;
-                const x1i = Math.cos(startAngle) * innerRadius, y1i = Math.sin(startAngle) * innerRadius;
-                const x2i = Math.cos(endAngle) * innerRadius, y2i = Math.sin(endAngle) * innerRadius;
-                const largeArc = pct > 0.5 ? 1 : 0;
-                const color = CAT_COLORS[i % CAT_COLORS.length];
-                const emoji = CATEGORY_EMOJI[name.toLowerCase()] || CATEGORY_EMOJI.default;
-                return "<path d=\"M" + x1o + "," + y1o + " A" + radius + "," + radius + " 0 " + largeArc + ",1 " + x2o + "," + y2o + " L" + x2i + "," + y2i + " A" + innerRadius + "," + innerRadius + " 0 " + largeArc + ",0 " + x1i + "," + y1i + " Z\" fill=\"" + color + "\" style=\"cursor:pointer;transition:opacity 0.2s;\" onmouseover=\"this.style.opacity=0.7\" onmouseout=\"this.style.opacity=1\"><title>" + emoji + " " + name + ": " + count + " (" + Math.round(pct*100) + "%)</title></path>";
+        // ----- Géographie : drapeau et continent déduits du code pays (déduction côté page, dite dans l'infobulle) -----
+        function drapeau(code) {
+            if (!code || code.length !== 2 || !/^[A-Za-z]{2}$/.test(code)) return '🌐';
+            return String.fromCodePoint(...Array.from(code.toUpperCase()).map(c => 127397 + c.charCodeAt(0)));
+        }
+        const CONT = {};
+        Object.entries({ europe: 'FR DE GB IT ES NL BE PL SE NO FI DK AT CH PT IE CZ RO HU GR UA RU BY SK BG',
+            asie: 'CN JP KR IN ID TH VN PH MY SG TW HK PK BD IR TR SA AE IL KZ', afrique: 'ZA EG NG KE MA DZ TN GH ET TZ', oceanie: 'AU NZ FJ PG',
+            ameriques: 'US CA MX BR AR CL CO PE VE EC CU PR PA' }).forEach(([c, l]) => l.split(' ').forEach(p => { CONT[p] = c; }));
+        const CONTS = [['ameriques', 'Amériques', '#DF0024'], ['europe', 'Europe', '#0085C7'], ['asie', 'Asie', '#F4C300'], ['oceanie', 'Océanie', '#009F3D'], ['afrique', 'Afrique', '#9aa3b2'], ['inconnu', 'Inconnu', '#6f84a8']];
+        const continent = cc => CONT[String(cc || '').toUpperCase()] || 'inconnu';
+        const EMOJI = { scanner: '🔍', scanners: '🔍', bruteforce: '🔨', 'brute-force': '🔨', honeypot: '🍯', honeypots: '🍯', waf: '🛡️', http: '🌐', ssh: '🔐', ftp: '📁', sqli: '💉', 'sql-injection': '💉', xss: '⚠️', rce: '💣', lfi: '📂', rfi: '🔗', spam: '📧', botnet: '🤖', router_botnet: '🤖', exploit: '🎯', crawler: '🕷️', recon_crawler: '🕷️' };
+        const CAT_COUL = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#29b6f6', '#2ecc71'];
+        // L'API renvoie tantôt une liste [{name|country|vhost, count}], tantôt un dictionnaire {clé: nombre} : on accepte les deux.
+        function lignesDe(v, cles) {
+            if (Array.isArray(v)) return v.map(x => typeof x === 'object' && x ? { n: String(cles.map(k => x[k]).find(y => y) || '?'), c: Number(x.count) || 0 } : { n: String(x), c: 0 });
+            if (v && typeof v === 'object') return Object.entries(v).map(([k, x]) => ({ n: k, c: typeof x === 'object' && x ? Number(x.count) || 0 : Number(x) || 0 }));
+            return [];
+        }
+
+        // ----- Activité récente (onglets Tous / Menaces / Système) -----
+        let ACT = [], FILTRE = 'all';
+        function ajoute(type, icone, parties, meta, cle) {
+            if (ACT.some(a => a.cle === cle)) return;
+            ACT.unshift({ type, icone, parties, meta, cle }); if (ACT.length > 20) ACT.pop();
+            rendreActivite();
+        }
+        function rendreActivite() {
+            const ul = $('activite'); ul.replaceChildren();
+            const f = ACT.filter(a => FILTRE === 'all' || (FILTRE === 'threats' ? a.type === 'waf' : a.type === 'sys'));
+            if (!f.length) { const li = el('li'); li.appendChild(el('div', 'vide', FILTRE === 'system' ? 'Aucun événement système.' : 'Aucune activité pour le moment.')); ul.appendChild(li); return; }
+            f.slice(0, 10).forEach(a => {
+                const li = el('li'); li.appendChild(el('span', 'ic' + (a.type === 'sys' ? ' sys' : ''), a.icone));
+                const d = el('div'); const tx = el('div', 'tx');
+                a.parties.forEach(p => tx.appendChild(typeof p === 'string' ? document.createTextNode(p) : el('code', '', p.code)));
+                d.appendChild(tx); d.appendChild(el('div', 'mt', a.meta)); li.appendChild(d); ul.appendChild(li);
             });
-            const centerText = "<text x=\"0\" y=\"-4\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text><text x=\"0\" y=\"10\" text-anchor=\"middle\" fill=\"var(--muted)\" font-size=\"7\">ALERTS</text>";
-            const legend = cats.slice(0, 5).map((c, i) => {
-                const nm = c.name || c.category || "?";
-                const em = CATEGORY_EMOJI[nm.toLowerCase()] || "📌";
-                return "<span style=\"display:inline-flex;align-items:center;gap:2px;margin:1px;\"><span style=\"width:6px;height:6px;background:" + CAT_COLORS[i % CAT_COLORS.length] + ";border-radius:1px;\"></span>" + em + "</span>";
-            }).join("");
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\"><svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"-" + size/2 + " -" + size/2 + " " + size + " " + size + "\">" + slices.join("") + centerText + "</svg><div style=\"font-size:0.6rem;margin-top:4px;\">" + legend + "</div></div>";
         }
 
+        // ----- État -----
+        let D = {}, SESSION_OK = true, CHARGE = false;
 
-        // Multi-layer concentric donut for categories (eyeremote style)
-        function createMultiLayerDonut(data, colors, icons, size) {
-            size = size || 120;
-            const center = size / 2;
-            if (!data || data.length === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
-            
-            const total = data.reduce((s, c) => s + (c.count || 0), 0);
-            if (total === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
-            
-            // Take top 6 categories for concentric rings
-            const topData = data.slice(0, 6);
-            const ringWidth = 7;
-            const spacing = 2;
-            
-            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
-            
-            // Draw rings from outer to inner with emojis around them
-            topData.forEach(function(cat, i) {
-                const r = center - 8 - (i * (ringWidth + spacing));
-                const pct = cat.count / total;
-                const circ = 2 * Math.PI * r;
-                const dash = circ * pct;
-                const gap = circ - dash;
-                const color = colors[i % colors.length];
-                const name = cat.name || cat.category || "?";
-                const icon = icons[name.toLowerCase()] || "📌";
-                
-                // Background ring
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.05)\" stroke-width=\"" + ringWidth + "\"/>";
-                
-                // Progress arc with hover
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"" + ringWidth + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;opacity:0.85;cursor:pointer;\" onmouseover=\"this.style.opacity=1;this.style.strokeWidth=9\" onmouseout=\"this.style.opacity=0.85;this.style.strokeWidth=" + ringWidth + "\"><title>" + icon + " " + name + ": " + cat.count + " (" + Math.round(pct*100) + "%)</title></circle>";
-                
-                // Emoji icon positioned around the ring
-                const angle = -Math.PI/2 + (i * Math.PI / 4);
-                const iconX = center + Math.cos(angle) * (r + 2);
-                const iconY = center + Math.sin(angle) * (r + 2);
-                svg += "<text x=\"" + iconX + "\" y=\"" + iconY + "\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"9\" style=\"pointer-events:none;\">" + icon + "</text>";
-            });
-            
-            // Center total
-            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text>";
-            svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--muted)\" font-size=\"6\">ALERTS</text>";
-            
-            svg += "</svg>";
-            
-            // Compact legend with colored dots and emojis
-            const legend = topData.slice(0, 4).map(function(cat, i) {
-                const name = cat.name || cat.category || "?";
-                const icon = icons[name.toLowerCase()] || "📌";
-                return "<span style=\"display:inline-flex;align-items:center;gap:2px;font-size:0.6rem;\"><span style=\"width:6px;height:6px;background:" + colors[i % colors.length] + ";border-radius:1px;\"></span>" + icon + " " + cat.count + "</span>";
-            }).join(" ");
-            
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;\">" + legend + "</div></div>";
+        function demoData() {
+            const t = Date.now() / 1000;
+            const hb = Array.from({ length: 24 }, (_, i) => Math.round(20 + 38 * Math.abs(Math.sin(i / 3.1)) + (i % 5) * 4));
+            D.health = R(VAR === 'hub'
+                ? { modules: { waf: { status: 'ok' }, dns: { status: 'ok' }, wireguard: { status: 'ok' }, metrics: { status: 'ok' }, mail: { status: 'degraded' }, nac: { status: 'ok' }, qos: { status: 'ok' }, haproxy: { status: 'ok' } } }
+                : { status: 'ok', module: 'hub', version: 'démo' });
+            D.mh = VAR === 'hub' ? NON : R({ healthy: 96, degraded: 6, down: 2, total: 104, health_percent: 92.3 });
+            D.waf = R({ running: true, version: '1.2.0', rules_loaded: 412, blocked_24h: 1284, blocked_today: 342, hourly_blocks: hb,
+                top_countries: [{ country: 'NL', count: 312 }, { country: 'DE', count: 201 }, { country: 'US', count: 187 }, { country: 'CN', count: 143 }, { country: 'BR', count: 66 }],
+                categories_list: [{ name: 'scanner', count: 420 }, { name: 'bruteforce', count: 233 }, { name: 'sqli', count: 91 }, { name: 'xss', count: 44 }, { name: 'honeypot', count: 30 }],
+                top_vhosts: [{ vhost: 'www.exemple.test', count: 540 }, { vhost: 'git.exemple.test', count: 222 }, { vhost: 'mail.exemple.test', count: 96 }],
+                last_threat: { ip: '203.0.113.57', type: 'scanner', vhost: 'www.exemple.test', time_ago: 'il y a 4 min' } });
+            D.alertes = R({ aggregated: true, alerts: [
+                { client_ip: '203.0.113.57', country: 'NL', count: 120, latest_alert: { host: 'www.exemple.test' } }, { client_ip: '203.0.113.9', country: 'DE', count: 74, latest_alert: { host: 'git.exemple.test' } },
+                { client_ip: '198.51.100.23', country: 'US', count: 51, latest_alert: { host: 'www.exemple.test' } }, { client_ip: '198.51.100.77', country: 'CN', count: 33, latest_alert: { host: 'mail.exemple.test' } },
+                { client_ip: '192.0.2.14', country: 'BR', count: 12, latest_alert: { host: 'www.exemple.test' } }, { client_ip: '2001:db8::5', country: 'JP', count: 9, latest_alert: { host: 'git.exemple.test' } },
+                { client_ip: '192.0.2.200', country: '', count: 4, latest_alert: null }] });
+            D.fw = R({ status: 'active', tables: 6, chains: 24, rules: 187, processed: 982340, dropped: 1284, accepted: 981056, source: 'cache' });
+            D.ov = R({ cpu_percent: 23, mem_pct: 61, mem_used_kb: 2400000, mem_total_kb: 3900000, load_avg: [0.42, 0.5, 0.4], uptime: 1209600 });
+            D.dash = R({ cpu_percent: 23, memory_percent: 61, disk_percent: 48, load_avg: [0.42, 0.5, 0.4], uptime: 1209600 });
+            D.conns = R({ total_tcp: 214, http: 38, https: 161, ssh: 3 });
+            D.net = R({ interfaces: 7, interfaces_up: 5, wan_status: 'connected' });
+            const sin = (b, a, k) => Array.from({ length: 30 }, (_, i) => Math.round((b + a * Math.sin(i / k)) * 10) / 10);
+            H.menaces = sin(1200, 60, 4).map((v, i) => v + i * 3); H.conns = sin(200, 30, 3); H.cpu = sin(24, 10, 3); H.mem = sin(60, 4, 5); H.disk = sin(47.5, .6, 9).map((v, i) => v + i * .02); H.net = Array(30).fill(71);
+            H.drop = Array.from({ length: 30 }, (_, i) => 1000 + i * 9 + (i % 4) * 3); H.accept = Array.from({ length: 30 }, (_, i) => 960000 + i * 710 + (i % 5) * 90);
         }
 
-
-        function renderCategories(cats, containerId) {
-            const el = document.getElementById(containerId);
-            if (!cats || cats.length === 0) {
-                el.innerHTML = '<span class="cat-tag">None</span>';
-                return;
-            }
-            el.innerHTML = cats.slice(0, 6).map(cat => {
-                const name = typeof cat === 'object' ? cat.name || cat.category : cat;
-                const count = typeof cat === 'object' ? cat.count : null;
-                const emoji = CATEGORY_EMOJI[name.toLowerCase()] || CATEGORY_EMOJI.default;
-                const cssClass = name.toLowerCase().replace(/[^a-z]/g, '');
-                return `<span class="cat-tag ${cssClass}">${emoji} ${name}${count ? ` (${count})` : ''}</span>`;
-            }).join('');
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; ajouteDerives(); rendre(); return; }
+            const [health, waf, fw, ov, dash, conns, net] = await Promise.all([
+                lire(API_HUB + '/health', EXIGE), lire(API_WAF + '/stats', EXIGE), lire(API_HUB + '/public/firewall_summary', EXIGE),
+                lire(API_METRICS + '/overview', EXIGE), lire(API_HUB + '/dashboard', true), lire(API_METRICS + '/connections', EXIGE), lire(API_HUB + '/network_summary', true)]);
+            D = { health, waf, fw, ov, dash, conns, net, alertes: NON, mh: NON };
+            // Suites, comme l'ancienne page : détail des alertes seulement si les stats du WAF sont lues, santé des modules si le hub répond.
+            if (waf.ok) D.alertes = await lire(API_WAF + '/alerts?limit=100&aggregate=true', true);
+            SESSION_OK = !Object.values(D).some(x => !x.ok && (x.statut === 401 || x.statut === 403));
+            CHARGE = true;
+            ajouteDerives(); rendre();
         }
 
-        async function loadFirewallStats() {
-            // Firewall summary endpoint
-            const fwData = await api(API_HUB + '/public/firewall_summary');
-            const nftOk = !!(fwData && !fwData.error && (fwData.tables || 0) > 0);
-            document.getElementById('fw-status').innerHTML = nftOk
-                ? '<span class="highlight">● ACTIVE</span>'
-                : '<span class="danger">● UNKNOWN</span>';
-
-            if (fwData) {
-                document.getElementById('fw-tables').textContent = fwData.tables || '-';
-                
-                // Scribe trace histogram for firewall packets
-                const drop = fwData.dropped || 0;
-                const accept = fwData.accepted || 0;
-                const reject = fwData.rejected || 0;
-                
-                // Update value labels
-                const dropEl = document.getElementById('fw-drop-val');
-                const acceptEl = document.getElementById('fw-accept-val');
-                const rejectEl = document.getElementById('fw-reject-val');
-                if (dropEl) dropEl.textContent = '🛑 ' + drop.toLocaleString();
-                if (acceptEl) acceptEl.textContent = '✅ ' + accept.toLocaleString();
-                if (rejectEl) rejectEl.textContent = '❌ ' + reject.toLocaleString();
-                
-                // Initialize history if needed
-                if (!window.fwScribeHistory) {
-                    window.fwScribeHistory = { drop: [], accept: [], reject: [] };
-                }
-                
-                // Add to history (max 20 samples)
-                window.fwScribeHistory.drop.push(drop);
-                window.fwScribeHistory.accept.push(accept);
-                window.fwScribeHistory.reject.push(reject);
-                if (window.fwScribeHistory.drop.length > 20) {
-                    window.fwScribeHistory.drop.shift();
-                    window.fwScribeHistory.accept.shift();
-                    window.fwScribeHistory.reject.shift();
-                }
-                
-                // Render scribe trace
-                const scribeEl = document.getElementById('fw-scribe-trace');
-                if (scribeEl) {
-                    const maxVal = Math.max(...window.fwScribeHistory.drop, ...window.fwScribeHistory.accept, ...window.fwScribeHistory.reject, 1);
-                    let bars = '';
-                    for (let i = 0; i < window.fwScribeHistory.drop.length; i++) {
-                        const dH = (window.fwScribeHistory.drop[i] / maxVal) * 35;
-                        const aH = (window.fwScribeHistory.accept[i] / maxVal) * 35;
-                        const rH = (window.fwScribeHistory.reject[i] / maxVal) * 35;
-                        bars += '<div style="display:flex;flex-direction:column;gap:1px;">';
-                        bars += '<div style="width:3px;height:' + dH + 'px;background:#ef4444;border-radius:1px;"></div>';
-                        bars += '<div style="width:3px;height:' + aH + 'px;background:#22c55e;border-radius:1px;"></div>';
-                        bars += '<div style="width:3px;height:' + rH + 'px;background:#f97316;border-radius:1px;"></div>';
-                        bars += '</div>';
-                    }
-                    scribeEl.innerHTML = bars;
-                }
-                document.getElementById('fw-chains').textContent = fwData.chains || '-';
-                document.getElementById('fw-rules').textContent = fwData.rules || '-';
-            } else {
-                document.getElementById('fw-tables').textContent = '-';
-                document.getElementById('fw-chains').textContent = '-';
-                document.getElementById('fw-rules').textContent = '-';
-            }
-            updateStatusLed('firewall-status', nftOk ? 'ok' : 'error');
+        // Valeurs lues (un getter par mesure : absente = undefined, jamais 0)
+        function g(k) { return D[k] && D[k].ok && D[k].data ? D[k].data : null; }
+        function mesures() {
+            const w = g('waf') || {}, c = g('conns'), ov = g('ov') || {}, dh = g('dash') || {}, n = g('net'), mh = g('mh'), h = g('health');
+            const m = {};
+            m.bloque = (num(w.blocked_24h) || num(w.blocked_today)) ? ((Number(w.blocked_24h) || 0) || (Number(w.blocked_today) || 0)) : undefined;
+            if (c) { const s = ['http', 'https', 'ssh'].filter(k => num(c[k])).reduce((a, k) => a + Number(c[k]), 0); m.conns = num(c.total_tcp) && Number(c.total_tcp) ? Number(c.total_tcp) : (['http', 'https', 'ssh'].some(k => num(c[k])) ? s : (num(c.total_tcp) ? 0 : undefined)); }
+            if (VAR === 'hub') {
+                if (h && h.modules && typeof h.modules === 'object') { const v = Object.values(h.modules); m.sains = v.filter(x => x && x.status === 'ok').length; m.total = v.length; }
+            } else if (mh) { if (num(mh.healthy)) { m.sains = Number(mh.healthy); m.total = num(mh.total) ? Number(mh.total) : undefined; m.pctSains = mh.health_percent; } }
+            m.cpuEst = !num(dh.cpu_percent) && !num(ov.cpu_percent) && Array.isArray(ov.load_avg) && num(ov.load_avg[0]);
+            m.cpu = num(dh.cpu_percent) ? Number(dh.cpu_percent) : num(ov.cpu_percent) ? Number(ov.cpu_percent) : (m.cpuEst ? Number(ov.load_avg[0]) * 10 : undefined);
+            m.mem = num(dh.memory_percent) ? Number(dh.memory_percent) : num(ov.mem_pct) ? Number(ov.mem_pct) : num(ov.memory_percent) ? Number(ov.memory_percent) : undefined;
+            m.disk = num(dh.disk_percent) ? Number(dh.disk_percent) : undefined;
+            m.net = n && num(n.interfaces) && Number(n.interfaces) > 0 && num(n.interfaces_up) ? Math.round(Number(n.interfaces_up) / Number(n.interfaces) * 100) : undefined;
+            m.up = num(dh.uptime) ? Number(dh.uptime) : num(ov.uptime) ? Number(ov.uptime) : undefined;
+            return m;
         }
 
-        async function loadMetrics() {
-            const data = await api(API_METRICS + '/overview');
-            if (!data) return;
-
-            // System metrics
-            const cpu = data.cpu_percent || (data.load_avg ? data.load_avg[0] * 10 : 0);
-            const mem = data.mem_pct || data.memory_percent || 0;
-
-            document.getElementById('cpu-load').textContent = data.load || (data.load_avg ? data.load_avg.join(' ') : '-');
-            document.getElementById('cpu-bar').style.width = Math.min(cpu, 100) + '%';
-            document.getElementById('cpu-pct').textContent = Math.round(cpu) + '%';
-
-            document.getElementById('mem-info').textContent = `${data.mem_used_kb ? Math.round(data.mem_used_kb / 1024) : '-'} / ${data.mem_total_kb ? Math.round(data.mem_total_kb / 1024) : '-'} MB`;
-            document.getElementById('mem-bar').style.width = mem + '%';
-            document.getElementById('mem-pct').textContent = Math.round(mem) + '%';
-            document.getElementById('mem-bar').className = 'health-fill ' + (mem > 85 ? 'danger' : mem > 70 ? 'warn' : 'ok');
-
-            // Uptime
-            if (data.uptime) {
-                const days = Math.floor(data.uptime / 86400);
-                document.getElementById('uptime-info').textContent = `${days}d uptime`;
+        function ajouteDerives() {
+            const m = mesures();
+            if (!DEMO) { pousse('menaces', m.bloque); pousse('conns', m.conns); pousse('cpu', m.cpu); pousse('mem', m.mem); pousse('disk', m.disk); pousse('net', m.net); const f = g('fw'); if (f) { pousse('drop', f.dropped); pousse('accept', f.accepted); } }
+            const w = g('waf');
+            if (w && w.last_threat) {
+                const t = w.last_threat;
+                ajoute('waf', '🛡️', ['Le WAF a bloqué ', { code: t.type || 'attaque' }, ' depuis ', { code: t.ip || 'inconnue' }], tiret(t.time_ago), 'lt:' + (t.type || '') + '|' + (t.ip || '') + '|' + (t.vhost || ''));
             }
+            const al = g('alertes');
+            if (al && Array.isArray(al.alerts)) {
+                const cnt = {};
+                al.alerts.forEach(a => { const v = vhostDe(a); if (v) cnt[v] = (cnt[v] || 0) + (Number(a.count) || 1); });
+                Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 3).forEach(([v, c]) => { if (c > 10) ajoute('waf', '🎯', ['Site ', { code: v }, ' sous attaque'], c + ' coups (relevé des 100 dernières alertes)', 'va:' + v); });
+            }
+            if (m.total && m.sains != null && m.sains < m.total) ajoute('sys', '⚡', [(m.total - m.sains) + ' service(s) sur ' + m.total + ' ne sont pas sains'], 'état des modules du hub', 'sy:' + m.sains + '/' + m.total);
         }
+        const vhostDe = a => a.vhost || (a.latest_alert && (a.latest_alert.vhost || a.latest_alert.host)) || '';
+        const ipDe = a => a.client_ip || a.ip || '';
 
-        async function loadDashboard() {
-            const data = await api(API_HUB + '/dashboard');
-            if (!data) return;
+        function tuile(id, cls, v, s) { const t = $(id); t.className = 'tuile ' + cls; t.querySelector('.v').textContent = v; t.querySelector('.s').textContent = s; }
+        const duree = s => { if (!num(s)) return '—'; const j = Math.floor(s / 86400), hh = Math.floor(s % 86400 / 3600); return j ? j + ' j ' + hh + ' h' : hh + ' h ' + Math.floor(s % 3600 / 60) + ' min'; };
+        const coulSante = p => p < 50 ? COUL.vert : p < 75 ? COUL.jaune : p < 90 ? COUL.orange : COUL.rouge;
+        function jauge(id, val, texte, info, cle, max) {
+            const ok = num(val), p = ok ? Math.max(0, Math.min(100, Number(val))) : 0;
+            $(id + 'V').textContent = texte; $(id + 'I').textContent = info;
+            const i = $(id + 'B'); i.style.width = p + '%'; i.style.background = ok ? coulSante(p) : 'transparent';
+            courbe($(id + 'C'), H[cle], ok ? coulSante(p) : COUL.cy, 100, 36, 'Relevés depuis l’ouverture : ' + id);
+        }
+        const pill = (cls, txt) => { const s = el('span', 'pill ' + cls, txt); return s; };
+        function pose(id, ...noeuds) { const e = $(id); e.replaceChildren(...noeuds); }
 
-            // CPU/Memory from dashboard
-            if (data.cpu_percent !== undefined) {
-                document.getElementById('cpu-bar').style.width = data.cpu_percent + '%';
-                document.getElementById('cpu-pct').textContent = Math.round(data.cpu_percent) + '%';
-            }
-            if (data.memory_percent !== undefined) {
-                document.getElementById('mem-bar').style.width = data.memory_percent + '%';
-                document.getElementById('mem-pct').textContent = Math.round(data.memory_percent) + '%';
-            }
-            if (data.disk_percent !== undefined) {
-                document.getElementById('disk-bar').style.width = data.disk_percent + '%';
-                document.getElementById('disk-pct').textContent = Math.round(data.disk_percent) + '%';
-            }
-            if (data.load_avg) {
-                document.getElementById('cpu-load').textContent = 'Load: ' + data.load_avg[0]?.toFixed(2);
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const w = g('waf'), m = mesures(), fw = g('fw');
+            const rien = !Object.values(D).some(x => x && x.ok);
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (CHARGE && rien) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (w && w.running === false) { etat.className = 'actif att'; etat.textContent = 'WAF INACTIF'; }
+            else if (m.total && m.sains != null && m.sains < m.total) { etat.className = 'actif att'; etat.textContent = 'DÉGRADÉ'; }
+            else if (!CHARGE) { etat.className = 'actif neutre'; etat.textContent = 'Chargement…'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+
+            // Tuiles
+            tuile('cMenaces', w ? (m.bloque ? 'ok' : 'cy') : 'cy', nb(m.bloque), w ? (w.running ? 'WAF actif' : 'WAF inactif') : 'WAF : pas de mesure');
+            const c = g('conns');
+            tuile('cConns', 'cy', nb(m.conns), c ? nb(c.http) + ' HTTP · ' + nb(c.https) + ' HTTPS' : '— HTTP · — HTTPS');
+            if (m.sains != null) tuile('cServ', m.total && m.sains < m.total ? 'att' : 'ok', nb(m.sains), (m.total ? 'sur ' + m.total : '') + (num(m.pctSains) ? ' · ' + Math.round(m.pctSains) + ' % sains' : ''));
+            else tuile('cServ', 'cy', '—', VAR === 'hub' ? 'liste des modules non fournie par /hub/health' : (g('health') ? 'hub en ligne, détail indisponible' : 'pas de mesure'));
+            const nft = !!(fw && !fw.error && (Number(fw.tables) || 0) > 0);
+            tuile('cFw', fw ? (nft ? 'ok' : 'att') : 'cy', fw ? nb(fw.rules) : '—', fw ? nb(fw.tables) + ' tables · ' + nb(fw.chains) + ' chaînes' : 'pas de mesure');
+            tuile('cDrop', fw && Number(fw.dropped) ? 'hors' : 'cy', fw ? nb(fw.dropped) : '—', 'compteurs nftables « blacklist », cumulés');
+            tuile('cUp', 'cy', duree(m.up), 'depuis le dernier démarrage');
+
+            // WAF
+            const wv = w || {};
+            pose('wEtat', w ? pill(w.running ? 'ok' : 'hors', w.running ? 'ACTIF' : 'INACTIF') : document.createTextNode('—'));
+            $('wVer').textContent = w ? (tiret(w.version && 'v' + w.version)) : '—';
+            $('wReg').textContent = w ? nb(w.rules_loaded) : '—';
+            const lt = wv.last_threat;
+            $('wDern').textContent = lt ? [lt.vhost, lt.type || 'attaque', 'depuis ' + (lt.ip || 'inconnue'), lt.time_ago].filter(Boolean).join(' · ') : (w ? 'Aucune menace récente' : '—');
+            const pays = lignesDe(wv.top_countries, ['country', 'code']).sort((a, b) => b.c - a.c).slice(0, 6);
+            barres($('wPays'), pays.map((p, i) => ({ n: drapeau(p.n) + ' ' + p.n, c: p.c, coul: CAT_COUL[i % 8], titre: 'Pays déduit de l’adresse par GeoIP côté WAF' })), w ? 'Aucun pays mesuré.' : '—');
+            const cats = lignesDe(wv.categories_list || wv.top_categories, ['name', 'category']).sort((a, b) => b.c - a.c).slice(0, 6);
+            barres($('wCats'), cats.map((p, i) => ({ n: (EMOJI[p.n.toLowerCase()] || '📌') + ' ' + p.n, c: p.c, coul: CAT_COUL[i % 8] })), w ? 'Aucune catégorie mesurée.' : '—');
+
+            // Pare-feu
+            pose('fEtat', fw ? (nft ? pill('ok', 'ACTIF') : pill('att', 'INCONNU')) : document.createTextNode('—'), ...(fw && fw.source === 'cache-stale' ? [document.createTextNode(' '), pill('att', 'relevé périmé')] : []));
+            $('fTab').textContent = fw ? nb(fw.tables) : '—'; $('fCh').textContent = fw ? nb(fw.chains) : '—'; $('fRg').textContent = fw ? nb(fw.rules) : '—';
+            if ($('fPaq')) {
+                $('fAcc').textContent = fw ? nb(fw.accepted) : '—'; $('fDrp').textContent = fw ? nb(fw.dropped) : '—'; $('fRej').textContent = fw && num(fw.rejected) ? nb(fw.rejected) : '—';
+                courbe($('fCd'), deltas(H.drop), COUL.rouge, 0, 36, 'Paquets écartés par relevé');
+                courbe($('fCa'), deltas(H.accept), COUL.vert, 0, 36, 'Paquets acceptés par relevé');
             }
 
-            // Version
-            if (data.build_info && data.build_info.version) {
-                var sv = document.getElementById('sidebar-version'); if(sv) sv.textContent = 'v' + data.build_info.version;
-            }
+            // Santé
+            const dh = g('dash') || {}, ov = g('ov') || {}, ne = g('net');
+            const load = Array.isArray(dh.load_avg) && num(dh.load_avg[0]) ? 'Charge ' + Number(dh.load_avg[0]).toFixed(2).replace('.', ',') : (ov.load ? String(ov.load) : (Array.isArray(ov.load_avg) ? ov.load_avg.join(' ') : '—'));
+            jauge('jCpu', m.cpu, pc(m.cpu), load, 'cpu');
+            $('jCpuV').title = m.cpuEst ? 'Estimée à 10 × la charge à 1 min : l’API ne fournit pas cpu_percent.' : 'Part du processeur utilisée.';
+            jauge('jMem', m.mem, pc(m.mem), num(ov.mem_used_kb) && num(ov.mem_total_kb) ? Math.round(ov.mem_used_kb / 1024) + ' / ' + Math.round(ov.mem_total_kb / 1024) + ' Mo' : '—', 'mem');
+            jauge('jDsk', m.disk, pc(m.disk), 'partition système', 'disk');
+            jauge('jNet', m.net, pc(m.net), ne ? tiret(ne.wan_status) : '—', 'net');
+
+            // Menaces
+            const hb = w && Array.isArray(w.hourly_blocks) ? w.hourly_blocks.map(Number).filter(isFinite) : null;
+            $('mNote').textContent = hb ? 'Une barre par tranche, la plus récente à droite.' : 'L’API ne fournit pas de série horaire (hourly_blocks) : la courbe ci-dessous montre les relevés successifs de la valeur « bloquées », depuis l’ouverture de cette page.';
+            if (hb && hb.length) histo($('mCourbe'), hb, COUL.rouge, 'Menaces bloquées par tranche'); else courbe($('mCourbe'), H.menaces, COUL.rouge, 0, 110, 'Menaces bloquées, relevés successifs');
+
+            rendreCapteurs();
+            rendreActivite();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function loadConnections() {
-            const data = await api(API_METRICS + '/connections');
-            if (!data) return;
-
-            const total = data.total_tcp || (data.http + data.https + data.ssh) || 0;
-            document.getElementById('throughput').textContent = total;
-            document.getElementById('throughput-trend').textContent = `${data.http || 0} HTTP · ${data.https || 0} HTTPS`;
-
-            // Update mini histogram
-            updateHistogram('throughput', total);
+        function rendreCapteurs() {
+            if (!$('eOrigD')) return;
+            const al = g('alertes'), w = g('waf');
+            const ev = al && Array.isArray(al.alerts) ? al.alerts : [];
+            const parC = (liste) => { const o = {}, pays = {}; CONTS.forEach(c => { o[c[0]] = 0; pays[c[0]] = {}; }); liste.forEach(e => { const k = continent(e.country); o[k] += e.count; if (e.country) pays[k][e.country] = (pays[k][e.country] || 0) + e.count; }); return { o, pays }; };
+            const dessine = (idDon, idLig, liste, total0) => {
+                const { o, pays } = parC(liste), total = CONTS.reduce((s, c) => s + o[c[0]], 0);
+                donut($(idDon), CONTS.map(c => ({ nom: c[1], val: o[c[0]], coul: c[2] })), al ? nb(total) : '—', 'Répartition par continent');
+                barres($(idLig), CONTS.filter(c => o[c[0]] > 0).map(c => ({ n: c[1] + ' · ' + Object.entries(pays[c[0]]).sort((a, b) => b[1] - a[1]).slice(0, 3).map(x => drapeau(x[0])).join(''), c: o[c[0]], coul: c[2], titre: 'Continent déduit du code pays par la page' })), al ? 'Aucune alerte.' : '—');
+            };
+            dessine('eOrigD', 'eOrigL', ev.map(a => ({ country: a.country, count: Number(a.count) || 1 })));
+            const vus = new Set(), uniques = [];
+            ev.forEach(a => { const ip = ipDe(a); if (ip && !vus.has(ip)) { vus.add(ip); uniques.push({ country: a.country, count: 1 }); } });
+            dessine('eVisD', 'eVisL', uniques);
+            const vh = lignesDe(w && w.top_vhosts, ['vhost', 'name']).sort((a, b) => b.c - a.c).slice(0, 5), tv = vh.reduce((s, x) => s + x.c, 0);
+            const VC = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6'];
+            donut($('eVhD'), vh.map((x, i) => ({ nom: x.n, val: x.c, coul: VC[i] })), w ? nb(tv) : '—', 'Répartition des attaques par site');
+            barres($('eVhL'), vh.map((x, i) => ({ n: (x.n.includes('git') ? '💻 ' : x.n.includes('mail') ? '📧 ' : x.n.includes('api') ? '⚡ ' : '🌐 ') + x.n, c: x.c, coul: VC[i] })), w ? 'Aucun site ciblé.' : '—');
         }
 
-        async function loadNetwork() {
-            const data = await api(API_HUB + '/network_summary');
-            if (!data) return;
-
-            document.getElementById('net-info').textContent = data.wan_status || 'Unknown';
-            const pct = data.interfaces_up && data.interfaces ? Math.round((data.interfaces_up / data.interfaces) * 100) : 100;
-            document.getElementById('net-bar').style.width = pct + '%';
-            document.getElementById('net-pct').textContent = pct + '%';
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: ONGLET }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+        $('rafraichir').addEventListener('click', charger);
+        onglets($('filtres'), f => { FILTRE = f; rendreActivite(); annoncer(); });
+        $('connexion').href = '/portal/login.html?redirect=' + encodeURIComponent(location.pathname);
 
-        function updateTimestamp() {
-            document.getElementById('last-update').textContent = 'Last update: ' + new Date().toLocaleTimeString();
-        }
-
-        async function refresh() {
-            updateTimestamp();
-            await Promise.all([
-                loadHealthBatch(),
-                loadWAFStats(),
-                loadFirewallStats(),
-                loadMetrics(),
-                loadDashboard(),
-                loadConnections(),
-                loadNetwork()
-            ]);
-        }
-
-        // Initial load
-        if (checkAuth()) {
-            refresh();
-            setInterval(refresh, 15000);
-        }
+        charger();
+        // Pas d'actualisation onglet masqué ; la page n'a ni saisie ni confirmation ouverte.
+        setInterval(() => { if (document.hidden || DEMO) return; charger(); }, 15000);
     </script>
-</body>
-</html>
+</body></html>
