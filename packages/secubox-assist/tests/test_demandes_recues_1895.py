@@ -10,7 +10,7 @@ PAGE = (Path(__file__).parent.parent / "www" / "assist" / "index.html").read_tex
 
 
 def test_carte_en_attente_liste_les_demandes_recues():
-    assert "renderPending(document.getElementById('log'), d.pending, recues)" in PAGE
+    assert "renderPending($('log'), d.pending, recues)" in PAGE
     assert "q => !q.de_moi" in PAGE                      # pas les siennes : on répond aux autres
     assert "['reçue de', q.noeud" in PAGE
 
