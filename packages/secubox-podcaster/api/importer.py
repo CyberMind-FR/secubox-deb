@@ -114,6 +114,26 @@ def _jlog(msg: str) -> None:
     JOB["log"] = (JOB["log"] + [f"{datetime.now().strftime('%H:%M:%S')} {msg}"])[-40:]
 
 
+def _derniere_cause() -> str:
+    """Dernière ligne yt-dlp du journal d'import (déjà tronquée), pour la dire à l'utilisateur."""
+    for ligne in reversed(JOB.get("log", [])):
+        if "yt-dlp:" in ligne:
+            return ligne.split("yt-dlp:", 1)[1].strip()[:160]
+    return ""
+
+
+def _noter_echec(url: str, fid, message: str) -> None:
+    """Mémorise l'échec sur le flux (retrouvé par son URL source si besoin) : il reste visible dans /feeds (#2635)."""
+    try:
+        if not fid:
+            existing = store.feed_by_site(url)
+            fid = existing["id"] if existing else None
+        if fid:
+            store.set_feed_status(fid, message)
+    except Exception as ex:  # noqa: BLE001
+        log.error(f"état du flux non mémorisé : {ex}")
+
+
 def _ulid() -> str:
     t = int(time.time() * 1000)
     ts = "".join(_B32[(t >> (10 * (5 - i))) & 0x1F] for i in range(6))
@@ -282,7 +302,9 @@ def _download(vid: str, workdir: Path, want_video: bool):
                       str(apath)], timeout=1800)
     else:
         if not apath.exists():
-            _ytdlp(["--no-warnings", "-x", "--audio-format", "m4a",
+            # `ba[ext=m4a]` : YouTube sert déjà de l'AAC (format 140). Sans -f, yt-dlp prend le flux le plus lourd (webm/opus)
+            # et ffmpeg le ré-encode en AAC : des dizaines de minutes par épisode, gk2 à charge 10 (#2635).
+            _ytdlp(["--no-warnings", "-f", "ba[ext=m4a]/ba", "-x", "--audio-format", "m4a",
                   "--write-info-json", "--write-thumbnail", "--convert-thumbnails", "jpg",
                   "-o", str(d / f"{vid}.%(ext)s"), url], timeout=1800)
     info = {}
@@ -341,6 +363,8 @@ def run_import(url: str, media_dir: str, mirror_peertube: bool, create_billets: 
         entries = _enumerate(url)
         if not entries:
             _jlog("nothing found at that URL")
+            _noter_echec(url, None, "Rien trouvé à cette adresse : YouTube a refusé la liste ou elle est vide. "
+                         + _derniere_cause())
             return
         JOB["total"] = len(entries)
         series = entries[0].get("playlist") or entries[0]["title"]
@@ -448,6 +472,13 @@ def run_import(url: str, media_dir: str, mirror_peertube: bool, create_billets: 
                 _jlog(f"  ERROR {vid}: {ex}")
                 JOB["errors"].append(f"{title[:40]}: {str(ex)[:120]}")
         _jlog(f"done: {JOB['done']}/{JOB['total']} imported")
+        if JOB["errors"]:
+            _noter_echec(url, fid, f"{len(JOB['errors'])} épisode(s) en échec sur {len(entries)} : {JOB['errors'][0]}")
+        elif fid:
+            store.set_feed_status(fid, None)
+    except Exception as ex:  # noqa: BLE001
+        _noter_echec(url, JOB.get("feed_id"), f"Import interrompu : {str(ex)[:200]}")
+        raise
     finally:
         JOB["running"] = False
         JOB["finished"] = int(time.time())

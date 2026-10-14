@@ -83,6 +83,22 @@
       .then(function(r){ btn.textContent = r.ok ? '✓ Au SAS' : '⚠'; if(!r.ok) btn.disabled = false; })
       .catch(function(){ btn.textContent = '⚠'; btn.disabled = false; });
   }
+  // Favoris du Hall (sbx_favoris, liste d'adresses) : cette carte est de la MÊME origine que le Hall, même localStorage.
+  function lireFavoris(){ try{ var l = JSON.parse(localStorage.getItem('sbx_favoris') || '[]'); return Array.isArray(l) ? l : []; }catch(e){ return []; } }
+  function favori(u){ return lireFavoris().indexOf(u) >= 0; }
+  function basculerFavori(btn, u){
+    try{
+      var l = lireFavoris(), i = l.indexOf(u);
+      if(i >= 0) l.splice(i, 1); else l.push(u);
+      localStorage.setItem('sbx_favoris', JSON.stringify(l));
+      btn.textContent = i >= 0 ? '☆' : '★';
+    }catch(e){ btn.textContent = '⚠'; }
+  }
+  function copier(btn, u){
+    var ok = function(){ btn.textContent = '✓'; setTimeout(function(){ btn.textContent = '⧉'; }, 1500); };
+    var ko = function(){ btn.textContent = '⚠'; setTimeout(function(){ btn.textContent = '⧉'; }, 1500); };
+    try{ navigator.clipboard.writeText(u).then(ok, ko); }catch(e){ ko(); }
+  }
   function carte(v){
     var c = el('div','video');
     var vg = el('div','vign');
@@ -98,7 +114,13 @@
     var lien = el('a','act','▶ YouTube'); lien.href = v.url; lien.target = '_blank'; lien.rel = 'noopener noreferrer'; lien.title = 'Ouvrir sur YouTube';
     var sas = el('button','act','⬇ SAS'); sas.type = 'button'; sas.title = 'Ajouter à la bibliothèque de la box';
     sas.onclick = function(){ ajouter(sas, v.url); };
-    ac.appendChild(lien); ac.appendChild(sas); co.appendChild(ac); c.appendChild(co);
+    var cop = el('button','act','⧉'); cop.type = 'button'; cop.title = 'Copier le lien'; cop.setAttribute('aria-label','Copier le lien');
+    cop.onclick = function(){ copier(cop, v.url); };
+    var fav = el('button','act', favori(v.url) ? '★' : '☆'); fav.type = 'button'; fav.title = 'Ajouter aux favoris du Hall'; fav.setAttribute('aria-label','Favori');
+    fav.onclick = function(){ basculerFavori(fav, v.url); };
+    var surf = el('button','act','🧭'); surf.type = 'button'; surf.title = 'Voir dans Surf (navigation web)'; surf.setAttribute('aria-label','Voir dans Surf');
+    surf.onclick = function(){ try{ parent.postMessage({ sbx: 'surf', url: v.url }, location.origin); }catch(e){} };
+    ac.appendChild(lien); ac.appendChild(sas); ac.appendChild(cop); ac.appendChild(fav); ac.appendChild(surf); co.appendChild(ac); c.appendChild(co);
     return c;
   }
   function date(t){ try{ return new Date(t*1000).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }

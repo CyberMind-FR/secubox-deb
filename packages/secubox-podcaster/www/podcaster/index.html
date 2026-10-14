@@ -42,7 +42,8 @@
   .feed .t{flex:1;min-width:0}.feed .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
   .feed .t span{color:var(--text-muted);font-size:11px}
   .feed .x{color:var(--text-muted);opacity:0;font-size:16px}.feed:hover .x{opacity:1}
-  .feed .ad{font-size:14px;cursor:pointer;opacity:.5}.feed .ad.on{opacity:1;color:var(--matrix-green)}
+  .feed .ad{font-size:14px;cursor:pointer;opacity:.5}
+  .ferr{margin:-2px 0 8px 50px;font-size:11px;color:#ffb4a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.feed .ad.on{opacity:1;color:var(--matrix-green)}
   label.autodl{display:flex;gap:7px;align-items:center;color:var(--text-muted);font-size:12px;margin:-4px 0 12px;cursor:pointer}
   h2{font-size:15px;color:var(--gold-hermetic);border-bottom:1px solid var(--line);padding-bottom:8px;margin:0 0 14px}
   .ep{display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;background:var(--panel)}
@@ -135,14 +136,25 @@ async function loadStatus(){
 }
 async function loadFeeds(){
   let d; try{d=await api("/feeds")}catch(e){return}
+  FEEDS=d.feeds;
   const el=document.getElementById("feeds");
   if(!d.feeds.length){el.innerHTML='<div class="muted" style="padding:12px">No feeds yet — add one above.</div>';return}
   el.innerHTML=d.feeds.map(f=>`<div class="feed ${SEL===f.id?'sel':''}" onclick="selFeed(${f.id})">
     <img src="${esc(f.image||'')}" onerror="this.style.visibility='hidden'">
-    <div class="t"><b>${esc(f.title||f.url)}</b><span>${f.downloaded}/${f.episodes} local</span></div>
+    <div class="t"><b>${esc(f.title||f.url)}</b><span>${f.downloaded}/${f.episodes} local${f.last_refresh?' · vérifié '+new Date(f.last_refresh*1000).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''}</span></div>
     <span class="ad ${f.auto_dl?'on':''}" title="auto-download ${f.auto_dl?'on':'off'}" onclick="event.stopPropagation();toggleAd(${f.id},${f.auto_dl?0:1})">⏬</span>
-    <span class="x" onclick="event.stopPropagation();delFeed(${f.id})">✕</span></div>`).join("");
+    ${srcFeed(f)?`<span class="ad" title="Copier l'adresse de la playlist" onclick="event.stopPropagation();copySrc(${f.id})">⧉</span>`:''}
+    <span class="ad" title="Réimporter maintenant" onclick="event.stopPropagation();refreshFeed(${f.id})">⟳</span>
+    <span class="x" onclick="event.stopPropagation();delFeed(${f.id})">✕</span></div>
+    ${f.last_error?`<div class="ferr" title="${esc(f.last_error)}">⚠ ${esc(f.last_error)}</div>`:''}`).join("");
 }
+let FEEDS=[];
+function srcFeed(f){const u=(f.site&&/^https?:/.test(f.site))?f.site:(/^https?:/.test(f.url)?f.url:"");return u}
+function copySrc(id){const f=FEEDS.find(x=>x.id===id);const u=f&&srcFeed(f);if(!u)return;
+  const ok=()=>toast("Adresse copiée");
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(u).then(ok,()=>toast("Copie refusée : "+u))}else toast("Copie impossible : "+u)}
+async function refreshFeed(id){try{await api(`/feeds/${id}/refresh`,{method:"POST"});toast("Réimport lancé");setTimeout(loadFeeds,4000)}
+  catch(e){toast("Réimport impossible : "+(e.message||e))}}
 async function selFeed(id){SEL=id;loadFeeds();loadEps(true)}
 let EPS_SIG="";
 function epsSig(eps){return eps.map(e=>e.id+":"+e.state+":"+(e.progress||0)).join("|")}

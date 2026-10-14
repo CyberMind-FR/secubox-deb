@@ -332,8 +332,10 @@ async def _refresher() -> None:
                 continue
             try:
                 await fetch_and_store(url)
+                store.set_feed_status(fid, None)
             except Exception as e:
                 log.error(f"refresh feed {fid} failed: {e}")
+                store.set_feed_status(fid, f"Lecture du flux impossible : {str(e)[:200]}")
 
 
 async def _refresh_synthetic(fid: int, url: str) -> None:
@@ -552,6 +554,34 @@ async def toggle_autodl(fid: int, on: bool = True):
     store.set_feed_autodl(fid, 1 if on else 0)
     queued = await _autoqueue(fid) if on else 0
     return {"ok": True, "auto_dl": on, "queued": queued}
+
+
+@router.post("/feeds/{fid}/refresh", dependencies=[Depends(require_jwt)])
+async def refresh_feed(fid: int):
+    """Relance l'import / le rafraîchissement d'un flux, maintenant (#2635). Un flux RSS est relu ; un flux
+    `youtube:` relance l'import de sa playlist source. Le résultat se lit dans /feeds (`last_error`, `last_refresh`)."""
+    _ensure_worker()
+    feed = next((f for f in store.list_feeds() if f["id"] == fid), None)
+    if not feed:
+        raise HTTPException(404, "flux inconnu")
+    url = feed["url"]
+    if url.startswith(("http://", "https://")):
+        async def _rss():
+            try:
+                await fetch_and_store(url)
+                store.set_feed_status(fid, None)
+            except Exception as e:  # noqa: BLE001
+                log.error(f"refresh feed {fid} failed: {e}")
+                store.set_feed_status(fid, f"Lecture du flux impossible : {str(e)[:200]}")
+        asyncio.create_task(_rss())
+        return {"ok": True, "started": url}
+    src = store.feed_site(fid)
+    if not src or not src.startswith(("http://", "https://")):
+        raise HTTPException(400, "pas d'URL source enregistrée : réimportez la playlist avec « Importer une URL »")
+    if importer.JOB.get("running"):
+        raise HTTPException(409, "un import est déjà en cours")
+    asyncio.create_task(asyncio.to_thread(importer.run_import, src, str(MEDIA), False, False))
+    return {"ok": True, "started": src}
 
 
 @router.delete("/feeds/{fid}", dependencies=[Depends(require_jwt)])
