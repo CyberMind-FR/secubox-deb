@@ -4,1565 +4,430 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Administration du WAF au profil Aurora (.claude/AURORA-REFERENCE.md) : page hôte autonome, aucune dépendance.
+  Elle encadre les sept pages Aurora (vue d'ensemble, menaces, attaquants, visites, surfaces, historique, campagnes), toutes de même
+  origine, et porte les actions de configuration : état du WAF, bannir / lever un ban, vider les bans, exporter, catégories.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes. Aucun secret affiché.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox — Web Application Firewall</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <title>SecuBox — Pare-feu applicatif</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --p31-dim: #6b7b8b;
-            --bg-dark: #0d1117;
-            --bg-card: rgba(30, 40, 55, 0.8);
-            --bg-row: rgba(20, 30, 45, 0.6);
-            --border: rgba(100, 150, 200, 0.2);
-            --text: #e8e6d9;
-            --red: #ff4466;
-            --orange: #ff9944;
-            --yellow: #ffcc00;
-            --green: #00dd44;
-            --blue: #4488ff;
-            --purple: #a371f7;
-            --cyan: #00d4ff;
-            /* legacy vars referenced by inline JS-generated styles — remapped to the cyan skin */
-            --muted-dark: #6b7b8b;
-            --text-dark: #e8e6d9;
-            --wall-light: #00d4ff;
-            --boot-light: #a371f7;
-            --root-light: #00d4ff;
-            --font-mono: 'Courier Prime', monospace;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
-
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
-        .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
-        .live-dot.paused { background: var(--orange); box-shadow: 0 0 8px var(--orange); animation: none; }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; transition: all 0.2s; }
-        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn.success { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
-        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
-
-        /* Header circular quick actions */
-        .quick-btn { position: relative; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg-card); display: flex; align-items: center; justify-content: center; font-size: 1rem; cursor: pointer; transition: all 0.2s; }
-        .quick-btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); transform: scale(1.08); }
-        .quick-btn:active { transform: scale(0.95); }
-        .quick-btn.active { border-color: var(--green); background: rgba(0,221,68,0.15); box-shadow: 0 0 8px rgba(0,221,68,0.35); }
-        .quick-btn.paused { border-color: var(--orange); background: rgba(255,153,68,0.15); }
-        .quick-btn.danger:hover { border-color: var(--red); box-shadow: 0 0 8px rgba(255,68,102,0.3); }
-        .quick-btn .spinner { animation: spin 1s linear infinite; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        .quick-btn-tooltip { position: absolute; bottom: -26px; left: 50%; transform: translateX(-50%); background: #000; color: #fff; font-size: 0.6rem; padding: 3px 8px; border-radius: 4px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 10; }
-        .quick-btn:hover .quick-btn-tooltip { opacity: 1; }
-
-        /* Live attack banner */
-        .live-attack-banner { display: flex; align-items: center; gap: 1rem; padding: 0.7rem 1rem; margin-bottom: 1rem; border-radius: 8px; background: linear-gradient(90deg, rgba(255,68,102,0.12), var(--bg-card)); border: 1px solid var(--red); backdrop-filter: blur(10px); }
-        .live-attack-banner.secure { background: linear-gradient(90deg, rgba(0,221,68,0.1), var(--bg-card)); border-color: var(--green); }
-        .live-attack-banner .live-indicator { display: flex; align-items: center; gap: 0.4rem; }
-        .live-attack-banner .live-dot { background: var(--red); box-shadow: 0 0 8px var(--red); animation: pulse 1s infinite; }
-        .live-attack-banner.secure .live-dot { background: var(--green); box-shadow: 0 0 8px var(--green); animation: none; }
-        .live-label { font-size: 0.62rem; letter-spacing: 2px; text-transform: uppercase; color: var(--red); }
-        .live-attack-banner.secure .live-label { color: var(--green); }
-        .last-attack { flex: 1; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
-        .last-attack-ip { font-family: 'Courier Prime', monospace; font-size: 1rem; color: var(--text); }
-        .last-attack-cat { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,68,102,0.15); padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; }
-        .last-attack-time { color: var(--p31-dim); font-size: 0.68rem; }
-
-        /* Stat cards */
-        .stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; text-align: center; backdrop-filter: blur(5px); transition: all 0.2s; }
-        .stat-card:hover { border-color: var(--cyan); transform: translateY(-2px); }
-        .stat-card .emoji { font-size: 1.3rem; margin-bottom: 0.15rem; }
-        .stat-card .value { font-size: 1.5rem; font-weight: bold; text-shadow: 0 0 10px currentColor; color: var(--cyan); font-family: 'Courier Prime', monospace; }
-        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; text-transform: uppercase; }
-        .stat-card.critical .value { color: var(--red); }
-        .stat-card.high .value { color: var(--orange); }
-        .stat-card.medium .value { color: var(--yellow); }
-        .stat-card.low .value { color: var(--green); }
-
-        /* Tabs */
-        .waf-tabs { display: flex; gap: 0.3rem; margin-bottom: 1rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
-        .waf-tab { background: transparent; color: var(--p31-dim); border: none; border-bottom: 2px solid transparent; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
-        .waf-tab:hover { color: var(--cyan); }
-        .waf-tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
-
-        /* Cards */
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-        .card h2 { font-size: 0.9rem; color: var(--cyan); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
-        .muted { color: var(--p31-dim); }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
-
-        /* Security events table */
-        .events-table { width: 100%; border-collapse: collapse; }
-        .events-table th, .events-table td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); }
-        .events-table th { color: var(--p31-dim); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; }
-        .events-table td { font-family: 'Courier Prime', monospace; font-size: 0.78rem; }
-        .events-table tbody tr:hover { background: rgba(0,212,255,0.05); }
-        .event-type { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 0.66rem; font-weight: bold; }
-        .event-type.alert { background: rgba(255,204,0,0.15); color: var(--yellow); }
-        .event-type.ban { background: rgba(255,68,102,0.15); color: var(--red); }
-        .event-type.blocked { background: rgba(163,113,247,0.15); color: var(--purple); }
-        .severity-badge { padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; font-weight: bold; }
-        .severity-badge.critical { background: rgba(255,68,102,0.15); color: var(--red); }
-        .severity-badge.high { background: rgba(255,153,68,0.15); color: var(--orange); }
-        .severity-badge.medium { background: rgba(255,204,0,0.15); color: var(--yellow); }
-        .severity-badge.low { background: rgba(68,136,255,0.15); color: var(--blue); }
-
-        /* Category pills */
-        .category-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-        .cat-pill { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg-row); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s; }
-        .cat-pill:hover { border-color: var(--cyan); transform: translateY(-2px); }
-        .cat-pill.disabled { opacity: 0.4; }
-        .cat-pill .cat-emoji { font-size: 1.3rem; }
-        .cat-pill .cat-info { display: flex; flex-direction: column; }
-        .cat-pill .cat-name { font-weight: bold; font-size: 0.8rem; color: var(--text); }
-        .cat-pill .cat-count { font-size: 0.66rem; color: var(--p31-dim); }
-
-        /* Donut charts */
-        .donut-container { display: flex; justify-content: center; align-items: center; flex-direction: column; }
-
-        /* Eyemote concentric donuts */
-        .eyemote-card { display: flex; flex-direction: column; }
-        .eyemote-mini { position: relative; display: flex; justify-content: center; align-items: center; padding: 0.5rem 0; }
-        .eyemote-svg-mini { width: 180px; height: 180px; }
-        .eyemote-svg-mini .ring-fill { transition: stroke-dasharray 0.8s ease-out; }
-        .eyemote-svg-mini .eyemote-pupil { animation: pupilPulse 2s infinite; }
-        @keyframes pupilPulse { 0%,100% { r: 8; opacity: 1; } 50% { r: 11; opacity: 0.8; } }
-        .eyemote-total-mini { position: absolute; font-family: 'Courier Prime', monospace; font-size: 1.4rem; font-weight: bold; color: var(--green); text-shadow: 0 0 15px rgba(0,221,68,0.5); }
-        .eyemote-total-mini.visitor { color: var(--cyan); text-shadow: 0 0 15px rgba(0,212,255,0.5); }
-        .eyemote-total-mini.vhost { color: var(--orange); text-shadow: 0 0 15px rgba(255,153,68,0.5); }
-        .eyemote-legend-mini { display: flex; flex-direction: column; gap: 4px; padding: 0 0.4rem; max-height: 200px; overflow-y: auto; }
-        .legend-row-mini { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: var(--bg-row); border-radius: 6px; border-left: 3px solid; }
-        .legend-row-mini .row-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-        .legend-row-mini .row-val { font-family: 'Courier Prime', monospace; font-size: 0.8rem; font-weight: bold; min-width: 50px; }
-        .legend-row-mini .row-flags { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
-        .flag-mini { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; border: 2px solid; position: relative; }
-        .flag-mini .fm-count { position: absolute; bottom: -3px; right: -3px; font-size: 0.5rem; background: #000; color: #fff; padding: 1px 2px; border-radius: 4px; font-family: 'Courier Prime', monospace; }
-        .vhost-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; background: var(--bg-row); border-radius: 4px; font-size: 0.68rem; font-family: 'Courier Prime', monospace; border: 1px solid; }
-        .vhost-badge .vb-count { font-weight: bold; }
-
-        /* Tracked attackers table */
-        .table-wrap { overflow-x: auto; }
-        .data-table { width: 100%; border-collapse: collapse; }
-        .data-table th, .data-table td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.76rem; }
-        .data-table th { color: var(--p31-dim); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; }
-        .data-table tbody tr:hover { background: rgba(0,212,255,0.05); }
-        .data-table code { font-family: 'Courier Prime', monospace; color: var(--cyan); }
-
-        /* Horizontal bars (top vhosts / visits) */
-        .vbars { display: flex; flex-direction: column; gap: 0.35rem; }
-        .vbar { display: grid; grid-template-columns: auto 1fr auto; gap: 0.6rem; align-items: center; font-size: 0.78rem; }
-        .vbar .vlabel { white-space: nowrap; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; }
-        .vbar .vtrack { height: 0.55rem; border-radius: 0.3rem; background: rgba(255,255,255,0.07); overflow: hidden; }
-        .vbar .vfill { height: 100%; border-radius: 0.3rem; background: linear-gradient(90deg, var(--cyan), var(--purple)); }
-        .vbar .vcount { font-variant-numeric: tabular-nums; color: var(--cyan); }
-
-        /* Toast */
-        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.7rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; box-shadow: 0 0 20px rgba(0,212,255,0.4); animation: slideIn 0.3s; }
-        .toast.error { background: var(--red); color: #fff; }
-        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-
-        @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
-        @media (max-width: 768px) { .main { margin-left: 0; } .grid-2, .grid-3 { grid-template-columns: 1fr; } .stats-grid { grid-template-columns: repeat(2, 1fr); } }
-
-        /* ── Langage de lecture commun avec Renseignement (#1240) ───────────
-           Les deux pages montrent les mêmes attaquants : elles doivent se lire
-           de la même façon, sinon l'opérateur retraduit à chaque passage. */
-        .nat{font-size:.95rem;margin-right:3px;vertical-align:-1px}
-        .multi{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
-          min-width:46px;padding:3px 7px;border-radius:8px;line-height:1.05;
-          background:rgba(0,212,255,.10);border:1px solid rgba(0,212,255,.32);color:var(--cyan)}
-        .multi b{font-size:.95rem;font-weight:800;font-variant-numeric:tabular-nums}
-        .multi i{font-style:normal;font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;opacity:.75}
-        .multi.n2{background:rgba(0,212,255,.14)}
-        .multi.n3{background:rgba(255,153,68,.13);border-color:rgba(255,153,68,.45);color:var(--orange)}
-        .multi.n4{background:rgba(255,68,102,.15);border-color:rgba(255,68,102,.55);color:var(--red);
-          box-shadow:0 0 12px rgba(255,68,102,.18)}
-        /* Tampon : apposé, pas dessiné. */
-        .tampon{display:inline-block;transform:rotate(-8deg);padding:2px 8px;border:2px solid currentColor;
-          border-radius:4px;font-weight:800;font-size:.58rem;letter-spacing:.1em}
-        .tampon.banni{color:var(--red);background:rgba(255,68,102,.10)}
-        .tampon.suivi{color:var(--blue)}
-    
-        /* ═══ PROFIL PROJET RÉFÉRENCE AURORA (#2354) ═══════════════════════════════════
-           Les jetons et les formes de la vue d'ensemble (vue.html), du Guardian et du DPI, posés sur l'existant :
-           palette, typographie, cartes, tuiles, tableaux, onglets, boutons. Aucune logique de données ici ; les
-           couleurs que le JavaScript référence (var(--cyan), var(--red)…) sont remappées sur la palette Aurora. */
-        :root {
-            --fond: #060d1b; --trait: rgba(86,150,255,.22); --trait2: rgba(86,150,255,.38);
-            --texte: #eaf1ff; --doux: #9fb3d6; --faible: #6f84a8;
-            --bg-dark: #060d1b; --bg-card: rgba(12,26,54,.62); --bg-row: rgba(10,22,46,.55);
-            --border: rgba(86,150,255,.22); --text: #eaf1ff; --p31-dim: #9fb3d6; --muted-dark: #9fb3d6; --text-dark: #eaf1ff;
-            --cyan: #29b6f6; --blue: #3b82f6; --green: #2ecc71; --red: #ff4d5e; --orange: #ff9f1c; --purple: #a78bfa; --yellow: #ffd23f;
-            --wall-light: #29b6f6; --boot-light: #a78bfa; --root-light: #29b6f6;
-            --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-            --aurora-sans: "IBM Plex Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-        }
-        body { font-family: var(--aurora-sans); font-size: 14px; line-height: 1.35;
-               background: radial-gradient(1200px 520px at 85% -10%, rgba(59,130,246,.2), transparent 60%),
-                           radial-gradient(900px 500px at -10% 110%, rgba(255,77,94,.10), transparent 60%), var(--fond); }
-        .main { background: transparent; }
-        .header h1 { font-family: var(--aurora-sans); font-size: 1.4rem; font-weight: 800; letter-spacing: .02em; color: var(--texte); text-shadow: none; }
-        .btn, .quick-btn { font-family: var(--aurora-sans); border: 1px solid var(--trait2); background: rgba(59,130,246,.14); color: var(--texte); border-radius: 8px; }
-        .btn:hover, .quick-btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 0 1px rgba(41,182,246,.25); }
-        .btn.primary { background: rgba(41,182,246,.18); border-color: var(--cyan); color: var(--cyan); }
-        .btn.success { background: rgba(46,204,113,.14); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(255,77,94,.14); border-color: var(--red); color: var(--red); }
-        .waf-tabs { gap: 6px; border-bottom: 1px solid var(--trait); padding-bottom: 8px; }
-        .waf-tab { font-family: var(--aurora-sans); font-size: .82rem; font-weight: 600; color: var(--doux); border: 1px solid transparent; border-radius: 999px; padding: 6px 14px; }
-        .waf-tab:hover { color: var(--texte); background: rgba(59,130,246,.12); }
-        .waf-tab.active { color: var(--texte); background: rgba(41,182,246,.18); border-color: var(--cyan); }
-        .card { border: 1px solid var(--trait); border-radius: 12px; background: linear-gradient(160deg, rgba(15,32,64,.78), rgba(7,15,32,.82)); }
-        .card h2 { font-family: var(--aurora-sans); font-size: .95rem; font-weight: 700; color: var(--texte); }
-        .stat-card { border: 1px solid var(--trait); border-radius: 12px; background: linear-gradient(160deg, rgba(18,40,78,.7), rgba(8,18,38,.7)); text-align: left; }
-        .stat-card:hover { border-color: var(--trait2); transform: none; }
-        .stat-card .value { font-family: var(--aurora-sans); font-weight: 700; text-shadow: none; font-variant-numeric: tabular-nums; }
-        .stat-card .label { font-size: .7rem; letter-spacing: .04em; color: var(--doux); }
-        .live-attack-banner { border-radius: 12px; border: 1px solid var(--trait2); }
-        .data-table th, .events-table th { font-family: var(--aurora-sans); color: var(--faible); font-size: .66rem; letter-spacing: .06em; }
-        .data-table td, .events-table td { font-family: var(--aurora-sans); font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(86,150,255,.12); }
-        .data-table code, .events-table td code, .last-attack-ip { font-family: var(--font-mono); color: var(--cyan); }
-        .data-table tbody tr:hover, .events-table tbody tr:hover { background: rgba(41,182,246,.07); }
-        .cat-pill, .legend-row-mini, .vhost-badge { font-family: var(--aurora-sans); border: 1px solid var(--trait); border-radius: 10px; background: var(--bg-row); }
-        .cat-pill:hover { border-color: var(--trait2); transform: none; }
-        .muted { color: var(--faible); }
-        .severity-badge, .event-type { font-family: var(--aurora-sans); border-radius: 999px; }
-        input, select, textarea { font-family: var(--aurora-sans); background: rgba(8,18,38,.7); color: var(--texte); border: 1px solid var(--trait2); border-radius: 8px; }
-        @media (max-width: 760px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .grid-2, .grid-3 { grid-template-columns: 1fr; } .main { margin-left: 0; padding: .9rem; padding-top: 56px; } }
-
-        /* Le skin partagé (hybrid-skin.css, injecté APRÈS cette page) impose ses teintes en !important : on lui répond à
-           spécificité supérieure, sinon les onglets et les tuiles retombent sur son vert et ses lueurs. */
-        html :is(.hybrid-skin, body) .card, html :is(.hybrid-skin, body) .stat-card {
-            background: linear-gradient(160deg, rgba(15,32,64,.78), rgba(7,15,32,.82)) !important;
-            border: 1px solid var(--trait) !important; border-radius: 12px !important; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-        html :is(.hybrid-skin, body) .card:hover, html :is(.hybrid-skin, body) .stat-card:hover { border-color: var(--trait2) !important; transform: none; box-shadow: none; }
-        html :is(.hybrid-skin, body) .stat-card .value, html :is(.hybrid-skin, body) .value { text-shadow: none !important; }
-        html :is(.hybrid-skin, body) .stat-card .label, html :is(.hybrid-skin, body) .label { color: var(--doux) !important; }
-        html :is(.hybrid-skin, body) .main, html :is(.hybrid-skin, body) .card, html :is(.hybrid-skin, body) .stat-card { color: var(--texte) !important; }
-        html :is(.hybrid-skin, body) table th { background: rgba(41,182,246,.10) !important; color: var(--faible) !important; border-bottom: 1px solid var(--trait) !important;
-            font-size: .66rem; letter-spacing: .06em; }
-        html :is(.hybrid-skin, body) table td { border-bottom: 1px solid rgba(86,150,255,.12) !important; color: var(--texte) !important; }
-        html :is(.hybrid-skin, body) table tr:hover td { background: rgba(41,182,246,.07) !important; }
-        html :is(.hybrid-skin, body) button.waf-tab:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn) {
-            background: transparent !important; border: 1px solid transparent !important; border-radius: 999px !important; color: var(--doux) !important;
-            text-transform: none; letter-spacing: 0; backdrop-filter: none; box-shadow: none; }
-        html :is(.hybrid-skin, body) button.waf-tab:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn):hover {
-            background: rgba(59,130,246,.12) !important; color: var(--texte) !important; border-color: transparent !important; box-shadow: none; }
-        html :is(.hybrid-skin, body) button.waf-tab.active:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn) {
-            background: rgba(41,182,246,.18) !important; border-color: var(--cyan) !important; color: var(--texte) !important; }
-        html :is(.hybrid-skin, body) button.btn:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn),
-        html :is(.hybrid-skin, body) button.quick-btn:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn) {
-            background: rgba(59,130,246,.14) !important; border: 1px solid var(--trait2) !important; border-radius: 8px !important; color: var(--texte) !important; backdrop-filter: none; }
-        html :is(.hybrid-skin, body) button.btn:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn):hover,
-        html :is(.hybrid-skin, body) button.quick-btn:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn):hover {
-            background: rgba(41,182,246,.18) !important; border-color: var(--cyan) !important; box-shadow: none; }
-        html :is(.hybrid-skin, body) button.btn.primary { color: var(--cyan) !important; border-color: var(--cyan) !important; }
-        html :is(.hybrid-skin, body) button.btn.danger { color: var(--red) !important; border-color: var(--red) !important; background: rgba(255,77,94,.14) !important; }
-        html :is(.hybrid-skin, body) button.btn.success { color: var(--green) !important; border-color: var(--green) !important; background: rgba(46,204,113,.14) !important; }
-        html :is(.hybrid-skin, body) .stat-card .value { color: var(--cyan) !important; }
-        html :is(.hybrid-skin, body) .stat-card.critical .value { color: var(--red) !important; }
-        html :is(.hybrid-skin, body) .stat-card.high .value { color: var(--orange) !important; }
-        html :is(.hybrid-skin, body) .stat-card.medium .value { color: var(--yellow) !important; }
-        html :is(.hybrid-skin, body) .stat-card.low .value { color: var(--green) !important; }
-        /* ═══ fin du profil projet référence Aurora ═══ */
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb,body.dm{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar,body.dm #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb):not(.dm) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb):not(.dm) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb):not(.dm) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 8px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none;line-height:1.5}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible,.waf-tab:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:9px 12px;font-size:.82rem;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+        .conf span{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.cy .v{color:var(--cyan)} .tuile.ro .v{color:var(--rouge)} .tuile.or .v{color:var(--orange)} .tuile.ve .v{color:var(--vert)} .tuile.vi .v{color:var(--violet)}
+        .live{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;border:1px solid var(--trait);border-radius:12px;padding:8px 12px;background:rgba(10,22,46,.6);font-size:.82rem}
+        .live.att{border-color:var(--rouge);background:rgba(255,77,94,.08)}
+        .pt{width:10px;height:10px;border-radius:50%;background:var(--vert);box-shadow:0 0 8px var(--vert);flex:none} .live.att .pt{background:var(--rouge);box-shadow:0 0 8px var(--rouge)} .pt.pause{background:var(--orange);box-shadow:0 0 8px var(--orange)}
+        .onglets{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;border-bottom:1px solid var(--trait);scrollbar-width:thin}
+        .waf-tab{font:inherit;font-size:.82rem;font-weight:600;color:var(--doux);background:transparent;border:1px solid transparent;border-radius:999px;padding:6px 14px;cursor:pointer;white-space:nowrap;flex:none}
+        .waf-tab:hover{color:var(--texte);background:rgba(59,130,246,.12)} .waf-tab.active{color:var(--texte);background:rgba(41,182,246,.18);border-color:var(--cyan)}
+        iframe{width:100%;border:0;display:block;background:transparent}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:560px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.critical{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.high{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .pill.medium{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.12)} .pill.low{border-color:var(--bleu);color:var(--bleu);background:rgba(59,130,246,.12)}
+        .pill.ban{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.alerte{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .cats{display:grid;gap:6px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+        .cat{font:inherit;text-align:left;display:flex;flex-direction:column;gap:2px;border:1px solid var(--trait);border-radius:10px;padding:7px 10px;background:rgba(8,18,38,.7);color:var(--texte);cursor:pointer;min-width:0}
+        .cat:hover{border-color:var(--trait2)} .cat:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .cat.off{opacity:.62}
+        .cat b{font-size:.8rem;overflow-wrap:anywhere} .cat span{font-size:.68rem;color:var(--doux)} .cat.on span i{color:var(--vert);font-style:normal} .cat.off span i{color:var(--faible);font-style:normal}
+        .dets{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+        .det{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.7);min-width:0} .det.on{border-left-color:var(--cyan)}
+        .det b{font-size:.84rem} .det p{margin:3px 0;font-size:.72rem;color:var(--doux)} .det small{color:var(--faible);font-size:.66rem;display:block;overflow-wrap:anywhere}
+        .det .cl{display:inline-block;font-size:.62rem;padding:0 6px;margin:2px 4px 2px 0;border:1px solid var(--trait);border-radius:999px;color:var(--faible)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1><span class="live-dot" id="live-dot"></span>🛡️ Web Application Firewall</h1>
-            <div class="btn-group">
-                <button class="quick-btn" id="btnRefresh" onclick="refresh()" title="Refresh">
-                    🔄
-                    <span class="quick-btn-tooltip">Refresh</span>
-                </button>
-                <button class="quick-btn active" id="btnWafToggle" onclick="toggleWaf()" title="WAF Status">
-                    🛡️
-                    <span class="quick-btn-tooltip">WAF Active</span>
-                </button>
-                <button class="quick-btn danger" id="btnClearBans" onclick="clearAllBans()" title="Clear Bans">
-                    🗑️
-                    <span class="quick-btn-tooltip">Clear Bans</span>
-                </button>
-                <button class="quick-btn" id="btnExport" onclick="exportLogs()" title="Export Logs">
-                    📤
-                    <span class="quick-btn-tooltip">Export</span>
-                </button>
-                <button class="quick-btn" id="btnSettings" onclick="location.href='/waf/settings.html'" title="Settings">
-                    ⚙️
-                    <span class="quick-btn-tooltip">Settings</span>
-                </button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 4.5 6v5.6c0 4.4 3.1 8.1 7.5 9.6 4.4-1.5 7.5-5.2 7.5-9.6V6z"/><path d="M9 11h6M9 14h4"/></svg>
+                <div><h1>Pare-feu applicatif</h1><small>SBXWAF · configuration et supervision</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite">
+                <span id="maj">—</span>
+                <button class="btn" id="rafraichir" type="button" title="Relit l'état, les statistiques, les événements et les catégories.">⟳ Actualiser</button>
+                <button class="btn ok" id="btnWafToggle" type="button" title="Active ou met en pause le WAF (POST /mode).">WAF actif</button>
+                <button class="btn danger" id="btnClearBans" type="button" title="Lève tous les bannissements actifs (POST /bans/clear).">Vider les bans</button>
+                <button class="btn" id="btnExport" type="button" title="Télécharge le journal du WAF (GET /export).">Exporter</button>
+                <a class="btn" id="btnSettings" href="/waf/settings.html" title="Réglages du WAF.">Réglages</a>
             </div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div class="conf" id="conf" role="alertdialog" aria-label="Confirmation" hidden><span id="confTexte"></span><button class="btn danger" id="confOk" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></div>
+        <div class="retour" id="retour" role="status" hidden></div>
 
-        <!-- Live Attack Banner -->
-        <div class="live-attack-banner secure" id="liveBanner">
-            <div class="live-indicator">
-                <div class="live-dot"></div>
-                <span class="live-label">LIVE</span>
-            </div>
-            <div class="last-attack" id="lastAttack">
-                <span style="font-size:1.5rem;">✅</span>
-                <span class="last-attack-ip">All Clear</span>
-                <span class="last-attack-time">No recent attacks</span>
-            </div>
+        <section class="tuiles" id="tuiles" aria-label="Indicateurs">
+            <div class="tuile ro" title="Menaces bloquées sur 24 h (champ blocked_24h de /stats, à défaut threats_today). Une menace compte une fois."><span class="l">Menaces 24 h</span><span class="v" id="tMenaces">—</span><span class="s">bloquées</span></div>
+            <div class="tuile or" title="Adresses actuellement écartées par le pare-feu (ensemble nft du WAF, route /bans)."><span class="l">Bans actifs</span><span class="v" id="tBans">—</span><span class="s">adresses écartées</span></div>
+            <div class="tuile cy" title="Règles chargées par le WAF (champ total_rules de /status)."><span class="l">Règles WAF</span><span class="v" id="tRegles">—</span><span class="s">en service</span></div>
+            <div class="tuile vi" title="Catégories de protection non désactivées (route /categories)."><span class="l">Catégories</span><span class="v" id="tCats">—</span><span class="s">actives</span></div>
+            <div class="tuile ro" title="Menaces du jour courant (champ threats_today de /stats), remis à zéro à minuit."><span class="l">Menaces du jour</span><span class="v" id="tJour">—</span><span class="s">depuis minuit</span></div>
+            <div class="tuile ve" title="Sites protégés : vhosts_count de /stats, à défaut le nombre de sites présents dans le classement des sites attaqués (donc partiel)."><span class="l">Sites protégés</span><span class="v" id="tSites">—</span><span class="s">vhosts</span></div>
+        </section>
+        <div class="live" id="live"><span class="pt" id="pt"></span><span id="liveTexte">Aucune attaque récente.</span></div>
+
+        <div class="onglets" id="wafTabs" role="tablist" aria-label="Pages du WAF">
+            <button class="waf-tab active" type="button" role="tab" aria-selected="true" data-tab="vue">Vue d'ensemble</button>
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="overview">Menaces</button>
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="attackers">Attaquants suivis</button>
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="visits">Visites</button>
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="recon">Surfaces</button>
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="history">Historique</button>
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="campaigns">Campagnes</button>
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="config">Configuration</button>
         </div>
 
-        <!-- Emoji Stats Cards -->
-        <div class="stats-grid">
-            <div class="stat-card critical"><div class="emoji">🔥</div><div class="value" id="threats24h">0</div><div class="label">Threats 24h</div></div>
-            <div class="stat-card high"><div class="emoji">🚫</div><div class="value" id="activeBans">0</div><div class="label">Active Bans</div></div>
-            <div class="stat-card medium"><div class="emoji">⚡</div><div class="value" id="totalRules">0</div><div class="label">WAF Rules</div></div>
-            <div class="stat-card low"><div class="emoji">📁</div><div class="value" id="activeCategories">0</div><div class="label">Categories</div></div>
-            <div class="stat-card"><div class="emoji">🔒</div><div class="value" id="blocked24h">0</div><div class="label">Blocked</div></div>
-            <div class="stat-card"><div class="emoji">🛡️</div><div class="value" id="protectedSites">0</div><div class="label">Protected</div></div>
-        </div>
+        <!-- #2293 : la vue d'ensemble, page encadrée de même origine ; #2354 : les six autres pages, encadrées comme elle -->
+        <div id="vueCard"><iframe id="vueFrame" src="vue.html" title="SBXWAF — vue d'ensemble" style="height:1500px"></iframe></div>
+        <div id="pageCard" hidden><iframe id="pageFrame" title="SBXWAF" style="height:1200px"></iframe></div>
 
-        <!-- #747 — dashboard tabs: Menaces / Attaquants suivis / Visites -->
-        <div class="waf-tabs" id="wafTabs">
-            <button class="waf-tab active" data-tab="vue" onclick="switchTab('vue')">📊 Vue d'ensemble</button>
-            <button class="waf-tab" data-tab="overview" onclick="switchTab('overview')">🛡️ Menaces</button>
-            <button class="waf-tab" data-tab="attackers" onclick="switchTab('attackers')">🎯 Attaquants suivis</button>
-            <button class="waf-tab" data-tab="visits" onclick="switchTab('visits')">👁️ Visites</button>
-            <button class="waf-tab" data-tab="recon" onclick="switchTab('recon')">🛰️ Surfaces</button>
-            <button class="waf-tab" data-tab="history" onclick="switchTab('history')">📈 Historique</button>
-            <button class="waf-tab" data-tab="campaigns" onclick="switchTab('campaigns')">⚔️ Campagnes</button>
-        </div>
-
-        <!-- #2293 : la vue d'ensemble (tableau de bord SBXWAF), page encadrée de même origine ; l'ancien contenu reste dans les autres onglets -->
-        <div id="vueCard" style="grid-column:1 / -1"><iframe id="vueFrame" src="vue.html" title="SBXWAF — vue d'ensemble" style="width:100%;height:1500px;border:0;display:block;background:transparent"></iframe></div>
-        <!-- #2354 : les six autres onglets sont des pages autonomes du profil Aurora (menaces, attaquants, visites, surfaces, historique, campagnes), encadrées comme la vue d'ensemble -->
-        <div id="pageCard" style="grid-column:1 / -1;display:none"><iframe id="pageFrame" title="SBXWAF" style="width:100%;height:1200px;border:0;display:block;background:transparent"></iframe></div>
-
-        <div class="grid-2">
-            <!-- Security Events (combined alerts/bans) -->
-            <div class="card">
-                <h2>🛡️ Security Events</h2>
-                <div style="max-height: 400px; overflow-y: auto;">
-                    <table class="events-table">
-                        <thead>
-                            <tr><th>Type</th><th>🌍</th><th>IP/Target</th><th>Category</th><th>Severity</th><th>Action</th></tr>
-                        </thead>
-                        <tbody id="eventsTable">
-                            <tr><td colspan="6" class="muted" style="text-align:center;">Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+        <div id="configCard" hidden style="display:grid;gap:10px">
+            <div class="pan"><h3>Événements de sécurité <i id="nEv"></i></h3>
+                <div class="tab"><table><thead><tr><th>Type</th><th>Pays</th><th>Adresse</th><th>Catégorie</th><th>Gravité</th><th>Action</th></tr></thead><tbody id="eventsTable"></tbody></table></div>
+                <p class="note">Alertes agrégées par adresse et bannissements actifs, du plus récent au plus ancien (15 lignes). Bannir pose un ban de 4 h ; une adresse déjà écartée se lève.</p>
             </div>
-
-            <!-- Category Pills with Emojis -->
-            <div class="card">
-                <h2>🧠 Détections comportementales
-                    <span class="muted" style="font-size:0.8rem;">— celles qui ne tiennent pas dans un fichier de motifs</span></h2>
-                <div id="detections" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.7rem;margin-top:.7rem">
-                    <div class="muted">…</div>
+            <div class="grille">
+                <div class="pan"><h3>Catégories de protection <i id="nCats"></i></h3>
+                    <div class="cats" id="categoryPills"></div>
+                    <p class="note">Un clic active ou désactive la catégorie (POST /category/…/toggle). Désactiver demande une confirmation.</p>
                 </div>
-            </div>
-
-            <div class="card">
-                <h2>📁 Protection Categories</h2>
-                <div class="category-pills" id="categoryPills">Loading...</div>
+                <div class="pan"><h3>Détections comportementales <i>celles qui ne tiennent pas dans un fichier de motifs</i></h3>
+                    <div class="dets" id="detections"></div>
+                </div>
             </div>
         </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-        <!-- Ces trois cartes ne concernent QUE les menaces : on les reserve a
-             l'onglet Menaces (#1369), elles debordaient sur tous les onglets. -->
-        <div class="grid-3 overview-only">
-            <!-- Severity Donut -->
-            <div class="card">
-                <h2>📊 By Severity</h2>
-                <div class="donut-container" id="severityDonut">Loading...</div>
-            </div>
-
-            <!-- Category Donut -->
-            <div class="card">
-                <h2>🏷️ By Category</h2>
-                <div class="donut-container" id="categoryDonut">Loading...</div>
-            </div>
-
-            <!-- Top Attacked Sites -->
-            <div class="card">
-                <h2>🎯 Top Attacked Sites</h2>
-                <div id="topVhosts">Loading...</div>
-            </div>
-        </div>
-
-        <!-- Triple Eyemote Sensors -->
-        <div class="grid-3">
-            <!-- Eyemote 1: Attack Origin by Continent -->
-            <div class="card eyemote-card">
-                <h2>👁️ Attack Origin</h2>
-                <div class="eyemote-mini">
-                    <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgOrigin">
-                        <defs><radialGradient id="eyeGlow1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#00ff41" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
-                        <circle cx="100" cy="100" r="95" fill="url(#eyeGlow1)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="originRing1" cx="100" cy="100" r="85" fill="none" stroke="#DF0024" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="originRing2" cx="100" cy="100" r="68" fill="none" stroke="#0085C7" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="originRing3" cx="100" cy="100" r="51" fill="none" stroke="#F4C300" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="originRing4" cx="100" cy="100" r="34" fill="none" stroke="#009F3D" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="originRing5" cx="100" cy="100" r="17" fill="none" stroke="#666666" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle cx="100" cy="100" r="8" fill="#00ff41" class="eyemote-pupil"/>
-                    </svg>
-                    <div class="eyemote-total-mini" id="originTotal">0</div>
-                </div>
-                <div class="eyemote-legend-mini" id="originLegend"></div>
-            </div>
-
-            <!-- Eyemote 2: Visitors by Country -->
-            <div class="card eyemote-card">
-                <h2>👤 Visitors</h2>
-                <div class="eyemote-mini">
-                    <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgVisitors">
-                        <defs><radialGradient id="eyeGlow2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#00d4ff" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
-                        <circle cx="100" cy="100" r="95" fill="url(#eyeGlow2)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="visitorRing1" cx="100" cy="100" r="85" fill="none" stroke="#00d4ff" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="visitorRing2" cx="100" cy="100" r="68" fill="none" stroke="#0ea5e9" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="visitorRing3" cx="100" cy="100" r="51" fill="none" stroke="#6366f1" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="visitorRing4" cx="100" cy="100" r="34" fill="none" stroke="#8b5cf6" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="visitorRing5" cx="100" cy="100" r="17" fill="none" stroke="#a855f7" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle cx="100" cy="100" r="8" fill="#00d4ff" class="eyemote-pupil"/>
-                    </svg>
-                    <div class="eyemote-total-mini visitor" id="visitorTotal">0</div>
-                </div>
-                <div class="eyemote-legend-mini" id="visitorLegend"></div>
-            </div>
-
-            <!-- Eyemote 3: Target Vhosts -->
-            <div class="card eyemote-card">
-                <h2>🎯 Target Vhosts</h2>
-                <div class="eyemote-mini">
-                    <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgVhosts">
-                        <defs><radialGradient id="eyeGlow3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#f97316" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
-                        <circle cx="100" cy="100" r="95" fill="url(#eyeGlow3)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="vhostRing1" cx="100" cy="100" r="85" fill="none" stroke="#ef4444" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="vhostRing2" cx="100" cy="100" r="68" fill="none" stroke="#f97316" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="vhostRing3" cx="100" cy="100" r="51" fill="none" stroke="#eab308" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="vhostRing4" cx="100" cy="100" r="34" fill="none" stroke="#22c55e" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                        <circle class="ring-fill" id="vhostRing5" cx="100" cy="100" r="17" fill="none" stroke="#14b8a6" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                        <circle cx="100" cy="100" r="8" fill="#f97316" class="eyemote-pupil"/>
-                    </svg>
-                    <div class="eyemote-total-mini vhost" id="vhostTotal">0</div>
-                </div>
-                <div class="eyemote-legend-mini" id="vhostLegend"></div>
-            </div>
-
-            <!-- Phase 7 (#498) — silenced-but-tracked attackers (24 h) -->
-            <div class="card" id="trackedAttackersCard" style="grid-column: span 2;">
-                <h2>🎯 Attaquants suivis <span class="muted" style="font-size:0.8rem;">— écartés du réseau, toujours profilés (24 h)</span></h2>
-                <div class="table-wrap">
-                    <table class="data-table" id="trackedAttackersTable">
-                        <thead>
-                            <tr>
-                                <th>Acteur</th>
-                                <th>Sondes</th>
-                                <th>Gravité</th>
-                                <th>Catégories dominantes</th>
-                                <th>Première vue</th>
-                                <th>Dernière vue</th>
-                                <th>État</th>
-                            </tr>
-                        </thead>
-                        <tbody id="trackedAttackersBody">
-                            <tr><td colspan="7" class="muted">Loading…</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- #747 — non-attacker visit statistics (shown in the Visites tab) -->
-            <div class="card" id="visitsCard" style="grid-column: 1 / -1;">
-                <h2>👁️ Visites — trafic légitime <span class="muted" style="font-size:0.8rem;">— total <b id="visitsTotal">—</b> requêtes vues par le WAF</span></h2>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-top:0.6rem">
-                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🧭 Type de client</h3><div id="visitsClientType" class="vbars"><span class="muted">…</span></div></div>
-                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">💻 Système</h3><div id="visitsOS" class="vbars"><span class="muted">…</span></div></div>
-                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🌍 Pays</h3><div id="visitsCountries" class="vbars"><span class="muted">…</span></div></div>
-                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">📊 Statut</h3><div id="visitsStatus" class="vbars"><span class="muted">…</span></div></div>
-                    <div style="grid-column:1/-1"><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🎯 Sites les plus visités</h3><div id="visitsVhosts" class="vbars"><span class="muted">…</span></div></div>
-                </div>
-            </div>
-
-            <!-- #1221 — quelle surface est attaquée, et par quel moteur.
-                 Regroupees dans l'onglet Surfaces (#1369). -->
-            <div class="card recon-card" style="grid-column: span 2; display:none;">
-                <h2>🛰️ Surfaces surveillées
-                    <span class="muted" style="font-size:0.8rem;">— sbxwaf ne voit que le HTTP ; authwatch couvre le reste</span></h2>
-                <div id="surfaces" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);margin-top:.7rem">
-                    <div class="muted" style="padding:1rem">…</div>
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;margin-top:1.1rem">
-                    <div>
-                        <h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🎯 Comptes visés
-                            <span class="muted" style="font-size:.72rem;font-weight:400">— SSH, SMTP, IMAP</span></h3>
-                        <div class="table-wrap" id="comptesVises"><span class="muted">…</span></div>
-                        <p class="muted" style="font-size:.7rem;margin:.5rem 0 0">
-                            Un compte tenté depuis des centaines de sources n'est pas un utilisateur
-                            qui se trompe. S'il n'existe pas sur la box, c'est du ciblage.
-                        </p>
-                    </div>
-                    <div>
-                        <h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🕳️ Leurres touchés
-                            <span class="muted" style="font-size:.72rem;font-weight:400">— services inexistants</span></h3>
-                        <div class="table-wrap" id="leurresTouches"><span class="muted">…</span></div>
-                        <p class="muted" style="font-size:.7rem;margin:.5rem 0 0">
-                            Ces ports n'offrent rien. Toute connexion y est un balayage,
-                            et vaut un bannissement dès le premier contact.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- #1219 — origine géographique et noms demandés que la box ne sert pas -->
-            <div class="card recon-card" style="grid-column: span 2; display:none;">
-                <h2>🌍 Origine des requêtes
-                    <span class="muted" style="font-size:0.8rem;">— sur l'ensemble du journal de menaces</span></h2>
-                <div id="paysCamembert" style="margin:.6rem 0"><span class="muted">…</span></div>
-                <div class="table-wrap" id="paysTable"></div>
-            </div>
-
-            <div class="card recon-card" style="grid-column: span 2; display:none;">
-                <h2>🕳️ Noms demandés, non servis
-                    <span class="muted" style="font-size:0.8rem;" id="nonServisResume"></span></h2>
-                <p class="muted" style="font-size:0.72rem;margin:.2rem 0 .6rem">
-                    Ces noms reçoivent un 421 : aucun vhost ne leur répond. Entre le balayage,
-                    la liste désigne les vhosts qui <b>manquent</b> — un nom encore référencé
-                    ailleurs, un service jamais publié.
-                </p>
-                <div class="table-wrap" id="nonServisTable"></div>
-            </div>
-
-            <!-- #1062 — historique des menaces depuis les logs tournés (onglet Historique) -->
-            <div class="card" id="historyCard" style="grid-column: 1 / -1; display:none;">
-                <h2>📈 Historique des menaces <span class="muted" style="font-size:0.8rem;">— <b id="histDays">—</b> jours · <b id="histTotal">—</b> menaces bloquées sur toute la rétention</span></h2>
-                <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:1.2rem;margin-top:0.6rem">
-                    <div><h3 style="font-size:0.85rem;margin:0 0 .5rem;color:var(--text);">Menaces par jour</h3><div id="histDaysBars" class="vbars"><span class="muted">…</span></div></div>
-                    <div><h3 style="font-size:0.85rem;margin:0 0 .5rem;color:var(--text);">🎯 Attaquants persistants</h3><div id="histTopIps" class="vbars"><span class="muted">…</span></div></div>
-                </div>
-            </div>
-
-            <div class="card" id="campaignsCard" style="grid-column: 1 / -1; display:none;">
-                <h2>⚔️ Campagnes d'attaque <span class="muted" style="font-size:0.8rem;">— <b id="campAttackers">—</b> attaquants regroupés en <b id="campCount">—</b> campagnes (même workflow)</span></h2>
-                <p class="muted" style="font-size:0.78rem;margin:.2rem 0 .6rem">
-                    Attaquants au <b>même mode opératoire</b> (mêmes sondes, même outil), corrélés à travers le temps et les IP — même s'ils changent d'adresse.
-                </p>
-                <div class="table-wrap">
-                    <table class="data-table" id="campaignsTable">
-                        <thead><tr><th>Outil</th><th>IP</th><th>Sondes</th><th>Séquence-type</th></tr></thead>
-                        <tbody><tr><td colspan="4" class="muted">…</td></tr></tbody>
-                    </table>
-                </div>
-            </div>
-
-        </div>
-    </main>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMBED = !!Q.get('embed');
+        if (EMBED) document.body.classList.add('emb');
+        if (DEMO) document.body.classList.add('dm');
         const API = '/api/v1/waf';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const nb = v => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? '—' : Number(v).toLocaleString('fr-FR');
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        // Category Emojis (substring-matched by getCatEmoji, exact-matched by loadTrackedAttackers)
-        // getCatEmoji fait une correspondance par SOUS-CHAINE, premier trouve :
-        // l'ordre est donc porteur de sens. Les clefs specifiques doivent
-        // preceder les generiques, sinon « cve_voip » tomberait sur « voip » et
-        // perdrait son identite de CVE.
-        const CAT_EMOJI = {
-            // Surfaces hors HTTP (#1220) — sans elles, toutes ces categories
-            // retombaient sur le pictogramme par defaut, et le tableau
-            // affichait la meme icone sur chaque ligne.
-            'auth_ssh': '🔑', 'auth_smtp': '✉️', 'auth_imap': '📥',
-            'leurre': '🕳️',
-            'host_anomaly': '🚪',
-            'product_absent': '👻',
-            'robots': '🤖',
-            'sqli': '💉', 'sql': '💉', 'injection': '💉',
-            'xss': '🔥',
-            'rce': '💥', 'command': '💥', 'dos': '💥',
-            'lfi': '📂', 'rfi': '🌐', 'traversal': '📂', 'path': '📂',
-            'recon_crawler': '🕷️', 'recon': '🕷️', 'crawler': '🕷️', 'scanner': '🕷️', 'scan': '🕷️', 'bot': '🤖',
-            'honeypot': '🍯',
-            'credential_harvest': '🔓', 'credential': '🔓', 'brute': '🔓',
-            'api_abuse': '🎣', 'api': '🎣',
-            'waf_fingerprint': '🖐️', 'fingerprint': '🖐️',
-            'cve_2024': '🧬', 'cve': '🧬',
-            'voip': '📞', 'xmpp': '💬',
-            'webmail': '📧', 'mail': '📧',
-            'router': '📡',
-            'default': '⚠️'
-        };
+        let STATS = null, STATUS = null, CATS = null, BANS = null, ALERTS = null, DETS = null;
+        let SESSION_OK = true, WAF_ACTIF = true, CONF = null, ONGLET = 'vue';
 
-        const SEV_COLORS = { critical: '#ff4466', high: '#ff9944', medium: '#ffcc00', low: '#4488ff' };
-        const SEV_EMOJI = { critical: '🔴', high: '🟠', medium: '🟡', low: '🔵' };
-        const CAT_COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#0ea5e9', '#14b8a6'];
-        const ARC_COLORS = ['#ff0044', '#ff4400', '#ff8800', '#ffcc00', '#88ff00', '#00ff44', '#00ffcc', '#0088ff', '#4400ff', '#cc00ff'];
-
-        // Country to Continent mapping
-        const COUNTRY_CONTINENT = {
-            // Europe (Blue Ring)
-            'FR': 'europe', 'DE': 'europe', 'GB': 'europe', 'IT': 'europe', 'ES': 'europe',
-            'NL': 'europe', 'BE': 'europe', 'PL': 'europe', 'SE': 'europe', 'NO': 'europe',
-            'FI': 'europe', 'DK': 'europe', 'AT': 'europe', 'CH': 'europe', 'PT': 'europe',
-            'IE': 'europe', 'CZ': 'europe', 'RO': 'europe', 'HU': 'europe', 'GR': 'europe',
-            'UA': 'europe', 'RU': 'europe', 'BY': 'europe', 'SK': 'europe', 'BG': 'europe',
-            // Asia (Yellow Ring)
-            'CN': 'asia', 'JP': 'asia', 'KR': 'asia', 'IN': 'asia', 'ID': 'asia',
-            'TH': 'asia', 'VN': 'asia', 'PH': 'asia', 'MY': 'asia', 'SG': 'asia',
-            'TW': 'asia', 'HK': 'asia', 'PK': 'asia', 'BD': 'asia', 'IR': 'asia',
-            'TR': 'asia', 'SA': 'asia', 'AE': 'asia', 'IL': 'asia', 'KZ': 'asia',
-            // Africa (Black Ring)
-            'ZA': 'africa', 'EG': 'africa', 'NG': 'africa', 'KE': 'africa', 'MA': 'africa',
-            'DZ': 'africa', 'TN': 'africa', 'GH': 'africa', 'ET': 'africa', 'TZ': 'africa',
-            // Oceania (Green Ring)
-            'AU': 'oceania', 'NZ': 'oceania', 'FJ': 'oceania', 'PG': 'oceania',
-            // Americas (Red Ring)
-            'US': 'americas', 'CA': 'americas', 'MX': 'americas', 'BR': 'americas',
-            'AR': 'americas', 'CL': 'americas', 'CO': 'americas', 'PE': 'americas',
-            'VE': 'americas', 'EC': 'americas', 'CU': 'americas', 'PR': 'americas'
-        };
-
-        function getContinent(countryCode) {
-            return COUNTRY_CONTINENT[countryCode?.toUpperCase()] || 'americas';
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { 'Content-Type': 'application/json', Accept: 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-
-        // Mini Eyemote Ring Config (smaller version)
-        const RING_CONFIG_MINI = [
-            { id: 1, continent: 'americas', color: '#DF0024', circ: 534 },
-            { id: 2, continent: 'europe', color: '#0085C7', circ: 427 },
-            { id: 3, continent: 'asia', color: '#F4C300', circ: 320 },
-            { id: 4, continent: 'oceania', color: '#009F3D', circ: 214 },
-            { id: 5, continent: 'africa', color: '#666666', circ: 107 }
-        ];
-
-        // Visitor ring colors (blue theme)
-        const VISITOR_COLORS = ['#00d4ff', '#0ea5e9', '#6366f1', '#8b5cf6', '#a855f7'];
-        // Vhost ring colors (warm theme)
-        const VHOST_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6'];
-
-        // Generic eyemote updater for all 3 sensors
-        function updateEyemoteMini(prefix, events, colors, totalId, legendId, isVhost = false) {
-            const counts = { americas: 0, europe: 0, asia: 0, oceania: 0, africa: 0 };
-            const countryData = { americas: {}, europe: {}, asia: {}, oceania: {}, africa: {} };
-            const vhostData = {};
-
-            events.forEach(e => {
-                const continent = getContinent(e.country);
-                const count = e.count || 1;
-                counts[continent] = (counts[continent] || 0) + count;
-                if (e.country) {
-                    countryData[continent][e.country] = (countryData[continent][e.country] || 0) + count;
-                }
-                if (isVhost && e.vhost) {
-                    vhostData[e.vhost] = (vhostData[e.vhost] || 0) + count;
-                }
-            });
-
-            const total = Object.values(counts).reduce((a, b) => a + b, 0);
-            const totalEl = document.getElementById(totalId);
-            if (totalEl) totalEl.textContent = total;
-
-            // Update rings
-            RING_CONFIG_MINI.forEach((cfg, i) => {
-                const count = counts[cfg.continent] || 0;
-                const pct = total > 0 ? count / total : 0;
-                const ringEl = document.getElementById(prefix + 'Ring' + cfg.id);
-                if (ringEl) {
-                    ringEl.style.stroke = colors[i];
-                    ringEl.style.strokeDasharray = (pct * cfg.circ) + ' ' + cfg.circ;
-                }
-            });
-
-            // Update legend
-            const legendEl = document.getElementById(legendId);
-            if (legendEl) {
-                if (isVhost) {
-                    // Vhost legend: show top vhosts
-                    const vhosts = Object.entries(vhostData).sort((a, b) => b[1] - a[1]).slice(0, 5);
-                    if (vhosts.length === 0) {
-                        legendEl.innerHTML = '<div style="color:var(--muted-dark);font-size:0.75rem;text-align:center;">No targets</div>';
-                    } else {
-                        legendEl.innerHTML = vhosts.map(([vh, cnt], i) => {
-                            const pct = total > 0 ? Math.round(cnt / total * 100) : 0;
-                            const emoji = vh.includes('git') ? '💻' : vh.includes('mail') ? '📧' : vh.includes('api') ? '⚡' : '🌐';
-                            return '<div class="legend-row-mini" style="border-color:' + VHOST_COLORS[i] + '"><span class="row-dot" style="background:' + VHOST_COLORS[i] + '"></span><span class="row-val">' + cnt + ' <span style="font-size:0.6rem;color:var(--muted-dark);">(' + pct + '%)</span></span><span class="vhost-badge" style="border-color:' + VHOST_COLORS[i] + '">' + emoji + ' ' + vh.replace(/\.gk2\.secubox\.in$/, '') + '</span></div>';
-                        }).join('');
-                    }
-                } else {
-                    // Country legend: show by continent with flags (% relative to continent total)
-                    const continents = ['americas', 'europe', 'asia', 'oceania', 'africa'];
-                    legendEl.innerHTML = continents.map((cont, i) => {
-                        const contTotal = counts[cont] || 0;
-                        if (contTotal === 0) return '';
-                        const pct = total > 0 ? Math.round(contTotal / total * 100) : 0;
-                        const countries = Object.entries(countryData[cont]).sort((a, b) => b[1] - a[1]).slice(0, 6);
-                        // Flag shows % relative to its own continent
-                        const flags = countries.map(([cc, cnt]) => {
-                            const flagPct = Math.round(cnt / contTotal * 100);
-                            return '<span class="flag-mini" style="border-color:' + colors[i] + '" title="' + cc + ': ' + cnt + ' (' + flagPct + '%)">' + countryToFlag(cc) + '<span class="fm-count">' + flagPct + '%</span></span>';
-                        }).join('');
-                        return '<div class="legend-row-mini" style="border-color:' + colors[i] + '"><span class="row-dot" style="background:' + colors[i] + '"></span><span class="row-val">' + contTotal + ' <span style="font-size:0.6rem;color:var(--muted-dark);">(' + pct + '%)</span></span><span class="row-flags">' + flags + '</span></div>';
-                    }).filter(Boolean).join('');
-                    if (!legendEl.innerHTML) legendEl.innerHTML = '<div style="color:var(--muted-dark);font-size:0.75rem;text-align:center;">No data</div>';
-                }
-            }
-        }
-
-        // Update all 3 eyemotes
-        function updateAllEyemotes(events, statsData) {
-            // 1. Attack Origin - by continent (attacks)
-            updateEyemoteMini('origin', events, RING_CONFIG_MINI.map(c => c.color), 'originTotal', 'originLegend', false);
-
-            // 2. Visitors - unique IPs by continent
-            const visitorEvents = [];
-            const seenIps = new Set();
-            events.forEach(e => {
-                if (e.ip && !seenIps.has(e.ip)) {
-                    seenIps.add(e.ip);
-                    visitorEvents.push({ country: e.country, count: 1 });
-                }
-            });
-            updateEyemoteMini('visitor', visitorEvents, VISITOR_COLORS, 'visitorTotal', 'visitorLegend', false);
-
-            // 3. Target Vhosts - attacks per vhost
-            const vhostEvents = [];
-            if (statsData?.top_vhosts) {
-                Object.entries(statsData.top_vhosts).forEach(([vh, data]) => {
-                    const count = typeof data === 'object' ? data.count || 0 : data;
-                    vhostEvents.push({ vhost: vh, count: count, country: 'XX' });
-                });
-            }
-            updateEyemoteMini('vhost', vhostEvents, VHOST_COLORS, 'vhostTotal', 'vhostLegend', true);
-        }
-
-        function getCatEmoji(cat) {
-            if (!cat) return CAT_EMOJI.default;
-            const c = cat.toLowerCase();
-            for (const [key, emoji] of Object.entries(CAT_EMOJI)) {
-                if (c.includes(key)) return emoji;
-            }
-            return CAT_EMOJI.default;
-        }
-
-        function countryToFlag(code) {
-            if (!code || code === "LAN" || code.length !== 2) return "🌐";
-            return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
-        }
-
-        function timeAgo(ts) {
-            if (!ts) return '';
-            const now = Date.now();
-            const date = typeof ts === 'string' ? new Date(ts).getTime() : ts * 1000;
-            const diff = Math.floor((now - date) / 1000);
-            if (diff < 60) return diff + 's ago';
-            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-            return Math.floor(diff / 86400) + 'd ago';
-        }
-
-        async function api(path, opts = {}) {
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
-                if (!res.ok) return null;
-                return res.json();
-            } catch (e) { console.error('API error:', path, e); return null; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes() };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok && !(data && data.success === false), statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(ok, msg) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && (res.data.detail || res.data.error);
+            if (d) return String(d);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function drapeau(c) { return /^[A-Za-z]{2}$/.test(c || '') ? String.fromCodePoint(127397 + c.toUpperCase().charCodeAt(0), 127397 + c.toUpperCase().charCodeAt(1)) : '—'; }
+        function ilYa(ts) {
+            if (!ts) return '';
+            const t = typeof ts === 'string' ? new Date(ts).getTime() : ts * 1000; if (isNaN(t)) return '';
+            const d = Math.max(0, Math.floor((Date.now() - t) / 1000));
+            return d < 60 ? 'il y a ' + d + ' s' : d < 3600 ? 'il y a ' + Math.floor(d / 60) + ' min' : d < 86400 ? 'il y a ' + Math.floor(d / 3600) + ' h' : 'il y a ' + Math.floor(d / 86400) + ' j';
         }
 
-        // Live Attack Banner
-        let lastEvent = null;
-        function updateLiveBanner(event) {
-            const banner = document.getElementById('liveBanner');
-            const lastAttack = document.getElementById('lastAttack');
-            if (!event) {
-                banner.classList.add('secure');
-                banner.classList.remove('attack');
-                lastAttack.innerHTML = '<span style="font-size:1.5rem;">✅</span><span class="last-attack-ip">All Clear</span><span class="last-attack-time">No recent attacks</span>';
-            } else {
-                banner.classList.remove('secure');
-                lastAttack.innerHTML =
-                    '<span style="font-size:1.5rem;">' + countryToFlag(event.country || '') + '</span>' +
-                    '<span class="last-attack-ip">' + (event.ip || event.client_ip || '-') + '</span>' +
-                    '<span class="last-attack-cat">' + getCatEmoji(event.category || event.scenario) + ' ' + (event.category || event.scenario || 'Attack') + '</span>' +
-                    '<span class="severity-badge ' + (event.severity || 'medium').toLowerCase() + '">' + (event.severity || 'MEDIUM') + '</span>' +
-                    '<span class="last-attack-time">' + timeAgo(event.timestamp) + '</span>';
-            }
+        function demoData() {
+            const t = new Date().toISOString();
+            STATS = { blocked_24h: 1284, threats_today: 311, vhosts_count: 9, top_vhosts: { 'app.example.test': 420, 'api.example.test': 310 } };
+            STATUS = { enabled: true, total_rules: 382, active_categories: 4, autoban_enabled: true };
+            CATS = { categories: { sqli: { name: 'Injection SQL', enabled: true, rules_count: 64 }, xss: { name: 'Scripts intersites', enabled: true, rules_count: 58 },
+                                   rce: { name: 'Exécution de code', enabled: true, rules_count: 41 }, robots: { name: 'Robots', enabled: false, rules_count: 120 } } };
+            BANS = { total: 2, bans: [{ value: '203.0.113.7', country: 'DE', scenario: 'sqli', created_at: t, duration: '4h' }, { value: '198.51.100.23', country: 'US', scenario: 'leurre', created_at: t, duration: '24h' }] };
+            ALERTS = { alerts: [{ client_ip: '203.0.113.41', country: 'NL', categories: ['xss', 'recon'], max_severity: 'high', count: 12, timestamp: t },
+                                { client_ip: '203.0.113.7', country: 'DE', categories: ['sqli'], max_severity: 'critical', count: 3, currently_banned: true, timestamp: t }] };
+            DETS = { detections: [{ nom: 'Hôtes non routés', actif: true, resume: "Un navigateur n'envoie jamais un nom qu'on ne publie pas", classes: ['hôte vide', 'IP littérale', 'nom généré (DGA)'], detail: '3 vhosts surveillés' },
+                                  { nom: 'Leurres de service', actif: false, resume: 'Un port qui n’offre rien ne reçoit que des balayages', classes: ['ssh', 'smtp'], detail: 'inactif' }] };
         }
 
-        // Combined Security Events (alerts + bans)
-        async function loadSecurityEvents() {
-            const [alertsData, bansData] = await Promise.all([
-                api('/alerts?limit=20&aggregate=true'),
-                api('/bans')
-            ]);
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/stats'), lire('/alerts?limit=20&aggregate=true'), lire('/bans'), lire('/categories'), lire('/detections')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUS = val(0); STATS = val(1); ALERTS = val(2); BANS = val(3); CATS = val(4); DETS = val(5);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le WAF (service arrêté ou injoignable).';
+            rendre();
+        }
 
-            const events = [];
+        function topVhostsCount(tv) { return tv ? (Array.isArray(tv) ? tv.length : Object.keys(tv).length) : null; }
 
-            // Add alerts as events
-            if (alertsData?.alerts) {
-                alertsData.alerts.forEach(a => {
-                    events.push({
-                        type: 'alert',
-                        ip: a.client_ip || a.value,
-                        country: a.country,
-                        // L'agrégat rend `categories` (une LISTE) ; l'ancien code
-                        // ne lisait que `scenario`/`category`, absents de cette
-                        // forme — d'où « Unknown » sur chaque ligne, et l'icône
-                        // qui retombait sur le pictogramme par défaut. On prend
-                        // la catégorie dominante, et on signale s'il y en a
-                        // d'autres plutôt que de les taire.
-                        category: (Array.isArray(a.categories) && a.categories.length)
-                            ? (a.categories[0] + (a.categories.length > 1 ? ' +' + (a.categories.length - 1) : ''))
-                            : (a.category || a.scenario || 'Unknown'),
-                        severity: a.max_severity || a.severity || 'medium',
-                        dejaBanni: !!a.currently_banned,
-                        timestamp: a.timestamp || a.created_at,
-                        count: a.count || 1
-                    });
-                });
-            }
-
-            // Add bans as events
-            if (bansData?.bans) {
-                document.getElementById('activeBans').textContent = bansData.total || bansData.bans.length;
-                bansData.bans.forEach(b => {
-                    events.push({
-                        type: 'ban',
-                        ip: b.value || b.ip,
-                        country: b.country,
-                        category: b.scenario || b.reason || 'Manual ban',
-                        severity: 'critical',
-                        timestamp: b.created_at,
-                        duration: b.duration
-                    });
-                });
-            }
-
-            // Sort by timestamp descending
-            events.sort((a, b) => {
-                const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-                const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-                return tb - ta;
+        function evenements() {
+            const ev = [];
+            ((ALERTS && ALERTS.alerts) || []).forEach(a => {
+                const cats = Array.isArray(a.categories) && a.categories.length ? a.categories[0] + (a.categories.length > 1 ? ' +' + (a.categories.length - 1) : '') : (a.category || a.scenario || '—');
+                ev.push({ type: 'alert', ip: a.client_ip || a.value, country: a.country, category: cats, severity: String(a.max_severity || a.severity || 'medium').toLowerCase(), dejaBanni: !!a.currently_banned, ts: a.timestamp || a.created_at, count: a.count || 1 });
             });
-
-            // Update live banner with most recent
-            if (events.length > 0) {
-                updateLiveBanner(events[0]);
-            } else {
-                updateLiveBanner(null);
-            }
-
-            // Store events and stats globally, update eyemotes
-            window._wafEvents = events;
-            if (window._wafStats) {
-                updateAllEyemotes(events, window._wafStats);
-            }
-
-            // Render table
-            const tbody = document.getElementById('eventsTable');
-            if (events.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted-dark);text-align:center;">No security events</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = events.slice(0, 15).map(e => {
-                const typeClass = (e.type === 'ban' || e.dejaBanni) ? 'ban'
-                    : (e.type === 'blocked' ? 'blocked' : 'alert');
-                const typeLabel = (e.type === 'ban' || e.dejaBanni) ? '🚫 BANNI'
-                    : (e.type === 'blocked' ? '🛡️ BLOCK' : '⚠️ ALERTE');
-                const sevClass = (e.severity || 'medium').toLowerCase();
-                // Une adresse DÉJÀ écartée par le pare-feu ne doit pas se voir
-                // proposer « Ban » : le bouton serait sans objet, et laisserait
-                // croire qu'elle passe encore. On offre la levée à la place.
-                const actionBtn = (e.type === 'ban' || e.dejaBanni)
-                    ? '<button class="btn success sm" onclick="unbanIp(\'' + e.ip + '\')">Unban</button>'
-                    : '<button class="btn danger sm" onclick="banIp(\'' + e.ip + '\')">Ban</button>';
-                return '<tr>' +
-                    '<td><span class="event-type ' + typeClass + '">' + typeLabel + '</span></td>' +
-                    '<td>' + countryToFlag(e.country) + '</td>' +
-                    '<td>' + e.ip + (e.count > 1 ? ' <span style="color:var(--muted-dark);">(' + e.count + 'x)</span>' : '') + '</td>' +
-                    '<td>' + getCatEmoji(e.category) + ' <span style="max-width:120px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle;">' + e.category + '</span></td>' +
-                    '<td><span class="severity-badge ' + sevClass + '">' + e.severity.toUpperCase() + '</span></td>' +
-                    '<td>' + actionBtn + '</td>' +
-                '</tr>';
-            }).join('');
+            ((BANS && BANS.bans) || []).forEach(b => ev.push({ type: 'ban', ip: b.value || b.ip, country: b.country, category: b.scenario || b.reason || 'ban manuel', severity: 'critical', ts: b.created_at, count: 1 }));
+            ev.sort((a, b) => (b.ts ? new Date(b.ts).getTime() : 0) - (a.ts ? new Date(a.ts).getTime() : 0));
+            return ev.filter(e => e.ip);
         }
 
-        // Category Pills
-        async function loadCategories() {
-            const d = await api('/categories');
-            const el = document.getElementById('categoryPills');
-            if (!d || !d.categories || Object.keys(d.categories).length === 0) {
-                el.innerHTML = '<p style="color:var(--muted-dark);">No categories configured</p>';
-                document.getElementById('activeCategories').textContent = '0';
-                return;
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (STATUS && STATUS.enabled != null) WAF_ACTIF = !!STATUS.enabled;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!STATUS && !STATS) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (!WAF_ACTIF) { etat.className = 'actif att'; etat.textContent = 'WAF EN PAUSE'; }
+            else { etat.className = 'actif'; etat.textContent = 'ACTIF' + (STATUS && STATUS.total_rules != null ? ' · ' + nb(STATUS.total_rules) + ' RÈGLES EN SERVICE' : ''); }
+            const b = $('btnWafToggle'); b.textContent = WAF_ACTIF ? 'WAF actif' : 'WAF en pause'; b.className = 'btn ' + (WAF_ACTIF ? 'ok' : 'danger'); b.setAttribute('aria-pressed', String(WAF_ACTIF));
+
+            const s = STATS;
+            $('tMenaces').textContent = s ? nb(s.blocked_24h != null ? s.blocked_24h : s.threats_today) : '—';
+            $('tJour').textContent = s ? nb(s.threats_today) : '—';
+            $('tBans').textContent = BANS ? nb(BANS.total != null ? BANS.total : (BANS.bans || []).length) : '—';
+            $('tRegles').textContent = STATUS ? nb(STATUS.total_rules) : '—';
+            const nc = CATS && CATS.categories ? Object.values(CATS.categories).filter(c => c.enabled !== false).length : (STATUS && STATUS.active_categories != null ? STATUS.active_categories : null);
+            $('tCats').textContent = nc == null ? '—' : nb(nc);
+            $('tSites').textContent = s ? nb(s.vhosts_count != null ? s.vhosts_count : topVhostsCount(s.top_vhosts)) : '—';
+
+            const ev = evenements(), live = $('live');
+            live.classList.toggle('att', ev.length > 0); $('pt').classList.toggle('pause', !WAF_ACTIF);
+            const t = $('liveTexte'); t.textContent = '';
+            if (!ev.length) t.textContent = SESSION_OK ? 'Aucune attaque récente.' : '—';
+            else {
+                const e = ev[0];
+                t.append(drapeau(e.country) + ' ', el('b', 'mono', e.ip), ' · ' + e.category + ' · ', el('span', 'pill ' + e.severity, e.severity.toUpperCase()), ' ' + ilYa(e.ts));
             }
-            const cats = Object.entries(d.categories).sort((a, b) => (b[1].rules_count || 0) - (a[1].rules_count || 0));
-            document.getElementById('activeCategories').textContent = cats.filter(([id, c]) => c.enabled !== false).length;
-            el.innerHTML = cats.map(([id, cat]) => {
-                const enabled = cat.enabled !== false;
-                const emoji = getCatEmoji(id);
-                return '<div class="cat-pill' + (enabled ? '' : ' disabled') + '" onclick="toggleCategory(\'' + id + '\', ' + !enabled + ')">' +
-                    '<span class="cat-emoji">' + emoji + '</span>' +
-                    '<span class="cat-info">' +
-                        '<span class="cat-name">' + (cat.name || id) + '</span>' +
-                        '<span class="cat-count">' + (cat.rules_count || 0) + ' rules • ' + (enabled ? '✓ ON' : '✗ OFF') + '</span>' +
-                    '</span>' +
-                '</div>';
-            }).join('');
+            rendreEvenements(ev); rendreCats(); rendreDets();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        // Stats
-        async function loadStats() {
-            const d = await api('/stats');
-            if (!d) {
-                document.getElementById('threats24h').textContent = '0';
-                document.getElementById('blocked24h').textContent = '0';
-                document.getElementById('severityDonut').innerHTML = '<p style="color:var(--muted-dark);">No data</p>';
-                document.getElementById('categoryDonut').innerHTML = '<p style="color:var(--muted-dark);">No data</p>';
-                document.getElementById('topVhosts').innerHTML = '<p style="color:var(--muted-dark);">No data</p>';
-                return;
-            }
-            document.getElementById('threats24h').textContent = (d.blocked_24h || d.threats_today || 0).toLocaleString();
-            document.getElementById('blocked24h').textContent = (d.blocked_24h || 0).toLocaleString();
-            document.getElementById('protectedSites').textContent = d.vhosts_count || (d.top_vhosts ? Object.keys(d.top_vhosts).length : 0);
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
 
-            // Severity donut
-            if (d.by_severity) {
-                document.getElementById('severityDonut').innerHTML = createDonut(d.by_severity, 'severity', 140);
-            }
-
-            // Category donut
-            if (d.by_category) {
-                document.getElementById('categoryDonut').innerHTML = createDonut(d.by_category, 'category', 140);
-            }
-
-            // Top Vhosts
-            renderTopVhosts(d.top_vhosts);
-            loadDetections();
-
-            // #1219 — origine géographique et noms demandés que la box ne sert pas.
-            surfaces('surfaces', d.par_type, d.par_origine);
-            tableau1col('comptesVises', d.comptes_vises, 'Compte', 'Tentatives',
-                'Aucune tentative d\'authentification enregistrée pour l\'instant.');
-            tableau1col('leurresTouches', d.leurres_touches, 'Service', 'Contacts',
-                'Aucun leurre touché pour l\'instant.');
-            camembertPays('paysCamembert', d.pays || d.top_countries);
-            tableau2col('paysTable', d.pays || d.top_countries, 'Pays', 'Requêtes');
-            tableau2col('nonServisTable', d.noms_non_routes, 'Nom demandé', 'Requêtes');
-            const resume = document.getElementById('nonServisResume');
-            if (resume) {
-                const nb = d.noms_non_routes_distincts || 0;
-                const tot = d.noms_non_routes_total || 0;
-                resume.textContent = nb
-                    ? '— ' + nb + ' noms distincts, ' + tot.toLocaleString() + ' requêtes'
-                    : '';
-            }
-
-            // Store stats globally and update eyemotes (double-cache pattern)
-            window._wafStats = d;
-            if (window._wafEvents) {
-                updateAllEyemotes(window._wafEvents, d);
-            }
-        }
-
-
-        // ── #1219 · origine géographique et noms non servis ──────────────────
-        // COULEURS locales : la page a déjà CAT_COLORS, mais il sert aux
-        // catégories de menace — réutiliser sa palette ferait croire à un lien
-        // entre « pays FR » et « catégorie sqli » parce qu'ils partagent une
-        // teinte. Une échelle distincte, donc.
-        const COUL_PAYS = ['#00d4ff', '#6e40c9', '#e63946', '#c9a84c', '#00ff41', '#ff8c42', '#4ecdc4'];
-
-        function _esc(v) {
-            return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-        }
-
-        // #1221 — surfaces surveillées. Le journal de menaces melange deux
-        // producteurs : sbxwaf, qui ne voit que le HTTP, et authwatch, qui
-        // couvre SSH, SMTP, IMAP et les leurres. Un total unique ne dirait plus
-        // de quelle surface vient la menace — d'ou cette ventilation.
-        const SURFACE_INFO = {
-            http:   ['🌐', 'HTTP',    'sbxwaf, devant les services'],
-            ssh:    ['🔑', 'SSH',     'échecs d\'authentification'],
-            smtp:   ['✉️', 'SMTP',    'SASL refusé sur postfix'],
-            imap:   ['📥', 'IMAP',    'connexions dovecot'],
-            leurre: ['🕳️', 'Leurres', 'services inexistants'],
-            autre:  ['❓', 'Autre',   'authwatch, type non classé']
-        };
-        function surfaces(cible, parType, parOrigine) {
-            const el = document.getElementById(cible);
-            if (!el) return;
-            const t = parType || {};
-            const cles = Object.keys(SURFACE_INFO).filter(k => (t[k] || 0) > 0);
-            if (!cles.length) {
-                el.innerHTML = '<div class="muted" style="padding:1rem;grid-column:1/-1">'
-                    + 'Aucun événement classé pour l\'instant. authwatch ne lit que ce qui '
-                    + 'survient après son démarrage : les premières lignes arriveront d\'elles-mêmes.'
-                    + '</div>';
-                return;
-            }
-            const total = cles.reduce((a, k) => a + t[k], 0) || 1;
-            el.innerHTML = cles.map(function (k) {
-                const [ico, nom, quoi] = SURFACE_INFO[k];
-                const n = t[k];
-                const pct = Math.round(n / total * 100);
-                return '<div style="background:var(--bg-card);padding:.9rem 1rem">'
-                    + '<div style="font-size:.62rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem">'
-                    + ico + ' ' + _esc(nom) + '</div>'
-                    + '<div style="font-family:\'Courier Prime\',monospace;font-size:1.35rem;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums">'
-                    + n.toLocaleString() + ' <span style="font-size:.72rem;color:var(--muted);font-weight:400">' + pct + ' %</span></div>'
-                    + '<div class="muted" style="font-size:.68rem;margin-top:.3rem">' + _esc(quoi) + '</div>'
-                    + '</div>';
-            }).join('') + (function () {
-                const o = parOrigine || {};
-                const w = o.waf || 0, a = o.authwatch || 0;
-                if (!w && !a) return '';
-                return '<div style="background:var(--bg-card);padding:.9rem 1rem">'
-                    + '<div style="font-size:.62rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem">⚙️ Moteurs</div>'
-                    + '<div style="font-size:.75rem;line-height:1.7">'
-                    + 'sbxwaf <b style="color:var(--cyan)">' + w.toLocaleString() + '</b><br>'
-                    + 'authwatch <b style="color:var(--cyan)">' + a.toLocaleString() + '</b></div></div>';
-            })();
-        }
-
-        // Vrai camembert, pas des anneaux : on compare des PARTS d'un tout.
-        // Au-delà de sept tranches la lecture se perd — la traîne est
-        // regroupée sous « autres » plutôt que rendue en confettis.
-        function camembertPays(cible, pays) {
-            const el = document.getElementById(cible);
-            if (!el) return;
-            const items = Object.entries(pays || {}).sort((a, b) => b[1] - a[1]);
-            if (!items.length) { el.innerHTML = '<span class="muted">pas de géolocalisation</span>'; return; }
-            const tete = items.slice(0, 7);
-            const reste = items.slice(7).reduce((a, kv) => a + kv[1], 0);
-            if (reste) tete.push(['autres', reste]);
-            const tot = tete.reduce((a, kv) => a + kv[1], 0) || 1;
-
-            const R = 54, C = 60;
-            let a0 = -Math.PI / 2, arcs = '';
-            tete.forEach(function (kv, i) {
-                const v = kv[1];
-                const a1 = a0 + 2 * Math.PI * v / tot;
-                // Une part de 100 % ne se trace pas en arc : les deux extrémités
-                // se rejoignent et le chemin est vide. On rend un disque plein.
-                if (v / tot > 0.999) {
-                    arcs += '<circle cx="' + C + '" cy="' + C + '" r="' + R + '" fill="' + COUL_PAYS[i % 7] + '"/>';
-                } else {
-                    const g = (a1 - a0) > Math.PI ? 1 : 0;
-                    arcs += '<path d="M' + C + ',' + C + ' L' + (C + R * Math.cos(a0)) + ',' + (C + R * Math.sin(a0))
-                         + ' A' + R + ',' + R + ' 0 ' + g + ',1 ' + (C + R * Math.cos(a1)) + ',' + (C + R * Math.sin(a1))
-                         + ' Z" fill="' + COUL_PAYS[i % 7] + '" stroke="var(--bg-card)" stroke-width="1"/>';
-                }
-                a0 = a1;
+        function rendreEvenements(ev) {
+            const tb = $('eventsTable'); tb.replaceChildren();
+            $('nEv').textContent = ev.length ? ev.length + ' événement' + (ev.length > 1 ? 's' : '') : '';
+            if (!ev.length) { const tr = el('tr'), td = el('td', 'vide', SESSION_OK ? 'Aucun événement de sécurité' : '—'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); return; }
+            ev.slice(0, 15).forEach(e => {
+                const banni = e.type === 'ban' || e.dejaBanni, tr = el('tr');
+                const t0 = el('td'); t0.appendChild(el('span', 'pill ' + (banni ? 'ban' : 'alerte'), banni ? 'BANNI' : 'ALERTE')); tr.appendChild(t0);
+                tr.appendChild(el('td', '', drapeau(e.country)));
+                const ti = el('td', 'mono', e.ip + (e.count > 1 ? ' (' + e.count + '×)' : '')); tr.appendChild(ti);
+                tr.appendChild(el('td', '', e.category));
+                const ts = el('td'); ts.appendChild(el('span', 'pill ' + e.severity, e.severity.toUpperCase())); tr.appendChild(ts);
+                const ta = el('td');
+                if (banni) ta.appendChild(btn('Lever le ban', 'ok', () => demander('unban', e.ip, 'Lever le bannissement de ' + e.ip + ' ?')));
+                else ta.appendChild(btn('Bannir', 'danger', () => demander('ban', e.ip, 'Bannir ' + e.ip + ' pendant 4 h ? Toute requête de cette adresse sera écartée par le pare-feu.')));
+                tr.appendChild(ta); tb.appendChild(tr);
             });
-            // La légende porte le compte ET le pourcentage : le pourcentage seul
-            // ne dit pas si 70 % vaut 7 requêtes ou 7000.
-            const legende = tete.map(function (kv, i) {
-                return '<div style="display:flex;justify-content:space-between;gap:1rem;font-size:0.75rem;padding:.1rem 0">'
-                     + '<span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:'
-                     + COUL_PAYS[i % 7] + ';margin-right:6px"></i>' + _esc(kv[0]) + '</span>'
-                     + '<span style="font-variant-numeric:tabular-nums;color:var(--cyan)">'
-                     + kv[1].toLocaleString() + ' · ' + Math.round(kv[1] / tot * 100) + ' %</span></div>';
-            }).join('');
-            el.innerHTML = '<div style="display:flex;gap:1.2rem;align-items:center;flex-wrap:wrap">'
-                + '<svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="répartition des requêtes par pays">'
-                + arcs + '</svg>'
-                + '<div style="flex:1;min-width:200px">' + legende + '</div></div>';
         }
 
-        // #1222 — détections comportementales. Elles jugent un COMPORTEMENT et
-        // non un motif : un hôte qu'on ne sert pas, un robot qui s'annonce, une
-        // authentification qui échoue, une connexion à un service inexistant.
-        // Elles protégeaient sans figurer nulle part dans le panneau.
-        async function loadDetections() {
-            const el = document.getElementById('detections');
-            if (!el) return;
-            const d = await api('/detections');
-            const liste = (d && d.detections) || [];
-            if (!liste.length) { el.innerHTML = '<div class="muted">indisponible</div>'; return; }
-            el.innerHTML = liste.map(function (x) {
-                const on = x.actif;
-                const bord = on ? 'var(--cyan)' : 'var(--muted)';
-                const etat = on ? '✓ ON' : '○ inactif';
-                const classes = (x.classes || []).slice(0, 6).map(c =>
-                    '<span style="display:inline-block;font-size:.62rem;padding:.05rem .35rem;margin:.1rem .18rem .1rem 0;'
-                    + 'border:1px solid var(--border);border-radius:2px;color:var(--muted)">' + _esc(c) + '</span>').join('');
-                const reste = (x.classes || []).length > 6
-                    ? '<span class="muted" style="font-size:.62rem"> +' + ((x.classes || []).length - 6) + '</span>' : '';
-                return '<div style="border:1px solid var(--border);border-left:3px solid ' + bord + ';padding:.7rem .85rem;background:var(--bg-card)">'
-                    + '<div style="font-weight:700;font-size:.86rem">' + x.emoji + ' ' + _esc(x.nom)
-                    + ' <span class="muted" style="font-size:.66rem;font-weight:400">' + etat + '</span></div>'
-                    + '<div class="muted" style="font-size:.72rem;margin:.25rem 0 .4rem;font-style:italic">' + _esc(x.resume) + '</div>'
-                    + '<div>' + classes + reste + '</div>'
-                    + '<div class="muted" style="font-size:.66rem;margin-top:.4rem">' + _esc(x.detail) + '</div>'
-                    + '</div>';
-            }).join('');
-        }
-
-        // Liste simple, même style que la table des attaquants suivis. Une seule
-        // colonne : ces listes sont courtes et vivent côte à côte.
-        function tableau1col(cible, obj, entete, enteteNb, siVide) {
-            const el = document.getElementById(cible);
-            if (!el) return;
-            const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 15);
-            if (!entries.length) {
-                el.innerHTML = '<span class="muted" style="font-size:.78rem">' + _esc(siVide) + '</span>';
-                return;
-            }
-            el.innerHTML = '<table class="data-table"><thead><tr>'
-                + '<th>' + _esc(entete) + '</th>'
-                + '<th style="text-align:right">' + _esc(enteteNb) + '</th></tr></thead><tbody>'
-                + entries.map(function (kv) {
-                    return '<tr><td><code>' + _esc(kv[0]) + '</code></td>'
-                         + '<td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--cyan)">'
-                         + kv[1].toLocaleString() + '</td></tr>';
-                }).join('') + '</tbody></table>';
-        }
-
-        // Liste en DEUX colonnes, au style de la table des attaquants suivis.
-        // Deux colonnes parce que ces listes sont longues et étroites : sur une
-        // seule, on scrolle pour rien et la moitié droite de la carte reste vide.
-        function tableau2col(cible, obj, entete, enteteNb) {
-            const el = document.getElementById(cible);
-            if (!el) return;
-            const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]);
-            if (!entries.length) { el.innerHTML = '<span class="muted">aucune donnée</span>'; return; }
-            const moitie = Math.ceil(entries.length / 2);
-            const colonnes = [entries.slice(0, moitie), entries.slice(moitie)];
-            const table = function (lignes, depart) {
-                if (!lignes.length) return '';
-                return '<table class="data-table"><thead><tr>'
-                     + '<th style="width:2.2rem">#</th><th>' + _esc(entete) + '</th>'
-                     + '<th style="text-align:right">' + _esc(enteteNb) + '</th></tr></thead><tbody>'
-                     + lignes.map(function (kv, i) {
-                         return '<tr><td class="muted">' + (depart + i + 1) + '</td>'
-                              + '<td><code>' + _esc(kv[0]) + '</code></td>'
-                              + '<td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--cyan)">'
-                              + kv[1].toLocaleString() + '</td></tr>';
-                     }).join('') + '</tbody></table>';
-            };
-            el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0 1.2rem">'
-                + '<div>' + table(colonnes[0], 0) + '</div>'
-                + '<div>' + table(colonnes[1], moitie) + '</div></div>';
-        }
-
-        function createDonut(data, type, size) {
-            size = size || 130;
-            let entries;
-            if (Array.isArray(data)) {
-                entries = data.slice(0, 6).map(c => [c.name || c.category || c[0], c.count || c[1] || 0]).filter(([k,v]) => v > 0);
-            } else {
-                entries = Object.entries(data).slice(0, 6).filter(([k,v]) => typeof v === 'number' && v > 0);
-            }
-            const total = entries.reduce((s, [k,v]) => s + v, 0);
-            if (total === 0) return '<p style="color:var(--muted-dark);">No data</p>';
-
-            const center = size / 2;
-            const ringWidth = 8;
-            const spacing = 3;
-            let svg = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">';
-            entries.forEach(([key, count], i) => {
-                const r = center - 10 - (i * (ringWidth + spacing));
-                const pct = count / total;
-                const circ = 2 * Math.PI * r;
-                const dash = circ * pct;
-                const gap = circ - dash;
-                const color = type === 'severity' ? (SEV_COLORS[key.toLowerCase()] || '#888') : CAT_COLORS[i % CAT_COLORS.length];
-                const emoji = type === 'severity' ? (SEV_EMOJI[key.toLowerCase()] || '⚪') : getCatEmoji(key);
-                svg += '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="' + ringWidth + '"/>';
-                svg += '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + ringWidth + '" stroke-dasharray="' + dash + ' ' + gap + '" stroke-dashoffset="' + (circ/4) + '" stroke-linecap="round" style="filter:drop-shadow(0 0 3px ' + color + ');"><title>' + emoji + ' ' + key + ': ' + count + ' (' + Math.round(pct*100) + '%)</title></circle>';
+        function rendreCats() {
+            const z = $('categoryPills'); z.replaceChildren();
+            const c = CATS && CATS.categories ? Object.entries(CATS.categories).sort((a, b) => (b[1].rules_count || 0) - (a[1].rules_count || 0)) : [];
+            $('nCats').textContent = c.length ? c.length + ' catégories' : '';
+            if (!c.length) { z.appendChild(el('div', 'vide', SESSION_OK ? 'Aucune catégorie chargée' : '—')); return; }
+            c.forEach(([id, cat]) => {
+                const on = cat.enabled !== false, b = el('button', 'cat ' + (on ? 'on' : 'off')); b.type = 'button'; b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on));
+                b.appendChild(el('b', '', cat.name || id));
+                const sp = el('span'); sp.append((cat.rules_count != null ? cat.rules_count : '—') + ' règles · ', el('i', '', on ? '✓ ACTIVE' : '✗ DÉSACTIVÉE')); b.appendChild(sp);
+                b.addEventListener('click', () => on ? demander('cat-off', id, 'Désactiver la catégorie « ' + (cat.name || id) + ' » ? Ses règles cesseront de s’appliquer.') : basculer(id, true));
+                z.appendChild(b);
             });
-            svg += '<text x="' + center + '" y="' + (center - 2) + '" text-anchor="middle" fill="var(--text-dark)" font-size="16" font-weight="bold">' + total + '</text>';
-            svg += '<text x="' + center + '" y="' + (center + 12) + '" text-anchor="middle" fill="var(--muted-dark)" font-size="7">' + (type === 'severity' ? 'ALERTS' : 'THREATS') + '</text>';
-            svg += '</svg>';
-            const legend = entries.slice(0, 5).map(([key, count], i) => {
-                const color = type === 'severity' ? (SEV_COLORS[key.toLowerCase()] || '#888') : CAT_COLORS[i % CAT_COLORS.length];
-                const emoji = type === 'severity' ? (SEV_EMOJI[key.toLowerCase()] || '⚪') : getCatEmoji(key);
-                return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:0.65rem;">' + emoji + ' <span style="color:' + color + '">' + count + '</span></span>';
-            }).join(' ');
-            return '<div style="display:flex;flex-direction:column;align-items:center;">' + svg + '<div style="margin-top:8px;">' + legend + '</div></div>';
         }
 
-        function renderTopVhosts(vhosts) {
-            const el = document.getElementById('topVhosts');
-            if (!vhosts) {
-                el.innerHTML = '<p style="color:var(--muted-dark);">No data</p>';
-                return;
-            }
-            let vhostData = Array.isArray(vhosts)
-                ? vhosts.map(v => ({host: v.host || v.vhost || v[0], count: v.count || v.threats || v[1] || 0}))
-                : Object.entries(vhosts).map(([h, c]) => ({host: h, count: typeof c === 'object' ? c.count || 0 : c}));
-            const maxVhost = Math.max(...vhostData.map(v => v.count));
-            const totalVhost = vhostData.reduce((s, v) => s + v.count, 0);
-            el.innerHTML = vhostData.slice(0, 5).map(v => {
-                const pct = totalVhost > 0 ? Math.round(v.count / totalVhost * 100) : 0;
-                const width = maxVhost > 0 ? Math.round(v.count / maxVhost * 100) : 0;
-                const emoji = v.host.includes('git') ? '💻' : v.host.includes('mail') ? '📧' : v.host.includes('api') ? '⚡' : v.host.includes('admin') ? '🔐' : '🌐';
-                return '<div style="margin-bottom:10px;">' +
-                    '<div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;">' +
-                        '<span>' + emoji + ' ' + v.host + '</span>' +
-                        '<span style="color:var(--wall-light);">' + v.count + ' <span style="color:var(--muted-dark);">(' + pct + '%)</span></span>' +
-                    '</div>' +
-                    '<div style="height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;">' +
-                        '<div style="height:100%;width:' + width + '%;background:linear-gradient(90deg, var(--wall-light), var(--boot-light));border-radius:3px;"></div>' +
-                    '</div>' +
-                '</div>';
-            }).join('');
-        }
-
-        async function loadStatus() {
-            const d = await api('/status');
-            document.getElementById('totalRules').textContent = d?.total_rules || 0;
-        }
-
-        async function toggleCategory(categoryId, enabled) {
-            const res = await api('/category/' + categoryId + '/toggle', {
-                method: 'POST',
-                body: JSON.stringify({ enabled: enabled })
+        function rendreDets() {
+            const z = $('detections'); z.replaceChildren();
+            const l = (DETS && DETS.detections) || [];
+            if (!l.length) { z.appendChild(el('div', 'vide', SESSION_OK ? 'Indisponible' : '—')); return; }
+            l.forEach(x => {
+                const d = el('div', 'det' + (x.actif ? ' on' : ''));
+                d.appendChild(el('b', '', (x.emoji ? x.emoji + ' ' : '') + tiret(x.nom) + (x.actif ? ' · ACTIVE' : ' · inactive')));
+                d.appendChild(el('p', '', tiret(x.resume)));
+                const cl = x.classes || []; const w = el('div'); cl.slice(0, 6).forEach(c => w.appendChild(el('span', 'cl', c)));
+                if (cl.length > 6) w.appendChild(el('span', 'cl', '+' + (cl.length - 6)));
+                d.appendChild(w); d.appendChild(el('small', '', tiret(x.detail))); z.appendChild(d);
             });
-            if (res?.success) {
-                loadCategories();
-                loadStatus();
-            } else {
-                alert('Failed to toggle category: ' + (res?.error || 'Unknown error'));
+        }
+
+        // ----- Confirmation intégrée à la page (jamais de dialogue natif) -----
+        function demander(genre, cle, texte) {
+            CONF = { genre, cle };
+            $('confTexte').textContent = texte; $('conf').hidden = false; annoncer();
+            $('confOk').focus();
+        }
+        function annulerConf() { CONF = null; $('conf').hidden = true; annoncer(); }
+        async function confirmer() {
+            const c = CONF; annulerConf(); if (!c) return;
+            if (c.genre === 'ban') await bannir(c.cle);
+            else if (c.genre === 'unban') await lever(c.cle);
+            else if (c.genre === 'clear') await viderBans();
+            else if (c.genre === 'pause') await modeWaf(false);
+            else if (c.genre === 'cat-off') await basculer(c.cle, false);
+        }
+        $('confOk').addEventListener('click', confirmer);
+        $('confNon').addEventListener('click', annulerConf);
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function bannir(ip) {
+            const r = await ecrire('POST', '/ban', { ip, duration: '4h', reason: 'Manual ban from WAF dashboard' });
+            if (r.ok) { retour(true, ip + ' est banni pour 4 h.'); charger(); } else retour(false, 'Bannissement impossible : ' + detail(r));
+        }
+        async function lever(ip) {
+            const r = await ecrire('POST', '/unban', { ip });
+            if (r.ok) { retour(true, 'Le ban de ' + ip + ' est levé.'); charger(); } else retour(false, 'Levée du ban impossible : ' + detail(r));
+        }
+        async function viderBans() {
+            const r = await ecrire('POST', '/bans/clear');
+            if (r.ok) { retour(true, 'Tous les bans actifs sont levés.'); charger(); } else retour(false, 'Impossible de vider les bans : ' + detail(r));
+        }
+        async function basculer(id, actif) {
+            const r = await ecrire('POST', '/category/' + encodeURIComponent(id) + '/toggle', { enabled: actif });
+            if (r.ok) { retour(true, 'Catégorie ' + (actif ? 'activée' : 'désactivée') + '.'); charger(); } else retour(false, 'Changement impossible : ' + detail(r));
+        }
+        async function modeWaf(actif) {
+            const r = await ecrire('POST', '/mode', { enabled: actif });
+            if (r.ok) { WAF_ACTIF = actif; retour(true, actif ? 'WAF actif.' : 'WAF en pause.'); rendre(); charger(); } else retour(false, 'Changement de mode impossible : ' + detail(r));
+        }
+        async function exporter() {
+            if (DEMO) { retour(false, 'Démonstration : action inerte.'); return; }
+            try {
+                const r = await fetch(API + '/export', { credentials: 'same-origin', headers: entetes() });
+                if (!r.ok) { retour(false, 'Export impossible : HTTP ' + r.status); return; }
+                const blob = await r.blob(), url = URL.createObjectURL(blob), a = document.createElement('a');
+                a.href = url; a.download = 'waf-logs-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); URL.revokeObjectURL(url);
+                retour(true, 'Journal exporté.');
+            } catch (e) { retour(false, 'Export impossible : serveur injoignable'); }
+        }
+        $('btnWafToggle').addEventListener('click', () => {
+            if (DEMO) { retour(false, 'Démonstration : action inerte.'); return; }
+            if (WAF_ACTIF) demander('pause', '', 'Mettre le WAF en pause ? Les requêtes ne seront plus filtrées tant qu’il ne sera pas réactivé.'); else modeWaf(true);
+        });
+        $('btnClearBans').addEventListener('click', () => {
+            if (DEMO) { retour(false, 'Démonstration : action inerte.'); return; }
+            demander('clear', '', 'Lever tous les bannissements actifs ? Toutes les adresses écartées pourront de nouveau se connecter.');
+        });
+        $('btnExport').addEventListener('click', exporter);
+        $('rafraichir').addEventListener('click', () => { charger(); rechargerCadre(); });
+
+        // ----- Onglets : pages autonomes encadrées (même origine) -----
+        const WAF_PAGES = { overview: 'menaces', attackers: 'attaquants', visits: 'visites', recon: 'surfaces', history: 'historique', campaigns: 'campagnes' };
+        const ONGLETS = ['vue', 'config'].concat(Object.keys(WAF_PAGES));
+        const suffixe = (embed) => (embed ? '?embed=1' : '') + (DEMO ? (embed ? '&' : '?') + 'demo=1' : '');
+        function rechargerCadre() { const f = ONGLET === 'vue' ? $('vueFrame') : WAF_PAGES[ONGLET] ? $('pageFrame') : null; if (f && !DEMO) { try { f.contentWindow.location.reload(); } catch (e) { /* sans objet */ } } }
+        function switchTab(name) {
+            if (ONGLETS.indexOf(name) < 0) name = 'vue';
+            ONGLET = name;
+            document.querySelectorAll('#wafTabs .waf-tab').forEach(b => { const on = b.dataset.tab === name; b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on)); });
+            const page = WAF_PAGES[name];
+            $('vueCard').hidden = name !== 'vue';
+            $('pageCard').hidden = !page;
+            $('configCard').hidden = name !== 'config';
+            if (page) {
+                const f = $('pageFrame');
+                if (f.dataset.p !== page) { f.dataset.p = page; f.style.height = '1200px'; f.src = page + '.html' + suffixe(true); }
             }
+            try { history.replaceState(null, '', '#' + name); } catch (e) { /* sans objet */ }
+            annoncer();
         }
+        document.querySelectorAll('#wafTabs .waf-tab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
-        function banIp(ip) {
-            api('/ban', { method: 'POST', body: JSON.stringify({ ip, duration: '4h', reason: 'Manual ban from WAF dashboard' }) })
-                .then(() => { loadSecurityEvents(); loadStats(); });
-        }
-        function unbanIp(ip) {
-            api('/unban', { method: 'POST', body: JSON.stringify({ ip }) })
-                .then(() => loadSecurityEvents());
-        }
-
-        async function refresh() {
-            const btn = document.getElementById('btnRefresh');
-            btn.innerHTML = '<span class="spinner">🔄</span><span class="quick-btn-tooltip">Loading...</span>';
-            await Promise.all([
-                loadStatus(),
-                loadStats(),
-                loadSecurityEvents(),
-                loadCategories(),
-                loadTrackedAttackers(),
-                loadVisits()
-            ]);
-            btn.innerHTML = '🔄<span class="quick-btn-tooltip">Refresh</span>';
-        }
-
-        // Phase 7 (#498) — Silenced-but-tracked attackers table.
-        // Renders /bans/history : IPs that hit WAF rules in the last 24 h
-        // with severity + categories + active-ban status.
-        function _shortISO(iso) {
-            if (!iso) return '-';
-            return iso.replace('T', ' ').replace('Z', '').slice(5, 16);
-        }
-        // NATURE D'UNE ADRESSE, lue dans ce qu'elle a RÉELLEMENT déclenché,
-        // jamais devinée. Les catégories viennent des règles qui ont matché :
-        // elles portent l'intention bien mieux qu'un compteur de sondes.
-        function _natureIP(r) {
-            const cats = (r.top_categories || []).map(c => String(c.category || '').toLowerCase()).join(' ');
-            const sev = String(r.severity_max || '').toLowerCase();
-            if (/auth|login|brute|credential/.test(cats))  return ['\u{1F511}', 'tente des identifiants'];
-            if (/lfi|rce|sqli|xss|traversal|exec|inject/.test(cats)) return ['\u{1F3AF}', 'exploitation cibl\u00e9e'];
-            if (/scan|recon|probe|crawl/.test(cats))       return ['\u{1F916}', 'balayage automatis\u00e9'];
-            if (/host|anomaly|unrouted|vhost/.test(cats))  return ['\u{1F4D6}', '\u00e9num\u00e8re des noms d\u2019h\u00f4tes'];
-            if (sev === 'critical' || sev === 'high')      return ['\u{1F525}', 'activit\u00e9 \u00e0 forte gravit\u00e9'];
-            return ['\u{1F464}', 'bruit de fond'];
-        }
-
-        async function loadTrackedAttackers() {
-            const data = await api('/bans/history?hours=24&limit=30');
-            const body = document.getElementById('trackedAttackersBody');
-            if (!body) return;
-            const rows = data?.tracked || [];
-            if (!rows.length) {
-                body.innerHTML = '<tr><td colspan="7" class="muted">Aucun attaquant suivi sur les 24 derni\u00e8res heures.</td></tr>';
-                return;
-            }
-            body.innerHTML = rows.map(r => {
-                const cats = (r.top_categories || []).map(c =>
-                    (CAT_EMOJI[c.category] || CAT_EMOJI.default) + ' ' + c.category + ' (' + c.count + ')'
-                ).join(', ');
-                const sev = (r.severity_max || 'low').toLowerCase();
-                const state = r.currently_banned
-                    ? '<span class="tampon banni" title="drop nft actif">BANNI</span>'
-                    : '<span class="tampon suivi" title="ban expiré, profil toujours suivi">SUIVI</span>';
-                // MEME LANGAGE DE LECTURE QUE LA PAGE RENSEIGNEMENT (#1240) :
-                // le glyphe dit CE QUE FAIT l'adresse, le bloc plein dit COMBIEN
-                // elle insiste. Deux pages qui montrent les mêmes attaquants
-                // doivent se lire pareil, sinon l'opérateur retraduit à chaque
-                // aller-retour entre les deux.
-                const nat = _natureIP(r);
-                const n = r.count || 0;
-                const cls = n >= 50 ? 'n4' : n >= 15 ? 'n3' : n >= 5 ? 'n2' : '';
-                return '<tr>'
-                    + '<td><span class="nat" title="' + nat[1] + '">' + nat[0] + '</span> <code>' + r.ip + '</code></td>'
-                    + '<td><span class="multi ' + cls + '"><b>' + n + '</b><i>sondes</i></span></td>'
-                    + '<td><span class="severity-badge ' + sev + '">' + (SEV_EMOJI[sev] || '') + ' ' + sev + '</span></td>'
-                    + '<td>' + (cats || '-') + '</td>'
-                    + '<td>' + _shortISO(r.first_seen) + '</td>'
-                    + '<td>' + _shortISO(r.last_seen) + '</td>'
-                    + '<td>' + state + '</td>'
-                    + '</tr>';
-            }).join('');
-        }
-
-        // #747 — non-attacker visit statistics
-        const _CT_EMOJI = { browser: '🌐', 'mobile-app': '📱', bot: '🤖', crawler: '🕷️', other: '❔' };
-        const _OS_EMOJI = { Windows: '🪟', macOS: '🍎', Linux: '🐧', Android: '🤖', iOS: '📱', other: '❔' };
-        function _vbars(elId, obj, emoji, limite) {
-            const el = document.getElementById(elId);
-            if (!el) return;
-            const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, limite || 10);
-            if (!entries.length) { el.innerHTML = '<span class="muted">aucune donnée</span>'; return; }
-            const max = entries[0][1] || 1;
-            const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-            el.innerHTML = entries.map(([k, v]) => {
-                const pct = Math.max(3, Math.round((v / max) * 100));
-                const ic = emoji ? (emoji[k] || '') + ' ' : '';
-                return '<div class="vbar"><span class="vlabel" title="' + esc(k) + '">' + ic + esc(k) + '</span>'
-                    + '<span class="vtrack"><span class="vfill" style="width:' + pct + '%"></span></span>'
-                    + '<span class="vcount">' + v + '</span></div>';
-            }).join('');
-        }
-        async function loadVisits() {
-            const d = await api('/visits');
-            const tot = document.getElementById('visitsTotal');
-            if (tot) tot.textContent = (d && d.total != null) ? d.total.toLocaleString() : '—';
-            _vbars('visitsClientType', d?.by_client_type, _CT_EMOJI);
-            _vbars('visitsOS', d?.by_os, _OS_EMOJI);
-            _vbars('visitsCountries', d?.top_countries, null);
-            _vbars('visitsStatus', d?.by_status, null);
-            _vbars('visitsVhosts', d?.by_vhost, null);
-        }
-
-        // #1062 — onglet Historique : tendances des menaces par jour + attaquants
-        // persistants, depuis /history (logs tournés agrégés, cache 1 h).
-        function _histBars(el, paires, couleur, largeurCle) {
-            if (!el) return;
-            const max = Math.max(1, ...paires.map(x => x[1]));
-            el.innerHTML = paires.map(function (x) {
-                const w = Math.round(100 * x[1] / max);
-                return '<div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;margin-bottom:3px;">' +
-                    '<span style="width:' + largeurCle + 'px;color:var(--p31-dim);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + x[0] + '</span>' +
-                    '<span style="flex:1;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;"><span style="display:block;height:12px;width:' + w + '%;background:' + couleur + ';"></span></span>' +
-                    '<span style="width:58px;text-align:right;font-family:monospace;color:var(--text);">' + x[1].toLocaleString() + '</span>' +
-                    (x[2] ? '<span style="width:96px;color:var(--p31-dim);font-size:0.62rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + x[2] + '</span>' : '') +
-                    '</div>';
-            }).join('') || '<span class="muted">aucune donnée</span>';
-        }
-        async function loadHistory() {
-            const d = await api('/history');
-            if (!d || !d.jours) return;
-            const noms = Object.keys(d.jours).sort();
-            const set = function (id, v) { const e = document.getElementById(id); if (e) e.textContent = v; };
-            set('histDays', noms.length);
-            set('histTotal', (d.total || 0).toLocaleString());
-            const jours = noms.slice(-21).map(function (j) {
-                const jd = d.jours[j];
-                const cats = Object.entries(jd.categories || {}).sort(function (a, b) { return b[1] - a[1]; });
-                return [j.slice(5), jd.total, cats.length ? cats[0][0] : ''];
-            });
-            _histBars(document.getElementById('histDaysBars'), jours, 'linear-gradient(90deg,#00d4ff,#ff4466)', 74);
-            const ips = Object.entries(d.top_ips || {}).slice(0, 14).map(function (x) { return [x[0], x[1]]; });
-            _histBars(document.getElementById('histTopIps'), ips, '#ff4466', 118);
-        }
-
-        // #747 — dashboard tabs (Menaces / Attaquants suivis / Visites)
+        // Hauteur des cadres : vue.html poste `sbxwafVue` ; les pages d'onglet postent `sbxWafVue` + `onglet` (#2354) ou `sbxVue` + `onglet`.
         window.addEventListener('message', (e) => {
             if (e.origin !== location.origin || !e.data) return;
-            // vue.html poste `sbxwafVue` ; les pages d'onglet postent `sbxWafVue` + `onglet` (#2354).
             const px = (h) => Math.min(4000, Math.max(300, +h + 4)) + 'px';
-            if (e.data.sbxwafVue) { const f = document.getElementById('vueFrame'); if (f) f.style.height = px(e.data.sbxwafVue); }
-            if (e.data.sbxWafVue && e.data.onglet) { const f = document.getElementById('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxWafVue); }
+            if (e.data.sbxwafVue) { const f = $('vueFrame'); if (f) f.style.height = px(e.data.sbxwafVue); }
+            if (e.data.sbxWafVue && e.data.onglet) { const f = $('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxWafVue); }
+            if (e.data.sbxVue && e.data.onglet) { const f = $('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxVue); }
         });
-        // onglet -> page autonome (#2354)
-        const WAF_PAGES = { overview: 'menaces', attackers: 'attaquants', visits: 'visites', recon: 'surfaces', history: 'historique', campaigns: 'campagnes' };
-        function switchTab(name) {
-            document.querySelectorAll('#wafTabs .waf-tab').forEach(b =>
-                b.classList.toggle('active', b.dataset.tab === name));
-            const show = (sel, on) => document.querySelectorAll(sel).forEach(el =>
-                el.style.display = on ? '' : 'none');
-            const overview = name === 'overview';
-            const vc = document.getElementById('vueCard'); if (vc) vc.style.display = (name === 'vue') ? '' : 'none';
-            const pc = document.getElementById('pageCard'); const page = WAF_PAGES[name];
-            if (pc) pc.style.display = page ? '' : 'none';
-            show('.stats-grid, .live-attack-banner', !page);   // la page d'onglet porte ses propres tuiles
-            if (page) {
-                // La page autonome remplace le contenu d'origine, qui reste dans le DOM (masqué) pour le reste du script.
-                show('.grid-2, .eyemote-card, .overview-only, .recon-card', false);
-                ['trackedAttackersCard', 'visitsCard', 'historyCard', 'campaignsCard'].forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });
-                const f = document.getElementById('pageFrame');
-                if (f && f.dataset.p !== page) { f.dataset.p = page; f.style.height = '1200px'; f.src = page + '.html?embed=1'; }
-                return;
-            }
-            show('.grid-2', overview);
-            show('.eyemote-card', overview);
-            // By Severity / By Category / Top Attacked Sites : onglet Menaces seul (#1369).
-            show('.overview-only', overview);
-            // Surfaces surveillees, comptes vises, leurres, origine, noms non
-            // servis : regroupes dans l'onglet Surfaces (#1369).
-            show('.recon-card', name === 'recon');
-            const tracked = document.getElementById('trackedAttackersCard');
-            const visits = document.getElementById('visitsCard');
-            if (tracked) tracked.style.display = (name === 'attackers') ? '' : 'none';
-            if (visits) visits.style.display = (name === 'visits') ? '' : 'none';
-            const history = document.getElementById('historyCard');
-            if (history) history.style.display = (name === 'history') ? '' : 'none';
-            const campaigns = document.getElementById('campaignsCard');
-            if (campaigns) campaigns.style.display = (name === 'campaigns') ? '' : 'none';
-            if (name === 'visits') loadVisits();
-            if (name === 'attackers') loadTrackedAttackers();
-            if (name === 'history') loadHistory();
-            if (name === 'campaigns') loadCampaigns();
-            // L'onglet Surfaces se peuple depuis /stats (surfaces, comptes,
-            // leurres, pays, noms non servis) — on rafraichit a l'ouverture.
-            if (name === 'recon') loadStats();
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'waf' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        // ⚔️ Campagnes d'attaque corrélées (#1070 phase D)
-        async function loadCampaigns() {
-            const d = await api('/campaigns');
-            const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
-            const tb = document.querySelector('#campaignsTable tbody');
-            if (!d || !tb) return;
-            const camps = d.campagnes || [];
-            set('campAttackers', d.attaquants || 0);
-            set('campCount', camps.length);
-            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g,
-                c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-            if (!camps.length) {
-                tb.innerHTML = '<tr><td colspan="4" class="muted">' +
-                    (d.available === false ? 'corrélateur pas encore passé' : 'aucune campagne détectée') + '</td></tr>';
-                return;
-            }
-            tb.innerHTML = camps.map(c =>
-                '<tr><td>' + esc(c.outil || '—') + '</td>' +
-                '<td style="color:var(--red);font-weight:600">' + (c.nb_attaquants || 0) + '</td>' +
-                '<td>' + (c.sondes || 0) + '</td>' +
-                '<td style="color:var(--p31-dim);font-size:.72rem;word-break:break-all">' +
-                (c.exemple_sequence || []).map(esc).join(' → ') + '</td></tr>'
-            ).join('');
-        }
-
-        // Reflect WAF on/off on the header live-dot (presentational only)
-        function setLiveDot(active) {
-            const d = document.getElementById('live-dot');
-            if (d) d.className = 'live-dot' + (active ? '' : ' paused');
-        }
-
-        // WAF Toggle
-        let wafActive = true;
-        async function toggleWaf() {
-            const btn = document.getElementById('btnWafToggle');
-            const tooltip = btn.querySelector('.quick-btn-tooltip');
-            wafActive = !wafActive;
-
-            // Call API to toggle WAF mode
-            const res = await api('/mode', {
-                method: 'POST',
-                body: JSON.stringify({ enabled: wafActive })
-            });
-
-            if (wafActive) {
-                btn.classList.add('active');
-                btn.classList.remove('paused');
-                tooltip.textContent = 'WAF Active';
-            } else {
-                btn.classList.remove('active');
-                btn.classList.add('paused');
-                tooltip.textContent = 'WAF Paused';
-            }
-            setLiveDot(wafActive);
-        }
-
-        // Clear All Bans
-        async function clearAllBans() {
-            if (!confirm('⚠️ Clear all active bans? This will unban all IPs.')) return;
-
-            const btn = document.getElementById('btnClearBans');
-            btn.innerHTML = '<span class="spinner">🗑️</span><span class="quick-btn-tooltip">Clearing...</span>';
-
-            const res = await api('/bans/clear', { method: 'POST' });
-
-            if (res?.success) {
-                await loadSecurityEvents();
-                await loadStats();
-            } else {
-                alert('Failed to clear bans: ' + (res?.error || 'Unknown error'));
-            }
-
-            btn.innerHTML = '🗑️<span class="quick-btn-tooltip">Clear Bans</span>';
-        }
-
-        // Export Logs
-        async function exportLogs() {
-            const btn = document.getElementById('btnExport');
-            btn.innerHTML = '<span class="spinner">📤</span><span class="quick-btn-tooltip">Exporting...</span>';
-
-            try {
-                const res = await fetch(API + '/export', { headers: headers() });
-                if (res.ok) {
-                    const blob = await res.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'waf-logs-' + new Date().toISOString().slice(0, 10) + '.json';
-                    a.click();
-                    URL.revokeObjectURL(url);
-                } else {
-                    alert('Export failed');
-                }
-            } catch (e) {
-                alert('Export error: ' + e.message);
-            }
-
-            btn.innerHTML = '📤<span class="quick-btn-tooltip">Export</span>';
-        }
-
-        switchTab('overview');
-        setLiveDot(wafActive);
-        refresh();
-        setInterval(refresh, 30000);
-        // More frequent live updates
-        setInterval(loadSecurityEvents, 10000);
+        if (DEMO) { $('vueFrame').src = 'vue.html' + suffixe(false); }
+        const dep = (location.hash || '').slice(1);   // lu avant switchTab, qui réécrit le fragment
         switchTab("vue");   // #2293 : la vue d'ensemble est l'onglet par défaut
+        if (dep && dep !== 'vue') switchTab(dep);
+        charger();
+        // Pas d'actualisation pendant une confirmation ouverte, ni onglet masqué.
+        setInterval(() => { if (document.hidden || DEMO || CONF) return; charger(); }, 30000);
     </script>
 </body>
 </html>

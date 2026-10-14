@@ -4,1029 +4,438 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Console du WAF (alertes, catégories, bans, statistiques) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mêmes appels d'API que l'ancienne console. Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Web Application Firewall</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Console WAF</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .btn-group { display: flex; gap: 0.5rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.8rem; font-weight: bold; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-        .stat-card.threats .value { color: var(--red); }
-        .stat-card.rules .value { color: var(--cyan); }
-        .stat-card.bans .value { color: var(--orange); }
-        .stat-card.categories .value { color: var(--purple); }
-        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
-        .badge.critical { background: rgba(248,81,73,0.2); color: var(--red); }
-        .badge.high { background: rgba(240,136,62,0.2); color: var(--orange); }
-        .badge.medium { background: rgba(210,153,34,0.2); color: var(--yellow); }
-        .badge.low { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.enabled { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.disabled { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
-        .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
-        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .category-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 0.75rem; }
-        .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-        .category-name { font-weight: 600; }
-        .category-meta { display: flex; gap: 1rem; font-size: 0.8rem; color: var(--text-dim); }
-        .toggle { position: relative; width: 40px; height: 22px; }
-        .toggle input { opacity: 0; width: 0; height: 0; }
-        .toggle .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--border); border-radius: 22px; transition: 0.3s; }
-        .toggle .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background: var(--text); border-radius: 50%; transition: 0.3s; }
-        .toggle input:checked + .slider { background: var(--green); }
-        .toggle input:checked + .slider:before { transform: translateX(18px); }
-        .alert-row { display: flex; gap: 1rem; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
-        .alert-row:last-child { border-bottom: none; }
-        .alert-time { font-size: 0.75rem; color: var(--text-dim); min-width: 140px; }
-        .alert-ip { font-family: monospace; color: var(--cyan); min-width: 120px; }
-        .alert-rule { font-size: 0.85rem; flex: 1; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 400px; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 4px; color: var(--text); }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb,body.dm{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar,body.dm #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb):not(.dm) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb):not(.dm) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb):not(.dm) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 8px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none;line-height:1.5}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible,.waf-tab:focus-visible,.navp a:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:9px 12px;font-size:.82rem;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+        .conf span{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+        [hidden]{display:none!important}
+        .navp{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin;padding-bottom:2px}
+        .navp a{flex:none;font-size:.76rem;color:var(--doux);text-decoration:none;border:1px solid var(--trait);border-radius:999px;padding:4px 12px;white-space:nowrap}
+        .navp a:hover{color:var(--texte);border-color:var(--cyan)} .navp a.cour{color:var(--texte);background:rgba(41,182,246,.18);border-color:var(--cyan)}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.cy .v{color:var(--cyan)} .tuile.ro .v{color:var(--rouge)} .tuile.or .v{color:var(--orange)} .tuile.vi .v{color:var(--violet)}
+        .onglets{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;border-bottom:1px solid var(--trait);scrollbar-width:thin}
+        .waf-tab{font:inherit;font-size:.82rem;font-weight:600;color:var(--doux);background:transparent;border:1px solid transparent;border-radius:999px;padding:6px 14px;cursor:pointer;white-space:nowrap;flex:none}
+        .waf-tab:hover{color:var(--texte);background:rgba(59,130,246,.12)} .waf-tab.active{color:var(--texte);background:rgba(41,182,246,.18);border-color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:520px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)} tr.sep td{color:var(--jaune);font-weight:700;text-align:center;font-size:.76rem;background:rgba(255,210,63,.06)} tr.sep.nouv td{color:var(--cyan);background:rgba(41,182,246,.06)}
+        td.act{white-space:nowrap}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.critical{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.high{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .pill.medium{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.12)} .pill.low{border-color:var(--bleu);color:var(--bleu);background:rgba(59,130,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;margin:0}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        .alerte{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:8px 0;border-top:1px solid rgba(86,150,255,.12);font-size:.8rem}
+        .alerte:first-child{border-top:0} .alerte .r{flex:1 1 200px;min-width:0;color:var(--doux);font-size:.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .cats{display:grid;gap:6px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+        .cat{font:inherit;text-align:left;display:flex;flex-direction:column;gap:2px;border:1px solid var(--trait);border-radius:10px;padding:8px 11px;background:rgba(8,18,38,.7);color:var(--texte);cursor:pointer;min-width:0}
+        .cat:hover{border-color:var(--trait2)} .cat:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .cat.off{opacity:.62}
+        .cat b{font-size:.82rem;overflow-wrap:anywhere} .cat span{font-size:.68rem;color:var(--doux)} .cat.on span i{color:var(--vert);font-style:normal} .cat.off span i{color:var(--faible);font-style:normal}
+        .barres{display:grid;gap:7px} .barre{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;font-size:.78rem}
+        .barre .n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .barre b{font-variant-numeric:tabular-nums}
+        .barre i{grid-column:1/-1;height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden;display:block} .barre i u{display:block;height:100%;background:var(--cyan);text-decoration:none}
+        .donut{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px} .donut svg{flex:none;width:120px;height:120px}
+        .leg{display:grid;gap:3px;font-size:.74rem;min-width:0;flex:1 1 140px} .leg div{display:flex;gap:6px;align-items:center;min-width:0} .leg i{width:9px;height:9px;border-radius:2px;flex:none} .leg span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1} .leg b{font-variant-numeric:tabular-nums}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>Web Application Firewall</h1>
-            <div class="btn-group">
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn primary" onclick="showBanModal()">Ban IP</button>
-                <button class="btn" onclick="reloadRules()">Reload Rules</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 4.5 6v5.6c0 4.4 3.1 8.1 7.5 9.6 4.4-1.5 7.5-5.2 7.5-9.6V6z"/><path d="M9 11h6M9 14h4"/></svg>
+                <div><h1>Console WAF</h1><small>Alertes, catégories, bannissements, statistiques</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite">
+                <span id="maj">—</span>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button>
+                <button class="btn prim" id="btnBannir" type="button" title="Ouvre le formulaire de bannissement manuel (POST /ban).">Bannir une IP</button>
+                <button class="btn" id="btnReload" type="button" title="Relit les fichiers de règles (POST /reload).">Recharger les règles</button>
             </div>
         </header>
+        <nav class="navp" aria-label="Pages du WAF">
+            <a href="/waf/#vue">Vue d'ensemble</a><a href="/waf/#overview">Menaces</a><a href="/waf/#attackers">Attaquants suivis</a><a href="/waf/#visits">Visites</a>
+            <a href="/waf/#recon">Surfaces</a><a href="/waf/#history">Historique</a><a href="/waf/#campaigns">Campagnes</a><a href="/waf/#config">Configuration</a><a class="cour" href="./" aria-current="page">Console</a>
+        </nav>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div class="conf" id="conf" role="alertdialog" aria-label="Confirmation" hidden><span id="confTexte"></span><button class="btn danger" id="confOk" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></div>
+        <div class="retour" id="retour" role="status" hidden></div>
 
-        <div class="grid">
-            <div class="stat-card threats">
-                <div class="value" id="threatsToday">-</div>
-                <div class="label">Threats Today</div>
-            </div>
-            <div class="stat-card rules">
-                <div class="value" id="totalRules">-</div>
-                <div class="label">Active Rules</div>
-            </div>
-            <div class="stat-card categories">
-                <div class="value" id="activeCategories">-</div>
-                <div class="label">Categories</div>
-            </div>
-            <div class="stat-card bans">
-                <div class="value" id="activeBans">-</div>
-                <div class="label">Active Bans</div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile ro" title="Menaces du jour courant (champ threats_today de /stats), remises à zéro à minuit."><span class="l">Menaces du jour</span><span class="v" id="threatsToday">—</span><span class="s">depuis minuit</span></div>
+            <div class="tuile cy" title="Règles chargées par le WAF (champ total_rules de /status)."><span class="l">Règles actives</span><span class="v" id="totalRules">—</span><span class="s">en service</span></div>
+            <div class="tuile vi" title="Catégories de règles chargées (champ active_categories de /status)."><span class="l">Catégories</span><span class="v" id="activeCategories">—</span><span class="s">chargées</span></div>
+            <div class="tuile or" title="Adresses actuellement écartées par le pare-feu (route /bans)."><span class="l">Bans actifs</span><span class="v" id="activeBans">—</span><span class="s">adresses écartées</span></div>
+        </section>
+
+        <div class="pan" id="banForm" hidden><h3>Bannir une adresse <i>POST /ban</i></h3>
+            <form class="saisie" id="fBan">
+                <label>Adresse IP<input id="banIp" placeholder="192.0.2.10" required autocomplete="off"></label>
+                <label>Durée<select id="banDuration"><option value="1h">1 heure</option><option value="4h" selected>4 heures</option><option value="24h">24 heures</option><option value="7d">7 jours</option><option value="30d">30 jours</option></select></label>
+                <label>Motif<input id="banReason" placeholder="Manual ban" autocomplete="off"></label>
+                <div style="display:flex;gap:6px"><button class="btn danger" type="submit">Bannir</button><button class="btn" id="banAnnule" type="button">Annuler</button></div>
+            </form>
         </div>
 
-        <div class="card">
-            <div class="tabs">
-                <div class="tab active" data-tab="alerts" onclick="switchTab('alerts')">Alerts</div>
-                <div class="tab" data-tab="categories" onclick="switchTab('categories')">Categories</div>
-                <div class="tab" data-tab="bans" onclick="switchTab('bans')">Bans</div>
-                <div class="tab" data-tab="stats" onclick="switchTab('stats')">Statistics</div>
-            </div>
+        <div class="onglets" id="wafTabs" role="tablist" aria-label="Sections de la console">
+            <button class="waf-tab active" type="button" role="tab" aria-selected="true" data-tab="alerts">Alertes</button>
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="categories">Catégories</button>
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="bans">Bans</button>
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="stats">Statistiques</button>
+        </div>
 
-            <div id="alerts" class="tab-content active">
-                <div id="alertsList">Loading...</div>
+        <div class="pan" id="alerts"><h3>Alertes récentes <i>agrégées par adresse</i></h3><div id="alertsList"></div></div>
+        <div class="pan" id="categories" hidden><h3>Catégories de règles <i id="nCats"></i></h3><div class="cats" id="categoriesList"></div>
+            <p class="note">Un clic active ou désactive la catégorie (POST /category/…/toggle). Désactiver demande une confirmation.</p></div>
+        <div class="pan" id="bans" hidden><h3>Bannissements actifs</h3>
+            <div class="tab"><table><thead><tr><th>Adresse</th><th>Motif</th><th>Pays</th><th>ASN</th><th>Reste</th><th>Action</th></tr></thead><tbody id="bansTable"></tbody></table></div>
+        </div>
+        <div id="stats" hidden style="display:grid;gap:10px">
+            <div class="grille">
+                <div class="pan"><h3>Par gravité</h3><div class="donut" id="severityStats"></div></div>
+                <div class="pan"><h3>Par catégorie</h3><div class="donut" id="categoryStats"></div></div>
+                <div class="pan"><h3>Pays d'origine</h3><div class="donut"><div id="countryDonut"></div><div class="barres" id="topCountries" style="flex:1 1 160px"></div></div></div>
+                <div class="pan"><h3>Sites les plus attaqués</h3><div class="barres" id="topVhosts"></div></div>
             </div>
-
-            <div id="categories" class="tab-content">
-                <div id="categoriesList">Loading...</div>
-            </div>
-
-            <div id="bans" class="tab-content">
-                <table>
-                    <thead><tr><th>IP Address</th><th>Reason</th><th>Country</th><th>ASN</th><th>Duration</th><th>Actions</th></tr></thead>
-                    <tbody id="bansTable"><tr><td colspan="6">Loading...</td></tr></tbody>
-                </table>
-            </div>
-
-            <div id="stats" class="tab-content">
-                <div class="grid">
-                    <div class="card">
-                        <h2>🎯 By Severity</h2>
-                        <div id="severityStats" style="display:flex;justify-content:center;">Loading...</div>
-                    </div>
-                    <div class="card">
-                        <h2>📊 By Category</h2>
-                        <div id="categoryStats" style="display:flex;justify-content:center;">Loading...</div>
-                    </div>
-                </div>
-                <div class="grid">
-                    <div class="card">
-                        <h2>🌍 Top Countries</h2>
-                        <div style="display: flex; gap: 1rem; align-items: flex-start;">
-                            <div id="countryDonut" style="flex-shrink: 0;"></div>
-                            <div id="topCountries" style="flex: 1;">Loading...</div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h2>🎯 Top Attacked Sites</h2>
-                        <div id="topVhosts">Loading...</div>
-                    </div>
-                </div>
-                <div class="card">
-                    <h2>Top Attacking IPs</h2>
-                    <table>
-                        <thead><tr><th>IP</th><th>🌍</th><th>Threats</th><th>Actions</th></tr></thead>
-                        <tbody id="topIpsTable"><tr><td colspan="4">Loading...</td></tr></tbody>
-                    </table>
-                </div>
+            <div class="pan"><h3>Adresses les plus actives</h3>
+                <div class="tab"><table><thead><tr><th>Adresse</th><th>Pays</th><th>Menaces</th><th>Action</th></tr></thead><tbody id="topIpsTable"></tbody></table></div>
             </div>
         </div>
-    </main>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-    <div class="modal" id="banModal">
-        <div class="modal-content">
-            <h3>Ban IP Address</h3>
-            <div class="form-group">
-                <label>IP Address</label>
-                <input type="text" id="banIp" placeholder="192.168.1.100">
-            </div>
-            <div class="form-group">
-                <label>Duration</label>
-                <select id="banDuration">
-                    <option value="1h">1 hour</option>
-                    <option value="4h" selected>4 hours</option>
-                    <option value="24h">24 hours</option>
-                    <option value="7d">7 days</option>
-                    <option value="30d">30 days</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Reason</label>
-                <input type="text" id="banReason" placeholder="Manual ban">
-            </div>
-            <div class="btn-group">
-                <button class="btn danger" onclick="banIp()">Ban</button>
-                <button class="btn" onclick="hideModal('banModal')">Cancel</button>
-            </div>
-        </div>
-    </div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        if (DEMO) document.body.classList.add('dm');
         const API = '/api/v1/waf';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const SVG = 'http://www.w3.org/2000/svg';
+        const nb = v => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? '—' : Number(v).toLocaleString('fr-FR');
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const GRAV = { critical: '#ff4d5e', high: '#ff9f1c', medium: '#ffd23f', low: '#3b82f6' };
+        const PAL = ['#29b6f6', '#a78bfa', '#2ecc71', '#ff9f1c', '#ff4d5e', '#ffd23f', '#3b82f6'];
 
-        async function api(path, opts = {}) {
+        let STATUS = null, STATS = null, ALERTS = null, CATS = null, BANS = null;
+        let SESSION_OK = true, CONF = null, ONGLET = 'alerts';
+        const GEO = {};   // pays par adresse (cache de la page ; /geoip/<ip>)
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { 'Content-Type': 'application/json', Accept: 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne console. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login.html'; return {}; }
-                return res.json();
-            } catch { return {}; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes() };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok && !(data && data.success === false), statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
         }
-        // GeoIP cache for country flags
-        const GEOIP_CACHE_KEY = "secubox_waf_geoip";
-        const GEOIP_CACHE_TTL = 86400000;
-        function getGeoCache() { try { return JSON.parse(localStorage.getItem(GEOIP_CACHE_KEY) || "{}"); } catch { return {}; } }
-        function setGeoCache(ip, country) { const c = getGeoCache(); c[ip] = { country, ts: Date.now() }; localStorage.setItem(GEOIP_CACHE_KEY, JSON.stringify(c)); }
-        function countryToFlag(code) { if (!code || code === "LAN" || code.length !== 2) return ""; return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0))); }
-        function getSiteEmoji(host) {
-            if (!host) return "🌐";
-            const h = host.toLowerCase();
-            if (h.includes("git")) return "💻";
-            if (h.includes("mail")) return "📧";
-            if (h.includes("blog")) return "📝";
-            if (h.includes("admin")) return "🔐";
-            if (h.includes("api")) return "⚡";
-            if (h.includes("auth")) return "🔑";
-            if (h.includes("file") || h.includes("cloud")) return "📁";
-            if (h.includes("chat") || h.includes("matrix")) return "💬";
-            if (h.includes("media") || h.includes("stream")) return "🎬";
-            if (h.includes("secubox")) return "🛡️";
-            return "🌐";
+        function retour(ok, msg) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && (res.data.detail || res.data.error);
+            return d ? String(d) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable');
         }
-
-        // Multi-layer concentric donut for countries with flags
-        function createCountryDonut(countries, size) {
-            size = size || 120;
-            const center = size / 2;
-            if (!countries || countries.length === 0) return "<p style=\"color:var(--text-dim);font-size:0.7rem;\">No data</p>";
-            
-            const total = countries.reduce((s, c) => s + (c.count || 0), 0);
-            if (total === 0) return "<p style=\"color:var(--text-dim);font-size:0.7rem;\">No data</p>";
-            
-            const COUNTRY_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#0ea5e9", "#6366f1", "#a855f7"];
-            const topCountries = countries.slice(0, 6);
-            const ringWidth = 7;
-            const spacing = 2;
-            
-            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
-            
-            // Draw rings from outer to inner
-            topCountries.forEach(function(c, i) {
-                const r = center - 8 - (i * (ringWidth + spacing));
-                const pct = c.count / total;
-                const circ = 2 * Math.PI * r;
-                const dash = circ * pct;
-                const gap = circ - dash;
-                const color = COUNTRY_COLORS[i % COUNTRY_COLORS.length];
-                const code = c.country || c.code || "??";
-                const flag = countryToFlag(code);
-                
-                // Background
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.05)\" stroke-width=\"" + ringWidth + "\"/>";
-                
-                // Progress arc
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"" + ringWidth + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;opacity:0.85;cursor:pointer;\" onmouseover=\"this.style.opacity=1;this.style.strokeWidth=9\" onmouseout=\"this.style.opacity=0.85;this.style.strokeWidth=" + ringWidth + "\"><title>" + flag + " " + code + ": " + c.count + " (" + Math.round(pct*100) + "%)</title></circle>";
-                
-                // Flag at position around ring (spread evenly)
-                const angle = -Math.PI/2 + (i * Math.PI / 4);
-                const iconX = center + Math.cos(angle) * (r + 2);
-                const iconY = center + Math.sin(angle) * (r + 2);
-                svg += "<text x=\"" + iconX + "\" y=\"" + iconY + "\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"10\" style=\"pointer-events:none;\">" + flag + "</text>";
-            });
-            
-            // Center total
-            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text>";
-            svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--text-dim)\" font-size=\"6\">ATTACKS</text>";
-            
-            svg += "</svg>";
-            
-            // Legend with flags
-            const legend = topCountries.slice(0, 4).map(function(c, i) {
-                const code = c.country || c.code || "??";
-                const flag = countryToFlag(code);
-                return "<span style=\"display:inline-flex;align-items:center;gap:2px;font-size:0.6rem;\"><span style=\"width:6px;height:6px;background:" + COUNTRY_COLORS[i % COUNTRY_COLORS.length] + ";border-radius:1px;\"></span>" + flag + " " + c.count + "</span>";
-            }).join(" ");
-            
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;\">" + legend + "</div></div>";
+        function drapeau(c) { return /^[A-Za-z]{2}$/.test(c || '') ? String.fromCodePoint(127397 + c.toUpperCase().charCodeAt(0), 127397 + c.toUpperCase().charCodeAt(1)) : '—'; }
+        const reseauLocal = ip => /^(10\.|192\.168\.|127\.)/.test(ip);
+        async function pays(ip) {
+            if (!ip) return '';
+            if (GEO[ip] !== undefined) return GEO[ip];
+            if (reseauLocal(ip)) return (GEO[ip] = 'LAN');
+            if (DEMO) return (GEO[ip] = '');
+            try { const r = await fetch(API + '/geoip/' + encodeURIComponent(ip), { credentials: 'same-origin', headers: entetes() }); const j = await r.json(); GEO[ip] = (j.country && j.country.length === 2) ? j.country : ''; }
+            catch (e) { GEO[ip] = ''; }
+            return GEO[ip];
         }
-
-        // Concentric donut for severity levels
-        function createSeverityDonut(data, size) {
-            size = size || 120;
-            const center = size / 2;
-            if (!data || Object.keys(data).length === 0) return "<p style=\"color:var(--text-dim);font-size:0.7rem;\">No data</p>";
-            
-            // Convert object to array if needed
-            const items = Array.isArray(data) ? data : Object.entries(data).map(([k,v]) => ({name: k, count: v}));
-            const total = items.reduce((s, c) => s + (c.count || 0), 0);
-            if (total === 0) return "<p style=\"color:var(--text-dim);font-size:0.7rem;\">No data</p>";
-            
-            const SEV_COLORS = { critical: "#dc2626", high: "#ef4444", medium: "#f97316", low: "#eab308", info: "#3b82f6" };
-            const SEV_ICONS = { critical: "💀", high: "🔴", medium: "🟠", low: "🟡", info: "🔵" };
-            const topItems = items.slice(0, 5);
-            const ringWidth = 7;
-            const spacing = 2;
-            
-            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
-            
-            topItems.forEach(function(item, i) {
-                const r = center - 8 - (i * (ringWidth + spacing));
-                const pct = item.count / total;
-                const circ = 2 * Math.PI * r;
-                const dash = circ * pct;
-                const gap = circ - dash;
-                const name = item.name || item.severity || "unknown";
-                const color = SEV_COLORS[name.toLowerCase()] || "#6b7280";
-                const icon = SEV_ICONS[name.toLowerCase()] || "⚪";
-                
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.05)\" stroke-width=\"" + ringWidth + "\"/>";
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"" + ringWidth + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;opacity:0.85;cursor:pointer;\" onmouseover=\"this.style.opacity=1;this.style.strokeWidth=9\" onmouseout=\"this.style.opacity=0.85;this.style.strokeWidth=" + ringWidth + "\"><title>" + icon + " " + name + ": " + item.count + " (" + Math.round(pct*100) + "%)</title></circle>";
-                
-                const angle = -Math.PI/2 + (i * Math.PI / 4);
-                const iconX = center + Math.cos(angle) * (r + 2);
-                const iconY = center + Math.sin(angle) * (r + 2);
-                svg += "<text x=\"" + iconX + "\" y=\"" + iconY + "\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"10\" style=\"pointer-events:none;\">" + icon + "</text>";
-            });
-            
-            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text>";
-            svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--text-dim)\" font-size=\"6\">ALERTS</text>";
-            svg += "</svg>";
-            
-            const legend = topItems.slice(0, 4).map(function(item, i) {
-                const name = item.name || item.severity || "?";
-                const color = SEV_COLORS[name.toLowerCase()] || "#6b7280";
-                const icon = SEV_ICONS[name.toLowerCase()] || "⚪";
-                return "<span style=\"display:inline-flex;align-items:center;gap:2px;font-size:0.6rem;\"><span style=\"width:6px;height:6px;background:" + color + ";border-radius:1px;\"></span>" + icon + " " + item.count + "</span>";
-            }).join(" ");
-            
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;\">" + legend + "</div></div>";
-        }
-
-        // Severity emoji helper (global)
-        function getSeverityEmoji(sev) {
-            const emojis = { critical: "💀", high: "🔴", medium: "🟠", low: "🟡", info: "🔵" };
-            return emojis[(sev || "").toLowerCase()] || "⚪";
-        }
-
-        // Concentric donut for categories
-        function createCategoryConcentricDonut(data, size) {
-            size = size || 120;
-            const center = size / 2;
-            if (!data || Object.keys(data).length === 0) return "<p style=\"color:var(--text-dim);font-size:0.7rem;\">No data</p>";
-            
-            const items = Array.isArray(data) ? data : Object.entries(data).map(([k,v]) => ({name: k, count: v}));
-            const total = items.reduce((s, c) => s + (c.count || 0), 0);
-            if (total === 0) return "<p style=\"color:var(--text-dim);font-size:0.7rem;\">No data</p>";
-            
-            const CAT_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#0ea5e9", "#6366f1", "#a855f7"];
-            const CAT_ICONS = { scanner: "🔍", scanners: "🔍", bruteforce: "🔨", honeypot: "🍯", waf: "🛡️", http: "🌐", ssh: "🔐", sqli: "💉", xss: "⚠️", rce: "💣", crawler: "🕷️", recon: "🔎", default: "📌" };
-
-            const topItems = items.slice(0, 6);
-            const ringWidth = 7;
-            const spacing = 2;
-            
-            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
-            
-            topItems.forEach(function(item, i) {
-                const r = center - 8 - (i * (ringWidth + spacing));
-                const pct = item.count / total;
-                const circ = 2 * Math.PI * r;
-                const dash = circ * pct;
-                const gap = circ - dash;
-                const name = item.name || item.category || "unknown";
-                const color = CAT_COLORS[i % CAT_COLORS.length];
-                let icon = "📌";
-                for (const [key, emoji] of Object.entries(CAT_ICONS)) {
-                    if (name.toLowerCase().includes(key)) { icon = emoji; break; }
-                }
-                
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.05)\" stroke-width=\"" + ringWidth + "\"/>";
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"" + ringWidth + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;opacity:0.85;cursor:pointer;\" onmouseover=\"this.style.opacity=1;this.style.strokeWidth=9\" onmouseout=\"this.style.opacity=0.85;this.style.strokeWidth=" + ringWidth + "\"><title>" + icon + " " + name + ": " + item.count + " (" + Math.round(pct*100) + "%)</title></circle>";
-                
-                const angle = -Math.PI/2 + (i * Math.PI / 4);
-                const iconX = center + Math.cos(angle) * (r + 2);
-                const iconY = center + Math.sin(angle) * (r + 2);
-                svg += "<text x=\"" + iconX + "\" y=\"" + iconY + "\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"9\" style=\"pointer-events:none;\">" + icon + "</text>";
-            });
-            
-            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text>";
-            svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--text-dim)\" font-size=\"6\">ALERTS</text>";
-            svg += "</svg>";
-            
-            const legend = topItems.slice(0, 4).map(function(item, i) {
-                const name = item.name || item.category || "?";
-                let icon = "📌";
-                for (const [key, emoji] of Object.entries(CAT_ICONS)) {
-                    if (name.toLowerCase().includes(key)) { icon = emoji; break; }
-                }
-                return "<span style=\"display:inline-flex;align-items:center;gap:2px;font-size:0.6rem;\"><span style=\"width:6px;height:6px;background:" + CAT_COLORS[i % CAT_COLORS.length] + ";border-radius:1px;\"></span>" + icon + " " + item.count + "</span>";
-            }).join(" ");
-            
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;\">" + legend + "</div></div>";
-        }
-
-        // Donut chart with hover icons
-
-        // Multi-layer donut for attacked sites with emojis
-        function createSiteDonut(sites, size) {
-            size = size || 110;
-            const center = size / 2;
-            if (!sites || sites.length === 0) return "<p style=\"color:var(--text-dim);font-size:0.7rem;\">No data</p>";
-            
-            const total = sites.reduce((s, v) => s + (v.count || 0), 0);
-            if (total === 0) return "<p style=\"color:var(--text-dim);font-size:0.7rem;\">No data</p>";
-            
-            const SITE_COLORS = ["#ec4899", "#f43f5e", "#ef4444", "#f97316", "#eab308", "#22c55e"];
-            const topSites = sites.slice(0, 5);
-            const ringWidth = 7;
-            const spacing = 2;
-            
-            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
-            
-            topSites.forEach(function(s, i) {
-                const r = center - 8 - (i * (ringWidth + spacing));
-                const pct = s.count / total;
-                const circ = 2 * Math.PI * r;
-                const dash = circ * pct;
-                const gap = circ - dash;
-                const color = SITE_COLORS[i % SITE_COLORS.length];
-                const host = s.vhost || s.host || "?";
-                const icon = getSiteEmoji(host);
-                
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.05)\" stroke-width=\"" + ringWidth + "\"/>";
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"" + ringWidth + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;opacity:0.85;cursor:pointer;\" onmouseover=\"this.style.opacity=1\" onmouseout=\"this.style.opacity=0.85\"><title>" + icon + " " + host + ": " + s.count + " (" + Math.round(pct*100) + "%)</title></circle>";
-                
-                const angle = -Math.PI/2 + (i * Math.PI / 3.5);
-                const iconX = center + Math.cos(angle) * (r + 2);
-                const iconY = center + Math.sin(angle) * (r + 2);
-                svg += "<text x=\"" + iconX + "\" y=\"" + iconY + "\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"9\" style=\"pointer-events:none;\">" + icon + "</text>";
-            });
-            
-            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"12\" font-weight=\"bold\">" + total + "</text>";
-            svg += "<text x=\"" + center + "\" y=\"" + (center + 9) + "\" text-anchor=\"middle\" fill=\"var(--text-dim)\" font-size=\"6\">HITS</text>";
-            svg += "</svg>";
-            
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "</div>";
-        }
-
-        function createDonutChart(data, colors, icons, size = 100) {
-            const total = Object.values(data).reduce((a, b) => a + b, 0);
-            if (total === 0) return "<p style='color:var(--text-dim)'>No data</p>";
-            const radius = size / 2 - 5;
-            const innerRadius = radius * 0.6;
-            let cumulative = 0;
-            const slices = Object.entries(data).map(([label, value], i) => {
-                const pct = value / total;
-                const startAngle = cumulative * 2 * Math.PI - Math.PI / 2;
-                cumulative += pct;
-                const endAngle = cumulative * 2 * Math.PI - Math.PI / 2;
-                const x1o = Math.cos(startAngle) * radius;
-                const y1o = Math.sin(startAngle) * radius;
-                const x2o = Math.cos(endAngle) * radius;
-                const y2o = Math.sin(endAngle) * radius;
-                const x1i = Math.cos(startAngle) * innerRadius;
-                const y1i = Math.sin(startAngle) * innerRadius;
-                const x2i = Math.cos(endAngle) * innerRadius;
-                const y2i = Math.sin(endAngle) * innerRadius;
-                const largeArc = pct > 0.5 ? 1 : 0;
-                const color = colors[i % colors.length];
-                const icon = icons && icons[label] ? icons[label] : "•";
-                return `<g class="donut-slice"><path d="M${x1o},${y1o} A${radius},${radius} 0 ${largeArc},1 ${x2o},${y2o} L${x2i},${y2i} A${innerRadius},${innerRadius} 0 ${largeArc},0 ${x1i},${y1i} Z" fill="${color}" style="transition:transform 0.2s;transform-origin:center;cursor:pointer;" onmouseover="this.style.transform='scale(1.05)';this.nextElementSibling.style.opacity=1" onmouseout="this.style.transform='scale(1)';this.nextElementSibling.style.opacity=0"/><title>${icon} ${label}: ${value} (${Math.round(pct*100)}%)</title></g>`;
-            });
-            const centerText = `<text x="0" y="-5" text-anchor="middle" fill="var(--text)" font-size="16" font-weight="bold">${total}</text><text x="0" y="12" text-anchor="middle" fill="var(--text-dim)" font-size="9">TOTAL</text>`;
-            return `<div style="display:flex;flex-direction:column;align-items:center;"><svg width="${size}" height="${size}" viewBox="-${size/2} -${size/2} ${size} ${size}">${slices.join("")}${centerText}</svg><div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;font-size:0.7rem;">${Object.entries(data).map(([l,v],i) => `<span style="display:flex;align-items:center;gap:0.2rem;"><span style="width:8px;height:8px;background:${colors[i%colors.length]};border-radius:2px;"></span>${icons&&icons[l]?icons[l]:""} ${l}</span>`).join("")}</div></div>`;
-        }
-        const SEV_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e"];
-        const SEV_ICONS = {critical:"🔴",high:"🟠",medium:"🟡",low:"🟢"};
-        const CAT_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#0ea5e9", "#14b8a6"];
-        const CAT_ICONS = {router_botnet:"🤖",scanners:"🔍",api_abuse:"⚠️",lfi:"📂",rce:"💀",recon_crawler:"🕷️",waf_fingerprint:"👆",honeypot:"🍯",xss:"⚡",sqli:"💉"};
-        // Nested concentric donut chart (inner=severity, outer=category)
-        function createNestedDonut(innerData, outerData, innerColors, outerColors, innerIcons, outerIcons, size) {
-            size = size || 160;
-            var innerTotal = Object.values(innerData).reduce(function(a,b){return a+b;}, 0);
-            var outerTotal = Object.values(outerData).reduce(function(a,b){return a+b;}, 0);
-            if (innerTotal === 0 && outerTotal === 0) return "<p style=\"color:var(--text-dim)\">No data</p>";
-            var outerR = size/2 - 5, outerI = outerR * 0.7, innerR = outerR * 0.65, innerI = outerR * 0.35;
-            function ring(data, cols, icons, r1, r2, tot) {
-                var cum = 0;
-                return Object.entries(data).map(function(e, i) {
-                    var lbl = e[0], val = e[1], pct = val/tot;
-                    var s = cum * 2 * Math.PI - Math.PI/2; cum += pct; var en = cum * 2 * Math.PI - Math.PI/2;
-                    var x1o = Math.cos(s)*r1, y1o = Math.sin(s)*r1, x2o = Math.cos(en)*r1, y2o = Math.sin(en)*r1;
-                    var x1i = Math.cos(s)*r2, y1i = Math.sin(s)*r2, x2i = Math.cos(en)*r2, y2i = Math.sin(en)*r2;
-                    var la = pct > 0.5 ? 1 : 0, col = cols[i % cols.length], ico = icons && icons[lbl] ? icons[lbl] : "";
-                    return "<path d=\"M"+x1o+","+y1o+" A"+r1+","+r1+" 0 "+la+",1 "+x2o+","+y2o+" L"+x2i+","+y2i+" A"+r2+","+r2+" 0 "+la+",0 "+x1i+","+y1i+" Z\" fill=\""+col+"\" style=\"cursor:pointer;transition:opacity 0.2s;\" onmouseover=\"this.style.opacity=0.7\" onmouseout=\"this.style.opacity=1\"><title>"+ico+" "+lbl+": "+val+" ("+Math.round(pct*100)+"%)</title></path>";
-                }).join("");
-            }
-            var iRing = ring(innerData, innerColors, innerIcons, innerR, innerI, innerTotal);
-            var oRing = ring(outerData, outerColors, outerIcons, outerR, outerI, outerTotal);
-            var ctr = "<text x=\"0\" y=\"-6\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"16\" font-weight=\"bold\">"+(innerTotal||outerTotal)+"</text><text x=\"0\" y=\"8\" text-anchor=\"middle\" fill=\"var(--text-dim)\" font-size=\"7\">THREATS</text>";
-            var iLeg = Object.entries(innerData).map(function(e,i){var ic=innerIcons&&innerIcons[e[0]]?innerIcons[e[0]]:"";return "<span style=\"display:inline-flex;align-items:center;gap:2px;margin:1px 3px;\"><span style=\"width:6px;height:6px;background:"+innerColors[i%innerColors.length]+";border-radius:1px;\"></span>"+ic+"</span>";}).join("");
-            var oLeg = Object.entries(outerData).slice(0,5).map(function(e,i){var ic=outerIcons&&outerIcons[e[0]]?outerIcons[e[0]]:"";return "<span style=\"display:inline-flex;align-items:center;gap:2px;margin:1px 3px;\"><span style=\"width:6px;height:6px;background:"+outerColors[i%outerColors.length]+";border-radius:1px;\"></span>"+ic+"</span>";}).join("");
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\"><svg width=\""+size+"\" height=\""+size+"\" viewBox=\"-"+size/2+" -"+size/2+" "+size+" "+size+"\">"+oRing+iRing+ctr+"</svg><div style=\"font-size:0.6rem;margin-top:4px;text-align:center;\"><div>🎯 "+iLeg+"</div><div>📊 "+oLeg+"</div></div></div>";
-        }
-
-        function getCategoryEmoji(cat) {
-            if (!cat) return "⚠️";
-            const c = cat.toLowerCase();
-            if (c.includes("sqli") || c.includes("sql")) return "💉";
-            if (c.includes("xss")) return "🔥";
-            if (c.includes("rce") || c.includes("exec")) return "💀";
-            if (c.includes("lfi") || c.includes("path") || c.includes("traversal")) return "📂";
-            if (c.includes("scanner") || c.includes("recon")) return "🔍";
-            if (c.includes("bot")) return "🤖";
-            if (c.includes("router") || c.includes("iot")) return "📡";
-            if (c.includes("shell") || c.includes("webshell")) return "🐚";
-            if (c.includes("cve") || c.includes("exploit")) return "🎯";
-            if (c.includes("brute") || c.includes("auth")) return "🔓";
-            if (c.includes("dos") || c.includes("flood")) return "🌊";
-            if (c.includes("voip") || c.includes("sip")) return "📞";
-            if (c.includes("crypto") || c.includes("miner")) return "⛏️";
-            if (c.includes("malware")) return "🦠";
-            if (c.includes("backdoor")) return "🚪";
-            return "⚠️";
-        }
-
-        async function lookupGeoIP(ip) { if (!ip) return "";
-            const cache = getGeoCache();
-            if (cache[ip] && Date.now() - cache[ip].ts < GEOIP_CACHE_TTL) return cache[ip].country;
-            if (ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("127.")) { setGeoCache(ip, "LAN"); return "LAN"; }
-            try { const r = await fetch("/api/v1/waf/geoip/" + ip, { mode: "cors" }); const j = await r.json(); const c = j.country; if (c && c.length === 2) { setGeoCache(ip, c); return c; } } catch {}
-            return "";
-        }
-
-
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        }
-
-        async function loadStatus() {
-            const d = await api('/status');
-            document.getElementById('totalRules').textContent = d.total_rules || 0;
-            document.getElementById('activeCategories').textContent = d.active_categories || 0;
-        }
-
-        async function loadStats() {
-            const d = await api('/stats');
-            document.getElementById('threatsToday').textContent = d.threats_today || 0;
-
-            // Severity donut
-            const sevEl = document.getElementById('severityStats');
-            if (d.by_severity) {
-                sevEl.innerHTML = createSeverityDonut(d.by_severity, 120);
-            }
-            
-            // Category donut
-            const catEl = document.getElementById('categoryStats');
-            if (d.by_category) {
-                catEl.innerHTML = createCategoryConcentricDonut(d.by_category, 120);
-            }
-
-            // Top Countries - render donut + bar graph
-            const countriesEl = document.getElementById('topCountries');
-            const countryDonutEl = document.getElementById('countryDonut');
-            const countryTotal = d.top_countries ? d.top_countries.reduce((s,c) => s + c.count, 0) : 1;
-            
-            // Render country donut
-            if (countryDonutEl && d.top_countries && d.top_countries.length > 0) {
-                countryDonutEl.innerHTML = createCountryDonut(d.top_countries, 110);
-            }
-            
-            if (d.top_countries && d.top_countries.length > 0) {
-                countriesEl.innerHTML = d.top_countries.slice(0, 8).map(c => [c.country, c.count]).map(([code, count]) =>
-                    `<div style="position:relative;padding:0.3rem 0.5rem;margin:0.15rem 0;border-radius:4px;overflow:hidden;"><div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(count/countryTotal*100)}%;background:linear-gradient(90deg,rgba(239,68,68,0.3),rgba(239,68,68,0.1));border-radius:4px;"></div><div style="position:relative;display:flex;justify-content:space-between;align-items:center;"><span>${countryToFlag(code)} ${code}</span><span style="color:var(--red);font-weight:500;">${count} <small style="opacity:0.6;">(${Math.round(count/countryTotal*100)}%)</small></span></div></div>`
-                ).join('');
-            } else {
-                countriesEl.innerHTML = '<p style="color:var(--text-dim)">No data (GeoIP DB needed)</p>';
-            }
-
-            // Top Attacked Vhosts
-            const vhostsEl = document.getElementById('topVhosts');
-            const vhostTotal = d.top_vhosts ? d.top_vhosts.reduce((s,v) => s + v.count, 0) : 1; if (d.top_vhosts && d.top_vhosts.length > 0) {
-                vhostsEl.innerHTML = d.top_vhosts.slice(0, 8).map(v => [v.vhost, v.count]).map(([host, count]) =>
-                    `<div style="position:relative;padding:0.3rem 0.5rem;margin:0.15rem 0;border-radius:4px;overflow:hidden;"><div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(count/vhostTotal*100)}%;background:linear-gradient(90deg,rgba(234,179,8,0.3),rgba(234,179,8,0.1));border-radius:4px;"></div><div style="position:relative;display:flex;justify-content:space-between;align-items:center;"><span>${getSiteEmoji(host)} ${host}</span><span style="color:var(--yellow);font-weight:500;">${count} <small style="opacity:0.6;">(${Math.round(count/vhostTotal*100)}%)</small></span></div></div>`
-                ).join('');
-            } else {
-                vhostsEl.innerHTML = '<p style="color:var(--text-dim)">No data</p>';
-            }
-
-            // Top IPs with flags (countries from backend)
-            const ipsTable = document.getElementById('topIpsTable');
-            if (d.top_ips && Object.keys(d.top_ips).length > 0) {
-                const ipCountries = d.top_ips_countries || {};
-                ipsTable.innerHTML = Object.entries(d.top_ips).map(([ip, count]) => {
-                    const country = ipCountries[ip] || '';
-                    const flag = countryToFlag(country);
-                    return `
-                    <tr>
-                        <td style="font-family:monospace">${ip}</td>
-                        <td style="font-size:1.2em" title="${country}">${flag}</td>
-                        <td>${count}</td>
-                        <td><button class="btn danger" onclick="banIpDirect('${ip}')">Ban</button></td>
-                    </tr>
-                `}).join('');
-            } else {
-                ipsTable.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No data</td></tr>';
-            }
-        }
-
-        async function loadAlerts() {
-            // Load aggregated alerts (grouped by IP)
-            const d = await api('/alerts?limit=15&aggregate=true');
-            const el = document.getElementById('alertsList');
-            if (!d.alerts || d.alerts.length === 0) {
-                el.innerHTML = '<p style="color:var(--text-dim)">No recent alerts</p>';
-                return;
-            }
-
-            // Fetch flags for all IPs
-            const ips = [...new Set(d.alerts.map(a => a.client_ip))];
-            const flags = {};
-            await Promise.all(ips.map(async ip => { flags[ip] = countryToFlag(await lookupGeoIP(ip)); }));
-
-            el.innerHTML = d.alerts.map(a => {
-                const countBadge = a.count > 1
-                    ? `<span style="background:var(--p31-ghost);color:var(--red);padding:0.15rem 0.5rem;border-radius:12px;font-size:0.75rem;font-weight:bold;">×${a.count}</span>`
-                    : '';
-                const categories = (a.categories || []).slice(0, 2).map(c => getCategoryEmoji(c)).join(' ');
-                const timeStr = a.last_seen ? new Date(a.last_seen).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'}) : '';
-                return `
-                <div class="alert-row" style="padding: 0.6rem 0;">
-                    <span class="alert-time" style="min-width: 50px;">${timeStr}</span>
-                    <span class="alert-flag" style="font-size:1.2em">${flags[a.client_ip] || ""}</span>
-                    <span class="alert-ip" style="min-width: 110px;">${a.client_ip}</span>
-                    ${countBadge}
-                    <span style="margin: 0 0.5rem; font-size: 1.2rem;" title="${a.max_severity}">${getSeverityEmoji(a.max_severity)}</span>
-                    <span class="alert-cat" style="font-size:1.1em">${categories}</span>
-                    <span class="alert-rule" style="flex:1;font-size:0.8rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                        ${a.latest_alert ? (a.latest_alert.rule_id + ': ' + (a.latest_alert.description || '').substring(0, 40)) : ''}
-                    </span>
-                    <button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.7rem;" onclick="banIpDirect('${a.client_ip}')">Ban</button>
-                </div>
-            `}).join('');
-        }
-
-        async function loadCategories() {
-            const d = await api('/categories');
-            const el = document.getElementById('categoriesList');
-            if (!d.categories) {
-                el.innerHTML = '<p style="color:var(--text-dim)">No categories loaded</p>';
-                return;
-            }
-            el.innerHTML = Object.entries(d.categories).map(([id, cat]) => `
-                <div class="category-card">
-                    <div class="category-header">
-                        <span class="category-name">${cat.name}</span>
-                        <label class="toggle">
-                            <input type="checkbox" ${cat.enabled ? 'checked' : ''} onchange="toggleCategory('${id}', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="category-meta">
-                        <span style="font-size: 1.1rem;" title="${cat.severity}">${getSeverityEmoji(cat.severity)}</span>
-                        <span>${cat.rules_count} rules</span>
-                        ${cat.owasp ? `<span>${cat.owasp}</span>` : ''}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function parseDuration(dur) {
-            // Parse duration like "4h", "24h", "7d", "22m47s", "2h30m15s" to milliseconds
-            if (!dur) return 0;
-            let ms = 0;
-            // Match all numeric+unit pairs
-            const matches = dur.matchAll(/(\d+)([smhd])/gi);
-            for (const m of matches) {
-                const n = parseInt(m[1]);
-                const u = m[2].toLowerCase();
-                if (u === 's') ms += n * 1000;
-                if (u === 'm') ms += n * 60 * 1000;
-                if (u === 'h') ms += n * 60 * 60 * 1000;
-                if (u === 'd') ms += n * 24 * 60 * 60 * 1000;
-            }
+        function dureeMs(d) {
+            if (!d) return 0; let ms = 0;
+            for (const m of String(d).matchAll(/(\d+)([smhd])/gi)) ms += parseInt(m[1], 10) * ({ s: 1e3, m: 6e4, h: 36e5, d: 864e5 })[m[2].toLowerCase()];
             return ms;
         }
-
-        function formatTimeLeft(ms) {
-            if (ms <= 0) return 'expiring';
-            const h = Math.floor(ms / 3600000);
-            const m = Math.floor((ms % 3600000) / 60000);
-            if (h >= 24) return `${Math.floor(h/24)}d ${h%24}h`;
-            if (h > 0) return `${h}h ${m}m`;
-            return `${m}m`;
+        function reste(ms) {
+            if (ms <= 0) return 'expire';
+            const h = Math.floor(ms / 36e5), m = Math.floor((ms % 36e5) / 6e4);
+            return h >= 24 ? Math.floor(h / 24) + ' j ' + (h % 24) + ' h' : h > 0 ? h + ' h ' + m + ' min' : m + ' min';
         }
 
-        async function loadBans() {
-            const d = await api('/bans');
-            document.getElementById('activeBans').textContent = d.total || 0;
+        function demoData() {
+            const t = new Date().toISOString();
+            STATUS = { enabled: true, total_rules: 382, active_categories: 4 };
+            STATS = { threats_today: 311, by_severity: { critical: 24, high: 80, medium: 140, low: 67 }, by_category: { sqli: 90, xss: 70, recon: 60, rce: 40 },
+                top_countries: [{ country: 'DE', count: 120 }, { country: 'US', count: 90 }, { country: 'NL', count: 40 }],
+                top_vhosts: [{ vhost: 'app.example.test', count: 150 }, { vhost: 'api.example.test', count: 95 }],
+                top_ips: { '203.0.113.7': 61, '198.51.100.23': 44, '203.0.113.41': 20 }, top_ips_countries: { '203.0.113.7': 'DE', '198.51.100.23': 'US', '203.0.113.41': 'NL' } };
+            ALERTS = { alerts: [{ client_ip: '203.0.113.41', count: 12, categories: ['xss', 'recon'], max_severity: 'high', last_seen: t, latest_alert: { rule_id: 'XSS-014', description: 'Balise script dans un paramètre' } },
+                                { client_ip: '203.0.113.7', count: 3, categories: ['sqli'], max_severity: 'critical', last_seen: t, latest_alert: { rule_id: 'SQLI-002', description: 'Union select' } }] };
+            CATS = { categories: { sqli: { name: 'Injection SQL', enabled: true, rules_count: 64, severity: 'critical', owasp: 'A03' }, xss: { name: 'Scripts intersites', enabled: true, rules_count: 58, severity: 'high', owasp: 'A03' },
+                                   robots: { name: 'Robots', enabled: false, rules_count: 120, severity: 'low' } } };
+            BANS = { total: 2, bans: [{ value: '203.0.113.7', scenario: 'sqli', country: 'DE', asn_org: 'AS64496 Exemple', duration: '4h', created_at: t },
+                                      { value: '198.51.100.23', scenario: 'leurre', country: 'US', duration: '24h', created_at: t }] };
+        }
 
-            const tbody = document.getElementById('bansTable');
-            if (!d.bans || d.bans.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim)">No active bans</td></tr>';
-                return;
-            }
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; await rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/stats'), lire('/alerts?limit=15&aggregate=true'), lire('/categories'), lire('/bans')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUS = val(0); STATS = val(1); ALERTS = val(2); CATS = val(3); BANS = val(4);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le WAF (service arrêté ou injoignable).';
+            await rendre();
+        }
 
-            // Calculate expiry times and sort
-            const now = Date.now();
-            const bansWithExpiry = d.bans.map(b => {
-                const created = b.created_at ? new Date(b.created_at).getTime() : now;
-                const durMs = parseDuration(b.duration);
-                const expiry = created + durMs;
-                const timeLeft = expiry - now;
-                return { ...b, expiry, timeLeft, created };
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function vide(tb, n, txt) { const tr = el('tr'), td = el('td', 'vide', txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        const pasDeDonnee = () => SESSION_OK ? 'Aucune donnée' : '—';
+
+        async function rendre() {
+            $('demo').hidden = !DEMO; $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!STATUS && !STATS) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+            $('threatsToday').textContent = STATS ? nb(STATS.threats_today) : '—';
+            $('totalRules').textContent = STATUS ? nb(STATUS.total_rules) : '—';
+            $('activeCategories').textContent = STATUS ? nb(STATUS.active_categories) : '—';
+            $('activeBans').textContent = BANS ? nb(BANS.total) : '—';
+            rendreCats(); rendreBans(); rendreStats();
+            await rendreAlertes();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        async function rendreAlertes() {
+            const z = $('alertsList'); const l = (ALERTS && ALERTS.alerts) || [];
+            await Promise.all(l.map(a => pays(a.client_ip)));
+            z.replaceChildren();
+            if (!l.length) { z.appendChild(el('div', 'vide', SESSION_OK ? 'Aucune alerte récente' : '—')); return; }
+            l.forEach(a => {
+                const r = el('div', 'alerte'), sev = String(a.max_severity || 'low').toLowerCase();
+                r.appendChild(el('span', '', a.last_seen ? new Date(a.last_seen).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'));
+                r.appendChild(el('span', '', drapeau(GEO[a.client_ip])));
+                r.appendChild(el('b', 'mono', tiret(a.client_ip)));
+                if (a.count > 1) r.appendChild(el('span', 'pill', '×' + a.count));
+                r.appendChild(el('span', 'pill ' + sev, sev.toUpperCase()));
+                r.appendChild(el('span', '', (a.categories || []).slice(0, 2).join(', ')));
+                r.appendChild(el('span', 'r', a.latest_alert ? a.latest_alert.rule_id + ' : ' + String(a.latest_alert.description || '').slice(0, 60) : ''));
+                r.appendChild(btn('Bannir', 'danger', () => demander('ban', a.client_ip, 'Bannir ' + a.client_ip + ' pendant 4 h ? Toute requête de cette adresse sera écartée par le pare-feu.')));
+                z.appendChild(r);
             });
-
-            // Sort: oldest expiry first (next to be unbanned at top)
-            bansWithExpiry.sort((a, b) => a.expiry - b.expiry);
-
-            // Fetch flags
-            const banIps = [...new Set(bansWithExpiry.map(b => b.value || b.ip).filter(Boolean))];
-            const banFlags = {};
-            await Promise.all(banIps.map(async ip => { banFlags[ip] = countryToFlag(await lookupGeoIP(ip)); }));
-
-            // Split into "next to unban" (first 5) and "latest banned" (5 most recent by created)
-            const nextToUnban = bansWithExpiry.slice(0, 5);
-            const latestBanned = [...bansWithExpiry].sort((a, b) => b.created - a.created).slice(0, 5);
-
-            function renderRow(b, highlight = '') {
-                const ip = b.value || b.ip || '-';
-                const timeLeftStr = b.timeLeft > 0 ? formatTimeLeft(b.timeLeft) : '<span style="color:var(--green)">expiring</span>';
-                return `
-                <tr style="${highlight}">
-                    <td><span style="font-size:1.2em">${banFlags[ip] || ''}</span> <span style="font-family:monospace">${ip}</span></td>
-                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${b.scenario || b.reason || '-'}</td>
-                    <td>${b.country || '-'}</td>
-                    <td style="font-size:0.85em">${b.asn_org || b.asn || '-'}</td>
-                    <td title="${b.duration}">${timeLeftStr}</td>
-                    <td><button class="btn" onclick="unbanIp('${ip}')">Unban</button></td>
-                </tr>`;
-            }
-
-            let html = '<tr><td colspan="6" style="background:var(--surface);color:var(--yellow);text-align:center;font-weight:bold">⏰ Next to Unban</td></tr>';
-            html += nextToUnban.map(b => renderRow(b, '')).join('');
-
-            html += '<tr><td colspan="6" style="background:var(--surface);color:var(--cyan);text-align:center;font-weight:bold;margin-top:1rem">🆕 5 Latest Banned</td></tr>';
-            html += latestBanned.map(b => renderRow(b, '')).join('');
-
-            tbody.innerHTML = html;
         }
 
-        async function toggleCategory(cat, enabled) {
-            await api(`/category/${cat}/toggle`, { method: 'POST', body: JSON.stringify({ enabled }) });
-            loadStatus();
+        function rendreCats() {
+            const z = $('categoriesList'); z.replaceChildren();
+            const c = CATS && CATS.categories ? Object.entries(CATS.categories) : [];
+            $('nCats').textContent = c.length ? c.length + ' catégories' : '';
+            if (!c.length) { z.appendChild(el('div', 'vide', SESSION_OK ? 'Aucune catégorie chargée' : '—')); return; }
+            c.forEach(([id, cat]) => {
+                const on = !!cat.enabled, b = el('button', 'cat ' + (on ? 'on' : 'off')); b.type = 'button'; b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on));
+                b.appendChild(el('b', '', cat.name || id));
+                const sp = el('span'); sp.append(tiret(cat.rules_count) + ' règles' + (cat.severity ? ' · ' + cat.severity : '') + (cat.owasp ? ' · ' + cat.owasp : '') + ' · ', el('i', '', on ? '✓ ACTIVE' : '✗ DÉSACTIVÉE')); b.appendChild(sp);
+                b.addEventListener('click', () => on ? demander('cat-off', id, 'Désactiver la catégorie « ' + (cat.name || id) + ' » ? Ses règles cesseront de s’appliquer.') : basculer(id, true));
+                z.appendChild(b);
+            });
         }
 
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showBanModal() { showModal('banModal'); }
-
-        async function banIp() {
-            const ip = document.getElementById('banIp').value;
-            const duration = document.getElementById('banDuration').value;
-            const reason = document.getElementById('banReason').value || 'Manual ban';
-            if (!ip) return alert('Enter IP address');
-            await api('/ban', { method: 'POST', body: JSON.stringify({ ip, duration, reason }) });
-            hideModal('banModal');
-            document.getElementById('banIp').value = '';
-            loadBans();
+        function rendreBans() {
+            const tb = $('bansTable'); tb.replaceChildren();
+            const l = (BANS && BANS.bans) || [];
+            if (!l.length) { vide(tb, 6, SESSION_OK ? 'Aucun ban actif' : '—'); return; }
+            const now = Date.now();
+            const b = l.map(x => { const c = x.created_at ? new Date(x.created_at).getTime() : now; return Object.assign({}, x, { cree: c, fin: c + dureeMs(x.duration) }); });
+            b.sort((x, y) => x.fin - y.fin);
+            const ligne = x => {
+                const ip = x.value || x.ip || '—', tr = el('tr');
+                tr.appendChild(el('td', 'mono', ip)); tr.appendChild(el('td', '', tiret(x.scenario || x.reason))); tr.appendChild(el('td', '', tiret(x.country)));
+                tr.appendChild(el('td', '', tiret(x.asn_org || x.asn))); const tm = el('td', '', reste(x.fin - now)); tm.title = tiret(x.duration); tr.appendChild(tm);
+                const ta = el('td', 'act'); ta.appendChild(btn('Lever le ban', 'ok', () => demander('unban', ip, 'Lever le bannissement de ' + ip + ' ?'))); tr.appendChild(ta);
+                return tr;
+            };
+            const sep = (txt, cls) => { const tr = el('tr', 'sep ' + (cls || '')), td = el('td', '', txt); td.colSpan = 6; tr.appendChild(td); return tr; };
+            tb.appendChild(sep('Prochains à expirer'));
+            b.slice(0, 5).forEach(x => tb.appendChild(ligne(x)));
+            tb.appendChild(sep('5 derniers bannis', 'nouv'));
+            b.slice().sort((x, y) => y.cree - x.cree).slice(0, 5).forEach(x => tb.appendChild(ligne(x)));
         }
 
-        async function banIpDirect(ip) {
-            if (!confirm(`Ban ${ip}?`)) return;
-            await api('/ban', { method: 'POST', body: JSON.stringify({ ip, duration: '4h', reason: 'Manual ban from dashboard' }) });
-            loadBans();
+        function donut(zone, entrees, couleur, unite) {
+            zone.replaceChildren();
+            const e = entrees.filter(x => x[1] > 0).slice(0, 6), tot = e.reduce((s, x) => s + x[1], 0);
+            if (!tot) { zone.appendChild(el('div', 'vide', pasDeDonnee())); return; }
+            const s = document.createElementNS(SVG, 'svg'); s.setAttribute('viewBox', '0 0 120 120'); s.setAttribute('role', 'img'); s.setAttribute('aria-label', 'Répartition ' + unite);
+            const R = 46, C = 2 * Math.PI * R; let acc = 0;
+            e.forEach((x, i) => {
+                const c = document.createElementNS(SVG, 'circle'), part = C * x[1] / tot;
+                c.setAttribute('cx', 60); c.setAttribute('cy', 60); c.setAttribute('r', R); c.setAttribute('fill', 'none'); c.setAttribute('stroke', couleur(x[0], i)); c.setAttribute('stroke-width', 14);
+                c.setAttribute('stroke-dasharray', part + ' ' + (C - part)); c.setAttribute('stroke-dashoffset', -acc); c.setAttribute('transform', 'rotate(-90 60 60)');
+                const ti = document.createElementNS(SVG, 'title'); ti.textContent = x[0] + ' : ' + nb(x[1]) + ' (' + Math.round(100 * x[1] / tot) + ' %)'; c.appendChild(ti); s.appendChild(c); acc += part;
+            });
+            const t = document.createElementNS(SVG, 'text'); t.setAttribute('x', 60); t.setAttribute('y', 64); t.setAttribute('text-anchor', 'middle'); t.setAttribute('fill', '#eaf1ff'); t.setAttribute('font-size', 16); t.setAttribute('font-weight', 700); t.textContent = nb(tot); s.appendChild(t);
+            zone.appendChild(s);
+            const leg = el('div', 'leg');
+            e.forEach((x, i) => { const d = el('div'), sw = el('i'); sw.style.background = couleur(x[0], i); d.append(sw, el('span', '', x[0]), el('b', '', nb(x[1]))); leg.appendChild(d); });
+            zone.appendChild(leg);
+        }
+        function barres(zone, entrees) {
+            zone.replaceChildren();
+            const e = entrees.filter(x => x[1] > 0).slice(0, 8), tot = e.reduce((s, x) => s + x[1], 0), max = e.length ? e[0][1] : 1;
+            if (!e.length) { zone.appendChild(el('div', 'vide', pasDeDonnee())); return; }
+            e.forEach(x => {
+                const l = el('div', 'barre'), n = el('span', 'n', x[0]); n.title = x[0];
+                l.append(n, el('b', '', nb(x[1]) + ' (' + Math.round(100 * x[1] / (tot || 1)) + ' %)'));
+                const b = el('i'), u = el('u'); u.style.width = Math.max(3, Math.round(100 * x[1] / max)) + '%'; b.appendChild(u); l.appendChild(b); zone.appendChild(l);
+            });
+        }
+        // /stats rend des listes ([{country,count}]) ou des dictionnaires : on accepte les deux formes.
+        function paires(v, cle) {
+            if (!v) return [];
+            const l = Array.isArray(v) ? v.map(x => [x[cle] || x.host || x.name || x[0], x.count != null ? x.count : x[1]]) : Object.entries(v).map(([k, c]) => [k, typeof c === 'object' && c ? c.count : c]);
+            return l.filter(x => x[0] != null).map(x => [String(x[0]), Number(x[1]) || 0]).sort((a, b) => b[1] - a[1]);
+        }
+        function rendreStats() {
+            const s = STATS || {};
+            donut($('severityStats'), paires(s.by_severity), (k, i) => GRAV[k.toLowerCase()] || PAL[i % 7], 'par gravité');
+            donut($('categoryStats'), paires(s.by_category), (k, i) => PAL[i % 7], 'par catégorie');
+            const pc = paires(s.top_countries, 'country');
+            donut($('countryDonut'), pc, (k, i) => PAL[i % 7], 'par pays'); barres($('topCountries'), pc.map(x => [drapeau(x[0]) + ' ' + x[0], x[1]]));
+            barres($('topVhosts'), paires(s.top_vhosts, 'vhost'));
+            const tb = $('topIpsTable'); tb.replaceChildren();
+            const ips = Object.entries(s.top_ips || {});
+            if (!ips.length) { vide(tb, 4, pasDeDonnee()); return; }
+            ips.forEach(([ip, n]) => {
+                const tr = el('tr'), c = (s.top_ips_countries || {})[ip] || '';
+                tr.appendChild(el('td', 'mono', ip)); const tc = el('td', '', drapeau(c)); tc.title = c; tr.appendChild(tc); tr.appendChild(el('td', '', nb(n)));
+                const ta = el('td', 'act'); ta.appendChild(btn('Bannir', 'danger', () => demander('ban', ip, 'Bannir ' + ip + ' pendant 4 h ? Toute requête de cette adresse sera écartée par le pare-feu.'))); tr.appendChild(ta); tb.appendChild(tr);
+            });
         }
 
-        async function unbanIp(ip) {
-            if (!confirm(`Unban ${ip}?`)) return;
-            await api(`/unban/${ip}`, { method: 'POST' });
-            loadBans();
+        // ----- Confirmation intégrée à la page (jamais de dialogue natif) -----
+        function demander(genre, cle, texte) { CONF = { genre, cle }; $('confTexte').textContent = texte; $('conf').hidden = false; annoncer(); $('confOk').focus(); }
+        function annulerConf() { CONF = null; $('conf').hidden = true; annoncer(); }
+        async function confirmer() {
+            const c = CONF; annulerConf(); if (!c) return;
+            if (c.genre === 'ban') await bannir(c.cle, '4h', 'Manual ban from dashboard');
+            else if (c.genre === 'unban') await lever(c.cle);
+            else if (c.genre === 'cat-off') await basculer(c.cle, false);
+            else if (c.genre === 'ban-form') { await bannir(c.cle, $('banDuration').value, $('banReason').value || 'Manual ban'); $('banIp').value = ''; $('banForm').hidden = true; }
         }
+        $('confOk').addEventListener('click', confirmer);
+        $('confNon').addEventListener('click', annulerConf);
 
-        async function reloadRules() {
-            const d = await api('/reload', { method: 'POST' });
-            alert(`Reloaded ${d.rules} rules in ${d.categories} categories`);
-            refresh();
+        // ----- Actions (mêmes appels que l'ancienne console) -----
+        async function bannir(ip, duration, reason) {
+            const r = await ecrire('POST', '/ban', { ip, duration, reason });
+            if (r.ok) { retour(true, ip + ' est banni (' + duration + ').'); charger(); } else retour(false, 'Bannissement impossible : ' + detail(r));
         }
-
-        function refresh() {
-            loadStatus();
-            loadStats();
-            loadAlerts();
-            loadCategories();
-            loadBans();
+        async function lever(ip) {
+            const r = await ecrire('POST', '/unban/' + ip);
+            if (r.ok) { retour(true, 'Le ban de ' + ip + ' est levé.'); charger(); } else retour(false, 'Levée du ban impossible : ' + detail(r));
         }
+        async function basculer(id, enabled) {
+            const r = await ecrire('POST', '/category/' + id + '/toggle', { enabled });
+            if (r.ok) { retour(true, 'Catégorie ' + (enabled ? 'activée' : 'désactivée') + '.'); charger(); } else retour(false, 'Changement impossible : ' + detail(r));
+        }
+        async function rechargerRegles() {
+            const r = await ecrire('POST', '/reload');
+            if (r.ok) { const d = r.data || {}; retour(true, nb(d.rules) + ' règles rechargées dans ' + nb(d.categories) + ' catégories.'); charger(); } else retour(false, 'Rechargement impossible : ' + detail(r));
+        }
+        $('btnReload').addEventListener('click', rechargerRegles);
+        $('btnBannir').addEventListener('click', () => { $('banForm').hidden = false; $('banIp').focus(); annoncer(); });
+        $('banAnnule').addEventListener('click', () => { $('banForm').hidden = true; annoncer(); });
+        $('fBan').addEventListener('submit', ev => {
+            ev.preventDefault();
+            const ip = $('banIp').value.trim(); if (!ip) return;
+            demander('ban-form', ip, 'Bannir ' + ip + ' pendant ' + $('banDuration').value + ' ?');
+        });
+        $('rafraichir').addEventListener('click', charger);
 
-        refresh();
-        setInterval(refresh, 30000);
+        // ----- Sections -----
+        function switchTab(name) {
+            ONGLET = name;
+            document.querySelectorAll('#wafTabs .waf-tab').forEach(b => { const on = b.dataset.tab === name; b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on)); });
+            ['alerts', 'categories', 'bans', 'stats'].forEach(id => { $(id).hidden = id !== name; });
+            annoncer();
+        }
+        document.querySelectorAll('#wafTabs .waf-tab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'console' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        setInterval(() => { if (document.hidden || DEMO || CONF || $('banIp').value) return; charger(); }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
