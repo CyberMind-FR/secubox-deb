@@ -11,6 +11,7 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 ## 2026-10-14 — YouTube SAS et carte Flux au profil Aurora, flux embarqué (closes #2638)
 Page admin `/ytsas/` (0.5.0) refaite en Aurora, mêmes appels d'API, onglet « Flux » qui encadre la carte du Hall (`hall.<domaine>/cardlets/ytflux.html?embed=1`, domaine déduit de l'hôte). Carte Flux (webos 1.10.0) en Aurora ; nginx du Hall : location dédiée avec `frame-ancestors 'self' $sbx_admin_du_hall` (admin du même domaine, sans joker). Aucune route flux sur le vhost admin. Tests `test_ytsas_aurora_2638.py`, `test_ytflux_aurora_2638.py`. **Non déployé.**
+
 ## 2026-10-14 — Podcaster : page /podcaster/ au profil Aurora (closes #2637)
 `secubox-podcaster` 1.4.0 : page refaite au profil Aurora (tuiles lues dans `GET /status`, flux et épisodes, menu commun hors `?embed=1` et hors démonstration, `?demo=1` sans écriture, bandeau « session requise » sur 401, hauteur `sbxVue`/`podcaster`). Mêmes appels d'API qu'avant ; suppression de flux et titre d'audiolivre saisis dans la page (plus de `confirm()` ni `prompt()`). Ajouts de #2635 conservés (erreur par flux, dernière vérification, copie, réimport). Test `test_podcaster_aurora_2637.py` (24, Playwright route-mocké). **Non déployé.**
 
@@ -215,6 +216,7 @@ Le billet éphémère de MetaNews n'avait ni lien, ni média, ni vignette. MetaN
 ## 2026-10-12 — profiles 0.20.3 : le kiosque n'est plus arrêté par un profil (ref #2329)
 
 L'interface locale (module kiosk, dans aucun profil) était mise à OFF par `profilectl apply` : la VM finissait son Auto-Load sans interface. HORS_PLAN : ni stop, ni start.
+
 ## 2026-10-12 — SOC 1.2.0 : refonte sur la maquette Guardian (ref #2341)
 
 Nouvel onglet par défaut Guardian ; les trois onglets existants restent.
@@ -494,6 +496,7 @@ secubox-autoload 0.5.0 / autoload-agent 0.5.0 : rapport sans secret construit pa
 ## 2026-10-10 — Auto-Load : WebUI d'administration (ref #2191)
 
 secubox-autoload 0.4.0 : page `/autoload/` (hybrid-dark) avec box en provisioning (statut, progression), génération du jeton (valeur montrée une seule fois) avec durée d'abonnement et profil, révocation/suspension/réactivation confirmées, pré-rapports (détail, refus). 11 tests navigateur. Les « modules inclus » du schéma de principe restent à porter.
+
 ## 2026-10-10 — Auto-Load : banc de bout en bout sans matériel (ref #2193)
 
 Huit scénarios réunissent moteur, client, service d'enrôlement (public et tunnel), jetons, fichier signé (vrai gpg) et vraies clés WireGuard (`packages/secubox-autoload/tests/test_banc_2193.py`). Restent hors banc : l'essai sur matériel (#2186, netboot), le démarrage automatique au boot (une unité root : à décider), la redirection udp/51830 de la Freebox, la WebUI (#2191) et le rapport final (#2192).
@@ -794,6 +797,7 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-02 — Assistance : boutons de session non muets (ref #1894)
 - secubox-assist 0.2.10 : sans session active, Kill session / Autoriser / Retirer sont désactivés avec l'explication ; le POST passe par postAction (succès et échec visibles). Avant : `if (!sid) return;` et réponse jamais lue. 3 tests.
+
 ## 2026-10-02 — Santé : veille pondérée (ref #1887)
 - core 1.5.53 + hub 1.9.35 : unités au repos (oneshot ou TriggeredBy timer/path, dernier passage réussi) et modules endormis = ok + `veille`; unités not-found/masked écartées; échec = alerte. Page Santé : carte 💤 en veille, score pondéré (sain 1, veille 1, dégradé 0,5, panne 0). gk2 : dégradés 59 → 2 (premier-pas-console, zia-llm), 68 en veille, 121 sains, 0 panne. 14 tests core.
 
@@ -879,6 +883,7 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — NAC, noms et services par Bonjour (closes #2440)
 - secubox-nac 3.9.0 : passe avahi-browse en cache (120 s), nom des appareils sans bail, nom annoncé, pastilles de services, types de service injectés dans la détection du type fin ; colonnes services/bonjour_name. 10 tests.
+
 ## 2026-10-12 — webfilter, « Appliquer maintenant » refusé (closes #2441)
 - secubox-webfilter 0.4.1 : le profil AppArmor du contrôleur root peut effacer appliquer.demande ; sans cela le service apply échouait, l'unité .path atteignait sa limite et chaque demande répondait 409. Constaté et corrigé sur gk2 (version 13 appliquée).
 
