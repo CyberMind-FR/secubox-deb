@@ -164,6 +164,16 @@ def _texte(v, n=200):
     return v.strip()[:n] if isinstance(v, str) else ""
 
 
+# `feed/playlists` : yt-dlp y met le TEXTE DU LIEN (« View full playlist », « Voir la playlist complète »…) là où l'on attend l'auteur.
+_LIBELLE_LIEN_RE = re.compile(r"^(view|voir|afficher|see|show|ver|ansehen)\b.*\bplaylist\b|^(view|voir|afficher)\b.*\b(liste|lista)\b", re.IGNORECASE)
+
+
+def _nom_auteur(v, n=200):
+    """Nom de chaîne ou de compte ; le libellé d'un lien de yt-dlp n'en est pas un (rien n'est inventé : « » si absent)."""
+    t = _texte(v, n)
+    return "" if _LIBELLE_LIEN_RE.match(t) else t
+
+
 def _hote_ok(url):
     m = re.match(r"^https://([^/]+)/", url or "")
     return bool(m and m.group(1) in _HOTES_VIGNETTES)
@@ -262,7 +272,7 @@ def analyser_playlists(sortie):
         items.append({
             "id": ident,
             "titre": _texte(d.get("title")),
-            "chaine": _texte(d.get("channel") or d.get("uploader")),
+            "chaine": _nom_auteur(d.get("channel") or d.get("uploader")),
             "videos": _entier(d.get("playlist_count")),
             "url": "https://www.youtube.com/playlist?list=" + ident,
             "vignette": "/api/v1/ytsas/flux/vignette/" + cle_vignette(ident) if src else None,
