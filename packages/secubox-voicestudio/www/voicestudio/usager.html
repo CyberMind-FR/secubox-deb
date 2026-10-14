@@ -5,128 +5,142 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox-Deb :: secubox-voicestudio :: page d'USAGER (#1917)
-  Facette webapp (vitrine) de index.html : mêmes fonctions utiles — dire un texte, dicter —,
-  sans aucune action destructive ni d'administration (WEBUI-PANEL-GUIDELINES § 7). Autonome :
-  pas de sidebar (page ouverte à toute personne connectée, pas au châssis d'administration).
-  Les routes appelées exigent une PERSONNE (require_personne) : un visiteur ou un appareil
-  invité reçoit 401/403 et la page le dit au lieu de feindre.
+  VoiceStudio, page d'USAGER (#1917) au profil Aurora (.claude/AURORA-REFERENCE.md, #2648) : page autonome, aucune
+  dépendance, aucune ressource tierce. Facette de index.html : mêmes fonctions utiles — dire un texte, dicter —, sans
+  aucune action destructive ni d'administration. Pas de menu d'administration (page ouverte à toute personne connectée).
+  Les routes appelées exigent une PERSONNE (require_personne) : un visiteur ou un appareil invité reçoit 401/403 et la page
+  le dit au lieu de feindre. Mesure absente = « — ». ?embed=1 : cadre seul ; ?demo=1 : données fictives, aucune écriture.
 -->
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox — Voix</title>
-    <!-- Aucune ressource tierce : cette page annonce « rien ne part dans le nuage » (pas de polices distantes). -->
     <style>
-        :root {
-            --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8); --bg-row: rgba(20, 30, 45, 0.6);
-            --border: rgba(100, 150, 200, 0.2); --text: #e8e6d9; --cyan: #00d4ff; --red: #ff4466; --orange: #ff9944;
-            --yellow: #ffcc00; --green: #00dd44; --blue: #4488ff;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', 'Courier New', monospace; background: var(--bg-dark); color: var(--text); min-height: 100vh;
-               background-image: linear-gradient(135deg, rgba(10,15,25,.96), rgba(15,25,40,.92)); }
-        a { color: var(--cyan); }
-        .main { max-width: 46rem; margin: 0 auto; padding: 1.2rem 1rem 4rem; }
-        .header { margin-bottom: 1rem; padding-bottom: .8rem; border-bottom: 1px solid var(--border); }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-        .sub { font-size: .72rem; color: var(--p31-dim); letter-spacing: .05em; margin-top: .25rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-        .card h2 { color: var(--cyan); font-size: .95rem; margin-bottom: .7rem; }
-        label { display: block; margin-bottom: .2rem; font-size: .68rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: .05em; }
-        textarea, select, input[type=text], input[type=file] { width: 100%; padding: .55rem; background: rgba(20,30,45,.8); border: 1px solid var(--border);
-               border-radius: 4px; font-family: inherit; font-size: .9rem; color: var(--text); }
-        textarea { resize: vertical; min-height: 6rem; }
-        textarea:focus, select:focus, input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,.3); }
-        .champ { margin-bottom: .8rem; }
-        .rang { display: flex; gap: .7rem; flex-wrap: wrap; } .rang .champ { flex: 1; min-width: 9rem; }
-        .btn { font-family: inherit; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text); background: var(--bg-row);
-               border: 1px solid var(--border); border-radius: 6px; padding: .65rem 1.1rem; cursor: pointer; min-height: 2.6rem; transition: border-color .15s, box-shadow .15s; }
-        .btn:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.3); }
-        .btn.primary { background: rgba(0,212,255,.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn:disabled { opacity: .5; cursor: not-allowed; }
-        .compteur { font-size: .68rem; color: var(--p31-dim); text-align: right; margin-top: .2rem; }
-        .compteur.trop { color: var(--red); }
-        audio { width: 100%; margin-top: .8rem; }
-        .etat { display: flex; align-items: center; gap: .6rem; padding: .55rem .8rem; border-radius: 6px; border-left: 3px solid var(--border);
-                background: var(--bg-row); font-size: .8rem; margin-bottom: 1rem; }
-        .etat.ok { border-left-color: var(--green); } .etat.dort { border-left-color: var(--orange); } .etat.ko { border-left-color: var(--red); }
-        .resultat { background: rgba(0,0,0,.4); border: 1px solid var(--border); border-radius: 6px; padding: .7rem; margin-top: .8rem; font-size: .9rem; white-space: pre-wrap; word-break: break-word; }
-        .resultat[hidden] { display: none; }
-        .toast { position: fixed; bottom: 18px; left: 50%; transform: translate(-50%, 20px); max-width: 90vw; padding: .75rem 1rem; background: var(--cyan); color: #000;
-                 border-radius: 6px; font-size: .85rem; z-index: 2000; opacity: 0; transition: all .3s; display: flex; gap: .7rem; align-items: flex-start; }
-        .toast.show { opacity: 1; transform: translate(-50%, 0); }
-        .toast.error { background: var(--red); color: #fff; }
-        .toast button { background: none; border: 0; color: inherit; cursor: pointer; font-size: 1rem; }
-        .connexion { text-align: center; padding: 1.2rem; }
-        .connexion[hidden] { display: none; }
-        .mic { display: inline-flex; align-items: center; gap: .4rem; }
-        .mic.enreg { border-color: var(--red); color: var(--red); animation: pulse 1.2s infinite; }
-        @keyframes pulse { 50% { box-shadow: 0 0 12px rgba(255,68,102,.6); } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+        .principal{min-width:0;max-width:56rem;margin:0 auto}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .btn{font:inherit;font-size:.78rem;padding:6px 14px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px;text-decoration:none}
+        .btn:hover:not(:disabled){border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .btn.enreg{border-color:var(--rouge);color:var(--rouge);animation:pulse 1.2s infinite}
+        @keyframes pulse{50%{box-shadow:0 0 12px rgba(255,77,94,.6)}}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.long{font-size:1rem;line-height:1.15}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h2{margin:0 0 8px;font-size:.88rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .rang{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:10px}
+        .champ{display:grid;gap:3px;font-size:.72rem;color:var(--doux);min-width:0}
+        textarea,select,input[type=text],input[type=file]{font:inherit;font-size:.85rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        textarea{resize:vertical;min-height:6rem}
+        textarea:focus,select:focus,input:focus{outline:none;border-color:var(--cyan)}
+        .compteur{font-size:.68rem;color:var(--faible);text-align:right;margin-top:2px} .compteur.trop{color:var(--rouge)}
+        .bout{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        audio{width:100%;margin-top:10px}
+        .resultat{margin-top:10px;padding:8px 10px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7);white-space:pre-wrap;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .connexion{text-align:center;padding:18px 12px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw;display:flex;gap:10px;align-items:flex-start;overflow-wrap:anywhere}
+        .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto} .toast.error{border-color:var(--rouge)}
+        .toast button{background:none;border:0;color:inherit;cursor:pointer;font-size:1rem}
     </style>
 </head>
 <body>
-    <main class="main">
-        <header class="header">
-            <h1>🗣️ La voix de la box</h1>
-            <div class="sub">Dire un texte à voix haute, ou dicter : traité sur votre SecuBox, rien ne part dans le nuage.</div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5v4M8.5 21.5h7"/></svg>
+                <div><h1>La voix de la box</h1><small>Dire un texte à voix haute, ou dicter : traité sur votre SecuBox, rien ne part dans le nuage.</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Vérification du moteur…</span>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, aucune écriture</div>
 
-        <div class="card connexion" id="connexion" hidden>
-            <p>🔒 Cette page est réservée aux personnes connectées.</p>
-            <p style="margin-top:.8rem"><a class="btn primary" style="text-decoration:none;display:inline-block" href="/login.html">Se connecter</a></p>
+        <div class="info connexion" id="connexion" hidden>
+            <p style="margin:0">Cette page est réservée aux personnes connectées. Aucune mesure : session requise.</p>
+            <p style="margin:12px 0 0"><a class="btn prim" href="/login.html">Se connecter</a></p>
         </div>
 
-        <div id="contenu">
-            <div class="etat" id="etat" role="status"><span id="etatIc">⏳</span><span id="etatTxt">Vérification du moteur…</span></div>
-
-            <section class="card">
-                <h2>🗣️ Dire un texte</h2>
-                <div class="champ"><label for="texte">Texte</label><textarea id="texte" placeholder="Écrivez ce que la box doit dire…"></textarea>
-                    <div class="compteur" id="compteur">0</div></div>
-                <div class="rang">
-                    <div class="champ"><label for="voix">Voix</label><select id="voix"><option value="">(voix par défaut)</option></select></div>
-                    <div class="champ"><label for="fmt">Format</label><select id="fmt"><option value="mp3">mp3</option><option value="wav">wav</option><option value="opus">opus</option></select></div>
-                </div>
-                <button class="btn primary" id="bDire">▶ Dire</button>
-                <audio id="audio" controls hidden></audio>
+        <div id="contenu" style="display:grid;gap:12px">
+            <section class="tuiles" aria-label="Indicateurs">
+                <div class="tuile cy" id="cMoteur" title="Réponse du moteur vocal : répond, dort (il se réveille au premier appel, 30 à 60 s), démarre ou indisponible."><span class="l">Moteur</span><span class="v long" id="tMoteur">—</span><span class="s" id="tMoteurS">état annoncé par la box</span></div>
+                <div class="tuile cy" title="Nombre maximal de caractères d’un texte à dire."><span class="l">Texte maximal</span><span class="v" id="tTexte">—</span><span class="s">caractères</span></div>
+                <div class="tuile cy" title="Taille maximale d’un enregistrement ou d’un fichier audio à transcrire."><span class="l">Audio maximal</span><span class="v" id="tAudio">—</span><span class="s">mégaoctets</span></div>
             </section>
 
-            <section class="card">
-                <h2>🎤 Dicter</h2>
-                <div class="rang">
-                    <div class="champ"><label for="langue">Langue</label><input type="text" id="langue" value="fr" maxlength="8" placeholder="fr (vide : détection)"></div>
-                    <div class="champ"><label for="fichier">…ou un fichier audio</label><input type="file" id="fichier" accept="audio/*"></div>
-                </div>
-                <div style="display:flex;gap:.6rem;flex-wrap:wrap">
-                    <button class="btn mic" id="bMic">🎤 Enregistrer</button>
-                    <button class="btn primary" id="bTranscrire">▶ Transcrire le fichier</button>
-                </div>
-                <div class="resultat" id="resultat" hidden></div>
-            </section>
+            <div class="grille">
+                <section class="pan">
+                    <h2>Dire un texte</h2>
+                    <div class="champ"><label for="texte">Texte</label><textarea id="texte" placeholder="Écrivez ce que la box doit dire…"></textarea>
+                        <div class="compteur" id="compteur">0</div></div>
+                    <div class="rang">
+                        <div class="champ"><label for="voix">Voix</label><select id="voix"><option value="">(voix par défaut)</option></select></div>
+                        <div class="champ"><label for="fmt">Format</label><select id="fmt"><option value="mp3">mp3</option><option value="wav">wav</option><option value="opus">opus</option></select></div>
+                    </div>
+                    <div class="bout" style="margin-top:0"><button class="btn prim" id="bDire" type="button">▶ Dire</button></div>
+                    <audio id="audio" controls hidden></audio>
+                </section>
+
+                <section class="pan">
+                    <h2>Dicter</h2>
+                    <div class="rang">
+                        <div class="champ"><label for="langue">Langue</label><input type="text" id="langue" value="fr" maxlength="8" placeholder="fr (vide : détection)"></div>
+                        <div class="champ"><label for="fichier">…ou un fichier audio</label><input type="file" id="fichier" accept="audio/*"></div>
+                    </div>
+                    <div class="bout" style="margin-top:0">
+                        <button class="btn" id="bMic" type="button">🎤 Enregistrer</button>
+                        <button class="btn prim" id="bTranscrire" type="button">▶ Transcrire le fichier</button>
+                    </div>
+                    <div class="resultat" id="resultat" hidden></div>
+                </section>
+            </div>
         </div>
-    </main>
+    </div></div></main>
     <div class="toast" id="toast" role="status"></div>
 
     <script>
     (function () {
         'use strict';
+        var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         var API = '/api/v1/voicestudio/usager';
-        var limites = { texte_max: 2000, audio_max_mo: 10 };
+        var limites = { texte_max: 2000, audio_max_mo: 10 }, limitesConnues = false;
         var enregistreur = null, morceaux = [], timer = null;
 
         function $(id) { return document.getElementById(id); }
+        function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
         function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
         var tToast = null;
         function toast(m) { var t = $('toast'); clearTimeout(tToast); t.className = 'toast show'; t.textContent = m; tToast = setTimeout(function () { t.className = 'toast'; }, 3000); }
         function errorToast(m) {
             var t = $('toast'); clearTimeout(tToast); t.className = 'toast error show'; t.textContent = '';
-            var s = document.createElement('span'); s.textContent = '⚠️ ' + m;
-            var b = document.createElement('button'); b.textContent = '✕'; b.setAttribute('aria-label', 'Fermer'); b.addEventListener('click', function () { t.className = 'toast'; });
+            var s = el('span', '', '⚠ ' + m);
+            var b = el('button', '', '✕'); b.type = 'button'; b.setAttribute('aria-label', 'Fermer'); b.addEventListener('click', function () { t.className = 'toast'; });
             t.appendChild(s); t.appendChild(b);
         }
-        function connexionRequise() { $('connexion').hidden = false; $('contenu').hidden = true; }
+        function connexionRequise() { $('connexion').hidden = false; $('contenu').hidden = true; pastille('neutre', 'SESSION REQUISE'); annoncer(); }
+        function pastille(classe, txt) { var p = $('etat'); p.className = 'actif ' + classe; p.textContent = txt; }
 
         async function api(chemin, opts) {
             opts = opts || {}; var h = {}; var j = jeton();
@@ -138,29 +152,48 @@
         }
         async function erreurDe(r) { try { var d = await r.json(); return d.detail || ('HTTP ' + r.status); } catch (e) { return 'HTTP ' + r.status; } }
 
-        function etat(classe, ic, txt) { $('etat').className = 'etat ' + classe; $('etatIc').textContent = ic; $('etatTxt').textContent = txt; }
+        function moteur(classe, pastilleClasse, pastilleTxt, valeur, note) {
+            $('cMoteur').className = 'tuile ' + classe; $('tMoteur').textContent = valeur; $('tMoteurS').textContent = note; pastille(pastilleClasse, pastilleTxt);
+        }
+        function majLimites() {
+            $('tTexte').textContent = limitesConnues ? limites.texte_max : '—'; $('tAudio').textContent = limitesConnues ? limites.audio_max_mo : '—'; majCompteur();
+        }
 
         /* Honnête : un moteur endormi n'est pas une panne, mais le premier appel sera lent — on le dit. */
         async function sonder() {
+            if (DEMO) {
+                limitesConnues = true; majLimites();
+                moteur('att', 'att', 'MOTEUR ENDORMI', 'endormi', 'le premier appel prend 30 à 60 secondes (il se réveille)'); return;
+            }
             try {
                 var r = await api('/etat'); if (!r.ok) throw new Error('HTTP ' + r.status);
                 var d = await r.json();
-                if (d.limites) { limites.texte_max = d.limites.texte_max || limites.texte_max; limites.audio_max_mo = d.limites.audio_max_mo || limites.audio_max_mo; majCompteur(); }
-                if (d.demarrage) etat('dort', '⏳', 'Le moteur démarre… quelques secondes.');
-                else if (d.reveil_necessaire && d.disponible) etat('dort', '💤', 'Le moteur dort : le premier appel prend 30 à 60 secondes (il se réveille).');
-                else if (d.disponible) etat('ok', '🟢', 'Le moteur répond.');
-                else etat('ko', '🔴', 'Le moteur est indisponible pour le moment. Demandez à l\'administrateur de le démarrer.');
-            } catch (e) { if (e.message !== 'session') etat('ko', '🔴', 'Le service de voix ne répond pas.'); }
-            clearTimeout(timer); timer = setTimeout(sonder, 30000);
+                if (d.limites) { limites.texte_max = d.limites.texte_max || limites.texte_max; limites.audio_max_mo = d.limites.audio_max_mo || limites.audio_max_mo; limitesConnues = true; majLimites(); }
+                if (d.demarrage) moteur('att', 'att', 'MOTEUR EN DÉMARRAGE', 'démarre', 'quelques secondes');
+                else if (d.reveil_necessaire && d.disponible) moteur('att', 'att', 'MOTEUR ENDORMI', 'endormi', 'le premier appel prend 30 à 60 secondes (il se réveille)');
+                else if (d.disponible) moteur('ok', '', 'MOTEUR EN LIGNE', 'répond', 'prêt');
+                else moteur('hors', 'hors', 'MOTEUR INDISPONIBLE', 'indisponible', 'demandez à l’administrateur de le démarrer');
+            } catch (e) { if (e.message !== 'session') moteur('hors', 'hors', 'HORS LIGNE', '—', 'le service de voix ne répond pas'); }
+            clearTimeout(timer); timer = setTimeout(sondeSiLibre, 30000);
+        }
+        /* Pas d'actualisation onglet masqué, ni pendant une saisie ou un enregistrement. */
+        function sondeSiLibre() {
+            var saisie = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+            if (document.hidden || enregistreur || saisie) { timer = setTimeout(sondeSiLibre, 5000); return; }
+            sonder();
         }
 
+        function remplirVoix(liste) {
+            var s = $('voix'), cur = s.value; s.replaceChildren();
+            var o0 = el('option', '', '(voix par défaut)'); o0.value = ''; s.appendChild(o0);
+            liste.forEach(function (v) { var o = el('option', '', v.nom + (v.langue ? ' (' + v.langue + ')' : '')); o.value = v.id; s.appendChild(o); });
+            s.value = cur;
+        }
         async function chargerVoix() {
+            if (DEMO) { remplirVoix([{ id: 'rapide', nom: 'Rapide — français (démo)', langue: 'fr' }, { id: 'v2', nom: 'Voix fictive', langue: 'fr' }]); return; }
             try {
                 var r = await api('/voix'); if (!r.ok) return;
-                var d = await r.json(), s = $('voix'), cur = s.value;
-                s.textContent = ''; var o0 = document.createElement('option'); o0.value = ''; o0.textContent = '(voix par défaut)'; s.appendChild(o0);
-                (d.voix || []).forEach(function (v) { var o = document.createElement('option'); o.value = v.id; o.textContent = v.nom + (v.langue ? ' (' + v.langue + ')' : ''); s.appendChild(o); });
-                s.value = cur;
+                var d = await r.json(); remplirVoix(d.voix || []);
             } catch (e) { /* le moteur dort : la liste viendra au prochain essai */ }
         }
 
@@ -172,6 +205,7 @@
 
         async function dire() {
             var texte = $('texte').value.trim(); if (!texte) return;
+            if (DEMO) { toast('Démonstration : action inerte'); return; }
             $('bDire').disabled = true; toast('⏳ Synthèse…');
             try {
                 var r = await api('/dire', { method: 'POST', json: { texte: texte, voix: $('voix').value, format: $('fmt').value } });
@@ -179,25 +213,27 @@
                 var blob = await r.blob(), a = $('audio');
                 if (a.dataset.url) URL.revokeObjectURL(a.dataset.url);
                 a.dataset.url = URL.createObjectURL(blob); a.src = a.dataset.url; a.hidden = false; a.play().catch(function () {});
-                chargerVoix();
+                chargerVoix(); annoncer();
             } catch (e) { if (e.message !== 'session') errorToast('Synthèse impossible : ' + e.message); }
             finally { majCompteur(); }
         }
 
         async function envoyer(fichier, nom) {
+            if (DEMO) { toast('Démonstration : action inerte'); return; }
             if (fichier.size > limites.audio_max_mo * 1048576) { errorToast('Audio trop volumineux (maximum ' + limites.audio_max_mo + ' Mo).'); return; }
             var fd = new FormData(); fd.append('fichier', fichier, nom); fd.append('langue', $('langue').value.trim());
             toast('⏳ Transcription…');
             try {
                 var r = await api('/transcrire', { method: 'POST', body: fd });
                 if (!r.ok) { errorToast(await erreurDe(r)); return; }
-                var d = await r.json(), z = $('resultat'); z.hidden = false; z.textContent = d.vide ? '(aucune parole détectée)' : d.texte;
+                var d = await r.json(), z = $('resultat'); z.hidden = false; z.textContent = d.vide ? '(aucune parole détectée)' : d.texte; annoncer();
             } catch (e) { if (e.message !== 'session') errorToast('Transcription impossible : ' + e.message); }
         }
 
         async function micro() {
             var b = $('bMic');
             if (enregistreur) { enregistreur.stop(); return; }
+            if (DEMO) { toast('Démonstration : action inerte'); return; }
             if (!navigator.mediaDevices || !window.MediaRecorder) { errorToast('Ce navigateur ne permet pas d\'enregistrer (ou la page n\'est pas en HTTPS). Utilisez un fichier audio.'); return; }
             try {
                 var flux = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -220,7 +256,16 @@
             var f = $('fichier').files[0]; if (!f) { errorToast('Choisissez un fichier audio, ou enregistrez-vous.'); return; }
             envoyer(f, f.name);
         });
-        majCompteur(); sonder(); chargerVoix();
+
+        /* Hauteur annoncée à l'hôte (iframes) : la mesure est celle du cadre, jamais du document. */
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'voicestudio-usager' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        $('demo').hidden = !DEMO;
+        majLimites(); sonder(); chargerVoix();
     })();
     </script>
 </body>

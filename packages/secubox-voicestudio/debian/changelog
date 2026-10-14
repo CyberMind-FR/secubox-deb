@@ -1,3 +1,13 @@
+secubox-voicestudio (0.5.10-1~bookworm1) bookworm; urgency=medium
+
+  * Pages d'administration (index.html) et d'usager (usager.html) au profil Aurora (#2648) : autonomes, sans police
+    distante ni skin partagé, tuiles à infobulle, ?demo=1 (données fictives, actions inertes) et ?embed=1.
+  * Mêmes routes, méthodes, corps et en-têtes ; garde d'accès de l'usager inchangée (401/403 : invite de connexion).
+  * Les confirmations (arrêt, redémarrage, installation, réglages, adresses, clé) sont intégrées à la page, plus de
+    dialogue natif ; la nouvelle clé n'est montrée qu'une fois, comme avant. Aucune API ni TOML modifié.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 10:00:00 +0200
+
 secubox-voicestudio (0.5.9-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-system au lieu de secubox-system-tuning (transitoire, #2050).
