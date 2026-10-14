@@ -1,3 +1,13 @@
+secubox-ad-guard (1.14.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: la page /ad-guard/ passe en direct (#2706). Bande d'etat en tete (resolveur Unbound, puits DNS, listes de blocage et leur fraicheur, capteur DNS d'Actor Intelligence, moteur DNS TV) en pastilles vert/orange/rouge/gris avec mot et icone ; indicateur « en direct » qui pulse (sauf prefers-reduced-motion), « mis a jour il y a N s », bascule en « hors ligne » si l'API ne repond plus.
+  * Metriques rafraichies seules toutes les 8 s (suspendues onglet masque, pause, saisie ou confirmation ouverte ; retombee a 16 s, 32 s puis 60 s en cas d'erreur) : requetes/min, bloquees/min, taux de blocage, clients actifs, domaines en liste, bloques du jour, courbe SVG des 30 dernieres minutes et domaines les plus bloques en barres animees. Les variations (fleche et %) ne s'affichent que si elles sont calculees sur deux releves reels ; mesure absente : « — ».
+  * API : nouvelle route GET /statut-direct (lecture seule, require_lecture, cache 5 s) : etat systemd d'Unbound, du capteur et du flux de compteurs, sinkhole-status.json, age des listes, clients actifs ; une valeur illisible reste null. Aucune autre route modifiee ; toutes les actions de la page et leurs appels sont inchanges.
+  * Ce qui n'est pas repris : le moteur DNS TV et les chiffres du flux ne couvrent que les appareils qui interrogent la box ; pas d'historique au-dela d'une heure dans la page.
+  * Tests : test_adguard_live_2706.py.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 18:00:00 +0200
+
 secubox-ad-guard (1.13.0-1~bookworm1) bookworm; urgency=medium
 
   * Capteur DNS : chaque constat nouveau (DGA, tunnel, dérive, liste de l'opérateur, détournement) est aussi écrit dans les alertes de dns-guard (/var/lib/secubox/dns-guard/alerts.jsonl). La page /dns-guard/ affichait « Aucune anomalie sur 24 h » partout : son module n'était branché sur aucune source (#2702).

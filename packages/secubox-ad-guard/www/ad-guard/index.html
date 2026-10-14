@@ -40,10 +40,59 @@
         .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
         #dialogue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
         #dialogue[hidden]{display:none} #dialogue span{flex:1 1 260px} #dialogue input{flex:1 1 200px}
-        .simple{display:flex;flex-direction:column;gap:10px;max-width:none}
-        .sp-etat{display:flex;gap:.8rem;align-items:center;padding:10px 12px;background:var(--bg-card);border:1px solid var(--trait);border-radius:12px}
+        .simple{display:block}
+        /* ── direct (#2706) : indicateur, bande d'état, tuiles, panneaux ── */
+        .direct{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--trait2);border-radius:999px;padding:2px 10px;font-size:.68rem;letter-spacing:.05em;color:var(--vert);background:rgba(46,204,113,.10)}
+        .direct .point{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 0 currentColor;animation:pulse 2s ease-out infinite}
+        .direct[data-etat=pause],.direct[data-etat=masque],.direct[data-etat=session],.direct[data-etat=attente]{color:var(--orange);background:rgba(255,159,28,.10)}
+        .direct[data-etat=hors]{color:var(--rouge);background:rgba(255,77,94,.12)}
+        .direct:not([data-etat=direct]) .point{animation:none}
+        @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,204,113,.55)}70%{box-shadow:0 0 0 7px rgba(46,204,113,0)}100%{box-shadow:0 0 0 0 rgba(46,204,113,0)}}
+        .maj{font-variant-numeric:tabular-nums;color:var(--doux)}
+        .actif.warn{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .actif.ko{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .info{background:rgba(41,182,246,.12);border:1px solid var(--cyan);color:#d9f2ff;border-radius:8px;padding:5px 10px;font-size:.78rem} .info[hidden]{display:none}
+        .bande{display:grid;gap:8px;grid-template-columns:1fr}
+        @container a (min-width:560px){.bande{grid-template-columns:repeat(2,1fr)}}
+        @container a (min-width:1000px){.bande{grid-template-columns:repeat(5,1fr)}}
+        .etat{display:flex;flex-direction:column;gap:3px;min-width:0;border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:12px;padding:8px 11px;background:rgba(10,22,46,.6);transition:opacity .3s,border-color .3s}
+        .etat .eti{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--faible)}
+        .etat .val{display:flex;align-items:center;gap:7px;font-size:.92rem;font-weight:700;min-width:0}
+        .etat .pt{display:inline-grid;place-items:center;flex:none;width:18px;height:18px;border-radius:50%;font-style:normal;font-size:.7rem;font-weight:800;color:#06101f;background:var(--faible)}
+        .etat .mot{overflow-wrap:anywhere}
+        .etat .det{color:var(--doux);font-size:.72rem;overflow-wrap:anywhere}
+        .etat.ok{border-left-color:var(--vert)} .etat.ok .pt{background:var(--vert)} .etat.ok .val{color:var(--vert)}
+        .etat.warn{border-left-color:var(--orange)} .etat.warn .pt{background:var(--orange)} .etat.warn .val{color:var(--orange)}
+        .etat.ko{border-left-color:var(--rouge)} .etat.ko .pt{background:var(--rouge)} .etat.ko .val{color:var(--rouge)}
+        .etat.inc .val{color:var(--doux)}
+        .bande.perime .etat{opacity:.55}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{position:relative;display:flex;flex-direction:column;gap:2px;min-width:0;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7))}
+        .tuile .eti{font-size:.74rem;color:var(--doux)} .tuile .val{font-size:1.7rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums} .tuile .val.rouge{color:var(--rouge)}
+        .tuile .var{font-size:.72rem;font-weight:600;min-height:1em;font-variant-numeric:tabular-nums;color:var(--doux)} .tuile .var.haut{color:var(--cyan)} .tuile .var.bas{color:var(--jaune)}
+        .tuile .sous{color:var(--faible);font-size:.68rem}
+        .spark{width:100%;height:26px;display:block;margin-top:2px;overflow:visible}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        .grille>*{min-width:0}
+        @container a (min-width:900px){.grille{grid-template-columns:repeat(2,1fr)}}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan-tete{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px 10px;margin-bottom:8px}
+        .pan-tete h3{margin:0;font-size:.88rem} .mention{color:var(--faible);font-size:.7rem}
+        .courbe svg{width:100%;height:auto;display:block}
+        .courbe text{fill:var(--faible);font-size:9px;font-variant-numeric:tabular-nums}
+        .legende{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;font-size:.72rem;color:var(--doux)} .legende i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+        .barres{display:flex;flex-direction:column;gap:7px}
+        .barre-l{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:baseline;font-size:.78rem}
+        .barre-l code{overflow-wrap:anywhere} .barre-l .n{font-variant-numeric:tabular-nums;color:var(--texte);font-weight:600}
+        .barre{grid-column:1/-1;height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;width:0;background:var(--rouge);border-radius:3px;transition:width .6s ease}
+        .barre-l small{grid-column:1/-1;color:var(--faible);font-size:.66rem;margin-top:-1px}
+        @container a (max-width:560px){.sp-sig{grid-template-columns:1fr}.sp-sig .act{grid-row:auto;grid-column:1}.sp-sig code{overflow-wrap:anywhere}}
+        @media (prefers-reduced-motion:reduce){.direct .point{animation:none}.barre i,.etat{transition:none}}
+        @media (max-width:560px){.tuile .val{font-size:1.45rem}}
+        .sp-etat{display:flex;gap:.8rem;align-items:center;padding:8px 10px;background:rgba(8,18,38,.5);border:1px solid var(--trait);border-radius:10px}
         .sp-pastille{width:12px;height:12px;border-radius:50%;background:var(--vert);flex:none;box-shadow:0 0 10px rgba(46,204,113,.5)} .sp-pastille.ko{background:var(--rouge);box-shadow:0 0 10px rgba(255,77,94,.5)}
-        .sp-app{display:grid;grid-template-columns:1fr auto;gap:.2rem 1rem;align-items:center;padding:9px 12px;background:var(--bg-card);border:1px solid var(--trait);border-radius:12px}
+        .sp-app{display:grid;grid-template-columns:1fr auto;gap:.2rem 1rem;align-items:center;padding:8px 10px;background:rgba(8,18,38,.5);border:1px solid var(--trait);border-radius:12px}
         .sp-app .sous,.sp-sig small{color:var(--doux);font-size:.76rem} .sp-app .ligne{grid-column:1/-1;font-size:.78rem}
         .sp-sig{display:grid;grid-template-columns:1fr auto;gap:.2rem .8rem;align-items:center;padding:6px 0;border-top:1px solid rgba(86,150,255,.12)}
         .sp-sig code{overflow-wrap:anywhere;min-width:0} .sp-sig .act{grid-row:1/3;grid-column:2;display:flex;gap:.4rem;flex-wrap:wrap}
@@ -52,7 +101,7 @@
         .sp-sw span::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#eaf1ff;transition:transform .15s}
         .sp-sw input:checked+span{background:var(--cyan)} .sp-sw input:checked+span::after{transform:translateX(22px)} .sp-sw input:focus-visible+span{outline:2px solid var(--cyan);outline-offset:2px}
         #sp-toast{position:fixed;right:12px;bottom:12px;max-width:26rem;padding:9px 14px;border-radius:10px;background:var(--cyan);color:#04202a;z-index:50;font-size:.82rem} #sp-toast[hidden]{display:none} #sp-toast.ko{background:var(--rouge);color:#fff}
-        #avance>summary{cursor:pointer;font-weight:600;padding:8px 0;color:var(--doux)}
+        #avance{border:1px solid var(--trait);border-radius:12px;padding:0 12px 6px;background:rgba(10,22,46,.35)} #avance>summary{cursor:pointer;font-weight:600;padding:10px 0;color:var(--doux)} #avance[open]>summary{border-bottom:1px solid rgba(86,150,255,.12);margin-bottom:10px}
         h2{font-size:.88rem;margin:0} h3{font-size:.84rem} a{color:var(--cyan)}
         .stats-grid{display:grid;gap:8px;grid-template-columns:repeat(2,1fr);margin-bottom:10px}
         @container a (min-width:560px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
@@ -104,21 +153,57 @@
                 <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(41,182,246,.14)"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg>
                 <div><b>Ad Guard</b><small>Filtrage DNS des publicités et des traqueurs</small></div>
             </div>
-            <span class="actif" id="pastille-global">ACTIF</span>
-            <div class="droite"><span id="heure"></span><span class="version">v1.2.0</span></div>
+            <span class="actif" id="pastille-global" title="Synthèse de la bande d'état : tout est vert, quelque chose est à surveiller, un composant est en panne, ou l'API ne répond plus.">…</span>
+            <div class="droite">
+                <span class="direct" id="direct" data-etat="attente" role="status" title="Le point pulse tant que la page relève l'API toute seule (toutes les 8 s environ). Il s'arrête en pause, onglet masqué ou hors ligne."><i class="point" aria-hidden="true"></i><b id="direct-lib">CONNEXION…</b></span>
+                <span id="maj" class="maj">—</span>
+                <button class="btn btn-sm" id="btn-pause" type="button" aria-pressed="false">Pause</button>
+                <span id="heure"></span><span class="version">v1.14.0</span>
+            </div>
         </header>
         <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" role="status" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
         <div id="dialogue" role="alertdialog" aria-label="Confirmation" hidden></div>
 
-        <div class="simple" id="simple">
-            <div class="sp-etat" role="status"><span class="sp-pastille" id="sp-pastille"></span>
-                <div><div id="sp-titre"><b>Chargement…</b></div><small id="sp-sous" style="color:var(--text-dim);"></small></div></div>
-            <section aria-label="Appareils"><h2 style="font-size:.85rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);">Mes appareils</h2>
-                <div id="sp-appareils" style="display:flex;flex-direction:column;gap:.6rem;"></div></section>
-            <section class="card" aria-labelledby="sp-h-pub"><h2 id="sp-h-pub">Une pub passe encore ?</h2>
-                <p style="color:var(--text-dim);font-size:.85rem;margin:.3rem 0;">Adresses interrogées par vos appareils dans la dernière heure qui ressemblent à de la publicité sans être bloquées.</p>
+        <section class="bande" id="bande" aria-label="Statut en direct">
+            <div class="etat inc" id="e-resolveur" title="Résolveur DNS de la box (Unbound). S'il est arrêté, plus aucun appareil du réseau ne résout de nom. Source : systemd, via l'API."><span class="eti">Résolveur</span><b class="val"><i class="pt" aria-hidden="true">?</i><span class="mot">INCONNU</span></b><small class="det">en attente du premier relevé</small></div>
+            <div class="etat inc" id="e-puits" title="Puits DNS : Unbound répond « domaine inexistant » aux noms des listes de blocage. Actif = le filtrage s'applique à tout le réseau. Source : état de la dernière synchronisation (sinkhole-status.json)."><span class="eti">Puits DNS</span><b class="val"><i class="pt" aria-hidden="true">?</i><span class="mot">INCONNU</span></b><small class="det">en attente du premier relevé</small></div>
+            <div class="etat inc" id="e-listes" title="Listes de blocage compilées : nombre de domaines refusés et date de la dernière mise à jour réussie. Orange au-delà de 9 jours (la synchronisation est hebdomadaire)."><span class="eti">Listes de blocage</span><b class="val"><i class="pt" aria-hidden="true">?</i><span class="mot">INCONNU</span></b><small class="det">en attente du premier relevé</small></div>
+            <div class="etat inc" id="e-capteur" title="Capteur DNS d'Actor Intelligence : repère les domaines malveillants ou anormaux (DGA, tunnel, détournement) et les signale. Source : minuterie systemd et fichier d'état du capteur."><span class="eti">Capteur DNS</span><b class="val"><i class="pt" aria-hidden="true">?</i><span class="mot">INCONNU</span></b><small class="det">en attente du premier relevé</small></div>
+            <div class="etat inc" id="e-moteur" title="Moteur DNS AdBlock TV (facultatif) : mesure et filtre, appareil par appareil, les TV et streamers déclarés. Inactif, il ne modifie rien dans Unbound."><span class="eti">Moteur DNS TV</span><b class="val"><i class="pt" aria-hidden="true">?</i><span class="mot">INCONNU</span></b><small class="det">en attente du premier relevé</small></div>
+        </section>
+
+        <section class="tuiles" id="tuiles" aria-label="Métriques en direct">
+            <div class="tuile" id="t-req" title="Requêtes DNS par minute reçues par la box : moyenne des 5 dernières minutes closes, d'après l'historique minute par minute du flux de compteurs. La variation compare avec les 5 minutes précédentes."><span class="eti">Requêtes / min</span><b class="val" id="v-req">—</b><span class="var" id="d-req"></span><svg class="spark" id="s-req" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"></svg><small class="sous" id="n-req">moyenne sur 5 min</small></div>
+            <div class="tuile" id="t-blq" title="Requêtes refusées par le puits DNS, par minute : moyenne des 5 dernières minutes closes. La variation compare avec les 5 minutes précédentes."><span class="eti">Bloquées / min</span><b class="val rouge" id="v-blq">—</b><span class="var" id="d-blq"></span><svg class="spark" id="s-blq" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"></svg><small class="sous" id="n-blq">moyenne sur 5 min</small></div>
+            <div class="tuile" id="t-taux" title="Part des requêtes bloquées sur les 5 dernières minutes closes (bloquées ÷ requêtes). La variation est en points de pourcentage par rapport aux 5 minutes précédentes."><span class="eti">Taux de blocage</span><b class="val" id="v-taux">—</b><span class="var" id="d-taux"></span><svg class="spark" id="s-taux" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"></svg><small class="sous" id="n-taux">sur 5 min</small></div>
+            <div class="tuile" id="t-cli" title="Appareils qui ont interrogé la box au moins une fois ces 5 dernières minutes. La variation compare avec le relevé de la page d'il y a 5 minutes ou plus : elle n'apparaît qu'après ce délai."><span class="eti">Clients actifs</span><b class="val" id="v-cli">—</b><span class="var" id="d-cli"></span><svg class="spark" id="s-cli" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"></svg><small class="sous" id="n-cli">dans les 5 dernières minutes</small></div>
+            <div class="tuile" id="t-dom" title="Nombre de domaines que le puits DNS refuse, d'après la dernière synchronisation des listes."><span class="eti">Domaines en liste</span><b class="val" id="v-dom">—</b><span class="var" id="d-dom"></span><small class="sous" id="n-dom">dernière synchronisation</small></div>
+            <div class="tuile" id="t-jour" title="Blocages DNS comptés depuis minuit UTC (même chiffre que « Bloqués aujourd'hui » de la partie Avancé). Rafraîchi toutes les 30 secondes."><span class="eti">Bloqués aujourd'hui</span><b class="val rouge" id="v-jour">—</b><span class="var" id="d-jour"></span><small class="sous" id="n-jour">depuis minuit UTC</small></div>
+        </section>
+
+        <div class="grille simple" id="simple">
+            <section class="pan" aria-labelledby="h-courbe">
+                <div class="pan-tete"><h3 id="h-courbe">Requêtes DNS, 30 dernières minutes</h3><span class="mention">une valeur par minute close</span></div>
+                <div id="courbe" class="courbe"></div>
+                <div class="legende"><span><i style="background:var(--cyan)"></i>requêtes</span><span><i style="background:var(--rouge)"></i>bloquées</span></div>
+            </section>
+            <section class="pan" aria-labelledby="h-top">
+                <div class="pan-tete"><h3 id="h-top">Domaines les plus bloqués</h3><span class="mention" id="m-top">dernière heure</span></div>
+                <div id="top-barres" class="barres"></div>
+            </section>
+            <section class="pan" aria-labelledby="h-app">
+                <div class="pan-tete"><h3 id="h-app">Mes appareils</h3><span class="mention">protection par appareil</span></div>
+                <div class="sp-etat" role="status"><span class="sp-pastille" id="sp-pastille"></span>
+                    <div><div id="sp-titre"><b>Chargement…</b></div><small id="sp-sous" style="color:var(--text-dim);"></small></div></div>
+                <div id="sp-appareils" style="display:flex;flex-direction:column;gap:.6rem;margin-top:8px;"></div>
+            </section>
+            <section class="pan" aria-labelledby="sp-h-pub">
+                <div class="pan-tete"><h3 id="sp-h-pub">Une pub passe encore ?</h3><span class="mention">dernière heure</span></div>
+                <p style="color:var(--text-dim);font-size:.8rem;margin:0 0 6px;">Adresses interrogées par vos appareils dans la dernière heure qui ressemblent à de la publicité sans être bloquées.</p>
                 <div id="sp-sigs"></div>
-                <p id="sp-vide" style="color:var(--text-dim);font-size:.85rem;" hidden>Rien de suspect pour l'instant. Si la pub est insérée dans la vidéo elle-même, le filtrage par noms ne peut pas l'enlever.</p></section>
+                <p id="sp-vide" class="vide" hidden>Rien de suspect pour l'instant. Si la pub est insérée dans la vidéo elle-même, le filtrage par noms ne peut pas l'enlever.</p>
+            </section>
             <div id="sp-toast" role="status" hidden></div>
         </div>
 
@@ -416,6 +501,7 @@
             document.getElementById('blocklist-count').textContent = statTexte(data.blocklist_domains, true);
             document.getElementById('devices-count').textContent = statTexte(data.monitored_devices);
             document.getElementById('blocked-24h').textContent = statTexte(data.detections_24h, true);
+            document.getElementById('v-jour').textContent = statTexte(data.detections_24h, true);
             document.getElementById('pending-count').textContent = statTexte(data.pending_delayed_blocks);
             const notes = [];
             if (data.dns_lisible === true) notes.push('Compteurs DNS ' + (data.dns_fenetre || '') + ' : ' + Number(data.dns_requetes_jour || 0).toLocaleString() + ' requêtes, ' + (data.dns_taux_blocage || 0) + ' % bloquées');
@@ -960,6 +1046,281 @@
 
         fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender(); tvRender(); tvVue(); autoRender(); dnsBoxRender(); detRender();
         setInterval(fetchStats, 30000);
+
+        // ══ Direct (#2706) : bande d'état, métriques et courbes relevées toutes les ~8 s ══════════════════════════════════════
+        // Sources : GET /statut-direct (résolveur, puits, listes, capteur, flux, clients), /adblock-tv/serie (historique minute par minute),
+        // /adblock-tv/status (moteur TV) et /adblock-tv/flux (domaines bloqués). Mesure absente = « — » ; une variation n'est affichée
+        // que si elle est calculée sur deux relevés réels. Tout texte est posé par textContent / createElement(NS).
+        const SVGNS = 'http://www.w3.org/2000/svg';
+        const LIVE = { base: 8000, echecs: 0, dernierOk: 0, pause: false, tick: 0, enCours: false, timer: null, decalage: 0, session: true, hors: false,
+                       etat: null, tv: null, points: null, top: null, releves: [] };
+        const nfr = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }), nfr1 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        const fmtDebit = v => v == null ? '—' : (v < 10 ? nfr1.format(v) : nfr.format(v));
+        const duree = s => { s = Math.max(0, Math.round(s)); return s < 90 ? s + ' s' : s < 5400 ? Math.round(s / 60) + ' min' : s < 172800 ? Math.round(s / 3600) + ' h' : Math.round(s / 86400) + ' j'; };
+        const svgEl = (tag, attrs) => { const e = document.createElementNS(SVGNS, tag); Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k])); return e; };
+        const maintenantServeur = () => Date.now() / 1000 + LIVE.decalage;
+
+        // Une lecture : { statut, data } ; 0 = réseau/délai, 401 = session requise. Jamais d'exception, jamais de redirection (la boucle ne doit pas se couper).
+        async function lire(chemin) {
+            if (DEMO) return demoLive(chemin);
+            let jeton = null; try { jeton = localStorage.getItem('sbx_token'); } catch (e) { /* stockage indisponible */ }
+            const h = { Accept: 'application/json' }; if (jeton) h.Authorization = 'Bearer ' + jeton;
+            const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 6000);
+            try {
+                const r = await fetch(API_BASE + chemin, { headers: h, credentials: 'same-origin', cache: 'no-store', signal: ctl.signal });
+                if (!r.ok) return { statut: r.status };
+                return { statut: 200, data: await r.json() };
+            } catch (e) { return { statut: 0 }; } finally { clearTimeout(t); }
+        }
+
+        // ── calculs (purs) ──────────────────────────────────────────────────────────────────────────────────────────────
+        function parMinute(points) { const m = {}; (Array.isArray(points) ? points : []).forEach(p => { if (p && Number.isFinite(p.ts)) m[Math.floor(p.ts / 60)] = { r: Number(p.requetes) || 0, b: Number(p.bloquees) || 0 }; }); return m; }
+        function sommeMinutes(m, de, a) { let r = 0, b = 0; for (let i = de; i <= a; i++) if (m[i]) { r += m[i].r; b += m[i].b; } return { r, b }; }
+        // Variation relative : seulement si les deux relevés existent et que la base est > 0.
+        function variation(cur, prev) {
+            if (cur == null || prev == null || !(prev > 0)) return null;
+            const p = (cur - prev) / prev * 100;
+            return Math.abs(p) < 1 ? { sens: 0, pct: 0 } : { sens: p > 0 ? 1 : -1, pct: Math.round(Math.abs(p)) };
+        }
+        function variationPts(cur, prev) {
+            if (cur == null || prev == null) return null;
+            const d = cur - prev;
+            return Math.abs(d) < 0.1 ? { sens: 0, pct: 0 } : { sens: d > 0 ? 1 : -1, pct: nfr1.format(Math.abs(d)) };
+        }
+        function metriques(points, maintenant) {
+            if (!Array.isArray(points) || !points.length) return null;                 // aucun relevé sur l'heure : « — », pas un zéro
+            const m = parMinute(points), m0 = Math.floor(maintenant / 60);
+            const cur = sommeMinutes(m, m0 - 5, m0 - 1), prev = sommeMinutes(m, m0 - 10, m0 - 6);
+            const taux = s => s.r > 0 ? s.b / s.r * 100 : null;
+            const serie = []; for (let i = m0 - 30; i <= m0 - 1; i++) serie.push({ min: i, r: m[i] ? m[i].r : 0, b: m[i] ? m[i].b : 0 });
+            return { req: cur.r / 5, blq: cur.b / 5, taux: taux(cur), preq: prev.r / 5, pblq: prev.b / 5, ptaux: taux(prev), prevVide: prev.r === 0, serie, m0 };
+        }
+        function releveAncien(releves, maintenant, age) {                               // le relevé de la page le plus récent d'au moins `age` secondes
+            let r = null; releves.forEach(x => { if (maintenant - x.t >= age) r = x; }); return r;
+        }
+
+        // ── rendu ───────────────────────────────────────────────────────────────────────────────────────────────────────
+        function poserVar(id, v, unite, ref) {
+            const e = document.getElementById(id); e.className = 'var'; e.removeAttribute('title');
+            if (!v) { e.textContent = ''; return; }
+            e.textContent = v.sens === 0 ? '→ stable' : (v.sens > 0 ? '↑ ' : '↓ ') + v.pct + (unite || ' %');
+            e.classList.add(v.sens > 0 ? 'haut' : v.sens < 0 ? 'bas' : 'eq');
+            e.title = (v.sens === 0 ? 'Stable' : v.sens > 0 ? 'En hausse' : 'En baisse') + ' ' + ref;
+        }
+        function spark(id, valeurs, couleur) {
+            const svg = document.getElementById(id); svg.replaceChildren();
+            const ok = valeurs.filter(v => v != null);
+            if (ok.length < 2) return;
+            const max = Math.max(...ok, 1e-9), n = valeurs.length; let d = '', coupe = true, aire = '', debut = null, dernier = null;
+            valeurs.forEach((v, i) => {
+                if (v == null) { coupe = true; return; }
+                const x = (i / (n - 1) * 100).toFixed(1), y = (24 - v / max * 22).toFixed(1);
+                d += (coupe ? 'M' : 'L') + x + ' ' + y; coupe = false; if (debut == null) debut = x; dernier = x;
+            });
+            if (ok.length === valeurs.length) aire = d + 'L' + dernier + ' 25L' + debut + ' 25Z';
+            if (aire) svg.append(svgEl('path', { d: aire, fill: couleur, 'fill-opacity': '.14' }));
+            svg.append(svgEl('path', { d, fill: 'none', stroke: couleur, 'stroke-width': '1.5', 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }));
+        }
+        function rendreCourbe(serie) {
+            const z = document.getElementById('courbe'); z.replaceChildren();
+            if (!serie) { z.append(tvEl('div', 'Aucune requête enregistrée sur la dernière heure : le flux de compteurs est peut-être arrêté.', 'vide')); return; }
+            const W = 600, H = 150, gx = 34, gb = 18, gh = 6, max = Math.max(...serie.map(p => p.r), 1), n = serie.length;
+            const X = i => gx + i / (n - 1) * (W - gx - 4), Y = v => H - gb - v / max * (H - gb - gh);
+            const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Requêtes et blocages par minute sur 30 minutes' });
+            [0, .5, 1].forEach(f => {
+                const y = Y(max * f); svg.append(svgEl('line', { x1: gx, x2: W - 4, y1: y, y2: y, stroke: 'rgba(86,150,255,.16)', 'stroke-width': '1' }));
+                const t = svgEl('text', { x: gx - 4, y: y + 3, 'text-anchor': 'end' }); t.textContent = nfr.format(Math.round(max * f)); svg.append(t);
+            });
+            [[0, '−30 min'], [(n - 1) / 2, '−15 min'], [n - 1, 'maintenant']].forEach(([i, lib], k) => {
+                const t = svgEl('text', { x: X(i), y: H - 4, 'text-anchor': k === 0 ? 'start' : k === 2 ? 'end' : 'middle' }); t.textContent = lib; svg.append(t);
+            });
+            const chemin = k => serie.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p[k]).toFixed(1)).join('');
+            svg.append(svgEl('path', { d: chemin('r') + 'L' + X(n - 1) + ' ' + Y(0) + 'L' + X(0) + ' ' + Y(0) + 'Z', fill: 'var(--cyan)', 'fill-opacity': '.14' }));
+            svg.append(svgEl('path', { d: chemin('r'), fill: 'none', stroke: 'var(--cyan)', 'stroke-width': '1.8', 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }));
+            svg.append(svgEl('path', { d: chemin('b'), fill: 'none', stroke: 'var(--rouge)', 'stroke-width': '1.8', 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }));
+            const maint = maintenantServeur();
+            serie.forEach((p, i) => {
+                const r = svgEl('rect', { x: X(i) - (W - gx) / n / 2, y: gh, width: (W - gx) / n, height: H - gb - gh, fill: 'transparent' });
+                const t = svgEl('title'); t.textContent = new Date((p.min * 60 + (Date.now() / 1000 - maint)) * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' — ' + p.r + ' requête(s), ' + p.b + ' bloquée(s)';
+                r.append(t); svg.append(r);
+            });
+            z.append(svg);
+        }
+        function rendreTuiles() {
+            const mt = maintenantServeur(), e = LIVE.etat, mm = LIVE.points ? metriques(LIVE.points, mt) : null;
+            const ref5 = 'par rapport aux 5 minutes précédentes';
+            document.getElementById('v-req').textContent = mm ? fmtDebit(mm.req) : '—';
+            document.getElementById('v-blq').textContent = mm ? fmtDebit(mm.blq) : '—';
+            document.getElementById('v-taux').textContent = mm && mm.taux != null ? nfr1.format(mm.taux) + ' %' : '—';
+            document.getElementById('n-req').textContent = mm ? 'moyenne sur 5 min' : (LIVE.points ? 'aucune requête sur 1 h' : 'historique indisponible');
+            if (mm) {
+                poserVar('d-req', variation(mm.req, mm.preq), ' %', ref5 + ' (' + fmtDebit(mm.preq) + ' / min)');
+                poserVar('d-blq', variation(mm.blq, mm.pblq), ' %', ref5 + ' (' + fmtDebit(mm.pblq) + ' / min)');
+                poserVar('d-taux', variationPts(mm.taux, mm.ptaux), ' pt', ref5 + ' (' + (mm.ptaux == null ? '—' : nfr1.format(mm.ptaux) + ' %') + ')');
+                spark('s-req', mm.serie.map(p => p.r), 'var(--cyan)'); spark('s-blq', mm.serie.map(p => p.b), 'var(--rouge)');
+                spark('s-taux', mm.serie.map(p => p.r > 0 ? p.b / p.r * 100 : null), 'var(--violet)');
+            } else ['d-req', 'd-blq', 'd-taux'].forEach(i => poserVar(i, null)), ['s-req', 's-blq', 's-taux'].forEach(i => document.getElementById(i).replaceChildren());
+            rendreCourbe(mm ? mm.serie : null);
+            // clients actifs : valeur de l'API ; variation seulement contre un relevé de la page vieux d'au moins 5 min
+            const cli = e && e.clients ? e.clients.actifs_5min : null;
+            document.getElementById('v-cli').textContent = cli == null ? '—' : nfr.format(cli);
+            const vieux = releveAncien(LIVE.releves, mt, 300);
+            poserVar('d-cli', vieux && vieux.clients != null ? variation(cli, vieux.clients) : null, ' %', 'par rapport au relevé de la page d’il y a ' + (vieux ? duree(mt - vieux.t) : '—') + ' (' + (vieux ? vieux.clients : '—') + ')');
+            document.getElementById('n-cli').textContent = e && e.clients && e.clients.vus != null ? 'sur ' + nfr.format(e.clients.vus) + ' vus au total' : 'dans les 5 dernières minutes';
+            spark('s-cli', LIVE.releves.filter(x => mt - x.t <= 1800 && x.clients != null).map(x => x.clients), 'var(--vert)');
+            const dom = e && e.listes ? e.listes.domaines : null;
+            document.getElementById('v-dom').textContent = dom == null ? '—' : nfr.format(dom);
+            document.getElementById('n-dom').textContent = e && e.listes && e.listes.maj_ts ? 'mis à jour il y a ' + duree(mt - e.listes.maj_ts) : 'dernière synchronisation inconnue';
+            hauteur();
+        }
+        function rendreBarres() {
+            const z = document.getElementById('top-barres'), liste = LIVE.top;
+            if (!liste) { z.replaceChildren(tvEl('div', 'Données indisponibles pour l’instant.', 'vide')); return; }
+            if (!liste.length) { z.replaceChildren(tvEl('div', 'Aucun domaine bloqué dans la dernière heure.', 'vide')); return; }
+            const max = Math.max(...liste.map(x => x.n), 1), vus = new Map([...z.querySelectorAll('.barre-l')].map(l => [l.dataset.d, l]));
+            z.querySelectorAll('.vide').forEach(v => v.remove());
+            liste.forEach((x, i) => {
+                let l = vus.get(x.d);
+                if (!l) {
+                    l = tvEl('div', null, 'barre-l'); l.dataset.d = x.d;
+                    l.append(tvEl('code', x.d), tvEl('span', null, 'n'), tvEl('div', null, 'barre'), tvEl('small', ''));
+                    l.children[2].append(document.createElement('i'));
+                    z.append(l); l.children[2].firstChild.offsetWidth;                 // force le calcul de style : la barre part de 0 et s'anime
+                }
+                vus.delete(x.d);
+                l.children[1].textContent = nfr.format(x.n);
+                l.children[3].textContent = [x.cat ? famille(x.cat) : '', x.service].filter(Boolean).join(' · ');
+                l.children[2].firstChild.style.width = Math.max(2, x.n / max * 100).toFixed(1) + '%';
+                if (z.children[i] !== l) z.insertBefore(l, z.children[i] || null);
+            });
+            vus.forEach(l => l.remove());
+        }
+
+        // Une pastille d'état : classe ok / warn / ko / inc, mot ET icône (jamais la couleur seule).
+        const ETAT_MOT = { ok: ['✓', 'OK'], warn: ['!', 'À SURVEILLER'], ko: ['✕', 'PANNE'], inc: ['?', 'INCONNU'] };
+        function poserEtat(id, classe, titre, detail) {
+            const e = document.getElementById(id); e.className = 'etat ' + classe;
+            e.querySelector('.pt').textContent = ETAT_MOT[classe][0]; e.querySelector('.mot').textContent = titre || ETAT_MOT[classe][1]; e.querySelector('.det').textContent = detail;
+        }
+        function rendreBande() {
+            const e = LIVE.etat, mt = maintenantServeur(), tv = LIVE.tv, classes = [];
+            const mot = (id, c, titre, det) => { poserEtat(id, c, titre, det); classes.push(c); };
+            if (!e) { ['e-resolveur', 'e-puits', 'e-listes', 'e-capteur'].forEach(id => mot(id, 'inc', 'INCONNU', 'relevé indisponible')); }
+            else {
+                const r = e.resolveur || {};
+                r.actif === true ? mot('e-resolveur', 'ok', 'Unbound actif', 'le réseau résout ses noms') : r.actif === false ? mot('e-resolveur', 'ko', 'Unbound arrêté', 'plus aucun nom n’est résolu') : mot('e-resolveur', 'inc', 'INCONNU', 'systemd ne le dit pas à l’API');
+                const p = e.puits || {};
+                if (p.ok === false || p.erreur) mot('e-puits', 'ko', 'Synchronisation en échec', p.erreur || 'dernière synchronisation refusée');
+                else if (p.actif === true) mot('e-puits', 'ok', 'Puits actif', (e.listes && e.listes.domaines != null ? nfr.format(e.listes.domaines) + ' domaines refusés' : 'filtrage appliqué') + (p.recharge === false ? ' · rechargement non confirmé' : ''));
+                else if (p.actif === false) mot('e-puits', 'warn', 'Puits inactif', 'aucun domaine n’est refusé par Unbound');
+                else mot('e-puits', 'inc', 'INCONNU', 'aucun état de puits enregistré');
+                const l = e.listes || {}, age = l.maj_ts ? mt - l.maj_ts : null, nb = l.domaines != null ? nfr.format(l.domaines) + ' domaines' : 'nombre inconnu';
+                if (age == null) mot('e-listes', 'inc', 'Âge inconnu', nb);
+                else if (age > (l.peremption_s || 777600)) mot('e-listes', 'warn', 'Listes périmées', nb + ' · mises à jour il y a ' + duree(age));
+                else mot('e-listes', 'ok', 'Listes à jour', nb + ' · il y a ' + duree(age));
+                const c = e.capteur || {};
+                const cd = c.constats_24h != null ? nfr.format(c.constats_24h) + ' constat' + (c.constats_24h > 1 ? 's' : '') + ' en 24 h' : 'constats 24 h : inconnus';
+                c.actif === true ? mot('e-capteur', 'ok', 'Capteur actif', cd) : c.actif === false ? mot('e-capteur', 'warn', 'Capteur arrêté', 'les domaines anormaux ne sont plus signalés') : mot('e-capteur', 'inc', 'INCONNU', 'systemd ne le dit pas à l’API');
+            }
+            const flux = e && e.flux ? e.flux : {}, derniere = flux.dernier_evenement_ts ? 'dernière requête il y a ' + duree(mt - flux.dernier_evenement_ts) : 'aucune requête enregistrée en 24 h';
+            if (!tv) mot('e-moteur', 'inc', 'INCONNU', 'API du moteur indisponible');
+            else if (tv.erreur) mot('e-moteur', 'ko', 'Moteur en erreur', String(tv.erreur).slice(0, 160));
+            else if (tv.actif && flux.actif === false) mot('e-moteur', 'warn', 'Flux de compteurs arrêté', 'le moteur est actif mais ne compte plus les requêtes');
+            else if (tv.actif) mot('e-moteur', 'ok', 'Moteur actif', (tv.clients || []).length + ' appareil(s) · ' + derniere);
+            else mot('e-moteur', 'inc', 'Moteur inactif', 'facultatif : rien n’est modifié dans Unbound · ' + derniere);
+            const g = document.getElementById('pastille-global'), pire = classes.includes('ko') ? 'ko' : classes.includes('warn') ? 'warn' : classes.includes('ok') ? 'ok' : 'inc';
+            g.className = 'actif' + (pire === 'ko' ? ' ko' : pire === 'warn' ? ' warn' : '');
+            g.textContent = LIVE.hors ? 'HORS LIGNE' : pire === 'ko' ? 'PANNE' : pire === 'warn' ? 'À SURVEILLER' : pire === 'ok' ? 'ACTIF' : 'ÉTAT INCONNU';
+            if (LIVE.hors) g.className = 'actif ko';
+            document.getElementById('bande').classList.toggle('perime', LIVE.hors);
+        }
+        function rendreIndicateur() {
+            const d = document.getElementById('direct'), lib = document.getElementById('direct-lib');
+            const etat = LIVE.hors ? 'hors' : !LIVE.session ? 'session' : LIVE.pause ? 'pause' : document.hidden ? 'masque' : LIVE.dernierOk ? 'direct' : 'attente';
+            d.dataset.etat = etat;
+            lib.textContent = { hors: 'HORS LIGNE', session: 'SESSION REQUISE', pause: 'EN PAUSE', masque: 'SUSPENDU', direct: 'EN DIRECT', attente: 'CONNEXION…' }[etat];
+            document.getElementById('session').hidden = LIVE.session;
+            document.getElementById('btn-pause').textContent = LIVE.pause ? 'Reprendre' : 'Pause';
+            document.getElementById('btn-pause').setAttribute('aria-pressed', String(LIVE.pause));
+            majHorloge();
+        }
+        function majHorloge() {
+            const e = document.getElementById('maj');
+            e.textContent = LIVE.dernierOk ? 'mis à jour il y a ' + duree((Date.now() - LIVE.dernierOk) / 1000) : '—';
+        }
+
+        // ── boucle ──────────────────────────────────────────────────────────────────────────────────────────────────────
+        async function relever() {
+            if (LIVE.enCours) return true;
+            LIVE.enCours = true;
+            try {
+                const lent = LIVE.tick % 4 === 0;                                      // statut du moteur et domaines bloqués : un relevé sur quatre (plus lourds)
+                const demandes = [lire('/statut-direct'), lire('/adblock-tv/serie?heures=1&pas=60')];
+                if (lent) demandes.push(lire('/adblock-tv/status'), lire('/adblock-tv/flux?heures=1'));
+                const [e, s, tv, fl] = await Promise.all(demandes);
+                LIVE.tick++;
+                const lectures = [e, s, tv, fl].filter(Boolean);
+                const sans = lectures.filter(x => x.statut === 401).length;
+                const bons = [e, s].filter(x => x.statut === 200).length;
+                LIVE.session = sans === 0 || bons > 0;
+                if (!bons) {
+                    LIVE.echecs++;
+                    if (sans) { LIVE.hors = false; LIVE.etat = null; LIVE.points = null; }
+                    else if (LIVE.echecs >= 2 || !LIVE.dernierOk) LIVE.hors = true;
+                    rendreIndicateur(); rendreBande(); if (sans) { rendreTuiles(); rendreBarres(); }
+                    return false;
+                }
+                LIVE.echecs = 0; LIVE.hors = false; LIVE.dernierOk = Date.now();
+                LIVE.etat = e.statut === 200 && e.data ? e.data : null;
+                if (LIVE.etat && Number.isFinite(LIVE.etat.maintenant)) LIVE.decalage = LIVE.etat.maintenant - Date.now() / 1000;
+                LIVE.points = s.statut === 200 && s.data && Array.isArray(s.data.points) ? s.data.points : null;
+                if (lent) {
+                    LIVE.tv = tv && tv.statut === 200 && tv.data && Array.isArray(tv.data.clients) ? tv.data : null;
+                    LIVE.top = fl && fl.statut === 200 && fl.data && Array.isArray(fl.data.domaines)
+                        ? fl.data.domaines.filter(x => x && (x.bloquees || 0) > 0 && typeof x.domaine === 'string').sort((a, b) => b.bloquees - a.bloquees).slice(0, 8)
+                            .map(x => ({ d: x.domaine, n: x.bloquees, cat: x.categorie || '', service: x.service || '' })) : null;
+                }
+                LIVE.releves.push({ t: maintenantServeur(), clients: LIVE.etat && LIVE.etat.clients ? LIVE.etat.clients.actifs_5min : null });
+                if (LIVE.releves.length > 400) LIVE.releves.shift();
+                rendreIndicateur(); rendreBande(); rendreTuiles(); if (lent) rendreBarres();
+                return true;
+            } finally { LIVE.enCours = false; }
+        }
+        // « Saisie en cours » : une boîte de confirmation ouverte, ou un champ texte / une liste qui a le focus ET une valeur tapée.
+        function saisieEnCours() {
+            if (!document.getElementById('dialogue').hidden) return true;
+            const a = document.activeElement;
+            if (!a) return false;
+            if (a.tagName === 'SELECT' || a.tagName === 'TEXTAREA') return true;
+            return a.tagName === 'INPUT' && /^(text|search|number|)$/.test(a.type) && a.value !== '';
+        }
+        function planifier(ms) { clearTimeout(LIVE.timer); LIVE.timer = setTimeout(boucle, ms); }
+        async function boucle() {
+            if (LIVE.pause || document.hidden) { rendreIndicateur(); return; }       // reprise : visibilitychange ou bouton
+            if (saisieEnCours()) { planifier(1000); return; }
+            const ok = await relever();
+            planifier(ok ? LIVE.base : Math.min(60000, LIVE.base * Math.pow(2, Math.min(LIVE.echecs, 3))));       // retombée douce : 16 s, 32 s, puis 60 s
+        }
+        document.addEventListener('visibilitychange', () => { rendreIndicateur(); if (!document.hidden && !LIVE.pause) planifier(0); });
+        document.getElementById('btn-pause').addEventListener('click', () => { LIVE.pause = !LIVE.pause; rendreIndicateur(); if (!LIVE.pause) planifier(0); else clearTimeout(LIVE.timer); });
+        setInterval(() => { if (!document.hidden) majHorloge(); }, 1000);
+
+        // Démonstration : relevés fictifs qui bougent (temps virtuel : 30 s par relevé), aucune requête réseau, aucune écriture.
+        function demoLive(chemin) {
+            const t0 = Math.floor(Date.now() / 1000), vn = t0 + LIVE.tick * 30, c = chemin.split('?')[0];
+            const dem = m => 90 + 55 * Math.sin(m / 6) + 25 * Math.sin(m / 2.3) + (m % 7) * 3, blq = m => dem(m) * (0.16 + 0.07 * Math.sin(m / 9));
+            if (c === '/statut-direct') return Promise.resolve({ statut: 200, data: { maintenant: vn, resolveur: { actif: true }, puits: { actif: true, ok: true, erreur: null, recharge: true },
+                listes: { domaines: 412800, maj_ts: vn - 3 * 86400, peremption_s: 777600 }, capteur: { actif: true, constats_24h: 2, dernier_constat_ts: vn - 7200 },
+                flux: { actif: true, dernier_evenement_ts: vn - 2 }, clients: { actifs_5min: 5 + Math.round(2 * Math.sin(LIVE.tick / 3)), vus: 9 } } });
+            if (c === '/adblock-tv/serie') { const pts = []; for (let i = Math.floor(vn / 60) - 59; i <= Math.floor(vn / 60); i++) pts.push({ ts: i * 60, requetes: Math.round(dem(i)), bloquees: Math.round(blq(i)), classees: 0 }); return Promise.resolve({ statut: 200, data: { pas_s: 60, points: pts } }); }
+            if (c === '/adblock-tv/status') return Promise.resolve({ statut: 200, data: { actif: true, clients: [{ ip: '192.0.2.21', nom: 'tv-salon', mode: 'auto' }, { ip: '192.0.2.22', nom: 'tablette-exemple', mode: 'observe' }], erreur: null, listes: { domaines: 412800 } } });
+            if (c === '/adblock-tv/flux') { const k = LIVE.tick; return Promise.resolve({ statut: 200, data: { domaines: [
+                { domaine: 'pub.exemple.test', categorie: 'advertising', requetes: 420 + 9 * k, bloquees: 400 + 9 * k, service: 'Régie exemple' }, { domaine: 'suivi.exemple.test', categorie: 'tracking', requetes: 300 + 5 * k, bloquees: 280 + 5 * k, service: '' },
+                { domaine: 'stats.exemple.test', categorie: 'analytics', requetes: 190 + 4 * k, bloquees: 170 + 4 * k, service: '' }, { domaine: 'telemetrie.exemple.test', categorie: 'telemetry', requetes: 120 + 2 * k, bloquees: 110 + 2 * k, service: '' },
+                { domaine: 'widget.exemple.test', categorie: 'social', requetes: 80 + k, bloquees: 60 + k, service: '' }] } }); }
+            return Promise.resolve({ statut: 404 });
+        }
+        boucle();
 
         // ══ Aurora : dialogues intégrés, hauteur, démonstration ═══════════════════════════════════════════════════════
         // confirm(), prompt() et alert() sont ignorés par le navigateur du Hall (confirm répond « non » sans rien dire) : tout est dans la page.
