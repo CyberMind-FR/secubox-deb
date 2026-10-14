@@ -9,7 +9,7 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
-## 2026-10-14 — Podcaster : page /podcaster/ au profil Aurora (ref #2637)
+## 2026-10-14 — Podcaster : page /podcaster/ au profil Aurora (closes #2637)
 `secubox-podcaster` 1.4.0 : page refaite au profil Aurora (tuiles lues dans `GET /status`, flux et épisodes, menu commun hors `?embed=1` et hors démonstration, `?demo=1` sans écriture, bandeau « session requise » sur 401, hauteur `sbxVue`/`podcaster`). Mêmes appels d'API qu'avant ; suppression de flux et titre d'audiolivre saisis dans la page (plus de `confirm()` ni `prompt()`). Ajouts de #2635 conservés (erreur par flux, dernière vérification, copie, réimport). Test `test_podcaster_aurora_2637.py` (24, Playwright route-mocké). **Non déployé.**
 
 ## 2026-10-14 — Podcaster : import YouTube sans ré-encodage, échecs de flux visibles (ref #2635)
