@@ -68,3 +68,10 @@ def test_les_quatre_onglets_et_les_etats_honnetes():
 def test_fiche_d_aide_presente_et_complete():
     f = next(c for c in AIDE["cartes"] if c["id"] == "ytflux")
     assert f["service"] == "ytsas" and f["acces"] == "session" and f["usage"] and f["role"]
+
+
+def test_les_donnees_anciennes_disent_la_cause_quand_ce_sont_les_cookies():
+    """#2633 : « YouTube n'a pas répondu » cachait que le compte n'est plus reconnu."""
+    assert "x.d.cause === 'cookies'" in CARTE
+    assert "cookies YouTube périmés" in CARTE
+    assert "n’a pas répondu" in CARTE                       # autre panne : message inchangé

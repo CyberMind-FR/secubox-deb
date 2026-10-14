@@ -121,7 +121,11 @@
         var et = $('etat');
         et.appendChild(el('span', null, items.length + ' vidéos'));
         if(x.d.date) et.appendChild(el('span', null, '· lu ' + date(x.d.date)));
-        if(x.d.perime){ et.appendChild(el('b', null, '· données anciennes (YouTube n’a pas répondu)')); }
+        if(x.d.perime){
+          et.appendChild(el('b', null, x.d.cause === 'cookies'
+            ? '· données anciennes — cookies YouTube périmés : redépose ton cookies.txt (panneau Authentification de YouTube SAS)'
+            : '· données anciennes (YouTube n’a pas répondu)'));
+        }
         items.forEach(function(v){ g.appendChild(carte(v)); });
       })
       .catch(function(){ if(mon !== jeton) return; $('etat').textContent = ''; message('Flux injoignable.', true, true); });
