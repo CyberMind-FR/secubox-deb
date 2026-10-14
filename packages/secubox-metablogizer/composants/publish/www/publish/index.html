@@ -4,1310 +4,662 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Plateforme de publication au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Assistant en quatre étapes (déposer, configurer, publier, résultat), création rapide, quatre listes (apps Streamlit,
+  projets StreamForge, fichiers Droplet, sites MetaBlogizer). Mêmes routes, méthodes et corps que l'ancienne page.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, aucune écriture, aucun appel réseau.
+  Aucun secret n'est affiché : le jeton sbx_token n'est lu que pour l'en-tête Authorization.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Publishing Platform</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Publication</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
-        .btn:hover { background: var(--bg-dark); transform: translateY(-1px); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; cursor: pointer; transition: all 0.2s; }
-        .stat-card:hover { border-color: var(--primary); transform: translateY(-2px); }
-        .stat-card .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
-        .stat-card .value { font-size: 1.5rem; font-weight: bold; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-        .stat-card.streamlit .value { color: var(--red); }
-        .stat-card.streamforge .value { color: var(--purple); }
-        .stat-card.droplet .value { color: var(--cyan); }
-        .stat-card.metablogizer .value { color: var(--green); }
-        .badge { display: inline-block; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 500; }
-        .badge.running { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.stopped { background: rgba(248,81,73,0.2); color: var(--red); }
-        .badge.published { background: rgba(0,212,255,0.2); color: var(--cyan); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
-        .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
-        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; transition: all 0.2s; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
-        .quick-action { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; cursor: pointer; transition: all 0.2s; }
-        .quick-action:hover { border-color: var(--primary); background: rgba(88,166,255,0.05); }
-        .quick-action .icon { font-size: 2rem; margin-bottom: 0.5rem; }
-        .quick-action .title { font-weight: 600; margin-bottom: 0.25rem; }
-        .quick-action .desc { font-size: 0.75rem; color: var(--text-dim); }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 450px; max-width: 90%; }
-        .modal h3 { margin-bottom: 1rem; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 4px; color: var(--text); }
-        .empty { color: var(--text-dim); text-align: center; padding: 2rem; }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        /* ISP Home Publish Wizard */
-        .wizard-step { transition: all 0.3s ease; }
-        .wizard-step.active { display: block; }
-
-        .drop-zone {
-            border: 2px dashed var(--p31-dim);
-            border-radius: 12px;
-            padding: 3rem 2rem;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: rgba(51,255,102,0.02);
-        }
-        .drop-zone:hover, .drop-zone.dragover {
-            border-color: var(--p31-peak);
-            background: rgba(51,255,102,0.08);
-            box-shadow: 0 0 20px rgba(51,255,102,0.15);
-        }
-        .drop-zone .drop-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-        .drop-zone .drop-text {
-            font-size: 1.1rem;
-            color: var(--p31-mid);
-            font-weight: 600;
-        }
-        .drop-zone .drop-subtext {
-            font-size: 0.85rem;
-            color: var(--p31-dim);
-            margin-top: 0.5rem;
-        }
-
-        .wizard-info {
-            background: rgba(51,255,102,0.05);
-            border: 1px solid var(--p31-dim);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-        .detected-box {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.5rem;
-        }
-        .detected-label {
-            color: var(--p31-dim);
-            font-size: 0.8rem;
-        }
-        .detected-type {
-            color: var(--p31-peak);
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            text-shadow: var(--bloom-soft);
-        }
-        .detected-icon { font-size: 1.2rem; }
-        .file-info {
-            font-size: 0.85rem;
-            color: var(--p31-mid);
-        }
-
-        .publishing-status {
-            text-align: center;
-            padding: 2rem;
-        }
-        .spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid var(--p31-ghost);
-            border-top-color: var(--p31-peak);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1rem;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: var(--p31-ghost);
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 1rem;
-        }
-        .progress-fill {
-            height: 100%;
-            background: var(--p31-peak);
-            width: 0%;
-            transition: width 0.3s ease;
-            box-shadow: 0 0 10px var(--p31-peak);
-        }
-
-        .result-box {
-            text-align: center;
-            padding: 2rem;
-            border-radius: 8px;
-        }
-        .result-box.success {
-            background: rgba(51,255,102,0.08);
-            border: 1px solid var(--p31-peak);
-        }
-        .result-box.error {
-            background: rgba(255,68,102,0.08);
-            border: 1px solid #ff4466;
-        }
-        .result-icon { font-size: 3rem; margin-bottom: 0.5rem; }
-        .result-title {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--p31-peak);
-            margin-bottom: 0.5rem;
-        }
-        .result-box.error .result-title { color: #ff4466; }
-        .result-url {
-            font-family: 'Courier Prime', monospace;
-            font-size: 0.9rem;
-            color: var(--p31-mid);
-            margin-bottom: 1rem;
-            word-break: break-all;
-        }
-        .result-actions {
-            display: flex;
-            gap: 0.5rem;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        .error-message {
-            color: #ff4466;
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
-        }
-
-        /* Result summary */
-        .result-summary {
-            text-align: left;
-            background: rgba(51,255,102,0.05);
-            border: 1px solid var(--p31-ghost);
-            border-radius: 6px;
-            padding: 0.75rem;
-            margin: 1rem 0;
-            font-size: 0.85rem;
-        }
-        .summary-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.25rem 0;
-            border-bottom: 1px dashed var(--p31-ghost);
-        }
-        .summary-row:last-child { border-bottom: none; }
-        .summary-label { color: var(--p31-dim); }
-        .summary-value { color: var(--p31-mid); font-weight: 600; }
-
-        /* Infrastructure status */
-        .infra-status {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin: 1rem 0;
-            justify-content: center;
-        }
-        .infra-item {
-            display: flex;
-            align-items: center;
-            gap: 0.3rem;
-            background: rgba(0,0,0,0.1);
-            padding: 0.4rem 0.6rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-        }
-        .status-icon { font-size: 1rem; }
-        .btn.mini {
-            padding: 0.15rem 0.4rem;
-            font-size: 0.7rem;
-            margin-left: 0.3rem;
-        }
-
-        /* Commands box */
-        .commands-box {
-            background: var(--tube-light);
-            border: 1px solid var(--p31-dim);
-            border-radius: 6px;
-            padding: 0.75rem;
-            text-align: left;
-        }
-        .commands-title {
-            color: var(--p31-decay);
-            font-weight: 600;
-            font-size: 0.8rem;
-            margin-bottom: 0.5rem;
-        }
-        .commands-code {
-            font-family: 'Courier Prime', monospace;
-            font-size: 0.75rem;
-            color: var(--p31-mid);
-            background: rgba(0,0,0,0.05);
-            padding: 0.5rem;
-            border-radius: 4px;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            margin-bottom: 0.5rem;
-        }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-            .drop-zone { padding: 2rem 1rem; }
-        }
-            /* Étapes réelles de la publication (#1823) */
-        .publish-steps { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; justify-content: center; margin-top: 0.8rem; font-size: 0.85rem; }
-        .publish-steps .etape { opacity: 0.55; }
-        .publish-steps .etape.ok, .publish-steps .etape.encours { opacity: 1; }
-        .publish-steps .etape.echec { opacity: 1; color: var(--danger, #e63946); }
-</style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none;text-align:center}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.ok{border-color:var(--vert);color:var(--vert)}
+        a:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0;font:inherit;color:inherit;text-align:left;cursor:pointer}
+        .tuile:hover{border-color:var(--cyan)}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:var(--cyan)} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.vi .v{color:var(--violet)} .tuile.ve .v{color:var(--vert)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h2,.pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h2 i,.pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:560px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle;overflow-wrap:anywhere}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td a{color:var(--cyan)}
+        td.act{white-space:nowrap}
+        td.act .ligne{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;margin:0}
+        .saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        .saisie input[type=text],select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        .saisie input:focus,select:focus{border-color:var(--cyan)}
+        .coche{display:flex!important;grid-template-columns:none;align-items:center;gap:8px;font-size:.8rem!important;color:var(--texte)!important}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        /* onglets des listes */
+        .onglets{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--trait);margin-bottom:8px}
+        .onglets [role=tab]{font:inherit;font-size:.78rem;background:none;color:var(--doux);border:1px solid transparent;border-bottom:2px solid transparent;border-radius:8px 8px 0 0;padding:6px 12px;cursor:pointer;min-height:32px}
+        .onglets [role=tab]:hover{color:var(--texte)}
+        .onglets [role=tab][aria-selected=true]{color:var(--cyan);border-bottom-color:var(--cyan);background:rgba(41,182,246,.08)}
+        .onglets [role=tab]:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
+        /* pas à pas */
+        ol.pas{list-style:none;margin:0 0 10px;padding:0;display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+        @container a (min-width:700px){ol.pas{grid-template-columns:repeat(4,1fr)}}
+        ol.pas li{display:flex;align-items:center;gap:8px;border:1px solid var(--trait);border-radius:10px;padding:6px 10px;font-size:.78rem;color:var(--faible);min-width:0}
+        ol.pas li .n{flex:none;width:22px;height:22px;border-radius:50%;border:1px solid var(--faible);display:grid;place-items:center;font-size:.72rem;font-weight:700;font-variant-numeric:tabular-nums}
+        ol.pas li[aria-current=step]{border-color:var(--cyan);color:var(--texte);background:rgba(41,182,246,.1)} ol.pas li[aria-current=step] .n{border-color:var(--cyan);color:var(--cyan)}
+        ol.pas li.fait{color:var(--doux);border-color:rgba(46,204,113,.45)} ol.pas li.fait .n{border-color:var(--vert);color:var(--vert)}
+        ol.pas li.echec{border-color:var(--rouge);color:var(--rouge)} ol.pas li.echec .n{border-color:var(--rouge)}
+        .etape-corps h3{outline:none}
+        .depot{display:grid;gap:4px;justify-items:center;text-align:center;border:2px dashed var(--trait2);border-radius:12px;padding:26px 14px;cursor:pointer;background:rgba(41,182,246,.03)}
+        .depot:hover,.depot.dessus{border-color:var(--cyan);background:rgba(41,182,246,.1)}
+        .depot:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .depot b{font-size:.95rem} .depot span{color:var(--faible);font-size:.76rem}
+        .detecte{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--trait);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:.8rem;background:rgba(8,18,38,.5)}
+        .barre{height:8px;border-radius:4px;background:rgba(159,179,214,.16);overflow:hidden;margin:10px 0}
+        .barre i{display:block;height:100%;width:0;background:var(--cyan);transition:width .3s}
+        ul.etapes-pub{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+        .verdict{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-radius:10px;border:1px solid var(--vert);color:var(--vert);margin-bottom:10px}
+        .verdict b{font-size:1rem} .verdict.ko{border-color:var(--rouge);color:var(--rouge)}
+        .chaine{display:grid;gap:6px;margin:10px 0;grid-template-columns:1fr}
+        @container a (min-width:700px){.chaine{grid-template-columns:repeat(3,1fr)}}
+        .maillon{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;border:1px solid var(--trait);border-radius:10px;padding:7px 10px;font-size:.8rem;background:rgba(8,18,38,.5)}
+        .maillon .nom{flex:1 1 90px}
+        .qr{display:block;max-width:200px;width:100%;border:2px solid var(--trait2);border-radius:8px;margin-top:10px;background:#fff}
+        pre.cmd{margin:6px 0;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7);overflow:auto;white-space:pre;max-width:100%;font-size:.74rem}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        @media (prefers-reduced-motion:reduce){.barre i,.toast{transition:none}}
+    </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>Publishing Platform</h1>
-            <div class="btn-group">
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn primary" onclick="showQuickPublish()">Quick Publish</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+                <div><h1>Plateforme de publication</h1><small>Déposer, publier, vérifier la chaîne du site</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn prim" id="rapide" type="button">Création rapide</button><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, aucune écriture</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <!-- Module Status Cards -->
-        <div class="grid">
-            <div class="stat-card streamlit" onclick="switchTab('apps')">
-                <div class="icon">🎯</div>
-                <div class="value" id="streamlitCount">-</div>
-                <div class="label">Streamlit Apps</div>
-            </div>
-            <div class="stat-card streamforge" onclick="switchTab('projects')">
-                <div class="icon">🔧</div>
-                <div class="value" id="streamforgeCount">-</div>
-                <div class="label">StreamForge Projects</div>
-            </div>
-            <div class="stat-card droplet" onclick="switchTab('files')">
-                <div class="icon">📤</div>
-                <div class="value" id="dropletCount">-</div>
-                <div class="label">Droplet Files</div>
-            </div>
-            <div class="stat-card metablogizer" onclick="switchTab('sites')">
-                <div class="icon">📝</div>
-                <div class="value" id="metablogizerCount">-</div>
-                <div class="label">MetaBlogizer Sites</div>
-            </div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <button type="button" class="tuile" data-onglet="apps" title="Applications Streamlit connues du module streamlit (lecture de /overview). Cliquer ouvre la liste."><span class="l">Apps Streamlit</span><span class="v" id="tApps">—</span><span class="s">déployées ou arrêtées</span></button>
+            <button type="button" class="tuile vi" data-onglet="projects" title="Projets du module StreamForge (lecture de /overview). Cliquer ouvre la liste."><span class="l">Projets StreamForge</span><span class="v" id="tProjets">—</span><span class="s">gabarits créés</span></button>
+            <button type="button" class="tuile" data-onglet="files" title="Fichiers déposés dans Droplet, publiés ou en brouillon (lecture de /overview). Cliquer ouvre la liste."><span class="l">Fichiers Droplet</span><span class="v" id="tFichiers">—</span><span class="s">à publier</span></button>
+            <button type="button" class="tuile ve" data-onglet="sites" title="Sites statiques gérés par MetaBlogizer. Si /overview n’en donne aucun, la page interroge directement metablogizer (/sites, puis /access)."><span class="l">Sites MetaBlogizer</span><span class="v" id="tSites">—</span><span class="s">statiques</span></button>
+        </section>
 
-        <!-- ISP Home Publish Wizard -->
-        <div class="card" id="ispPublishCard">
-            <h2>📦 ISP Home Publish</h2>
-            <p style="color:var(--p31-dim);margin-bottom:1rem;font-size:0.85rem;">Upload ZIP → Auto-detect → Publish → Download</p>
+        <section class="pan" id="assistant" aria-labelledby="hAssistant">
+            <h2 id="hAssistant">Assistant de publication <i>POST /isp/upload, suivi GET /isp/travail/…</i></h2>
+            <p class="note" style="margin:-2px 0 10px">Archive ZIP ou page HTML : détection du type, publication, puis lecture réelle de la chaîne du site (vhost, certificat, route WAF).</p>
+            <ol class="pas" id="pas" aria-label="Étapes de la publication">
+                <li data-pas="1" aria-current="step"><span class="n">1</span>Déposer</li>
+                <li data-pas="2"><span class="n">2</span>Configurer</li>
+                <li data-pas="3"><span class="n">3</span>Publier</li>
+                <li data-pas="4"><span class="n">4</span>Résultat</li>
+            </ol>
 
-            <!-- Step 1: Upload -->
-            <div id="wizardStep1" class="wizard-step active">
-                <div id="dropZone" class="drop-zone">
-                    <div class="drop-icon">📤</div>
-                    <div class="drop-text">Drag & drop your HTML or ZIP file here</div>
-                    <div class="drop-subtext">or click to browse</div>
-                    <input type="file" id="fileInput" accept=".html,.htm,.zip,.tar.gz,.tgz" style="display:none">
+            <div class="etape-corps" id="etape1" data-etape="1">
+                <h3 tabindex="-1">Étape 1 — Déposer l’archive</h3>
+                <div id="dropZone" class="depot" role="button" tabindex="0" aria-label="Choisir ou déposer un fichier HTML, ZIP ou tar.gz">
+                    <b>Glisser-déposer un fichier HTML ou une archive</b><span>ou cliquer / Entrée pour parcourir (.html, .htm, .zip, .tar.gz, .tgz)</span>
                 </div>
+                <input type="file" id="fileInput" accept=".html,.htm,.zip,.tar.gz,.tgz" hidden>
+                <div id="rDepot" class="retour ko" role="alert" hidden></div>
             </div>
 
-            <!-- Step 2: Configure -->
-            <div id="wizardStep2" class="wizard-step" style="display:none;">
-                <div class="wizard-info">
-                    <div class="detected-box">
-                        <span class="detected-label">Detected:</span>
-                        <span id="detectedType" class="detected-type">-</span>
-                        <span id="detectedIcon" class="detected-icon">📄</span>
-                    </div>
-                    <div class="file-info">
-                        <span id="fileName">-</span>
-                        <span id="fileSize" style="color:var(--p31-dim);margin-left:0.5rem;">-</span>
-                    </div>
+            <div class="etape-corps" id="etape2" data-etape="2" hidden>
+                <h3 tabindex="-1">Étape 2 — Configurer</h3>
+                <div class="detecte" title="Type déduit côté page du seul nom du fichier ; le serveur peut le préciser.">
+                    <span style="color:var(--doux)">Type détecté (d’après le nom) :</span><span class="pill cy" id="detectedType">—</span>
+                    <span class="mono" id="fileName">—</span><span class="note" style="margin:0" id="fileSize">—</span>
                 </div>
-                <div class="form-group">
-                    <label>Site/App Name</label>
-                    <input type="text" id="ispName" placeholder="my-site">
+                <form class="saisie" id="fPublier" autocomplete="off">
+                    <label>Nom du site ou de l’application<input type="text" id="ispName" placeholder="mon-site" required></label>
+                    <label>Domaine (facultatif)<input type="text" id="ispDomain" placeholder="monsite.votre-box"></label>
+                    <label class="coche"><input type="checkbox" id="ispAutoPublish" checked>Publier immédiatement</label>
+                </form>
+                <div id="rConfig" class="retour ko" role="alert" hidden></div>
+                <div class="bout"><button class="btn prim" id="btnPublier" type="button">Publier</button><button class="btn" id="btnAnnuler" type="button">Annuler</button></div>
+            </div>
+
+            <div class="etape-corps" id="etape3" data-etape="3" hidden>
+                <h3 tabindex="-1">Étape 3 — Publication en cours</h3>
+                <div id="publishStatus" role="status" aria-live="polite">Publication…</div>
+                <div class="barre" role="progressbar" aria-label="Avancement" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="barre"><i id="progressFill"></i></div>
+                <ul id="publishSteps" class="etapes-pub" aria-label="Étapes réelles côté serveur"></ul>
+                <p class="note">Les étapes viennent du serveur (lecture toutes les 2 s) ; la barre ne s’emplit qu’en fonction d’elles.</p>
+            </div>
+
+            <div class="etape-corps" id="etape4" data-etape="4" hidden>
+                <h3 tabindex="-1">Étape 4 — Résultat</h3>
+                <div class="verdict" id="verdictOk"><b>✓ PUBLIÉ</b><span class="mono" id="resultUrl">—</span></div>
+                <dl class="kv" id="resume">
+                    <dt>Bundle</dt><dd id="summaryBundle">—</dd><dt>Type</dt><dd id="summaryType">—</dd><dt>Domaine</dt><dd id="summaryDomain">—</dd><dt>Fichiers</dt><dd id="summaryFiles">—</dd>
+                </dl>
+                <h3 style="margin-top:12px;font-size:.82rem">Chaîne du site <i style="font-style:normal;color:var(--faible);font-size:.7rem">GET /site/…/chaine (metablogizer)</i></h3>
+                <div class="chaine">
+                    <div class="maillon"><span class="nom">Vhost nginx</span><span class="pill" id="vhostStatus">—</span><button type="button" class="btn sm" id="createVhostBtn" hidden>Créer</button></div>
+                    <div class="maillon"><span class="nom">Certificat TLS</span><span class="pill" id="certStatus">—</span><button type="button" class="btn sm" id="createCertBtn" hidden>Demander</button></div>
+                    <div class="maillon"><span class="nom">Route WAF</span><span class="pill" id="wafStatus">—</span><button type="button" class="btn sm" id="createWafBtn" hidden>Ajouter</button></div>
                 </div>
-                <div class="form-group">
-                    <label>Domain (optional)</label>
-                    <input type="text" id="ispDomain" placeholder="mysite.votre-box">
+                <div id="rChaine" class="retour" role="status" hidden></div>
+                <div class="bout">
+                    <a id="resultLink" class="btn prim" href="#" target="_blank" rel="noopener">Ouvrir le site</a>
+                    <a id="downloadLink" class="btn" href="#" download>Télécharger le ZIP</a>
+                    <button type="button" class="btn" id="btnQr" aria-expanded="false">QR code</button>
+                    <button type="button" class="btn" id="btnCmd" aria-expanded="false" aria-controls="commandsContainer">Commandes CLI</button>
                 </div>
-                <div class="form-group" style="display:flex;align-items:center;gap:0.5rem;">
-                    <input type="checkbox" id="ispAutoPublish" checked>
-                    <label for="ispAutoPublish" style="margin:0;">Auto-publish immediately</label>
+                <div id="qrCodeContainer" hidden><img id="qrCodeImg" class="qr" alt="QR code du site publié"></div>
+                <div id="commandsContainer" hidden>
+                    <p class="note">Commandes metactl équivalentes</p>
+                    <pre id="cliCommands" class="cmd mono"></pre>
+                    <button type="button" class="btn sm" id="btnCopier">Copier</button>
                 </div>
-                <div class="btn-group">
-                    <button class="btn primary" onclick="ispPublish()">🚀 Publish</button>
-                    <button class="btn" onclick="ispReset()">Cancel</button>
+                <div class="bout"><button type="button" class="btn ok" id="btnAutre">Publier autre chose</button><button type="button" class="btn" id="btnTout">Tout configurer</button></div>
+            </div>
+
+            <div class="etape-corps" id="etapeErr" data-etape="err" hidden>
+                <h3 tabindex="-1">Publication échouée</h3>
+                <div class="verdict ko"><b>✗ ÉCHEC</b><span id="errorMessage" style="overflow-wrap:anywhere">—</span></div>
+                <div class="bout"><button type="button" class="btn" id="btnRetry">Recommencer</button></div>
+            </div>
+        </section>
+
+        <section class="pan" id="creation" aria-labelledby="hCreation">
+            <h2 id="hCreation">Création rapide <i>POST /quick-publish</i></h2>
+            <div class="grille">
+                <form class="saisie" id="fApp" autocomplete="off">
+                    <label>Nom de l’application Streamlit<input type="text" id="appName" placeholder="mon-app"></label>
+                    <label>Gabarit<select id="appTemplate"><option value="basic">Basique</option><option value="dashboard">Tableau de bord</option><option value="data-explorer">Explorateur de données</option></select></label>
+                    <div class="bout" style="margin:0"><button class="btn prim" id="btnApp" type="submit">Créer et déployer</button></div>
+                </form>
+                <form class="saisie" id="fSite" autocomplete="off">
+                    <label>Nom du site statique<input type="text" id="siteName" placeholder="mon-site"></label>
+                    <label>Titre<input type="text" id="siteTitle" placeholder="Mon beau site"></label>
+                    <div class="bout" style="margin:0"><button class="btn prim" id="btnSite" type="submit">Créer et publier</button><a class="btn" href="/droplet/">Déposer via Droplet</a></div>
+                </form>
+            </div>
+            <div id="rCreation" class="retour" role="status" hidden></div>
+        </section>
+
+        <section class="pan" aria-labelledby="hListes">
+            <h2 id="hListes">Contenus publiés <i id="nListe"></i></h2>
+            <div class="onglets" role="tablist" aria-label="Types de contenu" id="onglets">
+                <button type="button" role="tab" id="tab-apps" aria-controls="apps" aria-selected="true" data-onglet="apps">Apps Streamlit</button>
+                <button type="button" role="tab" id="tab-projects" aria-controls="projects" aria-selected="false" tabindex="-1" data-onglet="projects">StreamForge</button>
+                <button type="button" role="tab" id="tab-files" aria-controls="files" aria-selected="false" tabindex="-1" data-onglet="files">Fichiers Droplet</button>
+                <button type="button" role="tab" id="tab-sites" aria-controls="sites" aria-selected="false" tabindex="-1" data-onglet="sites">Sites MetaBlogizer</button>
+            </div>
+            <div id="rListes" class="retour" role="status" hidden></div>
+
+            <div id="apps" role="tabpanel" aria-labelledby="tab-apps" class="tab">
+                <table><thead><tr><th>Nom</th><th>État</th><th>Port</th><th>Actions</th></tr></thead><tbody id="appsTable"></tbody></table>
+            </div>
+            <div id="projects" role="tabpanel" aria-labelledby="tab-projects" class="tab" hidden>
+                <table><thead><tr><th>Nom</th><th>Gabarit</th><th>Créé</th><th>Actions</th></tr></thead><tbody id="projectsTable"></tbody></table>
+            </div>
+            <div id="files" role="tabpanel" aria-labelledby="tab-files" class="tab" hidden>
+                <table><thead><tr><th>Fichier</th><th>Taille</th><th>État</th><th>Actions</th></tr></thead><tbody id="filesTable"></tbody></table>
+            </div>
+            <div id="sites" role="tabpanel" aria-labelledby="tab-sites" hidden>
+                <div class="bout" style="margin:0 0 8px" id="sitesHealth">
+                    <b style="font-size:.74rem;letter-spacing:.06em;color:var(--doux)">SANTÉ DES SITES</b>
+                    <span class="pill ok" id="healthGreen" title="HTTPS répond 200">— sains</span>
+                    <span class="pill att" id="healthYellow" title="HTTPS répond 4xx">— réserves</span>
+                    <span class="pill hors" id="healthRed" title="HTTPS répond 5xx ou injoignable">— en défaut</span>
+                    <span class="pill" id="healthGray" title="Pas de verdict exploitable">— inconnus</span>
+                    <button type="button" class="btn sm" id="btnTousSites">Tout vérifier</button>
                 </div>
+                <div class="tab"><table><thead><tr><th>Site</th><th>URL</th><th>HTTP</th><th>HTTPS</th><th>WAF</th><th>État</th><th>Actions</th></tr></thead><tbody id="sitesTable"></tbody></table></div>
             </div>
-
-            <!-- Step 3: Publishing -->
-            <div id="wizardStep3" class="wizard-step" style="display:none;">
-                <div class="publishing-status">
-                    <div class="spinner"></div>
-                    <div id="publishStatus">Publishing...</div>
-                    <div class="progress-bar">
-                        <div id="progressFill" class="progress-fill"></div>
-                    </div>
-                    <div id="publishSteps" class="publish-steps"></div>
-                </div>
-            </div>
-
-            <!-- Step 4: Result -->
-            <div id="wizardStep4" class="wizard-step" style="display:none;">
-                <div class="result-box success">
-                    <div class="result-icon">✅</div>
-                    <div class="result-title">Published Successfully!</div>
-                    <div id="resultUrl" class="result-url"></div>
-
-                    <!-- Content Summary -->
-                    <div class="result-summary">
-                        <div class="summary-row">
-                            <span class="summary-label">📦 Bundle:</span>
-                            <span id="summaryBundle" class="summary-value">-</span>
-                        </div>
-                        <div class="summary-row">
-                            <span class="summary-label">🔍 Type:</span>
-                            <span id="summaryType" class="summary-value">-</span>
-                        </div>
-                        <div class="summary-row">
-                            <span class="summary-label">🌐 Domain:</span>
-                            <span id="summaryDomain" class="summary-value">-</span>
-                        </div>
-                        <div class="summary-row">
-                            <span class="summary-label">📁 Files:</span>
-                            <span id="summaryFiles" class="summary-value">-</span>
-                        </div>
-                    </div>
-
-                    <!-- Infrastructure Status -->
-                    <div class="infra-status">
-                        <div class="infra-item">
-                            <span id="vhostStatus" class="status-icon">⏳</span>
-                            <span>Nginx VHost</span>
-                            <button id="createVhostBtn" class="btn mini" style="display:none;" onclick="createVhost()">Create</button>
-                        </div>
-                        <div class="infra-item">
-                            <span id="certStatus" class="status-icon">⏳</span>
-                            <span>SSL Certificate</span>
-                            <button id="createCertBtn" class="btn mini" style="display:none;" onclick="createCert()">Request</button>
-                        </div>
-                        <div class="infra-item">
-                            <span id="wafStatus" class="status-icon">⏳</span>
-                            <span>WAF Route</span>
-                            <button id="createWafBtn" class="btn mini" style="display:none;" onclick="createWafRoute()">Add</button>
-                        </div>
-                    </div>
-
-                    <div class="result-actions">
-                        <a id="resultLink" class="btn primary" href="#" target="_blank">🔗 Open Site</a>
-                        <a id="downloadLink" class="btn" href="#" download>📥 Download ZIP</a>
-                        <button class="btn" onclick="showQRCode()">📱 QR Code</button>
-                        <button class="btn" onclick="toggleCommands()">📋 CLI Commands</button>
-                    </div>
-
-                    <!-- QR Code -->
-                    <div id="qrCodeContainer" style="display:none;margin-top:1rem;text-align:center;">
-                        <img id="qrCodeImg" style="max-width:200px;border:2px solid var(--p31-dim);border-radius:8px;">
-                    </div>
-
-                    <!-- CLI Commands -->
-                    <div id="commandsContainer" style="display:none;margin-top:1rem;">
-                        <div class="commands-box">
-                            <div class="commands-title">📋 CLI Commands (metactl)</div>
-                            <pre id="cliCommands" class="commands-code"></pre>
-                            <button class="btn mini" onclick="copyCommands()">📋 Copy</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="btn-group" style="margin-top:1rem;">
-                    <button class="btn success" onclick="ispReset()">📦 Publish Another</button>
-                    <button class="btn" onclick="autoSetupAll()">⚡ Auto-Setup All</button>
-                </div>
-            </div>
-
-            <!-- Error State -->
-            <div id="wizardError" class="wizard-step" style="display:none;">
-                <div class="result-box error">
-                    <div class="result-icon">❌</div>
-                    <div class="result-title">Publishing Failed</div>
-                    <div id="errorMessage" class="error-message"></div>
-                </div>
-                <div class="btn-group" style="margin-top:1rem;">
-                    <button class="btn" onclick="ispReset()">Try Again</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="card">
-            <h2>Quick Actions</h2>
-            <div class="quick-actions">
-                <div class="quick-action" onclick="document.getElementById('fileInput').click()">
-                    <div class="icon">📦</div>
-                    <div class="title">Upload ZIP</div>
-                    <div class="desc">ISP Home Publish</div>
-                </div>
-                <div class="quick-action" onclick="showCreateApp()">
-                    <div class="icon">🚀</div>
-                    <div class="title">New App</div>
-                    <div class="desc">Create Streamlit app</div>
-                </div>
-                <div class="quick-action" onclick="showCreateSite()">
-                    <div class="icon">🌐</div>
-                    <div class="title">New Site</div>
-                    <div class="desc">Create static site</div>
-                </div>
-                <div class="quick-action" onclick="window.location='/droplet/'">
-                    <div class="icon">📁</div>
-                    <div class="title">Upload File</div>
-                    <div class="desc">Publish via Droplet</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tabbed Content -->
-        <div class="card">
-            <div class="tabs">
-                <div class="tab active" data-tab="apps" onclick="switchTab('apps')">Streamlit Apps</div>
-                <div class="tab" data-tab="projects" onclick="switchTab('projects')">StreamForge</div>
-                <div class="tab" data-tab="files" onclick="switchTab('files')">Droplet Files</div>
-                <div class="tab" data-tab="sites" onclick="switchTab('sites')">MetaBlogizer</div>
-            </div>
-
-            <div id="apps" class="tab-content active">
-                <table>
-                    <thead><tr><th>Name</th><th>Status</th><th>Port</th><th>Actions</th></tr></thead>
-                    <tbody id="appsTable"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
-                </table>
-            </div>
-
-            <div id="projects" class="tab-content">
-                <table>
-                    <thead><tr><th>Name</th><th>Template</th><th>Created</th><th>Actions</th></tr></thead>
-                    <tbody id="projectsTable"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
-                </table>
-            </div>
-
-            <div id="files" class="tab-content">
-                <table>
-                    <thead><tr><th>File</th><th>Size</th><th>Status</th><th>Actions</th></tr></thead>
-                    <tbody id="filesTable"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
-                </table>
-            </div>
-
-            <div id="sites" class="tab-content">
-                <div id="sitesHealth" style="margin-bottom:1rem;padding:0.75rem;background:var(--tube-pale);border:1px solid var(--tube-soft);border-radius:6px;">
-                    <span style="color:var(--p31-decay);font-weight:bold;letter-spacing:0.1em;">SITES HEALTH</span>
-                    <span style="margin-left:1rem;">
-                        <span id="healthGreen" style="color:#00ff41;">🟢 0</span>
-                        <span id="healthYellow" style="color:#ffb347;margin-left:0.5rem;">🟡 0</span>
-                        <span id="healthRed" style="color:#ff4466;margin-left:0.5rem;">🔴 0</span>
-                        <span id="healthGray" style="color:#888;margin-left:0.5rem;">⬜ 0</span>
-                    </span>
-                    <button class="btn" style="margin-left:1rem;padding:0.25rem 0.5rem;font-size:0.75rem;" onclick="checkAllHealth()">🔄 Check All</button>
-                </div>
-                <table>
-                    <thead><tr><th>Site</th><th>URL</th><th>HTTP</th><th>HTTPS</th><th>WAF</th><th>Status</th><th>Actions</th></tr></thead>
-                    <tbody id="sitesTable"><tr><td colspan="7" class="empty">Loading...</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-    </main>
-
-    <!-- Create App Modal -->
-    <div class="modal" id="createAppModal">
-        <div class="modal-content">
-            <h3>Create Streamlit App</h3>
-            <div class="form-group">
-                <label>App Name</label>
-                <input type="text" id="appName" placeholder="my-app">
-            </div>
-            <div class="form-group">
-                <label>Template</label>
-                <select id="appTemplate">
-                    <option value="basic">Basic</option>
-                    <option value="dashboard">Dashboard</option>
-                    <option value="data-explorer">Data Explorer</option>
-                </select>
-            </div>
-            <div class="btn-group">
-                <button class="btn primary" onclick="createApp()">Create & Deploy</button>
-                <button class="btn" onclick="hideModal('createAppModal')">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Create Site Modal -->
-    <div class="modal" id="createSiteModal">
-        <div class="modal-content">
-            <h3>Create Static Site</h3>
-            <div class="form-group">
-                <label>Site Name</label>
-                <input type="text" id="siteName" placeholder="my-site">
-            </div>
-            <div class="form-group">
-                <label>Title</label>
-                <input type="text" id="siteTitle" placeholder="My Awesome Site">
-            </div>
-            <div class="btn-group">
-                <button class="btn primary" onclick="createSite()">Create & Publish</button>
-                <button class="btn" onclick="hideModal('createSiteModal')">Cancel</button>
-            </div>
-        </div>
-    </div>
+            <p class="note">Le verdict HTTP / HTTPS / WAF n’est relevé qu’à la demande (« Vérifier » ou « Tout vérifier ») : « — » signifie non mesuré.</p>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMB = !!Q.get('embed');
+        if (EMB) document.body.classList.add('emb');
+        // Menu commun : hors ?embed=1 et hors démonstration.
+        if (!EMB && !DEMO) { const s = document.createElement('script'); s.src = '/shared/sidebar.js'; document.body.appendChild(s); }
+
         const API = '/api/v1/publish';
         const METABLOGIZER_API = '/api/v1/metablogizer';
-        // LE DOMAINE DE CETTE BOX, jamais « gk2 » en dur (#1723, #1823) : la page
+        // LE DOMAINE DE CETTE BOX, jamais le nom d’une box en dur (#1723, #1823) : la page
         // est servie par admin.<box> ou hall.<box> — on retire le premier label.
         const DOMAINE_BOX = /^[\d.:\[\]]+$/.test(location.hostname) ? ''
             : location.hostname.split('.').slice(1).join('.');
         const domaineDe = n => (n && DOMAINE_BOX) ? `${n}.${DOMAINE_BOX}` : '';
-        const token = () => localStorage.getItem('sbx_token');
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+
+        function token() { try { return localStorage.getItem('sbx_token'); } catch (e) { return null; } }
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
+        let SESSION_OK = true, OVERVIEW = null, SITES = [], CHARGE = false;
+        let ONGLET = 'apps', CONFIRM = null, HEALTH = {}, ETAPE = 1, SELECTED = null, PUBLISHED = null, WGEN = 0, SANTE = null;
+
+        // Appel du module publish : { ok, statut, data }. Un 401 devient le bandeau « session requise ».
         async function api(path, opts = {}) {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 5000);
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers(), signal: controller.signal });
                 clearTimeout(timeout);
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                return res.json();
+                if (res.status === 401) { SESSION_OK = false; return { ok: false, statut: 401, data: null }; }
+                let data = null; try { data = await res.json(); } catch (e) { /* corps vide */ }
+                return { ok: res.ok, statut: res.status, data };
             } catch (e) {
                 clearTimeout(timeout);
-                console.warn('Publish API unavailable:', e.message);
-                return {};
+                return { ok: false, statut: 0, data: null };
             }
         }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function motif(r) {
+            const d = r && r.data && (r.data.detail || r.data.error || r.data.message);
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + r.statut);
+            if (d) return String(d);
+            return r && r.statut ? 'HTTP ' + r.statut : 'serveur injoignable';
+        }
+        function href(u) { const s = String(u || ''); return /^(https?:\/\/|\/)/i.test(s) && !s.startsWith('//') ? s : '#'; }
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' o';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1).replace('.', ',') + ' Ko';
+            return (bytes / (1024 * 1024)).toFixed(1).replace('.', ',') + ' Mo';
+        }
 
+        // ----- Démonstration : données fictives (adresses et noms de documentation) -----
+        function demoData() {
+            OVERVIEW = {
+                apps: [{ name: 'tableau-demo', running: true, port: 8501 }, { name: 'explorateur-demo', running: false, port: null }],
+                projects: [{ name: 'projet-exemple', template: 'dashboard', created: '2026-09-30' }],
+                files: [{ name: 'plaquette-demo.html', size: '48 Ko', published: true }, { name: 'brouillon-demo.zip', size: '1,2 Mo', published: false }],
+                sites: []
+            };
+            SITES = [{ name: 'blog-demo', domain: 'blog-demo.box.example', published: true, size: '3,4 Mo' },
+                     { name: 'brouillon-demo', domain: 'brouillon-demo.box.example', published: false, size: '210 Ko' }];
+        }
+        const DEMO_HEALTH = { 'blog-demo.box.example': { http: 301, https: 200, waf: 'inspected' }, 'brouillon-demo.box.example': { http: 404, https: 404, waf: 'warning' } };
+
+        // ----- Lecture -----
         async function fetchMetablogizerSites() {
-            // Try metablogizer API directly
             try {
                 const res = await fetch(METABLOGIZER_API + '/sites', { headers: headers(), signal: AbortSignal.timeout(5000) });
-                if (res.ok) {
-                    const data = await res.json();
-                    return data.sites || [];
-                }
-            } catch (e) {
-                console.warn('MetaBlogizer API via sites failed:', e.message);
-            }
-            // Fallback to access endpoint (public)
+                if (res.ok) { const data = await res.json(); return data.sites || []; }
+            } catch (e) { /* repli ci-dessous */ }
             try {
                 const res = await fetch(METABLOGIZER_API + '/access', { signal: AbortSignal.timeout(5000) });
-                if (res.ok) {
-                    const data = await res.json();
-                    return data.sites || [];
-                }
-            } catch (e) {
-                console.warn('MetaBlogizer API via access failed:', e.message);
-            }
+                if (res.ok) { const data = await res.json(); return data.sites || []; }
+            } catch (e) { /* aucune liste */ }
             return [];
         }
 
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        }
-
         async function loadOverview() {
-            const d = await api('/overview');
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+            const r = await api('/overview');
+            OVERVIEW = r.ok && r.data ? r.data : null;
+            SITES = OVERVIEW && Array.isArray(OVERVIEW.sites) ? OVERVIEW.sites : [];
+            if (OVERVIEW && SITES.length === 0) SITES = await fetchMetablogizerSites();
+            CHARGE = true;
+            $('erreur').hidden = !(OVERVIEW === null && SESSION_OK);
+            if (OVERVIEW === null && SESSION_OK) $('erreur').textContent = 'Impossible de lire le module publish (arrêté ou injoignable).';
+            rendre();
+        }
+        const refresh = () => loadOverview();
 
-            // Fallback: fetch metablogizer sites directly if not in overview
-            let sites = d.sites || [];
-            if (sites.length === 0) {
-                sites = await fetchMetablogizerSites();
-            }
-
-            // Update counts
-            document.getElementById('streamlitCount').textContent = d.apps?.length || 0;
-            document.getElementById('streamforgeCount').textContent = d.projects?.length || 0;
-            document.getElementById('dropletCount').textContent = d.files?.length || 0;
-            document.getElementById('metablogizerCount').textContent = sites.length;
-
-            // Apps table
-            const appsTable = document.getElementById('appsTable');
-            if (!d.apps || d.apps.length === 0) {
-                appsTable.innerHTML = '<tr><td colspan="4" class="empty">No Streamlit apps</td></tr>';
-            } else {
-                appsTable.innerHTML = d.apps.map(a => `
-                    <tr>
-                        <td>${a.name}</td>
-                        <td><span class="badge ${a.running ? 'running' : 'stopped'}">${a.running ? 'Running' : 'Stopped'}</span></td>
-                        <td>${a.port || '-'}</td>
-                        <td class="btn-group">
-                            ${a.running
-                                ? `<button class="btn danger" onclick="stopApp('${a.name}')">Stop</button>`
-                                : `<button class="btn success" onclick="deployApp('${a.name}')">Deploy</button>`
-                            }
-                        </td>
-                    </tr>
-                `).join('');
-            }
-
-            // Projects table
-            const projectsTable = document.getElementById('projectsTable');
-            if (!d.projects || d.projects.length === 0) {
-                projectsTable.innerHTML = '<tr><td colspan="4" class="empty">No StreamForge projects</td></tr>';
-            } else {
-                projectsTable.innerHTML = d.projects.map(p => `
-                    <tr>
-                        <td>${p.name}</td>
-                        <td>${p.template || '-'}</td>
-                        <td>${p.created || '-'}</td>
-                        <td><button class="btn primary" onclick="deployApp('${p.name}')">Deploy</button></td>
-                    </tr>
-                `).join('');
-            }
-
-            // Files table
-            const filesTable = document.getElementById('filesTable');
-            if (!d.files || d.files.length === 0) {
-                filesTable.innerHTML = '<tr><td colspan="4" class="empty">No Droplet files</td></tr>';
-            } else {
-                filesTable.innerHTML = d.files.map(f => `
-                    <tr>
-                        <td>${f.name}</td>
-                        <td>${f.size || '-'}</td>
-                        <td><span class="badge ${f.published ? 'published' : 'stopped'}">${f.published ? 'Published' : 'Draft'}</span></td>
-                        <td><button class="btn primary" onclick="publishFile('${f.name}')">Publish</button></td>
-                    </tr>
-                `).join('');
-            }
-
-            // Sites table (uses `sites` from fallback)
-            const sitesTable = document.getElementById('sitesTable');
-            if (!sites || sites.length === 0) {
-                sitesTable.innerHTML = '<tr><td colspan="7" class="empty">No MetaBlogizer sites</td></tr>';
-            } else {
-                // Store sites for health checking
-                window.currentSites = sites;
-                sitesTable.innerHTML = sites.map(s => {
-                    const domain = s.domain || domaineDe(s.name);
-                    const url = s.url || `https://${domain}`;
-                    const displayUrl = s.url || domain || '-';
-                    const isPublished = s.published !== undefined ? s.published : true;
-                    const sizeInfo = s.size ? ` (${s.size})` : '';
-                    const siteId = (s.name || domain).replace(/[^a-z0-9]/gi, '-');
-                    return `
-                    <tr data-site="${siteId}">
-                        <td>${s.name}${sizeInfo}</td>
-                        <td><a href="${url}" target="_blank" style="font-size:0.8rem;">${displayUrl}</a></td>
-                        <td id="http-${siteId}" title="HTTP status">⬜</td>
-                        <td id="https-${siteId}" title="HTTPS status">⬜</td>
-                        <td id="waf-${siteId}" title="WAF pass">⬜</td>
-                        <td><span class="badge ${isPublished ? 'published' : 'stopped'}">${isPublished ? '✅ Live' : '⏸️ Draft'}</span></td>
-                        <td class="btn-group">
-                            <button class="btn" style="padding:0.25rem 0.5rem;font-size:0.7rem;" onclick="checkSiteHealth('${domain}','${siteId}')">🔍</button>
-                            ${isPublished
-                                ? `<button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.7rem;" onclick="unpublishSite('${s.name}')">⏹</button>`
-                                : `<button class="btn primary" style="padding:0.25rem 0.5rem;font-size:0.7rem;" onclick="publishSite('${s.name}')">▶</button>`
-                            }
-                            <a class="btn" style="padding:0.25rem 0.5rem;font-size:0.7rem;" href="${url}" target="_blank">🔗</a>
-                        </td>
-                    </tr>`;
-                }).join('');
-            }
+        // ----- Rendu -----
+        function liste(k) { return OVERVIEW && Array.isArray(OVERVIEW[k]) ? OVERVIEW[k] : null; }
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!OVERVIEW) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif'; etat.textContent = 'PRÊT'; }
+            const n = k => { const l = liste(k); return l ? l.length : '—'; };
+            $('tApps').textContent = n('apps'); $('tProjets').textContent = n('projects'); $('tFichiers').textContent = n('files');
+            $('tSites').textContent = OVERVIEW ? SITES.length : '—';
+            rendreApps(); rendreProjets(); rendreFichiers(); rendreSites();
+            const compte = { apps: liste('apps'), projects: liste('projects'), files: liste('files'), sites: OVERVIEW ? SITES : null }[ONGLET];
+            $('nListe').textContent = compte ? compte.length + ' élément' + (compte.length > 1 ? 's' : '') : '';
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        // Health checking functions
-        const healthStats = { green: 0, yellow: 0, red: 0, gray: 0 };
-
-        async function checkSiteHealth(domain, siteId) {
-            const httpEl = document.getElementById('http-' + siteId);
-            const httpsEl = document.getElementById('https-' + siteId);
-            const wafEl = document.getElementById('waf-' + siteId);
-
-            // Set loading state
-            if (httpEl) httpEl.textContent = '⏳';
-            if (httpsEl) httpsEl.textContent = '⏳';
-            if (wafEl) wafEl.textContent = '⏳';
-
-            try {
-                // Use health API endpoint
-                const res = await fetch(`/api/v1/metablogizer/health/${domain}`, {
-                    headers: headers(),
-                    signal: AbortSignal.timeout(10000)
-                });
-                const health = await res.json();
-
-                // Update HTTP status
-                if (httpEl) {
-                    if (health.http === 200) httpEl.textContent = '🟢';
-                    else if (health.http >= 500) httpEl.textContent = '🔴';
-                    else if (health.http >= 400) httpEl.textContent = '🟡';
-                    else httpEl.textContent = '⬜';
-                }
-
-                // Update HTTPS status
-                if (httpsEl) {
-                    if (health.https === 200) httpsEl.textContent = '🟢';
-                    else if (health.https >= 500) httpsEl.textContent = '🔴';
-                    else if (health.https >= 400) httpsEl.textContent = '🟡';
-                    else httpsEl.textContent = '⬜';
-                }
-
-                // Update WAF status (X-SecuBox-WAF header present means WAF passed)
-                if (wafEl) {
-                    if (health.waf === 'inspected') wafEl.textContent = '🟢';
-                    else if (health.waf === 'blocked' || health.waf === 'banned') wafEl.textContent = '🔴';
-                    else if (health.waf === 'warning') wafEl.textContent = '🟡';
-                    else wafEl.textContent = '⬜';
-                }
-            } catch (e) {
-                // Connection error
-                if (httpEl) httpEl.textContent = '🔴';
-                if (httpsEl) httpsEl.textContent = '🔴';
-                if (wafEl) wafEl.textContent = '⬜';
-            }
+        function vide(tb, cols, msg) { tb.replaceChildren(); const tr = el('tr'); const td = el('td', 'vide', msg); td.colSpan = cols; tr.appendChild(td); tb.appendChild(tr); }
+        function btn(txt, cls, fn, label) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; if (label) b.setAttribute('aria-label', label); b.addEventListener('click', fn); return b; }
+        // Action sans retour facile : confirmation dans la ligne, jamais de dialogue natif.
+        function actionConfirmee(cle, texte, libelle, cls, fn, aria) {
+            const w = el('div', 'ligne');
+            if (CONFIRM === cle) {
+                w.appendChild(el('span', 'note', texte));
+                w.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; fn(); }));
+                w.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+            } else w.appendChild(btn(libelle, cls, () => { CONFIRM = cle; rendre(); }, aria));
+            return w;
+        }
+        function rendreApps() {
+            const tb = $('appsTable'), l = liste('apps');
+            if (!l) return vide(tb, 4, !SESSION_OK ? '—' : CHARGE ? 'Liste indisponible' : '—');
+            if (!l.length) return vide(tb, 4, 'Aucune app Streamlit');
+            tb.replaceChildren();
+            l.forEach(a => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(a.name)));
+                const e = el('td'); e.appendChild(el('span', 'pill ' + (a.running ? 'ok' : 'hors'), a.running ? 'EN MARCHE' : 'ARRÊTÉE')); tr.appendChild(e);
+                tr.appendChild(el('td', '', tiret(a.port)));
+                const ac = el('td', 'act');
+                ac.appendChild(a.running ? actionConfirmee('stop:' + a.name, 'Arrêter l’application ?', 'Arrêter', 'danger', () => stopApp(a.name), 'Arrêter ' + a.name)
+                                         : btn('Déployer', 'ok', () => deployApp(a.name), 'Déployer ' + a.name));
+                tr.appendChild(ac); tb.appendChild(tr);
+            });
+        }
+        function rendreProjets() {
+            const tb = $('projectsTable'), l = liste('projects');
+            if (!l) return vide(tb, 4, !SESSION_OK ? '—' : CHARGE ? 'Liste indisponible' : '—');
+            if (!l.length) return vide(tb, 4, 'Aucun projet StreamForge');
+            tb.replaceChildren();
+            l.forEach(p => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(p.name))); tr.appendChild(el('td', '', tiret(p.template))); tr.appendChild(el('td', '', tiret(p.created)));
+                const ac = el('td', 'act'); ac.appendChild(btn('Déployer', 'prim', () => deployApp(p.name), 'Déployer ' + p.name)); tr.appendChild(ac); tb.appendChild(tr);
+            });
+        }
+        function rendreFichiers() {
+            const tb = $('filesTable'), l = liste('files');
+            if (!l) return vide(tb, 4, !SESSION_OK ? '—' : CHARGE ? 'Liste indisponible' : '—');
+            if (!l.length) return vide(tb, 4, 'Aucun fichier Droplet');
+            tb.replaceChildren();
+            l.forEach(f => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(f.name))); tr.appendChild(el('td', '', tiret(f.size)));
+                const e = el('td'); e.appendChild(el('span', 'pill ' + (f.published ? 'cy' : 'att'), f.published ? 'PUBLIÉ' : 'BROUILLON')); tr.appendChild(e);
+                const ac = el('td', 'act'); ac.appendChild(btn('Publier', 'prim', () => publishFile(f.name), 'Publier ' + f.name)); tr.appendChild(ac); tb.appendChild(tr);
+            });
         }
 
-        async function checkAllHealth() {
-            const sites = window.currentSites || [];
-            healthStats.green = 0;
-            healthStats.yellow = 0;
-            healthStats.red = 0;
-            healthStats.gray = 0;
-
-            for (const s of sites) {
+        function pastilleCode(c) { if (c === 'charge') return ['', '…']; const n = Number(c); if (c === 200 || n === 200) return ['ok', '200']; if (n >= 500) return ['hors', String(n)]; if (n >= 400) return ['att', String(n)]; return ['', c == null ? '—' : String(c)]; }
+        function pastilleWaf(w) { if (w === 'charge') return ['', '…']; if (w === 'inspected') return ['ok', 'inspecté']; if (w === 'blocked' || w === 'banned') return ['hors', 'bloqué']; if (w === 'warning') return ['att', 'alerte']; return ['', '—']; }
+        function cellule(def) { const td = el('td'); td.appendChild(el('span', 'pill ' + def[0], def[1])); return td; }
+        function rendreSites() {
+            const tb = $('sitesTable');
+            if (!OVERVIEW) return vide(tb, 7, !SESSION_OK ? '—' : CHARGE ? 'Liste indisponible' : '—');
+            if (!SITES.length) return vide(tb, 7, 'Aucun site MetaBlogizer');
+            tb.replaceChildren();
+            SITES.forEach(s => {
                 const domain = s.domain || domaineDe(s.name);
-                const siteId = (s.name || domain).replace(/[^a-z0-9]/gi, '-');
-                await checkSiteHealth(domain, siteId);
-
-                // Count health stats
-                const httpsEl = document.getElementById('https-' + siteId);
-                if (httpsEl) {
-                    const status = httpsEl.textContent;
-                    if (status === '🟢') healthStats.green++;
-                    else if (status === '🟡') healthStats.yellow++;
-                    else if (status === '🔴') healthStats.red++;
-                    else healthStats.gray++;
-                }
-            }
-
-            // Update aggregated health display
-            document.getElementById('healthGreen').textContent = '🟢 ' + healthStats.green;
-            document.getElementById('healthYellow').textContent = '🟡 ' + healthStats.yellow;
-            document.getElementById('healthRed').textContent = '🔴 ' + healthStats.red;
-            document.getElementById('healthGray').textContent = '⬜ ' + healthStats.gray;
+                const url = s.url || (domain ? `https://${domain}` : '');
+                const live = s.published !== undefined ? s.published : true;
+                const h = HEALTH[domain] || {};
+                const tr = el('tr'); tr.dataset.site = s.name;
+                tr.appendChild(el('td', 'mono', tiret(s.name) + (s.size ? ` (${s.size})` : '')));
+                const tu = el('td'); if (url) { const a = el('a', '', s.url || domain || '—'); a.href = href(url); a.target = '_blank'; a.rel = 'noopener'; tu.appendChild(a); } else tu.textContent = '—'; tr.appendChild(tu);
+                tr.appendChild(cellule(pastilleCode(h.http))); tr.appendChild(cellule(pastilleCode(h.https))); tr.appendChild(cellule(pastilleWaf(h.waf)));
+                const e = el('td'); e.appendChild(el('span', 'pill ' + (live ? 'cy' : 'att'), live ? 'EN LIGNE' : 'BROUILLON')); tr.appendChild(e);
+                const ac = el('td', 'act'); const l = el('div', 'ligne');
+                l.appendChild(btn('Vérifier', '', () => checkSiteHealth(domain), 'Vérifier ' + s.name));
+                if (live) l.appendChild(actionConfirmee('unpub:' + s.name, 'Retirer le site de la publication ?', 'Dépublier', 'danger', () => unpublishSite(s.name), 'Dépublier ' + s.name));
+                else l.appendChild(btn('Publier', 'prim', () => publishSite(s.name), 'Publier ' + s.name));
+                if (url) { const a = el('a', 'btn sm', 'Ouvrir'); a.href = href(url); a.target = '_blank'; a.rel = 'noopener'; l.appendChild(a); }
+                ac.appendChild(l); tr.appendChild(ac); tb.appendChild(tr);
+            });
+            rendreSante();
+        }
+        function rendreSante() {
+            const s = SANTE;
+            $('healthGreen').textContent = (s ? s.green : '—') + ' sains'; $('healthYellow').textContent = (s ? s.yellow : '—') + ' réserves';
+            $('healthRed').textContent = (s ? s.red : '—') + ' en défaut'; $('healthGray').textContent = (s ? s.gray : '—') + ' inconnus';
         }
 
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showCreateApp() { showModal('createAppModal'); }
-        function showCreateSite() { showModal('createSiteModal'); }
-        function showQuickPublish() { showCreateApp(); }
-
-        async function createApp() {
-            const name = document.getElementById('appName').value;
-            const template = document.getElementById('appTemplate').value;
-            if (!name) return alert('Enter app name');
-            await api('/quick-publish', { method: 'POST', body: JSON.stringify({ content_type: 'app', name, template }) });
-            hideModal('createAppModal');
-            document.getElementById('appName').value = '';
-            refresh();
-        }
-
-        async function createSite() {
-            const name = document.getElementById('siteName').value;
-            const title = document.getElementById('siteTitle').value;
-            if (!name) return alert('Enter site name');
-            await api('/quick-publish', { method: 'POST', body: JSON.stringify({ content_type: 'site', name, data: { title } }) });
-            hideModal('createSiteModal');
-            document.getElementById('siteName').value = '';
-            document.getElementById('siteTitle').value = '';
-            refresh();
-        }
-
-        async function deployApp(name) {
-            await api(`/streamlit/deploy?name=${name}`, { method: 'POST' });
-            refresh();
-        }
-
-        async function stopApp(name) {
-            await api(`/streamlit/stop?name=${name}`, { method: 'POST' });
-            refresh();
-        }
-
-        async function publishFile(name) {
-            await api('/droplet/publish', { method: 'POST', body: JSON.stringify({ file: name }) });
-            refresh();
-        }
-
-        async function publishSite(name) {
-            // Try publish API first, fallback to metablogizer API
-            let result = await api(`/metablogizer/publish/${name}`, { method: 'POST' });
-            if (result.error) {
-                try {
-                    await fetch(`${METABLOGIZER_API}/site/${name}/publish`, { method: 'POST', headers: headers() });
-                } catch (e) {}
-            }
-            refresh();
-        }
-
-        async function unpublishSite(name) {
-            // Try metablogizer API directly
+        // ----- Santé des sites (GET /api/v1/metablogizer/health/<domaine>) -----
+        async function checkSiteHealth(domain) {
+            HEALTH[domain] = { http: 'charge', https: 'charge', waf: 'charge' }; rendreSites();
+            if (DEMO) { HEALTH[domain] = DEMO_HEALTH[domain] || {}; rendreSites(); return; }
             try {
-                await fetch(`${METABLOGIZER_API}/site/${name}/unpublish`, { method: 'POST', headers: headers() });
-            } catch (e) {
-                console.warn('Unpublish failed:', e.message);
+                const res = await fetch(`/api/v1/metablogizer/health/${domain}`, { headers: headers(), signal: AbortSignal.timeout(10000) });
+                const health = await res.json();
+                HEALTH[domain] = { http: health.http, https: health.https, waf: health.waf };
+            } catch (e) { HEALTH[domain] = { http: 599, https: 599, waf: null }; }
+            rendreSites();
+        }
+        async function checkAllHealth() {
+            const s = { green: 0, yellow: 0, red: 0, gray: 0 };
+            for (const site of SITES) {
+                const domain = site.domain || domaineDe(site.name);
+                await checkSiteHealth(domain);
+                const c = Number((HEALTH[domain] || {}).https);
+                if (c === 200) s.green++; else if (c >= 500) s.red++; else if (c >= 400) s.yellow++; else s.gray++;
             }
-            refresh();
+            SANTE = s; rendreSante();
         }
 
-        function refresh() { loadOverview(); }
-        refresh();
-        setInterval(refresh, 15000);
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        function verdictAction(r, ok, ko) { if (r.ok && !(r.data && r.data.error)) toast(ok); else toast(ko + ' : ' + motif(r)); }
+        async function deployApp(name) {
+            if (DEMO) return toast('Démonstration : action inerte.');
+            verdictAction(await api(`/streamlit/deploy?name=${encodeURIComponent(name)}`, { method: 'POST' }), 'Déploiement demandé : ' + name, 'Déploiement impossible'); refresh();
+        }
+        async function stopApp(name) {
+            if (DEMO) return toast('Démonstration : action inerte.');
+            verdictAction(await api(`/streamlit/stop?name=${encodeURIComponent(name)}`, { method: 'POST' }), 'Arrêt demandé : ' + name, 'Arrêt impossible'); refresh();
+        }
+        async function publishFile(name) {
+            if (DEMO) return toast('Démonstration : action inerte.');
+            verdictAction(await api('/droplet/publish', { method: 'POST', body: JSON.stringify({ file: name }) }), 'Publication demandée : ' + name, 'Publication impossible'); refresh();
+        }
+        async function publishSite(name) {
+            if (DEMO) return toast('Démonstration : action inerte.');
+            // Publish API d'abord, repli sur l'API metablogizer.
+            const r = await api(`/metablogizer/publish/${encodeURIComponent(name)}`, { method: 'POST' });
+            if (r.data && r.data.error) {
+                try { await fetch(`${METABLOGIZER_API}/site/${encodeURIComponent(name)}/publish`, { method: 'POST', headers: headers() }); } catch (e) { /* le relevé suivant dira l'état */ }
+            }
+            toast('Publication demandée : ' + name); refresh();
+        }
+        async function unpublishSite(name) {
+            if (DEMO) return toast('Démonstration : action inerte.');
+            try { await fetch(`${METABLOGIZER_API}/site/${encodeURIComponent(name)}/unpublish`, { method: 'POST', headers: headers() }); toast('Dépublication demandée : ' + name); }
+            catch (e) { toast('Dépublication impossible : ' + e.message); }
+            refresh();
+        }
+        $('fApp').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const name = $('appName').value, template = $('appTemplate').value;
+            if (!name) return retour('rCreation', false, 'Indiquer le nom de l’application.');
+            if (DEMO) return retour('rCreation', false, 'Démonstration : action inerte.');
+            const r = await api('/quick-publish', { method: 'POST', body: JSON.stringify({ content_type: 'app', name, template }) });
+            if (r.ok && !(r.data && r.data.error)) { retour('rCreation', true, 'Application « ' + name + ' » : création demandée.'); $('appName').value = ''; refresh(); }
+            else retour('rCreation', false, 'Création impossible : ' + motif(r));
+        });
+        $('fSite').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const name = $('siteName').value, title = $('siteTitle').value;
+            if (!name) return retour('rCreation', false, 'Indiquer le nom du site.');
+            if (DEMO) return retour('rCreation', false, 'Démonstration : action inerte.');
+            const r = await api('/quick-publish', { method: 'POST', body: JSON.stringify({ content_type: 'site', name, data: { title } }) });
+            if (r.ok && !(r.data && r.data.error)) { retour('rCreation', true, 'Site « ' + name + ' » : création demandée.'); $('siteName').value = ''; $('siteTitle').value = ''; refresh(); }
+            else retour('rCreation', false, 'Création impossible : ' + motif(r));
+        });
 
-        // ===== ISP Home Publish Wizard =====
-        let selectedFile = null;
-        let publishedData = null;
+        // ----- Onglets des listes (clavier : flèches, Début, Fin) -----
+        function choisirOnglet(nom, focus) {
+            ONGLET = nom; CONFIRM = null;
+            document.querySelectorAll('#onglets [role=tab]').forEach(t => { const on = t.dataset.onglet === nom; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; if (on && focus) t.focus(); });
+            ['apps', 'projects', 'files', 'sites'].forEach(i => { $(i).hidden = i !== nom; });
+            rendre();
+        }
+        document.querySelectorAll('#onglets [role=tab]').forEach(t => t.addEventListener('click', () => choisirOnglet(t.dataset.onglet)));
+        $('onglets').addEventListener('keydown', ev => {
+            const ts = [...document.querySelectorAll('#onglets [role=tab]')], i = ts.findIndex(t => t.dataset.onglet === ONGLET);
+            const j = ev.key === 'ArrowRight' ? (i + 1) % ts.length : ev.key === 'ArrowLeft' ? (i + ts.length - 1) % ts.length : ev.key === 'Home' ? 0 : ev.key === 'End' ? ts.length - 1 : -1;
+            if (j >= 0) { ev.preventDefault(); choisirOnglet(ts[j].dataset.onglet, true); }
+        });
+        document.querySelectorAll('.tuile[data-onglet]').forEach(t => t.addEventListener('click', () => choisirOnglet(t.dataset.onglet)));
+        $('rapide').addEventListener('click', () => { $('creation').scrollIntoView({ block: 'nearest' }); $('appName').focus(); });
+        $('btnTousSites').addEventListener('click', checkAllHealth);
+        $('rafraichir').addEventListener('click', refresh);
 
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
+        // ===== Assistant de publication =====
+        function montreEtape(n, echec) {
+            ETAPE = n;
+            document.querySelectorAll('.etape-corps').forEach(c => { c.hidden = c.dataset.etape !== (echec ? 'err' : String(n)); });
+            document.querySelectorAll('#pas li').forEach(li => {
+                const k = Number(li.dataset.pas);
+                li.classList.toggle('fait', k < n && !echec || (echec && k < 3));
+                li.classList.toggle('echec', !!echec && k === 3);
+                if (k === n && !echec) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+            });
+            const titre = document.querySelector('.etape-corps:not([hidden]) h3');
+            if (titre && n !== 1) titre.focus({ preventScroll: true });
+            annoncer();
+        }
+        function showWizardError(message) { $('errorMessage').textContent = message; montreEtape(3, true); }
+        function avancement(p) { $('progressFill').style.width = p + '%'; $('barre').setAttribute('aria-valuenow', p); }
 
-        // Drag & Drop
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
-        });
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('dragover');
-        });
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) handleFileSelect(files[0]);
-        });
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
-        });
+        const dropZone = $('dropZone'), fileInput = $('fileInput');
+        const ouvrirChoix = () => fileInput.click();
+        dropZone.addEventListener('click', ouvrirChoix);
+        dropZone.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ouvrirChoix(); } });
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dessus'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dessus'));
+        dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dessus'); const f = e.dataTransfer.files; if (f.length > 0) handleFileSelect(f[0]); });
+        fileInput.addEventListener('change', e => { if (e.target.files.length > 0) handleFileSelect(e.target.files[0]); });
 
         function handleFileSelect(file) {
-            if (!file.name.match(/\.(html?|zip|tar\.gz|tgz)$/i)) {
-                alert('Please select a .html, .zip or .tar.gz file');
-                return;
-            }
-            selectedFile = file;
-
-            // Auto-detect content type based on filename
+            if (!file.name.match(/\.(html?|zip|tar\.gz|tgz)$/i)) { const r = $('rDepot'); r.hidden = false; r.textContent = 'Choisir un fichier .html, .zip ou .tar.gz.'; annoncer(); return; }
+            $('rDepot').hidden = true;
+            SELECTED = file;
             let detectedType = 'static';
-            let icon = '🌐';
-            const isHtml = file.name.match(/\.html?$/i);
-            if (isHtml) {
-                detectedType = 'html';
-                icon = '📄';
-            } else if (file.name.includes('streamlit') || file.name.includes('app')) {
-                detectedType = 'streamlit';
-                icon = '🎯';
-            } else if (file.name.includes('hugo') || file.name.includes('blog')) {
-                detectedType = 'hugo';
-                icon = '📝';
-            } else if (file.name.includes('jekyll')) {
-                detectedType = 'jekyll';
-                icon = '📚';
-            } else if (file.name.includes('hexo')) {
-                detectedType = 'hexo';
-                icon = '🔷';
-            }
-
-            // Update UI
-            document.getElementById('detectedType').textContent = detectedType;
-            document.getElementById('detectedIcon').textContent = icon;
-            document.getElementById('fileName').textContent = file.name;
-            document.getElementById('fileSize').textContent = formatSize(file.size);
-
-            // Auto-generate name from filename
+            if (file.name.match(/\.html?$/i)) detectedType = 'html';
+            else if (file.name.includes('streamlit') || file.name.includes('app')) detectedType = 'streamlit';
+            else if (file.name.includes('hugo') || file.name.includes('blog')) detectedType = 'hugo';
+            else if (file.name.includes('jekyll')) detectedType = 'jekyll';
+            else if (file.name.includes('hexo')) detectedType = 'hexo';
+            $('detectedType').textContent = detectedType;
+            $('fileName').textContent = file.name;
+            $('fileSize').textContent = formatSize(file.size);
             const baseName = file.name.replace(/\.(html?|zip|tar\.gz|tgz)$/i, '').replace(/[^a-z0-9-]/gi, '-').toLowerCase();
-            document.getElementById('ispName').value = baseName;
-            document.getElementById('ispDomain').value = domaineDe(baseName);
-
-            // Switch to step 2
-            showWizardStep(2);
-        }
-
-        function formatSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-        }
-
-        function showWizardStep(step) {
-            ['wizardStep1', 'wizardStep2', 'wizardStep3', 'wizardStep4', 'wizardError'].forEach(id => {
-                document.getElementById(id).style.display = 'none';
-            });
-            document.getElementById('wizardStep' + step).style.display = 'block';
-        }
-
-        function showWizardError(message) {
-            document.getElementById('errorMessage').textContent = message;
-            ['wizardStep1', 'wizardStep2', 'wizardStep3', 'wizardStep4'].forEach(id => {
-                document.getElementById(id).style.display = 'none';
-            });
-            document.getElementById('wizardError').style.display = 'block';
+            $('ispName').value = baseName;
+            $('ispDomain').value = domaineDe(baseName);
+            $('rConfig').hidden = true;
+            montreEtape(2);
         }
 
         async function ispPublish() {
-            const name = document.getElementById('ispName').value.trim();
-            const domain = document.getElementById('ispDomain').value.trim();
-            const autoPublish = document.getElementById('ispAutoPublish').checked;
-
-            if (!name) {
-                alert('Please enter a site/app name');
+            const name = $('ispName').value.trim(), domain = $('ispDomain').value.trim(), autoPublish = $('ispAutoPublish').checked;
+            if (!name) { retour('rConfig', false, 'Indiquer un nom de site ou d’application.'); return; }
+            if (!SELECTED) { retour('rConfig', false, 'Aucun fichier choisi.'); return; }
+            $('rConfig').hidden = true;
+            const gen = ++WGEN;
+            montreEtape(3);
+            $('publishStatus').textContent = 'Envoi…'; avancement(10); rendEtapes([]);
+            if (DEMO) {   // maquette : aucun appel, résultat fictif
+                avancement(100);
+                showPublishResult({ success: true, name, domain: domain || 'demo.box.example', url: 'https://' + (domain || 'demo.box.example'), content_type: 'static', files_count: 12 });
                 return;
             }
-            if (!selectedFile) {
-                alert('No file selected');
-                return;
-            }
-
-            // Show publishing step
-            showWizardStep(3);
-            document.getElementById('publishStatus').textContent = 'Uploading...';
-            document.getElementById('progressFill').style.width = '10%';
-
             try {
-                // Create FormData
                 const formData = new FormData();
-                formData.append('file', selectedFile);
+                formData.append('file', SELECTED);
                 formData.append('name', name);
                 if (domain) formData.append('domain', domain);
                 formData.append('auto_publish', autoPublish);
-
-                // Upload
-                document.getElementById('publishStatus').textContent = 'Uploading ZIP...';
-                document.getElementById('progressFill').style.width = '30%';
-
-                const response = await fetch(API + '/isp/upload', {
-                    method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + token() },
-                    body: formData
-                });
-
-                document.getElementById('progressFill').style.width = '70%';
-
+                $('publishStatus').textContent = 'Envoi de l’archive…'; avancement(30);
+                const hd = {}; const tk = token(); if (tk) hd['Authorization'] = 'Bearer ' + tk;
+                const response = await fetch(API + '/isp/upload', { method: 'POST', headers: hd, body: formData });
+                avancement(70);
                 if (!response.ok) {
                     const text = await response.text();
-                    let errMsg = 'Upload failed';
-                    try {
-                        const err = JSON.parse(text);
-                        errMsg = err.detail || err.error || errMsg;
-                    } catch {
-                        // Response is not JSON (probably HTML error page)
-                        if (text.includes('wrong-domain') || text.includes('Wrong Domain')) {
-                            errMsg = 'Accès refusé : passer par admin.' + (DOMAINE_BOX || '<box>');
-                        } else if (text.includes('405')) {
-                            errMsg = 'Method not allowed - check nginx config';
-                        } else {
-                            errMsg = `Server error (${response.status})`;
-                        }
+                    let errMsg = 'Envoi refusé';
+                    try { const err = JSON.parse(text); errMsg = err.detail || err.error || errMsg; }
+                    catch {
+                        // Réponse non JSON (page d'erreur HTML)
+                        if (text.includes('wrong-domain') || text.includes('Wrong Domain')) errMsg = 'Accès refusé : passer par admin.' + (DOMAINE_BOX || '<box>');
+                        else if (text.includes('405')) errMsg = 'Méthode refusée : vérifier la configuration nginx';
+                        else errMsg = `Erreur serveur (${response.status})`;
                     }
-                    throw new Error(errMsg);
+                    throw new Error(typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg));
                 }
-
-                const resultText = await response.text();
                 let result;
-                try {
-                    result = JSON.parse(resultText);
-                } catch {
-                    throw new Error('Invalid response from server');
-                }
-                publishedData = result;
-
-                // LA PAGE SUIT LE VERDICT DU SERVEUR (#1823). Elle affichait
-                // « Published Successfully » sans jamais lire `success`.
-                if (result.travail) {
-                    await suivreTravail(result);
-                    return;
-                }
-                if (!result.success) {
-                    throw new Error(result.message || 'Publication refusée');
-                }
-                document.getElementById('progressFill').style.width = '100%';
+                try { result = JSON.parse(await response.text()); } catch { throw new Error('Réponse invalide du serveur'); }
+                PUBLISHED = result;
+                // LA PAGE SUIT LE VERDICT DU SERVEUR (#1823) : jamais de succès sans lire `success`.
+                if (result.travail) { await suivreTravail(result, gen); return; }
+                if (!result.success) throw new Error(result.message || 'Publication refusée');
+                avancement(100);
                 showPublishResult(result);
-
             } catch (err) {
-                showWizardError(err.message || 'Publishing failed');
+                if (gen === WGEN) showWizardError(err.message || 'Publication échouée');
             }
         }
 
-        // Une publication statique se poursuit côté serveur (assistant de
-        // metablogizer) ; on lit son état toutes les 2 s, étape par étape.
-        const ICONE_ETAPE = { ok: '✅', echec: '❌', encours: '⏳', attente: '·' };
-
+        // Une publication statique se poursuit côté serveur (assistant de metablogizer) ;
+        // on lit son état toutes les 2 s, étape par étape.
+        const ICONE_ETAPE = { ok: '✓', echec: '✗', encours: '…', attente: '·' };
+        const CLASSE_ETAPE = { ok: 'ok', echec: 'hors', encours: 'cy', attente: '' };
         function rendEtapes(etapes) {
-            const box = document.getElementById('publishSteps');
-            if (!box) return;
+            const box = $('publishSteps');
             box.replaceChildren(...(etapes || []).map(e => {
-                const span = document.createElement('span');
-                span.className = 'etape ' + (e.etat || '');
-                span.textContent = `${ICONE_ETAPE[e.etat] || '·'} ${e.libelle || e.cle}`;
-                if (e.detail) span.title = e.detail;
-                return span;
+                const li = el('li', 'pill ' + (CLASSE_ETAPE[e.etat] || ''), `${ICONE_ETAPE[e.etat] || '·'} ${e.libelle || e.cle}`);
+                li.classList.add('etape', e.etat || '');
+                if (e.detail) li.title = e.detail;
+                return li;
             }));
         }
-
-        async function suivreTravail(result) {
+        async function suivreTravail(result, gen) {
             const debut = Date.now();
-            document.getElementById('publishStatus').textContent = 'Publication en cours…';
+            $('publishStatus').textContent = 'Publication en cours…';
             while (true) {
                 await new Promise(r => setTimeout(r, 2000));
+                if (gen !== WGEN) return;
                 let t;
                 try {
                     const res = await fetch(`${API}/isp/travail/${result.travail}`, { headers: headers() });
@@ -1319,195 +671,164 @@
                     if (e.message.startsWith('Travail') || Date.now() - debut > 600000) throw e;
                     continue;
                 }
+                if (gen !== WGEN) return;
                 const etapes = t.etapes || [];
                 rendEtapes(etapes);
                 const faites = etapes.filter(e => e.etat && e.etat !== 'attente').length;
-                document.getElementById('progressFill').style.width =
-                    (etapes.length ? Math.max(10, Math.round(100 * faites / etapes.length)) : 10) + '%';
+                avancement(etapes.length ? Math.max(10, Math.round(100 * faites / etapes.length)) : 10);
                 const courante = etapes.find(e => e.etat === 'attente');
-                document.getElementById('publishStatus').textContent =
-                    courante ? `${courante.libelle}…` : 'Publication en cours…';
-                if (t.etat === 'publie') {
-                    showPublishResult({ ...result, domain: t.domain, url: t.url, success: true });
-                    return;
-                }
+                $('publishStatus').textContent = courante ? `${courante.libelle}…` : 'Publication en cours…';
+                if (t.etat === 'publie') { showPublishResult({ ...result, domain: t.domain, url: t.url, success: true }); return; }
                 if (t.etat === 'echec') throw new Error(t.detail || 'Publication refusée');
             }
         }
 
         async function showQRCode() {
-            const container = document.getElementById('qrCodeContainer');
-            const img = document.getElementById('qrCodeImg');
-
-            if (container.style.display === 'none') {
-                // Fetch QR code
+            const container = $('qrCodeContainer'), img = $('qrCodeImg'), b = $('btnQr');
+            if (container.hidden) {
+                if (DEMO) { toast('Démonstration : QR code indisponible.'); return; }
                 try {
-                    const name = publishedData?.name || document.getElementById('ispName').value;
-                    const res = await fetch(API + `/bundle/${name}/qrcode`, {
-                        headers: headers()
-                    });
+                    const name = (PUBLISHED && PUBLISHED.name) || $('ispName').value;
+                    const res = await fetch(API + `/bundle/${name}/qrcode`, { headers: headers() });
                     const data = await res.json();
-                    if (data.qrcode) {
-                        img.src = data.qrcode;
-                        container.style.display = 'block';
-                    }
-                } catch (e) {
-                    console.error('QR code failed:', e);
-                }
-            } else {
-                container.style.display = 'none';
-            }
+                    if (data.qrcode && /^(data:image\/|\/)/.test(data.qrcode)) { img.src = data.qrcode; container.hidden = false; b.setAttribute('aria-expanded', 'true'); }
+                    else toast('QR code indisponible.');
+                } catch (e) { toast('QR code indisponible : ' + e.message); }
+            } else { container.hidden = true; b.setAttribute('aria-expanded', 'false'); }
+            annoncer();
         }
 
         function ispReset() {
-            selectedFile = null;
-            publishedData = null;
+            WGEN++;
+            SELECTED = null; PUBLISHED = null;
             fileInput.value = '';
-            document.getElementById('ispName').value = '';
-            document.getElementById('ispDomain').value = '';
-            document.getElementById('qrCodeContainer').style.display = 'none';
-            document.getElementById('commandsContainer').style.display = 'none';
-            document.getElementById('progressFill').style.width = '0%';
-            rendEtapes([]);
-            showWizardStep(1);
+            $('ispName').value = ''; $('ispDomain').value = '';
+            $('qrCodeContainer').hidden = true; $('btnQr').setAttribute('aria-expanded', 'false');
+            $('commandsContainer').hidden = true; $('btnCmd').setAttribute('aria-expanded', 'false');
+            $('rChaine').hidden = true; $('rDepot').hidden = true; $('rConfig').hidden = true;
+            avancement(0); rendEtapes([]);
+            montreEtape(1);
         }
 
-        // ===== Result Panel Functions =====
-
+        // ----- Résultat -----
         async function showPublishResult(result) {
-            publishedData = result;
+            PUBLISHED = result;
             const name = result.name || 'site';
             const domain = result.domain || domaineDe(name);
-            const url = result.url || `https://${domain}`;
+            const url = result.url || (domain ? `https://${domain}` : '');
             const downloadUrl = result.download_url || `/api/v1/publish/bundle/${name}.zip`;
-
-            // Update basic info
-            document.getElementById('resultUrl').textContent = url;
-            document.getElementById('resultLink').href = url;
-            document.getElementById('downloadLink').href = downloadUrl;
-
-            // Update summary
-            document.getElementById('summaryBundle').textContent = name;
-            document.getElementById('summaryType').textContent = result.content_type || 'static';
-            document.getElementById('summaryDomain').textContent = domain;
-            document.getElementById('summaryFiles').textContent = result.files_count || '-';
-
-            // Generate CLI commands
-            const commands = `# Download bundle
+            $('resultUrl').textContent = url || '—';
+            $('resultLink').href = href(url);
+            $('downloadLink').href = href(downloadUrl);
+            $('summaryBundle').textContent = name;
+            $('summaryType').textContent = result.content_type || 'static';
+            $('summaryDomain').textContent = tiret(domain);
+            $('summaryFiles').textContent = tiret(result.files_count);
+            $('cliCommands').textContent = `# Télécharger le bundle
 metactl download ${name} ${name}.zip
 
-# Check health
+# Vérifier la santé
 metactl health ${domain}
 
-# Generate QR code
+# Générer le QR code
 metactl qrcode ${name} > qrcode.png
 
-# Republish
+# Republier
 metactl publish ${name}
 
-# Unpublish
+# Dépublier
 metactl unpublish ${name}`;
-            document.getElementById('cliCommands').textContent = commands;
-
-            showWizardStep(4);
-
-            // Check infrastructure status
+            montreEtape(4);
             await checkInfrastructure(name);
-
-            refresh(); // Refresh overview
+            refresh();
         }
 
-        // LES TROIS PASTILLES VIENNENT DE LA CHAÎNE DU SITE (#1823) — les
-        // verdicts de metablogizer (`/site/{nom}/chaine`), jamais d'un bouton
-        // qui se peignait en vert sans lire la réponse.
+        // LES TROIS PASTILLES VIENNENT DE LA CHAÎNE DU SITE (#1823) — les verdicts de
+        // metablogizer (`/site/{nom}/chaine`), jamais d'un bouton qui se peignait en vert.
         function marque(id, btnId, ok, detail) {
-            const el = document.getElementById(id);
-            el.textContent = ok ? '✅' : '❌';
-            el.title = detail || '';
-            document.getElementById(btnId).style.display = ok ? 'none' : 'inline';
+            const e = $(id);
+            e.textContent = ok ? 'OK' : 'À FAIRE'; e.className = 'pill ' + (ok ? 'ok' : 'att'); e.title = detail || '';
+            e.dataset.ok = ok ? '1' : '0';
+            $(btnId).hidden = !!ok;
         }
-
         async function checkInfrastructure(name) {
+            if (DEMO) { marque('vhostStatus', 'createVhostBtn', true, 'démonstration'); marque('certStatus', 'createCertBtn', false, 'démonstration'); marque('wafStatus', 'createWafBtn', true, 'démonstration'); return; }
             try {
                 const res = await fetch(`${METABLOGIZER_API}/site/${encodeURIComponent(name)}/chaine`, { headers: headers() });
                 if (!res.ok) throw new Error(res.status === 404 ? 'site absent de metablogizer' : `HTTP ${res.status}`);
                 const m = (await res.json()).maillons || {};
-                marque('vhostStatus', 'createVhostBtn', m.vhost?.ok, m.vhost?.detail);
-                marque('certStatus', 'createCertBtn', m.cert?.ok, m.cert?.detail);
-                marque('wafStatus', 'createWafBtn', m.route?.ok, m.route?.detail);
+                marque('vhostStatus', 'createVhostBtn', m.vhost && m.vhost.ok, m.vhost && m.vhost.detail);
+                marque('certStatus', 'createCertBtn', m.cert && m.cert.ok, m.cert && m.cert.detail);
+                marque('wafStatus', 'createWafBtn', m.route && m.route.ok, m.route && m.route.detail);
             } catch (e) {
                 marque('vhostStatus', 'createVhostBtn', false, e.message);
                 marque('certStatus', 'createCertBtn', false, e.message);
                 marque('wafStatus', 'createWafBtn', false, e.message);
+                retour('rChaine', false, 'Chaîne du site illisible : ' + e.message);
             }
         }
-
         // Réparer un maillon : la réponse est LUE, puis la chaîne relue.
         async function repare(btnId, libelle, url, corps) {
-            const name = publishedData?.name;
+            const name = PUBLISHED && PUBLISHED.name;
             if (!name) return;
-            const btn = document.getElementById(btnId);
-            btn.textContent = '…';
-            btn.disabled = true;
+            if (DEMO) { retour('rChaine', false, 'Démonstration : action inerte.'); return; }
+            const b = $(btnId); b.textContent = '…'; b.disabled = true;
+            let msg = null, ok = false;
             try {
-                const res = await fetch(url, {
-                    method: 'POST', headers: headers(),
-                    body: corps ? JSON.stringify(corps) : undefined
-                });
+                const res = await fetch(url, { method: 'POST', headers: headers(), body: corps ? JSON.stringify(corps) : undefined });
                 const r = await res.json().catch(() => ({}));
-                if (!res.ok || r.ok === false) {
-                    alert(`${libelle} : échec — ${r.detail || 'HTTP ' + res.status}`);
-                }
-            } catch (e) {
-                alert(`${libelle} : ${e.message}`);
-            }
-            btn.textContent = libelle;
-            btn.disabled = false;
+                if (!res.ok || r.ok === false) msg = `${libelle} : échec — ${r.detail || 'HTTP ' + res.status}`;
+                else { ok = true; msg = `${libelle} : demandé.`; }
+            } catch (e) { msg = `${libelle} : ${e.message}`; }
+            b.textContent = libelle; b.disabled = false;
             await checkInfrastructure(name);
+            retour('rChaine', ok, msg);   // après la relecture de la chaîne : le verdict de l'action reste visible
         }
-
-        const createVhost = () => repare('createVhostBtn', 'Create',
-            `${METABLOGIZER_API}/site/${encodeURIComponent(publishedData?.name)}/publish`);
-        const createCert = () => repare('createCertBtn', 'Request',
-            `${METABLOGIZER_API}/site/${encodeURIComponent(publishedData?.name)}/cert`);
-        const createWafRoute = () => repare('createWafBtn', 'Add',
-            `${METABLOGIZER_API}/site/${encodeURIComponent(publishedData?.name)}/exposure`, { wan: true });
-
+        const nomPublie = () => encodeURIComponent(PUBLISHED && PUBLISHED.name);
+        const createVhost = () => repare('createVhostBtn', 'Créer', `${METABLOGIZER_API}/site/${nomPublie()}/publish`);
+        const createCert = () => repare('createCertBtn', 'Demander', `${METABLOGIZER_API}/site/${nomPublie()}/cert`);
+        const createWafRoute = () => repare('createWafBtn', 'Ajouter', `${METABLOGIZER_API}/site/${nomPublie()}/exposure`, { wan: true });
         async function autoSetupAll() {
-            const name = publishedData?.name;
+            const name = PUBLISHED && PUBLISHED.name;
             if (!name) return;
-
-            // Create VHost
-            if (document.getElementById('vhostStatus').textContent !== '✅') {
-                await createVhost();
-            }
-
-            // Request cert
-            if (document.getElementById('certStatus').textContent !== '✅') {
-                await createCert();
-            }
-
-            // Add WAF route
-            if (document.getElementById('wafStatus').textContent !== '✅') {
-                await createWafRoute();
-            }
-
-            // Re-check all
+            if ($('vhostStatus').dataset.ok !== '1') await createVhost();
+            if ($('certStatus').dataset.ok !== '1') await createCert();
+            if ($('wafStatus').dataset.ok !== '1') await createWafRoute();
             await checkInfrastructure(name);
         }
-
-        function toggleCommands() {
-            const container = document.getElementById('commandsContainer');
-            container.style.display = container.style.display === 'none' ? 'block' : 'none';
-        }
-
+        function toggleCommands() { const c = $('commandsContainer'); c.hidden = !c.hidden; $('btnCmd').setAttribute('aria-expanded', String(!c.hidden)); annoncer(); }
         function copyCommands() {
-            const commands = document.getElementById('cliCommands').textContent;
-            navigator.clipboard.writeText(commands).then(() => {
-                alert('Commands copied to clipboard!');
-            });
+            const commands = $('cliCommands').textContent;
+            try { navigator.clipboard.writeText(commands).then(() => toast('Commandes copiées.'), () => toast('Copie impossible.')); } catch (e) { toast('Copie impossible.'); }
         }
+
+        $('btnPublier').addEventListener('click', ispPublish);
+        $('fPublier').addEventListener('submit', ev => { ev.preventDefault(); ispPublish(); });
+        $('btnAnnuler').addEventListener('click', ispReset);
+        $('btnRetry').addEventListener('click', ispReset);
+        $('btnAutre').addEventListener('click', ispReset);
+        $('btnTout').addEventListener('click', autoSetupAll);
+        $('btnQr').addEventListener('click', showQRCode);
+        $('btnCmd').addEventListener('click', toggleCommands);
+        $('btnCopier').addEventListener('click', copyCommands);
+        $('createVhostBtn').addEventListener('click', createVhost);
+        $('createCertBtn').addEventListener('click', createCert);
+        $('createWafBtn').addEventListener('click', createWafRoute);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'publish' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        refresh();
+        // Pas d'actualisation onglet masqué, en démonstration, pendant une confirmation, une saisie ou une publication.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || ETAPE === 3) return;
+            if ($('appName').value || $('siteName').value || $('siteTitle').value) return;
+            refresh();
+        }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
