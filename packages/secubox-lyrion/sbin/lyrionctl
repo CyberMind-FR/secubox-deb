@@ -12,7 +12,7 @@
 
 set -u
 
-readonly VERSION="1.0.1"
+readonly VERSION="1.7.0"
 readonly CONFIG_FILE="${SECUBOX_LYRION_CONFIG:-/etc/secubox/lyrion.toml}"
 readonly STATE_DIR="${SECUBOX_LYRION_STATE:-/var/lib/secubox/lyrion}"
 readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"

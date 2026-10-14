@@ -1,3 +1,13 @@
+secubox-lyrion (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /lyrion/ refaite au profil Aurora (#2612) : page autonome (CSS et JS en ligne, plus de police Google ni de feuilles hybrid-dark/crt), en francais, avec tuiles (sante, conteneur, lecteurs, lecture en cours, mediatheque externe, version), tableaux des composants et des acces, lecteurs, lecture en cours et mediatheque externe. ?demo=1 (donnees fictives, actions inertes) et ?embed=1 (sans menu), hauteur annoncee a l'hote (sbxVue, onglet lyrion), actualisation toutes les 20 s seulement onglet visible et sans confirmation ni manipulation de lecteur en cours.
+  * Bogues de l'ancienne page corriges : le jeton sbx_token n'etait jamais envoye, donc monter, demonter la mediatheque (routes protegees par jeton) echouaient en 401 sans explication ; confirm() et alert() natifs (ignores par le navigateur du viewer : le montage ne partait jamais) remplaces par une confirmation dans la page, aussi pour la reindexation ; donnees d'API injectees dans innerHTML et dans des gestionnaires onclick en ligne, remplaces par une construction en textContent ; curseur de volume affiche a 50 comme s'il s'agissait du volume reel, alors que l'API ne le fournit pas (affiche desormais « — » jusqu'a ce qu'on le deplace) ; la barre d'etat « session requise » (401/403) et les echecs de lecture ne sont plus confondus avec une valeur vide ; polices distantes retirees.
+  * Appels d'ecriture inchanges (memes routes, methodes et corps) : /rescan, /player/<id>/action/<verbe>, /power, /volume, /sync, /medialib/mount, /medialib/unmount.
+  * Constantes de version alignees sur le paquet (api VERSION et lyrionctl VERSION valaient 1.2.0 et 1.0.1).
+  * Non repris : aucune action de demarrage ou d'arret du conteneur n'existait dans l'ancienne page et l'API n'en offre pas, donc aucune n'est ajoutee. Les peripheriques non montes (devices) sont listes en lecture seule, sans bouton de montage hote. La version amont disponible (version-status, check-upgrade, upgrade) n'est pas affichee, l'ancienne page ne l'utilisait pas. Le volume courant d'un lecteur n'est pas fourni par l'API et n'est donc pas affiche.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 10:00:00 +0200
+
 secubox-lyrion (1.6.20-1~bookworm1) bookworm; urgency=medium
 
   * Watchdog LMS : plus de relance en boucle. Il relancait LMS toutes les 2 min des que :9000 etait muet (141 fois en 3 h sur gk2) ; or chaque relance relance le scan de la mediatheque, pendant lequel :9000 reste muet : la boucle s'entretenait et saturait CPU et disque. Delai de grace de 600 s apres une relance, pas de relance pendant un scan (squeezeboxserver-scanner), plafond de 3 relances par heure, sonde a 10 s au lieu de 4 (#2146).
