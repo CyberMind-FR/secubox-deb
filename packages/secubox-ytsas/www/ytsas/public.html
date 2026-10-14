@@ -1,183 +1,142 @@
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
-     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-     Source-Disclosed License — All rights reserved except as expressly granted.
-     See LICENCE-CMSD-1.0.md for terms.
-     SecuBox-Deb :: secubox-ytsas :: www/ytsas/public.html — CyberMind https://cybermind.fr
-     PUBLIC player — this is what the ytsas LXC serves at "/" on its own vhost
-     (ytsas.gk2.secubox.in): recuperator (paste a link → fetch) + a read-only
-     library list + play. Styled after the torrent SAS public webui
-     (packages/secubox-torrent/www/torrent/index.html — cyan hybrid-dark
-     terminal look) but intentionally standalone (no /shared/sidebar.js admin
-     chassis: no logout/settings/nav — this page is reachable without an
-     admin session). The full admin dashboard (stat grid + cookie vault +
-     remove/purge controls) is www/ytsas/index.html, served ONLY by the
-     aggregator at admin.gk2/ytsas/ — install-lxc.sh swaps public.html in as
-     the LXC's index.html so the two never collide. No cookie upload, no
-     destructive actions here — add + list + play (+ conserve, safe) only. -->
 <!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+  SecuBox-Deb :: secubox-ytsas :: www/ytsas/public.html — CyberMind https://cybermind.fr
+
+  Lecteur PUBLIC au profil Aurora (.claude/AURORA-REFERENCE.md) : c'est ce que le LXC ytsas sert à "/" sur son propre vhost
+  (ytsas.gk2.secubox.in) — récupérateur (coller un lien -> récupérer) + liste de la bibliothèque + lecture. Page autonome :
+  ni menu commun (/shared/sidebar.js), ni déconnexion, ni réglages — elle est joignable SANS session d'administration. Le
+  tableau de bord d'administration (statistiques + coffre à cookies + retrait/purge) est www/ytsas/index.html, servi
+  SEULEMENT par l'agrégateur ; install-lxc.sh installe public.html comme index.html du LXC, les deux ne se heurtent jamais.
+  Aucun dépôt de cookie, aucune action destructrice ici : ajouter, lister, lire (+ conserver, sans danger) seulement.
+  Mêmes appels qu'avant, sans jeton ni en-tête d'authentification : GET /list, POST /add {url}, POST /conserve/<id>,
+  lecture /stream/<id>. Aucun innerHTML : tout le rendu passe par textContent.
+-->
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecuBox — YT-SAS</title>
-<link rel="stylesheet" href="/shared/hybrid-skin.css">
 <style>
-  :root {
-    --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8);
-    --bg-row:  rgba(20, 30, 45, 0.6); --border: rgba(100, 150, 200, 0.2);
-    --text: #e8e6d9; --cyan: #00d4ff; --red: #ff4466; --orange: #ff9944;
-    --yellow: #ffcc00; --green: #00dd44; --blue: #4488ff; --purple: #a371f7;
-  }
-  * { box-sizing: border-box; }
-  body {
-    font-family: 'Courier Prime', 'Courier New', monospace;
-    background: var(--bg-dark); color: var(--text); margin: 0; min-height: 100vh;
-    background-image: linear-gradient(135deg, rgba(10,15,25,.96), rgba(15,25,40,.92));
-  }
-  a { color: var(--cyan); }
-  /* Standalone page — no fixed sidebar (this is the public LXC-served root,
-     not the admin chassis), so .main is simply centered. */
-  .main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1.2rem 4rem; }
-  .header { margin-bottom: 1.2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
-  .header h1 { margin: 0; font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-  .toolbar { display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 1.2rem; flex-wrap: wrap; gap: .6rem; }
-  .sub { font-size: .72rem; color: var(--p31-dim); letter-spacing: .05em; }
-  .btn-group { display: flex; flex-wrap: wrap; gap: .5rem; }
-  .btn { font-family: inherit; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
-    text-decoration: none; color: var(--text); background: var(--bg-row); border: 1px solid var(--border);
-    border-radius: 6px; padding: .5rem .9rem; cursor: pointer; transition: border-color .15s, box-shadow .15s;
-    display: inline-flex; align-items: center; gap: .35rem; }
-  .btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.4); }
-  .btn.primary { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,.12); }
-  .btn.good { border-color: var(--green); color: var(--green); background: rgba(0,221,68,.12); }
-  .btn.sm { padding: .3rem .55rem; font-size: .68rem; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: .75rem; margin-bottom: 1.2rem; }
-  .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
-    padding: .75rem; text-align: center; backdrop-filter: blur(10px); }
-  .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor;
-    font-variant-numeric: tabular-nums; color: var(--text); }
-  .stat-card .label { font-size: .6rem; color: var(--p31-dim); letter-spacing: .1em; margin-top: .2rem; text-transform: uppercase; }
-  .stat-card.cyan .value { color: var(--cyan); }
-  .stat-card.green .value { color: var(--green); }
-  .badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .62rem;
-    text-transform: uppercase; letter-spacing: .06em; border: 1px solid var(--border); }
-  .badge.ready { border-color: var(--green); color: var(--green); }
-  .badge.pending { border-color: var(--orange); color: var(--orange); }
-  .badge.mirror { border-color: var(--purple); color: var(--purple); }
-  .badge.err { border-color: var(--red); color: var(--red); }
-  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 1.1rem 1.2rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-  .card h3 { margin: 0 0 .8rem; font-size: .95rem; color: var(--cyan); letter-spacing: .03em; }
-  .card .hint { color: var(--p31-dim); font-size: .72rem; margin: .1rem 0 .7rem; line-height: 1.5; }
-  .add-row { display: flex; gap: .5rem; flex-wrap: wrap; }
-  .add-row input[type=text] { flex: 1 1 20rem; }
-  input[type=text] { font-family: inherit; background: var(--bg-row); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text); padding: .6rem .7rem; font-size: .85rem; }
-  input[type=text]:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 6px rgba(0,212,255,.25); }
-  .item { background: var(--bg-row); border-left: 3px solid var(--border); border-radius: 5px;
-    padding: .6rem .8rem; margin-bottom: .5rem; }
-  .item.ready { border-left-color: var(--green); }
-  .item.pending { border-left-color: var(--orange); }
-  .item.mirror { border-left-color: var(--purple); }
-  .item.err { border-left-color: var(--red); }
-  .item-top { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; }
-  .item .title { color: var(--text); font-size: .88rem; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; max-width: 26rem; }
-  .item .meta { color: var(--p31-dim); font-size: .68rem; margin-top: .3rem; font-variant-numeric: tabular-nums; }
-  .item .row-actions { display: flex; gap: .35rem; flex: none; flex-wrap: wrap; align-items: center; }
-  .progress-bar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: .35rem; }
-  .progress-bar .fill { height: 100%; background: var(--cyan); transition: width .3s; }
-  .player { margin-top: .55rem; padding-top: .5rem; border-top: 1px solid var(--border); display: none; }
-  .player.open { display: block; }
-  .player video, .player iframe { width: 100%; max-height: 60vh; aspect-ratio: 16/9; background: #000;
-    border-radius: 6px; border: 0; }
-  .muted { color: var(--p31-dim); font-size: .8rem; }
-  .toast { position: fixed; bottom: 1rem; right: 1rem; max-width: 22rem; background: var(--cyan);
-    color: #07121a; padding: .65rem 1rem; border-radius: 6px; font-size: .78rem; opacity: 0;
-    pointer-events: none; transition: opacity .2s; z-index: 50; }
-  .toast.show { opacity: 1; pointer-events: auto; }
-  .toast.error { background: var(--red); color: #fff; }
-  .toast .x { float: right; margin-left: .6rem; cursor: pointer; font-weight: bold; }
-  ::-webkit-scrollbar { width: 5px; }
-  ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-  @media (max-width: 768px) {
-    .item .title { max-width: 12rem; }
-  }
+:root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+  --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+  color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+[hidden]{display:none!important}
+.cadre{container-type:inline-size;container-name:a;padding:10px;max-width:56rem;margin:0 auto}
+.app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+.app>*{min-width:0}
+.tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+.droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+.btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;min-height:30px}
+.btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+.btn.sm{padding:3px 9px;font-size:.72rem;min-height:28px} .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+.tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+.tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+.tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums} .tuile .l{color:var(--doux);font-size:.74rem}
+.tuile.cy .v{color:var(--cyan)} .tuile.ok .v{color:var(--vert)}
+.pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+.pan h3{margin:0 0 8px;font-size:.88rem}
+.ajout{display:flex;gap:8px;flex-wrap:wrap}
+.ajout input{flex:1 1 14rem;min-width:0;font:inherit;min-height:38px;padding:7px 11px;border-radius:10px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte)}
+.ajout input:focus-visible{outline:2px solid var(--cyan);outline-offset:1px;border-color:var(--cyan)}
+.note{color:var(--faible);font-size:.74rem;margin:0}
+.ligne{border:1px solid var(--trait);border-left:3px solid var(--trait2);border-radius:10px;padding:8px 10px;margin-bottom:8px;background:rgba(10,22,46,.5)}
+.ligne.pret{border-left-color:var(--vert)} .ligne.cours{border-left-color:var(--orange)} .ligne.miroir{border-left-color:var(--violet)} .ligne.erreur{border-left-color:var(--rouge)}
+.haut{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.titre{min-width:0;flex:1 1 10rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pastille{display:inline-block;border:1px solid var(--doux);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:2px 10px;font-size:.66rem;font-weight:700;letter-spacing:.03em}
+.pastille.pret{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}
+.pastille.cours{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+.pastille.miroir{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+.pastille.erreur{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+.barre{height:6px;background:rgba(159,179,214,.16);border-radius:3px;overflow:hidden;margin-top:6px} .barre i{display:block;height:100%;background:var(--cyan)}
+.meta{color:var(--faible);font-size:.7rem;margin-top:4px;font-variant-numeric:tabular-nums} .meta.ko{color:var(--rouge)}
+.lecteur{margin-top:8px;padding-top:8px;border-top:1px solid var(--trait)}
+.lecteur video,.lecteur iframe{display:block;width:100%;max-height:60vh;aspect-ratio:16/9;background:#000;border-radius:8px;border:0}
+.toast{position:fixed;left:10px;right:10px;bottom:10px;max-width:24rem;margin-left:auto;padding:9px 14px;border-radius:10px;font-size:.8rem;border:1px solid var(--cyan);background:rgba(7,15,32,.96);color:var(--texte);z-index:50;overflow-wrap:anywhere}
+.toast.erreur{border-color:var(--rouge);background:rgba(60,12,20,.96)}
+.toast button{float:right;margin-left:10px;background:none;border:0;color:inherit;cursor:pointer;font:inherit;min-width:24px;min-height:24px}
+@container a (min-width:700px){.tuiles{grid-template-columns:repeat(2,minmax(0,12rem))}}
 </style>
 </head>
-<body class="hybrid-dark">
-<main class="main">
-  <header class="header">
-    <h1>🎞️ YT-SAS</h1>
+<body>
+<div class="cadre">
+ <main class="app">
+  <header class="tete">
+    <div class="marque"><h1>🎞️ YT-SAS</h1><small id="sub">Colle un lien, on récupère la vidéo — puis tu la regardes ici</small></div>
+    <div class="droite"><button class="btn" id="btnRefresh" type="button">↻ Rafraîchir</button></div>
   </header>
-  <div class="toolbar">
-    <div class="sub" id="sub">Colle un lien, on récupère la vidéo — puis tu la regardes ici · chargement…</div>
-    <div class="btn-group">
-      <button class="btn" id="btnRefresh">↻ Refresh</button>
-    </div>
+
+  <div class="tuiles">
+    <div class="tuile cy" title="Vidéos en cours de récupération"><span class="v" id="statPending">—</span><span class="l">⏳ En cours</span></div>
+    <div class="tuile ok" title="Vidéos récupérées, prêtes à être lues"><span class="v" id="statReady">—</span><span class="l">▶ Prêtes</span></div>
   </div>
 
-  <div class="grid" id="statGrid">
-    <div class="stat-card cyan"><div class="value" id="statPending">–</div><div class="label">⏳ En cours</div></div>
-    <div class="stat-card green"><div class="value" id="statReady">–</div><div class="label">▶ Prêtes</div></div>
-  </div>
-
-  <div class="card">
+  <section class="pan">
     <h3>➕ Récupérer une vidéo</h3>
-    <div class="add-row">
-      <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=… (tout site supporté)">
-      <button class="btn primary" id="btnAdd">➕ Récupérer</button>
+    <div class="ajout">
+      <input type="text" id="urlInput" name="url" placeholder="https://www.youtube.com/watch?v=… (tout site supporté)" autocomplete="off" inputmode="url" aria-label="Lien de la vidéo">
+      <button class="btn prim" id="btnAdd" type="button">➕ Récupérer</button>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
+  <section class="pan">
     <h3>📚 Vidéos</h3>
-    <div id="list"><p class="muted">Chargement…</p></div>
-  </div>
-</main>
+    <div id="list"><p class="note">Chargement…</p></div>
+  </section>
+ </main>
+</div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
 (function () {
   'use strict';
   var API = '/api/v1/ytsas';
-  var openPlayers = Object.create(null); // id -> bool (inline player expanded)
+  var openPlayers = Object.create(null); // id -> bool (lecteur intégré ouvert)
 
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[<>&"]/g, function (c) {
-      return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c];
-    });
-  }
-
-  // progress may arrive as 0..1 fraction or 0..100 percent — normalise to %.
+  // progression : fraction 0..1 ou pourcentage 0..100 — normalisée en %.
   function pctOf(p) {
     if (p == null || !isFinite(p)) return null;
     return p <= 1 ? Math.round(p * 100) : Math.round(p);
   }
 
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
   var toastTimer = null;
   function toast(msg) {
     var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'toast show';
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.className = 'toast'; }, 3000);
+    t.textContent = msg;
+    t.className = 'toast';
+    t.hidden = false;
+    toastTimer = setTimeout(function () { t.hidden = true; }, 3000);
   }
   function errorToast(msg) {
     var t = document.getElementById('toast');
     clearTimeout(toastTimer);
-    t.innerHTML = '';
+    t.textContent = '';
     t.appendChild(document.createTextNode('⚠ ' + msg));
-    var x = document.createElement('span');
-    x.className = 'x';
-    x.textContent = '✕';
-    x.addEventListener('click', function () { t.className = 'toast'; });
+    var x = el('button', null, '✕');
+    x.type = 'button';
+    x.setAttribute('aria-label', 'Fermer');
+    x.addEventListener('click', function () { t.hidden = true; });
     t.appendChild(x);
-    t.className = 'toast show error';
+    t.className = 'toast erreur';
+    t.hidden = false;
   }
 
   function api(path, opts) {
@@ -192,86 +151,103 @@
     });
   }
 
+  // Seule une adresse http(s) peut alimenter l'iframe du miroir (pas de javascript:, data:…).
+  function urlMiroirSure(u) {
+    return typeof u === 'string' && /^https?:\/\//i.test(u);
+  }
+
+  function pastille(cls, txt) { return el('span', 'pastille ' + cls, txt); }
+
+  function actionBtn(action, txt, titre) {
+    var b = el('button', 'btn sm', txt);
+    b.type = 'button';
+    b.setAttribute('data-action', action);
+    b.title = titre;
+    return b;
+  }
+
+  function ligne(r) {
+    var id = r.id;
+    var pct = pctOf(r.progress);
+    var complete = r.complete === true || r.job_status === 'complete' || r.job_status === 'done' || pct === 100;
+    var errored = r.job_status === 'error' || !!r.error;
+    var hasMirror = complete && !!r.peertube_url;
+    var playerOpen = !!openPlayers[id];
+    var cls = errored ? 'erreur' : (!complete ? 'cours' : (hasMirror ? 'miroir' : 'pret'));
+
+    var item = el('div', 'ligne ' + cls);
+    item.setAttribute('data-id', String(id));
+
+    var haut = el('div', 'haut');
+    var titre = el('div', 'titre', r.title || r.url || ('#' + id));
+    titre.title = r.title || r.url || String(id);
+    haut.appendChild(titre);
+
+    var actions = el('div', 'actions');
+    if (errored) actions.appendChild(pastille('erreur', '⚠ erreur'));
+    else if (!complete) actions.appendChild(pastille('cours', '⏳ en cours' + (pct != null ? ' ' + pct + '%' : '')));
+    else if (hasMirror) actions.appendChild(pastille('miroir', '◎ miroir'));
+    else actions.appendChild(pastille('pret', '▶ prêt'));
+
+    if (complete && !errored) actions.appendChild(actionBtn('toggle-play', playerOpen ? '⏹ Fermer' : '▶ Lire', 'Lire'));
+    // « Conserver » (miroir PeerTube/Lyrion) : sans danger ; ni retrait ni purge ici, cette page n'efface rien.
+    if (complete && !errored && !hasMirror && r.job_status !== 'conserving') {
+      actions.appendChild(actionBtn('conserve', '💾 Conserver', 'Conserver (miroir PeerTube/Lyrion)'));
+    }
+    haut.appendChild(actions);
+    item.appendChild(haut);
+
+    if (errored) {
+      item.appendChild(el('div', 'meta ko', '⚠ échec de récupération'));
+    } else if (!complete) {
+      var barre = el('div', 'barre');
+      var rempli = el('i');
+      rempli.style.width = (pct == null ? 0 : pct) + '%';
+      barre.appendChild(rempli);
+      item.appendChild(barre);
+      item.appendChild(el('div', 'meta', '⏳ récupération ' + (pct == null ? '…' : pct + '%')));
+    }
+
+    if (playerOpen) {
+      var lecteur = el('div', 'lecteur');
+      if (hasMirror && urlMiroirSure(r.peertube_url)) {
+        var f = document.createElement('iframe');
+        f.src = r.peertube_url;
+        f.setAttribute('allowfullscreen', '');
+        f.loading = 'lazy';
+        lecteur.appendChild(f);
+      } else if (!hasMirror) {
+        var v = document.createElement('video');
+        v.controls = true;
+        v.autoplay = true;
+        v.preload = 'metadata';
+        v.src = API + '/stream/' + encodeURIComponent(id);
+        lecteur.appendChild(v);
+      }
+      item.appendChild(lecteur);
+    }
+    return item;
+  }
+
   function renderList(rows) {
-    var el = document.getElementById('list');
+    var cont = document.getElementById('list');
     rows = Array.isArray(rows) ? rows : (rows && rows.items) || [];
     var pending = 0, ready = 0;
+    cont.textContent = '';
 
     if (!rows.length) {
-      el.innerHTML = '<p class="muted">Rien pour l\'instant — colle un lien ci-dessus.</p>';
+      cont.appendChild(el('p', 'note', 'Rien pour l\'instant — colle un lien ci-dessus.'));
       document.getElementById('statPending').textContent = '0';
       document.getElementById('statReady').textContent = '0';
       return;
     }
-
-    el.innerHTML = rows.map(function (r) {
-      var id = r.id;
+    rows.forEach(function (r) {
       var pct = pctOf(r.progress);
       var complete = r.complete === true || r.job_status === 'complete' || r.job_status === 'done' || pct === 100;
       var errored = r.job_status === 'error' || !!r.error;
-      var hasMirror = complete && !!r.peertube_url;
-      var playerOpen = !!openPlayers[id];
-
-      if (errored) { /* not counted */ }
-      else if (!complete) pending++;
-      else ready++;
-
-      var cls = errored ? 'err' : (!complete ? 'pending' : (hasMirror ? 'mirror' : 'ready'));
-
-      var stateBadge = errored
-        ? '<span class="badge err">⚠ erreur</span>'
-        : !complete
-          ? '<span class="badge pending">⏳ en cours' + (pct != null ? ' ' + pct + '%' : '') + '</span>'
-          : hasMirror
-            ? '<span class="badge mirror">◎ miroir</span>'
-            : '<span class="badge ready">▶ prêt</span>';
-
-      // Safe, non-destructive "conserve" (mirror to PeerTube/Lyrion) — no
-      // remove/purge here, this page never deletes anything.
-      var conserveHtml = '';
-      if (complete && !errored && !hasMirror && r.job_status !== 'conserving') {
-        conserveHtml = '<button class="btn sm" data-action="conserve" title="Conserver (miroir PeerTube/Lyrion)">💾 Conserver</button>';
-      }
-
-      var playBtn = (complete && !errored)
-        ? '<button class="btn sm" data-action="toggle-play" title="Lire">' +
-            (playerOpen ? '⏹ Fermer' : '▶ Lire') + '</button>'
-        : '';
-
-      var body;
-      if (errored) {
-        body = '<div class="meta" style="color:var(--red)">⚠ échec de récupération</div>';
-      } else if (!complete) {
-        var pfill = pct == null ? 0 : pct;
-        body = '<div class="progress-bar"><div class="fill" style="width:' + pfill + '%"></div></div>' +
-          '<div class="meta">⏳ récupération ' + (pct == null ? '…' : pct + '%') + '</div>';
-      } else {
-        body = '';
-      }
-
-      var playerHtml = '<div class="player' + (playerOpen ? ' open' : '') + '" data-role="player">' +
-        (playerOpen
-          ? (hasMirror
-              ? '<iframe src="' + esc(r.peertube_url) + '" allowfullscreen loading="lazy"></iframe>'
-              : '<video controls autoplay preload="metadata" src="' + esc(API + '/stream/' + encodeURIComponent(id)) + '"></video>')
-          : '') +
-        '</div>';
-
-      return (
-        '<div class="item ' + cls + '" data-id="' + esc(id) + '">' +
-          '<div class="item-top">' +
-            '<div class="title" title="' + esc(r.title || r.url || id) + '">' +
-              esc(r.title || r.url || ('#' + id)) + '</div>' +
-            '<div class="row-actions">' +
-              stateBadge + playBtn + conserveHtml +
-            '</div>' +
-          '</div>' +
-          body +
-          playerHtml +
-        '</div>'
-      );
-    }).join('');
-
+      if (!errored) { if (!complete) pending++; else ready++; }
+      cont.appendChild(ligne(r));
+    });
     document.getElementById('statPending').textContent = String(pending);
     document.getElementById('statReady').textContent = String(ready);
   }
@@ -279,9 +255,12 @@
   function refreshList() {
     return api(API + '/list').then(function (rows) {
       renderList(rows);
-      document.getElementById('sub').textContent = 'Colle un lien, on récupère la vidéo — puis tu la regardes ici';
     }).catch(function (e) {
-      document.getElementById('list').innerHTML = '<p class="muted">Erreur de chargement.</p>';
+      var cont = document.getElementById('list');
+      cont.textContent = '';
+      cont.appendChild(el('p', 'note', 'Erreur de chargement.'));
+      document.getElementById('statPending').textContent = '—';
+      document.getElementById('statReady').textContent = '—';
       console.error(e);
     });
   }
@@ -289,7 +268,7 @@
   function onListClick(ev) {
     var actionEl = ev.target.closest('[data-action]');
     if (!actionEl) return;
-    var itemEl = ev.target.closest('.item');
+    var itemEl = ev.target.closest('.ligne');
     if (!itemEl) return;
     var id = itemEl.getAttribute('data-id');
     var action = actionEl.getAttribute('data-action');
@@ -336,7 +315,13 @@
   document.getElementById('list').addEventListener('click', onListClick);
 
   refreshList();
-  setInterval(refreshList, 15000);
+  // Actualisation 15 s, onglet visible, hors saisie en cours et sans lecteur ouvert (un rendu relancerait la vidéo).
+  setInterval(function () {
+    var a = document.activeElement;
+    var lecture = Object.keys(openPlayers).some(function (k) { return openPlayers[k]; });
+    if (document.hidden || lecture || (a && a.id === 'urlInput' && a.value)) return;
+    refreshList();
+  }, 15000);
 })();
 </script>
 </body>

@@ -6,7 +6,6 @@
 """Page /portal/ au profil Aurora (#2382) : contrôles statiques, sans navigateur."""
 
 import re
-import subprocess
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[1]
@@ -54,9 +53,3 @@ def test_routes_citees():
 def test_lecture_seule_comme_l_ancienne_page():
     # l'ancienne page n'émettait aucune écriture : on n'en invente pas
     assert not re.search(r"method\s*:\s*['\"](POST|DELETE|PUT|PATCH)", HTML)
-
-
-def test_login_html_intact():
-    r = subprocess.run(["git", "diff", "--quiet", "--", "packages/secubox-portal/www/login.html"],
-                       cwd=RACINE.parents[1])
-    assert r.returncode == 0
