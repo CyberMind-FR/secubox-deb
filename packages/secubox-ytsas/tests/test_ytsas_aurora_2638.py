@@ -53,8 +53,16 @@ def test_le_cadre_du_flux_vise_le_hall_deduit_du_nom_de_l_hote():
     assert "300" in SRC and "4000" in SRC
 
 
-def test_aucune_route_flux_sur_le_vhost_admin():
-    assert "flux" not in ROUTES
+def s_flux(texte):
+    return sorted(set(re.findall(r"/api/v1/ytsas/flux/(?:etat|\(actualiser\|vider\)/)", texte)))
+
+
+def test_aucune_route_flux_du_hall_sur_le_vhost_admin():
+    # #2714 : l'administration du flux ajoute SES trois routes (etat, actualiser, vider), gardées par auth_request administrateur ;
+    # les routes de lecture du Hall (liste, vignette, chaîne, playlist) et son en-tête restent absents de l'hôte admin.
+    for hall in ("X-Sbx-Flux", "flux/vignette", "flux/chaine", "flux/playlist", "ytsas/flux?", "ytsas/flux)", "ytsas/flux/(vignette"):
+        assert hall not in ROUTES, hall
+    assert s_flux(ROUTES) == ["/api/v1/ytsas/flux/(actualiser|vider)/", "/api/v1/ytsas/flux/etat"]
     assert "location /api/v1/ytsas/ {" in ROUTES
 
 

@@ -20,6 +20,9 @@ téléchargé, rien n'est modifié dans le compte.
  · CHAÎNES ET PLAYLISTS (#2708) : l'identifiant venu du client est validé par un motif strict (UC + 22, @handle, PL/UU/LL/FL/OL…),
    l'adresse envoyée à yt-dlp est CONSTRUITE ici, jamais une URL libre. Les avatars et vignettes de ces listes passent par la
    même route /flux/vignette sous une clé opaque de 11 caractères (empreinte de l'identifiant) : aucune route nouvelle.
+ · ADMINISTRATION (#2714) : `etat()` rend l'état de chaque liste (cache fichier + métadonnées, SANS lecture YouTube),
+   `actualiser()` relit UNE liste à la demande (borne anti-rafale), `vider()` supprime son cache. Les erreurs gardées pour
+   l'affichage sont ASSAINIES (`assainir`) : ni chemin, ni URL, ni cookie, ni jeton.
 """
 
 import asyncio
@@ -28,6 +31,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import time
 import urllib.request
 
@@ -45,6 +49,10 @@ MAX_DETAILS_EN_CACHE = 200
 LIMITE_DEFAUT = 24
 LIMITE_MAX = 60
 DELAI_YTDLP_S = 90
+ANTI_RAFALE_S = 30           # une relance manuelle par liste toutes les 30 s (#2714)
+MAX_ECHECS = 10
+TAILLE_TEXTE_ECHEC = 160
+MOTEURS_JS = ("deno", "node", "bun", "qjs")    # moteurs que yt-dlp sait utiliser pour résoudre les défis JavaScript
 
 _ID_RE = re.compile(r"[A-Za-z0-9_-]{11}")
 _CHAINE_RE = re.compile(r"UC[A-Za-z0-9_-]{22}")
@@ -61,12 +69,42 @@ class ErreurYoutube(Exception):
     """yt-dlp ou YouTube a refusé / limité / répondu à côté."""
 
 
+class Rafale(Exception):
+    """Relance manuelle trop rapprochée pour cette liste (borne anti-rafale)."""
+    def __init__(self, reste):
+        super().__init__("trop rapproché")
+        self.reste = reste
+
+
+class Occupe(Exception):
+    """Une relance manuelle est déjà en cours."""
+
+
 class CookiesRefuses(ErreurYoutube):
     """YouTube dit que le compte n'est pas connecté : cookies périmés, ou exportés sans session."""
 
 
 # « Login details are needed… », « Sign in to confirm… », « use --cookies… » : le compte n'est pas reconnu.
 _REFUS_COOKIES = re.compile(r"login details are needed|sign in|use --cookies|--cookies-from-browser|not a bot|cookies", re.I)
+
+
+_URL_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://\S+")
+_COOKIE_RE = re.compile(r"(?i)(?:__secure-\w+|__host-\w+|login_info|visitor_info1_live|sapisid|apisid|hsid|ssid|sid|sidcc|ysc|pref|consent)\s*[=:]\s*\S+")
+_CHEMIN_RE = re.compile(r"(?:[A-Za-z]:\\[^\s]*|(?<![\w.])(?:~|\.{1,2})?/[^\s:;,'\"]+)")
+_LONG_RE = re.compile(r"[A-Za-z0-9_%+=/-]{24,}")
+_BLANCS_RE = re.compile(r"\s+")
+
+
+def assainir(texte, n=TAILLE_TEXTE_ECHEC):
+    """Texte d'erreur yt-dlp rendu inoffensif avant d'être gardé ou montré : plus d'URL (signées ou non), de chemin, de
+    valeur de cookie ni de longue chaîne opaque (jeton, identifiant). Court, sur une ligne. Jamais le détail brut."""
+    t = texte if isinstance(texte, str) else ""
+    t = _URL_RE.sub("[adresse]", t)
+    t = _COOKIE_RE.sub("[cookie]", t)
+    t = _CHEMIN_RE.sub("[chemin]", t)
+    t = _LONG_RE.sub("[…]", t)
+    t = "".join(c if c.isprintable() else " " for c in t)
+    return _BLANCS_RE.sub(" ", t).strip()[:n]
 
 
 def borne(limite):
@@ -273,6 +311,8 @@ class Flux:
         self.ytdlp_bin = ytdlp_bin
         self._verrous = {}
         self._sources = {}   # id -> URL de vignette, apprise lors d'un listage
+        self._version = (0, None)        # (date, version de yt-dlp) : lue une fois par 10 minutes
+        self._admin = asyncio.Lock()     # une relance manuelle à la fois, toutes listes confondues
 
     def _verrou(self, type_):
         if type_ not in self._verrous:
@@ -312,24 +352,26 @@ class Flux:
     def _public(self, items):
         return [{k: v for k, v in i.items() if not k.startswith("_")} for i in items]
 
-    async def _servir(self, cle, verrou, argv, analyseur, limite, base, titre=None):
+    async def _servir(self, cle, verrou, argv, analyseur, limite, base, titre=None, forcer=False):
         """Cache fichier, appel unique, repli périmé avec sa cause : le MÊME mécanisme pour les listes et les détails."""
         async with self._verrou(verrou):
             maintenant = self.horloge()
             ancien = self._lire(cle)
-            if ancien and ancien.get("limite", 0) >= limite and maintenant - ancien.get("date", 0) < self.ttl:
+            if not forcer and ancien and ancien.get("limite", 0) >= limite and maintenant - ancien.get("date", 0) < self.ttl:
                 self._retenir(ancien["items"])
                 r = {**base, "items": self._public(ancien["items"])[:limite], "en_cache": True, "perime": False,
                      "date": int(ancien["date"])}
                 if titre:
                     r["titre"] = ancien.get("titre", "")
                 return r
+            debut = time.monotonic()
             try:
                 sortie = await self.executeur(argv)
                 items = analyseur(sortie)
                 if not items:
                     raise ErreurYoutube("flux vide ou illisible")
             except ErreurYoutube as e:
+                self._noter(verrou, maintenant, time.monotonic() - debut, e)
                 if ancien and ancien.get("items"):
                     self._retenir(ancien["items"])
                     # La CAUSE accompagne le repli (#2633) : sans elle, « YouTube n'a pas répondu » cache que le compte
@@ -346,16 +388,17 @@ class Flux:
                 doc["titre"] = r["titre"] = titre(sortie)
             self._ecrire(cle, doc)
             self._retenir(items)
+            self._noter(verrou, maintenant, time.monotonic() - debut, None)
             return r
 
-    async def lister(self, type_, limite=LIMITE_DEFAUT):
+    async def lister(self, type_, limite=LIMITE_DEFAUT, forcer=False):
         if type_ not in TYPES:
             raise ValueError("type de flux inconnu")
         if not self.cookie_path:
             raise AuthRequise("auth requise — dépose tes cookies")
         limite = borne(limite)
         return await self._servir(type_, type_, commande(self.ytdlp_bin, type_, limite, self.cookie_path),
-                                  ANALYSEURS.get(type_, analyser), limite, {"type": type_})
+                                  ANALYSEURS.get(type_, analyser), limite, {"type": type_}, forcer=forcer)
 
     async def detail(self, genre, ident, limite=LIMITE_DEFAUT):
         """Dernières vidéos d'une chaîne, ou vidéos d'une playlist. L'identifiant est validé AVANT tout, cookies compris."""
@@ -368,6 +411,138 @@ class Flux:
                                analyser, limite, {"type": genre, "id": ident}, titre=lambda sortie: titre_detail(genre, sortie))
         self._elaguer_details()
         return r
+
+    # ───────────────────────── administration (#2714) ─────────────────────────
+    def _meta(self):
+        m = self._lire("_etat")
+        if not isinstance(m, dict):
+            m = {}
+        if not isinstance(m.get("listes"), dict):
+            m["listes"] = {}
+        if not isinstance(m.get("echecs"), list):
+            m["echecs"] = []
+        return m
+
+    def _noter(self, etiquette, date, duree, erreur):
+        """Garde, pour l'administration, le résultat de la dernière lecture réelle : date, durée, cause, et l'échec ASSAINI."""
+        try:
+            m = self._meta()
+            if etiquette in TYPES:
+                fiche = m["listes"].setdefault(etiquette, {})
+                fiche.update({"tentative": int(date), "ok": erreur is None, "duree": round(max(0.0, duree), 1),
+                              "cause": None if erreur is None else ("cookies" if isinstance(erreur, CookiesRefuses) else "youtube")})
+            if erreur is not None:
+                m["echecs"] = ([{"liste": etiquette if etiquette in TYPES or etiquette in ("chaine", "playlist") else "autre",
+                                 "date": int(date), "cause": "cookies" if isinstance(erreur, CookiesRefuses) else "youtube",
+                                 "texte": assainir(str(erreur))}] + m["echecs"])[:MAX_ECHECS]
+            self._ecrire("_etat", m)
+        except (OSError, ValueError, TypeError):
+            pass      # l'état d'administration ne doit jamais faire échouer une lecture
+
+    def _relance_dans(self, type_):
+        fiche = self._meta()["listes"].get(type_) or {}
+        reste = ANTI_RAFALE_S - (self.horloge() - fiche.get("relance", 0))
+        return max(0, int(reste + 0.999)) if reste > 0 else 0
+
+    def taille_cache(self):
+        fichiers, octets = 0, 0
+        for racine, _dossiers, noms in os.walk(self.dossier):
+            for n in noms:
+                try:
+                    octets += os.path.getsize(os.path.join(racine, n))
+                    fichiers += 1
+                except OSError:
+                    pass
+        return {"fichiers": fichiers, "octets": octets}
+
+    @staticmethod
+    def moteurs_js():
+        """Moteurs JavaScript trouvés dans le conteneur (yt-dlp en a besoin pour résoudre les défis de YouTube). Lecture du PATH
+        seulement : aucun processus lancé. `deno` est celui que yt-dlp active par défaut ; les autres s'activent par réglage."""
+        trouves = [m for m in MOTEURS_JS if shutil.which(m)]
+        return {"present": bool(trouves), "moteurs": trouves, "par_defaut": "deno" in trouves}
+
+    async def version_ytdlp(self):
+        """Version de yt-dlp (`--version`, par l'exécuteur existant, argv fixe) ; mémorisée 10 minutes. None si illisible."""
+        maintenant = self.horloge()
+        date, v = self._version
+        if v is not None and maintenant - date < 600:
+            return v
+        try:
+            sortie = await self.executeur([self.ytdlp_bin, "--version"])
+        except Exception:
+            return None
+        ligne = (sortie or "").strip().splitlines()[0].strip() if (sortie or "").strip() else ""
+        v = ligne if re.fullmatch(r"[0-9A-Za-z._+-]{1,40}", ligne) else None
+        self._version = (maintenant, v)
+        return v
+
+    async def etat(self):
+        """État de chaque liste, LU dans le cache fichier et les métadonnées : aucune lecture YouTube n'est lancée."""
+        maintenant = self.horloge()
+        m = self._meta()
+        listes = []
+        for t in TYPES:
+            doc = self._lire(t) or {}
+            fiche = m["listes"].get(t) or {}
+            date = int(doc["date"]) if isinstance(doc.get("date"), (int, float)) else None
+            items = doc.get("items") if isinstance(doc.get("items"), list) else None
+            echec = fiche.get("ok") is False and fiche.get("tentative", 0) >= (date or 0)
+            cause = None
+            if not self.cookie_path:
+                cause = "absent"
+            elif echec:
+                cause = fiche.get("cause") if fiche.get("cause") in ("cookies", "youtube") else "youtube"
+            listes.append({
+                "type": t,
+                "date": date,
+                "age_s": int(maintenant - date) if date is not None else None,
+                "videos": len(items) if items is not None else None,
+                "perime": None if date is None else bool(echec or maintenant - date >= self.ttl or not self.cookie_path),
+                "cause": cause,
+                "derniere_tentative": fiche.get("tentative"),
+                "duree_s": fiche.get("duree"),
+                "relance_dans_s": self._relance_dans(t),
+            })
+        return {
+            "ttl_s": self.ttl,
+            "anti_rafale_s": ANTI_RAFALE_S,
+            "listes": listes,
+            "diagnostic": {
+                "ytdlp": await self.version_ytdlp(),
+                "js": self.moteurs_js(),
+                "echecs": m["echecs"][:MAX_ECHECS],
+                "cache": self.taille_cache(),
+            },
+        }
+
+    async def actualiser(self, type_):
+        """Relit UNE liste maintenant (lecture seule du compte). Un seul appel à la fois ; au plus une relance par liste toutes
+        les ANTI_RAFALE_S secondes. Lève Rafale / Occupe / AuthRequise / ErreurYoutube (sans ancien résultat)."""
+        if type_ not in TYPES:
+            raise ValueError("type de flux inconnu")
+        if not self.cookie_path:
+            raise AuthRequise("auth requise — dépose tes cookies")
+        if self._admin.locked():
+            raise Occupe("une relance est déjà en cours")
+        async with self._admin:
+            reste = self._relance_dans(type_)
+            if reste:
+                raise Rafale(reste)
+            m = self._meta()
+            m["listes"].setdefault(type_, {})["relance"] = self.horloge()
+            self._ecrire("_etat", m)
+            return await self.lister(type_, LIMITE_DEFAUT, forcer=True)
+
+    def vider(self, type_):
+        """Supprime le cache d'UNE liste (jamais celui des autres, jamais les cookies). True s'il y avait quelque chose."""
+        if type_ not in TYPES:
+            raise ValueError("type de flux inconnu")
+        try:
+            os.unlink(self._fichier(type_))
+        except FileNotFoundError:
+            return False
+        return True
 
     def _retenir(self, items):
         for i in items:
