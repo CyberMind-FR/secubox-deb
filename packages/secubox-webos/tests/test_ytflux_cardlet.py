@@ -75,3 +75,15 @@ def test_les_donnees_anciennes_disent_la_cause_quand_ce_sont_les_cookies():
     assert "x.d.cause === 'cookies'" in CARTE
     assert "cookies YouTube périmés" in CARTE
     assert "n’a pas répondu" in CARTE                       # autre panne : message inchangé
+
+
+def test_chaque_video_se_copie_se_met_en_favori_et_se_surfe():
+    """#2635 : copier le lien, favori du Hall (sbx_favoris, même origine), voir dans Surf (message 'surf' au Hall)."""
+    assert "navigator.clipboard.writeText(u)" in CARTE
+    assert "localStorage.getItem('sbx_favoris')" in CARTE and "localStorage.setItem('sbx_favoris'" in CARTE
+    assert "{ sbx: 'surf', url: v.url }" in CARTE and "location.origin" in CARTE
+    assert "prompt(" not in CARTE and "alert(" not in CARTE
+
+
+def test_le_hall_accepte_le_message_surf_d_une_carte():
+    assert "d.sbx==='surf' && d.url" in HALL

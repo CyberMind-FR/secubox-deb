@@ -1,3 +1,9 @@
+secubox-podcaster (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Import YouTube : audio m4a sans ré-encodage ; état par flux (last_error, last_refresh) ; POST /feeds/{id}/refresh ; page : erreur visible, copier l'adresse, réimporter (ref #2635).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 12:00:00 +0200
+
 secubox-podcaster (1.2.7-1~bookworm1) bookworm; urgency=medium
 
   * Vhost nginx : l'include du reveil (secubox-waking) precede desormais celui des pages d'erreur ; avant, le reveil a la demande etait masque par les pages d'erreur : secubox-errorpages et secubox-waking declarent tous deux `error_page 502 503 504`, nginx retient la PREMIERE, et le vhost incluait les pages d'erreur d'abord ; la page « 504 — Delai depasse » s'affichait, le waker n'etait jamais appele et le conteneur arrete ne se reveillait pas (#2251).

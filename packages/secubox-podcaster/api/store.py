@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS feeds (
     site        TEXT,
     added_ts    INTEGER NOT NULL,
     last_fetch  INTEGER DEFAULT 0,
-    auto_dl     INTEGER DEFAULT 0
+    auto_dl     INTEGER DEFAULT 0,
+    last_error  TEXT,                 -- dernier échec d'import/rafraîchissement, NULL si le dernier a réussi (#2635)
+    last_refresh INTEGER DEFAULT 0    -- dernière tentative (réussie ou non)
 );
 CREATE TABLE IF NOT EXISTS episodes (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,6 +70,11 @@ def init() -> None:
         cols = {r["name"] for r in c.execute("PRAGMA table_info(episodes)")}
         if "attempts" not in cols:
             c.execute("ALTER TABLE episodes ADD COLUMN attempts INTEGER DEFAULT 0")
+        fcols = {r["name"] for r in c.execute("PRAGMA table_info(feeds)")}
+        if "last_error" not in fcols:
+            c.execute("ALTER TABLE feeds ADD COLUMN last_error TEXT")
+        if "last_refresh" not in fcols:
+            c.execute("ALTER TABLE feeds ADD COLUMN last_refresh INTEGER DEFAULT 0")
 
 
 def requeue_stuck() -> list[int]:
@@ -181,6 +188,14 @@ def update_feed_meta(feed_id: int, meta: dict) -> None:
             (meta.get("title"), meta.get("description"), meta.get("image"),
              meta.get("site"), int(time.time()), feed_id),
         )
+
+
+def set_feed_status(feed_id: int, error: Optional[str]) -> None:
+    """Mémorise l'issue de la dernière tentative : le message d'erreur, ou None si elle a réussi (#2635).
+    Sans cela un flux qui échoue reste vide sans que personne sache pourquoi."""
+    with _conn() as c:
+        c.execute("UPDATE feeds SET last_error=?, last_refresh=? WHERE id=?",
+                  ((error or None) and error[:300], int(time.time()), feed_id))
 
 
 def list_feeds() -> list[dict]:

@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-14 — Podcaster : import YouTube sans ré-encodage, échecs de flux visibles (ref #2635)
+Playlist 4135 sur gk2 : 2 épisodes en 30 min, charge 10. `yt-dlp -x --audio-format m4a` prenait le flux webm/opus et ffmpeg le ré-encodait en AAC ; `-f ba[ext=m4a]/ba` ne fait plus qu'un remux. Table `feeds` : `last_error`, `last_refresh` (migration idempotente), remplis par l'import et le rafraîchisseur ; `POST /feeds/{id}/refresh` (jwt). Page Podcaster : erreur sous le flux, ⧉ copier l'adresse de la playlist, ⟳ réimporter. Carte Flux YouTube : ⧉ copier, ★ favori du Hall (`sbx_favoris`), 🧭 voir dans Surf. Podcaster 1.3.0, webos 1.9.12. Non fait : favori et Surf depuis la page Podcaster (autre origine que le Hall, pas de localStorage partagé) ; podcast vidéo (l'épisode reste audio). Essai manuel sur gk2 : deux imports concurrents sur les mêmes dossiers + ffmpeg orphelins, arrêtés et dossiers partiels supprimés.
+
 ## 2026-10-14 — Flux YouTube : la cause du « données anciennes » est dite (closes #2633)
 Sur gk2, `yt-dlp :ytsubs` répond « Login details are needed » : le cookies.txt est périmé (réécrit plus court par yt-dlp). `Flux.lister` avalait ce refus dans le repli sur le dernier résultat, d'où « YouTube n'a pas répondu ». Le repli porte désormais `cause` (`cookies` ou `youtube`), la route marque `cookies_stale`, la carte invite à redéposer cookies.txt (ytsas 0.4.2, webos 1.9.11). **Action utilisateur** : ré-exporter cookies.txt depuis un navigateur connecté. Les mêmes cookies servent à l'import Podcaster.
 
