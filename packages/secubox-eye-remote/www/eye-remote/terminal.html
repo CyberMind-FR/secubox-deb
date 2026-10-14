@@ -4,689 +4,639 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<!--
-SecuBox Eye Remote — Serial Console Terminal
-Console serie distante via xterm.js pour les appareils Eye Remote.
-
-CyberMind — https://cybermind.fr
-Author: Gerald Kerma <gandalf@gk2.net>
-License: Proprietary / ANSSI CSPN candidate
+  Eye Remote, console série au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Le terminal xterm.js (chargé depuis un CDN, interdit par la CSP des vhosts) est remplacé par un petit émulateur
+  écrit dans la page : séquences ANSI courantes (couleurs, effacement, déplacement du curseur), saisie clavier,
+  collage. Même WebSocket, même URL, mêmes octets échangés qu'avant.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, aucune connexion ni appel.
+  Le jeton d'appareil se saisit dans un champ masqué ; il n'est jamais affiché.
 -->
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox Eye Remote — Console Serie</title>
-
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-
-    <!-- xterm.js CDN -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
-    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
-
+    <title>SecuBox — Console série</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        /* === SecuBox Cyberpunk Palette === */
-        :root {
-            --cosmos-black: #0a0a0f;
-            --gold-hermetic: #c9a84c;
-            --cinnabar: #e63946;
-            --matrix-green: #00ff41;
-            --void-purple: #6e40c9;
-            --cyber-cyan: #00d4ff;
-            --text-primary: #e8e6d9;
-            --text-muted: #6b6b7a;
-            --bg-card: rgba(20, 20, 30, 0.95);
-            --bg-card-hover: rgba(30, 30, 45, 0.95);
-            --border-subtle: rgba(201, 168, 76, 0.3);
-            --border-active: rgba(201, 168, 76, 0.6);
-            --shadow-glow: 0 0 20px rgba(0, 212, 255, 0.15);
-        }
-
-        /* === Reset & Base === */
-        *, *::before, *::after {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        html, body {
-            height: 100%;
-            overflow: hidden;
-        }
-
-        body {
-            font-family: 'JetBrains Mono', monospace;
-            background: var(--cosmos-black);
-            color: var(--text-primary);
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Fond anime cyberpunk */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background:
-                radial-gradient(ellipse at 20% 80%, rgba(110, 64, 201, 0.08) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 20%, rgba(0, 212, 255, 0.05) 0%, transparent 50%),
-                linear-gradient(180deg, var(--cosmos-black) 0%, #0d0d15 100%);
-            z-index: -1;
-            pointer-events: none;
-        }
-
-        /* === Typography === */
-        h1, h2, h3 {
-            font-family: 'Cinzel', serif;
-            font-weight: 600;
-            color: var(--gold-hermetic);
-            letter-spacing: 0.05em;
-        }
-
-        /* === Header === */
-        header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.75rem 1.5rem;
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border-subtle);
-            flex-shrink: 0;
-            z-index: 100;
-        }
-
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .header-title {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .header-title h1 {
-            font-size: 1.25rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .terminal-icon {
-            font-size: 1.5rem;
-            filter: drop-shadow(0 0 8px var(--matrix-green));
-        }
-
-        .back-link {
-            display: flex;
-            align-items: center;
-            gap: 0.35rem;
-            color: var(--text-muted);
-            text-decoration: none;
-            font-size: 0.85rem;
-            padding: 0.4rem 0.75rem;
-            border: 1px solid var(--border-subtle);
-            border-radius: 4px;
-            transition: all 0.2s ease;
-        }
-
-        .back-link:hover {
-            color: var(--cyber-cyan);
-            border-color: var(--cyber-cyan);
-            background: rgba(0, 212, 255, 0.1);
-        }
-
-        .header-controls {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        /* === Status Indicator === */
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.4rem 0.875rem;
-            border: 1px solid var(--border-subtle);
-            border-radius: 4px;
-            font-size: 0.8rem;
-        }
-
-        .status-indicator.connected {
-            background: rgba(0, 255, 65, 0.1);
-            border-color: var(--matrix-green);
-        }
-
-        .status-indicator.disconnected {
-            background: rgba(230, 57, 70, 0.1);
-            border-color: var(--cinnabar);
-        }
-
-        .status-indicator.connecting {
-            background: rgba(201, 168, 76, 0.1);
-            border-color: var(--gold-hermetic);
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--text-muted);
-        }
-
-        .status-indicator.connected .status-dot {
-            background: var(--matrix-green);
-            box-shadow: 0 0 8px var(--matrix-green);
-            animation: pulse 2s infinite;
-        }
-
-        .status-indicator.disconnected .status-dot {
-            background: var(--cinnabar);
-        }
-
-        .status-indicator.connecting .status-dot {
-            background: var(--gold-hermetic);
-            animation: blink 0.8s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; box-shadow: 0 0 5px var(--matrix-green); }
-            50% { opacity: 0.6; box-shadow: 0 0 12px var(--matrix-green); }
-        }
-
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-
-        /* === Buttons === */
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.5rem 1rem;
-            border: 1px solid;
-            border-radius: 4px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.8rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            text-decoration: none;
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--matrix-green), #00cc33);
-            border-color: var(--matrix-green);
-            color: var(--cosmos-black);
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            background: linear-gradient(135deg, #00ff55, var(--matrix-green));
-            box-shadow: 0 0 15px rgba(0, 255, 65, 0.4);
-        }
-
-        .btn-danger {
-            background: transparent;
-            border-color: var(--cinnabar);
-            color: var(--cinnabar);
-        }
-
-        .btn-danger:hover:not(:disabled) {
-            background: rgba(230, 57, 70, 0.15);
-            box-shadow: 0 0 12px rgba(230, 57, 70, 0.3);
-        }
-
-        .btn-secondary {
-            background: transparent;
-            border-color: var(--border-subtle);
-            color: var(--text-primary);
-        }
-
-        .btn-secondary:hover:not(:disabled) {
-            border-color: var(--gold-hermetic);
-            color: var(--gold-hermetic);
-        }
-
-        /* === Toolbar === */
-        .toolbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.5rem 1rem;
-            background: rgba(15, 15, 20, 0.95);
-            border-bottom: 1px solid var(--border-subtle);
-            flex-shrink: 0;
-        }
-
-        .toolbar-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .toolbar-right {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        /* === Form Controls === */
-        .form-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .form-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .form-select {
-            padding: 0.35rem 0.75rem;
-            background: rgba(10, 10, 15, 0.9);
-            border: 1px solid var(--border-subtle);
-            border-radius: 4px;
-            color: var(--text-primary);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.8rem;
-            cursor: pointer;
-            outline: none;
-        }
-
-        .form-select:focus {
-            border-color: var(--cyber-cyan);
-        }
-
-        .form-select option {
-            background: var(--cosmos-black);
-            color: var(--text-primary);
-        }
-
-        /* === Terminal Container === */
-        .terminal-container {
-            flex: 1;
-            padding: 0.5rem;
-            overflow: hidden;
-            background: var(--cosmos-black);
-        }
-
-        #terminal {
-            width: 100%;
-            height: 100%;
-        }
-
-        /* xterm.js customization */
-        .xterm {
-            padding: 0.5rem;
-        }
-
-        .xterm-viewport::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .xterm-viewport::-webkit-scrollbar-track {
-            background: rgba(10, 10, 15, 0.5);
-        }
-
-        .xterm-viewport::-webkit-scrollbar-thumb {
-            background: var(--border-subtle);
-            border-radius: 4px;
-        }
-
-        .xterm-viewport::-webkit-scrollbar-thumb:hover {
-            background: var(--gold-hermetic);
-        }
-
-        /* === Connection Dialog === */
-        .dialog-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.85);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .dialog-overlay.hidden {
-            display: none;
-        }
-
-        .dialog {
-            background: var(--bg-card);
-            border: 1px solid var(--border-active);
-            border-radius: 8px;
-            padding: 2rem;
-            max-width: 420px;
-            width: 90%;
-            box-shadow: 0 0 40px rgba(0, 212, 255, 0.2);
-        }
-
-        .dialog h2 {
-            margin-bottom: 1.5rem;
-            text-align: center;
-            font-size: 1.3rem;
-        }
-
-        .dialog-form {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .dialog-field {
-            display: flex;
-            flex-direction: column;
-            gap: 0.35rem;
-        }
-
-        .dialog-field label {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .dialog-field input,
-        .dialog-field select {
-            padding: 0.6rem 0.875rem;
-            background: rgba(10, 10, 15, 0.9);
-            border: 1px solid var(--border-subtle);
-            border-radius: 4px;
-            color: var(--text-primary);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
-            outline: none;
-            transition: border-color 0.2s ease;
-        }
-
-        .dialog-field input:focus,
-        .dialog-field select:focus {
-            border-color: var(--cyber-cyan);
-        }
-
-        .dialog-field input::placeholder {
-            color: var(--text-muted);
-            opacity: 0.6;
-        }
-
-        .dialog-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 0.75rem;
-            margin-top: 1rem;
-        }
-
-        .dialog-error {
-            background: rgba(230, 57, 70, 0.15);
-            border: 1px solid var(--cinnabar);
-            border-radius: 4px;
-            padding: 0.75rem;
-            color: var(--cinnabar);
-            font-size: 0.85rem;
-            text-align: center;
-        }
-
-        .dialog-error.hidden {
-            display: none;
-        }
-
-        /* === Footer Info === */
-        .footer-info {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.4rem 1rem;
-            background: rgba(15, 15, 20, 0.95);
-            border-top: 1px solid var(--border-subtle);
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            flex-shrink: 0;
-        }
-
-        .footer-left {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-        }
-
-        .footer-item {
-            display: flex;
-            align-items: center;
-            gap: 0.35rem;
-        }
-
-        .footer-item span.label {
-            opacity: 0.7;
-        }
-
-        .footer-item span.value {
-            color: var(--cyber-cyan);
-        }
-
-        .footer-item span.value.warning {
-            color: var(--gold-hermetic);
-        }
-
-        /* === Responsive === */
-        @media (max-width: 768px) {
-            header {
-                flex-direction: column;
-                gap: 0.75rem;
-                padding: 0.75rem 1rem;
-            }
-
-            .header-controls {
-                width: 100%;
-                justify-content: space-between;
-            }
-
-            .toolbar {
-                flex-direction: column;
-                gap: 0.75rem;
-                padding: 0.75rem;
-            }
-
-            .toolbar-left,
-            .toolbar-right {
-                width: 100%;
-                justify-content: center;
-            }
-
-            .form-group {
-                flex-direction: column;
-                align-items: flex-start;
-                width: 100%;
-            }
-
-            .form-select {
-                width: 100%;
-            }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.disconnected{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.connecting{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:var(--cyan)} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.warning{color:var(--orange)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .barre{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:end;justify-content:space-between}
+        .groupe{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:end;min-width:0}
+        .champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        select,input{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        select:focus,input:focus{outline:none;border-color:var(--cyan)}
+        .barre select{min-width:120px}
+        /* Terminal */
+        #terminal{position:relative;height:460px;overflow:auto;background:#0a0a0f;color:#00ff41;border:1px solid var(--trait2);border-radius:10px;padding:8px 10px;cursor:text;
+                  font-family:ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;font-size:14px;line-height:18px}
+        #terminal:focus-within{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(41,182,246,.35)}
+        #terminal .lg{white-space:pre-wrap;overflow-wrap:anywhere;min-height:18px}
+        #saisie{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;border:0;padding:0;resize:none;pointer-events:none}
+        #terminal .cur{background:#c9a84c;color:#0a0a0f}
+        #terminal:not(:focus-within) .cur{background:transparent;outline:1px solid #c9a84c}
+        #terminal:focus-within .cur{animation:clign 1.1s steps(2,start) infinite}
+        @keyframes clign{to{visibility:hidden}}
+        #terminal .b{font-weight:700} #terminal .u{text-decoration:underline} #terminal .inv{background:#00ff41;color:#0a0a0f}
+        #terminal .f0{color:#0a0a0f}#terminal .f1{color:#e63946}#terminal .f2{color:#00ff41}#terminal .f3{color:#c9a84c}#terminal .f4{color:#00d4ff}#terminal .f5{color:#6e40c9}#terminal .f6{color:#00d4ff}#terminal .f7{color:#e8e6d9}
+        #terminal .f8{color:#6b6b7a}#terminal .f9{color:#ff5a67}#terminal .f10{color:#33ff66}#terminal .f11{color:#d4b85a}#terminal .f12{color:#33e0ff}#terminal .f13{color:#9966ff}#terminal .f14{color:#33e0ff}#terminal .f15{color:#fff}
+        #terminal .g0{background:#0a0a0f}#terminal .g1{background:#e63946}#terminal .g2{background:#00ff41}#terminal .g3{background:#c9a84c}#terminal .g4{background:#00d4ff}#terminal .g5{background:#6e40c9}#terminal .g6{background:#00d4ff}#terminal .g7{background:#e8e6d9}
+        #terminal .g8{background:#6b6b7a}#terminal .g9{background:#ff5a67}#terminal .g10{background:#33ff66}#terminal .g11{background:#d4b85a}#terminal .g12{background:#33e0ff}#terminal .g13{background:#9966ff}#terminal .g14{background:#33e0ff}#terminal .g15{background:#fff}
+        /* Fenêtre de connexion (dans la page, jamais un dialogue natif) */
+        .voile{position:fixed;inset:0;background:rgba(3,8,18,.72);display:flex;align-items:center;justify-content:center;padding:16px;z-index:60}
+        .fenetre{width:min(440px,100%);max-height:100%;overflow:auto;border:1px solid var(--trait2);border-radius:14px;background:linear-gradient(160deg,rgba(15,32,64,.98),rgba(7,15,32,.98));padding:16px;box-shadow:0 0 38px rgba(41,182,246,.18)}
+        .fenetre h2{margin:0 0 10px;font-size:1.05rem}
+        .fenetre form{display:grid;gap:10px;margin:0}
+        .fenetre label{display:grid;gap:3px;font-size:.72rem;color:var(--doux)}
+        .erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:4px}
     </style>
 </head>
 <body>
-    <!-- Header -->
-    <header>
-        <div class="header-left">
-            <a href="index.html" class="back-link">
-                <span>&larr;</span>
-                <span>Dashboard</span>
-            </a>
-            <div class="header-title">
-                <h1>
-                    <span class="terminal-icon">&#9000;</span>
-                    Console Serie
-                </h1>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="m7 9 3 3-3 3M12.5 15H17"/></svg>
+                <div><h1>Console série</h1><small>Eye Remote, port série distant par WebSocket</small></div>
             </div>
-        </div>
-        <div class="header-controls">
-            <div id="status-indicator" class="status-indicator disconnected">
-                <span class="status-dot"></span>
-                <span id="status-text">Deconnecte</span>
+            <div id="status-indicator" class="actif disconnected" aria-live="polite"><span id="status-text">Déconnecté</span></div>
+            <div class="droite">
+                <a href="index.html" class="btn" id="retour">← Tableau de bord</a>
+                <button id="btn-connect" class="btn prim" type="button">▶ Connecter</button>
+                <button id="btn-disconnect" class="btn danger" type="button" disabled>■ Déconnecter</button>
             </div>
-            <button id="btn-connect" class="btn btn-primary">
-                <span>&#9654;</span>
-                Connecter
-            </button>
-            <button id="btn-disconnect" class="btn btn-danger" disabled>
-                <span>&#9632;</span>
-                Deconnecter
-            </button>
-        </div>
-    </header>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune connexion série réelle</div>
+        <div class="info" id="session" hidden>Appareils et ports non lus : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
 
-    <!-- Toolbar -->
-    <div class="toolbar">
-        <div class="toolbar-left">
-            <div class="form-group">
-                <span class="form-label">Device</span>
-                <select id="select-device" class="form-select">
-                    <option value="eye-remote-001">Eye Remote #1</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <span class="form-label">Baud Rate</span>
-                <select id="select-baud" class="form-select">
-                    <option value="9600">9600</option>
-                    <option value="19200">19200</option>
-                    <option value="38400">38400</option>
-                    <option value="57600">57600</option>
-                    <option value="115200" selected>115200</option>
-                    <option value="230400">230400</option>
-                    <option value="460800">460800</option>
-                    <option value="921600">921600</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <span class="form-label">Port</span>
-                <select id="select-port" class="form-select">
-                    <option value="/dev/ttyACM0">/dev/ttyACM0</option>
-                    <option value="/dev/ttyACM1">/dev/ttyACM1</option>
-                    <option value="/dev/ttyUSB0">/dev/ttyUSB0</option>
-                    <option value="/dev/ttyUSB1">/dev/ttyUSB1</option>
-                </select>
-            </div>
-        </div>
-        <div class="toolbar-right">
-            <button id="btn-clear" class="btn btn-secondary" title="Effacer le terminal">
-                <span>&#8999;</span>
-                Effacer
-            </button>
-            <button id="btn-copy" class="btn btn-secondary" title="Copier la selection">
-                <span>&#128203;</span>
-                Copier
-            </button>
-        </div>
-    </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" title="Droits d’accès au port série annoncés par le serveur à la connexion : R/W = lecture et écriture, RO = lecture seule."><span class="l">Mode</span><span class="v" id="mode-value">—</span><span class="s">lecture/écriture</span></div>
+            <div class="tuile" title="Octets reçus du port série depuis l’ouverture de la connexion."><span class="l">Reçu (RX)</span><span class="v" id="rx-value">0 B</span><span class="s">depuis la connexion</span></div>
+            <div class="tuile" title="Octets envoyés au port série depuis l’ouverture de la connexion."><span class="l">Envoyé (TX)</span><span class="v" id="tx-value">0 B</span><span class="s">depuis la connexion</span></div>
+            <div class="tuile" title="Durée écoulée depuis l’ouverture de la connexion WebSocket."><span class="l">Connecté depuis</span><span class="v" id="connected-time">—</span><span class="s">durée</span></div>
+        </section>
 
-    <!-- Terminal Container -->
-    <div class="terminal-container">
-        <div id="terminal"></div>
-    </div>
-
-    <!-- Footer Info -->
-    <div class="footer-info">
-        <div class="footer-left">
-            <div class="footer-item">
-                <span class="label">Mode:</span>
-                <span id="mode-value" class="value">--</span>
-            </div>
-            <div class="footer-item">
-                <span class="label">RX:</span>
-                <span id="rx-value" class="value">0 B</span>
-            </div>
-            <div class="footer-item">
-                <span class="label">TX:</span>
-                <span id="tx-value" class="value">0 B</span>
-            </div>
-            <div class="footer-item">
-                <span class="label">Connecte:</span>
-                <span id="connected-time" class="value">--</span>
-            </div>
-        </div>
-        <div>
-            SecuBox Eye Remote v2.0.0 — <a href="https://cybermind.fr" target="_blank" style="color: var(--gold-hermetic); text-decoration: none;">CyberMind</a>
-        </div>
-    </div>
-
-    <!-- Connection Dialog -->
-    <div id="connect-dialog" class="dialog-overlay hidden">
-        <div class="dialog">
-            <h2>Connexion Console Serie</h2>
-            <form id="connect-form" class="dialog-form">
-                <div id="dialog-error" class="dialog-error hidden"></div>
-
-                <div class="dialog-field">
-                    <label for="input-device-id">ID Appareil</label>
-                    <select id="input-device-id">
-                        <!-- Rempli dynamiquement -->
-                    </select>
+        <div class="pan">
+            <div class="barre">
+                <div class="groupe">
+                    <div class="champ"><label for="select-device">Appareil</label>
+                        <select id="select-device"><option value="eye-remote-001">Eye Remote #1</option></select></div>
+                    <div class="champ"><label for="select-baud">Vitesse (bauds)</label>
+                        <select id="select-baud"><option value="9600">9600</option><option value="19200">19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200" selected>115200</option><option value="230400">230400</option><option value="460800">460800</option><option value="921600">921600</option></select></div>
+                    <div class="champ"><label for="select-port">Port</label>
+                        <select id="select-port"><option value="/dev/ttyACM0">/dev/ttyACM0</option><option value="/dev/ttyACM1">/dev/ttyACM1</option><option value="/dev/ttyUSB0">/dev/ttyUSB0</option><option value="/dev/ttyUSB1">/dev/ttyUSB1</option></select></div>
                 </div>
-
-                <div class="dialog-field">
-                    <label for="input-token">Token d'authentification</label>
-                    <input type="password" id="input-token" placeholder="Token de l'appareil" required>
+                <div class="groupe">
+                    <button id="btn-clear" class="btn" type="button" title="Effacer le terminal">⌫ Effacer</button>
+                    <button id="btn-copy" class="btn" type="button" title="Copier la sélection">⧉ Copier</button>
                 </div>
+            </div>
+        </div>
 
-                <div class="dialog-field">
-                    <label for="input-baud">Baud Rate</label>
-                    <select id="input-baud">
-                        <option value="9600">9600</option>
-                        <option value="19200">19200</option>
-                        <option value="38400">38400</option>
-                        <option value="57600">57600</option>
-                        <option value="115200" selected>115200</option>
-                        <option value="230400">230400</option>
-                    </select>
-                </div>
+        <div class="pan"><h3>Terminal <i>WebSocket /serial/console</i></h3>
+            <div id="terminal" role="log" aria-label="Terminal série" aria-live="off"><textarea id="saisie" aria-label="Saisie du terminal" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></textarea></div>
+            <p class="note">Cliquez dans le terminal pour saisir. La saisie n’est transmise qu’une fois connecté. Défilement conservé : 10 000 lignes. L’émulateur gère les couleurs et le déplacement du curseur courants, pas les applications plein écran complexes.</p>
+        </div>
+    </div></div></main>
 
-                <div class="dialog-field">
-                    <label for="input-port">Port Serie</label>
-                    <select id="input-port">
-                        <option value="/dev/ttyACM0">/dev/ttyACM0</option>
-                        <option value="/dev/ttyACM1">/dev/ttyACM1</option>
-                        <option value="/dev/ttyUSB0">/dev/ttyUSB0</option>
-                    </select>
-                </div>
-
-                <div class="dialog-actions">
-                    <button type="button" id="btn-dialog-cancel" class="btn btn-secondary">Annuler</button>
-                    <button type="submit" id="btn-dialog-connect" class="btn btn-primary">
-                        <span>&#9654;</span>
-                        Connecter
-                    </button>
+    <div id="connect-dialog" class="voile hidden" hidden>
+        <div class="fenetre" role="dialog" aria-modal="true" aria-labelledby="titre-connexion">
+            <h2 id="titre-connexion">Connexion console série</h2>
+            <form id="connect-form">
+                <div id="dialog-error" class="erreur hidden" role="alert" hidden></div>
+                <label>ID appareil<select id="input-device-id"></select></label>
+                <label>Jeton d’authentification de l’appareil<input type="password" id="input-token" placeholder="Jeton de l’appareil" autocomplete="off" required></label>
+                <label>Vitesse (bauds)<select id="input-baud"><option value="9600">9600</option><option value="19200">19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200" selected>115200</option><option value="230400">230400</option></select></label>
+                <label>Port série<select id="input-port"><option value="/dev/ttyACM0">/dev/ttyACM0</option><option value="/dev/ttyACM1">/dev/ttyACM1</option><option value="/dev/ttyUSB0">/dev/ttyUSB0</option></select></label>
+                <div class="actions">
+                    <button type="button" id="btn-dialog-cancel" class="btn">Annuler</button>
+                    <button type="submit" id="btn-dialog-connect" class="btn prim">▶ Connecter</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Terminal JavaScript -->
-    <script src="js/terminal.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMB = !!Q.get('embed');
+        if (EMB) { document.body.classList.add('emb'); $retour(); }
+        function $retour() { const a = document.getElementById('retour'); if (a) a.href = 'index.html?embed=1'; }
+        if (!EMB && !DEMO) { try { const sj = document.createElement('script'); sj.src = '/shared/sidebar.js'; document.head.appendChild(sj); } catch (e) { /* menu absent : la page reste utilisable */ } }
+
+        const CONFIG = { apiBase: '/api/v1/eye-remote', reconnectDelay: 3000, maxReconnectAttempts: 5, scrollback: 10000, statsUpdateInterval: 1000 };
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { Accept: 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        function session(ok) { $('session').hidden = ok; annoncer(); }
+
+        // =====================================================================
+        // Émulateur de terminal (remplace xterm.js, sans dépendance)
+        // =====================================================================
+        const Terminal = (() => {
+            const zone = $('terminal'), saisie = $('saisie');
+            const lignes = [];
+            const sale = new Set();
+            const DEFAUT = Object.freeze({ fg: null, bg: null, b: false, u: false, inv: false });
+            let sgr = DEFAUT, r = 0, c = 0, haut = 0, etat = 0, params = '', derniere = null, plan = false;
+            let surSaisie = null;
+            const decodeur = new TextDecoder('utf-8', { fatal: false });
+
+            function rangees() { return Math.max(10, Math.floor(zone.clientHeight / 18)); }
+            function ligne(i) {
+                while (lignes.length <= i) { const d = el('div', 'lg'); zone.insertBefore(d, saisie); const l = { cells: [], el: d }; lignes.push(l); sale.add(l); }
+                return lignes[i];
+            }
+            function marquer(l) { sale.add(l); programmer(); }
+            function remplir(l, n) { while (l.cells.length < n) l.cells.push([' ', DEFAUT]); }
+            function putc(ch) {
+                const l = ligne(r); remplir(l, c); l.cells[c] = [ch, sgr]; c++; marquer(l);
+            }
+            function saut() {
+                r++; c = 0; ligne(r);
+                if (r - haut >= rangees()) haut = r - rangees() + 1;
+                while (lignes.length > CONFIG.scrollback) { const l = lignes.shift(); l.el.remove(); sale.delete(l); r--; haut = Math.max(0, haut - 1); }
+                programmer();
+            }
+            function toutEffacer() { lignes.forEach(l => l.el.remove()); lignes.length = 0; sale.clear(); r = 0; c = 0; haut = 0; ligne(0); programmer(); }
+            function effacerLigne(n) {
+                const l = ligne(r);
+                if (n === 2) l.cells = [];
+                else if (n === 1) { remplir(l, c + 1); for (let i = 0; i <= c; i++) l.cells[i] = [' ', DEFAUT]; }
+                else l.cells.length = Math.min(l.cells.length, c);
+                marquer(l);
+            }
+            function numero(p, i, def) { const v = p[i]; return (v === null || v === undefined || isNaN(v)) ? def : v; }
+            function couleurs(p) {
+                for (let i = 0; i < p.length; i++) {
+                    const v = p[i] === null ? 0 : p[i];
+                    if (v === 0) sgr = DEFAUT;
+                    else if (v === 1) sgr = Object.assign({}, sgr, { b: true });
+                    else if (v === 22) sgr = Object.assign({}, sgr, { b: false });
+                    else if (v === 4) sgr = Object.assign({}, sgr, { u: true });
+                    else if (v === 24) sgr = Object.assign({}, sgr, { u: false });
+                    else if (v === 7) sgr = Object.assign({}, sgr, { inv: true });
+                    else if (v === 27) sgr = Object.assign({}, sgr, { inv: false });
+                    else if (v >= 30 && v <= 37) sgr = Object.assign({}, sgr, { fg: v - 30 });
+                    else if (v >= 90 && v <= 97) sgr = Object.assign({}, sgr, { fg: v - 90 + 8 });
+                    else if (v >= 40 && v <= 47) sgr = Object.assign({}, sgr, { bg: v - 40 });
+                    else if (v >= 100 && v <= 107) sgr = Object.assign({}, sgr, { bg: v - 100 + 8 });
+                    else if (v === 39) sgr = Object.assign({}, sgr, { fg: null });
+                    else if (v === 49) sgr = Object.assign({}, sgr, { bg: null });
+                    else if (v === 38 || v === 48) {
+                        const cle = v === 38 ? 'fg' : 'bg';
+                        if (p[i + 1] === 5 && p[i + 2] !== undefined) { sgr = Object.assign({}, sgr, { [cle]: palette(p[i + 2]) }); i += 2; }
+                        else if (p[i + 1] === 2 && p[i + 4] !== undefined) { sgr = Object.assign({}, sgr, { [cle]: 'rgb(' + [p[i + 2], p[i + 3], p[i + 4]].map(x => Math.max(0, Math.min(255, x || 0))).join(',') + ')' }); i += 4; }
+                    }
+                }
+            }
+            function palette(n) {
+                n = n || 0;
+                if (n < 16) return n;
+                if (n >= 232) { const g = 8 + (n - 232) * 10; return 'rgb(' + g + ',' + g + ',' + g + ')'; }
+                n -= 16; const f = x => x === 0 ? 0 : 55 + x * 40;
+                return 'rgb(' + f(Math.floor(n / 36)) + ',' + f(Math.floor(n / 6) % 6) + ',' + f(n % 6) + ')';
+            }
+            function csi(fin) {
+                const prive = params[0] === '?' || params[0] === '>';
+                const p = (prive ? params.slice(1) : params).split(';').map(x => x === '' ? null : parseInt(x, 10));
+                const n = numero(p, 0, 1);
+                if (prive) return;   // modes privés (curseur, écran alternatif…) ignorés
+                switch (fin) {
+                    case 'm': couleurs(p.length ? p : [0]); break;
+                    case 'K': effacerLigne(numero(p, 0, 0)); break;
+                    case 'J': {
+                        const k = numero(p, 0, 0);
+                        if (k === 2 || k === 3) { toutEffacer(); }
+                        else if (k === 0) { effacerLigne(0); while (lignes.length > r + 1) { lignes.pop().el.remove(); } }
+                        else { for (let i = haut; i < r; i++) { ligne(i).cells = []; marquer(ligne(i)); } effacerLigne(1); }
+                        break;
+                    }
+                    case 'H': case 'f': r = haut + Math.max(0, numero(p, 0, 1) - 1); c = Math.max(0, numero(p, 1, 1) - 1); ligne(r); break;
+                    case 'A': r = Math.max(0, r - n); break;
+                    case 'B': r += n; ligne(r); break;
+                    case 'C': c += n; break;
+                    case 'D': c = Math.max(0, c - n); break;
+                    case 'G': c = Math.max(0, numero(p, 0, 1) - 1); break;
+                    case 'd': r = haut + Math.max(0, numero(p, 0, 1) - 1); ligne(r); break;
+                    case 'P': { const l = ligne(r); l.cells.splice(c, n); marquer(l); break; }
+                    case '@': { const l = ligne(r); remplir(l, c); l.cells.splice(c, 0, ...Array.from({ length: n }, () => [' ', DEFAUT])); marquer(l); break; }
+                    case 'X': { const l = ligne(r); remplir(l, c + n); for (let i = 0; i < n; i++) l.cells[c + i] = [' ', DEFAUT]; marquer(l); break; }
+                    default: break;
+                }
+                programmer();
+            }
+            function ecrireCar(ch) {
+                const k = ch.codePointAt(0);
+                if (etat === 0) {
+                    if (k === 27) etat = 1;
+                    else if (k === 10) saut();                       // convertEol : LF = CR + LF
+                    else if (k === 13) c = 0;
+                    else if (k === 8) c = Math.max(0, c - 1);
+                    else if (k === 9) { const cible = (Math.floor(c / 8) + 1) * 8; while (c < cible) putc(' '); }
+                    else if (k < 32 || k === 127) { /* BEL et autres commandes : sans effet */ }
+                    else putc(ch);
+                } else if (etat === 1) {
+                    if (ch === '[') { etat = 2; params = ''; }
+                    else if (ch === ']') etat = 3;
+                    else if (ch === '(' || ch === ')' || ch === '#') etat = 4;
+                    else if (ch === 'c') { toutEffacer(); etat = 0; }
+                    else etat = 0;
+                } else if (etat === 2) {
+                    if (k >= 0x30 && k <= 0x3f) params += ch;
+                    else if (k >= 0x20 && k <= 0x2f) { /* intermédiaire */ }
+                    else { csi(ch); etat = 0; }
+                } else if (etat === 3) {
+                    if (k === 7) etat = 0; else if (k === 27) etat = 5;
+                } else { etat = 0; }
+            }
+            function ecrire(texte) {
+                const pied = zone.scrollHeight - zone.scrollTop - zone.clientHeight < 40;
+                plan = plan || pied;
+                for (const ch of texte) ecrireCar(ch);
+                programmer();
+            }
+            function ecrireOctets(octets) { ecrire(decodeur.decode(octets, { stream: true })); }
+            function ln(texte) { ecrire((texte || '') + '\n'); }
+
+            function span(cell, curseur) {
+                const st = cell[1], s = el('span', '', cell[0]);
+                const cl = [];
+                if (st.b) cl.push('b'); if (st.u) cl.push('u'); if (st.inv) cl.push('inv');
+                if (typeof st.fg === 'number') cl.push('f' + st.fg); else if (st.fg) s.style.color = st.fg;
+                if (typeof st.bg === 'number') cl.push('g' + st.bg); else if (st.bg) s.style.background = st.bg;
+                if (curseur) cl.push('cur');
+                s.className = cl.join(' ');
+                return s;
+            }
+            function dessinerLigne(l, curseur) {
+                const f = document.createDocumentFragment();
+                let texte = '', st = null, pre = null;
+                const vider = () => { if (texte) { const x = span([texte, st], false); f.appendChild(x); } texte = ''; };
+                const n = curseur ? Math.max(l.cells.length, c + 1) : l.cells.length;
+                for (let i = 0; i < n; i++) {
+                    const cell = l.cells[i] || [' ', DEFAUT];
+                    if (curseur && i === c) { vider(); f.appendChild(span(cell, true)); st = null; continue; }
+                    if (st !== cell[1] && texte) vider();
+                    st = cell[1]; texte += cell[0];
+                }
+                vider();
+                l.el.replaceChildren(f);
+            }
+            function programmer() { if (!pre_rendu) { pre_rendu = true; requestAnimationFrame(rendre); } }
+            let pre_rendu = false;
+            function rendre() {
+                pre_rendu = false;
+                const cur = lignes[r];
+                if (derniere && derniere !== cur) sale.add(derniere);
+                if (cur) sale.add(cur);
+                derniere = cur;
+                sale.forEach(l => dessinerLigne(l, l === cur));
+                sale.clear();
+                if (plan) { zone.scrollTop = zone.scrollHeight; plan = false; }
+                annoncer();
+            }
+            function effacer() { toutEffacer(); }
+            function selection() { const s = window.getSelection(); return s && zone.contains(s.anchorNode) ? s.toString() : ''; }
+
+            // ----- Saisie clavier -----
+            const TOUCHES = { Enter: '\r', Backspace: '\x7f', Tab: '\t', Escape: '\x1b', ArrowUp: '\x1b[A', ArrowDown: '\x1b[B', ArrowRight: '\x1b[C', ArrowLeft: '\x1b[D',
+                              Home: '\x1b[H', End: '\x1b[F', Delete: '\x1b[3~', Insert: '\x1b[2~', PageUp: '\x1b[5~', PageDown: '\x1b[6~' };
+            saisie.addEventListener('keydown', ev => {
+                if (ev.isComposing) return;
+                if (ev.ctrlKey && ev.shiftKey) return;                 // raccourcis du navigateur (copier, coller)
+                if (ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.key.length === 1) {
+                    const k = ev.key.toLowerCase();
+                    if (k === 'v') return;                                // coller : événement paste
+                    if (k >= 'a' && k <= 'z') { ev.preventDefault(); surSaisie && surSaisie(String.fromCharCode(k.charCodeAt(0) - 96)); return; }
+                    if (k === '[') { ev.preventDefault(); surSaisie && surSaisie('\x1b'); return; }
+                    return;
+                }
+                if (ev.altKey && !ev.ctrlKey && ev.key.length === 1) { ev.preventDefault(); surSaisie && surSaisie('\x1b' + ev.key); return; }
+                if (TOUCHES[ev.key] !== undefined) { ev.preventDefault(); surSaisie && surSaisie(TOUCHES[ev.key]); }
+            });
+            saisie.addEventListener('input', ev => {
+                if (ev.isComposing) return;
+                const v = saisie.value; saisie.value = '';
+                if (v && surSaisie) surSaisie(v.replace(/\n/g, '\r'));
+            });
+            saisie.addEventListener('compositionend', () => { const v = saisie.value; saisie.value = ''; if (v && surSaisie) surSaisie(v); });
+            saisie.addEventListener('paste', ev => {
+                const t = ev.clipboardData && ev.clipboardData.getData('text');
+                ev.preventDefault();
+                if (t && surSaisie) surSaisie(t.replace(/\r?\n/g, '\r'));
+            });
+            zone.addEventListener('click', () => { const s = window.getSelection(); if (!s || s.isCollapsed) saisie.focus({ preventScroll: true }); });
+            ligne(0);
+            programmer();
+            return { ecrire, ecrireOctets, ln, effacer, selection, onData(f) { surSaisie = f; }, focus() { saisie.focus({ preventScroll: true }); } };
+        })();
+
+        // =====================================================================
+        // État et connexion WebSocket (mêmes URL, octets et reprises qu'avant)
+        // =====================================================================
+        const state = {
+            websocket: null, isConnected: false, isConnecting: false,
+            reconnectAttempts: 0, reconnectTimer: null,
+            bytesReceived: 0, bytesSent: 0, connectedAt: null, accessMode: 'unknown',
+            currentDevice: null, currentBaud: 115200, currentPort: '/dev/ttyACM0', statsTimer: null
+        };
+        const DOM = {
+            statusIndicator: $('status-indicator'), statusText: $('status-text'), btnConnect: $('btn-connect'), btnDisconnect: $('btn-disconnect'),
+            selectDevice: $('select-device'), selectBaud: $('select-baud'), selectPort: $('select-port'), btnClear: $('btn-clear'), btnCopy: $('btn-copy'),
+            modeValue: $('mode-value'), rxValue: $('rx-value'), txValue: $('tx-value'), connectedTime: $('connected-time'),
+            connectDialog: $('connect-dialog'), connectForm: $('connect-form'), dialogError: $('dialog-error'),
+            inputDeviceId: $('input-device-id'), inputToken: $('input-token'), inputBaud: $('input-baud'), inputPort: $('input-port'),
+            btnDialogCancel: $('btn-dialog-cancel'), btnDialogConnect: $('btn-dialog-connect')
+        };
+
+        function accueil() {
+            const t = Terminal;
+            t.ln('\x1b[1;33m╔══════════════════════════════════════════════════════════╗\x1b[0m');
+            t.ln('\x1b[1;33m║\x1b[0m  \x1b[1;36mSecuBox Eye Remote\x1b[0m — \x1b[32mConsole Serie\x1b[0m                       \x1b[1;33m║\x1b[0m');
+            t.ln('\x1b[1;33m║\x1b[0m  \x1b[90mCyberMind — https://cybermind.fr\x1b[0m                         \x1b[1;33m║\x1b[0m');
+            t.ln('\x1b[1;33m╚══════════════════════════════════════════════════════════╝\x1b[0m');
+            t.ln('');
+            t.ln('\x1b[90mCliquez sur "Connecter" pour etablir la connexion serie.\x1b[0m');
+            t.ln('');
+        }
+
+        function envoyer(data) {
+            if (!state.websocket || state.websocket.readyState !== WebSocket.OPEN) return false;
+            try {
+                const octets = new TextEncoder().encode(data);
+                state.websocket.send(octets);
+                state.bytesSent += octets.length;
+                return true;
+            } catch (error) { return false; }
+        }
+        Terminal.onData(data => { if (!state.isConnected || !state.websocket) return; envoyer(data); });
+
+        function connect(params) {
+            if (state.isConnected || state.isConnecting) return;
+            if (DEMO) { Terminal.ln('\x1b[33m[Démonstration : connexion inerte, aucun WebSocket ouvert]\x1b[0m'); hideConnectDialog(); return; }
+            state.isConnecting = true;
+            updateStatus('connecting', 'Connexion…');
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${location.host}${CONFIG.apiBase}/serial/console/${params.deviceId}` +
+                `?token=${encodeURIComponent(params.token)}` + `&baud=${params.baud}` + `&device=${encodeURIComponent(params.device)}`;
+            try {
+                state.websocket = new WebSocket(wsUrl);
+                state.websocket.binaryType = 'arraybuffer';
+                state.websocket.onopen = () => handleOpen(params);
+                state.websocket.onmessage = handleMessage;
+                state.websocket.onclose = handleClose;
+                state.websocket.onerror = handleError;
+                state.currentDevice = params.deviceId; state.currentBaud = params.baud; state.currentPort = params.device;
+            } catch (error) {
+                state.isConnecting = false;
+                updateStatus('disconnected', 'Erreur de connexion');
+                showDialogError('Impossible d\'établir la connexion');
+            }
+        }
+        function handleOpen(params) {
+            state.isConnected = true; state.isConnecting = false; state.reconnectAttempts = 0;
+            state.connectedAt = new Date(); state.bytesReceived = 0; state.bytesSent = 0;
+            updateStatus('connected', 'Connecté');
+            hideConnectDialog(); updateUI(true);
+            Terminal.effacer();
+            Terminal.ln('\x1b[1;32m[Connexion etablie]\x1b[0m');
+            Terminal.ln(`\x1b[90mDevice: ${params.device} @ ${params.baud} bauds\x1b[0m`);
+            Terminal.ln('');
+            startStats(); Terminal.focus();
+        }
+        function handleMessage(event) {
+            if (event.data instanceof ArrayBuffer) {
+                const data = new Uint8Array(event.data);
+                state.bytesReceived += data.length;
+                const texte = new TextDecoder('utf-8', { fatal: false }).decode(data);
+                Terminal.ecrire(texte);
+                if (texte.includes('read/write')) { state.accessMode = 'read-write'; DOM.modeValue.textContent = 'R/W'; DOM.modeValue.classList.remove('warning'); }
+                else if (texte.includes('read-only')) { state.accessMode = 'read-only'; DOM.modeValue.textContent = 'RO'; DOM.modeValue.classList.add('warning'); }
+            } else {
+                state.bytesReceived += event.data.length;
+                Terminal.ecrire(event.data);
+            }
+        }
+        function handleClose(event) {
+            const etait = state.isConnected;
+            state.isConnected = false; state.isConnecting = false; state.websocket = null;
+            stopStats(); updateStatus('disconnected', 'Déconnecté'); updateUI(false);
+            if (etait) {
+                Terminal.ln('');
+                Terminal.ln('\x1b[1;31m[Connexion fermee]\x1b[0m');
+                if (event.code !== 1000 && event.code !== 1008) scheduleReconnect();
+            }
+        }
+        function handleError() {
+            if (state.isConnecting) { state.isConnecting = false; showDialogError('Erreur de connexion au serveur'); }
+            Terminal.ln('\x1b[1;31m[Erreur connexion]\x1b[0m');
+        }
+        function disconnect() {
+            if (state.reconnectTimer) { clearTimeout(state.reconnectTimer); state.reconnectTimer = null; }
+            state.reconnectAttempts = CONFIG.maxReconnectAttempts;   // empêche la reconnexion
+            if (state.websocket) state.websocket.close(1000, 'User disconnect');
+        }
+        function scheduleReconnect() {
+            if (state.reconnectAttempts >= CONFIG.maxReconnectAttempts) {
+                Terminal.ln(`\x1b[33m[Reconnexion abandonnee apres ${CONFIG.maxReconnectAttempts} tentatives]\x1b[0m`);
+                return;
+            }
+            state.reconnectAttempts++;
+            const delay = CONFIG.reconnectDelay * state.reconnectAttempts;
+            Terminal.ln(`\x1b[33m[Reconnexion dans ${delay / 1000}s... (tentative ${state.reconnectAttempts}/${CONFIG.maxReconnectAttempts})]\x1b[0m`);
+            state.reconnectTimer = setTimeout(() => {
+                if (state.currentDevice) {
+                    let token = null;
+                    try { token = sessionStorage.getItem('serial_token_' + state.currentDevice); } catch (e) { token = null; }
+                    if (token) connect({ deviceId: state.currentDevice, token: token, baud: state.currentBaud, device: state.currentPort });
+                    else Terminal.ln('\x1b[31m[Token manquant, reconnexion impossible]\x1b[0m');
+                }
+            }, delay);
+        }
+
+        // =====================================================================
+        // Appels d'API (lecture seule)
+        // =====================================================================
+        async function lireListe(chemin) {
+            const r = await fetch(CONFIG.apiBase + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        async function fetchDevices() {
+            if (DEMO) return [{ device_id: 'eye-remote-demo-01', hostname: 'eye-remote-demo', peer_ip: '10.55.0.2', name: 'Eye Remote démo' }];
+            try { const data = await lireListe('/paired-devices'); session(true); return data.devices || []; }
+            catch (e) { if (e.statut === 401 || e.statut === 403) session(false); return []; }
+        }
+        async function fetchSerialPorts() {
+            if (DEMO) return [{ path: '/dev/ttyACM0', readable: true, writable: true }, { path: '/dev/ttyUSB0', readable: true, writable: false }];
+            try { const data = await lireListe('/serial/devices'); return Array.isArray(data) ? data : []; }
+            catch (e) { if (e.statut === 401 || e.statut === 403) session(false); return []; }
+        }
+
+        // =====================================================================
+        // Interface
+        // =====================================================================
+        function majBouton(b, icone, texte) { b.textContent = icone + ' ' + texte; }
+        function updateStatus(status, text) {
+            DOM.statusIndicator.classList.remove('connected', 'disconnected', 'connecting');
+            DOM.statusIndicator.classList.add(status);
+            DOM.statusText.textContent = text;
+        }
+        function updateUI(connected) {
+            DOM.btnConnect.disabled = connected; DOM.btnDisconnect.disabled = !connected;
+            DOM.selectDevice.disabled = connected; DOM.selectBaud.disabled = connected; DOM.selectPort.disabled = connected;
+            if (!connected) { DOM.modeValue.textContent = '—'; DOM.modeValue.classList.remove('warning'); DOM.connectedTime.textContent = '—'; }
+        }
+        function startStats() { state.statsTimer = setInterval(updateStats, CONFIG.statsUpdateInterval); updateStats(); }
+        function stopStats() { if (state.statsTimer) { clearInterval(state.statsTimer); state.statsTimer = null; } }
+        function updateStats() {
+            DOM.rxValue.textContent = formatBytes(state.bytesReceived);
+            DOM.txValue.textContent = formatBytes(state.bytesSent);
+            if (state.connectedAt) DOM.connectedTime.textContent = formatDuration(Date.now() - state.connectedAt.getTime());
+        }
+        function formatBytes(b) { if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(1) + ' KB'; return (b / 1048576).toFixed(2) + ' MB'; }
+        function formatDuration(ms) {
+            const s = Math.floor(ms / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60);
+            if (h > 0) return `${h}h ${m % 60}m`;
+            if (m > 0) return `${m}m ${s % 60}s`;
+            return `${s}s`;
+        }
+
+        // ----- Fenêtre de connexion (dans la page) -----
+        async function showConnectDialog() {
+            DOM.connectDialog.hidden = false; DOM.connectDialog.classList.remove('hidden'); hideDialogError();
+            const devices = await fetchDevices(); populateDeviceSelect(devices);
+            const ports = await fetchSerialPorts(); populatePortSelect(ports);
+            DOM.inputToken.focus();
+            annoncer();
+        }
+        function hideConnectDialog() { DOM.connectDialog.hidden = true; DOM.connectDialog.classList.add('hidden'); DOM.inputToken.value = ''; hideDialogError(); }
+        function showDialogError(m) { DOM.dialogError.textContent = m; DOM.dialogError.hidden = false; DOM.dialogError.classList.remove('hidden'); }
+        function hideDialogError() { DOM.dialogError.hidden = true; DOM.dialogError.classList.add('hidden'); }
+        function populateDeviceSelect(devices) {
+            DOM.inputDeviceId.replaceChildren();
+            if (devices.length === 0) {
+                const opt = el('option', '', 'Aucun appareil appairé'); opt.value = ''; opt.disabled = true; opt.selected = true;
+                DOM.inputDeviceId.appendChild(opt); return;
+            }
+            devices.forEach(device => {
+                const opt = el('option'); opt.value = device.device_id;
+                opt.dataset.peerIp = device.peer_ip || '10.55.0.2'; opt.dataset.transport = device.transport || 'usb';
+                opt.textContent = `${device.hostname || device.device_id} (${device.peer_ip || ''})`;
+                DOM.inputDeviceId.appendChild(opt);
+            });
+            DOM.selectDevice.replaceChildren();
+            devices.forEach(device => {
+                const opt = el('option'); opt.value = device.device_id; opt.dataset.peerIp = device.peer_ip || '10.55.0.2';
+                opt.textContent = device.hostname || device.device_id;
+                DOM.selectDevice.appendChild(opt);
+            });
+        }
+        function populatePortSelect(ports) {
+            if (ports.length === 0) return;   // garde les options par défaut
+            DOM.inputPort.replaceChildren();
+            ports.forEach(port => {
+                const opt = el('option', '', port.path); opt.value = port.path;
+                if (!port.readable || !port.writable) { opt.textContent += ' (non accessible)'; opt.disabled = true; }
+                DOM.inputPort.appendChild(opt);
+            });
+        }
+
+        // ----- Gestionnaires -----
+        function onSubmit(event) {
+            event.preventDefault();
+            const deviceId = DOM.inputDeviceId.value, token = DOM.inputToken.value.trim();
+            const baud = parseInt(DOM.inputBaud.value, 10), device = DOM.inputPort.value;
+            if (!deviceId) { showDialogError('Sélectionnez un appareil'); return; }
+            if (!token) { showDialogError('Entrez le jeton d\'authentification'); return; }
+            try { if (!DEMO) sessionStorage.setItem('serial_token_' + deviceId, token); } catch (e) { /* reconnexion automatique indisponible */ }
+            connect({ deviceId, token, baud, device });
+            DOM.btnDialogConnect.disabled = true; majBouton(DOM.btnDialogConnect, '…', 'Connexion…');
+            setTimeout(() => { DOM.btnDialogConnect.disabled = false; majBouton(DOM.btnDialogConnect, '▶', 'Connecter'); }, 5000);
+        }
+        function onCopy() {
+            const sel = Terminal.selection();
+            if (!sel) return;
+            const avant = DOM.btnCopy.textContent;
+            navigator.clipboard.writeText(sel).then(() => {
+                DOM.btnCopy.textContent = '✓ Copié';
+                setTimeout(() => { DOM.btnCopy.textContent = avant; }, 1500);
+            }).catch(() => { /* presse-papiers refusé */ });
+        }
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'eye-remote-terminal' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        async function init() {
+            $('demo').hidden = !DEMO;
+            DOM.btnConnect.addEventListener('click', showConnectDialog);
+            DOM.btnDisconnect.addEventListener('click', disconnect);
+            DOM.connectForm.addEventListener('submit', onSubmit);
+            DOM.btnDialogCancel.addEventListener('click', hideConnectDialog);
+            DOM.btnClear.addEventListener('click', () => Terminal.effacer());
+            DOM.btnCopy.addEventListener('click', onCopy);
+            document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !DOM.connectDialog.hidden) hideConnectDialog(); });
+            DOM.connectDialog.addEventListener('click', ev => { if (ev.target === DOM.connectDialog) hideConnectDialog(); });
+            accueil();
+            if (DEMO) {
+                Terminal.ln('\x1b[1;32m[Démonstration]\x1b[0m \x1b[90mextrait fictif d\'une console\x1b[0m');
+                Terminal.ln('pi@eye-remote-demo:~ $ uname -a');
+                Terminal.ln('Linux eye-remote-demo 6.1.21+ #1642 armv6l GNU/Linux');
+                Terminal.ln('pi@eye-remote-demo:~ $ ');
+            }
+            const devices = await fetchDevices();
+            if (devices.length > 0) {
+                DOM.selectDevice.replaceChildren();
+                devices.forEach(device => {
+                    const opt = el('option', '', device.name || String(device.device_id).substring(0, 12)); opt.value = device.device_id;
+                    DOM.selectDevice.appendChild(opt);
+                });
+            }
+            // Connexion automatique : ?device=…&token=…&baud=…&port=…
+            const autoDeviceId = Q.get('device'), autoToken = Q.get('token');
+            if (autoDeviceId && autoToken) {
+                connect({ deviceId: autoDeviceId, token: autoToken, baud: parseInt(Q.get('baud') || '115200', 10), device: Q.get('port') || '/dev/ttyACM0' });
+            }
+            annoncer();
+        }
+        init();
+    </script>
 </body>
 </html>
