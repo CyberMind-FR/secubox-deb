@@ -20,8 +20,10 @@ event loop: yt-dlp is an async subprocess and blocking handlers are plain
 """
 
 import asyncio
+import hmac
 import json
 import os
+import secrets
 import shutil
 import time
 
@@ -47,6 +49,10 @@ DISK_FLOOR = float(os.environ.get("YTSAS_DISK_FLOOR_GB", "5")) * 1e9
 PLAYLIST_ADD_MAX = int(os.environ.get("YTSAS_PLAYLIST_ADD_MAX", "100"))
 # Cookies older than this are flagged "stale" in /cookies/status (advisory).
 COOKIE_STALE_SECS = int(os.environ.get("YTSAS_COOKIE_STALE_DAYS", "30")) * 86400
+
+# Jeton de la garde d'ADMINISTRATION du Flux (#2714). Écrit à l'installation (install-lxc.sh) dans le volume partagé, lisible de
+# root seul ; le même jeton est posé par nginx (en-tête X-Sbx-Garde-Admin) APRÈS auth_request sur /auth/verify?exige=admin.
+GARDE_ADMIN_PATH = os.environ.get("YTSAS_GARDE_ADMIN", os.path.join(DOWNLOAD_DIR, ".garde-admin"))
 
 # Conserve: the LXC drops a request on the shared /data volume, a HOST timer
 # (secubox-ytsas-conserve) classifies the file and routes it — PeerTube for
@@ -558,6 +564,96 @@ def flux_vignette(vid: str, request: Request):
         return JSONResponse({"error": "vignette indisponible"}, status_code=404)
     octets, mime = r
     return Response(octets, media_type=mime, headers={"Cache-Control": "private, max-age=86400"})
+
+
+# ----------------------------------------------------------- flux : administration (#2714)
+# Réservé à l'ADMINISTRATEUR de la box. Le LXC ne sait pas vérifier un jeton de session : c'est nginx (vhost admin) qui exige un
+# administrateur réel (auth_request /auth/verify?exige=admin) PUIS pose le jeton partagé X-Sbx-Garde-Admin. Sans ce jeton on refuse :
+# l'en-tête X-Sbx-Flux du Hall n'ouvre RIEN ici, et le Hall ne relaie pas ces routes. Pas de jeton installé = tout refusé (sûr par défaut).
+def _jeton_garde():
+    try:
+        with open(GARDE_ADMIN_PATH, encoding="utf-8") as f:
+            j = f.read().strip()
+        return j if len(j) >= 32 else None
+    except OSError:
+        return None
+
+
+def _admin_refuse(request: Request):
+    attendu = _jeton_garde()
+    recu = request.headers.get("x-sbx-garde-admin") or ""
+    if not attendu or not hmac.compare_digest(recu.encode("utf-8", "replace"), attendu.encode("utf-8", "replace")):
+        return JSONResponse({"error": "accès refusé"}, status_code=403)
+    return None
+
+
+def _cookies_admin(listes):
+    """État des cookies SANS jamais les relire : présence, date du fichier, verdict déduit des refus vus."""
+    present = engine._has_cookies()
+    mtime = None
+    if present:
+        try:
+            mtime = int(os.path.getmtime(COOKIE_PATH))
+        except OSError:
+            pass
+    refus = bool(engine.cookies_stale) or any(
+        l["cause"] == "cookies" and (l["derniere_tentative"] or 0) >= (mtime or 0) for l in listes)
+    accepte = any(l["date"] is not None and l["cause"] is None and (l["derniere_tentative"] or 0) >= (mtime or 0) for l in listes)
+    ancien = mtime is not None and (int(time.time()) - mtime) > COOKIE_STALE_SECS
+    verdict = "absents" if not present else "refuses" if refus else "anciens" if ancien else "acceptes" if accepte else "inconnu"
+    return {"present": present, "mtime": mtime, "stale": bool(engine.cookies_stale), "verdict": verdict}
+
+
+@app.get(API + "/flux/etat")
+async def flux_etat(request: Request):
+    """État de chaque liste, cookies, diagnostic : cache fichier + métadonnées, AUCUNE lecture YouTube."""
+    refus = _admin_refuse(request)
+    if refus:
+        return refus
+    flux_moteur.cookie_path = COOKIE_PATH if engine._has_cookies() else None
+    e = await flux_moteur.etat()
+    e["cookies"] = _cookies_admin(e["listes"])
+    return e
+
+
+@app.post(API + "/flux/actualiser/{type}")
+async def flux_actualiser(type: str, request: Request):
+    refus = _admin_refuse(request)
+    if refus:
+        return refus
+    if type not in _flux.TYPES:
+        return JSONResponse({"error": "type inconnu", "types": sorted(_flux.TYPES)}, status_code=400)
+    flux_moteur.cookie_path = COOKIE_PATH if engine._has_cookies() else None
+    try:
+        r = await flux_moteur.actualiser(type)
+    except _flux.AuthRequise:
+        return JSONResponse({"error": "pas de cookies — dépose-les d'abord", "cause": "absent"}, status_code=409)
+    except _flux.Rafale as e:
+        return JSONResponse({"error": "relance trop rapprochée pour cette liste", "cause": "rafale", "reessayer_dans": e.reste}, status_code=429,
+                            headers={"Retry-After": str(e.reste)})
+    except _flux.Occupe:
+        return JSONResponse({"error": "une relance est déjà en cours", "cause": "occupe"}, status_code=409)
+    except _flux.CookiesRefuses:
+        if engine._has_cookies():
+            engine.cookies_stale = True
+        return JSONResponse({"error": "YouTube ne reconnaît pas le compte : cookies périmés", "cause": "cookies"}, status_code=502)
+    except _flux.ErreurYoutube as e:
+        return JSONResponse({"error": "YouTube n'a pas répondu", "cause": "youtube", "detail": _flux.assainir(str(e))}, status_code=502)
+    if r.get("cause") == "cookies" and engine._has_cookies():
+        engine.cookies_stale = True
+    fiche = next((l for l in (await flux_moteur.etat())["listes"] if l["type"] == type), {})
+    return {"ok": not r.get("perime"), "type": type, "videos": len(r["items"]), "date": r["date"], "perime": bool(r.get("perime")),
+            "cause": r.get("cause"), "duree_s": fiche.get("duree_s")}
+
+
+@app.post(API + "/flux/vider/{type}")
+async def flux_vider(type: str, request: Request):
+    refus = _admin_refuse(request)
+    if refus:
+        return refus
+    if type not in _flux.TYPES:
+        return JSONResponse({"error": "type inconnu", "types": sorted(_flux.TYPES)}, status_code=400)
+    return {"ok": True, "type": type, "vide": flux_moteur.vider(type)}
 
 
 @app.get(API + "/status")

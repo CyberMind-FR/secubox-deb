@@ -48,3 +48,21 @@ fournie. Mêmes cache, repli `perime` + `cause`, erreurs et en-tête que la list
 Les avatars et miniatures de ces listes passent par `/flux/vignette/<clé opaque de 11 caractères>`.
 Sans cookies : 401. Ces routes exigent l'en-tête `X-Sbx-Flux: 1`, posé uniquement par le Hall après `auth_request` ; elles sont
 refusées en accès direct. Carte du Hall : `secubox-webos` « Flux YouTube ».
+
+## Administration du flux (0.8.0)
+
+Onglet « Administration du flux » de la page admin (`www/ytsas/index.html`), à côté de la carte du Hall. Routes de l'application du LXC,
+réservées à l'administrateur :
+
+- `GET /api/v1/ytsas/flux/etat` : cookies (`present`, `mtime`, `stale`, `verdict` ; jamais le contenu), état de chaque liste
+  (`date`, `age_s`, `videos`, `perime`, `cause` = `cookies` | `youtube` | `absent`, `derniere_tentative`, `duree_s`, `relance_dans_s`) et
+  diagnostic (`ytdlp`, `js` = moteurs trouvés dans le PATH, `cache`, `echecs` assainis, 10 au plus). Lecture du cache fichier et de
+  `.flux/_etat.json` : aucune lecture YouTube. Seule la version de yt-dlp (`--version`, argv fixe) est lue, mémorisée 10 minutes.
+- `POST /api/v1/ytsas/flux/actualiser/<liste>` : relance forcée d'UNE liste. Une relance à la fois (409), au plus une par liste toutes les
+  30 s (429 + `reessayer_dans`), 409 sans cookies, 502 avec `cause` si YouTube refuse sans ancien cache ; avec un ancien cache : 200,
+  `ok: false`, `perime: true` et la cause. Lecture seule du compte.
+- `POST /api/v1/ytsas/flux/vider/<liste>` : supprime le cache de cette liste seulement.
+
+Garde : nginx (`nginx/ytsas-routes.conf`) exige `auth_request /auth/verify?exige=admin` puis pose `X-Sbx-Garde-Admin`, dont le jeton est
+tiré par `install-lxc.sh` (hôte : `/var/lib/secubox/ytsas/garde-admin.jeton` et `/etc/nginx/snippets/secubox-ytsas-garde.conf`, root seul ;
+LXC : `/data/ytsas/.garde-admin`). Sans jeton installé, l'application refuse tout. Ces routes ne passent ni par le Hall ni par le vhost public.

@@ -160,11 +160,33 @@ YTSAS_DB=/data/ytsas/library.db
 YTSAS_COOKIES=/var/lib/secubox/ytsas/cookies.txt
 YTSAS_CONSERVE_QUEUE=/data/ytsas/.conserve-queue
 YTSAS_CONSERVE_RESULTS=/data/ytsas/.conserve-results
+YTSAS_GARDE_ADMIN=/data/ytsas/.garde-admin
 YTSAS_PORT=$PORT
 YTSAS_MAX_ACTIVE=${YTSAS_MAX_ACTIVE:-3}
 YTSAS_EPHEMERAL_TTL_HOURS=${YTSAS_TTL:-6}
 YTSAS_DISK_FLOOR_GB=${YTSAS_FLOOR:-5}
 EOF"
+
+# --- garde d'ADMINISTRATION du Flux (#2714) ---
+# Jeton tiré UNE fois sur l'hôte (root seul), copié dans le volume partagé pour l'application, et porté par un snippet nginx que le
+# vhost admin inclut APRÈS auth_request (administrateur réel). Jamais passé en argument de commande : printf et redirections internes.
+# Échec = pas de jeton installé = l'application refuse tout (sûr par défaut) ; ne bloque jamais le déploiement.
+GARDE_HOTE="$STATE_DIR/garde-admin.jeton"
+GARDE_LXC="$DATA_DIR/.garde-admin"
+GARDE_NGINX="/etc/nginx/snippets/secubox-ytsas-garde.conf"
+{
+  if [ ! -s "$GARDE_HOTE" ] || [ "$(wc -c < "$GARDE_HOTE")" -lt 32 ]; then
+    ( umask 077; od -An -N32 -tx1 /dev/urandom | tr -d ' \n' > "$GARDE_HOTE" )
+  fi
+  chmod 0600 "$GARDE_HOTE"
+  ( umask 077; cat "$GARDE_HOTE" > "$GARDE_LXC.tmp" ) && chown "$LXC_ROOT_UID:$LXC_ROOT_UID" "$GARDE_LXC.tmp" \
+    && chmod 0600 "$GARDE_LXC.tmp" && mv -f "$GARDE_LXC.tmp" "$GARDE_LXC"
+  if [ -d /etc/nginx/snippets ]; then
+    ( umask 077; _v=$(cat "$GARDE_HOTE"); printf 'proxy_set_header X-Sbx-Garde-Admin "%s";\n' "$_v" > "$GARDE_NGINX.sbxtmp" ) \
+      && mv -f "$GARDE_NGINX.sbxtmp" "$GARDE_NGINX" && chmod 0600 "$GARDE_NGINX"
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+  fi
+} || log "WARN garde d'administration du Flux non installée (les routes /flux/etat refusent tout)"
 
 # the unit ships alongside this script (rules installs both under the same
 # /usr/lib/secubox/ytsas/ dir so $(dirname "$0") resolves on the board)

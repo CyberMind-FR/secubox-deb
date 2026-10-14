@@ -1,3 +1,11 @@
+secubox-ytsas (0.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * Administration du Flux YouTube (ref #2714) : nouvel onglet « Administration du flux » dans la page YouTube SAS, à côté de la carte du Hall (conservée). État des cookies (présence, date du fichier, verdict de YouTube : jamais le contenu, jamais un nom ni une valeur de cookie) avec le mode d'emploi pour des cookies qui tiennent, état de chaque liste (dernière lecture, vidéos en cache, périmé, cause, durée), actualiser ou vider une liste (confirmation dans la page), diagnostic (version de yt-dlp, moteur JavaScript, derniers échecs assainis, taille du cache). Mode ?demo=1 sans requête ni écriture.
+  * API (LXC) : GET /flux/etat (cache fichier et métadonnées, aucune lecture YouTube), POST /flux/actualiser/<liste> (relance forcée, une à la fois, au plus une fois par 30 s et par liste : 429 sinon), POST /flux/vider/<liste>. Les erreurs de yt-dlp sont assainies avant d'être gardées ou rendues (adresses, chemins, cookies, longues chaînes retirés, 160 caractères).
+  * Sécurité : ces trois routes exigent le jeton de garde X-Sbx-Garde-Admin, que nginx ne pose qu'après auth_request sur /auth/verify?exige=admin (administrateur réel) ; l'en-tête X-Sbx-Flux du Hall n'ouvre rien, le Hall ne les relaie pas, le préfixe ouvert et le vhost public effacent le jeton. Jeton tiré par install-lxc.sh (root seul, volume partagé et snippet nginx) ; absent, tout est refusé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 19:00:00 +0200
+
 secubox-ytsas (0.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Flux YouTube : mes chaînes, playlists, dernières vidéos d'une chaîne, contenu d'une playlist (ref #2708). Nouveaux types de GET /flux : chaines (yt-dlp feed/channels : nom, handle, abonnés, vidéos, avatar, seulement s'ils sont fournis) et playlists (feed/playlists : id, titre, chaîne, miniature). Nouvelles routes de lecture GET /flux/chaine/<id> et GET /flux/playlist/<id>.

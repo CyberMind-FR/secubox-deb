@@ -10,6 +10,9 @@
   (/api/v1/ytsas/…, jeton sbx_token en Bearer) : on refait la peau, pas le contrat.
   Onglet « Flux » : ENCADRE la carte « Flux YouTube » du Hall (https://hall.<domaine>/cardlets/ytflux.html?embed=1), jamais une copie ;
   l'hôte admin n'ouvre aucune route /flux. Le menu commun reste chargé hors ?embed=1 et hors ?demo=1.
+  Onglet « Administration du flux » (#2714) : côté administration du Flux, à côté de la carte et non à sa place. État des cookies (jamais
+  leur contenu), état de chaque liste (cache, péremption, cause, durée), actualiser / vider une liste, diagnostic (yt-dlp, moteur JavaScript,
+  derniers échecs assainis). Routes /flux/etat, /flux/actualiser/<liste>, /flux/vider/<liste> : réservées à l'administrateur par nginx.
   ?demo=1 : données fictives, actions inertes. Mesure absente = « — ». Aucun secret affiché (les cookies ne sont jamais relus).
 -->
 <html lang="fr">
@@ -82,6 +85,15 @@
   .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
   #cFlux{display:block;width:100%;height:520px;border:1px solid var(--trait);border-radius:10px;background:rgba(8,18,38,.7);margin-top:8px}
   .flux-indispo{border:1px dashed var(--orange);color:var(--orange);border-radius:10px;padding:12px;font-size:.85rem;text-align:center;margin-top:8px}
+  .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)}
+  .liste-etat .item{border-left-color:var(--trait2)} .liste-etat .item.ok{border-left-color:var(--vert)} .liste-etat .item.perime{border-left-color:var(--orange)}
+  .liste-etat .item.sans{border-left-color:var(--faible)}
+  .item .retour{margin-top:5px;font-size:.74rem;overflow-wrap:anywhere} .item .retour.ko{color:var(--rouge)} .item .retour.ok{color:var(--vert)}
+  .mode{margin:8px 0 0;border:1px solid var(--trait);border-radius:10px;padding:8px 12px;background:rgba(8,18,38,.5)}
+  .mode summary{cursor:pointer;font-size:.82rem;font-weight:600} .mode ol{margin:8px 0 0;padding-left:20px;font-size:.78rem;line-height:1.6;overflow-wrap:anywhere}
+  .mode.alerte{border-color:var(--orange)}
+  .diag{display:grid;gap:6px;margin:0;font-size:.78rem} .diag div{display:flex;flex-wrap:wrap;gap:2px 10px;min-width:0} .diag dt{color:var(--doux);min-width:9rem} .diag dd{margin:0;overflow-wrap:anywhere;min-width:0}
+  .echec{border-left:3px solid var(--rouge);padding:4px 10px;margin-top:6px;font-size:.74rem;overflow-wrap:anywhere;color:var(--doux)}
   .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw;overflow-wrap:anywhere}
   .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto} .toast.ko{border-color:var(--rouge)}
   .toast .x{margin-left:10px;cursor:pointer;font-weight:700;background:none;border:0;color:inherit;font:inherit}
@@ -111,6 +123,7 @@
   <div class="onglets" role="tablist" aria-label="Sections de YouTube SAS">
     <button class="onglet" id="oBiblio" type="button" role="tab" aria-selected="true" aria-controls="pBiblio">Médiathèque</button>
     <button class="onglet" id="oFlux" type="button" role="tab" aria-selected="false" aria-controls="pFlux" tabindex="-1">Flux</button>
+    <button class="onglet" id="oAdmin" type="button" role="tab" aria-selected="false" aria-controls="pAdmin" tabindex="-1">Administration du flux</button>
   </div>
 
   <div class="panneaux" id="pBiblio" role="tabpanel" aria-labelledby="oBiblio">
@@ -143,6 +156,49 @@
       <div id="zoneFlux"></div>
     </div>
   </div>
+
+  <div class="panneaux" id="pAdmin" role="tabpanel" aria-labelledby="oAdmin" hidden>
+    <div class="info" id="adminAcces" role="status" hidden></div>
+    <section class="tuiles" aria-label="Indicateurs du flux">
+      <div class="tuile" id="kCookies" title="Verdict sur les cookies déposés : acceptés (une lecture récente a réussi), refusés (YouTube ne reconnaît pas le compte), anciens (fichier déposé depuis plus de 30 jours), absents, ou inconnu (aucune lecture depuis le dépôt)."><span class="l">Cookies</span><span class="v" id="aCookies">—</span><span class="s" id="aCookiesS">verdict</span></div>
+      <div class="tuile cy" id="kListes" title="Listes dont le cache est présent et encore frais (moins de 15 minutes), sur les six listes lues."><span class="l">Listes à jour</span><span class="v" id="aListes">—</span><span class="s">sur 6 listes</span></div>
+      <div class="tuile vi" title="Version de yt-dlp, le moteur qui lit le compte (mémorisée 10 minutes)."><span class="l">yt-dlp</span><span class="v" id="aYtdlp">—</span><span class="s">version</span></div>
+      <div class="tuile" id="kJs" title="Moteur JavaScript que yt-dlp utilise pour résoudre les défis de YouTube. Deno est celui qu'il active par défaut ; node ou bun demandent un réglage."><span class="l">Moteur JavaScript</span><span class="v" id="aJs">—</span><span class="s" id="aJsS">pour yt-dlp</span></div>
+    </section>
+
+    <div class="grille">
+      <div class="pan"><h3>🔒 Cookies du compte <i>GET /flux/etat</i></h3>
+        <div class="ligne-saisie" style="margin-top:0"><span class="pill" id="aCkPill">…</span><span class="muted" id="aCkMeta"></span></div>
+        <p class="note">Seuls la présence, la date du fichier et le verdict de YouTube sont montrés : jamais le contenu, jamais le nom ni la valeur d’un cookie.</p>
+        <details class="mode" id="aMode"><summary>Comment obtenir des cookies qui tiennent</summary>
+          <p class="note">Google fait tourner les cookies d’une session de navigateur : un export tiré d’une session qui reste ouverte devient inutilisable peu après. Pour qu’il tienne :</p>
+          <ol>
+            <li>Utilise un profil de navigateur dédié à cet usage, et à rien d’autre.</li>
+            <li>Ouvre une fenêtre de navigation privée dans ce profil, puis connecte-toi à YouTube avec le compte voulu.</li>
+            <li>Dans le même onglet privé, ouvre <code>youtube.com/robots.txt</code> (page neutre, qui ne fait pas tourner les cookies).</li>
+            <li>Exporte au format Netscape, avec l’extension « Get cookies.txt LOCALLY », les cookies de <code>youtube.com</code> et <code>google.com</code> seulement.</li>
+            <li>Ferme la fenêtre privée <strong>sans te déconnecter</strong> de YouTube, et ne rouvre pas ce compte dans ce profil.</li>
+            <li>Dépose le fichier dans le panneau Authentification.</li>
+          </ol>
+        </details>
+        <div class="ligne-saisie"><button class="btn prim" id="aVersDepot" type="button">⬆ Aller au dépôt des cookies</button></div>
+      </div>
+      <div class="pan"><h3>🩺 Diagnostic <i>yt-dlp · cache · échecs</i></h3>
+        <dl class="diag">
+          <div><dt>yt-dlp</dt><dd id="dYtdlp">—</dd></div>
+          <div><dt>Moteur JavaScript</dt><dd id="dJs">—</dd></div>
+          <div><dt>Cache du flux</dt><dd id="dCache">—</dd></div>
+          <div><dt>Péremption</dt><dd id="dTtl">—</dd></div>
+        </dl>
+        <div id="dEchecs"></div>
+      </div>
+    </div>
+
+    <div class="pan liste-etat"><h3>🎞️ État de chaque liste <i>POST /flux/actualiser · /flux/vider</i></h3>
+      <p class="note" style="margin-top:0">Lecture seule du compte : rien n’est écrit chez YouTube. Actualiser relit une liste maintenant (une à la fois, une fois par 30 s et par liste) ; vider supprime son cache sur la box.</p>
+      <div id="aListesEtat"><p class="vide">Chargement…</p></div>
+    </div>
+  </div>
 </div></div></main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -167,6 +223,10 @@
   var openPlayers = Object.create(null);     // id -> lecteur intégré ouvert
   var CONFIRM = null;                        // id dont la suppression attend confirmation (dans la ligne, jamais de dialogue natif)
   var OCCUPE = false;                        // ajout ou dépôt en cours
+  var ETAT = null, ETAT_ERR = null;          // administration du flux : dernière lecture de /flux/etat, ou la raison de son absence
+  var ATTENTE = null;                        // liste dont la relance est en cours (une seule à la fois)
+  var VIDER = null;                          // liste dont le vidage attend confirmation (dans la ligne, jamais de dialogue natif)
+  var RETOUR = Object.create(null);          // type -> {ok, texte} : résultat de la dernière action sur cette liste
 
   // ----- Mises en forme -----
   function fmtWhen(ts) {
@@ -221,7 +281,7 @@
     return fetch(path, Object.assign({}, opts, { headers: headers })).then(function (res) {
       if (res.status === 401) { SESSION_OK = false; throw new Error('unauthorized'); }
       return res.json().catch(function () { return {}; }).then(function (body) {
-        if (!res.ok) throw new Error(body && body.error ? body.error : ('HTTP ' + res.status));
+        if (!res.ok) { var er = new Error(body && body.error ? body.error : ('HTTP ' + res.status)); er.statut = res.status; er.corps = body || {}; throw er; }
         return body;
       });
     });
@@ -409,8 +469,153 @@
   $('btnCookie').addEventListener('click', uploadCookies);
   $('rafraichir').addEventListener('click', charger);
 
-  // ----- Onglets : Médiathèque | Flux -----
-  var ONGLETS = [['oBiblio', 'pBiblio'], ['oFlux', 'pFlux']];
+
+  var NOMS = { envie: 'À regarder plus tard', propositions: 'Propositions', abonnements: 'Abonnements', historique: 'Historique', chaines: 'Chaînes', playlists: 'Playlists' };
+  var ORDRE = ['envie', 'propositions', 'abonnements', 'historique', 'chaines', 'playlists'];
+  var CAUSES = { cookies: 'YouTube ne reconnaît pas le compte (cookies périmés)', youtube: 'YouTube n’a pas répondu', absent: 'pas de cookies déposés' };
+  var VERDICTS = { acceptes: ['ok', '✅ acceptés'], inconnu: ['', '❔ inconnu'], refuses: ['hors', '⛔ refusés'], anciens: ['att', '⚠ anciens'], absents: ['hors', '⛔ absents'] };
+
+  function demoEtat() {
+    var t = Math.floor(Date.now() / 1000);
+    ETAT = {
+      ttl_s: 900, anti_rafale_s: 30,
+      cookies: { present: true, mtime: t - 9 * 86400, stale: true, verdict: 'refuses' },
+      listes: [
+        { type: 'envie', date: t - 240, age_s: 240, videos: 24, perime: false, cause: null, derniere_tentative: t - 240, duree_s: 3.4, relance_dans_s: 0 },
+        { type: 'propositions', date: t - 5400, age_s: 5400, videos: 24, perime: true, cause: 'cookies', derniere_tentative: t - 600, duree_s: 1.9, relance_dans_s: 0 },
+        { type: 'abonnements', date: t - 700, age_s: 700, videos: 24, perime: false, cause: null, derniere_tentative: t - 700, duree_s: 4.1, relance_dans_s: 0 },
+        { type: 'historique', date: t - 7200, age_s: 7200, videos: 24, perime: true, cause: 'youtube', derniere_tentative: t - 3000, duree_s: 90.0, relance_dans_s: 0 },
+        { type: 'chaines', date: null, age_s: null, videos: null, perime: null, cause: null, derniere_tentative: null, duree_s: null, relance_dans_s: 0 },
+        { type: 'playlists', date: t - 300, age_s: 300, videos: 12, perime: false, cause: null, derniere_tentative: t - 300, duree_s: 2.2, relance_dans_s: 12 }
+      ],
+      diagnostic: {
+        ytdlp: '2026.08.19', js: { present: false, moteurs: [], par_defaut: false },
+        cache: { fichiers: 9, octets: 183296 },
+        echecs: [
+          { liste: 'historique', date: t - 3000, cause: 'youtube', texte: 'délai dépassé' },
+          { liste: 'propositions', date: t - 600, cause: 'cookies', texte: 'Sign in to confirm you’re not a bot. Use [chemin] for how to pass cookies' }
+        ]
+      }
+    };
+    ETAT_ERR = null;
+  }
+  function chargerEtat() {
+    if (DEMO) { demoEtat(); rendreAdmin(); return Promise.resolve(); }
+    return api(API + '/flux/etat').then(function (x) { ETAT = x; ETAT_ERR = null; })
+      .catch(function (e) {
+        ETAT = null;
+        ETAT_ERR = e.message === 'unauthorized' ? 'session' : (e.statut === 403 ? 'admin' : 'indispo');
+      }).then(rendreAdmin);
+  }
+  function fmtDate(ts) { return ts == null ? '—' : new Date(ts * 1000).toLocaleString('fr-FR'); }
+  function fmtDuree(s) { return s == null || !isFinite(s) ? '—' : s.toFixed(1).replace('.', ',') + ' s'; }
+  function fmtAge(s) {
+    if (s == null || !isFinite(s)) return '—';
+    if (s < 90) return 'il y a ' + Math.round(s) + ' s';
+    if (s < 5400) return 'il y a ' + Math.round(s / 60) + ' min';
+    if (s < 172800) return 'il y a ' + Math.round(s / 3600) + ' h';
+    return 'il y a ' + Math.round(s / 86400) + ' j';
+  }
+  function rendreAdmin() {
+    var acces = $('adminAcces'), e = ETAT;
+    acces.hidden = !ETAT_ERR;
+    if (ETAT_ERR) acces.textContent = ETAT_ERR === 'session' ? 'Aucune mesure : session requise. Connecte-toi.' :
+      ETAT_ERR === 'admin' ? 'Aucune mesure : l’administration du flux est réservée à l’administrateur de la box.' : 'Aucune mesure : l’état du flux est indisponible (service arrêté, injoignable ou pas encore mis à jour).';
+    var ck = e && e.cookies, v = ck ? (VERDICTS[ck.verdict] || ['', '—']) : null;
+    $('aCookies').textContent = v ? v[1].replace(/^\S+ /, '') : '—';
+    $('kCookies').className = 'tuile' + (v && v[0] ? ' ' + v[0] : '');
+    $('aCookiesS').textContent = ck && ck.mtime ? 'déposés ' + fmtDate(ck.mtime) : 'verdict';
+    var pill = $('aCkPill');
+    pill.className = 'pill' + (v && v[0] ? ' ' + v[0] : ''); pill.textContent = v ? v[1] : '—';
+    $('aCkMeta').textContent = ck ? (ck.present ? 'fichier déposé le ' + fmtDate(ck.mtime) : 'aucun fichier déposé') : '';
+    var probleme = !!ck && (ck.verdict === 'refuses' || ck.verdict === 'anciens' || ck.verdict === 'absents');
+    $('aMode').open = probleme; $('aMode').className = 'mode' + (probleme ? ' alerte' : '');
+    var n = e ? e.listes.filter(function (l) { return l.videos != null && l.perime === false; }).length : null;
+    $('aListes').textContent = e ? String(n) : '—';
+    var d = e && e.diagnostic;
+    $('aYtdlp').textContent = d ? tiret(d.ytdlp) : '—';
+    $('aJs').textContent = d ? (d.js.present ? d.js.moteurs.join(', ') : 'aucun') : '—';
+    $('kJs').className = 'tuile' + (d ? (d.js.present && d.js.par_defaut ? ' ok' : ' att') : '');
+    $('aJsS').textContent = d ? (d.js.present ? (d.js.par_defaut ? 'actif par défaut' : 'à activer dans yt-dlp') : 'yt-dlp peut échouer sur certaines pages') : 'pour yt-dlp';
+    $('dYtdlp').textContent = d ? tiret(d.ytdlp) : '—';
+    $('dJs').textContent = d ? (d.js.present ? d.js.moteurs.join(', ') + (d.js.par_defaut ? ' (deno : actif par défaut)' : ' (deno absent : à activer dans yt-dlp)')
+      : 'aucun moteur trouvé — installer deno dans le conteneur pour que yt-dlp résolve les défis JavaScript') : '—';
+    $('dCache').textContent = d ? d.cache.fichiers + ' fichier' + (d.cache.fichiers > 1 ? 's' : '') + ' · ' + fmtBytes(d.cache.octets) : '—';
+    $('dTtl').textContent = e ? 'cache frais pendant ' + Math.round(e.ttl_s / 60) + ' min' : '—';
+    var box = $('dEchecs'); box.replaceChildren();
+    if (d) {
+      if (!d.echecs.length) box.appendChild(el('p', 'note', 'Aucun échec récent.'));
+      d.echecs.forEach(function (f) {
+        box.appendChild(el('div', 'echec', fmtDate(f.date) + ' · ' + (NOMS[f.liste] || f.liste) + ' · ' + (CAUSES[f.cause] || f.cause) + (f.texte ? ' — ' + f.texte : '')));
+      });
+    }
+    rendreListesAdmin();
+    annoncer();
+  }
+  function rendreListesAdmin() {
+    var box = $('aListesEtat'); box.replaceChildren();
+    if (!ETAT) { box.appendChild(el('p', 'vide', ETAT_ERR ? '—' : 'Chargement…')); return; }
+    ORDRE.forEach(function (t) {
+      var l = ETAT.listes.filter(function (x) { return x.type === t; })[0];
+      if (!l) return;
+      var vide = l.videos == null;
+      var it = el('div', 'item ' + (vide ? 'sans' : (l.perime ? 'perime' : 'ok'))); it.setAttribute('data-liste', t);
+      var top = el('div', 'item-top');
+      top.appendChild(el('div', 'titre', NOMS[t] || t));
+      var act = el('div', 'row-actions');
+      act.appendChild(el('span', 'pill ' + (vide ? '' : (l.perime ? 'att' : 'ok')), vide ? 'pas de cache' : (l.perime ? '⚠ périmé' : '✅ à jour')));
+      var occupe = ATTENTE === t;
+      var b = btn(occupe ? '⏳ Lecture en cours…' : '↻ Actualiser', 'prim', function () { actualiser(t); }, 'Relire cette liste maintenant (lecture seule du compte)');
+      b.setAttribute('data-act', 'actualiser'); b.disabled = !!ATTENTE; act.appendChild(b);
+      if (VIDER === t) {
+        act.appendChild(el('span', 'note', 'Vider le cache de cette liste ?'));
+        var c = btn('Confirmer', 'danger', function () { VIDER = null; vider(t); }); c.setAttribute('data-act', 'confirmer'); act.appendChild(c);
+        act.appendChild(btn('Annuler', '', function () { VIDER = null; rendreListesAdmin(); }));
+      } else {
+        var vb = btn('🗑 Vider', 'danger', function () { VIDER = t; rendreListesAdmin(); }, 'Supprimer le cache de cette liste'); vb.setAttribute('data-act', 'vider');
+        vb.disabled = vide || !!ATTENTE; act.appendChild(vb);
+      }
+      top.appendChild(act); it.appendChild(top);
+      var meta = [];
+      meta.push('lue ' + (l.date == null ? '—' : fmtDate(l.date) + ' (' + fmtAge(l.age_s) + ')'));
+      meta.push('vidéos en cache : ' + tiret(l.videos));
+      meta.push('durée de lecture : ' + fmtDuree(l.duree_s));
+      it.appendChild(el('div', 'meta', meta.join(' · ')));
+      if (l.cause) it.appendChild(el('div', 'meta ko', 'Cause : ' + (CAUSES[l.cause] || l.cause)));
+      if (l.relance_dans_s) it.appendChild(el('div', 'meta', 'Prochaine relance possible dans ' + l.relance_dans_s + ' s'));
+      var r = RETOUR[t];
+      if (r) { var rr = el('div', 'retour ' + (r.ok ? 'ok' : 'ko'), r.texte); rr.setAttribute('role', 'status'); it.appendChild(rr); }
+      box.appendChild(it);
+    });
+  }
+  function actualiser(t) {
+    if (ATTENTE) return;
+    if (DEMO) { toast('Démonstration : action inerte, rien n’est envoyé.'); return; }
+    ATTENTE = t; delete RETOUR[t]; rendreListesAdmin();
+    api(API + '/flux/actualiser/' + encodeURIComponent(t), { method: 'POST' }).then(function (r) {
+      RETOUR[t] = r.ok ? { ok: true, texte: 'Lue : ' + tiret(r.videos) + ' vidéos en ' + fmtDuree(r.duree_s) + '.' }
+        : { ok: false, texte: 'YouTube n’a pas rendu de lecture neuve (' + (CAUSES[r.cause] || 'cause inconnue') + ') : ancienne lecture conservée, ' + tiret(r.videos) + ' vidéos.' };
+    }).catch(function (e) {
+      var c = e.corps || {};
+      RETOUR[t] = { ok: false, texte: e.message === 'unauthorized' ? 'Session requise.' :
+        c.cause === 'rafale' ? 'Trop rapproché : réessaie dans ' + tiret(c.reessayer_dans) + ' s.' :
+        c.cause ? (CAUSES[c.cause] || c.cause) + (c.detail ? ' — ' + c.detail : '') + '.' : 'Échec : ' + e.message };
+    }).then(function () { ATTENTE = null; return chargerEtat(); });
+  }
+  function vider(t) {
+    if (DEMO) { toast('Démonstration : action inerte, rien n’est envoyé.'); rendreListesAdmin(); return; }
+    api(API + '/flux/vider/' + encodeURIComponent(t), { method: 'POST' }).then(function (r) {
+      RETOUR[t] = { ok: true, texte: r.vide ? 'Cache vidé.' : 'Rien à vider : le cache était déjà vide.' };
+    }).catch(function (e) { RETOUR[t] = { ok: false, texte: e.message === 'unauthorized' ? 'Session requise.' : 'Échec : ' + e.message }; })
+      .then(chargerEtat);
+  }
+  $('aVersDepot').addEventListener('click', function () {
+    choisir('oBiblio');
+    var f = $('cookieFile'); try { f.scrollIntoView({ block: 'center' }); f.focus(); } catch (e) { /* défilement indisponible */ }
+  });
+
+  // ----- Onglets : Médiathèque | Flux | Administration du flux -----
+  var ONGLETS = [['oBiblio', 'pBiblio'], ['oFlux', 'pFlux'], ['oAdmin', 'pAdmin']];
   function choisir(id) {
     ONGLETS.forEach(function (o) {
       var sel = o[0] === id;
@@ -418,6 +623,7 @@
       $(o[1]).hidden = !sel;
     });
     if (id === 'oFlux') ouvrirFlux();
+    if (id === 'oAdmin') chargerEtat();
     annoncer();
   }
   ONGLETS.forEach(function (o, i) {
@@ -470,6 +676,7 @@
   setInterval(function () {
     if (document.hidden || DEMO || CONFIRM || OCCUPE || $('urlInput').value || $('cookieFile').value) return;
     charger();
+    if (!$('pAdmin').hidden && !ATTENTE && !VIDER) chargerEtat();
   }, 15000);
 })();
 </script>
