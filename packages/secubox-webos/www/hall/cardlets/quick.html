@@ -2,140 +2,149 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox #1286 — WIDGET D'ACCÈS RAPIDE.
+  SecuBox #1286 — WIDGET D'ACCÈS RAPIDE du Hall, au profil Aurora (.claude/AURORA-REFERENCE.md, #2659).
 
-  POURQUOI CES TROIS-LÀ N'ONT PAS DE CARTE À EUX. Torrent, YTSaS et le Dépôt ne
-  se CONSULTENT pas : on y va pour faire quelque chose. Leur montrer une
-  vitrine défilante serait leur prêter une vie de publication qu'ils n'ont pas.
-  Ce qu'on veut d'eux tient en une ligne de chiffres — combien, combien en
-  cours, combien de place reste — et en un accès direct.
+  POURQUOI CES SERVICES-LÀ N'ONT PAS DE CARTE À EUX. Torrent, YTSaS et le Dépôt ne se CONSULTENT pas : on y va pour faire
+  quelque chose. Leur montrer une vitrine défilante serait leur prêter une vie de publication qu'ils n'ont pas. Ce qu'on veut
+  d'eux tient en une ligne de chiffres — combien, combien en cours, combien de place reste — et en un accès direct.
 
-  UN SEUL GABARIT POUR LES TROIS. Ils diffèrent par leurs chiffres, pas par
-  leur forme : trois fichiers presque identiques auraient été trois endroits où
-  corriger, et un seul qu'on pense à corriger.
+  UN SEUL GABARIT POUR TOUS (?svc=torrent|ytsas|nextcloud|photoprism|mail|depot). Ils diffèrent par leurs chiffres, pas par
+  leur forme : plusieurs fichiers presque identiques auraient été autant d'endroits où corriger. Encadrée par la carte Cumul
+  (cloud, contenu…), elle porte ?embed=1 : l'hôte du service est alors repris par la barre du bas du cumul.
+
+  MÊMES APPELS D'API QU'AVANT : lecture /adm/api/v1/<module>/status, liste /api/v1/webos/public/actions/<m>/liste, actions
+  POST /api/v1/webos/actions/<m>/<action>, dépôt POST /api/v1/webos/depot (XHR, progression). Retrait d'un site du dépôt :
+  confirmation INTÉGRÉE (Confirmer / Annuler), aucun dialogue natif. Messages vers le Hall inchangés : ouvre, voir.
+  ?demo=1 : chiffres et listes fictifs, aucune requête, toutes les actions inertes. Mesure absente = « — » (jamais 0).
+  Tout texte venu du serveur passe par textContent.
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Accès rapide — vue micro</title>
-<link rel="stylesheet" href="../spicy.css">
 <style>
-  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#3c6e8f; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-      --border:#2a2a36; --accent:#6db3d9; }
-  }
-  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-    --border:#2a2a36; --accent:#6db3d9; }
-  * { box-sizing:border-box; }
-  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
-  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
-  body { background:var(--fond); color:var(--texte);
-         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
-
-  .mw { display:flex; flex-direction:column; height:100%; padding:.65rem .75rem; gap:.4rem;
-        position:relative; }
-  /* LES CHIFFRES SONT DANS LE TITRE, et c'est tout le propos : on doit
-     connaître l'état du service sans rien déplier. */
-  /* Meme en-tete que les cartes classiques et que les cartes deleguees
-     (#1302) : trois familles de cartes qui se ressemblent se lisent comme une
-     seule interface ; trois qui different se lisent comme un chantier. */
-  .tete { display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; }
-  .tete .ic { width:28px; height:28px; border-radius:8px; display:grid;
-              place-items:center; font-size:.9rem; color:#fff; flex:0 0 auto; }
-  .tete b { font-size:.88rem; }
-  .tete .m { display:inline-flex; align-items:baseline; gap:.2rem; font-size:.68rem;
-             color:var(--muted); font-variant-numeric:tabular-nums; }
-  .tete .m b { font-size:.72rem; color:var(--texte); font-weight:650; }
-  .tete .m.actif b { color:var(--accent); }
-  .hote { font-size:.6rem; color:var(--muted); font-family:"JetBrains Mono";
-          overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-
-  /* LA SURCOUCHE reste rangée jusqu'au survol : un widget d'accès rapide qui
-     affiche en permanence ses six boutons n'est plus rapide, il est encombré. */
-  .acces { display:flex; flex-wrap:wrap; gap:5px; margin-top:auto; }
-  .acces a { flex:1 1 auto; text-align:center; padding:.3rem .45rem; border-radius:7px;
-             border:1px solid var(--border); background:none; color:var(--texte);
-             text-decoration:none; font-size:.68rem; white-space:nowrap; }
-  .acces a:hover { border-color:var(--accent); color:var(--accent); }
-  .acces a.p { background:var(--accent); border-color:var(--accent); color:#fff; }
-  .acces a.p:hover { opacity:.9; color:#fff; }
-  /* LA LISTE AGISSANTE (#1314). Un widget d'acces rapide qui ne fait
-     qu'afficher des chiffres est une vitrine ; ce qu'on veut de ces
-     trois-la, c'est agir. La liste n'apparait que si l'on est connecte —
-     sans identite, il n'y a rien a commander. */
-  .items { display:flex; flex-direction:column; gap:.14rem; margin:.1rem 0; }
-  .items .it { display:flex; align-items:center; gap:.36rem; font-size:.69rem;
-               line-height:1.3; }
-  .items .it .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
-                   white-space:nowrap; }
-  .items .it button { flex:0 0 auto; width:20px; height:20px; border-radius:5px;
-                      border:1px solid var(--border); background:none;
-                      color:var(--muted); font-size:.6rem; line-height:1;
-                      cursor:pointer; padding:0; }
-  .items .it button:hover { border-color:var(--accent); color:var(--accent); }
-  .items .it .et { flex:0 0 auto; font-size:.58rem; color:var(--muted); }
-  .items .it .et.ok { color:var(--accent); }
-  .items .it a.nm { color:inherit; text-decoration:none; }
-  .items .it a.nm:hover { color:var(--accent); text-decoration:underline; }
-  /* UNE CAPTURE EN CACHE SOUVERAIN SE LIT D'UN CLIC (#1237). Elle est deja sur
-     la box : son titre devient un lien de lecture, distinct visuellement d'un
-     simple nom (accent + puce ▶). */
-  .items .it a.nm.lire { color:var(--accent); font-weight:600; cursor:pointer; }
-  .items .it a.nm.lire:hover { text-decoration:underline; }
-  /* ZONE DE DEPOT (#1328). La carte listait et retirait, mais ne DEPOSAIT
-     pas — elle parlait d'un service sans savoir faire ce pour quoi il existe.
-     Trois gestes menent au meme endroit : glisser, coller, choisir. */
-  .depose { display:flex; align-items:center; justify-content:center; gap:.3rem;
-    padding:.42rem .5rem; border:1px dashed var(--bord); border-radius:7px;
-    font-size:.62rem; color:var(--muted); cursor:pointer; text-align:center;
-    transition:border-color .12s, color .12s; }
-  .depose:hover, .depose.vise { border-color:var(--accent); color:var(--accent); }
-  .depose b { font-weight:600; }
-  .depose.envoi { cursor:progress; }
-  .jauge { height:3px; border-radius:2px; background:var(--bord); overflow:hidden;
-    margin-top:.28rem; }
-  .jauge i { display:block; height:100%; width:0; background:var(--accent);
-    transition:width .15s; }
-  .pied { font-size:.58rem; color:var(--muted); padding:.1rem .1rem 0;
-          font-variant-numeric:tabular-nums; }
-  .ajout { display:flex; gap:5px; margin-top:.15rem; }
-  .ajout input { flex:1; min-width:0; font:inherit; font-size:.68rem;
-                 padding:.24rem .4rem; border-radius:6px; color:var(--texte);
-                 border:1px solid var(--border); background:var(--fond); }
-  .ajout button { flex:0 0 auto; font:inherit; font-size:.68rem; padding:.24rem .55rem;
-                  border-radius:6px; border:1px solid var(--accent);
-                  background:var(--accent); color:#fff; cursor:pointer; }
-  .msg { font-size:.62rem; color:var(--muted); margin:.2rem 0 0; }
-  .msg.ko { color:#c0392b; }
-
-  .barre { height:4px; border-radius:3px; background:var(--border); overflow:hidden; }
-  .barre i { display:block; height:100%; background:var(--accent); width:0; }
-  .note { font-size:.6rem; color:var(--muted); }
-  .ko { font-size:.72rem; color:var(--muted); }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  body.emb .cadre,body.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  body.emb .app,body.dans .app{padding:10px;gap:8px}
+  body.emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  body.emb .marque{display:none} body.dans .marque small{display:none} body.dans .marque h1{font-size:1.05rem} body.dans .marque svg{width:24px;height:24px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .actif.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover{border-color:var(--cyan)} .btn:disabled{opacity:.5;cursor:default}
+  .btn:focus-visible,button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.danger{border-color:var(--rouge);color:var(--rouge)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(var(--n,2),minmax(0,1fr))}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(var(--nl,4),minmax(0,1fr))}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  body.dans .tuile{padding:7px 9px;gap:3px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  body.dans .tuile .v{font-size:1.2rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.mal .v{color:var(--rouge)} .tuile.nul .v{color:var(--faible)} .tuile.nul{border-style:dashed}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  body.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem;overflow-wrap:anywhere}
+  body.emb .pan h3,body.dans .pan h3{display:none}
+  .onglets{display:flex;gap:6px;flex-wrap:wrap}
+  .onglet{min-height:36px;padding:3px 13px;border-radius:999px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--doux);font:inherit;font-size:.78rem;cursor:pointer}
+  .onglet:hover{border-color:var(--cyan);color:var(--texte)}
+  .onglet[aria-selected="true"]{border-color:var(--cyan);background:rgba(41,182,246,.18);color:var(--texte);font-weight:700}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--orange);font-weight:600}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+  .retour.ko{border-color:var(--rouge);color:var(--rouge)}
+  .msg{padding:12px;margin-top:8px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  .msg .btn{margin:6px 0 0 .6rem}
+  input[type=search],input[type=text],input[type=url]{font:inherit;font-size:.8rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.8);color:var(--texte);min-width:0;min-height:34px}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  body.emb .marque{display:flex}
+  .marque .ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-size:1.05rem;color:#fff;flex:0 0 auto}
+  body.dans .marque .ic{width:28px;height:28px;font-size:.9rem}
+  .marque small a{color:inherit;text-decoration:none} .marque small a:hover{text-decoration:underline}
+  .marque small.mono{font-size:.68rem;overflow-wrap:anywhere}
+  .tuile .v.petit{font-size:1.1rem}
+  .acces{display:flex;flex-wrap:wrap;gap:6px}
+  .acces a{flex:1 1 auto;text-align:center;text-decoration:none}
+  .acces a.p{background:var(--cyan);border-color:var(--cyan);color:#04101e;font-weight:700}
+  .items{display:flex;flex-direction:column;gap:6px}
+  .it{display:flex;align-items:center;gap:8px;font-size:.78rem;line-height:1.3;min-height:34px;flex-wrap:wrap}
+  .it .nm{flex:1 1 120px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit;text-decoration:none}
+  a.nm:hover{color:var(--cyan);text-decoration:underline}
+  .it a.nm.lire{color:var(--cyan);font-weight:600;cursor:pointer}
+  .it .et{flex:0 0 auto;font-size:.68rem;color:var(--doux);border:1px solid var(--trait2);border-radius:999px;padding:1px 9px}
+  .it .et.ok{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)}
+  .it button{flex:0 0 auto;min-width:34px;min-height:34px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);font:inherit;font-size:.74rem;cursor:pointer;padding:0 8px}
+  .it button:hover{border-color:var(--cyan)}
+  .it button.ok{border-color:var(--rouge);color:var(--rouge)}
+  /* ZONE DE DEPOT (#1328) : glisser, coller, choisir — trois gestes, un seul chemin. */
+  .depose{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px;border:1px dashed var(--trait2);border-radius:10px;font-size:.78rem;color:var(--doux);cursor:pointer;text-align:center;min-height:48px}
+  .depose:hover,.depose.vise{border-color:var(--cyan);color:var(--cyan)}
+  .depose b{font-weight:600} .depose i{font-style:normal;color:var(--faible);font-size:.7rem}
+  .depose.envoi{cursor:progress} .depose.ferme{cursor:default;opacity:.7}
+  .jauge{height:4px;border-radius:2px;background:rgba(159,179,214,.16);overflow:hidden;margin-top:6px}
+  .jauge i{display:block;height:100%;width:0;background:var(--cyan);transition:width .15s}
+  .ajout{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .ajout input{flex:1 1 140px}
+  .ajout button{flex:0 0 auto;font:inherit;font-size:.78rem;padding:5px 14px;border-radius:8px;border:1px solid var(--cyan);background:var(--cyan);color:#04101e;font-weight:700;cursor:pointer;min-height:34px}
+  .pied{font-size:.72rem;color:var(--faible);font-variant-numeric:tabular-nums;margin:8px 0 0}
+  .ko{color:var(--rouge)}
+  #msg.msg{margin-top:8px;padding:6px 10px;font-size:.78rem;text-align:left;border-style:solid;border-color:var(--trait2)}
+  #msg.msg:empty{display:none}
+  #msg.msg.ko{border-color:var(--rouge);color:var(--rouge)}
 </style>
+</head>
+<body>
+<div class="cadre"><div class="app">
+  <header class="tete" id="tete">
+    <div class="marque">
+      <span class="ic" id="ic" aria-hidden="true">📦</span>
+      <div><h1 id="nom">…</h1><small class="mono" id="hote"></small></div>
+    </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Lecture…</span>
+    <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucun service réel, actions inertes</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" data-natif="1" target="_top">Se connecter</a></div>
 
-<div class="mw">
-  <div class="tete" id="tete"><span class="ic" id="ic">📦</span><b id="nom">…</b></div>
-  <div class="hote" id="hote"></div>
-  <div class="barre" id="barre" hidden><i id="jauge"></i></div>
-  <div class="note" id="note"></div>
-  <div class="items" id="items"></div>
-  <p class="msg" id="msg"></p>
+  <section class="tuiles" id="tuiles" aria-label="Indicateurs"></section>
+  <p class="note" id="note" style="margin:0"></p>
+  <div class="pan" id="panneau" hidden><h3>Éléments récents <i id="routeListe"></i></h3>
+    <div class="items" id="items"></div>
+    <p class="pied" id="piedStock" hidden></p>
+    <p class="msg" id="msg" role="status"></p>
+  </div>
   <div class="acces" id="acces"></div>
-</div>
-
+</div></div>
 <script src="/api/v1/webos/public/hotes.js"></script>
 <script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
 <script>
 (function () {
   "use strict";
-  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
-      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
   var el = function (id) { return document.getElementById(id); };
+  function nouveau(tag, cls, texte) { var e = document.createElement(tag); if (cls) e.className = cls; if (texte != null) e.textContent = texte; return e; }
 
-  // Ce qui distingue les trois : leur nom, leur module d'API, et les chiffres
+  // Ce qui distingue les services : leur nom, leur module d'API, et les chiffres
   // qui MERITENT d'etre en titre. Le reste est commun.
   var SVC = {
     // PAS DE BOUTONS DU BAS (#1332), comme YTSaS et le Dépôt. « Ouvrir » et
@@ -162,7 +171,7 @@
       couleur:'#1655a0',
       chiffres:[['user_count','👥','comptes'],['disk_used','💾','espace utilisé']],
       etat:function(d){ return d.running ? 'en marche' + (d.version ? ' · version ' + d.version : '')
-                                         : (d.installed ? 'endormi — se réveille à l\u2019ouverture' : 'non installé'); },
+                                         : (d.installed ? 'endormi — se réveille à l’ouverture' : 'non installé'); },
       acces:[['Ouvrir mon cloud','/sbx/entrer','']] },
     // PHOTOS (PhotoPrism) : photos, vidéos, albums, espace — le comptage vient d'un cache côté module (mesuré en arrière-plan).
     photoprism: { ic:'📷', nom:'Photos', hote:SBX_DOMAINE.hote('photoprism.gk2.secubox.in'), mod:'photoprism',
@@ -210,34 +219,39 @@
   };
 
   var params = new URLSearchParams(location.search);
+  var DEMO = !!params.get('demo');
   var id = params.get('svc') || 'depot';
   var c = SVC[id] || SVC.depot;
+  if (params.get('embed')) document.body.classList.add('emb');
+  try { if (window.top !== window) document.body.classList.add('dans'); } catch (e) { document.body.classList.add('dans'); }
   // EN TRANCHE DE CUMUL (#1266) : l'hôte du service est repris par la barre du
   // bas du cumul (sur la ligne des points). On masque donc NOTRE ligne d'hôte
   // pour ne pas la doubler — la tranche n'en montre qu'une, en bas.
   var enEmbed = params.get('embed') === '1';
+  var derniereListe = [];
+  if (ACTIONNABLE[id]) el('routeListe').textContent = 'GET /api/v1/webos/public/actions/' + ACTIONNABLE[id] + '/liste';
 
   el('ic').textContent = c.ic;
   el('ic').style.background = c.couleur;
   el('nom').textContent = c.nom;
   el('hote').textContent = c.hote;
-  if (enEmbed) { var _h = el('hote'); if (_h) _h.style.display = 'none'; }
-  el('acces').innerHTML = c.acces.map(function (a) {
-    return '<a class="' + a[2] + '" href="https://' + esc(c.hote) + esc(a[1])
-      + '" target="_top">' + esc(a[0]) + '</a>';
-  }).join('');
+  if (enEmbed) { el('hote').style.display = 'none'; }
+  c.acces.forEach(function (a) {
+    var l = nouveau('a', 'btn ' + (a[2] || 'p'), a[0]);
+    l.href = 'https://' + c.hote + a[1]; l.target = '_top';
+    el('acces').appendChild(l);
+  });
   // SANS BOUTONS, LE SERVICE DOIT RESTER ATTEIGNABLE. On ne rajoute rien : on
   // rend cliquable l'hôte, qui était déjà affiché. Une carte qui parle d'un
   // service sans y mener est une impasse.
   if (!c.acces.length) {
     var h = el('hote');
-    if (h) {
-      h.innerHTML = '<a href="https://' + esc(c.hote) + '/" target="_top">'
-        + esc(c.hote) + '</a>';
-      h.querySelector('a').style.color = 'inherit';
-    }
+    h.textContent = '';
+    var lh = nouveau('a', null, c.hote); lh.href = 'https://' + c.hote + '/'; lh.target = '_top';
+    h.appendChild(lh);
   }
 
+  function pastille(cls, t) { var e = el('etat'); e.className = 'actif ' + cls; e.textContent = t; }
   function octets(n) {
     n = Number(n) || 0;
     var u = ['o', 'Ko', 'Mo', 'Go', 'To'], i = 0;
@@ -245,34 +259,36 @@
     return (n >= 10 ? Math.round(n) : n.toFixed(1)) + ' ' + u[i];
   }
 
-  function pose(d) {
-    var t = el('tete');
-    // On repart du pictogramme et du nom : réécrire tout le titre évite de
-    // faire diverger l'ordre des chiffres du contenu qu'ils annoncent.
-    t.innerHTML = '<span class="ic" style="background:' + esc(c.couleur) + '">'
-      + esc(c.ic) + '</span><b>' + esc(c.nom) + '</b>'
-      + ((c.absent && c.absent(d)) ? [] : c.chiffres).map(function (m) {
-          var v = m[0].split('.').reduce(function (o, k) { return (o === undefined || o === null) ? undefined : o[k]; }, d);
-          // Un chiffre absent n'est PAS un zéro : on ne l'affiche pas plutôt
-          // que d'annoncer « 0 » là où le service n'a rien dit.
-          if (v === undefined || v === null) return '';
-          var actif = (m[0] === 'downloading' || m[0] === 'jobs') && Number(v) > 0;
-          return '<span class="m' + (actif ? ' actif' : '') + '" title="' + esc(m[2]) + '">'
-            + esc(m[1]) + '<b>' + esc(v) + '</b></span>';
-        }).join('');
+  // Les chiffres sont des tuiles. Une mesure absente est « — », jamais un zéro.
+  function rendTuiles(d) {
+    var z = el('tuiles'); z.textContent = '';
+    var liste = d ? ((c.absent && c.absent(d)) ? [] : c.chiffres) : c.chiffres;
+    z.style.setProperty('--n', String(Math.min(Math.max(liste.length, 1), 4) > 2 ? 2 : Math.max(liste.length, 1)));
+    z.style.setProperty('--nl', String(Math.max(Math.min(liste.length, 4), 1)));
+    liste.forEach(function (m) {
+      var v = d ? m[0].split('.').reduce(function (o, k) { return (o === undefined || o === null) ? undefined : o[k]; }, d) : undefined;
+      var absent = (v === undefined || v === null);
+      var actif = !absent && (m[0] === 'downloading' || m[0] === 'jobs') && Number(v) > 0;
+      var t = nouveau('div', 'tuile ' + (actif ? 'att' : absent ? 'nul' : 'cy'));
+      t.title = m[2];
+      t.appendChild(nouveau('span', 'l', m[1] + ' ' + m[2]));
+      t.appendChild(nouveau('span', 'v' + (!absent && String(v).length > 7 ? ' petit' : ''), absent ? '—' : String(v)));
+      z.appendChild(t);
+    });
+    z.hidden = !liste.length;
+  }
 
+  function pose(d) {
+    rendTuiles(d);
+    el('note').className = 'note';
+    el('note').textContent = '';
     if (d.disk_free !== undefined) {
       el('note').textContent = octets(d.disk_free) + ' libres';
     }
     // Un service qui dit lui-même s'il tourne (Nextcloud, Photos, Mail) : on l'écrit, c'est l'information la plus utile d'une
     // carte d'accès. Chaque service dit COMMENT (fonction `etat`), car « endormi », « démarre… » ou « webmail arrêté » diffèrent.
     if (typeof c.etat === 'function') { el('note').textContent = c.etat(d); }
-    if (d.active !== undefined && Number(d.active) > 0) {
-      el('barre').hidden = false;
-      el('jauge').style.width = '100%';
-    } else {
-      el('barre').hidden = true;
-    }
+    pastille(d.active !== undefined && Number(d.active) > 0 ? 'cy' : '', d.active !== undefined && Number(d.active) > 0 ? 'ACTIVITÉ EN COURS' : 'À JOUR');
   }
 
   // ── AGIR (#1314) ─────────────────────────────────────────────────────────
@@ -281,8 +297,11 @@
   // authentifiee, et l'appeler directement depuis la carte ouvrirait l'action
   // a qui charge la page.
   function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+  function inerte() { dis('Démonstration : action inerte, rien n’est envoyé.'); }
   function api(chemin, opts) {
     opts = opts || {};
+    // En démonstration, aucun appel d'écriture ne part : la promesse reste en suspens et le message le dit.
+    if (DEMO) { inerte(); return new Promise(function () {}); }
     opts.headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
     var j = jeton();
     if (j) opts.headers['Authorization'] = 'Bearer ' + j;
@@ -310,10 +329,14 @@
     return [];
   }
 
+  function bouton(a, titre, texte) { var b = nouveau('button', null, texte); b.type = 'button'; b.dataset.a = a; b.title = titre; b.setAttribute('aria-label', titre); return b; }
+
   function rendItems(l) {
-    var z = el('items');
-    if (!l || !l.length) { z.innerHTML = ''; return; }
-    z.innerHTML = l.slice(0, 3).map(function (x) {
+    var z = el('items'); z.textContent = '';
+    derniereListe = l || [];
+    el('panneau').hidden = !ACTIONNABLE[id];
+    if (!l || !l.length) return;
+    l.slice(0, 3).forEach(function (x) {
       // Chaque module nomme ses champs a sa facon : le torrent a un `name` et
       // un `complete`, YTSaS un `title` et un etat de conservation. On lit ce
       // qui existe plutot que d'imposer un schema commun a des services qui
@@ -321,6 +344,7 @@
       var titre = x.name || x.title || '—';
       var fini = String(x.complete) === '1' || x.complete === true;
       var garde = String(x.kept) === '1' || x.kept === true;
+      var ligne = nouveau('div', 'it');
 
       // LE DEPOT : ce qu'il heberge est en ligne ou ne l'est pas, et son nom
       // mene a son domaine. Un depot dont on ne peut pas ouvrir les sites
@@ -328,26 +352,20 @@
       if (id === 'depot') {
         var sur = x.enabled === true || String(x.enabled) === '1';
         var dom = x.domain || '';
-        var nom = dom
-          ? '<a class="nm" href="https://' + esc(dom) + '/" target="_top" title="'
-            + esc(dom) + '">' + esc(titre) + '</a>'
-          : '<span class="nm" title="' + esc(titre) + '">' + esc(titre) + '</span>';
-        return '<span class="it" data-id="' + esc(titre) + '">'
-          + nom
-          + '<span class="et' + (sur ? ' ok' : '') + '">'
-          + (x.type === 'streamlit' ? '🧩' : '🌐')
-          + ' ' + (sur ? 'en ligne' : 'arrêté') + '</span>'
-          + '<button data-a="supprimer" title="Retirer du dépôt">✕</button>'
-          + '</span>';
+        ligne.dataset.id = titre;
+        var nom;
+        if (dom) { nom = nouveau('a', 'nm', titre); nom.href = 'https://' + dom + '/'; nom.target = '_top'; nom.title = dom; }
+        else { nom = nouveau('span', 'nm', titre); nom.title = titre; }
+        ligne.appendChild(nom);
+        ligne.appendChild(nouveau('span', 'et' + (sur ? ' ok' : ''), (x.type === 'streamlit' ? '🧩' : '🌐') + ' ' + (sur ? 'en ligne' : 'arrêté')));
+        ligne.appendChild(bouton('supprimer', 'Retirer du dépôt', '✕'));
+        z.appendChild(ligne);
+        return;
       }
 
       var etat = (id === 'ytsas')
         ? (garde ? 'conservé' : 'éphémère')
         : (fini ? 'complet' : 'en cours');
-      var boutons = (id === 'ytsas')
-        ? (garde ? '' : '<button data-a="conserver" title="Conserver">★</button>')
-        : '<button data-a="pause" title="Mettre en pause">❚❚</button>'
-          + '<button data-a="reprise" title="Reprendre">▶</button>';
       // ── CAPTURE YTSAS EN CACHE LOCAL : CLIQUABLE VERS LE VIEWER TV (#1237) ──
       // Une capture COMPLETE (ou conservee) est deja dans le cache SOUVERAIN de
       // la box : on peut la jouer sans repasser par YouTube ni Google. Son titre
@@ -356,19 +374,43 @@
       // a jouer : elle reste un simple nom.
       var vidY = x.id || x.video_id || '';
       var enCacheY = (id === 'ytsas') && (fini || garde) && vidY;
-      var nmY = enCacheY
-        ? '<a class="nm lire" data-lire="' + esc(vidY) + '" data-titre="' + esc(titre)
-          + '" title="Lire dans le viewer (cache souverain) — ' + esc(titre) + '">▶ ' + esc(titre) + '</a>'
-        : '<span class="nm" title="' + esc(titre) + '">' + esc(titre) + '</span>';
-      return '<span class="it" data-id="' + esc(x.infohash || vidY) + '">'
-        + nmY
-        + '<span class="et' + ((fini || garde) ? ' ok' : '') + '">' + esc(etat) + '</span>'
-        + boutons + '</span>';
-    }).join('');
+      var nmY;
+      if (enCacheY) {
+        nmY = nouveau('a', 'nm lire', '▶ ' + titre);
+        nmY.dataset.lire = vidY; nmY.dataset.titre = titre; nmY.setAttribute('role', 'button'); nmY.tabIndex = 0;
+        nmY.title = 'Lire dans le viewer (cache souverain) — ' + titre;
+      } else { nmY = nouveau('span', 'nm', titre); nmY.title = titre; }
+      ligne.dataset.id = x.infohash || vidY;
+      ligne.appendChild(nmY);
+      ligne.appendChild(nouveau('span', 'et' + ((fini || garde) ? ' ok' : ''), etat));
+      if (id === 'ytsas') { if (!garde) ligne.appendChild(bouton('conserver', 'Conserver', '★')); }
+      else { ligne.appendChild(bouton('pause', 'Mettre en pause', '❚❚')); ligne.appendChild(bouton('reprise', 'Reprendre', '▶')); }
+      z.appendChild(ligne);
+    });
   }
+
+  // Données fictives (démonstration) : noms inventés, domaines de documentation, aucune requête.
+  var DEMO_STATUT = {
+    torrent: { total: 9, downloading: 2, to_peertube: 1, disk_free: 412 * 1024 * 1024 * 1024, active: 2 },
+    ytsas: { total: 14, jobs: 1, to_peertube: 0, disk_free: 412 * 1024 * 1024 * 1024, active: 1 },
+    nextcloud: { running: true, installed: true, version: '28.0.4', user_count: 4, disk_used: '12,4 Go' },
+    photoprism: { container_status: 'running', http_reachable: true, library_stats: { total_photos: 8421, total_videos: 212, total_albums: 37, storage_used: '38 Go', import_pending: 0, mesure_en_cours: false } },
+    mail: { installed: true, user_count: 5, storage: '2,1 Go', components: { mail_server: { installed: true, running: true }, webmail: { installed: true, running: true } } },
+    depot: { sites_count: 3, apps_count: 2, disk_free: 412 * 1024 * 1024 * 1024 }
+  };
+  var DEMO_LISTE = {
+    torrent: [{ name: 'distribution-libre-demo.iso', complete: 1, infohash: 'demo1' }, { name: 'archives-cartes-demo', complete: 0, infohash: 'demo2' }, { name: 'conference-demo.mkv', complete: 1, infohash: 'demo3' }],
+    ytsas: [{ title: 'Conférence fictive sur les réseaux', id: 'demo-a', complete: 1, kept: 0 }, { title: 'Tutoriel fictif', id: 'demo-b', complete: 0, kept: 0 }, { title: 'Concert fictif', id: 'demo-c', complete: 1, kept: 1 }],
+    depot: [{ name: 'site-demo', enabled: true, domain: 'site-demo.example', type: 'static' }, { name: 'appli-demo', enabled: false, domain: '', type: 'streamlit' }]
+  };
 
   function chargeItems() {
     if (!ACTIONNABLE[id]) return;
+    if (DEMO) {
+      rendItems(DEMO_LISTE[id] || []);
+      if (id === 'depot') { poseDepot(); chargeStockage(); } else poseAjout();
+      return;
+    }
     // LISTE PUBLIQUE (#1237) : media partages du parc, visibles meme en invite.
     api('/public/actions/' + ACTIONNABLE[id] + '/liste').then(function (r) {
       if (r.code === 401 || r.code === 403) {
@@ -376,13 +418,14 @@
         // libres, compteurs). La liste actionnable demande une session, mais un
         // invite n'a pas a etre harcele de « connectez-vous » : on masque juste
         // la liste et le bouton d'ajout, le resume reste.
-        el('items').innerHTML = '';
-        el('ajout') && el('ajout').remove();
+        el('items').textContent = '';
+        el('panneau').hidden = true;
+        if (el('ajout')) el('ajout').remove();
         dis('');
         return;
       }
       var d = r.corps || {};
-      if (!d.ok) { dis(d.detail || '', true); return; }
+      if (!d.ok) { el('panneau').hidden = false; dis(d.detail || '', true); return; }
       dis('');
       var l = tableau(d.donnees);
       rendItems(l);
@@ -395,19 +438,19 @@
   // CE QUE LE DEPOT A DE PLUS QUE SA LISTE : ce qu'il reste de place. La liste
   // peut etre vide sans que le depot le soit, et c'est la seule mesure qui le
   // dise. Cette route est authentifiee en amont — le jeton est relaye.
+  function pied(d) {
+    var p = el('piedStock');
+    p.hidden = false;
+    p.textContent = d.total_human + ' déposés · ' + (d.file_count || 0)
+      + ' fichier' + ((d.file_count || 0) > 1 ? 's' : '')
+      + ' · ' + (d.max_upload_mb || '?') + ' Mo par envoi';
+  }
   function chargeStockage() {
+    if (DEMO) { pied({ total_human: '1,2 Go', file_count: 14, max_upload_mb: 512 }); return; }
     api('/public/actions/droplet/stockage').then(function (r) {
       var d = (r.corps || {}).donnees;
       if (!d || !d.total_human) return;
-      var z = el('items');
-      var p = document.createElement('div');
-      p.className = 'pied';
-      p.textContent = d.total_human + ' déposés · ' + (d.file_count || 0)
-        + ' fichier' + ((d.file_count || 0) > 1 ? 's' : '')
-        + ' · ' + (d.max_upload_mb || '?') + ' Mo par envoi';
-      var vieux = z.parentNode.querySelector('.pied');
-      if (vieux) vieux.remove();
-      z.parentNode.insertBefore(p, el('msg'));
+      pied(d);
     });
   }
 
@@ -424,19 +467,42 @@
   // carte qui n'en accepte qu'un force le detour.
   var LIMITES = null;
 
+  // La zone de dépôt, construite par le DOM : invite par défaut, ou texte donné.
+  function remplisDepose(d, contenu) {
+    d.textContent = '';
+    if (contenu) {
+      var sp = nouveau('span'); contenu(sp); d.appendChild(sp);
+    } else {
+      var s = nouveau('span');
+      s.appendChild(document.createTextNode('Glissez vos fichiers, collez-les, ou '));
+      s.appendChild(nouveau('b', null, 'choisissez'));
+      var lim = nouveau('i'); lim.id = 'lim'; s.appendChild(document.createTextNode(' ')); s.appendChild(lim);
+      d.appendChild(s);
+    }
+    var f = nouveau('input'); f.type = 'file'; f.id = 'fich'; f.multiple = true; f.hidden = true; f.setAttribute('aria-label', 'Choisir des fichiers');
+    d.appendChild(f);
+  }
+  function affLimites() {
+    var lim = el('lim');
+    if (lim && LIMITES) {
+      var mo = Math.round((LIMITES.taille_max || 0) / (1024 * 1024));
+      lim.textContent = LIMITES.fichiers_max + ' fichiers · ' + (mo >= 1024 ? Math.round(mo / 1024) + ' Go' : mo + ' Mo');
+    }
+  }
+
   function poseDepot() {
     if (el('depose')) return;
-    var d = document.createElement('div');
-    d.className = 'depose'; d.id = 'depose';
+    var d = nouveau('div', 'depose');
+    d.id = 'depose';
     d.setAttribute('role', 'button'); d.setAttribute('tabindex', '0');
-    d.innerHTML = INVITE + CHAMP;
+    remplisDepose(d);
     el('items').parentNode.insertBefore(d, el('msg'));
 
     // CE QUE LE DEPOSANT DOIT SAVOIR AVANT D'ENVOYER, et qui n'est pas une
     // formalite : ses fichiers ne seront pas publies, et personne ne pourra
     // les relire depuis cette carte. Le dire apres n'aurait servi a rien.
-    var n = document.createElement('p');
-    n.className = 'note'; n.id = 'note';
+    var n = nouveau('p', 'note');
+    n.id = 'noteDepot';
     n.textContent = "Ils partent directement sur la box, et une alerte prévient "
       + "son propriétaire. Rien de ce qui est déposé n'est publié, ni relisible "
       + "depuis cette page.";
@@ -447,19 +513,17 @@
     // LES PLAFONDS SE DEMANDENT, ILS NE S'ECRIVENT PAS ICI. Les recopier dans
     // la carte, c'est garantir qu'ils divergeront le jour ou le service
     // changera les siens.
-    api('/depot/reglages').then(function (r) {
+    var lecture = DEMO ? Promise.resolve({ corps: { donnees: { actif: true, fichiers_max: 10, taille_max: 512 * 1024 * 1024 } } }) : api('/depot/reglages');
+    lecture.then(function (r) {
       var x = (r.corps || {}).donnees;
       if (!x) return;
       LIMITES = x;
       if (!x.actif) {
         d.classList.add('ferme');
-        d.innerHTML = "<span>L'espace de dépôt est fermé.</span>";
+        remplisDepose(d, function (sp) { sp.textContent = "L'espace de dépôt est fermé."; });
         return;
       }
-      var mo = Math.round((x.taille_max || 0) / (1024 * 1024));
-      var lim = el('lim');
-      if (lim) lim.textContent = x.fichiers_max + ' fichiers · ' +
-        (mo >= 1024 ? Math.round(mo / 1024) + ' Go' : mo + ' Mo');
+      affLimites();
     });
 
     // GLISSER SUR TOUTE LA CARTE, pas seulement sur la zone. Viser un cadre de
@@ -495,10 +559,6 @@
       if (l && l.length) { e.preventDefault(); retiens(l); }
     });
   }
-
-  var INVITE = '<span>Glissez vos fichiers, collez-les, ou <b>choisissez</b>'
-    + '<i id="lim"></i></span>';
-  var CHAMP = '<input type="file" id="fich" multiple hidden>';
 
   function branche() {
     var d = el('depose'), f = el('fich');
@@ -538,17 +598,21 @@
     }
     enAttente = liste;
     var d = el('depose');
-    d.innerHTML = '<span>' + liste.length + ' fichier'
-      + (liste.length > 1 ? 's' : '') + ' — <b>envoyer ?</b></span>' + CHAMP;
+    remplisDepose(d, function (sp) {
+      sp.appendChild(document.createTextNode(liste.length + ' fichier' + (liste.length > 1 ? 's' : '') + ' — '));
+      sp.appendChild(nouveau('b', null, 'envoyer ?'));
+    });
     branche();
     if (!el('mot')) {
-      var m = document.createElement('div');
-      m.className = 'ajout'; m.id = 'ajout';
-      m.innerHTML = '<input id="mot" placeholder="un mot, si vous voulez" '
-        + 'autocomplete="off" maxlength="2000"><button id="go">Déposer</button>';
-      el('note').parentNode.insertBefore(m, el('note'));
-      el('go').addEventListener('click', envoie);
-      el('mot').addEventListener('keydown', function (e) {
+      var m = nouveau('div', 'ajout');
+      m.id = 'ajout';
+      var champ = nouveau('input'); champ.id = 'mot'; champ.type = 'text'; champ.placeholder = 'un mot, si vous voulez'; champ.autocomplete = 'off'; champ.maxLength = 2000;
+      champ.setAttribute('aria-label', 'Un mot pour accompagner le dépôt');
+      var go = nouveau('button', null, 'Déposer'); go.id = 'go'; go.type = 'button';
+      m.appendChild(champ); m.appendChild(go);
+      el('noteDepot').parentNode.insertBefore(m, el('noteDepot'));
+      go.addEventListener('click', envoie);
+      champ.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); envoie(); }
       });
     }
@@ -558,10 +622,11 @@
   function envoie() {
     var d = el('depose');
     if (!enAttente || d.classList.contains('envoi')) return;
+    if (DEMO) { inerte(); return; }
     d.classList.add('envoi');
 
-    var j = document.createElement('div');
-    j.className = 'jauge'; j.innerHTML = '<i></i>';
+    var j = nouveau('div', 'jauge');
+    j.appendChild(nouveau('i'));
     d.parentNode.insertBefore(j, d.nextSibling);
     dis('envoi…');
 
@@ -583,13 +648,9 @@
       d.classList.remove('envoi'); j.remove();
       enAttente = null;
       var a = el('ajout'); if (a) a.remove();
-      d.innerHTML = INVITE + CHAMP;
+      remplisDepose(d);
       branche();
-      if (LIMITES) {
-        var mo = Math.round((LIMITES.taille_max || 0) / (1024 * 1024));
-        el('lim').textContent = LIMITES.fichiers_max + ' fichiers · ' +
-          (mo >= 1024 ? Math.round(mo / 1024) + ' Go' : mo + ' Mo');
-      }
+      affLimites();
       dis(txt, ko);
     }
     x.onload = function () {
@@ -606,10 +667,11 @@
   function poseAjout() {
     var cfg = AJOUT[id];
     if (!cfg || el('ajout')) return;
-    var d = document.createElement('div');
-    d.className = 'ajout'; d.id = 'ajout';
-    d.innerHTML = '<input id="mag" placeholder="' + esc(cfg.invite) + '" autocomplete="off">'
-      + '<button id="go">' + esc(cfg.bouton) + '</button>';
+    var d = nouveau('div', 'ajout');
+    d.id = 'ajout';
+    var champ = nouveau('input'); champ.id = 'mag'; champ.type = 'text'; champ.placeholder = cfg.invite; champ.autocomplete = 'off'; champ.setAttribute('aria-label', cfg.invite);
+    var go = nouveau('button', null, cfg.bouton); go.id = 'go'; go.type = 'button';
+    d.appendChild(champ); d.appendChild(go);
     el('items').parentNode.insertBefore(d, el('msg'));
     function envoie() {
       var v = el('mag').value.trim();
@@ -624,10 +686,10 @@
           else dis(x.detail || 'refusé', true);
         });
     }
-    el('go').addEventListener('click', envoie);
+    go.addEventListener('click', envoie);
     // Entrée vaut le bouton : coller une URL puis viser un bouton de 60 px,
     // c'est un geste de trop pour la seule chose que cette carte sait faire.
-    el('mag').addEventListener('keydown', function (e) {
+    champ.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); envoie(); }
     });
   }
@@ -640,6 +702,7 @@
     if (lire) {
       e.preventDefault();
       var sid = lire.getAttribute('data-lire');
+      if (DEMO) { inerte(); return; }
       if (sid && parent !== window) {
         try { parent.postMessage({ sbx: 'voir',
           url: '/api/v1/ytsas/stream/' + encodeURIComponent(sid),
@@ -651,19 +714,18 @@
     if (!b) return;
     var it = b.closest('.it');
 
+    // ANNULER le retrait : la ligne retrouve son bouton d'origine.
+    if (b.dataset.a === 'annuler') { rendItems(derniereListe); dis(''); return; }
+
     // SUPPRIMER NE SE FAIT PAS AU PREMIER CLIC. Retirer un site du depot est
     // irreversible, et cette carte est petite : le pointeur y derape. Le
-    // premier clic arme, le second execute — et l'armement retombe seul.
-    if (b.dataset.a === 'supprimer' && b.dataset.arme !== '1') {
-      b.dataset.arme = '1';
-      b.textContent = '⚠';
-      b.title = 'Cliquer à nouveau pour retirer « ' + it.dataset.id + ' »';
-      dis('confirmer le retrait ?');
-      setTimeout(function () {
-        if (!b.parentNode) return;
-        b.dataset.arme = ''; b.textContent = '✕';
-        b.title = 'Retirer du dépôt'; dis('');
-      }, 4000);
+    // premier clic demande une confirmation DANS LA PAGE (Confirmer / Annuler).
+    if (b.dataset.a === 'supprimer' && b.dataset.confirme !== '1') {
+      var conf = bouton('supprimer', 'Confirmer le retrait de « ' + it.dataset.id + ' »', 'Confirmer');
+      conf.dataset.confirme = '1'; conf.className = 'ok';
+      var ann = bouton('annuler', 'Annuler le retrait', 'Annuler');
+      it.replaceChild(conf, b); it.appendChild(ann);
+      dis('confirmer le retrait de « ' + it.dataset.id + ' » ?');
       return;
     }
 
@@ -682,44 +744,47 @@
   });
 
   function charge() {
+    el('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+    el('session').hidden = true;
+    if (DEMO) { el('demo').hidden = false; pose(DEMO_STATUT[id] || DEMO_STATUT.depot); annoncer(); return; }
     fetch('/adm/api/v1/' + c.mod + '/status', { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
       .then(function (r) {
         // Lecture réservée à la session (Nextcloud) : on le DIT, on n'affiche ni zéro ni « injoignable ».
-        if (r.status === 401 || r.status === 403) { el('note').innerHTML = '<span class="ko">connexion requise pour voir l\u2019état</span>'; return undefined; }
+        if (r.status === 401 || r.status === 403) { rendTuiles(null); el('note').className = 'note ko'; el('note').textContent = 'connexion requise pour voir l’état'; el('session').hidden = false; pastille('neutre', 'SESSION REQUISE'); return undefined; }
         return r.ok ? r.json() : null;
       })
       .then(function (d) {
         if (d === undefined) return;
-        if (!d) { el('note').innerHTML = '<span class="ko">état indisponible</span>'; return; }
+        if (!d) { rendTuiles(null); el('note').className = 'note ko'; el('note').textContent = 'état indisponible'; pastille('hors', 'HORS LIGNE'); return; }
         pose(d);
       })
-      .catch(function () { el('note').innerHTML = '<span class="ko">injoignable</span>'; });
+      .catch(function () { rendTuiles(null); el('note').className = 'note ko'; el('note').textContent = 'injoignable'; pastille('hors', 'HORS LIGNE'); })
+      .then(annoncer);
   }
+  el('rafraichir').onclick = function () { charge(); chargeItems(); };
+  rendTuiles(null);
   charge();
   chargeItems();
   // Ces chiffres bougent quand on agit, pas tout seuls : une minute suffit.
-  setInterval(charge, 60000);
+  setInterval(function () { if (!document.hidden && !DEMO) charge(); }, 60000);
 
   // Rester dans le Hall (#1266).
   document.addEventListener('click', function (ev) {
     if (parent === window) return;
     var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
     if (!a || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
+    if (a.hasAttribute('data-natif')) return;      // « Se connecter » : lien ordinaire
     ev.preventDefault();
+    if (DEMO) { inerte(); return; }
     try { parent.postMessage({ sbx: 'ouvre', id: id, url: a.href }, '*'); } catch (e) {}
   }, true);
 
-  (function () {
-    var t = new URLSearchParams(location.search).get('theme');
-    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
-  })();
-  addEventListener('message', function (ev) {
-    var d = ev.data;
-    if (!d || d.sbx !== 'theme') return;
-    if (d.theme === 'dark' || d.theme === 'light') {
-      document.documentElement.setAttribute('data-theme', d.theme);
-    }
-  });
+  // Hauteur annoncée à l'hôte (iframes) : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7).
+  function annoncer() {
+    try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'quick-' + id }, location.origin); } catch (e) { /* hors iframe */ }
+  }
+  if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
 })();
 </script>
 
@@ -729,3 +794,5 @@
   {el:document.getElementById('items'),label:'Éléments récents — la liste vivante du service'},
   {el:document.getElementById('acces'),label:'Accès — les actions du service'}
 ].filter(function(z){return z.el;});}});</script>
+</body>
+</html>
