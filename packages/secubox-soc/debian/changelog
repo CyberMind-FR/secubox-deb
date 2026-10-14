@@ -1,3 +1,11 @@
+secubox-soc (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: page Vigie SOC (www/soc/index.html) au profil Aurora : page autonome sans police distante, onglets et groupes inchangés, tuiles à infobulle de définition, mesure absente en tiret, bandeau session requise, ?demo=1 (données fictives, aucun appel) et ?embed=1, hauteur annoncée (sbxVue, onglet soc), aucun innerHTML ni dialogue natif (ref #2676)
+  * Inchangé : mêmes 14 routes de lecture, même jeton sbx_token en Bearer, mêmes écrans (Guardian, vues WAF/DPI/Actor encadrées, Vigie, Meta-metrics, Centrale d'alertes)
+  * Non repris : le thème clair (le profil Aurora est sombre uniquement), les polices Google (Cinzel, Inter, JetBrains Mono), l'animation du pouls ; le menu latéral commun n'est plus chargé en démonstration
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 13:10:00 +0200
+
 secubox-soc (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: Guardian, panneau Filtrage web (barres bloque et observe par categorie sur 7 jours, mode dit, lien vers le panneau) (ref #2430)
