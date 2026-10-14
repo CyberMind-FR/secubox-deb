@@ -1,3 +1,29 @@
+secubox-eye-remote (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Pages /eye-remote/ (tableau de bord) et /eye-remote/terminal.html
+    (console serie) au profil Aurora (ref #2644) : pages autonomes, sans
+    dependance, tuiles avec definition en infobulle, mesure absente = « — »,
+    bandeau « session requise », ?demo=1 (donnees fictives, aucun appel) et
+    ?embed=1, 420 px sans debordement. Memes routes, methodes et en-tetes
+    (jeton sbx_token en Bearer) ; aucune route ni API modifiee.
+  * Tableau de bord : le bloc « ecran rond virtuel » MOCHAbin lit
+    GET /api/v1/hub/dashboard. Dans l'ancienne page ce code etait place dans le
+    corps d'une balise script a attribut src, donc jamais execute : la carte
+    restait a « -- ». Il est maintenant execute (lecture seule).
+  * Console serie : xterm.js (charge depuis un CDN, interdit par la CSP des
+    vhosts) est remplace par un emulateur ecrit dans la page (couleurs ANSI,
+    effacement, curseur, saisie clavier, collage). Meme WebSocket, meme URL,
+    memes octets, memes reprises (5 tentatives) et jeton de reprise en
+    sessionStorage. Non repris : applications plein ecran complexes (vim,
+    ncurses) et modes prives ANSI. Les deux requetes de lecture envoient
+    desormais le jeton sbx_token en Bearer.
+  * Non repris, faute de donnees reelles : les valeurs de repli inventees de
+    l'ecran rond (temperature 45, signal -50) ; l'icone des six modules
+    (/eye-remote/assets/icons/*.png, absente du paquet) ; l'animation radar.
+  * Tests : tests/test_eye_remote_aurora_2644.py (17, dont Playwright).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 12:00:00 +0200
+
 secubox-eye-remote (1.0.7-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

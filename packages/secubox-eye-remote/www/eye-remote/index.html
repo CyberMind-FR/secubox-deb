@@ -4,741 +4,369 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Eye Remote, tableau de bord au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, aucun appel.
+  Page en lecture seule : aucun jeton d'appareil, aucun secret affiché.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Eye Remote Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Eye Remote</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            --bg-card: var(--tube-pale);
-            --border: var(--tube-soft);
-            --text: #1a1a2e;
-            --primary: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: #ffb347;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--text); display: flex; min-height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--bg-card); border-radius: 8px; margin-bottom: 1rem; }
-        .header h1 { font-size: 1.5rem; color: var(--primary); }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn.primary { background: rgba(0,221,68,0.15); border-color: var(--primary); color: var(--primary); }
-        .btn:hover { opacity: 0.8; }
-
-        .connection-diagram { display: flex; align-items: center; justify-content: center; gap: 1rem; padding: 2rem; background: var(--bg-card); border-radius: 8px; margin-bottom: 1rem; }
-        .device-box { padding: 1.5rem 2rem; border: 2px solid var(--border); border-radius: 12px; background: white; text-align: center; min-width: 160px; transition: all 0.3s; }
-        .device-box.active { border-color: var(--primary); box-shadow: 0 0 20px rgba(0,221,68,0.3); }
-        .device-box .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
-        .device-box .name { font-weight: 700; font-size: 1.1rem; }
-        .device-box .ip { font-size: 0.85rem; color: var(--p31-dim); margin-top: 0.25rem; }
-        .connection-line { width: 80px; height: 4px; background: var(--border); border-radius: 2px; position: relative; }
-        .connection-line.active { background: var(--primary); animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
-        .card { background: var(--bg-card); border-radius: 8px; padding: 1.25rem; }
-        .card h3 { font-size: 0.9rem; color: var(--p31-dim); margin-bottom: 1rem; text-transform: uppercase; }
-        .stat { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
-        .stat:last-child { border-bottom: none; }
-        .stat-label { color: var(--text); }
-        .stat-value { font-weight: 700; color: var(--primary); }
-        .stat-value.disconnected { color: var(--red); }
-
-        .gauges { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; padding: 1rem 0; }
-        .gauge { text-align: center; }
-        .gauge-circle { width: 80px; height: 80px; border-radius: 50%; border: 4px solid var(--border); display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; }
-        .gauge-circle.good { border-color: var(--primary); }
-        .gauge-circle.warn { border-color: var(--yellow); }
-        .gauge-circle.bad { border-color: var(--red); }
-        .gauge-value { font-size: 1.25rem; font-weight: 700; }
-        .gauge-label { font-size: 0.75rem; color: var(--p31-dim); }
-
-        
-        
-        /* Virtual Round Display */
-        .round-container {
-            width: 320px;
-            height: 320px;
-            border-radius: 50%;
-            background: linear-gradient(180deg, #0a0a0a 0%, #050505 100%);
-            position: relative;
-            overflow: hidden;
-            border: 3px solid #181818;
-            box-shadow: 0 0 30px rgba(0,221,68,0.2), inset 0 0 40px rgba(0,0,0,0.5);
-            margin: 0 auto;
-        }
-        .round-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-        .round-center {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            z-index: 2;
-        }
-        .round-time {
-            font-size: 22px;
-            font-weight: 600;
-            color: #fff;
-            letter-spacing: 2px;
-        }
-        .round-date {
-            font-size: 8px;
-            color: #4a4a4a;
-            margin-top: 3px;
-            letter-spacing: 1px;
-        }
-        .round-hostname {
-            font-size: 7px;
-            color: #0A5840;
-            margin-top: 2px;
-        }
-        .round-pod {
-            position: absolute;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 1px;
-            z-index: 3;
-        }
-        .round-pod-icon {
-            width: 18px;
-            height: 18px;
-            object-fit: contain;
-        }
-        .round-pod-val {
-            font-size: 11px;
-            font-weight: 700;
-            color: #fff;
-        }
-        .round-pod-name {
-            font-size: 6px;
-            letter-spacing: 0.5px;
-            opacity: 0.6;
-        }
-        .round-status {
-            position: absolute;
-            bottom: 22px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 7px;
-            letter-spacing: 1px;
-            color: #00dd44;
-            z-index: 2;
-        }
-        .round-transport {
-            position: absolute;
-            top: 14px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 7px;
-            letter-spacing: 0.6px;
-            color: #0A5840;
-            z-index: 2;
-        }
-        /* Module colors */
-        .pod-auth .round-pod-val { color: #C04E24; }
-        .pod-wall .round-pod-val { color: #9A6010; }
-        .pod-boot .round-pod-val { color: #803018; }
-        .pod-mind .round-pod-val { color: #3D35A0; }
-        .pod-root .round-pod-val { color: #0A5840; }
-        .pod-mesh .round-pod-val { color: #104A88; }
-
-        .mini-sparklines { display: flex; gap: 1rem; margin-top: 1rem; justify-content: center; }
-        .mini-spark { display: flex; align-items: flex-end; gap: 1px; height: 20px; padding: 2px; background: rgba(0,0,0,0.1); border-radius: 4px; }
-        .mini-spark .bar { width: 3px; background: var(--primary); border-radius: 1px 1px 0 0; transition: height 0.2s; }
-        .mini-spark .bar.warn { background: var(--yellow); }
-        .mini-spark .bar.bad { background: var(--red); }
-        .mochabin-dashboard { border: 2px solid var(--primary); box-shadow: 0 0 15px rgba(0,221,68,0.2); }
-
-        
-        /* Minimal Device Status Bar */
-        .device-status-bar {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            padding: 8px 16px;
-            background: var(--bg-card);
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            font-size: 0.8rem;
-        }
-        .dev-chip {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 10px;
-            background: rgba(0,0,0,0.05);
-            border-radius: 4px;
-            border: 1px solid var(--border);
-        }
-        .dev-chip.active { border-color: var(--primary); }
-        .dev-led { font-size: 10px; color: var(--border); }
-        .dev-chip.active .dev-led { color: var(--primary); text-shadow: 0 0 6px var(--primary); }
-        .dev-name { font-weight: 600; }
-        .dev-ip { color: var(--p31-dim); font-size: 0.7rem; }
-        .dev-conn { color: var(--border); font-size: 1.2rem; }
-        .dev-conn.active { color: var(--primary); animation: pulse 1.5s infinite; }
-
-        /* 3-Column Grid Layout */
-        .grid-3col {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-        @media (max-width: 1024px) {
-            .grid-3col { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (max-width: 768px) {
-            .grid-3col { grid-template-columns: 1fr; }
-        }
-
-        .quicksheet { font-size: 0.75rem; background: #1a1a2e; color: #00ff55; border-radius: 6px; padding: 0.75rem; font-family: monospace; }
-        .quicksheet code { display: block; padding: 0.2rem 0; color: #ccc; }
-        .quicksheet code span { color: #00ff55; }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.long{font-size:1rem;line-height:1.15}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:8px 0 0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .liaison{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+        .puce{display:flex;flex-direction:column;gap:2px;border:1px solid var(--trait);border-radius:10px;padding:6px 12px;background:rgba(8,18,38,.7);min-width:0}
+        .puce.on{border-color:var(--vert)} .puce b{font-size:.84rem;overflow-wrap:anywhere} .puce span{color:var(--faible);font-size:.7rem}
+        .trait{color:var(--faible);font-size:1.2rem} .trait.on{color:var(--vert)}
+        .jauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:8px;margin-top:4px}
+        .jauge{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+        .jauge svg{width:84px;height:84px;max-width:100%}
+        .jauge .piste{stroke:rgba(159,179,214,.16)} .jauge .arc{stroke:var(--faible);transition:stroke-dasharray .4s}
+        .jauge.good .arc{stroke:var(--vert)} .jauge.warn .arc{stroke:var(--orange)} .jauge.bad .arc{stroke:var(--rouge)}
+        .jauge text{fill:var(--texte);font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+        .jauge .nom{color:var(--doux);font-size:.72rem}
+        .anneaux{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:center}
+        .anneaux svg{width:min(240px,100%);height:auto;flex:0 0 auto}
+        .legende{display:grid;gap:5px;font-size:.78rem;min-width:150px;flex:1 1 150px}
+        .legende div{display:flex;align-items:center;gap:7px} .legende i{width:10px;height:10px;border-radius:3px;display:inline-block;flex:0 0 auto}
+        .legende span{margin-left:auto;font-variant-numeric:tabular-nums}
+        .etatrond{font-weight:700;font-size:.8rem;text-align:center;margin-top:4px}
+        .barres{display:flex;align-items:flex-end;gap:2px;height:30px;border-bottom:1px solid var(--trait);margin-top:8px}
+        .barres div{width:6px;background:var(--cyan);opacity:.8;border-radius:2px 2px 0 0} .barres div.warn{background:var(--orange)} .barres div.bad{background:var(--rouge)}
+        .cmds{display:grid;gap:6px;margin-top:2px} .cmds code{display:block;padding:6px 9px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .cmds code em{color:var(--faible);font-style:normal}
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main">
-        <div class="header">
-            <h1>Eye Remote Dashboard</h1>
-            <button class="btn primary" id="probe-btn" onclick="refreshAll()">Refresh</button>
-        </div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                <div><h1>Eye Remote</h1><small>Écran déporté USB, métriques du Pi Zero et console série</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
 
-        <!-- Minimal inline device status bar -->
-        <div class="device-status-bar">
-            <div class="dev-chip active"><span class="dev-led">●</span><span class="dev-name">MOCHAbin</span><span class="dev-ip">10.55.0.1</span></div>
-            <span class="dev-conn" id="conn-line">⟷</span>
-            <div class="dev-chip" id="gadget-box"><span class="dev-led" id="peer-led">○</span><span class="dev-name" id="pizero-hostname">Pi Zero W</span><span class="dev-ip" id="peer-ip">10.55.0.2</span></div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cLiaison" title="Liaison USB avec le Pi Zero (Eye Remote) : sonde de santé de l’API Eye Remote, relevée toutes les 10 secondes."><span class="l">Liaison</span><span class="v" id="tLiaison">—</span><span class="s">interface usb0</span></div>
+            <div class="tuile cy" id="cCpu" title="Charge du processeur du Pi Zero W, en pourcentage."><span class="l">CPU du Pi</span><span class="v" id="tCpu">—</span><span class="s">pourcentage</span></div>
+            <div class="tuile cy" id="cMem" title="Mémoire vive utilisée sur le Pi Zero W, en pourcentage."><span class="l">RAM du Pi</span><span class="v" id="tMem">—</span><span class="s">pourcentage</span></div>
+            <div class="tuile cy" id="cTemp" title="Température du processeur du Pi Zero W. Au-delà de 50 °C : attention, au-delà de 70 °C : critique."><span class="l">Température</span><span class="v" id="tTemp">—</span><span class="s">°C, processeur</span></div>
+            <div class="tuile cy" id="cDisque" title="Occupation du disque (carte SD) du Pi Zero W, en pourcentage."><span class="l">Disque du Pi</span><span class="v" id="tDisque">—</span><span class="s">carte SD</span></div>
+            <div class="tuile cy" title="Temps écoulé depuis le dernier démarrage du Pi Zero W."><span class="l">Disponibilité</span><span class="v long" id="tUptime">—</span><span class="s">depuis le démarrage</span></div>
+        </section>
 
-        <div class="grid-3col">
-            <div class="card">
-                <h3>Connection Status</h3>
-                <div class="stat">
-                    <span class="stat-label">Status</span>
-                    <span class="stat-value" id="status-text">Checking...</span>
+        <div class="grille">
+            <div class="pan"><h3>Liaison USB <i>GET /health</i></h3>
+                <div class="liaison">
+                    <div class="puce on"><b>MOCHAbin</b><span>10.55.0.1</span></div>
+                    <span class="trait" id="trait">⟷</span>
+                    <div class="puce" id="puceGadget"><b id="piNom">Pi Zero W</b><span id="piIp">10.55.0.2</span></div>
                 </div>
-                <div class="stat">
-                    <span class="stat-label">Interface</span>
-                    <span class="stat-value">usb0</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Last Update</span>
-                    <span class="stat-value" id="last-update">--</span>
-                </div>
+                <dl class="kv">
+                    <dt>Statut</dt><dd id="statut">—</dd>
+                    <dt>Interface</dt><dd class="mono">usb0</dd>
+                    <dt>Dernier relevé</dt><dd id="dernier">—</dd>
+                </dl>
+                <p class="note">Les adresses 10.55.0.1 et 10.55.0.2 sont les adresses fixes de la liaison USB (elles ne sont pas relevées).</p>
             </div>
 
-            <div class="card">
-                <h3>Pi Zero Metrics</h3>
-                <div class="gauges">
-                    <div class="gauge">
-                        <div class="gauge-circle" id="cpu-gauge">
-                            <span class="gauge-value" id="cpu-value">--</span>
-                        </div>
-                        <div class="gauge-label">CPU</div>
-                    </div>
-                    <div class="gauge">
-                        <div class="gauge-circle" id="mem-gauge">
-                            <span class="gauge-value" id="mem-value">--</span>
-                        </div>
-                        <div class="gauge-label">RAM</div>
-                    </div>
-                    <div class="gauge">
-                        <div class="gauge-circle" id="temp-gauge">
-                            <span class="gauge-value" id="temp-value">--</span>
-                        </div>
-                        <div class="gauge-label">Temp</div>
-                    </div>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Uptime</span>
-                    <span class="stat-value" id="pizero-uptime">--</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Disk</span>
-                    <span class="stat-value" id="pizero-disk">--</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Load</span>
-                    <span class="stat-value" id="pizero-load">--</span>
-                </div>
+            <div class="pan"><h3>Mesures du Pi Zero <i>GET /metrics</i></h3>
+                <div class="jauges" id="jaugesPi"></div>
+                <dl class="kv">
+                    <dt>Disponibilité</dt><dd id="piUptime">—</dd>
+                    <dt>Disque</dt><dd id="piDisque">—</dd>
+                    <dt>Charge (1 min)</dt><dd id="piCharge">—</dd>
+                    <dt>Nom d’hôte</dt><dd id="piHote">—</dd>
+                </dl>
             </div>
 
-            
-            <div class="card mochabin-dashboard" style="min-height: 400px;">
-                <h3>🖥️ Virtual Round Display</h3>
-                <div class="round-container" id="round-display">
-                    <canvas class="round-canvas" id="round-canvas" width="320" height="320"></canvas>
-                    <div class="round-transport" id="round-transport">● OTG</div>
-                    <div class="round-center">
-                        <div class="round-time" id="round-time">--:--:--</div>
-                        <div class="round-date" id="round-date">---</div>
-                        <div class="round-hostname" id="round-hostname">secubox</div>
-                    </div>
-                    <!-- 6 pods positioned around the circle -->
-                    <div class="round-pod pod-auth" style="top: 78%; left: 22%;">
-                        <img class="round-pod-icon" src="/eye-remote/assets/icons/auth-22.png" alt="AUTH">
-                        <span class="round-pod-val" id="rp-cpu">--%</span>
-                        <span class="round-pod-name">AUTH</span>
-                    </div>
-                    <div class="round-pod pod-wall" style="top: 22%; left: 75%;">
-                        <img class="round-pod-icon" src="/eye-remote/assets/icons/wall-22.png" alt="WALL">
-                        <span class="round-pod-val" id="rp-mem">--%</span>
-                        <span class="round-pod-name">WALL</span>
-                    </div>
-                    <div class="round-pod pod-boot" style="top: 58%; left: 85%;">
-                        <img class="round-pod-icon" src="/eye-remote/assets/icons/boot-22.png" alt="BOOT">
-                        <span class="round-pod-val" id="rp-disk">--%</span>
-                        <span class="round-pod-name">BOOT</span>
-                    </div>
-                    <div class="round-pod pod-mind" style="top: 58%; left: 5%;">
-                        <img class="round-pod-icon" src="/eye-remote/assets/icons/mind-22.png" alt="MIND">
-                        <span class="round-pod-val" id="rp-load">--</span>
-                        <span class="round-pod-name">MIND</span>
-                    </div>
-                    <div class="round-pod pod-root" style="top: 22%; left: 15%;">
-                        <img class="round-pod-icon" src="/eye-remote/assets/icons/root-22.png" alt="ROOT">
-                        <span class="round-pod-val" id="rp-temp">--°</span>
-                        <span class="round-pod-name">ROOT</span>
-                    </div>
-                    <div class="round-pod pod-mesh" style="top: 78%; left: 68%;">
-                        <img class="round-pod-icon" src="/eye-remote/assets/icons/mesh-22.png" alt="MESH">
-                        <span class="round-pod-val" id="rp-net">--</span>
-                        <span class="round-pod-name">MESH</span>
-                    </div>
-                    <div class="round-status" id="round-status">● NOMINAL</div>
+            <div class="pan"><h3>Écran rond virtuel — MOCHAbin <i>GET /api/v1/hub/dashboard</i></h3>
+                <div class="anneaux">
+                    <svg viewBox="0 0 320 320" role="img" aria-label="Six anneaux de mesure : CPU, RAM, disque, charge, température, signal" id="rond"></svg>
+                    <div class="legende" id="legende"></div>
                 </div>
-                <div class="gauges">
-                    <div class="gauge">
-                        <div class="gauge-circle" id="mb-cpu-gauge">
-                            <span class="gauge-value" id="mb-cpu-value">--</span>
-                        </div>
-                        <div class="gauge-label">CPU</div>
-                    </div>
-                    <div class="gauge">
-                        <div class="gauge-circle" id="mb-mem-gauge">
-                            <span class="gauge-value" id="mb-mem-value">--</span>
-                        </div>
-                        <div class="gauge-label">RAM</div>
-                    </div>
-                    <div class="gauge">
-                        <div class="gauge-circle" id="mb-disk-gauge">
-                            <span class="gauge-value" id="mb-disk-value">--</span>
-                        </div>
-                        <div class="gauge-label">Disk</div>
-                    </div>
-                    <div class="gauge">
-                        <div class="gauge-circle" id="mb-load-gauge">
-                            <span class="gauge-value" id="mb-load-value">--</span>
-                        </div>
-                        <div class="gauge-label">Load</div>
-                    </div>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Hostname</span>
-                    <span class="stat-value" id="mb-hostname">--</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Uptime</span>
-                    <span class="stat-value" id="mb-uptime">--</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Kernel</span>
-                    <span class="stat-value" id="mb-kernel">--</span>
-                </div>
-                <div class="mini-sparklines">
-                    <div class="mini-spark" id="mb-cpu-spark"></div>
-                    <div class="mini-spark" id="mb-mem-spark"></div>
-                </div>
+                <div class="etatrond" id="etatRond">—</div>
+                <div class="jauges" id="jaugesMb"></div>
+                <dl class="kv">
+                    <dt>Nom d’hôte</dt><dd id="mbHote">—</dd>
+                    <dt>Disponibilité</dt><dd id="mbUptime">—</dd>
+                    <dt>Noyau</dt><dd id="mbKernel" class="mono">—</dd>
+                </dl>
+                <div class="barres" id="sparkCpu" title="Historique du CPU de la box, relevé par cette page depuis son ouverture (20 points au plus)."></div>
+                <div class="barres" id="sparkMem" title="Historique de la mémoire de la box, relevé par cette page depuis son ouverture (20 points au plus)."></div>
+                <p class="note">Anneaux : AUTH = CPU, WALL = RAM, BOOT = disque, MIND = charge (pleine à 4), ROOT = température (35 à 85 °C), MESH = signal radio (−90 à −20 dB). Les barres montrent l’historique de cette session de page, pas celui de la box.</p>
             </div>
 
-            <div class="card">
-                <h3>Serial Console</h3>
-                <div class="stat">
-                    <span class="stat-label">Device</span>
-                    <span class="stat-value">/dev/ttyACM0</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Baud</span>
-                    <span class="stat-value">115200</span>
-                </div>
-                <div style="margin-top: 1rem;">
-                    <a href="/eye-remote/terminal.html" class="btn" target="_blank">Open Terminal</a>
-                </div>
+            <div class="pan"><h3>Console série</h3>
+                <dl class="kv">
+                    <dt>Périphérique</dt><dd class="mono">/dev/ttyACM0</dd>
+                    <dt>Vitesse</dt><dd>115200 bauds</dd>
+                </dl>
+                <div style="margin-top:10px"><a class="btn prim" id="lienTerm" href="/eye-remote/terminal.html" target="_blank" rel="noopener">Ouvrir le terminal</a></div>
             </div>
 
-            <div class="card">
-                <h3>Quick Commands</h3>
-                <div class="quicksheet">
-                    <code><span>ssh pi@10.55.0.2</span></code>
-                    <code><span>screen /dev/ttyACM0 115200</span></code>
-                    <code><span>ip link set usb0 up</span></code>
-                    <code><span>systemctl restart pizero-metrics</span></code>
-                    <code><span>sudo reboot</span> # Pi Zero</code>
+            <div class="pan"><h3>Commandes rapides</h3>
+                <div class="cmds">
+                    <code>ssh pi@10.55.0.2</code>
+                    <code>screen /dev/ttyACM0 115200</code>
+                    <code>ip link set usb0 up</code>
+                    <code>systemctl restart pizero-metrics</code>
+                    <code>sudo reboot <em># Pi Zero</em></code>
                 </div>
+                <p class="note">Exemples à copier dans un terminal : la page n’exécute rien.</p>
             </div>
         </div>
-    </main>
+    </div></div></main>
 
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMB = !!Q.get('embed');
+        if (EMB) document.body.classList.add('emb');
+        if (!EMB && !DEMO) { try { const sj = document.createElement('script'); sj.src = '/shared/sidebar.js'; document.head.appendChild(sj); } catch (e) { /* menu absent : la page reste utilisable */ } }
         const API = '/api/v1/eye-remote';
-        let connected = false;
+        const $ = id => document.getElementById(id);
+        const SVGNS = 'http://www.w3.org/2000/svg';
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const sv = (tag, attrs) => { const e = document.createElementNS(SVGNS, tag); Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k])); return e; };
+        const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
+        const pct = v => num(v) === null ? '—' : Math.round(v) + '%';
 
-        async function checkHealth() {
-            try {
-                const r = await fetch(API + '/health', { timeout: 3000 });
-                if (!r.ok) return false;
-                const data = await r.json();
-                return data.status === 'ok';
-            } catch (e) { return false; }
+        let SESSION_OK = true, EN_LIGNE = null, PI = null, MB = null, CHARGE = false;
+        const HIST = { cpu: [], mem: [] };
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { Accept: 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(url) {
+            const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
 
-        async function fetchMetrics() {
-            try {
-                const r = await fetch(API + '/metrics', { timeout: 3000 });
-                if (!r.ok) return null;
-                return await r.json();
-            } catch (e) { return null; }
+        // ----- Jauges et anneaux (SVG écrits à la main) -----
+        function classeJauge(v, temp) {
+            if (num(v) === null) return '';
+            if (temp) return v < 50 ? 'good' : v < 70 ? 'warn' : 'bad';
+            return v < 60 ? 'good' : v < 80 ? 'warn' : 'bad';
         }
-
-        function setGaugeClass(id, value, isTemp) {
-            const el = document.getElementById(id);
-            el.classList.remove('good', 'warn', 'bad');
-            if (isTemp) {
-                if (value < 50) el.classList.add('good');
-                else if (value < 70) el.classList.add('warn');
-                else el.classList.add('bad');
-            } else {
-                if (value < 60) el.classList.add('good');
-                else if (value < 80) el.classList.add('warn');
-                else el.classList.add('bad');
-            }
+        function jauge(nom, texte, valeur, classe) {
+            const d = el('div', 'jauge ' + (classe || ''));
+            const s = sv('svg', { viewBox: '0 0 84 84', 'aria-hidden': 'true' });
+            const R = 34, C = 2 * Math.PI * R, f = num(valeur) === null ? 0 : Math.max(0, Math.min(1, valeur / 100));
+            s.appendChild(sv('circle', { class: 'piste', cx: 42, cy: 42, r: R, fill: 'none', 'stroke-width': 7 }));
+            s.appendChild(sv('circle', { class: 'arc', cx: 42, cy: 42, r: R, fill: 'none', 'stroke-width': 7, 'stroke-linecap': 'round', transform: 'rotate(-90 42 42)', 'stroke-dasharray': (C * f).toFixed(1) + ' ' + C.toFixed(1) }));
+            const t = sv('text', { x: 42, y: 48, 'text-anchor': 'middle' }); t.textContent = texte; s.appendChild(t);
+            d.appendChild(s); d.appendChild(el('span', 'nom', nom));
+            return d;
         }
-
-        function updateUI(online, metrics) {
-            const connLine = document.getElementById('conn-line');
-            const gadgetBox = document.getElementById('gadget-box');
-            const statusText = document.getElementById('status-text');
-
-            if (online) {
-                connLine.classList.add('active');
-                gadgetBox.classList.add('active');
-                statusText.textContent = 'Connected';
-                statusText.classList.remove('disconnected');
-            } else {
-                connLine.classList.remove('active');
-                gadgetBox.classList.remove('active');
-                statusText.textContent = 'Disconnected';
-                statusText.classList.add('disconnected');
-            }
-
-            if (metrics) {
-                document.getElementById('cpu-value').textContent = Math.round(metrics.cpu_percent) + '%';
-                document.getElementById('mem-value').textContent = Math.round(metrics.mem_percent) + '%';
-                document.getElementById('temp-value').textContent = Math.round(metrics.cpu_temp) + '\u00b0';
-
-                setGaugeClass('cpu-gauge', metrics.cpu_percent, false);
-                setGaugeClass('mem-gauge', metrics.mem_percent, false);
-                setGaugeClass('temp-gauge', metrics.cpu_temp, true);
-
-                const h = Math.floor(metrics.uptime_seconds / 3600);
-                const m = Math.floor((metrics.uptime_seconds % 3600) / 60);
-                document.getElementById('pizero-uptime').textContent = h + 'h ' + m + 'm';
-                document.getElementById('pizero-disk').textContent = Math.round(metrics.disk_percent) + '%';
-                document.getElementById('pizero-load').textContent = metrics.load_1m.toFixed(2);
-                document.getElementById('pizero-hostname').textContent = metrics.hostname || 'Pi Zero W';
-            }
-
-            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
-        }
-
-        async function refreshAll() {
-            const btn = document.getElementById('probe-btn');
-            btn.disabled = true;
-            btn.textContent = 'Checking...';
-
-            const online = await checkHealth();
-            let metrics = null;
-            if (online) {
-                metrics = await fetchMetrics();
-            }
-            updateUI(online, metrics);
-
-            btn.disabled = false;
-            btn.textContent = 'Refresh';
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            refreshAll();
-            setInterval(refreshAll, 10000);
-        });
-    </script>
-    <script src="/shared/sidebar.js">
-        // MOCHAbin Dashboard Data
-        const mbHistory = { cpu: [], mem: [] };
-        const MB_SPARK_MAX = 20;
-
-        async function loadMochabinData() {
-            try {
-                var token = localStorage.getItem('sbx_token');
-                var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
-                const res = await fetch('/api/v1/hub/dashboard', { headers: headers });
-                if (!res.ok) throw new Error('API error');
-                const data = await res.json();
-
-                // Update gauges
-                const cpu = Math.round(data.cpu_percent || 0);
-                const mem = Math.round(data.memory_percent || 0);
-                const disk = Math.round(data.disk_percent || 0);
-                const load = (data.load_avg || [0])[0].toFixed(1);
-
-                document.getElementById('mb-cpu-value').textContent = cpu + '%';
-                document.getElementById('mb-mem-value').textContent = mem + '%';
-                document.getElementById('mb-disk-value').textContent = disk + '%';
-                document.getElementById('mb-load-value').textContent = load;
-
-                // Update gauge colors
-                setGaugeColor('mb-cpu-gauge', cpu);
-                setGaugeColor('mb-mem-gauge', mem);
-                setGaugeColor('mb-disk-gauge', disk);
-                setGaugeColor('mb-load-gauge', parseFloat(load) > 4 ? 80 : parseFloat(load) > 2 ? 60 : 30);
-
-                // Update info
-                if (data.hostname) document.getElementById('mb-hostname').textContent = data.hostname;
-                if (data.uptime) document.getElementById('mb-uptime').textContent = data.uptime;
-                if (data.kernel) document.getElementById('mb-kernel').textContent = data.kernel;
-
-                // Update sparklines
-                updateMbSparkline('mb-cpu-spark', cpu, mbHistory.cpu);
-                updateMbSparkline('mb-mem-spark', mem, mbHistory.mem);
-            } catch (e) {
-                console.log('MOCHAbin data error:', e);
-            }
-        }
-
-        function setGaugeColor(id, value) {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.className = 'gauge-circle ' + (value > 80 ? 'bad' : value > 50 ? 'warn' : 'good');
-        }
-
-        function updateMbSparkline(id, value, history) {
-            history.push(value);
-            if (history.length > MB_SPARK_MAX) history.shift();
-            const container = document.getElementById(id);
-            if (!container) return;
-            container.innerHTML = history.map(v => {
-                const h = Math.max(2, (v / 100) * 16);
-                const c = v > 80 ? 'bad' : v > 50 ? 'warn' : '';
-                return '<div class="bar ' + c + '" style="height:' + h + 'px"></div>';
-            }).join('');
-        }
-
-        // Load MOCHAbin data on start and refresh
-        loadMochabinData();
-        setInterval(loadMochabinData, 5000);
-
-    
-        // Round Display - Ring rendering
-        // Radar-style ring configuration (scaled to 320px from 480px original)
-        const RING_MODULES = [
-            { name: 'AUTH', color: '#C04E24', metric: 'cpu', r: 143, w: 5 },  // r=214 scaled
-            { name: 'WALL', color: '#9A6010', metric: 'mem', r: 134, w: 5 },  // r=201 scaled
-            { name: 'BOOT', color: '#803018', metric: 'disk', r: 125, w: 5 }, // r=188 scaled
-            { name: 'MIND', color: '#3D35A0', metric: 'load', r: 117, w: 5 }, // r=175 scaled
-            { name: 'ROOT', color: '#0A5840', metric: 'temp', r: 108, w: 5 }, // r=162 scaled
-            { name: 'MESH', color: '#104A88', metric: 'net', r: 99, w: 5 }    // r=149 scaled
+        const ANNEAUX = [
+            { nom: 'AUTH', mesure: 'CPU', couleur: '#ff7a45', cle: 'cpu', r: 143 },
+            { nom: 'WALL', mesure: 'RAM', couleur: '#ffb02e', cle: 'mem', r: 126 },
+            { nom: 'BOOT', mesure: 'Disque', couleur: '#ff4d5e', cle: 'disk', r: 109 },
+            { nom: 'MIND', mesure: 'Charge', couleur: '#a78bfa', cle: 'load', r: 92 },
+            { nom: 'ROOT', mesure: 'Température', couleur: '#2ecc71', cle: 'temp', r: 75 },
+            { nom: 'MESH', mesure: 'Signal', couleur: '#29b6f6', cle: 'net', r: 58 }
         ];
-
-        let roundMetrics = { cpu: 0, mem: 0, disk: 0, load: 0, temp: 0, net: 0 };
-        const CX = 160, CY = 160, SA = -Math.PI / 2;  // Center 320/2, start angle top
-
-        function drawRoundRings() {
-            const canvas = document.getElementById('round-canvas');
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-
-            ctx.clearRect(0, 0, 320, 320);
-            ctx.save();
-
-            // Clip to circle
-            ctx.beginPath();
-            ctx.arc(CX, CY, 158, 0, Math.PI * 2);
-            ctx.clip();
-
-            RING_MODULES.forEach((ring) => {
-                const value = roundMetrics[ring.metric] || 0;
-                // Calculate percentage based on metric type
-                const pct = ring.metric === 'load' ? Math.min(1, value / 4) :
-                            ring.metric === 'temp' ? Math.min(1, Math.max(0, (value - 35) / 50)) :
-                            ring.metric === 'net' ? Math.min(1, Math.max(0, (value + 90) / 70)) :
-                            value / 100;
-
-                // Background ring (dark track)
-                ctx.beginPath();
-                ctx.arc(CX, CY, ring.r, 0, Math.PI * 2);
-                ctx.strokeStyle = '#141414';
-                ctx.lineWidth = ring.w + 2;
-                ctx.stroke();
-
-                // Colored arc (percentage fill)
-                if (pct > 0.005) {
-                    ctx.beginPath();
-                    ctx.arc(CX, CY, ring.r, SA, SA + Math.PI * 2 * pct);
-                    ctx.strokeStyle = ring.color;
-                    ctx.lineWidth = ring.w;
-                    ctx.lineCap = 'round';
-                    ctx.globalAlpha = 0.92;
-                    ctx.stroke();
-                    ctx.globalAlpha = 1;
-                    ctx.lineCap = 'butt';
-                }
-
-                // Glow dot at arc end
-                const dotAngle = SA + Math.PI * 2 * pct;
-                ctx.beginPath();
-                ctx.arc(CX + ring.r * Math.cos(dotAngle), CY + ring.r * Math.sin(dotAngle), ring.w * 0.65, 0, Math.PI * 2);
-                ctx.fillStyle = ring.color;
-                ctx.globalAlpha = 0.65;
-                ctx.fill();
-                ctx.globalAlpha = 1;
+        function fraction(cle, v) {
+            if (num(v) === null) return 0;
+            if (cle === 'load') return Math.min(1, v / 4);
+            if (cle === 'temp') return Math.min(1, Math.max(0, (v - 35) / 50));
+            if (cle === 'net') return Math.min(1, Math.max(0, (v + 90) / 70));
+            return Math.min(1, Math.max(0, v / 100));
+        }
+        function texteMesure(cle, v) {
+            if (num(v) === null) return '—';
+            if (cle === 'load') return v.toFixed(1) + 'x';
+            if (cle === 'temp') return Math.round(v) + '°';
+            if (cle === 'net') return Math.round(v) + ' dB';
+            return Math.round(v) + '%';
+        }
+        function rendreRond(m) {
+            const s = $('rond'); s.replaceChildren();
+            s.appendChild(sv('circle', { cx: 160, cy: 160, r: 157, fill: 'rgba(8,18,38,.7)', stroke: 'rgba(86,150,255,.3)', 'stroke-width': 3 }));
+            ANNEAUX.forEach(a => {
+                const C = 2 * Math.PI * a.r, f = fraction(a.cle, m ? m[a.cle] : null);
+                s.appendChild(sv('circle', { cx: 160, cy: 160, r: a.r, fill: 'none', stroke: 'rgba(159,179,214,.16)', 'stroke-width': 11 }));
+                s.appendChild(sv('circle', { cx: 160, cy: 160, r: a.r, fill: 'none', stroke: a.couleur, 'stroke-width': 11, 'stroke-linecap': 'round', transform: 'rotate(-90 160 160)', 'stroke-dasharray': (C * f).toFixed(1) + ' ' + C.toFixed(1), opacity: f > 0.005 ? '.92' : '0' }));
             });
-
-            ctx.restore();
-
-            // Outer ring border
-            ctx.beginPath();
-            ctx.arc(CX, CY, 157, 0, Math.PI * 2);
-            ctx.strokeStyle = '#1c1c1c';
-            ctx.lineWidth = 3;
-            ctx.stroke();
+            const l = $('legende'); l.replaceChildren();
+            ANNEAUX.forEach(a => {
+                const d = el('div'); const p = el('i'); p.style.background = a.couleur; d.appendChild(p);
+                d.appendChild(el('b', '', a.nom)); d.appendChild(el('span', '', a.mesure + ' ' + texteMesure(a.cle, m ? m[a.cle] : null)));
+                l.appendChild(d);
+            });
+        }
+        function barres(id, hist) {
+            const c = $(id); c.replaceChildren();
+            hist.forEach(v => { const b = el('div', v > 80 ? 'bad' : v > 50 ? 'warn' : ''); b.style.height = Math.max(2, (v / 100) * 28) + 'px'; c.appendChild(b); });
         }
 
-        
-        // Radar sweep animation
-        let radarAngle = 0;
-        function drawRadarSweep() {
-            const canvas = document.getElementById('round-canvas');
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
+        function dureeCourte(s) { if (num(s) === null) return '—'; return Math.floor(s / 3600) + ' h ' + Math.floor((s % 3600) / 60) + ' min'; }
 
-            // Draw radar sweep gradient
-            const gradient = ctx.createConicGradient(radarAngle, CX, CY);
-            gradient.addColorStop(0, 'rgba(0,221,68,0.15)');
-            gradient.addColorStop(0.1, 'rgba(0,221,68,0.05)');
-            gradient.addColorStop(0.2, 'rgba(0,221,68,0)');
-            gradient.addColorStop(1, 'rgba(0,221,68,0)');
+        // ----- Rendu -----
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (EN_LIGNE === null) { etat.className = 'actif neutre'; etat.textContent = 'Vérification…'; }
+            else if (EN_LIGNE) { etat.className = 'actif'; etat.textContent = 'CONNECTÉ'; }
+            else { etat.className = 'actif hors'; etat.textContent = 'DÉCONNECTÉ'; }
 
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(CX, CY, 155, 0, Math.PI * 2);
-            ctx.clip();
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 320, 320);
-            ctx.restore();
+            const online = EN_LIGNE === true && SESSION_OK;
+            $('tLiaison').textContent = EN_LIGNE === null || !SESSION_OK ? '—' : online ? 'Connectée' : 'Coupée';
+            $('cLiaison').className = 'tuile ' + (EN_LIGNE === null || !SESSION_OK ? 'cy' : online ? 'ok' : 'hors');
+            $('tLiaison').classList.add('long');
+            $('trait').className = 'trait' + (online ? ' on' : '');
+            $('puceGadget').className = 'puce' + (online ? ' on' : '');
+            $('statut').textContent = EN_LIGNE === null || !SESSION_OK ? '—' : online ? 'Connecté' : 'Déconnecté';
 
-            radarAngle += 0.03;
-            if (radarAngle > Math.PI * 2) radarAngle = 0;
-        }
+            const p = PI || {};
+            const cpu = num(p.cpu_percent), mem = num(p.mem_percent), temp = num(p.cpu_temp), dsk = num(p.disk_percent), up = num(p.uptime_seconds), ld = num(p.load_1m);
+            const mise = (idT, idC, v, texte, classe) => { $(idT).textContent = texte; $(idC).className = 'tuile ' + (classe === 'good' ? 'ok' : classe === 'warn' ? 'att' : classe === 'bad' ? 'hors' : 'cy'); };
+            mise('tCpu', 'cCpu', cpu, pct(cpu), classeJauge(cpu));
+            mise('tMem', 'cMem', mem, pct(mem), classeJauge(mem));
+            mise('tTemp', 'cTemp', temp, temp === null ? '—' : Math.round(temp) + '°', classeJauge(temp, true));
+            mise('tDisque', 'cDisque', dsk, pct(dsk), classeJauge(dsk));
+            $('tUptime').textContent = dureeCourte(up);
+            const jp = $('jaugesPi'); jp.replaceChildren();
+            jp.appendChild(jauge('CPU', pct(cpu), cpu, classeJauge(cpu)));
+            jp.appendChild(jauge('RAM', pct(mem), mem, classeJauge(mem)));
+            jp.appendChild(jauge('Température', temp === null ? '—' : Math.round(temp) + '°', temp === null ? null : Math.min(100, temp), classeJauge(temp, true)));
+            $('piUptime').textContent = dureeCourte(up);
+            $('piDisque').textContent = pct(dsk);
+            $('piCharge').textContent = ld === null ? '—' : ld.toFixed(2);
+            $('piHote').textContent = p.hostname ? String(p.hostname) : '—';
+            $('piNom').textContent = p.hostname ? String(p.hostname) : 'Pi Zero W';
 
-        // Combined draw function
-        function drawRadar() {
-            drawRoundRings();
-            drawRadarSweep();
-        }
-
-        function updateRoundClock() {
-            const now = new Date();
-            const timeEl = document.getElementById('round-time');
-            const dateEl = document.getElementById('round-date');
-            if (timeEl) timeEl.textContent = now.toLocaleTimeString('fr-FR');
-            if (dateEl) {
-                const opts = { weekday: 'short', day: 'numeric', month: 'short' };
-                dateEl.textContent = now.toLocaleDateString('fr-FR', opts);
+            // MOCHAbin
+            const mb = MB, m = mb ? {
+                cpu: num(mb.cpu_percent), mem: num(mb.memory_percent), disk: num(mb.disk_percent),
+                load: Array.isArray(mb.load_avg) ? num(mb.load_avg[0]) : null, temp: num(mb.cpu_temp), net: num(mb.wifi_rssi)
+            } : null;
+            rendreRond(m);
+            const er = $('etatRond');
+            if (!m || m.cpu === null || m.mem === null || m.disk === null) { er.textContent = '—'; er.style.color = ''; }
+            else {
+                const mx = Math.max(m.cpu, m.mem, m.disk);
+                er.textContent = mx > 80 ? '▲ CRITIQUE' : mx > 50 ? '● ATTENTION' : '● NOMINAL';
+                er.style.color = mx > 80 ? 'var(--rouge)' : mx > 50 ? 'var(--orange)' : 'var(--vert)';
             }
+            const jm = $('jaugesMb'); jm.replaceChildren();
+            const cl = m && m.load !== null ? (m.load > 4 ? 'bad' : m.load > 2 ? 'warn' : 'good') : '';
+            const cj = v => v === null ? '' : (v > 80 ? 'bad' : v > 50 ? 'warn' : 'good');
+            jm.appendChild(jauge('CPU', m ? pct(m.cpu) : '—', m ? m.cpu : null, m ? cj(m.cpu) : ''));
+            jm.appendChild(jauge('RAM', m ? pct(m.mem) : '—', m ? m.mem : null, m ? cj(m.mem) : ''));
+            jm.appendChild(jauge('Disque', m ? pct(m.disk) : '—', m ? m.disk : null, m ? cj(m.disk) : ''));
+            jm.appendChild(jauge('Charge', m && m.load !== null ? m.load.toFixed(1) : '—', m && m.load !== null ? Math.min(100, m.load / 4 * 100) : null, cl));
+            $('mbHote').textContent = mb && mb.hostname ? String(mb.hostname) : '—';
+            $('mbUptime').textContent = mb && mb.uptime ? String(mb.uptime) : '—';
+            $('mbKernel').textContent = mb && mb.kernel ? String(mb.kernel) : '—';
+            barres('sparkCpu', HIST.cpu); barres('sparkMem', HIST.mem);
+            annoncer();
         }
 
-        async function loadRoundData() {
+        function empiler(h, v) { if (v === null) return; h.push(v); if (h.length > 20) h.shift(); }
+
+        // ----- Données -----
+        function demoPi() {
+            EN_LIGNE = true; SESSION_OK = true; CHARGE = true;
+            PI = { cpu_percent: 23.4, mem_percent: 41.2, cpu_temp: 52.4, uptime_seconds: 93784, disk_percent: 37.0, load_1m: 0.42, hostname: 'eye-remote-demo' };
+            majHorloge();
+        }
+        function demoMb() {
+            MB = { cpu_percent: 18, memory_percent: 46, disk_percent: 61, load_avg: [0.7, 0.6, 0.5], hostname: 'mochabin-demo', uptime: '12 j 4 h', kernel: '6.1.0-demo-arm64', cpu_temp: 49, wifi_rssi: -58 };
+            [17, 21, 19, 24, 22, 18].forEach(v => empiler(HIST.cpu, v)); [44, 45, 45, 47, 46, 46].forEach(v => empiler(HIST.mem, v));
+        }
+        function majHorloge() { const t = new Date().toLocaleTimeString('fr-FR'); $('dernier').textContent = t; $('maj').textContent = 'Relevé ' + t; }
+
+        async function chargerPi() {
+            if (DEMO) { demoPi(); rendre(); return; }
+            const btn = $('rafraichir'); btn.disabled = true; btn.textContent = 'Vérification…';
+            let refus = false;
             try {
-                var token = localStorage.getItem('sbx_token');
-                var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
-                const res = await fetch('/api/v1/hub/dashboard', { headers: headers });
-                if (!res.ok) throw new Error('API error');
-                const data = await res.json();
-
-                roundMetrics.cpu = data.cpu_percent || 0;
-                roundMetrics.mem = data.memory_percent || 0;
-                roundMetrics.disk = data.disk_percent || 0;
-                roundMetrics.load = (data.load_avg || [0])[0];
-                roundMetrics.temp = data.cpu_temp || 45;
-                roundMetrics.net = data.wifi_rssi || -50;
-
-                // Update pod values
-                document.getElementById('rp-cpu').textContent = Math.round(roundMetrics.cpu) + '%';
-                document.getElementById('rp-mem').textContent = Math.round(roundMetrics.mem) + '%';
-                document.getElementById('rp-disk').textContent = Math.round(roundMetrics.disk) + '%';
-                document.getElementById('rp-load').textContent = roundMetrics.load.toFixed(1) + 'x';
-                document.getElementById('rp-temp').textContent = Math.round(roundMetrics.temp) + '°';
-                document.getElementById('rp-net').textContent = Math.round(roundMetrics.net) + 'dB';
-
-                // Update hostname
-                if (data.hostname) {
-                    document.getElementById('round-hostname').textContent = data.hostname;
-                }
-
-                // Update status
-                const statusEl = document.getElementById('round-status');
-                const maxVal = Math.max(roundMetrics.cpu, roundMetrics.mem, roundMetrics.disk);
-                if (maxVal > 80) {
-                    statusEl.textContent = '▲ CRITICAL';
-                    statusEl.style.color = '#ff4466';
-                } else if (maxVal > 50) {
-                    statusEl.textContent = '● WARNING';
-                    statusEl.style.color = '#ffb347';
-                } else {
-                    statusEl.textContent = '● NOMINAL';
-                    statusEl.style.color = '#00dd44';
-                }
-
-                drawRoundRings();
-            } catch (e) {
-                console.log('Round data error:', e);
+                const h = await lire(API + '/health');
+                EN_LIGNE = h && h.status === 'ok';
+            } catch (e) { EN_LIGNE = false; if (e.statut === 401 || e.statut === 403) refus = true; }
+            PI = null;
+            if (EN_LIGNE) {
+                try { PI = await lire(API + '/metrics'); } catch (e) { if (e.statut === 401 || e.statut === 403) refus = true; }
             }
+            SESSION_OK = !refus; CHARGE = true;
+            btn.disabled = false; btn.textContent = '⟳ Actualiser';
+            majHorloge(); rendre();
         }
+        async function chargerBox() {
+            if (DEMO) { demoMb(); rendre(); return; }
+            try {
+                MB = await lire('/api/v1/hub/dashboard');
+                const c = num(MB.cpu_percent), m = num(MB.memory_percent);
+                empiler(HIST.cpu, c === null ? null : Math.round(c)); empiler(HIST.mem, m === null ? null : Math.round(m));
+            } catch (e) { MB = null; if (e.statut === 401 || e.statut === 403) SESSION_OK = false; }
+            rendre();
+        }
+        function tout() { chargerPi(); chargerBox(); }
+        $('rafraichir').addEventListener('click', tout);
 
-        // Initialize Round Display
-        setInterval(updateRoundClock, 1000);
-        updateRoundClock();
-        loadRoundData();
-        setInterval(loadRoundData, 3000);
-        setInterval(drawRadar, 50);  // Radar animation 20fps
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'eye-remote' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
+        rendre();
+        if (DEMO) { demoMb(); }
+        tout();
+        if (!DEMO) {
+            setInterval(() => { if (!document.hidden) chargerPi(); }, 10000);
+            setInterval(() => { if (!document.hidden) chargerBox(); }, 5000);
+        }
     </script>
 </body>
 </html>
