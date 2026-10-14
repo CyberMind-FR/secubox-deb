@@ -1,358 +1,373 @@
 <!DOCTYPE html>
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
-<html lang="fr" class="hybrid-dark">
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Centres et octrois au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Aucun secret affiché (identifiants DID publics tronqués, valeur entière en infobulle).
+  Routes : GET /centers, /centers/ownership, /centers/proposals, /centers/effective/<scope> ;
+  POST /centers/grant, /centers/revoke, /centers/proposal/accept.
+-->
+<html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SecuBox — Centres</title>
-<link rel="stylesheet" href="/shared/hybrid-dark.css">
 <style>
-  :root{
-    --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
-    --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
-    --cyan:#00d4ff; --red:#ff4466; --green:#00dd44; --yellow:#ffcc00;
-  }
-  body{font-family:'Courier Prime',monospace;color:var(--text);background:var(--bg-dark)}
-  .header{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:1rem}
-  .header h1{font-size:1.3rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan);margin:0}
-  .header .sub{font-size:.72rem;color:var(--p31-dim);margin-top:.2rem}
-  .dot{display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:var(--p31-dim);margin-right:.35rem;vertical-align:middle}
-  .dot.on{background:var(--green);box-shadow:0 0 6px var(--green)} .dot.off{background:var(--red)}
-  .btns{display:flex;flex-wrap:wrap;gap:.4rem}
-  .btn{font-family:inherit;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;
-    color:var(--text);background:var(--bg-row);border:1px solid var(--border);border-radius:6px;
-    padding:.45rem .8rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
-  .btn:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.4)}
-  .btn.primary{border-color:var(--cyan);color:var(--cyan)}
-  .btn.danger{border-color:var(--red);color:var(--red)}
-  .btn.small{padding:.25rem .5rem;font-size:.62rem}
-  .btn[disabled]{opacity:.4;cursor:not-allowed}
-  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
-  .card h3{font-size:.8rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
-  .note{font-size:.76rem;color:var(--p31-dim);line-height:1.5;margin-top:.5rem}
-  .note code{color:var(--yellow)}
-  table.matrix{width:100%;border-collapse:collapse;font-size:.78rem}
-  table.matrix th,table.matrix td{padding:.5rem .6rem;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
-  table.matrix th{color:var(--p31-dim);text-transform:uppercase;font-size:.66rem;letter-spacing:.06em}
-  table.matrix td.scope-col{color:var(--cyan);white-space:nowrap}
-  .owner-badge{display:inline-block;padding:.15rem .45rem;border-radius:4px;background:var(--bg-row);
-    border:1px solid var(--border);font-size:.72rem;color:var(--text)}
-  .owner-badge.local{color:var(--green);border-color:var(--green)}
-  .empty-cell{color:var(--p31-dim);font-style:italic;font-size:.74rem}
-  .cell-inner{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
-  .form-row{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem}
-  .form-row input,.form-row select{font-family:inherit;font-size:.78rem;color:var(--text);
-    background:var(--bg-row);border:1px solid var(--border);border-radius:6px;padding:.4rem .5rem}
-  .form-row input{flex:1;min-width:9rem}
-  ul#proposals-list,ul#centers-list{list-style:none;margin:0;padding:0;font-size:.82rem}
-  ul#proposals-list li,ul#centers-list li{display:flex;justify-content:space-between;gap:.6rem;align-items:center;flex-wrap:wrap;
-    padding:.5rem 0;border-bottom:1px solid var(--border)}
-  ul#proposals-list li:last-child,ul#centers-list li:last-child{border-bottom:0}
-  .empty{color:var(--p31-dim);font-size:.8rem;font-style:italic}
-  .reason-badge{color:var(--yellow);font-size:.7rem}
-  .diff-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.6rem}
-  .diff-grid pre{background:var(--bg-row);border:1px solid var(--border);border-radius:6px;padding:.6rem;
-    font-size:.72rem;white-space:pre-wrap;word-break:break-all;max-height:16rem;overflow:auto;margin:0}
-  .diff-grid .diff-label{font-size:.66rem;color:var(--p31-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.3rem}
-  .toast{position:fixed;bottom:1rem;right:1rem;background:var(--cyan);color:#07121a;padding:.6rem 1rem;border-radius:6px;
-    font-size:.8rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
-  .toast.show{opacity:1} .toast.error{background:var(--red);color:#fff}
-  @media(max-width:768px){.main{margin-left:0} .diff-grid{grid-template-columns:1fr}}
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.warn{border-color:var(--orange);color:var(--orange)} .btn.warn:hover{background:rgba(255,159,28,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.jn .v{color:var(--jaune)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:520px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.jn{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;margin:0}
+        form.saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select,form.saisie textarea,.filtre input,.filtre select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie textarea{min-height:4.5rem;resize:vertical}
+        form.saisie .large{grid-column:1/-1}
+        form.saisie input:focus,form.saisie select:focus,form.saisie textarea:focus,.filtre input:focus,.filtre select:focus{outline:none;border-color:var(--cyan)}
+        .filtre{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin:0 0 8px}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        .diff{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.diff{grid-template-columns:1fr 1fr}}
+        .diff h4{margin:0 0 4px;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);font-weight:600}
+        .diff pre{margin:0;max-height:16rem;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7);font-size:.74rem}
+        .liste{list-style:none;margin:0;padding:0;font-size:.82rem}
+        .liste li{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px 12px;padding:7px 0;border-top:1px solid rgba(86,150,255,.12)}
+        .liste li:first-child{border-top:0}
+        .liste li>*{min-width:0}
+        .cell{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+        td.sc{color:var(--cyan);white-space:nowrap}
+        .grise{color:var(--faible);font-size:.74rem}
 </style>
 </head>
-<body class="hybrid-dark">
+<body>
 <nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
+<main class="principal"><div class="cadre"><div class="app">
+    <header class="tete">
+        <div class="marque">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.500 10v8M14.500 10v8M19 10v8"/><path d="M3 20h18"/></svg>
+            <div><h1>Centres</h1><small>Propriété déléguée des scopes de configuration</small></div>
+        </div>
+        <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+        <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+    </header>
+    <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+    <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+    <div id="erreur" role="alert" hidden></div>
 
-<main class="main">
-  <header class="header">
-    <div>
-      <h1>🏛 Centres</h1>
-      <div class="sub" id="sub"><span class="dot" id="dot"></span>chargement…</div>
+    <section class="tuiles" aria-label="Indicateurs">
+        <div class="tuile cy" title="Nombre de centres qui détiennent au moins un octroi actif émis par cette box."><span class="l">Centres</span><span class="v" id="tCentres">—</span><span class="s">avec octroi actif</span></div>
+        <div class="tuile ok" title="Nombre de couples (scope, calque) actuellement délégués à un centre par cette box."><span class="l">Octrois actifs</span><span class="v" id="tOctrois">—</span><span class="s">scope × calque</span></div>
+        <div class="tuile cy" title="Nombre de scopes de configuration distincts qui ont au moins un octroi. Déduit côté page de la matrice de propriété."><span class="l">Scopes délégués</span><span class="v" id="tScopes">—</span><span class="s">déduit de la matrice</span></div>
+        <div class="tuile att" id="cProp" title="Configurations poussées par un centre pour un couple (scope, calque) qu’il ne détient pas, ou dont la signature ou l’empreinte n’a pas pu être vérifiée. À examiner."><span class="l">Propositions</span><span class="v" id="tProp">—</span><span class="s">en attente</span></div>
+    </section>
+
+    <div class="pan"><h3>Matrice de propriété <i>GET /centers/ownership</i></h3>
+        <p class="note" style="margin:0 0 6px">Une cellule vide signifie qu’aucun centre ne détient l’autorité de configuration pour ce couple (scope, calque). Le calque <b>local</b> n’est jamais délégable : il reste toujours propriété <b>box-local</b>.</p>
+        <div id="rMat" class="retour" hidden></div>
+        <div class="tab"><table><thead><tr><th>Scope</th><th>Baseline</th><th>Override</th><th>Local</th></tr></thead><tbody id="bMat"></tbody></table></div>
     </div>
-    <div class="btns">
-      <button class="btn" id="btn-refresh">↻ Rafraîchir</button>
-    </div>
-  </header>
 
-  <div class="card">
-    <h3>Matrice de propriété</h3>
-    <div class="note">Une cellule vide signifie qu'aucun centre ne détient l'autorité de configuration
-      pour ce (scope, calque) — le calque <code>local</code> n'est jamais délégable et reste toujours
-      propriété <code>box-local</code>.</div>
-    <div style="overflow-x:auto;margin-top:.6rem">
-      <table class="matrix">
-        <thead>
-          <tr><th>Scope</th><th>Baseline</th><th>Override</th><th>Local</th></tr>
-        </thead>
-        <tbody id="matrix-body"><tr><td colspan="4" class="empty-cell">chargement…</td></tr></tbody>
-      </table>
+    <div class="grille">
+        <div class="pan"><h3>Nouvel octroi <i>POST /centers/grant</i></h3>
+            <form class="saisie" id="fOctroi">
+                <label>Scope<input id="gScope" placeholder="ex : firewall" autocomplete="off" required></label>
+                <label>Calque<select id="gCalque"><option value="baseline">baseline</option><option value="override">override</option></select></label>
+                <label class="large">DID du centre<input id="gDid" class="mono" placeholder="did:plc:… du centre" autocomplete="off" required></label>
+                <div class="bout" style="margin:0"><button class="btn prim" id="btnOctroi" type="submit">+ Accorder</button></div>
+            </form>
+            <div id="rOctroi" class="retour" hidden></div>
+            <p class="note">Le calque <b>local</b> n’apparaît pas ici : il ne peut jamais être délégué (refusé côté <span class="mono">sbx-centersctl</span>).</p>
+        </div>
+        <div class="pan"><h3>Centres accordés <i>GET /centers</i></h3>
+            <ul class="liste" id="lCentres"></ul>
+        </div>
     </div>
 
-    <h3 style="margin-top:1rem">Nouvel octroi</h3>
-    <div class="form-row">
-      <input id="grant-scope" placeholder="scope (ex: firewall)">
-      <select id="grant-layer">
-        <option value="baseline">baseline</option>
-        <option value="override">override</option>
-      </select>
-      <input id="grant-center-did" placeholder="did:plc:… du centre">
-      <button class="btn primary" id="btn-grant-new">+ Accorder</button>
+    <div class="pan"><h3>Propositions (pushs non accordés) <i>GET /centers/proposals</i></h3>
+        <p class="note" style="margin:0 0 6px">Configurations poussées par un centre pour un couple (scope, calque) qu’il ne détient pas encore, ou dont la signature ou l’empreinte n’a pas pu être vérifiée. « Accepter » octroie le couple au centre publiant puis route la file.</p>
+        <div id="rProp" class="retour" hidden></div>
+        <ul class="liste" id="lProp"></ul>
     </div>
-    <div class="note">Le calque <code>local</code> n'apparaît pas dans ce formulaire : il ne peut jamais
-      être délégué (rejeté côté <code>sbx-centersctl</code>).</div>
-  </div>
 
-  <div class="card">
-    <h3>Centres accordés</h3>
-    <ul id="centers-list"><li class="empty">chargement…</li></ul>
-  </div>
-
-  <div class="card">
-    <h3>Propositions (pushs non-accordés)</h3>
-    <div class="note">Configurations poussées par un centre pour un (scope, calque) qu'il ne détient pas
-      encore — ou dont la signature/le hash n'a pas pu être vérifié. « Accepter » octroie le (scope,
-      calque) au centre publiant puis route la file.</div>
-    <ul id="proposals-list"><li class="empty">chargement…</li></ul>
-  </div>
-
-  <div class="card">
-    <h3>Diff effectif</h3>
-    <div class="form-row">
-      <input id="eff-scope" placeholder="scope (ex: firewall)">
-      <button class="btn" id="btn-eff-load">Charger le diff</button>
+    <div class="pan"><h3>Diff effectif <i>GET /centers/effective/&lt;scope&gt;</i></h3>
+        <form class="saisie" id="fDiff">
+            <label>Scope<input id="eScope" placeholder="ex : firewall" autocomplete="off"></label>
+            <div class="bout" style="margin:0"><button class="btn" id="btnDiff" type="submit">Charger le diff</button></div>
+        </form>
+        <div class="diff" style="margin-top:10px">
+            <div><h4>Effectif (composé baseline + override + local)</h4><pre id="eEff" class="mono">—</pre></div>
+            <div><h4>Local (fichier sur disque)</h4><pre id="eLoc" class="mono">—</pre></div>
+        </div>
+        <p class="note" id="eStatut"></p>
     </div>
-    <div class="diff-grid">
-      <div>
-        <div class="diff-label">Effectif (composé baseline+override+local)</div>
-        <pre id="eff-effective">—</pre>
-      </div>
-      <div>
-        <div class="diff-label">Local (fichier sur disque)</div>
-        <pre id="eff-local">—</pre>
-      </div>
-    </div>
-    <div class="note" id="eff-status"></div>
-  </div>
-</main>
-
-<div class="toast" id="toast"></div>
+</div></div></main>
+<div class="toast" id="toast" role="status"></div>
 
 <script>
+const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMBED = !!Q.get('embed');
+if (EMBED || DEMO) document.body.classList.add('emb');
+else { const s = document.createElement('script'); s.src = '/shared/sidebar.js'; document.body.appendChild(s); }
 const API = '/api/v1/annuaire';
-const $ = (id) => document.getElementById(id);
+const $ = id => document.getElementById(id);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+function didCourt(did) { if (!did) return '—'; did = String(did); return did.length > 22 ? did.slice(0, 14) + '…' + did.slice(-6) : did; }
 
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function token(){ return localStorage.getItem('sbx_token') || ''; }
-function authHeaders(extra){
-  return Object.assign({'Authorization': 'Bearer ' + token()}, extra || {});
-}
-function toast(msg, isErr){
-  const t = $('toast'); t.textContent = msg;
-  t.className = 'toast show' + (isErr ? ' error' : '');
-  setTimeout(() => { t.className = 'toast'; }, 2600);
-}
-async function J(path, opts){
-  const o = Object.assign({credentials: 'same-origin'}, opts || {});
-  o.headers = authHeaders(o.headers);
-  const r = await fetch(API + path, o);
-  if (!r.ok) {
-    let detail = 'HTTP ' + r.status;
-    try { const b = await r.json(); if (b && b.detail) detail = b.detail; } catch (e) { /* ignore */ }
-    throw new Error(detail);
-  }
-  return r.json();
-}
-function shortDid(did){
-  if (!did) return '—';
-  return did.length > 22 ? did.slice(0, 14) + '…' + did.slice(-6) : did;
-}
+let OWN = null, CENTRES = null, PROPS = null, SESSION_OK = true, CHARGE = false;
+let CONFIRM = '';   // clé de l'action en attente de confirmation (dans la ligne, jamais de dialogue natif)
 
-// ── ownership matrix ───────────────────────────────────────────────────
-
-let _lastOwnership = [];
-
-async function loadOwnership(){
-  try {
-    const d = await J('/centers/ownership');
-    _lastOwnership = d.ownership || [];
-    renderMatrix(_lastOwnership);
-    $('dot').className = 'dot on';
-    $('sub').innerHTML = '<span class="dot on"></span>panneau actif';
-  } catch (e) {
-    $('dot').className = 'dot off';
-    $('sub').innerHTML = '<span class="dot off"></span>matrice indisponible (' + esc(e.message) + ')';
-    $('matrix-body').innerHTML = '<tr><td colspan="4" class="empty-cell">indisponible (' + esc(e.message) + ')</td></tr>';
-    toast('Matrice indisponible : ' + e.message, true);
-  }
+function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+async function lire(chemin) {
+    const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+    if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+    return r.json();
+}
+// Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+async function ecrire(chemin, corps) {
+    if (DEMO) return { ok: false, demo: true };
+    try {
+        const r = await fetch(API + chemin, { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+        let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+        return { ok: r.ok, statut: r.status, data };
+    } catch (e) { return { ok: false, statut: 0, data: null }; }
+}
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+function detail(res) {
+    if (res.demo) return 'Démonstration : action inerte.';
+    const d = res.data && res.data.detail;
+    if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
+    if (d) return String(d);
+    return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
 }
 
-function renderMatrix(ownership){
-  const byKey = {};
-  const scopes = new Set();
-  ownership.forEach(o => {
-    byKey[o.scope + '|' + o.layer] = o;
-    scopes.add(o.scope);
-  });
-  const scopeInput = $('grant-scope').value.trim();
-  if (scopeInput) scopes.add(scopeInput);
-
-  if (scopes.size === 0) {
-    $('matrix-body').innerHTML = '<tr><td colspan="4" class="empty-cell">aucun octroi actif</td></tr>';
-    return;
-  }
-
-  $('matrix-body').innerHTML = Array.from(scopes).sort().map(scope => {
-    const cellFor = (layer) => {
-      const g = byKey[scope + '|' + layer];
-      if (!g) return '<span class="empty-cell">— vide —</span>';
-      return '<div class="cell-inner">' +
-        '<span class="owner-badge" title="' + esc(g.owner || '') + '">' + esc(shortDid(g.owner)) + '</span>' +
-        '<button class="btn danger small" data-action="revoke" data-grant-id="' + esc(g.grant_id || '') + '" ' +
-        'data-scope="' + esc(scope) + '" data-layer="' + esc(layer) + '">✕ Révoquer</button>' +
-        '</div>';
-    };
-    return '<tr>' +
-      '<td class="scope-col">' + esc(scope) + '</td>' +
-      '<td>' + cellFor('baseline') + '</td>' +
-      '<td>' + cellFor('override') + '</td>' +
-      '<td><span class="owner-badge local">📦 box-local</span></td>' +
-      '</tr>';
-  }).join('');
+function demoData() {
+    const A = 'did:plc:centre-paris-doc2001db8aaaa', B = 'did:plc:centre-lyon-doc2001db8bbbb';
+    OWN = [{ scope: 'firewall', layer: 'baseline', owner: A, grant_id: 'g-demo-1' }, { scope: 'firewall', layer: 'override', owner: B, grant_id: 'g-demo-2' },
+           { scope: 'dns', layer: 'baseline', owner: A, grant_id: 'g-demo-3' }];
+    CENTRES = [{ center_did: A, grants: [{ grant_id: 'g-demo-1', scope: 'firewall', layer: 'baseline' }, { grant_id: 'g-demo-3', scope: 'dns', layer: 'baseline' }] },
+               { center_did: B, grants: [{ grant_id: 'g-demo-2', scope: 'firewall', layer: 'override' }] }];
+    PROPS = [{ publisher: 'did:plc:centre-inconnu-doc2001db8cccc', scope: 'wireguard', layer: 'baseline', reason: 'no-grant' }];
 }
 
-// Délégation d'événements : aucune donnée d'API n'est jamais interpolée dans
-// un attribut d'événement inline (onclick/onchange/...). Les valeurs
-// dynamiques (grant_id, scope, layer, center_did) sont portées par des
-// data-* attributs (échappés HTML via esc()) et lues ici via `dataset`, qui
-// renvoie la valeur décodée en tant que STRING JS — jamais réinterprétée
-// comme du code. Empêche toute évasion de chaîne (leçon XSS proxypac).
-$('matrix-body').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-action]');
-  if (!btn) return;
-  if (btn.dataset.action === 'revoke') {
-    revokeGrant(btn.dataset.grantId, btn.dataset.scope, btn.dataset.layer);
-  }
+async function charger() {
+    if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+    const essais = await Promise.allSettled([lire('/centers/ownership'), lire('/centers'), lire('/centers/proposals')]);
+    const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+    const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+    const tous = essais.every(e => e.status === 'rejected');
+    SESSION_OK = !refus;
+    const o = val(0), c = val(1), p = val(2);
+    OWN = o && Array.isArray(o.ownership) ? o.ownership : null;
+    CENTRES = c && Array.isArray(c.centers) ? c.centers : null;
+    PROPS = p && Array.isArray(p.proposals) ? p.proposals : null;
+    CHARGE = true;
+    $('erreur').hidden = !(tous && !refus);
+    if (tous && !refus) $('erreur').textContent = 'Impossible de lire le service annuaire (arrêté ou injoignable).';
+    rendre();
+}
+
+function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+function ligneVide(td, n, msg) { const tr = el('tr'); const c = el('td', 'vide', msg); c.colSpan = n; tr.appendChild(c); td.appendChild(tr); }
+function itemVide(ul, msg) { ul.appendChild(el('li', 'grise', msg)); }
+
+function rendre() {
+    $('demo').hidden = !DEMO;
+    $('session').hidden = SESSION_OK;
+    const etat = $('etat');
+    if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+    else if (!OWN && !CENTRES && !PROPS) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+    else { etat.className = 'actif'; etat.textContent = 'PANNEAU ACTIF'; }
+    $('tCentres').textContent = CENTRES ? CENTRES.length : '—';
+    $('tOctrois').textContent = OWN ? OWN.length : '—';
+    $('tScopes').textContent = OWN ? new Set(OWN.map(o => o.scope)).size : '—';
+    $('tProp').textContent = PROPS ? PROPS.length : '—';
+    $('cProp').className = 'tuile ' + (PROPS && PROPS.length ? 'att' : 'cy');
+    rendreMatrice(); rendreCentres(); rendrePropositions();
+    $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+    annoncer();
+}
+
+function rendreMatrice() {
+    const tb = $('bMat'); tb.replaceChildren();
+    if (!OWN) { ligneVide(tb, 4, '—'); return; }
+    const parCle = {}, scopes = new Set();
+    OWN.forEach(o => { parCle[o.scope + '|' + o.layer] = o; scopes.add(o.scope); });
+    const saisi = $('gScope').value.trim();
+    if (saisi) scopes.add(saisi);
+    if (!scopes.size) { ligneVide(tb, 4, 'Aucun octroi actif'); return; }
+    Array.from(scopes).sort().forEach(scope => {
+        const tr = el('tr');
+        tr.appendChild(el('td', 'sc', scope));
+        ['baseline', 'override'].forEach(layer => {
+            const td = el('td'), g = parCle[scope + '|' + layer];
+            if (!g) td.appendChild(el('span', 'grise', '— vide —'));
+            else {
+                const c = el('div', 'cell');
+                const p = el('span', 'pill cy mono', didCourt(g.owner)); p.title = tiret(g.owner); c.appendChild(p);
+                if (CONFIRM === 'rev:' + g.grant_id) {
+                    c.appendChild(el('span', 'note', 'Révoquer cet octroi ?'));
+                    c.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = ''; revoquer(g.grant_id, scope, layer); }));
+                    c.appendChild(btn('Annuler', '', () => { CONFIRM = ''; rendre(); }));
+                } else {
+                    const b = btn('✕ Révoquer', 'danger', () => { CONFIRM = 'rev:' + g.grant_id; rendre(); });
+                    b.dataset.action = 'revoke'; b.dataset.grantId = g.grant_id || ''; b.dataset.scope = scope; b.dataset.layer = layer;
+                    c.appendChild(b);
+                }
+                td.appendChild(c);
+            }
+            tr.appendChild(td);
+        });
+        const tl = el('td'); tl.appendChild(el('span', 'pill ok', '📦 box-local')); tr.appendChild(tl);
+        tb.appendChild(tr);
+    });
+}
+
+function rendreCentres() {
+    const ul = $('lCentres'); ul.replaceChildren();
+    if (!CENTRES) { itemVide(ul, '—'); return; }
+    if (!CENTRES.length) { itemVide(ul, 'Aucun centre accordé'); return; }
+    CENTRES.forEach(c => {
+        const li = el('li');
+        const d = el('span', 'mono', didCourt(c.center_did)); d.title = tiret(c.center_did); li.appendChild(d);
+        const g = (c.grants || []).map(x => tiret(x.scope) + '/' + tiret(x.layer)).join(', ');
+        li.appendChild(el('span', g ? '' : 'grise', g || 'aucun octroi'));
+        ul.appendChild(li);
+    });
+}
+
+function rendrePropositions() {
+    const ul = $('lProp'); ul.replaceChildren();
+    if (!PROPS) { itemVide(ul, '—'); return; }
+    if (!PROPS.length) { itemVide(ul, 'Aucune proposition en attente'); return; }
+    PROPS.forEach(p => {
+        const centre = p.publisher || '', scope = p.scope || '', layer = p.layer || 'baseline', cle = 'acc:' + centre + '|' + scope + '|' + layer;
+        const li = el('li');
+        const t = el('span'); t.appendChild(document.createTextNode(tiret(p.scope) + ' / ' + tiret(p.layer) + ' '));
+        t.appendChild(el('span', 'pill jn', '(' + (p.reason || '?') + ')')); t.appendChild(document.createTextNode(' — '));
+        const d = el('span', 'mono', didCourt(centre)); d.title = centre; t.appendChild(d); li.appendChild(t);
+        const a = el('span', 'cell');
+        if (CONFIRM === cle) {
+            a.appendChild(el('span', 'note', 'Octroyer ' + scope + '/' + layer + ' à ce centre ?'));
+            a.appendChild(btn('Confirmer', 'prim', () => { CONFIRM = ''; accepter(centre, scope, layer); }));
+            a.appendChild(btn('Annuler', '', () => { CONFIRM = ''; rendre(); }));
+        } else {
+            const b = btn('✓ Accepter', 'prim', () => { CONFIRM = cle; rendre(); });
+            b.dataset.action = 'accept-proposal'; b.dataset.centerDid = centre; b.dataset.scope = scope; b.dataset.layer = layer;
+            a.appendChild(b);
+        }
+        li.appendChild(a); ul.appendChild(li);
+    });
+}
+
+// ----- Actions (mêmes appels que l'ancienne page) -----
+async function revoquer(grantId, scope, layer) {
+    if (!grantId) { retour('rMat', false, 'grant_id manquant'); return; }
+    const r = await ecrire('/centers/revoke', { grant_id: grantId });
+    if (r.ok) { retour('rMat', true, 'Octroi révoqué (' + scope + '/' + layer + ')'); toast('Octroi révoqué'); charger(); }
+    else { retour('rMat', false, 'Révocation impossible : ' + detail(r)); rendre(); }
+}
+async function accepter(centerDid, scope, layer) {
+    if (!centerDid || !scope) { retour('rProp', false, 'proposition incomplète'); return; }
+    const r = await ecrire('/centers/proposal/accept', { center_did: centerDid, scope: scope, layer: layer });
+    if (r.ok) { retour('rProp', true, 'Proposition acceptée (' + scope + '/' + layer + ')'); toast('Proposition acceptée'); charger(); }
+    else { retour('rProp', false, 'Acceptation impossible : ' + detail(r)); rendre(); }
+}
+$('fOctroi').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const scope = $('gScope').value.trim(), layer = $('gCalque').value, centerDid = $('gDid').value.trim();
+    if (!scope || !centerDid) { retour('rOctroi', false, 'scope et center_did requis'); return; }
+    $('btnOctroi').disabled = true;
+    const r = await ecrire('/centers/grant', { center_did: centerDid, scope: scope, layer: layer });
+    $('btnOctroi').disabled = false;
+    if (r.ok) { retour('rOctroi', true, 'Octroi accordé (' + scope + '/' + layer + ')'); $('gScope').value = ''; $('gDid').value = ''; charger(); }
+    else retour('rOctroi', false, 'Octroi impossible : ' + detail(r));
 });
+$('gScope').addEventListener('input', rendreMatrice);
 
-async function revokeGrant(grantId, scope, layer){
-  if (!grantId) { toast('grant_id manquant', true); return; }
-  try {
-    await J('/centers/revoke', {method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({grant_id: grantId})});
-    toast('Octroi révoqué (' + scope + '/' + layer + ')');
-    loadOwnership();
-    loadCenters();
-  } catch (e) {
-    toast('Révocation impossible : ' + e.message, true);
-  }
-}
-
-async function grantNew(){
-  const scope = $('grant-scope').value.trim();
-  const layer = $('grant-layer').value;
-  const centerDid = $('grant-center-did').value.trim();
-  if (!scope || !centerDid) { toast('scope et center_did requis', true); return; }
-  try {
-    await J('/centers/grant', {method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({center_did: centerDid, scope: scope, layer: layer})});
-    toast('Octroi accordé (' + scope + '/' + layer + ')');
-    $('grant-scope').value = ''; $('grant-center-did').value = '';
-    loadOwnership();
-    loadCenters();
-  } catch (e) {
-    toast('Octroi impossible : ' + e.message, true);
-  }
-}
-
-// ── centers list ───────────────────────────────────────────────────────
-
-async function loadCenters(){
-  try {
-    const d = await J('/centers');
-    const centers = d.centers || [];
-    $('centers-list').innerHTML = centers.length ? centers.map(c => {
-      const grants = (c.grants || []).map(g => esc(g.scope) + '/' + esc(g.layer)).join(', ');
-      return '<li><span title="' + esc(c.center_did) + '">' + esc(shortDid(c.center_did)) + '</span>' +
-        '<span>' + (grants || '<span class="empty">aucun octroi</span>') + '</span></li>';
-    }).join('') : '<li class="empty">aucun centre accordé</li>';
-  } catch (e) {
-    $('centers-list').innerHTML = '<li class="empty">indisponible (' + esc(e.message) + ')</li>';
-  }
-}
-
-// ── proposals ──────────────────────────────────────────────────────────
-
-async function loadProposals(){
-  try {
-    const d = await J('/centers/proposals');
-    const proposals = d.proposals || [];
-    $('proposals-list').innerHTML = proposals.length ? proposals.map(p => {
-      const centerDid = p.publisher || '';
-      return '<li>' +
-        '<span>' + esc(p.scope || '—') + ' / ' + esc(p.layer || '—') +
-        ' <span class="reason-badge">(' + esc(p.reason || '?') + ')</span>' +
-        ' — <span title="' + esc(centerDid) + '">' + esc(shortDid(centerDid)) + '</span></span>' +
-        '<button class="btn primary small" data-action="accept-proposal" ' +
-        'data-center-did="' + esc(centerDid) + '" data-scope="' + esc(p.scope || '') + '" ' +
-        'data-layer="' + esc(p.layer || 'baseline') + '">✓ Accepter</button>' +
-        '</li>';
-    }).join('') : '<li class="empty">aucune proposition en attente</li>';
-  } catch (e) {
-    $('proposals-list').innerHTML = '<li class="empty">indisponible (' + esc(e.message) + ')</li>';
-  }
-}
-
-$('proposals-list').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-action]');
-  if (!btn) return;
-  if (btn.dataset.action === 'accept-proposal') {
-    acceptProposal(btn.dataset.centerDid, btn.dataset.scope, btn.dataset.layer);
-  }
+$('fDiff').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const scope = $('eScope').value.trim();
+    if (!scope) { $('eStatut').textContent = 'scope requis'; return; }
+    if (DEMO) { $('eEff').textContent = '# démonstration\nenabled = true\n'; $('eLoc').textContent = '(vide)'; $('eStatut').textContent = 'statut : démonstration'; annoncer(); return; }
+    try {
+        const d = await lire('/centers/effective/' + encodeURIComponent(scope));
+        $('eEff').textContent = d.effective != null ? d.effective : '(vide)';
+        $('eLoc').textContent = d.local != null ? d.local : '(vide)';
+        $('eStatut').textContent = 'statut : ' + tiret(d.status);
+    } catch (e) {
+        $('eEff').textContent = '—'; $('eLoc').textContent = '—';
+        $('eStatut').textContent = 'indisponible (' + e.message + ')';
+    }
+    annoncer();
 });
+$('rafraichir').addEventListener('click', charger);
 
-async function acceptProposal(centerDid, scope, layer){
-  if (!centerDid || !scope) { toast('proposition incomplète', true); return; }
-  try {
-    await J('/centers/proposal/accept', {method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({center_did: centerDid, scope: scope, layer: layer})});
-    toast('Proposition acceptée (' + scope + '/' + layer + ')');
-    loadProposals();
-    loadOwnership();
-    loadCenters();
-  } catch (e) {
-    toast('Acceptation impossible : ' + e.message, true);
-  }
+// ----- Hauteur annoncée à l'hôte (iframes) -----
+function annoncer() {
+    try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'centers' }, location.origin); } catch (e) { /* hors iframe */ }
 }
+if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+addEventListener('resize', annoncer);
 
-// ── effective diff ────────────────────────────────────────────────────
-
-async function loadEffective(){
-  const scope = $('eff-scope').value.trim();
-  if (!scope) { toast('scope requis', true); return; }
-  try {
-    const d = await J('/centers/effective/' + encodeURIComponent(scope));
-    $('eff-effective').textContent = d.effective != null ? d.effective : '(vide)';
-    $('eff-local').textContent = d.local != null ? d.local : '(vide)';
-    $('eff-status').textContent = 'statut : ' + (d.status || '—');
-  } catch (e) {
-    $('eff-effective').textContent = '—';
-    $('eff-local').textContent = '—';
-    $('eff-status').textContent = 'indisponible (' + e.message + ')';
-    toast('Diff indisponible : ' + e.message, true);
-  }
-}
-
-$('btn-refresh').addEventListener('click', loadAll);
-$('btn-grant-new').addEventListener('click', grantNew);
-$('btn-eff-load').addEventListener('click', loadEffective);
-
-async function loadAll(){
-  loadOwnership();
-  loadCenters();
-  loadProposals();
-}
-loadAll();
+charger();
+// Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+setInterval(() => {
+    if (document.hidden || DEMO || CONFIRM || $('gScope').value || $('gDid').value) return;
+    charger();
+}, 30000);
 </script>
 </body>
 </html>

@@ -1,251 +1,282 @@
 <!DOCTYPE html>
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
-<html lang="fr"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Releases (évolutions × anneaux) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Aucun secret affiché. Seules routes : GET /evolutions ; POST /publish, /promote, /demote, /assign.
+-->
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecuBox — Releases</title>
-<link rel="stylesheet" href="/shared/hybrid-skin.css">
 <style>
-  body { font-family: 'Courier Prime', monospace; background:#0d1117; color:#e8e6d9; display:flex; }
-  .main { flex:1; margin-left:220px; padding:1.5rem; }
-  .card { background:rgba(30,40,55,.8); border:1px solid rgba(100,150,200,.2); border-radius:8px; padding:1rem; margin-bottom:1rem; }
-  .btn { padding:.4rem .8rem; border-radius:6px; border:1px solid rgba(100,150,200,.2); background:transparent; color:#e8e6d9; cursor:pointer; font-family:inherit; }
-  .btn:hover { border-color:#00d4ff; }
-  .btn.small { padding:.2rem .5rem; font-size:.72rem; margin-right:.3rem; }
-  .btn.warn { border-color:#ffcc00; color:#ffcc00; }
-  .btn.danger { border-color:#ff4466; color:#ff4466; }
-  .btn.primary { border-color:#00d4ff; color:#00d4ff; }
-  input,select,textarea { background:#111a24; color:#e8e6d9; border:1px solid rgba(100,150,200,.2); padding:.35rem; border-radius:5px; font-family:inherit; }
-  textarea { width:100%; min-height:4rem; }
-  table { width:100%; border-collapse:collapse; font-size:.85rem; }
-  th,td { padding:.5rem .6rem; border-bottom:1px solid rgba(100,150,200,.2); text-align:left; }
-  th { color:#6b7b8b; text-transform:uppercase; font-size:.7rem; letter-spacing:.05em; }
-  .ring-badge { padding:.1rem .5rem; border-radius:4px; border:1px solid rgba(100,150,200,.3); font-size:.75rem; }
-  .ring-draft { color:#ffcc00; border-color:#ffcc00; }
-  .ring-internal { color:#00d4ff; border-color:#00d4ff; }
-  .ring-published { color:#00dd44; border-color:#00dd44; }
-  .form-row { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.6rem; align-items:center; }
-  .form-row input { flex:1; min-width:9rem; }
-  #banner { padding:.5rem .8rem; border-radius:6px; margin-bottom:1rem; font-size:.85rem; display:none; }
-  #banner.ok { display:block; background:rgba(0,221,68,.15); border:1px solid #00dd44; color:#00dd44; }
-  #banner.err { display:block; background:rgba(255,68,102,.15); border:1px solid #ff4466; color:#ff4466; }
-  .empty { color:#6b7b8b; font-style:italic; font-size:.85rem; }
-</style></head>
-<body class="hybrid-dark">
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.warn{border-color:var(--orange);color:var(--orange)} .btn.warn:hover{background:rgba(255,159,28,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.jn .v{color:var(--jaune)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:460px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.jn{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;margin:0}
+        form.saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select,form.saisie textarea,.filtre input,.filtre select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie textarea{min-height:4.5rem;resize:vertical}
+        form.saisie .large{grid-column:1/-1}
+        form.saisie input:focus,form.saisie select:focus,form.saisie textarea:focus,.filtre input:focus,.filtre select:focus{outline:none;border-color:var(--cyan)}
+        .filtre{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin:0 0 8px}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
 <nav class="sidebar" id="sidebar"></nav>
-<div class="main">
-  <h1 style="color:#00d4ff">🚀 Releases</h1>
-  <div id="banner"></div>
+<main class="principal"><div class="cadre"><div class="app">
+    <header class="tete">
+        <div class="marque">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c3 2 5 5.2 5 9l2.2 3.2-3.2.4L12 21l-4-5.4-3.2-.4L7 12c0-3.800 2-7 5-9z"/><circle cx="12" cy="10" r="1.6"/></svg>
+            <div><h1>Releases</h1><small>Évolutions et anneaux de diffusion (draft, internal, published)</small></div>
+        </div>
+        <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+        <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+    </header>
+    <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+    <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+    <div id="erreur" role="alert" hidden></div>
 
-  <div class="card">
-    <h2>Évolutions × rings</h2>
-    <table>
-      <thead><tr><th>Évolution</th><th>Ring</th><th>Actions</th></tr></thead>
-      <tbody id="evo-body"></tbody>
-    </table>
+    <section class="tuiles" aria-label="Indicateurs">
+        <div class="tuile cy" title="Nombre d’évolutions publiées dans le journal de confiance, tous anneaux confondus. Vue souveraine : seules les promotions décidées par les centres accordés comptent."><span class="l">Évolutions</span><span class="v" id="tTotal">—</span><span class="s">au journal</span></div>
+        <div class="tuile ok" title="Évolutions à l’anneau published : visibles de toutes les boxes."><span class="l">Publiées</span><span class="v" id="tPub">—</span><span class="s">anneau published</span></div>
+        <div class="tuile cy" title="Évolutions à l’anneau internal : réservées aux boxes affectées à cet anneau."><span class="l">Internes</span><span class="v" id="tInt">—</span><span class="s">anneau internal</span></div>
+        <div class="tuile jn" title="Évolutions à l’anneau draft : brouillons, pas encore promus."><span class="l">Brouillons</span><span class="v" id="tDraft">—</span><span class="s">anneau draft</span></div>
+    </section>
 
-    <h2 style="margin-top:1rem">Publier une évolution</h2>
-    <div class="form-row">
-      <textarea id="pub-artifacts" placeholder='artifacts JSON (ex: ["secubox-core_1.0.0-1_arm64.deb"])'></textarea>
+    <div class="pan"><h3>Évolutions × anneaux <i>GET /evolutions</i></h3>
+        <div class="filtre">
+            <input id="rech" type="search" placeholder="Rechercher une évolution" aria-label="Rechercher une évolution" autocomplete="off">
+            <select id="fAnneau" aria-label="Filtrer par anneau"><option value="">Tous les anneaux</option><option value="draft">draft</option><option value="internal">internal</option><option value="published">published</option></select>
+        </div>
+        <div id="rEvo" class="retour" hidden></div>
+        <div class="tab"><table><thead><tr><th>Évolution</th><th>Anneau</th><th>Actions</th></tr></thead><tbody id="bEvo"></tbody></table></div>
+        <p class="note">Promouvoir fait avancer l’évolution d’un anneau (draft, internal, published) ; rétrograder la fait reculer. Chaque décision est signée au journal.</p>
     </div>
-    <div class="form-row">
-      <input id="pub-notes" placeholder="notes">
-      <button class="btn primary" data-act="publish">Publier</button>
-    </div>
-  </div>
 
-  <div class="card">
-    <h2>Box × ring</h2>
-    <h3 style="font-size:.9rem;color:#6b7b8b">Assigner un ring</h3>
-    <div class="form-row">
-      <input id="assign-box-did" placeholder="did:plc:… de la box">
-      <select id="assign-ring">
-        <option value="draft">draft</option>
-        <option value="internal">internal</option>
-        <option value="published">published</option>
-      </select>
-      <button class="btn primary" data-act="assign">Assigner</button>
+    <div class="grille">
+        <div class="pan"><h3>Publier une évolution <i>POST /publish</i></h3>
+            <form class="saisie" id="fPub">
+                <label class="large">Artefacts (liste JSON)<textarea id="pubArtefacts" placeholder='["secubox-core_1.0.0-1_arm64.deb"]' spellcheck="false"></textarea></label>
+                <label class="large">Notes<input id="pubNotes" placeholder="notes de version" autocomplete="off"></label>
+                <div class="bout" style="margin:0"><button class="btn prim" id="btnPub" type="submit" data-act="publish">Publier</button></div>
+            </form>
+            <div id="rPub" class="retour" hidden></div>
+        </div>
+        <div class="pan"><h3>Box × anneau <i>POST /assign</i></h3>
+            <form class="saisie" id="fAss">
+                <label class="large">DID de la box<input id="assBox" placeholder="did:plc:… de la box" autocomplete="off" class="mono"></label>
+                <label>Anneau<select id="assAnneau"><option value="draft">draft</option><option value="internal">internal</option><option value="published">published</option></select></label>
+                <div class="bout" style="margin:0"><button class="btn prim" id="btnAss" type="submit" data-act="assign">Assigner</button></div>
+            </form>
+            <div id="rAss" class="retour" hidden></div>
+            <p class="note">Affecte une box à un anneau : elle ne reçoit alors que les évolutions de cet anneau ou des anneaux plus larges.</p>
+        </div>
     </div>
-  </div>
-</div>
-<script src="/shared/sidebar.js"></script>
+</div></div></main>
+<div class="toast" id="toast" role="status"></div>
+
 <script>
-const T = () => localStorage.getItem('sbx_token') || '';
-const H = () => ({'Authorization':'Bearer '+T(),'Content-Type':'application/json'});
+const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMBED = !!Q.get('embed');
+if (EMBED || DEMO) document.body.classList.add('emb');
+else { const s = document.createElement('script'); s.src = '/shared/sidebar.js'; document.body.appendChild(s); }
 const API = '/api/v1/release';
+const $ = id => document.getElementById(id);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+const ANNEAUX = { draft: 'jn', internal: 'cy', published: 'ok' };
 
-function notify(msg, isError) {
-  const b = document.getElementById('banner');
-  b.textContent = msg;
-  b.className = isError ? 'err' : 'ok';
+let EVOS = null, SESSION_OK = true, CHARGE = false;
+
+function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+async function lire(chemin) {
+    const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+    if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+    return r.json();
 }
-
-function clearNotify() {
-  const b = document.getElementById('banner');
-  b.textContent = '';
-  b.className = '';
-}
-
-async function postAction(url, body, okMsg) {
-  let r;
-  try {
-    r = await fetch(url, {method:'POST', headers: H(), body: JSON.stringify(body)});
-  } catch (e) {
-    notify('Requête impossible : ' + e.message, true);
-    return null;
-  }
-  if (r.status === 401) {
-    clearNotify();
-    notify('Session expirée — reconnectez-vous', true);
-    return null;
-  }
-  let data = null;
-  try { data = await r.json(); } catch (e) { /* no body */ }
-  if (!r.ok) {
-    const detail = (data && data.detail) ? data.detail : ('HTTP ' + r.status);
-    notify(detail, true);
-    return null;
-  }
-  notify(okMsg);
-  return data;
-}
-
-function ringClass(ring) {
-  return 'ring-badge ring-' + (ring || 'draft');
-}
-
-function buildEvoRow(evo) {
-  const tr = document.createElement('tr');
-
-  const tdId = document.createElement('td');
-  tdId.textContent = evo.evo_id;
-  tr.appendChild(tdId);
-
-  const tdRing = document.createElement('td');
-  const badge = document.createElement('span');
-  badge.className = ringClass(evo.ring);
-  badge.textContent = evo.ring;
-  tdRing.appendChild(badge);
-  tr.appendChild(tdRing);
-
-  const tdActions = document.createElement('td');
-  const btnPromote = document.createElement('button');
-  btnPromote.className = 'btn small primary';
-  btnPromote.textContent = 'Promote';
-  btnPromote.dataset.act = 'promote';
-  btnPromote.dataset.evo = evo.evo_id;
-  tdActions.appendChild(btnPromote);
-
-  const btnDemote = document.createElement('button');
-  btnDemote.className = 'btn small warn';
-  btnDemote.textContent = 'Demote';
-  btnDemote.dataset.act = 'demote';
-  btnDemote.dataset.evo = evo.evo_id;
-  tdActions.appendChild(btnDemote);
-
-  tr.appendChild(tdActions);
-  return tr;
-}
-
-async function loadEvolutions() {
-  const tbody = document.getElementById('evo-body');
-  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
-  let r;
-  try {
-    r = await fetch(API + '/evolutions', {headers: H()});
-  } catch (e) {
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = 3;
-    td.className = 'empty';
-    td.textContent = 'indisponible (' + e.message + ')';
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-    return;
-  }
-  if (r.status === 401) {
-    clearNotify();
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = 3;
-    td.className = 'empty';
-    td.textContent = 'auth requise';
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-    return;
-  }
-  if (!r.ok) {
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = 3;
-    td.className = 'empty';
-    td.textContent = 'indisponible (HTTP ' + r.status + ')';
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-    return;
-  }
-  const d = await r.json();
-  const evos = d.evolutions || [];
-  if (evos.length === 0) {
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = 3;
-    td.className = 'empty';
-    td.textContent = 'aucune évolution';
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-    return;
-  }
-  evos.forEach((evo) => tbody.appendChild(buildEvoRow(evo)));
-}
-
-document.addEventListener('click', async (ev) => {
-  const b = ev.target.closest('[data-act]');
-  if (!b) return;
-  const act = b.dataset.act;
-
-  if (act === 'promote' || act === 'demote') {
-    const evoId = b.dataset.evo;
-    const okMsg = (act === 'promote' ? 'Promue : ' : 'Rétrogradée : ') + evoId;
-    await postAction(API + '/' + act, {evo_id: evoId}, okMsg);
-    loadEvolutions();
-    return;
-  }
-
-  if (act === 'publish') {
-    const rawArtifacts = document.getElementById('pub-artifacts').value.trim();
-    const notes = document.getElementById('pub-notes').value;
-    let artifacts;
+// Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+async function ecrire(chemin, corps) {
+    if (DEMO) return { ok: false, demo: true };
     try {
-      artifacts = rawArtifacts ? JSON.parse(rawArtifacts) : [];
+        const r = await fetch(API + chemin, { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+        let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+        return { ok: r.ok, statut: r.status, data };
+    } catch (e) { return { ok: false, statut: 0, data: null }; }
+}
+function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+function detail(res) {
+    if (res.demo) return 'Démonstration : action inerte.';
+    if (res.statut === 401) return 'Session expirée — reconnectez-vous';
+    const d = res.data && res.data.detail;
+    if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
+    if (d) return String(d);
+    return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+}
+
+function demoData() {
+    EVOS = [{ evo_id: 'evo-2026-10-core-1.9.50', ring: 'published' }, { evo_id: 'evo-2026-10-waf-2.4.0', ring: 'internal' },
+            { evo_id: 'evo-2026-10-hall-aurora', ring: 'internal' }, { evo_id: 'evo-2026-10-annuaire-0.14', ring: 'draft' }];
+}
+
+async function charger() {
+    if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+    let erreur = false;
+    try {
+        const d = await lire('/evolutions');
+        EVOS = Array.isArray(d.evolutions) ? d.evolutions : [];
+        SESSION_OK = true;
     } catch (e) {
-      notify('artifacts : JSON invalide', true);
-      return;
+        EVOS = null;
+        SESSION_OK = !(e.statut === 401 || e.statut === 403);
+        erreur = SESSION_OK;
+        $('erreur').textContent = erreur ? 'Impossible de lire les évolutions (' + e.message + ').' : '';
     }
-    const data = await postAction(API + '/publish', {artifacts: artifacts, notes: notes}, 'Évolution publiée');
-    if (data) {
-      document.getElementById('pub-artifacts').value = '';
-      document.getElementById('pub-notes').value = '';
-    }
-    loadEvolutions();
-    return;
-  }
+    CHARGE = true;
+    $('erreur').hidden = !erreur;
+    rendre();
+}
 
-  if (act === 'assign') {
-    const boxDid = document.getElementById('assign-box-did').value.trim();
-    const ring = document.getElementById('assign-ring').value;
-    if (!boxDid) {
-      notify('box_did requis', true);
-      return;
-    }
-    const data = await postAction(API + '/assign', {box_did: boxDid, ring: ring}, 'Ring assigné : ' + boxDid + ' → ' + ring);
-    if (data) {
-      document.getElementById('assign-box-did').value = '';
-    }
-    return;
-  }
+function compte(r) { return EVOS ? EVOS.filter(e => e.ring === r).length : '—'; }
+
+function rendre() {
+    $('demo').hidden = !DEMO;
+    $('session').hidden = SESSION_OK;
+    const etat = $('etat');
+    if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+    else if (!EVOS) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+    else { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+    $('tTotal').textContent = EVOS ? EVOS.length : '—';
+    $('tPub').textContent = compte('published'); $('tInt').textContent = compte('internal'); $('tDraft').textContent = compte('draft');
+    rendreEvos();
+    $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+    annoncer();
+}
+
+function ligneVide(msg) { const tr = el('tr'); const td = el('td', 'vide', msg); td.colSpan = 3; tr.appendChild(td); return tr; }
+function btn(txt, cls, act, evo) { const b = el('button', 'btn sm ' + cls, txt); b.type = 'button'; b.dataset.act = act; b.dataset.evo = evo; return b; }
+
+function rendreEvos() {
+    const tb = $('bEvo'); tb.replaceChildren();
+    if (!EVOS) { tb.appendChild(ligneVide('—')); return; }
+    if (!EVOS.length) { tb.appendChild(ligneVide('Aucune évolution')); return; }
+    const q = $('rech').value.trim().toLowerCase(), f = $('fAnneau').value;
+    const liste = EVOS.filter(e => (!f || e.ring === f) && (!q || String(e.evo_id).toLowerCase().includes(q)));
+    if (!liste.length) { tb.appendChild(ligneVide('Aucune évolution ne correspond au filtre')); return; }
+    liste.forEach(e => {
+        const tr = el('tr');
+        tr.appendChild(el('td', 'mono', e.evo_id));
+        const tdr = el('td'); tdr.appendChild(el('span', 'pill ' + (ANNEAUX[e.ring] || ''), e.ring || '—')); tr.appendChild(tdr);
+        const act = el('td', 'act');
+        act.appendChild(btn('Promouvoir', 'prim', 'promote', e.evo_id));
+        act.appendChild(document.createTextNode(' '));
+        act.appendChild(btn('Rétrograder', 'warn', 'demote', e.evo_id));
+        tr.appendChild(act); tb.appendChild(tr);
+    });
+}
+$('rech').addEventListener('input', rendreEvos);
+$('fAnneau').addEventListener('change', rendreEvos);
+
+// ----- Actions (mêmes appels que l'ancienne page) -----
+$('bEvo').addEventListener('click', async ev => {
+    const b = ev.target.closest('[data-act]');
+    if (!b) return;
+    const act = b.dataset.act, evo = b.dataset.evo;
+    b.disabled = true;
+    const r = await ecrire('/' + act, { evo_id: evo });
+    if (r.ok) { retour('rEvo', true, (act === 'promote' ? 'Promue : ' : 'Rétrogradée : ') + evo); charger(); }
+    else { retour('rEvo', false, (act === 'promote' ? 'Promotion' : 'Rétrogradation') + ' impossible : ' + detail(r)); b.disabled = false; }
 });
+$('fPub').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const brut = $('pubArtefacts').value.trim(), notes = $('pubNotes').value;
+    let artefacts;
+    try { artefacts = brut ? JSON.parse(brut) : []; } catch (e) { retour('rPub', false, 'artifacts : JSON invalide'); return; }
+    $('btnPub').disabled = true;
+    const r = await ecrire('/publish', { artifacts: artefacts, notes: notes });
+    $('btnPub').disabled = false;
+    if (r.ok) { retour('rPub', true, 'Évolution publiée'); $('pubArtefacts').value = ''; $('pubNotes').value = ''; charger(); }
+    else retour('rPub', false, 'Publication impossible : ' + detail(r));
+});
+$('fAss').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const box = $('assBox').value.trim(), anneau = $('assAnneau').value;
+    if (!box) { retour('rAss', false, 'box_did requis'); return; }
+    $('btnAss').disabled = true;
+    const r = await ecrire('/assign', { box_did: box, ring: anneau });
+    $('btnAss').disabled = false;
+    if (r.ok) { retour('rAss', true, 'Anneau assigné : ' + box + ' → ' + anneau); $('assBox').value = ''; }
+    else retour('rAss', false, 'Assignation impossible : ' + detail(r));
+});
+$('rafraichir').addEventListener('click', charger);
 
-loadEvolutions();
-setInterval(loadEvolutions, 10000);
+// ----- Hauteur annoncée à l'hôte (iframes) -----
+function annoncer() {
+    try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'releases' }, location.origin); } catch (e) { /* hors iframe */ }
+}
+if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+addEventListener('resize', annoncer);
+
+charger();
+// Pas d'actualisation pendant une saisie, ni onglet masqué.
+setInterval(() => {
+    if (document.hidden || DEMO || $('pubArtefacts').value || $('pubNotes').value || $('assBox').value || $('rech').value) return;
+    charger();
+}, 15000);
 </script>
-</body></html>
+</body>
+</html>
