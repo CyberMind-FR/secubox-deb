@@ -359,3 +359,17 @@ def test_aucun_secret_ni_cookie_dans_une_reponse(monkeypatch, tmp_path):
 def test_la_route_vignette_accepte_la_cle_opaque_et_pas_une_chaine_longue(monkeypatch, tmp_path):
     c = _client(monkeypatch, tmp_path, Faux([]))
     assert c.get(f"/api/v1/ytsas/flux/vignette/{UC1}", headers=H).status_code == 400
+
+
+# ── 0.8.2 : un libellé de yt-dlp n'est pas un nom de chaîne ──────────────────────────────────────────
+@pytest.mark.parametrize("libelle", ["View full playlist", "view full playlist", "Voir la playlist complète", "Afficher la playlist complète", "  View full playlist  "])
+def test_le_libelle_du_lien_de_yt_dlp_n_est_pas_le_nom_de_la_chaine(libelle):
+    """Lecture réelle de `feed/playlists` : yt-dlp met le texte du lien (« View full playlist ») dans `uploader`."""
+    brut = json.dumps({"_type": "url", "id": PL1, "title": "CLIPz", "uploader": libelle})
+    assert flux.analyser_playlists(brut)[0]["chaine"] == ""
+
+
+def test_un_vrai_nom_de_chaine_est_conserve():
+    brut = json.dumps({"_type": "url", "id": PL1, "title": "CLIPz", "uploader": "Cours Libres"})
+    assert flux.analyser_playlists(brut)[0]["chaine"] == "Cours Libres"
+    assert flux.analyser_playlists(_playlist(chaine="Ma playlist complète de blues"))[0]["chaine"] == "Ma playlist complète de blues"

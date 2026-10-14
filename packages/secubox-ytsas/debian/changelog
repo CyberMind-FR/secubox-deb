@@ -1,3 +1,11 @@
+secubox-ytsas (0.8.2-1~bookworm1) bookworm; urgency=medium
+
+  * Playlists du compte : la première lecture réelle de feed/playlists (cookies refaits) a montré que yt-dlp met le texte du lien (« View full playlist ») dans le champ auteur ; la carte l'affichait comme nom de chaîne. Un libellé de lien (anglais, français, espagnol, allemand) n'est plus pris pour un nom : le champ reste vide, rien n'est inventé. Un vrai nom, même contenant « playlist », est conservé (#2708).
+  * Constaté en réel, avec des cookies frais : abonnements, à regarder plus tard, chaînes (feed/channels : nom, handle, abonnés) et playlists répondent.
+  * Tests : trois cas ajoutés à test_flux_chaines_2708.py.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 21:00:00 +0200
+
 secubox-ytsas (0.8.1-1~bookworm1) bookworm; urgency=medium
 
   * Vhost public ytsas : le journal par domaine (access_log secubox-hosts.log, format sbx_host) fait partie de la source, comme pour les autres vhosts. Il n'y était pas : un outil le posait à la main sur la box, ce qui faisait poser à dpkg la question du fichier de configuration modifié à chaque mise à jour (la 0.8.0 s'est arrêtée dessus). Aucun autre changement de comportement (ref #2714).
