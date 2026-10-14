@@ -1,3 +1,11 @@
+secubox-webos (1.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * Hall au profil Aurora (ref #2656, #2658, #2659, #2660) : coque (jetons Aurora, anciens noms de jetons conservés, sombre par défaut, mode clair en variante sobre) et vingt cartes (activité, actor, coffre, comptes, cumul, dpi, éphéméride, freeboxtv, ipv6guard, lyrion, metablog, peertube, quick, quifrappe, radar, surf, surfviewer, voicestudio, voicestudio-admin, zigbee) plus le relais.
+  * Cartes : pages autonomes, ?demo=1 sans requête, ?embed=1, hauteur annoncée (sbxVue), aucun innerHTML ; thème sombre unique. Surf : protocole et sandbox inchangés, bouton Accueil réparé.
+  * Tests : test_hall_aurora_2656.py, test_cartes_aurora_2658.py, _2659.py, _2660.py.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 16:00:00 +0200
+
 secubox-webos (1.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Carte Flux YouTube au profil Aurora (page autonome, tuiles, pastille d'état, ?demo=1 et ?embed=1, hauteur annoncée) ; quatre listes, ▶ YouTube, ⬇ SAS, ⧉ copier, ★ favori, 🧭 Surf et messages de cause inchangés.
