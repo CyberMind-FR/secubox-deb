@@ -154,9 +154,10 @@ ExecStart=/usr/sbin/sbxwaf \
 # `inet secubox waf_ban{,6}`, persistant, retrait differe par le timeout nft).
 # Aucune source de blocage externe n'est plus interrogee sur le chemin de ban.
 
-# SIGHUP : réparation immédiate de la table nft (voir ReloadPropagatedFrom).
-# Les routes, elles, se rechargent seules à chaud.
-ExecReload=/bin/kill -HUP $MAINPID
+# RELOAD = FORCER LA RELECTURE A CHAUD, JAMAIS UN SIGNAL (#2629). sbxwaf n'a pas de gestionnaire SIGHUP : `kill -HUP` le terminait « avec succes »
+# (SIGHUP est une sortie propre pour systemd), Restart=on-failure ne le relancait pas et tous les vhosts publics repondaient 503. Un `touch` des
+# tables suffit : le controle de mtime (routes, regles) fait le reste a la requete suivante. `+` : en root malgre User=secubox-waf.
+ExecReload=+/usr/bin/touch /etc/secubox/waf/haproxy-routes.json
 Restart=on-failure
 RestartSec=5
 

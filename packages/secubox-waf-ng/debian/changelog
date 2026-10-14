@@ -1,3 +1,9 @@
+secubox-waf-ng (1.29.1-1~bookworm1) bookworm; urgency=high
+
+  * ExecReload n'envoie plus SIGHUP (#2629) : « systemctl reload secubox-waf-ng » (appele par secubox-relais-maillage, secubox-podcaster, l'exposition mesh...) tuait le WAF sans relance. Il fait maintenant un touch de haproxy-routes.json, qui force la relecture a chaud (controle de mtime). Le commentaire de l'unite parlait d'une « reparation de la table nft sur SIGHUP » qui n'existe pas dans le code. NB : le deploiement de ce paquet relance le WAF (quelques secondes de 503) : a faire hors heure de pointe.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 07:52:28 +0200
+
 secubox-waf-ng (1.29.0-1~bookworm1) bookworm; urgency=medium
 
   * Administration du WAF : les six autres onglets sont refaits comme des pages autonomes du profil projet reference Aurora, au niveau de la vue d'ensemble (ref #2354) : menaces.html, attaquants.html, visites.html, surfaces.html, historique.html, campagnes.html — tuiles, graphiques SVG, listes, ?embed=1 et ?demo=1 annonce, donnees reelles seulement (« — » sans mesure), lecture seule. Hauteur automatique (postMessage), l'ecouteur accepte sbxwafVue et sbxWafVue ; vue.html mesure son cadre et non le document. Les actions de l'ancien onglet Menaces (ban, unban, bascule de categorie) ne sont pas reprises dans la page. Le style de surcharge de la 1.28.x reste pour le reste de l'interface. 25 tests.

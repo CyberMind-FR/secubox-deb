@@ -55,18 +55,12 @@ def adresse_voisine(table: dict, port: int, defaut: str = "127.0.0.1") -> str:
 
 
 def recharge_sbxwaf() -> None:
-    """sbxwaf relit sa table à chaud ; on ne le touche que s'il tourne."""
-    actif = subprocess.run(
-        ["systemctl", "is-active", "--quiet", "secubox-waf-ng"],
-        capture_output=True,
-    )
-    if actif.returncode != 0:
-        return
-    for verbe in ("reload", "restart"):
-        r = subprocess.run(["systemctl", verbe, "secubox-waf-ng"],
-                           capture_output=True)
-        if r.returncode == 0:
-            return
+    """Ne signale PLUS le WAF (#2629).
+
+    sbxwaf relit haproxy-routes.json A CHAUD (controle de mtime a chaque requete) et la table est ecrite de facon atomique : aucun signal
+    n'est necessaire. Le « systemctl reload » d'avant envoyait SIGHUP (ExecReload=kill -HUP) ; sbxwaf n'a pas de gestionnaire SIGHUP, il
+    se terminait « avec succes » et systemd ne le relancait pas : 503 sur tous les vhosts publics jusqu'a une relance manuelle."""
+    return
 
 
 def main(argv: list[str]) -> int:
