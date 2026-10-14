@@ -45,7 +45,7 @@ from pydantic import BaseModel
 
 from secubox_core.auth import require_jwt, require_lecture
 
-VERSION = "2.0.12"
+VERSION = "2.1.0"
 
 # The single privileged surface. The panel/API is unprivileged (User=secubox);
 # every actuation is `sudo -n /usr/sbin/jellyfinctl <verb>` (scoped sudoers,
