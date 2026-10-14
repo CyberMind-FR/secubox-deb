@@ -1,3 +1,12 @@
+secubox-avatar (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /avatar/ refaite au profil Aurora (ref #2643) : page autonome en français (plus de police distante ni de skin crt/hybrid-dark), six tuiles avec infobulle de définition (identités, avatars, services actifs, personas, sites conservés, cookies chiffrés), onglets Identités / Services / Personas, fenêtre d'édition intégrée à la page, modes ?demo=1 (données fictives, actions inertes) et ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncée à l'hôte (sbxVue, onglet avatar).
+  * Corrigé : les confirm() natifs (suppression d'identité, oubli d'un site ou d'un persona) deviennent une confirmation intégrée à la page ; la redirection brutale vers /login.html sur 401 devient un bandeau ; noms, courriels, services et domaines venant de l'API ne passent plus par innerHTML ni par des gestionnaires en ligne (injection) ; une adresse d'avatar hors /api/v1/avatar/ est refusée ; mesure absente affichée « — » au lieu de 0 ; le jeton n'est plus envoyé sous la forme « Bearer null » au dépôt d'avatar.
+  * Non repris : la fenêtre de synchronisation n'avait aucun bouton pour la lancer dans l'ancienne page ; l'appel POST /sync est conservé dans le code (résultat affiché dans la fenêtre d'édition) sans nouveau bouton.
+  * Appels d'API inchangés : GET /identities, /services, /vault/list ; POST /identity, PUT /identity/{id}, DELETE /identity/{id}, POST /avatar/upload (multipart), POST /sync, DELETE /vault/{persona}/{domaine}. Tests Playwright ajoutés (14).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 11:40:00 +0200
+
 secubox-avatar (1.2.4-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait
