@@ -8,6 +8,13 @@ secubox-ad-guard (1.14.0-1~bookworm1) bookworm; urgency=medium
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 18:00:00 +0200
 
+secubox-ad-guard (1.13.1-1~bookworm1) bookworm; urgency=medium
+
+  * Alertes de dns-guard : une adresse publique n'est plus un « client ». Un détournement sans appareil connu porte l'adresse résolue dans le champ client du constat ; dns-guard affichait des serveurs distants (akadns.net, GitHub) parmi les clients concernés. Seule une adresse privée (LAN, wg) reste client_ip ; une adresse publique passe dans details.adresse_resolue (#2702).
+  * Tests : trois cas ajoutés à test_dnssensor_dnsguard_2702.py (29).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 18:00:00 +0200
+
 secubox-ad-guard (1.13.0-1~bookworm1) bookworm; urgency=medium
 
   * Capteur DNS : chaque constat nouveau (DGA, tunnel, dérive, liste de l'opérateur, détournement) est aussi écrit dans les alertes de dns-guard (/var/lib/secubox/dns-guard/alerts.jsonl). La page /dns-guard/ affichait « Aucune anomalie sur 24 h » partout : son module n'était branché sur aucune source (#2702).

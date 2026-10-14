@@ -170,6 +170,11 @@
   var S={st:null,cc:null,vpn:null,nac:null,br:null,hs:null,dns:null,leak:null,onion:null,sel:{},selInit:false,pending:null,session:true};
 
   var ISO_COUNTRIES=[['US','États-Unis'],['DE','Allemagne'],['FR','France'],['GB','Royaume-Uni'],['NL','Pays-Bas'],['CH','Suisse'],['SE','Suède'],['NO','Norvège'],['FI','Finlande'],['DK','Danemark'],['AT','Autriche'],['BE','Belgique'],['IE','Irlande'],['IS','Islande'],['LU','Luxembourg'],['CZ','Tchéquie'],['PL','Pologne'],['RO','Roumanie'],['ES','Espagne'],['IT','Italie'],['PT','Portugal'],['CA','Canada'],['AU','Australie'],['NZ','Nouvelle-Zélande'],['JP','Japon'],['SG','Singapour'],['HK','Hong Kong'],['KR','Corée du Sud'],['BR','Brésil'],['MX','Mexique'],['AR','Argentine'],['CL','Chili'],['IN','Inde'],['ZA','Afrique du Sud'],['UA','Ukraine'],['EE','Estonie'],['LV','Lettonie'],['LT','Lituanie'],['GR','Grèce'],['HU','Hongrie'],['BG','Bulgarie'],['HR','Croatie'],['SI','Slovénie'],['SK','Slovaquie'],['RS','Serbie'],['MD','Moldavie'],['MT','Malte'],['CY','Chypre'],['IL','Israël'],['TR','Turquie'],['TW','Taïwan'],['TH','Thaïlande'],['ID','Indonésie'],['MY','Malaisie'],['PH','Philippines'],['VN','Vietnam'],['AE','Émirats arabes unis'],['SA','Arabie saoudite'],['EG','Égypte'],['MA','Maroc'],['NG','Nigeria'],['KE','Kenya'],['CO','Colombie'],['PE','Pérou'],['UY','Uruguay'],['PA','Panama'],['LI','Liechtenstein'],['AD','Andorre'],['MC','Monaco'],['GE','Géorgie'],['AM','Arménie'],['AZ','Azerbaïdjan']];
+  function nomPays(g){var c=g&&g.country_iso,i;if(!c)return '';for(i=0;i<ISO_COUNTRIES.length;i++)if(ISO_COUNTRIES[i][0]===c)return ISO_COUNTRIES[i][1];return g.country_name||c;}
+  function paysTexte(g){ // drapeau, nom (en français si connu), code, puis l'ASN seulement s'il est connu : rien d'inventé
+    if(!g||!g.country_iso)return '';
+    return drapeau(g.country_iso)+' '+nomPays(g)+' ('+g.country_iso+')'+(g.asn>0?' · AS'+g.asn+(g.asn_org?' '+g.asn_org:''):'');
+  }
   function drapeau(c){return /^[A-Z]{2}$/.test(c)?String.fromCodePoint(127397+c.charCodeAt(0),127397+c.charCodeAt(1)):'';}
   function isIPv4(ip){return /^(\d{1,3}\.){3}\d{1,3}$/.test(String(ip||''));}
 
@@ -234,7 +239,7 @@
   function torLeaks(){
     ask('z-mode','Lancer la sonde de sortie ? Une requête est envoyée à un service d’écho d’adresse à travers Tor (SOCKS 9050).','Vérifier',function(slot){
       fetch(API+'/admin/tor/check-leaks',{method:'POST',credentials:'same-origin'}).then(function(r){return r.json().then(function(d){
-        S.leak={ok:!!d.ok,ip:d.tor_ip||null,err:d.error||null,t:new Date()};rendFuite();
+        S.leak={ok:!!d.ok,ip:d.tor_ip||null,geo:d.geo||null,err:d.error||null,t:new Date()};rendFuite();
         say(slot,d.ok?'IP de sortie : '+d.tor_ip:'Échec : '+(d.error||'Tor arrêté'),d.ok?'ok':'ko');setTimeout(charge,800);});
       }).catch(function(e){say(slot,'Échec : '+e.message,'ko');});
     });
@@ -341,14 +346,15 @@
       +'<span class="k">Démon</span><span class="v">'+(run?'🟢 en marche':'⚪ arrêté')+'</span>'
       +'<span class="k">Démarrage</span><span class="v">'+(run?boot+' %':'—')+'</span>'
       +'<span class="k">Circuits</span><span class="v">'+(run?N(st.circuits):'—')+'</span>'
-      +'<span class="k">IP de sortie</span><span class="v">'+(st.exit_ip?esc(st.exit_ip):'— (lance la vérification)')+'</span>'
+      +'<span class="k">IP de sortie</span><span class="v">'+(st.exit_ip?(st.exit_geo&&st.exit_geo.country_iso?esc(drapeau(st.exit_geo.country_iso))+' ':'')+esc(st.exit_ip):'— (lance la vérification)')+'</span>'
       :'<span class="k">État</span><span class="v">'+esc(st&&st.__error?st.__error:'—')+'</span>';
     el('bOn').disabled=!ok;el('bOff').disabled=!ok;el('bNewnym').disabled=!ok;el('bLeaks').disabled=!ok;
   }
   function rendFuite(){
     var L=S.leak,st=S.st,ip=L&&L.ok?L.ip:(st&&!st.__error&&st.exit_ip?st.exit_ip:null),d=S.dns&&!S.dns.__error?S.dns:null;
+    var geo=L&&L.ok?L.geo:(st&&!st.__error?st.exit_geo:null),pays=paysTexte(geo);
     var h='<span class="k">IP de sortie</span><span class="v">'+(ip?'<code>'+esc(ip)+'</code>':'—')+'</span>'
-      +'<span class="k">Pays de sortie</span><span class="v">—</span>'
+      +'<span class="k">Pays de sortie</span><span class="v">'+(pays?esc(pays):'—')+'</span>'
       +'<span class="k">Fuite DNS</span><span class="v">'+(d?(d.dnsport_up&&d.forward_zone_installed?'🟢 DNS via Tor (DNSPort + zone Unbound)':'🟠 DNSPort '+(d.dnsport_up?'actif':'inactif')+' · zone '+(d.forward_zone_installed?'installée':'absente')):'—')+'</span>'
       +'<span class="k">Dernière sonde</span><span class="v">'+(L?(L.ok?'réussie':'échec : '+esc(L.err||'Tor arrêté'))+' · '+L.t.toLocaleTimeString('fr-FR'):'aucune dans cette session')+'</span>';
     el('fuite').innerHTML=h;

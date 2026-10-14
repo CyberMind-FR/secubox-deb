@@ -186,3 +186,25 @@ def test_l_unite_du_capteur_peut_ecrire_chez_dns_guard_sans_dependre_de_son_doss
     sans_com = "\n".join(ligne for ligne in unite.splitlines() if not ligne.lstrip().startswith("#"))
     assert "ReadWritePaths=/var/lib/secubox/ad-guard -/var/lib/secubox/dns-guard" in sans_com   # « - » : dossier absent toléré
     assert "NoNewPrivileges=yes" in sans_com and "User=root" not in sans_com
+
+
+def test_une_adresse_publique_n_est_jamais_un_client_de_dns_guard(anomalies):
+    """Un détournement (dns.hijack.*) sans appareil connu porte l'adresse RÉSOLUE dans `client` : ce n'est pas un client du réseau."""
+    c = {"client": "185.199.108.133", "domaine": "github.com", "rule": "dns.hijack.new_net", "severity": 60, "tags": ["dns_hijack_suspect"]}
+    a = anomalies.alerte_dnsguard(c, NOW)
+    assert a["client_ip"] is None and a["details"]["adresse_resolue"] == "185.199.108.133"
+    c2 = dict(c, client=TV)
+    a2 = anomalies.alerte_dnsguard(c2, NOW)
+    assert a2["client_ip"] == TV and "adresse_resolue" not in a2["details"]
+
+
+def test_le_rattrapage_applique_la_meme_regle_d_adresse(anomalies):
+    emis = {"185.199.108.133|dns.hijack.new_net|github.com": NOW - 600, f"{TV}|dns.dga|x.fr": NOW - 600}
+    par_domaine = {a["domain"]: a for a in anomalies.alertes_depuis_etat(emis, NOW)}
+    assert par_domaine["github.com"]["client_ip"] is None and par_domaine["github.com"]["details"]["adresse_resolue"] == "185.199.108.133"
+    assert par_domaine["x.fr"]["client_ip"] == TV
+
+
+def test_une_adresse_illisible_ne_fait_pas_tomber_le_capteur(anomalies):
+    a = anomalies.alerte_dnsguard({"client": "pas-une-ip", "domaine": "x.fr", "rule": "dns.dga", "severity": 50, "tags": []}, NOW)
+    assert a["client_ip"] is None
