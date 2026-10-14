@@ -1,3 +1,12 @@
+secubox-saas-relay (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /saas-relay/ refaite au profil Aurora (ref #2647) : page autonome en français (plus de polices distantes ni de feuilles CRT), tuiles (services, activés, sains, requêtes du jour et totales), onglets Services, Clés d'API, Statistiques et Journal, mode ?demo=1 (données fictives, actions inertes) et ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncée à l'hôte (sbxVue, onglet saas-relay).
+  * Corrigé : les confirm() et alert() natifs deviennent des confirmations et des messages intégrés à la page ; les fenêtres modales deviennent des panneaux en ligne ; la redirection brutale vers /login.html sur 401 devient un bandeau ; noms, URL et réponses de l'API ne passent plus par innerHTML ni par des gestionnaires en ligne (injection) ; la clé d'API saisie est vidée du champ après envoi.
+  * Non repris : « 0 ms » et « 0 % » pour un service sans requête (désormais « — »). Aucun appel inventé ; l'API ne fournit toujours pas de série temporelle, donc aucune courbe.
+  * Appels inchangés : GET /status, /services, /keys, /stats, /logs, /service/{nom} ; POST /service/add, /service/{nom}/toggle, /service/{nom}/check ; PUT /keys/{nom} ; DELETE /service/{nom}, /keys/{nom}, /logs (filtre service), mêmes corps et en-têtes. Tests Playwright ajoutés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 10:00:00 +0200
+
 secubox-saas-relay (1.2.3-1~bookworm1) bookworm; urgency=medium
 
   * /etc/secubox/secrets : plus de secubox 0700 imposé au parent ; la clé de chiffrement est créée par le postinst (le service ne peut plus écrire dans le parent) (#1689).
