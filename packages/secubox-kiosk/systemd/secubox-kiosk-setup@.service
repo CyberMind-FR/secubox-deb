@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox :: kiosque, action root a la demande (#2615). L'API systeme (User=secubox, NoNewPrivileges) ne peut pas lancer secubox-kiosk-setup :
+# elle demarre cette unite par polkit (regle 50-secubox-system.rules), qui tourne en root. Trois instances seulement.
+[Unit]
+Description=SecuBox kiosque : %i (root, a la demande)
+ConditionPathExists=/usr/sbin/secubox-kiosk-setup
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'case "%i" in enable-x11) exec /usr/sbin/secubox-kiosk-setup enable --x11;; enable-wayland) exec /usr/sbin/secubox-kiosk-setup enable --wayland;; disable) exec /usr/sbin/secubox-kiosk-setup disable;; *) echo "instance refusee: %i" >&2; exit 2;; esac'
+# Le motif d'un echec est relu par l'API (le journal systemd n'est pas lisible par le compte secubox).
+StandardOutput=file:/run/secubox/kiosk-setup.log
+StandardError=inherit
+TimeoutStartSec=120

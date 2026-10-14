@@ -3,6 +3,7 @@
 	dh $@
 
 override_dh_auto_install:
+	install -D -m 0644 polkit/50-secubox-system.rules debian/secubox-system/usr/share/polkit-1/rules.d/50-secubox-system.rules
 	install -d debian/secubox-system/usr/lib/secubox/system/
 	cp -r api debian/secubox-system/usr/lib/secubox/system/
 	install -d debian/secubox-system/usr/share/secubox/www

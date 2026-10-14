@@ -1,3 +1,9 @@
+secubox-system (1.10.1-1~bookworm1) bookworm; urgency=medium
+
+  * Page /system/ : trois echecs corriges (#2615). (1) Demarrer, arreter, redemarrer un service depuis la page : « Interactive authentication required ». L'API tourne en User=secubox avec NoNewPrivileges=true et lancait systemctl directement ; polkit refusait. Une regle polkit est livree (/usr/share/polkit-1/rules.d/50-secubox-system.rules), BORNEE a l'unite secubox-system.service (le compte secubox est partage par tous les modules : une regle par utilisateur aurait donne a n'importe lequel le droit d'arreter le WAF), aux unites secubox-*.service et a quatre verbes ; si polkit ne fournit pas l'unite du demandeur, elle ne repond rien (refus par defaut). Depend de polkitd. (2) Liste des mises a jour : « Inst, Inst, Inst » -> le nom du paquet est le 2e mot de la ligne « Inst <paquet> [...] ». 3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 07:35:50 +0200
+
 secubox-system (1.10.0-1~bookworm1) bookworm; urgency=medium
 
   * ksm : page /ksm/ refaite au profil Aurora (#2584), un seul fichier autonome (plus de police Google, de crt-light, de hybrid-dark

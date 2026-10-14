@@ -641,7 +641,8 @@ def check_updates(user=Depends(require_jwt)):
     subprocess.run(["apt-get", "update", "-qq"], capture_output=True, timeout=60)
     r = subprocess.run(["apt-get", "-s", "upgrade"], capture_output=True, text=True, timeout=30)
     # Parse upgradable packages
-    pkgs = [l.split()[0] for l in r.stdout.split("\n") if l.startswith("Inst ")]
+    # « Inst <paquet> [ancienne] (nouvelle ...) » : le NOM est le 2e mot, le 1er est le verbe (#2615).
+    pkgs = [l.split()[1] for l in r.stdout.split("\n") if l.startswith("Inst ") and len(l.split()) > 1]
     return {"packages": pkgs, "count": len(pkgs)}
 
 
