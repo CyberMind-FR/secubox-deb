@@ -4,1468 +4,829 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  PeerTube au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance, huit onglets.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Aucun secret n'est affiché : ni identifiants initiaux, ni mot de passe (saisi ou généré), ni jeton.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - PeerTube Video Platform</title>
-    <link rel="stylesheet" href="/shared/sidebar.css">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <title>SecuBox — PeerTube</title>
     <style>
-        :root {
-            --p31-peak: #00dd44;
-            --p31-dim: #006622;
-            --p31-glow: rgba(0, 221, 68, 0.15);
-            --tube-light: #e8f5e9;
-            --tube-mid: #c8e6c9;
-            --tube-dark: #a5d6a7;
-            --text-primary: #1b5e20;
-            --text-secondary: #388e3c;
-            --text-dim: #66bb6a;
-            --surface: #f1f8e9;
-            --surface-alt: #dcedc8;
-            --border: #c5e1a5;
-            --error: #c62828;
-            --warning: #f57c00;
-            --success: #2e7d32;
-            --peertube: #f1680d;
-            --peertube-dark: #d45a0a;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'JetBrains Mono', 'Fira Code', monospace;
-            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
-            color: var(--text-primary);
-            min-height: 100vh;
-            display: flex;
-        }
-        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: calc(100% - 220px); }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid var(--peertube);
-        }
-        .header h1 { font-size: 1.5rem; color: var(--peertube); }
-        .header-actions { display: flex; gap: 0.5rem; }
-
-        /* Stats Row */
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-            box-shadow: 0 2px 8px var(--p31-glow);
-        }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .stat-card .value { font-size: 1.25rem; font-weight: bold; color: var(--p31-dim); margin-top: 0.25rem; }
-        .stat-card.running .value { color: var(--success); }
-        .stat-card.stopped .value { color: var(--error); }
-
-        /* Tabs */
-        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); flex-wrap: wrap; }
-        .tab {
-            padding: 0.75rem 1rem;
-            cursor: pointer;
-            border: 1px solid transparent;
-            border-bottom: none;
-            border-radius: 8px 8px 0 0;
-            background: transparent;
-            color: var(--text-secondary);
-            font-weight: 500;
-            font-size: 0.875rem;
-            transition: all 0.2s;
-        }
-        .tab:hover { background: var(--surface-alt); }
-        .tab.active {
-            background: var(--surface);
-            border-color: var(--border);
-            color: var(--peertube);
-            margin-bottom: -2px;
-            border-bottom: 2px solid var(--surface);
-        }
-
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        /* Cards */
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.25rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 2px 8px var(--p31-glow);
-        }
-        .card h3 {
-            font-size: 1rem;
-            color: var(--peertube);
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        /* Buttons */
-        .btn {
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            border: 1px solid var(--peertube);
-            background: var(--surface);
-            color: var(--peertube);
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.2s;
-            font-size: 0.875rem;
-        }
-        .btn:hover { background: var(--peertube); color: white; }
-        .btn-primary { background: var(--peertube); color: white; }
-        .btn-primary:hover { background: var(--peertube-dark); }
-        .btn-danger { border-color: var(--error); color: var(--error); }
-        .btn-danger:hover { background: var(--error); color: white; }
-        .btn-success { border-color: var(--success); color: var(--success); }
-        .btn-success:hover { background: var(--success); color: white; }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        /* Tables */
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
-        tr:hover { background: var(--surface-alt); }
-
-        /* Forms */
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
-        input, select, textarea {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            background: white;
-            color: var(--text-primary);
-            font-family: inherit;
-        }
-        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--peertube); box-shadow: 0 0 5px rgba(241, 104, 13, 0.3); }
-        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
-        .checkbox-label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
-        .checkbox-label input { width: auto; }
-
-        /* Badges */
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 500;
-        }
-        .badge-success { background: #c8e6c9; color: #2e7d32; }
-        .badge-error { background: #ffcdd2; color: #c62828; }
-        .badge-warning { background: #ffe0b2; color: #e65100; }
-        .badge-info { background: #ffe4d6; color: #d45a0a; }
-
-        /* Install Banner */
-        .install-banner {
-            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
-            border: 2px solid var(--peertube);
-            border-radius: 12px;
-            padding: 2rem;
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
-        .install-banner h2 { color: var(--peertube); margin-bottom: 1rem; }
-        .install-banner p { color: var(--text-secondary); margin-bottom: 1.5rem; }
-
-        /* Video Grid */
-        .video-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-        .video-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-            transition: transform 0.2s;
-        }
-        .video-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px var(--p31-glow); }
-        .video-thumb {
-            aspect-ratio: 16/9;
-            background: var(--tube-dark);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-dim);
-            font-size: 2rem;
-        }
-        .video-info { padding: 0.75rem; }
-        .video-info h4 { font-size: 0.875rem; margin-bottom: 0.25rem; color: var(--text-primary); }
-        .video-info .meta { font-size: 0.75rem; color: var(--text-dim); }
-
-        /* Federation peer list */
-        .peer-list { display: flex; flex-direction: column; gap: 0.5rem; }
-        .peer-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.75rem;
-            background: var(--surface-alt);
-            border-radius: 6px;
-        }
-        .peer-item .host { font-weight: 500; }
-        .peer-item .state { font-size: 0.75rem; }
-
-        /* Logs */
-        .logs-container {
-            background: #1a1a1a;
-            color: #f1680d;
-            padding: 1rem;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.8rem;
-            max-height: 400px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-
-        /* Toast */
-        .toast {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            padding: 1rem 1.5rem;
-            border-radius: 8px;
-            color: white;
-            z-index: 1000;
-            animation: slideIn 0.3s ease;
-        }
-        .toast-success { background: var(--success); }
-        .toast-error { background: var(--error); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-        .spinner {
-            display: inline-block;
-            width: 1rem;
-            height: 1rem;
-            border: 2px solid var(--border);
-            border-top-color: var(--peertube);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* Storage stats */
-        .storage-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 1rem;
-        }
-        .storage-item {
-            text-align: center;
-            padding: 1rem;
-            background: var(--surface-alt);
-            border-radius: 8px;
-        }
-        .storage-item .size { font-size: 1.5rem; font-weight: bold; color: var(--peertube); }
-        .storage-item .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; max-width: 100%; }
-            .stats-row { grid-template-columns: repeat(2, 1fr); }
-            .tabs { overflow-x: auto; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        body.sansmenu #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb):not(.sansmenu) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb):not(.sansmenu) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.ok{border-color:var(--vert);color:var(--vert)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .accueil{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:12px;padding:12px 14px;display:grid;gap:6px;font-size:.82rem}
+        .accueil h2{margin:0;font-size:1rem}
+        #conf{position:sticky;top:8px;z-index:6;border:1px solid var(--orange);background:rgba(30,20,4,.96);border-radius:10px;padding:9px 12px;font-size:.82rem;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.long{font-size:1rem;line-height:1.15}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--trait);padding-bottom:0;scrollbar-width:thin}
+        .onglets button{font:inherit;font-size:.8rem;white-space:nowrap;padding:8px 14px;border:1px solid transparent;border-bottom:none;border-radius:10px 10px 0 0;background:transparent;color:var(--doux);cursor:pointer;min-height:36px}
+        .onglets button:hover{color:var(--texte);background:rgba(41,182,246,.07)}
+        .onglets button[aria-selected="true"]{color:var(--cyan);border-color:var(--trait2);background:rgba(10,22,46,.8);font-weight:700}
+        .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
+        .panneau{display:grid;gap:10px;min-width:0}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:520px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle;overflow-wrap:anywhere}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;margin:0}
+        .saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        .saisie label.coche,label.coche{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--texte)}
+        .saisie label.large{grid-column:1/-1}
+        input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input[type=checkbox]{width:auto;accent-color:var(--cyan)}
+        input:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+        .resos{display:flex;flex-wrap:wrap;gap:6px 16px}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        .videos{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+        .video{border:1px solid var(--trait);border-radius:12px;overflow:hidden;background:rgba(8,18,38,.7);min-width:0}
+        .video .vig{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;background:rgba(41,182,246,.08);color:var(--faible);font-size:1.6rem;overflow:hidden}
+        .video .vig img{width:100%;height:100%;object-fit:cover}
+        .video .inf{padding:8px 10px} .video h4{margin:0 0 3px;font-size:.82rem;overflow-wrap:anywhere} .video .m{color:var(--faible);font-size:.7rem}
+        .lignes{display:grid;gap:0}
+        .ligne{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 4px;border-top:1px solid rgba(86,150,255,.12);font-size:.8rem}
+        .ligne:first-child{border-top:none} .ligne>span{min-width:0;overflow-wrap:anywhere}
+        .stock{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+        .stock div{border:1px solid var(--trait);border-radius:10px;padding:8px;text-align:center;background:rgba(8,18,38,.7)}
+        .stock b{display:block;font-size:1.1rem;color:var(--cyan);font-variant-numeric:tabular-nums} .stock span{color:var(--faible);font-size:.7rem}
+        .alerte{margin-bottom:8px;padding:8px 10px;border:1px solid var(--rouge);border-radius:8px;background:rgba(255,77,94,.08);font-size:.8rem}
+        .journal{margin:0;max-height:380px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:10px;border:1px solid var(--trait);border-radius:8px;background:rgba(4,9,20,.9);color:var(--doux);font-size:.74rem}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)} .toast.ko{border-color:var(--rouge)}
+        a{color:var(--cyan)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <h1>PeerTube Video Platform</h1>
-            <div class="header-actions">
-                <a id="openPeerTube" href="#" target="_blank" class="btn" style="display: none;">Open PeerTube</a>
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()">Start</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9.2 5 2.8-5 2.8z"/></svg>
+                <div><h1>PeerTube</h1><small>Plateforme vidéo libre et décentralisée</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span>
+                <a id="ouvrir" class="btn" href="#" target="_blank" rel="noopener" hidden>Ouvrir PeerTube</a>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button>
+                <button class="btn prim" id="btnToggle" type="button" disabled>—</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div id="conf" role="alert" hidden><span id="confTexte"></span><span class="bout" style="margin:0"><button class="btn danger" id="confOui" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></span></div>
 
-        <!-- Install Banner -->
-        <div id="installBanner" class="install-banner" style="display: none;">
-            <h2>Welcome to PeerTube</h2>
-            <p>Free/Libre decentralized video streaming. Take control of your videos.</p>
-            <button class="btn btn-primary" onclick="installPeerTube()">Install PeerTube</button>
+        <section class="accueil" id="accueil" hidden>
+            <h2>Bienvenue dans PeerTube</h2>
+            <span>Diffusion vidéo libre et décentralisée : gardez la maîtrise de vos vidéos. L’installation provisionne un conteneur LXC dédié.</span>
+            <span class="bout" style="margin:0"><button class="btn prim" id="btnInstall" type="button">Installer PeerTube</button></span>
+        </section>
+
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cStatut" title="État du conteneur LXC de PeerTube (en marche, arrêté ou non installé)."><span class="l">État</span><span class="v long" id="tStatut">—</span><span class="s">conteneur LXC</span></div>
+            <div class="tuile cy" title="Moteur de conteneurs qui héberge PeerTube sur ce nœud."><span class="l">Exécution</span><span class="v long" id="tRuntime">—</span><span class="s">moteur</span></div>
+            <div class="tuile cy" title="Nombre de vidéos publiées sur l’instance, tel que rapporté par l’API de statut."><span class="l">Vidéos</span><span class="v" id="tVideos">—</span><span class="s">sur l’instance</span></div>
+            <div class="tuile cy" title="Espace disque occupé par les données de PeerTube."><span class="l">Stockage</span><span class="v long" id="tStockage">—</span><span class="s">disque</span></div>
+            <div class="tuile cy" title="Fédération ActivityPub : permet de suivre d’autres instances et d’être suivi."><span class="l">Fédération</span><span class="v long" id="tFed">—</span><span class="s">ActivityPub</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections PeerTube" id="onglets"></div>
+
+        <div class="panneau" id="p-videos" role="tabpanel" aria-labelledby="o-videos">
+            <div class="pan"><h3>Vidéos <i>GET /videos?count=20</i></h3>
+                <div id="listeVideos" class="videos"></div><div id="vVides" class="vide">—</div></div>
         </div>
 
-        <!-- Stats Row -->
-        <div class="stats-row">
-            <div class="stat-card" id="statStatus">
-                <div class="label">Status</div>
-                <div class="value">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Runtime</div>
-                <div class="value" id="statRuntime">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Videos</div>
-                <div class="value" id="statVideos">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Storage</div>
-                <div class="value" id="statStorage">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Federation</div>
-                <div class="value" id="statFederation">-</div>
-            </div>
-        </div>
-
-        <!-- Tabs -->
-        <div class="tabs">
-            <div class="tab active" onclick="showTab('videos')">Videos</div>
-            <div class="tab" onclick="showTab('import')">Import</div>
-            <div class="tab" onclick="showTab('channels')">Channels</div>
-            <div class="tab" onclick="showTab('users')">Users</div>
-            <div class="tab" onclick="showTab('federation')">Federation</div>
-            <div class="tab" onclick="showTab('transcoding')">Transcoding</div>
-            <div class="tab" onclick="showTab('plugins')">Plugins</div>
-            <div class="tab" onclick="showTab('logs')">Logs</div>
-        </div>
-
-        <!-- Videos Tab -->
-        <div id="tab-videos" class="tab-content active">
-            <div class="card">
-                <h3>Videos</h3>
-                <div id="videoGrid" class="video-grid">
-                    <p style="color: var(--text-dim);">Loading videos...</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Import URL Tab (yt-dlp via PeerTube native HTTP import) -->
-        <div id="tab-import" class="tab-content">
-            <div class="card">
-                <h3>Import a video — or a playlist — from a URL</h3>
-                <p style="color: var(--text-dim); margin-bottom: 1rem;">
-                    Downloads a video from YouTube, Vimeo, a direct file link, etc.
-                    straight into this PeerTube instance (yt-dlp under the hood).
-                    A playlist URL (list=, /playlist, /sets/…) is expanded and
-                    imported video-by-video — see the Playlists panel below for
-                    progress; one item failing never stops the rest, and
-                    relaunching the same playlist URL skips what's already done.
-                </p>
-                <form id="importForm" onsubmit="importVideo(event)">
-                    <div class="form-group">
-                        <label>Video or playlist URL</label>
-                        <input type="url" id="importUrl" placeholder="https://www.youtube.com/watch?v=... or .../playlist?list=..." required>
-                    </div>
-                    <div class="form-group">
-                        <label>Title (optional — PeerTube derives one if empty; used as a prefix for each video of a playlist)</label>
-                        <input type="text" id="importName" placeholder="My imported video">
-                    </div>
-                    <div class="form-group">
-                        <label>Channel</label>
-                        <select id="importChannel"></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Privacy</label>
-                        <select id="importPrivacy">
-                            <option value="1">Public</option>
-                            <option value="2">Unlisted</option>
-                            <option value="3" selected>Private</option>
-                            <option value="4">Internal</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Import</button>
+        <div class="panneau" id="p-import" role="tabpanel" aria-labelledby="o-import" hidden>
+            <div class="pan"><h3>Importer une vidéo ou une liste de lecture <i>POST /import, /playlist/import</i></h3>
+                <p class="note" style="margin:0 0 8px">Télécharge une vidéo (YouTube, Vimeo, lien direct…) directement dans cette instance, via yt-dlp. Une URL de liste de lecture (list=, /playlist, /sets/…) est développée et importée vidéo par vidéo : une vidéo en échec n’arrête pas les autres, et relancer la même URL saute ce qui est déjà fait.</p>
+                <form class="saisie" id="fImport">
+                    <label class="large">URL de la vidéo ou de la liste<input id="impUrl" type="url" placeholder="https://www.youtube.com/watch?v=… ou …/playlist?list=…" required></label>
+                    <label>Titre (facultatif)<input id="impNom" type="text" placeholder="Ma vidéo importée"></label>
+                    <label>Chaîne<select id="impChaine"></select></label>
+                    <label>Confidentialité<select id="impPrivacy"><option value="1">Publique</option><option value="2">Non listée</option><option value="3" selected>Privée</option><option value="4">Interne</option></select></label>
+                    <div class="bout" style="margin:0"><button class="btn prim" id="btnImport" type="submit">Importer</button></div>
                 </form>
+                <p class="note">Le titre sert de préfixe pour chaque vidéo d’une liste de lecture. Sans titre, PeerTube en déduit un.</p>
+                <div id="rImport" class="retour" hidden></div>
             </div>
-            <div class="card">
-                <h3>Recent imports</h3>
-                <table>
-                    <thead><tr><th>Target URL</th><th>Video</th><th>State</th><th>Created</th></tr></thead>
-                    <tbody id="importsTable"><tr><td colspan="4" style="color: var(--text-dim);">Loading...</td></tr></tbody>
-                </table>
-            </div>
-            <div class="card">
-                <h3>Playlists</h3>
-                <p style="color: var(--text-dim); margin-bottom: 1rem;">
-                    Playlist imports run one video at a time (never in parallel) so
-                    a large playlist can't overload the board. Progress refreshes
-                    automatically while this tab is open.
-                </p>
-                <table>
-                    <thead><tr><th>Playlist</th><th>Progress</th><th>Status</th><th>Actions</th></tr></thead>
-                    <tbody id="playlistJobsTable"><tr><td colspan="4" style="color: var(--text-dim);">Loading...</td></tr></tbody>
-                </table>
-            </div>
+            <div class="pan"><h3>Imports récents <i>GET /imports</i></h3>
+                <div class="tab"><table><thead><tr><th>URL cible</th><th>Vidéo</th><th>État</th><th>Création</th></tr></thead><tbody id="bImports"></tbody></table></div></div>
+            <div class="pan"><h3>Listes de lecture <i>GET /playlist/jobs</i></h3>
+                <p class="note" style="margin:0 0 6px">Les listes sont importées une vidéo à la fois, jamais en parallèle, pour ne pas surcharger la carte. La progression s’actualise toute seule tant que cet onglet est ouvert.</p>
+                <div id="rListes" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Liste</th><th>Progression</th><th>État</th><th>Actions</th></tr></thead><tbody id="bListes"></tbody></table></div></div>
         </div>
 
-        <!-- Channels Tab -->
-        <div id="tab-channels" class="tab-content">
-            <div class="card">
-                <h3>Create Channel</h3>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Channel Name (URL)</label>
-                        <input type="text" id="channelName" placeholder="my_channel">
-                    </div>
-                    <div class="form-group">
-                        <label>Display Name</label>
-                        <input type="text" id="channelDisplayName" placeholder="My Channel">
-                    </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <input type="text" id="channelDescription" placeholder="Channel description">
-                    </div>
-                    <div class="form-group" style="display: flex; align-items: flex-end;">
-                        <button class="btn btn-primary" onclick="createChannel()">Create</button>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <h3>Channels</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Display Name</th>
-                            <th>Followers</th>
-                            <th>Videos</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="channelsTable">
-                        <tr><td colspan="5">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Users Tab -->
-        <div id="tab-users" class="tab-content">
-            <div class="card">
-                <h3>Create User</h3>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Username</label>
-                        <input type="text" id="userName" placeholder="username">
-                    </div>
-                    <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" id="userEmail" placeholder="user@example.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Password</label>
-                        <input type="password" id="userPassword" placeholder="Min 8 characters">
-                    </div>
-                    <div class="form-group">
-                        <label>Role</label>
-                        <select id="userRole">
-                            <option value="2">User</option>
-                            <option value="1">Moderator</option>
-                            <option value="0">Admin</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="display: flex; align-items: flex-end;">
-                        <button class="btn btn-primary" onclick="createUser()">Create</button>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h3>Users</h3>
-                    <button class="btn btn-danger" onclick="resetAdminPassword()">🔑 Reset admin password</button>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Videos</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTable">
-                        <tr><td colspan="5">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Federation Tab -->
-        <div id="tab-federation" class="tab-content">
-            <div class="card">
-                <h3>Follow Instance</h3>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Instance Host(s) (comma-separated)</label>
-                        <input type="text" id="followHosts" placeholder="video.example.com, peertube.social">
-                    </div>
-                    <div class="form-group" style="display: flex; align-items: flex-end;">
-                        <button class="btn btn-primary" onclick="followInstance()">Follow</button>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <h3>Following</h3>
-                <div id="followingList" class="peer-list">
-                    <p style="color: var(--text-dim);">Loading...</p>
-                </div>
-            </div>
-            <div class="card">
-                <h3>Followers</h3>
-                <div id="followersList" class="peer-list">
-                    <p style="color: var(--text-dim);">Loading...</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Transcoding Tab -->
-        <div id="tab-transcoding" class="tab-content">
-            <div class="card">
-                <h3>Transcoding Settings</h3>
-                <form id="transcodingForm" onsubmit="saveTranscoding(event)">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="tcEnabled" checked> Enable Transcoding
-                            </label>
-                        </div>
-                        <div class="form-group">
-                            <label>Threads</label>
-                            <input type="number" id="tcThreads" value="2" min="1" max="16">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="tcHLS" checked> Enable HLS
-                            </label>
-                        </div>
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="tcWebTorrent" checked> Enable WebTorrent
-                            </label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Resolutions</label>
-                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                            <label class="checkbox-label"><input type="checkbox" id="res240" checked> 240p</label>
-                            <label class="checkbox-label"><input type="checkbox" id="res360" checked> 360p</label>
-                            <label class="checkbox-label"><input type="checkbox" id="res480" checked> 480p</label>
-                            <label class="checkbox-label"><input type="checkbox" id="res720" checked> 720p</label>
-                            <label class="checkbox-label"><input type="checkbox" id="res1080" checked> 1080p</label>
-                            <label class="checkbox-label"><input type="checkbox" id="res1440"> 1440p</label>
-                            <label class="checkbox-label"><input type="checkbox" id="res2160"> 2160p</label>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Save Settings</button>
+        <div class="panneau" id="p-chaines" role="tabpanel" aria-labelledby="o-chaines" hidden>
+            <div class="pan"><h3>Créer une chaîne <i>POST /channel</i></h3>
+                <form class="saisie" id="fChaine" novalidate>
+                    <label>Nom (URL)<input id="chNom" placeholder="ma_chaine" autocomplete="off"></label>
+                    <label>Nom affiché<input id="chAff" placeholder="Ma chaîne" autocomplete="off"></label>
+                    <label>Description<input id="chDesc" placeholder="Description de la chaîne" autocomplete="off"></label>
+                    <div class="bout" style="margin:0"><button class="btn prim" type="submit">Créer</button></div>
                 </form>
-            </div>
-            <div class="card">
-                <h3>📼 Backlog — vidéos en attente</h3>
-                <div id="transcodingBacklog">
-                    <p style="color: var(--text-dim);">Chargement…</p>
-                </div>
-            </div>
-            <div class="card">
-                <h3>Transcoding Queue</h3>
-                <div id="transcodingJobs">
-                    <p style="color: var(--text-dim);">Loading jobs...</p>
-                </div>
-            </div>
-            <div class="card">
-                <h3>Storage Usage</h3>
-                <div id="storageStats" class="storage-grid">
-                    <p style="color: var(--text-dim);">Loading...</p>
-                </div>
+                <div id="rChaine" class="retour" hidden></div></div>
+            <div class="pan"><h3>Chaînes <i id="nChaines">GET /channels</i></h3>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Nom affiché</th><th>Abonnés</th><th>Vidéos</th><th>Actions</th></tr></thead><tbody id="bChaines"></tbody></table></div></div>
+        </div>
+
+        <div class="panneau" id="p-users" role="tabpanel" aria-labelledby="o-users" hidden>
+            <div class="pan"><h3>Créer un utilisateur <i>POST /user</i></h3>
+                <form class="saisie" id="fUser" novalidate>
+                    <label>Identifiant<input id="usNom" placeholder="identifiant" autocomplete="off"></label>
+                    <label>Courriel<input id="usMail" type="email" placeholder="usager@example.org" autocomplete="off"></label>
+                    <label>Mot de passe<input id="usPass" type="password" placeholder="8 caractères minimum" autocomplete="new-password"></label>
+                    <label>Rôle<select id="usRole"><option value="2">Utilisateur</option><option value="1">Modérateur</option><option value="0">Administrateur</option></select></label>
+                    <div class="bout" style="margin:0"><button class="btn prim" type="submit">Créer</button></div>
+                </form>
+                <div id="rUser" class="retour" hidden></div></div>
+            <div class="pan"><h3>Utilisateurs <i id="nUsers">GET /users</i></h3>
+                <div class="tab"><table><thead><tr><th>Identifiant</th><th>Courriel</th><th>Rôle</th><th>Vidéos</th><th>Actions</th></tr></thead><tbody id="bUsers"></tbody></table></div></div>
+            <div class="pan"><h3>Réinitialiser le mot de passe administrateur <i>POST /admin/reset-password</i></h3>
+                <form class="saisie" id="fReset" novalidate>
+                    <label>Nouveau mot de passe (vide : en générer un)<input id="rsPass" type="password" autocomplete="new-password" placeholder="vide = généré"></label>
+                    <div class="bout" style="margin:0"><button class="btn danger" id="btnReset" type="submit">🔑 Réinitialiser</button></div>
+                </form>
+                <p class="note">Cette page n’affiche jamais un mot de passe, saisi ou généré. Saisissez-en un pour le connaître.</p>
+                <div id="rReset" class="retour" hidden></div></div>
+        </div>
+
+        <div class="panneau" id="p-fed" role="tabpanel" aria-labelledby="o-fed" hidden>
+            <div class="pan"><h3>Suivre une instance <i>POST /federation/follow</i></h3>
+                <form class="saisie" id="fFollow" novalidate>
+                    <label class="large">Hôte(s) de l’instance, séparés par des virgules<input id="fwHotes" placeholder="video.example.com, peertube.example.org" autocomplete="off"></label>
+                    <div class="bout" style="margin:0"><button class="btn prim" type="submit">Suivre</button></div>
+                </form>
+                <div id="rFollow" class="retour" hidden></div></div>
+            <div class="grille">
+                <div class="pan"><h3>Instances suivies <i>GET /federation/following</i></h3><div class="lignes" id="lSuivies"></div></div>
+                <div class="pan"><h3>Abonnés <i>GET /federation/followers</i></h3><div class="lignes" id="lAbonnes"></div></div>
             </div>
         </div>
 
-        <!-- Plugins Tab -->
-        <div id="tab-plugins" class="tab-content">
-            <div class="card">
-                <h3>Install Plugin</h3>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>NPM Package Name</label>
-                        <input type="text" id="pluginNpm" placeholder="peertube-plugin-auth-ldap">
+        <div class="panneau" id="p-tc" role="tabpanel" aria-labelledby="o-tc" hidden>
+            <div class="pan"><h3>Réglages de transcodage <i>GET, POST /transcoding/settings</i></h3>
+                <form id="fTc" novalidate>
+                    <div class="saisie" style="margin-bottom:8px">
+                        <label class="coche"><input type="checkbox" id="tcEnabled" checked> Activer le transcodage</label>
+                        <label>Threads<input type="number" id="tcThreads" value="2" min="1" max="16"></label>
+                        <label class="coche"><input type="checkbox" id="tcHLS" checked> Activer HLS</label>
+                        <label class="coche"><input type="checkbox" id="tcWebTorrent" checked> Activer WebTorrent</label>
                     </div>
-                    <div class="form-group" style="display: flex; align-items: flex-end;">
-                        <button class="btn btn-primary" onclick="installPlugin()">Install</button>
-                    </div>
-                </div>
-                <p style="color: var(--text-dim); font-size: 0.875rem; margin-top: 0.5rem;">
-                    Browse plugins at <a href="https://packages.joinpeertube.org" target="_blank" style="color: var(--peertube);">packages.joinpeertube.org</a>
-                </p>
-            </div>
-            <div class="card">
-                <h3>Installed Plugins</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Version</th>
-                            <th>Type</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pluginsTable">
-                        <tr><td colspan="4">Loading...</td></tr>
-                    </tbody>
-                </table>
+                    <div class="champ">Résolutions</div>
+                    <div class="resos" id="resos"></div>
+                    <div class="bout"><button class="btn prim" type="submit">Enregistrer</button></div>
+                </form>
+                <div id="rTc" class="retour" hidden></div></div>
+            <div class="pan"><h3>📼 Arriéré — vidéos en attente <i>GET /transcoding/backlog</i></h3><div id="backlog"></div></div>
+            <div class="grille">
+                <div class="pan"><h3>File de transcodage <i>GET /transcoding/jobs</i></h3><div class="lignes" id="tcJobs"></div></div>
+                <div class="pan"><h3>Stockage <i>GET /storage/stats</i></h3><div class="stock" id="stockage"></div></div>
             </div>
         </div>
 
-        <!-- Logs Tab -->
-        <div id="tab-logs" class="tab-content">
-            <div class="card">
-                <h3>PeerTube Logs (peertube.service in LXC)</h3>
-                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
-                    <label>Lines:</label>
-                    <select id="logLines" onchange="loadLogs()">
-                        <option value="50">50</option>
-                        <option value="100" selected>100</option>
-                        <option value="200">200</option>
-                        <option value="500">500</option>
-                    </select>
-                    <button class="btn" onclick="loadLogs()">Refresh</button>
-                </div>
-                <div class="logs-container" id="logsContainer">Loading logs...</div>
-            </div>
-            <div class="card">
-                <h3>Maintenance</h3>
-                <div id="ptVersion" style="margin:0.5rem 0;color:var(--text-muted);">version…</div>
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                    <button class="btn" onclick="restartPeerTube()">Restart LXC</button>
-                    <button class="btn btn-danger" onclick="uninstallPeerTube()">Stop LXC (keep data)</button>
-                    <button class="btn" id="btnUpgrade" style="display:none;" onclick="upgradePeerTube()">⬆️ Upgrade</button>
-                </div>
-            </div>
+        <div class="panneau" id="p-plug" role="tabpanel" aria-labelledby="o-plug" hidden>
+            <div class="pan"><h3>Installer une extension <i>POST /plugin/install</i></h3>
+                <form class="saisie" id="fPlug" novalidate>
+                    <label>Paquet NPM<input id="plNpm" placeholder="peertube-plugin-auth-ldap" autocomplete="off"></label>
+                    <div class="bout" style="margin:0"><button class="btn prim" type="submit">Installer</button></div>
+                </form>
+                <p class="note">Catalogue : <a href="https://packages.joinpeertube.org" target="_blank" rel="noopener">packages.joinpeertube.org</a></p>
+                <div id="rPlug" class="retour" hidden></div></div>
+            <div class="pan"><h3>Extensions installées <i>GET /plugins</i></h3>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Version</th><th>Type</th><th>Actions</th></tr></thead><tbody id="bPlug"></tbody></table></div></div>
         </div>
-    </main>
+
+        <div class="panneau" id="p-logs" role="tabpanel" aria-labelledby="o-logs" hidden>
+            <div class="pan"><h3>Journaux <i>peertube.service dans le LXC — GET /logs</i></h3>
+                <div class="bout" style="margin:0 0 8px"><label class="champ" for="logLignes">Lignes</label>
+                    <select id="logLignes" style="width:auto"><option value="50">50</option><option value="100" selected>100</option><option value="200">200</option><option value="500">500</option></select>
+                    <button class="btn" id="btnLogs" type="button">Actualiser</button></div>
+                <pre class="journal mono" id="journal">—</pre></div>
+            <div class="pan"><h3>Maintenance <i>GET /version, POST /upgrade, /container/*</i></h3>
+                <div id="ptVersion" class="note" style="margin:0 0 8px">Version : —</div>
+                <div class="bout" style="margin:0">
+                    <button class="btn" id="btnRestart" type="button">Redémarrer le LXC</button>
+                    <button class="btn danger" id="btnStop" type="button">Arrêter le LXC (données conservées)</button>
+                    <button class="btn prim" id="btnUpgrade" type="button" hidden>⬆️ Mettre à niveau</button></div>
+                <div id="rMaint" class="retour" hidden></div></div>
+        </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMBED = !!Q.get('embed');
+        if (EMBED) document.body.classList.add('emb');
+        if (DEMO && !EMBED) document.body.classList.add('sansmenu');
+        // Menu commun : hors ?embed=1 et hors démonstration seulement.
+        if (!EMBED && !DEMO) {
+            const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/shared/sidebar-light.css'; document.head.appendChild(l);
+            const s = document.createElement('script'); s.src = '/shared/sidebar.js'; document.body.appendChild(s);
+        }
         const API = '/api/v1/peertube';
-        let isRunning = false;
-        let containerStatus = 'not_installed';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nombre = v => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? '—' : Number(v).toLocaleString('fr-FR');
+        const pause = ms => new Promise(r => setTimeout(r, ms));
 
-        function getToken() {
-            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || localStorage.getItem('jwt_token') || localStorage.getItem('token') || '';
+        const ONGLETS = [['videos', 'Vidéos'], ['import', 'Import'], ['chaines', 'Chaînes'], ['users', 'Utilisateurs'], ['fed', 'Fédération'], ['tc', 'Transcodage'], ['plug', 'Extensions'], ['logs', 'Journaux']];
+        let ST = null, SESSION_OK = true, COURANT = 'videos', CONF = null, OCCUPE = 0;
+        let CANAUX = [];
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                if (r.status === 401 || r.status === 403) { SESSION_OK = false; rendreEtat(); }
+                return { ok: r.ok && !!(data && data.success), statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function raison(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data;
+            if (d && d.error) return String(d.error);
+            if (d && Array.isArray(d.detail)) return d.detail.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
+            if (d && d.detail) return String(d.detail);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function toast(msg, ko) { const t = $('toast'); t.textContent = msg; t.className = 'toast show' + (ko ? ' ko' : ''); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 3000); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function erreurLecture(e) { if (e && (e.statut === 401 || e.statut === 403)) { SESSION_OK = false; rendreEtat(); } }
+        function date(v) { if (!v) return '—'; const d = new Date(v < 1e12 && typeof v === 'number' ? v * 1000 : v); return isNaN(d) ? '—' : d.toLocaleString('fr-FR'); }
+        const ROLES = { 0: 'Administrateur', 1: 'Modérateur', 2: 'Utilisateur' };
+
+        // ----- Démonstration : adresses de documentation, noms fictifs -----
+        const T0 = Date.now();
+        const DEMO_DATA = {
+            '/status': { container_status: 'running', runtime: 'lxc', video_count: 42, disk_usage: '18,4 Go', federation_enabled: true, public_url: 'https://videos.example.org/', domain: 'videos.example.org' },
+            '/version': { installed: '7.1.1', latest: '7.2.0', upgrade_available: true },
+            '/videos?count=20': { videos: [{ id: 1, name: 'Atelier réseau — épisode 1', views: 128 }, { id: 2, name: 'Démonstration du maillage', views: 57 }, { id: 3, name: 'Conférence sécurité', views: 0 }] },
+            '/channels': { channels: [{ id: 3, name: 'atelier', displayName: 'Atelier SecuBox', followersCount: 12, videosCount: 30 }, { id: 4, name: 'conferences', displayName: 'Conférences', followersCount: 4, videosCount: 12 }] },
+            '/imports': { imports: [{ targetUrl: 'https://video.example.net/watch?v=demo1', video: { name: 'Import de démonstration' }, state: { label: 'Réussi' }, createdAt: new Date(T0 - 7200000).toISOString() }] },
+            '/playlist/jobs': { jobs: [{ id: 'j-demo-1', title: 'Liste de démonstration', target_url: 'https://video.example.net/playlist?list=demo', total: 10, done: 4, errors: 1, status: 'running', current_title: 'Épisode 5' }, { id: 'j-demo-2', title: 'Ancienne liste', total: 6, done: 6, errors: 0, status: 'done' }] },
+            '/users': { users: [{ id: 1, username: 'admin-demo', email: 'admin@example.org', role: 0, videosCount: 3 }, { id: 2, username: 'invite-demo', email: 'invite@example.org', role: 2, videosCount: 0 }] },
+            '/federation/following': { following: [{ following: { host: 'video.example.com' }, state: 'accepted' }, { host: 'peertube.example.net', state: 'pending' }] },
+            '/federation/followers': { followers: [{ follower: { host: 'tube.example.org' }, state: 'accepted' }] },
+            '/transcoding/settings': { enabled: true, threads: 2, hls_enabled: true, webtorrent_enabled: false, resolutions: { '240p': true, '360p': true, '480p': true, '720p': true, '1080p': true, '1440p': false, '2160p': false } },
+            '/transcoding/backlog': { available: true, unplayable: 2, cache_age_seconds: 95, stuck: false, pending_counters: 0, states: [{ label: 'En attente', videos: 5, without_hls: 2 }, { label: 'Terminé', videos: 37, without_hls: 0 }] },
+            '/transcoding/jobs': { jobs: [{ type: 'hls-transcoding', state: 'pending' }, { type: 'hls-transcoding', state: 'completed' }] },
+            '/storage/stats': { stats: { total: '18,4 Go', videos: '15,9 Go', thumbnails: '210 Mo', streaming_playlists: '12,1 Go' } },
+            '/plugins': { plugins: [{ name: 'peertube-plugin-demo', version: '1.2.0', type: 'plugin', npmName: 'peertube-plugin-demo' }] },
+            '/logs?lines=100': { logs: '[démonstration] peertube.service démarré\n[démonstration] 42 vidéos indexées' }
+        };
+        async function donnees(chemin) {
+            if (DEMO) { const d = DEMO_DATA[chemin] || DEMO_DATA[chemin.replace(/\?.*/, '')]; return d || {}; }
+            return lire(chemin);
         }
 
-        async function api(endpoint, options = {}) {
-            const token = getToken();
-            const headers = { 'Content-Type': 'application/json', ...options.headers };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
-            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
-            if (res.status === 401) {
-                if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                throw new Error('Unauthorized');
+        // ----- Confirmation intégrée à la page (jamais de dialogue natif) -----
+        function confirmer(texte, fn) {
+            CONF = fn; $('confTexte').textContent = texte; $('conf').hidden = false; $('confNon').focus(); annoncer();
+        }
+        function fermerConf() { CONF = null; $('conf').hidden = true; annoncer(); }
+        $('confOui').addEventListener('click', () => { const f = CONF; fermerConf(); if (f) f(); });
+        $('confNon').addEventListener('click', fermerConf);
+
+        // ----- Onglets -----
+        (function () {
+            const ol = $('onglets');
+            ONGLETS.forEach(([id, nom], i) => {
+                const b = el('button', '', nom); b.type = 'button'; b.setAttribute('role', 'tab'); b.id = 'o-' + id; b.dataset.t = id;
+                b.setAttribute('aria-controls', 'p-' + id); b.setAttribute('aria-selected', i === 0 ? 'true' : 'false'); b.tabIndex = i === 0 ? 0 : -1;
+                b.addEventListener('click', () => ouvrir(id));
+                b.addEventListener('keydown', ev => {
+                    const k = ONGLETS.findIndex(o => o[0] === id); let n = -1;
+                    if (ev.key === 'ArrowRight') n = (k + 1) % ONGLETS.length; else if (ev.key === 'ArrowLeft') n = (k + ONGLETS.length - 1) % ONGLETS.length;
+                    else if (ev.key === 'Home') n = 0; else if (ev.key === 'End') n = ONGLETS.length - 1;
+                    if (n >= 0) { ev.preventDefault(); ouvrir(ONGLETS[n][0]); $('o-' + ONGLETS[n][0]).focus(); }
+                });
+                ol.appendChild(b);
+            });
+        })();
+        function ouvrir(id) {
+            COURANT = id;
+            ONGLETS.forEach(([t]) => {
+                const b = $('o-' + t), actif = t === id;
+                b.setAttribute('aria-selected', actif ? 'true' : 'false'); b.tabIndex = actif ? 0 : -1; $('p-' + t).hidden = !actif;
+            });
+            chargerOnglet(id); annoncer();
+        }
+        function chargerOnglet(id) {
+            if (id === 'videos') chargerVideos();
+            else if (id === 'import') { chargerCanaux(); chargerImports(); chargerListes(); }
+            else if (id === 'chaines') chargerChaines();
+            else if (id === 'users') chargerUsers();
+            else if (id === 'fed') { chargerSuivies(); chargerAbonnes(); }
+            else if (id === 'tc') { chargerTc(); chargerBacklog(); chargerJobs(); chargerStockage(); }
+            else if (id === 'plug') chargerPlugins();
+            else if (id === 'logs') { chargerLogs(); chargerVersion(); }
+        }
+
+        // ----- Briques de rendu -----
+        function cellule(c, cls) { const t = el('td', cls); (Array.isArray(c) ? c : [c]).forEach(x => { if (x != null) t.append(x.nodeType ? x : document.createTextNode(String(x))); }); return t; }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function pastille(txt, cls) { return el('span', 'pill ' + (cls || ''), txt); }
+        function messageTable(id, cols, msg) { const tb = $(id); tb.replaceChildren(); const tr = el('tr'); const td = el('td', 'vide', msg); td.colSpan = cols; tr.appendChild(td); tb.appendChild(tr); }
+        function messageListe(id, msg) { const l = $(id); l.replaceChildren(); l.appendChild(el('div', 'vide', msg)); }
+        function vide() { return SESSION_OK ? 'Aucune donnée' : '—'; }
+        function exige() { return DEMO || (ST && ST.container_status === 'running'); }
+
+        function rendreEtat() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = ST, e = $('etat'), cs = s && s.container_status;
+            if (!SESSION_OK) { e.className = 'actif neutre'; e.textContent = 'SESSION REQUISE'; }
+            else if (!s) { e.className = 'actif hors'; e.textContent = 'HORS LIGNE'; }
+            else if (cs === 'running') { e.className = 'actif'; e.textContent = 'EN MARCHE'; }
+            else if (cs === 'not_installed') { e.className = 'actif att'; e.textContent = 'NON INSTALLÉ'; }
+            else { e.className = 'actif hors'; e.textContent = cs === 'stopped' ? 'ARRÊTÉ' : String(cs || 'INCONNU').toUpperCase(); }
+            const lib = { running: 'En marche', stopped: 'Arrêté', not_installed: 'Non installé' };
+            $('tStatut').textContent = s && cs ? (lib[cs] || cs) : '—';
+            $('cStatut').className = 'tuile ' + (!s ? 'cy' : cs === 'running' ? 'ok' : cs === 'not_installed' ? 'att' : 'hors');
+            $('tRuntime').textContent = s ? tiret(s.runtime) : '—';
+            $('tVideos').textContent = s ? nombre(s.video_count) : '—';
+            $('tStockage').textContent = s ? tiret(s.disk_usage) : '—';
+            $('tFed').textContent = s && s.federation_enabled != null ? (s.federation_enabled ? 'Activée' : 'Désactivée') : '—';
+            $('accueil').hidden = !(s && cs === 'not_installed');
+            const t = $('btnToggle');
+            if (!s || !cs) { t.textContent = '—'; t.disabled = true; t.className = 'btn'; }
+            else if (cs === 'not_installed') { t.textContent = 'Installer'; t.disabled = false; t.className = 'btn prim'; }
+            else if (cs === 'running') { t.textContent = 'Arrêter'; t.disabled = false; t.className = 'btn danger'; }
+            else { t.textContent = 'Démarrer'; t.disabled = false; t.className = 'btn ok'; }
+            const o = $('ouvrir');
+            if (s && cs === 'running' && (s.public_url || s.domain)) { o.hidden = false; o.href = s.public_url || ('https://' + s.domain + '/'); } else o.hidden = true;
+            annoncer();
+        }
+
+        async function rafraichir() {
+            try {
+                ST = await donnees('/status');
+                SESSION_OK = true; $('erreur').hidden = true;
+            } catch (e) {
+                ST = null; erreurLecture(e);
+                $('erreur').hidden = !SESSION_OK ? true : false;
+                if (SESSION_OK) { $('erreur').textContent = 'Impossible de lire le service PeerTube (arrêté ou injoignable).'; }
             }
-            return res.json();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            rendreEtat();
+            chargerOnglet(COURANT);
+            chargerVersion();
         }
 
-        function showTab(name) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            const tabs = ['videos', 'import', 'channels', 'users', 'federation', 'transcoding', 'plugins', 'logs'];
-            const idx = tabs.indexOf(name);
-            if (idx >= 0) {
-                document.querySelectorAll('.tab')[idx].classList.add('active');
-            }
-            document.getElementById('tab-' + name).classList.add('active');
-
-            // Load tab-specific data
-            if (name === 'videos') loadVideos();
-            else if (name === 'import') { loadImportChannels(); loadImports(); loadPlaylistJobs(); }
-            else if (name === 'channels') loadChannels();
-            else if (name === 'users') loadUsers();
-            else if (name === 'federation') { loadFollowing(); loadFollowers(); }
-            else if (name === 'transcoding') { loadTranscoding(); loadBacklog(); loadJobs(); loadStorage(); }
-            else if (name === 'plugins') loadPlugins();
-            else if (name === 'logs') loadLogs();
-        }
-
-        function toast(msg, type = 'success') {
-            const t = document.createElement('div');
-            t.className = 'toast toast-' + type;
-            t.textContent = msg;
-            document.body.appendChild(t);
-            setTimeout(() => t.remove(), 3000);
-        }
-
-        async function pollOp(id, onDone) {
-            for (let i = 0; i < 60; i++) {
-                const r = await api('/admin/op/' + id);
-                if (r.status && r.status !== 'pending' && r.status !== 'running') { onDone(r); return; }
-                await new Promise(res => setTimeout(res, 2000));
-            }
-            onDone({ status: 'error', detail: 'timed out waiting for op' });
-        }
-
-        async function resetAdminPassword() {
-            const pw = prompt('New admin password (leave empty to generate a strong one):', '');
-            if (pw === null) return;
-            const r = await api('/admin/reset-password', { method: 'POST', body: JSON.stringify({ password: pw || null }) });
-            if (!r || !r.id) { toast('Reset failed: ' + ((r && (r.detail || r.error)) || 'no id'), 'error'); return; }
-            toast('Resetting admin password…');
-            pollOp(r.id, (res) => {
-                if (res.status === 'done') toast('Password reset. ' + (res.password ? 'New password: ' + res.password : ''), 'success');
-                else toast('Reset failed: ' + (res.detail || 'unknown'), 'error');
+        // ----- Service -----
+        $('btnToggle').addEventListener('click', async () => {
+            if (!ST) return;
+            if (ST.container_status === 'not_installed') { demanderInstall(); return; }
+            const running = ST.container_status === 'running';
+            const b = $('btnToggle'); b.disabled = true; b.textContent = '…'; OCCUPE++;
+            const r = await ecrire('POST', running ? '/container/stop' : '/container/start');
+            OCCUPE--;
+            if (r.ok) toast(running ? 'PeerTube arrêté.' : 'PeerTube démarré.'); else toast(raison(r) === 'HTTP 0' ? 'Action impossible' : 'Action impossible : ' + raison(r), true);
+            await rafraichir();
+        });
+        function demanderInstall() {
+            confirmer('Provisionner le LXC PeerTube et l’installer nativement (Node 22, PostgreSQL, Redis) ? L’opération tourne en arrière-plan et dure plusieurs minutes.', async () => {
+                toast('Installation de PeerTube dans son LXC… suivez l’onglet Journaux.');
+                const r = await ecrire('POST', '/container/install');
+                if (r.ok) { toast((r.data && r.data.message) || 'Installation lancée en arrière-plan.'); setTimeout(rafraichir, 5000); }
+                else toast('Installation impossible : ' + raison(r), true);
             });
         }
+        $('btnInstall').addEventListener('click', demanderInstall);
+        $('rafraichir').addEventListener('click', rafraichir);
 
-        async function upgradePeerTube() {
-            if (!confirm('Upgrade PeerTube now?\n\nThis stops PeerTube, backs up the DB, downloads the new release and runs migrations (several minutes of downtime). A pre-upgrade DB backup is taken automatically.')) return;
-            const r = await api('/upgrade', { method: 'POST', body: JSON.stringify({ target: 'latest' }) });
-            if (!r || !r.id) { toast('Upgrade failed to start: ' + ((r && r.error) || 'no id'), 'error'); return; }
-            toast('Upgrade started — this takes several minutes…');
-            document.getElementById('btnUpgrade').disabled = true;
-            // Own longer poll loop (300×2s = 10 min) — pollOp's 60×2s (2 min) cap
-            // would cut off a multi-minute upgrade.
-            (async () => {
-                for (let i = 0; i < 300; i++) {
-                    const res = await api('/admin/op/' + r.id);
-                    if (res.status && res.status !== 'pending' && res.status !== 'running') {
-                        document.getElementById('btnUpgrade').disabled = false;
-                        if (res.status === 'done') { toast('Upgrade complete. Backup: ' + (res.backup || ''), 'success'); loadVersion(); }
-                        else toast('Upgrade failed: ' + (res.detail || 'unknown') + (res.backup ? ' (backup: ' + res.backup + ')' : ''), 'error');
-                        return;
-                    }
-                    await new Promise(res => setTimeout(res, 2000));
-                }
-                document.getElementById('btnUpgrade').disabled = false;
-                toast('Upgrade timed out waiting for completion (check logs)', 'error');
-            })();
-        }
-
-        function getRoleName(role) {
-            const roles = { 0: 'Admin', 1: 'Moderator', 2: 'User' };
-            return roles[role] || 'User';
-        }
-
-        async function loadVersion() {
-            const v = await api('/version');
-            const el = document.getElementById('ptVersion');
-            if (!v || !v.installed) { el.textContent = 'version: unknown'; return; }
-            if (v.upgrade_available) {
-                el.innerHTML = 'PeerTube <b>v' + v.installed + '</b> · ⬆️ <b>' + v.latest + '</b> available';
-                const b = document.getElementById('btnUpgrade'); b.style.display = ''; b.textContent = '⬆️ Upgrade to ' + v.latest;
-            } else {
-                el.innerHTML = 'PeerTube <b>v' + v.installed + '</b> · ✅ up to date';
-            }
-        }
-
-        async function refresh() {
+        // ----- Vidéos -----
+        async function chargerVideos() {
+            const g = $('listeVideos'), v = $('vVides'); g.replaceChildren();
+            if (!exige()) { v.hidden = false; v.textContent = SESSION_OK ? 'PeerTube n’est pas joignable.' : '—'; return; }
             try {
-                const status = await api('/status');
-                containerStatus = status.container_status;
-                isRunning = status.container_status === 'running';
-
-                // Show/hide install banner
-                document.getElementById('installBanner').style.display =
-                    status.container_status === 'not_installed' ? 'block' : 'none';
-
-                // Update stats
-                const statEl = document.getElementById('statStatus');
-                statEl.querySelector('.value').textContent = status.container_status;
-                statEl.className = 'stat-card ' + (isRunning ? 'running' : 'stopped');
-
-                document.getElementById('statRuntime').textContent = status.runtime || 'none';
-                document.getElementById('statVideos').textContent = status.video_count || 0;
-                document.getElementById('statStorage').textContent = status.disk_usage || '-';
-                document.getElementById('statFederation').textContent = status.federation_enabled ? 'Enabled' : 'Disabled';
-
-                // Update toggle button
-                const btn = document.getElementById('btnToggle');
-                if (status.container_status === 'not_installed') {
-                    btn.textContent = 'Install';
-                    btn.className = 'btn btn-primary';
-                    btn.onclick = installPeerTube;
-                } else if (isRunning) {
-                    btn.textContent = 'Stop';
-                    btn.className = 'btn btn-danger';
-                    btn.onclick = () => toggleService();
-                } else {
-                    btn.textContent = 'Start';
-                    btn.className = 'btn btn-success';
-                    btn.onclick = () => toggleService();
-                }
-
-                // Open PeerTube link → public URL (HAProxy/nginx vhost)
-                const openLink = document.getElementById('openPeerTube');
-                if (isRunning) {
-                    openLink.style.display = 'inline-flex';
-                    openLink.href = status.public_url || `https://${status.domain}/`;
-                } else {
-                    openLink.style.display = 'none';
-                }
-
-                // Load current tab data
-                const activeTab = document.querySelector('.tab.active').textContent.toLowerCase();
-                showTab(activeTab);
-                loadVersion();
-
-            } catch (e) {
-                console.error(e);
-                toast('Failed to load status', 'error');
-            }
+                const d = await donnees('/videos?count=20'), vids = d.videos || [];
+                v.hidden = vids.length > 0; v.textContent = 'Aucune vidéo envoyée pour l’instant.';
+                vids.forEach(x => {
+                    const c = el('div', 'video'), vig = el('div', 'vig', '📹');
+                    if (x.thumbnailPath) { const im = el('img'); im.alt = ''; im.src = x.thumbnailPath; im.addEventListener('error', () => { im.remove(); vig.textContent = '📹'; }); vig.textContent = ''; vig.appendChild(im); }
+                    const inf = el('div', 'inf'); inf.appendChild(el('h4', '', tiret(x.name || x.id))); inf.appendChild(el('div', 'm', nombre(x.views == null ? 0 : x.views) + ' vue(s)'));
+                    c.appendChild(vig); c.appendChild(inf); g.appendChild(c);
+                });
+            } catch (e) { erreurLecture(e); v.hidden = false; v.textContent = SESSION_OK ? 'Erreur de lecture des vidéos.' : '—'; }
+            annoncer();
         }
 
-        async function toggleService() {
-            const action = isRunning ? 'container/stop' : 'container/start';
+        // ----- Import -----
+        async function chargerCanaux() {
+            const sel = $('impChaine'), prec = sel.value; sel.replaceChildren();
+            const opt = (v, t) => { const o = el('option', '', t); o.value = v; sel.appendChild(o); };
             try {
-                document.getElementById('btnToggle').disabled = true;
-                document.getElementById('btnToggle').innerHTML = '<span class="spinner"></span>';
-                const res = await api('/' + action, { method: 'POST' });
-                if (res.success) {
-                    toast(isRunning ? 'PeerTube stopped!' : 'PeerTube started!');
-                } else {
-                    toast(res.error || 'Action failed', 'error');
-                }
-                await refresh();
-            } catch (e) {
-                toast('Action failed: ' + e.message, 'error');
-            } finally {
-                document.getElementById('btnToggle').disabled = false;
-            }
+                const d = await donnees('/channels'), ch = d.channels || [];
+                if (!ch.length) opt('', '(aucune chaîne — en créer une d’abord)');
+                else ch.forEach(c => opt(String(c.id), c.displayName || c.name));
+                if (prec) sel.value = prec;
+            } catch (e) { erreurLecture(e); opt('', '(erreur de lecture des chaînes)'); }
         }
-
-        async function installPeerTube() {
-            if (!confirm('Provision the PeerTube LXC and install natively (Node 22 + PostgreSQL + Redis)? This runs in the background and takes several minutes.')) return;
-            toast('Installing PeerTube in its LXC... follow Logs / peertubectl logs.');
+        async function chargerImports() {
             try {
-                const res = await api('/container/install', { method: 'POST' });
-                if (res.success) {
-                    toast(res.message || 'Install started in background.');
-                    setTimeout(refresh, 5000);
-                } else {
-                    toast(res.error || 'Install failed', 'error');
-                }
-            } catch (e) {
-                toast('Install failed: ' + e.message, 'error');
-            }
+                const d = await donnees('/imports'), L = d.imports || [];
+                if (!L.length) { messageTable('bImports', 4, d.error || (SESSION_OK ? 'Aucun import pour l’instant' : '—')); return; }
+                const tb = $('bImports'); tb.replaceChildren();
+                L.forEach(im => {
+                    const tr = el('tr');
+                    tr.appendChild(cellule(tiret(im.targetUrl || im.magnetUri), 'mono'));
+                    tr.appendChild(cellule(tiret(im.video && (im.video.name || im.video.uuid))));
+                    tr.appendChild(cellule(tiret(im.state && (im.state.label || im.state.id))));
+                    tr.appendChild(cellule(date(im.createdAt)));
+                    tb.appendChild(tr);
+                });
+            } catch (e) { erreurLecture(e); messageTable('bImports', 4, SESSION_OK ? 'Erreur de lecture des imports' : '—'); }
+            annoncer();
         }
-
-        // Videos
-        async function loadVideos() {
-            if (!isRunning) {
-                document.getElementById('videoGrid').innerHTML = '<p style="color: var(--text-dim);">PeerTube not reachable</p>';
-                return;
-            }
-            try {
-                const data = await api('/videos?count=20');
-                const videos = data.videos || [];
-                if (videos.length === 0) {
-                    document.getElementById('videoGrid').innerHTML = '<p style="color: var(--text-dim);">No videos uploaded yet</p>';
-                } else {
-                    document.getElementById('videoGrid').innerHTML = videos.map(v => `
-                        <div class="video-card">
-                            <div class="video-thumb">${v.thumbnailPath ? `<img src="${v.thumbnailPath}" style="width:100%;height:100%;object-fit:cover;">` : '&#x1F4F9;'}</div>
-                            <div class="video-info">
-                                <h4>${v.name || v.id}</h4>
-                                <div class="meta">${v.views || 0} views</div>
-                            </div>
-                        </div>
-                    `).join('');
-                }
-            } catch (e) {
-                document.getElementById('videoGrid').innerHTML = '<p style="color: var(--error);">Error loading videos</p>';
-            }
-        }
-
-        // Import from URL (yt-dlp via PeerTube native HTTP import)
-        async function loadImportChannels() {
-            const sel = document.getElementById('importChannel');
-            try {
-                const data = await api('/channels');
-                const chans = data.channels || [];
-                if (chans.length === 0) {
-                    sel.innerHTML = '<option value="">(no channel — create one first)</option>';
-                } else {
-                    sel.innerHTML = chans.map(c =>
-                        `<option value="${c.id}">${c.displayName || c.name}</option>`).join('');
-                }
-            } catch (e) {
-                sel.innerHTML = '<option value="">(error loading channels)</option>';
-            }
-        }
-
-        async function loadImports() {
-            const tbody = document.getElementById('importsTable');
-            try {
-                const data = await api('/imports');
-                const imports = data.imports || [];
-                if (imports.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="4" style="color: var(--text-dim);">${data.error || 'No imports yet'}</td></tr>`;
-                    return;
-                }
-                tbody.innerHTML = imports.map(im => {
-                    const url = im.targetUrl || im.magnetUri || '-';
-                    const vid = (im.video && (im.video.name || im.video.uuid)) || '-';
-                    const state = (im.state && (im.state.label || im.state.id)) || '-';
-                    const created = im.createdAt ? new Date(im.createdAt).toLocaleString() : '-';
-                    return `<tr><td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;">${url}</td><td>${vid}</td><td>${state}</td><td>${created}</td></tr>`;
-                }).join('');
-            } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="4" style="color: var(--error);">Error loading imports</td></tr>';
-            }
-        }
-
-        // Mirrors the server-side heuristic (api/main.py::_looks_like_playlist_url)
-        // — a cheap client-side hint only; the backend's yt-dlp probe is the
-        // real authority and falls back to a plain "not a playlist" answer.
+        // Reflet de l'heuristique serveur (api/main.py::_looks_like_playlist_url) : simple indice côté page,
+        // le sondage yt-dlp du serveur fait foi.
         const PLAYLIST_URL_RE = /[?&]list=|\/playlist(?:[/?]|$)|\/sets\/|\/album\/|\/playlists(?:[/?]|$)/i;
-
-        async function importVideo(event) {
-            event.preventDefault();
-            const target_url = document.getElementById('importUrl').value.trim();
-            const name = document.getElementById('importName').value.trim();
-            const channel_id = parseInt(document.getElementById('importChannel').value, 10);
-            const privacy = parseInt(document.getElementById('importPrivacy').value, 10);
-            if (!target_url) { toast('URL required', 'error'); return; }
-
-            if (PLAYLIST_URL_RE.test(target_url)) {
+        $('fImport').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const target_url = $('impUrl').value.trim(), name = $('impNom').value.trim();
+            const channel_id = parseInt($('impChaine').value, 10), privacy = parseInt($('impPrivacy').value, 10);
+            if (!target_url) { retour('rImport', false, 'URL requise.'); return; }
+            const b = $('btnImport'); b.disabled = true;
+            try {
+                if (PLAYLIST_URL_RE.test(target_url)) {
+                    const body = { target_url, privacy };
+                    if (name) body.name_prefix = name;
+                    if (!isNaN(channel_id)) body.channel_id = channel_id;
+                    const res = await ecrire('POST', '/playlist/import', body);
+                    if (res.ok) {
+                        const d = res.data, saute = d.already_done ? ' (' + d.already_done + ' déjà faite(s), sautée(s))' : '';
+                        retour('rImport', true, 'Liste en file — ' + d.total + ' vidéo(s)' + saute + '. Voir le panneau « Listes de lecture » ci-dessous.');
+                        $('fImport').reset(); chargerListes(); return;
+                    }
+                    // Forme de liste mais yt-dlp dit « vidéo seule » (ex. mix radio) : import simple.
+                    if (!(res.data && res.data.is_playlist === false)) { retour('rImport', false, 'Import de la liste impossible : ' + raison(res)); return; }
+                }
                 const body = { target_url, privacy };
-                if (name) body.name_prefix = name;
+                if (name) body.name = name;
                 if (!isNaN(channel_id)) body.channel_id = channel_id;
-                try {
-                    const res = await api('/playlist/import', { method: 'POST', body: JSON.stringify(body) });
-                    if (res.success) {
-                        const skipped = res.already_done ? ` (${res.already_done} already done, skipped)` : '';
-                        toast(`Playlist queued — ${res.total} video(s)${skipped}. See the Playlists panel below.`);
-                        document.getElementById('importForm').reset();
-                        loadPlaylistJobs();
-                        return;
-                    }
-                    if (res.is_playlist === false) {
-                        // Looked playlist-shaped but yt-dlp says it's really a
-                        // single video (e.g. watch?v=...&list=RD... radio mix)
-                        // — fall through to the normal single-video import.
-                    } else {
-                        toast(res.error || 'Playlist import failed', 'error');
-                        return;
-                    }
-                } catch (e) {
-                    toast('Playlist import failed: ' + e.message, 'error');
-                    return;
-                }
-            }
-
-            const body = { target_url, privacy };
-            if (name) body.name = name;
-            if (!isNaN(channel_id)) body.channel_id = channel_id;
+                const res = await ecrire('POST', '/import', body);
+                if (res.ok) { retour('rImport', true, 'Import en file — PeerTube télécharge la vidéo.'); $('fImport').reset(); chargerImports(); }
+                else retour('rImport', false, 'Import impossible : ' + raison(res));
+            } finally { b.disabled = false; }
+        });
+        async function chargerListes() {
             try {
-                const res = await api('/import', { method: 'POST', body: JSON.stringify(body) });
-                if (res.success) {
-                    toast('Import queued — PeerTube is downloading the video.');
-                    document.getElementById('importForm').reset();
-                    loadImports();
-                } else {
-                    toast(res.error || 'Import failed', 'error');
-                }
-            } catch (e) {
-                toast('Import failed: ' + e.message, 'error');
-            }
-        }
-
-        async function loadPlaylistJobs() {
-            const tbody = document.getElementById('playlistJobsTable');
-            try {
-                const data = await api('/playlist/jobs');
-                const jobs = data.jobs || [];
-                if (jobs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="color: var(--text-dim);">No playlist imports yet</td></tr>';
-                    return;
-                }
-                tbody.innerHTML = jobs.map(j => {
+                const d = await donnees('/playlist/jobs'), J = d.jobs || [];
+                if (!J.length) { messageTable('bListes', 4, SESSION_OK ? 'Aucun import de liste pour l’instant' : '—'); return; }
+                const tb = $('bListes'); tb.replaceChildren();
+                J.forEach(j => {
                     const pct = j.total ? Math.round(100 * j.done / j.total) : 0;
-                    const progress = `${j.done}/${j.total}${j.errors ? ` (${j.errors} failed)` : ''}`
-                        + (j.status === 'running' && j.current_title ? ` — ${j.current_title}` : '');
-                    const cancellable = ['queued', 'running'].includes(j.status);
-                    const actions = cancellable
-                        ? `<button class="btn btn-sm btn-danger" onclick="cancelPlaylistJob('${j.id}')">Stop</button>`
-                        : '-';
-                    return `<tr>
-                        <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;" title="${j.target_url || ''}">${j.title || j.target_url || '-'}</td>
-                        <td>${progress} (${pct}%)</td>
-                        <td>${j.status}${j.error ? `: ${j.error}` : ''}</td>
-                        <td>${actions}</td>
-                    </tr>`;
-                }).join('');
-            } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="4" style="color: var(--error);">Error loading playlists</td></tr>';
-            }
-        }
-
-        async function cancelPlaylistJob(id) {
-            if (!confirm('Stop this playlist import? Videos already imported are kept; the rest is skipped.')) return;
-            try {
-                const res = await api('/playlist/jobs/' + id + '/cancel', { method: 'POST' });
-                if (res.success) {
-                    toast('Playlist import stopping…');
-                    loadPlaylistJobs();
-                } else {
-                    toast(res.error || 'Could not stop playlist import', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-        }
-
-        // Channels
-        async function loadChannels() {
-            if (!isRunning) return;
-            try {
-                const data = await api('/channels');
-                const channels = data.channels || [];
-                const tbody = document.getElementById('channelsTable');
-                if (channels.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5">No channels</td></tr>';
-                } else {
-                    tbody.innerHTML = channels.map(c => `
-                        <tr>
-                            <td>${c.name || c.displayName}</td>
-                            <td>${c.displayName || '-'}</td>
-                            <td>${c.followersCount || 0}</td>
-                            <td>${c.videosCount || 0}</td>
-                            <td><button class="btn btn-sm btn-danger" onclick="deleteChannel('${c.name}')">Delete</button></td>
-                        </tr>
-                    `).join('');
-                }
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        async function createChannel() {
-            const name = document.getElementById('channelName').value.trim();
-            const displayName = document.getElementById('channelDisplayName').value.trim();
-            const description = document.getElementById('channelDescription').value.trim();
-            if (!name || !displayName) return toast('Name and display name required', 'error');
-
-            try {
-                const res = await api('/channel', {
-                    method: 'POST',
-                    body: JSON.stringify({ name, display_name: displayName, description })
+                    const prog = j.done + '/' + j.total + (j.errors ? ' (' + j.errors + ' en échec)' : '') + (j.status === 'running' && j.current_title ? ' — ' + j.current_title : '') + ' (' + pct + ' %)';
+                    const tr = el('tr'), nom = cellule(tiret(j.title || j.target_url)); if (j.target_url) nom.title = j.target_url;
+                    tr.appendChild(nom); tr.appendChild(cellule(prog));
+                    tr.appendChild(cellule(String(j.status) + (j.error ? ' : ' + j.error : '')));
+                    const act = cellule('-', 'act');
+                    if (['queued', 'running'].includes(j.status)) { act.replaceChildren(btn('Arrêter', 'danger', () => confirmer('Arrêter cet import de liste ? Les vidéos déjà importées sont conservées ; le reste est sauté.', () => arreterListe(j.id)))); }
+                    tr.appendChild(act); tb.appendChild(tr);
                 });
-                if (res.success) {
-                    toast('Channel created!');
-                    document.getElementById('channelName').value = '';
-                    document.getElementById('channelDisplayName').value = '';
-                    document.getElementById('channelDescription').value = '';
-                    loadChannels();
-                } else {
-                    toast(res.error || 'Failed', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
+            } catch (e) { erreurLecture(e); messageTable('bListes', 4, SESSION_OK ? 'Erreur de lecture des listes' : '—'); }
+            annoncer();
+        }
+        async function arreterListe(id) {
+            const r = await ecrire('POST', '/playlist/jobs/' + id + '/cancel');
+            if (r.ok) { retour('rListes', true, 'Import de la liste en cours d’arrêt…'); chargerListes(); } else retour('rListes', false, 'Arrêt impossible : ' + raison(r));
         }
 
-        async function deleteChannel(name) {
-            if (!confirm(`Delete channel ${name}?`)) return;
+        // ----- Chaînes -----
+        async function chargerChaines() {
+            if (!exige()) { messageTable('bChaines', 5, SESSION_OK ? 'PeerTube n’est pas joignable' : '—'); return; }
             try {
-                const res = await api('/channel/' + name, { method: 'DELETE' });
-                if (res.success) {
-                    toast('Channel deleted');
-                    loadChannels();
-                }
-            } catch (e) {
-                toast('Failed', 'error');
-            }
-        }
-
-        // Users
-        async function loadUsers() {
-            if (!isRunning) return;
-            try {
-                const data = await api('/users');
-                const users = data.users || [];
-                const tbody = document.getElementById('usersTable');
-                if (users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5">No users</td></tr>';
-                } else {
-                    tbody.innerHTML = users.map(u => `
-                        <tr>
-                            <td>${u.username}</td>
-                            <td>${u.email || '-'}</td>
-                            <td><span class="badge badge-info">${getRoleName(u.role)}</span></td>
-                            <td>${u.videosCount || 0}</td>
-                            <td><button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">Delete</button></td>
-                        </tr>
-                    `).join('');
-                }
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        async function createUser() {
-            const username = document.getElementById('userName').value.trim();
-            const email = document.getElementById('userEmail').value.trim();
-            const password = document.getElementById('userPassword').value;
-            const role = parseInt(document.getElementById('userRole').value);
-
-            if (!username || !email || !password) return toast('All fields required', 'error');
-            if (password.length < 8) return toast('Password must be 8+ characters', 'error');
-
-            try {
-                const res = await api('/user', {
-                    method: 'POST',
-                    body: JSON.stringify({ username, email, password, role })
+                const d = await donnees('/channels'), C = d.channels || [];
+                $('nChaines').textContent = C.length ? C.length + ' chaîne' + (C.length > 1 ? 's' : '') : 'GET /channels';
+                if (!C.length) { messageTable('bChaines', 5, 'Aucune chaîne'); return; }
+                const tb = $('bChaines'); tb.replaceChildren();
+                C.forEach(c => {
+                    const tr = el('tr');
+                    tr.appendChild(cellule(tiret(c.name || c.displayName), 'mono')); tr.appendChild(cellule(tiret(c.displayName)));
+                    tr.appendChild(cellule(nombre(c.followersCount == null ? 0 : c.followersCount))); tr.appendChild(cellule(nombre(c.videosCount == null ? 0 : c.videosCount)));
+                    tr.appendChild(cellule(btn('Supprimer', 'danger', () => confirmer('Supprimer la chaîne ' + c.name + ' ?', () => supprimerChaine(c.name))), 'act'));
+                    tb.appendChild(tr);
                 });
-                if (res.success) {
-                    toast('User created!');
-                    document.getElementById('userName').value = '';
-                    document.getElementById('userEmail').value = '';
-                    document.getElementById('userPassword').value = '';
-                    loadUsers();
-                } else {
-                    toast(res.error || 'Failed', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
+            } catch (e) { erreurLecture(e); messageTable('bChaines', 5, SESSION_OK ? 'Erreur de lecture des chaînes' : '—'); }
+            annoncer();
+        }
+        $('fChaine').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const name = $('chNom').value.trim(), displayName = $('chAff').value.trim(), description = $('chDesc').value.trim();
+            if (!name || !displayName) { retour('rChaine', false, 'Nom et nom affiché requis.'); return; }
+            const r = await ecrire('POST', '/channel', { name, display_name: displayName, description });
+            if (r.ok) { retour('rChaine', true, 'Chaîne créée.'); ev.target.reset(); chargerChaines(); } else retour('rChaine', false, 'Création impossible : ' + raison(r));
+        });
+        async function supprimerChaine(name) {
+            const r = await ecrire('DELETE', '/channel/' + encodeURIComponent(name));
+            if (r.ok) { retour('rChaine', true, 'Chaîne supprimée.'); chargerChaines(); } else retour('rChaine', false, 'Suppression impossible : ' + raison(r));
         }
 
-        async function deleteUser(id) {
-            if (!confirm('Delete this user?')) return;
+        // ----- Utilisateurs -----
+        async function chargerUsers() {
+            if (!exige()) { messageTable('bUsers', 5, SESSION_OK ? 'PeerTube n’est pas joignable' : '—'); return; }
             try {
-                const res = await api('/user/' + id, { method: 'DELETE' });
-                if (res.success) {
-                    toast('User deleted');
-                    loadUsers();
-                }
-            } catch (e) {
-                toast('Failed', 'error');
-            }
-        }
-
-        // Federation
-        async function loadFollowing() {
-            if (!isRunning) return;
-            try {
-                const data = await api('/federation/following');
-                const following = data.following || [];
-                const list = document.getElementById('followingList');
-                if (following.length === 0) {
-                    list.innerHTML = '<p style="color: var(--text-dim);">Not following any instances</p>';
-                } else {
-                    list.innerHTML = following.map(f => `
-                        <div class="peer-item">
-                            <span class="host">${f.following?.host || f.host || '-'}</span>
-                            <span class="state badge badge-success">${f.state || 'accepted'}</span>
-                        </div>
-                    `).join('');
-                }
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        async function loadFollowers() {
-            if (!isRunning) return;
-            try {
-                const data = await api('/federation/followers');
-                const followers = data.followers || [];
-                const list = document.getElementById('followersList');
-                if (followers.length === 0) {
-                    list.innerHTML = '<p style="color: var(--text-dim);">No followers yet</p>';
-                } else {
-                    list.innerHTML = followers.map(f => `
-                        <div class="peer-item">
-                            <span class="host">${f.follower?.host || f.host || '-'}</span>
-                            <span class="state badge badge-success">${f.state || 'accepted'}</span>
-                        </div>
-                    `).join('');
-                }
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        async function followInstance() {
-            const input = document.getElementById('followHosts').value.trim();
-            if (!input) return toast('Enter instance host(s)', 'error');
-            const hosts = input.split(',').map(h => h.trim()).filter(h => h);
-
-            try {
-                const res = await api('/federation/follow', {
-                    method: 'POST',
-                    body: JSON.stringify({ hosts })
+                const d = await donnees('/users'), U = d.users || [];
+                $('nUsers').textContent = U.length ? U.length + ' utilisateur' + (U.length > 1 ? 's' : '') : 'GET /users';
+                if (!U.length) { messageTable('bUsers', 5, 'Aucun utilisateur'); return; }
+                const tb = $('bUsers'); tb.replaceChildren();
+                U.forEach(u => {
+                    const tr = el('tr');
+                    tr.appendChild(cellule(tiret(u.username), 'mono')); tr.appendChild(cellule(tiret(u.email)));
+                    tr.appendChild(cellule(pastille(ROLES[u.role] || 'Utilisateur', 'cy')));
+                    tr.appendChild(cellule(nombre(u.videosCount == null ? 0 : u.videosCount)));
+                    tr.appendChild(cellule(btn('Supprimer', 'danger', () => confirmer('Supprimer l’utilisateur ' + u.username + ' ?', () => supprimerUser(u.id))), 'act'));
+                    tb.appendChild(tr);
                 });
-                if (res.success) {
-                    toast('Follow request sent!');
-                    document.getElementById('followHosts').value = '';
-                    loadFollowing();
-                } else {
-                    toast(res.error || 'Failed', 'error');
+            } catch (e) { erreurLecture(e); messageTable('bUsers', 5, SESSION_OK ? 'Erreur de lecture des utilisateurs' : '—'); }
+            annoncer();
+        }
+        $('fUser').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const username = $('usNom').value.trim(), email = $('usMail').value.trim(), password = $('usPass').value, role = parseInt($('usRole').value, 10);
+            if (!username || !email || !password) { retour('rUser', false, 'Tous les champs sont requis.'); return; }
+            if (password.length < 8) { retour('rUser', false, 'Le mot de passe doit faire au moins 8 caractères.'); return; }
+            const r = await ecrire('POST', '/user', { username, email, password, role });
+            $('usPass').value = '';
+            if (r.ok) { retour('rUser', true, 'Utilisateur créé.'); $('usNom').value = ''; $('usMail').value = ''; chargerUsers(); } else retour('rUser', false, 'Création impossible : ' + raison(r));
+        });
+        async function supprimerUser(id) {
+            const r = await ecrire('DELETE', '/user/' + id);
+            if (r.ok) { retour('rUser', true, 'Utilisateur supprimé.'); chargerUsers(); } else retour('rUser', false, 'Suppression impossible : ' + raison(r));
+        }
+        // Attente d'une opération asynchrone du serveur (réinitialisation, mise à niveau).
+        async function suivreOp(id, tours) {
+            for (let i = 0; i < tours; i++) {
+                const r = await lire('/admin/op/' + id);
+                if (r.status && r.status !== 'pending' && r.status !== 'running') return r;
+                await pause(2000);
+            }
+            return { status: 'error', detail: 'délai dépassé en attendant l’opération' };
+        }
+        $('fReset').addEventListener('submit', ev => {
+            ev.preventDefault();
+            const pw = $('rsPass').value;
+            confirmer('Réinitialiser le mot de passe administrateur de PeerTube ?', async () => {
+                const r = await ecrire('POST', '/admin/reset-password', { password: pw || null });
+                $('rsPass').value = '';
+                if (!r.ok || !r.data || !r.data.id) { retour('rReset', false, 'Réinitialisation impossible : ' + raison(r)); return; }
+                retour('rReset', true, 'Réinitialisation en cours…');
+                try {
+                    const res = await suivreOp(r.data.id, 60);
+                    // Le mot de passe éventuellement renvoyé par le serveur n'est volontairement jamais affiché.
+                    if (res.status === 'done') retour('rReset', true, pw ? 'Mot de passe réinitialisé.' : 'Mot de passe réinitialisé (généré, non affiché par cette page).');
+                    else retour('rReset', false, 'Réinitialisation échouée : ' + (res.detail || 'raison inconnue'));
+                } catch (e) { retour('rReset', false, 'Suivi de l’opération impossible.'); }
+            });
+        });
+
+        // ----- Fédération -----
+        function remplirPairs(id, items, cle, vide) {
+            const l = $(id); l.replaceChildren();
+            if (!items.length) { l.appendChild(el('div', 'vide', vide)); return; }
+            items.forEach(f => {
+                const row = el('div', 'ligne'); row.appendChild(el('span', 'mono', tiret((f[cle] && f[cle].host) || f.host)));
+                row.appendChild(pastille(f.state || 'accepted', f.state === 'pending' ? 'att' : f.state === 'rejected' ? 'hors' : 'ok')); l.appendChild(row);
+            });
+        }
+        async function chargerSuivies() {
+            if (!exige()) { messageListe('lSuivies', SESSION_OK ? 'PeerTube n’est pas joignable' : '—'); return; }
+            try { const d = await donnees('/federation/following'); remplirPairs('lSuivies', d.following || [], 'following', 'Aucune instance suivie'); }
+            catch (e) { erreurLecture(e); messageListe('lSuivies', SESSION_OK ? 'Erreur de lecture' : '—'); }
+            annoncer();
+        }
+        async function chargerAbonnes() {
+            if (!exige()) { messageListe('lAbonnes', SESSION_OK ? 'PeerTube n’est pas joignable' : '—'); return; }
+            try { const d = await donnees('/federation/followers'); remplirPairs('lAbonnes', d.followers || [], 'follower', 'Aucun abonné pour l’instant'); }
+            catch (e) { erreurLecture(e); messageListe('lAbonnes', SESSION_OK ? 'Erreur de lecture' : '—'); }
+            annoncer();
+        }
+        $('fFollow').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const saisie = $('fwHotes').value.trim();
+            if (!saisie) { retour('rFollow', false, 'Indiquez au moins un hôte.'); return; }
+            const hosts = saisie.split(',').map(h => h.trim()).filter(h => h);
+            const r = await ecrire('POST', '/federation/follow', { hosts });
+            if (r.ok) { retour('rFollow', true, 'Demande de suivi envoyée.'); $('fwHotes').value = ''; chargerSuivies(); } else retour('rFollow', false, 'Suivi impossible : ' + raison(r));
+        });
+
+        // ----- Transcodage -----
+        const RESOS = ['240', '360', '480', '720', '1080', '1440', '2160'];
+        (function () {
+            const c = $('resos');
+            RESOS.forEach(r => {
+                const l = el('label', 'coche'), i = el('input'); i.type = 'checkbox'; i.id = 'res' + r; i.checked = !['1440', '2160'].includes(r);
+                l.appendChild(i); l.append(' ' + r + 'p'); c.appendChild(l);
+            });
+        })();
+        async function chargerTc() {
+            try {
+                const d = await donnees('/transcoding/settings');
+                $('tcEnabled').checked = !!d.enabled; $('tcThreads').value = d.threads || 2;
+                $('tcHLS').checked = !!d.hls_enabled; $('tcWebTorrent').checked = !!d.webtorrent_enabled;
+                const res = d.resolutions || {};
+                RESOS.forEach(r => { $('res' + r).checked = ['1440', '2160'].includes(r) ? res[r + 'p'] === true : res[r + 'p'] !== false; });
+            } catch (e) { erreurLecture(e); }
+        }
+        $('fTc').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const resolutions = {}; RESOS.forEach(r => { resolutions[r + 'p'] = $('res' + r).checked; });
+            const r = await ecrire('POST', '/transcoding/settings', {
+                enabled: $('tcEnabled').checked, threads: parseInt($('tcThreads').value, 10),
+                hls_enabled: $('tcHLS').checked, webtorrent_enabled: $('tcWebTorrent').checked, resolutions
+            });
+            if (r.ok) retour('rTc', true, 'Réglages enregistrés. Redémarrez PeerTube pour les appliquer.'); else retour('rTc', false, 'Enregistrement impossible : ' + raison(r));
+        });
+        async function chargerBacklog() {
+            const c = $('backlog'); c.replaceChildren();
+            try {
+                const d = await donnees('/transcoding/backlog');
+                if (!d.available) { c.appendChild(el('div', 'vide', 'Indisponible — ' + (d.reason || 'cache absent'))); return; }
+                // « unplayable » est le chiffre clé : web_videos étant désactivé, une vidéo sans playlist HLS est illisible.
+                if (d.stuck) {
+                    const a = el('div', 'alerte'); a.append('🧊 '); a.appendChild(el('b', '', 'File gelée'));
+                    a.append(' — ' + d.pending_counters + ' compteur(s) annoncent des jobs en attente alors qu’aucun ne tourne. PeerTube refusera toute relance. Débloquer : ');
+                    a.appendChild(el('code', 'mono', 'peertubectl unstick --apply')); c.appendChild(a);
                 }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-        }
-
-        // Transcoding
-        async function loadTranscoding() {
-            try {
-                const data = await api('/transcoding/settings');
-                document.getElementById('tcEnabled').checked = data.enabled;
-                document.getElementById('tcThreads').value = data.threads || 2;
-                document.getElementById('tcHLS').checked = data.hls_enabled;
-                document.getElementById('tcWebTorrent').checked = data.webtorrent_enabled;
-
-                const res = data.resolutions || {};
-                document.getElementById('res240').checked = res['240p'] !== false;
-                document.getElementById('res360').checked = res['360p'] !== false;
-                document.getElementById('res480').checked = res['480p'] !== false;
-                document.getElementById('res720').checked = res['720p'] !== false;
-                document.getElementById('res1080').checked = res['1080p'] !== false;
-                document.getElementById('res1440').checked = res['1440p'] === true;
-                document.getElementById('res2160').checked = res['2160p'] === true;
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        async function saveTranscoding(e) {
-            e.preventDefault();
-            try {
-                const res = await api('/transcoding/settings', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        enabled: document.getElementById('tcEnabled').checked,
-                        threads: parseInt(document.getElementById('tcThreads').value),
-                        hls_enabled: document.getElementById('tcHLS').checked,
-                        webtorrent_enabled: document.getElementById('tcWebTorrent').checked,
-                        resolutions: {
-                            '240p': document.getElementById('res240').checked,
-                            '360p': document.getElementById('res360').checked,
-                            '480p': document.getElementById('res480').checked,
-                            '720p': document.getElementById('res720').checked,
-                            '1080p': document.getElementById('res1080').checked,
-                            '1440p': document.getElementById('res1440').checked,
-                            '2160p': document.getElementById('res2160').checked,
-                        }
-                    })
+                const n = d.unplayable, tete = el('div', '', ''); tete.style.cssText = 'margin-bottom:8px;font-size:.95rem';
+                if (n > 0) { tete.append('⚠️ '); tete.appendChild(el('b', '', String(n))); tete.append(' vidéo' + (n > 1 ? 's' : '') + ' sans playlist HLS — non lisible' + (n > 1 ? 's' : '')); }
+                else tete.textContent = '✅ Toutes les vidéos ont une playlist HLS';
+                c.appendChild(tete);
+                const l = el('div', 'lignes');
+                (d.states || []).forEach(s => {
+                    const row = el('div', 'ligne'); row.appendChild(el('span', '', tiret(s.label)));
+                    const dr = el('span', '', s.videos + ' vidéo' + (s.videos > 1 ? 's' : '')); if (s.without_hls) { dr.append(' · '); const w = el('b', '', s.without_hls + ' sans HLS'); w.style.color = 'var(--rouge)'; dr.appendChild(w); }
+                    row.appendChild(dr); l.appendChild(row);
                 });
-                if (res.success) {
-                    toast('Transcoding settings saved! Restart to apply.');
-                }
-            } catch (e) {
-                toast('Failed', 'error');
-            }
+                c.appendChild(l);
+                c.appendChild(el('p', 'note', 'Mesuré ' + (d.cache_age_seconds != null ? 'il y a ' + d.cache_age_seconds + ' s' : '—')));
+            } catch (e) { erreurLecture(e); c.replaceChildren(el('div', 'vide', SESSION_OK ? 'Indisponible' : '—')); }
+            annoncer();
         }
-
-        async function loadBacklog() {
-            const c = document.getElementById('transcodingBacklog');
+        async function chargerJobs() {
+            if (!exige()) { messageListe('tcJobs', SESSION_OK ? 'PeerTube n’est pas joignable' : '—'); return; }
             try {
-                const d = await api('/transcoding/backlog');
-                if (!d.available) {
-                    c.innerHTML = `<p style="color: var(--text-dim);">Indisponible — ${d.reason || 'cache absent'}</p>`;
-                    return;
-                }
-                // `unplayable` is the headline: web_videos is disabled, so a video
-                // without an HLS playlist cannot be watched at all.
-                const warn = d.unplayable > 0;
-                const age = d.cache_age_seconds != null ? `il y a ${d.cache_age_seconds}s` : '';
-                const rows = (d.states || []).map(s => `
-                    <div style="display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid var(--border);">
-                        <span>${s.label}</span>
-                        <span>${s.videos} vidéo${s.videos > 1 ? 's' : ''}${
-                            s.without_hls ? ` · <strong style="color: var(--danger, #ff4466)">${s.without_hls} sans HLS</strong>` : ''
-                        }</span>
-                    </div>`).join('');
-                // #943: counters claiming pending jobs while nothing runs means
-                // PeerTube will 409 every relaunch — the queue is frozen, not busy.
-                const stuck = d.stuck
-                    ? `<div style="margin-bottom:0.75rem;padding:0.6rem;border:1px solid var(--danger,#ff4466);border-radius:6px;">
-                         🧊 <strong>File gelée</strong> — ${d.pending_counters} compteur(s) annoncent des jobs
-                         en attente alors qu'aucun ne tourne. PeerTube refusera toute relance.
-                         Débloquer : <code>peertubectl unstick --apply</code>
-                       </div>`
-                    : '';
-                c.innerHTML = stuck + `
-                    <div style="margin-bottom: 0.75rem; font-size: 1.1rem;">
-                        ${warn
-                            ? `⚠️ <strong>${d.unplayable}</strong> vidéo${d.unplayable > 1 ? 's' : ''} sans playlist HLS — <strong>non lisible${d.unplayable > 1 ? 's' : ''}</strong>`
-                            : '✅ Toutes les vidéos ont une playlist HLS'}
-                    </div>
-                    ${rows}
-                    <p style="color: var(--text-dim); font-size: 0.8rem; margin-top: 0.5rem;">Mesuré ${age}</p>`;
-            } catch (e) {
-                c.innerHTML = '<p style="color: var(--text-dim);">Indisponible</p>';
-                console.error(e);
-            }
+                const d = await donnees('/transcoding/jobs'), J = d.jobs || [], l = $('tcJobs'); l.replaceChildren();
+                if (!J.length) { l.appendChild(el('div', 'vide', 'Aucun job en attente')); return; }
+                J.forEach(j => { const row = el('div', 'ligne'); row.appendChild(el('span', '', j.type || 'transcoding')); row.appendChild(pastille(j.state || 'pending', j.state === 'completed' ? 'ok' : 'cy')); l.appendChild(row); });
+            } catch (e) { erreurLecture(e); messageListe('tcJobs', SESSION_OK ? 'Erreur de lecture' : '—'); }
+            annoncer();
         }
-
-        async function loadJobs() {
-            if (!isRunning) return;
+        async function chargerStockage() {
+            const g = $('stockage'); g.replaceChildren();
             try {
-                const data = await api('/transcoding/jobs');
-                const jobs = data.jobs || [];
-                const container = document.getElementById('transcodingJobs');
-                if (jobs.length === 0) {
-                    container.innerHTML = '<p style="color: var(--text-dim);">No pending jobs</p>';
-                } else {
-                    container.innerHTML = jobs.map(j => `
-                        <div style="display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid var(--border);">
-                            <span>${j.type || 'transcoding'}</span>
-                            <span class="badge badge-${j.state === 'completed' ? 'success' : 'info'}">${j.state || 'pending'}</span>
-                        </div>
-                    `).join('');
-                }
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        async function loadStorage() {
-            try {
-                const data = await api('/storage/stats');
-                const stats = data.stats || {};
-                document.getElementById('storageStats').innerHTML = `
-                    <div class="storage-item">
-                        <div class="size">${stats.total || '-'}</div>
-                        <div class="label">Total</div>
-                    </div>
-                    <div class="storage-item">
-                        <div class="size">${stats.videos || '-'}</div>
-                        <div class="label">Videos</div>
-                    </div>
-                    <div class="storage-item">
-                        <div class="size">${stats.thumbnails || '-'}</div>
-                        <div class="label">Thumbnails</div>
-                    </div>
-                    <div class="storage-item">
-                        <div class="size">${stats.streaming_playlists || '-'}</div>
-                        <div class="label">HLS</div>
-                    </div>
-                `;
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        // Plugins
-        async function loadPlugins() {
-            if (!isRunning) return;
-            try {
-                const data = await api('/plugins');
-                const plugins = data.plugins || [];
-                const tbody = document.getElementById('pluginsTable');
-                if (plugins.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4">No plugins installed</td></tr>';
-                } else {
-                    tbody.innerHTML = plugins.map(p => `
-                        <tr>
-                            <td>${p.name}</td>
-                            <td>${p.version || '-'}</td>
-                            <td><span class="badge badge-info">${p.type || 'plugin'}</span></td>
-                            <td><button class="btn btn-sm btn-danger" onclick="uninstallPlugin('${p.npmName || p.name}')">Uninstall</button></td>
-                        </tr>
-                    `).join('');
-                }
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        async function installPlugin() {
-            const npmName = document.getElementById('pluginNpm').value.trim();
-            if (!npmName) return toast('Enter plugin NPM name', 'error');
-
-            toast('Installing plugin...');
-            try {
-                const res = await api('/plugin/install', {
-                    method: 'POST',
-                    body: JSON.stringify({ npm_name: npmName })
+                const s = (await donnees('/storage/stats')).stats || {};
+                [['Total', s.total], ['Vidéos', s.videos], ['Miniatures', s.thumbnails], ['HLS', s.streaming_playlists]].forEach(([l, v]) => {
+                    const d = el('div'); d.appendChild(el('b', '', tiret(v))); d.appendChild(el('span', '', l)); g.appendChild(d);
                 });
-                if (res.success) {
-                    toast('Plugin installed!');
-                    document.getElementById('pluginNpm').value = '';
-                    loadPlugins();
-                } else {
-                    toast(res.error || 'Failed', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
+            } catch (e) { erreurLecture(e); g.appendChild(el('div', 'vide', SESSION_OK ? 'Erreur de lecture' : '—')); }
+            annoncer();
         }
 
-        async function uninstallPlugin(name) {
-            if (!confirm(`Uninstall plugin ${name}?`)) return;
+        // ----- Extensions -----
+        async function chargerPlugins() {
+            if (!exige()) { messageTable('bPlug', 4, SESSION_OK ? 'PeerTube n’est pas joignable' : '—'); return; }
             try {
-                const res = await api('/plugin/' + name, { method: 'DELETE' });
-                if (res.success) {
-                    toast('Plugin uninstalled');
-                    loadPlugins();
-                }
-            } catch (e) {
-                toast('Failed', 'error');
-            }
+                const P = (await donnees('/plugins')).plugins || [];
+                if (!P.length) { messageTable('bPlug', 4, 'Aucune extension installée'); return; }
+                const tb = $('bPlug'); tb.replaceChildren();
+                P.forEach(p => {
+                    const tr = el('tr'); tr.appendChild(cellule(tiret(p.name), 'mono')); tr.appendChild(cellule(tiret(p.version)));
+                    tr.appendChild(cellule(pastille(p.type || 'plugin', 'cy')));
+                    const nm = p.npmName || p.name;
+                    tr.appendChild(cellule(btn('Désinstaller', 'danger', () => confirmer('Désinstaller l’extension ' + nm + ' ?', () => desinstallerPlugin(nm))), 'act')); tb.appendChild(tr);
+                });
+            } catch (e) { erreurLecture(e); messageTable('bPlug', 4, SESSION_OK ? 'Erreur de lecture des extensions' : '—'); }
+            annoncer();
+        }
+        $('fPlug').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const npm_name = $('plNpm').value.trim();
+            if (!npm_name) { retour('rPlug', false, 'Indiquez le nom du paquet NPM.'); return; }
+            retour('rPlug', true, 'Installation de l’extension…');
+            const r = await ecrire('POST', '/plugin/install', { npm_name });
+            if (r.ok) { retour('rPlug', true, 'Extension installée.'); $('plNpm').value = ''; chargerPlugins(); } else retour('rPlug', false, 'Installation impossible : ' + raison(r));
+        });
+        async function desinstallerPlugin(nom) {
+            const r = await ecrire('DELETE', '/plugin/' + nom);
+            if (r.ok) { retour('rPlug', true, 'Extension désinstallée.'); chargerPlugins(); } else retour('rPlug', false, 'Désinstallation impossible : ' + raison(r));
         }
 
-        // Logs
-        async function loadLogs() {
-            const lines = document.getElementById('logLines').value;
+        // ----- Journaux et maintenance -----
+        async function chargerLogs() {
+            const n = $('logLignes').value;
+            try { const d = await donnees('/logs?lines=' + n); $('journal').textContent = d.logs || 'Aucun journal disponible'; }
+            catch (e) { erreurLecture(e); $('journal').textContent = SESSION_OK ? 'Erreur de lecture des journaux' : '—'; }
+            annoncer();
+        }
+        $('logLignes').addEventListener('change', chargerLogs);
+        $('btnLogs').addEventListener('click', chargerLogs);
+        async function chargerVersion() {
+            const v = $('ptVersion'), b = $('btnUpgrade');
             try {
-                const data = await api('/logs?lines=' + lines);
-                document.getElementById('logsContainer').textContent = data.logs || 'No logs available';
-            } catch (e) {
-                document.getElementById('logsContainer').textContent = 'Error loading logs';
-            }
+                const d = await donnees('/version');
+                if (!d || !d.installed) { v.textContent = 'Version : inconnue'; b.hidden = true; return; }
+                if (d.upgrade_available) { v.textContent = 'PeerTube v' + d.installed + ' · ⬆️ ' + d.latest + ' disponible'; b.hidden = false; b.textContent = '⬆️ Mettre à niveau vers ' + d.latest; }
+                else { v.textContent = 'PeerTube v' + d.installed + ' · ✅ à jour'; b.hidden = true; }
+            } catch (e) { erreurLecture(e); v.textContent = 'Version : —'; b.hidden = true; }
         }
-
-        async function restartPeerTube() {
-            if (!confirm('Restart PeerTube container?')) return;
-            toast('Restarting...');
+        $('btnRestart').addEventListener('click', () => confirmer('Redémarrer le conteneur PeerTube ?', async () => {
+            retour('rMaint', true, 'Redémarrage…');
+            const r = await ecrire('POST', '/container/restart');
+            if (r.ok) { retour('rMaint', true, 'PeerTube redémarré.'); await rafraichir(); } else retour('rMaint', false, 'Redémarrage impossible : ' + raison(r));
+        }));
+        $('btnStop').addEventListener('click', () => confirmer('Arrêter le LXC PeerTube ? Le conteneur s’arrête, mais toutes les données de /data/peertube sont conservées.', async () => {
+            const r = await ecrire('POST', '/container/uninstall');
+            if (r.ok) { retour('rMaint', true, 'PeerTube arrêté (données conservées).'); await rafraichir(); } else retour('rMaint', false, 'Arrêt impossible : ' + raison(r));
+        }));
+        $('btnUpgrade').addEventListener('click', () => confirmer('Mettre PeerTube à niveau maintenant ? Il est arrêté, la base est sauvegardée, la nouvelle version est téléchargée et les migrations sont exécutées (plusieurs minutes d’indisponibilité). Une sauvegarde de la base est faite automatiquement avant.', async () => {
+            const r = await ecrire('POST', '/upgrade', { target: 'latest' });
+            if (r.ok && r.data && !r.data.id) { retour('rMaint', true, 'Mise à niveau exécutée (réponse synchrone du serveur).'); chargerVersion(); return; }
+            if (!r.ok || !r.data || !r.data.id) { retour('rMaint', false, 'Mise à niveau impossible à lancer : ' + raison(r)); return; }
+            retour('rMaint', true, 'Mise à niveau lancée — cela prend plusieurs minutes…');
+            $('btnUpgrade').disabled = true; OCCUPE++;
             try {
-                const res = await api('/container/restart', { method: 'POST' });
-                if (res.success) {
-                    toast('PeerTube restarted');
-                    await refresh();
-                }
-            } catch (e) {
-                toast('Failed', 'error');
-            }
-        }
+                // Boucle d'attente plus longue (300 × 2 s = 10 min) : 2 minutes couperaient une mise à niveau.
+                const res = await suivreOp(r.data.id, 300);
+                if (res.status === 'done') { retour('rMaint', true, 'Mise à niveau terminée. Sauvegarde : ' + tiret(res.backup)); chargerVersion(); }
+                else retour('rMaint', false, 'Mise à niveau échouée : ' + (res.detail || 'raison inconnue') + (res.backup ? ' (sauvegarde : ' + res.backup + ')' : ''));
+            } catch (e) { retour('rMaint', false, 'Suivi de la mise à niveau impossible.'); }
+            OCCUPE--; $('btnUpgrade').disabled = false;
+        }));
 
-        async function uninstallPeerTube() {
-            if (!confirm('Stop the PeerTube LXC? The container stops but all data on /data/peertube is preserved.')) return;
-            try {
-                const res = await api('/container/uninstall', { method: 'POST' });
-                if (res.success) {
-                    toast('PeerTube uninstalled');
-                    await refresh();
-                }
-            } catch (e) {
-                toast('Failed', 'error');
-            }
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'peertube' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        // Initialize
-        refresh();
-        setInterval(refresh, 30000);
+        rafraichir();
+        // Pas d'actualisation pendant une saisie, une confirmation ou une opération longue, ni onglet masqué.
+        function inactif() {
+            const a = document.activeElement;
+            return document.hidden || DEMO || CONF || OCCUPE || (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && a.id !== 'logLignes');
+        }
+        setInterval(() => { if (!inactif()) rafraichir(); }, 30000);
+        setInterval(() => { if (!inactif() && COURANT === 'import') chargerListes(); }, 10000);
     </script>
 </body>
 </html>
