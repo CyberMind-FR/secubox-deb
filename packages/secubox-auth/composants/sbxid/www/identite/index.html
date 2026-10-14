@@ -88,6 +88,10 @@ td.c,th.c{text-align:center}
 .audit{list-style:none;margin:0;padding:0;max-height:300px;overflow:auto}
 .audit time{font-family:var(--mono);font-size:12px;color:var(--muted)}.audit .ev{font-family:var(--mono);font-size:12px;color:var(--acc)}
 @media (max-width:560px){.audit li{grid-template-columns:1fr}}
+/* Navigation systeme commune (#2631) : barre du haut + menu de gauche, absents en mode encadre ou avec ?embed=1. */
+body.avec-menu .wrap{margin-left:220px;padding-top:58px}
+@media (max-width:900px),(hover:none) and (pointer:coarse){body.avec-menu .wrap{margin-left:0}}
+body.mobile-mode.avec-menu .wrap{margin-left:0}
 </style>
 </head>
 <body>
@@ -749,6 +753,18 @@ function vue(){
   document.querySelectorAll('nav a').forEach(a => a.getAttribute('href')==='#'+v ? a.setAttribute('aria-current','page') : a.removeAttribute('aria-current'));
 }
 window.addEventListener('hashchange', vue); vue(); charge();
+</script>
+<script>
+// Menu commun (#2631) : seulement hors mode encadre. try/catch : window.top peut lever entre origines.
+document.addEventListener('DOMContentLoaded',function(){
+  var encadre=false;
+  try{encadre=new URLSearchParams(location.search).get('embed')||window.top!==window.self}catch(e){encadre=true}
+  if(encadre)return;
+  document.body.classList.add('avec-menu');
+  var css=document.createElement('link');css.rel='stylesheet';css.href='/shared/sidebar-light.css';document.head.appendChild(css);
+  var nav=document.createElement('nav');nav.className='sidebar';nav.id='sidebar';document.body.insertBefore(nav,document.body.firstChild);
+  var js=document.createElement('script');js.src='/shared/sidebar.js';document.body.appendChild(js);
+});
 </script>
 </body>
 </html>
