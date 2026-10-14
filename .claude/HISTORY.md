@@ -9,7 +9,7 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
-## 2026-10-14 — Flux YouTube : la cause du « données anciennes » est dite (ref #2633)
+## 2026-10-14 — Flux YouTube : la cause du « données anciennes » est dite (closes #2633)
 Sur gk2, `yt-dlp :ytsubs` répond « Login details are needed » : le cookies.txt est périmé (réécrit plus court par yt-dlp). `Flux.lister` avalait ce refus dans le repli sur le dernier résultat, d'où « YouTube n'a pas répondu ». Le repli porte désormais `cause` (`cookies` ou `youtube`), la route marque `cookies_stale`, la carte invite à redéposer cookies.txt (ytsas 0.4.2, webos 1.9.11). **Action utilisateur** : ré-exporter cookies.txt depuis un navigateur connecté. Les mêmes cookies servent à l'import Podcaster.
 
 ## 2026-10-14 — Aurora vague 5 : 12 pages (ref #2612) ; correctifs WAF et navigation déployés (closes #2613, closes #2615, closes #2629, closes #2631)
