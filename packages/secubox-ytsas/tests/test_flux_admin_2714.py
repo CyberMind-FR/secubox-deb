@@ -444,3 +444,10 @@ def test_aucune_reponse_ne_contient_de_cookie_en_nominal(banc):
     textes = [post(banc, "/flux/actualiser/envie").text, get(banc).text, post(banc, "/flux/vider/envie").text]
     for t in textes:
         assert SECRET not in t
+
+
+def test_le_vhost_public_garde_le_journal_par_domaine_et_efface_le_jeton_d_administration():
+    """0.8.1 : la ligne que la box portait en dérive est dans la source ; le jeton admin n'entre jamais par le vhost public."""
+    conf = (PKG / "nginx" / "ytsas.conf").read_text(encoding="utf-8")
+    assert "access_log /var/log/nginx/secubox-hosts.log sbx_host;" in conf
+    assert 'proxy_set_header X-Sbx-Garde-Admin "";' in conf
