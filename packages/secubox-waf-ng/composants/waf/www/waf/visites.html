@@ -66,6 +66,30 @@
   @container a (max-width:419px){.repart{grid-template-columns:96px 1fr}.donut{width:96px;height:96px}.donut span{inset:17px}.ligne{grid-template-columns:minmax(0,1fr) auto 56px}}
   @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
   @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g2{grid-template-columns:1fr 1fr} .carte{grid-template-columns:1fr 140px}}
+  /* #2704 — couches superposées et lecture dans le temps */
+  .info2{color:var(--doux);font-size:.72rem;border-left:3px solid var(--cyan);padding:2px 0 2px 9px}
+  .legC{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .couche{font:inherit;display:flex;align-items:center;gap:7px;text-align:left;color:var(--texte);background:rgba(18,40,78,.5);border:1px solid var(--trait);border-radius:10px;padding:5px 9px;cursor:pointer;min-height:36px;min-width:0;max-width:100%}
+  .couche[aria-pressed=true]{border-color:var(--cc);background:rgba(41,182,246,.10);box-shadow:inset 0 0 0 1px var(--cc)}
+  .couche[aria-pressed=false]{color:var(--doux)}
+  .couche:disabled{cursor:not-allowed;opacity:.5;filter:grayscale(1)}
+  .couche:focus-visible,.lapse button:focus-visible,.lapse input:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .couche b{font-weight:600}
+  .couche i{flex:none;width:18px;height:0;border-top:3px solid var(--cc)} .couche i.tiret{border-top-style:dashed}
+  .couche span{display:flex;flex-direction:column;min-width:0;font-size:.76rem;line-height:1.15} .couche small{color:var(--faible);font-size:.66rem;white-space:normal}
+  .grapheW{display:block;min-width:0;overflow:hidden} .grapheW svg{display:block;width:100%;height:auto}
+  .lapse{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:8px}
+  .lapse button{font:inherit;font-size:.76rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:6px 11px;cursor:pointer;min-height:34px}
+  .lapse button[aria-pressed=true]{background:rgba(41,182,246,.28);border-color:var(--cyan)}
+  .lapse button:disabled{opacity:.45;cursor:not-allowed}
+  .lapse input[type=range]{flex:1 1 180px;min-width:0;accent-color:var(--cyan);height:28px}
+  .lapse .vit{display:flex;gap:4px} .lapse .vit button{padding:6px 9px}
+  .lapse output{flex:1 1 100%;color:var(--doux);font-size:.74rem;font-variant-numeric:tabular-nums}
+  .etendue{display:flex;gap:4px;margin-left:auto;white-space:nowrap} .etendue button{font:inherit;font-size:.72rem;color:var(--texte);background:rgba(59,130,246,.14);border:1px solid var(--trait);border-radius:8px;padding:4px 10px;cursor:pointer;min-height:30px}
+  .etendue button{white-space:nowrap}
+  .etendue button[aria-pressed=true]{background:rgba(41,182,246,.28);border-color:var(--cyan)}
+  .etendue button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 <div class="cadre" id="cadre"><div class="app">
   <div class="tete">
@@ -74,9 +98,30 @@
     <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
   </div>
   <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
-  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle : les couches, les courbes journalières et la lecture dans le temps sont fictives</div>
   <div><h2>Visites</h2><div class="sous">Le trafic légitime : ceux qui viennent voir vos services, sans les attaquants. <span id="maj"></span></div></div>
   <div class="tuiles" id="tuiles"></div>
+  <div class="info2" id="infoHist">L’API ne conserve qu’un compteur cumulé des visites : le rythme par heure est calculé par cette page en échantillonnant le compteur (30 s) tant qu’elle est ouverte, et gardé dans ce navigateur (35 jours au plus). Les heures où la page était fermée ne sont pas mesurées : aucun zéro n’est inventé.</div>
+  <div class="tuiles" id="tuilesC"></div>
+  <div class="pan" id="pCouches">
+    <h3>Couches superposées — rythme sur 24 h <i>pas : 1 heure · visites par heure</i></h3>
+    <div class="legC" id="legH" role="group" aria-label="Couches affichées : rythme sur 24 heures"></div>
+    <div class="grapheW" id="wH"><svg id="chH" role="img" aria-label="Courbes superposées du rythme des visites sur 24 heures"></svg></div>
+    <div class="lapse" role="group" aria-label="Lecture dans le temps">
+      <button type="button" id="bPlay">▶ Lecture</button>
+      <button type="button" id="bDebut">⏮ Début</button>
+      <input type="range" id="curseur" min="0" max="0" step="1" value="0" aria-label="Position de la fenêtre de 24 heures dans le temps" title="Fait glisser la fenêtre de 24 h sur l’historique mesuré">
+      <span class="vit" role="group" aria-label="Vitesse de lecture"><button type="button" data-v="1" aria-pressed="true">1×</button><button type="button" data-v="2" aria-pressed="false">2×</button><button type="button" data-v="4" aria-pressed="false">4×</button></span>
+      <output id="lapseT" for="curseur" aria-live="off"></output>
+    </div>
+    <div class="note" id="noteH"></div>
+  </div>
+  <div class="pan" id="pJours">
+    <h3>Tendance journalière <i>pas : 1 jour · une échelle par unité</i><span class="etendue" role="group" aria-label="Étendue"><button type="button" data-n="7" aria-pressed="false">7 j</button><button type="button" data-n="30" aria-pressed="true">30 j</button></span></h3>
+    <div class="legC" id="legD" role="group" aria-label="Couches affichées : tendance journalière"></div>
+    <div class="grapheW" id="wD"><svg id="chD" role="img" aria-label="Courbes de la tendance journalière des visites et des menaces"></svg></div>
+    <div class="note" id="noteD"></div>
+  </div>
   <div class="grille g2">
     <div class="pan"><h3>Type de client <i>navigateur, application, robot…</i></h3><div class="repart"><div class="donut" id="donutT"><span id="donutTC"></span></div><div class="leg" id="legT"></div></div></div>
     <div class="pan"><h3>Système d’exploitation <i>déduit du navigateur</i></h3><div class="repart"><div class="donut" id="donutS"><span id="donutSC"></span></div><div class="leg" id="legS"></div></div></div>
@@ -167,17 +212,203 @@
     by_status:{'2xx':1021300,'3xx':142600,'4xx':96800,'5xx':22156},
     by_vhost:{'app.gk2.secubox.in':420300,'api.secubox.in':310800,'www.gk2.secubox.in':240100,'mail.secubox.in':90400,'cloud.secubox.in':64800,'docs.secubox.in':38200,'wiki.secubox.in':21900},
     top_countries:{FR:21400,DE:9200,US:7800,GB:5100,NL:3900,CH:2600,JP:1800,BR:1200}}};
+  // ───────── #2704 : couches superposées + lecture dans le temps (SVG à la main, DOM construit sans HTML injecté) ─────────
+  var NS='http://www.w3.org/2000/svg',CLE='sbx_visites_horaire_v1',HMAX=24*35,MINSEC=600;
+  var CY='#29b6f6',VI='#a78bfa',BL='#3b82f6',VE='#2ecc71',RO='#ff4d5e';
+  var ST={last:null,h:{}},HIST=null,ENDEMO=false;
+  var etat={E:0,minE:0,maxE:0,on:{maint:true,hier:true,j7:true,moy:true,vis:true,men:true,mm:true},vit:1,etendue:30,timer:null};
+  var RM=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  function S(p,t,a,txt){var n=document.createElementNS(NS,t);for(var k in a)n.setAttribute(k,a[k]);if(txt!=null)n.textContent=txt;if(p)p.appendChild(n);return n;}
+  function Hh(p,t,a,txt){var n=document.createElement(t);for(var k in a)n.setAttribute(k,a[k]);if(txt!=null)n.textContent=txt;if(p)p.appendChild(n);return n;}
+  function vide(n){while(n.firstChild)n.removeChild(n.firstChild);}
+  function nowH(){return Math.floor(Date.now()/3600000);}
+  function plur(n,m,p){return n+' '+(n>1?p:m);}
+  function vh(idx){var b=ST.h[idx];if(!b||b[1]<MINSEC)return null;return b[0]*3600/b[1];}
+  function mesures(){var ks=Object.keys(ST.h).map(Number).filter(function(i){return vh(i)!=null;}).sort(function(a,b){return a-b;});return ks;}
+  function joursDispo(){var m=mesures();return m.length?Math.ceil((m[m.length-1]-m[0]+1)/24):0;}
+  function chargeStock(){try{var o=JSON.parse(localStorage.getItem(CLE)||'null');if(o&&typeof o.h==='object'){ST.h={};Object.keys(o.h).forEach(function(k){var b=o.h[k];if(Array.isArray(b)&&isFinite(b[0])&&isFinite(b[1])&&+k>0)ST.h[k]=[+b[0],+b[1]];});
+    if(o.last&&isFinite(o.last.t)&&isFinite(o.last.n))ST.last={t:+o.last.t,n:+o.last.n};}}catch(e){}}
+  function gardeStock(){if(ENDEMO)return;try{var lim=nowH()-HMAX;Object.keys(ST.h).forEach(function(k){if(+k<lim)delete ST.h[k];});localStorage.setItem(CLE,JSON.stringify(ST));}catch(e){}}
+  function echantillon(v){
+    var n=num(v.total),t=num(v.updated_unix)||Math.floor(Date.now()/1000);
+    if(ST.last&&t>ST.last.t&&n>=ST.last.n&&t-ST.last.t<=900){var i=Math.floor(t/3600),b=ST.h[i]||(ST.h[i]=[0,0]);b[0]+=n-ST.last.n;b[1]+=t-ST.last.t;}
+    if(!ST.last||t>ST.last.t)ST.last={t:t,n:n};
+    gardeStock();
+  }
+  var LH=[
+    {id:'maint',nom:'Aujourd’hui',coul:CY,need:1,def:'La fenêtre de 24 h affichée (la plus récente tant que le curseur est à droite).'},
+    {id:'hier',nom:'Il y a 24 h',coul:VI,need:2,def:'La même fenêtre décalée de 24 heures : mêmes heures de la veille.'},
+    {id:'j7',nom:'Il y a 7 jours',coul:BL,need:8,def:'La même fenêtre décalée de 7 jours : même jour de la semaine passée.'},
+    {id:'moy',nom:'Moyenne des 7 jours précédents',coul:VE,need:3,dash:true,def:'Moyenne, heure par heure, des 7 fenêtres précédentes qui ont une mesure (au moins 2 jours mesurés pour tracer un point).'}];
+  var LD=[
+    {id:'vis',nom:'Visites (moyenne par heure)',coul:CY,need:2,def:'Moyenne du débit horaire des heures mesurées de chaque jour, échelle de gauche. Un jour partiellement mesuré est annoncé dans l’infobulle.'},
+    {id:'men',nom:'Menaces détectées par jour',coul:RO,need:2,def:'Événements enregistrés dans les journaux du WAF, par jour, échelle de droite. Ce sont des attaques, pas des visites.'},
+    {id:'mm',nom:'Moyenne mobile 7 jours (menaces)',coul:VI,need:3,dash:true,def:'Moyenne des menaces des 7 derniers jours qui ont une mesure, même échelle que les menaces.'}];
+  function construitLegende(cont,defs,suite){
+    vide(cont);
+    defs.forEach(function(d){
+      var b=Hh(cont,'button',{type:'button','aria-pressed':'true',title:d.def});b.style.setProperty('--cc',d.coul);
+      Hh(b,'i',d.dash?{'class':'tiret','aria-hidden':'true'}:{'aria-hidden':'true'});
+      var s=Hh(b,'span',{});Hh(s,'b',{},d.nom);d.st=Hh(s,'small',{});d.btn=b;b.className='couche';
+      b.addEventListener('click',function(){etat.on[d.id]=!etat.on[d.id];suite();});
+    });
+  }
+  function majLegende(defs,jours,statut){
+    defs.forEach(function(d){
+      var ok=jours>=d.need;d.btn.disabled=!ok;d.btn.setAttribute('aria-pressed',(ok&&etat.on[d.id])?'true':'false');
+      d.st.textContent=ok?statut(d):'historique insuffisant ('+plur(jours,'jour disponible','jours disponibles')+')';
+      d.ok=ok;
+    });
+  }
+  function joli(m){if(!(m>0))return 1;var p=Math.pow(10,Math.floor(Math.log(m)/Math.LN10)),f=m/p;return (f<=1?1:f<=2?2:f<=5?5:10)*p;}
+  function chemin(vals,X,Y){var d='',pen=false;vals.forEach(function(v,i){if(v==null){pen=false;return;}d+=(pen?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1);pen=true;});return d;}
+  function aire(vals,X,Y,y0){var d='',run=[];function ferme(){if(run.length){d+='M'+X(run[0]).toFixed(1)+' '+y0+run.map(function(i){return 'L'+X(i).toFixed(1)+' '+Y(vals[i]).toFixed(1);}).join('')+'L'+X(run[run.length-1]).toFixed(1)+' '+y0+'Z';run=[];}}
+    vals.forEach(function(v,i){if(v==null)ferme();else run.push(i);});ferme();return d;}
+  function points(vals,X,Y,coul,tous,p){vals.forEach(function(v,i){if(v==null)return;if(tous||((i===0||vals[i-1]==null)&&(i===vals.length-1||vals[i+1]==null)))S(p,'circle',{cx:X(i).toFixed(1),cy:Y(v).toFixed(1),r:2.5,fill:coul});});}
+  function fenetre(E){
+    var f=function(i){return new Date(i*3600000).toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});};
+    return 'du '+f(E-23)+' au '+f(E+1);
+  }
+  function dessineH(){
+    var svg=el('chH');vide(svg);
+    var E=etat.E,W=Math.max(260,Math.floor(el('wH').clientWidth||340)),HT=200,L=46,R=10,T=10,B=26;
+    svg.setAttribute('viewBox','0 0 '+W+' '+HT);
+    var o={maint:[],hier:[],j7:[],moy:[],moyn:[]};
+    for(var i=0;i<24;i++){var b=E-23+i;o.maint.push(vh(b));o.hier.push(vh(b-24));o.j7.push(vh(b-168));
+      var s=0,c=0;for(var k=1;k<=7;k++){var x=vh(b-24*k);if(x!=null){s+=x;c++;}}o.moy.push(c>=2?s/c:null);o.moyn.push(c);}
+    var act=LH.filter(function(d){return d.ok&&etat.on[d.id];}),mx=0;
+    act.forEach(function(d){o[d.id].forEach(function(v){if(v!=null&&v>mx)mx=v;});});
+    var yt=joli(mx),X=function(i){return L+(W-L-R)*i/23;},Y=function(v){return T+(HT-T-B)*(1-v/yt);};
+    var base=HT-B;
+    [0,.5,1].forEach(function(f){var y=Y(yt*f);S(svg,'line',{x1:L,x2:W-R,y1:y,y2:y,stroke:'rgba(86,150,255,.16)'});S(svg,'text',{x:L-6,y:y+3,'text-anchor':'end',fill:'#6f84a8','font-size':10},fmt(yt*f));});
+    [0,6,12,18,23].forEach(function(i){S(svg,'text',{x:X(i),y:HT-8,'text-anchor':i===0?'start':i===23?'end':'middle',fill:'#6f84a8','font-size':10},new Date((E-23+i)*3600000).getHours()+' h');});
+    var any=false;
+    act.forEach(function(d){var v=o[d.id];if(!v.some(function(x){return x!=null;}))return;any=true;
+      if(d.id==='maint')S(svg,'path',{d:aire(v,X,Y,base),fill:d.coul,'fill-opacity':.14,stroke:'none'});
+      S(svg,'path',{d:chemin(v,X,Y),fill:'none',stroke:d.coul,'stroke-width':d.id==='maint'?2.2:1.7,'stroke-dasharray':d.dash?'5 3':'none','vector-effect':'non-scaling-stroke'});
+      points(v,X,Y,d.coul,false,svg);});
+    if(!any)S(svg,'text',{x:W/2,y:HT/2,'text-anchor':'middle',fill:'#9fb3d6','font-size':12},mesures().length?'Aucune mesure sur cette fenêtre':'Aucune mesure');
+    for(var j=0;j<24;j++){
+      var lignes=[new Date((E-23+j)*3600000).getHours()+' h'];
+      act.forEach(function(d){var x=o[d.id][j];lignes.push(d.nom+' : '+(x==null?'—':fmt(x)+' visites/h')+(d.id==='moy'&&x!=null?' ('+plur(o.moyn[j],'jour','jours')+')':''));});
+      var r=S(svg,'rect',{x:(X(j)-(W-L-R)/46).toFixed(1),y:T,width:((W-L-R)/23).toFixed(1),height:HT-T-B,fill:'transparent','data-h':j});
+      S(r,'title',{},lignes.join('\n'));
+    }
+    var manque=act.filter(function(d){return !o[d.id].some(function(x){return x!=null;});}).map(function(d){return d.nom;});
+    el('noteH').textContent=(manque.length?'Pas de mesure à cette date pour : '+manque.join(', ')+'. ':'')+'Chaque heure est un débit moyen mesuré (heures couvertes au moins 10 minutes) ; les heures sans mesure restent vides, jamais à zéro.';
+    el('lapseT').textContent='Fenêtre '+fenetre(E)+(E===etat.maxE?' (la plus récente)':'');
+    el('curseur').setAttribute('aria-valuetext',fenetre(E));
+  }
+  function joursISO(d){return new Date(d*86400000).toISOString().slice(0,10);}
+  function histJour(d){var j=HIST&&HIST[joursISO(d)];return j&&isFinite(Number(j.total))?Number(j.total):null;}
+  function dessineJ(){
+    var svg=el('chD');vide(svg);
+    var n=etat.etendue,d0=Math.floor(Date.now()/86400000),W=Math.max(260,Math.floor(el('wD').clientWidth||340)),HT=200,L=46,R=46,T=10,B=26;
+    svg.setAttribute('viewBox','0 0 '+W+' '+HT);
+    var vis=[],men=[],mm=[],nv=[];
+    for(var i=0;i<n;i++){var d=d0-n+1+i,s=0,c=0;
+      for(var h=0;h<24;h++){var x=vh(d*24+h);if(x!=null){s+=x;c++;}}
+      vis.push(c?s/c:null);nv.push(c);men.push(histJour(d));
+      var ss=0,cc=0;for(var k=0;k<7;k++){var y=histJour(d-k);if(y!=null){ss+=y;cc++;}}mm.push(cc>=2?ss/cc:null);}
+    var o={vis:vis,men:men,mm:mm},act=LD.filter(function(d){return d.ok&&etat.on[d.id];});
+    var mv=0,mmx=0;
+    if(etat.on.vis&&LD[0].ok)vis.forEach(function(v){if(v!=null&&v>mv)mv=v;});
+    act.forEach(function(d){if(d.id!=='vis')o[d.id].forEach(function(v){if(v!=null&&v>mmx)mmx=v;});});
+    var yv=joli(mv),ym=joli(mmx),X=function(i){return L+(W-L-R)*(n>1?i/(n-1):.5);};
+    var Yv=function(v){return T+(HT-T-B)*(1-v/yv);},Ym=function(v){return T+(HT-T-B)*(1-v/ym);};
+    var hasV=etat.on.vis&&LD[0].ok,hasM=(etat.on.men&&LD[1].ok)||(etat.on.mm&&LD[2].ok);
+    [0,.5,1].forEach(function(f){var y=T+(HT-T-B)*(1-f);S(svg,'line',{x1:L,x2:W-R,y1:y,y2:y,stroke:'rgba(86,150,255,.16)'});
+      if(hasV)S(svg,'text',{x:L-6,y:y+3,'text-anchor':'end',fill:CY,'font-size':10},fmt(yv*f));
+      if(hasM)S(svg,'text',{x:W-R+6,y:y+3,'text-anchor':'start',fill:RO,'font-size':10},fmt(ym*f));});
+    var pas=n>14?5:1;
+    for(var t=0;t<n;t+=pas){var dt=new Date((d0-n+1+t)*86400000);S(svg,'text',{x:X(t),y:HT-8,'text-anchor':t===0?'start':'middle',fill:'#6f84a8','font-size':10},dt.getUTCDate()+'/'+(dt.getUTCMonth()+1));}
+    // bande de la fenêtre du curseur : 24 h se terminant à la fin de l’heure E (un jour = un intervalle centré sur son point)
+    var pa=(etat.E-23)/24-(d0-n+1)-.5,pb=(etat.E+1)/24-(d0-n+1)-.5,ba=Math.max(0,pa),bb=Math.min(n-1,pb);
+    if(bb>ba)S(svg,'rect',{x:X(ba).toFixed(1),y:T,width:Math.max(2,X(bb)-X(ba)).toFixed(1),height:HT-T-B,fill:CY,'fill-opacity':.10,stroke:CY,'stroke-opacity':.5,'data-fenetre':1});
+    var any=false;
+    act.forEach(function(d){var v=o[d.id],Y=d.id==='vis'?Yv:Ym;if(!v.some(function(x){return x!=null;}))return;any=true;
+      S(svg,'path',{d:chemin(v,X,Y),fill:'none',stroke:d.coul,'stroke-width':1.8,'stroke-dasharray':d.dash?'5 3':'none','vector-effect':'non-scaling-stroke'});
+      points(v,X,Y,d.coul,d.id!=='mm'&&n<=14,svg);});
+    if(!any)S(svg,'text',{x:W/2,y:HT/2,'text-anchor':'middle',fill:'#9fb3d6','font-size':12},'Aucune mesure');
+    for(var j=0;j<n;j++){
+      var lg=[joursISO(d0-n+1+j)];
+      act.forEach(function(d){var x=o[d.id][j];lg.push(d.nom+' : '+(x==null?'—':fmt(x))+(d.id==='vis'&&x!=null?' ('+nv[j]+'/24 h mesurées)':''));});
+      var r=S(svg,'rect',{x:(X(j)-(W-L-R)/(2*Math.max(1,n-1))).toFixed(1),y:T,width:((W-L-R)/Math.max(1,n-1)).toFixed(1),height:HT-T-B,fill:'transparent','data-j':j});
+      S(r,'title',{},lg.join('\n'));
+    }
+    el('noteD').textContent='Chaque couche suit sa propre échelle (gauche : visites par heure, droite : menaces par jour). Les jours sans mesure ne sont pas comblés. Bande bleue : la fenêtre de 24 h du curseur.'+(HIST?'':' Journaux de menaces : aucune donnée reçue.');
+  }
+  function majTout(){
+    var m=mesures(),N=joursDispo(),live=etat.E>=etat.maxE;
+    etat.minE=m.length?m[0]:nowH();etat.maxE=nowH();
+    if(etat.maxE<etat.minE)etat.maxE=etat.minE;
+    if(live&&!etat.timer)etat.E=etat.maxE;
+    if(etat.E<etat.minE||etat.E>etat.maxE)etat.E=etat.maxE;
+    var c=el('curseur');c.min=etat.minE;c.max=etat.maxE;c.value=etat.E;c.disabled=(etat.maxE-etat.minE)<1;
+    el('bDebut').disabled=c.disabled;
+    el('bPlay').disabled=c.disabled||RM;
+    el('bPlay').title=RM?'Lecture automatique désactivée (préférence « réduire les animations ») : utilisez le curseur.':'Fait avancer la fenêtre de 24 h heure par heure';
+    var nbj=HIST?Object.keys(HIST).length:0;
+    majLegende(LH,N,function(d){return d.id==='moy'?'moyenne, 2 jours mesurés ou plus':'pas : 1 heure';});
+    // disponibilité de la couche visites : jours ayant au moins une heure mesurée ; menaces : jours des journaux
+    var jv={};m.forEach(function(i){jv[Math.floor(i/24)]=1;});var njv=Object.keys(jv).length;
+    var dispo={vis:njv,men:nbj,mm:nbj};
+    LD.forEach(function(d){var ok=dispo[d.id]>=d.need;d.btn.disabled=!ok;d.btn.setAttribute('aria-pressed',(ok&&etat.on[d.id])?'true':'false');d.ok=ok;
+      d.st.textContent=ok?(d.id==='vis'?plur(njv,'jour mesuré','jours mesurés'):plur(nbj,'jour','jours')+' dans les journaux'):'historique insuffisant ('+plur(dispo[d.id],'jour disponible','jours disponibles')+')';});
+    // tuiles
+    var cur=vh(m.length?m[m.length-1]:-1),tl=el('tuilesC');vide(tl);
+    function tu(l,v,s,def){var t=Hh(tl,'div',{'class':'tuile',title:def}),h=Hh(t,'div',{'class':'haut'}),w=Hh(h,'div',{});Hh(w,'div',{'class':'l'},l);Hh(w,'div',{'class':'v'},v);if(s)Hh(t,'div',{'class':'s'},s);}
+    tu('Débit récent',cur==null?'—':fmt(cur),'visites par heure','Dernière heure mesurée par cette page : variation du compteur cumulé de visites divisée par le temps couvert.');
+    tu('Heures mesurées',m.length?String(m.length):'—','sur '+(HMAX/24)+' jours au plus','Nombre d’heures où cette page ouverte a pu mesurer le débit (au moins 10 minutes couvertes). Gardé dans ce navigateur.');
+    tu('Jours de menaces',nbj?String(nbj):'—','dans les journaux du WAF','Nombre de jours présents dans l’historique des menaces (journaux tournés), source des couches de menaces.');
+    dessineH();dessineJ();hauteur();
+  }
+  function pose(E){etat.E=Math.max(etat.minE,Math.min(etat.maxE,E));el('curseur').value=etat.E;dessineH();dessineJ();hauteur();}
+  function arrete(){if(etat.timer){clearInterval(etat.timer);etat.timer=null;}el('bPlay').textContent='▶ Lecture';}
+  function joue(){
+    if(RM||el('curseur').disabled)return;
+    if(etat.E>=etat.maxE)pose(etat.minE);
+    el('bPlay').textContent='⏸ Pause';
+    etat.timer=setInterval(function(){if(etat.E>=etat.maxE){arrete();return;}pose(etat.E+1);},Math.round(150/etat.vit));
+  }
+  function initLapse(){
+    construitLegende(el('legH'),LH,majTout);construitLegende(el('legD'),LD,majTout);
+    el('bPlay').addEventListener('click',function(){if(etat.timer)arrete();else joue();});
+    el('bDebut').addEventListener('click',function(){arrete();pose(etat.minE);});
+    el('curseur').addEventListener('input',function(){arrete();pose(+this.value);});
+    Array.prototype.forEach.call(document.querySelectorAll('.vit button'),function(b){b.addEventListener('click',function(){
+      etat.vit=+b.getAttribute('data-v');Array.prototype.forEach.call(document.querySelectorAll('.vit button'),function(x){x.setAttribute('aria-pressed',x===b?'true':'false');});
+      if(etat.timer){arrete();joue();}});});
+    Array.prototype.forEach.call(document.querySelectorAll('.etendue button'),function(b){b.addEventListener('click',function(){
+      etat.etendue=+b.getAttribute('data-n');Array.prototype.forEach.call(document.querySelectorAll('.etendue button'),function(x){x.setAttribute('aria-pressed',x===b?'true':'false');});majTout();});});
+    if(window.ResizeObserver)new ResizeObserver(function(){dessineH();dessineJ();}).observe(el('pCouches'));
+  }
+  function donneesDemo(){
+    // DÉMONSTRATION : 30 jours d’un rythme fictif (aucune mesure), avec un trou de 5 heures pour montrer les heures non mesurées
+    var n=nowH();ST={last:null,h:{}};ENDEMO=true;
+    for(var i=n-24*30;i<=n;i++){var hr=new Date(i*3600000).getHours(),dj=new Date(i*3600000).getDay();
+      if(i<n-24*12&&i>n-24*12-6)continue;
+      var jour=Math.max(0,Math.sin(Math.PI*(hr-7)/15)),f=(dj===0||dj===6)?.7:1;
+      var v=Math.round(40+520*jour*f*(1+.12*Math.sin(i*1.7))*(1+.4*Math.sin(Math.floor(i/24)*2.3))*(1+.25*Math.cos((hr-14)/3.8))*(1+.1*(i-(n-720))/720));
+      ST.h[i]=[v,3600];}
+    HIST={};var d0=Math.floor(Date.now()/86400000);
+    for(var k=0;k<30;k++){HIST[joursISO(d0-k)]={total:Math.round(900+700*Math.abs(Math.sin(k*.9))+(k===9?2600:0))};}
+  }
+  function chargeHist(){jget('/api/v1/waf/history').then(function(r){HIST=(r&&r.jours&&typeof r.jours==='object')?r.jours:null;majTout();});}
   el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   // encadrée par la page /waf/ : on lui dit sa hauteur pour qu'elle n'ait pas de défilement interne
   function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxWafVue:Math.ceil(el('cadre').getBoundingClientRect().height),onglet:'visites'},location.origin);}catch(e){}}}
   window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(el('cadre'));
-  if(q.get('demo')){rend(DEMO);hauteur();return;}
+  initLapse();
+  if(q.get('demo')){rend(DEMO);donneesDemo();majTout();return;}
+  chargeStock();
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
   function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
-  function charge(){jget('/api/v1/waf/visits').then(function(r){rend({visits:r});hauteur();});}
-  el('rafraichir').addEventListener('click',charge);
-  charge();
+  function charge(){jget('/api/v1/waf/visits').then(function(r){rend({visits:r});if(r&&r.available!==false)echantillon(r);majTout();});}
+  el('rafraichir').addEventListener('click',function(){charge();chargeHist();});
+  majTout();charge();chargeHist();
+  setInterval(function(){if(!document.hidden)chargeHist();},600000);
   setInterval(function(){if(!document.hidden)charge();},30000);
 })();
 </script>
