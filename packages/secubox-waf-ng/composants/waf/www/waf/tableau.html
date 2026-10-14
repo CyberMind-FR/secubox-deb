@@ -3,910 +3,463 @@
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox #1224 — tableau de bord WAF : attaquants, détections, évolution.
+  SecuBox — « SBXWAF », poste de garde : évolution et efficacité (#1224), au profil Aurora (.claude/AURORA-REFERENCE.md).
+  La vue d'ensemble (vue.html) répond à « que se passe-t-il maintenant » ; cette page répond à « comment cela évolue, et est-ce que ça sert » :
+  l'histogramme journalier par catégorie et l'EFFICACITÉ (pour chaque type, ce qui a été écarté contre ce qui n'a été qu'observé).
+  Une catégorie qui détecte beaucoup et n'agit jamais n'est pas une protection, c'est un compteur.
 
-  CE QUE CETTE PAGE AJOUTE au panneau WAF. Le panneau répond à « que se
-  passe-t-il maintenant ». Celle-ci répond à « comment cela évolue, et est-ce
-  que ça sert ». D'où deux choses qu'on ne trouve nulle part ailleurs :
-  l'histogramme journalier par catégorie, et l'EFFICACITÉ — pour chaque type,
-  ce qui a été bloqué contre ce qui n'a été qu'observé. Une catégorie qui
-  détecte beaucoup et ne bloque jamais n'est pas une protection, c'est un
-  compteur ; rien ne le disait.
-
-  Tous les graphiques sont en SVG écrit ici : la CSP du panneau interdit les
-  scripts externes, et une bibliothèque de plus serait une dépendance de plus.
-
-  ── REPRISE GRAPHIQUE (#1341), AU NIVEAU DE DevWatch ───────────────────────
-
-  Le fond était juste ; la forme ne l'était pas. Une seule fonte à chasse fixe,
-  des cartes plates, et des titres préfixés d'emoji : la page se lisait comme un
-  journal brut, alors qu'elle porte les conclusions du moteur.
-
-  TROIS FONTES, TROIS RÔLES — le trio de DevWatch, et c'est volontairement le
-  même : Chivo pour les titres et les chiffres, IBM Plex Sans pour le corps, IBM
-  Plex Mono pour les adresses, les signatures et les chemins. Un style de maison
-  n'existe que s'il se répète.
-
-  L'ACCENT N'EST PAS LA SÉMANTIQUE. Le cyan est structurel — il dit « SecuBox »,
-  jamais « danger ». Le rouge, l'ambre, le violet et le vert disent une DÉCISION
-  (banni, averti, refusé sans bannir, sain). Les confondre ferait clignoter la
-  page en alarme permanente, et une alarme permanente ne se lit plus.
-
-  L'ŒIL-DE-BŒUF DE CHAQUE SECTION PORTE LA PROVENANCE, pas un numéro d'ordre :
-  « JOURNAL · SOURCES », « CORRÉLATION », « REGISTRE DES VHOSTS ». Ces sections
-  ne forment pas une séquence — ce sont des angles de vue —, et numéroter ce qui
-  n'est pas ordonné invente une progression qui n'existe pas. Sur une console de
-  sécurité, ce qu'il est utile d'annoncer, c'est D'OÙ VIENT le chiffre.
-
-  L'HEURE DU RELEVÉ EST AFFICHÉE. La page se rafraîchit seule chaque minute ;
-  sans horodatage, rien ne distingue un tableau vivant d'un tableau figé sur une
-  erreur silencieuse.
+  Page autonome : CSS et JS en ligne, graphiques SVG écrits à la main, aucune police ni bibliothèque distante, aucune injection de balisage.
+  DONNÉES RÉELLES UNIQUEMENT (lecture seule : /stats, /history, /bans, /detections, /campaigns du WAF). Mesure absente = « — », jamais 0.
+  Chaque tuile porte sa définition en infobulle. `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau. `?embed=1` : sans navigation.
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SBXWAF — poste de garde</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<title>SBXWAF — évolution et efficacité</title>
 <style>
-  /* ═══════════════════════════════════════════════════════════════════════
-     PALETTE À TROIS ÉTATS, SOMBRE PAR DÉFAUT (#1308, revu #1334, #1341).
-
-     L'ORDRE EST INVERSÉ EXPRÈS, et c'est la leçon de #1308 : les teintes de
-     séries de cette page sont des néons, dessinés pour un fond noir. Poser le
-     clair sur `:root` nu avait fait du clair le défaut, et les néons s'y
-     écrasaient. `:root` porte donc le SOMBRE ; c'est le clair qui se redéfinit,
-     dans les deux sens — choix explicite ET état « système » sans attribut.
-
-     L'ACCENT ET LA SÉMANTIQUE SONT DEUX CHOSES. Le cyan est structurel : il
-     dit « SecuBox », il ne dit rien du danger. Le rouge, l'ambre, le violet et
-     le vert disent une DÉCISION (banni, averti, refusé, sain). Les confondre
-     ferait clignoter la page en alarme permanente, et une alarme permanente ne
-     se lit plus.
-     ═══════════════════════════════════════════════════════════════════════ */
-  :root {
-    --fond:#080a10; --surface:#131824; --surface-2:#0f131d; --sunk:#0b0e16;
-    --ink:#e6eaf3; --ink-soft:#bcc5d6; --muted:#838ea3; --faint:#5a6479;
-    --line:#222a3a; --line-soft:#1a2030;
-    --cyan:#28d6ff; --cyan-ink:#8fe6ff;
-    --red:#ff5d6c; --orange:#f0b429; --purple:#a98bff; --green:#35d07f;
-    --halo:rgba(40,214,255,.10);
-    --ombre:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
-    --ombre-h:0 2px 8px rgba(0,0,0,.5), 0 26px 60px rgba(0,0,0,.5);
-    /* Rétro-compatibilité : les fragments écrits par le JS et les SVG tracés
-       ici emploient encore ces deux noms. */
-    --bg-card:var(--surface); --border:var(--line);
-  }
-  /* Le clair, écrit UNE fois, appliqué à deux états. Accents assombris : le
-     néon des écrans ne tient pas sur du papier. */
-  :root[data-theme="light"] {
-    --fond:#eef1f7; --surface:#ffffff; --surface-2:#f5f7fc; --sunk:#e9edf5;
-    --ink:#131722; --ink-soft:#3a4256; --muted:#5b6478; --faint:#8a93a6;
-    --line:#dce1ec; --line-soft:#e7ebf3;
-    --cyan:#0784a8; --cyan-ink:#0784a8;
-    --red:#dc2f43; --orange:#b7810a; --purple:#6b46c9; --green:#0f9d54;
-    --halo:rgba(7,132,168,.08);
-    --ombre:0 1px 2px rgba(20,30,60,.06), 0 8px 24px rgba(20,30,60,.07);
-    --ombre-h:0 2px 6px rgba(20,30,60,.08), 0 20px 50px rgba(20,30,60,.12);
-  }
-  @media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) {
-      --fond:#eef1f7; --surface:#ffffff; --surface-2:#f5f7fc; --sunk:#e9edf5;
-      --ink:#131722; --ink-soft:#3a4256; --muted:#5b6478; --faint:#8a93a6;
-      --line:#dce1ec; --line-soft:#e7ebf3;
-      --cyan:#0784a8; --cyan-ink:#0784a8;
-      --red:#dc2f43; --orange:#b7810a; --purple:#6b46c9; --green:#0f9d54;
-      --halo:rgba(7,132,168,.08);
-      --ombre:0 1px 2px rgba(20,30,60,.06), 0 8px 24px rgba(20,30,60,.07);
-      --ombre-h:0 2px 6px rgba(20,30,60,.08), 0 20px 50px rgba(20,30,60,.12);
-    }
-  }
-
-  * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  /* Fond ET couleur EXPLICITES : un corps transparent emprunte celui de
-     l'hôte, et la page finit peinte dans un thème que son texte ne suit pas. */
-  body {
-    margin: 0; padding: 0; background: var(--fond); color: var(--ink);
-    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
-    font-size: 15px; line-height: 1.5; letter-spacing: .005em;
-    -webkit-font-smoothing: antialiased;
-    background-image: radial-gradient(1200px 620px at 82% -12%, var(--halo), transparent 70%);
-    background-attachment: fixed;
-  }
-  h1, h2, h3 { font-family: "Chivo", sans-serif; margin: 0; letter-spacing: -.015em; }
-  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-  a { color: inherit; }
-  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 4px; }
-
-  .grille { display: grid; gap: 18px; max-width: 78rem; margin: 0 auto; padding: 26px 22px 72px; }
-
-  /* ── MASTHEAD ─────────────────────────────────────────────────────────── */
-  .mast { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  .brand { display: flex; align-items: center; gap: 12px; }
-  .sceau { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center;
-           flex: 0 0 auto; font-size: 1.25rem; position: relative; overflow: hidden;
-           background: linear-gradient(150deg, color-mix(in srgb, var(--cyan) 26%, var(--surface)), var(--surface));
-           border: 1px solid var(--line); box-shadow: var(--ombre); }
-  /* Le reflet en diagonale : ce qui fait qu'une tuile a une MATIÈRE et pas
-     seulement une couleur. */
-  .sceau::after { content: ""; position: absolute; inset: -40% -40% auto auto; width: 90%; height: 180%;
-                  background: linear-gradient(transparent, color-mix(in srgb, var(--cyan) 30%, transparent));
-                  transform: rotate(25deg); opacity: .5; }
-  .wm { display: flex; flex-direction: column; line-height: 1.05; }
-  .wm b { font-family: "Chivo"; font-weight: 900; font-size: 1.42rem; letter-spacing: -.02em; }
-  .wm b i { font-style: normal; color: var(--cyan-ink); }
-  .wm span { font-size: .66rem; letter-spacing: .24em; text-transform: uppercase;
-             color: var(--faint); font-weight: 600; }
-  .moteur { display: flex; align-items: center; gap: 9px; padding: 8px 13px; border-radius: 11px;
-            background: var(--surface); border: 1px solid var(--line); box-shadow: var(--ombre); }
-  .moteur .path { font-family: "IBM Plex Mono"; font-size: .82rem; font-weight: 500; }
-  .moteur .path .o { color: var(--muted); }
-  .moteur .path .r { color: var(--ink); font-weight: 600; }
-  .live { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px 5px 9px; border-radius: 999px;
-          background: color-mix(in srgb, var(--green) 12%, var(--surface));
-          border: 1px solid color-mix(in srgb, var(--green) 30%, var(--line));
-          font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--green); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green);
-         animation: pouls 2.2s ease-out infinite; }
-  @keyframes pouls { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 55%, transparent); }
-                     70% { box-shadow: 0 0 0 8px transparent; }
-                     100% { box-shadow: 0 0 0 0 transparent; } }
-  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
-  .spacer { flex: 1 1 40px; }
-  .maj { font-size: .7rem; color: var(--faint); letter-spacing: .04em; }
-
-  h1 { font-size: 1.62rem; font-weight: 900; margin-top: 4px; }
-  .sous { color: var(--muted); font-size: .94rem; max-width: 66ch; margin: 0; text-wrap: pretty; }
-
-  /* ── TUILES HÉROS ─────────────────────────────────────────────────────── */
-  /* Des cartes SÉPARÉES, pas une feuille quadrillée : chaque chiffre est une
-     mesure autonome, et le filet de gauche dit laquelle sans qu'on lise. */
-  .tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 14px; }
-  .tuile { background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
-           box-shadow: var(--ombre); padding: 16px 16px 14px; position: relative; overflow: hidden; }
-  .tuile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--cyan); }
-  .tuile.k-red::before { background: var(--red); }
-  .tuile.k-orange::before { background: var(--orange); }
-  .tuile.k-purple::before { background: var(--purple); }
-  .tuile.k-green::before { background: var(--green); }
-  .tuile .lib { font-size: .72rem; color: var(--muted); font-weight: 600; }
-  .tuile .val { font-family: "Chivo", sans-serif; font-size: 2.05rem; font-weight: 800; line-height: 1;
-                letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin-top: 10px; color: var(--ink); }
-  .tuile .note { font-size: .68rem; color: var(--faint); margin-top: 8px; }
-
-  /* ── CARTES ET EN-TÊTES DE SECTION ────────────────────────────────────── */
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
-          box-shadow: var(--ombre); padding: 20px 20px 18px; }
-  /* L'ŒIL-DE-BŒUF PORTE LA PROVENANCE, pas un numéro d'ordre. Ces sections ne
-     forment pas une séquence : ce sont des angles de vue. Ce qu'il est utile
-     d'annoncer sur une console de sécurité, c'est D'OÙ VIENT le chiffre — du
-     journal, d'une corrélation, du registre. */
-  .sec-h { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
-  .sec-h .k { font-size: .62rem; letter-spacing: .18em; text-transform: uppercase;
-              color: var(--faint); font-weight: 700; white-space: nowrap; }
-  .sec-h .rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
-  .sec-h .ic { font-size: 1rem; opacity: .9; }
-  h2 { font-size: 1.06rem; font-weight: 800; margin: 0 0 .3rem; }
-  h3 { font-size: .86rem; font-weight: 800; margin: 0 0 .45rem; }
-  .h2sous { color: var(--muted); font-size: .82rem; margin: 0 0 1rem; max-width: 74ch; text-wrap: pretty; }
-
-  .legende { display: flex; flex-wrap: wrap; gap: .5rem .9rem; margin-top: .8rem; font-size: .7rem; color: var(--muted); }
-  .legende i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
-
-  /* Tout contenu large défile DANS SON CADRE : le corps de la page ne part
-     jamais en travers. */
-  .enveloppe { overflow-x: auto; }
-  .muted { color: var(--muted); }
-
-  table { width: 100%; border-collapse: collapse; font-size: .8rem; font-variant-numeric: tabular-nums; }
-  th, td { padding: .5rem .6rem; text-align: left; border-bottom: 1px solid var(--line-soft); }
-  th { font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 700; }
-  tbody tr:last-child td { border-bottom: none; }
-  code { font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--cyan-ink); }
-
-  /* ── CAMPAGNES (#1243) ────────────────────────────────────────────────── */
-  /* Une campagne = UNE ligne. La séquence déborde à l'horizontale sans jamais
-     empiler de détails. */
-  .camp1 { display: flex; align-items: center; gap: .55rem; padding: .5rem .1rem;
-           border-bottom: 1px solid var(--line-soft); overflow: hidden; }
-  .camp1:last-child { border-bottom: 0; }
-  .campseq1 { flex: 1; min-width: 0; display: flex; align-items: center; gap: .18rem;
-              overflow: hidden; white-space: nowrap;
-              -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
-              mask-image: linear-gradient(90deg, #000 88%, transparent); }
-  .campsig { font-family: "IBM Plex Mono"; color: var(--purple); font-size: .8rem; font-weight: 600; }
-  .camptool { font-size: .7rem; color: var(--orange); font-weight: 600; }
-  .campnb { font-size: .74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .camphv { font-size: .72rem; color: var(--orange); font-variant-numeric: tabular-nums; font-weight: 600; }
-  .camphv.z { color: var(--muted); opacity: .45; font-weight: 400; }
-  .seqchip { font-family: "IBM Plex Mono"; font-size: .68rem; background: var(--surface-2);
-             border: 1px solid var(--line-soft); color: var(--ink-soft);
-             padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
-  .seqar { color: var(--faint); font-size: .66rem; }
-  .camp { padding: .55rem 0; border-bottom: 1px solid var(--line-soft); }
-  .camp:last-child { border-bottom: 0; }
-  .camptete { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-  .campbar { flex: 1; min-width: 60px; height: 6px; border-radius: 4px; background: var(--line); overflow: hidden; }
-  .campbar i { display: block; height: 100%; background: var(--cyan); }
-  .campseq { display: flex; align-items: center; gap: .18rem; flex-wrap: wrap; margin-top: .35rem; }
-
-  /* ── EFFICACITÉ : barres empilées ─────────────────────────────────────── */
-  .barre { display: grid; grid-template-columns: 11rem 1fr auto; gap: .6rem; align-items: center;
-           font-size: .78rem; margin-bottom: .5rem; }
-  .barre .nom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-soft); }
-  .piste { height: .85rem; border-radius: 4px; overflow: hidden; display: flex;
-           background: color-mix(in srgb, var(--ink) 7%, transparent); }
-  .piste span { height: 100%; }
-  .chiffre { font-family: "IBM Plex Mono"; color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; }
-
-  /* ── ATTAQUANTS : langage de lecture partagé avec Renseignement (#1240) ──
-     Les fonds sont dérivés des JETONS par color-mix, jamais écrits en rgba
-     fixe : cette page a trois états de thème, et un rgba(0,212,255,…) posé en
-     dur redeviendrait un néon sur le fond clair. */
-  .acteurs { display: flex; flex-direction: column; }
-  .acteur { display: grid; grid-template-columns: auto 1fr auto auto auto;
-            align-items: center; gap: .65rem; padding: .5rem .1rem;
-            border-bottom: 1px solid var(--line-soft); }
-  .acteur:last-child { border-bottom: 0; }
-  .acteur.interne { opacity: .55; }
-  .acteur .nat { font-size: 1.05rem; line-height: 1; }
-  .acteur .ident { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
-  .acteur .ident code { font-family: "IBM Plex Mono"; font-size: .8rem; font-weight: 500;
-            color: var(--ink); overflow-wrap: anywhere; }
-  .acteur .ident small { font-size: .66rem; color: var(--muted); }
-  /* Le bloc plein : on lit le NOMBRE, l'unité ne fait que le qualifier. */
-  .multi { display: inline-flex; flex-direction: column; align-items: center;
-           justify-content: center; min-width: 54px; padding: .2rem .45rem;
-           border-radius: 8px; line-height: 1.05; color: var(--cyan);
-           background: color-mix(in srgb, var(--cyan) 10%, transparent);
-           border: 1px solid color-mix(in srgb, var(--cyan) 32%, transparent); }
-  .multi b { font-family: "Chivo"; font-size: .92rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .multi i { font-style: normal; font-size: .5rem; letter-spacing: .09em;
-             text-transform: uppercase; opacity: .72; }
-  .multi.n2 { background: color-mix(in srgb, var(--cyan) 16%, transparent); }
-  .multi.n3 { color: var(--orange);
-              background: color-mix(in srgb, var(--orange) 14%, transparent);
-              border-color: color-mix(in srgb, var(--orange) 45%, transparent); }
-  .multi.n4 { color: var(--red);
-              background: color-mix(in srgb, var(--red) 16%, transparent);
-              border-color: color-mix(in srgb, var(--red) 55%, transparent); }
-  /* Le chaînon vers la carte des empreintes, juste en dessous. */
-  .liencamp { font-family: "IBM Plex Mono"; font-size: .7rem; font-weight: 500;
-              color: var(--purple); text-decoration: none; white-space: nowrap;
-              border-bottom: 1px dotted color-mix(in srgb, var(--purple) 50%, transparent); }
-  .liencamp:hover { border-bottom-style: solid; }
-  .liencamp.z { color: var(--muted); opacity: .4; border-bottom: 0; }
-  /* Le tampon est APPOSÉ, pas dessiné : c'est une décision déjà prise. */
-  .tampon { display: inline-block; transform: rotate(-7deg); padding: .12rem .42rem;
-            border: 2px solid currentColor; border-radius: 4px;
-            font-weight: 800; font-size: .55rem; letter-spacing: .09em; }
-  .tampon.banni { color: var(--red);
-                  background: color-mix(in srgb, var(--red) 10%, transparent); }
-  .tampon.libre { color: var(--muted); opacity: .5; }
-
-  /* ── SURFACES ET DÉTECTIONS ───────────────────────────────────────────── */
-  .surfaces { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-  .surf { background: var(--surface-2); border: 1px solid var(--line-soft);
-          border-radius: 11px; padding: .85rem .95rem; }
-  .surf > div:first-child { font-size: .6rem; letter-spacing: .12em; text-transform: uppercase;
-          color: var(--faint); font-weight: 700; margin-bottom: .4rem; }
-  .surf-v { font-family: "Chivo", sans-serif; font-size: 1.32rem; font-weight: 800;
-            letter-spacing: -.02em; color: var(--cyan-ink); font-variant-numeric: tabular-nums; }
-  .det { background: var(--surface-2); border: 1px solid var(--line-soft);
-         border-left: 3px solid var(--cyan); border-radius: 11px; padding: .7rem .85rem; }
-  .duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(264px, 1fr)); gap: 1.4rem; margin-top: 1.3rem; }
-  .duo .apres { font-size: .7rem; color: var(--faint); margin: .6rem 0 0; text-wrap: pretty; }
-  .detections { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
-
-
-  /* Carte du monde (Natural Earth, domaine public, points de 3°) : compacte, à côté du top des pays. */
-  .carte-monde { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 14px; align-items: center; }
-  .carte-monde svg { width: 100%; height: auto; max-height: 170px; display: block; }
-  .carte-monde .terre { fill: color-mix(in srgb, var(--muted) 40%, transparent); }
-  .carte-monde .bulle { fill: color-mix(in srgb, var(--red) 65%, transparent); stroke: var(--red); stroke-width: .3; }
-  .pays-top { display: flex; flex-direction: column; gap: 3px; font-size: .78rem; min-width: 0; }
-  .pays-top div { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-  .pays-top b { margin-left: auto; font-variant-numeric: tabular-nums; }
-  details.replie { padding: 0; }
-  details.replie > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 18px; }
-  details.replie > summary::-webkit-details-marker { display: none; }
-  details.replie > summary h2 { margin: 0; font-size: .95rem; }
-  details.replie > summary .resume { margin-left: auto; color: var(--muted); font-size: .76rem; }
-  details.replie > summary::after { content: "▾"; color: var(--faint); }
-  details.replie[open] > summary::after { content: "▴"; }
-  details.replie > .contenu { padding: 0 18px 16px; }
-  @media (max-width: 640px) { .carte-monde { grid-template-columns: 1fr; } }
-
-  @media (max-width: 640px) {
-    .grille { padding: 18px 14px 56px; gap: 14px; }
-    .card { padding: 16px 15px 14px; border-radius: 14px; }
-    h1 { font-size: 1.34rem; }
-    .barre { grid-template-columns: 7.5rem 1fr auto; }
-    .acteur { grid-template-columns: auto 1fr auto; row-gap: .3rem; }
-    .acteur .liencamp, .acteur .tampon { grid-column: 2 / -1; justify-self: start; }
-  }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  [hidden]{display:none!important}
+  a{color:var(--cyan)} :focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:4px}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.ko{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .droite button,.droite a.nav{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:5px 11px;cursor:pointer;text-decoration:none;min-height:30px;display:inline-flex;align-items:center}
+  .droite button:hover,.droite a.nav:hover{border-color:var(--cyan)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center} .tuile svg.ic{flex:none;width:28px;height:28px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .grille>*{min-width:0}
+  .g1{align-items:start}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto;text-align:right}
+  .pan h4{margin:10px 0 4px;font-size:.8rem;font-weight:700}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.68rem;margin-top:6px}
+  .scroll{overflow-x:auto}
+  svg.courbe{width:100%;height:auto;display:block} svg.courbe text{fill:var(--faible);font-size:10px} svg.courbe .gr{stroke:rgba(159,179,214,.14);stroke-width:1}
+  .legende{display:flex;gap:4px 12px;flex-wrap:wrap;color:var(--doux);font-size:.7rem;margin-top:6px} .legende i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
+  .carte{display:grid;gap:8px;grid-template-columns:1fr}
+  svg.monde{width:100%;height:auto;max-height:200px;display:block;border-radius:8px;background:rgba(6,13,27,.5)}
+  .pays{display:grid;gap:3px;align-content:start;font-size:.78rem}
+  .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+  th.d,td.d{text-align:right}
+  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;font-variant-numeric:tabular-nums}
+  tbody tr:hover td{background:rgba(41,182,246,.07)}
+  td.mono,code{font-family:ui-monospace,"IBM Plex Mono",Menlo,Consolas,monospace}
+  td.n{color:var(--cyan)}
+  .pied{color:var(--faible);font-size:.68rem}
+  /* efficacité */
+  details.replie{border:1px solid var(--trait);border-radius:12px;background:rgba(10,22,46,.6)}
+  details.replie>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;flex-wrap:wrap}
+  details.replie>summary::-webkit-details-marker{display:none}
+  details.replie>summary h3{margin:0;font-size:.88rem}
+  details.replie>summary .resume{margin-left:auto;color:var(--doux);font-size:.74rem}
+  details.replie>summary::after{content:"▾";color:var(--faible)} details.replie[open]>summary::after{content:"▴"}
+  details.replie>.contenu{padding:0 12px 12px}
+  .barre{display:grid;grid-template-columns:minmax(0,10rem) 1fr auto;gap:8px;align-items:center;font-size:.76rem;margin-bottom:6px}
+  .barre .nom{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--texte)}
+  .piste{height:.8rem;border-radius:4px;overflow:hidden;display:flex;background:rgba(159,179,214,.16)} .piste span{height:100%}
+  .chiffre{color:var(--doux);font-size:.7rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+  /* attaquants */
+  .acteurs{display:grid}
+  .acteur{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;align-items:center;gap:8px;padding:6px 2px;border-top:1px solid rgba(86,150,255,.12)}
+  .acteur:first-child{border-top:0} .acteur.interne{opacity:.55}
+  .acteur .ident{display:flex;flex-direction:column;min-width:0} .acteur .ident code{font-size:.8rem;overflow-wrap:anywhere} .acteur .ident small{font-size:.66rem;color:var(--faible)}
+  .multi{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:54px;padding:3px 7px;border-radius:9px;line-height:1.05;color:var(--cyan);background:rgba(41,182,246,.10);border:1px solid rgba(41,182,246,.35)}
+  .multi b{font-size:.92rem;font-weight:800;font-variant-numeric:tabular-nums} .multi i{font-style:normal;font-size:.5rem;letter-spacing:.09em;text-transform:uppercase;opacity:.8}
+  .multi.n2{background:rgba(41,182,246,.18)} .multi.n3{color:var(--orange);background:rgba(255,159,28,.12);border-color:rgba(255,159,28,.5)} .multi.n4{color:var(--rouge);background:rgba(255,77,94,.14);border-color:rgba(255,77,94,.6)}
+  .liencamp{font-family:ui-monospace,"IBM Plex Mono",Menlo,monospace;font-size:.7rem;color:var(--violet);text-decoration:none;white-space:nowrap;border-bottom:1px dotted rgba(167,139,250,.5)}
+  .liencamp.z{color:var(--faible);border-bottom:0}
+  .tampon{display:inline-block;padding:1px 7px;border:1px solid currentColor;border-radius:999px;font-weight:700;font-size:.62rem;letter-spacing:.06em}
+  .tampon.banni{color:var(--rouge);background:rgba(255,77,94,.12)} .tampon.libre{color:var(--faible)}
+  /* campagnes */
+  .camp1{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid rgba(86,150,255,.12);min-width:0}
+  .camp1:first-child{border-top:0}
+  .campsig{color:var(--violet);font-weight:600;font-size:.8rem} .camptool{color:var(--orange);font-size:.7rem;font-weight:600} .campnb{color:var(--doux);font-size:.72rem;white-space:nowrap} .camphv{color:var(--orange);font-size:.72rem;font-weight:600} .camphv.z{color:var(--faible);font-weight:400}
+  .campseq1{flex:1;min-width:0;display:flex;align-items:center;gap:3px;overflow:hidden;white-space:nowrap}
+  .seqchip{font-size:.66rem;background:rgba(18,40,78,.7);border:1px solid var(--trait);color:var(--doux);padding:1px 6px;border-radius:6px} .seqar{color:var(--faible);font-size:.66rem}
+  /* surfaces et détections */
+  .surfaces{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+  .surf{border:1px solid var(--trait);border-radius:10px;padding:8px 10px;background:rgba(18,40,78,.35);min-width:0}
+  .surf .k{font-size:.64rem;color:var(--faible);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px} .surf .sv{font-size:1.2rem;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums} .surf .sv small{font-size:.7rem;color:var(--doux);font-weight:400}
+  .surf .sub{font-size:.66rem;color:var(--faible);margin-top:3px}
+  .detections{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .det{border:1px solid var(--trait);border-left:3px solid var(--cyan);border-radius:10px;padding:8px 10px;background:rgba(18,40,78,.35);min-width:0}
+  .det.off{border-left-color:var(--faible)} .det b{font-size:.84rem} .det span{color:var(--doux);font-size:.64rem;margin-left:6px} .det p{margin:4px 0 0;color:var(--faible);font-size:.7rem;overflow-wrap:anywhere}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g1{grid-template-columns:1fr 1.3fr} .g2{grid-template-columns:1fr 1fr} .carte{grid-template-columns:1fr 130px}}
+  @container a (max-width:599px){.barre{grid-template-columns:7rem 1fr auto}.acteur{grid-template-columns:auto minmax(0,1fr) auto}.acteur .liencamp,.acteur .tampon{grid-column:2/-1;justify-self:start}}
 </style>
-
-<div class="grille">
-
-  <header class="mast">
-    <div class="brand">
-      <div class="sceau">🛡️</div>
-      <div class="wm"><b>SBX<i>WAF</i></b><span>Poste de garde</span></div>
+</head>
+<body>
+<div class="cadre" id="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(59,130,246,.16)"/><path d="M8.5 12l2.4 2.4 4.6-4.8"/></svg>
+      <div><b>SBXWAF</b><small>Poste de garde · moteur Go, inspection HTTP</small></div>
     </div>
-    <div class="moteur">
-      <span class="path"><span class="o">moteur Go ·</span> <span class="r">inspection HTTP</span></span>
-    </div>
-    <span class="live" id="live"><span class="dot"></span><span id="liveTxt">lecture…</span></span>
-    <span class="spacer"></span>
-    <span class="maj mono" id="maj">relevé…</span>
+    <span class="actif neutre" id="live" aria-live="polite"><span id="liveTxt">lecture…</span></span>
+    <div class="droite"><span id="maj">—</span><a class="nav" id="navVue" href="vue.html" title="Retour à la vue d’ensemble SBXWAF">← Vue d’ensemble</a><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
   </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a id="lienLogin" href="/login.html" target="_top">Se connecter</a></div>
+  <div><h2>Évolution et efficacité</h2><div class="sous">Comment cela évolue, et si les protections bloquent vraiment (la vue d’ensemble dit ce qui se passe maintenant).</div></div>
 
-  <div>
-    <h1>Évolution et efficacité</h1>
-    <p class="sous">Le panneau répond à « que se passe-t-il maintenant ». Cette page répond à
-      <b>comment cela évolue, et si les protections bloquent vraiment</b>.</p>
+  <div class="tuiles" id="tuiles"></div>
+
+  <div class="grille g1">
+    <section class="pan"><h3>D’où viennent les attaques <i>journal · origines</i></h3>
+      <div class="carte"><svg class="monde" id="carteMonde" viewBox="0 0 120 60" role="img" aria-label="Pays d’origine des adresses les plus actives"></svg><div class="pays" id="paysTop"></div></div>
+      <div class="note" id="geoNote"></div></section>
+    <section class="pan"><h3>Évolution journalière par catégorie <i>journal · 30 jours</i></h3>
+      <div class="scroll" id="evolution"><div class="vide">Chargement…</div></div><div class="legende" id="evolutionLegende"></div>
+      <div class="note">Chaque barre est une journée ; les couleurs sont les catégories. Une journée qui gonfle d’un seul bloc est une campagne, pas une hausse de fond.</div></section>
   </div>
 
-  <div class="tuiles" id="tuiles"><div class="tuile"><span class="muted">chargement…</span></div></div>
-
-  <section class="card">
-    <div class="sec-h"><span class="k">Journal · origines</span><div class="rule"></div><span class="ic">🌍</span></div>
-    <h2>D'où viennent les attaques</h2>
-    <div class="carte-monde">
-      <svg id="carteMonde" viewBox="0 0 120 60" role="img" aria-label="Pays d'origine des adresses les plus actives"></svg>
-      <div class="pays-top" id="paysTop"><span class="muted">chargement…</span></div>
-    </div>
-  </section>
-
-  <section class="card">
-    <div class="sec-h"><span class="k">Journal · 30 jours</span><div class="rule"></div><span class="ic">📈</span></div>
-    <h2>Évolution journalière par catégorie</h2>
-    <p class="h2sous">Chaque barre est une journée ; les couleurs sont les catégories. Une journée qui gonfle d'un seul bloc est une campagne, pas une hausse de fond.</p>
-    <div class="enveloppe" id="evolution"><span class="muted">chargement…</span></div>
-    <div class="legende" id="evolutionLegende"></div>
-  </section>
-
-  <details class="card replie" id="efficaciteDetails">
-    <summary><span class="ic">🎚️</span><h2>Efficacité par catégorie</h2><span class="resume" id="efficaciteResume">…</span></summary>
+  <details class="replie" id="efficaciteDetails">
+    <summary><h3>Efficacité par catégorie</h3><span class="resume" id="efficaciteResume">…</span></summary>
     <div class="contenu">
-    <p class="h2sous">Écarté contre simplement observé. Refuser sans bannir compte comme écarter : on ne bannit pas Googlebot, on lui ferme la porte. Une catégorie qui détecte beaucoup et n'agit jamais n'est pas une protection, c'est un compteur.</p>
-    <div id="efficacite"><span class="muted">chargement…</span></div>
-    <div class="legende">
-      <span><i style="background:var(--red)"></i>banni</span>
-      <span><i style="background:var(--purple)"></i>refusé sans bannir</span>
-      <span><i style="background:var(--orange)"></i>averti</span>
-      <span><i style="background:var(--muted)"></i>observé seulement</span>
-    </div>
+      <div class="note" style="margin:0 0 8px">Écarté contre simplement observé. Refuser sans bannir compte comme écarter : on ne bannit pas Googlebot, on lui ferme la porte. Une catégorie qui détecte beaucoup et n’agit jamais n’est pas une protection, c’est un compteur.</div>
+      <div id="efficacite"><div class="vide">Chargement…</div></div>
+      <div class="legende"><span><i style="background:var(--rouge)"></i>banni</span><span><i style="background:var(--violet)"></i>refusé sans bannir</span><span><i style="background:var(--orange)"></i>averti</span><span><i style="background:var(--faible)"></i>observé seulement</span></div>
     </div>
   </details>
 
-  <section class="card">
-    <div class="sec-h"><span class="k">Journal · sources</span><div class="rule"></div><span class="ic">🎯</span></div>
-    <h2>Attaquants persistants</h2>
-    <p class="h2sous">Les adresses les plus vues, avec leur origine. « local » agrège tout le trafic interne : ce n'est pas un attaquant.</p>
-    <div class="enveloppe" id="attaquants"><span class="muted">chargement…</span></div>
-  </section>
+  <div class="grille g2">
+    <section class="pan"><h3>Attaquants persistants <i>journal · sources</i></h3>
+      <div class="note" style="margin:0 0 6px">Les adresses les plus vues, avec leur origine. « local » agrège tout le trafic interne : ce n’est pas un attaquant.</div>
+      <div id="attaquants"><div class="vide">Chargement…</div></div></section>
+    <section class="pan" id="campagnesPan"><h3>Empreintes de campagnes <i>corrélation</i></h3>
+      <div class="note" style="margin:0 0 6px">Des attaquants distincts qui rejouent le même enchaînement de sondes forment une campagne. La bande montre leur workflow ; 🔑 = sondes de secret ou d’exécution.</div>
+      <div id="campagnes"><div class="vide">Chargement…</div></div></section>
+  </div>
 
-  <section class="card">
-    <div class="sec-h"><span class="k">Corrélation</span><div class="rule"></div><span class="ic">🧬</span></div>
-    <h2>Empreintes de campagnes</h2>
-    <p class="h2sous">Des attaquants distincts qui rejouent le MÊME enchaînement de sondes forment une campagne. La bande montre leur workflow — l'empreinte séquentielle partagée. 🔑 = sondes de secret ou d'exécution.</p>
-    <div id="campagnes"><span class="muted">chargement…</span></div>
-  </section>
+  <section class="pan"><h3>Surfaces surveillées <i>sbxwaf + authwatch</i></h3>
+    <div class="note" style="margin:0 0 6px">sbxwaf ne voit que le HTTP ; authwatch couvre SSH, SMTP, IMAP et les leurres.</div>
+    <div class="surfaces" id="surfaces"><div class="vide">Chargement…</div></div>
+    <div class="grille g2" style="margin-top:10px">
+      <div><h4>Comptes visés <span class="pied">— SSH, SMTP, IMAP</span></h4><div class="scroll" id="comptesVises"><div class="vide">Chargement…</div></div>
+        <div class="note">Un compte tenté depuis des centaines de sources n’est pas un utilisateur qui se trompe. S’il n’existe pas sur la box, c’est du ciblage.</div></div>
+      <div><h4>Leurres touchés <span class="pied">— services inexistants</span></h4><div class="scroll" id="leurresTouches"><div class="vide">Chargement…</div></div>
+        <div class="note">Ces ports n’offrent rien. Toute connexion y est un balayage, et vaut un bannissement dès le premier contact.</div></div>
+    </div></section>
 
-  <section class="card">
-    <div class="sec-h"><span class="k">sbxwaf + authwatch</span><div class="rule"></div><span class="ic">🛰️</span></div>
-    <h2>Surfaces surveillées</h2>
-    <p class="h2sous">sbxwaf ne voit que le HTTP ; authwatch couvre SSH, SMTP, IMAP et les leurres.</p>
-    <div class="surfaces" id="surfaces"><div class="muted">chargement…</div></div>
-    <div class="duo">
-      <div>
-        <h3>🎯 Comptes visés <span class="muted" style="font-size:.72rem;font-weight:400">— SSH, SMTP, IMAP</span></h3>
-        <div id="comptesVises"><span class="muted">chargement…</span></div>
-        <p class="apres">Un compte tenté depuis des centaines de sources n'est pas un utilisateur qui se trompe. S'il n'existe pas sur la box, c'est du ciblage.</p>
-      </div>
-      <div>
-        <h3>🕳️ Leurres touchés <span class="muted" style="font-size:.72rem;font-weight:400">— services inexistants</span></h3>
-        <div id="leurresTouches"><span class="muted">chargement…</span></div>
-        <p class="apres">Ces ports n'offrent rien. Toute connexion y est un balayage, et vaut un bannissement dès le premier contact.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="card">
-    <div class="sec-h"><span class="k">Registre des vhosts</span><div class="rule"></div><span class="ic">🌐</span></div>
-    <h2>Noms demandés que la box ne sert pas</h2>
-    <p class="h2sous">Un nom qu'on ne route pas, frappé en boucle, n'est pas une erreur : c'est un scan. Les plus vus, en tête.</p>
-    <div id="nomsNonRoutes"><span class="muted">chargement…</span></div>
-    <p class="muted" id="nomsResume" style="font-size:.7rem;margin:.6rem 0 0"></p>
-  </section>
-
-  <section class="card">
-    <div class="sec-h"><span class="k">Moteur · état mesuré</span><div class="rule"></div><span class="ic">🧠</span></div>
-    <h2>Ce qui protège</h2>
-    <p class="h2sous">État mesuré, jamais supposé.</p>
-    <div class="detections" id="detections"><span class="muted">chargement…</span></div>
-  </section>
-</div>
+  <div class="grille g2">
+    <section class="pan"><h3>Noms demandés que la box ne sert pas <i>registre des vhosts</i></h3>
+      <div class="note" style="margin:0 0 6px">Un nom qu’on ne route pas, frappé en boucle, n’est pas une erreur : c’est un scan. Les plus vus, en tête.</div>
+      <div class="scroll" id="nomsNonRoutes"><div class="vide">Chargement…</div></div><div class="note" id="nomsResume"></div></section>
+    <section class="pan"><h3>Ce qui protège <i>état mesuré, jamais supposé</i></h3><div class="detections" id="detections"><div class="vide">Chargement…</div></div></section>
+  </div>
+</div></div>
 
 <script>
-  const API = '/api/v1/waf';
+"use strict";
+var Q=new URLSearchParams(location.search),DEMO=!!Q.get('demo'),EMB=!!Q.get('embed');
+if(EMB){document.body.classList.add('emb');}
+var API='/api/v1/waf';
+var $=function(i){return document.getElementById(i);};
+var NS='http://www.w3.org/2000/svg';
+function h(tag,cls,txt,title){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;if(title)e.title=title;return e;}
+function add(p){for(var i=1;i<arguments.length;i++){if(arguments[i]!=null)p.appendChild(arguments[i]);}return p;}
+function vide(e){e.textContent='';return e;}
+function sv(tag,attrs,parent){var e=document.createElementNS(NS,tag);for(var k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+function num(x){x=Number(x);return isFinite(x)?x:0;}
+function nb(n){return num(n).toLocaleString('fr-FR');}
+function mes(x){return (x===null||x===undefined||x==='')?'—':nb(x);}   // mesure absente = « — » ; 0 est une mesure
+function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+var SESSION_REFUSEE=false;
+// Lecture seule. Un 401 n'arrache plus la page vers /login.html (elle peut être encadrée) : un bandeau propose la connexion.
+function api(chemin){
+  var hd={'Accept':'application/json'},t=jeton();if(t)hd.Authorization='Bearer '+t;
+  return fetch(API+chemin,{headers:hd,credentials:'same-origin',cache:'no-store'}).then(function(r){
+    if(r.status===401){SESSION_REFUSEE=true;return null;}
+    return r.json();
+  }).catch(function(){return null;});
+}
 
-  function esc(v) {
-    return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+// Même table que le panneau d'administration : une catégorie porte le même signe partout. Correspondance par SOUS-CHAÎNE au premier trouvé :
+// l'ordre est porteur de sens (les clés spécifiques précèdent les génériques).
+var CAT_EMOJI={'auth_ssh':'🔑','auth_smtp':'✉️','auth_imap':'📥','leurre':'🕳️','host_anomaly':'🚪','product_absent':'👻','robots':'🤖','sqli':'💉','sql':'💉','injection':'💉','xss':'🔥','rce':'💥','command':'💥','dos':'💥','lfi':'📂','rfi':'🌐','traversal':'📂','path':'📂','recon_crawler':'🕷️','recon':'🕷️','crawler':'🕷️','scanner':'🕷️','scan':'🕷️','bot':'🤖','honeypot':'🍯','credential_harvest':'🔓','credential':'🔓','brute':'🔓','api_abuse':'🎣','api':'🎣','waf_fingerprint':'🖐️','fingerprint':'🖐️','cve_2024':'🧬','cve':'🧬','voip':'📞','xmpp':'💬','webmail':'📧','mail':'📧','router':'📡','autres':'➕','default':'⚠️'};
+function catEmoji(cat){
+  if(!cat)return CAT_EMOJI['default'];
+  var c=String(cat).toLowerCase(),ks=Object.keys(CAT_EMOJI);
+  for(var i=0;i<ks.length;i++)if(c.indexOf(ks[i])>=0)return CAT_EMOJI[ks[i]];
+  return CAT_EMOJI['default'];
+}
+// Teinte STABLE par nom (jamais par rang) : une catégorie garde sa couleur d'un rendu à l'autre, seule façon de suivre une série à l'œil.
+var TEINTES=['#29b6f6','#a78bfa','#ff4d5e','#ff9f1c','#2ecc71','#ff8c42','#4ecdc4','#ffd23f'];
+function teinte(nom){var x=0;for(var i=0;i<nom.length;i++)x=(x*31+nom.charCodeAt(i))>>>0;return TEINTES[x%TEINTES.length];}
+function drapeau(code){if(!code||code==='LAN'||code.length!==2)return '\u{1F310}';return String.fromCodePoint.apply(null,code.toUpperCase().split('').map(function(c){return 127397+c.charCodeAt(0);}));}
+
+// ── Tuiles ───────────────────────────────────────────────────────────────────────────────────────────
+function icone(couleur,d){
+  var s=sv('svg',{'class':'ic',viewBox:'0 0 24 24',fill:'none',stroke:couleur,'stroke-width':'1.7','stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true'});
+  sv('rect',{x:'3',y:'3',width:'18',height:'18',rx:'5',fill:couleur,'fill-opacity':'.14',stroke:'none'},s);sv('path',{d:d},s);return s;
+}
+function tuile(parent,ic,l,v,s,def){
+  var t=h('div','tuile',null,def),hh=h('div','haut'),c=h('div');
+  add(c,h('div','l',l),h('div','v',v));add(hh,ic,c);add(t,hh);if(s)add(t,h('div','s',s));
+  return add(parent,t);
+}
+function tuiles(stats,bans,detec){
+  var t=vide($('tuiles')),dl=detec&&detec.detections,pt=stats&&stats.par_type;
+  tuile(t,icone('#3b82f6','M4 12s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5zM12 10a2 2 0 100 4 2 2 0 000-4'),'Menaces vues',mes(stats&&stats.total_threats),'depuis le début du journal','Toutes les menaces inscrites au journal du WAF depuis son début (rotations comprises).');
+  tuile(t,icone('#ff9f1c','M5 17l4-5 3 3 5-7'),'Aujourd’hui',mes(stats&&stats.threats_today),'bloquées ce jour','Menaces enregistrées depuis minuit (source : journal du WAF).');
+  tuile(t,icone('#ff4d5e','M8 8l8 8M16 8l-8 8'),'Bannis actifs',mes(bans&&bans.total),'dans la chaîne nft du WAF','Adresses actuellement écartées du réseau par une règle nft du WAF (un bannissement expire).');
+  tuile(t,icone('#a78bfa','M12 5v5M12 10L6 16M12 10l6 6'),'Surfaces',pt?String(Object.keys(pt).length):'—','HTTP, SSH, SMTP, IMAP, leurres','Types de trafic ayant produit des événements : HTTP (sbxwaf) et les surfaces d’authwatch.');
+  tuile(t,icone('#2ecc71','M5 12l4 4 10-10'),'Détections',dl?dl.filter(function(d){return d.actif;}).length+' / '+dl.length:'—','comportementales actives','Détections comportementales actives sur le nombre de détections connues du moteur.');
+}
+
+// ── Badge d'état : ce que le moteur fait réellement, pas un libellé figé ──
+function etatMoteur(stats,bans){
+  var el=$('liveTxt'),pastille=$('live');
+  if(!el)return;
+  if(!stats){el.textContent=SESSION_REFUSEE?'session requise':'injoignable';pastille.className=SESSION_REFUSEE?'actif neutre':'actif ko';return;}
+  pastille.className='actif';
+  var n=((bans&&bans.bans)||[]).length;
+  el.textContent=n?'actif · '+nb(n)+' ban'+(n>1?'s':'')+' en cours':'actif · protège';
+}
+
+// ── Carte du monde ───────────────────────────────────────────────────────────────────────────────────
+var TERRE="0120|0120|031,8,5,9,67|028,7,3,16,10,2,1,1,23,2,27|019,2,2,1,2,1,1,6,3,16,29,1,11,3,23|019,2,3,1,1,5,1,2,7,12,25,1,8,13,1,1,5,1,12|06,4,12,4,2,1,1,7,5,9,17,2,12,2,1,28,7|14,1,34,3,8,15,19,2,34|06,27,1,4,5,3,7,2,9,3,1,51,1|05,24,5,2,8,2,16,4,1,45,1,1,1,3,2|08,1,5,15,5,3,1,1,19,1,3,1,1,2,2,39,6,1,6|016,15,3,6,18,1,5,1,2,38,7,2,6|017,16,1,7,16,1,1,49,4,1,7|019,19,21,49,12|019,19,21,11,1,1,1,4,1,28,1,1,12|019,18,20,1,1,3,1,6,4,3,1,28,2,1,12|019,16,22,3,5,3,2,7,1,22,1,2,17|019,16,22,3,4,1,2,1,1,8,1,23,1,1,3,1,13|020,14,24,5,9,28,4,2,14|021,12,24,8,2,2,3,29,2,1,16|023,5,4,1,23,15,1,4,1,24,19|024,4,27,22,3,20,20|025,2,6,1,21,17,1,7,3,7,1,7,22|025,3,2,1,5,1,18,17,2,5,5,4,3,4,1,1,23|027,4,23,19,1,4,6,3,4,5,4,1,19|030,2,22,22,9,2,6,3,24|031,1,3,3,1,1,15,22,8,2,8,1,24|034,6,16,21,24,1,18|034,9,14,1,4,14,16,1,5,2,20|034,9,20,12,18,2,1,3,21|033,12,18,11,20,1,2,2,1,1,3,1,15|033,14,17,9,21,1,10,3,12|033,15,16,9,23,2,8,3,11|034,14,16,9,47|035,12,17,10,2,1,26,2,2,1,12|035,12,17,10,2,1,26,2,2,1,12|037,10,17,8,3,1,24,9,11|037,9,19,7,2,2,22,12,10|036,8,21,6,27,13,9|036,8,21,6,27,13,9|036,7,23,4,29,12,9|036,6,24,1,32,1,6,4,10|035,6,66,3,8,1,1|035,4,79,1,1|036,2,79,1,2|035,3,78,1,3|035,2,83|035,2,83|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120";
+var CENTRE={AD:[42.5,1.5],AE:[24,54],AL:[41,20],AM:[40,45],AR:[-34,-64],AT:[47.5,14.5],AU:[-25,134],AZ:[40.3,47.7],BA:[44,18],BD:[24,90],BE:[50.6,4.6],BG:[42.7,25.5],BR:[-10,-52],BY:[53.7,28],CA:[58,-100],CH:[46.8,8.2],CL:[-35,-71],CN:[35,103],CO:[4,-72],CZ:[49.8,15.5],DE:[51,10],DK:[56,10],DZ:[28,2],EC:[-1.5,-78],EE:[58.6,25.5],EG:[26,30],ES:[40,-4],FI:[64,26],FR:[46.5,2.5],GB:[54,-2],GE:[42,43.5],GR:[39,22],HK:[22.3,114.2],HR:[45.1,15.2],HU:[47,19.5],ID:[-2,118],IE:[53,-8],IL:[31,35],IN:[22,79],IQ:[33,44],IR:[32,53],IS:[65,-18],IT:[42.8,12.5],JP:[36,138],KE:[0,38],KG:[41.5,74.5],KR:[36.5,128],KZ:[48,68],LT:[55.3,23.8],LU:[49.8,6.1],LV:[56.9,24.6],MA:[32,-6],MD:[47,28.5],MX:[23,-102],MY:[4,102],NG:[9,8],NL:[52.2,5.5],NO:[62,10],NZ:[-41,174],PE:[-10,-76],PH:[13,122],PK:[30,70],PL:[52,19.4],PT:[39.5,-8],RO:[46,25],RS:[44,21],RU:[60,90],SA:[24,45],SE:[62,15],SG:[1.35,103.8],SI:[46.1,14.8],SK:[48.7,19.5],TH:[15,101],TN:[34,9],TR:[39,35],TW:[23.7,121],UA:[49,32],US:[39,-98],UZ:[41,64],VE:[7,-66],VN:[16,106],ZA:[-29,24]};
+var TERRE_FAITE=false;
+// Somme des sondes par pays à partir des adresses les plus actives (les seules dont le pays est connu) : un chiffre partiel, annoncé comme tel.
+function carteMonde(ips,pays){
+  var svg=$('carteMonde'),liste=vide($('paysTop'));
+  if(!svg||!liste)return;
+  if(!TERRE_FAITE){
+    var g=sv('g',{},svg);
+    TERRE.split('|').forEach(function(l,j){var cur=l.charAt(0)==='1',x=0;
+      l.slice(1).split(',').forEach(function(n){n=+n;if(cur){for(var i=0;i<n;i++)sv('circle',{cx:x+i+.5,cy:j+.5,r:'.42',fill:'#33507f'},g);}x+=n;cur=!cur;});});
+    sv('g',{id:'bulles'},svg);TERRE_FAITE=true;
   }
-  function nb(n) { return (Number(n) || 0).toLocaleString('fr-FR'); }
+  var b=vide(svg.querySelector('#bulles')),parPays={};
+  Object.keys(ips||{}).forEach(function(ip){var c=String(((pays||{})[ip])||'').toUpperCase();if(c&&c!=='LOCAL'&&c!=='LAN')parPays[c]=(parPays[c]||0)+num(ips[ip]);});
+  var top=Object.keys(parPays).map(function(k){return [k,parPays[k]];}).sort(function(a,c){return c[1]-a[1];});
+  var max=top.length?top[0][1]:1;
+  top.forEach(function(kv){var c=CENTRE[kv[0]];if(!c)return;
+    var k=sv('circle',{cx:((c[1]+180)/3).toFixed(1),cy:((90-c[0])/3).toFixed(1),r:(1.2+2.6*Math.sqrt(kv[1]/max)).toFixed(1),fill:'rgba(255,77,94,.62)',stroke:'#ff4d5e','stroke-width':'.3'},b);
+    sv('title',{},k).textContent=kv[0]+' : '+nb(kv[1]);});
+  if(top.length)top.slice(0,6).forEach(function(kv){add(liste,add(h('div'),h('span',null,drapeau(kv[0])+' '+kv[0]),h('b',null,nb(kv[1]))));});
+  else add(liste,h('span','vide',ips?'pays inconnus':'—'));
+  $('geoNote').textContent=top.length?'Somme des sondes des adresses les plus actives dont le pays est connu (base GeoLite2 locale) : un VPN, un relais ou un nuage fausse l’origine réelle.':'';
+}
 
-  // ── SURFACES SURVEILLEES (#1221, portee de l'admin dans le tableau) ────────
-  // Le journal de menaces melange DEUX producteurs : sbxwaf (HTTP seul) et
-  // authwatch (SSH, SMTP, IMAP, leurres). Un total unique ne dirait plus de
-  // quelle surface vient la menace — d'ou la ventilation par type.
-  var SURFACE_INFO = {
-    http:   ['🌐', 'HTTP',    'sbxwaf, devant les services'],
-    ssh:    ['🔑', 'SSH',     "échecs d'authentification"],
-    smtp:   ['✉️', 'SMTP',    'SASL refusé sur postfix'],
-    imap:   ['📥', 'IMAP',    'connexions dovecot'],
-    leurre: ['🕳️', 'Leurres', 'services inexistants'],
-    autre:  ['❓', 'Autre',   'authwatch, type non classé']
-  };
-  function surfaces(parType, parOrigine) {
-    var el = document.getElementById('surfaces'); if (!el) return;
-    var t = parType || {};
-    var cles = Object.keys(SURFACE_INFO).filter(function (k) { return (t[k] || 0) > 0; });
-    if (!cles.length) {
-      el.innerHTML = '<div class="muted" style="padding:1rem;grid-column:1/-1">'
-        + "Aucun événement classé pour l'instant." + '</div>';
-      return;
-    }
-    var total = cles.reduce(function (a, k) { return a + t[k]; }, 0) || 1;
-    el.innerHTML = cles.map(function (k) {
-      var d = SURFACE_INFO[k], n = t[k], pct = Math.round(n / total * 100);
-      return '<div class="surf">'
-        + '<div style="font-size:.6rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem">'
-        + d[0] + ' ' + esc(d[1]) + '</div>'
-        + '<div class="surf-v">'
-        + nb(n) + ' <span style="font-size:.7rem;color:var(--muted);font-weight:400">' + pct + ' %</span></div>'
-        + '<div class="muted" style="font-size:.66rem;margin-top:.3rem">' + esc(d[2]) + '</div></div>';
-    }).join('') + (function () {
-      var o = parOrigine || {}, w = o.waf || 0, a = o.authwatch || 0;
-      if (!w && !a) return '';
-      return '<div class="surf">'
-        + '<div style="font-size:.6rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem">⚙️ Moteurs</div>'
-        + '<div style="font-size:.74rem;line-height:1.7">sbxwaf <b style="color:var(--cyan)">' + nb(w)
-        + '</b><br>authwatch <b style="color:var(--cyan)">' + nb(a) + '</b></div></div>';
-    })();
-  }
-
-  // Petit tableau une-colonne trie, pour comptes vises et leurres touches.
-  function table1(cible, obj, entete, videTexte) {
-    var el = document.getElementById(cible); if (!el) return;
-    var items = Object.entries(obj || {}).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 8);
-    if (!items.length) { el.innerHTML = '<span class="muted">' + esc(videTexte) + '</span>'; return; }
-    el.innerHTML = '<div class="tableau"><table style="width:100%;border-collapse:collapse;font-size:.76rem">'
-      + '<thead><tr><th style="text-align:left;color:var(--muted);font-weight:600;padding:.3rem .5rem">' + esc(entete[0])
-      + '</th><th style="text-align:right;color:var(--muted);font-weight:600;padding:.3rem .5rem">' + entete[1] + '</th></tr></thead><tbody>'
-      + items.map(function (kv) {
-          return '<tr><td style="padding:.28rem .5rem;border-top:1px solid var(--border);font-family:monospace">'
-            + esc(kv[0]) + '</td><td style="padding:.28rem .5rem;border-top:1px solid var(--border);text-align:right;color:var(--cyan);font-variant-numeric:tabular-nums">'
-            + nb(kv[1]) + '</td></tr>';
-        }).join('') + '</tbody></table></div>';
-  }
-
-  async function api(chemin) {
-    try {
-      const r = await fetch(API + chemin, { headers: { 'Accept': 'application/json' } });
-      if (r.status === 401) { location = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
-      return await r.json();
-    } catch (e) { return null; }
-  }
-
-  // MÊME table que le panneau, et c'est le point : une catégorie doit porter
-  // le même signe partout, sinon l'œil recommence son apprentissage à chaque
-  // page. La correspondance se fait par SOUS-CHAÎNE au premier trouvé —
-  // l'ordre est donc porteur de sens, les clés spécifiques précèdent les
-  // génériques, sans quoi « cve_voip » tomberait sur « voip ».
-  const CAT_EMOJI = {
-    'auth_ssh': '🔑', 'auth_smtp': '✉️', 'auth_imap': '📥',
-    'leurre': '🕳️', 'host_anomaly': '🚪', 'product_absent': '👻', 'robots': '🤖',
-    'sqli': '💉', 'sql': '💉', 'injection': '💉',
-    'xss': '🔥',
-    'rce': '💥', 'command': '💥', 'dos': '💥',
-    'lfi': '📂', 'rfi': '🌐', 'traversal': '📂', 'path': '📂',
-    'recon_crawler': '🕷️', 'recon': '🕷️', 'crawler': '🕷️', 'scanner': '🕷️', 'scan': '🕷️', 'bot': '🤖',
-    'honeypot': '🍯',
-    'credential_harvest': '🔓', 'credential': '🔓', 'brute': '🔓',
-    'api_abuse': '🎣', 'api': '🎣',
-    'waf_fingerprint': '🖐️', 'fingerprint': '🖐️',
-    'cve_2024': '🧬', 'cve': '🧬',
-    'voip': '📞', 'xmpp': '💬',
-    'webmail': '📧', 'mail': '📧',
-    'router': '📡',
-    'autres': '➕',
-    'default': '⚠️'
-  };
-  function catEmoji(cat) {
-    if (!cat) return CAT_EMOJI.default;
-    const c = String(cat).toLowerCase();
-    for (const [k, e] of Object.entries(CAT_EMOJI)) if (c.includes(k)) return e;
-    return CAT_EMOJI.default;
-  }
-
-  // Palette des catégories. Stable par NOM et non par rang : sinon une
-  // catégorie changerait de couleur d'un jour à l'autre, et l'histogramme
-  // deviendrait illisible d'une visite à la suivante.
-  // LES TEINTES SUIVENT LE THEME (#1309). Ces neons sont dessines pour un fond
-  // noir : sur du blanc ils eblouissent sans rien distinguer. On en garde deux
-  // jeux et l'on choisit au trace — un graphique doit se lire dans les deux
-  // thèmes, pas seulement dans celui d'origine.
-  const TEINTES_SOMBRE = ['#28d6ff', '#a98bff', '#ff5d6c', '#f0b429', '#35d07f', '#ff8c42',
-                          '#4ecdc4', '#7cb342'];
-  // Un seul jeu : la page est sombre quel que soit le theme de l'hote, donc
-  // des teintes claires ne s'y poseraient jamais.
-  const TEINTES_CLAIR = TEINTES_SOMBRE;
-  const estClair = () => false;
-  // Une FONCTION plutot qu'un proxy : le seul appel est `teinte(n)`, et une
-  // indirection maligne dans un tableau de bord est une dette, pas une
-  // elegance — la prochaine personne doit comprendre en une ligne.
-  // `teinte(nom)` existait deja et donnait une couleur STABLE par nom : la meme
-  // categorie garde sa couleur d'un rendu a l'autre, ce qui est la seule facon
-  // de suivre une serie a l'oeil. On ne touche pas a ce choix — on lui donne
-  // seulement le bon jeu selon le theme.
-  function teinteRang(n) {
-    const j = estClair() ? TEINTES_CLAIR : TEINTES_SOMBRE;
-    return j[((n % j.length) + j.length) % j.length];
-  }
-  function teinte(nom) {
-    let h = 0;
-    for (let i = 0; i < nom.length; i++) h = (h * 31 + nom.charCodeAt(i)) >>> 0;
-    return teinteRang(h);
-  }
-
-  function drapeau(code) {
-    if (!code || code === 'LAN' || code.length !== 2) return '🌐';
-    return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
-  }
-
-  // ── Histogramme empilé, en SVG ────────────────────────────────────────────
-  function evolution(jours) {
-    const cible = document.getElementById('evolution');
-    const legende = document.getElementById('evolutionLegende');
-    const dates = Object.keys(jours || {}).sort();
-    if (!dates.length) { cible.innerHTML = '<span class="muted">pas encore d\'historique</span>'; return; }
-
-    // On ne garde que les catégories qui pèsent : au-delà de huit, la pile
-    // devient un dégradé illisible. Le reste est regroupé sous « autres ».
-    const poids = {};
-    dates.forEach(d => {
-      const c = (jours[d] && jours[d].categories) || {};
-      Object.entries(c).forEach(([k, v]) => { poids[k] = (poids[k] || 0) + v; });
-    });
-    const tete = Object.entries(poids).sort((a, b) => b[1] - a[1]).slice(0, 8).map(x => x[0]);
-    const cles = tete.concat(Object.keys(poids).length > tete.length ? ['autres'] : []);
-
-    const L = 860, H = 240, gauche = 52, bas = 34, haut = 12;
-    const largeurBarre = Math.max(6, Math.min(46, (L - gauche - 10) / dates.length - 6));
-    const pas = (L - gauche - 10) / dates.length;
-    const maxi = Math.max(...dates.map(d => (jours[d] && jours[d].total) || 0), 1);
-    const echelle = (H - bas - haut) / maxi;
-
-    let svg = '<svg viewBox="0 0 ' + L + ' ' + H + '" width="100%" height="' + H
-            + '" role="img" aria-label="évolution journalière des menaces par catégorie">';
-    // Repères horizontaux : sans eux on compare des hauteurs à l'œil nu.
-    for (let i = 0; i <= 4; i++) {
-      const y = haut + (H - bas - haut) * i / 4;
-      const val = Math.round(maxi * (1 - i / 4));
-      svg += '<line x1="' + gauche + '" y1="' + y + '" x2="' + L + '" y2="' + y
-           + '" stroke="var(--border)" stroke-width="1"/>'
-           + '<text x="' + (gauche - 6) + '" y="' + (y + 3) + '" text-anchor="end" font-size="9" fill="var(--muted)">'
-           + nb(val) + '</text>';
-    }
-    dates.forEach((d, i) => {
-      const jour = jours[d] || {};
-      const cats = jour.categories || {};
-      const x = gauche + i * pas + (pas - largeurBarre) / 2;
-      let y = H - bas;
-      const groupe = {};
-      Object.entries(cats).forEach(([k, v]) => {
-        const clef = tete.indexOf(k) >= 0 ? k : 'autres';
-        groupe[clef] = (groupe[clef] || 0) + v;
-      });
-      cles.forEach(k => {
-        const v = groupe[k] || 0;
-        if (!v) return;
-        const h = Math.max(1, v * echelle);
-        y -= h;
-        svg += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + largeurBarre.toFixed(1)
-             + '" height="' + h.toFixed(1) + '" fill="' + teinte(k) + '">'
-             + '<title>' + esc(d) + ' · ' + esc(k) + ' : ' + nb(v) + '</title></rect>';
-      });
-      // Une date sur deux quand elles se serrent, sinon elles se chevauchent.
-      if (dates.length <= 12 || i % 2 === 0) {
-        svg += '<text x="' + (x + largeurBarre / 2).toFixed(1) + '" y="' + (H - bas + 14)
-             + '" text-anchor="middle" font-size="9" fill="var(--muted)">' + esc(d.slice(5)) + '</text>';
-      }
-    });
-    svg += '</svg>';
-    cible.innerHTML = svg;
-    legende.innerHTML = cles.map(k =>
-      '<span><i style="background:' + teinte(k) + '"></i>' + catEmoji(k) + ' ' + esc(k) + '</span>').join('');
-  }
-
-
-  // ── Badge d'état : ce que le moteur fait réellement, pas un libellé figé ───────
-  function etatMoteur(stats, bans) {
-    const el = document.getElementById('liveTxt'), pastille = document.getElementById('live');
-    if (!el) return;
-    if (!stats) { el.textContent = 'injoignable'; if (pastille) pastille.classList.add('ko'); return; }
-    if (pastille) pastille.classList.remove('ko');
-    const n = ((bans && bans.bans) || []).length;
-    el.textContent = n ? 'actif · ' + nb(n) + ' ban' + (n > 1 ? 's' : '') + ' en cours' : 'actif · protège';
-  }
-
-  // ── Carte du monde ─────────────────────────────────────────────────────────
-  const TERRE = "0120|0120|031,8,5,9,67|028,7,3,16,10,2,1,1,23,2,27|019,2,2,1,2,1,1,6,3,16,29,1,11,3,23|019,2,3,1,1,5,1,2,7,12,25,1,8,13,1,1,5,1,12|06,4,12,4,2,1,1,7,5,9,17,2,12,2,1,28,7|01,64,9,2,8,1,35|06,27,1,4,5,3,7,2,9,3,1,51,1|05,24,5,2,8,2,16,4,1,45,1,1,1,3,2|08,1,5,15,5,3,1,1,19,1,3,1,1,2,2,39,6,1,6|016,15,3,6,18,1,5,1,2,38,7,2,6|017,16,1,7,16,1,1,49,4,1,7|019,19,21,49,12|019,19,21,11,1,1,1,4,1,28,1,1,12|019,18,20,1,1,3,1,6,4,3,1,28,2,1,12|019,16,22,3,5,3,2,7,1,22,1,2,17|019,16,22,3,4,1,2,1,1,8,1,23,1,1,3,1,13|020,14,24,5,9,28,4,2,14|021,12,24,8,2,2,3,29,2,1,16|023,5,4,1,23,15,1,4,1,24,19|024,4,27,22,3,20,20|025,2,6,1,21,17,1,7,3,7,1,7,22|025,3,2,1,5,1,18,17,2,5,5,4,3,4,1,1,23|027,4,23,19,1,4,6,3,4,5,4,1,19|030,2,22,22,9,2,6,3,24|031,1,3,3,1,1,15,22,8,2,8,1,24|034,6,16,21,24,1,18|034,9,14,1,4,14,16,1,5,2,20|034,9,20,12,18,2,1,3,21|033,12,18,11,20,1,2,2,1,1,3,1,15|033,14,17,9,21,1,10,3,12|033,15,16,9,23,2,8,3,11|034,14,16,9,47|035,12,17,10,2,1,26,2,2,1,12|035,12,17,10,2,1,26,2,2,1,12|037,10,17,8,3,1,24,9,11|037,9,19,7,2,2,22,12,10|036,8,21,6,27,13,9|036,8,21,6,27,13,9|036,7,23,4,29,12,9|036,6,24,1,32,1,6,4,10|035,6,66,3,8,1,1|035,4,79,1,1|036,2,79,1,2|035,3,78,1,3|035,2,83|035,2,83|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120";
-  const CENTRE = {AD:[42.5,1.5],AE:[24,54],AL:[41,20],AM:[40,45],AR:[-34,-64],AT:[47.5,14.5],AU:[-25,134],AZ:[40.3,47.7],BA:[44,18],BD:[24,90],BE:[50.6,4.6],BG:[42.7,25.5],BR:[-10,-52],BY:[53.7,28],CA:[58,-100],CH:[46.8,8.2],CL:[-35,-71],CN:[35,103],CO:[4,-72],CZ:[49.8,15.5],DE:[51,10],DK:[56,10],DZ:[28,2],EC:[-1.5,-78],EE:[58.6,25.5],EG:[26,30],ES:[40,-4],FI:[64,26],FR:[46.5,2.5],GB:[54,-2],GE:[42,43.5],GR:[39,22],HK:[22.3,114.2],HR:[45.1,15.2],HU:[47,19.5],ID:[-2,118],IE:[53,-8],IL:[31,35],IN:[22,79],IQ:[33,44],IR:[32,53],IS:[65,-18],IT:[42.8,12.5],JP:[36,138],KE:[0,38],KG:[41.5,74.5],KR:[36.5,128],KZ:[48,68],LT:[55.3,23.8],LU:[49.8,6.1],LV:[56.9,24.6],MA:[32,-6],MD:[47,28.5],MX:[23,-102],MY:[4,102],NG:[9,8],NL:[52.2,5.5],NO:[62,10],NZ:[-41,174],PE:[-10,-76],PH:[13,122],PK:[30,70],PL:[52,19.4],PT:[39.5,-8],RO:[46,25],RS:[44,21],RU:[60,90],SA:[24,45],SE:[62,15],SG:[1.35,103.8],SI:[46.1,14.8],SK:[48.7,19.5],TH:[15,101],TN:[34,9],TR:[39,35],TW:[23.7,121],UA:[49,32],US:[39,-98],UZ:[41,64],VE:[7,-66],VN:[16,106],ZA:[-29,24]};
-
-  // Somme des sondes par pays à partir des adresses les plus actives (les seules dont le pays est connu).
-  function carteMonde(ips, pays) {
-    const svg = document.getElementById('carteMonde'), liste = document.getElementById('paysTop');
-    if (!svg || !liste) return;
-    const parPays = {};
-    Object.entries(ips || {}).forEach(function (kv) {
-      const c = ((pays || {})[kv[0]] || '').toUpperCase();
-      if (c && c !== 'LOCAL') parPays[c] = (parPays[c] || 0) + (Number(kv[1]) || 0);
-    });
-    const top = Object.entries(parPays).sort(function (a, b) { return b[1] - a[1]; });
-    let h = '';
-    TERRE.split('|').forEach(function (l, j) {
-      let cur = l.charAt(0) === '1', x = 0;
-      l.slice(1).split(',').forEach(function (n) {
-        n = +n;
-        if (cur) for (let i = 0; i < n; i++) h += '<circle class="terre" cx="' + (x + i + .5) + '" cy="' + (j + .5) + '" r=".42"/>';
-        x += n; cur = !cur;
-      });
-    });
-    const max = top.length ? top[0][1] : 1;
-    top.forEach(function (kv) {
-      const c = CENTRE[kv[0]]; if (!c) return;
-      h += '<circle class="bulle" cx="' + ((c[1] + 180) / 3).toFixed(1) + '" cy="' + ((90 - c[0]) / 3).toFixed(1)
-        + '" r="' + (1.2 + 2.6 * Math.sqrt(kv[1] / max)).toFixed(1) + '"><title>' + esc(kv[0]) + ' : ' + nb(kv[1]) + '</title></circle>';
-    });
-    svg.innerHTML = h;
-    liste.innerHTML = top.length ? top.slice(0, 6).map(function (kv) {
-      return '<div><span>' + drapeau(kv[0]) + '</span>' + esc(kv[0]) + '<b>' + nb(kv[1]) + '</b></div>';
-    }).join('') : '<span class="muted">pays inconnus</span>';
-  }
-
-  // ── Efficacité : part bloquée, part avertie, part seulement observée ──────
-  function efficacite(parCat) {
-    const cible = document.getElementById('efficacite');
-    const lignes = Object.entries(parCat || {});
-    if (!lignes.length) { cible.innerHTML = '<span class="muted">aucune donnée</span>'; return; }
-    // Synthèse affichée repliée : part écartée (banni + refusé) sur l'ensemble, et la catégorie qui détecte le plus sans agir.
-    let tot = 0, ecart = 0, pire = null;
-    lignes.forEach(function (kv) {
-      const a = kv[1] || {}, t = (a.banned || 0) + (a.robot || 0) + (a.warning || 0) + (a.detect || 0);
-      tot += t; ecart += (a.banned || 0) + (a.robot || 0);
-      const passif = (a.detect || 0) + (a.warning || 0);
-      if (t >= 20 && (!pire || passif > pire[1])) pire = [kv[0], passif];
-    });
-    const rs = document.getElementById('efficaciteResume');
-    if (rs) rs.textContent = tot ? Math.round(ecart / tot * 100) + ' % écarté' + (pire && pire[1] ? ' · surtout observé : ' + pire[0] : '') : 'aucune donnée';
-    cible.innerHTML = lignes.map(function (kv) {
-      const cat = kv[0], a = kv[1] || {};
-      // REFUSER N'EST PAS OBSERVER. L'anti-robots répond 403 sans bannir —
-      // c'est délibéré, on ne bannit pas Googlebot. Compter ce refus parmi les
-      // simples observations affichait « 0 % » sur 1824 requêtes pourtant
-      // toutes écartées : la mesure accusait une protection qui fonctionne.
-      const banni = a.banned || 0;
-      const refuse = a.robot || 0;
-      const averti = a.warning || 0;
-      const observe = a.detect || 0;
-      const total = banni + refuse + averti + observe;
-      if (!total) return '';
-      const pc = n => (n / total * 100).toFixed(1) + '%';
-      const agi = Math.round((banni + refuse) / total * 100);
-      return '<div class="barre">'
-        + '<span class="nom" title="' + esc(cat) + '">' + catEmoji(cat) + ' ' + esc(cat) + '</span>'
-        + '<span class="piste">'
-        + (banni ? '<span style="width:' + pc(banni) + ';background:var(--red)" title="banni : ' + nb(banni) + '"></span>' : '')
-        + (refuse ? '<span style="width:' + pc(refuse) + ';background:var(--purple)" title="refusé sans bannir : ' + nb(refuse) + '"></span>' : '')
-        + (averti ? '<span style="width:' + pc(averti) + ';background:var(--orange)" title="averti : ' + nb(averti) + '"></span>' : '')
-        + (observe ? '<span style="width:' + pc(observe) + ';background:var(--muted)" title="observé seulement : ' + nb(observe) + '"></span>' : '')
-        + '</span>'
-        + '<span class="chiffre">' + agi + ' % écarté · ' + nb(total) + '</span>'
-        + '</div>';
-    }).join('');
-  }
-
-  // ── ATTAQUANTS PERSISTANTS ────────────────────────────────────────────────
-  // MEME LANGAGE DE LECTURE QUE LA PAGE RENSEIGNEMENT (#1240). Les deux pages
-  // montrent les memes adresses ; si elles ne se lisent pas pareil, l'operateur
-  // retraduit a chaque aller-retour. On emprunte donc trois signes :
-  //   le GLYPHE dit ce que fait l'adresse, le BLOC PLEIN dit combien elle
-  //   insiste, le TAMPON dit ce que la box en a fait.
-  //
-  // ET SURTOUT, LE LIEN QUI MANQUAIT (#1240). Une empreinte de campagne porte
-  // la liste de ses IP : on peut donc dire, ligne par ligne, a quelle campagne
-  // une adresse appartient. Sans ce chainon, les deux cartes de cette meme page
-  // parlaient des memes attaquants sans jamais se repondre.
-
-  // Nature lue dans la SEQUENCE REELLEMENT sondee par la campagne de l'adresse,
-  // jamais devinee depuis le volume : un gros compteur ne dit pas l'intention.
-  function natureSeq(seq) {
-    const t = (seq || []).join(' ').toLowerCase();
-    if (/\.env|credential|\.aws|\.git|passwd|id_rsa|secret/.test(t)) return ['\u{1F511}', 'moissonne des secrets'];
-    if (/wp-|admin|login|phpmyadmin|\.php/.test(t))                   return ['\u{1F3AF}', 'cible des consoles connues'];
-    if (/\.\.|%2e%2e|\/etc\/|cgi-bin|shell|eval/.test(t))              return ['\u{1F4A3}', 'tente une execution'];
-    if (t.trim() === '/' || t.trim() === '')                         return ['\u{1F4D6}', 'enumere des noms d hotes'];
-    return ['\u{1F916}', 'balayage automatise'];
-  }
-
-  function attaquants(ips, pays, camps, bans) {
-    const cible = document.getElementById('attaquants');
-    const lignes = Object.entries(ips || {});
-    if (!lignes.length) { cible.innerHTML = '<span class="muted">aucune donn\u00e9e</span>'; return; }
-
-    // Index IP -> campagne. Construit ici plutot qu'au rendu : une adresse est
-    // cherchee une fois, pas une fois par campagne.
-    const parIP = {};
-    (camps || []).forEach(function (c) {
-      (c.attaquants || []).forEach(function (ip) { parIP[ip] = c; });
-    });
-    const bannies = {};
-    ((bans && bans.bans) || []).forEach(function (b) { if (b && b.ip) bannies[b.ip] = b; });
-
-    const max = lignes.reduce(function (m, kv) { return Math.max(m, kv[1] || 0); }, 1);
-
-    cible.innerHTML = '<div class="acteurs">' + lignes.map(function (kv) {
-      const ip = kv[0], n = kv[1] || 0;
-      const p = (pays || {})[ip] || '';
-      const interne = ip === 'local';
-      const c = parIP[ip];
-      const nat = interne ? ['\u{1F3E0}', 'trafic interne de la box']
-                          : natureSeq(c && c.exemple_sequence);
-      // Graduation sur le MAXIMUM OBSERVE, pas sur des paliers fixes : ce qui
-      // compte est de voir qui domine CE tableau-ci, dont l'echelle varie.
-      const part = Math.min(1, n / max);
-      const cls = part >= .6 ? 'n4' : part >= .3 ? 'n3' : part >= .1 ? 'n2' : '';
-      const ban = bannies[ip];
-      return '<div class="acteur' + (interne ? ' interne' : '') + '">'
-        + '<span class="nat" title="' + esc(nat[1]) + '">' + nat[0] + '</span>'
-        + '<span class="ident">'
-        +   '<code>' + esc(ip) + '</code>'
-        +   '<small>' + (interne ? '\u{1F3E0} interne' : drapeau(p) + ' ' + esc(p || '??')) + '</small>'
-        + '</span>'
-        + '<span class="multi ' + cls + '"><b>' + nb(n) + '</b><i>sondes</i></span>'
-        + (c ? '<a class="liencamp" href="#campagnes" title="campagne ' + esc(c.signature || '')
-             + ' \u2014 ' + (c.nb_attaquants || (c.attaquants || []).length) + ' IP au meme mode operatoire">'
-             + '\u{1F9EC} ' + esc((c.signature || '').slice(0, 8)) + '</a>'
-           : '<span class="liencamp z" title="aucune campagne correlee pour cette adresse">\u2014</span>')
-        + (ban ? '<span class="tampon banni" title="drop nft actif'
-                 + (ban.expires_in ? ', expire dans ' + ban.duration : '') + '">BANNI</span>'
-               : '<span class="tampon libre" title="vue mais pas ecartee du reseau">LIBRE</span>')
-        + '</div>';
-    }).join('') + '</div>';
-  }
-
-  function detections(liste) {
-    const cible = document.getElementById('detections');
-    if (!liste || !liste.length) { cible.innerHTML = '<span class="muted">indisponible</span>'; return; }
-    cible.innerHTML = liste.map(function (x) {
-      const bord = x.actif ? 'var(--cyan)' : 'var(--muted)';
-      return '<div class="det" style="border-left-color:' + bord + '">'
-        + '<div style="font-weight:700;font-size:.84rem">' + x.emoji + ' ' + esc(x.nom)
-        + ' <span class="muted" style="font-size:.64rem;font-weight:400">' + (x.actif ? '✓ ON' : '○ inactif') + '</span></div>'
-        + '<div class="muted" style="font-size:.68rem;margin-top:.3rem">' + esc(x.detail) + '</div></div>';
-    }).join('');
-  }
-
-  function tuiles(stats, bans, detec) {
-    const surfaces = Object.keys((stats && stats.par_type) || {}).length;
-    const actives = ((detec && detec.detections) || []).filter(d => d.actif).length;
-    const items = [
-      ['👁️ Menaces vues', nb(stats && stats.total_threats), 'depuis le début du journal', ''],
-      ['📅 Aujourd\'hui', nb(stats && stats.threats_today), 'bloquées ce jour', 'k-orange'],
-      ['🚫 Bannis actifs', nb(bans && bans.total), 'dans la chaîne nft du WAF', 'k-red'],
-      ['🛰️ Surfaces', String(surfaces), 'HTTP, SSH, SMTP, IMAP, leurres', 'k-purple'],
-      ['🧠 Détections', actives + ' / ' + (((detec && detec.detections) || []).length),
-       'comportementales actives', 'k-green']
-    ];
-    document.getElementById('tuiles').innerHTML = items.map(function (t) {
-      return '<div class="tuile ' + t[3] + '"><div class="lib">' + esc(t[0]) + '</div>'
-        + '<div class="val">' + esc(t[1]) + '</div>'
-        + '<div class="note">' + esc(t[2]) + '</div></div>';
-    }).join('');
-  }
-
-  // ── EMPREINTES SÉQUENTIELLES DE CAMPAGNES (#1243) ─────────────────────────
-  // Chemin RACCOURCI : les crawls git (git.gk2.secubox.in/…/commit/…) produisent
-  // des chemins interminables qui noient l'empreinte. On garde début et fin ;
-  // le chemin complet reste dans l'infobulle.
-  function court(p) { p = String(p || ''); return p.length > 28 ? p.slice(0, 18) + '…' + p.slice(-8) : p; }
-  function campagnes(data) {
-    const box = document.getElementById('campagnes');
-    if (!box) return;
-    const camps = (data && data.campagnes) || [];
-    if (!camps.length) {
-      box.innerHTML = '<span class="muted">Aucune campagne corrélée pour l\'instant.</span>';
-      return;
-    }
-    const maxA = camps.reduce(function (m, c) { return Math.max(m, c.nb_attaquants || 0); }, 1);
-    box.innerHTML = camps.slice(0, 12).map(function (c) {
-      const na = c.nb_attaquants || 0, hv = c.haute_valeur || 0;
-      // UNE SEULE LIGNE par campagne : la sequence tient a l'horizontale, tronquee
-      // (chemins deja raccourcis), et deborde en discret — pas de pave de details.
-      const seq = (c.exemple_sequence || []).slice(0, 5).map(function (p) {
-        return '<code class="seqchip" title="' + esc(p) + '">' + esc(court(p)) + '</code>';
-      }).join('<span class="seqar">→</span>');
-      return '<div class="camp1">'
-        + '<code class="campsig">' + esc((c.signature || '').slice(0, 8)) + '</code>'
-        + (c.outil ? '<span class="camptool">' + esc(c.outil) + '</span>' : '')
-        + '<span class="campnb">' + na + ' IP · ' + nb(c.sondes || 0) + '</span>'
-        + '<span class="camphv' + (hv ? '' : ' z') + '">🔑 ' + hv + '</span>'
-        + '<span class="campseq1">' + (seq || '<span class="muted">—</span>') + '</span>'
-        + '</div>';
-    }).join('');
-  }
-
-  async function charger() {
-    const [stats, hist, bans, detec, camps] = await Promise.all([
-      api('/stats'), api('/history'), api('/bans'), api('/detections'), api('/campaigns')
-    ]);
-    etatMoteur(stats, bans);
-    if (stats) {
-      carteMonde(stats.top_ips, stats.top_ips_countries);
-      efficacite(stats.efficacite);
-      attaquants(stats.top_ips, stats.top_ips_countries,
-                 (camps && camps.campagnes) || [], bans);
-    }
-    if (hist) evolution(hist.jours);
-    campagnes(camps);
-    detections(detec && detec.detections);
-    if (stats) {
-      surfaces(stats.par_type, stats.par_origine);
-      table1('comptesVises', stats.comptes_vises, ['Compte', 'Tentatives'],
-        "Aucune tentative d'authentification pour l'instant.");
-      table1('leurresTouches', stats.leurres_touches, ['Service', 'Contacts'],
-        'Aucun leurre touché pour l\'instant.');
-      table1('nomsNonRoutes', stats.noms_non_routes, ['Nom demandé', 'Requêtes'],
-        'Aucun nom hors registre pour l\'instant.');
-      const rz = document.getElementById('nomsResume');
-      if (rz) {
-        const nd = stats.noms_non_routes_distincts || 0, tot = stats.noms_non_routes_total || 0;
-        rz.textContent = nd ? (nd + ' noms distincts · ' + nb(tot) + ' requêtes au total') : '';
-      }
-    }
-    tuiles(stats, bans, detec);
-    const m = document.getElementById('maj');
-    if (m) {
-      m.textContent = 'relevé à ' + new Date().toLocaleTimeString('fr-FR',
-        { hour: '2-digit', minute: '2-digit' });
-    }
-  }
-
-  charger();
-  // Rafraîchissement paresseux : ces agrégats bougent en minutes, pas en
-  // secondes ; interroger plus souvent chargerait la box pour rien.
-  setInterval(charger, 60000);
-</script>
-
-<script>
-  // THÈME HÉRITÉ DU HALL (#1308). Le paramètre donne le thème d'ARRIVÉE, le
-  // message donne les bascules SUIVANTES — jamais par rechargement du cadre,
-  // qui perdrait la position de lecture et les graphiques déjà tracés.
-  (function () {
-    var t = new URLSearchParams(location.search).get('theme');
-    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
-  })();
-  addEventListener('message', function (ev) {
-    var d = ev.data;
-    if (!d || d.sbx !== 'theme') return;
-    if (d.theme === 'dark' || d.theme === 'light') {
-      document.documentElement.setAttribute('data-theme', d.theme);
-    }
+// ── Histogramme empilé par catégorie, en SVG ─────────────────────────────────────────────────────────
+function evolution(jours){
+  var cible=vide($('evolution')),leg=vide($('evolutionLegende'));
+  var dates=Object.keys(jours||{}).sort();
+  if(!dates.length){add(cible,h('div','vide',jours?'Pas encore d’historique.':'Historique indisponible (session requise).'));return;}
+  // Au-delà de huit catégories la pile devient un dégradé illisible : le reste est regroupé sous « autres ».
+  var poids={};
+  dates.forEach(function(d){var c=(jours[d]&&jours[d].categories)||{};Object.keys(c).forEach(function(k){poids[k]=(poids[k]||0)+num(c[k]);});});
+  var tete=Object.keys(poids).sort(function(a,b){return poids[b]-poids[a];}).slice(0,8);
+  var cles=tete.concat(Object.keys(poids).length>tete.length?['autres']:[]);
+  var L=620,H=230,gauche=46,bas=26,haut=10,pas=(L-gauche-8)/dates.length,lb=Math.max(5,Math.min(40,pas-5));
+  var maxi=Math.max.apply(null,dates.map(function(d){return num(jours[d]&&jours[d].total);}).concat([1])),ech=(H-bas-haut)/maxi;
+  var s=sv('svg',{'class':'courbe',viewBox:'0 0 '+L+' '+H,role:'img','aria-label':'Évolution journalière des menaces par catégorie'});
+  for(var i=0;i<=4;i++){var y=haut+(H-bas-haut)*i/4;sv('line',{'class':'gr',x1:gauche,y1:y,x2:L,y2:y},s);sv('text',{x:gauche-5,y:y+3,'text-anchor':'end'},s).textContent=nb(Math.round(maxi*(1-i/4)));}
+  dates.forEach(function(d,i){
+    var cats=(jours[d]&&jours[d].categories)||{},x=gauche+i*pas+(pas-lb)/2,y=H-bas,groupe={};
+    Object.keys(cats).forEach(function(k){var c=tete.indexOf(k)>=0?k:'autres';groupe[c]=(groupe[c]||0)+num(cats[k]);});
+    cles.forEach(function(k){var v=groupe[k]||0;if(!v)return;var hh=Math.max(1,v*ech);y-=hh;
+      var r=sv('rect',{x:x.toFixed(1),y:y.toFixed(1),width:lb.toFixed(1),height:hh.toFixed(1),fill:teinte(k)},s);sv('title',{},r).textContent=d+' · '+k+' : '+nb(v);});
+    if(dates.length<=12||i%2===0)sv('text',{x:(x+lb/2).toFixed(1),y:H-bas+14,'text-anchor':'middle'},s).textContent=d.slice(5);
   });
+  add(cible,s);
+  cles.forEach(function(k){var sp=h('span'),sw=h('i');sw.style.background=teinte(k);add(sp,sw,document.createTextNode(catEmoji(k)+' '+k));add(leg,sp);});
+}
+
+// ── Efficacité : part écartée, part avertie, part seulement observée ─────────────────────────────────
+function efficacite(parCat){
+  var cible=vide($('efficacite')),rs=$('efficaciteResume'),lignes=Object.keys(parCat||{});
+  if(!lignes.length){add(cible,h('div','vide',parCat?'Aucune donnée.':'—'));rs.textContent=parCat?'aucune donnée':'—';return;}
+  // Synthèse affichée repliée : part écartée (banni + refusé) sur l'ensemble, et la catégorie qui détecte le plus sans agir.
+  var tot=0,ecart=0,pire=null;
+  lignes.forEach(function(k){var a=parCat[k]||{},t=num(a.banned)+num(a.robot)+num(a.warning)+num(a.detect);
+    tot+=t;ecart+=num(a.banned)+num(a.robot);var passif=num(a.detect)+num(a.warning);
+    if(t>=20&&(!pire||passif>pire[1]))pire=[k,passif];});
+  rs.textContent=tot?Math.round(ecart/tot*100)+' % écarté'+(pire&&pire[1]?' · surtout observé : '+pire[0]:''):'aucune donnée';
+  lignes.forEach(function(cat){
+    // Refuser n'est pas observer : l'anti-robots répond 403 sans bannir, délibérément (on ne bannit pas Googlebot). Compter ce refus
+    // parmi les observations affichait 0 % sur des requêtes pourtant toutes écartées.
+    var a=parCat[cat]||{},banni=num(a.banned),refuse=num(a.robot),averti=num(a.warning),observe=num(a.detect),total=banni+refuse+averti+observe;
+    if(!total)return;
+    var pc=function(n){return (n/total*100).toFixed(1)+'%';},agi=Math.round((banni+refuse)/total*100);
+    var b=h('div','barre'),p=h('span','piste');
+    [[banni,'var(--rouge)','banni'],[refuse,'var(--violet)','refusé sans bannir'],[averti,'var(--orange)','averti'],[observe,'var(--faible)','observé seulement']].forEach(function(x){
+      if(!x[0])return;var sp=h('span',null,null,x[2]+' : '+nb(x[0]));sp.style.width=pc(x[0]);sp.style.background=x[1];add(p,sp);});
+    add(b,h('span','nom',catEmoji(cat)+' '+cat,cat),p,h('span','chiffre',agi+' % écarté · '+nb(total)));add(cible,b);
+  });
+}
+
+// ── Attaquants persistants ───────────────────────────────────────────────────────────────────────────
+// Même langage de lecture que la page Renseignement : le glyphe dit ce que fait l'adresse, le bloc plein combien elle insiste, le tampon ce que la box en a fait.
+// Nature lue dans la SÉQUENCE réellement sondée par la campagne de l'adresse, jamais devinée depuis le volume.
+function natureSeq(seq){
+  var t=(seq||[]).join(' ').toLowerCase();
+  if(/\.env|credential|\.aws|\.git|passwd|id_rsa|secret/.test(t))return ['\u{1F511}','moissonne des secrets'];
+  if(/wp-|admin|login|phpmyadmin|\.php/.test(t))                  return ['\u{1F3AF}','cible des consoles connues'];
+  if(/\.\.|%2e%2e|\/etc\/|cgi-bin|shell|eval/.test(t))            return ['\u{1F4A3}','tente une exécution'];
+  if(t.trim()==='/'||t.trim()==='')                              return ['\u{1F4D6}','énumère des noms d’hôtes'];
+  return ['\u{1F916}','balayage automatisé'];
+}
+function attaquants(ips,pays,camps,bans){
+  var cible=vide($('attaquants')),lignes=Object.keys(ips||{});
+  if(!lignes.length){add(cible,h('div','vide',ips?'Aucune donnée.':'—'));return;}
+  var parIP={},bannies={};
+  (camps||[]).forEach(function(c){(c.attaquants||[]).forEach(function(ip){parIP[ip]=c;});});
+  ((bans&&bans.bans)||[]).forEach(function(b){if(b&&b.ip)bannies[b.ip]=b;});
+  var max=lignes.reduce(function(m,ip){return Math.max(m,num(ips[ip]));},1),box=h('div','acteurs');
+  lignes.forEach(function(ip){
+    var n=num(ips[ip]),p=(pays||{})[ip]||'',interne=ip==='local',c=parIP[ip];
+    var nat=interne?['\u{1F3E0}','trafic interne de la box']:natureSeq(c&&c.exemple_sequence);
+    // Graduation sur le MAXIMUM OBSERVÉ, pas sur des paliers fixes : ce qui compte est de voir qui domine CE tableau-ci.
+    var part=Math.min(1,n/max),cls=part>=.6?'n4':part>=.3?'n3':part>=.1?'n2':'';
+    var ban=bannies[ip],d=h('div','acteur'+(interne?' interne':''));
+    var id=h('span','ident');add(id,h('code',null,ip),h('small',null,interne?'\u{1F3E0} interne':drapeau(p)+' '+(p||'??')));
+    var m=h('span','multi '+cls);add(m,h('b',null,nb(n)),h('i',null,'sondes'));
+    add(d,h('span','nat',nat[0],nat[1]),id,m);
+    if(c){var a=h('a','liencamp','\u{1F9EC} '+String(c.signature||'').slice(0,8),'campagne '+(c.signature||'')+' — '+(c.nb_attaquants||(c.attaquants||[]).length)+' IP au même mode opératoire');a.href='#campagnesPan';add(d,a);}
+    else add(d,h('span','liencamp z','—','aucune campagne corrélée pour cette adresse'));
+    add(d,ban?h('span','tampon banni','BANNI','drop nft actif'+(ban.expires_in?', expire dans '+ban.duration:'')):h('span','tampon libre','LIBRE','vue mais pas écartée du réseau'));
+    add(box,d);
+  });
+  add(cible,box);
+}
+
+// ── Empreintes séquentielles de campagnes (#1243) ────────────────────────────────────────────────────
+// Chemin raccourci : les crawls git produisent des chemins interminables qui noient l'empreinte ; le chemin complet reste dans l'infobulle.
+function court(p){p=String(p||'');return p.length>28?p.slice(0,18)+'…'+p.slice(-8):p;}
+function campagnes(data){
+  var box=vide($('campagnes')),camps=(data&&data.campagnes)||[];
+  if(!camps.length){add(box,h('div','vide',data?'Aucune campagne corrélée pour l’instant.':'—'));return;}
+  camps.slice(0,12).forEach(function(c){
+    var na=c.nb_attaquants||0,hv=c.haute_valeur||0,d=h('div','camp1'),sq=h('span','campseq1');
+    var seq=(c.exemple_sequence||[]).slice(0,5);
+    if(seq.length)seq.forEach(function(p,i){if(i)add(sq,h('span','seqar','→'));add(sq,h('code','seqchip',court(p),String(p)));});else add(sq,h('span',null,'—'));
+    add(d,h('code','campsig',String(c.signature||'').slice(0,8)));
+    if(c.outil)add(d,h('span','camptool',c.outil));
+    add(d,h('span','campnb',na+' IP · '+nb(c.sondes||0)),h('span','camphv'+(hv?'':' z'),'🔑 '+hv,'sondes de secret ou d’exécution'),sq);
+    add(box,d);
+  });
+}
+
+// ── Surfaces surveillées ─────────────────────────────────────────────────────────────────────────────
+// Le journal mélange DEUX producteurs : sbxwaf (HTTP seul) et authwatch (SSH, SMTP, IMAP, leurres) ; un total unique ne dirait pas de quelle surface vient la menace.
+var SURFACE_INFO={http:['🌐','HTTP','sbxwaf, devant les services'],ssh:['🔑','SSH','échecs d’authentification'],smtp:['✉️','SMTP','SASL refusé sur postfix'],imap:['📥','IMAP','connexions dovecot'],leurre:['🕳️','Leurres','services inexistants'],autre:['❓','Autre','authwatch, type non classé']};
+function surfaces(parType,parOrigine){
+  var el=vide($('surfaces'));
+  if(!parType){add(el,h('div','vide','—'));return;}
+  var cles=Object.keys(SURFACE_INFO).filter(function(k){return num(parType[k])>0;});
+  if(!cles.length){add(el,h('div','vide','Aucun événement classé pour l’instant.'));return;}
+  var total=cles.reduce(function(a,k){return a+num(parType[k]);},0)||1;
+  cles.forEach(function(k){var d=SURFACE_INFO[k],n=num(parType[k]),v=h('div','sv',nb(n)+' ');add(v,h('small',null,Math.round(n/total*100)+' %'));
+    add(el,add(h('div','surf'),h('div','k',d[0]+' '+d[1]),v,h('div','sub',d[2])));});
+  var o=parOrigine||{},w=num(o.waf),a=num(o.authwatch);
+  if(w||a)add(el,add(h('div','surf'),h('div','k','⚙️ Moteurs'),h('div','sub','sbxwaf '+nb(w)),h('div','sub','authwatch '+nb(a))));
+}
+// Petit tableau deux colonnes trié, pour comptes visés, leurres touchés et noms non routés.
+function table1(cible,obj,entete,videTexte){
+  var el=vide($(cible));
+  if(!obj){add(el,h('div','vide','—'));return;}
+  var items=Object.keys(obj).map(function(k){return [k,num(obj[k])];}).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
+  if(!items.length){add(el,h('div','vide',videTexte));return;}
+  var t=h('table'),hd=h('tr'),tb=h('tbody');
+  add(hd,h('th',null,entete[0]),h('th','d',entete[1]));add(t,add(h('thead'),hd),tb);
+  items.forEach(function(kv){add(tb,add(h('tr'),h('td','mono',kv[0],kv[0]),h('td','d n',nb(kv[1]))));});
+  add(el,t);
+}
+function detections(liste){
+  var cible=vide($('detections'));
+  if(!liste||!liste.length){add(cible,h('div','vide',liste?'Aucune détection déclarée.':'—'));return;}
+  liste.forEach(function(x){var d=h('div','det'+(x.actif?'':' off')),t=h('div');
+    add(t,h('b',null,(x.emoji||'')+' '+x.nom),h('span',null,x.actif?'✓ ON':'○ inactif'));add(d,t,h('p',null,x.detail||''));add(cible,d);});
+}
+
+// ── Démonstration : adresses de documentation (RFC 5737), noms fictifs, rien n'est écrit ─────────────
+function demoJours(){
+  var o={},cats=['sqli','scanner','auth_ssh','xss','robots','recon'];
+  for(var i=0;i<14;i++){var d=new Date(Date.UTC(2026,9,1+i)).toISOString().slice(0,10),c={},t=0;
+    cats.forEach(function(k,j){var v=((i*7+j*13)%23+3)*(j===4?9:3);c[k]=v;t+=v;});o[d]={total:t,categories:c};}
+  return o;
+}
+var DEMO_DATA=function(){return {
+  stats:{total_threats:482113,threats_today:3240,par_type:{http:61000,ssh:17458,smtp:1815,leurre:2458},par_origine:{waf:61000,authwatch:21731},
+    top_ips:{'203.0.113.7':5100,'198.51.100.23':2900,'192.0.2.99':900,'local':12000},top_ips_countries:{'203.0.113.7':'DE','198.51.100.23':'US','192.0.2.99':'NL','local':'LAN'},
+    efficacite:{sqli:{banned:300,robot:0,warning:40,detect:60},robots:{banned:0,robot:1824,warning:0,detect:0},scanner:{banned:20,robot:0,warning:200,detect:900}},
+    comptes_vises:{root:5200,admin:2100,test:880},leurres_touches:{'telnet/23':1200,'rdp/3389':640},noms_non_routes:{'wp-admin.example.test':420,'phpmyadmin.example.test':210},noms_non_routes_distincts:2,noms_non_routes_total:630},
+  hist:{jours:demoJours()},bans:{total:2,bans:[{ip:'203.0.113.7',duration:'1 h',expires_in:3200}]},
+  detec:{detections:[{emoji:'🚪',nom:'Hôtes non routés',actif:true,detail:'Noms demandés absents du registre'},{emoji:'🤖',nom:'Anti-robots',actif:true,detail:'403 sans bannir'},{emoji:'🕳️',nom:'Leurres de service',actif:false,detail:'Ports sans service'}]},
+  camps:{campagnes:[{signature:'089b4a5e1234',outil:'scanner',nb_attaquants:3,sondes:1273,haute_valeur:2,attaquants:['203.0.113.7','198.51.100.23'],exemple_sequence:['/','/.env','/wp-login.php','/admin']},
+                    {signature:'1392fa1c9876',outil:'sqlmap',nb_attaquants:1,sondes:87,haute_valeur:0,attaquants:['192.0.2.99'],exemple_sequence:['/index.php?id=1']}]}};};
+
+function charger(){
+  if(DEMO){var D=DEMO_DATA();rend(D.stats,D.hist,D.bans,D.detec,D.camps);return Promise.resolve();}
+  SESSION_REFUSEE=false;
+  return Promise.all([api('/stats'),api('/history'),api('/bans'),api('/detections'),api('/campaigns')]).then(function(r){rend(r[0],r[1],r[2],r[3],r[4]);});
+}
+function rend(stats,hist,bans,detec,camps){
+  $('session').hidden=!(SESSION_REFUSEE&&!DEMO);
+  etatMoteur(stats,bans);
+  carteMonde(stats&&stats.top_ips,stats&&stats.top_ips_countries);
+  efficacite(stats&&stats.efficacite);
+  attaquants(stats&&stats.top_ips,stats&&stats.top_ips_countries,(camps&&camps.campagnes)||[],bans);
+  evolution(hist&&hist.jours);
+  campagnes(camps);
+  detections(detec&&detec.detections);
+  surfaces(stats&&stats.par_type,stats&&stats.par_origine);
+  table1('comptesVises',stats&&stats.comptes_vises,['Compte','Tentatives'],'Aucune tentative d’authentification pour l’instant.');
+  table1('leurresTouches',stats&&stats.leurres_touches,['Service','Contacts'],'Aucun leurre touché pour l’instant.');
+  table1('nomsNonRoutes',stats&&stats.noms_non_routes,['Nom demandé','Requêtes'],'Aucun nom hors registre pour l’instant.');
+  var rz=$('nomsResume');
+  if(stats){var nd=num(stats.noms_non_routes_distincts),tot=num(stats.noms_non_routes_total);rz.textContent=nd?nd+' noms distincts · '+nb(tot)+' requêtes au total':'';}else rz.textContent='';
+  tuiles(stats,bans,detec);
+  try{$('maj').textContent='relevé à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}catch(e){$('maj').textContent='—';}
+  annoncer();
+}
+
+// ── Hauteur annoncée à l'hôte (iframe) : on mesure le CADRE, jamais le document ──
+function annoncer(){
+  if(window.parent===window)return;
+  try{parent.postMessage({sbxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+scrollY),onglet:'tableau'},location.origin);}catch(e){}
+}
+window.addEventListener('load',annoncer);window.addEventListener('resize',annoncer);
+if(window.ResizeObserver)new ResizeObserver(annoncer).observe(document.body);
+document.getElementById('efficaciteDetails').addEventListener('toggle',annoncer);
+if(EMB)$('navVue').hidden=true;
+if(DEMO)$('demo').hidden=false;
+$('lienLogin').href='/login.html?redirect='+encodeURIComponent(location.pathname);
+$('rafraichir').addEventListener('click',charger);
+charger();
+// Rafraîchissement paresseux : ces agrégats bougent en minutes, pas en secondes.
+setInterval(function(){if(!document.hidden&&!DEMO)charger();},60000);
 </script>
+</body>
+</html>
