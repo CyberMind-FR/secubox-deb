@@ -82,3 +82,12 @@ def test_ad_guard_se_declare_groupable_et_appelle_l_activateur():
     assert "secubox-groupe-declares-activer" in post
     assert subprocess.run(["sh", "-n", str(PAQUETS / "secubox-ad-guard" / "debian" / "postinst")]).returncode == 0
     assert "secubox-aggregator" in (PAQUETS / "secubox-ad-guard" / "debian" / "control").read_text()
+
+
+def test_debhelper_n_active_ni_ne_demarre_l_unite_a_la_place_de_l_activateur():
+    """RÉGRESSION gk2 : dh_installsystemd activait et démarrait l'unité (lien créé par dpkg) alors que gk2 a ses groupes -> deux serveurs sur les mêmes sockets.
+    Seul l'activateur, qui regarde groups.d, décide."""
+    rules = (PKG / "debian" / "rules").read_text()
+    assert "override_dh_installsystemd" in rules
+    bloc = rules[rules.index("override_dh_installsystemd"):]
+    assert "--name=secubox-groupe-declares" in bloc and "--no-enable" in bloc and "--no-start" in bloc

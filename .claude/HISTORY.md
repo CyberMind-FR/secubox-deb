@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Groupe des modules déclarés déployé sur gk2 et le RPi400 (aggregator 0.4.2, ad-guard 1.14.1, closes #2748)
+- gk2 : aggregator 0.4.1 + ad-guard 1.14.1 installés ; sur gk2, debhelper a activé ET démarré `secubox-groupe-declares` (82 modules déclarés) alors que g1 sert déjà ces sockets. Arrêté et désactivé à la main au bout d'une minute ; g1 (actif depuis la veille) n'avait pas bougé, ad-guard et dns-guard répondaient 200.
+- Cause : l'autoscript `dh_installsystemd`. Correctif 0.4.2 : `--no-enable --no-start` pour cette unité seule ; l'activateur, qui regarde `groups.d`, décide. Test de non-régression ajouté.
+- Vérifié : gk2 = unité désactivée/inactive, g1 actif ; RPi400 = unité active, API ad-guard servie (401 sans jeton).
+
 ## 2026-10-15 — proxypac : détecteur de CDN, étape 1 sur 3 (secubox-tor 1.6.2, ref #2752)
 - Demande : proxypac alimenté en silence par les requêtes CDN observées (API Google…), avec cache automatique. Étapes validées : (1) détecteur + candidats, (2) cache côté proxy (PAC vers sbxmitm), (3) réécriture sur nos vhosts comme les polices (#1875).
 - Étape 1 livrée : `proxypac-detect` + minuterie 15 min lisent en lecture seule `dnstv_counts` d'ad-guard, catalogue de CDN explicite, écrivent `candidates.json` ; un rejet est mémorisé, un hôte déjà réglé n'est plus proposé. Rien n'est activé tout seul.
