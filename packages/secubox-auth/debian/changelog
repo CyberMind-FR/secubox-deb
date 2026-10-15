@@ -1,3 +1,9 @@
+secubox-auth (1.8.2-1~bookworm1) bookworm; urgency=medium
+
+  * Identite (Administration), panneau Comptes d une personne : ligne PhotoPrism, ouvert par SSO (OIDC), identifiant = pseudo, sans mot de passe ; le compte nait a la premiere connexion. Informative : rien a ouvrir ni a relier (ref #2761).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 16:10:00 +0200
+
 secubox-auth (1.8.1-1~bookworm1) bookworm; urgency=medium
 
   * Utilisateurs : colonne « Profil SBX OS » dans les comptes systeme : a quel profil chaque compte est associe, et « Modifier » (associer, changer, dissocier). Utilise l API sbxid existante (comptes-systeme) ; l ancien lien est delie avant le nouveau et remis si le nouveau est refuse. Sans droit d administrateur systeme la colonne ne pretend rien. Identite (Administration) : chaque compte de service lie a une personne a un « Modifier » (relier un autre compte existant), l ancien lien remis si le nouveau est refuse (ref #2755).

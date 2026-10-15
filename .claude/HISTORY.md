@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Identité (Administration) : PhotoPrism dans les comptes d'une personne (secubox-auth 1.8.2, closes #2761)
+- Demande : « manque photoprism » sur hall.gk2/identite/#admin. Le panneau « Comptes » ne listait que courriel, Nextcloud, PeerTube et BBS ; « Mes comptes » du Hall montre PhotoPrism, ouvert par OIDC (#2255).
+- Ajout d'une ligne PhotoPrism informative : SSO, identifiant = pseudo de la personne, sans mot de passe, compte créé à la première connexion. Pas d'adaptateur root : PhotoPrism n'a rien à ouvrir ni à relier. 5 tests en vrai navigateur ; suite sbxid 99 verts.
+
 ## 2026-10-15 — nDPId Protocoles : regrouper protocoles et applications (secubox-dpi 1.14.1, closes #2759)
 - Suite de #2757, sur la remarque « Protocols has also applications » : l'onglet Protocoles a maintenant un « Regrouper par » (catégorie ou transport chiffré/en clair) sur « Tous les protocoles », un filtre de transport, et une nouvelle table « Toutes les applications » (filtre, tri, regroupement par catégorie déduite du nom ; avant : seulement un top 10 en barres).
 - Un composant de liste commun aux deux tables ; un clic sur un groupe revient au détail de ce groupe. 7 tests en vrai navigateur (somme des groupes = total, téléphone sans débordement) ; suite dpi 221 verts. Paquet arm64 construit en croisé.
