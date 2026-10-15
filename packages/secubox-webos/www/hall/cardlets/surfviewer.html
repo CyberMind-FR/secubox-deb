@@ -93,6 +93,10 @@
   .chip .src{font-size:.9rem;line-height:1;margin-right:3px;vertical-align:-1px}
   .chip .det{color:var(--faible);font-weight:400;margin-left:3px}
   .vide{color:var(--faible);font-size:.8rem;text-align:center;padding:14px 8px;border:1px dashed var(--trait2);border-radius:10px;overflow-wrap:anywhere}
+
+  /* iPhone (#2733) : EN FIN DE FEUILLE pour passer après `body.dans .cadre{padding:0}` et `body.emb .app{padding:0}` de la carte. Une vraie marge de chaque côté,
+     y compris dans l'iframe du Hall : sans elle le contenu touchait le bord (cadre à 0, 8 px de marge intérieure au mieux). */
+  @media(max-width:520px){.emb .cadre,.dans .cadre{padding:0!important}.emb .app,.dans .app{padding-left:14px!important;padding-right:14px!important}}
 </style>
 </head>
 <body>

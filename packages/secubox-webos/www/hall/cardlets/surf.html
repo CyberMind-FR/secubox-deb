@@ -94,6 +94,10 @@
   .accueil .ex button{border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--cyan);border-radius:999px;padding:.35rem .8rem;min-height:34px;cursor:pointer;font-size:.74rem;font-family:ui-monospace,"JetBrains Mono",monospace}
   .accueil .ex button:hover{border-color:var(--cyan)}
   .accueil small{font-size:.72rem;max-width:26rem;line-height:1.5;color:var(--faible)}
+
+  /* iPhone (#2733) : EN FIN DE FEUILLE pour passer après `body.dans .cadre{padding:0}` et `body.emb .app{padding:0}` de la carte. Une vraie marge de chaque côté,
+     y compris dans l'iframe du Hall : sans elle le contenu touchait le bord (cadre à 0, 8 px de marge intérieure au mieux). */
+  @media(max-width:520px){.emb .cadre,.dans .cadre{padding:0!important}.emb .app,.dans .app{padding-left:14px!important;padding-right:14px!important}}
 </style>
 </head>
 <body>

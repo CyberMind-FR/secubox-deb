@@ -1,3 +1,9 @@
+secubox-hub (1.12.1-1~bookworm1) bookworm; urgency=medium
+
+  * Pages Aurora dans le cadre de l'administration : marge gauche, centrage, iPhone (#2733). Mesure sur 14 pages reelles : ecran large, 50 px de chaque cote (40 de hybrid-main + 10 du cadre), symetrique ; ecran etroit (390, 768) OU appareil tactile : la barre laterale est repliee mais <main class="principal hybrid-main"> gardait `margin-left:220px!important` (hybrid-skin.css) + 40 px de marge interieure : contenu a 270 px, application dans 70 px, page qui deborde (jusqu'a 508 px). La regle mobile de sidebar.js ne visait que .main et .main-content. sidebar.js marque desormais les pages Aurora (`html.sbx-aurora`, page a `.cadre .app`) et leur applique : sur ecran etroit ou tactile, plus de decalage et une gouttiere de 14 px ; sur ecran large 12 px + 10 du cadre de chaque cote (au lieu de 40 + 10), centre et sur tout l'espace. Les anciennes pages hybrid-dark ne changent pas. 27 tests de geometrie dans un vrai navigateur (390, 768, 1024 tactile, 1400, 1920, cardlets en iframe).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 12:30:00 +0200
+
 secubox-hub (1.12.0-1~bookworm1) bookworm; urgency=medium
 
   * Pages /soc.html et /soc/ au profil Aurora (#2675) : HTML autonome (plus de police distante ni de design-tokens.css), tuiles avec infobulles de definition, courbes et donuts en SVG ecrits a la main, ?demo=1 (donnees fictives, aucune requete), ?embed=1, 420 px sans debordement, onglets Tous/Menaces/Systeme (role tab, fleches/Debut/Fin).

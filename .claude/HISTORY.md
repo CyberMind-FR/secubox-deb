@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Cadre admin : mise en page des pages Aurora, marge iPhone des cardlets, hub 1.12.1 / webos 1.12.1 (ref #2733)
+Retours du mainteneur : trop d'espace à gauche, pages mal centrées ou pas sur tout l'espace, « pas de marge gauche sur iPhone y compris dans les cardlets ». MESURÉ avant de corriger
+(Playwright, 14 pages Aurora réelles dans le cadre) : écran large, 50 px de chaque côté (40 de `hybrid-main` + 10 du cadre), plein espace et symétrique ; écran étroit (390, 768) OU appareil
+TACTILE (`sidebar.js` passe en mode mobile sur tout écran tactile, un iPad large inclus) : barre repliée mais `<main class="principal hybrid-main">` gardait `margin-left:220px!important`
+(hybrid-skin.css:77) + 40 px de marge intérieure : contenu à 270 px, application dans 70 px, page qui déborde (jusqu'à 508 px) ; la règle mobile ne visait que `.main` et `.main-content`.
+`sidebar.js` marque les pages Aurora (`html.sbx-aurora`) et leur applique la mise en page : plus de décalage de barre repliée, gouttière 14 px sur écran étroit, 12 + 10 px sur écran large
+(centré, plein espace) ; les anciennes pages « hybrid-dark » ne changent pas. Cardlets du Hall (21) : dans l'iframe, `body.dans .cadre{padding:0}` + `.app{padding:6px 8px}` collaient le contenu
+au bord (0 à 8 px) ; règle `@media(max-width:520px)` EN FIN DE FEUILLE, indépendante de l'élément qui porte `emb` (`<html>` pour comptes, `<body>` ailleurs), 14 px de chaque côté. 27 tests de
+géométrie dans un vrai navigateur, cardlets chargées dans une iframe comme le Hall. Déployé sur gk2 (hub, webos), vérifié servi. Deux échecs préexistants sans lien, sur master aussi :
+`test_espaces_2212` (lignes `c3box` et `mirror` de espaces.json sans entrée de menu) et `test_ytflux_aurora_2638::…vhost_admin`.
+Piège : `/shared/*` est servi `public, immutable` 1 h (même défaut que #2730) : un rechargement dur (Ctrl+Maj+R) est nécessaire une fois pour voir le nouveau cadre.
+Reste dans #2733 : habillage Aurora de la barre latérale, du menu du haut et de la barre du bas (encore « hybrid-dark » vert) ; page Actor sur son vhost dédié `actor.<domaine>` (sans cadre). Pas de `closes`.
+
 ## 2026-10-15 — Premier Pas : pages sans cache dur et verdict LAN de la session, 0.6.2 (ref #2730, ref #2731)
 Deux défauts vus sur le RPi400 par le mainteneur (captures). (1) Après la mise à jour et `rejouer`, le navigateur et le kiosque affichaient l'ANCIENNE page : `location /` du site
 pose `expires 1h` + `public, immutable` sur tout statique, et `immutable` interdit de revalider (la box servait bien la nouvelle page, vérifié par `curl`). Bloc
