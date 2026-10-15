@@ -74,9 +74,12 @@ fi
 # Set boot args
 # rootdelay=5: give storage time to settle
 # modprobe.blacklist: prevent mv88e6xxx DSA driver from loading during initramfs
+# ath10k_pci,ath10k_core: la carte mPCIe Qualcomm 168c:003c gelait les deux coeurs a 48 s (hard LOCKUP, #2177) ;
+#   le gel disparait quand ces modules sont bloques. Aucun profil lite n'utilise de wifi.
+# transparent_hugepage=never: khugepaged defragmente pour rien sur 1 Go et ajoute de la pression memoire
 # sdhci.debug_quirks2=0x40: fix xenon-sdhci DDR timing issues on eMMC
 # mmc_core.use_spi_crc=0: disable CRC checks that can cause timeouts
-setenv bootargs "root=${rootpart} rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core initcall_blacklist=mv88e6xxx_driver_init sdhci.debug_quirks2=0x40"
+setenv bootargs "root=${rootpart} rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core,ath10k_pci,ath10k_core transparent_hugepage=never initcall_blacklist=mv88e6xxx_driver_init sdhci.debug_quirks2=0x40"
 
 echo "Boot args: ${bootargs}"
 echo "============================================"

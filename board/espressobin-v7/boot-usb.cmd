@@ -75,7 +75,7 @@ fi
 
 # USB rootfs is on sda2 (second partition)
 # Blacklist mv88e6xxx switch driver - causes detection loop on ESPRESSObin
-setenv bootargs "root=/dev/sda2 rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core initcall_blacklist=mv88e6xxx_driver_init"
+setenv bootargs "root=/dev/sda2 rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core,ath10k_pci,ath10k_core transparent_hugepage=never initcall_blacklist=mv88e6xxx_driver_init"
 
 echo "============================================"
 echo "Booting SecuBox from USB..."
