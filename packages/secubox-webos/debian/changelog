@@ -1,3 +1,9 @@
+secubox-webos (1.12.1-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlets du Hall sur iPhone : une vraie marge de chaque cote (#2733). Dans l'iframe du Hall (`dans`), `.cadre{padding:0}` et `.app{padding:6px 8px}` faisaient toucher le bord : 0 a 8 px. Les 21 cardlets recoivent, EN FIN DE FEUILLE (apres les regles de la carte), `@media(max-width:520px)` : cadre a 0 et 14 px de marge interieure de chaque cote, quelle que soit la balise qui porte la classe emb (html pour comptes, body pour les autres). Grand ecran inchange.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 12:30:00 +0200
+
 secubox-webos (1.12.0-1~bookworm1) bookworm; urgency=medium
 
   * Carte Flux YouTube : mes chaînes, playlists, navigation, favoris, diffusion (ref #2708). Onglets Mes chaînes (nom, handle, abonnés et vidéos seulement s'ils sont fournis, avatar), Playlists et Favoris. Une chaîne ou une playlist s'ouvre dans la carte (fil d'Ariane, Retour ou Échap, focus géré, liste d'origine conservée sans relecture) et montre ses dernières vidéos.

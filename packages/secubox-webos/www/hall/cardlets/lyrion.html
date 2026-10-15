@@ -89,6 +89,10 @@
   .sel{font:inherit;font-size:.74rem;color:var(--cyan);background:none;border:1px solid var(--trait2);border-radius:999px;padding:4px 12px;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:34px}
   .sel:disabled{color:var(--faible);cursor:default}
   .pied{display:flex;align-items:center;gap:8px;min-height:34px;font:inherit;font-size:.74rem;color:var(--cyan);background:none;border:0;padding:0;cursor:pointer;text-align:left}
+
+  /* iPhone (#2733) : EN FIN DE FEUILLE pour passer après `body.dans .cadre{padding:0}` et `body.emb .app{padding:0}` de la carte. Une vraie marge de chaque côté,
+     y compris dans l'iframe du Hall : sans elle le contenu touchait le bord (cadre à 0, 8 px de marge intérieure au mieux). */
+  @media(max-width:520px){.emb .cadre,.dans .cadre{padding:0!important}.emb .app,.dans .app{padding-left:14px!important;padding-right:14px!important}}
 </style>
 </head>
 <body>

@@ -76,6 +76,10 @@
   .pastille{display:inline-block;border:1px solid var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12);border-radius:999px;padding:0 8px;font-size:.66rem}
   .pastille.com{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
   .liste a{color:var(--cyan);text-decoration:none} .liste a:hover{text-decoration:underline} .liste a:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+  /* iPhone (#2733) : EN FIN DE FEUILLE pour passer après `body.dans .cadre{padding:0}` et `body.emb .app{padding:0}` de la carte. Une vraie marge de chaque côté,
+     y compris dans l'iframe du Hall : sans elle le contenu touchait le bord (cadre à 0, 8 px de marge intérieure au mieux). */
+  @media(max-width:520px){.emb .cadre,.dans .cadre{padding:0!important}.emb .app,.dans .app{padding-left:14px!important;padding-right:14px!important}}
 </style>
 </head>
 <body>

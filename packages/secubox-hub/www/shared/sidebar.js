@@ -2207,7 +2207,15 @@
             '.mobile-mode .sidebar.mobile-hidden{transform:translateX(-100%);}' +
             '.mobile-mode .main,.mobile-mode .main-content{margin-left:0!important;}' +
             // Fallback media query for initial load before JS runs
-            '@media(max-width:768px){.sidebar:not(.open){transform:translateX(-100%);}.main,.main-content{margin-left:0!important;}}';
+            '@media(max-width:768px){.sidebar:not(.open){transform:translateX(-100%);}.main,.main-content{margin-left:0!important;}}' +
+            // PAGES AURORA (#2733) — la mise en page du contenu dans le cadre. Marqueur `html.sbx-aurora` posé par marquerAurora() : les anciennes pages
+            // « hybrid-dark » gardent leurs 32 px. MESURÉ : barre repliée (écran étroit OU appareil tactile) mais <main class="principal hybrid-main"> gardait
+            // `margin-left:220px!important` (hybrid-skin.css) + 40 px de marge intérieure : contenu à 270 px, application dans 70 px, page qui déborde.
+            // La règle mobile ci-dessus ne visait que .main et .main-content. Écran large : 12 px + 10 du cadre de chaque côté (au lieu de 40 + 10), centré.
+            'html.sbx-aurora .hybrid-main,html.sbx-aurora main.principal{padding-left:12px!important;padding-right:12px!important}' +
+            'html.sbx-aurora body.mobile-mode main,html.sbx-aurora body.mobile-mode .hybrid-main,html.sbx-aurora body.mobile-mode .principal{margin-left:0!important;padding-left:0!important;padding-right:0!important}' +
+            'html.sbx-aurora body.mobile-mode .cadre{padding-left:14px;padding-right:14px}' +
+            '@media(max-width:768px){html.sbx-aurora main,html.sbx-aurora .hybrid-main,html.sbx-aurora .principal{margin-left:0!important;padding-left:0!important;padding-right:0!important}html.sbx-aurora .cadre{padding-left:14px;padding-right:14px}}';
 
         document.head.appendChild(s);
     }
@@ -2239,6 +2247,16 @@
         // Smart detection: touch device OR narrow viewport
         return isTouchDevice() || isNarrowViewport();
     }
+
+    // Une page Aurora est une page à `.cadre > .app` (AURORA-REFERENCE §3). On la marque pour que les règles de mise en page ne touchent pas les anciennes pages (#2733).
+    function marquerAurora() {
+        try {
+            if (document.querySelector('.cadre .app, .cadre > .app')) document.documentElement.classList.add('sbx-aurora');
+        } catch (e) { /* le marqueur n'est jamais une raison de casser le cadre */ }
+    }
+    marquerAurora();
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', marquerAurora);
+    setTimeout(marquerAurora, 300);
 
     function applyMobileMode(enable) {
         var sidebar = document.getElementById('sidebar');

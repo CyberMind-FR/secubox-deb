@@ -130,6 +130,10 @@
      et le conteneur masque le débordement. */
   .embwrap{position:relative;height:100%;overflow:hidden;border-radius:6px}
   .embwrap .emb{position:absolute;left:0;top:0;width:100%;height:100%;border:0;display:block}
+
+  /* iPhone (#2733) : EN FIN DE FEUILLE pour passer après `body.dans .cadre{padding:0}` et `body.emb .app{padding:0}` de la carte. Une vraie marge de chaque côté,
+     y compris dans l'iframe du Hall : sans elle le contenu touchait le bord (cadre à 0, 8 px de marge intérieure au mieux). */
+  @media(max-width:520px){.emb .cadre,.dans .cadre{padding:0!important}.emb .app,.dans .app{padding-left:14px!important;padding-right:14px!important}}
 </style>
 </head>
 <body>

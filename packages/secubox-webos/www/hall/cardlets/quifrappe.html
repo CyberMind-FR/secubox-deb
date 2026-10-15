@@ -81,6 +81,10 @@
   .camp .hv.z{color:var(--faible)}
   .pied{display:flex;align-items:center;gap:8px;font-size:.74rem;color:var(--doux);text-decoration:none;min-height:34px}
   .pied a{color:var(--cyan)}
+
+  /* iPhone (#2733) : EN FIN DE FEUILLE pour passer après `body.dans .cadre{padding:0}` et `body.emb .app{padding:0}` de la carte. Une vraie marge de chaque côté,
+     y compris dans l'iframe du Hall : sans elle le contenu touchait le bord (cadre à 0, 8 px de marge intérieure au mieux). */
+  @media(max-width:520px){.emb .cadre,.dans .cadre{padding:0!important}.emb .app,.dans .app{padding-left:14px!important;padding-right:14px!important}}
 </style>
 </head>
 <body>
