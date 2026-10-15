@@ -9,6 +9,18 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Le maître repère les box neuves et leur pousse le profil sans code, premier-pas 0.7.0 (ref #2728)
+Demande du mainteneur : « gk2 repère les box neuves, les liste, puis pousse le profil en prenant la session distante au lieu du code » (le code de 8×4 caractères est « relou »). `premier_pas/decouverte.py` : les
+voisins (table ARP + pairs du maillage) reçoivent UNE lecture publique `GET /etat` ; une box SecuBox répond `{fait, etapes}`, `fait: false` = neuve ; jamais d'adresse publique ; registre `decouverte.json` SANS secret
+(nouvelle → préparée → configurée, une box absente depuis 1 h disparaît). `maitre.pousse` accepte un code VIDE : il prend la session distante (#2725) ; un refus (autre poste, fenêtre de 15 min close, box en service)
+s'arrête là avec la raison de la box. Routes `/maitre/decouverte` (garde `admin.modules`), carte « Boîtes détectées » pleine largeur dans le panneau maître, `premier-pasctl decouvrir`, minuterie de 2 min. L'AUTOMATIQUE est désactivé
+par défaut, limité à `remplir`/`proposer` (jamais `forcer`), à un profil COMPLET, UNE tentative par box : une machine qui répond « je suis neuve » à l'adresse d'un voisin n'est pas forcément la vôtre, et le profil porte
+l'empreinte du mot de passe administrateur. 53 tests, dont une préparation de bout en bout contre la VRAIE API de la box neuve (session distante, sans code).
+Déployé sur gk2 (0.5.4 → 0.7.0 : l'agrégateur a redémarré, API de retour en 35 s) et minuterie ACTIVÉE sur gk2. Vérifié en réel : gk2 sonde 18 voisins et reconnaît 2 box SecuBox, le RPi400 et gk3, toutes deux configurées → 0 nouvelle.
+NON vérifié : un envoi vers une box réellement neuve. Il faut un redémarrage (la fenêtre de 15 min part du démarrage) d'une box à l'assistant ouvert ; je n'ai pas voulu défaire la configuration du RPi400. À faire avec l'ESPRESSObin ou une box réinitialisée.
+Limites : détection par le maillage seulement si le service peut lire `wg show` (non confiné en root) ; `/etat` d'une box configurée n'annonce pas toujours son nom (le RPi400 apparaît sans nom).
+Pas de `closes` : à fermer après un envoi réel.
+
 ## 2026-10-15 — Boucles de redémarrage sur box neuve : assist 0.3.2 livré, ndpid-engine 1.7.2 à construire en CI (ref #2740)
 Sur le RPi400 : `secubox-ndpid-engine` (1 040 redémarrages) et `secubox-assist` (619) relancés toutes les 5 s depuis une heure, charge ~5. (1) `assist` : `BindError: wg-mesh unavailable` — le refus de servir sans
 `wg-mesh` est VOULU (fail-closed) ; le défaut était `Restart=on-failure`/`RestartSec=5`. Corrigé en 0.3.2 : l'unité ATTEND l'interface dans `ExecStart` (`sh -c 'until [ -e /sys/class/net/wg-mesh ]; do sleep 15; done; exec python3 -m assist.daemon'`),
