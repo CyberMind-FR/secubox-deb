@@ -1,0 +1,23 @@
+[Unit]
+Description=SecuBox — modules declares groupables, dans un interpreteur partage (#2748)
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+# PAS DE RuntimeDirectory : /run/secubox est partage (voir secubox-group@.service).
+# Sert tout ce qui s'est declare dans /usr/share/secubox/groupable.d. Active par
+# secubox-groupe-declares-activer UNIQUEMENT quand l'operateur n'a aucun groupe :
+# deux serveurs sur la meme socket, c'est un module qui parait mort.
+ExecStart=/usr/sbin/secubox-groupd --declarations
+LimitNOFILE=65536
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+UMask=0027
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

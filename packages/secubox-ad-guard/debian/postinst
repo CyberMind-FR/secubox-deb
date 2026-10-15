@@ -16,6 +16,8 @@ if [ "$1" = "configure" ]; then
     systemctl enable --now secubox-ad-guard-dnsdump.timer >/dev/null 2>&1 || true
 
     systemctl daemon-reload
+    # #2748 : le module est servi par le groupe des modules declares (groupable.d) ; sans groupe d'operateur on l'active.
+    [ -x /usr/sbin/secubox-groupe-declares-activer ] && /usr/sbin/secubox-groupe-declares-activer || true
     # PAS d'enable de secubox-ad-guard.service : le module est servi par
     # secubox-groupd (secubox-group@g1.service) d'apres sa declaration dans
     # aggregator.toml, et le paquet ne livre donc AUCUNE unite propre.

@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Image neuve : les modules servis par groupd sont enfin déclarés (ad-guard 1.14.1, aggregator 0.4.1, ref #2748)
+- Cause : ad-guard n'a plus d'unité d'API (#1362, « servi par groupd »), mais aucun paquet ne déposait groupable.d ni ne créait de groupe ; sur le RPi400 neuf, 35 modules sur 100 n'étaient servis par personne (page ad-guard HORS LIGNE, API 404). gk2 n'était pas touchée : ses groupes g1..g6 avaient été posés à la main.
+- Correctif : unité `secubox-groupe-declares` (sert tout groupable.d) activée par `secubox-groupe-declares-activer` seulement quand `groups.d` n'a aucun `*.conf` ; ad-guard dépose sa déclaration.
+- Déployé sur le RPi400 (API répond 401 au lieu de 404 : servie, garde active). Publié sur apt. PAS déployé sur gk2 (groupes d'opérateur, rien à changer ; la montée de l'agrégateur coupe 2 min) : issue laissée ouverte. Reste : déclarer les autres modules sans unité (dns-guard a la sienne).
+- dns-guard était arrêté et désactivé sur le RPi400 (cause non retrouvée) : réactivé à la main.
+
 ## 2026-10-15 — gk2 : aletheiavox.eu et www.aletheiavox.eu redirigés vers billets.gk2.secubox.in (closes #2747)
 Demande du mainteneur. Le domaine pointait déjà sur gk2, était déclaré dans `haproxy.toml` (TLS) avec un certificat Let's Encrypt valide pour les deux noms ; il répondait 404 : son vhost nginx `aletheiavox.eu.conf` (ancien site `aletheia`, à la main) n'était pas activé et MetaBlogizer
 renvoie 404 pour un hôte sans bloc sur :8900. Action sur la box, sans source dans le dépôt (précédent : `lldh.gk2-redirect.conf`) : `sites-available/aletheiavox.eu-redirect.conf` (bloc :8900, `return 302 https://billets.gk2.secubox.in$request_uri`, route ACME conservée), lien dans `sites-enabled`,

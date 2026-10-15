@@ -1,0 +1,22 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# #2748 — active le groupe des modules declares, sauf si l'operateur a ses propres groupes
+# (groups.d/*.conf : ils servent deja ces modules). Idempotent ; ne bloque jamais dpkg.
+GROUPS_D="${SECUBOX_GROUPS_D:-/etc/secubox/groups.d}"
+UNITE=secubox-groupe-declares.service
+
+for f in "$GROUPS_D"/*.conf; do
+    [ -e "$f" ] && exit 0
+done
+command -v systemctl >/dev/null 2>&1 || exit 0
+systemctl enable "$UNITE" >/dev/null 2>&1 || true
+if systemctl is-active --quiet "$UNITE" >/dev/null 2>&1; then
+    systemctl restart --no-block "$UNITE" >/dev/null 2>&1 || true
+else
+    systemctl start --no-block "$UNITE" >/dev/null 2>&1 || true
+fi
+exit 0

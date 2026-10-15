@@ -1,3 +1,9 @@
+secubox-ad-guard (1.14.1-1~bookworm1) bookworm; urgency=medium
+
+  * Se declare groupable (groupable.d/ad-guard) et active le groupe des modules declares : la page ad-guard etait HORS LIGNE sur une image neuve, aucun serveur ne portait son API (ref #2748).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 11:20:00 +0200
+
 secubox-ad-guard (1.14.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: la page /ad-guard/ passe en direct (#2706). Bande d'etat en tete (resolveur Unbound, puits DNS, listes de blocage et leur fraicheur, capteur DNS d'Actor Intelligence, moteur DNS TV) en pastilles vert/orange/rouge/gris avec mot et icone ; indicateur « en direct » qui pulse (sauf prefers-reduced-motion), « mis a jour il y a N s », bascule en « hors ligne » si l'API ne repond plus.
