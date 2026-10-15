@@ -17,6 +17,9 @@ override_dh_auto_install:
 	# Le lanceur du kiosque n'était posé QUE par l'image : une box déjà flashée
 	# ne pouvait jamais ouvrir l'assistant (#1542). Source unique : image/sbin/.
 	install -D -m 755 kiosque/secubox-kiosk-launcher debian/secubox-premier-pas/usr/sbin/secubox-kiosk-launcher
+	# L'unité du lanceur : sans elle une box flashée avec l'ancienne unité `startx` ne passe jamais par le lanceur (#2738). Source unique : image/systemd/.
+	install -D -m 644 kiosque/secubox-kiosk.service debian/secubox-premier-pas/usr/lib/systemd/system/secubox-kiosk.service
+	install -D -m 755 sbin/premier-pas-retire-unite-kiosque debian/secubox-premier-pas/usr/sbin/premier-pas-retire-unite-kiosque
 	# Chromium récent ignore --disable-translate(-features) : seule la politique
 	# gérée retire la bulle « Traduire » de l'assistant (#1542).
 	install -D -m 644 kiosque/secubox-kiosque-policy.json debian/secubox-premier-pas/etc/chromium/policies/managed/secubox-kiosque.json

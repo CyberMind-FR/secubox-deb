@@ -88,6 +88,14 @@ Aucune route distante pour cela : rouvrir l'assistant d'une box en service, c'es
   pose donc `premier-pas-session.conf` (route `= /api/v1/premier-pas/session` seulement) quand le fichier GeoIP du Hub existe ET que la ligne manque ET que `nginx -t` passe ;
   sinon il le retire. Il n'est jamais actif sans le postinst (livré dans `/usr/share/secubox/premier-pas/nginx/`).
 
+## Kiosque : l'unité du lanceur (0.6.3, #2738)
+
+Le paquet livre `/usr/lib/systemd/system/secubox-kiosk.service` (celle du lanceur `secubox-kiosk-launcher` : URL d'administration `admin.localhost:9078` #2534, assistant Premier Pas
+prioritaire #1522), avec le lanceur lui-même. L'image RPi écrivait avant sa propre unité `/etc/systemd/system/secubox-kiosk.service` (`startx -- :0 vt7`, `.xinitrc` à
+`http://localhost/`), qui MASQUAIT celle du paquet et ignorait le lanceur. `premier-pas-retire-unite-kiosque` (appelé par le postinst) la retire — seulement si elle porte le `startx` ET la
+description de l'image, et n'appelle pas le lanceur : une unité d'opérateur reste en place — puis le postinst remplace le lien d'activation (qui pointait dans le vide) et relance le
+kiosque s'il tournait. `build-rpi-usb.sh` pose désormais l'unité du lanceur (`image/systemd/`, source unique).
+
 ## Dépendances SecuBox
 
 `secubox-core`.

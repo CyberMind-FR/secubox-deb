@@ -1,3 +1,15 @@
+secubox-premier-pas (0.6.4-1~bookworm1) bookworm; urgency=high
+
+  * CORRECTION de 0.6.3 : le postinst echouait (#2738). Il tourne sous `set -e` et l'aide premier-pas-retire-unite-kiosque rend le code 10 (« unite retiree ») : toute la configuration du paquet s'arretait (dpkg : etat de sortie 10), l'ancienne unite etait retiree mais le lien d'activation restait orphelin et le kiosque « failed ». Constate en installant 0.6.3 sur le RPi400. Le code 10 n'est plus une erreur (`&& RC=0 || RC=$?`) et le nettoyage est REJOUABLE : un lien d'activation orphelin laisse par une configuration interrompue est traite meme si l'unite a deja ete retiree (il est remplace, le kiosque reactive et relance). Le test execute maintenant le VRAI bloc du postinst sous `set -e` avec un faux systemctl : unite perimee, lien orphelin, box deja a jour. 12 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 15:30:00 +0200
+
+secubox-premier-pas (0.6.3-1~bookworm1) bookworm; urgency=medium
+
+  * Le kiosque passe par le lanceur, plus par l'ancienne unite `startx` (#2738). Releve sur un RPi400 : /etc/systemd/system/secubox-kiosk.service, ecrite par build-rpi-usb.sh, lancait `startx -- :0 vt7` et un .xinitrc a http://localhost/ ; elle ignorait le lanceur (URL d'administration, assistant prioritaire) et MASQUAIT toute unite livree dans /usr/lib. Le lanceur n'etait utilise que lance a la main depuis tty1 : Chromium tournait hors de systemd (unite « inactive (dead) »), sans redemarrage possible s'il plantait. Le paquet livre desormais l'unite du lanceur (source unique image/systemd/) ; premier-pas-retire-unite-kiosque (appele par le postinst) retire l'ancienne unite SEULEMENT si elle porte le startx ET la description de l'image et n'appelle pas le lanceur (une unite d'operateur reste), le postinst remplace le lien d'activation qui pointait dans le vide et relance le kiosque s'il tournait. build-rpi-usb.sh pose l'unite du lanceur. 10 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 15:00:00 +0200
+
 secubox-premier-pas (0.6.2-1~bookworm1) bookworm; urgency=medium
 
   * Le HTML de l'assistant n'est plus servi « public, immutable » une heure (#2730). Constate sur un RPi400 : apres la mise a jour du paquet et `premier-pasctl rejouer`, le navigateur et le kiosque relance affichaient l'ANCIENNE page. `location /` du site pose `expires 1h` + `Cache-Control: public, immutable` sur tout statique, et `immutable` interdit de revalider. Nouveau /etc/nginx/secubox.d/premier-pas.conf : /premier-pas/ et /premier-pas-maitre/ en `no-cache` (ETag), avec les quatre en-tetes de securite du serveur repetes (un add_header de location remplace ceux du serveur). Teste avec un vrai nginx.

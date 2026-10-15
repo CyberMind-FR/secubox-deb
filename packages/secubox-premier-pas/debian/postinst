@@ -12,6 +12,26 @@ if [ "$1" = "configure" ]; then
         date -Is > /var/lib/secubox/.premier-pas-fait
         echo "secubox-premier-pas : box déjà configurée, assistant non ouvert"
     fi
+    # KIOSQUE : l'ancienne unité `startx` de l'image RPi masque celle du paquet (#2738). On la retire (elle seule), puis on réactive le kiosque sous la nouvelle.
+    # Le lien d'activation de l'ancienne unité (graphical.target.wants) pointe dans le vide une fois son fichier retiré : on le remplace. Le nettoyage est REJOUABLE :
+    # un lien orphelin laissé par une configuration interrompue est traité même si l'unité n'est plus là. `set -e` : le code 10 de l'aide (« retirée ») n'est PAS une erreur.
+    SYSD="${PREMIER_PAS_SYSTEMD_ETC:-/etc/systemd/system}"
+    RETIRE="${PREMIER_PAS_RETIRE_UNITE:-/usr/sbin/premier-pas-retire-unite-kiosque}"
+    KIOSQUE_ETAIT_ACTIF=0; KIOSQUE_ETAIT_ACTIVE=0; KIOSQUE_A_REFAIRE=0
+    systemctl is-enabled --quiet secubox-kiosk.service 2>/dev/null && KIOSQUE_ETAIT_ACTIF=1
+    systemctl is-active --quiet secubox-kiosk.service 2>/dev/null && KIOSQUE_ETAIT_ACTIVE=1
+    "$RETIRE" "$SYSD/secubox-kiosk.service" && RC_RETIRE=0 || RC_RETIRE=$?
+    [ "$RC_RETIRE" -eq 10 ] && KIOSQUE_A_REFAIRE=1
+    if [ -L "$SYSD/graphical.target.wants/secubox-kiosk.service" ] && [ ! -e "$SYSD/secubox-kiosk.service" ]; then
+        KIOSQUE_A_REFAIRE=1; KIOSQUE_ETAIT_ACTIF=1          # lien orphelin : le kiosque était activé, il doit le rester
+    fi
+    if [ "$KIOSQUE_A_REFAIRE" = 1 ]; then
+        rm -f "$SYSD/graphical.target.wants/secubox-kiosk.service"
+        systemctl daemon-reload >/dev/null 2>&1 || true
+        if [ "$KIOSQUE_ETAIT_ACTIF" = 1 ]; then systemctl enable secubox-kiosk.service >/dev/null 2>&1 || true; fi
+        systemctl reset-failed secubox-kiosk.service >/dev/null 2>&1 || true
+        if [ "$KIOSQUE_ETAIT_ACTIVE" = 1 ] || [ "$KIOSQUE_ETAIT_ACTIF" = 1 ]; then systemctl restart secubox-kiosk.service >/dev/null 2>&1 || true; fi
+    fi
     systemctl enable secubox-premier-pas.service >/dev/null 2>&1 || true
     systemctl enable --now secubox-premier-pas-appliquer.path >/dev/null 2>&1 || true
     # Face console sur tty1 : ne démarre que sur une box neuve (Condition).

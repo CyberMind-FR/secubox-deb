@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Kiosque RPi : l'unité du lanceur remplace l'ancienne unité `startx`, premier-pas 0.6.4 (closes #2738)
+Premier accès SSH au RPi400 (clé posée via le mot de passe par défaut donné par le mainteneur) : le kiosque ouvrait `http://localhost/` et tournait HORS de systemd. `build-rpi-usb.sh` écrivait
+`/etc/systemd/system/secubox-kiosk.service` (`startx -- :0 vt7`, `.xinitrc` à localhost) : elle ignorait le lanceur (URL d'administration #2534, assistant prioritaire #1522) et MASQUAIT toute unité de
+`/usr/lib` ; le lanceur n'était utilisé que lancé à la main depuis `tty1` (unité « inactive (dead) », pas de redémarrage si Chromium plante). Le paquet livre l'unité du lanceur (source unique
+`image/systemd/`), `premier-pas-retire-unite-kiosque` retire l'ancienne unité SEULEMENT si elle porte le `startx` ET la description de l'image, le postinst remplace le lien d'activation orphelin et relance le
+kiosque, `build-rpi-usb.sh` pose l'unité du lanceur. Vérifié en réel : kiosque activé et actif, `ExecStart=/usr/sbin/secubox-kiosk-launcher`, Chromium sur `http://admin.localhost:9078/`.
+ERREUR de ma part, vue en réel : 0.6.3 échouait à l'installation (« état de sortie 10 ») — le postinst tourne sous `set -e` et l'aide rend 10 (« retirée »). 0.6.4 : code 10 toléré, nettoyage REJOUABLE
+(lien orphelin traité même sans l'unité), et le test exécute maintenant le VRAI bloc du postinst sous `set -e` avec un faux systemctl. Leçon : tester un postinst en l'exécutant, pas en le lisant.
+Autre découverte sur ce RPi400, NON traitée ici : `secubox-ndpid-engine` (compteur 820) et `secubox-assist` (619) en boucle de redémarrage depuis des heures (`INTERFACE=eth2` livré en dur alors que la carte
+s'appelle `end0` ; `assist` se lie à `wg-mesh`, absente tant que le maillage n'est pas rejoint).
+
 ## 2026-10-15 — Cadre admin : habillage Aurora de la barre latérale, du menu du haut et de la barre du bas, hub 1.12.2 (closes #2733)
 Suite de #2733 : une page Aurora (bleu nuit, cyan) était encadrée par l'ancien cadre « hybrid-dark » (vert, monospace). `shared/cadre-aurora.css`, chargé par `sidebar.js` EN DERNIER et seulement
 pour `html.sbx-aurora`, tous sélecteurs préfixés (un test le vérifie), jetons AURORA-REFERENCE §2, contrastes WCAG testés. Piège mesuré : `sidebar.js` pose le fond de la page et le « verre » de la barre
