@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Verdict LAN absent sur une box neuve : la directive est posée par hub, hub 1.12.3 / premier-pas 0.7.1 (closes #2743)
+Mainteneur : « RPi400 web login remote KO ». Journal d'authentification de la box : mot de passe saisi sur le CLAVIER DE LA BOX accepté (08:25–08:27, enrôlement TOTP), même compte refusé depuis le PC (`invalid_credentials`). Mot de passe
+réglé via le moteur de comptes (`Engine.set_password`, mot de passe lu sur l'entrée standard, jamais écrit ni mémorisé) ; la connexion distante répondait alors `mfa_required` MÊME DEPUIS LE LAN, alors que #1699 veut le second facteur facultatif
+sur le LAN. Cause : `snippets/secubox-proxy.conf` ne contenait `proxy_set_header X-SecuBox-LAN $lan_client;` qu'EN COMMENTAIRE alors que le fichier GeoIP du hub existait. `core` ne pose la ligne que si `$lan_client` existe à ce moment-là ; sur une image neuve
+core passe AVANT hub, la ligne est retirée et rien ne la remettait : l'API croit tout client « WAN ». Même piège que #1351 (tester la CHAÎNE au lieu de la DIRECTIVE : le commentaire contient le nom). hub 1.12.3 pose la directive (idempotent, `nginx -t`,
+restauration si nginx refuse, rien sans le fichier GeoIP). ERREUR de ma part : mon garde de premier-pas (#2731) faisait `grep -q X-SecuBox-LAN`, trouvait le commentaire et RETIRAIT la route de session ; corrigé en 0.7.1 (le correctif de 0.6.2 ne
+réparait donc rien sur cette box). Les deux postinst ont des chemins surchargeables et 12 tests exécutent leur VRAI bloc sous `set -e` ; l'ancien test de #2731 figeait la forme défectueuse. Vérifié en réel sur le RPi400 : directive à la ligne 73,
+`nginx -t` valide, connexion distante depuis le LAN → jeton d'accès direct, sans code TOTP. gk2 n'est pas touchée (elle avait déjà la directive).
+Hypothèses écartées : disposition AZERTY/QWERTY du clavier (système et X du kiosque sont bien `fr`/`azerty`) ; incident connu du `login.html` écrasé (celui de gk2 est intact).
+
 ## 2026-10-15 — Le maître repère les box neuves et leur pousse le profil sans code, premier-pas 0.7.0 (ref #2728)
 Demande du mainteneur : « gk2 repère les box neuves, les liste, puis pousse le profil en prenant la session distante au lieu du code » (le code de 8×4 caractères est « relou »). `premier_pas/decouverte.py` : les
 voisins (table ARP + pairs du maillage) reçoivent UNE lecture publique `GET /etat` ; une box SecuBox répond `{fait, etapes}`, `fait: false` = neuve ; jamais d'adresse publique ; registre `decouverte.json` SANS secret
