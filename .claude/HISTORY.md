@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Le second facteur se règle PAR COMPTE, auth 1.8.0 (ref #2745)
+Demande du mainteneur : « activer ou désactiver l'OTP sur les comptes SBX OS users ; admin par défaut OTP hors LAN seulement, ou full disable ». Existant (#1699) : UN réglage global `otp_lan` (facultatif sur le LAN, exigé depuis le WAN) et « Réinitialiser le 2FA »
+(efface le secret). Nouveau champ `otp_mode` par compte : `defaut` (suit le global = hors LAN seulement, le défaut de l'administrateur), `hors_lan`, `toujours` (LAN compris), `jamais` (aucun code, même depuis internet, même enrôlé ; LE SECRET EST CONSERVÉ : réactiver ne demande pas de
+ré-enrôlement). `PUT /user/{nom}/otp-mode` (droit `users.edit`, la garde existante réserve les comptes administrateurs aux administrateurs) ; `jamais` sur un ADMINISTRATEUR exige `confirmer: true` (booléen, pas « true » ni 1) ; chaque changement est journalisé (compte, ancien, nouveau, appelant, confirmation).
+GARDE-FOU que le cas rend nécessaire : une connexion depuis le WAN SANS second facteur n'ouvre JAMAIS le coffre (il s'ouvre avec le mot de passe ; ce cas n'existait pas avant, le WAN exigeait toujours le code). La page Utilisateurs gagne un sélecteur par compte, la politique effective en clair et une confirmation intégrée
+(avertissement pour un administrateur ; annuler remet l'ancienne valeur). 70 tests : matrice mode × réseau × enrôlement (16 cas), coffre, moteur, API, page dans un vrai navigateur. Vérifié en réel sur le RPi400 : réglage, refus sans confirmation, mode et compte inconnus, retour au défaut, aucun secret dans la liste, 401 sans session.
+Déployé sur le RPi400 (auth 1.8.0), PAS sur gk2 : la mise à jour redémarre le service d'authentification (coupure brève des connexions) ; en attente du feu vert du mainteneur sur l'horaire. Pas de `closes`.
+Liaison : le défaut « hors LAN seulement » ne vaut que si nginx pose `X-SecuBox-LAN` sur l'API (#2743) — c'est ce qui bloquait la connexion web de la RPi400.
+Piège d'environnement noté : `api.main` du composant users lit `/etc/secubox/secubox.conf` à l'import ; sur un poste où il n'est pas lisible, 14 tests existants du composant échouent (identique sur master) ; mes tests isolent la configuration.
+
 ## 2026-10-15 — Verdict LAN absent sur une box neuve : la directive est posée par hub, hub 1.12.3 / premier-pas 0.7.1 (closes #2743)
 Mainteneur : « RPi400 web login remote KO ». Journal d'authentification de la box : mot de passe saisi sur le CLAVIER DE LA BOX accepté (08:25–08:27, enrôlement TOTP), même compte refusé depuis le PC (`invalid_credentials`). Mot de passe
 réglé via le moteur de comptes (`Engine.set_password`, mot de passe lu sur l'entrée standard, jamais écrit ni mémorisé) ; la connexion distante répondait alors `mfa_required` MÊME DEPUIS LE LAN, alors que #1699 veut le second facteur facultatif

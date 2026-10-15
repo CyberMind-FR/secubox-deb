@@ -69,6 +69,9 @@
         td.act{white-space:nowrap}
         td.act>*{margin:2px 4px 2px 0}
         td small{display:block;color:var(--faible);font-size:.68rem}
+        /* Second facteur PAR COMPTE (#2745) */
+        .otp{display:grid;gap:3px;margin-top:4px;min-width:10rem} .otp select{font:inherit;font-size:.74rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:3px 6px;max-width:100%}
+        .otp select:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .otp .otp-effet{font-size:.68rem;color:var(--faible)} .otp .otp-effet.risque{color:var(--orange)}
         .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
         .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap;margin:1px 3px 1px 0}
         .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
@@ -211,7 +214,7 @@
         const LIB_ROLE = { guest: 'invité', member: 'membre', subscriber: 'abonné', beta_tester: 'bêta', moderator: 'modérateur', sbx_operator: 'opérateur SBX' };
 
         let USERS = null, TOTAL_USERS = null, SERVICES = null, SESSIONS = null, PERSONNES = null, APPAREILS = {}, DEMANDES = null, OTP = null;
-        let SESSION_OK = true, ERR_SBX = null, ERR_DEM = null, ONGLET = 'comptes', SVC_USER = null, SVC_ETAT = null, CONF = null;
+        let SESSION_OK = true, ERR_SBX = null, ERR_DEM = null, ONGLET = 'comptes', SVC_USER = null, SVC_ETAT = null, CONF = null, ANNULE = null;
 
         function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
         function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
@@ -250,20 +253,21 @@
         function pluriel(n, mot) { return n + ' ' + mot + (n > 1 ? 's' : ''); }
 
         // ----- Confirmation intégrée à la page (jamais de dialogue natif) -----
-        function demande(texte, libelle, fn) {
-            CONF = fn; $('confTexte').textContent = texte; $('confOui').textContent = libelle || 'Confirmer'; $('conf').hidden = false;
+        function demande(texte, libelle, fn, annule) {
+            if (ANNULE) { const a = ANNULE; ANNULE = null; a(); }          // une confirmation en remplace une autre : l'ancienne est annulée (le sélecteur reprend sa valeur)
+            ANNULE = annule || null; CONF = fn; $('confTexte').textContent = texte; $('confOui').textContent = libelle || 'Confirmer'; $('conf').hidden = false;
             $('conf').scrollIntoView({ block: 'nearest' }); $('confOui').focus(); annoncer();
         }
-        function ferme() { CONF = null; $('conf').hidden = true; annoncer(); }
+        function ferme() { CONF = null; ANNULE = null; $('conf').hidden = true; annoncer(); }
         $('confOui').addEventListener('click', () => { const f = CONF; ferme(); if (f) f(); });
-        $('confNon').addEventListener('click', ferme);
+        $('confNon').addEventListener('click', () => { const a = ANNULE; ferme(); if (a) a(); });
 
         function demoData() {
             const t = Math.floor(Date.now() / 1000);
             TOTAL_USERS = 3;
             USERS = [
-                { username: 'admin', email: 'admin@example.org', enabled: true, totp_enabled: true, services: ['nextcloud', 'gitea'], created: '2026-05-02T09:12:00' },
-                { username: 'jdupont', email: 'jdupont@example.org', enabled: true, totp_enabled: false, services: ['email'], created: '2026-08-19T14:30:00' },
+                { username: 'admin', email: 'admin@example.org', enabled: true, role: 'admin', totp_enabled: true, services: ['nextcloud', 'gitea'], created: '2026-05-02T09:12:00' },
+                { username: 'jdupont', email: 'jdupont@example.org', enabled: true, role: 'viewer', otp_mode: 'toujours', totp_enabled: false, services: ['email'], created: '2026-08-19T14:30:00' },
                 { username: 'archive', email: 'archive@example.org', enabled: false, totp_enabled: false, services: [], created: '2026-09-03T08:00:00' }];
             SERVICES = { nextcloud: { running: true }, gitea: { running: true }, email: { running: true }, matrix: { running: false }, jellyfin: { running: false } };
             PERSONNES = [
@@ -351,7 +355,7 @@
                 const c1 = el('td'); c1.appendChild(document.createTextNode(tiret(u.username))); c1.appendChild(el('small', '', tiret(u.email))); tr.appendChild(c1);
                 const c2 = el('td'); c2.appendChild(pastille(actif ? 'ok' : '', actif ? 'ACTIF' : 'DÉSACTIVÉ')); tr.appendChild(c2);
                 const mfa = u.totp_enabled === true || u.mfa_enabled === true;
-                const c3 = el('td'); c3.appendChild(pastille(mfa ? 'cy' : '', mfa ? 'ACTIVÉ' : 'NON')); tr.appendChild(c3);
+                const c3 = el('td'); c3.appendChild(pastille(mfa ? 'cy' : '', mfa ? 'ACTIVÉ' : 'NON', mfa ? 'Second facteur enrôlé' : 'Aucun second facteur enrôlé')); c3.appendChild(celluleOtp(u)); tr.appendChild(c3);
                 const c4 = el('td'); (u.services || []).forEach(s => c4.appendChild(pastille('cy', s))); if (!(u.services || []).length) c4.textContent = '—'; tr.appendChild(c4);
                 tr.appendChild(el('td', '', u.created ? new Date(u.created).toLocaleDateString('fr-FR') : '—'));
                 const a = el('td', 'act');
@@ -361,6 +365,39 @@
                 a.appendChild(btn('Supprimer', 'danger', () => demande('Supprimer le compte « ' + u.username + ' » et le retirer de tous les services ? Cette action est irréversible.', 'Supprimer', () => supprimer(u.username))));
                 tr.appendChild(a); tb.appendChild(tr);
             });
+        }
+
+        // ----- Second facteur PAR COMPTE (#2745) -----
+        // defaut : suit le réglage général (facultatif sur le LAN = « hors LAN seulement ») ; hors_lan ; toujours ; jamais = aucun code, même depuis internet (le secret est conservé).
+        const MODES_OTP = [['defaut', 'Selon le réglage général'], ['hors_lan', 'Hors LAN seulement'], ['toujours', 'Toujours'], ['jamais', 'Désactivé']];
+        function effetOtp(mode) {
+            const m = mode === 'defaut' ? (OTP === 'obligatoire' ? 'toujours' : 'hors_lan') : mode;
+            return m === 'toujours' ? ['Code exigé partout, LAN compris', ''] : m === 'jamais' ? ['Aucun code, même depuis internet', 'risque'] : ['Code exigé hors du LAN', ''];
+        }
+        function celluleOtp(u) {
+            const mode = MODES_OTP.some(m => m[0] === u.otp_mode) ? u.otp_mode : 'defaut';
+            const boite = el('div', 'otp'); const s = el('select'); s.dataset.otp = u.username; s.setAttribute('aria-label', 'Second facteur de ' + u.username);
+            MODES_OTP.forEach(([v, l]) => { const o = el('option', '', l); o.value = v; s.appendChild(o); });
+            s.value = mode;
+            const [txt, cls] = effetOtp(mode);
+            boite.appendChild(s); boite.appendChild(el('span', 'otp-effet ' + cls, txt));
+            s.addEventListener('change', () => changeOtp(u, s, mode));
+            return boite;
+        }
+        function changeOtp(u, s, ancien) {
+            const nouveau = s.value; const appliquer = () => reglerOtpCompte(u.username, nouveau, s, ancien);
+            if (nouveau !== 'jamais') { appliquer(); return; }
+            // Désactiver est le seul geste qui AFFAIBLIT : confirmation intégrée à la page ; pour un administrateur, on dit ce que cela ouvre.
+            const texte = u.role === 'admin'
+                ? 'Désactiver le second facteur de « ' + u.username + ' », qui est administrateur ? Il pourra ouvrir l’administration depuis internet avec son seul mot de passe. Son secret est conservé : réactiver ne demande pas de ré-enrôlement.'
+                : 'Désactiver le second facteur de « ' + u.username + ' » ? Il se connectera avec son seul mot de passe, y compris depuis internet. Son secret est conservé.';
+            demande(texte, 'Désactiver le 2FA', appliquer, () => { s.value = ancien; });
+        }
+        async function reglerOtpCompte(nom, mode, s, ancien) {
+            const corps = mode === 'jamais' ? { mode, confirmer: true } : { mode };
+            const r = await appel('PUT', API, '/user/' + encodeURIComponent(nom) + '/otp-mode', corps);
+            if (r.ok) { retour('rComptes', true, 'Second facteur de ' + nom + ' : ' + (MODES_OTP.find(m => m[0] === mode) || [0, mode])[1].toLowerCase() + '.'); charger(); }
+            else { s.value = ancien; retour('rComptes', false, 'Réglage impossible : ' + detail(r)); }
         }
 
         function rendreSbx() {
