@@ -52,6 +52,7 @@ guarded by `require_lecture` since #1256 (a token, or the LAN dashboard mode).
 |--------|-----------------------------------|------------------------------------------------------|
 | GET    | `/api/v1/metrics/visitor-origin`  | `{enabled, window_minutes, entries:[{asn,org,count}]}`|
 | GET    | `/api/v1/metrics/live-hosts`      | `{enabled, window_minutes, entries:[{host,count}], total_requests}` |
+| GET    | `/api/v1/metrics/live`            | temps réel (#2763), sans cache : `{ts, box, debit:{rx,tx}, charge, memoire_pct, connexions:{entrantes:[{code,n}], sortantes:[{code,n}], lan, inconnu, total}}` — connexions TCP établies par PAYS (entrantes : ports 22/80/443), jamais d'adresse IP ; `box` = `SECUBOX_PAYS` (ISO-2, « FR » par défaut) |
 | GET    | `/api/v1/metrics/cert-status`     | `{enabled, summary, next_renewal, warnings}`          |
 
 `live-hosts` counts requests per vhost from `/var/log/nginx/<vhost>_access.log`

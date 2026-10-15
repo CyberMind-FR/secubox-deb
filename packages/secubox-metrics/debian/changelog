@@ -1,3 +1,9 @@
+secubox-metrics (1.24.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /metrics/ en temps reel (#2763) : API GET /api/v1/metrics/live (connexions TCP etablies par pays, entrantes 22/80/443 et sortantes, debit reseau, charge, memoire ; sans cache, jamais d adresse IP) ; nouvelle carte « Connexions en direct » (pulsations par pays, arcs vers la box, debit et compteurs en direct, pastille EN DIRECT, rafraichie toutes les 3 s, en pause quand l onglet est cache, mouvement reduit respecte) ; les cartes attaques et visiteurs pulsent quand un pays augmente. Pays de la box : SECUBOX_PAYS (FR par defaut).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 17:30:00 +0200
+
 secubox-metrics (1.23.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: page /grafana/ au profil Aurora (page autonome, tuiles statut / composants / acces, ?demo=1 et ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l hote) (ref #2649)
