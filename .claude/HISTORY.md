@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — nDPId : « Regrouper par » sur l'onglet Flux (secubox-dpi 1.14.0, closes #2757)
+- Demande : « aggregations possibles sur de nombreux items de même types ». L'onglet Flux listait 200 flux un par un (60 affichés).
+- Livré : sélecteur « Regrouper par » protocole, application, source, destination ou niveau de risque ; une ligne par groupe (nombre de flux, octets, part, risque maximal), tri par colonne, clic pour revenir au détail filtré sur le groupe ; le filtre s'applique avant le regroupement. Mobile sans débordement (la barre d'outils passe à quatre colonnes au-delà de 600 px).
+- Empreintes et Risques agrègent déjà (classements, répartitions par gravité, catégorie, famille, SNI) : non touchés.
+- 10 tests en vrai navigateur sur les données de démonstration ; paquet arm64 construit en croisé (binaire aarch64 vérifié).
+
 ## 2026-10-15 — Association comptes ↔ profils : colonne « Profil SBX OS » (Utilisateurs) et « Modifier » par service (/identite) (secubox-auth 1.8.1, ref #2755)
 - Utilisateurs, comptes système : nouvelle colonne « Profil SBX OS » (profil associé ou « non associé ») et « Modifier » : associer, changer, dissocier via l'API sbxid existante (`comptes-systeme`). Ordre sûr : l'ancien lien est délié avant le nouveau (le serveur refuse un double lien) et remis si le nouveau échoue. Sans droit d'administrateur système la colonne affiche « — » et ne prétend rien.
 - /identite (Administration) : chaque compte de service lié (Courriel, Nextcloud, PeerTube, BBS) a un « Modifier » à côté du ✕ : relier un autre compte existant, même ordre sûr.
