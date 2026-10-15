@@ -323,6 +323,10 @@ def test_un_secret_devenu_invalide_en_cours_de_route_repart_sur_une_nouvelle_ses
     sessions = len([a for a in appels if a[1] == "/session"])
     h["boot"], h["t"] = "boot-2", 30                              # redémarrage : nouvel identifiant, horloge à zéro, fenêtre rouverte
     p.click("#suiv")
+    for _ in range(80):                                           # la page affiche « Bienvenue » AVANT et APRÈS : c'est la nouvelle session qu'on attend, pas le titre
+        if len([a for a in appels if a[1] == "/session"]) == sessions + 1:
+            break
+        p.wait_for_timeout(100)
     p.wait_for_function("document.querySelector('h1') && document.querySelector('h1').textContent.includes('Bienvenue')")
     assert len([a for a in appels if a[1] == "/session"]) == sessions + 1 and err == []
     ctx.close()
