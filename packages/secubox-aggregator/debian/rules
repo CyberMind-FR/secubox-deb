@@ -40,3 +40,8 @@ override_dh_auto_install:
 	  $(CURDIR)/debian/secubox-aggregator/lib/systemd/system/
 	install -m 755 sbin/secubox-groupe-declares-activer \
 	  $(CURDIR)/debian/secubox-aggregator/usr/sbin/
+
+# L unite des modules declares n est activee que par secubox-groupe-declares-activer (qui regarde groups.d) : jamais par debhelper (#2748, gk2 a ses groupes).
+override_dh_installsystemd:
+	dh_installsystemd secubox-aggregator.service secubox-aggregator-watchdog.service secubox-aggregator-watchdog.timer
+	dh_installsystemd --no-enable --no-start --name=secubox-groupe-declares secubox-groupe-declares.service

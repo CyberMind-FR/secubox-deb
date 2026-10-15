@@ -1,3 +1,9 @@
+secubox-aggregator (0.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Correctif de 0.4.1 : debhelper activait ET demarrait secubox-groupe-declares a l installation, meme sur une box qui a ses groupes (gk2) -> deux serveurs sur les memes sockets. L unite n est plus activee que par secubox-groupe-declares-activer, qui regarde groups.d (ref #2748).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 13:10:00 +0200
+
 secubox-aggregator (0.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Ajoute l'unite secubox-groupe-declares et son activateur : sert les modules declares groupables (groupable.d) quand l'operateur n'a aucun groupe dans groups.d. Sur gk2 (groupes g1..g6) rien ne change. Sans cela une image neuve ne servait que les 10 modules pilotes (ref #2748).
