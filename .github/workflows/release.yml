@@ -82,10 +82,36 @@ jobs:
       publier: 'non'
     secrets: inherit
 
+  # Les secrets de la publication APT (#2719). publish-packages.yml en déclare trois OBLIGATOIRES ; aucun n'était défini sur le dépôt, et
+  # l'appel échouait en 2 s, sans étape ni message, dans une release déjà rouge pour d'autres raisons. Le contrôle est fait ICI, à découvert :
+  # un avertissement lisible dans le résumé du run (jamais un saut muet, #1294), et la publication ne part que si les trois sont là.
+  apt-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.verif.outputs.ok }}
+    steps:
+      - name: Verifier les secrets de la publication APT
+        id: verif
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          absents=""
+          [ -n "$GPG_PRIVATE_KEY" ] || absents="$absents GPG_PRIVATE_KEY"
+          [ -n "$DEPLOY_SSH_KEY" ] || absents="$absents DEPLOY_SSH_KEY"
+          [ -n "$DEPLOY_KNOWN_HOSTS" ] || absents="$absents DEPLOY_KNOWN_HOSTS"
+          if [ -z "$absents" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Publication APT sautee::Secrets absents du depot :$absents. Les paquets ne sont pas publies par la CI ; publier depuis la box qui heberge le depot (reprepro)."
+          fi
+
   # Publish to APT repository — partial-release resilient.
   publish:
-    if: ${{ always() && needs.build-packages.result != 'cancelled' && github.event.inputs.publish != 'false' }}
-    needs: build-packages
+    if: ${{ always() && needs.build-packages.result != 'cancelled' && needs.apt-secrets.outputs.ok == 'true' && github.event.inputs.publish != 'false' }}
+    needs: [build-packages, apt-secrets]
     uses: ./.github/workflows/publish-packages.yml
     with:
       distribution: ${{ github.event.inputs.suite || 'trixie' }}
@@ -270,44 +296,37 @@ jobs:
           cp image/create-qemu-arm64-vm.sh release/
           cp image/create-vbox-vm.sh release/
 
-      - name: Delete existing release assets (for retry)
+      - name: Create the release as a draft, upload the files one by one, publish only when all arrived
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           VERSION="${{ github.ref_name || github.event.inputs.version }}"
-          # Check if release exists and delete conflicting assets
-          if gh release view "$VERSION" &>/dev/null; then
-            echo "Release exists, cleaning up for retry..."
-            # Get existing asset names
-            existing=$(gh release view "$VERSION" --json assets --jq '.assets[].name')
-            for asset in release/images/*.img.gz release/images/*.img.xz release/images/*.part* release/images/*.assembled.sha256 release/live-usb/*.img.gz release/live-usb/*.img.xz release/live-usb/*.part* release/live-usb/*.assembled.sha256 release/live-usb/*.sha256; do
-              [ -f "$asset" ] || continue
-              name=$(basename "$asset")
-              if echo "$existing" | grep -qF "$name"; then
-                echo "Deleting existing asset: $name"
-                gh release delete-asset "$VERSION" "$name" --yes 2>/dev/null || true
-              fi
-            done
+          PRE=""
+          case "$VERSION" in *alpha*|*beta*|*rc*) PRE="--prerelease" ;; esac
+
+          # BROUILLON D'ABORD (#2719) : une release incomplete n'est visible de personne. Elle n'est publiee qu'apres le dernier envoi
+          # verifie ; au moindre fichier manquant elle reste en brouillon et le job echoue. Les .deb de build-packages sont deja sur la
+          # release (#1491) : on ne les touche pas.
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            gh release edit "$VERSION" --draft --title "SecuBox-DEB $VERSION" --notes-file release/RELEASE_NOTES.md $PRE
+          else
+            gh release create "$VERSION" --draft --verify-tag --title "SecuBox-DEB $VERSION" --notes-file release/RELEASE_NOTES.md $PRE
           fi
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: SecuBox-DEB ${{ github.ref_name || github.event.inputs.version }}
-          body_path: release/RELEASE_NOTES.md
-          # PAS DE .deb ICI (#1491) : build-packages les publie déjà dans cette
-          # release ; les supprimer puis les renvoyer (≈ 460 fichiers) faisait
-          # sauter la limite secondaire de l'API GitHub et échouer la release.
-          files: |
+          # UN FICHIER A LA FOIS, avec reprises. softprops/action-gh-release envoyait tout en parallele : sur des images de 1 a 2 Go,
+          # « Upload body timed out due to inactivity » puis « error updating release asset metadata : Not Found » (alpha.16 et alpha.17).
+          # --clobber remplace un fichier deja present (relance) sans le supprimer d'abord.
+          # MEME ORDRE qu'avant : a nom egal, le DERNIER fichier envoye reste (live-usb/ apres images/), comme pour SHA256SUMS. Compressees
+          # SEULEMENT (#1507) : l'image brute fait plus de 2 Go. Parties des images de plus de 1900 Mo (limite GitHub, #2427) : .part*
+          shopt -s nullglob
+          FICHIERS=(
             release/images/*.img.gz
             release/images/*.img.xz
-            # Parties des images de plus de 1900 Mo (limite GitHub de 2 Gio, #2427) et somme du fichier réassemblé.
             release/images/*.part*
             release/images/*.assembled.sha256
             release/live-usb/*.part*
             release/live-usb/*.assembled.sha256
-            # Compressées SEULEMENT (#1507) : `*.img*` attrapait l'image brute
-            # (8 Go) et GitHub refuse tout fichier de plus de 2 Go.
             release/live-usb/*.img.gz
             release/live-usb/*.img.xz
             release/live-usb/*.sha256
@@ -315,6 +334,29 @@ jobs:
             release/create-vbox-vm.sh
             release/SHA256SUMS
             release/SHA256SUMS.gpg
-          draft: false
-          fail_on_unmatched_files: false
-          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          )
+          echec=0
+          ENVOYES=()
+          for f in "${FICHIERS[@]}"; do
+            [ -f "$f" ] || continue
+            ok=0
+            for i in 1 2 3 4; do
+              if gh release upload "$VERSION" "$f" --clobber; then ok=1; break; fi
+              echo "::warning::envoi de $(basename "$f") echoue (essai $i sur 4)"
+              sleep $((i * 20))
+            done
+            if [ "$ok" = 1 ]; then ENVOYES+=("$f"); else echo "::error::envoi definitivement echoue : $f"; echec=1; fi
+          done
+
+          # Chaque fichier envoye doit etre sur la release.
+          publies="$(gh release view "$VERSION" --json assets --jq '.assets[].name')"
+          for f in "${ENVOYES[@]}"; do
+            n="$(basename "$f")"
+            printf '%s\n' "$publies" | grep -qxF "$n" || { echo "::error::fichier manquant sur la release : $n"; echec=1; }
+          done
+
+          if [ "$echec" != 0 ]; then
+            echo "::error::release $VERSION laissee en BROUILLON : des fichiers manquent. Relancer le job (les fichiers deja envoyes sont remplaces)."
+            exit 1
+          fi
+          gh release edit "$VERSION" --draft=false $PRE
