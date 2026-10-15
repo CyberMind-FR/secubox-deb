@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — nDPId Protocoles : regrouper protocoles et applications (secubox-dpi 1.14.1, closes #2759)
+- Suite de #2757, sur la remarque « Protocols has also applications » : l'onglet Protocoles a maintenant un « Regrouper par » (catégorie ou transport chiffré/en clair) sur « Tous les protocoles », un filtre de transport, et une nouvelle table « Toutes les applications » (filtre, tri, regroupement par catégorie déduite du nom ; avant : seulement un top 10 en barres).
+- Un composant de liste commun aux deux tables ; un clic sur un groupe revient au détail de ce groupe. 7 tests en vrai navigateur (somme des groupes = total, téléphone sans débordement) ; suite dpi 221 verts. Paquet arm64 construit en croisé.
+
 ## 2026-10-15 — nDPId : « Regrouper par » sur l'onglet Flux (secubox-dpi 1.14.0, closes #2757)
 - Demande : « aggregations possibles sur de nombreux items de même types ». L'onglet Flux listait 200 flux un par un (60 affichés).
 - Livré : sélecteur « Regrouper par » protocole, application, source, destination ou niveau de risque ; une ligne par groupe (nombre de flux, octets, part, risque maximal), tri par colonne, clic pour revenir au détail filtré sur le groupe ; le filtre s'applique avant le regroupement. Mobile sans débordement (la barre d'outils passe à quatre colonnes au-delà de 600 px).

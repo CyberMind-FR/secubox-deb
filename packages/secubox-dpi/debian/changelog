@@ -1,3 +1,9 @@
+secubox-dpi (1.14.1-1~bookworm1) bookworm; urgency=medium
+
+  * nDPId, onglet Protocoles : « Regrouper par » categorie ou transport pour les protocoles, filtre de transport, et nouvelle table « Toutes les applications » (filtre, tri, regroupement par categorie deduite du nom). Un clic sur un groupe revient au detail de ce groupe (ref #2759).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 15:40:00 +0200
+
 secubox-dpi (1.14.0-1~bookworm1) bookworm; urgency=medium
 
   * nDPId, onglet Flux : « Regrouper par » protocole, application, source, destination ou niveau de risque. Une ligne par groupe (flux, octets, part, risque maximal), tri par colonne, clic pour revenir au detail du groupe ; le filtre s applique avant le regroupement (ref #2757).
