@@ -1085,6 +1085,13 @@ async def metrics_en_direct():
     return JSONResponse(content=mesures, headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/v1/metrics/series", dependencies=[Depends(require_lecture)])
+def metrics_series(duree: float = 3600, points: int = 240, depuis: Optional[float] = None, jusqua: Optional[float] = None):
+    """Courbes (#2765) : CPU, mémoire, charge, débit, connexions, disque. Fenêtre `duree` (s) ou [depuis, jusqua] ; `points` tranches (moyennes). 7 jours au plus."""
+    import serie
+    return JSONResponse(content=serie.vue(duree, points, depuis=depuis, jusqua=jusqua), headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/v1/metrics/cookie-audit", dependencies=[Depends(require_lecture)])
 async def cookie_audit_metrics():
     """Inventaire RGPD des cookies deposes, par vhost (#1311).

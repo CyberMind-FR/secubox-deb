@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — « Courbes » remplace Grafana (secubox-metrics 1.25.0, closes #2765)
+- Demande : « remplacer grafana et glances par des équivalents quick aurora responsive dynamique fun simple réactive ». **Glances : conservée telle quelle** — le mainteneur a jugé la page actuelle « impecc » ; mon remplacement « Système en direct » a été retiré avant livraison (API, page et tests supprimés).
+- Grafana (page d'accès à un conteneur arrêté sur gk2) → page « Courbes » sans conteneur : relevé par minute de compteurs bruts (jiffies CPU, octets, connexions, disque) par `secubox-metrics-serie.timer` (stdlib, 7 jours) ; `GET /api/v1/metrics/series` ; page Aurora réactive : plages 15 min → 7 j, survol synchronisé sur les six courbes, glisser pour zoomer, repère du présent, actualisation (figée pendant un zoom). Un compteur remis à zéro ou une mesure absente donne un trou, jamais un pic ou un zéro.
+- 11 tests de collecte/API et 18 en vrai navigateur ; les 3 échecs de la suite metrics sont ceux de master. L'entrée de menu `grafana` devient « Courbes » (id inchangé, pins et profils intacts).
+
 ## 2026-10-15 — Metrics : cartes dynamiques et métriques en temps réel (secubox-metrics 1.24.0, closes #2763)
 - Demande : « dynamiser les mappes avec les connexions et autres metrics en real time ». Les deux cartes étaient des cercles statiques par pays, rafraîchis toutes les 15 s ; les connexions n'étaient que des compteurs.
 - API `GET /api/v1/metrics/live` (lecture, sans cache) : connexions TCP établies par pays (GeoLite2 local), entrantes 22/80/443 et sortantes, LAN et inconnues comptées à part, débit des interfaces physiques, charge, mémoire. Jamais d'adresse IP dans la réponse ; `ss` tourne sous `secubox`, sans privilège.

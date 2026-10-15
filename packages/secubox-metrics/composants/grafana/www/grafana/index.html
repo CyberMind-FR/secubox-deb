@@ -5,278 +5,231 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  Grafana : composants, état global, accès et tableau de bord des services.
-  Au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance. Mesure absente = « — ».
-  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes. Aucun secret n'est affiché ni stocké.
+  « Courbes » (#2765) : remplace la page Grafana. Page autonome au profil Aurora (.claude/AURORA-REFERENCE.md), aucune dépendance, aucun conteneur Grafana.
+  Données : GET /api/v1/metrics/series (un relevé par minute, 7 jours, lu en session). Une valeur absente est un TROU dans la courbe, jamais un zéro.
+  Réactif : plages 15 min → 7 j, survol qui suit sur les six courbes, glisser pour zoomer, actualisation automatique (sauf pendant un zoom).
+  ?embed=1 : sans menu ; ?demo=1 : données fictives ; ?cadence=ms : actualisation (plancher 300).
 -->
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox — Grafana</title>
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <style>
-        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
-          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
-        *{box-sizing:border-box}
-        html,body{margin:0;min-height:100%}
-        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
-             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
-        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
-        .principal{min-width:0}
-        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
-        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
-        body.mobile-mode:not(.emb) .principal{margin-left:0}
-        .cadre{container-type:inline-size;container-name:a;padding:10px}
-        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
-        .app>*{min-width:0}
-        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
-        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
-        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
-        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
-        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
-        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
-        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
-        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
-        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
-        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
-        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
-        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
-        [hidden]{display:none!important}
-        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
-        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(var(--nt,4),1fr)}}
-        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
-        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
-        .tuile .v.long{font-size:1rem;line-height:1.15}
-        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
-        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
-        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
-        .grille{display:grid;gap:10px;grid-template-columns:1fr}
-        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
-        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
-        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
-        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
-        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
-        .tab{overflow-x:auto} .tab table{min-width:560px} td.mono{white-space:nowrap}
-        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
-        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
-        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
-        tbody tr:hover{background:rgba(41,182,246,.07)} tbody tr.sel{background:rgba(41,182,246,.12)}
-        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
-        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
-        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
-        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
-        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
-        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;margin:0}
-        form.saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
-        form.saisie input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
-        form.saisie input:focus,select:focus{outline:none;border-color:var(--cyan)}
-        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
-        .verdict{display:flex;gap:10px;align-items:center;margin-top:8px;padding:8px 12px;border-radius:10px;border:1px solid var(--trait2)}
-        .verdict b{font-size:1rem} .verdict.ok{border-color:var(--vert);color:var(--vert)} .verdict.ko{border-color:var(--rouge);color:var(--rouge)}
-        .sortie{margin:8px 0 0;max-height:160px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7)}
-        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
-        .toast.show{opacity:1;transform:translate(-50%,0)}
-        ol.etapes{margin:6px 0 0;padding-left:1.3rem;font-size:.8rem;color:var(--doux);display:grid;gap:4px} ol.etapes b{color:var(--texte)}
-        .onglets{display:flex;flex-wrap:wrap;gap:6px}
-        .onglets button{font:inherit;font-size:.78rem;padding:6px 14px;border-radius:999px;border:1px solid var(--trait);background:rgba(10,22,46,.6);color:var(--doux);cursor:pointer;min-height:32px}
-        .onglets button[aria-selected=true]{border-color:var(--cyan);color:var(--texte);background:rgba(41,182,246,.18)}
-        .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
-        .liste{display:grid;gap:8px;margin:0;padding:0;list-style:none}
-        .elt{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;border:1px solid var(--trait);border-radius:10px;padding:8px 11px;background:rgba(8,18,38,.55);min-width:0}
-        .elt .nom{font-weight:600;overflow-wrap:anywhere;min-width:0} .elt .desc{color:var(--doux);font-size:.78rem;flex-basis:100%;overflow-wrap:anywhere}
-        .elt .act{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-        .elt .meta{color:var(--faible);font-size:.72rem;overflow-wrap:anywhere}
-        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
-        .journal{margin:0;max-height:340px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7)}
-        .sel-fichier{font:inherit;font-size:.8rem;color:var(--texte);min-width:0;max-width:100%}
-        form.saisie .coche{display:flex;align-items:center;gap:6px;color:var(--doux);font-size:.78rem}
-        form.saisie .coche input{width:auto}
-        .rech{display:flex;gap:8px;flex-wrap:wrap} .rech input{flex:1 1 200px;font:inherit;font-size:.85rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:7px 10px;min-width:0}
-        .rech input:focus{outline:none;border-color:var(--cyan)}
-        .cadre-graf{width:100%;height:560px;border:1px solid var(--trait);border-radius:10px;background:rgba(8,18,38,.7)}
-        @media (max-width:600px){.cadre-graf{height:420px}}
-        a.lien{color:var(--cyan);overflow-wrap:anywhere}
-        .tuiles{--nt:3}
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Courbes</title>
+<link rel="stylesheet" href="/shared/sidebar-light.css">
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(167,139,250,.1),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+  .principal{min-width:0}
+  body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+  body.mobile-mode:not(.emb) .principal{margin-left:0}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:14px;display:grid;gap:12px;min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:10px} .marque b{font-size:1.35rem;font-weight:800} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.06em}
+  .pill i{width:8px;height:8px;border-radius:50%;background:currentColor;animation:clig 1.4s ease-in-out infinite}
+  .pill.off{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.off i,.pill.zoom i{animation:none}
+  .pill.zoom{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+  @keyframes clig{0%,100%{opacity:1}50%{opacity:.25}}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .plages{display:inline-flex;border:1px solid var(--trait2);border-radius:10px;overflow:hidden}
+  .plages button,.droite button{font:inherit;font-size:.78rem;color:var(--texte);background:rgba(59,130,246,.12);border:0;padding:5px 12px;cursor:pointer}
+  .plages button+button{border-left:1px solid var(--trait2)} .plages button:hover{background:rgba(59,130,246,.3)} .plages button[aria-pressed="true"]{background:var(--bleu);color:#fff;font-weight:700}
+  .droite button{border:1px solid var(--trait2);border-radius:8px} :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{background:var(--cyan);color:#001;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .lecture{min-height:2.4em;border:1px dashed var(--trait2);border-radius:10px;padding:5px 10px;color:var(--doux);font-size:.8rem;font-variant-numeric:tabular-nums;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
+  .lecture b{color:var(--texte)} .lecture .h{color:var(--cyan);font-weight:700}
+  .grille{display:grid;gap:10px;min-width:0}
+  .courbe{border:1px solid var(--trait);border-radius:12px;background:rgba(6,13,27,.5);padding:8px 10px;min-width:0;display:grid;gap:4px}
+  .courbe h3{margin:0;font-size:.88rem;display:flex;gap:8px;align-items:baseline;justify-content:space-between;flex-wrap:wrap} .courbe h3 span{font-size:.7rem;color:var(--faible);font-weight:400;font-variant-numeric:tabular-nums}
+  .zone{position:relative;height:130px;cursor:crosshair;touch-action:pan-y;user-select:none;border-left:1px solid rgba(159,179,214,.2);border-bottom:1px solid rgba(159,179,214,.2)}
+  .zone svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:hidden}
+  .zone .gr{stroke:rgba(159,179,214,.1);stroke-width:1;vector-effect:non-scaling-stroke}
+  .zone path.ligne{fill:none;stroke-width:1.8;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:0;animation:trace .8s ease-out 1}
+  .zone path.aire{stroke:none;opacity:.16}
+  @keyframes trace{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+  .zone .ymax,.zone .ymin{position:absolute;left:4px;font-size:.6rem;color:var(--faible);font-variant-numeric:tabular-nums;pointer-events:none} .zone .ymax{top:1px} .zone .ymin{bottom:1px}
+  .repere{position:absolute;top:0;bottom:0;width:0;border-left:1px solid rgba(234,241,255,.55);pointer-events:none;display:none}
+  .repere i{position:absolute;left:-4px;width:8px;height:8px;border-radius:50%;background:#fff;border:2px solid currentColor}
+  .sel{position:absolute;top:0;bottom:0;background:rgba(167,139,250,.22);border-left:1px solid var(--violet);border-right:1px solid var(--violet);pointer-events:none;display:none}
+  .maintenant{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:currentColor;pointer-events:none;animation:onde 1.8s ease-out infinite}
+  @keyframes onde{0%{box-shadow:0 0 0 0 currentColor}100%{box-shadow:0 0 0 9px transparent}}
+  .axe{display:flex;justify-content:space-between;font-size:.62rem;color:var(--faible);font-variant-numeric:tabular-nums}
+  .stats{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:.7rem;color:var(--doux);font-variant-numeric:tabular-nums} .stats b{color:var(--texte)}
+  #vide{padding:18px;text-align:center;color:var(--doux);border:1px dashed var(--trait2);border-radius:12px}
+  .note{color:var(--faible);font-size:.7rem}
+  @container a (min-width:760px){.grille{grid-template-columns:1fr 1fr}}
+  @container a (min-width:1180px){.grille{grid-template-columns:1fr 1fr 1fr}}
+  @media (prefers-reduced-motion:reduce){.zone path.ligne,.pill i,.maintenant{animation:none}}
+</style>
 </head>
 <body>
-    <nav class="sidebar" id="sidebar"></nav>
-    <main class="principal"><div class="cadre"><div class="app">
-        <header class="tete">
-            <div class="marque">
-                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-7"/></svg>
-                <div><h1>Grafana</h1><small>Métriques de sécurité et tableau de bord des services</small></div>
-            </div>
-            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
-            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
-        </header>
-        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
-        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
-        <div id="erreur" role="alert" hidden></div>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="principal">
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+      <span><b>Courbes</b><small id="sousTitre">CPU, mémoire, réseau, connexions, disque.</small></span></span>
+    <span class="pill" id="etat" role="status" aria-live="polite"><i></i><b>CHARGEMENT…</b></span>
+    <div class="droite">
+      <span class="plages" id="plages" role="group" aria-label="Plage de temps">
+        <button type="button" data-d="900" aria-pressed="false">15 min</button><button type="button" data-d="3600" aria-pressed="true">1 h</button><button type="button" data-d="21600" aria-pressed="false">6 h</button><button type="button" data-d="86400" aria-pressed="false">24 h</button><button type="button" data-d="604800" aria-pressed="false">7 j</button>
+      </span>
+      <button type="button" id="tout" hidden>↺ Tout</button>
+    </div>
+  </div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — courbes fictives, aucune mesure réelle</div>
+  <div class="lecture" id="lecture" aria-live="off"><span>Survolez une courbe pour lire toutes les valeurs à cet instant · glissez pour zoomer.</span></div>
+  <div id="vide" hidden>Pas encore d’historique : le relevé a lieu chaque minute, les courbes apparaîtront dès les premières mesures.</div>
+  <div class="grille" id="grille"></div>
+  <div class="note" id="note">Lecture seule · un relevé par minute, gardé 7 jours · une valeur absente est un trou, jamais un zéro.</div>
+</div></div>
+</main>
+<script>
+(function(){
+  'use strict';
+  var q=new URLSearchParams(location.search),EMB=!!q.get('embed'),DEMO=!!q.get('demo');
+  if(EMB)document.body.classList.add('emb');
+  else{try{var s0=document.createElement('script');s0.src='/shared/sidebar.js';document.head.appendChild(s0);}catch(e){}}
+  var $=function(i){return document.getElementById(i);};
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fr(v,d){return num(v).toFixed(d==null?1:d).replace('.',',');}
+  function oct(b){b=num(b);var u=['o','Ko','Mo','Go'],i=0;while(b>=1024&&i<3){b/=1024;i++;}return (i?(b<10?fr(b,1):Math.round(b)):Math.round(b))+' '+u[i];}
+  var REDUIT=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var CAD=Math.max(300,+q.get('cadence')||15000),POINTS=300;
+  // Les six courbes : série(s), couleur, unité, borne haute fixe (pourcentages) ou automatique.
+  var C=[
+    {id:'cpu',titre:'Processeur',k:['cpu'],col:['#29b6f6'],max:100,f:function(v){return fr(v)+' %';}},
+    {id:'mem',titre:'Mémoire',k:['mem'],col:['#a78bfa'],max:100,f:function(v){return fr(v)+' %';}},
+    {id:'charge',titre:'Charge',k:['charge'],col:['#ff9f1c'],max:null,f:function(v){return fr(v,2);}},
+    {id:'reseau',titre:'Réseau',k:['rx','tx'],col:['#29b6f6','#ff9f1c'],max:null,f:function(v){return oct(v)+'/s';}},
+    {id:'conn',titre:'Connexions TCP',k:['conn'],col:['#2ecc71'],max:null,f:function(v){return String(Math.round(v));}},
+    {id:'disque',titre:'Disque /',k:['disque'],col:['#ff4d5e'],max:100,f:function(v){return fr(v)+' %';}}
+  ];
+  var D=null,duree=3600,zoom=null,tim=null,echecs=0;
 
-        <section class="tuiles" aria-label="Indicateurs">
-            <div class="tuile cy" id="cGlobal" title="État global calculé par grafanactl : sain si le conteneur, le démon Grafana et l'API hôte tournent ; dégradé si le conteneur existe et au moins le démon ou l'API tourne ; arrêté sinon."><span class="l">Statut</span><span class="v" id="tGlobal">—</span><span class="s">vert, jaune ou rouge</span></div>
-            <div class="tuile cy" id="cComp" title="Composants en fonctionnement sur le total relevé : conteneur LXC, démon grafana-server, service API hôte."><span class="l">Composants</span><span class="v" id="tComp">—</span><span class="s">en fonctionnement</span></div>
-            <div class="tuile cy" title="Nombre d'adresses d'accès à l'interface Grafana native (LAN et, si configuré, public)."><span class="l">Accès</span><span class="v" id="tAcces">—</span><span class="s">adresses déclarées</span></div>
-        </section>
+  function heure(t,long){var d=new Date(t*1000);return long?d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+  function etat(m){var e=$('etat');e.className='pill'+(m==='ok'?'':m==='zoom'?' zoom':' off');e.lastChild.textContent=m==='ok'?'EN DIRECT':m==='zoom'?'ZOOM':'RECONNEXION…';}
 
-        <div class="grille">
-            <div class="pan"><h3>Composants <i>GET /components</i></h3>
-                <ul class="liste" id="lComp"></ul>
-            </div>
-            <div class="pan"><h3>Accès <i>GET /access</i></h3>
-                <ul class="liste" id="lAcces"></ul>
-                <div class="bout"><a class="btn prim" id="natif" href="#" hidden target="_blank" rel="noopener">Ouvrir l'interface Grafana native</a><a class="btn" href="/">← Retour au hub</a></div>
-                <p class="note">L'adresse native retenue est la publique si elle existe, sinon celle du réseau local.</p>
-            </div>
-        </div>
+  // ----- construction de la grille (une fois) -----
+  var g=$('grille');
+  C.forEach(function(c){
+    var d=document.createElement('div');d.className='courbe';d.dataset.id=c.id;
+    d.innerHTML='<h3><b></b><span class="cur"></span></h3><div class="zone" tabindex="0" aria-label=""><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg><span class="ymax"></span><span class="ymin">0</span><div class="repere"></div><div class="sel"></div></div><div class="axe"><span></span><span></span><span></span></div><div class="stats"></div>';
+    d.querySelector('h3 b').textContent=c.titre;d.querySelector('.zone').setAttribute('aria-label','Courbe '+c.titre);
+    g.appendChild(d);
+  });
 
-        <div class="pan"><h3>Tableau de bord des services <i>Grafana, même origine</i></h3>
-            <iframe class="cadre-graf" id="graf" title="Tableaux de bord Grafana" referrerpolicy="no-referrer"></iframe>
-            <p class="note" id="nGraf"></p>
-        </div>
+  function segments(vals,n,haut){
+    var out=[],cur=[];
+    vals.forEach(function(v,i){
+      if(v==null){if(cur.length)out.push(cur);cur=[];return;}
+      cur.push([(n>1?i*100/(n-1):50),100-Math.max(0,Math.min(100,100*num(v)/haut))]);
+    });
+    if(cur.length)out.push(cur);return out;}
+  function chemin(segs){return segs.map(function(s){return s.map(function(p,i){return (i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2);}).join('');}).join('');}
+  function aire(segs){return segs.map(function(s){if(s.length<2)return '';return 'M'+s[0][0].toFixed(2)+' 100'+s.map(function(p){return 'L'+p[0].toFixed(2)+' '+p[1].toFixed(2);}).join('')+'L'+s[s.length-1][0].toFixed(2)+' 100Z';}).join('');}
 
-    </div></div></main>
+  function rend(d,neuf){
+    D=d;var n=d.t.length,vide=!d.points;
+    $('vide').hidden=!vide;$('grille').style.display=vide?'none':'';
+    if(vide)return;
+    C.forEach(function(c){
+      var box=g.querySelector('[data-id="'+c.id+'"]'),all=[];
+      c.k.forEach(function(k){(d.series[k]||[]).forEach(function(v){if(v!=null)all.push(num(v));});});
+      var haut=c.max||Math.max.apply(null,[c.id==='charge'?1:1].concat(all))*1.15;
+      var svg='';
+      [25,50,75].forEach(function(y){svg+='<line class="gr" x1="0" x2="100" y1="'+y+'" y2="'+y+'"/>';});
+      var maintenant='';
+      c.k.forEach(function(k,j){var segs=segments(d.series[k]||[],n,haut);
+        if(c.k.length===1)svg+='<path class="aire" d="'+aire(segs)+'" fill="'+c.col[j]+'"/>';
+        svg+='<path class="ligne" pathLength="1" d="'+chemin(segs)+'" stroke="'+c.col[j]+'" fill="none"'+(neuf&&!REDUIT?'':' style="animation:none"')+'/>';
+        var last=null;(d.series[k]||[]).forEach(function(v,i){if(v!=null)last=[i,v];});
+        if(last)maintenant+='<span class="maintenant" style="left:'+(n>1?last[0]*100/(n-1):50)+'%;top:'+(100-Math.min(100,100*num(last[1])/haut))+'%;color:'+c.col[j]+'"></span>';
+      });
+      var zone=box.querySelector('.zone');zone.querySelector('svg').innerHTML=svg;
+      Array.prototype.forEach.call(zone.querySelectorAll('.maintenant'),function(e){e.remove();});zone.insertAdjacentHTML('beforeend',maintenant);
+      zone.querySelector('.ymax').textContent=c.f(haut);
+      var ax=box.querySelectorAll('.axe span');ax[0].textContent=heure(d.t[0],d.duree_s>86400);ax[1].textContent=heure(d.t[Math.floor(n/2)],d.duree_s>86400);ax[2].textContent=heure(d.t[n-1],d.duree_s>86400);
+      var st=box.querySelector('.stats');st.innerHTML='';
+      c.k.forEach(function(k,j){var v=(d.series[k]||[]).filter(function(x){return x!=null;}).map(num);if(!v.length)return;
+        var mn=Math.min.apply(null,v),mx=Math.max.apply(null,v),mo=v.reduce(function(s,x){return s+x;},0)/v.length;
+        var sp=document.createElement('span');sp.style.color=c.col[j];sp.append((c.k.length>1?(k==='rx'?'↓ ':'↑ '):'')+'min ');var b1=document.createElement('b');b1.textContent=c.f(mn);sp.append(b1,' · moy ');var b2=document.createElement('b');b2.textContent=c.f(mo);sp.append(b2,' · max ');var b3=document.createElement('b');b3.textContent=c.f(mx);sp.appendChild(b3);st.appendChild(sp);});
+      var last0=c.k.map(function(k){var l=null;(d.series[k]||[]).forEach(function(v){if(v!=null)l=v;});return l;});
+      box.querySelector('.cur').textContent=last0.some(function(x){return x!=null;})?'maintenant : '+c.k.map(function(k,j){return last0[j]==null?'—':(c.k.length>1?(k==='rx'?'↓':'↑'):'')+c.f(last0[j]);}).join(' '):'';
+    });
+    $('sousTitre').textContent=(zoom?'Zoom du '+heure(zoom.depuis,true)+' au '+heure(zoom.jusqua,true):'Les '+libPlage(d.duree_s)+' écoulées')+' · un point toutes les '+Math.max(1,Math.round(d.pas_s/60*10)/10).toString().replace('.',',')+' min.';
+  }
+  function libPlage(s){return s>=604800?'7 jours':s>=86400?Math.round(s/86400)+' jour'+(s>=172800?'s':''):s>=3600?Math.round(s/3600)+' heure'+(s>=7200?'s':''):Math.round(s/60)+' minutes';}
 
-    <script src="/shared/sidebar.js"></script>
-    <script>
+  // ----- survol synchronisé + glisser pour zoomer -----
+  var drag=null;
+  function idx(zone,x){var r=zone.getBoundingClientRect(),f=Math.max(0,Math.min(1,(x-r.left)/r.width));return {f:f,i:Math.round(f*(D.t.length-1))};}
+  function lecture(i){
+    var L=$('lecture');L.innerHTML='';var h=document.createElement('span');h.className='h';h.textContent=heure(D.t[i],D.duree_s>86400);L.appendChild(h);
+    C.forEach(function(c){c.k.forEach(function(k,j){var v=(D.series[k]||[])[i];var s=document.createElement('span');s.append((k==='rx'?'↓ ':k==='tx'?'↑ ':c.titre.split(' ')[0]+' '));var b=document.createElement('b');b.textContent=v==null?'—':c.f(v);b.style.color=c.col[j];s.appendChild(b);L.appendChild(s);});});
+  }
+  function reperes(f,i){
+    Array.prototype.forEach.call(g.querySelectorAll('.courbe'),function(box,m){var c=C[m],r=box.querySelector('.repere');r.style.display='block';r.style.left=(f*100)+'%';
+      var h=r.querySelector('i');if(!h){h=document.createElement('i');r.appendChild(h);}
+      var v=(D.series[c.k[0]]||[])[i],all=[];c.k.forEach(function(k){(D.series[k]||[]).forEach(function(x){if(x!=null)all.push(num(x));});});
+      var haut=c.max||Math.max.apply(null,[1].concat(all))*1.15;h.style.display=v==null?'none':'';h.style.top='calc('+(100-Math.min(100,100*num(v)/haut))+'% - 4px)';r.style.color=c.col[0];});
+  }
+  function cacher(){Array.prototype.forEach.call(g.querySelectorAll('.repere'),function(r){r.style.display='none';});}
+  Array.prototype.forEach.call(g.querySelectorAll('.zone'),function(zone){
+    zone.addEventListener('pointermove',function(e){if(!D||!D.points)return;var p=idx(zone,e.clientX);lecture(p.i);reperes(p.f,p.i);
+      if(drag&&drag.zone===zone){var r=zone.getBoundingClientRect(),a=Math.min(drag.x0,e.clientX),b=Math.max(drag.x0,e.clientX),s=zone.querySelector('.sel');s.style.display='block';s.style.left=((a-r.left)/r.width*100)+'%';s.style.width=((b-a)/r.width*100)+'%';}});
+    zone.addEventListener('pointerleave',function(){if(!drag){cacher();}});
+    zone.addEventListener('pointerdown',function(e){if(!D||!D.points||e.button>0)return;drag={zone:zone,x0:e.clientX};try{zone.setPointerCapture(e.pointerId);}catch(x){}});
+    zone.addEventListener('pointerup',function(e){if(!drag||drag.zone!==zone)return;var x0=drag.x0;drag=null;Array.prototype.forEach.call(g.querySelectorAll('.sel'),function(s){s.style.display='none';});
+      if(Math.abs(e.clientX-x0)<12||!D)return;var a=idx(zone,Math.min(x0,e.clientX)).i,b=idx(zone,Math.max(x0,e.clientX)).i;if(b<=a)return;
+      zoom={depuis:D.t[a],jusqua:D.t[b]};$('tout').hidden=false;charge(true);});
+    zone.addEventListener('pointercancel',function(){drag=null;});
+  });
+  g.addEventListener('mouseleave',function(){cacher();});
 
-        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
-        if (Q.get('embed')) document.body.classList.add('emb');
-        const API = '/api/v1/grafana';
-        const $ = id => document.getElementById(id);
-        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
-        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
-        const nb = v => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? '—' : Number(v).toLocaleString('fr-FR');
-        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
-        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
-        async function lire(chemin) {
-            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
-            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
-            return r.json();
-        }
-        // Écriture : inerte en démonstration. Les routes, méthodes et corps sont ceux de l'ancienne page.
-        async function ecrire(methode, chemin, corps) {
-            if (DEMO) return { ok: false, demo: true };
-            try {
-                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
-                if (corps !== undefined) opts.body = JSON.stringify(corps);
-                const r = await fetch(API + chemin, opts);
-                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
-                return { ok: r.ok, statut: r.status, data };
-            } catch (e) { return { ok: false, statut: 0, data: null }; }
-        }
-        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
-        function detail(res) {
-            if (res.demo) return 'Démonstration : action inerte.';
-            const d = res.data && res.data.detail;
-            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
-            if (d) return String(d);
-            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
-        }
-        function taille(o) {
-            if (o === null || o === undefined || o === '' || isNaN(Number(o))) return '—';
-            o = Number(o);
-            if (o < 1024) return o + ' o';
-            if (o < 1048576) return (o / 1024).toFixed(1).replace('.', ',') + ' Ko';
-            if (o < 1073741824) return (o / 1048576).toFixed(1).replace('.', ',') + ' Mo';
-            return (o / 1073741824).toFixed(1).replace('.', ',') + ' Go';
-        }
-        function date(ts) { if (!ts) return '—'; const d = new Date(typeof ts === 'number' && ts < 1e12 ? ts * 1000 : ts); return isNaN(d) ? '—' : d.toLocaleString('fr-FR'); }
-        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
-        function annoncer() {
-            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'grafana' }, location.origin); } catch (e) { /* hors iframe */ }
-        }
-        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
-        addEventListener('resize', annoncer);
-        const refus = es => es.some(e => e.status === 'rejected' && e.reason && (e.reason.statut === 401 || e.reason.statut === 403));
+  // ----- plages, zoom, actualisation -----
+  Array.prototype.forEach.call($('plages').querySelectorAll('button'),function(b){b.addEventListener('click',function(){
+    duree=+b.dataset.d;zoom=null;$('tout').hidden=true;
+    Array.prototype.forEach.call($('plages').querySelectorAll('button'),function(x){x.setAttribute('aria-pressed',x===b?'true':'false');});charge(true);});});
+  $('tout').addEventListener('click',function(){zoom=null;this.hidden=true;charge(true);});
 
-
-        const SRC_GRAFANA = '/grafana/d/secubox-services/secubox-services-overview?kiosk=tv&theme=light';
-        let COMP = null, STAT = null, ACCES = null, SESSION_OK = true, CHARGE = false;
-
-        function demoData() {
-            COMP = [{ name: 'lxc', state: 'running', detail: 'grafana @ 10.100.0.50 sur br-lxc' }, { name: 'daemon', state: 'running', detail: 'grafana-server, port 3000' }, { name: 'host-api', state: 'running', detail: 'secubox-grafana.service' }];
-            STAT = { overall: 'green' };
-            ACCES = [{ url: 'http://10.100.0.50:3000/', auth: 'lan-only', scope: 'lan' }, { url: 'https://grafana.example.org/', auth: 'LAN-gated', scope: 'public' }];
-        }
-
-        async function charger() {
-            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
-            const es = await Promise.allSettled([lire('/components'), lire('/status'), lire('/access')]);
-            const val = i => es[i].status === 'fulfilled' ? es[i].value : null;
-            SESSION_OK = !refus(es);
-            const c = val(0); COMP = c && Array.isArray(c.components) ? c.components : null;
-            STAT = val(1);
-            const a = val(2); ACCES = a && Array.isArray(a.access) ? a.access : null;
-            CHARGE = true;
-            const tous = es.every(e => e.status === 'rejected');
-            $('erreur').hidden = !(tous && SESSION_OK);
-            if (tous && SESSION_OK) $('erreur').textContent = 'Impossible de lire le service Grafana (arrêté ou injoignable).';
-            rendre();
-        }
-
-        const httpOk = u => typeof u === 'string' && /^https?:\/\//i.test(u);
-        const marche = c => String(c.state || '').toLowerCase() === 'running';
-
-        function rendre() {
-            $('demo').hidden = !DEMO;
-            $('session').hidden = SESSION_OK;
-            const etat = $('etat'), ov = STAT && STAT.overall;
-            const lib = { green: ['SAIN', 'ok'], yellow: ['DÉGRADÉ', 'att'], red: ['ARRÊTÉ', 'hors'] }[ov];
-            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
-            else if (!lib) { etat.className = 'actif hors'; etat.textContent = STAT || COMP || ACCES ? 'INCONNU' : 'HORS LIGNE'; }
-            else { etat.className = 'actif' + (lib[1] === 'att' ? ' att' : lib[1] === 'hors' ? ' hors' : ''); etat.textContent = lib[0]; }
-            $('tGlobal').textContent = lib ? lib[0] : '—'; $('cGlobal').className = 'tuile ' + (lib ? lib[1] : 'cy');
-            $('tComp').textContent = COMP ? COMP.filter(marche).length + ' / ' + COMP.length : '—';
-            $('cComp').className = 'tuile ' + (COMP ? (COMP.every(marche) ? 'ok' : 'att') : 'cy');
-            $('tAcces').textContent = ACCES ? ACCES.length : '—';
-            rendreComp(); rendreAcces(); rendreGraf();
-            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
-            annoncer();
-        }
-
-        function rendreComp() {
-            const ul = $('lComp'); ul.replaceChildren();
-            if (!COMP || !COMP.length) { ul.appendChild(el('li', 'vide', !SESSION_OK || !CHARGE ? '—' : 'Aucun composant relevé')); return; }
-            COMP.forEach(c => {
-                const li = el('li', 'elt');
-                li.appendChild(el('span', 'nom', tiret(c.name)));
-                li.appendChild(el('span', 'pill ' + (marche(c) ? 'ok' : 'hors'), tiret(c.state).toUpperCase()));
-                if (c.detail) li.appendChild(el('span', 'desc', c.detail));
-                ul.appendChild(li);
-            });
-        }
-
-        function rendreAcces() {
-            const ul = $('lAcces'); ul.replaceChildren();
-            const n = $('natif');
-            const pub = ACCES && ACCES.find(a => a.scope === 'public'), lan = ACCES && ACCES.find(a => a.scope === 'lan');
-            const cible = (pub && pub.url) || (lan && lan.url) || '';
-            if (httpOk(cible)) { n.href = cible; n.hidden = false; } else { n.removeAttribute('href'); n.hidden = true; }
-            if (!ACCES || !ACCES.length) { ul.appendChild(el('li', 'vide', !SESSION_OK || !CHARGE ? '—' : 'Aucune adresse déclarée')); return; }
-            ACCES.forEach(a => {
-                const li = el('li', 'elt');
-                li.appendChild(el('span', 'nom', tiret(a.scope)));
-                if (a.auth) li.appendChild(el('span', 'pill', a.auth));
-                if (httpOk(a.url)) { const l = el('a', 'lien', a.url); l.href = a.url; l.target = '_blank'; l.rel = 'noopener'; li.appendChild(l); }
-                else li.appendChild(el('span', 'meta', tiret(a.url)));
-                ul.appendChild(li);
-            });
-        }
-
-        function rendreGraf() {
-            const f = $('graf');
-            if (DEMO) { f.hidden = true; $('nGraf').textContent = 'Démonstration : le tableau de bord Grafana n’est pas chargé.'; return; }
-            f.hidden = false; $('nGraf').textContent = '';
-            if (!f.getAttribute('src')) f.setAttribute('src', SRC_GRAFANA);
-        }
-
-        $('rafraichir').addEventListener('click', charger);
-        charger();
-        setInterval(() => { if (!document.hidden && !DEMO) charger(); }, 30000);
-
-    </script>
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function demo(){var n=POINTS,t=[],fin=Math.floor(Date.now()/1000),d=zoom?zoom.jusqua-zoom.depuis:duree,pas=d/n,i,s={cpu:[],mem:[],charge:[],rx:[],tx:[],conn:[],disque:[]};
+    for(i=0;i<n;i++){t.push((zoom?zoom.depuis:fin-d)+(i+.5)*pas);var u=i/n*Math.PI*6;
+      s.cpu.push(i===Math.floor(n*.6)?null:35+25*Math.sin(u)+6*Math.sin(u*5));s.mem.push(52+8*Math.sin(u/3)+i/n*6);s.charge.push(1.2+.7*Math.sin(u)+.2*Math.sin(u*7));
+      s.rx.push(Math.max(0,1.5e6+1.2e6*Math.sin(u*1.3)));s.tx.push(Math.max(0,4e5+3e5*Math.sin(u*1.7)));s.conn.push(Math.round(40+18*Math.sin(u*.8)));s.disque.push(61+i/n*.5);}
+    return {t:t,series:s,pas_s:pas,duree_s:d,points:n,releve_s:60};}
+  function lis(){
+    if(DEMO)return Promise.resolve(demo());
+    var h={'Accept':'application/json'},tk=jeton();if(tk)h.Authorization='Bearer '+tk;
+    var u='/api/v1/metrics/series?points='+POINTS+(zoom?'&depuis='+encodeURIComponent(zoom.depuis)+'&jusqua='+encodeURIComponent(zoom.jusqua):'&duree='+duree);
+    return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){
+      if(r.status===401||r.status===403){$('session').hidden=false;return null;}
+      return r.ok?r.json():null;}).catch(function(){return null;});
+  }
+  function charge(neuf){
+    clearTimeout(tim);
+    lis().then(function(d){
+      if(d&&d.t){$('session').hidden=true;rend(d,neuf);etat(zoom?'zoom':'ok');echecs=0;}else{etat('off');echecs=Math.min(echecs+1,5);}
+      suite(!!d);},function(){etat('off');echecs=Math.min(echecs+1,5);suite(false);});
+  }
+  function suite(ok){clearTimeout(tim);if(zoom)return;      // un zoom est une fenêtre figée : pas d'actualisation
+    tim=setTimeout(function(){if(document.hidden){suite(true);return;}charge(false);},ok?CAD:Math.min(60000,CAD*Math.pow(2,echecs)));}
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&!zoom)charge(false);});
+  function hauteur(){if(window.parent!==window){try{var c=document.querySelector('.cadre');window.parent.postMessage({sbxVue:Math.ceil(c.getBoundingClientRect().height),onglet:'grafana'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+  if(DEMO)$('demo').hidden=false;
+  charge(true);
+})();
+</script>
 </body>
 </html>

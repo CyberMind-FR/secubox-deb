@@ -1,11 +1,11 @@
 {
-  "subtitle": "Security metrics",
+  "subtitle": "Historique CPU, mémoire, réseau",
   "icon": "📈",
   "order": 50,
   "id": "grafana",
-  "name": "Grafana",
+  "name": "Courbes",
   "path": "/grafana/",
   "category": "mind",
-  "description": "",
+  "description": "Courbes de la box sur 7 jours (remplace Grafana)",
   "theme": "supervision"
 }
