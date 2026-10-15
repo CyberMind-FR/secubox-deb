@@ -1,0 +1,106 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ *
+ * CADRE AURORA (#2733) — habillage de la barre latérale, du menu du haut et de la barre du bas pour les pages Aurora.
+ *
+ * Chargé par sidebar.js EN DERNIER, seulement quand la page porte `html.sbx-aurora` (page à `.cadre .app`, AURORA-REFERENCE §3). Les anciennes pages
+ * « hybrid-dark » ne le reçoivent pas. hybrid-skin.css pose ses teintes en `!important` : on répond avec le même poids et une spécificité supérieure
+ * (préfixe `html.sbx-aurora`), jamais l'inverse (AURORA-REFERENCE §10).
+ *
+ * Jetons : ceux de §2 (fond #060d1b, traits bleus, cyan = primaire, vert = sain, orange = attention, rouge = menace). Police Aurora, repli système :
+ * rien à télécharger (CSP). Thème sombre unique. Les chiffres s'alignent (tabular-nums).
+ */
+html.sbx-aurora {
+  --au-fond: #060d1b; --au-trait: rgba(86,150,255,.22); --au-trait2: rgba(86,150,255,.38);
+  --au-texte: #eaf1ff; --au-doux: #9fb3d6; --au-faible: #6f84a8;
+  --au-cyan: #29b6f6; --au-bleu: #3b82f6; --au-vert: #2ecc71; --au-rouge: #ff4d5e; --au-orange: #ff9f1c;
+  --au-police: "IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+
+/* ── fond de la page ───────────────────────────────────────────── */
+html.sbx-aurora body.hybrid-skin {
+  background: radial-gradient(ellipse at 88% 0%, rgba(59,130,246,.20), transparent 55%),
+              radial-gradient(ellipse at 8% 100%, rgba(41,182,246,.10), transparent 55%), var(--au-fond) !important;
+  color: var(--au-texte) !important;
+  font-family: var(--au-police) !important;
+}
+
+/* ── barre latérale ────────────────────────────────────────────── */
+html.sbx-aurora #sidebar, html.sbx-aurora .sidebar {
+  background: linear-gradient(180deg, rgba(11,24,48,.97), rgba(6,13,27,.98)) !important;
+  border-right: 1px solid var(--au-trait2) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+  font-family: var(--au-police) !important;
+}
+html.sbx-aurora .sidebar::before { background: linear-gradient(180deg, var(--au-cyan), var(--au-bleu)) !important; opacity: .85; }
+html.sbx-aurora .sidebar-header { border-bottom: 1px solid var(--au-trait) !important; background: transparent !important; }
+html.sbx-aurora .sidebar .logo { color: var(--au-texte) !important; font-family: var(--au-police) !important; font-weight: 800; letter-spacing: .08em; text-shadow: none !important; }
+html.sbx-aurora .sidebar .logo-version { color: var(--au-faible) !important; font-family: var(--au-police) !important; font-variant-numeric: tabular-nums; }
+html.sbx-aurora .sidebar .nav-section-title { color: var(--au-faible) !important; font-family: var(--au-police) !important; font-size: .66rem; letter-spacing: .09em; text-transform: uppercase; }
+html.sbx-aurora .sidebar .nav-item {
+  color: var(--au-doux) !important; font-family: var(--au-police) !important; border-radius: 10px;
+  border: 0 !important; box-shadow: inset 3px 0 0 transparent !important; background: transparent !important;
+}
+html.sbx-aurora .sidebar .nav-item:hover { background: rgba(41,182,246,.10) !important; color: var(--au-texte) !important; }
+html.sbx-aurora .sidebar .nav-item.active, html.sbx-aurora .sidebar .nav-item[aria-current="page"] {
+  background: rgba(41,182,246,.16) !important; color: var(--au-texte) !important; box-shadow: inset 3px 0 0 var(--au-cyan) !important;
+}
+html.sbx-aurora .sidebar-footer { border-top: 1px solid var(--au-trait) !important; background: transparent !important; color: var(--au-faible) !important; font-family: var(--au-police) !important; }
+html.sbx-aurora .sidebar-footer button {
+  font-family: var(--au-police) !important; color: var(--au-doux) !important; background: rgba(59,130,246,.10) !important;
+  border: 1px solid var(--au-trait) !important; border-radius: 10px !important;
+}
+html.sbx-aurora .sidebar-footer button:hover { border-color: var(--au-cyan) !important; color: var(--au-texte) !important; }
+html.sbx-aurora .sidebar a:focus-visible, html.sbx-aurora .sidebar button:focus-visible, html.sbx-aurora .menu-btn:focus-visible { outline: 2px solid var(--au-cyan) !important; outline-offset: 2px; }
+
+/* ── menu du haut ──────────────────────────────────────────────── */
+html.sbx-aurora #global-menu-bar {
+  background: rgba(10,22,46,.90) !important; border-bottom: 1px solid var(--au-trait2) !important; box-shadow: none !important;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font-family: var(--au-police) !important;
+}
+html.sbx-aurora #global-menu-bar .menu-title { color: var(--au-texte) !important; font-family: var(--au-police) !important; font-weight: 700; text-shadow: none !important; }
+html.sbx-aurora #global-menu-bar .health-bumper {
+  border-radius: 999px !important; border: 1px solid rgba(46,204,113,.45) !important; background: rgba(46,204,113,.12) !important; color: var(--au-vert) !important;
+  font-family: var(--au-police) !important; box-shadow: none !important;
+}
+html.sbx-aurora #global-menu-bar .hb-status { color: var(--au-vert) !important; font-family: var(--au-police) !important; letter-spacing: .06em; }
+html.sbx-aurora #global-menu-bar .smart-strip { border: 1px solid var(--au-trait) !important; border-radius: 12px !important; background: rgba(8,18,38,.7) !important; box-shadow: none !important; }
+html.sbx-aurora #global-menu-bar .strip-val { color: var(--au-texte) !important; font-family: var(--au-police) !important; font-variant-numeric: tabular-nums; }
+html.sbx-aurora #global-menu-bar .page-metric {
+  border: 1px solid var(--au-trait) !important; border-radius: 999px !important; background: rgba(59,130,246,.10) !important; color: var(--au-doux) !important;
+  font-family: var(--au-police) !important; font-variant-numeric: tabular-nums;
+}
+html.sbx-aurora #global-menu-bar .menu-btn {
+  border: 1px solid var(--au-trait) !important; border-radius: 10px !important; background: rgba(59,130,246,.10) !important; color: var(--au-texte) !important; box-shadow: none !important;
+}
+html.sbx-aurora #global-menu-bar .menu-btn:hover { border-color: var(--au-cyan) !important; background: rgba(41,182,246,.18) !important; }
+html.sbx-aurora #global-menu-bar .menu-btn.danger:hover { border-color: var(--au-rouge) !important; background: rgba(255,77,94,.16) !important; }
+
+/* ── barre du bas ──────────────────────────────────────────────── */
+html.sbx-aurora #global-status-bar {
+  background: rgba(10,22,46,.94) !important; border-top: 1px solid var(--au-trait2) !important; box-shadow: none !important; font-family: var(--au-police) !important;
+}
+html.sbx-aurora #global-status-bar .status-label { color: var(--au-faible) !important; font-family: var(--au-police) !important; font-size: .62rem; letter-spacing: .07em; text-transform: uppercase; }
+html.sbx-aurora #global-status-bar .status-value { color: var(--au-texte) !important; font-family: var(--au-police) !important; font-variant-numeric: tabular-nums; }
+html.sbx-aurora #global-status-bar .bar-container { background: rgba(159,179,214,.16) !important; border-radius: 3px; }
+html.sbx-aurora #global-status-bar .bar-fill.bar-ok { background: var(--au-cyan) !important; }
+html.sbx-aurora #global-status-bar .bar-fill.bar-warn { background: var(--au-orange) !important; }
+html.sbx-aurora #global-status-bar .bar-fill.bar-crit, html.sbx-aurora #global-status-bar .bar-fill.bar-error { background: var(--au-rouge) !important; }
+
+/* ── écran étroit ou tactile : les barres occupent toute la largeur (#2733) ──
+ * MESURÉ sur iPhone : le menu du haut et la barre du bas commençaient à 220 px (la place de la barre latérale, pourtant repliée : hybrid-skin.css `left:220px!important`)
+ * et sortaient de l'écran, titre coupé, bouton de déconnexion hors champ. Le titre laisse la place au bouton du menu (52 px) ; ce qui ne tient pas est masqué :
+ * la bande de mesures et les métriques de page (le détail reste dans la page), les boutons secondaires (état de l'API, réglages) et les jauges du bas. */
+html.sbx-aurora body.mobile-mode #global-menu-bar { left: 0 !important; right: 0 !important; width: auto !important; padding-left: 64px !important; padding-right: 8px !important; gap: 6px; }
+html.sbx-aurora body.mobile-mode #global-status-bar { left: 0 !important; right: 0 !important; width: auto !important; }
+@media (max-width: 768px) {
+  html.sbx-aurora #global-menu-bar { left: 0 !important; right: 0 !important; width: auto !important; padding-left: 64px !important; padding-right: 8px !important; gap: 6px; }
+  html.sbx-aurora #global-status-bar { left: 0 !important; right: 0 !important; width: auto !important; }
+  html.sbx-aurora #global-menu-bar .smart-strip, html.sbx-aurora #global-menu-bar .page-metrics, html.sbx-aurora #global-menu-bar .hb-status,
+  html.sbx-aurora #global-menu-bar #api-status-btn, html.sbx-aurora #global-menu-bar .menu-btn[title="Settings"], html.sbx-aurora #global-status-bar .status-right { display: none !important; }
+  html.sbx-aurora #global-menu-bar .menu-left { min-width: 0; flex: 1 1 auto; overflow: hidden; }
+  html.sbx-aurora #global-menu-bar .menu-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+}
