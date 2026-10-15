@@ -125,7 +125,8 @@ POST = (PKG / "debian" / "postinst").read_text()
 
 def test_le_postinst_exige_le_fichier_geoip_du_hub_et_l_absence_de_la_ligne_et_nginx_t():
     assert "/etc/nginx/conf.d/secubox-lan-geo.conf" in POST
-    assert 'grep -q "X-SecuBox-LAN" /etc/nginx/snippets/secubox-proxy.conf' in POST
+    # LA DIRECTIVE, pas la chaîne (#2743) : le commentaire de secubox-proxy.conf contient « X-SecuBox-LAN » et l'ancien garde concluait « déjà posée ».
+    assert "proxy_set_header[[:space:]]+X-SecuBox-LAN" in POST and "/etc/nginx/snippets/secubox-proxy.conf" in POST
     assert "nginx -t" in POST
     assert 'rm -f "$SESSION_CONF"' in POST, "le bloc est retiré quand il n'est pas sûr (une variable inconnue casserait toute la configuration)"
 

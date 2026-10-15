@@ -45,6 +45,22 @@ TOML
     if [ -x /usr/sbin/secubox-realip ]; then
       SECUBOX_REALIP_NORELOAD=1 /usr/sbin/secubox-realip || true
     fi
+    # VERDICT LAN POUR TOUTE L'API (#2743). Le fichier GeoIP (`$lan_client`) vient d'ICI ; la directive qui le transmet à l'API vit dans snippets/secubox-proxy.conf (core).
+    # core ne la pose que si `$lan_client` existe à ce moment-là : sur une image neuve core est configuré AVANT hub, `nginx -t` échoue, la ligne est retirée, et rien ne la remet.
+    # Sans elle l'API croit tout client « WAN » et exige le second facteur même depuis le LAN (#1699). On la pose donc ici, SI le fichier GeoIP existe, et on retire si `nginx -t`
+    # refuse (une variable inconnue casserait TOUTE la configuration). LE GARDE RECONNAÎT LA DIRECTIVE, PAS LA CHAÎNE (#1351) : le commentaire qui documente la ligne contient son nom.
+    _snip="${SECUBOX_PROXY_SNIPPET:-/etc/nginx/snippets/secubox-proxy.conf}"
+    _geo="${SECUBOX_LAN_GEO:-/etc/nginx/conf.d/secubox-lan-geo.conf}"
+    if [ -f "$_geo" ] && [ -f "$_snip" ] && ! grep -qE '^[[:space:]]*proxy_set_header[[:space:]]+X-SecuBox-LAN' "$_snip"; then
+      cp -a "$_snip" "$_snip.sbxbak"
+      printf 'proxy_set_header   X-SecuBox-LAN     $lan_client;\n' >> "$_snip"
+      if nginx -t >/dev/null 2>&1; then
+        rm -f "$_snip.sbxbak"
+      else
+        mv -f "$_snip.sbxbak" "$_snip"
+        echo "secubox-hub: \$lan_client refusé par nginx -t — verdict LAN non posé, le second facteur restera exigé partout" >&2
+      fi
+    fi
     # `nginx -t` AVANT tout rechargement : une configuration invalide passée à
     # un reload laisse nginx sur l'ancienne sans le dire, et le défaut ne
     # surgit qu'au redémarrage suivant — c'est-à-dire au pire moment.
