@@ -37,6 +37,24 @@ if f.exists():
         f.write_text(s)
         print("secubox-premier-pas : déclaré dans aggregator.toml")
 TOML
+    # Verdict LAN de l'ouverture distante (#2731) : posé ici pour cette route seulement, et SEULEMENT si le fichier GeoIP du Hub existe (sinon
+    # `$lan_client` est inconnue et nginx -t casserait toute la configuration), si secubox-proxy.conf ne le pose pas déjà, et si nginx -t passe.
+    SESSION_CONF=/etc/nginx/secubox.d/premier-pas-session.conf
+    if [ -f /etc/nginx/conf.d/secubox-lan-geo.conf ] && [ -d /etc/nginx/secubox.d ] \
+       && ! grep -q "X-SecuBox-LAN" /etc/nginx/snippets/secubox-proxy.conf 2>/dev/null; then
+        install -m 644 /usr/share/secubox/premier-pas/nginx/premier-pas-session.conf "$SESSION_CONF"
+    else
+        rm -f "$SESSION_CONF"
+    fi
+    if command -v nginx >/dev/null 2>&1; then
+        if nginx -t >/dev/null 2>&1; then
+            [ -d /run/systemd/system ] && systemctl reload nginx >/dev/null 2>&1 || true
+        else
+            rm -f "$SESSION_CONF"          # c'est peut-être lui qui casse : on le retire plutôt que de laisser nginx sans configuration valide
+            echo "secubox-premier-pas : nginx -t échoue, route de session retirée" >&2
+            if nginx -t >/dev/null 2>&1 && [ -d /run/systemd/system ]; then systemctl reload nginx >/dev/null 2>&1 || true; fi
+        fi
+    fi
     if [ -d /run/systemd/system ]; then
         systemctl restart secubox-aggregator >/dev/null 2>&1 || true
         # Box neuve dont le kiosque tourne déjà (lanceur d'avant #1542) : le
