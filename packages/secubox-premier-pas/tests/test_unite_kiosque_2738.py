@@ -100,14 +100,60 @@ def test_l_unite_retiree_ne_contient_pas_de_demande_a_l_operateur():
 POST = (PKG / "debian" / "postinst").read_text()
 
 
-def test_le_postinst_retire_l_ancienne_unite_et_reactive_le_kiosque_sous_la_nouvelle():
-    assert "premier-pas-retire-unite-kiosque" in POST and "/etc/systemd/system/secubox-kiosk.service" in POST
-    assert "-eq 10" in POST, "le code 10 (unité retirée) déclenche le rechargement"
-    assert "systemctl daemon-reload" in POST
-    assert "graphical.target.wants/secubox-kiosk.service" in POST, "le lien d'activation de l'ancienne unité pointe dans le vide une fois le fichier retiré"
-    assert "systemctl enable secubox-kiosk.service" in POST
+def bloc_kiosque():
+    d = POST.index("    # KIOSQUE : l'ancienne unité")
+    f = POST.index("    systemctl enable secubox-premier-pas.service")
+    return POST[d:f]
+
+
+def execute_bloc(tmp_path, avec_unite_perimee=False, lien_orphelin=False):
+    """Exécute le VRAI bloc du postinst sous `set -e`, avec un faux systemctl : c'est `set -e` qui a fait échouer le premier essai sur le RPi400 (l'aide rend 10)."""
+    sysd = tmp_path / "etc-systemd"
+    (sysd / "graphical.target.wants").mkdir(parents=True)
+    if avec_unite_perimee:
+        (sysd / "secubox-kiosk.service").write_text(UNITE_STARTX)
+        (sysd / "graphical.target.wants" / "secubox-kiosk.service").symlink_to("../secubox-kiosk.service")
+    if lien_orphelin:
+        (sysd / "graphical.target.wants" / "secubox-kiosk.service").symlink_to("../secubox-kiosk.service")
+    journal = tmp_path / "systemctl.log"
+    faux = tmp_path / "bin"
+    faux.mkdir()
+    (faux / "systemctl").write_text(f"#!/bin/sh\necho \"$*\" >> {journal}\ncase \"$1\" in is-enabled|is-active) exit 0;; esac\nexit 0\n")
+    (faux / "systemctl").chmod(0o755)
+    script = tmp_path / "bloc.sh"
+    script.write_text("set -e\n" + bloc_kiosque() + "echo FIN\n")
+    r = subprocess.run(["sh", str(script)], capture_output=True, text=True,
+                       env={"PATH": f"{faux}:/usr/bin:/bin", "PREMIER_PAS_SYSTEMD_ETC": str(sysd), "PREMIER_PAS_RETIRE_UNITE": str(AIDE)})
+    return r, sysd, (journal.read_text() if journal.exists() else "")
+
+
+def test_le_postinst_ne_s_arrete_pas_quand_l_aide_rend_10(tmp_path):
+    """RÉGRESSION RPi400 : sous `set -e`, le code 10 (« unité retirée ») faisait échouer toute la configuration du paquet."""
+    r, sysd, appels = execute_bloc(tmp_path, avec_unite_perimee=True)
+    assert r.returncode == 0 and "FIN" in r.stdout, (r.returncode, r.stdout, r.stderr)
+    assert not (sysd / "secubox-kiosk.service").exists()
+    assert not (sysd / "graphical.target.wants" / "secubox-kiosk.service").is_symlink(), "le lien d'activation orphelin doit être remplacé"
+    lignes = appels.splitlines()
+    assert "daemon-reload" in lignes and "enable secubox-kiosk.service" in lignes and "restart secubox-kiosk.service" in lignes
+
+
+def test_un_lien_orphelin_laisse_par_un_essai_interrompu_est_traite_meme_sans_unite(tmp_path):
+    r, sysd, appels = execute_bloc(tmp_path, lien_orphelin=True)
+    assert r.returncode == 0 and "FIN" in r.stdout
+    assert not (sysd / "graphical.target.wants" / "secubox-kiosk.service").is_symlink()
+    assert "enable secubox-kiosk.service" in appels.splitlines() and "restart secubox-kiosk.service" in appels.splitlines()
+
+
+def test_rien_a_faire_sur_une_box_deja_a_jour(tmp_path):
+    r, _, appels = execute_bloc(tmp_path)
+    assert r.returncode == 0 and "FIN" in r.stdout
+    assert "daemon-reload" not in appels and "restart secubox-kiosk.service" not in appels.splitlines()
+
+
+def test_postinst_et_aide_sont_du_shell_valide():
     assert subprocess.run(["sh", "-n", str(PKG / "debian" / "postinst")]).returncode == 0
     assert subprocess.run(["sh", "-n", str(AIDE)]).returncode == 0
+    assert "graphical.target.wants/secubox-kiosk.service" in POST and "systemctl enable secubox-kiosk.service" in POST
 
 
 # ---------- le constructeur d'image RPi ----------
