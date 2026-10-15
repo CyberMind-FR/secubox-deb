@@ -18,8 +18,13 @@ LIVE_USB = yaml.safe_load((WORKFLOWS / "build-all-live-usb.yml").read_text())
 ETAPES = RELEASE["jobs"]["create-release"]["steps"]
 
 
+SCRIPT_ENVOI = RACINE / "scripts" / "release-envoyer.sh"
+COMPLETER = yaml.safe_load((WORKFLOWS / "release-completer.yml").read_text())
+
+
 def _etape_envoi():
-    return next(e for e in ETAPES if "gh release upload" in e.get("run", ""))
+    """Le script d'envoi, partagé par release.yml et release-completer.yml (#2719)."""
+    return {"run": SCRIPT_ENVOI.read_text()}
 
 
 # ---------- envoi des fichiers ----------
@@ -74,8 +79,7 @@ def test_le_marquage_prerelease_suit_alpha_beta_rc():
 def test_le_script_d_envoi_est_du_bash_valide_et_sans_backtick():
     run = _etape_envoi()["run"]
     assert "`" not in run                                                      # un backtick dans un run: serait exécuté (déjà arrivé)
-    script = re.sub(r"\$\{\{[^}]*\}\}", "v0.0.0-test", run)
-    r = subprocess.run(["bash", "-n", "-c", script], capture_output=True, text=True)
+    r = subprocess.run(["bash", "-n", str(SCRIPT_ENVOI)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
 
 
@@ -119,8 +123,7 @@ def test_une_reprise_apres_un_echec_passager_envoie_le_fichier(tmp_path):
     (bin_ / "gh").write_text((bin_ / "gh").read_text().replace(
         f"cat {tmp_path}/publies; else exit 1; fi ;;",
         f'sort -u {tmp_path}/publies.txt 2>/dev/null; else exit 1; fi ;;'))
-    script = re.sub(r"\$\{\{[^}]*\}\}", "v0.0.0-test", _etape_envoi()["run"])
-    r = subprocess.run(["bash", "-e", "-c", script], cwd=tmp_path, capture_output=True, text=True,
+    r = subprocess.run(["bash", str(SCRIPT_ENVOI), "v0.0.0-test"], cwd=tmp_path, capture_output=True, text=True,
                        env={"PATH": f"{bin_}:/usr/bin:/bin", "GH_TOKEN": "x", "HOME": str(tmp_path)})
     appels = (tmp_path / "appels").read_text()
     assert (tmp_path / "essais").read_text().splitlines().count("a.img.gz") == 3, r.stderr   # deux échecs, un succès
@@ -131,8 +134,7 @@ def test_une_reprise_apres_un_echec_passager_envoie_le_fichier(tmp_path):
 @pytest.mark.skipif(not __import__("shutil").which("bash"), reason="bash requis")
 def test_un_fichier_definitivement_en_echec_laisse_la_release_en_brouillon(tmp_path):
     bin_ = _simuler(tmp_path, toujours=True)
-    script = re.sub(r"\$\{\{[^}]*\}\}", "v0.0.0-test", _etape_envoi()["run"])
-    r = subprocess.run(["bash", "-e", "-c", script], cwd=tmp_path, capture_output=True, text=True,
+    r = subprocess.run(["bash", str(SCRIPT_ENVOI), "v0.0.0-test"], cwd=tmp_path, capture_output=True, text=True,
                        env={"PATH": f"{bin_}:/usr/bin:/bin", "GH_TOKEN": "x", "HOME": str(tmp_path)})
     assert r.returncode != 0
     assert "--draft=false" not in (tmp_path / "appels").read_text()                           # jamais publiée incomplète
@@ -159,3 +161,48 @@ def test_l_etape_emmc_mochabin_a_un_delai_plus_large():
     emmc = next(e for e in etapes if "embedded eMMC" in e.get("name", ""))
     assert emmc["timeout-minutes"] >= 330                                                      # 240 dépassé en alpha.16 et alpha.17
     assert emmc["timeout-minutes"] <= 345                                                      # sous la limite de 360 min d'un job hébergé
+
+
+# ---------- script partagé et workflow de reprise ----------
+
+def test_release_yml_appelle_le_script_partage():
+    etape = next(e for e in ETAPES if "release-envoyer.sh" in e.get("run", ""))
+    assert "GH_TOKEN" in etape["env"] and "github.ref_name" in etape["run"]
+    assert not [e for e in ETAPES if "gh release upload" in e.get("run", "")]          # plus de copie du script dans le workflow
+
+
+def test_le_script_est_executable_et_garde_le_brouillon():
+    assert SCRIPT_ENVOI.stat().st_mode & 0o111
+    assert SCRIPT_ENVOI.read_text().startswith("#!/usr/bin/env bash")
+
+
+def test_le_workflow_de_reprise_se_declenche_a_la_main_avec_une_version_et_un_run():
+    on = COMPLETER.get("on") or COMPLETER.get(True)
+    assert set(on) == {"workflow_dispatch"}                                            # jamais automatique
+    entrees = on["workflow_dispatch"]["inputs"]
+    assert entrees["version"]["required"] is True and entrees["run_id"]["required"] is True
+
+
+def test_le_workflow_de_reprise_reutilise_les_artefacts_du_run_et_appelle_le_meme_script():
+    job = next(iter(COMPLETER["jobs"].values()))
+    etapes = job["steps"]
+    telecharge = next(e for e in etapes if e.get("uses", "").startswith("actions/download-artifact"))
+    assert "run-id" in telecharge["with"] and "inputs.run_id" in telecharge["with"]["run-id"]
+    assert "github-token" in telecharge["with"]                                       # lecture d'un autre run du même dépôt
+    assert any("release-envoyer.sh" in e.get("run", "") for e in etapes)
+    assert any("release-decouper-assets.sh" in e.get("run", "") for e in etapes)      # mêmes parties de 1900 Mo
+    assert job.get("permissions", {}).get("contents") == "write"
+    assert job.get("permissions", {}).get("actions") == "read"
+
+
+def test_la_reprise_ne_remplace_pas_les_notes_de_la_release():
+    job = next(iter(COMPLETER["jobs"].values()))
+    run = " ".join(e.get("run", "") for e in job["steps"])
+    assert "--json body" in run and "RELEASE_NOTES.md" in run                          # reprend le texte existant
+
+
+def test_la_reprise_ne_republie_pas_les_deb_ni_les_notes_sans_version():
+    job = next(iter(COMPLETER["jobs"].values()))
+    run = " ".join(e.get("run", "") for e in job["steps"])
+    assert "secubox-debs-all" not in run and "*.deb" not in run                        # #1491 : les .deb sont déjà sur la release
+    assert "`" not in run

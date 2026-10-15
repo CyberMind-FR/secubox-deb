@@ -1,0 +1,98 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox — Completer une release incomplete (#2719)
+#
+# Une release dont le job create-release a echoue (envoi des images) n'est pas refaite en reconstruisant tout (plus de quatre heures) :
+# ce workflow reprend les ARTEFACTS d'un run existant (images, sommes), les decoupe comme release.yml, et les envoie avec le MEME script
+# (scripts/release-envoyer.sh : brouillon, envoi un par un avec reprises, verification, puis publication). Les notes de la release et ses
+# .deb (deja envoyes par build-packages, #1491) ne sont pas touches. Declenchement MANUEL uniquement.
+#
+#   gh workflow run release-completer.yml -f version=v3.0.0-alpha.17 -f run_id=<identifiant du run Release d'origine>
+name: Release - completer
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Tag de la release a completer (ex. v3.0.0-alpha.17)'
+        required: true
+        type: string
+      run_id:
+        description: 'Run Release dont on reprend les artefacts (images)'
+        required: true
+        type: string
+      suite:
+        description: 'Suite Debian des artefacts'
+        required: false
+        type: string
+        default: trixie
+
+jobs:
+  completer:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download image artifacts from the original run
+        uses: actions/download-artifact@v4
+        with:
+          pattern: secubox-*-${{ inputs.suite }}
+          path: release/images/
+          merge-multiple: true
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Keep the existing release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release/live-usb
+          gh release view "${{ inputs.version }}" --json body -q .body > release/RELEASE_NOTES.md
+          test -s release/RELEASE_NOTES.md || echo "Release ${{ inputs.version }}" > release/RELEASE_NOTES.md
+          # Les sommes .sha256 des images « live » sont envoyees depuis live-usb/ (comme release.yml).
+          cp release/images/*live*.sha256 release/live-usb/ 2>/dev/null || true
+
+      - name: Split files over the GitHub 2 GiB asset limit
+        run: bash scripts/release-decouper-assets.sh release/images release/live-usb
+
+      - name: Generate combined checksums
+        run: |
+          cd release/
+          for f in images/*.img.gz images/*.img.xz images/*.part* images/*.assembled.sha256 \
+                   live-usb/*.img.gz live-usb/*.img.xz live-usb/*.part* live-usb/*.assembled.sha256 \
+                   live-usb/*.sha256; do
+            [ -f "$f" ] || continue
+            ( cd "$(dirname "$f")" && sha256sum "$(basename "$f")" )
+          done | awk '{ h[$2] = $1 } END { for (n in h) print h[n] "  " n }' | sort -k2,2 > SHA256SUMS
+          test -s SHA256SUMS || { echo "::error::SHA256SUMS vide"; exit 1; }
+          cat SHA256SUMS
+
+      - name: Sign checksums
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -n "$GPG_PRIVATE_KEY" ]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+            cd release/
+            gpg --clearsign SHA256SUMS
+            mv SHA256SUMS.asc SHA256SUMS.gpg
+          else
+            echo "::warning::GPG_PRIVATE_KEY absent : SHA256SUMS n'est pas signe"
+          fi
+
+      - name: Copy VM scripts to release
+        run: |
+          cp image/create-qemu-arm64-vm.sh release/
+          cp image/create-vbox-vm.sh release/
+
+      - name: Upload the files one by one, publish only when all arrived
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/release-envoyer.sh "${{ inputs.version }}"
