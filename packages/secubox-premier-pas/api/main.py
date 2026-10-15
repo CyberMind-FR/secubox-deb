@@ -27,10 +27,10 @@ import tomllib
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from premier_pas import moteur as M, profil as P, remplir as R  # noqa: E402
+from premier_pas import moteur as M, ouverture as O, profil as P, remplir as R  # noqa: E402
 
 app = FastAPI(title="SecuBox Premier Pas", version="0.3.0")
 
@@ -43,9 +43,25 @@ def _jeton_local_path() -> Path:
     return Path(os.environ.get("PREMIER_PAS_JETON_LOCAL", "/run/secubox-premier-pas/jeton-local"))
 
 
-def _verifie(fourni: Optional[str], chemins) -> None:
+def _maintenant() -> float:
+    return O.depuis_le_demarrage()
+
+
+def _boot_id() -> str:
+    return O.identifiant_demarrage()
+
+
+def _ouverture() -> O.Ouverture:
+    """Lue à chaque appel (chemins et horloge) : les tests, et un opérateur, peuvent les déplacer."""
+    return O.Ouverture(R.dossier(), _jeton_local_path(), Path(os.environ.get("PREMIER_PAS_AUDIT", "/var/log/secubox/audit.log")),
+                       maintenant=lambda: _maintenant(), boot_id=lambda: _boot_id())
+
+
+def _verifie(fourni: Optional[str], chemins, session: bool = False) -> None:
     if M.MARQUEUR.exists():
         raise HTTPException(409, "Cette box est déjà configurée : l'assistant est fermé.")
+    if session and _ouverture().valide(fourni):
+        return                      # le poste qui a ouvert la session distante (#2725)
     attendus = []
     for c in chemins:
         try:
@@ -61,15 +77,40 @@ def _verifie(fourni: Optional[str], chemins) -> None:
 
 
 def ecriture(x_premier_pas: Optional[str] = Header(default=None)) -> None:
-    """Remplir le profil : l'écran de la box (jeton local) OU la box maîtresse
-    (le code d'appairage affiché à l'écran)."""
-    _verifie(x_premier_pas, [_jeton_local_path(), _jeton_path()])
+    """Remplir le profil : l'écran de la box (jeton local), la box maîtresse
+    (le code d'appairage affiché à l'écran) OU le poste de la session distante (#2725)."""
+    _verifie(x_premier_pas, [_jeton_local_path(), _jeton_path()], session=True)
 
 
 def locale(x_premier_pas: Optional[str] = Header(default=None)) -> None:
-    """Décider (appliquer, accepter, refuser) : l'écran de la box SEUL. Le
-    jeton local n'est jamais affiché ni transmis à la box maîtresse."""
+    """Décider (accepter, refuser) et lire le code d'appairage : l'écran de la
+    box SEUL. Le jeton local n'est jamais affiché ni transmis à la box maîtresse,
+    et la session distante ne le remplace pas : ces gestes prouvent la présence
+    devant la box."""
     _verifie(x_premier_pas, [_jeton_local_path()])
+
+
+def appliquer_garde(x_premier_pas: Optional[str] = Header(default=None)) -> None:
+    """Appliquer : l'écran de la box OU le poste de la session distante. Sans cela
+    une box sans écran se remplirait mais ne se configurerait jamais (#2725)."""
+    _verifie(x_premier_pas, [_jeton_local_path()], session=True)
+
+
+@app.post("/session")
+def ouvre_session(request: Request):
+    """Ouvrir l'assistant à distance : rend le secret du poste (voir premier_pas.ouverture pour les règles)."""
+    if M.MARQUEUR.exists():
+        raise HTTPException(409, "Cette box est déjà configurée : l'assistant est fermé.")
+    try:
+        from secubox_core.auth import adresse_client  # noqa: PLC0415
+        adresse = adresse_client(request)
+    except Exception:  # noqa: BLE001 — la trace n'est pas une raison de fermer l'assistant
+        adresse = request.client.host if request.client else ""
+    lan = request.headers.get("X-SecuBox-LAN", "").strip() == "1"     # verdict de nginx, jamais l'adresse
+    try:
+        return {"jeton": _ouverture().ouvre(lan, adresse)}
+    except O.Refus as e:
+        raise HTTPException(e.statut, e.message)
 
 
 @app.get("/etat")
@@ -104,7 +145,7 @@ def enregistre(etape: str, valeurs: Dict[str, Any]):
         raise HTTPException(404 if str(e) == "Étape inconnue." else 400, str(e))
 
 
-@app.post("/appliquer", dependencies=[Depends(locale)])
+@app.post("/appliquer", dependencies=[Depends(appliquer_garde)])
 def appliquer():
     try:
         R.demande_appliquer()

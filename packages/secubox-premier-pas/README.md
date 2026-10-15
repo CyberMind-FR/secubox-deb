@@ -36,12 +36,13 @@ Paquet Debian : version `0.4.9-1~bookworm1`, architecture `all`.
 |---|---|---|
 | `GET` | `/etat` | aucune |
 | `GET` | `/choix` | aucune |
-| `PUT` | `/etape/{etape}` | aucune |
-| `POST` | `/appliquer` | aucune |
-| `GET` | `/code` | aucune |
+| `POST` | `/session` | verdict LAN de nginx (`X-SecuBox-LAN: 1`), fenêtre de 15 min après le démarrage, un seul poste (0.6.0, #2725) |
+| `PUT` | `/etape/{etape}` | jeton local, code d'appairage ou secret de session distante |
+| `POST` | `/appliquer` | jeton local ou secret de session distante |
+| `GET` | `/code` | jeton local seul |
 | `POST` | `/proposition` | aucune |
-| `POST` | `/proposition/accepter` | aucune |
-| `POST` | `/proposition/refuser` | aucune |
+| `POST` | `/proposition/accepter` | jeton local seul |
+| `POST` | `/proposition/refuser` | jeton local seul |
 | `GET` | `/maitre/profils` | aucune |
 | `GET` | `/maitre/profils/{nom}` | aucune |
 | `PUT` | `/maitre/profils/{nom}` | aucune |
@@ -51,6 +52,21 @@ Paquet Debian : version `0.4.9-1~bookworm1`, architecture `all`.
 | `GET` | `/maitre/distant` | aucune |
 
 Routes relevées dans le code source, relatives au montage du module. « aucune » : pas de garde déclarée à cet endroit de la route.
+
+## Configurer une box sans écran (0.6.0, #2725)
+
+L'assistant ouvert depuis un navigateur du réseau local est le même que celui du kiosque : la page demande une session (`POST /session`) et se déroule
+normalement. Choix assumé du mainteneur — ouvert au LAN comme un routeur grand public : **le premier poste du LAN qui arrive dans la fenêtre prend la box**.
+Les règles qui en limitent la portée, dans `premier_pas/ouverture.py` :
+
+| Règle | Détail |
+|---|---|
+| Fenêtre | l'ouverture n'est possible que les **15 premières minutes** après le démarrage de la box. Comptée en temps écoulé depuis le démarrage (horloge monotone), pas en date : une carte sans horloge matérielle saute de plusieurs jours au réglage de l'heure. Elle ne limite que l'ouverture, pas une configuration commencée à la minute 14. Pour rouvrir : redémarrer la box |
+| Origine | seul un client que nginx déclare du LAN (`X-SecuBox-LAN: 1`, posé par `secubox-proxy.conf` depuis `$lan_client`). L'adresse IP n'est lue que pour la trace. Sans l'en-tête (Hub absent, hors nginx), l'ouverture reste fermée |
+| Un seul poste | le premier reçoit un secret aléatoire, les suivants reçoivent `423` tant que sa session est active (15 min depuis sa dernière action). Le secret, pas l'adresse, identifie le poste |
+| Secret | jamais écrit en clair : `session-distante.json` (0600, dans `PREMIER_PAS_DIR`) ne garde que son empreinte SHA-256, l'identifiant de démarrage et la dernière activité. Une session d'avant un redémarrage n'est jamais reprise |
+| Périmètre | la session **remplit et applique**. Elle ne lit pas le code d'appairage et n'accepte ni ne refuse une proposition de la box maîtresse : ces gestes prouvent la présence devant la box et restent à l'écran (jeton local) |
+| Trace | chaque ouverture et chaque refus part au journal systemd (`secubox.premier-pas`) et, si l'écriture est possible, à `/var/log/secubox/audit.log` (`PREMIER_PAS_AUDIT`). **Limite connue** : l'API tourne en `secubox` et `audit.log` est root 0644 ; la trace durable est donc celle du journal systemd. Le secret n'y figure jamais |
 
 ## Dépendances SecuBox
 
