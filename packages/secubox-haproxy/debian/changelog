@@ -1,3 +1,9 @@
+secubox-haproxy (1.12.1-1~bookworm1) bookworm; urgency=medium
+
+  * frame-ancestors : ajoute https://ytsas.<domaine de la box> aux encadreurs, pour que le lecteur miroir PeerTube de ytsas ne soit plus refuse dans son cadre (ref #2750).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 11:50:00 +0200
+
 secubox-haproxy (1.12.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /exposure/ (composant exposure) refaite au profil Aurora (ref #2584) : page autonome, sans police ni script externes (la page chargeait Google Fonts et le moteur CRT), tuiles (services a l'ecoute, sur toutes les interfaces, services caches Tor, backends SSL, services emancipes), panneaux Emancipes / Tor / Ecoute / Backends SSL / Exposition par vhost, ?demo=1 (donnees fictives RFC 5737, actions inertes), ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet exposure).

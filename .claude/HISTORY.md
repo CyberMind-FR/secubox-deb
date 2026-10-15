@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — ytsas : le lecteur miroir PeerTube n'est plus refusé dans son cadre (haproxy 1.12.1, closes #2750)
+- Cause : la CSP `frame-ancestors` de peertube.gk2 (posée par HAProxy via haproxyctl) ne listait pas ytsas, qui encadre le lecteur des titres « miroir » : Firefox affichait « ne peut pas ouvrir cette page ».
+- Correctif : `https://ytsas.<domaine de la box>` ajouté à la liste explicite (comme billets, #1723) ; jamais de joker. Déployé sur gk2 (paquet, `haproxyctl generate`, reload) : l'en-tête de peertube.gk2 contient ytsas, ytsas répond 200. À confirmer dans le navigateur par l'opérateur.
+
 ## 2026-10-15 — Image neuve : les modules servis par groupd sont enfin déclarés (ad-guard 1.14.1, aggregator 0.4.1, ref #2748)
 - Cause : ad-guard n'a plus d'unité d'API (#1362, « servi par groupd »), mais aucun paquet ne déposait groupable.d ni ne créait de groupe ; sur le RPi400 neuf, 35 modules sur 100 n'étaient servis par personne (page ad-guard HORS LIGNE, API 404). gk2 n'était pas touchée : ses groupes g1..g6 avaient été posés à la main.
 - Correctif : unité `secubox-groupe-declares` (sert tout groupable.d) activée par `secubox-groupe-declares-activer` seulement quand `groups.d` n'a aucun `*.conf` ; ad-guard dépose sa déclaration.
