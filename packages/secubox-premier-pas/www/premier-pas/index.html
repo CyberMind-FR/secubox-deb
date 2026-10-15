@@ -337,7 +337,7 @@ function fini() {
       JETON = s.jeton; DISTANT = true;
       try { sessionStorage.setItem("premier-pas.jeton", JETON); sessionStorage.setItem("premier-pas.distant", "1"); } catch (_) {}
     } catch (err) {
-      const occupe = err.statut === 423, close = err.statut === 403;
+      const occupe = err.statut === 423, close = err.statut === 403 && /fenêtre/i.test(err.message);   // « pas du réseau local » est un autre 403 : l'astuce du redémarrage n'y vaut pas
       $("#ecran").innerHTML = `<h1>${occupe ? "Un autre poste configure cette box" : "Premier démarrage"}</h1><p class="aide">${esc(err.message)}</p>`
         + (occupe ? `<p><button type="button" class="b prim" id="reessayer">Réessayer</button></p>` : "")
         + (close ? `<p class="aide">Une box sans écran se configure dans les 15 minutes qui suivent son démarrage : éteignez-la puis rallumez-la, et rouvrez cette page.</p>` : "");

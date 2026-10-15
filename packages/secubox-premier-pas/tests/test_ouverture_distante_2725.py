@@ -346,3 +346,14 @@ def test_a_420_px_rien_ne_deborde(navigateur, box):
     p.wait_for_selector("h1")
     assert p.evaluate("document.documentElement.scrollWidth <= innerWidth + 1") and err == []
     ctx.close()
+
+
+def test_pas_du_reseau_local_n_affiche_pas_l_astuce_du_redemarrage(navigateur, box):
+    """#2731 : « pas du réseau local » et « fenêtre close » sont deux 403 ; rallumer la box ne règle que le second."""
+    c, _, _, _ = box
+    c.headers["X-SecuBox-LAN"] = "0"
+    ctx, p, err, _ = ouvre_page(navigateur, box)
+    p.wait_for_function("document.getElementById('ecran').textContent.includes('réseau local')")
+    t = p.inner_text("#ecran")
+    assert "rallumez" not in t and "réseau local" in t and err == []
+    ctx.close()

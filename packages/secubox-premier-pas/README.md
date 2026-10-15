@@ -79,6 +79,15 @@ proposition du maître, la session distante et la trace d'aide ; **garde le prof
 Aucune route distante pour cela : rouvrir l'assistant d'une box en service, c'est rouvrir sa configuration.
 `POST /session` (ouverture distante, #2725) est refusée (409) sur une box en service sans assistant en cours.
 
+## nginx : cache des pages et verdict LAN (0.6.2, #2730, #2731)
+
+- **Pages jamais « immutable »** : `/etc/nginx/secubox.d/premier-pas.conf` sert `/premier-pas/` et `/premier-pas-maitre/` en `Cache-Control: no-cache` (revalidation à
+  chaque affichage, ETag). `location /` du site pose `public, immutable` + `expires 1h` sur tout statique : après une mise à jour du paquet, le navigateur et le kiosque
+  gardaient l'ancienne page. Le bloc répète les quatre en-têtes de sécurité du serveur (un `add_header` de location remplace ceux du serveur).
+- **Verdict LAN de la route de session** : `X-SecuBox-LAN` n'est posé par `snippets/secubox-proxy.conf` que si secubox-core a été configuré APRÈS secubox-hub. Le postinst
+  pose donc `premier-pas-session.conf` (route `= /api/v1/premier-pas/session` seulement) quand le fichier GeoIP du Hub existe ET que la ligne manque ET que `nginx -t` passe ;
+  sinon il le retire. Il n'est jamais actif sans le postinst (livré dans `/usr/share/secubox/premier-pas/nginx/`).
+
 ## Dépendances SecuBox
 
 `secubox-core`.

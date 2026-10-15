@@ -22,6 +22,9 @@ override_dh_auto_install:
 	install -D -m 644 kiosque/secubox-kiosque-policy.json debian/secubox-premier-pas/etc/chromium/policies/managed/secubox-kiosque.json
 	install -d debian/secubox-premier-pas/usr/lib/systemd/system
 	install -m 644 systemd/*.service systemd/*.timer systemd/*.path debian/secubox-premier-pas/usr/lib/systemd/system/
+	# Pages de l'assistant : jamais « immutable » (#2730) ; la route de session n'est posee que par le postinst, sous conditions (#2731).
+	install -D -m 644 nginx/premier-pas.conf debian/secubox-premier-pas/etc/nginx/secubox.d/premier-pas.conf
+	install -D -m 644 nginx/premier-pas-session.conf debian/secubox-premier-pas/usr/share/secubox/premier-pas/nginx/premier-pas-session.conf
 	install -D -m 644 exemples/profil.toml debian/secubox-premier-pas/usr/share/doc/secubox-premier-pas/examples/profil.toml
 	install -D -m 644 exemples/reponses-autoload.toml debian/secubox-premier-pas/usr/share/doc/secubox-premier-pas/examples/reponses-autoload.toml
 
