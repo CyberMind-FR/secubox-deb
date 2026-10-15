@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Mesh : le RPi400 (gk1) rejoint le maillage de gk2 (action d'exploitation, sans changement de code)
+- Constat : gk2 ↔ gk3 maillés (wg-mesh 10.10.0.1 / .5) ; le RPi400 n'avait ni wg-mesh, ni p2p.toml, ni code de jonction.
+- Fait sur demande du mainteneur : jeton de jonction auto-approuvé de 15 minutes, minté sur gk2 par la fonction `ml_token_generate` du module p2p (la route d'invitation exige le JWT d'un administrateur, #2476 ; le CLI `sbx-mesh-invite` donne un jeton de 32 hex que l'automesh refuse), encodé `sbxmesh1.…` vers `admin.gk2.secubox.in` (HTTPS à certificat vérifié : le port 7331 de gk2 est fermé côté LAN), déposé par stdin dans `/var/lib/secubox/p2p/automesh.code` (0600, secubox) du RPi400 ; le code n'a jamais été affiché. `secubox-automesh` : « approuvé », 10.10.0.6/24, code effacé.
+- Vérifié : handshake wg-mesh avec gk2, ping 10.10.0.1 (1 ms) et 10.10.0.5 (6 ms, via gk2) ; gk2 compte 5 pairs. Topologie en étoile autour de gk2 (le RPi400 n'a pas de pair direct gk3).
+- Pas de découverte mDNS du parent : la jonction reste manuelle (code d'invitation), comme écrit dans docs/dossiers/automesh.md.
+
 ## 2026-10-15 — Identité (Administration) : PhotoPrism dans les comptes d'une personne (secubox-auth 1.8.2, closes #2761)
 - Demande : « manque photoprism » sur hall.gk2/identite/#admin. Le panneau « Comptes » ne listait que courriel, Nextcloud, PeerTube et BBS ; « Mes comptes » du Hall montre PhotoPrism, ouvert par OIDC (#2255).
 - Ajout d'une ligne PhotoPrism informative : SSO, identifiant = pseudo de la personne, sans mot de passe, compte créé à la première connexion. Pas d'adaptateur root : PhotoPrism n'a rien à ouvrir ni à relier. 5 tests en vrai navigateur ; suite sbxid 99 verts.
