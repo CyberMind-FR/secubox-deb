@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Cadre admin : habillage Aurora de la barre latérale, du menu du haut et de la barre du bas, hub 1.12.2 (closes #2733)
+Suite de #2733 : une page Aurora (bleu nuit, cyan) était encadrée par l'ancien cadre « hybrid-dark » (vert, monospace). `shared/cadre-aurora.css`, chargé par `sidebar.js` EN DERNIER et seulement
+pour `html.sbx-aurora`, tous sélecteurs préfixés (un test le vérifie), jetons AURORA-REFERENCE §2, contrastes WCAG testés. Piège mesuré : `sidebar.js` pose le fond de la page et le « verre » de la barre
+latérale en style EN LIGNE avec `!important`, qu'aucune feuille ne peut battre : pour une page Aurora il ne les pose plus (les anciennes pages les gardent, test dédié). Sur iPhone / tactile le menu du
+haut et la barre du bas commençaient à 220 px (place de la barre latérale pourtant repliée, `hybrid-skin.css` `left:220px!important`) : titre coupé, déconnexion hors champ ; ils prennent toute la largeur,
+le titre laisse la place au bouton du menu, la bande de mesures et les boutons secondaires sont masqués. Titre du menu du haut sans tiret en tête (« SecuBox — Actor Intelligence » : seul le tiret court
+était retiré). Déployé sur gk2 et sur le RPi400 (hub 1.12.2), vérifié servi ; PAS vu dans un navigateur sur gk2 (session requise), vu en rendu réel sur banc de test à 1400 et 390 px.
+Trois échecs préexistants sur master, sans lien : `test_espaces_2212` (c3box, mirror), `test_charge_hub_1835::test_un_seul_list_units_par_cycle`, `test_ytflux_aurora_2638::…vhost_admin` (webos).
+Reste ouvert : la page Actor sur son vhost dédié `actor.<domaine>` n'a pas de cadre (elle ne le charge que sur un hôte `admin.*`) — dépend de l'URL réellement ouverte par le mainteneur.
+RPi400 : accès SSH par clé posé (le mot de passe par défaut a servi une fois ; à changer).
+
 ## 2026-10-15 — Guardian : carte des attaques colorée par type de menace agrégé, soc 1.8.0 (closes #2735)
 Demande du mainteneur (capture du Guardian) : colorer la carte par type de menace agrégé. La carte peignait des halos rouges proportionnels au nombre d'événements, sans type, et la page ne
 lisait que 8 alertes. Port du modèle de la vue d'ensemble du WAF (#2703) : huit familles de types (couleur ET forme, identiques au WAF : un test compare les deux sources), anneau par pays réparti
