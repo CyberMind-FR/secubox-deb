@@ -76,8 +76,8 @@ def test_le_workflow_decoupe_avant_les_sommes_et_publie_les_parties():
     assert "release-decouper-assets.sh release/images release/live-usb" in etapes[i_decoupe]["run"]
     # #2719 : l'envoi n'est plus fait par softprops/action-gh-release (envois parallèles, délai d'inactivité dépassé sur les images de
     # plusieurs Go) mais par `gh release upload`, un fichier à la fois : la liste de motifs reste la même, dans le script de l'étape.
-    publication = next(e for e in etapes if "gh release upload" in e.get("run", ""))
-    fichiers = publication["run"]
+    assert any("release-envoyer.sh" in e.get("run", "") for e in etapes)                  # l'envoi est dans scripts/release-envoyer.sh
+    fichiers = (RACINE / "scripts" / "release-envoyer.sh").read_text()
     for motif in ("release/images/*.part*", "release/live-usb/*.part*", "release/images/*.assembled.sha256"):
         assert motif in fichiers
     assert "*.part*" in etapes[i_sommes]["run"]
