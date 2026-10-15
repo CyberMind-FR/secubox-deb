@@ -195,6 +195,7 @@ def refuse():
 from fastapi.responses import PlainTextResponse  # noqa: E402
 from secubox_core.capacites import require_capability  # noqa: E402
 
+from premier_pas import decouverte as DE  # noqa: E402
 from premier_pas import maitre as MA  # noqa: E402
 
 _admin = [Depends(require_capability("admin.modules"))]
@@ -238,6 +239,36 @@ def maitre_export(nom: str):
 def maitre_pousse(demande: Dict[str, Any]):
     return _refus(MA.pousse, str(demande.get("nom", "")), str(demande.get("adresse", "")),
                   str(demande.get("code", "")), str(demande.get("mode", "proposer")))
+
+
+# ── Détection des box neuves (#2728) : le maître les repère, les liste, leur pousse le profil par la session distante ──
+
+@app.get("/maitre/decouverte", dependencies=_admin)
+def decouverte_etat():
+    return {"boxes": DE.liste(), "reglages": DE.reglages()}
+
+
+@app.post("/maitre/decouverte/analyser", dependencies=_admin)
+def decouverte_analyse():
+    """Sonde les voisins (ARP, maillage) : une lecture publique chacun. Peut durer quelques secondes."""
+    r = DE.analyse()
+    return {**r, "reglages": DE.reglages()}
+
+
+@app.post("/maitre/decouverte/preparer", dependencies=_admin)
+def decouverte_prepare(demande: Dict[str, Any]):
+    return _refus(DE.prepare, str(demande.get("adresse", "")), str(demande.get("nom", "")), str(demande.get("mode", "remplir")))
+
+
+@app.put("/maitre/decouverte/reglages", dependencies=_admin)
+def decouverte_regle(reglages: Dict[str, Any]):
+    return _refus(DE.regle, reglages)
+
+
+@app.delete("/maitre/decouverte/{adresse}", dependencies=_admin)
+def decouverte_oublie(adresse: str):
+    _refus(DE.oublie, adresse)
+    return {"ok": True}
 
 
 @app.get("/maitre/distant", dependencies=_admin)

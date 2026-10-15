@@ -201,15 +201,25 @@ def pousse(nom: str, adresse: str, code: str, mode: str = "proposer", client=Non
     # Espaces seulement : l'écran groupe le code par espaces. Surtout pas les
     # tirets — le jeton est du base64 « urlsafe », qui en contient.
     code = "".join((code or "").split())
-    if not code:
-        raise R.Refus("Code de démarrage : celui qu'affiche l'écran de la box neuve.")
     profil = lit(nom)
     if client is None:
         import httpx  # noqa: PLC0415
         # La box neuve a un certificat auto-signé : réseau local ou maillage seulement (ci-dessus).
         client = httpx.Client(verify=False, timeout=30)
     base = f"https://{adresse}/api/v1/premier-pas"
-    h = {"X-Premier-Pas": code}
+    if code:
+        h = {"X-Premier-Pas": code}
+    else:
+        # SANS CODE (#2728) : le maître prend la SESSION DISTANTE de la box neuve (#2725 : fenêtre de 15 minutes après son démarrage, un seul poste,
+        # verdict LAN de nginx) au lieu de faire recopier le code de 8×4 caractères affiché sur son écran. Un refus s'arrête là, avec la raison de la box.
+        r = client.post(f"{base}/session")
+        try:
+            corps = r.json()
+        except Exception:  # noqa: BLE001
+            corps = {}
+        if r.status_code != 200 or not corps.get("jeton"):
+            return {"ok": False, "faites": [], "arret": "Session distante", "detail": corps.get("detail", r.status_code), "code": r.status_code}
+        h = {"X-Premier-Pas": str(corps["jeton"])}
     faites: List[str] = []
     for etape in ORDRE_POUSSEE:
         v = _valeurs_etape(profil, etape)

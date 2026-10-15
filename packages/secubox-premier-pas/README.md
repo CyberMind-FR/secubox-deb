@@ -50,6 +50,11 @@ Paquet Debian : version `0.4.9-1~bookworm1`, architecture `all`.
 | `GET` | `/maitre/profils/{nom}/export` | aucune |
 | `POST` | `/maitre/pousser` | aucune |
 | `GET` | `/maitre/distant` | aucune |
+| `GET` | `/maitre/decouverte` | administrateur (`admin.modules`) |
+| `POST` | `/maitre/decouverte/analyser` | administrateur |
+| `POST` | `/maitre/decouverte/preparer` | administrateur |
+| `PUT` | `/maitre/decouverte/reglages` | administrateur |
+| `DELETE` | `/maitre/decouverte/{adresse}` | administrateur |
 
 Routes relevées dans le code source, relatives au montage du module. « aucune » : pas de garde déclarée à cet endroit de la route.
 
@@ -95,6 +100,22 @@ prioritaire #1522), avec le lanceur lui-même. L'image RPi écrivait avant sa pr
 `http://localhost/`), qui MASQUAIT celle du paquet et ignorait le lanceur. `premier-pas-retire-unite-kiosque` (appelé par le postinst) la retire — seulement si elle porte le `startx` ET la
 description de l'image, et n'appelle pas le lanceur : une unité d'opérateur reste en place — puis le postinst remplace le lien d'activation (qui pointait dans le vide) et relance le
 kiosque s'il tournait. `build-rpi-usb.sh` pose désormais l'unité du lanceur (`image/systemd/`, source unique).
+
+## Le maître repère les box neuves (0.7.0, #2728)
+
+Le maître (gk2) **repère** les box neuves du réseau local et du maillage, les **liste**, puis leur **pousse le profil en prenant la session distante** (#2725) au lieu de faire recopier
+le code de 8×4 caractères affiché sur leur écran. `POST /maitre/pousser` accepte désormais un code vide ; avec un code, rien ne change.
+
+| Pièce | Détail |
+|---|---|
+| Détection (`premier_pas/decouverte.py`) | voisins = table ARP (`ip neigh`, IPv4 privées vues récemment) + pairs du maillage (`wg show wg-mesh allowed-ips`, adresses /32 ; nécessite le droit de lire `wg`). Chacun reçoit UNE lecture publique `GET /api/v1/premier-pas/etat` : une box SecuBox répond `{fait, etapes}` ; `fait: false` = neuve. Jamais d'adresse publique |
+| Registre | `decouverte.json` dans le dossier du maître : adresse, nom annoncé, état (`nouvelle` → `preparee` → `configuree`), vues, dernier envoi. **Aucun secret** (ni mot de passe, ni empreinte, ni code, ni secret de session). Une box absente depuis une heure disparaît |
+| Préparer | `POST /maitre/decouverte/preparer {adresse, nom, mode}` : seulement une box DÉTECTÉE et neuve. Le maître prend la session distante ; un refus (« un autre poste configure déjà cette box », fenêtre de 15 min close, box en service) s'arrête là avec la raison de la box |
+| Automatique | **désactivé par défaut**. Activé : seulement `remplir` ou `proposer` (jamais `forcer`), seulement un profil COMPLET, UNE tentative par box (un échec n'est pas retenté). Raison : une machine qui répond « je suis neuve » à l'adresse d'un voisin n'est pas forcément la vôtre, et le profil porte l'empreinte du mot de passe administrateur |
+| Minuterie | `secubox-premier-pas-decouverte.timer` (toutes les 2 min, `premier-pasctl decouvrir`) existe mais **n'est pas activée** par le paquet : seule la box maître l'active (`systemctl enable --now secubox-premier-pas-decouverte.timer`). Service confiné (`secubox`, `NoNewPrivileges`, `IPAddressDeny=any` + réseaux privés) |
+| Trace | chaque envoi et chaque réglage de l'automatique part au journal systemd (`secubox.premier-pas`) ; `audit.log` est root 0644, l'API tourne en `secubox` |
+
+Limite connue : la box neuve n'ouvre la session distante que dans les 15 minutes qui suivent son démarrage (#2725). Passé ce délai, il faut la redémarrer ou lui pousser le profil avec le code.
 
 ## Dépendances SecuBox
 
