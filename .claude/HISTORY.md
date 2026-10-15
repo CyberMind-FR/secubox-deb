@@ -9,6 +9,15 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Premier Pas : pages sans cache dur et verdict LAN de la session, 0.6.2 (ref #2730, ref #2731)
+Deux défauts vus sur le RPi400 par le mainteneur (captures). (1) Après la mise à jour et `rejouer`, le navigateur et le kiosque affichaient l'ANCIENNE page : `location /` du site
+pose `expires 1h` + `public, immutable` sur tout statique, et `immutable` interdit de revalider (la box servait bien la nouvelle page, vérifié par `curl`). Bloc
+`/etc/nginx/secubox.d/premier-pas.conf` : `no-cache` + ETag, quatre en-têtes de sécurité répétés (un `add_header` de location remplace ceux du serveur). (2) Page distante en
+« L'assistant distant s'ouvre depuis le réseau local » sur un poste du LAN : `X-SecuBox-LAN` n'est posé par `secubox-proxy.conf` que si core est configuré APRÈS hub. Le postinst
+pose `premier-pas-session.conf` (route de session seulement, en-tête posé par nginx donc non forgeable) sous conditions : fichier GeoIP du Hub présent, ligne absente, `nginx -t`
+passe, sinon retiré. Tests avec un VRAI nginx (dont un client qui forge l'en-tête). Défaut général de `location /` (HTML « immutable » pour tout le site) NON traité : décision de site.
+Leçon : `curl` sur la box avant de croire à un défaut du code ; l'en-tête de cache expliquait « le kiosque relancé n'ouvre pas la bonne page ». Pas de `closes`.
+
 ## 2026-10-15 — Premier Pas : une mise à jour ne ferme plus l'assistant, `rejouer`, 0.6.1 (ref #2727)
 RPi400 : `GET /etat` (publique) rendait `fait: true`, profil complet, `moteur: {}` : le marqueur avait été posé sans application. Le `postinst` le posait à chaque
 configuration du paquet dès qu'un admin avait servi, sans regarder si un assistant était en cours ; la montée 0.5.8 → 0.5.9 → 0.6.0 en plein parcours l'a fermé (et le
