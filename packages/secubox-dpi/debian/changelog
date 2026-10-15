@@ -1,3 +1,9 @@
+secubox-dpi (1.14.0-1~bookworm1) bookworm; urgency=medium
+
+  * nDPId, onglet Flux : « Regrouper par » protocole, application, source, destination ou niveau de risque. Une ligne par groupe (flux, octets, part, risque maximal), tri par colonne, clic pour revenir au detail du groupe ; le filtre s applique avant le regroupement (ref #2757).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 15:00:00 +0200
+
 secubox-dpi (1.13.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: trois pages au profil Aurora (ref #2677) : /dpi/, la coque /ndpid/ et /mediaflow/. Pages autonomes (CSS et JS en ligne, aucune police ni script distant), ?demo=1 (donnees fictives, aucune ecriture), ?embed=1, 420 px sans debordement, mesure absente affichee « — », infobulle de definition sur chaque tuile, aucun dialogue natif (confirmations dans la page), plus aucun innerHTML : tout texte venu de l API passe par textContent. Memes routes, memes methodes, memes corps ; jeton sbx_token en Bearer dans un try/catch.

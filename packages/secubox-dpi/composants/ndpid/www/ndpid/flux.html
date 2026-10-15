@@ -51,6 +51,7 @@
   .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
   .note{color:var(--faible);font-size:.66rem;margin-top:6px}
   .outils{display:grid;gap:6px;grid-template-columns:1fr 1fr;margin-bottom:8px}
+  .outils>*{min-width:0;max-width:100%}
   .outils .rech{grid-column:1/-1}
   .repart{display:grid;gap:12px;grid-template-columns:120px 1fr;align-items:center}
   svg.donut{width:120px;height:120px;display:block}
@@ -67,10 +68,12 @@
   td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;font-variant-numeric:tabular-nums}
   td.num,th.num{text-align:right}
   .fl{color:var(--faible)}
+  tr.grp{cursor:pointer}tr.grp:hover td,tr.grp:focus-visible td{background:rgba(41,182,246,.12)}tr.grp:focus-visible{outline:2px solid var(--cyan,#29b6f6);outline-offset:-2px}
+  .part{display:inline-block;vertical-align:middle;width:70px;height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden}.part i{display:block;height:100%;background:#29b6f6}
   .tag{display:inline-block;border-radius:5px;padding:0 7px;font-size:.7rem;font-weight:600;background:rgba(41,182,246,.16);color:var(--cyan);max-width:150px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
   .tag.app{background:rgba(167,139,250,.16);color:var(--violet)}
   .risque{display:inline-block;min-width:34px;text-align:center;border-radius:5px;padding:1px 6px;font-weight:700;font-size:.72rem}
-  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}.outils{grid-template-columns:2fr 1fr 1fr}.outils .rech{grid-column:auto}}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}.outils{grid-template-columns:2fr 1fr 1fr 1fr}.outils .rech{grid-column:auto}}
   @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g3{grid-template-columns:1fr 1fr 1fr}}
 </style>
 <div class="cadre"><div class="app">
@@ -89,6 +92,7 @@
       <input type="search" id="rech" class="rech" placeholder="Rechercher : adresse, protocole, application…" aria-label="Rechercher dans les flux">
       <select id="fprot" aria-label="Filtrer par protocole"><option value="">Tous les protocoles</option></select>
       <select id="frisque" aria-label="Filtrer par risque"><option value="">Tous les risques</option><option value="eleve">Élevé (≥ 70)</option><option value="moyen">Moyen et plus (≥ 40)</option><option value="faible">Faible (&lt; 40)</option></select>
+      <select id="grp" aria-label="Regrouper les flux"><option value="">Pas de regroupement</option><option value="proto">Regrouper par protocole</option><option value="app">Regrouper par application</option><option value="sip">Regrouper par source</option><option value="dip">Regrouper par destination</option><option value="niv">Regrouper par niveau de risque</option></select>
     </div>
     <div class="scroll"><table><thead><tr id="entetes"></tr></thead><tbody id="flux"></tbody></table></div>
     <div class="note" id="noteFlux"></div>
@@ -125,8 +129,11 @@
 
   // Colonnes du tableau : clé de tri, libellé, numérique ?
   var COL=[['src','Source'],['dst','Destination'],['proto','Protocole'],['app','Application'],['octets','Octets',1],['duree','Durée',1],['risque','Risque',1]];
-  var tri={k:'octets',dir:-1},FL=[],prec=null,deb=null;
-  el('entetes').innerHTML=COL.map(function(c){return '<th class="'+(c[2]?'num ':'')+'" data-k="'+c[0]+'" aria-sort="none"><button type="button">'+c[1]+' <span></span></button></th>';}).join('');
+  var COLG=[['cle','Groupe'],['n','Flux',1],['octets','Octets',1],['part','Part',1],['risque','Risque max',1]];
+  var NOMG={proto:'Protocole',app:'Application',sip:'Source',dip:'Destination',niv:'Niveau de risque'};
+  var tri={k:'octets',dir:-1},triG={k:'octets',dir:-1},FL=[],prec=null,deb=null;
+  function entetes(cols){el('entetes').innerHTML=cols.map(function(c){return '<th class="'+(c[2]?'num ':'')+'" data-k="'+c[0]+'" aria-sort="none"><button type="button">'+c[1]+' <span></span></button></th>';}).join('');}
+  var colsActives=null;
 
   // Un flux brut de l'API → une ligne normalisée. Ports, durée, risque absents (collecteur ndpiReader / sbxdpi) → « — ».
   function norme(f){
@@ -148,9 +155,48 @@
       if(x==null&&y==null) return 0; if(x==null) return 1; if(y==null) return -1;   // les mesures absentes finissent toujours en bas
       return (typeof x==='string'?x.localeCompare(y):x-y)*d;});
   }
+  // Regroupement (#2757) : le filtre s'applique d'abord, puis une ligne par valeur de la clé choisie.
+  function niv3(r){return r==null?'Inconnu':r>=70?'Élevé':r>=40?'Moyen':'Faible';}
+  function cleDe(f,m){var k=m==='niv'?niv3(f.risque):f[m];return k===''||k==null?'—':String(k);}
+  function groupes(v,m){
+    var g={},tot=0;
+    v.forEach(function(f){var k=cleDe(f,m),a=g[k]||(g[k]={cle:k,n:0,octets:null,risque:null});
+      a.n+=f.n;if(f.octets!=null){a.octets=(a.octets||0)+f.octets;tot+=f.octets;}
+      if(f.risque!=null&&(a.risque==null||f.risque>a.risque))a.risque=f.risque;});
+    var l=Object.keys(g).map(function(k){var a=g[k];a.part=a.octets!=null&&tot>0?100*a.octets/tot:null;return a;});
+    var k=triG.k,d=triG.dir;
+    return l.sort(function(a,b){var x=a[k],y=b[k];
+      if(x==null&&y==null) return 0; if(x==null) return 1; if(y==null) return -1;
+      return (typeof x==='string'?x.localeCompare(y):x-y)*d;});
+  }
+  // Un clic sur un groupe revient au détail, filtré sur ce groupe.
+  function creuse(m,cle){
+    if(m==='proto'&&cle!=='—'){el('fprot').value=cle;if(el('fprot').value!==cle)el('rech').value=cle;}
+    else if(m==='niv'){var o={'Élevé':'eleve','Moyen':'moyen','Faible':'faible'}[cle];if(o)el('frisque').value=o;}
+    else if(cle!=='—')el('rech').value=cle;
+    el('grp').value='';tableau();
+  }
   var MAXL=60;
+  function tableauGroupes(v,m){
+    var l=groupes(v,m);
+    Array.prototype.forEach.call(el('entetes').children,function(th){var on=th.getAttribute('data-k')===triG.k;th.className=(th.className.replace(/\btri\b/g,'')+(on?' tri':'')).trim();
+      th.setAttribute('aria-sort',on?(triG.dir>0?'ascending':'descending'):'none');th.querySelector('span').textContent=on?(triG.dir>0?'▲':'▼'):'';});
+    el('flux').innerHTML=l.length?l.slice(0,MAXL).map(function(g){var n=g.risque==null?null:niveau(g.risque);
+      return '<tr class="grp" tabindex="0" role="button" data-g="'+esc(g.cle)+'" title="Voir le détail : '+esc(g.cle)+'"><td><span class="tag'+(m==='app'?' app':'')+'">'+esc(g.cle)+'</span></td><td class="num">'+fmt(g.n)+'</td>'
+        +'<td class="num">'+(g.octets==null?'—':oct(g.octets))+'</td>'
+        +'<td class="num">'+(g.part==null?'—':'<span class="part" title="Part des octets"><i style="width:'+Math.max(2,Math.round(g.part))+'%"></i></span> '+(g.part<1?'< 1':Math.round(g.part))+' %')+'</td>'
+        +'<td class="num">'+(n?'<span class="risque" style="background:'+n[1]+'33;color:'+n[1]+'" title="'+esc(n[0]+' · score '+g.risque)+'">'+fmt(g.risque)+'</span>':'—')+'</td></tr>';}).join('')
+      :'<tr><td colspan="5" class="vide">'+(FL.length?'Aucun flux ne correspond au filtre.':(ok?'Aucun flux actif.':'Ouvre une session pour voir les flux.'))+'</td></tr>';
+    var nf=v.reduce(function(s,f){return s+f.n;},0);
+    el('compte').textContent=ok?fmt(l.length)+' groupe'+(l.length>1?'s':'')+' · '+fmt(nf)+' flux (par '+NOMG[m].toLowerCase()+')':'';
+    el('noteFlux').textContent=l.length>MAXL?'Les '+MAXL+' premiers groupes sur '+fmt(l.length)+' sont affichés.':'';
+    hauteur();
+  }
   function tableau(){
-    var v=visibles();
+    var v=visibles(),m=el('grp').value;
+    var voulu=m?COLG:COL;
+    if(colsActives!==voulu){colsActives=voulu;entetes(voulu);}
+    if(m){tableauGroupes(v,m);return;}
     Array.prototype.forEach.call(el('entetes').children,function(th){var on=th.getAttribute('data-k')===tri.k;th.className=(th.className.replace(/\btri\b/g,'')+(on?' tri':'')).trim();
       th.setAttribute('aria-sort',on?(tri.dir>0?'ascending':'descending'):'none');th.querySelector('span').textContent=on?(tri.dir>0?'▲':'▼'):'';});
     el('flux').innerHTML=v.length?v.slice(0,MAXL).map(function(f){var n=f.risque==null?null:niveau(f.risque);
@@ -231,9 +277,11 @@
   function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxNdpidVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+window.scrollY),onglet:'flux'},location.origin);}catch(e){}}}
   window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
   // Tri, recherche et filtres : côté client, sans rappeler l'API.
-  el('entetes').addEventListener('click',function(e){var th=e.target.closest('th');if(!th)return;var k=th.getAttribute('data-k');
-    if(tri.k===k)tri.dir=-tri.dir;else{tri.k=k;tri.dir=/^(octets|duree|risque)$/.test(k)?-1:1;}tableau();});
-  ['rech','fprot','frisque'].forEach(function(i){el(i).addEventListener(i==='rech'?'input':'change',tableau);});
+  el('entetes').addEventListener('click',function(e){var th=e.target.closest('th');if(!th)return;var k=th.getAttribute('data-k'),T=el('grp').value?triG:tri;
+    if(T.k===k)T.dir=-T.dir;else{T.k=k;T.dir=/^(octets|duree|risque|n|part)$/.test(k)?-1:1;}tableau();});
+  function ouvreGroupe(e){var tr=e.target.closest('tr.grp');if(!tr)return;if(e.type==='keydown'&&e.key!=='Enter'&&e.key!==' ')return;e.preventDefault();creuse(el('grp').value,tr.getAttribute('data-g'));}
+  el('flux').addEventListener('click',ouvreGroupe);el('flux').addEventListener('keydown',ouvreGroupe);
+  ['rech','fprot','frisque','grp'].forEach(function(i){el(i).addEventListener(i==='rech'?'input':'change',tableau);});
   heure();
   if(q.get('demo')){deb=DEMO.debit;rend(DEMO);el('rafraichir').addEventListener('click',heure);return;}
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
