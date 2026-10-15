@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Metrics : cartes dynamiques et métriques en temps réel (secubox-metrics 1.24.0, closes #2763)
+- Demande : « dynamiser les mappes avec les connexions et autres metrics en real time ». Les deux cartes étaient des cercles statiques par pays, rafraîchis toutes les 15 s ; les connexions n'étaient que des compteurs.
+- API `GET /api/v1/metrics/live` (lecture, sans cache) : connexions TCP établies par pays (GeoLite2 local), entrantes 22/80/443 et sortantes, LAN et inconnues comptées à part, débit des interfaces physiques, charge, mémoire. Jamais d'adresse IP dans la réponse ; `ss` tourne sous `secubox`, sans privilège.
+- Page : carte « Connexions en direct » (pulsations par pays quand il augmente, arcs animés vers la box, débit en octets/s calculé entre deux mesures, pastille EN DIRECT, interrogation toutes les 3 s avec repli exponentiel en cas de panne, pause quand l'onglet est caché, `prefers-reduced-motion` respecté) ; les cartes attaques et visiteurs pulsent aussi quand un pays augmente. Démonstration animée (`?demo=1`). Pays de la box : `SECUBOX_PAYS`, « FR » par défaut.
+- 14 tests d'API et 10 en vrai navigateur ; échecs de la suite identiques à master.
+
 ## 2026-10-15 — Mesh : le RPi400 (gk1) rejoint le maillage de gk2 (action d'exploitation, sans changement de code)
 - Constat : gk2 ↔ gk3 maillés (wg-mesh 10.10.0.1 / .5) ; le RPi400 n'avait ni wg-mesh, ni p2p.toml, ni code de jonction.
 - Fait sur demande du mainteneur : jeton de jonction auto-approuvé de 15 minutes, minté sur gk2 par la fonction `ml_token_generate` du module p2p (la route d'invitation exige le JWT d'un administrateur, #2476 ; le CLI `sbx-mesh-invite` donne un jeton de 32 hex que l'automesh refuse), encodé `sbxmesh1.…` vers `admin.gk2.secubox.in` (HTTPS à certificat vérifié : le port 7331 de gk2 est fermé côté LAN), déposé par stdin dans `/var/lib/secubox/p2p/automesh.code` (0600, secubox) du RPi400 ; le code n'a jamais été affiché. `secubox-automesh` : « approuvé », 10.10.0.6/24, code effacé.

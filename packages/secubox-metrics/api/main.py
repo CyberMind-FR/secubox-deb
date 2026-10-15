@@ -1076,6 +1076,15 @@ async def live_hosts_endpoint():
     )
 
 
+@app.get("/api/v1/metrics/live", dependencies=[Depends(require_lecture)])
+async def metrics_en_direct():
+    """Temps réel pour les cartes (#2763) : connexions par pays, débit, charge, mémoire. Sans cache, jamais d'adresse IP."""
+    import en_direct
+    from vhost_stats import _pays
+    mesures = await asyncio.get_running_loop().run_in_executor(None, en_direct.instantane, _pays)
+    return JSONResponse(content=mesures, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/v1/metrics/cookie-audit", dependencies=[Depends(require_lecture)])
 async def cookie_audit_metrics():
     """Inventaire RGPD des cookies deposes, par vhost (#1311).
