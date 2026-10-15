@@ -1,3 +1,9 @@
+secubox-assist (0.3.2-1~bookworm1) bookworm; urgency=high
+
+  * CORRECTION de 0.3.1 : l'attente de wg-mesh bloquait systemctl (#2740). Elle etait dans ExecStartPre, sans delai : `systemctl restart` et `enable --now` — donc le postinst et dpkg — restaient INTERMINABLES tant que wg-mesh n'existait pas (constate en installant 0.3.1 sur le RPi400 : dpkg bloque, il a fallu tuer le systemctl en attente). L'attente est maintenant DANS ExecStart (`sh -c 'until [ -e /sys/class/net/wg-mesh ]; do sleep 15; done; exec python3 -m assist.daemon'`) : le demarrage se termine tout de suite, le sh ne coute rien et laisse la place au demon des que l'interface existe. Le demon garde son refus fail-closed, le plafond de redemarrages reste. Le test execute la VRAIE commande (le demon remplace par un marqueur) et verifie qu'aucun ExecStartPre / ExecCondition ne depend de wg-mesh. 6 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 16:30:00 +0200
+
 secubox-assist (0.3.1-1~bookworm1) bookworm; urgency=medium
 
   * L'unite attend wg-mesh au lieu de redemarrer toutes les 5 s (#2740). Constate sur un RPi400 : `BindError: wg-mesh iface 'wg-mesh' unavailable`, 619 redemarrages en ~1 h (charge ~5, journal ssature) tant que la box n'avait pas rejoint le maillage. Le refus de servir sans wg-mesh est VOULU (fail-closed) et reste dans le demon ; le defaut etait `Restart=on-failure` + `RestartSec=5`. ExecStartPre attend l'interface (`sleep 15` en boucle, cout nul) et TimeoutStartSec=infinity ne le tue pas ; une vraie panne est plafonnee a 10 demarrages en 5 minutes (StartLimit*, dans [Unit] : dans [Service] systemd les ignore). Corrige aussi test_changelog_bumped_to_0_2_3, qui figeait la version courante et echouait a chaque montee (« au moins 0.2.3 »). 6 tests dont l'execution de la vraie commande d'attente.

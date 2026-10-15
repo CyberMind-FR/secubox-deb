@@ -11,10 +11,10 @@ Type=simple
 User=secubox-assist
 Group=secubox-assist
 # ATTENDRE wg-mesh au lieu d'échouer (#2740). Sans l'interface du maillage le démon refuse de servir (fail-closed, voulu) ; avant, `Restart=on-failure` le relançait toutes les 5 s
-# (619 redémarrages en une heure sur un RPi400 qui n'avait pas encore rejoint le maillage). Un `sleep` en boucle ne coûte rien ; aucun délai de démarrage ne le tue.
-ExecStartPre=/bin/sh -c 'until [ -e /sys/class/net/wg-mesh ]; do sleep 15; done'
-TimeoutStartSec=infinity
-ExecStart=/usr/bin/python3 -m assist.daemon
+# (619 redémarrages en une heure sur un RPi400 qui n'avait pas encore rejoint le maillage). L'attente est DANS ExecStart (un `sh` qui fait `exec` du démon), PAS dans ExecStartPre :
+# une attente sans délai dans ExecStartPre rendait `systemctl restart` et `enable --now` — donc le postinst et dpkg — interminables tant que wg-mesh n'existait pas.
+# Ici le démarrage se termine tout de suite ; le `sh` ne coûte rien (1 Mo) et laisse la place au démon dès que l'interface existe.
+ExecStart=/bin/sh -c 'until [ -e /sys/class/net/wg-mesh ]; do sleep 15; done; exec /usr/bin/python3 -m assist.daemon'
 Environment=PYTHONPATH=/usr/lib/secubox/assist:/usr/lib/secubox/annuaire
 Restart=on-failure
 RestartSec=5
