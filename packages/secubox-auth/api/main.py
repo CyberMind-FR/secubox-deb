@@ -255,6 +255,31 @@ def _otp_exige(request) -> bool:
     return _otp_lan() == "obligatoire"
 
 
+# ─── Second facteur PAR COMPTE (#2745) ─────────────────────────────────
+# `otp_mode` sur le compte, qui l'emporte sur le réglage global :
+#   defaut   (champ absent ou inconnu) suit le réglage global — facultatif sur le LAN, soit « hors LAN seulement » ;
+#   hors_lan exigé hors du LAN seulement ;      toujours  exigé partout, LAN compris ;
+#   jamais   jamais exigé, même depuis internet, même pour un compte enrôlé (le secret est conservé : réactiver ne demande pas de ré-enrôlement).
+# Le LAN reste le verdict de nginx (`X-SecuBox-LAN: 1`), jamais l'adresse (#2743).
+OTP_MODES = ("defaut", "hors_lan", "toujours", "jamais")
+
+
+def _otp_mode_du_compte(user) -> str:
+    m = (user or {}).get("otp_mode")
+    return m if m in OTP_MODES else "defaut"
+
+
+def _otp_exige_pour(user, request) -> bool:
+    mode = _otp_mode_du_compte(user)
+    if mode == "jamais":
+        return False
+    if mode == "toujours":
+        return True
+    if mode == "hors_lan":
+        return not _requete_lan(request)
+    return _otp_exige(request)
+
+
 # ─── Branching login router ────────────────────────────────────────────
 from fastapi import APIRouter as _APIRouter, Request as _Request, Response as _Response
 from secubox_core.auth import set_session_cookie as _set_session_cookie
@@ -373,8 +398,9 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     # PRÉPARE ; l'ouverture n'a lieu qu'une fois le second facteur réussi.
     ticket_coffre = _coffre.preparer(req.username, req.password)
 
-    # Second facteur : exigé depuis le WAN, facultatif sur le LAN (#1699).
-    otp = _otp_exige(request)
+    # Second facteur : exigé depuis le WAN, facultatif sur le LAN (#1699) ; réglable PAR COMPTE (#2745).
+    mode_otp = _otp_mode_du_compte(user)
+    otp = _otp_exige_pour(user, request)
     totp_block = user.get("totp") or {}
     if otp and totp_block.get("enabled"):
         mfa_jti = secrets.token_hex(8)
@@ -393,13 +419,16 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
 
     # Second facteur exigé (WAN) mais absent pour ce compte (un utilisateur sans
     # TOTP) : un mot de passe seul n'ouvre rien — le ticket expirera de lui-même.
-    _coffre.confirmer(None if otp else ticket_coffre, not lan)
+    # UNE CONNEXION DEPUIS LE WAN SANS SECOND FACTEUR N'OUVRE JAMAIS LE COFFRE (#2745) : il s'ouvre avec le mot de passe. Le cas n'existait pas avant (le WAN exigeait toujours
+    # le second facteur) ; un compte au second facteur désactivé le rend possible, et le mot de passe seul ne suffit pas pour ce qu'il protège.
+    sans_facteur_distant = (not otp) and (not lan)
+    _coffre.confirmer(None if (otp or sans_facteur_distant) else ticket_coffre, not lan)
     jti = secrets.token_hex(8)
     tok = create_token(req.username, jti=jti)
     _set_session_cookie(response, tok, request=request)  # SSO-lite (#400, #1723)
     _on_session_event("login_success", req.username, {
         "jti": jti, "expires_in": 86400, "ip": ip, "user_agent": ua,
-        "otp": "exigé" if otp else "facultatif (LAN)",
+        "otp": "exigé" if otp else ("désactivé (compte)" if mode_otp == "jamais" else "facultatif (LAN)"),
     })
     _users_engine.touch_last_login(req.username)
     return {"access_token": tok, "token_type": "bearer", "expires_in": 86400}

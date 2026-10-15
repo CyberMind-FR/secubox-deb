@@ -834,6 +834,27 @@ async def disable_user_totp(username: str):
     return {"ok": True}
 
 
+@app.put("/user/{username}/otp-mode", dependencies=[Depends(require_permission("users.edit"))])
+async def set_user_otp_mode(username: str, corps: Dict[str, Any], creds=Depends(require_session)):
+    """Second facteur PAR COMPTE (#2745) : defaut | hors_lan | toujours | jamais. Désactiver (`jamais`) le second facteur d'un ADMINISTRATEUR l'ouvre depuis internet
+    avec le seul mot de passe : confirmation explicite (`confirmer: true`, un booléen, pas « true » ni 1) et journal (qui, quel compte, ancien et nouveau mode)."""
+    mode = corps.get("mode")
+    if not isinstance(mode, str) or mode not in _engine_mod.OTP_MODES:
+        raise HTTPException(status_code=400, detail="Mode du second facteur : defaut, hors_lan, toujours ou jamais.")
+    u = _engine.get_user(username)
+    if not u:
+        raise HTTPException(status_code=404, detail=f"user not found: {username}")
+    confirme = corps.get("confirmer") is True
+    if mode == "jamais" and u.get("role") == "admin" and not confirme:
+        raise HTTPException(status_code=400, detail="Désactiver le second facteur d'un administrateur l'ouvre depuis internet avec le seul mot de passe : confirmation explicite requise (confirmer: true).")
+    par = creds.get("sub") if isinstance(creds, dict) else None
+    try:
+        _engine.set_otp_mode(username, mode, par=par, confirme=True if confirme else None)
+    except _engine_mod.EngineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"ok": True, "otp_mode": mode}
+
+
 @app.post("/user/{username}/totp/backup-codes", dependencies=[Depends(require_permission("users.edit", allow_self_for_param="username"))])
 async def regen_backup_codes(username: str):
     """Admin: regenerate TOTP backup codes for a user (returns plaintext — shown once)."""

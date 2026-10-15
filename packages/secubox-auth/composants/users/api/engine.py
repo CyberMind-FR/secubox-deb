@@ -25,6 +25,9 @@ log = logging.getLogger("secubox.users.engine")
 # (« ani.skywalker », homonyme d'un compte BBS), jamais en tête ni doublé.
 USERNAME_RE = re.compile(r"^(?!.*\.\.)[a-z0-9_][a-z0-9._-]{0,30}[a-z0-9_-]$")
 ALLOWED_ROLES = {"admin", "operator", "viewer"}
+# Second facteur PAR COMPTE (#2745). defaut = suit le réglage global (facultatif sur le LAN) ; hors_lan = exigé hors du LAN seulement ; toujours = exigé partout ;
+# jamais = jamais exigé, même depuis internet (le secret TOTP est conservé).
+OTP_MODES = ("defaut", "hors_lan", "toujours", "jamais")
 
 
 class EngineError(ValueError):
@@ -343,6 +346,30 @@ class Engine:
         u["totp"] = None
         self._save(doc)
         self._audit("totp_disabled", username, {})
+
+    def set_otp_mode(self, username: str, mode: Any, par: Optional[str] = None, confirme: Optional[bool] = None) -> None:
+        """Règle le second facteur du compte (#2745). `defaut` retire le champ (users.json reste propre). Le secret TOTP n'est PAS touché : réactiver ne demande
+        pas de ré-enrôlement. Un mode inchangé n'écrit ni ne journalise rien. Le journal dit qui (`par`), quel compte, l'ancien et le nouveau mode."""
+        if not isinstance(mode, str) or mode not in OTP_MODES:
+            raise EngineError(f"otp mode invalid: {mode!r}")
+        doc = self._load()
+        u = self._find(doc, username)
+        if not u:
+            raise EngineError(f"user not found: {username}")
+        ancien = u.get("otp_mode") if u.get("otp_mode") in OTP_MODES else "defaut"
+        if mode == ancien:
+            return
+        if mode == "defaut":
+            u.pop("otp_mode", None)
+        else:
+            u["otp_mode"] = mode
+        self._save(doc)
+        details: Dict[str, Any] = {"ancien": ancien, "nouveau": mode}
+        if par is not None:
+            details["par"] = par
+        if confirme is not None:
+            details["confirme"] = confirme
+        self._audit("otp_mode_change", username, details)
 
     def regenerate_backup_codes(self, username: str) -> list:
         from . import totp as _totp
