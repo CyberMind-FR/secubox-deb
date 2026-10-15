@@ -67,6 +67,7 @@
   td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;font-variant-numeric:tabular-nums}
   .scroll{overflow-x:auto}
   .pastille{display:inline-block;border-radius:5px;padding:0 7px;font-weight:700;font-size:.66rem}
+  tr.grp{cursor:pointer}tr.grp:hover td,tr.grp:focus-visible td{background:rgba(41,182,246,.12)}tr.grp:focus-visible{outline:2px solid var(--cyan,#29b6f6);outline-offset:-2px}
   .chiffre{color:var(--vert)} .clair{color:var(--faible)}
   @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
   @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g1{grid-template-columns:1fr 1.2fr} .g2{grid-template-columns:1.2fr 1fr}
@@ -91,9 +92,14 @@
     <div class="pan"><h3>Chiffré ou en clair <i>déduit du nom du protocole</i></h3><div id="chiff"></div></div>
   </div>
   <div class="pan"><h3>Tous les protocoles <i id="cpt"></i></h3>
-    <div class="outils"><input type="search" id="filtre" placeholder="Filtrer par nom…" aria-label="Filtrer par nom"><select id="selcat" aria-label="Catégorie"><option value="">Toutes les catégories</option></select></div>
-    <div class="scroll"><table><thead><tr><th data-k="nom">Protocole</th><th data-k="cat">Catégorie</th><th data-k="chiffre">Transport</th><th data-k="flux" class="num">Flux</th><th data-k="octets" class="num tri">Octets</th><th data-k="part" class="num">Part</th></tr></thead><tbody id="tab"></tbody></table></div>
-    <div class="note">Lecture seule · la catégorie et le transport chiffré sont déduits du nom (ex. TLS, QUIC, SSH, WireGuard = chiffré) : un protocole inconnu reste « Autre ».</div>
+    <div class="outils"><input type="search" id="filtre" placeholder="Filtrer par nom…" aria-label="Filtrer par nom"><select id="selcat" aria-label="Catégorie"><option value="">Toutes les catégories</option></select><select id="seltr" aria-label="Transport"><option value="">Tous les transports</option><option value="1">Chiffré</option><option value="0">En clair</option></select><select id="grpP" aria-label="Regrouper les protocoles"><option value="">Pas de regroupement</option><option value="cat">Regrouper par catégorie</option><option value="chiffre">Regrouper par transport</option></select></div>
+    <div class="scroll"><table><thead><tr id="entP"></tr></thead><tbody id="tab"></tbody></table></div>
+    <div class="note">Lecture seule · la catégorie et le transport chiffré sont déduits du nom (ex. TLS, QUIC, SSH, WireGuard = chiffré) : un protocole inconnu reste « Autre ». Un clic sur un groupe revient au détail de ce groupe.</div>
+  </div>
+  <div class="pan"><h3>Toutes les applications <i id="cptA"></i></h3>
+    <div class="outils"><input type="search" id="filtreA" placeholder="Filtrer par nom…" aria-label="Filtrer les applications"><select id="selcatA" aria-label="Catégorie des applications"><option value="">Toutes les catégories</option></select><select id="grpA" aria-label="Regrouper les applications"><option value="">Pas de regroupement</option><option value="cat">Regrouper par catégorie</option></select></div>
+    <div class="scroll"><table><thead><tr id="entA"></tr></thead><tbody id="tabA"></tbody></table></div>
+    <div class="note">Lecture seule · la catégorie est déduite du nom de l’application, comme pour les protocoles : une application inconnue reste « Autre ».</div>
   </div>
 </div></div>
 <script>
@@ -156,7 +162,8 @@
     else{a.textContent=d.demo?'MOTEUR ACTIF':'ÉTAT INCONNU';a.className='actif'+(d.demo?'':' inc');}
     if(st&&st.daemon&&st.daemon.source==='ndpiReader/dpi') el('source').textContent='Source : ndpiReader (fenêtres de 60 s). Le moteur nDPId n’est pas actif ; les chiffres sont cumulés par ce collecteur.';
     var pl=(P||[]).map(function(p){var n=nature(p.protocol);return {nom:String(p.protocol||'—'),cat:n.cat,chiffre:n.chiffre,flux:num(p.flow_count),octets:num(p.bytes_total)};}).filter(function(x){return x.flux>0||x.octets>0;});
-    var al=(A||[]).map(function(x){return {nom:String(x.application||'—'),flux:num(x.flow_count),octets:num(x.bytes_total)};}).filter(function(x){return x.flux>0||x.octets>0;});
+    var al=(A||[]).map(function(x){var nm=String(x.application||'—');return {nom:nm,cat:nature(nm).cat,flux:num(x.flow_count),octets:num(x.bytes_total)};}).filter(function(x){return x.flux>0||x.octets>0;});
+    var totA=al.reduce(function(t,x){return t+x.octets;},0);al.forEach(function(x){x.part=totA>0?100*x.octets/totA:0;});
     d.pl=pl;d.al=al;
     var tot=pl.reduce(function(t,x){return t+x.octets;},0),ok=!!P&&pl.length>0;
     pl.forEach(function(x){x.part=tot>0?100*x.octets/tot:0;});
@@ -181,6 +188,7 @@
     el('chiff').innerHTML=ok&&tot>0?[['Chiffré',chif,'var(--vert)'],['En clair',tot-chif,'var(--orange)']].map(function(c){return '<div class="ligne"><span class="n">'+c[0]+'</span><span class="c">'+octets(c[1])+' · '+Math.round(100*c[1]/tot)+' %</span><div class="barre"><i style="width:'+Math.max(3,100*c[1]/tot)+'%;background:'+c[2]+'"></i></div></div>';}).join('')+'<div class="note">Un protocole inconnu est compté « en clair » : la part chiffrée est un minimum.</div>':'<div class="vide">'+(P?'Aucune mesure.':'Session requise.')+'</div>';
     // filtre catégories
     var sel=el('selcat'),cur=sel.value;sel.innerHTML='<option value="">Toutes les catégories</option>'+cl.map(function(c){return '<option value="'+esc(c.nom)+'">'+esc(c.nom)+'</option>';}).join('');sel.value=cur;
+    var cA={};al.forEach(function(x){cA[x.cat]=1;});var sA=el('selcatA'),curA=sA.value;sA.innerHTML='<option value="">Toutes les catégories</option>'+Object.keys(cA).sort().map(function(k){return '<option value="'+esc(k)+'">'+esc(k)+'</option>';}).join('');sA.value=curA;
     rendTab();
     el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
     hauteur();
@@ -189,24 +197,52 @@
     if(!D) return;var al=D.al.slice().sort(function(x,y){return mode==='flows'?y.flux-x.flux:y.octets-x.octets;}).slice(0,10);
     el('apps').innerHTML=al.length?(mode==='flows'?barres(al,'flux',function(v){return fmt(v)+' flux';}):barres(al,'octets',octets)):'<div class="vide">'+(D.applications?'Aucune application mesurée.':'Session requise.')+'</div>';
   }
-  function rendTab(){
-    if(!D) return;var f=el('filtre').value.trim().toLowerCase(),c=el('selcat').value;
-    var l=D.pl.filter(function(x){return (!f||x.nom.toLowerCase().indexOf(f)>=0)&&(!c||x.cat===c);});
-    l.sort(function(x,y){var a=x[tri.k],b=y[tri.k];if(typeof a==='boolean'){a=a?1:0;b=b?1:0;}
-      return (typeof a==='string'?a.localeCompare(b,'fr'):a-b)*tri.sens;});
-    el('cpt').textContent=D.protocols?l.length+' sur '+D.pl.length:'';
-    el('tab').innerHTML=l.length?l.map(function(x){return '<tr><td title="'+esc(x.nom)+'">'+esc(x.nom)+'</td><td>'+esc(x.cat)+'</td><td class="'+(x.chiffre?'chiffre':'clair')+'">'+(x.chiffre?'Chiffré':'En clair')+'</td><td class="num">'+fmt(x.flux)+'</td><td class="num">'+octets(x.octets)+'</td><td class="num">'+(x.part>=.1?x.part.toFixed(1).replace('.',','):'< 0,1')+' %</td></tr>';}).join(''):'<tr><td colspan="6" class="vide">'+(D.protocols?'Aucun protocole ne correspond.':'—')+'</td></tr>';
-    Array.prototype.forEach.call(document.querySelectorAll('th[data-k]'),function(h){h.classList.toggle('tri',h.dataset.k===tri.k);});
+  // Liste commune aux protocoles et aux applications (#2759) : filtre, tri, et « Regrouper par » (une ligne par groupe, clic = détail du groupe).
+  function pct(x){return (x>=.1?x.toFixed(1).replace('.',','):'< 0,1')+' %';}
+  var LP={corps:'tab',ent:'entP',cpt:'cpt',filtre:'filtre',selcat:'selcat',seltr:'seltr',grp:'grpP',nom:'Protocole',noms:'protocoles',transport:true,tri:{k:'octets',sens:-1},cols:null,
+          src:function(){return D.pl;},total:function(){return D.protocols?D.pl.length:null;}};
+  var LA={corps:'tabA',ent:'entA',cpt:'cptA',filtre:'filtreA',selcat:'selcatA',seltr:null,grp:'grpA',nom:'Application',noms:'applications',transport:false,tri:{k:'octets',sens:-1},cols:null,
+          src:function(){return D.al;},total:function(){return D.applications?D.al.length:null;}};
+  function entetes(c,cols){c.cols=cols;el(c.ent).innerHTML=cols.map(function(k){return '<th data-k="'+k[0]+'"'+(k[2]?' class="num"':'')+'>'+k[1]+'</th>';}).join('');
+    Array.prototype.forEach.call(el(c.ent).children,function(h){h.addEventListener('click',function(){var k=h.dataset.k;c.tri=c.tri.k===k?{k:k,sens:-c.tri.sens}:{k:k,sens:(k==='nom'||k==='cat'||k==='cle')?1:-1};rendListe(c);});});}
+  function colsDe(c,g){return g?[['cle','Groupe'],['n',c.nom+'s'],['flux','Flux',1],['octets','Octets',1],['part','Part',1]]
+    :[['nom',c.nom],['cat','Catégorie']].concat(c.transport?[['chiffre','Transport']]:[]).concat([['flux','Flux',1],['octets','Octets',1],['part','Part',1]]);}
+  function rendListe(c){
+    if(!D) return;
+    var f=el(c.filtre).value.trim().toLowerCase(),cat=el(c.selcat).value,tr=c.seltr?el(c.seltr).value:'',g=el(c.grp).value;
+    var cols=colsDe(c,g);if(!c.cols||c.cols.length!==cols.length||c.cols[0][0]!==cols[0][0]||c.g!==g){c.g=g;entetes(c,cols);}
+    var tous=c.src(),l=tous.filter(function(x){return (!f||x.nom.toLowerCase().indexOf(f)>=0)&&(!cat||x.cat===cat)&&(!tr||(tr==='1')===!!x.chiffre);});
+    var vide='<tr><td colspan="'+cols.length+'" class="vide">'+(c.total()!=null?'Aucun élément ne correspond.':'—')+'</td></tr>';
+    if(g){
+      var m={},tot=0;l.forEach(function(x){var k=g==='chiffre'?(x.chiffre?'Chiffré':'En clair'):x.cat,a=m[k]||(m[k]={cle:k,n:0,flux:0,octets:0});a.n++;a.flux+=x.flux;a.octets+=x.octets;tot+=x.octets;});
+      var gl=Object.keys(m).map(function(k){var a=m[k];a.part=tot>0?100*a.octets/tot:0;return a;});
+      gl.sort(function(x,y){var a=x[c.tri.k],b=y[c.tri.k];if(c.tri.k==='cle'||c.tri.k==='nom')return String(a).localeCompare(String(b),'fr')*c.tri.sens;return (num(a)-num(b))*c.tri.sens;});
+      el(c.corps).innerHTML=gl.length?gl.map(function(a){return '<tr class="grp" tabindex="0" role="button" data-g="'+esc(a.cle)+'" title="Voir le détail : '+esc(a.cle)+'"><td><b>'+esc(a.cle)+'</b></td><td class="num">'+fmt(a.n)+'</td><td class="num">'+fmt(a.flux)+'</td><td class="num">'+octets(a.octets)+'</td><td class="num">'+pct(a.part)+'</td></tr>';}).join(''):vide;
+      el(c.cpt).textContent=c.total()!=null?gl.length+' groupe'+(gl.length>1?'s':'')+' · '+l.length+' '+c.noms+' sur '+tous.length:'';
+    }else{
+      l.sort(function(x,y){var a=x[c.tri.k],b=y[c.tri.k];if(typeof a==='boolean'){a=a?1:0;b=b?1:0;}
+        return (typeof a==='string'?a.localeCompare(b,'fr'):a-b)*c.tri.sens;});
+      el(c.corps).innerHTML=l.length?l.map(function(x){return '<tr><td title="'+esc(x.nom)+'">'+esc(x.nom)+'</td><td>'+esc(x.cat)+'</td>'+(c.transport?'<td class="'+(x.chiffre?'chiffre':'clair')+'">'+(x.chiffre?'Chiffré':'En clair')+'</td>':'')+'<td class="num">'+fmt(x.flux)+'</td><td class="num">'+octets(x.octets)+'</td><td class="num">'+pct(x.part)+'</td></tr>';}).join(''):vide;
+      el(c.cpt).textContent=c.total()!=null?l.length+' sur '+tous.length:'';
+    }
+    Array.prototype.forEach.call(el(c.ent).children,function(h){h.classList.toggle('tri',h.dataset.k===c.tri.k);});
     hauteur();
   }
+  function rendTab(){rendListe(LP);rendListe(LA);}
+  function creuse(c,cle){var g=el(c.grp).value;
+    if(g==='cat')el(c.selcat).value=cle;else if(g==='chiffre'&&c.seltr)el(c.seltr).value=cle==='Chiffré'?'1':'0';
+    el(c.grp).value='';rendListe(c);}
+  function ouvreGroupe(c){return function(e){var tr=e.target.closest('tr.grp');if(!tr)return;if(e.type==='keydown'&&e.key!=='Enter'&&e.key!==' ')return;e.preventDefault();creuse(c,tr.getAttribute('data-g'));};}
   var DEMO={demo:true,status:{daemon:{running:true,source:'ndpid'}},
     protocols:[{protocol:'TLS',flow_count:18420,bytes_total:42100000000},{protocol:'QUIC',flow_count:9310,bytes_total:31800000000},{protocol:'HTTP',flow_count:4120,bytes_total:6200000000},{protocol:'DNS',flow_count:61200,bytes_total:310000000},{protocol:'SSH',flow_count:210,bytes_total:2900000000},{protocol:'WireGuard',flow_count:48,bytes_total:5400000000},{protocol:'RTP',flow_count:340,bytes_total:1900000000},{protocol:'NTP',flow_count:2100,bytes_total:3000000},{protocol:'SMTP',flow_count:150,bytes_total:260000000},{protocol:'Steam',flow_count:75,bytes_total:3700000000},{protocol:'MDNS',flow_count:5400,bytes_total:21000000},{protocol:'IMAPS',flow_count:880,bytes_total:420000000},{protocol:'Unknown',flow_count:320,bytes_total:90000000}],
     applications:[{application:'YouTube',flow_count:2210,bytes_total:28400000000},{application:'Netflix',flow_count:310,bytes_total:19200000000},{application:'Google',flow_count:9400,bytes_total:8100000000},{application:'WireGuard',flow_count:48,bytes_total:5400000000},{application:'Steam',flow_count:75,bytes_total:3700000000},{application:'Microsoft',flow_count:3300,bytes_total:2400000000},{application:'WhatsApp',flow_count:1900,bytes_total:1100000000},{application:'Spotify',flow_count:420,bytes_total:900000000},{application:'Cloudflare',flow_count:5100,bytes_total:700000000},{application:'Zoom',flow_count:60,bytes_total:640000000}]};
   function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxNdpidVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+window.scrollY),onglet:'protocoles'},location.origin);}catch(e){}}}
   window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
   Array.prototype.forEach.call(document.querySelectorAll('#bascule button'),function(b){b.addEventListener('click',function(){mode=b.dataset.m;Array.prototype.forEach.call(document.querySelectorAll('#bascule button'),function(x){x.classList.toggle('on',x===b);});rendApps();hauteur();});});
-  Array.prototype.forEach.call(document.querySelectorAll('th[data-k]'),function(h){h.addEventListener('click',function(){var k=h.dataset.k;tri=tri.k===k?{k:k,sens:-tri.sens}:{k:k,sens:(k==='nom'||k==='cat')?1:-1};rendTab();});});
-  el('filtre').addEventListener('input',rendTab);el('selcat').addEventListener('change',rendTab);
+  ['filtre','selcat','seltr','grpP'].forEach(function(i){el(i).addEventListener(i==='filtre'?'input':'change',function(){rendListe(LP);});});
+  ['filtreA','selcatA','grpA'].forEach(function(i){el(i).addEventListener(i==='filtreA'?'input':'change',function(){rendListe(LA);});});
+  el('tab').addEventListener('click',ouvreGroupe(LP));el('tab').addEventListener('keydown',ouvreGroupe(LP));
+  el('tabA').addEventListener('click',ouvreGroupe(LA));el('tabA').addEventListener('keydown',ouvreGroupe(LA));
   el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   if(q.get('demo')){rend(DEMO);return;}
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
