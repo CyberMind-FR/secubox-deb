@@ -9,6 +9,18 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — ESPRESSObin : le gel à 48 s vient d'ath10k, l'image le bloque (ref #2177)
+Démarrage USB de l'image alpha.17 sous U-Boot 2021.01, console série, quatre essais : « hard LOCKUP » à 48,02 s à chaque fois, puis « soft lockup
+[khugepaged] » (cœurs sans interruptions). Écartés par essai : le pilote DSA (déjà bloqué), AppArmor (`apparmor=0 security=none`, le gel tombe alors
+pendant `systemd-update-done`). Ce qui l'a levé : `modprobe.blacklist=…,ath10k_pci,ath10k_core` (carte mPCIe Qualcomm 168c:003c, noyau : « BAR 0: error
+updating »). Deux pièges de commande U-Boot à retenir : charger l'Image à 0x02000000 la fait chevaucher les zones réservées 0x4000000/0x4400000
+(« reserving fdt memory region failed », aucun message ensuite) → 0x10000000 ; et sans `initrd.img` le noyau Debian ne voit ni l'USB ni l'ext4 (`/dev/sda2`
+sans pilote). `boot.cmd`, `boot-usb.cmd`, `boot-live-usb.cmd`, `extlinux.conf` et `build-image.sh` bloquent désormais ath10k et passent
+`transparent_hugepage=never` (test `test_espressobin_ath10k_thp_2177.py`).
+**Reste ouvert** : une fois levé, la carte (1 Go) sature : 64 processus `python3` ~1 Go, zram 605 Mo/950, charge 96, OOM-killer (tor tué) 8 min après le
+démarrage. Le profil `secubox-lite` (42 paquets) est trop lourd pour 1 Go ; à alléger sur mesure (RSS par unité, `profilectl apply lite`), pas à l'aveugle.
+Pas de `closes` : rien n'est encore reflashé ni vérifié sur la carte.
+
 ## 2026-10-14 — YouTube SAS et carte Flux au profil Aurora, flux embarqué (closes #2638)
 Page admin `/ytsas/` (0.5.0) refaite en Aurora, mêmes appels d'API, onglet « Flux » qui encadre la carte du Hall (`hall.<domaine>/cardlets/ytflux.html?embed=1`, domaine déduit de l'hôte). Carte Flux (webos 1.10.0) en Aurora ; nginx du Hall : location dédiée avec `frame-ancestors 'self' $sbx_admin_du_hall` (admin du même domaine, sans joker). Aucune route flux sur le vhost admin. Tests `test_ytsas_aurora_2638.py`, `test_ytflux_aurora_2638.py`. **Non déployé.**
 

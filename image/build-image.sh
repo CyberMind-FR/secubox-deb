@@ -1905,7 +1905,7 @@ LABEL secubox
     KERNEL /Image
     INITRD /initrd.img
     FDT /dtbs/marvell/${KERNEL_DTS}.dtb
-    APPEND root=${ROOT_DEV} rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,dsa_core sdhci.debug_quirks2=0x40
+    APPEND root=${ROOT_DEV} rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,dsa_core,ath10k_pci,ath10k_core transparent_hugepage=never sdhci.debug_quirks2=0x40
 EXTLINUX
   ok "extlinux.conf créé pour ${KERNEL_DTS} (root=${ROOT_DEV})"
 
@@ -1974,7 +1974,7 @@ BOOTCMD_DTB
 # Set boot args
 # modprobe.blacklist: prevent mv88e6xxx DSA driver from loading during initramfs
 # sdhci.debug_quirks2=0x40: fix xenon-sdhci DDR timing issues
-setenv bootargs "root=${rootpart} rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,dsa_core sdhci.debug_quirks2=0x40"
+setenv bootargs "root=${rootpart} rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,dsa_core,ath10k_pci,ath10k_core transparent_hugepage=never sdhci.debug_quirks2=0x40"
 
 echo "Boot args: ${bootargs}"
 echo "============================================"

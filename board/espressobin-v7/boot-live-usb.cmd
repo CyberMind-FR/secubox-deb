@@ -70,7 +70,7 @@ fi
 # initcall_blacklist: for built-in drivers
 # Live boot: don't specify root= when using boot=live, let live-boot find squashfs
 # live-media=/dev/sda2 tells live-boot which partition has the squashfs
-setenv bootargs "boot=live live-media=/dev/sda2 live-media-path=/live toram console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core initcall_blacklist=mv88e6xxx_driver_init sdhci.debug_quirks2=0x40"
+setenv bootargs "boot=live live-media=/dev/sda2 live-media-path=/live toram console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core,ath10k_pci,ath10k_core transparent_hugepage=never initcall_blacklist=mv88e6xxx_driver_init sdhci.debug_quirks2=0x40"
 
 echo "Boot args: ${bootargs}"
 echo "============================================"
