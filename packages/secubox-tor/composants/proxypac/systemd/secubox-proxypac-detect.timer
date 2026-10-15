@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox ProxyPAC — detecteur de CDN (toutes les 15 minutes)
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

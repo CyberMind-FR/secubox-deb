@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""proxypac-detect — un passage du détecteur de CDN (#2752) : DNS observé -> candidates.json. Lancé par secubox-proxypac-detect.timer."""
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/secubox/proxypac")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from proxypac import detecteur  # noqa: E402
+
+E = os.environ.get
+sys.exit(detecteur.passe(
+    Path(E("PROXYPAC_DNS_DB", "/var/lib/secubox/ad-guard/dnstv/dnstv.db")),
+    Path(E("PROXYPAC_CANDIDATES", "/var/lib/secubox/proxypac/candidates.json")),
+    Path(E("PROXYPAC_RULES_DIR", "/etc/secubox/proxypac/rules.d")),
+    Path(E("PROXYPAC_REJETES", "/var/lib/secubox/proxypac/candidates-rejetes.json")),
+))

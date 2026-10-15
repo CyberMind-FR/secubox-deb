@@ -44,7 +44,8 @@ override_dh_auto_install:
 	install -d debian/secubox-tor/etc/nginx/sites-available
 	cp composants/proxypac/nginx/wpad-vhost.conf debian/secubox-tor/etc/nginx/sites-available/
 	install -d debian/secubox-tor/usr/lib/systemd/system
-	cp composants/proxypac/systemd/secubox-proxypac.service composants/proxypac/systemd/secubox-proxypac-gen.service composants/proxypac/systemd/secubox-proxypac-gen.path composants/proxypac/systemd/secubox-proxypac-gen.timer debian/secubox-tor/usr/lib/systemd/system/
+	cp composants/proxypac/systemd/secubox-proxypac.service composants/proxypac/systemd/secubox-proxypac-gen.service composants/proxypac/systemd/secubox-proxypac-gen.path composants/proxypac/systemd/secubox-proxypac-gen.timer composants/proxypac/systemd/secubox-proxypac-detect.service composants/proxypac/systemd/secubox-proxypac-detect.timer debian/secubox-tor/usr/lib/systemd/system/
+	install -D -m 755 composants/proxypac/sbin/proxypac-detect debian/secubox-tor/usr/sbin/proxypac-detect
 	install -d debian/secubox-tor/etc/secubox/proxypac/rules.d
 	cp composants/proxypac/conf/rules.d/*.rules debian/secubox-tor/etc/secubox/proxypac/rules.d/
 	install -d debian/secubox-tor/usr/share/secubox/www

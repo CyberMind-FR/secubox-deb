@@ -1,0 +1,13 @@
+[Unit]
+Description=SecuBox ProxyPAC — detecteur de CDN (candidats depuis le DNS observe, #2752)
+After=network.target
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+ExecStart=/usr/sbin/proxypac-detect
+NoNewPrivileges=true
+# full et non strict : le magasin DNS est en WAL, sa lecture a besoin d'ecrire le -shm voisin (meme compte secubox).
+ProtectSystem=full
+PrivateTmp=true
