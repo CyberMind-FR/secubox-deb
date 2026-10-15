@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Guardian : carte des attaques colorée par type de menace agrégé, soc 1.8.0 (closes #2735)
+Demande du mainteneur (capture du Guardian) : colorer la carte par type de menace agrégé. La carte peignait des halos rouges proportionnels au nombre d'événements, sans type, et la page ne
+lisait que 8 alertes. Port du modèle de la vue d'ensemble du WAF (#2703) : huit familles de types (couleur ET forme, identiques au WAF : un test compare les deux sources), anneau par pays réparti
+entre les types observés, forme du type dominant au centre, pays sans type connu = anneau gris (jamais rouge), légende filtrante avec comptes, infobulle, pastille dans la liste des pays.
+`alerts?limit=500` (aucune route nouvelle) ; le tableau des événements garde ses six lignes. 25 tests dont rendu réel dans un navigateur, démonstration enrichie, 420 px sans débordement.
+Déployé sur gk2 (soc 1.8.0), vérifié servi par l'hôte d'administration ; PAS vu dans un navigateur avec des données réelles (session requise). Le donut « répartition par catégorie » garde ses couleurs
+par rang : l'aligner sur les familles reste possible si le mainteneur le veut.
+
 ## 2026-10-15 — Cadre admin : mise en page des pages Aurora, marge iPhone des cardlets, hub 1.12.1 / webos 1.12.1 (ref #2733)
 Retours du mainteneur : trop d'espace à gauche, pages mal centrées ou pas sur tout l'espace, « pas de marge gauche sur iPhone y compris dans les cardlets ». MESURÉ avant de corriger
 (Playwright, 14 pages Aurora réelles dans le cadre) : écran large, 50 px de chaque côté (40 de `hybrid-main` + 10 du cadre), plein espace et symétrique ; écran étroit (390, 768) OU appareil
