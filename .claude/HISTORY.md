@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Premier Pas : une mise à jour ne ferme plus l'assistant, `rejouer`, 0.6.1 (ref #2727)
+RPi400 : `GET /etat` (publique) rendait `fait: true`, profil complet, `moteur: {}` : le marqueur avait été posé sans application. Le `postinst` le posait à chaque
+configuration du paquet dès qu'un admin avait servi, sans regarder si un assistant était en cours ; la montée 0.5.8 → 0.5.9 → 0.6.0 en plein parcours l'a fermé (et le
+kiosque est retombé sur le Hall). La règle vit dans `premier_pas/en_service.py` : box en service ET aucun profil en cours ; profil illisible = en cours. `premier-pasctl rejouer
+[--vierge]` (root, local, aucune route distante) rouvre l'assistant de force en gardant le profil. `POST /session` refusée sur une box en service. 21 tests.
+Geste local encore nécessaire sur la box touchée (pas d'accès SSH) : `apt install secubox-premier-pas` puis `premier-pasctl rejouer`. Pas de `closes`.
+Demandes liées ouvertes : #2728 (gk2 détecte et centralise les box neuves, code facultatif).
+
 ## 2026-10-15 — Premier Pas : configurer une box sans écran depuis le LAN, 0.6.0 (ref #2725)
 Demande du mainteneur : l'assistant ouvert depuis un autre poste affichait « s'utilise depuis l'écran branché sur la box » ; une box sans écran ne pouvait pas se
 configurer au navigateur. Choix assumé (« ouvert sur le LAN, fenêtre courte », comme un routeur grand public) : le premier poste du LAN qui arrive dans la

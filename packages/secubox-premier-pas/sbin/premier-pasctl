@@ -19,6 +19,7 @@
 Sans --profil : secubox.profil= sur la ligne noyau, puis /boot/secubox/profil.toml…
 """
 import argparse
+import subprocess
 import json
 import sys
 from pathlib import Path
@@ -61,6 +62,8 @@ def main(argv=None):
     sub.add_parser("etat")
     sub.add_parser("silencieux")
     sub.add_parser("appliquer-demande")
+    rj = sub.add_parser("rejouer", help="rouvre l'assistant de force (root, local) ; garde le profil rempli")
+    rj.add_argument("--vierge", action="store_true", help="efface aussi le profil rempli")
     a = ap.parse_args(argv)
 
     if a.cmd == "etat":
@@ -81,6 +84,23 @@ def main(argv=None):
         out = {"valide": ex.complet, "manquantes": ex.manquantes, "erreurs": ex.erreurs}
         print(json.dumps(out, ensure_ascii=False, indent=1) if a.json else ("accepté" if ex.complet else f"incomplet : {out}"))
         return 0 if ex.complet else 3
+
+    if a.cmd == "rejouer":
+        from premier_pas import rejouer as RJ  # noqa: PLC0415
+
+        def relance():
+            # Le service recrée les jetons et rouvre l'assistant ; le kiosque, s'il tourne, est relancé pour l'afficher.
+            subprocess.run(["systemctl", "restart", "secubox-premier-pas.service"], check=False)
+            for u in ("secubox-kiosk.service", "secubox-kiosk-wayland.service"):
+                if subprocess.run(["systemctl", "is-active", "--quiet", u]).returncode == 0:
+                    subprocess.run(["systemctl", "restart", u], check=False)
+        try:
+            r = RJ.rejouer(a.vierge, relance)
+        except RJ.Refus as e:
+            print(f"refusé : {e}", file=sys.stderr)
+            return 1
+        print(f"assistant rouvert ({'profil effacé' if r['vierge'] else 'profil gardé'}) ; retiré : {', '.join(r['retires']) or 'rien'}")
+        return 0
 
     if a.cmd == "appliquer-demande":
         demande = Path("/var/lib/secubox/premier-pas/demande")
