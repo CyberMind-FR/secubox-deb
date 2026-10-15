@@ -1,0 +1,20 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# SecuBox-DEB :: premier-pas-retire-unite-kiosque — retire l'ancienne unité `startx` du kiosque RPi (#2738)
+#
+# build-rpi-usb.sh écrivait /etc/systemd/system/secubox-kiosk.service : `startx -- :0 vt7` et un .xinitrc à http://localhost/. Cette unité ignore le lanceur
+# (URL d'administration, assistant Premier Pas prioritaire) et, placée dans /etc, MASQUE celle que le paquet livre dans /usr/lib.
+#
+# On ne retire QUE l'unité de l'image, reconnue à ses deux lignes caractéristiques (le `startx` ET la description « SecuBox Kiosk (chromium fullscreen »), et
+# seulement si elle n'appelle pas déjà le lanceur. Une unité d'opérateur (autre commande, autre description) reste en place : ce n'est pas la nôtre.
+#
+# Sortie : 10 = unité retirée (l'appelant recharge systemd) ; 0 = rien à faire. Jamais interactif : tourne dans un postinst.
+U="${1:?usage: $0 <unité>}"
+[ -f "$U" ] || exit 0
+grep -q 'secubox-kiosk-launcher' "$U" && exit 0
+grep -q '^ExecStart=/usr/bin/startx -- :0 vt7' "$U" || exit 0
+grep -q '^Description=SecuBox Kiosk (chromium fullscreen' "$U" || exit 0
+rm -f "$U"
+echo "secubox-premier-pas : ancienne unité kiosque (startx) retirée : $U"
+exit 10

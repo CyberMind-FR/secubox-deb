@@ -1052,32 +1052,11 @@ if [[ "${INCLUDE_KIOSK}" -eq 1 ]]; then
                     "${ROOTFS}/root/.xinitrc"
     ok "Copied kiosk launcher + xinitrc from ${KIOSK_SRC}"
 
-    # secubox-kiosk.service: matches the unit name apply_mode already
-    # enables/disables (lines ~353/357 of this script). Runs startx on vt7
-    # as root; xinitrc above exec's /usr/share/secubox/kiosk/secubox-kiosk.sh.
-    cat > "${ROOTFS}/etc/systemd/system/secubox-kiosk.service" <<'KIOSKSVC'
-[Unit]
-Description=SecuBox Kiosk (chromium fullscreen → http://127.0.0.1/)
-After=multi-user.target network-online.target
-Wants=network-online.target
-Conflicts=getty@tty7.service
-
-[Service]
-Type=simple
-User=root
-Environment=HOME=/root
-ExecStart=/usr/bin/startx -- :0 vt7
-Restart=on-failure
-RestartSec=5
-StandardInput=tty
-StandardOutput=tty
-TTYPath=/dev/tty7
-TTYReset=yes
-TTYVHangup=yes
-
-[Install]
-WantedBy=graphical.target
-KIOSKSVC
+    # secubox-kiosk.service (#2738) : l'unité du LANCEUR (image/systemd/), plus une unité `startx` maison. Celle-ci ouvrait http://localhost/ et ignorait le lanceur
+    # (URL d'administration, assistant Premier Pas prioritaire) ; le lanceur n'était utilisé que lancé à la main. Même nom d'unité que celui qu'apply_mode
+    # active et désactive (l. ~353/357). Le lanceur lui-même (/usr/sbin/secubox-kiosk-launcher) vient du paquet secubox-premier-pas.
+    install -D -m 0644 "${SCRIPT_DIR}/systemd/secubox-kiosk.service" \
+                       "${ROOTFS}/etc/systemd/system/secubox-kiosk.service"
 
     # First boot lands directly in kiosk — apply_mode (from the boot menu)
     # reads /var/lib/secubox/boot-mode; seed it so DEFAULT_MODE=kiosk.
