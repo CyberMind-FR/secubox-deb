@@ -1,3 +1,9 @@
+secubox-assist (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * L'unite attend wg-mesh au lieu de redemarrer toutes les 5 s (#2740). Constate sur un RPi400 : `BindError: wg-mesh iface 'wg-mesh' unavailable`, 619 redemarrages en ~1 h (charge ~5, journal ssature) tant que la box n'avait pas rejoint le maillage. Le refus de servir sans wg-mesh est VOULU (fail-closed) et reste dans le demon ; le defaut etait `Restart=on-failure` + `RestartSec=5`. ExecStartPre attend l'interface (`sleep 15` en boucle, cout nul) et TimeoutStartSec=infinity ne le tue pas ; une vraie panne est plafonnee a 10 demarrages en 5 minutes (StartLimit*, dans [Unit] : dans [Service] systemd les ignore). Corrige aussi test_changelog_bumped_to_0_2_3, qui figeait la version courante et echouait a chaque montee (« au moins 0.2.3 »). 6 tests dont l'execution de la vraie commande d'attente.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 16:00:00 +0200
+
 secubox-assist (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /assist/ refaite au profil Aurora (ref #2642) : page autonome en français, cinq tuiles avec définition en infobulle (demandes, offres, paires, session active, box administrables), panneaux « En cours », « Session active », « Administrer à distance », demande ciblée, marché d'entraide à cinq onglets, demandes en attente ; ?demo=1 (données fictives, aucune écriture, bandeau orange) et ?embed=1 ; bandeau « session requise » sur 401/403 ; mesure absente = « — » ; hauteur annoncée à l'hôte (sbxVue, onglet assist).

@@ -1,0 +1,43 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-DEB :: secubox-ndpid-engine-run — lance nDPId sur une interface qui EXISTE (#2740)
+#
+# POURQUOI. `conf/ndpid-engine.env` livrait `INTERFACE=eth2` (valeur de gk2) à toutes les cartes. Sur un RPi400 (carte `end0`) : « pcap_open_live: eth2: No such device exists »,
+# nDPId sort en erreur, `Restart=on-failure` le relance toutes les 5 s : 820 redémarrages en une heure, charge ~5, journal saturé.
+#
+# ORDRE DE CHOIX. (1) l'interface configurée (INTERFACE), si elle existe — une box qui a bien réglé la sienne ne change pas ; (2) celle de la route par défaut ;
+# (3) la première carte PHYSIQUE (qui a un lien `device` dans /sys/class/net : jamais `lo`, un pont, un conteneur, un tunnel). Une valeur vide ou « auto » saute (1).
+# Aucune : on le dit et on sort avec le code 0 — `Restart=on-failure` ne relance pas, il n'y a rien à analyser.
+#
+# Variables de substitution (tests) : SECUBOX_SYS_NET, SECUBOX_IP_CMD, SECUBOX_NDPID_BIN.
+SYS_NET="${SECUBOX_SYS_NET:-/sys/class/net}"
+IP="${SECUBOX_IP_CMD:-ip}"
+NDPID="${SECUBOX_NDPID_BIN:-/usr/sbin/nDPId}"
+
+choisit() {
+    c="${INTERFACE:-}"
+    case "$c" in
+        ""|auto) ;;
+        *)
+            if [ -e "$SYS_NET/$c" ]; then echo "$c"; return 0; fi
+            echo "nDPId : l'interface configurée « $c » n'existe pas sur cette box, détection automatique" >&2 ;;
+    esac
+    d="$($IP -o route show default 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit }}')"
+    if [ -n "$d" ] && [ -e "$SYS_NET/$d" ]; then echo "$d"; return 0; fi
+    for p in "$SYS_NET"/*; do
+        [ -e "$p" ] || continue
+        n="${p##*/}"
+        [ "$n" = lo ] && continue
+        [ -e "$p/device" ] || continue
+        echo "$n"; return 0
+    done
+    return 1
+}
+
+IF="$(choisit)" || { echo "nDPId : aucune interface à analyser sur cette box (aucune carte physique), rien à lancer"; exit 0; }
+echo "nDPId : interface $IF"
+exec "$NDPID" -l -i "$IF" -c "$COLLECTEUR" -u "$UTILISATEUR" -g "$GROUPE"
