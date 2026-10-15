@@ -49,6 +49,14 @@ fieldset{border:1px solid var(--border);border-radius:6px;padding:.6rem .8rem .8
 legend{color:var(--cyan);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;padding:0 .3rem}
 .actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}
 .etat{font-size:.8rem;color:var(--p31-dim);margin-top:.6rem;white-space:pre-wrap}
+
+.det{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;background:var(--bg-row);border-left:3px solid var(--p31-dim);border-radius:6px;padding:.5rem .7rem;margin-bottom:.4rem}
+.det.nouvelle{border-left-color:var(--orange)} .det.preparee{border-left-color:var(--cyan)} .det.configuree{border-left-color:var(--green)}
+.det b{color:var(--cyan);word-break:break-all} .det small{grid-column:2/4;color:var(--p31-dim);font-size:.72rem}
+.det .btns{display:flex;gap:6px;flex-wrap:wrap} .det .btn{padding:.25rem .6rem;font-size:.75rem}
+#detection{grid-column:1/-1}
+label.auto{display:flex;gap:8px;align-items:flex-start;margin-top:.7rem;font-size:.8rem;text-transform:none;letter-spacing:0} label.auto small{display:block;color:var(--p31-dim);font-size:.7rem;text-transform:none;letter-spacing:0}
+@media(max-width:520px){.det{grid-template-columns:1fr}.det small{grid-column:1}}
 .pill{font-size:.65rem;padding:1px 7px;border-radius:999px;border:1px solid currentColor}
 .p-ok{color:var(--green)} .p-ko{color:var(--orange)} .p-att{color:var(--yellow)} .p-err{color:var(--red)}
 .pas{display:flex;flex-wrap:wrap;gap:4px;margin-top:.5rem}
@@ -66,11 +74,18 @@ legend{color:var(--cyan);font-size:.72rem;letter-spacing:.08em;text-transform:up
 <main class="main">
   <header class="header">
     <div><h1>🧭 Boxes à préparer</h1>
-      <div class="sub">Préparez le profil d'une future SecuBox, exportez-le (clé USB « SBXPROFIL », /boot/secubox/profil.toml) ou poussez-le à la box neuve avec le code affiché sur son écran. Elle l'applique après validation de la personne devant elle — ou tout de suite en mode forcé, avec une alerte à l'écran.</div></div>
+      <div class="sub">Préparez le profil d'une future SecuBox, exportez-le (clé USB « SBXPROFIL », /boot/secubox/profil.toml) ou poussez-le à la box neuve : le maître repère les box neuves du réseau et prend leur session distante (sans code), ou utilise le code affiché sur leur écran. Elle l'applique après validation de la personne devant elle — ou tout de suite en mode forcé, avec une alerte à l'écran.</div></div>
     <button class="btn" id="nouveau">➕ Nouvelle box</button>
   </header>
 
   <div class="grille">
+    <section class="card" id="detection"><h3>📡 Boîtes détectées</h3>
+      <div class="liste" id="boxes" aria-live="polite"><div class="etat">Analyse en cours…</div></div>
+      <div class="actions"><button class="btn" id="analyser" type="button">🔍 Analyser le réseau</button></div>
+      <label class="auto"><input type="checkbox" id="auto"> Pousser automatiquement aux box neuves
+        <small>profil sélectionné, mode « remplir » ou « proposer » (jamais « forcer »), une seule tentative par box</small></label>
+      <div class="etat" id="detNote"></div>
+    </section>
     <section class="card"><h3>📋 Profils préparés</h3><div class="liste" id="liste"></div></section>
 
     <section class="card" id="edition">
@@ -107,7 +122,7 @@ legend{color:var(--cyan);font-size:.72rem;letter-spacing:.08em;text-transform:up
       <h3 style="margin-top:1.2rem">🤝 Pousser à la box neuve</h3>
       <fieldset><legend>Box neuve</legend>
         <label>Adresse (LAN ou maillage)<input id="p-adr" inputmode="decimal" placeholder="192.168.1.60"></label>
-        <label>Code affiché sur son écran<input id="p-code" spellcheck="false" placeholder="xxxx xxxx xxxx …"></label>
+        <label>Code affiché sur son écran <small>(facultatif : vide = session distante)</small><input id="p-code" spellcheck="false" placeholder="vide : le maître prend la session distante"></label>
         <label>Mode<select id="p-mode">
           <option value="proposer">proposer — l'utilisateur valide</option>
           <option value="forcer">forcer — appliquer, avec alerte</option>
@@ -254,6 +269,56 @@ function suivre(adr) {
   };
   tour();
 }
+
+// ── Détection des box neuves (#2728) : le maître les repère, les liste, leur pousse le profil par la session distante ──
+const ETATS = {nouvelle: ["🆕", "nouvelle"], preparee: ["📨", "profil envoyé"], configuree: ["🟢", "configurée"]};
+let reglages = {auto: false, profil: "", mode: "remplir"};
+
+function depuis(s) { const d = Math.max(0, Math.round(Date.now() / 1000 - s)); return d < 90 ? `il y a ${d} s` : d < 5400 ? `il y a ${Math.round(d / 60)} min` : `il y a ${Math.round(d / 3600)} h`; }
+
+function rendBoxes(r) {
+  reglages = r.reglages || reglages;
+  $("#auto").checked = !!reglages.auto;
+  const l = r.boxes || [];
+  $("#boxes").innerHTML = l.length ? l.map(b => {
+    const [ic, lib] = ETATS[b.etat] || ["❔", b.etat], d = b.dernier;
+    return `<div class="det ${esc(b.etat)}" data-adr="${esc(b.adresse)}">
+      <span>${ic}</span><span><b>${esc(b.adresse)}</b> ${b.nom ? "· " + esc(b.nom) : ""}</span>
+      <span class="btns">${b.etat === "configuree" ? "" : `<button class="btn" type="button" data-act="preparer">📨 Préparer</button>`}<button class="btn" type="button" data-act="oublier" title="Oublier cette box">✖</button></span>
+      <small>${esc(lib)} · vue ${esc(depuis(b.derniere_vue || 0))}${d ? ` · dernier envoi : ${d.ok ? "✓" : "✗"} ${esc(d.profil)} (${esc(d.mode)}${d.auto ? ", automatique" : ""})${d.arret ? " — " + esc(d.arret) : ""}` : ""}</small></div>`;
+  }).join("") : `<div class="etat">Aucune box SecuBox détectée sur le réseau local ou le maillage.</div>`;
+  $("#detNote").textContent = reglages.auto ? `Envoi automatique actif : profil « ${reglages.profil} », mode ${reglages.mode}.` : "";
+  document.querySelectorAll("#boxes [data-act]").forEach(x => x.onclick = () => action(x.closest(".det").dataset.adr, x.dataset.act));
+}
+
+async function detecte(analyse) {
+  try { rendBoxes(analyse ? await api("/maitre/decouverte/analyser", {method: "POST"}) : await api("/maitre/decouverte")); $("#detNote").dataset.err = ""; }
+  catch (e) { $("#boxes").innerHTML = `<div class="etat">${esc(e.message)}</div>`; }
+}
+
+async function action(adr, act) {
+  if (act === "oublier") { try { await api("/maitre/decouverte/" + encodeURIComponent(adr), {method: "DELETE"}); detecte(false); } catch (e) { toast(e.message, true); } return; }
+  if (!courant) return toast("Choisissez d'abord un profil dans « Profils préparés ».", true);
+  const mode = $("#p-mode").value;
+  $("#suivi").textContent = `Envoi du profil « ${courant} » à ${adr}…`;
+  try {
+    const r = await api("/maitre/decouverte/preparer", {method: "POST", body: JSON.stringify({adresse: adr, nom: courant, mode})});
+    $("#suivi").textContent = r.ok ? `✓ ${r.faites.length} étapes remplies sur ${adr} (session distante, sans code).` : `✗ Arrêt à « ${r.arret} » : ${r.detail}`;
+    if (r.ok) suivre(adr);
+  } catch (e) { $("#suivi").textContent = "✗ " + e.message; toast(e.message, true); }
+  detecte(false);
+}
+
+$("#analyser").onclick = () => detecte(true);
+$("#auto").onchange = async () => {
+  const mode = $("#p-mode").value === "proposer" ? "proposer" : "remplir";      // « forcer » ne s'automatise jamais
+  try {
+    const rg = await api("/maitre/decouverte/reglages", {method: "PUT", body: JSON.stringify({auto: $("#auto").checked, profil: courant || "", mode})});
+    rendBoxes({boxes: (await api("/maitre/decouverte")).boxes, reglages: rg});
+  } catch (e) { $("#auto").checked = !!reglages.auto; toast(e.message, true); }
+};
+detecte(true);
+setInterval(() => { if (!document.hidden) detecte(true); }, 60000);
 
 $("#nouveau").onclick = nouveau;
 $("#f-mode").onchange = visibilite;
