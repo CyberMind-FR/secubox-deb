@@ -1,3 +1,9 @@
+secubox-metrics (1.25.0-1~bookworm1) bookworm; urgency=medium
+
+  * « Courbes » remplace la page Grafana (#2765) : historique de la box sans conteneur Grafana. Releve par minute (secubox-metrics-serie.timer, stdlib seule, 7 jours) de compteurs bruts (CPU, memoire, charge, debit, connexions TCP, disque) ; API GET /api/v1/metrics/series (fenetre ou intervalle, moyennes par tranche) ; page reactive : plages 15 min a 7 j, survol synchronise sur les six courbes, glisser pour zoomer, repere du present, actualisation automatique (figee pendant un zoom). Une valeur absente est un trou, jamais un zero. La page Glances reste inchangee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 19:00:00 +0200
+
 secubox-metrics (1.24.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /metrics/ en temps reel (#2763) : API GET /api/v1/metrics/live (connexions TCP etablies par pays, entrantes 22/80/443 et sortantes, debit reseau, charge, memoire ; sans cache, jamais d adresse IP) ; nouvelle carte « Connexions en direct » (pulsations par pays, arcs vers la box, debit et compteurs en direct, pastille EN DIRECT, rafraichie toutes les 3 s, en pause quand l onglet est cache, mouvement reduit respecte) ; les cartes attaques et visiteurs pulsent quand un pays augmente. Pays de la box : SECUBOX_PAYS (FR par defaut).
