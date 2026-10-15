@@ -74,8 +74,10 @@ def test_le_workflow_decoupe_avant_les_sommes_et_publie_les_parties():
     i_sommes = noms.index("Generate combined checksums")
     assert i_decoupe < i_sommes                                   # on hache ce qui sera publié, pas l'original
     assert "release-decouper-assets.sh release/images release/live-usb" in etapes[i_decoupe]["run"]
-    publication = next(e for e in etapes if e.get("uses", "").startswith("softprops/action-gh-release"))
-    fichiers = publication["with"]["files"]
+    # #2719 : l'envoi n'est plus fait par softprops/action-gh-release (envois parallèles, délai d'inactivité dépassé sur les images de
+    # plusieurs Go) mais par `gh release upload`, un fichier à la fois : la liste de motifs reste la même, dans le script de l'étape.
+    publication = next(e for e in etapes if "gh release upload" in e.get("run", ""))
+    fichiers = publication["run"]
     for motif in ("release/images/*.part*", "release/live-usb/*.part*", "release/images/*.assembled.sha256"):
         assert motif in fichiers
     assert "*.part*" in etapes[i_sommes]["run"]

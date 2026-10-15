@@ -226,11 +226,11 @@ jobs:
             ls -la output/
             exit 1
           fi
-        # 240 min (alpha 9 : 120 min depasses sous QEMU arm64 avec le parc trixie complet) :
-        # l'update-initramfs sous QEMU (~10 min) + la construction de
+        # 340 min (alpha 9 : 120 min depasses sous QEMU arm64 avec le parc trixie complet ; alpha.16 et alpha.17 : 240 min
+        # depasses a leur tour, #2719) : l'update-initramfs sous QEMU (~10 min) + la construction de
         # l'image 8 Go dépassaient les 60 min précédents (#1131e). pigz réduit
-        # fortement la compression ; la marge évite un échec sur pic de charge.
-        timeout-minutes: 240
+        # fortement la compression ; la marge évite un échec sur pic de charge. 340 : sous la limite de 360 min d'un job hébergé.
+        timeout-minutes: 340
 
       - name: Build ${{ matrix.platform }} Live USB
         if: steps.filter.outputs.skip != 'true'
