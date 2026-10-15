@@ -625,6 +625,17 @@
             document.head.appendChild(link);
         });
 
+        // 1b. PAGES AURORA (#2733) : le cadre (barre latérale, menu du haut, barre du bas) prend le profil Aurora. La feuille vient EN DERNIER (après hybrid-skin.css
+        // et ses !important) et remplace les styles en ligne ci-dessous (4 et 5), qu'aucune feuille ne peut battre. Les anciennes pages « hybrid-dark » gardent tout.
+        marquerAurora();
+        var AURORA = document.documentElement.classList.contains('sbx-aurora');
+        if (AURORA && !document.querySelector('link[href="/shared/cadre-aurora.css"]')) {
+            var liAur = document.createElement('link');
+            liAur.rel = 'stylesheet';
+            liAur.href = '/shared/cadre-aurora.css';
+            document.head.appendChild(liAur);
+        }
+
         // 2. Add hybrid-skin class to body (CSS uses !important to override)
         document.body.classList.add('hybrid-skin');
 
@@ -632,15 +643,17 @@
         var main = document.querySelector('.main, .main-content, main');
         if (main) main.classList.add('hybrid-main');
 
-        // 4. Force dark background via inline style (highest priority)
-        document.body.style.setProperty('background', 'var(--bg-deep, #050810)', 'important');
-        document.body.style.setProperty('background-image',
-            'radial-gradient(ellipse at 30% 20%, rgba(20,140,102,0.05) 0%, transparent 50%), ' +
-            'radial-gradient(ellipse at 70% 80%, rgba(44,112,192,0.03) 0%, transparent 50%)', 'important');
+        // 4. Force dark background via inline style (highest priority) — sauf pages Aurora : cadre-aurora.css (#2733)
+        if (!AURORA) {
+            document.body.style.setProperty('background', 'var(--bg-deep, #050810)', 'important');
+            document.body.style.setProperty('background-image',
+                'radial-gradient(ellipse at 30% 20%, rgba(20,140,102,0.05) 0%, transparent 50%), ' +
+                'radial-gradient(ellipse at 70% 80%, rgba(44,112,192,0.03) 0%, transparent 50%)', 'important');
+        }
 
         // 5. Force sidebar glass morphism via inline style
         var sidebar = document.getElementById('sidebar') || document.querySelector('.sidebar');
-        if (sidebar) {
+        if (sidebar && !AURORA) {
             sidebar.style.setProperty('background', 'rgba(17, 23, 32, 0.85)', 'important');
             sidebar.style.setProperty('backdrop-filter', 'blur(20px)', 'important');
             sidebar.style.setProperty('-webkit-backdrop-filter', 'blur(20px)', 'important');
@@ -664,7 +677,7 @@
 
         // 5c. Inject global TOP menu bar (replaces page headers)
         if (!EMBARQUE && !document.getElementById('global-menu-bar')) {
-            var pageTitle = document.title.replace(' - SecuBox', '').replace('SecuBox ', '') || 'Dashboard';
+            var pageTitle = document.title.replace(/\s*[-\u2013\u2014]\s*SecuBox\s*$/i, '').replace(/^\s*SecuBox\s*[-\u2013\u2014]?\s*/i, '').trim() || 'Dashboard';   // « SecuBox — Actor Intelligence » laissait « — Actor Intelligence » (#2733)
             var pagePath = window.location.pathname;
             var pageIcon = getPageIcon(pagePath);
 
