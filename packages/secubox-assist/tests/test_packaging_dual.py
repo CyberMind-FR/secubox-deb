@@ -71,4 +71,7 @@ def test_postinst_ephemeral_block_only_touches_its_own_subdirectory():
 
 def test_changelog_bumped_to_0_2_3():
     changelog = (ROOT / "debian" / "changelog").read_text()
-    assert changelog.startswith("secubox-assist (0.2.3-1~bookworm1)")
+    # « au moins 0.2.3 » : le test figeait la version courante et échouait à chaque montée (0.3.0 depuis longtemps).
+    import re
+    m = re.match(r"secubox-assist \((\d+)\.(\d+)\.(\d+)-", changelog)
+    assert m and tuple(int(x) for x in m.groups()) >= (0, 2, 3)

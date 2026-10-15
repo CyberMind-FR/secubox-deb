@@ -2,12 +2,19 @@
 Description=SecuBox Assist — WebSocket data-plane (wg-mesh only)
 After=network-online.target wg-quick@wg-mesh.service
 Wants=network-online.target
+# Une vraie panne ne boucle pas indéfiniment : au plus 10 démarrages en 5 minutes (#2740). Dans [Unit] : dans [Service] systemd ignore ces clés.
+StartLimitIntervalSec=300
+StartLimitBurst=10
 
 [Service]
 Type=simple
 User=secubox-assist
 Group=secubox-assist
-ExecStart=/usr/bin/python3 -m assist.daemon
+# ATTENDRE wg-mesh au lieu d'échouer (#2740). Sans l'interface du maillage le démon refuse de servir (fail-closed, voulu) ; avant, `Restart=on-failure` le relançait toutes les 5 s
+# (619 redémarrages en une heure sur un RPi400 qui n'avait pas encore rejoint le maillage). L'attente est DANS ExecStart (un `sh` qui fait `exec` du démon), PAS dans ExecStartPre :
+# une attente sans délai dans ExecStartPre rendait `systemctl restart` et `enable --now` — donc le postinst et dpkg — interminables tant que wg-mesh n'existait pas.
+# Ici le démarrage se termine tout de suite ; le `sh` ne coûte rien (1 Mo) et laisse la place au démon dès que l'interface existe.
+ExecStart=/bin/sh -c 'until [ -e /sys/class/net/wg-mesh ]; do sleep 15; done; exec /usr/bin/python3 -m assist.daemon'
 Environment=PYTHONPATH=/usr/lib/secubox/assist:/usr/lib/secubox/annuaire
 Restart=on-failure
 RestartSec=5

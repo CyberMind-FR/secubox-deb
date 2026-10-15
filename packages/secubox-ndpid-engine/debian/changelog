@@ -1,3 +1,9 @@
+secubox-ndpid-engine (1.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * nDPId choisit son interface au lieu de dependre d'un `eth2` livre en dur (#2740). Constate sur un RPi400 : `pcap_open_live: eth2: No such device exists`, 820 redemarrages en ~1 h. conf/ndpid-engine.env livrait INTERFACE=eth2 (valeur de gk2) a toutes les cartes ; la carte du RPi400 s'appelle end0. Nouveau lanceur secubox-ndpid-engine-run : (1) l'interface configuree si elle existe — une box qui a bien regle la sienne ne change pas ; (2) celle de la route par defaut ; (3) la premiere carte PHYSIQUE (lien `device` dans /sys/class/net : jamais lo, un pont, un conteneur ni un tunnel) ; aucune : on le dit et on sort avec le code 0, Restart=on-failure ne relance pas. L'unite l'appelle ; la configuration livree est vide (auto). Une box dont /etc/secubox/ndpid-engine.env dit encore eth2 (conffile conserve) retombe sur la detection. 11 tests avec une fausse arborescence reseau. Paquet arch: any (compile nDPId) : construit en CI.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 16:00:00 +0200
+
 secubox-ndpid-engine (1.7.1-1~bookworm1) bookworm; urgency=medium
 
   * L'unite de capture s'appelle desormais secubox-ndpid-engine.service. Elle s'appelait secubox-ndpid.service, comme l'unite de l'API livree par secubox-dpi (composants/ndpid) : les deux paquets se disputaient le meme fichier, c'est celui de l'API qui l'emportait, et le moteur nDPId n'avait donc AUCUNE unite — jamais lance, distributeur nDPIsrvd muet, flux d'sbxdpi fige, page /ndpid/ vide (JA3/JA4, risques, flux en direct). Le postinst active maintenant secubox-ndpid-engine.service ; l'API (secubox-dpi) l'attend par Wants/After.

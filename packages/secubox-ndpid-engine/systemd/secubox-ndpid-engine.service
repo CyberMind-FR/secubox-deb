@@ -22,8 +22,8 @@ EnvironmentFile=-/etc/secubox/ndpid-engine.env
 # C'est le bon ordre, et il ne garde rien après.
 AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
 CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_SETUID CAP_SETGID CAP_CHOWN
-ExecStart=/usr/sbin/nDPId -l \
-  -i ${INTERFACE} -c ${COLLECTEUR} -u ${UTILISATEUR} -g ${GROUPE}
+# Le lanceur choisit une interface qui existe (#2740) : `eth2` en dur faisait redémarrer nDPId toutes les 5 s sur une carte qui s'appelle autrement.
+ExecStart=/usr/sbin/secubox-ndpid-engine-run
 Restart=on-failure
 RestartSec=5
 ProtectSystem=strict
