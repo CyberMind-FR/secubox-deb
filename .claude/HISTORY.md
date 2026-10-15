@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Premier Pas : « Champs inconnus : aide » à l'étape Maillage (ref #2723)
+Relevé sur le kiosque d'une box neuve (étape 7/9, mode Automatique, case « Demander de l'aide » cochée) : « Continuer » affichait « Champs inconnus : aide ».
+Cause : le formulaire (#2544) envoie `{mode: "automesh", aide: "demander"|"non"}`, `moteur.py` et `provision.py` connaissent `maillage.aide`, mais
+`CHAMPS["maillage"]` de `remplir.py` ne le permettait pas ; les tests de #2544 ne couvraient que le profil, jamais l'enregistrement de l'étape.
+`secubox-premier-pas` 0.5.9 : `aide` permis, et retiré du profil si le mode n'est plus « automesh » (sinon une case cochée puis abandonnée aurait fait
+refuser l'examen). Test qui lit le vrai formulaire et vérifie que chaque clé envoyée est permise. Publié sur apt.secubox.in (trixie, arm64 et amd64).
+Pas de `closes` : pas encore installé ni vérifié sur la box qui a montré l'erreur (gk1 refuse la clé SSH de l'agent, carte neuve).
+
 ## 2026-10-15 — ESPRESSObin : le gel à 48 s vient d'ath10k, l'image le bloque (ref #2177)
 Démarrage USB de l'image alpha.17 sous U-Boot 2021.01, console série, quatre essais : « hard LOCKUP » à 48,02 s à chaque fois, puis « soft lockup
 [khugepaged] » (cœurs sans interruptions). Écartés par essai : le pilote DSA (déjà bloqué), AppArmor (`apparmor=0 security=none`, le gel tombe alors
