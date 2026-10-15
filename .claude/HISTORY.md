@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — gk2 : aletheiavox.eu et www.aletheiavox.eu redirigés vers billets.gk2.secubox.in (closes #)
+Demande du mainteneur. Le domaine pointait déjà sur gk2, était déclaré dans `haproxy.toml` (TLS) avec un certificat Let's Encrypt valide pour les deux noms ; il répondait 404 : son vhost nginx `aletheiavox.eu.conf` (ancien site `aletheia`, à la main) n'était pas activé et MetaBlogizer
+renvoie 404 pour un hôte sans bloc sur :8900. Action sur la box, sans source dans le dépôt (précédent : `lldh.gk2-redirect.conf`) : `sites-available/aletheiavox.eu-redirect.conf` (bloc :8900, `return 302 https://billets.gk2.secubox.in$request_uri`, route ACME conservée), lien dans `sites-enabled`,
+`nginx -t`, `reload`. 302 et non 301 : un 301 serait gardé en cache dur par les navigateurs alors que la destination est une décision de produit ; à passer en 301 quand elle est définitive. Vérifié depuis internet, certificat contrôlé : http → 301 https → 302 billets → 200. Annuler : retirer le lien et recharger nginx.
+Constaté, non traité : `billets.gk2.secubox.in` répond 405 à une requête HEAD sur `/` (les aperçus de liens et certaines sondes d'uptime utilisent HEAD).
+
 ## 2026-10-15 — Le second facteur se règle PAR COMPTE, auth 1.8.0 (ref #2745)
 Demande du mainteneur : « activer ou désactiver l'OTP sur les comptes SBX OS users ; admin par défaut OTP hors LAN seulement, ou full disable ». Existant (#1699) : UN réglage global `otp_lan` (facultatif sur le LAN, exigé depuis le WAN) et « Réinitialiser le 2FA »
 (efface le secret). Nouveau champ `otp_mode` par compte : `defaut` (suit le global = hors LAN seulement, le défaut de l'administrateur), `hors_lan`, `toujours` (LAN compris), `jamais` (aucun code, même depuis internet, même enrôlé ; LE SECRET EST CONSERVÉ : réactiver ne demande pas de
