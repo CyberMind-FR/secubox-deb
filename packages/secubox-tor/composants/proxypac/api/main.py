@@ -30,6 +30,8 @@ RULES_DIR = Path(os.environ.get("PROXYPAC_RULES_DIR", "/etc/secubox/proxypac/rul
 WEBUI_FILE = RULES_DIR / "50-webui.rules"
 CANDIDATES = Path(os.environ.get("PROXYPAC_CANDIDATES",
                                  "/var/lib/secubox/proxypac/candidates.json"))
+REJETES = Path(os.environ.get("PROXYPAC_REJETES",
+                               "/var/lib/secubox/proxypac/candidates-rejetes.json"))
 AUDIT = Path(os.environ.get("PROXYPAC_AUDIT", "/var/log/secubox/audit.log"))
 
 app = FastAPI(title="SecuBox ProxyPAC")
@@ -96,13 +98,24 @@ def del_override(host: str, user=Depends(require_jwt)):
     return {"ok": True}
 
 
+def _rejetes():
+    import json
+    try:
+        v = json.loads(REJETES.read_text())
+        return [x for x in v if isinstance(x, str)] if isinstance(v, list) else []
+    except Exception:
+        return []
+
+
 @app.get("/candidates")
 def list_candidates(_=Depends(require_jwt)):
     import json
     try:
-        return {"candidates": json.loads(CANDIDATES.read_text())}
+        tous = json.loads(CANDIDATES.read_text())
     except Exception:
         return {"candidates": []}
+    rej = set(_rejetes())
+    return {"candidates": [c for c in tous if not (isinstance(c, dict) and c.get("host") in rej)]}
 
 
 @app.post("/candidate/{host}/accept")
@@ -116,6 +129,19 @@ def accept_candidate(host: str, user=Depends(require_jwt)):
 
 @app.post("/candidate/{host}/reject")
 def reject_candidate(host: str, user=Depends(require_jwt)):
+    import json, re, tempfile
+    if not re.fullmatch(r"[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+", host):
+        raise HTTPException(400, "hote invalide")
+    h = host.lower()
+    liste = _rejetes()
+    if h not in liste:
+        liste.append(h)
+        REJETES.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=REJETES.parent, suffix=".tmp")
+        with os.fdopen(fd, "w") as f:
+            json.dump(liste, f)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, REJETES)
     _audit("candidate-reject", host, user.get("sub"))
     return {"ok": True}
 

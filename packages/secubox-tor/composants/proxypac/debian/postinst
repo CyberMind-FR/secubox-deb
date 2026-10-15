@@ -8,6 +8,7 @@ if [ "$1" = "configure" ]; then
     systemctl daemon-reload || true
     systemctl enable --now secubox-proxypac-gen.path || true
     systemctl enable --now secubox-proxypac-gen.timer || true
+    systemctl enable --now secubox-proxypac-detect.timer || true   # #2752 : candidats CDN, silencieux
     nginx -t && systemctl reload nginx || true
     /usr/sbin/proxypac-wpad apply || true
 fi

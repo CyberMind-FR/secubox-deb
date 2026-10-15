@@ -229,8 +229,13 @@ CSPN audit trail (`/var/log/secubox/audit.log`).
 - **Mesh gateway with generative URLs for off-mesh clients** — a
   separate follow-on sub-project (tracked apart from this package);
   this package only routes clients that are already on the LAN/mesh.
-- **Auto-learn detector** that populates `candidates.json` — deferred;
-  this package ships the accept/reject/read half of that loop
-  (`GET /candidates`, `POST /candidate/{host}/accept|reject`), but the
-  detector that discovers and writes candidates is fed by a later,
-  separate effort (#743).
+- **Réécriture / cache côté proxy** — étapes 2 et 3 de #2752 (PAC vers sbxmitm, puis réécriture sur nos vhosts comme les polices, #1875).
+
+## Détecteur de CDN (#2752)
+
+`proxypac-detect` (minuterie `secubox-proxypac-detect.timer`, 15 min, compte `secubox`) lit en lecture seule le magasin DNS d'ad-guard
+(`/var/lib/secubox/ad-guard/dnstv/dnstv.db`, table `dnstv_counts`), reconnaît les hôtes de CDN par un catalogue explicite
+(`proxypac/detecteur.py` : Google, Cloudflare cdnjs, jsDelivr, unpkg, CloudFront, jQuery…) et écrit
+`/var/lib/secubox/proxypac/candidates.json` (hôte, requêtes, appareils, dernière vue, famille). Rien n'est activé : accepter ou rejeter reste
+à l'opérateur ; un rejet est mémorisé (`candidates-rejetes.json`), un hôte déjà réglé dans `rules.d` n'est plus proposé. Un magasin illisible
+laisse les candidats en place.

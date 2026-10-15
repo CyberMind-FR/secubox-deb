@@ -1,3 +1,15 @@
+secubox-tor (1.6.2-1~bookworm1) bookworm; urgency=medium
+
+  * proxypac-detect : la decision du magasin DNS d ad-guard s ecrit ALLOWED (pas allow) ; 1.6.1 ne trouvait donc aucun candidat sur la vraie base (ref #2752).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 12:50:00 +0200
+
+secubox-tor (1.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * proxypac : detecteur de CDN (#2752, cf. #743). proxypac-detect + minuterie de 15 min lisent en lecture seule le DNS observe par ad-guard, reconnaissent les hotes de CDN (catalogue explicite) et alimentent candidates.json ; un rejet est memorise. Rien n etait ecrit dans candidates.json jusqu ici.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 12:30:00 +0200
+
 secubox-tor (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /tor/ refaite au profil Aurora (ref #2571) : page autonome (plus de police Google, de crt-light,

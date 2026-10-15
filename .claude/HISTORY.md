@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — proxypac : détecteur de CDN, étape 1 sur 3 (secubox-tor 1.6.2, ref #2752)
+- Demande : proxypac alimenté en silence par les requêtes CDN observées (API Google…), avec cache automatique. Étapes validées : (1) détecteur + candidats, (2) cache côté proxy (PAC vers sbxmitm), (3) réécriture sur nos vhosts comme les polices (#1875).
+- Étape 1 livrée : `proxypac-detect` + minuterie 15 min lisent en lecture seule `dnstv_counts` d'ad-guard, catalogue de CDN explicite, écrivent `candidates.json` ; un rejet est mémorisé, un hôte déjà réglé n'est plus proposé. Rien n'est activé tout seul.
+- Déployé sur gk2 : 200 candidats sur les vraies données (optimizationguide-pa, play, fonts.googleapis, fonts.gstatic…). Piège : la décision du magasin s'écrit `ALLOWED`, pas `allow` (1.6.1 ne trouvait rien, corrigé en 1.6.2 après essai sur la vraie base).
+- Reste : étapes 2 et 3 ; l'opérateur propose aussi le passage par Tor (en repli ou pour l'anonymat) pour ces hôtes. Issue laissée ouverte.
+
 ## 2026-10-15 — ytsas : le lecteur miroir PeerTube n'est plus refusé dans son cadre (haproxy 1.12.1, closes #2750)
 - Cause : la CSP `frame-ancestors` de peertube.gk2 (posée par HAProxy via haproxyctl) ne listait pas ytsas, qui encadre le lecteur des titres « miroir » : Firefox affichait « ne peut pas ouvrir cette page ».
 - Correctif : `https://ytsas.<domaine de la box>` ajouté à la liste explicite (comme billets, #1723) ; jamais de joker. Déployé sur gk2 (paquet, `haproxyctl generate`, reload) : l'en-tête de peertube.gk2 contient ytsas, ytsas répond 200. À confirmer dans le navigateur par l'opérateur.
