@@ -1,3 +1,9 @@
+secubox-soc (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * Guardian : la carte des attaques est coloree par type de menace agrege (#2735). Elle peignait tout en halos rouges proportionnels au nombre d'evenements par pays, sans distinguer le type, et ne lisait que 8 alertes. Meme modele que la vue d'ensemble du WAF (#2703), porte (les pages Aurora sont autonomes) : huit familles de types (injection, script, traversee de fichiers, leurres, robots, brute force, scanners, autre) rangees depuis la categorie libre du journal, chacune avec une couleur ET une forme, identiques a celles du WAF (un test le verifie) ; un pays est un anneau reparti entre les types observes, le type dominant porte sa forme au centre ; pays sans type connu = anneau gris, jamais rouge ; legende filtrante (aria-pressed) avec comptes ; infobulle de repartition ; liste des pays avec pastille du type dominant. 500 alertes lues au plus (`alerts?limit=500`, aucune route nouvelle) ; le tableau des derniers evenements garde ses six lignes. Valeurs du journal toujours en texte. Demonstration enrichie. 25 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 13:00:00 +0200
+
 secubox-soc (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: page Vigie SOC (www/soc/index.html) au profil Aurora : page autonome sans police distante, onglets et groupes inchangés, tuiles à infobulle de définition, mesure absente en tiret, bandeau session requise, ?demo=1 (données fictives, aucun appel) et ?embed=1, hauteur annoncée (sbxVue, onglet soc), aucun innerHTML ni dialogue natif (ref #2676)
