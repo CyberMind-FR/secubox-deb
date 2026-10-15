@@ -563,6 +563,32 @@ function montreMdp(box, r, quoi){
     ? `${quoi} : accès posés dans son coffre (${r.coffre.join(', ')}) — rien à lui transmettre, le Hall s'en sert pour elle.`
     : `${quoi} : fait — rien à lui transmettre.`));
 }
+// Un compte relié est remplacé par un autre compte EXISTANT du même service (vérifié, jamais créé). Le serveur refuse un second lien : on délie
+// d'abord, et si le nouveau est refusé on remet l'ancien, pour ne jamais laisser la personne sans lien par accident.
+function modifieLien(ligne, mo, b, uid, svc, x){
+  if (ligne.querySelector('[data-modifier-champ]')) return;
+  const zone = el('span', 'modif'); zone.style.cssText = 'display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap';
+  const champ = document.createElement('input'); champ.value = x.identifiant; champ.size = 24; champ.dataset.modifierChamp = svc;
+  champ.setAttribute('aria-label', 'Nouveau compte ' + x.libelle);
+  const ok = btn('Enregistrer', 'prim'), non = btn('Annuler'); ok.dataset.modifierOk = svc; non.dataset.modifierNon = svc;
+  const ferme = () => { zone.remove(); mo.disabled = false; };
+  non.onclick = ferme;
+  ok.onclick = async () => {
+    const nouveau = champ.value.trim();
+    if (!nouveau || nouveau === x.identifiant) { ferme(); return; }
+    ok.disabled = true;
+    const lie = ident => api(`/admin/personnes/${uid}/lier`, {method:'POST', body:JSON.stringify({app:svc, ident})});
+    try { await api(`/admin/personnes/${uid}/liens/${svc}/${encodeURIComponent(x.identifiant)}`, {method:'DELETE'}); }
+    catch(y){ toast(y.message); ok.disabled = false; return; }
+    try { const r = await lie(nouveau); toast('Relié : ' + r.ident); }
+    catch(y){
+      try { await lie(x.identifiant); toast(y.message + ' — l\u2019ancien lien est conservé.'); }
+      catch(z){ toast(y.message + ' — ATTENTION : l\u2019ancien lien n\u2019a pas pu être remis.'); }
+    }
+    b.click(); b.click();
+  };
+  mo.disabled = true; zone.append(champ, ok, non); ligne.appendChild(zone); champ.focus(); champ.select();
+}
 async function comptes(b, cols){
   const tr = b.closest('tr'), ouvert = tr.nextElementSibling && tr.nextElementSibling.classList.contains('cpt');
   if (ouvert){ tr.nextElementSibling.remove(); b.setAttribute('aria-expanded', 'false'); return; }
@@ -587,6 +613,10 @@ async function comptes(b, cols){
       const dl = btn('✕'); dl.title = 'Délier ' + x.identifiant; dl.setAttribute('aria-label', 'Délier ' + x.identifiant);
       dl.onclick = async () => { try { await api(`/admin/personnes/${uid}/liens/${svc}/${encodeURIComponent(x.identifiant)}`, {method:'DELETE'}); toast('Délié'); } catch(y){ toast(y.message); } b.click(); b.click(); };
       l.appendChild(dl);
+      // MODIFIER (#2755) : relier un AUTRE compte existant à la place de celui-ci, service par service.
+      const mo = btn('Modifier'); mo.dataset.modifier = svc; mo.title = 'Relier un autre compte ' + x.libelle + ' existant';
+      mo.onclick = () => modifieLien(l, mo, b, uid, svc, x);
+      l.appendChild(mo);
     }
     if (!x.lie){
       const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = svc; cb.checked = x.disponible; cb.disabled = !x.disponible;

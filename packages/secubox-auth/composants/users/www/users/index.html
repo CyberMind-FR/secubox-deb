@@ -174,7 +174,7 @@
             <div class="pan"><h3>Services connectés <i id="nSvc"></i></h3><div class="puces" id="puces"></div></div>
             <div class="pan"><h3>Comptes système <i id="nComptes"></i></h3>
                 <div id="rComptes" class="retour" hidden></div>
-                <div class="tab"><table><thead><tr><th>Compte</th><th>État</th><th>2FA</th><th>Services</th><th>Créé</th><th>Actions</th></tr></thead><tbody id="bComptes"></tbody></table></div></div>
+                <div class="tab"><table><thead><tr><th>Compte</th><th>État</th><th>2FA</th><th>Services</th><th>Profil SBX OS</th><th>Créé</th><th>Actions</th></tr></thead><tbody id="bComptes"></tbody></table></div></div>
         </section>
 
         <section id="t-sbx" role="tabpanel" aria-labelledby="o-sbx" hidden>
@@ -213,7 +213,7 @@
         const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
         const LIB_ROLE = { guest: 'invité', member: 'membre', subscriber: 'abonné', beta_tester: 'bêta', moderator: 'modérateur', sbx_operator: 'opérateur SBX' };
 
-        let USERS = null, TOTAL_USERS = null, SERVICES = null, SESSIONS = null, PERSONNES = null, APPAREILS = {}, DEMANDES = null, OTP = null;
+        let USERS = null, TOTAL_USERS = null, SERVICES = null, SESSIONS = null, PERSONNES = null, SYSLIENS = null, APPAREILS = {}, DEMANDES = null, OTP = null;
         let SESSION_OK = true, ERR_SBX = null, ERR_DEM = null, ONGLET = 'comptes', SVC_USER = null, SVC_ETAT = null, CONF = null, ANNULE = null;
 
         function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
@@ -278,13 +278,14 @@
             SESSIONS = [
                 { id: 'sess-demo-0001-abcdef', username: 'admin', email: 'admin@example.org', ip: '192.0.2.10', user_agent: 'Mozilla/5.0 (X11; Linux x86_64) Firefox/131.0', created_at: t - 7200, expires_at: new Date((t + 79000) * 1000).toISOString(), current: true },
                 { id: 'sess-demo-0002-123456', username: 'sbx-aaaaaaaaaaaa', email: '', ip: '198.51.100.23', user_agent: 'SecuBox Companion/1.2', created_at: t - 900, expires_at: new Date((t + 85000) * 1000).toISOString(), current: false }];
+            SYSLIENS = [{ compte: 'admin', user_uuid: 'a1b2c3d4-0000-0000-0000-000000000001', pseudo: 'gandalf' }];
             OTP = 'facultatif'; SESSION_OK = true; ERR_SBX = ERR_DEM = null;
         }
 
         async function charger() {
             if (DEMO) { demoData(); rendre(); return; }
-            const [st, sv, us, se, au, pe, ap, de] = await Promise.all([lire('/status'), lire('/services'), lire('/users'), lire('/sessions'), lire('/settings', AUTH),
-                lire('/admin/personnes', SBX), lire('/admin/appareils', SBX), lire('/admin/demandes', SBX)]);
+            const [st, sv, us, se, au, pe, ap, de, sl] = await Promise.all([lire('/status'), lire('/services'), lire('/users'), lire('/sessions'), lire('/settings', AUTH),
+                lire('/admin/personnes', SBX), lire('/admin/appareils', SBX), lire('/admin/demandes', SBX), lire('/admin/comptes-systeme', SBX)]);
             const tous = [st, sv, us, se, au, pe, ap, de];
             SESSION_OK = !tous.some(r => r.statut === 401 || r.statut === 403);
             const dispo = tous.some(r => r.ok);
@@ -296,6 +297,8 @@
             SESSIONS = se.ok && se.data ? (se.data.sessions || []) : null;
             OTP = au.ok && au.data ? (au.data.otp_lan || null) : null;
             ERR_SBX = pe.ok ? null : detail(pe); PERSONNES = pe.ok && pe.data ? (pe.data.personnes || []) : null;
+            // Associations compte système -> profil SBX OS (#2755) : réservées à un administrateur système ; sans droit, null (on ne prétend rien).
+            SYSLIENS = sl.ok && sl.data ? (sl.data.liens || []) : null;
             APPAREILS = ap.ok && ap.data && ap.data.appareils ? ap.data.appareils : {};
             ERR_DEM = de.ok ? null : detail(de); DEMANDES = de.ok && de.data ? (de.data.en_attente || []) : null;
             rendre();
@@ -348,8 +351,8 @@
         function rendreComptes() {
             const tb = $('bComptes'); tb.replaceChildren();
             $('nComptes').textContent = USERS && USERS.length ? pluriel(USERS.length, 'compte') : '';
-            if (!USERS) { ligneVide(tb, 6, '—'); return; }
-            if (!USERS.length) { ligneVide(tb, 6, 'Aucun compte pour le moment'); return; }
+            if (!USERS) { ligneVide(tb, 7, '—'); return; }
+            if (!USERS.length) { ligneVide(tb, 7, 'Aucun compte pour le moment'); return; }
             USERS.forEach(u => {
                 const tr = el('tr'); const actif = u.enabled !== false;
                 const c1 = el('td'); c1.appendChild(document.createTextNode(tiret(u.username))); c1.appendChild(el('small', '', tiret(u.email))); tr.appendChild(c1);
@@ -357,6 +360,7 @@
                 const mfa = u.totp_enabled === true || u.mfa_enabled === true;
                 const c3 = el('td'); c3.appendChild(pastille(mfa ? 'cy' : '', mfa ? 'ACTIVÉ' : 'NON', mfa ? 'Second facteur enrôlé' : 'Aucun second facteur enrôlé')); c3.appendChild(celluleOtp(u)); tr.appendChild(c3);
                 const c4 = el('td'); (u.services || []).forEach(s => c4.appendChild(pastille('cy', s))); if (!(u.services || []).length) c4.textContent = '—'; tr.appendChild(c4);
+                tr.appendChild(celluleProfil(u)); tr.lastChild.dataset.compte = u.username;
                 tr.appendChild(el('td', '', u.created ? new Date(u.created).toLocaleDateString('fr-FR') : '—'));
                 const a = el('td', 'act');
                 a.appendChild(btn('Modifier', '', () => ouvreEdition(u.username)));
@@ -365,6 +369,54 @@
                 a.appendChild(btn('Supprimer', 'danger', () => demande('Supprimer le compte « ' + u.username + ' » et le retirer de tous les services ? Cette action est irréversible.', 'Supprimer', () => supprimer(u.username))));
                 tr.appendChild(a); tb.appendChild(tr);
             });
+        }
+
+        // ----- Profil SBX OS d'un compte système (#2755) -----
+        // L'association existe côté Identity Manager (sbxid) ; ici on la montre et on la modifie. Sans droit de lecture (null), on n'affirme rien.
+        const lienDe = nom => (SYSLIENS || []).find(l => l.compte === nom) || null;
+        function celluleProfil(u) {
+            const c = el('td');
+            if (SYSLIENS === null) { c.textContent = '—'; c.title = 'Visible d’un administrateur système'; return c; }
+            const l = lienDe(u.username);
+            if (l) { const a = el('a', '', l.pseudo); a.href = urlIdentite(); a.target = '_blank'; a.rel = 'noopener'; a.style.color = 'var(--cyan)'; c.appendChild(a); }
+            else c.appendChild(pastille('', 'non associé', 'Aucun profil SBX OS n’exploite ce compte'));
+            const b = btn('Modifier', '', () => ouvreProfil(u.username, c), 'Changer le profil SBX OS associé à ' + u.username); b.dataset.profil = u.username; b.style.marginLeft = '8px';
+            c.appendChild(b);
+            return c;
+        }
+        function urlIdentite() { return 'https://' + location.hostname.replace(/^admin\./, 'hall.') + '/identite/#admin'; }
+        function ouvreProfil(compte, cellule) {
+            if (cellule.querySelector('[data-profil-choix]')) return;
+            const l = lienDe(compte); const boite = el('div', 'otp');
+            const s = el('select'); s.dataset.profilChoix = compte; s.setAttribute('data-profil-choix', compte); s.setAttribute('aria-label', 'Profil SBX OS de ' + compte);
+            const aucun = el('option', '', '— aucun profil —'); aucun.value = ''; s.appendChild(aucun);
+            (PERSONNES || []).filter(x => x.status === 'active').forEach(x => { const o = el('option', '', x.pseudo); o.value = x.user_uuid; s.appendChild(o); });
+            s.value = l ? l.user_uuid : '';
+            const ok = btn('Enregistrer', 'prim', () => enregistreProfil(compte, s.value), 'Appliquer'); ok.setAttribute('data-profil-ok', compte);
+            const no = btn('Annuler', '', () => rendreComptes());
+            boite.appendChild(s); boite.appendChild(ok); boite.appendChild(no); cellule.appendChild(boite); s.focus();
+        }
+        async function enregistreProfil(compte, nouveau) {
+            const l = lienDe(compte); const ancien = l ? l.user_uuid : '';
+            if (nouveau === ancien) { rendreComptes(); return; }
+            const base = '/admin/personnes/';
+            // Un compte déjà lié à une autre personne est refusé par le serveur : on délie d'abord, et on remet l'ancien lien si le nouveau échoue.
+            if (ancien) {
+                const d = await appel('DELETE', SBX, base + encodeURIComponent(ancien) + '/compte-systeme/' + encodeURIComponent(compte));
+                if (!d.ok) { retour('rComptes', false, 'Modification impossible : ' + detail(d)); return; }
+            }
+            if (nouveau) {
+                const r = await appel('PUT', SBX, base + encodeURIComponent(nouveau) + '/compte-systeme', { compte });
+                if (!r.ok) {
+                    let restaure = true;
+                    if (ancien) restaure = (await appel('PUT', SBX, base + encodeURIComponent(ancien) + '/compte-systeme', { compte })).ok;
+                    retour('rComptes', false, 'Association refusée : ' + detail(r) + (ancien ? (restaure ? ' — l’ancienne association est conservée.' : ' — ATTENTION : l’ancienne association n’a pas pu être remise.') : ''));
+                    charger(); return;
+                }
+            }
+            const pseudo = nouveau ? ((PERSONNES || []).find(x => x.user_uuid === nouveau) || {}).pseudo : null;
+            retour('rComptes', true, pseudo ? '« ' + compte + ' » est associé au profil ' + pseudo + '.' : '« ' + compte + ' » n’est plus associé à un profil.');
+            charger();
         }
 
         // ----- Second facteur PAR COMPTE (#2745) -----
