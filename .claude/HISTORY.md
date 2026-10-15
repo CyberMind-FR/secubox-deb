@@ -9,6 +9,20 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Premier Pas : configurer une box sans écran depuis le LAN, 0.6.0 (ref #2725)
+Demande du mainteneur : l'assistant ouvert depuis un autre poste affichait « s'utilise depuis l'écran branché sur la box » ; une box sans écran ne pouvait pas se
+configurer au navigateur. Choix assumé (« ouvert sur le LAN, fenêtre courte », comme un routeur grand public) : le premier poste du LAN qui arrive dans la
+fenêtre prend la box. `premier_pas/ouverture.py` + `POST /session` : fenêtre de 15 min après le DÉMARRAGE comptée en temps écoulé (CLOCK_BOOTTIME : le RPi400 n'a pas de
+RTC, l'heure saute de plusieurs jours au réglage réseau), origine = verdict nginx `X-SecuBox-LAN: 1` (jamais l'adresse, falsifiable), UN poste identifié par un secret
+aléatoire (423 aux suivants, libre après 15 min sans action), secret jamais en clair (SHA-256, 0600, invalidé au redémarrage). La session remplit et applique ; elle
+ne lit pas le code d'appairage et n'accepte ni ne refuse une proposition (présence devant la box). 31 tests dont 8 contre la vraie page : ils ont trouvé un défaut que
+l'API seule ne montrait pas (le poste distant appelait `/code`, recevait un 403 voulu, et la page le prenait pour une session expirée et se rechargeait contre sa propre session).
+Limites écrites dans le README : la trace durable est le journal systemd (`audit.log` est root 0644, l'API tourne en `secubox`) ; l'ouverture dépend de la ligne
+`X-SecuBox-LAN` posée par `secubox-proxy.conf` quand le fichier GeoIP du Hub est présent, sinon elle reste fermée. Publié sur apt.secubox.in (trixie).
+Piège d'outillage : l'index apt n'était plus exporté depuis le 13 octobre (clé de signature verrouillée, « Pinentry: Inappropriate ioctl ») ; les paquets publiés entre-temps
+n'étaient visibles de personne. `systemctl restart secubox-depot-deverrouille.service` puis `reprepro export` ; toujours vérifier `InRelease` après un includedeb.
+Pas de `closes` : pas encore installé ni éprouvé sur une box réelle.
+
 ## 2026-10-15 — Premier Pas : « Champs inconnus : aide » à l'étape Maillage (ref #2723)
 Relevé sur le kiosque d'une box neuve (étape 7/9, mode Automatique, case « Demander de l'aide » cochée) : « Continuer » affichait « Champs inconnus : aide ».
 Cause : le formulaire (#2544) envoie `{mode: "automesh", aide: "demander"|"non"}`, `moteur.py` et `provision.py` connaissent `maillage.aide`, mais

@@ -86,13 +86,22 @@ try {
   if (h) { sessionStorage.setItem("premier-pas.jeton", h); history.replaceState(null, "", location.pathname); }
   JETON = sessionStorage.getItem("premier-pas.jeton") || "";
 } catch (_) { JETON = location.hash.slice(1); }
+// Secret obtenu en s'ouvrant depuis le réseau local, par opposition au jeton posé par le lanceur du kiosque (#2725).
+let DISTANT = false;
+try { DISTANT = sessionStorage.getItem("premier-pas.distant") === "1"; } catch (_) {}
 
 let ETAT = null, CHOIX = null, cur = 0, brouillon = {};
 
 async function api(chemin, opts = {}) {
   const r = await fetch(API + chemin, {...opts, headers: {"Content-Type": "application/json", "X-Premier-Pas": JETON}});
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.detail || ("Erreur " + r.status));
+  if (!r.ok) {
+    // Session distante expirée en cours de route (15 min sans action) : on repart de zéro plutôt que de laisser un « 403 » sans issue (#2725).
+    if (r.status === 403 && JETON && DISTANT && (chemin.startsWith("/etape/") || chemin === "/appliquer")) { try { sessionStorage.removeItem("premier-pas.jeton"); sessionStorage.removeItem("premier-pas.distant"); } catch (_) {} location.reload(); }
+    const e = new Error(j.detail || ("Erreur " + r.status));
+    e.statut = r.status;
+    throw e;
+  }
   return j;
 }
 
@@ -322,10 +331,21 @@ function fini() {
   catch (err) { $("#ecran").innerHTML = `<h1>Assistant indisponible</h1><p class="aide">${esc(err.message)}</p>`; return; }
   if (ETAT.fait) return fini();
   if (!JETON) {
-    $("#ecran").innerHTML = `<h1>Premier démarrage</h1><p class="aide">Cette box attend sa configuration. L'assistant s'utilise depuis l'écran branché sur la box (ou sa console).</p>`;
-    return;
+    // Ni écran ni jeton : on demande une session au réseau local de la box (#2725). Une box sans écran se configure ainsi, depuis ce navigateur.
+    try {
+      const s = await api("/session", {method: "POST"});
+      JETON = s.jeton; DISTANT = true;
+      try { sessionStorage.setItem("premier-pas.jeton", JETON); sessionStorage.setItem("premier-pas.distant", "1"); } catch (_) {}
+    } catch (err) {
+      const occupe = err.statut === 423, close = err.statut === 403;
+      $("#ecran").innerHTML = `<h1>${occupe ? "Un autre poste configure cette box" : "Premier démarrage"}</h1><p class="aide">${esc(err.message)}</p>`
+        + (occupe ? `<p><button type="button" class="b prim" id="reessayer">Réessayer</button></p>` : "")
+        + (close ? `<p class="aide">Une box sans écran se configure dans les 15 minutes qui suivent son démarrage : éteignez-la puis rallumez-la, et rouvrez cette page.</p>` : "");
+      const b = $("#reessayer"); if (b) b.onclick = () => location.reload();
+      return;
+    }
   }
-  try { const c = await api("/code"); $("#code").textContent = c.code.match(/.{1,4}/g).join(" "); $("#pied").hidden = false; } catch (_) {}
+  if (!DISTANT) try { const c = await api("/code"); $("#code").textContent = c.code.match(/.{1,4}/g).join(" "); $("#pied").hidden = false; } catch (_) {}
   const prop = ETAT.proposition || {};
   setTimeout(veille, 4000);
   if (prop.statut === "forcee" || ETAT.demande_en_cours || (ETAT.moteur || {}).phase === "application") return suivi();
