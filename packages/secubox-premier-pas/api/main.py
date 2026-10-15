@@ -30,7 +30,7 @@ from typing import Any, Dict, Optional
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from premier_pas import moteur as M, ouverture as O, profil as P, remplir as R  # noqa: E402
+from premier_pas import en_service as E, moteur as M, ouverture as O, profil as P, remplir as R  # noqa: E402
 
 app = FastAPI(title="SecuBox Premier Pas", version="0.3.0")
 
@@ -101,6 +101,9 @@ def ouvre_session(request: Request):
     """Ouvrir l'assistant à distance : rend le secret du poste (voir premier_pas.ouverture pour les règles)."""
     if M.MARQUEUR.exists():
         raise HTTPException(409, "Cette box est déjà configurée : l'assistant est fermé.")
+    if E.doit_marquer():
+        # Un admin a déjà servi et aucun assistant n'est en cours : c'est une box en service dont le marqueur manque. Elle ne s'offre pas au LAN (#2727).
+        raise HTTPException(409, "Cette box est déjà en service : l'assistant distant est fermé. Depuis la box : premier-pasctl rejouer.")
     try:
         from secubox_core.auth import adresse_client  # noqa: PLC0415
         adresse = adresse_client(request)
