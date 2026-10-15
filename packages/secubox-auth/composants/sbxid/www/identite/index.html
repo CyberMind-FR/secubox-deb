@@ -635,6 +635,15 @@ async function comptes(b, cols){
     }
     td.appendChild(l);
   }
+  // Services OUVERTS PAR SSO (#2761) : PhotoPrism s'ouvre par OIDC (#2255), sans mot de passe ; le compte naît à la première connexion, sous le pseudo.
+  // Ligne informative : rien à ouvrir ni à relier, et jamais un identifiant inventé.
+  { const pseudo = (tr.querySelector('td b') || {}).textContent || '';
+    if (pseudo) {
+      const l = el('div', 'svc');
+      l.append(el('b', null, 'PhotoPrism'), chip('SSO', 'ok'), ' ', el('span', 'mono', pseudo),
+               el('span', 'hint', ' accès par le Hall, sans mot de passe : le compte se crée à la première connexion'));
+      td.appendChild(l);
+    } }
   // La BBS est désormais une ligne de services comme les autres (#1521) : ouvrir, ou relier.
   const act = el('div', 'act'); act.style.justifyContent = 'flex-start'; act.style.marginTop = '8px';
   if (choix.length){
