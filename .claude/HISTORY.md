@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Boucles de redémarrage sur box neuve : assist 0.3.2 livré, ndpid-engine 1.7.2 à construire en CI (ref #2740)
+Sur le RPi400 : `secubox-ndpid-engine` (1 040 redémarrages) et `secubox-assist` (619) relancés toutes les 5 s depuis une heure, charge ~5. (1) `assist` : `BindError: wg-mesh unavailable` — le refus de servir sans
+`wg-mesh` est VOULU (fail-closed) ; le défaut était `Restart=on-failure`/`RestartSec=5`. Corrigé en 0.3.2 : l'unité ATTEND l'interface dans `ExecStart` (`sh -c 'until [ -e /sys/class/net/wg-mesh ]; do sleep 15; done; exec python3 -m assist.daemon'`),
+plafond de redémarrages dans `[Unit]` (dans `[Service]` systemd ignore ces clés, la box affichait déjà « Unknown key »). Installé sur le RPi400 (15 s, NRestarts=0) et sur gk2. (2) `ndpid-engine` : `pcap_open_live: eth2: No such device` — `conf/ndpid-engine.env` livrait
+`INTERFACE=eth2` (valeur de gk2) à toutes les cartes ; le RPi400 s'appelle `end0`. 1.7.2 : lanceur `secubox-ndpid-engine-run` (interface configurée si elle existe, sinon route par défaut, sinon première carte PHYSIQUE ; aucune = sortie 0, pas de relance). Paquet `arch: any`
+(compile nDPId) : à construire en CI pour arm64, PAS déployé. Sur le RPi400 j'ai réglé `INTERFACE=end0` dans `/etc/secubox/ndpid-engine.env` (configuration, sauvegarde `.avant-2740`) : actif, plus de boucle.
+ERREUR de ma part, vue en réel : ma première version (0.3.1) mettait l'attente dans `ExecStartPre` sans délai ; `systemctl restart` et `enable --now` — donc le postinst et `dpkg` — devenaient interminables tant que `wg-mesh` n'existait pas (dpkg bloqué 5 min, j'ai dû tuer le `systemctl` en attente
+par son PID). Leçon, deuxième fois aujourd'hui : un correctif d'unité systemd s'éprouve par `dpkg -i` sur une vraie box, avec un délai maximum, pas en lisant l'unité.
+Corrigé au passage : `test_changelog_bumped_to_0_2_3` figeait la version courante d'assist et échouait à chaque montée.
+Constaté, NON traité : quatre unités en échec sur ce profil lite (`peertube-backlog` sur une box sans PeerTube, `secubox-bootmenu`, `secubox-mail-autocrypt`, `secubox-sbxid-activites`) ; Chromium ~65 % d'un cœur.
+
 ## 2026-10-15 — Kiosque RPi : l'unité du lanceur remplace l'ancienne unité `startx`, premier-pas 0.6.4 (closes #2738)
 Premier accès SSH au RPi400 (clé posée via le mot de passe par défaut donné par le mainteneur) : le kiosque ouvrait `http://localhost/` et tournait HORS de systemd. `build-rpi-usb.sh` écrivait
 `/etc/systemd/system/secubox-kiosk.service` (`startx -- :0 vt7`, `.xinitrc` à localhost) : elle ignorait le lanceur (URL d'administration #2534, assistant prioritaire #1522) et MASQUAIT toute unité de
