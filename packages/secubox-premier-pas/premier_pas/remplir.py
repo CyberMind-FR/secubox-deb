@@ -105,7 +105,7 @@ CHAMPS = {
     "horloge": ("box", {"fuseau", "ntp"}),
     "reseau": ("reseau", {"mode", "domaine"}),
     "services": ("services", {"profil"}),
-    "maillage": ("maillage", {"mode", "rejoindre", "jeton"}),
+    "maillage": ("maillage", {"mode", "rejoindre", "jeton", "aide"}),
     "majs": ("apt", {"auto", "heure"}),
 }
 
@@ -158,6 +158,8 @@ def enregistre(etape: str, valeurs: Dict[str, Any]) -> Dict[str, Any]:
             raise Refus(f"Fuseau inconnu : « {bloc.get('fuseau')} ». Tapez une ville pour le trouver dans la liste.")
         if section == "reseau" and bloc.get("mode") == "lan":
             bloc.pop("domaine", None)
+        if section == "maillage" and bloc.get("mode") != "automesh":
+            bloc.pop("aide", None)      # une aide n'a de sens qu'en automesh : ne pas laisser survivre une case que la personne ne voit plus (#2723)
         if section == "maillage" and bloc.get("mode") != "rejoindre":
             bloc.pop("rejoindre", None)
             bloc.pop("jeton", None)

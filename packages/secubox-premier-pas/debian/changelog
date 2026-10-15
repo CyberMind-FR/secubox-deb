@@ -1,3 +1,9 @@
+secubox-premier-pas (0.5.9-1~bookworm1) bookworm; urgency=medium
+
+  * Etape « Maillage » : « Champs inconnus : aide » (#2723). Le formulaire web (#2544) envoie {mode: "automesh", aide: "demander"|"non"} mais `remplir.enregistre()` ne permettait pas `aide` pour cette etape : cocher « Demander de l'aide » bloquait l'assistant a l'etape 7/9 (releve sur le kiosque d'une box neuve). `aide` est permis ; il est retire du profil si le mode n'est plus « automesh », pour qu'une case cochee puis abandonnee (« Plus tard ») ne bloque pas l'examen. Un test lit le vrai formulaire et verifie que chaque cle qu'il envoie est permise cote serveur. 6 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 07:30:00 +0200
+
 secubox-premier-pas (0.5.8-1~bookworm1) bookworm; urgency=medium
 
   * Maillage « automesh » (#2544) : la box preparee rejoint son parent toute seule. `[maillage] mode = "automesh"` (aucun secret dans le fichier signe : le code est depose a part par l'atelier Auto-Load) ; l'action active, une par une, la minuterie de jonction, l'annuaire (inscription chez le maitre) et l'assistance, sans jamais arreter la premiere installation (etape souple). `aide = "demander"` publie UNE demande d'aide ouverte « premiere installation » (en tant que `secubox`, un marqueur evite les doublons) que le maitre voit dans « En cours » ; le demandeur garde le dernier mot, aucune session sans son consentement. Ajoute dans l'assistant web et console (Automatique, case « Demander de l'aide »). 11 tests.
