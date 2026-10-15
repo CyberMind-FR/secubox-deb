@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-15 — Association comptes ↔ profils : colonne « Profil SBX OS » (Utilisateurs) et « Modifier » par service (/identite) (secubox-auth 1.8.1, ref #2755)
+- Utilisateurs, comptes système : nouvelle colonne « Profil SBX OS » (profil associé ou « non associé ») et « Modifier » : associer, changer, dissocier via l'API sbxid existante (`comptes-systeme`). Ordre sûr : l'ancien lien est délié avant le nouveau (le serveur refuse un double lien) et remis si le nouveau échoue. Sans droit d'administrateur système la colonne affiche « — » et ne prétend rien.
+- /identite (Administration) : chaque compte de service lié (Courriel, Nextcloud, PeerTube, BBS) a un « Modifier » à côté du ✕ : relier un autre compte existant, même ordre sûr.
+- Tests : 8 (Utilisateurs) + 5 (identité) en vrai navigateur ; les 29 échecs de la suite users et ceux de sbxid sont identiques à master. Construit 1.8.1, PAS déployé sur gk2 (embarque aussi l'OTP par compte de 1.8.0, gk2 est en 1.7.0) : en attente du go. Issue laissée ouverte.
+
 ## 2026-10-15 — Groupe des modules déclarés déployé sur gk2 et le RPi400 (aggregator 0.4.2, ad-guard 1.14.1, closes #2748)
 - gk2 : aggregator 0.4.1 + ad-guard 1.14.1 installés ; sur gk2, debhelper a activé ET démarré `secubox-groupe-declares` (82 modules déclarés) alors que g1 sert déjà ces sockets. Arrêté et désactivé à la main au bout d'une minute ; g1 (actif depuis la veille) n'avait pas bougé, ad-guard et dns-guard répondaient 200.
 - Cause : l'autoscript `dh_installsystemd`. Correctif 0.4.2 : `--no-enable --no-start` pour cette unité seule ; l'activateur, qui regarde `groups.d`, décide. Test de non-régression ajouté.
