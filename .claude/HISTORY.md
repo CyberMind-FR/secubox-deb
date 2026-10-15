@@ -9,7 +9,7 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
-## 2026-10-15 — gk2 : aletheiavox.eu et www.aletheiavox.eu redirigés vers billets.gk2.secubox.in (closes #)
+## 2026-10-15 — gk2 : aletheiavox.eu et www.aletheiavox.eu redirigés vers billets.gk2.secubox.in (closes #2747)
 Demande du mainteneur. Le domaine pointait déjà sur gk2, était déclaré dans `haproxy.toml` (TLS) avec un certificat Let's Encrypt valide pour les deux noms ; il répondait 404 : son vhost nginx `aletheiavox.eu.conf` (ancien site `aletheia`, à la main) n'était pas activé et MetaBlogizer
 renvoie 404 pour un hôte sans bloc sur :8900. Action sur la box, sans source dans le dépôt (précédent : `lldh.gk2-redirect.conf`) : `sites-available/aletheiavox.eu-redirect.conf` (bloc :8900, `return 302 https://billets.gk2.secubox.in$request_uri`, route ACME conservée), lien dans `sites-enabled`,
 `nginx -t`, `reload`. 302 et non 301 : un 301 serait gardé en cache dur par les navigateurs alors que la destination est une décision de produit ; à passer en 301 quand elle est définitive. Vérifié depuis internet, certificat contrôlé : http → 301 https → 302 billets → 200. Annuler : retirer le lien et recharger nginx.
