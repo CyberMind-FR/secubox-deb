@@ -23,6 +23,9 @@ case "$1" in
         systemctl enable --now secubox-aggregator-watchdog.timer 2>/dev/null || true
     fi
 
+    # #2748 : sert les modules declares groupables (ad-guard...) si l'operateur n'a aucun groupe.
+    /usr/sbin/secubox-groupe-declares-activer || true
+
     echo "secubox-aggregator: to migrate all installed SecuBox modules into"
     echo "  the aggregator (replaces per-module uvicorn processes) run :"
     echo "    sudo /usr/sbin/secubox-aggregator-migrate"

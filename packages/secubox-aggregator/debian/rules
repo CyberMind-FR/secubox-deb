@@ -35,3 +35,8 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-aggregator/usr/share/secubox/groupable.d
 	install -d $(CURDIR)/debian/secubox-aggregator/usr/share/secubox/groupable-root.d
 	install -d $(CURDIR)/debian/secubox-aggregator/etc/secubox/groups.d
+	# #2748 : groupe des modules declares + activateur (actif seulement si l'operateur n'a aucun groupe).
+	install -m 644 systemd/secubox-groupe-declares.service \
+	  $(CURDIR)/debian/secubox-aggregator/lib/systemd/system/
+	install -m 755 sbin/secubox-groupe-declares-activer \
+	  $(CURDIR)/debian/secubox-aggregator/usr/sbin/

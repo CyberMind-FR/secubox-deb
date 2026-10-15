@@ -1,3 +1,9 @@
+secubox-aggregator (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Ajoute l'unite secubox-groupe-declares et son activateur : sert les modules declares groupables (groupable.d) quand l'operateur n'a aucun groupe dans groups.d. Sur gk2 (groupes g1..g6) rien ne change. Sans cela une image neuve ne servait que les 10 modules pilotes (ref #2748).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 15 Oct 2026 11:20:00 +0200
+
 secubox-aggregator (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-groupd (#2050, N1) : hote de groupe (secubox-groupd, unites secubox-group@ et

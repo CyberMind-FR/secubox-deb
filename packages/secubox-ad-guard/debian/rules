@@ -36,6 +36,10 @@ override_dh_auto_install:
 	install -d debian/secubox-ad-guard/usr/share/secubox/ad-guard/config
 	install -m 644 config/dns-malveillants.txt.example debian/secubox-ad-guard/usr/share/secubox/ad-guard/config/
 
+	# #2748 : declaration groupable (c'est le NOM qui compte) pour le groupe des modules declares.
+	install -d debian/secubox-ad-guard/usr/share/secubox/groupable.d
+	install -m 644 groupable.d/ad-guard debian/secubox-ad-guard/usr/share/secubox/groupable.d/ad-guard
+
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-adblock-sync secubox-adblock-sync.timer
 	# Le démon d'alimentation du POC (unité installée à la main plus haut) n'est ni activé ni démarré à l'installation : POC isolé,
