@@ -58,11 +58,15 @@ if f.exists():
         print("secubox-premier-pas : déclaré dans aggregator.toml")
 TOML
     # Verdict LAN de l'ouverture distante (#2731) : posé ici pour cette route seulement, et SEULEMENT si le fichier GeoIP du Hub existe (sinon
-    # `$lan_client` est inconnue et nginx -t casserait toute la configuration), si secubox-proxy.conf ne le pose pas déjà, et si nginx -t passe.
-    SESSION_CONF=/etc/nginx/secubox.d/premier-pas-session.conf
-    if [ -f /etc/nginx/conf.d/secubox-lan-geo.conf ] && [ -d /etc/nginx/secubox.d ] \
-       && ! grep -q "X-SecuBox-LAN" /etc/nginx/snippets/secubox-proxy.conf 2>/dev/null; then
-        install -m 644 /usr/share/secubox/premier-pas/nginx/premier-pas-session.conf "$SESSION_CONF"
+    # `$lan_client` est inconnue et nginx -t casserait toute la configuration), si secubox-proxy.conf ne pose pas DÉJÀ la directive, et si nginx -t passe.
+    # LE GARDE RECONNAÎT LA DIRECTIVE, PAS LA CHAÎNE (#1351, #2743) : `grep -q X-SecuBox-LAN` trouvait le COMMENTAIRE qui documente la ligne, concluait « déjà posée »
+    # et retirait la route — la page distante répondait encore « pas du réseau local ».
+    SESSION_D="${SECUBOX_NGINX_SECUBOX_D:-/etc/nginx/secubox.d}"
+    SESSION_CONF="$SESSION_D/premier-pas-session.conf"
+    SESSION_SRC="${PREMIER_PAS_SESSION_SOURCE:-/usr/share/secubox/premier-pas/nginx/premier-pas-session.conf}"
+    if [ -f "${SECUBOX_LAN_GEO:-/etc/nginx/conf.d/secubox-lan-geo.conf}" ] && [ -d "$SESSION_D" ] \
+       && ! grep -qE '^[[:space:]]*proxy_set_header[[:space:]]+X-SecuBox-LAN' "${SECUBOX_PROXY_SNIPPET:-/etc/nginx/snippets/secubox-proxy.conf}" 2>/dev/null; then
+        install -m 644 "$SESSION_SRC" "$SESSION_CONF"
     else
         rm -f "$SESSION_CONF"
     fi
