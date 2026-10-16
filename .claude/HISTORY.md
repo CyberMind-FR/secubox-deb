@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Rapport de sécurité PDF : tuiles Actor réparées, volet visites et bannissements (secubox-metrics 1.28.0, closes #2772)
+- Demande du mainteneur (capture du PDF) : « pdf missing actor metrics », puis « missing visites and bans stats and graphics » ; sources désignées : « waf et nft ».
+- Tuiles Actor vides : `GET /api/v1/actor/stats` d'actord met 5,0 s sur gk2 (mesuré), le rapport n'attendait que 4 s → `stats` valait None. Délai par appel : 30 s pour `/stats`, 4 s pour les lectures rapides. (actord `/stats` à 5 s reste lent : performance à voir séparément.)
+- Nouveau volet (page 3 sur 5) « WAF — visites et bannissements » : visites (`/var/log/secubox/waf/visits-stats.json` : requêtes, navigateurs, erreurs, sites, types de clients, statuts, systèmes ; les adresses `top_ips` ne sortent jamais), bannissements (`bans.jsonl` : bans, prolongations, levées, actifs, par heure, par catégorie ; lecture bornée à la fin du fichier), pare-feu (`nft-etat.json` : actif, vérification, réparations). `secubox` appartient au groupe `secubox-waf`, donc lit ces fichiers ; il ne peut pas appeler `nft` (NoNewPrivileges) : le nombre d'éléments de l'ensemble `waf_ban` n'est pas affiché, les « actifs » viennent du journal (985 adresses contre 1016 éléments nft au moment de l'essai).
+- Sources : onze au total (3 de plus), listées si absentes ou périmées ; rien n'est envoyé si aucune ne répond. 25 nouveaux tests.
+
 ## 2026-10-16 — NAC : les conteneurs LXC sont nommés (secubox-nac 3.9.2, closes #2773)
 - Demande : « Nommer les conteneurs lxc » (`/nac/` affichait « Conteneur sans nom » pour 10.100.0.110, .111, .120, .130).
 - Cause : l'inventaire root `secubox-nac-lxc-names` (#2445) ne lisait que `/var/lib/lxc` (7 adresses) ; mqtt, zigbee, peertube, photoprism, ytsas, lyrion, jellyfin, jitsi, torrent, picobrew, clamav, grafana, yacy, toolbox-mitm vivent dans `/data/lxc`, adresse en dur dans leur config. Piste écartée : `lxc-ls` (le service root est confiné, sans droit d'entrer dans un espace de noms).
