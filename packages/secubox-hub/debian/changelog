@@ -1,3 +1,9 @@
+secubox-hub (1.12.6-1~bookworm1) bookworm; urgency=medium
+
+  * Vue d'ensemble : un seul etat par service (#2794). Elle comptait « 39 a l'arret » car elle ne lisait que l'unite/socket : les modules montes dans l'agregateur (rlevel, proxypac, haproxy, zkp...) et en veille (grafana, hub) etaient declares arretes, alors que la page Espaces, qui lit la sonde de sante, les disait en service. Les deux pages suivent maintenant la meme sonde (`active` reste le repli sans sonde ; une sonde `error` reste une alarme). Les pages du hub (apercu, health) recoivent une sonde « Page du hub ». 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 10:00:00 +0200
+
 secubox-hub (1.12.5-1~bookworm1) bookworm; urgency=medium
 
   * Barre laterale : le bloc de pastilles en haut a gauche (live, menaces, services KO, materiel) est retire sur toutes les pages (#2792). Masque en CSS (meme depuis le cache HTML) et plus aucune requete de statut pour l'alimenter. 2 tests.

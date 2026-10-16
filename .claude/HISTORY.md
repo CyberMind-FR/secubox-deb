@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Vue d'ensemble : etats coherents avec la page Espaces (ref #2794)
+
+secubox-hub 1.12.6 : `/apercu` suit la sonde de sante (monte dans l'agregateur, en veille = en service ; `error` = arret) au lieu de la seule unite/socket ; apercu et health, pages du hub, ont une sonde. Reste a l'arret a juste titre : MESH 802.11s.
+
 ## 2026-10-16 — Barre laterale sans pastilles (ref #2792)
 
 secubox-hub 1.12.5 : le bloc de pastilles en haut a gauche (live, menaces, services KO, materiel) est retire sur toutes les pages (masque CSS, y compris depuis le cache HTML ; `loadStatusBarData` ne fait plus de requetes).
