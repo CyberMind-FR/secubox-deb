@@ -1,3 +1,9 @@
+secubox-profiles (0.21.1-1~bookworm1) bookworm; urgency=medium
+
+  * Politique par defaut : `cookies` passe de on-demand a always-on (#2811). C'est une cible du relais de sbxmitm, qui poste chaque evenement sur /run/secubox/cookies.sock et JETTE SANS BRUIT ce qu'il ne peut pas livrer : le sleeper endormait le module, mitm-ingest.db n'a plus ete ecrite depuis le 12 septembre et la page /cookies/ n'affichait que des metriques vides. 2 tests (dont un qui verifie que toute cible de socket du relais est always-on).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 16:00:00 +0200
+
 secubox-profiles (0.21.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /profiles/ refaite au profil Aurora (#2571) : page autonome (CSS et JS en ligne, plus de police Google Fonts ni de skin hybrid), tuiles (modules, actifs, arretes, inconnus, RAM connue, exposes publics), taxonomie par categorie/execution/exposition, bascule, liste des modules, diff. `?embed=1` sans menu, `?demo=1` donnees fictives et actions inertes, hauteur annoncee a l'hote (sbxVue, onglet « profiles »).
