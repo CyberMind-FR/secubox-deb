@@ -4,6 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """SecuBox-Deb :: proxypac API — override CRUD + candidates."""
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -22,7 +23,7 @@ except Exception:  # test/stub fallback
 from proxypac.pac_template import directive
 from proxypac.rules import parse_rules_dir
 from proxypac.generator import run_once
-from proxypac import role, config as _cfg
+from proxypac import role, config as _cfg, cdn_cache
 
 config = _cfg  # alias so tests can monkeypatch api.main.config.load
 
@@ -32,6 +33,7 @@ CANDIDATES = Path(os.environ.get("PROXYPAC_CANDIDATES",
                                  "/var/lib/secubox/proxypac/candidates.json"))
 REJETES = Path(os.environ.get("PROXYPAC_REJETES",
                                "/var/lib/secubox/proxypac/candidates-rejetes.json"))
+CDN_HOTES = Path(os.environ.get("PROXYPAC_CDN_HOTES", "/var/lib/secubox/proxypac/cdn-cache-hosts.txt"))
 AUDIT = Path(os.environ.get("PROXYPAC_AUDIT", "/var/log/secubox/audit.log"))
 
 app = FastAPI(title="SecuBox ProxyPAC")
@@ -115,7 +117,15 @@ def list_candidates(_=Depends(require_jwt)):
     except Exception:
         return {"candidates": []}
     rej = set(_rejetes())
-    return {"candidates": [c for c in tous if not (isinstance(c, dict) and c.get("host") in rej)]}
+    en_cache = set(cdn_cache.lire(CDN_HOTES))
+    out = []
+    for c in tous:
+        if isinstance(c, dict) and c.get("host") in rej:
+            continue
+        if isinstance(c, dict):
+            c = dict(c, cacheable=cdn_cache.cacheable(c.get("host", "")), en_cache=str(c.get("host", "")).lower() in en_cache)
+        out.append(c)
+    return {"candidates": out}
 
 
 @app.post("/candidate/{host}/accept")
@@ -124,6 +134,34 @@ def accept_candidate(host: str, user=Depends(require_jwt)):
     # common case; operator can re-edit). Minimal: DIRECT unless already routed.
     add_override(Override(host=host, proxy="direct"), user)
     _audit("candidate-accept", host, user.get("sub"))
+    return {"ok": True}
+
+
+_HOTE_OK = re.compile(r"[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+")
+
+
+@app.post("/candidate/{host}/cache")
+def cache_candidate(host: str, user=Depends(require_jwt)):
+    """Accepter un CDN STATIQUE pour le cache de sbxmitm (appareils acheminés par wg-toolbox). Une API ou un sous-domaine est refusé, avec la raison."""
+    if not _HOTE_OK.fullmatch(host):
+        raise HTTPException(400, "hote invalide")
+    if not cdn_cache.ajouter(CDN_HOTES, host):
+        raise HTTPException(400, "Hôte non statique : seuls les CDN de fichiers statiques (polices, bibliothèques JS) peuvent être mis en cache, jamais une API.")
+    _audit("candidate-cache", host.lower(), user.get("sub"))
+    return {"ok": True}
+
+
+@app.get("/cdn-cache")
+def liste_cache(_=Depends(require_jwt)):
+    return {"hosts": cdn_cache.lire(CDN_HOTES)}
+
+
+@app.delete("/cdn-cache/{host}")
+def retire_cache(host: str, user=Depends(require_jwt)):
+    if not _HOTE_OK.fullmatch(host):
+        raise HTTPException(400, "hote invalide")
+    cdn_cache.retirer(CDN_HOTES, host)
+    _audit("cdn-cache-del", host.lower(), user.get("sub"))
     return {"ok": True}
 
 

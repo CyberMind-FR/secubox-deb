@@ -139,8 +139,9 @@
             </form></div>
 
         <div class="pan"><h3>Candidats détectés <i id="nCand"></i></h3>
-            <div class="tab"><table><thead><tr><th>Hôte</th></tr></thead><tbody id="bCand"></tbody></table></div>
-            <p class="note">Lecture seule. Cette liste est celle de candidates.json ; elle reste vide tant que le détecteur d’auto-apprentissage n’y écrit rien.</p></div>
+            <div id="rCand" class="retour" hidden></div>
+            <div class="tab"><table><thead><tr><th>Hôte</th><th>Famille</th><th>Requêtes</th><th>Appareils</th><th>Cache</th></tr></thead><tbody id="bCand"></tbody></table></div>
+            <p class="note">Hôtes de CDN observés dans les requêtes DNS des appareils. « Mettre en cache » n’existe que pour les CDN de fichiers statiques (polices, bibliothèques JS) : le moteur MITM garde leurs réponses et les resert aux appareils acheminés par wg-toolbox. Une API (Google Play, etc.) n’est jamais mise en cache.</p></div>
     </div></div></main>
     <div class="toast" id="toast" role="status"></div>
 
@@ -263,8 +264,19 @@
             const tc = $('bCand'); tc.replaceChildren();
             if (candOk && candOk.length) {
                 for (const c of candOk) {
-                    const h = typeof c === 'string' ? c : (c && c.host) || JSON.stringify(c);
-                    const tr = el('tr'); tr.append(el('td', 'mono', h)); tc.append(tr);
+                    const obj = c && typeof c === 'object' ? c : {};
+                    const h = typeof c === 'string' ? c : obj.host || JSON.stringify(c);
+                    const tr = el('tr'); tr.append(el('td', 'mono', h), el('td', null, tiret(obj.famille)), el('td', null, obj.hits === undefined ? '—' : String(obj.hits)), el('td', null, obj.clients === undefined ? '—' : String(obj.clients)));
+                    const td = el('td', 'act');
+                    if (obj.en_cache) {
+                        const b = el('button', 'btn sm', 'Retirer'); b.type = 'button'; b.dataset.action = 'decache'; b.dataset.host = String(h);
+                        td.append(el('span', 'pill ok', 'En cache'), b);
+                    } else if (obj.cacheable) {
+                        const b = el('button', 'btn sm prim', 'Mettre en cache'); b.type = 'button'; b.dataset.action = 'cache'; b.dataset.host = String(h);
+                        td.append(b);
+                    } else if (obj.cacheable === false) td.append(el('span', 'pill', 'API : non cacheable'));
+                    else td.append(el('span', 'vide', '—'));
+                    tr.append(td); tc.append(tr);
                 }
             } else {
                 const tr = el('tr'), td = el('td', 'vide', SESSION_OK ? (PANNES.cand ? 'Candidats indisponibles (' + PANNES.cand.message + ').' : 'Aucun candidat.') : '—'); tr.append(td); tc.append(tr);
@@ -304,6 +316,18 @@
             if (reste) retour('rRegles', false, 'La règle « ' + host + ' » est toujours présente : elle vient d’un fichier du paquet et ne se supprime pas ici.');
             else retour('rRegles', true, 'Règle « ' + host + ' » supprimée.');
         }
+
+        async function cacheCdn(host, mettre) {
+            const r = mettre ? await ecrire('POST', '/candidate/' + encodeURIComponent(host) + '/cache') : await ecrire('DELETE', '/cdn-cache/' + encodeURIComponent(host));
+            if (r.ok) { retour('rCand', true, mettre ? '« ' + host + ' » sera mis en cache par le moteur MITM.' : '« ' + host + ' » retiré du cache.'); toast(mettre ? 'Mis en cache' : 'Retiré du cache'); }
+            else retour('rCand', false, (mettre ? 'Mise en cache' : 'Retrait') + ' impossible : ' + detail(r));
+            charger();
+        }
+        $('bCand').addEventListener('click', ev => {
+            const b = ev.target.closest('[data-action]');
+            if (!b || (b.dataset.action !== 'cache' && b.dataset.action !== 'decache')) return;
+            cacheCdn(b.dataset.host, b.dataset.action === 'cache');
+        });
 
         // Écouteur délégué : les valeurs d'API sont lues dans dataset (chaîne JS), jamais réinterprétées.
         $('bRegles').addEventListener('click', ev => {
