@@ -12,6 +12,7 @@ rejeté n'est jamais ressuscité."""
 from __future__ import annotations
 
 import calendar
+import html as _html
 import re
 import sqlite3
 import time
@@ -129,3 +130,27 @@ async def synchroniser(conn: aiosqlite.Connection, db_bbs: str, dossier_contenu:
             await conn.executemany("DELETE FROM comment WHERE billet_id=? AND source='bbs' AND source_ref=?", [(bid, r) for r in perdus])
             await conn.commit()
     return ajoutes
+
+
+_IMAGES = ("png", "jpg", "jpeg", "gif", "webp")
+_VIDEOS = ("mp4", "webm", "mov")
+
+
+def rendre_corps(corps: str, domaine: str) -> str:
+    """Corps d'un commentaire système du BBS -> HTML sûr (#2782) : une URL de FICHIER du BBS de cette box (https://bbs.<domaine>/f/<n>.<ext>) devient une
+    vignette cliquable (image) ou un lien « ▶ vidéo » ; tout le reste est du texte échappé, avec ses liens (linkify_plain). Jamais d'image d'un autre hôte."""
+    from .render import linkify_plain
+    if not domaine:
+        return linkify_plain(corps)
+    motif = re.compile(r"https://bbs\." + re.escape(domaine) + r"/f/(\d{1,9})\.(" + "|".join(_IMAGES + _VIDEOS) + r")(?![\w.])", re.I)
+    out, pos = [], 0
+    for m in motif.finditer(corps or ""):
+        out.append(linkify_plain((corps or "")[pos:m.start()]))
+        url = _html.escape(m.group(0), quote=True)
+        if m.group(2).lower() in _IMAGES:
+            out.append(f'<a class="vig" href="{url}" rel="nofollow ugc noopener noreferrer"><img class="vignette" src="{url}" alt="" loading="lazy"></a>')
+        else:
+            out.append(f'<a class="vid" href="{url}" rel="nofollow ugc noopener noreferrer">▶ vidéo</a>')
+        pos = m.end()
+    out.append(linkify_plain((corps or "")[pos:]))
+    return "".join(out)

@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Billets : les réponses-images du BBS s'affichent en vignettes (secubox-billets 0.13.2, closes #2782)
+- Constat du mainteneur (billet `business-plan-now-v2-gk2-f-…`) : « plus de vignettes ???? ». La réponse miroir du BBS (une image `/f/126.png`) apparaissait en URL texte dans la console du billet. Vérifié : fichiers du BBS publics, CSP du billet autorisant les images https, vignettes `_t.png` du billet servies — le défaut était l'affichage des commentaires système.
+- Fait : `miroir_bbs.rendre_corps` — URL de fichier du BBS de cette box → vignette cliquable (image paresseuse) ; vidéo → lien « ▶ vidéo » ; texte échappé et lié ; jamais d'image d'un autre hôte, d'un sous-domaine piège ni en http. 12 tests de plus (39 au total) ; échecs de la suite identiques à master.
+
 ## 2026-10-16 — Miroir BBS : le premier post du fil n'est plus recopié (secubox-billets 0.13.1, closes #2780)
 - Constaté sur gk2 après le déploiement de 0.13.0 : la source du billet (premier post du fil 1147, une image) apparaissait aussi comme commentaire. Un billet relayé porte une copie locale du média, donc l'égalité de corps ne la reconnaissait pas.
 - Correctif : jamais de recopie depuis le premier post d'un fil lié (plus petit identifiant, public ou non) ; les copies déjà posées sont retirées au balayage suivant. Premier balayage réel : 62 commentaires système sur l'ensemble des billets liés au BBS. Piège noté : le service met ~27 s à démarrer ; une vérification faite trop tôt voit l'ancien état.

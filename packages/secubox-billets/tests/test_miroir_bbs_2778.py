@@ -306,3 +306,53 @@ async def test_une_copie_deja_posee_du_premier_post_est_retiree(conn, tmp_path):
     db, content = sync.bbs
     await M.synchroniser(conn, db, content, DOMAINE, maintenant="2026-07-11T14:00:00Z")
     assert [c["source_ref"] for c in await repo.list_approved_comments(conn, bid)] == ["bbs:2"]
+
+
+# ---------- vignettes (#2782) ----------
+
+def test_une_image_du_bbs_devient_une_vignette_cliquable():
+    h = M.rendre_corps("https://bbs.gk2.secubox.in/f/126.png", DOMAINE)
+    assert 'href="https://bbs.gk2.secubox.in/f/126.png"' in h and 'src="https://bbs.gk2.secubox.in/f/126.png"' in h and 'loading="lazy"' in h
+    assert 'class="vignette"' in h
+
+
+@pytest.mark.parametrize("ext", ["png", "jpg", "jpeg", "gif", "webp"])
+def test_les_formats_d_image_courants_sont_reconnus(ext):
+    assert "<img " in M.rendre_corps(f"https://bbs.gk2.secubox.in/f/7.{ext}", DOMAINE)
+
+
+def test_une_video_du_bbs_devient_un_lien_lecture_pas_une_image():
+    h = M.rendre_corps("https://bbs.gk2.secubox.in/f/39.mp4", DOMAINE)
+    assert "<img" not in h and "▶" in h and 'href="https://bbs.gk2.secubox.in/f/39.mp4"' in h
+
+
+def test_le_texte_autour_est_echappe_et_lie():
+    h = M.rendre_corps("<b>x</b> voir https://exemple.org/a puis https://bbs.gk2.secubox.in/f/1.png fin", DOMAINE)
+    assert "&lt;b&gt;x&lt;/b&gt;" in h and '<a href="https://exemple.org/a"' in h and "<img " in h and "<b>" not in h
+
+
+def test_une_image_d_un_autre_hote_n_est_jamais_embarquee():
+    for url in ("https://evil.test/f/1.png", "https://bbs.evil.test/f/1.png", "https://bbs.gk2.secubox.in.evil.test/f/1.png", "http://bbs.gk2.secubox.in/f/1.png"):
+        assert "<img" not in M.rendre_corps(url, DOMAINE), url
+
+
+def test_une_url_piegee_ne_sort_pas_de_l_attribut():
+    h = M.rendre_corps('https://bbs.gk2.secubox.in/f/1.png"onerror="alert(1)', DOMAINE)
+    assert 'onerror' not in h.replace("&quot;", "").split("<img")[-1].split(">")[0] or "&quot;" in h
+    assert '"onerror' not in h
+
+
+def test_sans_domaine_rien_n_est_embarque():
+    assert "<img" not in M.rendre_corps("https://bbs.gk2.secubox.in/f/1.png", "")
+
+
+async def test_la_page_montre_la_vignette_de_la_reponse_du_bbs(conn, client, tmp_path, monkeypatch):
+    c, app = client
+    db, content = fabrique_bbs(tmp_path, fils=FILS, posts=[POSTS[0], (2, 1147, 2, "public", "2026-07-11T11:00:00Z", "/f/126.png", None)])
+    monkeypatch.setattr(app.state, "bbs_db", db, raising=False)
+    monkeypatch.setattr(app.state, "bbs_content", content, raising=False)
+    monkeypatch.setattr(app.state, "domaine", DOMAINE, raising=False)
+    bid = await billet(conn, ref="https://bbs.gk2.secubox.in/t/1147")
+    slug = (await repo.get_by_id(conn, bid))["slug"]
+    r = await c.get(f"/b/{slug}")
+    assert 'class="vignette" src="https://bbs.gk2.secubox.in/f/126.png"' in r.text
