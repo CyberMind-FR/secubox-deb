@@ -10,10 +10,10 @@ from api.state import load_profile
 
 PROFILES_DIR = Path(__file__).resolve().parent.parent / "profiles"
 PROFILE_FILES = sorted(PROFILES_DIR.glob("*.toml"))
-EXPECTED = {"full", "lite", "secure-gateway", "media-lab"}
+EXPECTED = {"full", "lite", "secure-gateway", "media-lab", "minimal"}
 
 
-def test_all_four_profiles_ship():
+def test_all_profiles_ship():
     assert {p.stem for p in PROFILE_FILES} == EXPECTED
 
 
@@ -34,7 +34,17 @@ def test_protected_core_present_in_every_profile():
         assert {"core", "auth", "aggregator"} <= on, f"{path.stem} missing protected"
 
 
-@pytest.mark.parametrize("path", PROFILE_FILES, ids=lambda p: p.stem)
+# `minimal` (#2838) est une box SANS ECRAN (ESPRESSObin) : ni kiosque, ni console locale, par construction (secubox-minimal n'installe ni l'un ni l'autre).
+SANS_ECRAN = {"minimal"}
+
+
+@pytest.mark.parametrize("path", [p for p in PROFILE_FILES if p.stem not in SANS_ECRAN], ids=lambda p: p.stem)
 def test_chaque_profil_porte_le_kiosque_et_la_console(path):
-    """#2332 : le kiosque WebUI (écran) et la console TUI (sa partie headless) sont les deux visages locaux de la box : dans tous les profils."""
+    """#2332 : le kiosque WebUI (écran) et la console TUI (sa partie headless) sont les deux visages locaux de la box : dans tous les profils AVEC écran."""
     assert {"kiosk", "console"} <= load_profile(path).on, path.stem
+
+
+def test_un_profil_sans_ecran_n_allume_ni_kiosque_ni_console():
+    for stem in SANS_ECRAN:
+        on = load_profile(PROFILES_DIR / f"{stem}.toml").on
+        assert not ({"kiosk", "console"} & on), stem

@@ -24,7 +24,7 @@ CLES = frozenset({"client", "profil", "paquets", "domaine", "comptes", "tunnel_a
 PAQUETS_MAX = 2000
 PAQUETS_COURRIER = 30
 SMTP_TIMEOUT_S = 20
-PROFILS = {"lite": "Lite", "isp": "ISP", "full": "Full"}
+PROFILS = {"minimal": "Minimal", "lite": "Lite", "isp": "ISP", "full": "Full"}
 
 _NOM = re.compile(r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")
 _PAQUET = re.compile(r"^[a-z0-9][a-z0-9+.-]{1,80}$")

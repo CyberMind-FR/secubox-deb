@@ -1,3 +1,9 @@
+secubox-profiles (0.23.0-1~bookworm1) bookworm; urgency=medium
+
+  * Profil d'activation `minimal` (#2838) : ce que `secubox-profilectl apply --profile minimal` laisse allume (DPI, dns-guard, ad-guard, NAC, Freebox, WebUI d'administration ; ni WAF, ni Hall, ni metrics, ni kiosque, ni Tor). Exigé par l'agent Auto-Load pour un client minimal. Les profils sans ecran n'ont ni kiosque ni console. 3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 02:00:00 +0200
+
 secubox-profiles (0.22.0-1~bookworm1) bookworm; urgency=medium
 
   * Comparatif des profils (#2819) : nouvelle page /profiles/comparatif.html (profil Aurora) qui montre Minimal, Lite, ISP et Full cote a cote. Le CONTENU de chaque profil est lu des meta-paquets secubox-<profil> a la construction (scripts/gen-profils-contenu.py, installe en contenu-profils.json) : jamais saisi a la main, un meta-paquet illisible fait ECHOUER la construction. Route GET /api/v1/profiles/comparatif (lecture) : ajoute le profil ACTIF de cette box et ses modules installes, lus de dpkg. La memoire affichee est celle MESUREE par le module (jamais estimee). Liste calculee de ce que Minimal n'embarque pas. Lien depuis /profiles/. 27 tests.
