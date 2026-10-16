@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Barre laterale sans pastilles (ref #2792)
+
+secubox-hub 1.12.5 : le bloc de pastilles en haut a gauche (live, menaces, services KO, materiel) est retire sur toutes les pages (masque CSS, y compris depuis le cache HTML ; `loadStatusBarData` ne fait plus de requetes).
+
 ## 2026-10-16 — Systeme : actions rapides reelles et honnetes (ref #2788)
 
 secubox-system 1.10.2 : cinq unites root `secubox-systeme-*.service` (verification pare-feu, heure NTP, caches, redemarrer, eteindre) demarrees via la regle polkit #2615 ; l'API rend le vrai code retour et la raison (502/504) au lieu de « HTTP 200 » muet. « Recharger le pare-feu » verifie la config (`nft -c`) sans la charger (`flush ruleset` viderait les bannissements). Redemarrage en bloc des services refuse (409). `override_dh_installsystemd` : le postinst ne demarre pas les unites d'action (il aurait eteint la machine). 24 tests.

@@ -1,3 +1,9 @@
+secubox-hub (1.12.5-1~bookworm1) bookworm; urgency=medium
+
+  * Barre laterale : le bloc de pastilles en haut a gauche (live, menaces, services KO, materiel) est retire sur toutes les pages (#2792). Masque en CSS (meme depuis le cache HTML) et plus aucune requete de statut pour l'alimenter. 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 09:00:00 +0200
+
 secubox-hub (1.12.4-1~bookworm1) bookworm; urgency=medium
 
   * Page Sante : le WAF s affiche « bloque les attaques · amont lent » quand le temoin a expire alors que les canaris sont bloques, au lieu de « defaillant » (ref #2784).
