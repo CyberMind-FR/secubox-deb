@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — nDPId Flux : synthese au-dessus de la liste (ref #2798)
+
+secubox-dpi 1.14.2 : repartition par protocole / applications / hotes passent au-dessus des flux actifs.
+
 ## 2026-10-16 — Espaces : sondes YouTube SAS et Glances (ref #2796)
 
 secubox-hub 1.12.7 : `glances` suit `metrics` ; `ytsas` (LXC) sonde par connexion TCP au conteneur. Plus d'arret affiche a tort pour des pages qui fonctionnent.

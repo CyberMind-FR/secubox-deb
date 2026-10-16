@@ -1,3 +1,9 @@
+secubox-dpi (1.14.2-1~bookworm1) bookworm; urgency=medium
+
+  * nDPId, page Flux : la rangee « Repartition par protocole / Applications / Hotes les plus actifs » passe au-dessus de la liste des flux actifs (#2798). 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 11:00:00 +0200
+
 secubox-dpi (1.14.1-1~bookworm1) bookworm; urgency=medium
 
   * nDPId, onglet Protocoles : « Regrouper par » categorie ou transport pour les protocoles, filtre de transport, et nouvelle table « Toutes les applications » (filtre, tri, regroupement par categorie deduite du nom). Un clic sur un groupe revient au detail de ce groupe (ref #2759).
