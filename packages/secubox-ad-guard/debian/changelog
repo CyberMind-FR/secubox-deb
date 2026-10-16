@@ -1,3 +1,9 @@
+secubox-ad-guard (1.14.2-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-toolbox passe de Depends a Recommends (#2855). Le module n'en lit la base qu'en lecture seule et tolere son absence (_stats_toolbox renvoie None, jamais un zero invente) ; la dependance dure imposait le MITM et le R-level a toute box qui voulait seulement le filtre de publicites (profil minimal, ESPRESSObin). Les profils lite et full gardent toolbox par leur propre meta-paquet.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:00:00 +0200
+
 secubox-ad-guard (1.14.1-1~bookworm1) bookworm; urgency=medium
 
   * Se declare groupable (groupable.d/ad-guard) et active le groupe des modules declares : la page ad-guard etait HORS LIGNE sur une image neuve, aucun serveur ne portait son API (ref #2748).

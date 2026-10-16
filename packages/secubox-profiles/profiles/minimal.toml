@@ -12,7 +12,7 @@ on = [
   "aggregator", "annuaire-apply", "annuaire-noms", "auth", "autoload-agent", "core", "hardening", "hub", "portal", "system",
   "dpi", "dpi-flowcap", "dpi-resume", "ndpid-engine", "ndpisrvd",
   "dns-guard", "ad-guard", "webfilter", "webfilter-apply", "webfilter-feed", "webfilter-sync",
-  "nac", "freebox", "ipv6guard", "toolbox", "toolbox-autolearn",
+  "nac", "freebox", "ipv6guard",
   "network-ready", "runtime", "firstboot", "openpgp",
   "wireguard",
   "premier-pas", "premier-pas-appliquer", "premier-pas-console", "premier-pas-decouverte",
