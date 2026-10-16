@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Santé : la sonde WAF teste le hall de cette box, pas celui d'un nœud mort (secubox-health 1.3.2, closes #2786)
+- Suite de #2784. Cause réelle de « requête saine : timed out » : `choisir_host` prenait le premier `hall.*` par ordre alphabétique, `hall.gk1.secubox.in`, routé vers `10.10.0.3:9080` (un autre nœud du maillage, qui ne répond plus ; le RPi400 est en 10.10.0.6). Mesuré sur gk2 : hall.gk1 → 14 s sans réponse ; hall.gk2 → 4 ms ; hall.gk3 → 12 ms ; canaris refusés en 5 ms. Le verdict « amont lent » de #2784 n'était donc qu'un pansement honnête ; la vraie correction est ici.
+- Correctif : hall de la box (`hall.<domaine>`) → sinon un amont hors maillage (10.10.0.x) → sinon l'ancien choix. 8 tests de plus.
+- À suivre : la table de routes porte `hall.gk1 → 10.10.0.3` (adresse périmée du nœud relayé) ; et gk2 saturée (swap 10 de 12 Go, mémoire 94 %, disque racine 97 %, charge 22) — non masquée.
+
 ## 2026-10-16 — Santé : la sonde du WAF ne déclare plus « défaillant » un amont lent (secubox-health 1.3.1, secubox-hub 1.12.4, closes #2784)
 - Constat du mainteneur (page Santé) : « WAF — test dynamique » rouge, « requête saine — non bloqué · timed out » ; « tu es certain de tes sondes d'état ? all greens ».
 - Analyse : le témoin (`GET /robots.txt`) traverse sbxwaf jusqu'à l'amont ; sur gk2 chargée (charge ~14, mémoire 94 %) l'amont dépasse 5 s. Un délai dépassé n'est pas un blocage (le WAF refuse en 403 immédiat) et les quatre canaris du même passage étaient bien refusés : le WAF fonctionnait.

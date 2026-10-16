@@ -139,3 +139,54 @@ def test_le_verdict_en_cache_garde_l_avertissement(tmp_path, monkeypatch):
     assert ok is True
     ok2, res2 = ws.verifier(maintenant=1010.0, requete=lambda h, p: 500, ecoute=lambda: True, cache=c)
     assert ok2 is True and res2["en_cache"] is True and "lent" in res2.get("avertissement", "").lower()
+
+
+# ---------- #2786 : tester le hall de CETTE box, pas celui d'un autre nœud du maillage ----------
+
+ROUTES_MAILLAGE = {"hall.gk1.secubox.in": ["10.10.0.3", 9080], "hall.gk2.net": ["192.168.1.200", 9080], "hall.gk2.secubox.in": ["192.168.1.200", 9080],
+                   "hall.gk3.secubox.in": ["10.10.0.5", 9080], "billets.gk2.secubox.in": ["127.0.0.1", 8910]}
+
+
+def test_le_hall_de_cette_box_est_choisi_par_son_domaine():
+    """RÉGRESSION (gk2) : l'ordre alphabétique donnait hall.gk1 (nœud relayé, amont mort) alors que hall.gk2 répondait en 4 ms."""
+    assert ws.choisir_host(ROUTES_MAILLAGE, "gk2.secubox.in") == "hall.gk2.secubox.in"
+    assert ws.choisir_host(ROUTES_MAILLAGE, "gk3.secubox.in") == "hall.gk3.secubox.in"
+
+
+def test_sans_domaine_un_amont_hors_maillage_est_prefere():
+    assert ws.choisir_host(ROUTES_MAILLAGE, None) in ("hall.gk2.net", "hall.gk2.secubox.in"), "jamais un amont en 10.10.0.x (autre nœud)"
+    assert not ws.choisir_host(ROUTES_MAILLAGE, "inconnu.test").startswith(("hall.gk1", "hall.gk3"))
+
+
+def test_un_domaine_dont_le_hall_est_absent_retombe_sur_un_amont_local():
+    assert ws.choisir_host(ROUTES_MAILLAGE, "gk9.secubox.in") in ("hall.gk2.net", "hall.gk2.secubox.in", "billets.gk2.secubox.in")
+
+
+def test_si_tous_les_amonts_sont_distants_l_ancien_choix_reste_le_dernier_recours():
+    seuls = {"hall.gk3.secubox.in": ["10.10.0.5", 9080], "hall.gk1.secubox.in": ["10.10.0.3", 9080]}
+    assert ws.choisir_host(seuls, None) == "hall.gk1.secubox.in"
+
+
+def test_l_ancien_appel_a_un_argument_reste_valide():
+    assert ws.choisir_host({"b.x": [], "a.x": [], "admin.x": []}) == "a.x"
+
+
+def test_les_vhosts_non_inspectes_restent_exclus():
+    r = {"admin.gk2.secubox.in": ["127.0.0.1", 1], "git.gk2.secubox.in": ["127.0.0.1", 2], "hall.gk2.secubox.in": ["127.0.0.1", 3]}
+    assert ws.choisir_host(r, "gk2.secubox.in") == "hall.gk2.secubox.in"
+    assert ws.choisir_host({"admin.gk2.secubox.in": ["127.0.0.1", 1]}, "gk2.secubox.in") is None
+
+
+def test_un_amont_mal_forme_ne_fait_pas_planter_le_choix():
+    r = {"hall.x.in": "pas une liste", "hall.y.in": [None, 1], "hall.z.in": []}
+    assert ws.choisir_host(r, "y.in") == "hall.y.in" or ws.choisir_host(r, "y.in") in r
+
+
+def test_verifier_utilise_le_domaine_de_la_box(tmp_path, monkeypatch):
+    routes = tmp_path / "routes.json"
+    routes.write_text('{"hall.gk1.secubox.in": ["10.10.0.3", 9080], "hall.gk2.secubox.in": ["192.168.1.200", 9080]}')
+    monkeypatch.setattr(ws, "ROUTES", routes)
+    monkeypatch.setattr(ws, "_domaine_de_la_box", lambda: "gk2.secubox.in")
+    vus = []
+    ws.verifier(maintenant=5000.0, requete=lambda h, p: (vus.append(h), 200 if p == "/robots.txt" else 403)[1], ecoute=lambda: True, cache=tmp_path / "c.json")
+    assert set(vus) == {"hall.gk2.secubox.in"}
