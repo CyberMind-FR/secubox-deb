@@ -1,3 +1,9 @@
+secubox-hub (1.12.8-1~bookworm1) bookworm; urgency=medium
+
+  * Barre du haut : le bloc de six icones (smart-strip) est retire sur toutes les pages (#2800). 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 11:30:00 +0200
+
 secubox-hub (1.12.7-1~bookworm1) bookworm; urgency=medium
 
   * Espaces : YouTube SAS et Glances ne sont plus « a l'arret » a tort (#2796). Glances est une page de secubox-metrics (elle suit ce module, comme R-Level suit le Toolbox) ; YouTube SAS tourne dans un conteneur LXC sans unite ni socket hote : une connexion TCP vers le conteneur (10.100.0.180:8091) fait la sonde, en erreur s'il ne repond pas. 5 tests.
