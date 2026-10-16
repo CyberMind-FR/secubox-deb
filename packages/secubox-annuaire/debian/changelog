@@ -1,3 +1,9 @@
+secubox-annuaire (0.14.3-1~bookworm1) bookworm; urgency=medium
+
+  * Page /fleet/ : panneau « Pairs p2p » lu depuis GET /api/v1/p2p/peers (nom, adresse, statut mesure par poignee de main wg-mesh, dernier vu). Couvre les pairs du transport qui n ont pas d annuaire. Masque si le module p2p est absent ou la liste vide ; texte brut (ref #2842).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 15:30:00 +0200
+
 secubox-annuaire (0.14.2-1~bookworm1) bookworm; urgency=medium
 
   * Page /fleet/ : panneau « Box Auto-Load » lu depuis GET /api/v1/autoload/boxes (client, profil, statut, progression, etape, derniere activite). Une box enrolee par le tunnel wg-autoload, sans annuaire (profil minimal), n y figurait jamais. Panneau masque si le module autoload est absent, la session refusee ou la liste vide ; valeurs posees en texte brut (ref #2840).

@@ -46,3 +46,34 @@ def test_module_absent_masque_le_panneau_sans_erreur():
 def test_aucune_box_masque_le_panneau():
     cache, erreurs, _ = _nav(lambda pg: pg.is_hidden("#al-pan"), api=_api(boxes=[]))
     assert cache and erreurs == []
+
+
+# ── #2842 : pairs p2p (wg-mesh), même page ──────────────────────────────────────────────────────────────
+PAIRS = {"peers": [
+    {"id": "c3box", "name": "c3box", "address": "10.10.0.2", "status": "online", "last_seen": 1760600000},
+    {"id": "<b>x</b>", "name": "<b>x</b>", "address": "10.10.0.9", "status": "offline", "last_seen": None},
+], "count": 2}
+
+
+def _api_p2p(status=200, corps=PAIRS):
+    def api(r):
+        if "/p2p/peers" in r.request.url:
+            return r.fulfill(status=status, content_type="application/json", body=json.dumps(corps))
+        return r.fulfill(status=200, content_type="application/json", body=json.dumps({"nodes": []}))
+    return api
+
+
+def test_pairs_p2p_listes_en_texte_brut():
+    def sc(pg):
+        pg.wait_for_selector("#p2p-body tr")
+        return (pg.is_visible("#p2p-pan"), pg.locator("#p2p-body tr").count(), pg.inner_text("#p2p-body tr:first-child"),
+                pg.locator("#p2p-body b").count(), pg.inner_text("#p2p-n"))
+    (visible, n, premiere, balises, total), erreurs, natifs = _nav(sc, api=_api_p2p())
+    assert visible and n == 2 and "c3box" in premiere and "10.10.0.2" in premiere and "online" in premiere
+    assert balises == 0 and total == "2" and erreurs == [] and natifs == []
+
+
+def test_p2p_absent_ou_vide_masque_le_panneau():
+    c1, e1, _ = _nav(lambda pg: pg.is_hidden("#p2p-pan"), api=_api_p2p(404, {}))
+    c2, e2, _ = _nav(lambda pg: pg.is_hidden("#p2p-pan"), api=_api_p2p(corps={"peers": [], "count": 0}))
+    assert c1 and c2 and e1 == [] and e2 == []
