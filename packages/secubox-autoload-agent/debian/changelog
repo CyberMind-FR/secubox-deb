@@ -1,3 +1,9 @@
+secubox-autoload-agent (0.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * L'agent connait le profil `minimal` (#2838) : il installe secubox-minimal et applique le profil minimal. Avant, un client minimal etait refuse au plan (« lite, isp ou full seulement ») ; l'accepter comme lite aurait installe secubox-lite PAR-DESSUS et fait retirer le profil minimal. Le refus d'un profil inconnu cite les quatre profils. 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 02:00:00 +0200
+
 secubox-autoload-agent (0.8.0-1~bookworm1) bookworm; urgency=medium
 
   * Code d'invitation du maillage deposé par la préparation (#2544). L'atelier (`autoload-atelier preparer --code-maillage-fichier|--code-maillage-stdin`) valide le code (forme et somme de controle) et le depose a part sur /boot/secubox/autoload/maillage (0600, jamais affiche) ; au premier demarrage `autoload-agent-demarrage` l'installe dans /var/lib/secubox/p2p/automesh.code (0600, secubox) puis l'efface de /boot, comme le jeton. Un code mal forme est laisse en place pour que l'atelier le voie ; un code deja en cours n'est pas remplace ; un lien symbolique n'est jamais suivi. `verifier` dit si le code est present. Le code ne donne aucun droit : le parent valide le jeton qu'il contient. 18 tests.

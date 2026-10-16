@@ -40,7 +40,7 @@ from . import tunnel as T
 
 SECRETS = Path("/etc/secubox/secrets")
 ETAPES = ("reponses", "cle", "enrolement", "tunnel", "plan", "validation", "installation", "application")
-PROFILS_PAQUET = {"lite": "secubox-lite", "isp": "secubox-isp", "full": "secubox-full"}
+PROFILS_PAQUET = {"minimal": "secubox-minimal", "lite": "secubox-lite", "isp": "secubox-isp", "full": "secubox-full"}
 TIMEOUT_COURT_S = 120
 TIMEOUT_INSTALL_S = 3600
 _PAQUET = re.compile(r"^[a-z0-9][a-z0-9+.-]{1,80}$")
@@ -181,7 +181,7 @@ class Moteur:
     def _plan(self, etat: dict) -> Plan:
         profil = self._ex.profil["services"]["profil"]
         if profil not in PROFILS_PAQUET:
-            raise EtapeEchec("plan", f"profil {profil!r} : lite, isp ou full seulement")
+            raise EtapeEchec("plan", f"profil {profil!r} : minimal, lite, isp ou full seulement")
         meta = PROFILS_PAQUET[profil]
         r = self._cmd(["apt-get", "-s", "install", "-y", meta], TIMEOUT_INSTALL_S)
         if r.returncode != 0:

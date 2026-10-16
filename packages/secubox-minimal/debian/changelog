@@ -1,3 +1,9 @@
+secubox-minimal (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Embarque secubox-autoload-agent (#2838) : une box minimale se prepare avant livraison et s'enrole toute seule au premier demarrage, par un tunnel SORTANT vers l'infrastructure (aucun port entrant). L'unite ne demarre que si un fichier de reponses SIGNE est present sur /boot ; une box ordinaire n'est jamais touchee. Tire secubox-premier-pas, secubox-profiles et wireguard-tools.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 02:00:00 +0200
+
 secubox-minimal (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Ajout de secubox-ipv6guard et secubox-webfilter (#2816). Les modules exclus (Hall secubox-webos, WAF secubox-waf-ng et secubox-waf, metrics) passent en Conflicts :

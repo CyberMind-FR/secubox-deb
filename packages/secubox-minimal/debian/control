@@ -26,7 +26,10 @@ Depends: ${misc:Depends},
  secubox-nac (>= 1.0),
  secubox-freebox,
  secubox-ipv6guard,
- secubox-webfilter (>= 0.2.1)
+ secubox-webfilter (>= 0.2.1),
+# AUTO-LOAD (#2838) : la box se prepare avant livraison et s'enrole toute seule au premier demarrage (tunnel SORTANT vers l'infrastructure, aucun port entrant).
+# L'unite ne demarre que si un fichier de reponses SIGNE est present sur /boot : une box ordinaire n'est jamais touchee.
+ secubox-autoload-agent
 Conflicts: secubox-webos, secubox-waf-ng, secubox-waf, secubox-metrics
 Description: SecuBox Minimal — DPI, garde DNS, filtre de publicites, NAC et Freebox
  Profil minimal, pour une petite carte (ESPRESSObin) : inspection des paquets (DPI), detection d'anomalies DNS (dns-guard), filtrage

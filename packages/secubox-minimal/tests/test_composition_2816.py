@@ -13,7 +13,7 @@ PAQUETS = Path(__file__).resolve().parents[2]
 META = "secubox-minimal"
 CONTROL = (PAQUETS / META / "debian" / "control").read_text(encoding="utf8")
 
-REQUIS = {"secubox-dpi", "secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox", "secubox-ipv6guard", "secubox-webfilter"}
+REQUIS = {"secubox-dpi", "secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox", "secubox-ipv6guard", "secubox-webfilter", "secubox-autoload-agent"}
 SOCLE_ADMIN = {"secubox-core", "secubox-aggregator", "secubox-hub", "secubox-portal", "secubox-auth"}
 INTERDITS = {"secubox-waf-ng", "secubox-waf", "secubox-haproxy", "secubox-webos", "secubox-isp", "secubox-lite", "secubox-full",
              "secubox-metrics", "secubox-soc", "secubox-toolbox-ng", "secubox-mediaflow", "secubox-torrent", "secubox-mail", "secubox-wireguard"}
