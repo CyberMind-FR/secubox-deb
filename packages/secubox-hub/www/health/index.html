@@ -212,8 +212,8 @@
         function rendWaf(entree) {
             const d = (entree && entree.details) || {}, tests = d.tests || [], zone = $('waf'); zone.textContent = '';
             const ligne = (nom, ok, msg) => { const e = ok ? 'ok' : 'hors'; const x = el('div', 'svc ' + (ok ? '' : 'hors')); const t = el('div', 'svc-tete'); t.appendChild(el('span', 'pt')); t.appendChild(el('span', 'svc-nom', nom)); t.appendChild(el('span', 'svc-msg', msg)); x.appendChild(t); zone.appendChild(x); return e; };
-            ligne('WAF', !!(entree && entree.ok), entree && entree.ok ? 'bloque les attaques, laisse passer le trafic sain' : 'défaillant — voir le détail');
-            tests.forEach(t => ligne(t.libelle || t.id, !!t.ok, (t.attendu || '') + ' · ' + (t.code == null ? (t.erreur || 'pas de réponse') : 'HTTP ' + t.code)));
+            ligne('WAF', !!(entree && entree.ok), entree && entree.ok ? (d.avertissement ? 'bloque les attaques · amont lent (la requête saine a expiré)' : 'bloque les attaques, laisse passer le trafic sain') : 'défaillant — voir le détail');
+            tests.forEach(t => ligne(t.libelle || t.id, !!t.ok, (t.attendu || '') + ' · ' + (t.indetermine ? 'délai dépassé (amont lent)' : t.code == null ? (t.erreur || 'pas de réponse') : 'HTTP ' + t.code)));
             if (!tests.length) ligne('sbxwaf', false, d.erreur || 'test non exécuté');
             $('wafAge').textContent = d.age_s != null ? 'il y a ' + d.age_s + ' s' : '';
             $('wafSection').hidden = false;

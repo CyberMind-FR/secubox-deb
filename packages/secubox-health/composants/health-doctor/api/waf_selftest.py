@@ -31,6 +31,8 @@ ROUTES = Path("/etc/secubox/waf/haproxy-routes.json")
 IP_SIMULEE = "198.51.100.77"                    # TEST-NET-2 : jamais routée
 UA = "SecuBox-WAF-SelfTest/1 (health-doctor)"
 VALIDITE_S = 300
+# Le témoin traverse le WAF JUSQU'À L'AMONT : sous charge (gk2 : charge ~14, mémoire 94 %) l'amont dépasse 5 s. Les canaris, eux, sont refusés par le WAF seul.
+DELAI_TEMOIN_S = 12.0
 
 TEMOIN = ("temoin", "requête saine", "/robots.txt")
 CANARIS = (
@@ -59,7 +61,7 @@ def choisir_host(routes: dict) -> str | None:
     return noms[0] if noms else None
 
 
-def _requete(host: str, chemin: str, timeout: float = 5.0) -> int:
+def _requete(host: str, chemin: str, timeout: float = DELAI_TEMOIN_S) -> int:
     c = http.client.HTTPConnection(*WAF_ADDR, timeout=timeout)
     try:
         c.request("GET", chemin, headers={"Host": host, "X-Forwarded-For": IP_SIMULEE,
@@ -70,7 +72,10 @@ def _requete(host: str, chemin: str, timeout: float = 5.0) -> int:
 
 
 def executer(host: str, requete: Callable[[str, str], int] = _requete) -> dict:
-    """Joue le témoin puis les canaris ; ne lève jamais."""
+    """Joue le témoin puis les canaris ; ne lève jamais.
+
+    Un témoin qui EXPIRE n'est pas un blocage : le WAF bloque en 403 immédiat. Si les quatre canaris du même passage sont refusés, le WAF est vivant et
+    bloque — c'est l'amont qui est lent : verdict sain avec un avertissement (#2784). Si un canari échoue, le témoin expiré ne prouve rien : échec."""
     tests = []
     for cle, libelle, chemin in (TEMOIN, *CANARIS):
         attendu_bloque = cle != "temoin"
@@ -83,8 +88,18 @@ def executer(host: str, requete: Callable[[str, str], int] = _requete) -> dict:
                           "code": code, "ok": ok, "ms": int((time.time() - t0) * 1000)})
         except OSError as e:
             tests.append({"id": cle, "libelle": libelle, "attendu": "bloqué" if attendu_bloque else "non bloqué",
-                          "code": None, "ok": False, "erreur": str(e)[:80], "ms": int((time.time() - t0) * 1000)})
-    return {"host": host, "tests": tests, "ok": all(t["ok"] for t in tests)}
+                          "code": None, "ok": False, "erreur": str(e)[:80], "ms": int((time.time() - t0) * 1000),
+                          **({"delai": True} if isinstance(e, TimeoutError) else {})})
+    res = {"host": host, "tests": tests}
+    temoin = tests[0]
+    canaris_ok = all(t["ok"] for t in tests[1:])
+    if temoin.get("delai") and canaris_ok:
+        temoin["ok"] = True
+        temoin["indetermine"] = True
+        res["avertissement"] = ("Amont lent : la requête saine n'a pas répondu dans le délai (elle n'a pas été bloquée) ; "
+                                "les quatre attaques simulées ont été refusées, le WAF fonctionne.")
+    res["ok"] = all(t["ok"] for t in tests)
+    return res
 
 
 def _lire_cache(cache: Path) -> dict | None:
