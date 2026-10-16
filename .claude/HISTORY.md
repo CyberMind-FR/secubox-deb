@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Billets : les réponses publiques des fils BBS liés deviennent des commentaires système et font remonter le billet (secubox-billets 0.13.0, closes #2778)
+- Constat du mainteneur (billet `business-plan-now-v2-f-125-…`) : le billet ne se remplissait pas des posts et réponses publics des fils liés du BBS (le fil 1147 portait une réponse publique, post 1218, invisible) ; puis : « cela fait remonter le billet dans le fil », « un commentaire système avec la réponse et l'auteur en référence », « visible partie droite du fil comme les likes internes ».
+- Fait : miroir en lecture seule (`services/miroir_bbs.py`) — fils liés par `ref_url` ou lien du corps vers `bbs.<domaine>/t/<id>` ; posts publics non supprimés d'un fil public → commentaires `source='bbs'`, `author_ref='bbs:<handle>'`, à l'heure de la réponse (donc remontée dans le fil) ; le post d'origine du billet n'est pas recopié ; `/f/NN.ext` devient un lien absolu vers le BBS ; compteur de commentaires à côté de 💬 sur les cartes du fil ; balayage au plus toutes les 20 s, un billet seul à l'ouverture ; panne du BBS sans effet sur la page.
+- Garde-fous testés : local/privé/supprimé/fil non public jamais lus ; corps hors du dossier de contenu refusé ; hôte étranger ou sous-domaine piège ignoré ; idempotent ; rejet administrateur respecté ; 24 tests, échecs de la suite identiques à master (35, préexistants).
+
 ## 2026-10-16 — Annuaire : l'acceptation d'une proposition accepte les scopes avec deux-points (secubox-annuaire 0.14.1, closes #2776)
 - Constat du mainteneur (page des centres, « Propositions ») : « Acceptation impossible : String should match pattern '^[a-z0-9][a-z0-9._-]*$' ».
 - Cause (reproduite sur gk2) : les propositions réelles portent des scopes `mitm-exclusion:gk2` / `mitm-exclusion:c3box` (publiés par la toolbox) ; la requête d'acceptation et d'octroi, le modèle de la config signée et de l'octroi délégué, et le nom de fichier appliqué refusaient le deux-points.
