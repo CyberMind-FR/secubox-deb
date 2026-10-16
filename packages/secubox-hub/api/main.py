@@ -611,6 +611,8 @@ def _unites_au_repos_cache() -> tuple:
 
 # Pages portées par un autre module : sans unité ni socket propres, elles suivent le module qui les sert (R-Level est une page du Toolbox).
 PAGES_PORTEES = {"rlevel": "toolbox"}
+# Pages servies par le hub lui-meme : il repond, donc elles sont en service (aucune unite ni sonde propre).
+PAGES_DU_HUB = ("apercu", "health")
 
 
 class _ConnexionUnix(http.client.HTTPConnection):
@@ -651,6 +653,8 @@ def superposer_montes(modules: dict, montes: frozenset) -> None:
     for page, porteur in PAGES_PORTEES.items():
         if page not in modules and porteur in modules:
             modules[page] = dict(modules[porteur])
+    for page in PAGES_DU_HUB:
+        modules.setdefault(page, {"status": "ok", "msg": "Page du hub"})
 
 
 def _refresh_health_batch():
@@ -1015,7 +1019,7 @@ async def apercu():
         up = int(float(Path("/proc/uptime").read_text().split()[0]))
     except Exception:
         up = None
-    return construire_apercu(menu, _cache.get("system_stats", {}), notifs, up)
+    return construire_apercu(menu, _cache.get("system_stats", {}), notifs, up, (_cache.get("health_batch") or {}).get("modules"))
 
 
 @router.get("/security_summary")
