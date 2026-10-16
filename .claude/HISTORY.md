@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — fleet : panneau des pairs p2p (ref #2842)
+
+secubox-annuaire 0.14.3 : /fleet/ lit aussi GET /api/v1/p2p/peers (nom, adresse, statut par poignee de main, dernier vu), masque si absent ou vide. Deploye gk2, publie apt.
+
 ## 2026-10-16 — fleet : panneau des box Auto-Load enrolees (ref #2840)
 
 secubox-annuaire 0.14.2 : /fleet/ lit aussi GET /api/v1/autoload/boxes (client, profil, statut, progression, etape, derniere activite). Panneau masque si module absent ou liste vide. Deploye gk2, publie apt.
