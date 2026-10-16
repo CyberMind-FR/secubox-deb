@@ -932,7 +932,7 @@ CONFIG_LOCAL_DIR = os.environ.get("CONFIG_LOCAL_DIR", "/etc/secubox/config-local
 
 class CenterGrantRequest(BaseModel):
     center_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
-    scope: str = Field(..., pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    scope: str = Field(..., pattern=r"^[a-z0-9][a-z0-9._:-]*$")      # « : » admis (mitm-exclusion:gk2, #2776)
     layer: str
 
 
@@ -942,7 +942,7 @@ class CenterRevokeRequest(BaseModel):
 
 class CenterProposalAcceptRequest(BaseModel):
     center_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
-    scope: str = Field(..., pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    scope: str = Field(..., pattern=r"^[a-z0-9][a-z0-9._:-]*$")      # « : » admis (mitm-exclusion:gk2, #2776)
     layer: str
 
 
