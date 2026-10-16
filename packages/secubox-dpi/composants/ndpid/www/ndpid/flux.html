@@ -86,6 +86,11 @@
   <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
   <div><h2>Flux réseau actifs</h2><div class="sous" id="sous">Qui parle à qui, avec quel protocole, et à quel risque (lecture seule).</div></div>
   <div class="tuiles" id="tuiles"></div>
+  <div class="grille g3">
+    <div class="pan"><h3>Répartition par protocole <i>en octets</i></h3><div class="repart"><div id="donut"></div><div class="leg" id="leg"></div></div></div>
+    <div class="pan"><h3>Applications <i>en octets</i></h3><div id="apps"></div></div>
+    <div class="pan"><h3>Hôtes les plus actifs <i>source ou destination</i></h3><div id="hotes"></div></div>
+  </div>
   <div class="pan">
     <h3>Flux actifs <i id="compte"></i></h3>
     <div class="outils">
@@ -96,11 +101,6 @@
     </div>
     <div class="scroll"><table><thead><tr id="entetes"></tr></thead><tbody id="flux"></tbody></table></div>
     <div class="note" id="noteFlux"></div>
-  </div>
-  <div class="grille g3">
-    <div class="pan"><h3>Répartition par protocole <i>en octets</i></h3><div class="repart"><div id="donut"></div><div class="leg" id="leg"></div></div></div>
-    <div class="pan"><h3>Applications <i>en octets</i></h3><div id="apps"></div></div>
-    <div class="pan"><h3>Hôtes les plus actifs <i>source ou destination</i></h3><div id="hotes"></div></div>
   </div>
   <div class="note">Lecture seule · seuls les flux que le moteur remonte sont comptés · le risque est le score calculé par le moteur (≥ 70 élevé, ≥ 40 moyen).</div>
 </div></div>
