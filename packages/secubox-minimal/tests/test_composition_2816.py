@@ -17,7 +17,7 @@ CONTROL = (PAQUETS / META / "debian" / "control").read_text(encoding="utf8")
 
 REQUIS = {"secubox-dpi", "secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox", "secubox-ipv6guard", "secubox-webfilter", "secubox-autoload-agent", "secubox-wireguard"}
 SOCLE_ADMIN = {"secubox-core", "secubox-aggregator", "secubox-hub", "secubox-portal", "secubox-auth"}
-INTERDITS = {"secubox-waf-ng", "secubox-waf", "secubox-haproxy", "secubox-webos", "secubox-isp", "secubox-lite", "secubox-full",
+INTERDITS = {"secubox-waf-ng", "secubox-waf", "secubox-haproxy", "secubox-toolbox", "secubox-webos", "secubox-isp", "secubox-lite", "secubox-full",
              "secubox-metrics", "secubox-soc", "secubox-toolbox-ng", "secubox-mediaflow", "secubox-torrent", "secubox-mail"}
 
 
@@ -106,7 +106,7 @@ def test_les_modules_exclus_sont_en_conflicts_car_un_recommends_les_ramenait():
     m = re.search(r"^Conflicts:((?:.*\n?(?: .*\n?)*))", bloc, re.M)
     assert m, "Conflicts absent"
     conflits = noms(m.group(1))
-    assert {"secubox-webos", "secubox-waf-ng", "secubox-metrics"} <= conflits, conflits
+    assert {"secubox-webos", "secubox-waf-ng", "secubox-metrics", "secubox-toolbox"} <= conflits, conflits
 
 
 def test_pas_de_postinst_de_leurre_ni_de_binaire_haproxy():
@@ -118,3 +118,11 @@ def test_pas_de_postinst_de_leurre_ni_de_binaire_haproxy():
 def test_ndpid_engine_exige_la_version_qui_choisit_son_interface():
     """1.7.1 lance nDPId sur `eth2` (valeur de gk2) : sur l'ESPRESSObin, 61 redemarrages et la carte noyee (#2851). Le choix de l'interface est dans 1.7.2 (#2740)."""
     assert re.search(r"secubox-ndpid-engine \(>= 1\.7\.2\)", CONTROL)
+
+
+def test_toolbox_et_rlevel_sont_exclus_et_ad_guard_ne_l_exige_plus():
+    """#2855 : toolbox (dont le R-level MITM par pair) quitte le profil. ad-guard l'exigeait en dependance dure alors que son code tolere son absence."""
+    d = toutes()
+    assert "secubox-toolbox" not in d["secubox-ad-guard"], "ad-guard ne doit plus EXIGER toolbox (Recommends seulement)"
+    ctl = (PAQUETS / "secubox-ad-guard" / "debian" / "control").read_text(encoding="utf8")
+    assert re.search(r"^Recommends:.*secubox-toolbox", ctl, re.M | re.S)

@@ -33,11 +33,12 @@ Depends: ${misc:Depends},
 # WireGuard distant (#2845) : la box offre la sortie Internet a des clients, par un relais UDP sur l'infrastructure.
  secubox-wireguard (>= 1.3.0)
 # WAF et HAProxy retires (#2849) : essayes sur la carte de 951 Mo, ils l'ont saturee (swap plein, charge > 10). Le WAF reste sur l'infrastructure.
-Conflicts: secubox-webos, secubox-waf-ng, secubox-waf, secubox-metrics
+# toolbox et R-level retires (#2855) : decision du proprietaire ; ad-guard ne l'exige plus (Recommends).
+Conflicts: secubox-webos, secubox-waf-ng, secubox-waf, secubox-metrics, secubox-toolbox
 Description: SecuBox Minimal — DPI, garde DNS, filtre de publicites, NAC, Freebox et WireGuard
  Profil minimal, pour une petite carte (ESPRESSObin) : inspection des paquets (DPI), detection d'anomalies DNS (dns-guard), filtrage
  des publicites et traqueurs (ad-guard), controle d'acces reseau (NAC), module Freebox, garde IPv6 et filtrage web, avec la seule interface d'administration.
  WireGuard offre la sortie Internet a des clients distants.
  Ni WAF (il reste sur l'infrastructure), ni profil ISP, ni Hall, ni metrics (le module « visites »), ni service heberge. Les modules exclus sont en Conflicts :
  un Recommends de secubox-auth ou de secubox-freebox ramenait le Hall dans l'image.
- secubox-toolbox est tire par ad-guard (dependance dure) ; le moteur d'interception secubox-toolbox-ng n'est pas installe.
+ Ni secubox-toolbox ni R-level (ad-guard ne l'exige plus), ni le moteur d'interception secubox-toolbox-ng.

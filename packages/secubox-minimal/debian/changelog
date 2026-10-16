@@ -1,3 +1,9 @@
+secubox-minimal (0.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Retire secubox-toolbox et le R-level MITM (#2855) : Conflicts sur secubox-toolbox. Possible parce que secubox-ad-guard 1.14.2 ne l'exige plus. Sur la carte : un moteur d'interception et une base de moins.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:10:00 +0200
+
 secubox-minimal (0.5.1-1~bookworm1) bookworm; urgency=medium
 
   * Exige secubox-ndpid-engine (>= 1.7.2) (#2851) : 1.7.1 lance nDPId sur eth2, interface inexistante sur l ESPRESSObin (61 redemarrages, charge, journal sature). Le choix de l interface est dans 1.7.2 (#2740).

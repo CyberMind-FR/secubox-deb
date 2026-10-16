@@ -16,7 +16,7 @@ def test_les_modules_du_profil_minimal_sont_allumes():
 
 
 def test_ce_que_minimal_exclut_reste_eteint():
-    for mid in ("waf", "waf-ng", "haproxy", "waf-ratelimit", "metrics", "webos", "kiosk", "isp", "toolbox-tor", "mail", "nextcloud", "gitea"):
+    for mid in ("waf", "waf-ng", "haproxy", "waf-ratelimit", "toolbox", "toolbox-autolearn", "metrics", "webos", "kiosk", "isp", "toolbox-tor", "mail", "nextcloud", "gitea"):
         assert mid not in MINIMAL.on, mid
 
 
