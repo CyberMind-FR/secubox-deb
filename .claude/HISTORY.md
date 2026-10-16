@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Santé : la sonde du WAF ne déclare plus « défaillant » un amont lent (secubox-health 1.3.1, secubox-hub 1.12.4, closes #2784)
+- Constat du mainteneur (page Santé) : « WAF — test dynamique » rouge, « requête saine — non bloqué · timed out » ; « tu es certain de tes sondes d'état ? all greens ».
+- Analyse : le témoin (`GET /robots.txt`) traverse sbxwaf jusqu'à l'amont ; sur gk2 chargée (charge ~14, mémoire 94 %) l'amont dépasse 5 s. Un délai dépassé n'est pas un blocage (le WAF refuse en 403 immédiat) et les quatre canaris du même passage étaient bien refusés : le WAF fonctionnait.
+- Correctif : délai du témoin 12 s ; témoin expiré + quatre canaris bloqués = WAF sain avec avertissement « amont lent » (indéterminé, jamais vert sans preuve) ; un canari en échec, un témoin bloqué (faux positif) ou un refus de connexion restent des échecs. Page Santé : « bloque les attaques · amont lent ». 9 tests. La cause de fond (gk2 saturée : mémoire 94 %, disque 97 %, charge 14) n'est pas masquée : elle reste visible dans les tuiles.
+
 ## 2026-10-16 — Billets : les réponses-images du BBS s'affichent en vignettes (secubox-billets 0.13.2, closes #2782)
 - Constat du mainteneur (billet `business-plan-now-v2-gk2-f-…`) : « plus de vignettes ???? ». La réponse miroir du BBS (une image `/f/126.png`) apparaissait en URL texte dans la console du billet. Vérifié : fichiers du BBS publics, CSP du billet autorisant les images https, vignettes `_t.png` du billet servies — le défaut était l'affichage des commentaires système.
 - Fait : `miroir_bbs.rendre_corps` — URL de fichier du BBS de cette box → vignette cliquable (image paresseuse) ; vidéo → lien « ▶ vidéo » ; texte échappé et lié ; jamais d'image d'un autre hôte, d'un sous-domaine piège ni en http. 12 tests de plus (39 au total) ; échecs de la suite identiques à master.

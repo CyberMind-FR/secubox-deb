@@ -1,3 +1,9 @@
+secubox-hub (1.12.4-1~bookworm1) bookworm; urgency=medium
+
+  * Page Sante : le WAF s affiche « bloque les attaques · amont lent » quand le temoin a expire alors que les canaris sont bloques, au lieu de « defaillant » (ref #2784).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 17:10:00 +0200
+
 secubox-hub (1.12.3-1~bookworm1) bookworm; urgency=medium
 
   * Le postinst pose la DIRECTIVE X-SecuBox-LAN quand core a ete configure avant hub (#2743). Constate sur un RPi400 : snippets/secubox-proxy.conf ne contenait la ligne `proxy_set_header X-SecuBox-LAN $lan_client;` qu'EN COMMENTAIRE alors que le fichier GeoIP du hub existait ; l'API croyait tout client « WAN » et exigeait le second facteur meme depuis le LAN (#1699 le veut facultatif), la connexion web a distance de l'administrateur etait bloquee. core ne l'ajoute que si `$lan_client` existe a ce moment-la ; sur une image neuve core passe AVANT hub : la ligne est retiree et rien ne la remettait. hub, qui livre le fichier GeoIP, la pose maintenant (idempotent, nginx -t, restauration du snippet si nginx refuse, rien si le fichier GeoIP est absent). Le garde reconnait la directive et pas la chaine (meme piege que #1351 : le commentaire contient le nom). 8 tests qui executent le VRAI bloc sous `set -e` avec un faux nginx.
