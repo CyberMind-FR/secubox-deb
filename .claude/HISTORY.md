@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Image ESPRESSObin : boot.scr et boot-usb.scr toujours livres (ref #2824)
+
+La CI n'installait pas u-boot-tools : l'image n'avait ni boot.scr ni boot-usb.scr (copie dans le bloc conditionnel de mkimage). Le workflow installe u-boot-tools, boot-usb.scr est copie sans mkimage, et l'absence de mkimage FAIT ECHOUER la construction d'une image espressobin*.
+
 ## 2026-10-16 — hub : depend de l'agregateur, /api/v1/hub/ plus en 404 sur image neuve (ref #2822)
 
 secubox-hub 1.12.10 : Depends secubox-aggregator (le postinst de hub n'ecrit dans aggregator.toml que si l'agregateur l'a deja cree).
