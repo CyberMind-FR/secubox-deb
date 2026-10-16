@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Catalogue App Store : secubox-minimal hors-arbre (ref #2832)
+
+secubox-meta 0.1.44 : arbre.yaml declare secubox-minimal ; gen-appstore-catalog (et la construction de secubox-appstore) echouait depuis le profil minimal.
+
 ## 2026-10-16 — webos : le retrait retire son lien nginx (ref #2830)
 
 secubox-webos 1.12.3 : postrm retire sites-enabled/hall.gk2.net.conf (le lien casse faisait echouer nginx -t apres une purge).
