@@ -1188,6 +1188,7 @@
 
     // Load status bar data from API (with safe fetch)
     async function loadStatusBarData() {
+        return; // #2792 : bloc de pastilles retire de la barre laterale, plus rien a alimenter
         var token = localStorage.getItem('sbx_token');
         var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
 
@@ -2185,6 +2186,7 @@
             '.health-toast{position:fixed;top:1rem;right:1rem;z-index:10000;animation:toastIn 0.3s;}.health-toast-content{display:flex;align-items:center;gap:0.5rem;background:rgba(255,68,68,0.95);color:#fff;padding:0.5rem 1rem;border-radius:8px;font-size:0.8rem;}@keyframes toastIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}' +
             '@keyframes statusbar-progress{0%{width:0%;opacity:0.5;}50%{width:100%;opacity:1;}100%{width:0%;opacity:0.5;}}' +
             '.sync-status{border-bottom:1px dashed rgba(100,150,200,0.2);padding-bottom:4px;margin-bottom:2px;}' +
+            '.header-leds-metrics{display:none !important;}' +
             '.sync-led{font-size:10px;width:14px;height:14px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:all 0.3s;}' +
             '.sync-led.fetching{animation:syncPulse 0.8s infinite;background:rgba(68,170,255,0.2);}' +
             '.sync-led.cached{background:rgba(100,200,150,0.15);color:#5f8;}' +
