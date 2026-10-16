@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Comparatif des profils (ref #2819)
+
+secubox-profiles 0.22.0 : page /profiles/comparatif.html, contenu lu des meta-paquets a la construction, profil actif et modules installes (dpkg), memoire mesuree.
+
 ## 2026-10-16 — Profil minimal (ref #2816)
 
 secubox-minimal 0.1.0 : DPI + moteur nDPI, dns-guard, ad-guard, NAC, Freebox, socle d'administration (core, aggregator, system, hardening, hub, portal, auth). Ni WAF, ISP, Hall, ni metrics (« visites »), ni VPN. `minimal` choisissable en declenchement manuel (build-image.yml, matrice-images.py) ; la matrice publiee est inchangee. Image ESPRESSObin sur cle USB : en cours.
