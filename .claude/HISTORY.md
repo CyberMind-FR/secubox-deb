@@ -9,10 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
-## 2026-10-16 — Glances : « Système en direct » livrée à côté de la page actuelle (secubox-metrics 1.26.0, ref #2767)
+## 2026-10-16 — Glances : « Système en direct » livrée à côté de la page actuelle (secubox-metrics 1.26.0, closes #2767)
 - Demande : « test le remplacement de glances que tu avais fait ». La page Glances actuelle est jugée impeccable : elle n'est PAS touchée. L'alternative est livrée à part : `/glances/direct.html` (lien « ← Glances » pour revenir) + `GET /api/v1/metrics/systeme` non bloquant (l'API de Glances dort 0,5 s à chaque appel).
 - Jauges et cœurs animés, courbes glissantes de 60 points avec lecture au survol, débit en direct, top processus qui glissent à leur nouvelle place, humeur de la box (Zen → En feu) qui règle le battement du cœur, pause, rythme 1/2/5 s, mouvement réduit respecté. Jamais de ligne de commande de processus.
-- 9 tests d'API et 15 en vrai navigateur (dont la lecture au survol : un bogue de la première version, l'identifiant de la lecture n'était pas transmis). Issue laissée ouverte jusqu'au verdict du mainteneur (garder, remplacer Glances ou retirer).
+- 9 tests d'API et 15 en vrai navigateur (dont la lecture au survol : un bogue de la première version, l'identifiant de la lecture n'était pas transmis). Déployée sur gk2 (pages et API répondent). Verdict du mainteneur : « processeur, level graphique, c'est top » → les deux pages sont gardées côte à côte, Glances inchangée.
 
 ## 2026-10-15 — « Courbes » remplace Grafana (secubox-metrics 1.25.0, closes #2765)
 - Demande : « remplacer grafana et glances par des équivalents quick aurora responsive dynamique fun simple réactive ». **Glances : conservée telle quelle** — le mainteneur a jugé la page actuelle « impecc » ; mon remplacement « Système en direct » a été retiré avant livraison (API, page et tests supprimés).
