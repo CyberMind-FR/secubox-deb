@@ -5,7 +5,7 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
-# FAQ — ESPRESSObin (951 Mo) : ce qui tient, ce qui sature
+# FAQ — ESPRESSObin v7 (951 Mo vus) : ce qui tient, ce qui sature, et le micrologiciel
 
 Retour d'essai du 2026-10-16 sur une ESPRESSObin v7 (profil `minimal`, #2816, #2838, #2849).
 
@@ -38,3 +38,20 @@ tournent sur gk2 (`sbx-authwatch`, dans `secubox-toolbox-ng`) ; l'administration
 ## `secubox-portal` : pourquoi le garder ?
 
 Il livre `login.html`, la page de connexion de la WebUI (le hub ne la livre plus depuis 1.9.6). Sans lui, plus de connexion par navigateur.
+
+## La carte annonce 951 Mo : est-ce une 2 Go bridée ?
+
+Vérifiez à la console (U-Boot, `bdinfo`) : sur la carte d'essai, `DRAM: 1 GiB` et une banque de 0x40000000, avec un micrologiciel `OpenWrt … (espressobin-v7-1gb)`.
+La v7 existe en 1 Go et en 2 Go ; lisez l'étiquette ou les puces avant de conclure à un micrologiciel limité. Sur la carte d'essai, l'image OpenWrt `trusted-firmware-a-espressobin-v7-2gb` (21.02.7) a rendu la carte **muette** :
+elle n'a pas la mémoire de cette configuration. Ne retentez pas le 2 Go sans preuve. Une v7 1 Go se reconnaît à `DRAM: 1 GiB` avec un micrologiciel `v7-1gb` qui démarre.
+
+## La carte est muette après un flash de la SPI : récupération par l'UART, sans cavaliers
+
+À faire AVANT tout flash : sauvegarder la SPI (`sf probe 0; sf read $loadaddr 0 0x400000; fatwrite usb 0:1 $loadaddr spi-sauvegarde.bin 0x400000`, 4 194 304 octets).
+Récupération (testée le 2026-10-16) avec `mox-imager` (CZ.NIC, `gitlab.nic.cz/turris/mox-imager`, il faut `libncurses-dev` pour le compiler), l'image `flash-image.bin` d'une configuration qui démarre :
+`./mox-imager -D /dev/ttyUSB0 -E --max-restarts=30 -t flash-image-1gb.bin`, puis couper et remettre l'alimentation (ou Reset) jusqu'à « Detected BootROM command prompt » ; compter 10 à 30 essais.
+- **Pas de `-b 6000000`** : un adaptateur USB-série qui ne tient pas 6 Mbaud perd la liaison (« Timed out ») ; laisser 115200.
+- `kwboot` ne convient pas (Armada 370/XP/38x seulement) ; l'outil Marvell `WtpDownload_linux` fonctionne, mais seulement par cavaliers (`J11 1-2, J3 1-2, J10 2-3`).
+- Une fois U-Boot en mémoire : `usb start; bubt retour-1gb.bin spi usb`, puis `reset`.
+
+L'image qui boote doit être la bonne pour la carte : un build qui ne s'initialise pas (mémoire, vitesses) donne `TIM-1.0 / WTMI … SVC REV` en boucle, sans `BL1`.

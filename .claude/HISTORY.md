@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — ESPRESSObin : reflash SPI 2 Go rate, recuperation UART (ref #2855, #2857)
+
+Le U-Boot de la carte d'essai est un build « espressobin-v7-1gb » (DRAM 1 GiB). Flash de l'image OpenWrt 21.02.7 « v7-2gb » : carte muette (TIM/WTMI en boucle, pas de BL1). Recuperee par mox-imager (UART, sans cavaliers, 115200, plusieurs coupures d'alimentation) puis `bubt` de l'image v7-1gb : SPI = build OpenWrt du 17 avril 2023, carte revenue (eMMC, tunnel Auto-Load, SSH de support, admin public OK). Conclusion : cette carte est une v7 1 Go. Autres faits du jour : hub 1.12.12 (panneau Reseau : WAF = route par defaut, #2857) ; secubox-minimal 0.6.0 sans toolbox ni R-level, ad-guard 1.14.2 (toolbox en Recommends, #2855) ; sur gk2, `apt remove secubox-toolbox` tape a la main a 20:00 a retire toolbox, lite et ad-guard : restaures (toolbox 2.13.4, ad-guard 1.14.1, lite 1.8.0), un `apt upgrade` de 19:52 a installe un nouveau noyau non actif (ne pas redemarrer gk2 sans verifier). FAQ-ESPRESSOBIN-1GO.md complete.
+
 ## 2026-10-16 — Support SSH depuis gk2 vers la box enrolee (ref #2854, #2853)
 
 Pose a la main sur lgm-ebin : cle dediee /etc/secubox/secrets/support-ssh/id_ed25519 (gk2, 0600), cle publique dans authorized_keys de la box avec from="10.64.0.1" et sans redirections, regle nft iifname wg-autoload + ip saddr 10.64.0.1 sur le port 22 avant le drop « hors LAN » (00-ssh-lan.nft). Test depuis gk2 : OK. #2854 : le faire poser par l'enrolement Auto-Load (revocable, journalise). #2853 : l'agent Auto-Load rejoue nom et mot de passe a chaque demarrage (desactive sur la carte). Suivi du jour : WIP, TODO, FAQ-ESPRESSOBIN-1GO.md, README racine, README secubox-minimal et secubox-annuaire.
