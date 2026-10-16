@@ -1,3 +1,9 @@
+secubox-hub (1.12.7-1~bookworm1) bookworm; urgency=medium
+
+  * Espaces : YouTube SAS et Glances ne sont plus « a l'arret » a tort (#2796). Glances est une page de secubox-metrics (elle suit ce module, comme R-Level suit le Toolbox) ; YouTube SAS tourne dans un conteneur LXC sans unite ni socket hote : une connexion TCP vers le conteneur (10.100.0.180:8091) fait la sonde, en erreur s'il ne repond pas. 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 10:30:00 +0200
+
 secubox-hub (1.12.6-1~bookworm1) bookworm; urgency=medium
 
   * Vue d'ensemble : un seul etat par service (#2794). Elle comptait « 39 a l'arret » car elle ne lisait que l'unite/socket : les modules montes dans l'agregateur (rlevel, proxypac, haproxy, zkp...) et en veille (grafana, hub) etaient declares arretes, alors que la page Espaces, qui lit la sonde de sante, les disait en service. Les deux pages suivent maintenant la meme sonde (`active` reste le repli sans sonde ; une sonde `error` reste une alarme). Les pages du hub (apercu, health) recoivent une sonde « Page du hub ». 5 tests.

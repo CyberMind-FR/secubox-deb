@@ -610,7 +610,7 @@ def _unites_au_repos_cache() -> tuple:
 
 
 # Pages portées par un autre module : sans unité ni socket propres, elles suivent le module qui les sert (R-Level est une page du Toolbox).
-PAGES_PORTEES = {"rlevel": "toolbox"}
+PAGES_PORTEES = {"rlevel": "toolbox", "glances": "metrics"}
 # Pages servies par le hub lui-meme : il repond, donc elles sont en service (aucune unite ni sonde propre).
 PAGES_DU_HUB = ("apercu", "health")
 
@@ -657,6 +657,27 @@ def superposer_montes(modules: dict, montes: frozenset) -> None:
         modules.setdefault(page, {"status": "ok", "msg": "Page du hub"})
 
 
+# Modules servis par un conteneur LXC, sans unite ni socket sur l'hote : seule une connexion TCP dit s'ils repondent (#2796).
+SONDES_LXC = {"ytsas": ("10.100.0.180", 8091)}
+
+
+def _tcp_ouvert(hote: str, port: int, delai: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((hote, port), timeout=delai):
+            return True
+    except OSError:
+        return False
+
+
+def superposer_lxc(modules: dict, sondes: dict, ouvert=_tcp_ouvert) -> None:
+    """Ajoute l'etat des modules en conteneur ; une sonde deja presente fait foi."""
+    for mid, (hote, port) in sondes.items():
+        if mid in modules:
+            continue
+        modules[mid] = ({"status": "ok", "msg": "Conteneur LXC joignable"} if ouvert(hote, port)
+                        else {"status": "error", "msg": "Conteneur LXC injoignable"})
+
+
 def _refresh_health_batch():
     """Build the sidebar health snapshot in ONE systemctl list-units call.
 
@@ -689,6 +710,7 @@ def _refresh_health_batch():
         modules["waf"] = dict(modules["waf-ng"])
 
     superposer_montes(modules, modules_montes())
+    superposer_lxc(modules, SONDES_LXC)
 
     _cache["health_batch"] = {"modules": modules, "count": len(modules)}
     _cache["health_batch_ts"] = time.time()

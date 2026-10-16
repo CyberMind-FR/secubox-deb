@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Espaces : sondes YouTube SAS et Glances (ref #2796)
+
+secubox-hub 1.12.7 : `glances` suit `metrics` ; `ytsas` (LXC) sonde par connexion TCP au conteneur. Plus d'arret affiche a tort pour des pages qui fonctionnent.
+
 ## 2026-10-16 — Vue d'ensemble : etats coherents avec la page Espaces (ref #2794)
 
 secubox-hub 1.12.6 : `/apercu` suit la sonde de sante (monte dans l'agregateur, en veille = en service ; `error` = arret) au lieu de la seule unite/socket ; apercu et health, pages du hub, ont une sonde. Reste a l'arret a juste titre : MESH 802.11s.
