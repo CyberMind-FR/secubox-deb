@@ -24,9 +24,13 @@ Depends: ${misc:Depends},
  secubox-dns-guard,
  secubox-ad-guard (>= 1.6.2),
  secubox-nac (>= 1.0),
- secubox-freebox
+ secubox-freebox,
+ secubox-ipv6guard,
+ secubox-webfilter (>= 0.2.1)
+Conflicts: secubox-webos, secubox-waf-ng, secubox-waf, secubox-metrics
 Description: SecuBox Minimal — DPI, garde DNS, filtre de publicites, NAC et Freebox
  Profil minimal, pour une petite carte (ESPRESSObin) : inspection des paquets (DPI), detection d'anomalies DNS (dns-guard), filtrage
- des publicites et traqueurs (ad-guard), controle d'acces reseau (NAC) et module Freebox, avec la seule interface d'administration.
- Ni WAF, ni profil ISP, ni Hall, ni metrics (le module « visites »), ni VPN, ni service heberge.
+ des publicites et traqueurs (ad-guard), controle d'acces reseau (NAC), module Freebox, garde IPv6 et filtrage web, avec la seule interface d'administration.
+ Ni WAF, ni profil ISP, ni Hall, ni metrics (le module « visites »), ni VPN, ni service heberge. Les modules exclus sont en Conflicts :
+ un Recommends de secubox-auth ou de secubox-freebox ramenait le Hall dans l'image.
  secubox-toolbox est tire par ad-guard (dependance dure) ; le moteur d'interception secubox-toolbox-ng n'est pas installe.
