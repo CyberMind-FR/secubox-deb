@@ -1,3 +1,10 @@
+secubox-metrics (1.27.0-1~bookworm1) bookworm; urgency=medium
+
+  * Glances : la page « Systeme en direct » REMPLACE l ancienne page (verdict du mainteneur, #2769) ; les barres des coeurs, des disques et des processus etaient invisibles sous le cadre (hybrid-skin.css impose un fond transparent !important dans main) : couleurs posees en style direct prioritaire, test de non-regression avec la vraie feuille du cadre.
+  * Courbes : graphiques vides sur gk2 (#2770) — le serveur decoupait une heure en 300 tranches de 12 s pour un releve par minute, chaque point restait isole et aucune ligne ne se dessinait. Jamais plus de tranches que de releves ; un trou isole d une tranche est ponte, un point isole se dessine, la pastille du present reste visible sous le cadre.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 10:30:00 +0200
+
 secubox-metrics (1.26.0-1~bookworm1) bookworm; urgency=medium
 
   * Glances : page « Systeme en direct » livree A COTE de la page actuelle, qui reste inchangee (#2767) : /glances/direct.html (jauges et coeurs animes, courbes glissantes avec lecture au survol, debit en direct, top processus qui glissent, humeur de la box, pause, mouvement reduit respecte, demonstration ?demo=1) et API GET /api/v1/metrics/systeme non bloquante (CPU total et par coeur, memoire, swap, disques, reseau, capteurs, top processus sans ligne de commande ni utilisateur).

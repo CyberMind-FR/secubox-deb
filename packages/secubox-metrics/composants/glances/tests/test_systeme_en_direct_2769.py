@@ -2,7 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""#2767 — « Système en direct » (/glances/direct.html), à côté de la page Glances : jauges, cœurs, courbes, processus qui glissent, en temps réel.
+"""#2769 — « Système en direct » est la page Glances (/glances/) : jauges, cœurs, courbes, processus qui glissent, en temps réel.
 
 Vrai navigateur, API simulée. `?cadence=` (ms, plancher 300) règle le rythme pour les tests."""
 import json
@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 playwright = pytest.importorskip("playwright.sync_api")
-PAGE = Path(__file__).resolve().parents[1] / "www" / "glances" / "direct.html"
+PAGE = Path(__file__).resolve().parents[1] / "www" / "glances" / "index.html"
 SRC = PAGE.read_text(encoding="utf-8")
 
 
@@ -52,7 +52,7 @@ def ouvre(navigateur, sequence, statut=200, cadence=300, taille=None, reduit=Fal
         n["i"] += 1
         r.fulfill(status=200, content_type="application/json", body=json.dumps(m))
     p.route("http://sbx.test/api/v1/metrics/systeme", api)
-    p.goto(f"http://sbx.test/glances/direct.html?cadence={cadence}")
+    p.goto(f"http://sbx.test/glances/?cadence={cadence}")
     return ctx, p, err, appels
 
 
@@ -201,7 +201,7 @@ def test_demonstration_animee_sans_api(navigateur):
     p = ctx.new_page()
     p.route("http://sbx.test/glances/**", lambda r, *_: r.fulfill(status=200, content_type="text/html", body=SRC))
     p.route("http://sbx.test/shared/**", lambda r, *_: r.fulfill(status=200, content_type="application/javascript", body=""))
-    p.goto("http://sbx.test/glances/direct.html?demo=1&cadence=300")
+    p.goto("http://sbx.test/glances/?demo=1&cadence=300")
     try:
         p.wait_for_selector("#bProc tr[data-pid]")
         assert not p.locator("#demo").is_hidden()
@@ -220,11 +220,35 @@ def test_telephone_pas_de_debordement(navigateur):
         ctx.close()
 
 
-def test_hygiene_de_la_page_et_lien_vers_glances():
+def test_hygiene_de_la_page():
     assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in SRC
     assert re.findall(r'<link[^>]+href="([^"]+)"', SRC) == ["/shared/sidebar-light.css"]
     assert not re.search(r"<script[^>]+src=", SRC) and "fonts.googleapis" not in SRC
     assert "lorem" not in SRC.lower() and "cmdline" not in SRC.lower()
     assert "'POST'" not in SRC, "lecture seule"
     assert "sbx_token" in SRC and "/api/v1/metrics/systeme" in SRC
-    assert 'href="/glances/"' in SRC, "retour vers la page Glances actuelle"
+
+
+HYBRID = Path(__file__).resolve().parents[4] / "secubox-hub" / "www" / "shared" / "hybrid-skin.css"
+
+
+def test_les_barres_restent_colorees_sous_la_feuille_du_cadre(navigateur):
+    """RÉGRESSION (#2769) : hybrid-skin.css impose `background-color: transparent !important` dans <main> ; les barres des cœurs, des disques et des processus étaient invisibles."""
+    if not HYBRID.is_file():
+        pytest.skip("feuille du cadre absente")
+    ctx = navigateur.new_context(viewport={"width": 1300, "height": 900})
+    p = ctx.new_page()
+    p.route("http://sbx.test/glances/**", lambda r, *_: r.fulfill(status=200, content_type="text/html", body=SRC))
+    p.route("http://sbx.test/shared/sidebar-light.css", lambda r, *_: r.fulfill(status=200, content_type="text/css", body=HYBRID.read_text()))
+    p.route("http://sbx.test/shared/**", lambda r, *_: r.fulfill(status=200, content_type="application/javascript", body=""))
+    p.add_init_script("document.addEventListener('DOMContentLoaded',()=>{document.body.classList.add('hybrid-skin')})")
+    p.goto("http://sbx.test/glances/?demo=1&cadence=300")
+    try:
+        p.wait_for_selector("#coeurs .coeur")
+        p.wait_for_selector("#bDisques .barre i")
+        p.wait_for_timeout(1200)
+        for sel in ("#coeurs .coeur i", "#bDisques .barre i", "#bProc .cpu-barre"):
+            fonds = p.locator(sel).evaluate_all("els => els.map(e => getComputedStyle(e).backgroundColor)")
+            assert fonds and all(f not in ("rgba(0, 0, 0, 0)", "transparent") for f in fonds), (sel, fonds)
+    finally:
+        ctx.close()

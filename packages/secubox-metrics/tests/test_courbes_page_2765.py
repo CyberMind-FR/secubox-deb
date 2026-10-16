@@ -101,12 +101,44 @@ def test_min_moyenne_max_de_chaque_courbe(navigateur):
         ctx.close()
 
 
-def test_une_valeur_absente_fait_un_trou_pas_un_zero(navigateur):
+def chemin_cpu(p):
+    return p.locator('.courbe[data-id="cpu"] path.ligne').first.get_attribute("d")
+
+
+def test_un_vrai_trou_reste_un_trou_pas_un_zero(navigateur):
+    s = serie()
+    s["series"]["cpu"][30] = None
+    s["series"]["cpu"][31] = None
+    ctx, p, err, _ = ouvre(navigateur, s)
+    try:
+        p.wait_for_selector('.courbe[data-id="cpu"] path.ligne')
+        assert chemin_cpu(p).count("M") == 2, "deux segments autour d'un trou de deux tranches"
+    finally:
+        ctx.close()
+
+
+def test_un_trou_isole_d_une_tranche_est_ponte(navigateur):
+    """Un relevé manqué par la minuterie ne doit pas couper la courbe en deux."""
     ctx, p, err, _ = ouvre(navigateur, serie(trou=30))
     try:
         p.wait_for_selector('.courbe[data-id="cpu"] path.ligne')
-        d = p.locator('.courbe[data-id="cpu"] path.ligne').first.get_attribute("d")
-        assert d.count("M") == 2, "deux segments autour du trou"
+        assert chemin_cpu(p).count("M") == 1
+    finally:
+        ctx.close()
+
+
+def test_une_serie_creuse_comme_celle_de_gk2_dessine_quand_meme(navigateur):
+    """RÉGRESSION (#2770) : 59 relevés dans 300 tranches -> chaque point isolé ; rien ne se voyait."""
+    s = serie(n=300)
+    for k in s["series"]:
+        s["series"][k] = [v if i % 5 == 0 else None for i, v in enumerate(s["series"][k])]
+    ctx, p, err, _ = ouvre(navigateur, s)
+    try:
+        p.wait_for_selector('.courbe[data-id="cpu"] path.ligne')
+        d = chemin_cpu(p)
+        assert "L" in d, "un point isolé se dessine (pastille), il ne disparaît plus"
+        box = p.locator('.courbe[data-id="cpu"] path.ligne').first.bounding_box()
+        assert box and box["width"] > 20, "la ligne couvre la zone"
     finally:
         ctx.close()
 
@@ -249,3 +281,26 @@ def test_hygiene_de_la_page():
     assert "sbx_token" in SRC and "/api/v1/metrics/series" in SRC
     for interdit in ("confirm(", "alert(", "prompt("):
         assert interdit not in SRC
+
+
+HYBRID = Path(__file__).resolve().parents[1].parent / "secubox-hub" / "www" / "shared" / "hybrid-skin.css"
+
+
+def test_la_pastille_du_present_reste_visible_sous_la_feuille_du_cadre(navigateur):
+    """RÉGRESSION (#2770) : le cadre impose `background-color: transparent !important` dans <main>."""
+    if not HYBRID.is_file():
+        pytest.skip("feuille du cadre absente")
+    ctx = navigateur.new_context(viewport={"width": 1300, "height": 900})
+    p = ctx.new_page()
+    p.route("http://sbx.test/grafana/**", lambda r, *_: r.fulfill(status=200, content_type="text/html", body=SRC))
+    p.route("http://sbx.test/shared/sidebar-light.css", lambda r, *_: r.fulfill(status=200, content_type="text/css", body=HYBRID.read_text()))
+    p.route("http://sbx.test/shared/**", lambda r, *_: r.fulfill(status=200, content_type="application/javascript", body=""))
+    p.add_init_script("document.addEventListener('DOMContentLoaded',()=>{document.body.classList.add('hybrid-skin')})")
+    p.route("http://sbx.test/api/v1/metrics/series*", lambda r, *_: r.fulfill(status=200, content_type="application/json", body=json.dumps(serie())))
+    p.goto("http://sbx.test/grafana/?cadence=60000")
+    try:
+        p.wait_for_selector(".courbe .maintenant")
+        fonds = p.locator(".courbe .maintenant").evaluate_all("els => els.map(e => getComputedStyle(e).backgroundColor)")
+        assert fonds and all(f not in ("rgba(0, 0, 0, 0)", "transparent") for f in fonds), fonds
+    finally:
+        ctx.close()
