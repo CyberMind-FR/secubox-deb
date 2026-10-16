@@ -36,6 +36,16 @@ sudo apt install secubox-wireguard
 
 Configuration file: `/etc/secubox/wireguard.toml`
 
+### Serveur « sortie Internet » (#2845)
+
+```
+wgctl serveur init --endpoint lgm-ebin.secubox.in:51840   # root seulement
+wgctl peer add telephone wg-clients
+```
+
+Crée `wg-clients` (10.66.0.1/24, udp/51820), une table nft `secubox_wg_clients` (forward + masquerade) et active `wg-quick@wg-clients`.
+`--endpoint` est écrit dans `/etc/secubox/wireguard-endpoint` : c'est le point d'accès des configurations clientes, utile derrière un NAT (relais UDP sur l'infrastructure).
+
 ## API Endpoints
 
 - `GET /api/v1/wireguard/status` - Module status

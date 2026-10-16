@@ -10,6 +10,12 @@ CONFIG_FILE="/etc/secubox/secubox.conf"
 WG_CONFIG_DIR="/etc/wireguard"
 LOG_FILE="/var/log/secubox/wireguard.log"
 PEERS_DIR="/var/lib/secubox/wireguard/peers"
+# Serveur « sortie Internet » (#2845) : interface wg-clients, derrière un relais quand la box est derrière un NAT.
+SERVEUR_IFACE="wg-clients"
+SERVEUR_CONF="$WG_CONFIG_DIR/wg-clients.conf"
+SERVEUR_NFT="/etc/secubox/wireguard-clients.nft"
+SERVEUR_SYSCTL="/etc/sysctl.d/90-secubox-wg-clients.conf"
+ENDPOINT_FILE="/etc/secubox/wireguard-endpoint"
 
 # === Logging ===
 log() {
@@ -376,7 +382,11 @@ cmd_peer_add() {
         return 1
     fi
 
+    # Ces fichiers portent la clé PRIVÉE et la clé partagée du client : jamais lisibles par tous (ils l'étaient, 0644). Groupe secubox : l'API lit le QR (#2845).
+    umask 027
     mkdir -p "$PEERS_DIR"
+    chmod 750 "$PEERS_DIR"
+    if getent group secubox >/dev/null 2>&1; then chgrp secubox "$PEERS_DIR" 2>/dev/null || true; fi
     check_wg || return 1
 
     # Generate keys for peer
@@ -394,6 +404,16 @@ cmd_peer_add() {
     server_port=$(wg show "$iface" listen-port 2>/dev/null)
     local server_ip
     server_ip=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
+
+    # Point d'accès annoncé aux clients : celui du relais quand il est configuré (#2845). L'IP publique de la box NAT-ée ne sert à rien.
+    if [ -s "$ENDPOINT_FILE" ]; then
+        local ep
+        ep=$(head -n1 "$ENDPOINT_FILE")
+        if _point_d_acces_admis "$ep"; then
+            server_ip="${ep%:*}"
+            server_port="${ep##*:}"
+        fi
+    fi
 
     # Allocate IP for peer
     local server_network
@@ -462,6 +482,9 @@ META_EOF
         info "QR code saved to $qr_file"
     fi
 
+    if getent group secubox >/dev/null 2>&1; then
+        chgrp secubox "$client_conf" "$PEERS_DIR/${peer_pubkey:0:8}.json" ${qr_file:+"$qr_file"} 2>/dev/null || true
+    fi
     info "Peer $name added successfully"
     echo "Client config saved to: $client_conf"
 
@@ -692,6 +715,62 @@ PEER_EOF
     info "Restart interfaces with: wg-quick up <interface>"
 }
 
+# === Serveur « sortie Internet » (#2845) ===
+
+cmd_serveur_init() {
+    local port=51820 endpoint=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --port)     port="${2:-}"; shift 2 || _refuser "--port" ;;
+            --endpoint) endpoint="${2:-}"; shift 2 || _refuser "--endpoint" ;;
+            *)          _refuser "$1" ;;
+        esac
+    done
+    _port_admis "$port" || _refuser "$port"
+    [ -z "$endpoint" ] || _point_d_acces_admis "$endpoint" || _refuser "$endpoint"
+    check_wg || return 1
+
+    mkdir -p "$(dirname "$SERVEUR_CONF")" "$(dirname "$SERVEUR_NFT")" "$(dirname "$SERVEUR_SYSCTL")"
+    if [ -e "$SERVEUR_CONF" ]; then
+        info "serveur déjà initialisé : clé et configuration conservées"
+    else
+        # Le réseau des clients (10.66.0.0/24) sort par masquerade ; le pare-feu n'est PAS rechargé : une table nft propre, chargée par wg-quick.
+        (umask 077
+        cat > "$SERVEUR_NFT" <<NFT_EOF
+add table inet secubox_wg_clients
+delete table inet secubox_wg_clients
+table inet secubox_wg_clients {
+    chain forward {
+        type filter hook forward priority -1; policy accept;
+        iifname "$SERVEUR_IFACE" accept
+        oifname "$SERVEUR_IFACE" ct state established,related accept
+    }
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        ip saddr 10.66.0.0/24 oifname != "$SERVEUR_IFACE" masquerade
+    }
+}
+NFT_EOF
+        cat > "$SERVEUR_CONF" <<CONF_EOF
+[Interface]
+Address = 10.66.0.1/24
+ListenPort = $port
+PrivateKey = $(wg genkey)
+PostUp = nft -f $SERVEUR_NFT
+PostDown = nft delete table inet secubox_wg_clients 2>/dev/null || true
+CONF_EOF
+        chmod 600 "$SERVEUR_CONF")
+        printf 'net.ipv4.ip_forward=1\n' > "$SERVEUR_SYSCTL"
+        sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+        info "serveur créé : $SERVEUR_CONF (10.66.0.1/24, udp/$port)"
+    fi
+    if [ -n "$endpoint" ]; then
+        printf '%s\n' "$endpoint" > "$ENDPOINT_FILE"
+        info "point d'accès des clients : $endpoint"
+    fi
+    systemctl enable --now "wg-quick@$SERVEUR_IFACE"
+}
+
 # === Help ===
 
 cmd_help() {
@@ -716,6 +795,8 @@ Peer Management:
   peer config <name>      Show peer config file
 
 Key Generation:
+  serveur init [--port N] [--endpoint H:P]
+                          Interface serveur wg-clients (sortie Internet), NAT, point d'accès des clients
   genkey                  Generate new key pair
   genpsk                  Generate preshared key
 
@@ -742,6 +823,8 @@ EOF
 _iface_admise()   { local LC_ALL=C; [[ "${1:-}" =~ ^[A-Za-z0-9_-]{1,15}$ ]]; }
 _nom_pair_admis() { local LC_ALL=C; [[ "${1:-}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$ ]]; }
 _cle_publique()   { local LC_ALL=C; [[ "${1:-}" =~ ^[A-Za-z0-9+/]{43}=$ ]]; }
+_port_admis()     { local LC_ALL=C; [[ "${1:-}" =~ ^[0-9]{1,5}$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]; }
+_point_d_acces_admis() { local LC_ALL=C; [[ "${1:-}" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?:[0-9]{1,5}$ ]] && _port_admis "${1##*:}"; }
 _refuser() { error "argument refusé : $(printf '%q' "${1:-}")"; exit 64; }
 # Verbe d'opérateur : refusé par le chemin sudo d'un compte de service.
 # SUDO_USER est posé par sudo lui-même — l'appelant ne le choisit pas.
@@ -801,6 +884,10 @@ main() {
                 config) cmd_peer_config "$@" ;;
                 *)      error "Unknown peer command: $subcmd" ;;
             esac
+            ;;
+        serveur)
+            _operateur_seulement serveur
+            case "${1:-}" in init) shift; cmd_serveur_init "$@" ;; *) error "Unknown serveur command: ${1:-}"; exit 64 ;; esac
             ;;
         genkey)         cmd_genkey ;;
         genpsk)         cmd_genpsk ;;
