@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — WireGuard distant par WAN : la box lgm-ebin offre la sortie Internet (ref #2845, #2844)
+
+secubox-wireguard 1.3.0 : `wgctl serveur init` (wg-clients 10.66.0.1/24, nft propre forward+masquerade, point d'acces configurable), configs clientes 0640 root:secubox (etaient 0644 avec la cle privee). Deploye sur la box d'essai ; sur gk2 : relais UDP 51840 -> 10.64.0.9:51820 (table nft secubox_relais_wg, /etc/nftables.d/zz-secubox-relais-wg-lgm-ebin.nft, HORS SOURCE, a porter dans secubox-autoload) ; publication admin.lgm-ebin.secubox.in (certificat, vhost, route sbxwaf 10.64.0.9:9080, HORS SOURCE, #2844). Reste : redirection UDP 51840 de la Freebox vers gk2, essai de bout en bout depuis un client.
+
 ## 2026-10-16 — fleet : panneau des pairs p2p (ref #2842)
 
 secubox-annuaire 0.14.3 : /fleet/ lit aussi GET /api/v1/p2p/peers (nom, adresse, statut par poignee de main, dernier vu), masque si absent ou vide. Deploye gk2, publie apt.
