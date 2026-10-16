@@ -9,7 +9,7 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
-## 2026-10-16 — nDPId Flux : synthese au-dessus de la liste (ref #2798)
+## 2026-10-16 — nDPId Flux : synthese au-dessus de la liste (closes #2798)
 
 secubox-dpi 1.14.2 : repartition par protocole / applications / hotes passent au-dessus des flux actifs.
 
