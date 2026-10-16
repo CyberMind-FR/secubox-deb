@@ -1,3 +1,9 @@
+secubox-annuaire (0.14.2-1~bookworm1) bookworm; urgency=medium
+
+  * Page /fleet/ : panneau « Box Auto-Load » lu depuis GET /api/v1/autoload/boxes (client, profil, statut, progression, etape, derniere activite). Une box enrolee par le tunnel wg-autoload, sans annuaire (profil minimal), n y figurait jamais. Panneau masque si le module autoload est absent, la session refusee ou la liste vide ; valeurs posees en texte brut (ref #2840).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 15:00:00 +0200
+
 secubox-annuaire (0.14.1-1~bookworm1) bookworm; urgency=medium
 
   * Centres : l acceptation d une proposition dont le scope porte un deux-points (mitm-exclusion:gk2, publie par la toolbox) echouait — « String should match pattern '^[a-z0-9][a-z0-9._-]*$' ». Le deux-points est admis a chaque maillon de la chaine de configuration : requetes d octroi et d acceptation, modele de la config signee et de l octroi delegue, nom de fichier applique (config_apply, desormais en fullmatch : « $ » acceptait un saut de ligne final). Pas de separateur de chemin : « / », « .. » en tete, espaces et majuscules restent refuses ; offres et incidents d assistance gardent leur motif (ref #2776).
