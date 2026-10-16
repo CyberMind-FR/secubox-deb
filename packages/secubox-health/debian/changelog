@@ -1,3 +1,9 @@
+secubox-health (1.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * Test dynamique du WAF : le vhost teste est le hall de CETTE box (hall.<domaine>), puis un vhost dont l amont n est pas un autre noeud du maillage (10.10.0.0/24), puis l ancien choix. « hall.* de preference » rendait hall.gk1 (premier par ordre alphabetique), un noeud relaye route vers 10.10.0.3 qui ne repondait plus : le temoin expirait alors que hall.gk2 repondait en 4 ms (ref #2786).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 17:50:00 +0200
+
 secubox-health (1.3.1-1~bookworm1) bookworm; urgency=medium
 
   * Test dynamique du WAF : un temoin qui EXPIRE (l amont, nginx puis le service, est lent sous charge) n est plus pris pour un WAF defaillant quand les quatre attaques simulees du meme passage sont refusees en 403 : verdict sain avec avertissement « amont lent » (un canari qui echoue, un temoin bloque ou un refus de connexion restent des echecs) ; delai du temoin porte de 5 a 12 s (ref #2784).
