@@ -13,7 +13,16 @@ import os
 import re
 import sys
 
-LXC = os.environ.get("SBX_LXC_DIR", "/var/lib/lxc")
+# Les conteneurs du parc vivent dans DEUX dossiers : /var/lib/lxc (mail, nextcloud…) et /data/lxc (mqtt, zigbee, peertube, photoprism, ytsas…, #2773).
+# Le service root peut lire les deux (ReadOnlyPaths) ; SBX_LXC_DIR en accepte plusieurs, séparés par « : ».
+DOSSIERS = ["/var/lib/lxc", "/data/lxc"]
+
+
+def dossiers_depuis_env() -> list:
+    v = os.environ.get("SBX_LXC_DIR", "")
+    return [d for d in v.split(":") if d] or list(DOSSIERS)
+
+
 SORTIE = os.environ.get("SBX_LXC_SORTIE", "/var/lib/secubox/nac/conteneurs.json")
 _NOM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _IPV4 = re.compile(r"^\s*lxc\.net\.\d+\.ipv4\.address\s*=\s*(\d{1,3}(?:\.\d{1,3}){3})")
@@ -21,9 +30,16 @@ _MAC = re.compile(r"^\s*lxc\.net\.\d+\.hwaddr\s*=\s*([0-9A-Fa-f:]{17})\s*$")
 _UTS = re.compile(r"^\s*lxc\.uts\.name\s*=\s*(\S+)\s*$")
 
 
-def inventaire(racine: str = LXC) -> dict:
+def inventaire(racines=None) -> dict:
+    if racines is None:
+        racines = dossiers_depuis_env()
+    elif isinstance(racines, str):
+        racines = [racines]
     ips, macs = {}, {}
-    for conf in sorted(glob.glob(os.path.join(racine, "*", "config"))):
+    confs = []
+    for racine in racines:
+        confs += sorted(glob.glob(os.path.join(racine, "*", "config")))
+    for conf in confs:
         nom = os.path.basename(os.path.dirname(conf))
         adresses, mac = [], None
         try:
@@ -43,9 +59,9 @@ def inventaire(racine: str = LXC) -> dict:
         if not _NOM.match(nom):
             continue
         for a in adresses:
-            ips[a] = nom
+            ips.setdefault(a, nom)           # la première déclaration d'une adresse l'emporte
         if mac:
-            macs[mac] = nom
+            macs.setdefault(mac, nom)
     return {"ips": ips, "macs": macs}
 
 
