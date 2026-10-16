@@ -1,3 +1,9 @@
+secubox-toolbox-ng (0.13.0-1~bookworm1) bookworm; urgency=medium
+
+  * sbxmitm : cache de reponses des CDN statiques (#2804, proxypac etape 2). Pour une LISTE FERMEE de noms exacts (polices Google, ajax.googleapis.com, cdnjs, jsdelivr, unpkg, code.jquery.com, bootstrapcdn, aspnetcdn) ET acceptes par l'operateur (cdn-cache-hosts.txt, ecrit par proxypac), la reponse GET/200 est gardee sur disque (1 h a 7 j, 512 Mio max, plus anciens evinces) et resservie sans retourner chez l'origine. Jamais une API, un sous-domaine, un Range, un Authorization, un Set-Cookie, no-store/private, Vary:*. Desactive par defaut : actif par INSTANCE via /etc/secubox/toolbox-ng-worker-N.env (SBX_CDN_CACHE_ARGS=--cdn-cache-dir=/var/cache/secubox/cdn). Le corps d'une reponse trop grosse est relaye sans perte. 11 tests Go + 4 tests d'unite.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 14:00:00 +0200
+
 secubox-toolbox-ng (0.12.5-1~bookworm1) bookworm; urgency=medium
 
   * fix: sbxmitm laisse visible l'appat des detecteurs d'anti-adblock (#rb-adcheck > #google_ads_iframe_test, theme Foxiz : zataz.com) ; la feuille cosmetique du R3 le masquait et la page dressait son mur « bloqueur de publicites detecte » (ref #2516)
