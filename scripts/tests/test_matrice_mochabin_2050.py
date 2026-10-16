@@ -51,5 +51,16 @@ def test_la_ligne_de_commande_accepte_auto_et_refuse_un_profil_inconnu(tmp_path)
 
 def test_le_workflow_propose_le_choix_du_profil_et_le_transmet():
     wf = (RACINE / ".github/workflows/build-image.yml").read_text(encoding="utf-8")
-    assert "profile:" in wf and "options: [auto, lite, isp, full]" in wf
+    assert "profile:" in wf and "options: [auto, lite, isp, full, minimal]" in wf   # #2816 : minimal, à la demande
     assert "--profil '${{ github.event.inputs.profile || 'auto' }}'" in wf
+
+
+def test_le_profil_minimal_se_demande_a_la_main_sans_changer_les_defauts_2816():
+    """#2816 : `minimal` (DPI, dns-guard, ad-guard, NAC, Freebox) est choisissable en declenchement manuel ; la matrice publiee ne change pas."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("matrice_images", RACINE / ".github/scripts/matrice-images.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    assert m.matrice(RACINE, ["espressobin-v7"], "minimal") == [{"board": "espressobin-v7", "profile": "minimal"}]
+    assert m.matrice(RACINE, ["espressobin-v7"]) == [{"board": "espressobin-v7", "profile": "lite"}]
+    assert "minimal" in m.PROFILS_ACCEPTES

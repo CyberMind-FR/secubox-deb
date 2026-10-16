@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Profil minimal (ref #2816)
+
+secubox-minimal 0.1.0 : DPI + moteur nDPI, dns-guard, ad-guard, NAC, Freebox, socle d'administration (core, aggregator, system, hardening, hub, portal, auth). Ni WAF, ISP, Hall, ni metrics (« visites »), ni VPN. `minimal` choisissable en declenchement manuel (build-image.yml, matrice-images.py) ; la matrice publiee est inchangee. Image ESPRESSObin sur cle USB : en cours.
+
 ## 2026-10-16 — Barre laterale du Hall : liens vers admin.* (ref #2814)
 
 secubox-hub 1.12.9 : sur un hote hall.*, les liens du menu visent admin.* (meme domaine, port conserve).
