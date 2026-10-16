@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Barre laterale du Hall : liens vers admin.* (ref #2814)
+
+secubox-hub 1.12.9 : sur un hote hall.*, les liens du menu visent admin.* (meme domaine, port conserve).
+
 ## 2026-10-16 — App Store : installation a distance (closes #2808)
 
 secubox-appstore 0.9.0 : demande d'installation sur un autre noeud via la boite OpenPGP, accord de l'admin cible (nom retape), reponse a l'expediteur. Rendu valide par le mainteneur ; une demande reelle entre deux noeuds n'a pas encore ete exercee (suivi a faire).

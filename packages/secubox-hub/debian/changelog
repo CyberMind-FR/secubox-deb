@@ -1,3 +1,9 @@
+secubox-hub (1.12.9-1~bookworm1) bookworm; urgency=medium
+
+  * Barre laterale sur le Hall : les liens menent a admin.*, plus a hall.* (#2814). Depuis #2809 la barre s'affiche sur /identite/ et /coffre/, mais ses liens etaient relatifs et visaient hall.gk2, qui ne sert pas les pages des modules. Sur un hote hall.*, le menu, le bouton Reglages et le menu de secours visent le MEME domaine en admin.* (port conserve) ; la sonde de sante inter-origine est sautee. Ailleurs : liens relatifs inchanges. 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 18:00:00 +0200
+
 secubox-hub (1.12.8-1~bookworm1) bookworm; urgency=medium
 
   * Barre du haut : le bloc de six icones (smart-strip) est retire sur toutes les pages (#2800). 1 test.
