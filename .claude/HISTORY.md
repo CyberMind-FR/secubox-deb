@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — fleet : panneau des box Auto-Load enrolees (ref #2840)
+
+secubox-annuaire 0.14.2 : /fleet/ lit aussi GET /api/v1/autoload/boxes (client, profil, statut, progression, etape, derniere activite). Panneau masque si module absent ou liste vide. Deploye gk2, publie apt.
+
 ## 2026-10-16 — Auto-Load : profil minimal, ESPRESSObin beta client (ref #2838)
 
 secubox-minimal 0.3.0 (+ agent Auto-Load), secubox-profiles 0.23.0 (profil d'activation minimal), secubox-autoload-agent 0.9.0 (connait minimal), secubox-autoload 0.6.1 (atelier). Tunnel sortant vers gk2, aucun port entrant ; identifiants d'usine a changer au premier login. Procedure d'atelier dans docs/AUTOLOAD-ATELIER.md.
