@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — ESPRESSObin : script fix-bootcmd (ref #2826)
+
+fix-bootcmd.scr (livre dans la partition de demarrage de l'image) : bootcmd = boot.scr de l'eMMC puis boot-usb.scr de la cle ; ancien bootcmd garde dans bootcmd_avant. Une ligne : usb start; load usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}.
+
 ## 2026-10-16 — Image ESPRESSObin : boot.scr et boot-usb.scr toujours livres (ref #2824)
 
 La CI n'installait pas u-boot-tools : l'image n'avait ni boot.scr ni boot-usb.scr (copie dans le bloc conditionnel de mkimage). Le workflow installe u-boot-tools, boot-usb.scr est copie sans mkimage, et l'absence de mkimage FAIT ECHOUER la construction d'une image espressobin*.

@@ -1997,6 +1997,13 @@ BOOTCMD_END
     ok "boot-usb.scr installé (démarrage USB en une ligne)"
   fi
 
+  # fix-bootcmd (#2826) : regle le bootcmd de la carte (eMMC puis USB) en gardant l'ancien. Livre compile, sans mkimage.
+  if [[ -f "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr" ]]; then
+    cp "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr" "${MNT}/boot/fix-bootcmd.scr"
+    [[ -f "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.cmd" ]] && cp "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.cmd" "${MNT}/boot/fix-bootcmd.cmd"
+    ok "fix-bootcmd.scr installé"
+  fi
+
   # Compiler le bootscript si mkimage est disponible
   if command -v mkimage >/dev/null 2>&1; then
     mkimage -C none -A arm64 -T script -d "${MNT}/boot/boot.cmd" "${MNT}/boot/boot.scr" >/dev/null
