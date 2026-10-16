@@ -613,7 +613,9 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         rctx = await reactions_context(request, row["id"], vhash, slug=row["slug"])
         rctx["pcsrf"] = pcsrf
         comments = await repo.list_approved_comments(app.state.conn, row["id"])
-        comment_views = [{**dict(c), "body_html": linkify_plain(c["body"])} for c in comments]
+        _dom = app.state.domaine or ""
+        from .services import miroir_bbs as _mb
+        comment_views = [{**dict(c), "body_html": (_mb.rendre_corps(c["body"], _dom) if c["source"] == "bbs" else linkify_plain(c["body"]))} for c in comments]
         base = _base(request)
         permalink_url = f"{base}/b/{row['slug']}"
         media_rows = await repo.list_media(app.state.conn, row["id"])

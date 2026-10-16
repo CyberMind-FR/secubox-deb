@@ -323,3 +323,5 @@ body.lb-lock{overflow:hidden}
 /* Commentaire SYSTÈME : réponse publique du BBS recopiée sous le billet (#2778) */
 .cline.systeme{border-left:2px solid var(--gold,#d9a441);padding-left:8px;background:color-mix(in srgb,var(--gold,#d9a441) 6%,transparent)}
 .cline .sys{display:inline-block;margin-left:6px;padding:0 6px;border:1px solid var(--gold,#d9a441);border-radius:999px;font-size:9.5px;color:var(--gold,#d9a441);font-family:var(--mono);vertical-align:middle}
+.cline .vignette{display:block;max-height:96px;max-width:100%;margin-top:4px;border-radius:6px;border:1px solid var(--edge,#333);object-fit:cover}
+.cline .vig,.cline .vid{display:inline-block;text-decoration:none}
