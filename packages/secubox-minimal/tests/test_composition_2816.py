@@ -113,3 +113,8 @@ def test_pas_de_postinst_de_leurre_ni_de_binaire_haproxy():
     """Le WAF est retire (#2849) : plus de leurre a armer, plus de haproxy en dependance."""
     assert not (PAQUETS / META / "debian" / "postinst").exists()
     assert "haproxy" not in CONTROL.split(f"Package: {META}", 1)[1].split("Conflicts:")[0]
+
+
+def test_ndpid_engine_exige_la_version_qui_choisit_son_interface():
+    """1.7.1 lance nDPId sur `eth2` (valeur de gk2) : sur l'ESPRESSObin, 61 redemarrages et la carte noyee (#2851). Le choix de l'interface est dans 1.7.2 (#2740)."""
+    assert re.search(r"secubox-ndpid-engine \(>= 1\.7\.2\)", CONTROL)
