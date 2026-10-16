@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — hub : depend de l'agregateur, /api/v1/hub/ plus en 404 sur image neuve (ref #2822)
+
+secubox-hub 1.12.10 : Depends secubox-aggregator (le postinst de hub n'ecrit dans aggregator.toml que si l'agregateur l'a deja cree).
+
 ## 2026-10-16 — Profil minimal 0.2.0 et demarrage USB (ref #2816)
 
 secubox-minimal 0.2.0 : + ipv6guard, webfilter ; Hall, WAF, metrics en Conflicts (un Recommends de auth/freebox ramenait le Hall dans l'image). Demarrage USB de l'ESPRESSObin en une ligne U-Boot : boot-usb.scr (root=LABEL=rootfs) livre dans la partition de demarrage.
