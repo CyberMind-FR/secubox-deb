@@ -187,6 +187,19 @@
         <div class="pan" id="pMesh"><h3>Catalogue du maillage <i id="meStat">—</i></h3>
             <p class="note" style="margin:0 0 8px">Services fédérés sur le maillage gondwana (annuaire) : quel nœud offre chaque service, par quel canal et comment l’atteindre.</p>
             <div class="tab"><table><thead><tr><th>Service</th><th>Type</th><th>Nœud</th><th>Canal</th><th>Accès</th></tr></thead><tbody id="bMesh"></tbody></table></div></div>
+
+        <div class="pan" id="pRemote"><h3>Installation à distance <i id="rStat">—</i></h3>
+            <p class="note" style="margin:0 0 8px">Demandez à un nœud lié d’installer un paquet : la demande voyage dans la boîte OpenPGP du maillage (signée et chiffrée). <b>Rien ne s’installe là-bas sans l’accord de son administrateur</b>, qui retape le nom du paquet. Ici, vous voyez les demandes que d’autres nœuds vous adressent.</p>
+            <div id="rRemote" class="retour" hidden></div>
+            <form class="barre-f" id="fRemote">
+                <input id="rPair" list="lPairs" placeholder="Nœud (nom de la box)" aria-label="Nœud cible" autocomplete="off" required><datalist id="lPairs"></datalist>
+                <input id="rPaquet" list="lPaquets" placeholder="Paquet (secubox-…)" aria-label="Paquet à installer" autocomplete="off" required><datalist id="lPaquets"></datalist>
+                <button class="btn primary" id="rEnvoyer" type="submit">Demander l’installation</button>
+            </form>
+            <h4 style="margin:10px 0 6px;font-size:.82rem">Demandes reçues</h4>
+            <div class="tab"><table><thead><tr><th>De</th><th>Paquet</th><th>État</th><th>Décision</th></tr></thead><tbody id="bRecues"></tbody></table></div>
+            <h4 style="margin:10px 0 6px;font-size:.82rem">Demandes envoyées</h4>
+            <div class="tab"><table><thead><tr><th>Vers</th><th>Paquet</th><th>État</th></tr></thead><tbody id="bEnvoyees"></tbody></table></div></div>
     </div></div></main>
     <div class="toast" id="toast" role="status"></div>
 
@@ -203,7 +216,7 @@
         const TYPES_FED = [['', 'Tout'], ['app', 'Applications'], ['site', 'Sites'], ['metablog', 'Métablogs'], ['waf', 'WAF'], ['dataset', 'Données'], ['archive', 'Archives'], ['config', 'Configurations']];
         const LIB_ETAT = { running: ['ok', 'EN MARCHE'], installed: ['cy', 'INSTALLÉ'], available: ['', 'DISPONIBLE'], unpublished: ['att', 'NON PUBLIÉ'], 'tier-locked': ['hors', 'VERROUILLÉ'] };
 
-        let CATS = null, ALL = null, GROUPES = null, MP = null, MESH = null, FEDALL = null;
+        let CATS = null, ALL = null, GROUPES = null, MP = null, MESH = null, FEDALL = null, REMOTE = null;
         let SESSION_OK = true, GROUPE = null, FED_TYPE = 'metablog', FED_N = 48;
         const FED_PAGE = 48;
         let CONFIRM = null;     // { genre:'module'|'cfg', cle, verbe } : confirmation en cours dans la page
@@ -256,6 +269,7 @@
                     'secubox-relais': { paquet: 'secubox-relais', version: '', installe: false, resume: 'Relais de services.', depends: [], recommends: [], suggests: [] } } };
             MESH = { catalog: [{ name: 'tor-socks', kind: 'socks', endpoint: 'socks5://192.0.2.10:9050', channel: 'mesh', provider_node: 'satellite-a', provider_mesh_ip: '10.10.0.2' },
                 { name: 'proxy-http', kind: 'http', endpoint: 'http://198.51.100.20:3128', channel: 'public', provider_node: 'satellite-b', provider_mesh_ip: '10.10.0.3' }], node_count: 2 };
+            REMOTE = { boite: 'ok', recues: [{ id: 'm1', demande: 'e'.repeat(32), de: 'did:plc:' + 'a'.repeat(32), boxname: 'satellite-a', paquet: 'secubox-relais', emis: 1000, etat: 'en_attente', message: '' }], envoyees: [] };
             FEDALL = { objets: [{ id: 'mb-1', type: 'metablog', name: 'Carnet de bord', description: 'Journal d’un nœud.', author: 'Atelier Exemple', license: 'CC-BY-4.0', version: '1.0.2', channel: 'stable', certifie: true, verrouille: false, apercus: 0 },
                 { id: 'mb-2', type: 'metablog', name: 'Gazette locale', description: 'Nouvelles du quartier.', author: 'Collectif Exemple', license: 'CC-BY-SA-4.0', version: '0.9.0', channel: 'beta', certifie: false, verrouille: false, motif: 'Éditeur inconnu de la fédération', apercus: 0 },
                 { id: 'ap-1', type: 'app', name: 'Calepin', description: 'Prise de notes chiffrée.', author: 'Atelier Exemple', license: 'MIT', version: '2.3.1', channel: 'stable', certifie: true, verrouille: true, apercus: 0 }], canaux_ouverts: ['stable'] };
@@ -263,13 +277,13 @@
 
         async function charger() {
             if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
-            const e = await Promise.allSettled([lire(API, '/categories'), lire(API, '/catalog'), lire(API, '/groupes'), lire(API, '/metapaquets'), lire(API, '/mesh-catalog'), lire(FED, '/catalog')]);
+            const e = await Promise.allSettled([lire(API, '/categories'), lire(API, '/catalog'), lire(API, '/groupes'), lire(API, '/metapaquets'), lire(API, '/mesh-catalog'), lire(FED, '/catalog'), lire(API, '/remote/demandes')]);
             const val = i => e[i].status === 'fulfilled' ? e[i].value : null;
             const refus = e.some(x => x.status === 'rejected' && (x.reason.statut === 401 || x.reason.statut === 403));
             const tous = e.every(x => x.status === 'rejected');
             SESSION_OK = !refus;
             CATS = val(0); const c = val(1); ALL = c && Array.isArray(c.modules) ? c.modules : null;
-            GROUPES = val(2); MP = val(3); MESH = val(4); FEDALL = val(5);
+            GROUPES = val(2); MP = val(3); MESH = val(4); FEDALL = val(5); REMOTE = val(6);
             $('erreur').hidden = !(tous && !refus);
             if (tous && !refus) $('erreur').textContent = 'Impossible de lire l’App Store (service arrêté ou injoignable).';
             rendre();
@@ -296,7 +310,7 @@
             const nonPub = n(m => m.state === 'unpublished'), verr = n(m => m.state === 'tier-locked');
             $('sDispo').textContent = ALL ? (nonPub + ' non publié(s) · ' + verr + ' verrouillé(s)') : 'installables';
             $('tTier').textContent = tiret(CATS && CATS.board_tier);
-            rendreFiltres(); rendreCumuls(); rendreGroupes(); rendreModules(); rendreArbre(); rendreFed(); rendreMesh();
+            rendreFiltres(); rendreCumuls(); rendreGroupes(); rendreModules(); rendreArbre(); rendreFed(); rendreMesh(); rendreRemote();
             $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
             annoncer();
         }
@@ -568,6 +582,62 @@
         $('fQ').addEventListener('input', () => { FED_N = FED_PAGE; rendreFed(); annoncer(); });
 
         // ----- Catalogue du maillage -----
+        // ----- Installation à distance (#2808) -----
+        const LIB_REMOTE = { en_attente: ['att', 'EN ATTENTE'], installee: ['ok', 'INSTALLÉE'], refusee: ['', 'REFUSÉE'], echec: ['att', 'ÉCHEC'], envoyee: ['cy', 'ENVOYÉE — SANS RÉPONSE'] };
+        function pastilleRemote(etat) { const l = LIB_REMOTE[etat] || ['', String(etat).toUpperCase()]; return pastille(l[0], l[1]); }
+        function rendreRemote() {
+            const r = REMOTE && typeof REMOTE === 'object' ? REMOTE : null;
+            const rec = r && Array.isArray(r.recues) ? r.recues : [], env = r && Array.isArray(r.envoyees) ? r.envoyees : [];
+            const att = rec.filter(x => x.etat === 'en_attente').length;
+            $('rStat').textContent = r ? (att ? att + ' demande(s) à décider' : 'aucune demande en attente') : '—';
+            if (r && r.boite === 'indisponible') retour('rRemote', false, 'Boîte OpenPGP indisponible : les demandes ne peuvent ni partir ni arriver tant que le service secubox-openpgp ne répond pas.');
+            const lp = $('lPairs'); lp.replaceChildren();
+            ((MESH && MESH.nodes) || []).forEach(n => { if (n.boxname) lp.appendChild(new Option(n.boxname, n.boxname)); });
+            const lq = $('lPaquets'); lq.replaceChildren();
+            (ALL || []).forEach(m => lq.appendChild(new Option(m.name, m.name)));
+            const tb = $('bRecues'); tb.replaceChildren();
+            if (!rec.length) { const tr = el('tr'), td = el('td', 'vide', r ? 'Aucune demande reçue.' : '—'); td.colSpan = 4; tr.appendChild(td); tb.appendChild(tr); }
+            rec.forEach(x => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(x.boxname || x.de))); tr.appendChild(el('td', 'mono', tiret(x.paquet)));
+                const te = el('td'); te.appendChild(pastilleRemote(x.etat)); if (x.message) te.appendChild(el('span', 'note', ' ' + x.message)); tr.appendChild(te);
+                const ta = el('td', 'act');
+                if (x.etat === 'en_attente') {
+                    const champ = el('input'); champ.type = 'text'; champ.placeholder = String(x.paquet); champ.setAttribute('aria-label', 'Retapez ' + x.paquet + ' pour accepter'); champ.dataset.paquet = String(x.paquet); champ.autocomplete = 'off';
+                    const ok = btn('Accepter', 'primary', () => {}); ok.dataset.action = 'accepter'; ok.dataset.id = String(x.id); ok.dataset.paquet = String(x.paquet); ok.disabled = true;
+                    const non = btn('Refuser', 'danger', () => {}); non.dataset.action = 'refuser'; non.dataset.id = String(x.id);
+                    ta.append(champ, ok, non);
+                }
+                tr.appendChild(ta); tb.appendChild(tr);
+            });
+            const te2 = $('bEnvoyees'); te2.replaceChildren();
+            if (!env.length) { const tr = el('tr'), td = el('td', 'vide', r ? 'Aucune demande envoyée.' : '—'); td.colSpan = 3; tr.appendChild(td); te2.appendChild(tr); }
+            env.forEach(x => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(x.boxname || x.a))); tr.appendChild(el('td', 'mono', tiret(x.paquet)));
+                const te = el('td'); te.appendChild(pastilleRemote(x.etat)); if (x.message) te.appendChild(el('span', 'note', ' ' + x.message)); tr.appendChild(te); te2.appendChild(tr);
+            });
+        }
+        async function remoteAgir(chemin, ok, ko) {
+            const r = await ecrire(API, 'POST', chemin);
+            if (r.ok) { retour('rRemote', true, ok); toast(ok); } else retour('rRemote', false, ko + ' : ' + detail(r));
+            charger();
+        }
+        $('bRecues').addEventListener('input', ev => {
+            const c = ev.target; if (!c.dataset || !c.dataset.paquet) return;
+            const b = c.closest('td').querySelector('button[data-action=accepter]'); if (b) b.disabled = c.value.trim() !== c.dataset.paquet;
+        });
+        $('bRecues').addEventListener('click', ev => {
+            const b = ev.target.closest('[data-action]'); if (!b) return;
+            const id = encodeURIComponent(b.dataset.id);
+            if (b.dataset.action === 'accepter') remoteAgir('/remote/demandes/' + id + '/accepter?confirmer=' + encodeURIComponent(b.dataset.paquet), 'Installation lancée sur cette box.', 'Installation refusée');
+            else if (b.dataset.action === 'refuser') remoteAgir('/remote/demandes/' + id + '/refuser', 'Demande refusée.', 'Refus impossible');
+        });
+        $('fRemote').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const r = await ecrire(API, 'POST', '/remote/demander', { pair: $('rPair').value.trim(), paquet: $('rPaquet').value.trim() });
+            if (r.ok) { retour('rRemote', true, 'Demande envoyée à ' + ((r.data && r.data.boxname) || $('rPair').value.trim()) + ' : son administrateur doit l’accepter.'); $('rPaquet').value = ''; charger(); }
+            else retour('rRemote', false, 'Envoi impossible : ' + detail(r));
+        });
+
         function rendreMesh() {
             const tb = $('bMesh'); tb.replaceChildren();
             const items = MESH && Array.isArray(MESH.catalog) ? MESH.catalog : null;

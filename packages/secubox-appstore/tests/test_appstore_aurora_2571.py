@@ -33,8 +33,8 @@ def test_routes_d_ecriture_a_l_identique():
     for r in ("/categories", "/catalog", "/groupes", "/metapaquets", "/mesh-catalog"):
         assert r in SRC
     assert "/api/v1/appstore" in SRC and "'/api/appstore'" in SRC
-    # aucune écriture nouvelle : seulement ces trois appels
-    assert len(re.findall(r"ecrire\(", SRC)) == 4   # définition + 3 appels
+    # écritures : ces trois appels + l'installation à distance (#2808 : accepter/refuser par remoteAgir, et demander)
+    assert len(re.findall(r"ecrire\(", SRC)) == 6   # définition + 3 appels d'origine + remoteAgir + demander
 
 
 playwright = pytest.importorskip("playwright.sync_api")

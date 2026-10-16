@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — App Store : installation a distance (ref #2808)
+
+secubox-appstore 0.9.0 : demande d'installation sur un autre noeud via la boite OpenPGP, accord de l'admin cible (nom retape), reponse a l'expediteur. A valider de bout en bout entre deux noeuds avant `closes`.
+
 ## 2026-10-16 — cookies : metriques vides, module always-on (ref #2811)
 
 secubox-profiles 0.21.1 : cookies always-on par defaut (cible du relais sbxmitm). Sur gk2 : `secubox-profilectl set-lifecycle`.

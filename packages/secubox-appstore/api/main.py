@@ -17,10 +17,10 @@ import tomllib
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from secubox_core.auth import require_lecture
 from secubox_core.auth import require_jwt
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 CATALOG_FILE = Path(os.environ.get(
     "APPSTORE_CATALOG", "/usr/share/secubox/appstore/catalog.json"))
@@ -653,3 +653,125 @@ async def put_config(name: str, body: ConfigIn):
     if rc != 0:
         raise HTTPException(status_code=400, detail=f"config write failed: {err or out}")
     return {"status": "ok", "module": name, "message": out}
+
+
+# ── Installation à distance (#2808) ────────────────────────────────────────────
+# La demande voyage dans la boîte OpenPGP inter-box (#1736) ; l'admin de la box CIBLE décide. Voir remote.py.
+import http.client
+import socket
+
+from . import remote as _remote
+
+OPENPGP_SOCK = os.environ.get("APPSTORE_OPENPGP_SOCK", "/run/secubox/openpgp.sock")
+REMOTE_STATE = Path(os.environ.get("APPSTORE_REMOTE_STATE", "/var/lib/secubox/appstore/remote.json"))
+
+
+class _Unix(http.client.HTTPConnection):
+    def __init__(self, chemin, timeout=15.0):
+        super().__init__("localhost", timeout=timeout)
+        self._chemin = chemin
+
+    def connect(self):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(self._chemin)
+
+
+def _openpgp(methode, chemin, token, corps=None):
+    """(statut, json) ; statut 0 si le démon est injoignable. Le jeton de l'ADMIN est transmis : la boîte exige l'admin, jamais un compte de service."""
+    try:
+        c = _Unix(OPENPGP_SOCK)
+        try:
+            h = {"Accept": "application/json"}
+            if token:
+                h["Authorization"] = "Bearer " + token
+            if corps is not None:
+                h["Content-Type"] = "application/json"
+            c.request(methode, chemin, body=json.dumps(corps) if corps is not None else None, headers=h)
+            r = c.getresponse()
+            brut = r.read()
+        finally:
+            c.close()
+        try:
+            return r.status, json.loads(brut.decode("utf-8", "replace"))
+        except ValueError:
+            return r.status, {}
+    except OSError:
+        return 0, {}
+
+
+def _jeton(req: Request) -> str:
+    a = req.headers.get("authorization", "")
+    return a[7:] if a.lower().startswith("bearer ") else (req.cookies.get("sbx_token") or "")
+
+
+def _envoyer_fn(token):
+    def envoyer(pair, objet, contenu):
+        st, d = _openpgp("POST", "/envoyer", token, {"pair": pair, "objet": objet, "contenu": contenu})
+        if st == 0:
+            raise HTTPException(502, "Boîte OpenPGP injoignable : le service secubox-openpgp ne répond pas.")
+        if st != 200:
+            raise HTTPException(502 if st >= 500 else 422, str(d.get("detail") or f"envoi refusé ({st})"))
+        return d
+    return envoyer
+
+
+def _installer_distant(paquet):
+    """Le MÊME chemin que l'installation locale : catalogue d'abord, puis secubox-appstorectl (liste blanche, paquets protégés, dépendances)."""
+    if paquet not in {m.get("name") for m in load_catalog()}:
+        return False, "paquet absent du catalogue de cette box"
+    rc, out, err = _appstorectl(["install", paquet])
+    return rc == 0, (out if rc == 0 else (err or out or f"échec (code {rc})"))
+
+
+class DemandeInstall(BaseModel):
+    pair: str = Field(..., min_length=3, max_length=64)
+    paquet: str = Field(..., min_length=10, max_length=80)
+
+
+@app.post("/remote/demander", dependencies=[Depends(require_jwt)])
+def remote_demander(req: DemandeInstall, request: Request):
+    """Demander à un nœud lié d'installer un paquet. Rien ne s'installe là-bas sans l'accord de son administrateur."""
+    if not _remote.paquet_valide(req.paquet):
+        raise HTTPException(400, "nom de paquet invalide")
+    if req.paquet not in {m.get("name") for m in load_catalog()}:
+        raise HTTPException(404, f"paquet {req.paquet!r} absent du catalogue")
+    try:
+        return _remote.demander(_remote.Etat(REMOTE_STATE), req.pair, req.paquet, _envoyer_fn(_jeton(request)))
+    except _remote.Refus as e:
+        raise HTTPException(e.statut, e.detail)
+
+
+@app.get("/remote/demandes", dependencies=[Depends(require_jwt)])
+def remote_demandes(request: Request):
+    """Demandes reçues (à décider) et envoyées (avec la réponse). Boîte injoignable : l'état gardé est rendu, signalé."""
+    etat = _remote.Etat(REMOTE_STATE)
+    token = _jeton(request)
+    boite = "ok"
+    st, d = _openpgp("GET", "/boite", token)
+    if st != 200:
+        boite = "indisponible"
+    else:
+        def lire(ident):
+            s2, m = _openpgp("GET", "/boite/" + ident, token)
+            return m if s2 == 200 else {}
+        _remote.synchroniser(etat, lambda: d.get("messages", []), lire)
+    return {"boite": boite, "recues": etat.recues(), "envoyees": etat.envoyees()}
+
+
+def _decider(ident, accepter, confirmer, request):
+    etat = _remote.Etat(REMOTE_STATE)
+    try:
+        return _remote.decider(etat, ident, accepter, confirmer, _installer_distant, _envoyer_fn(_jeton(request)))
+    except _remote.Refus as e:
+        raise HTTPException(e.statut, e.detail)
+
+
+@app.post("/remote/demandes/{ident}/accepter", dependencies=[Depends(require_jwt)])
+def remote_accepter(ident: str, request: Request, confirmer: str | None = None):
+    return _decider(ident, True, confirmer, request)
+
+
+@app.post("/remote/demandes/{ident}/refuser", dependencies=[Depends(require_jwt)])
+def remote_refuser(ident: str, request: Request):
+    return _decider(ident, False, None, request)
