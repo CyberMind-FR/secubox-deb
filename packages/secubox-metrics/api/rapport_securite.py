@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import os
 import socket
 import sys
 import time
@@ -34,6 +35,13 @@ DPI_PERIME_S = 3 * 3600            # un résumé plus vieux : annoncé périmé,
 WAF_CAMPAGNES = Path("/var/cache/secubox/waf/campaigns.json")
 ETATS_MODE = (Path("/var/lib/secubox/waf/campagne-ban-etat.json"), Path("/var/lib/secubox/waf/actor-ban-etat.json"))
 FRAICHEUR_MODE_S = 15 * 60
+# Visites, bannissements et état du pare-feu (#2772) : les fichiers du WAF, lisibles par le groupe secubox-waf dont `secubox` fait partie.
+WAF_VISITES = Path("/var/log/secubox/waf/visits-stats.json")
+WAF_BANS = Path("/var/lib/secubox/waf/bans.jsonl")
+NFT_ETAT = Path("/var/cache/secubox/waf/nft-etat.json")
+PERIME_VISITES_S = 3 * 3600
+PERIME_NFT_S = 15 * 60
+DELAI_STATS_ACTORD_S = 30.0         # actord /stats met ~5 s sur gk2 ; les autres lectures sont rapides
 
 # Palette et primitives de mise en page : communes aux rapports Aurora (pdf_aurora.py, #2390).
 import pdf_aurora as A  # noqa: E402
@@ -61,10 +69,10 @@ class _UnixHTTP(http.client.HTTPConnection):
         self.sock.connect(self._chemin)
 
 
-def lire_actord(chemin_api: str, sock: str = ACTOR_SOCK) -> Any:
-    """Lecture VUE RÉDUITE d'actord (jamais l'en-tête de la vue complète). None si actord ne répond pas."""
+def lire_actord(chemin_api: str, sock: str = ACTOR_SOCK, delai: float = 4.0) -> Any:
+    """Lecture VUE RÉDUITE d'actord (jamais l'en-tête de la vue complète). None si actord ne répond pas dans `delai` secondes."""
     try:
-        c = _UnixHTTP(sock)
+        c = _UnixHTTP(sock, delai)
         c.request("GET", chemin_api, headers={"Accept": "application/json"})
         r = c.getresponse()
         corps = r.read(4 << 20)
@@ -102,12 +110,100 @@ def lire_dpi(chemin: Path = DPI_RESUME, now: Optional[float] = None) -> Optional
     return r
 
 
+def lire_visites(chemin: Path = WAF_VISITES, now: Optional[float] = None) -> Optional[dict]:
+    """Visites vues par le WAF (instantané périodique de sbxwaf) + âge du fichier. None si absent ou illisible.
+    Les adresses des visiteurs (`top_ips`) ne sortent JAMAIS : le PDF part par courriel."""
+    d = _json(chemin)
+    if not isinstance(d, dict):
+        return None
+    d.pop("top_ips", None)
+    try:
+        now = time.time() if now is None else now
+        d["age_s"] = max(0, int(now - Path(chemin).stat().st_mtime))
+    except OSError:
+        d["age_s"] = None
+    return d
+
+
+def _cat_ban(cat: str) -> str:
+    base = (cat or "").split("|", 1)[0]
+    return "mesure d'acteur" if base.startswith("mesure:") else (base or "?")
+
+
+def lire_bans(chemin: Path = WAF_BANS, now: Optional[float] = None, lecture_max: int = 16 << 20) -> Optional[dict]:
+    """Résumé du journal des bannissements du WAF sur 24 h : bans, prolongations, levées, actifs, par heure du jour, par catégorie, par gravité.
+    Seule la FIN du fichier est lue (borne `lecture_max`). Une ligne illisible ou incomplète est ignorée ; fichier absent : None."""
+    now = time.time() if now is None else now
+    try:
+        taille = os.path.getsize(chemin)
+        with open(chemin, "rb") as f:
+            if taille > lecture_max:
+                f.seek(taille - lecture_max)
+                f.readline()                                # ligne coupée par le seek
+            brut = f.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    actifs: dict = {}
+    par_heure = [0] * 24
+    cats: dict = {}
+    sev: dict = {}
+    ips24 = set()
+    bans = prolong = unbans = 0
+    dernier = 0.0
+    debut = now - 86400
+    for ligne in brut.splitlines():
+        try:
+            e = json.loads(ligne)
+        except ValueError:
+            continue
+        if not isinstance(e, dict) or not e.get("ip") or not isinstance(e.get("at"), (int, float)):
+            continue
+        at, ip, action = float(e["at"]), str(e["ip"]), e.get("action")
+        dernier = max(dernier, at)
+        if action == "ban":
+            actifs[ip] = max(actifs.get(ip, 0.0), float(e.get("exp") or 0))
+            if at >= debut:
+                if "|prolonge" in str(e.get("cat") or ""):
+                    prolong += 1
+                else:
+                    bans += 1
+                    cats[_cat_ban(e.get("cat"))] = cats.get(_cat_ban(e.get("cat")), 0) + 1
+                    s = str(e.get("sev") or "?")
+                    sev[s] = sev.get(s, 0) + 1
+                    par_heure[time.localtime(at).tm_hour] += 1
+                ips24.add(ip)
+        elif action == "unban":
+            actifs.pop(ip, None)
+            if at >= debut:
+                unbans += 1
+    return {"bans_24h": bans, "prolongations_24h": prolong, "unbans_24h": unbans, "ips_24h": len(ips24),
+            "actifs": sum(1 for x in actifs.values() if x > now), "par_heure": par_heure,
+            "par_categorie": sorted(cats.items(), key=lambda kv: (-kv[1], kv[0]))[:8], "par_severite": sev,
+            "age_s": max(0, int(now - dernier)) if dernier else None}
+
+
+def lire_nft_etat(chemin: Path = NFT_ETAT, now: Optional[float] = None) -> Optional[dict]:
+    """État du jeu de règles du WAF dans nft (écrit par sbxwaf) : actif, table, réparations, âge de la dernière vérification et du dernier ban.
+    Le nombre d'éléments de l'ensemble n'est pas lisible ici : le service du rapport n'a pas le droit d'appeler nft (NoNewPrivileges)."""
+    d = _json(chemin)
+    if not isinstance(d, dict):
+        return None
+    now = time.time() if now is None else now
+
+    def age(c):
+        v = d.get(c)
+        return max(0, int(now - float(v))) if isinstance(v, (int, float)) and v else None
+    return {"actif": bool(d.get("actif")), "table": str(d.get("table") or "—"), "reparations": int(_num(d.get("reparations"))),
+            "verifie_il_y_a_s": age("verifie"), "dernier_ban_il_y_a_s": age("dernier_ban")}
+
+
 def collecter() -> dict:
     import rapport as R
     return {
         "genere": datetime.now(),
-        "waf": {"hist": R._lire_waf_historique(), "compteurs": R._lire_waf_stats(), "campagnes": _json(WAF_CAMPAGNES)},
-        "actor": {"stats": lire_actord("/api/v1/actor/stats"), "overview": lire_actord("/api/v1/actor/overview"), "radar": lire_actord("/api/v1/actor/radar?limit=30"),
+        "waf": {"hist": R._lire_waf_historique(), "compteurs": R._lire_waf_stats(), "campagnes": _json(WAF_CAMPAGNES),
+                "visites": lire_visites(), "bans": lire_bans(), "nft": lire_nft_etat()},
+        "actor": {"stats": lire_actord("/api/v1/actor/stats", delai=DELAI_STATS_ACTORD_S), "overview": lire_actord("/api/v1/actor/overview"), "radar": lire_actord("/api/v1/actor/radar?limit=30"),
                   "mesures": lire_actord("/api/v1/actor/mesures"), "mode": mode_application()},
         "dpi": lire_dpi(),
     }
@@ -169,6 +265,16 @@ def indisponibles(d: dict) -> list:
         m.append("WAF : historique des menaces")
     if not w.get("compteurs"):
         m.append("WAF : compteurs du jour")
+    if w.get("visites") is None:
+        m.append("WAF : visites (visits-stats.json)")
+    elif (w["visites"].get("age_s") or 0) > PERIME_VISITES_S:
+        m.append(f"WAF : visites périmées ({(w['visites'].get('age_s') or 0) // 3600} h)")
+    if w.get("bans") is None:
+        m.append("WAF : journal des bannissements")
+    if w.get("nft") is None:
+        m.append("WAF : état nft du pare-feu")
+    elif (w["nft"].get("verifie_il_y_a_s") or 0) > PERIME_NFT_S:
+        m.append(f"WAF : état nft périmé ({(w['nft'].get('verifie_il_y_a_s') or 0) // 60} min)")
     for cle, lib in (("stats", "compteurs"), ("overview", "vue d'ensemble"), ("radar", "radar"), ("mesures", "mesures en cours")):
         if a.get(cle) is None:
             m.append(f"Actor Intelligence : {lib}")
@@ -456,14 +562,70 @@ def _volet_dpi(pdf, d: dict) -> None:
     _barres(pdf, 111, y + 10, 86, [(x.get("domaine"), x.get("octets")) for x in (p.get("suggestions") or [])], fmt=octets, couleur=JAUNE, max_l=6)
 
 
+def _duree_courte(s) -> str:
+    if s is None:
+        return "—"
+    s = int(s)
+    return f"{s} s" if s < 90 else f"{s // 60} min" if s < 5400 else f"{s // 3600} h"
+
+
+def _volet_visites_bans(pdf, d: dict) -> None:
+    """Visites (WAF) et bannissements (journal du WAF + état nft) : ce que le WAF laisse passer, et ce qu'il écarte (#2772)."""
+    pdf.add_page()
+    w = d.get("waf") or {}
+    v, b, e = w.get("visites"), w.get("bans"), w.get("nft")
+    y = _titre_volet(pdf, 18, "WAF — visites et bannissements", "Visites : ce que le WAF a laissé entrer (hors attaques), instantané périodique de sbxwaf. Bannissements : journal du WAF sur 24 h ; l'état du pare-feu vient de nft. Aucune adresse n'est reproduite.")
+    ct = (v or {}).get("by_client_type") or {}
+    tot_ct = sum(_num(x) for x in ct.values())
+    nav = _num(ct.get("browser")) + _num(ct.get("mobile-app"))
+    st = (v or {}).get("by_status") or {}
+    y = _rangee_tuiles(pdf, y, [
+        ("Visites · requêtes vues", n((v or {}).get("total")) if v else "—", "depuis le démarrage du moteur", BLEU),
+        ("Visites · navigateurs", f"{100 * nav / tot_ct:.0f} %" if tot_ct else "—", "navigateurs et applications", CYAN),
+        ("Visites · erreurs", n(_num(st.get("4xx")) + _num(st.get("5xx"))) if st else "—", "réponses 4xx et 5xx", ORANGE),
+        ("Visites · sites", n(len((v or {}).get("by_vhost") or {})) if v else "—", "sites visités", VERT)])
+    y = _rangee_tuiles(pdf, y, [
+        ("Bans · 24 h", n((b or {}).get("bans_24h")) if b else "—", f"{n((b or {}).get('ips_24h'))} adresses distinctes" if b else "journal indisponible", ROUGE),
+        ("Bans · prolongés", n((b or {}).get("prolongations_24h")) if b else "—", "récidives, 24 h", ORANGE),
+        ("Bans · actifs", n((b or {}).get("actifs")) if b else "—", "non expirés, non levés", VIOLET),
+        ("nft · pare-feu", ("ACTIF" if e.get("actif") else "INACTIF") if e else "—", f"vérifié il y a {_duree_courte(e.get('verifie_il_y_a_s'))} · {n(e.get('reparations'))} réparations" if e else "état indisponible", VERT if (e or {}).get("actif") else ROUGE)])
+    y += 1
+    _panneau(pdf, 10, y, 92, 52, "Bans par heure", "aujourd'hui et hier, par heure du jour")
+    if b and sum(b["par_heure"]):
+        _image(pdf, graphe_heures([_num(x) for x in b["par_heure"]]), 12, y + 9, 88)
+    else:
+        pdf.set_xy(13, y + 25)
+        pdf.set_font("Helvetica", "", 8.5)
+        pdf.set_text_color(*FAIBLE)
+        pdf.cell(80, 5, _txt("— aucun ban sur 24 h —" if b else "— journal indisponible —"))
+    _panneau(pdf, 108, y, 92, 52, "Bans par catégorie", "24 h, hors prolongations")
+    _barres(pdf, 111, y + 10, 86, (b or {}).get("par_categorie") or [], couleur=ROUGE, max_l=7)
+    y += 56
+    _panneau(pdf, 10, y, 92, 54, "Visites par type de client", "navigateurs, robots, applications")
+    top = sorted(ct.items(), key=lambda kv: -_num(kv[1]))
+    _image(pdf, graphe_donut(top, n(tot_ct) if tot_ct else "—"), 12, y + 9, 36)
+    _barres(pdf, 50, y + 12, 50, top, fmt=lambda x: f"{100 * _num(x) / tot_ct:.0f}%" if tot_ct else "—", pas=6.6, max_l=5)
+    _panneau(pdf, 108, y, 92, 54, "Réponses du WAF", "classes de statut HTTP")
+    tot_st = sum(_num(x) for x in st.values())
+    coul = {"2xx": VERT, "3xx": CYAN, "4xx": ORANGE, "5xx": ROUGE}
+    ligne = [(k, _num(st.get(k))) for k in ("2xx", "3xx", "4xx", "5xx") if k in st]
+    _barres(pdf, 111, y + 10, 86, ligne, fmt=lambda x: f"{n(x)} · {100 * _num(x) / tot_st:.0f}%" if tot_st else n(x), couleur=CYAN, max_l=4)
+    y += 58
+    _panneau(pdf, 10, y, 92, 52, "Sites les plus visités", "requêtes vues")
+    _barres(pdf, 13, y + 10, 86, sorted(((v or {}).get("by_vhost") or {}).items(), key=lambda kv: -_num(kv[1])), couleur=CYAN, max_l=6)
+    _panneau(pdf, 108, y, 92, 52, "Systèmes des visiteurs", "déduits de l'en-tête de la requête")
+    _barres(pdf, 111, y + 10, 86, sorted(((v or {}).get("by_os") or {}).items(), key=lambda kv: -_num(kv[1])), couleur=VIOLET, max_l=6)
+
+
 def construire_pdf_securite(data: dict) -> bytes:
-    """Le PDF complet (A4, 4 pages : synthèse, WAF, Actor Intelligence, DPI)."""
+    """Le PDF complet (A4, 5 pages : synthèse, WAF, visites et bannissements, Actor Intelligence, DPI)."""
     pdf = _classe_page()()
     pdf.alias_nb_pages()
     pdf.set_auto_page_break(False)
     pdf.add_page()
     _synthese(pdf, data)
     _volet_waf(pdf, data)
+    _volet_visites_bans(pdf, data)
     _volet_actor(pdf, data)
     _volet_dpi(pdf, data)
     return bytes(pdf.output())
@@ -474,7 +636,7 @@ def executer_securite(collecter_: Callable[[], dict], construire: Callable[[dict
     if not cfg.get("destinataire"):
         return {"envoye": False, "raison": "aucun destinataire configuré ([rapport.waf])"}
     d = collecter_()
-    if len(indisponibles(d)) >= 8:
+    if len(indisponibles(d)) >= 11:
         return {"envoye": False, "raison": "aucune source n'a répondu"}
     pdf = construire(d)
     return envoyer(pdf, cfg["destinataire"], "Sécurité : WAF, Actor Intelligence, DPI", cfg.get("periode", "quotidien"),
