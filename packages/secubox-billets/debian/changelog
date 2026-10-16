@@ -1,3 +1,9 @@
+secubox-billets (1.30.0-1~bookworm1) bookworm; urgency=medium
+
+  * Les posts et reponses PUBLICS des fils BBS lies a un billet (ref_url ou lien du corps vers bbs.<domaine>/t/<id>, 3 fils au plus) deviennent des commentaires SYSTEME du billet, auteur en reference (« BBS · frodon ») : ils s affichent sous le billet, a l heure de la reponse, et le font remonter dans le fil (bumped_at ne recule jamais) (#2778). Le compteur de commentaires apparait a droite des cartes du fil, a cote de 💬, comme les « likes ». Lecture seule du BBS (mode=ro, corps sous le dossier de contenu seulement) ; jamais de post local, prive, supprime ni d un fil non public ; une reponse qui cesse d etre publique disparait ; un commentaire rejete par l administrateur n est jamais ressuscite ; balayage borne (20 s, 50 billets). Migration 0008 (source, source_ref, author_ref).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 15:00:00 +0200
+
 secubox-billets (0.12.0-1~bookworm1) bookworm; urgency=medium
 
   * Portail /billets/ au profil Aurora (#2473), en français, sur les statistiques réelles du

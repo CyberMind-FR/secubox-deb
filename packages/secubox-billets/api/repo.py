@@ -327,14 +327,15 @@ async def all_media(conn: aiosqlite.Connection) -> list[aiosqlite.Row]:
 async def add_comment(conn: aiosqlite.Connection, billet_id: str, *, author_name: str,
                       email_hash: Optional[str], body: str, ip_hash: str, honeypot: bool,
                       status: str, now: str, ulid: Optional[str] = None,
-                      video_t: Optional[int] = None) -> str:
-    """`video_t` = la seconde de lecture visée, ou None hors lecture (#1268)."""
+                      video_t: Optional[int] = None, source: Optional[str] = None,
+                      source_ref: Optional[str] = None, author_ref: Optional[str] = None) -> str:
+    """`video_t` = la seconde de lecture visée, ou None hors lecture (#1268). `source`/`source_ref`/`author_ref` : commentaire SYSTÈME miroir d'un fil BBS (#2778)."""
     cid = ulid or new_ulid()
     await conn.execute(
         "INSERT INTO comment(id,billet_id,created_at,author_name,author_email,body,"
-        "status,ip_hash,honeypot_tripped,video_t) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "status,ip_hash,honeypot_tripped,video_t,source,source_ref,author_ref) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (cid, billet_id, now, author_name, email_hash, body, status, ip_hash,
-         1 if honeypot else 0, video_t),
+         1 if honeypot else 0, video_t, source, source_ref, author_ref),
     )
     if status == "approved":
         await _remonter(conn, billet_id, now)
@@ -344,13 +345,27 @@ async def add_comment(conn: aiosqlite.Connection, billet_id: str, *, author_name
 
 async def list_approved_comments(conn: aiosqlite.Connection, billet_id: str) -> list[aiosqlite.Row]:
     async with conn.execute(
-        "SELECT id, author_name, body, created_at, video_t FROM comment "
+        "SELECT id, author_name, body, created_at, video_t, source, source_ref, author_ref FROM comment "
         "WHERE billet_id=? AND status='approved' "
         # Ancrés d'abord, dans l'ordre de la vidéo : la console se lit comme la
         # bande-son du billet. Les non-ancrés suivent, par date.
         "ORDER BY (video_t IS NULL), video_t ASC, created_at ASC", (billet_id,)
     ) as cur:
         return await cur.fetchall()
+
+
+async def comment_counts(conn: aiosqlite.Connection, ids: list[str]) -> dict[str, int]:
+    """Nombre de commentaires APPROUVÉS (réponses du BBS comprises) par billet : le compteur à droite des cartes du fil (#2778). Un billet sans commentaire vaut 0."""
+    ids = list(ids)
+    out = {i: 0 for i in ids}
+    if not ids:
+        return out
+    async with conn.execute(
+        f"SELECT billet_id, COUNT(*) FROM comment WHERE status='approved' AND billet_id IN ({','.join('?' * len(ids))}) GROUP BY billet_id", ids
+    ) as cur:
+        for bid, n in await cur.fetchall():
+            out[bid] = int(n)
+    return out
 
 
 async def list_pending_comments(conn: aiosqlite.Connection, *, limit: int = 200) -> list[aiosqlite.Row]:
