@@ -1,3 +1,9 @@
+secubox-core (1.7.9-1~bookworm1) bookworm; urgency=medium
+
+  * Le controle de vie nginx est une egalite EXACTE : `location = /health` (#2836). Le prefixe `location /health` masquait la page Sante /health/ (livree par secubox-hub) et la box repondait {"status":"ok"} au lieu de la page. 3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 01:00:00 +0200
+
 secubox-core (1.7.8-1~bookworm1) bookworm; urgency=high
 
   * secubox-waf-route ne signale plus le WAF (#2629). Il faisait « systemctl reload secubox-waf-ng » apres chaque route posee ; l'unite a ExecReload=kill -HUP, sbxwaf n'a pas de gestionnaire SIGHUP : il se terminait « avec succes » (SIGHUP est une sortie propre pour systemd), n'etait pas relance, et tous les vhosts publics repondaient 503 (gk2, 14 oct. : l'installation de lyrion, jellyfin, gitea, nextcloud et photoprism a coupe le WAF 3 min 30). Or sbxwaf relit deja la table a chaud (mtime, test TestRoutesHotReload) et l'ecriture est atomique : aucun signal n'est necessaire. 2 tests.

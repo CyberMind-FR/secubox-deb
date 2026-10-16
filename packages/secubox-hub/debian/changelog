@@ -1,3 +1,9 @@
+secubox-hub (1.12.11-1~bookworm1) bookworm; urgency=medium
+
+  * La sonde TCP des modules en conteneur (#2796) ne juge que les modules INSTALLES (#2836) : une box sans YouTube SAS (l'ESPRESSObin minimal) affichait « ytsas : Conteneur LXC injoignable » en erreur dans la sante. Presence = dossier de la page du module. 4 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 01:00:00 +0200
+
 secubox-hub (1.12.10-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-aggregator (#2822). Le postinst de hub se declare dans /etc/secubox/aggregator.toml seulement si ce fichier existe, et c'est l'agregateur qui le cree : sans dependance, apt pouvait configurer hub AVANT lui, hub n'etait jamais declare, /api/v1/hub/ repondait 404 et la barre laterale passait en mode de secours (constate sur l'ESPRESSObin minimal ; deja vu sur gk3, #1544). 3 tests.
