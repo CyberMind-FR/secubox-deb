@@ -1,3 +1,9 @@
+secubox-hub (1.12.12-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau Reseau : le WAN est l'interface de la ROUTE PAR DEFAUT, plus une interface devinee par son nom (#2857). gk2 affichait « Sortie Internet disconnected, WAN N/A, LAN 10.100.0.1 » alors qu'il avait Internet : son WAN est eth2 et son pont de conteneurs br-lxc passait pour le LAN. « connected » seulement si l'interface de la route par defaut porte une adresse ; un pont de conteneurs (br-lxc, lxcbr, docker, virbr…) n'est jamais le LAN ; plus de LAN invente (192.168.10.1) : « N/A ».
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:30:00 +0200
+
 secubox-hub (1.12.11-1~bookworm1) bookworm; urgency=medium
 
   * La sonde TCP des modules en conteneur (#2796) ne juge que les modules INSTALLES (#2836) : une box sans YouTube SAS (l'ESPRESSObin minimal) affichait « ytsas : Conteneur LXC injoignable » en erreur dans la sante. Presence = dossier de la page du module. 4 tests.

@@ -1067,62 +1067,56 @@ async def security_summary(user=Depends(require_jwt)):
     }
 
 
+# Ponts de CONTENEURS ou de virtualisation : jamais « le LAN » d'une box (br-lxc porte 10.100.0.1 sur gk2, #2857).
+_PONTS_NON_LAN = ("br-lxc", "lxcbr", "docker", "virbr", "veth", "eye-br", "wg-", "tun", "tap")
+_LAN_NOMS = ("br-lan", "br0", "lan0", "lan")
+
+
+def _inet(iface):
+    return [ai.get("local") for ai in (iface.get("addr_info") or []) if ai.get("family") == "inet" and ai.get("local")]
+
+
+def resume_reseau(addrs, routes):
+    """Résumé réseau d'après `ip -j addr` et `ip -j route show default`, sans deviner par nom (#2857).
+
+    WAN = l'interface de la ROUTE PAR DÉFAUT ; « connected » seulement si cette interface existe et porte une adresse IPv4. LAN = un pont br-lan/br0/lan0/lan, jamais un pont de
+    conteneurs ; sinon « N/A » : on n'invente plus 192.168.10.1."""
+    addrs = [i for i in (addrs or []) if isinstance(i, dict)]
+    wan_dev = next((r.get("dev") for r in (routes or []) if isinstance(r, dict) and r.get("dst") == "default" and r.get("dev")), None)
+    wan_ip = None
+    if wan_dev:
+        for i in addrs:
+            if i.get("ifname") == wan_dev and _inet(i):
+                wan_ip = _inet(i)[0]
+    lan_ip = None
+    for i in addrs:
+        nom = i.get("ifname", "")
+        if nom in _LAN_NOMS and _inet(i) and nom != wan_dev:
+            lan_ip = _inet(i)[0]
+            break
+    if not lan_ip:
+        for i in addrs:
+            nom = i.get("ifname", "")
+            if nom.startswith("br") and not nom.startswith(_PONTS_NON_LAN) and nom != wan_dev and _inet(i):
+                lan_ip = _inet(i)[0]
+                break
+    return {"wan_status": "connected" if wan_ip else "disconnected", "lan_ip": lan_ip or "N/A", "wan_ip": wan_ip or "N/A"}
+
+
 @router.get("/network_summary")
 def network_summary(user=Depends(require_jwt)):
-    """Résumé réseau with IP addresses."""
-    import json
+    """Résumé réseau : interfaces, WAN (route par défaut) et LAN (#2857)."""
+    def _json(cmd):
+        try:
+            return json.loads(subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout)
+        except Exception:
+            return None
 
-    # Get interface states
-    r = subprocess.run(["ip", "-j", "link", "show"], capture_output=True, text=True)
-    try:
-        links = json.loads(r.stdout)
-        ifaces = [l for l in links if l.get("ifname") != "lo"]
-        up_count = sum(1 for l in ifaces if "UP" in l.get("flags", []))
-    except Exception:
-        ifaces = []
-        up_count = 0
-
-    # Get IP addresses for common interfaces
-    lan_ip = None
-    wan_ip = None
-
-    # Try to get IP addresses using ip -j addr
-    r2 = subprocess.run(["ip", "-j", "addr", "show"], capture_output=True, text=True)
-    try:
-        addrs = json.loads(r2.stdout)
-        for iface in addrs:
-            ifname = iface.get("ifname", "")
-            addr_info = iface.get("addr_info", [])
-            for ai in addr_info:
-                if ai.get("family") == "inet":
-                    ip = ai.get("local")
-                    if ip:
-                        # LAN interfaces
-                        if ifname in ("br-lan", "br0", "lan0", "lan"):
-                            lan_ip = ip
-                        # WAN interfaces
-                        elif ifname in ("br-wan", "wan", "eth0", "wan0", "enp1s0"):
-                            wan_ip = ip
-                        # If no LAN yet, use any bridged interface
-                        elif ifname.startswith("br") and not lan_ip:
-                            lan_ip = ip
-    except Exception:
-        pass
-
-    # Fallback to default network
-    if not lan_ip:
-        lan_ip = "192.168.10.1"
-    if not wan_ip:
-        wan_ip = "N/A"
-
-    return {
-        "interfaces": len(ifaces),
-        "interfaces_up": up_count,
-        "wan_status": "connected" if wan_ip and wan_ip != "N/A" else "disconnected",
-        "lan_clients": 0,
-        "lan_ip": lan_ip,
-        "wan_ip": wan_ip,
-    }
+    links = _json(["ip", "-j", "link", "show"]) or []
+    ifaces = [l for l in links if isinstance(l, dict) and l.get("ifname") != "lo"]
+    up_count = sum(1 for l in ifaces if "UP" in l.get("flags", []))
+    r = resume_reseau(_json(["ip", "-j", "addr", "show"]), _json(["ip", "-j", "route", "show", "default"]))
+    return {"interfaces": len(ifaces), "interfaces_up": up_count, "lan_clients": 0, **r}
 
 
 @router.get("/netstats/summary")
