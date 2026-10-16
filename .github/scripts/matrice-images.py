@@ -122,8 +122,13 @@ def profils_pour(racine: Path, carte: str) -> list[str]:
     return profils
 
 
+#: Profils qu'un déclenchement MANUEL peut forcer. `minimal` (#2816 : DPI, dns-guard, ad-guard, NAC, Freebox, socle d'administration) n'est dans AUCUNE
+#: matrice publiée : il ne se construit que sur demande.
+PROFILS_ACCEPTES = ["lite", "isp", "full", "minimal"]
+
+
 def matrice(racine: Path, cartes: list[str], profil: str | None = None) -> list[dict[str, str]]:
-    """`profil` (lite|isp|full) force UN profil pour les cartes demandées (déclenchement manuel, #2497) : on construit l'image voulue, pas toute la matrice."""
+    """`profil` (lite|isp|full|minimal) force UN profil pour les cartes demandées (déclenchement manuel, #2497) : on construit l'image voulue, pas toute la matrice."""
     return [
         {"board": c, "profile": p}
         for c in cartes
@@ -136,7 +141,7 @@ def main() -> int:
     ap.add_argument("--racine", default=".", help="racine du dépôt")
     ap.add_argument("--cartes", required=True,
                     help="cartes séparées par des virgules, ou 'defaut'")
-    ap.add_argument("--profil", default="auto", choices=["auto", "lite", "isp", "full"],
+    ap.add_argument("--profil", default="auto", choices=["auto", *PROFILS_ACCEPTES],
                     help="force UN profil pour les cartes demandées (auto = ceux que la matrice publie)")
     ap.add_argument("--defaut", default="mochabin,vm-x64,rpi400,espressobin-v7",
                     help="cartes bâties quand --cartes vaut 'defaut'")

@@ -1,0 +1,7 @@
+secubox-minimal (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premier profil minimal (#2816) : DPI (secubox-dpi + moteur nDPI), garde DNS, ad-guard, NAC et Freebox, avec le seul socle d'administration
+    (core, aggregator, system, hardening, hub, portal, auth). Ni WAF, ni ISP, ni Hall, ni metrics (le module « visites »), ni VPN.
+    Pour essais sur ESPRESSObin V7 depuis une cle USB. Un test verifie sur la fermeture des dependances que rien d'interdit n'entre indirectement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 19:00:00 +0200

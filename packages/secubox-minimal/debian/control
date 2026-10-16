@@ -1,0 +1,32 @@
+Source: secubox-minimal
+Section: metapackages
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-minimal
+Architecture: all
+Depends: ${misc:Depends},
+# SOCLE D'ADMINISTRATION (WebUI admin seulement, pas de Hall) : l'API, le menu, la connexion.
+ secubox-core (>= 1.0),
+ secubox-aggregator,
+ secubox-system (>= 1.0),
+ secubox-hardening (>= 1.0),
+ secubox-hub (>= 1.0),
+ secubox-portal (>= 1.0),
+ secubox-auth (>= 1.4.0),
+# LES MODULES DEMANDES : DPI (avec son moteur nDPI), garde DNS, filtre de publicites, controle d'acces reseau, Freebox.
+ secubox-dpi (>= 1.7.0),
+ secubox-ndpid-engine,
+ secubox-dns-guard,
+ secubox-ad-guard (>= 1.6.2),
+ secubox-nac (>= 1.0),
+ secubox-freebox
+Description: SecuBox Minimal — DPI, garde DNS, filtre de publicites, NAC et Freebox
+ Profil minimal, pour une petite carte (ESPRESSObin) : inspection des paquets (DPI), detection d'anomalies DNS (dns-guard), filtrage
+ des publicites et traqueurs (ad-guard), controle d'acces reseau (NAC) et module Freebox, avec la seule interface d'administration.
+ Ni WAF, ni profil ISP, ni Hall, ni metrics (le module « visites »), ni VPN, ni service heberge.
+ secubox-toolbox est tire par ad-guard (dependance dure) ; le moteur d'interception secubox-toolbox-ng n'est pas installe.

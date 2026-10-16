@@ -68,7 +68,7 @@ on:
         description: 'Profil à construire (auto = ceux que la matrice publie pour la carte) — ex. lite pour une image RPi400 légère (#2497)'
         required: false
         type: choice
-        options: [auto, lite, isp, full]
+        options: [auto, lite, isp, full, minimal]
         default: auto
       kiosk:
         description: 'rpi400/rpi4 only: GUI kiosk (chromium fullscreen dashboard). auto = inclus pour rpi400/rpi4 (#2495)'
