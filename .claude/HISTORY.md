@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Hall : barre de navigation sur /identite/ (ref #2809)
+
+secubox-webos 1.12.2 : /shared/ en lecture seule + menu et health-batch derriere le double verrou LAN+session sur le vhost du Hall.
+
 ## 2026-10-16 — proxypac etape 2 : cache des CDN statiques (ref #2804, #2752)
 
 secubox-toolbox-ng 0.13.0 (cache de reponses dans sbxmitm, liste fermee, par instance) + secubox-tor 1.7.0 (accepter/retirer dans proxypac). Etape 3 abandonnee (nos pages n'ont pas de CDN statique externe) ; routage PAC sans cible (MITM sur wg-toolbox/loopback seulement).
