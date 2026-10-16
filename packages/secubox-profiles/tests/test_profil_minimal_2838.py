@@ -11,13 +11,12 @@ MINIMAL = load_profile(Path(__file__).resolve().parent.parent / "profiles" / "mi
 
 
 def test_les_modules_du_profil_minimal_sont_allumes():
-    for mid in ("dpi", "ndpid-engine", "dns-guard", "ad-guard", "nac", "freebox", "ipv6guard", "webfilter", "hub", "portal", "auth", "aggregator", "core", "system", "hardening", "autoload-agent",
-                "haproxy", "waf", "waf-ng", "waf-ratelimit", "wireguard"):
+    for mid in ("dpi", "ndpid-engine", "dns-guard", "ad-guard", "nac", "freebox", "ipv6guard", "webfilter", "hub", "portal", "auth", "aggregator", "core", "system", "hardening", "autoload-agent", "wireguard"):
         assert mid in MINIMAL.on, mid
 
 
 def test_ce_que_minimal_exclut_reste_eteint():
-    for mid in ("metrics", "webos", "kiosk", "isp", "toolbox-tor", "mail", "nextcloud", "gitea"):
+    for mid in ("waf", "waf-ng", "haproxy", "waf-ratelimit", "metrics", "webos", "kiosk", "isp", "toolbox-tor", "mail", "nextcloud", "gitea"):
         assert mid not in MINIMAL.on, mid
 
 

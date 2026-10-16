@@ -1,3 +1,9 @@
+secubox-minimal (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Retire le WAF et HAProxy (#2849) : haproxy, secubox-haproxy et secubox-waf-ng quittent les dependances, le Conflicts sur secubox-waf-ng est retabli, le postinst qui armait le leurre disparait. Essayes sur l ESPRESSObin (951 Mo), ils ont sature la carte : swap plein, charge superieure a 10, deux coupures franches. Le WAF reste en amont, sur l infrastructure. WireGuard reste (#2845).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 11:00:00 +0200
+
 secubox-minimal (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Ajoute le WAF (#2847) : haproxy, secubox-haproxy et secubox-waf-ng. Le frontal HAProxy devant sbxwaf est pose au premier demarrage (image/firstboot.sh, etape 16) ; leurre et detection de force brute protegent l'administration. Le Conflicts sur secubox-waf-ng est retire (webos, waf legacy et metrics restent exclus). Le postinst arme le leurre depuis le modele de waf-ng (drop-in honeypot, filigrane genere sur place en 0400), sans rien ecraser.
