@@ -1,3 +1,9 @@
+secubox-metrics (1.28.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rapport quotidien de securite (#2772) : (1) les quatre tuiles Actor etaient vides — actord /stats met ~5 s sur gk2 et le rapport n attendait que 4 s ; delai de 30 s pour cet appel, 4 s pour les lectures rapides ; (2) nouveau volet « WAF — visites et bannissements » : visites vues par le WAF (requetes, navigateurs, erreurs, sites, types de clients, statuts, systemes), bannissements sur 24 h depuis le journal du WAF (bans, prolongations, actifs, par heure, par categorie) et etat du pare-feu nft (actif, verification, reparations). Aucune adresse de visiteur ni de banni n est reproduite. Sources absentes ou perimees listees dans « Mesures non disponibles » (onze sources, rien n est envoye si aucune ne repond).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 12:30:00 +0200
+
 secubox-metrics (1.27.0-1~bookworm1) bookworm; urgency=medium
 
   * Glances : la page « Systeme en direct » REMPLACE l ancienne page (verdict du mainteneur, #2769) ; les barres des coeurs, des disques et des processus etaient invisibles sous le cadre (hybrid-skin.css impose un fond transparent !important dans main) : couleurs posees en style direct prioritaire, test de non-regression avec la vraie feuille du cadre.

@@ -31,6 +31,12 @@ def donnees(**sur):
                    "radar": RADAR, "mesures": {"par_niveau": {"TARPIT": 2}}, "mode": {"mode": "ACTIVE", "detail": {"campagnes": "ACTIVE", "acteurs": "ACTIVE"}}},
          "dpi": {"genere_le": time.time(), "age_s": 1, "perime": False, "stats": {"flux": 10, "octets": 2048, "protocoles": [{"nom": "TLS", "pct": 90}]}, "usages": [{"nom": "ai", "octets": 5}],
                  "pays": [{"cc": "FR", "octets": 9}], "appareils_total": 1, "appareils": [{"nom": "a", "octets": 9, "destinations": [{"hote": "h", "octets": 1}]}], "suggestions": []}}
+    # #2772 : visites, bannissements et état nft du WAF — un jeu de données « complet » les contient.
+    d["waf"].update({"visites": {"total": 1000, "by_vhost": {"a.test": 600}, "by_client_type": {"browser": 700, "bot": 300}, "by_os": {"Linux": 500, "other": 500},
+                                 "by_status": {"2xx": 900, "4xx": 100}, "age_s": 30},
+                     "bans": {"bans_24h": 40, "prolongations_24h": 7, "unbans_24h": 1, "ips_24h": 35, "actifs": 120, "par_heure": [i % 5 for i in range(24)],
+                              "par_categorie": [("lfi", 20), ("scanners", 10)], "par_severite": {"medium": 30}, "age_s": 60},
+                     "nft": {"actif": True, "table": "inet secubox", "reparations": 0, "verifie_il_y_a_s": 20, "dernier_ban_il_y_a_s": 90}})
     d.update(sur)
     return d
 
