@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Banniere de connexion : https://<IP>/ (ref #2828)
+
+build-image.sh annonçait le port 9443 (copie de l'image Raspberry Pi) ; les images servent le HTTPS sur 443.
+
 ## 2026-10-16 — ESPRESSObin : script fix-bootcmd (ref #2826)
 
 fix-bootcmd.scr (livre dans la partition de demarrage de l'image) : bootcmd = boot.scr de l'eMMC puis boot-usb.scr de la cle ; ancien bootcmd garde dans bootcmd_avant. Une ligne : usb start; load usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}.
