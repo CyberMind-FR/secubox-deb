@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — minimal : ndpid-engine >= 1.7.2, fin de la boucle sur eth2 (ref #2851)
+
+secubox-minimal 0.5.1. La carte portait ndpid-engine 1.7.1 (61 redemarrages, nDPId sur eth2 inexistante) ; la correction #2740 etait en 1.7.2. 1.7.2 arm64 (artefact CI) publie dans apt trixie et installe sur la carte : actif sur eth0.
+
 ## 2026-10-16 — minimal : WAF et HAProxy essayes puis retires (ref #2847, #2849)
 
 secubox-minimal 0.4.0 avait ajoute haproxy, secubox-haproxy, secubox-waf-ng (+ leurre arme par postinst) ; sur l'ESPRESSObin (951 Mo) la carte a sature (swap plein, charge > 10) et a du etre coupee deux fois. Decision du proprietaire : retrait. secubox-minimal 0.5.0 (sans WAF ni HAProxy, Conflicts waf-ng retabli, WireGuard garde), secubox-profiles 0.23.2. Retire de la carte (paquets purges, drop-in et filigrane supprimes). Le WAF reste sur gk2 (publication admin.lgm-ebin.secubox.in). Hors source sur la carte : regle nft SSH reserve au LAN (/etc/secubox/hardening/nft-input-trust.d/00-ssh-lan.nft), agent Auto-Load desactive. Reste : alleger le profil (ndpid-engine, python3 de l'agregateur, minuteurs), agent Auto-Load qui rejoue le mot de passe d'usine au demarrage.
