@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — minimal : WAF et HAProxy essayes puis retires (ref #2847, #2849)
+
+secubox-minimal 0.4.0 avait ajoute haproxy, secubox-haproxy, secubox-waf-ng (+ leurre arme par postinst) ; sur l'ESPRESSObin (951 Mo) la carte a sature (swap plein, charge > 10) et a du etre coupee deux fois. Decision du proprietaire : retrait. secubox-minimal 0.5.0 (sans WAF ni HAProxy, Conflicts waf-ng retabli, WireGuard garde), secubox-profiles 0.23.2. Retire de la carte (paquets purges, drop-in et filigrane supprimes). Le WAF reste sur gk2 (publication admin.lgm-ebin.secubox.in). Hors source sur la carte : regle nft SSH reserve au LAN (/etc/secubox/hardening/nft-input-trust.d/00-ssh-lan.nft), agent Auto-Load desactive. Reste : alleger le profil (ndpid-engine, python3 de l'agregateur, minuteurs), agent Auto-Load qui rejoue le mot de passe d'usine au demarrage.
+
 ## 2026-10-16 — WireGuard distant par WAN : la box lgm-ebin offre la sortie Internet (ref #2845, #2844)
 
 secubox-wireguard 1.3.0 : `wgctl serveur init` (wg-clients 10.66.0.1/24, nft propre forward+masquerade, point d'acces configurable), configs clientes 0640 root:secubox (etaient 0644 avec la cle privee). Deploye sur la box d'essai ; sur gk2 : relais UDP 51840 -> 10.64.0.9:51820 (table nft secubox_relais_wg, /etc/nftables.d/zz-secubox-relais-wg-lgm-ebin.nft, HORS SOURCE, a porter dans secubox-autoload) ; publication admin.lgm-ebin.secubox.in (certificat, vhost, route sbxwaf 10.64.0.9:9080, HORS SOURCE, #2844). Reste : redirection UDP 51840 de la Freebox vers gk2, essai de bout en bout depuis un client.
