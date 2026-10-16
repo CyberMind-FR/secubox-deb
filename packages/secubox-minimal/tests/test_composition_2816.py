@@ -3,8 +3,9 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """#2816 — profil `minimal` : DPI, dns-guard, ad-guard, NAC, Freebox, ipv6guard, webfilter, avec le seul socle d'administration (WebUI admin).
+#2847 — plus le WAF (HAProxy en frontal devant sbxwaf : leurres, force brute) et WireGuard (sortie Internet distante).
 
-Ni WAF, ni ISP, ni Hall, ni metrics (le module « visites ») : le test calcule la FERMETURE des dependances sur les `control` du depot,
+Ni ISP, ni Hall, ni metrics (le module « visites ») : le test calcule la FERMETURE des dependances sur les `control` du depot,
 car un module requis par un autre fait entrer ce qu'on voulait exclure."""
 import re
 from pathlib import Path
@@ -13,10 +14,11 @@ PAQUETS = Path(__file__).resolve().parents[2]
 META = "secubox-minimal"
 CONTROL = (PAQUETS / META / "debian" / "control").read_text(encoding="utf8")
 
-REQUIS = {"secubox-dpi", "secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox", "secubox-ipv6guard", "secubox-webfilter", "secubox-autoload-agent"}
+REQUIS = {"secubox-dpi", "secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox", "secubox-ipv6guard", "secubox-webfilter", "secubox-autoload-agent",
+          "secubox-haproxy", "secubox-waf-ng", "secubox-wireguard"}
 SOCLE_ADMIN = {"secubox-core", "secubox-aggregator", "secubox-hub", "secubox-portal", "secubox-auth"}
-INTERDITS = {"secubox-waf-ng", "secubox-waf", "secubox-haproxy", "secubox-webos", "secubox-isp", "secubox-lite", "secubox-full",
-             "secubox-metrics", "secubox-soc", "secubox-toolbox-ng", "secubox-mediaflow", "secubox-torrent", "secubox-mail", "secubox-wireguard"}
+INTERDITS = {"secubox-waf", "secubox-webos", "secubox-isp", "secubox-lite", "secubox-full",
+             "secubox-metrics", "secubox-soc", "secubox-toolbox-ng", "secubox-mediaflow", "secubox-torrent", "secubox-mail"}
 
 
 def noms(chunk):
@@ -104,4 +106,23 @@ def test_les_modules_exclus_sont_en_conflicts_car_un_recommends_les_ramenait():
     m = re.search(r"^Conflicts:((?:.*\n?(?: .*\n?)*))", bloc, re.M)
     assert m, "Conflicts absent"
     conflits = noms(m.group(1))
-    assert {"secubox-webos", "secubox-waf-ng", "secubox-metrics"} <= conflits, conflits
+    assert {"secubox-webos", "secubox-metrics"} <= conflits, conflits
+    assert "secubox-waf-ng" not in conflits, "le WAF fait partie du profil (#2847) : un Conflicts l'empecherait de s'installer"
+
+
+def test_le_binaire_haproxy_est_une_dependance_dure():
+    """secubox-haproxy ne fait que le RECOMMANDER ; sans le binaire, `haproxyctl frontal` echoue et la box reste en nginx autonome, sans WAF."""
+    assert "haproxy" in re.sub(r"secubox-haproxy", "", CONTROL.split(f"Package: {META}", 1)[1].split("Conflicts:")[0]).replace("\n", " ").replace(",", " ").split()
+
+
+POSTINST = PAQUETS / META / "debian" / "postinst"
+
+
+def test_le_postinst_arme_le_leurre_depuis_le_modele_du_waf_sans_ecraser():
+    """Le modele de secubox-waf-ng EST la procedure d'armement : on la rejoue, on ne la recopie pas (un miroir derive). Jamais d'ecrasement d'un drop-in ou d'un secret existants."""
+    t = POSTINST.read_text(encoding="utf8")
+    assert "/usr/share/secubox/waf/honeypot.conf" in t and "secubox-waf-ng.service.d" in t and "10-honeypot.conf" in t
+    assert "/etc/secubox/secrets/filigrane" in t and "secubox-waf" in t and "0400" in t
+    assert t.count("[ ! -e") >= 2 or t.count("! -e") >= 2, "armement idempotent : ne rien ecraser"
+    assert "systemctl daemon-reload" in t and "try-restart secubox-waf-ng" in t
+    assert "set -e" in t and "#DEBHELPER#" in t

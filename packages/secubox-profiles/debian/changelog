@@ -1,3 +1,9 @@
+secubox-profiles (0.23.1-1~bookworm1) bookworm; urgency=medium
+
+  * Profil d'activation `minimal` : allume haproxy, waf, waf-ng, waf-ratelimit et wireguard (#2847). Sans eux, `secubox-profilectl apply --profile minimal` eteindrait le WAF et WireGuard qu'embarque desormais secubox-minimal 0.4.0.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 10:10:00 +0200
+
 secubox-profiles (0.23.0-1~bookworm1) bookworm; urgency=medium
 
   * Profil d'activation `minimal` (#2838) : ce que `secubox-profilectl apply --profile minimal` laisse allume (DPI, dns-guard, ad-guard, NAC, Freebox, WebUI d'administration ; ni WAF, ni Hall, ni metrics, ni kiosque, ni Tor). Exigé par l'agent Auto-Load pour un client minimal. Les profils sans ecran n'ont ni kiosque ni console. 3 tests.
