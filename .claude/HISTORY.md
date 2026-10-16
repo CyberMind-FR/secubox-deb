@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — antirootkit : API KO corrigee (ref #2805)
+
+secubox-security-posture 2.4.1 : SupplementaryGroups=secubox dans l'unite antirootkit (secret JWT illisible sinon).
+
 ## 2026-10-16 — App Store : cumuls par categorie (ref #2802)
 
 secubox-appstore 0.8.0 : panneau de cumuls par categorie (installes/total, a installer), cliquable pour filtrer.

@@ -1,3 +1,9 @@
+secubox-security-posture (2.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * antirootkit : l'API ne repondait plus (« API KO », #2805). L'unite tourne sous le compte dedie secubox-antirootkit, qui ne pouvait pas lire /etc/secubox/secubox.conf (0640 secubox:secubox) : « RuntimeError: jwt_secret is not configured » a chaque requete authentifiee. SupplementaryGroups=secubox est ajoute (le groupe principal reste celui du service). 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 13:00:00 +0200
+
 secubox-security-posture (2.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Pages /security-posture/ et www/index.html (tableau historique) refaites au profil Aurora (ref #2646) : pages autonomes en français (CSS et JS en ligne ; plus de Google Fonts, de skin hybrid-dark, ni de posture.css / posture.js, supprimés), tuiles avec infobulles de définition (score global, DEFCON, couverture, constats, CSPN, TPN), jauge SVG du score, cartes de domaines (couverture, avertissements), constats avec commande de remédiation copiable, audits CSPN et TPN, mode ?demo=1 (données fictives, action inerte, bandeau orange) et ?embed=1, bandeau « session requise » sur 401/403, état « calcul en cours » sur 503 avec nouvelle tentative, état HORS LIGNE, hauteur annoncée à l'hôte (sbxVue).
