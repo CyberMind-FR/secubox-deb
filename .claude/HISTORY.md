@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — NAC : les conteneurs LXC sont nommés (secubox-nac 3.9.2, closes #2773)
+- Demande : « Nommer les conteneurs lxc » (`/nac/` affichait « Conteneur sans nom » pour 10.100.0.110, .111, .120, .130).
+- Cause : l'inventaire root `secubox-nac-lxc-names` (#2445) ne lisait que `/var/lib/lxc` (7 adresses) ; mqtt, zigbee, peertube, photoprism, ytsas, lyrion, jellyfin, jitsi, torrent, picobrew, clamav, grafana, yacy, toolbox-mitm vivent dans `/data/lxc`, adresse en dur dans leur config. Piste écartée : `lxc-ls` (le service root est confiné, sans droit d'entrer dans un espace de noms).
+- Correctif : les deux dossiers sont lus (`SBX_LXC_DIR` en accepte plusieurs, séparés par « : ») ; la première déclaration d'une adresse l'emporte. Essai à blanc sur gk2 avant déploiement : 21 conteneurs nommés au lieu de 7.
+
 ## 2026-10-16 — Glances remplacée par « Système en direct », barres visibles ; Courbes : graphiques vides corrigés (secubox-metrics 1.27.0, closes #2769, closes #2770)
 - Verdict du mainteneur sur la page « Système en direct » : « garder celle-là, la tienne » → elle remplace /glances/ (l'ancienne page, ses tests et ses commandes de démon Glances sont retirés ; l'API Glances reste). Capture du mainteneur : barres des cœurs vides.
 - Cause des barres vides (reproduite avec les vraies feuilles du cadre) : `hybrid-skin.css` impose `background-color: transparent !important` à tout ce qui est dans `<main>` ; un fond posé en style direct est annulé. Parade : style direct `!important`. Test de non-régression avec la vraie feuille.
