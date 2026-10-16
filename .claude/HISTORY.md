@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Annuaire : l'acceptation d'une proposition accepte les scopes avec deux-points (secubox-annuaire 0.14.1, closes #2776)
+- Constat du mainteneur (page des centres, « Propositions ») : « Acceptation impossible : String should match pattern '^[a-z0-9][a-z0-9._-]*$' ».
+- Cause (reproduite sur gk2) : les propositions réelles portent des scopes `mitm-exclusion:gk2` / `mitm-exclusion:c3box` (publiés par la toolbox) ; la requête d'acceptation et d'octroi, le modèle de la config signée et de l'octroi délégué, et le nom de fichier appliqué refusaient le deux-points.
+- Correctif : `:` admis dans cette chaîne seulement ; `config_apply` passe en `fullmatch` (le `$` de `re.match` laissait passer un « \n » final dans un nom de fichier). Offres et incidents d'assistance gardent leur motif strict. 74 tests ; les 15 échecs de la suite sont ceux de master (authentification locale).
+
 ## 2026-10-16 — Rapport de sécurité PDF : tuiles Actor réparées, volet visites et bannissements (secubox-metrics 1.28.0, closes #2772)
 - Demande du mainteneur (capture du PDF) : « pdf missing actor metrics », puis « missing visites and bans stats and graphics » ; sources désignées : « waf et nft ».
 - Tuiles Actor vides : `GET /api/v1/actor/stats` d'actord met 5,0 s sur gk2 (mesuré), le rapport n'attendait que 4 s → `stats` valait None. Délai par appel : 30 s pour `/stats`, 4 s pour les lectures rapides. (actord `/stats` à 5 s reste lent : performance à voir séparément.)

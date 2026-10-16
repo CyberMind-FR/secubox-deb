@@ -551,9 +551,9 @@ class ConfigBlob(BaseModel):
     publisher:    str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
     scope:        str = Field(
         ...,
-        pattern=r"^[a-z0-9][a-z0-9._-]*$",
-        description="what this configures, e.g. a module name 'yacy' — becomes a bare "
-                    "filename component on disk (config_apply.py), so no '/' or '..'",
+        pattern=r"^[a-z0-9][a-z0-9._:-]*$",
+        description="what this configures, e.g. a module name 'yacy' or 'mitm-exclusion:gk2' — becomes a bare "
+                    "filename component on disk (config_apply.py), so no '/' or '..' (':' is not a path separator, #2776)",
     )
     version:      int = Field(..., ge=0, description="monotonic; higher wins (last-writer-wins)")
     content_hash: str = Field(..., description="BLAKE2b-256 hex of the canonical config content")
@@ -592,7 +592,7 @@ class Grant(BaseModel):
     capability: str = Field(default="config", description="what is delegated, e.g. 'config'")
     scope:      str = Field(
         ...,
-        pattern=r"^[a-z0-9][a-z0-9._-]*$",
+        pattern=r"^[a-z0-9][a-z0-9._:-]*$",
         description="what this grant covers, e.g. a module name 'firewall' — becomes a "
                     "bare filename component on disk (config_apply.py), so no '/' or '..'",
     )
