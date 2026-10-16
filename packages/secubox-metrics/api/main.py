@@ -1092,6 +1092,14 @@ def metrics_series(duree: float = 3600, points: int = 240, depuis: Optional[floa
     return JSONResponse(content=serie.vue(duree, points, depuis=depuis, jusqua=jusqua), headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/v1/metrics/systeme", dependencies=[Depends(require_lecture)])
+async def metrics_systeme():
+    """Instantané système rapide (#2767) : CPU par cœur, mémoire, disques, réseau, top des processus (sans ligne de commande). Sans cache."""
+    import systeme
+    mesures = await asyncio.get_running_loop().run_in_executor(None, systeme.instantane)
+    return JSONResponse(content=mesures, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/v1/metrics/cookie-audit", dependencies=[Depends(require_lecture)])
 async def cookie_audit_metrics():
     """Inventaire RGPD des cookies deposes, par vhost (#1311).

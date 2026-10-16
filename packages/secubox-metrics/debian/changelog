@@ -1,3 +1,9 @@
+secubox-metrics (1.26.0-1~bookworm1) bookworm; urgency=medium
+
+  * Glances : page « Systeme en direct » livree A COTE de la page actuelle, qui reste inchangee (#2767) : /glances/direct.html (jauges et coeurs animes, courbes glissantes avec lecture au survol, debit en direct, top processus qui glissent, humeur de la box, pause, mouvement reduit respecte, demonstration ?demo=1) et API GET /api/v1/metrics/systeme non bloquante (CPU total et par coeur, memoire, swap, disques, reseau, capteurs, top processus sans ligne de commande ni utilisateur).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 09:00:00 +0200
+
 secubox-metrics (1.25.0-1~bookworm1) bookworm; urgency=medium
 
   * « Courbes » remplace la page Grafana (#2765) : historique de la box sans conteneur Grafana. Releve par minute (secubox-metrics-serie.timer, stdlib seule, 7 jours) de compteurs bruts (CPU, memoire, charge, debit, connexions TCP, disque) ; API GET /api/v1/metrics/series (fenetre ou intervalle, moyennes par tranche) ; page reactive : plages 15 min a 7 j, survol synchronise sur les six courbes, glisser pour zoomer, repere du present, actualisation automatique (figee pendant un zoom). Une valeur absente est un trou, jamais un zero. La page Glances reste inchangee.
