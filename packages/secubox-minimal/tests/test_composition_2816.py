@@ -2,7 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""#2816 — profil `minimal` : DPI, dns-guard, ad-guard, NAC, Freebox, avec le seul socle d'administration (WebUI admin).
+"""#2816 — profil `minimal` : DPI, dns-guard, ad-guard, NAC, Freebox, ipv6guard, webfilter, avec le seul socle d'administration (WebUI admin).
 
 Ni WAF, ni ISP, ni Hall, ni metrics (le module « visites ») : le test calcule la FERMETURE des dependances sur les `control` du depot,
 car un module requis par un autre fait entrer ce qu'on voulait exclure."""
@@ -13,7 +13,7 @@ PAQUETS = Path(__file__).resolve().parents[2]
 META = "secubox-minimal"
 CONTROL = (PAQUETS / META / "debian" / "control").read_text(encoding="utf8")
 
-REQUIS = {"secubox-dpi", "secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox"}
+REQUIS = {"secubox-dpi", "secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox", "secubox-ipv6guard", "secubox-webfilter"}
 SOCLE_ADMIN = {"secubox-core", "secubox-aggregator", "secubox-hub", "secubox-portal", "secubox-auth"}
 INTERDITS = {"secubox-waf-ng", "secubox-waf", "secubox-haproxy", "secubox-webos", "secubox-isp", "secubox-lite", "secubox-full",
              "secubox-metrics", "secubox-soc", "secubox-toolbox-ng", "secubox-mediaflow", "secubox-torrent", "secubox-mail", "secubox-wireguard"}
@@ -95,3 +95,13 @@ def test_aucun_conteneur_lxc_dans_le_profil():
         racine = PAQUETS / p
         installeurs = [f for f in racine.rglob("install-lxc.sh") if "/debian/" + p not in str(f)] if racine.is_dir() else []
         assert not installeurs, (p, installeurs)
+
+
+def test_les_modules_exclus_sont_en_conflicts_car_un_recommends_les_ramenait():
+    """L'image du 2026-10-16 contenait le Hall : secubox-auth et secubox-freebox le RECOMMANDENT, et apt installe les Recommends par defaut.
+    Un Conflicts est le seul moyen, depuis le meta-paquet, de dire a apt de ne pas les ramener."""
+    bloc = CONTROL.split(f"Package: {META}", 1)[1]
+    m = re.search(r"^Conflicts:((?:.*\n?(?: .*\n?)*))", bloc, re.M)
+    assert m, "Conflicts absent"
+    conflits = noms(m.group(1))
+    assert {"secubox-webos", "secubox-waf-ng", "secubox-metrics"} <= conflits, conflits
