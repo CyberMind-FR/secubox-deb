@@ -6,7 +6,7 @@
 -->
 
 # WIP — chantier en cours + Next Up
-*Mis à jour : 2026-10-11.* Moins de 200 lignes, par construction : l'historique du
+*Mis à jour : 2026-10-16.* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
 ## ✅ Fusionné et nettoyé le 2026-10-02 et 03
@@ -16,6 +16,13 @@ PR #1856 (Coffre), #1860/#1861 (WAF), #1864 (accès délégués retirés), #1865
 real_ip nginx #1754 (fermée), dossiers photo #1516 (fermée), NAC appliqué à nftables #1766, santé
 (veille pondérée, test dynamique du WAF), assistance, Reporter, menu p2p, garde-fou CI #1748, clé
 apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
+
+## 🔄 Chantier en cours — ESPRESSObin lgm-ebin, client `lgm` beta (2026-10-16)
+
+- **Fait** : profil `minimal` (0.5.1, sans WAF ni HAProxy : la carte de 951 Mo a saturé), `ndpid-engine` >= 1.7.2, WireGuard serveur sur la box (`wgctl serveur init`, #2845), panneaux Auto-Load et pairs p2p dans `/fleet/`
+  (#2840, #2842), `admin.lgm-ebin.secubox.in` publié par gk2 (hors source, #2844), relais UDP 51840 gk2 → box, SSH LAN seul + support depuis gk2 (hors source, #2854). Détail : `HISTORY.md`, `docs/FAQ-ESPRESSOBIN-1GO.md`.
+- **À faire par le propriétaire** : redirection UDP 51840 de la Freebox vers gk2 puis essai WireGuard avec un téléphone ; `passwd` root d'usine de la carte ; valider les issues #2840, #2842, #2845, #2847, #2849, #2851.
+- **Images minimales** (ESPRESSObin, RPi400) : en attente de la CI (build des paquets 38905071861 déjà vert, images à lancer) ; `boot-staging` du client prêt sur gk2 (`/root/atelier-lgm`, nom `lgm-ebin`, mode `lan`, jeton 9 non réclamé).
 
 ## 🔄 Chantier en cours — release v3.0.0-alpha.11 (tag posé le 2026-10-11, reposé avec l'agent Auto-Load)
 
@@ -40,6 +47,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
+0000. **ESPRESSObin (2026-10-16)** : #2853 l'agent Auto-Load ne doit plus rejouer ses réponses (priorité : protège la box du client) ; #2854 support SSH posé par l'enrôlement ; #2844 publication WAN automatique + recopie du PEM au renouvellement ; alléger `minimal` (agrégateur 70 Mo, minuteurs fréquents, swap 930/950).
 000. **Suites des vues d'ensemble (2026-10-11)** : « Appareils principaux » de Guardian sur 7 jours alors que les tuiles sont du jour (libellé ou période) et ligne à 0 % dans les catégories ; sélecteur de période 1h/6h/24h/7j de SBXWAF (l'API n'expose que le jour et l'historique par jour) ; formulaire de connexion direct au lieu du lien « Se connecter » ; les cinq plus petits écarts de l'audit Actor Intelligence (définitions des compteurs dans l'API, faux positifs par règle, états « proposé » et « annulé » des actions, source de géolocalisation, mode global) ; baseline par appareil (gros chantier, absent).
 00. **Après alpha.11** : lire le résultat de la CI et corriger ce qui manque ; Auto-Load phase A (agent dans les images + unité de premier démarrage, avec accord pour l'unité root) ; #2236 (DHCP, User-Agent, mDNS jamais alimentés) ; #2212 étape 9 (décider du retrait de `?nav=categories`) ; cadence de MetaNews (1 à 2 billets par tour au lieu d'une rafale) ; exemption Cloudflare à décider.
 

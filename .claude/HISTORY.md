@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Support SSH depuis gk2 vers la box enrolee (ref #2854, #2853)
+
+Pose a la main sur lgm-ebin : cle dediee /etc/secubox/secrets/support-ssh/id_ed25519 (gk2, 0600), cle publique dans authorized_keys de la box avec from="10.64.0.1" et sans redirections, regle nft iifname wg-autoload + ip saddr 10.64.0.1 sur le port 22 avant le drop « hors LAN » (00-ssh-lan.nft). Test depuis gk2 : OK. #2854 : le faire poser par l'enrolement Auto-Load (revocable, journalise). #2853 : l'agent Auto-Load rejoue nom et mot de passe a chaque demarrage (desactive sur la carte). Suivi du jour : WIP, TODO, FAQ-ESPRESSOBIN-1GO.md, README racine, README secubox-minimal et secubox-annuaire.
+
 ## 2026-10-16 — minimal : ndpid-engine >= 1.7.2, fin de la boucle sur eth2 (ref #2851)
 
 secubox-minimal 0.5.1. La carte portait ndpid-engine 1.7.1 (61 redemarrages, nDPId sur eth2 inexistante) ; la correction #2740 etait en 1.7.2. 1.7.2 arm64 (artefact CI) publie dans apt trixie et installe sur la carte : actif sur eth0.

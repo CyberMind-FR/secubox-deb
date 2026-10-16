@@ -103,6 +103,10 @@ machine can carry. Pick the profile that matches your hardware and your needs.
 
 <p align="center"><img src="docs/assets/secubox-profils-infographie.jpg" alt="SecuBox: choose your protection level — lite, isp, full" width="800"></p>
 
+A fourth profile, **minimal**, is sized for a 1 GB board (ESPRESSObin): DPI, DNS guard, ad-guard, access control (NAC), Freebox, IPv6 guard, web filter, WireGuard
+and the admin WebUI only. No WAF (it stays on the infrastructure), no Hall, no hosted service. Measured on a real ESPRESSObin: the 951 MB leave little room, which is why the WAF
+and HAProxy were tried and removed. See [docs/FAQ-ESPRESSOBIN-1GO.md](docs/FAQ-ESPRESSOBIN-1GO.md).
+
 Side-by-side table, glossary and a popularisation prompt:
 [docs/PROFILS-COMPARATIF.md](docs/PROFILS-COMPARATIF.md).
 

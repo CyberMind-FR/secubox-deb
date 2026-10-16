@@ -6,11 +6,20 @@
 -->
 
 # TODO — SecuBox-DEB : backlog actif
-*Mis à jour : 2026-10-11 (release alpha.11).* Seul le backlog actif est ici (≥ 2026-09-01).
+*Mis à jour : 2026-10-16 (ESPRESSObin lgm-ebin).* Seul le backlog actif est ici (≥ 2026-09-01).
 Le reste est archivé, jamais perdu : `.claude/archive/INDEX.md` (≈ 240 cases ouvertes
 y dorment, par mois) — ne le lire que sur demande.
 
 ---
+
+## 2026-10-16 — ESPRESSObin lgm-ebin, client beta `lgm`
+- [ ] **#2853** l'agent Auto-Load rejoue nom et mot de passe d'usine à chaque démarrage : une fois l'application réussie ou abandonnée, ne plus rien rejouer.
+- [ ] **#2854** support SSH depuis gk2 posé par l'enrôlement (clé publique dans la réponse d'enrôlement, règle nft, révocation, `audit.log`) ; envisager un compte `secubox-support` plutôt que `root`.
+- [ ] **#2844** publication WAN automatique des pairs (certificat, vhost, route sbxwaf) ; hook de recopie du PEM HAProxy au renouvellement certbot (absent sur gk2).
+- [ ] Relais UDP WireGuard de gk2 (`zz-secubox-relais-wg-lgm-ebin.nft`) à porter en source (`secubox-autoload`) ; redirection UDP 51840 de la Freebox ; essai client réel (#2845).
+- [ ] Mémoire de `minimal` sur 951 Mo : chiffrer l'agrégateur, `unbound`, les minuteurs ; décider ce qui sort du profil. Images minimales ESPRESSObin et RPi400 à produire et vérifier.
+- [ ] `secubox-net-detect` n'est livré par aucune image : mode `routeur` impossible ; décider de l'écrire ou de retirer le mode.
+- [ ] Facultatif : `secubox-authwatch` séparé de `secubox-toolbox-ng` (leurres de service sur une box sans moteur MITM).
 
 ## 2026-10-11 — suites de la release alpha.11
 - [ ] **Auto-Load** : phase A livrée (#2280, agent dans les images, unité de premier boot, atelier). Reste : décider de la custody de la clé « SecuBox Provisioning » (aujourd'hui sans phrase de passe sur gk2 ; niveau 0 comme la clé apt ?),
