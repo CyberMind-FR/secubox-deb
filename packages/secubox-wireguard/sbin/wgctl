@@ -382,7 +382,11 @@ cmd_peer_add() {
         return 1
     fi
 
+    # Ces fichiers portent la clé PRIVÉE et la clé partagée du client : jamais lisibles par tous (ils l'étaient, 0644). Groupe secubox : l'API lit le QR (#2845).
+    umask 027
     mkdir -p "$PEERS_DIR"
+    chmod 750 "$PEERS_DIR"
+    if getent group secubox >/dev/null 2>&1; then chgrp secubox "$PEERS_DIR" 2>/dev/null || true; fi
     check_wg || return 1
 
     # Generate keys for peer
@@ -478,6 +482,9 @@ META_EOF
         info "QR code saved to $qr_file"
     fi
 
+    if getent group secubox >/dev/null 2>&1; then
+        chgrp secubox "$client_conf" "$PEERS_DIR/${peer_pubkey:0:8}.json" ${qr_file:+"$qr_file"} 2>/dev/null || true
+    fi
     info "Peer $name added successfully"
     echo "Client config saved to: $client_conf"
 

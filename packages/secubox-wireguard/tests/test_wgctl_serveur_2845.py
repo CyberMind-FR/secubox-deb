@@ -100,3 +100,15 @@ def test_peer_add_ecrit_le_point_d_acces_configure(banc):
     assert r.returncode == 0, r.stdout + r.stderr
     client = (tmp / "var" / "lib" / "secubox" / "wireguard" / "peers" / "telephone.conf").read_text()
     assert "Endpoint = lgm-ebin.secubox.in:51840" in client and "203.0.113.9" not in client
+
+
+def test_la_config_cliente_porte_une_cle_privee_donc_jamais_lisible_par_tous(banc):
+    tmp, _, _, _ = banc
+    _ctl(banc, "serveur", "init", "--endpoint", "lgm-ebin.secubox.in:51840")
+    _exe(tmp / "bin" / "wg", f'case "$1" in genkey) echo "{CLE}";; pubkey) echo "pubxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=";; genpsk) echo "psk=";; show) case "$2 $3" in "wg-clients public-key") echo "pubSrv=";; *) true;; esac;; *) exit 0;; esac\n')
+    _exe(tmp / "bin" / "curl", 'echo 203.0.113.9\n')
+    assert _ctl(banc, "peer", "add", "telephone", "wg-clients").returncode == 0
+    d = tmp / "var" / "lib" / "secubox" / "wireguard" / "peers"
+    modes = {f.name: stat.S_IMODE(f.stat().st_mode) for f in d.iterdir()}
+    assert all(m & 0o007 == 0 for m in modes.values()) and modes["telephone.conf"] == 0o640, modes
+    assert stat.S_IMODE(d.stat().st_mode) == 0o750

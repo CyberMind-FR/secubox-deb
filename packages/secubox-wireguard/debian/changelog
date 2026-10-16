@@ -1,7 +1,8 @@
 secubox-wireguard (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * `wgctl serveur init [--port N] [--endpoint H:P]` (#2845) : cree l'interface serveur wg-clients (10.66.0.1/24, cle generee une fois, jamais regeneree), une table nft propre (forward + masquerade, sans recharger le pare-feu), le routage IPv4 persistant, et active wg-quick@wg-clients. Verbe d'operateur (root), arguments valides (hote:port, port 1-65535).
-  * Le point d'acces ecrit dans les configurations clientes (`peer add`) peut etre fixe dans /etc/secubox/wireguard-endpoint : une box derriere un NAT n'est pas joignable par l'IP publique que le script devinait. Sans ce fichier, comportement inchange.
+  * Les configurations clientes portent la cle privee et la cle partagee du client : creees en 0640 root:secubox, dossier 0750 (elles etaient lisibles par tous, 0644). L API lit toujours le QR par le groupe secubox.
+  * Le point d acces ecrit dans les configurations clientes (`peer add`) peut etre fixe dans /etc/secubox/wireguard-endpoint : une box derriere un NAT n'est pas joignable par l'IP publique que le script devinait. Sans ce fichier, comportement inchange.
 
  -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 17:00:00 +0200
 
