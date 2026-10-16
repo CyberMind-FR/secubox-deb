@@ -40,6 +40,16 @@
     })();
     if (EMBARQUE) document.documentElement.classList.add('sbx-embed');
 
+    // PAGES SERVIES PAR LE HALL (#2814) : /identite/ et /coffre/ vivent sur l'origine du Hall, qui ne sert pas les pages des modules. Sur un hote
+    // hall.*, chaque lien du menu vise donc le MEME domaine en admin.* (port conserve). Ailleurs : liens relatifs, comme avant.
+    const ORIGINE_ADMIN = (function () {
+        var h = location.hostname;
+        return /^hall\./i.test(h) ? location.protocol + '//admin.' + h.slice(5) + (location.port ? ':' + location.port : '') : '';
+    })();
+    function versAdmin(chemin) {
+        return ORIGINE_ADMIN && typeof chemin === 'string' && chemin.charAt(0) === '/' && chemin.charAt(1) !== '/' ? ORIGINE_ADMIN + chemin : chemin;
+    }
+
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
     const VERSION = 'v2.44.0';
@@ -709,7 +719,7 @@
                 '<div class="hw-led-tooltip" id="hw-led-tooltip"></div>' +
                 '<button class="menu-btn api-status" id="api-status-btn" onclick="SecuBoxSidebar.checkApiStatus()" title="API Status: checking..."><span id="api-status-icon">🔌</span></button>' +
                 '<button class="menu-btn" onclick="location.reload()" title="Refresh">🔄</button>' +
-                '<button class="menu-btn" onclick="location.href=\'/system/\'" title="Settings">⚙️</button>' +
+                '<button class="menu-btn" onclick="location.href=\'' + versAdmin('/system/') + '\'" title="Settings">⚙️</button>' +
                 '<button class="menu-btn danger" onclick="SecuBoxSidebar.logout()" title="Logout">🚪</button>' +
                 '</div>';
             document.body.insertBefore(menuBar, document.body.firstChild);
@@ -1592,8 +1602,8 @@
             '<div class="nav-section"><div class="nav-section-title"><span>⚠️ OFFLINE MODE</span></div>' +
             '<div class="nav-items">' +
             '<a href="/" class="nav-item"><span class="icon">🏠</span><span>Dashboard</span></a>' +
-            '<a href="/system/" class="nav-item"><span class="icon">⚙️</span><span>System</span></a>' +
-            '<a href="/soc/" class="nav-item"><span class="icon">🛡️</span><span>SOC</span></a>' +
+            '<a href="' + versAdmin('/system/') + '" class="nav-item"><span class="icon">⚙️</span><span>System</span></a>' +
+            '<a href="' + versAdmin('/soc/') + '" class="nav-item"><span class="icon">🛡️</span><span>SOC</span></a>' +
             '</div></div></div>' +
             '<div class="sidebar-footer">' +
             '<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">API unavailable - showing cached links</div>' +
@@ -2163,7 +2173,7 @@
         if (!mod) return true;
         ev.preventDefault();
         handleMobileNavClick();  // Close sidebar on mobile
-        await preflightCheck(mod, url);
+        if (!ORIGINE_ADMIN) await preflightCheck(mod, url);   // la sonde de santé est de même origine : inutile (et refusée) vers admin.*
         window.location.href = url;
         return false;
     }
@@ -2531,7 +2541,7 @@
                     var versionTip = getVersionTooltip(version, devStage);
                     var fullTitle = versionTip ? (initialTitle + ' | ' + versionTip) : initialTitle;
 
-                    menuHTML += '<a href="' + item.path + '" class="nav-item' + (isActive ? ' active' : '') + '" data-module="' + mod + '" onclick="return SecuBoxSidebar.navClick(event,\'' + mod + '\',\'' + item.path + '\')">' +
+                    menuHTML += '<a href="' + versAdmin(item.path) + '" class="nav-item' + (isActive ? ' active' : '') + '" data-module="' + mod + '" onclick="return SecuBoxSidebar.navClick(event,\'' + mod + '\',\'' + versAdmin(item.path) + '\')">' +
                         '<span class="icon">' + item.icon + '</span>' +
                         '<span>' + item.name + '</span>' +
                         devBadge +
