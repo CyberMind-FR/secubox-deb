@@ -20,7 +20,7 @@ Depends: ${misc:Depends},
  secubox-auth (>= 1.4.0),
 # LES MODULES DEMANDES : DPI (avec son moteur nDPI), garde DNS, filtre de publicites, controle d'acces reseau, Freebox.
  secubox-dpi (>= 1.7.0),
- secubox-ndpid-engine,
+ secubox-ndpid-engine (>= 1.7.2),
  secubox-dns-guard,
  secubox-ad-guard (>= 1.6.2),
  secubox-nac (>= 1.0),
