@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Images minimales publiees pour ESPRESSObin v7 et RPi 400 (ref #2834)
+
+matrice-images.py : `minimal` publie pour espressobin-v7 (a cote de lite) et rpi400 ; le workflow n'ajoute pas de kiosque a minimal (WebUI d'administration seule).
+
 ## 2026-10-16 — Catalogue App Store : secubox-minimal hors-arbre (ref #2832)
 
 secubox-meta 0.1.44 : arbre.yaml declare secubox-minimal ; gen-appstore-catalog (et la construction de secubox-appstore) echouait depuis le profil minimal.

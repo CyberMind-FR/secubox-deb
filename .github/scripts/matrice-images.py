@@ -78,11 +78,13 @@ PROFILS_PUBLIES = {
     # ESPRESSObin (Armada 3720, 1 a 2 Go, swap 512 Mo) : lite seul. Depuis la refonte des profils (#2146), `isp` porte
     # tout l'hebergement (courrier, Matrix, Nextcloud, photos, Git…) et vise 8 Go : l'y construire par defaut comme
     # « socle de comparaison » donnerait une image qui cale au demarrage.
-    "espressobin-v7": ["lite"],
+    # `minimal` (#2834) : DPI, dns-guard, ad-guard, NAC, Freebox et la seule WebUI d'administration (ni WAF, ni Hall, ni hebergement). Il tient sur la carte
+    # la ou lite/isp calent, et se publie A COTE de lite pour l'ESPRESSObin v7.
+    "espressobin-v7": ["lite", "minimal"],
     "espressobin-ultra": ["lite"],
     # RPi 400 (BCM2711, 4 Go, carte uSD) : lite (le plus léger : protection, sans hébergement), isp et full. Le lite n'existait pas pour cette carte
     # (#2497) : une uSD « lite RPi400 » n'avait donc aucune image publiée. full-rpi pèse 1,7 Go, sous la limite de 2 Gio d'un fichier de release.
-    "rpi400": ["lite", "isp", "full"],
+    "rpi400": ["lite", "isp", "full", "minimal"],
 }
 
 _RE_PROFIL = re.compile(r"^\s*SECUBOX_PROFILE\s*=\s*(\S+)", re.M)
