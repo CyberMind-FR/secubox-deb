@@ -1989,19 +1989,24 @@ fi
 BOOTCMD_END
   fi
 
+  # Script USB (#2816, #2824) : livre TEL QUEL (deja compile, source a cote), donc copie SANS mkimage. Une ligne a la console U-Boot suffit :
+  #   usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}
+  if [[ -f "${SCRIPT_DIR}/../board/${BOARD}/boot-usb.scr" ]]; then
+    cp "${SCRIPT_DIR}/../board/${BOARD}/boot-usb.scr" "${MNT}/boot/boot-usb.scr"
+    [[ -f "${SCRIPT_DIR}/../board/${BOARD}/boot-usb.cmd" ]] && cp "${SCRIPT_DIR}/../board/${BOARD}/boot-usb.cmd" "${MNT}/boot/boot-usb.cmd"
+    ok "boot-usb.scr installé (démarrage USB en une ligne)"
+  fi
+
   # Compiler le bootscript si mkimage est disponible
   if command -v mkimage >/dev/null 2>&1; then
     mkimage -C none -A arm64 -T script -d "${MNT}/boot/boot.cmd" "${MNT}/boot/boot.scr" >/dev/null
     ok "boot.scr créé (U-Boot bootscript)"
-    # Demarrage depuis une cle USB (#2816) : le boot.scr ci-dessus lit `mmc`. Le script USB du board est livre TEL QUEL (deja compile, source a cote) :
-    # une ligne a la console U-Boot suffit — usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}
-    if [[ -f "${SCRIPT_DIR}/../board/${BOARD}/boot-usb.scr" ]]; then
-      cp "${SCRIPT_DIR}/../board/${BOARD}/boot-usb.scr" "${SCRIPT_DIR}/../board/${BOARD}/boot-usb.cmd" "${MNT}/boot/" 2>/dev/null \
-        && ok "boot-usb.scr installé (démarrage USB en une ligne)"
-      [[ -f "${MNT}/boot/boot-usb.scr" ]] || cp "${SCRIPT_DIR}/../board/${BOARD}/boot-usb.scr" "${MNT}/boot/boot-usb.scr"
-    fi
   else
-    warn "mkimage non disponible — boot.scr non généré (installer u-boot-tools)"
+    # Une image ESPRESSObin sans boot.scr ne demarre pas par son script : on n'en sort pas une en silence (#2824).
+    case "${BOARD}" in
+      espressobin*) err "mkimage non disponible — boot.scr non généré : image ${BOARD} NON produite (installer u-boot-tools)" ;;
+      *)            warn "mkimage non disponible — boot.scr non généré (installer u-boot-tools)" ;;
+    esac
   fi
 fi
 
