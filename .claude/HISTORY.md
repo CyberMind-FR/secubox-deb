@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Glances remplacée par « Système en direct », barres visibles ; Courbes : graphiques vides corrigés (secubox-metrics 1.27.0, closes #2769, closes #2770)
+- Verdict du mainteneur sur la page « Système en direct » : « garder celle-là, la tienne » → elle remplace /glances/ (l'ancienne page, ses tests et ses commandes de démon Glances sont retirés ; l'API Glances reste). Capture du mainteneur : barres des cœurs vides.
+- Cause des barres vides (reproduite avec les vraies feuilles du cadre) : `hybrid-skin.css` impose `background-color: transparent !important` à tout ce qui est dans `<main>` ; un fond posé en style direct est annulé. Parade : style direct `!important`. Test de non-régression avec la vraie feuille.
+- Courbes vides (« les histogrammes graphiques sont empty ») : gk2 avait 59 relevés sur l'heure mais 300 tranches de 12 s étaient demandées → chaque point isolé, aucune ligne. Serveur : jamais plus de tranches que de relevés ; page : trou d'une tranche ponté, point isolé dessiné, pastille du présent visible sous le cadre.
+- Piège à retenir pour toute page Aurora : un fond (barre, pastille, jauge en `background`) posé en CSS ou en style direct sans `!important` disparaît sous le cadre ; les tests doivent charger `hybrid-skin.css`, pas un fichier vide.
+
 ## 2026-10-16 — Glances : « Système en direct » livrée à côté de la page actuelle (secubox-metrics 1.26.0, closes #2767)
 - Demande : « test le remplacement de glances que tu avais fait ». La page Glances actuelle est jugée impeccable : elle n'est PAS touchée. L'alternative est livrée à part : `/glances/direct.html` (lien « ← Glances » pour revenir) + `GET /api/v1/metrics/systeme` non bloquant (l'API de Glances dort 0,5 s à chaque appel).
 - Jauges et cœurs animés, courbes glissantes de 60 points avec lecture au survol, débit en direct, top processus qui glissent à leur nouvelle place, humeur de la box (Zen → En feu) qui règle le battement du cœur, pause, rythme 1/2/5 s, mouvement réduit respecté. Jamais de ligne de commande de processus.

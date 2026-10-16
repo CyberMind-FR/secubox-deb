@@ -165,7 +165,9 @@ def vue(duree_s: Optional[float], points: int = 240, chemin: Path = FICHIER, mai
     if fin - deb < MIN_DUREE_S:
         deb = fin - MIN_DUREE_S
     deb = max(deb, fin - RETENTION_S)
-    n = max(2, min(int(points), MAX_POINTS))
+    # Jamais plus de tranches que de relevés possibles (un par PAS_S) : des tranches plus fines laissent chaque point isolé entre des tranches vides,
+    # et aucune courbe ne se dessine (#2770).
+    n = max(2, min(int(points), MAX_POINTS, int((fin - deb) / PAS_S)))
     pas = (fin - deb) / n
     brut = lire(chemin, deb - 2 * PAS_S)
     brut.sort(key=lambda d: d["t"])

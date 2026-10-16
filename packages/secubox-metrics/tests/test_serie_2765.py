@@ -127,3 +127,22 @@ def test_unites_systemd_et_paquet():
     assert "User=secubox" in s and "ExecStart=/usr/bin/python3 -m api.serie" in s and "NoNewPrivileges=true" in s and "MemoryMax=" in s
     assert "OnUnitActiveSec=1min" in (ici / "systemd" / "secubox-metrics-serie.timer").read_text()
     assert "secubox-metrics-serie.timer" in (ici / "debian" / "rules").read_text() and "secubox-metrics-serie.timer" in (ici / "debian" / "postinst").read_text()
+
+
+def test_jamais_plus_de_tranches_que_de_releves_possibles(tmp_path):
+    """RÉGRESSION (#2770) : 300 tranches de 12 s sur une heure avec un relevé par minute -> chaque point isolé, aucune courbe dessinable."""
+    f = tmp_path / "s.jsonl"
+    for p in pts(61):
+        serie.ajoute(p, f, maintenant=p["t"])
+    v = serie.vue(3600, 300, f, maintenant=1000.0 + 60 * 60)
+    assert len(v["t"]) <= 60 and v["pas_s"] >= serie.PAS_S
+    cpu = v["series"]["cpu"]
+    assert sum(1 for x in cpu if x is not None) >= len(cpu) - 2, "sans trou : une tranche par relevé"
+
+
+def test_un_intervalle_court_garde_au_moins_deux_tranches(tmp_path):
+    f = tmp_path / "s.jsonl"
+    for p in pts(5):
+        serie.ajoute(p, f, maintenant=p["t"])
+    v = serie.vue(60, 300, f, maintenant=1000.0 + 4 * 60)
+    assert len(v["t"]) >= 2
