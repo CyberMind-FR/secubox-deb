@@ -42,6 +42,11 @@
         .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
         #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
         [hidden]{display:none!important}
+        .cumuls{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+        .cumul{display:flex;flex-direction:column;gap:4px;text-align:left;font:inherit;color:var(--texte);border:1px solid var(--trait);border-left:3px solid var(--cyan);border-radius:10px;padding:9px 11px;background:rgba(8,18,38,.5);cursor:pointer;min-width:0}
+        .cumul:hover,.cumul[aria-pressed="true"]{border-color:var(--cyan);background:rgba(41,182,246,.12)} .cumul:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .cumul.complet{border-left-color:var(--vert)} .cumul b{font-size:.9rem;overflow-wrap:anywhere} .cumul .n{font-size:1.4rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+        .cumul small{color:var(--doux);font-size:.72rem;overflow-wrap:anywhere} .cumul .jauge{height:5px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .cumul .jauge i{display:block;height:100%;background:var(--cyan)} .cumul.complet .jauge i{background:var(--vert)}
         .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
         @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
         .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
@@ -139,6 +144,9 @@
             <div class="tuile" title="Modules non installés, publiés au dépôt et permis par le niveau de la box."><span class="l">Disponibles</span><span class="v" id="tDispo">—</span><span class="s" id="sDispo">installables</span></div>
             <div class="tuile cy" title="Niveau (tier) de cette box : il décide quels modules sont permis."><span class="l">Niveau de la box</span><span class="v" id="tTier">—</span><span class="s">lite · standard · pro</span></div>
         </section>
+
+        <div class="pan" id="pCumuls"><h3>Catégories <i id="cStat">—</i></h3>
+            <div class="cumuls" id="cumuls"></div></div>
 
         <div class="pan" id="pGroupes"><h3>Fonctionnalités <i id="gStat">—</i><button class="btn sm" id="gRaz" type="button" hidden>✕ tout le catalogue</button></h3>
             <div class="groupes" id="groupes"></div>
@@ -288,11 +296,29 @@
             const nonPub = n(m => m.state === 'unpublished'), verr = n(m => m.state === 'tier-locked');
             $('sDispo').textContent = ALL ? (nonPub + ' non publié(s) · ' + verr + ' verrouillé(s)') : 'installables';
             $('tTier').textContent = tiret(CATS && CATS.board_tier);
-            rendreFiltres(); rendreGroupes(); rendreModules(); rendreArbre(); rendreFed(); rendreMesh();
+            rendreFiltres(); rendreCumuls(); rendreGroupes(); rendreModules(); rendreArbre(); rendreFed(); rendreMesh();
             $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
             annoncer();
         }
 
+        function rendreCumuls() {
+            const g = $('cumuls'); g.replaceChildren();
+            const cats = {};
+            (ALL || []).forEach(m => { const c = m.category || 'autres'; (cats[c] = cats[c] || []).push(m); });
+            const noms = Object.keys(cats).sort();
+            $('cStat').textContent = ALL ? noms.length + ' catégories' : '—';
+            if (!ALL) { g.appendChild(el('div', 'vide', 'Catalogue indisponible.')); return; }
+            const cur = $('fCat').value;
+            noms.forEach(nom => {
+                const l = cats[nom], inst = l.filter(m => m.installed).length, dispo = l.filter(m => m.state === 'available').map(m => m.name);
+                const b = el('button', 'cumul' + (inst === l.length ? ' complet' : '')); b.type = 'button'; b.setAttribute('aria-pressed', cur === nom ? 'true' : 'false');
+                b.appendChild(el('b', null, nom)); b.appendChild(el('span', 'n', inst + ' / ' + l.length));
+                const j = el('span', 'jauge'); const i = el('i'); i.style.width = Math.round(100 * inst / l.length) + '%'; j.appendChild(i); b.appendChild(j);
+                b.appendChild(el('small', null, dispo.length ? 'À installer : ' + dispo.slice(0, 4).join(', ') + (dispo.length > 4 ? ' (+' + (dispo.length - 4) + ')' : '') : 'Rien à installer'));
+                b.addEventListener('click', () => { $('fCat').value = cur === nom ? '' : nom; $('fCat').dispatchEvent(new Event('change')); rendreCumuls(); });
+                g.appendChild(b);
+            });
+        }
         function rendreFiltres() {
             const sel = $('fCat'), cur = sel.value; sel.replaceChildren(new Option('Toutes catégories', ''));
             ((CATS && CATS.categories) || []).forEach(c => sel.appendChild(new Option(c.name + ' (' + c.count + ')', c.name)));
