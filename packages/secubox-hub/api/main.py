@@ -669,10 +669,22 @@ def _tcp_ouvert(hote: str, port: int, delai: float = 1.0) -> bool:
         return False
 
 
-def superposer_lxc(modules: dict, sondes: dict, ouvert=_tcp_ouvert) -> None:
-    """Ajoute l'etat des modules en conteneur ; une sonde deja presente fait foi."""
+WWW_MODULES = Path("/usr/share/secubox/www")
+
+
+def _module_present(mid: str) -> bool:
+    """Le module est-il installe sur CETTE box ? Sa page est livree par son paquet : c'est l'indice le moins cher (aucun sous-processus)."""
+    return (WWW_MODULES / mid).is_dir()
+
+
+def superposer_lxc(modules: dict, sondes: dict, ouvert=_tcp_ouvert, presente=None) -> None:
+    """Ajoute l'etat des modules en conteneur ; une sonde deja presente fait foi.
+
+    Un module que la box n'a PAS n'est ni sonde ni declare en erreur (#2836) : « ytsas : conteneur injoignable » sur une box qui n'a pas YouTube SAS
+    etait une fausse alarme."""
+    presente = presente or _module_present
     for mid, (hote, port) in sondes.items():
-        if mid in modules:
+        if mid in modules or not presente(mid):
             continue
         modules[mid] = ({"status": "ok", "msg": "Conteneur LXC joignable"} if ouvert(hote, port)
                         else {"status": "error", "msg": "Conteneur LXC injoignable"})

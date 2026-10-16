@@ -19,19 +19,19 @@ def test_glances_suit_le_module_metrics():
 
 def test_ytsas_est_en_service_si_le_conteneur_ecoute():
     m = {}
-    main.superposer_lxc(m, {"ytsas": ("10.100.0.180", 8091)}, lambda h, p: True)
+    main.superposer_lxc(m, {"ytsas": ("10.100.0.180", 8091)}, lambda h, p: True, presente=lambda mid: True)
     assert m["ytsas"]["status"] == "ok" and "conteneur" in m["ytsas"]["msg"].lower()
 
 
 def test_ytsas_est_une_alarme_si_le_conteneur_ne_repond_pas():
     m = {}
-    main.superposer_lxc(m, {"ytsas": ("10.100.0.180", 8091)}, lambda h, p: False)
+    main.superposer_lxc(m, {"ytsas": ("10.100.0.180", 8091)}, lambda h, p: False, presente=lambda mid: True)
     assert m["ytsas"]["status"] == "error"
 
 
 def test_une_sonde_deja_presente_n_est_pas_ecrasee():
     m = {"ytsas": {"status": "warn", "msg": "x"}}
-    main.superposer_lxc(m, {"ytsas": ("10.100.0.180", 8091)}, lambda h, p: True)
+    main.superposer_lxc(m, {"ytsas": ("10.100.0.180", 8091)}, lambda h, p: True, presente=lambda mid: True)
     assert m["ytsas"]["status"] == "warn"
 
 
