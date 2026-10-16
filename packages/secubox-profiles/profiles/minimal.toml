@@ -5,7 +5,7 @@
 
 # Profil d'activation « minimal » (#2838) : ce que `secubox-profilectl apply --profile minimal` laisse allume.
 # C'est le pendant du meta-paquet secubox-minimal : DPI, garde DNS, filtre de publicites, controle d'acces reseau, Freebox, garde IPv6, filtrage web,
-# et la seule WebUI d'administration. Ni WAF, ni Hall, ni metrics, ni VPN, ni kiosque, ni Tor. Les ids sont ceux des manifestes derives des unites.
+# la seule WebUI d'administration, le WAF (HAProxy + sbxwaf, #2847) et WireGuard (#2845). Ni Hall, ni metrics, ni kiosque, ni Tor. Les ids sont ceux des manifestes derives des unites.
 name  = "minimal"
 label = "Minimal — DPI, dns-guard, ad-guard, NAC, Freebox"
 on = [
@@ -14,5 +14,6 @@ on = [
   "dns-guard", "ad-guard", "webfilter", "webfilter-apply", "webfilter-feed", "webfilter-sync",
   "nac", "freebox", "ipv6guard", "toolbox", "toolbox-autolearn",
   "network-ready", "runtime", "firstboot", "openpgp",
+  "haproxy", "waf", "waf-ng", "waf-ratelimit", "wireguard",
   "premier-pas", "premier-pas-appliquer", "premier-pas-console", "premier-pas-decouverte",
 ]

@@ -1,0 +1,43 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# secubox-minimal — postinst (#2847) : arme le LEURRE du WAF.
+#
+# Le modele de secubox-waf-ng (/usr/share/secubox/waf/honeypot.conf) EST la procedure d'armement : on la rejoue ici, on ne la recopie pas (un miroir de la
+# liste des drapeaux derive en silence). Un hote non route recoit un leurre inerte et son premier appel est banni (1 h, 24 h, 7 j) ; le LAN et la
+# premiere partie ne sont jamais leurres. Rien n'est ecrase : un drop-in ou un secret deja presents sont ceux de l'operateur.
+set -e
+
+MODELE=/usr/share/secubox/waf/honeypot.conf
+DROPIN_DIR=/etc/systemd/system/secubox-waf-ng.service.d
+DROPIN=$DROPIN_DIR/10-honeypot.conf
+SECRET=/etc/secubox/secrets/filigrane
+
+case "$1" in
+  configure)
+    change=0
+    if [ -f "$MODELE" ] && [ ! -e "$DROPIN" ]; then
+      install -D -m 0644 "$MODELE" "$DROPIN"
+      change=1
+    fi
+    if [ ! -e "$SECRET" ] && getent passwd secubox-waf >/dev/null 2>&1; then
+      # Un dossier existant garde ses droits et ses ACL : on ne le recree pas (install -d -m les ecraserait).
+      [ -d /etc/secubox/secrets ] || install -d -m 0700 /etc/secubox/secrets
+      (umask 077; head -c 48 /dev/urandom | base64 > "$SECRET")
+      chown secubox-waf:secubox-waf "$SECRET"
+      chmod 0400 "$SECRET"
+      change=1
+    fi
+    if [ "$change" = 1 ] && [ -d /run/systemd/system ]; then
+      systemctl daemon-reload || true
+      # Redemarrage, jamais un signal : sbxwaf n'a pas de gestionnaire SIGHUP (#2629). Quelques secondes de 503 au pire, et seulement si le WAF tourne deja.
+      systemctl try-restart secubox-waf-ng.service || true
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

@@ -87,11 +87,12 @@ def test_ecriture_atomique_et_json_valide(arbre, tmp_path):
     assert not list(sortie.parent.glob(".*tmp"))
 
 
-def test_sur_le_vrai_depot_minimal_n_a_ni_waf_ni_hall_ni_metrics():
+def test_sur_le_vrai_depot_minimal_a_le_waf_et_wireguard_mais_ni_hall_ni_metrics():
     depot = PKG.parent
     d = gen.construire(depot, depot / "secubox-hub" / "espaces.json")
     mini = {m["paquet"] for m in next(x for x in d["profils"] if x["id"] == "minimal")["modules"]}
-    assert not mini & {"secubox-waf-ng", "secubox-webos", "secubox-metrics", "secubox-isp"}
+    assert not mini & {"secubox-webos", "secubox-metrics", "secubox-isp"}
+    assert {"secubox-waf-ng", "secubox-haproxy", "secubox-wireguard"} <= mini      # #2847
     assert {"secubox-dpi", "secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox"} <= mini
 
 
