@@ -71,14 +71,15 @@ def _nettoie(texte: str, hote_bbs: Optional[str]) -> str:
 
 
 def lire_fil(db_bbs: str, dossier_contenu: str, thread_id: int, hote_bbs: Optional[str] = None) -> list:
-    """Posts publics non supprimés d'un fil PUBLIC : [{post_id, auteur, corps, quand}], dans l'ordre. [] si le BBS est absent, illisible ou le fil non public."""
+    """Posts publics non supprimés d'un fil PUBLIC : [{post_id, auteur, corps, quand, premier}], dans l'ordre. [] si le BBS est absent, illisible ou le fil non public."""
     contenu = Path(dossier_contenu).resolve()
     racine = contenu.parent
     try:
         con = sqlite3.connect(f"file:{db_bbs}?mode=ro", uri=True, timeout=3)
         try:
             lignes = con.execute(
-                "SELECT p.id, u.handle, p.body_path, p.created_at FROM posts p "
+                "SELECT p.id, u.handle, p.body_path, p.created_at, "
+                "(p.id = (SELECT MIN(id) FROM posts WHERE thread_id = p.thread_id)) FROM posts p "
                 "JOIN threads t ON t.id = p.thread_id JOIN users u ON u.id = p.author_id "
                 "WHERE p.thread_id = ? AND t.visibility = 'public' AND p.visibility = 'public' AND p.deleted_at IS NULL "
                 "ORDER BY p.created_at, p.id LIMIT 500", (int(thread_id),)).fetchall()
@@ -87,11 +88,11 @@ def lire_fil(db_bbs: str, dossier_contenu: str, thread_id: int, hote_bbs: Option
     except (sqlite3.Error, OSError):
         return []
     out = []
-    for pid, handle, chemin, quand in lignes:
+    for pid, handle, chemin, quand, premier in lignes:
         corps = _corps_du_disque(racine, contenu, str(chemin))
         if corps is None:
             continue
-        out.append({"post_id": int(pid), "auteur": str(handle), "corps": _nettoie(corps, hote_bbs), "quand": _iso(int(quand))})
+        out.append({"post_id": int(pid), "auteur": str(handle), "corps": _nettoie(corps, hote_bbs), "quand": _iso(int(quand)), "premier": bool(premier)})
     return out
 
 
@@ -110,7 +111,9 @@ async def synchroniser(conn: aiosqlite.Connection, db_bbs: str, dossier_contenu:
         voulus: dict = {}
         for tid in fils:
             for p in lire_fil(db_bbs, dossier_contenu, tid, hote):
-                if not p["corps"] or p["corps"] in (corps_billet or ""):        # le billet lui-même (relayé depuis le premier post) n'est pas recopié
+                # Le PREMIER post du fil (plus petit identifiant, public ou non) est la source du billet : jamais recopié (#2780). Un billet relayé en porte une copie
+                # locale (/media/…), l'égalité de corps ne la reconnaît pas. Les corps vides ou déjà présents dans le billet restent écartés.
+                if p["premier"] or not p["corps"] or p["corps"] in (corps_billet or ""):
                     continue
                 voulus[f"bbs:{p['post_id']}"] = p
         async with conn.execute("SELECT source_ref, status FROM comment WHERE billet_id=? AND source='bbs'", (bid,)) as cur:

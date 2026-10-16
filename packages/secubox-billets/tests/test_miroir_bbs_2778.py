@@ -283,3 +283,26 @@ async def test_les_miroirs_sont_balayes_au_plus_toutes_les_20_secondes(conn, cli
     await c.get("/feed/suite")
     await c.get("/feed/maj?depuis=2026-07-11T10:00:00Z")
     assert len(appels) == 1, "trois requêtes du fil, un seul balayage"
+
+
+async def test_le_premier_post_du_fil_n_est_jamais_recopie_meme_si_son_corps_differe_du_billet(conn, tmp_path):
+    """RÉGRESSION (#2780) : un billet relayé porte une COPIE locale du média (/media/…), pas l'URL BBS ; l'égalité de corps ne reconnaissait pas la source."""
+    posts = [(1, 1147, 1, "public", "2026-07-11T10:00:00Z", "/f/125.png", None), (2, 1147, 2, "public", "2026-07-11T11:00:00Z", "/f/126.png", None)]
+    bid, n = await sync(conn, tmp_path, posts, corps="## titre\n\n/media/COPIE.png\n\n---\n[Discuter](https://bbs.gk2.secubox.in/t/1147)")
+    cs = await repo.list_approved_comments(conn, bid)
+    assert n == 1 and [c["body"] for c in cs] == ["https://bbs.gk2.secubox.in/f/126.png"]
+
+
+async def test_le_premier_post_est_celui_de_plus_petit_id_meme_s_il_n_est_pas_public(conn, tmp_path):
+    posts = [(1, 1147, 1, "local", "2026-07-11T10:00:00Z", "ouverture locale", None), (2, 1147, 2, "public", "2026-07-11T11:00:00Z", "première réponse publique", None)]
+    bid, n = await sync(conn, tmp_path, posts)
+    assert [c["body"] for c in await repo.list_approved_comments(conn, bid)] == ["première réponse publique"]
+
+
+async def test_une_copie_deja_posee_du_premier_post_est_retiree(conn, tmp_path):
+    bid, _ = await sync(conn, tmp_path, POSTS)
+    await repo.add_comment(conn, bid, author_name="gk2", email_hash=None, body="copie de la source", ip_hash="systeme", honeypot=False, status="approved",
+                           now="2026-07-11T10:00:00Z", source="bbs", source_ref="bbs:1", author_ref="bbs:gk2")
+    db, content = sync.bbs
+    await M.synchroniser(conn, db, content, DOMAINE, maintenant="2026-07-11T14:00:00Z")
+    assert [c["source_ref"] for c in await repo.list_approved_comments(conn, bid)] == ["bbs:2"]

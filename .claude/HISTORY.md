@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-16 — Miroir BBS : le premier post du fil n'est plus recopié (secubox-billets 0.13.1, closes #2780)
+- Constaté sur gk2 après le déploiement de 0.13.0 : la source du billet (premier post du fil 1147, une image) apparaissait aussi comme commentaire. Un billet relayé porte une copie locale du média, donc l'égalité de corps ne la reconnaissait pas.
+- Correctif : jamais de recopie depuis le premier post d'un fil lié (plus petit identifiant, public ou non) ; les copies déjà posées sont retirées au balayage suivant. Premier balayage réel : 62 commentaires système sur l'ensemble des billets liés au BBS. Piège noté : le service met ~27 s à démarrer ; une vérification faite trop tôt voit l'ancien état.
+
 ## 2026-10-16 — Billets : les réponses publiques des fils BBS liés deviennent des commentaires système et font remonter le billet (secubox-billets 0.13.0, closes #2778)
 - Constat du mainteneur (billet `business-plan-now-v2-f-125-…`) : le billet ne se remplissait pas des posts et réponses publics des fils liés du BBS (le fil 1147 portait une réponse publique, post 1218, invisible) ; puis : « cela fait remonter le billet dans le fil », « un commentaire système avec la réponse et l'auteur en référence », « visible partie droite du fil comme les likes internes ».
 - Fait : miroir en lecture seule (`services/miroir_bbs.py`) — fils liés par `ref_url` ou lien du corps vers `bbs.<domaine>/t/<id>` ; posts publics non supprimés d'un fil public → commentaires `source='bbs'`, `author_ref='bbs:<handle>'`, à l'heure de la réponse (donc remontée dans le fil) ; le post d'origine du billet n'est pas recopié ; `/f/NN.ext` devient un lien absolu vers le BBS ; compteur de commentaires à côté de 💬 sur les cartes du fil ; balayage au plus toutes les 20 s, un billet seul à l'ouverture ; panne du BBS sans effet sur la page.
