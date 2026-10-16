@@ -1,3 +1,9 @@
+secubox-webos (1.12.2-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : les pages qu'il sert (/identite/, /coffre/) ont enfin leur barre de navigation (#2809). Sur ce vhost, /shared/sidebar.js retombait sur la page d'accueil (du HTML) et /api/v1/hub/public/menu repondait 404. /shared/ est servi en lecture seule (statique, jamais un relais) ; le menu et l'etat de sante, qui donnent l'inventaire des modules, ne sont relayes que derriere le meme double verrou que l'administration (reseau local ET session verifiee). 4 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 15:00:00 +0200
+
 secubox-webos (1.12.1-1~bookworm1) bookworm; urgency=medium
 
   * Cardlets du Hall sur iPhone : une vraie marge de chaque cote (#2733). Dans l'iframe du Hall (`dans`), `.cadre{padding:0}` et `.app{padding:6px 8px}` faisaient toucher le bord : 0 a 8 px. Les 21 cardlets recoivent, EN FIN DE FEUILLE (apres les regles de la carte), `@media(max-width:520px)` : cadre a 0 et 14 px de marge interieure de chaque cote, quelle que soit la balise qui porte la classe emb (html pour comptes, body pour les autres). Grand ecran inchange.
