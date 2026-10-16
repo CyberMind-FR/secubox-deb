@@ -79,3 +79,19 @@ def test_le_metapaquet_ne_tire_aucun_service_en_recommends():
 def test_les_fichiers_de_paquet_sont_la():
     for f in ("control", "changelog", "rules"):
         assert (PAQUETS / META / "debian" / f).is_file(), f
+
+
+CONTENEURS = {"secubox-nextcloud", "secubox-gitea", "secubox-mail", "secubox-matrix", "secubox-jitsi", "secubox-peertube", "secubox-photoprism",
+              "secubox-streamlit", "secubox-torrent", "secubox-ytsas", "secubox-jellyfin", "secubox-lyrion", "secubox-zigbee", "secubox-picobrew"}
+
+
+def test_aucun_conteneur_lxc_dans_le_profil():
+    """ESPRESSObin : AUCUN conteneur LXC, tous « non installes » — ni un module applicatif, ni un installeur de conteneur livre par un paquet du profil.
+
+    Le paquet `lxc` (les outils) peut subsister : secubox-toolbox en depend en dur et ad-guard depend de toolbox. Il ne cree aucun conteneur."""
+    ferme = fermeture(dependances_directes(CONTROL)[META], toutes())
+    assert not (ferme & CONTENEURS), ferme & CONTENEURS
+    for p in ferme:
+        racine = PAQUETS / p
+        installeurs = [f for f in racine.rglob("install-lxc.sh") if "/debian/" + p not in str(f)] if racine.is_dir() else []
+        assert not installeurs, (p, installeurs)
