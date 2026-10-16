@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Comparatif des profils (#2819), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  LECTURE SEULE. Le CONTENU des profils (minimal, lite, isp, full) est lu des meta-paquets secubox-<profil> à la construction : jamais saisi ici.
+  Le profil ACTIF et les modules installés viennent de dpkg sur cette box ; la mémoire est celle MESURÉE (jamais estimée).
+  ?embed=1 : sans menu ; ?demo=1 : données fictives.
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Comparatif des profils</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:14px;display:grid;gap:10px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn[aria-pressed="true"]{background:rgba(41,182,246,.22);border-color:var(--cyan)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem} #erreur[hidden]{display:none}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .l{color:var(--doux);font-size:.74rem} .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap} .tuile .s{color:var(--faible);font-size:.68rem}
+        .profils{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+        @container a (min-width:620px){.profils{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        @container a (min-width:1100px){.profils{grid-template-columns:repeat(4,minmax(0,1fr))}}
+        .profil{border:1px solid var(--trait);border-radius:14px;padding:12px;background:rgba(10,22,46,.6);display:flex;flex-direction:column;gap:8px;min-width:0}
+        .profil[data-profil=minimal]{border:2px solid var(--cyan);box-shadow:0 0 22px rgba(41,182,246,.25)}
+        .profil h3{margin:0;display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:1.05rem} .profil h3 b{font-weight:800;letter-spacing:.03em}
+        .badge{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.14);border-radius:999px;padding:1px 9px;font-size:.62rem;font-weight:700;letter-spacing:.05em}
+        .badge.cible{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.14)}
+        .meta{color:var(--faible);font-size:.7rem} .inclut{color:var(--doux);font-size:.78rem}
+        .esp{color:var(--faible);font-size:.64rem;text-transform:uppercase;letter-spacing:.06em;margin:4px 0 2px}
+        .chips{display:flex;flex-wrap:wrap;gap:4px}
+        .chip{border:1px solid var(--trait);border-radius:8px;padding:2px 8px;font-size:.72rem;color:var(--doux);background:rgba(8,18,38,.5);overflow-wrap:anywhere}
+        .chip.on{border-color:rgba(46,204,113,.55);color:var(--texte)}
+        .chip.on::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--vert);margin-right:5px;vertical-align:middle}
+        .pied{margin-top:auto;display:grid;gap:4px}
+        .total{font-size:.8rem;color:var(--texte);font-variant-numeric:tabular-nums} .jauge{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .jauge i{display:block;height:100%;border-radius:3px}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .absent .chip{border-color:rgba(255,77,94,.4)} .vide{color:var(--faible);font-size:.78rem;padding:6px 0}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="2.2"/></svg>
+                <div><b>Comparatif des profils</b><small>Ce que contient chaque profil, lu des méta-paquets</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><a class="btn" href="/profiles/">← Profils de modules</a><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:#001">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" title="Le profil dont le méta-paquet secubox-&lt;profil&gt; est installé sur cette box (dpkg). Le plus large l'emporte quand plusieurs sont présents."><span class="l">Profil actif</span><span class="v" id="tActif">—</span><span class="s" id="tActifS">méta-paquet installé</span></div>
+            <div class="tuile" title="Modules du profil actif dont le paquet est installé, sur le total que le méta-paquet demande."><span class="l">Modules installés</span><span class="v" id="tInst">—</span><span class="s">du profil actif</span></div>
+            <div class="tuile" title="Mémoire résidente MESURÉE par secubox-profiles pour les modules du profil actif. Jamais une estimation : les modules sans mesure ne comptent pas."><span class="l">Mémoire mesurée</span><span class="v" id="tMem">—</span><span class="s" id="tMemS">—</span></div>
+            <div class="tuile" title="Modules que Minimal n'embarque pas et que les autres profils apportent."><span class="l">Absents de Minimal</span><span class="v" id="tAbs">—</span><span class="s">dans lite, isp ou full</span></div>
+        </section>
+
+        <div class="droite" style="margin-left:0"><button class="btn" id="cumul" type="button" aria-pressed="false" title="Par défaut chaque carte montre ce que le profil AJOUTE à celui qu'il inclut">Afficher le contenu cumulé</button></div>
+        <section class="profils" id="profils" aria-label="Profils"></section>
+
+        <div class="pan absent" id="pAbsent"><h3>Ce que Minimal n’embarque pas <i id="aStat"></i></h3><div id="absents"></div>
+            <p class="note">Liste calculée : les modules des trois autres profils qui ne sont pas dans Minimal. Un module ajouté à un méta-paquet apparaît ici à la construction suivante.</p></div>
+    </div></div></main>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/profiles';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const nom = p => String(p).replace(/^secubox-/, '');
+        // `body.hybrid-skin main * { background-color: transparent !important }` rend invisible tout fond posé en CSS : on le pose en ligne, avec !important.
+        const peint = (e, c) => { e.style.setProperty('background-color', c, 'important'); return e; };
+        const TEINTE = { minimal: 'rgba(41,182,246,.10)', lite: 'rgba(10,22,46,.6)', isp: 'rgba(10,22,46,.6)', full: 'rgba(10,22,46,.6)' };
+        const COULEUR_POIDS = { minimal: '#2ecc71', lite: '#ffd23f', isp: '#ff9f1c', full: '#ff4d5e' };
+        let DATA = null, MEM = null, SESSION_OK = true, CUMUL = false, PANNE = null;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        async function lire(chemin) {
+            const h = { Accept: 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t;
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: h });
+            if (!r.ok) { let d = ''; try { d = (await r.json()).detail || ''; } catch (e) { /* corps vide */ } const e = new Error(d || 'HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+
+        function demoData() {
+            const f = (l, e) => l.map(x => ({ paquet: x, espace: e || 'protection' }));
+            const MIN = ['secubox-dpi', 'secubox-dns-guard', 'secubox-ad-guard', 'secubox-nac', 'secubox-freebox'], LITE = MIN.concat(['secubox-waf-ng', 'secubox-wireguard', 'secubox-qos']);
+            DATA = { dpkg: 'ok', actif: 'minimal', profils_installes: ['minimal'], installes: MIN, espaces: [{ id: 'protection', nom: 'Protection', ordre: 2 }, { id: 'services', nom: 'Services', ordre: 4 }, { id: 'autres', nom: 'Autres', ordre: 99 }],
+                profils: [{ id: 'minimal', label: 'Minimal', version: '0.1.0', inclut: null, ajoutes: f(MIN), modules: f(MIN), total: 5 }, { id: 'lite', label: 'Lite', version: '1.8.0', inclut: null, ajoutes: f(LITE), modules: f(LITE), total: 8 },
+                    { id: 'isp', label: 'ISP', version: '1.4.0', inclut: 'lite', ajoutes: f(['secubox-mail', 'secubox-gitea'], 'services'), modules: f(LITE.concat(['secubox-mail', 'secubox-gitea'])), total: 10 }],
+                absents_de_minimal: f(['secubox-waf-ng', 'secubox-wireguard', 'secubox-qos']).concat(f(['secubox-mail', 'secubox-gitea'], 'services')) };
+            MEM = { modules: [{ id: 'dpi', rss_kb: 80000 }, { id: 'nac', rss_kb: 20000 }] };
+        }
+
+        async function charger() {
+            PANNE = null;
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const e = await Promise.allSettled([lire('/comparatif'), lire('/status')]);
+            SESSION_OK = !e.some(x => x.status === 'rejected' && (x.reason.statut === 401 || x.reason.statut === 403));
+            DATA = e[0].status === 'fulfilled' ? e[0].value : null; MEM = e[1].status === 'fulfilled' ? e[1].value : null;
+            if (e[0].status === 'rejected' && SESSION_OK) PANNE = e[0].reason.message;
+            rendre();
+        }
+
+        function mesures(profil) {
+            const par = {}; ((MEM && MEM.modules) || []).forEach(m => { par[m.id] = m.rss_kb; });
+            let kb = 0, n = 0;
+            profil.modules.forEach(m => { const v = par[nom(m.paquet)] != null ? par[nom(m.paquet)] : par[nom(m.paquet).replace(/-ng$/, '')]; if (typeof v === 'number' && v > 0) { kb += v; n += 1; } });
+            return { kb, n };
+        }
+
+        function chipsParEspace(cont, liste, installes) {
+            const ordre = {}; ((DATA && DATA.espaces) || []).forEach(e => { ordre[e.id] = { nom: e.nom || e.id, o: e.ordre == null ? 99 : e.ordre }; });
+            const groupes = {};
+            liste.forEach(m => { (groupes[m.espace || 'autres'] = groupes[m.espace || 'autres'] || []).push(m); });
+            Object.keys(groupes).sort((a, b) => ((ordre[a] || { o: 99 }).o - (ordre[b] || { o: 99 }).o)).forEach(id => {
+                cont.appendChild(el('div', 'esp', (ordre[id] || { nom: id }).nom));
+                const c = el('div', 'chips');
+                groupes[id].slice().sort((a, b) => a.paquet.localeCompare(b.paquet)).forEach(m => {
+                    const ch = el('span', 'chip' + (installes && installes.has(m.paquet) ? ' on' : ''), nom(m.paquet));
+                    peint(ch, installes && installes.has(m.paquet) ? 'rgba(46,204,113,.12)' : 'rgba(8,18,38,.5)'); c.appendChild(ch);
+                });
+                cont.appendChild(c);
+            });
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO; $('session').hidden = SESSION_OK;
+            const e = $('erreur'); e.hidden = !PANNE; e.textContent = PANNE ? 'Contenu des profils indisponible : ' + PANNE : '';
+            const etat = $('etat');
+            const profils = DATA && Array.isArray(DATA.profils) ? DATA.profils : null;
+            const actif = DATA ? DATA.actif : null;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!profils) { etat.className = 'actif att'; etat.textContent = 'CONTENU INDISPONIBLE'; }
+            else if (actif) { etat.className = 'actif'; etat.textContent = 'PROFIL ACTIF : ' + actif.toUpperCase(); }
+            else { etat.className = 'actif att'; etat.textContent = 'AUCUN PROFIL INSTALLÉ'; }
+
+            const sec = $('profils'); sec.replaceChildren();
+            const installes = new Set((DATA && DATA.installes) || []);
+            const maxTotal = profils ? Math.max.apply(null, profils.map(p => p.total || 0).concat([1])) : 1;
+            (profils || []).forEach(p => {
+                const c = peint(el('article', 'profil'), TEINTE[p.id] || TEINTE.lite); c.dataset.profil = p.id;
+                const h = el('h3'); h.appendChild(el('b', null, p.label || p.id));
+                if (p.id === 'minimal') h.appendChild(el('span', 'badge cible', 'ESPRESSOBIN'));
+                if (actif === p.id) h.appendChild(el('span', 'badge', 'ACTIF SUR CETTE BOX'));
+                c.appendChild(h);
+                c.appendChild(el('div', 'meta', 'secubox-' + p.id + (p.version ? ' ' + p.version : '')));
+                const ajoutes = p.ajoutes || [];
+                c.appendChild(el('div', 'inclut', p.inclut ? 'Inclut ' + (profils.find(x => x.id === p.inclut) || { label: p.inclut }).label + ' · + ' + ajoutes.length + ' module' + (ajoutes.length > 1 ? 's' : '') : 'Socle autonome'));
+                chipsParEspace(c, CUMUL ? (p.modules || []) : ajoutes, installes);
+                const pied = el('div', 'pied');
+                pied.appendChild(el('div', 'total', (p.total || 0) + ' modules' + (DATA && DATA.dpkg === 'ok' ? ' · ' + (p.modules || []).filter(m => installes.has(m.paquet)).length + ' installés ici' : '')));
+                const j = el('div', 'jauge'); const i = el('i'); i.style.width = Math.round(100 * (p.total || 0) / maxTotal) + '%'; peint(i, COULEUR_POIDS[p.id] || '#29b6f6'); j.appendChild(i); pied.appendChild(j);
+                c.appendChild(pied); sec.appendChild(c);
+            });
+            if (!profils) sec.appendChild(el('div', 'vide', SESSION_OK ? 'Aucun profil à afficher.' : '—'));
+
+            const ap = profils && actif ? profils.find(x => x.id === actif) : null;
+            $('tActif').textContent = ap ? ap.label : '—'; $('tActifS').textContent = ap ? 'secubox-' + ap.id + (ap.version ? ' ' + ap.version : '') : (profils ? 'aucun méta-paquet installé' : 'méta-paquet installé');
+            $('tInst').textContent = ap ? (ap.modules || []).filter(m => installes.has(m.paquet)).length + ' / ' + (ap.total || 0) : '—';
+            if (ap) { const m = mesures(ap); $('tMem').textContent = m.n ? Math.round(m.kb / 1024) + ' Mo' : '—'; $('tMemS').textContent = m.n + ' module(s) mesuré(s) sur ' + (ap.total || 0); }
+            else { $('tMem').textContent = '—'; $('tMemS').textContent = 'mesure du profil actif'; }
+            const abs = profils ? (DATA.absents_de_minimal || []) : null;
+            $('tAbs').textContent = abs ? String(abs.length) : '—'; $('aStat').textContent = abs ? abs.length + ' module(s)' : '';
+            const za = $('absents'); za.replaceChildren(); if (abs && abs.length) chipsParEspace(za, abs, null); else za.appendChild(el('div', 'vide', abs ? 'Minimal contient tout ce que les autres profils apportent.' : '—'));
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        $('cumul').addEventListener('click', () => { CUMUL = !CUMUL; $('cumul').setAttribute('aria-pressed', String(CUMUL)); $('cumul').textContent = CUMUL ? 'Afficher seulement ce que chaque profil ajoute' : 'Afficher le contenu cumulé'; rendre(); });
+        $('rafraichir').addEventListener('click', charger);
+        function annoncer() { try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'profiles' }, location.origin); } catch (e) { /* hors iframe */ } }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        charger();
+    </script>
+</body>
+</html>
