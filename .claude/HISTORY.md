@@ -9,31 +9,31 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
-## 2026-10-16 — App Store : installation a distance (ref #2808)
+## 2026-10-16 — App Store : installation a distance (closes #2808)
 
-secubox-appstore 0.9.0 : demande d'installation sur un autre noeud via la boite OpenPGP, accord de l'admin cible (nom retape), reponse a l'expediteur. A valider de bout en bout entre deux noeuds avant `closes`.
+secubox-appstore 0.9.0 : demande d'installation sur un autre noeud via la boite OpenPGP, accord de l'admin cible (nom retape), reponse a l'expediteur. Rendu valide par le mainteneur ; une demande reelle entre deux noeuds n'a pas encore ete exercee (suivi a faire).
 
-## 2026-10-16 — cookies : metriques vides, module always-on (ref #2811)
+## 2026-10-16 — cookies : metriques vides, module always-on (closes #2811)
 
 secubox-profiles 0.21.1 : cookies always-on par defaut (cible du relais sbxmitm). Sur gk2 : `secubox-profilectl set-lifecycle`.
 
-## 2026-10-16 — Hall : barre de navigation sur /identite/ (ref #2809)
+## 2026-10-16 — Hall : barre de navigation sur /identite/ (closes #2809)
 
 secubox-webos 1.12.2 : /shared/ en lecture seule + menu et health-batch derriere le double verrou LAN+session sur le vhost du Hall.
 
-## 2026-10-16 — proxypac etape 2 : cache des CDN statiques (ref #2804, #2752)
+## 2026-10-16 — proxypac etape 2 : cache des CDN statiques (closes #2804, closes #2752)
 
 secubox-toolbox-ng 0.13.0 (cache de reponses dans sbxmitm, liste fermee, par instance) + secubox-tor 1.7.0 (accepter/retirer dans proxypac). Etape 3 abandonnee (nos pages n'ont pas de CDN statique externe) ; routage PAC sans cible (MITM sur wg-toolbox/loopback seulement).
 
-## 2026-10-16 — antirootkit : API KO corrigee (ref #2805)
+## 2026-10-16 — antirootkit : API KO corrigee (closes #2805)
 
 secubox-security-posture 2.4.1 : SupplementaryGroups=secubox dans l'unite antirootkit (secret JWT illisible sinon).
 
-## 2026-10-16 — App Store : cumuls par categorie (ref #2802)
+## 2026-10-16 — App Store : cumuls par categorie (closes #2802)
 
 secubox-appstore 0.8.0 : panneau de cumuls par categorie (installes/total, a installer), cliquable pour filtrer.
 
-## 2026-10-16 — Barre du haut sans icones (ref #2800)
+## 2026-10-16 — Barre du haut sans icones (closes #2800)
 
 secubox-hub 1.12.8 : smart-strip masquee.
 
@@ -41,23 +41,23 @@ secubox-hub 1.12.8 : smart-strip masquee.
 
 secubox-dpi 1.14.2 : repartition par protocole / applications / hotes passent au-dessus des flux actifs.
 
-## 2026-10-16 — Espaces : sondes YouTube SAS et Glances (ref #2796)
+## 2026-10-16 — Espaces : sondes YouTube SAS et Glances (closes #2796)
 
 secubox-hub 1.12.7 : `glances` suit `metrics` ; `ytsas` (LXC) sonde par connexion TCP au conteneur. Plus d'arret affiche a tort pour des pages qui fonctionnent.
 
-## 2026-10-16 — Vue d'ensemble : etats coherents avec la page Espaces (ref #2794)
+## 2026-10-16 — Vue d'ensemble : etats coherents avec la page Espaces (closes #2794)
 
 secubox-hub 1.12.6 : `/apercu` suit la sonde de sante (monte dans l'agregateur, en veille = en service ; `error` = arret) au lieu de la seule unite/socket ; apercu et health, pages du hub, ont une sonde. Reste a l'arret a juste titre : MESH 802.11s.
 
-## 2026-10-16 — Barre laterale sans pastilles (ref #2792)
+## 2026-10-16 — Barre laterale sans pastilles (closes #2792)
 
 secubox-hub 1.12.5 : le bloc de pastilles en haut a gauche (live, menaces, services KO, materiel) est retire sur toutes les pages (masque CSS, y compris depuis le cache HTML ; `loadStatusBarData` ne fait plus de requetes).
 
-## 2026-10-16 — Systeme : actions rapides reelles et honnetes (ref #2788)
+## 2026-10-16 — Systeme : actions rapides reelles et honnetes (closes #2788)
 
 secubox-system 1.10.2 : cinq unites root `secubox-systeme-*.service` (verification pare-feu, heure NTP, caches, redemarrer, eteindre) demarrees via la regle polkit #2615 ; l'API rend le vrai code retour et la raison (502/504) au lieu de « HTTP 200 » muet. « Recharger le pare-feu » verifie la config (`nft -c`) sans la charger (`flush ruleset` viderait les bannissements). Redemarrage en bloc des services refuse (409). `override_dh_installsystemd` : le postinst ne demarre pas les unites d'action (il aurait eteint la machine). 24 tests.
 
-## 2026-10-16 — Système : actions rapides réelles et honnêtes (secubox-system 1.10.2) (ref #2788)
+## 2026-10-16 — Système : actions rapides réelles et honnêtes (secubox-system 1.10.2) (closes #2788)
 
 - Cause : l'API (User=secubox, NoNewPrivileges) ne pouvait ni recharger nftables, ni régler l'heure, ni vider les caches, ni éteindre ; elle répondait HTTP 200 `{"success": false}` sans raison (« Échec : HTTP 200 »), et « Redémarrer les services » / « Éteindre » annonçaient un succès sans contrôle.
 - Correctif : cinq unités root `secubox-systeme-*.service` démarrées par `systemctl start` (règle polkit #2615) ; vrai code retour + raison en 502/504 ; « Recharger le pare-feu » = vérification `nft -c` (pas de flush : `/etc/nftables.conf` commence par `flush ruleset`, ce qui viderait les bannissements) ; redémarrage en bloc refusé (409) ; `override_dh_installsystemd` pour que le postinst ne démarre pas les unités d'action. 24 tests. Déployé gk2 (1.10.2) et vérifié : polkit autorise pare-feu-verif et heure depuis le cgroup du service, refuse ssh.service ; bannissements intacts. closes #2788
