@@ -1348,7 +1348,7 @@ echo -e "    ${CYAN}secubox-mode kiosk${GRAY}    Switch to Kiosk GUI${RESET}"
 echo -e "    ${CYAN}secubox-mode tui${GRAY}      Switch to TUI dashboard${RESET}"
 echo -e "    ${CYAN}secubox-mode console${GRAY}  Switch to shell console${RESET}"
 echo ""
-echo -e "  ${GRAY}Web UI: https://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):9443${RESET}"
+echo -e "  ${GRAY}Web UI: https://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost')${RESET}"
 echo ""
 HELP_CMD
 chmod +x "${ROOTFS}/usr/bin/secubox-help"
@@ -1436,8 +1436,8 @@ echo ""
 echo -e "${GOLD}  ────────────────────────────────────────────────────────────${RESET}"
 echo -e "${WHITE}  🔗 Quick Access${RESET}"
 IP=$(hostname -I | awk '{print $1}')
-echo -e "     ${GRAY}Dashboard:${RESET}  ${CYAN}https://${IP:-localhost}:9443${RESET}"
-echo -e "     ${GRAY}Admin API:${RESET}  ${CYAN}https://${IP:-localhost}:9443/api/v1/${RESET}"
+echo -e "     ${GRAY}Dashboard:${RESET}  ${CYAN}https://${IP:-localhost}${RESET}"
+echo -e "     ${GRAY}Admin API:${RESET}  ${CYAN}https://${IP:-localhost}/api/v1/${RESET}"
 echo ""
 STATUS_SCRIPT
 chmod +x "${ROOTFS}/usr/bin/secubox-status"
@@ -1486,7 +1486,7 @@ printf '%b' "\e[38;5;29m
 \e[38;5;242m  Build: ${BUILD_TIMESTAMP}\e[0m
 
 \e[38;5;250m  [user] Default: \e[38;5;214mroot\e[38;5;250m / \e[38;5;214msecubox\e[0m
-\e[38;5;250m  [web]  Web UI: \e[38;5;45mhttps://<IP>:9443\e[0m
+\e[38;5;250m  [web]  Web UI: \e[38;5;45mhttps://<IP>/\e[0m
 \e[38;5;250m  [ssh]  SSH:    \e[38;5;45mport 22\e[0m
 
 \e[38;5;242m─────────────────────────────────────────────────────────────\e[0m
@@ -1507,7 +1507,7 @@ printf '%b' "\e[38;5;214m
 
 \e[38;5;242m  Build: ${BUILD_TIMESTAMP}\e[0m
 
-\e[38;5;250m  🌐 Web UI:     \e[38;5;45mhttps://<IP>:9443\e[0m
+\e[38;5;250m  🌐 Web UI:     \e[38;5;45mhttps://<IP>/\e[0m
 \e[38;5;250m  🔐 Credentials: \e[38;5;214mroot\e[38;5;250m / \e[38;5;214msecubox\e[0m
 \e[38;5;250m  📖 Docs:       \e[38;5;45mhttps://secubox.in/docs\e[0m
 
