@@ -604,35 +604,62 @@ def packages():
     return {"packages": pkgs}
 
 
+# #2788 — l'API tourne en User=secubox + NoNewPrivileges : elle ne peut ni recharger nftables, ni regler l'heure, ni vider les caches, ni eteindre.
+# Chaque action est une unite root « secubox-systeme-*.service » que la regle polkit (#2615) l'autorise a DEMARRER ; on rend le vrai code retour et la vraie raison.
+UNITE_SYSTEME = {
+    "pare_feu": "secubox-systeme-pare-feu-verif.service",
+    "heure": "secubox-systeme-heure.service",
+    "caches": "secubox-systeme-caches.service",
+    "redemarrer": "secubox-systeme-redemarrer.service",
+    "eteindre": "secubox-systeme-eteindre.service",
+}
+
+
+def _lance_unite(cle: str) -> None:
+    """Demarre l'unite root ; leve HTTPException(502/504) avec la raison reelle si elle echoue."""
+    unite = UNITE_SYSTEME[cle]
+    try:
+        r = subprocess.run(["systemctl", "start", unite], capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, f"Délai dépassé en attendant {unite}")
+    if r.returncode == 0:
+        return
+    raison = (r.stderr or r.stdout or "").strip()
+    if not raison:
+        try:
+            j = subprocess.run(["journalctl", "-u", unite, "-n", "5", "--no-pager", "-o", "cat"],
+                               capture_output=True, text=True, timeout=5)
+            raison = (j.stdout or "").strip()
+        except Exception:
+            raison = ""
+    raise HTTPException(502, f"{unite} a échoué : {raison[:400] or 'raison inconnue (code ' + str(r.returncode) + ')'}")
+
+
 @router.post("/restart_services")
 def restart_services(user=Depends(require_jwt)):
-    """Restart all SecuBox services."""
-    for svc in SECUBOX_SERVICES[:12]:
-        if svc.startswith("secubox-"):
-            subprocess.run(["systemctl", "restart", svc], timeout=10)
-    return {"success": True}
+    """Refus honnete : relancer d'un coup hub, auth, nginx, system... coupe l'administration (l'agregateur met ~10 min a revenir)."""
+    raise HTTPException(409, "Redémarrage en bloc refusé : redémarrez un module à la fois depuis la liste des services.")
 
 
 @router.post("/reload_firewall")
 def reload_firewall(user=Depends(require_jwt)):
-    """Reload nftables firewall."""
-    r = subprocess.run(["systemctl", "reload", "nftables"], capture_output=True, text=True)
-    return {"success": r.returncode == 0}
+    """Verifie /etc/nftables.conf (nft -c). Pas de rechargement : il viderait les ensembles dynamiques (bannissements)."""
+    _lance_unite("pare_feu")
+    return {"success": True, "message": "Configuration du pare-feu vérifiée : valide. Non rechargé (un rechargement viderait les bannissements en cours)."}
 
 
 @router.post("/sync_time")
 def sync_time(user=Depends(require_jwt)):
     """Sync system time with NTP."""
-    r = subprocess.run(["timedatectl", "set-ntp", "true"], capture_output=True, text=True)
-    return {"success": r.returncode == 0}
+    _lance_unite("heure")
+    return {"success": True, "message": "Synchronisation NTP activée."}
 
 
 @router.post("/clear_cache")
 def clear_cache(user=Depends(require_jwt)):
     """Clear system caches."""
-    subprocess.run(["sync"], timeout=5)
-    Path("/proc/sys/vm/drop_caches").write_text("3")
-    return {"success": True}
+    _lance_unite("caches")
+    return {"success": True, "message": "Caches vidés."}
 
 
 @router.get("/check_updates")
@@ -660,8 +687,8 @@ def apply_updates(user=Depends(require_jwt)):
 def shutdown(user=Depends(require_jwt)):
     """Shutdown the system."""
     log.warning("Shutdown requested by user")
-    subprocess.Popen(["shutdown", "-h", "+1"], stdout=subprocess.DEVNULL)
-    return {"success": True, "message": "Shutdown scheduled in 1 minute"}
+    _lance_unite("eteindre")
+    return {"success": True, "message": "Extinction programmée dans 1 minute."}
 
 
 @router.post("/settings")
@@ -930,8 +957,8 @@ async def get_denoise_stats(user=Depends(require_jwt)):
 def reboot(user=Depends(require_jwt)):
     """Redémarrer le système."""
     log.warning("Reboot requested by user")
-    subprocess.Popen(["shutdown", "-r", "+1"], stdout=subprocess.DEVNULL)
-    return {"success": True, "message": "Reboot scheduled in 1 minute"}
+    _lance_unite("redemarrer")
+    return {"success": True, "message": "Redémarrage programmé dans 1 minute."}
 
 
 @router.get("/get_storage")

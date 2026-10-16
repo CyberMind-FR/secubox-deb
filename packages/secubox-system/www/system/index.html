@@ -232,7 +232,7 @@
         }
         function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
         function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
-        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? String(res.data.detail) : (res.statut ? 'HTTP ' + res.statut + (res.statut === 401 || res.statut === 403 ? ' (session ou droits insuffisants)' : '') : 'Serveur injoignable'); }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && (res.data.detail || res.data.error || res.data.message || res.data.output)) ? String(res.data.detail || res.data.error || res.data.message || res.data.output) : (res.statut ? 'HTTP ' + res.statut + (res.statut === 401 || res.statut === 403 ? ' (session ou droits insuffisants)' : '') : 'Serveur injoignable'); }
         // Une écriture réussie dont le corps dit success:false est un échec.
         const reussi = r => r.ok && !(r.data && r.data.success === false);
 
