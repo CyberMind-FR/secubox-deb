@@ -83,11 +83,12 @@ def test_la_table_du_hub_l_emporte_sur_le_defaut():
     assert gen._espace("secubox-core", {"core": {"espace": "protection"}}) == "protection"
 
 
-def test_sur_le_vrai_depot_minimal_contient_premier_pas_et_p2p_et_aucun_autres():
+def test_sur_le_vrai_depot_minimal_contient_premier_pas_sans_annuaire_ni_p2p_et_aucun_autres():
     depot = PKG.parent
     d = gen.construire(depot, depot / "secubox-hub" / "espaces.json")
     m = _mini(d)
     noms = {x["paquet"] for x in m["modules"]}
-    assert {"secubox-premier-pas", "secubox-p2p"} <= noms
+    assert "secubox-premier-pas" in noms                          # tire par autoload-agent
+    assert not noms & {"secubox-annuaire", "secubox-p2p"}          # #2877 : Conflicts de minimal
     assert not noms & {x["paquet"] for x in d["absents_de_minimal"]}
     assert [x["paquet"] for x in m["modules"] if x["espace"] == "autres"] == [], [x for x in m["modules"] if x["espace"] == "autres"]

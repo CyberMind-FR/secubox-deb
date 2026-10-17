@@ -1,3 +1,9 @@
+secubox-auth (1.8.4-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-annuaire passe de Depends a Recommends (#2877) : il ne sert qu'a la delegation d'acces, dont les modules sont importes a la demande (api/delegation.py), jamais au demarrage. Sans lui (profil minimal), les routes de delegation repondent 501 « module annuaire non installe » au lieu d'une 500. Les profils lite, isp et full l'installent toujours (Recommends).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 18:00:00 +0200
+
 secubox-auth (1.8.3-1~bookworm1) bookworm; urgency=medium
 
   * /sbxid/ ne renvoie plus vers un Hall ABSENT (#2872). Sur une box sans Hall (profil minimal, ESPRESSObin), admin.<box>/sbxid/ renvoyait en 302 vers https://hall.<box>/identite/#admin, un site qui n'existe pas. nginx (`if (!-d /usr/share/secubox/www/hall)`), le repli de la page /sbxid/ et les liens de la page Utilisateurs ouvrent maintenant le gestionnaire d'identite sur l'origine admin (/identite/#admin) quand il n'y a pas de Hall ; avec Hall, comportement inchange (sonde HEAD /hall/ de meme origine).

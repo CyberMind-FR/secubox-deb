@@ -9,11 +9,11 @@
 name  = "minimal"
 label = "Minimal — DPI, dns-guard, ad-guard, NAC, Freebox"
 on = [
-  "aggregator", "annuaire-apply", "annuaire-noms", "auth", "autoload-agent", "core", "hardening", "hub", "portal", "system",
+  "aggregator", "auth", "autoload-agent", "core", "hardening", "hub", "portal", "system",
   "dpi", "dpi-flowcap", "dpi-resume", "ndpid-engine", "ndpisrvd",
   "dns-guard", "ad-guard", "webfilter", "webfilter-apply", "webfilter-feed", "webfilter-sync",
   "nac", "freebox", "ipv6guard",
-  "network-ready", "runtime", "firstboot", "openpgp",
+  "network-ready", "runtime", "firstboot",
   "wireguard", "courbes",
   "premier-pas", "premier-pas-appliquer", "premier-pas-console", "premier-pas-decouverte",
 ]

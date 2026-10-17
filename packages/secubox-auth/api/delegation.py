@@ -23,6 +23,8 @@ import json
 import os
 import re
 import sys
+
+from fastapi import HTTPException
 import threading
 import time
 from datetime import datetime, timezone
@@ -43,9 +45,13 @@ def annuaire():
         # En FIN de chemin : l'annuaire a aussi un paquet « api », qui
         # masquerait celui de l'auth.
         sys.path.append(ANNUAIRE_LIB)
-    from annuaire import assist, delegation  # noqa: PLC0415
-    from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
-    from annuaire.log import Journal  # noqa: PLC0415
+    try:
+        from annuaire import assist, delegation  # noqa: PLC0415
+        from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+        from annuaire.log import Journal  # noqa: PLC0415
+    except ImportError:
+        # Profil minimal (#2877) : secubox-annuaire n'est pas installe. La delegation d'acces est alors indisponible, ce que le client doit lire comme tel.
+        raise HTTPException(501, "Délégation d'accès indisponible : le module annuaire (secubox-annuaire) n'est pas installé sur cette box")
     return Journal, assist, delegation, public_from_private, did_from_pubkey
 
 

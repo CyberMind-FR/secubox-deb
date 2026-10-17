@@ -36,7 +36,8 @@ Depends: ${misc:Depends},
  secubox-courbes (>= 0.1.0)
 # WAF et HAProxy retires (#2849) : essayes sur la carte de 951 Mo, ils l'ont saturee (swap plein, charge > 10). Le WAF reste sur l'infrastructure.
 # toolbox et R-level retires (#2855) : decision du proprietaire ; ad-guard ne l'exige plus (Recommends).
-Conflicts: secubox-webos, secubox-waf-ng, secubox-waf, secubox-metrics, secubox-toolbox
+# annuaire et p2p retires (#2877) : ni delegation d'acces ni maillage sur la carte ; annuaire n'est plus exige par auth, p2p n'est tire que par un Recommends de premier-pas.
+Conflicts: secubox-webos, secubox-waf-ng, secubox-waf, secubox-metrics, secubox-toolbox, secubox-annuaire, secubox-p2p
 Description: SecuBox Minimal — DPI, garde DNS, filtre de publicites, NAC, Freebox, WireGuard, Courbes et Glances
  Profil minimal, pour une petite carte (ESPRESSObin) : inspection des paquets (DPI), detection d'anomalies DNS (dns-guard), filtrage
  des publicites et traqueurs (ad-guard), controle d'acces reseau (NAC), module Freebox, garde IPv6 et filtrage web, avec la seule interface d'administration.
