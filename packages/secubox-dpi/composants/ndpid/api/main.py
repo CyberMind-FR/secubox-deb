@@ -903,32 +903,46 @@ async def get_realtime_stats():
 # Service Control
 # ============================================================================
 
+# L'unite REELLE de nDPId (#2870) : `ndpid.service` n'existe pas. Le compte `secubox` ne pilote pas systemd (polkit : « Interactive authentication required ») :
+# on passe par sudo, que le postinst de secubox-dpi autorise pour ces trois commandes EXACTES et aucune autre.
+UNITE_NDPID = "secubox-ndpid-engine.service"
+
+
+def _piloter_ndpid(verbe: str) -> Dict[str, Any]:
+    try:
+        r = subprocess.run(["sudo", "-n", "/usr/bin/systemctl", verbe, UNITE_NDPID], capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": f"Délai dépassé (30 s) en voulant {verbe} {UNITE_NDPID}"}
+    except FileNotFoundError:
+        return {"success": False, "error": "sudo introuvable"}
+    if r.returncode == 0:
+        return {"success": True, "error": None}
+    return {"success": False, "error": (r.stderr or r.stdout or f"échec de {verbe} {UNITE_NDPID}").strip()}
+
+
 @app.post("/control/start", dependencies=[Depends(require_jwt)])
 def start_ndpid():
     """Start nDPId daemon."""
-    result = subprocess.run(["systemctl", "start", "ndpid"], capture_output=True, text=True)
-    return {"success": result.returncode == 0, "error": result.stderr if result.returncode != 0 else None}
+    return _piloter_ndpid("start")
 
 
 @app.post("/control/stop", dependencies=[Depends(require_jwt)])
 def stop_ndpid():
     """Stop nDPId daemon."""
-    result = subprocess.run(["systemctl", "stop", "ndpid"], capture_output=True, text=True)
-    return {"success": result.returncode == 0}
+    return _piloter_ndpid("stop")
 
 
 @app.post("/control/restart", dependencies=[Depends(require_jwt)])
 def restart_ndpid():
     """Restart nDPId daemon."""
-    result = subprocess.run(["systemctl", "restart", "ndpid"], capture_output=True, text=True)
-    return {"success": result.returncode == 0, "error": result.stderr if result.returncode != 0 else None}
+    return _piloter_ndpid("restart")
 
 
 @app.get("/logs", dependencies=[Depends(require_jwt)])
 def get_logs(lines: int = 100):
     """Get nDPId daemon logs."""
     result = subprocess.run(
-        ["journalctl", "-u", "ndpid", "-n", str(lines), "--no-pager"],
+        ["journalctl", "-u", UNITE_NDPID, "-n", str(lines), "--no-pager"],
         capture_output=True, text=True, timeout=10
     )
     return {"lines": result.stdout.splitlines()}
