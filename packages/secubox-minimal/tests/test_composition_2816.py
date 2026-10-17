@@ -17,7 +17,7 @@ CONTROL = (PAQUETS / META / "debian" / "control").read_text(encoding="utf8")
 
 REQUIS = {"secubox-dpi", "secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox", "secubox-ipv6guard", "secubox-webfilter", "secubox-autoload-agent", "secubox-wireguard"}
 SOCLE_ADMIN = {"secubox-core", "secubox-aggregator", "secubox-hub", "secubox-portal", "secubox-auth"}
-INTERDITS = {"secubox-annuaire", "secubox-p2p", "secubox-waf-ng", "secubox-waf", "secubox-haproxy", "secubox-toolbox", "secubox-webos", "secubox-isp", "secubox-lite", "secubox-full",
+INTERDITS = {"secubox-waf-ng", "secubox-waf", "secubox-haproxy", "secubox-toolbox", "secubox-webos", "secubox-isp", "secubox-lite", "secubox-full",
              "secubox-metrics", "secubox-soc", "secubox-toolbox-ng", "secubox-mediaflow", "secubox-torrent", "secubox-mail"}
 
 
@@ -106,7 +106,7 @@ def test_les_modules_exclus_sont_en_conflicts_car_un_recommends_les_ramenait():
     m = re.search(r"^Conflicts:((?:.*\n?(?: .*\n?)*))", bloc, re.M)
     assert m, "Conflicts absent"
     conflits = noms(m.group(1))
-    assert {"secubox-webos", "secubox-waf-ng", "secubox-metrics", "secubox-toolbox", "secubox-annuaire", "secubox-p2p"} <= conflits, conflits
+    assert {"secubox-webos", "secubox-waf-ng", "secubox-metrics", "secubox-toolbox"} <= conflits, conflits
 
 
 def test_pas_de_postinst_de_leurre_ni_de_binaire_haproxy():
@@ -128,9 +128,10 @@ def test_toolbox_et_rlevel_sont_exclus_et_ad_guard_ne_l_exige_plus():
     assert re.search(r"^Recommends:.*secubox-toolbox", ctl, re.M | re.S)
 
 
-def test_annuaire_et_p2p_sont_exclus_de_minimal():
-    """#2877 : ni delegation d'acces (annuaire) ni maillage (p2p) sur la carte. annuaire y entrait par auth (Depends) et par p2p ; p2p par premier-pas (Recommends)."""
+def test_annuaire_et_p2p_restent_dans_minimal_mais_rien_ne_les_exige():
+    """#2877 : annuaire reste dans le profil, mais il est ÉMANCIPÉ : auth et p2p ne l'exigent plus (Recommends), chacun fonctionne sans (501 / (donnée, erreur))."""
     d = toutes()
-    ctl_auth = (PAQUETS / "secubox-auth" / "debian" / "control").read_text(encoding="utf8")
-    assert "secubox-annuaire" not in d["secubox-auth"], "auth ne doit plus EXIGER annuaire (Recommends seulement)"
-    assert re.search(r"^Recommends:[^\n]*(?:\n [^\n]*)*secubox-annuaire", ctl_auth, re.M) or "Recommends: secubox-annuaire" in ctl_auth or re.search(r"Recommends:(?:.|\n)*?secubox-annuaire", ctl_auth)
+    assert "secubox-annuaire" not in d["secubox-auth"] and "secubox-annuaire" not in d["secubox-p2p"]
+    bloc = CONTROL.split(f"Package: {META}", 1)[1]
+    m = re.search(r"^Conflicts:((?:.*\n?(?: .*\n?)*))", bloc, re.M)
+    assert not {"secubox-annuaire", "secubox-p2p"} & noms(m.group(1))
