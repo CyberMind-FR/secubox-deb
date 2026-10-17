@@ -1,3 +1,9 @@
+secubox-p2p (1.16.2-1~bookworm1) bookworm; urgency=medium
+
+  * Ecouteur d'enrolement 7331 : admet aussi les tunnels wg-autoload (10.64.0.0/16) et wg-mesh (10.10.0.0/24), en plus du LAN (ref #2883). Une box rattachee par tunnel, comme l'ebin lgm-ebin vers gk2, recevait 403 et ne pouvait pas devenir pair. Reste limite a cet ecouteur et aux routes master-link ; le jeton est toujours valide par le module. Aucun autre reseau n'est ouvert.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 14:00:00 +0200
+
 secubox-p2p (1.16.1-1~bookworm1) bookworm; urgency=medium
 
   * secubox-annuaire passe de Depends a Recommends (#2877) : le client (api/annuaire_client.py) parle a l'annuaire par sa socket et ne leve jamais (donnee, erreur) ; sans lui, le catalogue de federation est vide, pas une panne. Les profils qui installent l'annuaire (lite, isp, full, minimal) le gardent par la recommandation.
