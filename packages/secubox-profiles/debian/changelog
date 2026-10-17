@@ -1,3 +1,9 @@
+secubox-profiles (0.23.5-1~bookworm1) bookworm; urgency=medium
+
+  * Le comparateur de profils dit ce qu'un profil INSTALLE vraiment (#2875). Il ne lisait que les Depends du meta-paquet : secubox-premier-pas (tire par autoload-agent) et secubox-p2p (tire par premier-pas) sont installes sur la carte mais etaient ranges « absents de minimal ». Les modules sont maintenant la fermeture transitive des dependances ET des recommandations (une image installe les Recommends par defaut), moins les Conflicts du meta-paquet (apt refuse ces paquets). Les paquets sans entree de menu (core, aggregator, ndpid-engine, ipv6guard, autoload-agent, courbes, premier-pas, p2p) ont un espace par defaut au lieu de « autres ». minimal : 22 modules au lieu de 18.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 17:00:00 +0200
+
 secubox-profiles (0.23.4-1~bookworm1) bookworm; urgency=medium
 
   * Profil d'activation `minimal` : allume `courbes` (#2865), conformement a secubox-minimal 0.7.0.
