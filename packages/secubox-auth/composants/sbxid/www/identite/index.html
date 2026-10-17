@@ -172,7 +172,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.74rem;overflow
     <div class="pan"><h2>Révoqués et refusés</h2><div id="adm-closes"></div></div>
     <div class="pan"><h2>Personnes</h2>
       <form class="form-ligne" id="f-personne" autocomplete="off">
-        <label>Pseudo<input id="np-pseudo" required minlength="2" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,30}[A-Za-z0-9_\-]" placeholder="cedre83"></label>
+        <label>Pseudo<input id="np-pseudo" required minlength="2" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,30}[A-Za-z0-9_\-]" placeholder="pseudo"></label>
         <label>Rôle<select id="np-role"></select></label>
         <label style="flex:1;min-width:12rem">Adresse de récupération (externe, facultative)<input id="np-email" type="email" maxlength="200" placeholder="prenom@exemple.org"></label>
         <button class="prim">Créer la personne</button>
@@ -297,23 +297,23 @@ function demoGet(chemin){
   const R = [{id:'guest', label:'Invité', derive:false, capacites:['hall.read']}, {id:'member', label:'Membre', derive:false, capacites:['hall.read', 'bbs.write', 'files.read']},
              {id:'sbx_operator', label:'Opérateur SBX', derive:false, capacites:['hall.read', 'bbs.write', 'files.read', 'admin.users']}];
   const P = chemin.split('?')[0];
-  if (P === '/moi') return {identite:{pseudo:'cedre83', user_uuid:u1, home_node:'did:sbx:node:demo-gk', epoch:3, tier:'standard', status:'active', roles:['member', 'sbx_operator'], capabilities:caps, communities:[{name:'Atelier fabrication', role:'owner'}], etat:'node_admin'},
-    liens:[{app:'bbs', app_handle:'cedre83'}], appareils:dev, appareil_courant:'d1', systeme:false, par_compte:false,
-    connexions:{session_compte:'cedre83', compte_systeme:false, appareil_courant:'Téléphone de démo', rattachements:[{appareil:'Téléphone de démo', courant:true, compte:'cedre83'}, {appareil:'Portable de démo', courant:false, compte:null}],
-      liens:[{app:'bbs', app_handle:'cedre83'}], services:['courriel', 'fichiers']}};
+  if (P === '/moi') return {identite:{pseudo:'camille', user_uuid:u1, home_node:'did:sbx:node:demo-gk', epoch:3, tier:'standard', status:'active', roles:['member', 'sbx_operator'], capabilities:caps, communities:[{name:'Atelier fabrication', role:'owner'}], etat:'node_admin'},
+    liens:[{app:'bbs', app_handle:'camille'}], appareils:dev, appareil_courant:'d1', systeme:false, par_compte:false,
+    connexions:{session_compte:'camille', compte_systeme:false, appareil_courant:'Téléphone de démo', rattachements:[{appareil:'Téléphone de démo', courant:true, compte:'camille'}, {appareil:'Portable de démo', courant:false, compte:null}],
+      liens:[{app:'bbs', app_handle:'camille'}], services:['courriel', 'fichiers']}};
   if (P === '/roles') return {roles:R, capacites:['hall.read', 'bbs.write', 'files.read', 'admin.users']};
-  if (P === '/elevation/etat') return {lie:true, possible:true, compte:'cedre83', appareil:'Téléphone de démo', duree_s:14400, otp_requis:false};
-  if (P === '/admin/personnes') return {personnes:[{pseudo:'cedre83', user_uuid:u1, roles:['member', 'sbx_operator'], tier:'standard', appareils:2, status:'active'}, {pseudo:'ana', user_uuid:u2, roles:['member'], tier:'standard', appareils:1, status:'active'}, {pseudo:'invite-demo', user_uuid:'c0ffee00-1111-4222-8333-444455556666', roles:['guest'], tier:'free', appareils:0, status:'suspended'}]};
-  if (P === '/admin/journal') return {evenements:[{at:t - 600, event:'device.admitted', actor:'cedre83', detail:'Portable de démo'}, {at:t - 7200, event:'role.changed', actor:'cedre83', detail:'ana : member'}]};
+  if (P === '/elevation/etat') return {lie:true, possible:true, compte:'camille', appareil:'Téléphone de démo', duree_s:14400, otp_requis:false};
+  if (P === '/admin/personnes') return {personnes:[{pseudo:'camille', user_uuid:u1, roles:['member', 'sbx_operator'], tier:'standard', appareils:2, status:'active'}, {pseudo:'ana', user_uuid:u2, roles:['member'], tier:'standard', appareils:1, status:'active'}, {pseudo:'invite-demo', user_uuid:'c0ffee00-1111-4222-8333-444455556666', roles:['guest'], tier:'free', appareils:0, status:'suspended'}]};
+  if (P === '/admin/journal') return {evenements:[{at:t - 600, event:'device.admitted', actor:'camille', detail:'Portable de démo'}, {at:t - 7200, event:'role.changed', actor:'camille', detail:'ana : member'}]};
   if (P === '/admin/demandes') return {en_attente:[{did:'did:sbx:dev:z6MkDemoDem', nom:'Visiteur de démo', appareil:'Firefox · Linux', demandee_le:t - 900, email:'visiteur@example.org', message:'Bonjour, je rejoins l\'atelier.', empreinte:'4F2A 91C8 03DE 7B65'}],
-    closes:[{did:'did:sbx:dev:z6MkDemoRef', nom:'Inconnu de démo', appareil:'Safari · iOS', etat:'refusee', le:t - 86400 * 3, renouvellements:1}], revoques:[{device_uuid:'d3', nom:'Tablette ancienne', pseudo:'cedre83', revoque_le:t - 86400 * 9}]};
+    closes:[{did:'did:sbx:dev:z6MkDemoRef', nom:'Inconnu de démo', appareil:'Safari · iOS', etat:'refusee', le:t - 86400 * 3, renouvellements:1}], revoques:[{device_uuid:'d3', nom:'Tablette ancienne', pseudo:'camille', revoque_le:t - 86400 * 9}]};
   if (P === '/admin/communautes') return {communautes:[{community_uuid:'k1'}]};
   if (P === '/admin/capacites') return {modules:{hall:['hall.read'], bbs:['bbs.write'], files:['files.read'], admin:['admin.users']}};
-  if (P === '/admin/communautes/k1') return {community_uuid:'k1', name:'Atelier fabrication', visibility:'invited', description:'Communauté fictive de démonstration.', members:[{user_uuid:u1, pseudo:'cedre83', role:'owner'}], grants:[{grant_uuid:'g1', capability:'files.read'}]};
+  if (P === '/admin/communautes/k1') return {community_uuid:'k1', name:'Atelier fabrication', visibility:'invited', description:'Communauté fictive de démonstration.', members:[{user_uuid:u1, pseudo:'camille', role:'owner'}], grants:[{grant_uuid:'g1', capability:'files.read'}]};
   if (P === '/admin/communautes/k1/salons') return {salons:[{id:1, titre:'Accueil', ouvert:true, prive:true, profondeur:0}, {id:2, titre:'Projets', ouvert:false, prive:false, profondeur:0}]};
   if (/^\/admin\/personnes\/[^/]+\/comptes$/.test(P)) return {adresse:'ana@example.org', services:{courriel:{libelle:'Courriel', lie:true, existe:true, disponible:true, identifiant:'ana@example.org', propre:false}, fichiers:{libelle:'Fichiers', lie:false, existe:false, disponible:true}, video:{libelle:'Vidéos', lie:false, existe:false, endormi:true, disponible:false}}};
   if (P === '/mesh') return {node:{did:'did:sbx:node:demo-gk', pubkey:'z6MkDemoPublique1234…'}, personnes_hebergees:3, migrations:[], etat:'Nœud unique, mesh non constitué (démonstration).'};
-  if (P === '/invitations') return {invitations:[{invite_uuid:'i1', sorte:'personne', par:'cedre83', pseudo:'nouvel-ami', role:'guest', expire_le:t + 86400 * 2, email:'ami@example.org'}]};
+  if (P === '/invitations') return {invitations:[{invite_uuid:'i1', sorte:'personne', par:'camille', pseudo:'nouvel-ami', role:'guest', expire_le:t + 86400 * 2, email:'ami@example.org'}]};
   if (/^\/appareils\/[^/]+\/certificat$/.test(P)) return {yaml:'# démonstration\nsubject: did:sbx:dev:z6MkDemoUn\nnot_after: 2027-10-14\n'};
   throw Object.assign(new Error('HTTP 404'), {status: 404});
 }
@@ -687,7 +687,7 @@ function rendDemandes(liste){
     assign.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = LIB[r] || r; sel.appendChild(o); });
     sel.value = 'member';
     // RATTACHER À UNE PERSONNE EXISTANTE (#1456) : le téléphone de cedre devient
-    // un appareil de cedre83, au lieu d'une nouvelle personne.
+    // un appareil de camille, au lieu d'une nouvelle personne.
     const qui = document.createElement('select'); qui.setAttribute('aria-label', 'Personne');
     const o0 = el('option', null, 'nouvelle personne'); o0.value = ''; qui.appendChild(o0);
     PERS.forEach(p => { const o = el('option', null, '→ ' + p.pseudo); o.value = p.user_uuid; qui.appendChild(o); });

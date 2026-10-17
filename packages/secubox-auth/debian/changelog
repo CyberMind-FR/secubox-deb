@@ -1,3 +1,9 @@
+secubox-auth (1.8.5-1~bookworm1) bookworm; urgency=medium
+
+  * Page identite : l'exemple du champ Pseudo et les donnees de demonstration ne citent plus cedre83, un vrai compte historique qui passait pour une personne fantome (ref #2881). Exemple neutre « pseudo », compte de demonstration « camille ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 13:00:00 +0200
+
 secubox-auth (1.8.4-1~bookworm1) bookworm; urgency=medium
 
   * secubox-annuaire passe de Depends a Recommends (#2877) : il ne sert qu'a la delegation d'acces, dont les modules sont importes a la demande (api/delegation.py), jamais au demarrage. Sans lui (profil minimal), les routes de delegation repondent 501 « module annuaire non installe » au lieu d'une 500. Les profils lite, isp et full l'installent toujours (Recommends).
