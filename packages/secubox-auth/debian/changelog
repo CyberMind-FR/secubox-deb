@@ -1,3 +1,9 @@
+secubox-auth (1.8.3-1~bookworm1) bookworm; urgency=medium
+
+  * /sbxid/ ne renvoie plus vers un Hall ABSENT (#2872). Sur une box sans Hall (profil minimal, ESPRESSObin), admin.<box>/sbxid/ renvoyait en 302 vers https://hall.<box>/identite/#admin, un site qui n'existe pas. nginx (`if (!-d /usr/share/secubox/www/hall)`), le repli de la page /sbxid/ et les liens de la page Utilisateurs ouvrent maintenant le gestionnaire d'identite sur l'origine admin (/identite/#admin) quand il n'y a pas de Hall ; avec Hall, comportement inchange (sonde HEAD /hall/ de meme origine).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 16:00:00 +0200
+
 secubox-auth (1.8.2-1~bookworm1) bookworm; urgency=medium
 
   * Identite (Administration), panneau Comptes d une personne : ligne PhotoPrism, ouvert par SSO (OIDC), identifiant = pseudo, sans mot de passe ; le compte nait a la premiere connexion. Informative : rien a ouvrir ni a relier (ref #2761).

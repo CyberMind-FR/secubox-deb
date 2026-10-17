@@ -325,7 +325,7 @@
             $('otpBascule').textContent = 'OTP sur le LAN : ' + (OTP ? (OTP === 'obligatoire' ? 'obligatoire' : 'facultatif') : '—');
             $('otpBascule').disabled = !OTP;
             $('nSvc').textContent = noms && noms.length ? pluriel(noms.length, 'service') : '';
-            const h = location.hostname.replace(/^admin\./, 'hall.'); $('lienIdentite').href = 'https://' + h + '/identite/';
+            sonderHall().then(function () { $('lienIdentite').href = urlIdentite().replace('#admin', ''); });
             rendrePuces(); rendreCases(); rendreComptes(); rendreSbx(); rendreDemandes(); rendreSessions();
             if (SVC_USER && SVC_ETAT) rendreSvcPanel();
             $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
@@ -384,7 +384,12 @@
             c.appendChild(b);
             return c;
         }
-        function urlIdentite() { return 'https://' + location.hostname.replace(/^admin\./, 'hall.') + '/identite/#admin'; }
+        // #2872 : le Hall n'existe pas sur toutes les boxes (profil minimal) ; sonde de meme origine, repli sur l'origine admin. Par defaut (sonde pas encore revenue) : le Hall, comme avant.
+        let HALL_PRESENT = true;
+        function urlIdentite() { return HALL_PRESENT ? 'https://' + location.hostname.replace(/^admin\./, 'hall.') + '/identite/#admin' : '/identite/#admin'; }
+        function sonderHall() {
+            return fetch('/hall/', { method: 'HEAD', credentials: 'same-origin' }).then(r => r.ok, () => false).then(h => { HALL_PRESENT = h; });
+        }
         function ouvreProfil(compte, cellule) {
             if (cellule.querySelector('[data-profil-choix]')) return;
             const l = lienDe(compte); const boite = el('div', 'otp');
