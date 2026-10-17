@@ -1,3 +1,9 @@
+secubox-p2p (1.16.1-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-annuaire passe de Depends a Recommends (#2877) : le client (api/annuaire_client.py) parle a l'annuaire par sa socket et ne leve jamais (donnee, erreur) ; sans lui, le catalogue de federation est vide, pas une panne. Les profils qui installent l'annuaire (lite, isp, full, minimal) le gardent par la recommandation.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 19:05:00 +0200
+
 secubox-p2p (1.16.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /master-link/admin.html (administration du lien maître) au profil Aurora (#2597) : page autonome sombre, tuiles (rôle, profondeur, pairs approuvés, en attente, invitations actives), onglets Vue d'ensemble / Pairs / Arborescence / Inviter, `?demo=1` annoncée et inerte (adresses RFC 5737), `?embed=1`, bandeau « session requise » sur 401/403, « — » pour toute mesure absente, aucun dialogue natif. Les deux écritures sont celles de l'ancienne page, à l'identique : POST /master-link/invite-local?auto_approve=…&ttl=… (sans corps) et POST /master-link/approve avec {fingerprint, action: "approve"}. 10 tests (statique + vrai navigateur).

@@ -1,3 +1,9 @@
+secubox-minimal (0.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * annuaire et p2p ne sont plus exclus (#2877) : ils restent dans le profil, mais plus rien ne les EXIGE (secubox-auth et secubox-p2p : Recommends) — les modules sont emancipes de l'annuaire au lieu d'etre retires. Annule le Conflicts de 0.8.0.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 19:00:00 +0200
+
 secubox-minimal (0.8.0-1~bookworm1) bookworm; urgency=medium
 
   * Retire annuaire et p2p (#2877) : Conflicts sur secubox-annuaire et secubox-p2p. annuaire n'est plus exige par auth (Recommends), p2p n'etait tire que par un Recommends de premier-pas. Ni delegation d'acces ni maillage sur la carte.

@@ -1,3 +1,9 @@
+secubox-profiles (0.23.7-1~bookworm1) bookworm; urgency=medium
+
+  * Profil d'activation `minimal` : rallume annuaire-apply et annuaire-noms (#2877) — annuaire reste dans minimal (secubox-minimal 0.8.1).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 19:10:00 +0200
+
 secubox-profiles (0.23.6-1~bookworm1) bookworm; urgency=medium
 
   * Profil d'activation `minimal` : retire annuaire-apply, annuaire-noms et openpgp (#2877), conformement a secubox-minimal 0.8.0.
