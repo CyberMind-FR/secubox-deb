@@ -27,14 +27,15 @@ class ProfilIncoherent(Exception):
     pass
 
 
-def _depends(control: Path, paquet: str) -> list:
+def _champ(control: Path, paquet: str, champs: tuple = ("Depends", "Pre-Depends")) -> list:
     try:
         txt = re.sub(r"^#.*\n", "", control.read_text(encoding="utf8"), flags=re.M)
     except OSError as e:
         raise ProfilIncoherent(f"{paquet} : control illisible ({e})")
+    motif = "|".join(re.escape(c) for c in champs)
     for blk in re.split(r"\n\n+", txt):
         if re.search(rf"^Package:\s*{re.escape(paquet)}\s*$", blk, re.M):
-            d = " ".join(re.findall(r"^(?:Pre-)?Depends:((?:.*\n?(?: .*\n?)*))", blk, re.M)).replace("\n", " ")
+            d = ", ".join(re.findall(rf"^(?:{motif}):((?:.*\n?(?: .*\n?)*))", blk, re.M)).replace("\n", " ")      # « , » entre les champs : sinon le dernier nom du premier colle au premier du suivant
             noms = []
             for alt in d.split(","):
                 m = re.match(r"\s*(secubox-[a-z0-9.+-]+)", alt)      # la 1re alternative d'un « a | b »
@@ -42,6 +43,10 @@ def _depends(control: Path, paquet: str) -> list:
                     noms.append(m.group(1))
             return noms
     raise ProfilIncoherent(f"{paquet} : paragraphe Package introuvable")
+
+
+def _depends(control: Path, paquet: str) -> list:
+    return _champ(control, paquet)
 
 
 def _version(changelog: Path) -> str:
@@ -52,12 +57,40 @@ def _version(changelog: Path) -> str:
     return m.group(1) if m else ""
 
 
+# Paquets SANS entree de menu (donc absents de la table du hub) : sans cet espace par defaut ils tombaient dans « autres » (#2875).
+ESPACE_PAR_DEFAUT = {
+    "core": "systeme", "aggregator": "systeme", "autoload-agent": "systeme", "premier-pas": "systeme", "p2p": "systeme",
+    "ndpid-engine": "surveillance", "courbes": "surveillance",
+    "ipv6guard": "protection",
+}
+
+
 def _espace(paquet: str, table: dict) -> str:
     mid = paquet.removeprefix("secubox-")
     for cand in (mid, re.sub(r"-ng$", "", mid)):
         if cand in table:
             return table[cand].get("espace") or "autres"
-    return "autres"
+    return ESPACE_PAR_DEFAUT.get(mid, "autres")
+
+
+def _fermeture(racines: list, packages: Path, metas: set, conflits: set = frozenset()) -> list:
+    """Ce qu'un profil INSTALLE vraiment (#2875) : les dependances ET les recommandations des paquets, transitivement — une image installe les Recommends par defaut
+    (c'est ainsi que premier-pas tire p2p, et qu'auth tirait le Hall) — moins les paquets que le meta-paquet declare en Conflicts, qu'apt refuse d'installer.
+    Un paquet hors du depot (fournisseur externe) est une feuille ; un cycle entre modules est toleré ; l'ordre est celui de la decouverte (largeur d'abord)."""
+    out, vus, file = [], set(), list(racines)
+    while file:
+        x = file.pop(0)
+        if x in vus or x in metas or x in conflits:
+            continue
+        vus.add(x)
+        out.append(x)
+        ctl = packages / x / "debian" / "control"
+        if ctl.is_file():
+            try:
+                file.extend(_champ(ctl, x, ("Depends", "Pre-Depends", "Recommends")))
+            except ProfilIncoherent:
+                pass          # un control dont le paragraphe porte un autre nom : feuille
+    return out
 
 
 def construire(packages: Path, espaces_json: Path) -> dict:
@@ -65,10 +98,11 @@ def construire(packages: Path, espaces_json: Path) -> dict:
     esp = json.loads(Path(espaces_json).read_text(encoding="utf8"))
     table = esp.get("modules", {})
     metas = {f"secubox-{p}" for p in PROFILS}
-    brut = {}
+    brut, conf = {}, {}
     for p in PROFILS:
         nom = f"secubox-{p}"
         brut[p] = _depends(packages / nom / "debian" / "control", nom)
+        conf[p] = set(_champ(packages / nom / "debian" / "control", nom, ("Conflicts",)))
 
     def effectifs(p, vus=()):
         if p in vus:
@@ -85,8 +119,8 @@ def construire(packages: Path, espaces_json: Path) -> dict:
     for p in PROFILS:
         inclus = [x.removeprefix("secubox-") for x in brut[p] if x in metas]
         directs = [x for x in brut[p] if x not in metas]
-        modules = effectifs(p)
-        base = set(effectifs(inclus[0])) if inclus else set()
+        modules = _fermeture(effectifs(p), packages, metas, conf[p])
+        base = set(_fermeture(effectifs(inclus[0]), packages, metas, conf[inclus[0]])) if inclus else set()
         fiche = lambda l: [{"paquet": x, "espace": _espace(x, table)} for x in l]     # noqa: E731
         profils.append({"id": p, "label": LIBELLES[p], "meta": f"secubox-{p}", "version": _version(packages / f"secubox-{p}" / "debian" / "changelog"),
                         "inclut": inclus[0] if inclus else None, "directs": fiche(directs), "modules": fiche(modules),
