@@ -13,6 +13,7 @@ y dorment, par mois) — ne le lire que sur demande.
 ---
 
 ## 2026-10-17 — demandes du proprietaire en attente (file, a prioriser)
+- [ ] **Auto-appairage p2p des esclaves** a la premiere preparation (Auto-Load) et en reparation : la box prete rejoint le maitre seule (code `sbxmesh1.` ou jeton auto-approuve cote preparation, par le tunnel wg-autoload ; l'enrolement 7331 l'admet depuis #2883/p2p 1.16.2), puis une reparation periodique si le pair est tombe. Concevoir d'abord : ou vit le jeton (jamais en clair dans l'image), duree, rejeu apres reinstallation. Essai manuel en cours : lgm-ebin esclave de gk2.
 - [ ] **WAF et Acteurs : tendances recentes** (mini-courbes SVG + fleche/pourcentage) ; WAF depuis `/waf/history` (9 jours), acteurs : derive des dates ou instantane quotidien (a trancher).
 - [ ] **Modules LXC** : sleep / wake / restart / stop dans les panneaux d'administration de chaque conteneur ; Lyrion « a la demande » (la route de la table sbxwaf reste apres `profilectl apply --only lyrion` : 502 au lieu du reveil).
 - [ ] **Retraits** : `mesh` (desinstalle de gk2 ; reste : retirer de secubox-isp et de full.toml), `dns` (BIND absent ; attention dns-provider/dns-lan et les certificats DNS), `modem` (actif sur gk2, 4G), `ksm` (compose de secubox-system : ne se desinstalle pas, a desactiver ou masquer), `premier-pas-maitre` (de lite et minimal : separer la page en paquet propre).
