@@ -25,6 +25,8 @@ case "$1" in
     # tightly-scoped sudoers rule for exactly that unit — nothing else.
     cat > /etc/sudoers.d/secubox-dpi-engine <<'SUDOERS'
 secubox ALL=(root) NOPASSWD: /usr/bin/systemctl restart secubox-dpi-flowcap, /usr/bin/systemctl start secubox-dpi-flowcap, /usr/bin/systemctl stop secubox-dpi-flowcap
+# #2870 : « Redemarrer le service nDPId » (onglet Reglages) pilote la vraie unite, ces trois commandes exactes seulement.
+secubox ALL=(root) NOPASSWD: /usr/bin/systemctl restart secubox-ndpid-engine.service, /usr/bin/systemctl start secubox-ndpid-engine.service, /usr/bin/systemctl stop secubox-ndpid-engine.service
 SUDOERS
     chmod 0440 /etc/sudoers.d/secubox-dpi-engine
     visudo -cf /etc/sudoers.d/secubox-dpi-engine >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-dpi-engine

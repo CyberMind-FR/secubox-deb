@@ -1,3 +1,9 @@
+secubox-dpi (1.14.3-1~bookworm1) bookworm; urgency=medium
+
+  * « Redemarrer le service nDPId » (onglet Reglages) marche (#2870). La page appelait `systemctl restart ndpid` : l'unite s'appelle secubox-ndpid-engine.service, et le compte secubox n'a pas le droit de piloter systemd (« Interactive authentication required »). Les actions demarrer, arreter et redemarrer passent par `sudo -n /usr/bin/systemctl <verbe> secubox-ndpid-engine.service`, autorise par le postinst pour ces trois commandes exactes ; delai de 30 s et message d'erreur reel ; les journaux sont ceux de la vraie unite.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 15:00:00 +0200
+
 secubox-dpi (1.14.2-1~bookworm1) bookworm; urgency=medium
 
   * nDPId, page Flux : la rangee « Repartition par protocole / Applications / Hotes les plus actifs » passe au-dessus de la liste des flux actifs (#2798). 2 tests.
