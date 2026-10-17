@@ -31,21 +31,21 @@ def cache_vide():
 
 def test_un_delai_depasse_est_un_504_explicite_et_non_un_500(monkeypatch):
     def lent(*a, **k):
-        raise subprocess.TimeoutExpired(cmd="lyrionctl", timeout=45)
+        raise subprocess.TimeoutExpired(cmd="lyrionctl", timeout=25)
     monkeypatch.setattr(M.subprocess, "check_output", lent)
     with pytest.raises(HTTPException) as e:
         M._ctl_json("status")
     assert e.value.status_code == 504 and "délai" in e.value.detail.lower()
 
 
-def test_le_delai_est_de_45_secondes(monkeypatch):
+def test_le_delai_reste_sous_celui_du_proxy(monkeypatch):
     vus = {}
 
     def faux(cmd, **k):
         vus.update(k)
         return b'{"overall": "green"}'
     monkeypatch.setattr(M.subprocess, "check_output", faux)
-    assert M._ctl_json("status") == {"overall": "green"} and vus["timeout"] == 45
+    assert M._ctl_json("status") == {"overall": "green"} and vus["timeout"] == 25
 
 
 def test_deux_lectures_proches_n_executent_ctl_qu_une_fois(monkeypatch):
@@ -98,3 +98,33 @@ def test_une_action_vide_le_cache():
     M._CACHE_CTL[("status",)] = (time.monotonic(), {"a": 1})
     M._invalider_cache_ctl()
     assert not M._CACHE_CTL
+
+
+def test_si_ctl_echoue_la_derniere_lecture_connue_est_servie_marquee_obsolete(monkeypatch):
+    """Sous charge, le proxy coupe à 30 s : plutôt qu'une page vide, la dernière lecture réussie (≤ 15 min), marquée obsolète."""
+    horloge = [1000.0]
+    monkeypatch.setattr(M.time, "monotonic", lambda: horloge[0])
+    monkeypatch.setattr(M.subprocess, "check_output", lambda *a, **k: b'{"overall": "green"}')
+    assert M._ctl_json("status") == {"overall": "green"}
+    horloge[0] += M.TTL_CTL + 5
+
+    def lent(*a, **k):
+        raise subprocess.TimeoutExpired(cmd="x", timeout=25)
+    monkeypatch.setattr(M.subprocess, "check_output", lent)
+    r = M._ctl_json("status")
+    assert r["overall"] == "green" and r["obsolete"] is True and r["age_s"] >= M.TTL_CTL
+
+
+def test_une_lecture_trop_ancienne_n_est_plus_servie(monkeypatch):
+    horloge = [1000.0]
+    monkeypatch.setattr(M.time, "monotonic", lambda: horloge[0])
+    monkeypatch.setattr(M.subprocess, "check_output", lambda *a, **k: b'{"overall": "green"}')
+    M._ctl_json("status")
+    horloge[0] += M.AGE_MAX_OBSOLETE + 1
+
+    def lent(*a, **k):
+        raise subprocess.TimeoutExpired(cmd="x", timeout=25)
+    monkeypatch.setattr(M.subprocess, "check_output", lent)
+    with pytest.raises(HTTPException) as e:
+        M._ctl_json("status")
+    assert e.value.status_code == 504

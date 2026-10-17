@@ -1,3 +1,9 @@
+secubox-lyrion (1.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * Le delai de lyrionctl passe a 25 s, SOUS celui du proxy (30 s) : apres le redemarrage de gk2 (charge 25 a 80), les lectures dépassaient 30 s et l'utilisateur recevait la page d'erreur du proxy (HTML) avant le 504 de l'API (#2867). Si lyrionctl echoue ou depasse son delai et qu'une lecture reussie existe (<= 15 min), elle est servie marquee `obsolete: true` avec son `age_s`, plutot qu'un echec ; sans lecture connue, 504 explicite.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 14:00:00 +0200
+
 secubox-lyrion (1.7.1-1~bookworm1) bookworm; urgency=medium
 
   * La page /lyrion/ ne tombe plus en HTTP 500 quand lyrionctl est lent (#2867). `subprocess.TimeoutExpired` n'etait pas attrapee : sur gk2 (charge 10 a 12), `lyrionctl status` met 9 s sous secubox, la page lance 4 lectures en parallele, et au-dela de 15 s c'etait « Lecture incomplete — etat : HTTP 500 ; composants : HTTP 500 ». Un delai depasse est maintenant un 504 explicite ; le delai passe a 45 s ; le resultat est memorise 30 s avec un verrou par lecture (une seule execution de lyrionctl pour les lectures concurrentes) ; un echec n'est jamais memorise ; toute action vide le cache.

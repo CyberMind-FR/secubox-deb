@@ -37,7 +37,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Header, Response
 from secubox_core.auth import require_jwt
 from secubox_core.auth import require_lecture
 
-VERSION = "1.7.1"
+VERSION = "1.7.2"
 CTL = shutil.which("lyrionctl") or "/usr/sbin/lyrionctl"
 
 # LMS jsonrpc endpoint inside the LXC. Used for live data the lyrionctl
@@ -81,8 +81,9 @@ app = FastAPI(
 
 # Lectures de `lyrionctl` (status, components, access) : lentes sur une box chargee (9 s sous `secubox` quand gk2 a une charge de 10 a 12) et lancees EN PARALLELE par la
 # page. Un delai depasse etait un HTTP 500 (TimeoutExpired non attrapee, #2867). Resultat memorise TTL_CTL secondes, une seule execution pour les lectures concurrentes.
-DELAI_CTL = 45
+DELAI_CTL = 25            # SOUS le delai du proxy (30 s) : un 504 de l'API, pas la page d'erreur du proxy
 TTL_CTL = 30.0
+AGE_MAX_OBSOLETE = 900.0  # a defaut de lecture fraiche, la derniere lecture reussie est servie, marquee obsolete, jusqu'a 15 min
 _CACHE_CTL: Dict[tuple, tuple] = {}
 _VERROUS_CTL: Dict[tuple, threading.Lock] = {}
 _VERROU_VERROUS = threading.Lock()
@@ -117,7 +118,12 @@ def _ctl_json(*args: str) -> Dict[str, Any]:
         ancien = _CACHE_CTL.get(cle)
         if ancien and time.monotonic() - ancien[0] < TTL_CTL:
             return ancien[1]
-        donnees = _executer_ctl(cle)  # un echec (504, 500) n'est JAMAIS memorise
+        try:
+            donnees = _executer_ctl(cle)  # un echec (504, 500) n'est JAMAIS memorise
+        except HTTPException:
+            if ancien and time.monotonic() - ancien[0] < AGE_MAX_OBSOLETE:
+                return {**ancien[1], "obsolete": True, "age_s": int(time.monotonic() - ancien[0])}
+            raise
         _CACHE_CTL[cle] = (time.monotonic(), donnees)
         return donnees
 
