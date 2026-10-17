@@ -282,16 +282,42 @@ class ZoneCreate(BaseModel):
 
 
 # Public endpoints
-@app.get("/status", dependencies=[Depends(require_lecture)])
-async def status():
-    """Get BIND status"""
-    code, out, err = run_cmd(["status-json"])
+def _unite_active(nom: str) -> bool:
+    """Etat REEL d'une unite systemd ; une erreur rend False (on n'affiche pas « actif » sur une supposition)."""
+    try:
+        r = subprocess.run(["systemctl", "is-active", nom], capture_output=True, text=True, timeout=5)
+        return r.stdout.strip() == "active"
+    except Exception:
+        return False
+
+
+def _moteur(bind: Optional[Dict[str, Any]], unbound_actif: bool) -> Dict[str, Any]:
+    """Le moteur DNS REEL (#2859). Ce module gere des zones BIND ; une box qui resout avec Unbound seul (gk2) n'a pas de BIND, ce qui n'est pas un DNS en panne.
+    `running` reste l'etat de BIND (cle d'origine) ; `moteur` et `moteur_actif` disent ce qui repond vraiment."""
+    if bind and bind.get("running"):
+        return {"moteur": "bind", "moteur_actif": True}
+    if unbound_actif:
+        return {"moteur": "unbound", "moteur_actif": True}
+    return {"moteur": "aucun", "moteur_actif": False}
+
+
+async def _etat_dns() -> Dict[str, Any]:
+    code, out, err = await asyncio.to_thread(run_cmd, ["status-json"])
+    bind = None
     if code == 0:
         try:
-            return json.loads(out)
-        except:
-            pass
-    return {"running": False, "zones": 0, "records": 0}
+            bind = json.loads(out)
+        except Exception:
+            bind = None
+    unbound = await asyncio.to_thread(_unite_active, "unbound")
+    base = bind if isinstance(bind, dict) else {"running": False, "zones": 0, "records": 0}
+    return {**base, **_moteur(bind, unbound)}
+
+
+@app.get("/status", dependencies=[Depends(require_lecture)])
+async def status():
+    """Etat du DNS : BIND (zones) et le moteur qui repond reellement (bind, unbound ou aucun)."""
+    return await _etat_dns()
 
 
 @app.get("/zones", dependencies=[Depends(require_lecture)])
@@ -364,25 +390,14 @@ async def backup_zone(zone_name: str):
 
 @app.get("/health")
 async def health():
-    """Health check endpoint."""
-    code, out, _ = run_cmd(["status-json"])
-    if code == 0:
-        try:
-            status = json.loads(out)
-            return {
-                "status": "ok" if status.get("running") else "degraded",
-                "module": "dns",
-                "version": "2.0.0",
-                "running": status.get("running", False)
-            }
-        except json.JSONDecodeError:
-            pass
-
+    """Health check endpoint : « ok » des qu'un moteur DNS repond (BIND ou Unbound)."""
+    etat = await _etat_dns()
     return {
-        "status": "degraded",
+        "status": "ok" if etat["moteur_actif"] else "degraded",
         "module": "dns",
         "version": "2.0.0",
-        "running": False
+        "running": bool(etat.get("running", False)),
+        "moteur": etat["moteur"],
     }
 
 
