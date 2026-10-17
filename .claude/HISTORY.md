@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-17 — Cloture validee par le proprietaire
+
+Le proprietaire valide et demande la cloture : closes #2857 (hub, panneau Reseau), closes #2859 (dns, moteur reel), closes #2861 (hub, nom de la carte), closes #2863 (filterlists dans secubox-core ; deploye sur la carte, pas encore sur gk2), closes #2865 (secubox-courbes ; deploye sur la carte, pas encore sur gk2). Reste a deployer sur gk2 : core 1.7.10 + ad-guard 1.14.3 + dns-guard 1.4.7, et courbes 0.1.0 + metrics 1.24.0.
+
 ## 2026-10-17 — Courbes et Glances pour minimal : secubox-courbes (ref #2865, #2863, #2861, #2859, #2857)
 
 secubox-courbes 0.1.0 (nouveau, leger) : bibliotheque secubox_courbes (serie, systeme), API a la racine servie par secubox-groupd (/api/v1/courbes/{series,systeme}, aucun processus de plus), pages /grafana/ (Courbes) et /glances/, minuterie secubox-courbes-serie (meme fichier series.jsonl). secubox-metrics 1.24.0 en depend et delegue ; secubox-minimal 0.7.0 l'embarque ; profiles 0.23.4. Deploye et verifie sur la carte (health 200, pages 200, releve en marche), PAS encore sur gk2. Meme jour : secubox-core 1.7.10 livre secubox_filterlists (ad-guard 1.14.3, dns-guard 1.4.7 : secubox-adblock-sync marche sans toolbox, 119 265 domaines sur la carte, #2863, suite de #2855) ; dns 1.5.1 (moteur reel Unbound, #2859) et hub 1.12.12/1.12.13 (panneau Reseau, nom de la carte, #2857, #2861) deployes sur gk2 avec un redemarrage de l'agregateur ; carte : tor, waker, meshname, ksm arretes (environ 50 Mo de RAM, 130 Mo de zram).
