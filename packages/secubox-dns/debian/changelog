@@ -1,3 +1,9 @@
+secubox-dns (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * /dns/ dit le moteur DNS REEL (#2859). Sur gk2 la page affichait « BIND ARRETE, 0 zone » alors que la resolution marche : le module gere des zones BIND, BIND n'y est pas installe, Unbound resout, et l'API renvoyait running=false par defaut quand dnsmaster est absent. /status et /health ajoutent `moteur` (bind, unbound ou aucun) et `moteur_actif` (cles d'origine conservees ; `running` reste l'etat de BIND) ; /health est « ok » des qu'un moteur repond. La page affiche « UNBOUND ACTIF » et explique l'absence de zone BIND.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 09:00:00 +0200
+
 secubox-dns (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /dns-provider/ (fournisseurs DNS externes) refaite au profil Aurora (#2584) : fichier autonome (plus de crt-engine ni de feuille hybrid-dark), tuiles Fournisseurs / Domaines / Enregistrements / État, six onglets (Fournisseurs, Domaines, Enregistrements, ACME, DNS dynamique, Réglages), ?demo=1 (données RFC 5737, actions inertes) et ?embed=1, hauteur annoncée à l'hôte (sbxVue, onglet dns-provider), bandeau « session requise » et « — » sur 401/403.

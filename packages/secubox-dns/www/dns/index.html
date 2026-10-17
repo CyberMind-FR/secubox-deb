@@ -116,7 +116,7 @@
         <div class="retour" id="rGlobal" hidden></div>
 
         <section class="tuiles" aria-label="Indicateurs">
-            <div class="tuile ok" id="cBind" title="État du service BIND selon dnsmaster (status-json). Si la commande est absente ou en échec, l’API renvoie « arrêté » : la page ne peut pas distinguer arrêt et indisponibilité."><span class="l">BIND</span><span class="v" id="tBind">—</span><span class="s">service</span></div>
+            <div class="tuile ok" id="cBind" title="État du service BIND selon dnsmaster (status-json). Si la commande est absente ou en échec, l’API renvoie « arrêté » : la page ne peut pas distinguer arrêt et indisponibilité."><span class="l" id="lBind">BIND</span><span class="v" id="tBind">—</span><span class="s">service</span></div>
             <div class="tuile cy" title="Zones déclarées sur ce serveur."><span class="l">Zones</span><span class="v" id="tZones">—</span><span class="s">gérées</span></div>
             <div class="tuile cy" title="Nombre total d’enregistrements, tel que compté par dnsmaster."><span class="l">Enregistrements</span><span class="v" id="tRecs">—</span><span class="s">toutes zones</span></div>
             <div class="tuile cy" title="TTL par défaut annoncé par dnsmaster. « — » s’il n’est pas fourni : la page n’en suppose plus un."><span class="l">TTL par défaut</span><span class="v" id="tTtl">—</span><span class="s">secondes</span></div>
@@ -234,10 +234,16 @@
             const s = STATUT, etat = $('etat');
             if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
             else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (s.moteur === 'unbound' || s.moteur === 'aucun') {
+                // #2859 : ce module gère des zones BIND ; sans BIND, c'est le moteur RÉEL qui est dit (Unbound), pas « BIND arrêté ».
+                etat.className = 'actif' + (s.moteur_actif ? '' : ' hors'); etat.textContent = s.moteur === 'unbound' ? 'UNBOUND ACTIF' : 'AUCUN SERVEUR DNS';
+            }
             else { etat.className = 'actif' + (s.running ? '' : ' hors'); etat.textContent = s.running ? 'BIND ACTIF' : 'BIND ARRÊTÉ'; }
             const nb = x => (x === null || x === undefined) ? '—' : x;
-            $('tBind').textContent = s ? (s.running ? 'Actif' : 'Arrêté') : '—';
-            $('cBind').className = 'tuile ' + (s && s.running ? 'ok' : s ? 'hors' : 'cy');
+            const moteurReel = s && (s.moteur === 'unbound' || s.moteur === 'aucun');
+            $('lBind').textContent = moteurReel ? (s.moteur === 'unbound' ? 'UNBOUND' : 'DNS') : 'BIND';
+            $('tBind').textContent = s ? (moteurReel ? (s.moteur_actif ? 'Actif' : 'Arrêté') : (s.running ? 'Actif' : 'Arrêté')) : '—';
+            $('cBind').className = 'tuile ' + (s && (moteurReel ? s.moteur_actif : s.running) ? 'ok' : s ? 'hors' : 'cy');
             $('tZones').textContent = s ? nb(s.zones) : '—';
             $('tRecs').textContent = s ? nb(s.records) : '—';
             $('tTtl').textContent = s && s.default_ttl != null ? s.default_ttl + ' s' : '—';
@@ -251,7 +257,11 @@
         function rendreZones() {
             const ul = $('listeZones'); ul.replaceChildren();
             $('nZones').textContent = ZONES.length ? ZONES.length + ' zone' + (ZONES.length > 1 ? 's' : '') : '';
-            if (!ZONES.length) { ul.appendChild(el('li', 'vide', SESSION_OK ? 'Aucune zone configurée' : '—')); return; }
+            if (!ZONES.length) {
+                const unbound = STATUT && STATUT.moteur === 'unbound';
+                ul.appendChild(el('li', 'vide', !SESSION_OK ? '—' : unbound ? 'Aucune zone BIND : ce nœud résout avec Unbound (BIND n’est pas installé).' : 'Aucune zone configurée'));
+                return;
+            }
             ZONES.forEach(z => {
                 const nom = nomZone(z), li = el('li');
                 const b = el('button', 'zone'); b.type = 'button'; b.setAttribute('aria-pressed', String(nom === ZONE));
