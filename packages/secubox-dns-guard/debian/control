@@ -8,7 +8,7 @@ Standards-Version: 4.6.2
 Package: secubox-dns-guard
 Architecture: all
 Depends: ${misc:Depends},
- secubox-core (>= 1.4.0)
+ secubox-core (>= 1.7.10)
 Replaces: secubox-network-anomaly (<< 1.1.4~)
 Breaks: secubox-network-anomaly (<< 1.1.4~)
 Description: SecuBox DNS Guard — détection d'anomalies DNS

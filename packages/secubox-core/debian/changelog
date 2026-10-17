@@ -1,3 +1,9 @@
+secubox-core (1.7.10-1~bookworm1) bookworm; urgency=medium
+
+  * Livre `secubox_filterlists` (bibliotheque de listes de filtres, stdlib pure), jusque-la dans secubox-toolbox (#2863). secubox-adblock-sync (ad-guard) et /sinkhole/sources (dns-guard) l'importaient du toolbox : sans lui (profil minimal), la mise a jour du puits DNS publicitaire echouait.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 10:30:00 +0200
+
 secubox-core (1.7.9-1~bookworm1) bookworm; urgency=medium
 
   * Le controle de vie nginx est une egalite EXACTE : `location = /health` (#2836). Le prefixe `location /health` masquait la page Sante /health/ (livree par secubox-hub) et la box repondait {"status":"ok"} au lieu de la page. 3 tests.
