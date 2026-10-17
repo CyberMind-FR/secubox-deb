@@ -2,7 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""SecuBox-Deb :: metrics :: instantané système rapide pour la page « Système en direct » (#2767).
+"""SecuBox-Deb :: courbes :: instantané système rapide pour la page « Système en direct » (#2767).
 
 NON BLOQUANT : psutil calcule les pourcentages de CPU entre deux appels successifs (`interval=None`), au lieu de dormir 0,5 s à chaque requête
 comme l'ancienne API de Glances. Le premier appel après le démarrage sert d'amorce.

@@ -1,3 +1,9 @@
+secubox-metrics (1.24.0-1~bookworm1) bookworm; urgency=medium
+
+  * Courbes et Glances passent a secubox-courbes (#2865) : le releve (serie), l'instantane (systeme), les pages /grafana/ et /glances/ et la minuterie. secubox-metrics en depend et garde /api/v1/metrics/series et /api/v1/metrics/systeme en delegant a la bibliotheque (une seule copie du code). Meme fichier de donnees : l'historique de 7 jours est conserve. La minuterie secubox-metrics-serie est retiree au profit de secubox-courbes-serie.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:10:00 +0200
+
 secubox-metrics (1.28.0-1~bookworm1) bookworm; urgency=medium
 
   * Rapport quotidien de securite (#2772) : (1) les quatre tuiles Actor etaient vides — actord /stats met ~5 s sur gk2 et le rapport n attendait que 4 s ; delai de 30 s pour cet appel, 4 s pour les lectures rapides ; (2) nouveau volet « WAF — visites et bannissements » : visites vues par le WAF (requetes, navigateurs, erreurs, sites, types de clients, statuts, systemes), bannissements sur 24 h depuis le journal du WAF (bans, prolongations, actifs, par heure, par categorie) et etat du pare-feu nft (actif, verification, reparations). Aucune adresse de visiteur ni de banni n est reproduite. Sources absentes ou perimees listees dans « Mesures non disponibles » (onze sources, rien n est envoye si aucune ne repond).

@@ -1,3 +1,9 @@
+secubox-profiles (0.23.4-1~bookworm1) bookworm; urgency=medium
+
+  * Profil d'activation `minimal` : allume `courbes` (#2865), conformement a secubox-minimal 0.7.0.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:30:00 +0200
+
 secubox-profiles (0.23.3-1~bookworm1) bookworm; urgency=medium
 
   * Profil d'activation `minimal` : n'allume plus toolbox ni toolbox-autolearn (#2855), conformement a secubox-minimal 0.6.0.

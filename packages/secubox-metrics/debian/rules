@@ -132,7 +132,4 @@ override_dh_install:
 	install -D -m 0644 systemd/secubox-metrics-memoire.timer \
 	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-memoire.timer
 	# #2765 — historique des courbes (releve toutes les minutes, 7 jours ; remplace Grafana).
-	install -D -m 0644 systemd/secubox-metrics-serie.service \
-	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-serie.service
-	install -D -m 0644 systemd/secubox-metrics-serie.timer \
-	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-serie.timer
+	# secubox-metrics-serie.{service,timer} : passes a secubox-courbes (#2865, secubox-courbes-serie).

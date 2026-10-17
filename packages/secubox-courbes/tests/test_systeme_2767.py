@@ -10,7 +10,7 @@ import json
 import time
 from pathlib import Path
 
-import systeme
+from secubox_courbes import systeme
 
 
 def test_la_mesure_est_rapide_et_ne_bloque_pas():
@@ -72,6 +72,6 @@ def test_les_capteurs_absents_ne_cassent_rien(monkeypatch):
 
 def test_la_route_est_en_lecture_sans_cache():
     src = (Path(__file__).resolve().parents[1] / "api" / "main.py").read_text()
-    i = src.index('@app.get("/api/v1/metrics/systeme"')
+    i = src.index('@app.get("/systeme"')
     bloc = src[i:i + 600]
     assert "require_lecture" in bloc and "no-store" in bloc and "systeme" in bloc

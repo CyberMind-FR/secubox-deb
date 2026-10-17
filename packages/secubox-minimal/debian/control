@@ -31,11 +31,13 @@ Depends: ${misc:Depends},
 # L'unite ne demarre que si un fichier de reponses SIGNE est present sur /boot : une box ordinaire n'est jamais touchee.
  secubox-autoload-agent,
 # WireGuard distant (#2845) : la box offre la sortie Internet a des clients, par un relais UDP sur l'infrastructure.
- secubox-wireguard (>= 1.3.0)
+ secubox-wireguard (>= 1.3.0),
+# COURBES et GLANCES (#2865) : historique 7 jours et systeme en direct, sans secubox-metrics (350 Mo de processus sur gk2).
+ secubox-courbes (>= 0.1.0)
 # WAF et HAProxy retires (#2849) : essayes sur la carte de 951 Mo, ils l'ont saturee (swap plein, charge > 10). Le WAF reste sur l'infrastructure.
 # toolbox et R-level retires (#2855) : decision du proprietaire ; ad-guard ne l'exige plus (Recommends).
 Conflicts: secubox-webos, secubox-waf-ng, secubox-waf, secubox-metrics, secubox-toolbox
-Description: SecuBox Minimal — DPI, garde DNS, filtre de publicites, NAC, Freebox et WireGuard
+Description: SecuBox Minimal — DPI, garde DNS, filtre de publicites, NAC, Freebox, WireGuard, Courbes et Glances
  Profil minimal, pour une petite carte (ESPRESSObin) : inspection des paquets (DPI), detection d'anomalies DNS (dns-guard), filtrage
  des publicites et traqueurs (ad-guard), controle d'acces reseau (NAC), module Freebox, garde IPv6 et filtrage web, avec la seule interface d'administration.
  WireGuard offre la sortie Internet a des clients distants.

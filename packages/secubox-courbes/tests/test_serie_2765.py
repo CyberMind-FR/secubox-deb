@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-import serie
+from secubox_courbes import serie
 
 
 def proc(tmp_path, jiffies=(1000, 0, 500, 8000, 100, 0, 50, 0), mem=(8000000, 2000000), load="0.52 0.40 0.30 1/200 999", rx=1000, tx=500, etab=3):
@@ -116,17 +116,17 @@ def test_historique_vide(tmp_path):
 
 def test_la_route_est_en_lecture_et_valide_ses_parametres():
     src = (Path(__file__).resolve().parents[1] / "api" / "main.py").read_text()
-    i = src.index('@app.get("/api/v1/metrics/series"')
+    i = src.index('@app.get("/series"')
     bloc = src[i:i + 900]
     assert "require_lecture" in bloc and "serie.vue" in bloc
 
 
 def test_unites_systemd_et_paquet():
     ici = Path(__file__).resolve().parents[1]
-    s = (ici / "systemd" / "secubox-metrics-serie.service").read_text()
-    assert "User=secubox" in s and "ExecStart=/usr/bin/python3 -m api.serie" in s and "NoNewPrivileges=true" in s and "MemoryMax=" in s
-    assert "OnUnitActiveSec=1min" in (ici / "systemd" / "secubox-metrics-serie.timer").read_text()
-    assert "secubox-metrics-serie.timer" in (ici / "debian" / "rules").read_text() and "secubox-metrics-serie.timer" in (ici / "debian" / "postinst").read_text()
+    s = (ici / "systemd" / "secubox-courbes-serie.service").read_text()
+    assert "User=secubox" in s and "ExecStart=/usr/bin/python3 -m secubox_courbes.serie" in s and "NoNewPrivileges=true" in s and "MemoryMax=" in s
+    assert "OnUnitActiveSec=1min" in (ici / "systemd" / "secubox-courbes-serie.timer").read_text()
+    assert "secubox-courbes-serie.timer" in (ici / "debian" / "rules").read_text() and "secubox-courbes-serie.timer" in (ici / "debian" / "postinst").read_text()
 
 
 def test_jamais_plus_de_tranches_que_de_releves_possibles(tmp_path):
