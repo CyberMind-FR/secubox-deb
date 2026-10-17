@@ -1198,7 +1198,6 @@
 
     // Load status bar data from API (with safe fetch)
     async function loadStatusBarData() {
-        return; // #2792 : bloc de pastilles retire de la barre laterale, plus rien a alimenter
         var token = localStorage.getItem('sbx_token');
         var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
 
