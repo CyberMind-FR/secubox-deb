@@ -12,6 +12,14 @@ y dorment, par mois) — ne le lire que sur demande.
 
 ---
 
+## 2026-10-17 — demandes du proprietaire en attente (file, a prioriser)
+- [ ] **WAF et Acteurs : tendances recentes** (mini-courbes SVG + fleche/pourcentage) ; WAF depuis `/waf/history` (9 jours), acteurs : derive des dates ou instantane quotidien (a trancher).
+- [ ] **Modules LXC** : sleep / wake / restart / stop dans les panneaux d'administration de chaque conteneur ; Lyrion « a la demande » (la route de la table sbxwaf reste apres `profilectl apply --only lyrion` : 502 au lieu du reveil).
+- [ ] **Retraits** : `mesh` (desinstalle de gk2 ; reste : retirer de secubox-isp et de full.toml), `dns` (BIND absent ; attention dns-provider/dns-lan et les certificats DNS), `modem` (actif sur gk2, 4G), `ksm` (compose de secubox-system : ne se desinstalle pas, a desactiver ou masquer), `premier-pas-maitre` (de lite et minimal : separer la page en paquet propre).
+- [ ] **Freebox** (/freebox/ sur la carte) : possibilite de redemarrer le service. **meshname** : reparation automatique partout (arrete volontairement sur la carte le 2026-10-17). **Hub p2p** : roles maitre/esclave, scan/rafraichir, ajout et invitation/jonction automatiques. **/fleet/** elargie au maillage et au p2p.
+- [ ] **A decrire** : /profiles/comparatif.html (la fonction et l API repondent bien sur la carte : profil actif minimal, 18/46/63/83 modules) et /portal/ sur la carte : symptome exact a preciser.
+- [ ] **A deployer sur gk2** (avec un redemarrage de l agregateur) : lyrion 1.7.2, puis dpi 1.14.3 (Redemarrer nDPId, #2870).
+
 ## 2026-10-16 — ESPRESSObin lgm-ebin, client beta `lgm`
 - [ ] **#2865** deployer secubox-courbes 0.1.0 + metrics 1.24.0 sur gk2 (recharge metrics et le groupe groupd, sans coupure de l'agregateur) ; verifier que l'historique de 7 jours reste visible.
 - [ ] Regrouper les modules de `minimal` dans `groupd` (nac, auth, dpi, portal, hardening, system : 10 a 35 Mo de base chacun) ; mesure du 2026-10-17 : ~22 processus Python = ~450 Mo sur 951 Mo.
