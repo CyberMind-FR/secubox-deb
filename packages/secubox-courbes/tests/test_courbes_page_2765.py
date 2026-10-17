@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 playwright = pytest.importorskip("playwright.sync_api")
-PAGE = Path(__file__).resolve().parents[1] / "composants" / "grafana" / "www" / "grafana" / "index.html"
+PAGE = Path(__file__).resolve().parents[1] / "www" / "grafana" / "index.html"
 SRC = PAGE.read_text(encoding="utf-8")
 N = 60
 
@@ -60,7 +60,7 @@ def ouvre(navigateur, reponse, statut=200, taille=None, reduit=False, cadence=60
             r.fulfill(status=statut, content_type="application/json", body="{}")
             return
         r.fulfill(status=200, content_type="application/json", body=json.dumps(reponse(q) if callable(reponse) else reponse))
-    p.route("http://sbx.test/api/v1/metrics/series*", api)
+    p.route("http://sbx.test/api/v1/courbes/series*", api)
     p.goto(f"http://sbx.test/grafana/?cadence={cadence}")
     return ctx, p, err, appels
 
@@ -278,7 +278,7 @@ def test_hygiene_de_la_page():
     assert re.findall(r'<link[^>]+href="([^"]+)"', SRC) == ["/shared/sidebar-light.css"]
     assert not re.search(r"<script[^>]+src=", SRC) and "fonts.googleapis" not in SRC
     assert "lorem" not in SRC.lower() and "'POST'" not in SRC
-    assert "sbx_token" in SRC and "/api/v1/metrics/series" in SRC
+    assert "sbx_token" in SRC and "/api/v1/courbes/series" in SRC
     for interdit in ("confirm(", "alert(", "prompt("):
         assert interdit not in SRC
 
@@ -296,7 +296,7 @@ def test_la_pastille_du_present_reste_visible_sous_la_feuille_du_cadre(navigateu
     p.route("http://sbx.test/shared/sidebar-light.css", lambda r, *_: r.fulfill(status=200, content_type="text/css", body=HYBRID.read_text()))
     p.route("http://sbx.test/shared/**", lambda r, *_: r.fulfill(status=200, content_type="application/javascript", body=""))
     p.add_init_script("document.addEventListener('DOMContentLoaded',()=>{document.body.classList.add('hybrid-skin')})")
-    p.route("http://sbx.test/api/v1/metrics/series*", lambda r, *_: r.fulfill(status=200, content_type="application/json", body=json.dumps(serie())))
+    p.route("http://sbx.test/api/v1/courbes/series*", lambda r, *_: r.fulfill(status=200, content_type="application/json", body=json.dumps(serie())))
     p.goto("http://sbx.test/grafana/?cadence=60000")
     try:
         p.wait_for_selector(".courbe .maintenant")

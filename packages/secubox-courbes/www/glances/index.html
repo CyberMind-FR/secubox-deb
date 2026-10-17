@@ -7,7 +7,7 @@
 
   « Système en direct » (#2767, #2769) : REMPLACE l'ancienne page Glances (verdict du mainteneur : « garder celle-là »). Page autonome au profil Aurora
   (.claude/AURORA-REFERENCE.md), aucune dépendance, aucun démon Glances.
-  Données : GET /api/v1/metrics/systeme (instantané non bloquant, lu en session), interrogé toutes les 2 s (1 / 2 / 5 s au choix), en pause quand l'onglet est caché.
+  Données : GET /api/v1/courbes/systeme (instantané non bloquant, lu en session), interrogé toutes les 2 s (1 / 2 / 5 s au choix), en pause quand l'onglet est caché.
   Rien n'est inventé : une mesure absente s'affiche « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives animées ; ?cadence=ms : rythme (plancher 300).
   Aucune ligne de commande de processus n'est affichée : l'API ne la fournit pas.
 -->
@@ -213,7 +213,7 @@
   function lis(){
     if(DEMO)return Promise.resolve(demoMesure());
     var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
-    return fetch('/api/v1/metrics/systeme',{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){
+    return fetch('/api/v1/courbes/systeme',{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){
       if(r.status===401||r.status===403){$('session').hidden=false;return null;}
       return r.ok?r.json():null;}).catch(function(){return null;});
   }

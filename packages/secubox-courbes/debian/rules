@@ -1,0 +1,21 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-courbes/usr/lib/python3/dist-packages
+	cp -r lib/secubox_courbes debian/secubox-courbes/usr/lib/python3/dist-packages/
+	install -d debian/secubox-courbes/usr/lib/secubox/courbes/api
+	install -m 644 api/__init__.py api/main.py debian/secubox-courbes/usr/lib/secubox/courbes/api/
+	install -d debian/secubox-courbes/usr/share/secubox/www
+	cp -r www/. debian/secubox-courbes/usr/share/secubox/www/
+	install -d debian/secubox-courbes/usr/share/secubox/menu.d
+	install -m 644 menu.d/*.json debian/secubox-courbes/usr/share/secubox/menu.d/
+	# Declaration groupable : le NOM du fichier suffit (secubox-groupd sert le module sur /run/secubox/courbes.sock).
+	install -d debian/secubox-courbes/usr/share/secubox/groupable.d
+	install -m 644 groupable.d/courbes debian/secubox-courbes/usr/share/secubox/groupable.d/courbes
+	install -D -m 0644 systemd/secubox-courbes-serie.service debian/secubox-courbes/lib/systemd/system/secubox-courbes-serie.service
+	install -D -m 0644 systemd/secubox-courbes-serie.timer debian/secubox-courbes/lib/systemd/system/secubox-courbes-serie.timer
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-courbes-serie secubox-courbes-serie.timer

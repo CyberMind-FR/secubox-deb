@@ -6,7 +6,7 @@
   See LICENCE-CMSD-1.0.md for terms.
 
   « Courbes » (#2765) : remplace la page Grafana. Page autonome au profil Aurora (.claude/AURORA-REFERENCE.md), aucune dépendance, aucun conteneur Grafana.
-  Données : GET /api/v1/metrics/series (un relevé par minute, 7 jours, lu en session). Une valeur absente est un TROU dans la courbe, jamais un zéro.
+  Données : GET /api/v1/courbes/series (un relevé par minute, 7 jours, lu en session). Une valeur absente est un TROU dans la courbe, jamais un zéro.
   Réactif : plages 15 min → 7 j, survol qui suit sur les six courbes, glisser pour zoomer, actualisation automatique (sauf pendant un zoom).
   ?embed=1 : sans menu ; ?demo=1 : données fictives ; ?cadence=ms : actualisation (plancher 300).
 -->
@@ -216,7 +216,7 @@
   function lis(){
     if(DEMO)return Promise.resolve(demo());
     var h={'Accept':'application/json'},tk=jeton();if(tk)h.Authorization='Bearer '+tk;
-    var u='/api/v1/metrics/series?points='+POINTS+(zoom?'&depuis='+encodeURIComponent(zoom.depuis)+'&jusqua='+encodeURIComponent(zoom.jusqua):'&duree='+duree);
+    var u='/api/v1/courbes/series?points='+POINTS+(zoom?'&depuis='+encodeURIComponent(zoom.depuis)+'&jusqua='+encodeURIComponent(zoom.jusqua):'&duree='+duree);
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){
       if(r.status===401||r.status===403){$('session').hidden=false;return null;}
       return r.ok?r.json():null;}).catch(function(){return null;});

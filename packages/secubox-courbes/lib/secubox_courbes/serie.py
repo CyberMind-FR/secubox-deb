@@ -2,9 +2,9 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""SecuBox-Deb :: metrics :: historique des courbes (#2765, remplace Grafana).
+"""SecuBox-Deb :: courbes :: historique des courbes (#2765, remplace Grafana).
 
-Un relevé par minute (timer secubox-metrics-serie), 7 jours en JSON-lignes. On stocke des COMPTEURS bruts (jiffies de /proc/stat, octets de
+Un relevé par minute (timer secubox-courbes-serie), 7 jours en JSON-lignes. On stocke des COMPTEURS bruts (jiffies de /proc/stat, octets de
 /proc/net/dev) : le CPU et les débits se déduisent entre deux relevés à la lecture, donc un redémarrage (compteurs remis à zéro) donne un trou,
 jamais un pic négatif ou énorme.
 
