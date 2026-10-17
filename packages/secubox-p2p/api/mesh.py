@@ -256,6 +256,46 @@ def valid_wg_key(key) -> bool:
         return False
 
 
+def preparer_pair(etat: dict, genkey, pubkey) -> tuple:
+    """Etat du pair avant la jonction : cle privee creee SEULEMENT si absente
+    (une cle existante porte deja des poignees de main), cle publique derivee.
+    `genkey` et `pubkey` sont injectes : `wg genkey` / `wg pubkey` en vrai."""
+    etat = dict(etat)
+    if not valid_wg_key(etat.get("private_key")):
+        etat["private_key"] = genkey()
+    etat["public_key"] = pubkey(etat["private_key"])
+    etat.setdefault("listen_port", MESH_PORT)
+    etat.setdefault("peers", [])
+    etat["role"] = "peer"
+    return etat, etat["public_key"]
+
+
+def appliquer_offre(etat: dict, offre: dict, adresse_maitre: str) -> dict:
+    """Monte le cote pair du tunnel d'apres l'offre du maitre (#2885).
+
+    Tout ce qui finit dans le fichier wg-quick est valide d'abord : cle, port,
+    adresse et reseau. Un maitre fautif ne doit pas pouvoir y injecter de ligne.
+    ValueError sinon."""
+    import ipaddress
+    if not valid_wg_key(offre.get("master_public_key")):
+        raise ValueError("cle publique du maitre invalide")
+    port = int(offre.get("master_port", 0))
+    if not 1 <= port <= 65535:
+        raise ValueError("port du maitre invalide")
+    adresse = str(ipaddress.ip_interface(str(offre.get("address", ""))))
+    reseau = str(ipaddress.ip_network(str(offre.get("network", "")), strict=False))
+    hote_maitre = str(ipaddress.ip_address(str(offre.get("master_mesh_ip", ""))))
+    hote = f"[{adresse_maitre}]" if ":" in adresse_maitre else adresse_maitre
+    etat = dict(etat)
+    etat.update({
+        "address": adresse, "network": reseau, "role": "peer", "enabled": True,
+        "peers": [{"public_key": offre["master_public_key"],
+                   "endpoint": f"{hote}:{port}", "allowed_ips": reseau,
+                   "mesh_ip": hote_maitre, "name": "master"}],
+    })
+    return etat
+
+
 def taken_mesh_ips(wg_state: dict, legacy_peers: list, requests: list) -> list:
     """Toutes les adresses déjà engagées, QUELLE QUE SOIT leur source.
 

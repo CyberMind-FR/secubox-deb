@@ -1,3 +1,9 @@
+secubox-p2p (1.17.0-1~bookworm1) bookworm; urgency=medium
+
+  * La jonction par l'API (code d'invitation, jeton, auto-appairage) monte maintenant le tunnel wg-mesh du pair (ref #2885) : _rejoindre_maitre prepare la cle du pair (creee seulement si absente, jamais remplacee), l'envoie avec le port, puis applique l'offre du maitre dans wg_mesh.json (ecriture atomique 0600, que l'unite secubox-p2p-mesh.path applique en root). Avant, le maitre inscrivait le pair avec `wg: null` et aucun tunnel ne se formait (cas lgm-ebin vers gk2). L'offre est validee (cle, port, adresse, reseau) avant d'atteindre le fichier wg-quick. Une preparation ou une offre en echec n'empeche pas l'inscription : elle est journalisee.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 15:00:00 +0200
+
 secubox-p2p (1.16.2-1~bookworm1) bookworm; urgency=medium
 
   * Ecouteur d'enrolement 7331 : admet aussi les tunnels wg-autoload (10.64.0.0/16) et wg-mesh (10.10.0.0/24), en plus du LAN (ref #2883). Une box rattachee par tunnel, comme l'ebin lgm-ebin vers gk2, recevait 403 et ne pouvait pas devenir pair. Reste limite a cet ecouteur et aux routes master-link ; le jeton est toujours valide par le module. Aucun autre reseau n'est ouvert.
