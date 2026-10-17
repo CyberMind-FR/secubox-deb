@@ -13,6 +13,9 @@ y dorment, par mois) — ne le lire que sur demande.
 ---
 
 ## 2026-10-16 — ESPRESSObin lgm-ebin, client beta `lgm`
+- [ ] **#2865** deployer secubox-courbes 0.1.0 + metrics 1.24.0 sur gk2 (recharge metrics et le groupe groupd, sans coupure de l'agregateur) ; verifier que l'historique de 7 jours reste visible.
+- [ ] Regrouper les modules de `minimal` dans `groupd` (nac, auth, dpi, portal, hardening, system : 10 a 35 Mo de base chacun) ; mesure du 2026-10-17 : ~22 processus Python = ~450 Mo sur 951 Mo.
+- [ ] Unites a garder eteintes sur minimal (tor, waker, meshname, ksm : arretes a la main, a persister dans le profil).
 - [ ] **#2853** l'agent Auto-Load rejoue nom et mot de passe d'usine à chaque démarrage : une fois l'application réussie ou abandonnée, ne plus rien rejouer.
 - [ ] **#2854** support SSH depuis gk2 posé par l'enrôlement (clé publique dans la réponse d'enrôlement, règle nft, révocation, `audit.log`) ; envisager un compte `secubox-support` plutôt que `root`.
 - [ ] **#2844** publication WAN automatique des pairs (certificat, vhost, route sbxwaf) ; hook de recopie du PEM HAProxy au renouvellement certbot (absent sur gk2).
