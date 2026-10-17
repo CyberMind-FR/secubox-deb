@@ -849,7 +849,10 @@ async def sinkhole_disable():
 async def sinkhole_sources():
     """Modular filter sources with their enabled state + description."""
     try:
-        from secubox_toolbox import filterlists as _F
+        try:
+            import secubox_filterlists as _F            # #2863 : livre par secubox-core (le toolbox n'est pas necessaire)
+        except ImportError:
+            from secubox_toolbox import filterlists as _F
         srcs = _F.load_sources()
         return {"sources": [
             {"name": n, "enabled": bool(c.get("enabled")), "format": c.get("format"),

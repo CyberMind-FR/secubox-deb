@@ -1,3 +1,9 @@
+secubox-ad-guard (1.14.3-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-adblock-sync importe `secubox_filterlists` (secubox-core >= 1.7.10) au lieu de `secubox_toolbox.filterlists` (#2863) : la mise a jour du puits DNS publicitaire marche SANS secubox-toolbox (profil minimal), ce que #2855 (toolbox en Recommends) supposait a tort. Repli sur l'ancien chemin.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 10:30:00 +0200
+
 secubox-ad-guard (1.14.2-1~bookworm1) bookworm; urgency=medium
 
   * secubox-toolbox passe de Depends a Recommends (#2855). Le module n'en lit la base qu'en lecture seule et tolere son absence (_stats_toolbox renvoie None, jamais un zero invente) ; la dependance dure imposait le MITM et le R-level a toute box qui voulait seulement le filtre de publicites (profil minimal, ESPRESSObin). Les profils lite et full gardent toolbox par leur propre meta-paquet.
