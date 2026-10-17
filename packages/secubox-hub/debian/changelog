@@ -1,3 +1,9 @@
+secubox-hub (1.12.14-1~bookworm1) bookworm; urgency=medium
+
+  * Barre d'etat du bas de l'administration : elle est de nouveau alimentee (ref #2887). Le correctif #2792 (retrait du bloc de pastilles de la barre laterale) avait ajoute un `return` au debut de loadStatusBarData, la fonction qui remplit CETTE barre (sante, Mode, Auth, CPU, MEM, DISK, Uptime) : elle restait a « -- » sur toutes les boxes. Le return est retire ; le masquage des pastilles est inchange. Test #2792 corrige : il exigeait le return.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 16:00:00 +0200
+
 secubox-hub (1.12.13-1~bookworm1) bookworm; urgency=medium
 
   * Le pied de page et le sous-titre disent le NOM de la carte, plus « [object Object] » (#2861). /hub/dashboard renvoie `board` en objet (model, board, hostname…) ; la page le posait tel quel. Libelle lu dans `model` (sinon `board`, sinon `hostname`, « unknown » ecarte) ; une simple chaine reste acceptee. Le mode demonstration envoie desormais la forme reelle de l'API : il masquait le defaut.
