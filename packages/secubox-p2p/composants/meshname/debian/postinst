@@ -2,7 +2,15 @@
 set -e
 if [ "$1" = "configure" ]; then
     systemctl daemon-reload
-    systemctl enable secubox-meshname.service || true
-    systemctl start secubox-meshname.service || true
+    # #2889 : « enable + start » a chaque configure rallumait, a chaque mise a
+    # jour de secubox-p2p, un service arrete volontairement par l'operateur.
+    # Premiere installation ($2 vide) : on active ; mise a jour : l'etat est
+    # conserve, on ne relance que ce qui tourne deja.
+    if [ -z "${2:-}" ]; then
+        systemctl enable secubox-meshname.service || true
+        systemctl start secubox-meshname.service || true
+    else
+        systemctl try-restart secubox-meshname.service || true
+    fi
 fi
 exit 0
