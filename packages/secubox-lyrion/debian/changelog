@@ -1,3 +1,9 @@
+secubox-lyrion (1.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * La page /lyrion/ ne tombe plus en HTTP 500 quand lyrionctl est lent (#2867). `subprocess.TimeoutExpired` n'etait pas attrapee : sur gk2 (charge 10 a 12), `lyrionctl status` met 9 s sous secubox, la page lance 4 lectures en parallele, et au-dela de 15 s c'etait « Lecture incomplete — etat : HTTP 500 ; composants : HTTP 500 ». Un delai depasse est maintenant un 504 explicite ; le delai passe a 45 s ; le resultat est memorise 30 s avec un verrou par lecture (une seule execution de lyrionctl pour les lectures concurrentes) ; un echec n'est jamais memorise ; toute action vide le cache.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 13:00:00 +0200
+
 secubox-lyrion (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /lyrion/ refaite au profil Aurora (#2612) : page autonome (CSS et JS en ligne, plus de police Google ni de feuilles hybrid-dark/crt), en francais, avec tuiles (sante, conteneur, lecteurs, lecture en cours, mediatheque externe, version), tableaux des composants et des acces, lecteurs, lecture en cours et mediatheque externe. ?demo=1 (donnees fictives, actions inertes) et ?embed=1 (sans menu), hauteur annoncee a l'hote (sbxVue, onglet lyrion), actualisation toutes les 20 s seulement onglet visible et sans confirmation ni manipulation de lecteur en cours.
