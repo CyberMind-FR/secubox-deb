@@ -181,6 +181,14 @@
         }
         function ligne(parent, k, v) { const a = document.createElement('div'), b = document.createElement('div'); a.className = 'k'; a.textContent = k; b.textContent = v == null || v === '' ? '—' : String(v); parent.append(a, b); }
 
+        // /hub/dashboard renvoie `board` en OBJET (model, board, hostname, …) : le poser tel quel affichait « [object Object] » (#2861). Une simple chaîne reste acceptée.
+        function nomCarte(b) {
+            if (typeof b === 'string') return b.trim() || null;
+            if (!b || typeof b !== 'object') return null;
+            for (const k of ['model', 'board', 'hostname']) { const v = b[k]; if (typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'unknown') return v.trim(); }
+            return null;
+        }
+
         function rendre(d) {
             const { menu, dash, sante, mods, sites, alertes, reseau, mode, mem, disque, up, boot, auth } = d;
             const aucune = ![menu, dash, sante, mods, sites, alertes, reseau].some(x => x != null);
@@ -233,10 +241,10 @@
 
             // pied
             const bi = (dash && dash.build_info) || {};
-            $('pVer').textContent = bi.version ? 'v' + bi.version : '—'; $('pCarte').textContent = (dash && dash.board) || bi.board || '—';
+            $('pVer').textContent = bi.version ? 'v' + bi.version : '—'; const carte = nomCarte(dash && dash.board) || nomCarte(bi.board); $('pCarte').textContent = carte || '—';
             $('pBuild').textContent = bi.build_timestamp ? new Date(bi.build_timestamp).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
             $('pBoot').textContent = boot && boot.mode ? boot.mode : '—'; $('pAuth').textContent = auth && auth.mode ? auth.mode : '—';
-            $('subline').textContent = (dash && dash.board) ? 'Centre de contrôle · ' + dash.board : 'Centre de contrôle de la box';
+            $('subline').textContent = carte ? 'Centre de contrôle · ' + carte : 'Centre de contrôle de la box';
             hauteur();
         }
 
@@ -271,7 +279,7 @@
             const r = d => Promise.resolve(d);
             switch (c) {
                 case '/menu': return r({ total_active: 108, total_installed: 112, categories: [] });
-                case '/dashboard': return r({ board: 'carte-exemple', cpu_percent: 31, memory_percent: 62, disk_percent: 48, load_avg: [0.84, 0.71, 0.66], build_info: { version: '3.0.0', build_timestamp: '2026-10-11T08:30:00Z' } });
+                case '/dashboard': return r({ board: { model: 'Carte exemple', board: 'carte-exemple', hostname: 'exemple' }, cpu_percent: 31, memory_percent: 62, disk_percent: 48, load_avg: [0.84, 0.71, 0.66], build_info: { version: '3.0.0', build_timestamp: '2026-10-11T08:30:00Z' } });
                 case '/system_health': return r({ overall: 91 });
                 case '/module-health/summary': return r({ health_percent: 96, healthy: 105, degraded: 2, down: 1, total: 108 });
                 case '/health-monitor/summary': return r({ health_percent: 88, ok: 30, slow: 3, down: 1, placeholder: 4, total: 38 });
