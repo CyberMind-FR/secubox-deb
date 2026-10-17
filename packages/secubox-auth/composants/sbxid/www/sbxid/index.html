@@ -13,9 +13,11 @@
 </head><body>
 <p>Ouverture de l'Identity Manager… <a id="l" href="/identite/#admin">continuer</a></p>
 <script>
-  var h = location.hostname.replace(/^admin\./, 'hall.');
-  var u = 'https://' + h + '/identite/#admin';
-  document.getElementById('l').href = u;
-  (window.top || window).location.replace(u);
+  // #2872 : sans Hall (profil minimal), le gestionnaire s'ouvre sur CETTE origine ; avec Hall, comme avant. Sonde de meme origine (le Hall publie /hall/).
+  fetch('/hall/', { method: 'HEAD', credentials: 'same-origin' }).then(function (r) { return r.ok; }, function () { return false; }).then(function (hall) {
+    var u = hall ? 'https://' + location.hostname.replace(/^admin\./, 'hall.') + '/identite/#admin' : '/identite/#admin';
+    document.getElementById('l').href = u;
+    (window.top || window).location.replace(u);
+  });
 </script>
 </body></html>
