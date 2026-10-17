@@ -20,6 +20,8 @@ import os
 import re
 import shutil
 import subprocess
+import threading
+import time
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List
@@ -35,7 +37,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Header, Response
 from secubox_core.auth import require_jwt
 from secubox_core.auth import require_lecture
 
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 CTL = shutil.which("lyrionctl") or "/usr/sbin/lyrionctl"
 
 # LMS jsonrpc endpoint inside the LXC. Used for live data the lyrionctl
@@ -77,10 +79,26 @@ app = FastAPI(
 )
 
 
-def _ctl_json(*args: str) -> Dict[str, Any]:
+# Lectures de `lyrionctl` (status, components, access) : lentes sur une box chargee (9 s sous `secubox` quand gk2 a une charge de 10 a 12) et lancees EN PARALLELE par la
+# page. Un delai depasse etait un HTTP 500 (TimeoutExpired non attrapee, #2867). Resultat memorise TTL_CTL secondes, une seule execution pour les lectures concurrentes.
+DELAI_CTL = 45
+TTL_CTL = 30.0
+_CACHE_CTL: Dict[tuple, tuple] = {}
+_VERROUS_CTL: Dict[tuple, threading.Lock] = {}
+_VERROU_VERROUS = threading.Lock()
+
+
+def _invalider_cache_ctl() -> None:
+    """Toute action (demarrer, arreter, mettre a jour) rend l'etat memorise perime : on le jette."""
+    _CACHE_CTL.clear()
+
+
+def _executer_ctl(args: tuple) -> Dict[str, Any]:
     cmd = [CTL, *args, "--json"]
     try:
-        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=15)
+        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=DELAI_CTL)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail=f"lyrionctl : délai de {DELAI_CTL} s dépassé (la box est chargée) — réessayez dans un instant")
     except subprocess.CalledProcessError as e:
         raise HTTPException(status_code=500, detail=f"lyrionctl failed: {e.output!r}")
     except FileNotFoundError:
@@ -89,6 +107,19 @@ def _ctl_json(*args: str) -> Dict[str, Any]:
         return json.loads(out.decode())
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"lyrionctl emitted non-JSON: {e}; raw={out!r}")
+
+
+def _ctl_json(*args: str) -> Dict[str, Any]:
+    cle = tuple(args)
+    with _VERROU_VERROUS:
+        verrou = _VERROUS_CTL.setdefault(cle, threading.Lock())
+    with verrou:                      # une seule execution pour les lectures concurrentes de la meme cle
+        ancien = _CACHE_CTL.get(cle)
+        if ancien and time.monotonic() - ancien[0] < TTL_CTL:
+            return ancien[1]
+        donnees = _executer_ctl(cle)  # un echec (504, 500) n'est JAMAIS memorise
+        _CACHE_CTL[cle] = (time.monotonic(), donnees)
+        return donnees
 
 
 @app.get("/healthz")
@@ -306,6 +337,7 @@ async def _ctl_medialib(*args: str) -> Dict[str, Any]:
 # pour `status`, pas pour un relevé réseau ni pour un upgrade qui télécharge et
 # installe un paquet dans la LXC.
 async def _ctl_verb(*args: str, timeout: int = 120) -> Dict[str, Any]:
+    _invalider_cache_ctl()
     def _run() -> Dict[str, Any]:
         try:
             proc = subprocess.run([CTL, *args], capture_output=True, timeout=timeout)
