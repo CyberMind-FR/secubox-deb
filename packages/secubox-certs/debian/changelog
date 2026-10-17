@@ -1,3 +1,9 @@
+secubox-certs (1.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * Renouveler un certificat depuis le panneau ne echoue plus sur « Permission denied: /var/log/letsencrypt/.certbot.lock » (ref #2874) : l'API etant servie par l'agregateur sous secubox, le renouvellement passe par le nouveau verbe `certsctl renew <domaine>` (root, via sudo, regle sudoers a la lettre `certsctl renew *`). Le ctl valide le nom (hostname strict, sinon code 2), refuse un certificat inconnu (code 3), lance certbot `renew --cert-name <d> --force-renewal --non-interactive`, puis redeploie le pem vers HAProxy par `deploy --apply`. L'appel certbot de l'API ne bloque plus la boucle (thread).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:00:00 +0200
+
 secubox-certs (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /certs/ refaite au profil Aurora (ref #2556) : une page autonome (CSS et JS en ligne, plus de police Google ni de skin hybrid-dark), tuiles (expires, critiques, a surveiller, sains, illisibles, total, attaques du jour), onglets Tous / Expires / A renouveler / Sains / Illisibles / Metriques / Attaques, recherche, filtre d'origine et tri cote client, detail du certificat dans la page, assistant en trois etapes, ?demo=1 (donnees fictives, actions inertes), ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet certs). Les appels d'ecriture sont inchanges : POST /check, POST /issue (memes corps), POST /renew/{domaine}, POST /renew-all, DELETE /revoke/{domaine}. Le jeton est lu dans localStorage sbx_token.

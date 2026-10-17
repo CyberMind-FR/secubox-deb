@@ -635,27 +635,17 @@ async def renew_certificate(domain: str):
     if not pem_path.exists():
         raise HTTPException(404, f"Certificate not found: {domain}")
 
-    # Use certbot renew
-    cmd = ["certbot", "renew", "--cert-name", domain, "--force-renewal"]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    # Root requis (verrou certbot) : l'API tourne sous secubox, d'ou le ctl (#2874).
+    result = await asyncio.to_thread(
+        subprocess.run, ["sudo", "-n", "/usr/sbin/certsctl", "renew", domain],
+        capture_output=True, text=True, timeout=180)
 
     if result.returncode != 0:
         return {
             "success": False,
             "domain": domain,
-            "error": result.stderr or "Renewal failed",
+            "error": (result.stderr or "").strip()[-500:] or "Renewal failed",
         }
-
-    # Update HAProxy PEM
-    fullchain = Path(f"/etc/letsencrypt/live/{domain}/fullchain.pem")
-    privkey = Path(f"/etc/letsencrypt/live/{domain}/privkey.pem")
-
-    if fullchain.exists() and privkey.exists():
-        with open(pem_path, "w") as out:
-            out.write(fullchain.read_text())
-            out.write(privkey.read_text())
-
-        subprocess.run(["systemctl", "reload", "haproxy"], capture_output=True)
 
     return {
         "success": True,
