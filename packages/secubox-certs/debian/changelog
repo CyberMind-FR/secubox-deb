@@ -1,3 +1,9 @@
+secubox-certs (1.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * `certsctl renew` renouvelle avec l'emetteur qui DETIENT le certificat (ref #2874) : acme.sh (88 certificats du parc sur 96, dossier <domaine>_ecc ou <domaine>, `--renew --force`, `--ecc` si besoin) ou certbot. Le premier essai reel sur apt.secubox.in a repondu « No certificate found » : certbot n'en avait pas la trace. Le pem est ensuite redeploye vers HAProxy comme avant. certsctl 1.3.0, 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 09:00:00 +0200
+
 secubox-certs (1.3.1-1~bookworm1) bookworm; urgency=medium
 
   * Renouveler un certificat depuis le panneau ne echoue plus sur « Permission denied: /var/log/letsencrypt/.certbot.lock » (ref #2874) : l'API etant servie par l'agregateur sous secubox, le renouvellement passe par le nouveau verbe `certsctl renew <domaine>` (root, via sudo, regle sudoers a la lettre `certsctl renew *`). Le ctl valide le nom (hostname strict, sinon code 2), refuse un certificat inconnu (code 3), lance certbot `renew --cert-name <d> --force-renewal --non-interactive`, puis redeploie le pem vers HAProxy par `deploy --apply`. L'appel certbot de l'API ne bloque plus la boucle (thread).
