@@ -182,7 +182,7 @@ def _compute_menu_sync() -> dict:
         if _check_module_installed(module_www):
             item_copy = item.copy()
             item_copy["installed"] = True
-            item_copy["active"] = _check_module_active(module_www)
+            item_copy["active"] = _check_module_active(item.get("unite") or module_www)   # #2905 : page servie par un autre module
             installed_items.append(item_copy)
 
     espaces = _espaces_du_menu(installed_items)
