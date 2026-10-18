@@ -118,6 +118,7 @@ def _scene_acme(tmp_path, ecc=True):
     dossier.mkdir(parents=True)
     (dossier / "fullchain.cer").write_text("c")
     (dossier / "apt.example.com.key").write_text("k")
+    (dossier / "apt.example.com.conf").write_text("Le_Domain='apt.example.com'\nLe_Webroot='/var/www/apt.example.com'\nLe_API='x'\n")
     acme = tmp_path / "acme.sh"
     jac = tmp_path / "acme.args"
     acme.write_text(f'#!/bin/sh\necho "$@" > {jac}\nexit 0\n')
@@ -138,7 +139,8 @@ def test_renew_certificat_acme_passe_par_acme_sh_pas_certbot(tmp_path):
     # Le defi HTTP-01 est route par HAProxy vers l'ecouteur nginx :8880 dont la
     # racine est celle-ci : y ecrire, pas dans le webroot memorise (apt.secubox.in
     # a repondu 404 avec /var/www/apt.secubox.in).
-    assert args[args.index("-w") + 1] == "/usr/share/secubox/www"
+    conf = (tmp_path / "acme" / "apt.example.com_ecc" / "apt.example.com.conf").read_text()
+    assert "Le_Webroot='/usr/share/secubox/www'" in conf
 
 
 def test_renew_acme_rsa_sans_ecc(tmp_path):
