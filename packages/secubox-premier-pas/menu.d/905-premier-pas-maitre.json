@@ -6,5 +6,6 @@
   "path": "/premier-pas-maitre/",
   "order": 905,
   "description": "Préparer, exporter ou pousser le profil de premier démarrage d'une future SecuBox",
-  "theme": "socle"
+  "theme": "socle",
+  "unite": "aggregator"
 }
