@@ -1,3 +1,9 @@
+secubox-courbes (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Entrees de menu Courbes et Glances : `unite = courbes` (ref #2910). Elles etaient rouges (« a l'arret ») sur l'ebin alors que courbes.sock repond : le hub les jugeait sur l'id de leur page. Cle lue par secubox-hub 1.12.16.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 18:00:00 +0200
+
 secubox-courbes (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Nouveau paquet leger (#2865) : Courbes (/grafana/, remplace Grafana) et Glances (/glances/), sans secubox-metrics. Le releve (serie), l'instantane (systeme), les deux pages, leurs entrees de menu et la minuterie sortent de secubox-metrics pour que le profil minimal les embarque. Servi par secubox-groupd (groupable.d, /run/secubox/courbes.sock, /api/v1/courbes/{series,systeme}) : aucun processus de plus. Meme fichier de donnees (/var/lib/secubox/metrics/series.jsonl) : l'historique est conserve. Minuterie secubox-courbes-serie remplace secubox-metrics-serie.
