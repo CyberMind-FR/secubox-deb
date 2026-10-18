@@ -8,9 +8,18 @@ case "$1" in
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
     install -d -o secubox -g secubox -m 750 /var/lib/secubox/ksm
+    # #2901 : l'API (secubox, dans l'agregateur) ecrit sysfs par le ctl root.
+    cat > /etc/sudoers.d/secubox-ksm <<'SUDOERS'
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-ksmctl run *, /usr/sbin/secubox-ksmctl config *
+SUDOERS
+    chmod 0440 /etc/sudoers.d/secubox-ksm
+    visudo -cf /etc/sudoers.d/secubox-ksm >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-ksm
     systemctl daemon-reload
-    systemctl enable secubox-ksm.service
-    systemctl start  secubox-ksm.service || true
+    # Premiere installation seulement : une mise a jour ne rallume pas un service arrete par l'operateur.
+    if [ -z "${2:-}" ]; then
+        systemctl enable secubox-ksm.service
+        systemctl start  secubox-ksm.service || true
+    fi
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
     ;;

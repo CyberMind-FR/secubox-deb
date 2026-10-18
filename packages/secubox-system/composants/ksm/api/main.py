@@ -12,7 +12,9 @@ License: Proprietary / ANSSI CSPN candidate
 Kernel Same-page Merging (KSM) management module.
 Provides controls for KSM to optimize memory in VMs/containers.
 """
+import asyncio
 import json
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -83,6 +85,19 @@ def _write_sysfs(path: Path, value: int) -> bool:
     except (IOError, PermissionError) as e:
         log.error("Failed to write %s: %s", path, e)
     return False
+
+
+async def _ctl(*args: str) -> bool:
+    """Ecriture sysfs par le ctl root (#2901) : l'API tourne sous secubox, sysfs est root."""
+    try:
+        r = await asyncio.to_thread(subprocess.run, ["sudo", "-n", "/usr/sbin/secubox-ksmctl", *args],
+                                    capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError) as e:
+        log.error("secubox-ksmctl : %s", e)
+        return False
+    if r.returncode != 0:
+        log.error("secubox-ksmctl %s : %s", " ".join(args), (r.stderr or "").strip()[-200:])
+    return r.returncode == 0
 
 
 def _ksm_available() -> bool:
@@ -211,7 +226,7 @@ async def enable_ksm(user=Depends(require_jwt)):
     if not _ksm_available():
         raise HTTPException(status_code=503, detail="KSM not available on this system")
 
-    success = _write_sysfs(KSM_RUN, 1)
+    success = await _ctl("run", "1")
     if success:
         log.info("KSM enabled by %s", user.get("sub"))
         return {"success": True, "message": "KSM enabled"}
@@ -225,7 +240,7 @@ async def disable_ksm(user=Depends(require_jwt)):
     if not _ksm_available():
         raise HTTPException(status_code=503, detail="KSM not available on this system")
 
-    success = _write_sysfs(KSM_RUN, 0)
+    success = await _ctl("run", "0")
     if success:
         log.info("KSM disabled by %s", user.get("sub"))
         return {"success": True, "message": "KSM disabled"}
@@ -255,18 +270,8 @@ async def update_config(config: KSMConfig, user=Depends(require_jwt)):
     if not _ksm_available():
         raise HTTPException(status_code=503, detail="KSM not available on this system")
 
-    errors = []
-
-    # Update pages_to_scan
-    if not _write_sysfs(KSM_PAGES_TO_SCAN, config.pages_to_scan):
-        errors.append("Failed to set pages_to_scan")
-
-    # Update sleep_millisecs
-    if not _write_sysfs(KSM_SLEEP_MILLISECS, config.sleep_millisecs):
-        errors.append("Failed to set sleep_millisecs")
-
-    if errors:
-        raise HTTPException(status_code=500, detail="; ".join(errors))
+    if not await _ctl("config", str(config.pages_to_scan), str(config.sleep_millisecs)):
+        raise HTTPException(status_code=500, detail="Failed to set KSM configuration")
 
     # Save to TOML config
     try:

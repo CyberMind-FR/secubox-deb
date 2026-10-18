@@ -41,6 +41,7 @@ override_dh_auto_install:
 	install -D -m 755 composants/admin/debian/prerm debian/secubox-system/usr/lib/secubox/system/maintscripts/admin.prerm
 	install -D -m 644 composants/admin/debian/secubox-admin.service debian/secubox-system/usr/lib/systemd/system/secubox-admin.service
 	# Composant absorbé : ksm (#2050)
+	install -D -m 755 sbin/secubox-ksmctl debian/secubox-system/usr/sbin/secubox-ksmctl
 	install -d debian/secubox-system/usr/lib/secubox/ksm/
 	cp -r composants/ksm/api debian/secubox-system/usr/lib/secubox/ksm/
 	install -d debian/secubox-system/usr/share/secubox/www
