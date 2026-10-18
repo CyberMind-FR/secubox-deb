@@ -1,3 +1,9 @@
+secubox-auth (1.8.6-1~bookworm1) bookworm; urgency=medium
+
+  * Page users, « Services connectes » : l'etat est celui du CONTENEUR (ref #2903). check_service testait l'unite systemd secubox-<nom> : sur gk2, email « arrete » alors que mail tourne, jellyfin et peertube « en marche » alors que leurs conteneurs sont arretes. L'etat vient maintenant du cgroup du conteneur (lxc.payload.<nom>, lisible sans privilege) : « en marche », « en veille (reveil a la demande) » pour un conteneur on-demand endormi (/etc/secubox/modules.d/<nom>.toml), sinon « arrete ». /services expose `running` (inchange) et `etat`. Les 29 echecs de composants/users/tests sont anterieurs.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 15:00:00 +0200
+
 secubox-auth (1.8.5-1~bookworm1) bookworm; urgency=medium
 
   * Page identite : l'exemple du champ Pseudo et les donnees de demonstration ne citent plus cedre83, un vrai compte historique qui passait pour une personne fantome (ref #2881). Exemple neutre « pseudo », compte de demonstration « camille ».
