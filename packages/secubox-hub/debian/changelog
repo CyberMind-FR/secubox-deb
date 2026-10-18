@@ -1,3 +1,9 @@
+secubox-hub (1.12.17-1~bookworm1) bookworm; urgency=medium
+
+  * Le collecteur netstats se redeclenche (ref #2917) : secubox-netstats.timer n'avait que OnBootSec + OnUnitActiveSec ; reactivee apres le demarrage (mise a jour du paquet), la minuterie ne se declenchait plus (une seule collecte depuis le 14/10 sur gk2, onglet Temps reel « DONNEES PERIMEES »). Ajout de OnActiveSec=15s, qui compte depuis l'activation de la minuterie. A faire ailleurs : une cinquantaine de minuteurs du depot ont le meme motif.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 21:00:00 +0200
+
 secubox-hub (1.12.16-1~bookworm1) bookworm; urgency=medium
 
   * L'etat d'une entree de menu se juge sur le module qui PORTE la page (ref #2905) : cle optionnelle `unite` de l'entree. Centres, Flotte et Releases etaient rouges (« a l'arret ») sur gk2 alors que annuaire.sock et release.sock repondent : le hub cherchait une socket ou une unite portant l'id de la page. Sans cle : l'id, comme avant.

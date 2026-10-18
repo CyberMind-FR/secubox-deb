@@ -3,6 +3,8 @@ Description=SecuBox Annuaire — periodic threatmesh ban enforcement (#768)
 
 [Timer]
 OnBootSec=45s
+# #2917 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=45s
 OnUnitActiveSec=60s
 RandomizedDelaySec=10s
 Persistent=true

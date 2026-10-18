@@ -1,3 +1,9 @@
+secubox-annuaire (0.14.5-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries d'application (config et bannissements) : OnActiveSec ajoute (ref #2917). Elles ne s'etaient plus declenchees depuis le 5 octobre sur gk2 : meme defaut que le collecteur netstats, OnUnitActiveSec seul ne repart pas apres une reactivation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 21:00:00 +0200
+
 secubox-annuaire (0.14.4-1~bookworm1) bookworm; urgency=medium
 
   * Entrees de menu Centres et Flotte : `unite = annuaire` (ref #2905), pour que l'espace Services les juge sur le module qui les sert.
