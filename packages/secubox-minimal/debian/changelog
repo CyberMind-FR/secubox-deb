@@ -1,3 +1,9 @@
+secubox-minimal (0.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-routes (>= 1.5.0) : /netdiag/ fait partie du profil minimal (ref #2899).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 13:00:00 +0200
+
 secubox-minimal (0.8.1-1~bookworm1) bookworm; urgency=medium
 
   * annuaire et p2p ne sont plus exclus (#2877) : ils restent dans le profil, mais plus rien ne les EXIGE (secubox-auth et secubox-p2p : Recommends) — les modules sont emancipes de l'annuaire au lieu d'etre retires. Annule le Conflicts de 0.8.0.

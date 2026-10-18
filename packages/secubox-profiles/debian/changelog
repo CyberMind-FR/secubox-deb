@@ -1,3 +1,9 @@
+secubox-profiles (0.23.9-1~bookworm1) bookworm; urgency=medium
+
+  * Profil minimal : netdiag et routes allumes (ref #2899).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 13:00:00 +0200
+
 secubox-profiles (0.23.8-1~bookworm1) bookworm; urgency=medium
 
   * Profil minimal : cle `menu_off = ["ksm", "premier-pas-maitre"]` (ref #2897), lue par le hub pour masquer ces deux entrees de menu tant que le profil est actif. Les paquets restent installes (secubox-premier-pas est importe par l'agent Auto-Load).
