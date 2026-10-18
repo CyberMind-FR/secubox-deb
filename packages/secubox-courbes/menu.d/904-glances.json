@@ -6,5 +6,6 @@
   "path": "/glances/",
   "order": 904,
   "description": "System monitoring via Glances",
-  "theme": "supervision"
+  "theme": "supervision",
+  "unite": "courbes"
 }
