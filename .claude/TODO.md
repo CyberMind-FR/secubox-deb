@@ -13,6 +13,7 @@ y dorment, par mois) — ne le lire que sur demande.
 ---
 
 ## 2026-10-17 — demandes du proprietaire en attente (file, a prioriser)
+- [ ] **Pare-feu par zones (#2891) — SUSPENDU le 2026-10-18 sur demande du proprietaire.** Conception ecrite et relue (branche de l'issue, `docs/superpowers/specs/2026-10-18-firewall-zones-design.md`, non fusionnee) : zone = port physique + zone logique par appareil (MAC, prime sur le port), profils Enfants/Objets/Visiteurs/Libre, trois livrables (moteur, ports, API+UI). Reprise : trancher l'adressage par zone (sous-reseau + DHCP par port, ou un seul sous-reseau) et les boxes de la premiere livraison, puis plan. Rien n'est code.
 - [ ] **Auto-appairage p2p des esclaves** a la premiere preparation (Auto-Load) et en reparation : la box prete rejoint le maitre seule (code `sbxmesh1.` ou jeton auto-approuve cote preparation, par le tunnel wg-autoload ; l'enrolement 7331 l'admet depuis #2883/p2p 1.16.2), puis une reparation periodique si le pair est tombe. Concevoir d'abord : ou vit le jeton (jamais en clair dans l'image), duree, rejeu apres reinstallation. Essai manuel en cours : lgm-ebin esclave de gk2.
 - [ ] **WAF et Acteurs : tendances recentes** (mini-courbes SVG + fleche/pourcentage) ; WAF depuis `/waf/history` (9 jours), acteurs : derive des dates ou instantane quotidien (a trancher).
 - [ ] **Modules LXC** : sleep / wake / restart / stop dans les panneaux d'administration de chaque conteneur ; Lyrion « a la demande » (la route de la table sbxwaf reste apres `profilectl apply --only lyrion` : 502 au lieu du reveil).
