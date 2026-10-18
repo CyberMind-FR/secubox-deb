@@ -181,8 +181,17 @@ cmd_renew() {
         outil="acme.sh"
     fi
     if [ "$outil" = "acme.sh" ]; then
+        # `--renew` ignore `-w` : il rejoue le webroot MEMORISE dans la conf du
+        # domaine. On corrige donc la conf (la ou acme.sh l'a ecrit) pour que le
+        # defi tombe dans la racine servie par :8880.
+        local conf
+        for conf in "$ACME_HOME/${dom}_ecc/$dom.conf" "$ACME_HOME/$dom/$dom.conf"; do
+            if [ -f "$conf" ] && grep -q "^Le_Webroot=" "$conf"; then
+                sed -i "s|^Le_Webroot=.*|Le_Webroot='$ACME_WEBROOT'|" "$conf"
+            fi
+        done
         # shellcheck disable=SC2086
-        if ! "$ACME_BIN" --home "$ACME_HOME" --renew -d "$dom" -w "$ACME_WEBROOT" --force $ecc >&2; then
+        if ! "$ACME_BIN" --home "$ACME_HOME" --renew -d "$dom" --force $ecc >&2; then
             printf '{"success": false, "domain": "%s", "error": "acme.sh failed"}\n' "$dom"
             return 1
         fi
