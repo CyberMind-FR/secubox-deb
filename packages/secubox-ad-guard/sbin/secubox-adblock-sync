@@ -129,7 +129,7 @@ class Systeme(_unbound.SystemeUnbound):
     ERREUR = RuntimeError
 
     def verifier_unbound(self):
-        return _unbound.commande(["unbound-checkconf", str(UNBOUND_CONF)], 60)
+        return _unbound.commande(["unbound-checkconf", str(UNBOUND_CONF)], 300)
 
 
 def do_sync(force: bool = False, systeme=None) -> dict:

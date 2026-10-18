@@ -1,3 +1,9 @@
+secubox-ad-guard (1.14.4-1~bookworm1) bookworm; urgency=medium
+
+  * Le puits anti-pub n'est plus INACTIF sur la carte 1 Go (ref #2895) : la verification `unbound-checkconf` de la synchronisation avait 60 s, insuffisant pour lire 119 553 domaines + la liste webfilter de 22 Mo sur un ESPRESSObin. Elle echouait (« delai de 60 s depasse »), unbound n'etait pas recharge et le panneau affichait INACTIF malgre une liste compilee. Delai porte a 300 s.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 11:00:00 +0200
+
 secubox-ad-guard (1.14.3-1~bookworm1) bookworm; urgency=medium
 
   * secubox-adblock-sync importe `secubox_filterlists` (secubox-core >= 1.7.10) au lieu de `secubox_toolbox.filterlists` (#2863) : la mise a jour du puits DNS publicitaire marche SANS secubox-toolbox (profil minimal), ce que #2855 (toolbox en Recommends) supposait a tort. Repli sur l'ancien chemin.
