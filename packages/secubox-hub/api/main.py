@@ -19,6 +19,7 @@ import socket
 import subprocess
 import json
 import asyncio
+import re
 import os
 import time
 from pathlib import Path
@@ -55,6 +56,27 @@ _menu_cache_lock = asyncio.Lock()
 
 
 _PINS_FILE = Path("/etc/secubox/profiles/pins.toml")
+
+
+_PROFILS_DIR = Path("/etc/secubox/profiles")
+
+
+def _menu_off_du_profil() -> set:
+    """Entrees de menu masquees par le profil ACTIF (cle optionnelle `menu_off`, #2897).
+
+    Le profil exclut un module ; sans cela son entree restait au menu (ksm et
+    premier-pas-maitre sur l'ebin). Meme regle que les pins : un fichier absent, casse ou un
+    nom de profil suspect rend l'ensemble vide, jamais un menu coupe."""
+    try:
+        import tomllib
+        nom = (_PROFILS_DIR / "active").read_text(encoding="utf-8").strip()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,40}", nom):
+            return set()
+        d = tomllib.loads((_PROFILS_DIR / f"{nom}.toml").read_text(encoding="utf-8"))
+        liste = d.get("menu_off", [])
+        return {x for x in liste if isinstance(x, str)} if isinstance(liste, list) else set()
+    except Exception:  # noqa: BLE001 — voir la docstring
+        return set()
 
 
 def _epingles_off() -> set:
@@ -123,7 +145,7 @@ def _compute_menu_sync() -> dict:
     # UN MODULE EPINGLE 'off' N'EST PAS AU MENU (#1028). L'operateur l'a
     # eteint ; le laisser dans la navbar promet une page qui rendra 503, et
     # laisse croire que la decision n'a pas pris.
-    epingles_off = _epingles_off()
+    epingles_off = _epingles_off() | _menu_off_du_profil()
 
     # Filter to only installed modules and check active status
     installed_items = []
