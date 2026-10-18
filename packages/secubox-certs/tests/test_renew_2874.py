@@ -109,3 +109,35 @@ def test_postinst_pose_le_sudoers_exact():
     post = (Path(__file__).resolve().parents[1] / "debian" / "postinst").read_text()
     assert "secubox ALL=(root) NOPASSWD: /usr/sbin/certsctl renew *" in post
     assert "visudo -cf /etc/sudoers.d/secubox-certs" in post
+
+
+def _scene_acme(tmp_path, ecc=True):
+    certs, journal, env = _env(tmp_path)
+    (certs / "apt.example.com.pem").write_text("x")
+    dossier = tmp_path / "acme" / ("apt.example.com_ecc" if ecc else "apt.example.com")
+    dossier.mkdir(parents=True)
+    (dossier / "fullchain.cer").write_text("c")
+    (dossier / "apt.example.com.key").write_text("k")
+    acme = tmp_path / "acme.sh"
+    jac = tmp_path / "acme.args"
+    acme.write_text(f'#!/bin/sh\necho "$@" > {jac}\nexit 0\n')
+    acme.chmod(0o755)
+    env["SECUBOX_ACME_BIN"] = str(acme)
+    return certs, journal, jac, env
+
+
+def test_renew_certificat_acme_passe_par_acme_sh_pas_certbot(tmp_path):
+    certs, journal, jac, env = _scene_acme(tmp_path)
+    r = _run(["renew", "apt.example.com"], env)
+    assert r.returncode == 0, r.stderr
+    assert not journal.exists(), "un certificat acme.sh ne doit pas passer par certbot"
+    args = jac.read_text().split()
+    assert "--renew" in args and "--force" in args and "--ecc" in args
+    assert args[args.index("-d") + 1] == "apt.example.com"
+    assert args[args.index("--home") + 1].endswith("/acme")
+
+
+def test_renew_acme_rsa_sans_ecc(tmp_path):
+    certs, journal, jac, env = _scene_acme(tmp_path, ecc=False)
+    assert _run(["renew", "apt.example.com"], env).returncode == 0
+    assert "--ecc" not in jac.read_text().split()
