@@ -7,6 +7,8 @@
 
 # FAQ — ESPRESSObin v7 (951 Mo vus) : ce qui tient, ce qui sature, et le micrologiciel
 
+> Guide pas à pas : [INSTALL-ESPRESSOBIN.md](INSTALL-ESPRESSOBIN.md).
+
 Retour d'essai du 2026-10-16 sur une ESPRESSObin v7 (profil `minimal`, #2816, #2838, #2849).
 
 ## La carte ne répond plus (ping oui, SSH et HTTPS non)

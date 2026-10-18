@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-18 — Guide d'installation de l'ESPRESSObin (ref #2913)
+
+docs/INSTALL-ESPRESSOBIN.md : neuf etapes (materiel, image de la release GitHub ou construction, console serie, memoire et sauvegarde SPI, demarrage USB, install eMMC, profil minimal, rattachement a gk2) + recuperation UART. Les points non verifies sont signales : l'image lite de la release (v3.0.0-alpha.18) n'est pas une cle live dediee a l'ESPRESSObin, et le rattachement a gk2 reste manuel. Tutoriel interactif correspondant : artefact prive du proprietaire.
+
 ## 2026-10-17 — Cloture validee par le proprietaire
 
 Le proprietaire valide et demande la cloture : closes #2857 (hub, panneau Reseau), closes #2859 (dns, moteur reel), closes #2861 (hub, nom de la carte), closes #2863 (filterlists dans secubox-core ; deploye sur la carte, pas encore sur gk2), closes #2865 (secubox-courbes ; deploye sur la carte, pas encore sur gk2). Reste a deployer sur gk2 : core 1.7.10 + ad-guard 1.14.3 + dns-guard 1.4.7, et courbes 0.1.0 + metrics 1.24.0.
