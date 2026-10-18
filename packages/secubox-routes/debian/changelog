@@ -1,3 +1,9 @@
+secubox-routes (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * /netdiag/ : Routes et Temps reel en CODE NATIF, plus d'iframes (ref #2915). L'onglet « Gestion des routes » restait blanc (page embarquee) : sa gestion est maintenant dans l'onglet Routes (ajout, suppression avec confirmation integree, vidage du cache, regles de politique, tables de routage, API /api/v1/routes). L'onglet « SOC reseau » devient « Temps reel » : debit par interface et paquets ecartes par le pare-feu, courbes 24 h (API hub netstats), visible sur toute box, minimal compris. Les quatre onglets (Outils, Interfaces, Routes, Connexions) et Temps reel forment une seule barre, plus d'onglets imbriques. Test de comportement jsdom (page reelle, API simulees) : tests/test_netdiag_natif_2915.py, ignore sans node/jsdom. Reste a preciser : le bloc WAF temps reel du profil full.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 20:00:00 +0200
+
 secubox-routes (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * /netdiag/ absorbe la gestion des routes et SOC reseau en onglets (ref #2899) : « Gestion des routes » (page /routes/ en iframe ?embed=1) et « SOC réseau » (/soc/reseau.html, onglet visible seulement si la page existe sur la box), charges au premier affichage. L'entree de menu Routes est retiree (la page reste joignable). iperf3 passe de Recommends a Depends : l'outil n'est plus « absent de ce noeud ».
