@@ -16,6 +16,6 @@ on = [
   "dns-guard", "ad-guard", "webfilter", "webfilter-apply", "webfilter-feed", "webfilter-sync",
   "nac", "freebox", "ipv6guard",
   "network-ready", "runtime", "firstboot",
-  "wireguard", "courbes",
+  "wireguard", "courbes", "netdiag", "routes",
   "premier-pas", "premier-pas-appliquer", "premier-pas-console", "premier-pas-decouverte",
 ]

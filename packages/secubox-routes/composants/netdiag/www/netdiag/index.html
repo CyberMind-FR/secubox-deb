@@ -47,6 +47,7 @@
         .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
         .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
         .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)}
+        iframe.ext{width:100%;min-height:78vh;border:0;border-radius:12px;background:transparent;display:block}
         .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
         .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
         .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
@@ -115,6 +116,8 @@
             <button type="button" role="tab" id="o-interfaces" data-t="interfaces" aria-selected="false" aria-controls="t-interfaces">Interfaces</button>
             <button type="button" role="tab" id="o-routes" data-t="routes" aria-selected="false" aria-controls="t-routes">Routes</button>
             <button type="button" role="tab" id="o-connexions" data-t="connexions" aria-selected="false" aria-controls="t-connexions">Connexions</button>
+            <button type="button" role="tab" id="o-gestion" data-t="gestion" aria-selected="false" aria-controls="t-gestion">Gestion des routes</button>
+            <button type="button" role="tab" id="o-soc" data-t="soc" hidden aria-selected="false" aria-controls="t-soc">SOC réseau</button>
         </div>
 
         <section id="t-outils" role="tabpanel" aria-labelledby="o-outils">
@@ -168,6 +171,13 @@
                 <div class="pan" style="grid-column:1/-1"><h3>Ports en écoute <i id="nPorts"></i></h3>
                     <div class="tab"><table><thead><tr><th>Proto</th><th>Port</th><th>Adresse</th><th>Processus</th></tr></thead><tbody id="bPorts"></tbody></table></div></div>
             </div>
+        </section>
+        <!-- #2899 : les pages Routes et SOC Réseau vivent ici, en onglets. Chargées au premier affichage seulement (data-src). -->
+        <section id="t-gestion" role="tabpanel" aria-labelledby="o-gestion" hidden>
+            <iframe class="ext" data-src="/routes/?embed=1" title="Gestion des routes" loading="lazy"></iframe>
+        </section>
+        <section id="t-soc" role="tabpanel" aria-labelledby="o-soc" hidden>
+            <iframe class="ext" data-src="/soc/reseau.html?embed=1" title="SOC réseau" loading="lazy"></iframe>
         </section>
     </div></div></main>
 
@@ -409,10 +419,12 @@
         $('effacer').addEventListener('click', efface);
 
         // ----- Onglets -----
-        const NOMS = ['outils', 'interfaces', 'routes', 'connexions'];
+        const NOMS = ['outils', 'interfaces', 'routes', 'connexions', 'gestion', 'soc'];
         function onglet(nom) {
             document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
             NOMS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            const cadre = document.querySelector('#t-' + nom + ' iframe[data-src]');
+            if (cadre && !cadre.src) cadre.src = cadre.dataset.src;   // premier affichage seulement
             annoncer();
         }
         document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
@@ -422,6 +434,9 @@
             const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
         });
         $('rafraichir').addEventListener('click', charger);
+        // L'onglet SOC réseau n'apparait que si la page existe sur cette box (secubox-soc n'est pas partout).
+        fetch('/soc/reseau.html', { method: 'HEAD', credentials: 'same-origin' })
+            .then(r => { if (r.ok) $('o-soc').hidden = false; }).catch(() => { /* absent : pas d'onglet */ });
 
         // ----- Hauteur annoncée à l'hôte (iframes) -----
         function annoncer() {
