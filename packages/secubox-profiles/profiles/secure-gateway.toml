@@ -5,6 +5,8 @@
 
 name  = "secure-gateway"
 label = "Secure Gateway — appliance durcie"
+# #2909 : zkp et assistance ne font partie d'aucun profil ; leurs entrees de menu sont masquees.
+menu_off = ["zkp", "assist"]
 on = [
   "aggregator", "auth", "certs", "core", "dns",
   "dns-guard", "dns-provider", "exposure", "haproxy", "hardening", "ipblock",

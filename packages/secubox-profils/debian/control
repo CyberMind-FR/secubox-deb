@@ -22,8 +22,7 @@ Depends: ${misc:Depends},
          secubox-routes,
          secubox-system,
          secubox-vault,
-         secubox-vm,
-         secubox-zkp
+         secubox-vm
 Description: SecuBox — profil « socle » : Le noyau indispensable : administration, identite, routage
  Sans lui rien ne se pilote — le panneau, l'authentification et le routage.
  Tous les autres profils en dependent.
@@ -63,7 +62,6 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-profil-socle,
          secubox-annuaire,
-         secubox-assist,
          secubox-avatar,
          secubox-cdn,
          secubox-cookies,

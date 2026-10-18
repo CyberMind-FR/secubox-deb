@@ -1,3 +1,9 @@
+secubox-profils (1.0.44-1~bookworm1) bookworm; urgency=medium
+
+  * zkp et assistance sortent de tous les profils (ref #2909) : plus de dependance ni de suggestion vers secubox-zkp et secubox-assist.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 19:00:00 +0200
+
 secubox-profils (1.0.43-1~bookworm1) bookworm; urgency=medium
 
   * Module secubox-c3box declasse (ref #2371) : le portail web /c3box/ (« C3Box Services Portal », service inactif) est retire du depot ; il quitte les dependances de secubox-profils et les suggestions de secubox-meta. La carte c3box du maillage n'est pas concernee.

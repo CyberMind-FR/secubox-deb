@@ -243,7 +243,6 @@ Depends: ${misc:Depends},
          secubox-auth
 Recommends: secubox-vault,
          secubox-avatar
-Suggests: secubox-zkp
 Description: SecuBox — service « Identité »
  Comptes, authentification, identité décentralisée, coffre de secrets.
  .
@@ -259,7 +258,6 @@ Depends: ${misc:Depends},
 Recommends: secubox-repo,
          secubox-backup,
          secubox-config-advisor
-Suggests: secubox-assist
 Description: SecuBox — service « Administration »
  Tableau d'administration, App Store, profils, dépôt, certificats.
  .

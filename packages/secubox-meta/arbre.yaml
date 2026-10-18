@@ -262,7 +262,6 @@ recommande:
   - secubox-vault
   - secubox-avatar
 suggere:
-  - secubox-zkp
 
 meta: secubox-service-administration
 niveau: service
@@ -277,7 +276,6 @@ recommande:
   - secubox-backup
   - secubox-config-advisor
 suggere:
-  - secubox-assist
 
 meta: secubox-service-routage
 niveau: service

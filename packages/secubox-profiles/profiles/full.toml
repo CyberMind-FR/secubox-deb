@@ -5,6 +5,8 @@
 
 name  = "full"
 label = "Full — loadout courant (baseline)"
+# #2909 : zkp et assistance ne font partie d'aucun profil ; leurs entrees de menu sont masquees.
+menu_off = ["zkp", "assist"]
 on = [
   "ad-guard", "admin", "aggregator", "annuaire", "appstore", "auth",
   "avatar", "backup", "billets", "c3box", "cdn", "certs",
@@ -24,6 +26,6 @@ on = [
   "system", "threatmesh", "threats", "toolbox", "toolbox-mitm",
   "tor", "traffic", "turn", "users", "vault", "vhost",
   "vm", "vortex-dns", "vortex-firewall", "waf", "waf-ng", "waf-ratelimit",
-  "watchdog", "wireguard", "yacy", "zigbee", "zkp",
+  "watchdog", "wireguard", "yacy", "zigbee",
   "console", "kiosk",
 ]

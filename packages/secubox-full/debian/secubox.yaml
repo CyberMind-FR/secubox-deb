@@ -54,7 +54,6 @@ depends:
   - secubox-backup
   - secubox-tor
   - secubox-exposure
-  - secubox-zkp
   - secubox-mitmproxy
   - secubox-repo
   - secubox-hardening

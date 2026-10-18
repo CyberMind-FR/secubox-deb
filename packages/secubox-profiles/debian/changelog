@@ -1,3 +1,9 @@
+secubox-profiles (0.23.10-1~bookworm1) bookworm; urgency=medium
+
+  * zkp et assistance sortent de tous les profils (ref #2909) : id zkp retire de full et media-lab, `menu_off = [zkp, assist]` dans les cinq profils (entrees de menu masquees par le hub). Les paquets restent installables a la main.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 19:00:00 +0200
+
 secubox-profiles (0.23.9-1~bookworm1) bookworm; urgency=medium
 
   * Profil minimal : netdiag et routes allumes (ref #2899).
