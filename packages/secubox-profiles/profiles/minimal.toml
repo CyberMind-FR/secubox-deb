@@ -8,6 +8,8 @@
 # la seule WebUI d'administration et WireGuard (#2845). Ni WAF (#2849), ni Hall, ni metrics, ni kiosque, ni Tor. Les ids sont ceux des manifestes derives des unites.
 name  = "minimal"
 label = "Minimal — DPI, dns-guard, ad-guard, NAC, Freebox"
+# #2897 : entrees de menu masquees tant que ce profil est actif (leurs paquets restent : premier-pas est importe par l'agent Auto-Load).
+menu_off = ["ksm", "premier-pas-maitre"]
 on = [
   "aggregator", "annuaire-apply", "annuaire-noms", "auth", "autoload-agent", "core", "hardening", "hub", "portal", "system",
   "dpi", "dpi-flowcap", "dpi-resume", "ndpid-engine", "ndpisrvd",
