@@ -12,19 +12,10 @@ CONTROL = (ICI / "debian/control").read_text()
 PAQUETS = ICI.parent
 
 
-def test_onglet_gestion_des_routes_en_iframe_embarquee():
-    assert 'data-t="gestion"' in PAGE
-    assert "/routes/?embed=1" in PAGE
-
-
-def test_onglet_soc_reseau_seulement_si_la_page_existe():
-    assert 'data-t="soc"' in PAGE and "/soc/reseau.html?embed=1" in PAGE
-    assert re.search(r"HEAD[^;]*soc/reseau\.html|soc/reseau\.html[^;]*HEAD", PAGE), "sonde HEAD avant d'afficher l'onglet"
-    assert 'id="o-soc" data-t="soc"' in PAGE and "hidden" in PAGE.split('id="o-soc"', 1)[1][:120]
-
-
-def test_les_iframes_se_chargent_au_premier_affichage_seulement():
-    assert "data-src" in PAGE, "pas de chargement de page tierce tant que l'onglet n'est pas ouvert"
+def test_onglets_natifs_depuis_2915():
+    """#2899 les avait mis en iframes ; #2915 les porte en code natif (voir test_netdiag_natif_2915.py)."""
+    assert "<iframe" not in PAGE
+    assert 'data-t="direct"' in PAGE and 'id="rtForm"' in PAGE
 
 
 def test_l_entree_de_menu_routes_est_retiree():
