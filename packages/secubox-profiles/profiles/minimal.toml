@@ -9,7 +9,7 @@
 name  = "minimal"
 label = "Minimal — DPI, dns-guard, ad-guard, NAC, Freebox"
 # #2897 : entrees de menu masquees tant que ce profil est actif (leurs paquets restent : premier-pas est importe par l'agent Auto-Load).
-menu_off = ["ksm", "premier-pas-maitre"]
+menu_off = ["ksm", "premier-pas-maitre", "zkp", "assist"]
 on = [
   "aggregator", "annuaire-apply", "annuaire-noms", "auth", "autoload-agent", "core", "hardening", "hub", "portal", "system",
   "dpi", "dpi-flowcap", "dpi-resume", "ndpid-engine", "ndpisrvd",
