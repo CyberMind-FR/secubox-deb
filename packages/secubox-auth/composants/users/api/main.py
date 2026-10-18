@@ -327,6 +327,29 @@ def save_users(data: dict):
     """Atomic save via engine. Mutations should use _engine.* methods directly."""
     _engine._save(data)
 
+# #2903 : ces services sont des CONTENEURS LXC, pas des unites secubox-<nom>. L'etat vient du cgroup du
+# conteneur (existe seulement s'il tourne, lisible sans privilege), le reveil du cycle de vie du module.
+CGROUP_DIR = Path("/sys/fs/cgroup")
+MODULES_DIR = Path("/etc/secubox/modules.d")
+CONTENEUR_DE = {"nextcloud": "nextcloud", "gitea": "gitea", "email": "mail", "matrix": "matrix",
+                "jellyfin": "jellyfin", "peertube": "peertube"}
+
+
+def etat_service(name: str) -> str:
+    """« en marche », « en veille » (arrete mais reveille a la demande) ou « arrêté »."""
+    ctn = CONTENEUR_DE.get(name)
+    if ctn is None:                                  # pas un conteneur : l'unite systemd fait foi
+        return "en marche" if check_service(name) else "arrêté"
+    if (CGROUP_DIR / f"lxc.payload.{ctn}").exists():
+        return "en marche"
+    try:
+        import tomllib
+        cycle = tomllib.loads((MODULES_DIR / f"{ctn}.toml").read_text(encoding="utf-8")).get("lifecycle")
+    except Exception:  # noqa: BLE001 — fichier absent ou illisible : pas de reveil promis
+        cycle = None
+    return "en veille" if cycle == "on-demand" else "arrêté"
+
+
 def check_service(name: str) -> bool:
     """Check if a service is running."""
     try:
@@ -475,8 +498,10 @@ async def list_services():
     service_status = {}
     for svc in SERVICES:
         ctl = get_service_ctl(svc)
+        etat = etat_service(svc)
         service_status[svc] = {
-            "running": check_service(svc),
+            "running": etat == "en marche",
+            "etat": etat,
             "ctl_available": ctl is not None,
             "icon": {
                 "nextcloud": "cloud",
