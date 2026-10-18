@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-readonly VERSION="1.3.0"
+readonly VERSION="1.3.1"
 readonly CERTS_DIR="${SECUBOX_CERTS_DIR:-/data/haproxy/certs}"
 readonly ACME_HOME="${SECUBOX_ACME_HOME:-/root/.acme.sh}"
 # Certbot gere une partie du parc (ganimed.fr, mail.gk2.secubox.in, …). La garantie
@@ -29,6 +29,7 @@ readonly ACME_HOME="${SECUBOX_ACME_HOME:-/root/.acme.sh}"
 # soit l outil qui l a emis. Sinon la moitie du parc reste sur le mecanisme qui
 # avait laisse 36 certificats expirer.
 readonly CERTBOT_LIVE="${SECUBOX_CERTBOT_LIVE:-/etc/letsencrypt/live}"
+readonly ACME_WEBROOT="${SECUBOX_ACME_WEBROOT:-/usr/share/secubox/www}"
 readonly ACME_BIN="${SECUBOX_ACME_BIN:-$ACME_HOME/acme.sh}"
 readonly CERTBOT_BIN="${SECUBOX_CERTBOT_BIN:-certbot}"
 readonly RELOAD_CMD="${SECUBOX_CERTS_RELOAD:-systemctl reload haproxy}"
@@ -181,7 +182,7 @@ cmd_renew() {
     fi
     if [ "$outil" = "acme.sh" ]; then
         # shellcheck disable=SC2086
-        if ! "$ACME_BIN" --home "$ACME_HOME" --renew -d "$dom" --force $ecc >&2; then
+        if ! "$ACME_BIN" --home "$ACME_HOME" --renew -d "$dom" -w "$ACME_WEBROOT" --force $ecc >&2; then
             printf '{"success": false, "domain": "%s", "error": "acme.sh failed"}\n' "$dom"
             return 1
         fi

@@ -135,6 +135,10 @@ def test_renew_certificat_acme_passe_par_acme_sh_pas_certbot(tmp_path):
     assert "--renew" in args and "--force" in args and "--ecc" in args
     assert args[args.index("-d") + 1] == "apt.example.com"
     assert args[args.index("--home") + 1].endswith("/acme")
+    # Le defi HTTP-01 est route par HAProxy vers l'ecouteur nginx :8880 dont la
+    # racine est celle-ci : y ecrire, pas dans le webroot memorise (apt.secubox.in
+    # a repondu 404 avec /var/www/apt.secubox.in).
+    assert args[args.index("-w") + 1] == "/usr/share/secubox/www"
 
 
 def test_renew_acme_rsa_sans_ecc(tmp_path):
