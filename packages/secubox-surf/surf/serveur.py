@@ -169,6 +169,19 @@ async def app(scope, receive, send):
                     "headers": [(k.encode(), v.encode()) for k, v in entetes]})
         await send({"type": "http.response.body", "body": corps})
 
+    # STREAMING (#2962) : pour le passthrough brut (images, polices, médias —
+    # jamais réécrits), on envoie l'amont morceau par morceau au lieu de le
+    # bufferiser entier en RAM. Un flux vidéo complet chargé via `r.content`
+    # a vidé la RAM+swap de la box le 2026-10-19 (pic 3.2G + swap 4.9G).
+    async def repond_stream(code, entetes, octets):
+        await send({"type": "http.response.start", "status": code,
+                    "headers": [(k.encode(), v.encode()) for k, v in entetes]})
+        async for morceau in octets:
+            if morceau:
+                await send({"type": "http.response.body", "body": morceau,
+                            "more_body": True})
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
     chemin0 = scope.get("raw_path", scope["path"].encode()).decode()
 
     # ── APPRENDRE UNE FOIS (#1366) ──────────────────────────────────────────
@@ -491,9 +504,15 @@ async def app(scope, receive, send):
         # sans son corps JS (mais lisible et propre).
         _figer_leger = True
 
+    # STREAM (#2962) : l'amont s'ouvre en flux, jamais en corps déjà chargé.
+    # Le passthrough brut (plus bas) relaie chaque morceau sans jamais le
+    # tenir en entier en RAM ; les branches qui réécrivent (HTML/CSS/JS/
+    # manifeste — toujours du texte, jamais quelques centaines de Mo) lisent
+    # le corps explicitement via `r.aread()` une fois le type connu.
+    _cm = _client(mode).stream(methode, cible_url, headers=entetes_req,
+                               content=corps_req)
     try:
-        r = await _client(mode).request(methode, cible_url, headers=entetes_req,
-                                        content=corps_req)
+        r = await _cm.__aenter__()
     except httpx.HTTPError as e:
         # LA SORTIE NE MENE QU'A L'EXTERIEUR (#1609) : une destination de la
         # box ou de son reseau est refusee net — pas de saut de portail, pas
@@ -514,75 +533,91 @@ async def app(scope, receive, send):
                      _bannette(cible, "Injoignable (%s)." % type(e).__name__))
         return
 
-    # ON APPREND CE QUE L'AMONT POSE, avant de le reecrire pour le navigateur.
     try:
-        jarre.apprend(cible, r.headers.get_list("set-cookie"))
-    except AttributeError:
-        sc = r.headers.get("set-cookie")
-        if sc:
-            jarre.apprend(cible, [sc])
-
-    entetes_out = relais.reecris_entetes(dict(r.headers), base, rap, sur_hote,
-                                         origine_req=entetes_in.get("origin", ""))
-    ct = r.headers.get("content-type", "").lower()
-
-    # ── L'ARDOISE DU RENDU (#1323) ──────────────────────────────────────────
-    # Quand c'est le Chromium de la copie carbone qui demande, et qu'on lui
-    # sert un MEDIA, on le note : la page figee n'aura plus de JS pour aller
-    # le chercher, et c'est cette trace qui lui rendra une source jouable.
-    #
-    # ON NE NOTE QUE LES MANIFESTES ET LES FICHIERS ENTIERS. Un flux HLS, ce
-    # sont des centaines de segments `.ts` : les enregistrer noierait le seul
-    # renseignement utile — l'adresse du manifeste, qui les liste tous.
-    if rendu.MARQUEUR_UA in ua and r.status_code < 400 and _est_media(ct, chemin):
-        rendu.observe(cible_url)
-
-    if "text/html" in ct and _figer_leger:
-        # REPLI FIGÉ (#1235) : le rendu carbone a echoue, mais c'est un site
-        # lourd : on FIGE la voie legere (scripts retires) pour ne pas rejouer le
-        # ballet first-id. r.text est le HTML BRUT amont -> sur_hote normal
-        # (raw -> surf), pas de double-reecriture.
-        corps = relais.fige(r.text, base, sur_hote).encode()
-        # ON DIT LAQUELLE DES DEUX ON SERT. Les deux voies rendent du HTML figé
-        # d'apparence voisine ; sans cet en-tête, diagnostiquer « pourquoi cette
-        # page n'a pas sa copie carbone » demande de deviner.
-        entetes_out["x-surf-rendu"] = "leger-fige"
-    elif "text/html" in ct:
-        # JARRE D'ETAT (#1235) : on REINJECTE le storage retenu pour cet hote,
-        # inline dans la tete, AVANT les scripts du site (pendant du Cookie
-        # rejoue pour les cookies). Le script de tete le pose dans
-        # localStorage/sessionStorage et capture ensuite les mutations.
-        import json as _json
-        etat_js = _json.dumps(jarre.etat_pour(cible), ensure_ascii=False)
-        etat_js = (etat_js.replace("<", "\\u003c").replace(">", "\\u003e")
-                          .replace("&", "\\u0026"))
-        corps = relais.reecris_html(r.text, base, rap, sur_hote,
-                                    etat_js=etat_js).encode()
-    elif _est_manifeste(ct, chemin):
-        # LE FLUX AUSSI PASSE PAR LA BOX. Un manifeste laissé tel quel cite ses
-        # pistes en direct : la page viendrait de la box, la vidéo du CDN — et
-        # c'est la vidéo qui pèse et qui trace. Cf. relais.reecris_manifeste.
+        # ON APPREND CE QUE L'AMONT POSE, avant de le reecrire pour le navigateur.
         try:
-            corps = relais.reecris_manifeste(r.text, base, sur_hote).encode()
-        except Exception:  # noqa: BLE001 — un manifeste illisible passe tel quel
-            corps = r.content
-    elif "css" in ct:
-        corps = relais.reecris_css(r.text, base, rap, sur_hote).encode()
-    elif "javascript" in ct or "ecmascript" in ct:
-        # ON NE REECRIT PAS LE JS EN GENERAL (indecidable), MAIS SI : les URL
-        # ABSOLUES DES PORTAILS DE CONSENTEMENT (#1362). BFM/Altice cite
-        # « https://gate.first-id.fr/... » en dur dans son bundle ; sans cette
-        # passe, la navigation partait vers le vrai portail (CSP + DNS de la box
-        # la bloquent) et le site restait coince. On remplace ces hotes-la, et
-        # eux seuls, par leur origine surf — le relais capte alors la redirection
-        # et renvoie a la page de retour.
-        try:
-            corps = relais.reecris_portails(r.text).encode()
-        except Exception:  # noqa: BLE001 — un JS binaire/exotique reste tel quel
-            corps = r.content
-    else:
-        # Images, polices, JSON : relayés tels quels.
-        corps = r.content
+            jarre.apprend(cible, r.headers.get_list("set-cookie"))
+        except AttributeError:
+            sc = r.headers.get("set-cookie")
+            if sc:
+                jarre.apprend(cible, [sc])
+
+        entetes_out = relais.reecris_entetes(dict(r.headers), base, rap, sur_hote,
+                                             origine_req=entetes_in.get("origin", ""))
+        ct = r.headers.get("content-type", "").lower()
+
+        # ── L'ARDOISE DU RENDU (#1323) ──────────────────────────────────────
+        # Quand c'est le Chromium de la copie carbone qui demande, et qu'on lui
+        # sert un MEDIA, on le note : la page figee n'aura plus de JS pour aller
+        # le chercher, et c'est cette trace qui lui rendra une source jouable.
+        #
+        # ON NE NOTE QUE LES MANIFESTES ET LES FICHIERS ENTIERS. Un flux HLS, ce
+        # sont des centaines de segments `.ts` : les enregistrer noierait le seul
+        # renseignement utile — l'adresse du manifeste, qui les liste tous.
+        if rendu.MARQUEUR_UA in ua and r.status_code < 400 and _est_media(ct, chemin):
+            rendu.observe(cible_url)
+
+        # ── PASSTHROUGH SANS BUFFER (#2962) ──────────────────────────────────
+        # Images, polices, médias, JSON : jamais réécrits, donc jamais besoin
+        # du corps entier en mémoire. On relaie directement les morceaux de
+        # l'amont — c'est LÀ que vivait la fuite (`corps = r.content` sur un
+        # fichier vidéo complet de plusieurs centaines de Mo).
+        est_recrit = (("text/html" in ct) or _est_manifeste(ct, chemin)
+                      or ("css" in ct) or ("javascript" in ct or "ecmascript" in ct))
+        if not est_recrit:
+            sortie = list(entetes_out.items())
+            sortie.append(("x-surf-cible", cible))
+            await repond_stream(r.status_code, sortie, r.aiter_bytes())
+            return
+
+        await r.aread()
+        if "text/html" in ct and _figer_leger:
+            # REPLI FIGÉ (#1235) : le rendu carbone a echoue, mais c'est un site
+            # lourd : on FIGE la voie legere (scripts retires) pour ne pas rejouer le
+            # ballet first-id. r.text est le HTML BRUT amont -> sur_hote normal
+            # (raw -> surf), pas de double-reecriture.
+            corps = relais.fige(r.text, base, sur_hote).encode()
+            # ON DIT LAQUELLE DES DEUX ON SERT. Les deux voies rendent du HTML figé
+            # d'apparence voisine ; sans cet en-tête, diagnostiquer « pourquoi cette
+            # page n'a pas sa copie carbone » demande de deviner.
+            entetes_out["x-surf-rendu"] = "leger-fige"
+        elif "text/html" in ct:
+            # JARRE D'ETAT (#1235) : on REINJECTE le storage retenu pour cet hote,
+            # inline dans la tete, AVANT les scripts du site (pendant du Cookie
+            # rejoue pour les cookies). Le script de tete le pose dans
+            # localStorage/sessionStorage et capture ensuite les mutations.
+            import json as _json
+            etat_js = _json.dumps(jarre.etat_pour(cible), ensure_ascii=False)
+            etat_js = (etat_js.replace("<", "\\u003c").replace(">", "\\u003e")
+                              .replace("&", "\\u0026"))
+            corps = relais.reecris_html(r.text, base, rap, sur_hote,
+                                        etat_js=etat_js).encode()
+        elif _est_manifeste(ct, chemin):
+            # LE FLUX AUSSI PASSE PAR LA BOX. Un manifeste laissé tel quel cite ses
+            # pistes en direct : la page viendrait de la box, la vidéo du CDN — et
+            # c'est la vidéo qui pèse et qui trace. Cf. relais.reecris_manifeste.
+            try:
+                corps = relais.reecris_manifeste(r.text, base, sur_hote).encode()
+            except Exception:  # noqa: BLE001 — un manifeste illisible passe tel quel
+                corps = r.content
+        elif "css" in ct:
+            corps = relais.reecris_css(r.text, base, rap, sur_hote).encode()
+        else:
+            # "javascript" in ct or "ecmascript" in ct — seule autre branche
+            # réécrite, cf. `est_recrit` plus haut.
+            # ON NE REECRIT PAS LE JS EN GENERAL (indecidable), MAIS SI : les URL
+            # ABSOLUES DES PORTAILS DE CONSENTEMENT (#1362). BFM/Altice cite
+            # « https://gate.first-id.fr/... » en dur dans son bundle ; sans cette
+            # passe, la navigation partait vers le vrai portail (CSP + DNS de la box
+            # la bloquent) et le site restait coince. On remplace ces hotes-la, et
+            # eux seuls, par leur origine surf — le relais capte alors la redirection
+            # et renvoie a la page de retour.
+            try:
+                corps = relais.reecris_portails(r.text).encode()
+            except Exception:  # noqa: BLE001 — un JS binaire/exotique reste tel quel
+                corps = r.content
+    finally:
+        await _cm.__aexit__(None, None, None)
 
     sortie = [(k, v) for k, v in entetes_out.items()
               if k.lower() not in ("content-length",)]
