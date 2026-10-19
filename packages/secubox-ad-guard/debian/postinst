@@ -33,6 +33,12 @@ if [ "$1" = configure ] && [ "$(cat /var/lib/secubox/ad-guard/sinkhole.enabled 2
         && [ -x /usr/sbin/secubox-adblock-sync ] && command -v systemd-run >/dev/null 2>&1; then
     systemd-run --no-block --collect --quiet /usr/sbin/secubox-adblock-sync sync >/dev/null 2>&1 || true
 fi
+# #2964 : même discipline pour le sinkhole adulte — ne rafraîchit QUE s'il a
+# déjà été activé explicitement (jamais silencieux à l'installation).
+if [ "$1" = configure ] && [ "$(cat /var/lib/secubox/ad-guard/adult-sinkhole.enabled 2>/dev/null)" = 1 ] \
+        && [ -x /usr/sbin/secubox-adguard-adult-sync ] && command -v systemd-run >/dev/null 2>&1; then
+    systemd-run --no-block --collect --quiet /usr/sbin/secubox-adguard-adult-sync sync >/dev/null 2>&1 || true
+fi
 
 #DEBHELPER#
 exit 0
