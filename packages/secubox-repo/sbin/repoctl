@@ -142,10 +142,21 @@ EOF
     ok "Repository initialized at ${REPO_BASE}"
 }
 
+# Exporte la cle publique (armored + binaire) vers REPO_OUT, qu'elle vienne d'etre generee ou
+# qu'elle existe deja. #2948 : avant ce correctif, une cle PRE-EXISTANTE (creee hors de repoctl,
+# cas reel de gk2) prenait le chemin "la cle existe deja" de cmd_gpg_setup, qui ne l'exportait
+# jamais -- aucun secubox-keyring.gpg/.gpg.bin n'a jamais ete publie, meme pour d'autres nœuds.
+_export_public_key() {
+    mkdir -p "${REPO_OUT}"
+    gpg --homedir "${GPG_HOME}" --armor --export "${GPG_EMAIL}" > "${REPO_OUT}/secubox-keyring.gpg"
+    gpg --homedir "${GPG_HOME}" --export "${GPG_EMAIL}" > "${REPO_OUT}/secubox-keyring.gpg.bin"
+}
+
 cmd_gpg_setup() {
     if check_gpg_key 2>/dev/null; then
         warn "GPG key already exists for ${GPG_EMAIL}"
         gpg --homedir "${GPG_HOME}" --list-keys "${GPG_EMAIL}"
+        _export_public_key
         return 0
     fi
 
@@ -172,11 +183,28 @@ EOF
     gpg --homedir "${GPG_HOME}" --batch --gen-key "${GPG_HOME}/gen-key-params"
     rm -f "${GPG_HOME}/gen-key-params"
 
-    # Export public key
-    gpg --homedir "${GPG_HOME}" --armor --export "${GPG_EMAIL}" > "${REPO_OUT}/secubox-keyring.gpg"
-    gpg --homedir "${GPG_HOME}" --export "${GPG_EMAIL}" > "${REPO_OUT}/secubox-keyring.gpg.bin"
+    _export_public_key
 
     ok "GPG key generated and exported to ${REPO_OUT}/secubox-keyring.gpg"
+}
+
+# #2948 : gk2 heberge apt.secubox.in sans jamais le consommer lui-meme (sources.list.d vide) —
+# les mises a jour passaient par un dpkg -i manuel d'artefact telecharge, jamais apt upgrade.
+# Source locale en file:// (pas de reseau/DNS/vhost en jeu) ; cle copiee dans un trousseau dedie,
+# jamais apt-key (deprecie). Idempotent, sans effet si le depot ou la cle ne sont pas encore prets.
+cmd_local_source() {
+    check_gpg_key || err "GPG key not found. Run: repoctl gpg-setup"
+    local keyring_dir="${APT_KEYRING_DIR:-/etc/apt/keyrings}"
+    local sources_file="${APT_SOURCES_FILE:-/etc/apt/sources.list.d/secubox-local.list}"
+    mkdir -p "${keyring_dir}" "$(dirname "${sources_file}")"
+    gpg --homedir "${GPG_HOME}" --export "${GPG_EMAIL}" > "${keyring_dir}/secubox-apt.gpg"
+    cat > "${sources_file}" <<EOF
+# Dépôt local SecuBox (généré par « repoctl local-source », #2948) : ce nœud héberge
+# apt.secubox.in et consomme son propre dépôt, sans passer par le réseau.
+deb [signed-by=${keyring_dir}/secubox-apt.gpg] file:${REPO_OUT} bookworm main
+deb [signed-by=${keyring_dir}/secubox-apt.gpg] file:${REPO_OUT} trixie main
+EOF
+    ok "Source locale écrite : ${sources_file}"
 }
 
 cmd_gpg_export() {
@@ -368,6 +396,9 @@ GPG Commands:
   gpg-setup                    Generate GPG signing key
   gpg-export [dir] [type]      Export key (public/private/fingerprint)
 
+Self-Consumption:
+  local-source                 Write /etc/apt/sources.list.d entry for this host's own repo
+
 Info Commands:
   components                   List required components (JSON)
   access                       Show access endpoints (JSON)
@@ -403,6 +434,7 @@ case "$CMD" in
     init)           cmd_init ;;
     gpg-setup)      cmd_gpg_setup ;;
     gpg-export)     cmd_gpg_export "${1:-.}" "${2:-public}" ;;
+    local-source)   cmd_local_source ;;
     add)            cmd_add "$@" ;;
     remove)         cmd_remove "$@" ;;
     list)

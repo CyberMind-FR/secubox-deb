@@ -22,6 +22,11 @@ case "$1" in
         systemctl daemon-reload
         systemctl enable secubox-repo.service
         systemctl start secubox-repo.service || true
+
+        # #2948 : ce nœud consomme aussi son propre dépôt (sources.list.d etait vide jusqu'ici).
+        # Best-effort : n'echoue jamais la configuration (pas de cle GPG tant que gpg-setup n'a
+        # pas tourne au moins une fois, ce qui est normal a la toute premiere installation).
+        /usr/sbin/repoctl local-source >/dev/null 2>&1 || true
         ;;
 esac
 

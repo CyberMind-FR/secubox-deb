@@ -1,3 +1,15 @@
+secubox-repo (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Le nœud qui héberge apt.secubox.in le consomme maintenant lui-même (ref #2948) : gk2 avait
+    /etc/apt/sources.list.d/ vide, mises à jour par dpkg -i manuel seulement. Cause : la clé GPG
+    de gk2 existait déjà (créée avant que repoctl ne sache bien l'exporter), donc le chemin « la
+    clé existe déjà » de `gpg-setup` ne l'exportait jamais vers apt.secubox.in — corrigé
+    (idempotent). Nouvelle commande `repoctl local-source` : source apt locale en file://, signée
+    avec un trousseau dédié (pas apt-key). Appelée en best-effort par le postinst (n'échoue jamais
+    la configuration si la clé n'existe pas encore). 3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 15:30:00 +0200
+
 secubox-repo (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Entree de menu Releases : `unite = release` (ref #2905).
