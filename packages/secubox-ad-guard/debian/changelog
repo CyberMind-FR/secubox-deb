@@ -1,3 +1,18 @@
+secubox-ad-guard (1.15.2-1~bookworm1) bookworm; urgency=medium
+
+  * Exception adulte : remplacement de la vue Unbound par local-zone-override (#2969, correctif
+    critique de #2964/#2967). Constat gk2 en direct : la vue `sbx-adult-allow` redéclarait quasi tout
+    le sinkhole général pour chaque IP exemptée — drop-in monté à 49 Mo, rechargement Unbound resté en
+    état `reloading` ~1 min, DNS indisponible pour TOUT le réseau (pas seulement l'appareil exempté)
+    pendant ce temps. `unbound-control reload` rend « ok » dès le signal accepté, pas quand le
+    rechargement est terminé — faux positif qui faisait croire le correctif appliqué. Remplacé par
+    `local-zone-override: <ip> <domaine> always_transparent`, dédié à ce cas exact (dérogation par
+    domaine et par client, sans dupliquer le reste) : fichier désormais proportionnel aux domaines
+    adultes × IP exemptées, jamais à la taille du sinkhole général. `recharger_unbound` attend
+    désormais réellement `systemctl is-active unbound == active` avant de rendre la main. 4 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 20:00:00 +0200
+
 secubox-ad-guard (1.15.1-1~bookworm1) bookworm; urgency=medium
 
   * Exemption adulte par MAC (#2967, suite de #2964). Constat gk2 : chaturbate.com restait bloqué
