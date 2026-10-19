@@ -7,7 +7,7 @@
 
 # gk2 passerelle du LAN plat — conception (ref #2940)
 
-Statut : **à valider par le propriétaire.** Les points marqués **(mon choix)** sont des décisions de l'auteur.
+Statut : **approuvé par le propriétaire le 2026-10-19.** Les points marqués **(mon choix)** sont des décisions de l'auteur.
 Décidé en échange le 2026-10-19 : gk2 devient la passerelle DHCP de tout le LAN, réseau **plat**
 (`192.168.1.0/24`, même sous-réseau que la Freebox) ; limite acceptée : filtrage à l'aller seulement.
 
@@ -78,8 +78,10 @@ jour, mais **permanente et auto-renouvelée** tant que le mode passerelle est ac
 - Chaîne `forward` de `secubox-hardening` : politique `DEFAULT DROP`, comme `input`. Chaque zone (reprise des
   ensembles du NAC : `lan_allowed`, `guest_zone`, `iot_zone`, `quarantine_zone`, plus `blocked`) a sa règle
   `ether saddr @zone … accept` ou `drop`. Un appareil hors de tout ensemble connu suit la politique par défaut
-  **(mon choix, à trancher avec le propriétaire)** : accepté (comme aujourd'hui, rien ne change pour un appareil
-  neuf) ou bloqué tant qu'il n'est pas classé.
+  **décidé par le propriétaire : bloqué tant qu'il n'est pas classé.** Un appareil neuf (invité, objet connecté
+  qu'on vient de brancher) n'a donc **aucun accès Internet** avant d'être rangé dans une zone : à dire clairement
+  dans l'interface (« nouvel appareil détecté, sans accès tant qu'il n'est pas classé »), sinon ça ressemble à une
+  panne. C'est plus strict que l'état actuel, où un appareil neuf a Internet par défaut.
 - Aucune règle `ct state established` sur ce trafic précis (elle ne matcherait jamais, le retour ne passe pas par
   gk2) : les règles sont par paquet, sur l'adresse source et la destination/port.
 
@@ -107,14 +109,14 @@ jour, mais **permanente et auto-renouvelée** tant que le mode passerelle est ac
   prévu ; vérifier qu'une vérification réussie réarme bien le minuteur (pas de retour intempestif).
 - Freebox : écriture de la passerelle avec le droit `settings`, relecture, journal (mêmes motifs que
   `test_pare_feu_ecriture.py`).
-- Essai réel sur gk2 **hors heures d'usage du foyer**, avec un appareil de test d'abord, puis bascule générale
-  seulement après validation du propriétaire sur l'essai partiel.
+- Essai réel sur gk2 **hors heures d'usage du foyer** ; bascule générale dès ce premier essai (décision du
+  propriétaire), la sonde de secours testée en 1. est la seule garde.
 
-## À trancher par le propriétaire
+## Décisions du propriétaire (2026-10-19)
 
-1. **Appareil inconnu de toute zone** : accepté par défaut (comme aujourd'hui) ou bloqué tant qu'il n'est pas classé ?
-2. **Délai de la sonde de secours** avant retour automatique : 3 minutes proposées, à ajuster.
-3. **Portée de l'essai** : un appareil de test volontaire d'abord, ou bascule générale dès le premier essai ?
+1. Appareil inconnu de toute zone : **bloqué** tant qu'il n'est pas classé.
+2. Délai de la sonde de secours avant retour automatique : **3 minutes**.
+3. Portée de l'essai : **bascule générale** dès le premier essai, pas d'appareil de test isolé.
 
 ## Laissé au constructeur
 
