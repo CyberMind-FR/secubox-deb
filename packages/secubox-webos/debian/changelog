@@ -1,3 +1,13 @@
+secubox-webos (1.14.3-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : annulation de #2957/#2958 (ref #2960). Le `margin:0` entre cardlets empilés dans une
+    colonne de la mosaïque, censé supprimer un « espace noir », produisait en pratique des
+    coupures horizontales qui désorganisaient la lecture et donnaient l'impression que certaines
+    cartes étaient trop grandes. Retour à `margin:0 0 15px` (comportement 1.14.1). Le diagnostic
+    initial de #2957 était incorrect ; à requalifier avant toute nouvelle tentative.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 17:45:00 +0200
+
 secubox-webos (1.14.2-1~bookworm1) bookworm; urgency=medium
 
   * Hall : la mosaïque (`.grid.feat`, CSS `columns`, #1239) laissait un bandeau de 15px de fond

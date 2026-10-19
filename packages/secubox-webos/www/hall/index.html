@@ -393,13 +393,14 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* On garde le flex d'origine de .fcard : `inline-flex` glisserait des espaces
    parasites entre les cartes, et l'écart deviendrait irrégulier. Seuls la
    marge — `gap` ne s'applique pas en colonnes — et l'insécabilité changent. */
-/* Pas de marge verticale (#2957) : un `margin-bottom` laissait un bandeau de
-   fond de page (sombre, lu comme un « trou noir ») entre le bas d'une carte
-   et le haut de la suivante dans la même colonne. Les cartes se touchent
-   directement ; chacune garde sa propre bordure (`.fcard{border:1px solid
-   var(--trait)}`), donc la limite reste visible sans espace vide. */
 .grid.feat > .fcard{break-inside:avoid;-webkit-column-break-inside:avoid;
-  margin:0}
+  margin:0 0 15px}
+/* #2957/#2958 (margin:0, carte contre carte) ANNULÉ par #2960 : le bord de
+   chaque carte touchant directement celui de la suivante a produit des
+   coupures horizontales qui désorganisaient la lecture de la colonne, avec
+   certaines cartes perçues comme trop grandes. Retour au comportement 1.14.1
+   (marge de 15px) en attendant de requalifier ce que signifie « l'espace
+   noir » signalé. */
 @media (max-width:760px){.grid.feat{columns:1}}
 
 /* ── featured card (principal) ───────────────────────────── */
