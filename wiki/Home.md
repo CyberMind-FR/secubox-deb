@@ -5,23 +5,89 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
-# SecuBox-Deb
+# SecuBox
 
-**Appliance cybersécurité libre, basée Debian**
+## Votre réseau. Vos règles. · Your network. Your rules.
 
-CyberMind · Notre-Dame-du-Cruet, Savoie | [FR](Home-FR) | [DE](Home-DE) | [中文](Home-ZH)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/assets/poster/secubox-affiche-bilingue.jpg" alt="SecuBox — Reprenez le contrôle de votre réseau. Your network. Your rules." width="900">
+</p>
+
+> *Affiche illustrative : elle représente des fonctions et une interface imaginées. L'état réel de chaque composant est détaillé dans « Où en est-on ? » plus bas.*
+
+**[FR](#fr) · [EN](#en) · [DE](Home-DE) · [中文](Home-ZH)** | CyberMind · Notre-Dame-du-Cruet, Savoie
+
+| Code source | Documentation | Discuter avec CyberMind |
+|---|---|---|
+| Dépôt public et suivi du développement<br>[github.com/CyberMind-FR/secubox-deb](https://github.com/CyberMind-FR/secubox-deb) | Architecture, composants, installation et limites connues.<br>[Cette wiki](Home) · [Architecture des modules](Modules-Architecture) | Retours techniques, essais, partenariats et contributions.<br>[Signaler ou proposer (issues)](https://github.com/CyberMind-FR/secubox-deb/issues) · [cybermind.fr](https://cybermind.fr) |
 
 ---
 
-SecuBox-Deb est une plateforme de sécurité réseau complète, installable en trois profils (`lite`, `isp`, `full`) selon la mémoire de la machine. La base est **bookworm (12)**, et les images **Trixie (13)** sont désormais publiées pour la VM et le Raspberry Pi. Le projet vise la certification ANSSI CSPN à horizon 2027. Toute la stack est libre, auditable, et conçue pour fonctionner sur du matériel que vous possédez déjà — c'est le principe BYOH (Bring Your Own Hardware).
+<a id="fr"></a>
+## FR 🇫🇷
+
+SecuBox est un projet de sécurité réseau et d'hébergement souverain, construit sur Debian 13 Trixie. Son ambition : rendre les outils de sécurité et d'autonomie numérique accessibles aux particuliers, aux associations et aux petites organisations.
+
+Le projet dispose déjà de briques fonctionnelles et d'un prototype opérationnel. Les composants n'ont pas tous le même niveau de maturité : certains sont utilisables, d'autres continuent d'évoluer.
+
+**Nos objectifs**
+- Protéger les réseaux et les services.
+- Réduire le pistage et les sollicitations publicitaires indésirables.
+- Héberger ses propres outils et maîtriser ses données.
+- Relier des sites et des équipements de manière sécurisée.
+- Construire une plateforme modulaire, auditable et évolutive.
+
+**Le projet est ouvert à la discussion.** Testeurs, développeurs, experts en sécurité, associations et curieux : vos retours sont les bienvenus. Explorez le code, posez des questions, signalez les limites et proposez vos idées.
+
+**Tester · Contribuer · Échanger · Partager**
+
+<a id="en"></a>
+## EN 🇬🇧
+
+SecuBox is a network security and sovereign hosting project built on Debian 13 Trixie. Its ambition is to make digital security and autonomy more accessible to individuals, associations and small organizations.
+
+A working prototype and functional components already exist. Components have different maturity levels: some are usable, while others remain under active development.
+
+**Our goals**
+- Protect networks and hosted services.
+- Reduce tracking and unwanted advertising.
+- Host your own tools and retain control of your data.
+- Securely connect sites and devices.
+- Build a modular, auditable and evolving platform.
+
+**SecuBox welcomes open discussion.** Testers, developers, security experts, associations and curious minds are invited to explore the code, ask questions, report limitations and share ideas.
+
+**Test · Contribute · Discuss · Share**
+
+---
+
+## Où en est-on ? / Where are we?
+
+*État au 19 octobre 2026. SecuBox n'est ni certifié ni prêt pour tous les usages ; la certification CSPN (ANSSI) est un objectif, pas un acquis.*
+
+| Niveau | Composants | Remarque |
+|---|---|---|
+| **Utilisable** (en service sur une box d'infrastructure) | Administration web, pare-feu nftables en refus par défaut, WAF `sbxwaf` derrière HAProxy TLS 1.3, filtrage DNS et publicités, WireGuard et maillage pair à pair, services en conteneurs LXC (courrier, fichiers, messagerie, dépôt de code, média) | Testé sur MOCHAbin et x86. Les mises à jour sont encore fréquentes. |
+| **En test** | Détection et classification DPI (nDPId), préparation automatique des cartes (Auto-Load), profil « minimal » pour cartes de 1 Go (ESPRESSObin) | Le DPI est gourmand en mémoire et ses résultats ne prouvent pas une attaque. Sur 1 Go, le WAF et HAProxy saturent la carte : ils sont exclus du profil minimal. |
+| **Conception** | Pare-feu par zones (par port et par appareil), rattachement automatique des cartes préparées | Pas encore codé ou pas encore déployé. |
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/assets/poster/secubox-affiche-ateliers.jpg" alt="SecuBox — Votre réseau. Vos règles. Les sept ateliers" width="900">
+</p>
+
+> *Seconde affiche : les « ateliers » sont une présentation illustrée. Dans l'administration, les modules sont regroupés en six espaces (vue d'ensemble, protection, surveillance, services, identité et accès, système).*
+
+---
+
+SecuBox-Deb est une plateforme de sécurité réseau installable en quatre profils (`minimal`, `lite`, `isp`, `full`) selon la mémoire de la machine (1 Go pour `minimal`, 2 Go pour `lite`).
 
 L'architecture repose sur six modules canoniques organisés en chemin hamiltonien : `AUTH → WALL → BOOT → MIND → ROOT → MESH`. Chaque module expose une API REST FastAPI, le tout orchestré par un profile-generator hiérarchique YAML. La cryptographie s'appuie sur le framework GK·HAM-HASH ZKP à trois niveaux.
 
 ---
 
-## 🔴 Démarrage rapide — Alpha 8
+## 🔴 Démarrage rapide — Alpha 18
 
-> Tester, installer ou booter la release **`v3.0.0-alpha.9`** — en machine virtuelle ou sur matériel réel arm64. Toutes les commandes se lancent depuis un clone du dépôt (`git clone` puis `cd secubox-deb`).
+> Tester, installer ou booter la release **`v3.0.0-alpha.18`** — en machine virtuelle ou sur matériel réel arm64. Toutes les commandes se lancent depuis un clone du dépôt (`git clone` puis `cd secubox-deb`).
 
 ### 🖥️ A. En VM — le plus rapide (une commande)
 
@@ -29,7 +95,7 @@ VirtualBox amd64, image **téléchargée** depuis les releases GitHub, VM créé
 
 ```bash
 bash image/create-vbox-vm.sh --download
-# ou une release précise :  bash image/create-vbox-vm.sh --download v3.0.0-alpha.9
+# ou une release précise :  bash image/create-vbox-vm.sh --download v3.0.0-alpha.18
 ```
 
 La VM redirige les ports invité 22/80/443 vers l'hôte. Accès :
@@ -51,6 +117,8 @@ bash image/create-qemu-arm64-vm.sh output/secubox-*-mochabin-trixie.img --conver
 Nécessite `qemu-system-aarch64` + `qemu-efi-aarch64` (`apt install qemu-system-arm qemu-efi-aarch64 ovmf`). → **[[QEMU-ARM64]]**
 
 ### 🔌 C. Sur matériel réel arm64 (MOCHAbin / ESPRESSObin)
+
+> ESPRESSObin v7 (1 Go) : suivre le [guide pas à pas](https://github.com/CyberMind-FR/secubox-deb/blob/master/docs/INSTALL-ESPRESSOBIN.md) et le profil `minimal` ; le WAF et HAProxy saturent cette carte.
 
 ```bash
 # 1) Construire l'image (defaut : mochabin) :
@@ -112,7 +180,7 @@ SecuBox-Deb est un projet libre sans campagne de financement participatif, sans 
 
 | Élément | Valeur |
 |---------|--------|
-| Release courante | **v3.0.0-alpha.9** |
+| Release courante | **v3.0.0-alpha.18** (pré-version, 16 octobre 2026) |
 | Base Debian | **trixie (13)** |
 | Kernel | 6.12 |
 | Paquets | environ 190 |
