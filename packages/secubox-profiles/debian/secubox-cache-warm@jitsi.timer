@@ -8,6 +8,8 @@ Unit=secubox-cache-warm@jitsi.service
 # Au démarrage, une fois la board posée : le cache est froid à ce moment-là,
 # et c'est le seul instant où le réchauffage vaut vraiment son coût.
 OnBootSec=5min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=5min
 # Puis toutes les cinq minutes. La boucle d'origine tournait à la minute ;
 # rien dans un catalogue de services ne change à cette vitesse, et la cadence
 # se règle désormais ici, sans toucher au code.

@@ -5,6 +5,8 @@ Description=SecuBox Interceptor — instantané du Toolbox toutes les 2 minutes 
 
 [Timer]
 OnBootSec=1min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=1min
 OnUnitActiveSec=2min
 AccuracySec=30s
 

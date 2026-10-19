@@ -6,6 +6,8 @@ Description=Publish wg-mesh handshakes every 20 s (liveness for /status, /peers)
 # renégocie qu'environ toutes les deux minutes.
 [Timer]
 OnBootSec=30s
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=30s
 OnUnitActiveSec=20s
 Unit=secubox-p2p-mesh-liveness.service
 

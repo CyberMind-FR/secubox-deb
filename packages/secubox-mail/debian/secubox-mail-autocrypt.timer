@@ -3,6 +3,8 @@ Description=SecuBox Mail — synchronisation horaire de la table Autocrypt [#185
 
 [Timer]
 OnBootSec=5min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=5min
 OnUnitActiveSec=1h
 RandomizedDelaySec=5min
 

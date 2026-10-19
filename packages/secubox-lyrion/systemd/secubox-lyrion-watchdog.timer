@@ -3,6 +3,8 @@ Description=SecuBox Lyrion LMS watchdog — periodic check
 
 [Timer]
 OnBootSec=120
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=120
 OnUnitActiveSec=120
 AccuracySec=15s
 

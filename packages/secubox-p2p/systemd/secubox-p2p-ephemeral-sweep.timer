@@ -3,6 +3,8 @@ Description=Periodic sweep of expired secubox-p2p ephemeral WireGuard peers
 
 [Timer]
 OnBootSec=2min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=2min
 OnUnitActiveSec=60s
 Unit=secubox-p2p-ephemeral-sweep.service
 

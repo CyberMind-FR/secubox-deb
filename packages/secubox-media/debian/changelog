@@ -1,3 +1,9 @@
+secubox-media (1.8.3-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
 secubox-media (1.8.2-1~bookworm1) bookworm; urgency=medium
 
   * La page /media/ passe au profil Aurora (#2645) : page autonome (CSS et JS en ligne, sans police ni feuille distante), tuiles avec infobulles de definition, supports, deux volets de transfert et file inchanges, mode demonstration (?demo=1, actions inertes) et ?embed=1.

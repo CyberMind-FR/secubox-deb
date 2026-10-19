@@ -1,3 +1,9 @@
+secubox-ytsas (0.8.3-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
 secubox-ytsas (0.8.2-1~bookworm1) bookworm; urgency=medium
 
   * Playlists du compte : la première lecture réelle de feed/playlists (cookies refaits) a montré que yt-dlp met le texte du lien (« View full playlist ») dans le champ auteur ; la carte l'affichait comme nom de chaîne. Un libellé de lien (anglais, français, espagnol, allemand) n'est plus pris pour un nom : le champ reste vide, rien n'est inventé. Un vrai nom, même contenant « playlist », est conservé (#2708).

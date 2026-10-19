@@ -7,6 +7,8 @@ Description=SecuBox DPI — résumé pour le rapport, toutes les 30 minutes (#22
 
 [Timer]
 OnBootSec=5min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=5min
 OnUnitActiveSec=30min
 RandomizedDelaySec=60
 Persistent=true

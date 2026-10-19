@@ -5,6 +5,8 @@ Description=SecuBox WAF — corréler les campagnes d'attaque toutes les 5 min
 
 [Timer]
 OnBootSec=3min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=3min
 OnUnitActiveSec=5min
 Persistent=true
 

@@ -1,3 +1,9 @@
+secubox-hub (1.12.18-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
 secubox-hub (1.12.17-1~bookworm1) bookworm; urgency=medium
 
   * Le collecteur netstats se redeclenche (ref #2917) : secubox-netstats.timer n'avait que OnBootSec + OnUnitActiveSec ; reactivee apres le demarrage (mise a jour du paquet), la minuterie ne se declenchait plus (une seule collecte depuis le 14/10 sur gk2, onglet Temps reel « DONNEES PERIMEES »). Ajout de OnActiveSec=15s, qui compte depuis l'activation de la minuterie. A faire ailleurs : une cinquantaine de minuteurs du depot ont le meme motif.

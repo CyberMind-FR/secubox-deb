@@ -1,3 +1,9 @@
+secubox-threatmesh (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
 secubox-threatmesh (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /threatmesh/ refaite au profil Aurora (ref #2646) : page autonome en français (plus de skins hybrid-dark / crt-light), tuiles (IOC agrégés, flux publics, maillage, mode, nœud, avec infobulles de définition), panneaux Sources (barres) et Pairs du maillage, tableau des adresses au plus fort consensus (tri et filtre côté client), mode ?demo=1 (adresses RFC 5737, actions inertes, bandeau orange) et ?embed=1, bandeau « session requise » sur 401/403, état HORS LIGNE visible, hauteur annoncée à l'hôte (sbxVue, onglet threatmesh).

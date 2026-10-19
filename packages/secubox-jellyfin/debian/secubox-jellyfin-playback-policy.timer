@@ -5,6 +5,8 @@ Description=SecuBox Jellyfin — periodic playback policy reconciliation
 
 [Timer]
 OnBootSec=3min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=3min
 OnUnitActiveSec=10min
 RandomizedDelaySec=30s
 Persistent=true

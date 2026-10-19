@@ -4,6 +4,8 @@ Documentation=https://secubox.in/docs/soc
 
 [Timer]
 OnBootSec=10s
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=10s
 OnUnitActiveSec=30s
 AccuracySec=5s
 Unit=secubox-nft-cache.service

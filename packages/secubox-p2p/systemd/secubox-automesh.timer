@@ -5,6 +5,8 @@ Description=SecuBox — jonction automatique au maillage au démarrage puis tout
 
 [Timer]
 OnBootSec=45s
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=45s
 OnUnitActiveSec=2min
 AccuracySec=15s
 
