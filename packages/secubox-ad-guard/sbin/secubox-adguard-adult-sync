@@ -209,6 +209,28 @@ def _exempt_ips() -> list[str]:
     return dedup
 
 
+def _zone_effective(domaine: str, zones: set[str]) -> str:
+    """La zone qu'Unbound consulte RÉELLEMENT pour `domaine` (#2973) : une
+    `local-zone` couvre tout son sous-arbre — `chaturbate.com.` en
+    always_nxdomain bloque AUSSI `www.chaturbate.com.` sans déclaration
+    propre. Constaté en direct sur gk2 (log Unbound) : la requête
+    `www.chaturbate.com.` matche la zone `chaturbate.com.`, jamais un
+    `local-zone-override` posé sur `www.chaturbate.com.` lui-même — ce nom
+    n'est simplement jamais consulté. On cherche donc le suffixe le PLUS
+    COURT (l'ancêtre le plus haut) déjà présent dans `zones` — Unbound
+    retient celui-là pour toute la branche, même quand un nom plus précis a
+    AUSSI sa propre déclaration (constaté : chaturbate.com ET
+    www.chaturbate.com étaient tous deux déclarés, Unbound n'a consulté que
+    chaturbate.com). Jamais le TLD seul (une étiquette) ; à défaut
+    d'ancêtre déclaré, le nom reste sa propre zone."""
+    etiquettes = domaine.split(".")
+    for i in range(len(etiquettes) - 1, -1, -1):
+        candidat = ".".join(etiquettes[i:])
+        if len(etiquettes) - i >= 2 and candidat in zones:
+            return candidat
+    return domaine
+
+
 def _render(adult: set[str], general: set[str]) -> str:
     """Rend le drop-in Unbound. `adult` → always_nxdomain pour tout le monde
     (sauf ce que le sinkhole général bloque déjà — un seul `local-zone` par
@@ -218,11 +240,11 @@ def _render(adult: set[str], general: set[str]) -> str:
     vue redéclarant `general - adult` pour chaque IP a fait grossir le
     drop-in à 49 Mo sur gk2 — chaque rechargement a laissé Unbound en état
     `reloading` pendant ~1 min, DNS indisponible pour tout le réseau le
-    temps de ré-analyser le fichier. `local-zone-override` cible UN domaine
-    pour UNE IP sans toucher au reste : fichier proportionnel à (domaines
-    adultes × IP exemptées), jamais à la taille du sinkhole général."""
+    temps de ré-analyser le fichier. `local-zone-override` cible la ZONE
+    EFFECTIVE (#2973 : pas le nom exact du domaine, qui peut n'être jamais
+    consulté si un ancêtre couvre déjà son sous-arbre), dédupliquée."""
     lines = [
-        "# Managed by secubox-adguard-adult-sync (#2964, #2969). DO NOT EDIT BY HAND.",
+        "# Managed by secubox-adguard-adult-sync (#2964, #2969, #2973). DO NOT EDIT BY HAND.",
         "# Regenerate: secubox-adguard-adult-sync sync",
         "server:",
     ]
@@ -232,13 +254,15 @@ def _render(adult: set[str], general: set[str]) -> str:
 
     ips = _exempt_ips()
     if ips:
+        tous = general | adult
+        zones_effectives = sorted({_zone_effective(d, tous) for d in adult})
         for ip in ips:
-            for d in sorted(adult):
+            for zone in zones_effectives:
                 # Syntaxe réelle (man unbound.conf, #2971) : ZONE d'abord,
                 # puis le netblock IP — l'inverse de ce que #2969 avait
                 # écrit, refusé par unbound-checkconf en production
                 # (« cannot parse ip address » sur le nom de domaine).
-                lines.append(f'    local-zone-override: "{d}." {ip} always_transparent')
+                lines.append(f'    local-zone-override: "{zone}." {ip} always_transparent')
     return "\n".join(lines) + "\n"
 
 
