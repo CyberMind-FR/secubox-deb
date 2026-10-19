@@ -383,6 +383,10 @@
    "espace": "services",
    "objet": "SERVICE"
   },
+  "pseudo-routeur": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
   "proxypac": {
    "espace": "protection",
    "objet": null
