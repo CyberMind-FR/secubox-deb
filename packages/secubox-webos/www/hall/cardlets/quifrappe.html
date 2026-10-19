@@ -7,6 +7,12 @@
 
   SecuBox #1240 — carte « Qui frappe ? » du Hall, au profil Aurora (.claude/AURORA-REFERENCE.md, #2659).
 
+  Habillage « CRT » (#2952, mockup validé) : terminal phosphore vert (scanlines, vignette,
+  scintillement), cohérent avec le sujet (flux de sécurité temps réel). Retinte via les variables
+  --fond/--trait/--texte/etc. de :root (jamais retirées, seulement redéfinies plus bas dans la
+  feuille) + un seul <div aria-hidden> décoratif par carte : AUCUNE donnée, AUCUN id, AUCUNE
+  classe existante n'est renommée ou retirée. Scintillement coupé sous prefers-reduced-motion.
+
   ELLE NE PEINT RIEN QU'ELLE N'A OBSERVÉ. La carte Pare-feu répond « suis-je couvert » ; celle-ci répond « QUI frappe, et
   comment ». Elle lit la synthèse de campagnes que sbxwaf a DÉJÀ corrélée (campaigns.json, via --correlate), enrichie de la
   lecture « negative space » : combien d'attaquants, regroupés en combien de campagnes (même workflow depuis plusieurs IP),
@@ -85,10 +91,32 @@
   /* iPhone (#2733) : EN FIN DE FEUILLE pour passer après `body.dans .cadre{padding:0}` et `body.emb .app{padding:0}` de la carte. Une vraie marge de chaque côté,
      y compris dans l'iframe du Hall : sans elle le contenu touchait le bord (cadre à 0, 8 px de marge intérieure au mieux). */
   @media(max-width:520px){.emb .cadre,.dans .cadre{padding:0!important}.emb .app,.dans .app{padding-left:14px!important;padding-right:14px!important}}
+
+  /* ── CRT (#2952) : retinte via les variables, additif — rien ci-dessus n'est renommé ── */
+  :root{
+    --fond:#020603;--trait:rgba(57,255,106,.22);--trait2:rgba(57,255,106,.4);
+    --texte:#39ff6a;--doux:#2fae5a;--faible:#1f6b36;
+    --cyan:#39ff6a;--bleu:#39ff6a;--vert:#39ff6a;--violet:#39ff6a;--jaune:#ffe24d;
+    --rouge:#ff6a4a;--orange:#ffb23d
+  }
+  body,.tete,.pan,.camps,.pied{font-family:ui-monospace,"JetBrains Mono","SF Mono",Consolas,monospace}
+  h1,.v,#etat,.actif{text-shadow:0 0 2px currentColor,0 0 7px currentColor}
+
+  .app{position:relative;z-index:0;overflow:hidden;animation:crt-flicker 6s linear infinite}
+  .ecran{position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+  body.emb .ecran{inset:-10px}
+  body:not(.dans):not(.emb) .ecran{inset:-14px}
+  .ecran .scan{position:absolute;inset:0;background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0px,rgba(0,0,0,0) 2px,rgba(0,20,8,.4) 3px,rgba(0,0,0,0) 4px);mix-blend-mode:multiply}
+  .ecran .vignette{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 42%,transparent 55%,rgba(0,0,0,.55) 100%)}
+  @keyframes crt-flicker{0%,100%{opacity:.97}8%{opacity:.88}9%{opacity:.97}50%{opacity:1}92%{opacity:.9}93%{opacity:.97}}
+  @keyframes crt-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  #etat.att{animation:crt-pulse 1.1s steps(2,jump-none) infinite}
+  @media (prefers-reduced-motion: reduce){ .app{animation:none} #etat.att{animation:none} }
 </style>
 </head>
 <body>
 <div class="cadre"><div class="app">
+  <div class="ecran" aria-hidden="true"><div class="scan"></div><div class="vignette"></div></div>
   <header class="tete">
     <div class="marque">
       <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>

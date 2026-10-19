@@ -1,3 +1,14 @@
+secubox-webos (1.14.0-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet « Qui frappe ? » du Hall, habillage « CRT » (ref #2952) : terminal phosphore vert
+    (scanlines, vignette, scintillement), cohérent avec son sujet (flux de sécurité temps réel).
+    Retinte additive par les variables de :root (--fond/--trait/--texte/--rouge/--orange/…, jamais
+    retirées, seulement redéfinies plus bas) + un seul décor <div aria-hidden>. Contrat de données,
+    lecture publique et accessibilité inchangés, vérifié par test_cartes_aurora_2659.py (71 tests).
+    Première carte d'un habillage distinct par cardlet (à la suite du Boréal de l'Éphéméride, #2946).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 16:30:00 +0200
+
 secubox-webos (1.13.1-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet « Éphéméride » du Hall : la pastille d'état (ref #2950) ne répète plus « À JOUR »/
