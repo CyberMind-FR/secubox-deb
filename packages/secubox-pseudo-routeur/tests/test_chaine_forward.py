@@ -32,6 +32,16 @@ def test_lan_allowed_et_zones_connues_acceptees_avant_le_drop(tmp_path):
     assert txt.index("@blocked") < txt.index("accept")
 
 
+def test_lxc_zone_acceptee_elle_aussi(tmp_path):
+    # Relecture securite (ref #2940) : secubox-nac a SIX ensembles (nft_desired.SETS),
+    # pas cinq. lxc_zone (« aucune restriction » cote NAC) omis ici coupait tous les
+    # conteneurs LXC du parc (mail, nextcloud, matrix, horde...) dès l'activation reelle
+    # de la chaine (policy drop final). Doit etre accepte, comme lan_allowed/guest/iot.
+    txt = _generer(tmp_path)
+    assert "@lxc_zone" in txt
+    assert txt.index("@lxc_zone") < txt.rindex("accept")
+
+
 def test_nftables_valide_la_syntaxe(tmp_path):
     # Ruling (ref #2940, Tache 2) : le fichier de base synthetique du brief mettait
     # plusieurs `set { ... }` sur une seule ligne sans separateur -> erreur de syntaxe
@@ -43,6 +53,7 @@ def test_nftables_valide_la_syntaxe(tmp_path):
     base.write_text(
         "table inet secubox_nac {\n"
         "\tset lan_allowed { type ether_addr; }\n"
+        "\tset lxc_zone { type ether_addr; }\n"
         "\tset guest_zone { type ether_addr; }\n"
         "\tset iot_zone { type ether_addr; }\n"
         "\tset quarantine_zone { type ether_addr; }\n"

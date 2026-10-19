@@ -13,19 +13,23 @@ motif que secubox-jellyfin (voir MODULE-COMPLIANCE.md § WebUI-delegates-to-conf
   POST /activer       devient la passerelle (refuse si la sonde n'est pas active) (admin)
   POST /retour-freebox  revient a la Freebox, inconditionnel, chemin de secours    (admin)
   GET  /suggestions   appareils vus par la Freebox non classes par le NAC  (admin)
-  GET  /journal       dernieres bascules de passerelle DHCP (audit.log)    (lecture)
+  GET  /journal       dernieres bascules de passerelle DHCP (audit.log)    (admin)
   GET  /health        vivacite (publique)
 """
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 
+import httpx
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from secubox_core.auth import require_jwt, require_lecture
+
+log = logging.getLogger("secubox-pseudo-routeur")
 
 CTL = os.environ.get("SECUBOX_PR_CTL", "/usr/sbin/pseudo-routeurctl")
 AUDIT_LOG = os.environ.get("SECUBOX_PR_AUDIT_LOG", "/var/log/secubox/audit.log")
@@ -89,8 +93,6 @@ def retour_freebox():
 def _appel_uds(socket_path, chemin, entetes, timeout=10.0):
     """GET par socket Unix dedie d'un autre module (meme motif que secubox-hub pour
     secubox-netmodes) : forward l'en-tete Authorization recu — pas de second jeton."""
-    import httpx
-
     with httpx.Client(transport=httpx.HTTPTransport(uds=socket_path)) as c:
         return c.get(f"http://localhost{chemin}", headers=entetes, timeout=timeout)
 
@@ -107,21 +109,23 @@ def suggestions(request: Request):
         r = _appel_uds(NAC_SOCK, "/clients", entetes)
         if r.status_code == 200:
             macs_connues = {c.get("mac", "").lower() for c in r.json().get("clients", [])}
-    except Exception:  # noqa: BLE001 — socket absent/lent ne doit jamais planter la requete
-        pass
+    except (OSError, httpx.HTTPError, ValueError) as e:
+        # Degrade (liste de suggestions vide), ne plante jamais la requete — mais une panne
+        # du socket NAC ne doit pas disparaitre sans trace (RULES-CODE.md § 7).
+        log.warning("suggestions : appel au socket NAC (%s) impossible : %s", NAC_SOCK, e)
     non_classes = []
     try:
         r = _appel_uds(FREEBOX_SOCK, "/appareils-non-classes?macs_connues=" + ",".join(macs_connues), entetes)
         if r.status_code == 200:
             non_classes = r.json().get("appareils", [])
-    except Exception:  # noqa: BLE001
-        pass
+    except (OSError, httpx.HTTPError, ValueError) as e:
+        log.warning("suggestions : appel au socket Freebox (%s) impossible : %s", FREEBOX_SOCK, e)
     for a in non_classes:
         a["zone_suggeree"] = zone_suggeree(a.get("host_type"))
     return {"suggestions": non_classes}
 
 
-@app.get("/journal", dependencies=[Depends(require_lecture)])
+@app.get("/journal", dependencies=[Depends(require_jwt)])
 def journal(n: int = 50):
     """Dernieres bascules de passerelle DHCP, lues dans l'audit.log partage (action
     `passerelle_dhcp`, ecrite par secubox-freebox a chaque appel de pseudo-routeurctl)."""

@@ -19,6 +19,7 @@ table inet secubox_pseudo_routeur {
 		ether saddr @blocked drop
 		ether saddr @quarantine_zone drop
 		ether saddr @lan_allowed accept
+		ether saddr @lxc_zone accept
 		ether saddr @guest_zone accept
 		ether saddr @iot_zone accept
 		counter name sbx_pr_forward_rejete
