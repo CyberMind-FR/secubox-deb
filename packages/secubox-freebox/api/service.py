@@ -166,6 +166,27 @@ class Freebox:
         etat, change = self._regler("connection/ipv6/config/", N.CLES_PARE_FEU_IPV6, actif, "pare_feu_ipv6")
         return {"pare_feu_actif": etat, "change": change}
 
+    def regler_passerelle_dhcp(self, ip):
+        """Bascule la passerelle DHCP (#2940) : même charpente que _regler, mais une valeur chaîne
+        (pas un booléen) — on ne touche QUE la clé « gateway », jamais dns/ip_range_start/end etc.
+        que lire() rend aussi."""
+        if not self.client.session:
+            self.client.ouvrir_session()
+        if not self.client.droits.get("settings"):
+            raise C.DroitManquant("Cette action demande le droit « Modification des réglages de la Freebox » : réglez-le dans "
+                                  "Paramètres → Gestion des accès → Applications.")
+        chemin = "dhcp/config/"
+        avant = (self.client.lire(chemin) or {}).get("gateway")
+        if avant == ip:
+            return {"passerelle": avant, "change": False}
+        self.client.ecrire("PUT", chemin, {"gateway": ip})
+        apres = (self.client.lire(chemin) or {}).get("gateway")
+        self._cache.clear()
+        self.journal({"action": "passerelle_dhcp", "avant": avant, "apres": apres, "voulu": ip})
+        if apres != ip:
+            raise C.ErreurFreebox("La Freebox n'a pas pris en compte le changement de passerelle DHCP.")
+        return {"passerelle": apres, "change": True}
+
     def upnp(self):
         def produire():
             cfg = self.client.lire("upnpigd/config/")

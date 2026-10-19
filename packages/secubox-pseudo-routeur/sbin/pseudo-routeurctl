@@ -15,6 +15,24 @@ set -euo pipefail
 
 readonly NFT_OUT_DEFAUT="/etc/nftables.d/zz-secubox-pseudo-routeur.nft"
 readonly NFT_OUT="${SECUBOX_PR_NFT_OUT:-$NFT_OUT_DEFAUT}"
+# sonde-secours vit dans le meme sbin/ (dev comme une fois installe en /usr/sbin/) : pas
+# besoin que /usr/sbin figure dans le PATH pour le trouver.
+readonly SONDE_SCRIPT="${SECUBOX_PR_SONDE:-$(dirname "$0")/sonde-secours}"
+readonly FREEBOXCTL="${SECUBOX_PR_FREEBOXCTL:-/usr/sbin/freeboxctl}"
+readonly IP_GK2="${SECUBOX_PR_IP_GK2:-192.168.1.200}"
+readonly IP_FREEBOX="${SECUBOX_PR_IP_FREEBOX:-192.168.1.254}"
+
+_sonde_active() {
+    bash "$SONDE_SCRIPT" etat | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("actif") is True else 1)'
+}
+
+_freeboxctl() {
+    if command -v sudo >/dev/null 2>&1; then
+        sudo -u secubox-freebox "$FREEBOXCTL" "$@"
+    else
+        "$FREEBOXCTL" "$@"
+    fi
+}
 
 # #2940 Review Focus point 1 : un appareil deja bloque par le NAC (blocked/quarantine_zone)
 # doit le rester une fois la chaine forward basculee en policy drop — on recopie ses deux
@@ -64,9 +82,44 @@ except Exception:
     printf '{"transfert_actif": %s, "paquets_rejetes": %s}\n' "$transfert_actif" "$paquets_rejetes"
 }
 
+# activer : refuse (code 2) si la sonde n'est pas active — jamais de bascule DHCP sans
+# le filet de secours arme en premier (#2940 Review Focus point 3).
+cmd_activer() {
+    if ! _sonde_active; then
+        echo "refuse : la sonde de secours n'est pas active (sonde-secours etat)" >&2
+        exit 2
+    fi
+    cmd_activer_transfert
+    _freeboxctl passerelle-dhcp "$IP_GK2" || exit 1
+}
+
+# retour-freebox : chemin de secours, toujours execute, sonde active ou non. Un echec de
+# l'appel reseau/connecteur sort en 1 (jamais en 2 : ce code est reserve au refus de la
+# garde, et retour-freebox n'a pas de garde a refuser).
+cmd_retour_freebox() {
+    _freeboxctl passerelle-dhcp "$IP_FREEBOX" || exit 1
+}
+
+cmd_etat() {
+    local sonde_active="false"
+    if _sonde_active; then sonde_active="true"; fi
+    local passerelle
+    passerelle="$(_freeboxctl lire-passerelle 2>/dev/null | python3 -c 'import json,sys
+try:
+    print(json.load(sys.stdin).get("passerelle") or "")
+except Exception:
+    print("")' 2>/dev/null || echo "")"
+    local mode="freebox"
+    [ "$passerelle" = "$IP_GK2" ] && mode="gk2"
+    printf '{"mode": "%s", "sonde_active": %s}\n' "$mode" "$sonde_active"
+}
+
 case "${1:-}" in
     generer-chaine) cmd_generer_chaine ;;
     activer-transfert) cmd_activer_transfert ;;
     etat-transfert) cmd_etat_transfert ;;
-    *) echo "usage : pseudo-routeurctl generer-chaine|activer-transfert|etat-transfert" >&2; exit 2 ;;
+    activer) cmd_activer ;;
+    retour-freebox) cmd_retour_freebox ;;
+    etat) cmd_etat ;;
+    *) echo "usage : pseudo-routeurctl generer-chaine|activer-transfert|etat-transfert|activer|retour-freebox|etat" >&2; exit 2 ;;
 esac
