@@ -118,8 +118,8 @@ def test_appareil_exempte_recoit_un_local_zone_override_par_domaine_adulte(mod):
     assert st["exempt_ip"] == 1
     assert "view:" not in texte
     assert "access-control-view" not in texte
-    assert 'local-zone-override: 192.168.1.3 "cam-adulte.example." always_transparent' in texte
-    assert 'local-zone-override: 192.168.1.3 "tube-adulte.example." always_transparent' in texte
+    assert 'local-zone-override: "cam-adulte.example." 192.168.1.3 always_transparent' in texte
+    assert 'local-zone-override: "tube-adulte.example." 192.168.1.3 always_transparent' in texte
     # Le sinkhole général (pub.example, tracker.example) n'est PAS redéclaré
     # — il reste bloqué pour cet appareil par le drop-in général existant,
     # jamais touché par celui-ci.
