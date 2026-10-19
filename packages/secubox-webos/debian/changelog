@@ -1,3 +1,13 @@
+secubox-webos (1.14.2-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : la mosaïque (`.grid.feat`, CSS `columns`, #1239) laissait un bandeau de 15px de fond
+    de page entre le bas d'un cardlet et le haut du suivant dans une même colonne — lu comme un
+    « trou noir » (ref #2957). Les cardlets d'une colonne se touchent désormais directement
+    (`margin:0`), chacun gardant sa propre bordure comme seule limite visible ; l'écart entre
+    colonnes (`column-gap:16px`) est inchangé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 17:30:00 +0200
+
 secubox-webos (1.14.1-1~bookworm1) bookworm; urgency=medium
 
   * Hall : la hauteur annoncée par une carte (`{sbxVue:<px>}`, AURORA-REFERENCE §7) n'était
