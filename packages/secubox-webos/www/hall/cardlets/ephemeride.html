@@ -142,21 +142,24 @@
   @media(max-width:520px){.emb .cadre,.dans .cadre{padding:0!important}.emb .app,.dans .app{padding-left:14px!important;padding-right:14px!important}}
 
   /* ── Boréal (#2946) : ciel décoratif derrière la carte — additif, rien au-dessus n'est renommé ── */
+  .cadre{max-width:520px;margin-inline:auto}
   .app{position:relative;z-index:0;overflow:hidden}
   .ciel{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
-  .emb .ciel{display:none}
-  .ciel .fond{position:absolute;inset:0;background:linear-gradient(to bottom,#060c1c 0%,#050912 46%,#040710 100%)}
-  .ciel .ruban{position:absolute;left:-20%;width:140%;height:60%;border-radius:50%;mix-blend-mode:screen;filter:blur(28px);opacity:.4}
-  .ciel .ruban.a{top:-10%;background:radial-gradient(ellipse at 30% 40%,#34d399 0%,transparent 62%);animation:boreal-aurore-a 26s ease-in-out infinite}
-  .ciel .ruban.b{top:0;background:radial-gradient(ellipse at 70% 55%,#22d3ee 0%,transparent 60%);animation:boreal-aurore-b 32s ease-in-out infinite}
-  .ciel .ruban.c{top:-4%;background:radial-gradient(ellipse at 50% 30%,#a78bfa 0%,transparent 65%);animation:boreal-aurore-c 38s ease-in-out infinite}
-  .ciel .etoile{position:absolute;width:1.5px;height:1.5px;border-radius:50%;background:#eaf1ff;animation:boreal-etoile 3s ease-in-out infinite}
-  .ciel .horizon{position:absolute;left:0;right:0;bottom:36%;height:18%;background:#030509;opacity:.9;clip-path:polygon(0% 60%,9% 35%,18% 55%,27% 25%,37% 45%,46% 15%,56% 38%,65% 28%,75% 48%,84% 30%,100% 42%,100% 100%,0% 100%)}
-  .ciel .voile{position:absolute;left:0;right:0;bottom:0;height:72%;background:linear-gradient(to bottom,rgba(4,7,16,0) 0%,rgba(4,7,16,.76) 22%,rgba(4,7,16,.96) 55%,#04060f 100%)}
-  @keyframes boreal-aurore-a{0%,100%{transform:translate(-6%,-4%) scale(1.1)}50%{transform:translate(4%,3%) scale(1.22)}}
-  @keyframes boreal-aurore-b{0%,100%{transform:translate(5%,2%) scale(1.15)}50%{transform:translate(-4%,-5%) scale(1.02)}}
-  @keyframes boreal-aurore-c{0%,100%{transform:translate(-2%,4%) scale(1.05)}50%{transform:translate(6%,-3%) scale(1.18)}}
-  @keyframes boreal-etoile{0%,100%{opacity:.15}50%{opacity:1}}
+  .emb .ciel{inset:-10px}
+  body:not(.dans):not(.emb) .ciel{inset:-14px}
+  .ciel .fond{position:absolute;inset:0;background:linear-gradient(to bottom,#071022 0%,#050912 50%,#04070f 100%)}
+  .ciel .ruban{position:absolute;left:-20%;width:140%;height:68%;border-radius:50%;mix-blend-mode:screen;filter:blur(24px)}
+  .ciel .ruban.a{top:-14%;background:radial-gradient(ellipse at 30% 40%,#4ade80 0%,#22d3ee 38%,transparent 68%);animation:boreal-aurore-a 22s ease-in-out infinite,boreal-flash 4.5s ease-in-out infinite}
+  .ciel .ruban.b{top:-4%;background:radial-gradient(ellipse at 70% 50%,#2dd4bf 0%,#38bdf8 40%,transparent 66%);animation:boreal-aurore-b 27s ease-in-out infinite,boreal-flash 6.2s ease-in-out .8s infinite}
+  .ciel .ruban.c{top:-10%;background:radial-gradient(ellipse at 50% 30%,#c084fc 0%,#60a5fa 42%,transparent 70%);animation:boreal-aurore-c 33s ease-in-out infinite,boreal-flash 5.4s ease-in-out 1.6s infinite}
+  .ciel .etoile{position:absolute;width:2px;height:2px;border-radius:50%;background:#fff;box-shadow:0 0 4px 1px rgba(255,255,255,.8);animation:boreal-etoile 3s ease-in-out infinite}
+  .ciel .horizon{position:absolute;left:0;right:0;bottom:30%;height:14%;background:#020408;opacity:.92;clip-path:polygon(0% 60%,9% 35%,18% 55%,27% 25%,37% 45%,46% 15%,56% 38%,65% 28%,75% 48%,84% 30%,100% 42%,100% 100%,0% 100%)}
+  .ciel .voile{position:absolute;left:0;right:0;bottom:0;height:58%;background:linear-gradient(to bottom,rgba(4,7,16,0) 0%,rgba(4,7,16,.4) 30%,rgba(4,7,16,.74) 60%,#04060f 100%)}
+  @keyframes boreal-aurore-a{0%,100%{transform:translate(-6%,-4%) scale(1.1)}50%{transform:translate(4%,3%) scale(1.3)}}
+  @keyframes boreal-aurore-b{0%,100%{transform:translate(5%,2%) scale(1.2)}50%{transform:translate(-4%,-5%) scale(1.02)}}
+  @keyframes boreal-aurore-c{0%,100%{transform:translate(-2%,4%) scale(1.05)}50%{transform:translate(6%,-3%) scale(1.25)}}
+  @keyframes boreal-etoile{0%,100%{opacity:.25}50%{opacity:1}}
+  @keyframes boreal-flash{0%{opacity:.65}12%{opacity:1}22%{opacity:.6}38%{opacity:.95}50%{opacity:.7}66%{opacity:1}80%{opacity:.6}100%{opacity:.85}}
   @keyframes boreal-lueur{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}
   @keyframes boreal-eclat{0%,100%{filter:drop-shadow(0 0 3px rgba(255,210,100,.6))}50%{filter:drop-shadow(0 0 9px rgba(255,210,100,.95))}}
   @media (prefers-reduced-motion: reduce){ .ciel .ruban,.ciel .etoile,.lune svg,.point-soleil{animation:none!important} }
