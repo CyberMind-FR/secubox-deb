@@ -17,8 +17,8 @@ Depends: ${misc:Depends},
  python3-fastapi | python3-pip
 # Les pages, le releve et l'instantane vivaient dans secubox-metrics (350 Mo de processus sur gk2 : visites, rapports PDF, carte du monde). Ils en sortent pour que le profil minimal
 # les embarque sans lui ; secubox-metrics en dépend et garde ses URLs /api/v1/metrics/{series,systeme}.
-Replaces: secubox-metrics (<< 1.24.0~)
-Breaks: secubox-metrics (<< 1.24.0~)
+Replaces: secubox-metrics (<< 1.29.0~)
+Breaks: secubox-metrics (<< 1.29.0~)
 Description: SecuBox Courbes — historique de la box et système en direct (remplace Grafana et Glances)
  Courbes (/grafana/) : un relevé par minute, 7 jours, CPU, mémoire, charge, débit, connexions, disque. Glances (/glances/) : instantané système, CPU par cœur,
  disques, réseau, températures, top des processus. Bibliothèque standard et psutil seulement, servi par secubox-groupd : aucun processus de plus, aucun Grafana ni Glances.
