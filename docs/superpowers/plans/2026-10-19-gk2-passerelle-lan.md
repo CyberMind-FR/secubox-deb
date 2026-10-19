@@ -82,7 +82,7 @@ dans le chemin critique du retour arrière), nftables, systemd (service + timer,
 
 ---
 
-## Tâche 1 : sonde de secours (dead-man switch)
+### Task 1: sonde de secours (dead-man switch)
 
 **Fichiers :**
 - Créer : `packages/secubox-pseudo-routeur/sbin/sonde-secours`
@@ -201,7 +201,7 @@ git commit -m "feat: pseudo-routeur, sonde de secours independante (ref #2940)"
 
 ---
 
-## Tâche 2 : chaîne `forward` — transfert IP et zones
+### Task 2: chaîne `forward` — transfert IP et zones
 
 **Fichiers :**
 - Créer : `packages/secubox-pseudo-routeur/nft/secubox-pseudo-routeur.nft`
@@ -304,7 +304,7 @@ git commit -m "feat: pseudo-routeur, chaine forward DEFAULT DROP par zone (ref #
 
 ---
 
-## Tâche 3 : bascule du DHCP Freebox, gardée par la sonde
+### Task 3: bascule du DHCP Freebox, gardée par la sonde
 
 **Fichiers :**
 - Modifier : `packages/secubox-freebox/api/service.py` (ajoute `regler_passerelle_dhcp`)
@@ -423,7 +423,7 @@ git commit -m "feat: pseudo-routeur, bascule DHCP gardee par la sonde de secours
 
 ---
 
-## Tâche 4 : import des appareils Freebox (suggestions de classement)
+### Task 4: import des appareils Freebox (suggestions de classement)
 
 **Fichiers :**
 - Modifier : `packages/secubox-freebox/api/service.py` (ajoute `appareils_non_classes`)
@@ -533,7 +533,7 @@ git commit -m "feat: pseudo-routeur, import et suggestion de classement des appa
 
 ---
 
-## Tâche 5 : API, panneau et empaquetage
+### Task 5: API, panneau et empaquetage
 
 **Fichiers :**
 - Créer : `packages/secubox-pseudo-routeur/api/main.py`
