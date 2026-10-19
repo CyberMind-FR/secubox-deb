@@ -1,3 +1,17 @@
+secubox-webos (1.14.1-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : la hauteur annoncée par une carte (`{sbxVue:<px>}`, AURORA-REFERENCE §7) n'était
+    écoutée NULLE PART (ref #2955) — toutes les cartes restaient figées à leur hauteur de
+    construction (`h:` du manifeste, 252px par défaut), `scrolling="no"` rendant tout surplus
+    invisible, sans défilement possible. Confirmé par le propriétaire sur plusieurs cartes
+    (« tous les cardlets sont mangés de leur contenu, souvent le bas »). Correctif : écoute du
+    message, redimensionnement de l'iframe `data-micro` correspondante — identifiée par IDENTITÉ
+    du cadre (`cadreEmetteur`, déjà utilisé ailleurs dans le fichier), jamais par la chaîne
+    `onglet` qu'un émetteur quelconque pourrait prétendre ; valeur bornée (120–4000px). 3 tests
+    sur le harnais Playwright réel (`test_hall_messages.py`).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 17:00:00 +0200
+
 secubox-webos (1.14.0-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet « Qui frappe ? » du Hall, habillage « CRT » (ref #2952) : terminal phosphore vert

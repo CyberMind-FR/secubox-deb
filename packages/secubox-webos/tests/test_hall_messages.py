@@ -269,6 +269,39 @@ def test_diffusion_depuis_une_carte_posee_et_son_resultat(banc, origine_carte, s
     assert len(banc.posts_diffusion()) == 1
 
 
+# ── Hall : la carte redimensionne son cadre selon ce qu'elle annonce (#2955) ──
+
+def test_hauteur_annoncee_redimensionne_le_cadre_de_la_carte(banc):
+    ouvre_hall(banc)
+    banc.pose(emet(ORIGINE, {"sbxVue": 777, "onglet": "essai"}), {"data-micro": "essai"})
+    attendre(banc.page, lambda: banc.page.eval_on_selector(
+        'iframe[data-micro="essai"]', "e => e.style.height") == "777px")
+    assert banc.page.eval_on_selector('iframe[data-micro="essai"]', "e => e.style.height") == "777px"
+
+
+def test_hauteur_annoncee_est_bornee(banc):
+    ouvre_hall(banc)
+    banc.pose(emet(ORIGINE, {"sbxVue": 999999, "onglet": "essai"}), {"data-micro": "essai"})
+    attendre(banc.page, lambda: banc.page.eval_on_selector(
+        'iframe[data-micro="essai"]', "e => e.style.height") == "4000px")
+    assert banc.page.eval_on_selector('iframe[data-micro="essai"]', "e => e.style.height") == "4000px"
+
+
+def test_hauteur_annoncee_ignoree_sans_data_micro(banc):
+    # Une carte en simple aperçu (pas de data-micro) ne doit redimensionner
+    # AUCUNE carte vivante, même en déclarant un onglet qui en désigne une
+    # vraie : cadreEmetteur matche par IDENTITÉ du cadre, jamais par la
+    # chaîne « onglet » qu'un émetteur quelconque pourrait prétendre. Une
+    # carte « essai » dédiée (jamais annoncée par personne d'autre) sert de
+    # témoin — comparer tout le Hall avant/après serait fragile : de vraies
+    # cartes du manifeste s'annoncent elles-mêmes en tâche de fond.
+    ouvre_hall(banc)
+    banc.pose(emet(ORIGINE), {"data-micro": "essai"})
+    banc.pose(emet(ORIGINE, {"sbxVue": 777, "onglet": "essai"}), {})
+    banc.page.wait_for_timeout(600)
+    assert banc.page.eval_on_selector('iframe[data-micro="essai"]', "e => e.style.height") in (None, "")
+
+
 # ── Hall : l'action relayée par ZIA ──────────────────────────────────────────
 
 def test_action_suivie_depuis_le_cadre_zia_seulement(banc):
