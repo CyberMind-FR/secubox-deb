@@ -2101,6 +2101,20 @@ function cadreParmi(ev, cadres){
   return null;
 }
 function cadreEmetteur(ev, sel){ return cadreParmi(ev, document.querySelectorAll(sel)); }
+// HAUTEUR ANNONCÉE PAR LA CARTE (#2955). Chaque cardlet dit sa vraie hauteur de contenu par
+// {sbxVue:<px>, onglet:'<id>'} (fonction annoncer(), AURORA-REFERENCE §7) — jamais écoutée
+// jusqu'ici : la carte restait figée à sa hauteur de construction (`f.h`||252px), même quand son
+// contenu dépassait. L'iframe a `scrolling="no"` : le surplus était invisible, sans défilement
+// possible pour le voir. `cadreEmetteur` identifie le cadre émetteur par IDENTITÉ (contentWindow
+// + origine), jamais par le `onglet` déclaré : une carte en aperçu (origine distante) ne peut pas
+// se faire passer pour une autre carte en devinant son identifiant.
+addEventListener('message', ev=>{
+  const d=ev.data;
+  if(!d || typeof d.sbxVue!=='number' || !isFinite(d.sbxVue)) return;
+  const f=cadreEmetteur(ev, 'iframe[data-micro]');
+  if(!f) return;
+  f.style.height=Math.max(120, Math.min(4000, Math.round(d.sbxVue)))+'px';
+});
 // Les cadres d'où parlent les cartes : la mosaïque, et le service embarqué
 // (vue pleine ou lecteur du viewer). `var` : lue par des écouteurs, jamais en
 // zone morte.
