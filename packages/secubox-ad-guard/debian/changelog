@@ -1,3 +1,14 @@
+secubox-ad-guard (1.15.3-1~bookworm1) bookworm; urgency=medium
+
+  * Exception adulte : ordre des arguments de local-zone-override corrigé (#2971, casse #2969).
+    Syntaxe réelle Unbound (man unbound.conf) : `local-zone-override: <zone> <IP netblock> <type>`,
+    zone D'ABORD — #2969 les avait inversés. `unbound-checkconf` a refusé la config en production
+    (« cannot parse ip address » sur le nom de domaine) ; `do_sync` a échoué proprement sans toucher
+    Unbound (pose atomique + vérif + retour arrière, bibliothèque secubox_unbound). Vérifié cette
+    fois par un essai réel `unbound-checkconf` sur gk2 (copie, jamais en production) avant de merger.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 20:45:00 +0200
+
 secubox-ad-guard (1.15.2-1~bookworm1) bookworm; urgency=medium
 
   * Exception adulte : remplacement de la vue Unbound par local-zone-override (#2969, correctif

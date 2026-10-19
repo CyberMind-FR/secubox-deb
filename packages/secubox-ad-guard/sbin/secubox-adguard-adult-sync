@@ -234,7 +234,11 @@ def _render(adult: set[str], general: set[str]) -> str:
     if ips:
         for ip in ips:
             for d in sorted(adult):
-                lines.append(f'    local-zone-override: {ip} "{d}." always_transparent')
+                # Syntaxe réelle (man unbound.conf, #2971) : ZONE d'abord,
+                # puis le netblock IP — l'inverse de ce que #2969 avait
+                # écrit, refusé par unbound-checkconf en production
+                # (« cannot parse ip address » sur le nom de domaine).
+                lines.append(f'    local-zone-override: "{d}." {ip} always_transparent')
     return "\n".join(lines) + "\n"
 
 
