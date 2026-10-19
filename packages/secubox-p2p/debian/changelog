@@ -1,3 +1,9 @@
+secubox-p2p (1.17.3-1~bookworm1) bookworm; urgency=medium
+
+  * Le point d'acces WireGuard d'un pair IPv6 s'ecrit entre crochets (ref #2936) : `[2001:db8::7]:51822`. _record_wg_identity ecrivait `2001:db8::7:51822`, invalide dans wg-quick. IPv4 inchange. Prepare le mesh et le p2p sur IPv6 (le reseau interne du mesh reste IPv4, 10.10.0.0/24). 3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 16:00:00 +0200
+
 secubox-p2p (1.17.2-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
