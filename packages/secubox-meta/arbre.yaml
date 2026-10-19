@@ -292,6 +292,7 @@ recommande:
 suggere:
   - secubox-modem
   - secubox-wan-link-guard      # propre au MOCHAbin
+  - secubox-pseudo-routeur      # gk2 passerelle DHCP du LAN plat (#2940) : jamais actif sans POST /activer
 
 meta: secubox-service-dns
 niveau: service

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Pseudo-routeur : gk2 passerelle DHCP du LAN plat (#2940). DONNÉES RÉELLES : GET /api/v1/pseudo-routeur/etat,
+  /suggestions, /journal (lues en session) ; POST /activer, /retour-freebox (confirmation intégrée, jamais confirm()).
+  « Classer » appelle l'API NAC existante (POST /api/v1/nac/add_to_zone), jamais une écriture nftables directe d'ici.
+  `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, actions inertes. `?embed=1` : une colonne, sans menu latéral.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Pseudo-routeur</title>
+<link rel="stylesheet" href="/shared/sidebar-light.css">
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .principal{min-width:0}
+  body:not(.emb):not(.dem) .principal{margin-left:220px;padding-top:48px}
+  body.emb #sidebar,body.dem #sidebar{display:none}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb):not(.dem) .principal{margin-left:0;padding-top:0}}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .pastille{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .pastille.hors{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .pastille.alerte{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  button{font:inherit;cursor:pointer}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(3,1fr)}
+  @media (max-width:700px){.tuiles{grid-template-columns:1fr 1fr}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .v{font-size:1.3rem;font-weight:700;line-height:1.2}
+  .tuile .s{color:var(--faible);font-size:.68rem}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  .btn{font-size:.78rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:7px 14px;min-height:30px}
+  .btn.dg{background:rgba(255,77,94,.14);border-color:var(--rouge);color:var(--rouge)}
+  .btn.ok{background:rgba(46,204,113,.14);border-color:var(--vert);color:var(--vert)}
+  .btn[disabled]{opacity:.5;cursor:default}
+  .confirme{display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:8px 10px;border:1px solid var(--orange);border-radius:10px;background:rgba(255,159,28,.1)}
+  .confirme.on{display:flex}
+  .confirme span{color:var(--doux);font-size:.76rem;flex:1 1 220px}
+  table{width:100%;border-collapse:collapse;font-size:.78rem}
+  th{text-align:left;color:var(--faible);font-weight:600;font-size:.68rem;padding:4px 6px;border-bottom:1px solid var(--trait)}
+  td{padding:6px;border-bottom:1px solid rgba(86,150,255,.1);vertical-align:middle}
+  .pil{border-radius:999px;padding:1px 9px;font-size:.66rem;border:1px solid;white-space:nowrap}
+  code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.72rem;color:var(--doux)}
+</style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="principal"><div class="cadre"><div class="app">
+  <div class="tete">
+    <div class="marque"><b>Pseudo-routeur</b><small>gk2 passerelle DHCP du LAN (#2940)</small></div>
+    <span class="pastille" id="pastilleMode">—</span>
+    <div class="droite"><span id="demoTag" class="demo" style="display:none">DÉMONSTRATION</span></div>
+  </div>
+  <div class="sous">LAN plat : filtrage à l'aller seulement, sans état ni DPI fiable sur les flux. La sonde de secours revient automatiquement à la Freebox sous 3 minutes en cas de panne.</div>
+
+  <div class="tuiles">
+    <div class="tuile"><div class="l">Passerelle active</div><div class="v" id="vMode">—</div></div>
+    <div class="tuile"><div class="l">Sonde de secours</div><div class="v" id="vSonde">—</div></div>
+    <div class="tuile"><div class="l">Paquets rejetés</div><div class="v" id="vRejetes">—</div><div class="s">chaîne forward, DEFAULT DROP</div></div>
+  </div>
+
+  <div class="pan">
+    <h3>Bascule</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn ok" id="btnActiver">Devenir la passerelle</button>
+      <button type="button" class="btn dg" id="btnRetour">Revenir à la Freebox</button>
+    </div>
+    <div class="confirme" id="confirmeZone">
+      <span id="confirmeTexte"></span>
+      <button type="button" class="btn dg" id="btnConfirmerOui">Confirmer</button>
+      <button type="button" class="btn" id="btnConfirmerNon">Annuler</button>
+    </div>
+    <div class="note">Un appareil déjà bloqué ou mis en quarantaine par le NAC le reste une fois gk2 passerelle.</div>
+  </div>
+
+  <div class="pan">
+    <h3>Suggestions de classement <i>appareils Freebox non connus du NAC</i></h3>
+    <table id="tabSuggestions"><thead><tr><th>Nom</th><th>MAC</th><th>Type</th><th>Zone suggérée</th><th></th></tr></thead><tbody></tbody></table>
+    <div class="vide" id="videSuggestions" style="display:none">Aucun appareil non classé.</div>
+  </div>
+
+  <div class="pan">
+    <h3>Journal <i>dernières bascules de passerelle</i></h3>
+    <table id="tabJournal"><thead><tr><th>Quand</th><th>Avant</th><th>Après</th></tr></thead><tbody></tbody></table>
+    <div class="vide" id="videJournal" style="display:none">Aucune bascule enregistrée.</div>
+  </div>
+</div></div></main>
+<script>
+(function(){
+  "use strict";
+  var API='/api/v1/pseudo-routeur';
+  var NAC_API='/api/v1/nac';
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  var q=new URLSearchParams(location.search);
+  var EMB=!!q.get('embed'),DEMOMODE=!!q.get('demo');
+  if(EMB) document.body.classList.add('emb');
+  if(DEMOMODE){document.body.classList.add('dem');document.getElementById('demoTag').style.display='';}
+  if(!EMB&&!DEMOMODE){try{var sc=document.createElement('script');sc.src='/shared/sidebar.js';document.head.appendChild(sc);}catch(e){}}
+
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function api(path,opts){
+    var h=Object.assign({'Authorization':'Bearer '+jeton()},(opts&&opts.headers)||{});
+    return fetch(API+path,Object.assign({credentials:'include',cache:'no-store'},opts,{headers:h}));
+  }
+  function getj(url){
+    var h={'Authorization':'Bearer '+jeton()};
+    return fetch(url,{headers:h,credentials:'include',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+  }
+
+  var DEMO_ETAT={mode:'freebox',sonde_active:false};
+  var DEMO_SUGGESTIONS=[{nom:'tv-salon',mac:'aa:bb:cc:00:00:01',host_type:'television',zone_suggeree:'guest'},
+    {nom:'?',mac:'aa:bb:cc:00:00:02',host_type:'workstation',zone_suggeree:null}];
+  var DEMO_JOURNAL=[{ts:Math.floor(Date.now()/1000)-120,avant:'192.168.1.254',apres:'192.168.1.200'}];
+
+  function majPastille(mode,sonde){
+    var p=document.getElementById('pastilleMode');
+    if(mode==='gk2'){p.textContent='gk2 passerelle';p.className='pastille';}
+    else {p.textContent='Freebox passerelle';p.className='pastille hors';}
+    if(mode==='gk2'&&!sonde){p.textContent='gk2 passerelle — sonde inactive';p.className='pastille alerte';}
+  }
+
+  function majEtat(d){
+    document.getElementById('vMode').textContent=d.mode==='gk2'?'gk2':'Freebox';
+    document.getElementById('vSonde').textContent=d.sonde_active?'Active':'Inactive';
+    document.getElementById('vRejetes').textContent=(d.paquets_rejetes!=null)?d.paquets_rejetes:'—';
+    majPastille(d.mode,d.sonde_active);
+    document.getElementById('btnActiver').disabled=(d.mode==='gk2');
+    document.getElementById('btnRetour').disabled=(d.mode!=='gk2');
+  }
+
+  function chargerEtat(){
+    if(DEMOMODE){majEtat(DEMO_ETAT);return;}
+    getj(API+'/etat').then(function(d){if(d) majEtat(d);});
+  }
+
+  function ligneSuggestion(a){
+    var zone=a.zone_suggeree?'<span class="pil" style="border-color:#2ecc71;color:#2ecc71">'+esc(a.zone_suggeree)+'</span>':'<span class="pil" style="border-color:#6f84a8;color:#9fb3d6">aucune</span>';
+    return '<tr><td>'+esc(a.nom||'?')+'</td><td><code>'+esc(a.mac)+'</code></td><td>'+esc(a.host_type||'?')+'</td><td>'+zone+'</td>'+
+      '<td>'+(a.zone_suggeree?'<button type="button" class="btn ok" data-mac="'+esc(a.mac)+'" data-zone="'+esc(a.zone_suggeree)+'">Classer</button>':'')+'</td></tr>';
+  }
+
+  function chargerSuggestions(){
+    var corps=document.querySelector('#tabSuggestions tbody'),vide=document.getElementById('videSuggestions');
+    function rendre(liste){
+      liste=liste||[];
+      corps.innerHTML=liste.map(ligneSuggestion).join('');
+      vide.style.display=liste.length?'none':'';
+      corps.querySelectorAll('button[data-mac]').forEach(function(b){
+        b.addEventListener('click',function(){
+          if(DEMOMODE) return;
+          fetch(NAC_API+'/add_to_zone',{method:'POST',credentials:'include',
+            headers:{'Authorization':'Bearer '+jeton(),'Content-Type':'application/json'},
+            body:JSON.stringify({mac:b.dataset.mac,zone:b.dataset.zone})
+          }).then(function(){chargerSuggestions();}).catch(function(){});
+        });
+      });
+    }
+    if(DEMOMODE){rendre(DEMO_SUGGESTIONS);return;}
+    getj(API+'/suggestions').then(function(d){rendre(d&&d.suggestions);});
+  }
+
+  function fmtQuand(ts){if(!ts) return '—';return new Date(ts*1000).toLocaleString('fr-FR');}
+  function ligneJournal(e){return '<tr><td>'+fmtQuand(e.ts)+'</td><td><code>'+esc(e.avant)+'</code></td><td><code>'+esc(e.apres)+'</code></td></tr>';}
+
+  function chargerJournal(){
+    var corps=document.querySelector('#tabJournal tbody'),vide=document.getElementById('videJournal');
+    function rendre(liste){
+      liste=liste||[];
+      corps.innerHTML=liste.map(ligneJournal).join('');
+      vide.style.display=liste.length?'none':'';
+    }
+    if(DEMOMODE){rendre(DEMO_JOURNAL);return;}
+    getj(API+'/journal').then(function(d){rendre(d&&d.entrees);});
+  }
+
+  var actionEnAttente=null;
+  function demanderConfirmation(action,texte){
+    actionEnAttente=action;
+    document.getElementById('confirmeTexte').textContent=texte;
+    document.getElementById('confirmeZone').classList.add('on');
+  }
+  document.getElementById('btnConfirmerNon').addEventListener('click',function(){
+    actionEnAttente=null;document.getElementById('confirmeZone').classList.remove('on');
+  });
+  document.getElementById('btnConfirmerOui').addEventListener('click',function(){
+    var a=actionEnAttente;actionEnAttente=null;document.getElementById('confirmeZone').classList.remove('on');
+    if(!a||DEMOMODE) return;
+    api(a==='activer'?'/activer':'/retour-freebox',{method:'POST'}).then(function(){chargerEtat();chargerJournal();}).catch(function(){});
+  });
+  document.getElementById('btnActiver').addEventListener('click',function(){
+    demanderConfirmation('activer','gk2 va devenir la passerelle DHCP du LAN. La sonde de secours doit déjà être active, sinon la bascule est refusée.');
+  });
+  document.getElementById('btnRetour').addEventListener('click',function(){
+    demanderConfirmation('retour','Retour immédiat à la Freebox comme passerelle DHCP.');
+  });
+
+  chargerEtat();chargerSuggestions();chargerJournal();
+  if(!DEMOMODE) setInterval(chargerEtat,15000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-pseudo-routeur — cadence de la sonde de secours (#2940)
+#
+# OnActiveSec ET OnUnitActiveSec ensemble (motif #2919/#2925) : une minuterie qui n'a
+# que OnUnitActiveSec ne repart pas seule apres une reactivation (mise a jour du
+# paquet, redemarrage du module). Une sonde par minute : trois echecs consecutifs =
+# trois minutes avant le retour automatique (contrainte globale du plan #2940).
+
+[Unit]
+Description=SecuBox Pseudo-routeur — sonde de secours, toutes les 60 s (#2940)
+
+[Timer]
+OnActiveSec=60s
+OnUnitActiveSec=60s
+
+[Install]
+WantedBy=timers.target

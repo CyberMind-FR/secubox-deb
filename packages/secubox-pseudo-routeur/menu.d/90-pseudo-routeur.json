@@ -1,0 +1,10 @@
+{
+  "id": "pseudo-routeur",
+  "name": "Pseudo-routeur",
+  "category": "root",
+  "icon": "🧭",
+  "path": "/pseudo-routeur/",
+  "order": 909,
+  "description": "gk2 passerelle DHCP du LAN plat, filet de secours (#2940)",
+  "theme": "reseau"
+}

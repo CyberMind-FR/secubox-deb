@@ -1,0 +1,34 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-pseudo-routeur/usr/lib/secubox/pseudo-routeur/api
+	install -m 644 api/*.py debian/secubox-pseudo-routeur/usr/lib/secubox/pseudo-routeur/api/
+	install -d debian/secubox-pseudo-routeur/usr/sbin
+	install -m 755 sbin/pseudo-routeurctl debian/secubox-pseudo-routeur/usr/sbin/pseudo-routeurctl
+	install -m 755 sbin/sonde-secours debian/secubox-pseudo-routeur/usr/sbin/sonde-secours
+	install -d debian/secubox-pseudo-routeur/usr/share/secubox/www
+	cp -r www/. debian/secubox-pseudo-routeur/usr/share/secubox/www/
+	install -d debian/secubox-pseudo-routeur/usr/share/secubox/menu.d
+	cp -r menu.d/. debian/secubox-pseudo-routeur/usr/share/secubox/menu.d/
+	install -d debian/secubox-pseudo-routeur/etc/nginx/secubox-routes.d
+	install -m 644 nginx/pseudo-routeur.conf debian/secubox-pseudo-routeur/etc/nginx/secubox-routes.d/pseudo-routeur.conf
+	# Reference seulement (documentation) : la chaine LIVE n'est ecrite dans
+	# /etc/nftables.d/ qu'au moment de `pseudo-routeurctl activer-transfert`, jamais a
+	# l'installation du paquet (#2940 etape 6 : rien ne transfere seul).
+	install -d debian/secubox-pseudo-routeur/usr/share/secubox/pseudo-routeur
+	install -m 644 nft/secubox-pseudo-routeur.nft debian/secubox-pseudo-routeur/usr/share/secubox/pseudo-routeur/secubox-pseudo-routeur.nft.reference
+	install -d debian/secubox-pseudo-routeur/etc/sudoers.d
+	install -m 440 sudoers/secubox-pseudo-routeur debian/secubox-pseudo-routeur/etc/sudoers.d/secubox-pseudo-routeur
+	install -d debian/secubox-pseudo-routeur/lib/systemd/system
+	install -m 644 systemd/secubox-pseudo-routeur.service debian/secubox-pseudo-routeur/lib/systemd/system/
+	install -m 644 systemd/pseudo-routeur-sonde.service debian/secubox-pseudo-routeur/lib/systemd/system/
+	install -m 644 systemd/pseudo-routeur-sonde.timer debian/secubox-pseudo-routeur/lib/systemd/system/
+	install -m 644 systemd/pseudo-routeur-retour.service debian/secubox-pseudo-routeur/lib/systemd/system/
+
+override_dh_installsystemd:
+	# Postinst gere l'activation a la main : l'API demarre (enable+start), la sonde et
+	# son retour NE DOIVENT JAMAIS demarrer seuls a l'installation (#2940 etape 6) —
+	# seule POST /activer les arme.
+	dh_installsystemd --no-enable --no-start

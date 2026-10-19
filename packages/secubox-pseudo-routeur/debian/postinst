@@ -1,0 +1,30 @@
+#!/bin/sh
+set -e
+case "$1" in
+  configure)
+    getent group secubox >/dev/null || addgroup --system secubox >/dev/null
+    id -u secubox-pseudo-routeur >/dev/null 2>&1 || \
+      adduser --system --ingroup secubox --no-create-home --home /nonexistent \
+        --shell /usr/sbin/nologin secubox-pseudo-routeur >/dev/null
+    install -d -m 0750 -o secubox-pseudo-routeur -g secubox /var/lib/secubox/pseudo-routeur
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload || true
+      # L'API démarre (lecture seule tant que rien n'est activé). La sonde et son
+      # retour ne démarrent JAMAIS seuls ici (#2940 étape 6) : seule POST /activer
+      # les arme, via `pseudo-routeurctl activer` -> `activer-transfert` ->
+      # `nft -f` + `sysctl ip_forward=1`. Un module installé ne doit jamais
+      # commencer à transférer de paquets tout seul.
+      systemctl enable secubox-pseudo-routeur.service >/dev/null 2>&1 || true
+      if systemctl is-active --quiet secubox-pseudo-routeur.service; then
+        systemctl try-restart secubox-pseudo-routeur.service || true
+      else
+        systemctl start secubox-pseudo-routeur.service || true
+      fi
+      if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx >/dev/null 2>&1 || true
+      fi
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

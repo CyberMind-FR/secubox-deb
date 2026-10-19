@@ -84,6 +84,14 @@ def appareils():
     return _repondre(lambda: {"appareils": _service.appareils()})
 
 
+@app.get("/appareils-non-classes", dependencies=[Depends(require_jwt)])
+def appareils_non_classes(macs_connues: str = ""):
+    """Suggestions de classement (#2940) : appareils vus par la Freebox dont la MAC n'est
+    pas dans `macs_connues` (liste separee par des virgules, deja classes cote NAC)."""
+    macs = {m.strip().lower() for m in macs_connues.split(",") if m.strip()}
+    return _repondre(lambda: {"appareils": _service.appareils_non_classes(macs)})
+
+
 @app.get("/connexion", dependencies=[Depends(require_lecture)])
 def connexion():
     return _repondre(_service.connexion)

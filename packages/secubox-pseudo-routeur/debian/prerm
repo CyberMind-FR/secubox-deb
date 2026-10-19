@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+case "$1" in
+  remove|deconfigure)
+    # Chemin de secours avant de retirer quoi que ce soit : si le transfert est actif,
+    # revenir a la Freebox plutot que de laisser le LAN sans passerelle valide.
+    if command -v pseudo-routeurctl >/dev/null 2>&1; then
+      pseudo-routeurctl retour-freebox >/dev/null 2>&1 || true
+    fi
+    systemctl stop pseudo-routeur-sonde.timer >/dev/null 2>&1 || true
+    systemctl disable pseudo-routeur-sonde.timer >/dev/null 2>&1 || true
+    systemctl stop secubox-pseudo-routeur.service >/dev/null 2>&1 || true
+    systemctl disable secubox-pseudo-routeur.service >/dev/null 2>&1 || true
+    ;;
+esac
+#DEBHELPER#
+exit 0

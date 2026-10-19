@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-pseudo-routeur — sonde de secours, un passage (#2940)
+#
+# OnFailure= declenche le retour a la Freebox quand ce service SORT EN ERREUR, pas
+# seulement quand la sonde rapporte un echec applicatif : la sonde sort en erreur au
+# troisieme echec consecutif (voir sbin/sonde-secours). Le retour vit dans sa PROPRE
+# unite (pseudo-routeur-retour.service), jamais appele directement d'ici, pour qu'un
+# crash de CE service (pas seulement un echec propre du script) declenche quand meme
+# le retour.
+
+[Unit]
+Description=SecuBox Pseudo-routeur — sonde de secours (dead-man switch, #2940)
+OnFailure=pseudo-routeur-retour.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/sonde-secours verifier

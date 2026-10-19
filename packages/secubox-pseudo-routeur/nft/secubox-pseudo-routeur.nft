@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-pseudo-routeur :: chaine forward, DEFAULT DROP par zone (#2940)
+#
+# priority filter - 1 : juste APRES la chaine forward existante de secubox-nac
+# (priorite -5), pour que ses drops blocked/quarantine_zone restent evalues en premier.
+# blocked/quarantine_zone sont recopies ici (Review Focus #2940 point 1) : un appareil
+# deja bloque par le NAC le reste meme une fois cette chaine en policy drop.
+#
+# Genere par `pseudo-routeurctl generer-chaine` — ce fichier est le gabarit source
+# installe dans le paquet ; le contenu doit rester identique a celui que le ctl produit.
+
+table inet secubox_pseudo_routeur {
+	chain forward {
+		type filter hook forward priority filter - 1; policy drop;
+		ether saddr @blocked drop
+		ether saddr @quarantine_zone drop
+		ether saddr @lan_allowed accept
+		ether saddr @lxc_zone accept
+		ether saddr @guest_zone accept
+		ether saddr @iot_zone accept
+		counter name sbx_pr_forward_rejete
+	}
+}

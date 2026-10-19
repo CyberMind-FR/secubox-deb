@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-pseudo-routeur :: pseudo-routeurctl (#2940)
+#
+#   generer-chaine     ecrit la chaine nft dans un fichier (SECUBOX_PR_NFT_OUT ou
+#                       /etc/nftables.d/zz-secubox-pseudo-routeur.nft), ne l'applique pas
+#   activer-transfert   generer-chaine vers le fichier reel, nft -f, puis ip_forward=1
+#   etat-transfert      JSON {"transfert_actif": bool, "paquets_rejetes": int}
+
+set -euo pipefail
+
+readonly NFT_OUT_DEFAUT="/etc/nftables.d/zz-secubox-pseudo-routeur.nft"
+readonly NFT_OUT="${SECUBOX_PR_NFT_OUT:-$NFT_OUT_DEFAUT}"
+# sonde-secours vit dans le meme sbin/ (dev comme une fois installe en /usr/sbin/) : pas
+# besoin que /usr/sbin figure dans le PATH pour le trouver.
+readonly SONDE_SCRIPT="${SECUBOX_PR_SONDE:-$(dirname "$0")/sonde-secours}"
+readonly FREEBOXCTL="${SECUBOX_PR_FREEBOXCTL:-/usr/sbin/freeboxctl}"
+readonly IP_GK2="${SECUBOX_PR_IP_GK2:-192.168.1.200}"
+readonly IP_FREEBOX="${SECUBOX_PR_IP_FREEBOX:-192.168.1.254}"
+
+_sonde_active() {
+    bash "$SONDE_SCRIPT" etat | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("actif") is True else 1)'
+}
+
+_freeboxctl() {
+    if command -v sudo >/dev/null 2>&1; then
+        sudo -u secubox-freebox "$FREEBOXCTL" "$@"
+    else
+        "$FREEBOXCTL" "$@"
+    fi
+}
+
+# #2940 Review Focus point 1 : un appareil deja bloque par le NAC (blocked/quarantine_zone)
+# doit le rester une fois la chaine forward basculee en policy drop — on recopie ses deux
+# drops avant toute regle d'acceptation, plutot que de supposer que la chaine -5 suffit seule.
+_contenu_chaine() {
+    cat <<'EOF'
+table inet secubox_pseudo_routeur {
+	chain forward {
+		type filter hook forward priority filter - 1; policy drop;
+		ether saddr @blocked drop
+		ether saddr @quarantine_zone drop
+		ether saddr @lan_allowed accept
+		ether saddr @lxc_zone accept
+		ether saddr @guest_zone accept
+		ether saddr @iot_zone accept
+		counter name sbx_pr_forward_rejete
+	}
+}
+EOF
+}
+
+cmd_generer_chaine() {
+    mkdir -p "$(dirname "$NFT_OUT")"
+    _contenu_chaine > "$NFT_OUT"
+}
+
+cmd_activer_transfert() {
+    SECUBOX_PR_NFT_OUT="$NFT_OUT_DEFAUT" cmd_generer_chaine
+    nft -f "$NFT_OUT_DEFAUT"
+    sysctl -w net.ipv4.ip_forward=1 >/dev/null
+}
+
+cmd_etat_transfert() {
+    local transfert_actif="false"
+    local paquets_rejetes=0
+    if [ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo 0)" = "1" ]; then
+        transfert_actif="true"
+    fi
+    if command -v nft >/dev/null 2>&1; then
+        paquets_rejetes="$(nft -j list counter inet secubox_pseudo_routeur sbx_pr_forward_rejete 2>/dev/null \
+            | python3 -c 'import json,sys
+try:
+    d = json.load(sys.stdin)
+    print(d["nftables"][1]["counter"]["packets"])
+except Exception:
+    print(0)' 2>/dev/null || echo 0)"
+    fi
+    printf '{"transfert_actif": %s, "paquets_rejetes": %s}\n' "$transfert_actif" "$paquets_rejetes"
+}
+
+# activer : refuse (code 2) si la sonde n'est pas active — jamais de bascule DHCP sans
+# le filet de secours arme en premier (#2940 Review Focus point 3).
+cmd_activer() {
+    if ! _sonde_active; then
+        echo "refuse : la sonde de secours n'est pas active (sonde-secours etat)" >&2
+        exit 2
+    fi
+    cmd_activer_transfert
+    _freeboxctl passerelle-dhcp "$IP_GK2" || exit 1
+}
+
+# retour-freebox : chemin de secours, toujours execute, sonde active ou non. Un echec de
+# l'appel reseau/connecteur sort en 1 (jamais en 2 : ce code est reserve au refus de la
+# garde, et retour-freebox n'a pas de garde a refuser).
+cmd_retour_freebox() {
+    _freeboxctl passerelle-dhcp "$IP_FREEBOX" || exit 1
+}
+
+cmd_etat() {
+    local sonde_active="false"
+    if _sonde_active; then sonde_active="true"; fi
+    local passerelle
+    passerelle="$(_freeboxctl lire-passerelle 2>/dev/null | python3 -c 'import json,sys
+try:
+    print(json.load(sys.stdin).get("passerelle") or "")
+except Exception:
+    print("")' 2>/dev/null || echo "")"
+    local mode="freebox"
+    [ "$passerelle" = "$IP_GK2" ] && mode="gk2"
+    printf '{"mode": "%s", "sonde_active": %s}\n' "$mode" "$sonde_active"
+}
+
+case "${1:-}" in
+    generer-chaine) cmd_generer_chaine ;;
+    activer-transfert) cmd_activer_transfert ;;
+    etat-transfert) cmd_etat_transfert ;;
+    activer) cmd_activer ;;
+    retour-freebox) cmd_retour_freebox ;;
+    etat) cmd_etat ;;
+    *) echo "usage : pseudo-routeurctl generer-chaine|activer-transfert|etat-transfert|activer|retour-freebox|etat" >&2; exit 2 ;;
+esac
