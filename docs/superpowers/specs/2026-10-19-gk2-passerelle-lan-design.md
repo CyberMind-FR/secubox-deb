@@ -78,10 +78,11 @@ jour, mais **permanente et auto-renouvelée** tant que le mode passerelle est ac
 - Chaîne `forward` de `secubox-hardening` : politique `DEFAULT DROP`, comme `input`. Chaque zone (reprise des
   ensembles du NAC : `lan_allowed`, `guest_zone`, `iot_zone`, `quarantine_zone`, plus `blocked`) a sa règle
   `ether saddr @zone … accept` ou `drop`. Un appareil hors de tout ensemble connu suit la politique par défaut
-  **décidé par le propriétaire : bloqué tant qu'il n'est pas classé.** Un appareil neuf (invité, objet connecté
-  qu'on vient de brancher) n'a donc **aucun accès Internet** avant d'être rangé dans une zone : à dire clairement
-  dans l'interface (« nouvel appareil détecté, sans accès tant qu'il n'est pas classé »), sinon ça ressemble à une
-  panne. C'est plus strict que l'état actuel, où un appareil neuf a Internet par défaut.
+  **corrigé le 2026-10-19 (vérifié sur gk2) : la politique du NAC est déjà réglée sur `guest`, pas sur
+  `quarantine` — `default_zone: "guest"` dans l'historique du NAC.** Décision du propriétaire : **reproduire ce
+  comportement**, pas un blocage dur. Un appareil hors de toute zone connue suit `guest_zone` : Internet avec les
+  restrictions déjà posées à ce groupe (accès limité, pas d'accès au réseau privé), jamais un blocage total. Le
+  même réglage (lu dans la politique du NAC, pas recodé en dur) pilote la chaîne `forward`.
 - Aucune règle `ct state established` sur ce trafic précis (elle ne matcherait jamais, le retour ne passe pas par
   gk2) : les règles sont par paquet, sur l'adresse source et la destination/port.
 
@@ -93,7 +94,35 @@ jour, mais **permanente et auto-renouvelée** tant que le mode passerelle est ac
 - `GET` du même endpoint : état actuel (Freebox passerelle ou gk2), et pour chaque appareil connu de la Freebox,
   sa passerelle **actuellement utilisée** si disponible (sinon « inconnu, pas encore renouvelé son bail »).
 
-### 4. Journal et interface
+### 4. Import de la liste d'appareils de la Freebox (complète la classification)
+
+**(section ajoutée le 2026-10-19, demande du propriétaire)** Pour que moins d'appareils tombent dans `guest` faute
+d'être connus, importer la liste réelle de la Freebox (`lan/browser/pub/`, déjà lue par le connecteur
+`secubox-freebox` pour la sonde IPv6 du même jour) dans le NAC :
+
+- Pour chaque appareil Freebox non encore connu du NAC : adresse MAC, nom déclaré (DHCP/mDNS), et `host_type`.
+  Catégories réellement vues sur le foyer (125 appareils, relevé du 2026-10-19) : `workstation` (90),
+  `smartphone` (16), `freebox_wifi` (6, répéteurs), `freebox_pop` (5, l'infrastructure opérateur elle-même),
+  `laptop` (3), `television` (2), `printer` (1), `networking_device` (1), `multimedia_device` (1).
+  Correspondance de zone suggérée **(mon choix, à valider par le propriétaire)** :
+
+  | `host_type` | Zone suggérée | Pourquoi |
+  |---|---|---|
+  | `freebox_pop`, `freebox_wifi` | `lan_allowed` | infrastructure réseau du foyer, pas un appareil à restreindre |
+  | `television`, `multimedia_device` | `guest` (ou une zone Média si elle existe un jour) | accès limité suffit |
+  | `printer`, `networking_device` | `lan_allowed` | matériel fixe du foyer, pas de raison de le limiter |
+  | `workstation`, `laptop`, `smartphone` | **pas de suggestion automatique** | trop générique (90 appareils) pour deviner qui est qui ; proposé « non classé » avec le nom et laissé à l'administrateur |
+- **Proposition, jamais classification automatique silencieuse** : le NAC affiche l'appareil avec une zone
+  suggérée d'après son type (ex. `television` → zone Média si elle existe, sinon `guest` comme aujourd'hui ;
+  `freebox_pop` → `lan_allowed`, ce sont des répéteurs de l'opérateur, pas des appareils du foyer à classer) ;
+  l'administrateur confirme ou change avant que ça s'applique. **(mon choix)** : pas d'auto-classification sans
+  confirmation, pour ne pas laisser une mauvaise correspondance de type ouvrir une zone par erreur.
+- Rafraîchi à la demande (bouton) et à l'arrivée d'une notification `host_new` de la Freebox si le connecteur
+  l'expose déjà (à vérifier) ; sinon sondage périodique léger (le connecteur a déjà un TTL de lecture).
+- Les appareils déjà classés par le NAC ne sont jamais re-proposés ni reclassés par cet import : il ne complète
+  que ce qui manque.
+
+### 5. Journal et interface
 
 - Page du panneau réseau : état (« gk2 passerelle » / « Freebox passerelle »), bouton de bascule avec confirmation
   intégrée à la page, état de la sonde de secours, dernière bascule automatique s'il y en a eu une.
