@@ -948,6 +948,13 @@ cmd_generate() {
     local http_port=$(cle_conf http_port 80)
     local https_port=$(cle_conf https_port 443)
     local stats_port=$(cle_conf stats_port 8404)
+    # IPv6 entrant (#2934) : `ipv6 = true` ajoute DEUX ecouteurs v6only (80 et 443). v6only et non v4v6 : les ecouteurs
+    # IPv4 restent strictement inchanges et aucune adresse IPv4 mappee (::ffff:a.b.c.d) n'arrive au WAF. Desactive par defaut.
+    local bind_v6_http="" bind_v6_https=""
+    if [ "$(cle_conf ipv6 false)" = "true" ]; then
+        bind_v6_http="    bind :::${http_port} v6only"
+        bind_v6_https="    bind :::${https_port} v6only ssl crt $CERTS_DIR/"
+    fi
     local waf_enabled=$(grep -E '^waf_enabled\s*=' "$CONF_PATH" 2>/dev/null | grep -q 'true' && echo "1" || echo "0")
     local waf_port=$(cle_conf waf_backend_port 8080)
     local waf_ip=$(grep -E '^waf_backend_ip\s*=' "$CONF_PATH" 2>/dev/null | head -1 | cut -d'"' -f2)
@@ -1004,6 +1011,7 @@ frontend stats
 
 frontend http-in
     bind *:${http_port}
+${bind_v6_http}
     mode http
     # Pendant du frontend TLS : ici la connexion EST en clair, et le dire
     # explicitement empeche un client de pretendre le contraire.
@@ -1116,6 +1124,7 @@ EOF
 
 frontend https-in
     bind *:${https_port} ssl crt $CERTS_DIR/
+${bind_v6_https}
     mode http
     # X-FORWARDED-PROTO, ET IL N'ETAIT POSE NULLE PART (#1269).
     #
