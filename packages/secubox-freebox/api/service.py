@@ -98,6 +98,22 @@ class Freebox:
     def appareils(self):
         return self._lu("appareils", lambda: N.appareils(self.client.lire("lan/browser/pub/")))
 
+    def appareils_non_classes(self, macs_connues):
+        """Suggestions de classement (#2940) : appareils vus par la Freebox dont la MAC n'est
+        pas deja connue du NAC. Jamais applique seul — une liste pour decision du proprietaire."""
+        hotes = self.client.lire("lan/browser/pub/") or []
+        resultat = []
+        for h in hotes:
+            mac = (h.get("l2ident") or {}).get("id")
+            if not mac:
+                continue
+            mac = mac.lower()
+            if mac in macs_connues:
+                continue
+            noms = h.get("names") or []
+            resultat.append({"mac": mac, "nom": noms[0].get("name", "") if noms else "", "host_type": h.get("host_type")})
+        return resultat
+
     def connexion(self):
         def produire():
             conn = self.client.lire("connection/")
