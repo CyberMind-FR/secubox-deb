@@ -1,3 +1,18 @@
+secubox-surf (1.0.35-1~bookworm1) bookworm; urgency=medium
+
+  * Fuite mémoire (ref #2962) : `r = await client.request(...)` chargeait TOUJOURS le corps amont
+    entier en mémoire, y compris pour un passthrough binaire non réécrit (images, polices, médias).
+    Un flux vidéo complet relayé (ex. diffusion au parc via un lien YouTube) pouvait peser plusieurs
+    centaines de Mo par requête. Constat gk2 (2026-10-19) : service actif 2 jours, pic mémoire 3.2G
+    + swap pic 4.9G, charge système 25+, timeouts en cascade ailleurs sur la box (dont le SSO mail,
+    via l'agrégateur saturé). Correctif : `client.stream()` + `repond_stream()`, le corps non réécrit
+    est relayé morceau par morceau, jamais bufferisé entier. Les branches qui réécrivent (HTML/CSS/
+    JS/manifeste — toujours du texte) lisent explicitement le corps via `r.aread()`, comportement
+    inchangé. 2 tests (`test_passthrough_stream_2962.py`), RED confirmé contre l'ancien code.
+    L'endormissement par inactivité (reste de #2962) suit dans un correctif séparé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 18:30:00 +0200
+
 secubox-surf (1.0.34-1~bookworm1) bookworm; urgency=medium
 
   * zataz.com (« Bloqueur de publicités détecté ! », #2516) : le détecteur du thème Foxiz crée un appât #rb-adcheck > #google_ads_iframe_test (300x250) et dresse son mur si on l'a masqué ; notre feuille cosmétique ([id^="google_ads"], [class*="ad-slot"]…) le masquait. Une règle de protection par id, après la règle de masquage, le laisse visible (appât temporaire, hors écran, aria-hidden). Reproduit avec Chromium sur la vraie page. 2 tests.
