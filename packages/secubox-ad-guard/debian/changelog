@@ -1,3 +1,14 @@
+secubox-ad-guard (1.15.1-1~bookworm1) bookworm; urgency=medium
+
+  * Exemption adulte par MAC (#2967, suite de #2964). Constat gk2 : chaturbate.com restait bloqué
+    pour 192.168.1.3 malgré l'IPv4 exemptée — la requête DNS partait d'une adresse IPv6 temporaire
+    (extensions de confidentialité RFC 4941, qui tourne environ chaque jour), jamais listée. La MAC
+    ne change pas : `adult-exempt-mac.txt` (nouveau, en plus de `adult-exempt-ip.txt`) se résout vers
+    les adresses COURANTES de l'appareil (IPv4 et IPv6, table de voisinage du noyau) à chaque
+    synchronisation — plus robuste qu'une IP figée. 6 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 19:30:00 +0200
+
 secubox-ad-guard (1.15.0-1~bookworm1) bookworm; urgency=medium
 
   * Exception adulte par appareil (#2964, suite de #2962 : chaturbate.com bloqué pour 192.168.1.3 par
