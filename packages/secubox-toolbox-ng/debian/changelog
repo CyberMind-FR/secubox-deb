@@ -1,3 +1,9 @@
+secubox-toolbox-ng (0.13.1-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf : l'adresse cliente est normalisee et ::1 est un mandataire local (ref #2932). Preparation de la double pile HAProxy : une IPv4 peut arriver mappee (::ffff:a.b.c.d) et une IPv6 sous plusieurs ecritures ; sans normalisation, le set de bannissement, l'anti-tempete et les statistiques les compteraient comme des clients differents. IPv4 mappee -> IPv4 nue, IPv6 -> forme canonique, avant toute comparaison. Tests IPv6 ajoutes (clientip_ipv6_test.go : chaine X-Forwarded-For, ::1, forgeries ULA, privateCIDR).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 14:00:00 +0200
+
 secubox-toolbox-ng (0.13.0-1~bookworm1) bookworm; urgency=medium
 
   * sbxmitm : cache de reponses des CDN statiques (#2804, proxypac etape 2). Pour une LISTE FERMEE de noms exacts (polices Google, ajax.googleapis.com, cdnjs, jsdelivr, unpkg, code.jquery.com, bootstrapcdn, aspnetcdn) ET acceptes par l'operateur (cdn-cache-hosts.txt, ecrit par proxypac), la reponse GET/200 est gardee sur disque (1 h a 7 j, 512 Mio max, plus anciens evinces) et resservie sans retourner chez l'origine. Jamais une API, un sous-domaine, un Range, un Authorization, un Set-Cookie, no-store/private, Vary:*. Desactive par defaut : actif par INSTANCE via /etc/secubox/toolbox-ng-worker-N.env (SBX_CDN_CACHE_ARGS=--cdn-cache-dir=/var/cache/secubox/cdn). Le corps d'une reponse trop grosse est relaye sans perte. 11 tests Go + 4 tests d'unite.
