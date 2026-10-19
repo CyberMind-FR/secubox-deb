@@ -214,6 +214,11 @@
   .obs .note{font-size:.74rem}
   .obs .meta{font-size:.62rem}
   .etat-donnees{font-size:.62rem}
+
+  /* #2950 : la pastille ne répète « à jour »/« démo » (rien d'utile) qu'en l'absence de souci —
+     masquée seulement dans cet état nominal. hors/neutre(chargement)/att/cy restent visibles :
+     seuls ces états-là ne sont dits nulle part ailleurs sur la carte. */
+  .actif:not(.hors):not(.neutre):not(.att):not(.cy){display:none}
 </style>
 </head>
 <body>
