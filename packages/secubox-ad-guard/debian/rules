@@ -18,6 +18,8 @@ override_dh_auto_install:
 	# DNS sinkhole sync (#740) — compiles modular filter lists + renders Unbound
 	install -d debian/secubox-ad-guard/usr/sbin
 	install -m 755 sbin/secubox-adblock-sync debian/secubox-ad-guard/usr/sbin/
+	# Sinkhole adulte séparé, par appareil exempté (#2964, suite de #2962)
+	install -m 755 sbin/secubox-adguard-adult-sync debian/secubox-ad-guard/usr/sbin/
 	install -d debian/secubox-ad-guard/etc/secubox/toolbox
 	[ -f config/filter-sources.json ] && install -m 644 config/filter-sources.json debian/secubox-ad-guard/etc/secubox/toolbox/ || true
 
@@ -42,5 +44,9 @@ override_dh_auto_install:
 
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-adblock-sync secubox-adblock-sync.timer
+	# #2964 : le minuteur s'installe et s'active (le service ne fait rien tant que
+	# adult-sinkhole.enabled != 1, cf. ExecStart du .service) ; jamais d'enable --now
+	# implicite sur un blocage de contenu adulte.
+	dh_installsystemd --name=secubox-adguard-adult-sync secubox-adguard-adult-sync.timer
 	# Le démon d'alimentation du POC (unité installée à la main plus haut) n'est ni activé ni démarré à l'installation : POC isolé,
 	# inactif par défaut. Aucun dh_installsystemd pour lui, donc aucun snippet d'activation dans les scripts du paquet.

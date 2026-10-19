@@ -1,3 +1,17 @@
+secubox-ad-guard (1.15.0-1~bookworm1) bookworm; urgency=medium
+
+  * Exception adulte par appareil (#2964, suite de #2962 : chaturbate.com bloqué pour 192.168.1.3 par
+    un des sinkholes généraux stevenblack/oisd/hagezi). `ip-allowlist.txt` existant fait un bypass
+    COMPLET (pubs/trackers compris) — trop large pour « reste filtré normalement, sauf l'adulte ».
+    Nouveau sinkhole SÉPARÉ : `secubox-adguard-adult-sync` (liste NSFW dédiée StevenBlack porn-only),
+    drop-in `96-secubox-adult.conf` indépendant du sinkhole général, vue Unbound par IP exemptée
+    (`adult-exempt-ip.txt`) qui redéclare le sinkhole général MOINS les domaines adultes (les vues
+    Unbound remplacent entièrement les local-zone globales pour le client matché — jamais de fusion).
+    Jamais activé automatiquement : le service hebdomadaire ne rafraîchit que si déjà allumé
+    explicitement (`adult-sinkhole.enabled`), comme à l'installation/mise à jour. 9 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 19:00:00 +0200
+
 secubox-ad-guard (1.14.5-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.

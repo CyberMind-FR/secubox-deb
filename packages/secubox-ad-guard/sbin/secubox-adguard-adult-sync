@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: secubox-adguard-adult-sync (#2964, suite de #2962)
+CyberMind — https://cybermind.fr
+
+Sinkhole DNS DÉDIÉ au contenu adulte, séparé du sinkhole général
+(secubox-adblock-sync, #740). Pourquoi un second sinkhole plutôt qu'une
+simple entrée dans `ip-allowlist.txt` : celui-ci fait un bypass COMPLET par
+vue Unbound (pubs/trackers compris) — trop large pour « cet appareil garde
+le filtrage normal, seuls les domaines adultes lui restent ouverts ».
+
+Les vues Unbound REMPLACENT entièrement les `local-zone` globales pour le
+client matché (jamais de fusion) : une vue vide d'un appareil exempté
+équivaut donc à AUCUN filtrage pour lui. Pour une exception scopée, la vue
+redéclare l'ensemble du sinkhole général (`always_nxdomain`) MOINS les
+domaines adultes, qui y passent en `always_transparent` — l'appareil reste
+filtré pubs/trackers, seuls les domaines adultes lui sont ouverts.
+
+Ne modifie JAMAIS `secubox_filterlists` (bibliothèque commune, utilisée
+aussi par ad_ghost MITM) : source et compilation sont propres à ce script.
+
+Usage:
+  secubox-adguard-adult-sync sync     # fetch + compile + render + reload
+  secubox-adguard-adult-sync disable  # drop the drop-in + reload
+  secubox-adguard-adult-sync status   # print JSON status
+
+Runs as root (writes /etc/unbound, reloads the resolver).
+"""
+from __future__ import annotations
+
+import json
+import re
+import sys
+import time
+import urllib.request
+from pathlib import Path
+
+import secubox_unbound as _unbound
+
+# Importé en lecture seule : la liste générale déjà compilée par
+# secubox-adblock-sync (#740), pour savoir quels domaines adultes sont DÉJÀ
+# bloqués (éviter un doublon de `local-zone`, qu'Unbound refuse) et pour
+# redéclarer le sinkhole général dans la vue d'exception.
+for _p in ("/usr/lib/python3/dist-packages", "/usr/lib/secubox/toolbox", "/usr/lib/secubox/toolbox/lib"):
+    if _p not in sys.path:
+        sys.path.append(_p)
+try:
+    import secubox_filterlists as _F
+    GENERAL_DNS = _F.OUT_DNS
+except Exception:  # pragma: no cover — absent en profil minimal sans ad-guard général
+    GENERAL_DNS = Path("/var/lib/secubox/filterlists/dns-domains.txt")
+
+# Liste NSFW dédiée, maintenue séparément du reste (StevenBlack, variante
+# « porn-only » — un seul fichier hosts, pas de parsing supplémentaire).
+SOURCE_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts"
+CACHE_TTL = 6 * 3600
+
+DATA_DIR = Path("/var/lib/secubox/ad-guard")
+CACHE = DATA_DIR / "adult-source-cache.txt"
+ADULT_DOMAINS = DATA_DIR / "adult-domains.txt"
+EXEMPT_IP = DATA_DIR / "adult-exempt-ip.txt"
+DROPIN = Path("/etc/unbound/unbound.conf.d/96-secubox-adult.conf")
+UNBOUND_CONF = Path("/etc/unbound/unbound.conf")
+STATUS = DATA_DIR / "adult-sinkhole-status.json"
+STATE = DATA_DIR / "adult-sinkhole.enabled"
+
+_DOMAIN_RE = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)(\.[a-z0-9-]{1,63})+$")
+
+
+def _valid_domain(d: str) -> bool:
+    d = d.strip().lower().rstrip(".")
+    return bool(d) and len(d) <= 253 and " " not in d and bool(_DOMAIN_RE.match(d))
+
+
+def parse_hosts(text: str) -> set[str]:
+    """Format hosts : ``0.0.0.0 domaine`` / ``127.0.0.1 domaine``."""
+    out: set[str] = set()
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line[0] in "#!":
+            continue
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] in ("0.0.0.0", "127.0.0.1", "::"):
+            cand = parts[1].strip().lower()
+            if cand not in ("localhost", "localhost.localdomain") and _valid_domain(cand):
+                out.add(cand)
+    return out
+
+
+def _write_status(d: dict) -> None:
+    STATUS.parent.mkdir(parents=True, exist_ok=True)
+    d["ts"] = int(time.time())
+    tmp = STATUS.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, indent=2))
+    tmp.replace(STATUS)
+
+
+def _fetch(force: bool = False) -> str | None:
+    if not force and CACHE.exists() and (time.time() - CACHE.stat().st_mtime) < CACHE_TTL:
+        return CACHE.read_text(encoding="utf-8", errors="replace")
+    try:
+        req = urllib.request.Request(SOURCE_URL, headers={"User-Agent": "SecuBox-Deb/adult-sync"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read().decode("utf-8", errors="replace")
+        CACHE.parent.mkdir(parents=True, exist_ok=True)
+        CACHE.write_text(data, encoding="utf-8")
+        return data
+    except Exception:
+        if CACHE.exists():
+            return CACHE.read_text(encoding="utf-8", errors="replace")
+        return None
+
+
+def _general_domains() -> set[str]:
+    if GENERAL_DNS.exists():
+        return {d.strip() for d in GENERAL_DNS.read_text().splitlines() if d.strip()}
+    return set()
+
+
+def _exempt_ips() -> list[str]:
+    out = []
+    if EXEMPT_IP.exists():
+        for line in EXEMPT_IP.read_text().splitlines():
+            ip = line.split("#", 1)[0].strip()
+            if ip:
+                out.append(ip)
+    return out
+
+
+def _render(adult: set[str], general: set[str]) -> str:
+    """Rend le drop-in Unbound. `adult` → always_nxdomain pour tout le monde
+    (sauf ce que le sinkhole général bloque déjà — un seul `local-zone` par
+    nom, Unbound refuse les doublons). Par IP exemptée : une vue qui
+    redéclare `general - adult` (toujours bloqué) et laisse `adult` passer
+    (always_transparent) — l'appareil reste filtré pubs/trackers."""
+    lines = [
+        "# Managed by secubox-adguard-adult-sync (#2964). DO NOT EDIT BY HAND.",
+        "# Regenerate: secubox-adguard-adult-sync sync",
+        "server:",
+    ]
+    nouveaux = sorted(adult - general)
+    for d in nouveaux:
+        lines.append(f'    local-zone: "{d}." always_nxdomain')
+
+    ips = _exempt_ips()
+    if ips:
+        for ip in ips:
+            lines.append(f"    access-control-view: {ip} sbx-adult-allow")
+        lines.append("")
+        lines.append("view:")
+        lines.append('    name: "sbx-adult-allow"')
+        lines.append("    view-first: yes")
+        for d in sorted(general - adult):
+            lines.append(f'    local-zone: "{d}." always_nxdomain')
+        for d in sorted(adult):
+            lines.append(f'    local-zone: "{d}." always_transparent')
+    return "\n".join(lines) + "\n"
+
+
+class Systeme(_unbound.SystemeUnbound):
+    MODULE = "adguard-adult-sync"
+    ERREUR = RuntimeError
+
+    def verifier_unbound(self):
+        return _unbound.commande(["unbound-checkconf", str(UNBOUND_CONF)], 300)
+
+
+def do_sync(force: bool = False, systeme=None) -> dict:
+    s = systeme or Systeme()
+    text = _fetch(force=force)
+    if text is None:
+        st = {"ok": False, "error": "adult source unreachable and no cache"}
+        _write_status(st)
+        return st
+    adult = parse_hosts(text)
+    if not adult:
+        st = {"ok": False, "error": "no domains parsed from adult source"}
+        _write_status(st)
+        return st
+    ADULT_DOMAINS.parent.mkdir(parents=True, exist_ok=True)
+    ADULT_DOMAINS.write_text("\n".join(sorted(adult)) + "\n")
+
+    general = _general_domains()
+    try:
+        etat = _unbound.poser_vue(DROPIN, _render(adult, general), s)
+    except RuntimeError as e:
+        st = {"ok": False, "error": str(e), "adult": len(adult)}
+        _write_status(st)
+        return st
+
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text("1\n")
+    st = {"ok": True, "enabled": True, "adult": len(adult),
+          "exempt_ip": len(_exempt_ips()), "reloaded": etat == "applique"}
+    _write_status(st)
+    return st
+
+
+def do_disable(systeme=None) -> dict:
+    s = systeme or Systeme()
+    try:
+        etat = _unbound.retirer_vue(DROPIN, s)
+    except RuntimeError as e:
+        st = {"ok": False, "enabled": False, "reloaded": False, "error": str(e)}
+        _write_status(st)
+        return st
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text("0\n")
+    st = {"ok": True, "enabled": False, "reloaded": etat == "retire", "error": None}
+    _write_status(st)
+    return st
+
+
+def do_status() -> dict:
+    if STATUS.exists():
+        try:
+            return json.loads(STATUS.read_text())
+        except Exception:
+            pass
+    return {"ok": True, "enabled": STATE.exists() and STATE.read_text().strip() == "1", "adult": 0}
+
+
+def main() -> int:
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
+    force = "--force" in sys.argv
+    if cmd == "sync":
+        st = do_sync(force=force)
+    elif cmd == "disable":
+        st = do_disable()
+    elif cmd == "status":
+        st = do_status()
+    else:
+        print(f"unknown command: {cmd}", file=sys.stderr)
+        return 2
+    print(json.dumps(st, indent=2))
+    return 0 if st.get("ok", True) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly SecuBox adult-content sinkhole refresh (#2964)
+
+[Timer]
+OnBootSec=15min
+OnCalendar=Sun *-*-* 05:00:00
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

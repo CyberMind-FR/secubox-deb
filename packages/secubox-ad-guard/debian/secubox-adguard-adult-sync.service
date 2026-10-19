@@ -1,0 +1,16 @@
+[Unit]
+Description=SecuBox adult-content DNS sinkhole sync (#2964)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/2964
+After=network-online.target unbound.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Ne rafraîchit QUE si déjà activé explicitement (secubox-adguard-adult-sync
+# sync, à la main ou via l'API). Contrairement au sinkhole général (#740,
+# actif par défaut), celui-ci reste éteint tant qu'un administrateur ne l'a
+# pas allumé : bloquer du contenu adulte n'est jamais un réglage silencieux.
+ExecStart=/bin/sh -c '[ "$(cat /var/lib/secubox/ad-guard/adult-sinkhole.enabled 2>/dev/null)" = 1 ] && exec /usr/sbin/secubox-adguard-adult-sync sync || exit 0'
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=300
