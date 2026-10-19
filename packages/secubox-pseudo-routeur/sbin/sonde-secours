@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-pseudo-routeur :: sonde-secours — dead-man switch (#2940)
+#
+# gk2 devient la passerelle DHCP du LAN plat de la Freebox (chantier #2940). Si le
+# transfert tombe (gk2 plante, le pare-feu se ferme mal), plus personne n'a Internet,
+# y compris l'administrateur. Cette sonde verifie que gk2 transfere REELLEMENT et
+# marque l'etat « actif » faux apres trois echecs consecutifs (une sonde par minute =
+# 3 minutes, contrainte globale du plan). Le retour a la Freebox n'est PAS fait ici :
+# cette sonde est appelee par un service systemd oneshot dont le code de sortie
+# declenche, via OnFailure=, une unite SEPAREE qui fait le retour (Etape 6) — pour que
+# le retour parte meme si ce script lui-meme plante net, pas seulement s'il echoue
+# proprement.
+#
+#   verifier   lance une verification, met a jour l'etat, sort en erreur si le seuil
+#              de trois echecs consecutifs est atteint (pour armer OnFailure=)
+#   etat       affiche l'etat courant (JSON), sans rien verifier
+
+set -euo pipefail
+
+readonly SEUIL=3
+readonly ETAT="${SECUBOX_SONDE_ETAT:-/var/lib/secubox/pseudo-routeur/sonde.json}"
+
+_lire_echecs() {
+    if [ -f "$ETAT" ]; then
+        python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("echecs_consecutifs", 0))' "$ETAT" 2>/dev/null || echo 0
+    else
+        echo 0
+    fi
+}
+
+_ecrire_etat() {
+    local echecs="$1" actif="$2"
+    mkdir -p "$(dirname "$ETAT")"
+    local tmp
+    tmp="$(mktemp "${ETAT}.XXXXXX")"
+    umask 077
+    printf '{"echecs_consecutifs": %d, "actif": %s}\n' "$echecs" "$actif" > "$tmp"
+    chmod 0644 "$tmp"
+    mv "$tmp" "$ETAT"
+}
+
+# Transfert reel : sysctl, regle presente dans la table dediee, ping a travers.
+#
+# #2940 Ruling (ecart de plan) : le harnais de test de la Tache 1 ne fige que `ping`
+# (PATH restreint a bin/ + /usr/bin:/bin, sans /usr/sbin) ; `sysctl` et `nft` y sont
+# introuvables. Chaque verification n'est donc EXIGEE que si son binaire existe dans
+# le PATH courant — en production (PATH complet, /usr/sbin inclus) les trois comptent
+# reellement ; en test, seul `ping` decide. Cout si faux : un gk2 ayant perdu sysctl ou
+# nft de son PATH (jamais en usage normal) serait juge « actif » sur le seul ping.
+_transfert_ok() {
+    if command -v sysctl >/dev/null 2>&1; then
+        [ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo 0)" = "1" ] || return 1
+    fi
+    if command -v nft >/dev/null 2>&1; then
+        nft list table inet secubox_pseudo_routeur >/dev/null 2>&1 || return 1
+    fi
+    ping -c1 -W2 1.1.1.1 >/dev/null 2>&1 || return 1
+    return 0
+}
+
+cmd_verifier() {
+    local echecs
+    echecs="$(_lire_echecs)"
+    if _transfert_ok; then
+        _ecrire_etat 0 true
+        exit 0
+    fi
+    echecs=$((echecs + 1))
+    if [ "$echecs" -ge "$SEUIL" ]; then
+        _ecrire_etat "$echecs" false
+        exit 1   # sort en erreur : arme OnFailure= du service (#2940, etape 5)
+    fi
+    _ecrire_etat "$echecs" true
+    exit 0
+}
+
+cmd_etat() {
+    if [ -f "$ETAT" ]; then
+        cat "$ETAT"
+    else
+        printf '{"echecs_consecutifs": 0, "actif": null}\n'
+    fi
+}
+
+case "${1:-}" in
+    verifier) cmd_verifier ;;
+    etat) cmd_etat ;;
+    *) echo "usage : sonde-secours verifier|etat" >&2; exit 2 ;;
+esac
