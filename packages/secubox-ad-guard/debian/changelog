@@ -1,3 +1,17 @@
+secubox-ad-guard (1.15.4-1~bookworm1) bookworm; urgency=medium
+
+  * Exception adulte : local-zone-override cible la zone racine, pas le nom exact (#2973, casse
+    #2971/#2969). Log Unbound en direct sur gk2 : `info: chaturbate.com. always_nxdomain ...
+    www.chaturbate.com. AAAA IN` — Unbound matche TOUJOURS la zone la plus courte déjà déclarée
+    (`chaturbate.com.` couvre tout son sous-arbre), même quand un nom plus précis
+    (`www.chaturbate.com.`) a AUSSI sa propre déclaration ; un override posé sur ce nom précis n'est
+    donc jamais consulté. Nouvelle fonction `_zone_effective()` : remonte les étiquettes du domaine
+    jusqu'au plus proche ancêtre déjà déclaré (général ∪ adulte) et pose l'override là — dédupliquée,
+    ça réduit aussi fortement le nombre de lignes. Vérifié par `unbound-checkconf` réel sur gk2
+    (copie) avant de merger. 2 tests, RED confirmé contre l'ancien code.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 21:15:00 +0200
+
 secubox-ad-guard (1.15.3-1~bookworm1) bookworm; urgency=medium
 
   * Exception adulte : ordre des arguments de local-zone-override corrigé (#2971, casse #2969).

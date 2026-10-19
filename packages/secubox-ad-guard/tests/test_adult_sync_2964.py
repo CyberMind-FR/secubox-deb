@@ -107,6 +107,31 @@ def test_sans_appareil_exempte_aucune_vue(mod):
     assert "view:" not in mod.DROPIN.read_text()
 
 
+def test_zone_effective_remonte_au_plus_proche_ancetre_declare(mod):
+    zones = {"chaturbate.com", "autre.example"}
+    assert mod._zone_effective("www.chaturbate.com", zones) == "chaturbate.com"
+    assert mod._zone_effective("ads.chaturbate.com", zones) == "chaturbate.com"
+    assert mod._zone_effective("chaturbate.com", zones) == "chaturbate.com"
+    # Aucun ancêtre déclaré : le nom reste sa propre zone.
+    assert mod._zone_effective("isole.example", zones) == "isole.example"
+
+
+def test_appareil_exempte_sur_un_sous_domaine_recoit_l_override_de_l_apex(mod):
+    # Constat gk2 (#2973) : Unbound bloque "www.chaturbate.com." via la zone
+    # "chaturbate.com." (couvre tout son sous-arbre) — un override posé sur
+    # "www.chaturbate.com." lui-même n'est JAMAIS consulté. L'apex doit
+    # recevoir l'override, pas chaque sous-domaine séparément.
+    mod._fetch = lambda force=False: (
+        "0.0.0.0 chaturbate.com\n0.0.0.0 www.chaturbate.com\n0.0.0.0 ads.chaturbate.com\n"
+    )
+    mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
+    mod.EXEMPT_IP.write_text("192.168.1.3\n")
+    mod.do_sync(systeme=Faux())
+    texte = mod.DROPIN.read_text()
+    overrides = [ligne for ligne in texte.splitlines() if ligne.strip().startswith("local-zone-override:")]
+    assert overrides == ['    local-zone-override: "chaturbate.com." 192.168.1.3 always_transparent']
+
+
 def test_appareil_exempte_recoit_un_local_zone_override_par_domaine_adulte(mod):
     # #2969 : local-zone-override, PAS une vue — sans redéclarer le sinkhole
     # général (ce que faisait l'ancienne vue, jusqu'à 49 Mo sur gk2 et un
