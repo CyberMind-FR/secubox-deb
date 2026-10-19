@@ -1,3 +1,15 @@
+secubox-webos (1.13.0-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet « Éphéméride » du Hall, habillage « Boréal » (ref #2946) : ciel nocturne decoratif
+    (aurore animee en scintillement irregulier, etoiles, horizon) derriere le meme contenu reel
+    (date, soleil, lune, saint du jour, saison/meteo/air, observations). Contrat de donnees,
+    niveaux (compact/standard/etendu) et accessibilite inchanges — additif pur, verifie par
+    test_ephemeride_cardlet.py et test_cartes_aurora_2658.py. Carte resserree (largeur bridee,
+    tailles de police et paddings reduits) et fonds « verre » generalises (en-tete, horloge,
+    ligne d'etat) pour rester lisibles quelle que soit l'intensite de l'aurore derriere.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 15:00:00 +0200
+
 secubox-webos (1.12.3-1~bookworm1) bookworm; urgency=medium
 
   * Le retrait du paquet retire le lien d'activation du vhost du Hall (#2830). Sans postrm, `dpkg --purge secubox-webos` supprimait le conffile de sites-available et laissait /etc/nginx/sites-enabled/hall.gk2.net.conf CASSE : `nginx -t` echouait (open() failed) et le rechargement etait refuse (constate sur l'ESPRESSObin). Un lien seulement est retire, jamais un fichier ordinaire ; nginx est recharge si sa configuration est valide. 4 tests.
