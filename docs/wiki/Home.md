@@ -11,7 +11,7 @@
 ### Your network. Your rules.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/assets/poster/secubox-affiche.png" alt="SecuBox — Votre réseau. Vos règles. Affiche illustrative en pâte à modeler 2D½" width="900">
+  <img src="https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/assets/poster/secubox-affiche-bilingue.jpg" alt="SecuBox — Reprenez le contrôle de votre réseau. Your network. Your rules. Affiche illustrative en pâte à modeler 2D½" width="900">
 </p>
 
 > *Affiche illustrative : elle représente des fonctions et une interface imaginées. L'état réel de chaque composant est détaillé dans « Où en est-on ? » ci-dessous.*
@@ -71,6 +71,12 @@ A working prototype and functional components already exist. Components have dif
 | **Utilisable** (en service sur une box d'infrastructure) | Administration web, pare-feu nftables en refus par défaut, WAF `sbxwaf` derrière HAProxy TLS 1.3, filtrage DNS et publicités, WireGuard et maillage pair à pair, services en conteneurs LXC (courrier, fichiers, messagerie, dépôt de code, média) | Testé sur MOCHAbin et x86. Les mises à jour sont encore fréquentes. |
 | **En test** | Détection et classification DPI (nDPId), préparation automatique des cartes (Auto-Load), profil « minimal » pour cartes de 1 Go (ESPRESSObin) | Le DPI est gourmand en mémoire et ses résultats ne sont pas à considérer comme une preuve d'attaque. Sur 1 Go, le WAF et HAProxy saturent la carte : ils sont exclus du profil minimal. |
 | **Conception** | Pare-feu par zones (physiques et par appareil), publication et rattachement automatiques des cartes | Pas encore codé ou pas encore déployé. |
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/assets/poster/secubox-affiche-ateliers.jpg" alt="SecuBox — Votre réseau. Vos règles. Les sept ateliers : réseau, sécurité, services, média, communication, IA et outils, système" width="900">
+</p>
+
+> *Seconde affiche : les « ateliers » sont une présentation illustrée. Dans l'administration, les modules sont regroupés en six espaces (vue d'ensemble, protection, surveillance, services, identité et accès, système).*
 
 **Matériel.** MOCHAbin (Marvell 7040) et x86 : utilisés au quotidien. ESPRESSObin v7 (1 Go) : installable avec un profil allégé, voir le [guide d'installation](https://github.com/CyberMind-FR/secubox-deb/blob/master/docs/INSTALL-ESPRESSOBIN.md). Autres supports de l'affiche (Raspberry Pi 5, mini-PC Intel N100) : images prévues, à confirmer carte par carte.
 
