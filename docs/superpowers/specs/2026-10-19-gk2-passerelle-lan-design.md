@@ -77,12 +77,14 @@ jour, mais **permanente et auto-renouvelée** tant que le mode passerelle est ac
   IPv6 restent un sujet séparé, #2938 phase 3).
 - Chaîne `forward` de `secubox-hardening` : politique `DEFAULT DROP`, comme `input`. Chaque zone (reprise des
   ensembles du NAC : `lan_allowed`, `guest_zone`, `iot_zone`, `quarantine_zone`, plus `blocked`) a sa règle
-  `ether saddr @zone … accept` ou `drop`. Un appareil hors de tout ensemble connu suit la politique par défaut
-  **corrigé le 2026-10-19 (vérifié sur gk2) : la politique du NAC est déjà réglée sur `guest`, pas sur
-  `quarantine` — `default_zone: "guest"` dans l'historique du NAC.** Décision du propriétaire : **reproduire ce
-  comportement**, pas un blocage dur. Un appareil hors de toute zone connue suit `guest_zone` : Internet avec les
-  restrictions déjà posées à ce groupe (accès limité, pas d'accès au réseau privé), jamais un blocage total. Le
-  même réglage (lu dans la politique du NAC, pas recodé en dur) pilote la chaîne `forward`.
+  `ether saddr @zone … accept` ou `drop`.
+  **Corrigé le 2026-10-19, deuxième vérification (code, pas seulement l'historique) : `default_zone` du NAC
+  n'est en réalité jamais appliqué — `set_policy` journalise mais n'écrit rien, et le repli réel du code pour un
+  appareil non résolu est câblé en dur sur `"quarantine"` (`_get_client_zone`/`_resolve_zone`,
+  `packages/secubox-nac/api/main.py:521-563`). Or `quarantine_zone` est vide sur gk2 : un appareil hors de tout
+  ensemble connu n'est donc dans AUCUN ensemble aujourd'hui, et tombe sur la politique `accept` de la chaîne — rien
+  à reproduire, c'est entièrement ouvert.** Décision du propriétaire, confirmée : un appareil hors de toute zone
+  connue est **ajouté à `quarantine_zone`** (blocage dur, comme le reste de cette zone) jusqu'à classement.
 - Aucune règle `ct state established` sur ce trafic précis (elle ne matcherait jamais, le retour ne passe pas par
   gk2) : les règles sont par paquet, sur l'adresse source et la destination/port.
 
@@ -143,7 +145,7 @@ d'être connus, importer la liste réelle de la Freebox (`lan/browser/pub/`, dé
 
 ## Décisions du propriétaire (2026-10-19)
 
-1. Appareil inconnu de toute zone : **bloqué** tant qu'il n'est pas classé.
+1. Appareil inconnu de toute zone : **bloqué** (`quarantine_zone`) tant qu'il n'est pas classé — confirmé après correction, voir section 2.
 2. Délai de la sonde de secours avant retour automatique : **3 minutes**.
 3. Portée de l'essai : **bascule générale** dès le premier essai, pas d'appareil de test isolé.
 
