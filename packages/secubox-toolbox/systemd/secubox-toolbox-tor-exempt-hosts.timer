@@ -3,6 +3,8 @@ Description=SecuBox ToolBoX — refresh Tor-egress host exemptions (#799)
 
 [Timer]
 OnBootSec=12min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=12min
 OnUnitActiveSec=30min
 Persistent=true
 RandomizedDelaySec=3min

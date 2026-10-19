@@ -4,6 +4,8 @@ After=network.target
 
 [Timer]
 OnBootSec=10s
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=10s
 OnUnitActiveSec=30s
 AccuracySec=1s
 

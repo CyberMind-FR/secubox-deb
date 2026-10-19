@@ -3,6 +3,8 @@ Description=SecuBox ytsas conserve — drain the PeerTube upload queue
 
 [Timer]
 OnBootSec=90
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=90
 OnUnitActiveSec=60
 
 [Install]

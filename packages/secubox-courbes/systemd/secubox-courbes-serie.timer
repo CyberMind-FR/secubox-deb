@@ -7,6 +7,8 @@ Description=SecuBox — releve des courbes toutes les minutes (#2765)
 
 [Timer]
 OnBootSec=1min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=1min
 OnUnitActiveSec=1min
 AccuracySec=5s
 

@@ -3,6 +3,8 @@ Description=SecuBox ToolBoX — hourly autolearn of bad trackers (#589)
 
 [Timer]
 OnBootSec=10min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=10min
 OnUnitActiveSec=1h
 Persistent=true
 RandomizedDelaySec=5min

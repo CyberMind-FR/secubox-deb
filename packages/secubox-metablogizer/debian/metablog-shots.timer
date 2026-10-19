@@ -4,6 +4,8 @@ Description=Capture one metablogizer site thumbnail every 2 minutes
 
 [Timer]
 OnBootSec=90s
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=90s
 OnUnitActiveSec=2min
 # One site per tick, load-guarded (see api/shots.py) — at this cadence the
 # 172-site fleet fills in progressively over a few hours without ever

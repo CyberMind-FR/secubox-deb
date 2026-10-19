@@ -4,6 +4,8 @@ After=secubox-streamlit.service
 
 [Timer]
 OnBootSec=5min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=5min
 OnUnitActiveSec=5min
 AccuracySec=30s
 Unit=secubox-streamlit-idle.service

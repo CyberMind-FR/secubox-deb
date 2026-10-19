@@ -4,6 +4,8 @@ Description=Refresh the MetaBlogizer site-list cache (backstop, every 30 minutes
 
 [Timer]
 OnBootSec=150s
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=150s
 OnUnitActiveSec=30min
 # Measured cost: ~14.6s for 172 sites on a board at load ~160 (see
 # api/sites_scan.py) — comfortably inside a 5-minute window even on a bad

@@ -3,6 +3,8 @@ Description=SecuBox health-doctor — run vital-services checks every minute (#2
 
 [Timer]
 OnBootSec=30s
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=30s
 OnUnitActiveSec=60s
 Unit=secubox-health-doctor-runner.service
 

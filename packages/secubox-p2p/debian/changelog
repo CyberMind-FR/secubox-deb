@@ -1,3 +1,9 @@
+secubox-p2p (1.17.2-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
 secubox-p2p (1.17.1-1~bookworm1) bookworm; urgency=medium
 
   * Une mise a jour de secubox-p2p ne rallume plus secubox-meshname (ref #2889) : le postinst de la composante faisait `enable` + `start` a chaque configure, et rallumait donc un service arrete volontairement par l'operateur (gk2, ebin). Premiere installation : activation et demarrage comme avant ; mise a jour : etat conserve, `try-restart` seulement.

@@ -1,3 +1,9 @@
+secubox-mqtt (2.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
 secubox-mqtt (2.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /zigbee/ (composant zigbee) refaite au profil Aurora (ref #2650) : un seul fichier autonome (plus de police distante Google Fonts, plus de skin crt-light ni hybrid-dark, plus de api-utils.js), tuiles (etat global, conteneur, radio, demon, pont MQTT, sauvegardes) avec infobulles de definition, tableaux des composants et des sauvegardes, acces, ?demo=1 (donnees fictives RFC 5737, actions inertes), ?embed=1 (sans menu), bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet zigbee). Textes en francais.

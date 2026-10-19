@@ -1,3 +1,9 @@
+secubox-dpi (1.14.4-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
 secubox-dpi (1.14.3-1~bookworm1) bookworm; urgency=medium
 
   * « Redemarrer le service nDPId » (onglet Reglages) marche (#2870). La page appelait `systemctl restart ndpid` : l'unite s'appelle secubox-ndpid-engine.service, et le compte secubox n'a pas le droit de piloter systemd (« Interactive authentication required »). Les actions demarrer, arreter et redemarrer passent par `sudo -n /usr/bin/systemctl <verbe> secubox-ndpid-engine.service`, autorise par le postinst pour ces trois commandes exactes ; delai de 30 s et message d'erreur reel ; les journaux sont ceux de la vraie unite.
