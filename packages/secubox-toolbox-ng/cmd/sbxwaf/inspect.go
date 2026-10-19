@@ -33,6 +33,7 @@ import (
 var trustedProxies = map[string]struct{}{
 	"10.100.0.1":    {},
 	"127.0.0.1":     {},
+	"::1":           {}, // #2932 : mandataire local joint en IPv6
 	"172.17.0.1":    {},
 	"192.168.255.1": {},
 }
@@ -136,6 +137,21 @@ func ncBypass(path string) bool {
 //     d'en-tête possibles, dans l'ordre reçu) depuis la droite, en sautant les
 //     mandataires de confiance : la première adresse restante est le client ;
 //  3. chaîne vide ou faite uniquement de mandataires : le pair.
+//
+// NORMALISATION (#2932) : en double pile, une IPv4 peut arriver mappée (::ffff:a.b.c.d) et une IPv6 sous plusieurs
+// écritures. Chaque adresse est ramenée à une forme unique (IPv4 nue, IPv6 canonique) AVANT toute comparaison ou
+// compteur : sinon le set de bannissement, l'anti-tempête et les statistiques la verraient comme plusieurs clients.
+func normaliserIP(s string) string {
+	p := net.ParseIP(s)
+	if p == nil {
+		return s
+	}
+	if v4 := p.To4(); v4 != nil {
+		return v4.String()
+	}
+	return p.String()
+}
+
 func clientIP(r *http.Request) string {
 	// Parse peer IP (strip port from RemoteAddr).
 	peerHost, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -143,6 +159,7 @@ func clientIP(r *http.Request) string {
 		// RemoteAddr without port (unusual but handle gracefully).
 		peerHost = r.RemoteAddr
 	}
+	peerHost = normaliserIP(peerHost)
 	if _, trusted := trustedProxies[peerHost]; !trusted {
 		return peerHost
 	}
@@ -150,7 +167,7 @@ func clientIP(r *http.Request) string {
 	for _, v := range r.Header.Values("X-Forwarded-For") {
 		for _, s := range strings.Split(v, ",") {
 			if s = strings.TrimSpace(s); s != "" {
-				sauts = append(sauts, s)
+				sauts = append(sauts, normaliserIP(s))
 			}
 		}
 	}
