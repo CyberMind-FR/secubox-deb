@@ -16,5 +16,5 @@ Connecteur de l'API Freebox OS (v0.1, lecture). Conception : `docs/dossiers/conn
 - **Admin** (`require_jwt`) : `/autoriser`, `/revoquer`, `/explorer` (liste blanche de chemins).
 - Panneau : `/freebox/` (menu Réseau). Socket `/run/secubox/freebox.sock`, utilisateur `secubox-freebox`, sans capacité.
 - Autoconfiguration : `GET /autoconfig` (écarts), `POST /autoconfig` {ids, confirme, confirme_dmz} (admin, droit « settings », audit ; la DMZ exige `confirme_dmz`).
-- Écriture : `POST /pare-feu/ipv6` {actif, confirme:true} (admin, droit « settings », relecture, audit). Redirections de ports : à venir.
+- Écriture : `POST /pare-feu/ipv6` {actif, confirme:true} (réglage `ipv6_prefix_firewall` de la Freebox, `ipv6_firewall` sur les anciens firmwares ; un interrupteur global : le désactiver laisse entrer l'IPv6 vers tout le réseau) (admin, droit « settings », relecture, audit). Redirections de ports : à venir.
 - UPnP : `GET /upnp` (état + ports ouverts par les appareils), `POST /upnp` {actif, confirme:true} (admin, droit « settings », audit).

@@ -16,6 +16,22 @@ import ipaddress
 PORTS_SENSIBLES = {21, 22, 23, 25, 110, 135, 137, 138, 139, 143, 445, 1433, 1521, 3306, 3389, 5432, 5900, 6379, 27017}
 
 
+# #2930 : la Freebox expose le pare-feu IPv6 sous « ipv6_prefix_firewall » (sonde reelle) ; les anciens firmwares sous « ipv6_firewall ».
+CLES_PARE_FEU_IPV6 = ("ipv6_prefix_firewall", "ipv6_firewall")
+
+
+def cle_pare_feu_ipv6(cfg6):
+    cfg6 = cfg6 or {}
+    return next((k for k in CLES_PARE_FEU_IPV6 if k in cfg6), CLES_PARE_FEU_IPV6[0])
+
+
+def pare_feu_ipv6(cfg6):
+    """True/False selon la cle presente, None si la Freebox n'en publie aucune."""
+    cfg6 = cfg6 or {}
+    k = next((k for k in CLES_PARE_FEU_IPV6 if k in cfg6), None)
+    return cfg6[k] if k else None
+
+
 def est_sensible(debut, fin):
     try:
         debut, fin = int(debut), int(fin)
@@ -70,7 +86,7 @@ def connexion(conn, cfg6):
         "ipv4_publique": conn.get("ipv4") or "", "ipv6": conn.get("ipv6") or "",
         "debit_max_descendant_mbit": mbit(conn.get("bandwidth_down")), "debit_max_montant_mbit": mbit(conn.get("bandwidth_up")),
         "ipv6_actif": cfg6.get("ipv6_enabled") if "ipv6_enabled" in cfg6 else None,
-        "pare_feu_ipv6": cfg6.get("ipv6_firewall") if "ipv6_firewall" in cfg6 else None,
+        "pare_feu_ipv6": pare_feu_ipv6(cfg6),
         "prefixes_ipv6": [d["prefix"] for d in (cfg6.get("delegations") or []) if d.get("prefix")],
     }
 

@@ -1,3 +1,9 @@
+secubox-freebox (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le pare-feu IPv6 se lit et s'ecrit avec la vraie cle (ref #2930). Sonde reelle sur la Freebox de gk2 : connection/ipv6/config/ rend `ipv6_prefix_firewall` ; le module utilisait `ipv6_firewall` (lecture « inconnu », ecriture sans effet). La cle presente fait foi (les anciens firmwares gardent `ipv6_firewall`). La Freebox n'offre qu'un interrupteur global pour l'IPv6 entrant : l'autoconfiguration le dit (desactiver le pare-feu ouvre l'IPv6 a toutes les machines du reseau). Prepare le passage du WAF en double pile.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 13:00:00 +0200
+
 secubox-freebox (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Panneau refait au profil Aurora (ref #2597) : page autonome, tuiles (connexion Internet, appareils actifs, debits max, pare-feu IPv6,
