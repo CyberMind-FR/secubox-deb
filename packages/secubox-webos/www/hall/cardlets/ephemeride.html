@@ -7,6 +7,11 @@
 
   SecuBox — carte « Éphéméride » du Hall (secubox-ephemeride), au profil Aurora (.claude/AURORA-REFERENCE.md, #2658).
 
+  Habillage « Boréal » (#2946, mockup validé) : un ciel nocturne décoratif (aurore animée, étoiles,
+  horizon) derrière le même contenu. Décor pur CSS + un seul <div aria-hidden> additif par carte :
+  AUCUNE donnée, AUCUN id, AUCUNE classe existante n'est renommée ou retirée. Masqué en ?embed=1
+  (la carte s'efface alors dans la page hôte) et sous prefers-reduced-motion: reduce.
+
   UN SEUL composant, TROIS niveaux d'affichage :
     compact   date, heure, lune, lever/coucher, saint
     standard  + durée du jour, saison, météo, qualité de l'air
@@ -135,15 +140,56 @@
   /* iPhone (#2733) : EN FIN DE FEUILLE pour passer après `body.dans .cadre{padding:0}` et `body.emb .app{padding:0}` de la carte. Une vraie marge de chaque côté,
      y compris dans l'iframe du Hall : sans elle le contenu touchait le bord (cadre à 0, 8 px de marge intérieure au mieux). */
   @media(max-width:520px){.emb .cadre,.dans .cadre{padding:0!important}.emb .app,.dans .app{padding-left:14px!important;padding-right:14px!important}}
+
+  /* ── Boréal (#2946) : ciel décoratif derrière la carte — additif, rien au-dessus n'est renommé ── */
+  .app{position:relative;overflow:hidden}
+  .ciel{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+  .emb .ciel{display:none}
+  .ciel .fond{position:absolute;inset:0;background:linear-gradient(to bottom,#060c1c 0%,#050912 46%,#040710 100%)}
+  .ciel .ruban{position:absolute;left:-20%;width:140%;height:60%;border-radius:50%;mix-blend-mode:screen;filter:blur(28px);opacity:.4}
+  .ciel .ruban.a{top:-10%;background:radial-gradient(ellipse at 30% 40%,#34d399 0%,transparent 62%);animation:boreal-aurore-a 26s ease-in-out infinite}
+  .ciel .ruban.b{top:0;background:radial-gradient(ellipse at 70% 55%,#22d3ee 0%,transparent 60%);animation:boreal-aurore-b 32s ease-in-out infinite}
+  .ciel .ruban.c{top:-4%;background:radial-gradient(ellipse at 50% 30%,#a78bfa 0%,transparent 65%);animation:boreal-aurore-c 38s ease-in-out infinite}
+  .ciel .etoile{position:absolute;width:1.5px;height:1.5px;border-radius:50%;background:#eaf1ff;animation:boreal-etoile 3s ease-in-out infinite}
+  .ciel .horizon{position:absolute;left:0;right:0;bottom:36%;height:18%;background:#030509;opacity:.9;clip-path:polygon(0% 60%,9% 35%,18% 55%,27% 25%,37% 45%,46% 15%,56% 38%,65% 28%,75% 48%,84% 30%,100% 42%,100% 100%,0% 100%)}
+  .ciel .voile{position:absolute;left:0;right:0;bottom:0;height:72%;background:linear-gradient(to bottom,rgba(4,7,16,0) 0%,rgba(4,7,16,.76) 22%,rgba(4,7,16,.96) 55%,#04060f 100%)}
+  @keyframes boreal-aurore-a{0%,100%{transform:translate(-6%,-4%) scale(1.1)}50%{transform:translate(4%,3%) scale(1.22)}}
+  @keyframes boreal-aurore-b{0%,100%{transform:translate(5%,2%) scale(1.15)}50%{transform:translate(-4%,-5%) scale(1.02)}}
+  @keyframes boreal-aurore-c{0%,100%{transform:translate(-2%,4%) scale(1.05)}50%{transform:translate(6%,-3%) scale(1.18)}}
+  @keyframes boreal-etoile{0%,100%{opacity:.15}50%{opacity:1}}
+  @keyframes boreal-lueur{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}
+  @keyframes boreal-eclat{0%,100%{filter:drop-shadow(0 0 3px rgba(255,210,100,.6))}50%{filter:drop-shadow(0 0 9px rgba(255,210,100,.95))}}
+  @media (prefers-reduced-motion: reduce){ .ciel .ruban,.ciel .etoile,.lune svg,.point-soleil{animation:none!important} }
+  /* panneaux et tuiles : même fond/bordure qu'avant, juste un survol et un fondu, pour que le décor transparaisse un peu */
+  .verre{background:rgba(8,16,34,.64);backdrop-filter:blur(6px);transition:border-color .2s,box-shadow .2s,transform .2s}
+  .verre:hover{border-color:rgba(100,220,255,.5);box-shadow:0 0 0 1px rgba(100,220,255,.18),0 0 18px rgba(100,220,255,.16);transform:translateY(-1px)}
+  .puce{transition:border-color .2s,box-shadow .2s,transform .2s}
+  .puce:hover{border-color:rgba(100,220,255,.5);box-shadow:0 0 0 1px rgba(100,220,255,.18),0 0 16px rgba(100,220,255,.16);transform:translateY(-1px)}
+  .lune svg{animation:boreal-lueur 5s ease-in-out infinite}
+  .point-soleil{animation:boreal-eclat 3.2s ease-in-out infinite}
 </style>
 </head>
 <body>
 <div class="cadre"><div class="app">
+  <div class="ciel" aria-hidden="true">
+    <div class="fond"></div>
+    <div class="ruban a"></div><div class="ruban b"></div><div class="ruban c"></div>
+    <div class="etoile" style="top:6%;left:10%;animation-delay:0s"></div>
+    <div class="etoile" style="top:4%;left:26%;animation-delay:.4s"></div>
+    <div class="etoile" style="top:9%;left:42%;animation-delay:.8s"></div>
+    <div class="etoile" style="top:3%;left:58%;animation-delay:.2s"></div>
+    <div class="etoile" style="top:7%;left:74%;animation-delay:.6s"></div>
+    <div class="etoile" style="top:11%;left:88%;animation-delay:1s"></div>
+    <div class="etoile" style="top:14%;left:18%;animation-delay:.3s"></div>
+    <div class="etoile" style="top:17%;left:66%;animation-delay:.7s"></div>
+    <div class="horizon"></div>
+    <div class="voile"></div>
+  </div>
   <header class="tete">
-    <div class="marque"><span class="pic" aria-hidden="true">🌙</span>
+    <div class="marque"><span class="pic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 13.5A8.5 8.5 0 1 1 10.5 4c.4 0 .8.02 1.2.07a7 7 0 0 0 8.3 9.43Z" stroke="#bae6fd" stroke-width="1.5" fill="rgba(186,230,253,.12)"/></svg></span>
       <div><h1>Éphéméride</h1><small>Date, soleil, lune, saint du jour</small></div></div>
     <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
-    <div class="droite"><button class="rouage" id="rouage" type="button" aria-label="Réglages de l'éphéméride" aria-expanded="false">⚙</button></div>
+    <div class="droite"><button class="rouage" id="rouage" type="button" aria-label="Réglages de l'éphéméride" aria-expanded="false"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13.6c.1-.5.1-1.1 0-1.6l1.6-1.3-1.6-2.8-1.9.6a6.6 6.6 0 0 0-1.4-.8L15.7 5h-3.2l-.4 2.1c-.5.2-1 .5-1.4.8l-1.9-.6-1.6 2.8 1.6 1.3c-.1.5-.1 1.1 0 1.6l-1.6 1.3 1.6 2.8 1.9-.6c.4.3.9.6 1.4.8l.4 2.1h3.2l.4-2.1c.5-.2 1-.5 1.4-.8l1.9.6 1.6-2.8Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></button></div>
   </header>
   <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune lecture réelle, aucune observation enregistrée</div>
   <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
@@ -175,7 +221,7 @@
       <div class="ligne n-etendu" id="lune-age"></div><div class="ligne n-etendu" id="lune-next"></div></div>
   </div>
   </div>
-  <div class="saint verre" id="saint"><div class="croix" aria-hidden="true">✝</div>
+  <div class="saint verre" id="saint"><div class="croix" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3v4M12 17v4M4 12h3M17 12h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="12" r="4.3" stroke="currentColor" stroke-width="1.6"/></svg></div>
     <div><div class="etiquette">Saint du jour</div><div class="nom" id="saint-nom">—</div><div class="desc" id="saint-desc"></div></div></div>
   <div class="puces n-standard">
     <div class="puce" title="Saison astronomique en cours, avec sa date de début et les jours avant la suivante."><div class="t">Saison</div><div class="v" id="saison">—</div><div class="s" id="saison-s"></div></div>
@@ -183,7 +229,7 @@
     <div class="puce" title="Indice de qualité de l’air (AQI) et polluant principal."><div class="t">Air</div><div class="v" id="air">—</div><div class="s" id="air-s"></div></div>
   </div>
   <div class="obs verre n-etendu" id="obs">
-    <h2><span aria-hidden="true">🔭</span> Observations <button class="btn" id="obs-plus" type="button" aria-label="Ajouter ou modifier une observation">+</button></h2>
+    <h2><span aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 15l6-6 4 4 7-7" stroke="#bae6fd" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="6" r="2" fill="#bae6fd"/></svg></span> Observations <button class="btn" id="obs-plus" type="button" aria-label="Ajouter ou modifier une observation">+</button></h2>
     <div class="note" id="obs-note">Aucune observation.</div><div class="meta" id="obs-meta"></div>
     <div class="editeur" id="editeur" hidden>
       <label class="sr" for="obs-texte">Texte de l'observation</label>
