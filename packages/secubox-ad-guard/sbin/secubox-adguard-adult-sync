@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 import time
 import urllib.request
@@ -64,6 +65,14 @@ DATA_DIR = Path("/var/lib/secubox/ad-guard")
 CACHE = DATA_DIR / "adult-source-cache.txt"
 ADULT_DOMAINS = DATA_DIR / "adult-domains.txt"
 EXEMPT_IP = DATA_DIR / "adult-exempt-ip.txt"
+# Identifiant STABLE (#2967) : les extensions de confidentialité IPv6 (RFC
+# 4941) font tourner l'adresse source d'un appareil environ chaque jour —
+# une IP figée dans adult-exempt-ip.txt tombe en panne à la rotation
+# suivante (constaté sur gk2 le 2026-10-19, chaturbate.com resté bloqué
+# malgré l'IPv4 exemptée : la requête partait d'une IPv6 temporaire). La
+# MAC, elle, ne change pas ; on résout ses adresses COURANTES (IPv4 ET
+# IPv6, table de voisinage du noyau) à chaque synchronisation.
+EXEMPT_MAC = DATA_DIR / "adult-exempt-mac.txt"
 DROPIN = Path("/etc/unbound/unbound.conf.d/96-secubox-adult.conf")
 UNBOUND_CONF = Path("/etc/unbound/unbound.conf")
 STATUS = DATA_DIR / "adult-sinkhole-status.json"
@@ -122,6 +131,64 @@ def _general_domains() -> set[str]:
     return set()
 
 
+def _exempt_macs() -> list[str]:
+    out = []
+    if EXEMPT_MAC.exists():
+        for line in EXEMPT_MAC.read_text().splitlines():
+            mac = line.split("#", 1)[0].strip().lower()
+            if mac:
+                out.append(mac)
+    return out
+
+
+_MAC_RE = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
+
+
+def _voisinage_brut() -> str:
+    """La table de voisinage du noyau (ARP + NDP), IPv4 et IPv6 en un seul
+    texte. Un appel système absent ou en échec rend une chaîne vide — on ne
+    lève jamais ici, une MAC introuvable est juste ignorée."""
+    sortie = ""
+    for args in (["ip", "-4", "neigh", "show"], ["ip", "-6", "neigh", "show"]):
+        try:
+            r = subprocess.run(args, capture_output=True, text=True, timeout=10, check=False)
+            sortie += r.stdout
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return sortie
+
+
+def _parse_voisinage(texte: str) -> dict[str, set[str]]:
+    """`ip neigh show` → {mac: {ip, ...}}. Ignore les liens locaux (fe80::,
+    inutiles comme source DNS LAN) et les entrées sans `lladdr` (FAILED)."""
+    out: dict[str, set[str]] = {}
+    for line in texte.splitlines():
+        parts = line.split()
+        if not parts or parts[0].startswith("fe80:"):
+            continue
+        ip = parts[0]
+        if "lladdr" not in parts:
+            continue
+        mac = parts[parts.index("lladdr") + 1].lower()
+        if not _MAC_RE.match(mac):
+            continue
+        out.setdefault(mac, set()).add(ip)
+    return out
+
+
+def _ips_des_macs(macs: list[str], lire=None) -> list[str]:
+    # `lire` se résout au nom, pas par défaut lié à la définition : un test
+    # qui remplace `m._voisinage_brut` doit être pris en compte sans devoir
+    # aussi patcher cette fonction-ci.
+    if not macs:
+        return []
+    voisinage = _parse_voisinage((lire or _voisinage_brut)())
+    out: set[str] = set()
+    for mac in macs:
+        out |= voisinage.get(mac.lower(), set())
+    return sorted(out)
+
+
 def _exempt_ips() -> list[str]:
     out = []
     if EXEMPT_IP.exists():
@@ -129,7 +196,16 @@ def _exempt_ips() -> list[str]:
             ip = line.split("#", 1)[0].strip()
             if ip:
                 out.append(ip)
-    return out
+    out.extend(_ips_des_macs(_exempt_macs()))
+    # Dédoublonne en gardant l'ordre (une IP figée ET résolue par MAC ne
+    # doit pas produire deux `access-control-view` pour le même nom).
+    vus: set[str] = set()
+    dedup = []
+    for ip in out:
+        if ip not in vus:
+            vus.add(ip)
+            dedup.append(ip)
+    return dedup
 
 
 def _render(adult: set[str], general: set[str]) -> str:
