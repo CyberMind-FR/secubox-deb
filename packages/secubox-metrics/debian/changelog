@@ -1,3 +1,9 @@
+secubox-metrics (1.29.0-1~bookworm1) bookworm; urgency=medium
+
+  * Fusion de la branche feature/2772 dans master (ref #2772) : le rapport quotidien de securite (volet visites et bannissements, tuiles Actor reparees, 1.28.0), deploye sur gk2 depuis la branche, rejoint master apres la separation de secubox-courbes (1.24.x) et le balayage des minuteries (OnActiveSec). Les numeros 1.25 a 1.28 n'existaient que sur la branche : 1.29.0 depasse la version de gk2 (1.28.0), plus de retour en arriere a craindre.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 11:00:00 +0200
+
 secubox-metrics (1.24.1-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
