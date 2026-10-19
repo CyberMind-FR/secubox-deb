@@ -2297,8 +2297,9 @@ def _record_wg_identity(join_request: Dict, req: "JoinRequest") -> None:
     if not (1 <= int(port) <= 65535):
         raise HTTPException(status_code=400, detail="invalid WireGuard port")
     try:
-        ipaddress.ip_address(join_request.get("address") or "")
-        join_request["wg_endpoint"] = f"{join_request['address']}:{int(port)}"
+        adresse = ipaddress.ip_address(join_request.get("address") or "")
+        hote = f"[{adresse}]" if adresse.version == 6 else str(adresse)     # IPv6 entre crochets (#2936)
+        join_request["wg_endpoint"] = f"{hote}:{int(port)}"
     except ValueError:
         join_request.pop("wg_endpoint", None)
 
