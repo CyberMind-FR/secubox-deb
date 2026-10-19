@@ -32,6 +32,9 @@
 # Toujours actifs — infrastructure dont l'arrêt casserait le reste.
 [lifecycle]
 "dpi"                        = "always-on"
+# CIBLE DU RELAIS DE sbxmitm (#2811) : le moteur poste chaque evenement de cookies sur /run/secubox/cookies.sock et JETTE SANS BRUIT
+# ce qu'il ne peut pas livrer. Endormi, le module ne recevait plus rien (mitm-ingest.db figee au 12 septembre) et /cookies/ restait vide.
+"cookies"                    = "always-on"
 # API APPELÉE PAR LE PANNEAU, SERVIE PAR SON PROPRE BACKEND (#1322). Le waker
 # ne réveille que sur les vhosts de sites ; un module dont nginx route
 # `/api/v1/<mod>/` vers SON socket (et non `aggregator.sock`) rend donc 502
@@ -68,7 +71,6 @@ eye-network_at_              = "eager"
 "c3box"                      = "on-demand"
 "config-advisor"             = "on-demand"
 "console"                    = "on-demand"
-"cookies"                    = "on-demand"
 "cs-bridge"                  = "on-demand"
 "cve-triage"                 = "on-demand"
 "cyberfeed"                  = "on-demand"

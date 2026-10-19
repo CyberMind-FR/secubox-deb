@@ -20,6 +20,8 @@ After=network.target
 Type=simple
 User=secubox-antirootkit
 Group=secubox-antirootkit
+# #2805 : le secret JWT est dans /etc/secubox/secubox.conf (0640 secubox:secubox). Sans ce groupe : jwt_secret is not configured, « API KO ».
+SupplementaryGroups=secubox
 # LA SOCKET PERIMEE EST RETIREE PAR ROOT, ET C'EST OBLIGATOIRE.
 #
 # Le repertoire etant colle (1777), on n'y delie que ce qu'on possede. Une

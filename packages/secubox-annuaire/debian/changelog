@@ -1,3 +1,39 @@
+secubox-annuaire (0.14.6-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
+secubox-annuaire (0.14.5-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries d'application (config et bannissements) : OnActiveSec ajoute (ref #2917). Elles ne s'etaient plus declenchees depuis le 5 octobre sur gk2 : meme defaut que le collecteur netstats, OnUnitActiveSec seul ne repart pas apres une reactivation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 21:00:00 +0200
+
+secubox-annuaire (0.14.4-1~bookworm1) bookworm; urgency=medium
+
+  * Entrees de menu Centres et Flotte : `unite = annuaire` (ref #2905), pour que l'espace Services les juge sur le module qui les sert.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 16:00:00 +0200
+
+secubox-annuaire (0.14.3-1~bookworm1) bookworm; urgency=medium
+
+  * Page /fleet/ : panneau « Pairs p2p » lu depuis GET /api/v1/p2p/peers (nom, adresse, statut mesure par poignee de main wg-mesh, dernier vu). Couvre les pairs du transport qui n ont pas d annuaire. Masque si le module p2p est absent ou la liste vide ; texte brut (ref #2842).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 15:30:00 +0200
+
+secubox-annuaire (0.14.2-1~bookworm1) bookworm; urgency=medium
+
+  * Page /fleet/ : panneau « Box Auto-Load » lu depuis GET /api/v1/autoload/boxes (client, profil, statut, progression, etape, derniere activite). Une box enrolee par le tunnel wg-autoload, sans annuaire (profil minimal), n y figurait jamais. Panneau masque si le module autoload est absent, la session refusee ou la liste vide ; valeurs posees en texte brut (ref #2840).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 15:00:00 +0200
+
+secubox-annuaire (0.14.1-1~bookworm1) bookworm; urgency=medium
+
+  * Centres : l acceptation d une proposition dont le scope porte un deux-points (mitm-exclusion:gk2, publie par la toolbox) echouait — « String should match pattern '^[a-z0-9][a-z0-9._-]*$' ». Le deux-points est admis a chaque maillon de la chaine de configuration : requetes d octroi et d acceptation, modele de la config signee et de l octroi delegue, nom de fichier applique (config_apply, desormais en fullmatch : « $ » acceptait un saut de ligne final). Pas de separateur de chemin : « / », « .. » en tete, espaces et majuscules restent refuses ; offres et incidents d assistance gardent leur motif (ref #2776).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 13:30:00 +0200
+
 secubox-annuaire (0.14.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /centers/ au profil Aurora (#2681) : fichier autonome (CSS et JS en ligne, menu /shared/sidebar.js injecte hors ?embed=1 et hors demonstration), tuiles (centres, octrois actifs, scopes delegues, propositions, avec definition en infobulle), matrice de propriete scope x calque, nouvel octroi, centres accordes, propositions, diff effectif ; ?demo=1 (donnees fictives, actions inertes), ?embed=1, « — » pour toute mesure absente, bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet centers). Aucun contrat d'API change : GET /centers, /centers/ownership, /centers/proposals, /centers/effective/<scope> ; POST /centers/grant {center_did, scope, layer}, /centers/revoke {grant_id}, /centers/proposal/accept {center_did, scope, layer}.

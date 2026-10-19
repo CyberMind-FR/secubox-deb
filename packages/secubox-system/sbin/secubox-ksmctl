@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-ksmctl — ecriture des reglages KSM, en root (#2901).
+#
+# L'API du module est servie par l'agregateur sous l'utilisateur secubox : elle ne peut
+# pas ecrire /sys/kernel/mm/ksm (root), d'ou « Activer KSM : HTTP 500 ». Ce ctl est le
+# seul chemin d'ecriture, appele par sudo (regle sudoers a la lettre). Chaque valeur est
+# validee AVANT d'atteindre sysfs.
+#   run <0|1>                         arrete / demarre la fusion de pages
+#   config <pages_to_scan> <sleep_ms> pages 1..10000, sleep 10..1000
+set -euo pipefail
+
+readonly SYSFS="${SECUBOX_KSM_SYSFS:-/sys/kernel/mm/ksm}"
+
+entier() { [[ "${1:-}" =~ ^[0-9]{1,6}$ ]]; }
+refus() { echo "secubox-ksmctl : $*" >&2; exit 2; }
+
+case "${1:-}" in
+    run)
+        [[ "${2:-}" == "0" || "${2:-}" == "1" ]] || refus "run attend 0 ou 1"
+        [ -w "$SYSFS/run" ] || refus "KSM indisponible"
+        printf '%s\n' "$2" > "$SYSFS/run"
+        ;;
+    config)
+        entier "${2:-}" && entier "${3:-}" || refus "config attend deux entiers"
+        [ "$2" -ge 1 ] && [ "$2" -le 10000 ] || refus "pages_to_scan hors 1..10000"
+        [ "$3" -ge 10 ] && [ "$3" -le 1000 ] || refus "sleep_millisecs hors 10..1000"
+        [ -w "$SYSFS/pages_to_scan" ] || refus "KSM indisponible"
+        printf '%s\n' "$2" > "$SYSFS/pages_to_scan"
+        printf '%s\n' "$3" > "$SYSFS/sleep_millisecs"
+        ;;
+    *) refus "usage : run <0|1> | config <pages_to_scan> <sleep_ms>" ;;
+esac

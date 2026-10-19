@@ -3,6 +3,8 @@ Description=SecuBox ToolBoX — periodic mesh-exclusion publish (#806)
 
 [Timer]
 OnBootSec=8min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=8min
 OnUnitActiveSec=30min
 Persistent=true
 RandomizedDelaySec=3min

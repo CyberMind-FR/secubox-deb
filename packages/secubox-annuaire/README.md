@@ -77,6 +77,9 @@ Socket Unix : `/run/secubox/annuaire.sock`, `/run/secubox/openpgp.sock`.
 | `POST` | `/centers/revoke` | require_jwt |
 | `POST` | `/centers/proposal/accept` | require_jwt |
 
+La page `/fleet/` (WebUI) lit `GET /fleet` (nœuds du maillage à annuaire) et, séparément, deux autres sources : `GET /api/v1/autoload/boxes` (box enrôlées par Auto-Load, #2840) et
+`GET /api/v1/p2p/peers` (pairs `wg-mesh`, statut mesuré par poignée de main, #2842). Un panneau est masqué si son module est absent ou si sa liste est vide.
+
 Routes relevées dans le code source, relatives au montage du module. « aucune » : pas de garde déclarée à cet endroit de la route.
 
 ## Dépendances SecuBox

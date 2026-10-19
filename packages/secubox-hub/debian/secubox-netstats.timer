@@ -4,6 +4,8 @@ Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/758
 
 [Timer]
 OnBootSec=15s
+# #2917 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=15s
 OnUnitActiveSec=30s
 AccuracySec=5s
 Unit=secubox-netstats.service

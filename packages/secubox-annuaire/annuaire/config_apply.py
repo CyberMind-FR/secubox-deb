@@ -43,12 +43,12 @@ from .config_compose import compose
 # string. This is the filesystem-boundary guard: it is checked BEFORE any
 # Path is ever constructed from an untrusted scope, in both apply_blob
 # (mesh-sourced ConfigBlob) and apply_composed (grant-routed layers).
-_SCOPE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_SCOPE_RE = re.compile(r"[a-z0-9][a-z0-9._:-]*")      # « : » admis (mitm-exclusion:gk2, #2776) ; utilisé avec fullmatch : « $ » accepterait un « \n » final
 
 
 def _valid_scope(scope: Any) -> bool:
     """True iff *scope* is safe to use as a bare filename component."""
-    return isinstance(scope, str) and bool(_SCOPE_RE.match(scope))
+    return isinstance(scope, str) and bool(_SCOPE_RE.fullmatch(scope))
 
 
 def blob_text(payload: Optional[Dict[str, Any]]) -> Optional[str]:

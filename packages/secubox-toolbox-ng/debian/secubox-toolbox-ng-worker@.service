@@ -51,6 +51,8 @@ Group=secubox-toolbox
 # command-line variable substitution); unset/empty → no extra args → the
 # --media-buffer default (false, see main.go) applies and the tee is a no-op.
 EnvironmentFile=-/etc/secubox/toolbox-ng.env
+# Par instance (#2804) : SBX_CDN_CACHE_ARGS=--cdn-cache-dir=/var/cache/secubox/cdn active le cache des CDN statiques sur CE worker seulement (absent = désactivé).
+EnvironmentFile=-/etc/secubox/toolbox-ng-worker-%i.env
 
 # Forge avec la CA R3 VIVANTE : cert = sbxmitm-ca-cert.pem,
 # cle = sbxmitm-ca.pem (paquet cert+cle combine — loadCA y cherche la
@@ -62,7 +64,8 @@ ExecStart=/usr/sbin/sbxmitm \
   --ca-cert /etc/secubox/toolbox/ca-wg/sbxmitm-ca-cert.pem \
   --ca-key /etc/secubox/toolbox/ca-wg/sbxmitm-ca.pem \
   --jar-key /etc/secubox/secrets/privacy-jar.key \
-  $SBX_MEDIA_BUFFER_ARGS
+  $SBX_MEDIA_BUFFER_ARGS \
+  $SBX_CDN_CACHE_ARGS
 
 Restart=on-failure
 RestartSec=5
@@ -80,6 +83,7 @@ ReadWritePaths=/run/secubox
 # bytes + the metatag log under /data/secubox/media-buffer; harmless to grant
 # even while the feature is off (tmpfiles pre-creates the dir 0750 secubox).
 ReadWritePaths=-/data/secubox/media-buffer
+ReadWritePaths=-/var/cache/secubox/cdn
 MemoryHigh=100M
 MemoryMax=128M
 TasksMax=128

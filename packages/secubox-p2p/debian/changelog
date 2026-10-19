@@ -1,3 +1,33 @@
+secubox-p2p (1.17.2-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
+secubox-p2p (1.17.1-1~bookworm1) bookworm; urgency=medium
+
+  * Une mise a jour de secubox-p2p ne rallume plus secubox-meshname (ref #2889) : le postinst de la composante faisait `enable` + `start` a chaque configure, et rallumait donc un service arrete volontairement par l'operateur (gk2, ebin). Premiere installation : activation et demarrage comme avant ; mise a jour : etat conserve, `try-restart` seulement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 17:00:00 +0200
+
+secubox-p2p (1.17.0-1~bookworm1) bookworm; urgency=medium
+
+  * La jonction par l'API (code d'invitation, jeton, auto-appairage) monte maintenant le tunnel wg-mesh du pair (ref #2885) : _rejoindre_maitre prepare la cle du pair (creee seulement si absente, jamais remplacee), l'envoie avec le port, puis applique l'offre du maitre dans wg_mesh.json (ecriture atomique 0600, que l'unite secubox-p2p-mesh.path applique en root). Avant, le maitre inscrivait le pair avec `wg: null` et aucun tunnel ne se formait (cas lgm-ebin vers gk2). L'offre est validee (cle, port, adresse, reseau) avant d'atteindre le fichier wg-quick. Une preparation ou une offre en echec n'empeche pas l'inscription : elle est journalisee.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 15:00:00 +0200
+
+secubox-p2p (1.16.2-1~bookworm1) bookworm; urgency=medium
+
+  * Ecouteur d'enrolement 7331 : admet aussi les tunnels wg-autoload (10.64.0.0/16) et wg-mesh (10.10.0.0/24), en plus du LAN (ref #2883). Une box rattachee par tunnel, comme l'ebin lgm-ebin vers gk2, recevait 403 et ne pouvait pas devenir pair. Reste limite a cet ecouteur et aux routes master-link ; le jeton est toujours valide par le module. Aucun autre reseau n'est ouvert.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 14:00:00 +0200
+
+secubox-p2p (1.16.1-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-annuaire passe de Depends a Recommends (#2877) : le client (api/annuaire_client.py) parle a l'annuaire par sa socket et ne leve jamais (donnee, erreur) ; sans lui, le catalogue de federation est vide, pas une panne. Les profils qui installent l'annuaire (lite, isp, full, minimal) le gardent par la recommandation.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 19:05:00 +0200
+
 secubox-p2p (1.16.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /master-link/admin.html (administration du lien maître) au profil Aurora (#2597) : page autonome sombre, tuiles (rôle, profondeur, pairs approuvés, en attente, invitations actives), onglets Vue d'ensemble / Pairs / Arborescence / Inviter, `?demo=1` annoncée et inerte (adresses RFC 5737), `?embed=1`, bandeau « session requise » sur 401/403, « — » pour toute mesure absente, aucun dialogue natif. Les deux écritures sont celles de l'ancienne page, à l'identique : POST /master-link/invite-local?auto_approve=…&ttl=… (sans corps) et POST /master-link/approve avec {fingerprint, action: "approve"}. 10 tests (statique + vrai navigateur).

@@ -1,3 +1,93 @@
+secubox-hub (1.12.18-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
+secubox-hub (1.12.17-1~bookworm1) bookworm; urgency=medium
+
+  * Le collecteur netstats se redeclenche (ref #2917) : secubox-netstats.timer n'avait que OnBootSec + OnUnitActiveSec ; reactivee apres le demarrage (mise a jour du paquet), la minuterie ne se declenchait plus (une seule collecte depuis le 14/10 sur gk2, onglet Temps reel « DONNEES PERIMEES »). Ajout de OnActiveSec=15s, qui compte depuis l'activation de la minuterie. A faire ailleurs : une cinquantaine de minuteurs du depot ont le meme motif.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 21:00:00 +0200
+
+secubox-hub (1.12.16-1~bookworm1) bookworm; urgency=medium
+
+  * L'etat d'une entree de menu se juge sur le module qui PORTE la page (ref #2905) : cle optionnelle `unite` de l'entree. Centres, Flotte et Releases etaient rouges (« a l'arret ») sur gk2 alors que annuaire.sock et release.sock repondent : le hub cherchait une socket ou une unite portant l'id de la page. Sans cle : l'id, comme avant.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 16:00:00 +0200
+
+secubox-hub (1.12.15-1~bookworm1) bookworm; urgency=medium
+
+  * Le menu suit le profil actif (ref #2897) : un profil peut declarer `menu_off` (ids d'entrees de menu masquees tant qu'il est actif) ; le hub lit le profil actif (/etc/secubox/profiles/active) en plus des pins operateur. Fichier absent, casse ou nom de profil suspect : menu complet, jamais coupe. Sert le profil minimal : /ksm/ et /premier-pas-maitre/ n'apparaissent plus au menu (leurs paquets restent).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 12:00:00 +0200
+
+secubox-hub (1.12.14-1~bookworm1) bookworm; urgency=medium
+
+  * Barre d'etat du bas de l'administration : elle est de nouveau alimentee (ref #2887). Le correctif #2792 (retrait du bloc de pastilles de la barre laterale) avait ajoute un `return` au debut de loadStatusBarData, la fonction qui remplit CETTE barre (sante, Mode, Auth, CPU, MEM, DISK, Uptime) : elle restait a « -- » sur toutes les boxes. Le return est retire ; le masquage des pastilles est inchange. Test #2792 corrige : il exigeait le return.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 16:00:00 +0200
+
+secubox-hub (1.12.13-1~bookworm1) bookworm; urgency=medium
+
+  * Le pied de page et le sous-titre disent le NOM de la carte, plus « [object Object] » (#2861). /hub/dashboard renvoie `board` en objet (model, board, hostname…) ; la page le posait tel quel. Libelle lu dans `model` (sinon `board`, sinon `hostname`, « unknown » ecarte) ; une simple chaine reste acceptee. Le mode demonstration envoie desormais la forme reelle de l'API : il masquait le defaut.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 09:30:00 +0200
+
+secubox-hub (1.12.12-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau Reseau : le WAN est l'interface de la ROUTE PAR DEFAUT, plus une interface devinee par son nom (#2857). gk2 affichait « Sortie Internet disconnected, WAN N/A, LAN 10.100.0.1 » alors qu'il avait Internet : son WAN est eth2 et son pont de conteneurs br-lxc passait pour le LAN. « connected » seulement si l'interface de la route par defaut porte une adresse ; un pont de conteneurs (br-lxc, lxcbr, docker, virbr…) n'est jamais le LAN ; plus de LAN invente (192.168.10.1) : « N/A ».
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:30:00 +0200
+
+secubox-hub (1.12.11-1~bookworm1) bookworm; urgency=medium
+
+  * La sonde TCP des modules en conteneur (#2796) ne juge que les modules INSTALLES (#2836) : une box sans YouTube SAS (l'ESPRESSObin minimal) affichait « ytsas : Conteneur LXC injoignable » en erreur dans la sante. Presence = dossier de la page du module. 4 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 01:00:00 +0200
+
+secubox-hub (1.12.10-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-aggregator (#2822). Le postinst de hub se declare dans /etc/secubox/aggregator.toml seulement si ce fichier existe, et c'est l'agregateur qui le cree : sans dependance, apt pouvait configurer hub AVANT lui, hub n'etait jamais declare, /api/v1/hub/ repondait 404 et la barre laterale passait en mode de secours (constate sur l'ESPRESSObin minimal ; deja vu sur gk3, #1544). 3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 22:00:00 +0200
+
+secubox-hub (1.12.9-1~bookworm1) bookworm; urgency=medium
+
+  * Barre laterale sur le Hall : les liens menent a admin.*, plus a hall.* (#2814). Depuis #2809 la barre s'affiche sur /identite/ et /coffre/, mais ses liens etaient relatifs et visaient hall.gk2, qui ne sert pas les pages des modules. Sur un hote hall.*, le menu, le bouton Reglages et le menu de secours visent le MEME domaine en admin.* (port conserve) ; la sonde de sante inter-origine est sautee. Ailleurs : liens relatifs inchanges. 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 18:00:00 +0200
+
+secubox-hub (1.12.8-1~bookworm1) bookworm; urgency=medium
+
+  * Barre du haut : le bloc de six icones (smart-strip) est retire sur toutes les pages (#2800). 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 11:30:00 +0200
+
+secubox-hub (1.12.7-1~bookworm1) bookworm; urgency=medium
+
+  * Espaces : YouTube SAS et Glances ne sont plus « a l'arret » a tort (#2796). Glances est une page de secubox-metrics (elle suit ce module, comme R-Level suit le Toolbox) ; YouTube SAS tourne dans un conteneur LXC sans unite ni socket hote : une connexion TCP vers le conteneur (10.100.0.180:8091) fait la sonde, en erreur s'il ne repond pas. 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 10:30:00 +0200
+
+secubox-hub (1.12.6-1~bookworm1) bookworm; urgency=medium
+
+  * Vue d'ensemble : un seul etat par service (#2794). Elle comptait « 39 a l'arret » car elle ne lisait que l'unite/socket : les modules montes dans l'agregateur (rlevel, proxypac, haproxy, zkp...) et en veille (grafana, hub) etaient declares arretes, alors que la page Espaces, qui lit la sonde de sante, les disait en service. Les deux pages suivent maintenant la meme sonde (`active` reste le repli sans sonde ; une sonde `error` reste une alarme). Les pages du hub (apercu, health) recoivent une sonde « Page du hub ». 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 10:00:00 +0200
+
+secubox-hub (1.12.5-1~bookworm1) bookworm; urgency=medium
+
+  * Barre laterale : le bloc de pastilles en haut a gauche (live, menaces, services KO, materiel) est retire sur toutes les pages (#2792). Masque en CSS (meme depuis le cache HTML) et plus aucune requete de statut pour l'alimenter. 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 09:00:00 +0200
+
+secubox-hub (1.12.4-1~bookworm1) bookworm; urgency=medium
+
+  * Page Sante : le WAF s affiche « bloque les attaques · amont lent » quand le temoin a expire alors que les canaris sont bloques, au lieu de « defaillant » (ref #2784).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 17:10:00 +0200
+
 secubox-hub (1.12.3-1~bookworm1) bookworm; urgency=medium
 
   * Le postinst pose la DIRECTIVE X-SecuBox-LAN quand core a ete configure avant hub (#2743). Constate sur un RPi400 : snippets/secubox-proxy.conf ne contenait la ligne `proxy_set_header X-SecuBox-LAN $lan_client;` qu'EN COMMENTAIRE alors que le fichier GeoIP du hub existait ; l'API croyait tout client « WAN » et exigeait le second facteur meme depuis le LAN (#1699 le veut facultatif), la connexion web a distance de l'administrateur etait bloquee. core ne l'ajoute que si `$lan_client` existe a ce moment-la ; sur une image neuve core passe AVANT hub : la ligne est retiree et rien ne la remettait. hub, qui livre le fichier GeoIP, la pose maintenant (idempotent, nginx -t, restauration du snippet si nginx refuse, rien si le fichier GeoIP est absent). Le garde reconnait la directive et pas la chaine (meme piege que #1351 : le commentaire contient le nom). 8 tests qui executent le VRAI bloc sous `set -e` avec un faux nginx.

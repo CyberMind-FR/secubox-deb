@@ -47,6 +47,24 @@
         .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
         .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
         .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus{outline:none;border-color:var(--cyan)} form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        td.act{white-space:nowrap} td.act>*{margin-right:5px}
+        .confirme{display:inline-flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:.72rem;color:var(--doux)}
+        .direct-tete{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+        #t-direct .cartes{display:grid;gap:8px;grid-template-columns:1fr} @container a (min-width:700px){#t-direct .cartes{grid-template-columns:repeat(2,1fr)}} @container a (min-width:1100px){#t-direct .cartes{grid-template-columns:repeat(3,1fr)}}
+        #t-direct h3{margin:12px 0 6px;font-size:.88rem} #t-direct h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.72rem;margin-left:6px}
+        .itf,.drop{border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:rgba(10,22,46,.6);min-width:0}
+        .itf .tt,.drop .tt{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+        .itf .nom,.drop .nom{font-weight:700;font-size:.92rem;font-family:ui-monospace,Menlo,Consolas,monospace}
+        .itf .fl{font-size:.8rem;font-variant-numeric:tabular-nums;color:var(--doux)} .itf .fl b{color:var(--texte)} .itf .in b{color:var(--cyan)} .itf .out b{color:var(--orange)}
+        .itf .pic{margin-left:auto;color:var(--faible);font-size:.66rem} .drop .tot{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--rouge);font-weight:700}
+        svg.gr{width:100%;height:58px;display:block;margin-top:4px}
+        .repos{display:flex;flex-wrap:wrap;gap:6px} .repos span{border:1px solid var(--trait);border-radius:999px;padding:2px 10px;font-size:.72rem;color:var(--faible);font-family:ui-monospace,Menlo,Consolas,monospace}
         .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
         .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
         .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
@@ -115,6 +133,7 @@
             <button type="button" role="tab" id="o-interfaces" data-t="interfaces" aria-selected="false" aria-controls="t-interfaces">Interfaces</button>
             <button type="button" role="tab" id="o-routes" data-t="routes" aria-selected="false" aria-controls="t-routes">Routes</button>
             <button type="button" role="tab" id="o-connexions" data-t="connexions" aria-selected="false" aria-controls="t-connexions">Connexions</button>
+            <button type="button" role="tab" id="o-direct" data-t="direct" aria-selected="false" aria-controls="t-direct">Temps réel</button>
         </div>
 
         <section id="t-outils" role="tabpanel" aria-labelledby="o-outils">
@@ -150,10 +169,37 @@
 
         <section id="t-routes" role="tabpanel" aria-labelledby="o-routes" hidden>
             <div class="grille">
+                <div class="pan" style="grid-column:1/-1"><h3>Gérer les routes <span id="rtVidage" class="confirme" style="margin-left:auto"></span><button class="btn prim sm" id="rtAdd" type="button">+ Ajouter une route</button></h3>
+                    <div id="rtRetour" class="retour" hidden></div>
+                    <form class="saisie" id="rtForm" hidden>
+                        <label>Destination (CIDR)<input name="destination" placeholder="198.51.100.0/24 ou default" required></label>
+                        <label>Passerelle (facultatif)<input name="gateway" placeholder="192.0.2.1"></label>
+                        <label>Interface (facultatif)<input name="interface" placeholder="eth0"></label>
+                        <label>Métrique (facultatif)<input name="metric" type="number" placeholder="100"></label>
+                        <label>Table (facultatif)<input name="table" placeholder="main"></label>
+                        <div class="bout"><button class="btn prim" type="submit">Ajouter la route</button><button class="btn" type="button" id="rtAnnule">Annuler</button></div>
+                    </form>
+                    <p class="note">Seule la table principale est listée. « Vider le cache » (<span class="mono">ip route flush cache</span>) est sans retour arrière.</p></div>
                 <div class="pan" style="grid-column:1/-1"><h3>Routes IPv4 <i id="nR4"></i></h3>
-                    <div class="tab"><table><thead><tr><th>Destination</th><th>Passerelle</th><th>Interface</th><th>Métrique</th><th>Portée</th></tr></thead><tbody id="bR4"></tbody></table></div></div>
+                    <div class="tab"><table><thead><tr><th>Destination</th><th>Passerelle</th><th>Interface</th><th>Métrique</th><th>Portée</th><th>Actions</th></tr></thead><tbody id="bR4"></tbody></table></div></div>
                 <div class="pan" style="grid-column:1/-1"><h3>Routes IPv6 <i id="nR6"></i></h3>
-                    <div class="tab"><table><thead><tr><th>Destination</th><th>Passerelle</th><th>Interface</th><th>Métrique</th><th>Protocole</th></tr></thead><tbody id="bR6"></tbody></table></div></div>
+                    <div class="tab"><table><thead><tr><th>Destination</th><th>Passerelle</th><th>Interface</th><th>Métrique</th><th>Protocole</th><th>Actions</th></tr></thead><tbody id="bR6"></tbody></table></div></div>
+                <div class="pan" style="grid-column:1/-1"><h3>Règles de routage par politique <i id="rgN"></i><button class="btn prim sm" id="rgAdd" type="button">+ Ajouter une règle</button></h3>
+                    <div id="rgRetour" class="retour" hidden></div>
+                    <form class="saisie" id="rgForm" hidden>
+                        <label>Priorité (0-32767)<input name="priority" type="number" min="0" max="32767" placeholder="100" required></label>
+                        <label>Source (from)<input name="from" placeholder="192.0.2.0/24"></label>
+                        <label>Destination (to)<input name="to" placeholder="198.51.100.0/24"></label>
+                        <label>Table<input name="table" placeholder="nom ou numéro"></label>
+                        <label>Marque pare-feu<input name="fwmark" placeholder="0x1"></label>
+                        <label>Interface d’entrée<input name="iif" placeholder="eth0"></label>
+                        <label>Interface de sortie<input name="oif" placeholder="eth1"></label>
+                        <div class="bout"><button class="btn prim" type="submit">Ajouter la règle</button><button class="btn" type="button" id="rgAnnule">Annuler</button></div>
+                    </form>
+                    <div class="tab"><table><thead><tr><th>Priorité</th><th>Famille</th><th>Sélecteur</th><th>Action</th><th>Table</th><th>Actions</th></tr></thead><tbody id="rgBody"></tbody></table></div>
+                    <p class="note">L’API n’ajoute et ne supprime que des règles IPv4 : les règles IPv6 sont en lecture seule. Les priorités 0 et 32766-32767 sont celles du système.</p></div>
+                <div class="pan" style="grid-column:1/-1"><h3>Tables de routage <i id="rgTN"></i></h3>
+                    <div class="tab"><table><thead><tr><th>Numéro</th><th>Nom</th></tr></thead><tbody id="rgTables"></tbody></table></div></div>
                 <div class="pan" style="grid-column:1/-1"><h3>Voisins (ARP / NDP) <i id="nArp"></i></h3>
                     <div class="tab"><table><thead><tr><th>Adresse IP</th><th>Adresse MAC</th><th>Interface</th><th>État</th></tr></thead><tbody id="bArp"></tbody></table></div></div>
             </div>
@@ -168,6 +214,13 @@
                 <div class="pan" style="grid-column:1/-1"><h3>Ports en écoute <i id="nPorts"></i></h3>
                     <div class="tab"><table><thead><tr><th>Proto</th><th>Port</th><th>Adresse</th><th>Processus</th></tr></thead><tbody id="bPorts"></tbody></table></div></div>
             </div>
+        </section>
+        <section id="t-direct" role="tabpanel" aria-labelledby="o-direct" hidden>
+            <div class="direct-tete"><span class="actif neutre" id="dEtat">…</span><span class="sous" id="dHeure">—</span></div>
+            <div class="tuiles" id="dTuiles"></div>
+            <div id="dIfaces"></div>
+            <div id="dDrops"></div>
+            <p class="note">Fenêtre de 24 h, un point toutes les 5 min. Débits en bits par seconde ; les paquets écartés viennent des compteurs nftables nommés (input_policy, blacklist, quarantaine, doh…).</p>
         </section>
     </div></div></main>
 
@@ -303,17 +356,17 @@
         function rendreRoutes(r4, r6, ent) {
             const b4 = $('bR4'); b4.replaceChildren();
             $('nR4').textContent = r4 ? r4.length + ' route' + (r4.length > 1 ? 's' : '') : '';
-            if (!manque(b4, 5, r4)) {
-                if (!r4.length) ligneVide(b4, 5, 'Aucune route IPv4');
+            if (!manque(b4, 6, r4)) {
+                if (!r4.length) ligneVide(b4, 6, 'Aucune route IPv4');
                 r4.forEach(r => { const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(r.dst || 'default'))); tr.appendChild(el('td', 'mono', tiret(r.gateway)));
-                    tr.appendChild(el('td', '', tiret(r.dev))); tr.appendChild(el('td', '', tiret(r.metric))); tr.appendChild(el('td', '', tiret(r.scope))); b4.appendChild(tr); });
+                    tr.appendChild(el('td', '', tiret(r.dev))); tr.appendChild(el('td', '', tiret(r.metric))); tr.appendChild(el('td', '', tiret(r.scope))); tr.appendChild(rt.actionRoute(r, 'IPv4')); b4.appendChild(tr); });
             }
             const b6 = $('bR6'); b6.replaceChildren();
             $('nR6').textContent = r4 ? r6.length + ' route' + (r6.length > 1 ? 's' : '') : '';
-            if (!manque(b6, 5, r4 ? r6 : null)) {
-                if (!r6.length) ligneVide(b6, 5, 'Aucune route IPv6');
+            if (!manque(b6, 6, r4 ? r6 : null)) {
+                if (!r6.length) ligneVide(b6, 6, 'Aucune route IPv6');
                 r6.forEach(r => { const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(r.dst || 'default'))); tr.appendChild(el('td', 'mono', tiret(r.gateway)));
-                    tr.appendChild(el('td', '', tiret(r.dev))); tr.appendChild(el('td', '', tiret(r.metric))); tr.appendChild(el('td', '', tiret(r.protocol))); b6.appendChild(tr); });
+                    tr.appendChild(el('td', '', tiret(r.dev))); tr.appendChild(el('td', '', tiret(r.metric))); tr.appendChild(el('td', '', tiret(r.protocol))); tr.appendChild(rt.actionRoute(r, 'IPv6')); b6.appendChild(tr); });
             }
             const ba = $('bArp'); ba.replaceChildren();
             $('nArp').textContent = ent ? ent.length + ' voisin' + (ent.length > 1 ? 's' : '') : '';
@@ -408,11 +461,208 @@
             }); });
         $('effacer').addEventListener('click', efface);
 
+
+        // ===== Gestion des routes (#2915) : code natif, API /api/v1/routes =====
+        const rt = (function () {
+            const API_R = '/api/v1/routes';
+            let REGLES = null, TABLES = null, CONFIRM = null;
+            async function lireR(chemin) {
+                try {
+                    const r = await fetch(API_R + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+                    if (r.status === 401 || r.status === 403) SESSION_OK = false;
+                    return r.ok ? await r.json() : null;
+                } catch (e) { return null; }
+            }
+            async function ecrireR(methode, chemin, corps) {
+                if (DEMO) return { ok: false, demo: true };
+                try {
+                    const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                    if (corps !== undefined) opts.body = JSON.stringify(corps);
+                    const r = await fetch(API_R + chemin, opts);
+                    let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                    return { ok: r.ok && !!(data && data.success), statut: r.status, data };   // l'API répond 200 + success:false quand la commande ip échoue
+                } catch (e) { return { ok: false, statut: 0, data: null }; }
+            }
+            function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+            function detail(res) {
+                if (res.demo) return 'Démonstration : action inerte.';
+                if (res.data && res.data.error) return String(res.data.error);
+                if (res.data && res.data.detail) return String(res.data.detail);
+                return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+            }
+            function btn(libelle, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), libelle); b.type = 'button'; b.addEventListener('click', fn); return b; }
+            // Bouton à confirmation intégrée (Confirmer / Annuler) : jamais de dialogue natif.
+            function avecAveu(cont, genre, cle, libelle, fn, question) {
+                if (CONFIRM && CONFIRM.genre === genre && CONFIRM.cle === cle) {
+                    if (question) cont.appendChild(el('span', '', question));
+                    cont.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; fn(); }));
+                    cont.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendreTout(); }));
+                } else cont.appendChild(btn(libelle, 'danger', () => { CONFIRM = { genre, cle }; rendreTout(); }));
+            }
+            function actionRoute(r, famille) {
+                const td = el('td', 'act');
+                const cle = famille + '|' + (r.dst || '') + '|' + (r.gateway || '') + '|' + (r.dev || '');
+                avecAveu(td, 'route', cle, 'Supprimer', () => supprimerRoute(r), 'Supprimer la route vers ' + (r.dst || 'default') + ' ?');
+                return td;
+            }
+            async function apres(res, ok, ko, zone, formulaire) {
+                if (res.ok) { if (formulaire) { formulaire.reset(); formulaire.hidden = true; } retour(zone, true, ok); charger(true); }
+                else retour(zone, false, ko + ' : ' + detail(res));
+            }
+            async function supprimerRoute(r) {
+                const corps = { destination: r.dst || 'default' };
+                if (r.gateway) corps.gateway = r.gateway;
+                if (r.dev) corps.interface = r.dev;
+                apres(await ecrireR('DELETE', '/routes', corps), 'Route supprimée.', 'Suppression impossible', 'rtRetour');
+            }
+            async function supprimerRegle(p) { apres(await ecrireR('DELETE', '/rules/' + encodeURIComponent(p)), 'Règle supprimée.', 'Suppression impossible', 'rgRetour'); }
+            async function viderCache() { apres(await ecrireR('POST', '/flush'), 'Cache de routage vidé.', 'Vidage impossible', 'rtRetour'); }
+
+            function rendreRegles() {
+                const tb = $('rgBody'); tb.replaceChildren();
+                let l = [];
+                if (REGLES) {
+                    l = (REGLES.ipv4 || []).map(r => Object.assign({}, r, { famille: 'IPv4' })).concat((REGLES.ipv6 || []).map(r => Object.assign({}, r, { famille: 'IPv6' })));
+                    l.sort((a, b) => (a.priority - b.priority) || (a.famille < b.famille ? -1 : 1));
+                }
+                $('rgN').textContent = REGLES ? l.length + ' règle' + (l.length > 1 ? 's' : '') : '';
+                if (!l.length) ligneVide(tb, 6, REGLES ? 'Aucune règle' : (SESSION_OK ? 'Lecture impossible' : '—'));
+                l.forEach(r => {
+                    const tr = el('tr');
+                    tr.appendChild(el('td', 'mono', tiret(r.priority))); tr.appendChild(el('td', '', r.famille)); tr.appendChild(el('td', '', tiret(r.selector || 'all')));
+                    tr.appendChild(el('td', '', tiret(r.action || 'lookup'))); tr.appendChild(el('td', '', tiret(r.table)));
+                    const td = el('td', 'act'); tr.appendChild(td);
+                    if (r.famille === 'IPv4' && r.priority > 0 && r.priority < 32766)
+                        avecAveu(td, 'regle', String(r.priority), 'Supprimer', () => supprimerRegle(r.priority), 'Supprimer la règle de priorité ' + r.priority + ' ?');
+                    else td.appendChild(pastille('', r.famille === 'IPv4' ? 'Système' : 'Lecture seule'));
+                    tb.appendChild(tr);
+                });
+                const tt = $('rgTables'); tt.replaceChildren();
+                const t = TABLES && Array.isArray(TABLES.tables) ? TABLES.tables : null;
+                $('rgTN').textContent = t ? t.length + ' table' + (t.length > 1 ? 's' : '') : '';
+                if (!t || !t.length) ligneVide(tt, 2, t ? 'Aucune table' : '—');
+                else t.forEach(x => { const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(x.id))); tr.appendChild(el('td', '', tiret(x.name))); tt.appendChild(tr); });
+            }
+            function rendreVidage() { const z = $('rtVidage'); z.replaceChildren(); avecAveu(z, 'vidage', 'cache', 'Vider le cache', viderCache, 'Vider le cache de routage ?'); }
+            function rendreTout() { rendre(); rendreRegles(); rendreVidage(); }
+            async function charger(force) {
+                if (DEMO) { REGLES = { ipv4: [{ priority: 0, selector: 'all', action: 'lookup', table: 'local' }, { priority: 100, selector: 'from 192.0.2.0/24', action: 'lookup', table: 'wan2' }, { priority: 32766, selector: 'all', action: 'lookup', table: 'main' }], ipv6: [] }; TABLES = { tables: [{ id: 254, name: 'main' }, { id: 255, name: 'local' }] }; rendreRegles(); rendreVidage(); return; }
+                const [r, t] = await Promise.all([lireR('/rules'), lireR('/tables')]);
+                REGLES = r; TABLES = t; rendreRegles(); rendreVidage();
+                if (force) charger_netdiag();
+            }
+            function charger_netdiag() { return window.__netdiagCharger && window.__netdiagCharger(); }
+            function lier() {
+                $('rtAdd').addEventListener('click', () => { $('rtForm').hidden = !$('rtForm').hidden; annoncer(); });
+                $('rgAdd').addEventListener('click', () => { $('rgForm').hidden = !$('rgForm').hidden; annoncer(); });
+                $('rtAnnule').addEventListener('click', () => { $('rtForm').hidden = true; annoncer(); });
+                $('rgAnnule').addEventListener('click', () => { $('rgForm').hidden = true; annoncer(); });
+                $('rtForm').addEventListener('submit', async ev => {
+                    ev.preventDefault();
+                    const f = ev.target, v = n => f.elements[n].value.trim();
+                    if (!v('destination')) { retour('rtRetour', false, 'La destination est obligatoire.'); return; }
+                    const corps = { destination: v('destination') };
+                    if (v('gateway')) corps.gateway = v('gateway');
+                    if (v('interface')) corps.interface = v('interface');
+                    if (v('metric')) corps.metric = parseInt(v('metric'), 10);
+                    if (v('table')) corps.table = v('table');
+                    apres(await ecrireR('POST', '/routes', corps), 'Route ajoutée.', 'Ajout impossible', 'rtRetour', f);
+                });
+                $('rgForm').addEventListener('submit', async ev => {
+                    ev.preventDefault();
+                    const f = ev.target, v = n => f.elements[n].value.trim();
+                    if (!v('priority')) { retour('rgRetour', false, 'La priorité est obligatoire.'); return; }
+                    const corps = { priority: parseInt(v('priority'), 10) };
+                    ['from', 'to', 'table', 'fwmark', 'iif', 'oif'].forEach(n => { if (v(n)) corps[n] = v(n); });
+                    apres(await ecrireR('POST', '/rules', corps), 'Règle ajoutée.', 'Ajout impossible', 'rgRetour', f);
+                });
+            }
+            return { charger, actionRoute, lier, occupe: () => !!CONFIRM || !$('rtForm').hidden || !$('rgForm').hidden };
+        })();
+
+        // ===== Temps réel (#2915) : débit par interface et paquets écartés, API hub netstats =====
+        const direct = (function () {
+            const maxi = a => { let m = 0; (a || []).forEach(p => { if (p[1] > m) m = p[1]; }); return m; };
+            const dernier = a => { const p = (a || []).slice(-1)[0]; return p ? p[1] : null; };
+            const bps = b => b == null ? '—' : b >= 1e9 ? (b / 1e9).toFixed(1) + ' Gb/s' : b >= 1e6 ? (b / 1e6).toFixed(1) + ' Mb/s' : b >= 1e3 ? (b / 1e3).toFixed(1) + ' kb/s' : Math.round(b) + ' b/s';
+            const nb = n => n == null ? '—' : Number(n).toLocaleString('fr-FR');
+            async function api(chemin) {
+                try { const r = await fetch('/api/v1/hub' + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() }); return r.ok ? await r.json() : null; } catch (e) { return null; }
+            }
+            const NS = 'http://www.w3.org/2000/svg';
+            function courbe(entree, sortie, couleurs, haut) {
+                const W = 300, H = haut || 56, m = Math.max(1, maxi(entree), maxi(sortie));
+                const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('class', 'gr'); svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('role', 'img');
+                [[sortie, couleurs[1]], [entree, couleurs[0]]].forEach(([a, c]) => {
+                    if (!a || !a.length) return;
+                    const n = a.length, pts = a.map((p, i) => (i / Math.max(1, n - 1) * W).toFixed(1) + ',' + (H - 1 - p[1] / m * (H - 3)).toFixed(1)).join(' ');
+                    const pg = document.createElementNS(NS, 'polygon'); pg.setAttribute('points', '0,' + H + ' ' + pts + ' ' + W + ',' + H); pg.setAttribute('fill', c); pg.setAttribute('fill-opacity', '.14'); svg.appendChild(pg);
+                    const pl = document.createElementNS(NS, 'polyline'); pl.setAttribute('points', pts); pl.setAttribute('fill', 'none'); pl.setAttribute('stroke', c); pl.setAttribute('stroke-width', '1.4'); pl.setAttribute('vector-effect', 'non-scaling-stroke'); svg.appendChild(pl);
+                });
+                return svg;
+            }
+            const groupe = n => /^wg-/.test(n) ? 'Tunnels' : /^(veth|lxcbr|br-lxc|lxdbr)/.test(n) ? 'Conteneurs' : 'Interfaces';
+            function tuile(l, v, cls, s) { const t = el('div', 'tuile ' + cls); t.appendChild(el('span', 'l', l)); t.appendChild(el('span', 'v', v)); t.appendChild(el('span', 's', s || '')); return t; }
+            function rendu(sum, ser) {
+                const vieux = !!(sum && sum.stale), ok = !!(ser && ser.in_bps);
+                const e = $('dEtat'); e.className = 'actif ' + (ok ? (vieux ? 'neutre' : '') : 'hors');
+                e.textContent = !ok ? 'AUCUNE MESURE' : (vieux ? 'DONNÉES PÉRIMÉES — COLLECTEUR ARRÊTÉ ?' : 'EN DIRECT');
+                $('dHeure').textContent = new Date().toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+                const inb = (ser && ser.in_bps) || {}, outb = (ser && ser.out_bps) || {}, drops = (ser && ser.drops) || {};
+                const noms = Object.keys(inb).concat(Object.keys(outb).filter(k => !(k in inb)));
+                const actives = [], repos = [];
+                noms.forEach(n => (maxi(inb[n]) + maxi(outb[n]) > 0 ? actives : repos).push(n));
+                actives.sort((a, b) => (maxi(inb[b]) + maxi(outb[b])) - (maxi(inb[a]) + maxi(outb[a])));
+                let tIn = 0, tOut = 0; actives.forEach(n => { tIn += dernier(inb[n]) || 0; tOut += dernier(outb[n]) || 0; });
+                const cats = Object.keys(drops); let somme = 0, principale = null, pmax = 0;
+                cats.forEach(c => { let s = 0; (drops[c] || []).forEach(p => { s += p[1]; }); if (s > pmax) { pmax = s; principale = c; } somme += s; });
+                const total = sum && sum.network_drops != null ? sum.network_drops : (ok ? somme : null);
+                const tu = $('dTuiles'); tu.replaceChildren();
+                tu.appendChild(tuile('Entrant maintenant', ok ? bps(tIn) : '—', 'cy', 'somme des interfaces actives'));
+                tu.appendChild(tuile('Sortant maintenant', ok ? bps(tOut) : '—', 'att', 'somme des interfaces actives'));
+                tu.appendChild(tuile('Interfaces actives', ok ? actives.length + ' / ' + noms.length : '—', 'ok', ok ? repos.length + ' au repos sur 24 h' : ''));
+                tu.appendChild(tuile('Paquets écartés', total == null ? '—' : nb(total), total ? 'att' : 'ok', principale ? 'surtout : ' + principale : 'pare-feu nftables'));
+                const zi = $('dIfaces'); zi.replaceChildren();
+                const G = { Interfaces: [], Tunnels: [], Conteneurs: [] }; actives.forEach(n => G[groupe(n)].push(n));
+                Object.keys(G).forEach(g => {
+                    if (!G[g].length) return;
+                    const h = el('h3', '', g); h.appendChild(el('i', '', G[g].length + ' active' + (G[g].length > 1 ? 's' : ''))); zi.appendChild(h);
+                    const grille = el('div', 'cartes'); zi.appendChild(grille);
+                    G[g].forEach(n => {
+                        const i = inb[n] || [], o = outb[n] || [], c = el('div', 'itf'); c.title = 'Fenêtre 24 h';
+                        const t1 = el('div', 'tt'); t1.appendChild(el('span', 'nom', n)); t1.appendChild(el('span', 'pic', 'pic ' + bps(Math.max(maxi(i), maxi(o))))); c.appendChild(t1);
+                        const t2 = el('div', 'tt'); const fi = el('span', 'fl in', '↓ '); fi.appendChild(el('b', '', bps(dernier(i)))); const fo = el('span', 'fl out', '↑ '); fo.appendChild(el('b', '', bps(dernier(o)))); t2.appendChild(fi); t2.appendChild(fo); c.appendChild(t2);
+                        c.appendChild(courbe(i, o, ['#29b6f6', '#ff9f1c'])); grille.appendChild(c);
+                    });
+                });
+                if (!ok) zi.appendChild(el('div', 'vide', 'Aucune série de débit.'));
+                if (repos.length) { const h = el('h3', '', 'Au repos'); h.appendChild(el('i', '', 'aucun trafic sur 24 h')); zi.appendChild(h); const r = el('div', 'repos'); repos.forEach(n => r.appendChild(el('span', '', n))); zi.appendChild(r); }
+                const zd = $('dDrops'); zd.replaceChildren();
+                if (cats.length) {
+                    const h = el('h3', '', 'Paquets écartés par catégorie'); h.appendChild(el('i', '', '24 h')); zd.appendChild(h);
+                    const grille = el('div', 'cartes'); zd.appendChild(grille);
+                    cats.forEach(c => { let s = 0; (drops[c] || []).forEach(p => { s += p[1]; }); const d = el('div', 'drop'); const t = el('div', 'tt'); t.appendChild(el('span', 'nom', c)); t.appendChild(el('span', 'tot', nb(s))); d.appendChild(t); d.appendChild(courbe(drops[c], null, ['#ff4d5e'], 40)); grille.appendChild(d); });
+                }
+                annoncer();
+            }
+            async function charge() {
+                if (DEMO) { const t = Math.floor(Date.now() / 1000) - 288 * 300, s = (b) => Array.from({ length: 288 }, (_, i) => [t + i * 300, Math.round(b * (0.6 + 0.8 * Math.abs(Math.sin(i / 23))))]);
+                    rendu({ stale: false, network_drops: 92 }, { in_bps: { eth2: s(2.4e6), 'wg-mesh': s(3.4e5) }, out_bps: { eth2: s(9e5), 'wg-mesh': s(1.8e5) }, drops: { input_policy: s(3) } }); return; }
+                const [sum, ser] = await Promise.all([api('/netstats/summary'), api('/netstats/series?window=86400&step=300')]);
+                rendu(sum, ser);
+            }
+            return { charge, actif: () => !$('t-direct').hidden };
+        })();
+        window.__netdiagCharger = () => charger();
+        rt.lier(); rt.charger();
+
         // ----- Onglets -----
-        const NOMS = ['outils', 'interfaces', 'routes', 'connexions'];
+        const NOMS = ['outils', 'interfaces', 'routes', 'connexions', 'direct'];
         function onglet(nom) {
             document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
             NOMS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            if (nom === 'direct') direct.charge();
+            if (nom === 'routes') rt.charger();
             annoncer();
         }
         document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
@@ -435,7 +685,9 @@
         setInterval(() => {
             const a = document.activeElement;
             if (document.hidden || DEMO || OCCUPE || (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT' || a.tagName === 'TEXTAREA'))) return;
-            charger();
+            if (rt.occupe()) return;
+            charger(); rt.charger();
+            if (direct.actif()) direct.charge();
         }, 30000);
     </script>
 </body>

@@ -5,6 +5,8 @@ Description=SecuBox blacklist attribution timer (every 2 min)
 
 [Timer]
 OnBootSec=120s
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=120s
 OnUnitActiveSec=2min
 AccuracySec=20s
 Persistent=true

@@ -9,6 +9,179 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-18 — Guide d'installation de l'ESPRESSObin (ref #2913)
+
+docs/INSTALL-ESPRESSOBIN.md : neuf etapes (materiel, image de la release GitHub ou construction, console serie, memoire et sauvegarde SPI, demarrage USB, install eMMC, profil minimal, rattachement a gk2) + recuperation UART. Les points non verifies sont signales : l'image lite de la release (v3.0.0-alpha.18) n'est pas une cle live dediee a l'ESPRESSObin, et le rattachement a gk2 reste manuel. Tutoriel interactif correspondant : artefact prive du proprietaire.
+
+## 2026-10-17 — Cloture validee par le proprietaire
+
+Le proprietaire valide et demande la cloture : closes #2857 (hub, panneau Reseau), closes #2859 (dns, moteur reel), closes #2861 (hub, nom de la carte), closes #2863 (filterlists dans secubox-core ; deploye sur la carte, pas encore sur gk2), closes #2865 (secubox-courbes ; deploye sur la carte, pas encore sur gk2). Reste a deployer sur gk2 : core 1.7.10 + ad-guard 1.14.3 + dns-guard 1.4.7, et courbes 0.1.0 + metrics 1.24.0.
+
+## 2026-10-17 — Courbes et Glances pour minimal : secubox-courbes (ref #2865, #2863, #2861, #2859, #2857)
+
+secubox-courbes 0.1.0 (nouveau, leger) : bibliotheque secubox_courbes (serie, systeme), API a la racine servie par secubox-groupd (/api/v1/courbes/{series,systeme}, aucun processus de plus), pages /grafana/ (Courbes) et /glances/, minuterie secubox-courbes-serie (meme fichier series.jsonl). secubox-metrics 1.24.0 en depend et delegue ; secubox-minimal 0.7.0 l'embarque ; profiles 0.23.4. Deploye et verifie sur la carte (health 200, pages 200, releve en marche), PAS encore sur gk2. Meme jour : secubox-core 1.7.10 livre secubox_filterlists (ad-guard 1.14.3, dns-guard 1.4.7 : secubox-adblock-sync marche sans toolbox, 119 265 domaines sur la carte, #2863, suite de #2855) ; dns 1.5.1 (moteur reel Unbound, #2859) et hub 1.12.12/1.12.13 (panneau Reseau, nom de la carte, #2857, #2861) deployes sur gk2 avec un redemarrage de l'agregateur ; carte : tor, waker, meshname, ksm arretes (environ 50 Mo de RAM, 130 Mo de zram).
+
+## 2026-10-16 — ESPRESSObin : reflash SPI 2 Go rate, recuperation UART (ref #2855, #2857)
+
+Le U-Boot de la carte d'essai est un build « espressobin-v7-1gb » (DRAM 1 GiB). Flash de l'image OpenWrt 21.02.7 « v7-2gb » : carte muette (TIM/WTMI en boucle, pas de BL1). Recuperee par mox-imager (UART, sans cavaliers, 115200, plusieurs coupures d'alimentation) puis `bubt` de l'image v7-1gb : SPI = build OpenWrt du 17 avril 2023, carte revenue (eMMC, tunnel Auto-Load, SSH de support, admin public OK). Conclusion : cette carte est une v7 1 Go. Autres faits du jour : hub 1.12.12 (panneau Reseau : WAF = route par defaut, #2857) ; secubox-minimal 0.6.0 sans toolbox ni R-level, ad-guard 1.14.2 (toolbox en Recommends, #2855) ; sur gk2, `apt remove secubox-toolbox` tape a la main a 20:00 a retire toolbox, lite et ad-guard : restaures (toolbox 2.13.4, ad-guard 1.14.1, lite 1.8.0), un `apt upgrade` de 19:52 a installe un nouveau noyau non actif (ne pas redemarrer gk2 sans verifier). FAQ-ESPRESSOBIN-1GO.md complete.
+
+## 2026-10-16 — Support SSH depuis gk2 vers la box enrolee (ref #2854, #2853)
+
+Pose a la main sur lgm-ebin : cle dediee /etc/secubox/secrets/support-ssh/id_ed25519 (gk2, 0600), cle publique dans authorized_keys de la box avec from="10.64.0.1" et sans redirections, regle nft iifname wg-autoload + ip saddr 10.64.0.1 sur le port 22 avant le drop « hors LAN » (00-ssh-lan.nft). Test depuis gk2 : OK. #2854 : le faire poser par l'enrolement Auto-Load (revocable, journalise). #2853 : l'agent Auto-Load rejoue nom et mot de passe a chaque demarrage (desactive sur la carte). Suivi du jour : WIP, TODO, FAQ-ESPRESSOBIN-1GO.md, README racine, README secubox-minimal et secubox-annuaire.
+
+## 2026-10-16 — minimal : ndpid-engine >= 1.7.2, fin de la boucle sur eth2 (ref #2851)
+
+secubox-minimal 0.5.1. La carte portait ndpid-engine 1.7.1 (61 redemarrages, nDPId sur eth2 inexistante) ; la correction #2740 etait en 1.7.2. 1.7.2 arm64 (artefact CI) publie dans apt trixie et installe sur la carte : actif sur eth0.
+
+## 2026-10-16 — minimal : WAF et HAProxy essayes puis retires (ref #2847, #2849)
+
+secubox-minimal 0.4.0 avait ajoute haproxy, secubox-haproxy, secubox-waf-ng (+ leurre arme par postinst) ; sur l'ESPRESSObin (951 Mo) la carte a sature (swap plein, charge > 10) et a du etre coupee deux fois. Decision du proprietaire : retrait. secubox-minimal 0.5.0 (sans WAF ni HAProxy, Conflicts waf-ng retabli, WireGuard garde), secubox-profiles 0.23.2. Retire de la carte (paquets purges, drop-in et filigrane supprimes). Le WAF reste sur gk2 (publication admin.lgm-ebin.secubox.in). Hors source sur la carte : regle nft SSH reserve au LAN (/etc/secubox/hardening/nft-input-trust.d/00-ssh-lan.nft), agent Auto-Load desactive. Reste : alleger le profil (ndpid-engine, python3 de l'agregateur, minuteurs), agent Auto-Load qui rejoue le mot de passe d'usine au demarrage.
+
+## 2026-10-16 — WireGuard distant par WAN : la box lgm-ebin offre la sortie Internet (ref #2845, #2844)
+
+secubox-wireguard 1.3.0 : `wgctl serveur init` (wg-clients 10.66.0.1/24, nft propre forward+masquerade, point d'acces configurable), configs clientes 0640 root:secubox (etaient 0644 avec la cle privee). Deploye sur la box d'essai ; sur gk2 : relais UDP 51840 -> 10.64.0.9:51820 (table nft secubox_relais_wg, /etc/nftables.d/zz-secubox-relais-wg-lgm-ebin.nft, HORS SOURCE, a porter dans secubox-autoload) ; publication admin.lgm-ebin.secubox.in (certificat, vhost, route sbxwaf 10.64.0.9:9080, HORS SOURCE, #2844). Reste : redirection UDP 51840 de la Freebox vers gk2, essai de bout en bout depuis un client.
+
+## 2026-10-16 — fleet : panneau des pairs p2p (ref #2842)
+
+secubox-annuaire 0.14.3 : /fleet/ lit aussi GET /api/v1/p2p/peers (nom, adresse, statut par poignee de main, dernier vu), masque si absent ou vide. Deploye gk2, publie apt.
+
+## 2026-10-16 — fleet : panneau des box Auto-Load enrolees (ref #2840)
+
+secubox-annuaire 0.14.2 : /fleet/ lit aussi GET /api/v1/autoload/boxes (client, profil, statut, progression, etape, derniere activite). Panneau masque si module absent ou liste vide. Deploye gk2, publie apt.
+
+## 2026-10-16 — Auto-Load : profil minimal, ESPRESSObin beta client (ref #2838)
+
+secubox-minimal 0.3.0 (+ agent Auto-Load), secubox-profiles 0.23.0 (profil d'activation minimal), secubox-autoload-agent 0.9.0 (connait minimal), secubox-autoload 0.6.1 (atelier). Tunnel sortant vers gk2, aucun port entrant ; identifiants d'usine a changer au premier login. Procedure d'atelier dans docs/AUTOLOAD-ATELIER.md.
+
+## 2026-10-16 — Sante sur ESPRESSObin : page masquee et fausse alarme ytsas (ref #2836)
+
+secubox-core 1.7.9 : `location = /health` (egalite exacte) ; secubox-hub 1.12.11 : la sonde LXC ne juge que les modules installes.
+
+## 2026-10-16 — Images minimales publiees pour ESPRESSObin v7 et RPi 400 (ref #2834)
+
+matrice-images.py : `minimal` publie pour espressobin-v7 (a cote de lite) et rpi400 ; le workflow n'ajoute pas de kiosque a minimal (WebUI d'administration seule).
+
+## 2026-10-16 — Catalogue App Store : secubox-minimal hors-arbre (ref #2832)
+
+secubox-meta 0.1.44 : arbre.yaml declare secubox-minimal ; gen-appstore-catalog (et la construction de secubox-appstore) echouait depuis le profil minimal.
+
+## 2026-10-16 — webos : le retrait retire son lien nginx (ref #2830)
+
+secubox-webos 1.12.3 : postrm retire sites-enabled/hall.gk2.net.conf (le lien casse faisait echouer nginx -t apres une purge).
+
+## 2026-10-16 — Banniere de connexion : https://<IP>/ (ref #2828)
+
+build-image.sh annonçait le port 9443 (copie de l'image Raspberry Pi) ; les images servent le HTTPS sur 443.
+
+## 2026-10-16 — ESPRESSObin : script fix-bootcmd (ref #2826)
+
+fix-bootcmd.scr (livre dans la partition de demarrage de l'image) : bootcmd = boot.scr de l'eMMC puis boot-usb.scr de la cle ; ancien bootcmd garde dans bootcmd_avant. Une ligne : usb start; load usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}.
+
+## 2026-10-16 — Image ESPRESSObin : boot.scr et boot-usb.scr toujours livres (ref #2824)
+
+La CI n'installait pas u-boot-tools : l'image n'avait ni boot.scr ni boot-usb.scr (copie dans le bloc conditionnel de mkimage). Le workflow installe u-boot-tools, boot-usb.scr est copie sans mkimage, et l'absence de mkimage FAIT ECHOUER la construction d'une image espressobin*.
+
+## 2026-10-16 — hub : depend de l'agregateur, /api/v1/hub/ plus en 404 sur image neuve (ref #2822)
+
+secubox-hub 1.12.10 : Depends secubox-aggregator (le postinst de hub n'ecrit dans aggregator.toml que si l'agregateur l'a deja cree).
+
+## 2026-10-16 — Profil minimal 0.2.0 et demarrage USB (ref #2816)
+
+secubox-minimal 0.2.0 : + ipv6guard, webfilter ; Hall, WAF, metrics en Conflicts (un Recommends de auth/freebox ramenait le Hall dans l'image). Demarrage USB de l'ESPRESSObin en une ligne U-Boot : boot-usb.scr (root=LABEL=rootfs) livre dans la partition de demarrage.
+
+## 2026-10-16 — Comparatif des profils (ref #2819)
+
+secubox-profiles 0.22.0 : page /profiles/comparatif.html, contenu lu des meta-paquets a la construction, profil actif et modules installes (dpkg), memoire mesuree.
+
+## 2026-10-16 — Profil minimal (ref #2816)
+
+secubox-minimal 0.1.0 : DPI + moteur nDPI, dns-guard, ad-guard, NAC, Freebox, socle d'administration (core, aggregator, system, hardening, hub, portal, auth). Ni WAF, ISP, Hall, ni metrics (« visites »), ni VPN. `minimal` choisissable en declenchement manuel (build-image.yml, matrice-images.py) ; la matrice publiee est inchangee. Image ESPRESSObin sur cle USB : en cours.
+
+## 2026-10-16 — Barre laterale du Hall : liens vers admin.* (ref #2814)
+
+secubox-hub 1.12.9 : sur un hote hall.*, les liens du menu visent admin.* (meme domaine, port conserve).
+
+## 2026-10-16 — App Store : installation a distance (closes #2808)
+
+secubox-appstore 0.9.0 : demande d'installation sur un autre noeud via la boite OpenPGP, accord de l'admin cible (nom retape), reponse a l'expediteur. Rendu valide par le mainteneur ; une demande reelle entre deux noeuds n'a pas encore ete exercee (suivi a faire).
+
+## 2026-10-16 — cookies : metriques vides, module always-on (closes #2811)
+
+secubox-profiles 0.21.1 : cookies always-on par defaut (cible du relais sbxmitm). Sur gk2 : `secubox-profilectl set-lifecycle`.
+
+## 2026-10-16 — Hall : barre de navigation sur /identite/ (closes #2809)
+
+secubox-webos 1.12.2 : /shared/ en lecture seule + menu et health-batch derriere le double verrou LAN+session sur le vhost du Hall.
+
+## 2026-10-16 — proxypac etape 2 : cache des CDN statiques (closes #2804, closes #2752)
+
+secubox-toolbox-ng 0.13.0 (cache de reponses dans sbxmitm, liste fermee, par instance) + secubox-tor 1.7.0 (accepter/retirer dans proxypac). Etape 3 abandonnee (nos pages n'ont pas de CDN statique externe) ; routage PAC sans cible (MITM sur wg-toolbox/loopback seulement).
+
+## 2026-10-16 — antirootkit : API KO corrigee (closes #2805)
+
+secubox-security-posture 2.4.1 : SupplementaryGroups=secubox dans l'unite antirootkit (secret JWT illisible sinon).
+
+## 2026-10-16 — App Store : cumuls par categorie (closes #2802)
+
+secubox-appstore 0.8.0 : panneau de cumuls par categorie (installes/total, a installer), cliquable pour filtrer.
+
+## 2026-10-16 — Barre du haut sans icones (closes #2800)
+
+secubox-hub 1.12.8 : smart-strip masquee.
+
+## 2026-10-16 — nDPId Flux : synthese au-dessus de la liste (closes #2798)
+
+secubox-dpi 1.14.2 : repartition par protocole / applications / hotes passent au-dessus des flux actifs.
+
+## 2026-10-16 — Espaces : sondes YouTube SAS et Glances (closes #2796)
+
+secubox-hub 1.12.7 : `glances` suit `metrics` ; `ytsas` (LXC) sonde par connexion TCP au conteneur. Plus d'arret affiche a tort pour des pages qui fonctionnent.
+
+## 2026-10-16 — Vue d'ensemble : etats coherents avec la page Espaces (closes #2794)
+
+secubox-hub 1.12.6 : `/apercu` suit la sonde de sante (monte dans l'agregateur, en veille = en service ; `error` = arret) au lieu de la seule unite/socket ; apercu et health, pages du hub, ont une sonde. Reste a l'arret a juste titre : MESH 802.11s.
+
+## 2026-10-16 — Barre laterale sans pastilles (closes #2792)
+
+secubox-hub 1.12.5 : le bloc de pastilles en haut a gauche (live, menaces, services KO, materiel) est retire sur toutes les pages (masque CSS, y compris depuis le cache HTML ; `loadStatusBarData` ne fait plus de requetes).
+
+## 2026-10-16 — Systeme : actions rapides reelles et honnetes (closes #2788)
+
+secubox-system 1.10.2 : cinq unites root `secubox-systeme-*.service` (verification pare-feu, heure NTP, caches, redemarrer, eteindre) demarrees via la regle polkit #2615 ; l'API rend le vrai code retour et la raison (502/504) au lieu de « HTTP 200 » muet. « Recharger le pare-feu » verifie la config (`nft -c`) sans la charger (`flush ruleset` viderait les bannissements). Redemarrage en bloc des services refuse (409). `override_dh_installsystemd` : le postinst ne demarre pas les unites d'action (il aurait eteint la machine). 24 tests.
+
+## 2026-10-16 — Système : actions rapides réelles et honnêtes (secubox-system 1.10.2) (closes #2788)
+
+- Cause : l'API (User=secubox, NoNewPrivileges) ne pouvait ni recharger nftables, ni régler l'heure, ni vider les caches, ni éteindre ; elle répondait HTTP 200 `{"success": false}` sans raison (« Échec : HTTP 200 »), et « Redémarrer les services » / « Éteindre » annonçaient un succès sans contrôle.
+- Correctif : cinq unités root `secubox-systeme-*.service` démarrées par `systemctl start` (règle polkit #2615) ; vrai code retour + raison en 502/504 ; « Recharger le pare-feu » = vérification `nft -c` (pas de flush : `/etc/nftables.conf` commence par `flush ruleset`, ce qui viderait les bannissements) ; redémarrage en bloc refusé (409) ; `override_dh_installsystemd` pour que le postinst ne démarre pas les unités d'action. 24 tests. Déployé gk2 (1.10.2) et vérifié : polkit autorise pare-feu-verif et heure depuis le cgroup du service, refuse ssh.service ; bannissements intacts. closes #2788
+
+## 2026-10-16 — Santé : la sonde WAF teste le hall de cette box, pas celui d'un nœud mort (secubox-health 1.3.2, closes #2786)
+- Suite de #2784. Cause réelle de « requête saine : timed out » : `choisir_host` prenait le premier `hall.*` par ordre alphabétique, `hall.gk1.secubox.in`, routé vers `10.10.0.3:9080` (un autre nœud du maillage, qui ne répond plus ; le RPi400 est en 10.10.0.6). Mesuré sur gk2 : hall.gk1 → 14 s sans réponse ; hall.gk2 → 4 ms ; hall.gk3 → 12 ms ; canaris refusés en 5 ms. Le verdict « amont lent » de #2784 n'était donc qu'un pansement honnête ; la vraie correction est ici.
+- Correctif : hall de la box (`hall.<domaine>`) → sinon un amont hors maillage (10.10.0.x) → sinon l'ancien choix. 8 tests de plus.
+- À suivre : la table de routes porte `hall.gk1 → 10.10.0.3` (adresse périmée du nœud relayé) ; et gk2 saturée (swap 10 de 12 Go, mémoire 94 %, disque racine 97 %, charge 22) — non masquée.
+
+## 2026-10-16 — Santé : la sonde du WAF ne déclare plus « défaillant » un amont lent (secubox-health 1.3.1, secubox-hub 1.12.4, closes #2784)
+- Constat du mainteneur (page Santé) : « WAF — test dynamique » rouge, « requête saine — non bloqué · timed out » ; « tu es certain de tes sondes d'état ? all greens ».
+- Analyse : le témoin (`GET /robots.txt`) traverse sbxwaf jusqu'à l'amont ; sur gk2 chargée (charge ~14, mémoire 94 %) l'amont dépasse 5 s. Un délai dépassé n'est pas un blocage (le WAF refuse en 403 immédiat) et les quatre canaris du même passage étaient bien refusés : le WAF fonctionnait.
+- Correctif : délai du témoin 12 s ; témoin expiré + quatre canaris bloqués = WAF sain avec avertissement « amont lent » (indéterminé, jamais vert sans preuve) ; un canari en échec, un témoin bloqué (faux positif) ou un refus de connexion restent des échecs. Page Santé : « bloque les attaques · amont lent ». 9 tests. La cause de fond (gk2 saturée : mémoire 94 %, disque 97 %, charge 14) n'est pas masquée : elle reste visible dans les tuiles.
+
+## 2026-10-16 — Billets : les réponses-images du BBS s'affichent en vignettes (secubox-billets 0.13.2, closes #2782)
+- Constat du mainteneur (billet `business-plan-now-v2-gk2-f-…`) : « plus de vignettes ???? ». La réponse miroir du BBS (une image `/f/126.png`) apparaissait en URL texte dans la console du billet. Vérifié : fichiers du BBS publics, CSP du billet autorisant les images https, vignettes `_t.png` du billet servies — le défaut était l'affichage des commentaires système.
+- Fait : `miroir_bbs.rendre_corps` — URL de fichier du BBS de cette box → vignette cliquable (image paresseuse) ; vidéo → lien « ▶ vidéo » ; texte échappé et lié ; jamais d'image d'un autre hôte, d'un sous-domaine piège ni en http. 12 tests de plus (39 au total) ; échecs de la suite identiques à master.
+
+## 2026-10-16 — Miroir BBS : le premier post du fil n'est plus recopié (secubox-billets 0.13.1, closes #2780)
+- Constaté sur gk2 après le déploiement de 0.13.0 : la source du billet (premier post du fil 1147, une image) apparaissait aussi comme commentaire. Un billet relayé porte une copie locale du média, donc l'égalité de corps ne la reconnaissait pas.
+- Correctif : jamais de recopie depuis le premier post d'un fil lié (plus petit identifiant, public ou non) ; les copies déjà posées sont retirées au balayage suivant. Premier balayage réel : 62 commentaires système sur l'ensemble des billets liés au BBS. Piège noté : le service met ~27 s à démarrer ; une vérification faite trop tôt voit l'ancien état.
+
+## 2026-10-16 — Billets : les réponses publiques des fils BBS liés deviennent des commentaires système et font remonter le billet (secubox-billets 0.13.0, closes #2778)
+- Constat du mainteneur (billet `business-plan-now-v2-f-125-…`) : le billet ne se remplissait pas des posts et réponses publics des fils liés du BBS (le fil 1147 portait une réponse publique, post 1218, invisible) ; puis : « cela fait remonter le billet dans le fil », « un commentaire système avec la réponse et l'auteur en référence », « visible partie droite du fil comme les likes internes ».
+- Fait : miroir en lecture seule (`services/miroir_bbs.py`) — fils liés par `ref_url` ou lien du corps vers `bbs.<domaine>/t/<id>` ; posts publics non supprimés d'un fil public → commentaires `source='bbs'`, `author_ref='bbs:<handle>'`, à l'heure de la réponse (donc remontée dans le fil) ; le post d'origine du billet n'est pas recopié ; `/f/NN.ext` devient un lien absolu vers le BBS ; compteur de commentaires à côté de 💬 sur les cartes du fil ; balayage au plus toutes les 20 s, un billet seul à l'ouverture ; panne du BBS sans effet sur la page.
+- Garde-fous testés : local/privé/supprimé/fil non public jamais lus ; corps hors du dossier de contenu refusé ; hôte étranger ou sous-domaine piège ignoré ; idempotent ; rejet administrateur respecté ; 24 tests, échecs de la suite identiques à master (35, préexistants).
+
+## 2026-10-16 — Annuaire : l'acceptation d'une proposition accepte les scopes avec deux-points (secubox-annuaire 0.14.1, closes #2776)
+- Constat du mainteneur (page des centres, « Propositions ») : « Acceptation impossible : String should match pattern '^[a-z0-9][a-z0-9._-]*$' ».
+- Cause (reproduite sur gk2) : les propositions réelles portent des scopes `mitm-exclusion:gk2` / `mitm-exclusion:c3box` (publiés par la toolbox) ; la requête d'acceptation et d'octroi, le modèle de la config signée et de l'octroi délégué, et le nom de fichier appliqué refusaient le deux-points.
+- Correctif : `:` admis dans cette chaîne seulement ; `config_apply` passe en `fullmatch` (le `$` de `re.match` laissait passer un « \n » final dans un nom de fichier). Offres et incidents d'assistance gardent leur motif strict. 74 tests ; les 15 échecs de la suite sont ceux de master (authentification locale).
+
 ## 2026-10-16 — Rapport de sécurité PDF : tuiles Actor réparées, volet visites et bannissements (secubox-metrics 1.28.0, closes #2772)
 - Demande du mainteneur (capture du PDF) : « pdf missing actor metrics », puis « missing visites and bans stats and graphics » ; sources désignées : « waf et nft ».
 - Tuiles Actor vides : `GET /api/v1/actor/stats` d'actord met 5,0 s sur gk2 (mesuré), le rapport n'attendait que 4 s → `stats` valait None. Délai par appel : 30 s pour `/stats`, 4 s pour les lectures rapides. (actord `/stats` à 5 s reste lent : performance à voir séparément.)

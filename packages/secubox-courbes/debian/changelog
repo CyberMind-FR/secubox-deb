@@ -1,0 +1,17 @@
+secubox-courbes (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
+secubox-courbes (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Entrees de menu Courbes et Glances : `unite = courbes` (ref #2910). Elles etaient rouges (« a l'arret ») sur l'ebin alors que courbes.sock repond : le hub les jugeait sur l'id de leur page. Cle lue par secubox-hub 1.12.16.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 18:00:00 +0200
+
+secubox-courbes (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Nouveau paquet leger (#2865) : Courbes (/grafana/, remplace Grafana) et Glances (/glances/), sans secubox-metrics. Le releve (serie), l'instantane (systeme), les deux pages, leurs entrees de menu et la minuterie sortent de secubox-metrics pour que le profil minimal les embarque. Servi par secubox-groupd (groupable.d, /run/secubox/courbes.sock, /api/v1/courbes/{series,systeme}) : aucun processus de plus. Meme fichier de donnees (/var/lib/secubox/metrics/series.jsonl) : l'historique est conserve. Minuterie secubox-courbes-serie remplace secubox-metrics-serie.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:00:00 +0200

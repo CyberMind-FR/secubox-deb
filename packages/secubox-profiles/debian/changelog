@@ -1,3 +1,87 @@
+secubox-profiles (0.23.11-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
+secubox-profiles (0.23.10-1~bookworm1) bookworm; urgency=medium
+
+  * zkp et assistance sortent de tous les profils (ref #2909) : id zkp retire de full et media-lab, `menu_off = [zkp, assist]` dans les cinq profils (entrees de menu masquees par le hub). Les paquets restent installables a la main.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 19:00:00 +0200
+
+secubox-profiles (0.23.9-1~bookworm1) bookworm; urgency=medium
+
+  * Profil minimal : netdiag et routes allumes (ref #2899).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 13:00:00 +0200
+
+secubox-profiles (0.23.8-1~bookworm1) bookworm; urgency=medium
+
+  * Profil minimal : cle `menu_off = ["ksm", "premier-pas-maitre"]` (ref #2897), lue par le hub pour masquer ces deux entrees de menu tant que le profil est actif. Les paquets restent installes (secubox-premier-pas est importe par l'agent Auto-Load).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 12:00:00 +0200
+
+secubox-profiles (0.23.7-1~bookworm1) bookworm; urgency=medium
+
+  * Profil d'activation `minimal` : rallume annuaire-apply et annuaire-noms (#2877) — annuaire reste dans minimal (secubox-minimal 0.8.1).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 19:10:00 +0200
+
+secubox-profiles (0.23.6-1~bookworm1) bookworm; urgency=medium
+
+  * Profil d'activation `minimal` : retire annuaire-apply, annuaire-noms et openpgp (#2877), conformement a secubox-minimal 0.8.0.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 18:20:00 +0200
+
+secubox-profiles (0.23.5-1~bookworm1) bookworm; urgency=medium
+
+  * Le comparateur de profils dit ce qu'un profil INSTALLE vraiment (#2875). Il ne lisait que les Depends du meta-paquet : secubox-premier-pas (tire par autoload-agent) et secubox-p2p (tire par premier-pas) sont installes sur la carte mais etaient ranges « absents de minimal ». Les modules sont maintenant la fermeture transitive des dependances ET des recommandations (une image installe les Recommends par defaut), moins les Conflicts du meta-paquet (apt refuse ces paquets). Les paquets sans entree de menu (core, aggregator, ndpid-engine, ipv6guard, autoload-agent, courbes, premier-pas, p2p) ont un espace par defaut au lieu de « autres ». minimal : 22 modules au lieu de 18.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 17:00:00 +0200
+
+secubox-profiles (0.23.4-1~bookworm1) bookworm; urgency=medium
+
+  * Profil d'activation `minimal` : allume `courbes` (#2865), conformement a secubox-minimal 0.7.0.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:30:00 +0200
+
+secubox-profiles (0.23.3-1~bookworm1) bookworm; urgency=medium
+
+  * Profil d'activation `minimal` : n'allume plus toolbox ni toolbox-autolearn (#2855), conformement a secubox-minimal 0.6.0.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:20:00 +0200
+
+secubox-profiles (0.23.2-1~bookworm1) bookworm; urgency=medium
+
+  * Profil d'activation `minimal` : retire haproxy, waf, waf-ng et waf-ratelimit (#2849), conformement a secubox-minimal 0.5.0. wireguard reste allume.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 11:10:00 +0200
+
+secubox-profiles (0.23.1-1~bookworm1) bookworm; urgency=medium
+
+  * Profil d'activation `minimal` : allume haproxy, waf, waf-ng, waf-ratelimit et wireguard (#2847). Sans eux, `secubox-profilectl apply --profile minimal` eteindrait le WAF et WireGuard qu'embarque desormais secubox-minimal 0.4.0.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 10:10:00 +0200
+
+secubox-profiles (0.23.0-1~bookworm1) bookworm; urgency=medium
+
+  * Profil d'activation `minimal` (#2838) : ce que `secubox-profilectl apply --profile minimal` laisse allume (DPI, dns-guard, ad-guard, NAC, Freebox, WebUI d'administration ; ni WAF, ni Hall, ni metrics, ni kiosque, ni Tor). Exigé par l'agent Auto-Load pour un client minimal. Les profils sans ecran n'ont ni kiosque ni console. 3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 02:00:00 +0200
+
+secubox-profiles (0.22.0-1~bookworm1) bookworm; urgency=medium
+
+  * Comparatif des profils (#2819) : nouvelle page /profiles/comparatif.html (profil Aurora) qui montre Minimal, Lite, ISP et Full cote a cote. Le CONTENU de chaque profil est lu des meta-paquets secubox-<profil> a la construction (scripts/gen-profils-contenu.py, installe en contenu-profils.json) : jamais saisi a la main, un meta-paquet illisible fait ECHOUER la construction. Route GET /api/v1/profiles/comparatif (lecture) : ajoute le profil ACTIF de cette box et ses modules installes, lus de dpkg. La memoire affichee est celle MESUREE par le module (jamais estimee). Liste calculee de ce que Minimal n'embarque pas. Lien depuis /profiles/. 27 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 20:00:00 +0200
+
+secubox-profiles (0.21.1-1~bookworm1) bookworm; urgency=medium
+
+  * Politique par defaut : `cookies` passe de on-demand a always-on (#2811). C'est une cible du relais de sbxmitm, qui poste chaque evenement sur /run/secubox/cookies.sock et JETTE SANS BRUIT ce qu'il ne peut pas livrer : le sleeper endormait le module, mitm-ingest.db n'a plus ete ecrite depuis le 12 septembre et la page /cookies/ n'affichait que des metriques vides. 2 tests (dont un qui verifie que toute cible de socket du relais est always-on).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 16:00:00 +0200
+
 secubox-profiles (0.21.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /profiles/ refaite au profil Aurora (#2571) : page autonome (CSS et JS en ligne, plus de police Google Fonts ni de skin hybrid), tuiles (modules, actifs, arretes, inconnus, RAM connue, exposes publics), taxonomie par categorie/execution/exposition, bascule, liste des modules, diff. `?embed=1` sans menu, `?demo=1` donnees fictives et actions inertes, hauteur annoncee a l'hote (sbxVue, onglet « profiles »).

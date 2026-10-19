@@ -5,6 +5,8 @@
 
 name  = "media-lab"
 label = "Media Lab — box maison-média"
+# #2909 : zkp et assistance ne font partie d'aucun profil ; leurs entrees de menu sont masquees.
+menu_off = ["zkp", "assist"]
 on = [
   "ad-guard", "admin", "aggregator", "annuaire", "appstore", "auth",
   "avatar", "backup", "billets", "c3box", "cdn", "certs",
@@ -22,6 +24,6 @@ on = [
   "saas-relay", "streamforge", "streamlit", "streamlit-routes", "system",
   "threats", "tor", "traffic", "turn", "users", "vault",
   "vhost", "vm", "vortex-dns", "vortex-firewall", "waf", "waf-ng",
-  "waf-ratelimit", "watchdog", "wireguard", "yacy", "zigbee", "zkp",
+  "waf-ratelimit", "watchdog", "wireguard", "yacy", "zigbee",
   "console", "kiosk",
 ]

@@ -1,3 +1,15 @@
+secubox-tor (1.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
+secubox-tor (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * proxypac : accepter un CDN STATIQUE pour le cache de sbxmitm (#2804). Nouvelles routes POST /candidate/<hote>/cache, GET /cdn-cache, DELETE /cdn-cache/<hote> ; un hote qui n'est pas un CDN de fichiers statiques (API Google, cloudfront, sous-domaine) est refuse avec la raison. /candidates marque chaque candidat (cacheable, en_cache). La page affiche famille, requetes, appareils et le bouton « Mettre en cache » / « Retirer ». Le routage par le PAC n'a pas de cible (le MITM n'ecoute que sur wg-toolbox et en loopback) : le cache sert les appareils achemines par wg-toolbox. 17 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 14:00:00 +0200
+
 secubox-tor (1.6.2-1~bookworm1) bookworm; urgency=medium
 
   * proxypac-detect : la decision du magasin DNS d ad-guard s ecrit ALLOWED (pas allow) ; 1.6.1 ne trouvait donc aucun candidat sur la vraie base (ref #2752).

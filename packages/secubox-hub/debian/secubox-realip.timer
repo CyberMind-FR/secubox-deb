@@ -3,6 +3,8 @@ Description=SecuBox — relais de confiance de nginx, relecture des adresses (1 
 
 [Timer]
 OnBootSec=20s
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=20s
 OnUnitActiveSec=60s
 AccuracySec=5s
 Unit=secubox-realip.service

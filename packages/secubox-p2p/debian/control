@@ -15,8 +15,9 @@ Depends: ${misc:Depends},
  avahi-daemon,
  avahi-utils,
  wireguard-tools,
- secubox-annuaire,
  python3-aiohttp
+# secubox-annuaire : Recommends, plus Depends (#2877). Le client (api/annuaire_client.py) parle a l'annuaire par sa socket et « ne leve jamais » : sans lui, le catalogue est vide, pas une panne.
+Recommends: secubox-annuaire
 Breaks: secubox-master-link (<< 1.1),
  secubox-meshname (<< 1.1.5~)
 Replaces: secubox-master-link (<< 1.1),

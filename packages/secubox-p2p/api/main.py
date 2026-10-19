@@ -2547,6 +2547,26 @@ def _url_jonction(master_addr: str) -> str:
     return f"https://{hote}/api/v1/p2p/master-link/join"
 
 
+def _wg_cles():
+    """(genkey, pubkey) reels : `wg genkey` / `wg pubkey`, purs calculs sans privilege."""
+    def genkey():
+        return subprocess.run(["wg", "genkey"], capture_output=True, text=True, check=True, timeout=10).stdout.strip()
+
+    def pubkey(priv):
+        return subprocess.run(["wg", "pubkey"], input=priv, capture_output=True, text=True, check=True, timeout=10).stdout.strip()
+    return genkey, pubkey
+
+
+def _ecrire_etat_wg(etat: Dict) -> None:
+    """Ecriture atomique en 0600 : l'unite .path (root) applique le changement."""
+    init_dirs()
+    tmp = WG_MESH_CONFIG.with_suffix(".json.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(etat, f, indent=2)
+    os.replace(tmp, WG_MESH_CONFIG)
+
+
 async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:
     """Côté box qui REJOINT : envoie la demande de jonction au parent (appel SORTANT) et, si le parent approuve, enregistre son rôle de pair."""
     if not automesh.adresse_valide(master_addr):
@@ -2555,18 +2575,22 @@ async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:
     my_hostname = get_hostname()
     my_addr = get_lan_ip()
     url = _url_jonction(master_addr)
+    # #2885 : la cle du pair part avec la demande, sinon le maitre l'inscrit sans tunnel.
+    corps = {"token": token, "fingerprint": my_fp, "hostname": my_hostname, "address": my_addr}
+    try:
+        genkey, pubkey = _wg_cles()
+        etat_wg, pub = mesh.preparer_pair(get_wg_mesh_config(), genkey, pubkey)
+        _ecrire_etat_wg(etat_wg)
+        corps.update({"wg_public_key": pub, "wg_port": int(etat_wg.get("listen_port", WG_PORT))})
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        log.warning("tunnel du pair non prepare : %s", e)     # l'inscription reste possible sans tunnel
     try:
         proc = await asyncio.create_subprocess_exec(
             "curl", "-s", "--connect-timeout", "10",
             *(["-k"] if url.startswith("http://") else []),
             "-X", "POST",
             "-H", "Content-Type: application/json",
-            "-d", json.dumps({
-                "token": token,
-                "fingerprint": my_fp,
-                "hostname": my_hostname,
-                "address": my_addr
-            }),
+            "-d", json.dumps(corps),
             url,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
@@ -2585,6 +2609,11 @@ async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:
             config["upstream"] = master_addr
             config["depth"] = result.get("depth", 1)
             save_ml_config(config)
+            if isinstance(result.get("wg"), dict) and corps.get("wg_public_key"):
+                try:
+                    _ecrire_etat_wg(mesh.appliquer_offre(get_wg_mesh_config(), result["wg"], master_addr))
+                except (OSError, ValueError) as e:
+                    log.warning("offre de tunnel du maitre refusee : %s", e)
 
         return result
 

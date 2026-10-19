@@ -4,6 +4,8 @@ Description=SecuBox gitea — garde du SSH 2222, mise à jour périodique
 
 [Timer]
 OnBootSec=3min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=3min
 OnUnitActiveSec=10min
 
 [Install]

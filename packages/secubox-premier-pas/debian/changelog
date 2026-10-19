@@ -1,3 +1,15 @@
+secubox-premier-pas (0.7.3-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
+secubox-premier-pas (0.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * Entree de menu « Boxes a preparer » : `unite = aggregator` (ref #2907). Son API est servie en processus par l'agregateur (/api/v1/premier-pas/etat repond 200 sur gk2) ; secubox-premier-pas.service est le premier demarrage, a juste titre inactif sur une box configuree. La carte etait rouge a tort. Depend de la cle `unite` du hub (1.12.16).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 17:00:00 +0200
+
 secubox-premier-pas (0.7.1-1~bookworm1) bookworm; urgency=medium
 
   * Le postinst teste la DIRECTIVE X-SecuBox-LAN, pas la chaine (#2743). Mon garde de 0.6.2 (#2731) faisait `grep -q X-SecuBox-LAN`, trouvait le COMMENTAIRE de secubox-proxy.conf, concluait « deja posee » et retirait la route de session : sur le RPi400 la page distante repondait encore « pas du reseau local ». Meme piege que #1351. Les chemins du bloc sont surchargeables (SECUBOX_PROXY_SNIPPET, SECUBOX_LAN_GEO, SECUBOX_NGINX_SECUBOX_D, PREMIER_PAS_SESSION_SOURCE) et 4 tests executent le VRAI bloc sous `set -e` ; l'ancien test de 2731 figeait la forme defectueuse du garde, il exprime maintenant la bonne regle.

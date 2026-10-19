@@ -24,14 +24,13 @@ SCRIPT = ICI / "sbin" / "secubox-adblock-sync"
 
 @pytest.fixture
 def mod(tmp_path, monkeypatch):
-    fl = types.ModuleType("secubox_toolbox.filterlists")
+    # #2863 : la bibliotheque vit dans secubox_filterlists (secubox-core) ; secubox-toolbox n'est PAS necessaire (profil minimal).
+    fl = types.ModuleType("secubox_filterlists")
     fl.OUT_DNS = tmp_path / "domains.txt"
     fl.OUT_DNS.write_text("ads.example\ntracker.example\n")
     fl.compile_lists = lambda force=False: {"compiled": 2}
-    pkg = types.ModuleType("secubox_toolbox")
-    pkg.filterlists = fl
-    monkeypatch.setitem(sys.modules, "secubox_toolbox", pkg)
-    monkeypatch.setitem(sys.modules, "secubox_toolbox.filterlists", fl)
+    monkeypatch.setitem(sys.modules, "secubox_filterlists", fl)
+    monkeypatch.setitem(sys.modules, "secubox_toolbox", None)       # None = « import impossible » : le toolbox est absent
     loader = importlib.machinery.SourceFileLoader("adblock_sync_test", str(SCRIPT))
     spec = importlib.util.spec_from_loader("adblock_sync_test", loader)
     m = importlib.util.module_from_spec(spec)

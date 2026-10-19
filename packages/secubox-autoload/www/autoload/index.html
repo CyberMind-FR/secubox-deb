@@ -144,7 +144,7 @@
             <div class="pan"><h3>Gestion des jetons clients et abonnements</h3>
                 <form class="saisie" id="formJeton" autocomplete="off">
                     <label>Client<input id="fClient" required maxlength="40" pattern="[a-z0-9]([a-z0-9\-]{0,38}[a-z0-9])?" placeholder="boulangerie-dupont"></label>
-                    <label>Profil<select id="fProfil"><option value="lite">Lite — protection</option><option value="isp">ISP — protection + hébergement</option><option value="full">Full — tout le Hall</option></select></label>
+                    <label>Profil<select id="fProfil"><option value="minimal">Minimal — DPI, dns-guard, ad-guard, NAC, Freebox</option><option value="lite">Lite — protection</option><option value="isp">ISP — protection + hébergement</option><option value="full">Full — tout le Hall</option></select></label>
                     <label>Durée de l’abonnement<select id="fMois"><option value="1">1 mois</option><option value="3">3 mois</option><option value="6">6 mois</option><option value="12" selected>12 mois</option><option value="24">24 mois</option></select></label>
                     <label>Validité du jeton avant usage<select id="fValidite"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90" selected>90 jours</option><option value="365">365 jours</option></select></label>
                     <label>Courriel du client (rapport final)<input id="fEmail" type="email" maxlength="254" placeholder="gerant@exemple.fr"></label>

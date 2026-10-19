@@ -1,0 +1,69 @@
+secubox-minimal (0.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-routes (>= 1.5.0) : /netdiag/ fait partie du profil minimal (ref #2899).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 13:00:00 +0200
+
+secubox-minimal (0.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * annuaire et p2p ne sont plus exclus (#2877) : ils restent dans le profil, mais plus rien ne les EXIGE (secubox-auth et secubox-p2p : Recommends) — les modules sont emancipes de l'annuaire au lieu d'etre retires. Annule le Conflicts de 0.8.0.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 19:00:00 +0200
+
+secubox-minimal (0.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * Retire annuaire et p2p (#2877) : Conflicts sur secubox-annuaire et secubox-p2p. annuaire n'est plus exige par auth (Recommends), p2p n'etait tire que par un Recommends de premier-pas. Ni delegation d'acces ni maillage sur la carte.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 18:10:00 +0200
+
+secubox-minimal (0.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Embarque secubox-courbes (#2865) : Courbes (/grafana/, remplace Grafana) et Glances (/glances/), sans secubox-metrics qui reste exclu.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:20:00 +0200
+
+secubox-minimal (0.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Retire secubox-toolbox et le R-level MITM (#2855) : Conflicts sur secubox-toolbox. Possible parce que secubox-ad-guard 1.14.2 ne l'exige plus. Sur la carte : un moteur d'interception et une base de moins.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:10:00 +0200
+
+secubox-minimal (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Exige secubox-ndpid-engine (>= 1.7.2) (#2851) : 1.7.1 lance nDPId sur eth2, interface inexistante sur l ESPRESSObin (61 redemarrages, charge, journal sature). Le choix de l interface est dans 1.7.2 (#2740).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 11:30:00 +0200
+
+secubox-minimal (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Retire le WAF et HAProxy (#2849) : haproxy, secubox-haproxy et secubox-waf-ng quittent les dependances, le Conflicts sur secubox-waf-ng est retabli, le postinst qui armait le leurre disparait. Essayes sur l ESPRESSObin (951 Mo), ils ont sature la carte : swap plein, charge superieure a 10, deux coupures franches. Le WAF reste en amont, sur l infrastructure. WireGuard reste (#2845).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 11:00:00 +0200
+
+secubox-minimal (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Ajoute le WAF (#2847) : haproxy, secubox-haproxy et secubox-waf-ng. Le frontal HAProxy devant sbxwaf est pose au premier demarrage (image/firstboot.sh, etape 16) ; leurre et detection de force brute protegent l'administration. Le Conflicts sur secubox-waf-ng est retire (webos, waf legacy et metrics restent exclus). Le postinst arme le leurre depuis le modele de waf-ng (drop-in honeypot, filigrane genere sur place en 0400), sans rien ecraser.
+  * Ajoute secubox-wireguard (>= 1.3.0) : la box offre la sortie Internet a des clients distants (#2845).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 10:00:00 +0200
+
+secubox-minimal (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Embarque secubox-autoload-agent (#2838) : une box minimale se prepare avant livraison et s'enrole toute seule au premier demarrage, par un tunnel SORTANT vers l'infrastructure (aucun port entrant). L'unite ne demarre que si un fichier de reponses SIGNE est present sur /boot ; une box ordinaire n'est jamais touchee. Tire secubox-premier-pas, secubox-profiles et wireguard-tools.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 02:00:00 +0200
+
+secubox-minimal (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Ajout de secubox-ipv6guard et secubox-webfilter (#2816). Les modules exclus (Hall secubox-webos, WAF secubox-waf-ng et secubox-waf, metrics) passent en Conflicts :
+    l'image ESPRESSObin du 2026-10-16 contenait le Hall, que secubox-auth et secubox-freebox RECOMMANDENT et qu'apt installe par defaut.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 21:00:00 +0200
+
+secubox-minimal (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premier profil minimal (#2816) : DPI (secubox-dpi + moteur nDPI), garde DNS, ad-guard, NAC et Freebox, avec le seul socle d'administration
+    (core, aggregator, system, hardening, hub, portal, auth). Ni WAF, ni ISP, ni Hall, ni metrics (le module « visites »), ni VPN.
+    Pour essais sur ESPRESSObin V7 depuis une cle USB. Un test verifie sur la fermeture des dependances que rien d'interdit n'entre indirectement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 19:00:00 +0200

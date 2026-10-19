@@ -78,11 +78,13 @@ PROFILS_PUBLIES = {
     # ESPRESSObin (Armada 3720, 1 a 2 Go, swap 512 Mo) : lite seul. Depuis la refonte des profils (#2146), `isp` porte
     # tout l'hebergement (courrier, Matrix, Nextcloud, photos, Git…) et vise 8 Go : l'y construire par defaut comme
     # « socle de comparaison » donnerait une image qui cale au demarrage.
-    "espressobin-v7": ["lite"],
+    # `minimal` (#2834) : DPI, dns-guard, ad-guard, NAC, Freebox et la seule WebUI d'administration (ni WAF, ni Hall, ni hebergement). Il tient sur la carte
+    # la ou lite/isp calent, et se publie A COTE de lite pour l'ESPRESSObin v7.
+    "espressobin-v7": ["lite", "minimal"],
     "espressobin-ultra": ["lite"],
     # RPi 400 (BCM2711, 4 Go, carte uSD) : lite (le plus léger : protection, sans hébergement), isp et full. Le lite n'existait pas pour cette carte
     # (#2497) : une uSD « lite RPi400 » n'avait donc aucune image publiée. full-rpi pèse 1,7 Go, sous la limite de 2 Gio d'un fichier de release.
-    "rpi400": ["lite", "isp", "full"],
+    "rpi400": ["lite", "isp", "full", "minimal"],
 }
 
 _RE_PROFIL = re.compile(r"^\s*SECUBOX_PROFILE\s*=\s*(\S+)", re.M)
@@ -122,8 +124,13 @@ def profils_pour(racine: Path, carte: str) -> list[str]:
     return profils
 
 
+#: Profils qu'un déclenchement MANUEL peut forcer. `minimal` (#2816 : DPI, dns-guard, ad-guard, NAC, Freebox, socle d'administration) n'est dans AUCUNE
+#: matrice publiée : il ne se construit que sur demande.
+PROFILS_ACCEPTES = ["lite", "isp", "full", "minimal"]
+
+
 def matrice(racine: Path, cartes: list[str], profil: str | None = None) -> list[dict[str, str]]:
-    """`profil` (lite|isp|full) force UN profil pour les cartes demandées (déclenchement manuel, #2497) : on construit l'image voulue, pas toute la matrice."""
+    """`profil` (lite|isp|full|minimal) force UN profil pour les cartes demandées (déclenchement manuel, #2497) : on construit l'image voulue, pas toute la matrice."""
     return [
         {"board": c, "profile": p}
         for c in cartes
@@ -136,7 +143,7 @@ def main() -> int:
     ap.add_argument("--racine", default=".", help="racine du dépôt")
     ap.add_argument("--cartes", required=True,
                     help="cartes séparées par des virgules, ou 'defaut'")
-    ap.add_argument("--profil", default="auto", choices=["auto", "lite", "isp", "full"],
+    ap.add_argument("--profil", default="auto", choices=["auto", *PROFILS_ACCEPTES],
                     help="force UN profil pour les cartes demandées (auto = ceux que la matrice publie)")
     ap.add_argument("--defaut", default="mochabin,vm-x64,rpi400,espressobin-v7",
                     help="cartes bâties quand --cartes vaut 'defaut'")

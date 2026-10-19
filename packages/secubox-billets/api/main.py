@@ -235,7 +235,7 @@ def _categorie(billet_id: str) -> str:
     return _CATS[int(empreinte(billet_id or ""), 16) % len(_CATS)]
 
 
-def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None) -> dict:
+def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None, nb_commentaires: int = 0) -> dict:
     from urllib.parse import urlparse
     d = dict(row)
     # FICHE MEDIA (#1268) : un billet relayé porte dans son corps une fiche —
@@ -246,6 +246,7 @@ def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None)
     d["fiche"], _reste = fiche.extraire(d["body"])
     d["body_html"] = render_markdown(_reste if d["fiche"] else d["body"])
     d["tags"] = tags or []
+    d["nb_commentaires"] = nb_commentaires          # affiché à droite des cartes du fil, comme les « likes » (#2778)
     # A few words for list/preview contexts; body_html keeps the full billet.
     # Sur une fiche sans prose, le résumé vient de la fiche : une carte vide
     # n'apprendrait rien, et l'URL nue encore moins.
@@ -322,6 +323,30 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
     register_service(app)    # #2268 : MetaNews crée des billets éphémères (jeton de flotte, direct sur la socket)
     register_public(app, templates)
 
+    # MIROIR DES RÉPONSES BBS (#2778) : les posts publics des fils BBS liés deviennent des commentaires système des billets. Chemins surchargeables (tests).
+    app.state.bbs_db = os.environ.get("BILLETS_BBS_DB", "/var/lib/secubox/bbs/index.db")
+    app.state.bbs_content = os.environ.get("BILLETS_BBS_CONTENT", "/var/lib/secubox/bbs/content")
+    app.state.domaine = None
+    app.state.bbs_derniere = 0.0
+
+    async def _sync_bbs(billet_id: str | None = None) -> None:
+        """Balayage borné : au plus un toutes les 20 s pour le fil entier ; un billet seul à chaque ouverture. Une panne du BBS ne touche jamais la page."""
+        try:
+            from .services import miroir_bbs
+            maintenant = time.monotonic()
+            if billet_id is None:
+                if maintenant - app.state.bbs_derniere < 20:
+                    return
+                app.state.bbs_derniere = maintenant
+            dom = app.state.domaine
+            if not dom:
+                from secubox_core.auth import domaine_box
+                dom = app.state.domaine = domaine_box()
+            await miroir_bbs.synchroniser(app.state.conn, app.state.bbs_db, app.state.bbs_content, dom, billet_id=billet_id,
+                                          maintenant=repo._maintenant())
+        except Exception:  # noqa: BLE001 — le miroir est un bonus : jamais une 500 pour le lecteur
+            pass
+
     @app.middleware("http")
     async def _security_headers(request: Request, call_next):
         resp = await call_next(request)
@@ -338,15 +363,17 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
 
     @app.get("/", response_class=HTMLResponse)
     async def feed(request: Request, cursor: str | None = None, tag: str | None = None):
+        await _sync_bbs()
         rows, next_cursor = await repo.list_published(app.state.conn, limit=PAGE_SIZE,
                                                       cursor=cursor, tag=tag, ordre="activite")
         base = _base(request)
         media_map = await repo.list_media_for(app.state.conn, [r["id"] for r in rows])
         # One batched lookup for the page's chips + the whole-site chip bar.
         tag_map = await repo.tags_for_many(app.state.conn, [r["id"] for r in rows])
+        nbc = await repo.comment_counts(app.state.conn, [r["id"] for r in rows])
         resp = templates.TemplateResponse(request, "feed.html", {
             "site_title": SITE_TITLE, "tagline": SITE_TAGLINE,
-            "billets": [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]))
+            "billets": [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]), nbc.get(r["id"], 0))
                         for r in rows],
             "next_cursor": next_cursor,
             # Repère du dernier changement vu (#2266) : /feed/maj ne rend que ce qui bouge APRÈS lui. Sur la 1re page, c'est l'activité du billet de tête.
@@ -381,12 +408,14 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         HTML sous `#fil-billets` et poursuit tant que `next_cursor` n'est pas nul.
         Sans JS, le lecteur garde le pager `?cursor=` classique de la page."""
         from fastapi.responses import JSONResponse
+        await _sync_bbs()
         rows, next_cursor = await repo.list_published(app.state.conn, limit=PAGE_SIZE,
                                                       cursor=cursor, tag=tag, ordre="activite")
         base = _base(request)
         media_map = await repo.list_media_for(app.state.conn, [r["id"] for r in rows])
         tag_map = await repo.tags_for_many(app.state.conn, [r["id"] for r in rows])
-        vues = [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]))
+        nbc = await repo.comment_counts(app.state.conn, [r["id"] for r in rows])
+        vues = [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]), nbc.get(r["id"], 0))
                 for r in rows]
         html = templates.env.get_template("_immersif_items.html").render(billets=vues)
         # Pas d'en-tête CSP ici : le fragment est injecté dans le document de la
@@ -403,6 +432,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         complet par erreur."""
         import re
         from fastapi.responses import JSONResponse
+        await _sync_bbs()
         if not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", depuis or ""):
             resp = JSONResponse({"html": "", "depuis": depuis if re.fullmatch(r"[\d:TZ-]{0,24}", depuis or "") else "", "slugs": []})
         else:
@@ -413,7 +443,8 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
                 base = _base(request)
                 media_map = await repo.list_media_for(app.state.conn, [r["id"] for r in rows])
                 tag_map = await repo.tags_for_many(app.state.conn, [r["id"] for r in rows])
-                vues = [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"])) for r in rows]
+                nbc = await repo.comment_counts(app.state.conn, [r["id"] for r in rows])
+                vues = [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]), nbc.get(r["id"], 0)) for r in rows]
                 html = templates.env.get_template("_immersif_items.html").render(billets=vues)
                 resp = JSONResponse({"html": html, "slugs": [r["slug"] for r in rows],
                                      "depuis": max((r["bumped_at"] or r["published_at"]) for r in rows)})
@@ -575,13 +606,16 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         if row is None or row["status"] != "published":
             raise HTTPException(status_code=404, detail="Billet introuvable")
         await repo.increment_view(app.state.conn, row["id"])
+        await _sync_bbs(row["id"])
         vhash, new_vtoken = _visitor(request)
         pcsrf = request.cookies.get(PCSRF_COOKIE) or sec.new_csrf_token()
         ts_token = antispam.issue_form_token(app.state.secret, now_epoch=int(time.time()))
         rctx = await reactions_context(request, row["id"], vhash, slug=row["slug"])
         rctx["pcsrf"] = pcsrf
         comments = await repo.list_approved_comments(app.state.conn, row["id"])
-        comment_views = [{**dict(c), "body_html": linkify_plain(c["body"])} for c in comments]
+        _dom = app.state.domaine or ""
+        from .services import miroir_bbs as _mb
+        comment_views = [{**dict(c), "body_html": (_mb.rendre_corps(c["body"], _dom) if c["source"] == "bbs" else linkify_plain(c["body"]))} for c in comments]
         base = _base(request)
         permalink_url = f"{base}/b/{row['slug']}"
         media_rows = await repo.list_media(app.state.conn, row["id"])

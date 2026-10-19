@@ -5,6 +5,8 @@
 
 name  = "lite"
 label = "Lite — daily-driver optimisé"
+# #2909 : zkp et assistance ne font partie d'aucun profil ; leurs entrees de menu sont masquees.
+menu_off = ["zkp", "assist"]
 on = [
   "ad-guard", "admin", "aggregator", "annuaire", "auth", "backup",
   "cdn", "certs", "core", "cs-bridge", "dns",

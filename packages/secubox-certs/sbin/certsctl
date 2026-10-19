@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-readonly VERSION="1.1.0"
+readonly VERSION="1.3.1"
 readonly CERTS_DIR="${SECUBOX_CERTS_DIR:-/data/haproxy/certs}"
 readonly ACME_HOME="${SECUBOX_ACME_HOME:-/root/.acme.sh}"
 # Certbot gere une partie du parc (ganimed.fr, mail.gk2.secubox.in, …). La garantie
@@ -29,6 +29,9 @@ readonly ACME_HOME="${SECUBOX_ACME_HOME:-/root/.acme.sh}"
 # soit l outil qui l a emis. Sinon la moitie du parc reste sur le mecanisme qui
 # avait laisse 36 certificats expirer.
 readonly CERTBOT_LIVE="${SECUBOX_CERTBOT_LIVE:-/etc/letsencrypt/live}"
+readonly ACME_WEBROOT="${SECUBOX_ACME_WEBROOT:-/usr/share/secubox/www}"
+readonly ACME_BIN="${SECUBOX_ACME_BIN:-$ACME_HOME/acme.sh}"
+readonly CERTBOT_BIN="${SECUBOX_CERTBOT_BIN:-certbot}"
 readonly RELOAD_CMD="${SECUBOX_CERTS_RELOAD:-systemctl reload haproxy}"
 
 log() { printf '[certsctl] %s\n' "$*" >&2; }
@@ -150,15 +153,67 @@ cmd_status() {
     printf '{"expired": %d, "expiring_21d": %d, "valid": %d}\n' "$exp" "$soon" "$ok"
 }
 
+# renew <domaine> — force le renouvellement certbot puis redeploie le pem (#2874).
+#
+# Le panneau tourne dans l agregateur sous l utilisateur secubox : certbot y
+# echouait sur /var/log/letsencrypt/.certbot.lock. Ce verbe s execute en root
+# (sudoers a la lettre) ; le nom est valide AVANT tout, il n atteint jamais un
+# chemin ni une ligne de commande sans l avoir ete.
+cmd_renew() {
+    local dom="${1:-}"
+    if ! printf '%s' "$dom" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$'; then
+        log "nom de domaine invalide"
+        printf '{"success": false, "error": "invalid domain"}\n'
+        return 2
+    fi
+    if [ ! -f "$CERTS_DIR/$dom.pem" ]; then
+        log "certificat inconnu : $dom"
+        printf '{"success": false, "error": "unknown certificate"}\n'
+        return 3
+    fi
+    # Le parc a DEUX emetteurs : acme.sh (la grande majorite) et certbot. On
+    # renouvelle avec celui qui detient le certificat — l'autre repondrait
+    # « No certificate found » (cas reel : apt.secubox.in).
+    local outil="certbot" ecc=""
+    if [ -f "$ACME_HOME/${dom}_ecc/fullchain.cer" ]; then
+        outil="acme.sh"; ecc="--ecc"
+    elif [ -f "$ACME_HOME/$dom/fullchain.cer" ]; then
+        outil="acme.sh"
+    fi
+    if [ "$outil" = "acme.sh" ]; then
+        # `--renew` ignore `-w` : il rejoue le webroot MEMORISE dans la conf du
+        # domaine. On corrige donc la conf (la ou acme.sh l'a ecrit) pour que le
+        # defi tombe dans la racine servie par :8880.
+        local conf
+        for conf in "$ACME_HOME/${dom}_ecc/$dom.conf" "$ACME_HOME/$dom/$dom.conf"; do
+            if [ -f "$conf" ] && grep -q "^Le_Webroot=" "$conf"; then
+                sed -i "s|^Le_Webroot=.*|Le_Webroot='$ACME_WEBROOT'|" "$conf"
+            fi
+        done
+        # shellcheck disable=SC2086
+        if ! "$ACME_BIN" --home "$ACME_HOME" --renew -d "$dom" --force $ecc >&2; then
+            printf '{"success": false, "domain": "%s", "error": "acme.sh failed"}\n' "$dom"
+            return 1
+        fi
+    elif ! "$CERTBOT_BIN" renew --cert-name "$dom" --force-renewal --non-interactive >&2; then
+        printf '{"success": false, "domain": "%s", "error": "certbot failed"}\n' "$dom"
+        return 1
+    fi
+    cmd_deploy --apply >&2 || true
+    printf '{"success": true, "domain": "%s"}\n' "$dom"
+}
+
 case "${1:-help}" in
     deploy) cmd_deploy "${2:-}" ;;
     status) cmd_status ;;
+    renew) cmd_renew "${2:-}" ;;
     *) cat <<EOF
 certsctl v$VERSION — deploiement des certificats vers HAProxy
 
   deploy [--apply]   Synchronise magasin acme.sh -> $CERTS_DIR.
                      Sans --apply : simule. Recharge HAProxy uniquement si
                      quelque chose a change.
+  renew <domaine>    Force le renouvellement certbot puis redeploie le pem.
   status             Compte les certificats deployes expires / proches / valides
 EOF
     ;;

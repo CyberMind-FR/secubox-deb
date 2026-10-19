@@ -9,7 +9,7 @@ SecuBox-Deb :: secubox-adblock-sync (#740)
 CyberMind — https://cybermind.fr
 
 Board-wide DNS ad/tracker sinkhole. Compiles the modular filter-list resource
-(secubox_toolbox.filterlists) then renders the DNS-blockable domain set as an
+(secubox_filterlists, shipped by secubox-core) then renders the DNS-blockable domain set as an
 Unbound drop-in of `local-zone "<domain>." always_nxdomain` — so EVERY device on
 the LAN (not just R3 MITM clients) gets ads/trackers NXDOMAIN'd at resolve time.
 
@@ -36,16 +36,20 @@ from pathlib import Path
 # D4 (#2050) : pose, vérification, rechargement et retour arrière — la bibliothèque commune, pas une copie de plus.
 import secubox_unbound as _unbound
 
-# ── Locate the shared filter-list resource (secubox-toolbox package) ──────
-for _p in ("/usr/lib/secubox/toolbox", "/usr/lib/python3/dist-packages",
-           "/usr/lib/secubox/toolbox/lib"):
+# ── Locate the shared filter-list resource ────────────────────────────────
+# #2863 : secubox_filterlists est livré par secubox-core (comme secubox_unbound) — secubox-toolbox n'est PAS nécessaire (profil minimal). Repli sur l'ancien
+# chemin pour un secubox-core plus ancien.
+for _p in ("/usr/lib/python3/dist-packages", "/usr/lib/secubox/toolbox", "/usr/lib/secubox/toolbox/lib"):
     if _p not in sys.path:
         sys.path.append(_p)
 try:
-    from secubox_toolbox import filterlists as F
-except Exception as e:  # pragma: no cover
-    print(json.dumps({"ok": False, "error": f"filterlists import failed: {e}"}))
-    sys.exit(2)
+    import secubox_filterlists as F
+except Exception:
+    try:
+        from secubox_toolbox import filterlists as F
+    except Exception as e:  # pragma: no cover
+        print(json.dumps({"ok": False, "error": f"filterlists import failed: {e}"}))
+        sys.exit(2)
 
 DROPIN = Path("/etc/unbound/unbound.conf.d/95-secubox-adblock.conf")
 UNBOUND_CONF = Path("/etc/unbound/unbound.conf")
@@ -125,7 +129,7 @@ class Systeme(_unbound.SystemeUnbound):
     ERREUR = RuntimeError
 
     def verifier_unbound(self):
-        return _unbound.commande(["unbound-checkconf", str(UNBOUND_CONF)], 60)
+        return _unbound.commande(["unbound-checkconf", str(UNBOUND_CONF)], 300)
 
 
 def do_sync(force: bool = False, systeme=None) -> dict:

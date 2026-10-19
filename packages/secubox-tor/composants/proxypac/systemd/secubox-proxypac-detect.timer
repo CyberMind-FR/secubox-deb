@@ -3,6 +3,8 @@ Description=SecuBox ProxyPAC — detecteur de CDN (toutes les 15 minutes)
 
 [Timer]
 OnBootSec=3min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=3min
 OnUnitActiveSec=15min
 Persistent=true
 

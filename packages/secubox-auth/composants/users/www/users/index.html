@@ -269,7 +269,7 @@
                 { username: 'admin', email: 'admin@example.org', enabled: true, role: 'admin', totp_enabled: true, services: ['nextcloud', 'gitea'], created: '2026-05-02T09:12:00' },
                 { username: 'jdupont', email: 'jdupont@example.org', enabled: true, role: 'viewer', otp_mode: 'toujours', totp_enabled: false, services: ['email'], created: '2026-08-19T14:30:00' },
                 { username: 'archive', email: 'archive@example.org', enabled: false, totp_enabled: false, services: [], created: '2026-09-03T08:00:00' }];
-            SERVICES = { nextcloud: { running: true }, gitea: { running: true }, email: { running: true }, matrix: { running: false }, jellyfin: { running: false } };
+            SERVICES = { nextcloud: { running: false, etat: 'en veille' }, gitea: { running: true, etat: 'en marche' }, email: { running: true, etat: 'en marche' }, matrix: { running: false, etat: 'arrêté' }, jellyfin: { running: false, etat: 'en veille' } };
             PERSONNES = [
                 { user_uuid: 'a1b2c3d4-0000-0000-0000-000000000001', pseudo: 'gandalf', tier: 'free', status: 'active', roles: ['member', 'moderator'], appareils: 2, liens: { nextcloud: ['gandalf'], bbs: ['gandalf'] } },
                 { user_uuid: 'e5f6a7b8-0000-0000-0000-000000000002', pseudo: 'frodon', tier: 'free', status: 'suspended', roles: ['guest'], appareils: 1, liens: {} }];
@@ -325,7 +325,7 @@
             $('otpBascule').textContent = 'OTP sur le LAN : ' + (OTP ? (OTP === 'obligatoire' ? 'obligatoire' : 'facultatif') : '—');
             $('otpBascule').disabled = !OTP;
             $('nSvc').textContent = noms && noms.length ? pluriel(noms.length, 'service') : '';
-            const h = location.hostname.replace(/^admin\./, 'hall.'); $('lienIdentite').href = 'https://' + h + '/identite/';
+            sonderHall().then(function () { $('lienIdentite').href = urlIdentite().replace('#admin', ''); });
             rendrePuces(); rendreCases(); rendreComptes(); rendreSbx(); rendreDemandes(); rendreSessions();
             if (SVC_USER && SVC_ETAT) rendreSvcPanel();
             $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
@@ -337,7 +337,7 @@
             if (!SERVICES) { c.appendChild(el('span', 'note', '—')); return; }
             const noms = Object.keys(SERVICES);
             if (!noms.length) { c.appendChild(el('span', 'note', 'Aucun service enregistré.')); return; }
-            noms.forEach(n => c.appendChild(pastille(SERVICES[n].running ? 'ok' : '', n + (SERVICES[n].running ? ' · en marche' : ' · arrêté'))));
+            noms.forEach(n => { const e = SERVICES[n].etat || (SERVICES[n].running ? 'en marche' : 'arrêté'); c.appendChild(pastille(e === 'en marche' ? 'ok' : (e === 'en veille' ? 'cy' : ''), n + ' · ' + e + (e === 'en veille' ? ' (réveil à la demande)' : ''))); });
         }
         function rendreCases() {
             const c = $('cases'); const coche = [...c.querySelectorAll('input:checked')].map(i => i.value); c.replaceChildren();
@@ -384,7 +384,12 @@
             c.appendChild(b);
             return c;
         }
-        function urlIdentite() { return 'https://' + location.hostname.replace(/^admin\./, 'hall.') + '/identite/#admin'; }
+        // #2872 : le Hall n'existe pas sur toutes les boxes (profil minimal) ; sonde de meme origine, repli sur l'origine admin. Par defaut (sonde pas encore revenue) : le Hall, comme avant.
+        let HALL_PRESENT = true;
+        function urlIdentite() { return HALL_PRESENT ? 'https://' + location.hostname.replace(/^admin\./, 'hall.') + '/identite/#admin' : '/identite/#admin'; }
+        function sonderHall() {
+            return fetch('/hall/', { method: 'HEAD', credentials: 'same-origin' }).then(r => r.ok, () => false).then(h => { HALL_PRESENT = h; });
+        }
         function ouvreProfil(compte, cellule) {
             if (cellule.querySelector('[data-profil-choix]')) return;
             const l = lienDe(compte); const boite = el('div', 'otp');

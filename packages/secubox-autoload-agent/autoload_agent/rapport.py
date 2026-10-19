@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict
 
-PROFILS = {"lite": "Lite", "isp": "ISP", "full": "Full"}
+PROFILS = {"minimal": "Minimal", "lite": "Lite", "isp": "ISP", "full": "Full"}
 PAQUETS_AFFICHES = 30
 ISSUE_DEFAUT = Path("/run/issue.d")
 

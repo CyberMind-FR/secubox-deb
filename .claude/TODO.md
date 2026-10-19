@@ -6,11 +6,34 @@
 -->
 
 # TODO — SecuBox-DEB : backlog actif
-*Mis à jour : 2026-10-11 (release alpha.11).* Seul le backlog actif est ici (≥ 2026-09-01).
+*Mis à jour : 2026-10-16 (ESPRESSObin lgm-ebin).* Seul le backlog actif est ici (≥ 2026-09-01).
 Le reste est archivé, jamais perdu : `.claude/archive/INDEX.md` (≈ 240 cases ouvertes
 y dorment, par mois) — ne le lire que sur demande.
 
 ---
+
+## 2026-10-17 — demandes du proprietaire en attente (file, a prioriser)
+- [ ] **File du 2026-10-18 (ebin)** : (1) reparer /freebox/ et /meshname/ (services actives par moi, a verifier) ; (2) puits anti-pub INACTIF : ad-guard 1.14.4 installe, relancer la sync ; (3) /premier-pas-maitre/ a retirer de l'ebin et du profil minimal : la page vit dans secubox-premier-pas, que l'agent Auto-Load importe (Depends) → il faut sortir la page dans un petit paquet a part, pas retirer premier-pas ; (4) /portal/ : le bloc « Services » (WAF/HAProxy/nginx/Systeme, « etat inconnu ») est a remplacer par « Services vitaux (5) » de /health/ ; (5) /netdiag/ ajouter a minimal et a l'ebin (netdiag vit dans secubox-routes, composante absorbee), y deplacer « SOC Reseau » en onglet direct, integrer l'outil iperf3 absent (« Outils absents de ce noeud : iperf3 »).
+- [ ] **Pare-feu par zones (#2891) — SUSPENDU le 2026-10-18 sur demande du proprietaire.** Conception ecrite et relue (branche de l'issue, `docs/superpowers/specs/2026-10-18-firewall-zones-design.md`, non fusionnee) : zone = port physique + zone logique par appareil (MAC, prime sur le port), profils Enfants/Objets/Visiteurs/Libre, trois livrables (moteur, ports, API+UI). Reprise : trancher l'adressage par zone (sous-reseau + DHCP par port, ou un seul sous-reseau) et les boxes de la premiere livraison, puis plan. Rien n'est code.
+- [ ] **Auto-appairage p2p des esclaves** a la premiere preparation (Auto-Load) et en reparation : la box prete rejoint le maitre seule (code `sbxmesh1.` ou jeton auto-approuve cote preparation, par le tunnel wg-autoload ; l'enrolement 7331 l'admet depuis #2883/p2p 1.16.2), puis une reparation periodique si le pair est tombe. Concevoir d'abord : ou vit le jeton (jamais en clair dans l'image), duree, rejeu apres reinstallation. Essai manuel en cours : lgm-ebin esclave de gk2.
+- [ ] **WAF et Acteurs : tendances recentes** (mini-courbes SVG + fleche/pourcentage) ; WAF depuis `/waf/history` (9 jours), acteurs : derive des dates ou instantane quotidien (a trancher).
+- [ ] **Modules LXC** : sleep / wake / restart / stop dans les panneaux d'administration de chaque conteneur ; Lyrion « a la demande » (la route de la table sbxwaf reste apres `profilectl apply --only lyrion` : 502 au lieu du reveil).
+- [ ] **Retraits** : `mesh` (desinstalle de gk2 ; reste : retirer de secubox-isp et de full.toml), `dns` (BIND absent ; attention dns-provider/dns-lan et les certificats DNS), `modem` (actif sur gk2, 4G), `ksm` (compose de secubox-system : ne se desinstalle pas, a desactiver ou masquer), `premier-pas-maitre` (de lite et minimal : separer la page en paquet propre).
+- [ ] **Freebox** (/freebox/ sur la carte) : possibilite de redemarrer le service. **meshname** : reparation automatique partout (arrete volontairement sur la carte le 2026-10-17). **Hub p2p** : roles maitre/esclave, scan/rafraichir, ajout et invitation/jonction automatiques. **/fleet/** elargie au maillage et au p2p.
+- [ ] **A decrire** : /profiles/comparatif.html (la fonction et l API repondent bien sur la carte : profil actif minimal, 18/46/63/83 modules) et /portal/ sur la carte : symptome exact a preciser.
+- [ ] **A deployer sur gk2** (avec un redemarrage de l agregateur) : lyrion 1.7.2, puis dpi 1.14.3 (Redemarrer nDPId, #2870).
+
+## 2026-10-16 — ESPRESSObin lgm-ebin, client beta `lgm`
+- [ ] **#2865** deployer secubox-courbes 0.1.0 + metrics 1.24.0 sur gk2 (recharge metrics et le groupe groupd, sans coupure de l'agregateur) ; verifier que l'historique de 7 jours reste visible.
+- [ ] Regrouper les modules de `minimal` dans `groupd` (nac, auth, dpi, portal, hardening, system : 10 a 35 Mo de base chacun) ; mesure du 2026-10-17 : ~22 processus Python = ~450 Mo sur 951 Mo.
+- [ ] Unites a garder eteintes sur minimal (tor, waker, meshname, ksm : arretes a la main, a persister dans le profil).
+- [ ] **#2853** l'agent Auto-Load rejoue nom et mot de passe d'usine à chaque démarrage : une fois l'application réussie ou abandonnée, ne plus rien rejouer.
+- [ ] **#2854** support SSH depuis gk2 posé par l'enrôlement (clé publique dans la réponse d'enrôlement, règle nft, révocation, `audit.log`) ; envisager un compte `secubox-support` plutôt que `root`.
+- [ ] **#2844** publication WAN automatique des pairs (certificat, vhost, route sbxwaf) ; hook de recopie du PEM HAProxy au renouvellement certbot (absent sur gk2).
+- [ ] Relais UDP WireGuard de gk2 (`zz-secubox-relais-wg-lgm-ebin.nft`) à porter en source (`secubox-autoload`) ; redirection UDP 51840 de la Freebox ; essai client réel (#2845).
+- [ ] Mémoire de `minimal` sur 951 Mo : chiffrer l'agrégateur, `unbound`, les minuteurs ; décider ce qui sort du profil. Images minimales ESPRESSObin et RPi400 à produire et vérifier.
+- [ ] `secubox-net-detect` n'est livré par aucune image : mode `routeur` impossible ; décider de l'écrire ou de retirer le mode.
+- [ ] Facultatif : `secubox-authwatch` séparé de `secubox-toolbox-ng` (leurres de service sur une box sans moteur MITM).
 
 ## 2026-10-11 — suites de la release alpha.11
 - [ ] **Auto-Load** : phase A livrée (#2280, agent dans les images, unité de premier boot, atelier). Reste : décider de la custody de la clé « SecuBox Provisioning » (aujourd'hui sans phrase de passe sur gk2 ; niveau 0 comme la clé apt ?),

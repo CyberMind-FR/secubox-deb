@@ -125,6 +125,12 @@
         <div class="pan"><h3>Nœuds du maillage <i>cliquer une ligne pour le détail</i></h3>
             <div class="tw"><table class="matrix"><thead><tr><th>Nœud</th><th>CPU</th><th>Mém.</th><th>Disque</th><th>Charge</th><th>En marche</th><th>Compteurs</th><th>Modules à l’arrêt</th><th>Vu</th></tr></thead><tbody id="fleet-body"></tbody></table></div>
         </div>
+        <div class="pan" id="p2p-pan" hidden><h3>Pairs p2p <i><span id="p2p-n">0</span> sur wg-mesh, statut mesuré par poignée de main</i></h3>
+            <div class="tw"><table class="matrix"><thead><tr><th>Pair</th><th>Adresse</th><th>Statut</th><th>Dernier vu</th></tr></thead><tbody id="p2p-body"></tbody></table></div>
+        </div>
+        <div class="pan" id="al-pan" hidden><h3>Box Auto-Load <i><span id="al-n">0</span> enrôlée(s), tunnel wg-autoload, sans annuaire</i></h3>
+            <div class="tw"><table class="matrix"><thead><tr><th>Client</th><th>Profil</th><th>Statut</th><th>Progression</th><th>Étape</th><th>Dernière activité</th></tr></thead><tbody id="al-body"></tbody></table></div>
+        </div>
         <div class="pan detail" id="detail" hidden><h3>Détail <i id="detTitre"></i></h3><div class="kv" id="detKv"></div></div>
     </div></div></main>
 
@@ -226,7 +232,54 @@
             rendreNoeuds(noeuds, null);
         });
 
+        // Box enrôlées par Auto-Load : source distincte de l'annuaire (GET /api/v1/autoload/boxes). Module absent, session refusée ou liste vide : panneau masqué, jamais une erreur.
+        async function chargerAutoload() {
+            let liste = [];
+            try {
+                if (DEMO) liste = [{ client: 'client-exemple', profil: 'minimal', statut: 'en cours', progression: 40, etape: 'plan', maj_le: Math.floor(Date.now() / 1000) - 120 }];
+                else {
+                    const h = {}, t = token(); if (t) h.Authorization = 'Bearer ' + t;
+                    const r = await fetch('/api/v1/autoload/boxes', { headers: h, credentials: 'same-origin', cache: 'no-store' });
+                    if (r.ok) { const d = await r.json(); if (Array.isArray(d)) liste = d; }
+                }
+            } catch (e) { liste = []; }
+            const body = $('al-body'); clear(body);
+            $('al-pan').hidden = !liste.length; $('al-n').textContent = String(liste.length);
+            liste.forEach(b => {
+                const tr = el('tr', 'node-row'), c = el('td', 'hostname-col', b.client || '—');
+                const pc = el('td'); pc.append(pctCell(b.progression));
+                tr.append(c, el('td', null, b.profil || '—'), el('td', null, b.statut || '—'), pc, el('td', null, b.etape || '—'),
+                    el('td', null, b.maj_le ? ago(new Date(Number(b.maj_le) * 1000).toISOString()) : '—'));
+                body.append(tr);
+            });
+            hauteur();
+        }
+
+        // Pairs du transport wg-mesh (GET /api/v1/p2p/peers) : couvre aussi les pairs sans annuaire. Module absent ou liste vide : panneau masqué.
+        async function chargerP2p() {
+            let liste = [];
+            try {
+                if (DEMO) liste = [{ name: 'pair-exemple', address: '10.10.0.2', status: 'online', last_seen: Math.floor(Date.now() / 1000) - 30 }];
+                else {
+                    const h = {}, t = token(); if (t) h.Authorization = 'Bearer ' + t;
+                    const r = await fetch('/api/v1/p2p/peers', { headers: h, credentials: 'same-origin', cache: 'no-store' });
+                    if (r.ok) { const d = await r.json(); if (d && Array.isArray(d.peers)) liste = d.peers; }
+                }
+            } catch (e) { liste = []; }
+            const body = $('p2p-body'); clear(body);
+            $('p2p-pan').hidden = !liste.length; $('p2p-n').textContent = String(liste.length);
+            liste.forEach(p => {
+                const tr = el('tr', 'node-row'), st = el('td'), dot = el('span', 'dot ' + (p.status === 'online' ? 'ok' : 'stale'));
+                st.append(dot, el('span', null, ' ' + (p.status || '—')));
+                tr.append(el('td', 'hostname-col', p.name || p.id || '—'), el('td', null, p.address || '—'), st,
+                    el('td', null, p.last_seen ? ago(new Date(Number(p.last_seen) * 1000).toISOString()) : 'jamais'));
+                body.append(tr);
+            });
+            hauteur();
+        }
+
         async function loadFleet() {
+            chargerAutoload(); chargerP2p();
             try {
                 const d = await J('/fleet');
                 rendreNoeuds(d.nodes || [], d.erreur ? 'lecture en échec côté nœud' : null);

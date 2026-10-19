@@ -180,6 +180,9 @@ type Proxy struct {
 	// shells stop being SW-cached and the banner can be injected on the next nav.
 	swNeuter *SWNeuter
 
+	// cdn (#2804) : cache de réponses des CDN statiques acceptés par l'opérateur (proxypac étape 2). nil → désactivé, flux inchangé.
+	cdn *cdnCache
+
 	// sentinel (#823) is the inline threat-detection gate: it neutralizes
 	// high-confidence known-infra IOC hits (block/strip/sinkhole) and mirrors the
 	// rest to the async sbx-sentinel analyzer. nil-safe and fail-open — a
@@ -507,6 +510,18 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// cookie scope, method semantics). Go's http.Client follows by default, which
 	// would collapse a 301/302 into the final 200 under the original URL (wrong).
 	// Reprend le comportement de laisser-passer de l'ancien moteur.
+	// #2804 — CDN statique accepté : réponse du cache (le corps d'origine n'est même pas demandé) ; sinon on la capture au passage.
+	cdnCapture := false
+	if px.cdn != nil {
+		px.cdn.Maybe()
+		if px.cdn.Eligible(host, req) {
+			if e, ok := px.cdn.Get(host, req); ok {
+				writeResponse(tconn, e.reponse(), e.body)
+				return
+			}
+			cdnCapture = true
+		}
+	}
 	up := &http.Client{
 		Timeout:       30 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
@@ -602,6 +617,10 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		resp.Header.Set("X-SecuBox-Sentinel", "stripped")
 		writeResponse(tconn, resp, nil)
 		return
+	}
+
+	if cdnCapture {
+		px.cdn.capturer(host, req, resp)
 	}
 
 	// #662 — relay the cookie metadata for this MITM'd response (allow|mitm only).
@@ -784,6 +803,9 @@ func main() {
 		"R4 media reverse-catcher (#736): record cloneable media URLs (HLS/DASH manifests + direct audio/video) seen on MITM'd flows to "+mediaCatchPath+" for the mediaflow \"Discovered Media\" clone view. URLs only, never bodies; deduped. Set false to disable.")
 	swNeuterHosts := flag.String("sw-neuter-hosts", "/var/lib/secubox/toolbox/sw-neuter-hosts.txt",
 		"#753 allow-list of PWA hosts whose Service Worker is neutered (served a self-unregistering SW) so the banner can be injected; empty/missing file = no-op")
+	// #2804 — cache des CDN statiques (proxypac étape 2) : dossier vide = désactivé (défaut) ; la liste des hôtes acceptés est écrite par proxypac.
+	cdnDir := flag.String("cdn-cache-dir", "", "#2804 dossier du cache des CDN statiques ; vide = désactivé")
+	cdnHosts := flag.String("cdn-cache-hosts", "/var/lib/secubox/proxypac/cdn-cache-hosts.txt", "#2804 hôtes CDN statiques acceptés par l'opérateur (un par ligne ; seuls ceux de la liste fermée du moteur sont servis)")
 	// #812 R4 media buffer — capture whole-file media bytes (up + download) into a
 	// short rolling buffer on /data for admin/owner replay. Default OFF (Task 6
 	// formalises the flag docs + janitor wiring); the tee is a no-op when off.
@@ -857,6 +879,7 @@ func main() {
 		media:         newMediaCatcher(*mediaCatch),
 		mbuf:          NewMediaBuffer(*mediaBufferRoot, *mediaBuffer, *mediaBufferPerObj),
 		swNeuter:      newSWNeuter(*swNeuterHosts),
+		cdn:           newCDNCache(*cdnDir, *cdnHosts),
 		// #823 — inline Sentinel gate. Construction reads the environment
 		// (SENTINEL_ENABLED / SENTINEL_PACK_DIR / SENTINEL_OVERLAY_DIR /
 		// SENTINEL_MIRROR_SOCK); unset/false or a failed pack load yields a

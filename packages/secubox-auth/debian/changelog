@@ -1,3 +1,33 @@
+secubox-auth (1.8.7-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
+secubox-auth (1.8.6-1~bookworm1) bookworm; urgency=medium
+
+  * Page users, « Services connectes » : l'etat est celui du CONTENEUR (ref #2903). check_service testait l'unite systemd secubox-<nom> : sur gk2, email « arrete » alors que mail tourne, jellyfin et peertube « en marche » alors que leurs conteneurs sont arretes. L'etat vient maintenant du cgroup du conteneur (lxc.payload.<nom>, lisible sans privilege) : « en marche », « en veille (reveil a la demande) » pour un conteneur on-demand endormi (/etc/secubox/modules.d/<nom>.toml), sinon « arrete ». /services expose `running` (inchange) et `etat`. Les 29 echecs de composants/users/tests sont anterieurs.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 15:00:00 +0200
+
+secubox-auth (1.8.5-1~bookworm1) bookworm; urgency=medium
+
+  * Page identite : l'exemple du champ Pseudo et les donnees de demonstration ne citent plus cedre83, un vrai compte historique qui passait pour une personne fantome (ref #2881). Exemple neutre « pseudo », compte de demonstration « camille ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 13:00:00 +0200
+
+secubox-auth (1.8.4-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-annuaire passe de Depends a Recommends (#2877) : il ne sert qu'a la delegation d'acces, dont les modules sont importes a la demande (api/delegation.py), jamais au demarrage. Sans lui (profil minimal), les routes de delegation repondent 501 « module annuaire non installe » au lieu d'une 500. Les profils lite, isp et full l'installent toujours (Recommends).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 18:00:00 +0200
+
+secubox-auth (1.8.3-1~bookworm1) bookworm; urgency=medium
+
+  * /sbxid/ ne renvoie plus vers un Hall ABSENT (#2872). Sur une box sans Hall (profil minimal, ESPRESSObin), admin.<box>/sbxid/ renvoyait en 302 vers https://hall.<box>/identite/#admin, un site qui n'existe pas. nginx (`if (!-d /usr/share/secubox/www/hall)`), le repli de la page /sbxid/ et les liens de la page Utilisateurs ouvrent maintenant le gestionnaire d'identite sur l'origine admin (/identite/#admin) quand il n'y a pas de Hall ; avec Hall, comportement inchange (sonde HEAD /hall/ de meme origine).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 16:00:00 +0200
+
 secubox-auth (1.8.2-1~bookworm1) bookworm; urgency=medium
 
   * Identite (Administration), panneau Comptes d une personne : ligne PhotoPrism, ouvert par SSO (OIDC), identifiant = pseudo, sans mot de passe ; le compte nait a la premiere connexion. Informative : rien a ouvrir ni a relier (ref #2761).

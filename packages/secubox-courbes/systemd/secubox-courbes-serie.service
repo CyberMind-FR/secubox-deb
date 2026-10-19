@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox — releve des courbes de la box (CPU, memoire, reseau, connexions, disque ; remplace Grafana, #2765)
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+Nice=15
+IOSchedulingClass=idle
+StateDirectory=secubox/metrics
+ExecStart=/usr/bin/python3 -m secubox_courbes.serie
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+MemoryMax=64M

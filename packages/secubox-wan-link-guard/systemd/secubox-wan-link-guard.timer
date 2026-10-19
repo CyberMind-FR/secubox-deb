@@ -3,6 +3,8 @@ Description=SecuBox WAN link guard — periodic check
 
 [Timer]
 OnBootSec=20
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=20
 OnUnitActiveSec=30
 
 [Install]

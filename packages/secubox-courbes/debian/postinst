@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+case "$1" in
+  configure)
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+    # Le releve ecrit ici, et lit l'historique deja present (secubox-metrics) : le dossier garde ses droits.
+    [ -d /var/lib/secubox/metrics ] || install -d -o secubox -g secubox -m 755 /var/lib/secubox/metrics
+    systemctl daemon-reload || true
+    # Releve toutes les minutes (remplace secubox-metrics-serie.timer, meme fichier de donnees).
+    systemctl enable --now secubox-courbes-serie.timer >/dev/null 2>&1 || true
+    # Le module est servi par le groupe des modules declares (groupable.d), pas par une unite propre ni par un redemarrage de l'agregateur.
+    [ -x /usr/sbin/secubox-groupe-declares-activer ] && /usr/sbin/secubox-groupe-declares-activer || true
+    ;;
+esac
+#DEBHELPER#
+exit 0

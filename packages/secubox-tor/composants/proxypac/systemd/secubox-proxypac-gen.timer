@@ -3,6 +3,8 @@ Description=SecuBox ProxyPAC — periodic regen fallback
 
 [Timer]
 OnBootSec=2min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=2min
 OnUnitActiveSec=5min
 
 [Install]

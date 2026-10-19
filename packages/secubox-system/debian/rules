@@ -3,6 +3,8 @@
 	dh $@
 
 override_dh_auto_install:
+	install -d debian/secubox-system/usr/lib/systemd/system
+	install -m 0644 systemd/secubox-systeme-pare-feu-verif.service systemd/secubox-systeme-heure.service systemd/secubox-systeme-caches.service systemd/secubox-systeme-redemarrer.service systemd/secubox-systeme-eteindre.service debian/secubox-system/usr/lib/systemd/system/
 	install -D -m 0644 polkit/50-secubox-system.rules debian/secubox-system/usr/share/polkit-1/rules.d/50-secubox-system.rules
 	install -d debian/secubox-system/usr/lib/secubox/system/
 	cp -r api debian/secubox-system/usr/lib/secubox/system/
@@ -39,6 +41,7 @@ override_dh_auto_install:
 	install -D -m 755 composants/admin/debian/prerm debian/secubox-system/usr/lib/secubox/system/maintscripts/admin.prerm
 	install -D -m 644 composants/admin/debian/secubox-admin.service debian/secubox-system/usr/lib/systemd/system/secubox-admin.service
 	# Composant absorbé : ksm (#2050)
+	install -D -m 755 sbin/secubox-ksmctl debian/secubox-system/usr/sbin/secubox-ksmctl
 	install -d debian/secubox-system/usr/lib/secubox/ksm/
 	cp -r composants/ksm/api debian/secubox-system/usr/lib/secubox/ksm/
 	install -d debian/secubox-system/usr/share/secubox/www
@@ -66,3 +69,8 @@ override_dh_auto_install:
 	install -D -m 755 composants/system-tuning/debian/postinst debian/secubox-system/usr/lib/secubox/system/maintscripts/system-tuning.postinst
 	install -D -m 755 composants/system-tuning/debian/prerm debian/secubox-system/usr/lib/secubox/system/maintscripts/system-tuning.prerm
 
+
+# #2788 : les unites secubox-systeme-*.service sont des actions a la demande (eteindre, redemarrer...). Le postinst
+# genere par debhelper les DEMARRERAIT a l'installation : on ne lui confie que les unites de service.
+override_dh_installsystemd:
+	dh_installsystemd secubox-admin.service secubox-ksm.service secubox-system.service

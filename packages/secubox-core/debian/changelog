@@ -1,3 +1,21 @@
+secubox-core (1.7.11-1~bookworm1) bookworm; urgency=medium
+
+  * Cadence des minuteries : les quatorze drop-ins redonnent `OnActiveSec=60s` apres leur remise a zero (ref #2925). Vider « OnUnitActiveSec= » remet a zero TOUTES les minuteries monotones, OnBootSec et OnActiveSec compris : il ne restait que OnUnitActiveSec=<intervalle>, qui ne part jamais sans activation prealable du service. Les minuteries concernees (netstats, annuaire apply et bans-apply, media-drain, nft-cache, p2p-ephemeral-sweep, ui-health, wan-link-guard, torrent-conserve, ytsas-conserve, threatmesh-bridge, waf-watchdog, metrics-publish) restaient « elapsed » avec une echeance infinie apres chaque mise a jour de paquet. Le correctif de #2919 (OnActiveSec dans les fichiers .timer) etait efface par ces drop-ins. Test : tests/test_cadence_demarrage_2925.py.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 10:00:00 +0200
+
+secubox-core (1.7.10-1~bookworm1) bookworm; urgency=medium
+
+  * Livre `secubox_filterlists` (bibliotheque de listes de filtres, stdlib pure), jusque-la dans secubox-toolbox (#2863). secubox-adblock-sync (ad-guard) et /sinkhole/sources (dns-guard) l'importaient du toolbox : sans lui (profil minimal), la mise a jour du puits DNS publicitaire echouait.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 10:30:00 +0200
+
+secubox-core (1.7.9-1~bookworm1) bookworm; urgency=medium
+
+  * Le controle de vie nginx est une egalite EXACTE : `location = /health` (#2836). Le prefixe `location /health` masquait la page Sante /health/ (livree par secubox-hub) et la box repondait {"status":"ok"} au lieu de la page. 3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 01:00:00 +0200
+
 secubox-core (1.7.8-1~bookworm1) bookworm; urgency=high
 
   * secubox-waf-route ne signale plus le WAF (#2629). Il faisait « systemctl reload secubox-waf-ng » apres chaque route posee ; l'unite a ExecReload=kill -HUP, sbxwaf n'a pas de gestionnaire SIGHUP : il se terminait « avec succes » (SIGHUP est une sortie propre pour systemd), n'etait pas relance, et tous les vhosts publics repondaient 503 (gk2, 14 oct. : l'installation de lyrion, jellyfin, gitea, nextcloud et photoprism a coupe le WAF 3 min 30). Or sbxwaf relit deja la table a chaud (mtime, test TestRoutesHotReload) et l'ecriture est atomique : aucun signal n'est necessaire. 2 tests.

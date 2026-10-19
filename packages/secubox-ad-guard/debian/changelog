@@ -1,3 +1,27 @@
+secubox-ad-guard (1.14.5-1~bookworm1) bookworm; urgency=medium
+
+  * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 08:00:00 +0200
+
+secubox-ad-guard (1.14.4-1~bookworm1) bookworm; urgency=medium
+
+  * Le puits anti-pub n'est plus INACTIF sur la carte 1 Go (ref #2895) : la verification `unbound-checkconf` de la synchronisation avait 60 s, insuffisant pour lire 119 553 domaines + la liste webfilter de 22 Mo sur un ESPRESSObin. Elle echouait (« delai de 60 s depasse »), unbound n'etait pas recharge et le panneau affichait INACTIF malgre une liste compilee. Delai porte a 300 s.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 11:00:00 +0200
+
+secubox-ad-guard (1.14.3-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-adblock-sync importe `secubox_filterlists` (secubox-core >= 1.7.10) au lieu de `secubox_toolbox.filterlists` (#2863) : la mise a jour du puits DNS publicitaire marche SANS secubox-toolbox (profil minimal), ce que #2855 (toolbox en Recommends) supposait a tort. Repli sur l'ancien chemin.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 10:30:00 +0200
+
+secubox-ad-guard (1.14.2-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-toolbox passe de Depends a Recommends (#2855). Le module n'en lit la base qu'en lecture seule et tolere son absence (_stats_toolbox renvoie None, jamais un zero invente) ; la dependance dure imposait le MITM et le R-level a toute box qui voulait seulement le filtre de publicites (profil minimal, ESPRESSObin). Les profils lite et full gardent toolbox par leur propre meta-paquet.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 17 Oct 2026 12:00:00 +0200
+
 secubox-ad-guard (1.14.1-1~bookworm1) bookworm; urgency=medium
 
   * Se declare groupable (groupable.d/ad-guard) et active le groupe des modules declares : la page ad-guard etait HORS LIGNE sur une image neuve, aucun serveur ne portait son API (ref #2748).

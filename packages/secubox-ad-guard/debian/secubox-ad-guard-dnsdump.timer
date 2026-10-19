@@ -7,6 +7,8 @@ Description=SecuBox Ad Guard — instantané des réponses d'Unbound, toutes les
 
 [Timer]
 OnBootSec=4min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=4min
 OnUnitActiveSec=300s
 AccuracySec=15s
 

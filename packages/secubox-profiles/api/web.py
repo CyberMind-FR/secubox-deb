@@ -434,6 +434,47 @@ async def _run_sleep_ctl(module: str) -> dict:
     return await _run_ctl_json_argv(argv)
 
 
+# ── Comparatif des profils (#2819) ────────────────────────────────────────────
+# Le contenu des profils (minimal, lite, isp, full) est LU des meta-paquets a la construction (scripts/gen-profils-contenu.py) ; ici on y ajoute ce
+# qui est vrai de CETTE box : quel meta-paquet est installe (profil actif) et lesquels de leurs modules le sont (dpkg).
+_PROFILS_ORDRE = ["minimal", "lite", "isp", "full"]
+
+
+def _installes_dpkg(chemin: Path) -> Optional[set]:
+    """Les paquets en etat « install ok installed » ; None si le fichier est illisible."""
+    try:
+        texte = Path(chemin).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    out = set()
+    for bloc in texte.split("\n\n"):
+        nom = etat = ""
+        for ligne in bloc.splitlines():
+            if ligne.startswith("Package: "):
+                nom = ligne[9:].strip()
+            elif ligne.startswith("Status: "):
+                etat = ligne[8:].strip()
+        if nom and etat.endswith(" installed") and etat.startswith("install "):
+            out.add(nom)
+    return out
+
+
+def _comparatif(contenu_path: Path, dpkg_path: Path) -> dict:
+    import json as _json
+    try:
+        contenu = _json.loads(Path(contenu_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise HTTPException(503, "Contenu des profils indisponible : le fichier genere a la construction est absent ou illisible.")
+    inst = _installes_dpkg(dpkg_path)
+    profils = contenu.get("profils", [])
+    ids = [p.get("id") for p in profils]
+    modules = {m["paquet"] for p in profils for m in p.get("modules", [])}
+    presents = [i for i in _PROFILS_ORDRE if i in ids and inst is not None and f"secubox-{i}" in inst]
+    return {**contenu, "dpkg": "ok" if inst is not None else "illisible",
+            "profils_installes": presents, "actif": presents[-1] if presents else None,
+            "installes": sorted(modules & inst) if inst is not None else []}
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="SecuBox Profiles API",
@@ -476,6 +517,12 @@ def create_app() -> FastAPI:
              "portal_domain": m.get("portal_domain")}
             for m in payload.get("modules", [])
         ]}
+
+    @app.get("/api/v1/profiles/comparatif", dependencies=[Depends(require_lecture)])
+    async def get_comparatif():
+        contenu = Path(os.environ.get("SECUBOX_PROFILS_CONTENU", "/usr/share/secubox/profiles/contenu-profils.json"))
+        dpkg = Path(os.environ.get("SECUBOX_DPKG_STATUS", "/var/lib/dpkg/status"))
+        return await asyncio.to_thread(_comparatif, contenu, dpkg)
 
     @app.get("/api/v1/profiles/profiles")
     async def list_profiles(_claims=Depends(require_jwt)):

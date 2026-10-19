@@ -15,6 +15,10 @@ override_dh_auto_install:
 	# (les assistants root sous AppArmor ne doivent pas les charger).
 	cp -r ../../common/secubox_unbound \
 	      debian/secubox-core/usr/lib/python3/dist-packages/
+	# secubox_filterlists (#2863) : listes de filtres (stdlib pure), partagee par ad-guard, dns-guard et le toolbox ; elle vivait dans secubox-toolbox, ce qui cassait
+	# la mise a jour du puits DNS publicitaire sur le profil minimal (sans toolbox).
+	cp -r ../../common/secubox_filterlists \
+	      debian/secubox-core/usr/lib/python3/dist-packages/
 
 	# Noms STABLES des liaisons serie USB. Partage, parce que le probleme l'est :
 	# ttyUSB0/ttyACM0 sont attribues dans l'ordre d'enumeration, et un conteneur

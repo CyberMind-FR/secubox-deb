@@ -1,3 +1,15 @@
+secubox-system (1.10.3-1~bookworm1) bookworm; urgency=medium
+
+  * KSM : « Activer KSM » ne renvoie plus HTTP 500 (ref #2901). nginx route /api/v1/ksm/ vers l'agregateur, qui sert le module sous l'utilisateur secubox : l'ecriture de /sys/kernel/mm/ksm (root) echouait. Elle passe par le nouveau secubox-ksmctl (root, via sudo ; regle sudoers a la lettre dans /etc/sudoers.d/secubox-ksm), qui valide chaque valeur (run 0|1, pages_to_scan 1..10000, sleep_millisecs 10..1000). Le postinst du composant n'active plus et ne demarre plus le service a chaque mise a jour (premiere installation seulement) : un service arrete par l'operateur n'est plus rallume.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 18 Oct 2026 14:00:00 +0200
+
+secubox-system (1.10.2-1~bookworm1) bookworm; urgency=medium
+
+  * Actions rapides de /system/ reelles et honnetes (#2788). L'API tourne en User=secubox + NoNewPrivileges : recharger nftables, regler l'heure, vider les caches et eteindre/redemarrer echouaient (« Interactive authentication required ») et l'API repondait HTTP 200 {"success": false} sans raison (« Echec : HTTP 200 »). Cinq unites root secubox-systeme-*.service (pare-feu-verif, heure, caches, redemarrer, eteindre) sont demarrees par systemctl start, autorise par la regle polkit existante (#2615) ; l'API rend le vrai code retour et la raison (stderr ou journal) en 502/504. « Recharger le pare-feu » VERIFIE la configuration (nft -c) sans la charger : /etc/nftables.conf commence par « flush ruleset », un rechargement viderait les bannissements dynamiques. « Redemarrer les services » (12 services d'un coup, code retour ignore) est refuse honnetement (409). La page affiche detail/error/message/output. 23 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 16 Oct 2026 08:00:00 +0200
+
 secubox-system (1.10.1-1~bookworm1) bookworm; urgency=medium
 
   * Page /system/ : trois echecs corriges (#2615). (1) Demarrer, arreter, redemarrer un service depuis la page : « Interactive authentication required ». L'API tourne en User=secubox avec NoNewPrivileges=true et lancait systemctl directement ; polkit refusait. Une regle polkit est livree (/usr/share/polkit-1/rules.d/50-secubox-system.rules), BORNEE a l'unite secubox-system.service (le compte secubox est partage par tous les modules : une regle par utilisateur aurait donne a n'importe lequel le droit d'arreter le WAF), aux unites secubox-*.service et a quatre verbes ; si polkit ne fournit pas l'unite du demandeur, elle ne repond rien (refus par defaut). Depend de polkitd. (2) Liste des mises a jour : « Inst, Inst, Inst » -> le nom du paquet est le 2e mot de la ligne « Inst <paquet> [...] ». 3 tests.

@@ -40,6 +40,16 @@
     })();
     if (EMBARQUE) document.documentElement.classList.add('sbx-embed');
 
+    // PAGES SERVIES PAR LE HALL (#2814) : /identite/ et /coffre/ vivent sur l'origine du Hall, qui ne sert pas les pages des modules. Sur un hote
+    // hall.*, chaque lien du menu vise donc le MEME domaine en admin.* (port conserve). Ailleurs : liens relatifs, comme avant.
+    const ORIGINE_ADMIN = (function () {
+        var h = location.hostname;
+        return /^hall\./i.test(h) ? location.protocol + '//admin.' + h.slice(5) + (location.port ? ':' + location.port : '') : '';
+    })();
+    function versAdmin(chemin) {
+        return ORIGINE_ADMIN && typeof chemin === 'string' && chemin.charAt(0) === '/' && chemin.charAt(1) !== '/' ? ORIGINE_ADMIN + chemin : chemin;
+    }
+
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
     const VERSION = 'v2.44.0';
@@ -709,7 +719,7 @@
                 '<div class="hw-led-tooltip" id="hw-led-tooltip"></div>' +
                 '<button class="menu-btn api-status" id="api-status-btn" onclick="SecuBoxSidebar.checkApiStatus()" title="API Status: checking..."><span id="api-status-icon">🔌</span></button>' +
                 '<button class="menu-btn" onclick="location.reload()" title="Refresh">🔄</button>' +
-                '<button class="menu-btn" onclick="location.href=\'/system/\'" title="Settings">⚙️</button>' +
+                '<button class="menu-btn" onclick="location.href=\'' + versAdmin('/system/') + '\'" title="Settings">⚙️</button>' +
                 '<button class="menu-btn danger" onclick="SecuBoxSidebar.logout()" title="Logout">🚪</button>' +
                 '</div>';
             document.body.insertBefore(menuBar, document.body.firstChild);
@@ -1591,8 +1601,8 @@
             '<div class="nav-section"><div class="nav-section-title"><span>⚠️ OFFLINE MODE</span></div>' +
             '<div class="nav-items">' +
             '<a href="/" class="nav-item"><span class="icon">🏠</span><span>Dashboard</span></a>' +
-            '<a href="/system/" class="nav-item"><span class="icon">⚙️</span><span>System</span></a>' +
-            '<a href="/soc/" class="nav-item"><span class="icon">🛡️</span><span>SOC</span></a>' +
+            '<a href="' + versAdmin('/system/') + '" class="nav-item"><span class="icon">⚙️</span><span>System</span></a>' +
+            '<a href="' + versAdmin('/soc/') + '" class="nav-item"><span class="icon">🛡️</span><span>SOC</span></a>' +
             '</div></div></div>' +
             '<div class="sidebar-footer">' +
             '<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">API unavailable - showing cached links</div>' +
@@ -2162,7 +2172,7 @@
         if (!mod) return true;
         ev.preventDefault();
         handleMobileNavClick();  // Close sidebar on mobile
-        await preflightCheck(mod, url);
+        if (!ORIGINE_ADMIN) await preflightCheck(mod, url);   // la sonde de santé est de même origine : inutile (et refusée) vers admin.*
         window.location.href = url;
         return false;
     }
@@ -2185,6 +2195,8 @@
             '.health-toast{position:fixed;top:1rem;right:1rem;z-index:10000;animation:toastIn 0.3s;}.health-toast-content{display:flex;align-items:center;gap:0.5rem;background:rgba(255,68,68,0.95);color:#fff;padding:0.5rem 1rem;border-radius:8px;font-size:0.8rem;}@keyframes toastIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}' +
             '@keyframes statusbar-progress{0%{width:0%;opacity:0.5;}50%{width:100%;opacity:1;}100%{width:0%;opacity:0.5;}}' +
             '.sync-status{border-bottom:1px dashed rgba(100,150,200,0.2);padding-bottom:4px;margin-bottom:2px;}' +
+            '.header-leds-metrics{display:none !important;}' +
+            '.smart-strip{display:none !important;}' +
             '.sync-led{font-size:10px;width:14px;height:14px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:all 0.3s;}' +
             '.sync-led.fetching{animation:syncPulse 0.8s infinite;background:rgba(68,170,255,0.2);}' +
             '.sync-led.cached{background:rgba(100,200,150,0.15);color:#5f8;}' +
@@ -2528,7 +2540,7 @@
                     var versionTip = getVersionTooltip(version, devStage);
                     var fullTitle = versionTip ? (initialTitle + ' | ' + versionTip) : initialTitle;
 
-                    menuHTML += '<a href="' + item.path + '" class="nav-item' + (isActive ? ' active' : '') + '" data-module="' + mod + '" onclick="return SecuBoxSidebar.navClick(event,\'' + mod + '\',\'' + item.path + '\')">' +
+                    menuHTML += '<a href="' + versAdmin(item.path) + '" class="nav-item' + (isActive ? ' active' : '') + '" data-module="' + mod + '" onclick="return SecuBoxSidebar.navClick(event,\'' + mod + '\',\'' + versAdmin(item.path) + '\')">' +
                         '<span class="icon">' + item.icon + '</span>' +
                         '<span>' + item.name + '</span>' +
                         devBadge +

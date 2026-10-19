@@ -19,6 +19,7 @@ import socket
 import subprocess
 import json
 import asyncio
+import re
 import os
 import time
 from pathlib import Path
@@ -55,6 +56,27 @@ _menu_cache_lock = asyncio.Lock()
 
 
 _PINS_FILE = Path("/etc/secubox/profiles/pins.toml")
+
+
+_PROFILS_DIR = Path("/etc/secubox/profiles")
+
+
+def _menu_off_du_profil() -> set:
+    """Entrees de menu masquees par le profil ACTIF (cle optionnelle `menu_off`, #2897).
+
+    Le profil exclut un module ; sans cela son entree restait au menu (ksm et
+    premier-pas-maitre sur l'ebin). Meme regle que les pins : un fichier absent, casse ou un
+    nom de profil suspect rend l'ensemble vide, jamais un menu coupe."""
+    try:
+        import tomllib
+        nom = (_PROFILS_DIR / "active").read_text(encoding="utf-8").strip()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,40}", nom):
+            return set()
+        d = tomllib.loads((_PROFILS_DIR / f"{nom}.toml").read_text(encoding="utf-8"))
+        liste = d.get("menu_off", [])
+        return {x for x in liste if isinstance(x, str)} if isinstance(liste, list) else set()
+    except Exception:  # noqa: BLE001 — voir la docstring
+        return set()
 
 
 def _epingles_off() -> set:
@@ -123,7 +145,7 @@ def _compute_menu_sync() -> dict:
     # UN MODULE EPINGLE 'off' N'EST PAS AU MENU (#1028). L'operateur l'a
     # eteint ; le laisser dans la navbar promet une page qui rendra 503, et
     # laisse croire que la decision n'a pas pris.
-    epingles_off = _epingles_off()
+    epingles_off = _epingles_off() | _menu_off_du_profil()
 
     # Filter to only installed modules and check active status
     installed_items = []
@@ -160,7 +182,7 @@ def _compute_menu_sync() -> dict:
         if _check_module_installed(module_www):
             item_copy = item.copy()
             item_copy["installed"] = True
-            item_copy["active"] = _check_module_active(module_www)
+            item_copy["active"] = _check_module_active(item.get("unite") or module_www)   # #2905 : page servie par un autre module
             installed_items.append(item_copy)
 
     espaces = _espaces_du_menu(installed_items)
@@ -610,7 +632,9 @@ def _unites_au_repos_cache() -> tuple:
 
 
 # Pages portées par un autre module : sans unité ni socket propres, elles suivent le module qui les sert (R-Level est une page du Toolbox).
-PAGES_PORTEES = {"rlevel": "toolbox"}
+PAGES_PORTEES = {"rlevel": "toolbox", "glances": "metrics"}
+# Pages servies par le hub lui-meme : il repond, donc elles sont en service (aucune unite ni sonde propre).
+PAGES_DU_HUB = ("apercu", "health")
 
 
 class _ConnexionUnix(http.client.HTTPConnection):
@@ -651,6 +675,41 @@ def superposer_montes(modules: dict, montes: frozenset) -> None:
     for page, porteur in PAGES_PORTEES.items():
         if page not in modules and porteur in modules:
             modules[page] = dict(modules[porteur])
+    for page in PAGES_DU_HUB:
+        modules.setdefault(page, {"status": "ok", "msg": "Page du hub"})
+
+
+# Modules servis par un conteneur LXC, sans unite ni socket sur l'hote : seule une connexion TCP dit s'ils repondent (#2796).
+SONDES_LXC = {"ytsas": ("10.100.0.180", 8091)}
+
+
+def _tcp_ouvert(hote: str, port: int, delai: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((hote, port), timeout=delai):
+            return True
+    except OSError:
+        return False
+
+
+WWW_MODULES = Path("/usr/share/secubox/www")
+
+
+def _module_present(mid: str) -> bool:
+    """Le module est-il installe sur CETTE box ? Sa page est livree par son paquet : c'est l'indice le moins cher (aucun sous-processus)."""
+    return (WWW_MODULES / mid).is_dir()
+
+
+def superposer_lxc(modules: dict, sondes: dict, ouvert=_tcp_ouvert, presente=None) -> None:
+    """Ajoute l'etat des modules en conteneur ; une sonde deja presente fait foi.
+
+    Un module que la box n'a PAS n'est ni sonde ni declare en erreur (#2836) : « ytsas : conteneur injoignable » sur une box qui n'a pas YouTube SAS
+    etait une fausse alarme."""
+    presente = presente or _module_present
+    for mid, (hote, port) in sondes.items():
+        if mid in modules or not presente(mid):
+            continue
+        modules[mid] = ({"status": "ok", "msg": "Conteneur LXC joignable"} if ouvert(hote, port)
+                        else {"status": "error", "msg": "Conteneur LXC injoignable"})
 
 
 def _refresh_health_batch():
@@ -685,6 +744,7 @@ def _refresh_health_batch():
         modules["waf"] = dict(modules["waf-ng"])
 
     superposer_montes(modules, modules_montes())
+    superposer_lxc(modules, SONDES_LXC)
 
     _cache["health_batch"] = {"modules": modules, "count": len(modules)}
     _cache["health_batch_ts"] = time.time()
@@ -1015,7 +1075,7 @@ async def apercu():
         up = int(float(Path("/proc/uptime").read_text().split()[0]))
     except Exception:
         up = None
-    return construire_apercu(menu, _cache.get("system_stats", {}), notifs, up)
+    return construire_apercu(menu, _cache.get("system_stats", {}), notifs, up, (_cache.get("health_batch") or {}).get("modules"))
 
 
 @router.get("/security_summary")
@@ -1029,62 +1089,56 @@ async def security_summary(user=Depends(require_jwt)):
     }
 
 
+# Ponts de CONTENEURS ou de virtualisation : jamais « le LAN » d'une box (br-lxc porte 10.100.0.1 sur gk2, #2857).
+_PONTS_NON_LAN = ("br-lxc", "lxcbr", "docker", "virbr", "veth", "eye-br", "wg-", "tun", "tap")
+_LAN_NOMS = ("br-lan", "br0", "lan0", "lan")
+
+
+def _inet(iface):
+    return [ai.get("local") for ai in (iface.get("addr_info") or []) if ai.get("family") == "inet" and ai.get("local")]
+
+
+def resume_reseau(addrs, routes):
+    """Résumé réseau d'après `ip -j addr` et `ip -j route show default`, sans deviner par nom (#2857).
+
+    WAN = l'interface de la ROUTE PAR DÉFAUT ; « connected » seulement si cette interface existe et porte une adresse IPv4. LAN = un pont br-lan/br0/lan0/lan, jamais un pont de
+    conteneurs ; sinon « N/A » : on n'invente plus 192.168.10.1."""
+    addrs = [i for i in (addrs or []) if isinstance(i, dict)]
+    wan_dev = next((r.get("dev") for r in (routes or []) if isinstance(r, dict) and r.get("dst") == "default" and r.get("dev")), None)
+    wan_ip = None
+    if wan_dev:
+        for i in addrs:
+            if i.get("ifname") == wan_dev and _inet(i):
+                wan_ip = _inet(i)[0]
+    lan_ip = None
+    for i in addrs:
+        nom = i.get("ifname", "")
+        if nom in _LAN_NOMS and _inet(i) and nom != wan_dev:
+            lan_ip = _inet(i)[0]
+            break
+    if not lan_ip:
+        for i in addrs:
+            nom = i.get("ifname", "")
+            if nom.startswith("br") and not nom.startswith(_PONTS_NON_LAN) and nom != wan_dev and _inet(i):
+                lan_ip = _inet(i)[0]
+                break
+    return {"wan_status": "connected" if wan_ip else "disconnected", "lan_ip": lan_ip or "N/A", "wan_ip": wan_ip or "N/A"}
+
+
 @router.get("/network_summary")
 def network_summary(user=Depends(require_jwt)):
-    """Résumé réseau with IP addresses."""
-    import json
+    """Résumé réseau : interfaces, WAN (route par défaut) et LAN (#2857)."""
+    def _json(cmd):
+        try:
+            return json.loads(subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout)
+        except Exception:
+            return None
 
-    # Get interface states
-    r = subprocess.run(["ip", "-j", "link", "show"], capture_output=True, text=True)
-    try:
-        links = json.loads(r.stdout)
-        ifaces = [l for l in links if l.get("ifname") != "lo"]
-        up_count = sum(1 for l in ifaces if "UP" in l.get("flags", []))
-    except Exception:
-        ifaces = []
-        up_count = 0
-
-    # Get IP addresses for common interfaces
-    lan_ip = None
-    wan_ip = None
-
-    # Try to get IP addresses using ip -j addr
-    r2 = subprocess.run(["ip", "-j", "addr", "show"], capture_output=True, text=True)
-    try:
-        addrs = json.loads(r2.stdout)
-        for iface in addrs:
-            ifname = iface.get("ifname", "")
-            addr_info = iface.get("addr_info", [])
-            for ai in addr_info:
-                if ai.get("family") == "inet":
-                    ip = ai.get("local")
-                    if ip:
-                        # LAN interfaces
-                        if ifname in ("br-lan", "br0", "lan0", "lan"):
-                            lan_ip = ip
-                        # WAN interfaces
-                        elif ifname in ("br-wan", "wan", "eth0", "wan0", "enp1s0"):
-                            wan_ip = ip
-                        # If no LAN yet, use any bridged interface
-                        elif ifname.startswith("br") and not lan_ip:
-                            lan_ip = ip
-    except Exception:
-        pass
-
-    # Fallback to default network
-    if not lan_ip:
-        lan_ip = "192.168.10.1"
-    if not wan_ip:
-        wan_ip = "N/A"
-
-    return {
-        "interfaces": len(ifaces),
-        "interfaces_up": up_count,
-        "wan_status": "connected" if wan_ip and wan_ip != "N/A" else "disconnected",
-        "lan_clients": 0,
-        "lan_ip": lan_ip,
-        "wan_ip": wan_ip,
-    }
+    links = _json(["ip", "-j", "link", "show"]) or []
+    ifaces = [l for l in links if isinstance(l, dict) and l.get("ifname") != "lo"]
+    up_count = sum(1 for l in ifaces if "UP" in l.get("flags", []))
+    r = resume_reseau(_json(["ip", "-j", "addr", "show"]), _json(["ip", "-j", "route", "show", "default"]))
+    return {"interfaces": len(ifaces), "interfaces_up": up_count, "lan_clients": 0, **r}
 
 
 @router.get("/netstats/summary")

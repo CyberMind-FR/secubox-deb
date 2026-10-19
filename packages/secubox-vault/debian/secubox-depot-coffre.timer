@@ -8,6 +8,8 @@ Description=SecuBox â€” la connexion d'un administrateur ouvre le Coffre, la clÃ
 
 [Timer]
 OnBootSec=90s
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
+OnActiveSec=90s
 OnUnitActiveSec=60s
 AccuracySec=5s
 

@@ -1348,7 +1348,7 @@ echo -e "    ${CYAN}secubox-mode kiosk${GRAY}    Switch to Kiosk GUI${RESET}"
 echo -e "    ${CYAN}secubox-mode tui${GRAY}      Switch to TUI dashboard${RESET}"
 echo -e "    ${CYAN}secubox-mode console${GRAY}  Switch to shell console${RESET}"
 echo ""
-echo -e "  ${GRAY}Web UI: https://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):9443${RESET}"
+echo -e "  ${GRAY}Web UI: https://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost')${RESET}"
 echo ""
 HELP_CMD
 chmod +x "${ROOTFS}/usr/bin/secubox-help"
@@ -1436,8 +1436,8 @@ echo ""
 echo -e "${GOLD}  ────────────────────────────────────────────────────────────${RESET}"
 echo -e "${WHITE}  🔗 Quick Access${RESET}"
 IP=$(hostname -I | awk '{print $1}')
-echo -e "     ${GRAY}Dashboard:${RESET}  ${CYAN}https://${IP:-localhost}:9443${RESET}"
-echo -e "     ${GRAY}Admin API:${RESET}  ${CYAN}https://${IP:-localhost}:9443/api/v1/${RESET}"
+echo -e "     ${GRAY}Dashboard:${RESET}  ${CYAN}https://${IP:-localhost}${RESET}"
+echo -e "     ${GRAY}Admin API:${RESET}  ${CYAN}https://${IP:-localhost}/api/v1/${RESET}"
 echo ""
 STATUS_SCRIPT
 chmod +x "${ROOTFS}/usr/bin/secubox-status"
@@ -1486,7 +1486,7 @@ printf '%b' "\e[38;5;29m
 \e[38;5;242m  Build: ${BUILD_TIMESTAMP}\e[0m
 
 \e[38;5;250m  [user] Default: \e[38;5;214mroot\e[38;5;250m / \e[38;5;214msecubox\e[0m
-\e[38;5;250m  [web]  Web UI: \e[38;5;45mhttps://<IP>:9443\e[0m
+\e[38;5;250m  [web]  Web UI: \e[38;5;45mhttps://<IP>/\e[0m
 \e[38;5;250m  [ssh]  SSH:    \e[38;5;45mport 22\e[0m
 
 \e[38;5;242m─────────────────────────────────────────────────────────────\e[0m
@@ -1507,7 +1507,7 @@ printf '%b' "\e[38;5;214m
 
 \e[38;5;242m  Build: ${BUILD_TIMESTAMP}\e[0m
 
-\e[38;5;250m  🌐 Web UI:     \e[38;5;45mhttps://<IP>:9443\e[0m
+\e[38;5;250m  🌐 Web UI:     \e[38;5;45mhttps://<IP>/\e[0m
 \e[38;5;250m  🔐 Credentials: \e[38;5;214mroot\e[38;5;250m / \e[38;5;214msecubox\e[0m
 \e[38;5;250m  📖 Docs:       \e[38;5;45mhttps://secubox.in/docs\e[0m
 
@@ -1989,12 +1989,31 @@ fi
 BOOTCMD_END
   fi
 
+  # Script USB (#2816, #2824) : livre TEL QUEL (deja compile, source a cote), donc copie SANS mkimage. Une ligne a la console U-Boot suffit :
+  #   usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}
+  if [[ -f "${SCRIPT_DIR}/../board/${BOARD}/boot-usb.scr" ]]; then
+    cp "${SCRIPT_DIR}/../board/${BOARD}/boot-usb.scr" "${MNT}/boot/boot-usb.scr"
+    [[ -f "${SCRIPT_DIR}/../board/${BOARD}/boot-usb.cmd" ]] && cp "${SCRIPT_DIR}/../board/${BOARD}/boot-usb.cmd" "${MNT}/boot/boot-usb.cmd"
+    ok "boot-usb.scr installé (démarrage USB en une ligne)"
+  fi
+
+  # fix-bootcmd (#2826) : regle le bootcmd de la carte (eMMC puis USB) en gardant l'ancien. Livre compile, sans mkimage.
+  if [[ -f "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr" ]]; then
+    cp "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr" "${MNT}/boot/fix-bootcmd.scr"
+    [[ -f "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.cmd" ]] && cp "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.cmd" "${MNT}/boot/fix-bootcmd.cmd"
+    ok "fix-bootcmd.scr installé"
+  fi
+
   # Compiler le bootscript si mkimage est disponible
   if command -v mkimage >/dev/null 2>&1; then
     mkimage -C none -A arm64 -T script -d "${MNT}/boot/boot.cmd" "${MNT}/boot/boot.scr" >/dev/null
     ok "boot.scr créé (U-Boot bootscript)"
   else
-    warn "mkimage non disponible — boot.scr non généré (installer u-boot-tools)"
+    # Une image ESPRESSObin sans boot.scr ne demarre pas par son script : on n'en sort pas une en silence (#2824).
+    case "${BOARD}" in
+      espressobin*) err "mkimage non disponible — boot.scr non généré : image ${BOARD} NON produite (installer u-boot-tools)" ;;
+      *)            warn "mkimage non disponible — boot.scr non généré (installer u-boot-tools)" ;;
+    esac
   fi
 fi
 

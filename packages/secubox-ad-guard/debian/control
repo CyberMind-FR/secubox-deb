@@ -15,10 +15,11 @@ Architecture: all
 # fraiche : unbound boucle en echec (26 redemarrages constates) et le
 # systeme n'a AUCUNE resolution DNS, alors qu'unbound-anchor, l'outil
 # qui sait semer l'ancre, n'est pas installe non plus.
-Depends: ${misc:Depends}, secubox-core (>= 1.7.1), secubox-toolbox, secubox-aggregator (>= 0.4.1),
+Depends: ${misc:Depends}, secubox-core (>= 1.7.10), secubox-aggregator (>= 0.4.1),
  unbound, python3-httpx | python3-pip,
          dns-root-data
-Recommends: python3-maxminddb
+# secubox-toolbox : Recommends, plus Depends (#2855). ad-guard n'en lit la base qu'en lecture seule et tolere son absence (_stats_toolbox renvoie None, jamais un zero invente).
+Recommends: python3-maxminddb, secubox-toolbox
 Description: SecuBox Ad Guard Module
  Ad and tracker detection with per-device statistics.
  Features blocklist management, delayed blacklisting workflow,

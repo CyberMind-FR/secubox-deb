@@ -141,6 +141,8 @@ img{max-width:100%}
   background:transparent;border:1px solid var(--edge);border-radius:999px;padding:5px 11px;cursor:pointer;transition:.18s}
 .act:hover{border-color:var(--edge-2);color:var(--tx)}
 .act .n{color:var(--faint)}
+.act.cmt .n:empty{display:none}                      /* aucun commentaire : pas de « 0 » (#2778) */
+.act.cmt .n:not(:empty){color:var(--gold)}
 .act.liked{color:var(--coral);border-color:color-mix(in srgb,var(--coral) 45%,var(--edge))}
 .act.liked .n{color:var(--coral)}
 .act.spread{margin-left:auto}

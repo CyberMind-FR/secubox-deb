@@ -37,6 +37,20 @@ n'est installé.
 5. **Contrôler** : `autoload-atelier verifier --boot /mnt/boot` (réponses valides, signature acceptée, jeton présent).
 6. Démonter, livrer. Au premier démarrage, suivre avec `autoload-agentctl etat` ; le rapport final : `autoload-agentctl rapport`.
 
+## Préparer une ESPRESSObin `minimal` pour un client beta (#2838)
+
+Image : `secubox-minimal-espressobin-v7-trixie.img.xz` (profil `minimal` : DPI, dns-guard, ad-guard, NAC, Freebox, WebUI d'administration ; ni WAF, ni Hall, ni metrics).
+Accès distant : le tunnel est **sortant** vers `admin.gk2.secubox.in`, le client n'ouvre aucun port ; les identifiants d'usine restent à changer au premier login (décision du propriétaire).
+
+1. Flasher l'image sur la carte uSD ou la clé USB (`xzcat … | dd of=/dev/sdX bs=4M conv=fsync status=progress`), monter sa partition de démarrage (`boot`).
+2. Émettre le jeton : `autoloadctl emettre --client <client> --profil minimal --lot <lot>` (affiché une seule fois).
+3. Écrire `reponses.toml` depuis `/usr/share/doc/secubox-premier-pas/examples/reponses-autoload.toml` avec `profil = "minimal"` ; garder `jeton = "ref:/etc/secubox/secrets/autoload-jeton"`.
+4. `printf '%s' "$JETON" | autoload-atelier preparer --reponses reponses.toml --boot /mnt/boot --homedir /etc/secubox/secrets/provisioning-gnupg --jeton-stdin`, puis `autoload-atelier verifier --boot /mnt/boot`.
+5. Démarrer la carte : par la carte uSD, ou par l'USB avec `usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}` (console série 115200 8N1). Pour fixer le démarrage eMMC puis USB : `load usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}`.
+6. Suivre : `autoload-agentctl etat`, rapport final : `autoload-agentctl rapport`.
+
+Limite : l'ESPRESSObin n'a pas d'écran ; le délai de grâce du pré-rapport (15 min) se suit par l'infrastructure (`autoloadctl`), pas sur place.
+
 ## La clé « SecuBox Provisioning »
 
 - Créée **une fois**, sur l'infrastructure : `autoload-atelier cle-init --homedir /etc/secubox/secrets/provisioning-gnupg --export provisioning.gpg` (Ed25519, sans échéance). La partie

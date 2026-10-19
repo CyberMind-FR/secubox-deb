@@ -1,0 +1,12 @@
+{
+  "subtitle": "Historique CPU, mémoire, réseau",
+  "icon": "📈",
+  "order": 50,
+  "id": "grafana",
+  "name": "Courbes",
+  "path": "/grafana/",
+  "category": "mind",
+  "description": "Courbes de la box sur 7 jours (remplace Grafana)",
+  "theme": "supervision",
+  "unite": "courbes"
+}

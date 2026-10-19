@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+
+case "$1" in
+    remove|purge|disappear)
+        # Le lien d'activation du vhost du Hall est pose par NOTRE postinst : il part avec le paquet. Sinon, a la purge (qui supprime le conffile
+        # de sites-available), il reste CASSE et `nginx -t` echoue (open() failed) — plus aucun rechargement possible (#2830).
+        # Un lien seulement : un fichier ordinaire pose la par l'operateur n'est pas le notre.
+        if [ -L /etc/nginx/sites-enabled/hall.gk2.net.conf ]; then
+            rm -f /etc/nginx/sites-enabled/hall.gk2.net.conf
+            if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+                systemctl reload nginx 2>/dev/null || true
+            fi
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

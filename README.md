@@ -32,6 +32,15 @@
 
 ---
 
+<p align="center">
+  <img src="docs/assets/poster/secubox-affiche-bilingue.jpg" alt="SecuBox — Reprenez le contrôle de votre réseau. Your network. Your rules." width="900">
+</p>
+<p align="center"><sub>Affiche illustrative · Illustrative poster. Les fonctions et l'interface représentées ne sont pas toutes au même niveau de maturité : voir « <a href="#-where-we-are">Où en est-on ? / Where we are</a> ».</sub></p>
+
+**FR 🇫🇷** SecuBox est un projet de sécurité réseau et d'hébergement souverain, construit sur Debian 13 Trixie. Son ambition : rendre les outils de sécurité et d'autonomie numérique accessibles aux particuliers, aux associations et aux petites organisations. Le projet dispose déjà de briques fonctionnelles et d'un prototype opérationnel ; certains composants sont utilisables, d'autres continuent d'évoluer. **Tester · Contribuer · Échanger · Partager.**
+
+**EN 🇬🇧** SecuBox is a network security and sovereign hosting project built on Debian 13 Trixie. Its ambition is to make digital security and autonomy more accessible to individuals, associations and small organizations. A working prototype and functional components already exist; some are usable, others remain under active development. **Test · Contribute · Discuss · Share.**
+
 SecuBox turns a small ARM board — or any x86 PC — into a complete, self-hosted
 security appliance: firewall, VPN, intrusion detection, WAF, DNS filtering and a
 suite of sovereign services, all behind one web dashboard. It runs on **Debian 13 (Trixie)**, the base
@@ -72,6 +81,16 @@ Packages are built as `~trixie1` and published in the `trixie` suite of
 
 ---
 
+## 🧭 Where we are
+
+*State on 2026-10-19. SecuBox is neither certified nor ready for every use: CSPN (ANSSI) certification is a goal, not an achievement.*
+
+| Level | Components | Note |
+|---|---|---|
+| **Usable** (running on an infrastructure box) | Admin web UI, default-drop nftables firewall, `sbxwaf` WAF behind HAProxy TLS 1.3, DNS and ad filtering, WireGuard and peer-to-peer mesh, LXC services (mail, files, chat, code hosting, media) | Tested on MOCHAbin and x86. Updates are still frequent. |
+| **Being tested** | DPI classification (nDPId), self-provisioning of boards (Auto-Load), the `minimal` profile for 1 GB boards (ESPRESSObin) | DPI is memory-hungry and its output is not proof of an attack. On 1 GB the WAF and HAProxy saturate the board, so `minimal` leaves them out. |
+| **Design only** | Zone-based firewall (per port and per device), automatic peering of freshly prepared boards | Not coded or not deployed yet. |
+
 ## ⚡ Quick Start
 
 **Fastest path — a VM on your own machine, no hardware needed.**
@@ -103,6 +122,10 @@ machine can carry. Pick the profile that matches your hardware and your needs.
 
 <p align="center"><img src="docs/assets/secubox-profils-infographie.jpg" alt="SecuBox: choose your protection level — lite, isp, full" width="800"></p>
 
+A fourth profile, **minimal**, is sized for a 1 GB board (ESPRESSObin): DPI, DNS guard, ad-guard, access control (NAC), Freebox, IPv6 guard, web filter, WireGuard
+and the admin WebUI only. No WAF (it stays on the infrastructure), no Hall, no hosted service. Measured on a real ESPRESSObin: the 951 MB leave little room, which is why the WAF
+and HAProxy were tried and removed. Step-by-step install: [docs/INSTALL-ESPRESSOBIN.md](docs/INSTALL-ESPRESSOBIN.md); field notes: [docs/FAQ-ESPRESSOBIN-1GO.md](docs/FAQ-ESPRESSOBIN-1GO.md).
+
 Side-by-side table, glossary and a popularisation prompt:
 [docs/PROFILS-COMPARATIF.md](docs/PROFILS-COMPARATIF.md).
 
@@ -132,17 +155,21 @@ Full walkthrough and troubleshooting: [Live USB](https://github.com/CyberMind-FR
 `secubox-<profile>-<board>-<suite>` — check the release assets for what a given
 release actually ships.
 
-| Target | Best for | Image | Suite |
+| Target | Best for | Image (release asset) | Suite |
 |---|---|---|---|
-| VirtualBox / QEMU | Lab & demo | `secubox-full-vm-x64-trixie.img.gz` | Debian 13 |
-| Raspberry Pi 4 / 400 | Desktop appliance, kiosk | `secubox-full-rpi-arm64-trixie.img.gz` | Debian 13 |
+| VirtualBox / QEMU | Lab & demo | `secubox-full-vm-x64-trixie.img.gz` (also `isp`) | Debian 13 |
+| Raspberry Pi 4 / 400 | Desktop appliance, kiosk | `secubox-full-rpi-arm64-trixie.img.gz` (also `lite`, `isp`) | Debian 13 |
 | Any x86_64 PC | Repurposed hardware | `secubox-live-amd64-trixie.img.gz` (live) | Debian 13 |
-| Any x86_64 PC | Permanent install — **headless auto-install** to the first disk | `secubox-installer-amd64-trixie.iso.gz` | Debian 13 |
-| MOCHAbin | Enterprise | `secubox-mochabin-live-usb.img.gz` | Debian 13 |
-| ESPRESSObin v7 / Ultra | Small gateway | `lite` and `isp` images (7 GB, microSD) | Debian 13 |
+| Any x86_64 PC | Permanent install — **headless auto-install** to the first disk | `secubox-installer-amd64-trixie.iso.gz` or `.img.gz` | Debian 13 |
+| MOCHAbin | Enterprise | `secubox-lite-mochabin-trixie.img.gz`, `secubox-isp-mochabin-trixie.img.gz`, or the live stick `secubox-mochabin-live-usb.img.gz` | Debian 13 |
+| ESPRESSObin v7 | Small gateway (1 GB: use the `minimal` profile) | `secubox-lite-espressobin-v7-trixie.img.xz` (1.7 GB compressed) | Debian 13 |
+
+Large images are split into `.part00`, `.part01`… in the release: join them before use
+(`cat secubox-full-vm-x64-trixie.img.gz.part* > secubox-full-vm-x64-trixie.img.gz`) and check the result
+against the matching `.assembled.sha256`.
 
 The profile genuinely selects which modules are installed. An ESPRESSObin
-image is written to a microSD card; `secubox-install-emmc` then copies the
+image is written to a microSD card (or a USB stick); `secubox-install-emmc` then copies the
 running system to the eMMC and refuses clearly if it does not fit (4 GB eMMC:
 lite yes, isp maybe not).
 
@@ -151,32 +178,30 @@ Flashing, U-Boot and first-boot steps:
 [ARM / U-Boot](https://github.com/CyberMind-FR/secubox-deb/wiki/ARM-Installation) ·
 [Supported hardware](https://github.com/CyberMind-FR/secubox-deb/wiki/Hardware)
 
-### 🧪 Current release: `v3.0.0-alpha.11`
+### 🧪 Current release: `v3.0.0-alpha.18`
 
-This is a **pre-release line**: run it on a test box, not on the link your
-household depends on. What it brings, on top of alpha 10:
+Published 2026-10-16. This is a **pre-release line**: run it on a test box, not on the link your
+household depends on. Since alpha 11 (346 commits), the main changes are:
 
-- **Actor Intelligence 2.0.** The detection engine now *acts*, gradually and reversibly:
-  delay, proof-of-work challenge, tarpit, temporary ban — and, for a device on your own
-  network, automatic isolation by the NAC (its quarantine zone; you validate it to release it).
-  Risk and confidence are scored separately, a ban needs evidence from the address itself,
-  and verified search-engine crawlers are never banned. A new *Radar des acteurs* card in the
-  Hall shows it live. Activation procedure: [`docs/ACTOR-INTELLIGENCE-ACTIVATION.md`](docs/ACTOR-INTELLIGENCE-ACTIVATION.md).
-- **Admin in six spaces** (overview, protection, monitoring, services, identity, system) with
-  global search and a device sheet that shows the detected OS *and the evidence for it*.
-- **Live and ephemeral posts.** The posts feed updates itself — a new post or a new comment
-  pops to the top with an animation — and MetaNews publishes five-minute posts that fade away.
-- **Headless auto-install.** The installer image (`secubox-installer-amd64-trixie`) installs
-  SecuBox on the first disk with no screen and no keyboard. It **wipes that disk**.
-- **Auto-Load: images that provision themselves.** Every image now carries the Auto-Load agent. A box prepared at the workshop
-  (`autoload-atelier`: signed answers file + one-time token on the boot partition) enrolls through an outbound tunnel on its first
-  boot, shows a pre-report, waits a grace period and installs its profile. A box without that file is untouched. Guide:
-  [`docs/AUTOLOAD-ATELIER.md`](docs/AUTOLOAD-ATELIER.md). Network boot (phase B) is not shipped.
-- Debian 13 (Trixie) base, redefined profiles (`lite`, `isp`, `full`), ad blocking and web
-  filtering, zram and a collective memory ceiling, the nDPI 6.x engine — as in alpha 9 and 10.
+- **Aurora admin.** The shared Aurora look now covers the admin pages (overview, WAF, DPI, identity and access,
+  SOC watch, releases and centers, publishing, torrent, BBS, Hall…), with honest data: a missing measure
+  shows as « — », never as zero.
+- **1 GB boards.** A `minimal` profile (DPI, DNS guard, ad-guard, NAC, Freebox, IPv6 guard, web filter,
+  WireGuard, admin UI), an ESPRESSObin `lite` image, `secubox-install-emmc`, a USB boot script and an eMMC
+  fix-bootcmd. Measured on a real 951 MB board: see [docs/INSTALL-ESPRESSOBIN.md](docs/INSTALL-ESPRESSOBIN.md).
+- **Curves and live system.** `Courbes` (7-day history, one point per minute) replaces the Grafana page;
+  `Système en direct` replaces Glances; a package `secubox-courbes` serves them without the full metrics stack.
+- **DPI.** nDPId flows grouped by protocol, application, host or risk; an aggregated statistics view;
+  ad-guard 1.14 with live status and a DNS sensor feeding the DNS guard alerts.
+- **App store.** Remote installation through the OpenPGP box, totals per category; profile comparison page
+  read from the meta-packages.
+- **Services.** YouTube flow administration (`ytsas` 0.8), BBS image replies as thumbnails, identity row for
+  PhotoPrism (SSO), a static-CDN cache in the MITM engine (`proxypac` step 2).
+- **Still from alpha 11:** Actor Intelligence 2.0 ([activation](docs/ACTOR-INTELLIGENCE-ACTIVATION.md)), headless
+  auto-install (it **wipes the first disk**), Auto-Load ([guide](docs/AUTOLOAD-ATELIER.md); network boot is not shipped).
 
-Guided path: [Démarrage rapide Alpha](https://github.com/CyberMind-FR/secubox-deb/wiki) —
-VM in one command, or real arm64 hardware — first section of the wiki home.
+Known limits: the release notes list a live USB for ESPRESSObin, but no such file is among the release assets
+(only the `lite` image above). Guided path: first section of the [wiki home](https://github.com/CyberMind-FR/secubox-deb/wiki).
 
 ### Verifying downloads
 
@@ -198,6 +223,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 | [API reference](https://github.com/CyberMind-FR/secubox-deb/wiki/API-Reference) | 2000+ endpoints |
 | [Architecture](https://github.com/CyberMind-FR/secubox-deb/wiki/Modules-Architecture) | The 6-layer model |
 | [Troubleshooting](https://github.com/CyberMind-FR/secubox-deb/wiki/Troubleshooting) | When it does not boot |
+| [ESPRESSObin install](docs/INSTALL-ESPRESSOBIN.md) | Nine steps from a bare board to a box attached to the infrastructure |
 | [Project overview](docs/PROJECT-OVERVIEW.md) | Long form: flagship programmes, release history, CTL grammar |
 | [Cryptographic policy](docs/POLITIQUE-CRYPTO.md) | Which algorithms, why, and the two protocol-imposed exceptions — the reference document for CSPN evaluation |
 | [Aurora design reference](.claude/AURORA-REFERENCE.md) | The shared style of the admin web panels: tokens, structure, data-honesty rules, iframe height protocol, tests. [Gallery of every page](docs/aurora/README.md) (demo captures, regenerated by `scripts/snapshots-aurora.py`) |

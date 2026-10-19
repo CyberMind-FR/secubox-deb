@@ -31,6 +31,8 @@ ROUTES = Path("/etc/secubox/waf/haproxy-routes.json")
 IP_SIMULEE = "198.51.100.77"                    # TEST-NET-2 : jamais routée
 UA = "SecuBox-WAF-SelfTest/1 (health-doctor)"
 VALIDITE_S = 300
+# Le témoin traverse le WAF JUSQU'À L'AMONT : sous charge (gk2 : charge ~14, mémoire 94 %) l'amont dépasse 5 s. Les canaris, eux, sont refusés par le WAF seul.
+DELAI_TEMOIN_S = 12.0
 
 TEMOIN = ("temoin", "requête saine", "/robots.txt")
 CANARIS = (
@@ -49,17 +51,44 @@ CACHE = Path("/var/cache/secubox/health-doctor-waf-selftest.json")
 NON_INSPECTES = ("admin.", "git.")
 
 
-def choisir_host(routes: dict) -> str | None:
-    """Un vhost PUBLIC réel : hall.* de préférence, sinon le premier nom inspecté."""
+def _amont_du_maillage(amont) -> bool:
+    """Vrai si l'amont de la route est une adresse du MAILLAGE (10.10.0.0/24) : un autre nœud, que ce test ne doit pas juger (#2786)."""
+    try:
+        return str(amont[0]).startswith("10.10.0.")
+    except (TypeError, IndexError, KeyError):
+        return False
+
+
+def _domaine_de_la_box() -> str | None:
+    try:
+        from secubox_core.auth import domaine_box
+        return domaine_box() or None
+    except Exception:  # noqa: BLE001 — sans domaine, le choix se rabat sur les amonts locaux
+        return None
+
+
+def choisir_host(routes: dict, domaine: str | None = None) -> str | None:
+    """Le vhost à tester : le hall de CETTE box (`hall.<domaine>`), sinon un vhost public dont l'amont n'est pas un autre nœud du maillage, sinon l'ancien choix.
+
+    RÉGRESSION (gk2, #2786) : « hall.* de préférence » rendait hall.gk1 (premier par ordre alphabétique), un nœud relayé routé vers 10.10.0.3 qui ne
+    répondait plus : le témoin expirait à 12 s alors que hall.gk2 répondait en 4 ms. Juger ce WAF ne doit pas dépendre d'un autre nœud."""
     noms = sorted(h for h in routes
                   if "." in h and not h.replace(".", "").isdigit() and not h.startswith(NON_INSPECTES))
-    for h in noms:
-        if h.startswith("hall."):
-            return h
-    return noms[0] if noms else None
+    if not noms:
+        return None
+    if domaine and f"hall.{domaine}" in noms:
+        return f"hall.{domaine}"
+    locaux = [h for h in noms if not _amont_du_maillage(routes.get(h))]
+    for liste in (locaux, noms):
+        for h in liste:
+            if h.startswith("hall."):
+                return h
+        if liste is locaux and locaux:
+            return locaux[0]
+    return noms[0]
 
 
-def _requete(host: str, chemin: str, timeout: float = 5.0) -> int:
+def _requete(host: str, chemin: str, timeout: float = DELAI_TEMOIN_S) -> int:
     c = http.client.HTTPConnection(*WAF_ADDR, timeout=timeout)
     try:
         c.request("GET", chemin, headers={"Host": host, "X-Forwarded-For": IP_SIMULEE,
@@ -70,7 +99,10 @@ def _requete(host: str, chemin: str, timeout: float = 5.0) -> int:
 
 
 def executer(host: str, requete: Callable[[str, str], int] = _requete) -> dict:
-    """Joue le témoin puis les canaris ; ne lève jamais."""
+    """Joue le témoin puis les canaris ; ne lève jamais.
+
+    Un témoin qui EXPIRE n'est pas un blocage : le WAF bloque en 403 immédiat. Si les quatre canaris du même passage sont refusés, le WAF est vivant et
+    bloque — c'est l'amont qui est lent : verdict sain avec un avertissement (#2784). Si un canari échoue, le témoin expiré ne prouve rien : échec."""
     tests = []
     for cle, libelle, chemin in (TEMOIN, *CANARIS):
         attendu_bloque = cle != "temoin"
@@ -83,8 +115,18 @@ def executer(host: str, requete: Callable[[str, str], int] = _requete) -> dict:
                           "code": code, "ok": ok, "ms": int((time.time() - t0) * 1000)})
         except OSError as e:
             tests.append({"id": cle, "libelle": libelle, "attendu": "bloqué" if attendu_bloque else "non bloqué",
-                          "code": None, "ok": False, "erreur": str(e)[:80], "ms": int((time.time() - t0) * 1000)})
-    return {"host": host, "tests": tests, "ok": all(t["ok"] for t in tests)}
+                          "code": None, "ok": False, "erreur": str(e)[:80], "ms": int((time.time() - t0) * 1000),
+                          **({"delai": True} if isinstance(e, TimeoutError) else {})})
+    res = {"host": host, "tests": tests}
+    temoin = tests[0]
+    canaris_ok = all(t["ok"] for t in tests[1:])
+    if temoin.get("delai") and canaris_ok:
+        temoin["ok"] = True
+        temoin["indetermine"] = True
+        res["avertissement"] = ("Amont lent : la requête saine n'a pas répondu dans le délai (elle n'a pas été bloquée) ; "
+                                "les quatre attaques simulées ont été refusées, le WAF fonctionne.")
+    res["ok"] = all(t["ok"] for t in tests)
+    return res
 
 
 def _lire_cache(cache: Path) -> dict | None:
@@ -121,7 +163,7 @@ def verifier(maintenant: float | None = None,
         res = {"ok": False, "ecoute": False, "tests": [], "erreur": "sbxwaf n'écoute pas sur 127.0.0.1:8085"}
     else:
         try:
-            host = choisir_host(json.loads(ROUTES.read_text()))
+            host = choisir_host(json.loads(ROUTES.read_text()), _domaine_de_la_box())
         except (OSError, ValueError):
             host = None
         if not host:

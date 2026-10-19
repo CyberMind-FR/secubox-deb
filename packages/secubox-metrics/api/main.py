@@ -1088,14 +1088,14 @@ async def metrics_en_direct():
 @app.get("/api/v1/metrics/series", dependencies=[Depends(require_lecture)])
 def metrics_series(duree: float = 3600, points: int = 240, depuis: Optional[float] = None, jusqua: Optional[float] = None):
     """Courbes (#2765) : CPU, mémoire, charge, débit, connexions, disque. Fenêtre `duree` (s) ou [depuis, jusqua] ; `points` tranches (moyennes). 7 jours au plus."""
-    import serie
+    from secubox_courbes import serie           # #2865 : la bibliotheque vit dans secubox-courbes
     return JSONResponse(content=serie.vue(duree, points, depuis=depuis, jusqua=jusqua), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/v1/metrics/systeme", dependencies=[Depends(require_lecture)])
 async def metrics_systeme():
     """Instantané système rapide (#2767) : CPU par cœur, mémoire, disques, réseau, top des processus (sans ligne de commande). Sans cache."""
-    import systeme
+    from secubox_courbes import systeme
     mesures = await asyncio.get_running_loop().run_in_executor(None, systeme.instantane)
     return JSONResponse(content=mesures, headers={"Cache-Control": "no-store"})
 

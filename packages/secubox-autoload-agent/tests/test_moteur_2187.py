@@ -280,3 +280,20 @@ def test_l_agent_pose_le_marqueur_d_abandon_a_la_huitieme(monde):
 def test_un_parcours_reussi_ne_pose_pas_de_marqueur_d_abandon(monde):
     assert moteur(monde).run().ok
     assert not monde.cfg.abandon.exists()
+
+
+def test_un_client_minimal_installe_secubox_minimal_et_applique_le_profil_minimal_2838(monde):
+    """Avant : « lite, isp ou full seulement » refusait un client minimal ; l'accepter comme `lite` aurait installe secubox-lite PAR-DESSUS et fait retirer
+    le profil minimal (Conflicts)."""
+    monde.cfg.reponses.write_text(monde.cfg.reponses.read_text().replace('profil = "lite"', 'profil = "minimal"'))
+    r = moteur(monde).run()
+    assert r.ok, (r.etape, r.detail)
+    inst = [a for a, _ in monde.ex.appels if a[0] == "apt-get" and "install" in a and "-s" not in a][0]
+    assert inst[-1] == "secubox-minimal"
+    assert any(a[:4] == ["secubox-profilectl", "apply", "--profile", "minimal"] for a, _ in monde.ex.appels)
+
+
+def test_le_refus_d_un_profil_inconnu_cite_les_quatre_profils_2838(monde):
+    monde.cfg.reponses.write_text(monde.cfg.reponses.read_text().replace('profil = "lite"', 'profil = "actuel"'))
+    r = moteur(monde).run()
+    assert not r.ok and r.etape == "plan" and all(p in r.detail for p in ("minimal", "lite", "isp", "full"))
