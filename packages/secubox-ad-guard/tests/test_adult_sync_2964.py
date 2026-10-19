@@ -6,14 +6,16 @@
 appareil, sans lever le filtrage pubs/trackers.
 
 Contrairement à `ip-allowlist.txt` (bypass complet via une vue Unbound vide),
-un appareil exempté ici garde le sinkhole général — sa vue le redéclare
-entièrement, minoré des domaines adultes. C'est ce que ces tests prouvent :
-un domaine NON adulte reste `always_nxdomain` dans la vue d'exception."""
+un appareil exempté ici garde le sinkhole général — par `local-zone-override`
+PAR DOMAINE (#2969, pas une `view:` : une vue redéclarant tout le sinkhole
+général par IP exemptée a fait grossir le drop-in à 49 Mo sur gk2, avec un
+rechargement d'~1 min, DNS indisponible pour tout le réseau)."""
 import importlib.machinery
 import importlib.util
 import sys
 import types
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -105,21 +107,24 @@ def test_sans_appareil_exempte_aucune_vue(mod):
     assert "view:" not in mod.DROPIN.read_text()
 
 
-def test_appareil_exempte_garde_le_sinkhole_general_hors_adulte(mod):
+def test_appareil_exempte_recoit_un_local_zone_override_par_domaine_adulte(mod):
+    # #2969 : local-zone-override, PAS une vue — sans redéclarer le sinkhole
+    # général (ce que faisait l'ancienne vue, jusqu'à 49 Mo sur gk2 et un
+    # rechargement d'~1 min, DNS indisponible pour tout le réseau).
     mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
     mod.EXEMPT_IP.write_text("192.168.1.3\n")
     st = mod.do_sync(systeme=Faux())
     texte = mod.DROPIN.read_text()
     assert st["exempt_ip"] == 1
-    assert "access-control-view: 192.168.1.3 sbx-adult-allow" in texte
-    assert 'view-first: yes' in texte
-    # La vue bloque TOUJOURS les domaines du sinkhole général qui ne sont pas
-    # adultes — pubs/trackers restent filtrés pour cet appareil.
-    assert 'local-zone: "pub.example." always_nxdomain' in texte
-    assert 'local-zone: "tracker.example." always_nxdomain' in texte
-    # Mais laisse passer les domaines adultes.
-    assert 'local-zone: "cam-adulte.example." always_transparent' in texte
-    assert 'local-zone: "tube-adulte.example." always_transparent' in texte
+    assert "view:" not in texte
+    assert "access-control-view" not in texte
+    assert 'local-zone-override: 192.168.1.3 "cam-adulte.example." always_transparent' in texte
+    assert 'local-zone-override: 192.168.1.3 "tube-adulte.example." always_transparent' in texte
+    # Le sinkhole général (pub.example, tracker.example) n'est PAS redéclaré
+    # — il reste bloqué pour cet appareil par le drop-in général existant,
+    # jamais touché par celui-ci.
+    assert "pub.example" not in texte
+    assert "tracker.example" not in texte
 
 
 def test_une_config_refusee_remet_l_ancienne_octet_pour_octet(mod):
@@ -151,3 +156,46 @@ def test_source_injoignable_sans_cache_echoue_proprement(mod):
     mod._fetch = lambda force=False: None
     st = mod.do_sync(systeme=Faux())
     assert st["ok"] is False and "unreachable" in st["error"]
+
+
+# ── La vraie Systeme (#2969) : `unbound-control reload` rend la main dès le
+# signal accepté — `recharger_unbound` doit ATTENDRE que `systemctl
+# is-active` redevienne « active » avant de rendre la main, au lieu de
+# croire le rechargement terminé. ──────────────────────────────────────────
+
+def test_recharger_unbound_attend_que_le_service_redevienne_actif(mod):
+    etats = iter(["reloading", "reloading", "active"])
+    appels = []
+
+    def _commande(args, delai):
+        appels.append(args)
+        if args[-1] == "reload":
+            return True, ""
+        if args == ["systemctl", "is-active", "unbound"]:
+            return True, next(etats)
+        raise AssertionError(args)
+
+    s = mod.Systeme()
+    with mock.patch.object(mod._unbound, "commande", side_effect=_commande), \
+         mock.patch.object(mod.time, "sleep"):
+        s.recharger_unbound()
+    # 1 reload + 3 sondes (deux "reloading" avant le "active").
+    assert sum(1 for a in appels if a[-1] == "reload") == 1
+    assert appels.count(["systemctl", "is-active", "unbound"]) == 3
+
+
+def test_recharger_unbound_leve_si_le_service_ne_redevient_jamais_actif(mod):
+    def _commande(args, delai):
+        if args[-1] == "reload":
+            return True, ""
+        if args == ["systemctl", "is-active", "unbound"]:
+            return True, "reloading"
+        raise AssertionError(args)
+
+    s = mod.Systeme()
+    horloge = iter([0, 10, 9999])  # 1er appel < fin, puis dépasse l'attente
+    with mock.patch.object(mod._unbound, "commande", side_effect=_commande), \
+         mock.patch.object(mod.time, "sleep"), \
+         mock.patch.object(mod.time, "time", side_effect=lambda: next(horloge)):
+        with pytest.raises(RuntimeError, match="n'est pas revenu actif"):
+            s.recharger_unbound()

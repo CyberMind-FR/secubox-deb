@@ -14,12 +14,13 @@ simple entrée dans `ip-allowlist.txt` : celui-ci fait un bypass COMPLET par
 vue Unbound (pubs/trackers compris) — trop large pour « cet appareil garde
 le filtrage normal, seuls les domaines adultes lui restent ouverts ».
 
-Les vues Unbound REMPLACENT entièrement les `local-zone` globales pour le
-client matché (jamais de fusion) : une vue vide d'un appareil exempté
-équivaut donc à AUCUN filtrage pour lui. Pour une exception scopée, la vue
-redéclare l'ensemble du sinkhole général (`always_nxdomain`) MOINS les
-domaines adultes, qui y passent en `always_transparent` — l'appareil reste
-filtré pubs/trackers, seuls les domaines adultes lui sont ouverts.
+Exception PAR DOMAINE ET PAR IP via `local-zone-override` (#2969), jamais
+une `view:` Unbound : une vue redéclarant tout le sinkhole général pour
+chaque IP exemptée a fait grossir le drop-in à 49 Mo sur gk2, avec un
+rechargement d'~1 min qui a laissé DNS indisponible pour tout le réseau.
+`local-zone-override` cible UN domaine pour UNE IP, sans dupliquer le
+reste — l'appareil reste filtré pubs/trackers (il n'est inscrit nulle part
+ailleurs), seuls les domaines adultes lui sont ouverts.
 
 Ne modifie JAMAIS `secubox_filterlists` (bibliothèque commune, utilisée
 aussi par ad_ghost MITM) : source et compilation sont propres à ce script.
@@ -211,11 +212,17 @@ def _exempt_ips() -> list[str]:
 def _render(adult: set[str], general: set[str]) -> str:
     """Rend le drop-in Unbound. `adult` → always_nxdomain pour tout le monde
     (sauf ce que le sinkhole général bloque déjà — un seul `local-zone` par
-    nom, Unbound refuse les doublons). Par IP exemptée : une vue qui
-    redéclare `general - adult` (toujours bloqué) et laisse `adult` passer
-    (always_transparent) — l'appareil reste filtré pubs/trackers."""
+    nom, Unbound refuse les doublons).
+
+    Par IP exemptée : `local-zone-override` (#2969), PAS une `view:`. Une
+    vue redéclarant `general - adult` pour chaque IP a fait grossir le
+    drop-in à 49 Mo sur gk2 — chaque rechargement a laissé Unbound en état
+    `reloading` pendant ~1 min, DNS indisponible pour tout le réseau le
+    temps de ré-analyser le fichier. `local-zone-override` cible UN domaine
+    pour UNE IP sans toucher au reste : fichier proportionnel à (domaines
+    adultes × IP exemptées), jamais à la taille du sinkhole général."""
     lines = [
-        "# Managed by secubox-adguard-adult-sync (#2964). DO NOT EDIT BY HAND.",
+        "# Managed by secubox-adguard-adult-sync (#2964, #2969). DO NOT EDIT BY HAND.",
         "# Regenerate: secubox-adguard-adult-sync sync",
         "server:",
     ]
@@ -226,16 +233,20 @@ def _render(adult: set[str], general: set[str]) -> str:
     ips = _exempt_ips()
     if ips:
         for ip in ips:
-            lines.append(f"    access-control-view: {ip} sbx-adult-allow")
-        lines.append("")
-        lines.append("view:")
-        lines.append('    name: "sbx-adult-allow"')
-        lines.append("    view-first: yes")
-        for d in sorted(general - adult):
-            lines.append(f'    local-zone: "{d}." always_nxdomain')
-        for d in sorted(adult):
-            lines.append(f'    local-zone: "{d}." always_transparent')
+            for d in sorted(adult):
+                lines.append(f'    local-zone-override: {ip} "{d}." always_transparent')
     return "\n".join(lines) + "\n"
+
+
+# Combien de temps attendre, après `unbound-control reload`, que le
+# service repasse réellement « active » (#2969). `unbound-control reload`
+# rend la main dès que le signal est accepté, PAS quand le rechargement est
+# terminé — avec un gros drop-in, Unbound reste en `reloading` une bonne
+# minute, DNS indisponible le temps que ça dure. Ne pas attendre fait
+# croire « reloaded: true » alors que le service est encore en train de
+# ré-analyser sa config.
+_ATTENTE_RECHARGEMENT_S = 90
+_PAS_ATTENTE_S = 2
 
 
 class Systeme(_unbound.SystemeUnbound):
@@ -244,6 +255,22 @@ class Systeme(_unbound.SystemeUnbound):
 
     def verifier_unbound(self):
         return _unbound.commande(["unbound-checkconf", str(UNBOUND_CONF)], 300)
+
+    def recharger_unbound(self):
+        super().recharger_unbound()
+        # `unbound-control reload` rend la main dès le signal accepté : on
+        # attend `systemctl is-active` (reload-notify, cf. l'unité) pour
+        # confirmer que le service est VRAIMENT repassé actif, pas juste
+        # que la commande a été envoyée.
+        fin = time.time() + _ATTENTE_RECHARGEMENT_S
+        while time.time() < fin:
+            ok, sortie = _unbound.commande(["systemctl", "is-active", "unbound"], 10)
+            if ok and sortie.strip() == "active":
+                return
+            time.sleep(_PAS_ATTENTE_S)
+        raise self.ERREUR(
+            f"unbound n'est pas revenu actif {_ATTENTE_RECHARGEMENT_S}s après le rechargement"
+        )
 
 
 def do_sync(force: bool = False, systeme=None) -> dict:
