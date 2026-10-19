@@ -9,6 +9,26 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-19 — secubox-pseudo-routeur : gk2 passerelle DHCP du LAN plat (ref #2940, PR #2945)
+
+Nouveau paquet secubox-pseudo-routeur 0.1.0 (source seulement, pas encore installé ni essayé sur gk2) :
+gk2 peut devenir la passerelle DHCP du LAN plat de la Freebox (192.168.1.0/24), filtrage à l'aller
+seulement (réseau plat : routage asymétrique accepté, pas d'état ni de DPI fiable sur le retour).
+Sonde de secours (dead-man switch, une vérification par minute, 3 échecs consécutifs = retour
+automatique à la Freebox en moins de 3 minutes, sans action humaine) ; chaîne nftables `forward`
+DEFAULT DROP par zone (lan_allowed/lxc_zone/guest_zone/iot_zone acceptés, blocked/quarantine_zone
+recopiés — six ensembles NAC, pas cinq, corrigé en relecture) ; bascule DHCP gardée par la sonde
+(`pseudo-routeurctl activer` refuse sans sonde active ; `retour-freebox` inconditionnel) ; suggestions
+de classement (appareils vus par la Freebox non connus du NAC, jamais appliquées seules) ; API et
+panneau Aurora. La sonde ne démarre jamais seule à l'installation : seule `POST /activer` l'arme.
+secubox-freebox monté à 0.6.0 (passerelle DHCP, import des appareils, `freeboxctl`). Relecture
+sécurité (`relecteur-securite`) : 1 bloquant corrigé (lxc_zone), 2 à corriger corrigés (`/journal`
+en `require_jwt`, pannes de socket journalisées) ; 5 remarques différées (durcissement systemd,
+style bash, commentaire sudoers, repli root de `freeboxctl` sans `sudo`, tests de garde manquants
+sur 4 routes). Reste : l'essai réel sur gk2 (hors heures d'usage, sonde observée 10-15 min, coupure
+manuelle du service de sonde pour vérifier le retour sous 3 minutes), classé en NAC/Freebox pour
+l'import des appareils non classés.
+
 ## 2026-10-18 — Guide d'installation de l'ESPRESSObin (ref #2913)
 
 docs/INSTALL-ESPRESSOBIN.md : neuf etapes (materiel, image de la release GitHub ou construction, console serie, memoire et sauvegarde SPI, demarrage USB, install eMMC, profil minimal, rattachement a gk2) + recuperation UART. Les points non verifies sont signales : l'image lite de la release (v3.0.0-alpha.18) n'est pas une cle live dediee a l'ESPRESSObin, et le rattachement a gk2 reste manuel. Tutoriel interactif correspondant : artefact prive du proprietaire.
