@@ -1,3 +1,9 @@
+secubox-haproxy (1.12.2-1~bookworm1) bookworm; urgency=medium
+
+  * Option `ipv6 = true` dans haproxy.toml : ecouteurs IPv6 80 et 443 en `v6only` (ref #2934). Desactivee par defaut : rien ne change tant que la cle n'est pas posee. v6only plutot que v4v6 : les ecouteurs IPv4 existants restent strictement inchanges et aucune adresse IPv4 mappee (::ffff:a.b.c.d) n'arrive au WAF (sbxwaf normalise de toute facon, #2932). Les ports personnalises sont repris. 4 tests ; les 2 echecs de test_acme_wiring sont anterieurs.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 15:00:00 +0200
+
 secubox-haproxy (1.12.1-1~bookworm1) bookworm; urgency=medium
 
   * frame-ancestors : ajoute https://ytsas.<domaine de la box> aux encadreurs, pour que le lecteur miroir PeerTube de ytsas ne soit plus refuse dans son cadre (ref #2750).
