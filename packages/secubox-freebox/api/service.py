@@ -114,7 +114,7 @@ class Freebox:
                 cfg6 = self.client.lire("connection/ipv6/config/") or {}
             except C.DroitManquant:
                 raise
-            actif = cfg6.get("ipv6_firewall") if "ipv6_firewall" in cfg6 else None
+            actif = N.pare_feu_ipv6(cfg6)
             exceptions, lues = [], False
             for chemin in CHEMINS_EXCEPTIONS_IPV6:
                 try:
@@ -148,7 +148,10 @@ class Freebox:
             raise C.DroitManquant("Cette action demande le droit « Modification des réglages de la Freebox » : réglez-le dans "
                                   "Paramètres → Gestion des accès → Applications.")
         actif = bool(actif)
-        avant = (self.client.lire(chemin) or {}).get(cle)
+        lu = self.client.lire(chemin) or {}
+        if isinstance(cle, tuple):       # plusieurs noms selon le firmware (#2930) : le premier present dans la lecture fait foi
+            cle = next((k for k in cle if k in lu), cle[0])
+        avant = lu.get(cle)
         if avant is actif:
             return actif, False
         self.client.ecrire("PUT", chemin, {cle: actif})
@@ -160,7 +163,7 @@ class Freebox:
         return apres, True
 
     def regler_pare_feu_ipv6(self, actif):
-        etat, change = self._regler("connection/ipv6/config/", "ipv6_firewall", actif, "pare_feu_ipv6")
+        etat, change = self._regler("connection/ipv6/config/", N.CLES_PARE_FEU_IPV6, actif, "pare_feu_ipv6")
         return {"pare_feu_actif": etat, "change": change}
 
     def upnp(self):
@@ -181,7 +184,7 @@ class Freebox:
     ITEMS_AUTOCONFIG = ("pare_feu_ipv6", "dns", "ip_fixe", "dmz")
 
     def _lire_autoconfig(self):
-        fw = (self.client.lire("connection/ipv6/config/") or {}).get("ipv6_firewall")
+        fw = N.pare_feu_ipv6(self.client.lire("connection/ipv6/config/") or {})
         dns = [x for x in ((self.client.lire("dhcp/config/") or {}).get("dns") or []) if x]
         dmz = self._lire_dmz()
         return {"pare_feu_ipv6": fw, "dns": dns, "dmz": dmz}
@@ -210,7 +213,7 @@ class Freebox:
         fixe = self._etat_ip_fixe(ip_box)
         items = [
             {"id": "pare_feu_ipv6", "titre": "Pare-feu IPv6", "actuel": cur["pare_feu_ipv6"], "cible": True, "sensible": False,
-             "pourquoi": "Bloque les connexions entrantes IPv6 vers les appareils du réseau."},
+             "pourquoi": "Bloque les connexions entrantes IPv6 vers les appareils du réseau. La Freebox n'a qu'un interrupteur global, pas de règle par port : pour publier un site de la box en IPv6 il faut le désactiver, et TOUTES les machines du réseau deviennent alors joignables en IPv6 (seul leur propre pare-feu les protège)."},
             {"id": "dns", "titre": "DNS distribué par la Freebox (DHCP)", "actuel": cur["dns"], "cible": [ip_box], "sensible": False,
              "pourquoi": "Les appareils du réseau interrogent la box (filtrage, journal) au lieu d'un résolveur extérieur."},
             {"id": "ip_fixe", "titre": "Adresse IP fixe de la box (bail DHCP statique)", "actuel": fixe, "cible": {"mac": fixe["mac"], "ip": ip_box}, "sensible": False,
@@ -235,9 +238,15 @@ class Freebox:
             raise C.DroitManquant("Cette action demande le droit « Modification des réglages de la Freebox » : réglez-le dans "
                                   "Paramètres → Gestion des accès → Applications.")
         appliques = []
+        cle6 = [N.CLES_PARE_FEU_IPV6[0]]      # nom du reglage IPv6 selon le firmware, fixe par la lecture (#2930)
+
+        def lire6():
+            cfg = self.client.lire("connection/ipv6/config/") or {}
+            cle6[0] = N.cle_pare_feu_ipv6(cfg)
+            return N.pare_feu_ipv6(cfg)
         for ident in ids:
             chemin, corps, lire, voulu = {
-                "pare_feu_ipv6": ("connection/ipv6/config/", {"ipv6_firewall": True}, lambda: (self.client.lire("connection/ipv6/config/") or {}).get("ipv6_firewall"), True),
+                "pare_feu_ipv6": ("connection/ipv6/config/", None, lire6, True),
                 "dns": ("dhcp/config/", {"dns": [ip_box, "", "", "", "", ""]},
                         lambda: [x for x in ((self.client.lire("dhcp/config/") or {}).get("dns") or []) if x], [ip_box]),
                 "dmz": ("fw/dmz/", {"enabled": True, "ip": ip_box}, lambda: self._lire_dmz(), {"enabled": True, "ip": ip_box}),
@@ -258,6 +267,8 @@ class Freebox:
                 avant = lire()
                 if avant == voulu:
                     continue
+                if ident == "pare_feu_ipv6":
+                    corps = {cle6[0]: True}
             self.client.ecrire(methode, chemin, corps)
             apres = lire()
             self._cache.clear()
