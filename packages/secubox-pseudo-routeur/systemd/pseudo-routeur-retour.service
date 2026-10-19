@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox Pseudo-routeur — retour a la Freebox (#2940). Declenchee par OnFailure= de
+# pseudo-routeur-sonde.service (dead-man switch) : inconditionnelle, jamais de garde sur
+# l'etat de la sonde ici (sinon un crash du service de sonde empecherait aussi le retour).
+[Unit]
+Description=SecuBox Pseudo-routeur — retour inconditionnel a la Freebox (#2940)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/pseudo-routeurctl retour-freebox

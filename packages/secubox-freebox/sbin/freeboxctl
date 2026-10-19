@@ -16,7 +16,9 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+_lib_installe = "/usr/lib/secubox/freebox"
+_lib = _lib_installe if os.path.isdir(os.path.join(_lib_installe, "api")) else os.path.join(os.path.dirname(__file__), "..")
+sys.path.insert(0, _lib)
 
 from api import client as C  # noqa: E402
 from api import magasin as M  # noqa: E402

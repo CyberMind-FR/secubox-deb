@@ -1,0 +1,10 @@
+secubox-pseudo-routeur (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premier paquet (ref #2940) : gk2 passerelle DHCP du LAN plat de la Freebox, filet de
+    secours (sonde dead-man switch, 3 minutes avant retour automatique), chaîne nftables
+    forward DEFAULT DROP par zone (lan_allowed/guest_zone/iot_zone acceptés, blocked et
+    quarantine_zone recopiés), bascule DHCP gardée par la sonde, suggestions de classement
+    (appareils Freebox non connus du NAC, jamais appliquées seules), API et panneau Aurora.
+    La sonde ne démarre jamais seule à l'installation : seule POST /activer l'arme.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 19 Oct 2026 14:00:00 +0200

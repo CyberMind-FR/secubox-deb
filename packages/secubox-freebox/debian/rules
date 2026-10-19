@@ -5,6 +5,8 @@
 override_dh_auto_install:
 	install -d debian/secubox-freebox/usr/lib/secubox/freebox/api
 	install -m 644 api/*.py debian/secubox-freebox/usr/lib/secubox/freebox/api/
+	install -d debian/secubox-freebox/usr/sbin
+	install -m 755 sbin/freeboxctl debian/secubox-freebox/usr/sbin/freeboxctl
 	install -d debian/secubox-freebox/usr/share/secubox/www
 	cp -r www/. debian/secubox-freebox/usr/share/secubox/www/
 	install -d debian/secubox-freebox/usr/share/secubox/menu.d

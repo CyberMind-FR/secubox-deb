@@ -1,0 +1,25 @@
+Source: secubox-pseudo-routeur
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-pseudo-routeur
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, python3-httpx, adduser, sudo, nftables,
+ secubox-core, secubox-aggregator, secubox-freebox (>= 0.6.0), secubox-nac, secubox-hardening
+Description: SecuBox Pseudo-routeur — gk2 passerelle DHCP du LAN plat (#2940)
+ gk2 peut devenir la passerelle DHCP du réseau local plat de la Freebox : une sonde de
+ secours (dead-man switch) vérifie en continu que le transfert fonctionne réellement et
+ rend la main à la Freebox sous 3 minutes sans action humaine en cas de panne.
+ .
+ Filtrage à l'aller seulement (réseau plat : pas d'état ni de DPI fiable sur le retour).
+ Un appareil déjà bloqué ou mis en quarantaine par le NAC le reste. Un appareil inconnu
+ est bloqué tant qu'il n'est pas classé. Les suggestions de classement (liste des
+ appareils vus par la Freebox) ne sont jamais appliquées automatiquement.
+ .
+ La sonde ne démarre jamais seule à l'installation : seule l'activation explicite via
+ l'API (POST /activer) arme le transfert et bascule le DHCP.
