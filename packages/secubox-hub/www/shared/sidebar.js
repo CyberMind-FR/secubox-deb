@@ -685,8 +685,12 @@
             }
         }, 100);
 
-        // 5c. Inject global TOP menu bar (replaces page headers)
-        if (!EMBARQUE && !document.getElementById('global-menu-bar')) {
+        // 5c. Barre TOP globale retirée (#2987) : jugée inutile et coûteuse — polling
+        // toutes les 30s/60s (page metrics, statut API) sur chaque page de chaque module,
+        // pour un bandeau redondant avec le contenu de la page elle-même. `false &&` au
+        // lieu d'une suppression : readresse facilement si la décision change, sans
+        // ressortir ce bloc entier de l'historique.
+        if (false && !EMBARQUE && !document.getElementById('global-menu-bar')) {
             var pageTitle = document.title.replace(/\s*[-\u2013\u2014]\s*SecuBox\s*$/i, '').replace(/^\s*SecuBox\s*[-\u2013\u2014]?\s*/i, '').trim() || 'Dashboard';   // « SecuBox — Actor Intelligence » laissait « — Actor Intelligence » (#2733)
             var pagePath = window.location.pathname;
             var pageIcon = getPageIcon(pagePath);
