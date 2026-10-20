@@ -1,18 +1,24 @@
 [Unit]
-Description=SecuBox adult-content sinkhole refresh, chaque minute (#2976)
+Description=SecuBox adult-content sinkhole refresh, toutes les 10 min (#2983, corrige #2976)
 # #2976 : les adresses IPv6 temporaires (RFC 4941) d'un appareil exempté
 # peuvent tourner en quelques minutes (constaté sur gk2, Pop!_OS/NetworkManager)
 # — une synchro hebdomadaire laissait l'exception en panne la plupart du
-# temps. Même cadence que le moteur TV auto (#1954), qui résout déjà ce
-# problème pour ses propres appareils suivis.
+# temps. Mais la cadence à 1 min (#2976) était trop agressive une fois le
+# vrai correctif (#2979, local-zone-override par domaine ET par IP) en
+# place : le drop-in généré (un override par domaine adulte × IP exemptée)
+# prend 60-120s à recharger, donc la minuterie se chevauchait presque en
+# permanence avec elle-même — constaté sur gk2 : load average >20, swap
+# saturé, le reste des outils (jusqu'à smbctl) devenu flaky par échec
+# intermittent de sous-processus (#2983). 10 min reste largement assez
+# réactif pour une rotation IPv6, pour une fraction de la charge.
 
 [Timer]
 OnBootSec=2min
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se
 # redéclenche pas après une réactivation.
 OnActiveSec=2min
-OnUnitActiveSec=60s
-AccuracySec=5s
+OnUnitActiveSec=10min
+AccuracySec=30s
 
 [Install]
 WantedBy=timers.target
