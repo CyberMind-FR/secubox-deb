@@ -1,3 +1,20 @@
+secubox-ad-guard (1.15.6-1~bookworm1) bookworm; urgency=high
+
+  * Exception adulte : #2976 (vue partagée + view-first:yes) était CASSÉE — vérifié en direct
+    sur gk2 avec un Unbound propre, `view-first: yes` ne surcharge PAS un `always_nxdomain`
+    global pour la même zone. Retour à `local-zone-override`, UNE ENTRÉE PAR DOMAINE ET PAR IP
+    exemptée (#2979) : `local-zone-override` ne couvre QUE le nom exact donné, contrairement à
+    `local-zone` qui couvre tout son sous-arbre — avec une seule entrée sur l'apex, l'apex
+    résolvait mais ses sous-domaines restaient bloqués. Coût accepté : drop-in plus volumineux
+    (un override par domaine adulte × IP exemptée).
+  * Verrou exclusif (fichier dédié, même modèle que `secubox-adguard-tv.verrou_controleur()`)
+    autour de toute synchro/désactivation : constat gk2 — deux `unbound-control` concurrents
+    (un `reload` de ce script, un `dump_cache` d'un autre service) ont bloqué Unbound en
+    « reloading » puis l'ont fait tomber (panne DNS complète). Une synchro déjà en cours fait
+    maintenant échouer proprement la suivante au lieu de chevaucher. 22 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 20 Oct 2026 08:30:00 +0200
+
 secubox-ad-guard (1.15.5-1~bookworm1) bookworm; urgency=medium
 
   * Exception adulte : vue partagée + view-first:yes, resync chaque minute (#2976). Deux

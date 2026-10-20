@@ -5,14 +5,14 @@
 """secubox-adguard-adult-sync (#2964, suite de #2962) : exception adulte par
 appareil, sans lever le filtrage pubs/trackers.
 
-Contrairement à `ip-allowlist.txt` (bypass complet via une vue Unbound vide),
-un appareil exempté ici garde le sinkhole général — par une `view:` PARTAGÉE
-avec `view-first: yes` (#2976, même motif que le moteur TV auto, #1954/#1959) :
-un domaine ABSENT de la vue retombe automatiquement sur le puits général, nul
-besoin de le redéclarer (l'erreur de #2969, qui l'a fait en pure perte —
-drop-in monté à 49 Mo, rechargement d'~1 min, DNS indisponible pour tout le
-réseau). La vue ne contient QUE les domaines adultes, UNE SEULE FOIS (jamais
-par IP exemptée)."""
+`local-zone-override`, UNE ENTRÉE PAR DOMAINE (#2979, corrige #2973/#2976).
+Vérifié en direct sur gk2 avec un Unbound propre : contrairement à
+`local-zone` (qui couvre tout son sous-arbre), `local-zone-override` ne
+couvre QUE le nom exact donné — avec une seule entrée sur l'apex, l'apex
+résolvait pour l'IP exemptée mais ses sous-domaines restaient bloqués.
+Une `view:` avec `view-first: yes` (#2976) a aussi été vérifiée en direct
+et NE SURCHARGE PAS un `always_nxdomain` global pour la même zone —
+abandonnée."""
 import importlib.machinery
 import importlib.util
 import sys
@@ -53,6 +53,8 @@ def mod(tmp_path, monkeypatch):
     m.DROPIN = tmp_path / "unbound.d" / "96-secubox-adult.conf"
     m.STATUS = tmp_path / "ad-guard" / "adult-sinkhole-status.json"
     m.STATE = tmp_path / "ad-guard" / "adult-sinkhole.enabled"
+    m.DATA_DIR = tmp_path / "ad-guard"
+    m.DATA_DIR.mkdir(parents=True, exist_ok=True)
     m._fetch = lambda force=False: HOSTS_ADULTE
     return m
 
@@ -105,25 +107,34 @@ def test_un_domaine_deja_bloque_par_le_general_nest_pas_redeclare(mod):
     assert texte.count('local-zone: "deja-bloque.example."') == 0
 
 
-def test_sans_appareil_exempte_aucune_vue(mod):
+def test_sans_appareil_exempte_aucun_override(mod):
     mod.do_sync(systeme=Faux())
-    assert "view:" not in mod.DROPIN.read_text()
+    assert "local-zone-override" not in mod.DROPIN.read_text()
 
 
-def test_zone_effective_remonte_au_plus_proche_ancetre_declare(mod):
-    zones = {"chaturbate.com", "autre.example"}
-    assert mod._zone_effective("www.chaturbate.com", zones) == "chaturbate.com"
-    assert mod._zone_effective("ads.chaturbate.com", zones) == "chaturbate.com"
-    assert mod._zone_effective("chaturbate.com", zones) == "chaturbate.com"
-    # Aucun ancêtre déclaré : le nom reste sa propre zone.
-    assert mod._zone_effective("isole.example", zones) == "isole.example"
+def test_appareil_exempte_recoit_un_override_par_domaine_adulte_individuel(mod):
+    # #2979 : local-zone-override ne couvre QUE le nom exact — un override
+    # par domaine, jamais un ancêtre partagé (#2973, cassé) ni une vue
+    # (#2976, cassée — view-first:yes ne surcharge pas always_nxdomain).
+    mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
+    mod.EXEMPT_IP.write_text("192.168.1.3\n")
+    st = mod.do_sync(systeme=Faux())
+    texte = mod.DROPIN.read_text()
+    assert st["exempt_ip"] == 1
+    assert "view:" not in texte and "access-control-view" not in texte
+    assert 'local-zone-override: "cam-adulte.example." 192.168.1.3 always_transparent' in texte
+    assert 'local-zone-override: "tube-adulte.example." 192.168.1.3 always_transparent' in texte
+    # Le sinkhole général (pub.example, tracker.example) n'est PAS redéclaré
+    # — il reste bloqué pour cet appareil par le drop-in général existant.
+    assert "pub.example" not in texte
+    assert "tracker.example" not in texte
 
 
-def test_appareil_exempte_sur_un_sous_domaine_recoit_la_zone_de_l_apex(mod):
-    # Constat gk2 (#2973) : Unbound bloque "www.chaturbate.com." via la zone
-    # "chaturbate.com." (couvre tout son sous-arbre) — une entrée posée sur
-    # "www.chaturbate.com." lui-même n'est JAMAIS consultée. L'apex doit
-    # recevoir l'entrée de la vue, pas chaque sous-domaine séparément.
+def test_apex_et_sous_domaine_recoivent_chacun_leur_propre_override(mod):
+    # Constat gk2 en direct : avec une seule entrée sur l'apex,
+    # "chaturbate.com" résolvait pour l'IP exemptée mais
+    # "www.chaturbate.com" restait NXDOMAIN. Chaque nom a besoin de sa
+    # propre entrée — aucun ne « couvre » l'autre.
     mod._fetch = lambda force=False: (
         "0.0.0.0 chaturbate.com\n0.0.0.0 www.chaturbate.com\n0.0.0.0 ads.chaturbate.com\n"
     )
@@ -131,43 +142,12 @@ def test_appareil_exempte_sur_un_sous_domaine_recoit_la_zone_de_l_apex(mod):
     mod.EXEMPT_IP.write_text("192.168.1.3\n")
     mod.do_sync(systeme=Faux())
     texte = mod.DROPIN.read_text()
-    vue = texte.split('name: "sbx-adult-allow"')[1]
-    zones = [ligne for ligne in vue.splitlines() if ligne.strip().startswith("local-zone:")]
-    assert zones == ['    local-zone: "chaturbate.com." always_transparent']
-
-
-def test_appareil_exempte_a_une_vue_partagee_sans_redeclarer_le_general(mod):
-    # #2976 : view-first:yes fait retomber automatiquement sur le puits
-    # général tout domaine ABSENT de la vue — #2969 redéclarait
-    # "général - adulte" dans la vue, en pure perte (49 Mo sur gk2).
-    mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
-    mod.EXEMPT_IP.write_text("192.168.1.3\n")
-    st = mod.do_sync(systeme=Faux())
-    texte = mod.DROPIN.read_text()
-    assert st["exempt_ip"] == 1
-    assert "access-control-view: 192.168.1.3 sbx-adult-allow" in texte
-    assert texte.count('name: "sbx-adult-allow"') == 1
-    assert "view-first: yes" in texte
-    vue = texte.split('name: "sbx-adult-allow"')[1]
-    assert 'local-zone: "cam-adulte.example." always_transparent' in vue
-    assert 'local-zone: "tube-adulte.example." always_transparent' in vue
-    # Le sinkhole général (pub.example, tracker.example) n'est PAS redéclaré
-    # dans la vue — view-first:yes s'en charge tout seul.
-    assert "pub.example" not in vue
-    assert "tracker.example" not in vue
-
-
-def test_deux_ip_exemptees_partagent_la_meme_vue_une_seule_fois(mod):
-    # Le coût de la vue ne doit JAMAIS dépendre du nombre d'IP exemptées.
-    mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
-    mod.EXEMPT_IP.write_text("192.168.1.3\n192.168.1.4\n")
-    st = mod.do_sync(systeme=Faux())
-    texte = mod.DROPIN.read_text()
-    assert st["exempt_ip"] == 2
-    assert texte.count('name: "sbx-adult-allow"') == 1
-    assert texte.count('local-zone: "cam-adulte.example." always_transparent') == 1
-    assert "access-control-view: 192.168.1.3 sbx-adult-allow" in texte
-    assert "access-control-view: 192.168.1.4 sbx-adult-allow" in texte
+    overrides = {ligne.strip() for ligne in texte.splitlines() if ligne.strip().startswith("local-zone-override:")}
+    assert overrides == {
+        'local-zone-override: "chaturbate.com." 192.168.1.3 always_transparent',
+        'local-zone-override: "www.chaturbate.com." 192.168.1.3 always_transparent',
+        'local-zone-override: "ads.chaturbate.com." 192.168.1.3 always_transparent',
+    }
 
 
 def test_une_config_refusee_remet_l_ancienne_octet_pour_octet(mod):
@@ -193,6 +173,32 @@ def test_desactiver_retire_la_vue_et_recharge(mod):
     st = mod.do_disable(systeme=s)
     assert st["ok"] is True and st["enabled"] is False and not mod.DROPIN.exists()
     assert s.appels == ["verifier", "recharger"]
+
+
+# ── Verrou (#2979 bis) : une synchro en cours (minuterie 1 min, #2976) ──
+# qui recharge Unbound ne doit jamais chevaucher une autre invocation sur
+# le même socket de contrôle — constaté en direct sur gk2 : deux
+# `unbound-control` concurrents (reload + dump_cache) ont bloqué le
+# service en « reloading » pendant 24h affichées, puis Unbound est mort
+# (connexion refusée, panne DNS complète). Même verrou que
+# `secubox-adguard-tv.verrou_controleur()` (fichier dédié, exclusif,
+# `O_NOFOLLOW`).
+
+def test_verrou_exclusif_refuse_une_seconde_synchro_concurrente(mod):
+    with mod._verrou():
+        with pytest.raises(mod.ERREUR_VERROU):
+            with mod._verrou(bloquant=False):
+                pass
+    with mod._verrou(bloquant=False):  # libéré après la sortie du with
+        pass
+
+
+def test_do_sync_echoue_proprement_si_une_synchro_est_deja_en_cours(mod):
+    s = Faux()
+    with mod._verrou():
+        st = mod.do_sync(systeme=s)
+    assert st["ok"] is False and "en cours" in st["error"]
+    assert s.appels == []  # jamais touché unbound-control pendant que le verrou était pris
 
 
 def test_source_injoignable_sans_cache_echoue_proprement(mod):
