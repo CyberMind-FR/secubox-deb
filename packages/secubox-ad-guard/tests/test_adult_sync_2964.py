@@ -6,10 +6,13 @@
 appareil, sans lever le filtrage pubs/trackers.
 
 Contrairement à `ip-allowlist.txt` (bypass complet via une vue Unbound vide),
-un appareil exempté ici garde le sinkhole général — par `local-zone-override`
-PAR DOMAINE (#2969, pas une `view:` : une vue redéclarant tout le sinkhole
-général par IP exemptée a fait grossir le drop-in à 49 Mo sur gk2, avec un
-rechargement d'~1 min, DNS indisponible pour tout le réseau)."""
+un appareil exempté ici garde le sinkhole général — par une `view:` PARTAGÉE
+avec `view-first: yes` (#2976, même motif que le moteur TV auto, #1954/#1959) :
+un domaine ABSENT de la vue retombe automatiquement sur le puits général, nul
+besoin de le redéclarer (l'erreur de #2969, qui l'a fait en pure perte —
+drop-in monté à 49 Mo, rechargement d'~1 min, DNS indisponible pour tout le
+réseau). La vue ne contient QUE les domaines adultes, UNE SEULE FOIS (jamais
+par IP exemptée)."""
 import importlib.machinery
 import importlib.util
 import sys
@@ -116,11 +119,11 @@ def test_zone_effective_remonte_au_plus_proche_ancetre_declare(mod):
     assert mod._zone_effective("isole.example", zones) == "isole.example"
 
 
-def test_appareil_exempte_sur_un_sous_domaine_recoit_l_override_de_l_apex(mod):
+def test_appareil_exempte_sur_un_sous_domaine_recoit_la_zone_de_l_apex(mod):
     # Constat gk2 (#2973) : Unbound bloque "www.chaturbate.com." via la zone
-    # "chaturbate.com." (couvre tout son sous-arbre) — un override posé sur
-    # "www.chaturbate.com." lui-même n'est JAMAIS consulté. L'apex doit
-    # recevoir l'override, pas chaque sous-domaine séparément.
+    # "chaturbate.com." (couvre tout son sous-arbre) — une entrée posée sur
+    # "www.chaturbate.com." lui-même n'est JAMAIS consultée. L'apex doit
+    # recevoir l'entrée de la vue, pas chaque sous-domaine séparément.
     mod._fetch = lambda force=False: (
         "0.0.0.0 chaturbate.com\n0.0.0.0 www.chaturbate.com\n0.0.0.0 ads.chaturbate.com\n"
     )
@@ -128,28 +131,43 @@ def test_appareil_exempte_sur_un_sous_domaine_recoit_l_override_de_l_apex(mod):
     mod.EXEMPT_IP.write_text("192.168.1.3\n")
     mod.do_sync(systeme=Faux())
     texte = mod.DROPIN.read_text()
-    overrides = [ligne for ligne in texte.splitlines() if ligne.strip().startswith("local-zone-override:")]
-    assert overrides == ['    local-zone-override: "chaturbate.com." 192.168.1.3 always_transparent']
+    vue = texte.split('name: "sbx-adult-allow"')[1]
+    zones = [ligne for ligne in vue.splitlines() if ligne.strip().startswith("local-zone:")]
+    assert zones == ['    local-zone: "chaturbate.com." always_transparent']
 
 
-def test_appareil_exempte_recoit_un_local_zone_override_par_domaine_adulte(mod):
-    # #2969 : local-zone-override, PAS une vue — sans redéclarer le sinkhole
-    # général (ce que faisait l'ancienne vue, jusqu'à 49 Mo sur gk2 et un
-    # rechargement d'~1 min, DNS indisponible pour tout le réseau).
+def test_appareil_exempte_a_une_vue_partagee_sans_redeclarer_le_general(mod):
+    # #2976 : view-first:yes fait retomber automatiquement sur le puits
+    # général tout domaine ABSENT de la vue — #2969 redéclarait
+    # "général - adulte" dans la vue, en pure perte (49 Mo sur gk2).
     mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
     mod.EXEMPT_IP.write_text("192.168.1.3\n")
     st = mod.do_sync(systeme=Faux())
     texte = mod.DROPIN.read_text()
     assert st["exempt_ip"] == 1
-    assert "view:" not in texte
-    assert "access-control-view" not in texte
-    assert 'local-zone-override: "cam-adulte.example." 192.168.1.3 always_transparent' in texte
-    assert 'local-zone-override: "tube-adulte.example." 192.168.1.3 always_transparent' in texte
+    assert "access-control-view: 192.168.1.3 sbx-adult-allow" in texte
+    assert texte.count('name: "sbx-adult-allow"') == 1
+    assert "view-first: yes" in texte
+    vue = texte.split('name: "sbx-adult-allow"')[1]
+    assert 'local-zone: "cam-adulte.example." always_transparent' in vue
+    assert 'local-zone: "tube-adulte.example." always_transparent' in vue
     # Le sinkhole général (pub.example, tracker.example) n'est PAS redéclaré
-    # — il reste bloqué pour cet appareil par le drop-in général existant,
-    # jamais touché par celui-ci.
-    assert "pub.example" not in texte
-    assert "tracker.example" not in texte
+    # dans la vue — view-first:yes s'en charge tout seul.
+    assert "pub.example" not in vue
+    assert "tracker.example" not in vue
+
+
+def test_deux_ip_exemptees_partagent_la_meme_vue_une_seule_fois(mod):
+    # Le coût de la vue ne doit JAMAIS dépendre du nombre d'IP exemptées.
+    mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
+    mod.EXEMPT_IP.write_text("192.168.1.3\n192.168.1.4\n")
+    st = mod.do_sync(systeme=Faux())
+    texte = mod.DROPIN.read_text()
+    assert st["exempt_ip"] == 2
+    assert texte.count('name: "sbx-adult-allow"') == 1
+    assert texte.count('local-zone: "cam-adulte.example." always_transparent') == 1
+    assert "access-control-view: 192.168.1.3 sbx-adult-allow" in texte
+    assert "access-control-view: 192.168.1.4 sbx-adult-allow" in texte
 
 
 def test_une_config_refusee_remet_l_ancienne_octet_pour_octet(mod):

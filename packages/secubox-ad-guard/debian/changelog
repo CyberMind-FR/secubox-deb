@@ -1,3 +1,18 @@
+secubox-ad-guard (1.15.5-1~bookworm1) bookworm; urgency=medium
+
+  * Exception adulte : vue partagée + view-first:yes, resync chaque minute (#2976). Deux
+    correctifs : (1) architecture — #2969 redéclarait « général - adulte » dans la vue
+    d'exception, en pure perte (49 Mo) : `view-first: yes` (déjà éprouvé par le moteur TV auto,
+    #1954/#1959) fait retomber automatiquement sur le puits général tout domaine absent de la
+    vue. Retour à une vraie `view:` PARTAGÉE (domaines adultes déclarés UNE SEULE FOIS, jamais
+    par IP exemptée) ; (2) cadence — constat gk2 : l'adresse IPv6 d'un appareil exempté peut
+    tourner en quelques minutes (Pop!_OS/NetworkManager), bien plus vite qu'une synchro
+    hebdomadaire ne peut suivre. Minuterie passée à chaque minute (même cadence que le moteur TV
+    auto), sans aucune modification côté appareil. Vérifié par `unbound-checkconf` réel sur gk2
+    avant de merger. 20 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 20 Oct 2026 07:00:00 +0200
+
 secubox-ad-guard (1.15.4-1~bookworm1) bookworm; urgency=medium
 
   * Exception adulte : local-zone-override cible la zone racine, pas le nom exact (#2973, casse

@@ -236,15 +236,19 @@ def _render(adult: set[str], general: set[str]) -> str:
     (sauf ce que le sinkhole général bloque déjà — un seul `local-zone` par
     nom, Unbound refuse les doublons).
 
-    Par IP exemptée : `local-zone-override` (#2969), PAS une `view:`. Une
-    vue redéclarant `general - adult` pour chaque IP a fait grossir le
-    drop-in à 49 Mo sur gk2 — chaque rechargement a laissé Unbound en état
-    `reloading` pendant ~1 min, DNS indisponible pour tout le réseau le
-    temps de ré-analyser le fichier. `local-zone-override` cible la ZONE
-    EFFECTIVE (#2973 : pas le nom exact du domaine, qui peut n'être jamais
-    consulté si un ancêtre couvre déjà son sous-arbre), dédupliquée."""
+    Par IP exemptée : une `view:` PARTAGÉE avec `view-first: yes` (#2976,
+    reprend le motif déjà éprouvé par le moteur TV auto, #1954/#1959) —
+    PAS `local-zone-override` dupliqué par IP (#2969/#2971/#2973 : fichier
+    monté à 26 Mo rien que pour 5 adresses, rechargement lent). Avec
+    `view-first: yes`, un domaine ABSENT de la vue retombe automatiquement
+    sur le puits général — nul besoin de le redéclarer dans la vue (l'ERREUR
+    de #2969, qui redéclarait `général - adulte` en pure perte). La vue ne
+    contient donc QUE les domaines adultes, déclarés UNE SEULE FOIS (jamais
+    par IP) : fichier proportionnel aux domaines adultes, pas à (domaines ×
+    IP exemptées). Zone EFFECTIVE (#2973) : pas le nom exact du domaine, qui
+    peut n'être jamais consulté si un ancêtre couvre déjà son sous-arbre."""
     lines = [
-        "# Managed by secubox-adguard-adult-sync (#2964, #2969, #2973). DO NOT EDIT BY HAND.",
+        "# Managed by secubox-adguard-adult-sync (#2964, #2976). DO NOT EDIT BY HAND.",
         "# Regenerate: secubox-adguard-adult-sync sync",
         "server:",
     ]
@@ -257,12 +261,13 @@ def _render(adult: set[str], general: set[str]) -> str:
         tous = general | adult
         zones_effectives = sorted({_zone_effective(d, tous) for d in adult})
         for ip in ips:
-            for zone in zones_effectives:
-                # Syntaxe réelle (man unbound.conf, #2971) : ZONE d'abord,
-                # puis le netblock IP — l'inverse de ce que #2969 avait
-                # écrit, refusé par unbound-checkconf en production
-                # (« cannot parse ip address » sur le nom de domaine).
-                lines.append(f'    local-zone-override: "{zone}." {ip} always_transparent')
+            lines.append(f"    access-control-view: {ip} sbx-adult-allow")
+        lines.append("")
+        lines.append("view:")
+        lines.append('    name: "sbx-adult-allow"')
+        lines.append("    view-first: yes")
+        for zone in zones_effectives:
+            lines.append(f'    local-zone: "{zone}." always_transparent')
     return "\n".join(lines) + "\n"
 
 
