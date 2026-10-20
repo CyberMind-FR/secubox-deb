@@ -86,6 +86,28 @@ def test_un_pays_qui_augmente_pulse_et_un_pays_stable_non(navigateur):
         ctx.close()
 
 
+def test_un_bip_est_tente_quand_un_pays_augmente(navigateur):
+    """Demande explicite (2026-10-20) : un signal sonore sur les nouvelles connexions, pas seulement le pulse visuel.
+    `window.__sbxBipN` est le compteur de tentatives de bip posé par la page (Web Audio, jamais de fichier distant)."""
+    ctx, p, err, _ = ouvre(navigateur, [mesure(5, 2), mesure(9, 2)])
+    try:
+        p.wait_for_selector("#mondeLive circle.ping", timeout=8000)
+        assert p.evaluate("window.__sbxBipN || 0") >= 1
+    finally:
+        ctx.close()
+
+
+def test_aucun_bip_a_la_premiere_mesure_ni_si_rien_ne_change(navigateur):
+    ctx, p, err, appels = ouvre(navigateur, [mesure(5, 2)] * 6)
+    try:
+        p.wait_for_function("false || document.querySelectorAll('#mondeLive circle.pt').length > 0")
+        p.wait_for_timeout(2200)
+        assert len(appels) >= 3
+        assert p.evaluate("window.__sbxBipN || 0") == 0
+    finally:
+        ctx.close()
+
+
 def test_aucune_pulsation_si_rien_ne_change(navigateur):
     ctx, p, err, appels = ouvre(navigateur, [mesure(5, 2)] * 6)
     try:

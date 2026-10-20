@@ -79,6 +79,11 @@
   .scroll{overflow-x:auto}
   .alerte{border:1px solid var(--orange);background:rgba(255,159,28,.1);color:var(--orange);border-radius:8px;padding:4px 9px;font-size:.74rem;margin-top:6px}
   .carte svg.monde{width:100%;height:auto;display:block;border-radius:8px}
+  /* #2763 : la carte « Connexions en direct » n'est pas dans la grille 2 colonnes des cartes
+     d'attaques/visiteurs (elle reste seule, pleine largeur, pour garder stats + liste de pays
+     attenantes) — sans plafond elle double de hauteur sur un écran large (ratio 2:1 sur toute
+     la largeur du panneau au lieu de sa moitié). Même largeur maximale que les deux autres. */
+  #panLive .carte{max-width:640px;margin:0 auto}
   .vivant{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:10px}
   .vivant>div{min-width:0;border:1px solid var(--trait);border-radius:10px;padding:6px 10px;background:rgba(6,13,27,.5)}
   .vivant .l{display:block;font-size:.66rem;color:var(--faible);text-transform:uppercase;letter-spacing:.06em}.vivant b{font-size:1.05rem;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -384,10 +389,30 @@
   function pt(c){var k=CENTRE[String(c).toUpperCase()];return k?[(k[1]+180)/3,(90-k[0])/3]:null;}
   function debitFmt(v){v=Math.max(0,num(v));var u=['o/s','Ko/s','Mo/s','Go/s'],i=0;while(v>=1024&&i<3){v/=1024;i++;}return (i?(v<10?v.toFixed(1):Math.round(v)):Math.round(v)).toString().replace('.',',')+' '+u[i];}
   function cle(dir,code){return dir+':'+code;}
+  // Bip sur les nouvelles connexions de la carte en direct (demande du 2026-10-20) : un seul
+  // ton bref par cycle de rafraîchissement, même quand plusieurs pays pulsent en même temps —
+  // un bip par pays serait une cacophonie à cadence rapprochée. Web Audio, jamais de fichier
+  // distant ; `window.__sbxBipN` compte les TENTATIVES (le test ne peut pas entendre le son,
+  // et une politique de lecture automatique du navigateur peut bloquer le son avant tout geste
+  // de l'utilisateur — ça ne doit pas faire planter la page, donc tout est dans un try/catch).
+  window.__sbxBipN=0;
+  var AC=window.AudioContext||window.webkitAudioContext,bipCtx=null;
+  function bip(){
+    window.__sbxBipN++;
+    if(!AC)return;
+    try{
+      bipCtx=bipCtx||new AC();
+      if(bipCtx.state==='suspended')bipCtx.resume().catch(function(){});
+      var t=bipCtx.currentTime,osc=bipCtx.createOscillator(),g=bipCtx.createGain();
+      osc.type='sine';osc.frequency.setValueAtTime(880,t);
+      g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.12,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+.12);
+      osc.connect(g);g.connect(bipCtx.destination);osc.start(t);osc.stop(t+.13);
+    }catch(e){}
+  }
   function carteLive(c,prev){
     var svg=monde([],'#29b6f6','lueurLive'),b=pt(LV.box)||[60,30],tous=[],max=1;
     ['entrantes','sortantes'].forEach(function(dir){(c[dir]||[]).forEach(function(x){var p=pt(x.code);if(!p)return;tous.push({dir:dir,code:String(x.code).toUpperCase(),n:num(x.n),p:p});max=Math.max(max,num(x.n));});});
-    var arcs='',pts='',ondes='';
+    var arcs='',pts='',ondes='',pulse=false;
     tous.forEach(function(x){
       var col=x.dir==='entrantes'?'#29b6f6':'#ff9f1c',dx=b[0]-x.p[0],dy=b[1]-x.p[1],d=Math.sqrt(dx*dx+dy*dy);
       if(d>1){var mx=(x.p[0]+b[0])/2,my=(x.p[1]+b[1])/2-d*.25;
@@ -395,8 +420,9 @@
       var r=(1.1+2.6*Math.sqrt(x.n/max)).toFixed(1);
       pts+='<circle class="pt" cx="'+x.p[0].toFixed(1)+'" cy="'+x.p[1].toFixed(1)+'" r="'+r+'" fill="'+col+'" fill-opacity=".55"><title>'+esc(x.code)+' : '+fmt(x.n)+'</title></circle>';
       var avant=prev?prev[cle(x.dir,x.code)]:null;
-      if(prev&&(avant==null||x.n>avant))ondes+='<circle class="ping" cx="'+x.p[0].toFixed(1)+'" cy="'+x.p[1].toFixed(1)+'" r="'+r+'" stroke="'+col+'"/>';
+      if(prev&&(avant==null||x.n>avant)){ondes+='<circle class="ping" cx="'+x.p[0].toFixed(1)+'" cy="'+x.p[1].toFixed(1)+'" r="'+r+'" stroke="'+col+'"/>';pulse=true;}
     });
+    if(pulse)bip();
     el('mondeLive').innerHTML=svg+arcs+pts+ondes+'<circle class="hote" cx="'+b[0].toFixed(1)+'" cy="'+b[1].toFixed(1)+'" r=".9"><title>Cette box</title></circle>';
     var cumul={};tous.forEach(function(x){cumul[x.code]=(cumul[x.code]||0)+x.n;});
     var l=Object.keys(cumul).sort(function(a,z){return cumul[z]-cumul[a];}).slice(0,8);
