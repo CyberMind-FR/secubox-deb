@@ -1,3 +1,13 @@
+secubox-metrics (1.29.2-1~bookworm1) bookworm; urgency=low
+
+  * Retrait de la carte « Connexions en direct » (#2991, suite de #2989) : polling dédié
+    redondant avec les cartes Attaques/Visiteurs, panneau et machinerie JS entièrement retirés.
+  * Remplacement du bip sonore (#2989) par un flash lumineux (demande explicite) sur les cartes
+    Attaques ET Visiteurs : un disque plein blanc clignote deux fois, en plus du pulse existant
+    (#2763), quand un pays augmente entre deux rafraîchissements.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 20 Oct 2026 12:30:00 +0200
+
 secubox-metrics (1.29.1-1~bookworm1) bookworm; urgency=low
 
   * Carte « Connexions en direct » (#2989) : plafonnée à 640px (elle n'était pas, contrairement

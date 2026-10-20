@@ -79,21 +79,13 @@
   .scroll{overflow-x:auto}
   .alerte{border:1px solid var(--orange);background:rgba(255,159,28,.1);color:var(--orange);border-radius:8px;padding:4px 9px;font-size:.74rem;margin-top:6px}
   .carte svg.monde{width:100%;height:auto;display:block;border-radius:8px}
-  /* #2763 : la carte « Connexions en direct » n'est pas dans la grille 2 colonnes des cartes
-     d'attaques/visiteurs (elle reste seule, pleine largeur, pour garder stats + liste de pays
-     attenantes) — sans plafond elle double de hauteur sur un écran large (ratio 2:1 sur toute
-     la largeur du panneau au lieu de sa moitié). Même largeur maximale que les deux autres. */
-  #panLive .carte{max-width:640px;margin:0 auto}
-  .vivant{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:10px}
-  .vivant>div{min-width:0;border:1px solid var(--trait);border-radius:10px;padding:6px 10px;background:rgba(6,13,27,.5)}
-  .vivant .l{display:block;font-size:.66rem;color:var(--faible);text-transform:uppercase;letter-spacing:.06em}.vivant b{font-size:1.05rem;font-variant-numeric:tabular-nums;white-space:nowrap}
-  .direct{display:inline-flex;align-items:center;gap:6px;font-size:.68rem;letter-spacing:.08em;color:#2ecc71}.direct i{width:8px;height:8px;border-radius:50%;background:currentColor;animation:batt 1.4s ease-in-out infinite}
-  .direct.off{color:var(--orange,#ff9f1c)}.direct.off i{animation:none}
   svg.monde circle.ping{fill:none;stroke-width:.35;transform-box:fill-box;transform-origin:center;animation:onde 1.6s ease-out 1}
-  svg.monde path.arc{fill:none;stroke-width:.22;stroke-dasharray:1.2 1.6;opacity:.75;animation:coule 1.4s linear infinite}
-  svg.monde circle.hote{fill:#fff;stroke:#29b6f6;stroke-width:.3}
-  @keyframes batt{0%,100%{opacity:1}50%{opacity:.25}}@keyframes onde{from{opacity:.95;transform:scale(.6)}to{opacity:0;transform:scale(2.6)}}@keyframes coule{to{stroke-dashoffset:-2.8}}
-  @media (prefers-reduced-motion:reduce){.direct i,svg.monde circle.ping,svg.monde path.arc{animation:none}}
+  /* #2989 : flash lumineux (pas un pulse discret) sur un pays qui vient d'augmenter — plein, blanc,
+     clignote deux fois vite, bien plus visible que le seul anneau `ping`. */
+  svg.monde circle.flash{transform-box:fill-box;transform-origin:center;animation:clignote .9s ease-in-out 2}
+  @keyframes onde{from{opacity:.95;transform:scale(.6)}to{opacity:0;transform:scale(2.6)}}
+  @keyframes clignote{0%,100%{opacity:0}50%{opacity:1}}
+  @media (prefers-reduced-motion:reduce){svg.monde circle.ping,svg.monde circle.flash{animation:none}}
   .pays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 18px;align-content:start;font-size:.78rem;margin-top:8px}
   .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)} .pays .vide{grid-column:1/-1;padding:2px}
   @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
@@ -116,16 +108,6 @@
   <div class="grille g1">
     <div class="pan"><h3>Ressources <i id="fraicheur"></i></h3><div class="jauges" id="jauges"></div><div id="alertes"></div></div>
     <div class="pan"><h3>Mémoire et charge <i>24 dernières heures</i></h3><div id="courbeMem"></div><div class="legende" id="legMem"></div><div id="courbeLoad"></div><div class="legende" id="legLoad"></div></div>
-  </div>
-  <div class="pan" id="panLive">
-    <h3>Connexions en direct <i><span class="direct" id="enDirect" role="status" aria-live="polite"><i></i><b>EN DIRECT</b></span></i></h3>
-    <div class="vivant" id="vivant">
-      <div><span class="l">Reçu</span><b id="lvRx">—</b></div><div><span class="l">Émis</span><b id="lvTx">—</b></div>
-      <div><span class="l">Connexions</span><b id="lvConn">—</b></div><div><span class="l">Charge</span><b id="lvCharge">—</b></div><div><span class="l">Mémoire</span><b id="lvMem">—</b></div>
-    </div>
-    <div class="carte"><svg class="monde" id="mondeLive" viewBox="0 0 120 60" role="img" aria-label="Carte en direct des pays qui se connectent à la box"></svg></div>
-    <div class="pays" id="paysLive"></div>
-    <div class="note" id="noteLive">Connexions TCP établies, regroupées par pays déduit de l’adresse (jamais l’adresse elle-même). <span style="color:#29b6f6">●</span> entrantes (22, 80, 443) · <span style="color:#ff9f1c">●</span> sortantes.</div>
   </div>
   <div class="grille g3">
     <div class="pan"><h3>Services et conteneurs</h3><div id="services"></div></div>
@@ -227,9 +209,13 @@
   var PREC={};
   function carteMonde(idSvg,idListe,idNote,pays,rgb,gid,vide,note){
     // Pulsation (#2763) : un pays dont le compteur augmente depuis le rafraîchissement précédent émet une onde.
+    // Flash (#2989, demande explicite — lumineux, pas sonore) : un disque plein blanc qui clignote par-dessus.
     var cur={},ondes='',prec=PREC[idSvg];
     (pays||[]).forEach(function(x){var k=String(x.code).toUpperCase();cur[k]=num(x.n);var c=CENTRE[k];
-      if(prec&&c&&(prec[k]==null||cur[k]>prec[k]))ondes+='<circle class="ping" cx="'+((c[1]+180)/3).toFixed(1)+'" cy="'+((90-c[0])/3).toFixed(1)+'" r="3" stroke="'+rgb+'"/>';});
+      if(prec&&c&&(prec[k]==null||cur[k]>prec[k])){
+        var cx=((c[1]+180)/3).toFixed(1),cy=((90-c[0])/3).toFixed(1);
+        ondes+='<circle class="ping" cx="'+cx+'" cy="'+cy+'" r="3" stroke="'+rgb+'"/><circle class="flash" cx="'+cx+'" cy="'+cy+'" r="1.6" fill="#fff"/>';
+      }});
     PREC[idSvg]=cur;
     el(idSvg).innerHTML=monde(pays||[],rgb,gid)+ondes;
     var p=(pays||[]).filter(function(x){return CENTRE[String(x.code).toUpperCase()];}).sort(function(a,b){return num(b.n)-num(a.n);});
@@ -384,78 +370,6 @@
   window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
   hauteur();
 
-  // ----- EN DIRECT (#2763) : connexions par pays, débit, charge, mémoire ; interrogation légère, en pause quand l'onglet est caché -----
-  var CAD=Math.max(500,+q.get('cadence')||3000),LV={prev:null,echecs:0,box:'FR',tim:null};
-  function pt(c){var k=CENTRE[String(c).toUpperCase()];return k?[(k[1]+180)/3,(90-k[0])/3]:null;}
-  function debitFmt(v){v=Math.max(0,num(v));var u=['o/s','Ko/s','Mo/s','Go/s'],i=0;while(v>=1024&&i<3){v/=1024;i++;}return (i?(v<10?v.toFixed(1):Math.round(v)):Math.round(v)).toString().replace('.',',')+' '+u[i];}
-  function cle(dir,code){return dir+':'+code;}
-  // Bip sur les nouvelles connexions de la carte en direct (demande du 2026-10-20) : un seul
-  // ton bref par cycle de rafraîchissement, même quand plusieurs pays pulsent en même temps —
-  // un bip par pays serait une cacophonie à cadence rapprochée. Web Audio, jamais de fichier
-  // distant ; `window.__sbxBipN` compte les TENTATIVES (le test ne peut pas entendre le son,
-  // et une politique de lecture automatique du navigateur peut bloquer le son avant tout geste
-  // de l'utilisateur — ça ne doit pas faire planter la page, donc tout est dans un try/catch).
-  window.__sbxBipN=0;
-  var AC=window.AudioContext||window.webkitAudioContext,bipCtx=null;
-  function bip(){
-    window.__sbxBipN++;
-    if(!AC)return;
-    try{
-      bipCtx=bipCtx||new AC();
-      if(bipCtx.state==='suspended')bipCtx.resume().catch(function(){});
-      var t=bipCtx.currentTime,osc=bipCtx.createOscillator(),g=bipCtx.createGain();
-      osc.type='sine';osc.frequency.setValueAtTime(880,t);
-      g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.12,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+.12);
-      osc.connect(g);g.connect(bipCtx.destination);osc.start(t);osc.stop(t+.13);
-    }catch(e){}
-  }
-  function carteLive(c,prev){
-    var svg=monde([],'#29b6f6','lueurLive'),b=pt(LV.box)||[60,30],tous=[],max=1;
-    ['entrantes','sortantes'].forEach(function(dir){(c[dir]||[]).forEach(function(x){var p=pt(x.code);if(!p)return;tous.push({dir:dir,code:String(x.code).toUpperCase(),n:num(x.n),p:p});max=Math.max(max,num(x.n));});});
-    var arcs='',pts='',ondes='',pulse=false;
-    tous.forEach(function(x){
-      var col=x.dir==='entrantes'?'#29b6f6':'#ff9f1c',dx=b[0]-x.p[0],dy=b[1]-x.p[1],d=Math.sqrt(dx*dx+dy*dy);
-      if(d>1){var mx=(x.p[0]+b[0])/2,my=(x.p[1]+b[1])/2-d*.25;
-        arcs+='<path class="arc" d="M'+(x.dir==='entrantes'?x.p[0]+' '+x.p[1]+' Q'+mx+' '+my+' '+b[0]+' '+b[1]:b[0]+' '+b[1]+' Q'+mx+' '+my+' '+x.p[0]+' '+x.p[1])+'" stroke="'+col+'"/>';}
-      var r=(1.1+2.6*Math.sqrt(x.n/max)).toFixed(1);
-      pts+='<circle class="pt" cx="'+x.p[0].toFixed(1)+'" cy="'+x.p[1].toFixed(1)+'" r="'+r+'" fill="'+col+'" fill-opacity=".55"><title>'+esc(x.code)+' : '+fmt(x.n)+'</title></circle>';
-      var avant=prev?prev[cle(x.dir,x.code)]:null;
-      if(prev&&(avant==null||x.n>avant)){ondes+='<circle class="ping" cx="'+x.p[0].toFixed(1)+'" cy="'+x.p[1].toFixed(1)+'" r="'+r+'" stroke="'+col+'"/>';pulse=true;}
-    });
-    if(pulse)bip();
-    el('mondeLive').innerHTML=svg+arcs+pts+ondes+'<circle class="hote" cx="'+b[0].toFixed(1)+'" cy="'+b[1].toFixed(1)+'" r=".9"><title>Cette box</title></circle>';
-    var cumul={};tous.forEach(function(x){cumul[x.code]=(cumul[x.code]||0)+x.n;});
-    var l=Object.keys(cumul).sort(function(a,z){return cumul[z]-cumul[a];}).slice(0,8);
-    el('paysLive').innerHTML=l.length?l.map(function(k){var av=prev?(prev[cle('entrantes',k)]||0)+(prev[cle('sortantes',k)]||0):cumul[k],dl=cumul[k]-av;
-      return '<div><span>'+drapeau(k)+' '+esc(k)+'</span><b>'+fmt(cumul[k])+(prev&&dl>0?' <span style="color:#2ecc71">▲</span>':prev&&dl<0?' <span style="color:#ff9f1c">▼</span>':'')+'</b></div>';}).join(''):'<div class="vide">— aucune connexion géolocalisée</div>';
-    var snap={};tous.forEach(function(x){snap[cle(x.dir,x.code)]=x.n;});return snap;
-  }
-  function etatLive(ok){var e=el('enDirect');e.className='direct'+(ok?'':' off');e.lastChild.textContent=ok?'EN DIRECT':'RECONNEXION…';}
-  function rendLive(m){
-    if(!m||!m.connexions&&!m.debit){etatLive(false);return;}
-    LV.box=/^[A-Z]{2}$/.test(String(m.box||''))?m.box:LV.box;
-    var c=m.connexions;
-    if(c){LV.snap=carteLive(c,LV.prev&&LV.prev.snap||null);el('lvConn').textContent=fmt(c.total)+(c.lan?' · '+fmt(c.lan)+' LAN':'');}
-    var p=LV.prev;
-    if(m.debit&&p&&p.debit&&m.ts>p.ts){var dt=m.ts-p.ts;el('lvRx').textContent=debitFmt((m.debit.rx-p.debit.rx)/dt);el('lvTx').textContent=debitFmt((m.debit.tx-p.debit.tx)/dt);}
-    if(m.charge!=null)el('lvCharge').textContent=String(Math.round(num(m.charge)*10)/10).replace('.',',');
-    if(m.memoire_pct!=null)el('lvMem').textContent=Math.round(num(m.memoire_pct))+' %';
-    LV.prev={ts:m.ts,debit:m.debit,snap:LV.snap};etatLive(true);hauteur();
-  }
-  function cycleLive(){
-    clearTimeout(LV.tim);
-    var suite=function(ok){LV.echecs=ok?0:Math.min(LV.echecs+1,5);LV.tim=setTimeout(cycleLive,ok?CAD:Math.min(30000,CAD*Math.pow(2,LV.echecs)));};
-    if(document.hidden){LV.tim=setTimeout(cycleLive,CAD);return;}
-    var f=q.get('demo')?Promise.resolve(demoLive()):api('/live');
-    f.then(function(m){rendLive(m);suite(!!m);},function(){rendLive(null);suite(false);});
-  }
-  // Démonstration : des variations plausibles, pour que la maquette vive (adresses de documentation, pays fictifs).
-  var DV={t:0};
-  function demoLive(){DV.t++;var a=function(b,v){return Math.max(0,b+Math.round(v*Math.sin(DV.t/2+b)));};
-    return {ts:1000+DV.t*3,box:'FR',debit:{rx:DV.t*3*900000,tx:DV.t*3*210000},charge:1.2+.5*Math.sin(DV.t/3),memoire_pct:44+4*Math.sin(DV.t/5),
-      connexions:{entrantes:[{code:'FR',n:a(14,4)},{code:'DE',n:a(6,3)},{code:'US',n:a(5,3)},{code:'GB',n:a(3,2)},{code:'BR',n:Math.max(0,DV.t%4)}],sortantes:[{code:'US',n:a(4,2)},{code:'NL',n:a(2,1)}],lan:3,inconnu:1,total:40}};}
-  document.addEventListener('visibilitychange',function(){if(!document.hidden)cycleLive();});
-  cycleLive();
   if(q.get('demo')){return;}
   var bouton=el('rafraichir');
   charge=function(){
