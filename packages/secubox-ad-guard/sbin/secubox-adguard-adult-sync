@@ -34,7 +34,10 @@ Runs as root (writes /etc/unbound, reloads the resolver).
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
+import os
 import re
 import subprocess
 import sys
@@ -209,46 +212,24 @@ def _exempt_ips() -> list[str]:
     return dedup
 
 
-def _zone_effective(domaine: str, zones: set[str]) -> str:
-    """La zone qu'Unbound consulte RÉELLEMENT pour `domaine` (#2973) : une
-    `local-zone` couvre tout son sous-arbre — `chaturbate.com.` en
-    always_nxdomain bloque AUSSI `www.chaturbate.com.` sans déclaration
-    propre. Constaté en direct sur gk2 (log Unbound) : la requête
-    `www.chaturbate.com.` matche la zone `chaturbate.com.`, jamais un
-    `local-zone-override` posé sur `www.chaturbate.com.` lui-même — ce nom
-    n'est simplement jamais consulté. On cherche donc le suffixe le PLUS
-    COURT (l'ancêtre le plus haut) déjà présent dans `zones` — Unbound
-    retient celui-là pour toute la branche, même quand un nom plus précis a
-    AUSSI sa propre déclaration (constaté : chaturbate.com ET
-    www.chaturbate.com étaient tous deux déclarés, Unbound n'a consulté que
-    chaturbate.com). Jamais le TLD seul (une étiquette) ; à défaut
-    d'ancêtre déclaré, le nom reste sa propre zone."""
-    etiquettes = domaine.split(".")
-    for i in range(len(etiquettes) - 1, -1, -1):
-        candidat = ".".join(etiquettes[i:])
-        if len(etiquettes) - i >= 2 and candidat in zones:
-            return candidat
-    return domaine
-
-
 def _render(adult: set[str], general: set[str]) -> str:
     """Rend le drop-in Unbound. `adult` → always_nxdomain pour tout le monde
     (sauf ce que le sinkhole général bloque déjà — un seul `local-zone` par
     nom, Unbound refuse les doublons).
 
-    Par IP exemptée : une `view:` PARTAGÉE avec `view-first: yes` (#2976,
-    reprend le motif déjà éprouvé par le moteur TV auto, #1954/#1959) —
-    PAS `local-zone-override` dupliqué par IP (#2969/#2971/#2973 : fichier
-    monté à 26 Mo rien que pour 5 adresses, rechargement lent). Avec
-    `view-first: yes`, un domaine ABSENT de la vue retombe automatiquement
-    sur le puits général — nul besoin de le redéclarer dans la vue (l'ERREUR
-    de #2969, qui redéclarait `général - adulte` en pure perte). La vue ne
-    contient donc QUE les domaines adultes, déclarés UNE SEULE FOIS (jamais
-    par IP) : fichier proportionnel aux domaines adultes, pas à (domaines ×
-    IP exemptées). Zone EFFECTIVE (#2973) : pas le nom exact du domaine, qui
-    peut n'être jamais consulté si un ancêtre couvre déjà son sous-arbre."""
+    Par IP exemptée : `local-zone-override`, UNE ENTRÉE PAR DOMAINE (#2979 —
+    corrige #2973/#2976). Vérifié en direct sur gk2 avec un Unbound propre :
+    contrairement à `local-zone` (qui couvre tout son sous-arbre),
+    `local-zone-override` ne couvre QUE le nom exact donné — avec une seule
+    entrée sur l'apex "chaturbate.com.", "chaturbate.com" résolvait pour
+    l'IP exemptée mais "www.chaturbate.com" restait bloqué ; avec les DEUX
+    entrées, les deux résolvent. #2973 avait collapsé vers une « zone
+    effective » en pensant imiter le comportement subtree de `local-zone` —
+    erreur. Une `view:` avec `view-first: yes` (#2976) a aussi été vérifiée
+    en direct et NE SURCHARGE PAS un `always_nxdomain` global pour la même
+    zone — abandonnée."""
     lines = [
-        "# Managed by secubox-adguard-adult-sync (#2964, #2976). DO NOT EDIT BY HAND.",
+        "# Managed by secubox-adguard-adult-sync (#2964, #2979). DO NOT EDIT BY HAND.",
         "# Regenerate: secubox-adguard-adult-sync sync",
         "server:",
     ]
@@ -258,16 +239,9 @@ def _render(adult: set[str], general: set[str]) -> str:
 
     ips = _exempt_ips()
     if ips:
-        tous = general | adult
-        zones_effectives = sorted({_zone_effective(d, tous) for d in adult})
         for ip in ips:
-            lines.append(f"    access-control-view: {ip} sbx-adult-allow")
-        lines.append("")
-        lines.append("view:")
-        lines.append('    name: "sbx-adult-allow"')
-        lines.append("    view-first: yes")
-        for zone in zones_effectives:
-            lines.append(f'    local-zone: "{zone}." always_transparent')
+            for d in sorted(adult):
+                lines.append(f'    local-zone-override: "{d}." {ip} always_transparent')
     return "\n".join(lines) + "\n"
 
 
@@ -280,6 +254,30 @@ def _render(adult: set[str], general: set[str]) -> str:
 # ré-analyser sa config.
 _ATTENTE_RECHARGEMENT_S = 90
 _PAS_ATTENTE_S = 2
+
+ERREUR_VERROU = RuntimeError
+
+
+@contextlib.contextmanager
+def _verrou(bloquant: bool = True):
+    """Un seul `do_sync`/`do_disable` à la fois sur le socket de contrôle
+    Unbound (minuterie 1 min, #2976, + synchros manuelles). Constaté en
+    direct sur gk2 : deux `unbound-control` concurrents (un `reload` et un
+    `dump_cache` d'un autre service) ont laissé Unbound coincé en
+    « reloading » puis l'ont fait mourir — panne DNS complète pour tout le
+    réseau. Même verrou que `secubox-adguard-tv.verrou_controleur()`
+    (fichier dédié, exclusif, `O_NOFOLLOW`)."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    fd = os.open(DATA_DIR / "sync.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        op = fcntl.LOCK_EX if bloquant else (fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            fcntl.flock(fd, op)
+        except OSError as e:
+            raise ERREUR_VERROU("synchro déjà en cours") from e
+        yield
+    finally:
+        os.close(fd)
 
 
 class Systeme(_unbound.SystemeUnbound):
@@ -308,48 +306,60 @@ class Systeme(_unbound.SystemeUnbound):
 
 def do_sync(force: bool = False, systeme=None) -> dict:
     s = systeme or Systeme()
-    text = _fetch(force=force)
-    if text is None:
-        st = {"ok": False, "error": "adult source unreachable and no cache"}
-        _write_status(st)
-        return st
-    adult = parse_hosts(text)
-    if not adult:
-        st = {"ok": False, "error": "no domains parsed from adult source"}
-        _write_status(st)
-        return st
-    ADULT_DOMAINS.parent.mkdir(parents=True, exist_ok=True)
-    ADULT_DOMAINS.write_text("\n".join(sorted(adult)) + "\n")
-
-    general = _general_domains()
     try:
-        etat = _unbound.poser_vue(DROPIN, _render(adult, general), s)
-    except RuntimeError as e:
-        st = {"ok": False, "error": str(e), "adult": len(adult)}
+        with _verrou(bloquant=False):
+            text = _fetch(force=force)
+            if text is None:
+                st = {"ok": False, "error": "adult source unreachable and no cache"}
+                _write_status(st)
+                return st
+            adult = parse_hosts(text)
+            if not adult:
+                st = {"ok": False, "error": "no domains parsed from adult source"}
+                _write_status(st)
+                return st
+            ADULT_DOMAINS.parent.mkdir(parents=True, exist_ok=True)
+            ADULT_DOMAINS.write_text("\n".join(sorted(adult)) + "\n")
+
+            general = _general_domains()
+            try:
+                etat = _unbound.poser_vue(DROPIN, _render(adult, general), s)
+            except RuntimeError as e:
+                st = {"ok": False, "error": str(e), "adult": len(adult)}
+                _write_status(st)
+                return st
+
+            STATE.parent.mkdir(parents=True, exist_ok=True)
+            STATE.write_text("1\n")
+            st = {"ok": True, "enabled": True, "adult": len(adult),
+                  "exempt_ip": len(_exempt_ips()), "reloaded": etat == "applique"}
+            _write_status(st)
+            return st
+    except ERREUR_VERROU as e:
+        st = {"ok": False, "error": f"{e} — synchro ignorée"}
         _write_status(st)
         return st
-
-    STATE.parent.mkdir(parents=True, exist_ok=True)
-    STATE.write_text("1\n")
-    st = {"ok": True, "enabled": True, "adult": len(adult),
-          "exempt_ip": len(_exempt_ips()), "reloaded": etat == "applique"}
-    _write_status(st)
-    return st
 
 
 def do_disable(systeme=None) -> dict:
     s = systeme or Systeme()
     try:
-        etat = _unbound.retirer_vue(DROPIN, s)
-    except RuntimeError as e:
-        st = {"ok": False, "enabled": False, "reloaded": False, "error": str(e)}
+        with _verrou(bloquant=False):
+            try:
+                etat = _unbound.retirer_vue(DROPIN, s)
+            except RuntimeError as e:
+                st = {"ok": False, "enabled": False, "reloaded": False, "error": str(e)}
+                _write_status(st)
+                return st
+            STATE.parent.mkdir(parents=True, exist_ok=True)
+            STATE.write_text("0\n")
+            st = {"ok": True, "enabled": False, "reloaded": etat == "retire", "error": None}
+            _write_status(st)
+            return st
+    except ERREUR_VERROU as e:
+        st = {"ok": False, "enabled": False, "reloaded": False, "error": f"{e} — désactivation ignorée"}
         _write_status(st)
         return st
-    STATE.parent.mkdir(parents=True, exist_ok=True)
-    STATE.write_text("0\n")
-    st = {"ok": True, "enabled": False, "reloaded": etat == "retire", "error": None}
-    _write_status(st)
-    return st
 
 
 def do_status() -> dict:
