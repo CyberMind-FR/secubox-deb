@@ -1,3 +1,14 @@
+secubox-ad-guard (1.15.8-1~bookworm1) bookworm; urgency=medium
+
+  * Minuterie adulte (#2983) : 1 min (#2976) → 10 min. Une fois le vrai correctif en place
+    (#2979, un override par domaine × IP exemptée), le rechargement du drop-in prend 60-120s —
+    la minuterie à 1 min se chevauchait presque en permanence avec elle-même. Constaté sur gk2 :
+    load average >20, swap saturé, outils de diagnostic (smbctl) devenus flaky par échec
+    intermittent de sous-processus. L'exemption par MAC (#2967) reste largement assez réactive
+    à 10 min pour une rotation IPv6 réelle.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 20 Oct 2026 10:45:00 +0200
+
 secubox-ad-guard (1.15.7-1~bookworm1) bookworm; urgency=medium
 
   * TV auto (#2981) : `IPV6_CEDE_APRES_S` passe de 6 h (#2146) à 15 min — constat gk2, une TV
