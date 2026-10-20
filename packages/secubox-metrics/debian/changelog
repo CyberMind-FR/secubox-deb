@@ -1,3 +1,13 @@
+secubox-metrics (1.29.1-1~bookworm1) bookworm; urgency=low
+
+  * Carte « Connexions en direct » (#2989) : plafonnée à 640px (elle n'était pas, contrairement
+    aux cartes Attaques/Visiteurs, dans la grille 2 colonnes — pleine largeur, deux fois plus
+    haute que les deux autres à ratio 2:1 égal).
+  * Bip (Web Audio, synthétisé) sur les nouvelles connexions de cette carte, un seul par cycle
+    de rafraîchissement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 20 Oct 2026 12:00:00 +0200
+
 secubox-metrics (1.29.0-1~bookworm1) bookworm; urgency=medium
 
   * Fusion de la branche feature/2772 dans master (ref #2772) : le rapport quotidien de securite (volet visites et bannissements, tuiles Actor reparees, 1.28.0), deploye sur gk2 depuis la branche, rejoint master apres la separation de secubox-courbes (1.24.x) et le balayage des minuteries (OnActiveSec). Les numeros 1.25 a 1.28 n'existaient que sur la branche : 1.29.0 depasse la version de gk2 (1.28.0), plus de retour en arriere a craindre.
