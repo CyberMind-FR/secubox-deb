@@ -178,7 +178,8 @@ def test_les_ipv6_perimees_cedent_leur_place_aux_adresses_actuelles():
 def test_une_ipv6_encore_vue_n_est_jamais_evincee_et_l_ipv4_non_plus():
     etat, regles, suivi = tv_banc()
     maintenant = T0 + 10 * 86400
-    vues = {"192.168.1.95": T0, **{a: maintenant - 3600 for a in ANCIENNES}, NEUVES[0]: maintenant}   # tout est récent, sauf l'IPv4
+    # "récent" s'entend au sens du seuil #2981 (15 min), pas de l'ancien seuil #2146 (6 h).
+    vues = {"192.168.1.95": T0, **{a: maintenant - 300 for a in ANCIENNES}, NEUVES[0]: maintenant}   # tout est récent, sauf l'IPv4
     voisins = {"192.168.1.95": MAC_BANC, NEUVES[0]: MAC_BANC}
     lancer(etat, regles, suivi, det=[], voisins=voisins, vues=vues, maintenant=maintenant)
     ips = {c["ip"] for c in etat["clients"]}
@@ -206,6 +207,20 @@ def test_une_ipv6_vue_il_y_a_trois_jours_cede_sa_place_meme_dans_la_fenetre_de_r
     assert NEUVES[0] in ips and "192.168.1.95" in ips
     assert ANCIENNES[2] not in ips, "la plus ancienne (vue il y a 3 jours) est celle qui part"
     assert set(ANCIENNES[:2]) <= ips
+
+
+def test_une_rotation_plus_rapide_que_six_heures_n_est_plus_bloquee():
+    """#2981, constaté sur gk2 : la TV change d'IPv6 bien plus vite que les 6 h supposées par #2146 (entre 16 et 40
+    minutes dans ce relevé) — avec l'ancien seuil, aucune des adresses en place n'était jamais « périmée » assez tôt,
+    la candidate actuelle restait refusée indéfiniment, la TV sortait de sa vue de blocage sans jamais y revenir."""
+    etat, regles, suivi = tv_banc()
+    maintenant = T0 + 10 * 86400
+    vues = {"192.168.1.95": maintenant, NEUVES[0]: maintenant,
+            **{a: maintenant - (16 + i * 12) * 60 for i, a in enumerate(ANCIENNES)}}
+    lancer(etat, regles, suivi, det=[], voisins={"192.168.1.95": MAC_BANC, NEUVES[0]: MAC_BANC}, vues=vues, maintenant=maintenant)
+    ips = {c["ip"] for c in etat["clients"]}
+    assert NEUVES[0] in ips, "la candidate actuelle doit entrer malgré des adresses vues il y a seulement 16-40 min"
+    assert "192.168.1.95" in ips
 
 
 def test_une_adresse_n_en_evince_pas_une_plus_recente_qu_elle():

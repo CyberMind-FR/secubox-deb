@@ -27,7 +27,11 @@ except ImportError:                                  # lancé hors paquet
 FICHIER_SUIVI = "suivi-ajout.json"
 SUIVI_VIERGE = {"ajouts": [], "dernier_changement": 0}
 AJOUTS_MAX = 50
-IPV6_CEDE_APRES_S = 6 * 3600           # une IPv6 non vue depuis ce delai cede sa place a une adresse plus recente (#2146)
+# #2146 avait choisi 6 h en supposant une rotation ~quotidienne (RFC 4941). Constat gk2 #2981 :
+# une TV peut tourner son IPv6 toutes les 15-40 minutes — avec 6 h, aucune des 4 adresses en
+# place n'etait jamais assez "perimee" pour ceder sa place, la candidate actuelle restait
+# refusee indefiniment et l'appareil sortait de sa vue de blocage sans jamais y revenir.
+IPV6_CEDE_APRES_S = 15 * 60            # une IPv6 non vue depuis ce delai cede sa place a une adresse plus recente (#2146, #2981)
 ADRESSES_MAX_PAR_APPAREIL = 4          # une TV a une IPv4 et quelques IPv6 ; au-delà ce sont des entrées mortes du noyau ou une forgerie (revue #1959)
 
 
