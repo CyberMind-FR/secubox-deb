@@ -297,10 +297,18 @@ ANALYSEURS = {"chaines": analyser_chaines, "playlists": analyser_playlists}
 
 async def executer_ytdlp(argv):
     """Exécuteur réel : yt-dlp en sous-processus asynchrone, jamais bloquant."""
+    proc = None
     try:
         proc = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         out, err = await asyncio.wait_for(proc.communicate(), timeout=DELAI_YTDLP_S)
     except asyncio.TimeoutError:
+        # #2985 : `wait_for` n'annule que la coroutine `communicate()` — le sous-processus
+        # OS, lui, continue de tourner pour toujours si on ne le tue pas explicitement
+        # (constaté sur gk2 : 26 yt-dlp orphelins accumulés en 1 jour, chacun bloqué sur un
+        # défi YouTube qui ne répond jamais). `wait()` après `kill()` évite aussi un zombie.
+        if proc is not None:
+            proc.kill()
+            await proc.wait()
         raise ErreurYoutube("délai dépassé")
     except FileNotFoundError:
         raise ErreurYoutube("yt-dlp introuvable dans le conteneur")

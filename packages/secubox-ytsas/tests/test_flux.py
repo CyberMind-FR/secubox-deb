@@ -265,3 +265,35 @@ def test_les_cookies_refuses_pendant_un_repli_marquent_le_panneau_perime(monkeyp
     r = c.get("/api/v1/ytsas/flux?type=abonnements", headers=h)
     assert r.status_code == 200 and r.json()["cause"] == "cookies"
     assert main.engine.cookies_stale is True
+
+
+# ── #2985 : un délai dépassé ne doit jamais laisser le sous-processus yt-dlp orphelin ──
+class _FauxProcessus:
+    """Simule un yt-dlp bloqué : `communicate()` ne répond jamais avant le délai."""
+
+    def __init__(self):
+        self.tue = False
+        self.attendu = False
+
+    async def communicate(self):
+        await asyncio.sleep(3600)  # jamais atteint dans le test : wait_for coupe avant
+
+    def kill(self):
+        self.tue = True
+
+    async def wait(self):
+        self.attendu = True
+
+
+def test_un_delai_depasse_tue_et_attend_le_sous_processus(monkeypatch):
+    faux = _FauxProcessus()
+
+    async def faux_create_subprocess_exec(*argv, **kw):
+        return faux
+
+    monkeypatch.setattr(flux.asyncio, "create_subprocess_exec", faux_create_subprocess_exec)
+    monkeypatch.setattr(flux, "DELAI_YTDLP_S", 0.01)
+    with pytest.raises(flux.ErreurYoutube, match="délai dépassé"):
+        asyncio.run(flux.executer_ytdlp(["yt-dlp", "-j"]))
+    assert faux.tue is True, "le sous-processus doit être tué au dépassement du délai"
+    assert faux.attendu is True, "il doit aussi être réellement attendu, pour ne pas devenir un zombie"

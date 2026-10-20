@@ -1,3 +1,13 @@
+secubox-ytsas (0.8.4-1~bookworm1) bookworm; urgency=high
+
+  * Fuite de processus (#2985) : `executer_ytdlp` ne tuait jamais le sous-processus `yt-dlp` au
+    dépassement du délai — `asyncio.wait_for` n'annule que la coroutine `communicate()`, pas le
+    processus OS sous-jacent. Constaté sur gk2 : 26 `yt-dlp` orphelins accumulés en 1 jour,
+    chacun bloqué sur la même chaîne (vraisemblablement un défi anti-bot YouTube qui ne répond
+    jamais). `proc.kill()` + `proc.wait()` ajoutés au `except asyncio.TimeoutError`.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 20 Oct 2026 11:00:00 +0200
+
 secubox-ytsas (0.8.3-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
