@@ -1,3 +1,13 @@
+secubox-hub (1.12.19-1~bookworm1) bookworm; urgency=medium
+
+  * Retrait de la barre du haut (#2987) : injectée sur chaque page de chaque module
+    (`#global-menu-bar`), jugée redondante avec le contenu de la page — polling 30s (page
+    metrics) + 60s (statut API) pour rien. La barre du bas (CPU/MEM/DISK/uptime) n'est pas
+    concernée. Le bouton « Déconnexion » qu'elle portait fait doublon avec celui déjà présent
+    dans le pied de la barre latérale.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 20 Oct 2026 11:15:00 +0200
+
 secubox-hub (1.12.18-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.

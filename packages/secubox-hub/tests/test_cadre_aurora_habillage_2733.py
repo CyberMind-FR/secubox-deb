@@ -97,33 +97,31 @@ def test_les_styles_en_ligne_qui_bloquent_l_habillage_ne_sont_pas_poses(navigate
 
 
 def test_le_cadre_prend_les_couleurs_et_la_police_aurora(navigateur, site):
+    # #2987 : la barre du haut (#global-menu-bar) est retirée — polling permanent pour un
+    # bandeau redondant avec le contenu de chaque page. Seule la barre du bas subsiste.
     ctx, p, _ = ouvre(navigateur, site, "/autoload/index.html")
     assert p.evaluate(STYLE, ["body", "backgroundColor"]) == "rgb(6, 13, 27)"                       # --fond
     assert "linear-gradient" in p.evaluate(STYLE, ["#sidebar", "backgroundImage"])
-    assert p.evaluate(STYLE, ["#global-menu-bar", "backgroundColor"]).startswith("rgba(10, 22, 46")
     assert p.evaluate(STYLE, ["#global-status-bar", "backgroundColor"]).startswith("rgba(10, 22, 46")
-    assert p.evaluate(STYLE, ["#global-menu-bar .menu-title", "color"]) == "rgb(234, 241, 255)"     # --texte
-    assert p.evaluate(STYLE, ["#global-menu-bar .menu-btn", "borderRadius"]) == "10px"
-    for sel in ("#sidebar .nav-item", "#global-menu-bar .menu-title", "#global-status-bar .status-value"):
+    for sel in ("#sidebar .nav-item", "#global-status-bar .status-value"):
         assert "IBM Plex Sans" in p.evaluate(STYLE, [sel, "fontFamily"]), sel
     ctx.close()
 
 
 def test_plus_de_vert_hybrid_dark_dans_le_cadre(navigateur, site):
-    """Le vert n'a qu'un sens en Aurora : sain/actif. Ni le logo ni le titre ni les entrées de menu ne le portent."""
+    """Le vert n'a qu'un sens en Aurora : sain/actif. Ni le logo ni les entrées de menu ne le portent."""
     ctx, p, _ = ouvre(navigateur, site, "/autoload/index.html")
-    for sel in ("#sidebar .logo", "#global-menu-bar .menu-title", "#sidebar .nav-item"):
+    for sel in ("#sidebar .logo", "#sidebar .nav-item"):
         c = p.evaluate(STYLE, [sel, "color"])
         r, g, b = [int(x) for x in re.findall(r"\d+", c)[:3]]
         assert not (g > r + 60 and g > b + 20), f"{sel} est vert : {c}"
     ctx.close()
 
 
-def test_le_titre_du_menu_du_haut_n_a_plus_de_tiret_en_tete(navigateur, site):
-    """« SecuBox — Actor Intelligence » laissait « — Actor Intelligence » : le tiret long n'était pas retiré."""
+def test_la_barre_du_haut_n_est_plus_injectee(navigateur, site):
+    """#2987 : retirée partout — polling 30s/60s pour un bandeau redondant avec la page elle-même."""
     ctx, p, _ = ouvre(navigateur, site, "/autoload/index.html")
-    titre = p.inner_text("#gmb-title").strip()
-    assert titre and not re.match(r"^[-–—]", titre) and "SecuBox" not in titre, titre
+    assert p.evaluate("!document.getElementById('global-menu-bar')")
     ctx.close()
 
 
@@ -197,32 +195,18 @@ def test_contraste_du_texte_sur_le_fond_aurora(texte, mini):
 # ---------- sur iPhone ----------
 
 BARRES = """()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {g:Math.round(b.left),d:Math.round(b.right),h:Math.round(b.height)}};
-  return {W:innerWidth, haut:r('#global-menu-bar'), bas:r('#global-status-bar'), titre:r('#gmb-title'), deco:r('#global-menu-bar .menu-btn.danger'),
-          bascule:r('#sidebar-toggle'), scroll:document.documentElement.scrollWidth}}"""
+  return {W:innerWidth, bas:r('#global-status-bar'), scroll:document.documentElement.scrollWidth}}"""
 
 
 @pytest.mark.parametrize("largeur", [390, 768])
-def test_sur_iphone_les_barres_du_haut_et_du_bas_occupent_toute_la_largeur(navigateur, site, largeur):
-    """MESURÉ : le menu du haut et la barre du bas commençaient à 220 px (place de la barre latérale, pourtant repliée) et sortaient de l'écran."""
+def test_sur_iphone_la_barre_du_bas_occupe_toute_la_largeur(navigateur, site, largeur):
+    """MESURÉ : la barre du bas commençait à 220 px (place de la barre latérale, pourtant repliée) et sortait de l'écran.
+    #2987 : la barre du haut est retirée — plus rien à mesurer sur elle."""
     ctx = navigateur.new_context(viewport={"width": largeur, "height": 780}, has_touch=True, is_mobile=True)
     p = ctx.new_page()
     p.goto(f"http://admin.test:{site}/autoload/index.html")
     p.wait_for_timeout(1800)
     m = p.evaluate(BARRES)
     ctx.close()
-    assert m["haut"]["g"] == 0 and m["haut"]["d"] <= m["W"], m
     assert m["bas"]["g"] == 0 and m["bas"]["d"] <= m["W"], m
     assert m["scroll"] <= m["W"], m
-
-
-def test_sur_iphone_le_titre_et_la_deconnexion_restent_visibles_et_le_titre_ne_passe_pas_sous_la_bascule(navigateur, site):
-    ctx = navigateur.new_context(viewport={"width": 390, "height": 780}, has_touch=True, is_mobile=True)
-    p = ctx.new_page()
-    p.goto(f"http://admin.test:{site}/autoload/index.html")
-    p.wait_for_timeout(1800)
-    m = p.evaluate(BARRES)
-    ctx.close()
-    assert m["titre"] and 0 <= m["titre"]["g"] and m["titre"]["d"] <= m["W"], m
-    assert m["deco"] and m["deco"]["d"] <= m["W"], m
-    if m["bascule"]:
-        assert m["titre"]["g"] >= m["bascule"]["d"], f"le titre passe sous le bouton du menu : {m}"
