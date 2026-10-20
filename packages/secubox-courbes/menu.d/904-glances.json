@@ -1,11 +1,11 @@
 {
   "id": "glances",
-  "name": "Glances",
+  "name": "Graphs",
   "category": "mind",
   "icon": "📈",
   "path": "/glances/",
   "order": 904,
-  "description": "System monitoring via Glances",
+  "description": "Système en direct : CPU, mémoire, réseau, disques",
   "theme": "supervision",
   "unite": "courbes"
 }

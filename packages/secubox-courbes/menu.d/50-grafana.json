@@ -6,7 +6,7 @@
   "name": "Courbes",
   "path": "/grafana/",
   "category": "mind",
-  "description": "Courbes de la box sur 7 jours (remplace Grafana)",
+  "description": "Courbes de la box sur 7 jours",
   "theme": "supervision",
   "unite": "courbes"
 }
