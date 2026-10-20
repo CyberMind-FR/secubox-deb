@@ -1,3 +1,13 @@
+secubox-ad-guard (1.15.7-1~bookworm1) bookworm; urgency=medium
+
+  * TV auto (#2981) : `IPV6_CEDE_APRES_S` passe de 6 h (#2146) à 15 min — constat gk2, une TV
+    peut tourner son IPv6 toutes les 15-40 minutes, bien plus vite que l'hypothèse ~quotidienne
+    de #2146. Avec l'ancien seuil, les 4 adresses en place n'étaient jamais assez « périmées »
+    pour céder leur place : l'appareil sortait de sa vue de blocage et n'y revenait jamais
+    (pubs non filtrées en continu malgré le mode auto). 1 test (#2146 toujours couvert).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 20 Oct 2026 08:45:00 +0200
+
 secubox-ad-guard (1.15.6-1~bookworm1) bookworm; urgency=high
 
   * Exception adulte : #2976 (vue partagée + view-first:yes) était CASSÉE — vérifié en direct
