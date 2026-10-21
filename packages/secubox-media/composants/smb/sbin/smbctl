@@ -8,7 +8,9 @@
 # CyberMind — https://cybermind.fr
 #
 # Seule surface privilegiee du module. Rend du JSON pour rester consommable par
-# un panneau, comme les autres ctl du projet.
+# un panneau, comme les autres ctl du projet. Le panneau « Partages SMB »
+# (#3000) delegue tout ici par `sudo -n smbctl` : les gardes vivent ICI, pas
+# dans la couche HTTP, qui serait contournee par tout autre appelant.
 #
 # CE QUE CE CTL NE FAIT PAS, ET POURQUOI :
 #
@@ -19,14 +21,41 @@
 #   Il n'ouvre aucun port : le cantonnement au LAN vit dans le drop-in nft,
 #   pas ici. Une garde posee dans un outil d'administration serait contournee
 #   par tout autre appelant.
+#
+#   Il ne partage qu'un repertoire sous une racine declaree (SECUBOX_SMB_ROOTS,
+#   par defaut /data /media /srv /mnt /home) : le reste du systeme (/etc, les
+#   secrets, les rootfs LXC) n'est jamais un partage, meme demande.
 
 set -uo pipefail
 
-readonly VERSION="1.0.0"
+readonly VERSION="1.1.0"
 readonly CONF="${SECUBOX_SMB_CONF:-/etc/ksmbd/ksmbd.conf}"
 readonly USERDB="${SECUBOX_SMB_USERDB:-/etc/ksmbd/ksmbdpwd.db}"
+readonly AUDIT="${SECUBOX_SMB_AUDIT:-/var/log/secubox/audit.log}"
+readonly ROOTS="${SECUBOX_SMB_ROOTS:-/data:/media:/srv:/mnt:/home}"
 
 _json() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+
+# Chaque decision de securite (partage cree ou retire, compte cree ou retire)
+# laisse une ligne JSON dans le journal d'audit, en ajout seul. Jamais de
+# mot de passe dedans.
+_audit() {
+    python3 - "$AUDIT" "$@" <<'PY' 2>/dev/null || true
+import json, os, sys, time
+chemin, action, *reste = sys.argv[1:]
+ligne = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "module": "smb", "action": action,
+         "par": os.environ.get("SUDO_USER") or os.environ.get("USER") or "?"}
+for kv in reste:
+    k, _, v = kv.partition("=")
+    ligne[k] = v
+try:
+    os.makedirs(os.path.dirname(chemin), exist_ok=True)
+    with open(chemin, "a") as f:
+        f.write(json.dumps(ligne, ensure_ascii=False) + "\n")
+except OSError:
+    pass
+PY
+}
 
 # ── status ──────────────────────────────────────────────────────────────────
 #
@@ -41,29 +70,40 @@ cmd_status() {
     ss -tln 2>/dev/null | grep -q ':445 ' && listen=true
     [ -r "$USERDB" ] && users=$(grep -c ':' "$USERDB" 2>/dev/null || echo 0)
 
-    python3 - "$mod" "$svc" "$listen" "$users" "$CONF" <<'PY'
+    python3 - "$mod" "$svc" "$listen" "$users" "$CONF" "$ROOTS" <<'PY'
 import json, re, sys, os
-mod, svc, listen, users, conf = sys.argv[1:6]
-shares = []
+mod, svc, listen, users, conf, roots = sys.argv[1:7]
+shares, glob, auto = [], {}, False
+BEG, END = "; >>> SECUBOX-SMB AUTO-SHARES >>>", "; <<< SECUBOX-SMB AUTO-SHARES <<<"
 try:
     cur = None
     for line in open(conf):
-        line = line.strip()
-        if line.startswith(';') or line.startswith('#'):
+        raw = line.strip()
+        if raw == BEG: auto = True; continue
+        if raw == END: auto = False; continue
+        if raw.startswith(';') or raw.startswith('#'):
             continue
-        m = re.match(r'^\[(.+)\]$', line)
+        m = re.match(r'^\[(.+)\]$', raw)
         if m:
             cur = m.group(1)
             if cur != "global":
-                shares.append({"name": cur, "path": None, "readonly": None})
+                # `auto` : partage genere par sync-shares (un par support monte), regenere a chaque sync.
+                shares.append({"name": cur, "path": None, "readonly": None, "comment": "", "users": [], "auto": auto})
             continue
-        if shares and cur and cur != "global" and '=' in line:
-            k, v = (x.strip() for x in line.split('=', 1))
-            if k == "path":
-                shares[-1]["path"] = v
-                shares[-1]["exists"] = os.path.isdir(v)
-            elif k == "read only":
-                shares[-1]["readonly"] = v.lower() in ("yes", "true", "1")
+        if cur and '=' in raw:
+            k, v = (x.strip() for x in raw.split('=', 1))
+            if cur == "global":
+                glob[k] = v
+            elif shares:
+                if k == "path":
+                    shares[-1]["path"] = v
+                    shares[-1]["exists"] = os.path.isdir(v)
+                elif k == "read only":
+                    shares[-1]["readonly"] = v.lower() in ("yes", "true", "1")
+                elif k == "comment":
+                    shares[-1]["comment"] = v
+                elif k == "valid users":
+                    shares[-1]["users"] = [u for u in re.split(r'[,\s]+', v) if u]
 except OSError:
     # Une configuration illisible ne doit pas faire disparaitre le reste du
     # diagnostic : l'etat du module et du service reste utile.
@@ -78,6 +118,10 @@ print(json.dumps({
     # Un partage declare mais sans compte n'est joignable par personne : le
     # dire evite de chercher le defaut dans le reseau ou le pare-feu.
     "usable": mod == "true" and svc == "active" and listen == "true" and int(users) > 0,
+    "netbios": glob.get("netbios name", "SECUBOX"),
+    "interfaces": glob.get("interfaces", ""),
+    "min_protocol": glob.get("server min protocol", ""),
+    "roots": [r for r in roots.split(":") if r],
     "shares": shares,
 }))
 PY
@@ -87,9 +131,12 @@ PY
 #
 # Le mot de passe est LU SUR L'ENTREE STANDARD, jamais passe en argument : un
 # argument apparait dans la table des processus et dans l'historique du shell.
+_user_ok() { printf '%s' "$1" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,46}$'; }
+
 cmd_user_add() {
     local user="${1:-}"
     [ -n "$user" ] || { printf '{"ok":false,"error":"nom d utilisateur requis"}\n'; return 2; }
+    _user_ok "$user" || { printf '{"ok":false,"error":"nom de compte invalide (lettres, chiffres, . _ -, 47 max)"}\n'; return 2; }
     command -v ksmbd.adduser >/dev/null 2>&1 || {
         printf '{"ok":false,"error":"ksmbd-tools absent (apt install ksmbd-tools)"}\n'; return 1; }
     if [ -t 0 ]; then
@@ -102,15 +149,31 @@ cmd_user_add() {
     # commande, donc dans la table des processus, lisible par tout utilisateur
     # de la machine. ksmbd.adduser sait le demander — on le lui donne sur
     # l'entree standard, deux fois (saisie + confirmation).
+    # `-P` (ksmbd-tools >= 3.5) designe la base de comptes ; `-i` des versions
+    # anterieures n'existe plus.
     local out rc mode="-a"
     grep -q "^$user:" "$USERDB" 2>/dev/null && mode="-u"
-    out=$(printf '%s\n%s\n' "$pw" "$pw" | ksmbd.adduser "$mode" "$user" -i "$USERDB" 2>&1)
+    out=$(printf '%s\n%s\n' "$pw" "$pw" | ksmbd.adduser "$mode" -P "$USERDB" "$user" 2>&1)
     rc=$?
     if [ $rc -eq 0 ]; then
-        printf '{"ok":true,"user":%s}\n' "$(_json "$user")"
+        _audit "$([ "$mode" = -a ] && echo compte-cree || echo compte-modifie)" "compte=$user"
+        printf '{"ok":true,"user":%s,"created":%s}\n' "$(_json "$user")" "$([ "$mode" = -a ] && echo true || echo false)"
     else
         printf '{"ok":false,"error":%s}\n' "$(_json "${out:0:200}")"
     fi
+}
+
+cmd_user_del() {
+    local user="${1:-}"
+    [ -n "$user" ] || { printf '{"ok":false,"error":"nom d utilisateur requis"}\n'; return 2; }
+    _user_ok "$user" || { printf '{"ok":false,"error":"nom de compte invalide"}\n'; return 2; }
+    grep -q "^$user:" "$USERDB" 2>/dev/null || { printf '{"ok":false,"error":"compte inconnu"}\n'; return 1; }
+    command -v ksmbd.adduser >/dev/null 2>&1 || {
+        printf '{"ok":false,"error":"ksmbd-tools absent (apt install ksmbd-tools)"}\n'; return 1; }
+    local out
+    out=$(ksmbd.adduser -d -P "$USERDB" "$user" 2>&1) || { printf '{"ok":false,"error":%s}\n' "$(_json "${out:0:200}")"; return 1; }
+    _audit compte-retire "compte=$user"
+    printf '{"ok":true,"user":%s}\n' "$(_json "$user")"
 }
 
 cmd_users() {
@@ -127,6 +190,113 @@ if os.path.isfile(db):
         pass
 print(json.dumps({"ok": True, "users": sorted(set(n for n in names if n))}))
 PY
+}
+
+# ── share-add / share-del ───────────────────────────────────────────────────
+#
+# Un partage MANUEL (#3000) : nom assaini, chemin REEL (liens resolus) sous une
+# racine declaree, jamais un partage genere (ceux-la vivent entre les marqueurs
+# AUTO-SHARES et sync-shares les reecrit). `ksmbd.addshare` ecrit la section en
+# fin de fichier, donc hors du bloc genere. `valid users` restreint l'acces aux
+# comptes nommes ; sans, tout compte SMB declare y accede.
+_share_ok() { printf '%s' "$1" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$'; }
+
+_share_kind() {   # absent | manual | auto | global
+    python3 - "$CONF" "$1" <<'PY'
+import re, sys
+conf, name = sys.argv[1], sys.argv[2].lower()
+BEG, END = "; >>> SECUBOX-SMB AUTO-SHARES >>>", "; <<< SECUBOX-SMB AUTO-SHARES <<<"
+auto, kind = False, "absent"
+try:
+    for line in open(conf):
+        raw = line.strip()
+        if raw == BEG: auto = True; continue
+        if raw == END: auto = False; continue
+        m = re.match(r'^\[(.+)\]$', raw)
+        if m and m.group(1).lower() == name:
+            kind = "global" if name == "global" else ("auto" if auto else "manual")
+            break
+except OSError:
+    pass
+print(kind)
+PY
+}
+
+cmd_share_add() {
+    local name="${1:-}" path="${2:-}" ro=no users="" comment="" a
+    shift 2 2>/dev/null || true
+    while [ $# -gt 0 ]; do
+        a="$1"; shift
+        case "$a" in
+            --ro) ro=yes ;;
+            --rw) ro=no ;;
+            --users) users="${1:-}"; shift ;;
+            --comment) comment="${1:-}"; shift ;;
+            *) printf '{"ok":false,"error":%s}\n' "$(_json "option inconnue : $a")"; return 2 ;;
+        esac
+    done
+    [ -n "$name" ] && [ -n "$path" ] || { printf '{"ok":false,"error":"nom et chemin requis"}\n'; return 2; }
+    _share_ok "$name" || { printf '{"ok":false,"error":"nom de partage invalide (lettres, chiffres, . _ -, 40 max)"}\n'; return 2; }
+    case "$(printf '%s' "$name" | tr 'A-Z' 'a-z')" in
+        global|ipc\$) printf '{"ok":false,"error":"nom reserve"}\n'; return 2 ;;
+    esac
+    case "$(_share_kind "$name")" in
+        auto) printf '{"ok":false,"error":"partage genere par sync-shares : il suit le support monte, il ne se redefinit pas"}\n'; return 2 ;;
+    esac
+    # Chemin : absolu, existant, REEL (un lien vers /etc ne passe pas), sous une racine.
+    local real
+    case "$path" in /*) ;; *) printf '{"ok":false,"error":"chemin absolu requis"}\n'; return 2 ;; esac
+    real=$(readlink -f -- "$path" 2>/dev/null) || real=""
+    [ -n "$real" ] && [ -d "$real" ] || { printf '{"ok":false,"error":"le repertoire n existe pas"}\n'; return 2; }
+    local ok=false r
+    IFS=: read -ra _roots <<<"$ROOTS"
+    for r in "${_roots[@]}"; do
+        [ -n "$r" ] || continue
+        [ "$real" = "$r" ] || [ "${real#"$r"/}" != "$real" ] && ok=true
+    done
+    [ "$ok" = true ] || { printf '{"ok":false,"error":%s}\n' "$(_json "chemin hors des racines partageables ($ROOTS)")"; return 2; }
+    # Comptes : chacun valide et existant ; separes par des virgules en entree, par des espaces pour ksmbd.
+    local u vu=""
+    if [ -n "$users" ]; then
+        IFS=, read -ra _us <<<"$users"
+        for u in "${_us[@]}"; do
+            u="${u// /}"; [ -n "$u" ] || continue
+            _user_ok "$u" || { printf '{"ok":false,"error":%s}\n' "$(_json "compte invalide : $u")"; return 2; }
+            grep -q "^$u:" "$USERDB" 2>/dev/null || { printf '{"ok":false,"error":%s}\n' "$(_json "compte SMB inconnu : $u")"; return 2; }
+            vu="${vu:+$vu }$u"
+        done
+    fi
+    comment=$(printf '%s' "$comment" | tr -d '\r\n[]' | cut -c1-80)
+    command -v ksmbd.addshare >/dev/null 2>&1 || {
+        printf '{"ok":false,"error":"ksmbd-tools absent (apt install ksmbd-tools)"}\n'; return 1; }
+    local mode="-a" out
+    [ "$(_share_kind "$name")" = manual ] && mode="-u"
+    set -- -C "$CONF" -P "$USERDB" -o "path = $real" -o "read only = $ro" -o "guest ok = no" -o "writeable = $([ "$ro" = yes ] && echo no || echo yes)"
+    [ -n "$comment" ] && set -- "$@" -o "comment = $comment"
+    [ -n "$vu" ] && set -- "$@" -o "valid users = $vu"
+    out=$(ksmbd.addshare "$mode" "$@" "$name" 2>&1) || { printf '{"ok":false,"error":%s}\n' "$(_json "${out:0:200}")"; return 1; }
+    _audit "$([ "$mode" = -a ] && echo partage-cree || echo partage-modifie)" "partage=$name" "chemin=$real" "lecture_seule=$ro" "comptes=$vu"
+    printf '{"ok":true,"share":%s,"path":%s,"readonly":%s,"users":%s,"created":%s}\n' \
+        "$(_json "$name")" "$(_json "$real")" "$([ "$ro" = yes ] && echo true || echo false)" \
+        "$(python3 -c 'import json,sys; print(json.dumps([u for u in sys.argv[1].split() if u]))' "$vu")" \
+        "$([ "$mode" = -a ] && echo true || echo false)"
+}
+
+cmd_share_del() {
+    local name="${1:-}"
+    [ -n "$name" ] || { printf '{"ok":false,"error":"nom de partage requis"}\n'; return 2; }
+    _share_ok "$name" || { printf '{"ok":false,"error":"nom de partage invalide"}\n'; return 2; }
+    case "$(_share_kind "$name")" in
+        absent) printf '{"ok":false,"error":"partage inconnu"}\n'; return 1 ;;
+        global) printf '{"ok":false,"error":"nom reserve"}\n'; return 2 ;;
+        auto) printf '{"ok":false,"error":"partage genere par sync-shares : demonter le support, puis sync-shares"}\n'; return 2 ;;
+    esac
+    command -v ksmbd.addshare >/dev/null 2>&1 || {
+        printf '{"ok":false,"error":"ksmbd-tools absent (apt install ksmbd-tools)"}\n'; return 1; }
+    local out
+    out=$(ksmbd.addshare -d -C "$CONF" -P "$USERDB" "$name" 2>&1) || { printf '{"ok":false,"error":%s}\n' "$(_json "${out:0:200}")"; return 1; }
+    _audit partage-retire "partage=$name"
+    printf '{"ok":true,"share":%s}\n' "$(_json "$name")"
 }
 
 # ── sync-shares ─────────────────────────────────────────────────────────────
@@ -208,6 +378,11 @@ smbctl — partage SMB servi par le noyau (ksmbd)
   status              Module, service, ecoute, comptes et partages
   users               Comptes SMB declares
   user-add <nom>      Ajoute/modifie un compte — MOT DE PASSE SUR STDIN
+  user-del <nom>      Retire un compte
+  share-add <nom> <chemin> [--ro|--rw] [--users a,b] [--comment texte]
+                      Partage manuel d'un repertoire sous une racine
+                      declaree (SECUBOX_SMB_ROOTS)
+  share-del <nom>     Retire un partage manuel (jamais un partage genere)
   sync-shares         Un partage par support monte (ksmbd ne traverse
                       pas les points de montage)
   reload              Recharge la configuration
@@ -223,6 +398,9 @@ case "${1:-help}" in
     status)   cmd_status ;;
     users)    cmd_users ;;
     user-add) shift; cmd_user_add "${1:-}" ;;
+    user-del) shift; cmd_user_del "${1:-}" ;;
+    share-add) shift; cmd_share_add "$@" ;;
+    share-del) shift; cmd_share_del "${1:-}" ;;
     sync-shares) cmd_sync_shares ;;
     reload)   cmd_reload ;;
     version)  printf '{"ok":true,"version":"%s"}\n' "$VERSION" ;;

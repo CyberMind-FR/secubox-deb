@@ -1,3 +1,18 @@
+secubox-media (1.9.0-1~trixie1) trixie; urgency=medium
+
+  * Partages SMB : panneau de gestion (ref #3000). Page Aurora /media/smb.html (état
+    module/service/écoute/comptes, partages manuels et générés, création d'un partage
+    sous une racine partageable, retrait, synchronisation des supports montés,
+    rechargement, comptes SMB avec mot de passe saisi dans la page) ; routes
+    /api/v1/media/smb/* toutes en require_jwt, délégation à `sudo -n smbctl` (sudoers).
+    smbctl 1.1.0 : share-add (nom assaini, chemin réel sous SECUBOX_SMB_ROOTS, comptes
+    existants, `valid users`), share-del (jamais un partage généré), user-del, status
+    enrichi (global, manuel/généré, comptes par partage), ligne d'audit par décision ;
+    ksmbd.adduser appelé avec -P (ksmbd-tools 3.5 : -i n'existe plus). Entrée de menu
+    « Partages SMB », lien depuis Médias externes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 22:30:00 +0200
+
 secubox-media (1.8.3-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
