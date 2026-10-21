@@ -1,3 +1,15 @@
+secubox-system (1.11.2-1~trixie1) trixie; urgency=medium
+
+  * Page /admin/ (composant admin, ref #3002) : « Vérifier » et « Mettre à jour tous les
+    paquets » passent par le même spool root que la page système (secubox-majctl) :
+    GET /updates garde sa forme (available, packages[name, old_version, new_version]),
+    POST /update lance en arrière-plan (paquets nommés → apt-get install --only-upgrade,
+    noms validés), nouveau GET /update/status ; la page suit la mise à niveau jusqu'à la
+    fin au lieu d'annoncer « terminée » à l'aveugle. secubox-majctl : versions dans la
+    simulation (details), `appliquer [paquets…]`.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 02:20:00 +0200
+
 secubox-system (1.11.1-1~trixie1) trixie; urgency=medium
 
   * postinst (ref #3002) : relance l'agrégateur, qui sert /api/v1/system/ en mémoire sur

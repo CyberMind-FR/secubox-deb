@@ -21,7 +21,7 @@ from secubox_core.kiosk import (
     get_interface_classification,
     check_interface_carrier,
 )
-import subprocess, json, psutil, socket, time, os
+import subprocess, json, psutil, socket, time, os, re
 import asyncio
 import threading
 import concurrent.futures
@@ -679,11 +679,14 @@ def _maj_etat() -> dict:
                 "paquets": [], "count": 0, "appliques": 0}
 
 
-def _maj_demande(verbe: str) -> None:
-    """Dépose la demande ; le nom porte l'instant et le verbe, le contenu le verbe (ce que lit le ctl)."""
+def _maj_demande(verbe: str, paquets: Optional[List[str]] = None) -> None:
+    """Dépose la demande : première ligne « verbe [paquet ...] » (ce que lit le ctl, qui revalide chaque nom)."""
+    noms = [p for p in (paquets or []) if re.fullmatch(r"[a-z0-9][a-z0-9+.-]{1,99}", p)]
+    if paquets and len(noms) != len(paquets):
+        raise HTTPException(400, "nom de paquet invalide")
     try:
         MAJ_SPOOL.mkdir(parents=True, exist_ok=True)
-        (MAJ_SPOOL / f"{int(time.time() * 1000)}-{verbe}.demande").write_text(verbe + "\n", encoding="utf-8")
+        (MAJ_SPOOL / f"{int(time.time() * 1000)}-{verbe}.demande").write_text(" ".join([verbe] + noms) + "\n", encoding="utf-8")
     except OSError as e:
         raise HTTPException(500, f"Dépôt de la demande impossible dans {MAJ_SPOOL} : {e}")
 

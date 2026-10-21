@@ -12,6 +12,9 @@ License: Proprietary / ANSSI CSPN candidate
 System administration module - advanced admin tasks for SecuBox.
 """
 import subprocess
+import time
+import re
+import os
 import psutil
 import asyncio
 import json
@@ -359,56 +362,65 @@ def _get_system_logs(unit: str = "", lines: int = 100, priority: str = "") -> Di
         return {"logs": [], "error": str(e)}
 
 
-def _get_available_updates() -> Dict[str, Any]:
-    """Check for available apt updates."""
+# ── Mises à jour apt (#3002) ─────────────────────────────────────────────────
+# Cette API est servie par l'agrégateur (secubox) sur le vhost d'administration : apt-get y échouait sur le verrou dpkg.
+# Elle DÉPOSE une demande dans /run/secubox/system/maj, drainée par l'unité root secubox-maj.path/.service
+# (secubox-majctl, livré par ce même paquet), puis LIT l'état écrit par le ctl. Ni sudo ni polkit.
+MAJ_SPOOL = Path(os.environ.get("SECUBOX_MAJ_SPOOL", "/run/secubox/system/maj"))
+MAJ_ETAT = Path(os.environ.get("SECUBOX_MAJ_ETAT", "/var/lib/secubox/system/maj.json"))
+MAJ_ATTENTE_S = int(os.environ.get("SECUBOX_MAJ_ATTENTE_S", "150"))
+
+
+def _maj_etat() -> Dict[str, Any]:
     try:
-        # First update cache (non-blocking check)
-        update_result = subprocess.run(
-            ["apt-get", "update", "-qq"],
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
+        return json.loads(MAJ_ETAT.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"phase": "idle", "derniere": None, "ok": None, "debut": 0, "fin": 0, "erreur": None,
+                "paquets": [], "count": 0, "details": [], "appliques": 0}
 
-        # List upgradable packages
-        result = subprocess.run(
-            ["apt", "list", "--upgradable"],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
 
-        packages = []
-        for line in result.stdout.strip().split('\n'):
-            if '/' in line and 'upgradable' in line.lower():
-                # Parse: package/suite version arch [upgradable from: old_version]
-                parts = line.split()
-                if len(parts) >= 2:
-                    pkg_name = parts[0].split('/')[0]
-                    new_version = parts[1] if len(parts) > 1 else "unknown"
-                    old_version = ""
-                    if 'from:' in line:
-                        old_version = line.split('from:')[-1].strip().rstrip(']')
+def _maj_demande(verbe: str, paquets: Optional[List[str]] = None) -> None:
+    """Première ligne « verbe [paquet ...] » ; le ctl revalide chaque nom."""
+    noms = [p for p in (paquets or []) if re.fullmatch(r"[a-z0-9][a-z0-9+.-]{1,99}", p)]
+    if paquets and len(noms) != len(paquets):
+        raise HTTPException(status_code=400, detail="nom de paquet invalide")
+    try:
+        MAJ_SPOOL.mkdir(parents=True, exist_ok=True)
+        (MAJ_SPOOL / f"{int(time.time() * 1000)}-{verbe}.demande").write_text(" ".join([verbe] + noms) + "\n", encoding="utf-8")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Dépôt de la demande impossible dans {MAJ_SPOOL} : {e}")
 
-                    packages.append({
-                        "name": pkg_name,
-                        "new_version": new_version,
-                        "old_version": old_version
-                    })
 
-        # Check for security updates
-        security_count = sum(1 for p in packages if 'security' in str(p).lower())
+def _maj_attend(verbe: str, depuis: int) -> Dict[str, Any]:
+    fin = time.time() + MAJ_ATTENTE_S
+    while time.time() < fin:
+        e = _maj_etat()
+        if e.get("derniere") == verbe and e.get("phase") == "idle" and int(e.get("fin") or 0) >= depuis:
+            return e
+        time.sleep(1)
+    e = _maj_etat()
+    if e.get("phase") == verbe and int(e.get("debut") or 0) >= depuis:
+        raise HTTPException(status_code=504, detail=f"{verbe} toujours en cours après {MAJ_ATTENTE_S}s — réessayer dans un instant.")
+    raise HTTPException(status_code=504, detail="Aucune réponse du service de mise à jour : l'unité secubox-maj.path est-elle active ?")
 
-        return {
-            "available": len(packages),
-            "security_updates": security_count,
-            "packages": packages,
-            "last_check": datetime.now().isoformat()
-        }
-    except subprocess.TimeoutExpired:
-        return {"available": 0, "packages": [], "error": "Update check timeout"}
-    except Exception as e:
-        return {"available": 0, "packages": [], "error": str(e)}
+
+def _get_available_updates() -> Dict[str, Any]:
+    """apt-get update + simulation par l'unité root ; même forme de réponse qu'avant (available, packages[name, old, new])."""
+    depuis = int(time.time())
+    _maj_demande("verifier")
+    try:
+        e = _maj_attend("verifier", depuis)
+    except HTTPException as ex:
+        return {"available": 0, "packages": [], "error": ex.detail}
+    if not e.get("ok"):
+        return {"available": 0, "packages": [], "error": f"apt-get update a échoué : {e.get('erreur') or 'raison inconnue'}"}
+    paquets = e.get("details") or [{"name": n, "old_version": "", "new_version": ""} for n in e.get("paquets", [])]
+    return {
+        "available": len(paquets),
+        "security_updates": sum(1 for p in paquets if "security" in str(p).lower()),
+        "packages": paquets,
+        "last_check": datetime.fromtimestamp(int(e.get("fin") or time.time())).isoformat(),
+    }
 
 
 # Health endpoint (public)
@@ -560,25 +572,27 @@ async def get_updates(user=Depends(require_jwt)):
 
 @router.post("/update")
 async def run_update(request: UpdateRequest, user=Depends(require_jwt)):
-    """Run apt upgrade (requires confirmation)."""
+    """Lance la mise à niveau EN ARRIÈRE-PLAN par l'unité root (upgrade, ou install --only-upgrade des paquets nommés).
+    Le suivi se lit sur GET /update/status ; la réponse dit seulement que c'est lancé, jamais « terminé »."""
     if not request.confirm:
         raise HTTPException(status_code=400, detail="Confirmation required for update")
+    if _maj_etat().get("phase") == "appliquer":
+        raise HTTPException(status_code=409, detail="Une mise à niveau est déjà en cours.")
 
     packages_str = ','.join(request.packages) if request.packages else "all"
     _audit_log(user.get("sub", "unknown"), "apt_upgrade", f"packages={packages_str}")
     log.info("APT upgrade requested by %s, packages: %s", user.get("sub"), packages_str)
+    _maj_demande("appliquer", request.packages)
+    return {"success": True, "started": True, "action": "upgrade", "packages": request.packages or ["all"],
+            "message": "Mise à niveau lancée en arrière-plan (unité root).", "suivi": "/update/status"}
 
-    # Build command
-    if request.packages:
-        cmd = ["apt-get", "install", "-y", "--only-upgrade"] + request.packages
-    else:
-        cmd = ["apt-get", "upgrade", "-y"]
 
-    # Run update (longer timeout)
-    result = _run_cmd(cmd, timeout=300)
-    result["action"] = "upgrade"
-    result["packages"] = request.packages or ["all"]
-    return result
+@router.get("/update/status")
+async def update_status(user=Depends(require_jwt)):
+    """État de la dernière opération apt : phase (idle | verifier | appliquer), ok, erreur, appliques, paquets restants."""
+    e = _maj_etat()
+    e["en_cours"] = e.get("phase") in ("verifier", "appliquer")
+    return e
 
 
 @router.get("/summary", dependencies=[Depends(require_lecture)])

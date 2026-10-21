@@ -27,7 +27,7 @@ echo "$*" >> "$APT_JOURNAL"
 case " $* " in
   *" update "*) [ -f "$APT_PANNE" ] && { echo "E: Impossible de récupérer http://depot/InRelease" >&2; exit 100; }; echo "Hit:1 http://depot trixie InRelease"; exit 0 ;;
   *" -s upgrade "*) if [ -f "$APT_FAIT" ]; then echo "Reading package lists..."; else printf 'Reading package lists...\nInst secubox-hub [1.10.2] (1.11.0 apt.secubox.in:trixie [all])\nInst libssl3t64 [3.5.1] (3.5.2 Debian:13.7/stable [arm64])\nConf secubox-hub (1.11.0)\n'; fi; exit 0 ;;
-  *" upgrade "*) echo "Setting up secubox-hub (1.11.0) ..."; touch "$APT_FAIT"; exit 0 ;;
+  *" upgrade "*|*" --only-upgrade "*) echo "Setting up secubox-hub (1.11.0) ..."; touch "$APT_FAIT"; exit 0 ;;
 esac
 exit 2
 '''
@@ -191,3 +191,89 @@ def test_l_api_ne_lance_plus_apt_elle_meme():
 def test_la_page_suit_la_mise_a_niveau():
     page = (SYSTEM / "www" / "system" / "index.html").read_text(encoding="utf-8")
     assert "'/maj_status'" in page and "'/check_updates'" in page and "'/apply_updates'" in page and "en_cours" in page
+
+
+# ── l'API admin (composant admin, page /admin/) ─────────────────────────────
+def charge_admin(tmp_path, monkeypatch, attente="5"):
+    monkeypatch.setenv("SECUBOX_MAJ_SPOOL", str(tmp_path / "spool"))
+    monkeypatch.setenv("SECUBOX_MAJ_ETAT", str(tmp_path / "maj.json"))
+    monkeypatch.setenv("SECUBOX_MAJ_ATTENTE_S", attente)
+    sys.path.insert(0, str(SYSTEM / "composants" / "admin"))
+    spec = importlib.util.spec_from_file_location("api_admin_3002", SYSTEM / "composants" / "admin" / "api" / "main.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _run(coro):
+    import asyncio
+    return asyncio.run(coro)
+
+
+def test_admin_updates_meme_forme_qu_avant_depuis_le_ctl(tmp_path, monkeypatch):
+    api = charge_admin(tmp_path, monkeypatch)
+    monkeypatch.setattr(api.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("apt depuis l'API admin")))
+    def run():
+        sp = tmp_path / "spool"
+        for _ in range(100):
+            d = list(sp.glob("*.demande")) if sp.exists() else []
+            if d:
+                assert d[0].read_text().strip() == "verifier"
+                d[0].unlink(); break
+            time.sleep(0.05)
+        (tmp_path / "maj.json").write_text(json.dumps({"phase": "idle", "derniere": "verifier", "ok": True, "debut": int(time.time()) - 1, "fin": int(time.time()),
+            "erreur": None, "paquets": ["libx", "outil"], "count": 2, "appliques": 0,
+            "details": [{"name": "libx", "old_version": "1.0", "new_version": "1.1"}, {"name": "outil", "old_version": "2", "new_version": "3"}]}))
+    threading.Thread(target=run, daemon=True).start()
+    r = _run(api.get_updates(user={"sub": "admin"}))
+    assert r["available"] == 2 and r["packages"][0] == {"name": "libx", "old_version": "1.0", "new_version": "1.1"} and "last_check" in r
+
+
+def test_admin_updates_sans_unite_repond_error_comme_avant(tmp_path, monkeypatch):
+    api = charge_admin(tmp_path, monkeypatch, attente="2")
+    r = _run(api.get_updates(user={"sub": "admin"}))
+    assert r["available"] == 0 and "secubox-maj.path" in r["error"]       # la page affiche « Vérification impossible : … »
+
+
+def test_admin_update_lance_en_arriere_plan_avec_les_paquets_nommes(tmp_path, monkeypatch):
+    api = charge_admin(tmp_path, monkeypatch)
+    monkeypatch.setattr(api, "_audit_log", lambda *a, **k: None)
+    r = _run(api.run_update(api.UpdateRequest(confirm=True, packages=["libx", "outil"]), user={"sub": "admin"}))
+    assert r["success"] and r["started"] and r["suivi"] == "/update/status"
+    d = list((tmp_path / "spool").glob("*.demande"))
+    assert len(d) == 1 and d[0].read_text().strip() == "appliquer libx outil"
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as ex:
+        _run(api.run_update(api.UpdateRequest(confirm=True, packages=["libx; rm -rf /"]), user={"sub": "admin"}))
+    assert ex.value.status_code == 400
+    with pytest.raises(HTTPException) as ex:
+        _run(api.run_update(api.UpdateRequest(confirm=False), user={"sub": "admin"}))
+    assert ex.value.status_code == 400
+    s = _run(api.update_status(user={"sub": "admin"}))
+    assert s["en_cours"] is False
+
+
+def test_admin_ne_lance_plus_apt_et_la_page_suit_le_statut():
+    src = (SYSTEM / "composants" / "admin" / "api" / "main.py").read_text(encoding="utf-8")
+    assert '"apt-get"' not in src and '"apt"' not in src
+    page = (SYSTEM / "composants" / "admin" / "www" / "admin" / "index.html").read_text(encoding="utf-8")
+    assert "'/update/status'" in page and "en_cours" in page and "Mise à jour terminée" in page
+
+
+def test_appliquer_des_paquets_nommes_passe_par_only_upgrade(env):
+    rc, out = ctl(env, "appliquer", "secubox-hub", "libssl3t64")
+    assert rc == 0 and json.loads(out)["appliques"] == 2
+    appels = Path(env["APT_JOURNAL"]).read_text()
+    assert "install -y -q --only-upgrade" in appels and "-- secubox-hub libssl3t64" in appels and "upgrade -y" not in appels.replace("--only-upgrade", "")
+    rc, out = ctl(env, "appliquer", "mauvais;nom")
+    assert rc != 0 and "invalide" in json.loads(out)["error"]
+    sp = Path(env["SECUBOX_MAJ_SPOOL"])
+    (sp / "9-appliquer.demande").write_text("appliquer secubox-hub\n")
+    rc, out = ctl(env, "process-ops")
+    assert json.loads(out)["traitees"] == 1 and "-- secubox-hub\n" in Path(env["APT_JOURNAL"]).read_text() or "-- secubox-hub" in Path(env["APT_JOURNAL"]).read_text()
+
+
+def test_verifier_donne_aussi_les_versions(env):
+    ctl(env, "verifier")
+    e = etat(env)
+    assert e["details"][0] == {"name": "secubox-hub", "old_version": "1.10.2", "new_version": "1.11.0"}
