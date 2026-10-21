@@ -162,6 +162,21 @@
       .catch(function(){ pastille('off','SecuBox-DEB · Hors ligne'); });
   }
 
+  // ── Le dé SecuBox remplace le médaillon (chargé seulement en v2) ───────
+  function de(){
+    var logo=$('.logo'), med=$('.logo .medaillon'); if(!logo||!med) return;
+    function pose(){
+      var d=document.createElement('sbx-dice'); d.setAttribute('speed','4'); d.setAttribute('fov','40');
+      var mq=matchMedia('(max-width:720px)'), taille=function(){ d.setAttribute('size',mq.matches?'30':'36'); }; taille();
+      if(mq.addEventListener) mq.addEventListener('change',taille); else mq.addListener(taille);
+      med.replaceWith(d);
+      logo.addEventListener('mouseenter',function(){ d.setAttribute('speed','12'); });
+      logo.addEventListener('mouseleave',function(){ d.setAttribute('speed','4'); });
+    }
+    if(customElements.get('sbx-dice')) return pose();
+    var s=document.createElement('script'); s.src='/sbx-dice.js'; s.onload=pose; document.head.appendChild(s);
+  }
+
   // ── Construction ───────────────────────────────────────────────────────
   function construis(){
     if(construit||root.getAttribute('data-hall')!=='v2') return;
@@ -178,6 +193,7 @@
     if(theme){ actions.insertBefore(dispo,theme); actions.insertBefore(notif,theme); theme.innerHTML=ico('theme'); theme.insertAdjacentElement('afterend',version); }
     else { actions.appendChild(dispo); actions.appendChild(notif); actions.appendChild(version); }
     var av=$('#who .av'); if(av) av.innerHTML=ico('usager');
+    de();
 
     // Corps : sidebar + zone principale.
     var corps=el('div',{'class':'sbx-corps'});

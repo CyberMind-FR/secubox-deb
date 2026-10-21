@@ -8,6 +8,9 @@ secubox-webos (1.15.0-1~bookworm1) bookworm; urgency=medium
     tant que le flag `hall_v2` (`/etc/secubox/webos.toml`) est faux ; prévisualisation par
     `?hall=v2`. Nouvelle route publique `GET /api/v1/webos/public/etat` (flag, version).
     L'ancien Hall est inchangé.
+  * Hall : le dé SecuBox dans la topbar v2 (phase 1bis, ref #2996). `<sbx-dice>` (`sbx-dice.js`,
+    8 Ko) reprend le moteur canvas 2D de 3d.<domaine> ; six textures en fichiers (`dice/`),
+    chargé seulement en v2, figé sous prefers-reduced-motion, en pause hors écran.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 09:00:00 +0200
 

@@ -15,6 +15,8 @@
 [data-hall="v2"] .mnav{display:none}
 [data-hall="v2"] .logo img.medaille,[data-hall="v2"] .medaillon,[data-hall="v2"] .medaillon .mface{width:36px;height:36px}
 [data-hall="v2"] .logo-notif{left:24px}
+[data-hall="v2"] .logo sbx-dice{display:inline-block;line-height:0;filter:drop-shadow(var(--sbx-dice-ombre))}
+[data-hall="v2"] .logo sbx-dice canvas{display:block}
 [data-hall="v2"] .mast .drop{flex:1 1 160px;max-width:560px;min-width:0;background:var(--sbx-surface);border:1px solid var(--sbx-bordure-2);
   border-radius:var(--sbx-rayon-s)}
 [data-hall="v2"] .mast .drop:focus-within{border-color:var(--sbx-accent);box-shadow:var(--sbx-halo-focus)}
@@ -87,7 +89,8 @@
 
 /* ── 980 px : la sidebar devient un rail horizontal, favoris masqués ─────── */
 @media(max-width:980px){
-  .sbx-corps{flex-direction:column}
+  .sbx-corps{flex-direction:column;align-items:stretch}
+  [data-hall="v2"] .shell{width:100%}
   .sbx-side{position:sticky;top:var(--mast-h,var(--sbx-top));z-index:50;width:100%;flex:none;height:auto;max-height:none;
     flex-direction:row;align-items:center;gap:var(--sbx-e-2);padding:var(--sbx-e-2) var(--sbx-e-3);
     overflow-x:auto;overflow-y:hidden;border-right:0;border-bottom:1px solid var(--sbx-bordure-2);scrollbar-width:none}

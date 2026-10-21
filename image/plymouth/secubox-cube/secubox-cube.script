@@ -23,13 +23,15 @@ scanlines = Image("scanlines.png");
 progress_bg = Image("progress-bg.png");
 progress_fg = Image("progress-fg.png");
 
-/* 6 face icons - one per cube face */
-face_images[0] = Image("icon-root.png");   /* Front  - Root/System */
-face_images[1] = Image("icon-wall.png");   /* Back   - Firewall */
-face_images[2] = Image("icon-boot.png");   /* Top    - Boot */
-face_images[3] = Image("icon-mesh.png");   /* Bottom - Mesh Network */
-face_images[4] = Image("icon-auth.png");   /* Right  - Auth */
-face_images[5] = Image("icon-mind.png");   /* Left   - CyberMind */
+/* 6 faces — les textures du dé SecuBox (3d.<domaine>, reprises par le Hall : www/hall/dice/),
+   même ordre que FACES[] du moteur web : +Z SecuBox, +X FastAPI, -X Terminal, +Y nftables,
+   -Y Tailscale, -Z WireGuard. */
+face_images[0] = Image("face-5.png");   /* Front  (+Z) - SecuBox */
+face_images[1] = Image("face-0.png");   /* Back   (-Z) - WireGuard */
+face_images[2] = Image("face-1.png");   /* Top    (+Y) - nftables */
+face_images[3] = Image("face-3.png");   /* Bottom (-Y) - Tailscale */
+face_images[4] = Image("face-2.png");   /* Right  (+X) - FastAPI */
+face_images[5] = Image("face-4.png");   /* Left   (-X) - Terminal */
 
 /* ═══════════════════════════════════════════════════════════════
  * Create Sprites

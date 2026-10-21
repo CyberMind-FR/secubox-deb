@@ -218,6 +218,8 @@ def test_tablette_834_rail_horizontal_sans_favoris(nav):
     assert w > 600 and h < 120, (w, h)
     assert p.evaluate("getComputedStyle(document.querySelector('.sbx-side .sbx-favoris')).display") == "none"
     assert p.evaluate("getComputedStyle(document.querySelector('.sbx-tabbar')).display") == "none"
+    # en colonne, la zone principale prend toute la largeur (régression : .shell réduit à 652 px)
+    assert p.evaluate("document.querySelector('.main').getBoundingClientRect().width") >= 834 - 2
     assert erreurs == []
     ctx.close()
 
