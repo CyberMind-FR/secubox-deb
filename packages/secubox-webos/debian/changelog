@@ -1,3 +1,16 @@
+secubox-webos (1.15.0-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : vue maître, phase 1 (ref #2996). Jetons `--sbx-*` (`tokens.css`, thème clair par
+    redéfinition seule) et coque v2 (`hall-v2.css`, `hall-v2.js`) : topbar complétée (menu,
+    disposition, notifications, pastille « SecuBox-DEB vX · En ligne »), sidebar 220 px avec
+    rubriques, favoris et carte d'usager, zone principale `flex:999 1 560px`, ruptures 1180 /
+    980 / 720 px (rail horizontal, puis barre d'onglets fixe en bas, cibles ≥ 44 px). Inerte
+    tant que le flag `hall_v2` (`/etc/secubox/webos.toml`) est faux ; prévisualisation par
+    `?hall=v2`. Nouvelle route publique `GET /api/v1/webos/public/etat` (flag, version).
+    L'ancien Hall est inchangé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 09:00:00 +0200
+
 secubox-webos (1.14.3-1~bookworm1) bookworm; urgency=medium
 
   * Hall : annulation de #2957/#2958 (ref #2960). Le `margin:0` entre cardlets empilés dans une

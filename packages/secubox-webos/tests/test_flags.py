@@ -8,10 +8,16 @@ from api.flags import load_flags
 
 def test_missing_file_defaults(tmp_path):
     f = load_flags(str(tmp_path / "nope.toml"))
-    assert f == {"enabled": False, "registry_enabled": True}
+    assert f == {"enabled": False, "registry_enabled": True, "hall_v2": False}
 
 
 def test_reads_enabled(tmp_path):
     p = tmp_path / "webos.toml"
     p.write_text("[webos]\nenabled = true\nregistry_enabled = false\n")
-    assert load_flags(str(p)) == {"enabled": True, "registry_enabled": False}
+    assert load_flags(str(p)) == {"enabled": True, "registry_enabled": False, "hall_v2": False}
+
+
+def test_hall_v2_est_un_flag_a_part_entiere(tmp_path):
+    p = tmp_path / "webos.toml"
+    p.write_text("[webos]\nenabled = true\nhall_v2 = true\n")
+    assert load_flags(str(p))["hall_v2"] is True

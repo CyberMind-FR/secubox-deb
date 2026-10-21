@@ -1,0 +1,47 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0
+   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+   Source-Disclosed License — All rights reserved except as expressly granted.
+   See LICENCE-CMSD-1.0.md for terms.
+
+   Hall — jetons de la vue maître (#2996). Un composant lit un rôle, jamais une couleur en dur.
+   Le thème clair ne fait que redéfinir ces jetons : aucune règle de composant n'est dupliquée. */
+:root{
+  --sbx-fond:#070C1C; --sbx-surface:#0F1830; --sbx-surface-2:#0A1226;
+  --sbx-bordure:#243457; --sbx-bordure-2:#1B2745;
+  --sbx-texte:#E8EEFB; --sbx-texte-attenue:#8A9BC3;
+  --sbx-accent:#2563EB; --sbx-accent-2:#60A5FA;
+  --sbx-ok:#4ADE80; --sbx-warn:#FBBF24; --sbx-off:#FCA5A5; --sbx-info:#93C5FD;
+  --sbx-ok-fond:#0F2E24; --sbx-warn-fond:#3A2A0C; --sbx-off-fond:#3B1A1A; --sbx-info-fond:#172554;
+  --sbx-rayon-s:10px; --sbx-rayon-m:12px; --sbx-rayon-l:16px;
+  --sbx-e-1:4px; --sbx-e-2:8px; --sbx-e-3:12px; --sbx-e-4:16px;
+  --sbx-police:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --sbx-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+  --sbx-side:220px; --sbx-top:56px; --sbx-tabbar:64px;
+  --sbx-ombre:0 1px 0 rgba(255,255,255,.03) inset,0 10px 28px -14px rgba(0,0,0,.6);
+  --sbx-halo-focus:0 0 0 2px var(--sbx-fond),0 0 0 4px var(--sbx-accent-2);
+  --sbx-voile:rgba(7,12,28,.6);
+}
+:root[data-theme="light"]{
+  --sbx-fond:#F3F6FC; --sbx-surface:#FFFFFF; --sbx-surface-2:#E9EEF8;
+  --sbx-bordure:#C9D4EA; --sbx-bordure-2:#D9E1F0;
+  --sbx-texte:#0C1A33; --sbx-texte-attenue:#4A5B7E;
+  --sbx-accent:#2563EB; --sbx-accent-2:#1D4ED8;
+  --sbx-ok:#15803D; --sbx-warn:#A16207; --sbx-off:#B91C1C; --sbx-info:#1D4ED8;
+  --sbx-ok-fond:#DCFCE7; --sbx-warn-fond:#FEF3C7; --sbx-off-fond:#FEE2E2; --sbx-info-fond:#DBEAFE;
+  --sbx-ombre:0 1px 2px rgba(12,26,51,.06),0 8px 22px -12px rgba(12,26,51,.18);
+  --sbx-halo-focus:0 0 0 2px var(--sbx-fond),0 0 0 4px var(--sbx-accent);
+  --sbx-voile:rgba(12,26,51,.35);
+}
+/* Pont vers les anciens noms du Hall, en coque v2 seulement : les cartes existantes
+   adoptent la palette sans qu'une règle change. Hors v2, rien ne bouge. */
+:root[data-hall="v2"]{
+  --fond:var(--sbx-fond); --texte:var(--sbx-texte); --doux:var(--sbx-texte-attenue); --faible:var(--sbx-texte-attenue);
+  --trait:var(--sbx-bordure); --trait2:var(--sbx-bordure-2);
+  --bg:var(--sbx-surface-2); --panel:var(--sbx-surface); --panel-2:var(--sbx-surface-2);
+  --carte:var(--sbx-surface); --bande:var(--sbx-surface-2); --fond-degrade:none;
+  --cyan:var(--sbx-accent-2); --bleu:var(--sbx-accent); --btn:var(--sbx-accent);
+  --vert:var(--sbx-ok); --orange:var(--sbx-warn); --rouge:var(--sbx-off);
+  --nav:var(--sbx-surface-2); --nav-2:var(--sbx-surface); --nav-ink:var(--sbx-texte); --nav-dim:var(--sbx-texte-attenue); --nav-line:var(--sbx-bordure);
+  --shadow:var(--sbx-ombre); --lift:var(--sbx-ombre); --r:var(--sbx-rayon-m);
+  --police:var(--sbx-police);
+}

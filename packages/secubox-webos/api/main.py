@@ -5,6 +5,7 @@
 """SecuBox-Deb :: WebOS — API registre normalisé (P1)."""
 import asyncio
 import json
+import logging
 import time
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -22,7 +23,20 @@ from secubox_core.auth import require_lecture
 _cache: dict = {"services": [], "computed_at": None}
 _montes: frozenset = frozenset()          # modules montés par l'agrégateur (#2455), rafraîchi hors de la boucle d'événements
 _flags: dict = flags.load_flags()
+_version: str = ""                        # version du paquet, lue une fois au démarrage (#2996)
 _CACHE_FILE = Path("/var/cache/secubox/webos/services.json")
+
+
+async def _lire_version() -> str:
+    try:
+        p = await asyncio.create_subprocess_exec(
+            "dpkg-query", "-W", "-f=${Version}", "secubox-webos",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        out, _ = await asyncio.wait_for(p.communicate(), timeout=5)
+        return out.decode().strip()
+    except (OSError, asyncio.TimeoutError) as exc:
+        logging.getLogger(__name__).warning("version du paquet illisible : %s", exc)
+        return ""
 
 
 def _live_sockets(sock_dir: str = "/run/secubox") -> frozenset:
@@ -70,8 +84,9 @@ async def _refresh_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _flags
+    global _flags, _version
     _flags = flags.load_flags()
+    _version = await _lire_version()
     if _CACHE_FILE.exists():
         try:
             _cache.update(json.loads(_CACHE_FILE.read_text()))
@@ -103,6 +118,12 @@ _PUBLIC_FIELDS = ("id", "name", "description", "category", "icon", "installed", 
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
+
+
+@public_router.get("/etat")
+async def public_etat():
+    """Pastille de la coque et flag hall.v2 : rien de sensible (version du paquet, en ligne)."""
+    return {"hall_v2": bool(_flags.get("hall_v2")), "version": _version, "en_ligne": True}
 
 
 @public_router.get("/services")

@@ -25,6 +25,7 @@ disponible et bascule seul quand un service apprend à se résumer.
 | **Mégabarre** | Accueil / Services / Système, recherche — **ou barre d'adresse** (une adresse tapée se surfe) |
 | **Menu profil** | identités détectées (registre RGPD), thème, « ordre actuel = défaut », connexion SecuBox |
 | **Le BiB** | voir ci-dessous |
+| **Vue maître (v2)** | coque responsive derrière le flag `hall_v2` de `/etc/secubox/webos.toml` (prévisualisation : `?hall=v2`) — jetons `tokens.css`, `hall-v2.css`, `hall-v2.js` ; état public `GET /api/v1/webos/public/etat` → `{hall_v2, version, en_ligne}` (#2996) |
 
 ## Les cartes du Hall
 

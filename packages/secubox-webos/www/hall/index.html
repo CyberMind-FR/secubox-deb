@@ -25,6 +25,7 @@
 <head>
 <meta charset="utf-8">
 <script>/* Aurora (#2656) : sombre par défaut ; le choix mémorisé (#1240) est reposé plus bas, avant tout rendu. */try{if(!document.documentElement.getAttribute("data-theme"))document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
+<script>/* Coque v2 (#2996) : le choix est reposé avant tout rendu, comme le thème. ?hall=v2|v1 fixe le choix de ce navigateur, ?hall= l'efface ; sinon le dernier flag hall.v2 connu de la box (hall-v2.js). */try{var _h=new URLSearchParams(location.search).get("hall");if(_h==="v2"||_h==="v1")localStorage.setItem("sbx.hall.v2",_h==="v2"?"1":"0");else if(_h==="")localStorage.removeItem("sbx.hall.v2");var _c=localStorage.getItem("sbx.hall.v2");if((_c===null?localStorage.getItem("sbx.hall.v2.box"):_c)==="1")document.documentElement.setAttribute("data-hall","v2")}catch(e){}</script>
 <title>SecuBox Hall</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- FLAG LAN (#1247) : nginx (hall.vhost.conf, sub_filter) remplace le marqueur
@@ -1141,7 +1142,10 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 .tour-tip .nx{border:none;background:var(--btn);color:#fff;border-radius:9px;padding:7px 15px;font-size:.82rem;font-weight:600;cursor:pointer}
 @media(prefers-reduced-motion:reduce){.tour-hole,.tour-tip{transition:none}}
 </style>
-
+<!-- Vue maître (#2996) : jetons --sbx-* et coque v2, inertes tant que <html data-hall="v2"> n'est pas posé. -->
+<link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="/hall-v2.css">
+<script src="/hall-v2.js" defer></script>
 </head>
 <body>
 <header class="mast">
