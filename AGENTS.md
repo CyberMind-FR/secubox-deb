@@ -52,7 +52,7 @@ Code partagé : `common/secubox_core/`. Suivi de projet : `.claude/`.
 - Stats lourdes : tâche de fond + cache fichier (`.claude/reference/PERF-CACHE.md`), jamais pour start/stop/ban.
 
 **Paquets / frontend / fichiers**
-- Version `X.Y.Z-N~bookworm1`, `debian/compat` 13, `Standards-Version: 4.6.2` ; `postinst`
+- Version `X.Y.Z-N~trixie1` (suite `trixie` par défaut depuis le 2026-10-21 ; les anciennes entrées `~bookworm1` sont réestampillées au build), `debian/compat` 13, `Standards-Version: 4.6.2` ; `postinst`
   `systemctl enable --now`, `prerm` `systemctl stop`. Source modifiée et déployée = version montée.
 - Frontend `htdocs` porté de LuCI : ne pas modifier le JS/CSS/HTML porté (`scripts/rewrite-xhr.py`).
   Look & feel des webui de gestion : `.claude/WEBUI-PANEL-GUIDELINES.md`.

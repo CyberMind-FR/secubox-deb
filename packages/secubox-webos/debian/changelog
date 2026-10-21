@@ -1,4 +1,4 @@
-secubox-webos (1.15.0-1~bookworm1) bookworm; urgency=medium
+secubox-webos (1.15.0-1~trixie1) trixie; urgency=medium
 
   * Hall : vue maître, phase 1 (ref #2996). Jetons `--sbx-*` (`tokens.css`, thème clair par
     redéfinition seule) et coque v2 (`hall-v2.css`, `hall-v2.js`) : topbar complétée (menu,

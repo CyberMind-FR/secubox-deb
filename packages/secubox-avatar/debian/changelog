@@ -1,4 +1,4 @@
-secubox-avatar (1.4.0-1~bookworm1) bookworm; urgency=medium
+secubox-avatar (1.4.0-1~trixie1) trixie; urgency=medium
 
   * `GET /api/v1/avatar/par-nom/{username}` (garde de lecture, ref #2996) : l'image d'une
     identité par son nom d'usager — le pseudo sbxid de la session — sans révéler l'identifiant
