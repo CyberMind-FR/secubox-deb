@@ -1,3 +1,11 @@
+secubox-media (1.9.1-1~trixie1) trixie; urgency=medium
+
+  * smbctl status (ref #3000) : module et écoute 445 détectés sans `cmd | grep -q` —
+    avec pipefail, grep quittait avant lsmod/ss (SIGPIPE) et le module ou l'écoute
+    étaient annoncés absents au hasard du timing (`usable` faux sur gk2).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 22:50:00 +0200
+
 secubox-media (1.9.0-1~trixie1) trixie; urgency=medium
 
   * Partages SMB : panneau de gestion (ref #3000). Page Aurora /media/smb.html (état

@@ -64,10 +64,13 @@ PY
 # module n'est pas charge ne sert rien.
 cmd_status() {
     local mod=false svc="inactive" listen=false users=0
-    lsmod 2>/dev/null | grep -q '^ksmbd ' && mod=true
+    # PAS de `cmd | grep -q` ici : avec pipefail, grep -q quitte des la premiere
+    # ligne, lsmod/ss recoivent SIGPIPE et le tube echoue — au hasard du timing,
+    # le module ou l'ecoute etaient annonces absents alors qu'ils etaient la.
+    case "$(lsmod 2>/dev/null)" in *ksmbd*) mod=true ;; esac
     svc=$(systemctl is-active ksmbd 2>/dev/null | head -1)
     [ -n "$svc" ] || svc="inactive"
-    ss -tln 2>/dev/null | grep -q ':445 ' && listen=true
+    case "$(ss -tln 2>/dev/null)" in *:445\ *) listen=true ;; esac
     [ -r "$USERDB" ] && users=$(grep -c ':' "$USERDB" 2>/dev/null || echo 0)
 
     python3 - "$mod" "$svc" "$listen" "$users" "$CONF" "$ROOTS" <<'PY'

@@ -75,7 +75,11 @@ def env(tmp_path):
     db.write_text("admin:abc\n")
     bin_ = tmp_path / "bin"
     bin_.mkdir()
-    for n, src in (("ksmbd.addshare", ADDSHARE), ("ksmbd.adduser", ADDUSER)):
+    # lsmod et ss doubles : sorties longues, comme sur la box, pour attraper le piege pipefail + grep -q.
+    LSMOD = "#!/usr/bin/env bash\nfor i in $(seq 1 200); do echo \"module$i 12288 0\"; done; echo 'ksmbd                 299008  0'; for i in $(seq 1 200); do echo \"autre$i 12288 0\"; done\n"
+    SS = "#!/usr/bin/env bash\nfor i in $(seq 1 300); do echo \"LISTEN 0 128 127.0.0.1:$((10000+i)) *:*\"; done; echo 'LISTEN 0 16 *%eth2:445 *:*'\n"
+    SYSTEMCTL = "#!/usr/bin/env bash\necho active\n"
+    for n, src in (("ksmbd.addshare", ADDSHARE), ("ksmbd.adduser", ADDUSER), ("lsmod", LSMOD), ("ss", SS), ("systemctl", SYSTEMCTL)):
         p = bin_ / n
         p.write_text(src)
         p.chmod(0o755)
@@ -98,7 +102,9 @@ def audit(env):
 
 
 def test_status_distingue_partages_manuels_et_generes_et_lit_le_global(env):
-    rc, d = run(env, "status")
+    for _ in range(20):      # le piege pipefail + grep -q etait aleatoire : on insiste
+        rc, d = run(env, "status")
+        assert d["module_loaded"] is True and d["listening"] is True and d["service"] == "active" and d["usable"] is True
     assert rc == 0 and d["ok"] and d["netbios"] == "SECUBOX" and d["interfaces"] == "eth2" and d["min_protocol"] == "SMB3_00"
     assert d["roots"] == env["SECUBOX_SMB_ROOTS"].split(":")
     noms = {s["name"]: s for s in d["shares"]}
