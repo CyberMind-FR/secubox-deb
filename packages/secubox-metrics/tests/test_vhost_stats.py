@@ -127,3 +127,70 @@ def test_le_cumul_survit_a_la_purge_de_retention(tmp_path, monkeypatch):
     # Purger deux fois ne doit pas compter deux fois.
     ag._elaguer()
     assert ag.cumul_de("ganimed.fr")["visites"] == 520
+
+
+# ── #2993 — /vhost-stats recalculee en direct a chaque appel (7-8s mesurees
+# sur gk2, 23700 entrees fusionnees) : la carte Visiteurs clignote quand le
+# calcul depasse le temps dont dispose le prochain cycle de la page. ──
+
+def test_vue_met_en_cache_et_evite_un_second_calcul_immediat(monkeypatch):
+    from api import vhost_stats as V
+
+    appels = []
+    original = V.VhostStatsAggregator.current
+
+    def espion(self, periode="jour", grouper=False):
+        appels.append((periode, grouper))
+        return original(self, periode, grouper)
+
+    monkeypatch.setattr(V.VhostStatsAggregator, "current", espion)
+
+    ag = V.VhostStatsAggregator()
+    a = ag.vue("semaine", False)
+    b = ag.vue("semaine", False)
+
+    assert len(appels) == 1, f"current() recalcule malgre le cache : {appels}"
+    assert a is b
+
+
+def test_vue_recalcule_apres_expiration_du_cache(monkeypatch):
+    from api import vhost_stats as V
+
+    appels = []
+    original = V.VhostStatsAggregator.current
+
+    def espion(self, periode="jour", grouper=False):
+        appels.append((periode, grouper))
+        return original(self, periode, grouper)
+
+    monkeypatch.setattr(V.VhostStatsAggregator, "current", espion)
+
+    ag = V.VhostStatsAggregator()
+    horloge = {"t": 1000.0}
+    monkeypatch.setattr(V.time, "monotonic", lambda: horloge["t"])
+
+    ag.vue("semaine", False)
+    horloge["t"] += ag._cache_ttl + 1
+    ag.vue("semaine", False)
+
+    assert len(appels) == 2, f"le cache perime n'a pas ete recalcule : {appels}"
+
+
+def test_vue_garde_une_entree_distincte_par_periode_et_grouper(monkeypatch):
+    from api import vhost_stats as V
+
+    appels = []
+    original = V.VhostStatsAggregator.current
+
+    def espion(self, periode="jour", grouper=False):
+        appels.append((periode, grouper))
+        return original(self, periode, grouper)
+
+    monkeypatch.setattr(V.VhostStatsAggregator, "current", espion)
+
+    ag = V.VhostStatsAggregator()
+    ag.vue("semaine", False)
+    ag.vue("jour", False)
+    ag.vue("semaine", True)
+
+    assert len(appels) == 3, f"des combinaisons differentes ont partage un cache : {appels}"

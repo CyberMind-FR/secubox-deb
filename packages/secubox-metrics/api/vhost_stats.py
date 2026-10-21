@@ -33,6 +33,7 @@ import json
 import ipaddress
 import os
 import re
+import time
 from collections import Counter, OrderedDict, defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -393,6 +394,15 @@ class VhostStatsAggregator:
         # vhost -> total des jours DEJA purges (+ date de premiere visite)
         self._cumul: dict[str, dict] = {}
         self._maj: Optional[str] = None
+        # #2993 — current() fusionne et trie toute la fenetre a chaque appel
+        # (7-8s mesurees sur gk2, ~23700 entrees) : sans cache, la page
+        # /metrics/ qui interroge toutes les 15s declenchait ce calcul en
+        # direct sur chaque requete, et un appel trop lent faisait clignoter
+        # la carte Visiteurs entre son contenu et « session requise ».
+        # Perime au rythme de la collecte (self.intervalle) : inutile de
+        # recalculer une vue que les donnees sous-jacentes n'ont pas bougee.
+        self._vue_cache: dict[tuple[str, bool], dict] = {}
+        self._cache_ttl = max(60, self.intervalle)
         self._charger()
 
     # ── lecture incrementale ─────────────────────────────────────────────
@@ -626,6 +636,24 @@ class VhostStatsAggregator:
         for f, s in fam.items():
             s["membres"] = sorted(membres[f])
         return fam
+
+    def vue(self, periode: str = "jour", grouper: bool = False) -> dict:
+        """`current()`, mis en cache le temps d'un cycle de collecte (#2993).
+
+        Recalculer a chaque appel HTTP coutait 7-8s sur gk2 (~23700 entrees
+        fusionnees) : la page /metrics/, qui interroge toutes les 15s,
+        tombait parfois sur un appel trop lent et affichait a tort « session
+        requise ». Les donnees sous-jacentes ne changent qu'au rythme de
+        `collecter()` (self.intervalle) : recalculer plus souvent que ca
+        n'apporte rien.
+        """
+        cle = (periode, grouper)
+        entree = self._vue_cache.get(cle)
+        if entree and time.monotonic() - entree[0] < self._cache_ttl:
+            return entree[1]
+        resultat = self.current(periode, grouper)
+        self._vue_cache[cle] = (time.monotonic(), resultat)
+        return resultat
 
     def current(self, periode: str = "jour", grouper: bool = False) -> dict:
         if not self.actif:
