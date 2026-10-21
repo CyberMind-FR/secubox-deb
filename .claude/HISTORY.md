@@ -35,6 +35,22 @@ sans `public_base`, `request.base_url` porte le root_path et doublait `/api/v1/p
 global compris) ; l'origine vient désormais de l'hôte (https pour un nom, schéma transmis pour une IP). 92 tests
 verts ; déployé sur gk2 (8 podcasts, flux 465 à 60 épisodes vérifié), publié trixie.
 
+## 2026-10-22 — system : mises à jour apt depuis les pages système et admin sans privilège dans l'API (ref #3002, PR #3004)
+
+« Échec de la mise à jour : E: Could not open lock file /var/lib/dpkg/lock-frontend … are you root? » sur
+admin.gk2/admin/. Les routes `check_updates`/`apply_updates` (page système) et `/updates`/`/update` (composant admin)
+lançaient `apt-get` depuis l'API, servie en `secubox` par l'agrégateur. `secubox-system` 1.11.0 → 1.11.2 : l'API dépose
+une demande dans `/run/secubox/system/maj` (« verbe [paquets] »), l'unité root `secubox-maj.path/.service` la draine
+par `secubox-majctl` (`verifier` = update + simulation avec versions ; `appliquer [paquets]` = upgrade ou install
+--only-upgrade, confold, jamais dist-upgrade/autoremove ; état JSON 0644, journal `/var/log/secubox/system-maj.log`) ;
+ni sudo ni polkit, donc indépendant du processus qui sert l'API. `GET /maj_status` et `GET /update/status` ; les deux
+pages suivent la mise à niveau jusqu'à la fin. Le postinst relance l'agrégateur (il garde le module en mémoire :
+~2–3 min sans administration à chaque déploiement de ce paquet). Vérifié sur gk2 : demande déposée par `secubox`,
+drainée en 20 s, 61 paquets à mettre à jour listés. Issues ouvertes en chemin : #3003 (`/api/v1/system/` servi par
+l'agrégateur alors que la règle polkit n'autorise que `secubox-system.service` : caches/heure/pare-feu/éteindre
+injoignables par ce chemin), #3005 (webfilter : carte MAC→IP de 04:00 sans l'IPv4 192.168.1.3 revenue ensuite,
+Chaturbate de nouveau bloqué pour le Pop!_OS ; ré-application déposée à la main par `appliquer.demande`).
+
 ## 2026-10-19 — secubox-pseudo-routeur : gk2 passerelle DHCP du LAN plat (ref #2940, PR #2945)
 
 Nouveau paquet secubox-pseudo-routeur 0.1.0 (source seulement, pas encore installé ni essayé sur gk2) :
