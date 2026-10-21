@@ -95,8 +95,10 @@ def test_rubrique_securite_filtre_et_l_onglet_sites_montre_les_vignettes(nav):
     p.wait_for_selector("#view-mosaique:not(.hidden) .sbx-mtuile", state="attached")
     assert p.inner_text("#view-mosaique .sbx-mosaique-titre") == "Sécurité"
     assert sorted(p.evaluate("[...document.querySelectorAll('#view-mosaique .sbx-mtuile')].map(t=>t.getAttribute('data-module'))")) == ["ad-guard", "waf"]
-    assert p.evaluate("document.querySelector('#view-mosaique [role=tab][aria-selected=true]').getAttribute('data-id')") == "securite"
-    p.click("#view-mosaique [role=tab][data-id='sites']")
+    # la sélection est à gauche seulement : aucune rangée d'onglets au-dessus de la mosaïque
+    assert p.evaluate("!document.querySelector('#view-mosaique [role=tablist]')")
+    assert p.inner_text("#view-mosaique .sbx-mosaique-compte") == "2 modules"
+    p.click(".sbx-side .sbx-rub[data-rub='sites']")
     p.wait_for_selector("#view-mosaique .sbx-stuile", state="attached")
     tuiles = p.evaluate("[...document.querySelectorAll('#view-mosaique .sbx-stuile')].map(a=>[a.href,a.target,a.rel,!!a.querySelector('img'),a.querySelector('b').textContent])")
     assert tuiles == [["https://blog.sbx.test/", "_blank", "noopener", True, "Le blog"], ["https://sans.sbx.test/", "_blank", "noopener", False, "Sans image"]]
@@ -113,7 +115,6 @@ def test_mes_sites_dans_la_sidebar_ouvre_la_mosaique_des_sites(nav):
     p.click(".sbx-side .sbx-rub[data-rub='sites']")
     p.wait_for_selector("#view-mosaique:not(.hidden) .sbx-stuile", state="attached")
     assert p.inner_text("#view-mosaique .sbx-mosaique-titre") == "Mes sites"
-    assert p.evaluate("document.querySelector('#view-mosaique [role=tab][aria-selected=true]').getAttribute('data-id')") == "sites"
     assert p.evaluate("document.querySelectorAll('#view-mosaique .sbx-stuile').length") == 2
     assert p.evaluate("document.querySelector('.sbx-side .sbx-rub.on').getAttribute('data-rub')") == "sites"
     assert erreurs == []
@@ -128,11 +129,10 @@ def test_une_tuile_ouvre_le_service_dans_le_hall_et_nourrit_les_recents(nav):
     p.wait_for_selector("#view-embed:not(.hidden)", state="attached")
     assert p.evaluate("document.getElementById('view-mosaique').classList.contains('hidden')")
     assert p.evaluate("JSON.parse(localStorage.getItem('sbx.hall.recents'))") == ["radio"]
-    p.click(".sbx-side .sbx-rub[data-rub='modules']")
-    p.click("#view-mosaique [role=tab][data-id='recents']")
+    p.click(".sbx-side .sbx-rub[data-rub='recents']")
+    p.wait_for_selector("#view-mosaique:not(.hidden) .sbx-mtuile", state="attached")
+    assert p.inner_text("#view-mosaique .sbx-mosaique-titre") == "Récents"
     assert p.evaluate("[...document.querySelectorAll('#view-mosaique .sbx-mtuile')].map(t=>t.getAttribute('data-module'))") == ["radio"]
-    p.click("#view-mosaique [role=tab][data-id='favoris']")
-    assert not p.evaluate("document.querySelector('#view-mosaique .sbx-mosaique-vide').hidden")
     assert erreurs == []
     ctx.close()
 

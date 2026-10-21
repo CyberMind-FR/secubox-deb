@@ -1,3 +1,11 @@
+secubox-webos (1.19.3-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : une seule sélection, à gauche (ref #2996). La rangée d'onglets au-dessus de la
+    mosaïque doublait la sidebar ; elle disparaît, « Récents » rejoint la sidebar, le titre et le
+    compte de modules suivent la rubrique.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 17:20:00 +0200
+
 secubox-webos (1.19.2-1~trixie1) trixie; urgency=medium
 
   * Hall v2 : rubrique « Mes sites » dans la sidebar (ref #2996) — la mosaïque des sites

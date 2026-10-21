@@ -26,6 +26,7 @@
     chevron:'<path d="M9 6l6 6-6 6"/>',
     externe:'<path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
     globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+    horloge:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     maison:'<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
     jauge:'<path d="M4 14a8 8 0 0 1 16 0"/><path d="M12 14l4-4"/><circle cx="12" cy="14" r="1.5"/>',
     reseau:'<circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5 6.5 17M12 11.5l5.5 5.5"/>',
@@ -54,6 +55,7 @@
     {id:'reseau',nom:'Réseau',ic:'reseau',nav:'mosaique',motif:/maillage|réseau|reseau|dns|wireguard|vpn|ipv6|mesh|tor\b|exposition|proxy|hôtes|hotes|lan\b|wan\b/i},
     {id:'securite',nom:'Sécurité',ic:'bouclier',nav:'mosaique',motif:/muraille|sécurité|securite|waf|pare-feu|firewall|ban|guardian|coffre|vault|leurre|honeypot|acteur|actor|radar|renseignement|intrusion/i},
     {id:'modules',nom:'Modules',ic:'grille',nav:'mosaique'},
+    {id:'recents',nom:'Récents',ic:'horloge',nav:'mosaique'},
     {id:'stockage',nom:'Stockage',ic:'disque',nav:'mosaique',motif:/stockage|fichier|cloud|photo|dépôt|depot|torrent|disque|sauvegarde|partage|droplet/i},
     {id:'media',nom:'Média',ic:'media',nav:'mosaique',motif:/radio|vidéo|video|peertube|\btv\b|lyrion|musique|podcast|audio|mood|écoute|ecoute|youtube|flux|cinéma|cinema/i},
     {id:'communication',nom:'Communication',ic:'bulle',nav:'mosaique',motif:/mail|messag|forum|bbs|chat|voix|voice|social|diffusion|mur\b|gazette|billets|publication|site/i},
@@ -126,8 +128,6 @@
   }
 
   // ── Mosaïque : tuiles cliquables des modules (registre) et des sites (metablogizer) ──
-  var ONGLETS_MOSAIQUE=[{id:'tous',label:'Tous'},{id:'recents',label:'Récents'},{id:'favoris',label:'Favoris'},{id:'securite',label:'Sécurité'},
-    {id:'reseau',label:'Réseau'},{id:'media',label:'Média'},{id:'ia',label:'IA'},{id:'systeme',label:'Système'},{id:'sites',label:'Sites'}];
   var CLE_RECENTS='sbx.hall.recents', mosaique=null, ongletMosaique='tous', sites=null, sitesT=0, mosaiqueEnCours=false;
   function recents(){ try{ return JSON.parse(localStorage.getItem(CLE_RECENTS)||'[]'); }catch(e){ return []; } }
   function noteRecent(id){ var r=recents().filter(function(x){ return x!==id; }); r.unshift(id); ecrit(CLE_RECENTS,JSON.stringify(r.slice(0,12))); }
@@ -180,17 +180,18 @@
     if(ongletMosaique==='sites'){ grille.setAttribute('data-vue','sites'); return chargeSites(function(l){ if(ongletMosaique!=='sites') return; grille.textContent=''; l.forEach(function(s){ grille.appendChild(tuileSite(s)); }); vide.hidden=!!l.length; vide.textContent='Aucun site publié pour l’instant.'; }); }
     grille.setAttribute('data-vue','modules');
     var l=filtreModules(modules(),ongletMosaique); l.forEach(function(m){ grille.appendChild(tuileModule(m)); });
+    var compte=mosaique.querySelector('.sbx-mosaique-compte'); if(compte) compte.textContent=l.length?l.length+' module'+(l.length>1?'s':''):'';
     vide.hidden=!!l.length; vide.textContent=ongletMosaique==='favoris'?'Aucun favori — ★ sur une carte de l’accueil.':ongletMosaique==='recents'?'Rien d’ouvert récemment.':'Aucun module dans cette rubrique.';
   }
   function construisMosaique(){
     if(mosaique) return mosaique;
     var main=$('.main'); if(!main||!window.SbxUI) return null;
     mosaique=el('section',{id:'view-mosaique','class':'hidden','aria-label':'Mosaïque des modules'});
+    // La sélection vit dans la sidebar (et la barre basse sur téléphone) : pas d'onglets en double ici.
     var tete=el('div',{'class':'sbx-mosaique-tete'}); tete.appendChild(el('h2',{'class':'sbx-mosaique-titre'},'Modules'));
-    var tabs=window.SbxUI.Tabs({onglets:ONGLETS_MOSAIQUE,actif:ongletMosaique,onChange:function(id){ ongletMosaique=id; rendMosaique(); }});
-    tete.appendChild(tabs); mosaique.appendChild(tete);
+    tete.appendChild(el('span',{'class':'sbx-mosaique-compte mono'},'')); mosaique.appendChild(tete);
     mosaique.appendChild(el('div',{'class':'sbx-mosaique'})); mosaique.appendChild(el('p',{'class':'sbx-mosaique-vide',hidden:''}));
-    main.appendChild(mosaique); mosaique.sbxTabs=tabs; return mosaique;
+    main.appendChild(mosaique); return mosaique;
   }
   function montreMosaique(rub){
     if(!construisMosaique()) return;
@@ -198,8 +199,7 @@
     ['accueil','embed','systeme','aide'].forEach(function(k){ var e=document.getElementById('view-'+k); if(e) e.classList.add('hidden'); });
     if(typeof window.fermeSurf==='function') window.fermeSurf();
     mosaiqueEnCours=false;
-    ongletMosaique=(rub&&rub.id!=='modules'&&ONGLETS_MOSAIQUE.some(function(o){ return o.id===rub.id; }))?rub.id:'tous';
-    mosaique.sbxTabs.sbxChoisit(ongletMosaique);
+    ongletMosaique=(rub&&rub.id!=='modules')?rub.id:'tous';
     mosaique.classList.remove('hidden'); mosaique.querySelector('.sbx-mosaique-titre').textContent=rub&&rub.id!=='modules'?rub.nom:'Modules';
     rendMosaique(); window.scrollTo({top:0});
   }
@@ -418,7 +418,7 @@
       var b=el('button',{type:'button','class':'sbx-rub','data-rub':r.id},ico(r.ic)+'<span></span>');
       b.lastChild.textContent=r.nom;
       b.addEventListener('click',function(){ va(r); });
-      if(r.nav!=='mosaique'||r.id==='sites'){ nav.appendChild(b); return; }
+      if(r.nav!=='mosaique'||r.id==='sites'||r.id==='recents'){ nav.appendChild(b); return; }
       // Rubrique dépliable : ses modules (registre), ouverts embarqués, puis la sous-navigation du module courant.
       var grp=el('div',{'class':'sbx-grp','data-grp':r.id}); var ligne=el('div',{'class':'sbx-ligne'}); ligne.appendChild(b);
       var pli=el('button',{type:'button','class':'sbx-plier','aria-expanded':'false','aria-label':'Déplier '+r.nom},ico('chevron'));

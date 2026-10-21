@@ -138,7 +138,7 @@
 #view-mosaique.hidden{display:none}
 .sbx-mosaique-tete{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sbx-e-3);margin:0 0 var(--sbx-e-4)}
 .sbx-mosaique-titre{margin:0;font:700 1.25rem var(--sbx-police)}
-.sbx-mosaique-tete .sbx-tabs{flex:1 1 320px;min-width:0}
+.sbx-mosaique-compte{font-size:.72rem;color:var(--sbx-texte-attenue)}
 .sbx-mosaique{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--sbx-e-3)}
 .sbx-mosaique[data-vue="sites"]{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
 .sbx-mtuile,.sbx-stuile{position:relative;display:flex;flex-direction:column;gap:8px;min-height:92px;padding:12px;border:1px solid var(--sbx-bordure-2);border-radius:var(--sbx-rayon-m);
