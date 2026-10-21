@@ -29,6 +29,11 @@ CHECKCONF = "/usr/sbin/unbound-checkconf"      # chemins absolus : outil lancé 
 CONTROL = "/usr/sbin/unbound-control"
 SYSTEMCTL = "/usr/bin/systemctl"
 AUDIT = Path("/var/log/secubox/audit.log")     # ajout seul
+# unbound-checkconf relit TOUTE la configuration, drop-ins compris : sur gk2, ~820 000 zones (webfilter) + ~400 000 (adblock)
+# + ~160 000 (adulte) prennent 23 s à vide et plusieurs minutes quand la carte est chargée (charge 20, deux rechargements qui
+# coïncident). Un budget de 60 s faisait REFUSER une configuration valide — l'appelant restaurait l'ancienne et l'appareil
+# gardait sa vue périmée (#2979, #3005). Le refus doit venir de checkconf, jamais du chronomètre : 10 min.
+DELAI_CHECKCONF = 600
 
 
 class ErreurUnbound(RuntimeError):
@@ -93,7 +98,7 @@ class SystemeUnbound:
     AUDIT = AUDIT
 
     def verifier_unbound(self) -> tuple[bool, str]:
-        return commande([CHECKCONF], 60)
+        return commande([CHECKCONF], DELAI_CHECKCONF)
 
     def recharger_unbound(self) -> None:
         ok, sortie = commande([CONTROL, "reload"], 120)

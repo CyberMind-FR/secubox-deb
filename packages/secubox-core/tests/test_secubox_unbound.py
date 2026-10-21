@@ -221,3 +221,11 @@ def test_ecriture_atomique_cree_le_dossier_manquant(tmp_path):
     f = tmp_path / "nouveau" / "dossier" / "v.conf"
     U.ecrire_atomique(f, "x\n")
     assert f.read_text() == "x\n"
+
+
+def test_le_budget_de_checkconf_laisse_le_temps_a_une_grosse_configuration(monkeypatch):
+    """#3005 : 60 s faisaient refuser une configuration valide de 1,4 M de zones sous charge ; le refus vient de checkconf, pas du chronomètre."""
+    vu = {}
+    monkeypatch.setattr(U, "commande", lambda args, delai: vu.update(args=args, delai=delai) or (True, ""))
+    assert U.SystemeUnbound().verifier_unbound() == (True, "")
+    assert vu["args"] == [U.CHECKCONF] and vu["delai"] == U.DELAI_CHECKCONF >= 600

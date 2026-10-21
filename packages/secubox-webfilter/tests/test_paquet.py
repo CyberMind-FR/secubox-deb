@@ -82,6 +82,7 @@ def test_service_du_controleur_est_root_deplenche_par_fichier_et_bac_a_sable():
     u = lire("systemd/secubox-webfilter-apply.service")
     assert not re.search(r"^User=", u, re.M) and "Type=oneshot" in u                       # root : écrit dans /etc/unbound
     assert "ExecStart=/usr/sbin/secubox-webfilter-ctl apply" in u
+    assert re.search(r"^TimeoutStartSec=(\d+)min$", u, re.M) and int(re.search(r"^TimeoutStartSec=(\d+)min$", u, re.M).group(1)) >= 15   # checkconf 10 min (#3005)
     assert "ExecStopPost" not in u                                                           # la demande est consommée PAR LE CONTRÔLEUR, au début
     assert re.search(r"^StartLimitIntervalSec=\d+", u, re.M) and re.search(r"^StartLimitBurst=\d+", u, re.M)
     for d in ("CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE", "ProtectKernelTunables=true", "RestrictSUIDSGID=true", "ProtectKernelLogs=true"):
@@ -130,7 +131,8 @@ def test_postinst_cree_le_dossier_racine_et_active_la_minuterie_et_la_demande():
 
 def test_regles_installent_le_controleur_et_la_version_est_0_2_0():
     assert "sbin/secubox-webfilter-ctl" in lire("debian/rules")
-    assert re.match(r"secubox-webfilter \(0\.2\.\d+-1~bookworm1\) bookworm;", lire("debian/changelog"))
+    # version X.Y.Z-N~<suite>1 (bookworm puis trixie, #3005) ; l'API /health annonce la même (test_api)
+    assert re.match(r"secubox-webfilter \(\d+\.\d+\.\d+-1~(bookworm|trixie)1\) (bookworm|trixie);", lire("debian/changelog"))
     assert "secubox-webfilter (0.2.0-1~bookworm1)" in lire("debian/changelog")
     assert "secubox-webfilter (0.1.0-1~bookworm1)" in lire("debian/changelog")                   # l'historique est conservé
 

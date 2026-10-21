@@ -54,6 +54,10 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   Idée posée par le propriétaire, non chiffrée : gestionnaire de fichiers dans le navigateur montant temporairement un support
   USB local et des partages SMB distants (cifs) — à cadrer dans une issue si retenu.
 
+- **Webfilter / Chaturbate** (#3005, `secubox-core` 1.7.12 + `secubox-webfilter` 0.4.3 sur gk2 + apt trixie) : budget checkconf
+  600 s, unité 20 min ; 192.168.1.3 de retour dans la vue visiteurs. Reste : ré-application sur changement d'adresses d'un
+  appareil assigné (le cœur de #3005), puis `closes #3005`.
+
 ## 🔄 Livré le 2026-10-22, PR ouverte (ref)
 
 - **Mises à jour apt depuis les pages système et admin** (#3002, PR #3004, `secubox-system` 1.11.2 sur gk2 + apt trixie) :
