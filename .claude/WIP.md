@@ -17,6 +17,15 @@ real_ip nginx #1754 (fermée), dossiers photo #1516 (fermée), NAC appliqué à 
 (veille pondérée, test dynamique du WAF), assistance, Reporter, menu p2p, garde-fou CI #1748, clé
 apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
+## 🔄 Chantier en cours — Hall « vue maître » responsive (#2996, 2026-10-21)
+
+- **Fait (phases 1 + 1bis, secubox-webos 1.15.0, branche `feature/2996-…`)** : jetons `--sbx-*` (`tokens.css`), coque v2
+  (`hall-v2.css/js` : topbar, sidebar 220 px, rail à 980, barre d'onglets à 720) derrière le flag `hall_v2` de `webos.toml`
+  (prévisualisation `?hall=v2`), route `GET /public/etat`, dé SecuBox `<sbx-dice>` extrait de 3d.gk2 (sans iframe), mêmes
+  faces pour le thème Plymouth `secubox-cube`. Dossier : `docs/dossiers/hall-vue-maitre.md`.
+- ⬜ **Next Up** : GO de l'utilisateur sur la phase 1, puis phase 2 (composants `Card`, `Hero` + option `hall.v2.hero-dice`,
+  `StatRing`, `Sparkline`, `Tabs`, `Pill`, `Tile`, `ModuleTile`, `NewsItem`, `DeviceRow`) ; mesure du dé sur RPi4.
+
 ## 🔄 Chantier en cours — ESPRESSObin lgm-ebin, client `lgm` beta (2026-10-16)
 
 - **Fait** : profil `minimal` (0.5.1, sans WAF ni HAProxy : la carte de 951 Mo a saturé), `ndpid-engine` >= 1.7.2, WireGuard serveur sur la box (`wgctl serveur init`, #2845), panneaux Auto-Load et pairs p2p dans `/fleet/`

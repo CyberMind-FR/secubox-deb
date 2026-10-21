@@ -9,6 +9,20 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-21 — Hall vue maître, phases 1 + 1bis : jetons, coque v2 et dé SecuBox (ref #2996)
+
+secubox-webos 1.15.0 (source, non déployé) : `tokens.css` (palette du brief, thème clair par redéfinition seule,
+pont vers les anciens noms en v2 seulement), coque `hall-v2.css/js` (topbar complétée : menu, disposition,
+notifications, pastille « SecuBox-DEB vX · En ligne » ; sidebar 220 px avec rubriques, favoris et usager ;
+zone principale `flex:999 1 560px` ; ruptures 1180 / 980 / 720 px). Inerte tant que `hall_v2 = false`
+dans `/etc/secubox/webos.toml` ; `?hall=v2` prévisualise par navigateur ; `GET /public/etat` expose le
+flag et la version. Phase 1bis : le dé de 3d.gk2 (« SecuBox Dice 3D », canvas 2D sans bibliothèque) extrait
+en composant `<sbx-dice>` (8 Ko), textures en fichiers, chargé seulement en v2, figé sous
+prefers-reduced-motion, en pause hors écran, 0,29 ms/image mesuré ; le thème Plymouth `secubox-cube`
+reprend les six faces. Tests Playwright aux trois largeurs (captures dans `docs/assets/images/hall-vue-maitre/`).
+Constat : `test_ytflux_aurora_2638::test_la_route_flux_n_est_pas_ouverte_sur_le_vhost_admin` échoue déjà
+sur `master`, indépendamment de ce chantier. Dossier : `docs/dossiers/hall-vue-maitre.md`.
+
 ## 2026-10-19 — secubox-pseudo-routeur : gk2 passerelle DHCP du LAN plat (ref #2940, PR #2945)
 
 Nouveau paquet secubox-pseudo-routeur 0.1.0 (source seulement, pas encore installé ni essayé sur gk2) :
