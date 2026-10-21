@@ -12,7 +12,16 @@
 [data-hall="v2"] .mast{background:var(--sbx-surface-2);border-bottom:1px solid var(--sbx-bordure-2);box-shadow:none;
   -webkit-backdrop-filter:none;backdrop-filter:none}
 [data-hall="v2"] .mast-main{max-width:none;padding:0 var(--sbx-e-4);min-height:var(--sbx-top);gap:var(--sbx-e-3);flex-wrap:nowrap}
-[data-hall="v2"] .mnav{display:none}
+/* Les menus Services ▾ / Système ▾ restent : ce sont les accès rapides (⚙️ admin, ⧉ onglet) de chaque service. */
+[data-hall="v2"] .mnav{display:flex;gap:4px}
+[data-hall="v2"] .mnav .it{height:40px;padding:0 10px;border:1px solid var(--sbx-bordure-2);border-radius:var(--sbx-rayon-s);background:var(--sbx-surface);color:var(--sbx-texte-attenue);font-size:.82rem}
+[data-hall="v2"] .mnav .it.on{background:var(--sbx-info-fond);color:var(--sbx-accent-2);border-color:var(--sbx-bordure)}
+[data-hall="v2"] .megamenu{top:calc(var(--mast-h,56px) + 6px);border-color:var(--sbx-bordure);background:var(--sbx-surface);box-shadow:var(--sbx-ombre)}
+.sbx-actions{display:inline-flex;gap:2px;flex:none}
+.sbx-actions button{width:28px;height:28px;display:inline-grid;place-items:center;border:1px solid transparent;border-radius:8px;background:none;color:var(--sbx-texte-attenue);cursor:pointer;padding:0}
+.sbx-actions button:hover{background:var(--sbx-surface-2);color:var(--sbx-texte);border-color:var(--sbx-bordure-2)}
+.sbx-actions button:focus-visible{outline:none;box-shadow:var(--sbx-halo-focus)}
+.sbx-actions .sbx-ico{width:15px;height:15px}
 [data-hall="v2"] .logo img.medaille,[data-hall="v2"] .medaillon,[data-hall="v2"] .medaillon .mface{width:36px;height:36px}
 [data-hall="v2"] .logo-notif{left:24px}
 [data-hall="v2"] .logo sbx-dice{display:inline-block;line-height:0;filter:drop-shadow(var(--sbx-dice-ombre))}
@@ -135,7 +144,16 @@
 .sbx-mtuile,.sbx-stuile{position:relative;display:flex;flex-direction:column;gap:8px;min-height:92px;padding:12px;border:1px solid var(--sbx-bordure-2);border-radius:var(--sbx-rayon-m);
   background:var(--sbx-surface);color:var(--sbx-texte);text-align:left;text-decoration:none;cursor:pointer;font:inherit;min-width:0}
 .sbx-mtuile:hover,.sbx-stuile:hover{border-color:var(--sbx-bordure);box-shadow:var(--sbx-ombre)}
-.sbx-mtuile:focus-visible,.sbx-stuile:focus-visible{outline:none;box-shadow:var(--sbx-halo-focus)}
+.sbx-mtuile:focus-within,.sbx-stuile:focus-visible{outline:none;box-shadow:var(--sbx-halo-focus)}
+.sbx-mtuile .ouvre{display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-width:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;padding:0}
+.sbx-mtuile .ouvre:focus-visible{outline:none}
+.sbx-mtuile .sbx-actions{position:absolute;right:8px;bottom:8px;opacity:.55}
+.sbx-mtuile:hover .sbx-actions,.sbx-mtuile:focus-within .sbx-actions{opacity:1}
+.sbx-sous-ligne{display:flex;align-items:center;gap:2px}
+.sbx-sous-ligne .sbx-sous-item{flex:1 1 auto;min-width:0}
+.sbx-sous-ligne .sbx-actions{opacity:0}
+.sbx-sous-ligne:hover .sbx-actions,.sbx-sous-ligne:focus-within .sbx-actions{opacity:1}
+.sbx-sous-ligne .sbx-actions button{width:24px;height:24px}
 .sbx-mtuile .sbx-ico{width:26px;height:26px;color:var(--sbx-accent-2)}
 .sbx-mtuile .tx,.sbx-stuile .tx{min-width:0}
 .sbx-mtuile b,.sbx-stuile b{display:block;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

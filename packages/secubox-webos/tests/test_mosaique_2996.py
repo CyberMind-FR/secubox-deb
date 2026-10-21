@@ -75,9 +75,13 @@ def test_modules_ouvre_la_mosaique_de_tous_les_modules(nav):
     assert p.evaluate("document.querySelectorAll('#view-mosaique .sbx-mtuile').length") == 5
     noms = p.evaluate("[...document.querySelectorAll('#view-mosaique .sbx-mtuile b')].map(e=>e.textContent)")
     assert noms == sorted(noms, key=str.casefold)
-    assert p.evaluate("[...document.querySelectorAll('#view-mosaique .sbx-mtuile')].every(t=>t.tagName==='BUTTON'&&t.getAttribute('data-open')&&t.querySelector('svg.sbx-ico')&&t.querySelector('.sbx-led'))")
-    assert p.evaluate("document.querySelector('#view-mosaique .sbx-mtuile[data-open=zia] .sbx-led').getAttribute('data-ton')") == "info"
-    assert p.evaluate("document.querySelector('#view-mosaique .sbx-mtuile[data-open=wireguard]').getAttribute('data-status')") == "offline"
+    assert p.evaluate("[...document.querySelectorAll('#view-mosaique .sbx-mtuile')].every(t=>{const o=t.querySelector('button.ouvre');return o&&o.getAttribute('data-open')&&o.getAttribute('data-mode')==='embed'&&t.querySelector('svg.sbx-ico')&&t.querySelector('.sbx-led')})")
+    # accès rapides comme dans les menus Services / Système : ⚙ console admin et ⧉ onglet réel
+    assert p.evaluate("[...document.querySelectorAll('#view-mosaique .sbx-mtuile')].every(t=>t.querySelector('.sbx-actions [data-admin]')&&t.querySelector('.sbx-actions [data-open][data-mode=tab]'))")
+    assert p.evaluate("document.querySelector('#view-mosaique .sbx-mtuile[data-module=zia] .sbx-led').getAttribute('data-ton')") == "info"
+    assert p.evaluate("document.querySelector('#view-mosaique .sbx-mtuile[data-module=wireguard]').getAttribute('data-status')") == "offline"
+    # les menus Services / Système de la barre restent accessibles en v2
+    assert p.evaluate("getComputedStyle(document.querySelector('.mnav')).display") != "none"
     assert p.evaluate("document.querySelector('.sbx-side .sbx-rub.on').getAttribute('data-rub')") == "modules"
     if CAPTURES:
         p.screenshot(path=str(Path(CAPTURES) / "hall-v2-mosaique.png"))
@@ -90,7 +94,7 @@ def test_rubrique_securite_filtre_et_l_onglet_sites_montre_les_vignettes(nav):
     p.click(".sbx-side .sbx-rub[data-rub='securite']")
     p.wait_for_selector("#view-mosaique:not(.hidden) .sbx-mtuile", state="attached")
     assert p.inner_text("#view-mosaique .sbx-mosaique-titre") == "Sécurité"
-    assert sorted(p.evaluate("[...document.querySelectorAll('#view-mosaique .sbx-mtuile')].map(t=>t.getAttribute('data-open'))")) == ["ad-guard", "waf"]
+    assert sorted(p.evaluate("[...document.querySelectorAll('#view-mosaique .sbx-mtuile')].map(t=>t.getAttribute('data-module'))")) == ["ad-guard", "waf"]
     assert p.evaluate("document.querySelector('#view-mosaique [role=tab][aria-selected=true]').getAttribute('data-id')") == "securite"
     p.click("#view-mosaique [role=tab][data-id='sites']")
     p.wait_for_selector("#view-mosaique .sbx-stuile", state="attached")
@@ -107,14 +111,14 @@ def test_rubrique_securite_filtre_et_l_onglet_sites_montre_les_vignettes(nav):
 def test_une_tuile_ouvre_le_service_dans_le_hall_et_nourrit_les_recents(nav):
     ctx, p, erreurs = ouvre(nav)
     p.click(".sbx-side .sbx-rub[data-rub='modules']")
-    p.wait_for_selector("#view-mosaique:not(.hidden) .sbx-mtuile[data-open=radio]", state="attached")
-    p.click("#view-mosaique .sbx-mtuile[data-open=radio]")
+    p.wait_for_selector("#view-mosaique:not(.hidden) .sbx-mtuile[data-module=radio]", state="attached")
+    p.click("#view-mosaique .sbx-mtuile[data-module=radio] .ouvre")
     p.wait_for_selector("#view-embed:not(.hidden)", state="attached")
     assert p.evaluate("document.getElementById('view-mosaique').classList.contains('hidden')")
     assert p.evaluate("JSON.parse(localStorage.getItem('sbx.hall.recents'))") == ["radio"]
     p.click(".sbx-side .sbx-rub[data-rub='modules']")
     p.click("#view-mosaique [role=tab][data-id='recents']")
-    assert p.evaluate("[...document.querySelectorAll('#view-mosaique .sbx-mtuile')].map(t=>t.getAttribute('data-open'))") == ["radio"]
+    assert p.evaluate("[...document.querySelectorAll('#view-mosaique .sbx-mtuile')].map(t=>t.getAttribute('data-module'))") == ["radio"]
     p.click("#view-mosaique [role=tab][data-id='favoris']")
     assert not p.evaluate("document.querySelector('#view-mosaique .sbx-mosaique-vide').hidden")
     assert erreurs == []

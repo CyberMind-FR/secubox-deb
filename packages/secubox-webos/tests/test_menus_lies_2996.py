@@ -68,6 +68,8 @@ def test_une_rubrique_se_deplie_sur_ses_modules_et_les_ouvre(nav):
     assert p.evaluate("document.querySelector('.sbx-grp[data-grp=communication] .sbx-plier').getAttribute('aria-expanded')") == "true"
     items = p.evaluate("[...document.querySelectorAll('.sbx-grp[data-grp=communication] .sbx-sous-item')].map(b=>[b.getAttribute('data-open'),b.getAttribute('data-mode'),b.textContent.trim()])")
     assert ["bbs", "embed", "BBS"] in items and all(i[0] != "waf" for i in items)
+    # chaque module déplié porte ses accès rapides ⚙ admin et ⧉ onglet
+    assert p.evaluate("[...document.querySelectorAll('.sbx-grp[data-grp=communication] .sbx-sous-ligne')].every(l=>l.querySelector('[data-admin]')&&l.querySelector('[data-open][data-mode=tab]'))")
     p.click(".sbx-grp[data-grp='communication'] .sbx-plier")
     assert p.evaluate("document.querySelector('.sbx-grp[data-grp=communication] .sbx-sous').hidden")
     assert erreurs == []

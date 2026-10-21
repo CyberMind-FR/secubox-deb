@@ -24,6 +24,7 @@
   var ICONES={
     menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
     chevron:'<path d="M9 6l6 6-6 6"/>',
+    externe:'<path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
     maison:'<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
     jauge:'<path d="M4 14a8 8 0 0 1 16 0"/><path d="M12 14l4-4"/><circle cx="12" cy="14" r="1.5"/>',
     reseau:'<circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5 6.5 17M12 11.5l5.5 5.5"/>',
@@ -142,12 +143,21 @@
     if(!rub) return liste;
     return liste.filter(function(m){ return rub.motif.test(m.name+' '+m.description+' '+m.category); });
   }
+  // Accès rapides d'un service, comme dans les menus Services / Système : ⚙ console admin, ⧉ onglet réel.
+  function actions(m){
+    var a=el('span',{'class':'sbx-actions'});
+    var adm=el('button',{type:'button','data-admin':m.id,title:'Console d’administration de '+m.name,'aria-label':'Administrer '+m.name},ico('systeme'));
+    var tab=el('button',{type:'button','data-open':m.id,'data-mode':'tab',title:'Ouvrir '+m.name+' dans un onglet','aria-label':'Ouvrir '+m.name+' dans un onglet'},ico('externe'));
+    a.appendChild(adm); a.appendChild(tab); return a;
+  }
   function tuileModule(m){
-    var b=el('button',{type:'button','class':'sbx-mtuile','data-open':m.id,'data-mode':'embed','data-status':m.status,title:m.description||m.name});
+    var w=el('div',{'class':'sbx-mtuile','data-module':m.id,'data-status':m.status});
+    var b=el('button',{type:'button','class':'ouvre','data-open':m.id,'data-mode':'embed',title:m.description||m.name});
     b.appendChild(svgIco(ICO_CAT[m.category]||'grille'));
     var tx=el('span',{'class':'tx'}); tx.appendChild(el('b',null,m.name)); tx.appendChild(el('small',{'class':'mono'},m.hote||m.id)); b.appendChild(tx);
+    w.appendChild(b);
     var led=el('i',{'class':'sbx-led','data-ton':{active:'ok',idle:'info',offline:'off',stale:'warn'}[m.status]||'neutre','aria-label':{active:'actif',idle:'en veille',offline:'hors ligne',stale:'données périmées'}[m.status]||'aucune source'});
-    b.appendChild(led); return b;
+    w.appendChild(led); w.appendChild(actions(m)); return w;
   }
   function svgIco(n){ var w=el('span'); w.innerHTML=ico(n); return w.firstChild; }
   function tuileSite(s){
@@ -199,7 +209,7 @@
     l.slice(0,14).forEach(function(m){
       var b=el('button',{type:'button','class':'sbx-rub sbx-sous-item','data-open':m.id,'data-mode':'embed','data-status':m.status},'<span></span>');
       b.firstChild.textContent=m.name; var led=el('i',{'class':'sbx-led','data-ton':{active:'ok',idle:'info',offline:'off',stale:'warn'}[m.status]||'neutre'}); b.insertBefore(led,b.firstChild);
-      sous.appendChild(b);
+      var ligne=el('div',{'class':'sbx-sous-ligne'}); ligne.appendChild(b); ligne.appendChild(actions(m)); sous.appendChild(ligne);
     });
     if(l.length>14||!l.length){ var tout=el('button',{type:'button','class':'sbx-rub sbx-sous-tout'},'<span></span>'); tout.firstChild.textContent=l.length?'Tout voir ('+l.length+')':'Voir la mosaïque'; tout.addEventListener('click',function(){ va(rub); }); sous.appendChild(tout); }
     sous.hidden=false; grp.querySelector('.sbx-plier').setAttribute('aria-expanded','true');
@@ -219,7 +229,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('.sbx-sous-item'),function(b){ b.classList.toggle('on',b.getAttribute('data-open')===s.id); });
     Array.prototype.forEach.call(document.querySelectorAll('.sbx-ctx-liste'),function(e){ e.remove(); });
     var item=grp.querySelector('.sbx-sous-item[data-open="'+s.id+'"]'); if(!item) return;
-    var liste=el('div',{'class':'sbx-ctx-liste'}); item.insertAdjacentElement('afterend',liste);
+    var liste=el('div',{'class':'sbx-ctx-liste'}); (item.closest('.sbx-sous-ligne')||item).insertAdjacentElement('afterend',liste);
     fetch('/api/v1/webos/public/menu/'+encodeURIComponent(s.id),{credentials:'same-origin'}).then(function(r){ return r.ok?r.json():null; }).then(function(m){
       var items=(m&&m.items)||[]; if(!items.length||!liste.isConnected) return;
       var cur=(typeof _sub!=='undefined')?_sub:null;
