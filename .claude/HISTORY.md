@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-21 — Hall : Services en ordre alphabétique ; PeerTube : SSO pour l'administrateur gk2 (closes #3007, closes #3008)
+
+« services ordre alphabetiques et sso ko avec peertube ». `secubox-webos` 1.19.9 (PR #3009) : la rubrique « Services »
+de la sidebar v2 et sa mosaïque sont triées par libellé (`localeCompare` fr, insensible à la casse) au lieu de l'ordre de
+la curation FEATURED ; 662 tests verts, 1 rouge préexistant (`test_ytflux_aurora_2638`). `secubox-peertube` 1.6.2,
+`peertubectl` 1.2.0 (PR #3010) : le compte PeerTube `gk2` est administrateur (rôle 0) et le greffon secubox-sso n'ouvre
+qu'un compte rattaché, ce que `sso-rattache` refusait aux administrateurs ; nouveau drapeau explicite `--administrateur`
+(l'automatisme `sso` reste limité aux comptes ordinaires), chaque rattachement audité en JSON dans `audit.log`, drapeau
+inconnu refusé, test shell avec `lxc-attach` factice. Décision du propriétaire : une session SecuBox administrateur a déjà
+la main sur PeerTube par le ctl, pas d'escalade ; avec `pluginAuth` posé, PeerTube refuse le mot de passe pour `gk2`
+(`root` reste par mot de passe, `sso-detache` fait machine arrière). Déployés sur gk2, flux SSO exercé de bout en bout
+depuis l'hôte (route du greffon → `externalAuthToken` → jeton `/api/v1/users/token`), publiés trixie, PR fusionnées.
+
 ## 2026-10-21 — Hall vue maître, phases 1 + 1bis : jetons, coque v2 et dé SecuBox (ref #2996)
 
 secubox-webos 1.15.0 (source, non déployé) : `tokens.css` (palette du brief, thème clair par redéfinition seule,

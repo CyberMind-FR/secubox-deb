@@ -59,6 +59,9 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - **Webfilter / Chaturbate** (#3005 reste ouverte, PR #3006 fusionnée, `secubox-core` 1.7.12 + `secubox-webfilter` 0.4.3 sur
   gk2 + apt trixie) : budget checkconf 600 s, unité 20 min ; 192.168.1.3 de retour dans la vue visiteurs. Reste :
   ré-application sur changement d'adresses d'un appareil assigné (le cœur de #3005) ; fermeture par marqueur à ce moment-là.
+- **Services alphabétiques** — closes #3007 (PR #3009, `secubox-webos` 1.19.9 sur gk2 + apt trixie) : rubrique Services triée par libellé.
+- **SSO PeerTube administrateur** — closes #3008 (PR #3010, `secubox-peertube` 1.6.2 sur gk2 + apt trixie) : `peertubectl
+  sso-rattache gk2 --administrateur` fait et audité ; `gk2` entre par la session SecuBox, plus par mot de passe (`root` : mot de passe).
 - **Hall vue maître** (#2996 reste ouverte, PR #2997 fusionnée : phases 1 à 4 premier pas, webos 1.19.8 sur gk2) ; la suite
   est dans le chantier ci-dessus. CI : les échecs `gabarit` (4 écarts), `pytest · secubox-core` (sshd), `appstore-catalogue`,
   `build (secubox-appstore|meta)` (arbre des métapaquets) et `secubox-hub` (espaces.json) préexistent sur master.
