@@ -16,8 +16,9 @@
    Services ▾ / Système ▾ et le menu déroulant du service embarqué sont masqués en v2 — leurs accès rapides
    (⚙ admin, ⧉ onglet) et la sous-navigation du module vivent dans la sidebar et sur les tuiles. */
 [data-hall="v2"] .mnav{display:none}
-[data-hall="v2"] #mnav-ctx{pointer-events:none;cursor:default}
-[data-hall="v2"] #mnav-ctx .ca{display:none}
+/* Le menu DYNAMIQUE du service embarqué (titre ▾ → ses rubriques) reste dans la topbar : il est contextuel, pas un doublon. */
+[data-hall="v2"] #mnav-ctx{height:40px;border:1px solid var(--sbx-bordure-2);border-radius:var(--sbx-rayon-s);background:var(--sbx-surface);color:var(--sbx-texte)}
+[data-hall="v2"] #mnav-ctx.no-menu{border-color:transparent;background:none}
 [data-hall="v2"] .megamenu{top:calc(var(--mast-h,56px) + 6px);border-color:var(--sbx-bordure);background:var(--sbx-surface);box-shadow:var(--sbx-ombre)}
 .sbx-actions{display:inline-flex;gap:2px;flex:none}
 .sbx-actions button{width:28px;height:28px;display:inline-grid;place-items:center;border:1px solid transparent;border-radius:8px;background:none;color:var(--sbx-texte-attenue);cursor:pointer;padding:0}
