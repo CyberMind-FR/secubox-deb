@@ -54,6 +54,13 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   Idée posée par le propriétaire, non chiffrée : gestionnaire de fichiers dans le navigateur montant temporairement un support
   USB local et des partages SMB distants (cifs) — à cadrer dans une issue si retenu.
 
+## 🔄 Livré le 2026-10-22, PR ouverte (ref)
+
+- **Mises à jour apt depuis les pages système et admin** (#3002, PR #3004, `secubox-system` 1.11.2 sur gk2 + apt trixie) :
+  spool `/run/secubox/system/maj` + unité root `secubox-maj.path`, `secubox-majctl`, `/maj_status`, `/update/status`.
+  Reste : fusionner, `closes #3002`. À trancher ensuite : #3003 (routage `/api/v1/system/` vers `system.sock` pour les
+  actions root polkit), #3005 (webfilter : ré-appliquer quand les adresses d'un appareil assigné changent).
+
 ## 🔄 Chantier en cours — ESPRESSObin lgm-ebin, client `lgm` beta (2026-10-16)
 
 - **Fait** : profil `minimal` (0.5.1, sans WAF ni HAProxy : la carte de 951 Mo a saturé), `ndpid-engine` >= 1.7.2, WireGuard serveur sur la box (`wgctl serveur init`, #2845), panneaux Auto-Load et pairs p2p dans `/fleet/`

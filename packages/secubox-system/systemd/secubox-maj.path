@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox systeme : demandes de mise a jour apt (#3002)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3002
+
+[Path]
+# L'API systeme (secubox, sans privilege, servie par l'agregateur ou sa propre
+# unite) depose un fichier *.demande ici ; cette unite root draine le dossier.
+# Ni sudo ni polkit : le chemin qui sert l'API n'a pas d'importance.
+DirectoryNotEmpty=/run/secubox/system/maj
+Unit=secubox-maj.service
+
+[Install]
+WantedBy=paths.target
