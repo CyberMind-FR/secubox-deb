@@ -1,3 +1,12 @@
+secubox-metrics (1.29.3-1~bookworm1) bookworm; urgency=low
+
+  * Carte Visiteurs qui clignote (#2993) : /vhost-stats recalculait toute la
+    fenetre a chaque appel HTTP (7-8s mesurees sur gk2, ~23700 entrees
+    fusionnees) au lieu d'etre mise en cache (regle PERF-CACHE.md). La page
+    /metrics/ interroge toutes les 15s : un appel trop lent faisait basculer
+    la carte sur « session requise », a tort. VhostStatsAggregator.vue()
+    memoise desormais current() le temps d'un cycle de collecte.
+
 secubox-metrics (1.29.2-1~bookworm1) bookworm; urgency=low
 
   * Retrait de la carte « Connexions en direct » (#2991, suite de #2989) : polling dédié

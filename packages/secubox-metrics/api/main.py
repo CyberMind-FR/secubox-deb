@@ -1240,9 +1240,11 @@ async def vhost_stats(periode: str = "jour", grouper: bool = False,
                       _=Depends(require_jwt)):
     """Vue d ensemble. `grouper` fond les domaines d une meme famille."""
     amorcer_collecte()
-    # En thread : la fusion parcourt 30 jours de compteurs. Sur la boucle
-    # partagee du groupe, ce sont les 82 modules qui attendraient.
-    vue = await asyncio.to_thread(vhost_stats_agg.current, periode, grouper)
+    # En thread, et en cache (#2993) : la fusion parcourt 30 jours de
+    # compteurs (7-8s mesurees sur gk2). Sur la boucle partagee du groupe, ce
+    # sont les 82 modules qui attendraient ; sans cache, la page qui
+    # interroge toutes les 15s declenchait ce calcul en direct a chaque fois.
+    vue = await asyncio.to_thread(vhost_stats_agg.vue, periode, grouper)
     return JSONResponse(content=vue)
 
 
