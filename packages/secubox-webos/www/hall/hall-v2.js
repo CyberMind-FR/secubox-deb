@@ -141,11 +141,13 @@
     return ids.map(function(id){ var s=reg[id]||parStatut[id]||{id:id}; var p=parStatut[id]; return {id:id,name:s.name||id,description:s.description||'',category:s.category||'',status:(p&&p.status)||(s.status)||'nosource',vignette:!!((p&&p.vignette)||s.vignette),hote:(typeof window.host==='function'?window.host(s):'')||''}; })
       .sort(function(a,b){ return String(a.name).localeCompare(String(b.name),'fr',{sensitivity:'base'}); });
   }
-  // La curation du Hall (FEATURED, ce que listait le menu Services ▾), dans son ordre, avec le statut du registre.
+  // La curation du Hall (FEATURED, ce que listait le menu Services ▾), en ordre alphabétique des libellés (#3007),
+  // avec le statut du registre.
   function services(){
     var F=(typeof FEATURED!=='undefined'&&FEATURED)||[], parStatut={}; ((regDernier&&regDernier.services)||[]).forEach(function(s){ parStatut[s.id]=s; });
     var reg=window._reg||{};
-    return F.map(function(f){ var p=parStatut[f.id]||reg[f.id]; return {id:f.id,name:f.label||f.id,description:'',category:'',status:(p&&p.status)||'nosource',vignette:!!(p&&p.vignette),hote:f.url||''}; });
+    return F.map(function(f){ var p=parStatut[f.id]||reg[f.id]; return {id:f.id,name:f.label||f.id,description:'',category:'',status:(p&&p.status)||'nosource',vignette:!!(p&&p.vignette),hote:f.url||''}; })
+      .sort(function(a,b){ return String(a.name).localeCompare(String(b.name),'fr',{sensitivity:'base'}); });
   }
   function filtreModules(liste,onglet){
     if(onglet==='services') return services();
