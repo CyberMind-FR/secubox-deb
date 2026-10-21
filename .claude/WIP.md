@@ -30,6 +30,8 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   `intervalle_s`), pied « Relevé » / « données périmées », veille sans requête, sondages à recul, dock persistant, sparklines bicolores.
 - **Fait (phase 4, 1er pas, webos 1.17.0)** : mosaïque cliquable (`#view-mosaique`, onglets Tous/Récents/Favoris/catégories/Sites,
   tuiles de modules `data-open`, mur metablogizer avec vignettes) derrière « Modules » et les rubriques.
+- **Fait (webos 1.18.0)** : menus liés — rubriques dépliables sur leurs modules, module embarqué marqué + sous-navigation
+  (`/public/menu/{id}`), sidebar en rail de 64 px pendant l'embarquement.
 - ⬜ **Next Up** : phase 4, suite — vignettes des modules (relais Streamlit `/apps/{nom}/screenshot`, captures des webuis à produire),
   migration des cartes vers `Card` dans l'ordre du prompt ; à trancher : courbes `secubox-metrics`, option `hall.v2.hero-dice` (statut typé côté API, « Relevé », chargement différé, dock Radio) ; à trancher :
   reprise du relevé système dans les courbes de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.

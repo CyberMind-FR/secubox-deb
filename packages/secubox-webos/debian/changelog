@@ -1,3 +1,14 @@
+secubox-webos (1.18.0-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : menus liés hall ↔ admin (ref #2996). Chaque rubrique de la sidebar se déplie sur
+    ses modules (registre, regroupés par catégorie et motif), ouverts embarqués d'un clic ; le
+    module embarqué est marqué dans sa rubrique et sa sous-navigation (`GET /public/menu/{id}`,
+    rubriques BBS, pages d'un service) apparaît sous lui, ouverte par la délégation du Hall.
+  * Hall v2 : pendant l'embarquement, la sidebar se replie en rail d'icônes (64 px, complète au
+    survol ou au clavier) et rend sa largeur au cadre — la page admin n'est plus décalée.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 13:30:00 +0200
+
 secubox-webos (1.17.0-1~trixie1) trixie; urgency=medium
 
   * Hall v2 : mosaïque de tuiles cliquables (phase 4, ref #2996). « Modules » et les rubriques de

@@ -41,7 +41,9 @@ un module en veille, sondages à recul exponentiel, dock média vérifié persis
 Phase 4, premier pas (webos 1.17.0) : mosaïque cliquable derrière « Modules » et les rubriques (tuiles de modules
 `data-open` ouvrant le service dans le Hall, onglets Tous/Récents/Favoris/catégories/Sites, mur metablogizer avec
 ses vignettes). Constat : aucune capture d'écran n'existe pour les webuis de modules sur gk2 (176 sites
-metablogizer et 20 applis Streamlit en ont).
+metablogizer et 20 applis Streamlit en ont). Menus liés (webos 1.18.0) : rubriques dépliables sur leurs modules,
+module embarqué marqué et sa sous-navigation `/public/menu/{id}` sous lui (délégation `[data-ctx]`), sidebar en
+rail de 64 px pendant l'embarquement (le « décalage » de la page admin embarquée est sa mise en page centrée).
 Constat : `test_ytflux_aurora_2638::test_la_route_flux_n_est_pas_ouverte_sur_le_vhost_admin` échoue déjà
 sur `master`, indépendamment de ce chantier. Dossier : `docs/dossiers/hall-vue-maitre.md`.
 

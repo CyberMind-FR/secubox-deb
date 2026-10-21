@@ -231,6 +231,20 @@ accessible par la recherche et le mégamenu.
 
 ![Onglet Sites](../assets/images/hall-vue-maitre/hall-v2-mosaique-sites.png)
 
+### Menus liés hall ↔ admin, cadre à pleine largeur (2026-10-21, `secubox-webos` 1.18.0)
+
+Demande : « admin.gk2 et hall.gk2 : embedding, make menu linked, relatives, grouping smartly ». La page admin
+embarquée masque déjà sa propre coquille (`sbx-embed`, `sidebar.js` du hub) ; c'est donc la sidebar du Hall qui
+porte la navigation :
+
+- chaque rubrique (Réseau, Sécurité, Modules, Stockage, Média, Communication, IA, Outils, Système) se déplie sur ses
+  modules — le registre regroupé par catégorie et motif —, chacun ouvert embarqué d'un clic (`data-open`) ;
+- le module embarqué est marqué dans sa rubrique et sa **sous-navigation** (`GET /api/v1/webos/public/menu/{id}` :
+  rubriques BBS, pages d'un service) apparaît sous lui ; un clic passe par la délégation `[data-ctx]` du Hall ;
+- pendant l'embarquement, la sidebar devient un **rail d'icônes de 64 px** (complète au survol ou au clavier) et le
+  cadre reprend la largeur : le « décalage » observé sur DNS Guard était la mise en page centrée de la page admin,
+  plus visible avec 220 px de sidebar.
+
 ### Identité, avatar et comptes SSO (2026-10-21)
 
 - La carte d'usager de la sidebar lit `GET /api/v1/sbxid/moi` ; avec une identité, l'image vient de

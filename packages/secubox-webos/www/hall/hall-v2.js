@@ -23,6 +23,7 @@
 
   var ICONES={
     menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
+    chevron:'<path d="M9 6l6 6-6 6"/>',
     maison:'<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
     jauge:'<path d="M4 14a8 8 0 0 1 16 0"/><path d="M12 14l4-4"/><circle cx="12" cy="14" r="1.5"/>',
     reseau:'<circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5 6.5 17M12 11.5l5.5 5.5"/>',
@@ -106,6 +107,7 @@
         var e=document.getElementById('view-'+v);
         if(e&&!e.classList.contains('hidden')){
           var mo=document.getElementById('view-mosaique'); if(mo&&!mo.classList.contains('hidden')&&!mosaiqueEnCours) mo.classList.add('hidden');
+          if(v==='embed') marqueService();
           var actuel=document.querySelector('.sbx-rub.on');
           var deja=actuel&&RUBRIQUES.some(function(r){ return r.id===actuel.getAttribute('data-rub')&&r.nav===v; });
           if(!deja) marque(vues[v]);
@@ -114,6 +116,8 @@
       });
     });
     Object.keys(vues).forEach(function(v){ var e=document.getElementById('view-'+v); if(e) obs.observe(e,{attributes:true,attributeFilter:['class']}); });
+    // Changement de service ou de rubrique dans le cadre : le Hall redessine #ctx — on resynchronise la sidebar.
+    var ctx=document.getElementById('ctx'); if(ctx) new MutationObserver(function(){ var e=document.getElementById('view-embed'); if(e&&!e.classList.contains('hidden')) marqueService(); }).observe(ctx,{childList:true});
     // Le parc se redessine (registre, sonde) : on réapplique le filtre courant.
     var sb=$('#sysboard'); if(sb) new MutationObserver(function(){ if(filtreActif) filtreParc(filtreActif); }).observe(sb,{childList:true});
   }
@@ -186,6 +190,47 @@
     mosaique.classList.remove('hidden'); mosaique.querySelector('.sbx-mosaique-titre').textContent=rub&&rub.id!=='modules'?rub.nom:'Modules';
     rendMosaique(); window.scrollTo({top:0});
   }
+
+  // ── Menus liés : rubriques dépliables, module embarqué marqué, sa sous-navigation sous lui ──
+  function plie(grp){ grp.querySelector('.sbx-sous').hidden=true; grp.querySelector('.sbx-plier').setAttribute('aria-expanded','false'); }
+  function deplie(grp,rub){
+    var sous=grp.querySelector('.sbx-sous'); sous.textContent='';
+    var l=filtreModules(modules(),rub.id==='modules'?'tous':rub.id);
+    l.slice(0,14).forEach(function(m){
+      var b=el('button',{type:'button','class':'sbx-rub sbx-sous-item','data-open':m.id,'data-mode':'embed','data-status':m.status},'<span></span>');
+      b.firstChild.textContent=m.name; var led=el('i',{'class':'sbx-led','data-ton':{active:'ok',idle:'info',offline:'off',stale:'warn'}[m.status]||'neutre'}); b.insertBefore(led,b.firstChild);
+      sous.appendChild(b);
+    });
+    if(l.length>14||!l.length){ var tout=el('button',{type:'button','class':'sbx-rub sbx-sous-tout'},'<span></span>'); tout.firstChild.textContent=l.length?'Tout voir ('+l.length+')':'Voir la mosaïque'; tout.addEventListener('click',function(){ va(rub); }); sous.appendChild(tout); }
+    sous.hidden=false; grp.querySelector('.sbx-plier').setAttribute('aria-expanded','true');
+  }
+  function rubriqueDe(id){
+    var l=modules(); var m=l.filter(function(x){ return x.id===id; })[0]; if(!m) return 'modules';
+    var r=RUBRIQUES.filter(function(x){ return x.motif&&x.motif.test(m.name+' '+m.description+' '+m.category); })[0];
+    return r?r.id:'modules';
+  }
+  var serviceMarque=null;
+  function marqueService(){
+    var s=(typeof _svc!=='undefined')?_svc:null; if(!s||!s.id) return;
+    var rid=rubriqueDe(s.id), grp=$('.sbx-grp[data-grp="'+rid+'"]'); if(!grp) return;
+    var rub=RUBRIQUES.filter(function(x){ return x.id===rid; })[0];
+    if(grp.querySelector('.sbx-sous').hidden||serviceMarque!==s.id) deplie(grp,rub);
+    serviceMarque=s.id; marque(rid);
+    Array.prototype.forEach.call(document.querySelectorAll('.sbx-sous-item'),function(b){ b.classList.toggle('on',b.getAttribute('data-open')===s.id); });
+    Array.prototype.forEach.call(document.querySelectorAll('.sbx-ctx-liste'),function(e){ e.remove(); });
+    var item=grp.querySelector('.sbx-sous-item[data-open="'+s.id+'"]'); if(!item) return;
+    var liste=el('div',{'class':'sbx-ctx-liste'}); item.insertAdjacentElement('afterend',liste);
+    fetch('/api/v1/webos/public/menu/'+encodeURIComponent(s.id),{credentials:'same-origin'}).then(function(r){ return r.ok?r.json():null; }).then(function(m){
+      var items=(m&&m.items)||[]; if(!items.length||!liste.isConnected) return;
+      var cur=(typeof _sub!=='undefined')?_sub:null;
+      items.slice(0,24).forEach(function(c){ var path=c.path||(c.slug?('/c/'+c.slug):null); if(!path) return;
+        var a=el('a',{'class':'sbx-rub sbx-ctx',href:'#','data-ctx':path,'data-ctxt':c.title||c.slug},'<span></span>'); a.firstChild.textContent=c.title||c.slug;
+        if(c.threads!=null){ a.appendChild(el('small',{'class':'mono'},String(c.threads))); }
+        if(path===cur) a.classList.add('on'); liste.appendChild(a); });
+    }).catch(function(){});
+  }
+  document.addEventListener('click',function(e){ var cx=e.target.closest&&e.target.closest('.sbx-ctx[data-ctx]'); if(!cx) return;
+    Array.prototype.forEach.call(document.querySelectorAll('.sbx-ctx'),function(a){ a.classList.toggle('on',a===cx); }); fermeTiroir(); },true);
 
   // ── Tiroir (téléphone) ─────────────────────────────────────────────────
   function ouvreTiroir(){ var s=$('.sbx-side'),v=$('.sbx-voile'),m=$('#sbx-menu'); if(!s) return; s.classList.add('ouvert'); if(v) v.classList.add('ouvert'); if(m) m.setAttribute('aria-expanded','true'); }
@@ -360,7 +405,13 @@
       var b=el('button',{type:'button','class':'sbx-rub','data-rub':r.id},ico(r.ic)+'<span></span>');
       b.lastChild.textContent=r.nom;
       b.addEventListener('click',function(){ va(r); });
-      nav.appendChild(b);
+      if(r.nav!=='mosaique'){ nav.appendChild(b); return; }
+      // Rubrique dépliable : ses modules (registre), ouverts embarqués, puis la sous-navigation du module courant.
+      var grp=el('div',{'class':'sbx-grp','data-grp':r.id}); var ligne=el('div',{'class':'sbx-ligne'}); ligne.appendChild(b);
+      var pli=el('button',{type:'button','class':'sbx-plier','aria-expanded':'false','aria-label':'Déplier '+r.nom},ico('chevron'));
+      var sous=el('div',{'class':'sbx-sous',hidden:''});
+      pli.addEventListener('click',function(){ var o=pli.getAttribute('aria-expanded')==='true'; if(o) plie(grp); else deplie(grp,r); });
+      ligne.appendChild(pli); grp.appendChild(ligne); grp.appendChild(sous); nav.appendChild(grp);
     });
     side.appendChild(nav);
     var fav=el('div',{'class':'sbx-favoris'},'<p class="sbx-titre">Favoris</p><div class="sbx-favlist"></div>');
