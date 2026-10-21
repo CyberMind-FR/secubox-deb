@@ -179,7 +179,7 @@ def test_demonstration_annoncee_sans_aucun_appel(navigateur):
     p.locator(".ep a.btn").first.click()
     p.wait_for_function("document.getElementById('rActions').textContent.includes('Démonstration')")
     p.get_by_role("button", name=re.compile("Atelier")).click()
-    p.locator("#zipbar a").click()
+    p.locator("#zipbar a").first.click()      # le ZIP ; le flux RSS du podcast (#2998) le suit
     assert appels == [] and err == [] and p.natifs == []
     assert "sidebar.js" not in " ".join(p.partages)
     ctx.close()
@@ -207,7 +207,7 @@ def test_embarque_masque_l_en_tete_et_pousse_la_megabarre(navigateur):
     init = "window.__m = []; addEventListener('message', e => window.__m.push(e.data));"
     ctx, p, err, _ = ouvre(navigateur, "http://sbx.test/?embed=1", API, taille={"width": 420, "height": 800}, init=init)
     attend(p)
-    assert not p.is_visible(".tete") and not p.is_visible("#filtresPan")
+    assert not p.is_visible(".tete") and p.is_visible("#filtersPan".replace("filters", "filtres")) and not p.is_visible("#chips")   # mosaïque visible en cadre (#2998), puce « Tous » retirée
     assert p.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
     p.wait_for_function("window.__m.some(m => m && m.sbxVue)")
     m = p.evaluate("window.__m.filter(m => m && m.sbxVue).pop()")

@@ -40,6 +40,11 @@ Configuration file: `/etc/secubox/podcaster.toml`
 
 - `GET /api/v1/podcaster/status` - Module status
 - `GET /api/v1/podcaster/health` - Health check
+- `GET /api/v1/podcaster/public/library` - bibliothèque publique (lecture) : `episodes`, `feeds` (titre → compte) et, depuis 1.6.0,
+  `podcasts` (un par podcast ayant des épisodes téléchargés : `id`, `title`, `description`, `image`, `episodes`, `last`, `bytes`, `rss`, `zip`)
+- `GET /api/v1/podcaster/share/feed.xml` - flux RSS global des épisodes téléchargés
+- `GET /api/v1/podcaster/share/feed/{fid}.xml` - flux RSS d'un seul podcast (titre, description, pochette, ses épisodes téléchargés) ; 404 si inconnu
+- `GET /api/v1/podcaster/public/feed/{fid}/zip` - archive ZIP des épisodes téléchargés d'un podcast
 
 ## License
 

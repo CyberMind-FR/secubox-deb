@@ -1,3 +1,34 @@
+secubox-podcaster (1.6.2-1~trixie1) trixie; urgency=medium
+
+  * Portail embarqué dans le Hall (ref #2998) : la mosaïque des podcasts reste visible
+    en cadre (seuls l'en-tête et la puce « Tous », doublée par la mégabarre, sont retirés).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 00:05:00 +0200
+
+secubox-podcaster (1.6.1-1~trixie1) trixie; urgency=medium
+
+  * Flux RSS (ref #2998) : sans `public_base`, l'origine des adresses vient de l'hôte
+    de la requête et non de `request.base_url`, qui porte le root_path /api/v1/podcaster
+    et doublait le préfixe devant /media/ (flux global compris) ; un nom d'hôte est en
+    https (HAProxy TLS en frontal), une IP garde le schéma transmis. `<link>` du flux
+    d'un podcast avec le préfixe de l'API.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 21:50:00 +0200
+
+secubox-podcaster (1.6.0-1~trixie1) trixie; urgency=medium
+
+  * Portail public par podcast (ref #2998) : chaque podcast a son propre flux RSS
+    (GET /share/feed/{fid}.xml : titre, description, pochette, ses seuls épisodes
+    téléchargés ; garde require_lecture comme le flux global) et /public/library
+    décrit les podcasts un par un (liste `podcasts` : id, titre, description, image,
+    épisodes, dernière parution, volume, adresses RSS et ZIP ; `feeds` conservé).
+    Portail : mosaïque des podcasts (pochette ou initiale, titre, compte, date,
+    bouton RSS propre), un podcast choisi montre ses épisodes, son flux RSS, la
+    copie de son adresse et son ZIP ; le flux global reste en tête ; contrats du
+    Hall (mégabarre, bus média, micro) et vue micro inchangés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 21:30:00 +0200
+
 secubox-podcaster (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Portail d'écoute /podcaster/portal/ refait au profil Aurora (ref #2686) : page d'usager en lecture seule, mêmes appels qu'avant (GET /public/library, /media/<id>, /share/feed.xml, /public/feed/<id>/zip), gardes de l'API inchangées, aucune écriture. Tuiles avec infobulle (épisodes, flux, dernière parution, volume, partiel annoncé), liste des épisodes, filtre par flux, copie de l'adresse du flux, ?demo=1 (épisodes fictifs, aucun média lu, aucun appel), ?embed=1, hauteur annoncée, 420 px sans débordement. Jeton sbx_token envoyé en Bearer s'il existe.
