@@ -172,6 +172,7 @@ attends mon GO entre chaque phase.
 | Dé SecuBox | extrait en composant, pas d'iframe ; servi par le Hall ; chargé seulement en v2 | CSP sans tiers, aucun coût pour le Hall v1 |
 | Libellés des faces | non repris (le composant ne nomme pas les faces) | un libellé de la source nomme un produit tiers que le projet n'utilise pas |
 | Variante hero du dé | composant prêt (`size`, `fov`, `speed`), option `hall.v2.hero-dice` reportée en phase 2 | le Hero n'existe pas encore |
+| Une seule navigation | la **sidebar** fait foi (décision du 2026-10-21) : topbar = outils ; menus Services ▾ / Système ▾ et menu du service embarqué masqués en v2 ; ⚙/⧉ et sous-navigation dans la sidebar et sur les tuiles ; pas d'onglets au-dessus de la mosaïque | « en haut ou à gauche, pas les deux » |
 
 ## 5. Livré
 

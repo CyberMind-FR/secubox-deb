@@ -1,3 +1,12 @@
+secubox-webos (1.19.4-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : une seule navigation, la sidebar (décision du propriétaire, ref #2996). La topbar
+    redevient outils seulement : menus Services ▾ / Système ▾ masqués, le titre du service embarqué
+    n'ouvre plus de menu ; rubriques dépliables, accès ⚙/⧉ et sous-navigation du module vivent
+    dans la sidebar et sur les tuiles. Annule le retour des menus de 1.18.1.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 17:45:00 +0200
+
 secubox-webos (1.19.3-1~trixie1) trixie; urgency=medium
 
   * Hall v2 : une seule sélection, à gauche (ref #2996). La rangée d'onglets au-dessus de la

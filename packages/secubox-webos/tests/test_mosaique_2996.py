@@ -80,8 +80,8 @@ def test_modules_ouvre_la_mosaique_de_tous_les_modules(nav):
     assert p.evaluate("[...document.querySelectorAll('#view-mosaique .sbx-mtuile')].every(t=>t.querySelector('.sbx-actions [data-admin]')&&t.querySelector('.sbx-actions [data-open][data-mode=tab]'))")
     assert p.evaluate("document.querySelector('#view-mosaique .sbx-mtuile[data-module=zia] .sbx-led').getAttribute('data-ton')") == "info"
     assert p.evaluate("document.querySelector('#view-mosaique .sbx-mtuile[data-module=wireguard]').getAttribute('data-status')") == "offline"
-    # les menus Services / Système de la barre restent accessibles en v2
-    assert p.evaluate("getComputedStyle(document.querySelector('.mnav')).display") != "none"
+    # une seule navigation, la sidebar : les menus Services / Système de la barre sont masqués en v2
+    assert p.evaluate("getComputedStyle(document.querySelector('.mnav')).display") == "none"
     assert p.evaluate("document.querySelector('.sbx-side .sbx-rub.on').getAttribute('data-rub')") == "modules"
     if CAPTURES:
         p.screenshot(path=str(Path(CAPTURES) / "hall-v2-mosaique.png"))

@@ -84,6 +84,8 @@ def test_le_module_embarque_est_marque_et_sa_sous_navigation_apparait(nav):
     rows = p.evaluate("[...document.querySelectorAll('.sbx-ctx-liste .sbx-ctx')].map(a=>[a.getAttribute('data-ctx'),a.getAttribute('data-ctxt'),a.querySelector('small')&&a.querySelector('small').textContent])")
     assert rows == [["/c/atelier", "Atelier", "15"], ["/c/place", "Place publique", "9"], ["/gazette", "Gazette", None]]
     assert p.evaluate("document.querySelector('.sbx-side .sbx-rub.on[data-rub]').getAttribute('data-rub')") == "communication"
+    # le titre du service dans la topbar n'ouvre plus de menu : la navigation est dans la sidebar
+    assert p.evaluate("getComputedStyle(document.getElementById('mnav-ctx')).pointerEvents") == "none"
     # la sidebar est repliée en rail pendant l'embarquement, et rend la largeur au cadre
     assert round(p.evaluate("document.querySelector('.sbx-side').getBoundingClientRect().width")) == 64
     assert p.evaluate("document.querySelector('.shell').getBoundingClientRect().width") >= 1440 - 64 - 1

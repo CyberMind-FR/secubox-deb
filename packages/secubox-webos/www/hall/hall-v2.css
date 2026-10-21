@@ -12,10 +12,12 @@
 [data-hall="v2"] .mast{background:var(--sbx-surface-2);border-bottom:1px solid var(--sbx-bordure-2);box-shadow:none;
   -webkit-backdrop-filter:none;backdrop-filter:none}
 [data-hall="v2"] .mast-main{max-width:none;padding:0 var(--sbx-e-4);min-height:var(--sbx-top);gap:var(--sbx-e-3);flex-wrap:nowrap}
-/* Les menus Services ▾ / Système ▾ restent : ce sont les accès rapides (⚙️ admin, ⧉ onglet) de chaque service. */
-[data-hall="v2"] .mnav{display:flex;gap:4px}
-[data-hall="v2"] .mnav .it{height:40px;padding:0 10px;border:1px solid var(--sbx-bordure-2);border-radius:var(--sbx-rayon-s);background:var(--sbx-surface);color:var(--sbx-texte-attenue);font-size:.82rem}
-[data-hall="v2"] .mnav .it.on{background:var(--sbx-info-fond);color:var(--sbx-accent-2);border-color:var(--sbx-bordure)}
+/* UNE SEULE NAVIGATION, LA SIDEBAR (décision du 2026-10-21) : la topbar ne porte que des outils. Les menus
+   Services ▾ / Système ▾ et le menu déroulant du service embarqué sont masqués en v2 — leurs accès rapides
+   (⚙ admin, ⧉ onglet) et la sous-navigation du module vivent dans la sidebar et sur les tuiles. */
+[data-hall="v2"] .mnav{display:none}
+[data-hall="v2"] #mnav-ctx{pointer-events:none;cursor:default}
+[data-hall="v2"] #mnav-ctx .ca{display:none}
 [data-hall="v2"] .megamenu{top:calc(var(--mast-h,56px) + 6px);border-color:var(--sbx-bordure);background:var(--sbx-surface);box-shadow:var(--sbx-ombre)}
 .sbx-actions{display:inline-flex;gap:2px;flex:none}
 .sbx-actions button{width:28px;height:28px;display:inline-grid;place-items:center;border:1px solid transparent;border-radius:8px;background:none;color:var(--sbx-texte-attenue);cursor:pointer;padding:0}
