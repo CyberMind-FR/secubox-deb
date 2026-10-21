@@ -172,7 +172,7 @@ attends mon GO entre chaque phase.
 | Dé SecuBox | extrait en composant, pas d'iframe ; servi par le Hall ; chargé seulement en v2 | CSP sans tiers, aucun coût pour le Hall v1 |
 | Libellés des faces | non repris (le composant ne nomme pas les faces) | un libellé de la source nomme un produit tiers que le projet n'utilise pas |
 | Variante hero du dé | composant prêt (`size`, `fov`, `speed`), option `hall.v2.hero-dice` reportée en phase 2 | le Hero n'existe pas encore |
-| Une seule navigation | la **sidebar** fait foi (décision du 2026-10-21) : topbar = outils ; menus Services ▾ / Système ▾ et menu du service embarqué masqués en v2 ; ⚙/⧉ et sous-navigation dans la sidebar et sur les tuiles ; pas d'onglets au-dessus de la mosaïque | « en haut ou à gauche, pas les deux » |
+| Une seule navigation | la **sidebar** fait foi (décision du 2026-10-21) : topbar = outils + menu contextuel dynamique du seul service embarqué (`#mnav-ctx`, rétabli en 1.19.6) ; menus Services ▾ / Système ▾ masqués en v2, remplacés par les rubriques Favoris (dynamique, bande ★), Services (curation) et Récents ; ⚙/⧉ et sous-navigation dans la sidebar et sur les tuiles ; pas d'onglets au-dessus de la mosaïque | « en haut ou à gauche, pas les deux » ; « il manque le favoris dynamique » |
 
 ## 5. Livré
 
@@ -286,7 +286,11 @@ d'`apt.secubox.in`. Flag `hall_v2` laissé à faux : le Hall classique reste le 
 - Fait le 2026-10-21 (webos 1.19.x) : vignettes des modules (`webos-vignettes` + minuterie, charge ≤ 8, `shotter` sur la
   page publique, nginx statique `/api/v1/webos/public/vignette/{id}`, `vignette` dans le registre) ; **`hall_v2 = true`
   sur gk2** (sauvegarde `/var/backups/webos.toml.avant-hall-v2-*` ; `?hall=v1` rend l'ancien à un navigateur) ;
-  rubrique « Mes sites » dans la sidebar. Pages admin embarquées : les marges restantes sont leur conteneur centré
+  rubrique « Mes sites » dans la sidebar. Webos 1.19.3 → 1.19.8 : onglets de la mosaïque retirés, rubriques Récents,
+  Services (curation FEATURED) et **Favoris dynamique** (suit la bande ★ de l'accueil, dépliable avec ⚙/⧉, mosaïque au
+  clic ; remplace la section statique), menu contextuel `#mnav-ctx` du service embarqué rétabli, colonne vide des
+  pages admin embarquées supprimée (hub 1.12.20), sonde HTTP avant capture des vignettes (pages 421/connexion
+  exclues). Pages admin embarquées : les marges restantes sont leur conteneur centré
   (`:root.sbx-embed main{max-width:none}` côté `sidebar.css` du hub les étirerait).
 - Phase 4, suite : les 20 captures Streamlit demanderaient un relais `/api/v1/streamlit/apps/{nom}/screenshot` sur le Hall,
   puis migration des cartes vers `Card` dans l'ordre du prompt ; les cartes non migrées sous « Tous les modules ».

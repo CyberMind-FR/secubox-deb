@@ -37,6 +37,9 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   sur gk2 par `dpkg -i` (aperçu `~aurora`, jamais publié dans apt).
 - **Fait (webos 1.19.1)** : vignettes des modules (minuterie + capture shotter + nginx statique + `vignette` dans le registre) ;
   **`hall_v2 = true` sur gk2** depuis le 2026-10-21 (v2 = Hall par défaut ; retour : `hall_v2 = false` + restart).
+- **Fait (webos 1.19.3 → 1.19.8, hub 1.12.20)** : navigation unique = sidebar (onglets de mosaïque retirés, rubriques Récents /
+  Services / **Favoris dynamique** sur la bande ★, menu contextuel du service embarqué rétabli, colonne vide des pages admin
+  embarquées supprimée) ; vignettes avec sonde HTTP (421/connexion exclus), rattrapage `sbx-vignettes-rattrapage` en cours sur gk2.
 - ⬜ **Next Up** : phase 4, suite — migration des cartes vers `Card` dans l'ordre du prompt ; anciennement : vignettes des modules (relais Streamlit `/apps/{nom}/screenshot`, captures des webuis à produire),
   migration des cartes vers `Card` dans l'ordre du prompt ; à trancher : courbes `secubox-metrics`, option `hall.v2.hero-dice` (statut typé côté API, « Relevé », chargement différé, dock Radio) ; à trancher :
   reprise du relevé système dans les courbes de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.

@@ -54,6 +54,14 @@ page publique, nginx statique `/public/vignette/{id}`, `vignette` dans le regist
 **Bascule `hall_v2 = true` sur gk2** le 2026-10-21 (GO du propriétaire « go switch ») ; sauvegarde du TOML dans
 `/var/backups/`. Le `grep … | head` dans une chaîne `set -e` ne stoppe pas sur un test rouge : 1.19.0 a été déployée
 avec un test faux-négatif (PNG factice invalide) — corrigé en 1.19.1, sans effet en production.
+Navigation unique (webos 1.19.3 → 1.19.8, arbitrage « en haut ou à gauche, pas les deux » : la sidebar fait foi) :
+onglets de la mosaïque retirés, rubriques Récents, Services (curation FEATURED, après « on a reperdu les services ») et
+Favoris dynamique (suit la bande ★ de l'accueil, dépliable avec ⚙/⧉, mosaïque au clic, remplace la section statique ;
+« il manque le favoris dynamique »), menu contextuel `#mnav-ctx` du service embarqué rétabli (1.19.6) ; colonne vide des
+pages admin embarquées supprimée (hub 1.12.20, `body.emb`). Vignettes : sonde HTTP avant capture (pages 421 du WAF et
+pages de connexion marquées `sans-page.json`, 15 PNG fautifs purgés), seuil de charge 4 → 8, rattrapage transitoire
+`sbx-vignettes-rattrapage` (seuil 40) lancé sur gk2 ; `Cache-Control: no-cache` sur la coque v2 + `wafctl purge-cache`
+après chaque déploiement d'actifs (le navigateur servait un `hall-v2.js` périmé).
 Constat : `test_ytflux_aurora_2638::test_la_route_flux_n_est_pas_ouverte_sur_le_vhost_admin` échoue déjà
 sur `master`, indépendamment de ce chantier. Dossier : `docs/dossiers/hall-vue-maitre.md`.
 
