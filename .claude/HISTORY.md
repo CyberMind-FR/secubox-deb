@@ -9,6 +9,30 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-21 — media : panneau de gestion des partages SMB (ksmbd) (ref #3000, PR #3001)
+
+Demande « webui management shares samba with ksmb tools ». Le composant SMB de `secubox-media` (ksmbd, `smbctl`,
+nft LAN seul) n'avait ni route d'API ni panneau, et `smbctl` n'était pas dans le sudoers. `secubox-media` 1.9.1 :
+`smbctl` 1.1.0 (`share-add` : nom assaini, chemin réel sous `SECUBOX_SMB_ROOTS`, comptes existants, `valid users`,
+écrit par `ksmbd.addshare` hors du bloc généré ; `share-del` jamais sur un partage généré ; `user-del` ; `status`
+enrichi ; une ligne d'audit JSON par décision, sans secret), sudoers `secubox → smbctl`, routes `/api/v1/media/smb/*`
+toutes en `require_jwt` (mot de passe sur l'entrée standard du ctl), panneau Aurora `/media/smb.html` + menu
+« Partages SMB ». Deux bogues préexistants corrigés : `ksmbd.adduser -i` n'existe plus en ksmbd-tools 3.5 (`-P`,
+vérifié sur gk2 avec une base jetable) ; `cmd | grep -q` sous `pipefail` faisait annoncer au hasard le module ou
+l'écoute absents (SIGPIPE), `usable` faux sur gk2. Incident de ma part : `ksmbd.control -s` ARRÊTE ksmbd (ce n'est
+pas « status »), relancé dans la foulée, quelques secondes sans SMB. 77 tests verts ; déployé sur gk2, publié trixie.
+
+## 2026-10-21 — podcaster : portail public par podcast, un flux RSS par podcast (ref #2998, PR #2999)
+
+Demande « associer les podcasts et leurs flux respectifs ». `secubox-podcaster` 1.6.1 : `GET /share/feed/{fid}.xml`
+(RSS d'un seul podcast : titre, description, pochette rendue absolue, ses épisodes téléchargés, `require_lecture`,
+404 si inconnu), liste `podcasts` dans `/public/library` (`feeds`/`episodes` conservés pour le Hall et les cardlets),
+portail : mosaïque des podcasts (pochette ou initiale, bouton RSS propre), podcast choisi → ses épisodes, ZIP, flux,
+copie de son adresse ; flux global en tête ; contrats du Hall et vue micro inchangés. Bogue préexistant corrigé :
+sans `public_base`, `request.base_url` porte le root_path et doublait `/api/v1/podcaster` devant `/media/` (flux
+global compris) ; l'origine vient désormais de l'hôte (https pour un nom, schéma transmis pour une IP). 92 tests
+verts ; déployé sur gk2 (8 podcasts, flux 465 à 60 épisodes vérifié), publié trixie.
+
 ## 2026-10-19 — secubox-pseudo-routeur : gk2 passerelle DHCP du LAN plat (ref #2940, PR #2945)
 
 Nouveau paquet secubox-pseudo-routeur 0.1.0 (source seulement, pas encore installé ni essayé sur gk2) :

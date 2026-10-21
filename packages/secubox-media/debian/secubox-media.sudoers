@@ -4,3 +4,7 @@
 # vivent dans le ctl, qui valide ses propres entrées — une garde posée dans la
 # couche HTTP serait contournable par tout autre appelant.
 secubox ALL=(root) NOPASSWD: /usr/sbin/mediactl
+# Partages SMB (ksmbd, #3000) : même règle, smbctl valide noms, chemins
+# (racines déclarées, liens résolus) et comptes ; le mot de passe passe par
+# l'entrée standard, jamais en argument.
+secubox ALL=(root) NOPASSWD: /usr/sbin/smbctl

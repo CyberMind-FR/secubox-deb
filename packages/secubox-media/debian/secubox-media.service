@@ -25,7 +25,12 @@ ProtectSystem=strict
 # meme commande reussit depuis un shell root, ce qui egare le diagnostic.
 #
 # /data : destinations declarees des transferts (mediatheques).
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /media /data
+#
+# /etc/ksmbd et /var/log/secubox (#3000) : `sudo smbctl` tourne DANS cet espace de
+# noms ; sans eux, ksmbd.addshare echoue sur « Read-only file system » et la ligne
+# d'audit n'est pas ecrite — la meme commande reussit depuis un shell root.
+# /run : ksmbd.addshare/adduser previennent ksmbd.mountd par /run/ksmbd.lock.
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /media /data /etc/ksmbd /var/log/secubox /run
 
 # Les montages faits par ce service doivent etre visibles du RESTE du systeme.
 # PrivateTmp et ProtectSystem donnent a l'unite un espace de noms de montage
