@@ -1,3 +1,21 @@
+secubox-webos (1.19.1-1~trixie1) trixie; urgency=medium
+
+  * Vignettes : seuil de charge 8 au lieu de 4 (ref #2996) — la box vit entre 6 et 15, l'unité borne
+    déjà Chromium (CPUQuota 20 %, Nice 19, E/S idle). Première capture validée sur gk2.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 16:30:00 +0200
+
+secubox-webos (1.19.0-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : vignettes des modules dans la mosaïque (phase 4, ref #2996). `webos-vignettes` +
+    `secubox-webos-vignettes.timer` (toutes les 3 min, un module par tour, garde de charge 4,
+    verrou, CPUQuota 20 %, Nice 19) capturent la page publique d'un module (`?theme=dark&embed=1`)
+    avec `secubox_core.shotter`, une fois par semaine et par domaine ; PNG servis en statique par
+    nginx sur `/api/v1/webos/public/vignette/{id}` ; `GET /public/services` porte `vignette`.
+    Recommends: chromium.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 16:00:00 +0200
+
 secubox-webos (1.18.1-1~trixie1) trixie; urgency=medium
 
   * Hall v2 : les menus Services ▾ / Système ▾ de la barre reviennent (ref #2996) — la coque v2

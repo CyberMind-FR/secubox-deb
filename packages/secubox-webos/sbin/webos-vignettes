@@ -1,0 +1,23 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: webos-vignettes — capture UNE vignette de module pour la mosaïque du Hall (#2996).
+
+Rappelé par `secubox-webos-vignettes.timer`. Toute la logique (choix du module, garde de charge,
+verrou, capture) vit dans `api/vignettes.py`, testée sans ce point d'entrée. Variables :
+  WEBOS_LIB                   défaut /usr/lib/secubox/webos
+  WEBOS_SHOTS_CACHE           défaut /var/cache/secubox/webos/shots
+  WEBOS_SHOTS_LOAD_THRESHOLD  défaut 4
+"""
+import os
+import sys
+
+LIB = os.environ.get("WEBOS_LIB", "/usr/lib/secubox/webos")
+if LIB not in sys.path:
+    sys.path.insert(0, LIB)
+from api import vignettes  # noqa: E402
+
+if __name__ == "__main__":
+    raise SystemExit(vignettes.main())

@@ -25,6 +25,9 @@ if [ "$1" = "configure" ]; then
     fi
     systemctl daemon-reload || true
     systemctl enable --now secubox-webos.service || true
+    # Vignettes des modules (#2996) : le dossier appartient à l'utilisateur de la minuterie, lisible par nginx.
+    install -d -o secubox -g secubox -m 0755 /var/cache/secubox/webos/shots || true
+    systemctl enable --now secubox-webos-vignettes.timer || true
 fi
 
 # CE BLOC EST APRES LE JETON DEBHELPER, ET C'EST TOUT L'INTERET. C'est la que

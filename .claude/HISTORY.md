@@ -48,7 +48,12 @@ Régression corrigée (webos 1.18.1) : la coque v2 masquait les menus Services/S
 et ⧉ onglet ; rétablis, et posés aussi sur les tuiles de la mosaïque et les modules dépliés. `/sbxos/` régénérée
 (sbxos 0.6.0~aurora17-3, révision seule, dist Aurora inchangé) au profil vue maître ; déployée sur gk2 par dpkg -i
 (un aperçu `~aurora` n'entre jamais dans apt). Le `dist/` ignoré par git doit être recopié dans un worktree avant
-`dpkg-buildpackage` (debian/rules le vérifie, ne le construit pas).
+`dpkg-buildpackage` (debian/rules le vérifie, ne le construit pas). Vignettes des modules (webos 1.19.0/1.19.1) :
+`webos-vignettes` + minuterie (3 min, un module par tour, charge ≤ 8, CPUQuota 20 %), `secubox_core.shotter` sur la
+page publique, nginx statique `/public/vignette/{id}`, `vignette` dans le registre ; première capture `acces` validée.
+**Bascule `hall_v2 = true` sur gk2** le 2026-10-21 (GO du propriétaire « go switch ») ; sauvegarde du TOML dans
+`/var/backups/`. Le `grep … | head` dans une chaîne `set -e` ne stoppe pas sur un test rouge : 1.19.0 a été déployée
+avec un test faux-négatif (PNG factice invalide) — corrigé en 1.19.1, sans effet en production.
 Constat : `test_ytflux_aurora_2638::test_la_route_flux_n_est_pas_ouverte_sur_le_vhost_admin` échoue déjà
 sur `master`, indépendamment de ce chantier. Dossier : `docs/dossiers/hall-vue-maitre.md`.
 

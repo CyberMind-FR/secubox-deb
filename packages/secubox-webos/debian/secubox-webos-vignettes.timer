@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox WebOS — une vignette de module toutes les 3 minutes (une par semaine et par module)
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=3min
+RandomizedDelaySec=30s
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

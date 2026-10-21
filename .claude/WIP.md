@@ -35,7 +35,9 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - **Fait (webos 1.18.1)** : retour des menus Services/Système et accès rapides ⚙/⧉ (régression v2 signalée par le propriétaire).
 - **Fait (sbxos 0.6.0~aurora17-3)** : coquille `/sbxos/` régénérée au profil vue maître (jetons, topbar, barre SVG → sidebar), déployée
   sur gk2 par `dpkg -i` (aperçu `~aurora`, jamais publié dans apt).
-- ⬜ **Next Up** : phase 4, suite — vignettes des modules (relais Streamlit `/apps/{nom}/screenshot`, captures des webuis à produire),
+- **Fait (webos 1.19.1)** : vignettes des modules (minuterie + capture shotter + nginx statique + `vignette` dans le registre) ;
+  **`hall_v2 = true` sur gk2** depuis le 2026-10-21 (v2 = Hall par défaut ; retour : `hall_v2 = false` + restart).
+- ⬜ **Next Up** : phase 4, suite — migration des cartes vers `Card` dans l'ordre du prompt ; anciennement : vignettes des modules (relais Streamlit `/apps/{nom}/screenshot`, captures des webuis à produire),
   migration des cartes vers `Card` dans l'ordre du prompt ; à trancher : courbes `secubox-metrics`, option `hall.v2.hero-dice` (statut typé côté API, « Relevé », chargement différé, dock Radio) ; à trancher :
   reprise du relevé système dans les courbes de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
 

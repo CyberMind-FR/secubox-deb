@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox WebOS — capture d'une vignette de module pour la mosaïque du Hall
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/2996
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=/var/cache/secubox/webos
+TimeoutStartSec=300
+Nice=19
+CPUQuota=20%
+IOSchedulingClass=idle
+ExecStart=/usr/sbin/webos-vignettes
+StandardError=journal

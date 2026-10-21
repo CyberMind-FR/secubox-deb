@@ -148,6 +148,9 @@
 .sbx-mtuile .ouvre{display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-width:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;padding:0}
 .sbx-mtuile .ouvre:focus-visible{outline:none}
 .sbx-mtuile .sbx-actions{position:absolute;right:8px;bottom:8px;opacity:.55}
+.sbx-mtuile .vig{display:block;aspect-ratio:16/10;width:calc(100% + 24px);margin:-12px -12px 0;border-radius:var(--sbx-rayon-m) var(--sbx-rayon-m) 0 0;overflow:hidden;background:var(--sbx-surface-2);border-bottom:1px solid var(--sbx-bordure-2)}
+.sbx-mtuile .vig img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.sbx-mtuile.avec-vignette .sbx-led{top:12px;right:12px;box-shadow:0 0 0 3px var(--sbx-surface-2)}
 .sbx-mtuile:hover .sbx-actions,.sbx-mtuile:focus-within .sbx-actions{opacity:1}
 .sbx-sous-ligne{display:flex;align-items:center;gap:2px}
 .sbx-sous-ligne .sbx-sous-item{flex:1 1 auto;min-width:0}

@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse, Response
 from secubox_core.auth import require_session, require_personne, create_token, domaine_box
 from secubox_core.health import systemd_batch
 from api.models import Service
-from api import registry, flags, cardlets, actions, aide, hotes, systeme
+from api import registry, flags, cardlets, actions, aide, hotes, systeme, vignettes
 from secubox_core.auth import require_lecture
 
 _cache: dict = {"services": [], "computed_at": None}
@@ -61,6 +61,9 @@ def _recompute() -> bool:
     health = systemd_batch()
     expo = registry.load_exposure_cache()
     svcs = registry.normalize_services(menu, health, expo, sockets=_live_sockets(), montes=_montes, endormis=_endormis)
+    avec_vignette = vignettes.vignettes_presentes(s.id for s in svcs)
+    for s in svcs:
+        s.vignette = s.id in avec_vignette
     _cache["services"] = [s.model_dump() for s in svcs]
     _cache["computed_at"] = time.time()
     try:
@@ -115,7 +118,7 @@ def _enabled() -> bool:
     return bool(_flags.get("enabled"))
 
 
-_PUBLIC_FIELDS = ("id", "name", "description", "category", "icon", "installed", "active", "status")
+_PUBLIC_FIELDS = ("id", "name", "description", "category", "icon", "installed", "active", "status", "vignette")
 
 
 def _releve_iso(ts) -> str | None:
