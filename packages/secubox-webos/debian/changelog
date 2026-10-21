@@ -17,6 +17,10 @@ secubox-webos (1.15.0-1~bookworm1) bookworm; urgency=medium
     nosource}. Hero vivant en tête de l'accueil v2 : salutation, horloge, CPU / mémoire /
     stockage / réseau / E/S disque (≤ 5 s), titre radio. Route `GET /public/systeme`
     (lecture /proc hors boucle, cache 5 s).
+  * Hall : identité et avatar dans la carte d'usager v2 (ref #2996). Avec une session, le
+    pseudo sbxid cherche son image sur `GET /api/v1/avatar/par-nom/{pseudo}` (secubox-avatar
+    1.4.0, relais de lecture dédié sur le vhost du Hall ; repli : initiales) ; liens
+    « Mes comptes » (carte des comptes SSO) et « Mon identité ».
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 09:00:00 +0200
 

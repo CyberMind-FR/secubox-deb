@@ -203,6 +203,16 @@ attends mon GO entre chaque phase.
 
 ![Catalogue des composants](../assets/images/hall-vue-maitre/hall-v2-catalogue.png)
 
+### Identité, avatar et comptes SSO (2026-10-21)
+
+- La carte d'usager de la sidebar lit `GET /api/v1/sbxid/moi` ; avec une identité, l'image vient de
+  `GET /api/v1/avatar/par-nom/{pseudo}` (`secubox-avatar` 1.4.0 : identité dont le `username` est le pseudo,
+  sans révéler l'identifiant interne ; relais de lecture dédié sur le vhost du Hall, conforme au gabarit).
+  Sans image : initiales ; sans identité : rien n'est demandé de plus.
+- Deux liens apparaissent avec l'identité : **Mes comptes** (la carte `cardlets/comptes.html`, comptes SSO
+  ouverts avec la session du Hall) et **Mon identité** (`/identite/`). L'Identity Manager de l'administration
+  (`admin.<domaine>/avatar/`) reste le lieu où l'on crée l'identité et dépose l'image.
+
 ## 6. Reste à faire
 
 - Phase 2, reste : option `hall.v2.hero-dice` (dé de 96 px derrière l'heure), reportée avec la carte « Bonjour ».

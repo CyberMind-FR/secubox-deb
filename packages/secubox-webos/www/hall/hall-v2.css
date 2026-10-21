@@ -61,6 +61,11 @@
 .sbx-usager:focus-visible{outline:none;box-shadow:var(--sbx-halo-focus)}
 .sbx-usager .av{width:32px;height:32px;flex:none;border-radius:50%;background:var(--sbx-info-fond);color:var(--sbx-accent-2);display:grid;place-items:center;
   font:700 .78rem var(--sbx-mono)}
+.sbx-usager .av img{width:32px;height:32px;border-radius:50%;object-fit:cover;display:block}
+[data-hall="v2"] .mast .who .av img{width:32px;height:32px;border-radius:50%;object-fit:cover;display:block}
+.sbx-usager-liens{display:flex;flex-direction:column;gap:2px}
+.sbx-usager-liens[hidden]{display:none}
+.sbx-usager-liens .sbx-rub{min-height:36px;font-size:.8rem;text-decoration:none}
 .sbx-usager .tx{min-width:0}
 .sbx-usager b{display:block;font-size:.84rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sbx-usager i{display:block;font-style:normal;font-size:.7rem;color:var(--sbx-texte-attenue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -97,7 +102,7 @@
   .sbx-side::-webkit-scrollbar{display:none}
   .sbx-side nav{flex-direction:row;flex:none}
   .sbx-rub{width:auto}
-  .sbx-side .sbx-titre,.sbx-side .sbx-favoris{display:none}
+  .sbx-side .sbx-titre,.sbx-side .sbx-favoris,.sbx-side .sbx-usager-liens{display:none}
   .sbx-usager{margin:0 0 0 auto;width:auto;padding:4px;border:0;background:none;flex:none}
   .sbx-usager .tx{display:none}
 }
@@ -111,7 +116,7 @@
   [data-hall="v2"] .sbx-side.ouvert nav{flex-direction:column}
   [data-hall="v2"] .sbx-side.ouvert .sbx-rub{width:100%;min-height:44px}
   [data-hall="v2"] .sbx-side.ouvert .sbx-titre{display:block}
-  [data-hall="v2"] .sbx-side.ouvert .sbx-favoris{display:flex}
+  [data-hall="v2"] .sbx-side.ouvert .sbx-favoris,[data-hall="v2"] .sbx-side.ouvert .sbx-usager-liens:not([hidden]){display:flex}
   [data-hall="v2"] .sbx-side.ouvert .sbx-usager{margin-top:auto;width:100%;padding:10px;border:1px solid var(--sbx-bordure-2);background:var(--sbx-surface)}
   [data-hall="v2"] .sbx-side.ouvert .sbx-usager .tx{display:block}
   [data-hall="v2"] .sbx-voile.ouvert{display:block;position:fixed;inset:0;z-index:71;background:var(--sbx-voile)}

@@ -133,13 +133,25 @@
     });
   }
 
-  // ── Usager : miroir de #who ────────────────────────────────────────────
+  // ── Usager : miroir de #who, avatar par le pseudo sbxid (secubox-avatar), liens comptes / identité ──
+  var pseudoVu=null;
   function usager(){
     var u=$('.sbx-usager'); if(!u) return;
     var nom=($('#who-nom')||{}).textContent||'Invité', ligne=($('#who-ligne')||{}).textContent||'';
     u.querySelector('b').textContent=nom.trim();
     u.querySelector('i').textContent=ligne.trim().replace(/^[○●]\s*/,'');
-    u.querySelector('.av').textContent=(nom.trim().slice(0,2)||'?').toUpperCase();
+    var av=u.querySelector('.av'); if(!av.querySelector('img')) av.textContent=(nom.trim().slice(0,2)||'?').toUpperCase();
+    avatar();
+  }
+  function avatar(){
+    fetch('/api/v1/sbxid/moi',{credentials:'same-origin',headers:{Accept:'application/json'}}).then(function(r){ return r.ok?r.json():null; })
+      .then(function(m){
+        var pseudo=m&&m.identite&&m.identite.pseudo; var liens=$('.sbx-usager-liens'); if(liens) liens.hidden=!pseudo;
+        if(!pseudo||pseudo===pseudoVu||!/^[A-Za-z0-9._-]{2,64}$/.test(pseudo)) return; pseudoVu=pseudo;
+        var img=new Image(); img.alt=''; img.decoding='async';
+        img.onload=function(){ [$('.sbx-usager .av'),$('#who .av')].forEach(function(a){ if(!a) return; a.textContent=''; a.appendChild(img.cloneNode()); }); };
+        img.src='/api/v1/avatar/par-nom/'+encodeURIComponent(pseudo);
+      }).catch(function(){});
   }
 
   // ── Notifications : miroir du badge du logo ────────────────────────────
@@ -234,6 +246,12 @@
     var us=el('button',{type:'button','class':'sbx-usager','aria-label':'Profil et réglages'},'<span class="av"></span><span class="tx"><b></b><i></i></span>');
     us.addEventListener('click',function(){ fermeTiroir(); var w=$('#who'); if(w) w.click(); });
     side.appendChild(us);
+    // Avec une identité : « Mes comptes » (carte des comptes SSO, dans le Hall) et l'identité SBX OS.
+    var liens=el('div',{'class':'sbx-usager-liens',hidden:''});
+    var bc=el('button',{type:'button','class':'sbx-rub','data-open':'comptes','data-mode':'embed'},ico('etoile')+'<span>Mes comptes</span>');
+    bc.querySelector('svg').innerHTML=ICONES.usager;
+    var ai=el('a',{'class':'sbx-rub',href:'/identite/'},ico('bouclier')+'<span>Mon identité</span>');
+    liens.appendChild(bc); liens.appendChild(ai); side.appendChild(liens);
     var voile=el('div',{'class':'sbx-voile'});
     voile.addEventListener('click',fermeTiroir);
     shell.parentNode.insertBefore(corps,shell);

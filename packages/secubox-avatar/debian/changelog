@@ -1,3 +1,11 @@
+secubox-avatar (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * `GET /api/v1/avatar/par-nom/{username}` (garde de lecture, ref #2996) : l'image d'une
+    identité par son nom d'usager — le pseudo sbxid de la session — sans révéler l'identifiant
+    interne ; 404 sinon. Lue par la carte d'usager de la vue maître du Hall.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 10:30:00 +0200
+
 secubox-avatar (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /avatar/ refaite au profil Aurora (ref #2643) : page autonome en français (plus de police distante ni de skin crt/hybrid-dark), six tuiles avec infobulle de définition (identités, avatars, services actifs, personas, sites conservés, cookies chiffrés), onglets Identités / Services / Personas, fenêtre d'édition intégrée à la page, modes ?demo=1 (données fictives, actions inertes) et ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncée à l'hôte (sbxVue, onglet avatar).

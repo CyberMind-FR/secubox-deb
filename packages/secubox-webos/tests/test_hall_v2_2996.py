@@ -265,6 +265,51 @@ def test_theme_clair_en_v2_garde_le_contraste(nav):
     ctx.close()
 
 
+def test_carte_d_usager_avatar_et_liens_avec_identite(nav):
+    ctx = nav.new_context(viewport={"width": 1440, "height": 900}, color_scheme="dark")
+    p = ctx.new_page()
+    erreurs = []
+    p.on("pageerror", lambda e: erreurs.append(str(e)))
+    image = (HALL_DIR / "dice" / "face-5.jpg").read_bytes()
+
+    def sert(r):
+        u = r.request.url.split("http://sbx.test", 1)[1].split("?")[0]
+        if u == "/api/v1/sbxid/moi":
+            return r.fulfill(status=200, content_type="application/json", body='{"identite": {"pseudo": "gek"}, "liens": []}')
+        if u == "/api/v1/avatar/par-nom/gek":
+            return r.fulfill(status=200, content_type="image/jpeg", body=image)
+        if u == "/api/v1/webos/public/etat":
+            return r.fulfill(status=200, content_type="application/json", body='{"hall_v2": false, "version": "1.15.0-1", "en_ligne": true}')
+        if u.startswith("/api/"):
+            return r.fulfill(status=401, content_type="application/json", body="{}")
+        f = HALL_DIR / ("index.html" if u == "/" else u.lstrip("/"))
+        if f.is_file():
+            return r.fulfill(status=200, content_type=mimetypes.guess_type(str(f))[0] or "text/plain", body=f.read_bytes())
+        r.fulfill(status=404, body="")
+    p.route("http://sbx.test/**", sert)
+    p.goto("http://sbx.test/?hall=v2")
+    p.wait_for_selector(".sbx-usager .av img", state="attached")
+    assert p.evaluate("document.querySelector('.sbx-usager .av img').src").endswith("/api/v1/avatar/par-nom/gek")
+    assert p.evaluate("!!document.querySelector('#who .av img')")
+    assert not p.evaluate("document.querySelector('.sbx-usager-liens').hidden")
+    libelles = p.evaluate("[...document.querySelectorAll('.sbx-usager-liens .sbx-rub')].map(e=>e.textContent.trim())")
+    assert libelles == ["Mes comptes", "Mon identité"]
+    assert p.evaluate("document.querySelector('.sbx-usager-liens [data-open]').getAttribute('data-open')") == "comptes"
+    assert p.evaluate("document.querySelector('.sbx-usager-liens a').getAttribute('href')") == "/identite/"
+    assert erreurs == []
+    ctx.close()
+
+
+def test_sans_identite_initiales_et_liens_caches(nav):
+    ctx, p, erreurs = ouvre(nav, 1440)
+    p.wait_for_timeout(300)
+    assert p.evaluate("!document.querySelector('.sbx-usager .av img')")
+    assert p.inner_text(".sbx-usager .av") == "IN"
+    assert p.evaluate("document.querySelector('.sbx-usager-liens').hidden")
+    assert erreurs == []
+    ctx.close()
+
+
 def _lum(rgb):
     def c(v):
         v /= 255
