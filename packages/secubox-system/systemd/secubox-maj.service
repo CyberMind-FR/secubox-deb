@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox systeme : mises a jour apt a la demande (#3002)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3002
+
+[Service]
+Type=oneshot
+# Root (aucun compte de service declare) : apt et dpkg. Une mise a niveau complete peut durer
+# longtemps sur une carte ARM chargee.
+TimeoutStartSec=3600
+ExecStart=/usr/sbin/secubox-majctl process-ops

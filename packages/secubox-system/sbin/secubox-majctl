@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: secubox-majctl — mises a jour apt pour la page systeme (#3002)
+# CyberMind — https://cybermind.fr
+#
+# POURQUOI UN CTL ROOT. L'API systeme tourne en `secubox` (et, sur le vhost
+# d'administration, DANS l'agregateur) : `apt-get update` y echoue sur le verrou
+# dpkg (« are you root? »). Ce script tourne en root, lance par l'unite
+# secubox-maj.service quand le dossier de demandes n'est plus vide
+# (secubox-maj.path). L'API ne fait que DEPOSER une demande et LIRE
+# l'etat : aucun sudo, aucun polkit, donc independant du processus qui la sert.
+#
+# Verbes :
+#   verifier      apt-get update + simulation de mise a niveau -> etat JSON
+#   appliquer     apt-get upgrade -y (confold, non interactif) -> etat JSON + journal
+#   process-ops   draine le dossier de demandes (un fichier = un verbe)
+#
+# Il ne fait JAMAIS dist-upgrade ni autoremove : une mise a niveau depuis une page
+# web ne retire rien et ne change pas de noyau.
+
+set -uo pipefail
+
+readonly VERSION="1.0.0"
+readonly ETAT="${SECUBOX_MAJ_ETAT:-/var/lib/secubox/system/maj.json}"
+readonly SPOOL="${SECUBOX_MAJ_SPOOL:-/run/secubox/system/maj}"
+readonly JOURNAL="${SECUBOX_MAJ_JOURNAL:-/var/log/secubox/system-maj.log}"
+readonly VERROU="${SECUBOX_MAJ_VERROU:-/run/lock/secubox-maj.lock}"
+export DEBIAN_FRONTEND=noninteractive LC_ALL=C
+
+# L'etat est ecrit ATOMIQUEMENT (fichier temporaire + mv) et lisible par tous :
+# l'API, sous un autre compte, le lit pendant qu'on ecrit.
+_ecrit_etat() {   # phase derniere ok debut fin erreur paquets_json appliques
+    mkdir -p "$(dirname "$ETAT")"
+    python3 - "$ETAT" "$@" <<'PY'
+import json, os, sys, tempfile
+chemin, phase, derniere, ok, debut, fin, erreur, paquets, appliques = sys.argv[1:10]
+etat = {"phase": phase, "derniere": derniere, "ok": ok == "true",
+        "debut": int(debut or 0), "fin": int(fin or 0), "erreur": erreur or None,
+        "paquets": json.loads(paquets or "[]"), "count": len(json.loads(paquets or "[]")),
+        "appliques": int(appliques or 0)}
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(chemin), prefix=".maj-")
+with os.fdopen(fd, "w") as f:
+    json.dump(etat, f, ensure_ascii=False)
+os.chmod(tmp, 0o644)
+os.replace(tmp, chemin)
+PY
+}
+
+_journal() { mkdir -p "$(dirname "$JOURNAL")"; printf '%s %s\n' "$(date -Is)" "$*" >> "$JOURNAL" 2>/dev/null || true; }
+
+# « Inst <paquet> [ancienne] (nouvelle ...) » : le NOM est le 2e mot (#2615).
+_simule() {
+    apt-get -s upgrade 2>/dev/null | awk '$1 == "Inst" { print $2 }' \
+        | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))'
+}
+
+cmd_verifier() {
+    local debut err out rc paquets
+    debut=$(date +%s)
+    _ecrit_etat verifier verifier false "$debut" 0 "" "[]" 0
+    out=$(apt-get update -q -o DPkg::Lock::Timeout=180 2>&1); rc=$?
+    paquets=$(_simule)
+    if [ $rc -ne 0 ]; then
+        err=$(printf '%s' "$out" | grep -E '^(E|W):' | tail -3 | tr '\n' ' ' | cut -c1-400)
+        _ecrit_etat idle verifier false "$debut" "$(date +%s)" "${err:-apt-get update a echoue (code $rc)}" "$paquets" 0
+        _journal "verifier KO : ${err:-code $rc}"
+        printf '{"ok":false,"error":%s}\n' "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "${err:-code $rc}")"
+        return 1
+    fi
+    _ecrit_etat idle verifier true "$debut" "$(date +%s)" "" "$paquets" 0
+    _journal "verifier OK : $(printf '%s' "$paquets" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))') paquet(s) a mettre a jour"
+    printf '{"ok":true,"paquets":%s}\n' "$paquets"
+}
+
+cmd_appliquer() {
+    local debut avant n rc err restants
+    debut=$(date +%s)
+    avant=$(_simule)
+    n=$(printf '%s' "$avant" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
+    _ecrit_etat appliquer appliquer false "$debut" 0 "" "$avant" 0
+    _journal "appliquer : debut, $n paquet(s)"
+    # upgrade, JAMAIS dist-upgrade : rien n'est retire, aucun nouveau paquet n'est
+    # tire par ricochet. --force-confold garde la configuration de l'operateur.
+    apt-get upgrade -y -q -o DPkg::Lock::Timeout=180 -o Dpkg::Options::=--force-confold >> "$JOURNAL" 2>&1; rc=$?
+    restants=$(_simule)
+    if [ $rc -ne 0 ]; then
+        err=$(tail -3 "$JOURNAL" 2>/dev/null | grep -E '^(E|W):|dpkg:' | tail -2 | tr '\n' ' ' | cut -c1-400)
+        _ecrit_etat idle appliquer false "$debut" "$(date +%s)" "${err:-apt-get upgrade a echoue (code $rc), voir $JOURNAL}" "$restants" 0
+        _journal "appliquer KO : code $rc"
+        return 1
+    fi
+    _ecrit_etat idle appliquer true "$debut" "$(date +%s)" "" "$restants" "$n"
+    _journal "appliquer OK : $n paquet(s) mis a jour"
+    printf '{"ok":true,"appliques":%s}\n' "$n"
+}
+
+# Un fichier de demande = un verbe (son contenu, sinon la fin de son nom). Les
+# demandes sont retirees AVANT d'agir : une demande qui plante ne tourne pas en
+# boucle. Un seul passage a la fois (verrou), l'unite .path redeclenchera s'il
+# reste des demandes.
+cmd_process_ops() {
+    mkdir -p "$SPOOL" "$(dirname "$VERROU")"
+    exec 9>"$VERROU"
+    flock -n 9 || { echo "majctl: un passage est deja en cours" >&2; return 0; }
+    local f verbe fait=0
+    for f in "$SPOOL"/*.demande; do
+        [ -e "$f" ] || continue
+        verbe=$(head -c 32 "$f" 2>/dev/null | tr -cd 'a-z')
+        rm -f -- "$f"
+        [ -n "$verbe" ] || verbe=$(basename -- "$f" .demande | sed 's/.*-//' | tr -cd 'a-z')
+        case "$verbe" in
+            verifier)  cmd_verifier  >/dev/null; fait=$((fait + 1)) ;;
+            appliquer) cmd_appliquer >/dev/null; fait=$((fait + 1)) ;;
+            *) _journal "demande ignoree : $verbe" ;;
+        esac
+    done
+    printf '{"ok":true,"traitees":%s}\n' "$fait"
+}
+
+cmd_help() {
+    cat <<'EOF'
+secubox-majctl — mises a jour apt pour la page systeme (#3002)
+
+  verifier       apt-get update + simulation -> /var/lib/secubox/system/maj.json
+  appliquer      apt-get upgrade -y (confold) -> etat + /var/log/secubox/system-maj.log
+  process-ops    draine /run/secubox/system/maj/*.demande (unite .path, root)
+  status         affiche l'etat JSON
+EOF
+}
+
+case "${1:-help}" in
+    verifier)    cmd_verifier ;;
+    appliquer)   cmd_appliquer ;;
+    process-ops) cmd_process_ops ;;
+    status)      cat "$ETAT" 2>/dev/null || echo '{"phase":"idle","derniere":null,"ok":null}' ;;
+    version)     printf '{"ok":true,"version":"%s"}\n' "$VERSION" ;;
+    *)           cmd_help ;;
+esac

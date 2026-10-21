@@ -453,13 +453,26 @@
         $('aShutdown').addEventListener('click', () => demande('cRapide', 'Éteindre la machine', () => simple('POST', '/shutdown', 'rRapide', 'Arrêt planifié dans une minute.')));
 
         $('aCheck').addEventListener('click', async () => {
-            $('aCheck').disabled = true; retour('rPaq', true, 'Recherche en cours (apt-get update)…');
+            $('aCheck').disabled = true; retour('rPaq', true, 'Recherche en cours (apt-get update par l’unité root, jusqu’à deux minutes)…');
             const r = DEMO ? { demo: true } : await lire('/check_updates').then(d => ({ ok: true, data: d }), e => ({ ok: false, statut: e.statut || 0 }));
             $('aCheck').disabled = false;
             if (r.ok) { const n = r.data.count != null ? r.data.count : (r.data.packages || []).length; retour('rPaq', true, n ? n + ' mise(s) à jour disponible(s) : ' + (r.data.packages || []).slice(0, 12).join(', ') + (n > 12 ? '…' : '') : 'Aucune mise à jour disponible.'); }
             else retour('rPaq', false, 'Échec : ' + detail(r));
         });
-        $('aApply').addEventListener('click', () => demande('cPaq', 'Appliquer toutes les mises à jour', () => simple('POST', '/apply_updates', 'rPaq', 'Mises à jour appliquées.', charger)));
+        // La mise à niveau tourne en arrière-plan (unité root) : on suit GET /maj_status jusqu'à la fin (#3002).
+        async function suitMaj() {
+            for (let i = 0; i < 720; i++) {
+                await new Promise(r => setTimeout(r, 5000));
+                let e; try { e = await lire('/maj_status'); } catch (err) { continue; }
+                if (!e || e.en_cours) { retour('rPaq', true, 'Mise à niveau en cours… (' + ((e && e.count) || '?') + ' paquet(s))'); continue; }
+                if (e.derniere === 'appliquer') {
+                    if (e.ok) retour('rPaq', true, (e.appliques || 0) + ' paquet(s) mis à jour.' + (e.count ? ' Restent : ' + e.paquets.slice(0, 8).join(', ') : ''));
+                    else retour('rPaq', false, 'Échec de la mise à niveau : ' + (e.erreur || 'raison inconnue'));
+                }
+                charger(); return;
+            }
+        }
+        $('aApply').addEventListener('click', () => demande('cPaq', 'Appliquer toutes les mises à jour', () => simple('POST', '/apply_updates', 'rPaq', 'Mise à niveau lancée en arrière-plan…', suitMaj)));
 
         $('fReglages').addEventListener('submit', async ev => {
             ev.preventDefault();

@@ -1,3 +1,15 @@
+secubox-system (1.11.0-1~trixie1) trixie; urgency=medium
+
+  * Mises à jour apt depuis la page système (ref #3002) : « Rechercher » et « Appliquer »
+    échouaient sur le verrou dpkg (« are you root? »), l'API tournant en secubox, servie par
+    l'agrégateur. L'API dépose désormais une demande dans /run/secubox/system/maj ; l'unité
+    root secubox-maj.path/.service la draine par secubox-majctl (apt-get update +
+    simulation ; apt-get upgrade -y confold, jamais dist-upgrade) et écrit l'état dans
+    /var/lib/secubox/system/maj.json. GET /maj_status pour le suivi ; la page suit la mise à
+    niveau jusqu'à la fin. Ni sudo ni polkit : indépendant du processus qui sert l'API.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 01:10:00 +0200
+
 secubox-system (1.10.3-1~bookworm1) bookworm; urgency=medium
 
   * KSM : « Activer KSM » ne renvoie plus HTTP 500 (ref #2901). nginx route /api/v1/ksm/ vers l'agregateur, qui sert le module sous l'utilisateur secubox : l'ecriture de /sys/kernel/mm/ksm (root) echouait. Elle passe par le nouveau secubox-ksmctl (root, via sudo ; regle sudoers a la lettre dans /etc/sudoers.d/secubox-ksm), qui valide chaque valeur (run 0|1, pages_to_scan 1..10000, sleep_millisecs 10..1000). Le postinst du composant n'active plus et ne demarre plus le service a chaque mise a jour (premiere installation seulement) : un service arrete par l'operateur n'est plus rallume.

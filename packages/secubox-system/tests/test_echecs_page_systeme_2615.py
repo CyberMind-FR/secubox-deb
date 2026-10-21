@@ -30,15 +30,18 @@ class Res:
 
 
 # ── 3 : « Inst, Inst, Inst » ─────────────────────────────────────────────
-def test_la_liste_des_mises_a_jour_donne_les_noms_de_paquets(monkeypatch):
-    api = charge_api()
-    sortie = ("Reading package lists...\n"
-              "Inst secubox-hub [1.10.2-1~trixie1] (1.11.0-1~trixie1 apt.secubox.in:trixie [all])\n"
-              "Inst libssl3t64 [3.5.1-1] (3.5.2-1 Debian:13.7/stable [amd64])\n"
-              "Conf secubox-hub (1.11.0-1~trixie1 apt.secubox.in:trixie [all])\n")
-    monkeypatch.setattr(api.subprocess, "run", lambda *a, **k: Res(sortie))
-    r = api.check_updates(user={"sub": "admin"})
-    assert r["packages"] == ["secubox-hub", "libssl3t64"] and r["count"] == 2
+def test_la_liste_des_mises_a_jour_donne_les_noms_de_paquets(tmp_path):
+    """Depuis #3002 la simulation est faite par secubox-majctl (root) : c'est lui qui lit « Inst <paquet> … »."""
+    ctl = SYSTEM / "sbin" / "secubox-majctl"
+    bin_ = tmp_path / "bin"; bin_.mkdir()
+    (bin_ / "apt-get").write_text("#!/usr/bin/env bash\ncase \" $* \" in *\" -s upgrade \"*) printf 'Reading package lists...\\nInst secubox-hub [1.10.2-1~trixie1] (1.11.0-1~trixie1 apt.secubox.in:trixie [all])\\nInst libssl3t64 [3.5.1-1] (3.5.2-1 Debian:13.7/stable [amd64])\\nConf secubox-hub (1.11.0-1~trixie1 apt.secubox.in:trixie [all])\\n';; esac; exit 0\n")
+    (bin_ / "apt-get").chmod(0o755)
+    import os, json
+    env = {"PATH": f"{bin_}:" + os.environ.get("PATH", ""), "SECUBOX_MAJ_ETAT": str(tmp_path / "maj.json"),
+           "SECUBOX_MAJ_JOURNAL": str(tmp_path / "j.log"), "SECUBOX_MAJ_VERROU": str(tmp_path / "l")}
+    subprocess.run(["bash", str(ctl), "verifier"], env=env, capture_output=True, timeout=30)
+    e = json.loads((tmp_path / "maj.json").read_text())
+    assert e["paquets"] == ["secubox-hub", "libssl3t64"] and e["count"] == 2
 
 
 # ── 1 : demarrer un service ──────────────────────────────────────────────

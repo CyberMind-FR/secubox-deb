@@ -5,6 +5,10 @@
 override_dh_auto_install:
 	install -d debian/secubox-system/usr/lib/systemd/system
 	install -m 0644 systemd/secubox-systeme-pare-feu-verif.service systemd/secubox-systeme-heure.service systemd/secubox-systeme-caches.service systemd/secubox-systeme-redemarrer.service systemd/secubox-systeme-eteindre.service debian/secubox-system/usr/lib/systemd/system/
+	# #3002 — mises a jour apt par une unite root declenchee par un dossier de demandes (.path)
+	install -m 0644 systemd/secubox-maj.path systemd/secubox-maj.service debian/secubox-system/usr/lib/systemd/system/
+	install -D -m 0755 sbin/secubox-majctl debian/secubox-system/usr/sbin/secubox-majctl
+	install -D -m 0644 tmpfiles.d/secubox-system.conf debian/secubox-system/usr/lib/tmpfiles.d/secubox-system.conf
 	install -D -m 0644 polkit/50-secubox-system.rules debian/secubox-system/usr/share/polkit-1/rules.d/50-secubox-system.rules
 	install -d debian/secubox-system/usr/lib/secubox/system/
 	cp -r api debian/secubox-system/usr/lib/secubox/system/
@@ -73,4 +77,4 @@ override_dh_auto_install:
 # #2788 : les unites secubox-systeme-*.service sont des actions a la demande (eteindre, redemarrer...). Le postinst
 # genere par debhelper les DEMARRERAIT a l'installation : on ne lui confie que les unites de service.
 override_dh_installsystemd:
-	dh_installsystemd secubox-admin.service secubox-ksm.service secubox-system.service
+	dh_installsystemd secubox-admin.service secubox-ksm.service secubox-system.service secubox-maj.path
