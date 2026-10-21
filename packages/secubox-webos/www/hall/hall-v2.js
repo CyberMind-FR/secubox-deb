@@ -25,6 +25,7 @@
     menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
     chevron:'<path d="M9 6l6 6-6 6"/>',
     externe:'<path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
+    globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
     maison:'<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
     jauge:'<path d="M4 14a8 8 0 0 1 16 0"/><path d="M12 14l4-4"/><circle cx="12" cy="14" r="1.5"/>',
     reseau:'<circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5 6.5 17M12 11.5l5.5 5.5"/>',
@@ -58,7 +59,8 @@
     {id:'communication',nom:'Communication',ic:'bulle',nav:'mosaique',motif:/mail|messag|forum|bbs|chat|voix|voice|social|diffusion|mur\b|gazette|billets|publication|site/i},
     {id:'ia',nom:'IA',ic:'ia',nav:'mosaique',motif:/\bia\b|intelligence|zia|lexie|assistant|modèle|modele|llm|vision|oracle/i},
     {id:'outils',nom:'Outils',ic:'outils',nav:'mosaique',motif:/outil|toolbox|boîte|boite|surf|viewer|dpi|sonde|ytsas|convert|éphéméride|ephemeride|zigbee|domot|devwatch|compteur/i},
-    {id:'systeme',nom:'Système',ic:'systeme',nav:'mosaique',motif:/racine|amorce|système|systeme|métrique|metrique|metrics|courbe|journal|paquet|apt\b|noyau|mémoire|memoire|disque|processeur|hub|agrégateur|agregateur|profil|boot|eye/i}
+    {id:'systeme',nom:'Système',ic:'systeme',nav:'mosaique',motif:/racine|amorce|système|systeme|métrique|metrique|metrics|courbe|journal|paquet|apt\b|noyau|mémoire|memoire|disque|processeur|hub|agrégateur|agregateur|profil|boot|eye/i},
+    {id:'sites',nom:'Mes sites',ic:'globe',nav:'mosaique'}
   ];
   var ICO_CAT={wall:'bouclier',mind:'ia',mesh:'reseau',auth:'usager',root:'systeme',boot:'jauge'};
   var ONGLETS=['accueil','modules','securite','reseau','systeme'];
@@ -175,7 +177,7 @@
   }
   function rendMosaique(){
     if(!mosaique) return; var grille=mosaique.querySelector('.sbx-mosaique'), vide=mosaique.querySelector('.sbx-mosaique-vide'); grille.textContent=''; vide.hidden=true;
-    if(ongletMosaique==='sites'){ grille.setAttribute('data-vue','sites'); return chargeSites(function(l){ if(ongletMosaique!=='sites') return; l.forEach(function(s){ grille.appendChild(tuileSite(s)); }); vide.hidden=!!l.length; vide.textContent='Aucun site publié pour l’instant.'; }); }
+    if(ongletMosaique==='sites'){ grille.setAttribute('data-vue','sites'); return chargeSites(function(l){ if(ongletMosaique!=='sites') return; grille.textContent=''; l.forEach(function(s){ grille.appendChild(tuileSite(s)); }); vide.hidden=!!l.length; vide.textContent='Aucun site publié pour l’instant.'; }); }
     grille.setAttribute('data-vue','modules');
     var l=filtreModules(modules(),ongletMosaique); l.forEach(function(m){ grille.appendChild(tuileModule(m)); });
     vide.hidden=!!l.length; vide.textContent=ongletMosaique==='favoris'?'Aucun favori — ★ sur une carte de l’accueil.':ongletMosaique==='recents'?'Rien d’ouvert récemment.':'Aucun module dans cette rubrique.';
@@ -416,7 +418,7 @@
       var b=el('button',{type:'button','class':'sbx-rub','data-rub':r.id},ico(r.ic)+'<span></span>');
       b.lastChild.textContent=r.nom;
       b.addEventListener('click',function(){ va(r); });
-      if(r.nav!=='mosaique'){ nav.appendChild(b); return; }
+      if(r.nav!=='mosaique'||r.id==='sites'){ nav.appendChild(b); return; }
       // Rubrique dépliable : ses modules (registre), ouverts embarqués, puis la sous-navigation du module courant.
       var grp=el('div',{'class':'sbx-grp','data-grp':r.id}); var ligne=el('div',{'class':'sbx-ligne'}); ligne.appendChild(b);
       var pli=el('button',{type:'button','class':'sbx-plier','aria-expanded':'false','aria-label':'Déplier '+r.nom},ico('chevron'));

@@ -1,3 +1,10 @@
+secubox-webos (1.19.2-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : rubrique « Mes sites » dans la sidebar (ref #2996) — la mosaïque des sites
+    metablogizer n'était atteignable que par l'onglet Sites de « Modules ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 16:50:00 +0200
+
 secubox-webos (1.19.1-1~trixie1) trixie; urgency=medium
 
   * Vignettes : seuil de charge 8 au lieu de 4 (ref #2996) — la box vit entre 6 et 15, l'unité borne

@@ -108,6 +108,18 @@ def test_rubrique_securite_filtre_et_l_onglet_sites_montre_les_vignettes(nav):
     ctx.close()
 
 
+def test_mes_sites_dans_la_sidebar_ouvre_la_mosaique_des_sites(nav):
+    ctx, p, erreurs = ouvre(nav)
+    p.click(".sbx-side .sbx-rub[data-rub='sites']")
+    p.wait_for_selector("#view-mosaique:not(.hidden) .sbx-stuile", state="attached")
+    assert p.inner_text("#view-mosaique .sbx-mosaique-titre") == "Mes sites"
+    assert p.evaluate("document.querySelector('#view-mosaique [role=tab][aria-selected=true]').getAttribute('data-id')") == "sites"
+    assert p.evaluate("document.querySelectorAll('#view-mosaique .sbx-stuile').length") == 2
+    assert p.evaluate("document.querySelector('.sbx-side .sbx-rub.on').getAttribute('data-rub')") == "sites"
+    assert erreurs == []
+    ctx.close()
+
+
 def test_une_tuile_ouvre_le_service_dans_le_hall_et_nourrit_les_recents(nav):
     ctx, p, erreurs = ouvre(nav)
     p.click(".sbx-side .sbx-rub[data-rub='modules']")

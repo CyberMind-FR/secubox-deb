@@ -282,7 +282,11 @@ d'`apt.secubox.in`. Flag `hall_v2` laissé à faux : le Hall classique reste le 
 - Phase 2, reste : option `hall.v2.hero-dice` (dé de 96 px derrière l'heure), reportée avec la carte « Bonjour ».
 - Hors périmètre du Hall, à confirmer : reprendre le relevé `/public/systeme` (dont les E/S) dans les courbes de
   `secubox-metrics` (« Système en direct »).
-- Phase 4, suite : vignettes pour les modules eux-mêmes (aucune capture n'existe aujourd'hui sur la box pour les
-  webuis ; les 20 captures Streamlit demanderaient un relais `/api/v1/streamlit/apps/{nom}/screenshot` sur le Hall),
+- Fait le 2026-10-21 (webos 1.19.x) : vignettes des modules (`webos-vignettes` + minuterie, charge ≤ 8, `shotter` sur la
+  page publique, nginx statique `/api/v1/webos/public/vignette/{id}`, `vignette` dans le registre) ; **`hall_v2 = true`
+  sur gk2** (sauvegarde `/var/backups/webos.toml.avant-hall-v2-*` ; `?hall=v1` rend l'ancien à un navigateur) ;
+  rubrique « Mes sites » dans la sidebar. Pages admin embarquées : les marges restantes sont leur conteneur centré
+  (`:root.sbx-embed main{max-width:none}` côté `sidebar.css` du hub les étirerait).
+- Phase 4, suite : les 20 captures Streamlit demanderaient un relais `/api/v1/streamlit/apps/{nom}/screenshot` sur le Hall,
   puis migration des cartes vers `Card` dans l'ordre du prompt ; les cartes non migrées sous « Tous les modules ».
 - Mesure du dé sur RPi4 (le budget ≤ 1 ms/image est à confirmer sur la cible).
