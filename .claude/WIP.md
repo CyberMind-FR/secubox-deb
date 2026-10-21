@@ -58,7 +58,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   À trancher : #3003 (routage `/api/v1/system/` vers `system.sock` pour les actions root polkit).
 - **Webfilter / Chaturbate** (#3005 reste ouverte, PR #3006 fusionnée, `secubox-core` 1.7.12 + `secubox-webfilter` 0.4.3 sur
   gk2 + apt trixie) : budget checkconf 600 s, unité 20 min ; 192.168.1.3 de retour dans la vue visiteurs. Reste :
-  ré-application sur changement d'adresses d'un appareil assigné (le cœur de #3005), puis `closes #3005`.
+  ré-application sur changement d'adresses d'un appareil assigné (le cœur de #3005) ; fermeture par marqueur à ce moment-là.
 - **Hall vue maître** (#2996 reste ouverte, PR #2997 fusionnée : phases 1 à 4 premier pas, webos 1.19.8 sur gk2) ; la suite
   est dans le chantier ci-dessus. CI : les échecs `gabarit` (4 écarts), `pytest · secubox-core` (sshd), `appstore-catalogue`,
   `build (secubox-appstore|meta)` (arbre des métapaquets) et `secubox-hub` (espaces.json) préexistent sur master.
