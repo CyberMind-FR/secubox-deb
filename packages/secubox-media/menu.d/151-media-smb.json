@@ -1,0 +1,11 @@
+{
+  "subtitle": "SMB shares (ksmbd)",
+  "icon": "🗂️",
+  "order": 151,
+  "id": "media-smb",
+  "name": "Partages SMB",
+  "path": "/media/smb.html",
+  "category": "root",
+  "description": "Partages réseau servis par le noyau (ksmbd) : partages, comptes, rechargement",
+  "theme": "media"
+}

@@ -21,7 +21,8 @@ Recommends: rsync,
  exfatprogs,
  ntfs-3g,
  avahi-daemon,
- ksmbd-tools
+ ksmbd-tools,
+ cifs-utils
 Replaces: secubox-smb (<< 1.1.1~),
  secubox-freeboxtv (<< 0.1.4~)
 Breaks: secubox-smb (<< 1.1.1~),

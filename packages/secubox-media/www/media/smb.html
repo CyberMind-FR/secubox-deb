@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Partages SMB (ksmbd) au profil Aurora (.claude/AURORA-REFERENCE.md), #3000 : page autonome, aucune dépendance.
+  Tout passe par /api/v1/media/smb/* (jeton requis, lecture comprise) ; l'API délègue à `sudo smbctl`, qui porte les gardes
+  (racines partageables, liens résolus, partages générés intouchables, mot de passe sur stdin). Mesure absente = « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes. Aucun secret affiché : le mot de passe saisi part et n'est jamais relu.
+  Confirmations intégrées à la page (jamais confirm/alert/prompt).
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Partages SMB</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none}
+        .btn:hover:not(:disabled){border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.4;cursor:not-allowed}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.danger{border-color:var(--rouge);color:var(--rouge)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.long{font-size:1rem;line-height:1.15}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:3fr 2fr}} .grille>*{min-width:0}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0} .note b{color:var(--doux)} .note code,.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.66rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.vi{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+        .vide{color:var(--faible);padding:18px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .tab{width:100%;overflow-x:auto} table{width:100%;min-width:560px;border-collapse:collapse;font-size:.8rem}   /* étroit : le tableau défile dans son conteneur, les noms ne se cassent pas lettre à lettre */ th{text-align:left;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);font-weight:600;padding:4px 8px;border-bottom:1px solid var(--trait)}
+        td{padding:6px 8px;border-bottom:1px solid rgba(86,150,255,.12);vertical-align:middle} tr:hover td{background:rgba(41,182,246,.07)} td .nm{color:var(--cyan);font-weight:700} td .ch{color:var(--doux);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.74rem;overflow-wrap:anywhere}
+        .conf{border:1px solid var(--rouge);border-radius:8px;padding:6px 10px;background:rgba(255,77,94,.08);font-size:.78rem;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:6px}
+        form{display:grid;gap:8px} .champ{display:grid;gap:3px} .champ label{color:var(--doux);font-size:.72rem}
+        input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;max-width:100%;width:100%}
+        input:focus-visible,select:focus-visible{outline:2px solid var(--cyan)}
+        .ligne{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:.78rem;color:var(--doux)} .ligne label{display:inline-flex;align-items:center;gap:5px;cursor:pointer;min-height:24px}
+        .deux{display:grid;gap:8px;grid-template-columns:1fr} @container a (min-width:700px){.deux{grid-template-columns:1fr 1fr}}
+        .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+        .comptes{display:flex;flex-wrap:wrap;gap:6px}
+        .compte{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--trait);border-radius:999px;padding:3px 6px 3px 10px;font-size:.78rem;background:rgba(8,18,38,.6)}
+        .compte button{font:inherit;background:none;border:0;color:var(--faible);cursor:pointer;padding:0 4px;min-height:22px} .compte button:hover{color:var(--rouge)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 14h8M8 11h4"/></svg>
+                <div><h1>Partages SMB</h1><small>Servis par le noyau (ksmbd) · réseau local seulement, SMB3, comptes nommés</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><a class="btn" href="/media/" title="Supports externes, navigation et transferts">💽 Médias externes</a><button class="btn" id="refresh" type="button" title="Relire l’état">⟳ Relire</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session d’administrateur requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" id="cUsable" title="Utilisable = module noyau ksmbd chargé, service actif, écoute sur le port 445 et au moins un compte. Sans compte, aucun client ne peut ouvrir un partage."><span class="l">Service</span><span class="v long" id="tUsable">—</span><span class="s" id="sUsable">module · service · écoute</span></div>
+            <div class="tuile cy" title="Nombre de partages déclarés dans ksmbd.conf : manuels et générés (un par support monté)."><span class="l">Partages</span><span class="v" id="tShares">—</span><span class="s" id="sShares">déclarés</span></div>
+            <div class="tuile cy" title="Comptes SMB déclarés dans la base ksmbd (ksmbdpwd.db). Les mots de passe ne sont jamais affichés ni relus."><span class="l">Comptes</span><span class="v" id="tUsers">—</span><span class="s">SMB déclarés</span></div>
+            <div class="tuile cy" title="Nom NetBIOS du serveur et interface d’écoute (ksmbd.conf, section global). Le port 445 n’est ouvert que depuis le réseau local (drop-in nftables)."><span class="l">Adresse</span><span class="v long mono" id="tNetbios">—</span><span class="s" id="sNetbios">interface</span></div>
+        </section>
+
+        <div class="grille">
+          <div>
+            <div class="pan"><h3>Partages <i>GET /smb/status · POST /smb/shares, /smb/shares/delete, /smb/sync-shares</i></h3>
+                <div class="tab"><table aria-label="Partages"><thead><tr><th>Nom</th><th>Chemin</th><th>Mode</th><th>Comptes</th><th></th></tr></thead><tbody id="shares"></tbody></table></div>
+                <div id="videShares" class="vide" hidden>Aucun partage déclaré.</div>
+                <div id="confShare" class="conf" hidden></div>
+                <div class="actions" style="margin-top:8px"><button class="btn" id="sync" type="button" title="Un partage par support réellement monté (ksmbd ne traverse pas les points de montage) ; les partages générés sont réécrits, les manuels sont conservés.">⟳ Synchroniser les supports montés</button><button class="btn" id="reload" type="button" title="Recharge la configuration de ksmbd (systemctl reload)">↻ Recharger ksmbd</button></div>
+                <p class="note">Un partage <b>généré</b> suit un support USB monté : il disparaît quand le support est démonté puis synchronisé. Les partages se montent depuis un client avec <code id="exUnc">\\SECUBOX\nom</code> et un compte SMB ci-contre.</p>
+                <div id="rShare" class="retour" hidden></div>
+            </div>
+            <div class="pan" style="margin-top:10px"><h3>Nouveau partage <i>POST /smb/shares</i></h3>
+                <form id="fShare" autocomplete="off">
+                    <div class="deux">
+                        <div class="champ"><label for="shName">Nom (lettres, chiffres, . _ -)</label><input id="shName" maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,39}" required placeholder="Photos"></div>
+                        <div class="champ"><label for="shPath">Répertoire (sous une racine partageable)</label><input id="shPath" maxlength="512" required placeholder="/data/photos" list="racines"><datalist id="racines"></datalist></div>
+                    </div>
+                    <div class="deux">
+                        <div class="champ"><label for="shComment">Description (facultative)</label><input id="shComment" maxlength="80" placeholder="Albums de famille"></div>
+                        <div class="champ"><label for="shUsers">Comptes autorisés (vide = tous les comptes SMB)</label><input id="shUsers" maxlength="200" placeholder="gk2, admin"></div>
+                    </div>
+                    <div class="ligne"><label><input type="radio" name="mode" value="ro" checked> Lecture seule</label><label><input type="radio" name="mode" value="rw"> Lecture et écriture</label><span id="sRacines" class="note" style="margin:0"></span></div>
+                    <div class="actions"><button class="btn prim" type="submit">＋ Créer le partage</button></div>
+                </form>
+                <div id="rNew" class="retour" hidden></div>
+            </div>
+          </div>
+          <div>
+            <div class="pan"><h3>Comptes SMB <i>GET /smb/users · POST /smb/users, /smb/users/delete</i></h3>
+                <div class="comptes" id="users"></div>
+                <div id="videUsers" class="vide" hidden>Aucun compte : les partages ne sont joignables par personne.</div>
+                <div id="confUser" class="conf" hidden></div>
+                <form id="fUser" autocomplete="off" style="margin-top:10px">
+                    <div class="champ"><label for="usName">Compte (créé, ou mot de passe remplacé s’il existe)</label><input id="usName" maxlength="47" pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,46}" required placeholder="gk2" autocomplete="username"></div>
+                    <div class="champ"><label for="usPw">Mot de passe (saisi ici, jamais réaffiché)</label><input id="usPw" type="password" maxlength="128" required autocomplete="new-password"></div>
+                    <div class="actions"><button class="btn prim" type="submit">＋ Enregistrer le compte</button></div>
+                </form>
+                <p class="note">Un compte SMB est indépendant des comptes de la box. Le mot de passe part vers le service sur un canal interne et n’apparaît ni dans une adresse, ni dans un journal.</p>
+                <div id="rUser" class="retour" hidden></div>
+            </div>
+          </div>
+        </div>
+        <p class="note">SecuBox Media · partages servis par ksmbd, cantonnés au LAN par nftables (port 445), SMB3 signé, sans accès invité.</p>
+    </div></div></main>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/media';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const st = { status: null, users: [] };
+        let SESSION_OK = true, CHARGE = false, SAISIE = false;
+
+        function tok() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function lecture() { const h = { Accept: 'application/json' }; const t = tok(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        function hdrs() { const h = { 'Content-Type': 'application/json', Accept: 'application/json' }; const t = tok(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 3000); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+
+        async function api(path, opts) {
+            if (DEMO) return demoApi(path, opts);
+            const o = Object.assign({ credentials: 'same-origin', cache: 'no-store' }, opts || {});
+            if (!o.headers) o.headers = lecture();
+            const r = await fetch(API + path, o);
+            let d = null; try { d = await r.json(); } catch (e) { /* corps non JSON */ }
+            if (r.status === 401 || r.status === 403) { const e = new Error('session requise'); e.statut = r.status; throw e; }
+            if (!r.ok) { const e = new Error((d && d.detail) || ('HTTP ' + r.status)); e.statut = r.status; throw e; }
+            return d;
+        }
+        function post(path, body) { return api(path, { method: 'POST', headers: hdrs(), body: JSON.stringify(body || {}) }); }
+
+        // ----- Démonstration : noms fictifs, aucune écriture -----
+        async function demoApi(path, opts) {
+            if (opts && opts.method === 'POST') return { ok: false, demo: true };
+            if (path === '/smb/status') return { ok: true, module_loaded: true, service: 'active', listening: true, users: 2, usable: true, netbios: 'SECUBOX', interfaces: 'eth2', min_protocol: 'SMB3_00',
+                roots: ['/data', '/media', '/srv', '/mnt', '/home'], shares: [
+                { name: 'data', path: '/data', readonly: false, exists: true, comment: 'Donnees SecuBox', users: [], auto: false },
+                { name: 'Photos', path: '/data/photos', readonly: true, exists: true, comment: 'Albums', users: ['famille'], auto: false },
+                { name: 'CLE-DEMO', path: '/media/secubox-media/CLE-DEMO', readonly: true, exists: true, comment: 'Support externe (lecture seule)', users: [], auto: true }] };
+            if (path === '/smb/users') return { ok: true, users: ['admin', 'famille'] };
+            return {};
+        }
+
+        function refus(e) { return e && (e.statut === 401 || e.statut === 403); }
+        async function refresh() {
+            if (SAISIE) return;
+            let echec = null;
+            try { st.status = await api('/smb/status'); } catch (e) { echec = e; st.status = null; }
+            try { const u = await api('/smb/users'); st.users = (u && u.users) || []; } catch (e) { echec = echec || e; st.users = []; }
+            CHARGE = true; SESSION_OK = !refus(echec);
+            $('erreur').hidden = !(echec && !refus(echec));
+            if (echec && !refus(echec)) $('erreur').textContent = 'État indisponible : ' + echec.message;
+            rendre();
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO; $('session').hidden = SESSION_OK;
+            const s = st.status, etat = $('etat');
+            $('maj').textContent = new Date().toLocaleTimeString('fr-FR');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'INDISPONIBLE'; }
+            else if (s.usable) { etat.className = 'actif'; etat.textContent = 'EN SERVICE'; }
+            else { etat.className = 'actif att'; etat.textContent = 'NON JOIGNABLE'; }
+            const cu = $('cUsable');
+            cu.className = 'tuile ' + (!s ? '' : s.usable ? 'ok' : 'att');
+            $('tUsable').textContent = !s ? '—' : s.usable ? 'Utilisable' : (!s.module_loaded ? 'Module absent' : s.service !== 'active' ? 'Service ' + s.service : !s.listening ? 'Sans écoute' : 'Aucun compte');
+            $('sUsable').textContent = !s ? 'module · service · écoute' : ['module ' + (s.module_loaded ? 'chargé' : 'absent'), 'service ' + s.service, (s.listening ? 'écoute 445' : 'pas d’écoute'), (s.min_protocol || '')].filter(Boolean).join(' · ');
+            const shares = s ? (s.shares || []) : [];
+            $('tShares').textContent = s ? shares.length : '—';
+            $('sShares').textContent = s ? (shares.filter(x => !x.auto).length + ' manuel(s) · ' + shares.filter(x => x.auto).length + ' généré(s)') : 'déclarés';
+            $('tUsers').textContent = s ? st.users.length : '—';
+            $('tNetbios').textContent = s ? '\\\\' + (s.netbios || 'SECUBOX') : '—';
+            $('sNetbios').textContent = s && s.interfaces ? 'interface ' + s.interfaces + ' · LAN seul' : 'interface';
+            $('exUnc').textContent = '\\\\' + ((s && s.netbios) || 'SECUBOX') + '\\nom';
+            // Partages
+            const tb = $('shares'); tb.replaceChildren();
+            $('videShares').hidden = !(s && !shares.length);
+            shares.forEach(p => {
+                const tr = el('tr'); tr.dataset.name = p.name;
+                const n = el('td'); n.appendChild(el('span', 'nm', p.name)); if (p.comment) { n.appendChild(el('br')); n.appendChild(el('span', 'ch', p.comment)); } tr.appendChild(n);
+                const c = el('td'); c.appendChild(el('span', 'ch', p.path || '—')); if (p.path && p.exists === false) { c.appendChild(document.createTextNode(' ')); c.appendChild(el('span', 'pill hors', 'ABSENT')); } tr.appendChild(c);
+                const m = el('td'); m.appendChild(el('span', 'pill ' + (p.readonly ? 'cy' : 'att'), p.readonly === null ? '—' : p.readonly ? 'LECTURE' : 'ÉCRITURE')); m.appendChild(document.createTextNode(' ')); m.appendChild(el('span', 'pill ' + (p.auto ? 'vi' : ''), p.auto ? 'GÉNÉRÉ' : 'MANUEL')); tr.appendChild(m);
+                tr.appendChild(el('td', 'ch', (p.users && p.users.length) ? p.users.join(', ') : 'tous'));
+                const a = el('td');
+                if (!p.auto) { const b = el('button', 'btn sm danger', 'Retirer'); b.type = 'button'; b.title = 'Retirer le partage « ' + p.name + ' » (le répertoire n’est pas touché)'; b.addEventListener('click', () => confirmer('confShare', 'Retirer le partage « ' + p.name + ' » ? Les fichiers restent sur le disque.', async () => { await post('/smb/shares/delete', { name: p.name }); retour('rShare', true, 'Partage « ' + p.name + ' » retiré. Recharger ksmbd pour l’appliquer.'); })); a.appendChild(b); }
+                tr.appendChild(a); tb.appendChild(tr);
+            });
+            // Comptes
+            const cu2 = $('users'); cu2.replaceChildren();
+            $('videUsers').hidden = !(s && !st.users.length);
+            st.users.forEach(u => { const c = el('span', 'compte', u); const b = el('button', '', '✕'); b.type = 'button'; b.title = 'Retirer le compte ' + u; b.setAttribute('aria-label', 'Retirer le compte ' + u); b.addEventListener('click', () => confirmer('confUser', 'Retirer le compte SMB « ' + u + ' » ? Ses sessions ouvertes seront refusées à la prochaine connexion.', async () => { await post('/smb/users/delete', { user: u }); retour('rUser', true, 'Compte « ' + u + ' » retiré.'); })); c.appendChild(b); cu2.appendChild(c); });
+            // Racines partageables
+            const dl = $('racines'); dl.replaceChildren();
+            (s && s.roots || []).forEach(r => { const o = el('option'); o.value = r + '/'; dl.appendChild(o); });
+            $('sRacines').textContent = s && s.roots ? 'Racines : ' + s.roots.join(', ') : '';
+            annoncer();
+        }
+
+        // Confirmation intégrée à la page : aucun dialogue natif du navigateur.
+        function confirmer(id, texte, action) {
+            const c = $(id); c.replaceChildren(); c.hidden = false; SAISIE = true;
+            c.appendChild(el('span', '', texte));
+            const ok = el('button', 'btn sm danger', 'Confirmer'); ok.type = 'button';
+            const non = el('button', 'btn sm', 'Annuler'); non.type = 'button';
+            const fin = () => { c.hidden = true; c.replaceChildren(); SAISIE = false; };
+            non.addEventListener('click', fin);
+            ok.addEventListener('click', async () => { ok.disabled = true; try { if (DEMO) { retour(id === 'confShare' ? 'rShare' : 'rUser', false, 'Démonstration : rien n’est modifié.'); } else { await action(); } } catch (e) { retour(id === 'confShare' ? 'rShare' : 'rUser', false, 'Refusé : ' + e.message); } fin(); refresh(); });
+            c.appendChild(ok); c.appendChild(non); annoncer();
+        }
+
+        $('fShare').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const users = $('shUsers').value.split(',').map(x => x.trim()).filter(Boolean);
+            const body = { name: $('shName').value.trim(), path: $('shPath').value.trim(), readonly: document.querySelector('input[name=mode]:checked').value === 'ro', users, comment: $('shComment').value.trim() };
+            if (DEMO) { retour('rNew', false, 'Démonstration : rien n’est créé.'); return; }
+            try { const d = await post('/smb/shares', body); retour('rNew', true, 'Partage « ' + d.share + ' » ' + (d.created ? 'créé' : 'mis à jour') + ' sur ' + d.path + '. Recharger ksmbd pour l’appliquer.'); $('fShare').reset(); refresh(); }
+            catch (e) { retour('rNew', false, 'Refusé : ' + e.message); }
+        });
+        $('fUser').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const body = { user: $('usName').value.trim(), password: $('usPw').value };
+            $('usPw').value = '';   // le secret ne reste pas dans le formulaire
+            if (DEMO) { retour('rUser', false, 'Démonstration : rien n’est enregistré.'); return; }
+            try { const d = await post('/smb/users', body); retour('rUser', true, 'Compte « ' + d.user + '» ' + (d.created ? 'créé' : 'mot de passe remplacé') + '.'); $('fUser').reset(); refresh(); }
+            catch (e) { retour('rUser', false, 'Refusé : ' + e.message); }
+        });
+        $('sync').addEventListener('click', async () => { if (DEMO) { retour('rShare', false, 'Démonstration : rien n’est modifié.'); return; } try { const d = await post('/smb/sync-shares'); retour('rShare', true, d.shares + ' support(s) monté(s) partagé(s)' + (d.changed ? ' — configuration mise à jour, recharger ksmbd.' : ' — rien à changer.')); refresh(); } catch (e) { retour('rShare', false, 'Refusé : ' + e.message); } });
+        $('reload').addEventListener('click', async () => { if (DEMO) { retour('rShare', false, 'Démonstration : rien n’est modifié.'); return; } try { await post('/smb/reload'); retour('rShare', true, 'ksmbd rechargé.'); toast('ksmbd rechargé'); refresh(); } catch (e) { retour('rShare', false, 'Refusé : ' + e.message); } });
+        $('refresh').addEventListener('click', refresh);
+        ['shName', 'shPath', 'shComment', 'shUsers', 'usName', 'usPw'].forEach(id => { $(id).addEventListener('focus', () => { SAISIE = true; }); $(id).addEventListener('blur', () => { SAISIE = false; }); });
+
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'media-smb' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+        refresh();
+        setInterval(() => { if (!document.hidden && !DEMO) refresh(); }, 30000);
+    </script>
+</body>
+</html>
