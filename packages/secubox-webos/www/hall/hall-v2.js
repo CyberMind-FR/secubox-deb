@@ -27,6 +27,7 @@
     externe:'<path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
     globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
     horloge:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    couches:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5M3 17l9 5 9-5"/>',
     maison:'<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
     jauge:'<path d="M4 14a8 8 0 0 1 16 0"/><path d="M12 14l4-4"/><circle cx="12" cy="14" r="1.5"/>',
     reseau:'<circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5 6.5 17M12 11.5l5.5 5.5"/>',
@@ -52,7 +53,8 @@
   var RUBRIQUES=[
     {id:'accueil',nom:'Accueil',ic:'maison',nav:'accueil'},
     {id:'tableau',nom:'Tableau de bord',ic:'jauge',nav:'accueil',cible:'.sbx-hero'},
-    {id:'services',nom:'Services',ic:'etoile',nav:'mosaique'},
+    {id:'favoris',nom:'Favoris',ic:'etoile',nav:'mosaique'},
+    {id:'services',nom:'Services',ic:'couches',nav:'mosaique'},
     {id:'reseau',nom:'Réseau',ic:'reseau',nav:'mosaique',motif:/maillage|réseau|reseau|dns|wireguard|vpn|ipv6|mesh|tor\b|exposition|proxy|hôtes|hotes|lan\b|wan\b/i},
     {id:'securite',nom:'Sécurité',ic:'bouclier',nav:'mosaique',motif:/muraille|sécurité|securite|waf|pare-feu|firewall|ban|guardian|coffre|vault|leurre|honeypot|acteur|actor|radar|renseignement|intrusion/i},
     {id:'modules',nom:'Modules',ic:'grille',nav:'mosaique'},
@@ -218,13 +220,14 @@
     var sous=grp.querySelector('.sbx-sous'); sous.textContent='';
     var l=filtreModules(modules(),rub.id==='modules'?'tous':rub.id);
     // La curation se déplie en entier (c'était le menu Services ▾) ; les rubriques par motif, 14 puis « Tout voir ».
-    var plafond=rub.id==='services'?l.length:14;
+    var plafond=(rub.id==='services'||rub.id==='favoris')?l.length:14;
     l.slice(0,plafond).forEach(function(m){
       var b=el('button',{type:'button','class':'sbx-rub sbx-sous-item','data-open':m.id,'data-mode':'embed','data-status':m.status},'<span></span>');
       b.firstChild.textContent=m.name; var led=el('i',{'class':'sbx-led','data-ton':{active:'ok',idle:'info',offline:'off',stale:'warn'}[m.status]||'neutre'}); b.insertBefore(led,b.firstChild);
       var ligne=el('div',{'class':'sbx-sous-ligne'}); ligne.appendChild(b); ligne.appendChild(actions(m)); sous.appendChild(ligne);
     });
-    if(l.length>plafond||!l.length){ var tout=el('button',{type:'button','class':'sbx-rub sbx-sous-tout'},'<span></span>'); tout.firstChild.textContent=l.length?'Tout voir ('+l.length+')':'Voir la mosaïque'; tout.addEventListener('click',function(){ va(rub); }); sous.appendChild(tout); }
+    if(!l.length&&rub.id==='favoris'){ sous.appendChild(el('p',{'class':'sbx-vide'},'Aucun favori — ★ sur une carte de l’accueil')); }
+    else if(l.length>plafond||!l.length){ var tout=el('button',{type:'button','class':'sbx-rub sbx-sous-tout'},'<span></span>'); tout.firstChild.textContent=l.length?'Tout voir ('+l.length+')':'Voir la mosaïque'; tout.addEventListener('click',function(){ va(rub); }); sous.appendChild(tout); }
     sous.hidden=false; grp.querySelector('.sbx-plier').setAttribute('aria-expanded','true');
   }
   function rubriqueDe(id){
@@ -259,19 +262,12 @@
   function ouvreTiroir(){ var s=$('.sbx-side'),v=$('.sbx-voile'),m=$('#sbx-menu'); if(!s) return; s.classList.add('ouvert'); if(v) v.classList.add('ouvert'); if(m) m.setAttribute('aria-expanded','true'); }
   function fermeTiroir(){ var s=$('.sbx-side'),v=$('.sbx-voile'),m=$('#sbx-menu'); if(!s) return; s.classList.remove('ouvert'); if(v) v.classList.remove('ouvert'); if(m) m.setAttribute('aria-expanded','false'); }
 
-  // ── Favoris : miroir de la bande (#favbande) ───────────────────────────
+  // ── Favoris : la rubrique suit la bande ★ de l'accueil (#favbande) ; dépliée, elle se redessine à chaque changement ──
   function favoris(){
-    var liste=$('.sbx-favlist'), bande=$('#favbande'); if(!liste||!bande) return;
-    var cartes=bande.querySelectorAll('.fcard[data-embed], .fcard[data-open]');
-    liste.innerHTML='';
-    if(!cartes.length){ liste.appendChild(el('p',{'class':'sbx-vide'},'Aucun favori — ★ sur une carte')); return; }
-    Array.prototype.forEach.call(cartes,function(c){
-      var id=c.getAttribute('data-embed')||c.getAttribute('data-open');
-      var t=c.querySelector('h3, .clh b, .t, b'); var nom=(t&&t.textContent.trim())||id;
-      var b=el('button',{type:'button','class':'sbx-rub','data-open':id},ico('etoile')+'<span></span>');
-      b.lastChild.textContent=nom;
-      liste.appendChild(b);   // data-open : la délégation de clic du Hall ouvre le service
-    });
+    var grp=$('.sbx-grp[data-grp="favoris"]'); if(!grp) return;
+    var rub=RUBRIQUES.filter(function(x){ return x.id==='favoris'; })[0];
+    if(!grp.querySelector('.sbx-sous').hidden) deplie(grp,rub);
+    if(mosaique&&!mosaique.classList.contains('hidden')&&ongletMosaique==='favoris') rendMosaique();
   }
 
   // ── Usager : miroir de #who, avatar par le pseudo sbxid (secubox-avatar), liens comptes / identité ──
@@ -430,15 +426,13 @@
       b.addEventListener('click',function(){ va(r); });
       if(r.nav!=='mosaique'||r.id==='sites'||r.id==='recents'){ nav.appendChild(b); return; }
       // Rubrique dépliable : ses modules (registre), ouverts embarqués, puis la sous-navigation du module courant.
-      var grp=el('div',{'class':'sbx-grp','data-grp':r.id}); var ligne=el('div',{'class':'sbx-ligne'}); ligne.appendChild(b);
+      var grp=el('div',{'class':'sbx-grp'+(r.id==='favoris'?' sbx-favoris':''),'data-grp':r.id}); var ligne=el('div',{'class':'sbx-ligne'}); ligne.appendChild(b);
       var pli=el('button',{type:'button','class':'sbx-plier','aria-expanded':'false','aria-label':'Déplier '+r.nom},ico('chevron'));
       var sous=el('div',{'class':'sbx-sous',hidden:''});
       pli.addEventListener('click',function(){ var o=pli.getAttribute('aria-expanded')==='true'; if(o) plie(grp); else deplie(grp,r); });
       ligne.appendChild(pli); grp.appendChild(ligne); grp.appendChild(sous); nav.appendChild(grp);
     });
     side.appendChild(nav);
-    var fav=el('div',{'class':'sbx-favoris'},'<p class="sbx-titre">Favoris</p><div class="sbx-favlist"></div>');
-    side.appendChild(fav);
     var us=el('button',{type:'button','class':'sbx-usager','aria-label':'Profil et réglages'},'<span class="av"></span><span class="tx"><b></b><i></i></span>');
     us.addEventListener('click',function(){ fermeTiroir(); var w=$('#who'); if(w) w.click(); });
     side.appendChild(us);

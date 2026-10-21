@@ -1,3 +1,11 @@
+secubox-webos (1.19.8-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : rubrique « Favoris » dynamique dans la sidebar (ref #2996) — dépliable sur les
+    favoris du moment (la bande ★ de l'accueil), pastille et accès ⚙/⧉, mosaïque au clic, mise à
+    jour à chaque étoile posée ou retirée ; remplace la section statique.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 20:40:00 +0200
+
 secubox-webos (1.19.7-1~trixie1) trixie; urgency=medium
 
   * Vignettes : sonde HTTP avant Chromium (ref #2996). Un vhost non exposé (421 du WAF), une

@@ -127,6 +127,22 @@ def test_services_reprend_la_curation_du_menu_disparu(nav):
     ctx.close()
 
 
+def test_favoris_dynamiques_suivent_la_bande_etoilee(nav):
+    ctx, p, erreurs = ouvre(nav)
+    p.click(".sbx-grp[data-grp='favoris'] .sbx-plier")
+    assert "Aucun favori" in p.inner_text(".sbx-grp[data-grp='favoris'] .sbx-sous")
+    # une carte étoilée arrive dans la bande des favoris : la rubrique la reflète aussitôt
+    p.evaluate("(()=>{const c=document.querySelector('#featgrid .fcard[data-embed=radio]');document.getElementById('favbande').appendChild(c)})()")
+    p.wait_for_selector(".sbx-grp[data-grp='favoris'] .sbx-sous-item[data-open='radio']", state="attached")
+    assert p.evaluate("document.querySelector('.sbx-grp[data-grp=favoris] .sbx-sous-ligne [data-admin]')") is not None
+    p.click(".sbx-side .sbx-rub[data-rub='favoris']")
+    p.wait_for_selector("#view-mosaique:not(.hidden) .sbx-mtuile[data-module=radio]", state="attached")
+    assert p.inner_text("#view-mosaique .sbx-mosaique-titre") == "Favoris"
+    assert p.evaluate("document.querySelectorAll('#view-mosaique .sbx-mtuile').length") == 1
+    assert erreurs == []
+    ctx.close()
+
+
 def test_mes_sites_dans_la_sidebar_ouvre_la_mosaique_des_sites(nav):
     ctx, p, erreurs = ouvre(nav)
     p.click(".sbx-side .sbx-rub[data-rub='sites']")
