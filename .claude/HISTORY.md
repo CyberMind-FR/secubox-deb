@@ -9,7 +9,7 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
-## 2026-10-21 — media : panneau de gestion des partages SMB (ksmbd) (ref #3000, PR #3001)
+## 2026-10-21 — media : panneau de gestion des partages SMB (ksmbd) (closes #3000, PR #3001 fusionnée le 2026-10-22)
 
 Demande « webui management shares samba with ksmb tools ». Le composant SMB de `secubox-media` (ksmbd, `smbctl`,
 nft LAN seul) n'avait ni route d'API ni panneau, et `smbctl` n'était pas dans le sudoers. `secubox-media` 1.9.1 :
@@ -20,7 +20,9 @@ toutes en `require_jwt` (mot de passe sur l'entrée standard du ctl), panneau Au
 « Partages SMB ». Deux bogues préexistants corrigés : `ksmbd.adduser -i` n'existe plus en ksmbd-tools 3.5 (`-P`,
 vérifié sur gk2 avec une base jetable) ; `cmd | grep -q` sous `pipefail` faisait annoncer au hasard le module ou
 l'écoute absents (SIGPIPE), `usable` faux sur gk2. Incident de ma part : `ksmbd.control -s` ARRÊTE ksmbd (ce n'est
-pas « status »), relancé dans la foulée, quelques secondes sans SMB. 77 tests verts ; déployé sur gk2, publié trixie.
+pas « status »), relancé dans la foulée, quelques secondes sans SMB. 77 tests verts ; déployé sur gk2 (1.9.3 : ReadWritePaths /etc/ksmbd, /var/log/secubox, /run — `sudo smbctl` hérite du
+ProtectSystem=strict et la création de partage échouait en « Read-only file system » ; 1.9.2 : Recommends cifs-utils, installé
+sur gk2), publié trixie.
 
 ## 2026-10-21 — podcaster : portail public par podcast, un flux RSS par podcast (ref #2998, PR #2999)
 

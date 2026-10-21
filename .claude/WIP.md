@@ -19,13 +19,13 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## 🔄 Livré le 2026-10-21, PR ouvertes (ref, pas Closes : fermeture après fusion)
 
-- **Podcaster par podcast** (#2998, PR #2999, `secubox-podcaster` 1.6.1 sur gk2 + apt trixie) : flux RSS par podcast
+- **Podcaster par podcast** (#2998, PR #2999, `secubox-podcaster` 1.6.2 sur gk2 + apt trixie ; mosaïque visible en cadre dans le Hall) : flux RSS par podcast
   `/share/feed/{fid}.xml`, liste `podcasts` dans `/public/library`, portail en mosaïque ; origine des flux corrigée
   (root_path doublé). Reste : fusionner la PR, puis `closes #2998` ici.
-- **Partages SMB** (#3000, PR #3001, `secubox-media` 1.9.1 sur gk2 + apt trixie) : panneau `/media/smb.html`, routes
-  `/smb/*` en JWT, `smbctl` share-add/share-del/user-del + audit, sudoers. Reste : fusionner la PR, `closes #3000` ;
-  idée posée par le propriétaire, non chiffrée : gestionnaire de fichiers dans le navigateur montant temporairement
-  un support USB local et des partages SMB distants (cifs) — à cadrer dans une issue si retenu.
+- **Partages SMB** — closes #3000 (PR #3001 fusionnée, `secubox-media` 1.9.3 sur gk2 + apt trixie) : panneau `/media/smb.html`,
+  routes `/smb/*` en JWT, `smbctl` share-add/share-del/user-del + audit, sudoers, cifs-utils recommandé et installé.
+  Idée posée par le propriétaire, non chiffrée : gestionnaire de fichiers dans le navigateur montant temporairement un support
+  USB local et des partages SMB distants (cifs) — à cadrer dans une issue si retenu.
 
 ## 🔄 Chantier en cours — ESPRESSObin lgm-ebin, client `lgm` beta (2026-10-16)
 
