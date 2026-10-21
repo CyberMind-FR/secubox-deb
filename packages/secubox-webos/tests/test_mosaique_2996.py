@@ -110,6 +110,23 @@ def test_rubrique_securite_filtre_et_l_onglet_sites_montre_les_vignettes(nav):
     ctx.close()
 
 
+def test_services_reprend_la_curation_du_menu_disparu(nav):
+    ctx, p, erreurs = ouvre(nav)
+    n = p.evaluate("FEATURED.length")
+    assert n > 10
+    p.click(".sbx-grp[data-grp='services'] .sbx-plier")
+    assert p.evaluate("document.querySelectorAll('.sbx-grp[data-grp=services] .sbx-sous-item').length") == n   # tout, sans plafond
+    assert p.evaluate("[...document.querySelectorAll('.sbx-grp[data-grp=services] .sbx-sous-item')].map(b=>b.getAttribute('data-open'))") == p.evaluate("FEATURED.map(f=>f.id)")
+    assert p.evaluate("[...document.querySelectorAll('.sbx-grp[data-grp=services] .sbx-sous-ligne')].every(l=>l.querySelector('[data-admin]')&&l.querySelector('[data-open][data-mode=tab]'))")
+    p.click(".sbx-side .sbx-rub[data-rub='services']")
+    p.wait_for_selector("#view-mosaique:not(.hidden) .sbx-mtuile", state="attached")
+    assert p.inner_text("#view-mosaique .sbx-mosaique-titre") == "Services"
+    assert p.evaluate("document.querySelectorAll('#view-mosaique .sbx-mtuile').length") == n
+    assert p.evaluate("document.querySelector('#view-mosaique .sbx-mtuile').getAttribute('data-module')") == p.evaluate("FEATURED[0].id")
+    assert erreurs == []
+    ctx.close()
+
+
 def test_mes_sites_dans_la_sidebar_ouvre_la_mosaique_des_sites(nav):
     ctx, p, erreurs = ouvre(nav)
     p.click(".sbx-side .sbx-rub[data-rub='sites']")
