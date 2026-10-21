@@ -414,8 +414,19 @@ def _xml_esc(s: Optional[str]) -> str:
 
 
 def _base_publique(request: Request) -> str:
+    """Origine publique des adresses d'un flux : `public_base` si réglée, sinon l'hôte de la requête.
+
+    `request.base_url` porte le `root_path` (/api/v1/podcaster) : l'utiliser doublait le préfixe des médias (#2998).
+    Un nom d'hôte est toujours servi derrière HAProxy TLS : https ; une adresse IP (LAN direct) garde le schéma transmis."""
     base = (CFG.get("public_base") or "").rstrip("/")
-    return base or str(request.base_url).rstrip("/")
+    if base:
+        return base
+    hote = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc or "localhost"
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
+    nu = hote.split(":")[0]
+    if nu not in ("localhost", "sock") and not re.fullmatch(r"[0-9.]+|\[?[0-9a-fA-F:]+\]?", nu):
+        proto = "https"
+    return f"{proto}://{hote}"
 
 
 def _absolu(base: str, url: Optional[str]) -> str:
@@ -468,7 +479,7 @@ async def share_feed_podcast(fid: int, request: Request):
     if not f:
         raise HTTPException(404, "unknown feed")
     base = _base_publique(request)
-    return _rss(base, f.get("title") or f"Podcast {fid}", f"{base}/share/feed/{fid}.xml",
+    return _rss(base, f.get("title") or f"Podcast {fid}", f"{base}/api/v1/podcaster/share/feed/{fid}.xml",
                 f.get("description") or "Relayé localement par SecuBox Podcaster",
                 _absolu(base, f.get("image")), store.downloaded_episodes(feed_id=fid))
 

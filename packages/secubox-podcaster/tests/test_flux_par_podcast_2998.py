@@ -44,7 +44,12 @@ def api(tmp_path, monkeypatch):
 
 
 class _Req:
-    base_url = "http://sock/"
+    """Requête vue par l'API derrière nginx (socket, root_path /api/v1/podcaster)."""
+    base_url = "http://podcaster.gk2.secubox.in/api/v1/podcaster/"
+    headers = {"host": "podcaster.gk2.secubox.in", "x-forwarded-proto": "http"}
+
+    class url:
+        scheme, netloc = "http", "podcaster.gk2.secubox.in"
 
 
 def _run(coro):
@@ -76,7 +81,24 @@ def test_le_flux_rss_d_un_podcast_ne_porte_que_ses_episodes_telecharges(api):
     assert titres == ["Deux", "Un"] and "Pas encore" not in titres and "Trois" not in titres
     enc = ch.find("item").find("enclosure").get("url")
     assert enc.startswith("https://podcaster.exemple.test/api/v1/podcaster/media/")
-    assert ch.find("link").text == f"https://podcaster.exemple.test/share/feed/{a}.xml" or ch.findtext("link")
+    assert ch.findtext("link") == f"https://podcaster.exemple.test/api/v1/podcaster/share/feed/{a}.xml"
+
+
+def test_sans_public_base_l_origine_vient_de_l_hote_sans_le_root_path(api):
+    """`request.base_url` porte /api/v1/podcaster : l'ancien flux global doublait ce préfixe devant /media/."""
+    m, st, a, b = api
+    m.CFG["public_base"] = ""
+    ch = ET.fromstring(_run(m.share_feed_podcast(a, _Req())).body).find("channel")
+    enc = ch.find("item").find("enclosure").get("url")
+    assert enc.startswith("https://podcaster.gk2.secubox.in/api/v1/podcaster/media/") and "/api/v1/podcaster/api/" not in enc
+    assert ch.findtext("link") == f"https://podcaster.gk2.secubox.in/api/v1/podcaster/share/feed/{a}.xml"
+    g = ET.fromstring(_run(m.share_feed(_Req())).body).find("channel")
+    assert g.find("item").find("enclosure").get("url").startswith("https://podcaster.gk2.secubox.in/api/v1/podcaster/media/")
+
+    class _Lan(_Req):
+        headers = {"host": "192.168.1.200", "x-forwarded-proto": "http"}
+    enc = ET.fromstring(_run(m.share_feed_podcast(a, _Lan())).body).find("channel").find("item").find("enclosure").get("url")
+    assert enc.startswith("http://192.168.1.200/api/v1/podcaster/media/")        # une IP garde le schéma transmis
 
 
 def test_une_pochette_locale_devient_absolue_dans_le_flux(api):

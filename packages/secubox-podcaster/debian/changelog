@@ -1,3 +1,13 @@
+secubox-podcaster (1.6.1-1~trixie1) trixie; urgency=medium
+
+  * Flux RSS (ref #2998) : sans `public_base`, l'origine des adresses vient de l'hôte
+    de la requête et non de `request.base_url`, qui porte le root_path /api/v1/podcaster
+    et doublait le préfixe devant /media/ (flux global compris) ; un nom d'hôte est en
+    https (HAProxy TLS en frontal), une IP garde le schéma transmis. `<link>` du flux
+    d'un podcast avec le préfixe de l'API.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 21:50:00 +0200
+
 secubox-podcaster (1.6.0-1~trixie1) trixie; urgency=medium
 
   * Portail public par podcast (ref #2998) : chaque podcast a son propre flux RSS
