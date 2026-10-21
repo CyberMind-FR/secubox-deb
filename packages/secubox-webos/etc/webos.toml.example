@@ -2,3 +2,6 @@
 [webos]
 enabled = false
 registry_enabled = true
+# Coque « vue maître » du Hall (#2996) : false = Hall classique. Prévisualisation
+# par navigateur sans toucher ce fichier : https://hall.<domaine>/?hall=v2
+hall_v2 = false

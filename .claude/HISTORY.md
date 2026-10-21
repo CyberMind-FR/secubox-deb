@@ -9,6 +9,62 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-21 — Hall vue maître, phases 1 + 1bis : jetons, coque v2 et dé SecuBox (ref #2996)
+
+secubox-webos 1.15.0 (source, non déployé) : `tokens.css` (palette du brief, thème clair par redéfinition seule,
+pont vers les anciens noms en v2 seulement), coque `hall-v2.css/js` (topbar complétée : menu, disposition,
+notifications, pastille « SecuBox-DEB vX · En ligne » ; sidebar 220 px avec rubriques, favoris et usager ;
+zone principale `flex:999 1 560px` ; ruptures 1180 / 980 / 720 px). Inerte tant que `hall_v2 = false`
+dans `/etc/secubox/webos.toml` ; `?hall=v2` prévisualise par navigateur ; `GET /public/etat` expose le
+flag et la version. Phase 1bis : le dé de 3d.gk2 (« SecuBox Dice 3D », canvas 2D sans bibliothèque) extrait
+en composant `<sbx-dice>` (8 Ko), textures en fichiers, chargé seulement en v2, figé sous
+prefers-reduced-motion, en pause hors écran, 0,29 ms/image mesuré ; le thème Plymouth `secubox-cube`
+reprend les six faces. Tests Playwright aux trois largeurs (captures dans `docs/assets/images/hall-vue-maitre/`).
+Phase 2 (même jour) : `composants.js/.css` (`window.SbxUI` : Card, Pill, StatRing, Sparkline, Tabs, Tile,
+ModuleTile, NewsItem, DeviceRow, Hero ; jetons seuls, SVG inline, statuts active/idle/offline/stale/nosource)
+et Hero vivant en tête de l'accueil v2 (horloge, radio, CPU/mémoire/stockage/réseau/E/S disque toutes les 5 s)
+sur la nouvelle route `GET /public/systeme` (`api/systeme.py` : /proc hors boucle, cache 5 s, 503 si illisible).
+PR #2997 ouverte en `ref` (l'issue couvre les phases 3-4). Identité et avatar : secubox-avatar 1.4.0 ajoute
+`GET /par-nom/{username}` (garde de lecture) ; le Hall le relaie (relais de lecture, vérifié par
+`scripts/verifie-relais-hall.py`, dont les 4 écarts restants préexistent sur master) et la carte d'usager v2
+montre l'image du pseudo sbxid, avec liens « Mes comptes » et « Mon identité ». Bannière
+`docs/assets/secubox-eyemote-banner.svg` régénérée dans la palette de la vue maître (chiffres à jour :
+1 203 paquets, 118 modules, 3.0.0-α18). **Déployé** sur gk2 le même jour : webos 1.15.0 puis 1.15.1 (l'image
+d'avatar n'est demandée que si le module est en ligne — il dort en scale-to-zero, le relais répondait 502 ;
+bouton Lexie en picto sous 720 px) et avatar 1.4.0, publiés dans la suite `trixie`. Vérifié par le chemin
+public et dans Chromium sur `hall.gk2.secubox.in/?hall=v2` (captures `hall-v2-gk2-*.png`). Décision du
+propriétaire : **trixie est la suite par défaut** des scripts de build (`build-packages.sh`, `build-all-local.sh`,
+`build-add-local.sh`) et des nouvelles entrées de changelog (`~trixie1`), AGENTS.md mis à jour.
+Phase 3 (webos 1.16.0) : statut typé côté registre (`statut()`, veille lue sur `profiles.sock`), `/public/services`
++ `status`/`releve`/`intervalle_s`, cartes v2 avec pied « Relevé » et « données périmées », aperçu sans requête pour
+un module en veille, sondages à recul exponentiel, dock média vérifié persistant, sparklines du Hero en deux séries.
+Phase 4, premier pas (webos 1.17.0) : mosaïque cliquable derrière « Modules » et les rubriques (tuiles de modules
+`data-open` ouvrant le service dans le Hall, onglets Tous/Récents/Favoris/catégories/Sites, mur metablogizer avec
+ses vignettes). Constat : aucune capture d'écran n'existe pour les webuis de modules sur gk2 (176 sites
+metablogizer et 20 applis Streamlit en ont). Menus liés (webos 1.18.0) : rubriques dépliables sur leurs modules,
+module embarqué marqué et sa sous-navigation `/public/menu/{id}` sous lui (délégation `[data-ctx]`), sidebar en
+rail de 64 px pendant l'embarquement (le « décalage » de la page admin embarquée est sa mise en page centrée).
+Régression corrigée (webos 1.18.1) : la coque v2 masquait les menus Services/Système, donc les accès rapides ⚙️ admin
+et ⧉ onglet ; rétablis, et posés aussi sur les tuiles de la mosaïque et les modules dépliés. `/sbxos/` régénérée
+(sbxos 0.6.0~aurora17-3, révision seule, dist Aurora inchangé) au profil vue maître ; déployée sur gk2 par dpkg -i
+(un aperçu `~aurora` n'entre jamais dans apt). Le `dist/` ignoré par git doit être recopié dans un worktree avant
+`dpkg-buildpackage` (debian/rules le vérifie, ne le construit pas). Vignettes des modules (webos 1.19.0/1.19.1) :
+`webos-vignettes` + minuterie (3 min, un module par tour, charge ≤ 8, CPUQuota 20 %), `secubox_core.shotter` sur la
+page publique, nginx statique `/public/vignette/{id}`, `vignette` dans le registre ; première capture `acces` validée.
+**Bascule `hall_v2 = true` sur gk2** le 2026-10-21 (GO du propriétaire « go switch ») ; sauvegarde du TOML dans
+`/var/backups/`. Le `grep … | head` dans une chaîne `set -e` ne stoppe pas sur un test rouge : 1.19.0 a été déployée
+avec un test faux-négatif (PNG factice invalide) — corrigé en 1.19.1, sans effet en production.
+Navigation unique (webos 1.19.3 → 1.19.8, arbitrage « en haut ou à gauche, pas les deux » : la sidebar fait foi) :
+onglets de la mosaïque retirés, rubriques Récents, Services (curation FEATURED, après « on a reperdu les services ») et
+Favoris dynamique (suit la bande ★ de l'accueil, dépliable avec ⚙/⧉, mosaïque au clic, remplace la section statique ;
+« il manque le favoris dynamique »), menu contextuel `#mnav-ctx` du service embarqué rétabli (1.19.6) ; colonne vide des
+pages admin embarquées supprimée (hub 1.12.20, `body.emb`). Vignettes : sonde HTTP avant capture (pages 421 du WAF et
+pages de connexion marquées `sans-page.json`, 15 PNG fautifs purgés), seuil de charge 4 → 8, rattrapage transitoire
+`sbx-vignettes-rattrapage` (seuil 40) lancé sur gk2 ; `Cache-Control: no-cache` sur la coque v2 + `wafctl purge-cache`
+après chaque déploiement d'actifs (le navigateur servait un `hall-v2.js` périmé).
+Constat : `test_ytflux_aurora_2638::test_la_route_flux_n_est_pas_ouverte_sur_le_vhost_admin` échoue déjà
+sur `master`, indépendamment de ce chantier. Dossier : `docs/dossiers/hall-vue-maitre.md`.
+
 ## 2026-10-21 — media : panneau de gestion des partages SMB (ksmbd) (closes #3000, PR #3001 fusionnée le 2026-10-22)
 
 Demande « webui management shares samba with ksmb tools ». Le composant SMB de `secubox-media` (ksmbd, `smbctl`,

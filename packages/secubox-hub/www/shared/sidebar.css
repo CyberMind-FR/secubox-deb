@@ -502,5 +502,7 @@ body .sidebar,
 :root.sbx-embed .global-menu-bar,
 :root.sbx-embed .global-status-bar { display: none !important; }
 :root.sbx-embed .main,
-:root.sbx-embed .main-content { margin-left: 0 !important; }
+:root.sbx-embed .main-content,
+:root.sbx-embed .principal,
+:root.sbx-embed .page { margin-left: 0 !important; }
 :root.sbx-embed body { padding-top: 0 !important; padding-bottom: 0 !important; }

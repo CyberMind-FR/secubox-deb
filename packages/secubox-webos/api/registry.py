@@ -48,8 +48,33 @@ def modules_montes(socket_agregateur: str = "/run/secubox/aggregator.sock") -> f
         return frozenset()
 
 
+def modules_endormis(socket_profiles: str = "/run/secubox/profiles.sock") -> frozenset:
+    """Modules en veille (scale-to-zero) d'après les cycles de vie des profils : `sleep_state == "asleep"` (#2996).
+    Profils injoignables : ensemble vide — personne n'est déclaré endormi à tort."""
+    try:
+        c = _ConnexionUnix(socket_profiles, timeout=2.0)
+        try:
+            c.request("GET", "/api/v1/profiles/lifecycles")
+            rep = c.getresponse()
+            data = json.loads(rep.read().decode("utf-8", "replace")) if rep.status == 200 else {}
+        finally:
+            c.close()
+        return frozenset(str(m.get("id")) for m in (data.get("lifecycles") or [])
+                         if isinstance(m, dict) and m.get("sleep_state") == "asleep" and m.get("id"))
+    except (OSError, ValueError, http.client.HTTPException):
+        return frozenset()
+
+
+def statut(state: str, endormi: bool) -> str:
+    """Quintuplet de la vue maître : en veille prime (le module répondrait s'il était réveillé)."""
+    if endormi:
+        return "idle"
+    return {"online": "active", "offline": "offline", "degraded": "stale"}.get(state, "nosource")
+
+
 def normalize_services(menu: dict, health: dict, exposure: Optional[dict] = None,
-                       sockets: frozenset = frozenset(), montes: frozenset = frozenset()) -> List[Service]:
+                       sockets: frozenset = frozenset(), montes: frozenset = frozenset(),
+                       endormis: frozenset = frozenset()) -> List[Service]:
     exposure = exposure or {}
     out: List[Service] = []
     for cat in menu.get("categories", []):
@@ -85,6 +110,7 @@ def normalize_services(menu: dict, health: dict, exposure: Optional[dict] = None
                     mode=reach if reach in ("localhost", "lan", "wan") else "unknown",
                     available=(state != "offline")),
                 health=ServiceHealth(state=state, latency_ms=latency),
+                status=statut(state, item["id"] in endormis),
                 auth=ServiceAuth(),
                 installed=bool(item.get("installed", True)),
                 active=bool(item.get("active", True)),

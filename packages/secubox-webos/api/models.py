@@ -40,6 +40,9 @@ class Service(BaseModel):
     health: ServiceHealth
     auth: ServiceAuth
     capabilities: List[str] = []
+    # Statut typé de la vue maître (#2996) : la pastille et l'opacité d'une carte en découlent, jamais codées en dur.
+    status: Literal["active", "idle", "offline", "stale", "nosource"] = "nosource"
+    vignette: bool = False   # une capture de la page publique existe (webos-vignettes)
     cardlet: Optional[dict] = None
     installed: bool = True
     active: bool = True

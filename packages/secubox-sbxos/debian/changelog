@@ -1,3 +1,13 @@
+secubox-sbxos (0.6.0~aurora17-3~trixie1) trixie; urgency=medium
+
+  * La coquille PWA /sbxos/ régénérée au profil de la vue maître du Hall (ref #2996) : jetons
+    `--sbx-*` identiques à hall.<domaine> (thème clair par redéfinition seule, composants du
+    damier rebranchés), topbar (dé SecuBox en SVG, salutation, heure locale, profil), barre basse
+    en icônes SVG (cibles 44 px) qui devient la sidebar de 220 px au large, tuiles et réglages
+    aux jetons, cache du service worker `sbxos-v8`. Révision seule : le dist Aurora est inchangé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 15:00:00 +0200
+
 secubox-sbxos (0.6.0~aurora17-2~bookworm1) bookworm; urgency=medium
 
   * La coquille PWA /sbxos/ passe au profil Aurora (ref #2647) : jetons, fond, cadre dégradé, en-tête de marque, bandeaux et tuiles d'Aurora dans ui/styles.css ; tuiles Profil, Modules autorisés, Affichés et Favoris (chacune avec sa définition en infobulle, « — » tant qu'aucun bureau n'est connu) ; mode ?demo=1 (bureau fictif, aucun réseau, aucun stockage local, aucun service worker, lieux non chargés) ; message « session requise » en bandeau ; hauteur annoncée à l'hôte (sbxVue, onglet sbxos) ; cache du service worker passé à sbxos-v7.

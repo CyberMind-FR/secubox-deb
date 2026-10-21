@@ -6,7 +6,7 @@
 
 # ══════════════════════════════════════════════════════════════════
 #  build-all-local.sh — Build ALL SecuBox packages and add to local repo
-#  Usage: bash scripts/build-all-local.sh [bookworm|trixie] [arm64|amd64]
+#  Usage: bash scripts/build-all-local.sh [trixie|bookworm] [arm64|amd64]   (défaut : trixie)
 # ══════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -15,7 +15,7 @@ REPO_DIR="$(dirname "$SCRIPT_DIR")"
 PACKAGES_DIR="${REPO_DIR}/packages"
 LOCAL_REPO="${REPO_DIR}/cache/repo"
 
-SUITE="${1:-bookworm}"
+SUITE="${1:-trixie}"
 ARCH="${2:-$(dpkg --print-architecture)}"
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'

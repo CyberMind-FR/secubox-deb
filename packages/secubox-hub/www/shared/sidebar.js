@@ -39,6 +39,15 @@
         try { return window.top !== window.self; } catch (e) { return true; }
     })();
     if (EMBARQUE) document.documentElement.classList.add('sbx-embed');
+    // LA COLONNE VIDE DE GAUCHE (#2996). Quatre-vingts pages reservent 220 px a leur barre
+    // laterale par `body:not(.emb) .principal{margin-left:220px}` et ne posent `body.emb`
+    // que sur `?embed=1`. Encadrees par le Hall SANS ce parametre (console admin), la barre
+    // etait masquee mais sa colonne restait : la page s'affichait decalee. Le cadrage detecte
+    // ici vaut pour toutes : on pose `emb` sur le corps, des qu'il existe.
+    if (EMBARQUE) {
+        const poseEmb = () => { if (document.body) document.body.classList.add('emb'); };
+        if (document.body) poseEmb(); else document.addEventListener('DOMContentLoaded', poseEmb);
+    }
 
     // PAGES SERVIES PAR LE HALL (#2814) : /identite/ et /coffre/ vivent sur l'origine du Hall, qui ne sert pas les pages des modules. Sur un hote
     // hall.*, chaque lien du menu vise donc le MEME domaine en admin.* (port conserve). Ailleurs : liens relatifs, comme avant.

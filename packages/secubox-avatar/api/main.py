@@ -398,6 +398,25 @@ async def get_avatar(identity_id: str):
     return FileResponse(avatar_path, media_type=media_type)
 
 
+_NOM = re.compile(r"^[A-Za-z0-9._-]{2,64}$")
+
+
+@router.get("/par-nom/{username}", dependencies=[Depends(require_lecture)])
+async def avatar_par_nom(username: str):
+    """L'image d'une identité par son nom d'usager (le pseudo sbxid du Hall), sans révéler l'identifiant interne (#2996)."""
+    if not _NOM.match(username):
+        raise HTTPException(status_code=404, detail="Avatar not found")
+    for ident in _load_identities().values():
+        if ident.get("username") == username:
+            avatar_path = _find_avatar(ident["id"])
+            if avatar_path:
+                return FileResponse(avatar_path, media_type={".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                                                             ".gif": "image/gif", ".webp": "image/webp"}.get(avatar_path.suffix.lower(), "application/octet-stream"),
+                                    headers={"Cache-Control": "private, max-age=300"})
+            break
+    raise HTTPException(status_code=404, detail="Avatar not found")
+
+
 @router.delete("/avatar/{identity_id}")
 async def delete_avatar(identity_id: str, user=Depends(require_jwt)):
     """Delete avatar image."""

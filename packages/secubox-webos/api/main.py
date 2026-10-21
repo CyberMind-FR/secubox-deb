@@ -5,7 +5,9 @@
 """SecuBox-Deb :: WebOS — API registre normalisé (P1)."""
 import asyncio
 import json
+import logging
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter, Depends, Request
@@ -16,13 +18,27 @@ from fastapi.responses import JSONResponse, Response
 from secubox_core.auth import require_session, require_personne, create_token, domaine_box
 from secubox_core.health import systemd_batch
 from api.models import Service
-from api import registry, flags, cardlets, actions, aide, hotes
+from api import registry, flags, cardlets, actions, aide, hotes, systeme, vignettes
 from secubox_core.auth import require_lecture
 
 _cache: dict = {"services": [], "computed_at": None}
 _montes: frozenset = frozenset()          # modules montés par l'agrégateur (#2455), rafraîchi hors de la boucle d'événements
+_endormis: frozenset = frozenset()        # modules en veille d'après les profils (#2996), même rythme
 _flags: dict = flags.load_flags()
+_version: str = ""                        # version du paquet, lue une fois au démarrage (#2996)
 _CACHE_FILE = Path("/var/cache/secubox/webos/services.json")
+
+
+async def _lire_version() -> str:
+    try:
+        p = await asyncio.create_subprocess_exec(
+            "dpkg-query", "-W", "-f=${Version}", "secubox-webos",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        out, _ = await asyncio.wait_for(p.communicate(), timeout=5)
+        return out.decode().strip()
+    except (OSError, asyncio.TimeoutError) as exc:
+        logging.getLogger(__name__).warning("version du paquet illisible : %s", exc)
+        return ""
 
 
 def _live_sockets(sock_dir: str = "/run/secubox") -> frozenset:
@@ -44,7 +60,10 @@ def _recompute() -> bool:
         return False
     health = systemd_batch()
     expo = registry.load_exposure_cache()
-    svcs = registry.normalize_services(menu, health, expo, sockets=_live_sockets(), montes=_montes)
+    svcs = registry.normalize_services(menu, health, expo, sockets=_live_sockets(), montes=_montes, endormis=_endormis)
+    avec_vignette = vignettes.vignettes_presentes(s.id for s in svcs)
+    for s in svcs:
+        s.vignette = s.id in avec_vignette
     _cache["services"] = [s.model_dump() for s in svcs]
     _cache["computed_at"] = time.time()
     try:
@@ -56,10 +75,11 @@ def _recompute() -> bool:
 
 
 async def _refresh_loop() -> None:
-    global _montes
+    global _montes, _endormis
     while True:
         try:
             _montes = await asyncio.to_thread(registry.modules_montes)
+            _endormis = await asyncio.to_thread(registry.modules_endormis)
             if not _recompute():
                 # Menu absent : on réveille le hub (hors boucle d'événements).
                 await asyncio.to_thread(registry.reveille_hub)
@@ -70,8 +90,9 @@ async def _refresh_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _flags
+    global _flags, _version
     _flags = flags.load_flags()
+    _version = await _lire_version()
     if _CACHE_FILE.exists():
         try:
             _cache.update(json.loads(_CACHE_FILE.read_text()))
@@ -97,7 +118,11 @@ def _enabled() -> bool:
     return bool(_flags.get("enabled"))
 
 
-_PUBLIC_FIELDS = ("id", "name", "description", "category", "icon", "installed", "active")
+_PUBLIC_FIELDS = ("id", "name", "description", "category", "icon", "installed", "active", "status", "vignette")
+
+
+def _releve_iso(ts) -> str | None:
+    return datetime.fromtimestamp(ts, timezone.utc).isoformat(timespec="seconds") if ts else None
 
 
 @app.get("/healthz")
@@ -105,20 +130,46 @@ async def healthz():
     return {"status": "ok"}
 
 
+_sys = {"d": None, "t": 0.0}
+
+
+@public_router.get("/systeme")
+async def public_systeme():
+    """Relevé système du Hero (CPU, mémoire, disque, réseau) : /proc hors boucle, cache 5 s, rien de nominatif."""
+    now = time.time()
+    if _sys["d"] and now - _sys["t"] < 5:
+        return _sys["d"]
+    try:
+        _sys["d"] = await asyncio.to_thread(systeme.releve)
+        _sys["t"] = now
+    except OSError as exc:
+        logging.getLogger(__name__).warning("relevé système impossible : %s", exc)
+        return JSONResponse({"detail": "relevé indisponible"}, status_code=503)
+    return _sys["d"]
+
+
+@public_router.get("/etat")
+async def public_etat():
+    """Pastille de la coque et flag hall.v2 : rien de sensible (version du paquet, en ligne)."""
+    return {"hall_v2": bool(_flags.get("hall_v2")), "version": _version, "en_ligne": True}
+
+
 @public_router.get("/services")
 async def public_services():
     """Minimal, unauthenticated projection — never leaks urls/latency/reach."""
     if not _enabled():
-        return {"services": [], "computed_at": _cache["computed_at"]}
+        return {"services": [], "computed_at": _cache["computed_at"], "releve": _releve_iso(_cache["computed_at"]), "intervalle_s": 15}
     out = []
     for s in _cache["services"]:
         row = {k: s[k] for k in _PUBLIC_FIELDS if k in s}
+        row.setdefault("status", "nosource")
         row["health"] = {"state": (s.get("health") or {}).get("state", "unknown")}
         # `path` (relatif, non sensible) : nécessaire pour construire l'URL de la
         # webui admin embarquée (admin.gk2.secubox.in<path>) côté Hall (#1175).
         row["path"] = (s.get("urls") or {}).get("path") or ("/" + s["id"] + "/")
         out.append(row)
-    return {"services": out, "computed_at": _cache["computed_at"]}
+    # `releve` et `intervalle_s` : le pied des cartes affiche l'heure du relevé et juge « données périmées » au-delà de 2× l'intervalle.
+    return {"services": out, "computed_at": _cache["computed_at"], "releve": _releve_iso(_cache["computed_at"]), "intervalle_s": 15}
 
 
 # ── DIFFUSION PARTAGEE — le Broadcaster (#1224, MVP a/overlay) ───────────────

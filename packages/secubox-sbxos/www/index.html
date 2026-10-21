@@ -22,10 +22,11 @@
   MOBILE D'ABORD, sans point de rupture à maintenir : le damier est une grille
   `auto-fill`, la barre du bas est fixe, et le théâtre occupe tout l'écran.
 
-  PROFIL AURORA (#2647, .claude/AURORA-REFERENCE.md) : jetons, cadre, bandeaux et
-  tuiles d'Aurora, dans ui/styles.css. Ce qui reste hors d'une « page autonome »
-  est voulu : SBX OS est une PWA hors ligne dont la coquille (modules ES, composants
-  du damier, service worker) est mise en cache fichier par fichier.
+  VUE MAÎTRE (#2996, docs/dossiers/hall-vue-maitre.md) : les jetons --sbx-* du Hall,
+  la topbar (marque, salutation, heure, profil), la barre basse en icônes SVG qui
+  devient la sidebar au large, dans ui/styles.css. Ce qui reste hors d'une « page
+  autonome » est voulu : SBX OS est une PWA hors ligne dont la coquille (modules ES,
+  composants du damier, service worker) est mise en cache fichier par fichier.
   ?embed=1 : sans bandeau de marque ; ?demo=1 : bureau fictif, rien n'est lu ni
   écrit (ni réseau, ni stockage local, ni service worker).
 -->
@@ -33,7 +34,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#070C1C">
 <meta name="description" content="Votre SecuBox. Vos services. Votre univers. Partout.">
 <title>SBX OS</title>
 <link rel="manifest" href="./manifest.webmanifest">
@@ -56,10 +57,12 @@
 
 <header class="mast">
   <span class="marque">
-    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg>
+    <!-- Le dé SecuBox, en trois faces : la même marque que la topbar du Hall, sans script (PWA hors ligne). -->
+    <svg class="cube" viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,2.5 21,7.5 12,12.5 3,7.5" fill="#60A5FA"/><polygon points="3,7.5 12,12.5 12,22 3,17" fill="#2563EB"/><polygon points="12,12.5 21,7.5 21,17 12,22" fill="#1D4ED8"/><polyline points="3,7.5 12,12.5 21,7.5" fill="none" stroke="#070C1C" stroke-width=".6" stroke-opacity=".5"/></svg>
     <span class="marque-txt"><b>SBX&nbsp;OS</b><small>Le Hall qui tient dans la poche</small></span>
   </span>
   <span class="bonjour" id="bonjour"></span>
+  <time class="heure" id="heure"></time>
   <span class="profil" id="profil" hidden></span>
 </header>
 
@@ -144,9 +147,9 @@
   <!-- THÉÂTRE : le lieu, plein écran -->
   <section class="theatre" id="theatre" hidden>
     <div class="theatre-barre">
-      <button class="fb" id="theatre-retour">‹ Hall</button>
+      <button class="fb" id="theatre-retour" aria-label="Revenir au Hall">‹ Hall</button>
       <span id="theatre-titre"></span>
-      <button class="fb" id="theatre-fav" title="Mettre en favori">☆</button>
+      <button class="fb" id="theatre-fav" title="Mettre en favori" aria-label="Mettre en favori">☆</button>
     </div>
     <iframe id="theatre-cadre" title="" referrerpolicy="no-referrer"
             allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>
@@ -154,10 +157,10 @@
   </section>
 </div></main>
 
-<nav class="barre" id="barre">
-  <button data-ecran="hall"     class="on"><span>🏠</span>Hall</button>
-  <button data-ecran="favoris"><span>⭐</span>Favoris</button>
-  <button data-ecran="reglages"><span>⚙️</span>Réglages</button>
+<nav class="barre" id="barre" aria-label="Écrans">
+  <button data-ecran="hall" class="on"><svg class="sbx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><span>Hall</span></button>
+  <button data-ecran="favoris"><svg class="sbx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 16.9l-5.3 2.8 1.1-5.9-4.3-4.1 5.9-.8z"/></svg><span>Favoris</span></button>
+  <button data-ecran="reglages"><svg class="sbx-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Réglages</span></button>
 </nav>
 
 <script type="module">
@@ -203,6 +206,14 @@ addEventListener('resize', annoncer);
 
 appliqueTheme(hall.theme);
 
+// L'heure de la topbar : locale, sans réseau, à la minute.
+function tic() {
+  const d = new Date();
+  $('heure').textContent = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  $('heure').setAttribute('datetime', d.toISOString());
+}
+tic(); setInterval(tic, 30000);
+
 // ── Composition ─────────────────────────────────────────────────────────────
 // Un seul endroit relit l'état et redessine. Multiplier les points de rendu est
 // la façon la plus sûre de faire diverger deux écrans qui montrent la même
@@ -240,8 +251,8 @@ function compose() {
   $('profil').hidden = false;
   $('profil').textContent = p;
   $('profil').dataset.p = p;
-  $('bonjour').textContent = p === 'guest'
-    ? 'Bienvenue' : 'Votre Hall est prêt.';
+  const h = new Date().getHours();
+  $('bonjour').textContent = (h < 5 || h >= 18 ? 'Bonsoir' : 'Bonjour') + (p === 'guest' ? ', bienvenue' : ' — votre Hall est prêt');
 
   // Tuiles : mesure absente = « — » (pas de manifeste, ni mémorisé ni reçu).
   const connu = !!mine.manifeste;

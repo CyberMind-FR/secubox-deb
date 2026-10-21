@@ -1,3 +1,12 @@
+secubox-hub (1.12.20-1~trixie1) trixie; urgency=medium
+
+  * Barre latérale partagée : plus de colonne vide à gauche dans une page de module encadrée par
+    le Hall (ref #2996). Quatre-vingts pages réservent 220 px par `body:not(.emb) .principal` et
+    ne posent `body.emb` que sur `?embed=1` ; `sidebar.js` pose maintenant `emb` dès que la page
+    est encadrée, et `sidebar.css` neutralise aussi `.principal` / `.page` sous `:root.sbx-embed`.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 18:30:00 +0200
+
 secubox-hub (1.12.19-1~bookworm1) bookworm; urgency=medium
 
   * Retrait de la barre du haut (#2987) : injectée sur chaque page de chaque module
