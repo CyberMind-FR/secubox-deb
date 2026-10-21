@@ -1,3 +1,11 @@
+secubox-media (1.9.3-1~trixie1) trixie; urgency=medium
+
+  * Unité (ref #3000) : ReadWritePaths + /etc/ksmbd, /var/log/secubox et /run —
+    `sudo smbctl` hérite du ProtectSystem=strict du service ; la création d'un
+    partage échouait sur « Read-only file system » depuis le panneau.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 23:30:00 +0200
+
 secubox-media (1.9.2-1~trixie1) trixie; urgency=medium
 
   * Recommends: cifs-utils (ref #3000) — client SMB (mount.cifs) présent sur la box,
