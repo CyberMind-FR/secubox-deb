@@ -35,6 +35,9 @@ bouton Lexie en picto sous 720 px) et avatar 1.4.0, publiés dans la suite `trix
 public et dans Chromium sur `hall.gk2.secubox.in/?hall=v2` (captures `hall-v2-gk2-*.png`). Décision du
 propriétaire : **trixie est la suite par défaut** des scripts de build (`build-packages.sh`, `build-all-local.sh`,
 `build-add-local.sh`) et des nouvelles entrées de changelog (`~trixie1`), AGENTS.md mis à jour.
+Phase 3 (webos 1.16.0) : statut typé côté registre (`statut()`, veille lue sur `profiles.sock`), `/public/services`
++ `status`/`releve`/`intervalle_s`, cartes v2 avec pied « Relevé » et « données périmées », aperçu sans requête pour
+un module en veille, sondages à recul exponentiel, dock média vérifié persistant, sparklines du Hero en deux séries.
 Constat : `test_ytflux_aurora_2638::test_la_route_flux_n_est_pas_ouverte_sur_le_vhost_admin` échoue déjà
 sur `master`, indépendamment de ce chantier. Dossier : `docs/dossiers/hall-vue-maitre.md`.
 

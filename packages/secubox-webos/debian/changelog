@@ -1,3 +1,17 @@
+secubox-webos (1.16.0-1~trixie1) trixie; urgency=medium
+
+  * Hall : réactivité de la vue maître, phase 3 (ref #2996). Le registre porte un statut typé
+    `status ∈ {active, idle, offline, stale, nosource}` (en veille d'après les cycles de vie des
+    profils, lus hors boucle au même rythme que l'agrégateur) ; `GET /public/services` ajoute
+    `status`, `releve` (RFC 3339) et `intervalle_s`. En v2 : pastille et opacité de chaque carte
+    découlent du statut, pied « Relevé HH:MM:SS », « données périmées » au-delà de 2× l'intervalle,
+    aperçu d'un module en veille sans aucune requête (src retiré, note posée), sondages avec recul
+    exponentiel (Hero 5 s → 60 s, registre 15 s → 60 s), dock média inchangé en navigation interne.
+  * Hero : réseau et E/S disque en deux séries colorées (entrant / lu en accent, sortant / écrit en
+    vert), libellés assortis.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 12:00:00 +0200
+
 secubox-webos (1.15.1-1~trixie1) trixie; urgency=medium
 
   * Hall v2 : l'image d'avatar n'est demandée que si le module avatar est en ligne dans le

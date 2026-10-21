@@ -203,6 +203,19 @@ attends mon GO entre chaque phase.
 
 ![Catalogue des composants](../assets/images/hall-vue-maitre/hall-v2-catalogue.png)
 
+### Phase 3 — réactivité (2026-10-21, `secubox-webos` 1.16.0)
+
+- **Statut typé côté API** : `Service.status ∈ {active, idle, offline, stale, nosource}` (`api/registry.py::statut`) ;
+  « en veille » vient des cycles de vie des profils (`/run/secubox/profiles.sock`, lus hors boucle toutes les 15 s),
+  `online → active`, `offline → offline`, `degraded → stale`, `unknown → nosource`. `GET /public/services` ajoute
+  `status`, `releve` et `intervalle_s`.
+- **Cartes v2** : `data-status` sur chaque carte, pastille et opacité par CSS seul ; pied « Relevé HH:MM:SS »,
+  « données périmées » au-delà de 2× l'intervalle (`data-perime`) ; un module en veille perd le `src` de son aperçu
+  (aucune requête) et porte une note de veille ; le bouton « réveiller » existant reste celui des profils.
+- **Sondages** : Hero 5 s, registre 15 s, recul exponentiel jusqu'à 60 s sur échec, reprise au retour de l'onglet.
+- **Dock média** : nœud unique, inchangé par la navigation interne (test).
+- **Hero** : réseau et E/S disque en deux séries (entrant / lu en accent, sortant / écrit en vert).
+
 ### Identité, avatar et comptes SSO (2026-10-21)
 
 - La carte d'usager de la sidebar lit `GET /api/v1/sbxid/moi` ; avec une identité, l'image vient de
@@ -228,7 +241,7 @@ d'`apt.secubox.in`. Flag `hall_v2` laissé à faux : le Hall classique reste le 
 - Phase 2, reste : option `hall.v2.hero-dice` (dé de 96 px derrière l'heure), reportée avec la carte « Bonjour ».
 - Hors périmètre du Hall, à confirmer : reprendre le relevé `/public/systeme` (dont les E/S) dans les courbes de
   `secubox-metrics` (« Système en direct »).
-- Phase 3 : `status` typé {active, idle, offline, stale, nosource}, « Relevé HH:MM:SS », chargement différé,
-  dock Radio persistant.
-- Phase 4 : migration dans l'ordre du prompt ; les cartes non migrées sous « Tous les modules ».
+- Phase 4 : **mosaïque de vignettes cliquables** des vhosts pour « Modules / Tableau de bord » (demande du
+  2026-10-21, à l'image du mur mosaïque de metablogizer et de ses captures), puis migration dans l'ordre du prompt ;
+  les cartes non migrées sous « Tous les modules ».
 - Mesure du dé sur RPi4 (le budget ≤ 1 ms/image est à confirmer sur la cible).

@@ -113,8 +113,13 @@ def test_hero_en_tete_de_l_accueil_avec_cinq_statistiques_vivantes(nav):
     # deuxième relevé (forcé) : CPU connu, réseau et E/S calculés par différence → sparklines non nulles
     p.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
     p.wait_for_function("document.querySelectorAll('.sbx-hero .sbx-ring')[0].textContent.trim()==='42%'", timeout=8000)
-    p.wait_for_function("[...document.querySelectorAll('.sbx-hero .sbx-spark')].every(s=>[...s.children].some(li=>parseFloat(li.style.getPropertyValue('--h'))>0))", timeout=8000)
+    p.wait_for_function("[...document.querySelectorAll('.sbx-hero .sbx-spark')].every(s=>[...s.querySelectorAll('li i.a')].some(i=>parseFloat(i.style.getPropertyValue('--h'))>0) && [...s.querySelectorAll('li i.b')].some(i=>parseFloat(i.style.getPropertyValue('--h'))>0))", timeout=8000)
     assert "↓" in p.inner_text(".sbx-hero") and "lu " in p.inner_text(".sbx-hero")
+    # deux séries, deux couleurs : entrant/lu en accent, sortant/écrit en vert
+    ca, cb = p.evaluate("(()=>{const a=document.querySelector('.sbx-hero .sbx-spark li i.a'),b=document.querySelector('.sbx-hero .sbx-spark li i.b');return [getComputedStyle(a).backgroundColor,getComputedStyle(b).backgroundColor]})()")
+    assert ca != cb
+    assert p.evaluate("getComputedStyle(document.querySelector('.sbx-hero .sbx-in b')).color") == ca
+    assert p.evaluate("getComputedStyle(document.querySelector('.sbx-hero .sbx-out b')).color") == cb
     assert p.evaluate("document.querySelector('.sbx-hero').getBoundingClientRect().height") >= 148
     if CAPTURES:
         p.screenshot(path=str(Path(CAPTURES) / "hall-v2-1440-hero.png"))

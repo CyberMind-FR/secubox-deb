@@ -82,6 +82,17 @@
 [data-hall="v2"][data-densite="compact"] .main{padding-left:var(--sbx-e-2);padding-right:var(--sbx-e-2)}
 [data-hall="v2"] .statusbar{background:var(--sbx-surface-2);border-top:1px solid var(--sbx-bordure-2)}
 
+/* ── Statut typé des cartes (phase 3) : pastille, opacité et pied découlent de data-status ── */
+.sbx-fcard-pied{margin-top:auto;padding:6px 10px 0;font:500 .66rem var(--sbx-mono);color:var(--sbx-texte-attenue);border-top:1px solid var(--sbx-bordure-2)}
+[data-hall="v2"] .fcard-apercu .sbx-fcard-pied{padding:6px 10px}
+[data-hall="v2"] .fcard[data-perime="1"] .sbx-fcard-pied,[data-hall="v2"] .fcard[data-status="stale"] .sbx-fcard-pied{color:var(--sbx-warn)}
+[data-hall="v2"] .fcard[data-status="idle"]{opacity:.85}
+[data-hall="v2"] .fcard[data-status="offline"]{opacity:.6}
+[data-hall="v2"] .fcard[data-status="stale"] .led{background:var(--sbx-warn);box-shadow:0 0 0 3px var(--sbx-warn-fond)}
+[data-hall="v2"] .fcard[data-status="nosource"]{opacity:.6;border-style:dashed}
+[data-hall="v2"] .fcard .ap-vue{position:relative}
+.sbx-veille{position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:12px;text-align:center;font:.76rem var(--sbx-police);color:var(--sbx-texte-attenue);background:var(--sbx-surface-2)}
+
 /* ── Barre d'onglets (téléphone) ─────────────────────────────────────────── */
 .sbx-tabbar{display:none}
 .sbx-voile{display:none}

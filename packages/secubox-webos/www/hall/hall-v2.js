@@ -202,16 +202,59 @@
     vue.insertBefore(h,vue.firstChild);
     setInterval(function(){ h.sbxHorloge(); },1000);
     var who=$('#who-nom'); if(who) new MutationObserver(function(){ h.sbxNom(who.textContent.trim()); }).observe(who,{childList:true,characterData:true,subtree:true});
-    var dernier=0;
+    // Sondage à 5 s, recul exponentiel jusqu'à 60 s quand la box ne répond pas, reprise immédiate au retour.
+    var dernier=0, PAS=5000, retard=PAS, tm=0;
+    function planifie(){ clearTimeout(tm); tm=setTimeout(sonde,retard); }
     function sonde(){
-      if(document.hidden||vue.classList.contains('hidden')) return;
-      fetch('/api/v1/webos/public/systeme',{credentials:'same-origin'}).then(function(r){ return r.ok?r.json():null; }).then(function(d){ if(d){ h.sbxSysteme(d); dernier=Date.now(); h.removeAttribute('data-stale'); } })
-        .catch(function(){}).then(function(){ if(dernier&&Date.now()-dernier>10000) h.setAttribute('data-stale','1'); });
+      if(document.hidden||vue.classList.contains('hidden')){ retard=PAS; return planifie(); }
+      fetch('/api/v1/webos/public/systeme',{credentials:'same-origin'}).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function(d){ h.sbxSysteme(d); dernier=Date.now(); retard=PAS; h.removeAttribute('data-stale'); })
+        .catch(function(){ retard=Math.min(retard*2,60000); })
+        .then(function(){ if(dernier&&Date.now()-dernier>2*PAS) h.setAttribute('data-stale','1'); planifie(); });
       fetch('/api/v1/webos/public/cardlets/radio',{credentials:'same-origin'}).then(function(r){ return r.ok?r.json():null; })
         .then(function(c){ var ok=c&&c.status==='online'&&!c.silence&&c.content; h.sbxRadio(ok?c.content.title:'',ok?c.content.subtitle:''); }).catch(function(){});
     }
-    sonde(); setInterval(sonde,5000);
-    document.addEventListener('visibilitychange',function(){ if(!document.hidden) sonde(); });
+    sonde();
+    document.addEventListener('visibilitychange',function(){ if(!document.hidden){ retard=PAS; sonde(); } });
+  }
+
+  // ── Registre : statut typé sur chaque carte, « Relevé HH:MM:SS », veille sans requête ─────────
+  var REG_PAS=15000, regRetard=REG_PAS, regTm=0, regDernier=null;
+  function hhmmss(ms){ return new Date(ms).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+  function veille(c,dort){
+    Array.prototype.forEach.call(c.querySelectorAll('iframe'),function(f){
+      if(dort){ if(f.getAttribute('src')){ f.setAttribute('data-src',f.getAttribute('src')); f.removeAttribute('src'); } }
+      else if(f.getAttribute('data-src')&&!f.getAttribute('src')){ f.setAttribute('src',f.getAttribute('data-src')); f.removeAttribute('data-src'); }
+    });
+    var note=c.querySelector('.sbx-veille');
+    if(dort&&!note){ note=el('div',{'class':'sbx-veille'},'module en veille — aucune requête tant qu’il dort'); (c.querySelector('.ap-vue')||c).appendChild(note); }
+    else if(!dort&&note) note.remove();
+  }
+  function appliqueRegistre(d){
+    var parId={}; (d.services||[]).forEach(function(s){ parId[s.id]=s; });
+    var t=d.computed_at?d.computed_at*1000:Date.now(), iv=(d.intervalle_s||15)*1000, perime=Date.now()-t>2*iv;
+    Array.prototype.forEach.call(document.querySelectorAll('.fcard[data-embed]'),function(c){
+      var s=parId[c.getAttribute('data-embed')], st=(s&&s.status)||'nosource';
+      c.setAttribute('data-status',st);
+      if(perime) c.setAttribute('data-perime','1'); else c.removeAttribute('data-perime');
+      var pied=c.querySelector('.sbx-fcard-pied'); if(!pied){ pied=el('div',{'class':'sbx-fcard-pied'}); c.appendChild(pied); }
+      pied.textContent=(perime?'données périmées · relevé ':'Relevé ')+hhmmss(t)+(st==='idle'?' · en veille':'');
+      veille(c,st==='idle');
+    });
+  }
+  function planifieRegistre(){ clearTimeout(regTm); regTm=setTimeout(sondeRegistre,regRetard); }
+  function sondeRegistre(){
+    if(document.hidden){ regRetard=REG_PAS; return planifieRegistre(); }
+    fetch('/api/v1/webos/public/services',{credentials:'same-origin'}).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function(d){ regDernier=d; regRetard=REG_PAS; appliqueRegistre(d); })
+      .catch(function(){ regRetard=Math.min(regRetard*2,60000); if(regDernier) appliqueRegistre(regDernier); })
+      .then(planifieRegistre);
+  }
+  function registre(){
+    sondeRegistre();
+    document.addEventListener('visibilitychange',function(){ if(!document.hidden){ regRetard=REG_PAS; sondeRegistre(); } });
+    // Le Hall redessine la mosaïque (registre, favoris) : on repose statut et pied sur les nouvelles cartes.
+    ['featgrid','favbande'].forEach(function(id){ var z=document.getElementById(id); if(z) new MutationObserver(function(){ if(regDernier) appliqueRegistre(regDernier); }).observe(z,{childList:true}); });
   }
   function composants(cb){
     if(window.SbxUI) return cb();
@@ -234,7 +277,7 @@
     if(theme){ actions.insertBefore(dispo,theme); actions.insertBefore(notif,theme); theme.innerHTML=ico('theme'); theme.insertAdjacentElement('afterend',version); }
     else { actions.appendChild(dispo); actions.appendChild(notif); actions.appendChild(version); }
     var av=$('#who .av'); if(av) av.innerHTML=ico('usager');
-    de(); composants(hero);
+    de(); composants(hero); registre();
 
     // Corps : sidebar + zone principale.
     var corps=el('div',{'class':'sbx-corps'});
