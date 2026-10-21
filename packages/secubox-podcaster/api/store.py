@@ -209,6 +209,12 @@ def list_feeds() -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def get_feed(feed_id: int) -> dict | None:
+    with _conn() as c:
+        r = c.execute("SELECT * FROM feeds WHERE id=?", (feed_id,)).fetchone()
+        return dict(r) if r else None
+
+
 def delete_feed(feed_id: int) -> None:
     with _conn() as c:
         c.execute("DELETE FROM feeds WHERE id=?", (feed_id,))
@@ -267,16 +273,18 @@ def set_episode(ep_id: int, **fields: Any) -> None:
         c.execute(f"UPDATE episodes SET {cols} WHERE id=?", (*fields.values(), ep_id))
 
 
-def downloaded_episodes(limit: int = 500) -> list[dict]:
-    """Episodes with a local file — the shareable library."""
+def downloaded_episodes(limit: int = 500, feed_id: Optional[int] = None) -> list[dict]:
+    """Episodes with a local file — the shareable library (optionally one feed's, #2998)."""
+    q = ("SELECT e.*, f.title AS feed_title, f.image AS feed_image FROM episodes e JOIN feeds f ON f.id=e.feed_id "
+         "WHERE e.state='done' AND e.local_path IS NOT NULL ")
+    args: list = []
+    if feed_id is not None:
+        q += "AND e.feed_id=? "
+        args.append(feed_id)
+    q += "ORDER BY CASE WHEN f.url LIKE 'audiobook:%' THEN e.pubdate ELSE -e.pubdate END ASC LIMIT ?"
+    args.append(limit)
     with _conn() as c:
-        rows = c.execute(
-            "SELECT e.*, f.title AS feed_title FROM episodes e JOIN feeds f ON f.id=e.feed_id "
-            "WHERE e.state='done' AND e.local_path IS NOT NULL "
-            "ORDER BY CASE WHEN f.url LIKE 'audiobook:%' "
-            "THEN e.pubdate ELSE -e.pubdate END ASC LIMIT ?", (limit,)
-        ).fetchall()
-        return [dict(r) for r in rows]
+        return [dict(r) for r in c.execute(q, args).fetchall()]
 
 
 def counts() -> dict:

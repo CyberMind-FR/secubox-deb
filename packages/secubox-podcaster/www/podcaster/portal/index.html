@@ -54,6 +54,21 @@
   .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
   .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
   .filtres{display:flex;gap:8px;flex-wrap:wrap}
+  /* MOSAÏQUE DES PODCASTS (#2998) : un podcast = une tuile cliquable (pochette, titre, épisodes, dernière parution) et SON flux RSS. */
+  .pods{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));margin-top:8px}
+  .pod{position:relative;border:1px solid var(--trait);border-radius:12px;background:rgba(8,18,38,.55);min-width:0}
+  .pod:hover{border-color:var(--cyan)} .pod.on{border-color:var(--violet);box-shadow:0 0 0 1px var(--violet) inset;background:rgba(167,139,250,.10)}
+  .pod .ouvre{display:flex;flex-direction:column;gap:6px;width:100%;height:100%;padding:8px;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;border-radius:12px;min-width:0}
+  .pod .ouvre:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
+  .pod .podrss{position:absolute;top:12px;right:12px}
+  .pod .poch{aspect-ratio:1;width:100%;border-radius:8px;overflow:hidden;background:linear-gradient(160deg,rgba(41,182,246,.25),rgba(167,139,250,.25));display:grid;place-items:center}
+  .pod .poch img{width:100%;height:100%;object-fit:cover;display:block} .pod .initiale{font-size:2.2rem;font-weight:800;color:var(--texte);opacity:.8}
+  .pod .ptitre{font-weight:700;font-size:.84rem;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+  .pod .pdesc{color:var(--faible);font-size:.68rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+  .pod .pmeta{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;color:var(--doux);font-size:.7rem;font-variant-numeric:tabular-nums;margin-top:auto}
+  .pod .pmeta b{color:var(--cyan)}
+  .pod .podrss{font-size:.68rem;padding:2px 8px;border-radius:999px;border:1px solid var(--trait2);color:var(--texte);text-decoration:none;background:rgba(6,13,27,.85)}
+  .pod .podrss:hover{border-color:var(--cyan)}
   .chip{font:inherit;font-size:.76rem;padding:5px 12px;border-radius:999px;border:1px solid var(--trait);background:rgba(159,179,214,.08);color:var(--doux);cursor:pointer;min-height:30px;max-width:100%;overflow-wrap:anywhere;text-align:left}
   .chip:hover{border-color:var(--cyan)} .chip.on{color:var(--violet);border-color:var(--violet);background:rgba(167,139,250,.14)}
   .zipbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -106,7 +121,11 @@
     <div class="tuile" title="Somme des tailles annoncées (bytes) des épisodes. Partielle si certains épisodes n’annoncent pas leur taille : le nombre d’épisodes mesurés est alors indiqué."><span class="l">Volume</span><span class="v" id="tVolume">—</span><span class="s" id="sVolume">taille cumulée</span></div>
   </section>
 
-  <div class="pan filtres-pan" id="filtresPan" hidden><div class="filtres" id="filters" role="group" aria-label="Filtrer par flux"></div></div>
+  <div class="pan filtres-pan" id="filtresPan" hidden>
+    <h3>Podcasts <i id="nPod"></i></h3>
+    <div class="filtres" id="chips" role="group" aria-label="Filtrer par flux"></div>
+    <div class="pods" id="filters" role="group" aria-label="Choisir un podcast"></div>
+  </div>
   <div class="zipbar" id="zipbar"></div>
 
   <div class="pan"><h3>Épisodes <i id="nEp"></i></h3>
@@ -135,7 +154,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var el = function (tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 
-  var DATA = { episodes: [], feeds: {} }, FILT = null, LISTE_SIG = '', SESSION_OK = true, CHARGE = false, OK = false;
+  var DATA = { episodes: [], feeds: {}, podcasts: [] }, FILT = null, LISTE_SIG = '', SESSION_OK = true, CHARGE = false, OK = false;
 
   function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
   function entetes() { var h = { Accept: 'application/json' }, t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
@@ -145,12 +164,30 @@
     return (n / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1).replace('.', ',') + ' ' + u[i];
   }
   function jour(ts) { if (!ts) return ''; var d = new Date(ts * 1000); return isNaN(d) ? '' : d.toLocaleDateString('fr-FR'); }
-  function rssUrl() { return location.origin + API + '/share/feed.xml'; }
+  // L'adresse copiée est celle du podcast choisi (son flux propre, #2998), sinon celle du flux global.
+  function podChoisi() { var p = null; (DATA.podcasts || []).forEach(function (x) { if (FILT && x.title === FILT) p = x; }); return p; }
+  function rssUrl() { var p = podChoisi(); return location.origin + (p ? p.rss : API + '/share/feed.xml'); }
+
+  // Les podcasts viennent de l'API (`podcasts`) ; une API d'avant #2998 n'en donne pas : on les DÉRIVE des épisodes.
+  function podcastsDe(d) {
+    if (Array.isArray(d.podcasts) && d.podcasts.length) return d.podcasts;
+    var par = {}, ordre = [];
+    (d.episodes || []).forEach(function (e) {
+      var k = e.feed_id != null ? e.feed_id : e.feed, p = par[k];
+      if (!p) { p = par[k] = { id: e.feed_id, title: e.feed || 'Podcast', description: null, image: null, episodes: 0, last: 0, bytes: 0,
+        rss: API + '/share/feed/' + encodeURIComponent(e.feed_id) + '.xml', zip: API + '/public/feed/' + encodeURIComponent(e.feed_id) + '/zip' }; ordre.push(p); }
+      p.episodes++; p.last = Math.max(p.last, e.pubdate || 0); p.bytes += e.bytes || 0;
+    });
+    return ordre;
+  }
 
   // ----- Données de démonstration (noms fictifs, aucun média) -----
   function demoData() {
     var t = Math.floor(Date.now() / 1000), j = 86400;
-    DATA = { title: 'Podcasts de démonstration', feeds: { 'Atelier du samedi': 2, 'Chronique du réseau': 2 }, episodes: [
+    DATA = { title: 'Podcasts de démonstration', feeds: { 'Atelier du samedi': 2, 'Chronique du réseau': 2 }, podcasts: [
+      { id: 1, title: 'Atelier du samedi', description: 'Bricolages et réseaux, chaque semaine.', image: null, episodes: 2, last: t - 2 * j, bytes: 52428800, rss: API + '/share/feed/1.xml', zip: API + '/public/feed/1/zip' },
+      { id: 2, title: 'Chronique du réseau', description: null, image: null, episodes: 2, last: t - 1 * j, bytes: 12582912, rss: API + '/share/feed/2.xml', zip: API + '/public/feed/2/zip' }
+    ], episodes: [
       { id: 9001, title: 'Premier épisode d’exemple', feed: 'Atelier du samedi', feed_id: 1, pubdate: t - 2 * j, duration: '24:10', bytes: 23068672 },
       { id: 9002, title: 'Deuxième épisode d’exemple', feed: 'Atelier du samedi', feed_id: 1, pubdate: t - 9 * j, duration: '31:02', bytes: 29360128 },
       { id: 9003, title: 'Brèves de la semaine', feed: 'Chronique du réseau', feed_id: 2, pubdate: t - 1 * j, duration: '12:45', bytes: 12582912 },
@@ -165,6 +202,7 @@
       return r.json();
     }).then(function (d) {
       DATA = { title: d.title, episodes: Array.isArray(d.episodes) ? d.episodes : [], feeds: d.feeds && typeof d.feeds === 'object' ? d.feeds : {} };
+      DATA.podcasts = podcastsDe({ podcasts: d.podcasts, episodes: DATA.episodes });
       SESSION_OK = true; OK = true; CHARGE = true;
       $('erreur').hidden = true;
       rendreTout(false);
@@ -200,15 +238,38 @@
     annoncer();
   }
 
+  // Mosaïque des podcasts (#2998) : une tuile par podcast, son nombre d'épisodes, sa dernière parution et SON flux RSS ;
+  // la puce « Tous » rend la liste complète. Le panneau n'apparaît qu'avec au moins un podcast.
   function filtres(feeds) {
-    var fl = $('filters'); fl.replaceChildren();
-    $('filtresPan').hidden = !(feeds.length > 1);
-    if (feeds.length > 1) {
-      var tous = el('button', 'chip' + (FILT === null ? ' on' : ''), 'Tous'); tous.type = 'button'; tous.addEventListener('click', function () { setF(null); }); fl.appendChild(tous);
-      feeds.forEach(function (f) {
-        var c = el('button', 'chip' + (FILT === f ? ' on' : ''), f + ' · ' + DATA.feeds[f]); c.type = 'button'; c.addEventListener('click', function () { setF(f); }); fl.appendChild(c);
-      });
-    }
+    var fl = $('filters'), ch = $('chips'), pods = OK ? (DATA.podcasts || []) : [];
+    fl.replaceChildren(); ch.replaceChildren();
+    $('filtresPan').hidden = !pods.length;
+    $('nPod').textContent = pods.length ? pods.length + ' podcast' + (pods.length > 1 ? 's' : '') + ' · chacun avec son flux RSS' : '';
+    if (!pods.length) return;
+    var tous = el('button', 'chip' + (FILT === null ? ' on' : ''), 'Tous'); tous.type = 'button'; tous.addEventListener('click', function () { setF(null); }); ch.appendChild(tous);
+    pods.forEach(function (p) {
+      // UN bouton par tuile (pochette, titre, description, compte, date) + le lien RSS à côté : un lien ne se niche pas dans un bouton.
+      var t = el('div', 'pod' + (FILT === p.title ? ' on' : '')); t.setAttribute('data-id', p.id);
+      var b = el('button', 'ouvre'); b.type = 'button'; b.setAttribute('aria-pressed', FILT === p.title ? 'true' : 'false');
+      var poch = el('div', 'poch'); poch.setAttribute('aria-hidden', 'true');   // décor : le nom du bouton est le titre
+      if (p.image && !DEMO) {
+        var im = document.createElement('img'); im.alt = ''; im.loading = 'lazy'; im.referrerPolicy = 'no-referrer'; im.src = p.image;
+        im.addEventListener('error', function () { poch.replaceChildren(el('span', 'initiale', (p.title || '?').charAt(0).toUpperCase())); });
+        poch.appendChild(im);
+      } else poch.appendChild(el('span', 'initiale', (p.title || '?').charAt(0).toUpperCase()));
+      b.appendChild(poch);
+      b.appendChild(el('div', 'ptitre', p.title));
+      if (p.description) b.appendChild(el('div', 'pdesc', p.description));
+      var m = el('div', 'pmeta'); var n = el('span', '', ''); n.appendChild(el('b', '', String(p.episodes))); n.appendChild(document.createTextNode(' épisode' + (p.episodes > 1 ? 's' : ''))); m.appendChild(n);
+      if (p.last) m.appendChild(el('span', '', jour(p.last)));
+      b.appendChild(m);
+      b.addEventListener('click', function () { setF(p.title); });
+      t.appendChild(b);
+      var r = el('a', 'podrss', '📡 RSS'); r.href = p.rss; r.target = '_blank'; r.rel = 'noopener'; r.title = 'Flux RSS de ce podcast seul : ' + p.title; r.setAttribute('aria-label', 'Flux RSS : ' + p.title);
+      if (DEMO) r.addEventListener('click', function (ev) { ev.preventDefault(); retour(false, 'Démonstration : aucun flux n’est servi.'); });
+      t.appendChild(r);
+      fl.appendChild(t);
+    });
   }
 
   // FLUX DANS LA MÉGABARRE CONTEXTUELLE DU HALL (#1238b). Embarqué, la barre de filtres est masquée (le Hall porte le
@@ -240,14 +301,18 @@
     var cible = $('list'), eps = OK ? DATA.episodes : [];
     if (FILT) eps = eps.filter(function (e) { return e.feed === FILT; });
     $('nEp').textContent = eps.length ? eps.length + ' épisode' + (eps.length > 1 ? 's' : '') + (FILT ? ' · ' + FILT : '') : '';
-    // Bouton « tout télécharger » (ZIP) quand un seul flux est affiché.
+    // Un podcast choisi : « tout télécharger » (ZIP) puis SON flux RSS (#2998).
     var zb = $('zipbar'); zb.replaceChildren();
-    var fid = eps.length ? eps[0].feed_id : null;
+    var fid = eps.length ? eps[0].feed_id : null, pod = podChoisi();
     if (FILT && fid != null) {
       var z = el('a', 'btn bon', '⬇ Tout télécharger (ZIP) · ' + FILT); z.href = API + '/public/feed/' + encodeURIComponent(fid) + '/zip';
       z.title = 'Archive ZIP de tous les épisodes de ce flux (GET /public/feed/' + fid + '/zip)';
       if (DEMO) z.addEventListener('click', function (ev) { ev.preventDefault(); retour(false, 'Démonstration : aucun fichier n’est servi.'); });
       zb.appendChild(z);
+      var fx = el('a', 'btn prim podflux', '📡 Flux RSS de ce podcast'); fx.href = pod ? pod.rss : API + '/share/feed/' + encodeURIComponent(fid) + '.xml';
+      fx.target = '_blank'; fx.rel = 'noopener'; fx.title = 'Adresse du flux RSS de « ' + FILT + ' » seul (GET /share/feed/' + fid + '.xml)';
+      if (DEMO) fx.addEventListener('click', function (ev) { ev.preventDefault(); retour(false, 'Démonstration : aucun flux n’est servi.'); });
+      zb.appendChild(fx);
     }
     if (!eps.length) {
       cible.replaceChildren(el('div', 'vide', !SESSION_OK || !OK ? '—' : CHARGE ? 'Aucun épisode publié pour le moment.' : '—'));

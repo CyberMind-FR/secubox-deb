@@ -179,7 +179,7 @@ def test_demonstration_annoncee_sans_aucun_appel(navigateur):
     p.locator(".ep a.btn").first.click()
     p.wait_for_function("document.getElementById('rActions').textContent.includes('Démonstration')")
     p.get_by_role("button", name=re.compile("Atelier")).click()
-    p.locator("#zipbar a").click()
+    p.locator("#zipbar a").first.click()      # le ZIP ; le flux RSS du podcast (#2998) le suit
     assert appels == [] and err == [] and p.natifs == []
     assert "sidebar.js" not in " ".join(p.partages)
     ctx.close()
