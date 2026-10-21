@@ -20,6 +20,11 @@ flag et la version. Phase 1bis : le dé de 3d.gk2 (« SecuBox Dice 3D », canvas
 en composant `<sbx-dice>` (8 Ko), textures en fichiers, chargé seulement en v2, figé sous
 prefers-reduced-motion, en pause hors écran, 0,29 ms/image mesuré ; le thème Plymouth `secubox-cube`
 reprend les six faces. Tests Playwright aux trois largeurs (captures dans `docs/assets/images/hall-vue-maitre/`).
+Phase 2 (même jour) : `composants.js/.css` (`window.SbxUI` : Card, Pill, StatRing, Sparkline, Tabs, Tile,
+ModuleTile, NewsItem, DeviceRow, Hero ; jetons seuls, SVG inline, statuts active/idle/offline/stale/nosource)
+et Hero vivant en tête de l'accueil v2 (horloge, radio, CPU/mémoire/stockage/réseau/E/S disque toutes les 5 s)
+sur la nouvelle route `GET /public/systeme` (`api/systeme.py` : /proc hors boucle, cache 5 s, 503 si illisible).
+PR #2997 ouverte en `ref` (l'issue couvre les phases 3-4).
 Constat : `test_ytflux_aurora_2638::test_la_route_flux_n_est_pas_ouverte_sur_le_vhost_admin` échoue déjà
 sur `master`, indépendamment de ce chantier. Dossier : `docs/dossiers/hall-vue-maitre.md`.
 

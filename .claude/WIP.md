@@ -22,9 +22,11 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - **Fait (phases 1 + 1bis, secubox-webos 1.15.0, branche `feature/2996-…`)** : jetons `--sbx-*` (`tokens.css`), coque v2
   (`hall-v2.css/js` : topbar, sidebar 220 px, rail à 980, barre d'onglets à 720) derrière le flag `hall_v2` de `webos.toml`
   (prévisualisation `?hall=v2`), route `GET /public/etat`, dé SecuBox `<sbx-dice>` extrait de 3d.gk2 (sans iframe), mêmes
-  faces pour le thème Plymouth `secubox-cube`. Dossier : `docs/dossiers/hall-vue-maitre.md`.
-- ⬜ **Next Up** : GO de l'utilisateur sur la phase 1, puis phase 2 (composants `Card`, `Hero` + option `hall.v2.hero-dice`,
-  `StatRing`, `Sparkline`, `Tabs`, `Pill`, `Tile`, `ModuleTile`, `NewsItem`, `DeviceRow`) ; mesure du dé sur RPi4.
+  faces pour le thème Plymouth `secubox-cube`. PR #2997 (ref, pas closes). Dossier : `docs/dossiers/hall-vue-maitre.md`.
+- **Fait (phase 2)** : `composants.js/.css` (`window.SbxUI` : Card, Pill, StatRing, Sparkline, Tabs, Tile, ModuleTile, NewsItem,
+  DeviceRow, Hero), Hero vivant dans l'accueil v2 (CPU, mémoire, stockage, réseau, E/S disque, radio) sur `GET /public/systeme`.
+- ⬜ **Next Up** : GO sur la phase 2, puis phase 3 (statut typé côté API, « Relevé », chargement différé, dock Radio) ; à trancher :
+  reprise du relevé système dans les courbes de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
 
 ## 🔄 Chantier en cours — ESPRESSObin lgm-ebin, client `lgm` beta (2026-10-16)
 

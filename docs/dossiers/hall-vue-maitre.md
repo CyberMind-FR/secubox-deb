@@ -188,10 +188,26 @@ attends mon GO entre chaque phase.
   `tests/test_dice_2996.py` (budget, interdits, textures, Plymouth, rotation, survol, reduced-motion, mobile).
   Mesure : dessin moyen **0,29 ms/image** à 36 px dans Chromium (poste de développement).
 
+### Phase 2 — composants (2026-10-21)
+
+- `www/hall/composants.js` (`window.SbxUI`) et `composants.css` : `Card` (en-tête icône, titre, pastille de
+  statut, action ›, pied « Relevé HH:MM:SS »), `Pill`, `StatRing` (conic-gradient), `Sparkline` (barres),
+  `Tabs` (rôles ARIA, flèches), `Tile` (auto-fill 104 px), `ModuleTile`, `NewsItem` (vignette 16/10),
+  `DeviceRow` (icône, nom, IP mono, lien, ancienneté), `Hero`. Tout lit les jetons ; aucune règle par module.
+- Statuts `{active, idle, offline, stale, nosource}` → libellé, ton et opacité par CSS.
+- `Hero` en tête de l'accueil v2 : salutation, date, horloge, titre radio en cours, et cinq statistiques
+  vivantes (processeur, mémoire, stockage, réseau, **E/S disque**) lues toutes les 5 s sur
+  `GET /api/v1/webos/public/systeme` (`/proc` hors boucle, cache 5 s, compteurs cumulés → différences côté client).
+
+![Hero à 1440 px](../assets/images/hall-vue-maitre/hall-v2-1440-hero.png)
+
+![Catalogue des composants](../assets/images/hall-vue-maitre/hall-v2-catalogue.png)
+
 ## 6. Reste à faire
 
-- Phase 2 : composants `Card`, `Hero` (avec option `hall.v2.hero-dice`), `StatRing`, `Sparkline`, `Tabs`,
-  `Pill`, `Tile`, `ModuleTile`, `NewsItem`, `DeviceRow`.
+- Phase 2, reste : option `hall.v2.hero-dice` (dé de 96 px derrière l'heure), reportée avec la carte « Bonjour ».
+- Hors périmètre du Hall, à confirmer : reprendre le relevé `/public/systeme` (dont les E/S) dans les courbes de
+  `secubox-metrics` (« Système en direct »).
 - Phase 3 : `status` typé {active, idle, offline, stale, nosource}, « Relevé HH:MM:SS », chargement différé,
   dock Radio persistant.
 - Phase 4 : migration dans l'ordre du prompt ; les cartes non migrées sous « Tous les modules ».

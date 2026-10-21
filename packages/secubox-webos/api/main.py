@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse, Response
 from secubox_core.auth import require_session, require_personne, create_token, domaine_box
 from secubox_core.health import systemd_batch
 from api.models import Service
-from api import registry, flags, cardlets, actions, aide, hotes
+from api import registry, flags, cardlets, actions, aide, hotes, systeme
 from secubox_core.auth import require_lecture
 
 _cache: dict = {"services": [], "computed_at": None}
@@ -118,6 +118,24 @@ _PUBLIC_FIELDS = ("id", "name", "description", "category", "icon", "installed", 
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
+
+
+_sys = {"d": None, "t": 0.0}
+
+
+@public_router.get("/systeme")
+async def public_systeme():
+    """Relevé système du Hero (CPU, mémoire, disque, réseau) : /proc hors boucle, cache 5 s, rien de nominatif."""
+    now = time.time()
+    if _sys["d"] and now - _sys["t"] < 5:
+        return _sys["d"]
+    try:
+        _sys["d"] = await asyncio.to_thread(systeme.releve)
+        _sys["t"] = now
+    except OSError as exc:
+        logging.getLogger(__name__).warning("relevé système impossible : %s", exc)
+        return JSONResponse({"detail": "relevé indisponible"}, status_code=503)
+    return _sys["d"]
 
 
 @public_router.get("/etat")

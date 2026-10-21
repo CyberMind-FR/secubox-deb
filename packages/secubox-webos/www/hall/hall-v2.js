@@ -177,6 +177,29 @@
     var s=document.createElement('script'); s.src='/sbx-dice.js'; s.onload=pose; document.head.appendChild(s);
   }
 
+  // ── Hero : salutation, horloge, système (≤ 5 s), titre radio ───────────
+  function hero(){
+    var vue=document.getElementById('view-accueil'); if(!vue||!window.SbxUI) return;
+    var h=window.SbxUI.Hero({nom:(($('#who-nom')||{}).textContent||'').trim()});
+    vue.insertBefore(h,vue.firstChild);
+    setInterval(function(){ h.sbxHorloge(); },1000);
+    var who=$('#who-nom'); if(who) new MutationObserver(function(){ h.sbxNom(who.textContent.trim()); }).observe(who,{childList:true,characterData:true,subtree:true});
+    var dernier=0;
+    function sonde(){
+      if(document.hidden||vue.classList.contains('hidden')) return;
+      fetch('/api/v1/webos/public/systeme',{credentials:'same-origin'}).then(function(r){ return r.ok?r.json():null; }).then(function(d){ if(d){ h.sbxSysteme(d); dernier=Date.now(); h.removeAttribute('data-stale'); } })
+        .catch(function(){}).then(function(){ if(dernier&&Date.now()-dernier>10000) h.setAttribute('data-stale','1'); });
+      fetch('/api/v1/webos/public/cardlets/radio',{credentials:'same-origin'}).then(function(r){ return r.ok?r.json():null; })
+        .then(function(c){ var ok=c&&c.status==='online'&&!c.silence&&c.content; h.sbxRadio(ok?c.content.title:'',ok?c.content.subtitle:''); }).catch(function(){});
+    }
+    sonde(); setInterval(sonde,5000);
+    document.addEventListener('visibilitychange',function(){ if(!document.hidden) sonde(); });
+  }
+  function composants(cb){
+    if(window.SbxUI) return cb();
+    var s=document.createElement('script'); s.src='/composants.js'; s.onload=cb; document.head.appendChild(s);
+  }
+
   // ── Construction ───────────────────────────────────────────────────────
   function construis(){
     if(construit||root.getAttribute('data-hall')!=='v2') return;
@@ -193,7 +216,7 @@
     if(theme){ actions.insertBefore(dispo,theme); actions.insertBefore(notif,theme); theme.innerHTML=ico('theme'); theme.insertAdjacentElement('afterend',version); }
     else { actions.appendChild(dispo); actions.appendChild(notif); actions.appendChild(version); }
     var av=$('#who .av'); if(av) av.innerHTML=ico('usager');
-    de();
+    de(); composants(hero);
 
     // Corps : sidebar + zone principale.
     var corps=el('div',{'class':'sbx-corps'});

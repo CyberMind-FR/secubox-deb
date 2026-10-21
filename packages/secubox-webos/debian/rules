@@ -49,6 +49,8 @@ override_dh_auto_install:
 	install -m 0644 www/hall/hall-v2.css $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/hall-v2.css
 	install -m 0644 www/hall/hall-v2.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/hall-v2.js
 	install -m 0644 www/hall/sbx-dice.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/sbx-dice.js
+	install -m 0644 www/hall/composants.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/composants.js
+	install -m 0644 www/hall/composants.css $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/composants.css
 	install -d $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/dice
 	install -m 0644 www/hall/dice/*.jpg $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/dice/
 	install -m 0644 www/hall/hls.min.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/hls.min.js
