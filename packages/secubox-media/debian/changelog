@@ -1,3 +1,10 @@
+secubox-media (1.9.2-1~trixie1) trixie; urgency=medium
+
+  * Recommends: cifs-utils (ref #3000) — client SMB (mount.cifs) présent sur la box,
+    prérequis d'un montage temporaire de partages distants depuis le navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 23:10:00 +0200
+
 secubox-media (1.9.1-1~trixie1) trixie; urgency=medium
 
   * smbctl status (ref #3000) : module et écoute 445 détectés sans `cmd | grep -q` —
