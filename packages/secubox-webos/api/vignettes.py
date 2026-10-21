@@ -18,7 +18,11 @@ from __future__ import annotations
 import fcntl
 import json
 import os
-from datetime import date
+import re
+import ssl
+import urllib.error
+import urllib.request
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -29,6 +33,47 @@ CA = "/usr/share/secubox/egress-ca.pem"
 # presque jamais capturer ; l'unité borne déjà Chromium (CPUQuota 20 %, Nice 19, E/S idle).
 LOAD_THRESHOLD = 8.0
 LOCK_NAME = ".lock"
+SANS_PAGE = "sans-page.json"
+
+
+def sonde(url: str, timeout: float = 10.0, ca: Optional[str] = CA) -> tuple[bool, str]:
+    """Avant Chromium : la page existe-t-elle vraiment ? Un vhost non exposé répond 421 (le WAF), une page de
+    connexion ou d'erreur n'est pas une vignette. Lecture bornée (64 Ko), jamais de capture ici."""
+    ctx = ssl.create_default_context()
+    if ca and Path(ca).is_file():
+        try:
+            ctx.load_verify_locations(ca)
+        except ssl.SSLError:
+            pass
+    req = urllib.request.Request(url, headers={"User-Agent": "secubox-webos-vignettes", "Accept": "text/html"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
+            if r.status != 200:
+                return False, f"http {r.status}"
+            corps = r.read(65536).decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        return False, f"http {exc.code}"
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return False, f"injoignable : {exc}"[:120]
+    m = re.search(r"<title>([^<]*)", corps, re.I)
+    titre = (m.group(1) if m else "").strip()
+    if re.search(r"\b421\b|\b50\d\b|connexion|login|introuvable|not found", titre, re.I) or 'id="login' in corps:
+        return False, f"page de connexion ou d'erreur : {titre[:60]}"
+    return True, titre
+
+
+def marque_sans_page(cache_dir: Path, sid: str, fp: str, raison: str) -> None:
+    d = cache_dir / sid
+    d.mkdir(mode=0o755, parents=True, exist_ok=True)
+    (d / SANS_PAGE).write_text(json.dumps({"fingerprint": fp, "raison": raison,
+                                           "captured_at": datetime.now(timezone.utc).isoformat()}))
+
+
+def sans_page_frais(cache_dir: Path, sid: str, fp: str) -> bool:
+    try:
+        return json.loads((cache_dir / sid / SANS_PAGE).read_text()).get("fingerprint") == fp
+    except (OSError, ValueError):
+        return False
 
 
 def fingerprint(domaine: str, jour: Optional[date] = None) -> str:
@@ -56,7 +101,8 @@ def pick_next(services: Iterable[dict], cache_dir: Path = CACHE_DIR, jour: Optio
     from secubox_core import screenshots
     a_faire = []
     for sid, dom in candidats(services):
-        if not screenshots.is_stale(cache_dir, sid, fingerprint(dom, jour)):
+        fp = fingerprint(dom, jour)
+        if not screenshots.is_stale(cache_dir, sid, fp) or sans_page_frais(cache_dir, sid, fp):
             continue
         meta = screenshots.read_meta(cache_dir, sid)
         a_faire.append((meta.get("captured_at") or "", sid, dom))
@@ -84,10 +130,15 @@ def acquire_lock(lock_path: Path):
     return fh
 
 
-async def capture_module(sid: str, domaine: str, cache_dir: Path = CACHE_DIR, *, ca: Optional[str] = CA, _capture=None) -> dict:
-    """Capture UN module ; un échec est enregistré (l'ancienne vignette est conservée) et renvoyé, jamais propagé."""
+async def capture_module(sid: str, domaine: str, cache_dir: Path = CACHE_DIR, *, ca: Optional[str] = CA, _capture=None, _sonde=None) -> dict:
+    """Capture UN module ; un échec est enregistré (l'ancienne vignette est conservée) et renvoyé, jamais propagé.
+    Sans page réelle (421, erreur, connexion), on note « sans page » pour la semaine et Chromium ne démarre pas."""
     from secubox_core import screenshots, shotter
     url = f"https://{domaine}/?theme=dark&embed=1"
+    ok, raison = (_sonde or sonde)(url)
+    if not ok:
+        marque_sans_page(cache_dir, sid, fingerprint(domaine), raison)
+        return {"ok": False, "id": sid, "url": url, "sans_page": True, "error": raison}
     capture = _capture or (lambda u: shotter.capture(u, wait=shotter.wait_static_ready, ca=ca if ca and Path(ca).is_file() else None))
     try:
         png = await capture(url)
@@ -128,7 +179,7 @@ def main(argv=None) -> int:
             return 0
         res = asyncio.run(capture_module(choix[0], choix[1], cache_dir))
         print(json.dumps(res))
-        return 0 if res.get("ok") else 1
+        return 0 if res.get("ok") or res.get("sans_page") else 1
     finally:
         fcntl.flock(lock, fcntl.LOCK_UN)
         lock.close()

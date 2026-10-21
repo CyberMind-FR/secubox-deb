@@ -60,11 +60,51 @@ def test_capture_module_enregistre_et_un_echec_garde_l_ancienne(tmp_path):
 
     async def ko(url):
         raise shotter.ShotError("boum")
-    r = asyncio.run(vignettes.capture_module("radio", "radio.sbx.test", tmp_path, _capture=ok))
+    oui = lambda u: (True, "Radio")  # noqa: E731
+    r = asyncio.run(vignettes.capture_module("radio", "radio.sbx.test", tmp_path, _capture=ok, _sonde=oui))
     assert r["ok"] and screenshots.png_path(tmp_path, "radio").read_bytes() == PNG
-    r = asyncio.run(vignettes.capture_module("radio", "radio.sbx.test", tmp_path, _capture=ko))
+    r = asyncio.run(vignettes.capture_module("radio", "radio.sbx.test", tmp_path, _capture=ko, _sonde=oui))
     assert r["ok"] is False and "boum" in r["error"]
     assert screenshots.png_path(tmp_path, "radio").read_bytes() == PNG
+
+
+def test_sans_page_reelle_chromium_ne_demarre_pas_et_le_module_est_ecarte_pour_la_semaine(tmp_path):
+    appels = []
+
+    async def jamais(url):
+        appels.append(url)
+        return PNG
+    non = lambda u: (False, "http 421")  # noqa: E731
+    r = asyncio.run(vignettes.capture_module("waf", "waf.sbx.test", tmp_path, _capture=jamais, _sonde=non))
+    assert r["sans_page"] and not appels and not screenshots.png_path(tmp_path, "waf").exists()
+    fp = vignettes.fingerprint("waf.sbx.test")
+    assert vignettes.sans_page_frais(tmp_path, "waf", fp) and not vignettes.sans_page_frais(tmp_path, "waf", "autre")
+    assert vignettes.pick_next([SERVICES[1]], tmp_path) is None     # écarté ce tour-ci et jusqu'à la semaine prochaine
+    assert vignettes.pick_next([SERVICES[1]], tmp_path, date(2027, 1, 6)) == ("waf", "waf.sbx.test")
+
+
+def test_la_sonde_refuse_421_erreur_et_connexion(monkeypatch):
+    import io
+
+    class Rep(io.BytesIO):
+        def __init__(self, status, corps):
+            super().__init__(corps)
+            self.status = status
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+    reponses = {"https://a/": Rep(200, b"<html><title>421 \xc2\xb7 Requ\xc3\xaate mal aiguill\xc3\xa9e</title>"),
+                "https://b/": Rep(200, b"<html><title>SecuBox \xe2\x80\x94 Connexion</title>"),
+                "https://c/": Rep(200, b"<html><title>SBXWAF \xe2\x80\x94 le pare-feu</title><body>ok</body>"),
+                "https://d/": Rep(503, b"")}
+    monkeypatch.setattr(vignettes.urllib.request, "urlopen", lambda req, timeout, context: reponses[req.full_url])
+    assert vignettes.sonde("https://a/", ca=None)[0] is False
+    assert vignettes.sonde("https://b/", ca=None)[0] is False
+    assert vignettes.sonde("https://c/", ca=None) == (True, "SBXWAF — le pare-feu")
+    assert vignettes.sonde("https://d/", ca=None) == (False, "http 503")
 
 
 def test_verrou_et_garde_de_charge(tmp_path, monkeypatch):
