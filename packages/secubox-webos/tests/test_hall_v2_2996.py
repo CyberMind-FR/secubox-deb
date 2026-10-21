@@ -278,6 +278,9 @@ def test_carte_d_usager_avatar_et_liens_avec_identite(nav):
             return r.fulfill(status=200, content_type="application/json", body='{"identite": {"pseudo": "gek"}, "liens": []}')
         if u == "/api/v1/avatar/par-nom/gek":
             return r.fulfill(status=200, content_type="image/jpeg", body=image)
+        if u == "/api/v1/webos/public/services":
+            return r.fulfill(status=200, content_type="application/json",
+                             body='{"services": [{"id": "avatar", "name": "Avatar", "category": "mesh", "health": {"state": "online"}}], "computed_at": 1}')
         if u == "/api/v1/webos/public/etat":
             return r.fulfill(status=200, content_type="application/json", body='{"hall_v2": false, "version": "1.15.0-1", "en_ligne": true}')
         if u.startswith("/api/"):

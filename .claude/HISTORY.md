@@ -29,7 +29,12 @@ PR #2997 ouverte en `ref` (l'issue couvre les phases 3-4). Identité et avatar :
 `scripts/verifie-relais-hall.py`, dont les 4 écarts restants préexistent sur master) et la carte d'usager v2
 montre l'image du pseudo sbxid, avec liens « Mes comptes » et « Mon identité ». Bannière
 `docs/assets/secubox-eyemote-banner.svg` régénérée dans la palette de la vue maître (chiffres à jour :
-1 203 paquets, 118 modules, 3.0.0-α18).
+1 203 paquets, 118 modules, 3.0.0-α18). **Déployé** sur gk2 le même jour : webos 1.15.0 puis 1.15.1 (l'image
+d'avatar n'est demandée que si le module est en ligne — il dort en scale-to-zero, le relais répondait 502 ;
+bouton Lexie en picto sous 720 px) et avatar 1.4.0, publiés dans la suite `trixie`. Vérifié par le chemin
+public et dans Chromium sur `hall.gk2.secubox.in/?hall=v2` (captures `hall-v2-gk2-*.png`). Décision du
+propriétaire : **trixie est la suite par défaut** des scripts de build (`build-packages.sh`, `build-all-local.sh`,
+`build-add-local.sh`) et des nouvelles entrées de changelog (`~trixie1`), AGENTS.md mis à jour.
 Constat : `test_ytflux_aurora_2638::test_la_route_flux_n_est_pas_ouverte_sur_le_vhost_admin` échoue déjà
 sur `master`, indépendamment de ce chantier. Dossier : `docs/dossiers/hall-vue-maitre.md`.
 

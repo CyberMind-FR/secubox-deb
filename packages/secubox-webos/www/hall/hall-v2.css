@@ -128,6 +128,8 @@
   [data-hall="v2"] #sbx-dispo{display:none}
   [data-hall="v2"] .sbx-version{padding:0 8px}
   [data-hall="v2"] .sbx-version .txt{display:none}
+  [data-hall="v2"] .lexie-bouton{width:44px;height:44px;padding:0;justify-content:center;font-size:0}
+  [data-hall="v2"] .lexie-bouton .lexie-pastille{width:12px;height:12px}
   [data-hall="v2"] .statusbar{display:none}
   [data-hall="v2"]{--sb-h:var(--sbx-tabbar)}
   [data-hall="v2"] .mediadock{bottom:var(--sbx-tabbar)}

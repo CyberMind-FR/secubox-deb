@@ -213,6 +213,16 @@ attends mon GO entre chaque phase.
   ouverts avec la session du Hall) et **Mon identité** (`/identite/`). L'Identity Manager de l'administration
   (`admin.<domaine>/avatar/`) reste le lieu où l'on crée l'identité et dépose l'image.
 
+### Déployé sur gk2 (2026-10-21)
+
+`secubox-webos` 1.15.1 et `secubox-avatar` 1.4.0 installés sur gk2 (trixie) et publiés dans la suite `trixie`
+d'`apt.secubox.in`. Flag `hall_v2` laissé à faux : le Hall classique reste le défaut, la coque se prévisualise par
+`https://hall.gk2.secubox.in/?hall=v2`. Rendu réel dans Chromium (aucune erreur de page, dé à 0,13 ms/image) :
+
+![gk2 en v2 à 1440 px](../assets/images/hall-vue-maitre/hall-v2-gk2-1440.png)
+
+![gk2 en v2 à 390 px](../assets/images/hall-vue-maitre/hall-v2-gk2-390.png)
+
 ## 6. Reste à faire
 
 - Phase 2, reste : option `hall.v2.hero-dice` (dé de 96 px derrière l'heure), reportée avec la carte « Bonjour ».

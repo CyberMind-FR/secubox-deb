@@ -25,7 +25,8 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   faces pour le thème Plymouth `secubox-cube`. PR #2997 (ref, pas closes). Dossier : `docs/dossiers/hall-vue-maitre.md`.
 - **Fait (phase 2)** : `composants.js/.css` (`window.SbxUI` : Card, Pill, StatRing, Sparkline, Tabs, Tile, ModuleTile, NewsItem,
   DeviceRow, Hero), Hero vivant dans l'accueil v2 (CPU, mémoire, stockage, réseau, E/S disque, radio) sur `GET /public/systeme`.
-- ⬜ **Next Up** : GO sur la phase 2, puis phase 3 (statut typé côté API, « Relevé », chargement différé, dock Radio) ; à trancher :
+- **Déployé** (2026-10-21) : webos 1.15.1 + avatar 1.4.0 sur gk2, suite `trixie` du dépôt ; `hall_v2 = false` (prévisualisation `?hall=v2`).
+- ⬜ **Next Up** : phase 3 (statut typé côté API, « Relevé », chargement différé, dock Radio) ; à trancher :
   reprise du relevé système dans les courbes de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
 
 ## 🔄 Chantier en cours — ESPRESSObin lgm-ebin, client `lgm` beta (2026-10-16)

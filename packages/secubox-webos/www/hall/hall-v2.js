@@ -148,9 +148,15 @@
       .then(function(m){
         var pseudo=m&&m.identite&&m.identite.pseudo; var liens=$('.sbx-usager-liens'); if(liens) liens.hidden=!pseudo;
         if(!pseudo||pseudo===pseudoVu||!/^[A-Za-z0-9._-]{2,64}$/.test(pseudo)) return; pseudoVu=pseudo;
-        var img=new Image(); img.alt=''; img.decoding='async';
-        img.onload=function(){ [$('.sbx-usager .av'),$('#who .av')].forEach(function(a){ if(!a) return; a.textContent=''; a.appendChild(img.cloneNode()); }); };
-        img.src='/api/v1/avatar/par-nom/'+encodeURIComponent(pseudo);
+        // Le module avatar dort entre deux usages (scale-to-zero) : on ne lui demande l'image que s'il est en ligne,
+        // sinon un 502 par visite — les initiales suffisent.
+        return fetch('/api/v1/webos/public/services',{credentials:'same-origin'}).then(function(r){ return r.ok?r.json():null; }).then(function(d){
+          var ok=d&&(d.services||[]).some(function(s){ return s.id==='avatar'&&s.health&&s.health.state==='online'; });
+          if(!ok) return;
+          var img=new Image(); img.alt=''; img.decoding='async';
+          img.onload=function(){ [$('.sbx-usager .av'),$('#who .av')].forEach(function(a){ if(!a) return; a.textContent=''; a.appendChild(img.cloneNode()); }); };
+          img.src='/api/v1/avatar/par-nom/'+encodeURIComponent(pseudo);
+        });
       }).catch(function(){});
   }
 

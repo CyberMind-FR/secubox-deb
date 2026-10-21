@@ -1,3 +1,12 @@
+secubox-webos (1.15.1-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : l'image d'avatar n'est demandée que si le module avatar est en ligne dans le
+    registre (ref #2996). Le module dort entre deux usages (scale-to-zero) : le relais répondait
+    502 à chaque visite avec session, pour une image que les initiales remplacent très bien.
+  * Hall v2, téléphone : le bouton Lexie passe en picto (44 px), il chevauchait l'avatar.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 11:20:00 +0200
+
 secubox-webos (1.15.0-1~trixie1) trixie; urgency=medium
 
   * Hall : vue maître, phase 1 (ref #2996). Jetons `--sbx-*` (`tokens.css`, thème clair par
