@@ -29,8 +29,8 @@ def test_memes_appels_reseau_qu_avant():
     for r in ("/api/v1/acces/session/etat", "/acces/appareil.js", "./mine/manifeste.json", "ouvreSiAdmis", "cloneDuHall({ profil })"):
         assert r in SRC
     assert "./offline/sw.js" in SRC
-    assert "'sbxos-v7'" in (WWW / "offline" / "sw.js").read_text(encoding="utf-8")
-    assert "--accent:#29b6f6" in CSS and "--fond:#060d1b" in CSS
+    assert "'sbxos-v8'" in (WWW / "offline" / "sw.js").read_text(encoding="utf-8")
+    assert "--sbx-fond:#070C1C" in CSS and "--accent:var(--sbx-accent-2)" in CSS
 
 
 playwright = pytest.importorskip("playwright.sync_api")

@@ -8,6 +8,9 @@ Homepage: https://secubox.in
 
 Package: secubox-webos
 Architecture: all
+# chromium alimente les vignettes de la mosaïque (secubox-webos-vignettes.timer, #2996) :
+# Recommends, pas Depends — sans lui la capture échoue proprement, la tuile garde son icône.
+Recommends: chromium
 Depends: ${misc:Depends},
  secubox-core (>= 1.5.39~),
  python3,

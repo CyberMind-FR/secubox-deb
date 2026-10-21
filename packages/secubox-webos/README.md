@@ -25,6 +25,7 @@ disponible et bascule seul quand un service apprend à se résumer.
 | **Mégabarre** | Accueil / Services / Système, recherche — **ou barre d'adresse** (une adresse tapée se surfe) |
 | **Menu profil** | identités détectées (registre RGPD), thème, « ordre actuel = défaut », connexion SecuBox |
 | **Le BiB** | voir ci-dessous |
+| **Vue maître (v2)** | coque responsive derrière le flag `hall_v2` de `/etc/secubox/webos.toml` (prévisualisation : `?hall=v2`) — jetons `tokens.css`, `hall-v2.css`, `hall-v2.js` ; état public `GET /api/v1/webos/public/etat` → `{hall_v2, version, en_ligne}` ; dé SecuBox `<sbx-dice>` (`sbx-dice.js`, textures `dice/`) dans la topbar ; composants `window.SbxUI` (`composants.js/.css` : Card, Hero, StatRing, Sparkline, Tabs, Pill, Tile, ModuleTile, NewsItem, DeviceRow) ; relevé `GET /api/v1/webos/public/systeme` → `{cpu_pct, charge, coeurs, mem, disque, reseau, es, uptime_s, releve}` ; `GET /public/services` porte `status ∈ {active, idle, offline, stale, nosource}`, `releve`, `intervalle_s` ; dossier `docs/dossiers/hall-vue-maitre.md` (#2996) |
 
 ## Les cartes du Hall
 

@@ -579,6 +579,7 @@ if [[ -d "${CUBE_SRC}" ]]; then
     cp "${CUBE_SRC}/progress-bg.png" "${PLYMOUTH_DIR}/"
     cp "${CUBE_SRC}/progress-fg.png" "${PLYMOUTH_DIR}/"
     cp "${CUBE_SRC}"/icon-*.png "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}"/face-*.png "${PLYMOUTH_DIR}/"
     log "  Copied cube theme assets from ${CUBE_SRC}"
 else
     warn "Cube theme source not found, creating minimal theme..."

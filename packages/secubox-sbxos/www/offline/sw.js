@@ -38,7 +38,7 @@
  * d'hier serve un JavaScript d'aujourd'hui.
  */
 
-const VERSION = 'sbxos-v7';
+const VERSION = 'sbxos-v8';
 const CACHE_COQUILLE = `${VERSION}-coquille`;
 const CACHE_MANIFESTE = `${VERSION}-manifeste`;
 const CACHE_MEDIAS = `${VERSION}-medias`;

@@ -1,3 +1,160 @@
+secubox-webos (1.19.8-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : rubrique « Favoris » dynamique dans la sidebar (ref #2996) — dépliable sur les
+    favoris du moment (la bande ★ de l'accueil), pastille et accès ⚙/⧉, mosaïque au clic, mise à
+    jour à chaque étoile posée ou retirée ; remplace la section statique.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 20:40:00 +0200
+
+secubox-webos (1.19.7-1~trixie1) trixie; urgency=medium
+
+  * Vignettes : sonde HTTP avant Chromium (ref #2996). Un vhost non exposé (421 du WAF), une
+    erreur ou une page de connexion ne sont plus photographiés : le module est noté « sans page »
+    pour la semaine (`sans-page.json`) et garde son icône. Les 15 captures de pages 421 déjà
+    prises sont à purger (`/var/cache/secubox/webos/shots`).
+  * Coque v2 : `Cache-Control: no-cache` sur tokens.css, hall-v2.*, composants.*, sbx-dice.js —
+    le navigateur revalide par ETag, une mise à jour se voit sans rechargement forcé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 19:50:00 +0200
+
+secubox-webos (1.19.6-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : le menu dynamique du service embarqué (titre ▾ dans la topbar, ses rubriques) est
+    rétabli (ref #2996) — contextuel, ce n'est pas un doublon de la sidebar. Services ▾ / Système ▾
+    restent portés par la sidebar.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 19:20:00 +0200
+
+secubox-webos (1.19.5-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : rubrique « Services » dans la sidebar (ref #2996) — la curation que listait le menu
+    Services ▾ (Sécurité, Renseignement, Guardian, Coffre…) n'avait plus d'entrée ; elle se déplie
+    en entier avec ⚙/⧉ et ouvre sa mosaïque.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 19:00:00 +0200
+
+secubox-webos (1.19.4-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : une seule navigation, la sidebar (décision du propriétaire, ref #2996). La topbar
+    redevient outils seulement : menus Services ▾ / Système ▾ masqués, le titre du service embarqué
+    n'ouvre plus de menu ; rubriques dépliables, accès ⚙/⧉ et sous-navigation du module vivent
+    dans la sidebar et sur les tuiles. Annule le retour des menus de 1.18.1.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 17:45:00 +0200
+
+secubox-webos (1.19.3-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : une seule sélection, à gauche (ref #2996). La rangée d'onglets au-dessus de la
+    mosaïque doublait la sidebar ; elle disparaît, « Récents » rejoint la sidebar, le titre et le
+    compte de modules suivent la rubrique.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 17:20:00 +0200
+
+secubox-webos (1.19.2-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : rubrique « Mes sites » dans la sidebar (ref #2996) — la mosaïque des sites
+    metablogizer n'était atteignable que par l'onglet Sites de « Modules ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 16:50:00 +0200
+
+secubox-webos (1.19.1-1~trixie1) trixie; urgency=medium
+
+  * Vignettes : seuil de charge 8 au lieu de 4 (ref #2996) — la box vit entre 6 et 15, l'unité borne
+    déjà Chromium (CPUQuota 20 %, Nice 19, E/S idle). Première capture validée sur gk2.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 16:30:00 +0200
+
+secubox-webos (1.19.0-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : vignettes des modules dans la mosaïque (phase 4, ref #2996). `webos-vignettes` +
+    `secubox-webos-vignettes.timer` (toutes les 3 min, un module par tour, garde de charge 4,
+    verrou, CPUQuota 20 %, Nice 19) capturent la page publique d'un module (`?theme=dark&embed=1`)
+    avec `secubox_core.shotter`, une fois par semaine et par domaine ; PNG servis en statique par
+    nginx sur `/api/v1/webos/public/vignette/{id}` ; `GET /public/services` porte `vignette`.
+    Recommends: chromium.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 16:00:00 +0200
+
+secubox-webos (1.18.1-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : les menus Services ▾ / Système ▾ de la barre reviennent (ref #2996) — la coque v2
+    les masquait, et avec eux les accès rapides ⚙️ console admin et ⧉ onglet réel de chaque
+    service. Ces deux accès sont aussi posés sur chaque tuile de la mosaïque et chaque module
+    déplié de la sidebar.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 14:10:00 +0200
+
+secubox-webos (1.18.0-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : menus liés hall ↔ admin (ref #2996). Chaque rubrique de la sidebar se déplie sur
+    ses modules (registre, regroupés par catégorie et motif), ouverts embarqués d'un clic ; le
+    module embarqué est marqué dans sa rubrique et sa sous-navigation (`GET /public/menu/{id}`,
+    rubriques BBS, pages d'un service) apparaît sous lui, ouverte par la délégation du Hall.
+  * Hall v2 : pendant l'embarquement, la sidebar se replie en rail d'icônes (64 px, complète au
+    survol ou au clavier) et rend sa largeur au cadre — la page admin n'est plus décalée.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 13:30:00 +0200
+
+secubox-webos (1.17.0-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : mosaïque de tuiles cliquables (phase 4, ref #2996). « Modules » et les rubriques de
+    la sidebar / barre basse ouvrent une vue `#view-mosaique` : tuiles des modules du registre
+    (icône de catégorie, nom, hôte, pastille de statut) qui s'ouvrent dans le Hall, onglets Tous /
+    Récents / Favoris / Sécurité / Réseau / Média / IA / Système / Sites ; l'onglet Sites reprend
+    le mur metablogizer (`/public/mosaique`, vignettes `/site/{nom}/screenshot`, lien direct).
+    Récents mémorisés par navigateur (12 derniers services ouverts).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 12:40:00 +0200
+
+secubox-webos (1.16.0-1~trixie1) trixie; urgency=medium
+
+  * Hall : réactivité de la vue maître, phase 3 (ref #2996). Le registre porte un statut typé
+    `status ∈ {active, idle, offline, stale, nosource}` (en veille d'après les cycles de vie des
+    profils, lus hors boucle au même rythme que l'agrégateur) ; `GET /public/services` ajoute
+    `status`, `releve` (RFC 3339) et `intervalle_s`. En v2 : pastille et opacité de chaque carte
+    découlent du statut, pied « Relevé HH:MM:SS », « données périmées » au-delà de 2× l'intervalle,
+    aperçu d'un module en veille sans aucune requête (src retiré, note posée), sondages avec recul
+    exponentiel (Hero 5 s → 60 s, registre 15 s → 60 s), dock média inchangé en navigation interne.
+  * Hero : réseau et E/S disque en deux séries colorées (entrant / lu en accent, sortant / écrit en
+    vert), libellés assortis.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 12:00:00 +0200
+
+secubox-webos (1.15.1-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : l'image d'avatar n'est demandée que si le module avatar est en ligne dans le
+    registre (ref #2996). Le module dort entre deux usages (scale-to-zero) : le relais répondait
+    502 à chaque visite avec session, pour une image que les initiales remplacent très bien.
+  * Hall v2, téléphone : le bouton Lexie passe en picto (44 px), il chevauchait l'avatar.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 11:20:00 +0200
+
+secubox-webos (1.15.0-1~trixie1) trixie; urgency=medium
+
+  * Hall : vue maître, phase 1 (ref #2996). Jetons `--sbx-*` (`tokens.css`, thème clair par
+    redéfinition seule) et coque v2 (`hall-v2.css`, `hall-v2.js`) : topbar complétée (menu,
+    disposition, notifications, pastille « SecuBox-DEB vX · En ligne »), sidebar 220 px avec
+    rubriques, favoris et carte d'usager, zone principale `flex:999 1 560px`, ruptures 1180 /
+    980 / 720 px (rail horizontal, puis barre d'onglets fixe en bas, cibles ≥ 44 px). Inerte
+    tant que le flag `hall_v2` (`/etc/secubox/webos.toml`) est faux ; prévisualisation par
+    `?hall=v2`. Nouvelle route publique `GET /api/v1/webos/public/etat` (flag, version).
+    L'ancien Hall est inchangé.
+  * Hall : le dé SecuBox dans la topbar v2 (phase 1bis, ref #2996). `<sbx-dice>` (`sbx-dice.js`,
+    8 Ko) reprend le moteur canvas 2D de 3d.<domaine> ; six textures en fichiers (`dice/`),
+    chargé seulement en v2, figé sous prefers-reduced-motion, en pause hors écran.
+  * Hall : composants de la vue maître (phase 2, ref #2996). `composants.js` (window.SbxUI :
+    Card, Pill, StatRing, Sparkline, Tabs, Tile, ModuleTile, NewsItem, DeviceRow, Hero) et
+    `composants.css`, tout en jetons, SVG inline, statuts {active, idle, offline, stale,
+    nosource}. Hero vivant en tête de l'accueil v2 : salutation, horloge, CPU / mémoire /
+    stockage / réseau / E/S disque (≤ 5 s), titre radio. Route `GET /public/systeme`
+    (lecture /proc hors boucle, cache 5 s).
+  * Hall : identité et avatar dans la carte d'usager v2 (ref #2996). Avec une session, le
+    pseudo sbxid cherche son image sur `GET /api/v1/avatar/par-nom/{pseudo}` (secubox-avatar
+    1.4.0, relais de lecture dédié sur le vhost du Hall ; repli : initiales) ; liens
+    « Mes comptes » (carte des comptes SSO) et « Mon identité ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 09:00:00 +0200
+
 secubox-webos (1.14.3-1~bookworm1) bookworm; urgency=medium
 
   * Hall : annulation de #2957/#2958 (ref #2960). Le `margin:0` entre cardlets empilés dans une

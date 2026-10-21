@@ -63,7 +63,9 @@ STORAGE = {"partitions": [{"device": "/dev/sda1", "mountpoint": "/", "fstype": "
 PROCS = {"total": 90, "processes": [{"pid": 7, "name": "sbxwaf", "cmd": "sbxwaf", "cpu_percent": 6.4, "memory_percent": 1.9, "status": "running", "user": "waf", "threads": 12}]}
 LOGS = {"logs": ["ligne un", "ligne deux"], "count": 2}
 UPD = {"available": 2, "packages": [{"name": "libx", "old_version": "1.0", "new_version": "1.1"}, {"name": "outil", "old_version": "2", "new_version": "3"}]}
-API = {"/status": (200, STATUS), "/services": (200, SERVICES), "/storage": (200, STORAGE), "/processes": (200, PROCS), "/logs": (200, LOGS), "/updates": (200, UPD)}
+API = {"/status": (200, STATUS), "/services": (200, SERVICES), "/storage": (200, STORAGE), "/processes": (200, PROCS), "/logs": (200, LOGS), "/updates": (200, UPD),
+       # #3002 : la mise à niveau tourne en arrière-plan, la page suit /update/status jusqu'à « idle »
+       "/update/status": (200, {"phase": "idle", "derniere": "appliquer", "ok": True, "appliques": 2, "count": 0, "en_cours": False})}
 
 
 def ouvre(navigateur, url, routes, taille=None):

@@ -413,14 +413,30 @@ def _xml_esc(s: Optional[str]) -> str:
     return html.escape(s or "", quote=True)
 
 
-@router.get("/share/feed.xml", dependencies=[Depends(require_lecture)])
-async def share_feed(request: Request):
-    """A generated RSS of the locally downloaded episodes (the relay/share feed)."""
-    _ensure_worker()
+def _base_publique(request: Request) -> str:
+    """Origine publique des adresses d'un flux : `public_base` si réglée, sinon l'hôte de la requête.
+
+    `request.base_url` porte le `root_path` (/api/v1/podcaster) : l'utiliser doublait le préfixe des médias (#2998).
+    Un nom d'hôte est toujours servi derrière HAProxy TLS : https ; une adresse IP (LAN direct) garde le schéma transmis."""
     base = (CFG.get("public_base") or "").rstrip("/")
-    if not base:
-        base = str(request.base_url).rstrip("/")
-    eps = store.downloaded_episodes()
+    if base:
+        return base
+    hote = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc or "localhost"
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
+    nu = hote.split(":")[0]
+    if nu not in ("localhost", "sock") and not re.fullmatch(r"[0-9.]+|\[?[0-9a-fA-F:]+\]?", nu):
+        proto = "https"
+    return f"{proto}://{hote}"
+
+
+def _absolu(base: str, url: Optional[str]) -> str:
+    """Une pochette locale (`/api/v1/podcaster/feeds/{id}/cover`) devient absolue dans un flux (#2998)."""
+    if not url:
+        return ""
+    return base + url if url.startswith("/") else url
+
+
+def _rss(base: str, title: str, link: str, description: str, image: str, eps: list[dict]) -> Response:
     items = []
     for e in eps:
         url = f"{base}/api/v1/podcaster/media/{e['id']}"
@@ -434,15 +450,38 @@ async def share_feed(request: Request):
             f"<enclosure url=\"{_xml_esc(url)}\" type=\"{_xml_esc(e.get('mime') or 'audio/mpeg')}\" "
             f"length=\"{e.get('bytes') or 0}\"/></item>"
         )
-    title = _xml_esc(CFG.get("share_title", "SecuBox Podcaster"))
+    img = (f"<image><url>{_xml_esc(image)}</url><title>{_xml_esc(title)}</title><link>{_xml_esc(link)}</link></image>"
+           if image else "")
     rss = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<rss version="2.0"><channel>'
-        f"<title>{title}</title><link>{_xml_esc(base)}</link>"
-        f"<description>Locally relayed by SecuBox Podcaster</description>"
+        f"<title>{_xml_esc(title)}</title><link>{_xml_esc(link)}</link>"
+        f"<description>{_xml_esc(description)}</description>{img}"
         + "".join(items) + "</channel></rss>"
     )
     return Response(content=rss, media_type="application/rss+xml")
+
+
+@router.get("/share/feed.xml", dependencies=[Depends(require_lecture)])
+async def share_feed(request: Request):
+    """A generated RSS of the locally downloaded episodes (the relay/share feed)."""
+    _ensure_worker()
+    base = _base_publique(request)
+    return _rss(base, CFG.get("share_title", "SecuBox Podcaster"), base,
+                "Locally relayed by SecuBox Podcaster", "", store.downloaded_episodes())
+
+
+@router.get("/share/feed/{fid}.xml", dependencies=[Depends(require_lecture)])
+async def share_feed_podcast(fid: int, request: Request):
+    """Le flux RSS d'UN podcast : ses seuls épisodes téléchargés, son titre, sa description, sa pochette (#2998)."""
+    _ensure_worker()
+    f = store.get_feed(fid)
+    if not f:
+        raise HTTPException(404, "unknown feed")
+    base = _base_publique(request)
+    return _rss(base, f.get("title") or f"Podcast {fid}", f"{base}/api/v1/podcaster/share/feed/{fid}.xml",
+                f.get("description") or "Relayé localement par SecuBox Podcaster",
+                _absolu(base, f.get("image")), store.downloaded_episodes(feed_id=fid))
 
 
 @router.get("/public/library", dependencies=[Depends(require_lecture)])
@@ -452,10 +491,25 @@ async def public_library():
     _ensure_worker()
     eps = store.downloaded_episodes()
     feeds: dict = {}
+    pods: dict = {}
     for e in eps:
         k = e.get("feed_title") or "Podcast"
         feeds[k] = feeds.get(k, 0) + 1
+        fid = e.get("feed_id")
+        p = pods.get(fid)
+        if p is None:
+            p = pods[fid] = {"id": fid, "title": k, "description": None, "image": e.get("feed_image") or None,
+                             "episodes": 0, "last": 0, "bytes": 0,
+                             "rss": f"/api/v1/podcaster/share/feed/{fid}.xml",
+                             "zip": f"/api/v1/podcaster/public/feed/{fid}/zip"}
+        p["episodes"] += 1
+        p["last"] = max(p["last"], e.get("pubdate") or 0)
+        p["bytes"] += e.get("bytes") or 0
+    for fid, p in pods.items():     # une requête par podcast ayant des épisodes : la description vient de la table feeds
+        f = store.get_feed(fid) or {}
+        p["description"] = f.get("description") or None
     return {
+        "podcasts": sorted(pods.values(), key=lambda p: -p["last"]),
         "title": CFG.get("share_title", "SecuBox Podcaster"),
         "episodes": [{
             "id": e["id"], "title": e.get("title"), "feed": e.get("feed_title"),

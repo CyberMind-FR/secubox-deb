@@ -6,7 +6,7 @@
 
 # ══════════════════════════════════════════════════════════════════
 #  build-packages.sh — Build all SecuBox .deb packages
-#  Usage: bash scripts/build-packages.sh [bookworm|trixie] [arm64|amd64]
+#  Usage: bash scripts/build-packages.sh [trixie|bookworm] [arm64|amd64]   (défaut : trixie, décision du 2026-10-21)
 # ══════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -16,7 +16,7 @@ PACKAGES_DIR="${REPO_DIR}/packages"
 OUTPUT_DIR="${REPO_DIR}/output/debs"
 
 # Parse positional + flags
-SUITE="${1:-bookworm}"; shift || true
+SUITE="${1:-trixie}"; shift || true
 ARCH="${1:-$(dpkg --print-architecture)}"; shift || true
 
 FILTER=""

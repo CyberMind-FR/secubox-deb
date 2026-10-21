@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 PKG="${1:-}"
-SUITE="${2:-bookworm}"
+SUITE="${2:-trixie}"
 ARCH="${3:-$(dpkg --print-architecture)}"
 
 [[ -z "$PKG" ]] && { echo "Usage: $0 <package-name> [suite] [arch]"; exit 1; }

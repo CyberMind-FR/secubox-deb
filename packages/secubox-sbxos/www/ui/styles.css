@@ -2,179 +2,195 @@
    Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
    See LICENCE-CMSD-1.0.md for terms.
 
-   SBX OS — le thème. WebOS minimaliste, mobile d'abord.
+   SBX OS — le thème, au profil de la VUE MAÎTRE du Hall (#2996) : les mêmes jetons
+   --sbx-* que hall.<domaine> (tokens.css), repris ici tels quels parce que la PWA est
+   hors ligne et ne dépend d'aucun fichier hors de /sbxos/.
 
-   TROIS ÉTATS DE THÈME, pas deux. Le réglage « automatique » ne pose AUCUN
-   attribut : c'est `prefers-color-scheme` qui tranche. Un choix explicite pose
-   `data-theme`, et doit gagner dans les DEUX sens — d'où la redéfinition sous
-   `[data-theme]` en plus de la requête média.
+   TROIS ÉTATS DE THÈME, pas deux. « Automatique » ne pose aucun attribut et
+   `prefers-color-scheme` tranche ; un choix explicite pose `data-theme` et gagne
+   dans les deux sens. Le thème clair ne fait que REDÉFINIR les jetons.
 
-   PROFIL AURORA (#2647, .claude/AURORA-REFERENCE.md) : le thème sombre porte les
-   jetons d'Aurora (fond, traits, texte, cyan) et son cadre dégradé ; le thème
-   clair, propre à SBX OS, garde sa palette et un cadre uni. */
+   Les composants du damier (sbx-damier, sbx-carlette, en DOM fantôme) lisent les
+   anciens noms (--bord, --encre, --accent, --alerte, --min, --ecart) : ils sont
+   rebranchés sur les jetons, une fois, et suivent le thème. */
 
 :root {
-  --fond:#060d1b; --carte:#0d1a33; --bord:rgba(86,150,255,.22); --trait2:rgba(86,150,255,.38);
-  --encre:#eaf1ff; --encre-terne:#9fb3d6; --faible:#6f84a8;
-  --accent:#29b6f6; --alerte:#ff4d5e; --orange:#ff9f1c; --vert:#2ecc71;
-  --app-fond:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));
-  --tuile-fond:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));
-  --ciel:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%);
-  --min:5.5rem; --ecart:.7rem;
-  --barre-h:3.6rem;
+  --sbx-fond:#070C1C; --sbx-surface:#0F1830; --sbx-surface-2:#0A1226;
+  --sbx-bordure:#243457; --sbx-bordure-2:#1B2745;
+  --sbx-texte:#E8EEFB; --sbx-texte-attenue:#8A9BC3;
+  --sbx-accent:#2563EB; --sbx-accent-2:#60A5FA;
+  --sbx-ok:#4ADE80; --sbx-warn:#FBBF24; --sbx-off:#FCA5A5; --sbx-info:#93C5FD;
+  --sbx-ok-fond:#0F2E24; --sbx-warn-fond:#3A2A0C; --sbx-off-fond:#3B1A1A; --sbx-info-fond:#172554;
+  --sbx-rayon-s:10px; --sbx-rayon-m:12px; --sbx-rayon-l:16px;
+  --sbx-e-1:4px; --sbx-e-2:8px; --sbx-e-3:12px; --sbx-e-4:16px;
+  --sbx-police:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --sbx-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+  --sbx-ombre:0 1px 0 rgba(255,255,255,.03) inset,0 10px 28px -14px rgba(0,0,0,.6);
+  --sbx-halo-focus:0 0 0 2px var(--sbx-fond),0 0 0 4px var(--sbx-accent-2);
+  --sbx-top:56px; --sbx-tabbar:64px; --sbx-side:220px;
+  color-scheme:dark;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --fond:#f6f8fc; --carte:#fff; --bord:#e2e8f0; --trait2:#cbd5e1;
-    --encre:#0f172a; --encre-terne:#64748b; --faible:#64748b; --accent:#0284c7;
-    --app-fond:#fff; --tuile-fond:#f1f5f9; --ciel:none;
+    --sbx-fond:#F3F6FC; --sbx-surface:#FFFFFF; --sbx-surface-2:#E9EEF8;
+    --sbx-bordure:#C9D4EA; --sbx-bordure-2:#D9E1F0;
+    --sbx-texte:#0C1A33; --sbx-texte-attenue:#4A5B7E;
+    --sbx-accent:#2563EB; --sbx-accent-2:#1D4ED8;
+    --sbx-ok:#15803D; --sbx-warn:#A16207; --sbx-off:#B91C1C; --sbx-info:#1D4ED8;
+    --sbx-ok-fond:#DCFCE7; --sbx-warn-fond:#FEF3C7; --sbx-off-fond:#FEE2E2; --sbx-info-fond:#DBEAFE;
+    --sbx-ombre:0 1px 2px rgba(12,26,51,.06),0 8px 22px -12px rgba(12,26,51,.18);
+    --sbx-halo-focus:0 0 0 2px var(--sbx-fond),0 0 0 4px var(--sbx-accent);
+    color-scheme:light;
   }
 }
 :root[data-theme="light"] {
-  --fond:#f6f8fc; --carte:#fff; --bord:#e2e8f0; --trait2:#cbd5e1;
-  --encre:#0f172a; --encre-terne:#64748b; --faible:#64748b; --accent:#0284c7;
-  --app-fond:#fff; --tuile-fond:#f1f5f9; --ciel:none;
+  --sbx-fond:#F3F6FC; --sbx-surface:#FFFFFF; --sbx-surface-2:#E9EEF8;
+  --sbx-bordure:#C9D4EA; --sbx-bordure-2:#D9E1F0;
+  --sbx-texte:#0C1A33; --sbx-texte-attenue:#4A5B7E;
+  --sbx-accent:#2563EB; --sbx-accent-2:#1D4ED8;
+  --sbx-ok:#15803D; --sbx-warn:#A16207; --sbx-off:#B91C1C; --sbx-info:#1D4ED8;
+  --sbx-ok-fond:#DCFCE7; --sbx-warn-fond:#FEF3C7; --sbx-off-fond:#FEE2E2; --sbx-info-fond:#DBEAFE;
+  --sbx-ombre:0 1px 2px rgba(12,26,51,.06),0 8px 22px -12px rgba(12,26,51,.18);
+  --sbx-halo-focus:0 0 0 2px var(--sbx-fond),0 0 0 4px var(--sbx-accent);
+  color-scheme:light;
 }
 :root[data-theme="dark"] {
-  --fond:#060d1b; --carte:#0d1a33; --bord:rgba(86,150,255,.22); --trait2:rgba(86,150,255,.38);
-  --encre:#eaf1ff; --encre-terne:#9fb3d6; --faible:#6f84a8; --accent:#29b6f6;
-  --app-fond:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));
-  --tuile-fond:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));
-  --ciel:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%);
+  --sbx-fond:#070C1C; --sbx-surface:#0F1830; --sbx-surface-2:#0A1226;
+  --sbx-bordure:#243457; --sbx-bordure-2:#1B2745;
+  --sbx-texte:#E8EEFB; --sbx-texte-attenue:#8A9BC3;
+  --sbx-accent:#2563EB; --sbx-accent-2:#60A5FA;
+  --sbx-ok:#4ADE80; --sbx-warn:#FBBF24; --sbx-off:#FCA5A5; --sbx-info:#93C5FD;
+  --sbx-ok-fond:#0F2E24; --sbx-warn-fond:#3A2A0C; --sbx-off-fond:#3B1A1A; --sbx-info-fond:#172554;
+  --sbx-ombre:0 1px 0 rgba(255,255,255,.03) inset,0 10px 28px -14px rgba(0,0,0,.6);
+  --sbx-halo-focus:0 0 0 2px var(--sbx-fond),0 0 0 4px var(--sbx-accent-2);
+  color-scheme:dark;
+}
+/* Anciens noms, lus par les composants du damier : un seul pont, qui suit le thème. */
+:root {
+  --fond:var(--sbx-fond); --carte:var(--sbx-surface); --bord:var(--sbx-bordure-2); --trait2:var(--sbx-bordure);
+  --encre:var(--sbx-texte); --encre-terne:var(--sbx-texte-attenue); --faible:var(--sbx-texte-attenue);
+  --accent:var(--sbx-accent-2); --alerte:var(--sbx-off); --orange:var(--sbx-warn); --vert:var(--sbx-ok);
+  --app-fond:transparent; --tuile-fond:var(--sbx-surface); --ciel:none;
+  --min:5.5rem; --ecart:.7rem; --barre-h:var(--sbx-tabbar);
 }
 
 * { box-sizing: border-box; }
-/* `hidden` DOIT GAGNER SUR NOS PROPRES RÈGLES.
- *
- * `[hidden] { display: none }` est une règle du NAVIGATEUR, donc de plus faible
- * priorité que n'importe quelle règle d'auteur qui pose `display`. Or `.theatre`
- * pose `display:flex` — un élément `hidden` restait donc affiché, et comme il
- * est en `position:fixed; inset:0`, il couvrait tout l'écran avec son iframe
- * noire. Écran noir, sans une ligne de JavaScript en cause.
- *
- * LE DÉFAUT DORMAIT. Tant que la feuille était servie en
- * `application/octet-stream`, le navigateur la REFUSAIT (nosniff) : on voyait du
- * HTML nu, laid mais fonctionnel. Corriger le type MIME a réveillé le bug —
- * une panne qui apparaît en réparant autre chose n'est pas une régression de ce
- * correctif, c'est une dette qu'il rend visible.
- *
- * On bascule la visibilité par `el.hidden`, jamais par `style.display` : un seul
- * mécanisme, et cette règle le rend fiable. */
+/* `hidden` doit gagner sur nos propres `display` (le théâtre est en display:flex). */
 [hidden] { display: none !important; }
 
 body {
-  margin:0; background:var(--ciel),var(--fond); background-repeat:no-repeat; background-attachment:fixed; color:var(--encre);
-  font:15px/1.45 "IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  /* La barre du bas est fixe : on réserve sa hauteur, plus l'encoche. */
-  padding-bottom: calc(var(--barre-h) + env(safe-area-inset-bottom,0px));
-  -webkit-tap-highlight-color: transparent;
+  margin:0; background:var(--sbx-fond); color:var(--sbx-texte);
+  font:15px/1.45 var(--sbx-police);
+  padding-bottom: calc(var(--sbx-tabbar) + env(safe-area-inset-bottom,0px));
+  -webkit-tap-highlight-color: transparent; -webkit-font-smoothing:antialiased;
 }
+.sbx-ico { width:20px; height:20px; flex:none; stroke:currentColor; fill:none; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; }
 
+/* ── Topbar ──────────────────────────────────────────────────────────────── */
 .mast {
-  display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
-  padding: calc(.7rem + env(safe-area-inset-top,0px)) .9rem .5rem;
+  position:sticky; top:0; z-index:20;
+  display:flex; align-items:center; gap:var(--sbx-e-3); min-height:var(--sbx-top);
+  padding: calc(.4rem + env(safe-area-inset-top,0px)) var(--sbx-e-4) .4rem;
+  background:var(--sbx-surface-2); border-bottom:1px solid var(--sbx-bordure-2);
 }
-.marque { display:flex; align-items:center; gap:.6rem; font-weight:800; letter-spacing:.02em; color:var(--encre); }
-.marque-txt b { display:block; font-size:1.3rem; line-height:1.1; }
-.marque-txt small { display:block; color:var(--accent); font-size:.72rem; font-weight:500; letter-spacing:0; }
-
-/* ENCADRE DANS LE HALL (#1293) : la mégabarre porte déjà le nom, l'identité
-   et la sortie. Garder notre bandeau mettrait DEUX chromes l'un sous l'autre —
-   deux marques, deux lignes de bienvenue — et volerait 60 px de damier sur un
-   écran déjà réduit par le cadre. On ne masque que la marque et la salutation :
-   la pastille de profil RESTE, c'est le seul endroit où le porteur voit sous
-   quelle identité il agit, et l'effacer le laisserait deviner. */
-body[data-encadre] .mast { padding-top:.35rem; padding-bottom:.1rem; }
-body[data-encadre] .mast .marque,
-body[data-encadre] .mast .bonjour { display:none; }
-body[data-encadre] .mast .profil { margin-left:0; }
-.bonjour { color:var(--encre-terne); font-size:.84rem; }
+.marque { display:flex; align-items:center; gap:.6rem; color:var(--sbx-texte); min-width:0; }
+.marque .cube { width:32px; height:32px; flex:none; }
+.marque-txt b { display:block; font-size:1.15rem; line-height:1.05; font-weight:800; letter-spacing:-.01em; }
+.marque-txt small { display:block; color:var(--sbx-texte-attenue); font-size:.68rem; font-weight:500; white-space:nowrap; }
+.bonjour { color:var(--sbx-texte-attenue); font-size:.84rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.heure { margin-left:auto; font:600 .95rem var(--sbx-mono); font-variant-numeric:tabular-nums; color:var(--sbx-accent-2); }
 .profil {
-  margin-left:auto; font-size:.62rem; font-weight:800; letter-spacing:.09em;
-  text-transform:uppercase; padding:.15rem .5rem; border-radius:999px;
-  border:1px solid currentColor; color:var(--encre-terne);
+  font:800 .62rem var(--sbx-mono); letter-spacing:.09em; text-transform:uppercase;
+  padding:.3rem .55rem; border-radius:999px; border:1px solid var(--sbx-bordure);
+  background:var(--sbx-surface); color:var(--sbx-texte-attenue); white-space:nowrap;
 }
-.profil[data-p="admin"] { color:#f59e0b; }
-.profil[data-p="user"]  { color:var(--accent); }
+.profil[data-p="admin"] { color:var(--sbx-warn); background:var(--sbx-warn-fond); }
+.profil[data-p="user"]  { color:var(--sbx-accent-2); background:var(--sbx-info-fond); }
 
-main { padding: 0 .8rem 1rem; }
+/* Encadré dans le Hall (#1293) : la mégabarre porte déjà le nom et la salutation ;
+   la pastille de profil reste, c'est le seul endroit où le porteur voit sous quelle identité il agit. */
+body[data-encadre] .mast { min-height:0; padding-top:.3rem; padding-bottom:.3rem; background:transparent; border-bottom:0; }
+body[data-encadre] .mast .marque,
+body[data-encadre] .mast .bonjour,
+body[data-encadre] .mast .heure { display:none; }
+body[data-encadre] .mast .profil { margin-left:auto; }
 
-/* Cadre Aurora : un seul panneau dégradé qui porte tous les écrans. Aucune
-   « container-type » ici : elle ferait du cadre le bloc contenant du théâtre
-   (position:fixed) et le théâtre cesserait de couvrir l'écran. */
+main { padding: var(--sbx-e-3) var(--sbx-e-4) var(--sbx-e-4); }
 .cadre { min-width:0; }
-.app { border:1px solid var(--trait2); border-radius:16px; background:var(--app-fond);
-  box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);
-  padding:14px; display:grid; gap:12px; min-width:0; }
+.app { display:grid; gap:var(--sbx-e-3); min-width:0; }
 .app > * { min-width:0; }
-.demo { margin:0 .8rem .6rem; background:var(--orange); color:#1a1000; text-align:center;
-  font-weight:700; border-radius:8px; padding:3px 8px; font-size:.78rem; }
-.info { margin:.7rem 0 0; border:1px solid var(--accent); background:rgba(41,182,246,.1);
-  border-radius:10px; padding:8px 12px; font-size:.8rem; line-height:1.4; }
-.info a { color:var(--accent); }
-.tuiles { display:grid; gap:8px; grid-template-columns:repeat(2,1fr); margin:0 0 .8rem; }
-@media (min-width: 700px) { .tuiles { grid-template-columns:repeat(4,1fr); } }
-.tuile { display:flex; flex-direction:column; gap:4px; border:1px solid var(--bord);
-  border-radius:12px; padding:9px 11px; background:var(--tuile-fond); min-width:0; }
-.tuile .v { font-size:1.45rem; font-weight:700; line-height:1; color:var(--accent);
-  font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
-.tuile .l { color:var(--encre-terne); font-size:.74rem; }
-.tuile .s { color:var(--faible); font-size:.68rem; }
-.titre-ecran { font-size:1.05rem; margin:.3rem 0 .8rem; }
-.sous-titre { font-size:.82rem; margin:1.2rem 0 .3rem; color:var(--encre-terne);
-  text-transform:uppercase; letter-spacing:.08em; }
-.note { color:var(--encre-terne); font-size:.78rem; margin:.7rem 0 0; line-height:1.5; }
-.note a { color:var(--accent); }
+.demo { margin:0 var(--sbx-e-4) .4rem; background:var(--sbx-warn-fond); color:var(--sbx-warn); border:1px solid var(--sbx-bordure-2);
+  text-align:center; font:700 .72rem var(--sbx-mono); letter-spacing:.06em; border-radius:var(--sbx-rayon-s); padding:4px 8px; }
+.info { margin:.7rem 0 0; border:1px solid var(--sbx-bordure); background:var(--sbx-info-fond); color:var(--sbx-texte);
+  border-radius:var(--sbx-rayon-s); padding:8px 12px; font-size:.82rem; line-height:1.45; }
+.info a { color:var(--sbx-accent-2); }
 
-.reglage { display:flex; align-items:center; gap:.7rem; margin:.7rem 0; flex-wrap:wrap; }
-.reglage label { font-size:.82rem; color:var(--encre-terne); min-width:9rem; }
+/* ── Tuiles d'indicateurs : le « hero » de la poche ──────────────────────── */
+.tuiles { display:grid; gap:var(--sbx-e-2); grid-template-columns:repeat(2,minmax(0,1fr)); margin:0 0 var(--sbx-e-3); }
+@media (min-width: 700px) { .tuiles { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+.tuile { display:flex; flex-direction:column; gap:3px; border:1px solid var(--sbx-bordure-2);
+  border-radius:var(--sbx-rayon-m); padding:10px 12px; background:var(--sbx-surface); min-width:0; min-height:76px; }
+.tuile .v { font:700 1.45rem/1 var(--sbx-mono); color:var(--sbx-accent-2); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.tuile .l { color:var(--sbx-texte-attenue); font:600 .64rem var(--sbx-mono); letter-spacing:.1em; text-transform:uppercase; }
+.tuile .s { color:var(--sbx-texte-attenue); font-size:.7rem; }
+.titre-ecran { font-size:1.15rem; font-weight:700; margin:.2rem 0 .7rem; letter-spacing:-.01em; }
+.sous-titre { font:600 .64rem var(--sbx-mono); margin:1.2rem 0 .3rem; color:var(--sbx-texte-attenue);
+  text-transform:uppercase; letter-spacing:.12em; }
+.note { color:var(--sbx-texte-attenue); font-size:.8rem; margin:.7rem 0 0; line-height:1.5; }
+.note a { color:var(--sbx-accent-2); }
+
+/* ── Réglages ────────────────────────────────────────────────────────────── */
+.reglage { display:flex; align-items:center; gap:.7rem; margin:.6rem 0; flex-wrap:wrap; }
+.reglage label { font-size:.84rem; color:var(--sbx-texte-attenue); min-width:9rem; }
 select, .fb {
-  padding:.4rem .65rem; border-radius:8px; border:1px solid var(--bord);
-  background:var(--carte); color:var(--encre); font:inherit; font-size:.82rem;
-  cursor:pointer;
+  min-height:40px; padding:.4rem .7rem; border-radius:var(--sbx-rayon-s); border:1px solid var(--sbx-bordure-2);
+  background:var(--sbx-surface); color:var(--sbx-texte); font:inherit; font-size:.86rem; cursor:pointer;
 }
-.fb:hover, select:hover { border-color:var(--accent); }
+.fb:hover, select:hover { border-color:var(--sbx-bordure); }
+.fb:focus-visible, select:focus-visible { outline:none; box-shadow:var(--sbx-halo-focus); }
 
-/* ── Théâtre : le lieu prend tout ─────────────────────────────────────────── */
-.theatre { position:fixed; inset:0; z-index:40; background:var(--fond);
-  display:flex; flex-direction:column;
-  padding-top: env(safe-area-inset-top,0px); }
+/* ── Théâtre : le lieu prend tout ────────────────────────────────────────── */
+.theatre { position:fixed; inset:0; z-index:40; background:var(--sbx-fond);
+  display:flex; flex-direction:column; padding-top: env(safe-area-inset-top,0px); }
 .theatre-barre {
-  display:flex; align-items:center; gap:.6rem; padding:.5rem .7rem;
-  border-bottom:1px solid var(--bord); font-size:.86rem; font-weight:600;
+  display:flex; align-items:center; gap:.6rem; min-height:var(--sbx-top); padding:.4rem .7rem;
+  background:var(--sbx-surface-2); border-bottom:1px solid var(--sbx-bordure-2); font-size:.9rem; font-weight:600;
 }
 .theatre-barre span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.theatre iframe { flex:1; width:100%; border:0; background:#000; }
+.theatre iframe { flex:1; width:100%; border:0; background:var(--sbx-surface-2); }
 .theatre .note { padding:0 .8rem .8rem; margin:0; }
 
-/* ── La barre du bas ───────────────────────────────────────────────────────── */
+/* ── Barre du bas (téléphone) ────────────────────────────────────────────── */
 .barre {
   position:fixed; left:0; right:0; bottom:0; z-index:30;
-  height: calc(var(--barre-h) + env(safe-area-inset-bottom,0px));
-  padding-bottom: env(safe-area-inset-bottom,0px);
-  display:flex; background:color-mix(in srgb,var(--carte) 92%,transparent);
-  border-top:1px solid var(--bord);
-  backdrop-filter: blur(10px);
+  height: calc(var(--sbx-tabbar) + env(safe-area-inset-bottom,0px));
+  padding: 4px 4px calc(4px + env(safe-area-inset-bottom,0px));
+  display:flex; gap:2px; background:var(--sbx-surface-2); border-top:1px solid var(--sbx-bordure-2);
 }
 .barre button {
-  flex:1; display:flex; flex-direction:column; align-items:center;
-  justify-content:center; gap:.1rem;
-  background:none; border:0; color:var(--encre-terne);
-  font:inherit; font-size:.62rem; cursor:pointer;
+  flex:1 1 0; min-width:44px; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  background:none; border:0; border-radius:var(--sbx-rayon-s); color:var(--sbx-texte-attenue);
+  font:500 .62rem var(--sbx-police); cursor:pointer; padding:0;
 }
-.barre button span { font-size:1.15rem; line-height:1; }
-.barre button.on { color:var(--accent); }
+.barre button .sbx-ico { width:22px; height:22px; }
+.barre button.on { color:var(--sbx-accent-2); }
+.barre button:focus-visible { outline:none; box-shadow:var(--sbx-halo-focus); }
 
-/* ── Grand écran : le damier respire, la barre passe sur le côté ──────────── */
+/* ── Grand écran : la barre devient la sidebar de la vue maître ──────────── */
 @media (min-width: 900px) {
   :root { --min:7rem; --ecart:1rem; }
-  body { padding-bottom:0; padding-left:6.5rem; }
+  body { padding-bottom:0; padding-left:var(--sbx-side); }
   .barre {
-    top:0; right:auto; width:6.5rem; height:100vh;
-    flex-direction:column; justify-content:flex-start; gap:.3rem;
-    padding-top:4.5rem; border-top:0; border-right:1px solid var(--bord);
+    top:0; right:auto; bottom:0; width:var(--sbx-side); height:auto;
+    flex-direction:column; justify-content:flex-start; gap:2px;
+    padding:calc(var(--sbx-top) + var(--sbx-e-3)) var(--sbx-e-3) var(--sbx-e-3);
+    border-top:0; border-right:1px solid var(--sbx-bordure-2);
   }
-  .barre button { flex:0 0 auto; padding:.8rem 0; font-size:.68rem; }
+  .barre button { flex:0 0 auto; flex-direction:row; justify-content:flex-start; gap:10px; min-height:40px; padding:0 10px;
+    font-size:.88rem; border:1px solid transparent; }
+  .barre button .sbx-ico { width:18px; height:18px; }
+  .barre button.on { background:var(--sbx-info-fond); border-color:var(--sbx-bordure); }
+  .barre button:hover:not(.on) { background:var(--sbx-surface); color:var(--sbx-texte); }
   main { max-width:1200px; }
 }
 

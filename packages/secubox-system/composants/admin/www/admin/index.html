@@ -448,7 +448,20 @@
         $('bMajTout').addEventListener('click', () => demander({ titre: 'Mettre à jour tous les paquets ?', texte: 'Tous les paquets disponibles seront mis à jour ; certains services peuvent redémarrer.', libelle: 'Lancer la mise à jour', fn: async () => {
             retour(true, 'Mise à jour en cours…');
             const res = await ecrire('POST', '/update', { confirm: true, packages: [] });
-            if (res.ok && res.data && res.data.success) { retour(true, 'Mise à jour terminée.'); verifierMaj(); } else retour(false, 'Échec de la mise à jour : ' + detail(res)); } }));
+            if (res.ok && res.data && res.data.success) { retour(true, 'Mise à jour lancée en arrière-plan…'); suitMaj(); } else retour(false, 'Échec de la mise à jour : ' + detail(res)); } }));
+        // La mise à niveau tourne dans l'unité root (#3002) : on suit GET /update/status jusqu'à la fin.
+        async function suitMaj() {
+            for (let i = 0; i < 720; i++) {
+                await new Promise(r => setTimeout(r, i ? 5000 : 1500));
+                let e; try { e = await lire('/update/status'); } catch (err) { retour(false, 'Suivi de la mise à jour impossible : ' + err.message); return; }
+                if (e.en_cours) { retour(true, 'Mise à jour en cours… (' + (e.count || '?') + ' paquet(s))'); continue; }
+                if (e.derniere === 'appliquer') {
+                    if (e.ok) retour(true, 'Mise à jour terminée : ' + (e.appliques || 0) + ' paquet(s) mis à jour.' + (e.count ? ' Restent : ' + e.count : ''));
+                    else retour(false, 'Échec de la mise à jour : ' + (e.erreur || 'raison inconnue'));
+                }
+                verifierMaj(); return;
+            }
+        }
 
         // Onglets
         function ouvrir(t) {
