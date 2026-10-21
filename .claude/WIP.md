@@ -32,6 +32,9 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   tuiles de modules `data-open`, mur metablogizer avec vignettes) derrière « Modules » et les rubriques.
 - **Fait (webos 1.18.0)** : menus liés — rubriques dépliables sur leurs modules, module embarqué marqué + sous-navigation
   (`/public/menu/{id}`), sidebar en rail de 64 px pendant l'embarquement.
+- **Fait (webos 1.18.1)** : retour des menus Services/Système et accès rapides ⚙/⧉ (régression v2 signalée par le propriétaire).
+- **Fait (sbxos 0.6.0~aurora17-3)** : coquille `/sbxos/` régénérée au profil vue maître (jetons, topbar, barre SVG → sidebar), déployée
+  sur gk2 par `dpkg -i` (aperçu `~aurora`, jamais publié dans apt).
 - ⬜ **Next Up** : phase 4, suite — vignettes des modules (relais Streamlit `/apps/{nom}/screenshot`, captures des webuis à produire),
   migration des cartes vers `Card` dans l'ordre du prompt ; à trancher : courbes `secubox-metrics`, option `hall.v2.hero-dice` (statut typé côté API, « Relevé », chargement différé, dock Radio) ; à trancher :
   reprise du relevé système dans les courbes de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.

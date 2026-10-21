@@ -245,6 +245,18 @@ porte la navigation :
   cadre reprend la largeur : le « décalage » observé sur DNS Guard était la mise en page centrée de la page admin,
   plus visible avec 220 px de sidebar.
 
+### `/sbxos/` régénérée (2026-10-21, `secubox-sbxos` 0.6.0~aurora17-3)
+
+La coquille PWA « SBX OS » reprend le profil de la vue maître sans changer d'architecture (mine / hall / ui, composants
+du damier, service worker) : jetons `--sbx-*` identiques au Hall (thème clair par redéfinition seule, anciens noms
+rebranchés pour le DOM fantôme du damier), topbar (dé SecuBox en SVG, salutation, heure locale, pastille de profil),
+barre basse en icônes SVG (cibles 44 px) qui devient la sidebar de 220 px au large, tuiles et réglages aux jetons,
+cache `sbxos-v8`. Le dé animé n'y est pas : la PWA hors ligne ne charge rien hors de `/sbxos/`.
+
+![SBX OS à 1300 px](../assets/images/hall-vue-maitre/sbxos-1300.png)
+
+![SBX OS à 390 px](../assets/images/hall-vue-maitre/sbxos-390.png)
+
 ### Identité, avatar et comptes SSO (2026-10-21)
 
 - La carte d'usager de la sidebar lit `GET /api/v1/sbxid/moi` ; avec une identité, l'image vient de

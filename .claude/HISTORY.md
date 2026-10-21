@@ -44,6 +44,11 @@ ses vignettes). Constat : aucune capture d'écran n'existe pour les webuis de mo
 metablogizer et 20 applis Streamlit en ont). Menus liés (webos 1.18.0) : rubriques dépliables sur leurs modules,
 module embarqué marqué et sa sous-navigation `/public/menu/{id}` sous lui (délégation `[data-ctx]`), sidebar en
 rail de 64 px pendant l'embarquement (le « décalage » de la page admin embarquée est sa mise en page centrée).
+Régression corrigée (webos 1.18.1) : la coque v2 masquait les menus Services/Système, donc les accès rapides ⚙️ admin
+et ⧉ onglet ; rétablis, et posés aussi sur les tuiles de la mosaïque et les modules dépliés. `/sbxos/` régénérée
+(sbxos 0.6.0~aurora17-3, révision seule, dist Aurora inchangé) au profil vue maître ; déployée sur gk2 par dpkg -i
+(un aperçu `~aurora` n'entre jamais dans apt). Le `dist/` ignoré par git doit être recopié dans un worktree avant
+`dpkg-buildpackage` (debian/rules le vérifie, ne le construit pas).
 Constat : `test_ytflux_aurora_2638::test_la_route_flux_n_est_pas_ouverte_sur_le_vhost_admin` échoue déjà
 sur `master`, indépendamment de ce chantier. Dossier : `docs/dossiers/hall-vue-maitre.md`.
 
