@@ -1,3 +1,10 @@
+secubox-podcaster (1.6.2-1~trixie1) trixie; urgency=medium
+
+  * Portail embarqué dans le Hall (ref #2998) : la mosaïque des podcasts reste visible
+    en cadre (seuls l'en-tête et la puce « Tous », doublée par la mégabarre, sont retirés).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 00:05:00 +0200
+
 secubox-podcaster (1.6.1-1~trixie1) trixie; urgency=medium
 
   * Flux RSS (ref #2998) : sans `public_base`, l'origine des adresses vient de l'hôte

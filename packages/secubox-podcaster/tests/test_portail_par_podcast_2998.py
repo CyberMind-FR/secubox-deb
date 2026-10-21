@@ -117,7 +117,7 @@ def test_api_sans_liste_podcasts_derive_la_mosaique_des_episodes(navigateur):
 
 def test_megabarre_du_hall_choisit_un_podcast(navigateur):
     ctx, p, err, _ = ouvre(navigateur, "http://sbx.test/?embed=1", LIB, taille={"width": 420, "height": 800})
-    assert not p.is_visible("#filtresPan")
+    assert p.is_visible("#filtresPan") and p.locator("#filters .pod").count() == 2 and not p.is_visible("#chips")
     p.evaluate("postMessage({sbx:'contexte-choix', cle:'feed:Chronique'}, '*')")
     p.wait_for_function("document.querySelectorAll('#list .ep').length === 1")
     assert p.get_attribute("#zipbar a.podflux", "href") == "/api/v1/podcaster/share/feed/2.xml"

@@ -83,8 +83,11 @@
   .note{color:var(--faible);font-size:.72rem;margin:6px 0 0} .note a{color:var(--doux)}
   .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)}
   /* EMBARQUÉ DANS LE HALL (#1238b) : le Hall porte déjà le titre du service et la mégabarre. On retire l'en-tête
-     (marque, RSS) et la barre de filtres — les flux sont POUSSÉS dans la mégabarre contextuelle du Hall. */
-  html.sbx-embed .tete,html.sbx-embed .filtres-pan{display:none}
+     (marque, RSS) ; les flux sont AUSSI poussés dans la mégabarre contextuelle du Hall. */
+  html.sbx-embed .tete{display:none}
+  /* En cadre, la mosaïque des podcasts (#2998) RESTE visible : c'est le contenu, pas un simple filtre ; seule la puce « Tous »
+     double la mégabarre du Hall et se retire. */
+  html.sbx-embed .filtres-pan #chips{display:none}
   html.sbx-embed .cadre{padding:4px} html.sbx-embed .app{border:0;box-shadow:none;background:none;padding:4px}
   html.sbx-embed body{scrollbar-width:none} html.sbx-embed body::-webkit-scrollbar{display:none}
 </style>
