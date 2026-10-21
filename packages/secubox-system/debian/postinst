@@ -14,6 +14,9 @@ case "$1" in
     systemctl daemon-reload
     systemctl enable secubox-system.service
     systemctl start  secubox-system.service || true
+    # Sur le vhost d'administration, /api/v1/system/ est servi EN MEMOIRE par l'agregateur (#3003) : sans
+    # relancement, il garde l'ancien code (routes absentes, apt lance sans privilege). Meme regle que le hub.
+    systemctl try-restart secubox-aggregator.service 2>/dev/null || true
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
 

@@ -1,3 +1,10 @@
+secubox-system (1.11.1-1~trixie1) trixie; urgency=medium
+
+  * postinst (ref #3002) : relance l'agrégateur, qui sert /api/v1/system/ en mémoire sur
+    le vhost d'administration et gardait l'ancien code (GET /maj_status en 404).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 01:40:00 +0200
+
 secubox-system (1.11.0-1~trixie1) trixie; urgency=medium
 
   * Mises à jour apt depuis la page système (ref #3002) : « Rechercher » et « Appliquer »
