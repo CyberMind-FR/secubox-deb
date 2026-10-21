@@ -44,26 +44,24 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   migration des cartes vers `Card` dans l'ordre du prompt ; à trancher : courbes `secubox-metrics`, option `hall.v2.hero-dice` (statut typé côté API, « Relevé », chargement différé, dock Radio) ; à trancher :
   reprise du relevé système dans les courbes de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
 
-## 🔄 Livré le 2026-10-21, PR ouvertes (ref, pas Closes : fermeture après fusion)
+## ✅ Fusionné et déployé le 2026-10-21 (PR #2997, #2999, #3001, #3004, #3006 fusionnées en squash)
 
-- **Podcaster par podcast** (#2998, PR #2999, `secubox-podcaster` 1.6.2 sur gk2 + apt trixie ; mosaïque visible en cadre dans le Hall) : flux RSS par podcast
-  `/share/feed/{fid}.xml`, liste `podcasts` dans `/public/library`, portail en mosaïque ; origine des flux corrigée
-  (root_path doublé). Reste : fusionner la PR, puis `closes #2998` ici.
-- **Partages SMB** — closes #3000 (PR #3001 fusionnée, `secubox-media` 1.9.3 sur gk2 + apt trixie) : panneau `/media/smb.html`,
+- **Podcaster par podcast** — closes #2998 (PR #2999, `secubox-podcaster` 1.6.2 sur gk2 + apt trixie ; mosaïque visible en
+  cadre dans le Hall) : flux RSS par podcast `/share/feed/{fid}.xml`, liste `podcasts` dans `/public/library`, portail en
+  mosaïque ; origine des flux corrigée (root_path doublé).
+- **Partages SMB** — closes #3000 (PR #3001, `secubox-media` 1.9.3 sur gk2 + apt trixie) : panneau `/media/smb.html`,
   routes `/smb/*` en JWT, `smbctl` share-add/share-del/user-del + audit, sudoers, cifs-utils recommandé et installé.
   Idée posée par le propriétaire, non chiffrée : gestionnaire de fichiers dans le navigateur montant temporairement un support
   USB local et des partages SMB distants (cifs) — à cadrer dans une issue si retenu.
-
-- **Webfilter / Chaturbate** (#3005, `secubox-core` 1.7.12 + `secubox-webfilter` 0.4.3 sur gk2 + apt trixie) : budget checkconf
-  600 s, unité 20 min ; 192.168.1.3 de retour dans la vue visiteurs. Reste : ré-application sur changement d'adresses d'un
-  appareil assigné (le cœur de #3005), puis `closes #3005`.
-
-## 🔄 Livré le 2026-10-22, PR ouverte (ref)
-
-- **Mises à jour apt depuis les pages système et admin** (#3002, PR #3004, `secubox-system` 1.11.2 sur gk2 + apt trixie) :
-  spool `/run/secubox/system/maj` + unité root `secubox-maj.path`, `secubox-majctl`, `/maj_status`, `/update/status`.
-  Reste : fusionner, `closes #3002`. À trancher ensuite : #3003 (routage `/api/v1/system/` vers `system.sock` pour les
-  actions root polkit), #3005 (webfilter : ré-appliquer quand les adresses d'un appareil assigné changent).
+- **Mises à jour apt depuis les pages système et admin** — closes #3002 (PR #3004, `secubox-system` 1.11.2 sur gk2 + apt
+  trixie) : spool `/run/secubox/system/maj` + unité root `secubox-maj.path`, `secubox-majctl`, `/maj_status`, `/update/status`.
+  À trancher : #3003 (routage `/api/v1/system/` vers `system.sock` pour les actions root polkit).
+- **Webfilter / Chaturbate** (#3005 reste ouverte, PR #3006 fusionnée, `secubox-core` 1.7.12 + `secubox-webfilter` 0.4.3 sur
+  gk2 + apt trixie) : budget checkconf 600 s, unité 20 min ; 192.168.1.3 de retour dans la vue visiteurs. Reste :
+  ré-application sur changement d'adresses d'un appareil assigné (le cœur de #3005), puis `closes #3005`.
+- **Hall vue maître** (#2996 reste ouverte, PR #2997 fusionnée : phases 1 à 4 premier pas, webos 1.19.8 sur gk2) ; la suite
+  est dans le chantier ci-dessus. CI : les échecs `gabarit` (4 écarts), `pytest · secubox-core` (sshd), `appstore-catalogue`,
+  `build (secubox-appstore|meta)` (arbre des métapaquets) et `secubox-hub` (espaces.json) préexistent sur master.
 
 ## 🔄 Chantier en cours — ESPRESSObin lgm-ebin, client `lgm` beta (2026-10-16)
 

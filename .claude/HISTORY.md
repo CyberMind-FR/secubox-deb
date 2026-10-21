@@ -80,7 +80,7 @@ pas « status »), relancé dans la foulée, quelques secondes sans SMB. 77 test
 ProtectSystem=strict et la création de partage échouait en « Read-only file system » ; 1.9.2 : Recommends cifs-utils, installé
 sur gk2), publié trixie.
 
-## 2026-10-21 — podcaster : portail public par podcast, un flux RSS par podcast (ref #2998, PR #2999)
+## 2026-10-21 — podcaster : portail public par podcast, un flux RSS par podcast (closes #2998, PR #2999 fusionnée le 2026-10-21)
 
 Demande « associer les podcasts et leurs flux respectifs ». `secubox-podcaster` 1.6.1 : `GET /share/feed/{fid}.xml`
 (RSS d'un seul podcast : titre, description, pochette rendue absolue, ses épisodes téléchargés, `require_lecture`,
@@ -104,7 +104,7 @@ checkconf, jamais du chronomètre) et `secubox-webfilter` 0.4.3 (unité d'applic
 (647 Mo libres), trois worktrees fusionnés retirés ; un dossier `secubox-deb-worktrees/3005-webfilter-checkconf` incomplet
 reste à supprimer à la main.
 
-## 2026-10-22 — system : mises à jour apt depuis les pages système et admin sans privilège dans l'API (ref #3002, PR #3004)
+## 2026-10-21 — system : mises à jour apt depuis les pages système et admin sans privilège dans l'API (closes #3002, PR #3004 fusionnée le 2026-10-21)
 
 « Échec de la mise à jour : E: Could not open lock file /var/lib/dpkg/lock-frontend … are you root? » sur
 admin.gk2/admin/. Les routes `check_updates`/`apply_updates` (page système) et `/updates`/`/update` (composant admin)
