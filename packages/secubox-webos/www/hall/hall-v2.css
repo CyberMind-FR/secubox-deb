@@ -93,6 +93,32 @@
 [data-hall="v2"] .fcard .ap-vue{position:relative}
 .sbx-veille{position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:12px;text-align:center;font:.76rem var(--sbx-police);color:var(--sbx-texte-attenue);background:var(--sbx-surface-2)}
 
+/* ── Mosaïque des modules et des sites ───────────────────────────────────── */
+#view-mosaique.hidden{display:none}
+.sbx-mosaique-tete{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sbx-e-3);margin:0 0 var(--sbx-e-4)}
+.sbx-mosaique-titre{margin:0;font:700 1.25rem var(--sbx-police)}
+.sbx-mosaique-tete .sbx-tabs{flex:1 1 320px;min-width:0}
+.sbx-mosaique{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--sbx-e-3)}
+.sbx-mosaique[data-vue="sites"]{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.sbx-mtuile,.sbx-stuile{position:relative;display:flex;flex-direction:column;gap:8px;min-height:92px;padding:12px;border:1px solid var(--sbx-bordure-2);border-radius:var(--sbx-rayon-m);
+  background:var(--sbx-surface);color:var(--sbx-texte);text-align:left;text-decoration:none;cursor:pointer;font:inherit;min-width:0}
+.sbx-mtuile:hover,.sbx-stuile:hover{border-color:var(--sbx-bordure);box-shadow:var(--sbx-ombre)}
+.sbx-mtuile:focus-visible,.sbx-stuile:focus-visible{outline:none;box-shadow:var(--sbx-halo-focus)}
+.sbx-mtuile .sbx-ico{width:26px;height:26px;color:var(--sbx-accent-2)}
+.sbx-mtuile .tx,.sbx-stuile .tx{min-width:0}
+.sbx-mtuile b,.sbx-stuile b{display:block;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sbx-mtuile small,.sbx-stuile small{display:block;margin-top:2px;font:.68rem var(--sbx-mono);color:var(--sbx-texte-attenue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sbx-mtuile .sbx-led{position:absolute;top:12px;right:12px}
+.sbx-mtuile[data-status="offline"],.sbx-mtuile[data-status="nosource"]{opacity:.65}
+.sbx-mtuile[data-status="nosource"]{border-style:dashed}
+.sbx-stuile{padding:0;overflow:hidden}
+.sbx-stuile .vig{display:block;aspect-ratio:16/10;width:100%;background:var(--sbx-surface-2);border-bottom:1px solid var(--sbx-bordure-2);display:grid;place-items:center}
+.sbx-stuile .vig img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.sbx-stuile .vig .sans{font:700 1.6rem var(--sbx-mono);color:var(--sbx-texte-attenue)}
+.sbx-stuile .tx{padding:0 12px 12px}
+.sbx-mosaique-vide{margin:var(--sbx-e-4) 0;color:var(--sbx-texte-attenue);font-size:.9rem}
+.sbx-mosaique-vide[hidden]{display:none}
+
 /* ── Barre d'onglets (téléphone) ─────────────────────────────────────────── */
 .sbx-tabbar{display:none}
 .sbx-voile{display:none}
@@ -133,6 +159,7 @@
   [data-hall="v2"] .sbx-voile.ouvert{display:block;position:fixed;inset:0;z-index:71;background:var(--sbx-voile)}
   [data-hall="v2"] .grid.feat{columns:1}
   [data-hall="v2"] .tiles{grid-template-columns:1fr}
+  .sbx-mosaique,.sbx-mosaique[data-vue="sites"]{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--sbx-e-2)}
   [data-hall="v2"] .main{padding:var(--sbx-e-3) var(--sbx-e-3) calc(88px + var(--dock-h,0px))}
   [data-hall="v2"] .mast-main{padding:0 var(--sbx-e-2);gap:var(--sbx-e-2)}
   [data-hall="v2"] .mast .ibtn,[data-hall="v2"] .sbx-ibtn{width:44px;height:44px}

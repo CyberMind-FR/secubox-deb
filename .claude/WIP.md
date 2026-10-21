@@ -28,8 +28,10 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - **Déployé** (2026-10-21) : webos 1.15.1 + avatar 1.4.0 sur gk2, suite `trixie` du dépôt ; `hall_v2 = false` (prévisualisation `?hall=v2`).
 - **Fait (phase 3, webos 1.16.0)** : statut typé {active, idle, offline, stale, nosource} dans `/public/services` (+ `releve`,
   `intervalle_s`), pied « Relevé » / « données périmées », veille sans requête, sondages à recul, dock persistant, sparklines bicolores.
-- ⬜ **Next Up** : phase 4 — mosaïque de vignettes cliquables des vhosts (captures metablogizer / screenshots) pour « Modules », puis
-  migration des cartes dans l'ordre du prompt ; anciennement phase 3 (statut typé côté API, « Relevé », chargement différé, dock Radio) ; à trancher :
+- **Fait (phase 4, 1er pas, webos 1.17.0)** : mosaïque cliquable (`#view-mosaique`, onglets Tous/Récents/Favoris/catégories/Sites,
+  tuiles de modules `data-open`, mur metablogizer avec vignettes) derrière « Modules » et les rubriques.
+- ⬜ **Next Up** : phase 4, suite — vignettes des modules (relais Streamlit `/apps/{nom}/screenshot`, captures des webuis à produire),
+  migration des cartes vers `Card` dans l'ordre du prompt ; à trancher : courbes `secubox-metrics`, option `hall.v2.hero-dice` (statut typé côté API, « Relevé », chargement différé, dock Radio) ; à trancher :
   reprise du relevé système dans les courbes de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
 
 ## 🔄 Chantier en cours — ESPRESSObin lgm-ebin, client `lgm` beta (2026-10-16)

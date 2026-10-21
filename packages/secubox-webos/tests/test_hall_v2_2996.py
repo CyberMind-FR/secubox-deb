@@ -236,9 +236,10 @@ def test_mobile_390_barre_basse_et_cibles_tactiles(nav):
     for nom, h, w in onglets:
         assert h >= 44 and w >= 44, (nom, h, w)
     assert p.evaluate("parseFloat(getComputedStyle(document.querySelector('.main')).paddingBottom)") >= 88
-    # un onglet navigue réellement (Système = vue du parc)
-    p.click(".sbx-tabbar button[data-nav='systeme']")
-    assert not p.evaluate("document.getElementById('view-systeme').classList.contains('hidden')")
+    # un onglet navigue réellement (Système = mosaïque filtrée)
+    p.click(".sbx-tabbar button[data-rub='systeme']")
+    p.wait_for_selector("#view-mosaique:not(.hidden)", state="attached")
+    assert p.evaluate("document.getElementById('view-accueil').classList.contains('hidden')")
     assert erreurs == []
     ctx.close()
 

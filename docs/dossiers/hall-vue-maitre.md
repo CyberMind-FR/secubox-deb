@@ -216,6 +216,21 @@ attends mon GO entre chaque phase.
 - **Dock média** : nœud unique, inchangé par la navigation interne (test).
 - **Hero** : réseau et E/S disque en deux séries (entrant / lu en accent, sortant / écrit en vert).
 
+### Phase 4, premier pas — mosaïque cliquable (2026-10-21, `secubox-webos` 1.17.0)
+
+Demande du propriétaire : « plutôt mosaïque, par exemple avec la visu de la mosaïque metablogizer, vhosts cliquables ».
+« Modules » et toutes les rubriques (Réseau, Sécurité, Stockage, Média, Communication, IA, Outils, Système) ouvrent
+`#view-mosaique` : onglets Tous / Récents / Favoris / Sécurité / Réseau / Média / IA / Système / Sites, grille
+auto-fill de tuiles. Une tuile de module (icône SVG de catégorie, nom, hôte, pastille de statut) est un vrai bouton
+`data-open` : la délégation du Hall ouvre le service embarqué, comme depuis le mégamenu. L'onglet **Sites** reprend le
+mur metablogizer (`GET /api/v1/metablogizer/public/mosaique`, vignettes `/site/{nom}/screenshot` servies par nginx,
+lien direct vers le vhost). Les récents sont mémorisés par navigateur. L'ancienne vue liste « Système » reste
+accessible par la recherche et le mégamenu.
+
+![Mosaïque des modules](../assets/images/hall-vue-maitre/hall-v2-mosaique.png)
+
+![Onglet Sites](../assets/images/hall-vue-maitre/hall-v2-mosaique-sites.png)
+
 ### Identité, avatar et comptes SSO (2026-10-21)
 
 - La carte d'usager de la sidebar lit `GET /api/v1/sbxid/moi` ; avec une identité, l'image vient de
@@ -241,7 +256,7 @@ d'`apt.secubox.in`. Flag `hall_v2` laissé à faux : le Hall classique reste le 
 - Phase 2, reste : option `hall.v2.hero-dice` (dé de 96 px derrière l'heure), reportée avec la carte « Bonjour ».
 - Hors périmètre du Hall, à confirmer : reprendre le relevé `/public/systeme` (dont les E/S) dans les courbes de
   `secubox-metrics` (« Système en direct »).
-- Phase 4 : **mosaïque de vignettes cliquables** des vhosts pour « Modules / Tableau de bord » (demande du
-  2026-10-21, à l'image du mur mosaïque de metablogizer et de ses captures), puis migration dans l'ordre du prompt ;
-  les cartes non migrées sous « Tous les modules ».
+- Phase 4, suite : vignettes pour les modules eux-mêmes (aucune capture n'existe aujourd'hui sur la box pour les
+  webuis ; les 20 captures Streamlit demanderaient un relais `/api/v1/streamlit/apps/{nom}/screenshot` sur le Hall),
+  puis migration des cartes vers `Card` dans l'ordre du prompt ; les cartes non migrées sous « Tous les modules ».
 - Mesure du dé sur RPi4 (le budget ≤ 1 ms/image est à confirmer sur la cible).

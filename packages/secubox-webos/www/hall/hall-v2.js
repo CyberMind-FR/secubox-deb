@@ -44,19 +44,21 @@
 
   // Rubriques : vue cible + filtre de la vue du parc. Les motifs lisent le texte des cartes
   // (nom, description, catégorie) ; « Mes modules » (phase 4) remplacera cette heuristique.
+  // Les rubriques ouvrent la MOSAÏQUE (tuiles cliquables) filtrée par leur motif ; « Modules » = tout.
   var RUBRIQUES=[
     {id:'accueil',nom:'Accueil',ic:'maison',nav:'accueil'},
-    {id:'tableau',nom:'Tableau de bord',ic:'jauge',nav:'accueil',cible:'#tiles'},
-    {id:'reseau',nom:'Réseau',ic:'reseau',nav:'systeme',motif:/maillage|réseau|reseau|dns|wireguard|vpn|ipv6|mesh|tor\b|exposition|proxy|hôtes|hotes|lan\b|wan\b/i},
-    {id:'securite',nom:'Sécurité',ic:'bouclier',nav:'systeme',motif:/muraille|sécurité|securite|waf|pare-feu|firewall|ban|guardian|coffre|vault|leurre|honeypot|acteur|actor|radar|renseignement|intrusion/i},
-    {id:'modules',nom:'Modules',ic:'grille',nav:'systeme'},
-    {id:'stockage',nom:'Stockage',ic:'disque',nav:'systeme',motif:/stockage|fichier|cloud|photo|dépôt|depot|torrent|disque|sauvegarde|partage|droplet/i},
-    {id:'media',nom:'Média',ic:'media',nav:'systeme',motif:/radio|vidéo|video|peertube|\btv\b|lyrion|musique|podcast|audio|mood|écoute|ecoute|youtube|flux|cinéma|cinema/i},
-    {id:'communication',nom:'Communication',ic:'bulle',nav:'systeme',motif:/mail|messag|forum|bbs|chat|voix|voice|social|diffusion|mur\b|gazette|billets|publication|site/i},
-    {id:'ia',nom:'IA',ic:'ia',nav:'systeme',motif:/\bia\b|intelligence|zia|lexie|assistant|modèle|modele|llm|vision|oracle/i},
-    {id:'outils',nom:'Outils',ic:'outils',nav:'systeme',motif:/outil|toolbox|boîte|boite|surf|viewer|dpi|sonde|ytsas|convert|éphéméride|ephemeride|zigbee|domot|devwatch|compteur/i},
-    {id:'systeme',nom:'Système',ic:'systeme',nav:'systeme',motif:/racine|amorce|système|systeme|métrique|metrique|metrics|courbe|journal|paquet|apt\b|noyau|mémoire|memoire|disque|processeur|hub|agrégateur|agregateur|profil|boot|eye/i}
+    {id:'tableau',nom:'Tableau de bord',ic:'jauge',nav:'accueil',cible:'.sbx-hero'},
+    {id:'reseau',nom:'Réseau',ic:'reseau',nav:'mosaique',motif:/maillage|réseau|reseau|dns|wireguard|vpn|ipv6|mesh|tor\b|exposition|proxy|hôtes|hotes|lan\b|wan\b/i},
+    {id:'securite',nom:'Sécurité',ic:'bouclier',nav:'mosaique',motif:/muraille|sécurité|securite|waf|pare-feu|firewall|ban|guardian|coffre|vault|leurre|honeypot|acteur|actor|radar|renseignement|intrusion/i},
+    {id:'modules',nom:'Modules',ic:'grille',nav:'mosaique'},
+    {id:'stockage',nom:'Stockage',ic:'disque',nav:'mosaique',motif:/stockage|fichier|cloud|photo|dépôt|depot|torrent|disque|sauvegarde|partage|droplet/i},
+    {id:'media',nom:'Média',ic:'media',nav:'mosaique',motif:/radio|vidéo|video|peertube|\btv\b|lyrion|musique|podcast|audio|mood|écoute|ecoute|youtube|flux|cinéma|cinema/i},
+    {id:'communication',nom:'Communication',ic:'bulle',nav:'mosaique',motif:/mail|messag|forum|bbs|chat|voix|voice|social|diffusion|mur\b|gazette|billets|publication|site/i},
+    {id:'ia',nom:'IA',ic:'ia',nav:'mosaique',motif:/\bia\b|intelligence|zia|lexie|assistant|modèle|modele|llm|vision|oracle/i},
+    {id:'outils',nom:'Outils',ic:'outils',nav:'mosaique',motif:/outil|toolbox|boîte|boite|surf|viewer|dpi|sonde|ytsas|convert|éphéméride|ephemeride|zigbee|domot|devwatch|compteur/i},
+    {id:'systeme',nom:'Système',ic:'systeme',nav:'mosaique',motif:/racine|amorce|système|systeme|métrique|metrique|metrics|courbe|journal|paquet|apt\b|noyau|mémoire|memoire|disque|processeur|hub|agrégateur|agregateur|profil|boot|eye/i}
   ];
+  var ICO_CAT={wall:'bouclier',mind:'ia',mesh:'reseau',auth:'usager',root:'systeme',boot:'jauge'};
   var ONGLETS=['accueil','modules','securite','reseau','systeme'];
 
   var construit=false, filtreActif=null;
@@ -83,6 +85,7 @@
   function va(rub){
     var q=$('#q'); if(q&&q.value){ q.value=''; }
     Array.prototype.forEach.call(document.querySelectorAll('#sysboard .card'),function(c){ c.style.display=''; });
+    if(rub.nav==='mosaique'){ montreMosaique(rub); marque(rub.id); fermeTiroir(); return; }
     showView(rub.nav);
     if(rub.nav==='systeme') filtreParc(rub); else filtreActif=null;
     if(rub.cible){ var c=$(rub.cible); if(c) c.scrollIntoView({block:'start',behavior:'smooth'}); }
@@ -102,6 +105,7 @@
       Object.keys(vues).forEach(function(v){
         var e=document.getElementById('view-'+v);
         if(e&&!e.classList.contains('hidden')){
+          var mo=document.getElementById('view-mosaique'); if(mo&&!mo.classList.contains('hidden')&&!mosaiqueEnCours) mo.classList.add('hidden');
           var actuel=document.querySelector('.sbx-rub.on');
           var deja=actuel&&RUBRIQUES.some(function(r){ return r.id===actuel.getAttribute('data-rub')&&r.nav===v; });
           if(!deja) marque(vues[v]);
@@ -112,6 +116,75 @@
     Object.keys(vues).forEach(function(v){ var e=document.getElementById('view-'+v); if(e) obs.observe(e,{attributes:true,attributeFilter:['class']}); });
     // Le parc se redessine (registre, sonde) : on réapplique le filtre courant.
     var sb=$('#sysboard'); if(sb) new MutationObserver(function(){ if(filtreActif) filtreParc(filtreActif); }).observe(sb,{childList:true});
+  }
+
+  // ── Mosaïque : tuiles cliquables des modules (registre) et des sites (metablogizer) ──
+  var ONGLETS_MOSAIQUE=[{id:'tous',label:'Tous'},{id:'recents',label:'Récents'},{id:'favoris',label:'Favoris'},{id:'securite',label:'Sécurité'},
+    {id:'reseau',label:'Réseau'},{id:'media',label:'Média'},{id:'ia',label:'IA'},{id:'systeme',label:'Système'},{id:'sites',label:'Sites'}];
+  var CLE_RECENTS='sbx.hall.recents', mosaique=null, ongletMosaique='tous', sites=null, sitesT=0, mosaiqueEnCours=false;
+  function recents(){ try{ return JSON.parse(localStorage.getItem(CLE_RECENTS)||'[]'); }catch(e){ return []; } }
+  function noteRecent(id){ var r=recents().filter(function(x){ return x!==id; }); r.unshift(id); ecrit(CLE_RECENTS,JSON.stringify(r.slice(0,12))); }
+  document.addEventListener('click',function(e){ var o=e.target.closest&&e.target.closest('[data-open]'); if(o&&o.getAttribute('data-open')) noteRecent(o.getAttribute('data-open')); },true);
+  function modules(){
+    var reg=window._reg||{}, parStatut={}; ((regDernier&&regDernier.services)||[]).forEach(function(s){ parStatut[s.id]=s; });
+    var ids=Object.keys(reg).length?Object.keys(reg):Object.keys(parStatut);
+    return ids.map(function(id){ var s=reg[id]||parStatut[id]||{id:id}; var p=parStatut[id]; return {id:id,name:s.name||id,description:s.description||'',category:s.category||'',status:(p&&p.status)||(s.status)||'nosource',hote:(typeof window.host==='function'?window.host(s):'')||''}; })
+      .sort(function(a,b){ return String(a.name).localeCompare(String(b.name),'fr',{sensitivity:'base'}); });
+  }
+  function filtreModules(liste,onglet){
+    if(onglet==='recents'){ var r=recents(); return r.map(function(id){ return liste.filter(function(m){ return m.id===id; })[0]; }).filter(Boolean); }
+    if(onglet==='favoris'){ var f={}; Array.prototype.forEach.call(document.querySelectorAll('#favbande .fcard[data-embed]'),function(c){ f[c.getAttribute('data-embed')]=1; }); return liste.filter(function(m){ return f[m.id]; }); }
+    var rub=RUBRIQUES.filter(function(x){ return x.id===onglet&&x.motif; })[0];
+    if(!rub) return liste;
+    return liste.filter(function(m){ return rub.motif.test(m.name+' '+m.description+' '+m.category); });
+  }
+  function tuileModule(m){
+    var b=el('button',{type:'button','class':'sbx-mtuile','data-open':m.id,'data-mode':'embed','data-status':m.status,title:m.description||m.name});
+    b.appendChild(svgIco(ICO_CAT[m.category]||'grille'));
+    var tx=el('span',{'class':'tx'}); tx.appendChild(el('b',null,m.name)); tx.appendChild(el('small',{'class':'mono'},m.hote||m.id)); b.appendChild(tx);
+    var led=el('i',{'class':'sbx-led','data-ton':{active:'ok',idle:'info',offline:'off',stale:'warn'}[m.status]||'neutre','aria-label':{active:'actif',idle:'en veille',offline:'hors ligne',stale:'données périmées'}[m.status]||'aucune source'});
+    b.appendChild(led); return b;
+  }
+  function svgIco(n){ var w=el('span'); w.innerHTML=ico(n); return w.firstChild; }
+  function tuileSite(s){
+    var a=el('a',{'class':'sbx-stuile',href:'https://'+s.domain+'/',target:'_blank',rel:'noopener',title:s.title||s.name});
+    var v=el('span',{'class':'vig'});
+    if(s.vignette){ var im=new Image(); im.alt=''; im.loading='lazy'; im.decoding='async'; im.src='/api/v1/metablogizer/site/'+encodeURIComponent(s.name)+'/screenshot'; im.addEventListener('error',function(){ this.remove(); }); v.appendChild(im); }
+    else v.appendChild(el('span',{'class':'sans'},(s.title||s.name).slice(0,1).toUpperCase()));
+    a.appendChild(v); var tx=el('span',{'class':'tx'}); tx.appendChild(el('b',null,s.title||s.name)); tx.appendChild(el('small',{'class':'mono'},s.domain||'')); a.appendChild(tx); return a;
+  }
+  function chargeSites(cb){
+    if(sites&&Date.now()-sitesT<900000) return cb(sites);
+    fetch('/api/v1/metablogizer/public/mosaique',{credentials:'same-origin'}).then(function(r){ return r.ok?r.json():{sites:[]}; })
+      .then(function(d){ sites=(d.sites||[]).filter(function(s){ return s.domain; }); sitesT=Date.now(); cb(sites); }).catch(function(){ cb([]); });
+  }
+  function rendMosaique(){
+    if(!mosaique) return; var grille=mosaique.querySelector('.sbx-mosaique'), vide=mosaique.querySelector('.sbx-mosaique-vide'); grille.textContent=''; vide.hidden=true;
+    if(ongletMosaique==='sites'){ grille.setAttribute('data-vue','sites'); return chargeSites(function(l){ if(ongletMosaique!=='sites') return; l.forEach(function(s){ grille.appendChild(tuileSite(s)); }); vide.hidden=!!l.length; vide.textContent='Aucun site publié pour l’instant.'; }); }
+    grille.setAttribute('data-vue','modules');
+    var l=filtreModules(modules(),ongletMosaique); l.forEach(function(m){ grille.appendChild(tuileModule(m)); });
+    vide.hidden=!!l.length; vide.textContent=ongletMosaique==='favoris'?'Aucun favori — ★ sur une carte de l’accueil.':ongletMosaique==='recents'?'Rien d’ouvert récemment.':'Aucun module dans cette rubrique.';
+  }
+  function construisMosaique(){
+    if(mosaique) return mosaique;
+    var main=$('.main'); if(!main||!window.SbxUI) return null;
+    mosaique=el('section',{id:'view-mosaique','class':'hidden','aria-label':'Mosaïque des modules'});
+    var tete=el('div',{'class':'sbx-mosaique-tete'}); tete.appendChild(el('h2',{'class':'sbx-mosaique-titre'},'Modules'));
+    var tabs=window.SbxUI.Tabs({onglets:ONGLETS_MOSAIQUE,actif:ongletMosaique,onChange:function(id){ ongletMosaique=id; rendMosaique(); }});
+    tete.appendChild(tabs); mosaique.appendChild(tete);
+    mosaique.appendChild(el('div',{'class':'sbx-mosaique'})); mosaique.appendChild(el('p',{'class':'sbx-mosaique-vide',hidden:''}));
+    main.appendChild(mosaique); mosaique.sbxTabs=tabs; return mosaique;
+  }
+  function montreMosaique(rub){
+    if(!construisMosaique()) return;
+    mosaiqueEnCours=true;
+    ['accueil','embed','systeme','aide'].forEach(function(k){ var e=document.getElementById('view-'+k); if(e) e.classList.add('hidden'); });
+    if(typeof window.fermeSurf==='function') window.fermeSurf();
+    mosaiqueEnCours=false;
+    ongletMosaique=(rub&&rub.id!=='modules'&&ONGLETS_MOSAIQUE.some(function(o){ return o.id===rub.id; }))?rub.id:'tous';
+    mosaique.sbxTabs.sbxChoisit(ongletMosaique);
+    mosaique.classList.remove('hidden'); mosaique.querySelector('.sbx-mosaique-titre').textContent=rub&&rub.id!=='modules'?rub.nom:'Modules';
+    rendMosaique(); window.scrollTo({top:0});
   }
 
   // ── Tiroir (téléphone) ─────────────────────────────────────────────────
@@ -246,7 +319,7 @@
   function sondeRegistre(){
     if(document.hidden){ regRetard=REG_PAS; return planifieRegistre(); }
     fetch('/api/v1/webos/public/services',{credentials:'same-origin'}).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
-      .then(function(d){ regDernier=d; regRetard=REG_PAS; appliqueRegistre(d); })
+      .then(function(d){ regDernier=d; regRetard=REG_PAS; appliqueRegistre(d); if(mosaique&&!mosaique.classList.contains('hidden')&&ongletMosaique!=='sites') rendMosaique(); })
       .catch(function(){ regRetard=Math.min(regRetard*2,60000); if(regDernier) appliqueRegistre(regDernier); })
       .then(planifieRegistre);
   }

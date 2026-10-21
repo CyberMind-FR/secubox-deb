@@ -1,3 +1,14 @@
+secubox-webos (1.17.0-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : mosaïque de tuiles cliquables (phase 4, ref #2996). « Modules » et les rubriques de
+    la sidebar / barre basse ouvrent une vue `#view-mosaique` : tuiles des modules du registre
+    (icône de catégorie, nom, hôte, pastille de statut) qui s'ouvrent dans le Hall, onglets Tous /
+    Récents / Favoris / Sécurité / Réseau / Média / IA / Système / Sites ; l'onglet Sites reprend
+    le mur metablogizer (`/public/mosaique`, vignettes `/site/{nom}/screenshot`, lien direct).
+    Récents mémorisés par navigateur (12 derniers services ouverts).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 12:40:00 +0200
+
 secubox-webos (1.16.0-1~trixie1) trixie; urgency=medium
 
   * Hall : réactivité de la vue maître, phase 3 (ref #2996). Le registre porte un statut typé

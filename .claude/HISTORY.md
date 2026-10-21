@@ -38,6 +38,10 @@ propriétaire : **trixie est la suite par défaut** des scripts de build (`build
 Phase 3 (webos 1.16.0) : statut typé côté registre (`statut()`, veille lue sur `profiles.sock`), `/public/services`
 + `status`/`releve`/`intervalle_s`, cartes v2 avec pied « Relevé » et « données périmées », aperçu sans requête pour
 un module en veille, sondages à recul exponentiel, dock média vérifié persistant, sparklines du Hero en deux séries.
+Phase 4, premier pas (webos 1.17.0) : mosaïque cliquable derrière « Modules » et les rubriques (tuiles de modules
+`data-open` ouvrant le service dans le Hall, onglets Tous/Récents/Favoris/catégories/Sites, mur metablogizer avec
+ses vignettes). Constat : aucune capture d'écran n'existe pour les webuis de modules sur gk2 (176 sites
+metablogizer et 20 applis Streamlit en ont).
 Constat : `test_ytflux_aurora_2638::test_la_route_flux_n_est_pas_ouverte_sur_le_vhost_admin` échoue déjà
 sur `master`, indépendamment de ce chantier. Dossier : `docs/dossiers/hall-vue-maitre.md`.
 
