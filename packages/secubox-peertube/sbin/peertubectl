@@ -11,7 +11,7 @@
 
 set -u
 
-readonly VERSION="1.1.0"
+readonly VERSION="1.2.0"
 readonly CONFIG_FILE="${SECUBOX_PEERTUBE_CONFIG:-/etc/secubox/peertube.toml}"
 readonly INSTALL_LIB="${SECUBOX_INSTALL_LIB:-/usr/share/secubox/lib/peertube/install-lxc.sh}"
 
@@ -532,17 +532,46 @@ pt_sql() {
 
 sso_nom_ok() { printf '%s' "$1" | grep -Eq '^[a-z0-9._]{1,50}$'; }
 
+# Une décision de sécurité = une ligne JSON dans le journal d'audit (append-only).
+AUDIT_LOG="${SECUBOX_AUDIT_LOG:-/var/log/secubox/audit.log}"
+audit() {   # action compte administrateur(true|false) resultat
+    mkdir -p "$(dirname "$AUDIT_LOG")" 2>/dev/null || true
+    printf '{"ts": "%s", "module": "peertube", "action": "%s", "compte": "%s", "administrateur": %s, "resultat": "%s"}\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" >> "$AUDIT_LOG" 2>/dev/null || true
+}
+
 # Rattache un compte ORDINAIRE (rôle 2) au greffon : il s'ouvre dès lors par la
-# session SecuBox et plus par mot de passe. Jamais un administrateur ni un
-# modérateur, jamais un compte déjà rattaché à un autre greffon.
+# session SecuBox et plus par mot de passe. Jamais un modérateur, jamais un
+# compte déjà rattaché à un autre greffon. Un ADMINISTRATEUR ne l'est que sur
+# demande explicite (--administrateur, #3008) : la session SecuBox qui l'ouvre
+# est celle de l'administrateur de la box, qui a déjà la main sur PeerTube par
+# ce ctl ; l'automatisme de `sso` (comptes liés par l'Identity Manager) ne le
+# fait jamais. Chaque rattachement est audité.
 cmd_sso_rattache() {
-    local nom="${1:-}"; sso_nom_ok "$nom" || { err "nom invalide"; return 1; }
-    local n
+    local nom="" admin=false a
+    for a in "$@"; do
+        case "$a" in
+            --administrateur) admin=true ;;
+            --*) err "option inconnue : $a"; return 1 ;;
+            *) nom="$a" ;;
+        esac
+    done
+    sso_nom_ok "$nom" || { err "nom invalide"; return 1; }
+    local n garde="AND role = 2"
+    $admin && garde="AND role IN (0, 2)"
     # Sans greffon actif, un compte rattaché n'aurait PLUS AUCUNE entrée.
     n=$(pt_sql "SELECT 1 FROM plugin WHERE name = 'secubox-sso' AND type = 1 AND enabled") || return 1
     [ "$n" = 1 ] || { warn "greffon secubox-sso inactif — $nom non rattaché"; return 0; }
-    n=$(pt_sql "UPDATE \"user\" SET \"pluginAuth\" = '$SSO_NPM' WHERE username = '$nom' AND role = 2 AND \"pluginAuth\" IS NULL RETURNING username") || return 1
-    [ -n "$n" ] && log "$nom : entrée par la session SecuBox" || log "$nom : inchangé (absent, déjà rattaché, ou pas un compte ordinaire)"
+    n=$(pt_sql "UPDATE \"user\" SET \"pluginAuth\" = '$SSO_NPM' WHERE username = '$nom' $garde AND \"pluginAuth\" IS NULL RETURNING username") || return 1
+    local quoi="un compte ordinaire"
+    $admin && quoi="un compte ordinaire ou administrateur"
+    if [ -n "$n" ]; then
+        audit sso-rattache "$nom" "$admin" rattache
+        log "$nom : entrée par la session SecuBox ($quoi)"
+    else
+        audit sso-rattache "$nom" "$admin" inchange
+        log "$nom : inchangé (absent, déjà rattaché, ou pas $quoi)"
+    fi
 }
 
 # Retour arrière : le compte redevient un compte à mot de passe.
@@ -617,6 +646,7 @@ Usage: peertubectl <verb> [args]
   sso                           Entrée par la session SecuBox (greffon + comptes
                                 liés ordinaires ; rien sans la garde du vhost)
   sso-rattache|sso-detache <n>  Un compte ordinaire : par la session / par mot de passe
+      [--administrateur]        sso-rattache d'un administrateur, explicite et audité
   help                          This message
 
 Config: $CONFIG_FILE  (name/ip/path/http_port/public_hostname)

@@ -1,3 +1,12 @@
+secubox-peertube (1.6.2-1~trixie1) trixie; urgency=medium
+
+  * peertubectl 1.2.0 : `sso-rattache <nom> --administrateur` (ref #3008) — rattache un compte
+    administrateur au greffon secubox-sso sur demande explicite seulement (l'automatisme `sso`
+    ne rattache toujours que des comptes ordinaires) ; chaque rattachement, accepté ou non, écrit
+    une ligne JSON dans /var/log/secubox/audit.log. Test : tests/test_sso_rattache.sh.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 21 Oct 2026 18:50:00 +0200
+
 secubox-peertube (1.6.1-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
