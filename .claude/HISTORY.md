@@ -35,6 +35,19 @@ sans `public_base`, `request.base_url` porte le root_path et doublait `/api/v1/p
 global compris) ; l'origine vient désormais de l'hôte (https pour un nom, schéma transmis pour une IP). 92 tests
 verts ; déployé sur gk2 (8 podcasts, flux 465 à 60 épisodes vérifié), publié trixie.
 
+## 2026-10-22 — webfilter : Chaturbate de nouveau bloqué pour le Pop!_OS, budget checkconf levé (ref #3005)
+
+« chaturbate re ko ? » : l'application nocturne de 04:00 (carte version 43) ne connaissait le MAC `ac:19:8e:ab:26:c9` que par
+deux IPv6 ; `192.168.1.3` revenue ensuite tombait dans `wf-defaut` (adulte = block). Une ré-application déposée à la main
+(`appliquer.demande`) a d'abord été REFUSÉE : `unbound-checkconf` dépassait le budget de 60 s codé dans `secubox_unbound`
+(1,4 M de zones, charge 20), le ctl restaurait l'ancien drop-in ; la seconde a réussi (149 s, 822 540 zones), 192.168.1.3 est
+revenue dans la vue visiteurs. Correctif de fond : `secubox-core` 1.7.12 (`DELAI_CHECKCONF = 600`, le refus doit venir de
+checkconf, jamais du chronomètre) et `secubox-webfilter` 0.4.3 (unité d'application `TimeoutStartSec=20min`, Depends core
+>= 1.7.12, `/health` et test de version alignés : deux tests rouges depuis 0.4.x). Déployés sur gk2, publiés trixie. Reste
+(#3005) : ré-appliquer quand les adresses d'un appareil assigné changent. Incident de session : disque de la station à 100 %
+(647 Mo libres), trois worktrees fusionnés retirés ; un dossier `secubox-deb-worktrees/3005-webfilter-checkconf` incomplet
+reste à supprimer à la main.
+
 ## 2026-10-19 — secubox-pseudo-routeur : gk2 passerelle DHCP du LAN plat (ref #2940, PR #2945)
 
 Nouveau paquet secubox-pseudo-routeur 0.1.0 (source seulement, pas encore installé ni essayé sur gk2) :

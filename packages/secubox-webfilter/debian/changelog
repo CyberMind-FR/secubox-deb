@@ -1,3 +1,13 @@
+secubox-webfilter (0.4.3-1~trixie1) trixie; urgency=medium
+
+  * Unité d'application : TimeoutStartSec 5 min → 20 min (ref #3005), cohérent avec le budget
+    checkconf de 10 min de secubox-core 1.7.12 (Depends relevé) ; sans quoi systemd tuerait une
+    application valide mais lente. Reste à faire (#3005) : ré-appliquer quand les adresses d'un
+    appareil assigné changent, au lieu d'attendre 04:00. Version annoncée par /health alignée ;
+    test de version du paquet accepte la suite trixie (deux tests rouges depuis 0.4.x).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 03:05:00 +0200
+
 secubox-webfilter (0.4.2-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.

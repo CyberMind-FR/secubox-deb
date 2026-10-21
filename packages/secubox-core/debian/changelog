@@ -1,3 +1,13 @@
+secubox-core (1.7.12-1~trixie1) trixie; urgency=medium
+
+  * secubox_unbound : budget d'unbound-checkconf 60 s → 600 s (DELAI_CHECKCONF, ref #3005).
+    Sur gk2 (~1,4 M de zones), checkconf prend 23 s à vide et plusieurs minutes sous charge :
+    le webfilter voyait sa configuration valide REFUSÉE par le chronomètre, restaurait
+    l'ancienne, et un appareil gardait une vue périmée (Chaturbate de nouveau bloqué pour un
+    poste exempté). Le refus doit venir de checkconf, jamais du délai.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 03:00:00 +0200
+
 secubox-core (1.7.11-1~bookworm1) bookworm; urgency=medium
 
   * Cadence des minuteries : les quatorze drop-ins redonnent `OnActiveSec=60s` apres leur remise a zero (ref #2925). Vider « OnUnitActiveSec= » remet a zero TOUTES les minuteries monotones, OnBootSec et OnActiveSec compris : il ne restait que OnUnitActiveSec=<intervalle>, qui ne part jamais sans activation prealable du service. Les minuteries concernees (netstats, annuaire apply et bans-apply, media-drain, nft-cache, p2p-ephemeral-sweep, ui-health, wan-link-guard, torrent-conserve, ytsas-conserve, threatmesh-bridge, waf-watchdog, metrics-publish) restaient « elapsed » avec une echeance infinie apres chaque mise a jour de paquet. Le correctif de #2919 (OnActiveSec dans les fichiers .timer) etait efface par ces drop-ins. Test : tests/test_cadence_demarrage_2925.py.
