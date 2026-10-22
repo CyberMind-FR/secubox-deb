@@ -9,6 +9,18 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Hall v2 : variante encartée des micros MetaNews, BBS et Billets (ref #2996)
+
+« next » (le GO sur la fusion des flux reste au propriétaire). PR #3049 : `secubox-webos` 1.19.19 adresse `{sbx:'carte'}`
+aussi aux micros d'autres origines, à l'origine exacte du cadre lue au moment de l'envoi (jamais `*`) ; les trois micros qui
+portaient une marque en double la rangent (icône + titre, le compteur reste) : `secubox-metanews` 0.5.2 et `secubox-bbs`
+0.37.12 (cross-build arm64), `secubox-billets` 0.13.3 (règle dans `api/static/micro.css`, écouteur dans le gabarit). Radio
+et Podcaster sont des lecteurs sans titre : rien à faire. Tests : Go (bbs, metanews), pytest (billets), Hall (Chromium de
+test ne charge pas un cadre https intercepté : le test donne au micro une origine http interceptée). Tout déployé sur gk2
+et publié dans apt trixie ; vérifié en direct pour MetaNews (les cartes BBS, Billets et YTSaS ne sont pas affichées sur le Hall
+de gk2 : le micro BBS n'y apparaît qu'emboîté dans le cumul Forums, hors portée du message). Échecs préexistants inchangés : bbs
+`TestDepotPasserelleRefuseAuJetonMembre`, billets 35 (test_admin & co, identiques sur master), webos ytflux.
+
 ## 2026-10-22 — Hall v2 : plus de double en-tête sur les cardlets habillés en `Card` (ref #2996)
 
 « next » (le GO sur la fusion des flux reste au propriétaire : item sauté). `secubox-webos` 1.19.18 (PR #3048), déployé

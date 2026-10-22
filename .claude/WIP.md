@@ -52,9 +52,10 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   deux relais nginx en lecture seule ; anciennes cartes conservées.
 - **Fait (webos 1.19.18, 2026-10-22)** : plus de double en-tête sur les cardlets encartés (message `{sbx:'carte'}`, règle
   dans `sonde.js`).
+- **Fait (webos 1.19.19, metanews 0.5.2, bbs 0.37.12, billets 0.13.3 ; 2026-10-22)** : micros d'autres origines encartés
+  (marque rangée, message à leur origine exacte).
 - ⬜ **Next Up** : phase 4, reste — **GO du propriétaire** sur la fusion des flux (retirer ou masquer les cartes MetaNews / Flux
-  YouTube / Billets de l'accueil v2 — ne se fait pas sur un « next ») ; variante encartée des micros d'autres origines (MetaNews,
-  BBS, radio, billets, podcaster : leur en-tête double encore la Card) ; `ephemeride` et `ipv6guard` sans entrée de registre
+  YouTube / Billets de l'accueil v2 — ne se fait pas sur un « next ») ; `ephemeride` et `ipv6guard` sans entrée de registre
   (API seule, à trancher) ; relais Streamlit `/apps/{nom}/screenshot` pour les vignettes ; à trancher : reprise du relevé système
   dans les courbes de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
 
