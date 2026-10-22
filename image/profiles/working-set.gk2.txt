@@ -169,7 +169,6 @@ metanews
 metrics
 premier-pas
 sbxos
-socialrelay
 surf
 vault
 voice

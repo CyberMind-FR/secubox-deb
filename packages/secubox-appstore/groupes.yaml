@@ -90,7 +90,6 @@ description: "Suivre ce qui se dit : agrégation de sources, fil d'actualité et
 modules:
   - secubox-metanews
   - secubox-bbs
-  - secubox-socialrelay
 
 
 groupe: maison

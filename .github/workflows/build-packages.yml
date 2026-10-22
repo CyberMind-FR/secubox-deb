@@ -363,7 +363,7 @@ jobs:
           # either way it aborts ("Unmet build dependencies: golang-go (>= …)")
           # even though the compiler is present and the build is vendored and
           # self-contained. Skip the dep check for every Go package, detected by
-          # golang-go in its control (covers radio, socialrelay, bbs, metanews…).
+          # golang-go in its control (covers radio, bbs, metanews…).
           if grep -qE 'golang-go' debian/control; then
             DEPFLAG="-d"
           fi

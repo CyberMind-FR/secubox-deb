@@ -431,7 +431,6 @@ label: Fédivers
 description: "Présence fédérée et relais social avec consentement."
 requiert:
 recommande:
-  - secubox-socialrelay
   - secubox-billets
 
 meta: secubox-service-visio

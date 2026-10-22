@@ -60,7 +60,7 @@ Un clic vous y emmène.
 Trois cas, et le Hall prend toujours le meilleur disponible :
 
 1. **Le service dessine sa propre vignette** — la radio, le pare-feu, le
-   podcaster, les billets, MetaNews, le forum, SocialRelay. C'est le service
+   podcaster, les billets, MetaNews, le forum. C'est le service
    lui-même qui décide de ce qui mérite d'être montré.
 2. **Le service n'en a pas encore** — le Hall affiche alors sa **vraie page**,
    réduite. Rien n'est inventé.

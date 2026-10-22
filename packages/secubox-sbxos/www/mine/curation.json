@@ -236,13 +236,6 @@
    "url": "depot.gk2.secubox.in"
   },
   {
-   "id": "socialrelay",
-   "label": "SocialRelay",
-   "icon": "🔄",
-   "color": "#1f7a58",
-   "url": "socialrelay.gk2.secubox.in"
-  },
-  {
    "id": "comptes",
    "label": "Mes comptes",
    "icon": "🗝️",

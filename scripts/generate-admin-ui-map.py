@@ -40,7 +40,6 @@ NOTES = {
     "console": ("non (TUI sans page web)", "faible", "sans chemin : le hub l'écarte déjà"),
     "mediaflow": ("non", "faible", "rangé en « boot » dans le menu actuel : reclassé en Surveillance"),
     "avatar": ("non", "faible", "« Identity Manager » dans le menu mesh : entrée à renommer plus tard"),
-    "socialrelay": ("non", "faible", "entrée de menu sans page à son nom : écartée par le hub"),
     "metanews": ("non", "faible", "entrée de menu sans page à son nom : écartée par le hub"),
     "sbxos-audio-mood": ("non", "faible", "entrée de menu sans page à son nom : écartée par le hub"),
     "dns": ("non", "faible", "zones DNS ; le filtrage DNS est sous Protection (dns-guard, ad-guard, webfilter)"),

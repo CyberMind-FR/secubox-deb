@@ -447,10 +447,6 @@
    "espace": "surveillance",
    "objet": "ALERT"
   },
-  "socialrelay": {
-   "espace": "services",
-   "objet": "SERVICE"
-  },
   "streamforge": {
    "espace": "services",
    "objet": "SERVICE"

@@ -5661,31 +5661,6 @@ modules:
       presente: false
       chemin: "À documenter"
       vhosts: []
-  - id: secubox-socialrelay
-    nom: "secubox-socialrelay"
-    categorie: "misc"
-    tier: "lite"
-    description: "SecuBox — relais de reseaux sociaux (fediverse + consentement)"
-    manifeste: true
-    lxc: false
-    tests: 3
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd: []
-    ports:
-      - "9080"
-    documentation: []
-    api:
-      socket: "À documenter"
-      health: "À documenter"
-      authentifie: false
-      nb_routes: 0
-    interface_web:
-      presente: false
-      chemin: "À documenter"
-      vhosts:
-        - "socialrelay.gk2.secubox.in"
   - id: secubox-streamforge
     nom: "secubox-streamforge"
     categorie: "media"
