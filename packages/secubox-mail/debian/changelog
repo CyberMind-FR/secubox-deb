@@ -1,3 +1,9 @@
+secubox-mail (2.16.4-1~trixie1) trixie; urgency=high
+
+  * L'API ne démarrait plus (2.16.3) : `re` utilisé sans import dans api/main.py (ref #3033).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 08:15:08 +0200
+
 secubox-mail (2.16.3-1~trixie1) trixie; urgency=medium
 
   * Rapatriement d'une boîte IMAP distante dans une boîte SecuBox (ref #3033) : `mailctl imap-sync

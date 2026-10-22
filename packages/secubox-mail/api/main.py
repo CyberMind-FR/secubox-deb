@@ -14,6 +14,7 @@ SecuBox is an appliance and network model - distributed peer applications.
 """
 import subprocess
 import os
+import re
 import json
 import socket
 import uuid
