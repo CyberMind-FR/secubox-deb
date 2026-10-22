@@ -40,9 +40,14 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - **Fait (webos 1.19.3 → 1.19.8, hub 1.12.20)** : navigation unique = sidebar (onglets de mosaïque retirés, rubriques Récents /
   Services / **Favoris dynamique** sur la bande ★, menu contextuel du service embarqué rétabli, colonne vide des pages admin
   embarquées supprimée) ; vignettes avec sonde HTTP (421/connexion exclus), rattrapage `sbx-vignettes-rattrapage` en cours sur gk2.
-- ⬜ **Next Up** : phase 4, suite — migration des cartes vers `Card` dans l'ordre du prompt ; anciennement : vignettes des modules (relais Streamlit `/apps/{nom}/screenshot`, captures des webuis à produire),
-  migration des cartes vers `Card` dans l'ordre du prompt ; à trancher : courbes `secubox-metrics`, option `hall.v2.hero-dice` (statut typé côté API, « Relevé », chargement différé, dock Radio) ; à trancher :
-  reprise du relevé système dans les courbes de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
+- **Fait (webos 1.19.11 → 1.19.12, 2026-10-22)** : phase 4, suite — premier lot de cartes habillées en `Card` sur place
+  (`MIGREES` : securite, acteurs, radar, guardian, dpi, ipv6guard, activite ; `SOURCE_STATUT` pour le statut des cartes de
+  curation), ancien rendu conservé, déployé gk2, dossier §5.
+- ⬜ **Next Up** : phase 4, lots suivants dans l'ordre du prompt — Accès rapide (`Tile`), Flux d'actualités (fusion MetaNews +
+  Flux YouTube + Billets en `NewsItem`), Radio dock, Mur de discussion, Éphéméride, Zigbee, DevWatch, ZIA, Mes comptes, Lyrion,
+  Freebox TV, L'écoute, YTSaS (ajouter l'id à `MIGREES` + `ICO_CARTE`, alléger les cardlets à double en-tête : Activité, cumul) ;
+  relais Streamlit `/apps/{nom}/screenshot` pour les vignettes ; à trancher : reprise du relevé système dans les courbes de
+  `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
 
 ## ✅ Fusionné et déployé le 2026-10-21 (PR #2997, #2999, #3001, #3004, #3006 fusionnées en squash)
 

@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Hall v2, phase 4 (suite) : cartes de l'accueil habillées en `Card`, premier lot dans l'ordre du prompt (ref #2996)
+
+« next » → premier ⬜ de WIP. `secubox-webos` 1.19.11 (PR #3039) puis 1.19.12 (PR #3040), déployés sur gk2 et publiés dans
+apt trixie. Lot `MIGREES` (`hall-v2.js`) rapporté aux cartes réelles : Sécurité = securite, acteurs, radar ; DNS et Appareils
+= guardian ; Réseau = dpi, ipv6guard ; Notifications = activite ; État système = le Hero. Une carte du lot est **habillée sur
+place** (`SbxUI.Card({hote: article})`, nouveau) : en-tête icône SVG + titre + pastille de statut typé + action › (`data-open`,
+délégation du Hall), cardlet intact dans le corps, pied « hôte · Relevé » ; l'ancien rendu n'est pas retiré (poignée, étoile,
+aide descendues dans la bande du pied pour ne pas tronquer le titre ; glisser, favoris, auto-guide inchangés). Hors lot : pied
+v2 de la phase 3 ; Hall v1 intact. 1.19.12 : une carte de curation sans module à son nom prend le statut du module qui la sert
+(`SOURCE_STATUT` : waf, actor, ad-guard, sbxid) — sur gk2 elles s'affichaient « aucune source » en pointillés. Test
+`test_cartes_card_2996.py` ; suite webos 676 passés, 1 échec préexistant (`test_ytflux_aurora_2638`, route `flux` sur le
+vhost admin). Dossier §5 avec captures 1440 / 390. Stale worktree de #2996 (PR #2997 fusionnée) retiré, refait depuis master.
+
 ## 2026-10-22 — Radio : titres en « Récupération… » (ytsas figé par des yt-dlp orphelins) et jeton radio refusé par le BBS (closes #3034, closes #3036)
 
 « radio » (capture : titres en RÉCUPÉRATION…). Deux causes distinctes. (1) Dans le LXC ytsas, 62 processus `yt-dlp -j
