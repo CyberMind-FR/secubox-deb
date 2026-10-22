@@ -1505,7 +1505,6 @@ const FEATURED = [
    micro:"/micro.html", h:352, micro_audio:true, admin:"/sbxos-audio-mood/"},
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in", micro:"/micro", h:214},
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214, admin:"/droplet/"},
-  {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in", micro:"/micro", h:222, admin:false},
   // MES COMPTES (#1466) : les comptes de la personne SBX OS (courriel, Nextcloud,
   // PeerTube, BBS) liés par l'Identity Manager, avec leur lien d'ouverture.
   {id:"comptes",    label:"Mes comptes", icon:"🗝️", color:"#6a4fb3", carte:"/cardlets/comptes.html", h:272, auth:true, admin:false},
@@ -1581,7 +1580,7 @@ function entree(h){ return ENTREE_SBX[String(h||'').split('.')[0]]||'/'; }
 // puisse lire — puis de la curation elle-meme : une carte qui n'apprend rien
 // occupe la place d'une qui aurait servi. Le service existe toujours et reste
 // atteignable par SYSTEME, ou tout le parc est liste.
-const EMBEDDABLE = new Set(["metanews","socialrelay","bbs","radio","billets","depot",
+const EMBEDDABLE = new Set(["metanews","bbs","radio","billets","depot",
                             "peertube","nextcloud","photoprism","mail",
                             "ytsas","torrent"]);
 // ORDRE PAR DEFAUT — LES PLUS ABOUTIES D'ABORD (#1266).
@@ -1608,7 +1607,7 @@ function rangPref(f){ const i = ORDRE_PREF.indexOf(f.id); return i<0 ? ORDRE_PRE
 // retire donc de la mosaïque — le registre (santé, menu Système) et le menu
 // latéral les gardent, aucun accès n'est perdu. La liste doit suivre les
 // couches définies dans cardlets/cumul.html (GROUPES).
-const _CUMULES = new Set(['bbs','nextcloud','photoprism','billets','depot','socialrelay','mail','ytsas','torrent']);
+const _CUMULES = new Set(['bbs','nextcloud','photoprism','billets','depot','mail','ytsas','torrent']);
 const FEATURED_ORDONNE = FEATURED.filter(f=>!_CUMULES.has(f.id)).slice().sort((a,b)=>(rangPref(a)-rangPref(b)) || (degreCarte(a)-degreCarte(b)));
 const FEAT_IDS = FEATURED.map(f=>f.id);
 const CATS = [

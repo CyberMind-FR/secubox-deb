@@ -208,12 +208,6 @@
       "metriques": []
     },
     {
-      "id": "socialrelay", "ic": "🔄", "nom": "SocialRelay", "service": "", "acces": "public",
-      "role": "Le relais de fédération sociale (ActivityPub) entre instances.",
-      "usage": ["Ouvrir la carte montre les instances relayées."],
-      "metriques": []
-    },
-    {
       "id": "comptes", "ic": "🗝️", "nom": "Mes comptes", "service": "sbxid", "acces": "session",
       "role": "Vos comptes dans les services de la box — courriel, Nextcloud, PeerTube, forum — et leur lien. Tous s'ouvrent avec la session du Hall, sans mot de passe.",
       "usage": ["Chaque ligne ouvre le service déjà connecté ; « Mon identité » gère vos appareils et comptes liés."],

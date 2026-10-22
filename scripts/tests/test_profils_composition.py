@@ -41,7 +41,7 @@ PROTECTIONS = {f"secubox-{m}" for m in (
     "wireguard", "vault", "backup", "haproxy", "dns", "routes", "qos", "freebox", "certs", "tor")}
 HEBERGEMENT = {f"secubox-{m}" for m in (
     "mail", "matrix", "nextcloud", "gitea", "metablogizer", "bbs",
-    "billets", "socialrelay", "metanews", "messagerie", "cdn", "saas-relay")}
+    "billets", "metanews", "messagerie", "cdn", "saas-relay")}
 HALL = {f"secubox-{m}" for m in (
     "webos", "sbxos", "surf", "ephemeride", "zia", "voice", "voicestudio", "radio", "podcaster",
     "peertube", "jellyfin", "ytsas", "media", "photoprism", "lyrion", "mqtt", "ai-gateway", "streamlit",

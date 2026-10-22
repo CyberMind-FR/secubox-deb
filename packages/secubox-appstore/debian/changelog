@@ -1,3 +1,9 @@
+secubox-appstore (0.9.1-1~trixie1) trixie; urgency=medium
+
+  * Retrait de secubox-socialrelay des groupes (ref #3052).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 20:00:00 +0200
+
 secubox-appstore (0.9.0-1~bookworm1) bookworm; urgency=medium
 
   * Installation a distance sur un autre noeud du maillage (#2808). La demande voyage dans la boite OpenPGP inter-box (#1736 : signee et chiffree, expediteur, destinataire, fraicheur et rejeu verifies par le demon) ; aucune nouvelle surface reseau, aucune signature ecrite ici. RIEN NE S'INSTALLE A LA RECEPTION : la demande attend dans l'App Store de la cible, dont l'administrateur l'accepte en RETAPANT le nom du paquet (comme le retrait) ou la refuse ; secubox-appstorectl garde ses propres gardes (liste blanche, paquets proteges, dependances) et le paquet doit etre au catalogue. Une reponse (installee, refusee, echec) revient a l'expediteur ; seule la cible d'une demande peut y repondre. Routes POST /remote/demander, GET /remote/demandes, POST /remote/demandes/<id>/accepter|refuser (toutes sous jeton, transmis a la boite). File bornee (10 en attente par expediteur). Panneau « Installation a distance » dans la page. 40 tests.

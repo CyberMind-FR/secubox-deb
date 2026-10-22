@@ -418,22 +418,6 @@
    "statut": "definitif"
   },
   {
-   "id": "socialrelay",
-   "label": "SocialRelay",
-   "categorie": "communication",
-   "priorite": "hall",
-   "master": "art/socialrelay.webp",
-   "taille": 512,
-   "etats": [
-    "repos",
-    "alerte",
-    "succes"
-   ],
-   "licence": "LicenseRef-CMSD-1.0",
-   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
-   "statut": "definitif"
-  },
-  {
    "id": "activite",
    "label": "Activité",
    "categorie": "communication",

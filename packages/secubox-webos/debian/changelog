@@ -1,3 +1,10 @@
+secubox-webos (1.19.22-1~trixie1) trixie; urgency=medium
+
+  * Retrait de SocialRelay (ref #3052) : carte, aide de carte, espaces SBX OS et jeux
+    EMBEDDABLE / cumul ne le citent plus.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 20:00:00 +0200
+
 secubox-webos (1.19.21-1~trixie1) trixie; urgency=medium
 
   * Hall v2 : rubrique « Applications » dans la mosaïque (ref #2996) — les applis Streamlit avec

@@ -148,7 +148,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-soc-agent` | dashboard | lite | — | 15 | — | 1 | — | — | — |
 | `secubox-soc-gateway` | dashboard | lite | — | 30 | — | 1 | — | — | — |
 | `secubox-soc-web` | dashboard | lite | — | — | — | — | — | — | — |
-| `secubox-socialrelay` | misc | lite | — | — | — | — | — | 3 | — |
 | `secubox-streamforge` | media | lite | oui | 17 | 1 | 1 | — | — | oui |
 | `secubox-streamlit` | media | lite | oui | 30 | 2 | 5 | — | 23 | oui |
 | `secubox-surf` | network | lite | — | — | — | — | — | 2 | — |
@@ -2286,23 +2285,6 @@ SecuBox SOC Web Dashboard — Browser-based Fleet Monitoring
 - **Tests** : À documenter
 - **Documentation existante** : À documenter
 - **Source technique** : `packages/secubox-soc-web/`
-
-### `secubox-socialrelay`
-
-SecuBox — relais de reseaux sociaux (fediverse + consentement)
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 0 route(s), socket `À documenter`, authentification À documenter
-- **Interface web** : À documenter
-- **Vhosts livrés** : `socialrelay.gk2.secubox.in`
-- **CLI** : À documenter
-- **Units systemd** : À documenter
-- **Ports** : 9080
-- **Conteneur LXC** : non
-- **Tests** : 3
-- **Documentation existante** : À documenter
-- **Source technique** : `packages/secubox-socialrelay/`
 
 ### `secubox-streamforge`
 

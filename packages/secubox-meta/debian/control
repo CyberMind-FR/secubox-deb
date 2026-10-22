@@ -437,8 +437,7 @@ Description: SecuBox — service « Messageries »
 Package: secubox-service-fediverse
 Architecture: all
 Depends: ${misc:Depends}
-Recommends: secubox-socialrelay,
-         secubox-billets
+Recommends: secubox-billets
 Description: SecuBox — service « Fédivers »
  Présence fédérée et relais social avec consentement.
  .

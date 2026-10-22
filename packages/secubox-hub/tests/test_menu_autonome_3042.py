@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """#3042 — un module AUTONOME sert sa page lui-même, sans dossier www/.
 
-gk2 : metanews et socialrelay (Go) répondent 200 sur admin.<domaine>/<id>/ mais n'ont pas de
+gk2 : metanews (Go) répond 200 sur admin.<domaine>/<id>/ mais n'ont pas de
 /usr/share/secubox/www/<id>/ : le hub les écartait du menu, donc du registre du Hall (« aucune source »).
 La clé `"autonome": true` de menu.d le dit — le fichier menu.d est livré par le paquet, sa présence prouve
 l'installation ; l'activité reste jugée sur l'unité / la socket du module."""
@@ -36,11 +36,11 @@ def test_un_module_autonome_est_au_menu_sans_dossier_www(monkeypatch):
 
 
 def test_un_module_autonome_arrete_reste_au_menu_mais_inactif(monkeypatch):
-    vus = _menu(monkeypatch, [{"id": "socialrelay", "name": "SocialRelay", "category": "mesh", "order": 29, "autonome": True}],
+    vus = _menu(monkeypatch, [{"id": "autonome-dodo", "name": "Autonome endormi", "category": "mesh", "order": 29, "autonome": True}],
                 installes=set(), actifs=set())
-    assert vus["socialrelay"]["active"] is False
+    assert vus["autonome-dodo"]["active"] is False
 
 
-def test_metanews_et_socialrelay_se_declarent_autonomes():
-    for chemin in ("secubox-metanews/menu.d/28-metanews.json", "secubox-socialrelay/menu.d/29-socialrelay.json"):
+def test_metanews_se_declare_autonome():
+    for chemin in ("secubox-metanews/menu.d/28-metanews.json",):
         assert json.loads((PAQUETS / chemin).read_text(encoding="utf-8")).get("autonome") is True, chemin

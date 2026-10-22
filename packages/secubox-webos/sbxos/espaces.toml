@@ -21,7 +21,7 @@ modules = ["securite", "acteurs", "radar", "guardian", "dpi", "ipv6guard", "coff
 [espaces.media]
 nom = "Média"
 guide = "Lyrión"
-modules = ["radio", "peertube", "lyrion", "podcaster", "photoprism", "ytsas", "billets", "metanews", "socialrelay", "ytflux", "freeboxtv", "voix"]
+modules = ["radio", "peertube", "lyrion", "podcaster", "photoprism", "ytsas", "billets", "metanews", "ytflux", "freeboxtv", "voix"]
 
 [espaces.maison]
 nom = "Maison"
