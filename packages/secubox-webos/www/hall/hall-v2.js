@@ -413,6 +413,36 @@
     ids.slice(0,8).forEach(function(id){ grille.appendChild(window.SbxUI.Tile({icone:ICO_CARTE[id]||'module',label:libelle(id),status:statutDe(id),attrs:{'data-open':id,'data-mode':'embed',title:'Ouvrir '+libelle(id)}})); });
     acces.corps.textContent=''; acces.corps.appendChild(grille); acces.sbxReleve(new Date());
   }
+  // ── Flux d'actualités (phase 4) : une Card native qui fusionne MetaNews (sujets), YouTube (listes du compte, session)
+  // et Billets (publics) en NewsItem, en tourniquet entre les sources, neuf entrées au plus, relue toutes les 15 min.
+  var flux=null, fluxTm=0, FLUX_PAS=15*60*1000;
+  function hote(nom){ return (window.SBX_DOMAINE&&typeof SBX_DOMAINE.hote==='function')?SBX_DOMAINE.hote(nom):nom; }
+  function lis(url){ return fetch(url,{credentials:'same-origin'}).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; }); }
+  function fluxActualites(){
+    var vue=document.getElementById('view-accueil'); if(!vue||!window.SbxUI) return;
+    if(!flux){
+      flux=window.SbxUI.Card({id:'flux',icone:'actualite',titre:'Flux d’actualités',source:'MetaNews · YouTube · Billets',status:'nosource',
+        action:{label:'Ouvrir MetaNews',attrs:{'data-open':'metanews','data-mode':'embed'}}});
+      flux.classList.add('sbx-flux');
+      var apres=vue.querySelector('.sbx-acces')||vue.querySelector('.sbx-hero'); if(apres) apres.insertAdjacentElement('afterend',flux); else vue.insertBefore(flux,vue.firstChild);
+    }
+    clearTimeout(fluxTm); fluxTm=setTimeout(fluxActualites,FLUX_PAS);
+    if(document.hidden) return;
+    Promise.all([lis('/api/v1/metanews/topics?limit=6'),lis('/api/v1/ytsas/flux?type=abonnements&limite=6'),lis('/api/v1/billets/feed.json')]).then(function(r){
+      var mn=((r[0]&&r[0].topics)||[]).map(function(t){ return {titre:t.title,source:'MetaNews'+(t.source_names&&t.source_names.length?' · '+t.source_names.slice(0,2).join(', '):''),
+          date:t.updated_at?t.updated_at*1000:null,vignette:t.vignette?'/api/v1/metanews/img?u='+encodeURIComponent(t.vignette):null,href:'https://'+hote('metanews.gk2.secubox.in')+'/'}; });
+      var yt=((r[1]&&r[1].items)||[]).map(function(v){ return {titre:v.titre,source:'YouTube'+(v.chaine?' · '+v.chaine:''),date:null,vignette:v.vignette||null,href:v.url}; });
+      var bi=((r[2]&&r[2].items)||[]).map(function(b){ var slug=String(b.url||b.id||'').split('/b/')[1]||''; var im=/<img[^>]+src="(\/media\/[^"]+)"/.exec(b.content_html||'');
+          return {titre:b.title,source:'Billets',date:b.date_published?Date.parse(b.date_published):null,vignette:im?'https://'+hote('billets.gk2.secubox.in')+im[1]:null,href:'https://'+hote('billets.gk2.secubox.in')+'/b/'+slug}; });
+      var files=[mn,yt,bi], liste=[], i=0;
+      while(liste.length<9&&files.some(function(f){ return f.length; })){ var f=files[i%3]; if(f.length) liste.push(f.shift()); i++; }
+      var sources=[r[0]&&'MetaNews',r[1]&&'YouTube',r[2]&&'Billets'].filter(Boolean);
+      flux.corps.textContent='';
+      if(!liste.length){ flux.corps.appendChild(el('p',{'class':'sbx-vide'},'aucune source joignable pour l’instant')); flux.sbxStatut('nosource'); return; }
+      var grille=el('div',{'class':'sbx-flux-liste'}); liste.forEach(function(n){ n.cible='_blank'; grille.appendChild(window.SbxUI.NewsItem(n)); }); flux.corps.appendChild(grille);
+      flux.querySelector('.sbx-source').textContent=sources.join(' · '); flux.sbxStatut('active'); flux.sbxReleve(new Date());
+    });
+  }
   function appliqueRegistre(d){
     var parId={}; (d.services||[]).forEach(function(s){ parId[s.id]=s; });
     var t=d.computed_at?d.computed_at*1000:Date.now(), iv=(d.intervalle_s||15)*1000, perime=Date.now()-t>2*iv;
@@ -443,7 +473,7 @@
   }
   function registre(){
     sondeRegistre();
-    document.addEventListener('visibilitychange',function(){ if(!document.hidden){ regRetard=REG_PAS; sondeRegistre(); } });
+    document.addEventListener('visibilitychange',function(){ if(!document.hidden){ regRetard=REG_PAS; sondeRegistre(); if(flux) fluxActualites(); } });
     // Le Hall redessine la mosaïque (registre, favoris) : on rhabille et on repose statut et pied sur les nouvelles cartes.
     ['featgrid','favbande'].forEach(function(id){ var z=document.getElementById(id); if(z) new MutationObserver(function(){ habilleCartes(); if(regDernier) appliqueRegistre(regDernier); }).observe(z,{childList:true}); });
   }
@@ -468,7 +498,7 @@
     if(theme){ actions.insertBefore(dispo,theme); actions.insertBefore(notif,theme); theme.innerHTML=ico('theme'); theme.insertAdjacentElement('afterend',version); }
     else { actions.appendChild(dispo); actions.appendChild(notif); actions.appendChild(version); }
     var av=$('#who .av'); if(av) av.innerHTML=ico('usager');
-    de(); composants(function(){ hero(); habilleCartes(); if(regDernier) appliqueRegistre(regDernier); accesRapide(); }); registre();
+    de(); composants(function(){ hero(); habilleCartes(); if(regDernier) appliqueRegistre(regDernier); accesRapide(); fluxActualites(); }); registre();
 
     // Corps : sidebar + zone principale.
     var corps=el('div',{'class':'sbx-corps'});

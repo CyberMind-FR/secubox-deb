@@ -309,6 +309,17 @@ favoris, les récents ou le registre changent. Tests : `tests/test_acces_rapide_
 
 ![Accès rapide à 390 px](../assets/images/hall-vue-maitre/hall-v2-acces-rapide-390.png)
 
+**Flux d'actualités (1.19.16)** : la fusion du prompt — une `Card` native sous Accès rapide, `NewsItem` en tourniquet entre
+MetaNews (sujets, `/api/v1/metanews/topics`), YouTube (listes du compte, `/api/v1/ytsas/flux`, session : absent sinon) et
+Billets (`/api/v1/billets/feed.json`), neuf entrées au plus, relue toutes les 15 min et au retour de l'onglet ; deux relais
+nginx en lecture seule ajoutés au vhost du Hall (sujets + relais d'image de MetaNews pour les vignettes, feed.json des
+billets), avec le verdict LAN comme tout relais. Les trois anciennes cartes restent tant que la fusion n'est pas validée (GO
+du propriétaire : les retirer de la curation ou les masquer en v2). Tests : `tests/test_flux_actualites_2996.py`.
+
+![Flux d'actualités à 1440 px](../assets/images/hall-vue-maitre/hall-v2-flux-1440.png)
+
+![Flux d'actualités à 390 px](../assets/images/hall-vue-maitre/hall-v2-flux-390.png)
+
 ![Cartes Card à 1440 px](../assets/images/hall-vue-maitre/hall-v2-cards-1440.png)
 
 ![Cartes Card à 390 px](../assets/images/hall-vue-maitre/hall-v2-cards-390.png)
@@ -329,7 +340,8 @@ favoris, les récents ou le registre changent. Tests : `tests/test_acces_rapide_
   (`:root.sbx-embed main{max-width:none}` côté `sidebar.css` du hub les étirerait).
 - Phase 4, suite : les 20 captures Streamlit demanderaient un relais `/api/v1/streamlit/apps/{nom}/screenshot` sur le Hall.
   Migration vers `Card` : les deux lots de la liste du prompt sont habillés (1.19.11 → 1.19.13) et « Accès rapide » est une
-  Card native (1.19.14). Reste : fusion des flux (MetaNews + Flux YouTube + Billets) en une seule carte `NewsItem` ; corps
-  natifs pour les cardlets à double en-tête (Activité, cumul Sécurité, micro MetaNews / BBS). Hors Hall : #3042 (hub, modules
+  Card native (1.19.14), « Flux d'actualités » fusionne les trois flux (1.19.16). Reste : GO sur la fusion (retirer ou masquer
+  les cartes MetaNews / Flux YouTube / Billets) ; corps natifs pour les cardlets à double en-tête (Activité, cumul Sécurité,
+  micro MetaNews / BBS) ; lien profond vers un sujet MetaNews (son interface n'en expose pas : la carte ouvre l'accueil). Hors Hall : #3042 (hub, modules
   autonomes metanews / socialrelay absents du menu et du registre → « aucune source »).
 - Mesure du dé sur RPi4 (le budget ≤ 1 ms/image est à confirmer sur la cible).

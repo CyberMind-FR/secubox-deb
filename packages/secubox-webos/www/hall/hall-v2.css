@@ -149,6 +149,13 @@
 [data-hall="v2"] .sbx-acces{margin:0 0 var(--sbx-e-4)}
 .sbx-acces .sbx-tile{position:relative;font:500 .78rem var(--sbx-police);color:var(--sbx-texte)}
 .sbx-acces .sbx-tile span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Flux d'actualités : Card native, NewsItem (composants.css) en trois colonnes au large, une au téléphone */
+[data-hall="v2"] .sbx-flux{margin:0 0 var(--sbx-e-4)}
+.sbx-flux-liste{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 var(--sbx-e-4)}
+.sbx-flux-liste .sbx-news{min-width:0}
+.sbx-flux .sbx-vide{margin:0;font-size:.8rem;color:var(--sbx-texte-attenue)}
+@media (max-width:1180px){.sbx-flux-liste{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:720px){.sbx-flux-liste{grid-template-columns:minmax(0,1fr)}}
 .sbx-veille{position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:12px;text-align:center;font:.76rem var(--sbx-police);color:var(--sbx-texte-attenue);background:var(--sbx-surface-2)}
 
 /* ── Mosaïque des modules et des sites ───────────────────────────────────── */
