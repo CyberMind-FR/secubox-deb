@@ -92,6 +92,22 @@
     });
   };
 
+  // ENCARTÉ (#2996, phase 4) : habillé en Card par le Hall v2, le cardlet n'a plus à répéter sa marque (icône, titre,
+  // sous-titre) — la Card la porte. Le Hall le dit par postMessage {sbx:'carte'}, même origine seulement ; on pose la
+  // classe et UNE règle : la marque disparaît, les commandes de l'en-tête (rafraîchir, réglages) restent ; un en-tête
+  // sans commande disparaît en entier. Seul, ou dans le Hall v1, le cardlet garde son en-tête.
+  window.addEventListener("message", function (e) {
+    if (e.origin !== location.origin || !e.data || e.data.sbx !== "carte") return;
+    var h = document.documentElement;
+    if (h.classList.contains("sbx-carte")) return;
+    h.classList.add("sbx-carte");
+    var st = document.createElement("style");
+    st.textContent = "html.sbx-carte header.tete .marque{display:none}" +
+      "html.sbx-carte header.tete:not(:has(.droite)){display:none}" +
+      "html.sbx-carte header.tete .droite{margin-left:auto}";
+    document.head.appendChild(st);
+  });
+
   window.SBXSonde = {
     /** Pour les tests et la mise au point : l'état des gardes en cours. */
     etat: function () {

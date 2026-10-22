@@ -320,6 +320,14 @@ du propriétaire : les retirer de la curation ou les masquer en v2). Tests : `te
 
 ![Flux d'actualités à 390 px](../assets/images/hall-vue-maitre/hall-v2-flux-390.png)
 
+**Plus de double en-tête (1.19.18)** : un cardlet servi par le Hall et habillé en `Card` reçoit `{sbx:'carte'}` (postMessage,
+même origine, `/cardlets/` seulement) ; `sonde.js`, qu'ils chargent tous, pose `html.sbx-carte` et une règle : la marque
+(icône, titre, sous-titre) disparaît, les commandes de l'en-tête (rafraîchir, réglages) restent, un en-tête sans commande
+disparaît en entier. Seul, ou dans le Hall v1, l'en-tête reste. Les micros d'autres origines (MetaNews, BBS, radio…) ne
+reçoivent rien : leur en-tête reste tant qu'ils n'exposent pas une variante encartée. Tests : `tests/test_cardlet_encarte_2996.py`.
+
+![Cardlet encarté à 1440 px](../assets/images/hall-vue-maitre/hall-v2-encarte-1440.png)
+
 ![Cartes Card à 1440 px](../assets/images/hall-vue-maitre/hall-v2-cards-1440.png)
 
 ![Cartes Card à 390 px](../assets/images/hall-vue-maitre/hall-v2-cards-390.png)
@@ -340,8 +348,8 @@ du propriétaire : les retirer de la curation ou les masquer en v2). Tests : `te
   (`:root.sbx-embed main{max-width:none}` côté `sidebar.css` du hub les étirerait).
 - Phase 4, suite : les 20 captures Streamlit demanderaient un relais `/api/v1/streamlit/apps/{nom}/screenshot` sur le Hall.
   Migration vers `Card` : les deux lots de la liste du prompt sont habillés (1.19.11 → 1.19.13) et « Accès rapide » est une
-  Card native (1.19.14), « Flux d'actualités » fusionne les trois flux (1.19.16). Reste : GO sur la fusion (retirer ou masquer
-  les cartes MetaNews / Flux YouTube / Billets) ; corps natifs pour les cardlets à double en-tête (Activité, cumul Sécurité,
-  micro MetaNews / BBS) ; lien profond vers un sujet MetaNews (son interface n'en expose pas : la carte ouvre l'accueil). Hors Hall : #3042 (hub, modules
+  Card native (1.19.14), « Flux d'actualités » fusionne les trois flux (1.19.16). Les cardlets encartés n'ont plus de double en-tête (1.19.18). Reste : GO sur la fusion
+  (retirer ou masquer les cartes MetaNews / Flux YouTube / Billets) ; variante encartée des micros d'autres origines (MetaNews,
+  BBS, radio, billets, podcaster) ; lien profond vers un sujet MetaNews (son interface n'en expose pas : la carte ouvre l'accueil). Hors Hall : #3042 (hub, modules
   autonomes metanews / socialrelay absents du menu et du registre → « aucune source »).
 - Mesure du dé sur RPi4 (le budget ≤ 1 ms/image est à confirmer sur la cible).

@@ -1,3 +1,12 @@
+secubox-webos (1.19.18-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : plus de double en-tête sur les cardlets habillés en Card (ref #2996) — le Hall
+    dit au cardlet (postMessage, même origine, cardlets servis par le Hall seulement) qu'il est
+    encarté ; sonde.js, chargé par chaque cardlet, range sa marque (icône, titre, sous-titre) et
+    garde ses commandes (rafraîchir, réglages). Seul, ou dans le Hall v1, l'en-tête reste.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 16:20:00 +0200
+
 secubox-webos (1.19.17-1~trixie1) trixie; urgency=medium
 
   * Flux d'actualités : les vignettes MetaNews étaient encodées deux fois (NewsItem ré-encodait
