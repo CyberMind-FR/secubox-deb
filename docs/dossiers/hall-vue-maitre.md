@@ -288,7 +288,10 @@ pastille de statut typé, action › qui ouvre le service embarqué par la dél�
 dans le corps (padding 0), pied « hôte · Relevé HH:MM:SS ». L'ancien rendu n'est pas retiré : l'article garde `.fcard`,
 `data-embed`, sa poignée ⠿, son étoile ★ et son aide ? (descendues dans la bande du pied pour ne pas tronquer le titre),
 donc le glisser, les favoris et l'auto-guide continuent de fonctionner. Le registre pilote pastille, opacité et veille
-(`sbxStatut`, `sbxReleve`) ; les cartes hors lot gardent le pied v2 de la phase 3 ; le Hall v1 ne change pas.
+(`sbxStatut`, `sbxReleve`) ; une carte de curation sans module à son nom (securite, acteurs, radar, guardian, activite) prend
+le statut du module qui la sert (`SOURCE_STATUT` : waf, actor, ad-guard, sbxid ; 1.19.12) ; les cartes hors lot gardent le
+pied v2 de la phase 3 ; le Hall v1 ne change pas. À alléger plus tard : les cardlets qui portent leur propre en-tête (Activité,
+cumul Sécurité) le perdront quand leur corps sera natif.
 Tests : `tests/test_cartes_card_2996.py` (lot et ordre, habillage, statut et veille, 390 px sans débordement, v1 intact).
 
 ![Cartes Card à 1440 px](../assets/images/hall-vue-maitre/hall-v2-cards-1440.png)
