@@ -31,18 +31,28 @@
 
   function Pill(o){ var p=el('span','sbx-pill',o.texte); p.setAttribute('data-ton',o.ton||'neutre'); return p; }
 
+  // `o.hote` (phase 4) : un article existant est HABILLÉ sur place — ses enfants passent dans le corps, sauf les
+  // commandes de carte du Hall (poignée, étoile, aide) qui restent à l'article ; rien n'est remplacé.
   function Card(o){
-    var c=el('article','sbx-card'); if(o.id) c.setAttribute('data-module',o.id);
+    var c=o.hote||el('article'); c.classList.add('sbx-card'); if(o.id) c.setAttribute('data-module',o.id);
     var tete=el('header','sbx-card-tete'); tete.appendChild(ico(o.icone));
     var h=el('h3','sbx-card-titre',o.titre); tete.appendChild(h);
     var pill=Pill({texte:'',ton:'neutre'}); pill.classList.add('sbx-card-statut'); tete.appendChild(pill);
     if(o.action){
       var a=el(o.action.href?'a':'button','sbx-card-action'); a.setAttribute('aria-label',o.action.label||'Ouvrir '+o.titre); a.title=o.action.label||'Ouvrir';
       if(o.action.href){ a.href=o.action.href; if(o.action.cible) a.target=o.action.cible; if(a.target==='_blank') a.rel='noopener'; } else { a.type='button'; if(o.action.onClick) a.addEventListener('click',o.action.onClick); }
+      if(o.action.attrs) Object.keys(o.action.attrs).forEach(function(k){ a.setAttribute(k,o.action.attrs[k]); });
       a.appendChild(ico('chevron')); tete.appendChild(a);
     }
-    c.appendChild(tete);
-    var corps=el('div','sbx-card-corps'); if(o.corps) corps.appendChild(o.corps); c.appendChild(corps);
+    var corps=el('div','sbx-card-corps'); if(o.corps) corps.appendChild(o.corps);
+    if(o.hote){
+      Array.prototype.slice.call(c.childNodes).forEach(function(n){
+        if(n.nodeType===1&&/(^|\s)(cl-grip|cl-vedette|cl-aide)(\s|$)/.test(n.className||'')) return;
+        corps.appendChild(n);
+      });
+      c.insertBefore(tete,c.firstChild);
+    } else c.appendChild(tete);
+    c.appendChild(corps);
     var pied=el('footer','sbx-card-pied'); var src=el('span','sbx-source',o.source||''); pied.appendChild(src); var rel=el('span','sbx-releve'); pied.appendChild(rel); c.appendChild(pied);
     c.sbxStatut=function(s){ var d=statut(s); c.setAttribute('data-status',STATUTS[s]?s:'nosource'); pill.textContent=d[0]; pill.setAttribute('data-ton',d[1]); return c; };
     c.sbxReleve=function(date,perime){ rel.textContent=perime?'données périmées · relevé '+hhmmss(date):'Relevé '+hhmmss(date); if(perime) c.sbxStatut('stale'); return c; };

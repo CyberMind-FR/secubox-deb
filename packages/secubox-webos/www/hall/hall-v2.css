@@ -134,6 +134,17 @@
 [data-hall="v2"] .fcard[data-status="stale"] .led{background:var(--sbx-warn);box-shadow:0 0 0 3px var(--sbx-warn-fond)}
 [data-hall="v2"] .fcard[data-status="nosource"]{opacity:.6;border-style:dashed}
 [data-hall="v2"] .fcard .ap-vue{position:relative}
+/* ── Phase 4 : cartes habillées en Card (MIGREES de hall-v2.js) — l'en-tête garde sa largeur pour le titre ; les commandes
+   ⠿ ★ ? descendent dans la bande du pied, à droite du relevé ── */
+[data-hall="v2"] .fcard.sbx-card{display:flex;flex-direction:column;padding:0;overflow:hidden}
+.fcard.sbx-card .sbx-card-tete .sbx-pill{flex:none}
+.fcard.sbx-card .sbx-card-pied{padding-right:84px}
+.fcard.sbx-card .sbx-card-pied .sbx-releve{white-space:nowrap}
+.fcard.sbx-card > .cl-grip,.fcard.sbx-card > .cl-vedette,.fcard.sbx-card > .cl-aide{top:auto;bottom:5px}
+.fcard.sbx-card .sbx-card-corps{padding:0;position:relative;min-height:0}
+.fcard.sbx-card .sbx-card-corps iframe{display:block}
+.fcard.sbx-card .sbx-card-pied .sbx-source{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:720px){.fcard.sbx-card .sbx-card-action{width:44px;height:44px}}
 .sbx-veille{position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:12px;text-align:center;font:.76rem var(--sbx-police);color:var(--sbx-texte-attenue);background:var(--sbx-surface-2)}
 
 /* ── Mosaïque des modules et des sites ───────────────────────────────────── */

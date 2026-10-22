@@ -1,3 +1,16 @@
+secubox-webos (1.19.11-1~trixie1) trixie; urgency=medium
+
+  * Hall v2, phase 4 (suite) : migration des cartes de l'accueil vers `Card`, dans l'ordre du
+    prompt (ref #2996). Premier lot : Sécurité (securite, acteurs, radar), DNS et Appareils
+    (guardian), Réseau (dpi, ipv6guard), Notifications (activite). Une carte du lot est habillée
+    sur place — en-tête (icône SVG, titre, pastille de statut typé, action › vers le service
+    embarqué), son cardlet intact dans le corps, pied « hôte · Relevé HH:MM:SS » — sans retirer
+    l'ancien rendu : poignée, étoile et aide restent (dans la bande du pied), le glisser, les
+    favoris et l'auto-guide continuent de la trouver. Les cartes hors lot gardent le pied v2 ;
+    le Hall v1 ne change pas. `Card` accepte un hôte (`o.hote`) et des attributs d'action.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 12:30:00 +0200
+
 secubox-webos (1.19.10-1~trixie1) trixie; urgency=medium
 
   * Registre du Hall : double tampon réel (ref #3011). Chaque sonde (agrégateur, profils,
