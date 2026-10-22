@@ -1,3 +1,11 @@
+secubox-haproxy (1.12.4-1~trixie1) trixie; urgency=medium
+
+  * Le postinst active (`enable --now`) l'unité du composant exposure et le prerm l'arrête : installée
+    par debian/rules hors dh_installsystemd, elle n'avait jamais démarré — page Exposition « HORS
+    LIGNE », API 404 (ref #3056).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 21:00:00 +0200
+
 secubox-haproxy (1.12.3-1~trixie1) trixie; urgency=medium
 
   * Suppression d'un certificat en HTTP 500 (ref #3012) : l'API faisait elle-même mkdir + rename
