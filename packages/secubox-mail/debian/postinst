@@ -87,6 +87,8 @@ if [ "$1" = "configure" ]; then
         systemctl enable --now secubox-mail-ssl-renew.timer >/dev/null 2>&1 || true
         # Autocrypt sortant (#1852) : table des clés PUBLIQUES de l'annuaire -> rspamd, toutes les heures.
         systemctl enable --now secubox-mail-autocrypt.timer >/dev/null 2>&1 || true
+        # Rapatriement des boîtes IMAP distantes (#3033) : sans boîte déclarée, la minuterie ne fait rien.
+        systemctl enable --now secubox-mail-imap-sync.timer >/dev/null 2>&1 || true
     fi
 
     # Autoconfig XML + SRV Unbound (ref #1169 task 11) — end of board-only

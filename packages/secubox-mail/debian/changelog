@@ -1,3 +1,16 @@
+secubox-mail (2.16.3-1~trixie1) trixie; urgency=medium
+
+  * Rapatriement d'une boîte IMAP distante dans une boîte SecuBox (ref #3033) : `mailctl imap-sync
+    add|del|list|run` (doveadm sync -R, backend imapc de Dovecot, dans le conteneur mail ; identifiants gardés
+    par la box dans /etc/secubox/secrets/mail/imap-sync, root 0600, jamais en argument ni en retour),
+    unité et minuterie toutes les 15 min, routes GET/POST/DELETE /imap-sync et POST /imap-sync/{boîte}/run (JWT),
+    volet « Boîtes externes » avec préréglage OVH (ssl0.ovh.net:993), retrait confirmé dans la page.
+  * Relais SMTP : « Relais local par défaut » (ref #3028) — GET /config porte `local_default` (serveur mail de la
+    box : lxc_ip de mail.toml, port 25, sans authentification), POST /config/local-default l'enregistre ; bouton
+    dans la page du relais.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 08:10:11 +0200
+
 secubox-mail (2.16.2-1~trixie1) trixie; urgency=medium
 
   * Volet « Boîtes externes » branché sur l'état réel (ref #3028) : `mailctl webmail-comptes` et

@@ -62,6 +62,7 @@
         .large{grid-column:1/-1}
         .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
         .kv .v.ok{color:var(--vert)} .kv .v.warn{color:var(--orange)}
+        .confirme{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.8rem;margin-top:8px} .confirme b{color:var(--rouge)}
         .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
         .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
         .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
@@ -199,7 +200,22 @@
                 <div class="barre-actions"><a class="btn prim" id="externeOuvrir" href="#" target="_blank" rel="noopener noreferrer">Ouvrir le webmail</a><a class="btn" href="/smtp-relay/">Relais SMTP</a></div>
                 <div class="kv" id="externeImap" style="margin-top:8px"><span class="k">Récupération IMAP distante (greffon ident_switch)</span><span class="v">—</span></div>
                 <div class="kv" id="externeRelais"><span class="k">Relais SMTP sortant (smtp-relay)</span><span class="v">—</span></div>
-                <p class="note" id="externeNote">Récupération : chaque personne ajoute sa boîte depuis le webmail, la box n'en détient pas les identifiants. Relais : le courrier sortant de la box part par un smarthost quand il est configuré ; réglage sur la page du relais.</p></div>
+                <p class="note" id="externeNote">Récupération directe : avec le greffon, chaque personne lit sa boîte distante depuis le webmail, la box n'en détient pas les identifiants. Relais : le courrier sortant de la box part par un smarthost quand il est configuré ; réglage sur la page du relais.</p>
+            </div>
+            <div class="pan"><h3>Rapatriement IMAP <i>doveadm sync imapc, toutes les 15 min · GET, POST, DELETE /imap-sync</i></h3>
+                <p style="margin:0 0 8px;font-size:.84rem">Une boîte distante (OVH, Gmail, tout IMAP) est copiée dans une boîte SecuBox et maintenue à jour. <b>La box garde l'identifiant et le mot de passe distants</b> (root, 0600) : c'est le prix d'une synchronisation sans personne devant l'écran.</p>
+                <div class="tab"><table><thead><tr><th>Boîte SecuBox</th><th>Boîte distante</th><th>Dernier passage</th><th>État</th><th>Actions</th></tr></thead><tbody id="bSync"><tr><td colspan="5" class="vide">—</td></tr></tbody></table></div>
+                <div class="confirme" id="cSync" hidden><b>Retirer le rapatriement de</b> <span class="mono" id="cSyncNom"></span> ? La boîte SecuBox garde ce qui a déjà été copié ; l'identifiant distant est oublié.
+                    <button type="button" class="btn danger" id="cSyncOui">Confirmer</button><button type="button" class="btn" id="cSyncNon">Annuler</button></div>
+                <form class="saisie" id="fSync" autocomplete="off" style="margin-top:8px">
+                    <label>Boîte SecuBox<select class="sel" id="sLocal"></select><small>Boîte locale qui reçoit la copie</small></label>
+                    <label>Serveur IMAP distant<input type="text" id="sHote" value="ssl0.ovh.net" placeholder="ssl0.ovh.net"><small>OVH : ssl0.ovh.net · Gmail : imap.gmail.com</small></label>
+                    <label>Port<input type="number" id="sPort" value="993" min="1" max="65535"><small>993 (IMAPS)</small></label>
+                    <label>Identifiant distant<input type="text" id="sUser" placeholder="prenom@domaine.fr"></label>
+                    <label>Mot de passe distant<input type="password" id="sPass" autocomplete="new-password"><small>Transmis une fois, gardé par la box, jamais affiché</small></label>
+                    <div class="bout"><button class="btn prim" type="submit" id="bSyncAjout">Rapatrier cette boîte</button></div>
+                </form>
+                <p id="mSync" class="note"></p></div>
         </section>
 
         <section id="t-journaux" role="tabpanel" aria-labelledby="o-journaux" hidden>
@@ -279,7 +295,7 @@
         const ONGLETS = ['apercu', 'boites', 'alias', 'externe', 'journaux', 'reglages', 'actions', 'socle'];
 
         // Données lues (null = non lisible ; « — » à l'affichage).
-        let S = null, ACC = null, SSL = null, USERS = null, ALIAS = null, DKIMREC = null, SPAM = null, AV = null, SOCLE = null, SETT = null, LOGS = null, DNS = null, EXT = null, RELAIS = null;
+        let S = null, ACC = null, SSL = null, USERS = null, ALIAS = null, DKIMREC = null, SPAM = null, AV = null, SOCLE = null, SETT = null, LOGS = null, DNS = null, EXT = null, RELAIS = null, SYNC = null, SYNC_A_RETIRER = null;
         let SESSION_OK = true, CONFIRM = null, ONGLET = 'apercu';
 
         function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
@@ -364,11 +380,58 @@
         }
         // Boîtes externes (#3028) : le greffon de comptes IMAP distants (API mail) et le relais SMTP sortant (API smtp-relay).
         async function chargerExterne() {
-            if (DEMO) { EXT = { webmail: true, greffon: true, comptes: 3, utilisateurs: 2, hotes: ['imap.gmail.com', 'outlook.office365.com'] }; RELAIS = { running: true, configured: true, smarthost: 'smtp.exemple.test:587', queue_size: 0 }; rendreExterne(); return; }
+            if (DEMO) { EXT = { webmail: true, greffon: true, comptes: 3, utilisateurs: 2, hotes: ['imap.gmail.com', 'outlook.office365.com'] }; RELAIS = { running: true, configured: true, smarthost: 'smtp.exemple.test:587', queue_size: 0 }; SYNC = [{ local_user: 'marie@exemple.test', host: 'ssl0.ovh.net', port: 993, user: 'marie@ancien-domaine.fr', dernier: new Date().toISOString(), ok: true, duree_s: 42, message: '' }]; rendreExterne(); return; }
             try { EXT = await lire('/webmail/comptes-externes'); } catch (e) { EXT = null; }
             try { const r = await fetch('/api/v1/smtp-relay/status', { credentials: 'same-origin', cache: 'no-store', headers: entetes() }); RELAIS = r.ok ? await r.json() : null; } catch (e) { RELAIS = null; }
+            try { const r = await lire('/imap-sync'); SYNC = Array.isArray(r.syncs) ? r.syncs : null; } catch (e) { SYNC = null; }
             rendreExterne();
         }
+        // Rapatriement IMAP (#3033) : liste, ajout, retrait (confirmation dans la page), passage immédiat.
+        function rendreSync() {
+            const tb = $('bSync'); tb.replaceChildren();
+            const sel = $('sLocal'); const courant = sel.value; sel.replaceChildren();
+            (USERS || []).forEach(u => { const o = document.createElement('option'); o.value = o.textContent = (u.email || u.user || String(u)); sel.appendChild(o); });
+            if (courant) sel.value = courant;
+            if (!SYNC) { const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 5; td.className = 'vide'; td.textContent = SESSION_OK ? '—' : 'session requise'; tr.appendChild(td); tb.appendChild(tr); return; }
+            if (!SYNC.length) { const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 5; td.className = 'vide'; td.textContent = 'Aucune boîte distante rapatriée.'; tr.appendChild(td); tb.appendChild(tr); return; }
+            SYNC.forEach(s => {
+                const tr = document.createElement('tr');
+                const c = (txt, cls) => { const td = document.createElement('td'); if (cls) td.className = cls; td.textContent = txt; tr.appendChild(td); return td; };
+                c(s.local_user, 'mono'); c(s.user + ' @ ' + s.host + ':' + s.port, 'mono');
+                c(s.dernier ? new Date(s.dernier).toLocaleString('fr-FR') : 'jamais');
+                const e = c(''); e.appendChild(pastille(s.ok === true ? 'ok' : s.ok === false ? 'hors' : 'neutre', s.ok === true ? 'OK' + (s.duree_s != null ? ' · ' + s.duree_s + ' s' : '') : s.ok === false ? 'ÉCHEC' : 'EN ATTENTE', s.message || ''));
+                const a = c(''); const run = document.createElement('button'); run.type = 'button'; run.className = 'btn'; run.textContent = 'Maintenant'; run.dataset.syncRun = s.local_user;
+                const del = document.createElement('button'); del.type = 'button'; del.className = 'btn danger'; del.textContent = 'Retirer'; del.dataset.syncDel = s.local_user; a.append(run, ' ', del);
+                tb.appendChild(tr);
+            });
+        }
+        $('bSync').addEventListener('click', async ev => {
+            const r = ev.target.closest('button[data-sync-run]'), d = ev.target.closest('button[data-sync-del]');
+            if (d) { SYNC_A_RETIRER = d.dataset.syncDel; $('cSyncNom').textContent = SYNC_A_RETIRER; $('cSync').hidden = false; return; }
+            if (!r) return;
+            if (DEMO) { $('mSync').textContent = 'Démonstration : aucune écriture.'; return; }
+            r.disabled = true; const res = await ecrire('POST', '/imap-sync/' + encodeURIComponent(r.dataset.syncRun) + '/run'); r.disabled = false;
+            $('mSync').textContent = reussi(res) ? 'Rapatriement lancé pour ' + r.dataset.syncRun + ' ; l’état se met à jour au prochain relevé.' : 'Lancement impossible (' + (res.statut || 'réseau') + ').';
+        });
+        $('cSyncNon').addEventListener('click', () => { $('cSync').hidden = true; SYNC_A_RETIRER = null; });
+        $('cSyncOui').addEventListener('click', async () => {
+            const lu = SYNC_A_RETIRER; $('cSync').hidden = true; SYNC_A_RETIRER = null; if (!lu) return;
+            if (DEMO) { $('mSync').textContent = 'Démonstration : aucune écriture.'; return; }
+            const res = await ecrire('DELETE', '/imap-sync/' + encodeURIComponent(lu));
+            $('mSync').textContent = reussi(res) ? 'Rapatriement de ' + lu + ' retiré.' : 'Retrait impossible (' + (res.statut || 'réseau') + ').';
+            chargerExterne();
+        });
+        $('fSync').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const corps = { local_user: $('sLocal').value, host: $('sHote').value.trim().toLowerCase(), port: parseInt($('sPort').value, 10) || 993, user: $('sUser').value.trim(), password: $('sPass').value };
+            if (!corps.local_user || !corps.host || !corps.user || !corps.password) { $('mSync').textContent = 'Boîte SecuBox, serveur, identifiant et mot de passe sont requis.'; return; }
+            if (DEMO) { $('mSync').textContent = 'Démonstration : aucune écriture.'; return; }
+            const b = $('bSyncAjout'); b.disabled = true;
+            const res = await ecrire('POST', '/imap-sync', corps);
+            b.disabled = false; $('sPass').value = '';
+            $('mSync').textContent = reussi(res) ? 'Boîte distante enregistrée : premier passage à la prochaine minuterie (ou « Maintenant »).' : 'Enregistrement impossible : ' + ((res.data && res.data.detail) || res.statut || 'réseau');
+            chargerExterne();
+        });
         function rendreExterne() {
             const kv = (id, texte, cls) => { const v = $(id).querySelector('.v'); v.textContent = texte; v.className = 'v' + (cls ? ' ' + cls : ''); };
             if (!EXT) kv('externeImap', SESSION_OK ? '—' : 'session requise');
@@ -379,6 +442,7 @@
             else if (!RELAIS.running) kv('externeRelais', 'arrêté', 'warn');
             else if (!RELAIS.configured) kv('externeRelais', 'actif, aucun smarthost : envoi direct', 'warn');
             else kv('externeRelais', 'via ' + RELAIS.smarthost + (RELAIS.queue_size ? ' · ' + RELAIS.queue_size + ' en file' : ''), 'ok');
+            rendreSync();
         }
         async function chargerSocle() { if (DEMO) { rendreSocle(); return; } try { SOCLE = await lire('/socle/status'); } catch (e) { SOCLE = null; } rendreSocle(); }
         async function chargerReglages() {

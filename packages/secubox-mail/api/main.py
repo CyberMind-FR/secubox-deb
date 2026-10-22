@@ -891,6 +891,82 @@ async def webmail_comptes_externes():
     return d
 
 
+# ── Rapatriement d'une boîte IMAP distante (#3033) : doveadm sync imapc, par mailctl ──────────────────────────────
+class ImapSyncCreate(BaseModel):
+    local_user: str
+    host: str
+    user: str
+    password: str
+    port: int = 993
+
+
+_ADRESSE = re.compile(r"^[a-z0-9._+-]+@[a-z0-9.-]+$")
+_HOTE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
+
+
+def _imap_sync_liste() -> dict:
+    ok, out, err = run_cmd(["/usr/sbin/mailctl", "imap-sync", "list"], 20)
+    try:
+        d = json.loads(out.strip().splitlines()[-1]) if out.strip() else {}
+    except ValueError:
+        d = {}
+    if not isinstance(d, dict) or "syncs" not in d:
+        return {"syncs": None, "count": None, "erreur": (err or out or "réponse illisible")[:200]}
+    return d
+
+
+@app.get("/imap-sync", dependencies=[Depends(require_jwt)])
+async def imap_sync_liste():
+    """Boîtes distantes rapatriées (hôte, identifiant, dernier passage) — jamais un mot de passe."""
+    import asyncio  # noqa: PLC0415
+    return await asyncio.to_thread(_imap_sync_liste)
+
+
+@app.post("/imap-sync", dependencies=[Depends(require_jwt)])
+async def imap_sync_ajout(req: ImapSyncCreate):
+    """Déclare une boîte distante ; le mot de passe part à mailctl par l'environnement, jamais en argument."""
+    import asyncio  # noqa: PLC0415
+    local_user, host = req.local_user.strip().lower(), req.host.strip().lower()
+    if not _ADRESSE.match(local_user) or not _HOTE.match(host) or not (1 <= req.port <= 65535) or not req.user.strip() or not req.password:
+        raise HTTPException(400, "adresse locale, hôte, port, identifiant et mot de passe sont requis")
+
+    def _ajoute():
+        env = dict(os.environ, MAILCTL_PASSWORD=req.password)
+        try:
+            r = subprocess.run(["/usr/sbin/mailctl", "imap-sync", "add", local_user, host, req.user.strip(), str(req.port)],
+                               capture_output=True, text=True, timeout=30, env=env, check=False)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return False, str(exc)
+        return r.returncode == 0, (r.stderr or r.stdout).strip()
+    ok, detail = await asyncio.to_thread(_ajoute)
+    if not ok:
+        raise HTTPException(502, detail[:300] or "mailctl imap-sync add en échec")
+    return {"success": True, "local_user": local_user, "host": host, "port": req.port, "user": req.user.strip()}
+
+
+@app.delete("/imap-sync/{local_user}", dependencies=[Depends(require_jwt)])
+async def imap_sync_retrait(local_user: str):
+    import asyncio  # noqa: PLC0415
+    if not _ADRESSE.match(local_user):
+        raise HTTPException(400, "adresse locale invalide")
+    ok, out, err = await asyncio.to_thread(run_cmd, ["/usr/sbin/mailctl", "imap-sync", "del", local_user], 20)
+    if not ok:
+        raise HTTPException(502, (err or out)[:300])
+    return {"success": True, "local_user": local_user}
+
+
+@app.post("/imap-sync/{local_user}/run", dependencies=[Depends(require_jwt)])
+async def imap_sync_lancer(local_user: str, background_tasks: BackgroundTasks):
+    """Lance un passage maintenant (en tâche de fond : un premier rapatriement peut durer de longues minutes)."""
+    if not _ADRESSE.match(local_user):
+        raise HTTPException(400, "adresse locale invalide")
+
+    def do():
+        subprocess.run(["/usr/sbin/mailctl", "imap-sync", "run", local_user], capture_output=True, text=True, timeout=3600, check=False)
+    background_tasks.add_task(do)
+    return {"success": True, "message": "Rapatriement lancé ; l'état se lit dans la liste"}
+
+
 @app.get("/sieve/status", dependencies=[Depends(require_jwt)])
 async def sieve_status():
     """ManageSieve :4190 actif ?"""

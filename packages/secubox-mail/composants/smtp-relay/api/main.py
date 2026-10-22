@@ -353,10 +353,28 @@ async def restart(user=Depends(require_jwt)):
     return {"success": ok, "output": out[:500]}
 
 
+MAIL_TOML = Path("/etc/secubox/mail.toml")
+
+
+def _relais_local_defaut() -> Optional[dict]:
+    """Le serveur mail de la box (LXC mail, port 25, sans authentification : l'hôte est dans ses mynetworks) comme
+    smarthost par défaut (#3028). None si secubox-mail n'est pas configuré."""
+    try:
+        import tomllib  # noqa: PLC0415
+        d = tomllib.loads(MAIL_TOML.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    ip, domaine = str(d.get("lxc_ip") or "").strip(), str(d.get("domain") or "").strip()
+    if not ip:
+        return None
+    return {"smarthost": ip, "port": 25, "username": "", "password": "", "tls": False, "from_domain": domaine}
+
+
 @router.get("/config")
 async def get_config(user=Depends(require_jwt)):
-    """Get relay configuration."""
+    """Get relay configuration (+ `local_default` : le serveur mail de la box, s'il existe)."""
     config = _load_config()
+    config["local_default"] = _relais_local_defaut()
     # Mask password for security
     if config.get("password"):
         config["password"] = "********"
@@ -370,6 +388,19 @@ class RelayConfig(BaseModel):
     password: str = ""
     tls: bool = True
     from_domain: str = ""
+
+
+@router.post("/config/local-default")
+async def set_config_local_default(user=Depends(require_jwt)):
+    """Relais local par défaut : le courrier sortant de l'hôte part par le serveur mail de la box (#3028)."""
+    d = _relais_local_defaut()
+    if not d:
+        raise HTTPException(404, "secubox-mail n'est pas configuré sur cette box (lxc_ip absent de mail.toml)")
+    ok = _save_config(d)
+    if ok:
+        log.info(f"Config set to local default ({d['smarthost']}:25) by {user.get('sub', 'unknown')}")
+        _run(["systemctl", "reload", "postfix"])
+    return {"success": ok, "smarthost": d["smarthost"], "port": 25}
 
 
 @router.post("/config")

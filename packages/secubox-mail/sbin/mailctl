@@ -765,6 +765,96 @@ cmd_webmail_comptes() {
     printf '{"webmail":true,"greffon":%s,"comptes":%s,"utilisateurs":%s,"hotes":%s}\n' "$greffon" "${comptes:-0}" "${utilisateurs:-0}" "$hotes"
 }
 
+# ── Rapatriement d'une boîte IMAP distante (#3033) ───────────────────────────
+# `doveadm sync -R` avec le backend imapc de Dovecot, DANS le conteneur mail : rien à installer. Les identifiants de la
+# boîte distante sont gardés par la box (root, 0600) — c'est le prix d'une synchronisation sans la personne devant son
+# écran, et le volet de la page le dit. Le mot de passe ne passe jamais en argument de mailctl : stdin ou MAILCTL_PASSWORD.
+IMAP_SYNC_DIR="/etc/secubox/secrets/mail/imap-sync"
+IMAP_SYNC_ETAT="/var/lib/secubox/mail/imap-sync"
+
+_imap_sync_json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+
+cmd_imap_sync() {
+    local sub="${1:-list}"; shift || true
+    case "$sub" in
+        add)
+            local local_user="${1:-}" host="${2:-}" remote_user="${3:-}" port="${4:-993}"
+            [[ "$local_user" =~ ^[a-z0-9._+-]+@[a-z0-9.-]+$ ]] || { error "imap-sync add : adresse locale invalide '$local_user'"; return 1; }
+            [[ "$host" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || { error "imap-sync add : hôte invalide '$host'"; return 1; }
+            [ -n "$remote_user" ] || { error "imap-sync add : identifiant distant manquant"; return 1; }
+            [[ "$port" =~ ^[0-9]{2,5}$ ]] || { error "imap-sync add : port invalide '$port'"; return 1; }
+            local mdp="${MAILCTL_PASSWORD:-}"
+            if [ -z "$mdp" ] && [ ! -t 0 ]; then IFS= read -r mdp; fi
+            [ -n "$mdp" ] || { error "imap-sync add : mot de passe attendu sur stdin ou MAILCTL_PASSWORD"; return 1; }
+            install -d -m 0700 "$IMAP_SYNC_DIR" "$IMAP_SYNC_ETAT"
+            local f="$IMAP_SYNC_DIR/$local_user.json" tmp
+            tmp=$(mktemp "$IMAP_SYNC_DIR/.tmp.XXXXXX")
+            python3 - "$tmp" "$local_user" "$host" "$port" "$remote_user" "$mdp" <<'PY'
+import json, sys
+tmp, local_user, host, port, user, mdp = sys.argv[1:]
+json.dump({"local_user": local_user, "host": host, "port": int(port), "user": user, "password": mdp, "ssl": "imaps"}, open(tmp, "w"))
+PY
+            chmod 0600 "$tmp" && mv -f "$tmp" "$f"
+            log "imap-sync : $local_user ← $remote_user@$host:$port enregistré"
+            printf '{"ok":true,"local_user":%s,"host":%s,"port":%s,"user":%s}\n' "$(_imap_sync_json_str "$local_user")" "$(_imap_sync_json_str "$host")" "$port" "$(_imap_sync_json_str "$remote_user")"
+            ;;
+        del)
+            local local_user="${1:-}"
+            [[ "$local_user" =~ ^[a-z0-9._+-]+@[a-z0-9.-]+$ ]] || { error "imap-sync del : adresse locale invalide"; return 1; }
+            rm -f "$IMAP_SYNC_DIR/$local_user.json" "$IMAP_SYNC_ETAT/$local_user.json"
+            log "imap-sync : $local_user retiré"
+            printf '{"ok":true,"local_user":%s}\n' "$(_imap_sync_json_str "$local_user")"
+            ;;
+        list|status)
+            python3 - "$IMAP_SYNC_DIR" "$IMAP_SYNC_ETAT" <<'PY'
+import glob, json, os, sys
+d, e = sys.argv[1], sys.argv[2]
+out = []
+for f in sorted(glob.glob(os.path.join(d, "*.json"))):
+    try:
+        c = json.load(open(f))
+    except (OSError, ValueError):
+        continue
+    etat = {}
+    try:
+        etat = json.load(open(os.path.join(e, os.path.basename(f))))
+    except (OSError, ValueError):
+        pass
+    out.append({"local_user": c.get("local_user"), "host": c.get("host"), "port": c.get("port"), "user": c.get("user"),
+                "dernier": etat.get("dernier"), "ok": etat.get("ok"), "message": etat.get("message", ""), "duree_s": etat.get("duree_s")})
+print(json.dumps({"syncs": out, "count": len(out)}))
+PY
+            ;;
+        run)
+            local cible="${1:-}" f rc=0
+            lxc_running "$CONTAINER" || { error "imap-sync run : conteneur $CONTAINER à l'arrêt"; return 1; }
+            install -d -m 0700 "$IMAP_SYNC_ETAT"
+            for f in "$IMAP_SYNC_DIR"/*.json; do
+                [ -f "$f" ] || continue
+                local lu; lu=$(basename "$f" .json)
+                [ -z "$cible" ] || [ "$cible" = "$lu" ] || continue
+                local host port user mdp debut fin sortie ok
+                eval "$(python3 -c 'import json,shlex,sys; c=json.load(open(sys.argv[1])); print("host=%s port=%s user=%s mdp=%s" % tuple(shlex.quote(str(c.get(k,""))) for k in ("host","port","user","password")))' "$f")"
+                debut=$(date +%s)
+                # imapc_password en option de doveadm : visible le temps de la commande dans le ps DU CONTENEUR, pas sur l'hôte.
+                if sortie=$(lxc_attach "$CONTAINER" doveadm -o mail_fsync=never -o "imapc_host=$host" -o "imapc_port=$port" -o "imapc_user=$user" \
+                        -o "imapc_password=$mdp" -o imapc_ssl=imaps -o ssl_client_ca_dir=/etc/ssl/certs -o "imapc_features=rfc822.size fetch-headers" \
+                        sync -R -u "$lu" imapc: 2>&1); then ok=true; else ok=false; rc=1; fi
+                fin=$(date +%s)
+                python3 - "$IMAP_SYNC_ETAT/$lu.json" "$ok" "$((fin-debut))" "$(printf '%s' "$sortie" | tail -c 600)" <<'PY'
+import datetime, json, sys
+f, ok, duree, msg = sys.argv[1:]
+json.dump({"dernier": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "ok": ok == "true",
+           "duree_s": int(duree), "message": msg.strip()}, open(f, "w"))
+PY
+                log "imap-sync : $lu ← $user@$host : $([ "$ok" = true ] && echo ok || echo ECHEC) en $((fin-debut)) s"
+            done
+            return $rc
+            ;;
+        *) echo "Usage: mailctl imap-sync {add LOCAL HOTE UTILISATEUR [PORT] | del LOCAL | list | run [LOCAL]}" >&2; return 1 ;;
+    esac
+}
+
 cmd_fix_ports() {
     if ! lxc_running "$CONTAINER"; then
         error "Mail container not running"
@@ -1867,6 +1957,7 @@ case "${1:-}" in
     webmail-sso) cmd_webmail_sso ;;
     webmail-sieve) cmd_webmail_sieve ;;
     webmail-comptes) cmd_webmail_comptes ;;
+    imap-sync)   shift; cmd_imap_sync "$@" ;;
     webmail-openpgp) cmd_webmail_openpgp ;;
     autocrypt-sync) cmd_autocrypt_sync ;;
     webmail-pgp) cmd_webmail_pgp ;;
