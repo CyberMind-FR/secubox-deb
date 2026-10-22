@@ -22,7 +22,7 @@ def test_page_sans_skin_ni_police_distante_script_a_part_pour_la_csp():
     srcs = re.findall(r'<(?:script|link)[^>]+(?:src|href)="([^"]+)"', HTML)
     assert srcs == ["admin.js"], srcs                      # la CSP de la route refuse le script en ligne ; rien d'autre
     assert "hybrid-skin.css" not in HTML and "fonts.googleapis.com" not in HTML
-    assert "/shared/sidebar.js" in JS and "!EMBED && !DEMO" in JS
+    assert "/shared/sidebar.js" in JS and "!EMBED && !encadre && !DEMO" in JS
     assert "100vh" not in HTML
 
 
