@@ -1,3 +1,11 @@
+secubox-bbs (0.37.11-1~trixie1) trixie; urgency=medium
+
+  * Le jeton de service de la radio (iss « secubox-radio ») est accepté comme émetteur de la passerelle
+    (ref #3034) : depuis #1814, l'ouverture des contenus, représentations et fils des pistes validées rendait
+    « jeton sans session » et aucune piste n'avait de fil BBS.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 08:23:55 +0200
+
 secubox-bbs (0.37.10-1~bookworm1) bookworm; urgency=medium
 
   * Console sysop (www/bbs/index.html) au profil Aurora : page autonome, six tuiles avec infobulle de définition (fils, messages, membres, fichiers, billets, intégrité), trois onglets (Exploitation, Sysop, Salons), ?embed=1 sans menu, ?demo=1 (données fictives, actions inertes), 420 px sans débordement, mesure absente affichée « — », bandeau « session requise » au lieu de la redirection vers la connexion (#2674).

@@ -76,6 +76,7 @@ func TestControleSession(t *testing.T) {
 		{"session inconnue", map[string]any{"jti": "absente", "exp": now + 60}, false},
 		{"jeton d'intention", map[string]any{"jti": jti, "scope": "mfa-challenge"}, false},
 		{"service connu, court", map[string]any{"iss": "metanews", "iat": now, "exp": now + 120}, true},
+		{"radio (jeton de flotte de 2 min, #3034)", map[string]any{"iss": "secubox-radio", "iat": now, "exp": now + 120}, true},
 		{"service connu, trop long", map[string]any{"iss": "metanews", "iat": now, "exp": now + 3600}, false},
 		{"service inconnu", map[string]any{"iss": "intrus", "iat": now, "exp": now + 60}, false},
 		{"ni jti ni service", map[string]any{"sub": "gk2", "iat": now, "exp": now + 60}, false},
