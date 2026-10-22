@@ -80,6 +80,10 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   de gk2 et retirés du dépôt trixie et bookworm). Façades sans données : décision du propriétaire du 2026-10-22. Non
   redéployés : métapaquets (`secubox-meta` ne se construit pas sur master, `gen-meta` : assist, courbes, zkp hors arbre),
   isp/profils (non installés sur gk2). Reste `hub`/`espaces.json` : `media-smb` à classer (test préexistant).
+- **Retrait de `secubox-zkp`** — closes #3019 (PR #3024 ; aggregator 0.4.6, hub 1.12.23 sur gk2 + apt ; paquet purgé et retiré du dépôt).
+- **Coffre en Aurora** — closes #3020 (PR #3022, `secubox-vault` 2.1.10 sur gk2 + apt) : actions identiques, confirmations dans la page.
+- **Annuaire : offres réelles** — closes #3021 (PR #3023, `secubox-annuaire` 0.14.8 sur gk2 + apt) : curation du Hall + onions +
+  dépôt apt, synchronisation quotidienne ; reste l'offre étrangère « Suricata IDS feed » (did:plc:077c48…, à révoquer depuis ce nœud).
 - Charge de gk2 pendant ces déploiements : load 20-28 sur 4 cœurs, 9 Go de swap ; systemd et dpkg très lents (postinst du hub
   à plusieurs minutes). metrics était le premier consommateur avant 1.29.4.
 
