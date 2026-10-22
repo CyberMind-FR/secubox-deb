@@ -26,6 +26,9 @@ SUDOERS
     systemctl daemon-reload
     systemctl enable secubox-haproxy.service
     systemctl start secubox-haproxy.service || true
+    # #3056 : l'unité du composant exposure (root, /run/secubox/exposure.sock, hors agrégateur depuis #3013) est
+    # installée par debian/rules, donc inconnue de dh_installsystemd : l'activer ici, sinon « HORS LIGNE ».
+    systemctl enable --now secubox-exposure.service || true
     ;;
   triggered)
     for trig in $2; do
