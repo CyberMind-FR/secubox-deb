@@ -9,6 +9,23 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Mood et Radio en Aurora ; Mail : boîtes externes réelles, rapatriement IMAP OVH, relais local (closes #3026, closes #3028, closes #3029, closes #3033)
+
+« /sbxos-audio-mood/ aurora » : `sbxos-audio-mood` 0.10.7 puis 0.10.8 (PR #3027, arm64) — panneau au profil Aurora,
+script gardé dans `admin.js` (CSP `script-src 'self'` de la route), « Tout effacer » confirmé dans la page ; le menu
+latéral avait disparu (« a perdu le left menu bar ») : coque posée en JS (nav#sidebar, `main-content`, sidebar.js) comme
+/metrics/, et même correctif pour le Coffre (`secubox-vault` 2.1.11, PR #3030). « /radio/ aurora » : la page Aurora
+0.2.0 (#2612) n'avait jamais été construite ni publiée (gk2 et le dépôt en 0.1.79) ; `secubox-radio` 0.2.1 (PR #3031,
+arm64) déployé. Mail (`secubox-mail` 2.16.4, PR #3032) : le volet « Boîtes externes » dit l'état réel — greffon
+`ident_switch` du webmail (conteneur `roundcube`, PAS `mail` : il n'y est pas installé, le volet le dit) et relais SMTP
+sortant ; « mail remote imap retrieve sync with ovh ssl0.ovh.net » : `mailctl imap-sync add|del|list|run` = `doveadm
+sync -R` avec le backend imapc de Dovecot dans le LXC mail (rien à installer, OVH joignable), identifiants gardés par la
+box (`/etc/secubox/secrets/mail/imap-sync`, root 0600, jamais en argument ni en retour), minuterie 15 min, routes
+`/imap-sync`, volet avec préréglage OVH ; « /smtp-relay/ local default » : `local_default` (LXC mail :25 sans auth)
+et `POST /config/local-default`, bouton dans la page. Incident : 2.16.3 a laissé l'API mail à terre 15 min (`re` non
+importé, invisible à `py_compile`) ; 2.16.4 corrige, règle notée (importer le module avant de déployer). Tout publié
+dans apt trixie. Sans boîte OVH déclarée tant que le propriétaire n'a pas saisi ses identifiants dans le volet.
+
 ## 2026-10-22 — Retrait de zkp ; Coffre en Aurora ; Annuaire : offres de services réelles (closes #3019, closes #3020, closes #3021)
 
 « /zkp/ remove » : `secubox-zkp` retiré (PR #3024 ; aggregator 0.4.6 `RETIRED_MODULES`, hub 1.12.23 sans sonde de

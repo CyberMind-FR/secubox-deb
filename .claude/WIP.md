@@ -84,6 +84,12 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - **Coffre en Aurora** — closes #3020 (PR #3022, `secubox-vault` 2.1.10 sur gk2 + apt) : actions identiques, confirmations dans la page.
 - **Annuaire : offres réelles** — closes #3021 (PR #3023, `secubox-annuaire` 0.14.8 sur gk2 + apt) : curation du Hall + onions +
   dépôt apt, synchronisation quotidienne ; reste l'offre étrangère « Suricata IDS feed » (did:plc:077c48…, à révoquer depuis ce nœud).
+- **Mood et Radio en Aurora** — closes #3026 (PR #3027, `sbxos-audio-mood` 0.10.8), closes #3029 (PR #3031, `secubox-radio`
+  0.2.1) ; coque du menu latéral rétablie sur Mood et le Coffre (PR #3030, vault 2.1.11).
+- **Mail : boîtes externes réelles, rapatriement IMAP, relais local** — closes #3028, closes #3033 (PR #3032, `secubox-mail`
+  2.16.4) : `mailctl imap-sync` (doveadm imapc), minuterie 15 min, volet avec préréglage OVH ; relais local par défaut.
+  À faire par le propriétaire : déclarer la boîte OVH (identifiants) dans le volet « Boîtes externes ». Le greffon
+  `ident_switch` n'est pas installé dans le LXC `roundcube` (lecture directe depuis le webmail) : à décider.
 - Charge de gk2 pendant ces déploiements : load 20-28 sur 4 cœurs, 9 Go de swap ; systemd et dpkg très lents (postinst du hub
   à plusieurs minutes). metrics était le premier consommateur avant 1.29.4.
 
