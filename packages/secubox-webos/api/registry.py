@@ -32,37 +32,54 @@ def load_exposure_cache(path: str = "/var/cache/secubox/webos/exposure-health.js
 PAGES_PORTEES = {"rlevel": "toolbox"}
 
 
-def modules_montes(socket_agregateur: str = "/run/secubox/aggregator.sock") -> frozenset:
-    """Modules montés EN PROCESSUS par l'agrégateur (son /health). Sans unité ni socket propres, ils répondent pourtant : c'est la preuve
-    qu'ils sont en service (#2455). Agrégateur injoignable ou réponse illisible : ensemble vide, donc aucun module déclaré en service à tort."""
+def _lit_json(chemin_socket: str, url: str) -> Optional[dict]:
+    """GET JSON sur une socket unix ; None quand le service est INJOIGNABLE ou illisible (#3011).
+
+    Sous charge, une sonde qui expire rendait un ensemble vide, indistinguable d'un vrai « rien » :
+    le registre basculait ~110 modules en `nosource` pour un cycle. None laisse l'appelant garder
+    sa dernière valeur connue."""
     try:
-        c = _ConnexionUnix(socket_agregateur, timeout=2.0)
+        c = _ConnexionUnix(chemin_socket, timeout=2.0)
         try:
-            c.request("GET", "/health")
+            c.request("GET", url)
             rep = c.getresponse()
-            data = json.loads(rep.read().decode("utf-8", "replace")) if rep.status == 200 else {}
+            if rep.status != 200:
+                return None
+            data = json.loads(rep.read().decode("utf-8", "replace"))
         finally:
             c.close()
-        return frozenset(str(m) for m in (data.get("mounted") or []) if isinstance(m, str))
-    except Exception:
-        return frozenset()
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError, http.client.HTTPException):
+        return None
+
+
+def sonde_montes(socket_agregateur: str = "/run/secubox/aggregator.sock") -> Optional[frozenset]:
+    """Modules montés EN PROCESSUS par l'agrégateur (son /health). Sans unité ni socket propres, ils répondent pourtant : c'est la preuve
+    qu'ils sont en service (#2455). None = agrégateur injoignable (à distinguer d'un ensemble vide, #3011)."""
+    data = _lit_json(socket_agregateur, "/health")
+    if data is None:
+        return None
+    return frozenset(str(m) for m in (data.get("mounted") or []) if isinstance(m, str))
+
+
+def sonde_endormis(socket_profiles: str = "/run/secubox/profiles.sock") -> Optional[frozenset]:
+    """Modules en veille (scale-to-zero) d'après les cycles de vie des profils : `sleep_state == "asleep"` (#2996).
+    None = profils injoignables (#3011)."""
+    data = _lit_json(socket_profiles, "/api/v1/profiles/lifecycles")
+    if data is None:
+        return None
+    return frozenset(str(m.get("id")) for m in (data.get("lifecycles") or [])
+                     if isinstance(m, dict) and m.get("sleep_state") == "asleep" and m.get("id"))
+
+
+def modules_montes(socket_agregateur: str = "/run/secubox/aggregator.sock") -> frozenset:
+    """Comme `sonde_montes`, mais injoignable ⇒ ensemble vide : aucun module déclaré en service à tort."""
+    return sonde_montes(socket_agregateur) or frozenset()
 
 
 def modules_endormis(socket_profiles: str = "/run/secubox/profiles.sock") -> frozenset:
-    """Modules en veille (scale-to-zero) d'après les cycles de vie des profils : `sleep_state == "asleep"` (#2996).
-    Profils injoignables : ensemble vide — personne n'est déclaré endormi à tort."""
-    try:
-        c = _ConnexionUnix(socket_profiles, timeout=2.0)
-        try:
-            c.request("GET", "/api/v1/profiles/lifecycles")
-            rep = c.getresponse()
-            data = json.loads(rep.read().decode("utf-8", "replace")) if rep.status == 200 else {}
-        finally:
-            c.close()
-        return frozenset(str(m.get("id")) for m in (data.get("lifecycles") or [])
-                         if isinstance(m, dict) and m.get("sleep_state") == "asleep" and m.get("id"))
-    except (OSError, ValueError, http.client.HTTPException):
-        return frozenset()
+    """Comme `sonde_endormis`, mais injoignable ⇒ ensemble vide : personne n'est déclaré endormi à tort."""
+    return sonde_endormis(socket_profiles) or frozenset()
 
 
 def statut(state: str, endormi: bool) -> str:

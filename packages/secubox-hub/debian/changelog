@@ -1,3 +1,12 @@
+secubox-hub (1.12.21-1~trixie1) trixie; urgency=medium
+
+  * Lot de santé et menu : double tampon réel (ref #3011). Un `systemctl list-units` qui expire
+    ne remplace plus le lot complet par les seules sockets ; un menu recalculé vide ne remplace
+    plus un menu rempli ; la barre latérale (v2.44.1) ignore un lot vide ou `warming` et garde
+    le dernier état des LED.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 04:48:40 +0200
+
 secubox-hub (1.12.20-1~trixie1) trixie; urgency=medium
 
   * Barre latérale partagée : plus de colonne vide à gauche dans une page de module encadrée par

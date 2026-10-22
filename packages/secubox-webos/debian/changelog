@@ -1,3 +1,13 @@
+secubox-webos (1.19.10-1~trixie1) trixie; urgency=medium
+
+  * Registre du Hall : double tampon réel (ref #3011). Chaque sonde (agrégateur, profils,
+    systemd) distingue « injoignable » de « vide » et garde sa dernière valeur ; le registre ne
+    bascule que sur une passe utile, et le Hall n'applique qu'une réponse remplie (une réponse
+    vide laisse le dernier relevé visible). Fini les ~110 modules en « aucune source » pendant
+    un cycle sous charge.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 04:48:40 +0200
+
 secubox-webos (1.19.9-1~trixie1) trixie; urgency=medium
 
   * Hall v2 : rubrique « Services » en ordre alphabétique des libellés (ref #3007), dans la

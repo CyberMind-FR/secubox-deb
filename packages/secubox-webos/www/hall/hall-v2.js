@@ -385,7 +385,11 @@
   function sondeRegistre(){
     if(document.hidden){ regRetard=REG_PAS; return planifieRegistre(); }
     fetch('/api/v1/webos/public/services',{credentials:'same-origin'}).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
-      .then(function(d){ regDernier=d; regRetard=REG_PAS; appliqueRegistre(d); if(mosaique&&!mosaique.classList.contains('hidden')&&ongletMosaique!=='sites') rendMosaique(); })
+      .then(function(d){
+        regRetard=REG_PAS;
+        // L'affichage n'applique qu'un cache REMPLI (#3011) : une réponse vide laisse le dernier relevé visible (le pied le dira périmé si cela dure).
+        if(!(d&&d.services&&d.services.length)&&regDernier){ appliqueRegistre(regDernier); return; }
+        regDernier=d; appliqueRegistre(d); if(mosaique&&!mosaique.classList.contains('hidden')&&ongletMosaique!=='sites') rendMosaique(); })
       .catch(function(){ regRetard=Math.min(regRetard*2,60000); if(regDernier) appliqueRegistre(regDernier); })
       .then(planifieRegistre);
   }

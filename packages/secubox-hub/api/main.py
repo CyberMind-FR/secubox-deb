@@ -241,22 +241,33 @@ async def _refresh_menu_cache():
                 loop = asyncio.get_event_loop()
                 menu_data = await loop.run_in_executor(pool, _compute_menu_sync)
 
-            # Update in-memory cache
             async with _menu_cache_lock:
-                _menu_cache = menu_data
-
-            # Persist to file for fast startup
-            try:
-                MENU_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-                MENU_CACHE_FILE.write_text(json.dumps(menu_data))
-            except Exception as e:
-                log.debug("Menu cache file write failed: %s", e)
-
-            log.debug("Menu cache refreshed: %d modules", menu_data.get("total_installed", 0))
+                if await asyncio.to_thread(_bascule_menu, menu_data):
+                    log.debug("Menu cache refreshed: %d modules", menu_data.get("total_installed", 0))
         except Exception as e:
             log.error("Menu cache refresh failed: %s", e)
 
         await _attend_lecteur(30)  # Refresh every 30s while someone reads
+
+
+def _bascule_menu(menu_data: dict) -> bool:
+    """Bascule le tampon de menu et le persiste ; refuse un menu VIDE par-dessus un menu rempli (#3011).
+
+    Sous charge, un calcul dont les sources ont expiré rendait zéro module : la barre latérale se
+    vidait pour trente secondes. Au tout premier calcul, en revanche, un menu vide vaut mieux qu'un
+    `warming` sans fin : il n'y a rien à conserver."""
+    global _menu_cache
+    if not menu_data.get("categories") and _menu_cache.get("categories"):
+        log.warning("menu recalculé vide : le menu précédent (%d modules) reste servi",
+                    _menu_cache.get("total_installed", 0))
+        return False
+    _menu_cache = menu_data
+    try:
+        MENU_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        MENU_CACHE_FILE.write_text(json.dumps(menu_data))
+    except OSError as e:
+        log.debug("Menu cache file write failed: %s", e)
+    return True
 
 
 def _load_menu_cache_from_file() -> dict:
@@ -712,6 +723,19 @@ def superposer_lxc(modules: dict, sondes: dict, ouvert=_tcp_ouvert, presente=Non
                         else {"status": "error", "msg": "Conteneur LXC injoignable"})
 
 
+_LIST_UNITS_BATCH = ["systemctl", "list-units", "--type=service", "--state=running,failed,inactive",
+                     "--no-legend", "--plain", "secubox-*"]
+
+
+def _lire_unites_batch() -> "str | None":
+    """Le `list-units` du relevé de santé (même argv que `systemd_batch`) ; None si systemctl n'a pas répondu (#3011)."""
+    try:
+        return subprocess.run(_LIST_UNITS_BATCH, capture_output=True, text=True, timeout=5, check=False).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.warning("list-units du relevé de santé en échec : %s", exc)
+        return None
+
+
 def _refresh_health_batch():
     """Build the sidebar health snapshot in ONE systemctl list-units call.
 
@@ -729,11 +753,20 @@ def _refresh_health_batch():
     # _refresh_services_cache (toutes les unités secubox-*) contient déjà ce
     # que systemd_batch demanderait. Trop vieille ou absente : son propre appel.
     brut = _cache.get("units_brut")
-    run = None
     if brut and time.time() - _cache.get("units_ts", 0) < CACHE_TTL:
-        run = lambda: _filtre_etats_batch(brut)  # noqa: E731
+        texte = _filtre_etats_batch(brut)
+    else:
+        texte = _lire_unites_batch()
+    if texte is None:
+        # DOUBLE TAMPON RÉEL (#3011) : systemctl n'a pas répondu. `systemd_batch` dégraderait en
+        # silence vers un texte vide — seules les sockets subsisteraient — et les LED de la barre
+        # latérale tomberaient à « unknown » pour un cycle. Le dernier lot complet reste servi.
+        if _cache.get("health_batch"):
+            log.warning("relevé systemd indisponible : lot de santé précédent conservé")
+            return
+        texte = ""   # premier relevé : mieux vaut les sockets qu'un `warming` sans fin
     repos, absents = _unites_au_repos_cache()
-    modules = systemd_batch(sleepable=sleepable, _run=run, au_repos=repos, absents=absents)
+    modules = systemd_batch(sleepable=sleepable, _run=lambda: texte, au_repos=repos, absents=absents)
 
     # Le WAF est désormais le Go sbxwaf (secubox-waf-ng) ; le vieux
     # secubox-waf.service (API Python) est débranché depuis le cutover et reste

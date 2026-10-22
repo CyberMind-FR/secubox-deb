@@ -61,7 +61,7 @@
 
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.44.0';
+    const VERSION = 'v2.44.1';
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
@@ -1837,6 +1837,9 @@
         var res = await safeFetch(BATCH_HEALTH_API, { headers: headers }, 5000);
         if (!res.ok || !res.data || !res.data.modules) return;
         var mods = res.data.modules;
+        // N'appliquer qu'un lot REMPLI (#3011) : un lot vide ou `warming` laisserait toutes
+        // les LED à « unknown » ; le dernier état connu reste affiché jusqu'au prochain lot.
+        if (res.data.warming || Object.keys(mods).length === 0) return;
         modules.forEach(function(mod) {
             var hb = mods[mod] || mods[mod.replace(/_/g, '-')] || mods[mod.replace(/-/g, '_')];
             healthCache[mod] = hb
