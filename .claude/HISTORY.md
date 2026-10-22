@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Exposition « HORS LIGNE » : l'unité du composant exposure n'était jamais activée (closes #3056)
+
+« https://admin.gk2.secubox.in/exposure/ » : page « HORS LIGNE », API 404. `secubox-exposure.service` était `disabled`,
+jamais démarrée depuis l'installation de haproxy 1.12.3 (#3013 l'a sortie de l'agrégateur vers son unité root dédiée) :
+l'unité du composant est installée à la main par `debian/rules` de secubox-haproxy, donc inconnue de `dh_installsystemd`,
+et le postinst n'activait que `secubox-haproxy.service`. PR #3057, `secubox-haproxy` 1.12.4 : postinst `enable --now`,
+prerm `stop`/`disable`, tests statiques. Sur gk2 : unité activée à la main puis paquet déployé (enabled/active, API 200,
+page « EN LIGNE » : 43 ports à l'écoute, 1 onion, 1 service émancipé), publié dans apt trixie. Leçon : une unité installée
+par `rules` hors `dh_installsystemd` doit être activée explicitement par le postinst — vérifier `systemctl is-enabled` après
+un déplacement de module hors de l'agrégateur.
+
 ## 2026-10-22 — Hub : lien d'un module autonome vers son propre vhost (closes #3054)
 
 « https://admin.gk2.secubox.in/metanews/ » : la page rendue était « Module Not Found » du hub (HTTP 200 trompeur) — MetaNews
