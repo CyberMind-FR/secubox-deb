@@ -43,9 +43,11 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - **Fait (webos 1.19.11 → 1.19.12, 2026-10-22)** : phase 4, suite — premier lot de cartes habillées en `Card` sur place
   (`MIGREES` : securite, acteurs, radar, guardian, dpi, ipv6guard, activite ; `SOURCE_STATUT` pour le statut des cartes de
   curation), ancien rendu conservé, déployé gk2, dossier §5.
-- ⬜ **Next Up** : phase 4, lots suivants dans l'ordre du prompt — Accès rapide (`Tile`), Flux d'actualités (fusion MetaNews +
-  Flux YouTube + Billets en `NewsItem`), Radio dock, Mur de discussion, Éphéméride, Zigbee, DevWatch, ZIA, Mes comptes, Lyrion,
-  Freebox TV, L'écoute, YTSaS (ajouter l'id à `MIGREES` + `ICO_CARTE`, alléger les cardlets à double en-tête : Activité, cumul) ;
+- **Fait (webos 1.19.13, 2026-10-22)** : second lot — toute la liste du prompt est habillée en `Card` (18 cartes sur gk2, 11
+  génériques hors liste) ; icônes SVG ajoutées, `SOURCE_STATUT` étendu.
+- ⬜ **Next Up** : phase 4, ce qui n'est pas un simple habillage — Accès rapide en `Tile` (grille auto-fill 104 px) ; fusion des
+  flux (MetaNews + Flux YouTube + Billets) en une carte `NewsItem` ; corps natifs pour les cardlets à double en-tête (Activité,
+  cumul Sécurité, micro MetaNews / BBS) ; vérifier pourquoi `metanews` et `ephemeride` manquent au registre (« aucune source ») ;
   relais Streamlit `/apps/{nom}/screenshot` pour les vignettes ; à trancher : reprise du relevé système dans les courbes de
   `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
 

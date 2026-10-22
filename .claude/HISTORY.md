@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Hall v2, phase 4 : second lot de cartes habillées en `Card`, fin de la liste du prompt (ref #2996)
+
+« next ». `secubox-webos` 1.19.13 (PR #3041), déployé sur gk2, publié dans apt trixie. `MIGREES` couvre maintenant toute
+la liste du prompt : Flux d'actualités (metanews, ytflux, billets), Radio dock, Mur de discussion (bbs), Éphéméride, Zigbee,
+DevWatch, ZIA, Mes comptes, Lyrion, Freebox TV, L'écoute (mood), YTSaS ; onze icônes SVG ajoutées à `composants.js` ;
+statut emprunté pour ytflux (ytsas), comptes (sbxid), mood (sbxos-audio-mood), freeboxtv (freebox). Tests phase 3 et #3011
+lisent le relevé de la radio dans son pied Card. Sur gk2 : 18 cartes habillées, 11 génériques (hors liste) ; « aucune
+source » honnête pour metanews, ephemeride, ipv6guard (absents du registre — à vérifier pour metanews), ytsas et lyrion
+(registre `nosource`). Reste de nature différente : Accès rapide en `Tile`, fusion des flux en `NewsItem`, corps natifs
+pour les cardlets à double en-tête.
+
 ## 2026-10-22 — Hall v2, phase 4 (suite) : cartes de l'accueil habillées en `Card`, premier lot dans l'ordre du prompt (ref #2996)
 
 « next » → premier ⬜ de WIP. `secubox-webos` 1.19.11 (PR #3039) puis 1.19.12 (PR #3040), déployés sur gk2 et publiés dans
