@@ -389,6 +389,16 @@
     var titre=c.getAttribute('data-label')||id, pied=c.querySelector('.sbx-fcard-pied'); if(pied) pied.remove();
     window.SbxUI.Card({hote:c,icone:ICO_CARTE[id]||'module',titre:titre,source:c.getAttribute('data-host')||'',
       action:{label:'Ouvrir '+titre,attrs:{'data-open':id,'data-mode':'embed'}}});
+    encarte(c);
+  }
+  // Un cardlet servi par le Hall (même origine, /cardlets/) apprend qu'il est encarté : il range sa marque (sonde.js).
+  // Les pages d'autres origines (micro MetaNews, BBS, radio…) ne reçoivent rien.
+  function encarte(c){
+    Array.prototype.forEach.call(c.querySelectorAll('iframe'),function(f){
+      var src=f.getAttribute('src')||f.getAttribute('data-src')||''; if(src.indexOf('/cardlets/')!==0) return;
+      function dis(){ try{ f.contentWindow.postMessage({sbx:'carte'},location.origin); }catch(e){} }
+      f.addEventListener('load',dis); dis();
+    });
   }
   function habilleCartes(){ Array.prototype.forEach.call(document.querySelectorAll('#featgrid .fcard[data-embed], #favbande .fcard[data-embed]'),habille); }
   // ── Accès rapide (phase 4) : une Card native sous le Hero, huit tuiles au plus vers le service embarqué —
