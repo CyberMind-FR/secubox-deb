@@ -642,6 +642,35 @@ async def apps_audit():
 # SCREENSHOTS — Mosaic tile thumbnails (#958)
 # ═══════════════════════════════════════════════════════════════════════
 
+@router.get("/apps/vitrine", dependencies=[Depends(require_lecture)])
+def apps_vitrine():
+    """La VITRINE des applis pour le Hall (#2996, phase 4) : une ligne par appli — nom, en ligne ou non, domaine public
+    (celui de sa première instance active, sinon aucun), vignette conservée et sa date. Lecture gardée comme `/apps`
+    et `/apps/{name}/screenshot` (décision #1776 : une vignette photographie l'appli). Jamais de capture déclenchée ici."""
+    cfg = _load_streamlit_config() or {}
+    domaines: Dict[str, str] = {}
+    for ident, inst in (cfg.get("instances") or {}).items():
+        appli = inst.get("app", ident)
+        if inst.get("enabled", True) and appli not in domaines:
+            domaines[appli] = inst.get("domain") or hote_box(ident)
+    lignes = []
+    for a in _get_apps(enrichir=False, timeout=10):
+        nom = a.get("name")
+        if not nom or not _NOM_APPLI_RE.fullmatch(str(nom)):
+            continue
+        meta = _screenshots.read_meta(SHOTS_CACHE_DIR, nom)
+        lignes.append({
+            "name": nom,
+            "running": bool(a.get("running")),
+            "archived": bool(a.get("archived")),
+            "domain": domaines.get(nom),
+            "screenshot_available": _screenshots.png_path(SHOTS_CACHE_DIR, nom).exists(),
+            "screenshot_captured_at": meta.get("captured_at"),
+        })
+    lignes.sort(key=lambda x: (not x["running"], x["name"].lower()))
+    return {"apps": lignes, "vhost_suffix": domaine_box()}
+
+
 @router.get("/apps/{name}/screenshot", dependencies=[Depends(require_lecture)])
 def app_screenshot(name: str):
     """Sert la vignette conservée — lecture GARDÉE (#1256, décision #1776).

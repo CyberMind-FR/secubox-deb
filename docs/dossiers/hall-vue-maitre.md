@@ -328,6 +328,15 @@ reçoivent rien : leur en-tête reste tant qu'ils n'exposent pas une variante en
 
 ![Cardlet encarté à 1440 px](../assets/images/hall-vue-maitre/hall-v2-encarte-1440.png)
 
+**Applications (1.19.21, streamlit 1.6.2)** : rubrique « Applications » de la mosaïque — les applis Streamlit et leurs
+vignettes, via `GET /api/v1/streamlit/apps/vitrine` (nouveau : nom, en ligne, domaine de la première instance active,
+vignette et sa date) et `/apps/{nom}/screenshot`, relayés par le vhost du Hall **sous session SecuBox** (décision #1776 : une
+vignette photographie l'appli, jamais à un anonyme). Tuile = lien vers le domaine de l'appli quand elle en a un, sinon la
+console Streamlit embarquée ; archivées écartées ; sans session, la mosaïque le dit. Tests : `tests/test_applications_2996.py`,
+`secubox-streamlit/tests/test_vitrine_2996.py`.
+
+![Applications à 1440 px](../assets/images/hall-vue-maitre/hall-v2-applications-1440.png)
+
 ![Cartes Card à 1440 px](../assets/images/hall-vue-maitre/hall-v2-cards-1440.png)
 
 ![Cartes Card à 390 px](../assets/images/hall-vue-maitre/hall-v2-cards-390.png)
@@ -346,7 +355,7 @@ reçoivent rien : leur en-tête reste tant qu'ils n'exposent pas une variante en
   pages admin embarquées supprimée (hub 1.12.20), sonde HTTP avant capture des vignettes (pages 421/connexion
   exclues). Pages admin embarquées : les marges restantes sont leur conteneur centré
   (`:root.sbx-embed main{max-width:none}` côté `sidebar.css` du hub les étirerait).
-- Phase 4, suite : les 20 captures Streamlit demanderaient un relais `/api/v1/streamlit/apps/{nom}/screenshot` sur le Hall.
+- Fait (1.19.21) : les vignettes Streamlit sont dans la rubrique « Applications » de la mosaïque, par relais sous session.
   Migration vers `Card` : les deux lots de la liste du prompt sont habillés (1.19.11 → 1.19.13) et « Accès rapide » est une
   Card native (1.19.14), « Flux d'actualités » fusionne les trois flux (1.19.16). Les cardlets encartés n'ont plus de double en-tête (1.19.18). Reste : GO sur la fusion
   (retirer ou masquer les cartes MetaNews / Flux YouTube / Billets) ; lien profond vers un sujet MetaNews (son interface n'en expose pas : la carte ouvre l'accueil). Faits ensuite : #3042 (hub, modules autonomes

@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse, Response
 from secubox_core.auth import require_session, require_personne, create_token, domaine_box
 from secubox_core.health import systemd_batch
 from api import registry, flags, cardlets, actions, aide, hotes, systeme, vignettes
+from api.models import Service  # noqa: F401 — exposé pour les tests (main.Service), ne pas « nettoyer »
 from secubox_core.auth import require_lecture
 
 _cache: dict = {"services": [], "computed_at": None}
