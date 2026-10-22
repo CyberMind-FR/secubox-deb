@@ -366,18 +366,35 @@
       else if(f.getAttribute('data-src')&&!f.getAttribute('src')){ f.setAttribute('src',f.getAttribute('data-src')); f.removeAttribute('data-src'); }
     });
     var note=c.querySelector('.sbx-veille');
-    if(dort&&!note){ note=el('div',{'class':'sbx-veille'},'module en veille — aucune requête tant qu’il dort'); (c.querySelector('.ap-vue')||c).appendChild(note); }
+    if(dort&&!note){ note=el('div',{'class':'sbx-veille'},'module en veille — aucune requête tant qu’il dort'); (c.querySelector('.ap-vue')||c.querySelector('.sbx-card-corps')||c).appendChild(note); }
     else if(!dort&&note) note.remove();
   }
+  // ── Phase 4 : migration des cartes vers Card, dans l'ordre du prompt (Sécurité, DNS, Réseau, État système = Hero,
+  // Appareils, Notifications…). Une carte du lot est habillée SUR PLACE (Card avec hôte) : son cardlet reste dans le
+  // corps, ses commandes (⠿ ★ ?) à l'article, l'ancien rendu n'est pas retiré. Hors lot : le pied v2 de la phase 3.
+  var MIGREES=['securite','acteurs','radar','guardian','dpi','ipv6guard','activite'];
+  var ICO_CARTE={securite:'bouclier',acteurs:'bouclier',radar:'bouclier',guardian:'globe',dpi:'reseau',ipv6guard:'reseau',activite:'actualite'};
+  function habille(c){
+    var id=c.getAttribute('data-embed');
+    if(!window.SbxUI||MIGREES.indexOf(id)<0||c.classList.contains('sbx-card')) return;
+    var titre=c.getAttribute('data-label')||id, pied=c.querySelector('.sbx-fcard-pied'); if(pied) pied.remove();
+    window.SbxUI.Card({hote:c,icone:ICO_CARTE[id]||'module',titre:titre,source:c.getAttribute('data-host')||'',
+      action:{label:'Ouvrir '+titre,attrs:{'data-open':id,'data-mode':'embed'}}});
+  }
+  function habilleCartes(){ Array.prototype.forEach.call(document.querySelectorAll('#featgrid .fcard[data-embed], #favbande .fcard[data-embed]'),habille); }
   function appliqueRegistre(d){
     var parId={}; (d.services||[]).forEach(function(s){ parId[s.id]=s; });
     var t=d.computed_at?d.computed_at*1000:Date.now(), iv=(d.intervalle_s||15)*1000, perime=Date.now()-t>2*iv;
     Array.prototype.forEach.call(document.querySelectorAll('.fcard[data-embed]'),function(c){
+      habille(c);
       var s=parId[c.getAttribute('data-embed')], st=(s&&s.status)||'nosource';
-      c.setAttribute('data-status',st);
       if(perime) c.setAttribute('data-perime','1'); else c.removeAttribute('data-perime');
-      var pied=c.querySelector('.sbx-fcard-pied'); if(!pied){ pied=el('div',{'class':'sbx-fcard-pied'}); c.appendChild(pied); }
-      pied.textContent=(perime?'données périmées · relevé ':'Relevé ')+hhmmss(t)+(st==='idle'?' · en veille':'');
+      if(c.sbxStatut){ c.sbxStatut(st); c.sbxReleve(new Date(t),perime); }
+      else {
+        c.setAttribute('data-status',st);
+        var pied=c.querySelector('.sbx-fcard-pied'); if(!pied){ pied=el('div',{'class':'sbx-fcard-pied'}); c.appendChild(pied); }
+        pied.textContent=(perime?'données périmées · relevé ':'Relevé ')+hhmmss(t)+(st==='idle'?' · en veille':'');
+      }
       veille(c,st==='idle');
     });
   }
@@ -396,8 +413,8 @@
   function registre(){
     sondeRegistre();
     document.addEventListener('visibilitychange',function(){ if(!document.hidden){ regRetard=REG_PAS; sondeRegistre(); } });
-    // Le Hall redessine la mosaïque (registre, favoris) : on repose statut et pied sur les nouvelles cartes.
-    ['featgrid','favbande'].forEach(function(id){ var z=document.getElementById(id); if(z) new MutationObserver(function(){ if(regDernier) appliqueRegistre(regDernier); }).observe(z,{childList:true}); });
+    // Le Hall redessine la mosaïque (registre, favoris) : on rhabille et on repose statut et pied sur les nouvelles cartes.
+    ['featgrid','favbande'].forEach(function(id){ var z=document.getElementById(id); if(z) new MutationObserver(function(){ habilleCartes(); if(regDernier) appliqueRegistre(regDernier); }).observe(z,{childList:true}); });
   }
   function composants(cb){
     if(window.SbxUI) return cb();
@@ -420,7 +437,7 @@
     if(theme){ actions.insertBefore(dispo,theme); actions.insertBefore(notif,theme); theme.innerHTML=ico('theme'); theme.insertAdjacentElement('afterend',version); }
     else { actions.appendChild(dispo); actions.appendChild(notif); actions.appendChild(version); }
     var av=$('#who .av'); if(av) av.innerHTML=ico('usager');
-    de(); composants(hero); registre();
+    de(); composants(function(){ hero(); habilleCartes(); if(regDernier) appliqueRegistre(regDernier); }); registre();
 
     // Corps : sidebar + zone principale.
     var corps=el('div',{'class':'sbx-corps'});

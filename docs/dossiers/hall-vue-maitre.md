@@ -278,6 +278,23 @@ d'`apt.secubox.in`. Flag `hall_v2` laissé à faux : le Hall classique reste le 
 
 ![gk2 en v2 à 390 px](../assets/images/hall-vue-maitre/hall-v2-gk2-390.png)
 
+### Phase 4, suite — cartes de l'accueil habillées en `Card`, premier lot (2026-10-22, `secubox-webos` 1.19.11)
+
+Dans l'ordre du prompt (Sécurité, DNS, Réseau, État système, Appareils, Notifications…), rapporté aux cartes réelles du
+Hall : **Sécurité** = `securite`, `acteurs`, `radar` ; **DNS** et **Appareils** = `guardian` ; **Réseau** = `dpi`,
+`ipv6guard` ; **État système** = le Hero (phase 2) ; **Notifications** = `activite`. La liste `MIGREES` de `hall-v2.js`
+porte ce lot. Une carte du lot est **habillée sur place** (`SbxUI.Card({hote: article})`) : en-tête (icône SVG, titre,
+pastille de statut typé, action › qui ouvre le service embarqué par la délégation `data-open` du Hall), son cardlet intact
+dans le corps (padding 0), pied « hôte · Relevé HH:MM:SS ». L'ancien rendu n'est pas retiré : l'article garde `.fcard`,
+`data-embed`, sa poignée ⠿, son étoile ★ et son aide ? (descendues dans la bande du pied pour ne pas tronquer le titre),
+donc le glisser, les favoris et l'auto-guide continuent de fonctionner. Le registre pilote pastille, opacité et veille
+(`sbxStatut`, `sbxReleve`) ; les cartes hors lot gardent le pied v2 de la phase 3 ; le Hall v1 ne change pas.
+Tests : `tests/test_cartes_card_2996.py` (lot et ordre, habillage, statut et veille, 390 px sans débordement, v1 intact).
+
+![Cartes Card à 1440 px](../assets/images/hall-vue-maitre/hall-v2-cards-1440.png)
+
+![Cartes Card à 390 px](../assets/images/hall-vue-maitre/hall-v2-cards-390.png)
+
 ## 6. Reste à faire
 
 - Phase 2, reste : option `hall.v2.hero-dice` (dé de 96 px derrière l'heure), reportée avec la carte « Bonjour ».
@@ -292,6 +309,9 @@ d'`apt.secubox.in`. Flag `hall_v2` laissé à faux : le Hall classique reste le 
   pages admin embarquées supprimée (hub 1.12.20), sonde HTTP avant capture des vignettes (pages 421/connexion
   exclues). Pages admin embarquées : les marges restantes sont leur conteneur centré
   (`:root.sbx-embed main{max-width:none}` côté `sidebar.css` du hub les étirerait).
-- Phase 4, suite : les 20 captures Streamlit demanderaient un relais `/api/v1/streamlit/apps/{nom}/screenshot` sur le Hall,
-  puis migration des cartes vers `Card` dans l'ordre du prompt ; les cartes non migrées sous « Tous les modules ».
+- Phase 4, suite : les 20 captures Streamlit demanderaient un relais `/api/v1/streamlit/apps/{nom}/screenshot` sur le Hall.
+  Migration vers `Card` : premier lot fait (1.19.11, ci-dessus) ; lots suivants dans l'ordre du prompt — Accès rapide
+  (`Tile`), Mes modules (la mosaïque, déjà), Flux d'actualités (fusion MetaNews + Flux YouTube + Billets en `NewsItem`),
+  Radio dock, Mur de discussion, Éphéméride, Zigbee, DevWatch, ZIA, Mes comptes, Lyrion, Freebox TV, L'écoute, YTSaS —
+  en ajoutant chaque id à `MIGREES` (et son icône à `ICO_CARTE`) une fois son cardlet validé dans le corps.
 - Mesure du dé sur RPi4 (le budget ≤ 1 ms/image est à confirmer sur la cible).
