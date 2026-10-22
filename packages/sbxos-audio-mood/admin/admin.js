@@ -11,7 +11,14 @@
     const q = new URLSearchParams(location.search);
     const EMBED = !!q.get('embed'), DEMO = !!q.get('demo');
     if (EMBED) document.body.classList.add('emb');
-    if (!EMBED && !DEMO) { const s = document.createElement('script'); s.src = '/shared/sidebar.js'; document.body.appendChild(s); }
+    // Coque (menu latéral commun) : hors cadre du Hall et hors ?embed=1 / ?demo=1 — même recette que /metrics/ (#3026).
+    let encadre = true; try { encadre = window.top !== window.self; } catch (e) { /* origine différente : encadré */ }
+    if (!EMBED && !encadre && !DEMO) {
+        const nav = document.createElement('nav'); nav.className = 'sidebar'; nav.id = 'sidebar';
+        document.body.insertBefore(nav, document.body.firstChild);
+        document.getElementById('coque').classList.add('main-content');
+        const s = document.createElement('script'); s.src = '/shared/sidebar.js'; document.body.appendChild(s);
+    }
     const API = '/api/mood/admin';
     const $ = id => document.getElementById(id);
     const el = (tag, cls, texte) => { const e = document.createElement(tag); if (cls) e.className = cls; if (texte != null) e.textContent = texte; return e; };
