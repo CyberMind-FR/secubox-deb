@@ -1,0 +1,7 @@
+{
+  "id": "ipv6guard",
+  "name": "IPv6 Guardian",
+  "category": "wall",
+  "description": "Qui est joignable en IPv6, en clair — l'API de la carte du Hall",
+  "path": "/api/v1/ipv6guard/"
+}

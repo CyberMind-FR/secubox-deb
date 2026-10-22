@@ -7,7 +7,7 @@ import http.client
 import json
 import socket
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterable, List, Optional
 from api.models import Service, ServiceUrls, ServiceRouting, ServiceHealth, ServiceAuth
 from api.idmap import resolve
 
@@ -30,6 +30,24 @@ def load_exposure_cache(path: str = "/var/cache/secubox/webos/exposure-health.js
 
 # Pages d'un module qui n'a pas d'unité ni de socket propres : l'état est celui du module qui les porte (#2455).
 PAGES_PORTEES = {"rlevel": "toolbox"}
+
+
+def charger_registre_d(dossier: str = "/usr/share/secubox/registre.d") -> List[dict]:
+    """Fiches des modules API SEULE (#2996) : sans page, donc sans menu.d, ils se déclarent au registre du Hall par un
+    fichier `<id>.json` livré par leur paquet (id, name, category, description). Un fichier illisible ou sans id est ignoré."""
+    out: List[dict] = []
+    try:
+        chemins = sorted(Path(dossier).glob("*.json"))
+    except OSError:
+        return out
+    for p in chemins:
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(d, dict) and d.get("id"):
+            out.append(d)
+    return out
 
 
 def _lit_json(chemin_socket: str, url: str) -> Optional[dict]:
@@ -91,47 +109,50 @@ def statut(state: str, endormi: bool) -> str:
 
 def normalize_services(menu: dict, health: dict, exposure: Optional[dict] = None,
                        sockets: frozenset = frozenset(), montes: frozenset = frozenset(),
-                       endormis: frozenset = frozenset()) -> List[Service]:
+                       endormis: frozenset = frozenset(), supplements: Iterable[dict] = ()) -> List[Service]:
     exposure = exposure or {}
     out: List[Service] = []
-    for cat in menu.get("categories", []):
-        for item in cat.get("items", []):
-            _raw = (health.get(item["id"]) or {}).get("status")
+    items = [item for cat in menu.get("categories", []) for item in cat.get("items", [])]
+    vus = {item.get("id") for item in items}
+    # Modules API seule (registre.d) : mêmes règles de santé, jamais en double avec le menu.
+    items += [dict(s) for s in supplements if s.get("id") and s["id"] not in vus]
+    for item in items:
+        _raw = (health.get(item["id"]) or {}).get("status")
+        state = HEALTH_MAP.get(_raw, "unknown")
+        # Vérité opérationnelle SecuBox : ~110 modules sont servis IN-PROCESS
+        # par l'agrégateur, donc leur unité systemd est inactive/dead alors que
+        # le module RÉPOND via sa socket /run/secubox/<id>.sock. La socket est
+        # le vrai signal de joignabilité : présente ⇒ online, SAUF si l'unité a
+        # réellement échoué (`failed` = alarme, jamais masquée par une socket
+        # périmée).
+        # Même vérité pour un module monté dans l'agrégateur (ni unité ni socket propres) et pour une page portée par un autre module
+        # (R-Level est une page du Toolbox) : on suit le module qui répond. Une unité réellement en échec reste une alarme.
+        porteur = PAGES_PORTEES.get(item["id"])
+        if porteur and _raw is None:
+            _raw = (health.get(porteur) or {}).get("status")
             state = HEALTH_MAP.get(_raw, "unknown")
-            # Vérité opérationnelle SecuBox : ~110 modules sont servis IN-PROCESS
-            # par l'agrégateur, donc leur unité systemd est inactive/dead alors que
-            # le module RÉPOND via sa socket /run/secubox/<id>.sock. La socket est
-            # le vrai signal de joignabilité : présente ⇒ online, SAUF si l'unité a
-            # réellement échoué (`failed` = alarme, jamais masquée par une socket
-            # périmée).
-            # Même vérité pour un module monté dans l'agrégateur (ni unité ni socket propres) et pour une page portée par un autre module
-            # (R-Level est une page du Toolbox) : on suit le module qui répond. Une unité réellement en échec reste une alarme.
-            porteur = PAGES_PORTEES.get(item["id"])
-            if porteur and _raw is None:
-                _raw = (health.get(porteur) or {}).get("status")
-                state = HEALTH_MAP.get(_raw, "unknown")
-            if (item["id"] in sockets or item["id"] in montes) and _raw != "error":
-                state = "online"
-            domain, same_origin = resolve(item)
-            rec = exposure.get(domain) if domain else None
-            latency = rec.get("latency_ms") if rec else None
-            reach = rec.get("reach") if rec else "unknown"
-            lan = f"https://{domain}" if domain else None
-            wan = lan if reach == "wan" else None
-            out.append(Service(
-                id=item["id"], name=item.get("name", item["id"]),
-                description=item.get("description", ""),
-                category=item.get("category", "root"), icon=item.get("icon", ""),
-                urls=ServiceUrls(lan=lan, wan=wan, path=item.get("path", "/")),
-                routing=ServiceRouting(
-                    mode=reach if reach in ("localhost", "lan", "wan") else "unknown",
-                    available=(state != "offline")),
-                health=ServiceHealth(state=state, latency_ms=latency),
-                status=statut(state, item["id"] in endormis),
-                auth=ServiceAuth(),
-                installed=bool(item.get("installed", True)),
-                active=bool(item.get("active", True)),
-            ))
+        if (item["id"] in sockets or item["id"] in montes) and _raw != "error":
+            state = "online"
+        domain, same_origin = resolve(item)
+        rec = exposure.get(domain) if domain else None
+        latency = rec.get("latency_ms") if rec else None
+        reach = rec.get("reach") if rec else "unknown"
+        lan = f"https://{domain}" if domain else None
+        wan = lan if reach == "wan" else None
+        out.append(Service(
+            id=item["id"], name=item.get("name", item["id"]),
+            description=item.get("description", ""),
+            category=item.get("category", "root"), icon=item.get("icon", ""),
+            urls=ServiceUrls(lan=lan, wan=wan, path=item.get("path", "/")),
+            routing=ServiceRouting(
+                mode=reach if reach in ("localhost", "lan", "wan") else "unknown",
+                available=(state != "offline")),
+            health=ServiceHealth(state=state, latency_ms=latency),
+            status=statut(state, item["id"] in endormis),
+            auth=ServiceAuth(),
+            installed=bool(item.get("installed", True)),
+            active=bool(item.get("active", True)),
+        ))
     return out
 
 

@@ -9,6 +9,7 @@ override_dh_auto_install:
 	install -m 644 data/saints.json debian/secubox-ephemeride/usr/share/secubox/ephemeride/saints.json
 	install -m 644 conf/ephemeride.toml debian/secubox-ephemeride/usr/share/secubox/ephemeride/ephemeride.toml
 	# Route AUSSI dans secubox-routes.d/ : c'est le seul répertoire que le vhost principal inclut (#989).
+	install -D -m 644 registre.d/ephemeride.json debian/secubox-ephemeride/usr/share/secubox/registre.d/ephemeride.json
 	install -d debian/secubox-ephemeride/etc/nginx/secubox-routes.d
 	install -m 644 nginx/ephemeride.conf debian/secubox-ephemeride/etc/nginx/secubox-routes.d/ephemeride.conf
 	install -d debian/secubox-ephemeride/lib/systemd/system

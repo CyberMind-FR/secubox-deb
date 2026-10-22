@@ -1,3 +1,10 @@
+secubox-ephemeride (0.1.1-1~trixie1) trixie; urgency=medium
+
+  * Fiche `registre.d/ephemeride.json` : module API seule, sans page ni menu.d, il se déclare au
+    registre du Hall — sa carte ne dit plus « aucune source » (ref #2996).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 18:00:00 +0200
+
 secubox-ephemeride (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Nouveau module : l'API de la cardlet « Éphéméride » du Hall SBXOS (#2050 : nouvelle cardlet, pas une fusion).

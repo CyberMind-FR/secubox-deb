@@ -1,3 +1,10 @@
+secubox-ipv6guard (0.2.2-1~trixie1) trixie; urgency=medium
+
+  * Fiche `registre.d/ipv6guard.json` : module API seule, sans page ni menu.d, il se déclare au
+    registre du Hall — sa carte ne dit plus « aucune source » (ref #2996).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 18:00:00 +0200
+
 secubox-ipv6guard (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * Pare-feu actif mais exceptions illisibles (l'API de la Freebox ne les publie pas) : le texte dit que le pare-feu bloque par defaut et

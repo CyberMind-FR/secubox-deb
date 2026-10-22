@@ -1,0 +1,7 @@
+{
+  "id": "ephemeride",
+  "name": "Éphéméride",
+  "category": "mind",
+  "description": "Date, soleil, lune, saint du jour — l'API de la carte du Hall",
+  "path": "/api/v1/ephemeride/"
+}
