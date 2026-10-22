@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Hall v2 : plus de double en-tête sur les cardlets habillés en `Card` (ref #2996)
+
+« next » (le GO sur la fusion des flux reste au propriétaire : item sauté). `secubox-webos` 1.19.18 (PR #3048), déployé
+sur gk2, publié dans apt trixie. Un cardlet servi par le Hall (`/cardlets/`, même origine) et habillé en Card reçoit
+`{sbx:'carte'}` par postMessage (au chargement et à chaque rechargement, réveil compris) ; `sonde.js`, que chargent les
+21 cardlets, pose `html.sbx-carte` et une règle : la marque (icône, titre, sous-titre) disparaît, les commandes de l'en-tête
+(rafraîchir, rouage) restent, un en-tête sans commande disparaît (`:has`). Seul, ou dans le Hall v1, l'en-tête reste ; les
+micros d'autres origines (MetaNews, BBS, radio, billets, podcaster) ne reçoivent rien et gardent le leur. Test
+`test_cardlet_encarte_2996.py` (lit dans les cadres). Vérifié en direct sur gk2.
+
 ## 2026-10-22 — Hall v2 : carte « Flux d'actualités » fusionnée (MetaNews, YouTube, Billets) (ref #2996)
 
 « next ». `secubox-webos` 1.19.16 (PR #3046) puis 1.19.17 (PR #3047), déployés sur gk2, publiés dans apt trixie. Une `Card`
