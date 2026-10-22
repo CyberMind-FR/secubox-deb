@@ -294,6 +294,12 @@ pied v2 de la phase 3 ; le Hall v1 ne change pas. À alléger plus tard : les ca
 cumul Sécurité) le perdront quand leur corps sera natif.
 Tests : `tests/test_cartes_card_2996.py` (lot et ordre, habillage, statut et veille, 390 px sans débordement, v1 intact).
 
+**Second lot (1.19.13)** : Flux d'actualités (`metanews`, `ytflux`, `billets`), Radio dock (`radio`), Mur de discussion (`bbs`),
+`ephemeride`, `zigbee`, `devwatch`, `zia`, `comptes`, `lyrion`, `freeboxtv`, L'écoute (`mood`), `ytsas` — icônes SVG ajoutées à
+`composants.js`, statut emprunté (ytflux→ytsas, comptes→sbxid, mood→sbxos-audio-mood, freeboxtv→freebox). Restent avec la
+carte générique (pied v2) : les cartes hors liste du prompt (Contenu, Cloud, Forums, PeerTube, Podcaster, Coffre, SBX OS, Mes
+sites, Messagerie, Accès, Surf & Viewer, VoiceStudio, Voix, Mail, Dépôt, Torrent, SocialRelay).
+
 ![Cartes Card à 1440 px](../assets/images/hall-vue-maitre/hall-v2-cards-1440.png)
 
 ![Cartes Card à 390 px](../assets/images/hall-vue-maitre/hall-v2-cards-390.png)
@@ -313,8 +319,7 @@ Tests : `tests/test_cartes_card_2996.py` (lot et ordre, habillage, statut et vei
   exclues). Pages admin embarquées : les marges restantes sont leur conteneur centré
   (`:root.sbx-embed main{max-width:none}` côté `sidebar.css` du hub les étirerait).
 - Phase 4, suite : les 20 captures Streamlit demanderaient un relais `/api/v1/streamlit/apps/{nom}/screenshot` sur le Hall.
-  Migration vers `Card` : premier lot fait (1.19.11, ci-dessus) ; lots suivants dans l'ordre du prompt — Accès rapide
-  (`Tile`), Mes modules (la mosaïque, déjà), Flux d'actualités (fusion MetaNews + Flux YouTube + Billets en `NewsItem`),
-  Radio dock, Mur de discussion, Éphéméride, Zigbee, DevWatch, ZIA, Mes comptes, Lyrion, Freebox TV, L'écoute, YTSaS —
-  en ajoutant chaque id à `MIGREES` (et son icône à `ICO_CARTE`) une fois son cardlet validé dans le corps.
+  Migration vers `Card` : les deux lots de la liste du prompt sont habillés (1.19.11 → 1.19.13, ci-dessus). Reste, de nature
+  différente : Accès rapide en `Tile` (grille auto-fill 104 px) ; fusion des flux (MetaNews + Flux YouTube + Billets) en une
+  seule carte `NewsItem` ; corps natifs pour les cardlets à double en-tête (Activité, cumul Sécurité, micro MetaNews / BBS).
 - Mesure du dé sur RPi4 (le budget ≤ 1 ms/image est à confirmer sur la cible).

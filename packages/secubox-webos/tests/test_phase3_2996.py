@@ -140,7 +140,7 @@ def test_statut_type_sur_chaque_carte_et_releve_au_pied(nav):
     statuts = p.evaluate("Object.fromEntries([...document.querySelectorAll('.fcard[data-embed]')].map(c=>[c.getAttribute('data-embed'), c.getAttribute('data-status')]))")
     assert statuts.get("radio") == "active" and statuts.get("peertube") == "idle" and statuts.get("acces") == "offline"
     assert statuts.get("activite") == "stale" and statuts.get("comptes") == "nosource"   # absent du registre → aucune source
-    pied = p.inner_text(".fcard[data-embed=radio] .sbx-fcard-pied")
+    pied = p.inner_text(".fcard[data-embed=radio] .sbx-releve")   # radio habillée en Card (phase 4) : le relevé est dans son pied
     assert re.fullmatch(r"Relevé \d{2}:\d{2}:\d{2}", pied), pied
     assert "en veille" in p.inner_text(".fcard[data-embed=peertube] .sbx-fcard-pied")
     # l'opacité découle du statut, jamais codée en dur dans le JS
@@ -152,7 +152,7 @@ def test_statut_type_sur_chaque_carte_et_releve_au_pied(nav):
 
 def test_donnees_perimees_au_dela_de_deux_intervalles(nav):
     ctx, p, erreurs = ouvre(nav, age_s=100)
-    assert p.inner_text(".fcard[data-embed=radio] .sbx-fcard-pied").startswith("données périmées")
+    assert p.inner_text(".fcard[data-embed=radio] .sbx-releve").startswith("données périmées")
     assert p.evaluate("document.querySelector('.fcard[data-embed=radio]').getAttribute('data-perime')") == "1"
     assert erreurs == []
     ctx.close()
