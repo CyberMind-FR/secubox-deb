@@ -1,3 +1,9 @@
+secubox-meta (0.1.46-1~trixie1) trixie; urgency=medium
+
+  * Arbre et métapaquet Tunnels sans secubox-reality (ref #3017).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 05:33:14 +0200
+
 secubox-meta (0.1.45-1~bookworm1) bookworm; urgency=medium
 
   * zkp et assistance sortent de tous les profils (ref #2909) : plus de dependance ni de suggestion vers secubox-zkp et secubox-assist.

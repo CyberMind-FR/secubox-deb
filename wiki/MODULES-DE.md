@@ -165,14 +165,6 @@ AI-Modell-API-Gateway
 
 ![AI Gateway](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/ai-gateway.png)
 
-#### 💡 AI Insights
-
-KI-gestützte Sicherheitseinblicke
-
-**Funktionen:** Anomalieerkennung, Empfehlungen, Vorhersagen, Berichte
-
-![AI Insights](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/ai-insights.png)
-
 #### 🧠 LocalRecall
 
 Lokales RAG-Gedächtnissystem

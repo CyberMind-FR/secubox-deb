@@ -71,10 +71,6 @@
    "espace": "services",
    "objet": "SERVICE"
   },
-  "ai-insights": {
-   "espace": "surveillance",
-   "objet": "ALERT"
-  },
   "annuaire": {
    "espace": "identite",
    "objet": "USER"
@@ -402,10 +398,6 @@
   "radio": {
    "espace": "services",
    "objet": "SERVICE"
-  },
-  "reality": {
-   "espace": "protection",
-   "objet": null
   },
   "releases": {
    "espace": "systeme",

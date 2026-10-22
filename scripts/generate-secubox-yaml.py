@@ -57,7 +57,6 @@ TIER_EXCLUSIVE = {
         'secubox-nextcloud',
         'secubox-gitea',
         'secubox-ai-gateway',
-        'secubox-ai-insights',
     ],
     'standard': [
         'secubox-qos',

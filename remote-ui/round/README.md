@@ -741,7 +741,7 @@ SecuBox (Armada/x86)              RPi Zero W + HyperPixel
 |------|---------|---------|-------------|
 | AUTH | secubox-auth | `#C04E24` | Authentification / SSO |
 | BOOT | secubox-hub | `#803018` | Dashboard principal |
-| MIND | secubox-ai-insights | `#3D35A0` | IA / Insights |
+| MIND | secubox-ai-gateway | `#3D35A0` | IA / Insights |
 | ROOT | secubox-system | `#0A5840` | Système |
 | MESH | secubox-p2p | `#104A88` | Réseau mesh |
 

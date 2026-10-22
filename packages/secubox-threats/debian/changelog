@@ -1,3 +1,10 @@
+secubox-threats (1.6.1-1~trixie1) trixie; urgency=medium
+
+  * Retrait du composant ai-insights (ref #3017) : deux « modèles » codés en dur, menaces jamais
+    alimentées, corrélation à vide. Le paquet transitionnel secubox-ai-insights est à purger.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 05:33:14 +0200
+
 secubox-threats (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /ai-insights/ au profil Aurora (ref #2584) : fichier autonome (aucune police ni feuille externe, plus de

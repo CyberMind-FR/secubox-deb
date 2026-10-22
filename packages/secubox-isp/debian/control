@@ -14,7 +14,6 @@ Depends: ${misc:Depends},
  secubox-modem (>= 1.0),
  secubox-cdn,
  secubox-saas-relay,
- secubox-reality,
  secubox-p2p (>= 1.12.0),
  secubox-federation,
  secubox-mesh (>= 1.0),
@@ -32,7 +31,7 @@ Depends: ${misc:Depends},
 Recommends: wireguard-tools
 Description: SecuBox ISP — protection + operateur + hebergement
  Herite de secubox-lite (toutes les protections) et ajoute le reseau
- d'operateur (modem, exposition, Reality, maillage) et tous les
+ d'operateur (modem, exposition, maillage) et tous les
  modules d'hebergement : courrier, messagerie Matrix, visioconference,
  fichiers (Nextcloud), photos, Git (Gitea), sites (metablogizer), BBS,
  billets, actualites. Les medias, la domotique, l'IA et le Hall sont dans

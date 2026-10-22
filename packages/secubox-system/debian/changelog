@@ -1,3 +1,9 @@
+secubox-system (1.11.3-1~trixie1) trixie; urgency=medium
+
+  * Relevé des modules : l'anneau MIND suit secubox-ai-gateway, ai-insights étant retiré (ref #3017).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 05:33:14 +0200
+
 secubox-system (1.11.2-1~trixie1) trixie; urgency=medium
 
   * Page /admin/ (composant admin, ref #3002) : « Vérifier » et « Mettre à jour tous les

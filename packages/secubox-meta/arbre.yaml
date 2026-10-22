@@ -318,13 +318,11 @@ suggere:
 meta: secubox-service-vpn
 niveau: service
 label: Tunnels
-description: "WireGuard, sortie Reality, Tor."
+description: "WireGuard, Tor."
 requiert:
   - secubox-wireguard
 recommande:
   - secubox-tor
-suggere:
-  - secubox-reality
 
 meta: secubox-service-mesh
 niveau: service

@@ -164,14 +164,6 @@ AI模型API网关
 
 ![AI Gateway](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/ai-gateway.png)
 
-#### 💡 AI Insights
-
-AI驱动的安全洞察
-
-**功能:** 异常检测, 建议, 预测, 报告
-
-![AI Insights](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/ai-insights.png)
-
 #### 🧠 LocalRecall
 
 本地RAG记忆系统

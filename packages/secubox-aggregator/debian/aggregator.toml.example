@@ -13,7 +13,6 @@
 
 # Pilot batch — small, light, no startup deps on other modules
 modules = [
-    "ai-insights",
     "cookies",
     "avatar",
 ]

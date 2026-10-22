@@ -7,7 +7,7 @@ case "$1" in
     if [ ! -f /etc/secubox/aggregator.toml ]; then
         install -m 0644 /etc/secubox/aggregator.toml.example \
             /etc/secubox/aggregator.toml
-        echo "secubox-aggregator: installed default config (pilot mounts: ai-insights, cookies, avatar)"
+        echo "secubox-aggregator: installed default config (pilot mounts: cookies, avatar)"
     fi
 
     # Ensure /run/secubox exists with the right ownership/mode (#471 invariant).

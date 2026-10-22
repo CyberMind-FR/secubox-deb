@@ -164,7 +164,6 @@ declare -a MODULES=(
     "ollama|/cgi-bin/luci/admin/services/ollama|Ollama LLM"
     "localai|/cgi-bin/luci/admin/services/localai|LocalAI"
     "ai-gateway|/cgi-bin/luci/admin/services/ai-gateway|AI Gateway"
-    "ai-insights|/cgi-bin/luci/admin/services/ai-insights|AI Insights"
 
     # Publishing modules
     "droplet|/cgi-bin/luci/admin/services/droplet|Droplet Publisher"

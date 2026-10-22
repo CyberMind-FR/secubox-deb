@@ -6,8 +6,7 @@ from pathlib import Path
 
 PAQ = Path(__file__).resolve().parents[2] / "packages"
 # (absorbant, absorbé) — les fusions déjà faites par scripts/absorber-paquet.py (S1, S2 et N1 ont leurs propres tests)
-FUSIONS = [("matrix", "jabber"), ("dns-guard", "network-anomaly"), ("dns", "dns-provider"), ("threats", "ai-insights"),
-           ("health", "health-doctor"), ("health", "watchdog"), ("webos", "sbxui"), ("appstore", "metacatalog"),
+FUSIONS = [("matrix", "jabber"), ("dns-guard", "network-anomaly"), ("dns", "dns-provider"), ("health", "health-doctor"), ("health", "watchdog"), ("webos", "sbxui"), ("appstore", "metacatalog"),
            ("dns", "dns-lan"), ("qos", "traffic"), ("streamlit", "streamforge"), ("media", "smb"), ("media", "freeboxtv"), ("repo", "release"), ("jitsi", "turn"), ("mail", "smtp-relay"), ("security-posture", "cve-triage"), ("security-posture", "antirootkit"), ("waf-ng", "waf"), ("cdn", "mirror"), ("qos", "nettweak"), ("system", "system-hub"), ("system", "admin"), ("system", "ksm"), ("system", "system-tuning"), ("auth", "users"), ("auth", "sbxid"), ("auth", "oidc"), ("annuaire", "openpgp"), ("p2p", "meshname"), ("haproxy", "vhost"), ("haproxy", "exposure"), ("ipblock", "vortex-firewall"), ("ipblock", "cyberfeed"), ("tor", "proxypac"), ("tor", "macro"), ("routes", "netdiag"), ("metanews", "devwatch"), ("metanews", "yacy"), ("dpi", "ndpid"), ("dpi", "mediaflow"), ("metrics", "grafana"), ("metablogizer", "droplet"), ("metablogizer", "publish"), ("ytsas", "torrent"), ("mqtt", "zigbee"),
            ("backup", "cloner"), ("metrics", "glances"), ("metrics", "reporter"), ("ai-gateway", "localrecall"),
            ("ai-gateway", "mcp-server")]

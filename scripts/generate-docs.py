@@ -1017,21 +1017,6 @@ MODULES = {
             "zh": ["速率限制", "负载均衡", "缓存", "日志"]
         }
     },
-    "ai-insights": {
-        "name": "AI Insights", "icon": "💡", "category": "AI",
-        "description": {
-            "en": "AI-powered security insights",
-            "fr": "Aperçus sécurité assistés par IA",
-            "de": "KI-gestützte Sicherheitseinblicke",
-            "zh": "AI驱动的安全洞察"
-        },
-        "features": {
-            "en": ["Anomaly detection", "Recommendations", "Predictions", "Reports"],
-            "fr": ["Détection anomalies", "Recommandations", "Prédictions", "Rapports"],
-            "de": ["Anomalieerkennung", "Empfehlungen", "Vorhersagen", "Berichte"],
-            "zh": ["异常检测", "建议", "预测", "报告"]
-        }
-    },
     "localrecall": {
         "name": "LocalRecall", "icon": "🧠", "category": "AI",
         "description": {

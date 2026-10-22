@@ -119,7 +119,6 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-voip** | ✅ | ✅ | ✅ | extensions, trunks, routes, IVR, CDR | ✅ | **🗑️ retiré (#1743 : docker/podman)**
 
 | **secubox-ossec** | — | ✅ | ✅ | Host IDS | ✅ |
-| **secubox-ai-insights** | ✅ | ✅ | ✅ | ML threat detection, anomalies | ✅ |
 | **secubox-ipblock** | ✅ | ✅ | ✅ | IP blocklist, nftables sets | ✅ |
 | **secubox-interceptor** | ✅ | ✅ | ✅ | traffic interception, SSL inspect | ✅ |
 | **secubox-cookies** | ✅ | ✅ | ✅ | cookie tracking, GDPR | ✅ |

@@ -23,7 +23,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-admin` | system | lite | oui | 15 | — | 1 | — | — | oui |
 | `secubox-aggregator` | security | lite | — | — | 2 | — | — | — | — |
 | `secubox-ai-gateway` | ai | pro | oui | 17 | — | 1 | — | — | oui |
-| `secubox-ai-insights` | ai | pro | oui | 18 | — | — | — | — | oui |
 | `secubox-annuaire` | mesh | all | oui | 39 | 5 | 1 | — | 43 | — |
 | `secubox-antirootkit` | wall | pro | oui | 4 | 1 | 1 | — | 15 | oui |
 | `secubox-appstore` | system | all | oui | 12 | 2 | 1 | — | — | — |
@@ -130,7 +129,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-qos` | misc | standard | oui | 74 | — | 1 | — | — | oui |
 | `secubox-radio` | media | lite | oui | — | — | — | — | 20 | — |
 | `secubox-rbs-sensor` | system | lite | — | 9 | 1 | 1 | — | 1 | — |
-| `secubox-reality` | system | lite | — | — | — | 4 | — | — | — |
 | `secubox-redroid` | misc | lite | oui | 15 | — | — | — | — | oui |
 | `secubox-release` | misc | lite | oui | 8 | 2 | — | — | 6 | — |
 | `secubox-repo` | misc | lite | oui | 23 | 1 | 1 | — | — | oui |
@@ -271,22 +269,6 @@ SecuBox Ai-gateway Module
 - **Tests** : À documenter
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-ai-gateway/`
-
-### `secubox-ai-insights`
-
-SecuBox AI Insights - ML-based Threat Detection
-
-- **Catégorie** : ai · **Tier** : pro
-- **Dépend de** : `secubox-core`
-- **API** : 18 route(s), socket `/run/secubox/ai-insights.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/ai-insights
-- **CLI** : À documenter
-- **Units systemd** : À documenter
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-ai-insights/`
 
 ### `secubox-annuaire`
 
@@ -2000,22 +1982,6 @@ SecuBox RBS Sensor — Rogue Base Station sensor (WALL layer)
 - **Tests** : 1
 - **Documentation existante** : À documenter
 - **Source technique** : `packages/secubox-rbs-sensor/`
-
-### `secubox-reality`
-
-SecuBox Reality — VLESS+Reality+Vision egress-point manager
-
-- **Catégorie** : system · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 0 route(s), socket `À documenter`, authentification À documenter
-- **Interface web** : À documenter
-- **CLI** : À documenter
-- **Units systemd** : `secubox-reality-monitor.service`, `secubox-reality-monitor.timer`, `secubox-reality.service`, `secubox-xray@.service`
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : À documenter
-- **Source technique** : `packages/secubox-reality/`
 
 ### `secubox-redroid`
 

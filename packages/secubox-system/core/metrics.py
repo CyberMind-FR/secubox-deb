@@ -332,7 +332,7 @@ class SystemMetrics:
             "AUTH": "secubox-auth",
             "WALL": "secubox-waf",
             "BOOT": "secubox-hub",
-            "MIND": "secubox-ai-insights",
+            "MIND": "secubox-ai-gateway",
             "ROOT": "secubox-system",
             "MESH": "secubox-p2p",
         }

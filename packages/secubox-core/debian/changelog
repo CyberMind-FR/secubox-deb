@@ -1,3 +1,9 @@
+secubox-core (1.7.13-1~trixie1) trixie; urgency=medium
+
+  * Métadonnées de santé : ai-insights retiré (ref #3017).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 05:33:14 +0200
+
 secubox-core (1.7.12-1~trixie1) trixie; urgency=medium
 
   * secubox_unbound : budget d'unbound-checkconf 60 s → 600 s (DELAI_CHECKCONF, ref #3005).

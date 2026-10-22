@@ -274,6 +274,6 @@ jobs:
             - **Networking:** wireguard, haproxy, dpi, qos, netmodes, vhost, cdn
             - **Applications:** mail, gitea, nextcloud, ollama, jellyfin, matrix
             - **SOC:** soc-agent, soc-gateway, soc-web
-            - **Intel:** device-intel, vortex-dns, vortex-firewall, ai-insights
+            - **Intel:** device-intel, vortex-dns, vortex-firewall
           draft: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}

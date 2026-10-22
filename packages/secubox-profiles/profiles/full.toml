@@ -20,7 +20,7 @@ on = [
   "module-prober", "mqtt", "nac", "ndpid", "netboot",
   "netdiag", "netmodes", "nettweak", "network-anomaly", "network-ready",
   "nextcloud", "p2p", "peertube", "photoprism", "podcaster", "portal",
-  "proxypac", "publish", "qos", "reality", "repo", "reporter",
+  "proxypac", "publish", "qos", "repo", "reporter",
   "roadmap", "routes", "rtty", "runtime",
   "saas-relay", "security-posture", "soc", "streamforge", "streamlit", "streamlit-routes",
   "system", "threatmesh", "threats", "toolbox", "toolbox-mitm",

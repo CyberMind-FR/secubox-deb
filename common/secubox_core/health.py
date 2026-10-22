@@ -173,7 +173,6 @@ MODULE_METADATA: Dict[str, Dict[str, Any]] = {
     "system": {"version": "1.2.0", "dev_stage": "production"},
     "metrics": {"version": "1.0.0", "dev_stage": "beta"},
     "ai-gateway": {"version": "1.0.0", "dev_stage": "beta"},
-    "ai-insights": {"version": "1.0.0", "dev_stage": "beta"},
     "mcp-server": {"version": "1.0.0", "dev_stage": "alpha"},
     # Add more as needed
 }

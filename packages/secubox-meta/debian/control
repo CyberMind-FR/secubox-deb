@@ -310,9 +310,8 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-wireguard
 Recommends: secubox-tor
-Suggests: secubox-reality
 Description: SecuBox — service « Tunnels »
- WireGuard, sortie Reality, Tor.
+ WireGuard, Tor.
  .
  Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
  Recommends = installé par défaut mais retirable, Suggests = optionnel.

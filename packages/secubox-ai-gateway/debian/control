@@ -20,5 +20,4 @@ Description: SecuBox AI Gateway — data-sovereignty router for AI requests
  local backends.
  .
  Distinct from sibling packages in the AI cluster:
-  - secubox-ai-insights — ML-based threat detection.
   - secubox-mcp-server — Model Context Protocol server.

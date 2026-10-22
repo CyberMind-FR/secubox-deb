@@ -164,14 +164,6 @@ Passerelle API modèles IA
 
 ![AI Gateway](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/ai-gateway.png)
 
-#### 💡 AI Insights
-
-Aperçus sécurité assistés par IA
-
-**Fonctionnalités:** Détection anomalies, Recommandations, Prédictions, Rapports
-
-![AI Insights](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/ai-insights.png)
-
 #### 🧠 LocalRecall
 
 Système mémoire RAG local
