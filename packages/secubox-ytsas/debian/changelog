@@ -1,3 +1,12 @@
+secubox-ytsas (0.8.5-1~trixie1) trixie; urgency=high
+
+  * yt-dlp orphelins (ref #3036) : les sondes de métadonnées (`-j`, énumération de playlist) sont tuées au
+    dépassement de délai ; avant, le processus survivait, personne ne lisait plus sa sortie et il dormait pour
+    toujours sur pipe_write — 62 processus sur gk2, la file figée deux semaines (cinq titres de la radio en
+    « Récupération… »). Au démarrage, les entrées non complètes sont remises en file.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 08:31:23 +0200
+
 secubox-ytsas (0.8.4-1~bookworm1) bookworm; urgency=high
 
   * Fuite de processus (#2985) : `executer_ytdlp` ne tuait jamais le sous-processus `yt-dlp` au
