@@ -18,7 +18,6 @@ from fastapi.responses import JSONResponse, Response
 # pas l'administration ; ce qu'il relaie à un module, ce module le juge.
 from secubox_core.auth import require_session, require_personne, create_token, domaine_box
 from secubox_core.health import systemd_batch
-from api.models import Service
 from api import registry, flags, cardlets, actions, aide, hotes, systeme, vignettes
 from secubox_core.auth import require_lecture
 
@@ -82,7 +81,8 @@ def _recompute() -> bool:
     if not menu.get("categories"):
         return False
     expo = registry.load_exposure_cache()
-    svcs = registry.normalize_services(menu, _sante, expo, sockets=_live_sockets(), montes=_montes, endormis=_endormis)
+    svcs = registry.normalize_services(menu, _sante, expo, sockets=_live_sockets(), montes=_montes, endormis=_endormis,
+                                       supplements=registry.charger_registre_d())
     avec_vignette = vignettes.vignettes_presentes(s.id for s in svcs)
     for s in svcs:
         s.vignette = s.id in avec_vignette

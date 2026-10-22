@@ -1,3 +1,12 @@
+secubox-webos (1.19.20-1~trixie1) trixie; urgency=medium
+
+  * Registre du Hall : les modules API seule (sans page, donc sans menu.d) se déclarent par une
+    fiche `/usr/share/secubox/registre.d/<id>.json` livrée par leur paquet ; mêmes règles de santé
+    que le menu (socket ⇒ en ligne, unité en échec ⇒ alarme), jamais en double (ref #2996).
+    Premiers déclarants : Éphéméride, IPv6 Guardian.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 18:00:00 +0200
+
 secubox-webos (1.19.19-1~trixie1) trixie; urgency=medium
 
   * Hall v2 : le message « encarté » est aussi adressé aux micros d'autres origines (MetaNews,
