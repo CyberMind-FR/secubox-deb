@@ -1,3 +1,11 @@
+secubox-hub (1.12.26-1~trixie1) trixie; urgency=medium
+
+  * Menu : un module autonome (sa page vit sur son propre vhost, pas sous l'administration) porte
+    un lien externe dérivé du domaine de la box ; la barre latérale l'ouvre dans un onglet — fini
+    « Module Not Found » sur /metanews/ (ref #3054). sidebar.js v2.45.0.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 20:30:00 +0200
+
 secubox-hub (1.12.25-1~trixie1) trixie; urgency=medium
 
   * Retrait de SocialRelay des espaces de l'administration (ref #3052).

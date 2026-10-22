@@ -7,6 +7,7 @@
 from fastapi import FastAPI, APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from secubox_core.auth import router as auth_router, require_jwt
+from secubox_core.auth import hote_box  # lien d'un module autonome vers son vhost (#3054)
 from secubox_core.config import get_board_info, get_config
 from secubox_core.logger import get_logger
 from secubox_core.kiosk import (
@@ -185,6 +186,12 @@ def _compute_menu_sync() -> dict:
             item_copy = item.copy()
             item_copy["installed"] = True
             item_copy["active"] = _check_module_active(item.get("unite") or module_www)   # #2905 : page servie par un autre module
+            if item.get("autonome"):
+                # Sa page n'est pas sous l'administration (#3054 : /metanews/ rendait « Module Not Found ») : le lien du menu
+                # vise SON vhost, dérivé du domaine de la box (`hote` optionnel, sinon l'id) — jamais un domaine codé en dur.
+                hote = hote_box(str(item.get("hote") or module_id))
+                if hote:
+                    item_copy["externe"] = f"https://{hote}/"
             installed_items.append(item_copy)
 
     espaces = _espaces_du_menu(installed_items)
