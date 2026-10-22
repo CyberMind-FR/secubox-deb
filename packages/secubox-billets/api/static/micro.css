@@ -25,6 +25,8 @@
 
   .mw { display:flex; flex-direction:column; height:100%; padding:.7rem .8rem; gap:.45rem; }
   .tete { display:flex; align-items:baseline; gap:.4rem; }
+  /* Encarté par le Hall v2 (#2996) : la Card porte déjà icône et titre, le compteur reste. */
+  html.sbx-carte .tete .ic, html.sbx-carte .tete b { display:none; }
   .tete .ic { font-size:1rem; }
   .tete b { font-size:.88rem; }
   .tete .n { margin-left:auto; font-size:.58rem; letter-spacing:.08em;

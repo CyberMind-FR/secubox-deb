@@ -1,3 +1,11 @@
+secubox-webos (1.19.19-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : le message « encarté » est aussi adressé aux micros d'autres origines (MetaNews,
+    BBS, Billets), à leur origine exacte ; ils rangent leur marque quand ils savent le faire
+    (ref #2996).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 17:00:00 +0200
+
 secubox-webos (1.19.18-1~trixie1) trixie; urgency=medium
 
   * Hall v2 : plus de double en-tête sur les cardlets habillés en Card (ref #2996) — le Hall

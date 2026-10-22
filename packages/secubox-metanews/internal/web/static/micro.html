@@ -38,6 +38,8 @@
 
   .mw { display:flex; flex-direction:column; height:100%; padding:.6rem .7rem; gap:.4rem; }
   .tete { display:flex; align-items:baseline; gap:.4rem; }
+  /* Encarté par le Hall v2 (#2996) : la Card porte déjà icône et titre, le compteur reste. */
+  html.sbx-carte .tete .ic, html.sbx-carte .tete b { display:none; }
   .tete .ic { font-size:1rem; }
   .tete b { font-size:.88rem; }
   .tete .n { margin-left:auto; font-size:.56rem; letter-spacing:.08em;
@@ -345,6 +347,7 @@
     var d = ev && ev.data; if (!d || !d.sbx) return;
     if (d.sbx === 'survol' || d.sbx === 'pause') enPause = true;
     else if (d.sbx === 'quitte' || d.sbx === 'reprend') { enPause = false; stopAp(); montre(); }
+    else if (d.sbx === 'carte') document.documentElement.classList.add('sbx-carte');   // habillé en Card par le Hall v2 : marque rangée
   });
   // Le fond bouge en dizaines de minutes : recharger plus souvent afficherait
   // les mêmes sujets en chargeant la box.

@@ -1,3 +1,10 @@
+secubox-bbs (0.37.12-1~trixie1) trixie; urgency=medium
+
+  * Micro : encarté par le Hall v2 (message {sbx:'carte'}), il range sa marque — icône et titre,
+    que la Card porte déjà — et garde son compteur de fils (ref #2996).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 17:00:00 +0200
+
 secubox-bbs (0.37.11-1~trixie1) trixie; urgency=medium
 
   * Le jeton de service de la radio (iss « secubox-radio ») est accepté comme émetteur de la passerelle
