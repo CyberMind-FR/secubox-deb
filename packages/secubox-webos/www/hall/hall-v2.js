@@ -65,7 +65,8 @@
     {id:'ia',nom:'IA',ic:'ia',nav:'mosaique',motif:/\bia\b|intelligence|zia|lexie|assistant|modèle|modele|llm|vision|oracle/i},
     {id:'outils',nom:'Outils',ic:'outils',nav:'mosaique',motif:/outil|toolbox|boîte|boite|surf|viewer|dpi|sonde|ytsas|convert|éphéméride|ephemeride|zigbee|domot|devwatch|compteur/i},
     {id:'systeme',nom:'Système',ic:'systeme',nav:'mosaique',motif:/racine|amorce|système|systeme|métrique|metrique|metrics|courbe|journal|paquet|apt\b|noyau|mémoire|memoire|disque|processeur|hub|agrégateur|agregateur|profil|boot|eye/i},
-    {id:'sites',nom:'Mes sites',ic:'globe',nav:'mosaique'}
+    {id:'sites',nom:'Mes sites',ic:'globe',nav:'mosaique'},
+    {id:'apps',nom:'Applications',ic:'ia',nav:'mosaique'}
   ];
   var ICO_CAT={wall:'bouclier',mind:'ia',mesh:'reseau',auth:'usager',root:'systeme',boot:'jauge'};
   var ONGLETS=['accueil','modules','securite','reseau','systeme'];
@@ -187,8 +188,27 @@
     fetch('/api/v1/metablogizer/public/mosaique',{credentials:'same-origin'}).then(function(r){ return r.ok?r.json():{sites:[]}; })
       .then(function(d){ sites=(d.sites||[]).filter(function(s){ return s.domain; }); sitesT=Date.now(); cb(sites); }).catch(function(){ cb([]); });
   }
+  // Applications Streamlit (phase 4) : la vitrine (`/api/v1/streamlit/apps/vitrine`, session) et ses vignettes, relayées par le Hall.
+  var apps=null, appsT=0, appsRefus=false;
+  function chargeApps(cb){
+    if(apps&&Date.now()-appsT<900000) return cb(apps,appsRefus);
+    fetch('/api/v1/streamlit/apps/vitrine',{credentials:'same-origin'}).then(function(r){ appsRefus=(r.status===401||r.status===403); return r.ok?r.json():{apps:[]}; })
+      .then(function(d){ apps=(d.apps||[]).filter(function(a){ return a.name&&!a.archived; }); appsT=Date.now(); cb(apps,appsRefus); }).catch(function(){ cb([],false); });
+  }
+  function tuileApp(a){
+    var w=a.domain?el('a',{'class':'sbx-stuile sbx-atuile',href:'https://'+a.domain+'/',target:'_blank',rel:'noopener',title:a.name}):el('button',{type:'button','class':'sbx-stuile sbx-atuile','data-open':'streamlit','data-mode':'embed',title:a.name+' — console Streamlit'});
+    w.setAttribute('data-status',a.running?'active':'idle');
+    var v=el('span',{'class':'vig'});
+    if(a.screenshot_available){ var im=new Image(); im.alt=''; im.loading='lazy'; im.decoding='async'; im.src='/api/v1/streamlit/apps/'+encodeURIComponent(a.name)+'/screenshot?t='+encodeURIComponent(a.screenshot_captured_at||''); im.addEventListener('error',function(){ this.remove(); }); v.appendChild(im); }
+    else v.appendChild(el('span',{'class':'sans'},(a.name||'?').slice(0,1).toUpperCase()));
+    w.appendChild(v); var tx=el('span',{'class':'tx'}); tx.appendChild(el('b',null,a.name)); tx.appendChild(el('small',{'class':'mono'},a.domain||(a.running?'en ligne':'endormie'))); w.appendChild(tx);
+    var led=el('i',{'class':'sbx-led','data-ton':a.running?'ok':'info','aria-label':a.running?'en ligne':'endormie'}); w.appendChild(led); return w;
+  }
   function rendMosaique(){
     if(!mosaique) return; var grille=mosaique.querySelector('.sbx-mosaique'), vide=mosaique.querySelector('.sbx-mosaique-vide'); grille.textContent=''; vide.hidden=true;
+    if(ongletMosaique==='apps'){ grille.setAttribute('data-vue','apps'); return chargeApps(function(l,refus){ if(ongletMosaique!=='apps') return; grille.textContent=''; l.forEach(function(a){ grille.appendChild(tuileApp(a)); });
+      var compte=mosaique.querySelector('.sbx-mosaique-compte'); if(compte) compte.textContent=l.length?l.length+' application'+(l.length>1?'s':''):'';
+      vide.hidden=!!l.length; vide.textContent=refus?'Les applications et leurs vignettes se voient avec une session : connectez-vous.':'Aucune application pour l’instant.'; }); }
     if(ongletMosaique==='sites'){ grille.setAttribute('data-vue','sites'); return chargeSites(function(l){ if(ongletMosaique!=='sites') return; grille.textContent=''; l.forEach(function(s){ grille.appendChild(tuileSite(s)); }); vide.hidden=!!l.length; vide.textContent='Aucun site publié pour l’instant.'; }); }
     grille.setAttribute('data-vue','modules');
     var l=filtreModules(modules(),ongletMosaique); l.forEach(function(m){ grille.appendChild(tuileModule(m)); });
@@ -520,7 +540,7 @@
       var b=el('button',{type:'button','class':'sbx-rub','data-rub':r.id},ico(r.ic)+'<span></span>');
       b.lastChild.textContent=r.nom;
       b.addEventListener('click',function(){ va(r); });
-      if(r.nav!=='mosaique'||r.id==='sites'||r.id==='recents'){ nav.appendChild(b); return; }
+      if(r.nav!=='mosaique'||r.id==='sites'||r.id==='apps'||r.id==='recents'){ nav.appendChild(b); return; }
       // Rubrique dépliable : ses modules (registre), ouverts embarqués, puis la sous-navigation du module courant.
       var grp=el('div',{'class':'sbx-grp'+(r.id==='favoris'?' sbx-favoris':''),'data-grp':r.id}); var ligne=el('div',{'class':'sbx-ligne'}); ligne.appendChild(b);
       var pli=el('button',{type:'button','class':'sbx-plier','aria-expanded':'false','aria-label':'Déplier '+r.nom},ico('chevron'));

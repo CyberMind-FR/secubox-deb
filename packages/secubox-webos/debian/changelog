@@ -1,3 +1,13 @@
+secubox-webos (1.19.21-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 : rubrique « Applications » dans la mosaïque (ref #2996) — les applis Streamlit avec
+    leurs vignettes (vitrine `/apps/vitrine` et `/apps/{nom}/screenshot`, relayées par le vhost du
+    Hall avec session SecuBox, décision #1776) ; tuile = lien vers le domaine de l'appli ou console
+    Streamlit embarquée ; sans session, la mosaïque le dit.
+  * Correctif 1.19.20 : l'import `Service` de l'API, retiré par le lint, est rétabli (tests).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 19:00:00 +0200
+
 secubox-webos (1.19.20-1~trixie1) trixie; urgency=medium
 
   * Registre du Hall : les modules API seule (sans page, donc sans menu.d) se déclarent par une

@@ -149,6 +149,11 @@
 [data-hall="v2"] .sbx-acces{margin:0 0 var(--sbx-e-4)}
 .sbx-acces .sbx-tile{position:relative;font:500 .78rem var(--sbx-police);color:var(--sbx-texte)}
 .sbx-acces .sbx-tile span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Applications Streamlit : mêmes tuiles que les sites, pastille d'état, bouton (console) ou lien (domaine) */
+.sbx-atuile{position:relative}
+.sbx-atuile .sbx-led{position:absolute;top:8px;right:8px}
+button.sbx-atuile{font:inherit;color:inherit;text-align:left;cursor:pointer}
+.sbx-atuile[data-status="idle"] .vig{opacity:.7}
 /* Flux d'actualités : Card native, NewsItem (composants.css) en trois colonnes au large, une au téléphone */
 [data-hall="v2"] .sbx-flux{margin:0 0 var(--sbx-e-4)}
 .sbx-flux-liste{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 var(--sbx-e-4)}
