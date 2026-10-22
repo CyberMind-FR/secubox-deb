@@ -72,7 +72,7 @@ def test_une_reponse_vide_laisse_le_dernier_releve_visible(nav):
     assert p.get_attribute(".fcard[data-embed='radio']", "data-status") == "active"
     assert p.get_attribute(".fcard[data-embed='metanews']", "data-status") == "stale"
     # Le pied garde l'heure du relevé PLEIN : rien n'a été appliqué du vide.
-    assert "04:10:52" in p.inner_text(".fcard[data-embed='radio'] .sbx-fcard-pied") or "Relevé" in p.inner_text(".fcard[data-embed='radio'] .sbx-fcard-pied")
+    assert "04:10:52" in p.inner_text(".fcard[data-embed='radio'] .sbx-releve") or "Relevé" in p.inner_text(".fcard[data-embed='radio'] .sbx-releve")
     # La mosaïque aussi dessine le dernier relevé rempli.
     p.click("#sbx-side [data-rub='modules']")
     p.wait_for_selector(".sbx-mtuile[data-module='radio']", state="attached")

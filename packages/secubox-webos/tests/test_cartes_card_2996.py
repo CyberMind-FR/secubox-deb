@@ -24,10 +24,15 @@ JS = (HALL_DIR / "hall-v2.js").read_text(encoding="utf-8")
 COMPOSANTS = (HALL_DIR / "composants.js").read_text(encoding="utf-8")
 CSS = (HALL_DIR / "hall-v2.css").read_text(encoding="utf-8")
 
-# Ordre du prompt (dossier §2, phase 4) : Sécurité, DNS, Réseau, État système (= Hero), Appareils, Notifications…
-# Sur les cartes réelles du Hall : Sécurité = securite + acteurs + radar ; DNS et Appareils = guardian ;
-# Réseau = dpi + ipv6guard ; Notifications = activite.
-PREMIER_LOT = ["securite", "acteurs", "radar", "guardian", "dpi", "ipv6guard", "activite"]
+# Ordre du prompt (dossier §2, phase 4) : Sécurité, DNS, Réseau, État système (= Hero), Appareils, Notifications,
+# Accès rapide, Mes modules (= mosaïque), Flux d'actualités, Radio dock, Mur de discussion, Actor + Radar, Éphéméride,
+# Zigbee, DevWatch, ZIA, Mes comptes, Lyrion, Freebox TV, L'écoute, YTSaS. Sur les cartes réelles du Hall :
+# Sécurité = securite + acteurs + radar ; DNS et Appareils = guardian ; Réseau = dpi + ipv6guard ; Notifications = activite ;
+# Flux d'actualités = metanews + ytflux + billets ; Mur = bbs ; L'écoute = mood.
+PREMIER_LOT = ["securite", "acteurs", "radar", "guardian", "dpi", "ipv6guard", "activite",
+               "metanews", "ytflux", "billets", "radio", "bbs", "ephemeride", "zigbee", "devwatch", "zia", "comptes",
+               "lyrion", "freeboxtv", "mood", "ytsas"]
+INDEX = (HALL_DIR / "index.html").read_text(encoding="utf-8")
 
 # Les cartes de curation portent des ids à elles (securite, guardian, acteurs, radar, activite) : leur statut est celui
 # du MODULE qui les sert dans le registre (waf, ad-guard, actor, sbxid) — SOURCE_STATUT de hall-v2.js.
@@ -45,7 +50,15 @@ def test_le_premier_lot_est_declare_dans_l_ordre_du_prompt():
     ids = re.findall(r"'([a-z0-9-]+)'", m.group(1))
     assert ids == PREMIER_LOT
     m = re.search(r"var SOURCE_STATUT\s*=\s*\{([^}]*)\}", JS)
-    assert m and dict(re.findall(r"([a-z]+):'([a-z-]+)'", m.group(1))) == {"securite": "waf", "acteurs": "actor", "radar": "actor", "guardian": "ad-guard", "activite": "sbxid"}
+    assert m and dict(re.findall(r"([a-z]+):'([a-z-]+)'", m.group(1))) == {
+        "securite": "waf", "acteurs": "actor", "radar": "actor", "guardian": "ad-guard", "activite": "sbxid",
+        "ytflux": "ytsas", "comptes": "sbxid", "mood": "sbxos-audio-mood", "freeboxtv": "freebox"}
+    # chaque id du lot est une carte réelle de la curation, et porte une icône SVG connue des composants
+    icones = dict(re.findall(r"([a-z0-9]+):'([a-z]+)'", re.search(r"var ICO_CARTE\s*=\s*\{([^}]*)\}", JS).group(1)))
+    connues = set(re.findall(r"^\s*([a-z]+):'<", COMPOSANTS, re.M)) | set(re.findall(r"\s([a-z]+):'<", COMPOSANTS))
+    for i in ids:
+        assert re.search(r'\{id:"%s"' % i, INDEX), i
+        assert icones.get(i) in connues, (i, icones.get(i))
     # Card accepte un hôte : l'article existant est habillé, jamais remplacé.
     assert "o.hote" in COMPOSANTS
     # Les commandes de carte (poignée, étoile, aide) restent à l'article, hors du corps.
@@ -134,11 +147,14 @@ def test_seules_les_cartes_du_lot_sont_habillees_les_autres_gardent_le_pied_v2(n
     ctx, p, erreurs = ouvre(nav)
     ids = p.evaluate("[...document.querySelectorAll('.fcard.sbx-card')].map(c=>c.getAttribute('data-embed'))")
     assert ids and set(ids) <= set(PREMIER_LOT), ids
-    assert "securite" in ids and "dpi" in ids
-    radio = ".fcard[data-embed='radio']"
-    assert p.evaluate("document.querySelector(\"%s\").classList.contains('sbx-card')" % radio) is False
-    assert p.evaluate("document.querySelector(\"%s .sbx-fcard-pied\")" % radio) is not None
-    assert p.evaluate("document.querySelector(\"%s .sbx-card-tete\")" % radio) is None
+    assert "securite" in ids and "dpi" in ids and "radio" in ids and "metanews" in ids
+    autre = ".fcard[data-embed='peertube']"   # hors lot : la carte générique garde le pied v2
+    assert p.evaluate("document.querySelector(\"%s\").classList.contains('sbx-card')" % autre) is False
+    assert p.evaluate("document.querySelector(\"%s .sbx-fcard-pied\")" % autre) is not None
+    assert p.evaluate("document.querySelector(\"%s .sbx-card-tete\")" % autre) is None
+    # le dock radio reste un nœud unique : une seule carte radio, son cadre intact dans le corps
+    assert p.evaluate("document.querySelectorAll(\".fcard[data-embed='radio']\").length") == 1
+    assert p.evaluate("document.querySelector(\".fcard[data-embed='radio'].sbx-card .sbx-card-corps iframe\")") is not None
     assert erreurs == []
     ctx.close()
 

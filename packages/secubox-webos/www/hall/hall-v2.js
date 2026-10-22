@@ -372,10 +372,15 @@
   // ── Phase 4 : migration des cartes vers Card, dans l'ordre du prompt (Sécurité, DNS, Réseau, État système = Hero,
   // Appareils, Notifications…). Une carte du lot est habillée SUR PLACE (Card avec hôte) : son cardlet reste dans le
   // corps, ses commandes (⠿ ★ ?) à l'article, l'ancien rendu n'est pas retiré. Hors lot : le pied v2 de la phase 3.
-  var MIGREES=['securite','acteurs','radar','guardian','dpi','ipv6guard','activite'];
-  var ICO_CARTE={securite:'bouclier',acteurs:'bouclier',radar:'bouclier',guardian:'globe',dpi:'reseau',ipv6guard:'reseau',activite:'actualite'};
+  // Lot 1 : Sécurité, DNS, Réseau, Appareils, Notifications. Lot 2 : Flux d'actualités (metanews, ytflux, billets), Radio dock,
+  // Mur de discussion (bbs), Éphéméride, Zigbee, DevWatch, ZIA, Mes comptes, Lyrion, Freebox TV, L'écoute (mood), YTSaS.
+  var MIGREES=['securite','acteurs','radar','guardian','dpi','ipv6guard','activite',
+    'metanews','ytflux','billets','radio','bbs','ephemeride','zigbee','devwatch','zia','comptes','lyrion','freeboxtv','mood','ytsas'];
+  var ICO_CARTE={securite:'bouclier',acteurs:'bouclier',radar:'bouclier',guardian:'globe',dpi:'reseau',ipv6guard:'reseau',activite:'actualite',
+    metanews:'actualite',ytflux:'film',billets:'billet',radio:'radio',bbs:'bulle',ephemeride:'calendrier',zigbee:'ampoule',devwatch:'satellite',
+    zia:'ia',comptes:'cle',lyrion:'musique',freeboxtv:'ecran',mood:'micro',ytsas:'film'};
   // Une carte de curation a un id à elle (pas de module « securite ») : son statut est celui du module qui la sert.
-  var SOURCE_STATUT={securite:'waf',acteurs:'actor',radar:'actor',guardian:'ad-guard',activite:'sbxid'};
+  var SOURCE_STATUT={securite:'waf',acteurs:'actor',radar:'actor',guardian:'ad-guard',activite:'sbxid',ytflux:'ytsas',comptes:'sbxid',mood:'sbxos-audio-mood',freeboxtv:'freebox'};
   function habille(c){
     var id=c.getAttribute('data-embed');
     if(!window.SbxUI||MIGREES.indexOf(id)<0||c.classList.contains('sbx-card')) return;

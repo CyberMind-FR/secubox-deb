@@ -1,3 +1,13 @@
+secubox-webos (1.19.13-1~trixie1) trixie; urgency=medium
+
+  * Hall v2, phase 4 : second lot de cartes habillées en Card, dans l'ordre du prompt (ref #2996) —
+    Flux d'actualités (MetaNews, Flux YouTube, Billets), Radio dock, Mur de discussion (BBS),
+    Éphéméride, Zigbee, DevWatch, ZIA, Mes comptes, Lyrion, Freebox TV, L'écoute (Mood), YTSaS.
+    Icônes SVG ajoutées aux composants ; statut emprunté au module servant pour Flux YouTube
+    (ytsas), Mes comptes (sbxid), Mood (sbxos-audio-mood), Freebox TV (freebox).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 13:10:00 +0200
+
 secubox-webos (1.19.12-1~trixie1) trixie; urgency=medium
 
   * Hall v2, cartes habillées en Card : le statut d'une carte de curation (securite, acteurs,
