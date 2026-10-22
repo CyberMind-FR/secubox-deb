@@ -77,6 +77,8 @@ case "$1" in
         # table, so enabling by default is safe). Bans a node under attack
         # shares reach every peer within ~1 min.
         systemctl enable --now secubox-annuaire-bans-apply.timer 2>/dev/null || true
+        # #3021 : offres de services réelles, dès l'installation puis chaque jour.
+        systemctl enable --now secubox-annuaire-offres.timer 2>/dev/null || true
         # Fleet metrics publish (fleet-metrics, Task 5): signs + persists this
         # box's own MetricSnapshot every 60s. [metrics] fleet_publish=false in
         # secubox.conf makes sbx-fleetctl publish a documented no-op, so

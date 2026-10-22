@@ -23,6 +23,12 @@ Commands:
                                   Publish a signed service offer with the node
                                   key.
   services                        List the node's live (non-revoked) offers.
+  offres-collecte                 (root) Relève les VRAIS services de la box (onions Tor,
+                                  curation du Hall, dépôt apt) dans offres-reelles.json (#3021).
+  offer-sync                      Publie les offres manquantes et révoque celles de ce nœud
+                                  (source=sync) qui ne correspondent plus ; les offres manuelles
+                                  restent.
+  revoke-offer SERVICE_ID         Révoque une offre de ce nœud (manuelle ou non).
   pull   BASE_URL                 Fetch BASE_URL/api/v1/annuaire/services and
                                   ingest valid, self-certifying offers.
 
@@ -207,6 +213,50 @@ def cmd_services(args) -> int:
     return 0
 
 
+def cmd_offres_collecte(args) -> int:
+    """Lu en root : onions de Tor, curation du Hall, dépôt apt → offres-reelles.json, lisible par secubox (#3021)."""
+    import pwd  # noqa: PLC0415
+    from annuaire import offres  # noqa: PLC0415
+    faits = offres.collecter_faits()
+    offres.ecrire_faits(faits)
+    try:
+        u = pwd.getpwnam("secubox")
+        os.chown(offres.FAITS_PATH, u.pw_uid, u.pw_gid)
+        os.chmod(offres.FAITS_PATH, 0o640)
+    except (KeyError, OSError) as e:
+        print(f"annuairectl: offres-reelles.json non attribué à secubox : {e}", file=sys.stderr)
+    print(json.dumps({"offres": len(faits), "fichier": str(offres.FAITS_PATH),
+                      "genres": sorted({f["kind"] for f in faits})}, indent=2))
+    return 0
+
+
+def cmd_offer_sync(args) -> int:
+    """Signé par secubox : aligne les offres `source=sync` de ce nœud sur offres-reelles.json (#3021)."""
+    from annuaire import offres  # noqa: PLC0415
+    from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+    faits = offres.lire_faits()
+    if faits is None:
+        _die(f"aucune collecte lisible dans {offres.FAITS_PATH} — lancer `annuairectl offres-collecte` (root) d'abord", 2)
+    priv = _load_priv()
+    did = did_from_pubkey(public_from_private(priv))
+    r = offres.synchroniser(_journal(), priv, did, faits)
+    print(json.dumps(r, indent=2, ensure_ascii=False))
+    return 0
+
+
+def cmd_revoke_offer(args) -> int:
+    from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+    from annuaire.verbs import revoke_offer  # noqa: PLC0415
+    priv = _load_priv()
+    did = did_from_pubkey(public_from_private(priv))
+    try:
+        r = revoke_offer(_journal(), priv, did, args.service_id)
+    except Exception as e:  # noqa: BLE001
+        _die(f"revoke-offer failed: {e}")
+    print(json.dumps(r, indent=2, default=str))
+    return 0
+
+
 def cmd_pull(args) -> int:
     from annuaire.model import ServiceOffer  # noqa: PLC0415
     from annuaire.verbs import ingest_offer, _get_offers, _get_inviter_pubkey  # noqa: PLC0415
@@ -357,6 +407,11 @@ def main(argv=None) -> int:
     ps.add_argument("--raw", action="store_true", help="include provider_pubkey")
     ps.set_defaults(fn=cmd_services)
 
+    sub.add_parser("offres-collecte", help="(root) relève les vrais services de la box dans offres-reelles.json (#3021)").set_defaults(fn=cmd_offres_collecte)
+    sub.add_parser("offer-sync", help="publie/révoque les offres source=sync de ce nœud d'après offres-reelles.json (#3021)").set_defaults(fn=cmd_offer_sync)
+    pro = sub.add_parser("revoke-offer", help="révoque une offre de ce nœud")
+    pro.add_argument("service_id")
+    pro.set_defaults(fn=cmd_revoke_offer)
     pp = sub.add_parser("pull", help="federate offers from a remote node")
     pp.add_argument("base_url", help="e.g. http://10.10.0.1:8799")
     pp.add_argument("--timeout", type=float, default=5.0)
