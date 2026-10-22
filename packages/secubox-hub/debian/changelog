@@ -1,3 +1,12 @@
+secubox-hub (1.12.24-1~trixie1) trixie; urgency=medium
+
+  * Menu : un module autonome (`"autonome": true` dans menu.d — sa page est servie par lui-même,
+    sans dossier www/) est au menu et dans le registre du Hall ; son activité reste jugée sur
+    son unité (ref #3042). Sur gk2 : metanews et socialrelay manquaient, donc « aucune source »
+    sur leurs cartes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 14:20:00 +0200
+
 secubox-hub (1.12.23-1~trixie1) trixie; urgency=medium
 
   * espaces.json et mode d'authentification sans secubox-zkp, retiré (ref #3019).

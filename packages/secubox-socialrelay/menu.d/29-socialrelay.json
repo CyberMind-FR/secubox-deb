@@ -1,5 +1,11 @@
-{ "id": "socialrelay", "name": "SocialRelay", "category": "mesh", "icon": "🌐",
-  "path": "/social/", "order": 29,
+{
+  "id": "socialrelay",
+  "name": "SocialRelay",
+  "category": "mesh",
+  "icon": "🌐",
+  "path": "/social/",
+  "order": 29,
   "description": "Relais de reseaux sociaux : fediverse, medias caches, fils BBS",
-  "theme": "correspondance"
+  "theme": "correspondance",
+  "autonome": true
 }

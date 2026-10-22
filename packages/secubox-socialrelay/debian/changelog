@@ -1,3 +1,10 @@
+secubox-socialrelay (0.1.20-1~trixie1) trixie; urgency=medium
+
+  * menu.d : module autonome (page servie par le binaire, sans www/) — de retour au menu de
+    l'administration et dans le registre du Hall (ref #3042).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 14:20:00 +0200
+
 secubox-socialrelay (0.1.19-1~bookworm1) bookworm; urgency=high
 
   * API : une signature valide ne suffit plus — un jeton portant un jti doit être une session VIVANTE du registre de secubox-auth (déconnexion et révocation prises en compte), un jeton d'intention (scope) est refusé, un jeton sans session n'est admis que d'un service de la flotte (iss connu, 10 min au plus) (#1814).
