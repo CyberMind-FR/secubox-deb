@@ -27,6 +27,10 @@ import os
 import re
 import time
 
+# Délais des sondes de métadonnées (#3036) : bornés ET tués au dépassement (voir _attend_borne).
+DELAI_SONDE = 120
+DELAI_PLAYLIST = 90
+
 # Progress lines from `yt-dlp --newline`: "[download]  12.3% of ...".
 _PROGRESS_RE = re.compile(r"\[download\]\s+([\d.]+)%")
 
@@ -130,6 +134,36 @@ class Engine:
         return best
 
     # --------------------------------------------------------------- metadata
+    async def _attend_borne(self, proc, delai):
+        """`communicate()` borné : au dépassement, le sous-processus est TUÉ puis attendu (#3036).
+
+        Sans cela, yt-dlp survivait au délai, personne ne lisait plus sa sortie et il s'endormait pour
+        toujours sur `pipe_write` : 62 processus orphelins sur gk2, la file figée pendant deux semaines."""
+        try:
+            return await asyncio.wait_for(proc.communicate(), timeout=delai)
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=10)
+            except asyncio.TimeoutError:
+                pass
+            raise
+
+    def reprend_incomplets(self):
+        """Au démarrage : remet en file les entrées non complètes qui ont une URL et pas de job en cours (#3036).
+        Un redémarrage du service laissait ces entrées `idle` jusqu'à un relancement à la main."""
+        n = 0
+        for row in self.library.incomplete():
+            vid, url = row.get("id"), row.get("url")
+            if not vid or not url or vid in self.jobs:
+                continue
+            self.add_prefetched(vid, url, row.get("title") or "")
+            n += 1
+        return n
+
     async def _probe(self, url):
         """Fetch id + title without downloading. Raises AuthRequired/EngineError."""
         argv = [self.ytdlp_bin, "-j", "--no-download", "--no-playlist",
@@ -142,7 +176,7 @@ class Engine:
             proc = await asyncio.create_subprocess_exec(
                 *argv, stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE)
-            out, err = await asyncio.wait_for(proc.communicate(), timeout=120)
+            out, err = await self._attend_borne(proc, DELAI_SONDE)
         except asyncio.TimeoutError:
             raise EngineError("délai dépassé — le site ne répond pas")
         except FileNotFoundError:
@@ -216,7 +250,7 @@ class Engine:
             proc = await asyncio.create_subprocess_exec(
                 *argv, stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE)
-            out, err = await asyncio.wait_for(proc.communicate(), timeout=90)
+            out, err = await self._attend_borne(proc, DELAI_PLAYLIST)
         except asyncio.TimeoutError:
             raise PlaylistTimeout("énumération trop longue")
         except FileNotFoundError:

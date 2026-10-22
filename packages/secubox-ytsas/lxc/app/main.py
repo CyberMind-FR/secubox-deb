@@ -754,6 +754,13 @@ async def _startup():
             await asyncio.sleep(300)
 
     asyncio.create_task(purge_loop())
+    # #3036 : les téléchargements laissés incomplets par un arrêt reprennent sans relancement à la main.
+    try:
+        n = engine.reprend_incomplets()
+        if n:
+            print(f"ytsas: {n} téléchargement(s) incomplet(s) remis en file", flush=True)
+    except Exception as e:  # noqa: BLE001 — ne jamais empêcher le démarrage de l'API
+        print(f"ytsas: reprise des incomplets impossible : {e}", flush=True)
 
 
 # Serve the webui static from the app root, AFTER the API routes so /api/v1/...
