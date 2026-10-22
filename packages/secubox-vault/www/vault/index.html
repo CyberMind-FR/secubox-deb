@@ -4,125 +4,200 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
+  SecuBox — « Coffre » (secubox-vault), page d'administration au profil Aurora (#3020). Une seule page, deux mises en page :
+    · CARTE / page embarquée (?embed=1) : compacte, une colonne ;
+    · TABLEAU DE BORD complet (largeur ≥ 900 px).
+  DONNÉES RÉELLES UNIQUEMENT (API du module, lue en session sous /api/v1/vault : etat, serrures/appareil, secrets, journal).
+  Aucune valeur de secret ne s'affiche jamais ici. Une mesure absente s'affiche « — », jamais 0.
+  Actions conservées À L'IDENTIQUE de l'ancienne page : POST /ouvrir (phrase, code de secours, clé d'appareil WebAuthn PRF, TOTP
+  hors LAN), POST /sceller, POST /secrets, DELETE /secrets/{compartiment}/{nom}, POST /serrures/appareil/preparer,
+  POST /serrures/appareil, DELETE /serrures/appareil/{id}. Les retraits et le scellement demandent une confirmation DANS la page.
+  `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, aucune écriture.
+-->
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Coffre - SecuBox</title>
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <style>
-  [hidden]{display:none!important}   /* un `display:flex` d'auteur ne doit pas annuler `hidden` (#2146) */
-  .main-content { margin-left: 200px; padding: 2rem; max-width: 1100px; }
-  @media (max-width: 800px) { .main-content { margin-left: 0; padding: 1rem; } }
-  h1 { font-family: 'Courier Prime', monospace; color: var(--cyan, #00d4ff); margin: 0 0 .25rem; }
-  .sous { color: var(--text-muted, #8a8a99); margin: 0 0 1.5rem; }
-  .grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
-  .carte { background: rgba(0, 212, 255, .04); border: 1px solid rgba(0, 212, 255, .25); border-radius: 8px; padding: 1rem 1.2rem; }
-  .carte h2 { font-size: 1rem; margin: 0 0 .8rem; font-family: 'Courier Prime', monospace; }
-  .etat { font-size: 1.6rem; font-weight: bold; }
-  .scelle { color: #e6a23c; } .ouvert { color: #3ecf8e; } .neuf { color: #8a8a99; } .rompu { color: #e63946; }
-  label { display: block; font-size: .85rem; margin: .5rem 0 .2rem; color: var(--text-muted, #8a8a99); }
-  input, select { width: 100%; box-sizing: border-box; padding: .45rem .55rem; background: rgba(0,0,0,.25);
-                  border: 1px solid rgba(0, 212, 255, .3); border-radius: 4px; color: inherit; font-family: inherit; }
-  button { margin-top: .7rem; padding: .45rem .9rem; border: 1px solid rgba(0, 212, 255, .5); background: rgba(0, 212, 255, .12);
-           color: inherit; border-radius: 4px; cursor: pointer; }
-  button.danger { border-color: rgba(230, 57, 70, .6); background: rgba(230, 57, 70, .12); }
-  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
-  td, th { text-align: left; padding: .3rem .4rem; border-bottom: 1px solid rgba(255,255,255,.06); }
-  .mono { font-family: 'Courier Prime', monospace; font-size: .8rem; word-break: break-all; }
-  .msg { margin-top: .6rem; font-size: .85rem; min-height: 1.2em; }
-  .msg.err { color: #e63946; } .msg.ok { color: #3ecf8e; }
-  .note { font-size: .8rem; color: var(--text-muted, #8a8a99); }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Coffre</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{margin:0;min-height:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .etatp{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .etatp.scelle{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .etatp.neuf,.etatp.hors{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .etatp.rompu{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .bt{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:5px 11px;cursor:pointer;text-decoration:none;white-space:nowrap}
+  .bt:hover{border-color:var(--cyan)} .bt:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .bt.pri{background:rgba(41,182,246,.22);border-color:var(--cyan)} .bt.danger{border-color:rgba(255,77,94,.55);background:rgba(255,77,94,.12)}
+  .bt.danger:hover{border-color:var(--rouge)} .bt[disabled]{opacity:.5;cursor:wait} .bt.mini{padding:2px 8px;font-size:.68rem}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{background:rgba(41,182,246,.14);border:1px solid var(--cyan);color:var(--texte);border-radius:8px;padding:5px 10px;font-size:.78rem} .info a{color:var(--cyan)}
+  .erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile.cle{border-color:rgba(41,182,246,.62);background:linear-gradient(160deg,rgba(24,66,128,.78),rgba(8,24,52,.78));box-shadow:0 0 0 1px rgba(41,182,246,.18),0 0 22px rgba(41,182,246,.22)}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tuile.cle .v{color:#fff} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .v.ouvert{color:var(--vert)} .v.scelle{color:var(--orange)} .v.rompu{color:var(--rouge)}
+  .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0;display:flex;flex-direction:column;gap:8px}
+  .pan h3{margin:0;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto;text-align:right}
+  .vide{color:var(--faible);font-size:.8rem;padding:6px 2px}
+  .note{color:var(--faible);font-size:.68rem;margin:0}
+  .note code,.mono{font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;font-size:.72rem;color:var(--doux);word-break:break-all}
+  form{display:grid;gap:6px;margin:0} label{font-size:.68rem;color:var(--faible);text-transform:uppercase;letter-spacing:.06em}
+  label.coche{text-transform:none;letter-spacing:0;font-size:.74rem;color:var(--doux);display:flex;align-items:center;gap:6px}
+  input[type=text],input[type=password]{font:inherit;font-size:.8rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+  .rang{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:.78rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:4px 7px;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+  td{padding:5px 7px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle;font-variant-numeric:tabular-nums}
+  tr:hover td{background:rgba(41,182,246,.07)} td.r{text-align:right;white-space:nowrap}
+  .past{display:inline-block;border-radius:999px;padding:1px 8px;font-weight:700;font-size:.66rem;border:1px solid transparent;white-space:nowrap}
+  .past.v{background:rgba(46,204,113,.16);color:var(--vert);border-color:rgba(46,204,113,.4)}
+  .past.c{background:rgba(41,182,246,.16);color:var(--cyan);border-color:rgba(41,182,246,.4)}
+  .past.o{background:rgba(255,159,28,.16);color:var(--orange);border-color:rgba(255,159,28,.4)}
+  .past.r{background:rgba(255,77,94,.16);color:var(--rouge);border-color:rgba(255,77,94,.45)}
+  .past.g{background:rgba(159,179,214,.12);color:var(--faible);border-color:rgba(159,179,214,.2)}
+  .confirme{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.78rem}
+  .confirme b{color:var(--orange)} .confirme .mono{color:var(--texte)}
+  .msg{font-size:.76rem;min-height:1.1em;margin:0} .msg.ok{color:var(--vert)} .msg.err{color:var(--rouge)}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  @container a (min-width:900px){.grille{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .large{grid-column:1/-1}}
 </style>
 </head>
-<body class="crt-light hybrid-dark">
-<nav class="sidebar" id="sidebar"></nav>
-<main class="main-content">
-  <h1>🔐 Coffre</h1>
-  <p class="sous">Clé maîtresse en mémoire seulement, scellé par défaut (#1367). Aucune valeur de secret ne s'affiche ici.</p>
+<body>
+<div class="cadre" id="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.4"/></svg>
+      <span><b>Coffre</b><small>clé maîtresse en mémoire seulement · scellé par défaut</small></span></span>
+    <span class="etatp hors" id="pastille">—</span>
+    <div class="droite"><span id="heure"></span><button type="button" class="bt" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — aucune écriture n'est faite sur le Coffre.</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+  <div class="erreur" id="erreur" role="alert" hidden></div>
+
+  <div class="tuiles">
+    <div class="tuile cle" title="État du Coffre : scellé (clé maîtresse oubliée), ouvert (clé en mémoire, rescellement automatique), ou non initialisé."><span class="l">État</span><span class="v" id="tEtat">—</span><span class="s" id="tEtatS">—</span></div>
+    <div class="tuile" title="Serrures capables d'ouvrir le Coffre : phrase, code de secours, clé d'appareil."><span class="l">Serrures</span><span class="v" id="tSerrures">—</span><span class="s">phrase · secours · appareil</span></div>
+    <div class="tuile" title="Secrets rangés, tous compartiments confondus. Leurs valeurs ne s'affichent jamais."><span class="l">Secrets</span><span class="v" id="tSecrets">—</span><span class="s" id="tSecretsS">—</span></div>
+    <div class="tuile" title="Journal chaîné du Coffre : chaque ligne porte le hachage de la précédente."><span class="l">Journal</span><span class="v" id="tJournal">—</span><span class="s" id="tJournalS">—</span></div>
+  </div>
+
   <div class="grille">
-    <section class="carte">
-      <h2>État</h2>
-      <div id="etat" class="etat neuf">…</div>
-      <div id="detail" class="note"></div>
-      <form id="f-ouvrir" hidden>
+    <section class="pan">
+      <h3>Ouvrir et sceller <i id="iReste"></i></h3>
+      <p class="note" id="noteInit" hidden>Le Coffre n'est pas encore né : il le sera à la prochaine connexion d'un administrateur, dont le mot de passe de connexion deviendra la serrure. Pensez ensuite au recouvrement : <code>coffrectl recouvrement preparer gk3 papier</code> ou <code>coffrectl codes</code>.</p>
+      <p class="note">Le Coffre s'ouvre à la connexion d'un administrateur, après le second facteur hors du LAN. Ce formulaire reste pour une phrase, un code de secours ou une clé d'appareil.</p>
+      <form id="f-ouvrir" hidden autocomplete="off">
         <label for="secret">Phrase ou code de secours</label>
         <input id="secret" type="password" autocomplete="off" required>
-        <label><input id="secours" type="checkbox" style="width:auto"> c'est un code de secours (usage unique)</label>
+        <label class="coche"><input id="secours" type="checkbox"> c'est un code de secours (usage unique)</label>
         <label for="otp">Code TOTP — exigé hors du LAN</label>
-        <input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8">
-        <button type="submit">Ouvrir</button>
-        <button type="button" id="b-appareil" hidden>🔑 Ouvrir avec une clé d'appareil</button>
+        <input id="otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8">
+        <div class="rang"><button type="submit" class="bt pri">Ouvrir</button><button type="button" class="bt" id="b-appareil" hidden>Ouvrir avec une clé d'appareil</button></div>
       </form>
-      <button id="b-sceller" class="danger" hidden>Sceller maintenant</button>
+      <div class="rang" id="r-sceller" hidden><button type="button" class="bt danger" id="b-sceller">Sceller maintenant</button></div>
+      <div class="confirme" id="c-sceller" hidden><b>Sceller le Coffre ?</b> La clé maîtresse est oubliée, les secrets redeviennent illisibles jusqu'à la prochaine ouverture.
+        <button type="button" class="bt danger mini" id="c-sceller-oui">Confirmer</button><button type="button" class="bt mini" id="c-sceller-non">Annuler</button></div>
       <p id="m-etat" class="msg"></p>
-      <p class="note" id="note-init" hidden>Le Coffre n'est pas encore né : il le sera à la prochaine
-        connexion d'un administrateur, dont le mot de passe de connexion deviendra la serrure (aucune phrase à
-        part). Pensez ensuite au recouvrement : <span class="mono">coffrectl recouvrement preparer gk3 papier</span>
-        ou <span class="mono">coffrectl codes</span>.</p>
-      <p class="note">Le Coffre s'ouvre à la connexion d'un administrateur — après le second facteur hors du
-        LAN, qui prévient alors la boîte de la box. Le formulaire ci-dessous reste pour une phrase, un code de
-        secours ou une clé d'appareil.</p>
     </section>
-    <section class="carte">
-      <h2>Serrures et compartiments</h2>
-      <table><tbody id="serrures"></tbody></table>
-      <table style="margin-top:.8rem"><tbody id="compartiments"></tbody></table>
-      <h2 style="margin-top:1rem">Clés d'appareil</h2>
-      <p class="note">Une clé FIDO, Touch ID ou un téléphone (extension WebAuthn PRF) ouvre le Coffre sans phrase. Elle reste liée au nom de ce site : enrôler et ouvrir depuis le même nom (pas depuis une adresse IP).</p>
-      <table><tbody id="appareils"></tbody></table>
-      <label for="libelle-app">Nom de la clé</label>
-      <input id="libelle-app" maxlength="80" placeholder="ex. clé FIDO bureau">
-      <button id="b-ajout-app" hidden>➕ Ajouter cette clé d'appareil</button>
+
+    <section class="pan">
+      <h3>Serrures et compartiments <i id="iSerrures"></i></h3>
+      <div class="scroll"><table><thead><tr><th>Serrure</th><th>Identifiant</th></tr></thead><tbody id="serrures"><tr><td colspan="2" class="vide">—</td></tr></tbody></table></div>
+      <div class="scroll"><table><thead><tr><th>Compartiment</th><th>Libellé</th><th class="r">Secrets</th></tr></thead><tbody id="compartiments"><tr><td colspan="3" class="vide">—</td></tr></tbody></table></div>
+    </section>
+
+    <section class="pan">
+      <h3>Clés d'appareil <i>WebAuthn PRF</i></h3>
+      <p class="note">Une clé FIDO, Touch ID ou un téléphone ouvre le Coffre sans phrase. Elle reste liée au nom de ce site : enrôler et ouvrir depuis le même nom, jamais depuis une adresse IP.</p>
+      <div class="scroll"><table><thead><tr><th>Clé</th><th class="r">Action</th></tr></thead><tbody id="appareils"><tr><td colspan="2" class="vide">—</td></tr></tbody></table></div>
+      <div class="confirme" id="c-app" hidden><b>Retirer la clé</b> <span class="mono" id="c-app-nom"></span> ?
+        <button type="button" class="bt danger mini" id="c-app-oui">Confirmer</button><button type="button" class="bt mini" id="c-app-non">Annuler</button></div>
+      <form id="f-app" hidden autocomplete="off">
+        <label for="libelle-app">Nom de la clé</label>
+        <input id="libelle-app" type="text" maxlength="80" placeholder="ex. clé FIDO bureau">
+        <div class="rang"><button type="submit" class="bt" id="b-ajout-app">Ajouter cette clé d'appareil</button></div>
+      </form>
       <p id="m-app" class="msg"></p>
     </section>
-    <section class="carte">
-      <h2>Secrets</h2>
-      <table><tbody id="secrets"><tr><td class="note">Coffre scellé.</td></tr></tbody></table>
-      <form id="f-poser">
+
+    <section class="pan">
+      <h3>Secrets <i id="iSecrets"></i></h3>
+      <div class="scroll"><table><thead><tr><th>Nom</th><th>Version</th><th class="r">Action</th></tr></thead><tbody id="secrets"><tr><td colspan="3" class="vide">Coffre scellé.</td></tr></tbody></table></div>
+      <div class="confirme" id="c-sec" hidden><b>Retirer le secret</b> <span class="mono" id="c-sec-nom"></span> ? Sa valeur ne sera plus lisible par les modules.
+        <button type="button" class="bt danger mini" id="c-sec-oui">Confirmer</button><button type="button" class="bt mini" id="c-sec-non">Annuler</button></div>
+      <form id="f-poser" hidden autocomplete="off">
         <label for="nom">Nom (a-z, 0-9, . _ -)</label>
-        <input id="nom" pattern="[a-z0-9][a-z0-9._\-]{0,63}" required>
+        <input id="nom" type="text" pattern="[a-z0-9][a-z0-9._\-]{0,63}" required>
         <label for="valeur">Valeur</label>
         <input id="valeur" type="password" autocomplete="off" required>
-        <button type="submit">Poser dans « box »</button>
+        <div class="rang"><button type="submit" class="bt pri">Poser dans « box »</button></div>
       </form>
       <p id="m-secrets" class="msg"></p>
     </section>
-    <section class="carte" style="grid-column: 1 / -1">
-      <h2>Journal <span id="integrite" class="note"></span></h2>
-      <table><tbody id="journal"></tbody></table>
+
+    <section class="pan large">
+      <h3>Journal <i id="iJournal"></i></h3>
+      <div class="scroll"><table><thead><tr><th>Quand</th><th>Événement</th><th>Détails</th></tr></thead><tbody id="journal"><tr><td colspan="3" class="vide">—</td></tr></tbody></table></div>
     </section>
   </div>
-</main>
-<script src="/shared/sidebar.js"></script>
+</div></div>
+
 <script>
+  'use strict';
+  const q = new URLSearchParams(location.search);
+  const EMBED = !!q.get('embed'), DEMO = !!q.get('demo');
+  if (EMBED) document.body.classList.add('emb');
+  if (!EMBED && !DEMO) { const s = document.createElement('script'); s.src = '/shared/sidebar.js'; document.body.appendChild(s); }
   const API = '/api/v1/vault';
   const $ = (id) => document.getElementById(id);
-  const txt = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+  const el = (tag, cls, texte) => { const e = document.createElement(tag); if (cls) e.className = cls; if (texte != null) e.textContent = texte; return e; };
+  function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+  let SESSION = true, ETAT = null, APPAREILS = [], SECRETS = null, JOURNAL = null;
+
   async function api(chemin, opts) {
-    const r = await fetch(API + chemin, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts || {}));
+    const h = { 'Content-Type': 'application/json', Accept: 'application/json' };
+    const t = jeton(); if (t) h.Authorization = 'Bearer ' + t;
+    const r = await fetch(API + chemin, Object.assign({ headers: h, credentials: 'same-origin', cache: 'no-store' }, opts || {}));
     let corps = {};
-    try { corps = await r.json(); } catch (e) {}
-    if (!r.ok) throw new Error(corps.detail || ('HTTP ' + r.status));
+    try { corps = await r.json(); } catch (e) { /* corps vide */ }
+    if (r.status === 401) { SESSION = false; }
+    if (!r.ok) { const e = new Error(corps.detail || ('HTTP ' + r.status)); e.statut = r.status; throw e; }
+    SESSION = true;
     return corps;
   }
+  function msg(id, texte, ok) { const m = $(id); m.textContent = texte || ''; m.className = 'msg ' + (texte ? (ok ? 'ok' : 'err') : ''); }
+  function lignes(tb, rows) { tb.replaceChildren(...rows); }
+  function ligneVide(cols, texte) { const tr = el('tr'); const td = el('td', 'vide', texte); td.colSpan = cols; tr.appendChild(td); return tr; }
+  function hhmm(iso) { const d = new Date(iso); return isNaN(d) ? String(iso || '—') : d.toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+
+  // ── WebAuthn PRF (identique à l'ancienne page) ──
   const rnd = (n) => crypto.getRandomValues(new Uint8Array(n));
   const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const b64uDec = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
-  let APPAREILS = [];
-  // WebAuthn refuse une adresse IP comme identifiant de site, et une clé
-  // d'appareil reste liée au NOM sous lequel elle a été enrôlée.
   function siteWebAuthn() {
     const h = location.hostname;
-    if (/^[0-9.]+$/.test(h) || h.includes(':'))
-      throw new Error("les clés d'appareil exigent un nom de site (ex. admin.<box>), pas une adresse IP");
+    if (/^[0-9.]+$/.test(h) || h.includes(':')) throw new Error("les clés d'appareil exigent un nom de site (ex. admin.<box>), pas une adresse IP");
     return h;
   }
-
   async function ajouterAppareil() {
     if (!window.PublicKeyCredential) throw new Error('WebAuthn indisponible dans ce navigateur');
     const site = siteWebAuthn();
@@ -138,7 +213,7 @@
     const ext = cred.getClientExtensionResults().prf || {};
     if (ext.enabled === false) throw new Error("cette clé ne connaît pas l'extension PRF");
     let sortie = ext.results && ext.results.first;
-    if (!sortie) {              // certaines clés ne rendent la sortie PRF qu'à l'assertion
+    if (!sortie) {
       const a = await navigator.credentials.get({ publicKey: { challenge: rnd(32), rpId: site,
         allowCredentials: [{ type: 'public-key', id: cred.rawId }], userVerification: 'required',
         extensions: { prf: { eval: { first: selB } } } } });
@@ -148,7 +223,6 @@
     await api('/serrures/appareil', { method: 'POST', body: JSON.stringify({
       cred_id: b64u(cred.rawId), sel, prf: b64u(sortie), libelle: $('libelle-app').value || ("clé d'appareil · " + site) }) });
   }
-
   async function ouvrirAppareil() {
     if (!APPAREILS.length) throw new Error("aucune clé d'appareil enrôlée");
     const site = siteWebAuthn();
@@ -164,57 +238,87 @@
     await api('/ouvrir', { method: 'POST', body: JSON.stringify(corps) });
   }
 
-  function msg(id, texte, ok) { const m = $(id); m.textContent = texte || ''; m.className = 'msg ' + (texte ? (ok ? 'ok' : 'err') : ''); }
-
-  function rendEtat(e) {
-    const el = $('etat');
-    const ouvert = !!e.ouvert;
-    if (!e.initialise) { el.textContent = 'Non initialisé'; el.className = 'etat neuf'; }
-    else { el.textContent = ouvert ? '🔓 Ouvert' : '🔒 Scellé'; el.className = 'etat ' + (ouvert ? 'ouvert' : 'scelle'); }
-    $('detail').textContent = ouvert && e.reste_s != null ? `rescellement dans ${Math.ceil(e.reste_s / 60)} min` : '';
-    $('f-ouvrir').hidden = !e.initialise || ouvert;
-    $('b-sceller').hidden = !ouvert;
-    $('note-init').hidden = !!e.initialise;
-    $('serrures').innerHTML = (e.serrures || []).map(s =>
-      `<tr><td>${s.genre === 'phrase' ? '🔑' : s.genre === 'appareil' ? '📱' : '🧾'} ${txt(s.libelle)}</td><td class="mono">${txt(s.id)}</td></tr>`).join('');
-    $('b-ajout-app').hidden = !ouvert;
-    $('compartiments').innerHTML = (e.compartiments || []).map(c =>
-      `<tr><td>🗄 ${txt(c.id)}</td><td>${txt(c.libelle)}</td><td>${c.secrets} secret(s)</td></tr>`).join('');
-    const j = e.journal || {};
-    $('integrite').textContent = j.integre ? `· ${j.lignes} lignes, chaîne intègre` : `· CHAÎNE ROMPUE ligne ${j.ligne_fautive}`;
-    $('integrite').className = j.integre ? 'note' : 'note rompu';
-    return ouvert;
+  // ── rendu ──
+  function rendre() {
+    $('demo').hidden = !DEMO;
+    $('session').hidden = DEMO || SESSION;
+    const e = ETAT, ouvert = !!(e && e.ouvert), init = !!(e && e.initialise);
+    const p = $('pastille');
+    if (!e) { p.textContent = SESSION ? 'HORS LIGNE' : 'SESSION REQUISE'; p.className = 'etatp hors'; }
+    else if (!init) { p.textContent = 'NON INITIALISÉ'; p.className = 'etatp neuf'; }
+    else { p.textContent = ouvert ? 'OUVERT' : 'SCELLÉ'; p.className = 'etatp ' + (ouvert ? '' : 'scelle'); }
+    const tE = $('tEtat');
+    tE.textContent = !e ? '—' : !init ? 'Non né' : ouvert ? 'Ouvert' : 'Scellé';
+    tE.className = 'v ' + (!e || !init ? '' : ouvert ? 'ouvert' : 'scelle');
+    $('tEtatS').textContent = ouvert && e.reste_s != null ? 'rescellement dans ' + Math.ceil(e.reste_s / 60) + ' min' : init ? (ouvert ? 'clé en mémoire' : 'clé oubliée') : '—';
+    $('iReste').textContent = ouvert && e.reste_s != null ? 'rescellement automatique dans ' + Math.ceil(e.reste_s / 60) + ' min' : '';
+    const serr = (e && e.serrures) || null, comp = (e && e.compartiments) || null;
+    $('tSerrures').textContent = serr ? String(serr.length) : '—';
+    const nSec = comp ? comp.reduce((n, c) => n + (Number(c.secrets) || 0), 0) : null;
+    $('tSecrets').textContent = nSec == null ? '—' : String(nSec);
+    $('tSecretsS').textContent = comp ? comp.length + ' compartiment' + (comp.length > 1 ? 's' : '') : '—';
+    const j = (e && e.journal) || null;
+    $('tJournal').textContent = j && j.lignes != null ? String(j.lignes) : '—';
+    $('tJournal').className = 'v ' + (j && j.integre === false ? 'rompu' : '');
+    $('tJournalS').textContent = j ? (j.integre ? 'chaîne intègre' : 'CHAÎNE ROMPUE ligne ' + j.ligne_fautive) : 'lignes';
+    $('iJournal').textContent = j ? (j.integre ? 'chaîne intègre · 20 dernières lignes' : 'chaîne rompue') : '';
+    $('noteInit').hidden = !e || init;
+    $('f-ouvrir').hidden = !e || !init || ouvert;
+    $('r-sceller').hidden = !ouvert;
+    $('f-app').hidden = !ouvert; $('f-poser').hidden = !ouvert;
+    $('b-appareil').hidden = ouvert || !APPAREILS.length;
+    const ico = { phrase: 'Phrase', secours: 'Code de secours', appareil: "Clé d'appareil", compte: 'Compte' };
+    lignes($('serrures'), serr && serr.length ? serr.map(s => { const tr = el('tr'); const td = el('td');
+      const past = el('span', 'past c', ico[s.genre] || s.genre); td.appendChild(past); td.appendChild(document.createTextNode(' ' + (s.libelle || ''))); tr.appendChild(td);
+      tr.appendChild(el('td', 'mono', s.id || '')); return tr; }) : [ligneVide(2, serr ? 'Aucune serrure.' : '—')]);
+    lignes($('compartiments'), comp && comp.length ? comp.map(c => { const tr = el('tr'); tr.appendChild(el('td', 'mono', c.id || '')); tr.appendChild(el('td', null, c.libelle || ''));
+      tr.appendChild(el('td', 'r', c.secrets != null ? String(c.secrets) : '—')); return tr; }) : [ligneVide(3, comp ? 'Aucun compartiment.' : '—')]);
+    $('iSerrures').textContent = serr ? serr.length + ' serrure' + (serr.length > 1 ? 's' : '') : '';
+    lignes($('appareils'), APPAREILS.length ? APPAREILS.map(x => { const tr = el('tr'); tr.appendChild(el('td', null, x.libelle || x.id));
+      const td = el('td', 'r'); const b = el('button', 'bt danger mini', 'retirer'); b.type = 'button'; b.dataset.app = x.id; b.dataset.nom = x.libelle || x.id; b.disabled = !ouvert && !DEMO ? false : false; td.appendChild(b); tr.appendChild(td); return tr; })
+      : [ligneVide(2, e ? 'Aucune.' : '—')]);
+    if (!ouvert) lignes($('secrets'), [ligneVide(3, e ? 'Coffre scellé.' : '—')]);
+    else lignes($('secrets'), SECRETS && SECRETS.length ? SECRETS.map(x => { const tr = el('tr'); tr.appendChild(el('td', 'mono', x.compartiment + '/' + x.nom)); tr.appendChild(el('td', null, 'v' + x.version));
+      const td = el('td', 'r'); const b = el('button', 'bt danger mini', 'retirer'); b.type = 'button'; b.dataset.c = x.compartiment; b.dataset.n = x.nom; td.appendChild(b); tr.appendChild(td); return tr; })
+      : [ligneVide(3, SECRETS ? 'Aucun secret.' : '—')]);
+    $('iSecrets').textContent = ouvert && SECRETS ? SECRETS.length + ' secret' + (SECRETS.length > 1 ? 's' : '') + ' · valeurs jamais affichées' : 'valeurs jamais affichées';
+    lignes($('journal'), JOURNAL && JOURNAL.length ? JOURNAL.slice().reverse().map(x => { const tr = el('tr'); tr.appendChild(el('td', 'mono', hhmm(x.t))); tr.appendChild(el('td', null, x.evt || ''));
+      tr.appendChild(el('td', 'mono', JSON.stringify(x.details || {}))); return tr; }) : [ligneVide(3, JOURNAL ? 'Journal vide.' : '—')]);
+    $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    hauteur();
   }
+
+  // ── démonstration (RFC 5737 / noms fictifs, aucune écriture) ──
+  function DEMO_ETAT() {
+    return { initialise: true, ouvert: true, reste_s: 1140,
+      serrures: [{ genre: 'compte', libelle: 'mot de passe de connexion (admin)', id: 'srr-a1f3' }, { genre: 'secours', libelle: 'codes papier (8 restants)', id: 'srr-9c02' }, { genre: 'appareil', libelle: 'clé FIDO bureau', id: 'srr-4e7b' }],
+      compartiments: [{ id: 'box', libelle: 'secrets de la box', secrets: 4 }, { id: 'mail', libelle: 'relais SMTP', secrets: 1 }],
+      journal: { integre: true, lignes: 212 } };
+  }
+  const DEMO_APP = [{ id: 'srr-4e7b', libelle: 'clé FIDO bureau', cred_id: 'ZGVtbw', sel: 'c2Vs' }];
+  const DEMO_SECRETS = [{ compartiment: 'box', nom: 'jwt-secret', version: 3 }, { compartiment: 'box', nom: 'peertube-admin', version: 1 }, { compartiment: 'box', nom: 'wireguard-prive', version: 2 }, { compartiment: 'mail', nom: 'smtp-relais', version: 1 }];
+  const DEMO_JOURNAL = [{ t: '2026-10-22T05:10:12+00:00', evt: 'ouverture', details: { genre: 'compte', lan: true } }, { t: '2026-10-22T05:12:40+00:00', evt: 'secret.pose', details: { compartiment: 'box', nom: 'jwt-secret', version: 3 } }, { t: '2026-10-22T05:31:03+00:00', evt: 'scellement', details: { raison: 'delai' } }];
 
   async function charge() {
-    let e;
-    try { e = await api('/etat'); } catch (err) { msg('m-etat', err.message); return; }
-    const ouvert = rendEtat(e);
-    try { APPAREILS = (await api('/serrures/appareil')).appareils || []; } catch (err) { APPAREILS = []; }
-    $('appareils').innerHTML = APPAREILS.length ? APPAREILS.map(x =>
-      `<tr><td>📱 ${txt(x.libelle)}</td><td><button class="danger" data-app="${txt(x.id)}">retirer</button></td></tr>`).join('')
-      : '<tr><td class="note">Aucune.</td></tr>';
-    $('b-appareil').hidden = ouvert || !APPAREILS.length;
-    if (ouvert) {
-      try {
-        const s = (await api('/secrets')).secrets;
-        $('secrets').innerHTML = s.length ? s.map(x =>
-          `<tr><td class="mono">${txt(x.compartiment)}/${txt(x.nom)}</td><td>v${x.version}</td>
-           <td><button class="danger" data-c="${txt(x.compartiment)}" data-n="${txt(x.nom)}">retirer</button></td></tr>`).join('')
-          : '<tr><td class="note">Aucun secret.</td></tr>';
-      } catch (err) { msg('m-secrets', err.message); }
-    } else {
-      $('secrets').innerHTML = '<tr><td class="note">Coffre scellé.</td></tr>';
-    }
+    const b = $('rafraichir'); b.disabled = true;
+    $('erreur').hidden = true;
     try {
-      const j = await api('/journal?n=20');
-      $('journal').innerHTML = j.entrees.slice().reverse().map(x =>
-        `<tr><td class="mono">${txt(x.t)}</td><td>${txt(x.evt)}</td><td class="mono">${txt(JSON.stringify(x.details))}</td></tr>`).join('');
-    } catch (err) {}
+      if (DEMO) { ETAT = DEMO_ETAT(); APPAREILS = DEMO_APP; SECRETS = DEMO_SECRETS; JOURNAL = DEMO_JOURNAL; rendre(); return; }
+      try { ETAT = await api('/etat'); }
+      catch (err) { ETAT = null; if (SESSION) { $('erreur').textContent = 'Impossible de lire le Coffre : ' + err.message; $('erreur').hidden = false; } rendre(); return; }
+      try { APPAREILS = (await api('/serrures/appareil')).appareils || []; } catch (err) { APPAREILS = []; }
+      if (ETAT.ouvert) { try { SECRETS = (await api('/secrets')).secrets || []; } catch (err) { SECRETS = null; msg('m-secrets', err.message); } }
+      else SECRETS = null;
+      try { JOURNAL = (await api('/journal?n=20')).entrees || []; } catch (err) { JOURNAL = null; }
+      rendre();
+    } finally { b.disabled = false; }
   }
 
+  // ── actions : mêmes appels que l'ancienne page, confirmations dans la page ──
+  $('rafraichir').addEventListener('click', charge);
   $('f-ouvrir').addEventListener('submit', async (ev) => {
     ev.preventDefault();
+    if (DEMO) { msg('m-etat', 'Démonstration : aucune écriture.', false); return; }
     try {
       const corps = { secret: $('secret').value, genre: $('secours').checked ? 'secours' : 'phrase' };
       if ($('otp').value) corps.otp = $('otp').value;
@@ -225,45 +329,73 @@
     charge();
   });
   $('b-appareil').addEventListener('click', async () => {
-    try { await ouvrirAppareil(); msg('m-etat', 'Coffre ouvert par la clé d\'appareil.', true); }
+    if (DEMO) { msg('m-etat', 'Démonstration : aucune écriture.', false); return; }
+    try { await ouvrirAppareil(); msg('m-etat', "Coffre ouvert par la clé d'appareil.", true); }
     catch (err) { msg('m-etat', err.message); }
     $('otp').value = '';
     charge();
   });
-  $('b-ajout-app').addEventListener('click', async () => {
-    try { await ajouterAppareil(); msg('m-app', 'Clé d\'appareil ajoutée.', true); $('libelle-app').value = ''; }
-    catch (err) { msg('m-app', err.message); }
-    charge();
-  });
-  $('appareils').addEventListener('click', async (ev) => {
-    const b = ev.target.closest('button[data-app]');
-    if (!b) return;
-    try { await api('/serrures/appareil/' + encodeURIComponent(b.dataset.app), { method: 'DELETE' }); }
-    catch (err) { msg('m-app', err.message); }
-    charge();
-  });
-  $('b-sceller').addEventListener('click', async () => {
+  $('b-sceller').addEventListener('click', () => { $('c-sceller').hidden = false; });
+  $('c-sceller-non').addEventListener('click', () => { $('c-sceller').hidden = true; });
+  $('c-sceller-oui').addEventListener('click', async () => {
+    $('c-sceller').hidden = true;
+    if (DEMO) { msg('m-etat', 'Démonstration : aucune écriture.', false); return; }
     try { await api('/sceller', { method: 'POST' }); msg('m-etat', 'Coffre scellé.', true); } catch (err) { msg('m-etat', err.message); }
+    charge();
+  });
+  $('f-app').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (DEMO) { msg('m-app', 'Démonstration : aucune écriture.', false); return; }
+    try { await ajouterAppareil(); msg('m-app', "Clé d'appareil ajoutée.", true); $('libelle-app').value = ''; }
+    catch (err) { msg('m-app', err.message); }
+    charge();
+  });
+  let APP_A_RETIRER = null;
+  $('appareils').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-app]'); if (!b) return;
+    APP_A_RETIRER = b.dataset.app; $('c-app-nom').textContent = b.dataset.nom; $('c-app').hidden = false;
+  });
+  $('c-app-non').addEventListener('click', () => { $('c-app').hidden = true; APP_A_RETIRER = null; });
+  $('c-app-oui').addEventListener('click', async () => {
+    $('c-app').hidden = true; const id = APP_A_RETIRER; APP_A_RETIRER = null; if (!id) return;
+    if (DEMO) { msg('m-app', 'Démonstration : aucune écriture.', false); return; }
+    try { await api('/serrures/appareil/' + encodeURIComponent(id), { method: 'DELETE' }); msg('m-app', 'Clé retirée.', true); }
+    catch (err) { msg('m-app', err.message); }
     charge();
   });
   $('f-poser').addEventListener('submit', async (ev) => {
     ev.preventDefault();
+    if (DEMO) { msg('m-secrets', 'Démonstration : aucune écriture.', false); return; }
     try {
       const r = await api('/secrets', { method: 'POST', body: JSON.stringify({ compartiment: 'box', nom: $('nom').value, valeur: $('valeur').value }) });
-      msg('m-secrets', `Posé (version ${r.version}).`, true);
+      msg('m-secrets', 'Posé (version ' + r.version + ').', true);
       $('nom').value = ''; $('valeur').value = '';
     } catch (err) { msg('m-secrets', err.message); }
     charge();
   });
-  $('secrets').addEventListener('click', async (ev) => {
-    const b = ev.target.closest('button[data-n]');
-    if (!b) return;
-    try { await api(`/secrets/${encodeURIComponent(b.dataset.c)}/${encodeURIComponent(b.dataset.n)}`, { method: 'DELETE' }); }
+  let SEC_A_RETIRER = null;
+  $('secrets').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-n]'); if (!b) return;
+    SEC_A_RETIRER = { c: b.dataset.c, n: b.dataset.n }; $('c-sec-nom').textContent = b.dataset.c + '/' + b.dataset.n; $('c-sec').hidden = false;
+  });
+  $('c-sec-non').addEventListener('click', () => { $('c-sec').hidden = true; SEC_A_RETIRER = null; });
+  $('c-sec-oui').addEventListener('click', async () => {
+    $('c-sec').hidden = true; const s = SEC_A_RETIRER; SEC_A_RETIRER = null; if (!s) return;
+    if (DEMO) { msg('m-secrets', 'Démonstration : aucune écriture.', false); return; }
+    try { await api('/secrets/' + encodeURIComponent(s.c) + '/' + encodeURIComponent(s.n), { method: 'DELETE' }); msg('m-secrets', 'Secret retiré.', true); }
     catch (err) { msg('m-secrets', err.message); }
     charge();
   });
+
+  // ── hauteur annoncée à l'hôte (cadre, jamais le document) ──
+  function hauteur() { if (window.parent !== window) { try { window.parent.postMessage({ sbxVue: Math.ceil($('cadre').getBoundingClientRect().bottom + scrollY), onglet: 'vault' }, location.origin); } catch (e) {} } }
+  window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+  if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.body);
+
   charge();
-  setInterval(() => { if (!document.hidden) charge(); }, 30000);
+  // Relecture tant qu'un formulaire n'est pas en cours de saisie et que l'onglet est visible.
+  setInterval(() => { if (document.hidden) return; const a = document.activeElement; if (a && (a.tagName === 'INPUT')) return; if (!$('c-sceller').hidden || !$('c-app').hidden || !$('c-sec').hidden) return; charge(); }, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) charge(); });
 </script>
 </body>
 </html>
