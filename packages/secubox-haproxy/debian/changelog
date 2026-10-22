@@ -1,3 +1,13 @@
+secubox-haproxy (1.12.3-1~trixie1) trixie; urgency=medium
+
+  * Suppression d'un certificat en HTTP 500 (ref #3012) : l'API faisait elle-même mkdir + rename
+    dans /srv/haproxy/certs (root 0755) en tournant sous `secubox`. Nouveau `haproxyctl cert
+    delete <nom>` (root, nom validé, .pem mis de côté dans certs/backup/, jamais effacé), sudoers à
+    argv exact livré par le postinst, et l'API délègue hors boucle ; échec du contrôleur ⇒ 404/502
+    explicite. Six tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 04:51:42 +0200
+
 secubox-haproxy (1.12.2-1~bookworm1) bookworm; urgency=medium
 
   * Option `ipv6 = true` dans haproxy.toml : ecouteurs IPv6 80 et 443 en `v6only` (ref #2934). Desactivee par defaut : rien ne change tant que la cle n'est pas posee. v6only plutot que v4v6 : les ecouteurs IPv4 existants restent strictement inchanges et aucune adresse IPv4 mappee (::ffff:a.b.c.d) n'arrive au WAF (sbxwaf normalise de toute facon, #2932). Les ports personnalises sont repris. 4 tests ; les 2 echecs de test_acme_wiring sont anterieurs.

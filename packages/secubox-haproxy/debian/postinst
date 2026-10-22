@@ -17,6 +17,12 @@ case "$1" in
     # Create /etc/haproxy if not present (haproxy is Recommends, not Depends)
     # Required for systemd namespace setup
     install -d -m 755 /etc/haproxy
+    # #3012 : l'API (secubox, dans l'agregateur) met un certificat de cote via haproxyctl en root.
+    cat > /etc/sudoers.d/secubox-haproxy <<'SUDOERS'
+secubox ALL=(root) NOPASSWD: /usr/sbin/haproxyctl cert delete *
+SUDOERS
+    chmod 0440 /etc/sudoers.d/secubox-haproxy
+    visudo -cf /etc/sudoers.d/secubox-haproxy >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-haproxy
     systemctl daemon-reload
     systemctl enable secubox-haproxy.service
     systemctl start secubox-haproxy.service || true
