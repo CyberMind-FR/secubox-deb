@@ -1,3 +1,13 @@
+secubox-webos (1.19.14-1~trixie1) trixie; urgency=medium
+
+  * Hall v2, phase 4 : carte « Accès rapide » (ref #2996) — une Card native sous le Hero, huit
+    tuiles au plus vers le service embarqué : les favoris (bande ★), puis les récents, puis la
+    curation ; pastille du statut typé sur chaque tuile ; l'action › ouvre la mosaïque des modules.
+    Se redessine quand les favoris, les récents ou le registre changent. `Tile` porte des
+    attributs (`data-open`, `data-mode`). Hall v1 inchangé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 14:00:00 +0200
+
 secubox-webos (1.19.13-1~trixie1) trixie; urgency=medium
 
   * Hall v2, phase 4 : second lot de cartes habillées en Card, dans l'ordre du prompt (ref #2996) —

@@ -102,6 +102,7 @@
 
   function Tile(o){
     var t=el(o.href?'a':'button','sbx-tile'); if(o.href){ t.href=o.href; } else { t.type='button'; if(o.onClick) t.addEventListener('click',o.onClick); }
+    if(o.attrs) Object.keys(o.attrs).forEach(function(k){ t.setAttribute(k,o.attrs[k]); });
     t.appendChild(ico(o.icone)); t.appendChild(el('span',null,o.label));
     if(o.status){ var led=el('i','sbx-led'); led.setAttribute('data-ton',statut(o.status)[1]); led.setAttribute('aria-label',statut(o.status)[0]); t.appendChild(led); }
     return t;

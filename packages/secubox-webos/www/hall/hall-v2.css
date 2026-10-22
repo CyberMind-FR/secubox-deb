@@ -145,6 +145,10 @@
 .fcard.sbx-card .sbx-card-corps iframe{display:block}
 .fcard.sbx-card .sbx-card-pied .sbx-source{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:720px){.fcard.sbx-card .sbx-card-action{width:44px;height:44px}}
+/* Accès rapide : Card native sous le Hero, tuiles auto-fill 104 px (composants.css), libellé sur une ligne */
+[data-hall="v2"] .sbx-acces{margin:0 0 var(--sbx-e-4)}
+.sbx-acces .sbx-tile{position:relative;font:500 .78rem var(--sbx-police);color:var(--sbx-texte)}
+.sbx-acces .sbx-tile span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sbx-veille{position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:12px;text-align:center;font:.76rem var(--sbx-police);color:var(--sbx-texte-attenue);background:var(--sbx-surface-2)}
 
 /* ── Mosaïque des modules et des sites ───────────────────────────────────── */

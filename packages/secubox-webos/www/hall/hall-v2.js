@@ -134,7 +134,7 @@
   var CLE_RECENTS='sbx.hall.recents', mosaique=null, ongletMosaique='tous', sites=null, sitesT=0, mosaiqueEnCours=false;
   function recents(){ try{ return JSON.parse(localStorage.getItem(CLE_RECENTS)||'[]'); }catch(e){ return []; } }
   function noteRecent(id){ var r=recents().filter(function(x){ return x!==id; }); r.unshift(id); ecrit(CLE_RECENTS,JSON.stringify(r.slice(0,12))); }
-  document.addEventListener('click',function(e){ var o=e.target.closest&&e.target.closest('[data-open]'); if(o&&o.getAttribute('data-open')) noteRecent(o.getAttribute('data-open')); },true);
+  document.addEventListener('click',function(e){ var o=e.target.closest&&e.target.closest('[data-open]'); if(o&&o.getAttribute('data-open')){ noteRecent(o.getAttribute('data-open')); if(acces) accesRapide(); } },true);
   function modules(){
     var reg=window._reg||{}, parStatut={}; ((regDernier&&regDernier.services)||[]).forEach(function(s){ parStatut[s.id]=s; });
     var ids=Object.keys(reg).length?Object.keys(reg):Object.keys(parStatut);
@@ -270,6 +270,7 @@
     var rub=RUBRIQUES.filter(function(x){ return x.id==='favoris'; })[0];
     if(!grp.querySelector('.sbx-sous').hidden) deplie(grp,rub);
     if(mosaique&&!mosaique.classList.contains('hidden')&&ongletMosaique==='favoris') rendMosaique();
+    if(acces) accesRapide();
   }
 
   // ── Usager : miroir de #who, avatar par le pseudo sbxid (secubox-avatar), liens comptes / identité ──
@@ -389,6 +390,28 @@
       action:{label:'Ouvrir '+titre,attrs:{'data-open':id,'data-mode':'embed'}}});
   }
   function habilleCartes(){ Array.prototype.forEach.call(document.querySelectorAll('#featgrid .fcard[data-embed], #favbande .fcard[data-embed]'),habille); }
+  // ── Accès rapide (phase 4) : une Card native sous le Hero, huit tuiles au plus vers le service embarqué —
+  // les favoris (bande ★), puis les récents, puis la curation ; pastille du statut typé sur chaque tuile.
+  var acces=null;
+  function libelle(id){ var F=(typeof FEATURED!=='undefined'&&FEATURED)||[]; var f=F.filter(function(x){ return x.id===id; })[0]; if(f) return f.label||id; var r=(window._reg||{})[id]; return (r&&r.name)||null; }
+  function statutDe(id){ var p={}; ((regDernier&&regDernier.services)||[]).forEach(function(s){ p[s.id]=s; }); var s=p[id]||p[SOURCE_STATUT[id]]; return (s&&s.status)||'nosource'; }
+  function accesRapide(){
+    var vue=document.getElementById('view-accueil'); if(!vue||!window.SbxUI) return;
+    if(!acces){
+      acces=window.SbxUI.Card({id:'acces-rapide',icone:'module',titre:'Accès rapide',source:'favoris · récents · services',status:'active',
+        action:{label:'Tous les modules',onClick:function(){ va(RUBRIQUES.filter(function(r){ return r.id==='modules'; })[0]); }}});
+      acces.classList.add('sbx-acces');
+      var h=vue.querySelector('.sbx-hero'); if(h) h.insertAdjacentElement('afterend',acces); else vue.insertBefore(acces,vue.firstChild);
+    }
+    var vus={}, ids=[], absents=window.ABSENTS||{has:function(){ return false; }};
+    function pousse(id){ if(!id||vus[id]||absents.has(id)||!libelle(id)) return; vus[id]=1; ids.push(id); }
+    Array.prototype.forEach.call(document.querySelectorAll('#favbande .fcard[data-embed]'),function(c){ pousse(c.getAttribute('data-embed')); });
+    recents().forEach(pousse);
+    ((typeof FEATURED!=='undefined'&&FEATURED)||[]).forEach(function(f){ pousse(f.id); });
+    var grille=el('div',{'class':'sbx-tiles'});
+    ids.slice(0,8).forEach(function(id){ grille.appendChild(window.SbxUI.Tile({icone:ICO_CARTE[id]||'module',label:libelle(id),status:statutDe(id),attrs:{'data-open':id,'data-mode':'embed',title:'Ouvrir '+libelle(id)}})); });
+    acces.corps.textContent=''; acces.corps.appendChild(grille); acces.sbxReleve(new Date());
+  }
   function appliqueRegistre(d){
     var parId={}; (d.services||[]).forEach(function(s){ parId[s.id]=s; });
     var t=d.computed_at?d.computed_at*1000:Date.now(), iv=(d.intervalle_s||15)*1000, perime=Date.now()-t>2*iv;
@@ -413,7 +436,7 @@
         regRetard=REG_PAS;
         // L'affichage n'applique qu'un cache REMPLI (#3011) : une réponse vide laisse le dernier relevé visible (le pied le dira périmé si cela dure).
         if(!(d&&d.services&&d.services.length)&&regDernier){ appliqueRegistre(regDernier); return; }
-        regDernier=d; appliqueRegistre(d); if(mosaique&&!mosaique.classList.contains('hidden')&&ongletMosaique!=='sites') rendMosaique(); })
+        regDernier=d; appliqueRegistre(d); if(acces) accesRapide(); if(mosaique&&!mosaique.classList.contains('hidden')&&ongletMosaique!=='sites') rendMosaique(); })
       .catch(function(){ regRetard=Math.min(regRetard*2,60000); if(regDernier) appliqueRegistre(regDernier); })
       .then(planifieRegistre);
   }
@@ -444,7 +467,7 @@
     if(theme){ actions.insertBefore(dispo,theme); actions.insertBefore(notif,theme); theme.innerHTML=ico('theme'); theme.insertAdjacentElement('afterend',version); }
     else { actions.appendChild(dispo); actions.appendChild(notif); actions.appendChild(version); }
     var av=$('#who .av'); if(av) av.innerHTML=ico('usager');
-    de(); composants(function(){ hero(); habilleCartes(); if(regDernier) appliqueRegistre(regDernier); }); registre();
+    de(); composants(function(){ hero(); habilleCartes(); if(regDernier) appliqueRegistre(regDernier); accesRapide(); }); registre();
 
     // Corps : sidebar + zone principale.
     var corps=el('div',{'class':'sbx-corps'});

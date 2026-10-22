@@ -300,6 +300,15 @@ Tests : `tests/test_cartes_card_2996.py` (lot et ordre, habillage, statut et vei
 carte générique (pied v2) : les cartes hors liste du prompt (Contenu, Cloud, Forums, PeerTube, Podcaster, Coffre, SBX OS, Mes
 sites, Messagerie, Accès, Surf & Viewer, VoiceStudio, Voix, Mail, Dépôt, Torrent, SocialRelay).
 
+**Accès rapide (1.19.14)** : la `Card` native de la maquette, sous le Hero — huit `Tile` au plus (auto-fill 104 px) vers le
+service embarqué (`data-open`, délégation du Hall) : favoris de la bande ★, puis récents du navigateur, puis la curation ;
+pastille du statut typé (emprunté comme pour les cartes) ; l'action › ouvre la mosaïque « Modules ». Redessinée quand les
+favoris, les récents ou le registre changent. Tests : `tests/test_acces_rapide_2996.py`.
+
+![Accès rapide à 1440 px](../assets/images/hall-vue-maitre/hall-v2-acces-rapide-1440.png)
+
+![Accès rapide à 390 px](../assets/images/hall-vue-maitre/hall-v2-acces-rapide-390.png)
+
 ![Cartes Card à 1440 px](../assets/images/hall-vue-maitre/hall-v2-cards-1440.png)
 
 ![Cartes Card à 390 px](../assets/images/hall-vue-maitre/hall-v2-cards-390.png)
@@ -319,7 +328,8 @@ sites, Messagerie, Accès, Surf & Viewer, VoiceStudio, Voix, Mail, Dépôt, Torr
   exclues). Pages admin embarquées : les marges restantes sont leur conteneur centré
   (`:root.sbx-embed main{max-width:none}` côté `sidebar.css` du hub les étirerait).
 - Phase 4, suite : les 20 captures Streamlit demanderaient un relais `/api/v1/streamlit/apps/{nom}/screenshot` sur le Hall.
-  Migration vers `Card` : les deux lots de la liste du prompt sont habillés (1.19.11 → 1.19.13, ci-dessus). Reste, de nature
-  différente : Accès rapide en `Tile` (grille auto-fill 104 px) ; fusion des flux (MetaNews + Flux YouTube + Billets) en une
-  seule carte `NewsItem` ; corps natifs pour les cardlets à double en-tête (Activité, cumul Sécurité, micro MetaNews / BBS).
+  Migration vers `Card` : les deux lots de la liste du prompt sont habillés (1.19.11 → 1.19.13) et « Accès rapide » est une
+  Card native (1.19.14). Reste : fusion des flux (MetaNews + Flux YouTube + Billets) en une seule carte `NewsItem` ; corps
+  natifs pour les cardlets à double en-tête (Activité, cumul Sécurité, micro MetaNews / BBS). Hors Hall : #3042 (hub, modules
+  autonomes metanews / socialrelay absents du menu et du registre → « aucune source »).
 - Mesure du dé sur RPi4 (le budget ≤ 1 ms/image est à confirmer sur la cible).
