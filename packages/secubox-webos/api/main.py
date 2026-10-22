@@ -6,6 +6,7 @@
 import asyncio
 import json
 import logging
+import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,8 +23,13 @@ from api import registry, flags, cardlets, actions, aide, hotes, systeme, vignet
 from secubox_core.auth import require_lecture
 
 _cache: dict = {"services": [], "computed_at": None}
+# DOUBLE TAMPON RÉEL (#3011). Chaque source garde sa DERNIÈRE VALEUR CONNUE : une sonde qui expire sous
+# charge rendait un ensemble vide et le registre basculait ~110 modules en `nosource` pour un cycle. Le
+# registre ne bascule que sur une passe utile ; le relevé courant reste servi jusque-là.
 _montes: frozenset = frozenset()          # modules montés par l'agrégateur (#2455), rafraîchi hors de la boucle d'événements
 _endormis: frozenset = frozenset()        # modules en veille d'après les profils (#2996), même rythme
+_sante: dict = {}                         # dernier relevé systemd réussi (`systemd_batch`), même rythme
+_log = logging.getLogger(__name__)
 _flags: dict = flags.load_flags()
 _version: str = ""                        # version du paquet, lue une fois au démarrage (#2996)
 _CACHE_FILE = Path("/var/cache/secubox/webos/services.json")
@@ -49,8 +55,25 @@ def _live_sockets(sock_dir: str = "/run/secubox") -> frozenset:
         return frozenset()
 
 
+_LIST_UNITS = ["systemctl", "list-units", "--type=service", "--state=running,failed,inactive",
+               "--no-legend", "--plain", "secubox-*"]
+
+
+def _releve_sante() -> dict | None:
+    """Relevé systemd (`systemd_batch`) ; None quand `systemctl` n'a pas répondu (#3011).
+
+    `systemd_batch` seul dégrade en silence vers un texte vide — seules les sockets subsistent
+    alors — et c'est précisément ce vide que l'on refuse d'écrire par-dessus un relevé complet."""
+    try:
+        texte = subprocess.run(_LIST_UNITS, capture_output=True, text=True, timeout=5, check=False).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        _log.warning("relevé systemd indisponible, dernier relevé conservé : %s", exc)
+        return None
+    return systemd_batch(_run=lambda: texte)
+
+
 def _recompute() -> bool:
-    """Read menu/health/exposure sources and refresh `_cache` in place.
+    """Compose le registre à partir des DERNIÈRES VALEURS CONNUES des sources et bascule `_cache`.
 
     Rend False, SANS toucher au registre, quand le menu du hub est absent ou
     vide : un registre vidé fait retomber le Hall sur sa maquette.
@@ -58,33 +81,53 @@ def _recompute() -> bool:
     menu = registry.load_menu_cache()
     if not menu.get("categories"):
         return False
-    health = systemd_batch()
     expo = registry.load_exposure_cache()
-    svcs = registry.normalize_services(menu, health, expo, sockets=_live_sockets(), montes=_montes, endormis=_endormis)
+    svcs = registry.normalize_services(menu, _sante, expo, sockets=_live_sockets(), montes=_montes, endormis=_endormis)
     avec_vignette = vignettes.vignettes_presentes(s.id for s in svcs)
     for s in svcs:
         s.vignette = s.id in avec_vignette
+    # Le tampon est complet : on bascule d'un coup (liste neuve, puis horodatage), jamais de registre à moitié écrit.
     _cache["services"] = [s.model_dump() for s in svcs]
     _cache["computed_at"] = time.time()
     try:
         _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         _CACHE_FILE.write_text(json.dumps(_cache))
-    except Exception:
-        pass
+    except OSError as exc:
+        _log.warning("registre non persisté : %s", exc)
     return True
 
 
+async def _un_cycle() -> bool:
+    """Une passe du rafraîchisseur : sonde chaque source hors boucle, garde la dernière valeur de celles qui
+    n'ont pas répondu, et ne bascule le registre que si au moins une source a parlé (#3011). Rend True si
+    le registre a basculé."""
+    global _montes, _endormis, _sante
+    montes = await asyncio.to_thread(registry.sonde_montes)
+    endormis = await asyncio.to_thread(registry.sonde_endormis)
+    sante = await asyncio.to_thread(_releve_sante)
+    if montes is not None:
+        _montes = montes
+    if endormis is not None:
+        _endormis = endormis
+    if sante is not None:
+        _sante = sante
+    if montes is None and endormis is None and sante is None:
+        # Rien de neuf : le relevé courant reste servi tel quel ; le Hall le jugera « périmé » si cela dure.
+        _log.warning("aucune source n'a répondu, registre conservé (relevé %s)", _cache.get("computed_at"))
+        return False
+    if _recompute():
+        return True
+    # Menu absent : on réveille le hub (hors boucle d'événements).
+    await asyncio.to_thread(registry.reveille_hub)
+    return False
+
+
 async def _refresh_loop() -> None:
-    global _montes, _endormis
     while True:
         try:
-            _montes = await asyncio.to_thread(registry.modules_montes)
-            _endormis = await asyncio.to_thread(registry.modules_endormis)
-            if not _recompute():
-                # Menu absent : on réveille le hub (hors boucle d'événements).
-                await asyncio.to_thread(registry.reveille_hub)
-        except Exception:
-            pass
+            await _un_cycle()
+        except Exception as exc:  # noqa: BLE001 — la boucle ne doit jamais mourir ; le motif est journalisé
+            _log.warning("cycle du registre en échec : %s", exc)
         await asyncio.sleep(15)
 
 

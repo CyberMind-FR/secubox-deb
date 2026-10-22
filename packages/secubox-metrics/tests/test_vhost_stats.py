@@ -3,7 +3,12 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 
+import datetime
 import json
+
+# Un jour DANS la retention (30 jours) : une date figee finit par en sortir, et `_charger`
+# purge alors le seau que le test croit relire (#3011 : vu le 2026-10-22 avec 2026-08-25).
+JOUR = datetime.date.today().isoformat()
 
 
 # ── #1191 — la box qui se parle a elle-meme n'est pas une audience ──────────
@@ -63,7 +68,7 @@ def test_le_cache_deja_pollue_est_assaini_au_rechargement(tmp_path, monkeypatch)
     cache = tmp_path / "vhost_stats.json"
     cache.write_text(json.dumps({
         "version": 2, "suivi": {},
-        "jours": {"2026-08-25": {
+        "jours": {JOUR: {
             "ganimed.fr": {"visites": 12, "requetes": 30, "ips": ["93.184.216.34"]},
             "127.0.0.1": {"visites": 900, "requetes": 900, "ips": ["127.0.0.1"]},
             "192.168.1.200": {"visites": 1346, "requetes": 1346, "ips": ["192.168.1.9"]},
@@ -73,7 +78,7 @@ def test_le_cache_deja_pollue_est_assaini_au_rechargement(tmp_path, monkeypatch)
     monkeypatch.setattr(V, "CACHE", cache)
 
     ag = V.VhostStatsAggregator()
-    assert set(ag._jours["2026-08-25"]) == {"ganimed.fr"}
+    assert set(ag._jours[JOUR]) == {"ganimed.fr"}
 
 
 # ── #1190 — pays persistes et cumul depuis la premiere visite ───────────────
@@ -88,13 +93,13 @@ def test_les_pays_survivent_a_un_redemarrage(tmp_path, monkeypatch):
     monkeypatch.setattr(V, "CACHE", cache)
 
     ag = V.VhostStatsAggregator()
-    ag._jours["2026-08-25"]["ganimed.fr"]["pays"] = Counter({"FR": 12, "DE": 3})
-    ag._jours["2026-08-25"]["ganimed.fr"]["visites"] = 15
+    ag._jours[JOUR]["ganimed.fr"]["pays"] = Counter({"FR": 12, "DE": 3})
+    ag._jours[JOUR]["ganimed.fr"]["visites"] = 15
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps(ag._serialiser()))
 
     relu = V.VhostStatsAggregator()
-    assert dict(relu._jours["2026-08-25"]["ganimed.fr"]["pays"]) == {"FR": 12, "DE": 3}
+    assert dict(relu._jours[JOUR]["ganimed.fr"]["pays"]) == {"FR": 12, "DE": 3}
 
 
 def test_le_cumul_survit_a_la_purge_de_retention(tmp_path, monkeypatch):
@@ -153,9 +158,14 @@ def test_vue_met_en_cache_et_evite_un_second_calcul_immediat(monkeypatch):
     assert a is b
 
 
-def test_vue_recalcule_apres_expiration_du_cache(monkeypatch):
+def test_vue_rebatie_par_la_collecte_et_non_par_le_temps(monkeypatch, tmp_path):
+    """#3011 : plus de TTL. La vue ne change qu'avec les données, donc elle est rebâtie par la
+    collecte (dans un tampon, hors du chemin de la requête), jamais recalculée à la demande."""
     from api import vhost_stats as V
 
+    monkeypatch.setattr(V, "JOURNAL_HOTES", tmp_path / "absent.log")
+    monkeypatch.setattr(V, "REP_LOGS", tmp_path)
+    monkeypatch.setattr(V, "CACHE", tmp_path / "c.json")
     appels = []
     original = V.VhostStatsAggregator.current
 
@@ -170,10 +180,14 @@ def test_vue_recalcule_apres_expiration_du_cache(monkeypatch):
     monkeypatch.setattr(V.time, "monotonic", lambda: horloge["t"])
 
     ag.vue("semaine", False)
-    horloge["t"] += ag._cache_ttl + 1
+    horloge["t"] += 3600
     ag.vue("semaine", False)
+    assert appels == [("semaine", False)], f"la vue a ete recalculee sur la requete : {appels}"
 
-    assert len(appels) == 2, f"le cache perime n'a pas ete recalcule : {appels}"
+    ag.collecter()
+    assert appels.count(("semaine", False)) == 2, "la collecte n'a pas rebati la vue demandee"
+    ag.vue("semaine", False)
+    assert appels.count(("semaine", False)) == 2
 
 
 def test_vue_garde_une_entree_distincte_par_periode_et_grouper(monkeypatch):

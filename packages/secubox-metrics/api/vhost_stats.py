@@ -33,6 +33,7 @@ import json
 import ipaddress
 import os
 import re
+import threading
 import time
 from collections import Counter, OrderedDict, defaultdict
 from datetime import date, datetime, timedelta
@@ -59,6 +60,12 @@ AMORCE = 512 * 1024
 PLAFOND_CYCLE = 4 * 1024 * 1024
 
 PERIODES = {"jour": 1, "semaine": 7, "mois": 30}
+
+# DOUBLE TAMPON DES VUES (#3011). Les vues de base sont rebâties à chaque collecte, demandées
+# ou non (la page vhosts ouvre sur « jour », la vue d'ensemble demande « semaine ») ; toute
+# autre vue l'est tant qu'elle a été demandée depuis moins de VUE_OUBLI secondes.
+VUES_SOCLE = (("jour", False), ("jour", True), ("semaine", False))
+VUE_OUBLI = 3600
 
 # Journal commun porte par le domaine demande (format `sbx_host`, pose par
 # secubox-metrics dans /etc/nginx/conf.d/). Quand il existe on ne lit que lui :
@@ -394,15 +401,18 @@ class VhostStatsAggregator:
         # vhost -> total des jours DEJA purges (+ date de premiere visite)
         self._cumul: dict[str, dict] = {}
         self._maj: Optional[str] = None
-        # #2993 — current() fusionne et trie toute la fenetre a chaque appel
-        # (7-8s mesurees sur gk2, ~23700 entrees) : sans cache, la page
-        # /metrics/ qui interroge toutes les 15s declenchait ce calcul en
-        # direct sur chaque requete, et un appel trop lent faisait clignoter
-        # la carte Visiteurs entre son contenu et « session requise ».
-        # Perime au rythme de la collecte (self.intervalle) : inutile de
-        # recalculer une vue que les donnees sous-jacentes n'ont pas bougee.
-        self._vue_cache: dict[tuple[str, bool], dict] = {}
-        self._cache_ttl = max(60, self.intervalle)
+        # DOUBLE TAMPON RÉEL (#3011, après #2993). `current()` fusionne et trie toute la
+        # fenêtre (7-8 s sur gk2, 100 000 entrées) : jamais sur le chemin de la requête.
+        # `_vues` est le tampon ACTIF : des instantanés complets, servis tels quels. La
+        # collecte rebâtit les vues demandées récemment dans un tampon neuf puis bascule
+        # d'un coup ; une vue jamais demandée se fabrique une fois (file unique, `_calcul`)
+        # puis vit dans le tampon. Plus de TTL : la vue ne change qu'avec les données.
+        # `_verrou` : la collecte modifiait `_jours` EN PLACE pendant qu'une requête le
+        # parcourait (« dictionary changed size during iteration » → 500 → page vide).
+        self._vues: dict[tuple[str, bool], dict] = {}
+        self._demandees: dict[tuple[str, bool], float] = {}
+        self._verrou = threading.RLock()
+        self._calcul = threading.Lock()
         self._charger()
 
     # ── lecture incrementale ─────────────────────────────────────────────
@@ -459,6 +469,12 @@ class VhostStatsAggregator:
     def collecter(self) -> None:
         if not self.actif:
             return
+        with self._verrou:
+            self._collecter_sous_verrou()
+        self._persister()
+        self._rebatir_vues()
+
+    def _collecter_sous_verrou(self) -> None:
         budget = PLAFOND_CYCLE
 
         if JOURNAL_HOTES.exists():
@@ -494,7 +510,6 @@ class VhostStatsAggregator:
         self._tailler()
         self._elaguer()
         self._maj = datetime.now().astimezone().isoformat()
-        self._persister()
 
     # ── relecture complete d'un seul vhost ───────────────────────────────
     def _archives(self, vhost: str) -> Iterable[Path]:
@@ -542,24 +557,26 @@ class VhostStatsAggregator:
             except OSError:
                 continue
 
-        # Substitution seulement maintenant : si la relecture avait echoue en
-        # route, les anciens compteurs seraient restes intacts.
-        for jour in list(self._jours):
-            self._jours[jour].pop(vhost, None)
-        for jour, s in neuf.items():
-            self._jours[jour][vhost] = s
+        # Substitution seulement maintenant, et sous le verrou (#3011) : si la relecture
+        # avait echoue en route, les anciens compteurs seraient restes intacts.
+        with self._verrou:
+            for jour in list(self._jours):
+                self._jours[jour].pop(vhost, None)
+            for jour, s in neuf.items():
+                self._jours[jour][vhost] = s
 
-        # Le journal courant a ete lu en entier : on recale la marque dessus,
-        # sinon la boucle de fond recompterait toute la queue au tour suivant.
-        courant = JOURNAL_HOTES if par_hote else REP_LOGS / f"{vhost}{SUFFIXE}"
-        try:
-            st = courant.stat()
-            self._suivi[str(courant)] = (st.st_ino, st.st_size)
-        except OSError:
-            pass
+            # Le journal courant a ete lu en entier : on recale la marque dessus,
+            # sinon la boucle de fond recompterait toute la queue au tour suivant.
+            courant = JOURNAL_HOTES if par_hote else REP_LOGS / f"{vhost}{SUFFIXE}"
+            try:
+                st = courant.stat()
+                self._suivi[str(courant)] = (st.st_ino, st.st_size)
+            except OSError:
+                pass
 
-        self._maj = datetime.now().astimezone().isoformat()
+            self._maj = datetime.now().astimezone().isoformat()
         self._persister()
+        self._rebatir_vues()
         return {"vhost": vhost, "fichiers": len(fichiers), "lignes": lues,
                 "jours": sorted(neuf)}
 
@@ -638,26 +655,48 @@ class VhostStatsAggregator:
         return fam
 
     def vue(self, periode: str = "jour", grouper: bool = False) -> dict:
-        """`current()`, mis en cache le temps d'un cycle de collecte (#2993).
+        """La vue SERVIE : l'instantané complet du tampon actif, jamais un calcul sur la requête (#3011).
 
-        Recalculer a chaque appel HTTP coutait 7-8s sur gk2 (~23700 entrees
-        fusionnees) : la page /metrics/, qui interroge toutes les 15s,
-        tombait parfois sur un appel trop lent et affichait a tort « session
-        requise ». Les donnees sous-jacentes ne changent qu'au rythme de
-        `collecter()` (self.intervalle) : recalculer plus souvent que ca
-        n'apporte rien.
+        Une vue jamais demandée se fabrique une seule fois (file unique : un troupeau de
+        requêtes n'en lance qu'un calcul), puis la collecte la tient à jour tant qu'on la
+        demande (`VUE_OUBLI`).
         """
         cle = (periode, grouper)
-        entree = self._vue_cache.get(cle)
-        if entree and time.monotonic() - entree[0] < self._cache_ttl:
-            return entree[1]
-        resultat = self.current(periode, grouper)
-        self._vue_cache[cle] = (time.monotonic(), resultat)
-        return resultat
+        self._demandees[cle] = time.monotonic()
+        vue = self._vues.get(cle)
+        if vue is not None:
+            return vue
+        with self._calcul:
+            vue = self._vues.get(cle)
+            if vue is None:
+                vue = self.current(periode, grouper)
+                self._vues[cle] = vue
+        return vue
+
+    def _rebatir_vues(self) -> None:
+        """Après une collecte : refabrique chaque vue demandée dans un tampon NEUF, puis bascule.
+
+        Pendant la fabrication, `vue()` sert toujours l'ancien instantané ; la bascule est
+        une affectation, donc une requête voit l'ancien tampon ou le nouveau, jamais un
+        mélange. Les vues de base restent toujours prêtes ; une vue oubliée depuis
+        `VUE_OUBLI` n'est plus rebâtie (elle se refera à la prochaine demande).
+        """
+        limite = time.monotonic() - VUE_OUBLI
+        cles = set(VUES_SOCLE) | {c for c, t in self._demandees.items() if t >= limite}
+        for c in [c for c in self._demandees if c not in cles]:
+            del self._demandees[c]
+        nouvelles: dict[tuple[str, bool], dict] = {}
+        for cle in sorted(cles):
+            nouvelles[cle] = self.current(*cle)
+        self._vues = nouvelles
 
     def current(self, periode: str = "jour", grouper: bool = False) -> dict:
         if not self.actif:
             return {"actif": False, "vhosts": [], "periode": periode}
+        with self._verrou:
+            return self._current_sous_verrou(periode, grouper)
+
+    def _current_sous_verrou(self, periode: str, grouper: bool) -> dict:
         fenetre = self._fenetre(periode)
         brut = {v: s for v, s in self._fusion(fenetre).items() if s["requetes"]}
         source = self._regrouper(brut) if grouper else brut
@@ -730,6 +769,10 @@ class VhostStatsAggregator:
         montrerait qu'une fraction du trafic : on additionne donc tous les
         domaines de la famille, exactement comme la vue d'ensemble le fait.
         """
+        with self._verrou:
+            return self._detail_sous_verrou(vhost, periode)
+
+    def _detail_sous_verrou(self, vhost: str, periode: str) -> dict:
         fenetre = self._fenetre(periode)
         brut = self._fusion(fenetre)
 
@@ -777,7 +820,8 @@ class VhostStatsAggregator:
         if JOURNAL_HOTES.exists():
             # Les domaines reellement vus, et non les noms de fichiers : c'est
             # tout l'interet du journal commun.
-            return sorted({h for vh in self._jours.values() for h in vh})
+            with self._verrou:
+                return sorted({h for vh in self._jours.values() for h in vh})
         return sorted({f.name[:-len(SUFFIXE)] for f in self._journaux()})
 
     # ── persistance ──────────────────────────────────────────────────────
@@ -819,20 +863,21 @@ class VhostStatsAggregator:
 
     def cumul_de(self, vhost: str) -> dict:
         """Total depuis la premiere visite : le permanent plus la fenetre."""
-        c = self._cumul.get(vhost)
-        base = dict(c or {"depuis": "", "visites": 0, "requetes": 0})
-        pays = Counter((c or {}).get("pays", {}))
-        visites, requetes = base["visites"], base["requetes"]
-        depuis = base["depuis"]
-        for j in sorted(self._jours):
-            s = self._jours[j].get(vhost)
-            if not s:
-                continue
-            if not depuis or j < depuis:
-                depuis = j
-            visites += s["visites"]
-            requetes += s["requetes"]
-            pays.update(s["pays"])
+        with self._verrou:
+            c = self._cumul.get(vhost)
+            base = dict(c or {"depuis": "", "visites": 0, "requetes": 0})
+            pays = Counter((c or {}).get("pays", {}))
+            visites, requetes = base["visites"], base["requetes"]
+            depuis = base["depuis"]
+            for j in sorted(self._jours):
+                s = self._jours[j].get(vhost)
+                if not s:
+                    continue
+                if not depuis or j < depuis:
+                    depuis = j
+                visites += s["visites"]
+                requetes += s["requetes"]
+                pays.update(s["pays"])
         return {"depuis": depuis, "visites": visites, "requetes": requetes,
                 "pays": dict(pays.most_common(20))}
 
@@ -861,10 +906,14 @@ class VhostStatsAggregator:
         }
 
     def _persister(self) -> None:
+        # La sérialisation lit `_jours` : sous le verrou. L'écriture (60 Mo sur gk2) se fait
+        # dehors, pour ne pas retenir les lectures pendant ce temps.
+        with self._verrou:
+            contenu = json.dumps(self._serialiser())
         try:
             CACHE.parent.mkdir(parents=True, exist_ok=True)
             tmp = CACHE.with_suffix(".tmp")
-            tmp.write_text(json.dumps(self._serialiser()))
+            tmp.write_text(contenu)
             os.replace(tmp, CACHE)      # remplacement atomique
         except OSError:
             pass

@@ -54,3 +54,10 @@ def test_ni_lorem_ni_secret():
 
 def test_infobulle_visiteur_unique_proxy():
     assert "proxy" in HTML and "Visiteurs ⓘ" in HTML
+
+
+def test_un_appel_en_echec_laisse_la_vue_precedente_affichee_3011():
+    """#3011 : l'affichage n'applique qu'un cache rempli. Un /vhost-stats en échec (collecte en
+    cours, 500) ne vide plus la page jusqu'à la passe suivante ; seule une session perdue l'efface."""
+    assert "vue = r[0] || (session ? vue : null)" in HTML
+    assert "certs = r[1] || certs" in HTML and "live = r[2] || live" in HTML

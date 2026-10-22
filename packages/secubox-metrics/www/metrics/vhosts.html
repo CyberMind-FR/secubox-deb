@@ -567,7 +567,9 @@
           sûr(api(`/vhost-stats?periode=${per}&grouper=${groupe}`)),
           sûr(api('/cert-status')),
           sûr(api('/live-hosts'))]);
-        vue = r[0]; certs = r[1]; live = r[2];
+        // L'affichage n'applique qu'un cache REMPLI (#3011) : un appel en échec (hors session perdue)
+        // laisse la vue précédente à l'écran au lieu de la vider jusqu'à la passe suivante.
+        vue = r[0] || (session ? vue : null); certs = r[1] || certs; live = r[2] || live;
       }
       el('heure').textContent = new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
       rend();
