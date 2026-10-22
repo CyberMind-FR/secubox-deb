@@ -80,6 +80,9 @@ override_dh_auto_install:
 	# P2 config-apply timer + oneshot (#768) + opt-in allow-list config
 	install -m 644 $(CURDIR)/systemd/secubox-annuaire-apply.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 	install -m 644 $(CURDIR)/systemd/secubox-annuaire-apply.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
+	# Offres de services réelles : oneshot root+secubox et minuterie quotidienne (#3021)
+	install -m 644 $(CURDIR)/systemd/secubox-annuaire-offres.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
+	install -m 644 $(CURDIR)/systemd/secubox-annuaire-offres.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 	# Threatmesh ban-apply timer + oneshot (#768)
 	install -m 644 $(CURDIR)/systemd/secubox-annuaire-bans-apply.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 	install -m 644 $(CURDIR)/systemd/secubox-annuaire-bans-apply.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
@@ -101,4 +104,4 @@ override_dh_auto_install:
 override_dh_installsystemd:
 	# L unité du composant openpgp est gérée par son postinst (clé et liaison AVANT le démarrage) : dh ne doit pas
 	# l activer. On liste donc les unités propres à annuaire (#2050).
-	dh_installsystemd secubox-annuaire.service secubox-annuaire-apply.timer secubox-annuaire-bans-apply.timer secubox-annuaire-noms.timer secubox-metrics-publish.timer
+	dh_installsystemd secubox-annuaire.service secubox-annuaire-apply.timer secubox-annuaire-bans-apply.timer secubox-annuaire-offres.timer secubox-annuaire-noms.timer secubox-metrics-publish.timer

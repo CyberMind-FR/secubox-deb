@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Annuaire — offres de services réelles du nœud (#3021)
+Documentation=file:///usr/share/doc/secubox-annuaire/README
+After=secubox-annuaire.service tor.service
+Wants=secubox-annuaire.service
+
+[Service]
+Type=oneshot
+# Deux temps, deux utilisateurs : root LIT ce que la box offre (onions de Tor, curation du Hall, dépôt apt) et le pose
+# dans offres-reelles.json ; secubox, propriétaire de la clé du nœud et du journal, SIGNE les offres et les révocations.
+# Root ne touche jamais au journal (ses fichiers WAL resteraient à lui, et l'API ne pourrait plus écrire).
+User=secubox
+Group=secubox
+ExecStart=+/usr/sbin/annuairectl offres-collecte
+ExecStart=/usr/sbin/annuairectl offer-sync
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/secubox/annuaire
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+UMask=0027
