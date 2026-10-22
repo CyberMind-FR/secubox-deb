@@ -1,3 +1,12 @@
+secubox-mail (2.16.5-1~trixie1) trixie; urgency=medium
+
+  * Relais SMTP : « via # » (ref #3028) — la lecture de `relayhost` dans main.cf avalait le saut de ligne d'une
+    valeur vide et prenait le premier mot de la ligne suivante pour smarthost ; lecture bornée à la ligne.
+  * Volet « Boîtes externes » : l'introduction ne promet plus des comptes dans le webmail quand le greffon n'y est pas ;
+    elle distingue lecture directe (greffon, si actif) et rapatriement (panneau suivant).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 09:05:48 +0200
+
 secubox-mail (2.16.4-1~trixie1) trixie; urgency=high
 
   * L'API ne démarrait plus (2.16.3) : `re` utilisé sans import dans api/main.py (ref #3033).
