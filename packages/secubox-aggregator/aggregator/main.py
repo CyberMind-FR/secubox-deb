@@ -164,6 +164,12 @@ RETIRED_MODULES = frozenset({
     "hexo", "ollama", "gotosocial", "redroid", "simplex", "newsbin", "voip", "frigate",
 })
 
+# Modules À SOCKET DÉDIÉE, jamais montés en processus même si un aggregator.toml les cite (#3013) :
+# le relais transparent (`_dedicated_socket_proxy`) les atteint sur /run/secubox/<m>.sock.
+# lyrion : E/S bloquantes vers LMS (#763). exposure : écrit /etc/nginx et torrc, recharge nginx
+# et tor — son service root existe pour ça ; monté ici (secubox, ProtectSystem=full), il rendait 500.
+DEDICATED_MODULES = frozenset({"lyrion", "exposure"})
+
 
 def _load_config() -> dict:
     """Read the TOML config. Returns a dict with at least 'modules' key.
@@ -176,10 +182,11 @@ def _load_config() -> dict:
         if CONFIG_FILE.exists():
             with CONFIG_FILE.open("rb") as f:
                 data = tomllib.load(f)
-            cfg["modules"] = [m for m in data.get("modules", []) if m not in RETIRED_MODULES]
-            ignores = [m for m in data.get("modules", []) if m in RETIRED_MODULES]
+            ecartes = RETIRED_MODULES | DEDICATED_MODULES
+            cfg["modules"] = [m for m in data.get("modules", []) if m not in ecartes]
+            ignores = [m for m in data.get("modules", []) if m in ecartes]
             if ignores:
-                log.info("modules retirés ignorés : %s", ", ".join(ignores))
+                log.info("modules retirés ou à socket dédiée ignorés : %s", ", ".join(ignores))
             log.info("loaded %d modules from %s", len(cfg["modules"]), CONFIG_FILE)
         else:
             log.warning("no config at %s — aggregator runs with no mounts", CONFIG_FILE)
