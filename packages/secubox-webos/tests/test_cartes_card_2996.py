@@ -50,9 +50,10 @@ def test_le_premier_lot_est_declare_dans_l_ordre_du_prompt():
     ids = re.findall(r"'([a-z0-9-]+)'", m.group(1))
     assert ids == PREMIER_LOT
     m = re.search(r"var SOURCE_STATUT\s*=\s*\{([^}]*)\}", JS)
-    assert m and dict(re.findall(r"([a-z]+):'([a-z-]+)'", m.group(1))) == {
+    assert m and dict(re.findall(r"'?([a-z-]+)'?:'([a-z-]+)'", m.group(1))) == {
         "securite": "waf", "acteurs": "actor", "radar": "actor", "guardian": "ad-guard", "activite": "sbxid",
-        "ytflux": "ytsas", "comptes": "sbxid", "mood": "sbxos-audio-mood", "freeboxtv": "freebox"}
+        "ytflux": "ytsas", "comptes": "sbxid", "mood": "sbxos-audio-mood", "freeboxtv": "freebox",
+        "mon-coffre": "vault", "contenu": "droplet", "cloud": "nextcloud", "forums": "bbs"}
     # chaque id du lot est une carte réelle de la curation, et porte une icône SVG connue des composants
     icones = dict(re.findall(r"([a-z0-9]+):'([a-z]+)'", re.search(r"var ICO_CARTE\s*=\s*\{([^}]*)\}", JS).group(1)))
     connues = set(re.findall(r"^\s*([a-z]+):'<", COMPOSANTS, re.M)) | set(re.findall(r"\s([a-z]+):'<", COMPOSANTS))

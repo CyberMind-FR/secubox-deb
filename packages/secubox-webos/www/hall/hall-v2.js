@@ -381,7 +381,8 @@
     metanews:'actualite',ytflux:'film',billets:'billet',radio:'radio',bbs:'bulle',ephemeride:'calendrier',zigbee:'ampoule',devwatch:'satellite',
     zia:'ia',comptes:'cle',lyrion:'musique',freeboxtv:'ecran',mood:'micro',ytsas:'film'};
   // Une carte de curation a un id à elle (pas de module « securite ») : son statut est celui du module qui la sert.
-  var SOURCE_STATUT={securite:'waf',acteurs:'actor',radar:'actor',guardian:'ad-guard',activite:'sbxid',ytflux:'ytsas',comptes:'sbxid',mood:'sbxos-audio-mood',freeboxtv:'freebox'};
+  var SOURCE_STATUT={securite:'waf',acteurs:'actor',radar:'actor',guardian:'ad-guard',activite:'sbxid',ytflux:'ytsas',comptes:'sbxid',mood:'sbxos-audio-mood',freeboxtv:'freebox',
+    'mon-coffre':'vault',contenu:'droplet',cloud:'nextcloud',forums:'bbs'};
   function habille(c){
     var id=c.getAttribute('data-embed');
     if(!window.SbxUI||MIGREES.indexOf(id)<0||c.classList.contains('sbx-card')) return;
