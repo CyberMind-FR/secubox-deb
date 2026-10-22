@@ -1,3 +1,13 @@
+secubox-webos (1.19.16-1~trixie1) trixie; urgency=medium
+
+  * Hall v2, phase 4 : carte « Flux d'actualités » (ref #2996) — une Card native sous Accès rapide
+    qui fusionne MetaNews (sujets), YouTube (listes du compte, avec session) et Billets (publics)
+    en NewsItem, en tourniquet entre les sources, neuf entrées au plus, relue toutes les 15 min ;
+    deux relais nginx en lecture seule sur le vhost du Hall (sujets et relais d'image MetaNews,
+    feed.json des billets). Les trois anciennes cartes restent tant que la fusion n'est pas validée.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 15:20:00 +0200
+
 secubox-webos (1.19.15-1~trixie1) trixie; urgency=medium
 
   * Hall v2 : statut emprunté aussi pour les cartes génériques de curation — Coffre (vault),
