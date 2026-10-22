@@ -9,6 +9,24 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Retrait de zkp ; Coffre en Aurora ; Annuaire : offres de services réelles (closes #3019, closes #3020, closes #3021)
+
+« /zkp/ remove » : `secubox-zkp` retiré (PR #3024 ; aggregator 0.4.6 `RETIRED_MODULES`, hub 1.12.23 sans sonde de
+l'unité zkp ni entrée d'espace ; catalogues, wiki, scripts, ISO, tests nettoyés ; `zkp-hamiltonian` conservé). Sur gk2 :
+purge, unité/socket/nginx/données retirés (archive `/var/backups/retrait-3019-zkp-*`), `aggregator.toml` et `pins.toml`
+nettoyés, paquet retiré du dépôt trixie et bookworm. « /vault/ aurora » : `secubox-vault` 2.1.10 (PR #3022), page du
+Coffre au profil Aurora, autonome, actions et routes identiques (phrase, code de secours, TOTP, clé d'appareil
+WebAuthn PRF, sceller, poser/retirer un secret, enrôler/retirer une clé), confirmations dans la page, hauteur annoncée
+`sbxVue`/`vault`, démo annoncée, 10 tests + captures 1400/420 lues. « /annuaire/ vrais services… » : les trois offres
+étaient des démonstrations de juin (`annuairectl offer`). `secubox-annuaire` 0.14.8 (PR #3023) : `offres-collecte`
+(root : onions de Tor, cartes publiques de la curation du Hall hors hôte `admin.`, dépôt apt → `offres-reelles.json`),
+`offer-sync` (secubox : publie/révoque les offres `source=sync` de ce nœud, offres manuelles intouchées),
+`revoke-offer`, unité à deux temps (root ne touche jamais au journal) + minuterie quotidienne. Sur gk2 : 17 offres
+réelles, les deux démonstrations signées par ce nœud révoquées ; « Suricata IDS feed » est signée par did:plc:077c48…
+et ne peut être révoquée que par ce nœud-là. Les quatre paquets publiés dans apt trixie. Incident évité : un `git stash
+pop` sans remisage préalable a ressorti un vieux remisage du propriétaire (binaires toolbox-ng) ; checkout remis à HEAD,
+les 14 remisages sont intacts.
+
 ## 2026-10-22 — Retrait de secubox-reality et du composant ai-insights (closes #3017)
 
 « retrait reality et ai-insights » (propriétaire, après inventaire : Reality sans binaire `xray` ni point de sortie,
