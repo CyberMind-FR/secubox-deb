@@ -5,181 +5,142 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox-Deb :: sbxos-audio-mood — panneau d'administration (#1371).
-
-  AVANT, L'ENTRÉE « GABRIEL MOOD » DU PANNEAU OUVRAIT LE COCKPIT PUBLIC, ré-
-  embarqué : aucun réglage, aucune métrique. Ici : ce que la board GARDE
-  (rétention, historique, mémoire des voix), combien elle en garde, et les
-  garanties du module — affichées, jamais réglables.
+  SecuBox — « Audio Mood », panneau d'administration au profil Aurora (#3026, après #1371). Une seule page, deux mises
+  en page : CARTE / page embarquée (?embed=1) en une colonne ; TABLEAU DE BORD complet à partir de 900 px.
+  DONNÉES RÉELLES UNIQUEMENT (GET /api/mood/admin/etat, session administrateur). Une mesure absente s'affiche « — ».
+  Ce que la board GARDE (rétention, historique, mémoire des voix), combien elle en garde, et les garanties du module —
+  affichées, jamais réglables. Actions conservées À L'IDENTIQUE : POST /api/mood/admin/reglages (historique,
+  memoire_voix, retention_jours) et POST /api/mood/admin/purge ({quoi: "retention" | "tout"}) ; « Tout effacer » demande
+  une confirmation DANS la page. `?demo=1` : données de démonstration annoncées, aucune écriture.
+  Le script reste dans admin.js : la CSP de la route (script-src 'self') refuse tout script en ligne ; le CSS est en ligne.
 -->
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox — Audio Mood</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
-    <style>
-        :root {
-            --p31-dim: #6b7b8b;
-            --bg-dark: #0d1117;
-            --bg-card: rgba(30, 40, 55, 0.8);
-            --bg-row:  rgba(20, 30, 45, 0.6);
-            --border:  rgba(100, 150, 200, 0.2);
-            --text:    #e8e6d9;
-            --cyan:    #00d4ff;
-            --red:     #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
-            --green:   #00dd44;  --blue:   #4488ff;   --purple: #a371f7;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { margin-left: 220px; padding: 1.5rem; padding-top: 60px; min-height: 100vh;
-                background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); }
-        :root.sbx-embed .sidebar, :root.sbx-embed .global-menu-bar, :root.sbx-embed .global-status-bar { display: none !important; }
-        :root.sbx-embed .main { margin-left: 0 !important; padding-top: 1.2rem; }
-
-        .header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.2rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-        .header .sub { font-size: .75rem; color: var(--p31-dim); margin-top: .3rem; }
-        .btn-group { display: flex; gap: .5rem; flex-wrap: wrap; }
-        .btn { font-family: inherit; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
-               padding: .45rem .8rem; border-radius: 6px; border: 1px solid var(--border);
-               background: var(--bg-row); color: var(--text); cursor: pointer; text-decoration: none; }
-        .btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.3); }
-        .btn.primary { border-color: var(--cyan); color: var(--cyan); }
-        .btn.danger { border-color: var(--red); color: var(--red); }
-        .btn:disabled { opacity: .5; cursor: default; }
-
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .7rem; margin-bottom: 1rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: .8rem .9rem; backdrop-filter: blur(10px); }
-        .stat-card .value { font-size: 1.35rem; font-weight: 700; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
-        .stat-card .label { font-size: .62rem; text-transform: uppercase; letter-spacing: .08em; color: var(--p31-dim); margin-top: .25rem; }
-        .stat-card.cyan .value { color: var(--cyan); } .stat-card.green .value { color: var(--green); }
-        .stat-card.blue .value { color: var(--blue); } .stat-card.purple .value { color: var(--purple); }
-        .stat-card.orange .value { color: var(--orange); }
-
-        .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; backdrop-filter: blur(10px); }
-        .card h3 { color: var(--cyan); font-size: .9rem; margin-bottom: .8rem; }
-        .card .note { font-size: .7rem; color: var(--p31-dim); line-height: 1.5; margin-top: .6rem; }
-
-        .barres { display: grid; grid-template-columns: repeat(24, 1fr); align-items: end; gap: 3px; height: 110px;
-                  border-bottom: 1px solid var(--border); padding-bottom: 2px; }
-        .barres i { display: block; background: linear-gradient(0deg, var(--blue), var(--cyan)); border-radius: 2px 2px 0 0; min-height: 1px; }
-        .barres i.vide { background: var(--border); }
-        .axe { display: flex; justify-content: space-between; font-size: .6rem; color: var(--p31-dim); margin-top: .3rem; font-variant-numeric: tabular-nums; }
-
-        .rows { display: grid; gap: .35rem; }
-        .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .8rem; align-items: center;
-               background: var(--bg-row); border-left: 3px solid var(--border); border-radius: 4px; padding: .45rem .7rem; font-size: .78rem; }
-        .row .k { color: var(--p31-dim); font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; }
-        .row .v { color: var(--cyan); font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
-        .row.ok { border-left-color: var(--green); } .row.warn { border-left-color: var(--orange); }
-        .etat { display: grid; grid-template-columns: 7rem minmax(0, 1fr) 3.5rem; gap: .6rem; align-items: center; font-size: .74rem; }
-        .etat .jauge { height: 8px; background: var(--bg-row); border-radius: 4px; overflow: hidden; }
-        .etat .jauge i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--blue)); }
-        .etat .n { text-align: right; color: var(--p31-dim); font-variant-numeric: tabular-nums; }
-
-        form.reglages { display: grid; gap: .7rem; }
-        .interrupteur { display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: var(--bg-row);
-                        border-radius: 6px; padding: .55rem .75rem; font-size: .8rem; cursor: pointer; }
-        .interrupteur small { display: block; color: var(--p31-dim); font-size: .66rem; margin-top: .15rem; }
-        .interrupteur input { width: 1.1rem; height: 1.1rem; accent-color: var(--cyan); flex: none; }
-        .champ { display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: var(--bg-row);
-                 border-radius: 6px; padding: .55rem .75rem; font-size: .8rem; }
-        .champ input { width: 5rem; font-family: inherit; font-size: .85rem; background: var(--bg-dark); color: var(--cyan);
-                       border: 1px solid var(--border); border-radius: 4px; padding: .3rem .4rem; text-align: right; }
-        :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
-
-        .toast { position: fixed; right: 1rem; bottom: 1rem; background: var(--cyan); color: #001018; padding: .6rem .9rem;
-                 border-radius: 6px; font-size: .78rem; display: none; max-width: 90vw; z-index: 10; }
-        .toast.show { display: flex; gap: .8rem; align-items: center; }
-        .toast.error { background: var(--red); color: #fff; }
-        .toast button { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
-
-        @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
-        @media (max-width: 768px) { .main { margin-left: 0; padding: 1rem; padding-top: 60px; } }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Audio Mood</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{margin:0;min-height:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .etatp{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .etatp.hors{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .etatp.warn{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .bt{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:5px 11px;cursor:pointer;text-decoration:none;white-space:nowrap}
+  .bt:hover{border-color:var(--cyan)} .bt:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .bt.pri{background:rgba(41,182,246,.22);border-color:var(--cyan)} .bt.danger{border-color:rgba(255,77,94,.55);background:rgba(255,77,94,.12)} .bt.danger:hover{border-color:var(--rouge)}
+  .bt[disabled]{opacity:.5;cursor:wait} .bt.mini{padding:2px 8px;font-size:.68rem}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{background:rgba(41,182,246,.14);border:1px solid var(--cyan);color:var(--texte);border-radius:8px;padding:5px 10px;font-size:.78rem} .info a{color:var(--cyan)}
+  .erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile.cle{border-color:rgba(41,182,246,.62);background:linear-gradient(160deg,rgba(24,66,128,.78),rgba(8,24,52,.78));box-shadow:0 0 0 1px rgba(41,182,246,.18),0 0 22px rgba(41,182,246,.22)}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .tuile.cle .v{color:#fff}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0;display:flex;flex-direction:column;gap:8px}
+  .pan h3{margin:0;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto;text-align:right}
+  .note{color:var(--faible);font-size:.68rem;margin:0} .vide{color:var(--faible);font-size:.8rem;padding:6px 2px}
+  svg.courbe{width:100%;height:auto;display:block} svg.courbe text{fill:var(--faible);font-size:10px} svg.courbe .gr{stroke:rgba(159,179,214,.14);stroke-width:1}
+  .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto 90px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px;background:var(--cyan)}
+  .kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;font-size:.78rem;align-items:center}
+  .kv .k{color:var(--doux)} .kv .v{text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+  .kv .v.ok{color:var(--vert)} .kv .v.warn{color:var(--orange)} .kv .v.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.72rem;color:var(--doux)}
+  .past{display:inline-block;border-radius:999px;padding:1px 8px;font-weight:700;font-size:.66rem;border:1px solid transparent;white-space:nowrap}
+  .past.v{background:rgba(46,204,113,.16);color:var(--vert);border-color:rgba(46,204,113,.4)} .past.o{background:rgba(255,159,28,.16);color:var(--orange);border-color:rgba(255,159,28,.4)}
+  form{display:grid;gap:6px;margin:0}
+  .sw{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--trait);border-radius:8px;padding:6px 9px;font-size:.78rem;cursor:pointer}
+  .sw small{display:block;color:var(--faible);font-size:.66rem;margin-top:2px} .sw input{width:1.05rem;height:1.05rem;accent-color:var(--cyan);flex:none}
+  .champ{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--trait);border-radius:8px;padding:6px 9px;font-size:.78rem}
+  .champ input{width:5.2rem;font:inherit;font-size:.8rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:4px 7px;text-align:right}
+  .rang{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .confirme{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.78rem} .confirme b{color:var(--rouge)}
+  .msg{font-size:.76rem;min-height:1.1em;margin:0} .msg.ok{color:var(--vert)} .msg.err{color:var(--rouge)}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(6,1fr)} .grille{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+</style>
 </head>
-<body class="hybrid-dark">
-    <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <div>
-                <h1>🎙 Audio Mood</h1>
-                <div class="sub" id="subline">Chargement…</div>
-            </div>
-            <div class="btn-group">
-                <button class="btn" type="button" id="refresh">↻ Actualiser</button>
-                <a class="btn primary" id="cockpit" target="_blank" rel="noopener">↗ Ouvrir le cockpit</a>
-            </div>
-        </header>
+<body>
+<div class="cadre" id="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg>
+      <span><b>Audio Mood</b><small id="sousligne">indices prosodiques, analysés localement · aucune émotion affirmée</small></span></span>
+    <span class="etatp hors" id="pastille">—</span>
+    <div class="droite"><span id="heure"></span><a class="bt" id="cockpit" target="_blank" rel="noopener">↗ Cockpit</a><button type="button" class="bt" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — aucune écriture n'est faite sur la board.</div>
+  <div class="info" id="session" hidden>Aucune mesure : session administrateur requise. <a href="/login.html">Se connecter</a></div>
+  <div class="erreur" id="erreur" role="alert" hidden></div>
 
-        <section class="grid" id="stats" aria-label="Métriques"></section>
+  <div class="tuiles">
+    <div class="tuile cle" title="Sessions d'écoute ouvertes en ce moment (flux WebSocket actifs)."><span class="l">Sessions en cours</span><span class="v" id="tSessions">—</span><span class="s">flux ouverts</span></div>
+    <div class="tuile" title="Minutes de voix résumées et conservées (un résumé par minute : hauteur, débit, énergie), jamais du son."><span class="l">Minutes conservées</span><span class="v" id="tMinutes">—</span><span class="s">résumés par minute</span></div>
+    <div class="tuile" title="Sessions passées dont un résumé est conservé."><span class="l">Sessions archivées</span><span class="v" id="tArchivees">—</span><span class="s">dans l'historique</span></div>
+    <div class="tuile" title="Voix reconnues d'une visite à l'autre : 15 nombres par voix, clé tenue par le navigateur."><span class="l">Voix mémorisées</span><span class="v" id="tVoix">—</span><span class="s">références</span></div>
+    <div class="tuile" title="Taille de la base d'historique sur le disque."><span class="l">Taille de la base</span><span class="v" id="tTaille">—</span><span class="s">sur le disque</span></div>
+    <div class="tuile" title="Âge du résumé le plus ancien encore conservé."><span class="l">Plus ancien résumé</span><span class="v" id="tAncien">—</span><span class="s" id="tAncienS">—</span></div>
+  </div>
 
-        <div class="cols">
-            <section class="card">
-                <h3>📊 Activité — 24 dernières heures</h3>
-                <div class="barres" id="barres" aria-label="Minutes de voix conservées par heure"></div>
-                <div class="axe"><span id="axe-debut">−24 h</span><span>−12 h</span><span>maintenant</span></div>
-                <p class="note">Minutes de voix résumées et conservées, heure par heure. Des agrégats, jamais du son.</p>
-            </section>
+  <div class="grille">
+    <section class="pan">
+      <h3>Activité — 24 dernières heures <i>minutes de voix conservées par heure</i></h3>
+      <svg class="courbe" id="barres" viewBox="0 0 640 140" role="img" aria-label="Minutes de voix conservées par heure"></svg>
+      <p class="note">Des agrégats, jamais du son. L'axe montre les 24 heures, de la plus ancienne à l'heure en cours.</p>
+    </section>
 
-            <section class="card">
-                <h3>🎭 Lectures des 7 derniers jours</h3>
-                <div class="rows" id="etats"></div>
-                <p class="note">Répartition des lectures conservées. Ce sont des indices acoustiques relatifs à chaque voix, pas des émotions constatées.</p>
-            </section>
+    <section class="pan">
+      <h3>Lectures des 7 derniers jours <i id="iLectures"></i></h3>
+      <div id="lectures"><div class="vide">—</div></div>
+      <p class="note">Répartition des lectures conservées : des indices acoustiques relatifs à chaque voix, pas des émotions constatées.</p>
+    </section>
 
-            <section class="card">
-                <h3>⚙️ Ce que la board garde</h3>
-                <form class="reglages" id="reglages">
-                    <label class="interrupteur" for="r-historique">
-                        <span>Historique<small>Conserver un résumé par minute de voix (hauteur, débit, énergie…)</small></span>
-                        <input type="checkbox" id="r-historique">
-                    </label>
-                    <label class="interrupteur" for="r-memoire">
-                        <span>Mémoire des voix<small>Reconnaître une voix d'une visite à l'autre (15 nombres, clé tenue par le navigateur)</small></span>
-                        <input type="checkbox" id="r-memoire">
-                    </label>
-                    <div class="champ">
-                        <label for="r-retention">Rétention (jours)</label>
-                        <input type="number" id="r-retention" min="1" max="90" step="1" inputmode="numeric">
-                    </div>
-                    <div class="btn-group">
-                        <button class="btn primary" type="submit">💾 Enregistrer</button>
-                    </div>
-                </form>
-                <p class="note">Raccourcir la rétention efface aussitôt ce qui la dépasse.</p>
-            </section>
+    <section class="pan">
+      <h3>Ce que la board garde <i>réglages</i></h3>
+      <form id="reglages">
+        <label class="sw" for="r-historique"><span>Historique<small>Conserver un résumé par minute de voix (hauteur, débit, énergie…)</small></span><input type="checkbox" id="r-historique"></label>
+        <label class="sw" for="r-memoire"><span>Mémoire des voix<small>Reconnaître une voix d'une visite à l'autre (15 nombres, clé tenue par le navigateur)</small></span><input type="checkbox" id="r-memoire"></label>
+        <div class="champ"><label for="r-retention">Rétention (jours, 1 à 90)</label><input type="number" id="r-retention" min="1" max="90" step="1" inputmode="numeric"></div>
+        <div class="rang"><button class="bt pri" type="submit">Enregistrer</button></div>
+      </form>
+      <p class="note">Raccourcir la rétention efface aussitôt ce qui la dépasse.</p>
+      <p id="m-reglages" class="msg"></p>
+    </section>
 
-            <section class="card">
-                <h3>🛡️ Garanties du module</h3>
-                <div class="rows" id="garanties"></div>
-                <p class="note">Ces valeurs ne se règlent pas : ce sont des garanties vérifiées par les tests du module.</p>
-            </section>
+    <section class="pan">
+      <h3>Garanties du module <i>vérifiées par les tests, jamais réglables</i></h3>
+      <div class="kv" id="garanties"><span class="k">—</span><span class="v">—</span></div>
+    </section>
 
-            <section class="card">
-                <h3>🧹 Purge</h3>
-                <div class="rows" id="purge-etat"></div>
-                <div class="btn-group" style="margin-top:.8rem">
-                    <button class="btn" type="button" data-purge="retention">🧹 Appliquer la rétention maintenant</button>
-                    <button class="btn danger" type="button" data-purge="tout">🗑️ Tout effacer</button>
-                </div>
-                <p class="note">« Tout effacer » retire l'historique de toutes les sessions ET les voix mémorisées. Les visiteurs, eux, n'effacent que leur propre session.</p>
-            </section>
+    <section class="pan">
+      <h3>Purge <i id="iPurge"></i></h3>
+      <div class="kv" id="purge"><span class="k">—</span><span class="v">—</span></div>
+      <div class="rang"><button class="bt" type="button" data-purge="retention">Appliquer la rétention maintenant</button><button class="bt danger" type="button" id="b-tout">Tout effacer</button></div>
+      <div class="confirme" id="c-tout" hidden><b>Effacer TOUT l'historique de toutes les sessions et toutes les voix mémorisées ?</b> Irréversible.
+        <button type="button" class="bt danger mini" id="c-tout-oui" data-purge="tout">Confirmer</button><button type="button" class="bt mini" id="c-tout-non">Annuler</button></div>
+      <p class="note">« Tout effacer » retire l'historique de toutes les sessions ET les voix mémorisées. Les visiteurs, eux, n'effacent que leur propre session.</p>
+      <p id="m-purge" class="msg"></p>
+    </section>
 
-            <section class="card">
-                <h3>🔌 Entrées et moteur</h3>
-                <div class="rows" id="moteur"></div>
-            </section>
-        </div>
-    </main>
-    <div class="toast" id="toast" role="status"></div>
-
-    <script src="admin.js"></script>
+    <section class="pan">
+      <h3>Entrées et moteur <i id="iMoteur"></i></h3>
+      <div class="kv" id="moteur"><span class="k">—</span><span class="v">—</span></div>
+    </section>
+  </div>
+</div></div>
+<script src="admin.js"></script>
 </body>
 </html>

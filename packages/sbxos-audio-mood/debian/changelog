@@ -1,3 +1,16 @@
+sbxos-audio-mood (0.10.7-1~trixie1) trixie; urgency=medium
+
+  * Panneau d'administration au profil Aurora (ref #3026) : jetons et squelette Aurora, tuiles (sessions,
+    minutes conservées, sessions archivées, voix mémorisées, taille, plus ancien), activité 24 h en SVG
+    gradué, lectures 7 j, réglages, garanties, purge, moteur ; « Tout effacer » demande une confirmation
+    dans la page (plus de confirm()) ; hauteur annoncée à l'hôte (sbxVue, onglet audio-mood) ; « — » sans
+    session ; `?demo=1` annoncé, sans écriture. Mêmes appels qu'avant : GET /api/mood/admin/etat,
+    POST /api/mood/admin/reglages, POST /api/mood/admin/purge. Le script reste dans admin.js (CSP de la
+    route : script-src 'self'), le skin hybrid-skin.css et la police distante disparaissent. Non repris :
+    rien. Tests statiques et captures 1400/420.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 07:50:31 +0200
+
 sbxos-audio-mood (0.10.6-1~bookworm1) bookworm; urgency=medium
 
   * La route admin de Mood nomme aussi le Hall de CETTE box ($sbx_hall_box) dans frame-ancestors : sur gk3,
