@@ -78,6 +78,10 @@ type Claims struct {
 var emetteursPasserelle = map[string]bool{
 	"metanews":    true, // « Discuter » (metanews/internal/web/jwt.go)
 	"socialrelay": true, // fils des reseaux suivis (socialrelay/internal/pipeline)
+	// La radio ouvre un contenu, une representation et un fil par piste validee (radio/internal/contentbbs,
+	// jeton de 2 min signe du secret de flotte) ; oubliee ici depuis #1814, chaque appel rendait « jeton sans
+	// session » et aucune piste n'avait de fil (#3034).
+	"secubox-radio": true,
 }
 
 // claimsJeton valide la signature ET rend le sujet.
