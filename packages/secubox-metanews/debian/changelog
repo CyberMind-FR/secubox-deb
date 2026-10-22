@@ -1,3 +1,10 @@
+secubox-metanews (0.5.1-1~trixie1) trixie; urgency=medium
+
+  * menu.d : module autonome (page servie par le binaire, sans www/) — de retour au menu de
+    l'administration et dans le registre du Hall (ref #3042).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 14:20:00 +0200
+
 secubox-metanews (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Pages /devwatch/ et /yacy/ refaites au profil Aurora (ref #2651) : tuiles avec infobulles de definition, ?demo=1, ?embed=1,

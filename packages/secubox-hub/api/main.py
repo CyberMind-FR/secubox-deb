@@ -178,8 +178,10 @@ def _compute_menu_sync() -> dict:
         # Une entree peut nommer le dossier www de son module avec la cle optionnelle `"www"` :
         # « Voix » (voicestudio-usager) sert usager.html depuis www/voicestudio/, sans dossier
         # a son nom, et n'apparaissait donc jamais (#2024). Par defaut le dossier est l'id.
+        # Un module AUTONOME (#3042 : metanews, socialrelay — Go) sert sa page lui-même, sans dossier www/ :
+        # `"autonome": true` dans menu.d suffit, le fichier étant livré par le paquet. L'activité reste jugée sur son unité.
         module_www = item.get("www") or module_id
-        if _check_module_installed(module_www):
+        if item.get("autonome") or _check_module_installed(module_www):
             item_copy = item.copy()
             item_copy["installed"] = True
             item_copy["active"] = _check_module_active(item.get("unite") or module_www)   # #2905 : page servie par un autre module
