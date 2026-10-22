@@ -15,6 +15,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Billets — vue micro</title>
 <link rel="stylesheet" href="/static/micro.css">
+<script>
+// Encarté par le Hall v2 (#2996) : {sbx:'carte'} → la marque se range (micro.css), la Card la porte déjà.
+addEventListener('message',function(ev){var d=ev&&ev.data; if(d&&d.sbx==='carte') document.documentElement.classList.add('sbx-carte');});
+</script>
 
 <div class="mw">
   <div class="tete"><span class="ic">🎟️</span><b>Billets</b>

@@ -23,6 +23,7 @@ SERVICES = {"services": [{"id": "sbxid", "status": "active", "health": {"state":
 
 def test_declaration_statique():
     assert "sbx:'carte'" in JS or '"carte"' in JS
+    assert "new URL(src).origin" in JS      # un micro d'une autre origine reçoit le message à SON origine, jamais '*'
     assert "sbx-carte" in SONDE and "header.tete" in SONDE and ".marque" in SONDE
     assert "e.origin" in SONDE          # jamais un message d'une autre origine
     # tout cardlet qui porte un en-tête charge sonde.js
@@ -66,7 +67,9 @@ def ouvre(nav, v2=True):
             return r.fulfill(status=200, content_type=mimetypes.guess_type(str(f))[0] or "text/plain", body=f.read_bytes())
         r.fulfill(status=404, body="")
     p.route("http://sbx.test/**", sert)
+    # un micro d'une autre origine qui sait se ranger (MetaNews, BBS, Billets) : il attend {sbx:'carte'}
     p.route("https://**", lambda r: r.fulfill(status=200, content_type="text/html", body="<p>x</p>"))
+    p.route("http://micro.test/**", lambda r: r.fulfill(status=200, content_type="text/html", body="<p>x</p><script>addEventListener('message',function(e){if(e.data&&e.data.sbx==='carte')document.documentElement.classList.add('sbx-carte')})</script>"))
     p.goto("http://sbx.test/" + ("?hall=v2" if v2 else ""))
     p.wait_for_selector(".fcard[data-embed='activite'] iframe", state="attached")
     p.evaluate("document.querySelectorAll('.bienv-scrim').forEach(e=>e.classList.add('hidden'))")
@@ -94,6 +97,24 @@ def test_un_cardlet_habille_perd_sa_marque_mais_garde_ses_commandes(nav):
     g.wait_for_function("document.documentElement.classList.contains('sbx-carte')", timeout=5000)
     assert g.evaluate("getComputedStyle(document.querySelector('header.tete .marque')).display") == "none"
     assert g.evaluate("getComputedStyle(document.getElementById('rouage')).display") != "none"
+    assert erreurs == []
+    ctx.close()
+
+
+def test_un_micro_d_une_autre_origine_recoit_le_message_a_son_origine(nav):
+    ctx, p, erreurs = ouvre(nav)
+    p.wait_for_selector(".fcard[data-embed='metanews'].sbx-card", state="attached")
+    # Chromium de test ne charge pas un cadre https intercepté : on donne aux deux micros une autre origine http, interceptée,
+    # et on les amène à l'écran (cadres paresseux). Le message part à l'origine du cadre au moment de l'envoi.
+    for i in ("metanews", "podcaster"):
+        p.evaluate("(i=>{const c=document.querySelector(`.fcard[data-embed='${i}']`);c.scrollIntoView({block:'center'});c.querySelector('iframe').setAttribute('src','http://micro.test/micro?m='+i)})('%s')" % i)
+        p.wait_for_timeout(300)
+    f = cadre(p, "micro.test/micro?m=metanews")
+    f.wait_for_function("document.documentElement.classList.contains('sbx-carte')", timeout=5000)
+    # une carte hors lot (Podcaster) ne reçoit rien
+    g = cadre(p, "micro.test/micro?m=podcaster")
+    p.wait_for_timeout(500)
+    assert g.evaluate("document.documentElement.classList.contains('sbx-carte')") is False
     assert erreurs == []
     ctx.close()
 

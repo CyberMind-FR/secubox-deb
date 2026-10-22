@@ -392,11 +392,13 @@
     encarte(c);
   }
   // Un cardlet servi par le Hall (même origine, /cardlets/) apprend qu'il est encarté : il range sa marque (sonde.js).
-  // Les pages d'autres origines (micro MetaNews, BBS, radio…) ne reçoivent rien.
+  // Un micro d'une autre origine (MetaNews, BBS, Billets) reçoit le même message, adressé à SON origine ; il range sa marque s'il sait le faire.
   function encarte(c){
     Array.prototype.forEach.call(c.querySelectorAll('iframe'),function(f){
-      var src=f.getAttribute('src')||f.getAttribute('data-src')||''; if(src.indexOf('/cardlets/')!==0) return;
-      function dis(){ try{ f.contentWindow.postMessage({sbx:'carte'},location.origin); }catch(e){} }
+      // L'origine cible se lit au moment de l'envoi : le cadre peut changer d'adresse (réveil, nouvelle page).
+      function cibleDe(){ var src=f.getAttribute('src')||''; if(src.indexOf('/cardlets/')===0) return location.origin;
+        if(/^https?:\/\//.test(src)){ try{ return new URL(src).origin; }catch(e){} } return null; }   // micro d'une autre origine : MetaNews, BBS, Billets…
+      function dis(){ var cible=cibleDe(); if(!cible) return; try{ f.contentWindow.postMessage({sbx:'carte'},cible); }catch(e){} }
       f.addEventListener('load',dis); dis();
     });
   }

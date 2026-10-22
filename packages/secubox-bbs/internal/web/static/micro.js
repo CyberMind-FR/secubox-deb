@@ -47,6 +47,7 @@
     var d = ev && ev.data; if (!d || !d.sbx) return;
     if (d.sbx === 'survol' || d.sbx === 'pause') enPause = true;
     else if (d.sbx === 'quitte' || d.sbx === 'reprend') enPause = false;
+    else if (d.sbx === 'carte') document.documentElement.classList.add('sbx-carte');   // habillé en Card par le Hall v2 (#2996) : marque rangée
   });
   montre();
   // Rotation RALENTIE (7s→12s) et jamais sous prefers-reduced-motion.

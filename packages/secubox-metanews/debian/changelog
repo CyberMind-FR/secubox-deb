@@ -1,3 +1,10 @@
+secubox-metanews (0.5.2-1~trixie1) trixie; urgency=medium
+
+  * Micro : encarté par le Hall v2 (message {sbx:'carte'}), il range sa marque — icône et titre,
+    que la Card porte déjà — et garde son compteur (ref #2996).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 17:00:00 +0200
+
 secubox-metanews (0.5.1-1~trixie1) trixie; urgency=medium
 
   * menu.d : module autonome (page servie par le binaire, sans www/) — de retour au menu de

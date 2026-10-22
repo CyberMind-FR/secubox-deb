@@ -1,3 +1,10 @@
+secubox-billets (0.13.3-1~trixie1) trixie; urgency=medium
+
+  * Micro : encarté par le Hall v2 (message {sbx:'carte'}), il range sa marque — icône et titre,
+    que la Card porte déjà — et garde son compteur (ref #2996).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 17:00:00 +0200
+
 secubox-billets (0.13.2-1~bookworm1) bookworm; urgency=medium
 
   * Miroir des reponses BBS : une URL de FICHIER du BBS de cette box (https://bbs.<domaine>/f/<n>.<png|jpg|jpeg|gif|webp>) dans un commentaire systeme s affiche en VIGNETTE cliquable (image paresseuse, lien vers l original) au lieu d une URL en texte ; une video devient un lien « ▶ video » ; le reste est du texte echappe et lie. Jamais d image d un autre hote, ni en http (ref #2782).
