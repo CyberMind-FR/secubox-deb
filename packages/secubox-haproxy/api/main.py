@@ -19,6 +19,7 @@ Features:
 """
 import os
 import shutil
+import re
 import subprocess
 import socket
 import json
@@ -1120,18 +1121,31 @@ async def delete_certificate(name: str):
     if not cert_dir.exists():
         cert_dir = Path("/etc/haproxy/certs")
 
+    # Nom de fichier, pas chemin : le contrôleur revalide, mais on ne lui passe rien de douteux.
+    if not re.fullmatch(r"[A-Za-z0-9*][A-Za-z0-9._*-]{0,250}", name):
+        raise HTTPException(400, "nom de certificat refusé")
     cert_path = cert_dir / f"{name}.pem"
     if not cert_path.exists():
         raise HTTPException(404, "Certificate not found")
 
-    # Backup before delete
-    backup_dir = cert_dir / "backup"
-    backup_dir.mkdir(exist_ok=True)
-    backup_path = backup_dir / f"{name}.pem.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    cert_path.rename(backup_path)
-
-    log.info("Deleted certificate: %s (backed up to %s)", name, backup_path)
-    return {"success": True, "name": name, "backup": str(backup_path)}
+    # #3012 : l'API tourne en `secubox` et $CERTS_DIR appartient à root (0755) — mkdir + rename
+    # ici faisaient PermissionError → 500. La mise de côté (certs/backup/) est l'affaire du
+    # contrôleur, en root par sudoers à argv exact (postinst). Hors boucle : c'est un sous-processus.
+    def _retirer():
+        return subprocess.run(["sudo", "-n", CTL, "cert", "delete", name],
+                              capture_output=True, text=True, timeout=30, check=False)
+    try:
+        result = await asyncio.to_thread(_retirer)
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.warning("cert delete %s : contrôleur injoignable : %s", name, exc)
+        raise HTTPException(502, f"contrôleur injoignable : {exc}")
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip() or f"haproxyctl rc={result.returncode}"
+        log.warning("cert delete %s refusé par le contrôleur : %s", name, detail)
+        raise HTTPException(404 if result.returncode == 2 else 502, detail)
+    backup = result.stdout.strip().split(" : ", 1)[-1] if result.stdout.strip() else ""
+    log.info("Deleted certificate: %s (backed up to %s)", name, backup)
+    return {"success": True, "name": name, "backup": backup}
 
 
 class AcmeRequest(BaseModel):

@@ -824,6 +824,23 @@ cmd_cert_add() {
     fi
 }
 
+cmd_cert_delete() {
+    # #3012 : l'API (secubox, dans l'agregateur) ne peut pas ecrire dans $CERTS_DIR (root 0755) ;
+    # c'est ici, en root par sudoers a argv exact, que le .pem est mis de cote. Jamais efface :
+    # certs/backup/<nom>.pem.<horodatage>. Codes : 1 nom refuse, 2 certificat absent, 3 echec.
+    local nom="$1"
+    [[ "$nom" =~ ^[A-Za-z0-9*][A-Za-z0-9._*-]{0,250}$ ]] || { error "cert delete: nom refuse : '${nom}'"; return 1; }
+    local pem="$CERTS_DIR/${nom}.pem"
+    [ -f "$pem" ] || { error "cert delete: certificat absent : $pem"; return 2; }
+    local sauvegarde="$CERTS_DIR/backup"
+    local horodatage cible
+    horodatage=$(date '+%Y%m%d_%H%M%S')
+    cible="$sauvegarde/${nom}.pem.${horodatage}"
+    mkdir -p "$sauvegarde" && chmod 0750 "$sauvegarde" && mv -- "$pem" "$cible" || { error "cert delete: mise de cote impossible pour $pem"; return 3; }
+    log "Certificate removed: $nom (mis de cote : $cible)"
+    echo "mis de cote : $cible"
+}
+
 cmd_cert_renew() {
     log "Renewing certificates..."
     if command -v acme.sh >/dev/null; then
@@ -1857,8 +1874,9 @@ case "${1:-}" in
             list)   cmd_cert_list ;;
             sync)   cmd_cert_sync "${3:-}" ;;
             add)    cmd_cert_add "$3" "$4" ;;
+            delete) cmd_cert_delete "${3:-}" ;;
             renew)  cmd_cert_renew ;;
-            *)      echo "Usage: haproxyctl cert {list|add|renew} [domain]" ;;
+            *)      echo "Usage: haproxyctl cert {list|add|delete|renew} [domain]" ;;
         esac
         ;;
 
