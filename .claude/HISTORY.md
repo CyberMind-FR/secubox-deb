@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Registre du Hall : fiches `registre.d` pour les modules API seule (ref #2996)
+
+« next » (le GO sur la fusion des flux reste au propriétaire). PR #3050 : un module API seule — sans page, donc sans
+menu.d, donc absent du menu du hub et du registre du Hall (« aucune source » sur sa carte alors qu'il répond) — se déclare
+par `/usr/share/secubox/registre.d/<id>.json` livré par son paquet (id, name, category, description, path).
+`registry.charger_registre_d()` + `normalize_services(…, supplements=…)` : mêmes règles de santé que le menu (socket ⇒ en
+ligne, unité en échec ⇒ alarme), jamais en double avec une entrée de menu, fichier illisible ignoré. Premiers déclarants :
+`secubox-ephemeride` 0.1.1, `secubox-ipv6guard` 0.2.2 ; `secubox-webos` 1.19.20. Déployé sur gk2 (119 entrées au registre,
+les deux « actif » / en ligne, cartes « actif »), publié dans apt trixie. Reste sans fiche, à dessein (modules internes) :
+actord, courbes, dpi-live, federation, mirror, openpgp, rbs-sensor, release, routes, sentinel-mirror, voice, waker.
+
 ## 2026-10-22 — Hall v2 : variante encartée des micros MetaNews, BBS et Billets (ref #2996)
 
 « next » (le GO sur la fusion des flux reste au propriétaire). PR #3049 : `secubox-webos` 1.19.19 adresse `{sbx:'carte'}`

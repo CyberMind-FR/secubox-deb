@@ -94,6 +94,16 @@ Navigateur ─▶ hall.gk2.net / hall.gk2.secubox.in
   (`acces.py` : demande → validation manuelle → secret 0600, jamais de mot de
   passe en transit), **actions** de modules, relais de jeton cross-domaine.
 
+### Registre : d'où viennent les entrées
+
+Le registre (`GET /api/v1/webos/public/services`) part du **menu du hub** (`/var/cache/secubox/menu.json`,
+une entrée par fichier `menu.d` dont le module a une page). Un module **API seule** — sans page, donc sans
+`menu.d` — se déclare par une fiche **`/usr/share/secubox/registre.d/<id>.json`** livrée par son paquet
+(`id`, `name`, `category`, `description`, `path`) : mêmes règles de santé que le menu (socket présente ⇒ en
+ligne, unité en échec ⇒ alarme), jamais en double avec une entrée de menu, fichier illisible ignoré.
+Exemples : `secubox-ephemeride`, `secubox-ipv6guard`. Un module qui sert sa page lui-même sans dossier
+`www/` reste au menu avec `"autonome": true` dans son `menu.d` (hub ≥ 1.12.24).
+
 ## Contrat d'une carte
 
 Une carte **résume**, elle ne rétrécit pas. Règles et pièges (CSP, cookies

@@ -349,7 +349,7 @@ reçoivent rien : leur en-tête reste tant qu'ils n'exposent pas une variante en
 - Phase 4, suite : les 20 captures Streamlit demanderaient un relais `/api/v1/streamlit/apps/{nom}/screenshot` sur le Hall.
   Migration vers `Card` : les deux lots de la liste du prompt sont habillés (1.19.11 → 1.19.13) et « Accès rapide » est une
   Card native (1.19.14), « Flux d'actualités » fusionne les trois flux (1.19.16). Les cardlets encartés n'ont plus de double en-tête (1.19.18). Reste : GO sur la fusion
-  (retirer ou masquer les cartes MetaNews / Flux YouTube / Billets) ; variante encartée des micros d'autres origines (MetaNews,
-  BBS, radio, billets, podcaster) ; lien profond vers un sujet MetaNews (son interface n'en expose pas : la carte ouvre l'accueil). Hors Hall : #3042 (hub, modules
-  autonomes metanews / socialrelay absents du menu et du registre → « aucune source »).
+  (retirer ou masquer les cartes MetaNews / Flux YouTube / Billets) ; lien profond vers un sujet MetaNews (son interface n'en expose pas : la carte ouvre l'accueil). Faits ensuite : #3042 (hub, modules autonomes
+  metanews / socialrelay au menu et au registre), micros MetaNews / BBS / Billets encartés (1.19.19), fiches `registre.d`
+  des modules API seule — Éphéméride, IPv6 Guardian (1.19.20).
 - Mesure du dé sur RPi4 (le budget ≤ 1 ms/image est à confirmer sur la cible).
