@@ -9,6 +9,21 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Hall v2 : carte « Accès rapide » native ; hub : modules autonomes au menu et au registre (ref #2996, closes #3042)
+
+« next ». (1) `secubox-webos` 1.19.14 (PR #3043) : la carte « Accès rapide » de la maquette en `Card` native sous le
+Hero — huit `Tile` au plus vers le service embarqué (`data-open`), favoris de la bande ★ puis récents puis curation,
+pastille du statut typé, action › vers la mosaïque ; redessinée quand favoris, récents ou registre changent ; `Tile` porte
+des attributs. 1.19.15 (PR #3045) : statut emprunté aussi pour Coffre (vault), Contenu (droplet), Cloud (nextcloud),
+Forums (bbs) — les tuiles le montraient « sans source ». (2) #3042 : sur gk2, metanews et socialrelay (Go, page servie
+par le binaire, sans `www/`) étaient écartés du menu du hub, donc du registre du Hall (« aucune source ») ; clé
+`"autonome": true` dans menu.d honorée par `secubox-hub` 1.12.24 (PR #3044), déclarée par `secubox-metanews` 0.5.1 et
+`secubox-socialrelay` 0.1.20 (cross-build arm64). Le hub vit dans l'agrégateur : relancé une fois après l'installation
+des trois paquets ; menu 117 entrées, metanews et socialrelay « actif » dans le registre et sur leurs cartes. Tout
+déployé sur gk2 et publié dans apt trixie. Échecs préexistants inchangés : hub 2 (`test_charge_hub_1835`,
+`test_espaces_2212`), webos 1 (ytflux). Un worktree de cross-build Go laisse des fichiers non inscriptibles : `chmod -R u+w`
+avant `git worktree remove`.
+
 ## 2026-10-22 — Hall v2, phase 4 : second lot de cartes habillées en `Card`, fin de la liste du prompt (ref #2996)
 
 « next ». `secubox-webos` 1.19.13 (PR #3041), déployé sur gk2, publié dans apt trixie. `MIGREES` couvre maintenant toute
