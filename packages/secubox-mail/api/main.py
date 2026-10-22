@@ -876,6 +876,21 @@ async def maildir_reconcile(background_tasks: BackgroundTasks):
     return {"success": True, "message": "Reconciliation Maildir lancee (log: /var/log/mail-socle.log)"}
 
 
+@app.get("/webmail/comptes-externes", dependencies=[Depends(require_lecture)])
+async def webmail_comptes_externes():
+    """Greffon ident_switch (boîtes IMAP distantes lues depuis le webmail) : actif ?, combien de comptes et
+    d'utilisateurs, vers quels hôtes — jamais un identifiant (#3028). Hors boucle : mailctl interroge le conteneur."""
+    import asyncio  # noqa: PLC0415
+    ok, out, err = await asyncio.to_thread(run_cmd, ["/usr/sbin/mailctl", "webmail-comptes"], 20)
+    try:
+        d = json.loads(out.strip().splitlines()[-1]) if out.strip() else {}
+    except ValueError:
+        d = {}
+    if not isinstance(d, dict) or "greffon" not in d:
+        return {"webmail": False, "greffon": None, "comptes": None, "utilisateurs": None, "hotes": [], "erreur": (err or out or "réponse illisible")[:200]}
+    return d
+
+
 @app.get("/sieve/status", dependencies=[Depends(require_jwt)])
 async def sieve_status():
     """ManageSieve :4190 actif ?"""

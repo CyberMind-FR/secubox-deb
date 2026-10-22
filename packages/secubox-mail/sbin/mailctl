@@ -744,6 +744,27 @@ cmd_webmail_sieve() {
     log "Sieve activé dans le webmail ($wc) → managesieve :4190 sur $ms_host"
 }
 
+cmd_webmail_comptes() {
+    # ÉTAT DU GREFFON DE COMPTES EXTERNES (#3028) : `ident_switch` dans Roundcube laisse chaque personne lire ses
+    # boîtes IMAP distantes (Gmail, Outlook, IMAP) depuis le webmail, identifiants chiffrés par utilisateur. On dit
+    # s'il est actif, combien de comptes et d'utilisateurs, et vers quels hôtes — JAMAIS un identifiant. JSON sur stdout.
+    local wc="$WEBMAIL_CONTAINER"
+    if ! lxc_running "$wc"; then printf '{"webmail":false,"greffon":false,"comptes":0,"utilisateurs":0,"hotes":[]}\n'; return 0; fi
+    local conf="/etc/roundcube/config.inc.php.local"
+    local greffon=false
+    lxc-attach -n "$wc" -- grep -q '"ident_switch"' "$conf" 2>/dev/null && greffon=true
+    local db
+    db=$(lxc-attach -n "$wc" -- sh -c "grep -ho 'sqlite:///[^?\"'\"'\"']*' $conf /etc/roundcube/debian-db.php 2>/dev/null | head -1 | sed 's#^sqlite:///#/#'")
+    local comptes=0 utilisateurs=0 hotes='[]'
+    if [ -n "$db" ] && [ "$greffon" = true ]; then
+        comptes=$(lxc-attach -n "$wc" -- sqlite3 "$db" "select count(*) from ident_switch" 2>/dev/null || echo 0)
+        utilisateurs=$(lxc-attach -n "$wc" -- sqlite3 "$db" "select count(distinct user_id) from ident_switch" 2>/dev/null || echo 0)
+        hotes=$(lxc-attach -n "$wc" -- sqlite3 "$db" "select json_group_array(h) from (select distinct imap_host as h from ident_switch where imap_host is not null and imap_host <> '' order by 1)" 2>/dev/null || echo '[]')
+        [ -n "$hotes" ] || hotes='[]'
+    fi
+    printf '{"webmail":true,"greffon":%s,"comptes":%s,"utilisateurs":%s,"hotes":%s}\n' "$greffon" "${comptes:-0}" "${utilisateurs:-0}" "$hotes"
+}
+
 cmd_fix_ports() {
     if ! lxc_running "$CONTAINER"; then
         error "Mail container not running"
@@ -1845,6 +1866,7 @@ case "${1:-}" in
     webmail-greffons) cmd_webmail_greffons ;;
     webmail-sso) cmd_webmail_sso ;;
     webmail-sieve) cmd_webmail_sieve ;;
+    webmail-comptes) cmd_webmail_comptes ;;
     webmail-openpgp) cmd_webmail_openpgp ;;
     autocrypt-sync) cmd_autocrypt_sync ;;
     webmail-pgp) cmd_webmail_pgp ;;

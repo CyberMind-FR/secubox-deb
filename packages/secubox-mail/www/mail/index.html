@@ -61,6 +61,7 @@
         @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
         .large{grid-column:1/-1}
         .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv .v.ok{color:var(--vert)} .kv .v.warn{color:var(--orange)}
         .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
         .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
         .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
@@ -193,10 +194,12 @@
         </section>
 
         <section id="t-externe" role="tabpanel" aria-labelledby="o-externe" hidden>
-            <div class="pan"><h3>Boîtes externes</h3>
+            <div class="pan"><h3>Boîtes externes <i>deux branchements, lus sur la box</i></h3>
                 <p style="margin:0 0 8px;font-size:.84rem">Chaque utilisateur peut rapatrier son compte Gmail, Outlook ou IMAP dans le webmail SecuBox : Webmail → Paramètres → Comptes → Ajouter. Les identifiants sont chiffrés par utilisateur dans Roundcube ; la box ne les détient pas.</p>
-                <div class="barre-actions"><a class="btn prim" id="externeOuvrir" href="#" target="_blank" rel="noopener noreferrer">Ouvrir le webmail</a></div>
-                <p class="note">L’état du greffon de comptes externes n’est pas affiché : l’API ne le fournit pas (l’ancienne page interrogeait une route inexistante).</p></div>
+                <div class="barre-actions"><a class="btn prim" id="externeOuvrir" href="#" target="_blank" rel="noopener noreferrer">Ouvrir le webmail</a><a class="btn" href="/smtp-relay/">Relais SMTP</a></div>
+                <div class="kv" id="externeImap" style="margin-top:8px"><span class="k">Récupération IMAP distante (greffon ident_switch)</span><span class="v">—</span></div>
+                <div class="kv" id="externeRelais"><span class="k">Relais SMTP sortant (smtp-relay)</span><span class="v">—</span></div>
+                <p class="note" id="externeNote">Récupération : chaque personne ajoute sa boîte depuis le webmail, la box n'en détient pas les identifiants. Relais : le courrier sortant de la box part par un smarthost quand il est configuré ; réglage sur la page du relais.</p></div>
         </section>
 
         <section id="t-journaux" role="tabpanel" aria-labelledby="o-journaux" hidden>
@@ -276,7 +279,7 @@
         const ONGLETS = ['apercu', 'boites', 'alias', 'externe', 'journaux', 'reglages', 'actions', 'socle'];
 
         // Données lues (null = non lisible ; « — » à l'affichage).
-        let S = null, ACC = null, SSL = null, USERS = null, ALIAS = null, DKIMREC = null, SPAM = null, AV = null, SOCLE = null, SETT = null, LOGS = null, DNS = null;
+        let S = null, ACC = null, SSL = null, USERS = null, ALIAS = null, DKIMREC = null, SPAM = null, AV = null, SOCLE = null, SETT = null, LOGS = null, DNS = null, EXT = null, RELAIS = null;
         let SESSION_OK = true, CONFIRM = null, ONGLET = 'apercu';
 
         function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
@@ -356,7 +359,26 @@
             $('erreur').hidden = !(tous && !refus);
             if (tous && !refus) $('erreur').textContent = 'Impossible de lire le serveur mail (service arrêté ou injoignable).';
             if (ONGLET === 'socle') await chargerSocle();
+            if (ONGLET === 'externe') await chargerExterne();
             rendre();
+        }
+        // Boîtes externes (#3028) : le greffon de comptes IMAP distants (API mail) et le relais SMTP sortant (API smtp-relay).
+        async function chargerExterne() {
+            if (DEMO) { EXT = { webmail: true, greffon: true, comptes: 3, utilisateurs: 2, hotes: ['imap.gmail.com', 'outlook.office365.com'] }; RELAIS = { running: true, configured: true, smarthost: 'smtp.exemple.test:587', queue_size: 0 }; rendreExterne(); return; }
+            try { EXT = await lire('/webmail/comptes-externes'); } catch (e) { EXT = null; }
+            try { const r = await fetch('/api/v1/smtp-relay/status', { credentials: 'same-origin', cache: 'no-store', headers: entetes() }); RELAIS = r.ok ? await r.json() : null; } catch (e) { RELAIS = null; }
+            rendreExterne();
+        }
+        function rendreExterne() {
+            const kv = (id, texte, cls) => { const v = $(id).querySelector('.v'); v.textContent = texte; v.className = 'v' + (cls ? ' ' + cls : ''); };
+            if (!EXT) kv('externeImap', SESSION_OK ? '—' : 'session requise');
+            else if (!EXT.webmail) kv('externeImap', 'webmail arrêté', 'warn');
+            else if (!EXT.greffon) kv('externeImap', 'greffon inactif — mailctl webmail-greffons', 'warn');
+            else kv('externeImap', (EXT.comptes || 0) + ' compte(s) chez ' + (EXT.utilisateurs || 0) + ' utilisateur(s)' + (EXT.hotes && EXT.hotes.length ? ' · ' + EXT.hotes.join(', ') : ''), 'ok');
+            if (!RELAIS) kv('externeRelais', '—');
+            else if (!RELAIS.running) kv('externeRelais', 'arrêté', 'warn');
+            else if (!RELAIS.configured) kv('externeRelais', 'actif, aucun smarthost : envoi direct', 'warn');
+            else kv('externeRelais', 'via ' + RELAIS.smarthost + (RELAIS.queue_size ? ' · ' + RELAIS.queue_size + ' en file' : ''), 'ok');
         }
         async function chargerSocle() { if (DEMO) { rendreSocle(); return; } try { SOCLE = await lire('/socle/status'); } catch (e) { SOCLE = null; } rendreSocle(); }
         async function chargerReglages() {
@@ -614,6 +636,7 @@
             document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
             ONGLETS.forEach(t => { $('t-' + t).hidden = t !== nom; });
             if (nom === 'socle') chargerSocle();
+            if (nom === 'externe') chargerExterne();
             if (nom === 'reglages') chargerReglages();
             if (nom === 'journaux') chargerJournal();
             annoncer();
