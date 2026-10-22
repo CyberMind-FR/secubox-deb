@@ -21,7 +21,7 @@ def test_page_autonome_sans_skin_ni_ressource_externe():
     srcs = re.findall(r'<(?:script|link)[^>]+(?:src|href)="([^"]+)"', HTML)
     assert srcs == [], srcs                       # CSS et JS en ligne ; sidebar.js injectée par script hors embed
     assert "hybrid-dark.css" not in HTML and "crt-light.css" not in HTML and "sidebar-light.css" not in HTML
-    assert "/shared/sidebar.js" in HTML and "!EMBED && !DEMO" in HTML
+    assert "/shared/sidebar.js" in HTML and "!EMBED && !encadre && !DEMO" in HTML
     assert "100vh" not in HTML
 
 
