@@ -9,6 +9,18 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Radio : titres en « Récupération… » (ytsas figé par des yt-dlp orphelins) et jeton radio refusé par le BBS (closes #3034, closes #3036)
+
+« radio » (capture : titres en RÉCUPÉRATION…). Deux causes distinctes. (1) Dans le LXC ytsas, 62 processus `yt-dlp -j
+--no-download … /channel/…` dormaient depuis 25 h sur `pipe_write` : `_probe()` levait au dépassement de
+`asyncio.wait_for` sans tuer le processus, dont plus personne ne lisait la sortie ; la file ne traitait plus rien, cinq
+titres ajoutés le 6 octobre restaient idle (un `POST /add` les a téléchargés en 25 s) ; part visible de la charge de gk2.
+`secubox-ytsas` 0.8.5 (PR #3037) : `_attend_borne()` tue le processus au dépassement, `reprend_incomplets()` remet en
+file au démarrage ; sur gk2 orphelins tués, service relancé, 130/130 pistes en cache. (2) Le BBS refusait le jeton de
+service de la radio (« jeton sans session ») : depuis #1814, `emetteursPasserelle` ne connaissait que metanews et
+socialrelay ; `secubox-bbs` 0.37.11 (PR #3035) ajoute `secubox-radio` (130 pistes sans `content_id` jusque-là). Les deux
+publiés dans apt trixie. Règle notée : un `wait_for` sur un sous-processus se termine par `kill()`.
+
 ## 2026-10-22 — Mood et Radio en Aurora ; Mail : boîtes externes réelles, rapatriement IMAP OVH, relais local (closes #3026, closes #3028, closes #3029, closes #3033)
 
 « /sbxos-audio-mood/ aurora » : `sbxos-audio-mood` 0.10.7 puis 0.10.8 (PR #3027, arm64) — panneau au profil Aurora,

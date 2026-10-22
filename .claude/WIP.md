@@ -90,6 +90,8 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   2.16.4) : `mailctl imap-sync` (doveadm imapc), minuterie 15 min, volet avec préréglage OVH ; relais local par défaut.
   À faire par le propriétaire : déclarer la boîte OVH (identifiants) dans le volet « Boîtes externes ». Le greffon
   `ident_switch` n'est pas installé dans le LXC `roundcube` (lecture directe depuis le webmail) : à décider.
+- **Radio : récupération figée et BBS** — closes #3036 (PR #3037, `secubox-ytsas` 0.8.5 : yt-dlp tué au délai, reprise au
+  démarrage), closes #3034 (PR #3035, `secubox-bbs` 0.37.11 : `secubox-radio` émetteur de la passerelle). 130/130 pistes en cache.
 - Charge de gk2 pendant ces déploiements : load 20-28 sur 4 cœurs, 9 Go de swap ; systemd et dpkg très lents (postinst du hub
   à plusieurs minutes). metrics était le premier consommateur avant 1.29.4.
 
