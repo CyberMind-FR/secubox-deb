@@ -170,7 +170,7 @@ crit = -80                           # Signal critique
 AUTH = "secubox-auth"                # Authentification / SSO
 WALL = "secubox-waf-ng"              # WAF / IDS (moteur Go sbxwaf)
 BOOT = "secubox-hub"                 # Dashboard principal
-MIND = "secubox-ai-insights"         # IA / Insights
+MIND = "secubox-ai-gateway"          # IA / passerelle
 ROOT = "secubox-system"              # Système / Métriques
 MESH = "secubox-p2p"                 # Réseau mesh P2P
 

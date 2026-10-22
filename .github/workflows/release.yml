@@ -178,7 +178,7 @@ jobs:
           - **Networking:** wireguard, haproxy, dpi, qos, netmodes, vhost, cdn
           - **Applications:** mail, gitea, nextcloud, ollama, jellyfin, matrix
           - **SOC:** soc-agent, soc-gateway, soc-web (hierarchical security operations)
-          - **Intel:** device-intel, vortex-dns, vortex-firewall, ai-insights
+          - **Intel:** device-intel, vortex-dns, vortex-firewall
 
           ### System Images (Disk Install)
           - MOCHAbin (Marvell Armada 7040) - arm64

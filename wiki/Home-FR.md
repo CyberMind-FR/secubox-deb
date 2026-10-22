@@ -126,7 +126,6 @@ Voir [[Modules|MODULES-FR]] pour la documentation complète des modules.
 - **sbx-authwatch** — SSH/SMTP/IMAP et leurres, vers le même ensemble de bannissement
 - **WAF** — 300+ règles ModSecurity
 - **nftables** — Politique DROP par défaut
-- **AI-Insights** — Détection ML des menaces
 - **IPBlock** — Gestion automatique des blocklists
 - **MAC-Guard** — Contrôle des adresses MAC
 

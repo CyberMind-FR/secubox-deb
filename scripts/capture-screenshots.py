@@ -139,7 +139,7 @@ def categorize_module(module_id: str) -> str:
         # Services
         "c3box": "Services", "gitea": "Services", "nextcloud": "Services",
         "ollama": "AI", "localai": "AI", "ai-gateway": "AI",
-        "ai-insights": "AI", "localrecall": "AI", "mcp-server": "AI",
+        "localrecall": "AI", "mcp-server": "AI",
 
         # Email
         "mail": "Email", "webmail": "Email", "mail-lxc": "Email",

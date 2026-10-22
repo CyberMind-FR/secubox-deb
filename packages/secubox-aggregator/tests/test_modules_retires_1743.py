@@ -21,7 +21,7 @@ def test_modules_retires_ignores_sans_erreur_de_chargement(tmp_path, monkeypatch
 
 
 def test_la_liste_des_retires_est_celle_du_retrait():
-    assert ag.RETIRED_MODULES == {"hexo", "ollama", "gotosocial", "redroid", "simplex", "newsbin", "voip", "frigate"}
+    assert ag.RETIRED_MODULES == {"hexo", "ollama", "gotosocial", "redroid", "simplex", "newsbin", "voip", "frigate", "reality", "ai-insights"}
 
 
 def test_aucun_module_vivant_n_est_marque_retire():

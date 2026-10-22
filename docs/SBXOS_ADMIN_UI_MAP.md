@@ -34,7 +34,6 @@
 | Filtrage de contenus (`webfilter`) | `/webfilter/` oui | DEVICE | `packages/secubox-webfilter/www` + sidebar.js | non | faible |  |
 | HAProxy (`haproxy`) | `/haproxy/` oui | — | `packages/secubox-haproxy/www` + sidebar.js | non | faible |  |
 | ProxyPAC (`proxypac`) | `/proxypac/` oui | — | `packages/secubox-tor/www` + sidebar.js | non | faible |  |
-| Reality (`reality`) | `/reality/` oui | — | `packages/secubox-reality/www` + sidebar.js | non | faible | entrée de menu sans page : écartée par le hub |
 | Tor (`tor`) | `/tor/` oui | — | `packages/secubox-tor/www` + sidebar.js | non | faible |  |
 | WireGuard VPN (`wireguard`) | `/wireguard/` oui | DEVICE | `packages/secubox-wireguard/www` + sidebar.js | non | faible | quatre modules gèrent WireGuard (wireguard, p2p, toolbox, netmodes) : un seul rattachement visible, les autres par lien |
 | Hardening (`hardening`) | `/hardening/` oui | BOX | `packages/secubox-hardening/www` + sidebar.js | non | faible |  |
@@ -43,7 +42,6 @@
 
 | Ancienne page | Chemin conservé | Objet | Composant réutilisé | Réécriture ? | Risque | Remarque |
 |---|---|---|---|---|---|---|
-| AI Insights (`ai-insights`) | `/ai-insights/` oui | ALERT | `packages/secubox-threats/www` + sidebar.js | non | faible |  |
 | DPI (`dpi`) | `/dpi/` oui | DEVICE | `packages/secubox-dpi/www` + sidebar.js | non | faible | ne voit que les clients WireGuard : pas de jointure avec ad-guard |
 | Media Flow (`mediaflow`) | `/mediaflow/` oui | DEVICE | `packages/secubox-dpi/www` + sidebar.js | non | faible | rangé en « boot » dans le menu actuel : reclassé en Surveillance |
 | nDPId (`ndpid`) | `/ndpid/` oui | DEVICE | `packages/secubox-dpi/www` + sidebar.js | non | faible |  |

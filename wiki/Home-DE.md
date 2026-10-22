@@ -123,7 +123,6 @@ Siehe [[Module|MODULES-DE]] für vollständige Moduldokumentation.
 
 - **WAF** — 300+ ModSecurity-Regeln
 - **nftables** — Standard-DROP-Richtlinie
-- **AI-Insights** — ML-Bedrohungserkennung
 - **IPBlock** — Automatisierte Blocklist-Verwaltung
 - **MAC-Guard** — MAC-Adresskontrolle
 

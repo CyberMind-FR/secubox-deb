@@ -161,7 +161,7 @@ SecuBox OS est organisé en 6 stacks fonctionnelles :
 |-------|--------------|--------------|
 | 🟠 **AUTH** | Orange | auth, portal, nac, users |
 | 🔴 **BOOT** | Rouge | cloner, vault, vm, backup |
-| 🟣 **MIND** | Violet | dpi, ai-insights |
+| 🟣 **MIND** | Violet | dpi |
 | 🟢 **ROOT** | Vert | core, hub, system, admin |
 | 🔵 **MESH** | Bleu | wireguard, haproxy, qos, mesh |
 
@@ -207,7 +207,6 @@ Voir [[Modules]] pour les 125 modules.
 - **300+ règles** — OWASP ModSecurity CRS
 
 ### AI & Threat Intel
-- **AI-Insights** — Détection ML anomalies
 - **Threat feeds** — AbuseIPDB, Emerging Threats
 - **Geo-blocking** — Blocage par pays
 

@@ -220,7 +220,7 @@ Retourne l'état des 6 modules SecuBox :
 - **AUTH** : secubox-auth (authentification)
 - **WALL** : secubox-waf (WAF/IDS)
 - **BOOT** : secubox-hub (dashboard principal)
-- **MIND** : secubox-ai-insights (IA)
+- **MIND** : secubox-ai-gateway (IA)
 - **ROOT** : secubox-system (système)
 - **MESH** : secubox-p2p (réseau mesh)
 
@@ -239,7 +239,7 @@ async def get_modules_status() -> ModulesStatusResponse:
         "AUTH": "secubox-auth",
         "WALL": "secubox-waf",
         "BOOT": "secubox-hub",
-        "MIND": "secubox-ai-insights",
+        "MIND": "secubox-ai-gateway",
         "ROOT": "secubox-system",
         "MESH": "secubox-p2p",
     }

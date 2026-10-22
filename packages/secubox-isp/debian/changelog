@@ -1,3 +1,9 @@
+secubox-isp (1.4.1-1~trixie1) trixie; urgency=medium
+
+  * Sans secubox-reality (ref #3017).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 05:33:14 +0200
+
 secubox-isp (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * PhotoPrism et Jitsi quittent isp (#2322) : optionnels, ils echouaient a chaque demarrage d'une image isp (PhotoPrism 226/NAMESPACE, /data/photoprism absent ; Jitsi, LXC a provisionner). PhotoPrism passe dans secubox-full (profil full) ; Jitsi reste installable a la demande.

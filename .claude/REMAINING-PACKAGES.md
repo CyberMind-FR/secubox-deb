@@ -116,7 +116,6 @@ These OpenWrt packages exist in Debian with renamed equivalents:
 
 | OpenWrt Package | Target Debian | Complexity | Notes |
 |-----------------|---------------|------------|-------|
-| **ai-insights** | secubox-ai-insights | Medium | ML threat detection |
 | **ipblocklist** | secubox-ipblock | Easy | IP blocklist manager |
 | **interceptor** | secubox-interceptor | Medium | Traffic interception |
 | **cookie-tracker** | secubox-cookies | Easy | Cookie analysis |

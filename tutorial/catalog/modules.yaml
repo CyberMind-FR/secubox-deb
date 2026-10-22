@@ -209,49 +209,6 @@ modules:
       presente: true
       chemin: "/srv/secubox/www/ai-gateway"
       vhosts: []
-  - id: secubox-ai-insights
-    nom: "secubox-ai-insights"
-    categorie: "ai"
-    tier: "pro"
-    description: "SecuBox AI Insights - ML-based Threat Detection"
-    manifeste: true
-    lxc: false
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd: []
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/ai-insights.sock"
-      health: "/api/v1/ai-insights/health"
-      authentifie: true
-      nb_routes: 18
-      routes:
-        - "GET /access"
-        - "GET /anomalies"
-        - "GET /components"
-        - "GET /config"
-        - "GET /correlations"
-        - "GET /health"
-        - "GET /integrations"
-        - "GET /logs"
-        - "GET /models"
-        - "GET /scores"
-        - "GET /stats"
-        - "GET /status"
-        - "GET /threats"
-        - "GET /threats/history"
-        - "POST /analyze"
-        - "POST /config"
-        - "POST /model/deploy"
-        - "POST /model/train"
-    interface_web:
-      presente: true
-      chemin: "/srv/secubox/www/ai-insights"
-      vhosts: []
   - id: secubox-annuaire
     nom: "secubox-annuaire"
     categorie: "mesh"
@@ -4919,33 +4876,6 @@ modules:
         - "POST /mitigate/lte-only"
         - "POST /mitigate/rf-off"
         - "POST /restore"
-    interface_web:
-      presente: false
-      chemin: "À documenter"
-      vhosts: []
-  - id: secubox-reality
-    nom: "secubox-reality"
-    categorie: "system"
-    tier: "lite"
-    description: "SecuBox Reality — VLESS+Reality+Vision egress-point manager"
-    manifeste: true
-    lxc: false
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd:
-      - "secubox-reality-monitor.service"
-      - "secubox-reality-monitor.timer"
-      - "secubox-reality.service"
-      - "secubox-xray@.service"
-    ports: []
-    documentation: []
-    api:
-      socket: "À documenter"
-      health: "À documenter"
-      authentifie: false
-      nb_routes: 0
     interface_web:
       presente: false
       chemin: "À documenter"
