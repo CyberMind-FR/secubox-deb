@@ -23,7 +23,9 @@ WebAuthn PRF, sceller, poser/retirer un secret, enrôler/retirer une clé), conf
 `offer-sync` (secubox : publie/révoque les offres `source=sync` de ce nœud, offres manuelles intouchées),
 `revoke-offer`, unité à deux temps (root ne touche jamais au journal) + minuterie quotidienne. Sur gk2 : 17 offres
 réelles, les deux démonstrations signées par ce nœud révoquées ; « Suricata IDS feed » est signée par did:plc:077c48…
-et ne peut être révoquée que par ce nœud-là. Les quatre paquets publiés dans apt trixie. Incident évité : un `git stash
+et ne peut être révoquée que par ce nœud-là. Les quatre paquets publiés dans apt trixie. Suite « INJOIGNABLE » :
+`_get_offers` rebalayait le journal PAR OFFRE (17 × 5 000 entrées, 6 s par appel, boucle bloquée) ; 0.14.9 (PR #3025) relève
+les clés publiques en un seul balayage, déployé et publié. Incident évité : un `git stash
 pop` sans remisage préalable a ressorti un vieux remisage du propriétaire (binaires toolbox-ng) ; checkout remis à HEAD,
 les 14 remisages sont intacts.
 
