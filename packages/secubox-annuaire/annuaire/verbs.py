@@ -1247,8 +1247,18 @@ def _get_offers(journal: Journal) -> List[Dict]:
     offer_entries: Dict[str, "object"] = {}   # service_id -> LogEntry
     offer_heights: Dict[str, int] = {}
     revoked_ids: set = set()
+    # UN SEUL BALAYAGE (#3021) : la clé publique de chaque fournisseur se relève au passage (dernière Identity
+    # auto-signée). Avant, _enrich_offer rebalayait tout le journal PAR OFFRE : 17 offres × 5 000 entrées,
+    # 6 s par appel sur gk2, et la page Annuaire disait « injoignable ».
+    pubkeys: Dict[str, str] = {}
+    pubkey_heights: Dict[str, int] = {}
 
     for entry in journal.iter_entries():
+        if entry.payload_type == "Identity":
+            did = entry.payload.get("did")
+            if did and entry.author == did and entry.height > pubkey_heights.get(did, -1):
+                pubkey_heights[did] = entry.height
+                pubkeys[did] = entry.payload.get("pubkey")
         if entry.op == Op.SERVICE_OFFER and entry.payload_type == "ServiceOffer":
             sid = entry.payload.get("service_id")
             provider = entry.payload.get("provider")
@@ -1266,13 +1276,13 @@ def _get_offers(journal: Journal) -> List[Dict]:
                     revoked_ids.add(sid)
 
     return [
-        _enrich_offer(journal, ent)
+        _enrich_offer(journal, ent, pubkeys)
         for sid, ent in offer_entries.items()
         if sid not in revoked_ids
     ]
 
 
-def _enrich_offer(journal: Journal, entry) -> Dict:
+def _enrich_offer(journal: Journal, entry, pubkeys: Optional[Dict[str, str]] = None) -> Dict:
     """Return a self-contained, verifiable offer dict for federation/export.
 
     The stored payload omits ``sig``/``signer_did`` (they are not part of the
@@ -1292,7 +1302,7 @@ def _enrich_offer(journal: Journal, entry) -> Dict:
     out = dict(entry.payload)
     out["sig"] = entry.sig
     out["signer_did"] = entry.author
-    pubkey = _get_inviter_pubkey(journal, entry.author)
+    pubkey = pubkeys.get(entry.author) if pubkeys is not None else _get_inviter_pubkey(journal, entry.author)
     if pubkey:
         out["provider_pubkey"] = pubkey
     return out
