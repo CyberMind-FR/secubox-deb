@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Hall v2 : rubrique « Applications », vignettes Streamlit sous session (ref #2996)
+
+« next » (le GO sur la fusion des flux reste au propriétaire). PR #3051 : `secubox-streamlit` 1.6.2 ajoute
+`GET /apps/vitrine` (lecture gardée : nom, en ligne, domaine de la première instance active de `streamlit.toml`, vignette
+conservée et sa date ; jamais de capture déclenchée). `secubox-webos` 1.19.21 : relais du vhost du Hall pour
+`/apps/vitrine` et `/apps/{nom}/screenshot` **sous `auth_request`** — décision #1776 (une vignette photographie l'appli)
+respectée, un anonyme reçoit 401, un POST 403, le reste de l'API Streamlit n'est pas relayé ; rubrique « Applications » dans
+la mosaïque (tuile = lien vers le domaine de l'appli ou console Streamlit embarquée, archivées écartées, pastille
+en ligne / endormie, message explicite sans session). Corrige au passage un dégât du `ruff --fix` de 1.19.20 : l'import
+`Service` de `api/main.py` que `test_endpoints` lit avait été retiré (le test échouait seul, et dans la suite selon
+l'ordre) — rétabli avec `# noqa: F401`. Déployé sur gk2, publié dans apt trixie. Leçon : ne jamais `ruff --fix` un fichier
+d'API sans relire les suppressions d'imports (un import « inutilisé » peut être un point d'accès des tests).
+
 ## 2026-10-22 — Registre du Hall : fiches `registre.d` pour les modules API seule (ref #2996)
 
 « next » (le GO sur la fusion des flux reste au propriétaire). PR #3050 : un module API seule — sans page, donc sans

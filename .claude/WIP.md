@@ -55,10 +55,10 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - **Fait (webos 1.19.19, metanews 0.5.2, bbs 0.37.12, billets 0.13.3 ; 2026-10-22)** : micros d'autres origines encartés
   (marque rangée, message à leur origine exacte).
 - **Fait (webos 1.19.20, ephemeride 0.1.1, ipv6guard 0.2.2 ; 2026-10-22)** : fiches `registre.d` des modules API seule.
+- **Fait (webos 1.19.21, streamlit 1.6.2 ; 2026-10-22)** : rubrique « Applications » (vignettes Streamlit sous session).
 - ⬜ **Next Up** : phase 4, reste — **GO du propriétaire** sur la fusion des flux (retirer ou masquer les cartes MetaNews / Flux
-  YouTube / Billets de l'accueil v2 — ne se fait pas sur un « next ») ; relais Streamlit `/apps/{nom}/screenshot` pour les
-  vignettes ; à trancher : reprise du relevé système dans les courbes de `secubox-metrics` ; option `hall.v2.hero-dice` ;
-  mesure du dé sur RPi4.
+  YouTube / Billets de l'accueil v2 — ne se fait pas sur un « next ») ; à trancher : reprise du relevé système dans les courbes
+  de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
 
 ## ✅ Fusionné et déployé le 2026-10-21 (PR #2997, #2999, #3001, #3004, #3006 fusionnées en squash)
 
