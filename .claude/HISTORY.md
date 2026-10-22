@@ -35,7 +35,9 @@ sync -R` avec le backend imapc de Dovecot dans le LXC mail (rien à installer, O
 box (`/etc/secubox/secrets/mail/imap-sync`, root 0600, jamais en argument ni en retour), minuterie 15 min, routes
 `/imap-sync`, volet avec préréglage OVH ; « /smtp-relay/ local default » : `local_default` (LXC mail :25 sans auth)
 et `POST /config/local-default`, bouton dans la page. Incident : 2.16.3 a laissé l'API mail à terre 15 min (`re` non
-importé, invisible à `py_compile`) ; 2.16.4 corrige, règle notée (importer le module avant de déployer). Tout publié
+importé, invisible à `py_compile`) ; 2.16.4 corrige, règle notée (importer le module avant de déployer). 2.16.5 (PR
+#3038) : « Relais SMTP sortant : via # » (un `relayhost =` vide lu jusqu'à la ligne suivante) et introduction du volet
+honnête quand le greffon manque. Tout publié
 dans apt trixie. Sans boîte OVH déclarée tant que le propriétaire n'a pas saisi ses identifiants dans le volet.
 
 ## 2026-10-22 — Retrait de zkp ; Coffre en Aurora ; Annuaire : offres de services réelles (closes #3019, closes #3020, closes #3021)
