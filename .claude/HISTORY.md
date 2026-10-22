@@ -9,6 +9,15 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Hub : lien d'un module autonome vers son propre vhost (closes #3054)
+
+« https://admin.gk2.secubox.in/metanews/ » : la page rendue était « Module Not Found » du hub (HTTP 200 trompeur) — MetaNews
+n'a pas de page sous l'administration, son interface vit sur `metanews.<domaine>` ; l'entrée « autonome » de #3042 pointait
+donc dans le vide. PR #3055, `secubox-hub` 1.12.26 : pour un module `autonome`, `_compute_menu_sync` pose
+`externe = https://<hote>.<domaine de la box>/` (`hote_box`, clé `hote` optionnelle, jamais un domaine codé en dur ; sans
+domaine connu, pas de lien) ; `sidebar.js` v2.45.0 rend alors un lien `target=_blank rel=noopener` sans `navClick`. Déployé
+sur gk2 (agrégateur relancé, `menu.json` porte `externe` pour metanews), publié dans apt trixie.
+
 ## 2026-10-22 — Retrait de secubox-socialrelay (closes #3052)
 
 « https://admin.gk2.secubox.in/social/ decomissionne ». PR #3053, même procédure que reality / ai-insights / zkp :
