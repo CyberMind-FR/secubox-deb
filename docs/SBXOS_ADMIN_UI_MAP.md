@@ -124,7 +124,6 @@
 | Coffre (`vault`) | `/vault/` oui | CERTIFICATE | `packages/secubox-vault/www` + sidebar.js | non | moyen | trois pages (/vault/, /coffre/, /pgp/) dont deux hors menu : raccorder sans les modifier ; ne jamais re-sceller |
 | Identity Manager (`avatar`) | `/avatar/` oui | USER | `packages/secubox-avatar/www` + sidebar.js | non | faible | « Identity Manager » dans le menu mesh : entrée à renommer plus tard |
 | Users (`users`) | `/users/` oui | USER | `packages/secubox-auth/www` + sidebar.js | non | élevé | comptes SecuBox ; la séparation comptes Linux / identités SBXOS (capacites.py) est inviolable |
-| Zero-Knowledge Proof (`zkp`) | `/zkp/` oui | USER | `packages/secubox-zkp/www` + sidebar.js | non | faible |  |
 
 ## ⚙️ 6 — Système (29)
 

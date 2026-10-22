@@ -94,7 +94,6 @@ Every module page must include:
 | Vortex Firewall | `/vortex-firewall/` | nftables threat enforcement |
 | NAC | `/nac/` | Network access control |
 | Tor | `/tor/` | Anonymity network |
-| ZKP | `/zkp/` | Zero-Knowledge Proof |
 
 ### Network (🌐)
 

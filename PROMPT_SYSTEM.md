@@ -101,7 +101,6 @@ Séparation de privilèges formelle entre chaque couche. Ne jamais croiser les r
 | firewall | nftables | actif |
 | dns | Unbound (Vortex DNS) | actif |
 | waf | HAProxy + sbxwaf | actif |
-| zkp | SecuBox-ZKP (GK-HAM-2025) | en développement |
 | mirrornet | MirrorNet P2P mesh | en développement |
 | parameters | double-buffer 4R | actif |
 | dashboard | C3BOX (HTML/JS) | actif |

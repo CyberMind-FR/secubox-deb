@@ -716,21 +716,6 @@ MODULES = {
             "zh": ["Tor暴露", "SSL证书", "DNS记录", "Mesh访问"]
         }
     },
-    "zkp": {
-        "name": "Zero-Knowledge Proofs", "icon": "🔐", "category": "Privacy",
-        "description": {
-            "en": "ZKP Hamiltonian authentication",
-            "fr": "Authentification ZKP Hamiltonien",
-            "de": "ZKP Hamiltonian-Authentifizierung",
-            "zh": "ZKP哈密顿认证"
-        },
-        "features": {
-            "en": ["Proof generation", "Verification", "Key management", "MirrorNet"],
-            "fr": ["Génération preuves", "Vérification", "Gestion clés", "MirrorNet"],
-            "de": ["Beweisgenerierung", "Verifizierung", "Schlüsselverwaltung", "MirrorNet"],
-            "zh": ["证明生成", "验证", "密钥管理", "MirrorNet"]
-        }
-    },
     "simplex": {
         "name": "SimpleX Chat", "icon": "💬", "category": "Privacy",
         "description": {

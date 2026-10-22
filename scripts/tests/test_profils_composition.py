@@ -29,7 +29,7 @@ def _champ(profil, champ):
 HORS_PROFIL = {
     "secubox-daemon-c3box", "secubox-eye-remote", "secubox-rbs-sensor",
     "secubox-led-heartbeat", "secubox-meshtastic", "secubox-daemon", "secubox-ui-manager",
-    "secubox-voice-moteur", "secubox-zia-llm", "secubox-zkp", "secubox-clamav",
+    "secubox-voice-moteur", "secubox-zia-llm", "secubox-clamav",
     "secubox-netboot", "secubox-vm", "secubox-soc-agent",
     "secubox-jitsi",                                                            # visioconference optionnelle, LXC a provisionner : a la demande (#2322)
     "secubox-autoload",                                                         # infrastructure seulement (admin.gk2.secubox.in), jamais sur une box cliente (#2182)

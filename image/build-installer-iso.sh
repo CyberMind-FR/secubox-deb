@@ -772,7 +772,6 @@ log "Disabling services incompatible with live boot..."
 
 DISABLE_ON_LIVE=(
     secubox-haproxy
-    secubox-zkp
     secubox-nac
         secubox-dpi
     secubox-qos

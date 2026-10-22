@@ -1,3 +1,9 @@
+secubox-aggregator (0.4.6-1~trixie1) trixie; urgency=medium
+
+  * zkp rejoint RETIRED_MODULES (ref #3019).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 06:25:58 +0200
+
 secubox-aggregator (0.4.5-1~trixie1) trixie; urgency=medium
 
   * reality et ai-insights rejoignent RETIRED_MODULES (ref #3017) : ignorés même si un

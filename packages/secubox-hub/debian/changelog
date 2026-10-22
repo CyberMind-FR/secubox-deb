@@ -1,3 +1,9 @@
+secubox-hub (1.12.23-1~trixie1) trixie; urgency=medium
+
+  * espaces.json et mode d'authentification sans secubox-zkp, retiré (ref #3019).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 06:28:52 +0200
+
 secubox-hub (1.12.22-1~trixie1) trixie; urgency=medium
 
   * espaces.json sans reality ni ai-insights (ref #3017).

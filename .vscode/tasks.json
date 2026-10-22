@@ -70,7 +70,7 @@
       "id": "moduleName",
       "description": "Nom du module SecuBox",
       "type": "pickString",
-      "options": ["firewall", "dpi", "dns", "waf", "ids", "dashboard", "zkp", "mirrornet", "parameters"],
+      "options": ["firewall", "dpi", "dns", "waf", "ids", "dashboard", "mirrornet", "parameters"],
       "default": "firewall"
     }
   ]

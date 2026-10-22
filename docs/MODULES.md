@@ -115,7 +115,6 @@ This document catalogs all SecuBox Debian modules, their features, and UI screen
 ### Advanced Security
 | Module | Icon | Path | Description |
 |--------|------|------|-------------|
-| secubox-zkp | `🔐` | `/zkp/` | Zero-knowledge proofs |
 
 ---
 
@@ -440,7 +439,6 @@ docs/screenshots/<module-name>.png
 - [ ] system.png
 - [ ] backup.png
 - [ ] hardening.png
-- [ ] zkp.png
 
 ---
 

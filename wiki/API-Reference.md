@@ -837,17 +837,6 @@ Peer-to-peer networking.
 | `/share` | POST | Yes | Share resource |
 | `/resources` | GET | Yes | Shared resources |
 
-### ZKP API (`/api/v1/zkp/`)
-
-Zero-knowledge proof system.
-
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/status` | GET | No | ZKP status |
-| `/generate` | POST | Yes | Generate proof |
-| `/verify` | POST | Yes | Verify proof |
-| `/challenges` | GET | Yes | Active challenges |
-
 ### Repo API (`/api/v1/repo/`)
 
 APT repository management.

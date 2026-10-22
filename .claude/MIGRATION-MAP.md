@@ -89,7 +89,6 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-metrics** | ✅ | ✅ | ✅ | real-time metrics dashboard | ✅ |
 | **secubox-mesh** | ✅ | ✅ | ✅ | Mesh 802.11s + AP Passpoint | ✅ |
 | **secubox-p2p** | ✅ | ✅ | ✅ | P2P networking | ✅ |
-| **secubox-zkp** | ✅ | ✅ | ✅ | ZKP Hamiltonian proofs | ✅ |
 | **secubox-hardening** | ✅ | ✅ | ✅ | sysctl + module blacklist | ✅ |
 | **secubox-repo** | ✅ | ✅ | ✅ | APT repository management | ✅ |
 | **secubox-daemon** | — | Go | ✅ | Mesh daemon (secuboxd, secuboxctl) | ✅ |
