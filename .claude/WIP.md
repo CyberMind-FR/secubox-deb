@@ -75,9 +75,11 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - **Suppression de certificat HAProxy** — closes #3012 (`secubox-haproxy` 1.12.3) : `haproxyctl cert delete` sous sudoers.
 - **Exposition par vhost** — closes #3013 (`secubox-aggregator` 0.4.4) : `exposure` à socket dédiée, jamais monté dans
   l'agrégateur (`DEDICATED_MODULES`). Même famille que #3003 (`system`), à trancher.
-- À trancher : **`secubox-reality`** (points de sortie VLESS+Reality+Vision Xray, 0.2.3 sur gk2) — pas de binaire `xray`,
-  base vide, aucun point de sortie, aucun module dépendant (seuls isp/profils/meta le citent) ; proposition :
-  décommissionner (purge sur gk2, retrait des métapaquets, #2050 « wireguard/reality »).
+- **Retrait de `secubox-reality` et du composant `ai-insights`** — closes #3017 (PR #3018 ; threats 1.6.1, aggregator 0.4.5,
+  system 1.11.3, core 1.7.13, profiles 0.23.12, hub 1.12.22, ai-gateway 1.5.1 sur gk2 + apt trixie ; les deux paquets purgés
+  de gk2 et retirés du dépôt trixie et bookworm). Façades sans données : décision du propriétaire du 2026-10-22. Non
+  redéployés : métapaquets (`secubox-meta` ne se construit pas sur master, `gen-meta` : assist, courbes, zkp hors arbre),
+  isp/profils (non installés sur gk2). Reste `hub`/`espaces.json` : `media-smb` à classer (test préexistant).
 - Charge de gk2 pendant ces déploiements : load 20-28 sur 4 cœurs, 9 Go de swap ; systemd et dpkg très lents (postinst du hub
   à plusieurs minutes). metrics était le premier consommateur avant 1.29.4.
 

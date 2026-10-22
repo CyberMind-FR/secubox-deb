@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Retrait de secubox-reality et du composant ai-insights (closes #3017)
+
+« retrait reality et ai-insights » (propriétaire, après inventaire : Reality sans binaire `xray` ni point de sortie,
+ai-insights avec deux modèles codés en dur et des menaces jamais alimentées). PR #3018 : sources retirées (90 fichiers),
+`secubox-threats` 1.6.1 sans le composant, `secubox-aggregator` 0.4.5 (`RETIRED_MODULES` += reality, ai-insights),
+`secubox-system` 1.11.3 (anneau MIND → ai-gateway), `secubox-core` 1.7.13, `secubox-profiles` 0.23.12, `secubox-hub`
+1.12.22, `secubox-ai-gateway` 1.5.1, métapaquets meta/isp/profils en source ; catalogues, wiki, scripts et workflows
+nettoyés ; `test_absorptions_2050` repasse au vert. Sur gk2 : unités arrêtées, `apt purge` des deux paquets (l'ancien
+transitionnel `secubox-ai-insights` 1.2.3 compris), extraits nginx et données retirés (archive
+`/var/backups/retrait-3017-*.tar.gz`), `ai-insights` retiré d'`aggregator.toml` (sauvegarde `.avant-3017`), paquets
+retirés du dépôt apt (trixie et bookworm). Non redéployés : métapaquets (`secubox-meta` ne se construit pas sur master,
+`gen-meta` refuse assist/courbes/zkp hors arbre), isp/profils (absents de gk2).
+
 ## 2026-10-22 — Double tampon réel des caches ; certificats HAProxy ; exposition par socket dédiée (closes #3011, closes #3012, closes #3013)
 
 « problème dans le double buffer de refresh de cache, il refresh à vide avant de régénérer la seconde passe » (page
