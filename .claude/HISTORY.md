@@ -9,6 +9,34 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Double tampon réel des caches ; certificats HAProxy ; exposition par socket dédiée (closes #3011, closes #3012, closes #3013)
+
+« problème dans le double buffer de refresh de cache, il refresh à vide avant de régénérer la seconde passe » (page
+`metrics/vhosts.html`). Cause réelle : `VhostStatsAggregator` modifiait `_jours` en place pendant qu'une requête le lisait
+(« dictionary changed size during iteration » → 500 → page vide, 5 fois en 6 h) et chaque vue se recalculait sur le chemin
+de la requête (7-8 s, 100 000 entrées, process metrics à 1,5 Go / 87 % CPU). `secubox-metrics` 1.29.4 (PR #3014) :
+verrou lectures/collecte, vues servies depuis un tampon rebâti par la collecte puis basculé d'un coup (vues de base
+toujours prêtes, autres tant que demandées < 1 h), plus de TTL ; la page garde la vue précédente si un appel échoue.
+Même principe pour `secubox-hub` 1.12.21 (un `list-units` expiré ne remplace plus le lot de santé ; menu vide refusé
+par-dessus un menu plein ; `sidebar.js` 2.44.1 ignore un lot `warming`/vide) et `secubox-webos` 1.19.10 (sondes
+agrégateur/profils/systemd distinguant « injoignable » de « vide », dernière valeur conservée, `_un_cycle()`, le Hall
+n'applique qu'une réponse remplie). Après déploiement : metrics à 33 % CPU / 670 Mo, aucun traceback. Deux tests
+metrics à date figée (2026-08-25, hors rétention) réparés ; échecs préexistants sur master inchangés (hub 2, metrics 1,
+haproxy 19). « Suppression impossible : HTTP 500 » (page HAProxy) : `delete_certificate` faisait mkdir + rename dans
+`/srv/haproxy/certs` (root) sous `secubox` ; `secubox-haproxy` 1.12.3 (PR #3015) : `haproxyctl cert delete <nom>` (root,
+nom validé, .pem mis de côté dans `certs/backup/`), sudoers `secubox-haproxy` à argv exact par le postinst, API qui délègue
+hors boucle (404/502 explicites). « Erreur 500 » de l'exposition par vhost (lyrion) : `exposure` monté EN PROCESSUS dans
+l'agrégateur (`secubox`, `ProtectSystem=full`) alors qu'il écrit /etc/nginx et torrc et que son service root
+`secubox-exposure.service` tourne ; `secubox-aggregator` 0.4.4 (PR #3016) : `DEDICATED_MODULES = {lyrion, exposure}` et
+`AGG_EXCLUDE`, relais transparent vers `/run/secubox/exposure.sock` ; sur gk2 `exposure` retiré d'`aggregator.toml`
+(sauvegarde `.avant-3013`), `/api/v1/exposure/status` répond 200 par le chemin public. Même famille que #3003 (`system`),
+toujours à l'arbitrage. Les cinq paquets déployés sur gk2 (trois redémarrages de l'agrégateur, 2-3 min de chauffe chacun
+sous une charge de 20-28) et publiés dans apt trixie. Inventaire demandé : `secubox-reality` 0.2.3 (gestionnaire de points de
+sortie VLESS+Reality+Vision Xray) tourne sur gk2 sans binaire `xray`, base vide, aucun point de sortie ; seuls les
+métapaquets isp/profils/meta le citent ; proposition : décommissionner (voir WIP, à trancher). Note : un `reality.db` vide
+appartenant à root est né à 05:02 pendant mon inventaire (probable effet d'une sonde sqlite en root) ; sans incidence tant
+que le module est inutilisé, à supprimer avec lui.
+
 ## 2026-10-21 — Hall : Services en ordre alphabétique ; PeerTube : SSO pour l'administrateur gk2 (closes #3007, closes #3008)
 
 « services ordre alphabetiques et sso ko avec peertube ». `secubox-webos` 1.19.9 (PR #3009) : la rubrique « Services »

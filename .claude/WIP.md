@@ -66,6 +66,21 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   est dans le chantier ci-dessus. CI : les échecs `gabarit` (4 écarts), `pytest · secubox-core` (sshd), `appstore-catalogue`,
   `build (secubox-appstore|meta)` (arbre des métapaquets) et `secubox-hub` (espaces.json) préexistent sur master.
 
+## ✅ Fusionné et déployé le 2026-10-22 (PR #3014, #3015, #3016 fusionnées en squash)
+
+- **Double tampon réel des caches** — closes #3011 (`secubox-metrics` 1.29.4, `secubox-hub` 1.12.21, `secubox-webos`
+  1.19.10 sur gk2 + apt trixie) : vues vhost de metrics servies depuis un tampon rebâti par la collecte (verrou
+  lectures/collecte, plus de 500 ni de recalcul sur la requête) ; lot de santé et menu du hub jamais remplacés par une passe
+  dégradée ; registre du Hall avec sondes « injoignable ≠ vide » ; pages et sidebar n'appliquent qu'un cache rempli.
+- **Suppression de certificat HAProxy** — closes #3012 (`secubox-haproxy` 1.12.3) : `haproxyctl cert delete` sous sudoers.
+- **Exposition par vhost** — closes #3013 (`secubox-aggregator` 0.4.4) : `exposure` à socket dédiée, jamais monté dans
+  l'agrégateur (`DEDICATED_MODULES`). Même famille que #3003 (`system`), à trancher.
+- À trancher : **`secubox-reality`** (points de sortie VLESS+Reality+Vision Xray, 0.2.3 sur gk2) — pas de binaire `xray`,
+  base vide, aucun point de sortie, aucun module dépendant (seuls isp/profils/meta le citent) ; proposition :
+  décommissionner (purge sur gk2, retrait des métapaquets, #2050 « wireguard/reality »).
+- Charge de gk2 pendant ces déploiements : load 20-28 sur 4 cœurs, 9 Go de swap ; systemd et dpkg très lents (postinst du hub
+  à plusieurs minutes). metrics était le premier consommateur avant 1.29.4.
+
 ## 🔄 Chantier en cours — ESPRESSObin lgm-ebin, client `lgm` beta (2026-10-16)
 
 - **Fait** : profil `minimal` (0.5.1, sans WAF ni HAProxy : la carte de 951 Mo a saturé), `ndpid-engine` >= 1.7.2, WireGuard serveur sur la box (`wgctl serveur init`, #2845), panneaux Auto-Load et pairs p2p dans `/fleet/`
