@@ -550,10 +550,6 @@
   "zigbee": {
    "espace": "services",
    "objet": "SERVICE"
-  },
-  "zkp": {
-   "espace": "identite",
-   "objet": "USER"
   }
  }
 }

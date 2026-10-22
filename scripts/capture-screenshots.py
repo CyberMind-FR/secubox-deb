@@ -125,7 +125,7 @@ def categorize_module(module_id: str) -> str:
 
         # VPN & Privacy
         "wireguard": "VPN", "mesh": "VPN", "p2p": "VPN", "master-link": "VPN",
-        "tor": "Privacy", "exposure": "Privacy", "zkp": "Privacy",
+        "tor": "Privacy", "exposure": "Privacy", 
         "simplex": "Privacy", "vault": "Privacy",
 
         # Monitoring

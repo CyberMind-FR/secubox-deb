@@ -163,6 +163,7 @@ _LOAD_ERRORS: Dict[str, str] = {}
 RETIRED_MODULES = frozenset({
     "hexo", "ollama", "gotosocial", "redroid", "simplex", "newsbin", "voip", "frigate",
     "reality", "ai-insights",   # #3017 : façades sans données, retirées
+    "zkp",                      # #3019 : tableau de bord ZKP hors arbre, retiré
 })
 
 # Modules À SOCKET DÉDIÉE, jamais montés en processus même si un aggregator.toml les cite (#3013) :

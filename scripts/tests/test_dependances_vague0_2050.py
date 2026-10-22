@@ -28,8 +28,3 @@ def test_streamforge_est_retire_et_le_vrai_nom_du_paquet_streamlit_existe():
     assert "secubox-streamlit" in _binaires() and "streamlit" not in _binaires()
 
 
-def test_zkp_recommande_les_outils_dont_il_appelle_les_binaires():
-    # secubox-zkp appelle zkp_keygen / zkp_prover / zkp_verifier (api/main.py) ; il dégrade proprement s'ils manquent
-    # (`which`), donc Recommends et non Depends : les outils ne sont pas publiés pour toutes les architectures.
-    assert "zkp-hamiltonian-tools" in _champ("secubox-zkp", "Recommends")
-    assert "zkp-hamiltonian-tools" in _binaires()

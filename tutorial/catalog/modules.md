@@ -186,7 +186,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-zia` | ai | lite | oui | 7 | 1 | — | — | 4 | oui |
 | `secubox-zia-llm` | ai | lite | — | — | 1 | — | — | — | — |
 | `secubox-zigbee` | network | lite | oui | 9 | 3 | 1 | oui | 1 | oui |
-| `secubox-zkp` | misc | lite | oui | 7 | — | 1 | — | — | oui |
 
 ## Détail par module
 
@@ -837,7 +836,7 @@ Frigate NVR for SecuBox
 SecuBox Full — All 49 modules
 
 - **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`, `secubox-hub`, `secubox-portal`, `secubox-system`, `secubox-waf`, `secubox-vortex-firewall`, `secubox-auth`, `secubox-nac`, `secubox-wireguard`, `secubox-mesh`, `secubox-p2p`, `secubox-netmodes`, `secubox-dpi`, `secubox-qos`, `secubox-traffic`, `secubox-vhost`, `secubox-haproxy`, `secubox-cdn`, `secubox-dns`, `secubox-vortex-dns`, `secubox-meshname`, `secubox-mediaflow`, `secubox-device-intel`, `secubox-watchdog`, `secubox-metrics`, `secubox-soc`, `secubox-roadmap`, `secubox-mail`, `secubox-mail-lxc`, `secubox-webmail`, `secubox-webmail-lxc`, `secubox-users`, `secubox-gitea`, `secubox-nextcloud`, `secubox-droplet`, `secubox-streamlit`, `secubox-streamforge`, `secubox-metablogizer`, `secubox-publish`, `secubox-c3box`, `secubox-backup`, `secubox-tor`, `secubox-exposure`, `secubox-zkp`, `secubox-mitmproxy`, `secubox-repo`, `secubox-hardening`
+- **Dépend de** : `secubox-core`, `secubox-hub`, `secubox-portal`, `secubox-system`, `secubox-waf`, `secubox-vortex-firewall`, `secubox-auth`, `secubox-nac`, `secubox-wireguard`, `secubox-mesh`, `secubox-p2p`, `secubox-netmodes`, `secubox-dpi`, `secubox-qos`, `secubox-traffic`, `secubox-vhost`, `secubox-haproxy`, `secubox-cdn`, `secubox-dns`, `secubox-vortex-dns`, `secubox-meshname`, `secubox-mediaflow`, `secubox-device-intel`, `secubox-watchdog`, `secubox-metrics`, `secubox-soc`, `secubox-roadmap`, `secubox-mail`, `secubox-mail-lxc`, `secubox-webmail`, `secubox-webmail-lxc`, `secubox-users`, `secubox-gitea`, `secubox-nextcloud`, `secubox-droplet`, `secubox-streamlit`, `secubox-streamforge`, `secubox-metablogizer`, `secubox-publish`, `secubox-c3box`, `secubox-backup`, `secubox-tor`, `secubox-exposure`, `secubox-mitmproxy`, `secubox-repo`, `secubox-hardening`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : À documenter
@@ -2904,20 +2903,4 @@ SecuBox Zigbee — Coordinator RF IoT (MIND layer)
 - **Tests** : 1
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-zigbee/`
-
-### `secubox-zkp`
-
-SecuBox ZKP - Zero-Knowledge Proof Dashboard
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 7 route(s), socket `/run/secubox/zkp.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/zkp
-- **CLI** : À documenter
-- **Units systemd** : `secubox-zkp.service`
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-zkp/`
 

@@ -210,7 +210,6 @@ ssh-keyscan -H apt.secubox.in
 ### Privacy
 | Package | Description |
 |---------|-------------|
-| `secubox-zkp` | Zero-knowledge proofs (Hamiltonian) |
 
 ### Infrastructure
 | Package | Description |

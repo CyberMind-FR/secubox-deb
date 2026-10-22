@@ -99,7 +99,6 @@ MODULES = {
     "p2p": {"path": "/p2p/", "name": "P2P Network", "category": "VPN", "icon": "🔗"},
     "tor": {"path": "/tor/", "name": "Tor Network", "category": "Privacy", "icon": "🧅"},
     "exposure": {"path": "/exposure/", "name": "Exposure Settings", "category": "Privacy", "icon": "🌐"},
-    "zkp": {"path": "/zkp/", "name": "Zero-Knowledge Proofs", "category": "Privacy", "icon": "🔐"},
 
     # Monitoring
     "dpi": {"path": "/dpi/", "name": "Deep Packet Inspection", "category": "Monitoring", "icon": "🔬"},

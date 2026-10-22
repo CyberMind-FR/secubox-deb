@@ -104,7 +104,6 @@ Domaine d'identité : authentification ZKP, gestion des accès, TURN/STUN.
 | Module | Rôle | Statut |
 |--------|------|--------|
 | `secubox-auth` | Authentification centralisée | ✅ |
-| `secubox-zkp` | Preuves zero-knowledge (GK·HAM-HASH) | 🔄 |
 | `secubox-turn` | Serveur TURN/STUN (coturn) | ✅ |
 | `secubox-vault` | Gestion des secrets | ✅ |
 

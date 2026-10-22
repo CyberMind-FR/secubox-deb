@@ -80,7 +80,6 @@ MODULES = [
     {"name": "Vortex Firewall", "path": "/vortex-firewall/", "category": "security"},
     {"name": "NAC", "path": "/nac/", "category": "security"},
     {"name": "Tor", "path": "/tor/", "category": "security"},
-    {"name": "ZKP", "path": "/zkp/", "category": "security"},
 
     # Network
     {"name": "DNS", "path": "/dns/", "category": "network"},

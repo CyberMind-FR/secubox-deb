@@ -338,10 +338,6 @@ def public_info():
         except Exception:
             pass
 
-    # Check for ZKP service
-    if _unite_active("secubox-zkp"):
-        auth_mode = "ZKP"
-
     return {
         "version": version,
         "auth_mode": auth_mode,
@@ -1403,8 +1399,8 @@ def auth_mode(user=Depends(require_jwt)):
         except Exception:
             pass
 
-    # Also check for ZKP service
-    zkp_running = _unite_active("secubox-zkp")
+    # secubox-zkp est retiré (#3019) : plus d'unité à sonder.
+    zkp_running = False
 
     mode = "ZKP" if (zkp_enabled or zkp_running) else "Standard"
 
