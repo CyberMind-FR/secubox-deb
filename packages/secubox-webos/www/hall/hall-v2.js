@@ -374,6 +374,8 @@
   // corps, ses commandes (⠿ ★ ?) à l'article, l'ancien rendu n'est pas retiré. Hors lot : le pied v2 de la phase 3.
   var MIGREES=['securite','acteurs','radar','guardian','dpi','ipv6guard','activite'];
   var ICO_CARTE={securite:'bouclier',acteurs:'bouclier',radar:'bouclier',guardian:'globe',dpi:'reseau',ipv6guard:'reseau',activite:'actualite'};
+  // Une carte de curation a un id à elle (pas de module « securite ») : son statut est celui du module qui la sert.
+  var SOURCE_STATUT={securite:'waf',acteurs:'actor',radar:'actor',guardian:'ad-guard',activite:'sbxid'};
   function habille(c){
     var id=c.getAttribute('data-embed');
     if(!window.SbxUI||MIGREES.indexOf(id)<0||c.classList.contains('sbx-card')) return;
@@ -387,7 +389,7 @@
     var t=d.computed_at?d.computed_at*1000:Date.now(), iv=(d.intervalle_s||15)*1000, perime=Date.now()-t>2*iv;
     Array.prototype.forEach.call(document.querySelectorAll('.fcard[data-embed]'),function(c){
       habille(c);
-      var s=parId[c.getAttribute('data-embed')], st=(s&&s.status)||'nosource';
+      var id=c.getAttribute('data-embed'), s=parId[id]||parId[SOURCE_STATUT[id]], st=(s&&s.status)||'nosource';
       if(perime) c.setAttribute('data-perime','1'); else c.removeAttribute('data-perime');
       if(c.sbxStatut){ c.sbxStatut(st); c.sbxReleve(new Date(t),perime); }
       else {

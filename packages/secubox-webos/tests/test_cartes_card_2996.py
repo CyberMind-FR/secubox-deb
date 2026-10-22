@@ -29,9 +29,11 @@ CSS = (HALL_DIR / "hall-v2.css").read_text(encoding="utf-8")
 # Réseau = dpi + ipv6guard ; Notifications = activite.
 PREMIER_LOT = ["securite", "acteurs", "radar", "guardian", "dpi", "ipv6guard", "activite"]
 
+# Les cartes de curation portent des ids à elles (securite, guardian, acteurs, radar, activite) : leur statut est celui
+# du MODULE qui les sert dans le registre (waf, ad-guard, actor, sbxid) — SOURCE_STATUT de hall-v2.js.
 SERVICES = {"services": [
-    {"id": "securite", "name": "Sécurité", "category": "wall", "status": "active", "health": {"state": "online"}},
-    {"id": "guardian", "name": "Guardian", "category": "wall", "status": "idle", "health": {"state": "online"}},
+    {"id": "waf", "name": "WAF", "category": "wall", "status": "active", "health": {"state": "online"}},
+    {"id": "ad-guard", "name": "Ad Guard", "category": "wall", "status": "idle", "health": {"state": "online"}},
     {"id": "dpi", "name": "DPI", "category": "mesh", "status": "offline", "health": {"state": "offline"}},
     {"id": "radio", "name": "Radio", "category": "mind", "status": "active", "health": {"state": "online"}},
 ], "computed_at": time.time(), "releve": "2026-10-22T07:10:52+00:00", "intervalle_s": 15}
@@ -42,6 +44,8 @@ def test_le_premier_lot_est_declare_dans_l_ordre_du_prompt():
     assert m, "hall-v2.js doit déclarer MIGREES (cartes habillées en Card)"
     ids = re.findall(r"'([a-z0-9-]+)'", m.group(1))
     assert ids == PREMIER_LOT
+    m = re.search(r"var SOURCE_STATUT\s*=\s*\{([^}]*)\}", JS)
+    assert m and dict(re.findall(r"([a-z]+):'([a-z-]+)'", m.group(1))) == {"securite": "waf", "acteurs": "actor", "radar": "actor", "guardian": "ad-guard", "activite": "sbxid"}
     # Card accepte un hôte : l'article existant est habillé, jamais remplacé.
     assert "o.hote" in COMPOSANTS
     # Les commandes de carte (poignée, étoile, aide) restent à l'article, hors du corps.
