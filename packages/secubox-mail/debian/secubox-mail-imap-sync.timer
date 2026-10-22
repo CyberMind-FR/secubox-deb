@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Mail — rapatriement des boîtes IMAP distantes toutes les 15 min (#3033)
+
+[Timer]
+OnBootSec=3min
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redéclenche pas après une réactivation.
+OnActiveSec=3min
+OnUnitActiveSec=15min
+RandomizedDelaySec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

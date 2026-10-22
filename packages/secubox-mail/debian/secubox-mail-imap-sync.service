@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Mail — rapatriement des boîtes IMAP distantes (doveadm sync imapc, #3033)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3033
+After=secubox-mail.service
+
+[Service]
+Type=oneshot
+# Root : lit les identifiants (/etc/secubox/secrets/mail/imap-sync, 0600) et entre dans le conteneur mail.
+ExecStart=/usr/sbin/mailctl imap-sync run
+ProtectHome=true
+PrivateTmp=true

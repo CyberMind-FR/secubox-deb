@@ -160,7 +160,7 @@
                     <label>Mot de passe<input type="password" id="cPass" autocomplete="new-password" placeholder="inchangé"><small id="sPass">Jamais affiché ; laissé vide, le mot de passe enregistré est conservé.</small></label>
                     <label>Domaine d’expédition<input type="text" id="cDom" placeholder="exemple.test" autocomplete="off"><small>Domaine par défaut du courrier sortant</small></label>
                     <label class="coche"><input type="checkbox" id="cTls" checked> Chiffrement TLS</label>
-                    <div class="bout"><button class="btn" type="button" id="cReinit">Réinitialiser</button><button class="btn prim" type="submit" id="btnConf">Enregistrer la configuration</button></div>
+                    <div class="bout"><button class="btn" type="button" id="cReinit">Réinitialiser</button><button class="btn" type="button" id="cLocal" hidden title="Le serveur mail de la box (LXC mail, port 25, sans mot de passe) devient le smarthost : le courrier sortant de l’hôte part par lui.">Relais local par défaut</button><button class="btn prim" type="submit" id="btnConf">Enregistrer la configuration</button></div>
                 </form>
                 <div id="rConf" class="retour" hidden></div>
             </div>
@@ -183,6 +183,7 @@
         const $ = id => document.getElementById(id);
         const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
         const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        let LOCAL_DEFAUT = null;
         const nombre = n => (n === null || n === undefined) ? '—' : Number(n).toLocaleString('fr-FR');
 
         let ST = null, STATS = null, QUEUE = null, SESSION_OK = true, CHARGE = false, ONGLET = 'apercu';
@@ -336,12 +337,23 @@
             $('cHote').value = d.smarthost || ''; $('cPort').value = d.port || 587; $('cUser').value = d.username || '';
             $('cDom').value = d.from_domain || ''; $('cTls').checked = d.tls !== false;
             $('cPass').value = '';
+            LOCAL_DEFAUT = DEMO ? { smarthost: '192.0.2.10', port: 25 } : (d.local_default || null);
+            $('cLocal').hidden = !LOCAL_DEFAUT; if (LOCAL_DEFAUT) $('cLocal').textContent = 'Relais local par défaut (' + LOCAL_DEFAUT.smarthost + ':' + LOCAL_DEFAUT.port + ')';
             MDP_DEFINI = DEMO ? false : !!d.password;     // l'API ne renvoie qu'un masque : on retient seulement « défini »
             $('cPass').placeholder = MDP_DEFINI ? 'défini, inchangé' : 'aucun mot de passe enregistré';
             CONF_SALE = false; $('rConf').hidden = true; annoncer();
         }
         document.querySelectorAll('#fConf input').forEach(i => i.addEventListener('input', () => { CONF_SALE = true; }));
         $('cReinit').addEventListener('click', () => { CONF_SALE = false; chargerConfig(); });
+        // Relais local par défaut (#3028) : POST /config/local-default, inerte en démonstration.
+        $('cLocal').addEventListener('click', async () => {
+            if (DEMO) { retour('rConf', false, 'Démonstration : aucune écriture.'); return; }
+            const b = $('cLocal'); b.disabled = true;
+            const r = await appel('/config/local-default', { method: 'POST' });
+            b.disabled = false;
+            if (r.ok && r.data && r.data.success) { CONF_SALE = false; await chargerConfig(); retour('rConf', true, 'Relais local enregistré : ' + r.data.smarthost + ':' + r.data.port + ' (serveur mail de la box).'); }
+            else retour('rConf', false, 'Enregistrement impossible : ' + motif(r));
+        });
         $('fConf').addEventListener('submit', async ev => {
             ev.preventDefault();
             const config = { smarthost: $('cHote').value.trim(), port: parseInt($('cPort').value) || 587, username: $('cUser').value.trim(),
