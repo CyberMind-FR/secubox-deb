@@ -113,7 +113,7 @@ def test_la_carte_fusionne_les_trois_sources_en_tourniquet(nav):
     assert re.match(r"https://metanews\.", items[0][0]), items[0][0]
     # la vignette MetaNews passe par son relais d'image en même origine (CSP img-src 'self')
     vig = p.evaluate("document.querySelector(\"%s .sbx-news .sbx-news-vignette\").style.backgroundImage" % c)
-    assert "/api/v1/metanews/img?u=" in vig and "exemple.test" in vig
+    assert "/api/v1/metanews/img?u=https%3A%2F%2Fexemple.test%2Fa.jpg" in vig, vig   # encodée UNE fois (le relais répond 404 sinon)
     # la pastille dit « actif » et le pied nomme les sources
     assert p.evaluate("document.querySelector(\"%s .sbx-card-statut\").textContent" % c) == "actif"
     assert "MetaNews" in p.inner_text(c + " .sbx-source")

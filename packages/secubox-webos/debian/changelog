@@ -1,3 +1,11 @@
+secubox-webos (1.19.17-1~trixie1) trixie; urgency=medium
+
+  * Flux d'actualités : les vignettes MetaNews étaient encodées deux fois (NewsItem ré-encodait
+    l'adresse du relais d'image), donc 404 sur gk2 ; NewsItem n'encode plus, il écarte seulement
+    les guillemets (ref #2996).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 15:50:00 +0200
+
 secubox-webos (1.19.16-1~trixie1) trixie; urgency=medium
 
   * Hall v2, phase 4 : carte « Flux d'actualités » (ref #2996) — une Card native sous Accès rapide

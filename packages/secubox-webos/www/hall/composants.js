@@ -117,7 +117,7 @@
 
   function NewsItem(o){
     var a=el('a','sbx-news'); a.href=o.href||'#'; if(o.cible){ a.target=o.cible; if(o.cible==='_blank') a.rel='noopener'; }
-    var vig=el('span','sbx-news-vignette'); vig.setAttribute('aria-hidden','true'); if(o.vignette) vig.style.backgroundImage='url("'+encodeURI(o.vignette).replace(/"/g,'%22')+'")'; a.appendChild(vig);
+    var vig=el('span','sbx-news-vignette'); vig.setAttribute('aria-hidden','true'); if(o.vignette) vig.style.backgroundImage='url("'+String(o.vignette).replace(/["\\\n\r]/g,'')+'")'; a.appendChild(vig);   // l'adresse arrive déjà encodée (relais ?u=…) : on ne ré-encode pas, on écarte seulement ce qui fermerait le url()
     var tx=el('span'); tx.appendChild(el('b',null,o.titre)); tx.appendChild(el('span','sbx-news-meta',[o.source,o.date?anciennete(o.date):null].filter(Boolean).join(' · '))); a.appendChild(tx);
     return a;
   }
