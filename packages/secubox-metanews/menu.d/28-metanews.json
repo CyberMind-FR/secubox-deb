@@ -6,5 +6,6 @@
   "path": "/metanews/",
   "order": 28,
   "description": "Radar d'actualite : plusieurs sources, un evenement, une discussion",
-  "theme": "veille"
+  "theme": "veille",
+  "autonome": true
 }
