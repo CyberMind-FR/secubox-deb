@@ -9,6 +9,22 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Retrait de secubox-socialrelay (closes #3052)
+
+« https://admin.gk2.secubox.in/social/ decomissionne ». PR #3053, même procédure que reality / ai-insights / zkp :
+sources du paquet et icône SBX OS (`art/socialrelay.webp`) retirées ; références vives nettoyées — carte, aide de carte et
+`sbxos/espaces.toml` du Hall, jeux `EMBEDDABLE` / `_CUMULES`, `render-ref.html`, `espaces.json` du hub, métapaquets
+(`isp` Depends, `service-fediverse` Recommends, `arbre.yaml`), `groupes.yaml` de l'appstore, catalogue `tutorial/catalog`,
+`working-set.gk2.txt`, wiki, `generate-admin-ui-map`, test de composition des profils, test `autonome` du hub. Les
+consommateurs tolérants (BBS `--parc` et covers réseaux, radio, metanews, sbxmitm : clients ou émetteurs optionnels) ne sont
+pas touchés : sans socket ils dégradent. Box gk2 : service arrêté, données (439 Mo) archivées dans
+`/var/backups/socialrelay-20261022-1545.tar.gz`, `apt purge`, menu.d et extraits nginx retirés, vhost retiré
+(`haproxyctl vhost remove` puis `generate --allow-shrink` : la garde anti-dérive refuse de réduire sans l'aveu), dépôt apt
+nettoyé (trixie et bookworm). `secubox-webos` 1.19.22 et `secubox-hub` 1.12.25 déployés et publiés. `secubox-appstore`
+0.9.1 ne se construit pas sur master (`gen-appstore-catalog` : assist et courbes hors arbre, même cause que secubox-meta) :
+source montée, binaire à produire quand l'arbre sera réparé. Le vhost `socialrelay_gk3_secubox_in` de gk3 reste dans le
+toml de gk2 (entrée d'une autre box, hors périmètre).
+
 ## 2026-10-22 — Hall v2 : rubrique « Applications », vignettes Streamlit sous session (ref #2996)
 
 « next » (le GO sur la fusion des flux reste au propriétaire). PR #3051 : `secubox-streamlit` 1.6.2 ajoute
