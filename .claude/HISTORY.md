@@ -9,6 +9,18 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-22 — Hall v2 : carte « Flux d'actualités » fusionnée (MetaNews, YouTube, Billets) (ref #2996)
+
+« next ». `secubox-webos` 1.19.16 (PR #3046) puis 1.19.17 (PR #3047), déployés sur gk2, publiés dans apt trixie. Une `Card`
+native sous Accès rapide, `NewsItem` en tourniquet MetaNews → YouTube → Billets, neuf entrées au plus, relue toutes les
+15 min et au retour de l'onglet ; YouTube (listes du compte, `/api/v1/ytsas/flux`) absent sans session. Deux relais nginx
+en lecture seule ajoutés au vhost du Hall (`/api/v1/metanews/(topics|img)` et `/api/v1/billets/feed.json`, verdict LAN
+comme tout relais — `test_verdict_lan` l'exige). Les liens des billets sont reconstruits vers le vhost des billets (le
+feed.json porte l'hôte du relais) ; un sujet MetaNews ouvre l'accueil de MetaNews (son interface n'expose pas de lien
+profond). 1.19.17 : les vignettes répondaient 404 sur gk2 — `NewsItem` ré-encodait l'adresse du relais d'image déjà
+encodée ; il n'encode plus. Les trois anciennes cartes restent (prompt : « sans retirer l'ancien tant que le nouveau n'est
+pas validé »). Vérifié en direct : MetaNews et Billets fusionnés, vignettes 200.
+
 ## 2026-10-22 — Hall v2 : carte « Accès rapide » native ; hub : modules autonomes au menu et au registre (ref #2996, closes #3042)
 
 « next ». (1) `secubox-webos` 1.19.14 (PR #3043) : la carte « Accès rapide » de la maquette en `Card` native sous le

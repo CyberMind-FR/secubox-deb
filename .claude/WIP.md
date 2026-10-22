@@ -48,11 +48,13 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - **Fait (webos 1.19.14 → 1.19.15, hub 1.12.24, metanews 0.5.1, socialrelay 0.1.20 ; 2026-10-22)** : carte « Accès rapide »
   native (tuiles favoris / récents / curation) ; #3042 modules autonomes au menu et au registre (plus d'« aucune source » sur
   MetaNews et SocialRelay) ; statut emprunté pour les cartes génériques de curation.
-- ⬜ **Next Up** : phase 4, reste — fusion des flux (MetaNews + Flux YouTube + Billets) en une carte `NewsItem` ; corps natifs
-  pour les cardlets à double en-tête (Activité, cumul Sécurité, micro MetaNews / BBS) ; `ephemeride` et `ipv6guard` sans
-  entrée de registre (API seule : « aucune source » honnête, à trancher) ; relais Streamlit `/apps/{nom}/screenshot` pour les
-  vignettes ; à trancher : reprise du relevé système dans les courbes de `secubox-metrics` ; option `hall.v2.hero-dice` ;
-  mesure du dé sur RPi4.
+- **Fait (webos 1.19.16 → 1.19.17, 2026-10-22)** : carte « Flux d'actualités » fusionnée (MetaNews, YouTube, Billets) avec
+  deux relais nginx en lecture seule ; anciennes cartes conservées.
+- ⬜ **Next Up** : phase 4, reste — GO du propriétaire sur la fusion (retirer ou masquer les cartes MetaNews / Flux YouTube /
+  Billets de l'accueil v2) ; corps natifs pour les cardlets à double en-tête (Activité, cumul Sécurité, micro MetaNews / BBS) ;
+  `ephemeride` et `ipv6guard` sans entrée de registre (API seule : « aucune source » honnête, à trancher) ; relais Streamlit
+  `/apps/{nom}/screenshot` pour les vignettes ; à trancher : reprise du relevé système dans les courbes de `secubox-metrics` ;
+  option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
 
 ## ✅ Fusionné et déployé le 2026-10-21 (PR #2997, #2999, #3001, #3004, #3006 fusionnées en squash)
 
