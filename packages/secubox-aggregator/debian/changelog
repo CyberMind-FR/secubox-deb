@@ -1,3 +1,13 @@
+secubox-aggregator (0.4.4-1~trixie1) trixie; urgency=medium
+
+  * Modules à socket dédiée jamais montés en processus (ref #3013) : `exposure` rejoint `lyrion`
+    dans DEDICATED_MODULES (ignoré même si aggregator.toml le cite) et dans AGG_EXCLUDE du script
+    de migration. Monté dans l'agrégateur (secubox, ProtectSystem=full), exposure rendait 500 sur
+    toute écriture nginx/tor alors que son service root sur /run/secubox/exposure.sock tourne :
+    le relais transparent le sert désormais.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 05:05:14 +0200
+
 secubox-aggregator (0.4.3-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.
