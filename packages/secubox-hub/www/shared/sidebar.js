@@ -61,7 +61,7 @@
 
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.44.1';
+    const VERSION = 'v2.45.0';
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
@@ -2556,7 +2556,10 @@
                     var versionTip = getVersionTooltip(version, devStage);
                     var fullTitle = versionTip ? (initialTitle + ' | ' + versionTip) : initialTitle;
 
-                    menuHTML += '<a href="' + versAdmin(item.path) + '" class="nav-item' + (isActive ? ' active' : '') + '" data-module="' + mod + '" onclick="return SecuBoxSidebar.navClick(event,\'' + mod + '\',\'' + versAdmin(item.path) + '\')">' +
+                    // Module AUTONOME (#3054) : sa page vit sur son propre vhost, pas sous l'administration — lien externe, nouvel onglet, pas de navClick.
+                    menuHTML += (item.externe
+                        ? '<a href="' + item.externe + '" class="nav-item nav-externe" data-module="' + mod + '" target="_blank" rel="noopener" title="' + item.name + ' — s\'ouvre sur son propre domaine">'
+                        : '<a href="' + versAdmin(item.path) + '" class="nav-item' + (isActive ? ' active' : '') + '" data-module="' + mod + '" onclick="return SecuBoxSidebar.navClick(event,\'' + mod + '\',\'' + versAdmin(item.path) + '\')">') +
                         '<span class="icon">' + item.icon + '</span>' +
                         '<span>' + item.name + '</span>' +
                         devBadge +

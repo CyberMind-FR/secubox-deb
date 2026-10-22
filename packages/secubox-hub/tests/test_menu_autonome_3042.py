@@ -16,7 +16,8 @@ from api import main as hub
 PAQUETS = Path(__file__).resolve().parents[2]
 
 
-def _menu(monkeypatch, entrees, installes, actifs):
+def _menu(monkeypatch, entrees, installes, actifs, domaine="gk9.secubox.in"):
+    monkeypatch.setattr(hub, "hote_box", lambda p: f"{p}.{domaine}" if domaine and p else "")
     monkeypatch.setattr(hub, "_load_menu_definitions", lambda: entrees)
     monkeypatch.setattr(hub, "_epingles_off", lambda: set())
     monkeypatch.setattr(hub, "_menu_off_du_profil", lambda: set())
@@ -44,3 +45,27 @@ def test_un_module_autonome_arrete_reste_au_menu_mais_inactif(monkeypatch):
 def test_metanews_se_declare_autonome():
     for chemin in ("secubox-metanews/menu.d/28-metanews.json",):
         assert json.loads((PAQUETS / chemin).read_text(encoding="utf-8")).get("autonome") is True, chemin
+
+
+def test_un_module_autonome_porte_un_lien_externe_vers_son_vhost(monkeypatch):
+    vus = _menu(monkeypatch, [
+        {"id": "metanews", "name": "MetaNews", "category": "mind", "order": 28, "autonome": True, "path": "/metanews/"},
+        {"id": "radio", "name": "Radio", "category": "mind", "order": 60},
+    ], installes={"radio"}, actifs={"metanews", "radio"})
+    assert vus["metanews"]["externe"] == "https://metanews.gk9.secubox.in/"     # dérivé du domaine de la box, jamais codé en dur
+    assert "externe" not in vus["radio"]
+
+
+def test_la_cle_hote_choisit_le_prefixe_et_sans_domaine_pas_de_lien(monkeypatch):
+    vus = _menu(monkeypatch, [{"id": "metanews", "name": "MetaNews", "category": "mind", "order": 28, "autonome": True, "hote": "news"}],
+                installes=set(), actifs=set())
+    assert vus["metanews"]["externe"] == "https://news.gk9.secubox.in/"
+    vus = _menu(monkeypatch, [{"id": "metanews", "name": "MetaNews", "category": "mind", "order": 28, "autonome": True}],
+                installes=set(), actifs=set(), domaine="")
+    assert "externe" not in vus["metanews"]
+
+
+def test_la_barre_laterale_ouvre_un_lien_externe_dans_un_onglet():
+    js = (PAQUETS / "secubox-hub" / "www" / "shared" / "sidebar.js").read_text(encoding="utf-8")
+    assert "item.externe" in js and 'target="_blank" rel="noopener"' in js
+    assert "'v2.45.0'" in js
