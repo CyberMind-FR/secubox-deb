@@ -21,6 +21,7 @@ const FEATURED = [
   {id:"sans-url",   label:"Sans URL",   icon:"x", color:"#333", carte:"/x.html"},
   {id:"doublon",    label:"Doublon",    icon:"x", color:"#333", url:"radio.gk2.secubox.in"},
   {id:"mauvais",    label:"Mauvais",    icon:"x", color:"#333", url:"pas un hôte"},
+  {id:"devwatch",   label:"DevWatch",   icon:"x", color:"#333", url:"admin.gk2.secubox.in", carte:"/devwatch/micro.html"},
 ];
 const APRES = [{id:"nope", label:"Nope", url:"nope.example"}];
 """

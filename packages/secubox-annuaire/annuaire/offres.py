@@ -86,7 +86,9 @@ def cartes_du_hall(html: str) -> List[Dict[str, Any]]:
             continue
         hote = u.group("url").strip().lower()
         hote = re.sub(r"^https?://", "", hote).split("/", 1)[0]
-        if not _HOTE.match(hote) or hote in vus:
+        # Une carte sans `auth:true` mais servie par l'hôte d'administration (DevWatch → admin.<box>/devwatch/)
+        # n'est pas une offre publique : l'hôte admin reste derrière la session.
+        if not _HOTE.match(hote) or hote in vus or hote.startswith("admin."):
             continue
         vus.add(hote)
         out.append(_offre(m.group("label") or m.group("id"), "app", f"https://{hote}/",
