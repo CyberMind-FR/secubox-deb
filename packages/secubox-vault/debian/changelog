@@ -1,3 +1,10 @@
+secubox-vault (2.1.11-1~trixie1) trixie; urgency=medium
+
+  * Page Aurora du Coffre : le menu latéral commun était perdu (ref #3020). Même recette que /metrics/ : hors cadre
+    et hors ?embed=1 / ?demo=1, la page pose le conteneur #sidebar, marque sa coque `main-content` et charge sidebar.js.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 22 Oct 2026 07:55:39 +0200
+
 secubox-vault (2.1.10-1~trixie1) trixie; urgency=medium
 
   * Page /vault/ au profil Aurora (ref #3020) : page autonome (plus de skins hybrid-dark/crt-light), tuiles
