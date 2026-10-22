@@ -87,3 +87,24 @@ def test_relais_local_par_defaut():
     assert '"port": 25' in RELAIS_API and '"tls": False' in RELAIS_API and 'lxc_ip' in RELAIS_API
     assert 'id="cLocal"' in RELAIS_HTML and "appel('/config/local-default', { method: 'POST' })" in RELAIS_HTML
     assert "LOCAL_DEFAUT = DEMO ? { smarthost: '192.0.2.10', port: 25 }" in RELAIS_HTML
+
+
+def test_relayhost_vide_ne_donne_pas_un_smarthost_fantome(tmp_path, monkeypatch):
+    """« via # » : `relayhost =` vide suivi d'un commentaire donnait smarthost = « # »."""
+    import importlib.util, sys
+    sys.path.insert(0, str(PKG.parents[1] / "common"))
+    spec = importlib.util.spec_from_file_location("relais_main", PKG / "composants" / "smtp-relay" / "api" / "main.py")
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    cf = tmp_path / "main.cf"
+    cf.write_text("#relayhost = [gateway.example.com]\nrelayhost =\n# commentaire suivant\nmyhostname = gk2\n")
+    monkeypatch.setattr(mod, "POSTFIX_MAIN_CF", cf); monkeypatch.setattr(mod, "CONFIG_FILE", tmp_path / "absent.toml")
+    monkeypatch.setattr(mod, "POSTFIX_SASL_PASSWD", tmp_path / "absent")
+    assert mod._load_config()["smarthost"] == ""
+    cf.write_text("relayhost = [10.100.0.10]:25\n")
+    c = mod._load_config(); assert (c["smarthost"], c["port"]) == ("10.100.0.10", 25)
+    cf.write_text("relayhost = smtp.exemple.test\n")
+    assert mod._load_config()["smarthost"] == "smtp.exemple.test"
+
+
+def test_l_introduction_du_volet_ne_promet_pas_le_greffon_absent():
+    assert "seulement si le greffon est actif" in HTML and "rapatrier" in HTML

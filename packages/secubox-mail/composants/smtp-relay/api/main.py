@@ -151,7 +151,9 @@ def _load_config() -> dict:
         try:
             content = POSTFIX_MAIN_CF.read_text()
             # Extract relayhost
-            m = re.search(r'^relayhost\s*=\s*\[?([^\]\s:]+)\]?:?(\d+)?', content, re.MULTILINE)
+            # Même ligne seulement (#3028) : `\s*` avalait le saut de ligne d'un `relayhost =` vide et le premier mot
+            # de la ligne suivante (« # » d'un commentaire) devenait le smarthost affiché (« via # »).
+            m = re.search(r'^relayhost[ \t]*=[ \t]*\[?([^\]\s:#]+)\]?(?::(\d+))?[ \t]*$', content, re.MULTILINE)
             if m:
                 config["smarthost"] = m.group(1)
                 if m.group(2):
