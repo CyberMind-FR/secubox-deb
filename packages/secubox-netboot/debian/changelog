@@ -1,3 +1,14 @@
+secubox-netboot (0.6.6-1~trixie1) trixie; urgency=medium
+
+  * build-live-netboot.sh (ref #3079) : le live garde le réseau obtenu dans l'initrd.
+    boot.scr ajoute modprobe.blacklist=mv88e6xxx (chargé tard sur noyau Debian, il fait
+    rouvrir les ports mvpp2 : eth2 perd sa porteuse, #2004) et masque systemd-networkd
+    (le netplan de l'image met eth1, conduit DSA, et eth2 dans br-lan). bootargs en deux
+    lignes, sous le tampon de ligne U-Boot.
+  * sbx-netflash : l'erreur de téléchargement de la liste n'est plus masquée.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 18:05:00 +0200
+
 secubox-netboot (0.6.5-1~trixie1) trixie; urgency=medium
 
   * live-initrd-modules.sh (ref #3079) : lève la liste noire de squashfs dans l'initrd du
