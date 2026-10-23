@@ -1,3 +1,12 @@
+secubox-netboot (0.6.5-1~trixie1) trixie; urgency=medium
+
+  * live-initrd-modules.sh (ref #3079) : lève la liste noire de squashfs dans l'initrd du
+    live. secubox-hardening la pose (secubox-blacklist.conf, recopié dans l'initrd) ; le
+    noyau demande le module par l'alias fs-squashfs, refusé : « still no fs? » sur DUT
+    même avec le module présent. Le système installé garde sa liste noire.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 17:40:00 +0200
+
 secubox-netboot (0.6.4-1~trixie1) trixie; urgency=medium
 
   * live-initrd-modules.sh (ref #3079) : ajoute squashfs et overlay à l'initrd du live

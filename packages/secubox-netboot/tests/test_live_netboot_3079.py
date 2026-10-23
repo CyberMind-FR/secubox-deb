@@ -131,3 +131,41 @@ def test_la_construction_ajoute_les_modules_et_le_verifie():
     s = BUILD.read_text()
     assert '"$HERE/scripts/live-initrd-modules.sh"' in s
     assert "squashfs\\.ko" in s and "overlay\\.ko" in s
+
+
+def test_l_initrd_du_live_leve_la_liste_noire_de_squashfs_et_garde_le_reste(tmp_path):
+    # DUT 2026-10-23, 2e essai : squashfs bien présent mais secubox-hardening le met en liste noire
+    # (/etc/modprobe.d/secubox-blacklist.conf, recopié dans l'initrd) : la demande du noyau
+    # par alias « fs-squashfs » est refusée → « still no fs? ». Le live, lui, est un squashfs.
+    import shutil
+    import pytest
+    for outil in ("unmkinitramfs", "depmod", "cpio", "zstd"):
+        if not shutil.which(outil):
+            pytest.skip(f"{outil} absent")
+    v = os.uname().release
+    vrai = list(Path(f"/lib/modules/{v}/kernel/fs/overlayfs").glob("overlay.ko*"))
+    if not vrai:
+        pytest.skip("pas de module noyau réel pour le test")
+    ext = vrai[0].name[len("overlay"):]
+    racine = tmp_path / "rootfs"
+    for m in ("fs/squashfs/squashfs", "fs/overlayfs/overlay"):
+        d = racine / "lib/modules" / v / "kernel" / Path(m).parent
+        d.mkdir(parents=True)
+        shutil.copy(vrai[0], d / (Path(m).name + ext))
+    ird = tmp_path / "ird"
+    (ird / "etc/modprobe.d").mkdir(parents=True)
+    (ird / "lib/modules" / v).mkdir(parents=True)
+    (ird / "init").write_text("#!/bin/sh\n")
+    (ird / "etc/modprobe.d/secubox-blacklist.conf").write_text(
+        "# durcissement\nblacklist cramfs\nblacklist squashfs\ninstall squashfs /bin/false\nblacklist udf\n")
+    initrd = tmp_path / "initrd.img"
+    subprocess.run(f"cd {ird} && find . | cpio -o -H newc --quiet | gzip > {initrd}", shell=True, check=True)
+
+    r = subprocess.run(["bash", str(AJOUT), str(initrd), str(racine)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    sortie = tmp_path / "x"
+    subprocess.run(["unmkinitramfs", str(initrd), str(sortie)], check=True)
+    conf = next(sortie.rglob("etc/modprobe.d/secubox-blacklist.conf")).read_text()
+    assert "blacklist squashfs" not in conf
+    assert "install squashfs" not in conf
+    assert "blacklist cramfs" in conf and "blacklist udf" in conf
