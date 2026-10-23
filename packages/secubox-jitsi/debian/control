@@ -13,7 +13,9 @@ Depends: ${misc:Depends},
  python3-uvicorn | python3-pip,
  lxc,
  curl,
- coturn
+ coturn,
+ sudo,
+ openssl
 Recommends: nginx
 Replaces: secubox-turn (<< 1.2.2~)
 Breaks: secubox-turn (<< 1.2.2~)

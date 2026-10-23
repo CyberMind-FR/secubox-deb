@@ -15,10 +15,21 @@ case "$1" in
         chown turnserver:turnserver /var/log/turnserver 2>/dev/null || \
         chown secubox:secubox /var/log/turnserver
 
+        # #3060 : le sudoers est validé AVANT d'être cru — une faute de syntaxe ne s'installe jamais en silence.
+        visudo -cf /etc/sudoers.d/secubox-turn
+
+        # #3060 : coturn reçoit la configuration SecuBox si celle en place n'en est pas une (marqueur « # SecuBox »
+        # en première ligne) : configuration Debian par défaut, ou éditée à la main. Une configuration SecuBox
+        # existante n'est pas réécrite ici (le realm et le secret sont déjà les siens).
+        if ! head -1 /etc/turnserver.conf 2>/dev/null | grep -q '^# SecuBox'; then
+            /usr/sbin/secubox-turnctl generer >/dev/null 2>&1 \
+                || echo "secubox-turn : la configuration SecuBox de coturn n'a pas pu être appliquée (secubox-turnctl generer)" >&2
+        fi
+
         # Enable and start service
         systemctl daemon-reload
         systemctl enable secubox-turn.service
-        systemctl start secubox-turn.service || true
+        systemctl restart secubox-turn.service || true
 
         # Reload nginx if running
         systemctl reload nginx 2>/dev/null || true

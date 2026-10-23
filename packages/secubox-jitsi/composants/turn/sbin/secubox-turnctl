@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox :: secubox-turnctl — la SEULE surface privilégiée du composant TURN (#3060).
+#
+# L'API (utilisateur `secubox`, /run/secubox/turn.sock) ne touche ni systemd, ni
+# turnadmin, ni /etc/turnserver.conf : elle appelle ce ctl par sudo, aux verbes
+# exacts du sudoers (sudoers/secubox-turn). Chaque verbe écrit du JSON sur stdout.
+#
+# La configuration de coturn est GÉNÉRÉE (jamais éditée à la main) : realm dans
+# /etc/secubox/turn.toml, secret dans /etc/secubox/secrets/turn/, écriture en
+# double tampon (ombre → bascule atomique → coturn relancé → vérifié → sinon
+# retour arrière), décision tracée dans /var/log/secubox/audit.log.
+
+set -euo pipefail
+
+readonly CONF="/etc/turnserver.conf"
+readonly TOML="${SECUBOX_TURN_TOML:-/etc/secubox/turn.toml}"
+readonly SECRET_FILE="${SECUBOX_TURN_SECRET:-/etc/secubox/secrets/turn/static-auth-secret}"
+readonly JOURNAL="/var/log/turnserver/turnserver.log"
+readonly AUDIT="/var/log/secubox/audit.log"
+readonly USERDB="/var/lib/turn/turndb"
+# Première ligne de toute configuration écrite ici : `status` et le postinst s'y fient.
+readonly MARQUEUR="# SecuBox — configuration de coturn générée par secubox-turnctl, ne pas modifier à la main (#3060)"
+
+json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+audit() {
+    # append-only : une ligne JSON par décision
+    local ts; ts="$(date -u +%FT%TZ)"
+    printf '{"ts":"%s","module":"turn","action":%s,"result":%s,"detail":%s}\n' \
+        "$ts" "$(json_str "$1")" "$(json_str "$2")" "$(json_str "${3:-}")" >> "$AUDIT" 2>/dev/null || true
+}
+echec() { printf '{"success": false, "error": %s}\n' "$(json_str "$1")"; exit 1; }
+
+toml_get() {
+    local key="$1" default="${2:-}" raw=""
+    [ -f "$TOML" ] && raw="$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$TOML" 2>/dev/null | head -1 || true)"
+    [ -z "$raw" ] && { printf '%s' "$default"; return; }
+    local val; val="$(printf '%s' "$raw" | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | tr -d '"' | tr -d "'")"
+    [ -z "$val" ] && printf '%s' "$default" || printf '%s' "$val"
+}
+
+# valeur d'une clé `cle=valeur` dans un texte de configuration coturn déjà décommenté
+conf_get() { printf '%s\n' "$1" | grep -E "^$2=" | head -1 | cut -d= -f2- | tr -d ' ' || true; }
+
+realm_courant() {
+    local r; r="$(toml_get realm "")"
+    if [ -z "$r" ] && command -v secubox-domaine >/dev/null 2>&1; then r="$(secubox-domaine turn 2>/dev/null || true)"; fi
+    [ -z "$r" ] && r="turn.secubox.local"
+    printf '%s' "$r"
+}
+valide_hote() { [[ "$1" =~ ^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)+$ ]]; }
+valide_nom()  { [[ "$1" =~ ^[A-Za-z0-9._-]{1,64}$ ]]; }
+
+secret_lire() {
+    if [ ! -s "$SECRET_FILE" ]; then
+        (umask 077; install -d -m 0700 "$(dirname "$SECRET_FILE")"; head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 48 > "$SECRET_FILE")
+        audit "secret" "ok" "secret partagé généré"
+    fi
+    cat "$SECRET_FILE"
+}
+
+# Un certificat pour le realm (HAProxy ou ACME) : TLS ; sinon pas de port TLS plutôt qu'un
+# écouteur qui échoue à chaque poignée de main.
+certificat_pour() {
+    local r="$1" c
+    for c in "/etc/haproxy/certs/$r.pem" "/etc/secubox/certs/$r/fullchain.pem"; do [ -s "$c" ] && { printf '%s' "$c"; return 0; }; done
+    return 1
+}
+
+ecrire_conf() {
+    local realm="$1" secret="$2" cert="" pkey="" ombre="$CONF.sbx-nouveau"
+    cert="$(certificat_pour "$realm" || true)"
+    {
+        printf '%s\n' "$MARQUEUR"
+        printf '# realm : %s (/etc/secubox/turn.toml) — généré le %s\n\n' "$realm" "$(date -u +%FT%TZ)"
+        printf 'listening-port=3478\n'
+        if [ -n "$cert" ]; then
+            printf 'tls-listening-port=5349\n'
+            case "$cert" in
+                *.pem) printf 'cert=%s\npkey=%s\n' "$cert" "$cert" ;;
+                *) pkey="$(dirname "$cert")/privkey.pem"; printf 'cert=%s\npkey=%s\n' "$cert" "$pkey" ;;
+            esac
+            printf 'no-tlsv1\nno-tlsv1_1\n'
+        else
+            printf '# aucun certificat pour %s : pas de TLS (no-tls, no-dtls) plutôt qu'"'"'un écouteur en échec\nno-tls\nno-dtls\nno-tlsv1\nno-tlsv1_1\n' "$realm"
+        fi
+        printf 'min-port=49152\nmax-port=65535\n\n'
+        printf 'realm=%s\n' "$realm"
+        printf 'lt-cred-mech\nuse-auth-secret\nstatic-auth-secret=%s\nuserdb=%s\n\n' "$secret" "$USERDB"
+        printf 'fingerprint\nno-cli\nno-multicast-peers\nno-rfc5780\nno-stun-backward-compatibility\nresponse-origin-only-with-rfc5780\n'
+        printf 'denied-peer-ip=127.0.0.0-127.255.255.255\ndenied-peer-ip=169.254.0.0-169.254.255.255\ndenied-peer-ip=::1\n\n'
+        printf 'log-file=%s\nsimple-log\n' "$JOURNAL"
+    } > "$ombre"
+    chown root:turnserver "$ombre" 2>/dev/null || true
+    chmod 0640 "$ombre"
+    printf '%s' "$ombre"
+}
+
+generer() {
+    local realm="${1:-}"
+    [ -n "$realm" ] || realm="$(realm_courant)"
+    valide_hote "$realm" || echec "realm invalide"
+    local secret; secret="$(secret_lire)"
+    install -d -m 0755 /var/log/turnserver && chown turnserver:turnserver /var/log/turnserver 2>/dev/null || true
+    # le realm choisi reste la vérité pour les prochaines générations
+    install -d -m 0755 "$(dirname "$TOML")"
+    printf '# SecuBox TURN (#3060) — écrit par secubox-turnctl\nrealm = "%s"\n' "$realm" > "$TOML"
+    local ombre; ombre="$(ecrire_conf "$realm" "$secret")"
+    # double tampon : l'ancienne configuration reste en .avant pour le retour arrière
+    [ -f "$CONF" ] && cp -a "$CONF" "$CONF.avant"
+    mv -f "$ombre" "$CONF"
+    systemctl enable coturn >/dev/null 2>&1 || true
+    systemctl restart coturn >/dev/null 2>&1 || true
+    sleep 2
+    if systemctl is-active --quiet coturn; then
+        audit "generer" "ok" "realm=$realm"
+        printf '{"success": true, "realm": %s, "tls": %s}\n' "$(json_str "$realm")" "$( [ -n "$(certificat_pour "$realm" || true)" ] && echo true || echo false)"
+        return 0
+    fi
+    # retour arrière (4R) : la configuration précédente reprend, coturn relancé
+    if [ -f "$CONF.avant" ]; then mv -f "$CONF.avant" "$CONF"; systemctl restart coturn >/dev/null 2>&1 || true; fi
+    audit "generer" "fail" "coturn ne démarre pas avec la configuration générée — retour arrière"
+    echec "coturn ne démarre pas avec la configuration générée : retour arrière sur la précédente"
+}
+
+status() {
+    local active=false enabled=false pid=null uptime=null conf_sbx=false secret=false users=0 ips="[]"
+    systemctl is-active --quiet coturn && active=true
+    [ "$(systemctl is-enabled coturn 2>/dev/null || true)" = "enabled" ] && enabled=true
+    if [ "$active" = true ]; then
+        pid="$(systemctl show -p MainPID --value coturn 2>/dev/null || echo 0)"; [ "${pid:-0}" -gt 0 ] || pid=null
+        if [ "$pid" != null ]; then
+            local st; st="$(systemctl show -p ActiveEnterTimestampMonotonic --value coturn 2>/dev/null || echo 0)"
+            local now; now="$(awk '{printf "%d", $1*1000000}' /proc/uptime)"
+            [ "${st:-0}" -gt 0 ] && uptime=$(( (now - st) / 1000000 ))
+        fi
+    fi
+    [ -f "$CONF" ] && head -1 "$CONF" | grep -q "^# SecuBox" && conf_sbx=true
+    [ -s "$SECRET_FILE" ] && secret=true
+    local c; c="$(sed -E 's/#.*$//' "$CONF" 2>/dev/null || true)"
+    local realm lp tp minp maxp
+    realm="$(conf_get "$c" realm)"; lp="$(conf_get "$c" listening-port)"; tp="$(conf_get "$c" tls-listening-port)"
+    minp="$(conf_get "$c" min-port)"; maxp="$(conf_get "$c" max-port)"
+    printf '%s\n' "$c" | grep -q '^no-tls' && tp=""
+    if [ -x /usr/bin/turnadmin ]; then users="$(turnadmin -l 2>/dev/null | grep -c '\[' || true)"; fi
+    ips="$(ss -lntuH 2>/dev/null | awk '{print $5}' | grep -E ':3478$' | sed -E 's/:3478$//' | sort -u | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')"
+    printf '{"active": %s, "enabled": %s, "pid": %s, "uptime_seconds": %s, "realm": %s, "listening_port": %s, "tls_port": %s, "min_port": %s, "max_port": %s, "config_secubox": %s, "secret_configured": %s, "users_count": %s, "listening_ips": %s}\n' \
+        "$active" "$enabled" "$pid" "$uptime" "$(json_str "${realm:-$(realm_courant)}")" "${lp:-3478}" "${tp:-null}" "${minp:-49152}" "${maxp:-65535}" "$conf_sbx" "$secret" "${users:-0}" "$ips"
+}
+
+credentials() {
+    local user="${1:-webrtc}" ttl="${2:-86400}"
+    valide_nom "$user" || echec "nom invalide"
+    [[ "$ttl" =~ ^[0-9]{2,7}$ ]] || echec "durée invalide"
+    [ -s "$SECRET_FILE" ] || echec "aucun secret : lancer generer"
+    local secret; secret="$(cat "$SECRET_FILE")"
+    local exp=$(( $(date +%s) + ttl )) temp="" pass="" realm tp
+    temp="$exp:$user"
+    # TURN REST API (coturn use-auth-secret) : base64(HMAC-SHA1(secret, username)) — SHA-1 imposé par le protocole,
+    # les clients WebRTC ne négocient rien d'autre (voir docs/POLITIQUE-CRYPTO.md § exceptions).
+    pass="$(printf '%s' "$temp" | openssl dgst -sha1 -hmac "$secret" -binary | base64)"
+    realm="$(status | python3 -c 'import json,sys; print(json.load(sys.stdin)["realm"])')"
+    tp="$(status | python3 -c 'import json,sys; print(json.load(sys.stdin)["tls_port"] or "")')"
+    python3 - "$temp" "$pass" "$ttl" "$exp" "$realm" "$tp" <<'EOF'
+import json, sys
+temp, pw, ttl, exp, realm, tp = sys.argv[1:7]
+turn = [f"turn:{realm}:3478", f"turn:{realm}:3478?transport=tcp"]
+if tp:
+    turn.append(f"turns:{realm}:{tp}")
+print(json.dumps({"username": temp, "password": pw, "ttl": int(ttl), "expires": int(exp), "realm": realm,
+                  "turn_urls": turn, "stun_urls": [f"stun:{realm}:3478"]}))
+EOF
+}
+
+users_lister() {
+    turnadmin -l 2>/dev/null | python3 -c '
+import json, re, sys
+out = []
+for l in sys.stdin:
+    m = re.match(r"\s*(\S+)\[(\S+)\]", l.strip())
+    if m:
+        out.append({"username": m.group(1), "realm": m.group(2)})
+print(json.dumps({"users": out}))'
+}
+
+verbe="${1:-}"
+case "$verbe" in
+    status)   status ;;
+    start|stop|restart)
+        if systemctl "$verbe" coturn; then audit "$verbe" "ok"; printf '{"success": true, "action": %s}\n' "$(json_str "$verbe")"
+        else audit "$verbe" "fail"; echec "systemctl $verbe coturn a échoué"; fi ;;
+    enable)
+        systemctl enable --now coturn >/dev/null 2>&1 && { audit enable ok; printf '{"success": true}\n'; } || echec "enable a échoué" ;;
+    generer)  generer "${2:-}" ;;
+    secret-renouveler)
+        (umask 077; install -d -m 0700 "$(dirname "$SECRET_FILE")"; head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 48 > "$SECRET_FILE")
+        audit "secret-renouveler" "ok" "les identifiants temporaires déjà émis cessent de valoir"
+        generer ;;
+    credentials) credentials "${2:-webrtc}" "${3:-86400}" ;;
+    users)    users_lister ;;
+    user-add)
+        nom="${2:-}"; valide_nom "$nom" || echec "nom invalide"
+        # le mot de passe arrive par stdin : jamais en argv (visible dans ps et le journal sudo)
+        IFS= read -r motdepasse || true
+        [ -n "$motdepasse" ] || echec "mot de passe vide"
+        realm="$(realm_courant)"
+        if turnadmin -a -u "$nom" -p "$motdepasse" -r "$realm" >/dev/null 2>&1; then audit "user-add" "ok" "$nom"; printf '{"success": true, "username": %s}\n' "$(json_str "$nom")"
+        else audit "user-add" "fail" "$nom"; echec "turnadmin a refusé l'ajout"; fi ;;
+    user-del)
+        nom="${2:-}"; valide_nom "$nom" || echec "nom invalide"
+        realm="$(realm_courant)"
+        if turnadmin -d -u "$nom" -r "$realm" >/dev/null 2>&1; then audit "user-del" "ok" "$nom"; printf '{"success": true, "username": %s}\n' "$(json_str "$nom")"
+        else audit "user-del" "fail" "$nom"; echec "turnadmin a refusé la suppression"; fi ;;
+    sessions)
+        ss -tunpH 2>/dev/null | grep turnserver | awk '{print $1, $2, $5, $6}' | python3 -c '
+import json, sys
+out = []
+for l in sys.stdin:
+    p = l.split()
+    if len(p) >= 4:
+        out.append({"protocol": p[0], "state": p[1], "local_addr": p[2], "remote_addr": p[3]})
+print(json.dumps({"sessions": out}))' ;;
+    journal)
+        n="${2:-100}"; [[ "$n" =~ ^[0-9]{1,4}$ ]] || n=100
+        if [ -f "$JOURNAL" ]; then tail -n "$n" "$JOURNAL"; else journalctl -u coturn -n "$n" --no-pager 2>/dev/null || true; fi \
+            | python3 -c 'import json,sys; print(json.dumps({"lines": [l.rstrip("\n") for l in sys.stdin]}))' ;;
+    config)
+        # lecture masquée : le secret n'en sort jamais
+        if [ -f "$CONF" ]; then sed -E 's/^(static-auth-secret=).*/\1••••••••(masqué)/' "$CONF"; fi \
+            | python3 -c 'import json,sys; print(json.dumps({"content": sys.stdin.read()}))' ;;
+    *) echo "usage: $0 {status|start|stop|restart|enable|generer [realm]|secret-renouveler|credentials <nom> <ttl>|users|user-add <nom>|user-del <nom>|sessions|journal [n]|config}" >&2; exit 2 ;;
+esac
