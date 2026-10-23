@@ -1,3 +1,12 @@
+secubox-webos (1.19.23-1~trixie1) trixie; urgency=medium
+
+  * Dé SecuBox de la topbar (ref #3068) : immobile sur un poste de bureau, il tournait sur tablette. Sous la préférence
+    système « réduire les animations » (prefers-reduced-motion), sbx-dice.js le figeait sur la face SecuBox sans aucun
+    indice. Il tourne maintenant à un quart de vitesse (data-etat=calme) ; localStorage sbx_de=fige le fige
+    (data-etat=fige). Tests : rotation sous préférence réduite, figé par sbx_de.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 10:45:00 +0200
+
 secubox-webos (1.19.22-1~trixie1) trixie; urgency=medium
 
   * Retrait de SocialRelay (ref #3052) : carte, aide de carte, espaces SBX OS et jeux

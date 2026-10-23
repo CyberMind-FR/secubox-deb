@@ -6,8 +6,11 @@
    <sbx-dice size="36" speed="4" fov="40"> — le dé SecuBox (moteur de « SecuBox Dice 3D », 3d.<domaine>) :
    canvas 2D sans bibliothèque, matrices 3×3, projection perspective, quads texturés par clip + transform,
    éclairage Lambert. Six textures /dice/face-N.jpg partagées entre instances ; cube uni tant qu'elles
-   chargent. Pause quand l'onglet est caché ou l'élément hors écran ; figé sur la face SecuBox sous
-   prefers-reduced-motion ; 30 i/s si le dessin dépasse 8 ms en moyenne sur 60 images. */
+   chargent. Pause quand l'onglet est caché ou l'élément hors écran ; sous prefers-reduced-motion il tourne
+   à QUART de vitesse (data-etat="calme") au lieu de se figer — c'est un logo de 36 px, et une préférence
+   système posée sur un poste de bureau le laissait immobile sans que l'on sache pourquoi ; localStorage
+   sbx_de="fige" le fige sur la face SecuBox (data-etat="fige") ; 30 i/s si le dessin dépasse 8 ms en
+   moyenne sur 60 images. */
 (function(){
   'use strict';
   var CORNERS=[[-1,-1,-1],[1,-1,-1],[-1,1,-1],[1,1,-1],[-1,-1,1],[1,-1,1],[-1,1,1],[1,1,1]];
@@ -50,6 +53,7 @@
 
   var ACTIF=null;
   function reduit(){ if(!ACTIF) ACTIF=matchMedia('(prefers-reduced-motion: reduce)'); return ACTIF; }
+  function fige(){ try{ return localStorage.getItem('sbx_de')==='fige'; }catch(e){ return false; } }
 
   function SbxDice(){ var e=Reflect.construct(HTMLElement,[],SbxDice); e._init(); return e; }
   SbxDice.prototype=Object.create(HTMLElement.prototype,{constructor:{value:SbxDice}});
@@ -82,17 +86,17 @@
   P.attributeChangedCallback=function(){ if(this.isConnected){ this._taille(); this._dessine(); this._relance(); } };
   function attr(e,n,d){ var v=parseFloat(e.getAttribute(n)); return isFinite(v)&&v>0?v:d; }
   P._taille=function(){ var s=attr(this,'size',36), r=Math.min(window.devicePixelRatio||1,2); this._cv.width=this._cv.height=Math.round(s*r); this._cv.style.width=this._cv.style.height=s+'px'; };
-  P._actif=function(){ return this.isConnected&&!reduit().matches&&!document.hidden&&this._visible&&!this.hasAttribute('paused'); };
+  P._actif=function(){ return this.isConnected&&!fige()&&!document.hidden&&this._visible&&!this.hasAttribute('paused'); };
   P._relance=function(){
-    if(this._actif()){ this.removeAttribute('data-etat'); if(!this._raf){ this._dernier=0; this._raf=requestAnimationFrame(this._boucle); } return; }
+    if(this._actif()){ if(reduit().matches) this.setAttribute('data-etat','calme'); else this.removeAttribute('data-etat'); if(!this._raf){ this._dernier=0; this._raf=requestAnimationFrame(this._boucle); } return; }
     if(this._raf){ cancelAnimationFrame(this._raf); this._raf=0; }
-    if(reduit().matches){ this._ax=0; this._ay=0; this._az=0; this.setAttribute('data-etat','fige'); this._dessine(); }
+    if(fige()){ this._ax=0; this._ay=0; this._az=0; this.setAttribute('data-etat','fige'); this._dessine(); }
     else this.setAttribute('data-etat','pause');
   };
   P._boucle=function(t){
     this._raf=requestAnimationFrame(this._boucle);
     var dt=this._dernier?Math.min(t-this._dernier,100):16; this._dernier=t;
-    var sp=attr(this,'speed',4); this._ax+=SPEEDS[0]*dt*sp; this._ay+=SPEEDS[1]*dt*sp; this._az+=SPEEDS[2]*dt*sp;
+    var sp=attr(this,'speed',4)*(reduit().matches?0.25:1); this._ax+=SPEEDS[0]*dt*sp; this._ay+=SPEEDS[1]*dt*sp; this._az+=SPEEDS[2]*dt*sp;
     if(this._lent&&(this._n++&1)) return;
     var d0=performance.now(); this._dessine(); this._couts.push(performance.now()-d0);
     if(this._couts.length>=60){ var m=0; for(var i=0;i<60;i++) m+=this._couts[i]; m/=60; this._couts.length=0; this._lent=m>8; this.setAttribute('data-raf-ms',m.toFixed(2)); }

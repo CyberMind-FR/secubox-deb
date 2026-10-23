@@ -5,7 +5,7 @@
 """#2996 (phase 1bis) — <sbx-dice> : le dé SecuBox de 3d.<domaine>, extrait en composant, dans la topbar v2.
 
 Pas d'iframe, pas de bibliothèque, pas de fetch distant : moteur canvas 2D servi par le Hall, textures en fichiers.
-Figé sous prefers-reduced-motion, en pause hors écran, 30 i/s si le dessin dépasse 8 ms. Le thème Plymouth
+Au quart de vitesse sous prefers-reduced-motion (figé par localStorage sbx_de=fige, #3068), en pause hors écran, 30 i/s si le dessin dépasse 8 ms. Le thème Plymouth
 secubox-cube reprend les mêmes six faces.
 """
 import mimetypes
@@ -86,9 +86,11 @@ def nav():
         b.close()
 
 
-def ouvre(nav, largeur, reduced=False):
+def ouvre(nav, largeur, reduced=False, fige=False):
     ctx = nav.new_context(viewport={"width": largeur, "height": 900}, color_scheme="dark",
                           reduced_motion="reduce" if reduced else "no-preference")
+    if fige:
+        ctx.add_init_script("try{localStorage.setItem('sbx_de','fige')}catch(e){}")
     p = ctx.new_page()
     erreurs = []
     p.on("pageerror", lambda e: erreurs.append(str(e)))
@@ -150,8 +152,20 @@ def test_survol_accelere_et_le_clic_reste_l_accueil(nav):
     ctx.close()
 
 
-def test_reduced_motion_fige_la_face_secubox_sans_boucle(nav):
+def test_reduced_motion_tourne_au_quart_de_vitesse_au_lieu_de_se_figer(nav):
+    """#3068 — une préférence « réduire les animations » posée sur un poste de bureau laissait le dé immobile, sans
+    explication, alors qu'il tournait sur tablette : il tourne maintenant, calmement (data-etat=calme)."""
     ctx, p, erreurs = ouvre(nav, 1440, reduced=True)
+    p.wait_for_function("document.querySelector('.logo sbx-dice').getAttribute('data-etat')==='calme'")
+    avant = p.evaluate("document.querySelector('.logo sbx-dice canvas').toDataURL()")
+    p.wait_for_timeout(1500)
+    assert p.evaluate("document.querySelector('.logo sbx-dice canvas').toDataURL()") != avant, "le dé doit tourner"
+    assert erreurs == []
+    ctx.close()
+
+
+def test_sbx_de_fige_fige_la_face_secubox_sans_boucle(nav):
+    ctx, p, erreurs = ouvre(nav, 1440, reduced=True, fige=True)
     p.wait_for_function("document.querySelector('.logo sbx-dice').getAttribute('data-etat')==='fige'")
     avant = p.evaluate("document.querySelector('.logo sbx-dice canvas').toDataURL()")
     p.wait_for_timeout(400)
