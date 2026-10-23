@@ -4,7 +4,8 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 #
-# live-initrd-modules.sh INITRD RACINE — ajoute squashfs et overlay à un initrd (#3079).
+# live-initrd-modules.sh INITRD RACINE — rend un initrd capable de monter le live (#3079) :
+# ajoute squashfs et overlay, lève la liste noire de squashfs.
 #
 # L'initrd d'une image eMMC ne sait monter qu'une racine ext4 ; live-boot doit monter le
 # filesystem.squashfs téléchargé sous un overlay. Sans ces modules : « request_module
@@ -45,6 +46,14 @@ for x in modules.builtin modules.builtin.modinfo modules.order; do
     [ -e "$main/lib/modules/$v/$x" ] || [ ! -e "$racine/lib/modules/$v/$x" ] || cp "$racine/lib/modules/$v/$x" "$main/lib/modules/$v/"
 done
 depmod -b "$main" "$v"
+
+# secubox-hardening met squashfs en liste noire (secubox-blacklist.conf, recopié dans l'initrd) :
+# le noyau le demande par l'alias fs-squashfs, refusé. Le live, lui, EST un squashfs : seule
+# cette ligne est levée, dans l'initrd du live seulement ; le système installé garde la sienne.
+for f in "$main"/etc/modprobe.d/*.conf "$main"/usr/lib/modprobe.d/*.conf; do
+    [ -f "$f" ] || continue
+    sed -i -E '/^[[:space:]]*(blacklist|install)[[:space:]]+squashfs([[:space:]]|$)/d' "$f"
+done
 
 {
     for e in "$w/ird"/early*; do
