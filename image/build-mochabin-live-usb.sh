@@ -603,13 +603,18 @@ if [[ -f "$EXTLINUX_CONF" ]]; then
 fi
 
 # Copy kernel and DTB to ESP
+# Debian installe boot/vmlinuz-<version> (les liens vmlinuz/initrd.img sont à la RACINE du rootfs) : chercher
+# boot/vmlinuz seul laissait la partition de boot VIDE (clé alpha.18 non amorçable, #3079).
 KERNEL_SRC="${WORK_DIR}/mnt/rootfs/boot"
-if [[ -f "${KERNEL_SRC}/vmlinuz" ]]; then
-    cp "${KERNEL_SRC}/vmlinuz" "${WORK_DIR}/mnt/esp/Image"
+KVER="$(ls -1 "${KERNEL_SRC}" | sed -n 's/^vmlinuz-//p' | sort -V | tail -n1)"
+[[ -n "$KVER" ]] || err "Aucun noyau dans ${KERNEL_SRC} (vmlinuz-*)"
+if gzip -t "${KERNEL_SRC}/vmlinuz-${KVER}" 2>/dev/null; then
+    gunzip -c "${KERNEL_SRC}/vmlinuz-${KVER}" > "${WORK_DIR}/mnt/esp/Image"
+else
+    cp "${KERNEL_SRC}/vmlinuz-${KVER}" "${WORK_DIR}/mnt/esp/Image"
 fi
-if [[ -f "${KERNEL_SRC}/initrd.img" ]]; then
-    cp "${KERNEL_SRC}/initrd.img" "${WORK_DIR}/mnt/esp/"
-fi
+[[ -f "${KERNEL_SRC}/initrd.img-${KVER}" ]] || err "initrd absent : initrd.img-${KVER}"
+cp "${KERNEL_SRC}/initrd.img-${KVER}" "${WORK_DIR}/mnt/esp/initrd.img"
 
 # Copy DTB
 mkdir -p "${WORK_DIR}/mnt/esp/dtbs/marvell"
@@ -623,6 +628,24 @@ if [[ -d "${WORK_DIR}/mnt/rootfs/usr/lib/linux-image-"* ]]; then
         cp "${DTB_DIR}/marvell/armada-7040-mochabin.dtb" "${WORK_DIR}/mnt/esp/dtbs/marvell/"
     fi
 fi
+
+[[ -s "${WORK_DIR}/mnt/esp/dtbs/marvell/armada-7040-mochabin.dtb" ]] || err "DTB armada-7040-mochabin.dtb absent de la partition de boot"
+
+ROOT_UUID="${ROOT_UUID:-$(blkid -s UUID -o value "$ROOT_PART")}"
+# extlinux de la CLÉ : le fichier du board vise les noyaux de gk2 (Image-mpcie-fix…), absents d'ici (#3079)
+cat > "${WORK_DIR}/mnt/esp/extlinux/extlinux.conf" << EXTLINUX
+DEFAULT secubox-live
+TIMEOUT 30
+PROMPT 1
+MENU TITLE SecuBox MOCHAbin Live USB
+
+LABEL secubox-live
+    MENU LABEL SecuBox Live (Debian ${KVER})
+    KERNEL /Image
+    INITRD /initrd.img
+    FDT /dtbs/marvell/armada-7040-mochabin.dtb
+    APPEND root=UUID=${ROOT_UUID} rootfstype=ext4 rw rootwait console=ttyS0,115200 net.ifnames=0
+EXTLINUX
 
 # Create fstab
 cat > "${WORK_DIR}/mnt/rootfs/etc/fstab" << FSTAB

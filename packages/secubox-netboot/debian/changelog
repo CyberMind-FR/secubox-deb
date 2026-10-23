@@ -1,3 +1,12 @@
+secubox-netboot (0.6.1-1~trixie1) trixie; urgency=medium
+
+  * build-live-netboot.sh (ref #3079) : la partition de boot de la clé live alpha.18 est VIDE (ni Image, ni initrd, ni DTB) ;
+    le noyau, l'initrd et le DTB sont pris dans le rootfs (boot/vmlinuz-<version>, usr/lib/linux-image-*), Image
+    décompressée si besoin et contrôlée ARM64. Même défaut corrigé dans image/build-mochabin-live-usb.sh (cherchait
+    boot/vmlinuz ; extlinux visant les noyaux de gk2) : la clé live USB alpha.18 n'était pas amorçable.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 11:40:00 +0200
+
 secubox-netboot (0.6.0-1~trixie1) trixie; urgency=medium
 
   * Live MOCHAbin par le réseau et flash eMMC depuis le live (ref #3079). `scripts/build-live-netboot.sh` (sur le serveur
