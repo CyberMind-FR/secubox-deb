@@ -114,6 +114,7 @@
 
         <div class="onglets" role="tablist" aria-label="Sections des fournisseurs DNS">
             <button type="button" role="tab" id="o-fournisseurs" data-t="fournisseurs" aria-selected="true" aria-controls="t-fournisseurs">Fournisseurs</button>
+            <button type="button" role="tab" id="o-couverture" data-t="couverture" aria-selected="false" aria-controls="t-couverture">Vhosts et domaines</button>
             <button type="button" role="tab" id="o-domaines" data-t="domaines" aria-selected="false" aria-controls="t-domaines">Domaines</button>
             <button type="button" role="tab" id="o-enregistrements" data-t="enregistrements" aria-selected="false" aria-controls="t-enregistrements">Enregistrements</button>
             <button type="button" role="tab" id="o-acme" data-t="acme" aria-selected="false" aria-controls="t-acme">ACME</button>
@@ -128,11 +129,21 @@
                     <label>Nom<input name="name" placeholder="Mon Cloudflare" autocomplete="off" required></label>
                     <label>Type<select name="ptype" id="ptype"><option value="gandi">Gandi LiveDNS</option><option value="cloudflare">Cloudflare</option><option value="ovh">OVH</option><option value="route53">AWS Route 53</option></select></label>
                     <div id="champsCred" style="display:contents"></div>
-                    <p class="note large">Les identifiants partent dans la requête puis les champs sont vidés : la page ne les affiche ni ne les conserve jamais. Côté serveur ils sont stockés dans /var/lib/secubox/dns-provider/providers.json (conservé par apt upgrade, perdu par apt purge) et l’API ne les renvoie que masqués.</p>
+                    <p class="note large">Les identifiants partent dans la requête puis les champs sont vidés : la page ne les affiche ni ne les conserve jamais. Côté serveur ils sont stockés dans /var/lib/secubox/dns-provider/providers.json (lisible par le seul service, 0600 ; conservé par apt upgrade, perdu par apt purge) et l’API ne les renvoie que masqués.</p>
                     <div class="bout"><button class="btn prim" type="submit">Ajouter</button><button class="btn" type="button" data-ferme="fFourn">Annuler</button></div>
                 </form>
                 <div class="tab"><table><thead><tr><th>Nom</th><th>Type</th><th>Identifiant</th><th>État</th><th>Ajouté le</th><th>Actions</th></tr></thead><tbody id="bFourn"></tbody></table></div>
                 <p class="note">Les identifiants enregistrés ne sont jamais affichés, même tronqués.</p></div>
+        </section>
+
+        <section id="t-couverture" role="tabpanel" aria-labelledby="o-couverture" hidden>
+            <div class="pan"><h3>Vhosts et domaines <i id="nCouv"></i><button class="btn sm" id="majCouv" type="button">Relire les serveurs de noms</button></h3>
+                <div id="alertesCouv"></div>
+                <div id="resumeCouv" class="btns"></div>
+                <div class="tab"><table><thead><tr><th>Domaine</th><th>Vhosts</th><th>Statut</th><th>Fournisseur / serveurs de noms</th><th>Actions</th></tr></thead><tbody id="bCouv"></tbody></table></div>
+                <p class="note"><b>Géré</b> : une zone d’un fournisseur configuré couvre le domaine (enregistrements modifiables ici). <b>Gérable</b> : les serveurs de noms publics sont chez Gandi, OVH, Cloudflare ou Route 53, mais aucun fournisseur configuré n’a cette zone : ajouter (ou compléter) le fournisseur. <b>Externe</b> : zone hébergée ailleurs ou introuvable. Les vhosts viennent de haproxy.toml (actifs, jokers exclus).</p></div>
+            <div class="pan"><h3>Zones des fournisseurs sans vhost <i id="nZsv"></i></h3>
+                <div class="tab"><table><thead><tr><th>Zone</th><th>Fournisseur</th><th>Type</th></tr></thead><tbody id="bZsv"></tbody></table></div></div>
         </section>
 
         <section id="t-domaines" role="tabpanel" aria-labelledby="o-domaines" hidden>
@@ -224,7 +235,7 @@
         const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
         const court = (s, n) => { s = String(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
-        let SUMMARY = null, FOURN = [], DOMAINES = [], DOM_ERR = [], CONFIG = null, LOGS = [];
+        let SUMMARY = null, FOURN = [], DOMAINES = [], DOM_ERR = [], CONFIG = null, LOGS = [], COUV = null;
         let SESSION_OK = true, TOUS_KO = false;
         let SEL = null;           // { name, pid } : domaine ouvert dans l'onglet Enregistrements
         let RECS = null, RECS_ERR = '';
@@ -295,6 +306,13 @@
                         { name: 'example.net', status: 'active', provider_id: 'a1b2c3d4', provider_name: 'Gandi principal', provider_type: 'gandi' },
                         { name: 'example.org', status: 'active', provider_id: 'e5f6a7b8', provider_name: 'Cloudflare vitrine', provider_type: 'cloudflare' }];
             DOM_ERR = [];
+            COUV = { resume: { vhosts: 9, domaines: 4, geres: 1, gerables: 2, externes: 1 }, ovh_configure: false,
+                     fournisseurs: [{ id: 'a1b2c3d4', name: 'Gandi démo', type: 'gandi', actif: true, zones: 2, erreur: null }],
+                     domaines: [{ domaine: 'example.com', vhosts: 5, statut: 'gere', fournisseur: 'Gandi démo', type_fournisseur: 'gandi', hebergeur_ns: null, fournisseur_a_ajouter: null },
+                                { domaine: 'example.net', vhosts: 2, statut: 'gerable', fournisseur: null, type_fournisseur: null, hebergeur_ns: 'ovh', fournisseur_a_ajouter: 'ovh' },
+                                { domaine: 'example.fr', vhosts: 1, statut: 'gerable', fournisseur: null, type_fournisseur: null, hebergeur_ns: 'gandi', fournisseur_a_ajouter: 'gandi' },
+                                { domaine: 'example.eu', vhosts: 1, statut: 'externe', fournisseur: null, type_fournisseur: null, hebergeur_ns: 'autre', fournisseur_a_ajouter: null }],
+                     zones_sans_vhost: [{ zone: 'inutile.example.org', fournisseur: 'Gandi démo', type: 'gandi' }] };
             CONFIG = { default_ttl: 300, acme_ttl: 60, ddns_check_interval: 300, audit_retention_days: 90 };
             LOGS = [{ timestamp: new Date(t - 600e3).toISOString(), action: 'ddns_update', user: 'admin', details: { domain: 'example.com', subdomain: 'box', ip: '198.51.100.7', action: 'updated' } },
                     { timestamp: new Date(t - 3600e3).toISOString(), action: 'acme_challenge_created', user: 'admin', details: { domain: 'example.org', provider: 'e5f6a7b8' } },
@@ -310,7 +328,7 @@
         async function charger() {
             SALI = false;
             if (DEMO) { demoData(); SESSION_OK = true; TOUS_KO = false; if (SEL) await chargerRecords(false); rendre(); remplirConfig(); return; }
-            const essais = await Promise.allSettled([lire('/summary'), lire('/providers'), lire('/domains'), lire('/config'), lire('/logs?limit=50')]);
+            const essais = await Promise.allSettled([lire('/summary'), lire('/providers'), lire('/domains'), lire('/config'), lire('/logs?limit=50'), lire('/couverture')]);
             const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
             SESSION_OK = !essais.some(e => e.status === 'rejected' && estAuth(e.reason));
             TOUS_KO = essais.every(e => e.status === 'rejected');
@@ -322,6 +340,7 @@
             if (!d) DOMAINES = null;
             CONFIG = val(3);
             const l = val(4); LOGS = l && Array.isArray(l.logs) ? l.logs : [];
+            COUV = val(5);
             $('erreur').hidden = !(TOUS_KO && SESSION_OK);
             if (TOUS_KO && SESSION_OK) $('erreur').textContent = 'Impossible de lire le service des fournisseurs DNS (arrêté ou injoignable).';
             if (SEL) await chargerRecords(false);
@@ -366,7 +385,7 @@
             $('sEnr').textContent = SEL ? SEL.name : 'ouvrir un domaine';
             $('tEtat').textContent = ok && act !== null && act !== undefined ? (act > 0 ? 'OK' : 'Aucun actif') : '—';
             $('cEtat').className = 'tuile ' + (ok && act > 0 ? 'ok' : (ok && act === 0 ? 'att' : 'cy'));
-            rendreFournisseurs(); rendreDomaines(); rendreRecords(); remplirSelects(); rendreAcme(); rendreJournaux();
+            rendreFournisseurs(); rendreCouverture(); rendreDomaines(); rendreRecords(); remplirSelects(); rendreAcme(); rendreJournaux();
             $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
             annoncer();
         }
@@ -389,6 +408,50 @@
                 confirmation(act, 'fournisseur', p.id, 'Supprimer', () => supprimerFourn(p));
                 tr.appendChild(act); tb.appendChild(tr);
             });
+        }
+
+        // Vhosts et domaines (#3070) : qui est géré, gérable ou externe, et où ajouter le fournisseur qui manque.
+        const STATUT_COUV = { gere: ['ok', 'Géré'], gerable: ['att', 'Gérable'], externe: ['', 'Externe'] };
+        function ajouterFournisseur(type) {
+            onglet('fournisseurs');
+            const f = $('fFourn'); f.hidden = false; $('ptype').value = type; champsCred(); SALI = true; annoncer();
+        }
+        function rendreCouverture() {
+            const tb = $('bCouv'); tb.replaceChildren();
+            const zb = $('bZsv'); zb.replaceChildren();
+            const al = $('alertesCouv'); al.replaceChildren();
+            const rs = $('resumeCouv'); rs.replaceChildren();
+            if (!COUV || !Array.isArray(COUV.domaines)) {
+                $('nCouv').textContent = ''; $('nZsv').textContent = '';
+                ligneVide(tb, 5, SESSION_OK && !TOUS_KO ? 'Relevé indisponible.' : '—'); ligneVide(zb, 3, '—'); return;
+            }
+            const r = COUV.resume || {};
+            $('nCouv').textContent = (r.vhosts || 0) + ' vhosts · ' + (r.domaines || 0) + ' domaines';
+            rs.appendChild(pastille('ok', (r.geres || 0) + ' géré(s)'));
+            rs.appendChild(pastille('att', (r.gerables || 0) + ' gérable(s)'));
+            rs.appendChild(pastille('', (r.externes || 0) + ' externe(s)'));
+            (COUV.fournisseurs || []).filter(f => f.erreur).forEach(f => al.appendChild(el('p', 'alerte', '⚠ ' + tiret(f.name) + ' (' + tiret(f.type) + ') : ' + court(f.erreur, 200))));
+            const manque = (COUV.domaines || []).filter(d => d.fournisseur_a_ajouter === 'ovh').length;
+            if (manque && !COUV.ovh_configure) al.appendChild(el('p', 'alerte', '⚠ OVH n’est pas configuré : ' + manque + ' domaine(s) y sont hébergés. Ajoutez un fournisseur OVH (Application Key, Secret, Consumer Key).'));
+            COUV.domaines.forEach(d => {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', d.domaine));
+                tr.appendChild(el('td', '', tiret(d.vhosts)));
+                const [cl, lib] = STATUT_COUV[d.statut] || ['', tiret(d.statut)];
+                const s = el('td'); s.appendChild(pastille(cl, lib)); tr.appendChild(s);
+                tr.appendChild(el('td', '', d.statut === 'gere' ? tiret(d.fournisseur) + ' (' + tiret(TYPES[d.type_fournisseur] || d.type_fournisseur) + ')'
+                                   : (d.hebergeur_ns ? 'NS chez ' + (TYPES[d.hebergeur_ns] || d.hebergeur_ns) : 'NS inconnus')));
+                const a = el('td', 'act');
+                if (d.statut === 'gere') a.appendChild(btn('Voir les enregistrements', '', () => { const x = (DOMAINES || []).find(z => z.name === d.domaine); if (x) ouvrirDomaine(x); else onglet('domaines'); }));
+                else if (d.fournisseur_a_ajouter) a.appendChild(btn('Ajouter ' + (TYPES[d.fournisseur_a_ajouter] || d.fournisseur_a_ajouter), 'ok', () => ajouterFournisseur(d.fournisseur_a_ajouter)));
+                else a.textContent = '—';
+                tr.appendChild(a); tb.appendChild(tr);
+            });
+            if (!COUV.domaines.length) ligneVide(tb, 5, 'Aucun vhost actif lu dans haproxy.toml.');
+            const zs = COUV.zones_sans_vhost || [];
+            $('nZsv').textContent = zs.length ? zs.length + ' zone' + (zs.length > 1 ? 's' : '') : '';
+            if (!zs.length) ligneVide(zb, 3, 'Toutes les zones des fournisseurs portent au moins un vhost.');
+            zs.forEach(z => { const tr = el('tr'); tr.appendChild(el('td', '', z.zone)); tr.appendChild(el('td', '', tiret(z.fournisseur))); const t = el('td'); t.appendChild(pastille('vio', tiret(TYPES[z.type] || z.type))); tr.appendChild(t); zb.appendChild(tr); });
         }
 
         function ouvrirDomaine(d) {
@@ -572,7 +635,7 @@
         $('rechEnr').addEventListener('input', () => { SALI = false; rendreRecords(); annoncer(); });
 
         // ----- Onglets -----
-        const ONGLETS = ['fournisseurs', 'domaines', 'enregistrements', 'acme', 'ddns', 'reglages'];
+        const ONGLETS = ['fournisseurs', 'couverture', 'domaines', 'enregistrements', 'acme', 'ddns', 'reglages'];
         function onglet(nom) {
             document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
             ONGLETS.forEach(t => { $('t-' + t).hidden = t !== nom; });
@@ -585,6 +648,7 @@
             const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
         });
         $('rafraichir').addEventListener('click', charger);
+        $('majCouv').addEventListener('click', async () => { if (!DEMO) { try { COUV = await lire('/couverture?refresh=true'); } catch (e) { /* on garde le relevé */ } } rendreCouverture(); annoncer(); });
 
         // ----- Hauteur annoncée à l'hôte (iframes) -----
         function annoncer() {

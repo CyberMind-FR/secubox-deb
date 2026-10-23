@@ -4,6 +4,8 @@ if [ "$1" = "configure" ]; then
     # Create data directories
     mkdir -p /var/lib/secubox/dns-provider
     chown -R secubox:secubox /var/lib/secubox/dns-provider
+    # #3070 : providers.json porte les clés d'API en clair — 0600 (il était en 0664, lisible par tous les comptes locaux)
+    chmod 0600 /var/lib/secubox/dns-provider/providers.json 2>/dev/null || true
 
     systemctl daemon-reload
     systemctl enable secubox-dns-provider.service || true

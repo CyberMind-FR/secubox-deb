@@ -1,3 +1,18 @@
+secubox-dns (1.6.0-1~trixie1) trixie; urgency=medium
+
+  * dns-provider (ref #3070) : « où sont les vhosts, les domaines managés et managables, l'API Gandi et OVH ». (1) OVH était
+    inutilisable : l'adaptateur exigeait la bibliothèque Python `ovh`, absente de la box et de Debian (HTTP 501), alors que
+    gk2.net (5 vhosts) y est hébergé. Il parle maintenant à l'API OVH par httpx (signature `$1$` + SHA-1 imposée par le
+    protocole, horodatage du serveur OVH, ovh-eu/ca/us, rafraîchissement de la zone après chaque écriture, erreurs en 502
+    lisibles) ; exception SHA-1 documentée dans docs/POLITIQUE-CRYPTO.md. (2) Nouvelle route `GET /couverture` et onglet
+    « Vhosts et domaines » : les vhosts actifs de haproxy.toml (jokers exclus) croisés avec les zones des fournisseurs
+    configurés et les serveurs de noms publics (dig NS, mis en cache 1 h) — géré, gérable (NS chez Gandi, OVH, Cloudflare ou
+    Route 53 sans fournisseur : bouton « Ajouter OVH » ouvre le formulaire présélectionné) ou externe, plus les zones sans
+    vhost ; aucune clé dans la réponse. (3) providers.json (clés d'API en clair) était en 0664, lisible par tous les comptes
+    locaux : écrit en 0600, resserré au démarrage et par le postinst. 20 tests (dont 2 de rendu).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 11:30:00 +0200
+
 secubox-dns (1.5.1-1~bookworm1) bookworm; urgency=medium
 
   * /dns/ dit le moteur DNS REEL (#2859). Sur gk2 la page affichait « BIND ARRETE, 0 zone » alors que la resolution marche : le module gere des zones BIND, BIND n'y est pas installe, Unbound resout, et l'API renvoyait running=false par defaut quand dnsmaster est absent. /status et /health ajoutent `moteur` (bind, unbound ou aucun) et `moteur_actif` (cles d'origine conservees ; `running` reste l'etat de BIND) ; /health est « ok » des qu'un moteur repond. La page affiche « UNBOUND ACTIF » et explique l'absence de zone BIND.
