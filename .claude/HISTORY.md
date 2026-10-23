@@ -9,6 +9,29 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-23 — Netboot : live MOCHAbin par TFTP et flash eMMC depuis le live (ref #3079)
+
+« preparer tftpboot avec latest mochabin ready to live and flash ». Dernière release : v3.0.0-alpha.18 (16/10) — clé live
+`secubox-mochabin-live-usb`, images eMMC `isp` et `lite` (pas d'image `full` MOCHAbin dans cette release). Téléchargées sur gk2
+(`/data/sbx-netboot/alpha18/`, empreintes identiques à la release). L'installeur B3 existant gardait l'image DÉCOMPRESSÉE en RAM
+et ne lisait pas un .gz, et son initrd n'a aucun module : inutilisable. PR #3080, `secubox-netboot` 0.6.0 :
+`scripts/build-live-netboot.sh` (serveur) — Image, DTB, initrd et `boot.scr` en TFTP, rootfs en squashfs servi en HTTP
+(live-boot `fetch=`), fstab de la clé neutralisé, initrd contrôlé (live-boot, mvpp2), images eMMC signées par la clé netboot et
+listées dans `images.txt` ; `installer/sbx-netflash` (live) — mémoire, téléchargement, signature vérifiée avec la clé publique
+embarquée, puis `secubox-flash-emmc` (embarqué au paquet). `squashfs-tools` installé sur gk2.
+
+## 2026-10-23 — Agrégateur : admin, cloner, netdiag, certs, cookies, mail relayés à leur service root (closes #3077)
+
+Audit (agent en lecture seule) des 8 modules à unité root encore montés dans l'agrégateur. Six exécutaient leurs actions sous
+`secubox` : **mail** (`mailctl status` → « Not installed » alors que le conteneur tourne : toutes les actions et plusieurs lectures
+faussées), admin (systemctl refusé par polkit, reboot), cloner (tar de /etc et /var/lib), certs (certbot, /etc/letsencrypt),
+cookies (/etc/secubox/cookies.json, clé Fernet), netdiag (ping « Operation not permitted », ss -p tronqué). ksm et vm sains
+(ctl + sudoers ; vm : `lxc-create`/`lxc-destroy` restent volontairement hors root, décision de conception à prendre). PR #3078,
+`secubox-aggregator` 0.4.8 : DEDICATED_MODULES + AGG_EXCLUDE. Déployé gk2 : 79 modules montés, aucun des six ; `mail/status`
+voit le conteneur (installé, en marche, 5 comptes). Sockets des six en 0666 root:root (antérieur, à resserrer).
+Coût : trois démarrages à froid de l'agrégateur ce matin (10:50, 10:59 ; ~4 à 8 min chacun sous 5 Go de swap) — Hall et cartes
+« hors ligne » pendant ce temps (signalé par le propriétaire : « Mes comptes » HORS LIGNE). Grouper les redémarrages.
+
 ## 2026-10-23 — ZIA : « Activez la radio » répondait « rien trouvé » (closes #3074)
 
 Capture du propriétaire : « Activez la radio. » → outils `search_objects(activez radio)` puis `delegate(remote)`, réponse « Je n'ai

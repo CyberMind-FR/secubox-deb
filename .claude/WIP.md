@@ -102,9 +102,11 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   sudoers exact, garde d'espace disque.
 - **Sauvegardes sur /data, restauration par root, audit DNS par compte** — closes #3072 (PR #3073, `secubox-backup` 2.5.0 +
   `secubox-dns` 1.6.1, gk2 + apt trixie). Racine gk2 91 % → 74 %. Reste au propriétaire : 16 archives en clair (déplacées).
-- **ZIA « Activez la radio »** — closes #3074 (PR #3075, zia 0.3.1, radio 0.2.2, webos 1.19.24). À confirmer dans le navigateur.
+- **ZIA « Activez la radio »** — closes #3074 (PR #3075, zia 0.3.1, radio 0.2.3 (#3076), webos 1.19.24). À confirmer dans le navigateur.
+- **Agrégateur : six modules root relayés** — closes #3077 (PR #3078, aggregator 0.4.8). Reste : sockets 0666, vm lxc-create.
+- **Netboot live MOCHAbin + flash** — ref #3079 (PR #3080, netboot 0.6.0). Construction du live sur gk2 en cours ; à prouver au banc série.
 - **nettweak, traffic, qos relayés à leur service root** — closes #3065 (PR #3066, `secubox-aggregator` 0.4.7 sur gk2 + apt
-  trixie). À examiner : admin, cloner, ksm, netdiag, vm, certs, cookies, mail (root + montés dans l'agrégateur).
+  trixie). Examinés : #3077.
 - Ouvert : profil de
   services : `secubox-matrix.service` coupé en boucle (34 s, échec `disable`), 737 lignes d'audit en une nuit — à traiter.
 
