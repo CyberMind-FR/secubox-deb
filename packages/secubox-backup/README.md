@@ -61,8 +61,22 @@ Outil root `backupctl` :
 | `backupctl etat` | destinataire, clé privée, archives encore en clair |
 | `backupctl init-key` | génère la paire age ; la privée (`/etc/secubox/secrets/backup-age.key`, 0600 root) est à **copier hors de la box** |
 | `backupctl chiffrer-existantes [--supprimer-clair]` | chiffre les anciennes archives ; le clair n'est supprimé qu'après un déchiffrement vérifié, deux fichiers distincts |
-| `backupctl restaurer FICHIER.age [-C /]` | déchiffre (temporaire privé) puis extrait |
+| `backupctl restaurer [--liste] FICHIER[.age\|.tar.gz] [-C /]` | déchiffre si besoin (temporaire privé) puis extrait ; une archive de conteneur va sous `lxc_path` |
+| `backupctl restaurer-conteneur NOM FICHIER` | arrête le conteneur, extrait à côté, ne remplace qu'une archive qui contient `NOM/config` |
 
 Une clé privée gardée sur la même box ne protège que les copies qui en sortent (envoi distant, disque de
 sauvegarde, copie manuelle). La restauration d'une archive chiffrée par l'API répond 409 et renvoie à
 `backupctl restaurer` : l'API est sans privilège et ne lit pas la clé.
+
+## Emplacements : `/etc/secubox/backup.toml`
+
+```toml
+[backup]
+path = "/data/secubox-backups"   # destination des archives (défaut /srv/backups)
+lxc_path = "/data/lxc"           # conteneurs (défaut /srv/lxc)
+service_paths = ["/var/lib/secubox"]   # données de la sauvegarde « services »
+```
+
+Lu par l'API et par `backupctl`. Sans fichier, valeurs historiques. Changer `path` ne déplace pas les archives déjà
+créées : les copier (mêmes sous-dossiers `config`, `containers`, `services`, mêmes droits) puis relancer le service.
+La restauration (`/restore`, `/container/restore`) répond 409 et donne la commande root.

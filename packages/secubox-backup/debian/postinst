@@ -6,7 +6,10 @@ if [ "$1" = "configure" ]; then
     # archives déjà en clair sont LISTÉES, jamais supprimées d'office : backupctl chiffrer-existantes.
     if [ -x /usr/sbin/backupctl ]; then
       /usr/sbin/backupctl init-key >/dev/null 2>&1 || true
-      for d in /srv/backups/config /srv/backups/containers /srv/backups/services; do
+      # destination configurée (/etc/secubox/backup.toml, section [backup], clé path) — /srv/backups par défaut (#3072)
+      _dest=$(sed -n 's/^[[:space:]]*path[[:space:]]*=[[:space:]]*"\(\/[^"]*\)".*/\1/p' /etc/secubox/backup.toml 2>/dev/null | head -n1)
+      _dest="${_dest:-/srv/backups}"
+      for d in "$_dest/config" "$_dest/containers" "$_dest/services"; do
         [ -d "$d" ] || continue
         chmod 0750 "$d" 2>/dev/null || true
         find "$d" -maxdepth 1 -type f -exec chmod 0640 {} + 2>/dev/null || true

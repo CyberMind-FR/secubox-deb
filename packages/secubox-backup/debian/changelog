@@ -1,3 +1,18 @@
+secubox-backup (2.5.0-1~trixie1) trixie; urgency=medium
+
+  * Destination, chemin des conteneurs et restauration (ref #3072). Sur gk2 la racine (eMMC) est à 91 % alors que /data a 400 Go
+    libres, et les conteneurs vivent sous /data/lxc, pas /srv/lxc. Nouveau /etc/secubox/backup.toml, section [backup] :
+    path (destination), lxc_path, service_paths ; lu par l'API et par `backupctl` (sudo vide l'environnement, seul un fichier
+    atteint le ctl root). Valeurs historiques sans fichier ; une valeur invalide (non absolue, `..`, mauvais type) est ignorée.
+  * Restauration : toujours par root. `backupctl restaurer` accepte aussi une archive en clair (.tar.gz) et envoie une archive de
+    conteneur sous lxc_path ; nouveau `backupctl restaurer-conteneur NOM FICHIER` (arrête le conteneur, extrait à côté et ne
+    remplace l'ancien que si l'archive contient NOM/config). L'API (`/restore`, `/container/restore`) répond 409 avec la commande
+    à lancer au lieu de lancer `tar -x` sous `secubox` (échec garanti, et une archive en clair appartient à `secubox` : un
+    sudoers qui l'extrairait sur / serait une élévation de privilège). Nom de fichier avec chemin refusé (422). Le bouton
+    « Commande » de la page sort pour toutes les archives.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 10:00:00 +0200
+
 secubox-backup (2.4.1-1~trixie1) trixie; urgency=medium
 
   * Sauvegardes créées par root (ref #3064) : « Config backup failed: tar: /etc/secubox/secrets: Cannot open: Permission

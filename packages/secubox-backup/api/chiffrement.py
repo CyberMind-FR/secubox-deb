@@ -26,6 +26,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import tomllib
 from pathlib import Path
 from typing import Optional
 
@@ -33,6 +34,30 @@ CONFIG = Path(os.environ.get("SECUBOX_BACKUP_ENC", "/etc/secubox/backup-encrypti
 CLE_PRIVEE = Path(os.environ.get("SECUBOX_BACKUP_KEY", "/etc/secubox/secrets/backup-age.key"))
 MODE_FICHIER = 0o640
 MODE_DOSSIER = 0o750
+
+# Emplacements (#3072) : /etc/secubox/backup.toml, section [backup] — path (destination des archives), lxc_path (conteneurs),
+# service_paths (données des services). Absent ou illisible : valeurs historiques. Un sudo vide l'environnement : la
+# configuration par fichier est la seule qui atteigne le ctl root.
+CONF = Path(os.environ.get("SECUBOX_BACKUP_CONF", "/etc/secubox/backup.toml"))
+DEFAUTS = {"path": "/srv/backups", "lxc_path": "/srv/lxc",
+           "service_paths": ["/var/lib/secubox", "/srv/nextcloud/data", "/srv/gitea/data"]}
+
+
+def parametres(conf: Optional[Path] = None) -> dict:
+    """Destination, chemin LXC et chemins de services. Une valeur invalide (non absolue, mauvais type) est ignorée."""
+    p = dict(DEFAUTS)
+    try:
+        brut = tomllib.loads((conf or CONF).read_text()).get("backup", {})
+    except (OSError, ValueError):
+        return p
+    for cle in ("path", "lxc_path"):
+        v = brut.get(cle)
+        if isinstance(v, str) and v.startswith("/") and ".." not in Path(v).parts:
+            p[cle] = v.rstrip("/") or "/"
+    sp = brut.get("service_paths")
+    if isinstance(sp, list) and sp and all(isinstance(x, str) and x.startswith("/") for x in sp):
+        p["service_paths"] = sp
+    return p
 
 
 class ErreurChiffrement(RuntimeError):

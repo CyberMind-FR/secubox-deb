@@ -36,13 +36,14 @@ from pathlib import Path
 sys.path.insert(0, os.environ.get("SECUBOX_BACKUP_LIB", "/usr/lib/secubox/backup/api"))
 import chiffrement as c   # noqa: E402
 
-RACINE = Path(os.environ.get("SECUBOX_BACKUP_PATH", "/srv/backups"))
+PARAM = c.parametres()
+RACINE = Path(os.environ.get("SECUBOX_BACKUP_PATH") or PARAM["path"])
 SOUS = ("config", "containers", "services")
 
 # Ce que l'on sauvegarde (#3064) : les mêmes chemins qu'avant, mais lus par ROOT.
 CONFIG_PATHS = ["/etc/secubox", "/etc/nginx", "/etc/wireguard", "/etc/haproxy", "/etc/nftables.conf"]
-SERVICE_PATHS = ["/var/lib/secubox", "/srv/nextcloud/data", "/srv/gitea/data"]
-LXC_PATH = Path(os.environ.get("SECUBOX_BACKUP_LXC", "/srv/lxc"))
+SERVICE_PATHS = PARAM["service_paths"]
+LXC_PATH = Path(os.environ.get("SECUBOX_BACKUP_LXC") or PARAM["lxc_path"])
 NOM = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 # Réserve d'espace (#3064) : une sauvegarde ne remplit JAMAIS le disque de la box. On ne commence pas sous RESERVE, et on
 # interrompt tar (archive partielle supprimée) si l'espace libre passe sous la moitié. Sur gk2 (disque racine à 91 %), la
@@ -135,29 +136,84 @@ def _memes_octets(a: Path, b: Path) -> bool:
                 return True
 
 
-def restaurer(args) -> int:
-    liste = "--liste" in args
-    args = [a for a in args if a != "--liste"]
-    if not args:
-        sys.exit("usage : backupctl restaurer [--liste] FICHIER.age [-C RACINE]")
-    f = Path(args[0])
-    racine = args[args.index("-C") + 1] if "-C" in args else "/"
+def _trouve(nom: str):
+    """Chemin de l'archive : tel quel s'il existe, sinon retrouvé sous RACINE/<sous-dossier>/ par son nom. Retourne (chemin, sous-dossier)."""
+    f = Path(nom)
     if not f.exists():
         for s in SOUS:
             if (RACINE / s / f.name).exists():
                 f = RACINE / s / f.name
                 break
     if not f.exists():
-        sys.exit(f"introuvable : {args[0]}")
-    try:
-        clair = c.dechiffrer(f)
-    except c.ErreurChiffrement as e:
-        sys.exit(str(e))
+        sys.exit(f"introuvable : {nom}")
+    return f, f.parent.name
+
+
+def restaurer(args) -> int:
+    """Restaure une archive chiffrée (.age) ou en clair (.tar.gz), toujours par root (#3072) : une archive en clair appartient à
+    `secubox`, la laisser extraire par un sudoers serait une élévation de privilège. Une archive de conteneur va sous LXC_PATH."""
+    liste = "--liste" in args
+    args = [a for a in args if a != "--liste"]
+    if not args:
+        sys.exit("usage : backupctl restaurer [--liste] FICHIER[.age|.tar.gz] [-C RACINE]")
+    f, sous = _trouve(args[0])
+    racine = args[args.index("-C") + 1] if "-C" in args else (str(LXC_PATH) if sous == "containers" else "/")
+    clair, temporaire = f, False
+    if f.name.endswith(".age"):
+        try:
+            clair, temporaire = c.dechiffrer(f), True
+        except c.ErreurChiffrement as e:
+            sys.exit(str(e))
+    elif not (f.name.endswith(".tar.gz") or f.name.endswith(".tgz")):
+        sys.exit(f"format non reconnu (attendu .age ou .tar.gz) : {f.name}")
     try:
         r = subprocess.run(["tar", "-tzf" if liste else "-xzf", str(clair)] + ([] if liste else ["-C", racine]))
     finally:
-        c.detruire_clair(clair)             # le temporaire, jamais une archive d'origine
+        if temporaire:
+            c.detruire_clair(clair)         # le temporaire, jamais une archive d'origine
     return r.returncode
+
+
+def restaurer_conteneur(nom: str, fichier: str) -> int:
+    """Remplace le conteneur NOM par le contenu de l'archive (arrêté s'il tourne, non relancé : à l'opérateur de vérifier)."""
+    if not NOM.match(nom):
+        sys.exit("nom de conteneur invalide")
+    f, sous = _trouve(fichier)
+    if sous != "containers":
+        sys.exit("ce n'est pas une archive de conteneur")
+    if not f.name.endswith((".age", ".tar.gz", ".tgz")):
+        sys.exit(f"format non reconnu : {f.name}")
+    cible = LXC_PATH / nom
+    if cible.exists():
+        try:
+            info = subprocess.run(["lxc-info", "-P", str(LXC_PATH), "-n", nom, "-s"], capture_output=True, text=True, timeout=30)
+            if info.returncode == 0 and "RUNNING" in (info.stdout or ""):
+                subprocess.run(["lxc-stop", "-P", str(LXC_PATH), "-n", nom], capture_output=True, text=True, timeout=120)
+        except FileNotFoundError:
+            pass                            # pas d'outils LXC : rien ne tourne
+    clair, temporaire = f, False
+    if f.name.endswith(".age"):
+        try:
+            clair, temporaire = c.dechiffrer(f), True
+        except c.ErreurChiffrement as e:
+            sys.exit(str(e))
+    try:
+        # l'archive est extraite d'abord dans un dossier voisin : l'ancien conteneur n'est retiré que si l'extraction réussit
+        tmp = Path(tempfile.mkdtemp(prefix=f".restaure-{nom}-", dir=str(LXC_PATH)))
+        r = subprocess.run(["tar", "-xzf", str(clair), "-C", str(tmp)])
+        if r.returncode != 0 or not (tmp / nom / "config").exists():
+            shutil.rmtree(tmp, ignore_errors=True)
+            print(f"échec : extraction (code {r.returncode}) ou archive sans {nom}/config ; conteneur actuel conservé", file=sys.stderr)
+            return r.returncode or 1
+        if cible.exists():
+            shutil.rmtree(cible)
+        os.replace(tmp / nom, cible)
+        shutil.rmtree(tmp, ignore_errors=True)
+    finally:
+        if temporaire:
+            c.detruire_clair(clair)
+    print(f"conteneur {nom} restauré depuis {f.name}")
+    return 0
 
 
 def _donne_a_secubox(chemin: Path, mode: int) -> None:
@@ -275,6 +331,8 @@ def main() -> int:
         return chiffrer_existantes("--supprimer-clair" in a)
     if a[0] == "restaurer":
         return restaurer(a[1:])
+    if a[0] == "restaurer-conteneur" and len(a) == 3:
+        return restaurer_conteneur(a[1], a[2])
     if a[0] == "archiver":
         # archiver config|services chiffre|clair   ou   archiver conteneur NOM chiffre|clair
         if len(a) == 3 and a[1] in ("config", "services") and a[2] in ("chiffre", "clair"):
