@@ -89,9 +89,11 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   restauré par le navigateur est retiré. Vérifié en boîte noire depuis l'hôte (trois scénarios).
 - Opérations gk2 sans source : `auditd` relancé (aucune écriture dans `audit.log` depuis le 16 octobre, descripteur perdu) ;
   `secubox-exposure.service` réactivée (retrouvée `disabled`, cause non établie — à surveiller).
-- Ouvert : #3058 (antirootkit : AppArmor, exécutions conteneurisées, reprise du point de contrôle, pouls), #3060 (TURN :
-  ctl root + sudoers, configuration SecuBox de coturn, API déléguée). Profil de services : `secubox-matrix.service` coupé
-  en boucle (34 s, échec `disable`), 737 lignes d'audit en une nuit — à traiter.
+- **TURN réparé et activé** — closes #3060 (PR #3062, `secubox-jitsi` 2.4.1 sur gk2 + apt trixie) : `secubox-turnctl` root
+  (verbes exacts, sudoers), configuration SecuBox de coturn générée en double tampon (realm `turn.gk2.secubox.in`, secret
+  dans `secrets/turn/`), API déléguée, panneau en lecture seule. Sans certificat du realm : pas de TURNS.
+- Ouvert : #3058 (antirootkit : AppArmor, exécutions conteneurisées, reprise du point de contrôle, pouls). Profil de
+  services : `secubox-matrix.service` coupé en boucle (34 s, échec `disable`), 737 lignes d'audit en une nuit — à traiter.
 
 ## ✅ Fusionné et déployé le 2026-10-22 (PR #3014, #3015, #3016 fusionnées en squash)
 

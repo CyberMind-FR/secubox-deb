@@ -9,6 +9,25 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-23 — TURN : la page était inerte, coturn n'avait jamais reçu la configuration SecuBox (closes #3060)
+
+« https://admin.gk2.secubox.in/turn/ ko repair et activate ». L'API tournait sous `secubox` avec `NoNewPrivileges=true`,
+sans sudoers ni ctl : `/etc/turnserver.conf` (root:turnserver 0640) illisible — realm, ports, utilisateurs à « — » —,
+`systemctl start|stop|restart coturn`, `turnadmin` et l'écriture de la configuration lancés par l'API elle-même, donc
+inopérants. coturn tournait avec la configuration Debian par défaut (aucune ligne SecuBox) sur toutes les adresses, WAN
+comprise. PR #3062, `secubox-jitsi` 2.4.1 (composant turn) : `secubox-turnctl` root aux verbes exacts (`status`,
+`start|stop|restart|enable`, `generer [realm]`, `secret-renouveler`, `credentials`, `users`, `user-add` par stdin,
+`user-del`, `sessions`, `journal`, `config` masqué), sudoers `secubox-turn`, configuration SecuBox générée en double
+tampon (ombre `.sbx-nouveau` → bascule → relance → `is-active` → retour arrière sur `.avant`), realm dans
+`/etc/secubox/turn.toml` (`secubox-domaine turn`), secret dans `/etc/secubox/secrets/turn/`, TLS seulement avec un
+certificat du realm, relais vers loopback/lien local refusé, décisions dans `audit.log`. L'API délègue tout et valide
+avant ; `POST /config` → 409, `POST /generer` ; panneau en lecture seule avec « Régénérer », secret renouvelé côté
+serveur. Unité API sans `NoNewPrivileges` ni accès à `turnserver.conf` ; postinst `visudo -cf` puis génération si la
+configuration en place n'est pas SecuBox. 13 tests (ctl `bash -n` + shellcheck, sudoers, unité, API par TestClient,
+paquet, panneau). Déployé gk2 : `turnserver.conf` SecuBox, realm `turn.gk2.secubox.in`, coturn actif et activé, ctl
+par sudo depuis `secubox` OK, identifiants temporaires émis, STUN répond en local ; publié dans apt trixie. Reste : pas de
+certificat pour `turn.gk2.secubox.in` donc pas de TURNS (à poser dans HAProxy/ACME si besoin) ; aucun utilisateur long terme.
+
 ## 2026-10-23 — Webmail d'office : une déconnexion de Roundcube coupait le SSO pour toujours (closes #3059)
 
 « mes comptes courriel sso ko », puis « fix sso correctly en permanently ». Diagnostic par le chemin public : session du Hall
