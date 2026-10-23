@@ -82,6 +82,17 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   est dans le chantier ci-dessus. CI : les échecs `gabarit` (4 écarts), `pytest · secubox-core` (sshd), `appstore-catalogue`,
   `build (secubox-appstore|meta)` (arbre des métapaquets) et `secubox-hub` (espaces.json) préexistent sur master.
 
+## ✅ Fusionné et déployé le 2026-10-23
+
+- **Webmail d'office rétabli** — closes #3059 (PR #3061, `secubox-mail` 2.16.6 sur gk2 + apt trixie) : le cookie d'arrêt
+  posé à la déconnexion de Roundcube ne vaut que pour le jeton du Hall fermé (empreinte SHA-256, 12 h) ; l'ancien « 1 »
+  restauré par le navigateur est retiré. Vérifié en boîte noire depuis l'hôte (trois scénarios).
+- Opérations gk2 sans source : `auditd` relancé (aucune écriture dans `audit.log` depuis le 16 octobre, descripteur perdu) ;
+  `secubox-exposure.service` réactivée (retrouvée `disabled`, cause non établie — à surveiller).
+- Ouvert : #3058 (antirootkit : AppArmor, exécutions conteneurisées, reprise du point de contrôle, pouls), #3060 (TURN :
+  ctl root + sudoers, configuration SecuBox de coturn, API déléguée). Profil de services : `secubox-matrix.service` coupé
+  en boucle (34 s, échec `disable`), 737 lignes d'audit en une nuit — à traiter.
+
 ## ✅ Fusionné et déployé le 2026-10-22 (PR #3014, #3015, #3016 fusionnées en squash)
 
 - **Double tampon réel des caches** — closes #3011 (`secubox-metrics` 1.29.4, `secubox-hub` 1.12.21, `secubox-webos`

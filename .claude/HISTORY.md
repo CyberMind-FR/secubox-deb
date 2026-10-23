@@ -9,6 +9,22 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-23 — Webmail d'office : une déconnexion de Roundcube coupait le SSO pour toujours (closes #3059)
+
+« mes comptes courriel sso ko », puis « fix sso correctly en permanently ». Diagnostic par le chemin public : session du Hall
+valide (cookie `.gk2.secubox.in`), boîte liée dans `sbx_app_links`, greffon `secubox_sso` actif dans le LXC roundcube,
+`/api/v1/auth/auth/verify` joignable depuis le conteneur — et un jeton factice envoyé par curl déclenche bien la vérification.
+À l'ouverture réelle, aucun appel : le greffon se taisait avant. Cause : `deconnecte()` posait `secubox_sso_off=1` en cookie
+de session (durée 0), que Firefox restaure avec sa session ; une seule déconnexion du webmail coupait le SSO définitivement.
+PR #3061, `secubox-mail` 2.16.6 : le cookie d'arrêt porte l'empreinte SHA-256 (32 hex) du jeton `secubox_session` fermé,
+12 h ; `coupe()` ne tait le SSO que pour ce jeton, retire un cookie d'un autre jeton ou de l'ancien format. 3 tests statiques
+(pas de PHP sur le poste ; `mailctl webmail-sso` fait `php -l`). Déployé gk2 (postinst → greffon reposé dans le conteneur),
+vérifié en boîte noire : jeton seul → vérification appelée ; `sso_off=1` → cookie `deleted` et vérification appelée ;
+empreinte du même jeton → formulaire sans appel. Publié dans apt trixie. Même session : `auditd` sur gk2 ne possédait plus
+de descripteur sur `audit.log` depuis le 16 octobre (aucun enregistrement, `lost 0`) — relancé, il écrit de nouveau ;
+`secubox-exposure.service` retrouvée `disabled` sans trace dans le journal (réactivée à la main, cause non établie) ;
+le profil de services coupe `secubox-matrix.service` toutes les 34 s en échec (737 lignes d'audit en une nuit), à traiter.
+
 ## 2026-10-22 — Exposition « HORS LIGNE » : l'unité du composant exposure n'était jamais activée (closes #3056)
 
 « https://admin.gk2.secubox.in/exposure/ » : page « HORS LIGNE », API 404. `secubox-exposure.service` était `disabled`,
