@@ -72,6 +72,10 @@ override_dh_auto_install:
 		$(CURDIR)/debian/secubox-security-posture/usr/lib/systemd/system/
 	install -m 644 $(CURDIR)/composants/antirootkit/systemd/sbx-untrusted.slice \
 		$(CURDIR)/debian/secubox-security-posture/usr/lib/systemd/system/
+	# AppArmor enforce (#3058) : API et démon d'exécution
+	install -d $(CURDIR)/debian/secubox-security-posture/etc/apparmor.d
+	install -m 644 $(CURDIR)/composants/antirootkit/apparmor/secubox-antirootkit \
+		$(CURDIR)/debian/secubox-security-posture/etc/apparmor.d/secubox-antirootkit
 	# Install scoped composants/antirootkit/sudoers (secubox-antirootkit -> secubox-antirootkitctl,
 	# exact verbs only)
 	install -d $(CURDIR)/debian/secubox-security-posture/etc/sudoers.d

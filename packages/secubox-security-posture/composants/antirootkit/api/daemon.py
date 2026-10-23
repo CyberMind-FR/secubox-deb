@@ -41,6 +41,7 @@ from api.cgroup import jail_pid
 from api.dpkg_backing import DpkgIndex
 from api.execlog import ExecLog
 from api.policy import load_policy, should_jail
+from api.pouls import Pouls
 
 CONF_PATH = "/etc/secubox/antirootkit.toml"
 DB_PATH = "/var/lib/secubox/antirootkit/execlog.db"
@@ -81,9 +82,15 @@ def _ausearch_since(cursor=None) -> str:
     """
     try:
         r = subprocess.run(_EXECSCAN, capture_output=True, text=True, timeout=25)
+        # le ctl signale sur stderr qu'il a réamorcé un point de contrôle périmé (#3058) : le pouls le compte
+        if "REAMORCE" in (r.stderr or ""):
+            _REAMORCES.append(1)
         return r.stdout or ""
     except Exception:
         return ""
+
+
+_REAMORCES: list = []
 
 
 def _seed_checkpoint() -> None:
@@ -196,15 +203,35 @@ def main() -> None:
     log_fn = make_log_fn(log, alert_store)
     jail_fn = make_jail_fn(enforce, jail_dirs)
     dpkg = DpkgIndex()  # preload dpkg-owned paths once: O(1) is_backed at 150/s
+    pouls = Pouls()
     cursor = None
+    lot = {"vus": 0, "conteneurs": 0, "signales": 0, "dernier": None}
 
     _seed_checkpoint()
 
     def handle(events) -> None:
-        execwatch.run_once(events, allow, dpkg.is_backed, jail_fn, log_fn)
+        verdicts = {"conteneur": 0, "jail": 0}
+
+        def log_compte(ev, d):
+            verdicts[d] = verdicts.get(d, 0) + 1
+            log_fn(ev, d)
+
+        execwatch.run_once(events, allow, dpkg.is_backed, jail_fn, log_compte)
+        lot["vus"] += len(events)
+        lot["conteneurs"] += verdicts["conteneur"]
+        lot["signales"] += verdicts["jail"]
+        horodates = [e.ts for e in events if e.ts is not None]
+        if horodates:
+            lot["dernier"] = max(horodates + ([lot["dernier"]] if lot["dernier"] else []))
 
     while True:
         cursor = poll_once(_ausearch_since, execwatch.parse_ausearch, handle, cursor)
+        # un signe de vie à CHAQUE passage, même sans événement neuf (#3058) : c'est ce qui dit « le démon regarde »
+        while _REAMORCES:
+            _REAMORCES.pop()
+            pouls.reamorcage()
+        pouls.passage(lot["vus"], lot["conteneurs"], lot["signales"], lot["dernier"])
+        lot.update({"vus": 0, "conteneurs": 0, "signales": 0, "dernier": None})
         time.sleep(POLL_SECONDS)
 
 

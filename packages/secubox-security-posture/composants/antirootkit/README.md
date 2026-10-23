@@ -71,3 +71,19 @@ manual quarantine.
 kernel must support cgroup v2 unified hierarchy for the anti-escape jail to
 take effect; this package installs the config/rules but does not itself
 change the box's cgroup boot mode.
+
+## Confinement, conteneurs, pouls (#3058)
+
+- **AppArmor enforce** : `apparmor/secubox-antirootkit` définit `secubox-antirootkit-api` et `secubox-antirootkit-daemon`
+  (fichiers nommés, `/etc/secubox/secrets/**` interdit, aucune capacité ; le démon n'a que `sudo Ux` pour appeler le ctl).
+  Appliqués par `AppArmorProfile=-…` dans les unités (le « - » : un profil non chargé n'empêche jamais le démarrage) ;
+  chargés par le postinst avant le démarrage des unités.
+- **Exécutions de conteneurs** : une exécution dont l'étiquette AppArmor (`subj=`) est `lxc-container-default…` ou
+  `lxc-<nom>_<…>` est décidée `conteneur` : ni journal d'alertes, ni jail, mais comptée par le pouls. Son chemin n'existe pas
+  sur l'hôte, dpkg ne peut donc rien en dire ; la surveillance d'un conteneur se fait dans le conteneur. Les outils de
+  l'hôte (`lxc-attach`…) restent surveillés.
+- **Point de contrôle ausearch** : `execscan` réamorce le point de contrôle quand `ausearch` sort en 10, 11 ou 12 (inode
+  disparu à la rotation d'`audit.log`), le trace dans `audit.log` et le signale au démon.
+- **Pouls** : le démon écrit `/var/lib/secubox/antirootkit/pouls.json` à chaque passage (totaux conservés) ; `GET /status`
+  le renvoie sous `pouls` (`age_s`, `aveugle` = aucun passage depuis 2 min) et la page l'affiche.
+- **uid** : le journal affichait l'`auid` (« unset », 4294967295) à la place de l'uid ; corrigé dans le parseur.

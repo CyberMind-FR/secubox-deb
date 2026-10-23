@@ -31,16 +31,31 @@ class ExecEvent:
     # how much two successive ausearch windows overlap.
     ts: float | None = None
     serial: int | None = None
+    # auid (uid de connexion, 4294967295 = « unset » pour un démon) et étiquette AppArmor du processus (`subj=`) :
+    # c'est l'étiquette qui dit qu'une exécution vient d'un conteneur LXC (#3058).
+    auid: int | None = None
+    subj: str | None = None
+
+    @property
+    def conteneur(self) -> bool:
+        """Exécution vue DEPUIS un conteneur LXC : son chemin (`/usr/bin/php8.2`) n'existe pas sur l'hôte, dpkg ne
+        peut donc rien en dire. Reconnue à l'étiquette AppArmor `lxc-container-default…` ou `lxc-<nom>_<…>` ; les
+        outils de l'hôte (`lxc-attach`, `lxc-start`…) portent un profil nommé d'après eux, sans suffixe : exclus."""
+        return bool(self.subj and _CONTENEUR.match(self.subj))
 
 
 # auditd emits any field containing a space/quote/control byte UNQUOTED and
 # hex-encoded instead of double-quoted (e.g. exe=2F746D702F2E78206576696C for
 # "/tmp/.x evil"). Both exe= and aN= must accept EITHER form, or an attacker
 # can bypass jailing simply by naming their binary with a space.
+# `\buid=` et non `uid=` : l'expression `.*?uid=` s'arrêtait sur `auid=` (4294967295, « unset ») et le journal
+# affichait cette valeur à la place de l'uid réel (#3058).
 _SYS = re.compile(
-    r'type=SYSCALL .*?ppid=(\d+) pid=(\d+) .*?uid=(\d+) .*?'
+    r'type=SYSCALL .*?ppid=(\d+) pid=(\d+) (?:.*?\bauid=(\d+) )?.*?\buid=(\d+) .*?'
     r'exe=(?:"([^"]*)"|([0-9A-Fa-f]+))'
 )
+_SUBJ = re.compile(r'\bsubj=(\S+)')
+_CONTENEUR = re.compile(r'^lxc-(?:container-default\S*|[^\s_]+_<\S*)$')
 _SUC = re.compile(r'success=(yes|no)')
 _A = re.compile(r'a\d+=(?:"([^"]*)"|([0-9A-Fa-f]+))')
 # msg=audit(TS:SERIAL) is the audit record's unique identity. Each block
@@ -71,26 +86,32 @@ def parse_ausearch(text: str) -> list:
         if not m:
             continue
         suc = _SUC.search(b)
-        exe = _auditd_field(m.group(4), m.group(5))
+        exe = _auditd_field(m.group(5), m.group(6))
+        sj = _SUBJ.search(b)
         argv = [_auditd_field(am.group(1), am.group(2)) for am in _A.finditer(b)]
         tsm = _TS.search(b)
         out.append(
             ExecEvent(
                 pid=int(m.group(2)),
                 ppid=int(m.group(1)),
-                uid=int(m.group(3)),
+                uid=int(m.group(4)),
                 exe=exe,
                 argv=argv,
                 success=(suc.group(1) == "yes" if suc else True),
                 ts=float(tsm.group(1)) if tsm else None,
                 serial=int(tsm.group(2)) if tsm else None,
+                auid=int(m.group(3)) if m.group(3) else None,
+                subj=sj.group(1) if sj else None,
             )
         )
     return out
 
 
 def decide(ev: ExecEvent, allow: set, is_backed_fn) -> str:
-    """Decide jail-vs-allow for an ExecEvent: dpkg-backed or allowlisted -> allow, else jail."""
+    """Decide for an ExecEvent: container -> conteneur (ni signalé ni jailé, compté par le pouls); dpkg-backed or
+    allowlisted -> allow, else jail."""
+    if ev.conteneur:
+        return "conteneur"
     if is_backed_fn(ev.exe) or allowed(ev.exe, allow):
         return "allow"
     return "jail"

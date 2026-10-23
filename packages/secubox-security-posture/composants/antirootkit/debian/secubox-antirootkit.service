@@ -45,6 +45,8 @@ StandardError=journal
 # shells out to sudo (unlike sbx-antirootkitd.service, which jails pids).
 ProtectHome=yes
 PrivateTmp=yes
+# #3058 : profil AppArmor enforce (apparmor/secubox-antirootkit) ; le « - » ignore une panne de chargement
+AppArmorProfile=-secubox-antirootkit-api
 ReadWritePaths=/run/secubox /var/lib/secubox/antirootkit
 
 [Install]
