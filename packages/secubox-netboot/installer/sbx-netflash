@@ -67,7 +67,8 @@ telecharge() { # URL DEST
 }
 
 mkdir -p "$TRAVAIL"
-telecharge "$BASE/images.txt" "$TRAVAIL/images.txt" >/dev/null 2>&1 || fail "liste introuvable : $BASE/images.txt"
+# sortie d'erreur gardée : « Network is unreachable » ou un 404 se lisent directement
+telecharge "$BASE/images.txt" "$TRAVAIL/images.txt" >/dev/null || fail "liste introuvable : $BASE/images.txt"
 # images.txt : « NOM TAILLE_OCTETS SHA256 » par ligne
 if [ "$liste" -eq 1 ] || [ -z "$image" ]; then
     echo "Images disponibles sur $BASE :"

@@ -124,6 +124,8 @@ cat > "$w/boot.cmd" <<EOF
 # SecuBox MOCHAbin — live réseau (#3079). Depuis le U-Boot usine, câble sur le WAN 1G (mvpp2-2) :
 #   setenv ethact mvpp2-2; setenv ipaddr <ip libre>; setenv serverip $srv_ip
 #   tftpboot \${scriptaddr} $nom/boot.scr; source \${scriptaddr}
+# Le live garde le réseau de l'initrd (ip=dhcp) : mv88e6xxx bloqué (chargé tard, il fait rouvrir les ports
+# mvpp2 et eth2 perd sa porteuse, #2004), systemd-networkd masqué (le netplan de l'image met eth1/eth2 dans br-lan).
 # Adresses au-dessus de 0x04000000-0x04200000, réservé au firmware (PSCI/ATF) de l'Armada 7040.
 setenv serverip $srv_ip
 setenv kernel_addr_r 0x08000000
@@ -133,6 +135,7 @@ tftpboot \${kernel_addr_r} $nom/Image || exit
 tftpboot \${fdt_addr_r} $nom/board.dtb || exit
 tftpboot \${ramdisk_addr_r} $nom/initrd.img || exit
 setenv bootargs console=ttyS0,115200 boot=live components fetch=http://$srv/$nom/filesystem.squashfs ip=dhcp net.ifnames=0
+setenv bootargs \${bootargs} modprobe.blacklist=mv88e6xxx systemd.mask=systemd-networkd.service systemd.mask=systemd-networkd.socket
 booti \${kernel_addr_r} \${ramdisk_addr_r}:\${filesize} \${fdt_addr_r}
 EOF
 cp "$w/boot.cmd" "$w/out/tftp/boot.cmd"

@@ -169,3 +169,22 @@ def test_l_initrd_du_live_leve_la_liste_noire_de_squashfs_et_garde_le_reste(tmp_
     assert "blacklist squashfs" not in conf
     assert "install squashfs" not in conf
     assert "blacklist cramfs" in conf and "blacklist udf" in conf
+
+
+def test_le_live_garde_le_reseau_de_l_initrd():
+    # DUT 2026-10-23 : réseau OK dans l'initrd (squashfs téléchargé), perdu ensuite :
+    #  - mv88e6xxx (module sur noyau Debian) chargé tard : mvpp2 rouvre ses ports, eth2 sans porteuse (#2004) ;
+    #  - le netplan de l'image met eth1 (conduit DSA) et eth2 dans br-lan : plus d'adresse, lan0..3 sourds.
+    s = BUILD.read_text()
+    lignes = [l for l in s.splitlines() if l.startswith("setenv bootargs")]
+    assert all(len(l) < 200 for l in lignes)  # tampon de ligne U-Boot parfois à 256
+    ligne = " ".join(lignes)
+    assert "modprobe.blacklist=mv88e6xxx" in ligne
+    assert "systemd.mask=systemd-networkd.service" in ligne
+    assert "systemd.mask=systemd-networkd.socket" in ligne
+
+
+def test_sbx_netflash_montre_l_erreur_du_telechargement_de_la_liste():
+    s = FLASH.read_text()
+    ligne = next(l for l in s.splitlines() if "images.txt" in l and "telecharge" in l)
+    assert "2>&1" not in ligne
