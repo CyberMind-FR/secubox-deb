@@ -1,3 +1,13 @@
+secubox-netboot (0.6.4-1~trixie1) trixie; urgency=medium
+
+  * live-initrd-modules.sh (ref #3079) : ajoute squashfs et overlay à l'initrd du live
+    (modules pris dans le rootfs, modules.dep recalculé). L'initrd de l'image eMMC ne
+    montait qu'une racine ext4 : sur DUT, « request_module fs-squashfs succeeded, but
+    still no fs? » puis BOOT FAILED après le téléchargement du squashfs.
+  * build-live-netboot.sh : appelle cet ajout et refuse un initrd sans squashfs ni overlay.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 17:10:00 +0200
+
 secubox-netboot (0.6.3-1~trixie1) trixie; urgency=medium
 
   * build-live-netboot.sh (ref #3079) : boot.scr charge le noyau à 0x08000000, le DTB à

@@ -89,9 +89,16 @@ dtb="$(find "$w/esp" "$w/root/usr/lib" -name 'armada-7040-mochabin.dtb' 2>/dev/n
 [ -n "$dtb" ] || die "DTB armada-7040-mochabin.dtb introuvable"
 cp "$dtb" "$w/out/tftp/board.dtb"
 
-# L'initrd doit savoir faire un live réseau : scripts live-boot et pilote Ethernet de l'Armada 7040 (mvpp2).
+# L'initrd de l'image vise une racine ext4 : y ajouter squashfs et overlay, que live-boot monte.
+bash "$HERE/scripts/live-initrd-modules.sh" "$w/out/tftp/initrd.img" "$w/root" || die "ajout des modules du live à l'initrd"
+
+# L'initrd doit savoir faire un live réseau : scripts live-boot, squashfs, overlay, pilote Ethernet (mvpp2).
 lsinitramfs "$w/out/tftp/initrd.img" > "$w/initrd.lst"
 grep -q 'scripts/live' "$w/initrd.lst" || die "initrd sans live-boot : boot=live fetch= impossible"
+grep -q '/squashfs\.ko' "$w/initrd.lst" || grep -q 'squashfs\.ko' "$w/root/lib/modules/"*/modules.builtin 2>/dev/null \
+    || die "initrd sans squashfs : le live ne peut pas monter son rootfs"
+grep -q '/overlay\.ko' "$w/initrd.lst" || grep -q 'overlay\.ko' "$w/root/lib/modules/"*/modules.builtin 2>/dev/null \
+    || die "initrd sans overlay : le live ne peut pas monter son rootfs"
 if ! grep -q 'mvpp2' "$w/initrd.lst"; then
     if grep -q 'mvpp2' "$w/root/lib/modules/"*/modules.builtin 2>/dev/null; then log "mvpp2 intégré au noyau"
     else die "initrd sans pilote mvpp2 et noyau sans mvpp2 intégré : pas de réseau au démarrage"; fi
