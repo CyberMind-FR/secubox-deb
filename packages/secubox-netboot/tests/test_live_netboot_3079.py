@@ -86,3 +86,48 @@ def test_un_echec_tftp_arrete_le_script_au_lieu_de_lancer_booti():
     s = BUILD.read_text()
     for f in ("Image", "board.dtb", "initrd.img"):
         assert f"$nom/{f} || exit" in s
+
+
+AJOUT = ICI / "scripts" / "live-initrd-modules.sh"
+
+
+def test_l_initrd_recoit_squashfs_et_overlay(tmp_path):
+    # DUT 2026-10-23 : « request_module fs-squashfs succeeded, but still no fs? » puis BOOT FAILED.
+    # L'initrd de l'image eMMC ne connaît que l'ext4 ; live-boot doit monter un squashfs sous overlay.
+    import shutil
+    import pytest
+    for outil in ("unmkinitramfs", "lsinitramfs", "depmod", "cpio", "zstd"):
+        if not shutil.which(outil):
+            pytest.skip(f"{outil} absent")
+    v = os.uname().release
+    vrai = list(Path(f"/lib/modules/{v}/kernel/fs/overlayfs").glob("overlay.ko*"))
+    if not vrai:
+        pytest.skip("pas de module noyau réel pour le test")
+    ext = vrai[0].name[len("overlay"):]
+    racine = tmp_path / "rootfs"
+    for m in ("fs/squashfs/squashfs", "fs/overlayfs/overlay"):
+        d = racine / "lib/modules" / v / "kernel" / Path(m).parent
+        d.mkdir(parents=True)
+        shutil.copy(vrai[0], d / (Path(m).name + ext))
+    ird = tmp_path / "ird"
+    (ird / "scripts/live-bottom").mkdir(parents=True)
+    (ird / "init").write_text("#!/bin/sh\n")
+    (ird / "lib/modules" / v).mkdir(parents=True)
+    initrd = tmp_path / "initrd.img"
+    subprocess.run(f"cd {ird} && find . | cpio -o -H newc --quiet | gzip > {initrd}", shell=True, check=True)
+
+    r = subprocess.run(["bash", str(AJOUT), str(initrd), str(racine)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    lst = subprocess.run(["lsinitramfs", str(initrd)], capture_output=True, text=True, check=True).stdout
+    assert "kernel/fs/squashfs/squashfs.ko" in lst and "kernel/fs/overlayfs/overlay.ko" in lst
+    assert "scripts/live-bottom" in lst and "init" in lst.split()
+    sortie = tmp_path / "x"
+    subprocess.run(["unmkinitramfs", str(initrd), str(sortie)], check=True)
+    dep = next(sortie.rglob(f"lib/modules/{v}/modules.dep")).read_text()
+    assert "kernel/fs/squashfs/squashfs.ko" in dep
+
+
+def test_la_construction_ajoute_les_modules_et_le_verifie():
+    s = BUILD.read_text()
+    assert '"$HERE/scripts/live-initrd-modules.sh"' in s
+    assert "squashfs\\.ko" in s and "overlay\\.ko" in s
