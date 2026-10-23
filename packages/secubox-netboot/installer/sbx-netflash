@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: sbx-netflash (#3079) — DANS LE LIVE netbooté, écrit une image eMMC servie par le serveur de boot.
+#
+# Le live tourne en RAM (rootfs squashfs récupéré en HTTP) : l'eMMC est libre. Flux :
+#   liste des images (images.txt) → contrôle de la mémoire libre → téléchargement de l'image .img.gz et de sa
+#   signature détachée dans /run (tmpfs) → VÉRIFICATION de la signature avec la clé publique EMBARQUÉE dans le
+#   live (/etc/secubox/netboot-image.pub) → secubox-flash-emmc (refuse si l'on a démarré de l'eMMC, demande
+#   « FLASH » sauf --auto). Signature invalide = rien n'est écrit, le fichier est supprimé.
+#
+# Serveur : --srv HOTE[:PORT], sinon l'hôte de `fetch=` (ou `sbx_srv=`) de la ligne de commande du noyau.
+set -euo pipefail
+
+PUB=/etc/secubox/netboot-image.pub
+TRAVAIL=/run/sbx-netflash
+JOURNAL=/var/log/sbx-netflash.log
+srv="" dir="" image="" auto=0 liste=0 reboot_opt=()
+
+usage() {
+    cat <<EOF
+sbx-netflash — écrit sur l'eMMC une image signée servie par le serveur de boot
+
+  sbx-netflash --list                         images disponibles
+  sbx-netflash --image NOM.img.gz             télécharge, vérifie la signature, écrit (demande « FLASH »)
+  sbx-netflash --image NOM.img.gz --auto      sans confirmation
+Options : --srv HOTE[:PORT]  --dir DOSSIER  --no-reboot
+EOF
+}
+
+log()  { echo "[sbx-netflash] $*"; echo "[$(date -Iseconds)] $*" >> "$JOURNAL" 2>/dev/null || true; }
+fail() { log "ERREUR : $*"; exit 1; }
+
+while [ $# -gt 0 ]; do case "$1" in
+    --srv) srv="$2"; shift 2 ;;
+    --dir) dir="$2"; shift 2 ;;
+    --image) image="$2"; shift 2 ;;
+    --auto) auto=1; shift ;;
+    --list) liste=1; shift ;;
+    --no-reboot) reboot_opt=(--no-reboot); shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage; exit 2 ;;
+esac; done
+
+[ "$(id -u)" -eq 0 ] || fail "à lancer en root"
+
+# Serveur et dossier par défaut : ceux qui ont servi le live (fetch=http://HOTE:PORT/DOSSIER/filesystem.squashfs).
+CMDLINE="$(cat /proc/cmdline 2>/dev/null || true)"
+if [ -z "$srv" ] || [ -z "$dir" ]; then
+    f="$(printf '%s\n' $CMDLINE | sed -n 's#^fetch=http://##p' | head -n1)"
+    if [ -n "$f" ]; then
+        [ -n "$srv" ] || srv="${f%%/*}"
+        [ -n "$dir" ] || { d="${f#*/}"; dir="${d%/*}"; }
+    fi
+fi
+[ -n "$srv" ] || srv="$(printf '%s\n' $CMDLINE | sed -n 's#^sbx_srv=##p' | head -n1)"
+[ -n "$srv" ] || fail "serveur inconnu : --srv HOTE[:PORT]"
+[ -n "$dir" ] || dir="mochabin-live"
+BASE="http://$srv/$dir"
+
+telecharge() { # URL DEST
+    if command -v curl >/dev/null 2>&1; then curl -fSL --retry 3 -o "$2" "$1"
+    else wget -O "$2" "$1"; fi
+}
+
+mkdir -p "$TRAVAIL"
+telecharge "$BASE/images.txt" "$TRAVAIL/images.txt" >/dev/null 2>&1 || fail "liste introuvable : $BASE/images.txt"
+# images.txt : « NOM TAILLE_OCTETS SHA256 » par ligne
+if [ "$liste" -eq 1 ] || [ -z "$image" ]; then
+    echo "Images disponibles sur $BASE :"
+    awk '{printf "  %-45s %6d Mo\n", $1, $2/1048576}' "$TRAVAIL/images.txt"
+    [ -n "$image" ] || { echo; echo "Écrire : sbx-netflash --image NOM"; exit 0; }
+fi
+
+case "$image" in */*|*..*|"") fail "nom d'image invalide : $image" ;; esac
+ligne="$(awk -v n="$image" '$1==n' "$TRAVAIL/images.txt")"
+[ -n "$ligne" ] || fail "image absente de la liste du serveur : $image"
+taille="$(echo "$ligne" | awk '{print $2}')"
+sha="$(echo "$ligne" | awk '{print $3}')"
+[ -s "$PUB" ] || fail "clé publique absente ($PUB) : ce live n'a pas été construit pour le flash réseau"
+
+# L'image transite par la RAM (tmpfs) : il faut sa taille + 768 Mo pour le reste du système.
+dispo="$(awk '/^MemAvailable:/{print $2*1024}' /proc/meminfo)"
+besoin=$(( taille + 768 * 1048576 ))
+[ "$dispo" -gt "$besoin" ] || fail "mémoire insuffisante : $((dispo/1048576)) Mo libres, $((besoin/1048576)) Mo nécessaires (choisir une image plus petite)"
+
+dest="$TRAVAIL/$image"
+log "téléchargement $BASE/$image ($((taille/1048576)) Mo)…"
+telecharge "$BASE/$image" "$dest" || { rm -f "$dest"; fail "téléchargement de l'image KO"; }
+telecharge "$BASE/$image.sig" "$dest.sig" || { rm -f "$dest" "$dest.sig"; fail "téléchargement de la signature KO"; }
+
+log "vérification de la signature (clé embarquée)…"
+if ! openssl dgst -sha256 -verify "$PUB" -signature "$dest.sig" "$dest" >/dev/null 2>&1; then
+    rm -f "$dest" "$dest.sig"
+    fail "SIGNATURE INVALIDE — rien n'a été écrit, fichier supprimé"
+fi
+log "signature VALIDE."
+# secubox-flash-emmc relit une empreinte locale : celle de la liste, vérifiée contre le fichier reçu.
+echo "$sha  $dest" > "${dest}.sha256"
+echo "$sha  $dest" | sha256sum -c --status || { rm -f "$dest" "$dest.sig" "${dest}.sha256"; fail "empreinte différente de la liste du serveur"; }
+
+opts=(--image "$dest" "${reboot_opt[@]}")
+[ "$auto" -eq 1 ] && opts+=(--auto)
+log "écriture par secubox-flash-emmc ${opts[*]}"
+exec secubox-flash-emmc "${opts[@]}"

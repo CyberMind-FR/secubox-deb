@@ -1,3 +1,15 @@
+secubox-netboot (0.6.0-1~trixie1) trixie; urgency=medium
+
+  * Live MOCHAbin par le réseau et flash eMMC depuis le live (ref #3079). `scripts/build-live-netboot.sh` (sur le serveur
+    de boot) transforme la clé live USB en live netbooté : Image, DTB, initrd et boot.scr en TFTP, rootfs en squashfs
+    servi en HTTP (live-boot fetch=), fstab neutralisé, initrd contrôlé (live-boot, mvpp2) ; il signe les images eMMC
+    avec la clé netboot et publie images.txt. `installer/sbx-netflash` (dans le live) télécharge une image, vérifie la
+    signature avec la clé publique embarquée et la mémoire libre, puis écrit l'eMMC par secubox-flash-emmc (embarqué).
+    L'installeur B3 existant gardait l'image décompressée en RAM et ne lisait pas un .gz : inutilisable sur MOCHAbin.
+    Recommends : squashfs-tools, rsync.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 11:15:00 +0200
+
 secubox-netboot (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /netboot/ refaite au profil Aurora (#2597) : page autonome (aucun script ni police externes hors menu commun), tuiles (carte, environnement U-Boot, overlay, serveur TFTP, cartes publiées, profils), panneaux carte / overlay / tampon d'ombre / serveur de boot / profils / audit, modes ?demo=1 (données fictives, actions inertes) et ?embed=1, hauteur annoncée à l'hôte (sbxVue, onglet netboot).
