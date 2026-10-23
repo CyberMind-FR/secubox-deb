@@ -1,3 +1,13 @@
+secubox-aggregator (0.4.8-1~trixie1) trixie; urgency=medium
+
+  * admin, cloner, netdiag, certs, cookies et mail à socket dédiée (ref #3077). Audit du 2026-10-23 : ces six modules ont une
+    unité root active et leur socket, mais restaient montés en processus dans l'agrégateur (utilisateur secubox) ; leurs
+    actions échouaient (mailctl « Not installed » alors que le conteneur tourne, ping « Operation not permitted », systemctl
+    refusé par polkit, écritures sous /etc/letsencrypt, /etc/secubox/cookies.json, /var/lib/secubox/backups refusées). Ajoutés
+    à DEDICATED_MODULES et à AGG_EXCLUDE : l'agrégateur les relaie à leur socket. ksm et vm restent montés (ctl + sudoers).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 12:15:00 +0200
+
 secubox-aggregator (0.4.7-1~trixie1) trixie; urgency=medium
 
   * nettweak à socket dédiée (ref #3065) : « sysctl: permission denied on key net.core.rmem_max » (16 clés) à chaque

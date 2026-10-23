@@ -172,7 +172,11 @@ RETIRED_MODULES = frozenset({
 # et tor — son service root existe pour ça ; monté ici (secubox, ProtectSystem=full), il rendait 500.
 # nettweak : écrit /proc/sys (sysctl -w) — monté ici, « sysctl: permission denied on key … » pour chaque clé (#3065).
 # traffic, qos : `tc qdisc add|del` sans sudo — monté ici, « RTNETLINK answers: Operation not permitted » (#3065).
-DEDICATED_MODULES = frozenset({"lyrion", "exposure", "nettweak", "traffic", "qos"})
+# #3077 : audit du 2026-10-23 — admin (systemctl, reboot), cloner (tar de /etc et /var/lib), netdiag (ping, ss -p), certs
+# (certbot, /etc/letsencrypt), cookies (/etc/secubox/cookies.json, clé Fernet), mail (mailctl, lxc-attach) ont tous une unité
+# root active et leur socket ; montés ici, sous `secubox`, leurs actions échouaient (mailctl : « Not installed »).
+DEDICATED_MODULES = frozenset({"lyrion", "exposure", "nettweak", "traffic", "qos",
+                               "admin", "cloner", "netdiag", "certs", "cookies", "mail"})
 
 
 def _load_config() -> dict:
