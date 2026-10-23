@@ -95,12 +95,14 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - **Anti-rootkit** — closes #3058 (PR #3063, `secubox-security-posture` 2.4.2 sur gk2 + apt trixie) : point de contrôle
   réamorcé, conteneurs comptés et non signalés, uid corrigé, pouls du démon, profils AppArmor enforce.
 - **DNS : OVH sans bibliothèque, vhosts et domaines gérés/gérables** — closes #3070 (PR #3071, `secubox-dns` 1.6.0 sur gk2 + apt
-  trixie). À faire par le propriétaire : clés d'application OVH (gk2.net), compte Gandi de cybermind.fr. Journal d'audit : utilisateur
-  toujours « system ».
+  trixie). À faire par le propriétaire : clés d'application OVH (gk2.net), compte Gandi de cybermind.fr. Journal d'audit par
+  compte : fait (#3072).
 - **Dé du Hall sous mouvement réduit** — closes #3068 (PR #3069, `secubox-webos` 1.19.23). Cause à confirmer sur le poste du propriétaire.
 - **Sauvegardes créées par root** — closes #3064 (PR #3067, `secubox-backup` 2.4.1 sur gk2 + apt trixie) : `backupctl archiver`,
-  sudoers exact, garde d'espace disque. Reste : destination des sauvegardes (disque racine à 91 %), restauration en `secubox`,
-  chemin des conteneurs `/srv/lxc` ≠ `/data/lxc`.
+  sudoers exact, garde d'espace disque.
+- **Sauvegardes sur /data, restauration par root, audit DNS par compte** — closes #3072 (PR #3073, `secubox-backup` 2.5.0 +
+  `secubox-dns` 1.6.1, gk2 + apt trixie). Racine gk2 91 % → 74 %. Reste au propriétaire : 16 archives en clair (déplacées).
+- **ZIA « Activez la radio »** — closes #3074 (PR #3075, zia 0.3.1, radio 0.2.2, webos 1.19.24). À confirmer dans le navigateur.
 - **nettweak, traffic, qos relayés à leur service root** — closes #3065 (PR #3066, `secubox-aggregator` 0.4.7 sur gk2 + apt
   trixie). À examiner : admin, cloner, ksm, netdiag, vm, certs, cookies, mail (root + montés dans l'agrégateur).
 - Ouvert : profil de

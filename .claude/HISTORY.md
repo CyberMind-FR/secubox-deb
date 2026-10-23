@@ -9,6 +9,33 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-23 — ZIA : « Activez la radio » répondait « rien trouvé » (closes #3074)
+
+Capture du propriétaire : « Activez la radio. » → outils `search_objects(activez radio)` puis `delegate(remote)`, réponse « Je n'ai
+rien trouvé de visible ». Trois causes. (1) Ni « active » ni le vouvoiement n'étaient des commandes (seuls lance/joue/démarre au
+tutoiement, en bascule). (2) La bascule aurait mis en pause une radio qui joue déjà. (3) La page `/zia/` refaite en Aurora (#2646)
+ne relayait plus AUCUNE action au Hall : « coupe la radio » répondait « Je coupe le son » sans rien couper (seule la carte micro
+relayait). PR #3075 : `secubox-zia` 0.3.1 (verbes de lecture au tutoiement et au vouvoiement → `media.play` idempotente, repli sur
+la bascule pour un service qui ne la déclare pas, « écouter » à l'infinitif reste une recherche ; relais des actions depuis `/zia/`),
+`secubox-radio` 0.2.2 (commande `play` : lance si arrêtée, ne fait rien sinon), `secubox-webos` 1.19.24 (sur `media.play` sans
+lecteur ouvert, le Hall ouvre la vue /micro du service en mini puis lui envoie `play`). Tests : zia 247 dont Playwright du relais
+vu rouge puis vert. Déployé gk2, publié trixie. Non vérifié dans le navigateur du propriétaire : le lancement sans geste local peut
+être bloqué par la politique d'autoplay du navigateur (la radio réarme alors la lecture au premier clic). Constat annexe : le
+service ZIA met environ 2 min 25 s à ouvrir sa socket au démarrage sur gk2 (antérieur, non traité).
+
+## 2026-10-23 — Sauvegardes sur /data, restauration par root, audit DNS par compte (closes #3072)
+
+Suite de #3064, demandée par le propriétaire (liste des points ouverts). PR #3073. `secubox-backup` 2.5.0 : `/etc/secubox/backup.toml`
+(`path`, `lxc_path`, `service_paths`) lu par l'API et par `backupctl` (sudo vide l'environnement, seul un fichier atteint le ctl
+root) ; restauration toujours par root — `backupctl restaurer` accepte le clair et vise `lxc_path` pour un conteneur, nouveau
+`restaurer-conteneur NOM FICHIER` (extraction à côté, remplacement seulement si l'archive contient `NOM/config`) ; l'API répond 409
+avec la commande au lieu de lancer `tar -x` sous `secubox` (une archive en clair appartient à `secubox` : un sudoers qui l'extrairait
+sur / serait une élévation de privilège) ; nom de fichier avec chemin refusé (422). `secubox-dns` 1.6.1 : le journal d'audit de
+dns-provider nomme le compte de la session (avant : toujours « system »). Sur gk2 : `backup.toml` = `/data/secubox-backups` et
+`/data/lxc` ; archives copiées (tailles identiques) puis retirées de `/srv/backups` ; **disque racine 91 % → 74 %** ; archive de
+configuration chiffrée créée dans /data par le sudoers ; sauvegarde « services » lancée vers /data. Les 16 archives en clair sont
+toujours là (déplacées, pas supprimées) : décision du propriétaire. Les dossiers `mail-phase1/2` restent sous `/srv/backups`.
+
 ## 2026-10-23 — DNS : OVH inutilisable, vue des vhosts et domaines gérés/gérables, clés en 0600 (closes #3070)
 
 « https://admin.gk2.secubox.in/dns/ ou sont les vhosts et domain managed et manageable et api remote gandi et ovh » puis
