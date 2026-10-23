@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-23 — Réglages réseau, trafic, QoS : actions refusées, modules montés dans l'agrégateur (closes #3065)
+
+« Échec : net.core.rmem_max : sysctl: permission denied on key … » (16 clés), puis `/traffic/`. `nettweak`, `traffic` et `qos` ont
+chacun leur service root (`User=root`, `/run/secubox/<m>.sock`) mais figuraient aussi dans `aggregator.toml` : l'agrégateur
+(utilisateur `secubox`) les montait en processus et nginx routait vers lui — leurs actions s'exécutaient sans privilège. Vérifié :
+`sysctl -w` réussit depuis l'espace de noms du service nettweak et échoue en `secubox` ; `sudo -u secubox tc qdisc add dev lo
+root pfifo` → « Operation not permitted ». PR #3066, `secubox-aggregator` 0.4.7 : les trois rejoignent `DEDICATED_MODULES` (relayés à
+leur socket, jamais montés) et le script de migration ; 3 tests. Déployé gk2 (85 modules montés, aucun des trois), pages 200,
+publié dans apt trixie. À examiner un par un (unité root ET monté, pas de preuve d'écriture privilégiée sans sudo) : admin,
+cloner, ksm, netdiag, vm, certs, cookies, mail. Même famille que #3013 (exposure), #3060 (turn) et #3064 (sauvegardes).
+
 ## 2026-10-23 — Anti-rootkit : démon aveugle depuis juillet, alertes de conteneurs, AppArmor (closes #3058)
 
 « https://admin.gk2.secubox.in/antirootkit/ ok ?? » : page et API en ligne, mais le journal d'exécution était figé du 28 juillet

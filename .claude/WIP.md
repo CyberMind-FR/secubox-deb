@@ -94,6 +94,8 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   dans `secrets/turn/`), API déléguée, panneau en lecture seule. Sans certificat du realm : pas de TURNS.
 - **Anti-rootkit** — closes #3058 (PR #3063, `secubox-security-posture` 2.4.2 sur gk2 + apt trixie) : point de contrôle
   réamorcé, conteneurs comptés et non signalés, uid corrigé, pouls du démon, profils AppArmor enforce.
+- **nettweak, traffic, qos relayés à leur service root** — closes #3065 (PR #3066, `secubox-aggregator` 0.4.7 sur gk2 + apt
+  trixie). À examiner : admin, cloner, ksm, netdiag, vm, certs, cookies, mail (root + montés dans l'agrégateur).
 - Ouvert : profil de
   services : `secubox-matrix.service` coupé en boucle (34 s, échec `disable`), 737 lignes d'audit en une nuit — à traiter.
 
