@@ -198,6 +198,16 @@
             function rend(r) {
                 const d = ajouteZia(r.text || '…');
                 (r.objects || []).forEach(o => d.querySelector('.bub').appendChild(objet(o)));
+                // ACTIONS SBX (#3074) : déjà validées côté serveur (capacité + rôle + valeur), RELAYÉES au Hall, seul à
+                // pouvoir commander la carte cible. La refonte Aurora (#2646) avait perdu ce relais : « coupe la radio »
+                // répondait « Je coupe le son » sans rien couper. Hors du Hall, rien n'est relayé.
+                (r.actions || []).forEach(a => {
+                    if (!a || a.kind !== 'sbx-action') return;
+                    if (!DEMO && parent !== window) { try { parent.postMessage({ sbx: 'action', req: a }, '*'); } catch (e) { /* hôte parti */ } }
+                    d.querySelector('.bub').appendChild(el('div', 'os', '⚡ ' + a.service + ' · ' + a.action
+                        + (a.params && a.params.value != null ? ' = ' + a.params.value : '')
+                        + (parent === window ? ' (ouvrez ZIA depuis le Hall pour agir)' : '')));
+                });
                 if (r.delegate && r.delegate.to) {
                     const dl = el('div', 'deleg'); dl.appendChild(document.createTextNode('délègue à '));
                     dl.appendChild(el('b', null, 'ZIA · ' + r.delegate.to)); dl.appendChild(document.createTextNode(' →'));

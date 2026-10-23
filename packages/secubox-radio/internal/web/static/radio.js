@@ -276,6 +276,14 @@
         var e = ecran.play();
         if (e && e.catch) e.catch(function () { armeRelance(); });
       } else ecran.pause();
+    } else if (d.action === 'play') {
+      // LECTURE IDEMPOTENTE (#3074) : « Activez la radio » ne met jamais en pause ce qui joue deja (la bascule le
+      // faisait). Meme relance que `toggle` quand le navigateur refuse la lecture sans geste local.
+      if (ecran.paused) {
+        veutJouer = true;
+        var j = ecran.play();
+        if (j && j.catch) j.catch(function () { armeRelance(); });
+      }
     } else if (d.action === 'stop') { ecran.pause(); annonceHall(true); }
     // `pause` N'EST PAS `toggle` (#1276) : le Hall s'en sert pour faire taire
     // une seconde instance du meme service, ou pour laisser la place a une

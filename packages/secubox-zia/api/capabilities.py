@@ -69,6 +69,9 @@ _BOOTSTRAP: dict = {
         "transport": "sbx-postmessage",
         "actions": {
             "media.toggle": {"message": {"sbx": "cmd", "action": "toggle"}},
+            # Lecture idempotente (#3074) : « Activez la radio » ne met jamais en pause ce qui joue déjà. Si aucun lecteur
+            # radio n'est ouvert, le Hall l'ouvre (sbxExecuteAction).
+            "media.play":   {"message": {"sbx": "cmd", "action": "play"}},
             "media.pause":  {"message": {"sbx": "cmd", "action": "pause"}},
             "media.stop":   {"message": {"sbx": "cmd", "action": "stop"}},
             "media.mute":   {"message": {"sbx": "cmd", "action": "muet"},

@@ -3803,7 +3803,11 @@ function sbxExecuteAction(req){
   if(req.service==='voice'){
     return (typeof window.sbxVoiceCmd==='function') ? !!window.sbxVoiceCmd(cap.message) : false;
   }
-  const ok=(typeof window.sbxPost==='function') ? !!window.sbxPost(req.service, cap.message) : false;
+  let ok=(typeof window.sbxPost==='function') ? !!window.sbxPost(req.service, cap.message) : false;
+  // « ACTIVEZ LA RADIO » SANS RADIO OUVERTE (#3074) : aucun cadre à qui poster, la demande mourait. Une demande de
+  // LECTURE ouvre le lecteur du service (sa vue /micro déclarée dans FEATURED, en mini), puis lui poste `play` une
+  // fois chargé. Seulement media.play : un réglage ou une pause sur un service fermé n'ouvre rien.
+  if(!ok && req.action==='media.play') ok=ouvrePourLire(req.service, cap.message);
   // Un réglage de son doit TENIR : on met à jour l'état retenu du dock pour que
   // appliqueMedia ne le réécrase pas à la prochaine recomposition.
   if(ok && typeof window.dockRetiens==='function'){
@@ -3812,6 +3816,19 @@ function sbxExecuteAction(req){
     else if(req.action==='media.mute') window.dockRetiens(req.service,{muet:!!v});
   }
   return ok;
+}
+function ouvrePourLire(service, message){
+  if(typeof window.ouvreLecteurViewer!=='function') return false;
+  const app=(typeof FEATURED!=='undefined' ? FEATURED : []).find(a=>a && a.id===service && a.url && a.micro);
+  if(!app) return false;
+  const src='https://'+app.url.replace(/\/+$/,'')+app.micro;
+  window.ouvreLecteurViewer(service, src, app.label||service);
+  const f=document.querySelector('iframe[data-embarque="'+service+'"]');
+  if(!f) return false;
+  f.addEventListener('load', ()=>{
+    try{ f.contentWindow.postMessage(message, new URL(f.src).origin); }catch(e){}
+  }, {once:true});
+  return true;
 }
 window.sbxExecuteAction=sbxExecuteAction;
 

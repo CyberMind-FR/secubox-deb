@@ -172,8 +172,16 @@ def _commande(low: str):
         return ("media.stop", {})
     if re.search(r"\b(agrandis|agrandir|zoom|plein[- ]?[ée]cran)\b", low):
         return ("ui.zoom", {})
-    if re.search(r"\b(relance|relancer|reprends?|reprendre|remets? la lecture|joue|jouer|lance|lancer|d[ée]marre|play)\b", low):
-        return ("media.toggle", {})
+    # DEMANDE DE LECTURE (#3074) : « Activez la radio. » partait en recherche d'objets (« rien trouvé ») — ni « active »
+    # ni le vouvoiement n'étaient des commandes. C'est `media.play`, IDEMPOTENTE : une radio qui joue déjà n'est jamais
+    # mise en pause par une demande de lecture (la bascule le faisait). Un service sans `media.play` retombe sur la
+    # bascule, plus bas. « mets/mettez » n'est une lecture que suivi d'un service ou de la musique : « mets en pause »
+    # et « mets à 30 % » sont tranchés plus haut.
+    if re.search(r"\b(activ(?:e|ez|er)|allum(?:e|ez|er)|[ée]cout(?:e|ez)|(?:re)?lance[rz]?|(?:re)?jou(?:e|ez|er)"
+                 r"|d[ée]marr(?:e|ez|er)|reprends?|reprendre|reprenez|remets? la lecture|play)\b", low) \
+            or (re.search(r"\b(mets|mettez|mettre)\b", low)
+                and (_service_de(low) or re.search(r"\b(musique|son)\b", low))):
+        return ("media.play", {})
     # Piste suivante/précédente : capacité MÉDIA (podcaster oui, radio non). On la
     # PROPOSE ; Tools.act la refusera proprement là où elle n'existe pas.
     if re.search(r"\b(suivant|suivante|prochaine?|next)\b", low):
@@ -206,6 +214,7 @@ def _phrase_action(service: str, action: str, params: dict) -> str:
         "media.pause": f"Je mets {service} en pause.",
         "media.stop": f"J'arrête {service}.",
         "media.toggle": f"Je relance {service}.",
+        "media.play": f"Je lance {service}.",
         "media.next": f"Piste suivante sur {service}.",
         "media.prev": f"Piste précédente sur {service}.",
         "ui.zoom": f"J'agrandis {service}.",
@@ -359,6 +368,11 @@ async def respond(message: str, role: str, tools, cfg: dict, remote=None) -> dic
         target = f"service:{cible}"
         trace.append({"tool": "act", "args": {"target": target, "action": action}})
         res = await tools.call("act", {"target": target, "action": action, "params": params}, role)
+        if action == "media.play" and not res.get("ok") and re.search(r"disponible|inconnu", str(res.get("error", ""))):
+            # Service sans lecture idempotente déclarée : la bascule, seule commande de lecture qu'il connaisse.
+            action = "media.toggle"
+            trace.append({"tool": "act", "args": {"target": target, "action": action}})
+            res = await tools.call("act", {"target": target, "action": action, "params": params}, role)
         if res.get("ok"):
             act = res["result"]
             return {"text": _phrase_action(cible, action, act.get("params", {})),

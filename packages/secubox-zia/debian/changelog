@@ -1,3 +1,15 @@
+secubox-zia (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * « Activez la radio. » répondait « Je n'ai rien trouvé de visible » (ref #3074) : ni « active » ni le vouvoiement
+    n'étaient des commandes, la phrase partait en recherche d'objets puis en escalade distante. Demande de lecture
+    (active, allume, écoute, lance, joue, démarre, reprends, mets la radio… au tutoiement comme au vouvoiement) =
+    nouvelle action `media.play`, idempotente (une radio qui joue n'est jamais mise en pause) ; un service sans
+    `media.play` retombe sur la bascule. « écouter » à l'infinitif reste une recherche.
+  * Page /zia/ : la refonte Aurora (#2646) avait perdu le relais des actions au Hall ; « coupe la radio » répondait
+    sans rien couper. Les actions validées repartent vers le Hall (pas en démonstration, pas hors du Hall).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 11:30:00 +0200
+
 secubox-zia (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /zia/ (chat plein cadre, index.html) refaite au profil Aurora (ref #2646) : page autonome en français, tuiles (moteur, modèle, échanges de la session, avec infobulles), discussion avec traces d'outils, objets du bus et actions Ouvrir / Lire / Discuter, suggestions, saisie vocale conservée (voix.js), mode ?demo=1 (réponses fictives, aucun appel, voix inerte, bandeau orange) et ?embed=1, état EN LIGNE / HORS LIGNE d'après /health, hauteur annoncée à l'hôte (sbxVue, onglet zia), menu commun hors cadre du Hall.
