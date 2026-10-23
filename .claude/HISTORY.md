@@ -9,6 +9,23 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-23 — Anti-rootkit : démon aveugle depuis juillet, alertes de conteneurs, AppArmor (closes #3058)
+
+« https://admin.gk2.secubox.in/antirootkit/ ok ?? » : page et API en ligne, mais le journal d'exécution était figé du 28 juillet
+au 23 octobre et les 100 alertes affichées étaient du bruit. Causes : (1) point de contrôle `ausearch` périmé — à la première
+rotation d'`audit.log` l'inode mémorisé disparaît, `ausearch` sort en 10 à chaque appel et le démon prenait ce code pour « rien de
+neuf » ; (2) exécutions vues depuis des conteneurs LXC (`/usr/bin/php8.2`, `/memfd:lxc-attach`), chemins absents de l'hôte donc
+« non dpkg » ; (3) le parseur lisait `auid` (4294967295) à la place de `uid` (`.*?uid=` s'arrêtait sur `auid=`) ; (4) aucun profil
+AppArmor ; (5) aucun signe de vie du démon. PR #3063, `secubox-security-posture` 2.4.2 : `execscan` réamorce sur 10/11/12 et trace ;
+décision `conteneur` pour l'étiquette `subj=lxc-container-default…` / `lxc-<nom>_<…>` (comptée, ni alerte ni jail ; `lxc-attach`
+de l'hôte reste surveillé) ; `\buid=` ; `pouls.json` + `GET /status` → `pouls` (`aveugle` après 2 min) + ligne dans la page ; profils
+enforce `secubox-antirootkit-api` / `-daemon` (`AppArmorProfile=-…`, chargés par le postinst avant le démarrage, écriture des `.pyc`
+refusée en silence). 16 tests (les 3 échecs de `test_packaging` existent sur master). Déployé gk2 : les deux processus sous profil
+enforce, aucun refus, le démon revoit l'audit (2 593 exécutions en 3 min, 14 de conteneurs, 0 signalée, 1 réamorçage), API 200 par
+nginx ; publié dans apt trixie. Non touché : les 100 alertes et 219 lignes de juillet restent (journal forensique en ajout seul).
+Cause première de la cécité non traitée ailleurs : toute surveillance qui lit un curseur doit distinguer « rien de neuf » de « curseur
+invalide » — le pouls est là pour que cela se voie.
+
 ## 2026-10-23 — TURN : la page était inerte, coturn n'avait jamais reçu la configuration SecuBox (closes #3060)
 
 « https://admin.gk2.secubox.in/turn/ ko repair et activate ». L'API tournait sous `secubox` avec `NoNewPrivileges=true`,
