@@ -9,6 +9,24 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-23 — Sauvegarde : l'API ne pouvait rien lire de /etc, archives créées par root (closes #3064)
+
+Collage de la page /backup/ : « Config backup failed: tar: /etc/secubox/secrets: Cannot open: Permission denied » (et ~60 autres
+fichiers). L'API tourne sous `secubox` (NoNewPrivileges, aucun sudoers) et lançait elle-même `tar` sur /etc, `lxc-stop`/`tar`/
+`lxc-start` sur les conteneurs, `tar` sur les données de services : plus aucune archive de configuration depuis le 15 mai ; et
+un échec rendait `code 0`. PR #3067, `secubox-backup` 2.4.1 : `backupctl archiver config|services|conteneur … chiffre|clair`
+(root) crée et chiffre l'archive (clé publique de la box, échec = rien ne reste), sudoers `secubox-backup` aux verbes exacts,
+API qui délègue (`/create`, `/container/backup`, planification), nom validé avant sudo, destinataire imposé par la box (422),
+échec = code 1, unité sans NoNewPrivileges, postinst `visudo -cf`. **Incident de test sur gk2** : la première version n'avait
+aucune garde d'espace ; l'archive « services » (3,8 Go de données dans /var/lib/secubox) a rempli le disque racine à 100 %
+(SSH instable quelques minutes) avant que je ne tue tar et supprime le fichier partiel (1,4 Go) ; disque revenu à 91 %, services
+tous actifs. Garde ajoutée au ctl : pas de départ sous 1 Go libre (`SECUBOX_BACKUP_RESERVE_MB`), tar interrompu et partiel
+supprimé sous 512 Mo ; vérifiée (refus immédiat avec une réserve de 5 Go ; archive de configuration chiffrée réelle OK).
+À savoir : la sauvegarde « services » ne peut pas tenir sur gk2 tant que le disque racine reste à 91 % (destination à déplacer,
+par exemple sur /data) ; la restauration et `/container/restore` lancent encore `tar -x` en `secubox` ; le chemin des
+conteneurs est `/srv/lxc` alors que ceux de gk2 sont sous `/data/lxc` ; une archive de configuration partielle en clair
+(`config-20261023-082749.tar.gz`, issue de l'échec) et 16 archives en clair restent dans /srv/backups.
+
 ## 2026-10-23 — Réglages réseau, trafic, QoS : actions refusées, modules montés dans l'agrégateur (closes #3065)
 
 « Échec : net.core.rmem_max : sysctl: permission denied on key … » (16 clés), puis `/traffic/`. `nettweak`, `traffic` et `qos` ont

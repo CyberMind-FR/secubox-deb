@@ -94,6 +94,9 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   dans `secrets/turn/`), API déléguée, panneau en lecture seule. Sans certificat du realm : pas de TURNS.
 - **Anti-rootkit** — closes #3058 (PR #3063, `secubox-security-posture` 2.4.2 sur gk2 + apt trixie) : point de contrôle
   réamorcé, conteneurs comptés et non signalés, uid corrigé, pouls du démon, profils AppArmor enforce.
+- **Sauvegardes créées par root** — closes #3064 (PR #3067, `secubox-backup` 2.4.1 sur gk2 + apt trixie) : `backupctl archiver`,
+  sudoers exact, garde d'espace disque. Reste : destination des sauvegardes (disque racine à 91 %), restauration en `secubox`,
+  chemin des conteneurs `/srv/lxc` ≠ `/data/lxc`.
 - **nettweak, traffic, qos relayés à leur service root** — closes #3065 (PR #3066, `secubox-aggregator` 0.4.7 sur gk2 + apt
   trixie). À examiner : admin, cloner, ksm, netdiag, vm, certs, cookies, mail (root + montés dans l'agrégateur).
 - Ouvert : profil de
