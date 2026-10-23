@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-23 — Hall : le dé SecuBox immobile sur ordinateur (closes #3068)
+
+« not rotating cube dice on computer, looks fine on ipad ». Le dé de la topbar v2 (`sbx-dice.js`) était figé sous la préférence
+système `prefers-reduced-motion: reduce` (décision de la phase 1bis, sans aucun indice visible) ; une tablette ne l'a pas, un poste
+de bureau l'a souvent (animations désactivées dans l'environnement). Cause **non confirmée sur le poste du propriétaire** (à vérifier :
+`matchMedia('(prefers-reduced-motion: reduce)').matches` dans la console, ou `data-etat` de `<sbx-dice>`). PR #3069,
+`secubox-webos` 1.19.23 : sous cette préférence le dé tourne à un quart de vitesse (`data-etat=calme`) ; `localStorage sbx_de=fige`
+le fige (`data-etat=fige`). Tests Playwright (rotation sous préférence réduite, figé par `sbx_de`) ; suite webos : seul le
+test ytflux, déjà rouge sur master, échoue. Déployé gk2 (cache WAF purgé), publié dans apt trixie.
+
 ## 2026-10-23 — Sauvegarde : l'API ne pouvait rien lire de /etc, archives créées par root (closes #3064)
 
 Collage de la page /backup/ : « Config backup failed: tar: /etc/secubox/secrets: Cannot open: Permission denied » (et ~60 autres
