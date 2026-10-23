@@ -11,6 +11,15 @@
       "effet": "media",
       "role_min": "guest"
     },
+    "media.play": {
+      "message": {
+        "sbx": "cmd",
+        "action": "play"
+      },
+      "effet": "media",
+      "role_min": "guest",
+      "_note": "Lecture idempotente (#3074) : lance si arrêtée, ne fait rien sinon. Le Hall ouvre le lecteur s'il n'est pas ouvert."
+    },
     "media.pause": {
       "message": {
         "sbx": "cmd",
