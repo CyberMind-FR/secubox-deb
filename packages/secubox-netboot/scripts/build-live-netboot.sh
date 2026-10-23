@@ -68,12 +68,24 @@ mount -o ro "${loop}p2" "$w/root"
 # ── 2. noyau, DTB, initrd ────────────────────────────────────────────────────
 t="$ROOT/tftp/$nom"; h="$ROOT/http/$nom"
 mkdir -p "$w/out/tftp" "$w/out/http"
-[ -s "$w/esp/Image" ] || die "Image absente de la partition de boot de la clé"
-[ -s "$w/esp/initrd.img" ] || die "initrd.img absent de la partition de boot de la clé"
-dtb="$(find "$w/esp" "$w/root/usr/lib" -name 'armada-7040-mochabin.dtb' 2>/dev/null | head -n1)"
+# Partition de boot de la clé d'abord ; sinon le noyau Debian du rootfs (alpha.18 : la partition de boot est VIDE,
+# build-mochabin-live-usb.sh cherchait boot/vmlinuz alors que Debian installe boot/vmlinuz-<version>).
+noyau="" initrd=""
+if [ -s "$w/esp/Image" ] && [ -s "$w/esp/initrd.img" ]; then
+    noyau="$w/esp/Image"; initrd="$w/esp/initrd.img"
+else
+    v="$(ls -1 "$w/root/boot" | sed -n 's/^vmlinuz-//p' | sort -V | tail -n1)"
+    [ -n "$v" ] || die "aucun noyau : ni Image sur la partition de boot, ni boot/vmlinuz-* dans le rootfs"
+    noyau="$w/root/boot/vmlinuz-$v"; initrd="$w/root/boot/initrd.img-$v"
+    [ -s "$initrd" ] || die "initrd absent : $initrd"
+    log "noyau du rootfs : $v (partition de boot de la clé vide)"
+fi
+# booti veut une Image ARM64 non compressée : décompresser un vmlinuz gzip
+if gzip -t "$noyau" 2>/dev/null; then gunzip -c "$noyau" > "$w/out/tftp/Image"; else cp "$noyau" "$w/out/tftp/Image"; fi
+file -b "$w/out/tftp/Image" | grep -q 'ARM64' || die "noyau non reconnu comme Image ARM64"
+cp "$initrd" "$w/out/tftp/initrd.img"
+dtb="$(find "$w/esp" "$w/root/usr/lib" -name 'armada-7040-mochabin.dtb' 2>/dev/null | sort -V | tail -n1)"
 [ -n "$dtb" ] || die "DTB armada-7040-mochabin.dtb introuvable"
-cp "$w/esp/Image" "$w/out/tftp/Image"
-cp "$w/esp/initrd.img" "$w/out/tftp/initrd.img"
 cp "$dtb" "$w/out/tftp/board.dtb"
 
 # L'initrd doit savoir faire un live réseau : scripts live-boot et pilote Ethernet de l'Armada 7040 (mvpp2).

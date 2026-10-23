@@ -45,3 +45,17 @@ def test_le_flash_refuse_un_nom_avec_chemin():
 
 def test_le_paquet_embarque_le_flasheur():
     assert "image/sbin/secubox-flash-emmc" in (ICI / "debian" / "rules").read_text()
+
+
+def test_noyau_du_rootfs_quand_la_partition_de_boot_est_vide():
+    # alpha.18 : partition de boot de la clé VIDE ; le noyau Debian est boot/vmlinuz-<version> dans le rootfs
+    s = BUILD.read_text()
+    assert "sed -n 's/^vmlinuz-//p'" in s and '"$w/root/boot/initrd.img-$v"' in s
+    assert "gzip -t" in s and "ARM64" in s                 # booti veut une Image non compressée
+
+
+def test_la_cle_live_usb_copie_le_noyau_versionne_et_son_propre_extlinux():
+    s = (ICI.parents[1] / "image" / "build-mochabin-live-usb.sh").read_text()
+    assert 'cp "${KERNEL_SRC}/vmlinuz" ' not in s               # le chemin qui laissait la partition vide
+    assert 'vmlinuz-${KVER}' in s and 'initrd.img-${KVER}' in s
+    assert "KERNEL /Image" in s and "Image-mpcie-fix" not in s.split("extlinux de la CLÉ", 1)[1]
