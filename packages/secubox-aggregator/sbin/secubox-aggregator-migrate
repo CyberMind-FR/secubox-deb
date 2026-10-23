@@ -36,7 +36,7 @@ command -v curl >/dev/null || err "curl required"
 # (mirrors how auth/metrics already run standalone). Space-separated list.
 # exposure (#3013) : écrit /etc/nginx et torrc, recharge nginx/tor — son service root dédié
 # (secubox-exposure.service) existe pour ça ; dans l'agrégateur il rend 500 (lecture seule).
-readonly AGG_EXCLUDE="lyrion exposure nettweak"
+readonly AGG_EXCLUDE="lyrion exposure nettweak traffic qos"
 
 _is_excluded() {
     local n="$1" e
