@@ -60,3 +60,10 @@ def test_la_cle_live_usb_copie_le_noyau_versionne_et_son_propre_extlinux():
     assert 'vmlinuz-${KVER}' in s and 'initrd.img-${KVER}' in s
     bloc = s.split("<< EXTLINUX", 1)[1].split("\nEXTLINUX\n", 1)[0]
     assert "KERNEL /Image" in bloc and "INITRD /initrd.img" in bloc and "Image-mpcie-fix" not in bloc
+
+
+def test_le_squashfs_ne_reste_pas_sous_srv():
+    # gk2 : /srv est sur l'eMMC racine ; 2,2 Go de squashfs l'avaient fait passer de 74 à 89 %
+    s = BUILD.read_text()
+    assert 'mv -f "$h/filesystem.squashfs" "$stockage/filesystem.squashfs"' in s
+    assert 'ln -sfn "$stockage/filesystem.squashfs" "$h/filesystem.squashfs"' in s
