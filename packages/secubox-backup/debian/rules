@@ -8,6 +8,9 @@ override_dh_auto_install:
 	# #1903 : outil root de chiffrement / restauration des sauvegardes
 	install -d debian/secubox-backup/usr/sbin
 	install -m 0755 sbin/backupctl debian/secubox-backup/usr/sbin/backupctl
+	# #3064 : sudoers aux verbes exacts (secubox -> backupctl archiver)
+	install -d debian/secubox-backup/etc/sudoers.d
+	install -m 0440 debian/secubox-backup.sudoers debian/secubox-backup/etc/sudoers.d/secubox-backup
 	install -d debian/secubox-backup/usr/share/secubox/www/backup
 	cp -r www/backup/. debian/secubox-backup/usr/share/secubox/www/backup/
 	install -d debian/secubox-backup/usr/share/secubox/menu.d

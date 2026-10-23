@@ -1,3 +1,21 @@
+secubox-backup (2.4.1-1~trixie1) trixie; urgency=medium
+
+  * Sauvegardes créées par root (ref #3064) : « Config backup failed: tar: /etc/secubox/secrets: Cannot open: Permission
+    denied » (et ~60 autres fichiers de /etc/secubox, /etc/nginx, /etc/wireguard). L'API tourne sous `secubox`
+    (NoNewPrivileges, aucun sudoers) et lançait elle-même `tar -czf` sur /etc, `lxc-stop`/`tar`/`lxc-start` sur les
+    conteneurs et `tar` sur les données de services : aucune archive de configuration depuis le 15 mai. Nouveau verbe
+    `backupctl archiver config|services chiffre|clair` et `archiver conteneur NOM chiffre|clair` (root) : crée l'archive,
+    la chiffre avec la clé publique de la box (échec = rien ne reste, ni tronquée ni en clair), la donne à `secubox`
+    en 0640 ; un conteneur arrêté est toujours relancé, même si tar échoue. Sudoers `secubox-backup` aux verbes exacts
+    (restauration, init-key et chiffrer-existantes restent à root). L'API délègue (`/create`, `/container/backup`,
+    planification), valide le nom du conteneur avant sudo et refuse un destinataire choisi par l'appelant (422) ;
+    un échec de création est un code 1 (avant : code 0 pour « Config backup failed »). Unité sans NoNewPrivileges ;
+    postinst `visudo -cf`. Garde d espace disque : pas de départ sous 1 Go libre (SECUBOX_BACKUP_RESERVE_MB), tar interrompu
+    et archive partielle supprimée sous 512 Mo — sur gk2 (disque à 91 %) la sauvegarde des services (3,8 Go) a rempli le
+    disque. 17 tests, 3 anciens tests adaptés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 10:10:00 +0200
+
 secubox-backup (2.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /cloner/ (composant cloner) refaite au profil Aurora (#2571) : fichier autonome, tuiles (sauvegardes,

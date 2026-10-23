@@ -208,6 +208,32 @@ def run_cmd(cmd: list, timeout: int = 300) -> tuple:
         return False, "", str(e)
 
 
+CTL = "/usr/sbin/backupctl"
+NOM_CONTENEUR = __import__("re").compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+def _archiver(kind: str, encrypt: bool, nom: Optional[str] = None, timeout: int = 900) -> tuple:
+    """Crée une archive par `sudo -n backupctl archiver` (root, argv exact du sudoers) — l'API, utilisateur `secubox`, ne
+    lit ni /etc/secubox/secrets ni /etc/wireguard (#3064). Rend (ok, nom_du_fichier_ou_erreur)."""
+    if kind == "conteneur" and not (nom and NOM_CONTENEUR.match(nom)):
+        return False, "nom de conteneur invalide"
+    cmd = ["sudo", "-n", CTL, "archiver", kind] + ([nom] if kind == "conteneur" else []) + ["chiffre" if encrypt else "clair"]
+    ok, out, err = run_cmd(cmd, timeout=timeout)
+    try:
+        d = json.loads(out) if out else {}
+    except ValueError:
+        d = {}
+    if d.get("ok"):
+        return True, d["fichier"] + ("" if d.get("chiffre") else " (NON CHIFFRÉE, choix explicite)")
+    return False, d.get("erreur") or (err or "").strip()[-300:] or "backupctl archiver a échoué"
+
+
+def _destinataire_impose(req) -> None:
+    """Le destinataire de chiffrement est celui de la box (/etc/secubox/backup-encryption.json) : un appelant ne le choisit pas."""
+    if req.encrypt and req.encrypt_recipient:
+        raise HTTPException(status_code=422, detail="destinataire fixé par la box (/etc/secubox/backup-encryption.json)")
+
+
 def generate_backup_id() -> str:
     """Generate unique backup ID."""
     import uuid
@@ -584,81 +610,29 @@ async def list_containers():
 # Protected endpoints
 @app.post("/create")
 async def create_backup(req: BackupCreate, user: dict = Depends(require_jwt)):
-    """Create a backup"""
+    """Create a backup — l'archive est créée par le ctl root (#3064), chiffrée par défaut (#1903)."""
+    _destinataire_impose(req)
     ensure_backup_dirs()
-
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
     outputs = []
 
     if req.type in ["full", "config"]:
-        # Backup config files
-        archive = BACKUP_PATH / "config" / f"config-{timestamp}.tar.gz"
-        existing_paths = [p for p in CONFIG_PATHS if os.path.exists(p)]
-
-        if existing_paths:
-            success, out, err = run_cmd(
-                ["tar", "-czf", str(archive)] + existing_paths,
-                timeout=300
-            )
-            if success:
-                ok, nom = finaliser_archive(archive, req.encrypt, req.encrypt_recipient)
-                outputs.append(f"Config backup: {nom}" if ok else f"Config backup NON créée (chiffrement) : {nom}")
-            else:
-                outputs.append(f"Config backup failed: {err}")
+        ok, nom = _archiver("config", req.encrypt)
+        outputs.append(f"Config backup: {nom}" if ok else f"Config backup NON créée : {nom}")
 
     if req.type in ["full", "containers"]:
-        # Backup all containers
         if LXC_PATH.exists():
-            for container_dir in LXC_PATH.iterdir():
-                if not container_dir.is_dir():
+            for container_dir in sorted(LXC_PATH.iterdir()):
+                if not container_dir.is_dir() or not (container_dir / "config").exists():
                     continue
-                if not (container_dir / "config").exists():
-                    continue
-
                 name = container_dir.name
-                archive = BACKUP_PATH / "containers" / f"{name}-{timestamp}.tar.gz"
-
-                # Stop if running for consistent backup
-                was_running = lxc_running(name)
-                if was_running:
-                    run_cmd(["lxc-stop", "-P", str(LXC_PATH), "-n", name])
-
-                success, out, err = run_cmd(
-                    ["tar", "-czf", str(archive), "-C", str(LXC_PATH), name],
-                    timeout=600
-                )
-
-                if was_running:
-                    run_cmd(["lxc-start", "-P", str(LXC_PATH), "-n", name])
-
-                if success:
-                    ok, nom = finaliser_archive(archive, req.encrypt, req.encrypt_recipient)
-                    outputs.append(f"Container backup: {nom}" if ok else f"Container {name} NON sauvegardé (chiffrement) : {nom}")
-                else:
-                    outputs.append(f"Container {name} failed: {err}")
+                ok, nom = _archiver("conteneur", req.encrypt, nom=name)
+                outputs.append(f"Container backup: {nom}" if ok else f"Container {name} NON sauvegardé : {nom}")
 
     if req.type in ["full", "services"]:
-        # Backup service data
-        service_paths = [
-            "/var/lib/secubox",
-            "/srv/nextcloud/data",
-            "/srv/gitea/data"
-        ]
-        existing = [p for p in service_paths if os.path.exists(p)]
+        ok, nom = _archiver("services", req.encrypt)
+        outputs.append(f"Services backup: {nom}" if ok else f"Services backup NON créée : {nom}")
 
-        if existing:
-            archive = BACKUP_PATH / "services" / f"services-{timestamp}.tar.gz"
-            success, out, err = run_cmd(
-                ["tar", "-czf", str(archive)] + existing,
-                timeout=600
-            )
-            if success:
-                ok, nom = finaliser_archive(archive, req.encrypt, req.encrypt_recipient)
-                outputs.append(f"Services backup: {nom}" if ok else f"Services backup NON créée (chiffrement) : {nom}")
-            else:
-                outputs.append(f"Services backup failed: {err}")
-
-    # Un échec de chiffrement est un ÉCHEC : jamais « code 0 » pour une sauvegarde qui n'existe pas.
+    # Un échec est un ÉCHEC : jamais « code 0 » pour une sauvegarde qui n'existe pas.
     echec = any("NON créée" in o or "NON sauvegardé" in o for o in outputs)
     return {
         "code": 0 if outputs and not echec else 1,
@@ -750,36 +724,20 @@ async def cleanup_backups(user: dict = Depends(require_jwt)):
 
 @app.post("/container/backup")
 async def backup_container(req: ContainerBackup, user: dict = Depends(require_jwt)):
-    """Backup a specific container"""
+    """Backup a specific container — par le ctl root (#3064) : arrêté le temps de l'archive, toujours relancé."""
     container_dir = LXC_PATH / req.name
 
-    if not container_dir.exists() or not (container_dir / "config").exists():
+    if not NOM_CONTENEUR.match(req.name) or not container_dir.exists() or not (container_dir / "config").exists():
         raise HTTPException(status_code=404, detail="Container not found")
 
     ensure_backup_dirs()
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    archive = BACKUP_PATH / "containers" / f"{req.name}-{timestamp}.tar.gz"
-
-    # Stop if running
-    was_running = lxc_running(req.name)
-    if was_running:
-        run_cmd(["lxc-stop", "-P", str(LXC_PATH), "-n", req.name])
-
-    success, out, err = run_cmd(
-        ["tar", "-czf", str(archive), "-C", str(LXC_PATH), req.name],
-        timeout=600
-    )
-
-    if was_running:
-        run_cmd(["lxc-start", "-P", str(LXC_PATH), "-n", req.name])
-
-    if not success:
-        return {"code": 1, "output": err}
-    ok, nom = finaliser_archive(archive, req.encrypt)
+    ok, nom = _archiver("conteneur", req.encrypt, nom=req.name)
+    if not ok:
+        return {"code": 1, "output": f"Sauvegarde NON créée : {nom}"}
     return {
-        "code": 0 if ok else 1,
-        "output": f"Backup created: {nom}" if ok else f"Sauvegarde NON créée (chiffrement) : {nom}",
-        "chiffree": ok and nom.endswith(".age"),
+        "code": 0,
+        "output": f"Backup created: {nom}",
+        "chiffree": nom.endswith(".age"),
     }
 
 
@@ -1131,81 +1089,51 @@ async def run_backup_async(backup_id: str, req: BackupCreate, schedule_name: str
 
     try:
         ensure_backup_dirs()
-        timestamp = time.strftime("%Y%m%d-%H%M%S")
         outputs = []
         created_files = []
 
         backup_type = req.type.value if isinstance(req.type, BackupType) else req.type
 
+        # Les archives sont créées (et chiffrées, sauf choix explicite) par le ctl root (#3064).
+        def _cree(kind, nom=None, libelle=None):
+            ok, fichier = _archiver(kind, req.encrypt, nom=nom)
+            if ok:
+                nom_fichier = fichier.split(" ", 1)[0]
+                sous = {"config": "config", "services": "services", "conteneur": "containers"}[kind]
+                created_files.append(BACKUP_PATH / sous / nom_fichier)
+                outputs.append(f"{libelle or kind}: {fichier}")
+            else:
+                outputs.append(f"{libelle or kind} NON créée : {fichier}")
+                erreurs.append(f"{libelle or kind}: {fichier}")
+
+        erreurs = []
+        if req.encrypt_recipient and req.encrypt:
+            raise RuntimeError("destinataire fixé par la box (/etc/secubox/backup-encryption.json)")
+
         # Config backup
         if backup_type in ["full", "config"]:
             set_progress(backup_id, "running", 20, "Backing up configuration...")
-            archive = BACKUP_PATH / "config" / f"config-{timestamp}.tar.gz"
-            existing_paths = [p for p in CONFIG_PATHS if os.path.exists(p)]
-
-            if existing_paths:
-                success, out, err = run_cmd(
-                    ["tar", "-czf", str(archive)] + existing_paths,
-                    timeout=300
-                )
-                if success:
-                    outputs.append(f"Config: {archive.name}")
-                    created_files.append(archive)
+            _cree("config", libelle="Config")
 
         # Container backup
         if backup_type in ["full", "containers"]:
             set_progress(backup_id, "running", 40, "Backing up containers...")
             if LXC_PATH.exists():
-                containers = [d for d in LXC_PATH.iterdir() if d.is_dir() and (d / "config").exists()]
-                for i, container_dir in enumerate(containers):
-                    name = container_dir.name
-                    archive = BACKUP_PATH / "containers" / f"{name}-{timestamp}.tar.gz"
-
-                    was_running = lxc_running(name)
-                    if was_running:
-                        run_cmd(["lxc-stop", "-P", str(LXC_PATH), "-n", name])
-
-                    success, out, err = run_cmd(
-                        ["tar", "-czf", str(archive), "-C", str(LXC_PATH), name],
-                        timeout=600
-                    )
-
-                    if was_running:
-                        run_cmd(["lxc-start", "-P", str(LXC_PATH), "-n", name])
-
-                    if success:
-                        outputs.append(f"Container: {name}")
-                        created_files.append(archive)
+                for container_dir in sorted(LXC_PATH.iterdir()):
+                    if container_dir.is_dir() and (container_dir / "config").exists():
+                        _cree("conteneur", nom=container_dir.name, libelle=f"Container {container_dir.name}")
 
         # Services backup
         if backup_type in ["full", "services"]:
             set_progress(backup_id, "running", 70, "Backing up services...")
-            service_paths = ["/var/lib/secubox", "/srv/nextcloud/data", "/srv/gitea/data"]
-            existing = [p for p in service_paths if os.path.exists(p)]
+            _cree("services", libelle="Services")
 
-            if existing:
-                archive = BACKUP_PATH / "services" / f"services-{timestamp}.tar.gz"
-                success, out, err = run_cmd(
-                    ["tar", "-czf", str(archive)] + existing,
-                    timeout=600
-                )
-                if success:
-                    outputs.append(f"Services: {archive.name}")
-                    created_files.append(archive)
-
-        # Chiffrement (#1903) : par défaut, avec la clé publique de la box. Échec = la sauvegarde
-        # ÉCHOUE et l'archive en clair est détruite (levée ErreurChiffrement, traitée plus bas).
-        if req.encrypt and created_files:
-            set_progress(backup_id, "running", 85, "Encrypting backups...")
-            created_files[:] = [chiffrement.chiffrer(a, req.encrypt_recipient) for a in list(created_files)]
-        elif created_files:
+        if not req.encrypt and created_files:
             log.warning("sauvegarde %s SANS chiffrement (choix explicite de %s)", backup_id, "l'appelant")
             outputs.append("ATTENTION : archive non chiffrée (choix explicite)")
-            for a in created_files:
-                try:
-                    os.chmod(a, chiffrement.MODE_FICHIER)
-                except OSError:
-                    pass
+
+        if erreurs and not created_files:
+            raise RuntimeError("; ".join(erreurs))
 
         # Upload to remote
         if req.upload_remote and created_files:
