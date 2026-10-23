@@ -15,9 +15,13 @@ if [ "$1" = "configure" ]; then
       [ "${_n:-0}" != "0" ] && echo "secubox-backup : ${_n} archive(s) en clair — backupctl chiffrer-existantes [--supprimer-clair]" >&2
     fi
 
+    # #3064 : le sudoers est validé AVANT d'être cru — une faute de syntaxe ne s'installe jamais en silence.
+    visudo -cf /etc/sudoers.d/secubox-backup
+
     systemctl daemon-reload
     systemctl enable secubox-backup.service || true
-    systemctl start secubox-backup.service || true
+    # restart (et non start) : l'unité a perdu NoNewPrivileges, il faut la relire sur une montée de version
+    systemctl restart secubox-backup.service || true
 fi
 #DEBHELPER#
 # Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.

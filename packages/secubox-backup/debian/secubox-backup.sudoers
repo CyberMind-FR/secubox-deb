@@ -1,0 +1,5 @@
+# SecuBox Backup (#3064) — l'API (utilisateur `secubox`) ne lit pas /etc/secubox/secrets ni /etc/wireguard : la création
+# d'une archive est confiée à `backupctl archiver`, aux verbes exacts ci-dessous. La restauration, l'init de la clé et le
+# chiffrement des archives existantes restent des actes de root (jamais accordés ici).
+secubox ALL=(root) NOPASSWD: /usr/sbin/backupctl archiver config chiffre, /usr/sbin/backupctl archiver config clair, /usr/sbin/backupctl archiver services chiffre, /usr/sbin/backupctl archiver services clair, /usr/sbin/backupctl archiver conteneur [A-Za-z0-9._-]* chiffre, /usr/sbin/backupctl archiver conteneur [A-Za-z0-9._-]* clair
+Defaults!/usr/sbin/backupctl !requiretty

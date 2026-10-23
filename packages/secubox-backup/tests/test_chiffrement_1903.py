@@ -123,7 +123,8 @@ def test_defauts_chiffres_dans_l_api():
     for modele in ("class BackupCreate", "class ContainerBackup", "class ScheduleConfig"):
         bloc = MAIN[MAIN.index(modele):MAIN.index(modele) + 400]
         assert "encrypt: bool = True" in bloc, modele
-    assert "chiffrement.chiffrer(a, req.encrypt_recipient)" in MAIN
+    # le chiffrement se fait désormais dans le ctl root, qui crée l'archive (#3064) : l'API passe « chiffre » par défaut
+    assert '"chiffre" if encrypt else "clair"' in MAIN
     assert "encrypt_recipient and created_files" not in MAIN                 # l'ancien « chiffre si un destinataire »
     assert "backupctl restaurer" in MAIN                                     # restauration d'un .age : message clair
 
@@ -164,54 +165,34 @@ def _charge_api(tmp_path, monkeypatch):
 
 
 def test_create_chiffre_par_defaut_et_ne_laisse_aucun_clair(tmp_path, monkeypatch):
+    """Au niveau de l'API : « chiffre » est demandé au ctl par défaut (le ctl, lui, ne laisse aucun clair : voir
+    test_archiver_root_3064)."""
     import asyncio
     m = _charge_api(tmp_path, monkeypatch)
-    monkeypatch.setattr(m, "CONFIG_PATHS", [str(tmp_path)])
-    (tmp_path / "secret").write_text("motdepasse-secret")
-
-    def faux_tar(cmd, timeout=300):
-        Path(cmd[2]).write_bytes(b"CLAIR motdepasse-secret")
-        return True, "", ""
-    monkeypatch.setattr(m, "run_cmd", faux_tar)
-    monkeypatch.setattr(m.chiffrement, "destinataire", lambda: "age1abc")
-
-    class R:
-        returncode, stderr = 0, ""
-
-    def faux_run(cmd, **k):
-        dest = Path(cmd[cmd.index("-o") + 1])
-        dest.write_bytes(b"CHIFFRE")
-        return R()
-    monkeypatch.setattr(m.chiffrement.subprocess, "run", faux_run)
+    vus = []
+    monkeypatch.setattr(m, "_archiver", lambda kind, encrypt, nom=None, timeout=900: (vus.append((kind, encrypt)) or True, "config-1.tar.gz.age"))
     req = m.BackupCreate(type="config")            # aucun champ encrypt : le défaut s'applique
     assert req.encrypt is True
     res = asyncio.run(m.create_backup(req, user={"sub": "t"}))
-    assert res["code"] == 0 and ".age" in res["output"]
-    restes = list((tmp_path / "srv" / "config").iterdir())
-    assert [f.suffix for f in restes] == [".age"]  # plus aucune archive en clair
-    assert b"CLAIR" not in restes[0].read_bytes()
+    assert res["code"] == 0 and ".age" in res["output"] and vus == [("config", True)]
 
 
 def test_create_sans_destinataire_est_un_echec_pas_un_succes_en_clair(tmp_path, monkeypatch):
     import asyncio
     m = _charge_api(tmp_path, monkeypatch)
-    monkeypatch.setattr(m, "CONFIG_PATHS", [str(tmp_path)])
-    monkeypatch.setattr(m, "run_cmd", lambda cmd, timeout=300: (Path(cmd[2]).write_bytes(b"CLAIR") or True, "", ""))
-    monkeypatch.setattr(m.chiffrement, "destinataire", lambda: None)
+    monkeypatch.setattr(m, "_archiver", lambda kind, encrypt, nom=None, timeout=900: (False, "aucun destinataire de chiffrement : `backupctl init-key`"))
     res = asyncio.run(m.create_backup(m.BackupCreate(type="config"), user={"sub": "t"}))
     assert res["code"] == 1                         # jamais « code 0 » pour une sauvegarde qui n'existe pas
-    assert list((tmp_path / "srv" / "config").iterdir()) == []      # et rien en clair ne reste
+    assert "NON créée" in res["output"]
 
 
 def test_choix_explicite_de_ne_pas_chiffrer_est_signale(tmp_path, monkeypatch):
     import asyncio
     m = _charge_api(tmp_path, monkeypatch)
-    monkeypatch.setattr(m, "CONFIG_PATHS", [str(tmp_path)])
-    monkeypatch.setattr(m, "run_cmd", lambda cmd, timeout=300: (Path(cmd[2]).write_bytes(b"CLAIR") or True, "", ""))
+    vus = []
+    monkeypatch.setattr(m, "_archiver", lambda kind, encrypt, nom=None, timeout=900: (vus.append(encrypt) or True, "config-1.tar.gz (NON CHIFFRÉE, choix explicite)"))
     res = asyncio.run(m.create_backup(m.BackupCreate(type="config", encrypt=False), user={"sub": "t"}))
-    assert res["code"] == 0 and "NON CHIFFRÉE" in res["output"]
-    f = next((tmp_path / "srv" / "config").iterdir())
-    assert stat.S_IMODE(f.stat().st_mode) == 0o640  # même en clair : jamais 0666
+    assert res["code"] == 0 and "NON CHIFFRÉE" in res["output"] and vus == [False]
 
 
 def test_liste_marque_les_archives_chiffrees(tmp_path, monkeypatch):
