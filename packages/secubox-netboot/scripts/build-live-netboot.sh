@@ -114,15 +114,17 @@ mksquashfs "$w/rootfs" "$w/out/http/filesystem.squashfs" -comp xz -noappend -no-
 # ── 4. script de démarrage U-Boot ────────────────────────────────────────────
 srv_ip="${srv%%:*}"
 cat > "$w/boot.cmd" <<EOF
-# SecuBox MOCHAbin — live réseau (#3079). Depuis le U-Boot usine :
-#   setenv serverip $srv_ip; dhcp; tftpboot \${scriptaddr} $nom/boot.scr; source \${scriptaddr}
+# SecuBox MOCHAbin — live réseau (#3079). Depuis le U-Boot usine, câble sur le WAN 1G (mvpp2-2) :
+#   setenv ethact mvpp2-2; setenv ipaddr <ip libre>; setenv serverip $srv_ip
+#   tftpboot \${scriptaddr} $nom/boot.scr; source \${scriptaddr}
+# Adresses au-dessus de 0x04000000-0x04200000, réservé au firmware (PSCI/ATF) de l'Armada 7040.
 setenv serverip $srv_ip
-setenv kernel_addr_r 0x02080000
-setenv fdt_addr_r 0x06f00000
-setenv ramdisk_addr_r 0x07000000
-tftpboot \${kernel_addr_r} $nom/Image
-tftpboot \${fdt_addr_r} $nom/board.dtb
-tftpboot \${ramdisk_addr_r} $nom/initrd.img
+setenv kernel_addr_r 0x08000000
+setenv fdt_addr_r 0x0c000000
+setenv ramdisk_addr_r 0x0c100000
+tftpboot \${kernel_addr_r} $nom/Image || exit
+tftpboot \${fdt_addr_r} $nom/board.dtb || exit
+tftpboot \${ramdisk_addr_r} $nom/initrd.img || exit
 setenv bootargs console=ttyS0,115200 boot=live components fetch=http://$srv/$nom/filesystem.squashfs ip=dhcp net.ifnames=0
 booti \${kernel_addr_r} \${ramdisk_addr_r}:\${filesize} \${fdt_addr_r}
 EOF
