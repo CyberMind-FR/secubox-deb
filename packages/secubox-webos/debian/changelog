@@ -1,3 +1,10 @@
+secubox-webos (1.19.24-1~trixie1) trixie; urgency=medium
+
+  * Hall (ref #3074) : une demande de lecture de ZIA (`media.play`) pour un service dont aucun lecteur n'est ouvert
+    ouvre sa vue /micro en mini, puis lui envoie `play` une fois chargée. Les réglages et pauses n'ouvrent rien.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 11:30:00 +0200
+
 secubox-webos (1.19.23-1~trixie1) trixie; urgency=medium
 
   * Dé SecuBox de la topbar (ref #3068) : immobile sur un poste de bureau, il tournait sur tablette. Sous la préférence

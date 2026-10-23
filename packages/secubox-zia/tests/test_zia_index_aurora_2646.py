@@ -136,3 +136,38 @@ def test_telephone_sans_debordement(navigateur):
     assert p.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
     assert not p.is_visible("#sidebar") and err == []
     ctx.close()
+
+
+# ── #3074 : les actions validées repartent vers le Hall ───────────────────────
+ACTION = {"kind": "sbx-action", "target": "service:radio", "service": "radio", "action": "media.play", "params": {},
+          "effet": "media"}
+
+
+def test_actions_relayees_au_hall_quand_la_page_est_embarquee(navigateur):
+    ctx = navigateur.new_context()
+    p = ctx.new_page()
+    hote = "<!doctype html><script>window.recus=[];addEventListener('message',e=>{if(e.data&&e.data.sbx==='action')recus.push(e.data.req)})</script><iframe id=f src='http://sbx.test/zia/?embed=1' width=900 height=700></iframe>"
+
+    def tout(r, *_):
+        u = r.request.url
+        if "/api/v1/zia/v1/chat" in u:
+            r.fulfill(status=200, content_type="application/json", body=json.dumps({"text": "Je lance radio.", "actions": [ACTION]}))
+        elif "/api/v1/zia/" in u:
+            r.fulfill(status=200, content_type="application/json", body=json.dumps(HEALTH))
+        elif u.startswith("http://hall.test/"):
+            r.fulfill(status=200, content_type="text/html", body=hote)
+        elif "/zia/voix.js" in u:
+            r.fulfill(status=200, content_type="application/javascript", body=VOIX)
+        elif "/zia/" in u:
+            r.fulfill(status=200, content_type="text/html", body=SRC)
+        else:
+            r.fulfill(status=200, body="")
+    ctx.route("**/*", tout)
+    p.goto("http://hall.test/")
+    f = p.frame_locator("#f")
+    f.locator("#q").fill("Activez la radio.")
+    f.locator("#q").press("Enter")
+    p.wait_for_function("window.recus.length > 0")
+    assert p.evaluate("window.recus")[0]["action"] == "media.play"
+    assert "radio · media.play" in f.locator("#stream").inner_text()
+    ctx.close()
