@@ -249,3 +249,41 @@ def test_telephone_sans_debordement_et_hauteur_annoncee(navigateur):
         assert p.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), onglet
     assert not p.is_visible("#sidebar") and err == []
     ctx.close()
+
+
+# ── #3070 : onglet « Vhosts et domaines » ────────────────────────────────────
+
+COUV = {"resume": {"vhosts": 9, "domaines": 3, "geres": 1, "gerables": 1, "externes": 1}, "ovh_configure": False,
+        "fournisseurs": [{"id": "p1", "name": "Gandi test", "type": "gandi", "actif": True, "zones": 1, "erreur": None}],
+        "domaines": [{"domaine": "example.com", "vhosts": 6, "statut": "gere", "fournisseur": "Gandi test", "type_fournisseur": "gandi", "hebergeur_ns": None, "fournisseur_a_ajouter": None},
+                     {"domaine": "example.net", "vhosts": 2, "statut": "gerable", "fournisseur": None, "type_fournisseur": None, "hebergeur_ns": "ovh", "fournisseur_a_ajouter": "ovh"},
+                     {"domaine": "example.eu", "vhosts": 1, "statut": "externe", "fournisseur": None, "type_fournisseur": None, "hebergeur_ns": "autre", "fournisseur_a_ajouter": None}],
+        "zones_sans_vhost": [{"zone": "inutile.org", "fournisseur": "Gandi test", "type": "gandi"}]}
+
+
+def test_l_onglet_couverture_dit_gere_gerable_externe_et_propose_ovh(navigateur):
+    ctx, p, err, _, _ = ouvre(navigateur, "http://sbx.test/dns-provider/", {**API, "GET /couverture": (200, COUV)})
+    p.click("#o-couverture")
+    p.wait_for_selector("#bCouv tr td", state="attached")
+    lignes = [[c.text_content() for c in r.query_selector_all("td")] for r in p.query_selector_all("#bCouv tr")]
+    assert [c[0] for c in lignes] == ["example.com", "example.net", "example.eu"]
+    assert [c[2].lower() for c in lignes] == ["géré", "gérable", "externe"]
+    assert "Gandi test" in lignes[0][3] and "OVH" in lignes[1][3]
+    assert "OVH n’est pas configuré" in p.inner_text("#alertesCouv")
+    assert p.inner_text("#nCouv") == "9 vhosts · 3 domaines"
+    assert "inutile.org" in p.inner_text("#bZsv")
+    # « Ajouter OVH » ouvre le formulaire des fournisseurs, type OVH présélectionné, champs OVH affichés
+    p.click("#bCouv >> text=Ajouter OVH")
+    assert p.is_visible("#fFourn") and p.input_value("#ptype") == "ovh"
+    assert p.is_visible("input[data-cred=application_key]") and p.is_visible("input[data-cred=consumer_key]")
+    assert err == []
+    ctx.close()
+
+
+def test_l_onglet_couverture_sans_releve_ne_plante_pas(navigateur):
+    ctx, p, err, _, _ = ouvre(navigateur, "http://sbx.test/dns-provider/", API)        # /couverture → 404
+    p.click("#o-couverture")
+    p.wait_for_selector("#bCouv tr td", state="attached")
+    assert "indisponible" in p.inner_text("#bCouv").lower()
+    assert err == []
+    ctx.close()

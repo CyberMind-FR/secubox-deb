@@ -20,6 +20,7 @@ Author: Gerald KERMA <devel@cybermind.fr>
 """
 import asyncio
 import json
+import os
 import hashlib
 import hmac
 import re
@@ -47,7 +48,12 @@ PROVIDERS_FILE = DATA_DIR / "providers.json"
 AUDIT_LOG_FILE = DATA_DIR / "audit.log"
 CACHE_FILE = DATA_DIR / "cache.json"
 
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+HAPROXY_TOML = Path("/etc/secubox/haproxy.toml")      # source des vhosts (lecture seule, #3070)
+
+try:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:      # poste de développement : pas de /var/lib/secubox
+    pass
 
 
 # ===========================================================================
@@ -146,9 +152,17 @@ def _load_json(path: Path, default=None) -> Any:
     return default
 
 
-def _save_json(path: Path, data: Any):
+def _save_json(path: Path, data: Any, prive: bool = False):
+    """Écrit un JSON. `prive=True` (providers.json : clés d'API) : fichier créé en 0600, jamais 0664 (#3070)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2))
+    contenu = json.dumps(data, indent=2)
+    if not prive:
+        path.write_text(contenu)
+        return
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(contenu)
+    os.chmod(path, 0o600)           # un fichier déjà là en 0664 est resserré
 
 
 def _audit_log(action: str, details: Dict[str, Any], user: str = "system"):
@@ -520,90 +534,111 @@ class GandiAdapter(DNSProviderAdapter):
         return "\n".join(lines)
 
 
+def ovh_signature(secret: str, consumer_key: str, method: str, url: str, body: str, timestamp: int) -> str:
+    """Signature d'une requête de l'API OVH : « $1$ » + SHA-1 hexadécimal de secret+consumer+méthode+URL+corps+horodatage.
+
+    SHA-1 ICI EST IMPOSÉ PAR LE PROTOCOLE — CE N'EST PAS UN CHOIX. L'API OVH rejette toute autre signature ; aucune
+    alternative n'est proposée. Ce n'est pas une signature à clé publique : la sécurité tient au secret d'application
+    (long, aléatoire, jamais envoyé) et à l'horodatage vérifié par le serveur. Exception documentée dans
+    docs/POLITIQUE-CRYPTO.md § 3."""
+    brut = "+".join([secret, consumer_key, method, url, body, str(timestamp)])
+    return "$1$" + hashlib.sha1(brut.encode()).hexdigest()
+
+
 class OVHAdapter(DNSProviderAdapter):
-    """OVH DNS API adapter using ovh library (pip install ovh)."""
+    """OVH DNS API adapter — httpx et signature OVH, SANS la bibliothèque `ovh` (absente de Debian, #3070)."""
 
-    def __init__(self, credentials: Dict[str, str]):
-        super().__init__(credentials)
-        self._client = None
+    ENDPOINTS = {
+        "ovh-eu": "https://eu.api.ovh.com/1.0",
+        "ovh-ca": "https://ca.api.ovh.com/1.0",
+        "ovh-us": "https://api.us.ovhcloud.com/1.0",
+    }
+    _transport = None          # injection pour les tests (httpx.MockTransport)
+
+    def _base(self) -> str:
+        return self.ENDPOINTS.get(self.credentials.get("endpoint", "ovh-eu"), self.ENDPOINTS["ovh-eu"])
+
+    async def _request(self, method: str, path: str, data: Any = None) -> Any:
+        import httpx
+        base = self._base()
+        corps = json.dumps(data) if data is not None else ""
+        async with httpx.AsyncClient(timeout=30, transport=self._transport) as client:
+            # l'horodatage signé est celui du SERVEUR OVH : une horloge locale décalée donnerait « Invalid signature »
+            try:
+                ts = int((await client.get(f"{base}/auth/time")).json())
+            except (ValueError, httpx.HTTPError):
+                ts = int(time.time())
+            url = f"{base}{path}"
+            entetes = {
+                "X-Ovh-Application": self.credentials.get("application_key", ""),
+                "X-Ovh-Consumer": self.credentials.get("consumer_key", ""),
+                "X-Ovh-Timestamp": str(ts),
+                "X-Ovh-Signature": ovh_signature(self.credentials.get("application_secret", ""),
+                                                 self.credentials.get("consumer_key", ""), method, url, corps, ts),
+                "Content-Type": "application/json",
+            }
+            try:
+                resp = await client.request(method, url, headers=entetes, content=corps or None)
+            except httpx.HTTPError as e:
+                raise HTTPException(502, f"OVH API injoignable : {e}")
+        if resp.status_code >= 400:
+            try:
+                msg = resp.json().get("message", resp.text)
+            except (ValueError, AttributeError):
+                msg = resp.text
+            raise HTTPException(502, f"OVH API {resp.status_code} : {msg}")
         try:
-            import ovh
-            self._client = ovh.Client(
-                endpoint=credentials.get("endpoint", "ovh-eu"),
-                application_key=credentials.get("application_key"),
-                application_secret=credentials.get("application_secret"),
-                consumer_key=credentials.get("consumer_key"),
-            )
-        except ImportError:
-            pass  # Library not installed
-        except Exception:
-            pass  # Invalid credentials
-
-    def _check_client(self):
-        if not self._client:
-            raise HTTPException(501, "OVH adapter requires 'ovh' library: pip install ovh")
+            return resp.json()
+        except ValueError:
+            return None
 
     async def list_domains(self) -> List[Dict[str, Any]]:
-        self._check_client()
-        try:
-            domains = self._client.get("/domain/zone")
-            return [{"name": d, "id": d, "status": "active"} for d in domains]
-        except Exception as e:
-            raise HTTPException(500, f"OVH API error: {e}")
+        zones = await self._request("GET", "/domain/zone")
+        return [{"name": z, "id": z, "status": "active"} for z in (zones or [])]
 
     async def list_records(self, domain: str) -> List[Dict[str, Any]]:
-        self._check_client()
-        try:
-            record_ids = self._client.get(f"/domain/zone/{domain}/record")
-            records = []
-            for rid in record_ids:
-                r = self._client.get(f"/domain/zone/{domain}/record/{rid}")
-                records.append({
-                    "id": str(rid),
-                    "name": r.get("subDomain", "@"),
-                    "type": r.get("fieldType"),
-                    "value": r.get("target"),
-                    "ttl": r.get("ttl", 300),
-                })
-            return records
-        except Exception as e:
-            raise HTTPException(500, f"OVH API error: {e}")
+        ids = await self._request("GET", f"/domain/zone/{domain}/record") or []
+        records = []
+        for rid in ids:
+            r = await self._request("GET", f"/domain/zone/{domain}/record/{rid}") or {}
+            records.append({
+                "id": str(rid),
+                "name": r.get("subDomain") or "@",
+                "type": r.get("fieldType"),
+                "value": r.get("target"),
+                "ttl": r.get("ttl", 300),
+            })
+        return records
 
     async def create_record(self, domain: str, record: RecordCreate) -> Dict[str, Any]:
-        self._check_client()
-        try:
-            result = self._client.post(f"/domain/zone/{domain}/record",
-                fieldType=record.type.value,
-                subDomain=record.name if record.name != "@" else "",
-                target=record.value,
-                ttl=record.ttl or 300,
-            )
-            self._client.post(f"/domain/zone/{domain}/refresh")
-            return {"id": str(result), "name": record.name, "type": record.type.value, "value": record.value}
-        except Exception as e:
-            raise HTTPException(500, f"OVH API error: {e}")
+        r = await self._request("POST", f"/domain/zone/{domain}/record", {
+            "fieldType": record.type.value,
+            "subDomain": record.name if record.name != "@" else "",
+            "target": record.value,
+            "ttl": record.ttl or 300,
+        })
+        await self._request("POST", f"/domain/zone/{domain}/refresh")
+        rid = r.get("id") if isinstance(r, dict) else r
+        return {"id": str(rid), "name": record.name, "type": record.type.value, "value": record.value}
 
     async def update_record(self, domain: str, record_id: str, record: RecordUpdate) -> Dict[str, Any]:
-        self._check_client()
-        try:
-            update_data = {}
-            if record.value:
-                update_data["target"] = record.value
-            if record.ttl:
-                update_data["ttl"] = record.ttl
-            self._client.put(f"/domain/zone/{domain}/record/{record_id}", **update_data)
-            self._client.post(f"/domain/zone/{domain}/refresh")
-            return {"id": record_id, "updated": True}
-        except Exception as e:
-            raise HTTPException(500, f"OVH API error: {e}")
+        donnees = {}
+        if record.value:
+            donnees["target"] = record.value
+        if record.ttl:
+            donnees["ttl"] = record.ttl
+        if record.name is not None:
+            donnees["subDomain"] = record.name if record.name != "@" else ""
+        await self._request("PUT", f"/domain/zone/{domain}/record/{record_id}", donnees)
+        await self._request("POST", f"/domain/zone/{domain}/refresh")
+        return {"id": record_id, "updated": True}
 
     async def delete_record(self, domain: str, record_id: str) -> bool:
-        self._check_client()
         try:
-            self._client.delete(f"/domain/zone/{domain}/record/{record_id}")
-            self._client.post(f"/domain/zone/{domain}/refresh")
+            await self._request("DELETE", f"/domain/zone/{domain}/record/{record_id}")
+            await self._request("POST", f"/domain/zone/{domain}/refresh")
             return True
-        except Exception:
+        except HTTPException:
             return False
 
     async def create_acme_challenge(self, domain: str, token: str, key_auth: str) -> bool:
@@ -616,8 +651,7 @@ class OVHAdapter(DNSProviderAdapter):
 
     async def delete_acme_challenge(self, domain: str, token: str) -> bool:
         try:
-            records = await self.list_records(domain)
-            for r in records:
+            for r in await self.list_records(domain):
                 if r["name"] == "_acme-challenge" and r["type"] == "TXT":
                     await self.delete_record(domain, r["id"])
             return True
@@ -808,6 +842,112 @@ class Route53Adapter(DNSProviderAdapter):
         return "\n".join(lines)
 
 
+# ===========================================================================
+# Couverture : vhosts × zones des fournisseurs × serveurs de noms publics (#3070)
+# ===========================================================================
+
+# Les hébergeurs de zone que ce module sait piloter (adaptateurs ci-dessus), reconnus à leurs serveurs de noms.
+_NS_HEBERGEURS = (("gandi", re.compile(r"\.gandi\.net\.?$", re.I)),
+                  ("ovh", re.compile(r"\.ovh\.(net|com)\.?$|^(ns|dns)\.ovh\.net\.?$", re.I)),
+                  ("cloudflare", re.compile(r"\.cloudflare\.com\.?$", re.I)),
+                  ("route53", re.compile(r"\.awsdns-[0-9a-z.-]+\.?$", re.I)))
+_NS_CACHE = StatsCache(ttl_seconds=3600)
+
+
+def hebergeur_ns(serveurs: List[str]) -> Optional[str]:
+    """Qui héberge la zone, d'après ses serveurs de noms : gandi / ovh / cloudflare / route53 / autre ; None sans réponse."""
+    if not serveurs:
+        return None
+    for nom, motif in _NS_HEBERGEURS:
+        if any(motif.search(ns.strip()) for ns in serveurs):
+            return nom
+    return "autre"
+
+
+def apex_de(domaine: str) -> str:
+    """Domaine d'enregistrement présumé : les deux derniers libellés (les suffixes à deux niveaux comme .co.uk sont hors périmètre)."""
+    libelles = domaine.strip(".").split(".")
+    return ".".join(libelles[-2:]) if len(libelles) > 2 else domaine.strip(".")
+
+
+def zone_pour(domaine: str, zones: Dict[str, Dict[str, Any]]) -> Optional[str]:
+    """La zone la plus spécifique (suffixe le plus long) d'un fournisseur qui couvre ce domaine, ou None."""
+    candidates = [z for z in zones if domaine == z or domaine.endswith("." + z)]
+    return max(candidates, key=len) if candidates else None
+
+
+def domaines_des_vhosts(chemin: Path = None) -> List[str]:
+    """Les domaines des vhosts ACTIFS de haproxy.toml (`[vhosts.*]`), sans les jokers (`surf-*`). Absent ou illisible : []."""
+    import tomllib
+    chemin = chemin or HAPROXY_TOML
+    try:
+        data = tomllib.loads(Path(chemin).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    out = []
+    for v in (data.get("vhosts") or {}).values():
+        dom = (v or {}).get("domain")
+        if isinstance(dom, str) and dom and "*" not in dom and v.get("enabled", True):
+            out.append(dom.lower())
+    return out
+
+
+def calcule_couverture(vhosts: List[str], fournisseurs: List[Dict[str, Any]], ns_par_apex: Dict[str, Optional[str]]) -> Dict[str, Any]:
+    """Croise les vhosts avec les zones des fournisseurs configurés.
+
+    - `gere` : une zone d'un fournisseur configuré couvre le domaine ;
+    - `gerable` : aucune zone configurée, mais les serveurs de noms publics sont chez un hébergeur que ce module pilote
+      (gandi, ovh, cloudflare, route53) — il suffit d'ajouter (ou de compléter) le fournisseur correspondant ;
+    - `externe` : zone hébergée ailleurs, ou inconnue."""
+    zones: Dict[str, Dict[str, Any]] = {}
+    for f in fournisseurs:
+        for z in f.get("zones", []):
+            zones.setdefault(z.lower(), f)
+    groupes: Dict[str, int] = {}
+    for d in vhosts:
+        if "*" in d:
+            continue
+        cle = zone_pour(d, zones) or apex_de(d)
+        groupes[cle] = groupes.get(cle, 0) + 1
+    domaines = []
+    for cle in sorted(groupes):
+        f = zones.get(cle)
+        heb = None if f else ns_par_apex.get(cle)
+        if f:
+            statut, a_ajouter = "gere", None
+        elif heb in ("gandi", "ovh", "cloudflare", "route53"):
+            statut, a_ajouter = "gerable", heb
+        else:
+            statut, a_ajouter = "externe", None
+        domaines.append({"domaine": cle, "vhosts": groupes[cle], "statut": statut,
+                         "fournisseur": f["name"] if f else None, "type_fournisseur": f["type"] if f else None,
+                         "hebergeur_ns": heb, "fournisseur_a_ajouter": a_ajouter})
+    utilises = {d["domaine"] for d in domaines}
+    sans_vhost = [{"zone": z, "fournisseur": f["name"], "type": f["type"]} for z, f in sorted(zones.items()) if z not in utilises]
+    return {"domaines": domaines, "zones_sans_vhost": sans_vhost,
+            "resume": {"vhosts": sum(groupes.values()), "domaines": len(domaines),
+                       "geres": sum(d["statut"] == "gere" for d in domaines),
+                       "gerables": sum(d["statut"] == "gerable" for d in domaines),
+                       "externes": sum(d["statut"] == "externe" for d in domaines)}}
+
+
+async def ns_hebergeur_de(apex: str) -> Optional[str]:
+    """Hébergeur d'une zone d'après `dig +short NS` (5 s, mis en cache 1 h) ; None si dig est absent ou ne répond pas."""
+    en_cache = _NS_CACHE.get(apex)
+    if en_cache is not None:
+        return en_cache or None
+    resultat = None
+    try:
+        proc = await asyncio.create_subprocess_exec("dig", "+short", "+time=3", "+tries=1", "NS", apex,
+                                                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        sortie, _ = await asyncio.wait_for(proc.communicate(), timeout=6)
+        resultat = hebergeur_ns([x for x in sortie.decode().split() if x])
+    except (OSError, asyncio.TimeoutError):
+        resultat = None
+    _NS_CACHE.set(apex, resultat or "")
+    return resultat
+
+
 def get_adapter(provider_type: ProviderType, credentials: Dict[str, str]) -> DNSProviderAdapter:
     """Factory for DNS provider adapters."""
     adapters = {
@@ -869,6 +1009,10 @@ async def _periodic_refresh():
 @app.on_event("startup")
 async def startup_event():
     global _refresh_task
+    try:
+        os.chmod(PROVIDERS_FILE, 0o600)      # clés d'API : jamais lisibles par les autres comptes (#3070)
+    except OSError:
+        pass
     _refresh_task = asyncio.create_task(_periodic_refresh())
 
 
@@ -974,7 +1118,7 @@ async def add_provider(data: ProviderCredentials, background_tasks: BackgroundTa
     }
 
     providers["providers"].append(provider_entry)
-    _save_json(PROVIDERS_FILE, providers)
+    _save_json(PROVIDERS_FILE, providers, prive=True)
 
     _audit_log("provider_added", {
         "id": provider_id,
@@ -1006,7 +1150,7 @@ async def remove_provider(provider_id: str):
     if len(providers["providers"]) == original_len:
         raise HTTPException(404, "Provider not found")
 
-    _save_json(PROVIDERS_FILE, providers)
+    _save_json(PROVIDERS_FILE, providers, prive=True)
     _audit_log("provider_removed", {"id": provider_id})
     stats_cache.clear()
 
@@ -1026,7 +1170,7 @@ async def update_provider(provider_id: str, updates: Dict[str, Any]):
                 p["name"] = updates["name"]
             if "credentials" in updates:
                 p["credentials"].update(updates["credentials"])
-            _save_json(PROVIDERS_FILE, providers)
+            _save_json(PROVIDERS_FILE, providers, prive=True)
             _audit_log("provider_updated", {"id": provider_id, "changes": list(updates.keys())})
             return {"success": True}
 
@@ -1066,6 +1210,41 @@ async def list_domains(provider_id: Optional[str] = None):
             })
 
     return {"domains": all_domains}
+
+
+@app.get("/couverture", dependencies=[Depends(require_jwt)])
+async def couverture(refresh: bool = False):
+    """Vhosts de la box × domaines gérés par un fournisseur configuré × domaines gérables (serveurs de noms chez Gandi, OVH,
+    Cloudflare ou Route 53 sans fournisseur) × externes. Aucune clé d'API dans la réponse (#3070)."""
+    if not refresh:
+        en_cache = stats_cache.get("couverture")
+        if en_cache is not None:
+            return en_cache
+    providers = _load_json(PROVIDERS_FILE, {"providers": []}).get("providers", [])
+    fournisseurs, vue = [], []
+    for p in providers:
+        zones, erreur = [], None
+        if p.get("enabled", True):
+            try:
+                adapter = get_adapter(ProviderType(p["provider"]), p.get("credentials", {}))
+                zones = [d["name"] for d in await adapter.list_domains() if d.get("name")]
+            except HTTPException as e:
+                erreur = str(e.detail)
+            except Exception as e:  # noqa: BLE001 — un fournisseur en panne n'efface pas les autres
+                erreur = str(e)
+        fournisseurs.append({"id": p["id"], "name": p["name"], "type": p["provider"], "actif": p.get("enabled", True),
+                             "zones": len(zones), "erreur": erreur})
+        vue.append({"id": p["id"], "name": p["name"], "type": p["provider"], "zones": zones})
+    vhosts = domaines_des_vhosts()
+    zones_connues = {z.lower(): None for f in vue for z in f["zones"]}
+    a_interroger = sorted({apex_de(d) for d in vhosts if "*" not in d and zone_pour(d, zones_connues) is None})
+    ns = dict(zip(a_interroger, await asyncio.gather(*(ns_hebergeur_de(a) for a in a_interroger)))) if a_interroger else {}
+    resultat = calcule_couverture(vhosts, vue, ns)
+    resultat["fournisseurs"] = fournisseurs
+    resultat["ovh_configure"] = any(f["type"] == "ovh" for f in fournisseurs)
+    resultat["horodatage"] = datetime.now().isoformat(timespec="seconds")
+    stats_cache.set("couverture", resultat)
+    return resultat
 
 
 @app.get("/domain/{domain_name}/records", dependencies=[Depends(require_jwt)])

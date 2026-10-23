@@ -122,7 +122,7 @@ une fois, avec séparation non ambiguë des parties.
 
 ## 3. Exceptions imposées par un protocole
 
-Deux, toutes deux documentées **dans le code** à l'endroit concerné.
+Trois, toutes documentées **dans le code** à l'endroit concerné.
 
 ### `secubox-turn` — HMAC-SHA1
 
@@ -137,6 +137,13 @@ HMAC-SHA1 n'en dépend pas : sa sécurité repose sur la résistance à la préi
 sous clé, non entamée — c'est pourquoi la RFC 6151 déconseille SHA-1 pour les
 signatures tout en laissant HMAC-SHA1 en service. La protection réelle tient au
 secret (long, aléatoire) et à l'expiration de l'identifiant.
+
+### `secubox-dns` (dns-provider) — signature de l'API OVH
+
+L'API OVH authentifie chaque requête par `"$1$" + SHA-1(secret + consumer + méthode + URL + corps + horodatage)` : c'est la
+seule signature qu'elle accepte, et le service n'en propose pas d'autre. Ce n'est pas une signature à clé publique : la
+sécurité tient au secret d'application (long, aléatoire, jamais envoyé sur le réseau), à l'horodatage vérifié par le serveur
+et à la portée du consumer key. Documenté dans `ovh_signature()` (`composants/dns-provider/api/main.py`).
 
 ### `secubox-p2p` — identifiant de nœud Kademlia sur 160 bits
 
@@ -166,7 +173,7 @@ par sa clé Ed25519, pas par sa place dans l'anneau.
 
 ```bash
 # Aucun algorithme faible employé (les seuls hits doivent être le classifieur
-# défensif et les deux exceptions documentées ci-dessus) :
+# défensif et les trois exceptions documentées ci-dessus) :
 grep -rn "hashlib.md5\|hashlib.sha1\|MODE_ECB\|RC4\|Blowfish" \
   --include=*.py --include=*.go --include=*.c common/ packages/
 
