@@ -1,3 +1,12 @@
+secubox-aggregator (0.4.7-1~trixie1) trixie; urgency=medium
+
+  * nettweak à socket dédiée (ref #3065) : « sysctl: permission denied on key net.core.rmem_max » (16 clés) à chaque
+    profil appliqué — nettweak était monté en processus dans l'agrégateur (utilisateur secubox) alors que son service
+    root écrit /proc/sys sur /run/secubox/nettweak.sock. Rejoint DEDICATED_MODULES (relayé, jamais monté) et le script de
+    migration. 3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 09:40:00 +0200
+
 secubox-aggregator (0.4.6-1~trixie1) trixie; urgency=medium
 
   * zkp rejoint RETIRED_MODULES (ref #3019).
