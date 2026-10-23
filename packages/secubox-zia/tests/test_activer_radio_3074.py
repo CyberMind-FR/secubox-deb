@@ -70,3 +70,12 @@ def test_une_recherche_reste_une_recherche():
 
 def test_ecouter_a_l_infinitif_reste_une_recherche():
     assert resp("trouve un podcast à écouter sur le WAF").get("actions", []) == []
+
+
+def test_le_manifeste_installe_de_la_radio_declare_la_lecture():
+    # Sur la box, le manifeste du paquet radio REMPLACE l'amorçage : sans media.play ici, « Activez la radio » retombait
+    # sur la bascule (vu sur gk2 après le premier déploiement).
+    capdir = str(pathlib.Path(__file__).resolve().parents[2] / "secubox-radio" / "capabilities.d")
+    o = resp("Activez la radio.", _bus(capdir))
+    assert o["actions"] and o["actions"][0]["action"] == "media.play"
+    assert [t["args"]["action"] for t in o["trace"] if t["tool"] == "act"] == ["media.play"]
