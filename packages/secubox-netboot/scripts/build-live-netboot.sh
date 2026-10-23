@@ -15,7 +15,7 @@
 # urgence), sbx-netflash, secubox-flash-emmc et la clé PUBLIQUE de signature. La clé privée ne sort jamais du serveur.
 #
 #   build-live-netboot.sh --live secubox-mochabin-live-usb.img.gz [--flash img.gz]... [--nom mochabin-live]
-#                         [--srv 192.168.1.200:8099] [--travail /data/sbx-netboot/travail]
+#                         [--srv 192.168.1.200:8099] [--travail /data/sbx-netboot/travail] [--stockage DIR]
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -23,7 +23,7 @@ REPO="$(cd "$HERE/../.." 2>/dev/null && pwd || true)"
 ROOT=/srv/secubox/netboot
 KEY=/etc/secubox/netboot/keys/secubox-netboot.key
 PUB=/etc/secubox/netboot/keys/secubox-netboot.crt.pub
-live="" nom="mochabin-live" srv="192.168.1.200:8099" travail="/data/sbx-netboot/travail" flash=()
+live="" nom="mochabin-live" srv="192.168.1.200:8099" travail="/data/sbx-netboot/travail" stockage="" flash=()
 
 while [ $# -gt 0 ]; do case "$1" in
     --live) live="$2"; shift 2 ;;
@@ -31,6 +31,7 @@ while [ $# -gt 0 ]; do case "$1" in
     --nom) nom="$2"; shift 2 ;;
     --srv) srv="$2"; shift 2 ;;
     --travail) travail="$2"; shift 2 ;;
+    --stockage) stockage="$2"; shift 2 ;;
     *) echo "arg inconnu : $1" >&2; exit 2 ;;
 esac; done
 
@@ -147,7 +148,14 @@ for d in "$t:$w/out/tftp" "$h:$w/out/http"; do
     rm -rf "$cible.avant"; [ -d "$cible" ] && mv "$cible" "$cible.avant"
     mkdir -p "$(dirname "$cible")"; cp -a "$src" "$cible"
 done
-chmod -R a+rX "$t" "$h"
+# Le squashfs (plus de 2 Go) ne reste pas sous /srv : sur gk2, /srv est sur la racine (eMMC à ~75 %). Il va sur le
+# stockage (défaut : /data/sbx-netboot/<nom>), servi par un lien, comme les images eMMC (#3079).
+[ -n "$stockage" ] || stockage="$(dirname "$travail")/$nom"
+mkdir -p "$stockage"
+mv -f "$h/filesystem.squashfs" "$stockage/filesystem.squashfs"
+ln -sfn "$stockage/filesystem.squashfs" "$h/filesystem.squashfs"
+rm -rf "$t.avant" "$h.avant"
+chmod -R a+rX "$t" "$h" "$stockage"
 mkdir -p /var/log/secubox/netboot
 echo "$(date -Iseconds) live-netboot publie nom=$nom live=$(basename "$live") images=${#flash[@]}" >> /var/log/secubox/netboot/audit.log
 log "publié : TFTP $t  HTTP $h"

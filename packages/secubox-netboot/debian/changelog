@@ -1,3 +1,11 @@
+secubox-netboot (0.6.2-1~trixie1) trixie; urgency=medium
+
+  * build-live-netboot.sh (ref #3079) : le squashfs (2,2 Go) est rangé sur le stockage (--stockage, défaut
+    /data/sbx-netboot/<nom>) et servi par un lien ; laissé sous /srv, il avait fait passer la racine de gk2 de 74 à 89 %.
+    Les copies .avant de la publication précédente sont supprimées une fois la nouvelle en place.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 12:50:00 +0200
+
 secubox-netboot (0.6.1-1~trixie1) trixie; urgency=medium
 
   * build-live-netboot.sh (ref #3079) : la partition de boot de la clé live alpha.18 est VIDE (ni Image, ni initrd, ni DTB) ;
