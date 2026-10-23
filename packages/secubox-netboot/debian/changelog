@@ -1,3 +1,13 @@
+secubox-netboot (0.6.3-1~trixie1) trixie; urgency=medium
+
+  * build-live-netboot.sh (ref #3079) : boot.scr charge le noyau à 0x08000000, le DTB à
+    0x0c000000 et l'initrd à 0x0c100000. À 0x02080000, le noyau Debian 6.12 (~37 Mo)
+    débordait sur la zone réservée au firmware (0x04000000) : TFTP tronqué puis
+    « Synchronous Abort » au booti sur MOCHAbin. Un échec TFTP arrête le script ;
+    la consigne donne le port WAN 1G (ethact mvpp2-2).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 14:30:00 +0200
+
 secubox-netboot (0.6.2-1~trixie1) trixie; urgency=medium
 
   * build-live-netboot.sh (ref #3079) : le squashfs (2,2 Go) est rangé sur le stockage (--stockage, défaut

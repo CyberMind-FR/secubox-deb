@@ -67,3 +67,22 @@ def test_le_squashfs_ne_reste_pas_sous_srv():
     s = BUILD.read_text()
     assert 'mv -f "$h/filesystem.squashfs" "$stockage/filesystem.squashfs"' in s
     assert 'ln -sfn "$stockage/filesystem.squashfs" "$h/filesystem.squashfs"' in s
+
+
+def test_les_adresses_de_chargement_evitent_la_zone_reservee_du_firmware():
+    # Armada 7040 : 0x04000000-0x04200000 réservé (PSCI/ATF). Le noyau Debian 6.12 (~37 Mo)
+    # chargé à 0x02080000 débordait dessus : TFTP tronqué puis « Synchronous Abort » au booti.
+    import re
+    s = BUILD.read_text()
+    adr = {k: int(v, 16) for k, v in re.findall(r"setenv (\w+_addr_r) (0x[0-9a-fA-F]+)", s)}
+    noyau, fdt, initrd = adr["kernel_addr_r"], adr["fdt_addr_r"], adr["ramdisk_addr_r"]
+    assert noyau >= 0x04200000 and noyau % 0x200000 == 0
+    assert fdt >= noyau + 0x04000000          # 64 Mo laissés au noyau décompressé
+    assert initrd >= fdt + 0x00100000
+    assert initrd + 0x08000000 < 0x7F000000   # 128 Mo d'initrd sous U-Boot relogé
+
+
+def test_un_echec_tftp_arrete_le_script_au_lieu_de_lancer_booti():
+    s = BUILD.read_text()
+    for f in ("Image", "board.dtb", "initrd.img"):
+        assert f"$nom/{f} || exit" in s
