@@ -13,12 +13,20 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 « preparer tftpboot avec latest mochabin ready to live and flash ». Dernière release : v3.0.0-alpha.18 (16/10) — clé live
 `secubox-mochabin-live-usb`, images eMMC `isp` et `lite` (pas d'image `full` MOCHAbin dans cette release). Téléchargées sur gk2
-(`/data/sbx-netboot/alpha18/`, empreintes identiques à la release). L'installeur B3 existant gardait l'image DÉCOMPRESSÉE en RAM
+(`/data/sbx-netboot/alpha18/`, empreintes identiques à la release). **La clé live USB alpha.18 n'est pas amorçable** : sa partition de boot est vide
+(`build-mochabin-live-usb.sh` cherchait `boot/vmlinuz`, Debian installe `boot/vmlinuz-<version>` ; extlinux visant les noyaux de
+gk2) — corrigé dans le script (PR #3081), à reconstruire par la CI. L'installeur B3 existant gardait l'image DÉCOMPRESSÉE en RAM
 et ne lisait pas un .gz, et son initrd n'a aucun module : inutilisable. PR #3080, `secubox-netboot` 0.6.0 :
 `scripts/build-live-netboot.sh` (serveur) — Image, DTB, initrd et `boot.scr` en TFTP, rootfs en squashfs servi en HTTP
 (live-boot `fetch=`), fstab de la clé neutralisé, initrd contrôlé (live-boot, mvpp2), images eMMC signées par la clé netboot et
 listées dans `images.txt` ; `installer/sbx-netflash` (live) — mémoire, téléchargement, signature vérifiée avec la clé publique
-embarquée, puis `secubox-flash-emmc` (embarqué au paquet). `squashfs-tools` installé sur gk2.
+embarquée, puis `secubox-flash-emmc` (embarqué au paquet). `squashfs-tools` installé sur gk2. Publié sur gk2 (netboot 0.6.1) : TFTP
+`/srv/secubox/netboot/tftp/mochabin-live/` (Image Debian 6.12.107, board.dtb, initrd avec live-boot + mvpp2, boot.scr), HTTP
+`:8099/mochabin-live/` (filesystem.squashfs 2,19 Go, images `isp` et `lite` signées, `images.txt`) ; vérifié par tftp/curl depuis
+gk2 et `openssl dgst -verify` (OK). **Non prouvé au banc** : aucun DUT démarré. Limites : le live tient en RAM (squashfs 2,2 Go) et
+l'image à flasher aussi → MOCHAbin 8 Go requis (4 Go : non) ; pas de pilote du switch 4 ports dans l'initrd → câble sur le port
+WAN 1G ou le SFP+. Incident : mksquashfs (même en nice 19) a fait passer l'agrégateur en 504 vers 11:45 ; mis en pause (SIGSTOP),
+retour en 20 s, repris confiné à un cœur (taskset), Hall sain jusqu'au bout.
 
 ## 2026-10-23 — Agrégateur : admin, cloner, netdiag, certs, cookies, mail relayés à leur service root (closes #3077)
 
