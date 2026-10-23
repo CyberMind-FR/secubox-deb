@@ -94,6 +94,10 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   dans `secrets/turn/`), API déléguée, panneau en lecture seule. Sans certificat du realm : pas de TURNS.
 - **Anti-rootkit** — closes #3058 (PR #3063, `secubox-security-posture` 2.4.2 sur gk2 + apt trixie) : point de contrôle
   réamorcé, conteneurs comptés et non signalés, uid corrigé, pouls du démon, profils AppArmor enforce.
+- **DNS : OVH sans bibliothèque, vhosts et domaines gérés/gérables** — closes #3070 (PR #3071, `secubox-dns` 1.6.0 sur gk2 + apt
+  trixie). À faire par le propriétaire : clés d'application OVH (gk2.net), compte Gandi de cybermind.fr. Journal d'audit : utilisateur
+  toujours « system ».
+- **Dé du Hall sous mouvement réduit** — closes #3068 (PR #3069, `secubox-webos` 1.19.23). Cause à confirmer sur le poste du propriétaire.
 - **Sauvegardes créées par root** — closes #3064 (PR #3067, `secubox-backup` 2.4.1 sur gk2 + apt trixie) : `backupctl archiver`,
   sudoers exact, garde d'espace disque. Reste : destination des sauvegardes (disque racine à 91 %), restauration en `secubox`,
   chemin des conteneurs `/srv/lxc` ≠ `/data/lxc`.

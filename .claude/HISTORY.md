@@ -9,6 +9,23 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-23 — DNS : OVH inutilisable, vue des vhosts et domaines gérés/gérables, clés en 0600 (closes #3070)
+
+« https://admin.gk2.secubox.in/dns/ ou sont les vhosts et domain managed et manageable et api remote gandi et ovh » puis
+`/dns-provider/`. Constat : un seul fournisseur (Gandi `gk2-gandi`, 2 zones) ; **OVH ne pouvait pas être configuré** — l'adaptateur
+exigeait la bibliothèque Python `ovh`, absente de la box et de Debian (HTTP 501) — alors que `gk2.net` (5 vhosts) est chez OVH ;
+aucune page ne croisait les 131 vhosts avec les zones ; `providers.json` (clé d'API Gandi) était en **0664**. PR #3071,
+`secubox-dns` 1.6.0 : adaptateur OVH par httpx (signature `$1$`+SHA-1 imposée par le protocole, horodatage du serveur OVH, ovh-eu/ca/us,
+refresh de zone après écriture, erreurs 502 lisibles ; exception ajoutée à `docs/POLITIQUE-CRYPTO.md`) ; `GET /couverture` + onglet
+« Vhosts et domaines » (vhosts actifs de `haproxy.toml` × zones des fournisseurs × NS publics par `dig`, cache 1 h : géré / gérable /
+externe, zones sans vhost, bouton « Ajouter OVH » présélectionné) ; `providers.json` en 0600 (écriture, démarrage, postinst).
+Déployé gk2 (agrégateur relancé pour le nouveau code), relevé réel : 130 vhosts, 4 domaines — `secubox.in` (119) et `aletheiavox.eu`
+(2) gérés par Gandi, `cybermind.fr` (4) gérable (NS Gandi, mais zone hors du compte de la clé configurée), `gk2.net` (5) gérable
+(NS OVH, aucun fournisseur OVH). Reste à faire par le propriétaire : créer l'application OVH (clés application / secret / consumer)
+et l'ajouter dans l'onglet Fournisseurs ; décider pour `cybermind.fr` (autre compte Gandi ?). Non fait : clés restent dans
+`/var/lib/secubox/dns-provider/` (API sans privilège) et non dans `/etc/secubox/secrets/` ; suffixes à deux niveaux (`.co.uk`).
+Constat annexe : le journal d'audit du module attribue tout à l'utilisateur « system » (jamais à l'administrateur réel).
+
 ## 2026-10-23 — Hall : le dé SecuBox immobile sur ordinateur (closes #3068)
 
 « not rotating cube dice on computer, looks fine on ipad ». Le dé de la topbar v2 (`sbx-dice.js`) était figé sous la préférence
