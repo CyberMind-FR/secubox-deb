@@ -58,4 +58,5 @@ def test_la_cle_live_usb_copie_le_noyau_versionne_et_son_propre_extlinux():
     s = (ICI.parents[1] / "image" / "build-mochabin-live-usb.sh").read_text()
     assert 'cp "${KERNEL_SRC}/vmlinuz" ' not in s               # le chemin qui laissait la partition vide
     assert 'vmlinuz-${KVER}' in s and 'initrd.img-${KVER}' in s
-    assert "KERNEL /Image" in s and "Image-mpcie-fix" not in s.split("extlinux de la CLÉ", 1)[1]
+    bloc = s.split("<< EXTLINUX", 1)[1].split("\nEXTLINUX\n", 1)[0]
+    assert "KERNEL /Image" in bloc and "INITRD /initrd.img" in bloc and "Image-mpcie-fix" not in bloc
