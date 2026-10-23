@@ -23,8 +23,13 @@
  *      jamais touchée, et le maître n'est posé que pour une session ouverte
  *      par ce greffon — jamais globalement.
  *
- * Déconnexion : un cookie de session empêche la reconnexion immédiate ; il
- * tombe avec le navigateur.
+ * Déconnexion (#3059) : un cookie d'arrêt empêche la reconnexion d'office,
+ * mais SEULEMENT pour la session du Hall qui était ouverte à ce moment-là : il
+ * porte l'empreinte du jeton secubox_session, pour une durée bornée. Un cookie
+ * de session (durée 0) ne suffisait pas : le navigateur le restaure avec sa
+ * session, et UNE déconnexion coupait le webmail d'office pour toujours — même
+ * après une nouvelle connexion au Hall. Un autre jeton (nouvelle connexion),
+ * ou l'ancien format, rouvre le webmail d'office et retire le cookie périmé.
  */
 class secubox_sso extends rcube_plugin
 {
@@ -45,7 +50,7 @@ class secubox_sso extends rcube_plugin
     {
         if (empty($_SESSION['user_id']) && $args['task'] == 'login'
             && empty($_POST['_user']) && !empty($_COOKIE['secubox_session'])
-            && empty($_COOKIE['secubox_sso_off'])) {
+            && !$this->coupe()) {
             $args['action'] = 'login';
         }
         return $args;
@@ -91,10 +96,43 @@ class secubox_sso extends rcube_plugin
         return $args;
     }
 
+    /** Durée du cookie d'arrêt (#3059) : 12 h, puis il tombe seul. */
+    const ARRET_S = 43200;
+
     function deconnecte($args)
     {
-        rcube_utils::setcookie('secubox_sso_off', '1', 0);
+        // L'arrêt ne vaut que pour LA session du Hall fermée ici (#3059) : son
+        // empreinte, pas un « 1 » que le navigateur restaurerait pour toujours.
+        $e = $this->empreinte();
+        if ($e !== '') {
+            rcube_utils::setcookie('secubox_sso_off', $e, time() + self::ARRET_S);
+        }
         return $args;
+    }
+
+    /** Empreinte (SHA-256, 32 hex) du jeton secubox_session présent ; '' sans jeton. */
+    private function empreinte()
+    {
+        $jeton = preg_replace('/[^A-Za-z0-9._\-]/', '', $_COOKIE['secubox_session'] ?? '');
+        return $jeton === '' ? '' : substr(hash('sha256', $jeton), 0, 32);
+    }
+
+    /**
+     * La personne a fermé le webmail SOUS CE jeton du Hall : on ne la
+     * reconnecte pas d'office. Un cookie d'arrêt d'un autre jeton, ou de
+     * l'ancien format (« 1 »), est périmé : retiré, et le SSO reprend (#3059).
+     */
+    private function coupe()
+    {
+        $off = $_COOKIE['secubox_sso_off'] ?? '';
+        if ($off === '') {
+            return false;
+        }
+        if (hash_equals($this->empreinte(), $off)) {
+            return true;
+        }
+        rcube_utils::setcookie('secubox_sso_off', '', time() - 3600);
+        return false;
     }
 
     /** La boîte liée à la session SecuBox, ou null. */

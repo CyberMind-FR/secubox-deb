@@ -1,3 +1,13 @@
+secubox-mail (2.16.6-1~trixie1) trixie; urgency=medium
+
+  * Webmail d'office (greffon secubox_sso, ref #3059) : la déconnexion de Roundcube posait `secubox_sso_off=1` en
+    cookie de session, que le navigateur restaure avec sa session — une seule déconnexion coupait le SSO pour
+    toujours, même après une nouvelle connexion au Hall. Le cookie d'arrêt porte désormais l'empreinte SHA-256 du
+    jeton `secubox_session` fermé, pour 12 h : un autre jeton rouvre le webmail d'office, un cookie d'un autre
+    jeton ou de l'ancien format est retiré. 3 tests statiques (le postinst repose le greffon par `mailctl webmail-sso`).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 08:05:00 +0200
+
 secubox-mail (2.16.5-1~trixie1) trixie; urgency=medium
 
   * Relais SMTP : « via # » (ref #3028) — la lecture de `relayhost` dans main.cf avalait le saut de ligne d'une
