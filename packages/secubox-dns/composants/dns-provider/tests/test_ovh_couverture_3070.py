@@ -224,3 +224,30 @@ def test_le_postinst_et_le_demarrage_resserrent_un_providers_json_existant():
     postinst = (COMP / "debian" / "postinst").read_text()
     assert "chmod 0600 /var/lib/secubox/dns-provider/providers.json" in postinst
     assert "os.chmod(PROVIDERS_FILE, 0o600)" in SRC
+
+
+# ── #3072 : le journal d'audit nomme le compte, pas « system » ────────────────
+
+def test_journal_d_audit_attribue_l_action_au_compte(tmp_path, monkeypatch):
+    import importlib.util
+    from fastapi.testclient import TestClient
+    spec = importlib.util.spec_from_file_location("dnsprov_3072", Path(__file__).resolve().parents[1] / "api" / "main.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    monkeypatch.setattr(m, "AUDIT_LOG_FILE", tmp_path / "audit.log")
+    monkeypatch.setattr(m, "CONFIG_FILE", tmp_path / "config.json", raising=False)
+    m.app.dependency_overrides[m.require_jwt] = lambda: {"sub": "gk2", "role": "admin"}
+    c = TestClient(m.app)
+    c.post("/config", json={"default_ttl": 600})
+    lignes = [json.loads(x) for x in (tmp_path / "audit.log").read_text().splitlines()]
+    assert lignes and all(x["user"] == "gk2" for x in lignes)
+
+
+def test_audit_hors_requete_reste_system(tmp_path, monkeypatch):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("dnsprov_3072b", Path(__file__).resolve().parents[1] / "api" / "main.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    monkeypatch.setattr(m, "AUDIT_LOG_FILE", tmp_path / "audit.log")
+    m._audit_log("demarrage", {})
+    assert json.loads((tmp_path / "audit.log").read_text())["user"] == "system"

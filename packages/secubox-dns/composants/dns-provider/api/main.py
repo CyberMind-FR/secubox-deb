@@ -19,6 +19,7 @@ CyberMind - https://cybermind.fr
 Author: Gerald KERMA <devel@cybermind.fr>
 """
 import asyncio
+import contextvars
 import json
 import os
 import hashlib
@@ -165,8 +166,20 @@ def _save_json(path: Path, data: Any, prive: bool = False):
     os.chmod(path, 0o600)           # un fichier déjà là en 0664 est resserré
 
 
-def _audit_log(action: str, details: Dict[str, Any], user: str = "system"):
+# Qui agit (#3072) : le compte de la session, posé par _acteur pour toute la durée de la requête. Hors requête
+# (démarrage, tâche de fond), l'acteur reste « system ».
+_ACTEUR: contextvars.ContextVar = contextvars.ContextVar("dns_provider_acteur", default="system")
+
+
+async def _acteur(payload: Dict[str, Any] = Depends(require_jwt)) -> Dict[str, Any]:
+    """Garde d'administration (require_jwt) qui retient aussi le compte pour le journal d'audit."""
+    _ACTEUR.set(str((payload or {}).get("sub") or "system"))
+    return payload
+
+
+def _audit_log(action: str, details: Dict[str, Any], user: Optional[str] = None):
     """Append to audit log (CSPN requirement: immutable audit trail)."""
+    user = user or _ACTEUR.get()
     try:
         with open(AUDIT_LOG_FILE, "a") as f:
             entry = {
@@ -1059,7 +1072,7 @@ async def status():
 # Configuration Endpoints
 # ===========================================================================
 
-@app.get("/config", dependencies=[Depends(require_jwt)])
+@app.get("/config", dependencies=[Depends(_acteur)])
 async def get_config_endpoint():
     """Get current configuration."""
     cfg = _load_json(CONFIG_FILE, {
@@ -1071,7 +1084,7 @@ async def get_config_endpoint():
     return cfg
 
 
-@app.post("/config", dependencies=[Depends(require_jwt)])
+@app.post("/config", dependencies=[Depends(_acteur)])
 async def update_config(new_config: Dict[str, Any]):
     """Update configuration."""
     cfg = _load_json(CONFIG_FILE, {})
@@ -1085,7 +1098,7 @@ async def update_config(new_config: Dict[str, Any]):
 # Provider Management
 # ===========================================================================
 
-@app.get("/providers", dependencies=[Depends(require_jwt)])
+@app.get("/providers", dependencies=[Depends(_acteur)])
 async def list_providers():
     """List configured DNS providers."""
     providers = _load_json(PROVIDERS_FILE, {"providers": []})
@@ -1102,7 +1115,7 @@ async def list_providers():
     return {"providers": result}
 
 
-@app.post("/provider", dependencies=[Depends(require_jwt)])
+@app.post("/provider", dependencies=[Depends(_acteur)])
 async def add_provider(data: ProviderCredentials, background_tasks: BackgroundTasks):
     """Add DNS provider credentials."""
     providers = _load_json(PROVIDERS_FILE, {"providers": []})
@@ -1140,7 +1153,7 @@ async def add_provider(data: ProviderCredentials, background_tasks: BackgroundTa
     }
 
 
-@app.delete("/provider/{provider_id}", dependencies=[Depends(require_jwt)])
+@app.delete("/provider/{provider_id}", dependencies=[Depends(_acteur)])
 async def remove_provider(provider_id: str):
     """Remove DNS provider."""
     providers = _load_json(PROVIDERS_FILE, {"providers": []})
@@ -1157,7 +1170,7 @@ async def remove_provider(provider_id: str):
     return {"success": True}
 
 
-@app.put("/provider/{provider_id}", dependencies=[Depends(require_jwt)])
+@app.put("/provider/{provider_id}", dependencies=[Depends(_acteur)])
 async def update_provider(provider_id: str, updates: Dict[str, Any]):
     """Update provider settings."""
     providers = _load_json(PROVIDERS_FILE, {"providers": []})
@@ -1181,7 +1194,7 @@ async def update_provider(provider_id: str, updates: Dict[str, Any]):
 # Domain Management
 # ===========================================================================
 
-@app.get("/domains", dependencies=[Depends(require_jwt)])
+@app.get("/domains", dependencies=[Depends(_acteur)])
 async def list_domains(provider_id: Optional[str] = None):
     """List domains from all or specific provider."""
     providers = _load_json(PROVIDERS_FILE, {"providers": []})
@@ -1212,7 +1225,7 @@ async def list_domains(provider_id: Optional[str] = None):
     return {"domains": all_domains}
 
 
-@app.get("/couverture", dependencies=[Depends(require_jwt)])
+@app.get("/couverture", dependencies=[Depends(_acteur)])
 async def couverture(refresh: bool = False):
     """Vhosts de la box × domaines gérés par un fournisseur configuré × domaines gérables (serveurs de noms chez Gandi, OVH,
     Cloudflare ou Route 53 sans fournisseur) × externes. Aucune clé d'API dans la réponse (#3070)."""
@@ -1247,7 +1260,7 @@ async def couverture(refresh: bool = False):
     return resultat
 
 
-@app.get("/domain/{domain_name}/records", dependencies=[Depends(require_jwt)])
+@app.get("/domain/{domain_name}/records", dependencies=[Depends(_acteur)])
 async def list_records(domain_name: str, provider_id: Optional[str] = None):
     """List DNS records for domain."""
     providers = _load_json(PROVIDERS_FILE, {"providers": []})
@@ -1276,7 +1289,7 @@ async def list_records(domain_name: str, provider_id: Optional[str] = None):
     raise HTTPException(404, f"Domain {domain_name} not found in any provider")
 
 
-@app.post("/domain/{domain_name}/record", dependencies=[Depends(require_jwt)])
+@app.post("/domain/{domain_name}/record", dependencies=[Depends(_acteur)])
 async def create_record(domain_name: str, record: RecordCreate, provider_id: str = Query(...)):
     """Create DNS record."""
     provider, adapter = _get_provider(provider_id)
@@ -1292,7 +1305,7 @@ async def create_record(domain_name: str, record: RecordCreate, provider_id: str
     return {"success": True, **result}
 
 
-@app.put("/domain/{domain_name}/record/{record_id}", dependencies=[Depends(require_jwt)])
+@app.put("/domain/{domain_name}/record/{record_id}", dependencies=[Depends(_acteur)])
 async def update_record_endpoint(
     domain_name: str,
     record_id: str,
@@ -1312,7 +1325,7 @@ async def update_record_endpoint(
     return {"success": True, **result}
 
 
-@app.delete("/domain/{domain_name}/record/{record_id}", dependencies=[Depends(require_jwt)])
+@app.delete("/domain/{domain_name}/record/{record_id}", dependencies=[Depends(_acteur)])
 async def delete_record_endpoint(domain_name: str, record_id: str, provider_id: str = Query(...)):
     """Delete DNS record."""
     provider, adapter = _get_provider(provider_id)
@@ -1331,7 +1344,7 @@ async def delete_record_endpoint(domain_name: str, record_id: str, provider_id: 
 # ACME DNS-01 Challenge
 # ===========================================================================
 
-@app.post("/acme/challenge", dependencies=[Depends(require_jwt)])
+@app.post("/acme/challenge", dependencies=[Depends(_acteur)])
 async def create_acme_challenge(challenge: ACMEChallenge, provider_id: str = Query(...)):
     """Create ACME DNS-01 challenge TXT record."""
     provider, adapter = _get_provider(provider_id)
@@ -1354,7 +1367,7 @@ async def create_acme_challenge(challenge: ACMEChallenge, provider_id: str = Que
     }
 
 
-@app.delete("/acme/challenge", dependencies=[Depends(require_jwt)])
+@app.delete("/acme/challenge", dependencies=[Depends(_acteur)])
 async def delete_acme_challenge(domain: str, token: str, provider_id: str = Query(...)):
     """Delete ACME DNS-01 challenge TXT record."""
     provider, adapter = _get_provider(provider_id)
@@ -1369,7 +1382,7 @@ async def delete_acme_challenge(domain: str, token: str, provider_id: str = Quer
 # Dynamic DNS
 # ===========================================================================
 
-@app.post("/ddns/update", dependencies=[Depends(require_jwt)])
+@app.post("/ddns/update", dependencies=[Depends(_acteur)])
 async def ddns_update(update: DDNSUpdate, provider_id: str = Query(...)):
     """Update Dynamic DNS record."""
     provider, adapter = _get_provider(provider_id)
@@ -1440,7 +1453,7 @@ async def ddns_update(update: DDNSUpdate, provider_id: str = Query(...)):
 # Zone Import/Export
 # ===========================================================================
 
-@app.get("/zones/export/{domain}", dependencies=[Depends(require_jwt)])
+@app.get("/zones/export/{domain}", dependencies=[Depends(_acteur)])
 async def export_zone(domain: str, provider_id: str = Query(...), format: str = Query(default="bind")):
     """Export DNS zone."""
     provider, adapter = _get_provider(provider_id)
@@ -1465,7 +1478,7 @@ async def export_zone(domain: str, provider_id: str = Query(...), format: str = 
     }
 
 
-@app.post("/zones/import", dependencies=[Depends(require_jwt)])
+@app.post("/zones/import", dependencies=[Depends(_acteur)])
 async def import_zone(zone_import: ZoneImport):
     """Import DNS zone from BIND format."""
     provider, adapter = _get_provider(zone_import.provider_id)
@@ -1521,7 +1534,7 @@ async def import_zone(zone_import: ZoneImport):
 # Audit Logs
 # ===========================================================================
 
-@app.get("/logs", dependencies=[Depends(require_jwt)])
+@app.get("/logs", dependencies=[Depends(_acteur)])
 async def get_audit_logs(
     limit: int = Query(default=100, le=1000),
     action: Optional[str] = None,
@@ -1556,7 +1569,7 @@ async def get_audit_logs(
 # Summary
 # ===========================================================================
 
-@app.get("/summary", dependencies=[Depends(require_jwt)])
+@app.get("/summary", dependencies=[Depends(_acteur)])
 async def get_summary():
     """Get DNS provider summary."""
     providers = _load_json(PROVIDERS_FILE, {"providers": []})

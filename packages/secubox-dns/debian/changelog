@@ -1,3 +1,11 @@
+secubox-dns (1.6.1-1~trixie1) trixie; urgency=medium
+
+  * dns-provider : le journal d'audit nomme le compte (ref #3072). Toutes les entrées portaient l'utilisateur « system » :
+    impossible de savoir qui avait ajouté un fournisseur ou modifié un enregistrement. La garde d'administration retient
+    désormais le compte de la session pour la durée de la requête ; hors requête l'acteur reste « system ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 10:30:00 +0200
+
 secubox-dns (1.6.0-1~trixie1) trixie; urgency=medium
 
   * dns-provider (ref #3070) : « où sont les vhosts, les domaines managés et managables, l'API Gandi et OVH ». (1) OVH était
