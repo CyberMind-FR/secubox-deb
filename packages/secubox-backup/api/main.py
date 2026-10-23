@@ -54,8 +54,10 @@ chiffrement = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(chiffrement)
 
 # Configuration
-BACKUP_PATH = Path("/srv/backups")
-LXC_PATH = Path("/srv/lxc")
+# Destination et chemin des conteneurs : /etc/secubox/backup.toml (#3072), valeurs historiques sinon.
+_PARAM = chiffrement.parametres()
+BACKUP_PATH = Path(_PARAM["path"])
+LXC_PATH = Path(_PARAM["lxc_path"])
 DATA_DIR = Path("/var/lib/secubox/backup")
 HISTORY_FILE = DATA_DIR / "history.json"
 SCHEDULE_FILE = DATA_DIR / "schedule.json"
@@ -643,7 +645,8 @@ async def create_backup(req: BackupCreate, user: dict = Depends(require_jwt)):
 @app.post("/restore")
 async def restore_backup(req: RestoreRequest, user: dict = Depends(require_jwt)):
     """Restore from a backup file"""
-    # Find the backup file
+    if "/" in req.file or ".." in req.file:
+        raise HTTPException(status_code=422, detail="nom de fichier invalide")
     backup_file = None
     for btype in ["config", "containers", "services"]:
         candidate = BACKUP_PATH / btype / req.file
@@ -654,12 +657,9 @@ async def restore_backup(req: RestoreRequest, user: dict = Depends(require_jwt))
     if not backup_file:
         raise HTTPException(status_code=404, detail="Backup file not found")
 
-    if backup_file.name.endswith(".age"):
-        # La clé privée de restauration est à root (et HORS de la box de préférence) : l'API,
-        # qui tourne sans privilège, ne la lit pas. Restauration : `backupctl restaurer FICHIER`.
+    if backup_file.name.endswith(".age") and req.dry_run:
         raise HTTPException(status_code=409, detail={
-            "message": "Archive chiffrée : la restauration se fait en root avec la clé privée de sauvegarde.",
-            "commande": "backupctl restaurer %s" % backup_file.name,
+            "message": "Archive chiffrée : la liste du contenu demande la clé privée (root).",
             "liste": "backupctl restaurer --liste %s" % backup_file.name,
         })
 
@@ -672,27 +672,13 @@ async def restore_backup(req: RestoreRequest, user: dict = Depends(require_jwt))
             "dry_run": True
         }
 
-    # Determine restore location
-    if "config" in str(backup_file.parent):
-        success, out, err = run_cmd(
-            ["tar", "-xzf", str(backup_file), "-C", "/"],
-            timeout=300
-        )
-    elif "containers" in str(backup_file.parent):
-        success, out, err = run_cmd(
-            ["tar", "-xzf", str(backup_file), "-C", str(LXC_PATH)],
-            timeout=600
-        )
-    else:
-        success, out, err = run_cmd(
-            ["tar", "-xzf", str(backup_file), "-C", "/"],
-            timeout=600
-        )
-
-    return {
-        "code": 0 if success else 1,
-        "output": "Restore completed" if success else err
-    }
+    # Restaurer = écrire sur / (ou dans les conteneurs) : acte de root, jamais de l'API (#3072). L'archive en clair appartient
+    # à `secubox` : la faire extraire par un sudoers permettrait à l'API d'écrire n'importe où en root.
+    raise HTTPException(status_code=409, detail={
+        "message": "La restauration se fait en root, l'API est sans privilège.",
+        "commande": "backupctl restaurer %s" % backup_file.name,
+        "liste": "backupctl restaurer --liste %s" % backup_file.name,
+    })
 
 
 @app.post("/cleanup")
@@ -749,26 +735,12 @@ async def restore_container(req: ContainerRestore, user: dict = Depends(require_
     if not backup_file.exists():
         raise HTTPException(status_code=404, detail="Backup file not found")
 
-    container_dir = LXC_PATH / req.name
-
-    # Stop if running
-    if container_dir.exists() and lxc_running(req.name):
-        run_cmd(["lxc-stop", "-P", str(LXC_PATH), "-n", req.name])
-
-    # Remove existing
-    if container_dir.exists():
-        run_cmd(["rm", "-rf", str(container_dir)])
-
-    # Extract backup
-    success, out, err = run_cmd(
-        ["tar", "-xzf", str(backup_file), "-C", str(LXC_PATH)],
-        timeout=600
-    )
-
-    return {
-        "code": 0 if success else 1,
-        "output": f"Container {req.name} restored" if success else err
-    }
+    if not NOM_CONTENEUR.match(req.name):
+        raise HTTPException(status_code=422, detail="nom de conteneur invalide")
+    raise HTTPException(status_code=409, detail={
+        "message": "La restauration d'un conteneur se fait en root (arrêt, remplacement, clé privée).",
+        "commande": "backupctl restaurer-conteneur %s %s" % (req.name, backup_file.name),
+    })
 
 
 @app.get("/info", dependencies=[Depends(require_lecture)])

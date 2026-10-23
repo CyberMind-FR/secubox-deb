@@ -276,7 +276,7 @@
                 const t = el('td'); t.appendChild(pastille(couleur[b.type] || '', nom[b.type] || tiret(b.type))); tr.appendChild(t);
                 tr.appendChild(el('td', '', taille(b.size))); tr.appendChild(el('td', '', quand(b.timestamp)));
                 const a = el('td', 'act');
-                if (b.encrypted) { const r = el('button', 'btn sm', 'Commande'); r.type = 'button'; r.addEventListener('click', () => montrerRestauration(b.file)); a.appendChild(r); }
+                { const r = el('button', 'btn sm', 'Commande'); r.type = 'button'; r.addEventListener('click', () => montrerRestauration(b.file)); a.appendChild(r); }
                 tr.appendChild(a); tb.appendChild(tr);
             });
         }
