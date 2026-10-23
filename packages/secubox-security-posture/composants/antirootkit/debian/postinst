@@ -67,10 +67,17 @@ case "$1" in
         # when the slice sits directly under the unified cgroup root.
         systemctl start sbx-untrusted.slice || true
 
+        # Confinement AppArmor (enforce), chargé AVANT le démarrage des unités (#3058) : un échec de chargement ne bloque
+        # pas l'installation (les unités portent `AppArmorProfile=-…`), il est affiché.
+        if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
+            apparmor_parser -r /etc/apparmor.d/secubox-antirootkit >/dev/null 2>&1 \
+                || echo "secubox-antirootkit : profil AppArmor non chargé (les unités tournent sous le seul bac à sable systemd)" >&2
+        fi
+
         systemctl enable secubox-antirootkit.service || true
-        systemctl start secubox-antirootkit.service || true
+        systemctl restart secubox-antirootkit.service || true
         systemctl enable sbx-antirootkitd.service || true
-        systemctl start sbx-antirootkitd.service || true
+        systemctl restart sbx-antirootkitd.service || true
 
         # Reload nginx so the /antirootkit panel + API route (installed into
         # /etc/nginx/secubox-routes.d, which the hub's webui.conf includes)

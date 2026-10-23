@@ -96,6 +96,7 @@
         <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, action inerte</div>
         <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
         <div id="erreur" role="alert" hidden></div>
+        <div class="info" id="pouls" hidden></div>
 
         <section class="tuiles" aria-label="Indicateurs">
             <div class="tuile cy" title="Nombre total de lignes du journal d’exécution (execve) tenu par le démon, vraie taille de la table."><span class="l">Événements journalisés</span><span class="v" id="tEvt">—</span><span class="s">journal d’exécution</span></div>
@@ -205,6 +206,15 @@
             else if (aucune) { etat.className = 'actif hors'; etat.textContent = 'INJOIGNABLE'; }
             else { etat.className = 'actif'; etat.textContent = 'API EN LIGNE'; }
             $('maj').textContent = (aucune && !DEMO) ? '—' : 'Mis à jour ' + new Date().toLocaleTimeString('fr-FR');
+            // Pouls du démon d'exécution (#3058) : un démon aveugle doit se voir, et les exécutions de conteneurs sont comptées, pas listées.
+            const po = $('pouls'), pl = STATUT && STATUT.pouls;
+            po.hidden = DEMO || !SESSION_OK || !STATUT;
+            if (!po.hidden) {
+                if (!pl) { po.className = 'info'; po.textContent = 'Démon d’exécution : aucun signe de vie enregistré.'; }
+                else if (pl.aveugle) { po.className = 'info'; po.textContent = 'Démon d’exécution muet depuis ' + Math.round(pl.age_s / 60) + ' min : plus rien n’est surveillé.'; }
+                else po.textContent = 'Démon d’exécution actif · ' + pl.evenements + ' exécutions vues · ' + pl.conteneurs_ignores + ' venant de conteneurs LXC (comptées, non listées) · ' + pl.signales + ' signalées'
+                    + (pl.reamorcages ? ' · ' + pl.reamorcages + ' reprise(s) du point de contrôle' : '') + '.';
+            }
 
             $('tEvt').textContent = STATUT && STATUT.execlog_rows != null ? String(STATUT.execlog_rows) : '—';
             const nA = ALERTES ? ALERTES.length : null;

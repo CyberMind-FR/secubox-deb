@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profils AppArmor ENFORCE du composant antirootkit (#3058) : l'API (socket Unix) et le démon d'exécution (lit la trace
+# d'audit via le ctl sous sudo). Tout ce qui n'est pas listé est refusé. Posés dans /etc/apparmor.d/secubox-antirootkit,
+# chargés par le postinst, appliqués par `AppArmorProfile=-…` dans les unités (le « - » : un profil non chargé ne
+# empêche jamais l'unité de démarrer).
+
+#include <tunables/global>
+
+profile secubox-antirootkit-api flags=(attach_disconnected) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  /usr/bin/python3* rix,
+  /usr/lib/secubox/antirootkit/** r,
+  /usr/lib/secubox/ r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+  # Python tente d'écrire ses .pyc à côté du code (dossiers de root, non inscriptibles de toute façon) : refus silencieux.
+  deny /usr/lib/secubox/antirootkit/** w,
+  deny /usr/lib/python3*/** w,
+
+  # Configuration et authentification : fichiers nommés, jamais /etc/secubox/** (le dossier des secrets reste interdit).
+  /etc/secubox/ r,
+  /etc/secubox/secubox.conf r,
+  /etc/secubox/antirootkit.toml r,
+  /etc/secubox/users.json r,
+  /etc/secubox/auth.toml r,
+  deny /etc/secubox/secrets/** r,
+  # Registre des sessions : sans lui, toute garde d'API voit un registre vide et refuse (401 partout, #942) ; trace de délégation.
+  /var/lib/secubox/auth/ r,
+  /var/lib/secubox/auth/sessions.json r,
+  /var/log/secubox/delegation.log w,
+
+  # Journal d'exécution, alertes, pouls du démon : le dossier d'état du module, rien d'autre.
+  /var/lib/secubox/antirootkit/ r,
+  /var/lib/secubox/antirootkit/** rwk,
+
+  /run/secubox/ r,
+  /run/secubox/antirootkit.sock rwk,
+
+  network unix stream,
+  /proc/sys/net/core/somaxconn r,
+}
+
+profile secubox-antirootkit-daemon flags=(attach_disconnected) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  /usr/bin/python3* rix,
+  # Le seul assistant privilégié : sudo (sudoers à argv exact → secubox-antirootkitctl), qui s'exécute hors de ce profil ;
+  # ce qu'il peut faire est borné par le sudoers.
+  /usr/bin/sudo Ux,
+  /usr/lib/secubox/antirootkit/** r,
+  /usr/lib/secubox/ r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+  # Python tente d'écrire ses .pyc à côté du code (dossiers de root, non inscriptibles de toute façon) : refus silencieux.
+  deny /usr/lib/secubox/antirootkit/** w,
+  deny /usr/lib/python3*/** w,
+
+  # Liste blanche et politique ; secrets interdits.
+  /etc/secubox/ r,
+  /etc/secubox/antirootkit.toml r,
+  deny /etc/secubox/secrets/** r,
+
+  # Index des fichiers possédés par dpkg (préchargé au démarrage : O(1) à 150 exécutions par seconde).
+  /var/lib/dpkg/info/ r,
+  /var/lib/dpkg/info/*.list r,
+  /var/lib/dpkg/diversions r,
+
+  /var/lib/secubox/antirootkit/ r,
+  /var/lib/secubox/antirootkit/** rwk,
+
+  /proc/sys/net/core/somaxconn r,
+  network unix stream,
+}

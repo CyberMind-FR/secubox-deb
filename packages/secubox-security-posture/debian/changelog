@@ -1,3 +1,16 @@
+secubox-security-posture (2.4.2-1~trixie1) trixie; urgency=medium
+
+  * antirootkit (ref #3058) : la page était en ligne mais aveugle et bruyante. (1) Point de contrôle `ausearch` périmé :
+    à la première rotation d'audit.log l'inode mémorisé disparaît, `ausearch` sort en 10 à chaque appel et le démon
+    prenait ce code pour « rien de neuf » — journal figé du 28 juillet au 23 octobre. `execscan` réamorce (10/11/12),
+    trace dans audit.log et signale REAMORCE. (2) Exécutions de conteneurs LXC (étiquette AppArmor `lxc-…`) : décision
+    `conteneur`, ni alertes ni jail, comptées ; les outils de l'hôte restent surveillés. (3) Le parseur lisait `auid`
+    (4294967295) à la place de `uid`. (4) Pouls du démon (`pouls.json`, `GET /status` → `pouls`, ligne dans la page,
+    `aveugle` après 2 min). (5) Profils AppArmor enforce pour l'API et le démon (`AppArmorProfile=-…`, chargés par le
+    postinst avant le démarrage, Recommends apparmor). 16 tests (refus d'écriture des .pyc silencieux).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 09:10:00 +0200
+
 secubox-security-posture (2.4.1-1~bookworm1) bookworm; urgency=medium
 
   * antirootkit : l'API ne repondait plus (« API KO », #2805). L'unite tourne sous le compte dedie secubox-antirootkit, qui ne pouvait pas lire /etc/secubox/secubox.conf (0640 secubox:secubox) : « RuntimeError: jwt_secret is not configured » a chaque requete authentifiee. SupplementaryGroups=secubox est ajoute (le groupe principal reste celui du service). 2 tests.

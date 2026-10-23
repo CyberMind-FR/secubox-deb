@@ -25,7 +25,8 @@ Breaks: secubox-cve-triage (<< 1.2.5~),
  secubox-antirootkit (<< 0.1.7~)
 Recommends: aide,
  rkhunter,
- chkrootkit
+ chkrootkit,
+ apparmor
 Description: SecuBox Security Posture - honest board-truthful scorecard
  SecuBox Security Posture computes a single security score (mapped to a
  DEFCON 5-1 dial) from real, provenance-tracked signals collected over public

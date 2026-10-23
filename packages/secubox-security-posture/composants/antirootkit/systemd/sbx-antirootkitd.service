@@ -17,6 +17,8 @@ SupplementaryGroups=adm
 # exact-path sudoers rule shipped in sudoers/secubox-antirootkit. NNP=yes
 # would block that sudo call.
 NoNewPrivileges=no
+# #3058 : profil AppArmor enforce (apparmor/secubox-antirootkit) ; le « - » ignore une panne de chargement
+AppArmorProfile=-secubox-antirootkit-daemon
 ExecStart=/usr/bin/python3 -m api.daemon
 WorkingDirectory=/usr/lib/secubox/antirootkit
 Restart=on-failure

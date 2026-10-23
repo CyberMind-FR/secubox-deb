@@ -39,6 +39,7 @@ from pydantic import BaseModel
 
 from api.execlog import ExecLog
 from api.alertstore import AlertStore
+from api import pouls as pouls_mod
 from api import quarantine
 
 # ---------------------------------------------------------------------------
@@ -107,7 +108,7 @@ class QuarantinePrepRequest(BaseModel):
 
 
 def create_app(
-    execlog: Optional[ExecLog] = None, alertstore: Optional[AlertStore] = None
+    execlog: Optional[ExecLog] = None, alertstore: Optional[AlertStore] = None, pouls_path: Optional[str] = None
 ) -> FastAPI:
     """Build the FastAPI app. Tests inject a temp-db ExecLog/AlertStore;
     production (module-level `app` below) uses the default singletons."""
@@ -123,7 +124,9 @@ def create_app(
         latter is capped at its `limit` and would freeze the badge at 100
         once the log grows past that on a live host.
         """
-        return {"execlog_rows": log.count()}
+        # `pouls` : signe de vie du démon d'exécution (processus à part) ; null s'il n'a jamais écrit. `aveugle` = plus de
+        # passage depuis 2 min — sans lui, un démon bloqué pendant des mois ne se voyait pas (#3058).
+        return {"execlog_rows": log.count(), "pouls": pouls_mod.lire(pouls_path or pouls_mod.DEFAUT)}
 
     @app.get("/execlog", dependencies=[Depends(require_lecture)])
     def get_execlog(limit: int = 100):

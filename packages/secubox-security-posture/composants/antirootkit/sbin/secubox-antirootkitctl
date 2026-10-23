@@ -34,8 +34,26 @@ case "$verb" in
         # a decoded path, but api/execwatch.parse_ausearch expects the RAW
         # auditd format (numeric uid=0, hex-or-quoted exe=). With -i the parser
         # matches zero events. Emit raw records.
-        exec ausearch --input-logs --checkpoint \
-          /var/lib/secubox/antirootkit/ausearch.checkpoint -k sbx_exec ;;
+        #
+        # POINT DE CONTRÔLE PÉRIMÉ (#3058). À la première rotation d'audit.log, l'inode mémorisé disparaît : ausearch
+        # sort alors en 10 (« checkpoint invalide »), 11 ou 12 (« événement introuvable ») — pour TOUJOURS, à chaque
+        # appel suivant. Le démon prenait ce code pour « rien de neuf » : journal figé du 28 juillet au 23 octobre,
+        # sans une alerte. On le réamorce : fichier retiré, relecture à vide (ausearch réécrit le point de contrôle
+        # à partir de maintenant), décision tracée dans audit.log, et REAMORCE sur stderr pour le pouls du démon.
+        ck="${ANTIROOTKIT_CHECKPOINT:-/var/lib/secubox/antirootkit/ausearch.checkpoint}"
+        rc=0
+        ausearch --input-logs --checkpoint "$ck" -k sbx_exec || rc=$?
+        case "$rc" in
+          0|1) exit 0 ;;   # 1 = rien de neuf
+          10|11|12)
+            rm -f "$ck"
+            ausearch --input-logs --checkpoint "$ck" -k sbx_exec >/dev/null 2>&1 || true
+            printf '{"ts":"%s","module":"antirootkit","action":"execscan","result":"reamorce","detail":"point de controle (checkpoint) perime, ausearch rc=%s : reamorce"}\n' \
+              "$(date -u +%FT%TZ)" "$rc" >> "${ANTIROOTKIT_AUDIT:-/var/log/secubox/audit.log}" 2>/dev/null || true
+            echo "REAMORCE rc=$rc" >&2
+            exit 0 ;;
+          *) exit "$rc" ;;
+        esac ;;
   quarantine-prep)
         [[ $# -eq 2 ]] || { echo "usage: $0 quarantine-prep <path>" >&2; exit 2; }
         path="${2:?path}"; [[ -n "$path" ]] || exit 2
