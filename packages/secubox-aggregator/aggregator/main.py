@@ -170,7 +170,9 @@ RETIRED_MODULES = frozenset({
 # le relais transparent (`_dedicated_socket_proxy`) les atteint sur /run/secubox/<m>.sock.
 # lyrion : E/S bloquantes vers LMS (#763). exposure : écrit /etc/nginx et torrc, recharge nginx
 # et tor — son service root existe pour ça ; monté ici (secubox, ProtectSystem=full), il rendait 500.
-DEDICATED_MODULES = frozenset({"lyrion", "exposure"})
+# nettweak : écrit /proc/sys (sysctl -w) — monté ici, « sysctl: permission denied on key … » pour chaque clé (#3065).
+# traffic, qos : `tc qdisc add|del` sans sudo — monté ici, « RTNETLINK answers: Operation not permitted » (#3065).
+DEDICATED_MODULES = frozenset({"lyrion", "exposure", "nettweak", "traffic", "qos"})
 
 
 def _load_config() -> dict:

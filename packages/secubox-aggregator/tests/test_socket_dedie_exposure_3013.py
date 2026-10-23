@@ -24,7 +24,7 @@ def test_un_module_a_socket_dediee_cite_dans_le_toml_n_est_pas_monte(tmp_path, m
 
 
 def test_la_liste_des_sockets_dediees_est_celle_du_relais():
-    assert ag.DEDICATED_MODULES == {"lyrion", "exposure"}
+    assert {"lyrion", "exposure"} <= ag.DEDICATED_MODULES   # nettweak les a rejoints (#3065)
     assert not ag.DEDICATED_MODULES & ag.RETIRED_MODULES
 
 
