@@ -176,19 +176,18 @@
                 <div id="rRealm" class="retour" hidden></div>
                 <form class="saisie" id="fRealm">
                     <label>Domaine (realm)<input id="realm" autocomplete="off" placeholder="turn.example.org"></label>
-                    <label>Nouveau secret partagé<input id="secret" type="password" autocomplete="new-password" placeholder="vide = inchangé"></label>
-                    <button class="btn" id="genSecret" type="button">Générer un secret</button>
+                    <button class="btn" id="genSecret" type="button">Renouveler le secret partagé</button>
                     <button class="btn prim" type="submit">Enregistrer</button>
                 </form>
-                <p class="note">Le secret reste masqué, y compris juste après sa génération. Le changer invalide tous les identifiants temporaires déjà émis ; redémarrer le service ensuite.</p></div>
+                <p class="note">Le secret reste masqué, y compris juste après sa génération. Il est généré et gardé côté serveur (jamais saisi ni affiché) ; le renouveler invalide tous les identifiants temporaires déjà émis et relance coturn aussitôt.</p></div>
         </section>
 
         <section id="t-config" role="tabpanel" aria-labelledby="o-config" class="grille" hidden>
             <div class="pan large"><h3>turnserver.conf <i>secrets masqués</i></h3>
                 <div id="rConf" class="retour" hidden></div>
-                <div class="btns"><button class="btn" id="confRecharger" type="button">Recharger</button><button class="btn prim" id="confSave" type="button">Enregistrer</button></div>
-                <textarea class="editeur" id="editeur" spellcheck="false" aria-label="Contenu de turnserver.conf" placeholder="Chargement de la configuration…"></textarea>
-                <p class="note">Les valeurs secrètes (static-auth-secret, cli-password, user=, bases d’utilisateurs) s’affichent « ••••••••(masqué) » ; laissées telles quelles, elles sont conservées à l’enregistrement. Redémarrer le service pour appliquer.</p></div>
+                <div class="btns"><button class="btn" id="confRecharger" type="button">Recharger</button><button class="btn prim" id="confRegen" type="button">Régénérer la configuration</button></div>
+                <textarea class="editeur" id="editeur" readonly spellcheck="false" aria-label="Contenu de turnserver.conf (lecture seule)" placeholder="Chargement de la configuration…"></textarea>
+                <p class="note">Configuration générée par SecuBox (lecture seule) : le secret partagé s’affiche « ••••••••(masqué) ». « Régénérer » réécrit la configuration à partir du domaine et du secret courants, relance coturn et revient à la précédente s’il ne repart pas.</p></div>
             <div class="pan large"><h3>Journaux du serveur <i>lecture seule</i></h3>
                 <div class="outils"><label>Lignes<select id="logLines"><option value="50">50</option><option value="100" selected>100</option><option value="200">200</option></select></label><button class="btn" id="logRaf" type="button">Actualiser</button></div>
                 <pre class="journal" id="journal">Actualiser pour lire le journal.</pre></div>
@@ -382,23 +381,20 @@
 
         // ----- Domaine et secret -----
         $('realm').addEventListener('input', () => { $('realm').dataset.salie = '1'; });
-        $('genSecret').addEventListener('click', async () => {
+        // Le secret est généré et gardé côté serveur (#3060) : le renouveler l'applique aussitôt.
+        $('genSecret').addEventListener('click', () => demander('Renouveler le secret partagé ? Tous les identifiants temporaires déjà émis cesseront de fonctionner ; coturn est relancé.', async () => {
             const r = await ecrire('POST', '/generate_secret');
-            if (r.ok && r.data && r.data.secret) { $('secret').value = r.data.secret; retour('rRealm', true, 'Nouveau secret généré (masqué) : enregistrer pour l’appliquer.'); }
-            else retour('rRealm', false, 'Échec : ' + detail(r));
-        });
+            retour('rRealm', reussi(r), reussi(r) ? (r.data.message || 'Secret renouvelé et appliqué.') : 'Échec : ' + detail(r));
+            if (!DEMO) charger();
+        }));
         $('fRealm').addEventListener('submit', async ev => {
             ev.preventDefault();
-            const realm = $('realm').value.trim(), secret = $('secret').value.trim();
+            const realm = $('realm').value.trim();
             if (!realm) { retour('rRealm', false, 'Le domaine est requis.'); return; }
-            const run = async () => {
-                const data = { realm }; if (secret) data.secret = secret;
-                const r = await ecrire('POST', '/realm', data);
-                if (reussi(r)) { $('secret').value = ''; delete $('realm').dataset.salie; }
-                retour('rRealm', reussi(r), reussi(r) ? 'Domaine enregistré. Redémarrer le service pour appliquer.' : 'Échec : ' + detail(r));
-                if (!DEMO) charger();
-            };
-            if (secret) demander('Remplacer le secret partagé ? Tous les identifiants temporaires déjà émis cesseront de fonctionner.', run); else run();
+            const r = await ecrire('POST', '/realm', { realm });
+            if (reussi(r)) delete $('realm').dataset.salie;
+            retour('rRealm', reussi(r), reussi(r) ? (r.data.message || 'Domaine appliqué.') : 'Échec : ' + detail(r));
+            if (!DEMO) charger();
         });
 
         // ----- Identifiants temporaires (POST /credentials { username, ttl }) -----
@@ -445,11 +441,12 @@
             if (r.data.error) retour('rConf', false, String(r.data.error));
         }
         $('confRecharger').addEventListener('click', chargerConf);
-        $('confSave').addEventListener('click', () => {
-            if (!CONF_CHARGEE) { retour('rConf', false, 'Recharger la configuration avant de l’enregistrer.'); return; }
-            demander('Écraser turnserver.conf avec ce contenu ? Une sauvegarde .bak est conservée ; redémarrer le service pour appliquer.', async () => {
-                const r = await ecrire('POST', '/config', { content: restaurer($('editeur').value) });
-                retour('rConf', reussi(r), reussi(r) ? 'Configuration enregistrée. Redémarrer le service pour appliquer.' : 'Échec : ' + detail(r));
+        // Configuration générée (#3060) : pas d'édition à la main, une régénération par le ctl root.
+        $('confRegen').addEventListener('click', () => {
+            demander('Régénérer turnserver.conf ? coturn est relancé ; si la nouvelle configuration ne démarre pas, la précédente est rétablie.', async () => {
+                const r = await ecrire('POST', '/generer');
+                retour('rConf', reussi(r), reussi(r) ? 'Configuration régénérée et appliquée.' : 'Échec : ' + detail(r));
+                if (!DEMO) { charger(); chargerConf(); }
             });
         });
 

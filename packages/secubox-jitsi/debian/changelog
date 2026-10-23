@@ -1,3 +1,20 @@
+secubox-jitsi (2.4.1-1~trixie1) trixie; urgency=medium
+
+  * Composant TURN (ref #3060) : la page /turn/ était inerte et coturn tournait avec la configuration Debian par défaut.
+    L'API (utilisateur secubox, NoNewPrivileges) ne lisait pas /etc/turnserver.conf (root:turnserver 0640) et lançait
+    elle-même systemctl, turnadmin et l'écriture de la configuration — sans sudoers ni ctl, rien n'agissait.
+    Nouveau : `secubox-turnctl` (root, verbes exacts, JSON) — status, start/stop/restart/enable, generer [realm],
+    secret-renouveler, credentials, users/user-add (mot de passe par stdin)/user-del, sessions, journal, config
+    (secret masqué) ; sudoers `secubox-turn` ; configuration SecuBox de coturn générée en double tampon (ombre, bascule
+    atomique, relance, vérification, retour arrière), realm dans /etc/secubox/turn.toml, secret dans
+    /etc/secubox/secrets/turn/, TLS seulement si un certificat du realm existe ; décisions dans audit.log.
+    L'API délègue tout au ctl et valide les entrées ; POST /config répond 409 (configuration générée), POST /generer
+    régénère ; le panneau montre la configuration en lecture et propose « Régénérer ». L'unité API perd
+    NoNewPrivileges (sudo) et l'accès à turnserver.conf. Le postinst valide le sudoers et génère la configuration si
+    celle en place n'est pas SecuBox. Depends : sudo, openssl. 13 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 23 Oct 2026 08:40:00 +0200
+
 secubox-jitsi (2.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /turn/ (composant TURN/STUN) refaite au profil Aurora (ref #2651) : tuiles (service, sessions, utilisateurs, ports, UDP, TCP,

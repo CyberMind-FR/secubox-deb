@@ -1,0 +1,4 @@
+# SecuBox TURN (#3060) — l'API (utilisateur `secubox`) délègue à secubox-turnctl, aux verbes exacts.
+# Le mot de passe d'un utilisateur long terme passe par stdin, jamais en argument.
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-turnctl status, /usr/sbin/secubox-turnctl start, /usr/sbin/secubox-turnctl stop, /usr/sbin/secubox-turnctl restart, /usr/sbin/secubox-turnctl enable, /usr/sbin/secubox-turnctl generer, /usr/sbin/secubox-turnctl generer [a-z0-9.-]*, /usr/sbin/secubox-turnctl secret-renouveler, /usr/sbin/secubox-turnctl credentials [A-Za-z0-9._-]* [0-9]*, /usr/sbin/secubox-turnctl users, /usr/sbin/secubox-turnctl user-add [A-Za-z0-9._-]*, /usr/sbin/secubox-turnctl user-del [A-Za-z0-9._-]*, /usr/sbin/secubox-turnctl sessions, /usr/sbin/secubox-turnctl journal [0-9]*, /usr/sbin/secubox-turnctl config
+Defaults!/usr/sbin/secubox-turnctl !requiretty

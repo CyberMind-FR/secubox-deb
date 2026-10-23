@@ -58,6 +58,9 @@ override_dh_auto_install:
 	# elle n etait jamais lue.
 	install -d debian/secubox-jitsi/etc/nginx/secubox-routes.d
 	[ -f composants/turn/nginx/turn.conf ] && cp composants/turn/nginx/turn.conf debian/secubox-jitsi/etc/nginx/secubox-routes.d/ || true
+	# #3060 : actionneur root du composant turn (la seule surface privilégiée) + sudoers aux verbes exacts
+	install -m 755 composants/turn/sbin/secubox-turnctl debian/secubox-jitsi/usr/sbin/
+	install -m 440 composants/turn/sudoers/secubox-turn debian/secubox-jitsi/etc/sudoers.d/secubox-turn
 	# Create composants/turn/data directories
 	install -d debian/secubox-jitsi/var/lib/secubox/turn
 	install -d debian/secubox-jitsi/var/log/turnserver
