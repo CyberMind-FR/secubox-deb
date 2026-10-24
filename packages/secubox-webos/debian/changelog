@@ -1,3 +1,9 @@
+secubox-webos (1.19.26-1~trixie1) trixie; urgency=medium
+
+  * Vhost du Hall livre sans les noms de gk2 (ref #3117) : server_name « hall.localhost hall.* » (hall.gk2.net et hall.gk2.secubox.in sont couverts par hall.* sur gk2), fichier renomme hall.conf. mv_conffile deplace l'ancien hall.gk2.net.conf (retouches conservees) ; le postinst remplace le lien d'activation si l'ancien l'etait, sans reactiver un Hall desactive a la main ; le postrm retire les deux liens.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 12:00:00 +0200
+
 secubox-webos (1.19.25-1~trixie1) trixie; urgency=medium
 
   * Hall v2 (vue maître Aurora) par défaut (ref #3115) : gk1 affichait l'ancien Hall faute de « hall_v2 = true »

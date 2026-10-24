@@ -10,8 +10,12 @@ case "$1" in
         # Le lien d'activation du vhost du Hall est pose par NOTRE postinst : il part avec le paquet. Sinon, a la purge (qui supprime le conffile
         # de sites-available), il reste CASSE et `nginx -t` echoue (open() failed) — plus aucun rechargement possible (#2830).
         # Un lien seulement : un fichier ordinaire pose la par l'operateur n'est pas le notre.
+        # Le nom d'avant #3117 est aussi retiré : une montée interrompue a pu le laisser.
         if [ -L /etc/nginx/sites-enabled/hall.gk2.net.conf ]; then
             rm -f /etc/nginx/sites-enabled/hall.gk2.net.conf
+        fi
+        if [ -L /etc/nginx/sites-enabled/hall.conf ]; then
+            rm -f /etc/nginx/sites-enabled/hall.conf
             if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
                 systemctl reload nginx 2>/dev/null || true
             fi

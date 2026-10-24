@@ -1,1 +1,2 @@
 mv_conffile /etc/nginx/sites-enabled/hall.gk2.net.conf /etc/nginx/sites-available/hall.gk2.net.conf 1.0.317-1~bookworm1~
+mv_conffile /etc/nginx/sites-available/hall.gk2.net.conf /etc/nginx/sites-available/hall.conf 1.19.26-1~trixie1~
