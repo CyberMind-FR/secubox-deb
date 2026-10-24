@@ -3,6 +3,9 @@ secubox-annuaire (0.15.0-1~trixie1) trixie; urgency=medium
   * Les services publics de la box deviennent des offres « service » signées : noms de webos
     (`GET /public/noms` par socket Unix), un niveau, hors admin/acces/wpad/boot, 64 au plus. Minuterie
     des offres toutes les heures (ref #3133).
+  * Cache fichier des services des autres nœuds (`annuairectl pairs-cache`, services-pairs.json) : seuls les
+    endpoints https dont l'hôte est dans le ddns déclaré par le fournisseur ; un journal illisible laisse
+    l'ancien cache (ref #3133).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 12:00:00 +0200
 

@@ -17,6 +17,7 @@ User=secubox
 Group=secubox
 ExecStart=+/usr/sbin/annuairectl offres-collecte
 ExecStart=/usr/sbin/annuairectl offer-sync
+ExecStart=/usr/sbin/annuairectl pairs-cache
 NoNewPrivileges=yes
 ProtectSystem=strict
 ReadWritePaths=/var/lib/secubox/annuaire
