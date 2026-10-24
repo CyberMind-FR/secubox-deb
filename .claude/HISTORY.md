@@ -9,6 +9,29 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-24 — gk1 dans le maillage, profils isp/full recomposés, Coffre réparé
+
+- **Ports MOCHAbin** — closes #3101 (PR #3102, `secubox-netmodes` 1.3.3, gk1 + gk2 + apt) : `secubox-net-detect` donnait
+  wan=eth0, lan=eth1..eth4 ; le mode routeur aurait ponté eth2 (WAN) et eth1 (conduit DSA) dans br-lan. wan=eth2,
+  lan=lan0..lan3, sfp=eth0.
+- **Jonction du maillage depuis le LAN** — closes #3103 (PR #3104, `secubox-hardening` 1.6.1, gk2 + apt) : `wan-guard`
+  coupait 7331 sur eth2, qui porte aussi le LAN de gk2 ; aucune box ne pouvait rejoindre le maître. Ouvert aux adresses
+  privées, toujours fermé à Internet et en IPv6. gk1 a rejoint (10.10.0.8) ; profil premier-pas appliqué (nom gk1,
+  domaine gk1.secubox.in) ; webos redémarré (identité gardée en mémoire) ; relais : 9 noms `*.gk1` vers 10.10.0.8,
+  `admin.gk1.secubox.in` 200 depuis Internet.
+- **Profils** — closes #3105 (PR #3106, `secubox-isp` 1.5.0, `secubox-full` 1.8.0, gk1 + gk2 + apt) : isp = lite
+  (protections, HAProxy, WAF) + modem, cdn, saas-relay, p2p, federation, metrics, mail, metablogizer ; full ajoute les
+  plugins du Hall billets, metanews, messagerie, nextcloud, bbs ; matrix, gitea, mesh à l'App Store. gk1 (isp) : purgés
+  reality, socialrelay (retirés), matrix, gitea, secubox-mesh (maillage Wi-Fi 802.11s, pas le maillage p2p) et les cinq
+  plugins du Hall. La purge de bbs/billets a laissé deux liens nginx orphelins (`nginx -t` en échec) : nettoyés, #3107.
+- **Coffre** — closes #3108 (PR #3109, `secubox-vault` 2.1.12, gk2 + apt) : ouverture en HTTP 500, journal
+  `coffre.journal` re-chowné `secubox:secubox` au démarrage (coupable non identifié) ; l'unité le rend à
+  `secubox-coffre` à chaque démarrage. Rouvert par le propriétaire ; clé du dépôt de nouveau en cache, publications faites.
+- Ouverts : #3100 (association automatique, document de conception, Q1 en attente ; Q2 : mot de passe choisi au
+  formulaire « Préparer un flash »), #3107 (postrm bbs/billets), règle du menu Système (modules installés et non retirés
+  seulement, grisés réparables depuis l'App Store), Hall Aurora et page admin par défaut sur gk1, gk1 dans la Flotte,
+  `sbx-mesh-up` (KeyError address avant l'adresse attribuée).
+
 ## 2026-10-24 — Panneaux exposure et lyrion en 404 après le redémarrage de gk2 (closes #3096)
 
 Les deux modules relayés par l'agrégateur à leur socket dédiée n'avaient plus de service après le redémarrage (passage au
