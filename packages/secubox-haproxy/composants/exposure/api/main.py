@@ -70,6 +70,8 @@ PORTS_HTTP_DIRECTS = (80, WEBUI_NGINX_PORT)
 PORTS_NON_HTTP = (22, 443)
 # Répertoire de repli de metablogizerctl pour ses services onion (quand l'API d'exposition est absente).
 TOR_METABLOG_DIR = Path("/etc/tor/secubox-metablogizer.d")
+# Configuration par défaut du service Tor de Debian (User debian-tor…), indispensable à `--verify-config`.
+TOR_DEFAULTS = Path("/usr/share/tor/tor-service-defaults-torrc")
 WAF_ROUTE_CMD = "secubox-waf-route"
 CONFIG_FILE = Path("/etc/secubox/exposure.json")
 DATA_DIR = Path("/var/lib/secubox/exposure")
@@ -614,6 +616,26 @@ def _tor_bin() -> str:
     return shutil.which("tor") or ""
 
 
+def _tor_verifie(binaire: str) -> tuple:
+    """`tor --verify-config` AVEC la configuration Debian (`--defaults-torrc`, qui porte `User debian-tor`) :
+    sans elle, la vérification échoue sur une box saine (« Failed to configure rendezvous options », les
+    répertoires des services appartiennent à debian-tor). Le code retour ne suffit pas — tor rend 0 même en
+    échec : verdict sur la SORTIE. Valide seulement si « Configuration was valid » et aucun « [err] » ni
+    « Reading config failed ». Rend (ok, sortie)."""
+    cmd = [binaire, "--verify-config"]
+    if TOR_DEFAULTS.exists():
+        cmd += ["--defaults-torrc", str(TOR_DEFAULTS)]
+    cmd += ["-f", str(TOR_CONFIG)]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        sortie = (r.stdout or "") + (r.stderr or "")
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return False, f"[err] vérification impossible : {e}"
+    ok = ("Configuration was valid" in sortie and "[err]" not in sortie
+          and "Reading config failed" not in sortie)
+    return ok, sortie
+
+
 def _instantane(fichiers) -> dict:
     """{fichier: contenu ou None s'il n'existe pas} — de quoi revenir en arrière."""
     out = {}
@@ -645,12 +667,12 @@ def _verifie_ou_restaure(instantane: dict, contexte: str, user: str = "exposure"
     binaire = _tor_bin()
     if not binaire:
         return True
-    res = run_cmd([binaire, "--verify-config", "-f", str(TOR_CONFIG)])
-    if isinstance(res, tuple) and res and res[0]:
+    ok, sortie = _tor_verifie(binaire)
+    if ok:
         return True
     _restaure(instantane)
-    erreur = (res[2] if isinstance(res, tuple) and len(res) > 2 else "") or ""
-    print(f"ERREUR #3112 : Tor refuse la configuration ({contexte}) — fichiers restaurés. {erreur.strip()[:300]}",
+    erreurs = " | ".join(x.strip() for x in sortie.splitlines() if "[err]" in x or "failed" in x.lower())
+    print(f"ERREUR #3112 : Tor refuse la configuration ({contexte}) — fichiers restaurés. {erreurs[:400]}",
           file=sys.stderr)
     _audit_exposure_action(action="torrc_refuse",
                            detail=f"contexte={contexte} fichiers={','.join(str(f) for f in instantane)}",
@@ -690,12 +712,17 @@ def _hs_ecrit_dropin(name: str, hs_dir: Path, onion_port: int, local_port: int) 
     - puis `tor --verify-config` ; refus ⇒ tout est restauré, `torrc_refuse` à l'audit, RuntimeError."""
     f = _hs_dropin(name)
     avant = _instantane(_fichiers_tor() + [f])
-    _assure_include_torrc()
-    _retire_autres_blocs(hs_dir, garder=f)
-    _ecrit_atomique(f,
-                    f"# SecuBox — service onion {name} (#2050)\n"
-                    f"HiddenServiceDir {hs_dir}\n"
-                    f"HiddenServicePort {onion_port} 127.0.0.1:{local_port}\n")
+    try:
+        _assure_include_torrc()
+        _retire_autres_blocs(hs_dir, garder=f)
+        _ecrit_atomique(f,
+                        f"# SecuBox — service onion {name} (#2050)\n"
+                        f"HiddenServiceDir {hs_dir}\n"
+                        f"HiddenServicePort {onion_port} 127.0.0.1:{local_port}\n")
+    except OSError:
+        # Échec d'écriture entre le retrait de l'ancien bloc et le nouveau fichier : le service disparaîtrait.
+        _restaure(avant)
+        raise
     if not _verifie_ou_restaure(avant, f"service {name}"):
         raise RuntimeError(f"Tor refuse la configuration du service {name} : fichiers restaurés")
 
@@ -832,7 +859,8 @@ def migrer_onions(user: str = "reconcile") -> dict:
     if port != ONION_IN_PORT_DEFAUT:
         a_migrer.add(f"127.0.0.1:{ONION_IN_PORT_DEFAUT}")
     migres = []
-    avant = _instantane(_fichiers_tor())
+    # exposure.json aussi : un refus de Tor doit rendre les ports enregistrés d'avant, pas seulement les fichiers.
+    avant = _instantane(_fichiers_tor() + [CONFIG_FILE])
     for f in _fichiers_tor():
         try:
             texte = f.read_text()
@@ -848,7 +876,11 @@ def migrer_onions(user: str = "reconcile") -> dict:
                 migres.append({"fichier": str(f), "dir": hs_dir, "ancienne_cible": ancienne})
                 change = True
         if change:
-            _ecrit_atomique(f, "".join(lignes))
+            try:
+                _ecrit_atomique(f, "".join(lignes))
+            except OSError:
+                _restaure(avant)   # jamais une migration à moitié appliquée
+                raise
 
     services = _load_emancipated()
     entrees = False

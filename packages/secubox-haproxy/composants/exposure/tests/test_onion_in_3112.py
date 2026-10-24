@@ -243,31 +243,98 @@ def test_la_persistance_au_demarrage_ne_double_pas_le_service(box, monkeypatch):
     assert _declarations(box, box["hs"]) == 1
 
 
-def test_un_refus_de_tor_restaure_tout_et_s_inscrit_a_l_audit(box, monkeypatch):
+# Sorties réelles de tor sur gk2 (round 3) : rc=0 dans LES DEUX cas — le verdict se lit sur la sortie.
+SORTIE_VALIDE = ("Oct 24 18:00:00.000 [notice] Tor 0.4.8.16 running on Linux.\n"
+                 "Oct 24 18:00:00.000 [notice] Read configuration file \"/etc/tor/torrc\".\n"
+                 "Configuration was valid\n")
+SORTIE_REFUS = ("Oct 24 18:00:00.000 [notice] Read configuration file \"/etc/tor/torrc\".\n"
+                "Oct 24 18:00:00.000 [warn] Directory /var/lib/tor/hidden_services/webui cannot be read: "
+                "Permission denied\n"
+                "Oct 24 18:00:00.000 [err] Failed to configure rendezvous options. See logs for details.\n"
+                "Oct 24 18:00:00.000 [err] Reading config failed--see warnings above.\n")
+
+
+def _faux_tor(box, monkeypatch, sortie_sans_defauts, sortie_avec_defauts=None, rc=0):
+    """Faux binaire tor : rend `sortie_avec_defauts` si --defaults-torrc est passé, sinon `sortie_sans_defauts`
+    (comme sur gk2), toujours avec le code `rc`, et journalise ses arguments."""
+    journal = box["tmp"] / "tor-args.log"
+    (box["tmp"] / "sans.txt").write_text(sortie_sans_defauts)
+    (box["tmp"] / "avec.txt").write_text(sortie_avec_defauts if sortie_avec_defauts is not None
+                                         else sortie_sans_defauts)
+    faux = box["tmp"] / "tor"
+    faux.write_text("#!/bin/sh\n"
+                    f'echo "$*" >> "{journal}"\n'
+                    'case " $* " in *" --defaults-torrc "*) f=avec ;; *) f=sans ;; esac\n'
+                    f'cat "{box["tmp"]}/$f.txt"\n'
+                    f"exit {rc}\n")
+    faux.chmod(0o755)
+    monkeypatch.setattr(m, "_tor_bin", lambda: str(faux))
+    return journal
+
+
+def test_la_verification_passe_la_configuration_debian_et_lit_la_sortie(box, monkeypatch):
+    """gk2 : sans --defaults-torrc, tor échoue (rc=0 !) ; avec, « Configuration was valid »."""
+    defauts = _ecrit(box["tmp"] / "tor-service-defaults-torrc", "User debian-tor\n")
+    monkeypatch.setattr(m, "TOR_DEFAULTS", defauts)
+    journal = _faux_tor(box, monkeypatch, SORTIE_REFUS, SORTIE_VALIDE, rc=0)
+    m._tor_add_sync("webui", local_port=9180, onion_port=80)
+    assert box["dropin"].exists(), "configuration valide : le service reste écrit"
+    assert f"--verify-config --defaults-torrc {defauts} -f {box['torrc']}" in journal.read_text()
+    assert not any("torrc_refuse" in a for a in box["audits"])
+
+
+@pytest.mark.parametrize("sortie", [SORTIE_REFUS, "", "Oct 24 [notice] Read configuration file\n",
+                                    SORTIE_VALIDE + "Oct 24 [err] autre chose\n"])
+def test_un_refus_de_tor_restaure_tout_meme_avec_rc_0(box, monkeypatch, sortie):
+    """rc=0 en échec : seule la sortie décide. Sans « Configuration was valid », ou avec un [err] : refus."""
     _torrc_avec_bloc_webui(box)
     avant = {f: f.read_text() for f in m._fichiers_tor()}
-    monkeypatch.setattr(m, "_tor_bin", lambda: "/usr/bin/tor")
-    monkeypatch.setattr(m, "run_cmd", lambda cmd, *a, **k: box["cmds"].append(cmd) or (
-        (False, "", "Duplicate HiddenServiceDir") if "--verify-config" in cmd else (True, "", "")))
+    _faux_tor(box, monkeypatch, sortie, rc=0)
     with pytest.raises(RuntimeError):
         m._tor_add_sync("webui", local_port=9180, onion_port=80)
     assert {f: f.read_text() for f in m._fichiers_tor()} == avant
     assert not box["dropin"].exists()
-    assert ["/usr/bin/tor", "--verify-config", "-f", str(box["torrc"])] in box["cmds"]
-    assert not [c for c in box["cmds"] if c == ["systemctl", "reload", "tor"]], "jamais recharger une config refusée"
+    assert _reloads(box) == [], "jamais recharger une config refusée"
     assert any("action=torrc_refuse" in a for a in box["audits"])
 
 
-def test_une_migration_refusee_par_tor_est_restauree(box, monkeypatch):
+def test_sans_fichier_de_defauts_la_verification_reste_possible(box, monkeypatch):
+    monkeypatch.setattr(m, "TOR_DEFAULTS", box["tmp"] / "absent")
+    journal = _faux_tor(box, monkeypatch, SORTIE_VALIDE)
+    m._tor_add_sync("webui", local_port=9180, onion_port=80)
+    assert "--defaults-torrc" not in journal.read_text() and box["dropin"].exists()
+
+
+def test_une_migration_refusee_par_tor_restaure_aussi_exposure_json(box, monkeypatch):
     f = _ecrit(box["dropin"], f"HiddenServiceDir {box['hs']}\nHiddenServicePort 80 127.0.0.1:9080\n")
     avant = f.read_text()
-    monkeypatch.setattr(m, "_tor_bin", lambda: "/usr/bin/tor")
-    monkeypatch.setattr(m, "run_cmd", lambda cmd, *a, **k: box["cmds"].append(cmd) or (
-        (False, "", "refus") if "--verify-config" in cmd else (True, "", "")))
+    m._save_emancipated([{"name": "webui", "local_port": 9080, "onion_port": 80, "active": True}])
+    json_avant = (box["tmp"] / "exposure.json").read_text()
+    _faux_tor(box, monkeypatch, SORTIE_REFUS, rc=0)
     r = m.migrer_onions(user="postinst")
     assert r["success"] is False and f.read_text() == avant
+    assert (box["tmp"] / "exposure.json").read_text() == json_avant, "ports enregistrés rendus aussi"
     assert _reloads(box) == []
     assert any("action=torrc_refuse" in a and "by=postinst" in a for a in box["audits"])
+
+
+def test_un_echec_d_ecriture_apres_le_retrait_du_bloc_restaure_le_torrc(box, monkeypatch):
+    """Entre le retrait de l'ancien bloc et l'écriture du nouveau fichier, un échec ne doit pas faire
+    disparaître le service."""
+    _torrc_avec_bloc_webui(box)
+    torrc_avant = box["torrc"].read_text()
+    vrai = m._ecrit_atomique
+
+    def ecrit(f, texte):
+        if f == box["dropin"]:
+            raise OSError("disque plein")
+        vrai(f, texte)
+
+    monkeypatch.setattr(m, "_ecrit_atomique", ecrit)
+    with pytest.raises(OSError):
+        m._tor_add_sync("webui", local_port=9180, onion_port=80)
+    monkeypatch.setattr(m, "_ecrit_atomique", vrai)
+    assert box["torrc"].read_text() == torrc_avant
 
 
 def test_la_persistance_force_toute_cible_http_par_le_frontal(box, monkeypatch):

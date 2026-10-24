@@ -31,6 +31,12 @@ secubox-haproxy (1.12.6-1~trixie1) trixie; urgency=high
     migration, et Tor refusait toute sa configuration. Après toute modification, tor --verify-config est lancé ;
     s'il refuse, les fichiers d'avant sont restaurés, Tor n'est pas rechargé et torrc_refuse est écrit à
     l'audit. Au démarrage, toute cible enregistrée passe par le frontal, sauf 22 et 443.
+  * Vérification de Tor avec la configuration Debian (ref #3112). tor --verify-config reçoit
+    --defaults-torrc /usr/share/tor/tor-service-defaults-torrc quand ce fichier existe : sans lui, la
+    vérification échouait sur une box saine (gk2 : « Failed to configure rendezvous options »). tor rend 0 même
+    en échec, donc le verdict se lit sur la sortie : valide seulement avec « Configuration was valid » et sans
+    « [err] » ni « Reading config failed ». Une migration refusée restaure aussi exposure.json. Un échec
+    d'écriture entre le retrait d'un ancien bloc et le nouveau fichier restaure les fichiers d'avant.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 18:00:00 +0200
 
