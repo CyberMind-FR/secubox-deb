@@ -36,6 +36,7 @@ parted_etendre() {
 # `secubox-firstboot --help` lancé à la main sur gk1 a rejoué TOUT le premier démarrage (secret JWT, secubox.conf,
 # users.json, SSH par mot de passe), sans sauvegarde. Désormais : arguments analysés avant toute action, refus une
 # fois le premier démarrage fait (sauf --force), et même avec --force rien d'existant n'est écrasé.
+# SECUBOX_FIRSTBOOT_MARQUEUR : pour les tests seulement (l'unité systemd ne le pose pas).
 MARQUEUR="${SECUBOX_FIRSTBOOT_MARQUEUR:-/var/lib/secubox/.firstboot_done}"
 
 usage() {
@@ -57,11 +58,23 @@ jwt_existant() {
 # sauvegarde_existants DOSSIER FICHIER... : copie (droits conservés) de ceux qui existent, dossier en 0700.
 sauvegarde_existants() {
     local dest="$1" f; shift
-    install -d -m 700 "$dest"
+    install -d -m 700 "$(dirname "$dest")" "$dest" || return 1
     for f in "$@"; do
-        [[ -e "$f" ]] && cp -a -- "$f" "$dest/"
+        if [[ -e "$f" ]]; then cp -a -- "$f" "$dest/" || return 1; fi
     done
     return 0
+}
+
+# ajoute_cles SOURCE DEST : ajoute à DEST les clés de SOURCE qu'il n'a pas, sans jamais en retirer ; un DEST sans
+# saut de ligne final en reçoit un d'abord (sinon la première clé ajoutée se collerait à la dernière).
+ajoute_cles() {
+    local src="$1" dest="$2"
+    if [[ ! -s "$dest" ]]; then
+        tr -d '\r' < "$src" > "$dest"
+        return 0
+    fi
+    [[ "$(tail -c1 "$dest" | od -An -tx1 | tr -d ' ')" == "0a" ]] || printf '\n' >> "$dest"
+    tr -d '\r' < "$src" | grep -vxF -f "$dest" >> "$dest" || true
 }
 
 # Sourcé avec --bibliotheque (tests) : fonctions seulement.
@@ -288,18 +301,17 @@ fi
 
 # Avant toute écriture : copie de ce qu'un rejeu pourrait toucher (#3113).
 SAUVEGARDE="/var/backups/secubox-firstboot/$(date +%Y%m%d-%H%M%S)"
-sauvegarde_existants "$SAUVEGARDE" "${SECUBOX_DIR}/secubox.conf" "${SECUBOX_DIR}/users.json" /etc/ssh/sshd_config \
-  && log "Existant sauvegardé dans ${SAUVEGARDE}"
+if sauvegarde_existants "$SAUVEGARDE" "${SECUBOX_DIR}/secubox.conf" "${SECUBOX_DIR}/users.json" /etc/ssh/sshd_config; then
+  log "Existant sauvegardé dans ${SAUVEGARDE}"
+else
+  warn "sauvegarde de l'existant incomplète (${SAUVEGARDE})"
+fi
 
 # ── 4. SSH — injection clé publique ──────────────────────────────
 install -d -o root -g root -m 700 /root/.ssh
 if [[ -f "${BOOT_DIR}/authorized_keys" ]]; then
-  if [[ -s /root/.ssh/authorized_keys ]]; then
-    # rejeu (#3113) : on AJOUTE les clés manquantes, on ne remplace jamais celles posées depuis
-    grep -vxF -f /root/.ssh/authorized_keys "${BOOT_DIR}/authorized_keys" >> /root/.ssh/authorized_keys || true
-  else
-    cat "${BOOT_DIR}/authorized_keys" > /root/.ssh/authorized_keys
-  fi
+  # rejeu (#3113) : on AJOUTE les clés manquantes, on ne remplace jamais celles posées depuis
+  ajoute_cles "${BOOT_DIR}/authorized_keys" /root/.ssh/authorized_keys
   chmod 600 /root/.ssh/authorized_keys
   ok "Clés SSH injectées depuis ${BOOT_DIR}/authorized_keys"
 elif [[ ! -s /root/.ssh/authorized_keys ]]; then
@@ -318,8 +330,12 @@ fi
 
 # ── 5. JWT Secret ─────────────────────────────────────────────────
 # Repris s'il existe : le régénérer invalide toutes les sessions et désaccorde les services (#3113).
+# Une box est « déjà configurée » si et seulement si secubox.conf porte un jwt_secret valide : le postinst de
+# secubox-core pose un exemple (jwt_secret vide) qu'il FAUT remplacer au premier démarrage.
+JWT_REPRIS=0
 JWT_SECRET=$(jwt_existant "${SECUBOX_DIR}/secubox.conf")
 if [[ -n "${JWT_SECRET}" ]]; then
+  JWT_REPRIS=1
   ok "JWT secret existant conservé"
 else
   JWT_SECRET=$(openssl rand -hex 32)
@@ -349,8 +365,9 @@ else
   BOARD="unknown"
 fi
 
-# Écrit seulement s'il est absent (#3113) : domaine, domaine de cookie, réglages posés depuis sont préservés.
-if [[ ! -s "${SECUBOX_DIR}/secubox.conf" ]]; then
+# Écrit sauf si la box est déjà configurée (secret JWT valide repris, #3113) : domaine, domaine de cookie et
+# réglages posés depuis sont alors préservés. L'exemple du paquet (secret vide) est remplacé comme avant.
+if [[ "${JWT_REPRIS}" != 1 ]]; then
 cat > "${SECUBOX_DIR}/secubox.conf" <<EOF
 # /etc/secubox/secubox.conf — généré par firstboot
 # NE PAS modifier jwt_secret manuellement

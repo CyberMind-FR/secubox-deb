@@ -3,9 +3,10 @@ secubox-core (1.7.15-1~trixie1) trixie; urgency=high
   * secubox-firstboot (ref #3113) : « --help » rejouait tout le premier démarrage (gk1 : secret JWT, secubox.conf,
     users.json, SSH par mot de passe, sans sauvegarde). Arguments analysés avant toute action (--help : aide, sortie 0 ;
     argument inconnu : sortie 2) ; une fois le premier démarrage fait, refus (sortie 3) sauf --force. Même avec
-    --force, rien d'existant n'est écrasé : secubox.conf et users.json conservés, secret JWT repris, clés SSH de
+    --force, rien d'existant n'est écrasé : secubox.conf conservé dès qu'il porte un secret JWT valide (l'exemple
+    du paquet, secret vide, est remplacé comme avant), users.json conservé, clés SSH de
     /boot ajoutées sans remplacer celles de root, mot de passe SSH ouvert seulement si root n'a aucune clé ; copie
-    horodatée dans /var/backups/secubox-firstboot/ avant toute écriture.
+    horodatée dans /var/backups/secubox-firstboot/ (0700) avant toute écriture, échec signalé.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 16:00:00 +0200
 

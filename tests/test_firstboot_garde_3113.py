@@ -71,7 +71,7 @@ def test_sauvegarde_horodatee_des_existants(tmp_path):
 def test_rien_d_existant_n_est_ecrase():
     # secubox.conf, users.json : écrits seulement s'ils sont absents ; secret JWT repris ; SSH par mot de passe
     # seulement si root n'a aucune clé.
-    assert 'if [[ ! -s "${SECUBOX_DIR}/secubox.conf" ]]' in TEXTE
+    assert 'if [[ "${JWT_REPRIS}" != 1 ]]; then' in TEXTE
     assert 'if [[ ! -s "${USERS_JSON}" ]]' in TEXTE
     assert 'JWT_SECRET=$(jwt_existant "${SECUBOX_DIR}/secubox.conf")' in TEXTE
     assert "elif [[ ! -s /root/.ssh/authorized_keys ]]" in TEXTE
@@ -79,6 +79,32 @@ def test_rien_d_existant_n_est_ecrase():
     assert i_sauv < TEXTE.index("# ── 4. SSH")
 
 
+def test_exemple_du_paquet_n_est_pas_une_box_configuree():
+    """Le postinst de secubox-core pose secubox.conf.example (jwt_secret vide) : le premier démarrage doit l'écrire."""
+    exemple = (SCRIPT.parents[1] / "secubox.conf.example")
+    assert 'jwt_secret  = ""' in exemple.read_text()
+    assert biblio(f"jwt_existant {exemple}").stdout.strip() == ""
+
+
+def test_ajoute_cles_sans_saut_final_ni_doublon(tmp_path):
+    src, dest = tmp_path / "boot_keys", tmp_path / "authorized_keys"
+    src.write_text("ssh-ed25519 AAAA1 a\r\nssh-ed25519 AAAA2 b\n")
+    dest.write_text("ssh-ed25519 AAAA1 a")            # pas de saut de ligne final
+    r = biblio(f"ajoute_cles {src} {dest}")
+    assert r.returncode == 0, r.stderr
+    assert dest.read_text() == "ssh-ed25519 AAAA1 a\nssh-ed25519 AAAA2 b\n"
+    vide = tmp_path / "neuf"
+    assert biblio(f"ajoute_cles {src} {vide}").returncode == 0
+    assert vide.read_text() == "ssh-ed25519 AAAA1 a\nssh-ed25519 AAAA2 b\n"
+
+
+def test_sauvegarde_en_echec_est_signalee(tmp_path):
+    bloque = tmp_path / "fichier"
+    bloque.write_text("x")
+    r = biblio(f"sauvegarde_existants {bloque}/sous {tmp_path / 'a'}")   # parent = un fichier : install échoue
+    assert r.returncode != 0
+
+
 def test_rejeu_ajoute_les_cles_ssh_sans_remplacer():
-    assert 'grep -vxF -f /root/.ssh/authorized_keys "${BOOT_DIR}/authorized_keys" >> /root/.ssh/authorized_keys' in TEXTE
+    assert 'ajoute_cles "${BOOT_DIR}/authorized_keys" /root/.ssh/authorized_keys' in TEXTE
     assert 'log "Login     : comptes existants conservés"' in TEXTE
