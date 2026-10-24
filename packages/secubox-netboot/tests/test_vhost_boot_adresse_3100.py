@@ -55,3 +55,27 @@ def test_detectee_10_8_refusee_explicite_admise():
 def test_lance_hors_source_avec_bibliotheque_ne_fait_rien():
     r = subprocess.run(["bash", str(SERVE), "--bibliotheque"], capture_output=True, text=True)
     assert r.returncode == 0 and r.stdout == ""
+
+
+def test_racine_http_reservee_au_lan():
+    """Le live et les images eMMC : LAN seulement, dans le gabarit même (l'ancien vhost le faisait par un snippet)."""
+    s = VHOST.read_text()
+    bloc = s[s.index("location / {"):]
+    bloc = bloc[:bloc.index("}")]
+    for ligne in ("allow 127.0.0.1;", "allow 10.0.0.0/8;", "allow 172.16.0.0/12;", "allow 192.168.0.0/16;", "deny all;"):
+        assert ligne in bloc, ligne
+
+
+def test_gabarit_sans_marqueur_dans_les_commentaires():
+    s = VHOST.read_text()
+    assert s.count("@ADRESSE_LAN@") == 1
+
+
+def test_statut_ne_dit_pas_non_quand_nginx_sert_la_racine(tmp_path):
+    faux = tmp_path / "nginx"
+    # beaucoup de sortie après la ligne trouvée : grep -q fermerait le tube (SIGPIPE + pipefail)
+    faux.write_text("#!/bin/sh\necho 'root /srv/secubox/netboot/http;'\nyes x | head -n 200000\n")
+    faux.chmod(0o755)
+    r = subprocess.run(["bash", "-c", f"source {SERVE} --bibliotheque; set -o pipefail; cmd_status"],
+                       capture_output=True, text=True, env={"PATH": f"{tmp_path}:/usr/bin:/bin"})
+    assert '"nginx_sbxboot":"yes"' in r.stdout.replace(" ", ""), r.stdout

@@ -1,3 +1,12 @@
+secubox-netboot (0.7.3-1~trixie1) trixie; urgency=high
+
+  * Vhost de boot (ref #3100) : « location / » réservé au LAN dans le gabarit même (127.0.0.1, 10/8, 172.16/12,
+    192.168/16). L'ancien vhost de gk2 le faisait par un snippet d'exposition que le gabarit 0.7.2 n'incluait plus.
+  * secubox-netboot-serve status : « nginx_sbxboot » disait toujours « no » (grep -q + pipefail : SIGPIPE de
+    nginx -T). Le marqueur d'adresse n'apparaît plus dans les commentaires du gabarit.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 15:20:00 +0200
+
 secubox-netboot (0.7.2-1~trixie1) trixie; urgency=medium
 
   * Page NetBoot (ref #3100) : panneau « Netbooter une box » (commandes U-Boot lues dans le boot.cmd réellement
