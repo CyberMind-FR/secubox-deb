@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-24 — Les visiteurs onion ne sont plus jamais LAN (closes #3112, closes #3123)
+
+- PR #3124 (4 rondes de relecture de sécurité) : frontal HAProxy `onion-in` (127.0.0.1:9180) pour tous les onions
+  — Host non `.onion` refusé, XFF/Forwarded/X-Real-IP/X-SecuBox-* effacés, source 192.0.2.80, puis sbxwaf ; les
+  frontaux publics rendent 404 à un Host `.onion` hors boucle locale. Migration exposure atomique des cibles :80/:9080,
+  doublons de HiddenServiceDir retirés, `tor --verify-config` avec `--defaults-torrc` Debian (verdict sur la sortie :
+  Tor rend 0 même en échec), retour arrière complet. haproxy 1.12.6, tor 1.7.3, metablogizer 1.11.3, gk2 par apt.
+- Vérifié sur gk2 : l'onion du webui déclaré une seule fois (torrc.d/70, cible 9180) ; par Tor avec un
+  `X-Forwarded-For: 192.168.1.10` forgé, nginx journalise 192.0.2.80 ; Host onion vers 192.168.1.200 en http/https : 404.
+- Constat : réactiver l'ancien bloc du torrc à côté du drop-in donne deux déclarations ; la migration refuse et
+  restaure (vu, sain), mais ne fusionne pas les doublons entre fichiers. L'onion du webui sert « Wrong Domain » :
+  `webui.conf` n'accepte pas `*.onion` (antérieur à #3112).
+
 ## 2026-10-24 — Association automatique au maillage, vhosts sans gk2, Hall v2 par défaut
 
 - **Association automatique** — ref #3100 (PR #3114, conception + plan + 7 tâches en sous-agents, revue de branche) :
