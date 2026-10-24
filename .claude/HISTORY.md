@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-24 — Panneaux exposure et lyrion en 404 après le redémarrage de gk2 (closes #3096)
+
+Les deux modules relayés par l'agrégateur à leur socket dédiée n'avaient plus de service après le redémarrage (passage au
+noyau 6.12.113). **exposure** : manifeste `modules.d/exposure.toml` en `on-demand`, unité mise en sommeil puis jamais relancée
+au démarrage ; passé en `always-on` (`secubox-profilectl set-lifecycle`), unité activée — page et API 200. **lyrion** : depuis
+#763 l'API tourne sur `/run/secubox/lyrion.sock`, mais le paquet ne livrait plus l'unité et son postinst la désactivait (logique
+#1573) ; manifeste revenu à `on-demand`, `units = []`. `secubox-lyrion` 1.7.4 → 1.7.6 (PR #3097, #3098, #3099) : unité livrée
+une seule fois par dh_installsystemd, activée par le postinst (deb-systemd-helper gardait l'ancien « disabled »), plus de
+`RuntimeDirectory=secubox` (re-chown de `/run/secubox`, #494), manifeste `units = ["secubox-lyrion.service"]` en `always-on`
+(témoin `.manifeste-3096`). Déployé sur gk2 + apt trixie : service actif, `/run/secubox` 1777 root:root, page et API 200.
+
 ## 2026-10-24 — gk2 passe au noyau Debian stock 6.12.113 (ref #3093)
 
 Sur go du propriétaire, après le banc. Initrd dédié généré depuis une COPIE de la configuration (`/data/sbx-initramfs-3093`,
