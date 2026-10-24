@@ -206,6 +206,25 @@ Les vhosts des services répondent à `<service>.*` en plus de leur nom gk2 : c'
 - Audit (`/var/log/secubox/audit.log`) : `code_emis`, décisions de jonction, `ancre_rattrapee`,
   `ancre_non_rattrapee` ; jamais de jeton ni de code.
 
+## Liens directs (#3133)
+
+`secubox-maillage-pairs [synchroniser|etat]` (root, minuterie `secubox-maillage-pairs.timer` : 3 min après le démarrage,
+puis toutes les 5 min) relie les pairs en direct, sans passer par le maître, pour le trafic entre eux.
+
+- Le maître publie `GET /api/v1/p2p/master-link/pairs` (`{"version":1,"pairs":[{nom, mesh_ip, cle_publique, endpoint}]}`).
+- Le pair ne lit cette liste que sur `http://<mesh_ip du maître>:7331` (le maître est l'entrée de `wg_mesh.json` dont la
+  clé est celle de l'ancre), à travers le tunnel : sans redirection, 6 s, 256 Kio. Tout échec ne change rien ;
+  une liste vide valide retire seulement les liens directs.
+- Les liens sont des entrées `direct: true` de `wg_mesh.json` ; `secubox-p2p-mesh.path` déclenche `sbx-mesh-up`
+  (`wg syncconf`). Jamais de `wg set`. Un lien sans poignée de main récente est retiré et refusé 1 h
+  (`/var/lib/secubox/p2p/pairs-directs-refuses.json`).
+- Écriture de `wg_mesh.json` : relecture juste avant le calcul, remplacement atomique, propriétaire et mode conservés.
+  L'API écrit aussi ce fichier : la fenêtre de concurrence est courte et acceptée.
+- Réglage : `/etc/secubox/p2p.toml`, `[maillage] liens_directs = true` (défaut ; `false` désactive).
+- Audit : `pair_direct_ajoute`, `pair_direct_retire`, `pair_direct_refuse` (nom, clé publique, mesh_ip).
+- Variables `SBX_PAIRS_*` (dont `SBX_PAIRS_MAITRE_URL`) : réservées aux tests ; ne jamais les poser en production,
+  `SBX_PAIRS_MAITRE_URL` remplaçant l'adresse du maître.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.

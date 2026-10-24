@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-maillage-pairs — liens WireGuard directs entre pairs du maillage (#3133), côté PAIR, en root.
+
+  synchroniser   (défaut) lit la liste des pairs vivants publiée par le maître, calcule les liens directs à ajouter
+                 ou retirer et les écrit dans wg_mesh.json ; le changement de ce fichier déclenche
+                 secubox-p2p-mesh.path, donc sbx-mesh-up (wg syncconf). On n'appelle jamais `wg set`.
+  etat           affiche (JSON, lecture seule) les liens directs et les derniers refus.
+
+Confiance : la liste n'est lue QUE sur http://<mesh_ip du maître>:7331/api/v1/p2p/master-link/pairs, à travers le
+tunnel, et le maître est l'entrée de l'état dont la clé est celle de l'ancre. Aucune adresse ne vient de la liste ou du
+réseau. Pas de redirection, 6 s, 256 Kio au plus. Tout échec (réseau, 4xx/5xx, JSON, version, pairs) : rien ne change.
+
+Surcharges réservées aux tests (jamais posées en production) : SBX_PAIRS_ETAT, SBX_PAIRS_POIGNEES, SBX_PAIRS_ANCRE,
+SBX_PAIRS_REFUSES, SBX_PAIRS_MAITRE_URL (URL de base remplaçant http://<mesh_ip>:7331), SBX_PAIRS_CONFIG,
+SBX_PAIRS_AUDIT, SBX_P2P_LIB."""
+import ipaddress
+import json
+import math
+import os
+import sys
+import tempfile
+import time
+import tomllib
+import urllib.error
+import urllib.request
+
+sys.path.insert(0, os.environ.get("SBX_P2P_LIB", "/usr/lib/secubox/p2p"))
+from api import ancre, mesh, pairs_directs  # noqa: E402
+
+ETAT = "/var/lib/secubox/p2p/wg_mesh.json"
+POIGNEES = "/run/secubox/p2p/wg-mesh-handshakes.json"
+ANCRE = ancre.CHEMIN
+REFUSES = "/var/lib/secubox/p2p/pairs-directs-refuses.json"
+CONFIG = "/etc/secubox/p2p.toml"
+AUDIT = "/var/log/secubox/audit.log"
+CHEMIN_LISTE = "/api/v1/p2p/master-link/pairs"
+PORT_MAITRE = 7331
+DELAI_S = 6
+TAILLE_MAX = 256 * 1024
+MAX_REFUSES = 256
+
+
+def _chemin(variable, defaut):
+    return os.environ.get(variable) or defaut
+
+
+def log(message):
+    print(f"[maillage-pairs] {message}")
+
+
+def _lire_json(chemin):
+    """Document JSON d'un fichier ordinaire (lien symbolique refusé), ou None."""
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    try:
+        with os.fdopen(fd, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _ecrire_json(chemin, document, modele=None):
+    """Écriture atomique : fichier temporaire de nom aléatoire dans le même dossier, puis os.replace. Si `modele`
+    (résultat de os.stat) est fourni, propriétaire et mode sont conservés ; sinon 0644, propriétaire inchangé."""
+    dossier = os.path.dirname(chemin) or "."
+    fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".maillage-pairs-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(document, f, indent=2)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        if modele is not None:
+            os.chmod(tmp, modele.st_mode & 0o7777)
+            try:
+                os.chown(tmp, modele.st_uid, modele.st_gid)
+            except PermissionError:
+                if os.geteuid() == 0:
+                    raise
+        else:
+            os.chmod(tmp, 0o644)
+        os.replace(tmp, chemin)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _liens_directs_actifs():
+    """Réglage [maillage] liens_directs de p2p.toml : vrai par défaut, fichier illisible compris."""
+    try:
+        with open(_chemin("SBX_PAIRS_CONFIG", CONFIG), "rb") as f:
+            valeur = tomllib.load(f).get("maillage", {}).get("liens_directs", True)
+    except (OSError, ValueError, AttributeError):
+        return True
+    return valeur is not False
+
+
+def _refuses_lus(maintenant):
+    """Refus encore en cours, relevé nettoyé : clés texte, échéance finie et future, 256 au plus."""
+    doc = _lire_json(_chemin("SBX_PAIRS_REFUSES", REFUSES))
+    propres = {}
+    if isinstance(doc, dict):
+        for cle, jusqua in doc.items():
+            if (isinstance(cle, str) and mesh.valid_wg_key(cle) and not isinstance(jusqua, bool)
+                    and isinstance(jusqua, (int, float)) and math.isfinite(jusqua) and jusqua > maintenant):
+                propres[cle] = float(jusqua)
+    return dict(sorted(propres.items(), key=lambda kv: kv[1], reverse=True)[:MAX_REFUSES])
+
+
+class _SansRedirection(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def _url_maitre(mesh_ip):
+    base = os.environ.get("SBX_PAIRS_MAITRE_URL")     # tests seulement
+    if not base:
+        base = f"http://{mesh_ip}:{PORT_MAITRE}"
+    return base.rstrip("/") + CHEMIN_LISTE
+
+
+def lire_liste(url):
+    """Liste publiée par le maître (liste de pairs bruts), ou None à la moindre anomalie."""
+    ouvreur = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SansRedirection)
+    try:
+        with ouvreur.open(urllib.request.Request(url, headers={"Accept": "application/json"}), timeout=DELAI_S) as r:
+            if r.status != 200:
+                return None
+            brut = r.read(TAILLE_MAX + 1)
+        if len(brut) > TAILLE_MAX:
+            return None
+        doc = json.loads(brut.decode("utf-8"))
+    except (OSError, ValueError, urllib.error.URLError):     # HTTPError, délai, UnicodeDecodeError inclus
+        return None
+    if not isinstance(doc, dict):
+        return None
+    version, pairs = doc.get("version"), doc.get("pairs")
+    if isinstance(version, bool) or not isinstance(version, int) or version != 1 or not isinstance(pairs, list):
+        return None
+    return [_au_format_de_l_etat(p) for p in pairs]
+
+
+def _au_format_de_l_etat(p):
+    """Un pair publié (nom, cle_publique…) au format que pairs_directs.valider_pair attend (name, public_key…).
+    Tout ce qui n'est pas un objet est laissé tel quel : valider_pair l'écartera."""
+    if not isinstance(p, dict):
+        return p
+    return {"name": p.get("nom"), "public_key": p.get("cle_publique"), "mesh_ip": p.get("mesh_ip"),
+            "endpoint": p.get("endpoint")}
+
+
+def trouver_maitre(etat, cle_ancre):
+    """Entrée du maître : non directe, couvrant tout le réseau maillé, de la clé de l'ancre, avec une mesh_ip valide."""
+    reseau = ipaddress.ip_network(pairs_directs.RESEAU_MAILLE)
+    for e in etat.get("peers") or []:
+        if not isinstance(e, dict) or e.get("direct") is True or e.get("public_key") != cle_ancre:
+            continue
+        try:
+            if ipaddress.ip_network(str(e.get("allowed_ips", "")).strip(), strict=False) != reseau:
+                continue
+            ip = ipaddress.IPv4Address(e.get("mesh_ip"))
+        except ValueError:
+            continue
+        if ip in reseau:
+            return e, str(ip)
+    return None, None
+
+
+def _etat_lu(chemin):
+    """(état, stat) d'un fichier ordinaire ; (None, None) si absent, lien symbolique ou document inattendu."""
+    if os.path.islink(chemin):
+        log(f"{chemin} est un lien symbolique : refus")
+        return None, None
+    doc = _lire_json(chemin)
+    if not isinstance(doc, dict):
+        return None, None
+    return doc, os.stat(chemin)
+
+
+def _auditer(evenement, **champs):
+    try:
+        ancre.audit(evenement, chemin=_chemin("SBX_PAIRS_AUDIT", AUDIT), **champs)
+    except (OSError, ValueError) as e:
+        log(f"audit impossible : {e}")
+
+
+def synchroniser(maintenant=None):
+    """Code de sortie : 0 (rien à faire ou fait), 1 (état illisible)."""
+    chemin = _chemin("SBX_PAIRS_ETAT", ETAT)
+    etat, _ = _etat_lu(chemin)
+    if etat is None:
+        log("état du maillage absent ou illisible : rien à faire")
+        return 0
+    if etat.get("role") == "master":
+        return 0
+    if not _liens_directs_actifs():
+        log("liens directs désactivés ([maillage] liens_directs = false)")
+        return 0
+    a = ancre.lire(_chemin("SBX_PAIRS_ANCRE", ANCRE))
+    if a is None or not isinstance(a.get("cle_publique"), str):
+        log("pas d'ancre du maître : rien à faire")
+        return 0
+    maitre, ip_maitre = trouver_maitre(etat, a["cle_publique"])
+    if maitre is None or not ancre.accepte(a, maitre.get("public_key")):
+        log("le maître de l'état n'est pas celui de l'ancre : rien à faire")
+        return 0
+    liste = lire_liste(_url_maitre(ip_maitre))
+    if liste is None:
+        log("liste du maître indisponible ou invalide : rien ne change")
+        return 0
+    maintenant = time.time() if maintenant is None else maintenant
+    # Relecture juste avant le calcul : l'API écrit aussi ce fichier.
+    etat, modele = _etat_lu(chemin)
+    if etat is None or etat.get("role") == "master":
+        return 0
+    poignees = mesh.load_handshakes(_chemin("SBX_PAIRS_POIGNEES", POIGNEES))
+    if poignees is None:       # mesure absente : jamais une raison de retirer un lien
+        poignees = {e["public_key"]: maintenant for e in etat.get("peers", [])
+                    if isinstance(e, dict) and e.get("direct") is True and isinstance(e.get("public_key"), str)}
+    refus_avant = _refuses_lus(maintenant)
+    calcul = pairs_directs.calculer(etat, liste, poignees, maintenant, refus_avant)
+    nouvel = pairs_directs.appliquer(etat, calcul, maintenant)
+    if nouvel != etat:
+        _ecrire_json(chemin, nouvel, modele)
+        par_cle = {e.get("public_key"): e for e in etat.get("peers", []) if isinstance(e, dict)}
+        for p in calcul["ajouts"]:
+            _auditer("pair_direct_ajoute", nom=p["nom"], cle=p["cle_publique"], mesh_ip=p["mesh_ip"])
+            log(f"lien direct ajouté : {p['nom']} ({p['mesh_ip']})")
+        cles_nouvelles = {e.get("public_key") for e in nouvel.get("peers", []) if isinstance(e, dict)}
+        for cle in calcul["retraits"]:
+            if cle in cles_nouvelles:
+                continue
+            e = par_cle.get(cle, {})
+            _auditer("pair_direct_retire", nom=str(e.get("name", "")), cle=cle, mesh_ip=str(e.get("mesh_ip", "")))
+            if cle in calcul["refuses"] and cle not in refus_avant:
+                _auditer("pair_direct_refuse", nom=str(e.get("name", "")), cle=cle, mesh_ip=str(e.get("mesh_ip", "")))
+            log(f"lien direct retiré : {e.get('name', '?')}")
+    brut = _lire_json(_chemin("SBX_PAIRS_REFUSES", REFUSES))      # écrit aussi pour purger un relevé encombré
+    if calcul["refuses"] != (brut if brut is not None else {}) or (brut is None and calcul["refuses"]):
+        _ecrire_json(_chemin("SBX_PAIRS_REFUSES", REFUSES), calcul["refuses"])
+    return 0
+
+
+def etat_json(maintenant=None):
+    maintenant = time.time() if maintenant is None else maintenant
+    etat, _ = _etat_lu(_chemin("SBX_PAIRS_ETAT", ETAT))
+    directs = [e for e in (etat or {}).get("peers", []) if isinstance(e, dict) and e.get("direct") is True]
+    return {"actif": _liens_directs_actifs(), "liens_directs": directs, "refuses": _refuses_lus(maintenant)}
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    commande = argv[0] if argv else "synchroniser"
+    if commande == "etat":
+        print(json.dumps(etat_json(), indent=2))
+        return 0
+    if commande != "synchroniser":
+        print("usage : secubox-maillage-pairs [synchroniser|etat]", file=sys.stderr)
+        return 2
+    if os.geteuid() != 0:
+        print("[maillage-pairs] ERREUR : à lancer en root", file=sys.stderr)
+        return 1
+    return synchroniser()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
