@@ -1,3 +1,12 @@
+secubox-webos (1.20.0-1~trixie1) trixie; urgency=medium
+
+  * GET /public/pairs (ref #3133) : sert, en lecture seule et sous require_lecture, le cache des services
+    offerts par les autres box (/var/lib/secubox/annuaire/services-pairs.json, écrit par l'annuaire). Entrée non
+    fiable : 32 pairs et 64 services au plus, champs str bornés, endpoints https:// seulement ; cache absent
+    ou corrompu : 200 avec disponible=false.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 14:00:00 +0200
+
 secubox-webos (1.19.26-1~trixie1) trixie; urgency=medium
 
   * Vhost du Hall livre sans les noms de gk2 (ref #3117) : server_name « hall.localhost hall.* » (hall.gk2.net et hall.gk2.secubox.in sont couverts par hall.* sur gk2), fichier renomme hall.conf. mv_conffile deplace l'ancien hall.gk2.net.conf (retouches conservees) ; le postinst remplace le lien d'activation si l'ancien l'etait, sans reactiver un Hall desactive a la main ; le postrm retire les deux liens.

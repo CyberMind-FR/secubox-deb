@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse, Response
 # pas l'administration ; ce qu'il relaie à un module, ce module le juge.
 from secubox_core.auth import require_session, require_personne, create_token, domaine_box
 from secubox_core.health import systemd_batch
-from api import registry, flags, cardlets, actions, aide, hotes, systeme, vignettes
+from api import registry, flags, cardlets, actions, aide, hotes, systeme, vignettes, pairs
 from api.models import Service  # noqa: F401 — exposé pour les tests (main.Service), ne pas « nettoyer »
 from secubox_core.auth import require_lecture
 
@@ -482,6 +482,13 @@ async def noms_de_la_box():
     dom = (domaine_box() or "").lower()
     return {"domaine": dom, "noeud": hotes.nom_noeud(),
             "noms": hotes.candidats(hotes.lire_sites(), dom)}
+
+
+# SERVICES DES AUTRES BOX (#3133). Lecture seule du cache de l'annuaire ; webos
+# n'appelle pas l'API de l'annuaire. Réservé à la lecture authentifiée.
+@public_router.get("/pairs")
+async def services_des_pairs(_=Depends(require_lecture)):
+    return pairs.lire_cache()
 
 
 @public_router.get("/hotes.js")
