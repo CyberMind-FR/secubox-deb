@@ -1,3 +1,11 @@
+secubox-netmodes (1.3.3-1~trixie1) trixie; urgency=medium
+
+  * secubox-net-detect (ref #3101) : rôles des ports MOCHAbin corrigés. wan=eth2 (1G RJ45), lan=lan0..lan3
+    (ports du switch), sfp=eth0 ; eth1, conduit du switch DSA, n'est plus ponté. Le mode routeur mettait
+    eth2 et eth1 dans br-lan et attendait le DHCP sur le SFP : box hors réseau (constaté sur gk1).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 08:30:00 +0200
+
 secubox-netmodes (1.3.2-1~bookworm1) bookworm; urgency=medium
 
   * secubox-net-detect (#2532) : `timeout 5 netplan apply` tuait l'application en cours sur une RPi (« netplan apply skipped or failed » au premier demarrage). 30 s, et le message donne le code (124 = delai depasse). 2 tests.
