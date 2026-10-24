@@ -9,6 +9,27 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-24 — Association automatique au maillage, vhosts sans gk2, Hall v2 par défaut
+
+- **Association automatique** — ref #3100 (PR #3114, conception + plan + 7 tâches en sous-agents, revue de branche) :
+  ancre du maître sur la box (sbx-mesh-join n'accepte que lui), codes de flash au format automesh, lot de flash signé
+  servi au live sur le vhost 8099 seulement, `sbx-netflash --nom`, poussée de l'ancre par premier-pas, rattrapage par le
+  tunnel. Trou critique trouvé en revue finale et corrigé : un hôte du LAN pouvait évincer une box existante (reflash) —
+  le reflash d'un nom connu exige désormais une préparation sur le maître. Déployé : p2p 1.18.0, netboot 0.7.0,
+  premier-pas 0.8.0, core 1.7.14, hub 1.12.27 (gk2 par dpkg, gk1 par apt) ; rattrapage de l'ancre constaté sur gk1.
+  Reste : banc de reflash, formulaire « Préparer un flash » sur la page Netboot.
+- **Hall v2 par défaut** — closes #3115 (PR #3116, webos 1.19.25, gk1 par apt).
+- **Vhosts livrés aux noms de gk2** — ref #3117 (PR #3120 puis balayage PR #3122) : 25 paquets livraient des
+  `server_name` gk2 ; neutralisés (`<x>.*`), fichiers renommés avec migration sûre, garde de dépôt
+  `tests/test_aucun_vhost_gk2_3117.py`, réveil (profiles 0.23.13) qui retrouve `<x>.*`. Publiés sur apt (waf-ng reconstruit
+  arm64) ; gk1 à jour par apt, plus aucun « gk2 » dans sites-enabled ; vhosts orphelins gitea/metanews retirés (sauvegarde
+  /var/backups/nginx). **gk2 non mis à jour** : vérifier d'abord dpkg -V (mood, bbs, podcaster retouchés ?) et nginx -T.
+- Incidents gk1 : `secubox-firstboot --help` a rejoué le premier démarrage (secubox.conf, users.json, JWT, SSH par mot de
+  passe) — #3113 ; domaine restauré, ~40 services redémarrés un par un pour le nouveau secret JWT.
+- Ouverts : #3112 (nginx fait confiance à XFF depuis 127.0.0.1 : l'onion du webui forge l'adresse LAN), #3118 (recharger
+  nginx depuis la page Vhosts, droits), #3119 (App Store : installer/désinstaller, catalogue metablogizer aux pairs),
+  #3121 (photoprism, radio), #3110 (phrase du Coffre), #3111 (/tmp/secubox, LED sur noyau stock).
+
 ## 2026-10-24 — gk1 dans le maillage, profils isp/full recomposés, Coffre réparé
 
 - **Ports MOCHAbin** — closes #3101 (PR #3102, `secubox-netmodes` 1.3.3, gk1 + gk2 + apt) : `secubox-net-detect` donnait
