@@ -25,5 +25,6 @@ def load_flags(path: str = "/etc/secubox/webos.toml") -> dict:
     return {
         "enabled": bool(data.get("enabled", False)),
         "registry_enabled": bool(data.get("registry_enabled", True)),
-        "hall_v2": bool(data.get("hall_v2", False)),
+        # Hall v2 (vue maître Aurora) par défaut (#3115) ; « hall_v2 = false » dans webos.toml reste le retour arrière.
+        "hall_v2": bool(data.get("hall_v2", True)),
     }

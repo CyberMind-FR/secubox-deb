@@ -1,3 +1,10 @@
+secubox-webos (1.19.25-1~trixie1) trixie; urgency=medium
+
+  * Hall v2 (vue maître Aurora) par défaut (ref #3115) : gk1 affichait l'ancien Hall faute de « hall_v2 = true »
+    posé à la main comme sur gk2. « hall_v2 = false » dans /etc/secubox/webos.toml reste le retour arrière.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 10:35:00 +0200
+
 secubox-webos (1.19.24-1~trixie1) trixie; urgency=medium
 
   * Hall (ref #3074) : une demande de lecture de ZIA (`media.play`) pour un service dont aucun lecteur n'est ouvert
