@@ -12,6 +12,7 @@ request path: every call returns (data, error).
 """
 from __future__ import annotations
 
+import contextvars
 import hashlib
 import http.client
 import json
@@ -46,6 +47,12 @@ class _UnixHTTPConnection(http.client.HTTPConnection):
 # `admin` is a guaranteed master user on every login-capable SecuBox app;
 # override via SBX_SERVICE_USER if needed.
 SERVICE_USER = os.environ.get("SBX_SERVICE_USER", "admin")
+
+# Jeton de l'appelant de la requête en cours (#3136). L'annuaire garde /services et /subscriptions en lecture depuis
+# #1256, et le jeton de service ci-dessous n'a pas de session au registre partagé (échec fermé depuis #942) : l'annuaire
+# le refuse. Le module p2p pose ici le jeton de la personne connectée, le temps de sa requête (voir api/main.py) ; il
+# n'est envoyé qu'à l'annuaire LOCAL, par socket Unix. Hors requête : aucun jeton, comme avant.
+JETON_APPELANT: contextvars.ContextVar = contextvars.ContextVar("jeton_appelant_annuaire", default=None)
 
 
 def _service_token() -> Optional[str]:
@@ -143,7 +150,7 @@ def get_catalog(
 
     Returns (list_of_service_dicts, None) on success, or ([], error_string).
     """
-    data, err = _request("GET", "/api/v1/annuaire/services", sock)
+    data, err = _request("GET", "/api/v1/annuaire/services", sock, auth_token=JETON_APPELANT.get())
     if err:
         return [], err
     return (data or {}).get("services", []), None
@@ -160,7 +167,7 @@ def get_subscriptions(
     path = "/api/v1/annuaire/subscriptions"
     if mine_did:
         path += f"?mine={mine_did}"
-    data, err = _request("GET", path, sock)
+    data, err = _request("GET", path, sock, auth_token=JETON_APPELANT.get())
     if err:
         return [], err
     return (data or {}).get("subscriptions", []), None
@@ -184,5 +191,5 @@ def subscribe(
         f"/api/v1/annuaire/service/{service_id}/subscribe",
         sock,
         body={"subscriber_did": did, "subscriber_priv_hex": priv_hex},
-        auth_token=_service_token(),
+        auth_token=JETON_APPELANT.get() or _service_token(),
     )
