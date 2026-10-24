@@ -73,7 +73,7 @@ FEDC = {"objets": [{"id": "mb-1", "type": "metablog", "name": "Carnet", "descrip
 LECTURES = {"/categories": CATS, "/catalog": CATALOG, "/groupes": GROUPES, "/metapaquets": MP, "/mesh-catalog": MESH}
 
 
-def ouvre(navigateur, url, statut_lecture=200, ecritures=None, taille=None):
+def ouvre(navigateur, url, statut_lecture=200, ecritures=None, taille=None, jobs=None):
     ctx = navigateur.new_context(viewport=taille or {"width": 1400, "height": 900})
     p = ctx.new_page()
     erreurs, appels = [], []
@@ -97,6 +97,8 @@ def ouvre(navigateur, url, statut_lecture=200, ecritures=None, taille=None):
             if statut_lecture != 200:
                 return r.fulfill(status=statut_lecture, content_type="application/json", body='{"detail":"jeton requis"}')
             corps = FEDC if u == "/api/appstore/catalog" else LECTURES.get(u.replace("/api/v1/appstore", ""), None)
+            if u == "/api/v1/appstore/jobs":
+                corps = {"jobs": jobs() if jobs else {}}
             if u.endswith("/config"):
                 corps = {"path": "/etc/secubox/radio.toml", "exists": True, "readable": True, "content": "port = 1\n"}
             return r.fulfill(status=200 if corps is not None else 404, content_type="application/json", body=json.dumps(corps or {}))
@@ -212,4 +214,112 @@ def test_telephone_sans_debordement_et_hauteur_annoncee(navigateur):
     p.wait_for_selector("#grille .carte")
     assert p.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
     assert not p.is_visible("#sidebar") and err == []
+    ctx.close()
+
+
+
+# ----- #3119 : installer et retirer depuis la page (tâches de fond, HAProxy coupe à 30 s) -----
+
+def _suite(*etats):
+    """jobs() : rend les états l'un après l'autre, le dernier ensuite en boucle."""
+    restants = list(etats)
+    return lambda: (restants.pop(0) if len(restants) > 1 else restants[0])
+
+
+def test_installer_un_module_disponible_confirme_puis_suivi_de_la_tache(navigateur):
+    jobs = _suite({}, {"secubox-relais": {"verbe": "install", "etat": "en-cours"}},
+                  {"secubox-relais": {"verbe": "install", "etat": "ok", "message": "installed secubox-relais"}})
+    ctx, p, err, appels = ouvre(navigateur, "http://sbx.test/appstore/?sonde=40", jobs=jobs,
+                                ecritures={"/api/v1/appstore/module/secubox-relais/action/install": (202, {"status": "en-cours"})})
+    p.add_init_script("localStorage.setItem('sbx_token','jwt-test')"); p.reload()
+    p.wait_for_selector("#grille .carte")
+    carte = p.locator("#grille .carte", has_text="Relais")
+    carte.get_by_text("Installer").click()
+    assert not [a for a in appels if a[0] == "POST"]                    # pas avant la confirmation
+    assert "Installer relais ?" in p.inner_text("#grille")
+    carte.get_by_text("Confirmer").click()
+    p.wait_for_function("document.getElementById('rMod').textContent.includes('terminé')")
+    post = [a for a in appels if a[0] == "POST"][0]
+    assert post[1] == "/api/v1/appstore/module/secubox-relais/action/install" and post[3] == "Bearer jwt-test"
+    assert len([a for a in appels if a[0] == "GET" and a[1].endswith("/jobs")]) >= 2     # suivi de la tâche
+    assert err == []
+    ctx.close()
+
+
+def test_module_non_publie_ou_verrouille_reste_grise_avec_sa_raison(navigateur):
+    ctx, p, _, _ = ouvre(navigateur, "http://sbx.test/appstore/")
+    p.wait_for_selector("#grille .carte")
+    coffre = p.locator("#grille .carte", has_text="coffre").get_by_role("button", name="Installer")
+    assert coffre.is_disabled() and "dépôt" in coffre.get_attribute("title")
+    galerie = p.locator("#grille .carte", has_text="galerie").get_by_role("button", name="Installer")
+    assert galerie.is_disabled() and "niveau" in galerie.get_attribute("title")
+    ctx.close()
+
+
+def test_retirer_exige_de_retaper_le_nom_du_paquet(navigateur):
+    jobs = _suite({}, {"secubox-dns": {"verbe": "remove", "etat": "ok", "message": "removed secubox-dns"}})
+    ctx, p, err, appels = ouvre(navigateur, "http://sbx.test/appstore/?sonde=40", jobs=jobs,
+                                ecritures={"/api/v1/appstore/module/secubox-dns/action/remove": (202, {"status": "en-cours"})})
+    p.wait_for_selector("#grille .carte")
+    carte = p.locator("#grille .carte", has_text="dns")
+    carte.get_by_text("Retirer", exact=True).click()
+    champ = carte.get_by_label("Retapez le nom du paquet")
+    ok = carte.get_by_role("button", name="Retirer", exact=True)
+    assert ok.is_disabled()
+    champ.fill("dns")
+    assert ok.is_disabled()                                              # le nom court ne suffit pas
+    champ.fill("secubox-dns")
+    assert ok.is_enabled()
+    ok.click()
+    p.wait_for_function("document.getElementById('rMod').textContent.includes('terminé')")
+    post = [a for a in appels if a[0] == "POST"]
+    assert [a[1] for a in post] == ["/api/v1/appstore/module/secubox-dns/action/remove"]
+    assert err == []
+    ctx.close()
+
+
+def test_annuler_le_retrait_n_envoie_rien(navigateur):
+    ctx, p, _, appels = ouvre(navigateur, "http://sbx.test/appstore/")
+    p.wait_for_selector("#grille .carte")
+    carte = p.locator("#grille .carte", has_text="dns")
+    carte.get_by_text("Retirer", exact=True).click()
+    carte.get_by_text("Annuler").click()
+    assert not [a for a in appels if a[0] == "POST"]
+    assert carte.get_by_text("Retirer", exact=True).is_visible()
+    ctx.close()
+
+
+def test_refus_du_controleur_affiche_le_motif(navigateur):
+    jobs = _suite({}, {"secubox-dns": {"verbe": "remove", "etat": "refuse", "code": 409,
+                                       "message": "remove refusé : appstorectl: secubox-dns est requis par : secubox-x"}})
+    ctx, p, _, _ = ouvre(navigateur, "http://sbx.test/appstore/?sonde=40", jobs=jobs,
+                         ecritures={"/api/v1/appstore/module/secubox-dns/action/remove": (202, {"status": "en-cours"})})
+    p.wait_for_selector("#grille .carte")
+    carte = p.locator("#grille .carte", has_text="dns")
+    carte.get_by_text("Retirer", exact=True).click()
+    carte.get_by_label("Retapez le nom du paquet").fill("secubox-dns")
+    carte.get_by_role("button", name="Retirer", exact=True).click()
+    p.wait_for_function("document.getElementById('rMod').textContent.includes('requis par')")
+    assert "ko" in p.get_attribute("#rMod", "class")
+    ctx.close()
+
+
+def test_operation_deja_en_cours_au_chargement_est_reprise(navigateur):
+    jobs = _suite({"secubox-relais": {"verbe": "install", "etat": "en-cours"}},
+                  {"secubox-relais": {"verbe": "install", "etat": "ok", "message": "installed"}})
+    ctx, p, _, _ = ouvre(navigateur, "http://sbx.test/appstore/?sonde=40", jobs=jobs)
+    p.wait_for_selector("#grille .carte")
+    carte = p.locator("#grille .carte", has_text="Relais")
+    assert "installation en cours" in carte.inner_text() and carte.get_by_text("Installer").count() == 0
+    p.wait_for_function("document.getElementById('rMod').textContent.includes('terminé')")
+    ctx.close()
+
+
+def test_conflit_409_au_lancement_est_affiche(navigateur):
+    ctx, p, _, _ = ouvre(navigateur, "http://sbx.test/appstore/",
+                         ecritures={"/api/v1/appstore/module/secubox-relais/action/install": (409, {"detail": "une autre opération est en cours : secubox-x"})})
+    p.wait_for_selector("#grille .carte")
+    carte = p.locator("#grille .carte", has_text="Relais")
+    carte.get_by_text("Installer").click(); carte.get_by_text("Confirmer").click()
+    p.wait_for_function("document.getElementById('rMod').textContent.includes('une autre opération')")
     ctx.close()

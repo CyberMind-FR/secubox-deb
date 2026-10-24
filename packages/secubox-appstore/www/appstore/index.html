@@ -220,6 +220,11 @@
         let SESSION_OK = true, GROUPE = null, FED_TYPE = 'metablog', FED_N = 48;
         const FED_PAGE = 48;
         let CONFIRM = null;     // { genre:'module'|'cfg', cle, verbe } : confirmation en cours dans la page
+        let BUSY = {};          // nom → verbe : installation, retrait ou réparation en cours (tâche de fond côté API, #3119)
+        let SUIVI = false;
+        const SONDE_MS = Number(Q.get('sonde')) || 2500;
+        const LIB_VERBE = { install: 'installation', remove: 'retrait', repair: 'réparation' };
+        const LIB_CONFIRM = { stop: 'Arrêter', disable: 'Désactiver', install: 'Installer', repair: 'Réparer' };
         let FEDCONF = null;     // { id, nom } : installation fédérée en cours de confirmation
         let CUR = null;         // module dont la configuration est ouverte
         let CFG_LECTURE = true;
@@ -277,16 +282,19 @@
 
         async function charger() {
             if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
-            const e = await Promise.allSettled([lire(API, '/categories'), lire(API, '/catalog'), lire(API, '/groupes'), lire(API, '/metapaquets'), lire(API, '/mesh-catalog'), lire(FED, '/catalog'), lire(API, '/remote/demandes')]);
+            const e = await Promise.allSettled([lire(API, '/categories'), lire(API, '/catalog'), lire(API, '/groupes'), lire(API, '/metapaquets'), lire(API, '/mesh-catalog'), lire(FED, '/catalog'), lire(API, '/remote/demandes'), lire(API, '/jobs')]);
             const val = i => e[i].status === 'fulfilled' ? e[i].value : null;
             const refus = e.some(x => x.status === 'rejected' && (x.reason.statut === 401 || x.reason.statut === 403));
             const tous = e.every(x => x.status === 'rejected');
             SESSION_OK = !refus;
             CATS = val(0); const c = val(1); ALL = c && Array.isArray(c.modules) ? c.modules : null;
             GROUPES = val(2); MP = val(3); MESH = val(4); FEDALL = val(5); REMOTE = val(6);
+            const jb = val(7);
+            if (jb && jb.jobs) Object.keys(jb.jobs).forEach(n => { if (jb.jobs[n].etat === 'en-cours') BUSY[n] = jb.jobs[n].verbe; });
             $('erreur').hidden = !(tous && !refus);
             if (tous && !refus) $('erreur').textContent = 'Impossible de lire l’App Store (service arrêté ou injoignable).';
             rendre();
+            if (Object.keys(BUSY).length) suivre();
         }
         async function rechargerCatalogue() {
             if (DEMO) { rendre(); return; }
@@ -375,16 +383,33 @@
             });
         }
         function actionsDe(m, cell) {
-            if (!m.installed) {
-                const b = btn('Installer', '', () => {}); b.disabled = true;
-                b.title = 'Installation depuis cette page : non reprise. En ligne de commande : apt install ' + m.name; cell.appendChild(b); return;
-            }
+            if (BUSY[m.name]) { cell.appendChild(el('span', 'note', LIB_VERBE[BUSY[m.name]] + ' en cours…')); return; }
             const c = CONFIRM && CONFIRM.genre === 'module' && CONFIRM.cle === m.name ? CONFIRM : null;
+            if (c && c.verbe === 'remove') {
+                // la confirmation du retrait est un NOM à retaper, pas une case : l'API refuse sans ?confirmer=<nom> (428)
+                cell.appendChild(el('span', 'note', 'Retapez « ' + m.name + ' » pour retirer (configuration et données conservées) :'));
+                const champ = el('input'); champ.type = 'text'; champ.value = c.saisie || ''; champ.placeholder = m.name;
+                champ.autocomplete = 'off'; champ.spellcheck = false; champ.setAttribute('aria-label', 'Retapez le nom du paquet pour confirmer le retrait');
+                const ok = btn('Retirer', 'danger', () => { CONFIRM = null; agir(m.name, 'remove', '?confirmer=' + encodeURIComponent(m.name)); });
+                ok.disabled = champ.value !== m.name;
+                champ.addEventListener('input', () => { c.saisie = champ.value; ok.disabled = champ.value !== m.name; });
+                cell.appendChild(champ); cell.appendChild(ok); cell.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+                if (c.focus) { c.focus = false; setTimeout(() => champ.focus(), 0); }
+                return;
+            }
             if (c) {
-                cell.appendChild(el('span', 'note', (c.verbe === 'stop' ? 'Arrêter' : 'Désactiver') + ' ' + court(m.name) + ' ?'));
-                cell.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; agir(m.name, c.verbe); }));
+                cell.appendChild(el('span', 'note', (LIB_CONFIRM[c.verbe] || 'Désactiver') + ' ' + court(m.name) + ' ?'));
+                cell.appendChild(btn('Confirmer', c.verbe === 'install' ? 'go' : 'danger', () => { CONFIRM = null; agir(m.name, c.verbe); }));
                 cell.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
                 return;
+            }
+            if (!m.installed) {
+                const b = btn('Installer', m.state === 'available' ? 'go' : '', () => { CONFIRM = { genre: 'module', cle: m.name, verbe: 'install' }; rendre(); });
+                if (m.state !== 'available') {
+                    b.disabled = true;
+                    b.title = m.state === 'tier-locked' ? 'Verrouillé par le niveau de cette box' : 'Non publié au dépôt de cette box : rien à installer pour l’instant';
+                }
+                cell.appendChild(b); return;
             }
             const sans = (txt, verbe) => btn(txt, '', () => agir(m.name, verbe));
             const avec = (txt, verbe) => btn(txt, 'danger', () => { CONFIRM = { genre: 'module', cle: m.name, verbe }; rendre(); });
@@ -392,6 +417,7 @@
             else cell.appendChild(sans('Démarrer', 'start'));
             cell.appendChild(sans('Activer', 'enable')); cell.appendChild(avec('Désactiver', 'disable'));
             cell.appendChild(btn('Config', '', () => ouvrirCfg(m.name)));
+            cell.appendChild(btn('Retirer', 'danger', () => { CONFIRM = { genre: 'module', cle: m.name, verbe: 'remove', saisie: '', focus: true }; rendre(); }));
         }
         function rendreModules() {
             const g = $('grille'); g.replaceChildren();
@@ -412,10 +438,34 @@
         ['fCat', 'fTier', 'fEtat'].forEach(i => $(i).addEventListener('change', () => { rendreModules(); annoncer(); }));
         $('q').addEventListener('input', annoncer);
 
-        async function agir(nom, verbe) {
-            const r = await ecrire(API, 'POST', '/module/' + encodeURIComponent(nom) + '/action/' + verbe);
+        async function agir(nom, verbe, suite) {
+            const r = await ecrire(API, 'POST', '/module/' + encodeURIComponent(nom) + '/action/' + verbe + (suite || ''));
+            if (r.ok && r.statut === 202) {        // tâche de fond : HAProxy coupe à 30 s, apt peut durer des minutes
+                BUSY[nom] = verbe; retour('rMod', true, court(nom) + ' : ' + LIB_VERBE[verbe] + ' en cours…'); rendre(); suivre(); return;
+            }
             if (r.ok) { retour('rMod', true, court(nom) + ' : ' + verbe + ' effectué.'); await rechargerCatalogue(); }
             else { retour('rMod', false, verbe + ' impossible : ' + detail(r)); rendre(); }
+        }
+        // Interroge GET /jobs tant qu'une opération est en cours ; rend le motif exact d'un refus du contrôleur.
+        async function suivre() {
+            if (SUIVI) return;
+            SUIVI = true;
+            try {
+                while (Object.keys(BUSY).length) {
+                    await new Promise(fin => setTimeout(fin, SONDE_MS));
+                    let jobs = null;
+                    try { jobs = (await lire(API, '/jobs')).jobs || {}; } catch (e) { continue; }       // service occupé : on réessaie
+                    for (const nom of Object.keys(BUSY)) {
+                        const t = jobs[nom], verbe = BUSY[nom];
+                        if (t && t.etat === 'en-cours') continue;
+                        delete BUSY[nom];
+                        if (!t) retour('rMod', false, court(nom) + ' : ' + LIB_VERBE[verbe] + ' — suivi perdu (service redémarré ?). Vérifiez l’état du module.');
+                        else if (t.etat === 'ok') retour('rMod', true, court(nom) + ' : ' + LIB_VERBE[verbe] + ' — terminé.');
+                        else retour('rMod', false, court(nom) + ' : ' + (t.message || (LIB_VERBE[verbe] + ' impossible')));
+                    }
+                    await rechargerCatalogue();
+                }
+            } finally { SUIVI = false; }
         }
 
         // ----- Configuration d'un module (panneau intégré, plus de fenêtre modale) -----

@@ -23,6 +23,8 @@ Socket Unix : `/run/secubox/appstore.sock`.
 
 ## API
 
+`install`, `remove` (confirmation : `?confirmer=<nom complet>`) et `repair` sont des **tâches de fond** (202 puis `GET /jobs`), car HAProxy coupe à 30 s ; une seule à la fois (409 sinon). Les autres verbes sont synchrones.
+
 | Méthode | Route | Garde |
 |---|---|---|
 | `GET` | `/health` | aucune |
@@ -35,6 +37,7 @@ Socket Unix : `/run/secubox/appstore.sock`.
 | `GET` | `/metapaquets` | require_lecture |
 | `GET` | `/profils` | require_lecture |
 | `POST` | `/module/{name}/action/{verb}` | require_jwt |
+| `GET` | `/jobs` | require_lecture |
 | `GET` | `/module/{name}/config` | require_lecture |
 | `PUT` | `/module/{name}/config` | require_jwt |
 

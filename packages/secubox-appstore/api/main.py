@@ -9,6 +9,7 @@ debian/secubox.yaml) with live runtime state (dpkg installed/version +
 systemctl active). Runs unprivileged (user `secubox`): all state queries are
 read-only. Install/enable/prefs/profiles are later phases (a root worker).
 """
+import asyncio
 import os
 import json
 import time
@@ -17,6 +18,7 @@ import tomllib
 from pathlib import Path
 from typing import Optional
 
+from fastapi.responses import JSONResponse
 from fastapi import FastAPI, HTTPException, Depends, Request
 from secubox_core.auth import require_lecture
 from secubox_core.auth import require_jwt
@@ -287,10 +289,14 @@ def _resolve(name: str, st: dict) -> str:
     raise HTTPException(status_code=404, detail=f"unknown module {name!r}")
 
 
+# apt peut durer des minutes (MOCHAbin, dépôt distant) : installer et réparer ont 10 min, retirer 5, le reste 90 s (#3119).
+DELAIS_CTL = {"install": 600, "repair": 600, "remove": 300}
+
+
 def _appstorectl(args, input_text=None):
     try:
         r = subprocess.run(["sudo", "-n", APPSTORECTL, *args], input=input_text,
-                           capture_output=True, text=True, timeout=90)
+                           capture_output=True, text=True, timeout=DELAIS_CTL.get(args[0] if args else "", 90))
         return r.returncode, (r.stdout or "").strip(), (r.stderr or "").strip()
     except Exception as e:  # noqa: BLE001
         return 1, "", str(e)
@@ -580,6 +586,55 @@ async def profils():
     return {"profils": out, "count": len(out)}
 
 
+# UN REFUS N'EST PAS UNE PANNE : les codes de sortie du contrôleur disent pourquoi la demande est refusée.
+STATUTS_CTL = {
+    2: 400,   # nom hors liste blanche, ou verbe inconnu du script
+    4: 404,   # paquet absent des dépôts configurés
+    5: 409,   # une autre opération dpkg est en cours (verrou)
+    6: 403,   # module protégé : retrait interdit
+    7: 409,   # d'autres paquets en dépendent encore
+}
+
+# Installer, retirer, réparer = TÂCHES DE FOND (#3119). HAProxy coupe à 30 s (`timeout server`) : une installation apt
+# synchrone finirait en 504 alors qu'apt continue derrière. La requête rend 202, la page interroge GET /jobs.
+VERBES_LONGS = {"install", "remove", "repair"}
+_JOBS: dict = {}
+_TACHES: set = set()           # références fortes : une tâche sans référence peut être ramassée en cours de route
+_JOBS_GARDES_S = 3600
+
+
+def _purger_jobs():
+    limite = time.time() - _JOBS_GARDES_S
+    for nom in [n for n, j in _JOBS.items() if j["etat"] != "en-cours" and (j.get("fin") or 0) < limite]:
+        del _JOBS[nom]
+
+
+async def _executer_job(name: str, verb: str):
+    job = _JOBS[name]
+    try:
+        rc, out, err = await asyncio.to_thread(_appstorectl, [verb, name])
+    except Exception as e:  # noqa: BLE001
+        rc, out, err = 1, "", str(e)
+    if rc == 0:
+        job.update(etat="ok", code=200, message=out)
+    elif rc in STATUTS_CTL:
+        job.update(etat="refuse", code=STATUTS_CTL[rc], message=f"{verb} refusé : {err or out}")
+    else:
+        job.update(etat="echec", code=500, message=f"{verb} failed: {err or out}")
+    job["fin"] = time.time()
+    try:
+        compute_state(force=True)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+@app.get("/jobs", dependencies=[Depends(require_lecture)])
+async def jobs():
+    """Avancement des installations, retraits et réparations lancés depuis cette page (#3119)."""
+    _purger_jobs()
+    return {"jobs": _JOBS}
+
+
 @app.post("/module/{name}/action/{verb}", dependencies=[Depends(require_jwt)])
 async def module_action(name: str, verb: str, confirmer: str | None = None):
     """Agir sur un module : cycle de vie, ou ajout/retrait dans le parc (#1323).
@@ -612,21 +667,22 @@ async def module_action(name: str, verb: str, confirmer: str | None = None):
     if verb in ACTIONS_CONFIRMEES and confirmer != name:
         raise HTTPException(status_code=428,
                             detail=f"confirmation requise : renvoyez ?confirmer={name}")
-    rc, out, err = _appstorectl([verb, name])
+    if verb in VERBES_LONGS:
+        en_cours = [n for n, j in _JOBS.items() if j["etat"] == "en-cours"]
+        if en_cours:
+            raise HTTPException(status_code=409,
+                                detail=f"une autre opération est en cours : {en_cours[0]} — attendez qu'elle finisse")
+        _JOBS[name] = {"verbe": verb, "etat": "en-cours", "code": None, "message": "",
+                       "debut": time.time(), "fin": None}
+        tache = asyncio.create_task(_executer_job(name, verb))
+        _TACHES.add(tache)
+        tache.add_done_callback(_TACHES.discard)
+        return JSONResponse(status_code=202, content={"status": "en-cours", "action": verb, "module": name})
+    # hors de la boucle d'événements (to_thread), comme les tâches de fond
+    rc, out, err = await asyncio.to_thread(_appstorectl, [verb, name])
     if rc != 0:
-        # UN REFUS N'EST PAS UNE PANNE. Le script sort sur des codes parlants ;
-        # les rendre tous en 500 dirait « le serveur a cassé » là où la vérité
-        # est « votre demande est refusée, et voici pourquoi » — et l'interface
-        # ne pourrait qu'afficher une erreur générique au lieu du motif.
-        STATUTS = {
-            2: 400,   # nom hors liste blanche, ou verbe inconnu du script
-            4: 404,   # paquet absent des dépôts configurés
-            5: 409,   # une autre opération dpkg est en cours (verrou)
-            6: 403,   # module protégé : retrait interdit
-            7: 409,   # d'autres paquets en dépendent encore
-        }
-        raise HTTPException(status_code=STATUTS.get(rc, 500),
-                            detail=f"{verb} refusé : {err or out}" if rc in STATUTS
+        raise HTTPException(status_code=STATUTS_CTL.get(rc, 500),
+                            detail=f"{verb} refusé : {err or out}" if rc in STATUTS_CTL
                                    else f"{verb} failed: {err or out}")
     new = compute_state(force=True).get(name, {})
     return {"status": "ok", "action": verb, "module": name,
