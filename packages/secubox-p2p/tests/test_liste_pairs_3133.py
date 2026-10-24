@@ -327,7 +327,7 @@ def test_aucun_proxy_vers_p2p_sock_ne_transmet_le_pair_autrement_que_par_la_cle(
     assert fichiers
     for f in fichiers:
         for m in re.finditer(r"proxy_set_header\s+X-SecuBox-Pair\s+([^;]*);", f.read_text()):
-            assert m.group(1).strip() == "$p2p_pair_cle", f
+            assert m.group(1).strip() in ("$p2p_pair_cle", '""'), f      # la clé du maillage, ou vidé
 
 
 def test_postinst_entier_un_seul_mode_pour_le_dossier_du_jeton():

@@ -3,6 +3,11 @@ set -e
 
 case "$1" in
     remove|upgrade|deconfigure)
+        # Liens directs (#3133) : la minuterie d'abord, pour qu'aucune synchronisation ne démarre pendant l'opération.
+        systemctl stop secubox-maillage-pairs.timer secubox-maillage-pairs.service || true
+        if [ "$1" = "remove" ]; then
+            systemctl disable secubox-maillage-pairs.timer || true
+        fi
         # Stop the service
         systemctl stop secubox-p2p.service || true
         systemctl disable secubox-p2p.service || true
