@@ -1062,8 +1062,15 @@ manual_add_modules phy_mvebu_a3700_comphy
 HOOK
   chmod +x "${ROOTFS}/etc/initramfs-tools/hooks/sdhci-xenon"
 
+  # Hook 2: switch DSA (mv88e6xxx) et initramfs
+  if [[ "${BOARD}" == "mochabin" ]]; then
+  # MOCHAbin (#3093) : le switch se charge DANS l'initrd, avant toute ouverture d'eth2. Chargé après (udev, ~13 s),
+  # il fait basculer les tampons mvpp2 (« switching to per-cpu buffers »), tous les ports sont rouverts et le PHY
+  # 88E1510 d'eth2 (WAN) rattaché une 2e fois ne remonte jamais (#2004, constaté au banc le 2026-10-24).
+  printf 'dsa_core\nmv88e6xxx\n' >> "${ROOTFS}/etc/initramfs-tools/modules"
+  else
   # Hook 2: Blacklist mv88e6xxx DSA switch driver during initramfs
-  # Prevents probe loop that causes boot failures on ESPRESSObin/MOCHAbin
+  # Prevents probe loop that causes boot failures on ESPRESSObin
   cat > "${ROOTFS}/etc/initramfs-tools/hooks/mv88e6xxx-blacklist" <<'HOOK'
 #!/bin/sh
 PREREQ=""
@@ -1081,6 +1088,7 @@ blacklist dsa_core
 MODPROBE
 HOOK
   chmod +x "${ROOTFS}/etc/initramfs-tools/hooks/mv88e6xxx-blacklist"
+  fi
 
   # Also create the modprobe.d config in rootfs for good measure
   mkdir -p "${ROOTFS}/etc/modprobe.d"
