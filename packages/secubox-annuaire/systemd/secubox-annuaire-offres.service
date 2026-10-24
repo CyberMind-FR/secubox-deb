@@ -13,11 +13,13 @@ Type=oneshot
 # Deux temps, deux utilisateurs : root LIT ce que la box offre (onions de Tor, curation du Hall, dépôt apt) et le pose
 # dans offres-reelles.json ; secubox, propriétaire de la clé du nœud et du journal, SIGNE les offres et les révocations.
 # Root ne touche jamais au journal (ses fichiers WAL resteraient à lui, et l'API ne pourrait plus écrire).
+# pairs-cache (services des autres nœuds, #3133) EN PREMIER : il ne dépend d'aucune étape locale, et dans ce oneshot
+# l'échec d'un ExecStart arrête les suivants — placé après, le cache resterait périmé tant que la collecte échoue.
 User=secubox
 Group=secubox
+ExecStart=/usr/sbin/annuairectl pairs-cache
 ExecStart=+/usr/sbin/annuairectl offres-collecte
 ExecStart=/usr/sbin/annuairectl offer-sync
-ExecStart=/usr/sbin/annuairectl pairs-cache
 NoNewPrivileges=yes
 ProtectSystem=strict
 ReadWritePaths=/var/lib/secubox/annuaire

@@ -80,7 +80,11 @@ def test_le_ctl_et_l_unite_portent_le_verbe():
     assert '"pairs-cache"' in (pkg / "sbin" / "annuairectl").read_text(encoding="utf-8")
     unite = (pkg / "systemd" / "secubox-annuaire-offres.service").read_text(encoding="utf-8")
     assert "ExecStart=/usr/sbin/annuairectl pairs-cache" in unite
-    assert unite.index("offer-sync") < unite.index("pairs-cache")
+    # pairs-cache EN PREMIER : il ne dépend d'aucune étape locale, et dans ce oneshot un échec d'offres-collecte ou
+    # d'offer-sync arrêterait les ExecStart suivants (le cache des services des pairs resterait périmé sans fin)
+    execs = [ligne.split("=", 1)[1] for ligne in unite.splitlines() if ligne.startswith("ExecStart=")]
+    assert execs == ["/usr/sbin/annuairectl pairs-cache", "+/usr/sbin/annuairectl offres-collecte",
+                     "/usr/sbin/annuairectl offer-sync"]
     assert "annuairectl" in (pkg / "debian" / "rules").read_text(encoding="utf-8")
 
 
