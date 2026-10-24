@@ -212,3 +212,60 @@ def test_le_module_ne_se_charge_que_du_chemin_installe(tmp_path, monkeypatch):
     monkeypatch.setattr(ancre_p2p, "INSTALLE", tmp_path / "absent.py")
     with pytest.raises(RuntimeError):
         ancre_p2p.charge()
+
+
+class _RepRefus:
+    status_code = 400
+
+    def __init__(self, detail):
+        self._d = detail
+
+    def json(self):
+        return {"detail": self._d}
+
+
+class _ClientAncienne(_Client):
+    """Box d'avant premier-pas 0.8.0 : les champs ancre_* de l'étape maillage sont inconnus."""
+
+    def __init__(self, detail=None):
+        super().__init__()
+        self.essais = []
+        self.detail = detail
+
+    def put(self, url, json=None, **k):
+        etape = url.rsplit("/", 1)[1]
+        if etape == "maillage":
+            self.essais.append(dict(json))
+            inconnus = sorted(c for c in json if c.startswith("ancre_"))
+            if inconnus or self.detail:
+                return _RepRefus(self.detail or "Champs inconnus : " + ", ".join(inconnus))
+        return super().put(url, json=json, **k)
+
+
+def _maitre_avec_cle(tmp_path, monkeypatch):
+    monkeypatch.setenv("SBX_P2P_ANCRE_PY", str(SOURCE_ANCRE))
+    monkeypatch.setenv("PREMIER_PAS_MAITRE_DIR", str(tmp_path / "maitre"))
+    mesh = tmp_path / "wg_mesh.json"
+    mesh.write_text(json.dumps({"public_key": CLE}))
+    monkeypatch.setattr(MA, "WG_MESH_JSON", mesh)
+    monkeypatch.setattr(MA, "_mes_adresses", lambda: [])
+    MA.enregistre("gk3", _profil() | {"admin": {"mot_de_passe": EMPREINTE}})
+
+
+def test_box_ancienne_maillage_repris_sans_ancre(tmp_path, monkeypatch, caplog):
+    _maitre_avec_cle(tmp_path, monkeypatch)
+    c = _ClientAncienne()
+    r = MA.pousse("gk3", "192.168.1.9", "code", "remplir", client=c)
+    assert r["ok"], r
+    assert len(c.essais) == 2
+    assert any(k.startswith("ancre_") for k in c.essais[0])
+    assert not any(k.startswith("ancre_") for k in c.essais[1]) and c.essais[1]["jeton"] == JETON
+    assert "ancre" in r["avertissements"][0].lower()
+    assert "trop ancienne" in caplog.text
+
+
+def test_autre_refus_du_maillage_pas_de_reprise(tmp_path, monkeypatch):
+    _maitre_avec_cle(tmp_path, monkeypatch)
+    c = _ClientAncienne(detail="Champs inconnus : ancre_cle, inconnue")
+    r = MA.pousse("gk3", "192.168.1.9", "code", "remplir", client=c)
+    assert not r["ok"] and r["code"] == 400 and len(c.essais) == 1
