@@ -1,0 +1,177 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""#3100 — le maître sert au live un lot de flash signé (code de jonction, ancre, nom, domaine)."""
+import base64
+import importlib
+import json
+import os
+import stat
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ICI = Path(__file__).resolve().parents[1]
+RACINE = ICI.parents[1]
+P2P = RACINE / "packages" / "secubox-p2p"
+CTL = ICI / "sbin" / "secubox-netboot-lot"
+sys.path.insert(0, str(ICI))
+sys.path.insert(0, str(RACINE / "common"))
+
+
+def _p2p(nom):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("p2p_" + nom, P2P / "api" / (nom + ".py"))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+@pytest.fixture
+def monde(tmp_path, monkeypatch):
+    """Clé RSA jetable, fausse CLI d'invitation, wg_mesh.json, dossiers temporaires."""
+    cle = tmp_path / "netboot.key"
+    pub = tmp_path / "netboot.pub"
+    subprocess.run(["openssl", "genrsa", "-out", str(cle), "2048"], check=True, capture_output=True)
+    subprocess.run(["openssl", "rsa", "-in", str(cle), "-pubout", "-out", str(pub)], check=True, capture_output=True)
+    automesh = _p2p("automesh")
+    code = automesh.encoder("192.168.1.200", "a" * 64)
+    invite = tmp_path / "invite"
+    invite.write_text("#!/bin/sh\necho '{\"code\": \"%s\", \"nom\": \"'\"$4\"'\", \"expire\": 1}'\n" % code)
+    invite.chmod(0o755)
+    wg = tmp_path / "wg_mesh.json"
+    wg.write_text(json.dumps({"public_key": "CLEPUBLIQUEDUMAITRE="}))
+    prep = tmp_path / "prepares"
+    audit = tmp_path / "audit.log"
+    env = {"SBX_NETBOOT_KEY": str(cle), "SBX_LOT_INVITE": str(invite), "SBX_LOT_WGMESH": str(wg),
+           "SBX_LOT_P2P": str(P2P / "api"), "SBX_LOT_PREPARES": str(prep), "SBX_LOT_AUDIT": str(audit),
+           "SBX_LOT_DOMAINE_MAITRE": "gk2.secubox.in", "SBX_LOT_HOTE": "gk2"}
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    return {"env": env, "pub": pub, "code": code, "prep": prep, "audit": audit, "tmp": tmp_path}
+
+
+def _lot():
+    sys.modules.pop("api.lot", None)
+    return importlib.import_module("api.lot")
+
+
+def test_domaine_pour():
+    lot = _lot()
+    assert lot.domaine_pour("gk1", "gk2.secubox.in") == "gk1.secubox.in"
+    assert lot.domaine_pour("a-b2", "x.exemple.fr") == "a-b2.exemple.fr"
+
+
+@pytest.mark.parametrize("nom", ["", "GK1", "1gk", "a_b", "a.b", "../x", "a" * 32, "gk1\n"])
+def test_nom_invalide_refuse(nom):
+    with pytest.raises(ValueError):
+        _lot().domaine_pour(nom, "gk2.secubox.in")
+
+
+def test_lot_signe_verifie_avec_la_cle_publique(monde):
+    r = subprocess.run([sys.executable, str(CTL), "gk1"], capture_output=True, text=True, env={**os.environ, **monde["env"]})
+    assert r.returncode == 0, r.stderr
+    sortie = json.loads(r.stdout)
+    texte = sortie["lot"]
+    d = json.loads(texte)
+    assert d["version"] == 1 and d["nom"] == "gk1" and d["domaine"] == "gk1.secubox.in"
+    assert d["code"] == monde["code"] and "admin_empreinte" not in d
+    anc = d["ancre"]
+    assert anc["cle_publique"] == "CLEPUBLIQUEDUMAITRE=" and anc["adresse"] == "192.168.1.200" and anc["nom"] == "gk2"
+    assert anc["empreinte"] == _p2p("ancre").empreinte("CLEPUBLIQUEDUMAITRE=")
+    sig = monde["tmp"] / "lot.sig"
+    sig.write_bytes(base64.b64decode(sortie["signature"]))
+    lotf = monde["tmp"] / "lot.json"
+    lotf.write_bytes(texte.encode())
+    v = subprocess.run(["openssl", "dgst", "-sha256", "-verify", str(monde["pub"]), "-signature", str(sig), str(lotf)],
+                       capture_output=True)
+    assert v.returncode == 0, v.stderr
+    lotf.write_bytes(texte.replace("gk1", "gk9").encode())
+    assert subprocess.run(["openssl", "dgst", "-sha256", "-verify", str(monde["pub"]), "-signature", str(sig), str(lotf)],
+                          capture_output=True).returncode != 0
+
+
+def test_ctl_refuse_nom_invalide(monde):
+    r = subprocess.run([sys.executable, str(CTL), "../x"], capture_output=True, text=True, env={**os.environ, **monde["env"]})
+    assert r.returncode != 0 and r.stdout == ""
+
+
+def _client(monde):
+    from fastapi.testclient import TestClient
+    sys.modules.pop("api.lot", None)
+    sys.modules.pop("api.main", None)
+    main = importlib.import_module("api.main")
+    main._LOT_COMPTEURS.clear()
+    main.CTL_LOT = str(CTL)
+    return main, TestClient(main.app)
+
+
+def test_preparation_consommee_une_fois(monde):
+    main, c = _client(monde)
+    main.app.dependency_overrides[main.require_jwt] = lambda: {"sub": "admin"}
+    r = c.post("/flash/prepare", json={"nom": "gk1", "mot_de_passe": "Secret-Test-42"})
+    assert r.status_code == 200, r.text
+    h = {"X-Real-IP": "192.168.1.50"}
+    r1 = c.get("/lot-flash", params={"nom": "gk1"}, headers=h)
+    assert r1.status_code == 200, r1.text
+    d1 = json.loads(r1.json()["lot"])
+    assert d1["admin_empreinte"].startswith("$argon2")
+    r2 = c.get("/lot-flash", params={"nom": "gk1"}, headers=h)
+    assert "admin_empreinte" not in json.loads(r2.json()["lot"])
+    assert not (monde["prep"] / "gk1.json").exists()
+    lignes = [json.loads(x) for x in monde["audit"].read_text().splitlines()]
+    assert [x["evenement"] for x in lignes] == ["lot_flash_servi"] * 2
+    assert lignes[0]["nom"] == "gk1" and lignes[0]["adresse"] == "192.168.1.50"
+    assert monde["code"] not in monde["audit"].read_text()
+
+
+def test_mot_de_passe_jamais_en_clair_sur_disque(monde, caplog):
+    main, c = _client(monde)
+    main.app.dependency_overrides[main.require_jwt] = lambda: {"sub": "admin"}
+    c.post("/flash/prepare", json={"nom": "gk1", "mot_de_passe": "Secret-Test-42"})
+    f = monde["prep"] / "gk1.json"
+    assert stat.S_IMODE(f.stat().st_mode) == 0o600
+    assert "Secret-Test-42" not in f.read_text()
+    d = json.loads(f.read_text())
+    assert d["nom"] == "gk1" and d["admin_empreinte"].startswith("$argon2")
+    from argon2 import PasswordHasher
+    assert PasswordHasher().verify(d["admin_empreinte"], "Secret-Test-42")
+    for p in monde["tmp"].rglob("*"):
+        if p.is_file():
+            assert b"Secret-Test-42" not in p.read_bytes()
+    assert "Secret-Test-42" not in caplog.text
+
+
+def test_prepare_exige_jwt_et_valide_le_nom(monde):
+    main, c = _client(monde)
+    assert c.post("/flash/prepare", json={"nom": "gk1", "mot_de_passe": "x" * 12}).status_code in (401, 403)
+    main.app.dependency_overrides[main.require_jwt] = lambda: {"sub": "admin"}
+    assert c.post("/flash/prepare", json={"nom": "../x", "mot_de_passe": "x" * 12}).status_code == 400
+    assert c.post("/flash/prepare", json={"nom": "gk1", "mot_de_passe": "court"}).status_code == 400
+
+
+def test_route_lot_refuse_hors_lan(monde):
+    main, c = _client(monde)
+    assert c.get("/lot-flash", params={"nom": "gk1"}, headers={"X-Real-IP": "8.8.8.8"}).status_code == 403
+    assert c.get("/lot-flash", params={"nom": "gk1"}).status_code == 403
+    assert c.get("/lot-flash", params={"nom": "../x"}, headers={"X-Real-IP": "10.0.0.5"}).status_code == 400
+
+
+def test_route_lot_six_par_heure_et_par_adresse(monde):
+    main, c = _client(monde)
+    h = {"X-Real-IP": "10.0.0.5"}
+    assert [c.get("/lot-flash", params={"nom": "gk1"}, headers=h).status_code for _ in range(6)] == [200] * 6
+    assert c.get("/lot-flash", params={"nom": "gk1"}, headers=h).status_code == 429
+    assert c.get("/lot-flash", params={"nom": "gk1"}, headers={"X-Real-IP": "10.0.0.6"}).status_code == 200
+
+
+def test_vhost_nginx_location_lot_flash_lan_seulement():
+    s = (ICI / "nginx" / "boot-vhost.conf").read_text()
+    i = s.index("location = /lot-flash")
+    bloc = s[i:s.index("}", i)]
+    for t in ("allow 10.0.0.0/8;", "allow 172.16.0.0/12;", "allow 192.168.0.0/16;", "deny all;",
+              "unix:/run/secubox/netboot.sock", "X-Real-IP $remote_addr"):
+        assert t in bloc
