@@ -1,3 +1,11 @@
+secubox-p2p (1.18.3-1~trixie1) trixie; urgency=medium
+
+  * secubox-relais-maillage (ref #3132) : le refus des sous-domaines d'un autre pair comptait aussi les routes du
+    relais lui-même sous le domaine parent (www.secubox.in vers 127.0.0.1) : tout *.secubox.in était refusé, gk1
+    compris (vu sur gk2 avec 1.18.2, aucun nom modifié). Seuls les domaines des pairs du maillage comptent.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 17:20:00 +0200
+
 secubox-p2p (1.18.2-1~trixie1) trixie; urgency=medium
 
   * secubox-relais-maillage (ref #3132) : les services propres à un pair sont publiés par le relais (réglage
