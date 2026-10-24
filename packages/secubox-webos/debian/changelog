@@ -1,6 +1,7 @@
 secubox-webos (1.19.26-1~trixie1) trixie; urgency=medium
 
   * Vhost du Hall livre sans les noms de gk2 (ref #3117) : server_name « hall.localhost hall.* » (hall.gk2.net et hall.gk2.secubox.in sont couverts par hall.* sur gk2), fichier renomme hall.conf. mv_conffile deplace l'ancien hall.gk2.net.conf (retouches conservees) ; le postinst remplace le lien d'activation si l'ancien l'etait, sans reactiver un Hall desactive a la main ; le postrm retire les deux liens.
+  * preinst (ref #3117) : retire l'ancien lien sites-enabled avant le renommage mv_conffile (il pendait jusqu'au postinst et faisait echouer nginx -t chez les autres paquets) et pose un repere /var/lib/secubox/webos/.hall-reactiver que le postinst consomme pour reactiver hall.conf.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 12:00:00 +0200
 

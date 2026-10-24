@@ -57,11 +57,19 @@ if [ "$1" = "configure" ]; then
         rm -f /etc/nginx/sites-enabled/hall.gk2.net.conf
     fi
     [ -z "${2:-}" ] && _hall_actif=1
+    # Repère posé par le preinst quand il a retiré l'ancien lien (#3117).
+    if [ -e /var/lib/secubox/webos/.hall-reactiver ]; then
+        _hall_actif=1
+    fi
     if [ "$_hall_actif" = 1 ] && [ -f /etc/nginx/sites-available/hall.conf ] && \
        [ ! -e /etc/nginx/sites-enabled/hall.conf ] && \
        [ ! -L /etc/nginx/sites-enabled/hall.conf ]; then
         ln -s ../sites-available/hall.conf \
               /etc/nginx/sites-enabled/hall.conf
+    fi
+    # Le repère ne part que lorsque le lien est en place (sinon il resservira).
+    if [ -L /etc/nginx/sites-enabled/hall.conf ]; then
+        rm -f /var/lib/secubox/webos/.hall-reactiver
     fi
     # Filet : un `.dpkg-dist`/`.dpkg-new` laisse dans sites-enabled par une
     # version anterieure (qui y livrait le conffile) reste charge par le glob

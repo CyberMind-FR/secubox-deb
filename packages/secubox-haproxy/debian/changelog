@@ -1,3 +1,9 @@
+secubox-haproxy (1.12.5-1~trixie1) trixie; urgency=medium
+
+  * Exposition : le filtre d'un vhost est celui que son fichier inclut (ref #3117). Les vhosts livres sous un nom neutre (metablogizer.*, actor.*, waf.*) incluent snippets/exposure/<nom>.conf ; les resolveurs du panneau (vhost et exposure) lisaient <FQDN>.conf, un fichier qui n'existe plus, et ecrivaient dans un filtre que nginx n'incluait pas. La ligne include du fichier de vhost fait foi (server_name exact avant joker) ; sans include, repli sur le FQDN comme avant.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 14:00:00 +0200
+
 secubox-haproxy (1.12.4-1~trixie1) trixie; urgency=medium
 
   * Le postinst active (`enable --now`) l'unité du composant exposure et le prerm l'arrête : installée

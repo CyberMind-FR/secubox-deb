@@ -1,6 +1,7 @@
 secubox-metablogizer (1.11.2-1~trixie1) trixie; urgency=medium
 
   * Vhosts metablogizer et depot livres sans les noms de gk2 (ref #3117) : server_name « metablogizer.* » / « depot.* », fichiers renommes metablogizer.conf et depot.conf, journaux depot_access.log / depot_error.log, filtre d'exposition metablogizer.conf. Le postinst migre l'ancien lien d'activation, l'ancien fichier (conserve sous le nouveau nom s'il a ete retouche) et le filtre d'exposition de l'operateur ; le vhost depot n'est reactive que s'il l'etait.
+  * Migration sure (ref #3117) : un ancien vhost retouche est archive dans /var/backups/nginx (0600) au lieu d'etre recopie sur le fichier livre ; un echec de nginx -t ne retire plus le lien migre.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 12:00:00 +0200
 
