@@ -40,7 +40,7 @@ except ImportError:
         return {"sub": "admin"}
 
 from . import mesh, registry, annuaire_client, dht, federation, masterlink, automesh, jetons, ancre
-from secubox_core.auth import require_lecture
+from secubox_core.auth import require_lecture, SESSION_COOKIE
 from secubox_core.crypto.empreinte import ident
 
 app = FastAPI(
@@ -50,6 +50,46 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url=None
 )
+
+
+# ── jeton de l'appelant relayé à l'annuaire local (#3136) ────────────────────
+_RE_JETON = re.compile(r"[A-Za-z0-9_-]{1,2048}\.[A-Za-z0-9_-]{1,2048}\.[A-Za-z0-9_-]{0,2048}")
+
+
+def _jetons_de_l_appelant(scope) -> tuple:
+    """Candidats de la requête dans l'ordre de la garde de lecture — Bearer, puis cookie de session —, de forme JWT
+    seulement, sans doublon. La position des en-têtes ne compte pas."""
+    from http.cookies import SimpleCookie
+    bearer, cookie = [], []
+    for nom, valeur in scope.get("headers") or []:
+        if nom == b"authorization" and valeur[:7].lower() == b"bearer ":
+            bearer.append(valeur[7:].decode("latin-1").strip())
+        elif nom == b"cookie":
+            try:
+                c = SimpleCookie(valeur.decode("latin-1"))
+            except Exception:  # noqa: BLE001
+                continue
+            if SESSION_COOKIE in c:
+                cookie.append(c[SESSION_COOKIE].value)
+    return tuple(dict.fromkeys(j for j in bearer + cookie if _RE_JETON.fullmatch(j)))
+
+
+class _RelaieJeton:
+    """ASGI : pose le jeton de l'appelant pour annuaire_client le temps de la requête, puis le retire."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        marque = annuaire_client.JETON_APPELANT.set(_jetons_de_l_appelant(scope))
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            annuaire_client.JETON_APPELANT.reset(marque)
+
+
+app.add_middleware(_RelaieJeton)
 
 # Paths
 P2P_DIR = Path("/var/lib/secubox/p2p")
