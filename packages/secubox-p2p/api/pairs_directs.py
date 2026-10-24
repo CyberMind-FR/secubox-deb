@@ -99,7 +99,7 @@ def liste_publiable(etat: dict, poignees: dict, maintenant: float, age_max_s: in
 
 
 def pairs_vivants(etat: dict, poignees: Optional[dict]) -> List[Dict[str, str]]:
-    """Enveloppe pour la route : sans mesure de poignées, personne n'est publié."""
+    """Enveloppe pour la route (horloge réelle). La route répond 503 sans mesure ; None reste sûr ici : personne."""
     return liste_publiable(etat, poignees or {}, time.time())
 
 

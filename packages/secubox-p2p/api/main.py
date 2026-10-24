@@ -2545,8 +2545,14 @@ async def garde_pair_ou_lecture(request: Request, creds=Depends(_bearer)):
 
 @app.get("/master-link/pairs", dependencies=[Depends(garde_pair_ou_lecture)])
 async def ml_pairs():
-    """Liste des pairs vivants du maillage, pour les liens directs (#3133). Aucun secret."""
-    return {"version": 1, "pairs": pairs_directs.pairs_vivants(get_wg_mesh_config(), mesh.load_handshakes())}
+    """Liste des pairs vivants du maillage, pour les liens directs (#3133). Aucun secret.
+
+    Sans mesure des poignées de main (fichier absent, illisible ou de plus de 120 s) : 503, JAMAIS une liste vide
+    valide — chaque pair retirerait alors tous ses liens directs ; sur une erreur HTTP, le pair ne change rien."""
+    poignees = mesh.load_handshakes()
+    if poignees is None:
+        raise HTTPException(status_code=503, detail="mesure des poignées indisponible")
+    return {"version": 1, "pairs": pairs_directs.pairs_vivants(get_wg_mesh_config(), poignees)}
 
 
 @app.get("/master-link/peers", dependencies=[Depends(require_lecture)])

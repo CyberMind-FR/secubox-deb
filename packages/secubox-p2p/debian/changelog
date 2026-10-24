@@ -6,6 +6,8 @@ secubox-p2p (1.19.0-1~trixie1) trixie; urgency=medium
     /etc/secubox/secrets/p2p/pair.token, généré par le postinst, nginx le pose pour une source 10.10.0.0/24 via
     /etc/nginx/secubox-p2p-pair.conf, compare_digest côté module) ou garde de lecture. La liste n'est pas signée :
     sa confiance repose sur ce secret et sur le canal wg-mesh. Nouveau module api/pairs_directs.py.
+    Sans mesure des poignées (fichier absent, illisible ou de plus de 120 s) la route répond 503, jamais une liste
+    vide valide qui ferait retirer leurs liens à tous les pairs.
   * Côté pair, calcul des liens directs (ref #3133, logique pure) « sonde puis promotion » : pairs_directs.calculer
     décide des ajouts (ni soi-même, ni le maître, ni une clé ou une IP déjà présente en entrée non directe), des
     promotions, des rétrogradations et des retraits ; pairs_directs.appliquer reconstruit l'état champ par champ

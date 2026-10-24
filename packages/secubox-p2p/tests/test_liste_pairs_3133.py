@@ -211,14 +211,26 @@ CORROMPUS = ['[1,2]', '{"written_at":"x","handshakes":{}}', '{"written_at":1,"ha
 
 
 @pytest.mark.parametrize("contenu", CORROMPUS)
-def test_fichier_de_poignees_corrompu_donne_liste_vide_jamais_500(client, monkeypatch, tmp_path, contenu):
+def test_fichier_de_poignees_corrompu_donne_503_jamais_500_ni_liste_vide(client, monkeypatch, tmp_path, contenu):
+    # remplace « liste vide 200 » : une liste vide VALIDE ferait retirer tous les liens directs de chaque pair
     f = tmp_path / "h.json"
     f.write_text(contenu)
     monkeypatch.setattr(main.mesh, "load_handshakes", lambda *a, **k: _CHARGEUR_REEL(f, now=1.0))
     assert _CHARGEUR_REEL(f, now=1.0) is None
     r = client.get("/master-link/pairs", headers={"X-SecuBox-Pair": JETON})
-    assert r.status_code == 200
-    assert r.json() == {"version": 1, "pairs": []}
+    assert r.status_code == 503
+    assert r.json() == {"detail": "mesure des poignées indisponible"}
+
+
+def test_mesure_perimee_ou_absente_donne_503(client, monkeypatch, tmp_path):
+    f = tmp_path / "h.json"
+    f.write_text('{"written_at": 1000, "handshakes": {"%s": 999}}' % cle(2))
+    monkeypatch.setattr(main.mesh, "load_handshakes", lambda *a, **k: _CHARGEUR_REEL(f, now=1000 + 121))
+    assert client.get("/master-link/pairs", headers={"X-SecuBox-Pair": JETON}).status_code == 503
+    monkeypatch.setattr(main.mesh, "load_handshakes", lambda *a, **k: _CHARGEUR_REEL(tmp_path / "absent", now=1.0))
+    assert client.get("/master-link/pairs", headers={"X-SecuBox-Pair": JETON}).status_code == 503
+    monkeypatch.setattr(main.mesh, "load_handshakes", lambda *a, **k: _CHARGEUR_REEL(f, now=1000 + 60))
+    assert client.get("/master-link/pairs", headers={"X-SecuBox-Pair": JETON}).status_code == 200
 
 
 # --- nginx -----------------------------------------------------------------------------------------------------
