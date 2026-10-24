@@ -461,6 +461,36 @@ def _cfg():
     }
 
 
+# Onion du webui (#3112) : Tor livre au frontal HAProxy dédié, jamais à nginx :9080. Adresse marqueur NON LAN
+# « client onion » : 192.0.2.80 (TEST-NET-1, RFC 5737, jamais routée). Mêmes valeurs que haproxyctl generate.
+ONION_WEBUI_PORT_DEFAUT = 9180
+ONION_CLIENT_MARQUEUR = "192.0.2.80"
+
+
+def frontal_onion_webui(backend: str, port: Optional[int] = None) -> list:
+    """Lignes du frontal `onion-webui` : efface ce que le client dit de son adresse, pose le marqueur, inspecte."""
+    if port is None:
+        port = int(((_get_haproxy_config() or {}).get("main", {}) or {}).get(
+            "onion_webui_port", ONION_WEBUI_PORT_DEFAUT))
+    return [
+        "frontend onion-webui",
+        f"    bind 127.0.0.1:{port}",
+        "    mode http",
+        "    http-request del-header X-Forwarded-For",
+        "    http-request del-header Forwarded",
+        "    http-request del-header X-Real-IP",
+        "    http-request del-header X-Client-IP",
+        "    http-request del-header X-Forwarded-Host",
+        "    http-request del-header X-SecuBox- -m beg",
+        f"    http-request set-src ipv4({ONION_CLIENT_MARQUEUR})",
+        f"    http-request set-header X-Forwarded-For {ONION_CLIENT_MARQUEUR}",
+        "    http-request set-header X-Forwarded-Proto http",
+        "    http-request set-header X-SecuBox-Onion 1",
+        f"    default_backend {backend}",
+        "",
+    ]
+
+
 def _haproxy_running() -> bool:
     """Check if HAProxy is running."""
     result = subprocess.run(["pgrep", "haproxy"], capture_output=True)
@@ -1589,6 +1619,11 @@ async def generate_config():
         "    default_backend fallback",
         "",
     ])
+
+    # Onion du webui (#3112) : même frontal que haproxyctl generate (qui fait foi). Jamais webui_direct :
+    # WAF désactivé ⇒ fallback (503), l'onion se ferme plutôt que de contourner l'inspection.
+    config_lines.extend(frontal_onion_webui(
+        "waf_inspector" if cfg["waf_enabled"] else "fallback"))
 
     # WAF inspector backend (sbxwaf)
     if cfg["waf_enabled"]:

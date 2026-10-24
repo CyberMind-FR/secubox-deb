@@ -56,6 +56,14 @@ TOR_CONFIG = Path("/etc/tor/torrc")
 # Un fichier par service onion, dans le répertoire que le torrc de Debian inclut (`%include /etc/tor/torrc.d/*.conf`).
 # Le torrc lui-même n'est plus réécrit (#2050) ; les services posés avant ce changement y restent lisibles.
 TOR_DROPIN_DIR = Path("/etc/tor/torrc.d")
+# ONION DU WEBUI (#3112). Tor livre au frontal HAProxy `onion-webui` (127.0.0.1:9180, généré par haproxyctl),
+# jamais directement à nginx :9080 : là, chaque visiteur Tor arrivait de 127.0.0.1 et nginx le classait LAN.
+# Le frontal efface l'adresse annoncée par le client, pose le marqueur NON LAN 192.0.2.80 (« client onion »)
+# et passe par sbxwaf, qui route le Host <onion>.onion vers le webui (nginx :9080) — route posée ici.
+HAPROXY_TOML = Path("/etc/secubox/haproxy.toml")
+ONION_WEBUI_PORT_DEFAUT = 9180
+WEBUI_NGINX_PORT = 9080
+WAF_ROUTE_CMD = "secubox-waf-route"
 CONFIG_FILE = Path("/etc/secubox/exposure.json")
 DATA_DIR = Path("/var/lib/secubox/exposure")
 HISTORY_FILE = DATA_DIR / "history.json"
@@ -597,6 +605,85 @@ def _hs_blocs_torrc(texte: str) -> list:
     return [(d, b) for d, b, _, _ in out]
 
 
+def _hs_retire_bloc_torrc(hs_dir: Path) -> bool:
+    """Retire du torrc de Debian le seul ancien bloc de ce service (ligne à ligne, jamais un autre service).
+    Ne touche NI à la clé NI au répertoire du service. Rend True si un bloc a été retiré."""
+    try:
+        texte = TOR_CONFIG.read_text()
+    except OSError:
+        return False
+    for d, bloc in _hs_blocs_torrc(texte):
+        if d == str(hs_dir):
+            TOR_CONFIG.write_text(texte.replace(bloc, "", 1))
+            return True
+    return False
+
+
+def _port_onion_webui() -> int:
+    """Port du frontal HAProxy `onion-webui` : clé `onion_webui_port` de haproxy.toml (la même que lit
+    haproxyctl generate), sinon 9180. Jamais 9080 : ce serait de nouveau nginx en direct."""
+    try:
+        m = re.search(r"^onion_webui_port\s*=\s*(\d+)\s*$", HAPROXY_TOML.read_text(), re.M)
+        if m and 1 <= int(m.group(1)) <= 65535 and int(m.group(1)) != WEBUI_NGINX_PORT:
+            return int(m.group(1))
+    except OSError:
+        pass
+    return ONION_WEBUI_PORT_DEFAUT
+
+
+def _route_waf_onion(onion: str) -> bool:
+    """Route sbxwaf `<onion>.onion` → webui (nginx :9080), posée par l'outil commun `secubox-waf-route`
+    (idempotent, écriture atomique, adresse des voisins du port). Sans elle sbxwaf rend 421 à l'onion.
+    Au mieux : un échec n'ouvre rien, l'onion reste simplement fermé. Ne lève jamais."""
+    if not re.fullmatch(r"[a-z2-7]{56}\.onion", onion or ""):
+        return False
+    res = run_cmd([WAF_ROUTE_CMD, onion, str(WEBUI_NGINX_PORT)])
+    return bool(isinstance(res, tuple) and res and res[0])
+
+
+def migrer_onion_webui() -> dict:
+    """Migration #3112, idempotente : la cible du service onion « webui » passe de nginx (127.0.0.1:9080) au
+    frontal HAProxy `onion-webui`. HiddenServiceDir inchangé ⇒ même clé, même adresse .onion. Un ancien bloc
+    du torrc de Debian est déplacé dans son fichier de torrc.d (jamais deux HiddenServiceDir identiques : Tor
+    refuserait toute sa configuration). Recharge Tor seulement si quelque chose a changé ; journal d'audit."""
+    name = "webui"
+    hs_dir = TOR_DATA / name
+    port = _port_onion_webui()
+    change = False
+
+    stanza = _hs_stanza_texte(name, hs_dir)
+    m = re.search(r"^HiddenServicePort\s+(\d+)\s+(\S+)", stanza, re.M)
+    dans_dropin = _hs_dropin(name).exists()
+    if m and (m.group(2) != f"127.0.0.1:{port}" or not dans_dropin):
+        if not dans_dropin:
+            _hs_retire_bloc_torrc(hs_dir)
+        _hs_ecrit_dropin(name, hs_dir, int(m.group(1)), port)
+        change = True
+
+    services = _load_emancipated()
+    for svc in services:
+        if svc.get("name") == name and svc.get("local_port") != port:
+            svc["local_port"] = port
+            change = True
+    if change:
+        _save_emancipated(services)
+        if m:
+            run_cmd(["systemctl", "reload", "tor"])
+        _audit_exposure_action(
+            action="migrate_onion_webui",
+            detail=f"ancienne_cible={m.group(2) if m else '(aucune)'} cible=127.0.0.1:{port} ref=#3112",
+            user="postinst",
+        )
+    return {"success": True, "migrated": change, "local_port": port}
+
+
+def _onion_webui_hostname() -> str:
+    try:
+        return (TOR_DATA / "webui" / "hostname").read_text().strip()
+    except OSError:
+        return ""
+
+
 def get_tor_services() -> list:
     """Get Tor hidden services.
 
@@ -773,14 +860,7 @@ def _tor_remove_sync(name: str) -> dict:
         _hs_dropin(name).unlink()
     except FileNotFoundError:
         pass
-    if TOR_CONFIG.exists():
-        texte = TOR_CONFIG.read_text()
-        lignes = texte.splitlines(keepends=True)
-        for d, bloc in _hs_blocs_torrc(texte):
-            if d == str(hs_dir):
-                texte = "".join(lignes).replace(bloc, "", 1)
-                TOR_CONFIG.write_text(texte)
-                break
+    _hs_retire_bloc_torrc(hs_dir)
 
     # Remove directory
     import shutil
@@ -862,9 +942,12 @@ def _mesh_present() -> bool:
 def emancipate_webui(federate: bool = False, user: Optional[dict] = None) -> dict:
     """Emancipate the SecuBox webui itself as a Tor hidden service.
 
-    Standalone by default: creates HS `name="webui"`, `local_port=9080`
-    (the nginx canonical hub), `onion_port=80`, and records it `active` in the
-    exposure config so `tor_reconcile_persist()` can restore it on reboot.
+    Standalone by default: creates HS `name="webui"`, `onion_port=80`, whose
+    target is the dedicated HAProxy frontend `onion-webui` (127.0.0.1:9180 by
+    default) — NEVER nginx :9080 directly (#3112: every Tor visitor came from
+    127.0.0.1 and nginx classed it LAN). Records it `active` in the exposure
+    config so `tor_reconcile_persist()` can restore it on reboot, and registers
+    the sbxwaf route `<onion>` -> webui so the WAF inspects and serves it.
 
     `federate=True` additionally publishes a signed annuaire offer — but ONLY
     when a mesh is actually present, and always wrapped so a federation
@@ -876,11 +959,13 @@ def emancipate_webui(federate: bool = False, user: Optional[dict] = None) -> dic
     service is at least as security-relevant as an exit-country/VPN/bridge
     change, which are already audited via `_audit_exposure`).
     """
-    tor_result = _tor_add_sync(name="webui", local_port=9080, onion_port=80)
+    port = _port_onion_webui()
+    tor_result = _tor_add_sync(name="webui", local_port=port, onion_port=80)
 
-    entry = {"name": "webui", "local_port": 9080, "onion_port": 80, "active": True}
+    entry = {"name": "webui", "local_port": port, "onion_port": 80, "active": True}
     if tor_result.get("onion"):
         entry["onion"] = tor_result["onion"]
+        entry["waf_route"] = _route_waf_onion(tor_result["onion"])
 
     services = [s for s in _load_emancipated() if s.get("name") != "webui"]
     services.append(entry)
@@ -888,7 +973,7 @@ def emancipate_webui(federate: bool = False, user: Optional[dict] = None) -> dic
 
     _audit_exposure_action(
         action="emancipate_webui",
-        detail=f"onion={entry.get('onion', '(pending)')} local_port=9080 federate={federate}",
+        detail=f"onion={entry.get('onion', '(pending)')} local_port={port} federate={federate}",
         user=(user or {}).get("sub", "?"),
     )
 
@@ -897,7 +982,7 @@ def emancipate_webui(federate: bool = False, user: Optional[dict] = None) -> dic
             if _mesh_present():
                 endpoint = f"http://{tor_result['onion']}/"
                 _publish("webui", endpoint,
-                         {"channel": "tor", "onion": tor_result["onion"], "port": 9080})
+                         {"channel": "tor", "onion": tor_result["onion"], "port": port})
         except Exception:  # noqa: BLE001 — federation is best-effort, never fatal
             pass
 
@@ -914,7 +999,15 @@ def tor_reconcile_persist() -> dict:
     which the .onion is actually being served. When the key dir survives but
     the stanza is missing, `_tor_add_sync` re-appends it and reloads Tor;
     since the private key is unchanged, the `.onion` address is preserved.
+
+    #3112 : d'abord la migration de l'onion du webui vers le frontal HAProxy
+    dédié (idempotente), et le webui n'est JAMAIS réappliqué vers nginx :9080,
+    quelle que soit la valeur enregistrée ; enfin sa route sbxwaf est assurée.
     """
+    try:
+        migration = migrer_onion_webui()
+    except Exception as e:  # noqa: BLE001 — la migration ne doit pas empêcher la persistance des autres
+        migration = {"success": False, "error": str(e)}
     applied = []
     for svc in _load_emancipated():
         if not svc.get("active"):
@@ -924,6 +1017,8 @@ def tor_reconcile_persist() -> dict:
         onion_port = svc.get("onion_port")
         if not name or local_port is None or onion_port is None:
             continue
+        if name == "webui":
+            local_port = _port_onion_webui()
         if _hs_dir_exists(name) and _torrc_has_stanza(name):
             continue
         try:
@@ -932,7 +1027,11 @@ def tor_reconcile_persist() -> dict:
         except Exception:  # noqa: BLE001 — one bad entry must not abort the rest
             continue
 
-    return {"success": True, "applied": applied}
+    route = False
+    if any(s.get("name") == "webui" and s.get("active") for s in _load_emancipated()):
+        route = _route_waf_onion(_onion_webui_hostname())
+
+    return {"success": True, "applied": applied, "migration": migration, "waf_route": route}
 
 
 @app.post("/tor/add")
@@ -945,6 +1044,12 @@ async def tor_add(req: TorAddRequest, user: dict = Depends(require_jwt)):
     if excluded:
         raise HTTPException(status_code=400,
                             detail=f"Tor refusé pour {req.service} : domaine exclu — {why}.")
+    # #3112 : un onion vers nginx :9080 en direct contourne HAProxy et sbxwaf, et nginx prend chaque visiteur
+    # Tor (127.0.0.1) pour un poste du LAN. Le webui passe par /tor/emancipate_webui (frontal onion-webui).
+    if req.local_port == WEBUI_NGINX_PORT:
+        raise HTTPException(status_code=400,
+                            detail="Tor refusé vers 127.0.0.1:9080 (nginx en direct, hors WAF) — "
+                                   "le webui s'expose par emancipate_webui (#3112).")
     # Sanitize service name
     name = "".join(c for c in req.service if c.isalnum() or c in "_-")
 

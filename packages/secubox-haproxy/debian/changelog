@@ -1,3 +1,21 @@
+secubox-haproxy (1.12.6-1~trixie1) trixie; urgency=high
+
+  * Sécurité : l'onion du webui passe par un frontal HAProxy dédié et n'est jamais LAN (ref #3112). Le service onion
+    « webui » livrait à nginx :9080 en direct, hors HAProxy et hors sbxwaf ; nginx croit X-Forwarded-For de 127.0.0.1
+    et classe 127.0.0.0/8 en LAN, donc chaque visiteur Tor était « poste du LAN », et un X-Forwarded-For forgé était
+    cru aussi. haproxyctl generate émet le frontal onion-webui (127.0.0.1:9180, clé onion_webui_port) : il efface
+    X-Forwarded-For, Forwarded, X-Real-IP, X-Client-IP, X-Forwarded-Host et X-SecuBox-* du client, pose le marqueur
+    non LAN 192.0.2.80 (TEST-NET-1, « client onion ») par set-src et X-Forwarded-For, ajoute X-SecuBox-Onion: 1 et
+    passe par sbxwaf_inspector. Les frontaux publics refusent un Host .onion venu d'ailleurs que la boucle locale.
+  * Exposure : emancipate_webui vise le frontal et pose la route sbxwaf <onion> → webui (secubox-waf-route) ;
+    /tor/add refuse local_port 9080. Migration idempotente par secubox-exposure-tor-reconcile, lancé au démarrage
+    et par le postinst sur les box qui ont l'onion : la cible est réécrite, HiddenServiceDir reste le même (même clé,
+    même adresse), un ancien bloc du torrc passe dans torrc.d, Tor est rechargé et la migration est inscrite à
+    l'audit. Le postinst régénère d'abord HAProxy si le frontal manque. En cas d'échec, l'onion reste fermé, jamais
+    ouvert vers nginx.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 16:00:00 +0200
+
 secubox-haproxy (1.12.5-1~trixie1) trixie; urgency=medium
 
   * Exposition : le filtre d'un vhost est celui que son fichier inclut (ref #3117). Les vhosts livres sous un nom neutre (metablogizer.*, actor.*, waf.*) incluent snippets/exposure/<nom>.conf ; les resolveurs du panneau (vhost et exposure) lisaient <FQDN>.conf, un fichier qui n'existe plus, et ecrivaient dans un filtre que nginx n'incluait pas. La ligne include du fichier de vhost fait foi (server_name exact avant joker) ; sans include, repli sur le FQDN comme avant.

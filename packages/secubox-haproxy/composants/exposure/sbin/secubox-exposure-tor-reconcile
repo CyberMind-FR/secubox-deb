@@ -11,6 +11,9 @@
 # .onion addresses survive reboots unchanged. Runs as root (torrc + systemctl
 # reload tor need privilege), invoked by
 # secubox-exposure-tor-reconcile.service on boot.
+# #3112 : migre d'abord l'onion du webui de nginx :9080 vers le frontal HAProxy
+# onion-webui (meme cle, meme adresse) et assure sa route sbxwaf — idempotent ;
+# aussi lance par le postinst du composant.
 set -e
 /usr/bin/python3 -c "import sys; sys.path.insert(0, '/usr/lib/secubox/exposure'); import api.main as m; m.tor_reconcile_persist()"
 

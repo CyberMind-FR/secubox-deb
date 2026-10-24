@@ -105,6 +105,21 @@ topology). This requires `secubox-hub`'s lan-geo real_ip configuration —
 config. Without it, all requests appear to originate from the proxy's
 address and reach/deny rules will not behave as expected.
 
+## Onion du webui (#3112)
+
+`POST /tor/emancipate_webui` publie le webui en service onion vers le frontal HAProxy `onion-webui`
+(`127.0.0.1:9180`, ou `onion_webui_port` de `haproxy.toml`), jamais vers nginx :9080 en direct. Le
+frontal efface l'adresse annoncée par le client et pose le marqueur non LAN 192.0.2.80 avant
+l'inspection sbxwaf. La route sbxwaf `<onion>.onion` → webui (nginx :9080) est posée par
+`secubox-waf-route`. `/tor/add` refuse `local_port = 9080`.
+
+Migration des onions déjà publiés, idempotente : `secubox-exposure-tor-reconcile` (au démarrage, et
+lancé par le postinst sur les box qui ont un onion « webui ») réécrit la cible du service vers le
+frontal. `HiddenServiceDir` ne change pas, donc la clé et l'adresse `.onion` restent les mêmes. Un
+ancien bloc de `/etc/tor/torrc` passe dans `torrc.d`. Le script recharge Tor et inscrit la migration
+dans le journal d'audit. Le postinst régénère d'abord HAProxy si le frontal manque dans le
+`haproxy.cfg` en service. Si cette régénération échoue, l'onion reste fermé, et non ouvert vers nginx.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
