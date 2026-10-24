@@ -66,6 +66,8 @@ ONION_IN_PORT_DEFAUT = 9180
 WEBUI_NGINX_PORT = 9080
 # Entrées HTTP directes de la box, jamais cibles d'un onion : nginx (9080) et le frontal public http-in (80).
 PORTS_HTTP_DIRECTS = (80, WEBUI_NGINX_PORT)
+# Ports clairement non HTTP qu'un service onion historique peut viser sans passer par le frontal (signalés I2).
+PORTS_NON_HTTP = (22, 443)
 # Répertoire de repli de metablogizerctl pour ses services onion (quand l'API d'exposition est absente).
 TOR_METABLOG_DIR = Path("/etc/tor/secubox-metablogizer.d")
 WAF_ROUTE_CMD = "secubox-waf-route"
@@ -606,14 +608,96 @@ def _assure_include_torrc() -> bool:
     return True
 
 
+def _tor_bin() -> str:
+    """Binaire tor pour `--verify-config`, '' s'il est absent (la vérification est alors sautée)."""
+    import shutil
+    return shutil.which("tor") or ""
+
+
+def _instantane(fichiers) -> dict:
+    """{fichier: contenu ou None s'il n'existe pas} — de quoi revenir en arrière."""
+    out = {}
+    for f in fichiers:
+        try:
+            out[f] = f.read_text()
+        except FileNotFoundError:
+            out[f] = None
+        except OSError:
+            continue
+    return out
+
+
+def _restaure(instantane: dict) -> None:
+    for f, texte in instantane.items():
+        try:
+            if texte is None:
+                f.unlink(missing_ok=True)
+            else:
+                _ecrit_atomique(f, texte)
+        except OSError:
+            pass
+
+
+def _verifie_ou_restaure(instantane: dict, contexte: str, user: str = "exposure") -> bool:
+    """Après toute modification de la configuration de Tor : `tor --verify-config` (s'il est disponible). En cas
+    de refus, on RESTAURE les fichiers d'avant et on écrit `torrc_refuse` à l'audit : une configuration que Tor
+    refuse coupe TOUS les onions et la sortie Tor au prochain redémarrage (#3112)."""
+    binaire = _tor_bin()
+    if not binaire:
+        return True
+    res = run_cmd([binaire, "--verify-config", "-f", str(TOR_CONFIG)])
+    if isinstance(res, tuple) and res and res[0]:
+        return True
+    _restaure(instantane)
+    erreur = (res[2] if isinstance(res, tuple) and len(res) > 2 else "") or ""
+    print(f"ERREUR #3112 : Tor refuse la configuration ({contexte}) — fichiers restaurés. {erreur.strip()[:300]}",
+          file=sys.stderr)
+    _audit_exposure_action(action="torrc_refuse",
+                           detail=f"contexte={contexte} fichiers={','.join(str(f) for f in instantane)}",
+                           user=user)
+    return False
+
+
+def _retire_autres_blocs(hs_dir: Path, garder: Path) -> list:
+    """Retire, atomiquement, tout AUTRE bloc déclarant ce HiddenServiceDir (torrc, torrc.d, répertoire de
+    metablogizer ; comparaison tolérante : « / » final, commentaire). Deux déclarations du même service, et Tor
+    refuse toute sa configuration (#3112). Rend les fichiers modifiés."""
+    cible = _norm_dir(str(hs_dir))
+    modifies = []
+    for f in _fichiers_tor():
+        if f == garder:
+            continue
+        try:
+            texte = f.read_text()
+        except OSError:
+            continue
+        nouveau = texte
+        for d, bloc in _hs_blocs_torrc(texte):
+            if d == cible:
+                nouveau = nouveau.replace(bloc, "", 1)
+        if nouveau != texte:
+            _ecrit_atomique(f, nouveau)
+            modifies.append(f)
+    return modifies
+
+
 def _hs_ecrit_dropin(name: str, hs_dir: Path, onion_port: int, local_port: int) -> None:
-    """Écrit le fichier du service, atomiquement (un fichier par service : rien à relire ni à réécrire d'autre).
-    S'assure d'abord que le torrc inclut torrc.d : sinon le service serait écrit pour rien (#3112, I1)."""
+    """Écrit le fichier du service, atomiquement, comme SEULE déclaration de ce HiddenServiceDir.
+
+    - le torrc doit inclure torrc.d, sinon le service serait écrit pour rien (I1) ;
+    - tout autre bloc du même HiddenServiceDir (ancien bloc du torrc, autre fichier) est retiré : jamais deux
+      déclarations du même service, que Tor refuserait en bloc ;
+    - puis `tor --verify-config` ; refus ⇒ tout est restauré, `torrc_refuse` à l'audit, RuntimeError."""
+    f = _hs_dropin(name)
+    avant = _instantane(_fichiers_tor() + [f])
     _assure_include_torrc()
-    _ecrit_atomique(_hs_dropin(name),
+    _retire_autres_blocs(hs_dir, garder=f)
+    _ecrit_atomique(f,
                     f"# SecuBox — service onion {name} (#2050)\n"
                     f"HiddenServiceDir {hs_dir}\n"
                     f"HiddenServicePort {onion_port} 127.0.0.1:{local_port}\n")
+    if not _verifie_ou_restaure(avant, f"service {name}"):
+        raise RuntimeError(f"Tor refuse la configuration du service {name} : fichiers restaurés")
 
 
 _RE_HS_DIR = re.compile(r"^\s*HiddenServiceDir\s+(.+?)\s*$")
@@ -748,6 +832,7 @@ def migrer_onions(user: str = "reconcile") -> dict:
     if port != ONION_IN_PORT_DEFAUT:
         a_migrer.add(f"127.0.0.1:{ONION_IN_PORT_DEFAUT}")
     migres = []
+    avant = _instantane(_fichiers_tor())
     for f in _fichiers_tor():
         try:
             texte = f.read_text()
@@ -773,6 +858,9 @@ def migrer_onions(user: str = "reconcile") -> dict:
             entrees = True
     if entrees:
         _save_emancipated(services)
+    if migres and not _verifie_ou_restaure(avant, "migration des onions", user=user):
+        return {"success": False, "migrated": False, "services": [], "local_port": port,
+                "error": "Tor refuse la configuration migrée : fichiers restaurés"}
     if migres:
         run_cmd(["systemctl", "reload", "tor"])
     for mg in migres:
@@ -1152,7 +1240,9 @@ def tor_reconcile_persist(user: str = "reconcile") -> dict:
         onion_port = svc.get("onion_port")
         if not name or local_port is None or onion_port is None:
             continue
-        if local_port in PORTS_HTTP_DIRECTS or name == "webui":
+        # Toute cible enregistrée passe par le frontal, sauf un port clairement non HTTP (22, 443) : jamais un
+        # port direct de nginx ou de http-in réappliqué (#3112).
+        if name == "webui" or local_port not in PORTS_NON_HTTP:
             local_port = _port_onion_in()
         if _hs_dir_exists(name) and _torrc_has_stanza(name):
             continue

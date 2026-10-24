@@ -39,6 +39,7 @@ def box(monkeypatch, tmp_path):
     monkeypatch.setattr(m, "CONFIG_FILE", tmp_path / "exposure.json")
     monkeypatch.setattr(m, "HAPROXY_TOML", tmp_path / "haproxy.toml")
     monkeypatch.setattr(time, "sleep", lambda s: None)   # _tor_add_sync attend l'adresse : inutile ici
+    monkeypatch.setattr(m, "_tor_bin", lambda: "")       # pas de `tor --verify-config` sauf test dédié
     cmds, audits = [], []
     monkeypatch.setattr(m, "run_cmd", lambda cmd, *a, **k: cmds.append(cmd) or (True, "", ""))
     monkeypatch.setattr(m, "_audit_write", lambda line: audits.append(line))
@@ -202,3 +203,78 @@ def test_la_persistance_au_demarrage_migre_et_ne_reapplique_jamais_une_entree_di
     assert sorted(ajouts) == [("site", 9180, 80), ("webui", 9180, 80)]
     assert r["waf_route"] is True and r["non_migres"] == []
     assert ["secubox-waf-route", ONION, "9080"] in box["cmds"]
+
+
+# ── jamais deux déclarations du même service (round 2) ───────────────────────────────────────────────────────────
+def _declarations(box, hs_dir) -> int:
+    """Nombre de HiddenServiceDir déclarant ce répertoire, tous fichiers lus par la migration confondus."""
+    n = 0
+    for f in m._fichiers_tor():
+        for ligne in f.read_text().splitlines():
+            md = m._RE_HS_DIR.match(ligne)
+            if md and m._norm_dir(md.group(1)) == m._norm_dir(str(hs_dir)):
+                n += 1
+    return n
+
+
+def _torrc_avec_bloc_webui(box):
+    box["torrc"].write_text("SocksPort 9050\n%include /etc/tor/torrc.d/*.conf\n"
+                            f"# Hidden service: webui\nHiddenServiceDir {box['hs']}/  # ancien\n"
+                            "HiddenServicePort 80 127.0.0.1:9180\nControlPort 9051\n")
+
+
+def test_publier_alors_qu_un_bloc_reste_dans_le_torrc_ne_double_pas_le_service(box):
+    _torrc_avec_bloc_webui(box)
+    _ecrit(box["tmp"] / "metablog.d" / "x.conf", f"HiddenServiceDir {box['hs']}\nHiddenServicePort 80 127.0.0.1:80\n")
+    m.emancipate_webui(federate=False)
+    assert _declarations(box, box["hs"]) == 1
+    assert box["dropin"].read_text().splitlines()[-1] == "HiddenServicePort 80 127.0.0.1:9180"
+    t = box["torrc"].read_text()
+    assert "SocksPort 9050" in t and "ControlPort 9051" in t, "le reste du torrc est intact"
+
+
+def test_la_persistance_au_demarrage_ne_double_pas_le_service(box, monkeypatch):
+    """Clé absente mais bloc encore dans le torrc : la réparation écrit torrc.d ET retire l'ancien bloc."""
+    _torrc_avec_bloc_webui(box)
+    monkeypatch.setattr(m, "_hs_dir_exists", lambda n: False)
+    m._save_emancipated([{"name": "webui", "local_port": 9180, "onion_port": 80, "active": True}])
+    r = m.tor_reconcile_persist()
+    assert r["applied"] == ["webui"]
+    assert _declarations(box, box["hs"]) == 1
+
+
+def test_un_refus_de_tor_restaure_tout_et_s_inscrit_a_l_audit(box, monkeypatch):
+    _torrc_avec_bloc_webui(box)
+    avant = {f: f.read_text() for f in m._fichiers_tor()}
+    monkeypatch.setattr(m, "_tor_bin", lambda: "/usr/bin/tor")
+    monkeypatch.setattr(m, "run_cmd", lambda cmd, *a, **k: box["cmds"].append(cmd) or (
+        (False, "", "Duplicate HiddenServiceDir") if "--verify-config" in cmd else (True, "", "")))
+    with pytest.raises(RuntimeError):
+        m._tor_add_sync("webui", local_port=9180, onion_port=80)
+    assert {f: f.read_text() for f in m._fichiers_tor()} == avant
+    assert not box["dropin"].exists()
+    assert ["/usr/bin/tor", "--verify-config", "-f", str(box["torrc"])] in box["cmds"]
+    assert not [c for c in box["cmds"] if c == ["systemctl", "reload", "tor"]], "jamais recharger une config refusée"
+    assert any("action=torrc_refuse" in a for a in box["audits"])
+
+
+def test_une_migration_refusee_par_tor_est_restauree(box, monkeypatch):
+    f = _ecrit(box["dropin"], f"HiddenServiceDir {box['hs']}\nHiddenServicePort 80 127.0.0.1:9080\n")
+    avant = f.read_text()
+    monkeypatch.setattr(m, "_tor_bin", lambda: "/usr/bin/tor")
+    monkeypatch.setattr(m, "run_cmd", lambda cmd, *a, **k: box["cmds"].append(cmd) or (
+        (False, "", "refus") if "--verify-config" in cmd else (True, "", "")))
+    r = m.migrer_onions(user="postinst")
+    assert r["success"] is False and f.read_text() == avant
+    assert _reloads(box) == []
+    assert any("action=torrc_refuse" in a and "by=postinst" in a for a in box["audits"])
+
+
+def test_la_persistance_force_toute_cible_http_par_le_frontal(box, monkeypatch):
+    m._save_emancipated([{"name": "app", "local_port": 8080, "onion_port": 80, "active": True},
+                         {"name": "ssh", "local_port": 22, "onion_port": 22, "active": True}])
+    ajouts = []
+    monkeypatch.setattr(m, "_tor_add_sync",
+                        lambda name, local_port, onion_port: ajouts.append((name, local_port)))
+    m.tor_reconcile_persist()
+    assert sorted(ajouts) == [("app", 9180), ("ssh", 22)]

@@ -24,6 +24,13 @@ secubox-haproxy (1.12.6-1~trixie1) trixie; urgency=high
     Debian ne l'a pas). Tout HiddenServicePort restant hors du frontal est signalé sur stderr et dans l'audit
     (onion_non_migre). L'auteur de l'audit est postinst ou reconcile. Le postinst redémarre le démon exposure
     (try-restart), qui charge alors la garde. Page Exposition : port local du frontal (9180).
+  * Jamais deux déclarations du même service onion (ref #3112). Avant d'écrire le fichier d'un service dans
+    torrc.d, tout autre bloc du même HiddenServiceDir est retiré, atomiquement. La recherche couvre le torrc, les
+    autres fichiers et le répertoire de metablogizer ; la comparaison tolère « / » final et commentaire.
+    Sans cela, « Publier » ou la réparation au démarrage doublait le bloc resté dans le torrc après la
+    migration, et Tor refusait toute sa configuration. Après toute modification, tor --verify-config est lancé ;
+    s'il refuse, les fichiers d'avant sont restaurés, Tor n'est pas rechargé et torrc_refuse est écrit à
+    l'audit. Au démarrage, toute cible enregistrée passe par le frontal, sauf 22 et 443.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 18:00:00 +0200
 
