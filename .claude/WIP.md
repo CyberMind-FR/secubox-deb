@@ -104,8 +104,8 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   `secubox-dns` 1.6.1, gk2 + apt trixie). Racine gk2 91 % → 74 %. Reste au propriétaire : 16 archives en clair (déplacées).
 - **ZIA « Activez la radio »** — closes #3074 (PR #3075, zia 0.3.1, radio 0.2.3 (#3076), webos 1.19.24). À confirmer dans le navigateur.
 - **Agrégateur : six modules root relayés** — closes #3077 (PR #3078, aggregator 0.4.8). Reste : sockets 0666, vm lxc-create.
-- **Netboot live MOCHAbin + flash** — ref #3079 (netboot 0.6.8 sur gk2 + apt). **Prouvé au banc le 2026-10-24** : live TFTP,
-  flash isp, démarrage eMMC avec réseau (noyau stock). Reste : squashfs du live à reconstruire (nouveau sbx-netflash, go
+- **Netboot live MOCHAbin + flash** — ref #3079 (netboot 0.6.8 sur gk2 + apt). Au banc le 2026-10-24 : live TFTP OK,
+  flash isp lancé (signature OK) ; fin d'écriture et démarrage eMMC à constater. Reste : squashfs du live à reconstruire (nouveau sbx-netflash, go
   propriétaire), clé live USB par la CI, noyau stock sur gk2 à vérifier avec lan0..3. #3088 ouvert (192.168.1.200 statique).
 - **nettweak, traffic, qos relayés à leur service root** — closes #3065 (PR #3066, `secubox-aggregator` 0.4.7 sur gk2 + apt
   trixie). Examinés : #3077.

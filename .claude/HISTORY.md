@@ -9,11 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
-## 2026-10-24 — Netboot MOCHAbin prouvé au banc : live par TFTP puis flash eMMC isp (ref #3079)
+## 2026-10-24 — Netboot MOCHAbin au banc : live par TFTP, flash eMMC isp en cours (ref #3079)
 
-DUT MOCHAbin 8 Go au banc série : live démarré par le U-Boot usine, image `isp` alpha.18 écrite sur l'eMMC par `sbx-netflash`
-(signature valide, empreinte vérifiée), la carte démarre sur l'eMMC et a du réseau avec le noyau Debian stock (constat du
-propriétaire). Six défauts trouvés et corrigés au fil de l'essai (netboot 0.6.2 → 0.6.8, PR #3082, #3083, #3085, #3086, #3087,
+DUT MOCHAbin 8 Go au banc série : live démarré par le U-Boot usine, réseau du live OK (noyau Debian stock), écriture de
+l'image `isp` alpha.18 sur l'eMMC par `sbx-netflash` lancée (signature valide, empreinte vérifiée) ; **fin d'écriture et
+démarrage sur l'eMMC pas encore constatés**. Six défauts trouvés et corrigés au fil de l'essai (netboot 0.6.2 → 0.6.8, PR #3082, #3083, #3085, #3086, #3087,
 #3089, #3090) : squashfs rangé sur /data (racine gk2 89 % → 74 %) ; adresses de chargement au-dessus de 0x04000000 (zone réservée
 du firmware Armada 7040 : TFTP tronqué puis « Synchronous Abort ») ; squashfs et overlay ajoutés à l'initrd (`live-initrd-modules.sh`) ;
 liste noire de squashfs (secubox-hardening, recopiée dans l'initrd) levée dans l'initrd du live seulement ; réseau du live gardé
