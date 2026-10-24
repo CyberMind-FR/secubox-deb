@@ -1,3 +1,11 @@
+secubox-p2p (1.18.1-1~trixie1) trixie; urgency=medium
+
+  * secubox-relais-maillage (ref #3130) : « pas de drop terminal » toutes les heures sur gk1. Le nftables.conf de
+    secubox-hardening met la chaîne input en « policy drop » sans ligne « drop » finale : la règle du relais va
+    alors juste avant l'accolade fermante de cette chaîne (même effet), toujours validée par nft -c.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 16:20:00 +0200
+
 secubox-p2p (1.18.0-1~trixie1) trixie; urgency=medium
 
   * Ancre du maitre (ref #3100) : /etc/secubox/p2p/ancre-maitre.json (cle publique du maillage, adresse, nom, empreinte) garde l'identite du maitre qui a flashe la box. A la jonction (sbx-mesh-join, api/mesh.py), une ancre presente impose la verification : seul le maitre de l'ancre est accepte, une ancre illisible est refusee ; sans ancre (box vierge), tout maitre l'est. sbx-mesh-up attend l'adresse du maillage.
