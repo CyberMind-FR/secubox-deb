@@ -7,6 +7,7 @@
 Le maître (étoile wg-mesh) publie la liste de ses pairs vivants ; chaque pair s'y connecte en direct.
 Tout ce qui vient de wg_mesh.json est une donnée écrite par les flux d'enrôlement : on la valide strictement
 (re.fullmatch, jamais un `$` nu) et une entrée mal typée est écartée, jamais une exception."""
+import copy
 import hmac
 import ipaddress
 import math
@@ -100,6 +101,106 @@ def liste_publiable(etat: dict, poignees: dict, maintenant: float, age_max_s: in
 def pairs_vivants(etat: dict, poignees: Optional[dict]) -> List[Dict[str, str]]:
     """Enveloppe pour la route : sans mesure de poignées, personne n'est publié."""
     return liste_publiable(etat, poignees or {}, time.time())
+
+
+# --- côté pair : calcul des liens directs (logique pure : ni fichier, ni réseau, ni horloge) ------------------------
+
+def calculer(etat: Any, liste: Any, poignees: Any, maintenant: float, refuses: Any,
+             delai_poignee_s: int = 180, retente_apres_s: int = 3600) -> Dict[str, Any]:
+    """Décide des liens directs à ajouter / retirer. Rend {"ajouts": [pair normalisé…], "retraits": [clé…],
+    "refuses": {clé: jusqu'à}}. Toute entrée mal typée est écartée en silence, jamais une exception."""
+    vide: Dict[str, Any] = {"ajouts": [], "retraits": [], "refuses": {}}
+    if not isinstance(etat, dict) or isinstance(maintenant, bool) or _horodatage(maintenant) is None:
+        return vide
+    poignees = poignees if isinstance(poignees, dict) else {}
+    refus: Dict[str, float] = {}
+    if isinstance(refuses, dict):
+        for cle, jusqua in refuses.items():
+            t = _horodatage(jusqua)
+            if isinstance(cle, str) and t is not None and t > maintenant:
+                refus[cle] = t                      # un refus échu s'oublie
+    entrees = etat.get("peers")
+    entrees = [e for e in entrees if isinstance(e, dict)] if isinstance(entrees, list) else []
+    moi = etat.get("public_key")
+    cles_fixes, ips_prises = set(), set()           # entrées NON directes (maître compris) : jamais en double
+    directs: Dict[str, dict] = {}
+    for e in entrees:
+        cle = e.get("public_key")
+        if e.get("direct") is True:
+            if isinstance(cle, str):
+                directs[cle] = e
+            continue
+        if isinstance(cle, str):
+            cles_fixes.add(cle)
+        for champ in ("mesh_ip", "allowed_ips"):
+            v = e.get(champ)
+            if isinstance(v, str):
+                ips_prises.add(v.split("/")[0].strip())
+    for e in directs.values():
+        if isinstance(e.get("mesh_ip"), str):
+            ips_prises.add(e["mesh_ip"])
+    valides: Dict[str, Dict[str, str]] = {}
+    for brut in liste if isinstance(liste, list) else []:
+        p = valider_pair(brut)
+        if p is None or p["cle_publique"] == moi or p["cle_publique"] in cles_fixes:
+            continue
+        ai = brut.get("allowed_ips")
+        if isinstance(ai, str) and not ai.strip().endswith("/32"):
+            continue                                # le maître (/24) ou toute route large
+        valides.setdefault(p["cle_publique"], p)    # doublon de clé : la première entrée
+    retraits: List[str] = []
+    nouveaux_refus = dict(refus)
+    for cle, e in directs.items():
+        if cle not in valides:
+            retraits.append(cle)
+            continue
+        depuis = _horodatage(e.get("direct_depuis"))
+        ts = _horodatage(poignees.get(cle))
+        recente = ts is not None and 0 <= maintenant - ts < delai_poignee_s
+        if not recente and depuis is not None and maintenant - depuis > delai_poignee_s:
+            retraits.append(cle)
+            nouveaux_refus[cle] = maintenant + retente_apres_s
+    ajouts: List[Dict[str, str]] = []
+    ips_ajoutees = set()
+    places = MAX_PAIRS - len(directs)
+    for cle, p in sorted(valides.items(), key=lambda kv: int(ipaddress.IPv4Address(kv[1]["mesh_ip"]))):
+        if cle in directs or cle in refus or p["mesh_ip"] in ips_prises or p["mesh_ip"] in ips_ajoutees:
+            continue
+        if len(ajouts) >= places:
+            break
+        ips_ajoutees.add(p["mesh_ip"])
+        ajouts.append(p)
+    return {"ajouts": ajouts, "retraits": retraits, "refuses": nouveaux_refus}
+
+
+def appliquer(etat: Any, calcul: Any, maintenant: float) -> dict:
+    """Nouvel état = copie de l'ancien + ajouts − retraits. Les ajouts sont REVALIDÉS (valider_pair) puis reconstruits
+    champ par champ : rien de brut n'atteint le fichier. Seules les entrées « direct » peuvent être retirées."""
+    if not isinstance(etat, dict):
+        return {}
+    nouveau = copy.deepcopy(etat)
+    if not isinstance(nouveau.get("peers"), list) or not isinstance(calcul, dict):
+        return nouveau
+    retraits = {c for c in calcul.get("retraits") or [] if isinstance(c, str)} \
+        if isinstance(calcul.get("retraits"), list) else set()
+    pairs = [e for e in nouveau["peers"] if not (isinstance(e, dict) and e.get("direct") is True
+                                                  and e.get("public_key") in retraits)]
+    cles = {e.get("public_key") for e in pairs if isinstance(e, dict)}
+    ips = {e.get("mesh_ip") for e in pairs if isinstance(e, dict)}
+    for a in calcul.get("ajouts") if isinstance(calcul.get("ajouts"), list) else []:
+        if not isinstance(a, dict):
+            continue
+        p = valider_pair({"name": a.get("nom"), "public_key": a.get("cle_publique"),
+                          "mesh_ip": a.get("mesh_ip"), "endpoint": a.get("endpoint")})
+        if p is None or p["cle_publique"] in cles or p["mesh_ip"] in ips:
+            continue
+        cles.add(p["cle_publique"])
+        ips.add(p["mesh_ip"])
+        pairs.append({"public_key": p["cle_publique"], "allowed_ips": p["mesh_ip"] + "/32", "mesh_ip": p["mesh_ip"],
+                      "name": p["nom"], "endpoint": p["endpoint"], "direct": True,
+                      "direct_depuis": int(maintenant)})
+    nouveau["peers"] = pairs
+    return nouveau
 
 
 # --- jeton du listener 7331 -----------------------------------------------------------------------------------
