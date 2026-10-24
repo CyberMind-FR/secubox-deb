@@ -450,11 +450,16 @@
         async function suivre() {
             if (SUIVI) return;
             SUIVI = true;
+            let echecs = 0;
             try {
                 while (Object.keys(BUSY).length) {
                     await new Promise(fin => setTimeout(fin, SONDE_MS));
                     let jobs = null;
-                    try { jobs = (await lire(API, '/jobs')).jobs || {}; } catch (e) { continue; }       // service occupé : on réessaie
+                    try { jobs = (await lire(API, '/jobs')).jobs || {}; echecs = 0; }
+                    catch (e) {                                                                          // service occupé : on réessaie, mais pas sans fin
+                        if (++echecs >= 20) { Object.keys(BUSY).forEach(n => delete BUSY[n]); retour('rMod', false, 'Suivi interrompu : le service ne répond plus. Rechargez la page pour vérifier l’état.'); rendre(); return; }
+                        continue;
+                    }
                     for (const nom of Object.keys(BUSY)) {
                         const t = jobs[nom], verbe = BUSY[nom];
                         if (t && t.etat === 'en-cours') continue;

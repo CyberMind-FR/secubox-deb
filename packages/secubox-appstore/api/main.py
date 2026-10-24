@@ -12,9 +12,12 @@ read-only. Install/enable/prefs/profiles are later phases (a root worker).
 import asyncio
 import os
 import json
+import logging
 import time
 import subprocess
 import tomllib
+
+log = logging.getLogger("secubox.appstore")
 from pathlib import Path
 from typing import Optional
 
@@ -297,7 +300,10 @@ def _appstorectl(args, input_text=None):
     try:
         r = subprocess.run(["sudo", "-n", APPSTORECTL, *args], input=input_text,
                            capture_output=True, text=True, timeout=DELAIS_CTL.get(args[0] if args else "", 90))
-        return r.returncode, (r.stdout or "").strip(), (r.stderr or "").strip()
+        return r.returncode, (r.stdout or "").strip(), (r.stderr or "").strip()   # check=False : le code de sortie est lu
+    except subprocess.TimeoutExpired:
+        # tue `sudo`, pas l'apt root : l'opération peut très bien continuer (verrou dpkg tenu)
+        return 124, "", "délai dépassé"
     except Exception as e:  # noqa: BLE001
         return 1, "", str(e)
 
@@ -616,16 +622,23 @@ async def _executer_job(name: str, verb: str):
     except Exception as e:  # noqa: BLE001
         rc, out, err = 1, "", str(e)
     if rc == 0:
-        job.update(etat="ok", code=200, message=out)
+        job.update(etat="ok", code=200, message=out[:300])
     elif rc in STATUTS_CTL:
-        job.update(etat="refuse", code=STATUTS_CTL[rc], message=f"{verb} refusé : {err or out}")
+        # un refus dit pourquoi (module protégé, dépendants…) : borné, c'est tout ce que GET /jobs laisse voir
+        job.update(etat="refuse", code=STATUTS_CTL[rc], message=f"{verb} refusé : {err or out}"[:300])
+    elif rc == 124:
+        log.warning("appstore %s %s : délai dépassé", verb, name)
+        job.update(etat="delai", code=504, message=f"{verb} : délai dépassé — l'opération peut être encore en cours côté apt, "
+                                                   "vérifiez l'état du module avant de relancer")
     else:
-        job.update(etat="echec", code=500, message=f"{verb} failed: {err or out}")
+        # le détail (sortie apt, chemins, exception) va au journal du service, pas à l'API de lecture
+        log.warning("appstore %s %s a échoué (code %s) : %s", verb, name, rc, (err or out)[:2000])
+        job.update(etat="echec", code=500, message=f"{verb} : échec (code {rc}) — voir le journal du service secubox-appstore")
     job["fin"] = time.time()
     try:
-        compute_state(force=True)
+        await asyncio.to_thread(compute_state, True)
     except Exception:  # noqa: BLE001
-        pass
+        log.warning("appstore : état non recalculé après %s %s", verb, name, exc_info=True)
 
 
 @app.get("/jobs", dependencies=[Depends(require_lecture)])

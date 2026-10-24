@@ -128,3 +128,42 @@ def test_jobs_exige_une_session(api, monkeypatch):
     monkeypatch.setattr(auth, "mode_tableau_de_bord_actif", lambda: False)   # ce poste peut avoir le mode LAN sans jeton
     api.app.dependency_overrides.pop(api.require_lecture, None)
     assert TestClient(api.app).get("/jobs").status_code in (401, 403)
+
+
+def test_reparation_aussi_en_tache_de_fond(api, monkeypatch):
+    monkeypatch.setattr(api, "_appstorectl", lambda a, input_text=None: (0, "reinstalled secubox-relais", ""))
+    with TestClient(api.app) as c:
+        assert c.post("/module/secubox-relais/action/repair").status_code == 202
+        j = _attend(c, "secubox-relais")
+    assert j["verbe"] == "repair" and j["etat"] == "ok"
+
+
+def test_une_panne_ne_divulgue_pas_la_sortie_du_controleur(api, monkeypatch, caplog):
+    secret = "E: /var/lib/dpkg/lock-frontend (sudo -n /usr/sbin/secubox-appstorectl install x) Traceback"
+    monkeypatch.setattr(api, "_appstorectl", lambda a, input_text=None: (1, "", secret))
+    with TestClient(api.app) as c, caplog.at_level("WARNING"):
+        c.post("/module/secubox-relais/action/remove?confirmer=secubox-relais")
+        j = _attend(c, "secubox-relais")
+        publie = c.get("/jobs").text
+    assert j["etat"] == "echec" and secret not in publie and "journal" in j["message"]
+    assert secret in caplog.text                                  # le détail reste dans le journal du service
+
+
+def test_delai_depasse_est_distinct_d_un_echec(api, monkeypatch):
+    def lent(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, 600)
+
+    monkeypatch.setattr(api.subprocess, "run", lent)
+    assert api._appstorectl(["install", "secubox-dns"])[0] == 124
+    with TestClient(api.app) as c:
+        c.post("/module/dns/action/install")
+        j = _attend(c, "secubox-dns")
+    assert j["etat"] == "delai" and "encore en cours" in j["message"]
+
+
+def test_message_de_refus_borne(api, monkeypatch):
+    monkeypatch.setattr(api, "_appstorectl", lambda a, input_text=None: (7, "", "requis par : " + "x" * 2000))
+    with TestClient(api.app) as c:
+        c.post("/module/secubox-relais/action/remove?confirmer=secubox-relais")
+        j = _attend(c, "secubox-relais")
+    assert j["etat"] == "refuse" and len(j["message"]) <= 320

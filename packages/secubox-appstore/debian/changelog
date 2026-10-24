@@ -9,6 +9,9 @@ secubox-appstore (0.9.2-1~trixie1) trixie; urgency=medium
     504. POST /module/{nom}/action/{install|remove|repair} rend 202 ; GET /jobs donne l'avancement (une opération à la fois,
     409 sinon) ; la page suit la tâche, la reprend après un rechargement et affiche le motif d'un refus. Délais du contrôleur :
     10 min installer/réparer, 5 min retirer. Les verbes courts (start, stop…) restent synchrones, hors de la boucle d'événements.
+    Un délai dépassé est distinct d'un échec (apt peut continuer) ; le détail d'une panne (sortie apt, chemins) va au
+    journal du service et non à GET /jobs ; l'état est recalculé hors de la boucle ; la page cesse d'interroger après
+    20 échecs consécutifs. Limite connue : les tâches sont en mémoire, un redémarrage du service les oublie (la page le dit).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 19:00:00 +0200
 
