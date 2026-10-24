@@ -3,6 +3,11 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """#3117 : le vhost de mood est livré sans les noms de gk2, migration sûre."""
+import hashlib
+import os
+import re
+import stat
+import subprocess
 from pathlib import Path
 
 PKG = Path(__file__).resolve().parent.parent
@@ -19,7 +24,7 @@ def test_server_name_generique():
 
 def test_nom_installe_neutre():
     assert "sites-available/mood.conf" in RULES
-    assert "gk2" not in "".join(l for l in RULES.splitlines() if "sites-available" in l)
+    assert "gk2" not in "".join(ligne for ligne in RULES.splitlines() if "sites-available" in ligne)
 
 
 def test_postinst_migre_avant_de_semer_le_filtre():
@@ -29,11 +34,6 @@ def test_postinst_migre_avant_de_semer_le_filtre():
 
 
 # ── Migration : un ancien vhost retouché est archivé, jamais recopié ───────
-import hashlib
-import os
-import re
-import stat
-import subprocess
 
 
 def _fonction(chemin: Path) -> str:
@@ -48,7 +48,8 @@ def _lancer(tmp_path: Path, ancien: str, nouveau: str, md5_livre: str,
     racine = tmp_path
     f = (_fonction(PKG / "debian" / "postinst").replace("/etc/nginx", f"{racine}/etc/nginx")
          .replace("/var/backups", f"{racine}/var/backups"))
-    bin_ = tmp_path / "bin"; bin_.mkdir(exist_ok=True)
+    bin_ = tmp_path / "bin"
+    bin_.mkdir(exist_ok=True)
     dq = bin_ / "dpkg-query"
     dq.write_text("#!/bin/sh\nprintf ' %s %s\\n' \"$DQ_FICHIER\" \"$DQ_MD5\"\n")
     dq.chmod(0o755)
@@ -61,7 +62,8 @@ def _lancer(tmp_path: Path, ancien: str, nouveau: str, md5_livre: str,
 
 
 def _cadre(tmp_path: Path, contenu: str):
-    sa = tmp_path / "etc/nginx/sites-available"; sa.mkdir(parents=True)
+    sa = tmp_path / "etc/nginx/sites-available"
+    sa.mkdir(parents=True)
     (tmp_path / "etc/nginx/sites-enabled").mkdir(parents=True)
     (tmp_path / "etc/nginx/snippets/exposure").mkdir(parents=True)
     (sa / ANCIEN).write_text(contenu)
