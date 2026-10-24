@@ -373,19 +373,38 @@ cmd_ouvrir() {
     if grep -qF "$regle" "$NFT_CONF"; then
         log "pare-feu : déjà ouvert à $relais sur $port"
     else
-        # Avant le `drop` terminal (une règle après lui ne sert à rien), validé
-        # par `nft -c` avant de remplacer quoi que ce soit.
+        # Avant le `drop` terminal (une règle après lui ne sert à rien) ; à défaut
+        # (#3130, gk1 : chaîne input en `policy drop` de secubox-hardening), juste
+        # avant l'accolade fermante de cette chaîne. Validé par `nft -c` avant de
+        # remplacer quoi que ce soit.
         python3 - "$NFT_CONF" "$regle" <<'PY'
 import re, sys, shutil, time, subprocess, os
 chemin, regle = sys.argv[1], sys.argv[2]
 t = open(chemin).read()
+lignes = t.splitlines(keepends=True)
 out, fait = [], False
-for l in t.splitlines(keepends=True):
+for l in lignes:
     if not fait and re.match(r"^[ \t]*drop[ \t]*$", l):
         out.append(l[: len(l) - len(l.lstrip())] + regle + "\n"); fait = True
     out.append(l)
 if not fait:
-    sys.exit("pas de drop terminal dans " + chemin)
+    # première chaîne input en policy drop : la règle va en fin de chaîne, avant la politique
+    out, dans, prof, politique, retrait = [], False, 0, False, "    "
+    for l in lignes:
+        if not fait and not dans and re.match(r"^[ \t]*chain[ \t]+input[ \t]*\{", l):
+            dans, prof, politique = True, 0, False
+        if dans and not fait:
+            if re.search(r"\bpolicy[ \t]+drop\b", l):
+                politique = True
+                retrait = l[: len(l) - len(l.lstrip())]
+            prof += l.count("{") - l.count("}")
+            if prof == 0 and l.strip() == "}":
+                if politique:
+                    out.append(retrait + regle + "\n"); fait = True
+                dans = False
+        out.append(l)
+if not fait:
+    sys.exit("pas de drop terminal ni de chaîne input en policy drop dans " + chemin)
 tmp = chemin + ".sbxtmp"
 open(tmp, "w").write("".join(out))
 if subprocess.run(["nft", "-c", "-f", tmp]).returncode != 0:
