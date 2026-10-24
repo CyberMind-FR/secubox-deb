@@ -22,6 +22,7 @@ from api.ancre import audit  # noqa: E402
 
 VERSION = "2.0.0"
 API_PORT = 7331
+TTL_FLASH = 172800  # 48 h
 
 
 def _adresse_lan():
@@ -39,19 +40,22 @@ def _rendre_au_service(dossier):
         u = pwd.getpwnam("secubox")
     except KeyError:
         return
-    for racine, dirs, fichiers in os.walk(dossier):
-        for n in [racine] + [os.path.join(racine, f) for f in fichiers]:
-            try:
-                os.chown(n, u.pw_uid, u.pw_gid)
-            except OSError:
-                pass
+    ml = os.path.join(dossier, "master-link")
+    for n in (ml, os.path.join(ml, "tokens.json")):
+        if os.path.islink(n):
+            print(f"sbx-mesh-invite : {n} est un lien, propriétaire inchangé", file=sys.stderr)
+            continue
+        try:
+            os.lchown(n, u.pw_uid, u.pw_gid)       # jamais de suivi de lien : le dossier est écrivable par le service
+        except OSError:
+            pass
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="sbx-mesh-invite", description=__doc__.splitlines()[0])
     p.add_argument("-a", "--auto-approve", action="store_true", default=True)
     p.add_argument("-m", "--manual-approve", action="store_true")
-    p.add_argument("-t", "--ttl", type=int, default=jetons.DEFAUT_TTL, help="validité en secondes")
+    p.add_argument("-t", "--ttl", type=int, default=None, help="validité en secondes (3600 ; 172800 avec --flash)")
     p.add_argument("-i", "--ip", "--adresse", dest="adresse", help="adresse LAN du maître")
     p.add_argument("--code", action="store_true", help="émettre un code sbxmesh1.…")
     p.add_argument("--nom", help="nom prévu de la box (jeton lié à ce nom)")
@@ -61,6 +65,8 @@ def main(argv=None):
     a = p.parse_args(argv)
     if a.flash and not a.nom:
         p.error("--flash exige --nom")
+    if a.ttl is None:
+        a.ttl = TTL_FLASH if a.flash else jetons.DEFAUT_TTL
     if a.ttl <= 0:
         p.error("--ttl doit être positif")
     auto = not a.manual_approve
