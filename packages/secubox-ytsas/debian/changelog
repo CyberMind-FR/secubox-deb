@@ -1,3 +1,11 @@
+secubox-ytsas (0.8.6-1~trixie1) trixie; urgency=medium
+
+  * Vhosts publics livrés sans les noms de gk2 (ref #3117) : server_name « ytsas.* » et « torrent.* ».
+    Conffiles gérés par dpkg : aucune migration. Le repli SECUBOX_HOSTNAME=gk2 de la déclaration HAProxy du
+    postinst est signalé, non modifié.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:22:13 +0200
+
 secubox-ytsas (0.8.5-1~trixie1) trixie; urgency=high
 
   * yt-dlp orphelins (ref #3036) : les sondes de métadonnées (`-j`, énumération de playlist) sont tuées au

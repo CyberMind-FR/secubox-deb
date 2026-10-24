@@ -1,3 +1,11 @@
+secubox-radio (0.2.4-1~trixie1) trixie; urgency=medium
+
+  * Vhost public livré sans le nom de gk2 (ref #3117) : server_name « radio.* ». Recopié dans sites-enabled
+    par le postinst (sauvegarde, nginx -t, retour arrière) : gk2 passe sur radio.*, qui couvre
+    radio.gk2.secubox.in.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:22:13 +0200
+
 secubox-radio (0.2.3-1~trixie1) trixie; urgency=medium
 
   * Manifeste de capacités : déclare `media.play` (ref #3074). Sur la box, ce manifeste remplace l'amorçage de ZIA ; sans

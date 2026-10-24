@@ -1,3 +1,11 @@
+secubox-metanews (0.5.3-1~trixie1) trixie; urgency=medium
+
+  * Vhosts livrés sans les noms de gk2 (ref #3117) : server_name « metanews.* » et « yacy.* ». metanews.conf
+    est recopié dans sites-enabled par le postinst (sauvegarde, nginx -t, retour arrière) : gk2 passe sur
+    metanews.*, qui couvre metanews.gk2.secubox.in. yacy.conf : conffile, aucune migration.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:22:13 +0200
+
 secubox-metanews (0.5.2-1~trixie1) trixie; urgency=medium
 
   * Micro : encarté par le Hall v2 (message {sbx:'carte'}), il range sa marque — icône et titre,

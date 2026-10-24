@@ -1,3 +1,11 @@
+secubox-lyrion (1.7.7-1~trixie1) trixie; urgency=medium
+
+  * Vhost public livré sans le nom de gk2 (ref #3117) : server_name « lyrion.* » (lyrion.gk2.secubox.in reste
+    couvert sur gk2). Conffile géré par dpkg : aucune migration. L'adresse 192.168.1.200 du bloc LAN :9000 est
+    signalée, non modifiée (attrapée de toute façon par « _ »).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:22:13 +0200
+
 secubox-lyrion (1.7.6-1~trixie1) trixie; urgency=medium
 
   * postinst active l'API (ref #3096) : deb-systemd-helper gardait l'état « disabled » laissé par les
