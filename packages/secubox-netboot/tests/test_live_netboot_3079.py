@@ -188,3 +188,20 @@ def test_sbx_netflash_montre_l_erreur_du_telechargement_de_la_liste():
     s = FLASH.read_text()
     ligne = next(l for l in s.splitlines() if "images.txt" in l and "telecharge" in l)
     assert "2>&1" not in ligne
+
+
+def test_l_image_a_son_propre_tmpfs_a_sa_taille():
+    # DUT 2026-10-24 : /run est un tmpfs à 10 % de la RAM (792 Mo sur 8 Go) ; curl (23) à 790 Mo.
+    s = FLASH.read_text()
+    assert 'mount -t tmpfs -o "size=$' in s
+    i_mount, i_dl = s.index("mount -t tmpfs"), s.index('telecharge "$BASE/$image"')
+    assert i_mount < i_dl
+    assert 'dest="$TRAVAIL/image/$image"' in s
+
+
+def test_le_live_demarre_sans_la_pile_secubox():
+    # DUT 2026-10-24 : la pile SecuBox du live prenait 6,9 Go sur 8 ; il ne sert qu'à flasher.
+    s = BUILD.read_text()
+    lignes = [l for l in s.splitlines() if l.startswith("setenv bootargs")]
+    assert all(len(l) < 200 for l in lignes)
+    assert "systemd.unit=rescue.target" in " ".join(lignes)
