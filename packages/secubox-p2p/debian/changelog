@@ -4,8 +4,10 @@ secubox-p2p (1.18.4-1~trixie1) trixie; urgency=medium
     gk1. L'annuaire garde /services et /subscriptions en lecture depuis #1256 (jeton exigé) ; le client p2p les appelait
     sans jeton (401), et son jeton de service n'a pas de session au registre partagé (échec fermé depuis #942), donc
     refusé aussi pour s'abonner. Le module relaie maintenant à l'annuaire LOCAL (socket Unix) le jeton de la personne
-    connectée (en-tête Bearer ou cookie de session, de forme JWT), le temps de sa requête seulement. Sans jeton
-    (mode tableau de bord LAN, minuteurs) : comportement d'avant.
+    connectée (en-tête Bearer puis cookie de session, de forme JWT, dans l'ordre de la garde de lecture), le temps de sa
+    requête seulement. Le client les essaie tant que l'annuaire répond 401 (un Bearer périmé ne masque pas un cookie
+    valide), puis un dernier essai sans jeton comme avant. Sans jeton (mode tableau de bord LAN, minuteurs) : comportement
+    d'avant.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 18:00:00 +0200
 

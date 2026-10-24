@@ -52,7 +52,27 @@ SERVICE_USER = os.environ.get("SBX_SERVICE_USER", "admin")
 # #1256, et le jeton de service ci-dessous n'a pas de session au registre partagé (échec fermé depuis #942) : l'annuaire
 # le refuse. Le module p2p pose ici le jeton de la personne connectée, le temps de sa requête (voir api/main.py) ; il
 # n'est envoyé qu'à l'annuaire LOCAL, par socket Unix. Hors requête : aucun jeton, comme avant.
-JETON_APPELANT: contextvars.ContextVar = contextvars.ContextVar("jeton_appelant_annuaire", default=None)
+JETON_APPELANT: contextvars.ContextVar = contextvars.ContextVar("jeton_appelant_annuaire", default=())
+# Tuple ORDONNÉ de candidats (Bearer puis cookie, comme la garde de lecture) : un Bearer périmé mais bien formé ne doit pas
+# masquer le cookie valide. Le client les essaie dans l'ordre tant que l'annuaire répond 401.
+
+
+def _essais(*, avec_jeton_de_service: bool = False) -> list:
+    """Jetons à essayer, dans l'ordre : ceux de l'appelant, puis (abonnement) le jeton de service, sinon aucun jeton
+    (comme avant #3136 : une route appelée par un pair, sans session, reste lisible quand l'annuaire le permet)."""
+    essais = list(JETON_APPELANT.get() or ())
+    essais.append(_service_token() if avec_jeton_de_service else None)
+    return essais
+
+
+def _requete_avec_essais(methode, chemin, sock, body=None, avec_jeton_de_service=False):
+    """_request, rejoué avec le jeton suivant tant que la réponse est 401 (non exécuté : sans effet de bord)."""
+    res = (None, "aucun essai")
+    for jeton in _essais(avec_jeton_de_service=avec_jeton_de_service):
+        res = _request(methode, chemin, sock, body=body, auth_token=jeton)
+        if not (res[1] and "HTTP 401" in res[1]):
+            return res
+    return res
 
 
 def _service_token() -> Optional[str]:
@@ -150,7 +170,7 @@ def get_catalog(
 
     Returns (list_of_service_dicts, None) on success, or ([], error_string).
     """
-    data, err = _request("GET", "/api/v1/annuaire/services", sock, auth_token=JETON_APPELANT.get())
+    data, err = _requete_avec_essais("GET", "/api/v1/annuaire/services", sock)
     if err:
         return [], err
     return (data or {}).get("services", []), None
@@ -167,7 +187,7 @@ def get_subscriptions(
     path = "/api/v1/annuaire/subscriptions"
     if mine_did:
         path += f"?mine={mine_did}"
-    data, err = _request("GET", path, sock, auth_token=JETON_APPELANT.get())
+    data, err = _requete_avec_essais("GET", path, sock)
     if err:
         return [], err
     return (data or {}).get("subscriptions", []), None
@@ -186,10 +206,10 @@ def subscribe(
     subscriber's identity (annuaire validates the ed25519 key pair). annuaire's
     subscribe endpoint is JWT-gated, so a service token is also attached.
     """
-    return _request(
+    return _requete_avec_essais(
         "POST",
         f"/api/v1/annuaire/service/{service_id}/subscribe",
         sock,
         body={"subscriber_did": did, "subscriber_priv_hex": priv_hex},
-        auth_token=JETON_APPELANT.get() or _service_token(),
+        avec_jeton_de_service=True,
     )

@@ -56,21 +56,22 @@ app = FastAPI(
 _RE_JETON = re.compile(r"[A-Za-z0-9_-]{1,2048}\.[A-Za-z0-9_-]{1,2048}\.[A-Za-z0-9_-]{0,2048}")
 
 
-def _jeton_de_l_appelant(scope) -> Optional[str]:
-    """Jeton Bearer, sinon cookie de session, de la requête ; seulement s'il a la forme d'un JWT."""
+def _jetons_de_l_appelant(scope) -> tuple:
+    """Candidats de la requête dans l'ordre de la garde de lecture — Bearer, puis cookie de session —, de forme JWT
+    seulement, sans doublon. La position des en-têtes ne compte pas."""
     from http.cookies import SimpleCookie
-    candidats = []
+    bearer, cookie = [], []
     for nom, valeur in scope.get("headers") or []:
         if nom == b"authorization" and valeur[:7].lower() == b"bearer ":
-            candidats.append(valeur[7:].decode("latin-1").strip())
+            bearer.append(valeur[7:].decode("latin-1").strip())
         elif nom == b"cookie":
             try:
                 c = SimpleCookie(valeur.decode("latin-1"))
             except Exception:  # noqa: BLE001
                 continue
             if SESSION_COOKIE in c:
-                candidats.append(c[SESSION_COOKIE].value)
-    return next((j for j in candidats if _RE_JETON.fullmatch(j)), None)
+                cookie.append(c[SESSION_COOKIE].value)
+    return tuple(dict.fromkeys(j for j in bearer + cookie if _RE_JETON.fullmatch(j)))
 
 
 class _RelaieJeton:
@@ -81,7 +82,7 @@ class _RelaieJeton:
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
-        marque = annuaire_client.JETON_APPELANT.set(_jeton_de_l_appelant(scope))
+        marque = annuaire_client.JETON_APPELANT.set(_jetons_de_l_appelant(scope))
         try:
             await self.app(scope, receive, send)
         finally:
