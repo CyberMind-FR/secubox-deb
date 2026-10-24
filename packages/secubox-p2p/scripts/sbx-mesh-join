@@ -10,8 +10,11 @@
 #   sbx-mesh-join 192.168.1.1 abc123def456
 #   sbx-mesh-join "http://192.168.1.1:7331/master-link/?token=abc123"
 
-VERSION="1.4.0"
+VERSION="1.5.0"
 API_PORT="7331"
+# Dossier d'état et module p2p : surchargeables (SBX_P2P_DIR, SBX_P2P_LIB) pour les tests ; ancre et audit (SBX_ANCRE, SBX_AUDIT) aussi (#3100).
+P2P_DIR="${SBX_P2P_DIR:-/var/lib/secubox/p2p}"
+P2P_LIB="${SBX_P2P_LIB:-/usr/lib/secubox/p2p}"
 
 usage() {
     echo "SecuBox Mesh Join v$VERSION"
@@ -97,9 +100,9 @@ get_fingerprint() {
             fi
             ;;
         *)
-            fp_file="/var/lib/secubox/p2p/node.id"
+            fp_file="$P2P_DIR/node.id"
             if [ ! -f "$fp_file" ]; then
-                mkdir -p /var/lib/secubox/p2p
+                mkdir -p "$P2P_DIR"
                 if [ -f /sys/class/net/eth0/address ]; then
                     echo "sbx-$(cat /sys/class/net/eth0/address | tr -d ':')" > "$fp_file"
                 else
@@ -212,6 +215,32 @@ join_openwrt_cgi_port() {
     http_post "http://$MASTER_IP:$API_PORT/cgi-bin/masterlink/join" "$JSON_DATA"
 }
 
+# ── ANCRE DU MAÎTRE (#3100) ───────────────────────────────────────────────
+# Une box ancrée (flashée par un maître) n'accepte que ce maître : la clé WireGuard offerte doit être celle de l'ancre. Sans python3 ni module
+# (OpenWrt), on garde le comportement d'avant. Sortie 0 = accepté, 1 = refusé (audit `maitre_refuse`). Aucun jeton n'est audité.
+verifier_ancre() {
+    command -v python3 >/dev/null 2>&1 && [ -f "$P2P_LIB/api/ancre.py" ] || return 0
+    printf '%s' "$RESPONSE" | SBX_ANCRE_CHEMIN="${SBX_ANCRE:-}" SBX_AUDIT_CHEMIN="${SBX_AUDIT:-}" python3 -c '
+import json, os, sys
+sys.path.insert(0, sys.argv[1])
+from api import ancre
+try:
+    cle = json.load(sys.stdin).get("wg", {}).get("master_public_key", "")
+except Exception:
+    cle = ""
+chemin = os.environ.get("SBX_ANCRE_CHEMIN") or ancre.CHEMIN
+a = ancre.lire(chemin)
+if ancre.accepte(a, cle):
+    sys.exit(0)
+try:
+    ancre.audit("maitre_refuse", os.environ.get("SBX_AUDIT_CHEMIN") or "/var/log/secubox/audit.log",
+                maitre=sys.argv[2], empreinte_offerte=ancre.empreinte(cle) if cle else "", empreinte_ancre=a.get("empreinte", ""))
+except Exception:
+    pass
+sys.exit(1)
+' "$P2P_LIB" "$MASTER_IP"
+}
+
 # Save success config
 save_config() {
     case "$SYSTEM" in
@@ -222,8 +251,8 @@ save_config() {
             echo "$MASTER_TYPE" > /etc/secubox/master.type
             ;;
         *)
-            mkdir -p /var/lib/secubox/p2p
-            cat > /var/lib/secubox/p2p/mesh.json << CONF
+            mkdir -p "$P2P_DIR"
+            cat > "$P2P_DIR/mesh.json" << CONF
 {"upstream":"$MASTER_IP","role":"peer","master_type":"$MASTER_TYPE"}
 CONF
             ;;
@@ -251,11 +280,11 @@ echo ""
 # La jonction n'échangeait AUCUNE clé : le maître inscrivait le pair à son
 # registre, et aucun tunnel ne pouvait se former. On génère (ou réutilise) la
 # clé du pair et on l'envoie ; la clé privée ne quitte jamais cette machine.
-WG_STATE=/var/lib/secubox/p2p/wg_mesh.json
+WG_STATE="$P2P_DIR/wg_mesh.json"
 WG_PORT=51822
 WG_PUB=""
 if [ "$SYSTEM" != "openwrt" ] && command -v wg >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
-    mkdir -p /var/lib/secubox/p2p
+    mkdir -p "$P2P_DIR"
     WG_PUB=$(python3 - "$WG_STATE" "$WG_PORT" <<'PY2'
 import json, os, subprocess, sys
 path, port = sys.argv[1], int(sys.argv[2])
@@ -351,6 +380,12 @@ esac
 # OpenWrt, qui ne renvoient pas de statut.
 if echo "$RESPONSE" | grep -q '"status":"approved"' || \
    { echo "$RESPONSE" | grep -q '"success":true' && ! echo "$RESPONSE" | grep -q '"status"'; }; then
+    if ! verifier_ancre; then
+        echo ""
+        echo "✗ REFUSED: this master is not the one this box is anchored to (#3100)"
+        echo "  Nothing was changed. Ask the right master for a new invitation."
+        exit 3
+    fi
     echo ""
     echo "✓ SUCCESS: Joined mesh network!"
     echo "  Status: APPROVED"
