@@ -180,3 +180,23 @@ def test_mot_de_passe_espaces_conserves(tmp_path):
     assert r.returncode == 0, r.stderr
     h = r.stdout.strip()
     assert argon2.PasswordHasher().verify(h, "  a b  ")
+
+
+@pytest.mark.parametrize("nom,ok", [("gk1", True), ("a", True), ("a-b2", True), ("a" * 31, True),
+                                    ("a" * 32, False), ("gk-", False), ("1gk", False), ("GK1", False),
+                                    ("a_b", False), ("gk1\n../x", False)])
+def test_motif_de_nom_identique_partout(nom, ok):
+    """Lot du maître, sbx-netflash-profil et sbx-netflash acceptent exactement les mêmes noms."""
+    import importlib.util
+    import re
+    spec = importlib.util.spec_from_file_location("lot_3100", ICI / "api" / "lot.py")
+    lot = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lot)
+    assert lot.nom_valide(nom) is ok
+    r = subprocess.run([sys.executable, str(PROFIL), "--nom", nom, "--domaine", "gk1.example.org",
+                        "--empreinte", "$argon2id$v=19$m=65536,t=3,p=4$c2FsdA$aGFzaA"], capture_output=True, text=True)
+    assert (r.returncode == 0) is ok
+    src = (ICI / "installer" / "sbx-netflash").read_text()
+    motif = re.search(r"NOM_RE='([^']+)'", src).group(1)
+    b = subprocess.run(["bash", "-c", 'NOM_RE="$1"; [[ "$2" =~ $NOM_RE ]]', "_", motif, nom])
+    assert (b.returncode == 0) is ok

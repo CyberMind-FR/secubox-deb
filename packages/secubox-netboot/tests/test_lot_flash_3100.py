@@ -40,7 +40,11 @@ def monde(tmp_path, monkeypatch):
     automesh = _p2p("automesh")
     code = automesh.encoder("192.168.1.200", "a" * 64)
     invite = tmp_path / "invite"
-    invite.write_text("#!/bin/sh\necho '{\"code\": \"%s\", \"nom\": \"'\"$4\"'\", \"expire\": 1}'\n" % code)
+    appels = tmp_path / "invite-appels.jsonl"
+    # fausse CLI : note ses arguments (une ligne JSON par appel) et rend le code
+    invite.write_text("#!%s\nimport json, sys\nopen(%r, 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                      "a = sys.argv[1:]\nprint(json.dumps({'code': %r, 'nom': a[a.index('--nom') + 1], 'expire': 1}))\n"
+                      % (sys.executable, str(appels), code))
     invite.chmod(0o755)
     wg = tmp_path / "wg_mesh.json"
     wg.write_text(json.dumps({"public_key": "CLEPUBLIQUEDUMAITRE="}))
@@ -51,7 +55,14 @@ def monde(tmp_path, monkeypatch):
            "SBX_LOT_DOMAINE_MAITRE": "gk2.secubox.in", "SBX_LOT_HOTE": "gk2"}
     for k, v in env.items():
         monkeypatch.setenv(k, v)
-    return {"env": env, "pub": pub, "code": code, "prep": prep, "audit": audit, "tmp": tmp_path}
+    return {"env": env, "pub": pub, "code": code, "prep": prep, "audit": audit, "tmp": tmp_path, "appels": appels}
+
+
+def _appels(monde):
+    """Arguments passés à sbx-mesh-invite, un appel par élément."""
+    if not monde["appels"].exists():
+        return []
+    return [json.loads(x) for x in monde["appels"].read_text().splitlines()]
 
 
 def _lot():
@@ -65,7 +76,7 @@ def test_domaine_pour():
     assert lot.domaine_pour("a-b2", "x.exemple.fr") == "a-b2.exemple.fr"
 
 
-@pytest.mark.parametrize("nom", ["", "GK1", "1gk", "a_b", "a.b", "../x", "a" * 32, "gk1\n"])
+@pytest.mark.parametrize("nom", ["", "GK1", "1gk", "a_b", "a.b", "../x", "a" * 32, "gk1\n", "gk-"])
 def test_nom_invalide_refuse(nom):
     with pytest.raises(ValueError):
         _lot().domaine_pour(nom, "gk2.secubox.in")
@@ -119,12 +130,15 @@ def test_preparation_consommee_une_fois(monde):
     assert r1.status_code == 200, r1.text
     d1 = json.loads(r1.json()["lot"])
     assert d1["admin_empreinte"].startswith("$argon2")
+    assert "flash" not in r1.json()                       # l'indicateur reste côté maître
     r2 = c.get("/lot-flash", params={"nom": "gk1"}, headers=h)
     assert "admin_empreinte" not in json.loads(r2.json()["lot"])
     assert not (monde["prep"] / "gk1.json").exists()
+    assert ["--flash" in a for a in _appels(monde)] == [True, False]
     lignes = [json.loads(x) for x in monde["audit"].read_text().splitlines()]
-    assert [x["evenement"] for x in lignes] == ["lot_flash_servi"] * 2
-    assert lignes[0]["nom"] == "gk1" and lignes[0]["adresse"] == "192.168.1.50"
+    assert [x["evenement"] for x in lignes] == ["flash_prepare", "lot_flash_servi", "lot_flash_servi"]
+    assert lignes[1]["nom"] == "gk1" and lignes[1]["adresse"] == "192.168.1.50"
+    assert [lignes[1]["flash"], lignes[2]["flash"]] == [True, False]
     assert monde["code"] not in monde["audit"].read_text()
 
 
@@ -151,6 +165,125 @@ def test_prepare_exige_jwt_et_valide_le_nom(monde):
     main.app.dependency_overrides[main.require_jwt] = lambda: {"sub": "admin"}
     assert c.post("/flash/prepare", json={"nom": "../x", "mot_de_passe": "x" * 12}).status_code == 400
     assert c.post("/flash/prepare", json={"nom": "gk1", "mot_de_passe": "court"}).status_code == 400
+    assert not (monde["prep"] / "gk1.json").exists()
+
+
+def test_lot_sans_preparation_code_ordinaire(monde):
+    """Sans préparation : code ordinaire (pas de --flash), lié au nom, 48 h — un nom déjà approuvé
+    sera refusé par le maître (409), aucune clé de pair ne peut être remplacée."""
+    main, c = _client(monde)
+    r = c.get("/lot-flash", params={"nom": "gk1"}, headers={"X-Real-IP": "192.168.1.50"})
+    assert r.status_code == 200, r.text
+    (a,) = _appels(monde)
+    assert "--flash" not in a
+    assert a[a.index("--nom") + 1] == "gk1" and a[a.index("--ttl") + 1] == "172800"
+    assert json.loads(monde["audit"].read_text().splitlines()[-1])["flash"] is False
+
+
+def test_preparation_sans_mot_de_passe_donne_un_flash(monde):
+    main, c = _client(monde)
+    main.app.dependency_overrides[main.require_jwt] = lambda: {"sub": "admin"}
+    r = c.post("/flash/prepare", json={"nom": "gk1"})
+    assert r.status_code == 200, r.text
+    d = json.loads((monde["prep"] / "gk1.json").read_text())
+    assert "admin_empreinte" not in d and d["expire"] - d["cree"] == 86400
+    r = c.get("/lot-flash", params={"nom": "gk1"}, headers={"X-Real-IP": "192.168.1.50"})
+    assert r.status_code == 200, r.text
+    assert "admin_empreinte" not in json.loads(r.json()["lot"])      # la console du live le demandera
+    assert "--flash" in _appels(monde)[0]
+    assert not (monde["prep"] / "gk1.json").exists()
+
+
+def test_preparation_expiree_ignoree_et_supprimee(monde):
+    lot = _lot()
+    lot.enregistrer_preparation("gk1")
+    f = monde["prep"] / "gk1.json"
+    d = json.loads(f.read_text())
+    d["expire"] = d["cree"] - 1
+    f.write_text(json.dumps(d))
+    sortie = lot.construire("gk1")
+    assert sortie["flash"] is False and "--flash" not in _appels(monde)[0]
+    assert list(monde["prep"].iterdir()) == []
+    assert json.loads(monde["audit"].read_text().splitlines()[-1])["evenement"] == "preparation_ignoree"
+
+
+def test_preparation_ancienne_sans_echeance_ignoree(monde):
+    """Format d'avant (sans `expire`) : jamais pris pour une préparation valide."""
+    monde["prep"].mkdir(mode=0o700)
+    (monde["prep"] / "gk1.json").write_text(json.dumps({"nom": "gk1", "admin_empreinte": "$argon2id$x"}))
+    assert _lot().construire("gk1")["flash"] is False
+
+
+def test_preparation_prise_une_seule_fois_en_concurrence(monde):
+    """Deux demandes simultanées : une seule obtient la préparation (renommage atomique)."""
+    from concurrent.futures import ThreadPoolExecutor
+    lot = _lot()
+    for _ in range(20):
+        lot.enregistrer_preparation("gk1")
+        with ThreadPoolExecutor(8) as ex:
+            pris = list(ex.map(lambda _i: lot.prendre_preparation("gk1"), range(8)))
+        gagnants = [p for p in pris if p is not None]
+        assert len(gagnants) == 1
+        lot.abandonner_preparation(gagnants[0])
+    assert list(monde["prep"].iterdir()) == []
+
+
+def test_preparation_rendue_si_le_lot_echoue(monde):
+    lot = _lot()
+    lot.enregistrer_preparation("gk1")
+    monde["appels"].parent.joinpath("invite").write_text("#!/bin/sh\nexit 1\n")
+    with pytest.raises(RuntimeError):
+        lot.construire("gk1")
+    assert (monde["prep"] / "gk1.json").exists()               # remise : le prochain essai sera un flash
+
+
+def test_adresse_du_maitre_portee_par_le_code(monde):
+    """L'adresse jointe par le live ($server_addr du vhost :8099) est passée à sbx-mesh-invite."""
+    main, c = _client(monde)
+    h = {"X-Real-IP": "192.168.1.50", "X-SecuBox-Adresse-Serveur": "192.168.1.200"}
+    assert c.get("/lot-flash", params={"nom": "gk1"}, headers=h).status_code == 200
+    a = _appels(monde)[-1]
+    assert a[a.index("--adresse") + 1] == "192.168.1.200"
+
+
+@pytest.mark.parametrize("serveur", ["8.8.8.8", "127.0.0.1", "10.10.0.1", "fe80::1", "x; rm -rf /"])
+def test_adresse_du_maitre_invalide_remplacee_par_la_route(monde, serveur):
+    main, c = _client(monde)
+    vus = []
+
+    async def faux_run(*argv, timeout=60):
+        vus.append(argv)
+        if argv[0] == "ip":
+            return {"rc": 0, "stdout": "192.168.1.50 dev lan0 src 192.168.1.201 uid 0 \\    cache", "stderr": ""}
+        return await vrai_run(*argv, timeout=timeout)
+    vrai_run = main._run
+    main._run = faux_run
+    h = {"X-Real-IP": "192.168.1.50", "X-SecuBox-Adresse-Serveur": serveur}
+    assert c.get("/lot-flash", params={"nom": "gk1"}, headers=h).status_code == 200
+    assert ("ip", "-o", "route", "get", "192.168.1.50") in vus
+    a = _appels(monde)[-1]
+    assert a[a.index("--adresse") + 1] == "192.168.1.201"
+
+
+def test_adresse_introuvable_sans_option(monde):
+    main, c = _client(monde)
+
+    async def faux_run(*argv, timeout=60):
+        if argv[0] == "ip":
+            return {"rc": 2, "stdout": "", "stderr": "RTNETLINK"}
+        return await vrai_run(*argv, timeout=timeout)
+    vrai_run = main._run
+    main._run = faux_run
+    assert c.get("/lot-flash", params={"nom": "gk1"}, headers={"X-Real-IP": "192.168.1.50"}).status_code == 200
+    assert "--adresse" not in _appels(monde)[-1]
+
+
+def test_ctl_refuse_adresse_invalide(monde):
+    for argv in (["gk1", "--adresse", "8.8.8.8"], ["gk1", "--adresse"], ["gk1", "--autre", "10.0.0.1"]):
+        r = subprocess.run([sys.executable, str(CTL), *argv], capture_output=True, text=True,
+                           env={**os.environ, **monde["env"]})
+        assert r.returncode == 2 and r.stdout == ""
+    assert _appels(monde) == []
 
 
 def test_route_lot_refuse_hors_lan(monde):
@@ -173,7 +306,8 @@ def test_vhost_nginx_location_lot_flash_lan_seulement():
     i = s.index("location = /lot-flash")
     bloc = s[i:s.index("}", i)]
     for t in ("allow 10.0.0.0/8;", "allow 172.16.0.0/12;", "allow 192.168.0.0/16;", "deny all;",
-              "unix:/run/secubox/netboot.sock", "X-Real-IP $remote_addr"):
+              "unix:/run/secubox/netboot.sock", "X-Real-IP $remote_addr",
+              "X-SecuBox-Adresse-Serveur $server_addr;"):
         assert t in bloc
 
 

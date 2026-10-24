@@ -14,6 +14,7 @@ import importlib.util
 import json
 import os
 import re
+import secrets
 import socket
 import subprocess
 import tempfile
@@ -21,8 +22,10 @@ import time
 from pathlib import Path
 from typing import Optional
 
-NOM_RE = re.compile(r"[a-z][a-z0-9-]{0,30}")
+# Même motif que sbx-netflash et sbx-netflash-profil : 1 à 31 caractères, ni tiret final.
+NOM_RE = re.compile(r"[a-z]([a-z0-9-]{0,29}[a-z0-9])?")
 TTL_FLASH = 172800  # 48 h, comme sbx-mesh-invite --flash
+DUREE_PREPARATION = 86400  # une préparation de flash vaut 24 h
 
 
 def _env(nom: str, defaut: str) -> str:
@@ -56,19 +59,26 @@ def domaine_pour(nom: str, domaine_maitre: str) -> str:
 
 
 # ── Préparations d'administrateur ─────────────────────────────────────────────────────────────
-def enregistrer_preparation(nom: str, mot_de_passe: str) -> None:
-    """Hache le mot de passe (argon2) et écrit {nom, admin_empreinte} en 0600. Le clair n'est jamais écrit."""
+# Une préparation (posée sous JWT administrateur) est la SEULE chose qui autorise un code de
+# reflash (`--flash`, qui remplace la clé du pair de ce nom). Sans elle, le lot porte un code
+# ordinaire : un nom neuf rejoint, un nom déjà approuvé est refusé (409) par le maître.
+def enregistrer_preparation(nom: str, mot_de_passe: Optional[str] = None) -> None:
+    """Écrit {nom, cree, expire[, admin_empreinte]} en 0600 ; le mot de passe (facultatif) n'est gardé
+    qu'en empreinte argon2, le clair n'est jamais écrit. Valable DUREE_PREPARATION secondes."""
     if not nom_valide(nom):
         raise ValueError("nom de box invalide")
-    from argon2 import PasswordHasher
-    empreinte = PasswordHasher().hash(mot_de_passe)
+    maintenant = int(time.time())
+    donnees = {"nom": nom, "cree": maintenant, "expire": maintenant + DUREE_PREPARATION}
+    if mot_de_passe:
+        from argon2 import PasswordHasher
+        donnees["admin_empreinte"] = PasswordHasher().hash(mot_de_passe)
     d = dossier_prepares()
     d.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd, tmp = tempfile.mkstemp(dir=d, prefix=".tmp-")
     try:
         os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump({"nom": nom, "admin_empreinte": empreinte}, f)
+            json.dump(donnees, f)
         os.replace(tmp, d / f"{nom}.json")
     except BaseException:
         try:
@@ -78,20 +88,72 @@ def enregistrer_preparation(nom: str, mot_de_passe: str) -> None:
         raise
 
 
-def lire_preparation(nom: str) -> Optional[str]:
+def _preparation_valide(donnees, nom: str, maintenant: float) -> bool:
+    if not isinstance(donnees, dict) or donnees.get("nom") != nom:
+        return False
+    expire = donnees.get("expire")
+    if not isinstance(expire, int) or isinstance(expire, bool) or expire <= maintenant:
+        return False
+    e = donnees.get("admin_empreinte")
+    return e is None or (isinstance(e, str) and e.startswith("$argon2"))
+
+
+def prendre_preparation(nom: str) -> Optional[Path]:
+    """Prise ATOMIQUE de la préparation de `nom` : le fichier est renommé vers un nom propre à cet
+    appel ; de deux demandes concurrentes, une seule l'obtient. Rend le chemin pris, ou None.
+    Une préparation expirée ou illisible est supprimée et ignorée (audit `preparation_ignoree`)."""
+    if not nom_valide(nom):
+        return None
+    d = dossier_prepares()
+    pris = d / f".pris-{nom}-{os.getpid()}-{secrets.token_hex(6)}.json"
     try:
-        d = json.loads((dossier_prepares() / f"{nom}.json").read_text(encoding="utf-8"))
-        e = d.get("admin_empreinte")
-        return e if d.get("nom") == nom and isinstance(e, str) and e.startswith("$argon2") else None
+        os.rename(d / f"{nom}.json", pris)
+    except OSError:
+        return None
+    try:
+        donnees = json.loads(pris.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        donnees = None
+    if not _preparation_valide(donnees, nom, time.time()):
+        abandonner_preparation(pris)
+        try:
+            audit("preparation_ignoree", nom=nom, raison="expiree ou illisible")
+        except OSError:
+            pass
+        return None
+    return pris
+
+
+def empreinte_preparation(pris: Optional[Path]) -> Optional[str]:
+    """Empreinte argon2 portée par une préparation prise (None : la console du live la demandera)."""
+    if pris is None:
+        return None
+    try:
+        e = json.loads(pris.read_text(encoding="utf-8")).get("admin_empreinte")
     except (OSError, ValueError, AttributeError):
         return None
+    return e if isinstance(e, str) and e.startswith("$argon2") else None
 
 
-def consommer_preparation(nom: str) -> None:
+def abandonner_preparation(pris: Optional[Path]) -> None:
+    """Supprime une préparation prise (consommée ou invalide)."""
+    if pris is not None:
+        try:
+            pris.unlink()
+        except OSError:
+            pass
+
+
+def rendre_preparation(pris: Optional[Path], nom: str) -> None:
+    """Échec après la prise : la préparation est remise, sauf si une plus récente l'a remplacée
+    (os.link échoue si la cible existe)."""
+    if pris is None:
+        return
     try:
-        (dossier_prepares() / f"{nom}.json").unlink()
+        os.link(pris, dossier_prepares() / f"{nom}.json")
     except OSError:
         pass
+    abandonner_preparation(pris)
 
 
 # ── Lot ──────────────────────────────────────────────────────────────────────────────────────
@@ -111,9 +173,16 @@ def _domaine_maitre() -> str:
     return domaine_box()
 
 
-def _code(nom: str) -> str:
-    r = subprocess.run([_env("SBX_LOT_INVITE", "/usr/bin/sbx-mesh-invite"), "--code", "--nom", nom, "--flash",
-                        "--ttl", str(TTL_FLASH), "--json"], capture_output=True, text=True, timeout=30)
+def _code(nom: str, flash: bool, adresse: Optional[str] = None) -> str:
+    """Code de jonction pour `nom`. `flash` (reflash, remplace la clé du pair de ce nom) n'est demandé
+    que sur préparation de l'administrateur ; `adresse` : celle du maître que le live a jointe."""
+    argv = [_env("SBX_LOT_INVITE", "/usr/bin/sbx-mesh-invite"), "--code", "--nom", nom,
+            "--ttl", str(TTL_FLASH), "--json"]
+    if flash:
+        argv.append("--flash")
+    if adresse:
+        argv += ["--adresse", adresse]
+    r = subprocess.run(argv, capture_output=True, text=True, timeout=30)
     if r.returncode != 0:
         raise RuntimeError("émission du code de jonction impossible")
     try:
@@ -130,21 +199,32 @@ def _cle_wg() -> str:
     return cle
 
 
-def construire(nom: str) -> dict:
-    """{"lot": <texte JSON>, "signature": <base64>} pour la box `nom`. ValueError si le nom est invalide."""
+def construire(nom: str, adresse: Optional[str] = None) -> dict:
+    """{"lot": <texte JSON>, "signature": <base64>, "flash": bool} pour la box `nom`.
+
+    Le code n'est de reflash (`--flash`) que si une préparation valide existe pour ce nom ; elle est
+    prise atomiquement et consommée au succès, remise en cas d'échec. ValueError si le nom est invalide."""
     domaine = domaine_pour(nom, _domaine_maitre())
-    code = _code(nom)
-    adresse, _jeton = _module_p2p("automesh").decoder(code)
-    cle = _cle_wg()
-    lot = {"version": 1, "nom": nom, "domaine": domaine, "code": code,
-           "ancre": {"cle_publique": cle, "adresse": adresse, "nom": _env("SBX_LOT_HOTE", socket.gethostname()),
-                     "empreinte": _module_p2p("ancre").empreinte(cle)},
-           "emis": int(time.time())}
-    prep = lire_preparation(nom)
-    if prep:
-        lot["admin_empreinte"] = prep
-    texte = json.dumps(lot, ensure_ascii=False, separators=(",", ":"))
-    return {"lot": texte, "signature": signer(texte)}
+    pris = prendre_preparation(nom)
+    try:
+        code = _code(nom, flash=pris is not None, adresse=adresse)
+        adresse_code, _jeton = _module_p2p("automesh").decoder(code)
+        cle = _cle_wg()
+        lot = {"version": 1, "nom": nom, "domaine": domaine, "code": code,
+               "ancre": {"cle_publique": cle, "adresse": adresse_code,
+                         "nom": _env("SBX_LOT_HOTE", socket.gethostname()),
+                         "empreinte": _module_p2p("ancre").empreinte(cle)},
+               "emis": int(time.time())}
+        prep = empreinte_preparation(pris)
+        if prep:
+            lot["admin_empreinte"] = prep
+        texte = json.dumps(lot, ensure_ascii=False, separators=(",", ":"))
+        sortie = {"lot": texte, "signature": signer(texte), "flash": pris is not None}
+    except BaseException:
+        rendre_preparation(pris, nom)
+        raise
+    abandonner_preparation(pris)
+    return sortie
 
 
 def signer(texte: str) -> str:

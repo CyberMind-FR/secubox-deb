@@ -3,10 +3,13 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""secubox-netboot-lot NOM : lot de flash signé pour la box NOM (root, sur le maître).
+"""secubox-netboot-lot NOM [--adresse IPV4] : lot de flash signé pour la box NOM (root, sur le maître).
 
-Sortie : {"lot": <JSON texte>, "signature": <base64>}. Émet un code de jonction à usage unique
-(sbx-mesh-invite --flash) : à n'appeler que pour un flash réel. Le code n'est jamais journalisé."""
+Sortie : {"lot": <JSON texte>, "signature": <base64>, "flash": bool}. Émet un code de jonction à
+usage unique : de reflash (sbx-mesh-invite --flash) seulement si l'administrateur a préparé ce
+nom (POST /flash/prepare, 24 h), ordinaire sinon. À n'appeler que pour un flash réel.
+--adresse : l'adresse du maître que le live a jointe (portée par le code). Le code n'est jamais journalisé."""
+import ipaddress
 import json
 import sys
 from pathlib import Path
@@ -17,12 +20,25 @@ sys.path.insert(0, "/usr/lib/secubox")
 from api import lot  # noqa: E402
 
 
+def _adresse_admise(a: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(a)
+    except ValueError:
+        return False
+    return ip.version == 4 and ip.is_private and not ip.is_loopback
+
+
 def main(argv):
-    if len(argv) != 2 or not lot.nom_valide(argv[1]):
-        print("usage : secubox-netboot-lot NOM (^[a-z][a-z0-9-]{0,30}$)", file=sys.stderr)
+    usage = "usage : secubox-netboot-lot NOM [--adresse IPV4_PRIVEE] (NOM : ^[a-z]([a-z0-9-]{0,29}[a-z0-9])?$)"
+    adresse = None
+    if len(argv) == 4 and argv[2] == "--adresse":
+        adresse = argv[3]
+    if len(argv) not in (2, 4) or (len(argv) == 4 and adresse is None) or not lot.nom_valide(argv[1]) \
+            or (adresse is not None and not _adresse_admise(adresse)):
+        print(usage, file=sys.stderr)
         return 2
     try:
-        print(json.dumps(lot.construire(argv[1]), ensure_ascii=False))
+        print(json.dumps(lot.construire(argv[1], adresse=adresse), ensure_ascii=False))
     except (ValueError, RuntimeError, OSError) as e:
         print(f"secubox-netboot-lot : {e}", file=sys.stderr)
         return 1

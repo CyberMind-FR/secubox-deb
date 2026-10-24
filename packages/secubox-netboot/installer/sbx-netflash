@@ -150,7 +150,9 @@ while [ $# -gt 0 ]; do case "$1" in
     *) usage; exit 2 ;;
 esac; done
 
-case "$nom" in "") ;; *) printf '%s' "$nom" | grep -Eq '^[a-z][a-z0-9-]{0,30}$' || fail "nom invalide : $nom" ;; esac
+# même motif que le lot du maître (api/lot.py) et sbx-netflash-profil ; =~ de bash : pas de multiligne
+NOM_RE='^[a-z]([a-z0-9-]{0,29}[a-z0-9])?$'
+if [ -n "$nom" ] && ! [[ "$nom" =~ $NOM_RE ]]; then fail "nom invalide : $nom"; fi
 [ "$(id -u)" -eq 0 ] || fail "à lancer en root"
 
 # Serveur et dossier par défaut : ceux qui ont servi le live (fetch=http://HOTE:PORT/DOSSIER/filesystem.squashfs).
