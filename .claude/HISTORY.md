@@ -9,6 +9,29 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-24 — Suite de la journée : firstboot, relais du maillage, catalogue p2p, App Store, Chaturbate
+
+- **#3113 closes** — `secubox-firstboot` : `--help` n'exécute plus rien (0), argument inconnu 2, déjà fait 3 sauf `--force` ;
+  rien d'existant écrasé (secubox.conf gardé s'il porte un secret JWT valide, users.json, clés SSH ajoutées), copie
+  horodatée 0700. Relecture : l'exemple du paquet (secret vide) reste remplacé. secubox-core 1.7.15, gk1 et gk2.
+- **#3130, #3132** — relais du maillage (secubox-p2p 1.18.1 → 1.18.3) : chaîne `input` en `policy drop` acceptée (gk1 échouait
+  chaque heure) ; services propres aux pairs publiés (`services_des_pairs`), noms périmés retirés au second relevé (gk2 :
+  bbs, metanews, socialrelay de gk1), détournement de domaine fermé (domaine et sous-domaine d'un autre pair refusés, route
+  jamais écrasée), audit JSON. 1.18.2 refusait tout `*.secubox.in` (routes du relais sous le domaine parent) : corrigé en 1.18.3.
+- **#3136** — page Registre de services : l'annuaire garde `/services` depuis #1256, le client p2p l'appelait sans jeton
+  (401) et son jeton de service n'a pas de session (échec fermé #942). Le module relaie le jeton de l'appelant (Bearer puis
+  cookie) à l'annuaire local. secubox-p2p 1.18.4. Chemin positif à confirmer par le propriétaire (session requise).
+- **#3119 (partie 1)** — App Store 0.9.2 : « Installer » et « Retirer » (nom à retaper) dans la page ; install/remove/repair en
+  tâches de fond (202 puis `GET /jobs`) car HAProxy coupe à 30 s. Reste la partie 2 : catalogue metablogizer distribué aux pairs.
+- **#3139** — l'arbre des métapaquets ne plaçait ni `secubox-courbes` ni `secubox-assist` : le build de l'appstore échouait
+  (rc 2). Placés (courbes recommandé, assist suggéré), secubox-meta 0.1.47 — NON publié sur apt (courbes serait installé
+  partout via la recommandation). Deux tests d'arbre restent rouges, sans lien (carte guardian, webmail transitionnel).
+- **#3005 récidive** — chaturbate.com NXDOMAIN pour 192.168.1.3 : la carte MAC→IP de 04:00 n'avait pas son IPv4. Débloqué par
+  `appliquer.demande` (278 s). À corriger pour de bon : rattacher l'appareil à sa vue sans régénérer ~800 000 zones.
+- **Nettoyage** : 55 worktrees fusionnés retirés (disque 100 % → 93 %) ; deux dossiers orphelins laissés (1193-mur, 2526).
+- **Ouverts** : #3126 (TR-369), #3133 (projet 2, conception à valider), gk3 publie une liste de noms vide, avertissements
+  `haproxy -c` sur gk2.
+
 ## 2026-10-24 — Page NetBoot : netbooter une box, préparer un flash (ref #3100)
 
 - PR #3127 puis #3128, secubox-netboot 0.7.3, gk2 par apt : route `GET /live` (commandes U-Boot lues dans le
