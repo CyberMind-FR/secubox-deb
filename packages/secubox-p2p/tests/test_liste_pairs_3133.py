@@ -249,9 +249,64 @@ def test_postinst_genere_le_jeton_avant_le_vhost_sans_le_divulguer():
     i_jeton, i_vhost = t.index("openssl rand -hex 32"), t.index("ln -s ../sites-available/secubox-p2p-masterlink.conf")
     assert i_jeton < i_vhost
     assert "umask 077" in t and "set -x" not in t
-    assert "[ ! -s /etc/secubox/secrets/p2p/pair.token ]" in t        # jamais régénéré
-    assert not re.search(r"echo[^\n]*pair\.token\)?|echo[^\n]*\$\(cat", t)
-    assert "chmod 0600 /etc/nginx/secubox-p2p-pair.conf" in t
+    assert "chmod 0600" in t and "chmod 0640" in t and "chmod 0750" in t
+    assert "_own root:secubox" in t
+    assert not re.search(r"echo[^\n]*\$_t|echo[^\n]*\$\(cat", t)
+    # la validation précède le rendu, et seul $_t (validé) est interpolé dans le printf de la map
+    assert t.index("*[!0-9a-f]*)") < t.index("printf 'map")
+    assert t.count("printf 'map") == 1 and '"$_t" > "$_ngx.new"' in t
+
+
+def _fragment():
+    t = (Path(__file__).resolve().parents[1] / "debian" / "postinst").read_text()
+    return t.split("# BEGIN jeton-pair\n")[1].split("# END jeton-pair")[0]
+
+
+def _rend(tmp_path, jeton):
+    import subprocess
+    d = tmp_path / "secrets"
+    d.mkdir(exist_ok=True)
+    if jeton is not None:
+        (d / "pair.token").write_bytes(jeton)
+    ngx = tmp_path / "pair.conf"
+    env = {"PATH": "/usr/bin:/bin", "SBX_P2P_TEST": "1", "SBX_P2P_SECRETS_DIR": str(d), "SBX_P2P_PAIR_CONF": str(ngx)}
+    r = subprocess.run(["sh", "-ec", _fragment() + "\n_rendre_jeton_pair"], env=env, capture_output=True, text=True)
+    return r, d / "pair.token", ngx
+
+
+PIEGE = b'x"; } server { listen 0.0.0.0:9999; location / { root /; autoindex on; } } map $a $b { default "\n'
+
+
+@pytest.mark.parametrize("piege", [PIEGE, b"ab" * 31, b"AB" * 32, b"ab" * 32 + b"\nlisten 9999;\n", b"ab" * 32 + b"\x00" * 5,
+                                   b"\xff\xfe" * 40, b"", None])
+def test_postinst_jeton_pique_jamais_rendu_et_regenere(tmp_path, piege):
+    r, tok, ngx = _rend(tmp_path, piege)
+    assert r.returncode == 0, r.stderr
+    nouveau = tok.read_text().strip()
+    assert re.fullmatch(r"[0-9a-f]{64}", nouveau)
+    rendu = ngx.read_text()
+    assert f'1 "{nouveau}";' in rendu and "server" not in rendu and "9999" not in rendu
+    assert nouveau not in r.stderr and nouveau not in r.stdout
+    assert oct(tok.stat().st_mode & 0o777) == "0o640" and oct(ngx.stat().st_mode & 0o777) == "0o600"
+    assert oct(tok.parent.stat().st_mode & 0o777) == "0o750"
+
+
+def test_postinst_jeton_valide_conserve(tmp_path):
+    valide = "0123456789abcdef" * 4
+    r, tok, ngx = _rend(tmp_path, (valide + "\n").encode())
+    assert r.returncode == 0 and tok.read_text().strip() == valide and f'"{valide}"' in ngx.read_text()
+    assert "regenere" not in r.stderr
+
+
+def test_jeton_pair_fichier_binaire(fichier_jeton):
+    fichier_jeton.write_bytes(b"\xff\xfe\x00\x80" * 20)
+    assert pd.jeton_pair() == ""
+    assert pd.en_tete_pair_valide("x") is False
+
+
+def test_preinst_pose_une_map_vide_valide():
+    t = (Path(__file__).resolve().parents[1] / "debian" / "preinst").read_text()
+    assert 'default "";' in t and " 1 " not in t.split("printf")[1]
 
 
 def test_aucun_proxy_vers_p2p_sock_ne_transmet_le_pair_autrement_que_par_la_cle():

@@ -118,21 +118,41 @@ case "$1" in
         systemctl start secubox-p2p-mesh.service || true
 
         # Jeton du listener 7331 (#3133) : secret partagé entre nginx (qui le pose dans X-SecuBox-Pair pour une
-        # source 10.10.0.0/24) et le module (qui le compare). Généré une fois, jamais régénéré, jamais affiché.
-        # AVANT l'activation du vhost : le site inclut le fichier rendu ci-dessous.
-        install -d -o secubox -g secubox -m 0700 /etc/secubox/secrets/p2p
-        if [ ! -s /etc/secubox/secrets/p2p/pair.token ]; then
-            ( umask 077; openssl rand -hex 32 > /etc/secubox/secrets/p2p/pair.token )
-            chown secubox:secubox /etc/secubox/secrets/p2p/pair.token
-            chmod 0600 /etc/secubox/secrets/p2p/pair.token
-        fi
-        if [ -s /etc/secubox/secrets/p2p/pair.token ]; then
+        # source 10.10.0.0/24) et le module (qui le compare). Généré en ROOT, lisible par le service (groupe) mais
+        # non modifiable par lui : ce fichier est interpolé dans une configuration nginx chargée par root, donc seul
+        # un jeton de 64 caractères hexadécimaux validé y entre. AVANT l'activation du vhost qui l'inclut.
+        # BEGIN jeton-pair
+        _own() { chown "$@" 2>/dev/null || [ "${SBX_P2P_TEST:-}" = 1 ]; }
+        _rendre_jeton_pair() {
+            _d="${SBX_P2P_SECRETS_DIR:-/etc/secubox/secrets/p2p}"
+            _ngx="${SBX_P2P_PAIR_CONF:-/etc/nginx/secubox-p2p-pair.conf}"
+            _tok="$_d/pair.token"
+            mkdir -p "$_d"
+            _own root:secubox "$_d"
+            chmod 0750 "$_d"
+            _t=$(cat "$_tok" 2>/dev/null || true)
+            case "$_t" in
+                *[!0-9a-f]*) _t="" ;;
+            esac
+            if [ "${#_t}" -ne 64 ] || [ "$(wc -c < "$_tok")" -gt 65 ]; then
+                ( umask 077; openssl rand -hex 32 > "$_tok.new" ) && mv -f "$_tok.new" "$_tok"
+                echo "secubox-p2p: jeton du listener 7331 absent ou invalide, regenere" >&2
+                _t=$(cat "$_tok")
+            fi
+            _own root:secubox "$_tok"
+            chmod 0640 "$_tok"
+            case "$_t" in
+                *[!0-9a-f]*) return 1 ;;
+            esac
+            [ "${#_t}" -eq 64 ] || return 1
             ( umask 077
-              printf 'map $p2p_pair_maille $p2p_pair_cle {\n    1 "%s";\n    default "";\n}\n' \
-                  "$(cat /etc/secubox/secrets/p2p/pair.token)" > /etc/nginx/secubox-p2p-pair.conf )
-            chown root:root /etc/nginx/secubox-p2p-pair.conf
-            chmod 0600 /etc/nginx/secubox-p2p-pair.conf
-        fi
+              printf 'map $p2p_pair_maille $p2p_pair_cle {\n    1 "%s";\n    default "";\n}\n' "$_t" > "$_ngx.new"
+              mv -f "$_ngx.new" "$_ngx" )
+            _own root:root "$_ngx"
+            chmod 0600 "$_ngx"
+        }
+        # END jeton-pair
+        _rendre_jeton_pair
 
         # Écouteur d'enrôlement 7331 : activé seulement si nginx l'accepte. Un
         # site qui casse `nginx -t` casserait TOUS les vhosts, pas seulement

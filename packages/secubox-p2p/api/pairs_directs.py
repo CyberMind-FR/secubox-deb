@@ -115,7 +115,7 @@ def jeton_pair() -> str:
         if _cache_jeton["chemin"] != chemin or _cache_jeton["mtime"] != mtime:
             _cache_jeton.update(chemin=chemin, mtime=mtime, valeur=Path(chemin).read_text().strip())
         return _cache_jeton["valeur"]
-    except OSError:
+    except (OSError, ValueError):       # illisible ou non UTF-8 : pas de jeton
         _cache_jeton.update(chemin=None, mtime=None, valeur="")
         return ""
 
