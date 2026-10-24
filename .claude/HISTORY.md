@@ -11,10 +11,10 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 ## 2026-10-24 — Suite de la journée : firstboot, relais du maillage, catalogue p2p, App Store, Chaturbate
 
-- **#3113 closes** — `secubox-firstboot` : `--help` n'exécute plus rien (0), argument inconnu 2, déjà fait 3 sauf `--force` ;
+- **closes #3113** — `secubox-firstboot` : `--help` n'exécute plus rien (0), argument inconnu 2, déjà fait 3 sauf `--force` ;
   rien d'existant écrasé (secubox.conf gardé s'il porte un secret JWT valide, users.json, clés SSH ajoutées), copie
   horodatée 0700. Relecture : l'exemple du paquet (secret vide) reste remplacé. secubox-core 1.7.15, gk1 et gk2.
-- **#3130, #3132** — relais du maillage (secubox-p2p 1.18.1 → 1.18.3) : chaîne `input` en `policy drop` acceptée (gk1 échouait
+- **closes #3130, closes #3132** — relais du maillage (secubox-p2p 1.18.1 → 1.18.3) : chaîne `input` en `policy drop` acceptée (gk1 échouait
   chaque heure) ; services propres aux pairs publiés (`services_des_pairs`), noms périmés retirés au second relevé (gk2 :
   bbs, metanews, socialrelay de gk1), détournement de domaine fermé (domaine et sous-domaine d'un autre pair refusés, route
   jamais écrasée), audit JSON. 1.18.2 refusait tout `*.secubox.in` (routes du relais sous le domaine parent) : corrigé en 1.18.3.
