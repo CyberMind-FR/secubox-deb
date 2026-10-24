@@ -22,8 +22,10 @@ Aucun appel réseau, aucun jeton : des fichiers, que root lit, puis une signatur
 """
 from __future__ import annotations
 
+import http.client
 import json
 import re
+import socket
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -33,6 +35,10 @@ TOR_HIDDEN = Path("/var/lib/tor/hidden_services")
 HALL_INDEX = Path("/usr/share/secubox/www/hall/index.html")
 HAPROXY_TOML = Path("/etc/secubox/haproxy.toml")
 REPO_MARQUEUR = Path("/usr/lib/secubox/repo")
+WEBOS_SOCK = "/run/secubox/webos.sock"
+# Noms d'administration ou d'infrastructure : jamais publiés comme services (#3133).
+EXCLUS_SERVICES = frozenset({"admin", "acces", "wpad", "boot"})
+MAX_SERVICES = 64
 
 # Une ligne de FEATURED : {id:"radio", label:"Radio", icon:"📻", color:"#…", url:"radio.gk2.secubox.in", …}
 _CARTE = re.compile(r'\{\s*id:\s*"(?P<id>[a-z0-9_-]+)"\s*,\s*label:\s*"(?P<label>[^"]*)"(?P<reste>[^}]*)\}')
@@ -110,14 +116,78 @@ def depot_apt(haproxy_toml: Path = HAPROXY_TOML, marqueur: Path = REPO_MARQUEUR)
     return [_offre("Dépôt apt", "repo", f"https://{m.group(1)}/", "Paquets SecuBox-DEB de cette box", channel="public")]
 
 
+_LIBELLE = re.compile(r'^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$')
+
+
+def services_des_noms(noms: Optional[dict]) -> List[Dict[str, Any]]:
+    """Les noms publics de la box (réponse de `GET /public/noms` de webos) en offres « service » (#3133).
+
+    Seuls les noms `<libellé>.<domaine>` à un seul niveau sont retenus, hors noms d'administration."""
+    if not isinstance(noms, dict):
+        return []
+    domaine = noms.get("domaine")
+    liste = noms.get("noms")
+    if not isinstance(domaine, str) or not _HOTE.match(domaine.lower()) or not isinstance(liste, list):
+        return []
+    domaine = domaine.lower()
+    noeud = noms.get("noeud") if isinstance(noms.get("noeud"), str) else ""
+    out: List[Dict[str, Any]] = []
+    vus = set()
+    for nom in liste:
+        if not isinstance(nom, str):
+            continue
+        nom = nom.strip().lower()
+        libelle, _, reste = nom.partition(".")
+        if reste != domaine or not _LIBELLE.match(libelle) or libelle in EXCLUS_SERVICES or libelle in vus:
+            continue
+        vus.add(libelle)
+        out.append(_offre(libelle, "service", f"https://{nom}", f"{libelle} ({noeud})" if noeud else libelle,
+                          channel="public", service=libelle, domaine=domaine))
+        if len(out) >= MAX_SERVICES:
+            break
+    return out
+
+
+class _ConnexionUnix(http.client.HTTPConnection):
+    """HTTP sur socket Unix : jamais de réseau."""
+
+    def __init__(self, chemin: str, delai: float) -> None:
+        super().__init__("localhost", timeout=delai)
+        self._chemin = chemin
+
+    def connect(self) -> None:
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(self._chemin)
+
+
+def lire_noms_webos(sock: str = WEBOS_SOCK, delai: float = 3.0) -> Optional[dict]:
+    """`GET /public/noms` du webos local par son socket Unix. None : socket absent, délai dépassé ou réponse
+    qui n'est pas un objet JSON."""
+    conn = _ConnexionUnix(sock, delai)
+    try:
+        conn.request("GET", "/public/noms")
+        rep = conn.getresponse()
+        if rep.status != 200:
+            return None
+        d = json.loads(rep.read(1_000_000).decode("utf-8"))
+    except (OSError, ValueError, http.client.HTTPException):
+        return None
+    finally:
+        conn.close()
+    return d if isinstance(d, dict) else None
+
+
 def collecter_faits(*, tor_dir: Path = TOR_HIDDEN, hall_index: Path = HALL_INDEX,
-                    haproxy_toml: Path = HAPROXY_TOML, repo_marqueur: Path = REPO_MARQUEUR) -> List[Dict[str, Any]]:
+                    haproxy_toml: Path = HAPROXY_TOML, repo_marqueur: Path = REPO_MARQUEUR,
+                    webos_sock: str = WEBOS_SOCK) -> List[Dict[str, Any]]:
     """Tout ce que la box offre vraiment, dans un ordre stable. Chaque source manquante donne simplement rien."""
     try:
         html = hall_index.read_text(encoding="utf-8")
     except OSError:
         html = ""
-    faits = onions(tor_dir) + cartes_du_hall(html) + depot_apt(haproxy_toml, repo_marqueur)
+    faits = onions(tor_dir) + cartes_du_hall(html) + depot_apt(haproxy_toml, repo_marqueur) \
+        + services_des_noms(lire_noms_webos(webos_sock))
     return sorted(faits, key=lambda f: (f["kind"], f["endpoint"]))
 
 

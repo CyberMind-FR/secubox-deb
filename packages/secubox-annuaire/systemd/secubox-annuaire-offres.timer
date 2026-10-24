@@ -3,13 +3,14 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 [Unit]
-Description=SecuBox Annuaire — offres de services réelles, chaque jour (#3021)
+Description=SecuBox Annuaire — offres de services réelles, chaque heure (#3021, #3133)
 
 [Timer]
 OnBootSec=5min
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redéclenche pas après une réactivation.
 OnActiveSec=5min
-OnUnitActiveSec=1d
+# Chaque heure : les services d'une box changent plus vite que ses onions (#3133).
+OnUnitActiveSec=1h
 RandomizedDelaySec=10min
 Persistent=true
 
