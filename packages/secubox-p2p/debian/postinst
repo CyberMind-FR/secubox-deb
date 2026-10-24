@@ -122,7 +122,7 @@ case "$1" in
         # non modifiable par lui : ce fichier est interpolé dans une configuration nginx chargée par root, donc seul
         # un jeton de 64 caractères hexadécimaux validé y entre. AVANT l'activation du vhost qui l'inclut.
         # BEGIN jeton-pair
-        _own() { chown "$@" 2>/dev/null || [ "${SBX_P2P_TEST:-}" = 1 ]; }
+        _own() { chown -h "$@" 2>/dev/null || [ "${SBX_P2P_TEST:-}" = 1 ]; }
         _rendre_jeton_pair() {
             _d="${SBX_P2P_SECRETS_DIR:-/etc/secubox/secrets/p2p}"
             _ngx="${SBX_P2P_PAIR_CONF:-/etc/nginx/secubox-p2p-pair.conf}"
@@ -130,12 +130,17 @@ case "$1" in
             mkdir -p "$_d"
             _own root:secubox "$_d"
             chmod 0750 "$_d"
-            _t=$(cat "$_tok" 2>/dev/null || true)
+            _t=""
+            # lien symbolique ou fichier non régulier : invalide (on le supprime plus bas, jamais on ne le suit)
+            if [ -f "$_tok" ] && [ ! -L "$_tok" ]; then
+                _t=$(cat "$_tok" 2>/dev/null || true)
+            fi
             case "$_t" in
                 *[!0-9a-f]*) _t="" ;;
             esac
             if [ "${#_t}" -ne 64 ] || [ "$(wc -c < "$_tok")" -gt 65 ]; then
-                ( umask 077; openssl rand -hex 32 > "$_tok.new" ) && mv -f "$_tok.new" "$_tok"
+                rm -f "$_tok.new"
+                ( umask 077; set -C; openssl rand -hex 32 > "$_tok.new" ) && mv -f "$_tok.new" "$_tok"
                 echo "secubox-p2p: jeton du listener 7331 absent ou invalide, regenere" >&2
                 _t=$(cat "$_tok")
             fi
@@ -146,6 +151,8 @@ case "$1" in
             esac
             [ "${#_t}" -eq 64 ] || return 1
             ( umask 077
+              rm -f "$_ngx.new"
+              set -C
               printf 'map $p2p_pair_maille $p2p_pair_cle {\n    1 "%s";\n    default "";\n}\n' "$_t" > "$_ngx.new"
               mv -f "$_ngx.new" "$_ngx" )
             _own root:root "$_ngx"
@@ -173,7 +180,7 @@ case "$1" in
         # Generate the wg-ephemeral private key once if absent. Guarded:
         # `wg` may be unavailable in a build/CI container, and this must
         # never fail the package install.
-        install -d -m 700 /etc/secubox/secrets/p2p
+        install -d -o root -g secubox -m 0750 /etc/secubox/secrets/p2p   # #3133 : le service lit pair.token par le groupe
         if [ ! -f /etc/secubox/secrets/p2p/wg-ephemeral.key ]; then
             (umask 077; wg genkey > /etc/secubox/secrets/p2p/wg-ephemeral.key) 2>/dev/null || true
         fi

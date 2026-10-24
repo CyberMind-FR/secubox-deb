@@ -316,3 +316,32 @@ def test_aucun_proxy_vers_p2p_sock_ne_transmet_le_pair_autrement_que_par_la_cle(
     for f in fichiers:
         for m in re.finditer(r"proxy_set_header\s+X-SecuBox-Pair\s+([^;]*);", f.read_text()):
             assert m.group(1).strip() == "$p2p_pair_cle", f
+
+
+def test_postinst_entier_un_seul_mode_pour_le_dossier_du_jeton():
+    t = (Path(__file__).resolve().parents[1] / "debian" / "postinst").read_text()
+    for ligne in t.splitlines():
+        if "secrets/p2p" in ligne and re.search(r"\b(install\s+-d|chmod|chown)\b", ligne) and "wg-ephemeral.key" not in ligne:
+            assert re.search(r"-o root -g secubox -m 0750 /etc/secubox/secrets/p2p(\s|$)", ligne), ligne
+    assert not re.search(r"install -d -m 700 /etc/secubox/secrets/p2p", t)
+
+
+def test_postinst_lien_symbolique_piege(tmp_path):
+    cible = tmp_path / "victime"
+    cible.write_text("intact")
+    d = tmp_path / "secrets"
+    d.mkdir()
+    (d / "pair.token").symlink_to(cible)
+    (d / "pair.token.new").symlink_to(cible)
+    r, tok, ngx = _rend(tmp_path, None)
+    assert r.returncode == 0, r.stderr
+    assert cible.read_text() == "intact"
+    assert tok.is_file() and not tok.is_symlink()
+    assert re.fullmatch(r"[0-9a-f]{64}\n?", tok.read_text())
+    assert oct(tok.stat().st_mode & 0o777) == "0o640"
+    # même piège sur la map nginx
+    ngx.unlink()
+    (tmp_path / "pair.conf.new").symlink_to(cible)
+    r, tok, ngx = _rend(tmp_path, None)
+    assert r.returncode == 0, r.stderr
+    assert cible.read_text() == "intact" and ngx.is_file() and not ngx.is_symlink()
