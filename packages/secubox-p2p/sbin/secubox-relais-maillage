@@ -45,11 +45,18 @@ BACKEND=sbxwaf_inspector
 RESOLVEUR=1.1.1.1
 ACME=/root/.acme.sh
 REGLAGES=/etc/secubox/relais-maillage.toml
+ETAT_PERIMES=/var/lib/secubox/p2p/relais-perimes.json   # candidats au retrait du relevé précédent (#3132)
+AUDIT=/var/log/secubox/audit.log
 WG_ETAT=/var/lib/secubox/p2p/wg_mesh.json
 PORT_PAIR=9080
 
 log()  { printf '[%s] %s\n' "$MODULE" "$*"; }
 meurt() { printf '[%s] ERREUR : %s\n' "$MODULE" "$*" >&2; exit 1; }
+# Décision d'exposition → journal d'audit (append-only). Valeurs déjà validées (nom_valide, ip_valide) : JSON sûr.
+audit_relais() {   # audit_relais <evenement> <nom> <ip-du-pair>
+    printf '{"ts":"%s","module":"p2p","evenement":"%s","nom":"%s","pair":"%s"}\n' \
+        "$(date +%Y-%m-%dT%H:%M:%S%z)" "$1" "$2" "$3" >> "$AUDIT" 2>/dev/null || true
+}
 [ "$(id -u)" -eq 0 ] || meurt "à lancer en root"
 
 nom_valide()  { [[ "$1" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; }
@@ -217,21 +224,83 @@ print(" ".join(sorted({k[: -len(dom)] for k in d if k.endswith(dom) and "." not 
 PY
 }
 
-# Noms relayés vers le pair IP, de son domaine, qu'il ne publie plus (#3132). Le relais lui-même, les
-# autres pairs et les autres domaines ne sont jamais touchés ; routes illisibles : rien.
-noms_perimes() {   # noms_perimes <ip> <domaine-du-pair> [noms publiés…]
+# Noms relayés vers le pair IP, de la forme que pose la synchronisation (<libellé>.<domaine-du-pair>, libellé non
+# exclu, et commun en mode « communs ») et qu'il ne publie plus (#3132). Retirés seulement s'ils l'étaient déjà au
+# relevé précédent : un webos au cache vide ne vide pas le relais d'un coup. Le relais lui-même, les autres pairs,
+# les autres domaines et les relais posés à la main (plusieurs niveaux, libellé exclu) ne sont jamais touchés.
+noms_perimes() {   # noms_perimes <ip> <domaine-du-pair> <exclus,…> <communs,…|*> [noms publiés…]
+    python3 - "$ROUTES" "$ETAT_PERIMES" "$@" <<'PY'
+import json, os, sys
+routes, etat, ip, dpair, exclus, communs = sys.argv[1:7]
+publies = set(sys.argv[7:])
+exclus = set(filter(None, exclus.split(",")))
+communs = None if communs == "*" else set(filter(None, communs.split(",")))
+try:
+    d = json.load(open(routes))
+except (OSError, ValueError):
+    sys.exit(0)
+cand = []
+for k in sorted(d):
+    v = d[k]
+    if not (isinstance(v, list) and v and v[0] == ip and k.endswith("." + dpair)):
+        continue
+    label = k[: -len(dpair) - 1]
+    if "." in label or label in exclus or (communs is not None and label not in communs):
+        continue
+    if k not in publies:
+        cand.append(k)
+try:
+    e = json.load(open(etat))
+    e = e if isinstance(e, dict) else {}
+except (OSError, ValueError):
+    e = {}
+avant = set(e.get(ip) or [])
+for k in cand:
+    if k in avant:
+        print(k)
+e[ip] = cand
+os.makedirs(os.path.dirname(etat) or ".", exist_ok=True)
+tmp = etat + ".tmp"
+with open(tmp, "w") as f:
+    json.dump(e, f)
+os.replace(tmp, etat)
+PY
+}
+
+# Un domaine déjà relayé vers une AUTRE IP n'est pas à ce pair : refus (#3132 — sinon un pair annonce le domaine d'un
+# autre et détourne ses noms). Routes illisibles : refus aussi.
+domaine_tenu_par_autre() {   # domaine_tenu_par_autre <ip> <domaine> — 0 : tenu par un autre
     python3 - "$ROUTES" "$@" <<'PY'
 import json, sys
-chemin, ip, dpair, publies = sys.argv[1], sys.argv[2], sys.argv[3], set(sys.argv[4:])
+chemin, ip, dpair = sys.argv[1:4]
 try:
     d = json.load(open(chemin))
 except (OSError, ValueError):
     sys.exit(0)
-for k in sorted(d):
-    v = d[k]
-    if isinstance(v, list) and v and v[0] == ip and k.endswith("." + dpair) and k not in publies:
-        print(k)
+for k, v in d.items():
+    if (k == dpair or k.endswith("." + dpair)) and isinstance(v, list) and v and v[0] != ip:
+        sys.exit(0)
+sys.exit(1)
 PY
+}
+
+# Jamais écraser une route qui vise une autre cible que ce pair.
+route_etrangere() {   # route_etrangere <nom> <ip> — 0 : la route existe et vise ailleurs
+    python3 -c 'import json,sys
+d = json.load(open(sys.argv[1])); v = d.get(sys.argv[2])
+sys.exit(0 if isinstance(v, list) and v and v[0] != sys.argv[3] else 1)' "$ROUTES" "$1" "$2" 2>/dev/null
+}
+
+# Noms d'un pair (JSON de /public/noms sur l'entrée) ; liste absente ou mal formée : échec, rien n'est ajouté ni retiré.
+noms_du_pair() {
+    python3 -c 'import json,sys
+try:
+    n = json.load(sys.stdin)["noms"]
+except Exception:
+    sys.exit(1)
+if not isinstance(n, list) or not all(isinstance(x, str) for x in n):
+    sys.exit(1)
+print(" ".join(n))'
 }
 
 # Pairs à /32 (côté maître) ; maître du satellite (entrée « master » de l'état).
@@ -294,6 +363,14 @@ except Exception: pass' 2>/dev/null)"
         if [ "$dpair" = "$dom" ] || [[ "$dpair" == *".$dom" ]] || [[ "$dom" == *".$dpair" ]]; then
             log "pair $ip : domaine $dpair refusé (celui du relais)"; continue
         fi
+        if domaine_tenu_par_autre "$ip" "$dpair"; then
+            log "pair $ip : domaine $dpair déjà relayé vers un autre pair — refusé"
+            audit_relais relais_domaine_refuse "$dpair" "$ip"; continue
+        fi
+        local liste
+        if ! liste="$(printf '%s' "$json" | noms_du_pair)"; then
+            log "pair $ip : liste de noms illisible — rien ajouté ni retiré"; continue
+        fi
         # ÉMETTRE UN JOKER PEUT MASQUER LE DNS. Si les noms du pair résolvent
         # par un joker PARENT (*.secubox.in), le défi DNS-01 crée
         # _acme-challenge.<domaine> : le domaine devient un nœud existant et le
@@ -307,8 +384,7 @@ except Exception: pass' 2>/dev/null)"
             log "pair $ip : $temoin ne résout plus depuis le défi DNS-01 — créer « *.$dpair A $pub » chez le registraire"
         fi
         publies=""
-        for nom in $(printf '%s' "$json" | python3 -c 'import json,sys
-print(" ".join(json.load(sys.stdin).get("noms") or []))'); do
+        for nom in $liste; do
             [[ "$nom" == *".$dpair" ]] && nom_valide "$nom" || continue
             label="${nom%.$dpair}"
             [[ "$label" =~ ^[a-z0-9-]+$ ]] || continue
@@ -321,23 +397,33 @@ print(" ".join(json.load(sys.stdin).get("noms") or []))'); do
             if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d.get(sys.argv[2],[None])[0]==sys.argv[3] else 1)' "$ROUTES" "$nom" "$ip"; then
                 continue
             fi
+            if route_etrangere "$nom" "$ip"; then
+                log "non relayé : $nom vise déjà une autre cible — jamais écrasé"
+                audit_relais relais_nom_refuse "$nom" "$ip"; continue
+            fi
             if ( RELAIS_EN_LOT=1 cmd_relayer "$nom" "$ip" "$PORT_PAIR" ) >/dev/null 2>&1; then
-                ajoutes=$((ajoutes + 1)); log "relayé : $nom → $ip"
+                ajoutes=$((ajoutes + 1)); log "relayé : $nom → $ip"; audit_relais relaye "$nom" "$ip"
             else
                 echecs=$((echecs + 1)); log "non relayé : $nom (voir : secubox-relais-maillage relayer $nom $ip)"
             fi
         done
         # Le pair a répondu (domaine valide) : ce qu'il ne publie plus n'est plus relayé (#3132). Un pair
         # injoignable n'arrive jamais ici, ses noms restent.
+        local communs="*"
+        [ "$mode" = "communs" ] && communs="$(printf '%s' "$labels" | xargs | tr ' ' ',')"
         # shellcheck disable=SC2086  # publies : liste de noms validés, découpée exprès
-        for perime in $(noms_perimes "$ip" "$dpair" $publies); do
+        for perime in $(noms_perimes "$ip" "$dpair" "$(printf '%s' "$exclus" | xargs | tr ' ' ',')" "$communs" $publies); do
             if ( RELAIS_EN_LOT=1 cmd_retirer "$perime" ) >/dev/null 2>&1; then
                 retires=$((retires + 1)); log "retiré : $perime (le pair $ip ne le publie plus)"
+                audit_relais relais_retire "$perime" "$ip"
             fi
         done
     done
     if [ "$ajoutes" -gt 0 ] || [ "$retires" -gt 0 ]; then
-        haproxyctl generate --allow-shrink >/dev/null && haproxyctl reload >/dev/null || meurt "HAProxy n'a pas rechargé"
+        # --allow-shrink seulement si des noms ont été retirés : sinon la garde anti-dérive reste entière
+        local opt=()
+        if [ "$retires" -gt 0 ]; then opt=(--allow-shrink); fi
+        haproxyctl generate "${opt[@]}" >/dev/null && haproxyctl reload >/dev/null || meurt "HAProxy n'a pas rechargé"
         systemctl reload secubox-waf-ng 2>/dev/null || true
     fi
     log "synchronisé : $vus nom(s) éligible(s), $ajoutes ajouté(s), $retires retiré(s), $echecs échec(s)"
@@ -354,7 +440,8 @@ cmd_retirer() {
     # retirer réduit le nombre de vhosts : sans --allow-shrink la garde anti-dérive refusait et le nom restait servi.
     # En lot (synchroniser), un seul rechargement à la fin.
     if [ -z "${RELAIS_EN_LOT:-}" ]; then
-        haproxyctl generate --allow-shrink >/dev/null && haproxyctl reload >/dev/null || true
+        haproxyctl generate --allow-shrink >/dev/null && haproxyctl reload >/dev/null \
+            || log "génération HAProxy refusée : $nom peut rester servi jusqu'au prochain « haproxyctl generate »"
     fi
     if [[ "$nom" == hall.* ]] && command -v secubox-halls-parc >/dev/null; then
         secubox-halls-parc retirer "https://$nom" >/dev/null || true
