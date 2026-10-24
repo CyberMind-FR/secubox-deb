@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from . import ancre_p2p
 from . import profil as P
 
 MARQUEUR = Path("/var/lib/secubox/.premier-pas-fait")
@@ -256,6 +257,9 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
         out.append(Action("services", f"profil de services « {sp} »",
                           ["secubox-profilectl", "apply", "--profile", sp, "--yes"]))
     if m["mode"] == "rejoindre":
+        if m.get("ancre_cle"):
+            # L'ancre AVANT la jonction (#3100) : la box retient le maître qui l'a flashée ; un autre maître déjà ancré arrête l'étape.
+            out.append(Action("maillage", f"ancre du maître {m.get('ancre_nom') or m['rejoindre']}", fn=lambda: _pose_ancre(m)))
         # L'étape réseau vient de reconfigurer les interfaces : le maître n'est
         # pas joignable dans la seconde (vu deux fois sur gk3, #1544).
         out.append(Action("maillage", f"rejoindre {m['rejoindre']}",
@@ -282,6 +286,25 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
 CLE_ANNUAIRE = Path("/etc/secubox/secrets/annuaire/node.key")
 MARQUEUR_AIDE = Path("/var/lib/secubox/premier-pas/aide-demandee")
 UNITES_MAILLAGE = ("secubox-automesh.timer", "secubox-annuaire.service", "secubox-assist.service")
+
+
+ANCRE_CHEMIN = Path("/etc/secubox/p2p/ancre-maitre.json")
+
+
+def _charge_ancre():
+    return ancre_p2p.charge()
+
+
+def _pose_ancre(m: Dict[str, Any]) -> None:
+    """Écrit l'ancre du maître sans jamais écraser (#3100). Une ancre déjà posée pour une AUTRE clé : la box appartient à un autre maître, on ne rejoint pas."""
+    ancre = _charge_ancre()
+    cle = str(m["ancre_cle"])
+    existante = ancre.lire(str(ANCRE_CHEMIN))
+    if existante is not None and not ancre.accepte(existante, cle):
+        raise RuntimeError(f"cette box est déjà ancrée à un autre maître ({existante.get('nom') or existante.get('empreinte') or '?'}) : jonction refusée")
+    if existante is None and not ancre.ecrire(cle, str(m.get("ancre_adresse") or m["rejoindre"]), str(m.get("ancre_nom") or ""),
+                                              str(m.get("ancre_empreinte") or ancre.empreinte(cle)), chemin=str(ANCRE_CHEMIN), ecraser=False):
+        raise RuntimeError("ancre du maître non écrite")
 
 
 def _activer_maillage() -> None:

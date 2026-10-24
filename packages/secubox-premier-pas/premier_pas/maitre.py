@@ -18,18 +18,24 @@ pousse l'empreinte (champ « empreinte » de l'étape admin).
 """
 from __future__ import annotations
 
+import hashlib
 import ipaddress
+import json
 import os
 import re
+import socket
 import time
 import tomllib
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from . import ancre_p2p
 from . import profil as P
 from . import remplir as R
 
 _NOM = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+# Clé publique du maillage de CE maître (#3100) : « public_key » au sommet. Surchargeable pour les tests.
+WG_MESH_JSON = Path(os.environ.get("PREMIER_PAS_WG_MESH_JSON", "/var/lib/secubox/p2p/wg_mesh.json"))
 ORDRE_POUSSEE = ("bienvenue", "nom", "horloge", "admin", "reseau", "services", "maillage", "majs")
 
 
@@ -92,7 +98,9 @@ def enregistre(nom: str, profil: Dict[str, Any]) -> Dict[str, Any]:
     if m.get("mode") != "rejoindre":
         m.pop("rejoindre", None)
         m.pop("jeton", None)
-    elif not m.get("jeton") and (ancien.get("maillage") or {}).get("jeton"):
+    for k in P.CLES_ANCRE:
+        m.pop(k, None)              # l'ancre est calculée à la poussée, jamais enregistrée (#3100)
+    if m.get("mode") == "rejoindre" and not m.get("jeton") and (ancien.get("maillage") or {}).get("jeton"):
         m["jeton"] = ancien["maillage"]["jeton"]           # « défini » dans la vue
     dossier().mkdir(parents=True, exist_ok=True)
     f = _chemin(nom)
@@ -179,6 +187,22 @@ def _ip_vers(adresse: str) -> Optional[str]:
         return None
 
 
+def ancre_du_maitre(adresse: str) -> Dict[str, str]:
+    """L'ancre que la box neuve gardera (#3100) : clé publique du maillage de ce maître, son adresse de jonction, son nom, l'empreinte de la clé.
+    Vide si ce maître n'a pas de clé de maillage (il n'est pas maître de maillage) : rien n'est alors poussé."""
+    try:
+        cle = str(json.loads(Path(WG_MESH_JSON).read_text()).get("public_key") or "").strip()
+    except (OSError, ValueError, AttributeError):
+        return {}
+    if not cle:
+        return {}
+    try:
+        empreinte = ancre_p2p.charge().empreinte(cle)       # une seule définition, celle de secubox-p2p
+    except RuntimeError:
+        empreinte = hashlib.sha256(cle.encode("utf-8")).hexdigest()[:16]
+    return {"ancre_cle": cle, "ancre_adresse": adresse, "ancre_nom": socket.gethostname(), "ancre_empreinte": empreinte}
+
+
 def rejoindre_joignable(rejoindre: str, adresse: str, mes_adresses=None, ip_vers=None) -> str:
     """L'invitation de secubox-p2p annonce l'adresse que préfère get_lan_ip()
     — 192.168.255.x, l'ancien maillage OpenWrt — que la box neuve ne joint
@@ -227,6 +251,8 @@ def pousse(nom: str, adresse: str, code: str, mode: str = "proposer", client=Non
             continue
         if etape == "maillage" and v.get("rejoindre"):
             v["rejoindre"] = rejoindre_joignable(str(v["rejoindre"]), adresse)
+            if v.get("mode") == "rejoindre":
+                v.update(ancre_du_maitre(v["rejoindre"]))      # #3100 : la box garde l'identité du maître qui la flashe
         r = client.put(f"{base}/etape/{etape}", json=v, headers=h)
         if r.status_code != 200:
             try:

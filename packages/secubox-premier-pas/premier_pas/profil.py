@@ -18,7 +18,7 @@ Format TOML (docs/design/premier-pas-maquette.html) :
     [admin]    mot_de_passe = "demander" | empreinte argon2 ; totp = "enroler"
     [reseau]   mode = routeur|pont|lan ; domaine (absent si mode = lan)
     [services] profil = un profil de secubox-profilectl
-    [maillage] mode = rejoindre|premiere|plus_tard|automesh ; rejoindre, jeton ; aide = demander|non (automesh)
+    [maillage] mode = rejoindre|premiere|plus_tard|automesh ; rejoindre, jeton ; ancre_cle, ancre_adresse, ancre_nom, ancre_empreinte (#3100) ; aide = demander|non (automesh)
     [apt]      auto = true|false ; heure = "HH:MM"
 
 JAMAIS de mot de passe en clair : firstboot.sh en écrivait un dans
@@ -62,6 +62,9 @@ _HEURE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _ARGON2 = re.compile(r"^\$argon2(id|i|d)\$v=\d+\$m=\d+,t=\d+,p=\d+\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$")
 _IP = re.compile(r"^(\d{1,3}\.){3}\d{1,3}$")
 _JETON = re.compile(r"^[0-9a-f]{16,128}$")
+# Ancre du maître (#3100), poussée avec le maillage : clé publique WireGuard (base64, 44 caractères), adresse, nom et empreinte du maître.
+CLES_ANCRE = ("ancre_cle", "ancre_adresse", "ancre_nom", "ancre_empreinte")
+_CLE_WG = re.compile(r"^[A-Za-z0-9+/]{43}=$")
 
 
 class ProfilInvalide(ValueError):
@@ -180,6 +183,19 @@ def examine(profil: Dict[str, Any], profils_connus: Optional[List[str]] = None) 
             refuse("maillage", "aide : seulement avec un maillage à rejoindre (automesh, rejoindre)")
         elif m.get("aide") not in AIDES_MAILLAGE:
             refuse("maillage", f"aide : {', '.join(AIDES_MAILLAGE)}")
+
+    # ancre du maître (#3100) : seulement dans [maillage], en chaînes, la clé ayant la forme d'une clé WireGuard
+    for section, bloc in profil.items():
+        if section != "maillage" and isinstance(bloc, dict):
+            etape = next((e for e, sec in (("nom", "box"), ("horloge", "box"), ("admin", "admin"), ("reseau", "reseau"),
+                                           ("services", "services"), ("majs", "apt")) if sec == section), None)
+            if etape and any(k in bloc for k in CLES_ANCRE):
+                refuse(etape, "ancre_* : seulement dans [maillage]")
+    if any(k in m for k in CLES_ANCRE) and "maillage" not in ex.erreurs:
+        if not all(isinstance(m.get(k), str) and m.get(k) for k in CLES_ANCRE if k in m):
+            refuse("maillage", "ancre_* : des chaînes non vides")
+        elif "ancre_cle" in m and not _CLE_WG.match(m["ancre_cle"]):
+            refuse("maillage", "ancre_cle : une clé publique WireGuard (44 caractères, base64)")
 
     # mises à jour
     apt = profil.get("apt") or {}
