@@ -171,11 +171,13 @@ Un nœud sans accès Internet (ex. gk3) est servi par un nœud qui en a un (ex. 
 **Exposition par défaut (`synchroniser`).**
 - *Sur un satellite* : le port est ouvert au maître maillé.
 - *Sur le relais* : pour chaque pair, lecture de `GET /api/v1/webos/public/noms`. Un nom `<service>.<domaine-du-pair>` est relayé seulement si :
-  1. `<service>.<domaine-du-relais>` est lui-même exposé par le relais (même politique) ;
+  1. avec `services_des_pairs = "communs"` seulement : `<service>.<domaine-du-relais>` est lui-même exposé par le relais. Par défaut (`"tous"`, #3132), les services propres au pair sont publiés aussi ;
   2. le service n'est pas exclu (défaut : `wpad`, `boot`) ;
   3. le domaine du pair n'est pas celui du relais ;
   4. le DNS public du nom pointe vers le relais ;
   5. le service répond sur le pair (pas de 5xx).
+
+Un nom relayé vers un pair qui, joint avec succès, ne le publie plus est retiré (vhost, route, Hall du parc) ; un pair injoignable garde ses noms (#3132).
 
 Un seul certificat joker `*.<domaine-du-pair>` est émis par DNS-01 (acme.sh + Gandi LiveDNS), renouvelé comme `*.gk2.secubox.in`.
 
@@ -184,6 +186,7 @@ Réglages facultatifs, `/etc/secubox/relais-maillage.toml` :
 ```toml
 auto = true                  # false : plus d'exposition automatique
 exclure = ["wpad", "boot"]   # services jamais relayés
+services_des_pairs = "tous"  # "communs" : seulement les services que le relais expose lui-même
 ```
 
 Les vhosts des services répondent à `<service>.*` en plus de leur nom gk2 : c'est ce qui permet à un pair de servir ses services sous son propre domaine.
