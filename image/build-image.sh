@@ -1067,7 +1067,10 @@ HOOK
   # MOCHAbin (#3093) : le switch se charge DANS l'initrd, avant toute ouverture d'eth2. Chargé après (udev, ~13 s),
   # il fait basculer les tampons mvpp2 (« switching to per-cpu buffers »), tous les ports sont rouverts et le PHY
   # 88E1510 d'eth2 (WAN) rattaché une 2e fois ne remonte jamais (#2004, constaté au banc le 2026-10-24).
-  printf 'dsa_core\nmv88e6xxx\n' >> "${ROOTFS}/etc/initramfs-tools/modules"
+  # tag_dsa (étiquettes DSA/EDSA Marvell) est indispensable : sans lui la sonde est remise à après la racine.
+  # Prouvé au banc (noyau Debian 6.12.107) : switch à 5,1 s, « DSA: tree 0 setup » avant la racine, eth2 ouvert
+  # une seule fois, lien 1 Gb/s.
+  printf 'dsa_core\ntag_dsa\nmv88e6xxx\n' >> "${ROOTFS}/etc/initramfs-tools/modules"
   else
   # Hook 2: Blacklist mv88e6xxx DSA switch driver during initramfs
   # Prevents probe loop that causes boot failures on ESPRESSObin
