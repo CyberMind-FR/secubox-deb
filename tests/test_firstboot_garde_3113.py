@@ -69,7 +69,7 @@ def test_sauvegarde_horodatee_des_existants(tmp_path):
 
 
 def test_rien_d_existant_n_est_ecrase():
-    # secubox.conf, users.json : écrits seulement s'ils sont absents ; secret JWT repris ; SSH par mot de passe
+    # secubox.conf : écrit sauf si un secret JWT valide existe (repris) ; users.json : seulement s il est absent ; SSH par mot de passe
     # seulement si root n'a aucune clé.
     assert 'if [[ "${JWT_REPRIS}" != 1 ]]; then' in TEXTE
     assert 'if [[ ! -s "${USERS_JSON}" ]]' in TEXTE
