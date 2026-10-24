@@ -16,8 +16,10 @@ UNITE = ICI / "debian" / "secubox-lyrion.service"
 
 
 def test_le_paquet_livre_et_active_l_unite_de_l_api():
-    assert "debian/secubox-lyrion.service" in RULES
-    assert "dh_installsystemd --name=secubox-lyrion " in RULES or RULES.rstrip().endswith("dh_installsystemd --name=secubox-lyrion")
+    # dh_installsystemd --name=secubox-lyrion prend debian/secubox-lyrion.service ; une copie manuelle en plus la
+    # livrait deux fois (/lib et /usr/lib, même fichier sous usrmerge).
+    assert any(l.strip() == "dh_installsystemd --name=secubox-lyrion" for l in RULES.splitlines())
+    assert "install -m 644 debian/secubox-lyrion.service" not in RULES
 
 
 def test_le_postinst_ne_desactive_plus_l_api():
