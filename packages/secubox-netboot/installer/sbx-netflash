@@ -80,15 +80,31 @@ verifie_hacheur_ou_refuse() { # EMPREINTE_DU_LOT
 }
 
 saisit_empreinte() { # → empreinte argon2 sur stdout ; mot de passe jamais en argument ni dans le journal
-    local a b
-    while :; do
-        read -r -s -p "Mot de passe administrateur de la box : " a < /dev/tty >&2; echo >&2
-        read -r -s -p "Confirmer : " b < /dev/tty >&2; echo >&2
-        [ -n "$a" ] || { echo "mot de passe vide" >&2; continue; }
-        [ "$a" = "$b" ] && break
+    local a b tty="${SBX_TTY:-/dev/tty}"
+    for _ in 1 2 3; do
+        # IFS= : les espaces en tête ou en queue du mot de passe sont conservés ; échec de lecture = abandon
+        IFS= read -r -s -p "Mot de passe administrateur de la box : " a < "$tty" >&2 || return 1; echo >&2
+        IFS= read -r -s -p "Confirmer : " b < "$tty" >&2 || return 1; echo >&2
+        if [ -z "$a" ]; then echo "mot de passe vide" >&2; continue; fi
+        if [ "$a" = "$b" ]; then
+            printf '%s\n' "$a" | python3 -c "import argon2,sys; print(argon2.PasswordHasher().hash(sys.stdin.read().rstrip('\n')))"
+            return
+        fi
         echo "les deux saisies diffèrent" >&2
     done
-    printf '%s\n' "$a" | python3 -c "import argon2,sys; print(argon2.PasswordHasher().hash(sys.stdin.read().rstrip('\n')))"
+    return 1
+}
+
+# Le lot doit porter un code de jonction et une ancre exploitables : contrôle AVANT toute écriture.
+lot_complet() { # LOT_JSON
+    python3 -I - "$1" <<'PY'
+import json, sys
+l = json.load(open(sys.argv[1]))
+c, a = l.get("code"), l.get("ancre")
+ok = isinstance(c, str) and c.startswith("sbxmesh1.") and isinstance(a, dict) \
+    and isinstance(a.get("cle_publique"), str) and a["cle_publique"].strip() != ""
+sys.exit(0 if ok else 1)
+PY
 }
 
 # Écrit sur la racine RACINE (p2 montée) et sur BOOT (p1 montée) : code 0600, ancre 0644, secubox/profil.toml.
@@ -96,6 +112,7 @@ depose_dans() { # RACINE BOOT LOT_JSON PROFIL_TOML
     local racine="$1" boot="$2" lot="$3" profil="$4" code
     code="$(champ_lot "$lot" code)"
     [ -n "$code" ] || { log "ERREUR : lot sans code"; return 1; }
+    lot_complet "$lot" || { log "ERREUR : lot sans ancre exploitable"; return 1; }
     install -d -m0755 "$racine/var/lib/secubox/p2p" "$racine/etc/secubox/p2p" "$boot/secubox" || return 1
     ( umask 077; printf '%s' "$code" > "$racine/var/lib/secubox/p2p/automesh.code" ) || return 1
     chmod 0600 "$racine/var/lib/secubox/p2p/automesh.code"
@@ -180,10 +197,12 @@ if [ -n "$nom" ]; then
     lot="$TRAVAIL/lot/lot.json"
     verifie_lot "$TRAVAIL/lot/reponse.json" "$lot" || { rm -rf "$TRAVAIL/lot"; fail "LOT INVALIDE (signature ou format) — rien n'a été écrit"; }
     [ "$(champ_lot "$lot" nom)" = "$nom" ] || { rm -rf "$TRAVAIL/lot"; fail "le lot n'est pas celui de $nom — rien n'a été écrit"; }
+    lot_complet "$lot" || { rm -rf "$TRAVAIL/lot"; fail "lot sans code de jonction ou sans ancre exploitable — rien n'a été écrit"; }
     log "lot VALIDE pour $nom."
     empreinte="$(champ_lot "$lot" admin_empreinte)"
     verifie_hacheur_ou_refuse "$empreinte" || { rm -rf "$TRAVAIL/lot"; exit 1; }
-    [ -n "$empreinte" ] || empreinte="$(saisit_empreinte)"
+    [ -n "$empreinte" ] || empreinte="$(saisit_empreinte)" \
+        || { rm -rf "$TRAVAIL/lot"; fail "mot de passe non saisi (console absente ou 3 essais ratés) — rien n'a été écrit"; }
     profil="$TRAVAIL/lot/profil.toml"
     HERE_NF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     helper="$HERE_NF/sbx-netflash-profil"; [ -x "$helper" ] || helper=/usr/local/sbin/sbx-netflash-profil

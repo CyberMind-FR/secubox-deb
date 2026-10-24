@@ -124,3 +124,59 @@ def test_argon2_absent_refus_avant_ecriture(lot):
     # lot sans admin_empreinte et python3 sans argon2 : refus net, rien d'écrit
     r = bash('python3() { return 1; }; export -f python3; verifie_hacheur_ou_refuse ""')
     assert r.returncode != 0 and "argon2" in (r.stdout + r.stderr)
+
+
+def _rep_signee(lot, **retire):
+    """Réponse signée avec la même clé que la fixture, après retrait de champs du lot."""
+    d = json.loads(lot["texte"])
+    for k in retire:
+        d.pop(k)
+    texte = json.dumps(d)
+    t = lot["tmp"] / "x.txt"
+    t.write_text(texte)
+    cle = lot["tmp"] / "k.key"
+    sig = subprocess.run(["openssl", "dgst", "-sha256", "-sign", str(cle), str(t)], capture_output=True, check=True).stdout
+    rep = lot["tmp"] / "x.json"
+    rep.write_text(json.dumps({"lot": texte, "signature": base64.b64encode(sig).decode()}))
+    return rep
+
+
+@pytest.mark.parametrize("champ", ["code", "ancre"])
+def test_lot_sans_code_ou_ancre_refuse_avant_ecriture(lot, champ):
+    rep = _rep_signee(lot, **{champ: 1})
+    r = bash(f'PUB="{lot["pub"]}"; verifie_lot "{rep}" "{lot["tmp"]}/ok.json" && lot_complet "{lot["tmp"]}/ok.json"')
+    assert r.returncode != 0
+    racine, boot = lot["tmp"] / "p2", lot["tmp"] / "p1"
+    racine.mkdir(); boot.mkdir()
+    r = bash(f'depose_dans "{racine}" "{boot}" "{lot["tmp"]}/ok.json" /dev/null')
+    assert r.returncode != 0
+    assert list(racine.rglob("ancre*")) == []
+
+
+def test_lot_sans_code_refuse_avant_ecriture(lot):
+    test_lot_sans_code_ou_ancre_refuse_avant_ecriture(lot, "code")
+
+
+def test_lot_sans_ancre_refuse_avant_ecriture(lot):
+    test_lot_sans_code_ou_ancre_refuse_avant_ecriture(lot, "ancre")
+
+
+def test_lot_code_mauvais_format_refuse(lot):
+    d = json.loads(lot["texte"]); d["code"] = "abc"
+    (lot["tmp"] / "l.json").write_text(json.dumps(d))
+    assert bash(f'lot_complet "{lot["tmp"]}/l.json"').returncode != 0
+
+
+def test_saisie_sans_console_echoue_sans_boucler(tmp_path):
+    r = bash('saisit_empreinte', env={"SBX_TTY": str(tmp_path / "absent")}, timeout=15, stdin=subprocess.DEVNULL)
+    assert r.returncode != 0
+
+
+def test_mot_de_passe_espaces_conserves(tmp_path):
+    argon2 = pytest.importorskip("argon2")
+    tty = tmp_path / "tty"
+    tty.write_text("  a b  \n  a b  \n")
+    r = bash('saisit_empreinte', env={"SBX_TTY": str(tty)}, timeout=30)
+    assert r.returncode == 0, r.stderr
+    h = r.stdout.strip()
+    assert argon2.PasswordHasher().verify(h, "  a b  ")
