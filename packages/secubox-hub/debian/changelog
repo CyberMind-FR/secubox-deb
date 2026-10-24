@@ -1,3 +1,10 @@
+secubox-hub (1.12.27-1~trixie1) trixie; urgency=medium
+
+  * webui.conf : /api/v1/netboot/lot-flash répond 404 sur le vhost principal ; le lot de
+    flash n'est servi que par le vhost de boot :8099 (ref #3100).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 18:00:00 +0200
+
 secubox-hub (1.12.26-1~trixie1) trixie; urgency=medium
 
   * Menu : un module autonome (sa page vit sur son propre vhost, pas sous l'administration) porte
