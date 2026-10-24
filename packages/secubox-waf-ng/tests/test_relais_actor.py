@@ -31,7 +31,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent            # packages/secubox-waf-ng
 REPO = ROOT.parent.parent
-VHOST_ADMIN = ROOT / "nginx" / "actor.gk2.secubox.in.conf"
+VHOST_ADMIN = ROOT / "nginx" / "actor.vhost.conf"
 SOCKET = "/run/secubox/actor.sock"
 PREFIXE = "/api/v1/actor/"
 
@@ -132,7 +132,7 @@ def test_vhost_admin_passe_par_la_garde_de_l_agregateur():
 
 def test_vhost_admin_reste_filtre_au_lan():
     texte = _sans_commentaires(VHOST_ADMIN.read_text(encoding="utf-8"))
-    assert "include /etc/nginx/snippets/exposure/actor.gk2.secubox.in.conf;" in texte
+    assert "include /etc/nginx/snippets/exposure/actor.conf;" in texte
 
 
 def test_aucun_fichier_nginx_ne_pose_la_vue_complete():

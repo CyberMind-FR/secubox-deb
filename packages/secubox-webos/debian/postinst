@@ -43,16 +43,38 @@ if [ "$1" = "configure" ]; then
     # seule fois. Un lien deja present (ou pointant ailleurs) est RESPECTE, et
     # une absence deliberee n'est pas retablie de force au `dpkg -i` suivant :
     # desactiver un site est une decision d'exploitation.
-    if [ -f /etc/nginx/sites-available/hall.gk2.net.conf ] && \
-       [ ! -e /etc/nginx/sites-enabled/hall.gk2.net.conf ] && \
-       [ ! -L /etc/nginx/sites-enabled/hall.gk2.net.conf ]; then
-        ln -s ../sites-available/hall.gk2.net.conf \
-              /etc/nginx/sites-enabled/hall.gk2.net.conf
+    #
+    # MIGRATION #3117 : le vhost s'appelait hall.gk2.net.conf (nom de gk2 livre
+    # a toutes les boxes). Le fichier est deplace par le .maintscript
+    # (mv_conffile : retouches de l'administrateur conservees) ; ici on ne
+    # remplace que le lien d'activation. Le nouveau lien est pose si l'ancien
+    # l'etait, ou a la premiere installation ($2 vide) : un Hall desactive a la
+    # main avant la montee reste desactive.
+    _hall_actif=0
+    if [ -L /etc/nginx/sites-enabled/hall.gk2.net.conf ] || \
+       [ -e /etc/nginx/sites-enabled/hall.gk2.net.conf ]; then
+        _hall_actif=1
+        rm -f /etc/nginx/sites-enabled/hall.gk2.net.conf
+    fi
+    [ -z "${2:-}" ] && _hall_actif=1
+    # Repère posé par le preinst quand il a retiré l'ancien lien (#3117).
+    if [ -e /var/lib/secubox/webos/.hall-reactiver ]; then
+        _hall_actif=1
+    fi
+    if [ "$_hall_actif" = 1 ] && [ -f /etc/nginx/sites-available/hall.conf ] && \
+       [ ! -e /etc/nginx/sites-enabled/hall.conf ] && \
+       [ ! -L /etc/nginx/sites-enabled/hall.conf ]; then
+        ln -s ../sites-available/hall.conf \
+              /etc/nginx/sites-enabled/hall.conf
+    fi
+    # Le repère ne part que lorsque le lien est en place (sinon il resservira).
+    if [ -L /etc/nginx/sites-enabled/hall.conf ]; then
+        rm -f /var/lib/secubox/webos/.hall-reactiver
     fi
     # Filet : un `.dpkg-dist`/`.dpkg-new` laisse dans sites-enabled par une
     # version anterieure (qui y livrait le conffile) reste charge par le glob
     # de nginx et le fait echouer. On l'ecarte plutot que de le supprimer.
-    for _f in /etc/nginx/sites-enabled/hall.gk2.net.conf.dpkg-*; do
+    for _f in /etc/nginx/sites-enabled/hall.gk2.net.conf.dpkg-* /etc/nginx/sites-enabled/hall.conf.dpkg-*; do
         [ -e "$_f" ] || continue
         mkdir -p /var/backups/nginx
         mv -f "$_f" /var/backups/nginx/ 2>/dev/null || true

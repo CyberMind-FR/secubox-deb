@@ -20,14 +20,14 @@ def test_un_postrm_existe_et_garde_le_jeton_debhelper():
 
 def test_le_lien_d_activation_est_retire_a_remove_et_purge():
     s = POSTRM.read_text()
-    assert "remove" in s and "purge" in s and "/etc/nginx/sites-enabled/hall.gk2.net.conf" in s
-    assert "rm -f /etc/nginx/sites-enabled/hall.gk2.net.conf" in s
+    assert "remove" in s and "purge" in s and "/etc/nginx/sites-enabled/hall.conf" in s
+    assert "rm -f /etc/nginx/sites-enabled/hall.conf" in s
 
 
 def test_seul_un_lien_est_retire_jamais_un_fichier_reel():
     """Un fichier ordinaire posé là par l'opérateur n'est pas le nôtre."""
     s = POSTRM.read_text()
-    assert '[ -L /etc/nginx/sites-enabled/hall.gk2.net.conf ]' in s
+    assert '[ -L /etc/nginx/sites-enabled/hall.conf ]' in s
 
 
 def test_le_script_est_du_sh_valide():

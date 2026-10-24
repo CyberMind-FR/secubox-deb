@@ -10,7 +10,7 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parents[2]
 VHOSTS = [
     "packages/secubox-waf-ng/composants/waf/nginx/waf-vhost.conf",
-    "packages/secubox-waf-ng/nginx/actor.gk2.secubox.in.conf",
+    "packages/secubox-waf-ng/nginx/actor.vhost.conf",
     "packages/secubox-metablogizer/nginx/metablogizer.vhost.conf",
     "packages/sbxos-audio-mood/nginx/sbxos-audio-mood.conf",
 ]
@@ -18,7 +18,7 @@ VHOSTS = [
 
 def test_les_vhosts_encadres_nomment_le_hall_de_la_box():
     for f in VHOSTS:
-        politiques = re.findall(r"frame-ancestors 'self' https://hall\.gk2\.secubox\.in[^;\"]*", (RACINE / f).read_text())
+        politiques = re.findall(r"frame-ancestors 'self' (?:https://hall\.gk2\.secubox\.in|\$sbx_hall_box)[^;\"]*", (RACINE / f).read_text())
         assert politiques, f
         for p in politiques:
             assert "$sbx_hall_box" in p or "$sbx_mood_hall" in p, f"{f} : {p}"

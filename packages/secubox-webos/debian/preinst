@@ -1,0 +1,32 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+
+# MIGRATION #3117 : le vhost du Hall passe de hall.gk2.net.conf à hall.conf.
+# mv_conffile (ci-dessous, jeton DEBHELPER) renomme l'ancien fichier de
+# sites-available pendant le dépaquetage ; tant que le postinst n'a pas posé le
+# nouveau lien, le lien sites-enabled/hall.gk2.net.conf PENDRAIT, et tout
+# `nginx -t` lancé entre-temps (postinst d'autres paquets : waf-ng,
+# metablogizer) échouerait — ces paquets retireraient alors leurs propres liens.
+# On retire donc l'ancien lien ICI, avant le renommage, et on laisse un repère
+# pour que le postinst réactive hall.conf (un Hall désactivé à la main, lui,
+# reste désactivé : sans lien, pas de repère).
+case "$1" in
+    upgrade)
+        if [ -n "${2:-}" ] && dpkg --compare-versions "$2" lt 1.19.26-1~trixie1; then
+            _lien=/etc/nginx/sites-enabled/hall.gk2.net.conf
+            if [ -e "$_lien" ] || [ -L "$_lien" ]; then
+                mkdir -p /var/lib/secubox/webos
+                : > /var/lib/secubox/webos/.hall-reactiver
+                rm -f "$_lien"
+            fi
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

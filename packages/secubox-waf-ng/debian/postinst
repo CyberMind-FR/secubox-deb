@@ -207,14 +207,54 @@ case "$1" in
       systemctl start secubox-waf-campaigns.service 2>/dev/null || true
     fi
 
-    # ── 7. #1240 : vhost dédié actor.gk2.secubox.in (Renseignement) ────────────
+    # ── 7. #1240 : vhost dédié actor.<domaine> (Renseignement) ─────────────────
     #
     # Trois gestes, dans cet ordre, et l'ordre compte : semer le filtre
     # d'exposition AVANT d'activer le site. Activer d'abord exposerait la page —
     # et les points d'entrée sans jeton qu'elle consomme — pendant l'intervalle.
-    A_VHOST="actor.gk2.secubox.in"
+    A_VHOST="actor"
     A_SNIP="/etc/nginx/snippets/exposure/${A_VHOST}.conf"
     A_SITE="/etc/nginx/sites-available/${A_VHOST}.conf"
+
+    # MIGRATION #3117 : les vhosts étaient livrés sous le nom de gk2. Idempotent.
+    #   $1 ancien nom de fichier (sans chemin)  $2 nouveau nom  $3 ancien filtre
+    #   d'exposition (nom de fichier)           $4 nouveau filtre
+    # Le lien d'activation ancien part ; l'ancien fichier part s'il est celui que
+    # le paquet avait livré (somme dpkg), sinon il est archivé dans /var/backups/nginx (0600), le fichier livré fait foi,
+    # avec un avertissement. Retourne 0 si l'ancien
+    # vhost était activé.
+    sbx_migrer_vhost() {
+        _o="$1"; _n="$2"; _os="$3"; _ns="$4"; _act=1
+        _av=/etc/nginx/sites-available; _en=/etc/nginx/sites-enabled
+        _sn=/etc/nginx/snippets/exposure
+        if [ -e "$_en/$_o" ] || [ -L "$_en/$_o" ]; then
+            rm -f "$_en/$_o"; _act=0
+        fi
+        if [ -f "$_av/$_o" ]; then
+            _livre=$(dpkg-query -W -f='${Conffiles}\n' secubox-waf-ng 2>/dev/null \
+                     | awk -v f="$_av/$_o" '$1 == f { print $2 }')
+            _actuel=$(md5sum "$_av/$_o" | cut -d' ' -f1)
+            if [ "$_livre" != "$_actuel" ]; then
+                # Retouché par l'administrateur (ou origine inconnue) : ses lignes
+                # sont ARCHIVÉES, jamais recopiées sur le fichier livré — elles
+                # citeraient l'ancien nom du filtre d'exposition et nginx -t
+                # échouerait. Le fichier livré fait foi.
+                _arch="/var/backups/nginx/$_o.$(date +%Y%m%d-%H%M%S)"
+                mkdir -p /var/backups/nginx
+                if cp -p "$_av/$_o" "$_arch" && chmod 0600 "$_arch"; then
+                    echo "secubox-waf-ng : l'ancien vhost $_o avait été modifié ; archivé dans $_arch, le fichier livré $_n est utilisé. Reportez-y vos retouches si besoin." >&2
+                fi
+            fi
+            rm -f "$_av/$_o"
+        fi
+        # Le filtre d'exposition de l'opérateur suit le vhost.
+        if [ -n "$_os" ] && [ -f "$_sn/$_os" ]; then
+            if [ ! -f "$_sn/$_ns" ]; then mv -f "$_sn/$_os" "$_sn/$_ns"; else rm -f "$_sn/$_os"; fi
+        fi
+        return $_act
+    }
+    A_MIGRE=0
+    sbx_migrer_vhost actor.gk2.secubox.in.conf actor.conf actor.gk2.secubox.in.conf actor.conf && A_MIGRE=1 || true
 
     if [ -f "$A_SITE" ]; then
       # 1. Le filtre, à « lan » — jamais écrasé s'il existe déjà : l'opérateur a
@@ -240,8 +280,13 @@ EXPO
 
       # 3. Le rechargement, SEULEMENT si la configuration passe le test : une
       #    conf fautive couperait tous les autres vhosts de la box.
-      if nginx -t >/dev/null 2>&1; then
+      if A_NT=$(nginx -t 2>&1); then
         systemctl reload nginx >/dev/null 2>&1 || true
+      elif [ "$A_MIGRE" = 1 ]; then
+        # Lien migré à l'instant : il ne doit PAS disparaître sur un échec qui
+        # peut venir d'ailleurs (autre vhost en cours de migration). Le
+        # prochain rechargement réussi le prendra.
+        echo "secubox-waf-ng: nginx -t a echoue, vhost ${A_VHOST} laisse active (migration #3117) : ${A_NT}" >&2
       else
         echo "secubox-waf-ng: nginx -t a echoue — vhost ${A_VHOST} depose mais non active" >&2
         rm -f "/etc/nginx/sites-enabled/${A_VHOST}.conf"
