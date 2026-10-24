@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-24 — gk2 passe au noyau Debian stock 6.12.113 (ref #3093)
+
+Sur go du propriétaire, après le banc. Initrd dédié généré depuis une COPIE de la configuration (`/data/sbx-initramfs-3093`,
+sans le hook `mv88e6xxx-blacklist`, avec `dsa_core`, `tag_dsa`, `mv88e6xxx`) : `/boot/initrd.img-6.12.113-switch3093` ;
+entrée extlinux `debian-113-switch` (3), essayée au menu Tow-Boot puis passée en **DEFAULT** (sauvegardes
+`extlinux.conf.avant-3093-20261024` et `.avant-defaut-3093-20261024`, entrées 1 et 2 gardées en secours). Constaté sur gk2 :
+switch sondé dans l'initrd (3,7 et 4,8 s), bascule des tampons à 5,3 s, racine à 5,4 s, eth2 ouvert une fois à 15,4 s, lien
+1 Gb/s, bail DHCP .200, Hall/apt/agrégateur 200, 6 LXC. `linux-image-6.12.113+deb13-arm64` marqué manuel (autoremove ne le retire
+pas). **Écart à résorber** : initrd et entrée faits à la main sur gk2 ; une mise à jour du noyau ne les régénère pas, et le hook
+de liste noire est toujours dans `/etc/initramfs-tools/hooks` — à porter dans un paquet. `fw_printenv` : pas de `/proc/mtd`,
+`CONFIG_SPI_ORION` absent des DEUX noyaux (déjà cassé sur 6.12.111) → proposé : module `spi-orion` par DKMS. À voir à part :
+`wg-quick@wg-mesh` (« already exists »), `secubox-mail-imap-sync` (échouait déjà avant), `streamlit-audit`.
+
 ## 2026-10-24 — MOCHAbin sur noyau Debian stock : WAN et switch tenus par l'initrd (ref #3093, #3091, #3088)
 
 Suite du banc netboot : l'image `isp` alpha.18 flashée a démarré sur l'eMMC (noyau Debian 6.12.107) après deux corrections.
