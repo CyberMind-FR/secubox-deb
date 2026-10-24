@@ -117,6 +117,23 @@ case "$1" in
         # prochain enrôlement pour avoir son tunnel.
         systemctl start secubox-p2p-mesh.service || true
 
+        # Jeton du listener 7331 (#3133) : secret partagé entre nginx (qui le pose dans X-SecuBox-Pair pour une
+        # source 10.10.0.0/24) et le module (qui le compare). Généré une fois, jamais régénéré, jamais affiché.
+        # AVANT l'activation du vhost : le site inclut le fichier rendu ci-dessous.
+        install -d -o secubox -g secubox -m 0700 /etc/secubox/secrets/p2p
+        if [ ! -s /etc/secubox/secrets/p2p/pair.token ]; then
+            ( umask 077; openssl rand -hex 32 > /etc/secubox/secrets/p2p/pair.token )
+            chown secubox:secubox /etc/secubox/secrets/p2p/pair.token
+            chmod 0600 /etc/secubox/secrets/p2p/pair.token
+        fi
+        if [ -s /etc/secubox/secrets/p2p/pair.token ]; then
+            ( umask 077
+              printf 'map $p2p_pair_maille $p2p_pair_cle {\n    1 "%s";\n    default "";\n}\n' \
+                  "$(cat /etc/secubox/secrets/p2p/pair.token)" > /etc/nginx/secubox-p2p-pair.conf )
+            chown root:root /etc/nginx/secubox-p2p-pair.conf
+            chmod 0600 /etc/nginx/secubox-p2p-pair.conf
+        fi
+
         # Écouteur d'enrôlement 7331 : activé seulement si nginx l'accepte. Un
         # site qui casse `nginx -t` casserait TOUS les vhosts, pas seulement
         # l'enrôlement. On retire l'essai posé à la main pendant le test du

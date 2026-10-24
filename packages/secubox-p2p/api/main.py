@@ -2537,8 +2537,8 @@ async def _notify_peer_promotion(peer_addr: str, depth: int):
 
 
 async def garde_pair_ou_lecture(request: Request, creds=Depends(_bearer)):
-    """#3133 : X-SecuBox-Pair: 1 (posé par nginx pour une source 10.10.0.0/24, toujours écrasé) ou garde de lecture."""
-    if request.headers.get("X-SecuBox-Pair") == "1":
+    """#3133 : X-SecuBox-Pair = jeton secret posé par nginx (listener 7331, source 10.10.0.0/24) ou garde de lecture."""
+    if pairs_directs.en_tete_pair_valide(request.headers.get("X-SecuBox-Pair")):
         return {"pair": True}
     return await require_lecture(request, creds)
 

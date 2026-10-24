@@ -17,6 +17,7 @@ from api import main
 from api import pairs_directs as pd
 
 MAINTENANT = 1_000_000.0
+_CHARGEUR_REEL = main.mesh.load_handshakes
 CONF = Path(__file__).resolve().parents[1] / "nginx" / "p2p-masterlink.conf"
 
 
@@ -42,7 +43,7 @@ def etat_gk2():
         pair(2), pair(3), pair(4),
         pair(5, nom="clone-vieux"),                  # poignée > 10 min
         pair(6, nom="clone-absent"),                 # aucune poignée
-        pair(4, nom="doublon-de-4"),                 # même clé que box4
+        pair(4, nom="doublon-de-4"),                 # même clé que box4 : la dernière entrée gagne
         pair(7, nom="box7-sans-endpoint", endpoint="inconnu"),
     ], "private_key": "SECRET"}
 
@@ -54,16 +55,33 @@ POIGNEES = {cle(2): MAINTENANT - 5, cle(3): MAINTENANT - 599, cle(4): MAINTENANT
 def test_seuls_les_vivants_sans_doublon():
     liste = pd.liste_publiable(etat_gk2(), POIGNEES, MAINTENANT)
     assert [p["mesh_ip"] for p in liste] == ["10.10.0.2", "10.10.0.3", "10.10.0.4"]
-    assert [p["nom"] for p in liste] == ["box2", "box3", "box4"]
+    assert [p["nom"] for p in liste] == ["box2", "box3", "doublon-de-4"]
     assert set(liste[0]) == {"nom", "mesh_ip", "cle_publique", "endpoint"}
     assert "SECRET" not in repr(liste)
 
 
-def test_doublon_garde_la_poignee_la_plus_recente_des_entrees():
-    etat = {"peers": [pair(4, nom="ancien"), pair(4, nom="recent")]}
-    # une seule clé, donc une seule poignée : la première entrée valide est gardée, une seule fois
+def test_doublon_de_cle_garde_la_derniere_entree():
+    etat = {"peers": [pair(4, nom="ancien", endpoint="192.168.1.40:51820"),
+                      pair(4, nom="recent", endpoint="192.168.1.41:51820")]}
     liste = pd.liste_publiable(etat, {cle(4): MAINTENANT - 1}, MAINTENANT)
-    assert len(liste) == 1
+    assert [(p["nom"], p["endpoint"]) for p in liste] == [("recent", "192.168.1.41:51820")]
+
+
+@pytest.mark.parametrize("ai", ["0.0.0.0/0, 10.10.0.9/32", "10.10.0.77/32", "10.10.0.9/32, 10.10.0.0/24", None, 5, ["10.10.0.9/32"]])
+def test_role_pair_exige_exactement_mesh_ip_slash_32(ai):
+    mauvais = {**pair(9), "allowed_ips": ai}
+    assert pd.liste_publiable({"peers": [mauvais]}, {cle(9): MAINTENANT - 1}, MAINTENANT) == []
+    ok = {**pair(9), "allowed_ips": " 10.10.0.9/32 "}
+    assert len(pd.liste_publiable({"peers": [ok]}, {cle(9): MAINTENANT - 1}, MAINTENANT)) == 1
+
+
+def test_reseau_invalide_rend_none():
+    assert pd.valider_pair(pair(9), reseau="pas-un-reseau") is None
+    assert pd.valider_pair(pair(9), reseau="fd00::/64") is None
+
+
+def test_chiffres_non_ascii_refuses():
+    assert pd.valider_pair(pair(9, endpoint="192.168.1.\u0669:51820")) is None
 
 
 @pytest.mark.parametrize("mauvais", [
@@ -117,34 +135,90 @@ def test_valider_pair_normalise():
 
 # --- route -----------------------------------------------------------------------------------------------------
 
+JETON = "ab" * 32
+
+
 @pytest.fixture
-def client(monkeypatch):
+def fichier_jeton(tmp_path, monkeypatch):
+    f = tmp_path / "pair.token"
+    f.write_text(JETON + "\n")
+    monkeypatch.setenv("SBX_P2P_PAIR_TOKEN", str(f))
+    return f
+
+
+@pytest.fixture
+def client(monkeypatch, fichier_jeton):
     monkeypatch.setenv("SECUBOX_TABLEAU_DE_BORD", "0")     # le mode tableau de bord du poste ne doit pas ouvrir la route
     monkeypatch.setattr(main, "get_wg_mesh_config", etat_gk2)
     monkeypatch.setattr(main.mesh, "load_handshakes", lambda *a, **k: dict(POIGNEES, **{cle(5): 1.0}))
+    monkeypatch.setattr(pd.time, "time", lambda: MAINTENANT)
     return TestClient(main.app)
 
 
-def test_route_avec_en_tete_pair_sans_jeton(client, monkeypatch):
-    monkeypatch.setattr(pd.time, "time", lambda: MAINTENANT)
-    r = client.get("/master-link/pairs", headers={"X-SecuBox-Pair": "1"})
+def test_route_avec_le_jeton_sans_session(client):
+    r = client.get("/master-link/pairs", headers={"X-SecuBox-Pair": JETON})
     assert r.status_code == 200
     corps = r.json()
     assert corps["version"] == 1
-    assert [p["nom"] for p in corps["pairs"]] == ["box2", "box3", "box4"]
+    assert [p["nom"] for p in corps["pairs"]] == ["box2", "box3", "doublon-de-4"]
+    assert JETON not in r.text
 
 
-@pytest.mark.parametrize("entetes", [{}, {"X-SecuBox-Pair": "0"}, {"X-SecuBox-Pair": "true"}, {"X-SecuBox-Pair": " 1x"}])
-def test_route_refusee_sans_pair_ni_session(client, entetes):
+@pytest.mark.parametrize("entetes", [{}, {"X-SecuBox-Pair": "0"}, {"X-SecuBox-Pair": "1"}, {"X-SecuBox-Pair": ""},
+                                     {"X-SecuBox-Pair": "ab" * 31}, {"X-SecuBox-Pair": JETON + "0"},
+                                     {"X-SecuBox-Pair": "cd" * 32}])
+def test_route_refusee_sans_jeton_exact(client, entetes):
     assert client.get("/master-link/pairs", headers=entetes).status_code in (401, 403)
+
+
+@pytest.mark.parametrize("contenu", [None, "", "\n", "  "])
+def test_jeton_absent_ou_vide_refuse_meme_un_en_tete_vide_ou_un(client, fichier_jeton, contenu):
+    if contenu is None:
+        fichier_jeton.unlink()
+    else:
+        fichier_jeton.write_text(contenu)
+    for h in ("", "1", JETON):
+        assert client.get("/master-link/pairs", headers={"X-SecuBox-Pair": h}).status_code in (401, 403)
+
+
+def test_jeton_illisible_refuse(client, fichier_jeton, monkeypatch):
+    monkeypatch.setenv("SBX_P2P_PAIR_TOKEN", str(fichier_jeton.parent))      # un répertoire : illisible
+    assert client.get("/master-link/pairs", headers={"X-SecuBox-Pair": JETON}).status_code in (401, 403)
+
+
+def test_jeton_relu_quand_le_fichier_change(client, fichier_jeton):
+    import os
+    h = {"X-SecuBox-Pair": "ef" * 32}
+    assert client.get("/master-link/pairs", headers=h).status_code in (401, 403)
+    fichier_jeton.write_text("ef" * 32)
+    os.utime(fichier_jeton, ns=(1, 2_000_000_000_000_000_000))
+    assert client.get("/master-link/pairs", headers=h).status_code == 200
+
+
+def test_comparaison_a_temps_constant():
+    assert "hmac.compare_digest" in Path(pd.__file__).read_text()
 
 
 def test_route_session_de_lecture(client, monkeypatch):
     async def lecteur(request, creds=None):
         return {"sub": "admin"}
     monkeypatch.setattr(main, "require_lecture", lecteur)
-    monkeypatch.setattr(pd.time, "time", lambda: MAINTENANT)
     assert client.get("/master-link/pairs").status_code == 200
+
+
+CORROMPUS = ['[1,2]', '{"written_at":"x","handshakes":{}}', '{"written_at":1,"handshakes":{"k":"abc"}}',
+             '{"written_at":1,"handshakes":[1]}', "pas du json"]
+
+
+@pytest.mark.parametrize("contenu", CORROMPUS)
+def test_fichier_de_poignees_corrompu_donne_liste_vide_jamais_500(client, monkeypatch, tmp_path, contenu):
+    f = tmp_path / "h.json"
+    f.write_text(contenu)
+    monkeypatch.setattr(main.mesh, "load_handshakes", lambda *a, **k: _CHARGEUR_REEL(f, now=1.0))
+    assert _CHARGEUR_REEL(f, now=1.0) is None
+    r = client.get("/master-link/pairs", headers={"X-SecuBox-Pair": JETON})
+    assert r.status_code == 200
+    assert r.json() == {"version": 1, "pairs": []}
 
 
 # --- nginx -----------------------------------------------------------------------------------------------------
@@ -152,5 +226,38 @@ def test_route_session_de_lecture(client, monkeypatch):
 def test_nginx_pose_l_en_tete_pair_depuis_la_carte_geo():
     texte = CONF.read_text()
     assert re.search(r"geo\s+\$remote_addr\s+\$p2p_pair_maille\s*\{[^}]*default\s+0;[^}]*10\.10\.0\.0/24\s+1;", texte, re.S)
-    assert "proxy_set_header X-SecuBox-Pair $p2p_pair_maille;" in texte
+    assert "proxy_set_header X-SecuBox-Pair $p2p_pair_cle;" in texte
     assert "X-SecuBox-LAN" in texte
+
+
+def test_nginx_jeton_par_map_et_include():
+    texte = CONF.read_text()
+    assert "include /etc/nginx/secubox-p2p-pair.conf;" in texte
+    assert "proxy_set_header X-SecuBox-Pair $p2p_pair_cle;" in texte
+    assert "$p2p_pair_maille;" not in texte.split("proxy_set_header X-SecuBox-Pair")[1].split("\n")[0]
+
+
+def test_aucun_jeton_dans_le_depot():
+    racine = Path(__file__).resolve().parents[1]
+    for f in list((racine / "nginx").glob("*")) + list((racine / "debian").glob("*")):
+        if f.is_file():
+            assert not re.search(r"\b[0-9a-f]{64}\b", f.read_text()), f
+
+
+def test_postinst_genere_le_jeton_avant_le_vhost_sans_le_divulguer():
+    t = (Path(__file__).resolve().parents[1] / "debian" / "postinst").read_text()
+    i_jeton, i_vhost = t.index("openssl rand -hex 32"), t.index("ln -s ../sites-available/secubox-p2p-masterlink.conf")
+    assert i_jeton < i_vhost
+    assert "umask 077" in t and "set -x" not in t
+    assert "[ ! -s /etc/secubox/secrets/p2p/pair.token ]" in t        # jamais régénéré
+    assert not re.search(r"echo[^\n]*pair\.token\)?|echo[^\n]*\$\(cat", t)
+    assert "chmod 0600 /etc/nginx/secubox-p2p-pair.conf" in t
+
+
+def test_aucun_proxy_vers_p2p_sock_ne_transmet_le_pair_autrement_que_par_la_cle():
+    racine = Path(__file__).resolve().parents[3]
+    fichiers = list((racine / "packages" / "secubox-p2p" / "nginx").glob("*.conf")) + list((racine / "common" / "nginx").glob("*.conf"))
+    assert fichiers
+    for f in fichiers:
+        for m in re.finditer(r"proxy_set_header\s+X-SecuBox-Pair\s+([^;]*);", f.read_text()):
+            assert m.group(1).strip() == "$p2p_pair_cle", f

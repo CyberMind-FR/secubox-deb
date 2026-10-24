@@ -359,9 +359,12 @@ def load_handshakes(path: pathlib.Path = None, now: float = None):
         doc = json.loads(pathlib.Path(path).read_text())
     except Exception:
         return None
-    if now - float(doc.get("written_at", 0)) > HANDSHAKES_MAX_STALENESS:
+    try:                # fichier corrompu (liste au sommet, valeur non numérique) : la mesure manque, jamais d'exception
+        if now - float(doc.get("written_at", 0)) > HANDSHAKES_MAX_STALENESS:
+            return None
+        return {k: int(v) for k, v in (doc.get("handshakes") or {}).items()}
+    except (AttributeError, TypeError, ValueError, OverflowError):
         return None
-    return {k: int(v) for k, v in (doc.get("handshakes") or {}).items()}
 
 
 def peer_liveness(handshakes, public_key: str, now: float) -> str:
