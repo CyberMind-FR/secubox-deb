@@ -9,6 +9,28 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-24 — Maillage, projet 2 : services des pairs dans le Hall, liens WireGuard directs (ref #3133)
+
+- PR #3144 (conception #3141, plan, 7 tâches en sous-agents, revue de chaque tâche, revue finale de la branche, deux re-relectures) :
+  annuaire 0.15.0, webos 1.20.0, p2p 1.19.0, déployés sur gk1 puis gk2 par apt. **gk3 NON mis à niveau** (p2p 1.16, core 1.7.8,
+  dépôt non rafraîchi : rattrapage à faire à part), donc pas de lien direct réel testé.
+- **A. Services des pairs** : les noms publics de la box deviennent des offres signées `service` ; `pairs-cache` (premier `ExecStart`
+  de l'unité, minuteur horaire) écrit `/var/lib/secubox/annuaire/services-pairs.json` ; `GET /public/pairs` (webos, lecture gardée) ;
+  rubrique « Pairs » du Hall v2. Vérifié sur gk1 : le cache porte les 64 services de gk2 (après `annuairectl pull`). Limite : gk2 publie
+  190 noms mais l'offre est plafonnée à 64 (ordre alphabétique) — à trier par pertinence.
+- **B. Liens directs** : le maître publie ses pairs vivants (`GET /master-link/pairs`, jeton secret posé par nginx pour les sources du
+  maillage) ; `secubox-maillage-pairs` (User=secubox, refuse root, minuterie 1 min) gère des liens « sonde puis promotion » : sans
+  AllowedIPs tant qu'aucune poignée de main, /32 après, rétrogradation locale sans attendre le maître. Vérifié sur gk1 : gk3 ajouté en
+  sonde (`allowed ips: (none)`), gk1 joint toujours gk3 par le maître (ping, HTTP 200). La première version (/32 d'emblée) créait un
+  trou noir périodique et ne convergeait pas en déploiement échelonné (simulé par la revue finale) : remplacée.
+- Défauts trouvés par les relectures puis corrigés : en-tête de confiance falsifiable par le vhost principal (jeton secret), injection
+  nginx par le fichier du jeton, dossier du jeton remis en 0700 par un autre bloc du postinst, chmod/chown par chemin en root (escalade),
+  exécution sans privilège, `ddns` hostile (`com`), journal absent écrasant le cache, JSON imbriqué en 500, regex `$` laissant passer `\n`.
+- Ouvert : politique de domaine des ddns de pairs (un membre peut déclarer un ddns sans rapport), profil AppArmor du service p2p
+  (lacune de tout le module), mise à niveau de gk3 puis banc d'un vrai lien direct, #3119 partie 2 (partage metablog, conception
+  corrigée : le catalogue fédéré de gk2 n'authentifie pas le demandeur), #3126 (TR-369). Le test des routes en LAN de gk2 est
+  non concluant pour le jeton : le mode « tableau de bord » ouvre la lecture au LAN.
+
 ## 2026-10-24 — Suite de la journée : firstboot, relais du maillage, catalogue p2p, App Store, Chaturbate
 
 - **closes #3113** — `secubox-firstboot` : `--help` n'exécute plus rien (0), argument inconnu 2, déjà fait 3 sauf `--force` ;
