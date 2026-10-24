@@ -1,3 +1,13 @@
+sbxos-audio-mood (0.10.9-1~trixie1) trixie; urgency=medium
+
+  * Vhost livré sans les noms de gk2 (ref #3117) : server_name « mood.* » (mood.gk2.secubox.in reste couvert
+    sur gk2), fichier renommé mood.conf et filtre d'exposition snippets/exposure/mood.conf. Migration dans le
+    postinst : l'ancien lien d'activation est remplacé, l'ancien filtre de l'opérateur suit le vhost, un
+    ancien fichier retouché est archivé dans /var/backups/nginx (0600) sans être recopié, et un lien migré
+    n'est jamais retiré sur un échec de nginx -t.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:19:06 +0200
+
 sbxos-audio-mood (0.10.8-1~trixie1) trixie; urgency=medium
 
   * Panneau Aurora : le menu latéral commun était perdu (ref #3026). Même recette que /metrics/ : hors cadre et hors

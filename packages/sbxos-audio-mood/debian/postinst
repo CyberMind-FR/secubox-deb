@@ -27,7 +27,51 @@ install -d -o secubox -g secubox -m 0750 /var/lib/secubox/sbxos-audio-mood
 # UN SERVICE DÉCLARE SA PROPRE ROUTE, comme il déclare son vhost et son unité.
 # Le 421 n'a qu'une cause : sbxwaf reçoit un nom qu'il ne connaît pas, et cette
 # table n'appartenait longtemps à aucun paquet.
-HOTE=mood.gk2.secubox.in
+HOTE=mood
+
+# MIGRATION #3117 : le vhost était livré sous le nom de gk2. Idempotent.
+#   $1 ancien nom de fichier  $2 nouveau nom  $3 ancien filtre d'exposition
+#   (ou vide)  $4 nouveau filtre. L'ancien lien d'activation part ; l'ancien
+# fichier part s'il est celui que le paquet avait livré (somme dpkg), sinon il
+# est archivé dans /var/backups/nginx (0600) avec un avertissement : le fichier
+# livré fait foi. Retourne 0 si l'ancien vhost était activé.
+sbx_migrer_vhost() {
+    _o="$1"; _n="$2"; _os="$3"; _ns="$4"; _act=1
+    _av=/etc/nginx/sites-available; _en=/etc/nginx/sites-enabled
+    _sn=/etc/nginx/snippets/exposure
+    if [ -e "$_en/$_o" ] || [ -L "$_en/$_o" ]; then
+        rm -f "$_en/$_o"; _act=0
+    fi
+    if [ -f "$_av/$_o" ]; then
+        _livre=$(dpkg-query -W -f='${Conffiles}\n' sbxos-audio-mood 2>/dev/null \
+                 | awk -v f="$_av/$_o" '$1 == f { print $2 }')
+        _actuel=$(md5sum "$_av/$_o" | cut -d' ' -f1)
+        if [ "$_livre" != "$_actuel" ]; then
+            # Retouché par l'administrateur (ou origine inconnue) : ses lignes
+            # sont ARCHIVÉES, jamais recopiées sur le fichier livré — elles
+            # citeraient l'ancien nom (et l'ancien filtre d'exposition) et
+            # nginx -t échouerait. Le fichier livré fait foi.
+            _arch="/var/backups/nginx/$_o.$(date +%Y%m%d-%H%M%S)"
+            mkdir -p /var/backups/nginx
+            if cp -p "$_av/$_o" "$_arch" && chmod 0600 "$_arch"; then
+                echo "sbxos-audio-mood : l'ancien vhost $_o avait été modifié ; archivé dans $_arch, le fichier livré $_n est utilisé. Reportez-y vos retouches si besoin." >&2
+            fi
+        fi
+        rm -f "$_av/$_o"
+    fi
+    # Le filtre d'exposition de l'opérateur suit le vhost.
+    if [ -n "$_os" ] && [ -f "$_sn/$_os" ]; then
+        if [ ! -f "$_sn/$_ns" ]; then mv -f "$_sn/$_os" "$_sn/$_ns"; else rm -f "$_sn/$_os"; fi
+    fi
+    return $_act
+}
+MIGRE=0
+if [ "$1" = "configure" ]; then
+    # Avant de semer le filtre : celui de l'opérateur (ancien nom) doit suivre,
+    # pas être remplacé par la valeur de départ.
+    sbx_migrer_vhost mood.gk2.secubox.in.conf mood.conf \
+        mood.gk2.secubox.in.conf mood.conf && MIGRE=1 || true
+fi
 
 mkdir -p /etc/nginx/snippets/exposure
 if [ ! -f "/etc/nginx/snippets/exposure/$HOTE.conf" ]; then
@@ -56,11 +100,15 @@ if command -v nginx >/dev/null 2>&1; then
     ln -sf ../sites-available/$HOTE.conf /etc/nginx/sites-enabled/$HOTE.conf
     # La route ne vaut que si nginx accepte la configuration : poser l'une sans
     # l'autre échange un 421 contre un 502, ce qui n'est pas un progrès.
-    if nginx -t >/dev/null 2>&1; then
+    if NT=$(nginx -t 2>&1); then
         systemctl reload nginx 2>/dev/null || true
         if command -v secubox-waf-route >/dev/null 2>&1; then
             secubox-waf-route "$(secubox-domaine mood)" 9080 || true
         fi
+    elif [ "$MIGRE" = 1 ]; then
+        # Lien migré à l'instant (#3117) : on ne le retire pas sur un échec qui
+        # peut venir d'ailleurs ; le prochain rechargement réussi le prendra.
+        echo "sbxos-audio-mood : nginx -t a échoué, vhost laissé activé (migration #3117) : $NT" >&2
     else
         echo "sbxos-audio-mood : nginx -t a échoué, vhost NON activé" >&2
         rm -f /etc/nginx/sites-enabled/$HOTE.conf
