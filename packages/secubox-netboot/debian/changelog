@@ -1,3 +1,13 @@
+secubox-netboot (0.6.8-1~trixie1) trixie; urgency=medium
+
+  * build-live-netboot.sh (ref #3079) : retrait de systemd.unit=rescue.target. Le live
+    reste complet (mode live normal) ; en rescue, les outils ne démarrent pas.
+  * sbx-netflash : si la mémoire manque pour l'image, arrête alors seulement la pile
+    SecuBox du live (services secubox-*, tor, haproxy, nginx, nDPId, python3/uvicorn),
+    mesure de nouveau, puis refuse si elle manque encore.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 10:20:00 +0200
+
 secubox-netboot (0.6.7-1~trixie1) trixie; urgency=medium
 
   * sbx-netflash (ref #3079) : l'image est téléchargée dans son propre tmpfs, à sa taille.

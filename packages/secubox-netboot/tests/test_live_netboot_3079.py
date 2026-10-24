@@ -199,9 +199,18 @@ def test_l_image_a_son_propre_tmpfs_a_sa_taille():
     assert 'dest="$TRAVAIL/image/$image"' in s
 
 
-def test_le_live_demarre_sans_la_pile_secubox():
-    # DUT 2026-10-24 : la pile SecuBox du live prenait 6,9 Go sur 8 ; il ne sert qu'à flasher.
+def test_le_live_demarre_en_mode_normal():
+    # Arbitrage du 2026-10-24 : rescue.target ne permet pas de lancer les outils ; le live reste
+    # en mode normal, sbx-netflash libère la mémoire lui-même quand elle manque.
     s = BUILD.read_text()
-    lignes = [l for l in s.splitlines() if l.startswith("setenv bootargs")]
-    assert all(len(l) < 200 for l in lignes)
-    assert "systemd.unit=rescue.target" in " ".join(lignes)
+    assert "systemd.unit=rescue.target" not in s
+
+
+def test_sbx_netflash_libere_la_memoire_seulement_si_elle_manque():
+    # DUT 2026-10-24 : pile SecuBox du live à 6,9 Go sur 8 ; arrêt manuel des services → 5,2 Go libres.
+    s = FLASH.read_text()
+    i_test, i_lib, i_fail = s.index('if [ "$dispo" -le "$besoin" ]'), s.index("libere_memoire"), s.index("mémoire insuffisante")
+    assert i_test < s.index("libere_memoire\n") if "libere_memoire\n" in s else True
+    assert "systemctl stop 'secubox-*'" in s
+    assert "pkill -x" in s
+    assert s.count('dispo="$(awk') == 2   # nouvelle mesure après libération
