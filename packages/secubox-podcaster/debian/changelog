@@ -1,3 +1,13 @@
+secubox-podcaster (1.6.3-1~trixie1) trixie; urgency=medium
+
+  * Vhost du portail livré sans le nom de gk2 (ref #3117) : server_name « podcaster.* »
+    (podcaster.gk2.secubox.in reste couvert sur gk2), source renommée nginx/podcaster.vhost.conf, installée
+    sous sites-available/podcaster.conf. Migration dans le postinst juste avant l'activation : l'ancien lien
+    podcaster.gk2.conf (ou un lien posé à la main sous un autre nom) est retiré, un ancien fichier retouché
+    est archivé dans /var/backups/nginx (0600) sans être recopié. Le postrm retire les deux liens.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:26:35 +0200
+
 secubox-podcaster (1.6.2-1~trixie1) trixie; urgency=medium
 
   * Portail embarqué dans le Hall (ref #2998) : la mosaïque des podcasts reste visible
