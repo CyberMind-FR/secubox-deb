@@ -52,12 +52,41 @@ def _declares_401(line: str) -> bool:
     return s.startswith("error_page") and "401" in s.split("=")[0]
 
 
-def _is_server_name_line(line: str, domain: str) -> bool:
+def _server_name_tokens(line: str) -> list[str]:
     s = line.split("#", 1)[0].strip()
     if not s.startswith("server_name"):
-        return False
-    toks = s[len("server_name"):].rstrip(";").split()
-    return domain in toks
+        return []
+    return s[len("server_name"):].rstrip(";").split()
+
+
+def _is_server_name_line(line: str, domain: str) -> bool:
+    """Nom EXACT du domaine sur cette ligne server_name."""
+    return domain in _server_name_tokens(line)
+
+
+def _joker_du_domaine(domain: str) -> str | None:
+    """`peertube.gk2.secubox.in` -> `peertube.*` (joker final générique, #3117)."""
+    label = domain.split(".", 1)[0]
+    return f"{label}.*" if label and "." in domain else None
+
+
+def _is_joker_line(line: str, domain: str) -> bool:
+    """Joker final `<label>.*` du domaine sur cette ligne server_name.
+
+    LES VHOSTS LIVRÉS NE PORTENT PLUS DE NOM DE BOX (#3117) : `server_name
+    peertube.*;` sert peertube.<domaine> de n'importe quelle box. Chercher le
+    seul nom exact du manifeste ne les trouvait plus, et le réveil n'était plus
+    câblé. Le nom exact reste prioritaire (voir find_config / _ligne_du_domaine)."""
+    joker = _joker_du_domaine(domain)
+    return joker is not None and joker in _server_name_tokens(line)
+
+
+def _ligne_du_domaine(lines: list[str], domain: str) -> int | None:
+    """Index de la ligne server_name du domaine : nom exact d'abord, joker sinon."""
+    i = next((n for n, ln in enumerate(lines) if _is_server_name_line(ln, domain)), None)
+    if i is None:
+        i = next((n for n, ln in enumerate(lines) if _is_joker_line(ln, domain)), None)
+    return i
 
 
 _ERRORPAGES = "secubox-errorpages.conf"
@@ -81,7 +110,10 @@ def _bloc_server(lines: list[str], idx: int) -> tuple[int, int]:
 def find_config(domain: str, sites_dir: Path) -> Path | None:
     """Le fichier de conf nginx dont un `server_name` contient `domain`, ou None.
     On lit les fichiers de `sites_dir` triés (déterminisme) ; on ignore les
-    `.bak`/`.dpkg-*` (résidus non chargés par nginx, jamais la cible)."""
+    `.bak`/`.dpkg-*` (résidus non chargés par nginx, jamais la cible).
+    Un nom EXACT, dans n'importe quel fichier, l'emporte ; à défaut, le joker
+    final générique `<label>.*` du domaine (#3117)."""
+    joker: Path | None = None
     for p in sorted(Path(sites_dir).iterdir()):
         if not p.is_file() or any(x in p.name for x in (".bak", ".dpkg", ".pre-", "~")):
             continue
@@ -91,7 +123,9 @@ def find_config(domain: str, sites_dir: Path) -> Path | None:
             continue
         if any(_is_server_name_line(ln, domain) for ln in lines):
             return p
-    return None
+        if joker is None and any(_is_joker_line(ln, domain) for ln in lines):
+            joker = p
+    return joker
 
 
 def wire(path: Path, domain: str) -> bool:
@@ -104,7 +138,7 @@ def wire(path: Path, domain: str) -> bool:
     aucune ligne server_name du domaine n'existe."""
     path = Path(path)
     lines = path.read_text(encoding="utf-8").splitlines()
-    i = next((n for n, ln in enumerate(lines) if _is_server_name_line(ln, domain)), None)
+    i = _ligne_du_domaine(lines, domain)
     if i is None:
         return False
     debut, fin = _bloc_server(lines, i)
