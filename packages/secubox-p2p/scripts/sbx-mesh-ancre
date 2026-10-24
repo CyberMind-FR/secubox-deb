@@ -1,0 +1,128 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""sbx-mesh-ancre rattraper [--dump FICHIER] — pose l'ancre du maître (#3100) sur une box déjà associée.
+
+Une box jointe avant l'existence de l'ancre la reçoit ici, depuis le tunnel qu'elle a déjà : état local `role` de pair
+(`peer`, écrit par les jonctions, ou `satellite`, ancien nom ; jamais `master`) et UN SEUL pair WireGuard couvrant tout le
+réseau maillé (le maître). Sinon rien n'est écrit, et l'audit dit pourquoi (`ancre_non_rattrapee`, `raison`).
+Jamais d'écrasement.
+Surcharges pour les tests : SBX_P2P_DIR, SBX_P2P_LIB, SBX_ANCRE, SBX_AUDIT."""
+import ipaddress
+import json
+import os
+import subprocess
+import sys
+
+sys.path.insert(0, os.environ.get("SBX_P2P_LIB", "/usr/lib/secubox/p2p"))
+from api import ancre  # noqa: E402
+
+ETAT = os.path.join(os.environ.get("SBX_P2P_DIR", "/var/lib/secubox/p2p"), "wg_mesh.json")
+CHEMIN = os.environ.get("SBX_ANCRE", ancre.CHEMIN)
+AUDIT = os.environ.get("SBX_AUDIT", "/var/log/secubox/audit.log")
+
+
+def _dump(fichier):
+    """Lignes de pairs de `wg show wg-mesh dump` (la 1re ligne, l'interface, est ignorée)."""
+    if fichier:
+        with open(fichier, encoding="utf-8") as f:
+            texte = f.read()
+    else:
+        texte = subprocess.run(["wg", "show", "wg-mesh", "dump"], capture_output=True, text=True,
+                               check=True, timeout=10).stdout
+    return [ligne.split("\t") for ligne in texte.splitlines()[1:] if ligne.strip()]
+
+
+def _couvre(allowed, reseau):
+    for a in allowed.split(","):
+        try:
+            if reseau.subnet_of(ipaddress.ip_network(a.strip(), strict=False)):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+ROLES_PAIR = ("peer", "satellite")    # `peer` : sbx-mesh-join et api/mesh.py ; `satellite` : ancien état
+
+
+def _hote(endpoint):
+    """Hôte d'un point d'accès `h:port` ou `[h6]:port` (crochets ôtés) ; None si absent (`(none)`) ou invalide."""
+    hote = (endpoint or "").rsplit(":", 1)[0] if ":" in (endpoint or "") else ""
+    if hote.startswith("[") and hote.endswith("]"):
+        hote = hote[1:-1]
+    try:
+        return str(ipaddress.ip_address(hote))
+    except ValueError:
+        return None
+
+
+def _ip_maillee_du_maitre(etat, cle):
+    """Repli quand le point d'accès est inconnu : l'adresse maillée du maître gardée dans l'état."""
+    for v in [p.get("mesh_ip") for p in etat.get("peers", []) if isinstance(p, dict) and p.get("public_key") == cle] \
+            + [etat.get("master_mesh_ip")]:
+        try:
+            return str(ipaddress.ip_address(str(v)))
+        except ValueError:
+            continue
+    return None
+
+
+def _non_rattrapee(raison, **champs):
+    """Chaque issue sans ancre est tracée : un rattrapage qui ne se fait pas doit se voir."""
+    try:
+        ancre.audit("ancre_non_rattrapee", AUDIT, raison=raison, **champs)
+    except OSError as e:
+        print("sbx-mesh-ancre : audit non ecrit (%s)" % e, file=sys.stderr)
+    return 0
+
+
+def rattraper(fichier_dump=None):
+    if os.path.exists(CHEMIN):
+        return 0                                   # déjà ancrée : rien à rattraper, rien à tracer
+    try:
+        with open(ETAT, encoding="utf-8") as f:
+            etat = json.load(f)
+    except (OSError, ValueError):
+        return _non_rattrapee("etat du maillage absent ou illisible")
+    if not isinstance(etat, dict):
+        return _non_rattrapee("etat du maillage illisible")
+    role = etat.get("role")
+    if role not in ROLES_PAIR:
+        return _non_rattrapee("role maitre" if role == "master" else "role %s" % role)
+    try:
+        pairs = _dump(fichier_dump)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return _non_rattrapee("pas de tunnel")
+    try:
+        reseau = ipaddress.ip_network(etat.get("network") or "10.10.0.0/24", strict=False)
+    except ValueError:
+        return _non_rattrapee("reseau maille invalide")
+    maitres = [p for p in pairs if len(p) >= 4 and _couvre(p[3], reseau)]
+    if not maitres:
+        return _non_rattrapee("pas de tunnel")
+    if len(maitres) > 1:
+        return _non_rattrapee("plusieurs pairs reseau", nombre=len(maitres))
+    cle, endpoint = maitres[0][0], maitres[0][2]
+    adresse = _hote(endpoint) or _ip_maillee_du_maitre(etat, cle)
+    if not adresse:
+        return _non_rattrapee("pas de point d'acces")
+    nom = next((p.get("name") for p in etat.get("peers", []) if p.get("public_key") == cle and p.get("name")), "maitre")
+    if ancre.ecrire(cle, adresse, nom, ancre.empreinte(cle), chemin=CHEMIN):
+        ancre.audit("ancre_rattrapee", AUDIT, empreinte=ancre.empreinte(cle), adresse=adresse, nom=nom)
+        print("ancre du maitre posee (%s)" % ancre.empreinte(cle))
+    return 0
+
+
+def main(argv):
+    if len(argv) < 2 or argv[1] != "rattraper":
+        print("usage: sbx-mesh-ancre rattraper [--dump FICHIER]", file=sys.stderr)
+        return 2
+    dump = argv[argv.index("--dump") + 1] if "--dump" in argv and argv.index("--dump") + 1 < len(argv) else None
+    return rattraper(dump)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

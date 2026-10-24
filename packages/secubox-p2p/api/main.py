@@ -39,7 +39,7 @@ except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
 
-from . import mesh, registry, annuaire_client, dht, federation, masterlink, automesh
+from . import mesh, registry, annuaire_client, dht, federation, masterlink, automesh, jetons, ancre
 from secubox_core.auth import require_lecture
 from secubox_core.crypto.empreinte import ident
 
@@ -299,33 +299,18 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def ml_token_generate(ttl: int = None, token_type: str = "join", auto_approve: bool = False) -> Dict:
-    """Generate a new join token."""
+def ml_token_generate(ttl: int = None, token_type: str = "join", auto_approve: bool = False,
+                      nom_prevu: Optional[str] = None, flash: bool = False) -> Dict:
+    """Generate a new join token (le cœur vit dans jetons.py, partagé avec sbx-mesh-invite)."""
     config = get_ml_config()
-    tokens = get_ml_tokens()
 
     if ttl is None:
         ttl = config.get("token_ttl", ML_DEFAULT_TOKEN_TTL)
 
-    token = generate_token()
-    token_hash = hash_token(token)
-    now = datetime.utcnow()
-    expires = now + timedelta(seconds=ttl)
-
-    token_entry = {
-        "hash": token_hash,
-        "type": token_type,
-        "created": now.isoformat(),
-        "expires": expires.isoformat(),
-        "expires_ts": int(expires.timestamp()),
-        "ttl": ttl,
-        "status": "active",
-        "auto_approve": auto_approve,
-        "peer_fp": None,
-        "used_by": None
-    }
-    tokens.append(token_entry)
-    save_ml_tokens(tokens)
+    ml_init()
+    emis = jetons.generer(ttl, auto_approve, nom_prevu=nom_prevu, flash=flash,
+                          token_type=token_type, chemin=ML_TOKENS_FILE)
+    token, token_hash, expires = emis["token"], emis["token_hash"], emis["expires"]
 
     # Build join URL
     lan_ip = get_lan_ip()
@@ -333,7 +318,7 @@ def ml_token_generate(ttl: int = None, token_type: str = "join", auto_approve: b
     return {
         "token": token,
         "token_hash": token_hash,
-        "expires": expires.isoformat(),
+        "expires": expires,
         "ttl": ttl,
         "auto_approve": auto_approve,
         "url": f"http://{lan_ip}:{API_PORT}/master-link/?token={token}"
@@ -371,7 +356,9 @@ def ml_token_validate(token: str) -> Dict:
                 "valid": True,
                 "token_hash": token_hash,
                 "expires": t.get("expires"),
-                "auto_approve": t.get("auto_approve", False)
+                "auto_approve": t.get("auto_approve", False),
+                "flash": bool(t.get("flash")),
+                "nom_prevu": t.get("nom_prevu"),
             }
 
     return {"valid": False, "error": "unknown_token"}
@@ -2123,6 +2110,23 @@ def ml_join(req: JoinRequest, request: Request):
                 "message": "Join request already pending"
             }
 
+    # REFLASH (#3100) : un jeton `flash` ne vaut que pour le nom prévu, et ne remplace
+    # que le pair de CE nom ; hors flash, un nom déjà pris reste refusé.
+    flash = bool(validation.get("flash"))
+    nom = (req.hostname or "").strip()
+    if flash and nom != (validation.get("nom_prevu") or ""):
+        _audit_jonction("jonction_refusee", raison="jeton flash pour un autre nom", nom=nom)
+        raise HTTPException(status_code=403, detail="flash_token_other_name")
+    homonyme = None
+    if nom and nom.lower() not in NOMS_PAR_DEFAUT:
+        homonyme = next((r for r in requests if r.get("hostname") == nom
+                         and r.get("status") == "approved"
+                         and r.get("fingerprint") != req.fingerprint), None)
+    if homonyme and not (flash and (auto_approve or config.get("auto_approve", False))):
+        _audit_jonction("jonction_refusee", raison="nom deja pris", nom=nom)
+        raise HTTPException(status_code=409, detail="nom déjà pris : préparer un flash sur le maître "
+                                                    "(page Netboot) ou retirer l'ancien pair")
+
     join_request = {
         "fingerprint": req.fingerprint,
         "address": peer_address,
@@ -2141,7 +2145,10 @@ def ml_join(req: JoinRequest, request: Request):
         join_request["approved_at"] = now.isoformat()
         join_request["approved_by"] = config.get("fingerprint", get_node_id())
         join_request["depth"] = peer_depth
-        _assign_mesh_ip(join_request)
+        if homonyme:
+            _remplacer_homonyme(join_request, homonyme, requests)
+        else:
+            _assign_mesh_ip(join_request)
 
         # Mark token as used
         ml_token_mark_used(token_hash, req.fingerprint)
@@ -2149,6 +2156,8 @@ def ml_join(req: JoinRequest, request: Request):
         # Add to peers
         _add_approved_peer(join_request)
         _provision(join_request)
+        for k in ("remplace_cle", "remplace_ip", "remplace_nom"):
+            join_request.pop(k, None)          # usage unique : l'ancienne clé est partie
 
         requests.append(join_request)
         save_ml_requests(requests)
@@ -2173,6 +2182,42 @@ def ml_join(req: JoinRequest, request: Request):
         "fingerprint": req.fingerprint,
         "message": "Join request queued for approval"
     }
+
+
+NOMS_PAR_DEFAUT = {"", "unknown", "localhost", "secubox", "secubox-mochabin", "secubox-espressobin"}
+
+
+def _audit_jonction(evenement: str, **champs) -> None:
+    """Décision de sécurité de la jonction, dans l'audit (jamais de jeton ni de code)."""
+    try:
+        ancre.audit(evenement, chemin=os.environ.get("SBX_AUDIT", "/var/log/secubox/audit.log"), **champs)
+    except OSError as e:
+        log.warning("audit jonction non écrit: %s", e)
+
+
+def _remplacer_homonyme(join_request: Dict, ancien: Dict, requests: List[Dict]) -> None:
+    """Reflash (#3100) : le nouveau pair prend l'adresse du maillage de l'ancien de même nom.
+
+    L'ancienne demande disparaît du registre, l'ancienne entrée du registre hérité aussi,
+    et l'ancienne clé est retirée du transport par `_add_mesh_peer` (champ `remplace_cle`).
+    """
+    join_request["mesh_ip"] = ancien.get("mesh_ip")
+    if ancien.get("wg_public_key"):
+        join_request["remplace_cle"] = ancien["wg_public_key"]
+    # Même sans clé connue dans la demande : le transport est purgé par adresse et par nom.
+    join_request["remplace_ip"] = ancien.get("mesh_ip")
+    join_request["remplace_nom"] = ancien.get("hostname")
+    _audit_jonction("pair_remplace_reflash", nom=ancien.get("hostname"),
+                    ancienne_empreinte=ancien.get("fingerprint"),
+                    nouvelle_empreinte=join_request.get("fingerprint"), mesh_ip=ancien.get("mesh_ip"))
+    requests[:] = [r for r in requests if r is not ancien]
+    legacy = load_json(PEERS_FILE, {"peers": []})
+    if isinstance(legacy, dict):
+        legacy["peers"] = [p for p in legacy.get("peers", [])
+                           if p.get("fingerprint") != ancien.get("fingerprint")]
+        save_json(PEERS_FILE, legacy)
+    if not join_request.get("mesh_ip"):
+        _assign_mesh_ip(join_request)
 
 
 def _assign_mesh_ip(join_request: Dict) -> None:
@@ -2219,6 +2264,14 @@ def _add_mesh_peer(join_request: Dict) -> bool:
     if not (pk and ip):
         return False
     state = get_wg_mesh_config()
+    ancienne = join_request.get("remplace_cle")
+    if ancienne and ancienne != pk:                 # reflash (#3100) : l'ancienne clé quitte le transport
+        state["peers"] = [p for p in state.get("peers", []) if p.get("public_key") != ancienne]
+    r_ip, r_nom = join_request.get("remplace_ip"), join_request.get("remplace_nom")
+    if r_ip or r_nom:                               # ... et tout pair qui tenait l'adresse ou le nom
+        state["peers"] = [p for p in state.get("peers", []) if p.get("public_key") == pk or not (
+            (r_ip and (p.get("mesh_ip") == r_ip or p.get("allowed_ips") == f"{r_ip}/32"))
+            or (r_nom and p.get("name") == r_nom))]
     peer = {
         "public_key": pk,
         "allowed_ips": f"{ip}/32",

@@ -105,7 +105,7 @@ CHAMPS = {
     "horloge": ("box", {"fuseau", "ntp"}),
     "reseau": ("reseau", {"mode", "domaine"}),
     "services": ("services", {"profil"}),
-    "maillage": ("maillage", {"mode", "rejoindre", "jeton", "aide"}),
+    "maillage": ("maillage", {"mode", "rejoindre", "jeton", "aide", *P.CLES_ANCRE}),
     "majs": ("apt", {"auto", "heure"}),
 }
 
@@ -163,6 +163,8 @@ def enregistre(etape: str, valeurs: Dict[str, Any]) -> Dict[str, Any]:
         if section == "maillage" and bloc.get("mode") != "rejoindre":
             bloc.pop("rejoindre", None)
             bloc.pop("jeton", None)
+            for k in P.CLES_ANCRE:
+                bloc.pop(k, None)       # l'ancre accompagne une jonction (#3100)
     else:
         raise Refus("Étape inconnue.")
     ecrit(profil)

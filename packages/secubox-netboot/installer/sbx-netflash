@@ -13,12 +13,15 @@
 #   « FLASH » sauf --auto). Signature invalide = rien n'est écrit, le fichier est supprimé.
 #
 # Serveur : --srv HOTE[:PORT], sinon l'hôte de `fetch=` (ou `sbx_srv=`) de la ligne de commande du noyau.
+# Avec --nom (#3100) : le maître sert un lot signé (GET http://SRV/lot-flash?nom=NOM, même clé que les images) ;
+# après l'écriture de l'image (--no-reboot), on dépose sur l'eMMC le code de jonction (p2, 0600), l'ancre du maître
+# (p2, 0644) et secubox/profil.toml (p1, monté en /boot) : la box rejoint le maillage toute seule au premier démarrage.
 set -euo pipefail
 
 PUB=/etc/secubox/netboot-image.pub
 TRAVAIL=/run/sbx-netflash
 JOURNAL=/var/log/sbx-netflash.log
-srv="" dir="" image="" auto=0 liste=0 reboot_opt=()
+srv="" dir="" image="" auto=0 liste=0 reboot_opt=() nom="" reboot_demande=1
 
 usage() {
     cat <<EOF
@@ -27,24 +30,129 @@ sbx-netflash — écrit sur l'eMMC une image signée servie par le serveur de bo
   sbx-netflash --list                         images disponibles
   sbx-netflash --image NOM.img.gz             télécharge, vérifie la signature, écrit (demande « FLASH »)
   sbx-netflash --image NOM.img.gz --auto      sans confirmation
-Options : --srv HOTE[:PORT]  --dir DOSSIER  --no-reboot
+  sbx-netflash --image NOM.img.gz --nom NOM   en plus : dépose le code de jonction, l'ancre du maître et le profil
+Options : --nom NOM  --srv HOTE[:PORT]  --dir DOSSIER  --no-reboot
 EOF
 }
 
 log()  { echo "[sbx-netflash] $*"; echo "[$(date -Iseconds)] $*" >> "$JOURNAL" 2>/dev/null || true; }
 fail() { log "ERREUR : $*"; exit 1; }
 
+
+# ── Dépôt du lot (#3100) ───────────────────────────────────────────────────
+# Extrait le lot et sa signature de la réponse JSON du maître, puis vérifie la signature (clé embarquée, même
+# commande que les images) sur les octets EXACTS du texte du lot. Écrit le lot dans LOT_SORTIE seulement si valide.
+verifie_lot() { # REPONSE_JSON LOT_SORTIE
+    local rep="$1" sortie="$2" t
+    t="$(mktemp -d)" || return 1
+    if ! python3 -I - "$rep" "$t/lot" "$t/sig" <<'PY'
+import base64, json, sys
+r = json.load(open(sys.argv[1]))
+if not isinstance(r.get("lot"), str) or not isinstance(r.get("signature"), str):
+    sys.exit(1)
+open(sys.argv[2], "wb").write(r["lot"].encode("utf-8"))
+open(sys.argv[3], "wb").write(base64.b64decode(r["signature"], validate=True))
+PY
+    then rm -rf "$t"; return 1; fi
+    if ! openssl dgst -sha256 -verify "$PUB" -signature "$t/sig" "$t/lot" >/dev/null 2>&1; then
+        rm -rf "$t"; return 1
+    fi
+    cp "$t/lot" "$sortie" && chmod 0600 "$sortie"
+    rm -rf "$t"
+}
+
+champ_lot() { # LOT_JSON CHAMP : valeur texte ("" si absente) ; "ancre" sort l'objet en JSON
+    python3 -I - "$1" "$2" <<'PY'
+import json, sys
+v = json.load(open(sys.argv[1])).get(sys.argv[2], "")
+sys.stdout.write(json.dumps(v) if isinstance(v, dict) else str(v))
+PY
+}
+
+# Sans empreinte dans le lot, le mot de passe est saisi ici et haché : sans module argon2, on refuse AVANT d'écrire
+# (jamais de repli « demander » : l'assistant s'ouvrirait et bloquerait la jonction automatique au maillage).
+verifie_hacheur_ou_refuse() { # EMPREINTE_DU_LOT
+    [ -n "$1" ] && return 0
+    if ! python3 -c "import argon2" >/dev/null 2>&1; then
+        log "ERREUR : le lot n'a pas d'empreinte administrateur et ce live n'a pas le module python3 argon2 : le mot de passe ne peut pas être haché. Rien n'a été écrit."
+        return 1
+    fi
+}
+
+saisit_empreinte() { # → empreinte argon2 sur stdout ; mot de passe jamais en argument ni dans le journal
+    local a b tty="${SBX_TTY:-/dev/tty}"
+    for _ in 1 2 3; do
+        # IFS= : les espaces en tête ou en queue du mot de passe sont conservés ; échec de lecture = abandon
+        IFS= read -r -s -p "Mot de passe administrateur de la box : " a < "$tty" >&2 || return 1; echo >&2
+        IFS= read -r -s -p "Confirmer : " b < "$tty" >&2 || return 1; echo >&2
+        if [ -z "$a" ]; then echo "mot de passe vide" >&2; continue; fi
+        if [ "$a" = "$b" ]; then
+            printf '%s\n' "$a" | python3 -c "import argon2,sys; print(argon2.PasswordHasher().hash(sys.stdin.read().rstrip('\n')))"
+            return
+        fi
+        echo "les deux saisies diffèrent" >&2
+    done
+    return 1
+}
+
+# Le lot doit porter un code de jonction et une ancre exploitables : contrôle AVANT toute écriture.
+lot_complet() { # LOT_JSON
+    python3 -I - "$1" <<'PY'
+import json, sys
+l = json.load(open(sys.argv[1]))
+c, a = l.get("code"), l.get("ancre")
+ok = isinstance(c, str) and c.startswith("sbxmesh1.") and isinstance(a, dict) \
+    and isinstance(a.get("cle_publique"), str) and a["cle_publique"].strip() != ""
+sys.exit(0 if ok else 1)
+PY
+}
+
+# Écrit sur la racine RACINE (p2 montée) et sur BOOT (p1 montée) : code 0600, ancre 0644, secubox/profil.toml.
+depose_dans() { # RACINE BOOT LOT_JSON PROFIL_TOML
+    local racine="$1" boot="$2" lot="$3" profil="$4" code
+    code="$(champ_lot "$lot" code)"
+    [ -n "$code" ] || { log "ERREUR : lot sans code"; return 1; }
+    lot_complet "$lot" || { log "ERREUR : lot sans ancre exploitable"; return 1; }
+    install -d -m0755 "$racine/var/lib/secubox/p2p" "$racine/etc/secubox/p2p" "$boot/secubox" || return 1
+    ( umask 077; printf '%s' "$code" > "$racine/var/lib/secubox/p2p/automesh.code" ) || return 1
+    chmod 0600 "$racine/var/lib/secubox/p2p/automesh.code"
+    champ_lot "$lot" ancre > "$racine/etc/secubox/p2p/ancre-maitre.json" || return 1
+    chmod 0644 "$racine/etc/secubox/p2p/ancre-maitre.json"
+    install -m0644 "$profil" "$boot/secubox/profil.toml" || return 1
+}
+
+# Monte p2 puis p1, dépose, démonte. Un échec de montage n'écrit rien (et ne touche pas à ce qui est déjà flashé).
+depose_sur_emmc() { # DEV_P2 DEV_P1 LOT_JSON PROFIL_TOML
+    local p2="$1" p1="$2" lot="$3" profil="$4" m="${SBX_TRAVAIL_DEPOT:-$TRAVAIL/depot}" rc=0
+    mkdir -p "$m/p2" "$m/p1" || return 1
+    mount "$p2" "$m/p2" || { log "ERREUR : montage de $p2 impossible, rien n'a été déposé (l'image écrite est intacte)"; return 1; }
+    if mount "$p1" "$m/p1"; then
+        depose_dans "$m/p2" "$m/p1" "$lot" "$profil" || rc=1
+        sync; umount "$m/p1" || rc=1
+    else
+        log "ERREUR : montage de $p1 impossible, rien n'a été déposé"; rc=1
+    fi
+    umount "$m/p2" || rc=1
+    [ "$rc" -eq 0 ] || log "ERREUR : dépôt incomplet sur l'eMMC (image intacte) : relancer avec --nom"
+    return "$rc"
+}
+
+main() {
 while [ $# -gt 0 ]; do case "$1" in
     --srv) srv="$2"; shift 2 ;;
     --dir) dir="$2"; shift 2 ;;
     --image) image="$2"; shift 2 ;;
+    --nom) nom="$2"; shift 2 ;;
     --auto) auto=1; shift ;;
     --list) liste=1; shift ;;
-    --no-reboot) reboot_opt=(--no-reboot); shift ;;
+    --no-reboot) reboot_opt=(--no-reboot); reboot_demande=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;
 esac; done
 
+# même motif que le lot du maître (api/lot.py) et sbx-netflash-profil ; =~ de bash : pas de multiligne
+NOM_RE='^[a-z]([a-z0-9-]{0,29}[a-z0-9])?$'
+if [ -n "$nom" ] && ! [[ "$nom" =~ $NOM_RE ]]; then fail "nom invalide : $nom"; fi
 [ "$(id -u)" -eq 0 ] || fail "à lancer en root"
 
 # Serveur et dossier par défaut : ceux qui ont servi le live (fetch=http://HOTE:PORT/DOSSIER/filesystem.squashfs).
@@ -83,6 +191,28 @@ taille="$(echo "$ligne" | awk '{print $2}')"
 sha="$(echo "$ligne" | awk '{print $3}')"
 [ -s "$PUB" ] || fail "clé publique absente ($PUB) : ce live n'a pas été construit pour le flash réseau"
 
+# --nom : lot signé récupéré et VÉRIFIÉ avant toute écriture ; refus = rien n'est écrit.
+lot="" profil=""
+if [ -n "$nom" ]; then
+    mkdir -p "$TRAVAIL/lot"; chmod 0700 "$TRAVAIL/lot"
+    telecharge "http://$srv/lot-flash?nom=$nom" "$TRAVAIL/lot/reponse.json" >/dev/null || fail "lot de flash refusé ou introuvable : http://$srv/lot-flash?nom=$nom"
+    lot="$TRAVAIL/lot/lot.json"
+    verifie_lot "$TRAVAIL/lot/reponse.json" "$lot" || { rm -rf "$TRAVAIL/lot"; fail "LOT INVALIDE (signature ou format) — rien n'a été écrit"; }
+    [ "$(champ_lot "$lot" nom)" = "$nom" ] || { rm -rf "$TRAVAIL/lot"; fail "le lot n'est pas celui de $nom — rien n'a été écrit"; }
+    lot_complet "$lot" || { rm -rf "$TRAVAIL/lot"; fail "lot sans code de jonction ou sans ancre exploitable — rien n'a été écrit"; }
+    log "lot VALIDE pour $nom."
+    empreinte="$(champ_lot "$lot" admin_empreinte)"
+    verifie_hacheur_ou_refuse "$empreinte" || { rm -rf "$TRAVAIL/lot"; exit 1; }
+    [ -n "$empreinte" ] || empreinte="$(saisit_empreinte)" \
+        || { rm -rf "$TRAVAIL/lot"; fail "mot de passe non saisi (console absente ou 3 essais ratés) — rien n'a été écrit"; }
+    profil="$TRAVAIL/lot/profil.toml"
+    HERE_NF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    helper="$HERE_NF/sbx-netflash-profil"; [ -x "$helper" ] || helper=/usr/local/sbin/sbx-netflash-profil
+    python3 "$helper" --nom "$nom" --domaine "$(champ_lot "$lot" domaine)" --empreinte "$empreinte" > "$profil" \
+        || { rm -rf "$TRAVAIL/lot"; fail "profil non généré — rien n'a été écrit"; }
+    unset empreinte
+fi
+
 # L'image transite par la RAM (tmpfs) : il faut sa taille + 768 Mo pour le reste du système.
 # Le live garde toute la pile SecuBox (6,9 Go sur 8 sur DUT) : on ne la stoppe que si la mémoire manque.
 libere_memoire() {
@@ -119,7 +249,23 @@ log "signature VALIDE."
 echo "$sha  $dest" > "${dest}.sha256"
 echo "$sha  $dest" | sha256sum -c --status || { rm -f "$dest" "$dest.sig" "${dest}.sha256"; fail "empreinte différente de la liste du serveur"; }
 
-opts=(--image "$dest" "${reboot_opt[@]}")
+if [ -n "$nom" ]; then      # le dépôt suit l'écriture : pas de redémarrage avant lui
+    opts=(--image "$dest" --no-reboot)
+else
+    opts=(--image "$dest" "${reboot_opt[@]}")
+fi
 [ "$auto" -eq 1 ] && opts+=(--auto)
 log "écriture par secubox-flash-emmc ${opts[*]}"
-exec secubox-flash-emmc "${opts[@]}"
+if [ -z "$nom" ]; then
+    exec secubox-flash-emmc "${opts[@]}"
+fi
+secubox-flash-emmc "${opts[@]}" || fail "écriture de l'eMMC KO — rien n'a été déposé"
+dev="${SBX_EMMC:-/dev/mmcblk0}"
+depose_sur_emmc "${dev}p2" "${dev}p1" "$lot" "$profil" || fail "dépôt du lot KO (image écrite, ni code ni profil déposés)"
+rm -rf "$TRAVAIL/lot"
+log "code de jonction, ancre et profil déposés pour $nom."
+if [ "$reboot_demande" -eq 1 ]; then log "redémarrage…"; sleep 2; systemctl reboot || reboot; fi
+}
+
+# Chargeable sans exécuter (tests) : SBX_NETFLASH_SOURCE=1.
+if [ -z "${SBX_NETFLASH_SOURCE:-}" ]; then main "$@"; fi

@@ -1,3 +1,11 @@
+secubox-core (1.7.14-1~trixie1) trixie; urgency=medium
+
+  * snippets/secubox-proxy.conf : les en-têtes X-SecuBox-Netboot-Lot et
+    X-SecuBox-Adresse-Serveur sont vidés sur tout proxy ; seul le vhost de boot :8099 de
+    secubox-netboot les pose (lot de flash, ref #3100).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 18:00:00 +0200
+
 secubox-core (1.7.13-1~trixie1) trixie; urgency=medium
 
   * Métadonnées de santé : ai-insights retiré (ref #3017).

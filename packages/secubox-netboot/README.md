@@ -175,6 +175,38 @@ All endpoints require JWT (`Authorization: Bearer <token>`).
 | POST | `/api/v1/netboot/overlay/revert` | Revert to factory bootcmd |
 | POST | `/api/v1/netboot/overlay/persist` | Lock overlay as permanent boot |
 | POST | `/api/v1/netboot/overlay/confirm-healthy` | Mark boot healthy (bootcount=0) |
+| POST | `/api/v1/netboot/flash/prepare` | Préparer le (re)flash d'une box (#3100) : `{"nom", "mot_de_passe"?}`, 24 h |
+
+Hors JWT, servi par le **seul vhost de boot `:8099`** (404 sur le vhost principal) :
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `http://<maître>:8099/lot-flash?nom=NOM` | Lot de flash signé remis au live (#3100) |
+
+---
+
+## Flash par le réseau et association au maillage (#3100)
+
+Sur le live de la box à flasher : `sbx-netflash --image IMAGE --nom NOM`.
+
+1. Le live demande `GET /lot-flash?nom=NOM` au vhost `:8099` (LAN seulement, ponts conteneurs
+   et maillage refusés, 6 lots par heure et par adresse). nginx y pose le marqueur
+   `X-SecuBox-Netboot-Lot` et `X-SecuBox-Adresse-Serveur: $server_addr` (adresse du maître
+   jointe par le live, portée par le code ; à défaut, source de `ip route get`).
+2. `secubox-netboot-lot NOM [--adresse A]` (root) émet un code de jonction lié au nom (48 h) et
+   signe le lot `{nom, domaine, code, ancre du maître, admin_empreinte?}` avec la clé netboot.
+3. Le live vérifie la signature AVANT toute écriture, flashe l'eMMC, puis y dépose le code,
+   l'ancre et `profil.toml` (maillage automesh). Sans empreinte dans le lot, le mot de passe
+   administrateur est saisi à la console.
+
+**Reflash d'une box déjà associée.** Le code ne remplace la clé d'un pair existant (`--flash`)
+que si l'administrateur a **préparé** ce nom : `POST /api/v1/netboot/flash/prepare`
+(`{"nom": "gk1"}`, mot de passe facultatif, gardé en empreinte argon2 seulement). La préparation
+vaut 24 h, est prise atomiquement et consommée par un seul lot. Sans préparation, le code est
+ordinaire : un nom neuf rejoint le maillage, un nom déjà approuvé reçoit un 409
+(« nom déjà pris : préparer un flash… »).
+
+Noms admis partout (lot, `sbx-netflash`, `sbx-netflash-profil`) : `^[a-z]([a-z0-9-]{0,29}[a-z0-9])?$`.
 
 ---
 

@@ -1,3 +1,13 @@
+secubox-p2p (1.18.0-1~trixie1) trixie; urgency=medium
+
+  * Ancre du maitre (ref #3100) : /etc/secubox/p2p/ancre-maitre.json (cle publique du maillage, adresse, nom, empreinte) garde l'identite du maitre qui a flashe la box. A la jonction (sbx-mesh-join, api/mesh.py), une ancre presente impose la verification : seul le maitre de l'ancre est accepte, une ancre illisible est refusee ; sans ancre (box vierge), tout maitre l'est. sbx-mesh-up attend l'adresse du maillage.
+  * Nouveau sbx-mesh-invite 2.0.0 : `--code [--nom N] [--flash] [--ttl S] [--json] [--adresse A]` emet un code `sbxmesh1.` au format automesh (cœur partage api/jetons.py : seul le SHA-256 du jeton est stocke, tokens.json rendu au compte `secubox` sans suivre de lien, 48 h avec --flash). Audit `code_emis` sans le jeton. Avec --adresse, FastAPI n'est plus importe.
+  * Reflash : un jeton `flash` ne vaut que pour son nom prevu et remplace la cle du pair approuve de ce nom en gardant son adresse maillee. secubox-netboot ne l'emet QUE si l'administrateur a prepare le flash de ce nom (POST /api/v1/netboot/flash/prepare, 24 h, consommee une fois).
+  * Hors flash, un nom deja approuve est refuse (409, « nom deja pris : preparer un flash sur le maitre (page Netboot) ou retirer l'ancien pair ») ; decisions de jonction auditees.
+  * Rattrapage de l'ancre : `sbx-mesh-ancre rattraper` pose l'ancre sur une box deja associee (gk1, gk3) depuis le tunnel qu'elle a deja. Condition : role de pair (`peer`, ecrit par les jonctions, ou `satellite`) et UN SEUL pair WireGuard couvrant tout le reseau maille ; point d'acces IPv6 accepte (crochets otes), `(none)` remplace par l'adresse maillee du maitre. Jamais d'ecrasement. Audit `ancre_rattrapee`, ou `ancre_non_rattrapee` avec sa `raison` (pas de tunnel, plusieurs pairs reseau, role maitre, pas de point d'acces). Appele en fin de sbx-mesh-up et une fois au postinst, qui cree /etc/secubox/p2p (root:root 0755).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 12:00:00 +0200
+
 secubox-p2p (1.17.3-1~bookworm1) bookworm; urgency=medium
 
   * Le point d'acces WireGuard d'un pair IPv6 s'ecrit entre crochets (ref #2936) : `[2001:db8::7]:51822`. _record_wg_identity ecrivait `2001:db8::7:51822`, invalide dans wg-quick. IPv4 inchange. Prepare le mesh et le p2p sur IPv6 (le reseau interne du mesh reste IPv4, 10.10.0.0/24). 3 tests.

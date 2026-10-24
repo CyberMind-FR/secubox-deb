@@ -24,7 +24,9 @@ fi
 STATE=/var/lib/secubox/p2p/wg_mesh.json
 CONF=/etc/wireguard/wg-mesh.conf
 
-python3 - "$STATE" "$CONF" <<'PY'
+# Code 10 = pas d'adresse encore : sortie propre, sans toucher au tunnel (#3100).
+rc=0
+python3 - "$STATE" "$CONF" <<'PY' || rc=$?
 import json, sys, pathlib
 sys.path.insert(0, "/usr/lib/secubox/p2p")
 from api import mesh
@@ -45,6 +47,11 @@ if bad:
 if not state.get("private_key"):
     sys.exit("no private key in state and none to adopt; run /wireguard/init first")
 
+# Pas encore d'adresse : le maître n'a rien attribué (#3100). Ce n'est pas une erreur, le déclencheur .path relancera ce script.
+if not state.get("address"):
+    print("adresse maillée pas encore attribuée : rien à monter pour l'instant")
+    sys.exit(10)
+
 conf_path.parent.mkdir(parents=True, exist_ok=True)
 conf_path.write_text(mesh.render_wg_conf(state))
 conf_path.chmod(0o600)
@@ -56,6 +63,8 @@ if state != original:
     state_path.write_text(json.dumps(state, indent=2))
 print(f"rendered {conf_path} (addr {state.get('address')}, peers {len(state.get('peers', []))})")
 PY
+[[ $rc -eq 10 ]] && exit 0
+[[ $rc -eq 0 ]] || exit "$rc"
 
 # APPLIQUER SANS COUPER (#1360). Ce script est désormais déclenché à CHAQUE
 # changement de l'état (unité secubox-p2p-mesh.path) : un `down/up` complet
@@ -73,4 +82,8 @@ wg show wg-mesh
 # :8799 et règle nft — sans quoi la Flotte et la réplication l'ignorent.
 if [ -x /usr/sbin/secubox-annuaire-maillage ]; then
     /usr/sbin/secubox-annuaire-maillage || true
+fi
+# Ancre du maître (#3100) : une box associée avant l'ancre la reçoit du tunnel qu'elle vient de monter. Sans effet si elle existe déjà.
+if [ -x /usr/bin/sbx-mesh-ancre ]; then
+    /usr/bin/sbx-mesh-ancre rattraper || true
 fi

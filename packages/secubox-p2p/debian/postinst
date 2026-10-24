@@ -163,6 +163,10 @@ case "$1" in
             nft -f /etc/nftables.d/secubox-p2p-ephemeral.nft 2>/dev/null || true
         fi
 
+        # Ancre du maître (#3100) : dossier root:root 0755 (personne d'autre n'y écrit), puis rattrapage unique pour une box déjà associée.
+        install -d -m 0755 -o root -g root /etc/secubox/p2p 2>/dev/null || true
+        [ -x /usr/bin/sbx-mesh-ancre ] && { /usr/bin/sbx-mesh-ancre rattraper || true; }
+
         # Reload nginx if running — seulement sur une configuration valide.
         if systemctl is-active --quiet nginx; then
             nginx -t >/dev/null 2>&1 && systemctl reload nginx || true

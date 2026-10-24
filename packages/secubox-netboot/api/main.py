@@ -12,12 +12,17 @@ Servi en STANDALONE (socket /run/secubox/netboot.sock) car les opérations sont
 privilégiées (fw_setenv) et bloquantes — jamais in-process dans l'aggregator.
 Aucune opération destructive (overlay apply/revert, flash) sans confirm=true.
 """
-from fastapi import FastAPI, APIRouter, Depends, HTTPException
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 import asyncio
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import ipaddress
+import logging
+import time
+
+from . import lot
 
 from secubox_core.auth import router as auth_router, require_jwt
 
@@ -33,6 +38,7 @@ CATALOG = Path("/var/lib/secubox/netboot/images.json")     # catalogue release s
 PROFILES = Path("/var/lib/secubox/netboot/profiles.json")  # profils board (remote config)
 STAGING = Path("/var/lib/secubox/netboot/staging")         # artefacts buildés par image
 AUDIT = Path("/var/log/secubox/netboot/audit.log")
+CTL_LOT = "/usr/sbin/secubox-netboot-lot"                  # lot de flash signé (#3100)
 
 
 @app.get("/health")
@@ -318,6 +324,128 @@ async def publish(req: PublishReq, user=Depends(require_jwt)):
         raise HTTPException(500, r["stderr"].strip() or "publish échoué")
     await _run(TRIGGERS, "on-image-published", f"BOARD={pid}", f"IMAGE_VER={image}", timeout=30)
     return {"ok": True, "board": pid, "image": image, "result": r["stdout"]}
+
+
+
+# ── lot de flash (#3100) ─────────────────────────────────────────────────────
+
+class FlashPrepare(BaseModel):
+    nom: str
+    mot_de_passe: Optional[str] = None
+
+
+@router.post("/flash/prepare")
+async def flash_prepare(body: FlashPrepare, user=Depends(require_jwt)):
+    """Prépare le (re)flash de la box `nom` pour 24 h : seule une préparation autorise le code de
+    reflash qui remplace la clé du pair de ce nom. Mot de passe facultatif (sinon la console du live
+    le demande) ; s'il est donné, seule son empreinte argon2 est gardée."""
+    if not lot.nom_valide(body.nom):
+        raise HTTPException(400, "nom de box invalide")
+    if body.mot_de_passe is not None and len(body.mot_de_passe) < 12:
+        raise HTTPException(400, "mot de passe trop court (12 caractères au moins)")
+    await asyncio.to_thread(lot.enregistrer_preparation, body.nom, body.mot_de_passe or None)
+    try:
+        await asyncio.to_thread(lot.audit, "flash_prepare", nom=body.nom,
+                                avec_mot_de_passe=bool(body.mot_de_passe),
+                                par=(user or {}).get("sub") if isinstance(user, dict) else None)
+    except OSError:
+        logging.getLogger("secubox.netboot").error("audit de la préparation de flash impossible")
+    return {"ok": True, "nom": body.nom, "expire_dans": lot.DUREE_PREPARATION}
+
+
+_LAN = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]
+_REFUSES = [ipaddress.ip_network(n) for n in ("10.100.0.0/24", "10.0.3.0/24", "10.10.0.0/24")]  # ponts conteneurs, maillage
+_LOT_MAX, _LOT_FENETRE, _LOT_ADRESSES = 6, 3600, 1024
+_LOT_COMPTEURS: Dict[str, List[float]] = {}
+
+
+def _lan(adresse: str) -> bool:
+    try:
+        a = ipaddress.ip_address(adresse)
+    except ValueError:
+        return False
+    return any(a in n for n in _LAN)
+
+
+def _lot_admis(adresse: str, maintenant: Optional[float] = None) -> bool:
+    """Au plus 6 lots par heure et par adresse (en mémoire)."""
+    t = time.monotonic() if maintenant is None else maintenant
+    for a in [a for a, v in _LOT_COMPTEURS.items() if not v or t - v[-1] >= _LOT_FENETRE]:
+        del _LOT_COMPTEURS[a]
+    if adresse not in _LOT_COMPTEURS:
+        while len(_LOT_COMPTEURS) >= _LOT_ADRESSES:       # le plus ancien est évincé
+            del _LOT_COMPTEURS[min(_LOT_COMPTEURS, key=lambda a: _LOT_COMPTEURS[a][-1])]
+    vus = [x for x in _LOT_COMPTEURS.get(adresse, []) if t - x < _LOT_FENETRE]
+    if len(vus) >= _LOT_MAX:
+        _LOT_COMPTEURS[adresse] = vus
+        return False
+    vus.append(t)
+    _LOT_COMPTEURS[adresse] = vus
+    return True
+
+
+def _adresse_serveur_valide(adresse: str) -> bool:
+    """Adresse du maître admise dans un code : IPv4 privée, hors boucle locale, ponts et maillage."""
+    try:
+        a = ipaddress.ip_address(adresse)
+    except ValueError:
+        return False
+    return (a.version == 4 and a.is_private and not a.is_loopback
+            and not any(a in n for n in _REFUSES))
+
+
+async def _adresse_serveur(request: Request, client: str) -> Optional[str]:
+    """L'adresse du maître que le live a réellement jointe : $server_addr posé par le vhost :8099,
+    sinon la source de la route vers le client (`ip route get`). None : sbx-mesh-invite choisira."""
+    a = (request.headers.get("x-secubox-adresse-serveur") or "").strip()
+    if _adresse_serveur_valide(a):
+        return a
+    r = await _run("ip", "-o", "route", "get", client, timeout=5)
+    if r["rc"] == 0:
+        mots = r["stdout"].split()
+        if "src" in mots and mots.index("src") + 1 < len(mots):
+            a = mots[mots.index("src") + 1]
+            if _adresse_serveur_valide(a):
+                return a
+    return None
+
+
+@router.get("/lot-flash")
+async def lot_flash(nom: str, request: Request):
+    """Lot signé pour le live en cours de flash. Servi par le port 8099 (LAN seulement, X-Real-IP posé par nginx)."""
+    if request.headers.get("x-secubox-netboot-lot") != "1":     # posé par le seul vhost :8099
+        raise HTTPException(404, "Not Found")
+    adresse = request.headers.get("x-real-ip", "")
+    if not _lan(adresse):
+        raise HTTPException(403, "réservé au réseau local")
+    if any(ipaddress.ip_address(adresse) in n for n in _REFUSES):
+        try:
+            await asyncio.to_thread(lot.audit, "lot_flash_refuse", adresse=adresse, raison="pont conteneur ou maillage")
+        except OSError:
+            pass
+        raise HTTPException(403, "adresse non admise (conteneur ou maillage)")
+    if not lot.nom_valide(nom):
+        raise HTTPException(400, "nom de box invalide")
+    if not _lot_admis(adresse):
+        raise HTTPException(429, "trop de demandes")
+    serveur = await _adresse_serveur(request, adresse)
+    r = await _run(CTL_LOT, nom, *(("--adresse", serveur) if serveur else ()), timeout=45)
+    if r["rc"] != 0:
+        logging.getLogger("secubox.netboot").error("lot de flash refusé pour %s (rc=%s)", nom, r["rc"])
+        raise HTTPException(502, "lot de flash indisponible")
+    try:
+        sortie = json.loads(r["stdout"])
+    except ValueError:
+        raise HTTPException(502, "lot de flash illisible")
+    if not isinstance(sortie, dict) or not isinstance(sortie.get("lot"), str):
+        raise HTTPException(502, "lot de flash illisible")
+    flash = bool(sortie.pop("flash", False))       # la préparation a été prise par secubox-netboot-lot
+    try:
+        await asyncio.to_thread(lot.audit, "lot_flash_servi", nom=nom, adresse=adresse, flash=flash,
+                                adresse_maitre=serveur)
+    except OSError:
+        logging.getLogger("secubox.netboot").error("audit du lot de flash impossible")
+    return sortie
 
 
 app.include_router(router)

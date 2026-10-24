@@ -1,3 +1,31 @@
+secubox-netboot (0.7.0-1~trixie1) trixie; urgency=medium
+
+  * sbx-netflash --nom NOM (ref #3100) : récupère le lot signé servi par le maître
+    (GET /lot-flash?nom=NOM, route ajoutée dans cette série), le vérifie avec la clé
+    embarquée AVANT toute écriture, flashe avec --no-reboot, puis dépose sur l'eMMC le code
+    de jonction (var/lib/secubox/p2p/automesh.code, 0600), l'ancre du maître
+    (etc/secubox/p2p/ancre-maitre.json, 0644) et secubox/profil.toml (maillage automesh).
+    Sans admin_empreinte dans le lot : mot de passe saisi deux fois (read -s) et haché en
+    argon2 (stdin) ; sans module argon2 dans le live, refus avant toute écriture.
+    Sans --nom : comportement inchangé.
+  * Nouveau sbx-netflash-profil (généré, validé par premier-pas), installé dans le live.
+  * secubox-p2p passe de Recommends à Depends (le lot appelle sbx-mesh-invite).
+  * Lot de flash signé (ref #3100) : GET /lot-flash?nom=NOM servi par le seul vhost de boot
+    :8099 (marqueur X-SecuBox-Netboot-Lot, LAN, ponts conteneurs et maillage refusés, 6 par
+    heure et par adresse) ; bloqué (404) sur le vhost principal. secubox-netboot-lot NOM
+    [--adresse A] signe {nom, domaine, code, ancre, admin_empreinte?} avec la clé netboot.
+  * Le code n'est de reflash (sbx-mesh-invite --flash, qui remplace la clé du pair de ce nom)
+    que si l'administrateur a préparé ce nom : POST /flash/prepare (JWT), mot de passe
+    facultatif (sinon demandé à la console du live), valable 24 h, prise atomique et
+    consommée une seule fois (remise si le lot échoue), expirée = ignorée et supprimée.
+    Sans préparation : code ordinaire lié au nom (48 h) ; un nom déjà pris reçoit un 409.
+  * Le code porte l'adresse du maître que le live a jointe ($server_addr posé par le vhost
+    :8099 en X-SecuBox-Adresse-Serveur, IPv4 privée ; sinon source de `ip route get`).
+  * Motif de nom unique (lot, sbx-netflash, sbx-netflash-profil) :
+    ^[a-z]([a-z0-9-]{0,29}[a-z0-9])?$.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:00:00 +0200
+
 secubox-netboot (0.6.8-1~trixie1) trixie; urgency=medium
 
   * build-live-netboot.sh (ref #3079) : retrait de systemd.unit=rescue.target. Le live

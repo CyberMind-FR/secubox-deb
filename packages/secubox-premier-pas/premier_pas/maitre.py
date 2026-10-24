@@ -18,18 +18,27 @@ pousse l'empreinte (champ « empreinte » de l'étape admin).
 """
 from __future__ import annotations
 
+import hashlib
 import ipaddress
+import json
+import logging
 import os
 import re
+import socket
 import time
 import tomllib
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from . import ancre_p2p
 from . import profil as P
 from . import remplir as R
 
+_JOURNAL = logging.getLogger("secubox.premier-pas")
+
 _NOM = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+# Clé publique du maillage de CE maître (#3100) : « public_key » au sommet. Surchargeable pour les tests.
+WG_MESH_JSON = Path(os.environ.get("PREMIER_PAS_WG_MESH_JSON", "/var/lib/secubox/p2p/wg_mesh.json"))
 ORDRE_POUSSEE = ("bienvenue", "nom", "horloge", "admin", "reseau", "services", "maillage", "majs")
 
 
@@ -92,7 +101,9 @@ def enregistre(nom: str, profil: Dict[str, Any]) -> Dict[str, Any]:
     if m.get("mode") != "rejoindre":
         m.pop("rejoindre", None)
         m.pop("jeton", None)
-    elif not m.get("jeton") and (ancien.get("maillage") or {}).get("jeton"):
+    for k in P.CLES_ANCRE:
+        m.pop(k, None)              # l'ancre est calculée à la poussée, jamais enregistrée (#3100)
+    if m.get("mode") == "rejoindre" and not m.get("jeton") and (ancien.get("maillage") or {}).get("jeton"):
         m["jeton"] = ancien["maillage"]["jeton"]           # « défini » dans la vue
     dossier().mkdir(parents=True, exist_ok=True)
     f = _chemin(nom)
@@ -179,6 +190,22 @@ def _ip_vers(adresse: str) -> Optional[str]:
         return None
 
 
+def ancre_du_maitre(adresse: str) -> Dict[str, str]:
+    """L'ancre que la box neuve gardera (#3100) : clé publique du maillage de ce maître, son adresse de jonction, son nom, l'empreinte de la clé.
+    Vide si ce maître n'a pas de clé de maillage (il n'est pas maître de maillage) : rien n'est alors poussé."""
+    try:
+        cle = str(json.loads(Path(WG_MESH_JSON).read_text()).get("public_key") or "").strip()
+    except (OSError, ValueError, AttributeError):
+        return {}
+    if not cle:
+        return {}
+    try:
+        empreinte = ancre_p2p.charge().empreinte(cle)       # une seule définition, celle de secubox-p2p
+    except RuntimeError:
+        empreinte = hashlib.sha256(cle.encode("utf-8")).hexdigest()[:16]
+    return {"ancre_cle": cle, "ancre_adresse": adresse, "ancre_nom": socket.gethostname(), "ancre_empreinte": empreinte}
+
+
 def rejoindre_joignable(rejoindre: str, adresse: str, mes_adresses=None, ip_vers=None) -> str:
     """L'invitation de secubox-p2p annonce l'adresse que préfère get_lan_ip()
     — 192.168.255.x, l'ancien maillage OpenWrt — que la box neuve ne joint
@@ -189,6 +216,21 @@ def rejoindre_joignable(rejoindre: str, adresse: str, mes_adresses=None, ip_vers
         return rejoindre
     vue = (ip_vers or _ip_vers)(adresse)
     return vue or rejoindre
+
+
+def _ancre_refusee(r, valeurs: Dict[str, Any]) -> bool:
+    """Vrai si la box a refusé l'étape pour des champs inconnus qui sont tous des champs d'ancre."""
+    if not any(k.startswith("ancre_") for k in valeurs):
+        return False
+    try:
+        detail = str(r.json().get("detail", ""))
+    except Exception:  # noqa: BLE001
+        detail = str(getattr(r, "text", ""))[:400]
+    m = re.search(r"Champs inconnus\s*:\s*(.+)", detail)
+    if not m:
+        return False
+    inconnus = [c.strip() for c in m.group(1).split(",") if c.strip()]
+    return bool(inconnus) and all(c.startswith("ancre_") for c in inconnus)
 
 
 def pousse(nom: str, adresse: str, code: str, mode: str = "proposer", client=None, par: str = "") -> Dict[str, Any]:
@@ -221,13 +263,23 @@ def pousse(nom: str, adresse: str, code: str, mode: str = "proposer", client=Non
             return {"ok": False, "faites": [], "arret": "Session distante", "detail": corps.get("detail", r.status_code), "code": r.status_code}
         h = {"X-Premier-Pas": str(corps["jeton"])}
     faites: List[str] = []
+    avertissements: List[str] = []
     for etape in ORDRE_POUSSEE:
         v = _valeurs_etape(profil, etape)
         if v is None:
             continue
         if etape == "maillage" and v.get("rejoindre"):
             v["rejoindre"] = rejoindre_joignable(str(v["rejoindre"]), adresse)
+            if v.get("mode") == "rejoindre":
+                v.update(ancre_du_maitre(v["rejoindre"]))      # #3100 : la box garde l'identité du maître qui la flashe
         r = client.put(f"{base}/etape/{etape}", json=v, headers=h)
+        if etape == "maillage" and r.status_code != 200 and _ancre_refusee(r, v):
+            # Box d'avant premier-pas 0.8.0 : elle ne connaît pas les champs ancre_* et refuse l'étape.
+            # Une seule reprise sans eux ; le rattrapage (sbx-mesh-ancre) l'ancrera une fois jointe.
+            v = {k: x for k, x in v.items() if not k.startswith("ancre_")}
+            _JOURNAL.warning("premier-pas %s : box trop ancienne pour l'ancre du maître, maillage poussé sans elle", nom)
+            avertissements.append("Box trop ancienne pour l'ancre du maître : elle sera ancrée par le tunnel après la jonction.")
+            r = client.put(f"{base}/etape/{etape}", json=v, headers=h)
         if r.status_code != 200:
             try:
                 detail = r.json().get("detail")
@@ -237,6 +289,8 @@ def pousse(nom: str, adresse: str, code: str, mode: str = "proposer", client=Non
         faites.append(P.LIBELLES[etape])
     etat = client.get(f"{base}/etat").json()
     res = {"ok": True, "faites": faites, "complet": etat.get("complet"), "reprendre": etat.get("reprendre")}
+    if avertissements:
+        res["avertissements"] = avertissements
     if mode != "remplir":
         import socket  # noqa: PLC0415
         r = client.post(f"{base}/proposition", headers=h,

@@ -188,6 +188,21 @@ exclure = ["wpad", "boot"]   # services jamais relayés
 
 Les vhosts des services répondent à `<service>.*` en plus de leur nom gk2 : c'est ce qui permet à un pair de servir ses services sous son propre domaine.
 
+## Association automatique au maillage (#3100)
+
+| Commande | Où | Effet |
+|---|---|---|
+| `sbx-mesh-invite --code [--nom N] [--flash] [--ttl S] [--adresse A] [--json]` | maître | Code `sbxmesh1.…` (automesh) ; seul le SHA-256 du jeton est gardé. `--flash` : ne vaut que pour N et remplace la clé du pair approuvé de ce nom |
+| `sbx-mesh-ancre rattraper [--dump F]` | pair | Pose l'ancre du maître depuis le tunnel existant (rôle `peer`/`satellite`, un seul pair couvrant le réseau maillé) ; sinon audit `ancre_non_rattrapee` avec sa raison |
+
+- **Ancre** : `/etc/secubox/p2p/ancre-maitre.json` (clé publique, adresse, nom, empreinte du maître).
+  Présente, elle impose à `sbx-mesh-join` de ne rejoindre que ce maître.
+- **Nom déjà pris** : hors jeton `flash`, `POST /api/v1/p2p/master-link/join` répond 409
+  « nom déjà pris : préparer un flash sur le maître (page Netboot) ou retirer l'ancien pair ».
+  Les jetons `flash` sont émis par secubox-netboot sur préparation de l'administrateur seulement.
+- Audit (`/var/log/secubox/audit.log`) : `code_emis`, décisions de jonction, `ancre_rattrapee`,
+  `ancre_non_rattrapee` ; jamais de jeton ni de code.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.

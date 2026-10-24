@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""sbx-netflash-profil (#3100) : profil.toml de premier démarrage pour une box flashée par le réseau.
+
+Sortie sur stdout. L'empreinte argon2 du mot de passe administrateur est la seule valeur sensible ;
+jamais de mot de passe en clair ici (le hachage est fait par sbx-netflash, sur stdin).
+"""
+import argparse
+import re
+import sys
+
+# Même motif que le lot du maître (api/lot.py) et sbx-netflash : 1 à 31 caractères.
+_NOM = re.compile(r"[a-z]([a-z0-9-]{0,29}[a-z0-9])?")
+_DOMAINE = re.compile(r"^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+_ARGON2 = re.compile(r"^\$argon2(id|i|d)\$v=\d+\$m=\d+,t=\d+,p=\d+\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$")
+
+
+def profil(nom: str, domaine: str, empreinte: str) -> str:
+    if not _NOM.fullmatch(nom):
+        raise ValueError("nom invalide")
+    if not _DOMAINE.match(domaine):
+        raise ValueError("domaine invalide")
+    if not _ARGON2.match(empreinte):
+        raise ValueError("empreinte argon2 invalide")
+    return (
+        "[box]\n"
+        f'nom = "{nom}"\n'
+        'langue = "fr"\n'
+        'clavier = "fr"\n'
+        'fuseau = "Europe/Paris"\n'
+        "ntp = true\n"
+        "\n[admin]\n"
+        f'mot_de_passe = "{empreinte}"\n'
+        'totp = "enroler"\n'
+        "\n[reseau]\n"
+        'mode = "routeur"\n'
+        f'domaine = "{domaine}"\n'
+        "\n[services]\n"
+        'profil = "actuel"\n'
+        "\n[maillage]\n"
+        'mode = "automesh"\n'
+        "\n[apt]\n"
+        "auto = true\n"
+        'heure = "03:00"\n'
+    )
+
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--nom", required=True)
+    p.add_argument("--domaine", required=True)
+    p.add_argument("--empreinte", required=True)
+    a = p.parse_args(argv)
+    try:
+        sys.stdout.write(profil(a.nom, a.domaine, a.empreinte))
+    except ValueError as e:
+        print(f"sbx-netflash-profil : {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
