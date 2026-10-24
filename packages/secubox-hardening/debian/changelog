@@ -1,3 +1,11 @@
+secubox-hardening (1.6.1-1~trixie1) trixie; urgency=medium
+
+  * secubox-wan-guard.nft (ref #3103) : le port 7331 (jonction au maillage) n'est plus coupé pour les
+    adresses privées sur eth2. eth2 porte aussi le LAN sur gk2 : aucune box ne pouvait rejoindre le maître
+    (gk1 : curl 000, sbx-mesh-join en échec). Toujours coupé pour Internet et en IPv6.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 08:50:00 +0200
+
 secubox-hardening (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /hardening/ refaite au profil Aurora (#2556) : page autonome sans police ni script externes, tuiles (score, contrôles réussis, paramètres noyau, modules bloqués, ports non gardés), contrôles du noyau, garde des ports de backend, composants, actions. ?demo=1 (données fictives, actions inertes) et ?embed=1 (sans menu), hauteur annoncée à l'hôte, « — » pour toute mesure absente, bandeau « session requise » sur 401/403.

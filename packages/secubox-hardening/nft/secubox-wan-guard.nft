@@ -21,7 +21,13 @@ delete table inet secubox_wan_guard
 table inet secubox_wan_guard {
 	chain input {
 		type filter hook input priority filter - 10; policy accept;
-		iifname "eth2" tcp dport { 23, 1433, 3306, 3389, 5432, 5900, 6379, 7331, 8088, 8404, 8880, 8900, 8910, 9080, 9200, 27017 } counter drop \
+		iifname "eth2" tcp dport { 23, 1433, 3306, 3389, 5432, 5900, 6379, 8088, 8404, 8880, 8900, 8910, 9080, 9200, 27017 } counter drop \
 			comment "backends + leurres sbx-authwatch fermes cote eth2 (#1306)"
+		# 7331 = jonction au maillage (#3103). eth2 porte AUSSI le LAN (gk2 est sur le réseau de la Freebox) :
+		# fermé à Internet, ouvert aux adresses privées ; nginx p2p-masterlink restreint ensuite au LAN et au maillage.
+		iifname "eth2" tcp dport 7331 ip saddr != { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } counter drop \
+			comment "jonction du maillage : LAN seulement (#3103)"
+		iifname "eth2" meta nfproto ipv6 tcp dport 7331 counter drop \
+			comment "jonction du maillage : jamais en IPv6 depuis eth2 (#3103)"
 	}
 }
