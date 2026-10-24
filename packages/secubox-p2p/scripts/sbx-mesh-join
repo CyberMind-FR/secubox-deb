@@ -219,8 +219,15 @@ join_openwrt_cgi_port() {
 # Une box ancrée (flashée par un maître) n'accepte que ce maître : la clé WireGuard offerte doit être celle de l'ancre. Sans python3 ni module
 # (OpenWrt), on garde le comportement d'avant. Sortie 0 = accepté, 1 = refusé (audit `maitre_refuse`). Aucun jeton n'est audité.
 verifier_ancre() {
-    command -v python3 >/dev/null 2>&1 && [ -f "$P2P_LIB/api/ancre.py" ] || return 0
-    printf '%s' "$RESPONSE" | SBX_ANCRE_CHEMIN="${SBX_ANCRE:-}" SBX_AUDIT_CHEMIN="${SBX_AUDIT:-}" python3 -c '
+    local fichier="${SBX_ANCRE:-/etc/secubox/p2p/ancre-maitre.json}"
+    # Pas de fichier d'ancre : box vierge (ou OpenWrt), comportement d'avant. Un fichier présent impose la vérification : s'il ne peut pas
+    # s'exécuter (ni python3 ni module), on REFUSE plutôt que d'accepter n'importe quel maître.
+    [ -e "$fichier" ] || return 0
+    if ! command -v python3 >/dev/null 2>&1 || [ ! -f "$P2P_LIB/api/ancre.py" ]; then
+        echo "ERROR: ancre du maitre presente ($fichier) mais python3 ou $P2P_LIB/api/ancre.py manquant : verification impossible, jonction refusee" >&2
+        return 1
+    fi
+    printf '%s' "$RESPONSE" | SBX_ANCRE_CHEMIN="$fichier" SBX_AUDIT_CHEMIN="${SBX_AUDIT:-}" python3 -c '
 import json, os, sys
 sys.path.insert(0, sys.argv[1])
 from api import ancre
@@ -228,13 +235,21 @@ try:
     cle = json.load(sys.stdin).get("wg", {}).get("master_public_key", "")
 except Exception:
     cle = ""
-chemin = os.environ.get("SBX_ANCRE_CHEMIN") or ancre.CHEMIN
-a = ancre.lire(chemin)
-if ancre.accepte(a, cle):
+a = ancre.lire(os.environ["SBX_ANCRE_CHEMIN"])
+raison = ""
+if a is None or not a.get("cle_publique"):
+    raison = "ancre illisible"
+elif not cle:
+    raison = "cle du maitre absente"
+elif not ancre.accepte(a, cle):
+    raison = "cle differente de l ancre"
+if not raison:
     sys.exit(0)
+print("ERROR: " + raison, file=sys.stderr)
 try:
-    ancre.audit("maitre_refuse", os.environ.get("SBX_AUDIT_CHEMIN") or "/var/log/secubox/audit.log",
-                maitre=sys.argv[2], empreinte_offerte=ancre.empreinte(cle) if cle else "", empreinte_ancre=a.get("empreinte", ""))
+    ancre.audit("maitre_refuse", os.environ.get("SBX_AUDIT_CHEMIN") or "/var/log/secubox/audit.log", raison=raison,
+                maitre=sys.argv[2], empreinte_offerte=ancre.empreinte(cle) if cle else "",
+                empreinte_ancre=(a or {}).get("empreinte", ""))
 except Exception:
     pass
 sys.exit(1)

@@ -115,3 +115,45 @@ def test_sbx_mesh_up_sans_adresse_sort_proprement(tmp_path):
     assert "adresse maillée pas encore attribuée" in r.stdout
     assert "KeyError" not in r.stderr
     assert not (tmp_path / "wg-mesh.conf").exists()
+
+
+def _raisons(tmp_path):
+    return [json.loads(ligne).get("raison") for ligne in (tmp_path / "audit.log").read_text().splitlines()]
+
+
+def test_ancre_corrompue_refuse(tmp_path):
+    env, p2p, etat = _env(tmp_path, CLE_MAITRE)
+    (tmp_path / "ancre.json").write_text('{"cle_publ')
+    r = _joindre(env)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert json.loads((p2p / "wg_mesh.json").read_text()) == etat
+    assert _raisons(tmp_path) == ["ancre illisible"]
+
+
+def test_ancre_presente_sans_module_refuse(tmp_path):
+    env, p2p, etat = _env(tmp_path, CLE_MAITRE)
+    _ancrer(tmp_path, CLE_MAITRE)
+    vide = tmp_path / "vide"
+    vide.mkdir()
+    env["SBX_P2P_LIB"] = str(vide)
+    r = _joindre(env)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert "verification impossible" in r.stderr
+    assert json.loads((p2p / "wg_mesh.json").read_text()) == etat
+
+
+def test_ancre_absente_sans_module_accepte(tmp_path):
+    env, p2p, _ = _env(tmp_path, CLE_MAITRE)
+    vide = tmp_path / "vide"
+    vide.mkdir()
+    env["SBX_P2P_LIB"] = str(vide)
+    assert _joindre(env).returncode == 0
+
+
+def test_ancre_presente_cle_offerte_vide_refuse(tmp_path):
+    env, p2p, etat = _env(tmp_path, "")
+    _ancrer(tmp_path, CLE_MAITRE)
+    r = _joindre(env)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert json.loads((p2p / "wg_mesh.json").read_text()) == etat
+    assert _raisons(tmp_path) == ["cle du maitre absente"]
