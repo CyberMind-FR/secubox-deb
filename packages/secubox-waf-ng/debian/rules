@@ -116,7 +116,7 @@ override_dh_auto_install:
 	# c'est le postinst qui l'active, apres avoir seme son filtre d'exposition.
 	install -d debian/secubox-waf-ng/etc/nginx/sites-available
 	install -m 0644 composants/waf/nginx/waf-vhost.conf \
-	  debian/secubox-waf-ng/etc/nginx/sites-available/waf.gk2.secubox.in.conf
+	  debian/secubox-waf-ng/etc/nginx/sites-available/waf.conf
 	# Example haproxy-routes.json
 	install -d debian/secubox-waf-ng/usr/share/doc/secubox-waf/examples
 	[ -f composants/waf/config/haproxy-routes.json.example ] && cp composants/waf/config/haproxy-routes.json.example debian/secubox-waf-ng/usr/share/doc/secubox-waf/examples/ || true
@@ -155,15 +155,15 @@ execute_after_dh_auto_install:
 	install -m 0644 config/secubox-waf-ratelimit.nft debian/secubox-waf-ng/etc/secubox/
 	install -m 0755 sbxwaf debian/secubox-waf-ng/usr/sbin/sbxwaf
 	install -m 0755 sbx-actord debian/secubox-waf-ng/usr/sbin/sbx-actord
-	# Panneau admin Actor Intelligence (admin.gk2/actor/) — statique, standard maison.
+	# Panneau admin Actor Intelligence (console d'administration, /actor/) — statique, standard maison.
 	install -d debian/secubox-waf-ng/usr/share/secubox/www/actor
 	install -m 0644 www/actor/index.html \
 	  debian/secubox-waf-ng/usr/share/secubox/www/actor/index.html
-	# #1240 : vhost dédié actor.gk2.secubox.in (servi en direct par nginx, comme
-	# waf.gk2). Déposé dans sites-available ; activé + semé « lan » par le postinst.
+	# #1240 : vhost dédié actor.<domaine> (servi en direct par nginx, comme
+	# le vhost du tableau WAF). Déposé dans sites-available ; activé + semé « lan » par le postinst.
 	install -d debian/secubox-waf-ng/etc/nginx/sites-available
-	install -m 0644 nginx/actor.gk2.secubox.in.conf \
-	  debian/secubox-waf-ng/etc/nginx/sites-available/actor.gk2.secubox.in.conf
+	install -m 0644 nginx/actor.vhost.conf \
+	  debian/secubox-waf-ng/etc/nginx/sites-available/actor.conf
 	# Entrée du menu Système du Hall (le hub lit /usr/share/secubox/menu.d/*.json
 	# et n'affiche que les modules ayant un www/<id>/ — actor en a un ci-dessus).
 	install -d debian/secubox-waf-ng/usr/share/secubox/menu.d

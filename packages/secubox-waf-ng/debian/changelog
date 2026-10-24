@@ -1,3 +1,9 @@
+secubox-waf-ng (1.30.3-1~trixie1) trixie; urgency=medium
+
+  * Vhosts actor et waf livres sans les noms de gk2 (ref #3117) : server_name « actor.* » / « waf.* » (toute box les sert sous son propre domaine), fichiers renommes actor.conf et waf.conf, filtre d'exposition actor.conf / waf.conf. Le postinst migre l'ancien lien d'activation, l'ancien fichier (conserve sous le nouveau nom s'il a ete retouche) et le filtre d'exposition de l'operateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 12:00:00 +0200
+
 secubox-waf-ng (1.30.2-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf : l'adresse cliente est normalisee et ::1 est un mandataire local (ref #2932). Preparation de la double pile HAProxy : une IPv4 peut arriver mappee (::ffff:a.b.c.d) et une IPv6 sous plusieurs ecritures ; sans normalisation, le set de bannissement, l'anti-tempete et les statistiques les compteraient comme des clients differents. IPv4 mappee -> IPv4 nue, IPv6 -> forme canonique, avant toute comparaison. Tests IPv6 ajoutes (clientip_ipv6_test.go : chaine X-Forwarded-For, ::1, forgeries ULA, privateCIDR).
