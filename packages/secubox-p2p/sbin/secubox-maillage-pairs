@@ -276,6 +276,10 @@ def main(argv=None):
     if commande != "synchroniser":
         print("usage : secubox-maillage-pairs [synchroniser|etat]", file=sys.stderr)
         return 2
+    if os.geteuid() == 0:     # un remplacement fait en root changerait le propriétaire de l'état : l'API ne le lirait plus
+        print("[maillage-pairs] ERREUR : à lancer par le service (User=secubox) : "
+              "sudo -u secubox secubox-maillage-pairs", file=sys.stderr)
+        return 1
     return synchroniser()
 
 

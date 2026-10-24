@@ -305,7 +305,6 @@ def test_etat_lien_symbolique_refuse(env, tmp_path):
 
 def test_main_sans_privilege_et_sortie_inconnue(env, monkeypatch):
     cli = _charger()
-    monkeypatch.setattr(os, "geteuid", lambda: 1000)
     env.maitre(corps=LISTE)
     assert cli.main(["synchroniser"]) == 0 and len(_pairs_ecrits(env)) == 3
     assert cli.main(["inconnu"]) == 2
@@ -323,9 +322,20 @@ def test_ecriture_refusee_code_1_et_etat_intact(env, monkeypatch, capsys):
     assert "refusée" in capsys.readouterr().err and env.etat.read_bytes() == avant
 
 
+def test_synchroniser_refuse_en_root(env, monkeypatch, capsys):
+    cli = _charger()
+    m = env.maitre(corps=LISTE)
+    avant = env.etat.read_bytes()
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    assert cli.main(["synchroniser"]) != 0 and cli.main([]) != 0
+    assert "sudo -u secubox" in capsys.readouterr().err
+    assert m.requetes == [] and env.etat.read_bytes() == avant and not env.refuses.exists()
+    assert cli.main(["etat"]) == 0       # lecture seule : permise
+
+
 def test_pas_de_chown_ni_chmod_par_chemin():
     src = SCRIPT.read_text()
-    assert "os.chown" not in src and "os.chmod" not in src and "fchmod" in src and "geteuid" not in src
+    assert "os.chown" not in src and "os.chmod" not in src and "fchmod" in src
 
 
 def test_mode_pris_sur_le_descripteur_lu(env, tmp_path):
@@ -379,7 +389,6 @@ def test_sous_commande_etat_lecture_seule(env, monkeypatch, capsys):
     cli.synchroniser()
     avant = env.etat.read_bytes()
     capsys.readouterr()
-    monkeypatch.setattr(os, "geteuid", lambda: 1000)
     assert cli.main(["etat"]) == 0
     sortie = json.loads(capsys.readouterr().out)
     assert {p["name"] for p in sortie["liens_directs"]} == {"gk3", "gk4"} and sortie["actif"] is True

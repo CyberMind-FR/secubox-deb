@@ -14,7 +14,7 @@ secubox-p2p (1.19.0-1~trixie1) trixie; urgency=medium
   * Côté pair, l'exécuteur sans privilège (User=secubox, durci ; l'application passe par sbx-mesh-up en root) (ref #3133) : secubox-maillage-pairs [synchroniser|etat] lit la liste du maître
     UNIQUEMENT sur http://<mesh_ip du maître>:7331 (le maître est l'entrée de la clé de l'ancre), sans redirection,
     6 s, 256 Kio ; tout échec ou version autre que 1 ne change rien, une liste vide valide ne retire que les liens
-    directs. Écriture atomique de wg_mesh.json (propriétaire et mode conservés, rien si inchangé), refus mémorisés dans
+    directs. Écriture atomique de wg_mesh.json (mode conservé, propriétaire = celui du service secubox, rien si inchangé ; refus de synchroniser en root), refus mémorisés dans
     pairs-directs-refuses.json, audit pair_direct_ajoute / pair_direct_retire / pair_direct_refuse. Minuterie
     secubox-maillage-pairs.timer (3 min, puis 5 min). Réglage [maillage] liens_directs (défaut true) de p2p.toml.
 

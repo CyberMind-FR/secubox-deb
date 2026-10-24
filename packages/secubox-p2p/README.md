@@ -208,7 +208,7 @@ Les vhosts des services répondent à `<service>.*` en plus de leur nom gk2 : c'
 
 ## Liens directs (#3133)
 
-`secubox-maillage-pairs [synchroniser|etat]` (sans privilège, `User=secubox` ; l'application passe par `sbx-mesh-up` (root) ; minuterie `secubox-maillage-pairs.timer` : 3 min après le démarrage,
+`sudo -u secubox secubox-maillage-pairs [synchroniser|etat]` (sans privilège ; `synchroniser` refuse de tourner en root, `etat` reste permis, `User=secubox` ; l'application passe par `sbx-mesh-up` (root) ; minuterie `secubox-maillage-pairs.timer` : 3 min après le démarrage,
 puis toutes les 5 min) relie les pairs en direct, sans passer par le maître, pour le trafic entre eux.
 
 - Le maître publie `GET /api/v1/p2p/master-link/pairs` (`{"version":1,"pairs":[{nom, mesh_ip, cle_publique, endpoint}]}`).
