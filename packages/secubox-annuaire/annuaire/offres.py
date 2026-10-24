@@ -44,8 +44,8 @@ MAX_SERVICES = 64
 _CARTE = re.compile(r'\{\s*id:\s*"(?P<id>[a-z0-9_-]+)"\s*,\s*label:\s*"(?P<label>[^"]*)"(?P<reste>[^}]*)\}')
 _URL = re.compile(r'url:\s*"(?P<url>[^"]+)"')
 _AUTH = re.compile(r'auth:\s*true')
-_ONION = re.compile(r'^[a-z2-7]{56}\.onion$')
-_HOTE = re.compile(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$')
+_ONION = re.compile(r'^[a-z2-7]{56}\.onion\Z')
+_HOTE = re.compile(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\Z')
 
 
 def _offre(name: str, kind: str, endpoint: str, description: str = "", **scope: Any) -> Dict[str, Any]:
@@ -116,7 +116,7 @@ def depot_apt(haproxy_toml: Path = HAPROXY_TOML, marqueur: Path = REPO_MARQUEUR)
     return [_offre("Dépôt apt", "repo", f"https://{m.group(1)}/", "Paquets SecuBox-DEB de cette box", channel="public")]
 
 
-_LIBELLE = re.compile(r'^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$')
+_LIBELLE = re.compile(r'^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\Z')
 
 
 def services_des_noms(noms: Optional[dict]) -> List[Dict[str, Any]]:
@@ -127,16 +127,14 @@ def services_des_noms(noms: Optional[dict]) -> List[Dict[str, Any]]:
         return []
     domaine = noms.get("domaine")
     liste = noms.get("noms")
-    if not isinstance(domaine, str) or not _HOTE.match(domaine.lower()) or not isinstance(liste, list):
+    if not isinstance(domaine, str) or not _HOTE.match(domaine) or not isinstance(liste, list):
         return []
-    domaine = domaine.lower()
     noeud = noms.get("noeud") if isinstance(noms.get("noeud"), str) else ""
     out: List[Dict[str, Any]] = []
     vus = set()
     for nom in liste:
         if not isinstance(nom, str):
             continue
-        nom = nom.strip().lower()
         libelle, _, reste = nom.partition(".")
         if reste != domaine or not _LIBELLE.match(libelle) or libelle in EXCLUS_SERVICES or libelle in vus:
             continue

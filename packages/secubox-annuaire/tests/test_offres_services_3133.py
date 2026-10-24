@@ -101,3 +101,20 @@ def test_minuterie_horaire():
     pkg = Path(__file__).resolve().parents[1]
     minuterie = (pkg / "systemd" / "secubox-annuaire-offres.timer").read_text(encoding="utf-8")
     assert "OnUnitActiveSec=1h" in minuterie
+
+
+@pytest.mark.parametrize("nom", [
+    "hall\n.gk3.exemple.test", "hall.gk3.exemple.test\n", "\nhall.gk3.exemple.test",
+    "HALL.gk3.exemple.test", "ha_ll.gk3.exemple.test", ("a" * 64) + ".gk3.exemple.test",
+    "ha ll.gk3.exemple.test", " hall.gk3.exemple.test", "hall.gk3.exemple.test ",
+])
+def test_noms_hostiles_aucune_offre(nom):
+    assert offres.services_des_noms({"domaine": "gk3.exemple.test", "noeud": "gk3", "noms": [nom]}) == []
+
+
+@pytest.mark.parametrize("domaine", [
+    "gk3.exemple.test\n", "gk3.exemple\n.test", "GK3.exemple.test", "gk3_x.exemple.test", "gk3 .exemple.test",
+])
+def test_domaines_hostiles_aucune_offre(domaine):
+    noms = {"domaine": domaine, "noeud": "gk3", "noms": [f"hall.{domaine}", "hall.gk3.exemple.test"]}
+    assert offres.services_des_noms(noms) == []
