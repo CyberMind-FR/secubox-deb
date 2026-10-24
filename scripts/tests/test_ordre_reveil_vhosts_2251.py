@@ -32,4 +32,4 @@ def test_le_reveil_precede_les_pages_d_erreur_dans_tous_les_vhosts():
 
 
 def test_la_garde_voit_bien_des_vhosts():
-    assert {f.name for f, _, _ in vhosts()} >= {"photoprism.gk2.conf", "peertube.gk2.conf"}
+    assert {f.name for f, _, _ in vhosts()} >= {"photoprism.vhost.conf", "peertube.vhost.conf"}

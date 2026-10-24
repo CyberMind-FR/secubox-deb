@@ -1,3 +1,12 @@
+secubox-photoprism (1.5.1-1~trixie1) trixie; urgency=medium
+
+  * Vhost public livré sans le nom de gk2 (ref #3117) : server_name « photoprism.* »
+    (photoprism.gk2.secubox.in reste couvert sur gk2) dans nginx/photoprism.vhost.conf (renommé) et
+    conf/photoprism.nginx.conf. Le nom installé (sites-available/photoprism.conf) ne change pas : conffile
+    géré par dpkg, aucune migration.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:25:12 +0200
+
 secubox-photoprism (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /photoprism/ refaite au profil Aurora (#2612) : un seul fichier autonome, onglets Bibliotheque, Albums, Stockage, Reglages, Journaux, tuiles (etat, photos, videos, albums, originaux, a importer), ?demo=1 et ?embed=1, hauteur annoncee a l'hote, bandeau « session requise » sur 401/403.
