@@ -88,7 +88,12 @@ dispo="$(awk '/^MemAvailable:/{print $2*1024}' /proc/meminfo)"
 besoin=$(( taille + 768 * 1048576 ))
 [ "$dispo" -gt "$besoin" ] || fail "mémoire insuffisante : $((dispo/1048576)) Mo libres, $((besoin/1048576)) Mo nécessaires (choisir une image plus petite)"
 
-dest="$TRAVAIL/$image"
+# /run est un tmpfs plafonné à 10 % de la RAM (792 Mo sur 8 Go) : l'image a son propre tmpfs, à sa taille.
+mkdir -p "$TRAVAIL/image"
+mountpoint -q "$TRAVAIL/image" && umount "$TRAVAIL/image"
+mount -t tmpfs -o "size=$(( taille + 64 * 1048576 )),mode=0700" sbx-netflash "$TRAVAIL/image" \
+    || fail "espace de travail en mémoire impossible à monter"
+dest="$TRAVAIL/image/$image"
 log "téléchargement $BASE/$image ($((taille/1048576)) Mo)…"
 telecharge "$BASE/$image" "$dest" || { rm -f "$dest"; fail "téléchargement de l'image KO"; }
 telecharge "$BASE/$image.sig" "$dest.sig" || { rm -f "$dest" "$dest.sig"; fail "téléchargement de la signature KO"; }
