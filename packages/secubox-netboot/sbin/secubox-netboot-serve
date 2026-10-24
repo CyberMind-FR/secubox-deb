@@ -92,7 +92,8 @@ CFG
 
 cmd_status() {
   local tftp_act=absent; command -v systemctl >/dev/null && tftp_act="$(systemctl is-active tftpd-hpa 2>/dev/null || echo absent)"
-  local http_ok=no; nginx -T 2>/dev/null | grep -q '/srv/secubox/netboot/http' && http_ok=yes
+  local http_ok=no; # grep -c lit tout : grep -q fermerait le tube, nginx -T prendrait SIGPIPE et pipefail dirait « no »
+  [ "$(nginx -T 2>/dev/null | grep -c '/srv/secubox/netboot/http')" -gt 0 ] && http_ok=yes
   local boards=0; [ -d "$HTTP" ] && boards="$(find "$HTTP" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l)"
   cat <<JSON
 { "module":"$MODULE","tftp_root":"$TFTP","http_root":"$HTTP","tftpd":"$tftp_act",
