@@ -5,6 +5,7 @@ sbxos-audio-mood (0.10.9-1~trixie1) trixie; urgency=medium
     postinst : l'ancien lien d'activation est remplacé, l'ancien filtre de l'opérateur suit le vhost, un
     ancien fichier retouché est archivé dans /var/backups/nginx (0600) sans être recopié, et un lien migré
     n'est jamais retiré sur un échec de nginx -t.
+    Un lien posé à la main sous un autre nom vers l'ancien fichier est retiré aussi (il pendrait).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:19:06 +0200
 

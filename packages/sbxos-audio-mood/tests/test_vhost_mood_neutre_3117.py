@@ -106,3 +106,16 @@ def test_lien_et_filtre_migres_et_idempotence(tmp_path):
 def test_lien_migre_jamais_retire_sur_echec_de_nginx_t():
     t = (PKG / "debian" / "postinst").read_text(encoding="utf-8")
     assert re.search(r'elif \[ "\$\{?MIGRE\}?" = 1 \]', t), "lien migré retiré sur échec de nginx -t"
+
+
+def test_lien_pose_a_la_main_sous_un_autre_nom_retire(tmp_path):
+    sa = _cadre(tmp_path, "x")
+    autre = tmp_path / "etc/nginx/sites-enabled/pose-a-la-main"
+    autre.symlink_to("../sites-available/" + ANCIEN)
+    voisin = tmp_path / "etc/nginx/sites-enabled/voisin.conf"
+    (sa / "voisin.conf").write_text("y")
+    voisin.symlink_to("../sites-available/voisin.conf")
+    r = _lancer(tmp_path, ANCIEN, NOUVEAU, "")
+    assert r.returncode == 0, r.stderr          # compté comme activé
+    assert not os.path.lexists(autre)           # ne pend pas
+    assert os.path.lexists(voisin)              # les autres liens sont intacts

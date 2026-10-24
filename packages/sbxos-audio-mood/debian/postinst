@@ -42,6 +42,14 @@ sbx_migrer_vhost() {
     if [ -e "$_en/$_o" ] || [ -L "$_en/$_o" ]; then
         rm -f "$_en/$_o"; _act=0
     fi
+    # Un lien posé à la main sous un AUTRE nom vers l'ancien fichier pendrait
+    # une fois celui-ci retiré, et nginx -t échouerait pour toute la box.
+    for _l in "$_en"/*; do
+        [ -L "$_l" ] || continue
+        case "$(readlink "$_l")" in
+            "$_o"|*/"$_o") rm -f "$_l"; _act=0 ;;
+        esac
+    done
     if [ -f "$_av/$_o" ]; then
         _livre=$(dpkg-query -W -f='${Conffiles}\n' sbxos-audio-mood 2>/dev/null \
                  | awk -v f="$_av/$_o" '$1 == f { print $2 }')
