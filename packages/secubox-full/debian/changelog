@@ -1,3 +1,10 @@
+secubox-full (1.8.0-1~trixie1) trixie; urgency=medium
+
+  * full porte les plugins du Hall (billets, metanews, messagerie, nextcloud, bbs), sortis de secubox-isp
+    (ref #3105).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 09:30:00 +0200
+
 secubox-full (1.7.1-1~bookworm1) bookworm; urgency=medium
 
   * zkp et assistance sortent de tous les profils (ref #2909) : plus de dependance ni de suggestion vers secubox-zkp et secubox-assist.
