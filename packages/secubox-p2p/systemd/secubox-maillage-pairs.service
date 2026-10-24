@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox — liens WireGuard directs entre pairs du maillage (#3133)
+After=wg-quick@wg-mesh.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-maillage-pairs synchroniser
+TimeoutStartSec=2min
+# Sans privilège : l'application passe par sbx-mesh-up (root), déclenché par secubox-p2p-mesh.path.
+User=secubox
+Group=secubox
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/secubox/p2p /var/log/secubox
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=10.10.0.0/24 localhost

@@ -106,7 +106,7 @@ def test_le_ctl_et_l_unite_portent_les_verbes():
     assert "ExecStart=+/usr/sbin/annuairectl offres-collecte" in unite
     assert "ExecStart=/usr/sbin/annuairectl offer-sync" in unite and "User=secubox" in unite
     minuterie = (pkg / "systemd" / "secubox-annuaire-offres.timer").read_text(encoding="utf-8")
-    assert "OnActiveSec=" in minuterie and "OnUnitActiveSec=" in minuterie and "Persistent=true" in minuterie
+    assert "OnActiveSec=" in minuterie and "OnUnitActiveSec=1h" in minuterie and "Persistent=true" in minuterie
     rules = (pkg / "debian" / "rules").read_text(encoding="utf-8")
     assert "secubox-annuaire-offres.service" in rules and "secubox-annuaire-offres.timer" in rules
     assert json.loads("{}") == {}

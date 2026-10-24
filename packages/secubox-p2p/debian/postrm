@@ -10,5 +10,13 @@ case "$1" in
         fi
         ;;
 esac
+# #3133 : à la purge, la carte nginx du jeton des pairs et le jeton (le dossier des secrets seulement s'il est vide).
+# Jamais l'état du maillage (wg_mesh.json, ancre, poignées). Jamais d'échec.
+if [ "$1" = "purge" ]; then
+    _ngx="${SBX_P2P_PAIR_CONF:-/etc/nginx/secubox-p2p-pair.conf}"
+    _sec="${SBX_P2P_SECRETS_DIR:-/etc/secubox/secrets/p2p}"
+    rm -f "$_ngx" "$_sec/pair.token" 2>/dev/null || true
+    rmdir "$_sec" 2>/dev/null || true
+fi
 #DEBHELPER#
 exit 0

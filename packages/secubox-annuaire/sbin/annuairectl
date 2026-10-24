@@ -25,6 +25,7 @@ Commands:
   services                        List the node's live (non-revoked) offers.
   offres-collecte                 (root) Relève les VRAIS services de la box (onions Tor,
                                   curation du Hall, dépôt apt) dans offres-reelles.json (#3021).
+  pairs-cache                     Écrit le cache des services publics des autres nœuds
   offer-sync                      Publie les offres manquantes et révoque celles de ce nœud
                                   (source=sync) qui ne correspondent plus ; les offres manuelles
                                   restent.
@@ -244,6 +245,31 @@ def cmd_offer_sync(args) -> int:
     return 0
 
 
+def cmd_pairs_cache(args) -> int:
+    """Écrit le cache des services des autres nœuds ; un journal illisible laisse l'ancien cache (#3133)."""
+    from annuaire import pairs_services  # noqa: PLC0415
+    from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+    # Un journal absent ou vide ne doit jamais effacer le cache : _journal() en créerait un neuf.
+    try:
+        vide = os.path.getsize(DB_PATH) == 0
+    except OSError:
+        vide = True
+    if vide:
+        _die(f"journal absent ou vide ({DB_PATH}), cache des services des pairs laissé en place", 3)
+    try:
+        priv = _load_priv()
+        did = did_from_pubkey(public_from_private(priv))
+        donnees = pairs_services.construire(_journal(), did)
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        _die(f"journal illisible, cache des services des pairs laissé en place : {e}", 3)
+    pairs_services.ecrire(donnees, pairs_services.CACHE_PATH)
+    print(json.dumps({"pairs": len(donnees["pairs"]), "services": sum(len(p["services"]) for p in donnees["pairs"]),
+                      "fichier": str(pairs_services.CACHE_PATH)}, indent=2))
+    return 0
+
+
 def cmd_revoke_offer(args) -> int:
     from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
     from annuaire.verbs import revoke_offer  # noqa: PLC0415
@@ -409,6 +435,7 @@ def main(argv=None) -> int:
 
     sub.add_parser("offres-collecte", help="(root) relève les vrais services de la box dans offres-reelles.json (#3021)").set_defaults(fn=cmd_offres_collecte)
     sub.add_parser("offer-sync", help="publie/révoque les offres source=sync de ce nœud d'après offres-reelles.json (#3021)").set_defaults(fn=cmd_offer_sync)
+    sub.add_parser("pairs-cache", help="écrit le cache des services publics des autres nœuds (#3133)").set_defaults(fn=cmd_pairs_cache)
     pro = sub.add_parser("revoke-offer", help="révoque une offre de ce nœud")
     pro.add_argument("service_id")
     pro.set_defaults(fn=cmd_revoke_offer)

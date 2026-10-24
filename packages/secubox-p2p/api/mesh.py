@@ -174,7 +174,14 @@ def render_wg_conf(state: dict) -> str:
         lines += ["", "[Peer]", f"PublicKey = {_une_ligne(peer['public_key'])}"]
         if peer.get("endpoint"):
             lines.append(f"Endpoint = {_une_ligne(peer['endpoint'])}")
-        lines.append(f"AllowedIPs = {_une_ligne(peer.get('allowed_ips', MESH_NETWORK))}")
+        if peer.get("direct"):
+            # Lien direct entre pairs (#3133) : seule une entrée « actif » porte son /32. Une sonde n'a AUCUNE ligne
+            # AllowedIPs (wg l'accepte : le pair n'attire aucun trafic, ses keepalives font la poignée de main), et
+            # une entrée directe ne retombe JAMAIS sur le réseau maillé entier : elle prendrait le trafic du maître.
+            if peer.get("direct_etat") == "actif" and peer.get("allowed_ips"):
+                lines.append(f"AllowedIPs = {_une_ligne(peer['allowed_ips'])}")
+        else:
+            lines.append(f"AllowedIPs = {_une_ligne(peer.get('allowed_ips', MESH_NETWORK))}")
         lines.append("PersistentKeepalive = 25")
     return "\n".join(lines) + "\n"
 
@@ -359,9 +366,12 @@ def load_handshakes(path: pathlib.Path = None, now: float = None):
         doc = json.loads(pathlib.Path(path).read_text())
     except Exception:
         return None
-    if now - float(doc.get("written_at", 0)) > HANDSHAKES_MAX_STALENESS:
+    try:                # fichier corrompu (liste au sommet, valeur non numérique) : la mesure manque, jamais d'exception
+        if now - float(doc.get("written_at", 0)) > HANDSHAKES_MAX_STALENESS:
+            return None
+        return {k: int(v) for k, v in (doc.get("handshakes") or {}).items()}
+    except (AttributeError, TypeError, ValueError, OverflowError):
         return None
-    return {k: int(v) for k, v in (doc.get("handshakes") or {}).items()}
 
 
 def peer_liveness(handshakes, public_key: str, now: float) -> str:

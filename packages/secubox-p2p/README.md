@@ -206,6 +206,49 @@ Les vhosts des services répondent à `<service>.*` en plus de leur nom gk2 : c'
 - Audit (`/var/log/secubox/audit.log`) : `code_emis`, décisions de jonction, `ancre_rattrapee`,
   `ancre_non_rattrapee` ; jamais de jeton ni de code.
 
+## Liens directs (#3133)
+
+`sudo -u secubox secubox-maillage-pairs [synchroniser|etat]` (sans privilège ; `synchroniser` refuse de tourner en root, `etat` reste permis, `User=secubox` ; l'application passe par `sbx-mesh-up` (root) ; minuterie `secubox-maillage-pairs.timer` : 2 min après le démarrage,
+puis toutes les minutes, ±10 s ; charge sur le maître : au plus 32 requêtes par minute) relie les pairs en direct, sans passer par le maître, pour le trafic entre eux.
+
+- Le maître publie `GET /api/v1/p2p/master-link/pairs` (`{"version":1,"pairs":[{nom, mesh_ip, cle_publique, endpoint}]}`).
+- Le pair ne lit cette liste que sur `http://<mesh_ip du maître>:7331` (le maître est l'entrée de `wg_mesh.json` dont la
+  clé est celle de l'ancre), à travers le tunnel : sans redirection, 6 s, 256 Kio. Tout échec (réseau, 4xx/5xx — le
+  maître répond 503 quand sa propre mesure des poignées manque —, JSON, version, ancre absente ou autre maître)
+  n'ajoute, ne promeut ni ne retire rien, mais les **rétrogradations s'appliquent quand même** : elles ne dépendent que
+  des poignées locales (soupape de sécurité, jamais suspendue au maître). Une liste vide valide retire seulement les liens directs.
+- Les liens sont des entrées `direct: true` de `wg_mesh.json` ; `secubox-p2p-mesh.path` déclenche `sbx-mesh-up`
+  (`wg syncconf`). Jamais de `wg set`. **Sonde puis promotion** (champ `direct_etat`, `direct_depuis` = dernier
+  changement d'état) :
+  - pair listé par le maître → **sonde** : clé, endpoint et `PersistentKeepalive = 25`, **sans `AllowedIPs`** : elle ne
+    prend aucun trafic au maître ; ses keepalives provoquent la poignée de main si l'autre pair a lui aussi notre clé ;
+  - poignée de main de moins de 180 s → **actif** : `AllowedIPs = <ip>/32`, le trafic vers ce pair passe en direct ;
+  - actif sans poignée depuis plus de 180 s (et promu depuis plus de 180 s) → redevient **sonde** : le `/32` disparaît,
+    le trafic revient au maître ; la sonde reste et se repromeut d'elle-même quand le chemin revient ;
+  - entrée retirée seulement quand le maître ne liste plus le pair.
+
+  Un pair qui ne participe pas (ancien p2p, liens désactivés, chemin direct injoignable) n'a jamais notre clé : aucune
+  poignée, la sonde reste inerte et rien n'est capté. Coût d'une sonde : une tentative de poignée toutes les 5 à 25 s
+  vers au plus 32 endpoints. Limites connues (bornes = 180 s + une période ;
+  mesurées par la simulation à deux nœuds, 20 graines) : à la coupure d'un chemin direct actif, le trafic est perdu
+  jusqu'au passage de la minuterie qui suit les 180 s sans poignée (110 à 170 s mesurés, borne 250 s) ; à la promotion,
+  les deux pairs peuvent être en désaccord au plus une période (l'un actif, l'autre encore sonde : 60 s mesurés au plus) ;
+  convergence en 95 s au plus après que chacun a la clé de l'autre.
+  Sans mesure de ses propres poignées (fichier `wg-mesh-handshakes.json` absent ou périmé), le pair ne change rien.
+  `mesh.render_wg_conf` n'écrit `AllowedIPs` pour une entrée directe que si elle est `actif`, et ne lui donne jamais le
+  réseau maillé entier.
+- Écriture de `wg_mesh.json` : relecture juste avant le calcul, remplacement atomique, mode conservé (fchmod sur le descripteur), propriétaire = celui du processus.
+  L'API écrit aussi ce fichier : la fenêtre de concurrence est courte et acceptée.
+- Réglage : `/etc/secubox/p2p.toml`, `[maillage] liens_directs = true` (défaut ; `false` : plus aucune requête au
+  maître ni ajout, et toutes les entrées directes de CETTE box, sondes et actifs, sont retirées au passage suivant).
+- `etat` : `{"actif": <réglage>, "liens_directs": [entrées directes avec direct_etat], "sondes": n, "actifs": n}`.
+- Audit : `pair_direct_ajoute` (sonde), `pair_direct_promu`, `pair_direct_retrograde`, `pair_direct_retire` (nom, clé
+  publique, mesh_ip) ; seulement pour ce qui a réellement changé dans le fichier écrit.
+- `secubox-relais-maillage` ignore les entrées `direct: true` (un lien direct n'est pas un pair à relayer) et tolère
+  la sortie `(none)` de `wg show allowed-ips` pour une sonde.
+- Variables `SBX_PAIRS_*` (dont `SBX_PAIRS_MAITRE_URL`) : réservées aux tests ; ne jamais les poser en production,
+  `SBX_PAIRS_MAITRE_URL` remplaçant l'adresse du maître.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.

@@ -80,9 +80,23 @@ resout_vers() { [ "$(dig +short "$1" A @"$RESOLVEUR" | grep -E '^[0-9.]+$' | hea
 
 # Joignable par wg-mesh : l'IP est couverte par les allowed-ips d'un pair — un
 # /32 côté maître, tout le réseau maillé côté satellite (le maître y relaie).
+# Une sonde de lien direct (#3133) n'a pas d'AllowedIPs : `wg show` affiche « (none) », valeur ignorée.
 pair_du_maillage() {
-    wg show wg-mesh allowed-ips 2>/dev/null | awk '{for(i=2;i<=NF;i++) print $i}' \
-        | python3 -c 'import ipaddress,sys; ip=ipaddress.ip_address(sys.argv[1]); sys.exit(0 if any(l.strip() and ip in ipaddress.ip_network(l.strip(), strict=False) for l in sys.stdin) else 1)' "$1"
+    python3 - "$1" "$(wg show wg-mesh allowed-ips 2>/dev/null || true)" <<'PY'
+import ipaddress, sys
+try:
+    ip = ipaddress.ip_address(sys.argv[1])
+except ValueError:
+    sys.exit(1)
+for ligne in sys.argv[2].splitlines():
+    for v in ligne.split()[1:]:
+        try:
+            if ip in ipaddress.ip_network(v, strict=False):
+                sys.exit(0)
+        except ValueError:
+            continue
+sys.exit(1)
+PY
 }
 
 routes_ecrire() {   # routes_ecrire <nom> [<ip> <port>] — sans ip : retire
@@ -320,8 +334,25 @@ print(" ".join(n))'
 }
 
 # Pairs à /32 (côté maître) ; maître du satellite (entrée « master » de l'état).
+# Un lien direct entre pairs (#3133, entrée `direct: true` de l'état) a aussi un /32 mais n'est PAS un pair à relayer :
+# sans ce filtre, tout satellite se prendrait pour le relais de ses frères. État absent ou illisible : aucun filtre.
 pairs_32() {
-    wg show wg-mesh allowed-ips 2>/dev/null | awk '{for(i=2;i<=NF;i++) if ($i ~ /\/32$/) {sub(/\/32$/,"",$i); print $i}}'
+    python3 - "$WG_ETAT" "$(wg show wg-mesh allowed-ips 2>/dev/null || true)" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        d = json.load(f)
+    directs = {p.get("public_key") for p in d.get("peers") or [] if isinstance(p, dict) and p.get("direct") is True}
+except (OSError, ValueError, AttributeError, TypeError):
+    directs = set()
+for ligne in sys.argv[2].splitlines():
+    champs = ligne.split()
+    if len(champs) < 2 or champs[0] in directs:
+        continue
+    for v in champs[1:]:
+        if v.endswith("/32"):
+            print(v[:-3])
+PY
 }
 maitre_du_satellite() {
     python3 - "$WG_ETAT" <<'PY'

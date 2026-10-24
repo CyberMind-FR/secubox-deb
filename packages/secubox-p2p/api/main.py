@@ -39,8 +39,8 @@ except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
 
-from . import mesh, registry, annuaire_client, dht, federation, masterlink, automesh, jetons, ancre
-from secubox_core.auth import require_lecture, SESSION_COOKIE
+from . import mesh, registry, annuaire_client, dht, federation, masterlink, automesh, jetons, ancre, pairs_directs
+from secubox_core.auth import require_lecture, SESSION_COOKIE, _bearer
 from secubox_core.crypto.empreinte import ident
 
 app = FastAPI(
@@ -2534,6 +2534,25 @@ async def _notify_peer_promotion(peer_addr: str, depth: int):
         await asyncio.wait_for(proc.communicate(), timeout=10)
     except:
         pass  # Best effort
+
+
+async def garde_pair_ou_lecture(request: Request, creds=Depends(_bearer)):
+    """#3133 : X-SecuBox-Pair = jeton secret posé par nginx (listener 7331, source 10.10.0.0/24) ou garde de lecture."""
+    if pairs_directs.en_tete_pair_valide(request.headers.get("X-SecuBox-Pair")):
+        return {"pair": True}
+    return await require_lecture(request, creds)
+
+
+@app.get("/master-link/pairs", dependencies=[Depends(garde_pair_ou_lecture)])
+async def ml_pairs():
+    """Liste des pairs vivants du maillage, pour les liens directs (#3133). Aucun secret.
+
+    Sans mesure des poignées de main (fichier absent, illisible ou de plus de 120 s) : 503, JAMAIS une liste vide
+    valide — chaque pair retirerait alors tous ses liens directs ; sur une erreur HTTP, le pair ne change rien."""
+    poignees = mesh.load_handshakes()
+    if poignees is None:
+        raise HTTPException(status_code=503, detail="mesure des poignées indisponible")
+    return {"version": 1, "pairs": pairs_directs.pairs_vivants(get_wg_mesh_config(), poignees)}
 
 
 @app.get("/master-link/peers", dependencies=[Depends(require_lecture)])

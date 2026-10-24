@@ -1,3 +1,40 @@
+secubox-p2p (1.19.0-1~trixie1) trixie; urgency=medium
+
+  * Liens directs entre pairs (ref #3133), côté maître : GET /master-link/pairs publie la liste des pairs vivants
+    (poignée de main de moins de 10 minutes, dédoublonnés par clé, triés par IP, 32 au plus, champs validés
+    strictement, aucun secret). Garde : en-tête X-SecuBox-Pair portant un JETON secret partagé (64 hex,
+    /etc/secubox/secrets/p2p/pair.token, généré par le postinst, nginx le pose pour une source 10.10.0.0/24 via
+    /etc/nginx/secubox-p2p-pair.conf, compare_digest côté module) ou garde de lecture. La liste n'est pas signée :
+    sa confiance repose sur ce secret et sur le canal wg-mesh. Nouveau module api/pairs_directs.py.
+    Sans mesure des poignées (fichier absent, illisible ou de plus de 120 s) la route répond 503, jamais une liste
+    vide valide qui ferait retirer leurs liens à tous les pairs.
+  * Côté pair, calcul des liens directs (ref #3133, logique pure) « sonde puis promotion » : pairs_directs.calculer
+    décide des ajouts (ni soi-même, ni le maître, ni une clé ou une IP déjà présente en entrée non directe), des
+    promotions, des rétrogradations et des retraits ; pairs_directs.appliquer reconstruit l'état champ par champ
+    depuis des pairs revalidés. Un pair listé devient une SONDE (clé, endpoint, keepalive, SANS AllowedIPs : aucun
+    trafic détourné du maître), promue ACTIF (/32) après une poignée de main de moins de 180 s, rétrogradée en sonde
+    quand la poignée manque depuis plus de 180 s, retirée seulement quand le maître ne la liste plus. Plus de refus
+    ni de reprise à 1 h : un pair absent ou qui ne participe pas ne capte jamais de trafic (simulation à deux nœuds
+    en test). mesh.render_wg_conf n'émet AllowedIPs pour une entrée directe que si elle est active et ne retombe
+    jamais sur le /24. Les entrées non directes ne sont jamais retirées ni modifiées.
+  * Côté pair, l'exécuteur sans privilège (User=secubox, durci ; l'application passe par sbx-mesh-up en root) (ref #3133) : secubox-maillage-pairs [synchroniser|etat] lit la liste du maître
+    UNIQUEMENT sur http://<mesh_ip du maître>:7331 (le maître est l'entrée de la clé de l'ancre), sans redirection,
+    6 s, 256 Kio ; tout échec ou version autre que 1 ne change rien, une liste vide valide ne retire que les liens
+    directs. Écriture atomique de wg_mesh.json (mode conservé, propriétaire = celui du service secubox, rien si inchangé ; refus de synchroniser en root), audit pair_direct_ajoute /
+    pair_direct_promu / pair_direct_retrograde / pair_direct_retire ; sans mesure locale des poignées, rien ne change ;
+    sans liste exploitable du maître (injoignable, 503, ancre absente…), seules les rétrogradations s'appliquent ;
+    liens_directs = false retire les entrées directes de la box. Minuterie
+    secubox-maillage-pairs.timer (2 min, puis toutes les minutes ±10 s : désaccord à la promotion ≤ 60 s, perte après
+    une rupture ≤ 180 s + une période ; au plus 32 requêtes/min sur le maître). Réglage [maillage] liens_directs (défaut true) de p2p.toml.
+  * secubox-relais-maillage (ref #3133) : pairs_32 ignore les entrées direct: true de wg_mesh.json (un lien direct
+    n'est pas un pair à relayer : sans cela tout satellite tentait joker DNS-01, certbot et vhosts pour ses frères) ;
+    pair_du_maillage tolère « (none) » (sonde sans AllowedIPs) au lieu d'échouer sur une exception.
+  * Paquet (ref #3133) : nginx/p2p.conf (vhosts principaux) vide X-SecuBox-Pair ; prerm arrête
+    secubox-maillage-pairs.timer et .service (et désactive la minuterie au retrait) ; postrm purge retire
+    /etc/nginx/secubox-p2p-pair.conf et le jeton pair.token (dossier des secrets seulement s'il est vide).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 19:00:00 +0200
+
 secubox-p2p (1.18.4-1~trixie1) trixie; urgency=medium
 
   * Registre de services (ref #3136) : « Catalogue de l'annuaire indisponible — services locaux uniquement » sur gk2 et

@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox — synchronisation des liens directs entre pairs (#3133)
+
+[Timer]
+OnBootSec=2min
+# Depuis l'activation de la minuterie : OnUnitActiveSec seul ne se redéclenche pas après une réactivation.
+OnActiveSec=2min
+OnUnitActiveSec=1min
+RandomizedDelaySec=10s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

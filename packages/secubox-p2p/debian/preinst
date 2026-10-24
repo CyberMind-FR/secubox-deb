@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# #3133 : en mise à jour, le vhost 7331 déjà activé inclura le nouveau fichier de map avant que le postinst ne le
+# rende. On pose une map VIDE valide (aucun jeton) pour qu'un rechargement nginx intermédiaire reste valide.
+set -e
+case "$1" in
+    install|upgrade)
+        if [ -d /etc/nginx ] && [ ! -e /etc/nginx/secubox-p2p-pair.conf ]; then
+            printf 'map $p2p_pair_maille $p2p_pair_cle {\n    default "";\n}\n' > /etc/nginx/secubox-p2p-pair.conf
+            chmod 0600 /etc/nginx/secubox-p2p-pair.conf
+        fi
+        ;;
+esac
+exit 0
