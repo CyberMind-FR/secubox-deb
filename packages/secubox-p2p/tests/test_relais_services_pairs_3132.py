@@ -114,3 +114,23 @@ def test_retirer_reduit_vraiment_haproxy():
     r = r[:r.index("\n}\n")]
     assert "haproxyctl generate --allow-shrink" in r and "RELAIS_EN_LOT" in r
     assert "génération HAProxy refusée" in r
+
+
+def test_sous_domaine_d_un_autre_pair_refuse(tmp_path):
+    f = tmp_path / "routes.json"
+    f.write_text(json.dumps(ROUTES))
+    # 10.10.0.5 annonce sub.gk1.secubox.in : le joker *.gk1 du pair gk1 le couvrirait
+    assert _execute(tmp_path, "domaine_tenu_par_autre", f, "10.10.0.5", "sub.gk1.secubox.in").returncode == 0
+    assert _execute(tmp_path, "domaine_tenu_par_autre", f, "10.10.0.8", "sub.gk1.secubox.in").returncode == 1
+
+
+def test_audit_en_utc_rfc3339():
+    a = TEXTE[TEXTE.index("audit_relais() {"):]
+    a = a[:a.index("\n}\n")]
+    assert "date -u +%Y-%m-%dT%H:%M:%SZ" in a
+
+
+def test_exclusions_sans_xargs_et_etat_ecrit_par_fichier_unique():
+    s = TEXTE[TEXTE.index("cmd_synchroniser() {"):TEXTE.index("cmd_retirer() {")]
+    assert "xargs" not in s
+    assert "mkstemp" in _python_de("noms_perimes")

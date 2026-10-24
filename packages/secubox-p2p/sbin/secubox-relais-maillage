@@ -55,7 +55,7 @@ meurt() { printf '[%s] ERREUR : %s\n' "$MODULE" "$*" >&2; exit 1; }
 # Décision d'exposition → journal d'audit (append-only). Valeurs déjà validées (nom_valide, ip_valide) : JSON sûr.
 audit_relais() {   # audit_relais <evenement> <nom> <ip-du-pair>
     printf '{"ts":"%s","module":"p2p","evenement":"%s","nom":"%s","pair":"%s"}\n' \
-        "$(date +%Y-%m-%dT%H:%M:%S%z)" "$1" "$2" "$3" >> "$AUDIT" 2>/dev/null || true
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" >> "$AUDIT" 2>/dev/null || true
 }
 [ "$(id -u)" -eq 0 ] || meurt "à lancer en root"
 
@@ -259,9 +259,11 @@ for k in cand:
     if k in avant:
         print(k)
 e[ip] = cand
-os.makedirs(os.path.dirname(etat) or ".", exist_ok=True)
-tmp = etat + ".tmp"
-with open(tmp, "w") as f:
+import tempfile
+dossier = os.path.dirname(etat) or "."
+os.makedirs(dossier, exist_ok=True)
+fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".relais-perimes.")
+with os.fdopen(fd, "w") as f:
     json.dump(e, f)
 os.replace(tmp, etat)
 PY
@@ -278,7 +280,11 @@ try:
 except (OSError, ValueError):
     sys.exit(0)
 for k, v in d.items():
-    if (k == dpair or k.endswith("." + dpair)) and isinstance(v, list) and v and v[0] != ip:
+    if not (isinstance(v, list) and v and v[0] != ip):
+        continue
+    parent = k.split(".", 1)[1] if "." in k else k
+    # même domaine, un de ses noms, ou un sous-domaine du domaine d'un autre (son joker le couvrirait)
+    if k == dpair or k.endswith("." + dpair) or dpair == parent or dpair.endswith("." + parent):
         sys.exit(0)
 sys.exit(1)
 PY
@@ -409,10 +415,12 @@ except Exception: pass' 2>/dev/null)"
         done
         # Le pair a répondu (domaine valide) : ce qu'il ne publie plus n'est plus relayé (#3132). Un pair
         # injoignable n'arrive jamais ici, ses noms restent.
-        local communs="*"
-        [ "$mode" = "communs" ] && communs="$(printf '%s' "$labels" | xargs | tr ' ' ',')"
+        # listes « a b c » → « a,b,c » par découpage bash (un guillemet du TOML ne vide plus la liste)
+        local communs="*" ex_csv mots
+        read -ra mots <<<"$exclus"; ex_csv="$(IFS=,; printf '%s' "${mots[*]}")"
+        if [ "$mode" = "communs" ]; then read -ra mots <<<"$labels"; communs="$(IFS=,; printf '%s' "${mots[*]}")"; fi
         # shellcheck disable=SC2086  # publies : liste de noms validés, découpée exprès
-        for perime in $(noms_perimes "$ip" "$dpair" "$(printf '%s' "$exclus" | xargs | tr ' ' ',')" "$communs" $publies); do
+        for perime in $(noms_perimes "$ip" "$dpair" "$ex_csv" "$communs" $publies); do
             if ( RELAIS_EN_LOT=1 cmd_retirer "$perime" ) >/dev/null 2>&1; then
                 retires=$((retires + 1)); log "retiré : $perime (le pair $ip ne le publie plus)"
                 audit_relais relais_retire "$perime" "$ip"
