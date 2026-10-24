@@ -24,10 +24,18 @@ def _load(monkeypatch, tmp_path):
     """Point config + HS storage at an isolated tmp tree for this test."""
     monkeypatch.setattr(m, "CONFIG_FILE", tmp_path / "exposure.json")
     monkeypatch.setattr(m, "TOR_DATA", tmp_path / "hidden_services")
+    # #3112 : la migration de l'onion du webui lit torrc / torrc.d / haproxy.toml — jamais ceux du poste.
+    monkeypatch.setattr(m, "TOR_CONFIG", tmp_path / "torrc")
+    monkeypatch.setattr(m, "TOR_DROPIN_DIR", tmp_path / "torrc.d")
+    monkeypatch.setattr(m, "TOR_METABLOG_DIR", tmp_path / "metablog.d")
+    monkeypatch.setattr(m, "HAPROXY_TOML", tmp_path / "haproxy.toml")
+    monkeypatch.setattr(m, "run_cmd", lambda *a, **k: (True, "", ""))
+    monkeypatch.setattr(m, "_audit_write", lambda line: None)
     return m
 
 
-def test_emancipate_webui_uses_9080_80(monkeypatch, tmp_path):
+def test_emancipate_webui_targets_the_haproxy_onion_frontend_not_nginx(monkeypatch, tmp_path):
+    """#3112 : l'onion du webui livre au frontal HAProxy onion-in (9180), jamais à nginx :9080."""
     m = _load(monkeypatch, tmp_path)
     calls = []
     monkeypatch.setattr(
@@ -38,7 +46,7 @@ def test_emancipate_webui_uses_9080_80(monkeypatch, tmp_path):
 
     m.emancipate_webui(federate=False)
 
-    assert calls == [("webui", 9080, 80)]
+    assert calls == [("webui", 9180, 80)]
 
 
 def test_emancipate_webui_standalone_skips_federation(monkeypatch, tmp_path):
@@ -61,7 +69,7 @@ def test_emancipate_webui_records_active_entry(monkeypatch, tmp_path):
     services = m._load_emancipated()
     webui = [s for s in services if s["name"] == "webui"]
     assert len(webui) == 1
-    assert webui[0]["local_port"] == 9080
+    assert webui[0]["local_port"] == 9180
     assert webui[0]["onion_port"] == 80
     assert webui[0]["active"] is True
 
@@ -83,7 +91,7 @@ def test_emancipate_webui_writes_audit_entry(monkeypatch, tmp_path):
     action, detail, user = audited[0]
     assert action == "emancipate_webui"
     assert "abc.onion" in detail
-    assert "local_port=9080" in detail
+    assert "local_port=9180" in detail
     assert user == "gandalf"
 
 

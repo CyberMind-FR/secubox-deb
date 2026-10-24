@@ -11,8 +11,13 @@
 # .onion addresses survive reboots unchanged. Runs as root (torrc + systemctl
 # reload tor need privilege), invoked by
 # secubox-exposure-tor-reconcile.service on boot.
+# #3112/#3123 : migre d'abord TOUS les services onion (nginx :9080, http-in :80)
+# vers le frontal HAProxy onion-in (meme cle, meme adresse), assure la route
+# sbxwaf de l'onion du webui et signale sur stderr + audit tout onion restant
+# hors du frontal — idempotent. Argument facultatif : qui lance (« postinst »
+# depuis le postinst du composant ; « reconcile » par defaut, au demarrage).
 set -e
-/usr/bin/python3 -c "import sys; sys.path.insert(0, '/usr/lib/secubox/exposure'); import api.main as m; m.tor_reconcile_persist()"
+/usr/bin/python3 -c "import sys; sys.path.insert(0, '/usr/lib/secubox/exposure'); import api.main as m; m.tor_reconcile_persist(user=sys.argv[1])" "${1:-reconcile}"
 
 # Discovery perms: tor creates each HS leaf dir 0700 and hostname 0600, so the
 # secubox-tor API (running with SupplementaryGroups=debian-tor) can't read the

@@ -38,7 +38,7 @@ def test_tor_add_endpoint_refuses_excluded_host(tmp_path, monkeypatch):
     assert ei.value.status_code == 400
     assert called == []                                    # never created the hidden service
 
-    asyncio.run(m.tor_add(m.TorAddRequest(service="myblog", local_port=80), {"sub": "admin"}))
+    asyncio.run(m.tor_add(m.TorAddRequest(service="myblog", local_port=9180), {"sub": "admin"}))  # frontal (#3112)
     assert called == ["myblog"]                            # non-excluded proceeds
 
 
@@ -51,7 +51,7 @@ def test_apply_tor_add_calls_sync_helper_when_hs_absent(tmp_path, monkeypatch):
     # dots are stripped by the existing sanitization (isalnum or _/-), same as tor_add
     asyncio.run(m._apply_tor("z-example", True, {"sub": "admin"}))
 
-    assert calls == [("z-example", 80, 80)]
+    assert calls == [("z-example", 9180, 80)]   # frontal onion-in, jamais http-in :80 (#3112)
 
 
 def test_apply_tor_remove_calls_sync_helper_when_hs_present(tmp_path, monkeypatch):

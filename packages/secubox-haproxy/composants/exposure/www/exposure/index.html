@@ -130,7 +130,7 @@
                 <div id="rTor" class="retour" hidden></div>
                 <form class="saisie" id="fTor" hidden>
                     <label>Nom du service<input name="service" placeholder="monservice" required></label>
-                    <label>Port local<input name="local_port" type="number" min="1" max="65535" value="80" required></label>
+                    <label>Port local (frontal onion-in, inspecté par le WAF)<input name="local_port" type="number" min="1" max="65535" value="9180" readonly required></label>
                     <label>Port onion<input name="onion_port" type="number" min="1" max="65535" value="80" required></label>
                     <div class="conf" id="cTor" hidden></div>
                     <div class="bout"><button class="btn prim" type="submit">Créer</button><button class="btn" type="button" data-ferme="fTor">Annuler</button></div>
@@ -220,7 +220,7 @@
             TOR = { services: [{ service: 'monapp', onion: 'exempleexempleexempleexempleexempleexempleexempleexemple23.onion', port: '80', backend: '127.0.0.1:8080' }] };
             EMANC = { services: [
                 { name: 'monapp', port: 8080, domain: null, tor: true, dns: false, mesh: true, onion: 'exempleexempleexempleexempleexempleexempleexempleexemple23.onion' },
-                { name: 'webui', local_port: 9080, onion_port: 80, active: true }] };
+                { name: 'webui', local_port: 9180, onion_port: 80, active: true }] };
         }
 
         async function charger() {

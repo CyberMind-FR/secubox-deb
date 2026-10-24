@@ -1,3 +1,45 @@
+secubox-haproxy (1.12.6-1~trixie1) trixie; urgency=high
+
+  * Sécurité : l'onion du webui passe par un frontal HAProxy dédié et n'est jamais LAN (ref #3112). Le service onion
+    « webui » livrait à nginx :9080 en direct, hors HAProxy et hors sbxwaf ; nginx croit X-Forwarded-For de 127.0.0.1
+    et classe 127.0.0.0/8 en LAN, donc chaque visiteur Tor était « poste du LAN », et un X-Forwarded-For forgé était
+    cru aussi. haproxyctl generate émet le frontal onion-webui (127.0.0.1:9180, clé onion_webui_port) : il efface
+    X-Forwarded-For, Forwarded, X-Real-IP, X-Client-IP, X-Forwarded-Host et X-SecuBox-* du client, pose le marqueur
+    non LAN 192.0.2.80 (TEST-NET-1, « client onion ») par set-src et X-Forwarded-For, ajoute X-SecuBox-Onion: 1 et
+    passe par sbxwaf_inspector. Les frontaux publics refusent un Host .onion venu d'ailleurs que la boucle locale.
+  * Exposure : emancipate_webui vise le frontal et pose la route sbxwaf <onion> → webui (secubox-waf-route) ;
+    /tor/add refuse local_port 9080. Migration idempotente par secubox-exposure-tor-reconcile, lancé au démarrage
+    et par le postinst sur les box qui ont l'onion : la cible est réécrite, HiddenServiceDir reste le même (même clé,
+    même adresse), un ancien bloc du torrc passe dans torrc.d, Tor est rechargé et la migration est inscrite à
+    l'audit. Le postinst régénère d'abord HAProxy si le frontal manque. En cas d'échec, l'onion reste fermé, jamais
+    ouvert vers nginx.
+  * Relecture de sécurité (ref #3112, #3123). Les onions des vhosts et de metablogizer livraient à http-in :80, qui
+    ne nettoie rien : par eux, un Host admin.<box> ou celui de l'onion du webui, avec un X-Forwarded-For forgé ou
+    sans rien, arrivait LAN. Le frontal devient générique, onion-in (127.0.0.1:9180, clé onion_in_port), pour
+    TOUS les onions, et refuse (404) tout Host qui ne finit pas en .onion. Toutes les cibles y pointent :
+    webui, vhosts (_apply_tor), /tor/add en liste blanche (seul le port du frontal), /emancipate avec Tor.
+  * Migration de tous les onions existants (torrc, torrc.d, répertoire de metablogizer), sur place, atomique,
+    idempotente : 127.0.0.1:80 et :9080 deviennent le frontal, HiddenServiceDir inchangé. Rien n'est déplacé
+    vers un fichier que Tor ne lit pas, et l'API ajoute le %include de torrc.d au torrc s'il manque (le torrc de
+    Debian ne l'a pas). Tout HiddenServicePort restant hors du frontal est signalé sur stderr et dans l'audit
+    (onion_non_migre). L'auteur de l'audit est postinst ou reconcile. Le postinst redémarre le démon exposure
+    (try-restart), qui charge alors la garde. Page Exposition : port local du frontal (9180).
+  * Jamais deux déclarations du même service onion (ref #3112). Avant d'écrire le fichier d'un service dans
+    torrc.d, tout autre bloc du même HiddenServiceDir est retiré, atomiquement. La recherche couvre le torrc, les
+    autres fichiers et le répertoire de metablogizer ; la comparaison tolère « / » final et commentaire.
+    Sans cela, « Publier » ou la réparation au démarrage doublait le bloc resté dans le torrc après la
+    migration, et Tor refusait toute sa configuration. Après toute modification, tor --verify-config est lancé ;
+    s'il refuse, les fichiers d'avant sont restaurés, Tor n'est pas rechargé et torrc_refuse est écrit à
+    l'audit. Au démarrage, toute cible enregistrée passe par le frontal, sauf 22 et 443.
+  * Vérification de Tor avec la configuration Debian (ref #3112). tor --verify-config reçoit
+    --defaults-torrc /usr/share/tor/tor-service-defaults-torrc quand ce fichier existe : sans lui, la
+    vérification échouait sur une box saine (gk2 : « Failed to configure rendezvous options »). tor rend 0 même
+    en échec, donc le verdict se lit sur la sortie : valide seulement avec « Configuration was valid » et sans
+    « [err] » ni « Reading config failed ». Une migration refusée restaure aussi exposure.json. Un échec
+    d'écriture entre le retrait d'un ancien bloc et le nouveau fichier restaure les fichiers d'avant.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 18:00:00 +0200
+
 secubox-haproxy (1.12.5-1~trixie1) trixie; urgency=medium
 
   * Exposition : le filtre d'un vhost est celui que son fichier inclut (ref #3117). Les vhosts livres sous un nom neutre (metablogizer.*, actor.*, waf.*) incluent snippets/exposure/<nom>.conf ; les resolveurs du panneau (vhost et exposure) lisaient <FQDN>.conf, un fichier qui n'existe plus, et ecrivaient dans un filtre que nginx n'incluait pas. La ligne include du fichier de vhost fait foi (server_name exact avant joker) ; sans include, repli sur le FQDN comme avant.
