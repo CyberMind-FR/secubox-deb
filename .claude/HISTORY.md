@@ -9,6 +9,23 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-24 — Netboot MOCHAbin prouvé au banc : live par TFTP puis flash eMMC isp (ref #3079)
+
+DUT MOCHAbin 8 Go au banc série : live démarré par le U-Boot usine, image `isp` alpha.18 écrite sur l'eMMC par `sbx-netflash`
+(signature valide, empreinte vérifiée), la carte démarre sur l'eMMC et a du réseau avec le noyau Debian stock (constat du
+propriétaire). Six défauts trouvés et corrigés au fil de l'essai (netboot 0.6.2 → 0.6.8, PR #3082, #3083, #3085, #3086, #3087,
+#3089, #3090) : squashfs rangé sur /data (racine gk2 89 % → 74 %) ; adresses de chargement au-dessus de 0x04000000 (zone réservée
+du firmware Armada 7040 : TFTP tronqué puis « Synchronous Abort ») ; squashfs et overlay ajoutés à l'initrd (`live-initrd-modules.sh`) ;
+liste noire de squashfs (secubox-hardening, recopiée dans l'initrd) levée dans l'initrd du live seulement ; réseau du live gardé
+après l'initrd (`modprobe.blacklist=mv88e6xxx` : chargé tard il fait perdre la porteuse à eth2, #2004 ; systemd-networkd masqué :
+le netplan de l'image met eth1/eth2 dans br-lan) ; `sbx-netflash` montre l'erreur curl, télécharge dans un tmpfs à la taille de
+l'image (`/run` plafonné à 792 Mo : curl 23) et arrête la pile SecuBox du live seulement si la mémoire manque (6,9 Go sur 8).
+Arbitrage du propriétaire : **pas de rescue.target** (les outils n'y démarrent pas), le live reste complet. Consigne U-Boot :
+`setenv ethact mvpp2-2; setenv ipaddr <ip libre>; setenv serverip 192.168.1.200; tftpboot ${scriptaddr} mochabin-live/boot.scr;
+source ${scriptaddr}` (WAN 1G = mvpp2-2). Reste : reconstruire le squashfs du live pour y porter le nouveau `sbx-netflash`
+(go du propriétaire, mksquashfs charge gk2) ; clé live USB à reconstruire par la CI ; noyau stock suffisant sur gk2 ? à vérifier
+avec les ports `lan0..3` (mv88e6xxx dans l'initrd). Ouvert à part : #3088 (netplan de la carte : 192.168.1.200 statique sur eth2).
+
 ## 2026-10-23 — Netboot : live MOCHAbin par TFTP et flash eMMC depuis le live (ref #3079)
 
 « preparer tftpboot avec latest mochabin ready to live and flash ». Dernière release : v3.0.0-alpha.18 (16/10) — clé live
