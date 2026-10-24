@@ -180,6 +180,7 @@ def test_reponse_anormale_ne_change_rien(env, statut, corps, brut):
     doc = _etat()
     doc["peers"].append(_direct("gk3", K_A, "10.10.0.3", "192.168.1.30:51820"))
     env.etat.write_text(json.dumps(doc))
+    env.poignees_ecrire(**{K_A: int(time.time())})      # poignée fraîche : seule une rétrogradation pourrait changer
     avant = env.etat.read_bytes()
     env.maitre(statut=statut, corps=corps, brut=brut)
     assert _charger().synchroniser() == 0
@@ -272,6 +273,77 @@ def test_sans_mesure_des_poignees_rien_ne_change(env, contenu, capsys):
     # ni ajout (gk9), ni rétrogradation (gk3), ni promotion (gk4) : l'état et l'audit sont intacts
     assert env.etat.read_bytes() == avant and env.audit.read_text() == ""
     assert "mesure des poignées" in capsys.readouterr().out
+
+
+def _etat_trois_liens(t):
+    doc = _etat()
+    doc["peers"].append(_direct("gk3", K_A, "10.10.0.3", "192.168.1.30:51820", depuis=int(t) - 600))   # actif expiré
+    doc["peers"].append(_direct("gk4", K_B, "10.10.0.4", "192.168.1.40:51820", depuis=int(t) - 600))   # actif frais
+    doc["peers"].append(_direct("gk6", _cle("C"), "10.10.0.6", "192.168.1.60:51820", etat_d="sonde",
+                                depuis=int(t) - 600))                                                    # sonde
+    return doc
+
+
+def _panne_maitre(env, panne):
+    if panne == "503":
+        env.maitre(statut=503, corps={"detail": "mesure des poignées indisponible"})
+    elif panne == "injoignable":
+        os.environ["SBX_PAIRS_MAITRE_URL"] = "http://127.0.0.1:9"
+    elif panne == "json":
+        env.maitre(brut=b"pas du json")
+    elif panne == "sans_ancre":
+        env.ancre.unlink()
+        env.maitre(corps=LISTE)
+    elif panne == "autre_ancre":
+        env.ancre.write_text(json.dumps({"cle_publique": _cle("Z")}))
+        env.maitre(corps=LISTE)
+
+
+PANNES = ["503", "injoignable", "json", "sans_ancre", "autre_ancre"]
+
+
+@pytest.mark.parametrize("panne", PANNES)
+def test_sans_liste_exploitable_la_retrogradation_ne_depend_pas_du_maitre(env, monkeypatch, panne, capsys):
+    t = time.time()
+    env.etat.write_text(json.dumps(_etat_trois_liens(t)))
+    env.poignees_ecrire(**{K_A: int(t) - 400, K_B: int(t) - 20, _cle("C"): int(t) - 5})
+    monkeypatch.setenv("SBX_PAIRS_MAITRE_URL", "http://127.0.0.1:9")
+    _panne_maitre(env, panne)
+    capsys.readouterr()
+    assert _charger().synchroniser(t) == 0
+    par_nom = {p["name"]: p for p in _pairs_ecrits(env)}
+    assert list(par_nom) == ["master", "gk3", "gk4", "gk6"]                          # rien d'ajouté ni retiré
+    assert par_nom["gk3"]["direct_etat"] == "sonde" and "allowed_ips" not in par_nom["gk3"]   # poignée expirée
+    assert par_nom["gk4"]["direct_etat"] == "actif" and par_nom["gk4"]["allowed_ips"] == "10.10.0.4/32"
+    assert par_nom["gk6"]["direct_etat"] == "sonde" and "allowed_ips" not in par_nom["gk6"]   # jamais promue sans liste
+    assert [(x["evenement"], x["nom"]) for x in _evenements(env)] == [("pair_direct_retrograde", "gk3")]
+    assert "rétrogradations seulement" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("panne", PANNES)
+def test_sans_liste_et_rien_d_expire_le_fichier_n_est_pas_reecrit(env, monkeypatch, panne):
+    t = time.time()
+    doc = _etat_trois_liens(t)
+    doc["peers"].pop(1)                                    # plus d'actif expiré
+    env.etat.write_text(json.dumps(doc))
+    env.poignees_ecrire(**{K_B: int(t) - 20})
+    monkeypatch.setenv("SBX_PAIRS_MAITRE_URL", "http://127.0.0.1:9")
+    _panne_maitre(env, panne)
+    avant = env.etat.read_bytes()
+    assert _charger().synchroniser(t) == 0
+    assert env.etat.read_bytes() == avant and env.audit.read_text() == ""
+
+
+@pytest.mark.parametrize("panne", PANNES)
+def test_sans_liste_et_sans_mesure_des_poignees_rien(env, monkeypatch, panne):
+    t = time.time()
+    env.etat.write_text(json.dumps(_etat_trois_liens(t)))
+    env.poignees.unlink()                                  # F4 : sans mesure, on ne décide rien
+    monkeypatch.setenv("SBX_PAIRS_MAITRE_URL", "http://127.0.0.1:9")
+    _panne_maitre(env, panne)
+    avant = env.etat.read_bytes()
+    assert _charger().synchroniser(t) == 0
+    assert env.etat.read_bytes() == avant and env.audit.read_text() == ""
 
 
 def test_maitre_absent_de_l_etat(env):
@@ -463,7 +535,7 @@ def test_conditionnement():
               "RestrictAddressFamilies=AF_INET AF_UNIX", "IPAddressDeny=any", "IPAddressAllow=10.10.0.0/24 localhost"):
         assert d in svc
     tim = (RACINE / "systemd" / "secubox-maillage-pairs.timer").read_text()
-    for ligne in ("OnBootSec=3min", "OnActiveSec=3min", "OnUnitActiveSec=5min", "RandomizedDelaySec=30s",
+    for ligne in ("OnBootSec=2min", "OnActiveSec=2min", "OnUnitActiveSec=1min", "RandomizedDelaySec=10s",
                   "Persistent=true"):
         assert ligne in tim
     rules = (RACINE / "debian" / "rules").read_text()

@@ -9,7 +9,8 @@ Modèle de réseau minimal, horloge simulée, avec les vrais `pairs_directs.calc
 
 - Une session WireGuard A↔B existe SSI chacun a la clé de l'autre dans ses pairs (sonde ou actif) ET que le
   chemin direct est joignable. Première poignée de main dans les 25 s (PersistentKeepalive), puis toutes les 120 s.
-- Chaque pair participant exécute sa logique toutes les 300-330 s (minuterie 5 min + RandomizedDelaySec 30 s).
+- Chaque pair participant exécute sa logique toutes les 60-70 s (minuterie 1 min + RandomizedDelaySec 10 s), le
+  premier passage 120-130 s après son démarrage (OnBootSec=2min).
 - « Trou noir » : un pair rend `AllowedIPs = <ip de l'autre>/32` alors qu'aucune session n'existe.
 - « Désaccord » : la session existe mais un seul des deux capte : le trafic est perdu dans les deux sens (le
   filtrage par source de WireGuard rejette ce qui revient par le maître). Il dure au plus une période, une fois.
@@ -24,7 +25,7 @@ from api import mesh
 from api import pairs_directs as pd
 
 DT = 5
-PERIODE_MIN, PERIODE_MAX = 300, 330
+PERIODE_MIN, PERIODE_MAX = 60, 70
 DELAI = 180
 KEEPALIVE = 25
 REKEY = 120
@@ -64,7 +65,7 @@ def simuler(debut_b=0.0, b_participe=True, joignable=True, coupure=None, graine=
     """Rend les mesures de la simulation (secondes)."""
     hasard = random.Random(graine)
     etats = {"A": _etat("A"), "B": _etat("B")}
-    prochain = {"A": 180 + hasard.random() * 30, "B": debut_b + 180 + hasard.random() * 30}
+    prochain = {"A": 120 + hasard.random() * 10, "B": debut_b + 120 + hasard.random() * 10}
     session_depuis = None        # début de la session courante
     poignee = None               # dernière poignée de main (horodatage), persiste après la coupure
     m = {"trou_noir_max": 0, "trou_noir_total": 0, "desaccord_max": 0, "a_capte_b": False, "b_capte_a": False,

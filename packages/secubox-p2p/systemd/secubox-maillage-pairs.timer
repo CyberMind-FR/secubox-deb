@@ -6,11 +6,11 @@
 Description=SecuBox — synchronisation des liens directs entre pairs (#3133)
 
 [Timer]
-OnBootSec=3min
+OnBootSec=2min
 # Depuis l'activation de la minuterie : OnUnitActiveSec seul ne se redéclenche pas après une réactivation.
-OnActiveSec=3min
-OnUnitActiveSec=5min
-RandomizedDelaySec=30s
+OnActiveSec=2min
+OnUnitActiveSec=1min
+RandomizedDelaySec=10s
 Persistent=true
 
 [Install]

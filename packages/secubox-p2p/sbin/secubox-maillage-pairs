@@ -12,13 +12,16 @@
                  Un pair listé devient une SONDE (clé + endpoint, sans AllowedIPs : aucun trafic détourné du maître),
                  promue ACTIF (/32) seulement après une poignée de main de moins de 180 s, rétrogradée en sonde quand
                  la poignée manque depuis plus de 180 s, retirée seulement quand le maître ne la liste plus.
+                 Sans liste exploitable (maître injoignable, 503, JSON, version, ancre absente ou autre maître) :
+                 seules les rétrogradations s'appliquent (elles ne dépendent que des poignées locales).
                  Sans mesure de poignées locale (fichier absent ou périmé) : rien ne change.
                  Avec [maillage] liens_directs = false : toutes les entrées directes de CETTE box sont retirées.
   etat           affiche (JSON, lecture seule) le réglage et les liens directs (direct_etat « sonde » ou « actif »).
 
 Confiance : la liste n'est lue QUE sur http://<mesh_ip du maître>:7331/api/v1/p2p/master-link/pairs, à travers le
 tunnel, et le maître est l'entrée de l'état dont la clé est celle de l'ancre. Aucune adresse ne vient de la liste ou du
-réseau. Pas de redirection, 6 s, 256 Kio au plus. Tout échec (réseau, 4xx/5xx, JSON, version, pairs) : rien ne change.
+réseau. Pas de redirection, 6 s, 256 Kio au plus. Tout échec (réseau, 4xx/5xx, JSON, version, pairs) : ni ajout,
+ni promotion, ni retrait ; seules les rétrogradations (poignées locales) s'appliquent.
 
 Surcharges réservées aux tests (jamais posées en production) : SBX_PAIRS_ETAT, SBX_PAIRS_POIGNEES, SBX_PAIRS_ANCRE,
 SBX_PAIRS_MAITRE_URL (URL de base remplaçant http://<mesh_ip>:7331), SBX_PAIRS_CONFIG,
@@ -232,17 +235,17 @@ def synchroniser(maintenant=None):
         log("liens directs désactivés ([maillage] liens_directs = false)")
         return 0
     a = ancre.lire(_chemin("SBX_PAIRS_ANCRE", ANCRE))
+    liste = None
     if a is None or not isinstance(a.get("cle_publique"), str):
-        log("pas d'ancre du maître : rien à faire")
-        return 0
-    maitre, ip_maitre = trouver_maitre(etat, a["cle_publique"])
-    if maitre is None or not ancre.accepte(a, maitre.get("public_key")):
-        log("le maître de l'état n'est pas celui de l'ancre : rien à faire")
-        return 0
-    liste = lire_liste(_url_maitre(ip_maitre))
-    if liste is None:
-        log("liste du maître indisponible ou invalide : rien ne change")
-        return 0
+        log("pas d'ancre du maître : pas de liste")
+    else:
+        maitre, ip_maitre = trouver_maitre(etat, a["cle_publique"])
+        if maitre is None or not ancre.accepte(a, maitre.get("public_key")):
+            log("le maître de l'état n'est pas celui de l'ancre : pas de liste")
+        else:
+            liste = lire_liste(_url_maitre(ip_maitre))
+            if liste is None:
+                log("liste du maître indisponible ou invalide : pas de liste")
     # Relecture juste avant le calcul : l'API écrit aussi ce fichier.
     etat, modele = _etat_lu(chemin)
     if etat is None or etat.get("role") == "master":
@@ -251,7 +254,16 @@ def synchroniser(maintenant=None):
     if poignees is None:       # sans mesure, ni ajout, ni promotion, ni rétrogradation : on ne décide pas à l'aveugle
         log("mesure des poignées de main absente ou périmée : rien ne change")
         return 0
-    calcul = pairs_directs.calculer(etat, liste, poignees, maintenant)
+    if liste is None:
+        # La rétrogradation est la soupape de sécurité : elle ne dépend que des poignées LOCALES, jamais du maître.
+        # Liste = nos entrées directes actuelles (rien n'est retiré ni ajouté) ; seules les rétrogradations sont gardées.
+        log("sans liste du maître : rétrogradations seulement (ni ajout, ni promotion, ni retrait)")
+        actuelles = [{"name": e.get("name"), "public_key": e.get("public_key"), "mesh_ip": e.get("mesh_ip"),
+                      "endpoint": e.get("endpoint")} for e in _directs(etat)]
+        retro = pairs_directs.calculer(etat, actuelles, poignees, maintenant)["retrogradations"]
+        calcul = {"ajouts": [], "promotions": [], "retrogradations": retro, "retraits": []}
+    else:
+        calcul = pairs_directs.calculer(etat, liste, poignees, maintenant)
     return _ecrire_et_auditer(chemin, etat, pairs_directs.appliquer(etat, calcul, maintenant), modele)
 
 

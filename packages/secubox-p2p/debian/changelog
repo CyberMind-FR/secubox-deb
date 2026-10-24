@@ -22,8 +22,10 @@ secubox-p2p (1.19.0-1~trixie1) trixie; urgency=medium
     6 s, 256 Kio ; tout échec ou version autre que 1 ne change rien, une liste vide valide ne retire que les liens
     directs. Écriture atomique de wg_mesh.json (mode conservé, propriétaire = celui du service secubox, rien si inchangé ; refus de synchroniser en root), audit pair_direct_ajoute /
     pair_direct_promu / pair_direct_retrograde / pair_direct_retire ; sans mesure locale des poignées, rien ne change ;
+    sans liste exploitable du maître (injoignable, 503, ancre absente…), seules les rétrogradations s'appliquent ;
     liens_directs = false retire les entrées directes de la box. Minuterie
-    secubox-maillage-pairs.timer (3 min, puis 5 min). Réglage [maillage] liens_directs (défaut true) de p2p.toml.
+    secubox-maillage-pairs.timer (2 min, puis toutes les minutes ±10 s : désaccord à la promotion ≤ 60 s, perte après
+    une rupture ≤ 180 s + une période ; au plus 32 requêtes/min sur le maître). Réglage [maillage] liens_directs (défaut true) de p2p.toml.
   * secubox-relais-maillage (ref #3133) : pairs_32 ignore les entrées direct: true de wg_mesh.json (un lien direct
     n'est pas un pair à relayer : sans cela tout satellite tentait joker DNS-01, certbot et vhosts pour ses frères) ;
     pair_du_maillage tolère « (none) » (sonde sans AllowedIPs) au lieu d'échouer sur une exception.
