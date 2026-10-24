@@ -20,6 +20,12 @@ Environment=PYTHONDONTWRITEBYTECODE=1
 # /run/secubox (sticky) ne se retire pas autrement — vécu sur gk3, elle
 # appartenait à secubox-waf et le démon tournait en boucle.
 ExecStartPre=+/bin/rm -f /run/secubox/vault.sock
+# Le journal chaîné du Coffre appartient au service (#3108) : retrouvé secubox:secubox après un démarrage de gk2,
+# le Coffre ne pouvait plus l'écrire, donc plus s'ouvrir (HTTP 500). Le postinst ne corrige qu'à l'installation ;
+# ici, à chaque démarrage. Créé s'il manque (sans jamais tronquer un journal existant), contenu jamais touché.
+ExecStartPre=+/bin/sh -c 'test -e /var/log/secubox/coffre.journal || install -o secubox-coffre -g secubox -m 0640 /dev/null /var/log/secubox/coffre.journal'
+ExecStartPre=+/bin/chown secubox-coffre:secubox /var/log/secubox/coffre.journal
+ExecStartPre=+/bin/chmod 0640 /var/log/secubox/coffre.journal
 ExecStart=/usr/bin/python3 -m coffre.daemon
 RuntimeDirectory=secubox-coffre
 RuntimeDirectoryMode=0700
