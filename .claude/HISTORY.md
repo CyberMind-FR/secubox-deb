@@ -23,7 +23,10 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   `server_name` gk2 ; neutralisés (`<x>.*`), fichiers renommés avec migration sûre, garde de dépôt
   `tests/test_aucun_vhost_gk2_3117.py`, réveil (profiles 0.23.13) qui retrouve `<x>.*`. Publiés sur apt (waf-ng reconstruit
   arm64) ; gk1 à jour par apt, plus aucun « gk2 » dans sites-enabled ; vhosts orphelins gitea/metanews retirés (sauvegarde
-  /var/backups/nginx). **gk2 non mis à jour** : vérifier d'abord dpkg -V (mood, bbs, podcaster retouchés ?) et nginx -T.
+  /var/backups/nginx). gk2 mis à jour par apt après contrôles (dpkg -V : seuls metablogizer et depot retouchés, archivés ;
+  nginx -T : aucun vhost local en conflit) — closes #3117. Incident : mon `timeout 1500` a coupé apt (18/26 configurés) ;
+  fini par `dpkg --configure -a` dans une unité transitoire ; noms publics de gk2 identiques avant/après (lyrion.gk2
+  déjà en 000 avant). Leçon : jamais de limite de temps sur une installation de paquets.
 - Incidents gk1 : `secubox-firstboot --help` a rejoué le premier démarrage (secubox.conf, users.json, JWT, SSH par mot de
   passe) — #3113 ; domaine restauré, ~40 services redémarrés un par un pour le nouveau secret JWT.
 - Ouverts : #3112 (nginx fait confiance à XFF depuis 127.0.0.1 : l'onion du webui forge l'adresse LAN), #3118 (recharger
