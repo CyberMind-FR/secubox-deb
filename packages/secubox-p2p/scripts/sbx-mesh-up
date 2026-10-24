@@ -83,3 +83,7 @@ wg show wg-mesh
 if [ -x /usr/sbin/secubox-annuaire-maillage ]; then
     /usr/sbin/secubox-annuaire-maillage || true
 fi
+# Ancre du maître (#3100) : une box associée avant l'ancre la reçoit du tunnel qu'elle vient de monter. Sans effet si elle existe déjà.
+if [ -x /usr/bin/sbx-mesh-ancre ]; then
+    /usr/bin/sbx-mesh-ancre rattraper || true
+fi

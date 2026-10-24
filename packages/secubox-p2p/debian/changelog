@@ -1,3 +1,9 @@
+secubox-p2p (1.18.0-1~trixie1) trixie; urgency=medium
+
+  * Rattrapage de l'ancre du maitre (ref #3100) : `sbx-mesh-ancre rattraper` pose l'ancre sur une box deja associee (gk1, gk3), depuis le tunnel qu'elle a deja. Condition : role satellite et UN SEUL pair WireGuard couvrant tout le reseau maille ; sinon rien. Jamais d'ecrasement. Audit `ancre_rattrapee`. Appele en fin de sbx-mesh-up et une fois au postinst, qui cree /etc/secubox/p2p (root:root 0755). 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 12:00:00 +0200
+
 secubox-p2p (1.17.3-1~bookworm1) bookworm; urgency=medium
 
   * Le point d'acces WireGuard d'un pair IPv6 s'ecrit entre crochets (ref #2936) : `[2001:db8::7]:51822`. _record_wg_identity ecrivait `2001:db8::7:51822`, invalide dans wg-quick. IPv4 inchange. Prepare le mesh et le p2p sur IPv6 (le reseau interne du mesh reste IPv4, 10.10.0.0/24). 3 tests.
