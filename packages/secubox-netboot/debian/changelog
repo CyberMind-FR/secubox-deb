@@ -1,3 +1,18 @@
+secubox-netboot (0.7.0-1~trixie1) trixie; urgency=medium
+
+  * sbx-netflash --nom NOM (ref #3100) : récupère le lot signé servi par le maître
+    (GET /lot-flash?nom=NOM, route ajoutée dans cette série), le vérifie avec la clé
+    embarquée AVANT toute écriture, flashe avec --no-reboot, puis dépose sur l'eMMC le code
+    de jonction (var/lib/secubox/p2p/automesh.code, 0600), l'ancre du maître
+    (etc/secubox/p2p/ancre-maitre.json, 0644) et secubox/profil.toml (maillage automesh).
+    Sans admin_empreinte dans le lot : mot de passe saisi deux fois (read -s) et haché en
+    argon2 (stdin) ; sans module argon2 dans le live, refus avant toute écriture.
+    Sans --nom : comportement inchangé.
+  * Nouveau sbx-netflash-profil (généré, validé par premier-pas), installé dans le live.
+  * secubox-p2p passe de Recommends à Depends (le lot appelle sbx-mesh-invite).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:00:00 +0200
+
 secubox-netboot (0.6.8-1~trixie1) trixie; urgency=medium
 
   * build-live-netboot.sh (ref #3079) : retrait de systemd.unit=rescue.target. Le live
