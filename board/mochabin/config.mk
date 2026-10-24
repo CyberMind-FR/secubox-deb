@@ -51,10 +51,10 @@ ATF_MARVELL_BRANCH=atf-v1.5-armada-18.12
 SECUBOX_PROFILE=secubox-full
 SECUBOX_LITE=0
 
-# Interfaces réseau
-WAN_IFACE=eth0
-LAN_IFACES=eth1 eth2 eth3 eth4
-SFP_IFACES=eth5 eth6
+# Interfaces réseau (net.ifnames=0, #3101) : eth1 = conduit du switch DSA, jamais ponté
+WAN_IFACE=eth2
+LAN_IFACES=lan0 lan1 lan2 lan3
+SFP_IFACES=eth0
 
 # RAM suffisante pour DPI full-line + toutes les fonctions
 DPI_MODE=inline

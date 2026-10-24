@@ -132,10 +132,12 @@ get_interface_config() {
 
     case "$board" in
         mochabin)
-            # MochaBin: Armada 7040 with DSA switch + SFP+
-            wan_iface="eth0"
-            lan_ifaces="eth1 eth2 eth3 eth4"
-            sfp_ifaces="eth5 eth6"
+            # MOCHAbin, Armada 7040 (net.ifnames=0, #3101) : eth0 = SFP+ 10G, eth1 = conduit du switch DSA
+            # (JAMAIS ponté : br-lan coupe alors lan0..lan3), eth2 = WAN 1G RJ45 (PHY 88E1510).
+            # Les ports LAN sont les ports du switch, lan0..lan3 ; eth3..eth6 n'existent pas.
+            wan_iface="eth2"
+            lan_ifaces="lan0 lan1 lan2 lan3"
+            sfp_ifaces="eth0"
             profile="full"
             ;;
         espressobin-v7)
