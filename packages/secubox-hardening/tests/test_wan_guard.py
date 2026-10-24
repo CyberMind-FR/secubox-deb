@@ -56,3 +56,18 @@ def test_base_geree_sans_interface_en_dur():
         assert port in texte
     assert "nft-input-trust.d" in texte
     assert 'include "/etc/nftables.d/*.nft"' in texte
+
+
+def test_jonction_du_maillage_ouverte_au_lan_fermee_a_internet():
+    # #3103 : eth2 de gk2 porte le WAN ET le LAN (réseau de la Freebox). 7331 dans la liste coupée rendait toute
+    # jonction au maillage impossible depuis le LAN (gk1 : curl 000, sbx-mesh-join en échec).
+    texte = LIVREE.read_text()
+    _, ports = wg.ports_gardes(texte)
+    assert 7331 not in ports
+    regles = [l.strip() for l in texte.splitlines() if "7331" in l and not l.lstrip().startswith("#")]
+    v4 = [l for l in regles if "ip saddr !=" in l]
+    assert v4, "7331 doit rester coupé sur eth2 pour les adresses non privées"
+    for reseau in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"):
+        assert reseau in v4[0]
+    assert "drop" in v4[0]
+    assert any("nfproto ipv6" in l and "drop" in l for l in regles)     # jamais en IPv6 depuis eth2
