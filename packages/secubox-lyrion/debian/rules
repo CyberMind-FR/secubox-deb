@@ -14,6 +14,8 @@ override_dh_auto_install:
 	# Watchdog LMS (relance si :9000 muet alors que la LXC tourne).
 	install -m 755 sbin/secubox-lyrion-watchdog debian/secubox-lyrion/usr/sbin/secubox-lyrion-watchdog
 	install -d debian/secubox-lyrion/lib/systemd/system
+	# API sur socket dédiée (#763, #3096) : l'agrégateur relaie /api/v1/lyrion/ à /run/secubox/lyrion.sock.
+	install -m 644 debian/secubox-lyrion.service debian/secubox-lyrion/lib/systemd/system/
 	install -m 644 systemd/secubox-lyrion-watchdog.service systemd/secubox-lyrion-watchdog.timer \
 	        debian/secubox-lyrion/lib/systemd/system/
 	# Web UI
@@ -47,3 +49,4 @@ override_dh_installsystemd:
 	# dh_installsystemd par défaut le désactiverait.
 	dh_installsystemd --name=secubox-lyrion-version-check secubox-lyrion-version-check.timer
 	dh_installsystemd --name=secubox-lyrion-watchdog secubox-lyrion-watchdog.timer
+	dh_installsystemd --name=secubox-lyrion

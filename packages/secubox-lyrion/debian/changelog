@@ -1,3 +1,12 @@
+secubox-lyrion (1.7.4-1~trixie1) trixie; urgency=medium
+
+  * API sur socket dédiée de nouveau livrée et activée (ref #3096) : l'agrégateur relaie /api/v1/lyrion/
+    à /run/secubox/lyrion.sock (#763), mais l'unité n'était plus installée et le postinst la désactivait ;
+    après un redémarrage de gk2, panneau d'administration en 404. L'unité ne touche plus /run/secubox
+    (RuntimeDirectory= vide, #494). Manifeste : units = [secubox-lyrion.service], always-on (une fois).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:30:00 +0200
+
 secubox-lyrion (1.7.3-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.

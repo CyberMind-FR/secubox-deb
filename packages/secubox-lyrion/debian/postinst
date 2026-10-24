@@ -65,7 +65,19 @@ case "$1" in
         if command -v secubox-waf-route >/dev/null 2>&1; then
             secubox-waf-route "$(secubox-domaine lyrion)" 9080 || true
         fi
-        systemctl disable secubox-lyrion.service 2>/dev/null || true
+        # API sur socket dédiée (#763) : #1573 l'avait retirée du manifeste quand elle était servie par
+        # l'agrégateur. Elle y revient, toujours éveillée (un serveur de musique ne dort pas ; en on-demand
+        # rien ne la relançait au démarrage : panneau en 404, #3096). Une fois (témoin), puis le manifeste
+        # reste celui de l'administrateur.
+        temoin3096=/var/lib/secubox/lyrion/.manifeste-3096
+        if [ ! -e "$temoin3096" ] && [ -f "$man" ]; then
+            sed -i 's/^units *= *\[\].*$/units     = ["secubox-lyrion.service"]/' "$man"
+            if command -v secubox-profilectl >/dev/null 2>&1; then
+                secubox-profilectl set-lifecycle lyrion --lifecycle always-on \
+                    --wake-class normal >/dev/null 2>&1 || true
+            fi
+            touch "$temoin3096"
+        fi
         ;;
 esac
 
