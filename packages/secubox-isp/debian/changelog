@@ -1,3 +1,11 @@
+secubox-isp (1.5.0-1~trixie1) trixie; urgency=medium
+
+  * isp recentré : socle SecuBox (lite : protections, HAProxy, WAF) + opérateur + courrier + metablogizer.
+    Plugins du Hall (billets, metanews, messagerie, nextcloud, bbs) passés à secubox-full ; matrix, gitea, mesh
+    à l'App Store seulement (ref #3105).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 09:30:00 +0200
+
 secubox-isp (1.4.1-1~trixie1) trixie; urgency=medium
 
   * Sans secubox-reality (ref #3017).

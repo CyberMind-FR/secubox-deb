@@ -16,22 +16,14 @@ Depends: ${misc:Depends},
  secubox-saas-relay,
  secubox-p2p (>= 1.12.0),
  secubox-federation,
- secubox-mesh (>= 1.0),
  secubox-metrics (>= 1.14.0),
  secubox-mail (>= 1.0),
- secubox-matrix,
- secubox-billets,
- secubox-nextcloud (>= 1.0),
- secubox-gitea (>= 1.0),
- secubox-metablogizer (>= 1.0),
- secubox-bbs,
- secubox-messagerie,
- secubox-metanews (>= 0.3.0)
+ secubox-metablogizer (>= 1.0)
 Recommends: wireguard-tools
-Description: SecuBox ISP — protection + operateur + hebergement
- Herite de secubox-lite (toutes les protections) et ajoute le reseau
- d'operateur (modem, exposition, maillage) et tous les
- modules d'hebergement : courrier, messagerie Matrix, visioconference,
- fichiers (Nextcloud), photos, Git (Gitea), sites (metablogizer), BBS,
- billets, actualites. Les medias, la domotique, l'IA et le Hall sont dans
- secubox-full.
+Description: SecuBox ISP — protection + operateur + publication
+ Herite de secubox-lite (toutes les protections, HAProxy et le WAF sbxwaf) et
+ ajoute le reseau d'operateur (modem, CDN, relais SaaS, maillage p2p,
+ federation, metriques), le courrier et la publication de sites
+ (metablogizer). Les plugins du Hall (billets, actualites, messagerie,
+ Nextcloud, BBS) sont dans secubox-full ; Matrix, Gitea et mesh s'installent
+ depuis l'App Store.
