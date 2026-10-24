@@ -303,12 +303,74 @@ def test_etat_lien_symbolique_refuse(env, tmp_path):
     assert m.requetes == [] and reel.read_bytes() == avant
 
 
-def test_main_exige_root_seulement_a_l_execution(env, monkeypatch, capsys):
-    cli = _charger()                      # le chargement ne vérifie rien
+def test_main_sans_privilege_et_sortie_inconnue(env, monkeypatch):
+    cli = _charger()
     monkeypatch.setattr(os, "geteuid", lambda: 1000)
-    m = env.maitre(corps=LISTE)
-    assert cli.main(["synchroniser"]) == 1 and m.requetes == []
+    env.maitre(corps=LISTE)
+    assert cli.main(["synchroniser"]) == 0 and len(_pairs_ecrits(env)) == 3
     assert cli.main(["inconnu"]) == 2
+
+
+def test_ecriture_refusee_code_1_et_etat_intact(env, monkeypatch, capsys):
+    cli = _charger()
+    env.maitre(corps=LISTE)
+    avant = env.etat.read_bytes()
+
+    def refus(*a, **k):
+        raise PermissionError(13, "refusé")
+    monkeypatch.setattr(cli.tempfile, "mkstemp", refus)
+    assert cli.main(["synchroniser"]) == 1
+    assert "refusée" in capsys.readouterr().err and env.etat.read_bytes() == avant
+
+
+def test_pas_de_chown_ni_chmod_par_chemin():
+    src = SCRIPT.read_text()
+    assert "os.chown" not in src and "os.chmod" not in src and "fchmod" in src and "geteuid" not in src
+
+
+def test_mode_pris_sur_le_descripteur_lu(env, tmp_path):
+    cli = _charger()
+    cible = tmp_path / "autre.json"
+    cible.write_text("{}")
+    os.chmod(cible, 0o600)
+    original = cli.os.open
+    appels = []
+
+    def open_puis_echange(chemin, *a, **k):
+        fd = original(chemin, *a, **k)
+        if str(chemin) == str(env.etat) and not appels:
+            appels.append(1)
+            env.etat.unlink()               # échange après l'ouverture : lien vers une autre cible
+            env.etat.symlink_to(cible)
+        return fd
+    cli.os.open = open_puis_echange
+    try:
+        doc, st = cli._lire_json_stat(str(env.etat))
+    finally:
+        cli.os.open = original
+    assert doc["role"] == "peer" and stat.S_IMODE(st.st_mode) == 0o640
+
+
+def test_audit_seulement_pour_les_liens_reellement_ajoutes(env):
+    cli = _charger()
+    env.maitre(corps=LISTE)
+    reel = cli.pairs_directs.appliquer
+    cli.pairs_directs.appliquer = lambda etat, calcul, t: reel(etat, dict(calcul, ajouts=calcul["ajouts"][:1]), t)
+    try:
+        cli.synchroniser()
+    finally:
+        cli.pairs_directs.appliquer = reel
+    lignes = [json.loads(x) for x in env.audit.read_text().splitlines()]
+    assert [x["cle"] for x in lignes] == [K_A]
+
+
+def test_peers_null_sans_exception(env):
+    doc = _etat()
+    doc["peers"] = None
+    env.etat.write_text(json.dumps(doc))
+    env.maitre(corps=LISTE)
+    cli = _charger()
+    assert cli.synchroniser() == 0 and cli.etat_json()["liens_directs"] == []
 
 
 def test_sous_commande_etat_lecture_seule(env, monkeypatch, capsys):
@@ -336,6 +398,10 @@ def test_conditionnement():
     svc = (RACINE / "systemd" / "secubox-maillage-pairs.service").read_text()
     assert "Type=oneshot" in svc and "ExecStart=/usr/sbin/secubox-maillage-pairs synchroniser" in svc
     assert "After=wg-quick@wg-mesh.service" in svc and "TimeoutStartSec=2min" in svc
+    for d in ("User=secubox", "Group=secubox", "NoNewPrivileges=yes", "ProtectSystem=strict",
+              "ReadWritePaths=/var/lib/secubox/p2p /var/log/secubox", "ProtectHome=yes", "PrivateTmp=yes",
+              "RestrictAddressFamilies=AF_INET AF_UNIX", "IPAddressDeny=any", "IPAddressAllow=10.10.0.0/24 localhost"):
+        assert d in svc
     tim = (RACINE / "systemd" / "secubox-maillage-pairs.timer").read_text()
     for ligne in ("OnBootSec=3min", "OnActiveSec=3min", "OnUnitActiveSec=5min", "RandomizedDelaySec=30s",
                   "Persistent=true"):

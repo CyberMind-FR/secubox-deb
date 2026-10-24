@@ -11,7 +11,7 @@ secubox-p2p (1.19.0-1~trixie1) trixie; urgency=medium
     cours ; retrait d'un direct disparu de la liste ou sans poignée de main récente, avec refus de 1 h) et
     pairs_directs.appliquer reconstruit l'état champ par champ depuis des pairs revalidés. Les entrées non directes
     ne sont jamais retirées ni modifiées.
-  * Côté pair, l'exécuteur root (ref #3133) : secubox-maillage-pairs [synchroniser|etat] lit la liste du maître
+  * Côté pair, l'exécuteur sans privilège (User=secubox, durci ; l'application passe par sbx-mesh-up en root) (ref #3133) : secubox-maillage-pairs [synchroniser|etat] lit la liste du maître
     UNIQUEMENT sur http://<mesh_ip du maître>:7331 (le maître est l'entrée de la clé de l'ancre), sans redirection,
     6 s, 256 Kio ; tout échec ou version autre que 1 ne change rien, une liste vide valide ne retire que les liens
     directs. Écriture atomique de wg_mesh.json (propriétaire et mode conservés, rien si inchangé), refus mémorisés dans

@@ -208,7 +208,7 @@ Les vhosts des services répondent à `<service>.*` en plus de leur nom gk2 : c'
 
 ## Liens directs (#3133)
 
-`secubox-maillage-pairs [synchroniser|etat]` (root, minuterie `secubox-maillage-pairs.timer` : 3 min après le démarrage,
+`secubox-maillage-pairs [synchroniser|etat]` (sans privilège, `User=secubox` ; l'application passe par `sbx-mesh-up` (root) ; minuterie `secubox-maillage-pairs.timer` : 3 min après le démarrage,
 puis toutes les 5 min) relie les pairs en direct, sans passer par le maître, pour le trafic entre eux.
 
 - Le maître publie `GET /api/v1/p2p/master-link/pairs` (`{"version":1,"pairs":[{nom, mesh_ip, cle_publique, endpoint}]}`).
@@ -218,9 +218,9 @@ puis toutes les 5 min) relie les pairs en direct, sans passer par le maître, po
 - Les liens sont des entrées `direct: true` de `wg_mesh.json` ; `secubox-p2p-mesh.path` déclenche `sbx-mesh-up`
   (`wg syncconf`). Jamais de `wg set`. Un lien sans poignée de main récente est retiré et refusé 1 h
   (`/var/lib/secubox/p2p/pairs-directs-refuses.json`).
-- Écriture de `wg_mesh.json` : relecture juste avant le calcul, remplacement atomique, propriétaire et mode conservés.
+- Écriture de `wg_mesh.json` : relecture juste avant le calcul, remplacement atomique, mode conservé (fchmod sur le descripteur), propriétaire = celui du processus.
   L'API écrit aussi ce fichier : la fenêtre de concurrence est courte et acceptée.
-- Réglage : `/etc/secubox/p2p.toml`, `[maillage] liens_directs = true` (défaut ; `false` désactive).
+- Réglage : `/etc/secubox/p2p.toml`, `[maillage] liens_directs = true` (défaut ; `false` désactive la synchronisation mais ne retire PAS les liens existants).
 - Audit : `pair_direct_ajoute`, `pair_direct_retire`, `pair_direct_refuse` (nom, clé publique, mesh_ip).
 - Variables `SBX_PAIRS_*` (dont `SBX_PAIRS_MAITRE_URL`) : réservées aux tests ; ne jamais les poser en production,
   `SBX_PAIRS_MAITRE_URL` remplaçant l'adresse du maître.

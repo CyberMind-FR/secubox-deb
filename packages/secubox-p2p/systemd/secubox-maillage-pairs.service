@@ -10,3 +10,14 @@ After=wg-quick@wg-mesh.service
 Type=oneshot
 ExecStart=/usr/sbin/secubox-maillage-pairs synchroniser
 TimeoutStartSec=2min
+# Sans privilège : l'application passe par sbx-mesh-up (root), déclenché par secubox-p2p-mesh.path.
+User=secubox
+Group=secubox
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/secubox/p2p /var/log/secubox
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=10.10.0.0/24 localhost
