@@ -118,20 +118,31 @@ def _ips_reservees(etat: dict) -> set:
     return res
 
 
-def calculer(etat: Any, liste: Any, poignees: Any, maintenant: float, refuses: Any,
-             delai_poignee_s: int = 180, retente_apres_s: int = 3600) -> Dict[str, Any]:
-    """Décide des liens directs à ajouter / retirer. Rend {"ajouts": [pair normalisé…], "retraits": [clé…],
-    "refuses": {clé: jusqu'à}}. Toute entrée mal typée est écartée en silence, jamais une exception."""
-    vide: Dict[str, Any] = {"ajouts": [], "retraits": [], "refuses": {}}
+SONDE, ACTIF = "sonde", "actif"
+
+
+def etat_direct(e: Any) -> str:
+    """« actif » seulement si l'entrée le dit explicitement ; tout le reste (absent, inconnu, mal typé) est une sonde,
+    qui ne prend aucun trafic : en cas de doute, le trafic reste à la route du maître."""
+    return ACTIF if isinstance(e, dict) and e.get("direct_etat") == ACTIF else SONDE
+
+
+def calculer(etat: Any, liste: Any, poignees: Any, maintenant: float, delai_poignee_s: int = 180) -> Dict[str, Any]:
+    """Décide des liens directs : « sonde puis promotion ».
+
+    - ajouts : pair listé par le maître et inconnu ici -> nouvelle SONDE (clé + endpoint, sans AllowedIPs : elle ne
+      prend aucun trafic au maître ; ses keepalives provoquent la poignée de main si l'autre pair a aussi notre clé) ;
+    - promotions : sonde dont une poignée de main a moins de delai_poignee_s -> ACTIF (AllowedIPs = <ip>/32) ;
+    - retrogradations : actif sans poignée depuis plus de delai_poignee_s ET promu depuis plus de delai_poignee_s
+      -> SONDE (le /32 disparaît, le trafic revient au maître) ;
+    - retraits : entrée directe dont le maître ne liste plus le pair (seul cas de suppression).
+
+    Rend {"ajouts": [pair normalisé…], "promotions": [clé…], "retrogradations": [clé…], "retraits": [clé…]}.
+    Toute entrée mal typée est écartée en silence, jamais une exception."""
+    vide: Dict[str, Any] = {"ajouts": [], "promotions": [], "retrogradations": [], "retraits": []}
     if not isinstance(etat, dict) or isinstance(maintenant, bool) or _horodatage(maintenant) is None:
         return vide
     poignees = poignees if isinstance(poignees, dict) else {}
-    refus: Dict[str, float] = {}
-    if isinstance(refuses, dict):
-        for cle, jusqua in refuses.items():
-            t = _horodatage(jusqua)
-            if isinstance(cle, str) and t is not None and t > maintenant:
-                refus[cle] = t                      # un refus échu s'oublie
     entrees = etat.get("peers")
     entrees = [e for e in entrees if isinstance(e, dict)] if isinstance(entrees, list) else []
     moi = etat.get("public_key")
@@ -163,44 +174,80 @@ def calculer(etat: Any, liste: Any, poignees: Any, maintenant: float, refuses: A
             continue                                # le maître (/24) ou toute route large
         valides.setdefault(p["cle_publique"], p)    # doublon de clé : la première entrée
     retraits: List[str] = []
-    nouveaux_refus = dict(refus)
+    promotions: List[str] = []
+    retrogradations: List[str] = []
     for cle, e in directs.items():
         if cle not in valides:
             retraits.append(cle)
             continue
-        depuis = _horodatage(e.get("direct_depuis"))
         ts = _horodatage(poignees.get(cle))
         recente = ts is not None and 0 <= maintenant - ts < delai_poignee_s
-        if not recente and depuis is not None and maintenant - depuis > delai_poignee_s:
-            retraits.append(cle)
-            nouveaux_refus[cle] = maintenant + retente_apres_s
+        if etat_direct(e) == SONDE:
+            if recente:
+                promotions.append(cle)
+            continue
+        depuis = _horodatage(e.get("direct_depuis"))
+        # promu depuis plus du délai ; un horodatage absent, invalide ou futur ne protège pas le /32 (côté sûr)
+        ancien = depuis is None or not 0 <= maintenant - depuis <= delai_poignee_s
+        if not recente and ancien:
+            retrogradations.append(cle)
     ajouts: List[Dict[str, str]] = []
     ips_ajoutees = set()
     places = MAX_PAIRS - len(directs)
     for cle, p in sorted(valides.items(), key=lambda kv: int(ipaddress.IPv4Address(kv[1]["mesh_ip"]))):
-        if cle in directs or cle in refus or p["mesh_ip"] in ips_prises or p["mesh_ip"] in ips_ajoutees:
+        if cle in directs or p["mesh_ip"] in ips_prises or p["mesh_ip"] in ips_ajoutees:
             continue
         if len(ajouts) >= places:
             break
         ips_ajoutees.add(p["mesh_ip"])
         ajouts.append(p)
-    return {"ajouts": ajouts, "retraits": retraits, "refuses": nouveaux_refus}
+    return {"ajouts": ajouts, "promotions": promotions, "retrogradations": retrogradations, "retraits": retraits}
+
+
+def _cles(calcul: dict, champ: str) -> set:
+    v = calcul.get(champ)
+    return {c for c in v if isinstance(c, str)} if isinstance(v, list) else set()
 
 
 def appliquer(etat: Any, calcul: Any, maintenant: float) -> dict:
-    """Nouvel état = copie de l'ancien + ajouts − retraits. Les ajouts sont REVALIDÉS (valider_pair) puis reconstruits
-    champ par champ : rien de brut n'atteint le fichier. Seules les entrées « direct » peuvent être retirées."""
+    """Nouvel état = copie de l'ancien, retraits, rétrogradations, promotions puis ajouts. Seules les entrées
+    « direct » sont touchées. Les ajouts sont REVALIDÉS (valider_pair) puis reconstruits champ par champ, en sonde
+    (aucune AllowedIPs) ; une promotion revérifie l'IP (réseau maillé, ni réservée ni tenue par une autre entrée)."""
     if not isinstance(etat, dict):
         return {}
     nouveau = copy.deepcopy(etat)
     if not isinstance(nouveau.get("peers"), list) or not isinstance(calcul, dict):
         return nouveau
-    retraits = {c for c in calcul.get("retraits") or [] if isinstance(c, str)} \
-        if isinstance(calcul.get("retraits"), list) else set()
+    retraits, promotions = _cles(calcul, "retraits"), _cles(calcul, "promotions")
+    retrogradations = _cles(calcul, "retrogradations")
     pairs = [e for e in nouveau["peers"] if not (isinstance(e, dict) and e.get("direct") is True
                                                   and e.get("public_key") in retraits)]
+    net = ipaddress.ip_network(RESEAU_MAILLE)
+    reservees = _ips_reservees(nouveau)
+    for e in pairs:
+        if not (isinstance(e, dict) and e.get("direct") is True):
+            continue
+        cle = e.get("public_key")
+        if cle in retrogradations and etat_direct(e) == ACTIF:
+            e["direct_etat"] = SONDE
+            e.pop("allowed_ips", None)
+            e["direct_depuis"] = int(maintenant)
+        elif cle in promotions and etat_direct(e) == SONDE:
+            ip = _ipv4(e.get("mesh_ip"))
+            autres = set()
+            for x in pairs:
+                if x is e or not isinstance(x, dict):
+                    continue
+                for champ in ("mesh_ip", "allowed_ips"):
+                    if isinstance(x.get(champ), str):
+                        autres.add(x[champ].split("/")[0].strip())
+            if ip is None or ip not in net or str(ip) in reservees or str(ip) in autres:
+                continue
+            e["direct_etat"] = ACTIF
+            e["allowed_ips"] = f"{ip}/32"
+            e["direct_depuis"] = int(maintenant)
     cles = {e.get("public_key") for e in pairs if isinstance(e, dict)}
-    ips = {e.get("mesh_ip") for e in pairs if isinstance(e, dict)} | _ips_reservees(nouveau)
+    ips = {e.get("mesh_ip") for e in pairs if isinstance(e, dict)} | reservees
     for a in calcul.get("ajouts") if isinstance(calcul.get("ajouts"), list) else []:
         if not isinstance(a, dict):
             continue
@@ -210,8 +257,8 @@ def appliquer(etat: Any, calcul: Any, maintenant: float) -> dict:
             continue
         cles.add(p["cle_publique"])
         ips.add(p["mesh_ip"])
-        pairs.append({"public_key": p["cle_publique"], "allowed_ips": p["mesh_ip"] + "/32", "mesh_ip": p["mesh_ip"],
-                      "name": p["nom"], "endpoint": p["endpoint"], "direct": True,
+        pairs.append({"public_key": p["cle_publique"], "mesh_ip": p["mesh_ip"], "name": p["nom"],
+                      "endpoint": p["endpoint"], "direct": True, "direct_etat": SONDE,
                       "direct_depuis": int(maintenant)})
     nouveau["peers"] = pairs
     return nouveau

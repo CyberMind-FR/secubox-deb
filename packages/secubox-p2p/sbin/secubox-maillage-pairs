@@ -5,22 +5,26 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """secubox-maillage-pairs — liens WireGuard directs entre pairs du maillage (#3133), côté PAIR, sans privilège (User=secubox).
 
-  synchroniser   (défaut) lit la liste des pairs vivants publiée par le maître, calcule les liens directs à ajouter
-                 ou retirer et les écrit dans wg_mesh.json ; le changement de ce fichier déclenche
-                 secubox-p2p-mesh.path, donc sbx-mesh-up (root) qui applique la configuration (wg syncconf). Ce script ne tourne
-                 PAS en root et n'appelle jamais `wg set`.
-  etat           affiche (JSON, lecture seule) les liens directs et les derniers refus.
+  synchroniser   (défaut) lit la liste des pairs vivants publiée par le maître et ses propres poignées de main, décide
+                 des liens directs (« sonde puis promotion », voir api/pairs_directs.calculer) et les écrit dans
+                 wg_mesh.json ; le changement de ce fichier déclenche secubox-p2p-mesh.path, donc sbx-mesh-up (root) qui
+                 applique la configuration (wg syncconf). Ce script ne tourne PAS en root et n'appelle jamais `wg set`.
+                 Un pair listé devient une SONDE (clé + endpoint, sans AllowedIPs : aucun trafic détourné du maître),
+                 promue ACTIF (/32) seulement après une poignée de main de moins de 180 s, rétrogradée en sonde quand
+                 la poignée manque depuis plus de 180 s, retirée seulement quand le maître ne la liste plus.
+                 Sans mesure de poignées locale (fichier absent ou périmé) : rien ne change.
+                 Avec [maillage] liens_directs = false : toutes les entrées directes de CETTE box sont retirées.
+  etat           affiche (JSON, lecture seule) le réglage et les liens directs (direct_etat « sonde » ou « actif »).
 
 Confiance : la liste n'est lue QUE sur http://<mesh_ip du maître>:7331/api/v1/p2p/master-link/pairs, à travers le
 tunnel, et le maître est l'entrée de l'état dont la clé est celle de l'ancre. Aucune adresse ne vient de la liste ou du
 réseau. Pas de redirection, 6 s, 256 Kio au plus. Tout échec (réseau, 4xx/5xx, JSON, version, pairs) : rien ne change.
 
 Surcharges réservées aux tests (jamais posées en production) : SBX_PAIRS_ETAT, SBX_PAIRS_POIGNEES, SBX_PAIRS_ANCRE,
-SBX_PAIRS_REFUSES, SBX_PAIRS_MAITRE_URL (URL de base remplaçant http://<mesh_ip>:7331), SBX_PAIRS_CONFIG,
+SBX_PAIRS_MAITRE_URL (URL de base remplaçant http://<mesh_ip>:7331), SBX_PAIRS_CONFIG,
 SBX_PAIRS_AUDIT, SBX_P2P_LIB."""
 import ipaddress
 import json
-import math
 import os
 import stat
 import sys
@@ -36,14 +40,12 @@ from api import ancre, mesh, pairs_directs  # noqa: E402
 ETAT = "/var/lib/secubox/p2p/wg_mesh.json"
 POIGNEES = "/run/secubox/p2p/wg-mesh-handshakes.json"
 ANCRE = ancre.CHEMIN
-REFUSES = "/var/lib/secubox/p2p/pairs-directs-refuses.json"
 CONFIG = "/etc/secubox/p2p.toml"
 AUDIT = "/var/log/secubox/audit.log"
 CHEMIN_LISTE = "/api/v1/p2p/master-link/pairs"
 PORT_MAITRE = 7331
 DELAI_S = 6
 TAILLE_MAX = 256 * 1024
-MAX_REFUSES = 256
 
 
 def _chemin(variable, defaut):
@@ -66,10 +68,6 @@ def _lire_json_stat(chemin):
             return json.load(f), st
     except (OSError, ValueError):
         return None, None
-
-
-def _lire_json(chemin):
-    return _lire_json_stat(chemin)[0]
 
 
 def _ecrire_json(chemin, document, mode=0o644):
@@ -101,18 +99,6 @@ def _liens_directs_actifs():
     except (OSError, ValueError, AttributeError):
         return True
     return valeur is not False
-
-
-def _refuses_lus(maintenant):
-    """Refus encore en cours, relevé nettoyé : clés texte, échéance finie et future, 256 au plus."""
-    doc = _lire_json(_chemin("SBX_PAIRS_REFUSES", REFUSES))
-    propres = {}
-    if isinstance(doc, dict):
-        for cle, jusqua in doc.items():
-            if (isinstance(cle, str) and mesh.valid_wg_key(cle) and not isinstance(jusqua, bool)
-                    and isinstance(jusqua, (int, float)) and math.isfinite(jusqua) and jusqua > maintenant):
-                propres[cle] = float(jusqua)
-    return dict(sorted(propres.items(), key=lambda kv: kv[1], reverse=True)[:MAX_REFUSES])
 
 
 class _SansRedirection(urllib.request.HTTPRedirectHandler):
@@ -192,16 +178,57 @@ def _auditer(evenement, **champs):
         log(f"audit impossible : {e}")
 
 
+def _directs(etat):
+    return [e for e in (etat.get("peers") or []) if isinstance(e, dict) and e.get("direct") is True]
+
+
+def _ecrire_et_auditer(chemin, etat, nouvel, modele):
+    """Écrit le nouvel état s'il diffère, puis audite ce qui a RÉELLEMENT changé (comparaison avant/après, jamais le
+    seul calcul). Code de sortie 0, ou 1 si l'écriture est refusée (rien n'est à moitié écrit)."""
+    if nouvel == etat:
+        return 0
+    try:
+        _ecrire_json(chemin, nouvel, stat.S_IMODE(modele.st_mode))
+    except OSError as e:
+        print(f"[maillage-pairs] ERREUR : écriture de {chemin} refusée : {e}", file=sys.stderr)
+        return 1
+    avant = {e.get("public_key"): e for e in _directs(etat)}
+    apres = {e.get("public_key"): e for e in _directs(nouvel)}
+
+    def champs(e):
+        return {"nom": str(e.get("name", "")), "mesh_ip": str(e.get("mesh_ip", ""))}
+    for cle, e in apres.items():
+        if cle not in avant:
+            _auditer("pair_direct_ajoute", cle=cle, etat=pairs_directs.etat_direct(e), **champs(e))
+            log(f"sonde ajoutée : {e.get('name', '?')} ({e.get('mesh_ip', '?')})")
+        elif pairs_directs.etat_direct(e) != pairs_directs.etat_direct(avant[cle]):
+            promu = pairs_directs.etat_direct(e) == pairs_directs.ACTIF
+            _auditer("pair_direct_promu" if promu else "pair_direct_retrograde", cle=cle, **champs(e))
+            log(f"lien direct {'actif' if promu else 'redevenu sonde'} : {e.get('name', '?')}")
+    for cle, e in avant.items():
+        if cle not in apres:
+            _auditer("pair_direct_retire", cle=cle, **champs(e))
+            log(f"lien direct retiré : {e.get('name', '?')}")
+    return 0
+
+
 def synchroniser(maintenant=None):
     """Code de sortie : 0 (rien à faire ou fait), 1 (écriture refusée : rien n'est à moitié écrit)."""
     chemin = _chemin("SBX_PAIRS_ETAT", ETAT)
-    etat, _ = _etat_lu(chemin)
+    etat, modele = _etat_lu(chemin)
     if etat is None:
         log("état du maillage absent ou illisible : rien à faire")
         return 0
     if etat.get("role") == "master":
         return 0
+    maintenant = time.time() if maintenant is None else maintenant
     if not _liens_directs_actifs():
+        # Désactivé : plus rien n'est ajouté, et les entrées directes de CETTE box sont retirées (le trafic revient
+        # au maître). Aucune requête au maître.
+        cles = [e.get("public_key") for e in _directs(etat) if isinstance(e.get("public_key"), str)]
+        if cles:
+            calcul = {"ajouts": [], "promotions": [], "retrogradations": [], "retraits": cles}
+            return _ecrire_et_auditer(chemin, etat, pairs_directs.appliquer(etat, calcul, maintenant), modele)
         log("liens directs désactivés ([maillage] liens_directs = false)")
         return 0
     a = ancre.lire(_chemin("SBX_PAIRS_ANCRE", ANCRE))
@@ -216,55 +243,24 @@ def synchroniser(maintenant=None):
     if liste is None:
         log("liste du maître indisponible ou invalide : rien ne change")
         return 0
-    maintenant = time.time() if maintenant is None else maintenant
     # Relecture juste avant le calcul : l'API écrit aussi ce fichier.
     etat, modele = _etat_lu(chemin)
     if etat is None or etat.get("role") == "master":
         return 0
     poignees = mesh.load_handshakes(_chemin("SBX_PAIRS_POIGNEES", POIGNEES))
-    if poignees is None:       # mesure absente : jamais une raison de retirer un lien
-        poignees = {e["public_key"]: maintenant for e in (etat.get("peers") or [])
-                    if isinstance(e, dict) and e.get("direct") is True and isinstance(e.get("public_key"), str)}
-    refus_avant = _refuses_lus(maintenant)
-    calcul = pairs_directs.calculer(etat, liste, poignees, maintenant, refus_avant)
-    nouvel = pairs_directs.appliquer(etat, calcul, maintenant)
-    if nouvel != etat:
-        try:
-            _ecrire_json(chemin, nouvel, stat.S_IMODE(modele.st_mode))
-        except OSError as e:
-            print(f"[maillage-pairs] ERREUR : écriture de {chemin} refusée : {e}", file=sys.stderr)
-            return 1
-        par_cle = {e.get("public_key"): e for e in (etat.get("peers") or []) if isinstance(e, dict)}
-        cles_apres = {e.get("public_key") for e in (nouvel.get("peers") or []) if isinstance(e, dict)}
-        for p in calcul["ajouts"]:
-            if p["cle_publique"] not in cles_apres:       # écarté par appliquer : aucun lien, aucune ligne
-                continue
-            _auditer("pair_direct_ajoute", nom=p["nom"], cle=p["cle_publique"], mesh_ip=p["mesh_ip"])
-            log(f"lien direct ajouté : {p['nom']} ({p['mesh_ip']})")
-        cles_nouvelles = {e.get("public_key") for e in (nouvel.get("peers") or []) if isinstance(e, dict)}
-        for cle in calcul["retraits"]:
-            if cle in cles_nouvelles:
-                continue
-            e = par_cle.get(cle, {})
-            _auditer("pair_direct_retire", nom=str(e.get("name", "")), cle=cle, mesh_ip=str(e.get("mesh_ip", "")))
-            if cle in calcul["refuses"] and cle not in refus_avant:
-                _auditer("pair_direct_refuse", nom=str(e.get("name", "")), cle=cle, mesh_ip=str(e.get("mesh_ip", "")))
-            log(f"lien direct retiré : {e.get('name', '?')}")
-    brut = _lire_json(_chemin("SBX_PAIRS_REFUSES", REFUSES))      # écrit aussi pour purger un relevé encombré
-    if calcul["refuses"] != (brut if brut is not None else {}) or (brut is None and calcul["refuses"]):
-        try:
-            _ecrire_json(_chemin("SBX_PAIRS_REFUSES", REFUSES), calcul["refuses"])
-        except OSError as e:
-            print(f"[maillage-pairs] ERREUR : écriture des refus refusée : {e}", file=sys.stderr)
-            return 1
-    return 0
+    if poignees is None:       # sans mesure, ni ajout, ni promotion, ni rétrogradation : on ne décide pas à l'aveugle
+        log("mesure des poignées de main absente ou périmée : rien ne change")
+        return 0
+    calcul = pairs_directs.calculer(etat, liste, poignees, maintenant)
+    return _ecrire_et_auditer(chemin, etat, pairs_directs.appliquer(etat, calcul, maintenant), modele)
 
 
-def etat_json(maintenant=None):
-    maintenant = time.time() if maintenant is None else maintenant
+def etat_json():
     etat, _ = _etat_lu(_chemin("SBX_PAIRS_ETAT", ETAT))
-    directs = [e for e in ((etat or {}).get("peers") or []) if isinstance(e, dict) and e.get("direct") is True]
-    return {"actif": _liens_directs_actifs(), "liens_directs": directs, "refuses": _refuses_lus(maintenant)}
+    directs = [dict(e, direct_etat=pairs_directs.etat_direct(e)) for e in _directs(etat or {})]
+    return {"actif": _liens_directs_actifs(), "liens_directs": directs,
+            "sondes": sum(e["direct_etat"] == pairs_directs.SONDE for e in directs),
+            "actifs": sum(e["direct_etat"] == pairs_directs.ACTIF for e in directs)}
 
 
 def main(argv=None):
