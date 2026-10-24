@@ -13,6 +13,11 @@ echo "============================================"
 setenv bootdev 0
 setenv bootpart "mmc 0:1"
 setenv rootpart "/dev/mmcblk0p2"
+# Adresses explicites (#3091) : celles du U-Boot usine 2020.10 posent un noyau Debian (~37 Mo) sur
+# 0x04000000-0x04200000, réservé au firmware (PSCI/ATF) → « would overwrite reserved memory ».
+setenv kernel_addr_r 0x08000000
+setenv fdt_addr_r 0x0c000000
+setenv ramdisk_addr_r 0x0c100000
 
 echo "Boot: ${bootpart} | Root: ${rootpart}"
 
