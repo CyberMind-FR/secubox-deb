@@ -334,6 +334,7 @@ requiert:
 recommande:
   - secubox-federation
 suggere:
+  - secubox-assist              # aide en temps réel, sur consentement : jamais installée sans le demander
   - secubox-mesh
   - secubox-daemon
   - secubox-meshtastic
@@ -397,6 +398,7 @@ description: "Métriques temps réel, tableaux et rapports."
 requiert:
   - secubox-metrics
 recommande:
+  - secubox-courbes             # historique et système en direct, remplace Grafana et Glances
 suggere:
 
 meta: secubox-service-ecrans
