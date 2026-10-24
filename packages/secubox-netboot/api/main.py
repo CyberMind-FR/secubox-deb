@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 import ipaddress
 import logging
+import re
 import time
 
 from . import lot
@@ -212,7 +213,7 @@ class BoardProfile(BaseModel):
 
 @router.get("/server")
 async def server_status(user=Depends(require_jwt)):
-    """État du rôle serveur de boot (tftpd, nginx /sbxboot, boards publiées)."""
+    """État du rôle serveur de boot (tftpd, vhost de boot :8099, boards publiées)."""
     r = await _run(SERVE, "status", timeout=20)
     return {"server": _json_or_raw(r["stdout"]), "error": r["stderr"] or None}
 
@@ -325,6 +326,68 @@ async def publish(req: PublishReq, user=Depends(require_jwt)):
     await _run(TRIGGERS, "on-image-published", f"BOARD={pid}", f"IMAGE_VER={image}", timeout=30)
     return {"ok": True, "board": pid, "image": image, "result": r["stdout"]}
 
+
+# ── netbooter une box : le live servi, lu dans son boot.cmd (#3100) ──────────
+
+TFTP_ROOT = Path("/srv/secubox/netboot/tftp")
+HTTP_ROOT = Path("/srv/secubox/netboot/http")
+_RE_NOM_LIVE = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+_RE_IMAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.img\.gz")
+_LIRE_MAX = 64 * 1024
+
+
+def _lire_court(f: Path) -> Optional[str]:
+    try:
+        with f.open("r", encoding="utf-8", errors="replace") as h:
+            return h.read(_LIRE_MAX)
+    except OSError:
+        return None
+
+
+def _images_live(d: Path) -> List[Dict[str, Any]]:
+    """images.txt du live (« nom taille sha256 » par ligne) ; noms douteux et lignes illisibles écartés."""
+    out: List[Dict[str, Any]] = []
+    for ligne in (_lire_court(d / "images.txt") or "").splitlines():
+        mots = ligne.split()
+        if len(mots) != 3 or not _RE_IMAGE.fullmatch(mots[0]) or not mots[1].isdigit() \
+                or not re.fullmatch(r"[0-9a-f]{64}", mots[2]):
+            continue
+        out.append({"nom": mots[0], "taille": int(mots[1]), "sha256": mots[2],
+                    "signee": (d / (mots[0] + ".sig")).is_file()})
+        if len(out) >= 50:
+            break
+    return out
+
+
+def live_infos() -> List[Dict[str, Any]]:
+    """Un live = un dossier TFTP qui porte un boot.cmd. Les commandes U-Boot à taper sont celles que le
+    boot.cmd généré documente en tête (« #   … ») : la page dit exactement ce que la box exécutera."""
+    lives: List[Dict[str, Any]] = []
+    try:
+        dossiers = sorted(p for p in TFTP_ROOT.iterdir() if p.is_dir() and _RE_NOM_LIVE.fullmatch(p.name))
+    except OSError:
+        return lives
+    for d in dossiers:
+        texte = _lire_court(d / "boot.cmd")
+        if texte is None:
+            continue
+        serveur = re.search(r"^setenv serverip (\S+)\s*$", texte, re.M)
+        fetch = re.search(r"\bfetch=(http://\S+)/filesystem\.squashfs\b", texte)
+        lives.append({
+            "nom": d.name,
+            "serveur": serveur.group(1) if serveur else None,
+            "http_base": fetch.group(1) if fetch else None,
+            "commandes": re.findall(r"^#   (\S.*?)\s*$", texte, re.M),
+            "squashfs": (HTTP_ROOT / d.name / "filesystem.squashfs").is_file(),
+            "images": _images_live(HTTP_ROOT / d.name),
+        })
+    return lives
+
+
+@router.get("/live")
+async def live(user=Depends(require_jwt)):
+    """Lives netboot servis par ce maître : commandes U-Boot, base HTTP, images eMMC signées."""
+    return {"lives": await asyncio.to_thread(live_infos)}
 
 
 # ── lot de flash (#3100) ─────────────────────────────────────────────────────

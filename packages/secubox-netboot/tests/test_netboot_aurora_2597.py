@@ -29,6 +29,7 @@ def test_routes_d_ecriture_a_l_identique():
         ("POST", "'/overlay/apply'"), ("POST", "'/overlay/revert'"), ("POST", "'/overlay/persist'"),
         ("POST", "'/overlay/confirm-healthy'"), ("POST", "'/server/up'"), ("POST", "'/publish'"),
         ("POST", "'/profiles'"), ("DELETE", "'/profiles/' + encodeURIComponent(id)"),
+        ("POST", "'/flash/prepare'"),   # #3100 : préparer un flash
     }
     assert "{ confirm: !!commit }" in SRC and "{ confirm: true }" in SRC and "{ board_id: id }" in SRC
     assert "boot_level: v('boot_level')" in SRC and "srv: v('srv') || null" in SRC
@@ -186,4 +187,40 @@ def test_telephone_sans_debordement(navigateur):
     p.wait_for_selector("#bProf tr td.mono", state="attached")
     assert p.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
     assert not p.is_visible("#sidebar") and err == []
+    ctx.close()
+
+
+LIVES = {"lives": [{"nom": "mochabin-live", "serveur": "192.0.2.10", "http_base": "http://192.0.2.10:8099/mochabin-live",
+                    "squashfs": True, "commandes": ["setenv ethact mvpp2-2; setenv serverip 192.0.2.10",
+                                                    "tftpboot ${scriptaddr} mochabin-live/boot.scr; source ${scriptaddr}"],
+                    "images": [{"nom": "secubox-isp-mochabin-trixie.img.gz", "taille": 2669000177, "sha256": "a" * 64, "signee": True}]}]}
+
+
+def test_3100_netbooter_et_preparer_un_flash(navigateur):
+    ctx, p, err, appels = ouvre(navigateur, "http://sbx.test/netboot/", {**API, "/live": (200, LIVES)})
+    p.wait_for_selector("#lives pre", state="attached")
+    texte = p.inner_text("#lives")
+    assert "tftpboot ${scriptaddr} mochabin-live/boot.scr" in texte and "sbx-netflash --nom NOM" in texte
+    assert "secubox-isp-mochabin-trixie.img.gz" in texte and "2,67 Go" in texte and "signée" in texte
+    assert p.get_attribute("#lives a", "href") == "http://192.0.2.10:8099/mochabin-live/images.txt"
+    # nom invalide : rien n'est envoyé
+    p.fill("#fFlash input[name=nom]", "../x"); p.click("#fFlash button[type=submit]")
+    assert not [a for a in appels if a[1] == "/flash/prepare"]
+    # confirmation dans la page, mot de passe envoyé une fois puis effacé du formulaire
+    p.fill("#fFlash input[name=nom]", "gk4"); p.fill("#fFlash input[name=mot_de_passe]", "Secret-Test-42")
+    p.click("#fFlash button[type=submit]")
+    assert p.is_visible("#conf") and "gk4" in p.inner_text("#confTexte")
+    assert p.input_value("#fFlash input[name=mot_de_passe]") == ""
+    assert not [a for a in appels if a[1] == "/flash/prepare"]
+    p.click("#confOui")
+    p.wait_for_function("document.getElementById('rFlash').textContent.includes('sbx-netflash --nom gk4')")
+    assert [json.loads(a[2]) for a in appels if a[1] == "/flash/prepare"] == [{"nom": "gk4", "mot_de_passe": "Secret-Test-42"}]
+    assert err == []
+    ctx.close()
+
+
+def test_3100_aucun_live_publie(navigateur):
+    ctx, p, err, _ = ouvre(navigateur, "http://sbx.test/netboot/", {**API, "/live": (200, {"lives": []})})
+    p.wait_for_function("document.getElementById('lives').textContent.includes('Aucun live')")
+    assert err == []
     ctx.close()
