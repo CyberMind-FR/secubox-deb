@@ -32,6 +32,56 @@ parted_etendre() {
     printf 'Yes\n' | parted ---pretend-input-tty "$1" resizepart "$2" 100% 2>&1
 }
 
+# ── Garde (#3113) ─────────────────────────────────────────────────
+# `secubox-firstboot --help` lancé à la main sur gk1 a rejoué TOUT le premier démarrage (secret JWT, secubox.conf,
+# users.json, SSH par mot de passe), sans sauvegarde. Désormais : arguments analysés avant toute action, refus une
+# fois le premier démarrage fait (sauf --force), et même avec --force rien d'existant n'est écrasé.
+MARQUEUR="${SECUBOX_FIRSTBOOT_MARQUEUR:-/var/lib/secubox/.firstboot_done}"
+
+usage() {
+    cat <<'USAGE'
+Usage : secubox-firstboot [--force]
+Premier démarrage d'une box SecuBox (lancé une fois par secubox-firstboot.service).
+  --force   rejouer alors que le premier démarrage est déjà fait ; secubox.conf, users.json et le secret
+            JWT existants sont conservés, une copie horodatée est faite dans /var/backups/secubox-firstboot/
+  -h, --help  cette aide (n'exécute rien)
+USAGE
+}
+
+# jwt_existant FICHIER : le jwt_secret (64 hex) d'un secubox.conf existant, sinon rien.
+jwt_existant() {
+    [[ -f "$1" ]] || return 0
+    sed -n 's/^[[:space:]]*jwt_secret[[:space:]]*=[[:space:]]*"\([0-9a-f]\{64\}\)"[[:space:]]*$/\1/p' "$1" | head -1
+}
+
+# sauvegarde_existants DOSSIER FICHIER... : copie (droits conservés) de ceux qui existent, dossier en 0700.
+sauvegarde_existants() {
+    local dest="$1" f; shift
+    install -d -m 700 "$dest"
+    for f in "$@"; do
+        [[ -e "$f" ]] && cp -a -- "$f" "$dest/"
+    done
+    return 0
+}
+
+# Sourcé avec --bibliotheque (tests) : fonctions seulement.
+# shellcheck disable=SC2317  # exit : seulement si lancé (et non sourcé) avec --bibliotheque
+[[ "${1:-}" == "--bibliotheque" ]] && { return 0 2>/dev/null || exit 0; }
+
+FORCE=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        --force) FORCE=1 ;;
+        *) echo "secubox-firstboot : argument inconnu « $1 »" >&2; usage >&2; exit 2 ;;
+    esac
+    shift
+done
+if [[ -e "$MARQUEUR" && "$FORCE" != 1 ]]; then
+    echo "secubox-firstboot : premier démarrage déjà fait ($MARQUEUR) — rien n'est exécuté. --force pour le rejouer (l'existant est conservé)." >&2
+    exit 3
+fi
+
 log "=== SecuBox First Boot ==="
 
 # ── 0. Expand filesystem to use all available space ─────────────────
@@ -236,13 +286,24 @@ if [[ -f "${BOOT_DIR}/hostname" ]]; then
   fi
 fi
 
+# Avant toute écriture : copie de ce qu'un rejeu pourrait toucher (#3113).
+SAUVEGARDE="/var/backups/secubox-firstboot/$(date +%Y%m%d-%H%M%S)"
+sauvegarde_existants "$SAUVEGARDE" "${SECUBOX_DIR}/secubox.conf" "${SECUBOX_DIR}/users.json" /etc/ssh/sshd_config \
+  && log "Existant sauvegardé dans ${SAUVEGARDE}"
+
 # ── 4. SSH — injection clé publique ──────────────────────────────
 install -d -o root -g root -m 700 /root/.ssh
 if [[ -f "${BOOT_DIR}/authorized_keys" ]]; then
-  cat "${BOOT_DIR}/authorized_keys" > /root/.ssh/authorized_keys
+  if [[ -s /root/.ssh/authorized_keys ]]; then
+    # rejeu (#3113) : on AJOUTE les clés manquantes, on ne remplace jamais celles posées depuis
+    grep -vxF -f /root/.ssh/authorized_keys "${BOOT_DIR}/authorized_keys" >> /root/.ssh/authorized_keys || true
+  else
+    cat "${BOOT_DIR}/authorized_keys" > /root/.ssh/authorized_keys
+  fi
   chmod 600 /root/.ssh/authorized_keys
   ok "Clés SSH injectées depuis ${BOOT_DIR}/authorized_keys"
-else
+elif [[ ! -s /root/.ssh/authorized_keys ]]; then
+  # seulement si root n'a AUCUNE clé : un rejeu ne rouvre jamais le mot de passe sur une box déjà accessible par clé (#3113)
   log "Pas de ${BOOT_DIR}/authorized_keys — SSH password auth activé provisoirement"
   sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
   systemctl reload ssh 2>/dev/null || true
@@ -256,8 +317,14 @@ if [[ -s /root/.ssh/authorized_keys ]]; then
 fi
 
 # ── 5. JWT Secret ─────────────────────────────────────────────────
-JWT_SECRET=$(openssl rand -hex 32)
-ok "JWT secret généré"
+# Repris s'il existe : le régénérer invalide toutes les sessions et désaccorde les services (#3113).
+JWT_SECRET=$(jwt_existant "${SECUBOX_DIR}/secubox.conf")
+if [[ -n "${JWT_SECRET}" ]]; then
+  ok "JWT secret existant conservé"
+else
+  JWT_SECRET=$(openssl rand -hex 32)
+  ok "JWT secret généré"
+fi
 
 # ── 6. Mot de passe admin par défaut ──────────────────────────────
 # Lire depuis /boot/admin_password si présent, sinon utiliser "secubox"
@@ -282,6 +349,8 @@ else
   BOARD="unknown"
 fi
 
+# Écrit seulement s'il est absent (#3113) : domaine, domaine de cookie, réglages posés depuis sont préservés.
+if [[ ! -s "${SECUBOX_DIR}/secubox.conf" ]]; then
 cat > "${SECUBOX_DIR}/secubox.conf" <<EOF
 # /etc/secubox/secubox.conf — généré par firstboot
 # NE PAS modifier jwt_secret manuellement
@@ -318,6 +387,9 @@ EOF
 chown secubox:secubox "${SECUBOX_DIR}/secubox.conf"
 chmod 640 "${SECUBOX_DIR}/secubox.conf"
 ok "/etc/secubox/secubox.conf créé"
+else
+  ok "/etc/secubox/secubox.conf existant conservé"
+fi
 
 # ── 8. Portal users.json avec admin par défaut ───────────────────
 # Schema v2 + argon2 hash (issue #210 — old SHA256 + flat schema made
@@ -329,6 +401,8 @@ ok "/etc/secubox/secubox.conf créé"
 # `must_change_password: true` so the very next login is gated on a
 # proper password change.
 USERS_JSON="${SECUBOX_DIR}/users.json"
+# Écrit seulement s'il est absent (#3113) : jamais de retour à admin/secubox sur une box déjà configurée.
+if [[ ! -s "${USERS_JSON}" ]]; then
 python3 - "$ADMIN_PASS" "$USERS_JSON" <<'PYEOF'
 import json, sys
 from datetime import datetime, timezone
@@ -361,7 +435,11 @@ with open(path, "w") as f:
 PYEOF
 chown secubox:secubox "${USERS_JSON}"
 chmod 640 "${USERS_JSON}"
+USERS_CREES=1
 ok "Portal users.json créé (admin / ${ADMIN_PASS}, doit changer au premier login)"
+else
+  ok "Portal users.json existant conservé"
+fi
 
 # ── 9. Certificat TLS autosigné ───────────────────────────────────
 if [[ ! -f "${TLS_DIR}/cert.pem" ]]; then
@@ -538,4 +616,8 @@ fi
 
 log "=== First boot terminé ==="
 log "Interface : https://${HOSTNAME}/ ou https://$(hostname -I | awk '{print $1}')/"
-log "Login     : admin / ${ADMIN_PASS}"
+if [[ "${USERS_CREES:-0}" == 1 ]]; then
+  log "Login     : admin / ${ADMIN_PASS}"
+else
+  log "Login     : comptes existants conservés"
+fi
