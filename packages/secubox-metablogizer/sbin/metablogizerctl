@@ -378,6 +378,11 @@ site_unpublish() {
 
 TOR_DROPIN_DIR="${TOR_DROPIN_DIR:-/etc/tor/secubox-metablogizer.d}"
 TOR_DATA_DIR="${TOR_DATA_DIR:-/var/lib/tor/secubox-metablogizer}"
+# Frontal HAProxy des onions (#3112) : cle onion_in_port de haproxy.toml, 9180 par defaut.
+ONION_IN_PORT=$(sed -n 's/^onion_in_port[[:space:]]*=[[:space:]]*\([0-9][0-9]*\)[[:space:]]*$/\1/p' \
+    /etc/secubox/haproxy.toml 2>/dev/null | head -1)
+ONION_IN_PORT="${ONION_IN_PORT:-9180}"
+case "$ONION_IN_PORT" in 80|9080) ONION_IN_PORT=9180 ;; esac  # jamais une entree HTTP directe
 
 _tor_drop_path() { echo "$TOR_DROPIN_DIR/${1}.conf"; }
 _tor_data_path() { echo "$TOR_DATA_DIR/${1}"; }
@@ -396,9 +401,9 @@ tor_expose() {
     # the same orchestration (Tor / DNS+SSL / Mesh) and Peek shows it.
     if _have_exposure; then
         log "delegating to secubox-exposure emancipate (tor channel)"
-        # The static site is served via nginx on port 80 (per site_publish);
-        # secubox-exposure handles the HiddenService wiring and revocation.
-        secubox-exposure emancipate "metablogizer-${name}" 80 --tor
+        # Tor passe par le frontal HAProxy onion-in (#3112, #3123), jamais par
+        # http-in (:80) en direct ; secubox-exposure gere le HiddenService.
+        secubox-exposure emancipate "metablogizer-${name}" "$ONION_IN_PORT" --tor
         return $?
     fi
 
@@ -409,10 +414,13 @@ tor_expose() {
     local data; data=$(_tor_data_path "$name")
     local drop; drop=$(_tor_drop_path "$name")
     log "writing Tor HiddenService stanza for $name"
+    # Cible : le frontal HAProxy onion-in (#3112, #3123). Il refuse tout Host non .onion, efface l'adresse
+    # annoncee par le client et pose le marqueur non LAN 192.0.2.80 avant sbxwaf. Jamais 127.0.0.1:80
+    # (http-in) : le visiteur Tor y etait vu depuis 127.0.0.1, donc comme un poste du LAN.
     cat > "$drop" <<EOF
-# metablogizer site: $name (#184 — Emancipate via Tor)
+# metablogizer site: $name (#184 — Emancipate via Tor ; #3112 frontal onion-in)
 HiddenServiceDir $data
-HiddenServicePort 80 127.0.0.1:80
+HiddenServicePort 80 127.0.0.1:$ONION_IN_PORT
 EOF
     chown -R debian-tor:debian-tor "$TOR_DATA_DIR" 2>/dev/null || true
     chmod 700 "$data" 2>/dev/null || true

@@ -105,20 +105,32 @@ topology). This requires `secubox-hub`'s lan-geo real_ip configuration —
 config. Without it, all requests appear to originate from the proxy's
 address and reach/deny rules will not behave as expected.
 
-## Onion du webui (#3112)
+## Onions (#3112, #3123)
 
-`POST /tor/emancipate_webui` publie le webui en service onion vers le frontal HAProxy `onion-webui`
-(`127.0.0.1:9180`, ou `onion_webui_port` de `haproxy.toml`), jamais vers nginx :9080 en direct. Le
-frontal efface l'adresse annoncée par le client et pose le marqueur non LAN 192.0.2.80 avant
-l'inspection sbxwaf. La route sbxwaf `<onion>.onion` → webui (nginx :9080) est posée par
-`secubox-waf-route`. `/tor/add` refuse `local_port = 9080`.
+Tout service onion vise le frontal HAProxy `onion-in` (`127.0.0.1:9180`, ou `onion_in_port` de
+`haproxy.toml`) : le webui (`POST /tor/emancipate_webui`), les vhosts (portée Tor) et metablogizer.
+Jamais nginx :9080 ni `http-in` :80 en direct. Le frontal refuse tout Host non `.onion`, efface
+l'adresse annoncée par le client et pose le marqueur non LAN 192.0.2.80 avant l'inspection sbxwaf. La
+route sbxwaf `<onion>.onion` → webui (nginx :9080) est posée par `secubox-waf-route`.
 
-Migration des onions déjà publiés, idempotente : `secubox-exposure-tor-reconcile` (au démarrage, et
-lancé par le postinst sur les box qui ont un onion « webui ») réécrit la cible du service vers le
-frontal. `HiddenServiceDir` ne change pas, donc la clé et l'adresse `.onion` restent les mêmes. Un
-ancien bloc de `/etc/tor/torrc` passe dans `torrc.d`. Le script recharge Tor et inscrit la migration
-dans le journal d'audit. Le postinst régénère d'abord HAProxy si le frontal manque dans le
-`haproxy.cfg` en service. Si cette régénération échoue, l'onion reste fermé, et non ouvert vers nginx.
+`/tor/add` est en liste blanche : `local_port` absent ou égal au port du frontal, sinon 400.
+`/emancipate` avec Tor passe aussi par le frontal ; le port du service ne sert qu'au maillage et au DNS.
+Avant d'écrire un service dans `torrc.d`, l'API ajoute `%include /etc/tor/torrc.d/*.conf` au torrc s'il
+manque : le torrc de Debian ne l'inclut pas par défaut.
+
+Migration, idempotente : `secubox-exposure-tor-reconcile` tourne au démarrage. Le postinst le lance
+aussi sur les box qui ont un service onion, après avoir régénéré HAProxy si `onion-in` manque.
+
+- Il réécrit **sur place** chaque `HiddenServicePort` qui vise 127.0.0.1:80 ou :9080 (dans le torrc,
+  `torrc.d` et `/etc/tor/secubox-metablogizer.d`), par écriture atomique.
+- `HiddenServiceDir` ne change pas, donc la clé et l'adresse `.onion` restent les mêmes.
+- Il met à jour `exposure.json`, recharge Tor une fois et écrit une ligne d'audit `migrate_onion` par
+  service. La ligne nomme qui a lancé : `postinst` ou `reconcile`.
+- Tout `HiddenServicePort` qui reste hors du frontal est signalé sur stderr et dans l'audit
+  (`onion_non_migre`, avec son `HiddenServiceDir`).
+
+Le postinst redémarre ensuite le démon (`try-restart`) pour qu'il charge la nouvelle garde. Si la
+régénération échoue, les onions restent fermés, et non ouverts vers nginx.
 
 ## License
 

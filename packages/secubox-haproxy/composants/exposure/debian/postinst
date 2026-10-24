@@ -33,23 +33,29 @@ case "$1" in
         # service is actually emancipated with active=true.
         systemctl enable secubox-exposure-tor-reconcile.service || true
 
-        # ONION DU WEBUI (#3112) : Tor livrait a nginx :9080 en direct, hors HAProxy et hors sbxwaf, et nginx
-        # prenait chaque visiteur Tor (127.0.0.1) pour un poste du LAN. Migration, sur les seules box qui ont
-        # cet onion, idempotente :
-        #   1. le frontal onion-webui (127.0.0.1:9180) doit exister dans le haproxy.cfg vivant : sinon
-        #      regeneration sure (validation, rechargement, retour arriere) ;
-        #   2. la cible du service onion est reecrite vers ce frontal (meme HiddenServiceDir : meme cle, meme
-        #      adresse), la route sbxwaf <onion> posee, Tor recharge.
-        # Si la regeneration echoue, l'onion reste FERME (et non ouvert vers nginx) jusqu'a haproxyctl generate.
-        if [ -e /var/lib/tor/hidden_services/webui ]; then
-            if [ -f /etc/haproxy/haproxy.cfg ] && ! grep -q '^frontend onion-webui$' /etc/haproxy/haproxy.cfg \
+        # ONIONS (#3112, #3123) : Tor livrait a nginx :9080 (webui) ou a http-in :80 (vhosts, metablogizer) en
+        # direct, sans nettoyage des en-tetes, et nginx prenait chaque visiteur Tor (127.0.0.1) pour un poste du
+        # LAN. Migration, sur les seules box qui ont un service onion, idempotente :
+        #   1. le frontal onion-in (127.0.0.1:9180) doit exister dans le haproxy.cfg vivant : sinon regeneration
+        #      sure (validation, rechargement, retour arriere) ;
+        #   2. la cible de chaque service onion est reecrite SUR PLACE vers ce frontal (meme HiddenServiceDir :
+        #      meme cle, meme adresse), la route sbxwaf de l'onion du webui posee, Tor recharge ; tout onion
+        #      restant hors du frontal est signale sur stderr et dans le journal d'audit.
+        # Si la regeneration echoue, les onions restent FERMES (et non ouverts vers nginx) jusqu'a haproxyctl
+        # generate.
+        if grep -qs '^[[:space:]]*HiddenServicePort' /etc/tor/torrc /etc/tor/torrc.d/*.conf \
+                /etc/tor/secubox-metablogizer.d/*.conf; then
+            if [ -f /etc/haproxy/haproxy.cfg ] && ! grep -q '^frontend onion-in$' /etc/haproxy/haproxy.cfg \
                && [ -x /usr/local/bin/secubox-haproxy-regen-safe ]; then
                 /usr/local/bin/secubox-haproxy-regen-safe \
-                    || echo "exposure : regeneration HAProxy en echec — onion du webui ferme jusqu'a 'haproxyctl generate' (#3112)" >&2
+                    || echo "exposure : ERREUR regeneration HAProxy — onions fermes jusqu'a 'haproxyctl generate' (#3112)" >&2
             fi
-            /usr/sbin/secubox-exposure-tor-reconcile \
-                || echo "exposure : migration de l'onion du webui en echec (#3112)" >&2
+            /usr/sbin/secubox-exposure-tor-reconcile postinst \
+                || echo "exposure : ERREUR migration des services onion (#3112)" >&2
         fi
+        # Le demon en service doit charger la nouvelle garde de /tor/add et la cible du frontal : sans cela,
+        # « Publier » reecrirait 127.0.0.1:9080 jusqu'au prochain redemarrage (#3112).
+        systemctl try-restart secubox-exposure.service || true
         ;;
 esac
 

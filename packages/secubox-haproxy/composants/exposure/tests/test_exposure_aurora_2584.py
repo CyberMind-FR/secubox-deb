@@ -156,7 +156,7 @@ def test_ajout_tor_et_erreur_affichee(navigateur):
     p.fill("#fTor [name=service]", "monapp")
     p.click("#fTor button[type=submit]"); p.click("#cTor >> text=Confirmer")
     p.wait_for_function("document.getElementById('rTor').textContent.includes('already exists')")
-    assert json.loads([a for a in appels if a[1] == "/tor/add"][0][2]) == {"service": "monapp", "local_port": 80, "onion_port": 80}
+    assert json.loads([a for a in appels if a[1] == "/tor/add"][0][2]) == {"service": "monapp", "local_port": 9180, "onion_port": 80}   # frontal onion-in (#3112)
     ctx.close()
 
 

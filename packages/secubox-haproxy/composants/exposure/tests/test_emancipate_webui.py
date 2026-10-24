@@ -27,6 +27,7 @@ def _load(monkeypatch, tmp_path):
     # #3112 : la migration de l'onion du webui lit torrc / torrc.d / haproxy.toml — jamais ceux du poste.
     monkeypatch.setattr(m, "TOR_CONFIG", tmp_path / "torrc")
     monkeypatch.setattr(m, "TOR_DROPIN_DIR", tmp_path / "torrc.d")
+    monkeypatch.setattr(m, "TOR_METABLOG_DIR", tmp_path / "metablog.d")
     monkeypatch.setattr(m, "HAPROXY_TOML", tmp_path / "haproxy.toml")
     monkeypatch.setattr(m, "run_cmd", lambda *a, **k: (True, "", ""))
     monkeypatch.setattr(m, "_audit_write", lambda line: None)
@@ -34,7 +35,7 @@ def _load(monkeypatch, tmp_path):
 
 
 def test_emancipate_webui_targets_the_haproxy_onion_frontend_not_nginx(monkeypatch, tmp_path):
-    """#3112 : l'onion du webui livre au frontal HAProxy onion-webui (9180), jamais à nginx :9080."""
+    """#3112 : l'onion du webui livre au frontal HAProxy onion-in (9180), jamais à nginx :9080."""
     m = _load(monkeypatch, tmp_path)
     calls = []
     monkeypatch.setattr(

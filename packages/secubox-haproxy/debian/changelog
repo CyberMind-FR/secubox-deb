@@ -13,8 +13,19 @@ secubox-haproxy (1.12.6-1~trixie1) trixie; urgency=high
     même adresse), un ancien bloc du torrc passe dans torrc.d, Tor est rechargé et la migration est inscrite à
     l'audit. Le postinst régénère d'abord HAProxy si le frontal manque. En cas d'échec, l'onion reste fermé, jamais
     ouvert vers nginx.
+  * Relecture de sécurité (ref #3112, #3123). Les onions des vhosts et de metablogizer livraient à http-in :80, qui
+    ne nettoie rien : par eux, un Host admin.<box> ou celui de l'onion du webui, avec un X-Forwarded-For forgé ou
+    sans rien, arrivait LAN. Le frontal devient générique, onion-in (127.0.0.1:9180, clé onion_in_port), pour
+    TOUS les onions, et refuse (404) tout Host qui ne finit pas en .onion. Toutes les cibles y pointent :
+    webui, vhosts (_apply_tor), /tor/add en liste blanche (seul le port du frontal), /emancipate avec Tor.
+  * Migration de tous les onions existants (torrc, torrc.d, répertoire de metablogizer), sur place, atomique,
+    idempotente : 127.0.0.1:80 et :9080 deviennent le frontal, HiddenServiceDir inchangé. Rien n'est déplacé
+    vers un fichier que Tor ne lit pas, et l'API ajoute le %include de torrc.d au torrc s'il manque (le torrc de
+    Debian ne l'a pas). Tout HiddenServicePort restant hors du frontal est signalé sur stderr et dans l'audit
+    (onion_non_migre). L'auteur de l'audit est postinst ou reconcile. Le postinst redémarre le démon exposure
+    (try-restart), qui charge alors la garde. Page Exposition : port local du frontal (9180).
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 16:00:00 +0200
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 18:00:00 +0200
 
 secubox-haproxy (1.12.5-1~trixie1) trixie; urgency=medium
 

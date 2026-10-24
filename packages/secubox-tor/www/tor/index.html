@@ -517,7 +517,7 @@
         }));
         $('btnDesactiver').addEventListener('click', () => demander('controle', 'Désactiver Tor ? Le démon est arrêté et la sortie transparente coupée : tous les services cachés (.onion) deviennent injoignables.', 'Désactiver', desactiverTor));
         $('btnIdentite').addEventListener('click', () => demander('controle', 'Demander une nouvelle identité ? Les circuits actuels sont abandonnés et les connexions en cours peuvent être coupées.', 'Nouvelle identité', nouvelleIdentite));
-        $('btnEmanciper').addEventListener('click', () => demander('hs', 'Publier l’interface d’administration SecuBox comme service caché .onion (port local 9080) ? Quiconque connaît l’adresse pourra atteindre la page de connexion.', 'Publier', emanciper));
+        $('btnEmanciper').addEventListener('click', () => demander('hs', 'Publier l’interface d’administration SecuBox comme service caché .onion (par le frontal HAProxy onion-in, 127.0.0.1:9180, inspecté par le WAF ; jamais vu comme un poste du LAN) ? Quiconque connaît l’adresse pourra atteindre la page de connexion.', 'Publier', emanciper));
         $('btnAjoutHs').addEventListener('click', () => { $('fHs').hidden = !$('fHs').hidden; annoncer(); });
         $('annuleHs').addEventListener('click', () => { $('fHs').hidden = true; annoncer(); });
         $('fHs').addEventListener('submit', ev => {

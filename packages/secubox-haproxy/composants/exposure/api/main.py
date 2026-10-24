@@ -56,13 +56,18 @@ TOR_CONFIG = Path("/etc/tor/torrc")
 # Un fichier par service onion, dans le répertoire que le torrc de Debian inclut (`%include /etc/tor/torrc.d/*.conf`).
 # Le torrc lui-même n'est plus réécrit (#2050) ; les services posés avant ce changement y restent lisibles.
 TOR_DROPIN_DIR = Path("/etc/tor/torrc.d")
-# ONION DU WEBUI (#3112). Tor livre au frontal HAProxy `onion-webui` (127.0.0.1:9180, généré par haproxyctl),
-# jamais directement à nginx :9080 : là, chaque visiteur Tor arrivait de 127.0.0.1 et nginx le classait LAN.
-# Le frontal efface l'adresse annoncée par le client, pose le marqueur NON LAN 192.0.2.80 (« client onion »)
-# et passe par sbxwaf, qui route le Host <onion>.onion vers le webui (nginx :9080) — route posée ici.
+# ONIONS (#3112, #3123). Tout service onion livre au frontal HAProxy `onion-in` (127.0.0.1:9180, généré par
+# haproxyctl), jamais directement à nginx :9080 ni au frontal public http-in :80 : là, chaque visiteur Tor
+# arrivait de 127.0.0.1 et nginx le classait LAN. Le frontal refuse tout Host qui n'est pas en .onion, efface
+# l'adresse annoncée par le client, pose le marqueur NON LAN 192.0.2.80 (« client onion ») et passe par sbxwaf,
+# qui route le Host <onion>.onion — la route de l'onion du webui (vers nginx :9080) est posée ici.
 HAPROXY_TOML = Path("/etc/secubox/haproxy.toml")
-ONION_WEBUI_PORT_DEFAUT = 9180
+ONION_IN_PORT_DEFAUT = 9180
 WEBUI_NGINX_PORT = 9080
+# Entrées HTTP directes de la box, jamais cibles d'un onion : nginx (9080) et le frontal public http-in (80).
+PORTS_HTTP_DIRECTS = (80, WEBUI_NGINX_PORT)
+# Répertoire de repli de metablogizerctl pour ses services onion (quand l'API d'exposition est absente).
+TOR_METABLOG_DIR = Path("/etc/tor/secubox-metablogizer.d")
 WAF_ROUTE_CMD = "secubox-waf-route"
 CONFIG_FILE = Path("/etc/secubox/exposure.json")
 DATA_DIR = Path("/var/lib/secubox/exposure")
@@ -420,7 +425,8 @@ async def check_service_health(service: str, port: int, channels: List[str]) -> 
 # Models
 class TorAddRequest(BaseModel):
     service: str
-    local_port: int = 80
+    # #3112 : None ⇒ le frontal onion-in ; toute autre valeur que son port est refusée par /tor/add.
+    local_port: Optional[int] = None
     onion_port: int = 80
 
 
@@ -560,15 +566,64 @@ def _hs_dropin(name: str) -> Path:
     return TOR_DROPIN_DIR / f"70-secubox-hs-{name}.conf"
 
 
-def _hs_ecrit_dropin(name: str, hs_dir: Path, onion_port: int, local_port: int) -> None:
-    """Écrit le fichier du service, atomiquement (un fichier par service : rien à relire ni à réécrire d'autre)."""
-    f = _hs_dropin(name)
+def _ecrit_atomique(f: Path, texte: str) -> None:
+    """Écriture atomique (fichier temporaire du même répertoire puis rename), mode d'origine conservé :
+    Tor, rechargé à tout moment, ne lit jamais un fichier à moitié écrit."""
     f.parent.mkdir(parents=True, exist_ok=True)
-    tmp = f.with_name(f.name + ".tmp")
-    tmp.write_text(f"# SecuBox — service onion {name} (#2050)\n"
-                   f"HiddenServiceDir {hs_dir}\n"
-                   f"HiddenServicePort {onion_port} 127.0.0.1:{local_port}\n")
+    tmp = f.with_name(f".{f.name}.tmp")
+    tmp.write_text(texte)
+    try:
+        os.chmod(tmp, f.stat().st_mode & 0o7777)
+    except OSError:
+        pass
     tmp.replace(f)
+
+
+def _torrc_inclut_dropins() -> bool:
+    """Le torrc lit-il torrc.d ? Le torrc de Debian ne l'inclut PAS par défaut (#3112, I1)."""
+    try:
+        texte = TOR_CONFIG.read_text()
+    except OSError:
+        return False
+    for chemin in re.findall(r"^\s*%include\s+(\S+)", texte, re.M):
+        if chemin.startswith((str(TOR_DROPIN_DIR), "/etc/tor/torrc.d")):
+            return True
+    return False
+
+
+def _assure_include_torrc() -> bool:
+    """Ajoute `%include <torrc.d>/*.conf` au torrc s'il manque (idempotent, atomique). Jamais de service écrit
+    dans un fichier que Tor ne lit pas. Rend True si le torrc inclut torrc.d à la sortie."""
+    if _torrc_inclut_dropins():
+        return True
+    try:
+        texte = TOR_CONFIG.read_text()
+        if texte and not texte.endswith("\n"):
+            texte += "\n"
+        _ecrit_atomique(TOR_CONFIG, texte + f"%include {TOR_DROPIN_DIR}/*.conf\n")
+    except OSError:
+        return False
+    return True
+
+
+def _hs_ecrit_dropin(name: str, hs_dir: Path, onion_port: int, local_port: int) -> None:
+    """Écrit le fichier du service, atomiquement (un fichier par service : rien à relire ni à réécrire d'autre).
+    S'assure d'abord que le torrc inclut torrc.d : sinon le service serait écrit pour rien (#3112, I1)."""
+    _assure_include_torrc()
+    _ecrit_atomique(_hs_dropin(name),
+                    f"# SecuBox — service onion {name} (#2050)\n"
+                    f"HiddenServiceDir {hs_dir}\n"
+                    f"HiddenServicePort {onion_port} 127.0.0.1:{local_port}\n")
+
+
+_RE_HS_DIR = re.compile(r"^\s*HiddenServiceDir\s+(.+?)\s*$")
+_RE_HS_PORT = re.compile(r"^(\s*HiddenServicePort\s+)(\d+)(?:[ \t]+([^\s#]+))?([ \t]*(?:#.*)?)$")
+
+
+def _norm_dir(valeur: str) -> str:
+    """HiddenServiceDir comparable : sans commentaire de fin, sans blancs, sans « / » final."""
+    v = valeur.split("#", 1)[0].strip()
+    return v.rstrip("/") or v
 
 
 def _hs_stanza_texte(name: str, hs_dir: Path) -> str:
@@ -580,55 +635,58 @@ def _hs_stanza_texte(name: str, hs_dir: Path) -> str:
             continue
         if src == TOR_CONFIG:
             blocs = _hs_blocs_torrc(texte)
-            return next((b for d, b in blocs if d == str(hs_dir)), "")
+            return next((b for d, b in blocs if d == _norm_dir(str(hs_dir))), "")
         return texte
     return ""
 
 
 def _hs_blocs_torrc(texte: str) -> list:
-    """[(HiddenServiceDir, texte du bloc)] : un bloc commence à sa ligne HiddenServiceDir (et son éventuel
-    commentaire « # Hidden service: » juste avant) et court jusqu'à la ligne suivante qui n'est pas HiddenService*."""
+    """[(HiddenServiceDir normalisé, texte du bloc)] : un bloc commence à sa ligne HiddenServiceDir (et son
+    éventuel commentaire « # Hidden service: » juste avant) et court jusqu'à la ligne suivante qui n'est pas
+    HiddenService*."""
     lignes = texte.splitlines(keepends=True)
     out, i = [], 0
     while i < len(lignes):
-        if lignes[i].startswith("HiddenServiceDir "):
+        md = _RE_HS_DIR.match(lignes[i])
+        if md:
             deb = i
             if deb > 0 and lignes[deb - 1].startswith("# Hidden service:"):
                 deb -= 1
             fin = i + 1
-            while fin < len(lignes) and lignes[fin].startswith("HiddenService"):
+            while fin < len(lignes) and lignes[fin].lstrip().startswith("HiddenService") \
+                    and not _RE_HS_DIR.match(lignes[fin]):
                 fin += 1
-            out.append((lignes[i].split(None, 1)[1].strip(), "".join(lignes[deb:fin]), deb, fin))
+            out.append((_norm_dir(md.group(1)), "".join(lignes[deb:fin])))
             i = fin
         else:
             i += 1
-    return [(d, b) for d, b, _, _ in out]
+    return out
 
 
 def _hs_retire_bloc_torrc(hs_dir: Path) -> bool:
-    """Retire du torrc de Debian le seul ancien bloc de ce service (ligne à ligne, jamais un autre service).
-    Ne touche NI à la clé NI au répertoire du service. Rend True si un bloc a été retiré."""
+    """Retire du torrc de Debian le seul ancien bloc de ce service (ligne à ligne, jamais un autre service),
+    atomiquement. Ne touche NI à la clé NI au répertoire du service. Rend True si un bloc a été retiré."""
     try:
         texte = TOR_CONFIG.read_text()
     except OSError:
         return False
     for d, bloc in _hs_blocs_torrc(texte):
-        if d == str(hs_dir):
-            TOR_CONFIG.write_text(texte.replace(bloc, "", 1))
+        if d == _norm_dir(str(hs_dir)):
+            _ecrit_atomique(TOR_CONFIG, texte.replace(bloc, "", 1))
             return True
     return False
 
 
-def _port_onion_webui() -> int:
-    """Port du frontal HAProxy `onion-webui` : clé `onion_webui_port` de haproxy.toml (la même que lit
-    haproxyctl generate), sinon 9180. Jamais 9080 : ce serait de nouveau nginx en direct."""
+def _port_onion_in() -> int:
+    """Port du frontal HAProxy `onion-in` : clé `onion_in_port` de haproxy.toml (la même que lit
+    haproxyctl generate), sinon 9180. Jamais 9080 ni 80 : ce serait de nouveau nginx ou http-in en direct."""
     try:
-        m = re.search(r"^onion_webui_port\s*=\s*(\d+)\s*$", HAPROXY_TOML.read_text(), re.M)
-        if m and 1 <= int(m.group(1)) <= 65535 and int(m.group(1)) != WEBUI_NGINX_PORT:
+        m = re.search(r"^onion_in_port\s*=\s*(\d+)\s*$", HAPROXY_TOML.read_text(), re.M)
+        if m and 1 <= int(m.group(1)) <= 65535 and int(m.group(1)) not in PORTS_HTTP_DIRECTS:
             return int(m.group(1))
     except OSError:
         pass
-    return ONION_WEBUI_PORT_DEFAUT
+    return ONION_IN_PORT_DEFAUT
 
 
 def _route_waf_onion(onion: str) -> bool:
@@ -641,40 +699,114 @@ def _route_waf_onion(onion: str) -> bool:
     return bool(isinstance(res, tuple) and res and res[0])
 
 
-def migrer_onion_webui() -> dict:
-    """Migration #3112, idempotente : la cible du service onion « webui » passe de nginx (127.0.0.1:9080) au
-    frontal HAProxy `onion-webui`. HiddenServiceDir inchangé ⇒ même clé, même adresse .onion. Un ancien bloc
-    du torrc de Debian est déplacé dans son fichier de torrc.d (jamais deux HiddenServiceDir identiques : Tor
-    refuserait toute sa configuration). Recharge Tor seulement si quelque chose a changé ; journal d'audit."""
-    name = "webui"
-    hs_dir = TOR_DATA / name
-    port = _port_onion_webui()
-    change = False
+def _fichiers_tor() -> list:
+    """Tous les fichiers où peut vivre un service onion : le torrc, torrc.d, et le répertoire de repli de
+    metablogizerctl."""
+    fichiers = [TOR_CONFIG]
+    for d in (TOR_DROPIN_DIR, TOR_METABLOG_DIR):
+        try:
+            fichiers += sorted(p for p in d.glob("*.conf") if p.is_file())
+        except OSError:
+            pass
+    return fichiers
 
-    stanza = _hs_stanza_texte(name, hs_dir)
-    m = re.search(r"^HiddenServicePort\s+(\d+)\s+(\S+)", stanza, re.M)
-    dans_dropin = _hs_dropin(name).exists()
-    if m and (m.group(2) != f"127.0.0.1:{port}" or not dans_dropin):
-        if not dans_dropin:
-            _hs_retire_bloc_torrc(hs_dir)
-        _hs_ecrit_dropin(name, hs_dir, int(m.group(1)), port)
-        change = True
+
+def _cible_normalisee(cible: Optional[str], port_virtuel: str) -> str:
+    """Cible d'un HiddenServicePort ramenée à « hôte:port » (absente ⇒ 127.0.0.1:<port virtuel>)."""
+    if not cible:
+        return f"127.0.0.1:{port_virtuel}"
+    if cible.isdigit():
+        return f"127.0.0.1:{cible}"
+    for boucle in ("localhost:", "[::1]:"):
+        if cible.startswith(boucle):
+            return "127.0.0.1:" + cible[len(boucle):]
+    return cible
+
+
+def _hs_lignes(texte: str):
+    """Itère (index, HiddenServiceDir courant normalisé, match HiddenServicePort) sur un fichier Tor."""
+    courant = ""
+    for i, ligne in enumerate(texte.splitlines()):
+        md = _RE_HS_DIR.match(ligne)
+        if md:
+            courant = _norm_dir(md.group(1))
+            continue
+        mp = _RE_HS_PORT.match(ligne)
+        if mp:
+            yield i, courant, mp
+
+
+def migrer_onions(user: str = "reconcile") -> dict:
+    """Migration #3112/#3123, idempotente : TOUT service onion qui livrait en clair à une entrée HTTP directe de
+    la box — nginx (127.0.0.1:9080) ou le frontal public http-in (127.0.0.1:80) — vise désormais le frontal
+    HAProxy `onion-in`. Réécriture SUR PLACE de la seule ligne HiddenServicePort (torrc, torrc.d, répertoire de
+    metablogizer), atomique : rien n'est déplacé dans un fichier que Tor ne lirait pas, HiddenServiceDir est
+    inchangé (même clé, même adresse .onion). Recharge Tor une fois si quelque chose a changé ; une ligne
+    d'audit par service migré."""
+    port = _port_onion_in()
+    a_migrer = {f"127.0.0.1:{p}" for p in PORTS_HTTP_DIRECTS}
+    if port != ONION_IN_PORT_DEFAUT:
+        a_migrer.add(f"127.0.0.1:{ONION_IN_PORT_DEFAUT}")
+    migres = []
+    for f in _fichiers_tor():
+        try:
+            texte = f.read_text()
+        except OSError:
+            continue
+        lignes = texte.splitlines(keepends=True)
+        change = False
+        for i, hs_dir, mp in _hs_lignes(texte):
+            ancienne = _cible_normalisee(mp.group(3), mp.group(2))
+            if ancienne in a_migrer:
+                fin = "\n" if lignes[i].endswith("\n") else ""
+                lignes[i] = f"{mp.group(1)}{mp.group(2)} 127.0.0.1:{port}{mp.group(4)}{fin}"
+                migres.append({"fichier": str(f), "dir": hs_dir, "ancienne_cible": ancienne})
+                change = True
+        if change:
+            _ecrit_atomique(f, "".join(lignes))
 
     services = _load_emancipated()
+    entrees = False
     for svc in services:
-        if svc.get("name") == name and svc.get("local_port") != port:
+        if svc.get("local_port") in PORTS_HTTP_DIRECTS:
             svc["local_port"] = port
-            change = True
-    if change:
+            entrees = True
+    if entrees:
         _save_emancipated(services)
-        if m:
-            run_cmd(["systemctl", "reload", "tor"])
+    if migres:
+        run_cmd(["systemctl", "reload", "tor"])
+    for mg in migres:
         _audit_exposure_action(
-            action="migrate_onion_webui",
-            detail=f"ancienne_cible={m.group(2) if m else '(aucune)'} cible=127.0.0.1:{port} ref=#3112",
-            user="postinst",
+            action="migrate_onion",
+            detail=f"dir={mg['dir'] or '(inconnu)'} ancienne_cible={mg['ancienne_cible']} "
+                   f"cible=127.0.0.1:{port} ref=#3112",
+            user=user,
         )
-    return {"success": True, "migrated": change, "local_port": port}
+    return {"success": True, "migrated": bool(migres or entrees), "services": migres, "local_port": port}
+
+
+def signaler_onions_non_migres(user: str = "reconcile") -> list:
+    """Après migration, tout HiddenServicePort qui ne vise pas le frontal onion-in est signalé BRUYAMMENT :
+    stderr et ligne d'audit `onion_non_migre` (avec son HiddenServiceDir). Jamais en silence (#3112, I2)."""
+    port = _port_onion_in()
+    restes = []
+    for f in _fichiers_tor():
+        try:
+            texte = f.read_text()
+        except OSError:
+            continue
+        for _, hs_dir, mp in _hs_lignes(texte):
+            cible = _cible_normalisee(mp.group(3), mp.group(2))
+            if cible != f"127.0.0.1:{port}":
+                restes.append({"fichier": str(f), "dir": hs_dir, "cible": cible})
+    for r in restes:
+        print(f"ERREUR #3112 : service onion NON migré — {r['dir'] or '(HiddenServiceDir inconnu)'} "
+              f"vise {r['cible']} au lieu de 127.0.0.1:{port} ({r['fichier']}). Ses visiteurs ne passent "
+              f"pas par le frontal onion-in.", file=sys.stderr)
+        _audit_exposure_action(action="onion_non_migre",
+                               detail=f"dir={r['dir'] or '(inconnu)'} cible={r['cible']} fichier={r['fichier']}",
+                               user=user)
+    return restes
 
 
 def _onion_webui_hostname() -> str:
@@ -882,7 +1014,8 @@ async def _apply_tor(vhost: str, want: bool, user: dict) -> None:
         hs = TOR_DATA / name
         try:
             if want and not hs.exists():
-                _tor_add_sync(name, local_port=80, onion_port=80)
+                # #3112/#3123 : par le frontal onion-in, jamais http-in (:80) en direct.
+                _tor_add_sync(name, local_port=_port_onion_in(), onion_port=80)
             elif not want and hs.exists():
                 _tor_remove_sync(name)
         except Exception:
@@ -943,7 +1076,7 @@ def emancipate_webui(federate: bool = False, user: Optional[dict] = None) -> dic
     """Emancipate the SecuBox webui itself as a Tor hidden service.
 
     Standalone by default: creates HS `name="webui"`, `onion_port=80`, whose
-    target is the dedicated HAProxy frontend `onion-webui` (127.0.0.1:9180 by
+    target is the dedicated HAProxy frontend `onion-in` (127.0.0.1:9180 by
     default) — NEVER nginx :9080 directly (#3112: every Tor visitor came from
     127.0.0.1 and nginx classed it LAN). Records it `active` in the exposure
     config so `tor_reconcile_persist()` can restore it on reboot, and registers
@@ -959,7 +1092,7 @@ def emancipate_webui(federate: bool = False, user: Optional[dict] = None) -> dic
     service is at least as security-relevant as an exit-country/VPN/bridge
     change, which are already audited via `_audit_exposure`).
     """
-    port = _port_onion_webui()
+    port = _port_onion_in()
     tor_result = _tor_add_sync(name="webui", local_port=port, onion_port=80)
 
     entry = {"name": "webui", "local_port": port, "onion_port": 80, "active": True}
@@ -989,7 +1122,7 @@ def emancipate_webui(federate: bool = False, user: Optional[dict] = None) -> dic
     return {"success": True, "message": "webui emancipated", "output": entry, "tor": tor_result}
 
 
-def tor_reconcile_persist() -> dict:
+def tor_reconcile_persist(user: str = "reconcile") -> dict:
     """Boot-time reconcile: re-apply the torrc HiddenService* stanza for every
     `active` emancipated service that is missing EITHER its HS key dir OR its
     torrc stanza (e.g. after a fresh provisioning, an image flash, an
@@ -1000,12 +1133,14 @@ def tor_reconcile_persist() -> dict:
     the stanza is missing, `_tor_add_sync` re-appends it and reloads Tor;
     since the private key is unchanged, the `.onion` address is preserved.
 
-    #3112 : d'abord la migration de l'onion du webui vers le frontal HAProxy
-    dédié (idempotente), et le webui n'est JAMAIS réappliqué vers nginx :9080,
-    quelle que soit la valeur enregistrée ; enfin sa route sbxwaf est assurée.
+    #3112/#3123 : d'abord la migration de TOUS les onions vers le frontal
+    HAProxy onion-in (idempotente) ; aucun service n'est réappliqué vers nginx
+    :9080 ni http-in :80, quelle que soit la valeur enregistrée ; la route
+    sbxwaf de l'onion du webui est assurée ; enfin tout onion qui ne vise pas
+    le frontal est signalé bruyamment. `user` : qui lance (audit).
     """
     try:
-        migration = migrer_onion_webui()
+        migration = migrer_onions(user=user)
     except Exception as e:  # noqa: BLE001 — la migration ne doit pas empêcher la persistance des autres
         migration = {"success": False, "error": str(e)}
     applied = []
@@ -1017,8 +1152,8 @@ def tor_reconcile_persist() -> dict:
         onion_port = svc.get("onion_port")
         if not name or local_port is None or onion_port is None:
             continue
-        if name == "webui":
-            local_port = _port_onion_webui()
+        if local_port in PORTS_HTTP_DIRECTS or name == "webui":
+            local_port = _port_onion_in()
         if _hs_dir_exists(name) and _torrc_has_stanza(name):
             continue
         try:
@@ -1031,7 +1166,14 @@ def tor_reconcile_persist() -> dict:
     if any(s.get("name") == "webui" and s.get("active") for s in _load_emancipated()):
         route = _route_waf_onion(_onion_webui_hostname())
 
-    return {"success": True, "applied": applied, "migration": migration, "waf_route": route}
+    try:
+        restes = signaler_onions_non_migres(user=user)
+    except Exception as e:  # noqa: BLE001
+        print(f"ERREUR #3112 : contrôle des onions impossible ({e})", file=sys.stderr)
+        restes = None
+
+    return {"success": True, "applied": applied, "migration": migration, "waf_route": route,
+            "non_migres": restes}
 
 
 @app.post("/tor/add")
@@ -1044,12 +1186,14 @@ async def tor_add(req: TorAddRequest, user: dict = Depends(require_jwt)):
     if excluded:
         raise HTTPException(status_code=400,
                             detail=f"Tor refusé pour {req.service} : domaine exclu — {why}.")
-    # #3112 : un onion vers nginx :9080 en direct contourne HAProxy et sbxwaf, et nginx prend chaque visiteur
-    # Tor (127.0.0.1) pour un poste du LAN. Le webui passe par /tor/emancipate_webui (frontal onion-webui).
-    if req.local_port == WEBUI_NGINX_PORT:
+    # #3112/#3123 : LISTE BLANCHE, une seule cible — le frontal onion-in. Un onion vers nginx :9080 ou http-in
+    # :80 en direct contourne le nettoyage des en-têtes, et nginx prend chaque visiteur Tor (127.0.0.1) pour un
+    # poste du LAN. sbxwaf route ensuite le Host <onion>.onion.
+    port = _port_onion_in()
+    if req.local_port not in (None, port):
         raise HTTPException(status_code=400,
-                            detail="Tor refusé vers 127.0.0.1:9080 (nginx en direct, hors WAF) — "
-                                   "le webui s'expose par emancipate_webui (#3112).")
+                            detail=f"Tor refusé vers 127.0.0.1:{req.local_port} : un service onion ne vise que "
+                                   f"le frontal HAProxy onion-in (127.0.0.1:{port}) (#3112).")
     # Sanitize service name
     name = "".join(c for c in req.service if c.isalnum() or c in "_-")
 
@@ -1057,7 +1201,7 @@ async def tor_add(req: TorAddRequest, user: dict = Depends(require_jwt)):
     if hs_dir.exists():
         raise HTTPException(status_code=400, detail="Hidden service already exists")
 
-    return _tor_add_sync(name, req.local_port, req.onion_port)
+    return _tor_add_sync(name, port, req.onion_port)
 
 
 @app.post("/tor/remove")
@@ -1143,7 +1287,8 @@ async def emancipate(req: EmancipateRequest, user: dict = Depends(require_jwt)):
     # If Tor requested, create hidden service + register the onion in the
     # directory so the anonymous egress endpoint federates (gondwana #768 P3).
     if req.tor:
-        tor_req = TorAddRequest(service=req.service, local_port=req.port)
+        # Tor passe par le frontal onion-in (#3112) : le port du service ne sert qu'au maillage et au DNS.
+        tor_req = TorAddRequest(service=req.service)
         tor_result = await tor_add(tor_req, user)
         if tor_result.get("onion"):
             result["onion"] = tor_result["onion"]

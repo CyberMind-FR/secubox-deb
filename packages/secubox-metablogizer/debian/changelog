@@ -1,3 +1,13 @@
+secubox-metablogizer (1.11.3-1~trixie1) trixie; urgency=high
+
+  * Sécurité : l'onion d'un site (metablogizerctl tor expose) vise le frontal HAProxy onion-in (127.0.0.1:9180,
+    clé onion_in_port de haproxy.toml), jamais http-in :80 (ref #3112, #3123). Par http-in, le visiteur Tor
+    arrivait de 127.0.0.1 sans nettoyage des en-têtes : nginx le prenait pour un poste du LAN, et un Host
+    admin.<box> menait au webui. Délégation à secubox-exposure avec le même port. Les sites déjà publiés
+    sont migrés par secubox-exposure-tor-reconcile (secubox-haproxy).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 18:00:00 +0200
+
 secubox-metablogizer (1.11.2-1~trixie1) trixie; urgency=medium
 
   * Vhosts metablogizer et depot livres sans les noms de gk2 (ref #3117) : server_name « metablogizer.* » / « depot.* », fichiers renommes metablogizer.conf et depot.conf, journaux depot_access.log / depot_error.log, filtre d'exposition metablogizer.conf. Le postinst migre l'ancien lien d'activation, l'ancien fichier (conserve sous le nouveau nom s'il a ete retouche) et le filtre d'exposition de l'operateur ; le vhost depot n'est reactive que s'il l'etait.

@@ -1,3 +1,11 @@
+secubox-tor (1.7.3-1~trixie1) trixie; urgency=medium
+
+  * Page Tor : la confirmation « Publier » de l'onion du webui ne dit plus « port local 9080 » ; l'onion passe
+    par le frontal HAProxy onion-in (127.0.0.1:9180), inspecté par le WAF et jamais vu comme un poste du LAN
+    (ref #3112, #3123).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 18:00:00 +0200
+
 secubox-tor (1.7.2-1~trixie1) trixie; urgency=medium
 
   * Vhost wpad livre sans le nom de gk2 (ref #3117) : server_name « wpad.* » seul (toute box le sert sous son propre domaine). Le fichier wpad-vhost.conf garde son nom, deja neutre, et n'est pas active par le paquet : aucune migration.

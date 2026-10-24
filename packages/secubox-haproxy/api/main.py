@@ -461,21 +461,24 @@ def _cfg():
     }
 
 
-# Onion du webui (#3112) : Tor livre au frontal HAProxy dédié, jamais à nginx :9080. Adresse marqueur NON LAN
-# « client onion » : 192.0.2.80 (TEST-NET-1, RFC 5737, jamais routée). Mêmes valeurs que haproxyctl generate.
-ONION_WEBUI_PORT_DEFAUT = 9180
+# Onions (#3112, #3123) : Tor livre au frontal HAProxy onion-in, jamais à nginx :9080 ni à http-in :80. Adresse
+# marqueur NON LAN « client onion » : 192.0.2.80 (TEST-NET-1, RFC 5737, jamais routée). Mêmes valeurs que
+# haproxyctl generate (qui fait foi).
+ONION_IN_PORT_DEFAUT = 9180
 ONION_CLIENT_MARQUEUR = "192.0.2.80"
 
 
-def frontal_onion_webui(backend: str, port: Optional[int] = None) -> list:
-    """Lignes du frontal `onion-webui` : efface ce que le client dit de son adresse, pose le marqueur, inspecte."""
+def frontal_onion_in(backend: str, port: Optional[int] = None) -> list:
+    """Lignes du frontal `onion-in` : refuse tout Host non .onion, efface ce que le client dit de son adresse,
+    pose le marqueur, inspecte."""
     if port is None:
         port = int(((_get_haproxy_config() or {}).get("main", {}) or {}).get(
-            "onion_webui_port", ONION_WEBUI_PORT_DEFAUT))
+            "onion_in_port", ONION_IN_PORT_DEFAUT))
     return [
-        "frontend onion-webui",
+        "frontend onion-in",
         f"    bind 127.0.0.1:{port}",
         "    mode http",
+        "    http-request deny deny_status 404 unless { req.hdr(host),field(1,:) -m end -i .onion }",
         "    http-request del-header X-Forwarded-For",
         "    http-request del-header Forwarded",
         "    http-request del-header X-Real-IP",
@@ -1620,9 +1623,9 @@ async def generate_config():
         "",
     ])
 
-    # Onion du webui (#3112) : même frontal que haproxyctl generate (qui fait foi). Jamais webui_direct :
+    # Onions (#3112, #3123) : même frontal que haproxyctl generate (qui fait foi). Jamais webui_direct :
     # WAF désactivé ⇒ fallback (503), l'onion se ferme plutôt que de contourner l'inspection.
-    config_lines.extend(frontal_onion_webui(
+    config_lines.extend(frontal_onion_in(
         "waf_inspector" if cfg["waf_enabled"] else "fallback"))
 
     # WAF inspector backend (sbxwaf)

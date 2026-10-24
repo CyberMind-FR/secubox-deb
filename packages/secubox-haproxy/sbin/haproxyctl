@@ -965,9 +965,9 @@ cmd_generate() {
     local http_port=$(cle_conf http_port 80)
     local https_port=$(cle_conf https_port 443)
     local stats_port=$(cle_conf stats_port 8404)
-    # Frontal de l'onion du webui (#3112), sur la boucle locale seulement. 9180 : libre sur le parc, distinct de
-    # nginx (9080). Surchargeable par `onion_webui_port` ; le composant exposure lit la meme cle.
-    local onion_webui_port=$(cle_conf onion_webui_port 9180)
+    # Frontal de TOUS les onions (#3112, #3123), sur la boucle locale seulement. 9180 : libre sur le parc, distinct
+    # de nginx (9080) et de http-in (80). Surchargeable par `onion_in_port` ; le composant exposure lit la meme cle.
+    local onion_in_port=$(cle_conf onion_in_port 9180)
     # IPv6 entrant (#2934) : `ipv6 = true` ajoute DEUX ecouteurs v6only (80 et 443). v6only et non v4v6 : les ecouteurs
     # IPv4 restent strictement inchanges et aucune adresse IPv4 mappee (::ffff:a.b.c.d) n'arrive au WAF. Desactive par defaut.
     local bind_v6_http="" bind_v6_https=""
@@ -1325,24 +1325,31 @@ EOF
 
 EOF
 
-    # ONION DU WEBUI : FRONTAL DEDIE (#3112).
+    # ONIONS : UN FRONTAL DEDIE, POUR TOUS (#3112, #3123).
     #
-    # Le service onion « webui » pointait sur nginx :9080, hors HAProxy et hors sbxwaf. Tout visiteur Tor
-    # arrive de 127.0.0.1 ; nginx croit X-Forwarded-For de 127.0.0.1 et classe 127.0.0.0/8 en LAN : chaque
-    # visiteur onion etait donc « poste du LAN » sans rien forger, et un X-Forwarded-For forge (192.168.1.50)
-    # etait cru aussi. Or ce verdict ouvre la premiere configuration et les routes reservees au LAN.
+    # Les services onion livraient a nginx :9080 (webui) ou au frontal public http-in :80 (vhosts, metablogizer),
+    # sans rien nettoyer. Tout visiteur Tor arrive de 127.0.0.1 ; nginx croit X-Forwarded-For de 127.0.0.1 et
+    # classe 127.0.0.0/8 en LAN : chaque visiteur onion etait « poste du LAN » sans rien forger, un
+    # X-Forwarded-For forge (192.168.1.50) etait cru aussi, et par http-in un Host admin.<box> menait au webui
+    # en direct. Or ce verdict ouvre la premiere configuration et les routes reservees au LAN.
     #
-    # Tor livre desormais ici (HiddenServicePort 80 127.0.0.1:<onion_webui_port>, pose par exposure). On
-    # EFFACE tout ce que le client dit de son adresse, puis on pose une adresse marqueur NON LAN, 192.0.2.80
-    # (TEST-NET-1, RFC 5737, jamais routee) qui signifie « client onion ». set-src la fait voir aussi a
-    # %[src] : X-Real-IP et le X-Forwarded-For qu'ajoute option forwardfor la portent, et aucune ACL
-    # src_privee ne la reconnait. Puis inspection sbxwaf, comme le trafic Internet : sbxwaf route le Host
-    # <onion>.onion vers le webui (route posee par exposure via secubox-waf-route). Jamais webui_direct.
+    # Tor livre desormais ICI, pour tout service (HiddenServicePort <p> 127.0.0.1:<onion_in_port>, pose par
+    # exposure). Dans l'ordre :
+    #   1. tout Host qui n'est pas en .onion est refuse (404) : aucun nom clair ne se joint par un onion, ce qui
+    #      empeche aussi de relier un onion aux domaines publics de la box ;
+    #   2. on EFFACE tout ce que le client dit de son adresse ;
+    #   3. on pose une adresse marqueur NON LAN, 192.0.2.80 (TEST-NET-1, RFC 5737, jamais routee) qui signifie
+    #      « client onion ». set-src la fait voir aussi a %[src] : X-Real-IP et le X-Forwarded-For
+    #      qu'ajoute option forwardfor la portent, et aucune ACL src_privee ne la reconnait ;
+    #   4. inspection sbxwaf, comme le trafic Internet : sbxwaf route par Host <onion>.onion (route de l'onion
+    #      du webui posee par exposure via secubox-waf-route ; un onion sans route recoit 421). Jamais
+    #      webui_direct.
     # Ecoute sur la boucle locale seulement : rien a ouvrir dans nftables.
     cat >> "$out" << EOF
-frontend onion-webui
-    bind 127.0.0.1:${onion_webui_port}
+frontend onion-in
+    bind 127.0.0.1:${onion_in_port}
     mode http
+    http-request deny deny_status 404 unless { req.hdr(host),field(1,:) -m end -i .onion }
     http-request del-header X-Forwarded-For
     http-request del-header Forwarded
     http-request del-header X-Real-IP
