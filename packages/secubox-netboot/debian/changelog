@@ -1,3 +1,12 @@
+secubox-netboot (0.7.1-1~trixie1) trixie; urgency=medium
+
+  * Vhost de boot livré sans le nom de gk2 (ref #3117) : server_name « boot.* ». Livré dans /usr/share (pas un
+    conffile) et recopié tel quel par « secubox-netboot-serve up » : rien ne change sur une box tant que
+    l'opérateur ne relance pas « serve up ». L'adresse d'écoute 192.168.1.200:8099 (celle de gk2) est signalée
+    en commentaire, non modifiée : aucun gabarit n'existe pour la remplacer.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:27:29 +0200
+
 secubox-netboot (0.7.0-1~trixie1) trixie; urgency=medium
 
   * sbx-netflash --nom NOM (ref #3100) : récupère le lot signé servi par le maître
