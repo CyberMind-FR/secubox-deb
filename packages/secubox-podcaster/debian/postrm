@@ -5,9 +5,10 @@ set -e
 
 case "$1" in
     remove|purge)
-        # Vhost podcaster.gk2 : on retire le symlink d'activation (le server-block
-        # sous sites-available/ est un conffile géré par dpkg).
-        rm -f /etc/nginx/sites-enabled/podcaster.gk2.conf || true
+        # Vhost podcaster : on retire le symlink d'activation (le server-block
+        # sous sites-available/ est un conffile géré par dpkg). L'ancien nom
+        # (avant #3117) aussi : une montée interrompue a pu le laisser.
+        rm -f /etc/nginx/sites-enabled/podcaster.conf /etc/nginx/sites-enabled/podcaster.gk2.conf || true
         if command -v nginx >/dev/null 2>&1 && nginx -t 2>/dev/null; then
             systemctl reload nginx 2>/dev/null || true
         fi

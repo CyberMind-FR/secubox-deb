@@ -1,3 +1,12 @@
+secubox-profiles (0.23.13-1~trixie1) trixie; urgency=medium
+
+  * Réveil (nginx-sync) : find_config et wire retrouvent aussi un vhost livré en joker générique « <label>.* »
+    quand aucun server_name ne porte le nom exact du domaine (ref #3117) — les vhosts livrés n'ont plus de nom
+    de box, et le câblage de l'include phase-2 se perdait (no_config). Le nom exact reste prioritaire, dans
+    tous les fichiers ; un autre label, un label prolongé ou un joker de tête ne correspondent pas.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:38:02 +0200
+
 secubox-profiles (0.23.12-1~trixie1) trixie; urgency=medium
 
   * Profils full et media-lab sans reality, cycle de vie sans ai-insights (ref #3017).

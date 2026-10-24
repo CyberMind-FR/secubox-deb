@@ -1,3 +1,13 @@
+secubox-bbs (0.37.13-1~trixie1) trixie; urgency=medium
+
+  * Vhost membre livré sans les noms de gk2 (ref #3117) : server_name « bbs.* » (bbs.gk2.secubox.in reste
+    couvert sur gk2), fichier renommé bbs.conf. Migration dans le postinst juste avant l'activation : l'ancien
+    lien (y compris un lien posé à la main sous un autre nom) est retiré, un ancien fichier retouché est
+    archivé dans /var/backups/nginx (0600) sans être recopié, et un lien migré n'est jamais retiré sur un
+    échec de nginx -t.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:20:32 +0200
+
 secubox-bbs (0.37.12-1~trixie1) trixie; urgency=medium
 
   * Micro : encarté par le Hall v2 (message {sbx:'carte'}), il range sa marque — icône et titre,

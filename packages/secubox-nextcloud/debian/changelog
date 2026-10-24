@@ -1,3 +1,10 @@
+secubox-nextcloud (1.9.1-1~trixie1) trixie; urgency=medium
+
+  * Vhost public livré sans les noms de gk2 (ref #3117) : server_name « nc.* nextcloud.* » (nc.gk2 et
+    nextcloud.gk2.secubox.in restent couverts sur gk2). Conffile, activé à la main : aucune migration.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:22:13 +0200
+
 secubox-nextcloud (1.9.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /nextcloud/ refaite au profil Aurora (#2612) : une page autonome (plus de police ni de script externes, plus de peau CRT), tuiles Conteneur, Comptes, Données, Stockage, Version, panneaux Conteneur, Stockage, Adresses de connexion, Configuration, Comptes, Sauvegardes, Journal, Console occ et Zone dangereuse ; modes ?demo=1 (données fictives, actions inertes) et ?embed=1.

@@ -1,6 +1,51 @@
 #!/bin/bash
 set -e
 
+# MIGRATION #3117 : le vhost était livré sous le nom de gk2. Idempotent.
+#   $1 ancien nom de fichier  $2 nouveau nom  $3 ancien filtre d'exposition
+#   (ou vide)  $4 nouveau filtre. L'ancien lien d'activation part ; l'ancien
+# fichier part s'il est celui que le paquet avait livré (somme dpkg), sinon il
+# est archivé dans /var/backups/nginx (0600) avec un avertissement : le fichier
+# livré fait foi. Retourne 0 si l'ancien vhost était activé.
+sbx_migrer_vhost() {
+    _o="$1"; _n="$2"; _os="$3"; _ns="$4"; _act=1
+    _av=/etc/nginx/sites-available; _en=/etc/nginx/sites-enabled
+    _sn=/etc/nginx/snippets/exposure
+    if [ -e "$_en/$_o" ] || [ -L "$_en/$_o" ]; then
+        rm -f "$_en/$_o"; _act=0
+    fi
+    # Un lien posé à la main sous un AUTRE nom vers l'ancien fichier pendrait
+    # une fois celui-ci retiré, et nginx -t échouerait pour toute la box.
+    for _l in "$_en"/*; do
+        [ -L "$_l" ] || continue
+        case "$(readlink "$_l")" in
+            "$_o"|*/"$_o") rm -f "$_l"; _act=0 ;;
+        esac
+    done
+    if [ -f "$_av/$_o" ]; then
+        _livre=$(dpkg-query -W -f='${Conffiles}\n' secubox-podcaster 2>/dev/null \
+                 | awk -v f="$_av/$_o" '$1 == f { print $2 }')
+        _actuel=$(md5sum "$_av/$_o" | cut -d' ' -f1)
+        if [ "$_livre" != "$_actuel" ]; then
+            # Retouché par l'administrateur (ou origine inconnue) : ses lignes
+            # sont ARCHIVÉES, jamais recopiées sur le fichier livré — elles
+            # citeraient l'ancien nom (et l'ancien filtre d'exposition) et
+            # nginx -t échouerait. Le fichier livré fait foi.
+            _arch="/var/backups/nginx/$_o.$(date +%Y%m%d-%H%M%S)"
+            mkdir -p /var/backups/nginx
+            if cp -p "$_av/$_o" "$_arch" && chmod 0600 "$_arch"; then
+                echo "secubox-podcaster : l'ancien vhost $_o avait été modifié ; archivé dans $_arch, le fichier livré $_n est utilisé. Reportez-y vos retouches si besoin." >&2
+            fi
+        fi
+        rm -f "$_av/$_o"
+    fi
+    # Le filtre d'exposition de l'opérateur suit le vhost.
+    if [ -n "$_os" ] && [ -f "$_sn/$_os" ]; then
+        if [ ! -f "$_sn/$_ns" ]; then mv -f "$_sn/$_os" "$_sn/$_ns"; else rm -f "$_sn/$_os"; fi
+    fi
+    return $_act
+}
+
 case "$1" in
   configure)
     # Data dirs (module-owned; never touch the shared /run/secubox parent, #494).
@@ -34,9 +79,14 @@ case "$1" in
       systemctl restart secubox-podcaster.service 2>/dev/null || true
     fi
 
-    # Vhost podcaster.gk2 : on active le server-block (symlink) s'il est fourni.
-    if [ -f /etc/nginx/sites-available/podcaster.gk2.conf ]; then
-      ln -sf ../sites-available/podcaster.gk2.conf /etc/nginx/sites-enabled/podcaster.gk2.conf
+    # Vhost podcaster.<domaine> : on active le server-block (symlink) s'il est fourni.
+    # #3117 : il s'appelait podcaster.gk2.conf (nom de gk2 livré à toutes les
+    # boxes). L'ancien lien et l'ancien fichier partent juste avant que le
+    # nouveau lien soit posé : aucun `nginx -t` ne passe entre les deux. Ce
+    # postinst ne retire jamais le lien sur un échec de nginx -t.
+    sbx_migrer_vhost podcaster.gk2.conf podcaster.conf "" "" || true
+    if [ -f /etc/nginx/sites-available/podcaster.conf ]; then
+      ln -sf ../sites-available/podcaster.conf /etc/nginx/sites-enabled/podcaster.conf
     fi
 
     # ROUTE SBXWAF — POSEE PAR CE PAQUET, comme le vhost juste au-dessus.

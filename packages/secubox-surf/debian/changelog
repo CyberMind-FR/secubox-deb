@@ -1,3 +1,12 @@
+secubox-surf (1.0.36-1~trixie1) trixie; urgency=medium
+
+  * Vhost du relais livré sans le nom de gk2 (ref #3117) : server_name « ~^surf-[^.]+\..+$ » (un label
+    surf-<site> sous le domaine de la box ; surf-*.gk2.secubox.in reste couvert sur gk2). Conffile déclaré
+    (debian/conffiles), non régénéré : aucune migration. Le suffixe gk2.secubox.in codé dans surf/relais.py
+    (SUFFIXE) est signalé, non modifié.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:27:09 +0200
+
 secubox-surf (1.0.35-1~bookworm1) bookworm; urgency=medium
 
   * Fuite mémoire (ref #2962) : `r = await client.request(...)` chargeait TOUJOURS le corps amont

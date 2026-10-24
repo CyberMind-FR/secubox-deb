@@ -1,3 +1,11 @@
+secubox-auth (1.8.8-1~trixie1) trixie; urgency=medium
+
+  * Vhost ACCÈS livré sans les noms de gk2 (ref #3117) : server_name « acces.* » (acces.gk2.secubox.in reste
+    couvert sur gk2). Fichier livré dans /etc/secubox/nginx-available/acces.conf, jamais activé par le
+    postinst : la copie active posée par l'opérateur n'est pas touchée, aucune migration.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:19:28 +0200
+
 secubox-auth (1.8.7-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.

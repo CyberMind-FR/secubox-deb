@@ -2,6 +2,51 @@
 # SecuBox-Deb :: secubox-bbs — postinst
 set -e
 
+# MIGRATION #3117 : le vhost était livré sous le nom de gk2. Idempotent.
+#   $1 ancien nom de fichier  $2 nouveau nom  $3 ancien filtre d'exposition
+#   (ou vide)  $4 nouveau filtre. L'ancien lien d'activation part ; l'ancien
+# fichier part s'il est celui que le paquet avait livré (somme dpkg), sinon il
+# est archivé dans /var/backups/nginx (0600) avec un avertissement : le fichier
+# livré fait foi. Retourne 0 si l'ancien vhost était activé.
+sbx_migrer_vhost() {
+    _o="$1"; _n="$2"; _os="$3"; _ns="$4"; _act=1
+    _av=/etc/nginx/sites-available; _en=/etc/nginx/sites-enabled
+    _sn=/etc/nginx/snippets/exposure
+    if [ -e "$_en/$_o" ] || [ -L "$_en/$_o" ]; then
+        rm -f "$_en/$_o"; _act=0
+    fi
+    # Un lien posé à la main sous un AUTRE nom vers l'ancien fichier pendrait
+    # une fois celui-ci retiré, et nginx -t échouerait pour toute la box.
+    for _l in "$_en"/*; do
+        [ -L "$_l" ] || continue
+        case "$(readlink "$_l")" in
+            "$_o"|*/"$_o") rm -f "$_l"; _act=0 ;;
+        esac
+    done
+    if [ -f "$_av/$_o" ]; then
+        _livre=$(dpkg-query -W -f='${Conffiles}\n' secubox-bbs 2>/dev/null \
+                 | awk -v f="$_av/$_o" '$1 == f { print $2 }')
+        _actuel=$(md5sum "$_av/$_o" | cut -d' ' -f1)
+        if [ "$_livre" != "$_actuel" ]; then
+            # Retouché par l'administrateur (ou origine inconnue) : ses lignes
+            # sont ARCHIVÉES, jamais recopiées sur le fichier livré — elles
+            # citeraient l'ancien nom (et l'ancien filtre d'exposition) et
+            # nginx -t échouerait. Le fichier livré fait foi.
+            _arch="/var/backups/nginx/$_o.$(date +%Y%m%d-%H%M%S)"
+            mkdir -p /var/backups/nginx
+            if cp -p "$_av/$_o" "$_arch" && chmod 0600 "$_arch"; then
+                echo "secubox-bbs : l'ancien vhost $_o avait été modifié ; archivé dans $_arch, le fichier livré $_n est utilisé. Reportez-y vos retouches si besoin." >&2
+            fi
+        fi
+        rm -f "$_av/$_o"
+    fi
+    # Le filtre d'exposition de l'opérateur suit le vhost.
+    if [ -n "$_os" ] && [ -f "$_sn/$_os" ]; then
+        if [ ! -f "$_sn/$_ns" ]; then mv -f "$_sn/$_os" "$_sn/$_ns"; else rm -f "$_sn/$_os"; fi
+    fi
+    return $_act
+}
+
 case "$1" in
   configure)
     # Compte de service dedie, sans shell ni repertoire personnel : le BBS ne
@@ -95,11 +140,23 @@ case "$1" in
     # Depuis #1682, l'exposition des nœuds relayés est la règle (vhosts x.*,
     # joker DNS-01, relais synchronisé). Service arrêté = 502, et le Hall garde
     # alors son repli sur le BBS d'un autre nœud. Un lien existant est laissé.
-    if [ -f /etc/nginx/sites-available/bbs.gk2.conf ] && [ -d /etc/nginx/sites-enabled ] \
-       && [ ! -e /etc/nginx/sites-enabled/bbs.gk2.conf ] && command -v nginx >/dev/null 2>&1; then
-        ln -s ../sites-available/bbs.gk2.conf /etc/nginx/sites-enabled/bbs.gk2.conf
-        if ! nginx -t >/dev/null 2>&1; then
-            rm -f /etc/nginx/sites-enabled/bbs.gk2.conf
+    #
+    # #3117 : le vhost s'appelait bbs.gk2.conf (nom de gk2 livré à toutes les
+    # boxes). L'ancien lien et l'ancien fichier partent ici, juste avant que le
+    # nouveau lien soit posé : aucun `nginx -t` ne passe entre les deux.
+    MIGRE=0
+    sbx_migrer_vhost bbs.gk2.conf bbs.conf "" "" && MIGRE=1 || true
+    if [ -f /etc/nginx/sites-available/bbs.conf ] && [ -d /etc/nginx/sites-enabled ] \
+       && [ ! -e /etc/nginx/sites-enabled/bbs.conf ] && command -v nginx >/dev/null 2>&1; then
+        ln -s ../sites-available/bbs.conf /etc/nginx/sites-enabled/bbs.conf
+        if NT=$(nginx -t 2>&1); then
+            :
+        elif [ "$MIGRE" = 1 ]; then
+            # Lien migré à l'instant : il ne doit PAS disparaître sur un échec
+            # qui peut venir d'ailleurs ; le prochain rechargement réussi le prendra.
+            echo "secubox-bbs: nginx -t a échoué, vhost laissé activé (migration #3117) : $NT" >&2
+        else
+            rm -f /etc/nginx/sites-enabled/bbs.conf
             echo "secubox-bbs: vhost refusé par nginx -t, non activé" >&2
         fi
     fi

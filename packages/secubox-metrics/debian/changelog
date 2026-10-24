@@ -1,3 +1,10 @@
+secubox-metrics (1.29.5-1~trixie1) trixie; urgency=medium
+
+  * Vhost grafana (source, non installé par le paquet) sans le nom de gk2 (ref #3117) : server_name «
+    grafana.* ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:22:13 +0200
+
 secubox-metrics (1.29.4-1~trixie1) trixie; urgency=medium
 
   * Vues par vhost : double tampon réel (ref #3011). La collecte modifiait les compteurs en place
