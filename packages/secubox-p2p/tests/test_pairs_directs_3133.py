@@ -138,3 +138,23 @@ def test_entrees_hostiles_sans_exception():
     assert calc(e, [cand("a", K1, "10.10.0.2")], {K1: "x", K2: True})["retraits"] == []
     assert pd.appliquer(None, {}, NOW) == {}
     assert pd.appliquer({"peers": 3}, {"ajouts": 5}, NOW) == {"peers": 3}
+
+
+def test_ip_locale_reservee():
+    e = etat()
+    e["address"] = "10.10.0.7/24"
+    liste = [cand("a", K1, "10.10.0.7")]
+    assert calc(e, liste)["ajouts"] == []
+    forge = {"ajouts": [{"nom": "a", "mesh_ip": "10.10.0.7", "cle_publique": K1, "endpoint": "192.168.1.7:51820"}],
+             "retraits": [], "refuses": {}}
+    assert pd.appliquer(e, forge, NOW)["peers"] == e["peers"]
+
+
+def test_ip_du_maitre_reservee_sans_mesh_ip():
+    e = etat()
+    del e["peers"][0]["mesh_ip"]
+    assert calc(e, [cand("a", K1, "10.10.0.1")])["ajouts"] == []
+    forge = {"ajouts": [{"nom": "a", "mesh_ip": "10.10.0.1", "cle_publique": K1, "endpoint": "192.168.1.7:51820"}],
+             "retraits": [], "refuses": {}}
+    assert pd.appliquer(e, forge, NOW)["peers"] == e["peers"]
+    assert calc(e, [cand("a", K1, "10.10.0.255"), cand("b", K2, "10.10.0.0")])["ajouts"] == []

@@ -105,6 +105,19 @@ def pairs_vivants(etat: dict, poignees: Optional[dict]) -> List[Dict[str, str]]:
 
 # --- côté pair : calcul des liens directs (logique pure : ni fichier, ni réseau, ni horloge) ------------------------
 
+def _ips_reservees(etat: dict) -> set:
+    """IP jamais attribuables à un lien direct : la première adresse hôte du réseau (le maître, même si son entrée
+    n'a pas de mesh_ip : un /32 l'emporterait sur son /24), l'adresse réseau, la diffusion et la nôtre."""
+    net = ipaddress.ip_network(RESEAU_MAILLE)
+    res = {str(net.network_address), str(net.network_address + 1), str(net.broadcast_address)}
+    adresse = etat.get("address")
+    if isinstance(adresse, str):
+        ip = _ipv4(adresse.split("/")[0].strip())
+        if ip is not None:
+            res.add(str(ip))
+    return res
+
+
 def calculer(etat: Any, liste: Any, poignees: Any, maintenant: float, refuses: Any,
              delai_poignee_s: int = 180, retente_apres_s: int = 3600) -> Dict[str, Any]:
     """Décide des liens directs à ajouter / retirer. Rend {"ajouts": [pair normalisé…], "retraits": [clé…],
@@ -123,6 +136,7 @@ def calculer(etat: Any, liste: Any, poignees: Any, maintenant: float, refuses: A
     entrees = [e for e in entrees if isinstance(e, dict)] if isinstance(entrees, list) else []
     moi = etat.get("public_key")
     cles_fixes, ips_prises = set(), set()           # entrées NON directes (maître compris) : jamais en double
+    ips_prises.update(_ips_reservees(etat))
     directs: Dict[str, dict] = {}
     for e in entrees:
         cle = e.get("public_key")
@@ -186,7 +200,7 @@ def appliquer(etat: Any, calcul: Any, maintenant: float) -> dict:
     pairs = [e for e in nouveau["peers"] if not (isinstance(e, dict) and e.get("direct") is True
                                                   and e.get("public_key") in retraits)]
     cles = {e.get("public_key") for e in pairs if isinstance(e, dict)}
-    ips = {e.get("mesh_ip") for e in pairs if isinstance(e, dict)}
+    ips = {e.get("mesh_ip") for e in pairs if isinstance(e, dict)} | _ips_reservees(nouveau)
     for a in calcul.get("ajouts") if isinstance(calcul.get("ajouts"), list) else []:
         if not isinstance(a, dict):
             continue
