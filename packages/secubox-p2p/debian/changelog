@@ -22,6 +22,9 @@ secubox-p2p (1.19.0-1~trixie1) trixie; urgency=medium
     pair_direct_promu / pair_direct_retrograde / pair_direct_retire ; sans mesure locale des poignées, rien ne change ;
     liens_directs = false retire les entrées directes de la box. Minuterie
     secubox-maillage-pairs.timer (3 min, puis 5 min). Réglage [maillage] liens_directs (défaut true) de p2p.toml.
+  * secubox-relais-maillage (ref #3133) : pairs_32 ignore les entrées direct: true de wg_mesh.json (un lien direct
+    n'est pas un pair à relayer : sans cela tout satellite tentait joker DNS-01, certbot et vhosts pour ses frères) ;
+    pair_du_maillage tolère « (none) » (sonde sans AllowedIPs) au lieu d'échouer sur une exception.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 19:00:00 +0200
 

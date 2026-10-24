@@ -241,6 +241,8 @@ puis toutes les 5 min) relie les pairs en direct, sans passer par le maître, po
 - `etat` : `{"actif": <réglage>, "liens_directs": [entrées directes avec direct_etat], "sondes": n, "actifs": n}`.
 - Audit : `pair_direct_ajoute` (sonde), `pair_direct_promu`, `pair_direct_retrograde`, `pair_direct_retire` (nom, clé
   publique, mesh_ip) ; seulement pour ce qui a réellement changé dans le fichier écrit.
+- `secubox-relais-maillage` ignore les entrées `direct: true` (un lien direct n'est pas un pair à relayer) et tolère
+  la sortie `(none)` de `wg show allowed-ips` pour une sonde.
 - Variables `SBX_PAIRS_*` (dont `SBX_PAIRS_MAITRE_URL`) : réservées aux tests ; ne jamais les poser en production,
   `SBX_PAIRS_MAITRE_URL` remplaçant l'adresse du maître.
 
