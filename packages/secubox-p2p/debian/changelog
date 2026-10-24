@@ -1,3 +1,13 @@
+secubox-p2p (1.18.2-1~trixie1) trixie; urgency=medium
+
+  * secubox-relais-maillage (ref #3132) : les services propres à un pair sont publiés par le relais (réglage
+    services_des_pairs = "tous", défaut ; "communs" rend l'ancien filtre). Un nom relayé vers un pair qui, joint avec
+    succès, ne le publie plus est retiré (gk2 relayait encore bbs, metanews et socialrelay de gk1) ; un pair
+    injoignable garde ses noms. « retirer » réduit vraiment HAProxy (--allow-shrink : la garde anti-dérive refusait
+    en silence) ; en lot, un seul rechargement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 16:45:00 +0200
+
 secubox-p2p (1.18.1-1~trixie1) trixie; urgency=medium
 
   * secubox-relais-maillage (ref #3130) : « pas de drop terminal » toutes les heures sur gk1. Le nftables.conf de
