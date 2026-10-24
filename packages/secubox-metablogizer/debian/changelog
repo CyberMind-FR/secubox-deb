@@ -1,3 +1,9 @@
+secubox-metablogizer (1.11.2-1~trixie1) trixie; urgency=medium
+
+  * Vhosts metablogizer et depot livres sans les noms de gk2 (ref #3117) : server_name « metablogizer.* » / « depot.* », fichiers renommes metablogizer.conf et depot.conf, journaux depot_access.log / depot_error.log, filtre d'exposition metablogizer.conf. Le postinst migre l'ancien lien d'activation, l'ancien fichier (conserve sous le nouveau nom s'il a ete retouche) et le filtre d'exposition de l'operateur ; le vhost depot n'est reactive que s'il l'etait.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 12:00:00 +0200
+
 secubox-metablogizer (1.11.1-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.

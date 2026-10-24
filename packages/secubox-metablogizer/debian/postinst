@@ -28,7 +28,47 @@ fi
 # La table n'appartenait à aucun paquet — 275 routes posées à la main au fil
 # des années, invisibles tant que ça tient, fatales le jour où une entrée
 # saute. `secubox-waf-route` (secubox-core) fait la fusion idempotente.
-HOTE=metablogizer.gk2.secubox.in
+HOTE=metablogizer
+
+# MIGRATION #3117 : les vhosts étaient livrés sous le nom de gk2. Idempotent.
+#   $1 ancien nom de fichier  $2 nouveau nom  $3 ancien filtre d'exposition
+#   (ou vide)  $4 nouveau filtre. L'ancien lien d'activation part ; l'ancien
+# fichier part s'il est celui que le paquet avait livré (somme dpkg), sinon il
+# est repris sous le nouveau nom pour que les retouches de l'administrateur
+# survivent. Retourne 0 si l'ancien vhost était activé.
+sbx_migrer_vhost() {
+    _o="$1"; _n="$2"; _os="$3"; _ns="$4"; _act=1
+    _av=/etc/nginx/sites-available; _en=/etc/nginx/sites-enabled
+    _sn=/etc/nginx/snippets/exposure
+    if [ -e "$_en/$_o" ] || [ -L "$_en/$_o" ]; then
+        rm -f "$_en/$_o"; _act=0
+    fi
+    if [ -f "$_av/$_o" ]; then
+        _livre=$(dpkg-query -W -f='${Conffiles}\n' secubox-metablogizer 2>/dev/null \
+                 | awk -v f="$_av/$_o" '$1 == f { print $2 }')
+        _actuel=$(md5sum "$_av/$_o" | cut -d' ' -f1)
+        if [ -n "$_livre" ] && [ "$_livre" != "$_actuel" ]; then
+            cp -p "$_av/$_o" "$_av/$_n"
+        elif [ -z "$_livre" ]; then
+            mkdir -p /var/backups/nginx
+            cp -p "$_av/$_o" "/var/backups/nginx/$_o.avant-3117" || true
+        fi
+        rm -f "$_av/$_o"
+    fi
+    # Le filtre d'exposition de l'opérateur suit le vhost.
+    if [ -n "$_os" ] && [ -f "$_sn/$_os" ]; then
+        if [ ! -f "$_sn/$_ns" ]; then mv -f "$_sn/$_os" "$_sn/$_ns"; else rm -f "$_sn/$_os"; fi
+    fi
+    return $_act
+}
+sbx_migrer_vhost metablogizer.gk2.secubox.in.conf metablogizer.conf \
+    metablogizer.gk2.secubox.in.conf metablogizer.conf || true
+# Le vhost du dépôt est livré mais non activé : on ne le réactive que s'il l'était.
+if sbx_migrer_vhost depot.gk2.conf depot.conf "" ""; then
+    if [ -f /etc/nginx/sites-available/depot.conf ]; then
+        ln -sf ../sites-available/depot.conf /etc/nginx/sites-enabled/depot.conf
+    fi
+fi
 
 # Filtre d'exposition, semé à « lan » S'IL MANQUE et jamais écrasé ensuite :
 # publier au monde la console qui pilote la publication de tous les sites

@@ -67,7 +67,7 @@ override_dh_auto_install:
 	# posé par le postinst (même correctif que secubox-webos et secubox-surf).
 	install -d debian/secubox-metablogizer/etc/nginx/sites-available
 	install -m 644 nginx/metablogizer.vhost.conf \
-	  debian/secubox-metablogizer/etc/nginx/sites-available/metablogizer.gk2.secubox.in.conf
+	  debian/secubox-metablogizer/etc/nginx/sites-available/metablogizer.conf
 
 	install -d debian/secubox-metablogizer/etc/nginx/secubox-routes.d
 	[ -f nginx/metablogizer.conf ] && cp nginx/metablogizer.conf debian/secubox-metablogizer/etc/nginx/secubox-routes.d/ || true
@@ -93,7 +93,7 @@ override_dh_auto_install:
 	# demande aussi une entree HAProxy, une route WAF et un enregistrement DNS,
 	# qu un paquet ne doit pas decider seul. Voir README.
 	install -d debian/secubox-metablogizer/etc/nginx/sites-available
-	[ -f composants/droplet/nginx/depot-vhost.conf ] && cp composants/droplet/nginx/depot-vhost.conf debian/secubox-metablogizer/etc/nginx/sites-available/depot.gk2.conf || true
+	[ -f composants/droplet/nginx/depot-vhost.conf ] && cp composants/droplet/nginx/depot-vhost.conf debian/secubox-metablogizer/etc/nginx/sites-available/depot.conf || true
 	# dropletctl — composants/droplet/static publisher (rewritten for issue #196 — superseded #181)
 	install -d debian/secubox-metablogizer/usr/sbin
 	install -m 755 composants/droplet/sbin/dropletctl debian/secubox-metablogizer/usr/sbin/
