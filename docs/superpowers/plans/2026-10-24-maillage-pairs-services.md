@@ -37,17 +37,17 @@
 
 ## Points à contrôler en revue (Review Focus)
 
-1. Un pair hostile annonce un service dont l'URL sort du domaine qu'il a déclaré → jamais affiché (Tâche 2).
-2. Un pair du maître porte l'IP du maître, l'IP locale, une IP hors `10.10.0.0/24`, une clé invalide ou un nom/endpoint à saut de ligne → ignoré, rien d'écrit (Tâche 6).
-3. Liste du maître illisible, vide ou maître injoignable → les liens directs existants ne bougent pas (Tâche 7).
-4. Un pair mort (clone périmé, NAT) → jamais publié par le maître (Tâche 5), et un lien direct sans poignée de main depuis 3 minutes est retiré puis non retenté pendant 1 h (Tâche 6).
-5. Cache absent, corrompu ou annuaire absent → `/public/pairs` répond `{"pairs": [], "disponible": false}` et le Hall le dit, jamais une erreur 500 (Tâches 3 et 4).
+1. Un pair hostile annonce un service dont l'URL sort du domaine qu'il a déclaré → jamais affiché (Task 2).
+2. Un pair du maître porte l'IP du maître, l'IP locale, une IP hors `10.10.0.0/24`, une clé invalide ou un nom/endpoint à saut de ligne → ignoré, rien d'écrit (Task 6).
+3. Liste du maître illisible, vide ou maître injoignable → les liens directs existants ne bougent pas (Task 7).
+4. Un pair mort (clone périmé, NAT) → jamais publié par le maître (Task 5), et un lien direct sans poignée de main depuis 3 minutes est retiré puis non retenté pendant 1 h (Task 6).
+5. Cache absent, corrompu ou annuaire absent → `/public/pairs` répond `{"pairs": [], "disponible": false}` et le Hall le dit, jamais une erreur 500 (Tasks 3 et 4).
 
 ---
 
 ## Partie A — services des pairs dans chaque Hall
 
-### Tâche 1 : l'annuaire publie les services publics de la box
+### Task 1 : l'annuaire publie les services publics de la box
 
 **Fichiers :**
 - Modifier : `packages/secubox-annuaire/annuaire/offres.py`
@@ -71,7 +71,7 @@
 - [ ] **Étape 4 : lancer** la suite du paquet — tout vert.
 - [ ] **Étape 5 : valider** `git add` des fichiers ci-dessus ; `git commit -m "feat: annuaire, les services publics de la box deviennent des offres signées (ref #3133)"`.
 
-### Tâche 2 : le cache des services des autres nœuds
+### Task 2 : le cache des services des autres nœuds
 
 **Fichiers :**
 - Créer : `packages/secubox-annuaire/annuaire/pairs_services.py`
@@ -95,7 +95,7 @@
 - [ ] **Étape 4 : suite du paquet verte** ; `ruff check` sur les fichiers touchés sans régression.
 - [ ] **Étape 5 : commit** `feat: annuaire, cache des services des autres nœuds (ref #3133)`.
 
-### Tâche 3 : webos sert les services des pairs
+### Task 3 : webos sert les services des pairs
 
 **Fichiers :**
 - Créer : `packages/secubox-webos/api/pairs.py`
@@ -116,7 +116,7 @@
 - [ ] **Étape 4 : suite du paquet verte** (`cd packages/secubox-webos && python3 -m pytest tests -q`).
 - [ ] **Étape 5 : commit** `feat: webos, GET /public/pairs sert les services des autres box (ref #3133)`.
 
-### Tâche 4 : rubrique « Pairs » dans le Hall v2
+### Task 4 : rubrique « Pairs » dans le Hall v2
 
 **Fichiers :**
 - Modifier : `packages/secubox-webos/www/hall/hall-v2.js` (`RUBRIQUES` l.53-70, `rendMosaique` l.207, nouvelles `chargePairs`, `tuilePair`)
@@ -138,7 +138,7 @@
 
 ## Partie B — liens directs entre pairs
 
-### Tâche 5 : le maître publie la liste de ses pairs vivants
+### Task 5 : le maître publie la liste de ses pairs vivants
 
 **Fichiers :**
 - Modifier : `packages/secubox-p2p/nginx/p2p-masterlink.conf` (carte `$p2p_pair_maille` et en-tête `X-SecuBox-Pair`)
@@ -161,7 +161,7 @@
 - [ ] **Étape 4 : suite du paquet verte.**
 - [ ] **Étape 5 : commit** `feat: p2p, le maître publie la liste de ses pairs vivants (ref #3133)`.
 
-### Tâche 6 : le calcul des liens directs (logique pure)
+### Task 6 : le calcul des liens directs (logique pure)
 
 **Fichiers :**
 - Modifier : `packages/secubox-p2p/api/pairs_directs.py`
@@ -169,7 +169,7 @@
 - Modifier : `packages/secubox-p2p/debian/changelog`
 
 **Interfaces :**
-- Consomme : `pairs_directs.valider_pair` (Tâche 5), `ancre.lire()` / `ancre.accepte(ancre, cle_maitre)`, format d'un pair de `wg_mesh.json` (`public_key`, `allowed_ips`, `mesh_ip`, `name`, `endpoint`).
+- Consomme : `pairs_directs.valider_pair` (Task 5), `ancre.lire()` / `ancre.accepte(ancre, cle_maitre)`, format d'un pair de `wg_mesh.json` (`public_key`, `allowed_ips`, `mesh_ip`, `name`, `endpoint`).
 - Produit :
   - `pairs_directs.calculer(etat: dict, liste: List[Any], poignees: Dict[str, float], maintenant: float, refuses: Dict[str, float], delai_poignee_s: int = 180, retente_apres_s: int = 3600) -> Dict[str, Any]` — rend `{"ajouts": [pair…], "retraits": [cle_publique…], "refuses": {cle: jusqua}}`.
     - Ajout : pair valide, ni soi-même (clé de `etat["public_key"]`), ni le maître (pair `allowed_ips` en `/24`), ni une `mesh_ip` ou une clé déjà présente en entrée **non directe**, ni refusé en cours.
@@ -183,7 +183,7 @@
 - [ ] **Étape 4 : suite du paquet verte.**
 - [ ] **Étape 5 : commit** `feat: p2p, calcul des liens directs entre pairs (ref #3133)`.
 
-### Tâche 7 : l'exécuteur root et sa minuterie
+### Task 7 : l'exécuteur root et sa minuterie
 
 **Fichiers :**
 - Créer : `packages/secubox-p2p/sbin/secubox-maillage-pairs`
@@ -207,7 +207,7 @@
 - [ ] **Étape 4 : suite du paquet verte** ; `shellcheck`/`ruff` sans régression sur les fichiers touchés.
 - [ ] **Étape 5 : commit** `feat: p2p, secubox-maillage-pairs relie les pairs en direct (ref #3133)`.
 
-### Tâche 8 : banc et suivi (par le contrôleur, pas par un sous-agent)
+### Task 8 : banc et suivi (par le contrôleur, pas par un sous-agent)
 
 - [ ] Relecture de sécurité de la branche entière (liste signée absente, source `10.10.0.0/24`, valeurs injectées dans `wg_mesh.json`, `X-SecuBox-Pair`).
 - [ ] Construction des trois paquets, publication apt, installation : **gk1 d'abord**, puis gk2 (maître), puis gk3 ; jamais d'installation locale par `dpkg -i`.
