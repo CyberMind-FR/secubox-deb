@@ -1,3 +1,12 @@
+secubox-meta (0.1.47-1~trixie1) trixie; urgency=medium
+
+  * Arbre complété (ref #3139) : secubox-courbes (remplace Grafana et Glances) est recommandé par secubox-service-metriques ;
+    secubox-assist (aide en temps réel, sur consentement) est suggéré par secubox-service-mesh, jamais installé sans le
+    demander. Les deux existaient depuis le 2026-10-19 sans place dans l'arbre : le générateur du catalogue de
+    l'App Store refusait de construire (« ni dans l'arbre ni hors-arbre »).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 19:40:00 +0200
+
 secubox-meta (0.1.46-1~trixie1) trixie; urgency=medium
 
   * Arbre et métapaquet Tunnels sans secubox-reality (ref #3017).

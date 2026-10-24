@@ -274,7 +274,8 @@ Recommends: secubox-qos,
          secubox-ipv6guard,
          secubox-freebox
 Suggests: secubox-modem,
-         secubox-wan-link-guard
+         secubox-wan-link-guard,
+         secubox-pseudo-routeur
 Description: SecuBox — service « Routage »
  Modes réseau, routes, contrôle d'accès, qualité de service.
  .
@@ -322,7 +323,8 @@ Depends: ${misc:Depends},
          secubox-annuaire,
          secubox-p2p
 Recommends: secubox-federation
-Suggests: secubox-mesh,
+Suggests: secubox-assist,
+         secubox-mesh,
          secubox-daemon,
          secubox-meshtastic
 Description: SecuBox — service « Maillage »
@@ -396,6 +398,7 @@ Package: secubox-service-metriques
 Architecture: all
 Depends: ${misc:Depends},
          secubox-metrics
+Recommends: secubox-courbes
 Description: SecuBox — service « Métriques »
  Métriques temps réel, tableaux et rapports.
  .
