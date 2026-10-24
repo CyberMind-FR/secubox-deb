@@ -121,7 +121,7 @@ CLI in `sbin/`).
 
 `<id>` is the board MAC address (e.g. `00504384fb2f` for c3q).
 
-HTTP boot vhost listens on **`:8099` only** — never `:80`.
+HTTP boot vhost listens on **`:8099` only** — never `:80`. Its `listen` address is the template `@ADRESSE_LAN@`, filled by `secubox-netboot-serve up` with this box's private address (`SBX_NETBOOT_ADRESSE=<ip>` to force it). There is no `/sbxboot/` location on the main vhost.
 
 Config: `/etc/secubox/netboot.toml`
 
@@ -175,6 +175,7 @@ All endpoints require JWT (`Authorization: Bearer <token>`).
 | POST | `/api/v1/netboot/overlay/revert` | Revert to factory bootcmd |
 | POST | `/api/v1/netboot/overlay/persist` | Lock overlay as permanent boot |
 | POST | `/api/v1/netboot/overlay/confirm-healthy` | Mark boot healthy (bootcount=0) |
+| GET | `/api/v1/netboot/live` | Lives servis (#3100) : commandes U-Boot lues dans le `boot.cmd` servi, base HTTP, images eMMC (taille, SHA-256, signature) |
 | POST | `/api/v1/netboot/flash/prepare` | Préparer le (re)flash d'une box (#3100) : `{"nom", "mot_de_passe"?}`, 24 h |
 
 Hors JWT, servi par le **seul vhost de boot `:8099`** (404 sur le vhost principal) :

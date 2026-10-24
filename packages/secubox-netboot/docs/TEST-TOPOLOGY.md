@@ -34,7 +34,7 @@
 ```bash
 # 1) installer le paquet (n'active aucun overlay/flash local)
 dpkg -i secubox-netboot_*.deb
-# 2) activer le rôle serveur (racines + tftpd-hpa + vérif nginx /sbxboot)
+# 2) activer le rôle serveur (racines + tftpd-hpa + vhost de boot :8099)
 secubox-netboot-serve up
 secubox-netboot-serve status        # tftpd actif, nginx_sbxboot=yes
 # 3) profil gk2 = B0 (sécurité), profil DUT = B2 (ou B1 pour chain-proof)

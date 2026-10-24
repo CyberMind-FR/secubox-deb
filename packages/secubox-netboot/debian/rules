@@ -18,7 +18,7 @@ override_dh_auto_install:
 	install -m0755 ../../image/sbin/secubox-flash-emmc debian/secubox-netboot/usr/share/secubox/netboot/installer/
 	# vhost de boot + location servis par le rôle serveur (posés par 'serve up')
 	install -d debian/secubox-netboot/usr/share/secubox/netboot/nginx
-	install -m0644 nginx/boot-vhost.conf nginx/netboot-server.conf debian/secubox-netboot/usr/share/secubox/netboot/nginx/
+	install -m0644 nginx/boot-vhost.conf debian/secubox-netboot/usr/share/secubox/netboot/nginx/
 	install -d debian/secubox-netboot/usr/share/secubox/www
 	cp -r www/. debian/secubox-netboot/usr/share/secubox/www/
 	install -d debian/secubox-netboot/usr/share/secubox/menu.d

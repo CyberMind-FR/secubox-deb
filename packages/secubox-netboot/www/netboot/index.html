@@ -129,6 +129,19 @@
                 <div id="rServeur" class="retour" hidden></div>
                 <p class="note">Ce serveur ne fait que servir : aucun overlay ni flash n’est posé sur lui.</p></div>
 
+            <div class="pan large"><h3>Netbooter une box <i>live en RAM, puis flash de l’eMMC</i></h3>
+                <div id="lives"></div>
+                <p class="note">Le U-Boot d’usine ne sait que DHCP/TFTP : on charge le live par TFTP, le live récupère son système par HTTP (port 8099, réseau local seulement), puis <span class="mono">sbx-netflash</span> écrit l’image choisie après en avoir vérifié la signature.</p></div>
+
+            <div class="pan large"><h3>Préparer un flash <i>la box rejoint seule ce maître</i></h3>
+                <form class="saisie" id="fFlash" autocomplete="off">
+                    <label>Nom de la box<input name="nom" required pattern="[a-z]([a-z0-9\-]{0,29}[a-z0-9])?" placeholder="gk4" title="minuscules, chiffres et tirets, commence par une lettre"></label>
+                    <label>Mot de passe admin (facultatif)<input name="mot_de_passe" type="password" minlength="12" autocomplete="new-password" placeholder="sinon demandé dans le live"></label>
+                    <div><button class="btn prim" type="submit">Préparer (24 h)</button></div>
+                </form>
+                <div id="rFlash" class="retour" hidden></div>
+                <p class="note">Valable 24 h, pour un seul flash. Sans préparation, une box qui porte déjà ce nom n’est pas remplacée. Le mot de passe n’est jamais gardé en clair (empreinte argon2).</p></div>
+
             <div class="pan large"><h3>Profils de cartes <i id="nProf"></i></h3>
                 <div class="tab"><table><thead><tr><th>Carte (MAC)</th><th>Modèle</th><th>Image</th><th>Niveau</th><th>Serveur</th><th>Actions</th></tr></thead><tbody id="bProf"></tbody></table></div>
                 <div id="rProf" class="retour" hidden></div>
@@ -157,7 +170,7 @@
         const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
         const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        let INV = null, SHADOW = null, AUDIT = null, SERVEUR = null, PROFILS = null, SESSION_OK = true;
+        let INV = null, SHADOW = null, AUDIT = null, SERVEUR = null, PROFILS = null, LIVES = null, SESSION_OK = true;
         let CONF = null;        // { texte, fn } : confirmation en cours, jamais de dialogue natif
         let SAISIE = false;     // formulaire de profil modifié : pas d'actualisation tant qu'il est ouvert
 
@@ -200,6 +213,9 @@
             SHADOW = { items: [{ name: 'overlay.fit', size: 1843200 }, { name: 'overlay.sig', size: 512 }] };
             AUDIT = { audit: ['2026-10-13T08:12:03 publish board=02005e005301 image=secubox-2.39.0 ok', '2026-10-12T17:40:51 overlay apply (simulation)'] };
             SERVEUR = { server: { tftp_root: '/srv/secubox/netboot/tftp', http_root: '/srv/secubox/netboot/http', tftpd: 'active', nginx_sbxboot: 'yes', published_boards: 2 } };
+            LIVES = { lives: [{ nom: 'mochabin-live', serveur: '192.0.2.10', http_base: 'http://192.0.2.10:8099/mochabin-live', squashfs: true,
+                                commandes: ['setenv ethact mvpp2-2; setenv ipaddr <ip libre>; setenv serverip 192.0.2.10', 'tftpboot ${scriptaddr} mochabin-live/boot.scr; source ${scriptaddr}'],
+                                images: [{ nom: 'secubox-isp-mochabin-trixie.img.gz', taille: 2669000177, sha256: '35b4…', signee: true }] }] };
             PROFILS = { profiles: [
                 { id: '02005e005301', model: 'mochabin', image: 'secubox-2.39.0', boot_level: 'B2', srv: '192.0.2.10' },
                 { id: '02005e005302', model: 'espressobin-v7', image: null, boot_level: 'B0', srv: null }] };
@@ -208,12 +224,12 @@
 
         async function charger() {
             if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
-            const essais = await Promise.allSettled([lire('/inventory'), lire('/shadow'), lire('/audit?limit=40'), lire('/server'), lire('/profiles')]);
+            const essais = await Promise.allSettled([lire('/inventory'), lire('/shadow'), lire('/audit?limit=40'), lire('/server'), lire('/profiles'), lire('/live')]);
             const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
             const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
             const tous = essais.every(e => e.status === 'rejected');
             SESSION_OK = !refus;
-            INV = val(0); SHADOW = val(1); AUDIT = val(2); SERVEUR = val(3); PROFILS = val(4);
+            INV = val(0); SHADOW = val(1); AUDIT = val(2); SERVEUR = val(3); PROFILS = val(4); LIVES = val(5);
             $('erreur').hidden = !(tous && !refus);
             if (tous && !refus) $('erreur').textContent = 'Impossible de lire NetBoot (service arrêté ou injoignable).';
             rendre();
@@ -288,7 +304,7 @@
             // Serveur
             const ks = $('kServeur'); ks.replaceChildren();
             ligne(ks, 'Racine TFTP', tiret(srv.tftp_root)); ligne(ks, 'Racine HTTP', tiret(srv.http_root));
-            ligne(ks, 'tftpd', srv.tftpd ? drapeau(srv.tftpd, 'active') : '—'); ligne(ks, 'nginx /sbxboot', drapeau(srv.nginx_sbxboot, 'yes'));
+            ligne(ks, 'tftpd', srv.tftpd ? drapeau(srv.tftpd, 'active') : '—'); ligne(ks, 'Vhost de boot :8099', drapeau(srv.nginx_sbxboot, 'yes'));
             ligne(ks, 'Cartes publiées', tiret(srv.published_boards));
             const se = $('srvEtat'); se.className = 'pill ' + (srv.tftpd === 'active' ? 'ok' : srv.tftpd ? 'hors' : ''); se.textContent = srv.tftpd === 'active' ? 'ACTIF' : srv.tftpd ? String(srv.tftpd).toUpperCase() : '—';
 
@@ -296,6 +312,7 @@
             $('audit').textContent = AUDIT ? ((AUDIT.audit && AUDIT.audit.length) ? AUDIT.audit.join('\n') : 'Aucun événement') : '—';
 
             rendreProfils(profs);
+            rendreLives(LIVES && Array.isArray(LIVES.lives) ? LIVES.lives : null);
             $('conf').hidden = !CONF; if (CONF) $('confTexte').textContent = CONF.texte;
             $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
             annoncer();
@@ -321,6 +338,58 @@
                 tr.appendChild(act); tb.appendChild(tr);
             });
         }
+
+        // ----- Netbooter une box : tout vient du boot.cmd servi (GET /live) -----
+        const Go = n => n == null ? '—' : (n / 1e9).toFixed(2).replace('.', ',') + ' Go';
+        function blocCopie(texte, titre) {
+            const b = el('div'); b.style.cssText = 'display:grid;gap:4px;margin:6px 0';
+            const pre = el('pre', 'mono', texte); const bt = el('button', 'btn sm', 'Copier'); bt.type = 'button'; bt.title = titre || 'Copier dans le presse-papiers';
+            bt.addEventListener('click', async () => { try { await navigator.clipboard.writeText(texte); bt.textContent = 'Copié'; } catch (e) { bt.textContent = 'Copie impossible'; } setTimeout(() => { bt.textContent = 'Copier'; }, 1500); });
+            b.appendChild(pre); const l = el('div'); l.appendChild(bt); b.appendChild(l); return b;
+        }
+        function rendreLives(lives) {
+            const z = $('lives'); z.replaceChildren();
+            if (!lives) { z.appendChild(el('p', 'vide', '—')); return; }
+            if (!lives.length) { z.appendChild(el('p', 'vide', 'Aucun live publié — le construire avec build-live-netboot.sh sur ce maître.')); return; }
+            lives.forEach(lv => {
+                const dl = el('dl', 'kv');
+                ligne(dl, 'Live', lv.nom); ligne(dl, 'Serveur TFTP', tiret(lv.serveur));
+                ligne(dl, 'Système (HTTP)', lv.squashfs ? pastille('ok', 'servi') : pastille('hors', 'absent'));
+                if (lv.http_base) { const a = el('a', 'mono', lv.http_base + '/images.txt'); a.href = lv.http_base + '/images.txt'; a.target = '_blank'; a.rel = 'noopener'; a.style.color = 'var(--cyan)'; ligne(dl, 'Liste des images', a); }
+                z.appendChild(dl);
+                z.appendChild(el('p', 'note', '1. Console série de la box, câble sur le port qui joint ce maître, U-Boot interrompu :'));
+                z.appendChild(blocCopie((lv.commandes || []).join('\n') || '—', 'Commandes U-Boot'));
+                z.appendChild(el('p', 'note', '2. Dans le live, après « Préparer un flash » ci-dessous (NOM = nom préparé) :'));
+                z.appendChild(blocCopie('sbx-netflash --list\nsbx-netflash --nom NOM', 'Commandes du live'));
+                const imgs = lv.images || [];
+                if (imgs.length) {
+                    const t = el('table'), th = el('thead'), tr = el('tr');
+                    ['Image eMMC', 'Taille', 'Signature', 'SHA-256'].forEach(h => tr.appendChild(el('th', '', h))); th.appendChild(tr); t.appendChild(th);
+                    const tb = el('tbody');
+                    imgs.forEach(im => { const r = el('tr'); r.appendChild(el('td', 'mono', im.nom)); r.appendChild(el('td', '', Go(im.taille)));
+                        const s = el('td'); s.appendChild(pastille(im.signee ? 'ok' : 'hors', im.signee ? 'signée' : 'absente')); r.appendChild(s);
+                        const h = el('td', 'mono', String(im.sha256 || '').slice(0, 16) + '…'); h.title = im.sha256 || ''; r.appendChild(h); tb.appendChild(r); });
+                    t.appendChild(tb); const w = el('div', 'tab'); w.appendChild(t); z.appendChild(w);
+                }
+            });
+        }
+
+        // ----- Préparer un flash -----
+        async function preparer(nom, mdp) {
+            const corps = { nom: nom }; if (mdp) corps.mot_de_passe = mdp;
+            const r = await ecrire('POST', '/flash/prepare', corps);
+            if (r.ok) retour('rFlash', true, 'Flash de « ' + nom + ' » préparé pour 24 h.\nDans le live : sbx-netflash --nom ' + nom);
+            else retour('rFlash', false, 'Préparation impossible : ' + detail(r));
+        }
+        $('fFlash').addEventListener('input', () => { SAISIE = true; });
+        $('fFlash').addEventListener('submit', ev => {
+            ev.preventDefault(); const f = ev.target;
+            const nom = (f.elements.nom.value || '').trim(), mdp = f.elements.mot_de_passe.value || '';
+            if (!/^[a-z]([a-z0-9-]{0,29}[a-z0-9])?$/.test(nom)) { retour('rFlash', false, 'Nom invalide : minuscules, chiffres et tirets, commence par une lettre.'); return; }
+            if (mdp && mdp.length < 12) { retour('rFlash', false, 'Mot de passe trop court (12 caractères au moins).'); return; }
+            f.elements.mot_de_passe.value = ''; SAISIE = false;
+            demander('Préparer le flash de « ' + nom + ' » pour 24 h ? Si une box porte déjà ce nom dans le maillage, celle qui sera flashée la remplacera.', () => preparer(nom, mdp));
+        });
 
         // ----- Confirmation intégrée -----
         function demander(texte, fn) { CONF = { texte, fn }; rendre(); $('confNon').focus(); }

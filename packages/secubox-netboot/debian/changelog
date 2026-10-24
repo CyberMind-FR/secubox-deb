@@ -1,3 +1,19 @@
+secubox-netboot (0.7.2-1~trixie1) trixie; urgency=medium
+
+  * Page NetBoot (ref #3100) : panneau « Netbooter une box » (commandes U-Boot lues dans le boot.cmd réellement
+    servi, lien vers images.txt, images eMMC avec taille, SHA-256 et signature, commandes du live) et formulaire
+    « Préparer un flash » (POST /flash/prepare, confirmation dans la page, mot de passe facultatif jamais
+    conservé dans la page). Nouvelle route GET /live (session administrateur).
+  * Vhost de boot en gabarit (ref #3117) : « listen @ADRESSE_LAN@:8099 », remplacé par « secubox-netboot-serve
+    up » par l'adresse privée de la box : SBX_NETBOOT_ADRESSE, sinon la source de la route par défaut limitée à
+    192.168/16 et 172.16/12 (un 10/8 détecté peut être le réseau du FAI : il faut l'imposer) ; boucle locale,
+    adresses publiques, ponts conteneurs et maillage refusés. Temporaires mktemp hors de sites-enabled, vhost
+    précédent rendu si nginx -t refuse.
+  * GET /live : lecture sans suivre les liens symboliques (O_NOFOLLOW), FIFO et fichiers spéciaux ignorés.
+  * netboot-server.conf (location /sbxboot/, jamais incluse) retiré ; libellé « Vhost de boot :8099 ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 15:30:00 +0200
+
 secubox-netboot (0.7.1-1~trixie1) trixie; urgency=medium
 
   * Vhost de boot livré sans le nom de gk2 (ref #3117) : server_name « boot.* ». Livré dans /usr/share (pas un
