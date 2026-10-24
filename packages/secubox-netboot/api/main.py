@@ -20,7 +20,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 import ipaddress
 import logging
+import os
 import re
+import stat
 import time
 
 from . import lot
@@ -337,11 +339,19 @@ _LIRE_MAX = 64 * 1024
 
 
 def _lire_court(f: Path) -> Optional[str]:
+    """Fichier ordinaire seulement : un lien symbolique n'est pas suivi, une FIFO ne bloque pas (service root)."""
     try:
-        with f.open("r", encoding="utf-8", errors="replace") as h:
-            return h.read(_LIRE_MAX)
+        fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
         return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        return os.read(fd, _LIRE_MAX).decode("utf-8", errors="replace")
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
 
 
 def _images_live(d: Path) -> List[Dict[str, Any]]:
@@ -364,7 +374,8 @@ def live_infos() -> List[Dict[str, Any]]:
     boot.cmd généré documente en tête (« #   … ») : la page dit exactement ce que la box exécutera."""
     lives: List[Dict[str, Any]] = []
     try:
-        dossiers = sorted(p for p in TFTP_ROOT.iterdir() if p.is_dir() and _RE_NOM_LIVE.fullmatch(p.name))
+        dossiers = sorted(p for p in TFTP_ROOT.iterdir()
+                          if not p.is_symlink() and p.is_dir() and _RE_NOM_LIVE.fullmatch(p.name))
     except OSError:
         return lives
     for d in dossiers:

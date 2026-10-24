@@ -18,21 +18,31 @@ readonly TFTPCONF=/etc/default/tftpd-hpa
 
 log(){ printf '[%s] %s\n' "$MODULE" "$*" >&2; }
 
-# Adresse d'écoute du vhost de boot (#3100/#3117) : SBX_NETBOOT_ADRESSE, sinon la source de la route par
-# défaut. IPv4 privée seulement, hors ponts conteneurs (10.0.3/24, 10.100.0/24) et maillage (10.10.0/24) :
-# le live et ses images ne se servent qu'au réseau local.
-adresse_lan() {
-  local a="${SBX_NETBOOT_ADRESSE:-}"
-  [ -n "$a" ] || a="$(ip -4 -o route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')"
+# Adresse d'écoute du vhost de boot (#3100/#3117). Le live et ses images ne se servent qu'au réseau local.
+# adresse_admise IP EXPLICITE : IPv4 privée, hors ponts conteneurs (10.0.3/24, 10.100.0/24) et maillage
+# (10.10.0/24). Détectée (EXPLICITE=0) : 192.168/16 et 172.16/12 seulement — un 10/8 côté route par défaut
+# peut être le réseau du FAI ou d'un immeuble, il faut alors SBX_NETBOOT_ADRESSE.
+adresse_admise() {
+  local a="$1" explicite="$2"
   [[ "$a" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
   local o1=${BASH_REMATCH[1]} o2=${BASH_REMATCH[2]} o3=${BASH_REMATCH[3]} o4=${BASH_REMATCH[4]} o
-  for o in "$o1" "$o2" "$o3" "$o4"; do [ "$o" -le 255 ] || return 1; done
+  for o in "$o1" "$o2" "$o3" "$o4"; do [ "$((10#$o))" -le 255 ] || return 1; done
   case "$o1.$o2.$o3" in 10.0.3|10.100.0|10.10.0) return 1 ;; esac
-  if [ "$o1" = 10 ] || { [ "$o1" = 172 ] && [ "$o2" -ge 16 ] && [ "$o2" -le 31 ]; } \
-     || { [ "$o1" = 192 ] && [ "$o2" = 168 ]; }; then
+  if { [ "$o1" = 192 ] && [ "$o2" = 168 ]; } || { [ "$o1" = 172 ] && [ "$o2" -ge 16 ] && [ "$o2" -le 31 ]; } \
+     || { [ "$o1" = 10 ] && [ "$explicite" = 1 ]; }; then
     printf '%s\n' "$a"; return 0
   fi
   return 1
+}
+
+# SBX_NETBOOT_ADRESSE, sinon la source de la route par défaut (le réseau où l'on branche les box à netbooter,
+# derrière la box FAI sur gk1/gk2).
+adresse_lan() {
+  if [ -n "${SBX_NETBOOT_ADRESSE:-}" ]; then
+    adresse_admise "$SBX_NETBOOT_ADRESSE" 1
+  else
+    adresse_admise "$(ip -4 -o route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')" 0
+  fi
 }
 
 cmd_up() {
@@ -59,15 +69,21 @@ CFG
   if [ -f "$vsrc" ] && ! adresse="$(adresse_lan)"; then
     log "WARN aucune adresse LAN privée : vhost de boot non posé (SBX_NETBOOT_ADRESSE=<ip> pour l'imposer)"
   elif [ -f "$vsrc" ]; then
-    # fichier temporaire HORS de sites-enabled (nginx y inclut tout fichier)
-    local tmp=/etc/nginx/.secubox-netboot-boot.conf.tmp
-    sed "s/@ADRESSE_LAN@/$adresse/g" "$vsrc" > "$tmp" && chmod 0644 "$tmp" && mv -f "$tmp" "$vdst"
+    # temporaires HORS de sites-enabled (nginx y inclut tout fichier) ; l'ancien vhost est rendu si nginx -t refuse
+    local tmp prec
+    tmp="$(mktemp /etc/nginx/.secubox-netboot-boot.XXXXXX)" || { log "WARN mktemp impossible"; cmd_status; return 0; }
+    prec="$(mktemp /etc/nginx/.secubox-netboot-boot-prec.XXXXXX)" || { rm -f -- "$tmp"; cmd_status; return 0; }
+    local avait=0; [ -f "$vdst" ] && cp -p -- "$vdst" "$prec" && avait=1
+    sed "s/@ADRESSE_LAN@/$adresse/g" "$vsrc" > "$tmp" && chmod 0644 "$tmp" && mv -f -- "$tmp" "$vdst"
     if nginx -t 2>/dev/null; then
       systemctl reload nginx 2>/dev/null || true
-      log "vhost boot posé ($vdst) + nginx reload"
+      log "vhost boot posé ($vdst, écoute $adresse:8099) + nginx reload"
+    elif [ "$avait" = 1 ]; then
+      mv -f -- "$prec" "$vdst"; log "WARN nginx -t KO → vhost de boot précédent rendu"
     else
-      rm -f "$vdst"; log "WARN nginx -t KO → vhost boot retiré (adapter l'IP/listen)"
+      rm -f -- "$vdst"; log "WARN nginx -t KO → vhost boot retiré (SBX_NETBOOT_ADRESSE=<ip> pour imposer l'adresse)"
     fi
+    rm -f -- "$tmp" "$prec"
   else
     log "WARN vhost source absent: $vsrc"
   fi
@@ -85,7 +101,8 @@ JSON
 }
 
 # Sourcé avec --bibliotheque (tests) : fonctions seulement.
-[ "${1:-}" = "--bibliotheque" ] && return 0
+# shellcheck disable=SC2317  # exit : seulement si lancé (et non sourcé) avec --bibliotheque
+[ "${1:-}" = "--bibliotheque" ] && { return 0 2>/dev/null || exit 0; }
 
 case "${1:-status}" in
   up) cmd_up ;;

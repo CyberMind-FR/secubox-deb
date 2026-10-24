@@ -82,3 +82,20 @@ def test_live_absent_liste_vide(tmp_path):
     main, c = _client((tmp_path / "rien", tmp_path / "rien2"))
     main.app.dependency_overrides[main.require_jwt] = lambda: {"sub": "admin"}
     assert c.get("/live").json() == {"lives": []}
+
+
+def test_liens_symboliques_et_fifo_ignores(racines, tmp_path):
+    import os
+    tftp, http = racines
+    secret = tmp_path / "secret.txt"
+    secret.write_text("#   ligne-secrete\n")
+    (tftp / "lien-live").mkdir()
+    (tftp / "lien-live" / "boot.cmd").symlink_to(secret)        # fichier lié : jamais lu
+    (tftp / "dossier-lie").symlink_to(tftp / "mochabin-live")    # dossier lié : ignoré
+    (tftp / "fifo-live").mkdir()
+    os.mkfifo(tftp / "fifo-live" / "boot.cmd")                    # FIFO : ne bloque pas
+    main, c = _client(racines)
+    main.app.dependency_overrides[main.require_jwt] = lambda: {"sub": "admin"}
+    lives = c.get("/live").json()["lives"]
+    assert [v["nom"] for v in lives] == ["mochabin-live"]
+    assert "ligne-secrete" not in str(lives)

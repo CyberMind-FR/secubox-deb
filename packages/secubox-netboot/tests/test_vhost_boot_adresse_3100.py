@@ -37,3 +37,21 @@ def test_adresse_publique_ou_invalide_refusee():
     for a in ("8.8.8.8", "127.0.0.1", "192.168.1.300", "1.2.3", "10.10.0.8"):
         rc, _ = _adresse({"PATH": "/usr/bin:/bin", "SBX_NETBOOT_ADRESSE": a})
         assert rc != 0, a
+
+
+def _admise(a, explicite):
+    r = subprocess.run(["bash", "-c", f"source {SERVE} --bibliotheque; adresse_admise {a} {explicite}"],
+                       capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
+    return r.returncode == 0
+
+
+def test_detectee_10_8_refusee_explicite_admise():
+    assert _admise("192.168.1.200", 0) and _admise("172.20.0.5", 0)
+    assert not _admise("10.20.3.4", 0)          # réseau du FAI ou d'immeuble possible : explicite exigé
+    assert _admise("10.20.3.4", 1)
+    assert not _admise("10.100.0.1", 1) and not _admise("10.0.3.1", 1) and not _admise("100.64.0.1", 0)
+
+
+def test_lance_hors_source_avec_bibliotheque_ne_fait_rien():
+    r = subprocess.run(["bash", str(SERVE), "--bibliotheque"], capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout == ""
