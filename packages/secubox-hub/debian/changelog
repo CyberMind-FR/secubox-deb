@@ -1,3 +1,12 @@
+secubox-hub (1.12.28-1~trixie1) trixie; urgency=medium
+
+  * Vhost du panneau (webui.conf) livré sans le nom de gk2 (ref #3117) : admin.gk2.secubox.in retiré du
+    server_name, couvert par admin.* (joker final, prioritaire sur les expressions régulières ; le
+    default_server « _ » reste inchangé). Conffile géré par dpkg, non régénéré par le postinst : une copie
+    retouchée sur la box est conservée, aucune migration.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:21:08 +0200
+
 secubox-hub (1.12.27-1~trixie1) trixie; urgency=medium
 
   * webui.conf : /api/v1/netboot/lot-flash répond 404 sur le vhost principal ; le lot de
