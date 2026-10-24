@@ -279,12 +279,22 @@ try:
     d = json.load(open(chemin))
 except (OSError, ValueError):
     sys.exit(0)
+import ipaddress
+maillage = ipaddress.ip_network("10.10.0.0/24")
 for k, v in d.items():
     if not (isinstance(v, list) and v and v[0] != ip):
         continue
+    # même domaine ou un de ses noms, quelle que soit la cible
+    if k == dpair or k.endswith("." + dpair):
+        sys.exit(0)
+    # sous-domaine du domaine d'un AUTRE PAIR (son joker le couvrirait) ; les routes du relais lui-même
+    # (127.0.0.1, sous le domaine parent) ne comptent pas, sinon tout *.secubox.in serait refusé
+    try:
+        pair = ipaddress.ip_address(v[0]) in maillage
+    except ValueError:
+        pair = False
     parent = k.split(".", 1)[1] if "." in k else k
-    # même domaine, un de ses noms, ou un sous-domaine du domaine d'un autre (son joker le couvrirait)
-    if k == dpair or k.endswith("." + dpair) or dpair == parent or dpair.endswith("." + parent):
+    if pair and (dpair == parent or dpair.endswith("." + parent)):
         sys.exit(0)
 sys.exit(1)
 PY

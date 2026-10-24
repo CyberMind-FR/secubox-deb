@@ -35,6 +35,7 @@ ROUTES = {
     "hall.gk3.secubox.in": ["10.10.0.5", 9080],         # autre pair : jamais touché
     "hall.gk2.secubox.in": ["127.0.0.1", 9080],         # le relais lui-même : jamais touché
     "x.autre.fr": ["10.10.0.8", 9080],                  # même IP, autre domaine : jamais touché
+    "www.secubox.in": ["127.0.0.1", 9080],              # le relais sous le domaine parent : ne bloque aucun pair
 }
 
 
@@ -134,3 +135,11 @@ def test_exclusions_sans_xargs_et_etat_ecrit_par_fichier_unique():
     s = TEXTE[TEXTE.index("cmd_synchroniser() {"):TEXTE.index("cmd_retirer() {")]
     assert "xargs" not in s
     assert "mkstemp" in _python_de("noms_perimes")
+
+
+def test_route_du_relais_sous_le_domaine_parent_ne_bloque_pas_les_pairs(tmp_path):
+    # vu sur gk2 (#3132) : une route du relais sous secubox.in faisait refuser gk1.secubox.in
+    f = tmp_path / "routes.json"
+    f.write_text(json.dumps(ROUTES))
+    assert _execute(tmp_path, "domaine_tenu_par_autre", f, "10.10.0.8", "gk1.secubox.in").returncode == 1
+    assert _execute(tmp_path, "domaine_tenu_par_autre", f, "10.10.0.8", "www.secubox.in").returncode == 0   # nom exact
