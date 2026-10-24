@@ -8,6 +8,7 @@ webos le sert sans appeler l'API de l'Annuaire (qui exige un jeton). Tout ce qui
 hostile : un endpoint n'est retenu que s'il est en https, sans identifiants ni port, et si son nom d'hôte
 appartient au domaine ddns que le fournisseur a lui-même déclaré.
 """
+import ipaddress
 import json
 import os
 import re
@@ -22,7 +23,8 @@ MAX_PAIRS = 32
 MAX_SERVICES = 64
 
 _HOTE = re.compile(r"[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?")
-_DOMAINE = re.compile(r"[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?")
+_LIBELLE = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")
+_BOXNAME = re.compile(r"[a-z0-9][a-z0-9-]{0,30}")
 _CTRL = re.compile(r"[\x00-\x20\x7f\\]")
 
 
@@ -47,16 +49,46 @@ def _endpoint_valide(endpoint: Any, ddns: str) -> bool:
     return hote.endswith("." + ddns) and len(hote) > len(ddns) + 1
 
 
+def _domaine(v: Any) -> str:
+    """Le ddns en minuscules s'il a au moins deux libellés valides, sinon chaîne vide."""
+    if not isinstance(v, str):
+        return ""
+    d = v.strip().lower().rstrip(".")
+    libelles = d.split(".")
+    return d if len(d) <= 253 and len(libelles) >= 2 and all(_LIBELLE.fullmatch(lib) for lib in libelles) else ""
+
+
 def construire(journal: Any, did_local: str) -> Dict[str, Any]:
     """Relève dans le journal les offres `service` des autres nœuds, vérifiées contre leur domaine ddns."""
     from annuaire.verbs import _get_nodes, _get_offers  # noqa: PLC0415
-    noeuds: Dict[str, Dict[str, Any]] = {}
+    # Le ddns déclaré par un pair est hostile lui aussi : il doit être un vrai domaine (deux libellés au moins),
+    # propre à ce seul DID, ni celui de la box locale (ni son parent), ni le parent ambigu du ddns d'un autre nœud.
+    declares: List[Dict[str, Any]] = []
     for n in _get_nodes(journal):
-        ddns = n.get("ddns")
-        ddns = ddns.strip().lower().strip(".") if isinstance(ddns, str) else ""
-        if n.get("did") and ddns and _DOMAINE.fullmatch(ddns):
-            noeuds[n["did"]] = {"did": n["did"], "boxname": _texte(n.get("boxname"), 64), "domaine": ddns,
-                                "mesh_ip": _texte(n.get("mesh_ip"), 64), "services": []}
+        d = _domaine(n.get("ddns"))
+        if n.get("did") and d:
+            declares.append({"n": n, "ddns": d})
+    local = next((x["ddns"] for x in declares if x["n"]["did"] == did_local), "")
+    noeuds: Dict[str, Dict[str, Any]] = {}
+    for x in declares:
+        n, d = x["n"], x["ddns"]
+        if n["did"] == did_local:
+            continue
+        if any(y["ddns"] == d and y["n"]["did"] != n["did"] for y in declares):
+            continue
+        if local and (d == local or local.endswith("." + d)):
+            continue
+        if any(y["n"]["did"] != n["did"] and y["ddns"].endswith("." + d) for y in declares):
+            continue
+        try:
+            ip = ipaddress.ip_address(n.get("mesh_ip"))
+        except ValueError:
+            continue
+        if ip.version != 4:
+            continue
+        boxname = n.get("boxname") if isinstance(n.get("boxname"), str) and _BOXNAME.fullmatch(n["boxname"]) else ""
+        noeuds[n["did"]] = {"did": n["did"], "boxname": boxname, "domaine": d,
+                            "mesh_ip": str(ip), "services": []}
     for o in _get_offers(journal):
         if o.get("kind") != "service" or o.get("provider") == did_local:
             continue

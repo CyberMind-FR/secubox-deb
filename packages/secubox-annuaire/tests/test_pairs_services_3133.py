@@ -82,3 +82,119 @@ def test_le_ctl_et_l_unite_portent_le_verbe():
     assert "ExecStart=/usr/sbin/annuairectl pairs-cache" in unite
     assert unite.index("offer-sync") < unite.index("pairs-cache")
     assert "annuairectl" in (pkg / "debian" / "rules").read_text(encoding="utf-8")
+
+
+def _noeud_libre(j, boxname, ddns, ip="10.10.0.9"):
+    priv, did = _membre(j)
+    publish_node(j, priv, did, node_id="sb-x", boxname=boxname, pubkey_wg="W" * 44, mesh_ip=ip, ddns=ddns)
+    return priv, did
+
+
+def _domaines(j, local="loc.exemple.test"):
+    _p, d_loc = _noeud_libre(j, "locale", local, "10.10.0.1")
+    return [p["domaine"] for p in pairs_services.construire(j, d_loc)["pairs"]]
+
+
+def _avec_offre(j, boxname, ddns, ip="10.10.0.9"):
+    priv, did = _noeud_libre(j, boxname, ddns, ip)
+    _svc(j, priv, did, "S", "https://s." + ddns)
+    return did
+
+
+def test_ddns_a_un_seul_libelle_ecarte(tmp_path):
+    j = Journal(str(tmp_path / "j.db"))
+    _avec_offre(j, "com", "com")
+    assert _domaines(j) == []
+
+
+def test_ddns_syntaxiquement_invalide_ecarte(tmp_path):
+    for mauvais in ("a..exemple.test", "-a.exemple.test", "a-.exemple.test", "a.exemple.test-"):
+        j = Journal(str(tmp_path / (str(abs(hash(mauvais))) + ".db")))
+        _avec_offre(j, "x", mauvais)
+        assert _domaines(j) == [], mauvais
+
+
+def test_ddns_revendique_par_deux_did_ecarte(tmp_path):
+    j = Journal(str(tmp_path / "j.db"))
+    _avec_offre(j, "un", "double.exemple.test", "10.10.0.2")
+    _avec_offre(j, "deux", "double.exemple.test", "10.10.0.3")
+    _avec_offre(j, "ok", "ok.exemple.test", "10.10.0.4")
+    assert _domaines(j) == ["ok.exemple.test"]
+
+
+def test_ddns_local_ou_son_parent_ecarte(tmp_path):
+    j = Journal(str(tmp_path / "j.db"))
+    _avec_offre(j, "egal", "loc.exemple.test", "10.10.0.2")
+    _avec_offre(j, "parent", "exemple.test", "10.10.0.3")
+    assert _domaines(j) == []
+
+
+def test_ddns_parent_ambigu_ecarte_pas_les_enfants(tmp_path):
+    j = Journal(str(tmp_path / "j.db"))
+    _avec_offre(j, "parent", "exemple.test", "10.10.0.2")
+    _avec_offre(j, "enfant", "gk3.exemple.test", "10.10.0.3")
+    assert _domaines(j, local="zz.autre.test") == ["gk3.exemple.test"]
+
+
+def test_mesh_ip_invalide_ou_ipv6_ecarte_et_boxname_strict(tmp_path):
+    j = Journal(str(tmp_path / "j.db"))
+    _avec_offre(j, "a", "a.exemple.test", "pas une ip")
+    _avec_offre(j, "b", "b.exemple.test", "fd00::1")
+    _avec_offre(j, "Mauvais Nom", "c.exemple.test", "10.10.0.5")
+    _p, d_loc = _noeud_libre(j, "locale", "loc.exemple.test", "10.10.0.1")
+    pairs = pairs_services.construire(j, d_loc)["pairs"]
+    assert [(p["domaine"], p["boxname"], p["mesh_ip"]) for p in pairs] == [("c.exemple.test", "", "10.10.0.5")]
+
+
+def _ctl():
+    from importlib.machinery import SourceFileLoader
+    from importlib.util import module_from_spec, spec_from_loader
+    chemin = str(Path(__file__).resolve().parents[1] / "sbin" / "annuairectl")
+    spec = spec_from_loader("annuairectl_t", SourceFileLoader("annuairectl_t", chemin))
+    m = module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _env(tmp_path, monkeypatch):
+    ctl = _ctl()
+    priv, pub = generate_keypair()
+    cle = tmp_path / "node.key"
+    cle.write_text(priv.hex())
+    monkeypatch.setattr(ctl, "DB_PATH", str(tmp_path / "journal.db"))
+    monkeypatch.setattr(ctl, "KEY_PATH", str(cle))
+    monkeypatch.setattr(pairs_services, "CACHE_PATH", tmp_path / "cache.json")
+    return ctl
+
+
+def test_pairs_cache_journal_absent_laisse_l_ancien_cache(tmp_path, monkeypatch):
+    import pytest
+    ctl = _env(tmp_path, monkeypatch)
+    ancien = b'{"version": 1, "genere": "ancien", "pairs": []}\n'
+    (tmp_path / "cache.json").write_bytes(ancien)
+    with pytest.raises(SystemExit) as e:
+        ctl.cmd_pairs_cache(None)
+    assert e.value.code != 0
+    assert (tmp_path / "cache.json").read_bytes() == ancien
+    assert not (tmp_path / "journal.db").exists()
+
+
+def test_pairs_cache_journal_corrompu_laisse_l_ancien_cache(tmp_path, monkeypatch):
+    import pytest
+    ctl = _env(tmp_path, monkeypatch)
+    (tmp_path / "journal.db").write_bytes(b"ceci n'est pas une base sqlite" * 50)
+    (tmp_path / "cache.json").write_bytes(b'{"version": 1, "pairs": []}')
+    with pytest.raises(SystemExit) as e:
+        ctl.cmd_pairs_cache(None)
+    assert e.value.code != 0
+    assert (tmp_path / "cache.json").read_bytes() == b'{"version": 1, "pairs": []}'
+
+
+def test_pairs_cache_succes(tmp_path, monkeypatch):
+    ctl = _env(tmp_path, monkeypatch)
+    j = Journal(str(tmp_path / "journal.db"))
+    priv, did = _noeud_libre(j, "alpha", "alpha.exemple.test", "10.10.0.2")
+    _svc(j, priv, did, "Radio", "https://radio.alpha.exemple.test")
+    assert ctl.cmd_pairs_cache(None) == 0
+    d = pairs_services.lire(tmp_path / "cache.json")
+    assert d and d["pairs"][0]["services"][0]["nom"] == "Radio"

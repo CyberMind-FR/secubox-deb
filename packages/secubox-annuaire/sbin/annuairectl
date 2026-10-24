@@ -249,6 +249,13 @@ def cmd_pairs_cache(args) -> int:
     """Écrit le cache des services des autres nœuds ; un journal illisible laisse l'ancien cache (#3133)."""
     from annuaire import pairs_services  # noqa: PLC0415
     from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+    # Un journal absent ou vide ne doit jamais effacer le cache : _journal() en créerait un neuf.
+    try:
+        vide = os.path.getsize(DB_PATH) == 0
+    except OSError:
+        vide = True
+    if vide:
+        _die(f"journal absent ou vide ({DB_PATH}), cache des services des pairs laissé en place", 3)
     try:
         priv = _load_priv()
         did = did_from_pubkey(public_from_private(priv))
@@ -257,7 +264,7 @@ def cmd_pairs_cache(args) -> int:
         raise
     except Exception as e:  # noqa: BLE001
         _die(f"journal illisible, cache des services des pairs laissé en place : {e}", 3)
-    pairs_services.ecrire(donnees)
+    pairs_services.ecrire(donnees, pairs_services.CACHE_PATH)
     print(json.dumps({"pairs": len(donnees["pairs"]), "services": sum(len(p["services"]) for p in donnees["pairs"]),
                       "fichier": str(pairs_services.CACHE_PATH)}, indent=2))
     return 0
