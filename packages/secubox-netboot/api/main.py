@@ -346,7 +346,8 @@ async def flash_prepare(body: FlashPrepare, user=Depends(require_jwt)):
 
 
 _LAN = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]
-_LOT_MAX, _LOT_FENETRE = 6, 3600
+_REFUSES = [ipaddress.ip_network(n) for n in ("10.100.0.0/24", "10.0.3.0/24", "10.10.0.0/24")]  # ponts conteneurs, maillage
+_LOT_MAX, _LOT_FENETRE, _LOT_ADRESSES = 6, 3600, 1024
 _LOT_COMPTEURS: Dict[str, List[float]] = {}
 
 
@@ -361,6 +362,11 @@ def _lan(adresse: str) -> bool:
 def _lot_admis(adresse: str, maintenant: Optional[float] = None) -> bool:
     """Au plus 6 lots par heure et par adresse (en mémoire)."""
     t = time.monotonic() if maintenant is None else maintenant
+    for a in [a for a, v in _LOT_COMPTEURS.items() if not v or t - v[-1] >= _LOT_FENETRE]:
+        del _LOT_COMPTEURS[a]
+    if adresse not in _LOT_COMPTEURS:
+        while len(_LOT_COMPTEURS) >= _LOT_ADRESSES:       # le plus ancien est évincé
+            del _LOT_COMPTEURS[min(_LOT_COMPTEURS, key=lambda a: _LOT_COMPTEURS[a][-1])]
     vus = [x for x in _LOT_COMPTEURS.get(adresse, []) if t - x < _LOT_FENETRE]
     if len(vus) >= _LOT_MAX:
         _LOT_COMPTEURS[adresse] = vus
@@ -373,9 +379,17 @@ def _lot_admis(adresse: str, maintenant: Optional[float] = None) -> bool:
 @router.get("/lot-flash")
 async def lot_flash(nom: str, request: Request):
     """Lot signé pour le live en cours de flash. Servi par le port 8099 (LAN seulement, X-Real-IP posé par nginx)."""
+    if request.headers.get("x-secubox-netboot-lot") != "1":     # posé par le seul vhost :8099
+        raise HTTPException(404, "Not Found")
     adresse = request.headers.get("x-real-ip", "")
     if not _lan(adresse):
         raise HTTPException(403, "réservé au réseau local")
+    if any(ipaddress.ip_address(adresse) in n for n in _REFUSES):
+        try:
+            await asyncio.to_thread(lot.audit, "lot_flash_refuse", adresse=adresse, raison="pont conteneur ou maillage")
+        except OSError:
+            pass
+        raise HTTPException(403, "adresse non admise (conteneur ou maillage)")
     if not lot.nom_valide(nom):
         raise HTTPException(400, "nom de box invalide")
     if not _lot_admis(adresse):

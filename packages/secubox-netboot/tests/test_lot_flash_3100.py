@@ -106,7 +106,7 @@ def _client(monde):
     main = importlib.import_module("api.main")
     main._LOT_COMPTEURS.clear()
     main.CTL_LOT = str(CTL)
-    return main, TestClient(main.app)
+    return main, TestClient(main.app, headers={"X-SecuBox-Netboot-Lot": "1"})
 
 
 def test_preparation_consommee_une_fois(monde):
@@ -175,3 +175,46 @@ def test_vhost_nginx_location_lot_flash_lan_seulement():
     for t in ("allow 10.0.0.0/8;", "allow 172.16.0.0/12;", "allow 192.168.0.0/16;", "deny all;",
               "unix:/run/secubox/netboot.sock", "X-Real-IP $remote_addr"):
         assert t in bloc
+
+
+def test_route_sans_marqueur_refusee(monde):
+    main, c = _client(monde)
+    c.headers.pop("X-SecuBox-Netboot-Lot")
+    assert c.get("/lot-flash", params={"nom": "gk1"}, headers={"X-Real-IP": "192.168.1.50"}).status_code == 404
+    assert c.get("/lot-flash", params={"nom": "gk1"}, headers={"X-Real-IP": "192.168.1.50",
+                                                                "X-SecuBox-Netboot-Lot": "0"}).status_code == 404
+
+
+@pytest.mark.parametrize("ip", ["10.100.0.7", "10.0.3.9", "10.10.0.2"])
+def test_ponts_conteneurs_et_maillage_refuses(monde, ip):
+    main, c = _client(monde)
+    assert c.get("/lot-flash", params={"nom": "gk1"}, headers={"X-Real-IP": ip}).status_code == 403
+    ligne = json.loads(monde["audit"].read_text().splitlines()[-1])
+    assert ligne["evenement"] == "lot_flash_refuse" and ligne["adresse"] == ip and ligne["raison"]
+    assert c.get("/lot-flash", params={"nom": "gk1"}, headers={"X-Real-IP": "10.100.1.7"}).status_code == 200
+
+
+def test_compteurs_bornes(monde):
+    main, c = _client(monde)
+    main._lot_admis("10.1.1.1", 0.0)
+    main._lot_admis("10.1.1.2", 4000.0)           # l'entrée de plus d'une heure est élaguée
+    assert "10.1.1.1" not in main._LOT_COMPTEURS
+    for i in range(3000):
+        main._lot_admis(f"10.2.{i // 250}.{i % 250}", 5000.0 + i)
+    assert len(main._LOT_COMPTEURS) <= 1024
+    assert "10.2.11.249" in main._LOT_COMPTEURS    # la plus récente reste, les plus anciennes sont évincées
+
+
+def test_nginx_principal_bloque_la_route_et_vide_le_marqueur():
+    n = (ICI / "nginx" / "netboot.conf").read_text()
+    assert "location = /api/v1/netboot/lot-flash { return 404; }" in n
+    assert n.index("lot-flash") < n.index("location /api/v1/netboot/")
+    p = (RACINE / "common" / "nginx" / "secubox-proxy.conf").read_text()
+    assert 'proxy_set_header   X-SecuBox-Netboot-Lot "";' in p
+    assert 'proxy_set_header X-SecuBox-Netboot-Lot "1";' in (ICI / "nginx" / "boot-vhost.conf").read_text()
+
+
+def test_vhost_principal_du_hub_bloque_aussi_la_route():
+    w = (RACINE / "packages" / "secubox-hub" / "nginx" / "webui.conf").read_text()
+    assert "location = /api/v1/netboot/lot-flash { return 404; }" in w
+    assert w.index("lot-flash") < w.index("location /api/v1/netboot/ {")
