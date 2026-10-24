@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-24 — MOCHAbin sur noyau Debian stock : WAN et switch tenus par l'initrd (ref #3093, #3091, #3088)
+
+Suite du banc netboot : l'image `isp` alpha.18 flashée a démarré sur l'eMMC (noyau Debian 6.12.107) après deux corrections.
+**Démarrage eMMC** (#3091, PR #3092) : `board/mochabin/boot.cmd` prenait les adresses du U-Boot usine, noyau de ~37 Mo posé sur
+la zone réservée 0x04000000 (« would overwrite reserved memory ») ; adresses fixées (0x08000000 / 0x0c000000 / 0x0c100000).
+**Conflit d'adresse** (#3088, PR #3095) : la MOCHAbin flashée prenait 192.168.1.200 (gk2) par le secours statique du netplan
+commun (arping depuis gk2 : MAC 00:50:43:84:25:2F) ; retiré du netplan de la carte, retiré à la main sur le DUT, gk2 seul sur .200.
+**WAN sur noyau stock** (#3093, PR #3094) : #2004 reproduit (switch chargé par udev après l'ouverture d'eth2 → bascule des tampons
+mvpp2, PHY rattaché deux fois, pas de porteuse ; un démarrage sur deux par hasard d'ordre). Corrigé en chargeant `dsa_core`,
+**`tag_dsa`** et `mv88e6xxx` dans l'initrd (sans `tag_dsa`, sonde remise après la racine) : switch à 5,1 s, « DSA: tree 0 setup »
+avant la racine, eth2 ouvert une fois, lien 1 Gb/s. MOCHAbin seulement, ESPRESSObin garde sa liste noire (#2146). Constaté aussi :
+`/boot` FAT 256 Mo trop petit pour régénérer l'initrd (pas de zstd, gzip) — à traiter. Le noyau sur mesure de gk2 n'est pas touché.
+
 ## 2026-10-24 — Netboot MOCHAbin au banc : live par TFTP, flash eMMC isp en cours (ref #3079)
 
 DUT MOCHAbin 8 Go au banc série : live démarré par le U-Boot usine, réseau du live OK (noyau Debian stock), écriture de
