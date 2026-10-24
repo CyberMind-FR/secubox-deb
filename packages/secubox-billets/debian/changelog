@@ -1,3 +1,11 @@
+secubox-billets (0.13.4-1~trixie1) trixie; urgency=medium
+
+  * Vhost livré sans le nom de gk2 (ref #3117) : server_name « billets.* » (billets.gk2.secubox.in reste
+    couvert sur gk2). Conffile sites-available/billets.conf géré par dpkg ; la migration #1682 du postinst
+    reste inchangée (sans effet sur le nouveau fichier).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 11:32:18 +0200
+
 secubox-billets (0.13.3-1~trixie1) trixie; urgency=medium
 
   * Micro : encarté par le Hall v2 (message {sbx:'carte'}), il range sa marque — icône et titre,

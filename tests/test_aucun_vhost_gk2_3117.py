@@ -9,7 +9,8 @@ noms de gk2 sur toutes les boxes qui l'installent. Le service d'une box se
 nomme par un joker `<x>.*` (les noms exacts de gk2 restent couverts par lui).
 
 Fichiers balayés (sources livrées) : `packages/*/nginx/**`,
-`packages/*/conf/*.nginx.conf`, `packages/*/composants/*/nginx/**`. Sont
+`packages/*/conf/*.nginx.conf`, `packages/*/composants/*/nginx/**`, et
+`packages/*/deploy/*nginx*.conf` (billets y range son vhost). Sont
 exclus les arbres de construction `packages/<pkg>/debian/<pkg>/` et les
 `*.example`.
 """
@@ -32,7 +33,8 @@ def _sans_commentaires(texte: str) -> str:
 
 
 def _fichiers_livres():
-    motifs = ("*/nginx/**/*", "*/conf/*.nginx.conf", "*/composants/*/nginx/**/*")
+    motifs = ("*/nginx/**/*", "*/conf/*.nginx.conf", "*/composants/*/nginx/**/*",
+              "*/deploy/*nginx*.conf")
     vus = set()
     for motif in motifs:
         for f in PACKAGES.glob(motif):
@@ -62,6 +64,7 @@ def test_la_garde_voit_les_vhosts():
     assert "secubox-hub/nginx/webui.conf" in noms
     assert "secubox-gitea/conf/gitea.nginx.conf" in noms
     assert "secubox-ytsas/composants/torrent/nginx/torrent.conf" in noms
+    assert "secubox-billets/deploy/nginx.conf" in noms
 
 
 def test_aucun_server_name_de_gk2():
