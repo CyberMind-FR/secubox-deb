@@ -126,7 +126,6 @@ cat > "$w/boot.cmd" <<EOF
 #   tftpboot \${scriptaddr} $nom/boot.scr; source \${scriptaddr}
 # Le live garde le réseau de l'initrd (ip=dhcp) : mv88e6xxx bloqué (chargé tard, il fait rouvrir les ports
 # mvpp2 et eth2 perd sa porteuse, #2004), systemd-networkd masqué (le netplan de l'image met eth1/eth2 dans br-lan).
-# rescue.target : la pile SecuBox du live prenait 6,9 Go sur 8 ; le live ne sert qu'à flasher (console root).
 # Adresses au-dessus de 0x04000000-0x04200000, réservé au firmware (PSCI/ATF) de l'Armada 7040.
 setenv serverip $srv_ip
 setenv kernel_addr_r 0x08000000
@@ -137,7 +136,6 @@ tftpboot \${fdt_addr_r} $nom/board.dtb || exit
 tftpboot \${ramdisk_addr_r} $nom/initrd.img || exit
 setenv bootargs console=ttyS0,115200 boot=live components fetch=http://$srv/$nom/filesystem.squashfs ip=dhcp net.ifnames=0
 setenv bootargs \${bootargs} modprobe.blacklist=mv88e6xxx systemd.mask=systemd-networkd.service systemd.mask=systemd-networkd.socket
-setenv bootargs \${bootargs} systemd.unit=rescue.target
 booti \${kernel_addr_r} \${ramdisk_addr_r}:\${filesize} \${fdt_addr_r}
 EOF
 cp "$w/boot.cmd" "$w/out/tftp/boot.cmd"

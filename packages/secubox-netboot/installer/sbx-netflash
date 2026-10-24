@@ -84,8 +84,19 @@ sha="$(echo "$ligne" | awk '{print $3}')"
 [ -s "$PUB" ] || fail "clé publique absente ($PUB) : ce live n'a pas été construit pour le flash réseau"
 
 # L'image transite par la RAM (tmpfs) : il faut sa taille + 768 Mo pour le reste du système.
+# Le live garde toute la pile SecuBox (6,9 Go sur 8 sur DUT) : on ne la stoppe que si la mémoire manque.
+libere_memoire() {
+    log "mémoire insuffisante : arrêt de la pile SecuBox du live (le live redevient complet au prochain démarrage)…"
+    systemctl stop 'secubox-*' 'tor@*' tor haproxy nginx 2>/dev/null || true
+    for p in nDPId tor haproxy secubox-groupd uvicorn python3; do pkill -x "$p" 2>/dev/null || true; done
+    sleep 3
+}
 dispo="$(awk '/^MemAvailable:/{print $2*1024}' /proc/meminfo)"
 besoin=$(( taille + 768 * 1048576 ))
+if [ "$dispo" -le "$besoin" ]; then
+    libere_memoire
+    dispo="$(awk '/^MemAvailable:/{print $2*1024}' /proc/meminfo)"
+fi
 [ "$dispo" -gt "$besoin" ] || fail "mémoire insuffisante : $((dispo/1048576)) Mo libres, $((besoin/1048576)) Mo nécessaires (choisir une image plus petite)"
 
 # /run est un tmpfs plafonné à 10 % de la RAM (792 Mo sur 8 Go) : l'image a son propre tmpfs, à sa taille.
