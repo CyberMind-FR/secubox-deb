@@ -112,6 +112,7 @@ def test_doublon_sans_flash_refuse(maitre):
     with pytest.raises(HTTPException) as e:
         _join()
     assert e.value.status_code == 409 and wg.read_text() == avant
+    assert "préparer un flash" in e.value.detail and "retirer l'ancien pair" in e.value.detail
 
 
 def test_jeton_flash_pour_un_autre_nom_refuse(maitre):

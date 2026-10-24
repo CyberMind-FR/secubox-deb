@@ -2124,7 +2124,8 @@ def ml_join(req: JoinRequest, request: Request):
                          and r.get("fingerprint") != req.fingerprint), None)
     if homonyme and not (flash and (auto_approve or config.get("auto_approve", False))):
         _audit_jonction("jonction_refusee", raison="nom deja pris", nom=nom)
-        raise HTTPException(status_code=409, detail="name_already_taken")
+        raise HTTPException(status_code=409, detail="nom déjà pris : préparer un flash sur le maître "
+                                                    "(page Netboot) ou retirer l'ancien pair")
 
     join_request = {
         "fingerprint": req.fingerprint,
