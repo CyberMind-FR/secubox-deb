@@ -90,6 +90,7 @@ def env(tmp_path, monkeypatch):
         monkeypatch.setenv("SBX_PAIRS_" + var, str(chemin))
     e.poignees.write_text(json.dumps({"written_at": time.time(), "handshakes": {}}))
     e.maitres = []
+    monkeypatch.setattr(os, "geteuid", lambda: 1000)     # les tests ne dépendent jamais de l'euid réel
 
     def maitre(*a, **k):
         m = Maitre(*a, **k)
