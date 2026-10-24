@@ -9,6 +9,18 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-24 — Page NetBoot : netbooter une box, préparer un flash (ref #3100)
+
+- PR #3127 puis #3128, secubox-netboot 0.7.3, gk2 par apt : route `GET /live` (commandes U-Boot lues dans le
+  `boot.cmd` servi, images eMMC avec taille, SHA-256 et signature ; lectures O_NOFOLLOW, FIFO ignorées), panneau
+  « Netbooter une box » et formulaire « Préparer un flash » (confirmation dans la page). Vhost de boot :8099 en
+  gabarit `@ADRESSE_LAN@` (plus l'adresse de gk2, #3117 ; détection limitée à 192.168/16 et 172.16/12, 10/8 imposé
+  par `SBX_NETBOOT_ADRESSE`), `location /` réservée au LAN dans le gabarit, vhost précédent rendu si `nginx -t`
+  refuse ; `netboot-server.conf` (/sbxboot, jamais inclus) retiré ; statut `nginx_sbxboot` juste (grep -q + pipefail).
+- Constat : le vhost de boot vivant de gk2 datait d'avant #3100 (pas de `/lot-flash`) ; reposé par
+  `secubox-netboot-serve up`, vérifié (LAN 200, `/lot-flash` joignable).
+- Reste #3100 : banc de reflash de gk1 avec préparation, essai du faux maître. TR-369 suivi en #3126 (projet 3).
+
 ## 2026-10-24 — Les visiteurs onion ne sont plus jamais LAN (closes #3112, closes #3123)
 
 - PR #3124 (4 rondes de relecture de sécurité) : frontal HAProxy `onion-in` (127.0.0.1:9180) pour tous les onions
