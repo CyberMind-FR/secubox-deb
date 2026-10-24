@@ -289,6 +289,7 @@ UNITES_MAILLAGE = ("secubox-automesh.timer", "secubox-annuaire.service", "secubo
 
 
 ANCRE_CHEMIN = Path("/etc/secubox/p2p/ancre-maitre.json")
+AUDIT_CHEMIN = Path("/var/log/secubox/audit.log")
 
 
 def _charge_ancre():
@@ -299,12 +300,27 @@ def _pose_ancre(m: Dict[str, Any]) -> None:
     """Écrit l'ancre du maître sans jamais écraser (#3100). Une ancre déjà posée pour une AUTRE clé : la box appartient à un autre maître, on ne rejoint pas."""
     ancre = _charge_ancre()
     cle = str(m["ancre_cle"])
+    adresse = str(m.get("ancre_adresse") or m["rejoindre"])
+    nom = str(m.get("ancre_nom") or "")
+    emp = str(m.get("ancre_empreinte") or ancre.empreinte(cle))
     existante = ancre.lire(str(ANCRE_CHEMIN))
+
+    def audit(evenement: str, **plus) -> None:
+        # Une décision de sécurité, une ligne (jamais de code ni de jeton). Journal illisible (pas root) : l'étape ne s'arrête pas pour autant.
+        try:
+            ancre.audit(evenement, chemin=str(AUDIT_CHEMIN), maitre=nom, adresse=adresse, empreinte=emp, **plus)
+        except OSError:
+            pass
+
     if existante is not None and not ancre.accepte(existante, cle):
+        audit("ancre_refusee", empreinte_existante=str(existante.get("empreinte") or ancre.empreinte(str(existante.get("cle_publique") or ""))))
         raise RuntimeError(f"cette box est déjà ancrée à un autre maître ({existante.get('nom') or existante.get('empreinte') or '?'}) : jonction refusée")
-    if existante is None and not ancre.ecrire(cle, str(m.get("ancre_adresse") or m["rejoindre"]), str(m.get("ancre_nom") or ""),
-                                              str(m.get("ancre_empreinte") or ancre.empreinte(cle)), chemin=str(ANCRE_CHEMIN), ecraser=False):
+    if existante is not None:
+        audit("ancre_conservee")
+        return
+    if not ancre.ecrire(cle, adresse, nom, emp, chemin=str(ANCRE_CHEMIN), ecraser=False):
         raise RuntimeError("ancre du maître non écrite")
+    audit("ancre_ecrite")
 
 
 def _activer_maillage() -> None:

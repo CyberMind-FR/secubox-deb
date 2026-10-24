@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from premier_pas import maitre as MA, moteur as M, profil as P, remplir as R  # noqa: E402
 
+SOURCE_ANCRE = Path(__file__).resolve().parents[2] / "secubox-p2p" / "api" / "ancre.py"
 CLE = "A" * 43 + "="
 AUTRE = "B" * 43 + "="
 EMP = hashlib.sha256(CLE.encode()).hexdigest()[:16]
@@ -55,6 +56,7 @@ class _Client:
 
 
 def test_profil_pousse_contient_l_ancre_du_maitre(tmp_path, monkeypatch):
+    monkeypatch.setenv("SBX_P2P_ANCRE_PY", str(SOURCE_ANCRE))
     monkeypatch.setenv("PREMIER_PAS_MAITRE_DIR", str(tmp_path / "maitre"))
     mesh = tmp_path / "wg_mesh.json"
     mesh.write_text(json.dumps({"public_key": CLE}))
@@ -95,6 +97,8 @@ def _isole(tmp_path, monkeypatch):
     monkeypatch.setattr(M, "_majauto", lambda a, h: None)
     monkeypatch.setattr(M, "_reseau_existant_conserve", lambda *a: None)
     monkeypatch.setattr(M, "ANCRE_CHEMIN", tmp_path / "ancre-maitre.json")
+    monkeypatch.setattr(M, "AUDIT_CHEMIN", tmp_path / "audit.log")
+    monkeypatch.setenv("SBX_P2P_ANCRE_PY", str(SOURCE_ANCRE))
 
 
 def _execute(appels):
@@ -174,3 +178,37 @@ def test_cles_d_ancre_inconnues_toujours_refusees_ailleurs():
         R.enregistre("reseau", {"ancre_cle": CLE})
     with pytest.raises(R.Refus):
         R.enregistre("maillage", {"inconnue": "x"})
+
+
+def _audit(tmp_path):
+    f = tmp_path / "audit.log"
+    return [json.loads(l) for l in f.read_text().splitlines()] if f.exists() else []
+
+
+def test_audit_ancre_ecrite_conservee_refusee(tmp_path, monkeypatch):
+    _isole(tmp_path, monkeypatch)
+    assert M.appliquer(_profil(**ANCRE), _execute([]), ["actuel"], marqueur=tmp_path / "fait").ok
+    (tmp_path / "fait").unlink()
+    assert M.appliquer(_profil(**ANCRE), _execute([]), ["actuel"], marqueur=tmp_path / "fait").ok
+    (tmp_path / "ancre-maitre.json").write_text(json.dumps({"cle_publique": AUTRE, "adresse": "x", "nom": "o", "empreinte": "e1"}))
+    assert not M.appliquer(_profil(**ANCRE), _execute([]), ["actuel"], marqueur=tmp_path / "fait2").ok
+    lignes = _audit(tmp_path)
+    assert [l["evenement"] for l in lignes] == ["ancre_ecrite", "ancre_conservee", "ancre_refusee"]
+    for l in lignes:
+        assert l["maitre"] == "gk2" and l["adresse"] == "10.0.0.2" and l["empreinte"] == EMP
+        assert not {"code", "jeton", "token"} & set(l)
+    assert lignes[2]["empreinte_existante"] == "e1"
+
+
+def test_audit_illisible_n_arrete_pas_l_etape(tmp_path, monkeypatch):
+    _isole(tmp_path, monkeypatch)
+    monkeypatch.setattr(M, "AUDIT_CHEMIN", tmp_path / "pas-de-dossier" / "audit.log")
+    assert M.appliquer(_profil(**ANCRE), _execute([]), ["actuel"], marqueur=tmp_path / "fait").ok
+
+
+def test_le_module_ne_se_charge_que_du_chemin_installe(tmp_path, monkeypatch):
+    from premier_pas import ancre_p2p
+    monkeypatch.delenv("SBX_P2P_ANCRE_PY", raising=False)
+    monkeypatch.setattr(ancre_p2p, "INSTALLE", tmp_path / "absent.py")
+    with pytest.raises(RuntimeError):
+        ancre_p2p.charge()
