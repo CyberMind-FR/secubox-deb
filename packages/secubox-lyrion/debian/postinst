@@ -78,6 +78,9 @@ case "$1" in
             fi
             touch "$temoin3096"
         fi
+        # Les anciens postinst la désactivaient à chaque installation : deb-systemd-helper garde cet état
+        # « disabled » d'une mise à jour à l'autre. On l'active ici (même patron qu'exposure, #3056).
+        systemctl enable --now secubox-lyrion.service 2>/dev/null || true
         ;;
 esac
 
