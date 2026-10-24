@@ -170,6 +170,10 @@ button.sbx-atuile{font:inherit;color:inherit;text-align:left;cursor:pointer}
 .sbx-mosaique-compte{font-size:.72rem;color:var(--sbx-texte-attenue)}
 .sbx-mosaique{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--sbx-e-3)}
 .sbx-mosaique[data-vue="sites"]{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.sbx-mosaique[data-vue="pairs"]{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.sbx-pgroupe{grid-column:1/-1;margin:var(--sbx-e-3) 0 0;font:600 .9rem var(--sbx-police);color:var(--sbx-texte-attenue);overflow-wrap:anywhere}
+.sbx-pgroupe:first-child{margin-top:0}
+.sbx-ptuile b,.sbx-ptuile small{overflow-wrap:anywhere}
 .sbx-mtuile,.sbx-stuile{position:relative;display:flex;flex-direction:column;gap:8px;min-height:92px;padding:12px;border:1px solid var(--sbx-bordure-2);border-radius:var(--sbx-rayon-m);
   background:var(--sbx-surface);color:var(--sbx-texte);text-align:left;text-decoration:none;cursor:pointer;font:inherit;min-width:0}
 .sbx-mtuile:hover,.sbx-stuile:hover{border-color:var(--sbx-bordure);box-shadow:var(--sbx-ombre)}

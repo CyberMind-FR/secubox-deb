@@ -4,6 +4,9 @@ secubox-webos (1.20.0-1~trixie1) trixie; urgency=medium
     offerts par les autres box (/var/lib/secubox/annuaire/services-pairs.json, écrit par l'annuaire). Entrée non
     fiable : 32 pairs et 64 services au plus, champs str bornés, endpoints https:// seulement ; cache absent
     ou corrompu : 200 avec disponible=false.
+  * Hall v2 (ref #3133) : rubrique « Pairs » dans la barre latérale, les services publics des autres nœuds en tuiles
+    groupées par nœud. Textes posés en texte (jamais en HTML), liens https:// seulement en target=_blank
+    rel="noopener noreferrer" ; sans session, la mosaïque le dit.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 14:00:00 +0200
 

@@ -66,7 +66,8 @@
     {id:'outils',nom:'Outils',ic:'outils',nav:'mosaique',motif:/outil|toolbox|boîte|boite|surf|viewer|dpi|sonde|ytsas|convert|éphéméride|ephemeride|zigbee|domot|devwatch|compteur/i},
     {id:'systeme',nom:'Système',ic:'systeme',nav:'mosaique',motif:/racine|amorce|système|systeme|métrique|metrique|metrics|courbe|journal|paquet|apt\b|noyau|mémoire|memoire|disque|processeur|hub|agrégateur|agregateur|profil|boot|eye/i},
     {id:'sites',nom:'Mes sites',ic:'globe',nav:'mosaique'},
-    {id:'apps',nom:'Applications',ic:'ia',nav:'mosaique'}
+    {id:'apps',nom:'Applications',ic:'ia',nav:'mosaique'},
+    {id:'pairs',nom:'Pairs',ic:'reseau',nav:'mosaique'}
   ];
   var ICO_CAT={wall:'bouclier',mind:'ia',mesh:'reseau',auth:'usager',root:'systeme',boot:'jauge'};
   var ONGLETS=['accueil','modules','securite','reseau','systeme'];
@@ -204,8 +205,31 @@
     w.appendChild(v); var tx=el('span',{'class':'tx'}); tx.appendChild(el('b',null,a.name)); tx.appendChild(el('small',{'class':'mono'},a.domain||(a.running?'en ligne':'endormie'))); w.appendChild(tx);
     var led=el('i',{'class':'sbx-led','data-ton':a.running?'ok':'info','aria-label':a.running?'en ligne':'endormie'}); w.appendChild(led); return w;
   }
+  // >>> Pairs (#3133) : services publics des autres nœuds (`/api/v1/webos/public/pairs`, session). Tout texte vient d'un autre nœud :
+  // posé par textContent seulement, lien posé après contrôle du schéma https://.
+  var pairs=null, pairsT=0, pairsRefus=false;
+  function chargePairs(cb){
+    if(pairs&&Date.now()-pairsT<300000) return cb(pairs,pairsRefus);
+    fetch('/api/v1/webos/public/pairs',{credentials:'same-origin'}).then(function(r){ pairsRefus=(r.status===401||r.status===403); return r.ok?r.json():{pairs:[]}; })
+      .then(function(d){ pairs=(d&&Array.isArray(d.pairs)?d.pairs:[]).filter(function(n){ return n&&typeof n.boxname==='string'&&n.boxname&&Array.isArray(n.services); }); pairsT=Date.now(); cb(pairs,pairsRefus); })
+      .catch(function(){ cb([],false); });
+  }
+  function texte(tag,cls,t){ var e=document.createElement(tag); if(cls) e.className=cls; e.textContent=String(t==null?'':t); return e; }
+  function tuilePair(nomNoeud,service){
+    if(!service||typeof service.endpoint!=='string'||service.endpoint.indexOf('https://')!==0) return null;
+    var a=document.createElement('a'); a.className='sbx-stuile sbx-ptuile'; a.setAttribute('href',service.endpoint); a.setAttribute('target','_blank'); a.setAttribute('rel','noopener noreferrer');
+    a.title=String(service.description||service.nom||'');
+    var v=texte('span','vig',''); v.appendChild(texte('span','sans',String(service.nom||'?').slice(0,1).toUpperCase())); a.appendChild(v);
+    var tx=texte('span','tx',''); tx.appendChild(texte('b','',service.nom||'')); tx.appendChild(texte('small','mono',nomNoeud)); a.appendChild(tx); return a;
+  }
+  // <<< Pairs
   function rendMosaique(){
     if(!mosaique) return; var grille=mosaique.querySelector('.sbx-mosaique'), vide=mosaique.querySelector('.sbx-mosaique-vide'); grille.textContent=''; vide.hidden=true;
+    if(ongletMosaique==='pairs'){ grille.setAttribute('data-vue','pairs'); return chargePairs(function(l,refus){ if(ongletMosaique!=='pairs') return; grille.textContent=''; var n=0;
+      l.forEach(function(nd){ var tuiles=[]; nd.services.forEach(function(sv){ var t=tuilePair(nd.boxname,sv); if(t) tuiles.push(t); }); if(!tuiles.length) return;
+        grille.appendChild(texte('h3','sbx-pgroupe',nd.boxname)); tuiles.forEach(function(t){ grille.appendChild(t); }); n+=tuiles.length; });
+      var compte=mosaique.querySelector('.sbx-mosaique-compte'); if(compte) compte.textContent=n?n+' service'+(n>1?'s':''):'';
+      vide.hidden=!!n; vide.textContent=refus?'Les services des pairs se voient avec une session : connectez-vous.':'Aucun autre nœud ne publie de service pour l’instant.'; }); }
     if(ongletMosaique==='apps'){ grille.setAttribute('data-vue','apps'); return chargeApps(function(l,refus){ if(ongletMosaique!=='apps') return; grille.textContent=''; l.forEach(function(a){ grille.appendChild(tuileApp(a)); });
       var compte=mosaique.querySelector('.sbx-mosaique-compte'); if(compte) compte.textContent=l.length?l.length+' application'+(l.length>1?'s':''):'';
       vide.hidden=!!l.length; vide.textContent=refus?'Les applications et leurs vignettes se voient avec une session : connectez-vous.':'Aucune application pour l’instant.'; }); }
@@ -540,7 +564,7 @@
       var b=el('button',{type:'button','class':'sbx-rub','data-rub':r.id},ico(r.ic)+'<span></span>');
       b.lastChild.textContent=r.nom;
       b.addEventListener('click',function(){ va(r); });
-      if(r.nav!=='mosaique'||r.id==='sites'||r.id==='apps'||r.id==='recents'){ nav.appendChild(b); return; }
+      if(r.nav!=='mosaique'||r.id==='sites'||r.id==='apps'||r.id==='pairs'||r.id==='recents'){ nav.appendChild(b); return; }
       // Rubrique dépliable : ses modules (registre), ouverts embarqués, puis la sous-navigation du module courant.
       var grp=el('div',{'class':'sbx-grp'+(r.id==='favoris'?' sbx-favoris':''),'data-grp':r.id}); var ligne=el('div',{'class':'sbx-ligne'}); ligne.appendChild(b);
       var pli=el('button',{type:'button','class':'sbx-plier','aria-expanded':'false','aria-label':'Déplier '+r.nom},ico('chevron'));
