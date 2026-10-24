@@ -1,3 +1,10 @@
+secubox-lyrion (1.7.6-1~trixie1) trixie; urgency=medium
+
+  * postinst active l'API (ref #3096) : deb-systemd-helper gardait l'état « disabled » laissé par les
+    anciens postinst ; en 1.7.5 sur gk2 l'unité livrée restait éteinte.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 24 Oct 2026 12:00:00 +0200
+
 secubox-lyrion (1.7.5-1~trixie1) trixie; urgency=medium
 
   * Unité de l'API livrée une seule fois, par dh_installsystemd (ref #3096) : la copie manuelle en plus

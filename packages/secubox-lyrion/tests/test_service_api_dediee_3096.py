@@ -40,3 +40,10 @@ def test_le_manifeste_passe_une_fois_en_toujours_eveille_avec_l_unite():
     assert "set-lifecycle lyrion --lifecycle always-on" in POSTINST
     assert '.manifeste-3096' in POSTINST
     assert 'units     = ["secubox-lyrion.service"]' in POSTINST
+
+
+def test_le_postinst_active_l_api_meme_apres_une_desactivation():
+    # gk2, 1.7.5 : deb-systemd-helper garde l'état « disabled » laissé par les anciens postinst (systemctl disable
+    # à chaque installation) ; l'unité livrée restait éteinte. Le postinst l'active lui-même, après le témoin.
+    i = POSTINST.index("touch \"$temoin3096\"")
+    assert "systemctl enable --now secubox-lyrion.service" in POSTINST[i:]
