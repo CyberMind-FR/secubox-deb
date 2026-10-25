@@ -1,3 +1,11 @@
+secubox-auth (1.8.9-1~trixie1) trixie; urgency=medium
+
+  * Fournisseur OIDC (ref #3155) : sans session, /authorize renvoie vers /login.html?redirect=/oidc/authorize?… (chemin de même
+    origine) au lieu d'une page sans issue ; la personne revient seule sur sa demande. Une session valide sans personne rattachée
+    reçoit une page explicative (403) : pas de boucle de connexion. prompt=none inchangé (login_required).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 19:00:00 +0000
+
 secubox-auth (1.8.8-1~trixie1) trixie; urgency=medium
 
   * Vhost ACCÈS livré sans les noms de gk2 (ref #3117) : server_name « acces.* » (acces.gk2.secubox.in reste

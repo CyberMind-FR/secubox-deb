@@ -55,8 +55,9 @@ def cli(tmp_path, monkeypatch):
     (tmp_path / "clients.json").write_text(json.dumps({"photos": {
         "name": "Photos", "app": "photoprism", "redirect_uris": [REDIR],
         "secret_sha256": F.empreinte(SECRET)}}))
-    etat = {"ident": {"payload": {"sub": "sbx-1"}, "per": {"user_uuid": PERSONNE["sub"], "pseudo": "gek"}}}
+    etat = {"ident": {"payload": {"sub": "sbx-1"}, "per": {"user_uuid": PERSONNE["sub"], "pseudo": "gek"}}, "session": True}
     monkeypatch.setattr(M, "personne", lambda req: etat["ident"])
+    monkeypatch.setattr(M, "session_ouverte", lambda req: etat["session"])
     monkeypatch.setattr(M, "claims_pour", lambda ident, c: dict(PERSONNE))
     c = _Client()
     c.etat = etat
@@ -131,12 +132,38 @@ def test_pas_de_redirecteur_ouvert(cli):
     assert r.status_code == 400 and "location" not in r.headers
 
 
-def test_sans_session_pas_de_code(cli):
+def test_sans_session_pas_de_code_et_renvoi_vers_la_connexion(cli):
     cli.etat["ident"] = None
+    cli.etat["session"] = False
     r = _autorise(cli)
-    assert r.status_code == 200 and "location" not in r.headers
+    assert r.status_code == 302
+    loc = urlsplit(r.headers["location"])
+    assert loc.scheme == "" and loc.netloc == "" and loc.path == "/login.html"      # même origine, jamais un autre hôte
+    retour = parse_qs(loc.query)["redirect"][0]
+    rq = urlsplit(retour)
+    assert rq.path == "/oidc/authorize" and rq.netloc == ""                           # chemin absolu à barre unique
+    q = parse_qs(rq.query)
+    assert q["client_id"] == ["photos"] and q["state"] == ["S"] and q["redirect_uri"] == [REDIR]   # la demande revient intacte
+    assert "code" not in parse_qs(loc.query)
     r = _autorise(cli, prompt="none")
     assert parse_qs(urlsplit(r.headers["location"]).query)["error"] == ["login_required"]
+
+
+def test_session_sans_personne_pas_de_boucle_de_connexion(cli):
+    # connecté (compte système, appareil non rattaché) mais sans personne : page explicative, pas de renvoi vers /login.html
+    cli.etat["ident"] = None
+    cli.etat["session"] = True
+    r = _autorise(cli)
+    assert r.status_code == 403 and "location" not in r.headers
+    assert "aucune personne" in r.text.lower()
+
+
+def test_retour_de_connexion_sans_ouverture_de_redirection(cli):
+    cli.etat["ident"] = None
+    cli.etat["session"] = False
+    r = _autorise(cli, state="x\r\nLocation: https://evil.test")
+    loc = r.headers["location"]
+    assert "\r" not in loc and "\n" not in loc and loc.startswith("/login.html?redirect=%2Foidc%2Fauthorize%3F")
 
 
 def test_pkce(cli):

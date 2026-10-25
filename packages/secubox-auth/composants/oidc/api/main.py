@@ -24,7 +24,7 @@ import time
 import tomllib
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
+from urllib.parse import quote, urlencode, urlsplit, urlunsplit, parse_qsl
 
 # En QUEUE, jamais en tête : devant /usr/local, le websockets 10.4 de Debian
 # masquait celui qu'attend uvicorn ≥ 0.54 → service en boucle (#1796).
@@ -79,6 +79,19 @@ def personne(request: Request) -> Optional[dict]:
     if not per:
         return None
     return {"payload": payload, "per": per}
+
+
+def session_ouverte(request: Request) -> bool:
+    """Une session SecuBox VALIDE existe-t-elle, qu'elle désigne une personne ou non ?
+
+    Distingue « personne connectée » de « personne sans identité » : seule la première est renvoyée vers la
+    connexion ; la seconde y reviendrait en boucle sans jamais devenir une personne (#3155)."""
+    try:
+        from secubox_core import auth  # noqa: PLC0415
+    except ImportError:
+        return False
+    tok = request.cookies.get(auth.SESSION_COOKIE)
+    return bool(tok and auth._validate_token(tok))
 
 
 def claims_pour(ident: dict, c: dict) -> dict:
@@ -176,13 +189,18 @@ async def autorise(request: Request):
     if not ident:
         if q.get("prompt") == "none":
             return RedirectResponse(_avec_params(redirect_uri, {"error": "login_required", "state": state}), 302)
-        hall = emetteur().rsplit("/oidc", 1)[0]
-        ici = html.escape(str(request.url.path) + "?" + str(request.url.query))
+        if not session_ouverte(request):
+            # Pas de session : la connexion du Hall, avec retour sur cette même demande (#3155). `redirect` est un chemin
+            # absolu de même origine : la page de connexion refuse tout le reste (pas de redirection ouverte).
+            retour = "/oidc/authorize?" + str(request.url.query)
+            return RedirectResponse("/login.html?" + urlencode({"redirect": retour}, quote_via=quote), 302)
+        # Connecté mais sans personne rattachée (compte système, appareil non rattaché) : renvoyer vers la connexion
+        # tournerait en rond. On l'explique.
         nom = html.escape(str(c.get("name") or client_id))
         return _page("Connexion SecuBox", f"""<h1>Entrer dans {nom} avec SecuBox</h1>
-<p>Aucune session SecuBox rattachée à une personne n'est ouverte dans ce navigateur.
-Connectez-vous au <a href="{html.escape(hall)}/" target="_blank" rel="noopener">Hall</a>, puis
-<a href="/oidc/authorize?{html.escape(str(request.url.query))}">réessayez</a>.</p>""")
+<p>Votre session SecuBox n'est rattachée à aucune personne : un compte système ou un appareil non rattaché
+n'ouvre pas de compte dans un service. Connectez-vous avec le compte d'une personne (ou demandez une invitation),
+puis réessayez.</p>""", 403)
     try:
         code = F.emet_code(client_id, redirect_uri, claims_pour(ident, c), q.get("nonce", ""),
                            q.get("code_challenge", ""), q.get("code_challenge_method", ""))
