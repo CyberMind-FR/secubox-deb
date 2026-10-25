@@ -451,8 +451,9 @@ Package: secubox-service-visio
 Architecture: all
 Depends: ${misc:Depends}
 Recommends: secubox-jitsi
+Suggests: secubox-meet
 Description: SecuBox — service « Visio et téléphonie »
- Jitsi, TURN/STUN, PBX.
+ Jitsi, La Suite Meet, TURN/STUN, PBX.
  .
  Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
  Recommends = installé par défaut mais retirable, Suggests = optionnel.
