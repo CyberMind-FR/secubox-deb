@@ -46,3 +46,11 @@ Routes relevées dans le code source, relatives au montage du module. « aucune 
 ## Dépendances SecuBox
 
 `secubox-core`.
+
+## Boutique client (#3148)
+
+`/appstore/boutique.html` : vitrine simple pour les usagers (onglets Aujourd'hui, Apps, Fonctionnalités, Installées),
+sur les mêmes routes que la page d'administration. `www/appstore/boutique-fiches.json` donne à un paquet un nom, un résumé,
+une catégorie et un détail grand public (`"cacher": true` le masque) ; sans fiche, la page affiche le nom du paquet, et
+seules les catégories grand public (médias, courrier, communication, publication, IA, objets, outils) sont proposées.
+`?demo=1` affiche des données d'exemple sans aucun appel d'écriture.

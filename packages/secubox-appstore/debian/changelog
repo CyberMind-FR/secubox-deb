@@ -1,3 +1,13 @@
+secubox-appstore (0.10.0-1~trixie1) trixie; urgency=medium
+
+  * Boutique client (ref #3148) : /appstore/boutique.html, vitrine façon App Store en peau Aurora pour les usagers
+    de la box. Onglets Aujourd'hui, Apps, Fonctionnalités et Installées, fiche d'app, Obtenir/Ouvrir. Mêmes routes
+    que la page d'administration (catalog, groupes, jobs, action/install) : aucune écriture nouvelle. Noms et
+    catégories grand public dans boutique-fiches.json, repli sur le nom du paquet ; les modules système, non
+    publiés ou verrouillés par le niveau sont masqués. Une installation refusée dit qu'elle est réservée à l'administrateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 14:00:00 +0000
+
 secubox-appstore (0.9.2-1~trixie1) trixie; urgency=medium
 
   * Installer et retirer depuis la page (ref #3119, gk1 et gk2). Le bouton « Installer » était grisé (« non reprise » à la
