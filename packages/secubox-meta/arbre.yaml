@@ -438,10 +438,11 @@ recommande:
 meta: secubox-service-visio
 niveau: service
 label: Visio et téléphonie
-description: "Jitsi, TURN/STUN, PBX."
+description: "Jitsi, La Suite Meet, TURN/STUN, PBX."
 recommande:
   - secubox-jitsi
 suggere:
+  - secubox-meet
 
 meta: secubox-service-fichiers
 niveau: service

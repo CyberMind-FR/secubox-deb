@@ -114,6 +114,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-photoprism** | ✅ | ✅ | ✅ | library, albums, faces, storage | ✅ |
 | **secubox-matrix** | ✅ | ✅ | ✅ | users, rooms, federation, media | ✅ |
 | **secubox-jitsi** | ✅ | ✅ | ✅ | rooms, recordings, auth, prosody | ✅ |
+| **secubox-meet** | 🔄 | 🔄 | 🔄 | La Suite Meet (visio, LXC), OIDC SecuBox, ports média — en cours (ref #3154) | 🔄 |
 | **secubox-peertube** | ✅ | ✅ | ✅ | videos, channels, federation, transcoding | ✅ |
 | **secubox-voip** | ✅ | ✅ | ✅ | extensions, trunks, routes, IVR, CDR | ✅ | **🗑️ retiré (#1743 : docker/podman)**
 

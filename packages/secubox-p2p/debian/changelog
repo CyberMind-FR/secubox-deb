@@ -1,3 +1,17 @@
+secubox-p2p (1.19.1-1~trixie1) trixie; urgency=medium
+
+  * Relais des ports médias par le maître (ref #3154) : secubox-relais-maillage lit GET /public/ports de chaque pair
+    et relaie chaque <proto>/<port> publié par DNAT vers son IP maillée (table inet secubox-relais-ports : dnat en
+    prerouting, masquerade en postrouting pour que le retour repasse par le maître, accept en forward). Un <proto>/<port>
+    n'a qu'un propriétaire : le premier déclarant gagne, le maître compte (ports-publics.d local) ; un second est refusé
+    (audit relais_port_refuse). Un pair qui répond sans le port le libère (relais_port_retire) ; injoignable, il garde
+    ses ports. État /var/lib/secubox/p2p/relais-ports.json, fichier /etc/nftables.d/secubox-relais-ports.nft
+    régénéré à chaque synchronisation et appliqué à chaud, table seule (jamais nft -f nftables.conf).
+    Nouveaux verbes relayer-port et retirer-port. postrm purge : retire ce fichier et la table
+    inet secubox-relais-ports (sans échec si elle est absente), jamais l'état relais-ports.json.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 18:00:00 +0000
+
 secubox-p2p (1.19.0-1~trixie1) trixie; urgency=medium
 
   * Liens directs entre pairs (ref #3133), côté maître : GET /master-link/pairs publie la liste des pairs vivants

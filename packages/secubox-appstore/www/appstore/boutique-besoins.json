@@ -1,0 +1,20 @@
+{
+ "visio": {
+  "nom": "Visio",
+  "resume": "Appels vidéo privés",
+  "categorie": "Communication",
+  "detail": "Se voir à distance, depuis un navigateur, sans confier vos appels à une plateforme. Choisissez la solution qui vous convient : elles tournent toutes chez vous.",
+  "ordre": 10,
+  "solutions": [
+   {"paquet": "secubox-jitsi", "qui": "Communauté Jitsi · Apache 2.0",
+    "texte": "Le plus simple : un lien, et l'on se parle. Aucun compte à créer, même pour l'organisateur.",
+    "traits": [["oui", "Sans compte"], ["", "Léger (≈ 1 Go)"], ["", "Port média UDP 10000"]]},
+   {"paquet": "secubox-meet", "qui": "État français (DINUM) · MIT",
+    "texte": "La visio de La Suite numérique. Connexion avec votre compte SecuBox, salles gérées par les membres de la box ; les invités entrent par le lien.",
+    "traits": [["oui", "Compte SecuBox"], ["oui", "Invités par lien"], ["", "≈ 2 Go"], ["att", "Ports média 7881/7882"]]},
+   {"nom": "BigBlueButton", "qui": "Communauté BBB · LGPL",
+    "texte": "Pour les cours et les réunions longues : tableau blanc, sondages, enregistrement. Demande une machine plus puissante.",
+    "traits": [["", "Classes, formations"], ["att", "Pas encore empaqueté"]]}
+  ]
+ }
+}

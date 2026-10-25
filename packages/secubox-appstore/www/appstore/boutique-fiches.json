@@ -65,11 +65,18 @@
   "ordre": 9
  },
  "secubox-jitsi": {
-  "nom": "Visio",
-  "resume": "Appels vidéo privés",
+  "nom": "Jitsi Meet",
+  "resume": "Visio en un lien, sans compte",
   "categorie": "Communication",
   "detail": "Lancez une visioconférence en un lien, chiffrée et hébergée chez vous.",
   "ordre": 10
+ },
+ "secubox-meet": {
+  "nom": "La Suite Meet",
+  "resume": "Visio de La Suite numérique",
+  "categorie": "Communication",
+  "detail": "La visio de La Suite numérique, avec connexion par votre compte SecuBox, hébergée chez vous.",
+  "ordre": 11
  },
  "secubox-bbs": {
   "nom": "Salon BBS",

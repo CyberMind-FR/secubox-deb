@@ -93,6 +93,20 @@ dialog::backdrop{background:rgba(2,8,20,.65);backdrop-filter:blur(4px)}
 .facts div+div{border-left:1px solid var(--trait)}.facts b{display:block;font-variant-numeric:tabular-nums}.facts span{font-size:.7rem;color:var(--faible)}
 .sheet p{margin:0;max-width:60ch;color:var(--texte)}.close{align-self:flex-end;color:var(--cyan);font-weight:600}
 .note{font-size:.8rem;color:var(--doux)}
+.sols{display:grid;gap:10px}
+.sols h4{margin:4px 0 0;font-size:.95rem}
+.sol{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:start;border:1px solid var(--trait);border-radius:14px;padding:12px;background:var(--tuile)}
+.sol.choisie{border-color:var(--vert);box-shadow:inset 0 0 0 1px rgba(46,204,113,.35)}
+.sol .ico{width:44px;height:44px;border-radius:11px;font-size:19px}
+.sol b{display:block}.sol .qui{font-size:.72rem;color:var(--faible);letter-spacing:.03em}
+.sol p{margin:6px 0 0;font-size:.82rem;color:var(--doux)}
+.traits{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.trait{font-size:.68rem;border-radius:999px;padding:2px 9px;border:1px solid var(--trait2);color:var(--doux)}
+.trait.oui{border-color:rgba(46,204,113,.55);color:var(--vert);background:rgba(46,204,113,.08)}
+.trait.att{border-color:rgba(255,159,28,.55);color:var(--orange);background:rgba(255,159,28,.08)}
+.get.bientot{border-color:var(--trait2);color:var(--faible);background:transparent;cursor:default}
+.besoin{font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--violet)}
+@media (max-width:520px){.sol{grid-template-columns:40px 1fr}.sol .get{grid-column:2;justify-self:start}}
 .info{background:rgba(41,182,246,.1);border-color:var(--cyan);color:var(--cyan)}
 .erreur{background:rgba(255,77,94,.1);border:1px solid var(--rouge);color:var(--rouge);border-radius:10px;padding:6px 12px;font-size:.78rem;margin:6px 0 0}
 .toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:rgba(18,40,78,.96);border:1px solid var(--cyan);color:var(--texte);
@@ -129,7 +143,7 @@ const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=nu
 const court=n=>String(n||'').replace(/^secubox-/,'');
 const CAT_FR={media:'Médias',email:'Communication',communication:'Communication',publishing:'Publication',ai:'Intelligence',iot:'Objets',network:'Réseau',security:'Protection',system:'Système',monitoring:'Suivi',dashboard:'Tableaux',mesh:'Maillage',analysis:'Analyse',apps:'Outils',misc:'Divers',wall:'Affichage',mind:'Intelligence'};
 const CAT_VISIBLES=new Set(['media','email','communication','publishing','ai','iot','apps']);   // sans fiche, seules ces catégories sont proposées
-let FICHES={},MODS=[],GROUPES=[],SESSION_OK=true,BUSY={},SUIVI=false;
+let FICHES={},BESOINS={},MODS=[],GROUPES=[],SESSION_OK=true,BUSY={},SUIVI=false;
 const etat={onglet:'auj',cat:'Tout',q:''};
 const SONDE_MS=Number(Q.get('sonde'))||2500;
 
@@ -153,13 +167,32 @@ function habiller(m){
     h:teinte(m.name),v:m.version,inst:!!m.installed,run:!!m.running,ordre:f.ordre||999,vedette:!!f.vedette,
     visible:!f.cacher&&(!!FICHES[m.name]||CAT_VISIBLES.has(m.category))&&m.installable!==false&&!m.tier_locked,fiche:!!FICHES[m.name]}}
 function teinte(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h}
-const apps=()=>MODS.map(habiller).filter(a=>a.visible).sort((a,b)=>a.ordre-b.ordre||a.n.localeCompare(b.n,'fr'));
-const app=id=>apps().filter(a=>a.id===id)[0];
+const tri=(a,b)=>a.ordre-b.ordre||a.n.localeCompare(b.n,'fr');
+const paquets=()=>MODS.map(habiller).filter(a=>a.visible).sort(tri);
+/* Un besoin (boutique-besoins.json) regroupe plusieurs solutions ; un paquet solution n'est pas listé seul, sauf dans « Installées ». */
+const TRAITS=['','oui','att'];
+const solutionsDe=()=>{const s=new Set();Object.keys(BESOINS).forEach(k=>((BESOINS[k]&&BESOINS[k].solutions)||[]).forEach(x=>{if(x&&x.paquet)s.add(x.paquet)}));return s};
+function solution(x){
+  const m=x.paquet?MODS.filter(y=>y.name===x.paquet)[0]:null;
+  const ok=!!m&&(!!m.installed||m.installable!==false&&!m.tier_locked);const a=ok?habiller(m):null;   // installée : toujours « Ouvrir »
+  return{a:a,n:a?a.n:String(x.nom||court(x.paquet)),qui:String(x.qui||''),texte:String(x.texte||''),present:ok,inst:!!(a&&a.inst),
+    traits:(Array.isArray(x.traits)?x.traits:[]).map(t=>[TRAITS.indexOf(t[0])>=0?t[0]:'',String(t[1]||'')])}}
+function besoins(){
+  return Object.keys(BESOINS).map(k=>{const b=BESOINS[k];if(!b||typeof b!=='object'||!Array.isArray(b.solutions))return null;
+    const sols=b.solutions.map(solution),n=sols.filter(x=>x.present).length;if(!n)return null;const id='besoin:'+k;
+    return{id:id,besoin:true,n:String(b.nom||k),d:String(b.resume||'')+' · '+n+' solution'+(n>1?'s':''),l:String(b.detail||''),c:String(b.categorie||'Divers'),
+      h:teinte(id),ordre:b.ordre||999,inst:sols.some(x=>x.inst),sols:sols,rech:sols.map(x=>x.n).join(' ')}}).filter(Boolean)}
+const apps=()=>{const sol=solutionsDe();return paquets().filter(a=>!sol.has(a.id)).concat(besoins()).sort(tri)};
+const toutes=()=>paquets().concat(besoins());
+const app=id=>toutes().filter(a=>a.id===id)[0];
 
 function icone(a,cls){const e=el('div','ico'+(cls?' '+cls:''),a.n.charAt(0).toUpperCase());
   e.style.background='linear-gradient(145deg,hsl('+a.h+' 80% 58%),hsl('+((a.h+30)%360)+' 75% 38%))';e.setAttribute('aria-hidden','true');return e}
 function bouton(a,cls){
-  const b=el('button','get '+(cls||''));b.type='button';
+  const b=el('button','get '+(cls||''));b.type='button';b.dataset.id=a.id;
+  if(a.besoin){b.textContent=a.inst?'Ouvrir':'Choisir';if(a.inst)b.classList.add('open');
+    b.addEventListener('click',ev=>{ev.stopPropagation();ouvrir(a.id)});return b}
+  if(a.bientot){b.textContent='Bientôt';b.classList.add('bientot');b.disabled=true;return b}
   if(BUSY[a.id]){b.textContent=BUSY[a.id]==='remove'?'Retrait…':'Installation…';b.classList.add('busy');b.disabled=true}
   else if(a.inst){b.textContent='Ouvrir';b.classList.add('open')}
   else b.textContent='Obtenir';
@@ -193,10 +226,10 @@ function ligne(a){const r=el('div','app');r.tabIndex=0;r.setAttribute('role','bu
 function liste(items){const l=el('div','list');
   if(!items.length){l.appendChild(el('div','empty','Aucune app ne correspond.'));return l}
   items.forEach(a=>l.appendChild(ligne(a)));return l}
-const rechercher=items=>{const q=etat.q.trim().toLowerCase();return q?items.filter(a=>(a.n+' '+a.d+' '+a.c).toLowerCase().indexOf(q)>=0):items};
+const rechercher=items=>{const q=etat.q.trim().toLowerCase();return q?items.filter(a=>(a.n+' '+a.d+' '+a.c+' '+(a.rech||'')).toLowerCase().indexOf(q)>=0):items};
 
 function groupesVisibles(){
-  return GROUPES.map(g=>({id:g.id,t:g.label,d:g.description,m:(g.membres||[]).map(x=>app(x.name)).filter(Boolean)})).filter(g=>g.m.length>=2)}
+  return GROUPES.map(g=>({id:g.id,t:g.label,d:g.description,m:(g.membres||[]).map(x=>apps().filter(a=>a.id===x.name)[0]).filter(Boolean)})).filter(g=>g.m.length>=2)}
 function carteGroupe(g){
   const c=el('article','feat');c.appendChild(el('div','eyebrow','Ensemble'));c.appendChild(el('h3',null,g.t));c.appendChild(el('p',null,g.d));
   const s=el('div','stack');g.m.slice(0,6).forEach(a=>s.appendChild(icone(a)));c.appendChild(s);
@@ -223,7 +256,7 @@ function vueApps(m){
   w.appendChild(liste(rechercher(apps().filter(a=>etat.cat==='Tout'||a.c===etat.cat))));m.appendChild(w)}
 function vueFonc(m){m.appendChild(el('h2',null,'Fonctionnalités'));const g=groupesVisibles();
   if(!g.length){m.appendChild(vide());return}const d=el('div','duo');g.forEach(x=>d.appendChild(carteGroupe(x)));m.appendChild(d)}
-function vueInst(m){m.appendChild(el('h2',null,'Installées sur cette box'));m.appendChild(liste(rechercher(apps().filter(a=>a.inst))))}
+function vueInst(m){m.appendChild(el('h2',null,'Installées sur cette box'));m.appendChild(liste(rechercher(paquets().filter(a=>a.inst))))}
 function vide(){return el('div','empty',SESSION_OK?'Le catalogue est vide ou injoignable pour le moment.':'—')}
 
 function rendre(){
@@ -232,17 +265,48 @@ function rendre(){
     b.setAttribute('aria-selected',String(etat.onglet===o[0]));b.addEventListener('click',()=>{etat.onglet=o[0];rendre();scrollTo(0,0)});t.appendChild(b)});
   const m=$('main');m.textContent='';
   ({auj:vueAuj,apps:vueApps,fonc:vueFonc,inst:vueInst})[etat.onglet](m);
-  $('session').hidden=SESSION_OK;$('demo').hidden=!DEMO;annoncer()}
+  $('session').hidden=SESSION_OK;$('demo').hidden=!DEMO;
+  if($('dlg').open&&OUVERTE){const o=app(OUVERTE);if(!o||empreinte(o)!==EMPREINTE)remplir(OUVERTE)}
+  annoncer()}
 
-function ouvrir(id){
-  const a=app(id);if(!a)return;const d=$('dlg');d.textContent='';const s=el('div','sheet');
-  const c=el('button','close','Fermer');c.type='button';c.addEventListener('click',()=>d.close());s.appendChild(c);
-  const h=el('div','head');h.appendChild(icone(a));const t=el('div');t.style.minWidth='0';t.appendChild(el('h3',null,a.n));t.appendChild(el('div','note',a.d));
-  const bt=bouton(a,'big');bt.style.marginTop='12px';t.appendChild(bt);h.appendChild(t);s.appendChild(h);
+/* Le suivi d'une installation relit tout toutes les 2,5 s : la fiche ouverte n'est reconstruite que si ce
+   qu'elle montre a changé (sinon focus et défilement sautent à chaque tour). */
+let OUVERTE=null,EMPREINTE='';
+function empreinte(a){return JSON.stringify(a.besoin?a.sols.map(x=>[x.n,x.present,x.inst,x.a?BUSY[x.a.id]||'':'']):[a.n,a.d,a.inst,a.run,a.v,BUSY[a.id]||''])}
+function carteSolution(x){
+  const r=el('div','sol'+(x.inst?' choisie':''));const ic=x.a||{n:x.n,h:teinte(x.n)};r.appendChild(icone(ic));
+  const t=el('div');t.style.minWidth='0';t.appendChild(el('b',null,x.n));t.appendChild(el('div','qui',x.qui));t.appendChild(el('p',null,x.texte));
+  const tr=el('div','traits');if(x.inst)tr.appendChild(el('span','trait oui','Installée'));
+  x.traits.forEach(k=>tr.appendChild(el('span','trait '+k[0],k[1])));t.appendChild(tr);r.appendChild(t);
+  if(x.present)r.appendChild(bouton(x.a));
+  else{const b=el('button','get bientot','Bientôt');b.type='button';b.disabled=true;r.appendChild(b)}
+  return r}
+function remplir(id){
+  const a=app(id),d=$('dlg');if(!a){d.close();return}
+  const haut=d.scrollTop,f=document.activeElement,cle=f&&f!==d&&d.contains(f)&&f.dataset?f.dataset.id||'':'';
+  EMPREINTE=empreinte(a);d.textContent='';garnir(a,d);
+  d.scrollTop=haut;   // reconstruite : même défilement, focus rendu au même bouton
+  if(cle){const b=[...d.querySelectorAll('[data-id]')].filter(e=>e.dataset.id===cle)[0];if(b&&!b.disabled)b.focus({preventScroll:true})}}
+function garnir(a,d){
+  const s=el('div','sheet');
+  const c=el('button','close','Fermer');c.type='button';c.dataset.id='fermer';c.addEventListener('click',()=>d.close());s.appendChild(c);
+  const h=el('div','head');h.appendChild(icone(a));const t=el('div');t.style.minWidth='0';
+  if(a.besoin)t.appendChild(el('div','besoin','Un besoin, plusieurs solutions'));
+  t.appendChild(el('h3',null,a.n));t.appendChild(el('div','note',a.d));
+  if(!a.besoin){const bt=bouton(a,'big');bt.style.marginTop='12px';t.appendChild(bt)}
+  h.appendChild(t);s.appendChild(h);
+  if(a.besoin){
+    s.appendChild(el('p',null,a.l));
+    const w=el('div','sols');w.appendChild(el('h4',null,'Solutions libres pour ce besoin'));
+    a.sols.forEach(x=>w.appendChild(carteSolution(x)));s.appendChild(w);
+    s.appendChild(el('div','note','Plusieurs solutions peuvent cohabiter. Ouvrir les ports média d\'une visio se confirme ensuite dans son administration.'));
+    d.appendChild(s);return}
   const f=el('div','facts');[[a.c,'Catégorie'],[a.v||'—','Version'],[a.inst?(a.run?'En marche':'Installée'):'Disponible','État']].forEach(x=>{const q=el('div');q.appendChild(el('b',null,x[0]));q.appendChild(el('span',null,x[1]));f.appendChild(q)});s.appendChild(f);
   s.appendChild(el('p',null,a.l));
   s.appendChild(el('div','note',a.inst?'Installée sur cette box.':'L’installation est réservée à l’administrateur de la box. Vos données restent chez vous.'));
-  d.appendChild(s);if(!d.open)d.showModal()}
+  d.appendChild(s)}
+function ouvrir(id){if(!app(id))return;OUVERTE=id;remplir(id);const d=$('dlg');if(!d.open)d.showModal()}
+$('dlg').addEventListener('close',()=>{OUVERTE=null});
 $('dlg').addEventListener('click',function(e){if(e.target===this)this.close()});
 $('q').addEventListener('input',function(){etat.q=this.value;if(etat.q.trim()&&etat.onglet==='auj')etat.onglet='apps';rendre()});
 
@@ -255,12 +319,13 @@ function demoData(){
   GROUPES=[{id:'ciné',label:'Cinéma à la maison',description:'Regarder chez soi.',membres:[{name:'secubox-jellyfin'},{name:'secubox-peertube'}]}]}
 async function charger(){
   if(DEMO){demoData();SESSION_OK=true;rendre();return}
-  const e=await Promise.allSettled([lire('/catalog'),lire('/groupes'),lire('/jobs'),fetch('/appstore/boutique-fiches.json',{cache:'no-store'}).then(r=>r.ok?r.json():{})]);
+  const e=await Promise.allSettled([lire('/catalog'),lire('/groupes'),lire('/jobs'),fetch('boutique-fiches.json',{cache:'no-store'}).then(r=>r.ok?r.json():{}),fetch('boutique-besoins.json',{cache:'no-store'}).then(r=>r.ok?r.json():{})]);
   const val=i=>e[i].status==='fulfilled'?e[i].value:null;
   SESSION_OK=!e.slice(0,3).some(x=>x.status==='rejected'&&(x.reason.statut===401||x.reason.statut===403));
   const c=val(0);if(c&&Array.isArray(c.modules))MODS=c.modules;
   const g=val(1);if(g&&Array.isArray(g.groupes))GROUPES=g.groupes;
   const f=val(3);if(f&&typeof f==='object')FICHES=f;
+  const bs=val(4);BESOINS=bs&&typeof bs==='object'?bs:{};
   const jb=val(2);if(jb&&jb.jobs)Object.keys(jb.jobs).forEach(n=>{if(jb.jobs[n].etat==='en-cours')BUSY[n]=jb.jobs[n].verbe});
   const rien=e.slice(0,2).every(x=>x.status==='rejected')&&SESSION_OK;
   $('erreur').hidden=!rien;if(rien)$('erreur').textContent='Impossible de lire l’App Store (service arrêté ou injoignable).';

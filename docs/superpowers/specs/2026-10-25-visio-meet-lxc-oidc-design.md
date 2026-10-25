@@ -51,7 +51,7 @@ Facultatives : Egress, S3, résumés, téléphonie.
 | `OIDC_USE_PKCE=True`, méthode `S256` (recommandé) | S256 | activer |
 | `OIDC_USE_NONCE=True` (défaut) | nonce repris dans l'id_token | rien à faire |
 | `OIDC_OP_USER_ENDPOINT_FORMAT=AUTO` | `userinfo` répond en JSON | rien à faire |
-| Nom complet : `given_name`, `usual_name` (défaut) | nous publions `name`, `nickname`, `preferred_username` | **régler** `OIDC_USERINFO_FULLNAME_FIELDS=["name"]` et `OIDC_USERINFO_SHORTNAME_FIELD=nickname` |
+| Nom complet : `given_name`, `usual_name` (défaut) | nous publions `name`, `nickname`, `preferred_username` | **régler** `OIDC_USERINFO_FULLNAME_FIELDS=name` et `OIDC_USERINFO_SHORTNAME_FIELD=nickname` |
 | `FRONTEND_IS_SILENT_LOGIN_ENABLED=True` (défaut) : exige `prompt=none` | `prompt=none` renvoie `login_required` quand il faut | compatible |
 | `OIDC_OP_LOGOUT_ENDPOINT` : facultatif | absent chez nous (écart 3) | **laisser vide** : la déconnexion de Meet ne ferme que la session de Meet |
 | `OIDC_FALLBACK_TO_EMAIL_FOR_IDENTIFICATION=False` (défaut) | le `sub` est stable ; le courriel synthétique n'est pas fiable | garder `False` |
@@ -142,7 +142,7 @@ versionné), état, mise à jour (migrations Django, reconstruction du front). M
    puis dans l'environnement du conteneur.
 2. Meet est configuré avec l'émetteur `https://hall.<domaine>/oidc`, ses quatre points d'accès, `RS256`, les portées
    `openid email`, PKCE.
-3. **Réglage des noms** : `OIDC_USERINFO_FULLNAME_FIELDS=["name"]`, `OIDC_USERINFO_SHORTNAME_FIELD=nickname`, `OIDC_USE_PKCE=True`, pas de
+3. **Réglage des noms** : `OIDC_USERINFO_FULLNAME_FIELDS=name`, `OIDC_USERINFO_SHORTNAME_FIELD=nickname`, `OIDC_USE_PKCE=True`, pas de
    `OIDC_OP_LOGOUT_ENDPOINT`, `ALLOW_UNREGISTERED_ROOMS=False`.
 4. **Le conteneur doit joindre l'émetteur sous son nom public** : l'`iss` des jetons est comparé tel quel, donc pas d'adresse
    interne. Résolution du nom public vers la box depuis le conteneur (entrée d'hôtes vers l'adresse du pont LXC, ou DNS de la
@@ -202,7 +202,10 @@ l'essai le demande.
    le fournisseur l'authentifie déjà). Pas de restriction par défaut ; la politique par client (écart 2) reste une option.
    *Précision de mon fait :* Meet lui-même laisse un participant sans compte rejoindre une salle par son lien ; l'OIDC ne sert qu'à
    créer et gérer des salles.
-2. **Ports média :** ouverts **après confirmation dans la Boutique** (jamais par `apt install`, comme Jitsi).
+2. **Ports média :** ouverts **après confirmation** (jamais par `apt install`, comme Jitsi) ; la confirmation vit dans la page
+   d'administration `/meet/`, que la Boutique ouvre par ⚙️. **Redirection via gk2** (décision du 2026-10-25) : une box derrière le
+   relais publie ses ports média (`/public/ports`) et le maître, cible de la DMZ, les DNAT vers elle par `wg-mesh` avec masquerade
+   (retour par le maître). Aucune redirection Freebox pour ces boxes ; #3160 reste utile pour une box exposée en direct.
 3. **Fédération d'identité entre boxes :** voulue ; projet à part, issue #3157. Les écarts du fournisseur sont conçus pour ne pas
    l'empêcher : l'émetteur reste lu en configuration et le `sub` reste l'identifiant stable de la personne.
 

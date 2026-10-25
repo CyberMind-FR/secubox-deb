@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox Meet — le panneau/API non privilégié (utilisateur `secubox`) pilote le
+# LXC Meet via meetctl, SEULE surface privilégiée du module. Seuls les argv
+# EXACTS qu'emploie l'API sont accordés (une commande sudoers avec arguments
+# n'admet que ceux-là) : ni `install`, ni `autostart` (scripts de maintenance,
+# root), ni le renouvellement forcé du secret OIDC (root seulement). Pour `logs`, une
+# ligne par unité de la liste blanche, le nombre de lignes en motif ; meetctl
+# revalide unité et nombre.
+Cmnd_Alias SECUBOX_MEETCTL_API = /usr/sbin/meetctl status, \
+    /usr/sbin/meetctl start, \
+    /usr/sbin/meetctl stop, \
+    /usr/sbin/meetctl restart, \
+    /usr/sbin/meetctl media-expose, \
+    /usr/sbin/meetctl media-expose --apply, \
+    /usr/sbin/meetctl media-expose --revoke, \
+    /usr/sbin/meetctl oidc-verifier, \
+    /usr/sbin/meetctl oidc-enregistrer, \
+    /usr/sbin/meetctl logs postgresql [0-9]*, \
+    /usr/sbin/meetctl logs redis-server [0-9]*, \
+    /usr/sbin/meetctl logs livekit [0-9]*, \
+    /usr/sbin/meetctl logs meet-backend [0-9]*, \
+    /usr/sbin/meetctl logs nginx [0-9]*
+secubox ALL=(root) NOPASSWD: SECUBOX_MEETCTL_API

@@ -78,6 +78,7 @@ HALL = os.path.join(RACINE, "..", "secubox-webos", "www", "hall", "index.html")
 
 # Entrée du Hall → paquet qui la sert, quand le nom ne suffit pas.
 PAQUET_DE = {
+    "visio": "secubox-meet", "boutique": "secubox-appstore",
     "securite": "secubox-waf-ng", "acteurs": "secubox-waf-ng",
     # Cartes-pages du Hall sans paquet du meme nom : Guardian est une page de secubox-ad-guard, le Radar des acteurs est servi par le WAF (actord).
     "guardian": "secubox-ad-guard", "radar": "secubox-waf-ng",
@@ -98,7 +99,8 @@ PAQUET_DE = {
 
 # Cartes dont le paquet ne peut PAS être requis par sbxos : il n'existe qu'en amd64, et un requiert
 # le rendrait non installable sur une box arm64. Il reste suggéré (VoiceStudio vit sur gk3, #1917).
-SUGGERE_SEULEMENT = {"voicestudio": "secubox-voicestudio"}
+# La carte Visio (#3154) n existe que si secubox-meet répond : le conteneur (~2 Go) n est que suggéré.
+SUGGERE_SEULEMENT = {"voicestudio": "secubox-voicestudio", "visio": "secubox-meet"}
 
 
 def _installe_par_sbxos(noeuds):

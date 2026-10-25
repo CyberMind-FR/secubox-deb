@@ -1452,6 +1452,8 @@ const FEATURED = [
   {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in", micro:"/micro.html", h:236},
   // BOUTIQUE (#3150) : la vitrine client de l'App Store sous son propre vhost, encadrée ici ; ⚙️ → l'administration, admin.<domaine>/appstore/.
   {id:"boutique",   label:"Boutique", icon:"🛍️", color:"#1d5fa8", url:"boutique.gk2.secubox.in", admin:"/appstore/", h:236},
+  // VISIO (#3154) : La Suite Meet (visio.<domaine>), carte présente seulement si le module meet répond ; ⚙️ → son administration.
+  {id:"visio", label:"Visio", icon:"🎥", color:"#1d5fa8", url:"visio.gk2.secubox.in", admin:"/meet/", h:236, si_present:"/api/v1/meet/health"},
   // Freebox TV (#1238) : grille des chaînes + lecteur HLS (sas ffmpeg RTSP→HLS
   // on-demand, secubox-freeboxtv). Cardlet locale (pas de vhost). Visible comme
   // les autres cartes média (radio/podcaster) ; la restriction LAN (souveraineté)

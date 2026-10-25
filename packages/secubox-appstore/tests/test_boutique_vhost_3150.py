@@ -26,6 +26,11 @@ def test_api_limitee_aux_lectures_du_catalogue_et_a_l_installation():
     assert "location / { return 404; }" in VHOST          # tout le reste, dont l'administration : introuvable
 
 
+def test_vhost_sert_les_deux_fichiers_de_donnees_a_la_racine():
+    assert "location = /boutique-fiches.json" in VHOST and "location = /boutique-besoins.json" in VHOST
+    assert "try_files /boutique-besoins.json =404" in VHOST
+
+
 def test_encadrable_par_le_hall_de_la_box():
     assert "frame-ancestors 'self' $sbx_boutique_hall $sbx_halls_parc" in VHOST
     assert "hall.$sbx_boutique_dom" in VHOST

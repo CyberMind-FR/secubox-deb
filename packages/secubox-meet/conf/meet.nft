@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# /etc/nftables.d/secubox-meet-dnat.nft
+#
+# DNAT des médias LiveKit (7881/TCP repli, 7882/UDP mux) vers le LXC Meet.
+#
+# UNE SEULE CHAÎNE NAT SUFFIT. Après DNAT en prerouting, la destination n'est
+# plus locale : le paquet emprunte la chaîne FORWARD et non INPUT. La politique
+# `drop` de la chaîne input ne s'y applique jamais, et forward est en
+# `policy accept` — aucune règle d'acceptation à ajouter, donc aucune règle
+# input ici (ce serait inutile, et trompeur pour qui relit ce qui est
+# réellement exposé).
+#
+# `counter` n'est pas décoratif : sans lui, une redirection qui ne mord pas est
+# indiscernable d'une redirection qui mord mais ne traduit pas, et le symptôme
+# est le même (la salle se forme, mais sans image ni son). C'est le moyen le
+# plus simple de vérifier que le paquet arrive bien jusqu'ici.
+#
+# `iifname != "br-lxc"` : l'interface d'entrée n'est volontairement PAS
+# épinglée (le LAN n'arrive pas toujours sur la même interface), sauf pour
+# exclure le bridge LXC. Cela empêche le trafic sortant du conteneur d'être
+# re-DNAT'é sur lui-même.
+#
+# `fib daddr type local` : seuls les paquets destinés à une adresse de CETTE machine sont redirigés. Sans cette garde,
+# le trafic routé (LAN, conteneurs) vers n'importe quelle destination au port 7881 ou 7882 serait détourné vers Meet.
+#
+# Table dédiée plutôt qu'une règle ajoutée à `inet nat` : le fichier peut être
+# rechargé, remplacé ou retiré sans toucher aux règles des autres modules.
+#
+# CE FICHIER N'EST JAMAIS APPLIQUÉ PAR LE POSTINST. Ouvrir des ports entrants
+# vers un service média est une décision d'exposition, pas un effet de bord d'un
+# `apt install`. Pour l'activer : `meetctl media-expose --apply` ; pour la
+# retirer : `meetctl media-expose --revoke`.
+#
+# Côté routeur FAI : soit des redirections 7881/TCP et 7882/UDP vers cette
+# machine, soit une DMZ pointant dessus (voir #3160). La DMZ dispense des
+# redirections mais PAS de cette règle : elle amène le paquet jusqu'à la
+# machine, pas jusqu'au conteneur.
+#
+# Cas du relais par le maître (#3154, Tâche 4b) : une box derrière le relais du
+# maillage publie ces ports, et le maître les redirige (DNAT) vers elle ; la
+# règle ci-dessous s'applique alors sur la box qui héberge le conteneur.
+
+table inet secubox-meet {
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+        iifname != "br-lxc" fib daddr type local tcp dport 7881 counter dnat ip to 10.100.0.195:7881 comment "meet-livekit-tcp"
+        iifname != "br-lxc" fib daddr type local udp dport 7882 counter dnat ip to 10.100.0.195:7882 comment "meet-livekit-udp"
+    }
+}

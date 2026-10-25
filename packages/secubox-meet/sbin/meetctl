@@ -1,0 +1,456 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: meetctl
+# CyberMind — https://cybermind.fr
+#
+# Contrôleur côté hôte de La Suite Meet (visioconférence). Meet tourne
+# NATIVEMENT dans un LXC Debian non privilégié (10.100.0.195 sur br-lxc par
+# défaut) : postgresql + redis + livekit + meet-backend (Django) + un nginx
+# interne. L'hôte ne fait que router (HAProxy -> sbxwaf -> conteneur).
+#
+# Chaque verbe écrit du JSON sur stdout ; l'API hôte lui délègue tout (elle ne
+# pilote jamais systemd ni LXC elle-même). Mêmes conventions que jitsictl.
+# Aucun secret n'est lu ni imprimé ici : « enregistré » se déduit de la seule
+# présence d'un fichier.
+
+set -euo pipefail
+
+readonly MODULE="meet"
+# Tenue en phase avec debian/changelog.
+readonly VERSION="0.1.1"
+readonly CONFIG_FILE="${SECUBOX_MEET_CONFIG:-/etc/secubox/meet.toml}"
+readonly STATE_DIR="${SECUBOX_MEET_STATE_DIR:-/etc/secubox/meet}"
+readonly INSTALL_SCRIPT="${SECUBOX_MEET_INSTALL_SCRIPT:-/usr/lib/secubox/meet/install-lxc.sh}"
+readonly SECRETS_DIR="${SECUBOX_MEET_SECRETS_DIR:-/etc/secubox/secrets/meet}"
+readonly NFT_DST="${SECUBOX_MEET_NFT_DST:-/etc/nftables.d/secubox-meet-dnat.nft}"
+readonly NFT_SRC="${SECUBOX_MEET_NFT_SRC:-/usr/share/doc/secubox-meet/examples/meet.nft}"
+# Ports publiés pour le relais du maître (secubox-relais-maillage les lit via webos /public/ports).
+readonly PORTS_PUBLICS_DIR="${SECUBOX_PORTS_PUBLICS_DIR:-/var/lib/secubox/ports-publics.d}"
+readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
+
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly NC='\033[0m'
+
+log()  { printf '%b[meet]%b %s\n'  "$GREEN"  "$NC" "$*" >&2; }
+warn() { printf '%b[warn]%b %s\n'  "$YELLOW" "$NC" "$*" >&2; }
+err()  { printf '%b[error]%b %s\n' "$RED"    "$NC" "$*" >&2; }
+
+# ── Config TOML (lecture plate de scalaires, comme jitsictl) ─────────────────
+config_get() {
+    local key="$1" default="${2:-}" raw=""
+    if [ -f "$CONFIG_FILE" ]; then
+        raw=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null | head -1 || true)
+    fi
+    if [ -z "$raw" ]; then echo "$default"; return; fi
+    local val
+    val=$(echo "$raw" | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' \
+        | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | tr -d '"' | tr -d "'")
+    [ -z "$val" ] && echo "$default" || echo "$val"
+}
+
+LXC_NAME="$(config_get lxc_name meet)"
+LXC_IP="$(config_get lxc_ip 10.100.0.195)"
+# Une seule résolution du domaine : variable d'environnement (posée par
+# install-lxc.sh), puis TOML, puis secubox-domaine.
+resolve_domain() {
+    if [ -n "${SECUBOX_MEET_DOMAIN:-}" ]; then printf '%s' "$SECUBOX_MEET_DOMAIN"; return; fi
+    config_get domain "$(secubox-domaine visio 2>/dev/null || true)"
+}
+DOMAIN="$(resolve_domain)"
+LIVEKIT_DOMAIN="$(config_get livekit_domain "$(secubox-domaine livekit 2>/dev/null || true)")"
+TCP_PORT="$(config_get tcp_port 7881)"
+UDP_PORT="$(config_get udp_port 7882)"
+WEB_PORT="$(config_get web_port 80)"
+
+# Unités systemd internes connues (liste blanche pour `logs`).
+readonly UNITS="postgresql redis-server livekit meet-backend nginx"
+
+json_escape() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+lxc_state() {
+    lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
+        | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }' || true
+}
+
+lxc_exists() { [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; }
+
+# État d'une unité systemd À L'INTÉRIEUR du conteneur : interroger l'hôte
+# rapporterait « inactive » pour tout, ce qui se lit comme une panne alors que
+# c'est une erreur de cible.
+unit_state() {
+    local unit="$1"
+    [ "$(lxc_state)" = "running" ] || { printf 'container-down'; return; }
+    # `systemctl is-active` sort en 3 pour inactive/failed : on garde la sortie
+    # malgré le code (pas de pipeline : pipefail y ajouterait « unknown »).
+    local out
+    out=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        systemctl is-active "$unit" 2>/dev/null || true)
+    out="${out%%$'\n'*}"
+    printf '%s' "${out:-unknown}"
+}
+
+# PostgreSQL : l'unité « postgresql » de Debian est un parapluie (oneshot,
+# « active » même cluster tombé) : on interroge le serveur lui-même.
+pg_state() {
+    [ "$(lxc_state)" = "running" ] || { printf 'container-down'; return; }
+    if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- pg_isready -q >/dev/null 2>&1; then
+        printf 'active'
+    else
+        printf 'failed'
+    fi
+}
+
+# ── status ───────────────────────────────────────────────────────────────────
+#
+# Les cinq services sont rapportés SÉPARÉMENT : base morte = rien ne s'ouvre ;
+# livekit mort = on se connecte et la salle reste muette ; meet-backend mort =
+# la page charge mais l'API échoue. Un « ok/ko » unique perdrait ce signal.
+cmd_status() {
+    local state; state=$(lxc_state)
+    local pg rd lk be web
+    pg=$(pg_state)
+    rd=$(unit_state redis-server)
+    lk=$(unit_state livekit)
+    be=$(unit_state meet-backend)
+    web=$(unit_state nginx)
+
+    local reachable=false
+    if [ "$state" = "running" ] && curl -fsS --max-time 5 -o /dev/null \
+            "http://${LXC_IP}:${WEB_PORT}/" 2>/dev/null; then
+        reachable=true
+    fi
+
+    cat <<JSON
+{
+  "module": "$MODULE",
+  "version": "$VERSION",
+  "installed": $(lxc_exists && echo true || echo false),
+  "container": "$(json_escape "$state")",
+  "domain": "$(json_escape "$DOMAIN")",
+  "livekit_domain": "$(json_escape "$LIVEKIT_DOMAIN")",
+  "lxc_ip": "$(json_escape "$LXC_IP")",
+  "web_reachable": $reachable,
+  "services": {
+    "postgresql": "$(json_escape "$pg")",
+    "redis": "$(json_escape "$rd")",
+    "livekit": "$(json_escape "$lk")",
+    "meet-backend": "$(json_escape "$be")",
+    "nginx": "$(json_escape "$web")"
+  },
+  "media": {
+    "tcp_port": $TCP_PORT,
+    "udp_port": $UDP_PORT,
+    "exposed": $([ -f "$NFT_DST" ] && echo true || echo false)
+  },
+  "oidc": {
+    "client_registered": $([ -s "$SECRETS_DIR/oidc-client-secret" ] && echo true || echo false)
+  }
+}
+JSON
+}
+
+cmd_start() {
+    lxc_exists || { echo '{"success": false, "error": "not installed"}'; return 1; }
+    if [ "$(lxc_state)" = "running" ]; then
+        echo '{"success": true, "already": true}'
+        return 0
+    fi
+    lxc-start -n "$LXC_NAME" -P "$LXC_PATH"
+    echo '{"success": true}'
+}
+
+cmd_stop() {
+    if [ "$(lxc_state)" != "running" ]; then
+        echo '{"success": true, "already": true}'
+        return 0
+    fi
+    lxc-stop -n "$LXC_NAME" -P "$LXC_PATH"
+    echo '{"success": true}'
+}
+
+cmd_restart() {
+    cmd_stop >/dev/null 2>&1 || true
+    sleep 2
+    cmd_start
+}
+
+cmd_logs() {
+    local unit="${1:-meet-backend}" lines="${2:-50}" u ok=false
+    for u in $UNITS; do [ "$u" = "$unit" ] && ok=true; done
+    if [ "$ok" != true ]; then
+        echo '{"success": false, "error": "unknown unit"}'
+        return 2
+    fi
+    case "$lines" in ''|*[!0-9]*) lines=50 ;; esac
+    [ "$(lxc_state)" = "running" ] || { echo '{"success": false, "error": "container not running"}'; return 1; }
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        journalctl -u "$unit" -n "$lines" --no-pager 2>/dev/null || true
+}
+
+# Provisionne (ou reprend) le conteneur. Le script est idempotent ; son journal
+# va sur stderr pour que stdout reste un JSON unique.
+cmd_install() {
+    [ -f "$STATE_DIR/.lxc-provisioned" ] && log "déjà provisionné : reprise idempotente"
+    if "$INSTALL_SCRIPT" >&2; then
+        echo '{"success": true}'
+    else
+        echo '{"success": false}'
+        return 1
+    fi
+}
+
+# ── OIDC ─────────────────────────────────────────────────────────────────────
+#
+# Meet est un client du fournisseur OIDC de la box (secubox-oidcctl). Le secret
+# n'est imprimé qu'UNE fois par client-add : on le capte et on l'écrit tout de
+# suite en 0600, sans jamais le répéter (ni sur stdout, ni en argv, ni au journal).
+readonly OIDC_SECRET_FILE="$SECRETS_DIR/oidc-client-secret"
+# Empreinte (sha256) du secret que le conteneur a reçu, notée par install-lxc.sh
+# après un rendu réussi : jamais le secret lui-même.
+readonly OIDC_APPLIQUE_FILE="$SECRETS_DIR/.oidc-applique"
+
+# Émetteur attendu : le Hall de la box (même règle que install-lxc.sh).
+oidc_issuer_attendu() { printf 'https://hall.%s/oidc' "${DOMAIN#*.}"; }
+oidc_redirect_attendu() { printf 'https://%s/api/v1.0/callback/' "$DOMAIN"; }
+
+# Vrai si le fournisseur connaît le client « meet » avec EXACTEMENT l'adresse
+# de rappel attendue (client-ls ne montre jamais de secret).
+oidc_client_chez_le_fournisseur() {
+    local liste
+    liste=$(secubox-oidcctl client-ls 2>/dev/null) || return 1
+    printf '%s\n' "$liste" | awk -F'\t' -v r="$(oidc_redirect_attendu)" '
+        $1 == "meet" { n = split($4, a, " "); for (i = 1; i <= n; i++) if (a[i] == r) ok = 1 }
+        END { exit !ok }'
+}
+
+# Même calcul qu'install-lxc.sh (printf du contenu sans saut de ligne final) ;
+# le secret ne passe ni en argv ni sur stdout.
+oidc_empreinte() { printf '%s' "$(cat "$OIDC_SECRET_FILE")" | sha256sum | cut -d' ' -f1; }
+oidc_secret_applique() {
+    [ -s "$OIDC_APPLIQUE_FILE" ] && [ "$(cat "$OIDC_APPLIQUE_FILE")" = "$(oidc_empreinte)" ]
+}
+
+# Porte le secret jusqu'au conteneur : nouveau rendu SANS construction, puis
+# relance des seuls services dont la configuration a changé (install-lxc.sh,
+# journal sur stderr). Résultat dans APPLIQUE (true|false) et HINT.
+oidc_appliquer() {
+    APPLIQUE=false
+    HINT=""
+    if [ "${SECUBOX_MEET_APPLIQUER:-1}" = 0 ]; then
+        HINT="appelé par le provisionnement, qui rend et applique lui-même le secret"
+    elif ! lxc_exists || [ ! -f "$STATE_DIR/.lxc-provisioned" ]; then
+        HINT="provisionnement non terminé : il portera ce secret au conteneur"
+    elif [ "$(lxc_state)" != "running" ]; then
+        HINT="conteneur à l'arrêt : démarrez-le puis relancez l'enregistrement pour appliquer le secret"
+    elif SECUBOX_MEET_RENDRE_SEULEMENT=1 "$INSTALL_SCRIPT" >&2; then
+        APPLIQUE=true
+    else
+        HINT="nouveau rendu en échec, secret pas encore appliqué : relancez l'enregistrement, ou en root « systemctl start secubox-meet-rerendu » puis « journalctl -u secubox-meet-rerendu »"
+    fi
+}
+
+cmd_oidc_enregistrer() {
+    local renouveler=false
+    [ "${1:-}" = "--renouveler" ] && renouveler=true
+    if [ -z "$DOMAIN" ]; then
+        echo '{"success": false, "error": "domaine de la box inconnu"}'
+        return 1
+    fi
+    if [ -s "$OIDC_SECRET_FILE" ] && [ "$renouveler" = false ] && oidc_client_chez_le_fournisseur; then
+        if oidc_secret_applique; then
+            echo '{"success": true, "already": true}'
+            return 0
+        fi
+        # Enregistré mais jamais parvenu au conteneur (arrêté, rendu en échec) : on réessaie.
+        oidc_appliquer
+        printf '{"success": true, "already": true, "applique": %s, "hint": "%s"}\n' "$APPLIQUE" "$(json_escape "$HINT")"
+        return 0
+    fi
+    # Adresse de rappel enregistrée EXACTEMENT, barre finale comprise.
+    local redirect secret tmp
+    redirect=$(oidc_redirect_attendu)
+    if ! secret=$(secubox-oidcctl client-add meet --name Visio --redirect "$redirect" 2>/dev/null) \
+            || [ -z "$secret" ]; then
+        echo '{"success": false, "error": "secubox-oidcctl client-add a échoué"}'
+        return 1
+    fi
+    install -d -m 0700 "$SECRETS_DIR"
+    tmp=$(umask 077; mktemp "$SECRETS_DIR/.oidc-client-secret.XXXXXX")
+    printf '%s\n' "$secret" > "$tmp"
+    chmod 0600 "$tmp"
+    mv -f "$tmp" "$OIDC_SECRET_FILE"
+    secret=""
+    oidc_appliquer
+    printf '{"success": true, "client_id": "meet", "redirect_uri": "%s", "applique": %s, "hint": "%s"}\n' \
+        "$(json_escape "$redirect")" "$APPLIQUE" "$(json_escape "$HINT")"
+}
+
+# Interroge le fournisseur DEPUIS le conteneur : c'est son chemin réseau (DNS,
+# NAT en épingle) qui compte, pas celui de l'hôte. Les URL viennent de
+# l'émetteur ATTENDU, jamais d'un champ du document distant (jwks_uri ignoré :
+# Meet lit ${émetteur}/jwks), et curl est limité à https.
+cmd_oidc_verifier() {
+    local attendu; attendu=$(oidc_issuer_attendu)
+    local issuer="$attendu" discovery=false jwks=false keys=0 hint="" doc="" body="" lu=""
+    local registered=false
+    if [ -s "$OIDC_SECRET_FILE" ] && oidc_client_chez_le_fournisseur; then registered=true; fi
+    local cible="le conteneur ne joint pas hall.${DOMAIN#*.} : vérifier la résolution DNS/NAT en épingle ; en dernier recours, une entrée /etc/hosts dans le conteneur vers l'adresse LAN du HAProxy qui sert ce nom"
+
+    if [ "$(lxc_state)" != "running" ]; then
+        hint="conteneur à l'arrêt : le démarrer (meetctl start) avant de vérifier"
+    elif doc=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+            curl -fsS --max-time 10 --proto =https -- "${attendu}/.well-known/openid-configuration" 2>/dev/null) \
+            && lu=$(printf '%s' "$doc" | python3 -c '
+import json, sys
+print(json.load(sys.stdin).get("issuer", ""))' 2>/dev/null); then
+        if [ "$lu" != "$attendu" ]; then
+            hint="issuer du document de découverte ($lu) différent de l'émetteur attendu ($attendu) : vérifier le domaine de la box"
+        else
+            discovery=true
+            if body=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+                    curl -fsS --max-time 10 --proto =https -- "${attendu}/jwks" 2>/dev/null) \
+                    && keys=$(printf '%s' "$body" | python3 -c '
+import json, sys
+print(len(json.load(sys.stdin)["keys"]))' 2>/dev/null); then
+                [ "$keys" -gt 0 ] && jwks=true
+            else
+                keys=0
+            fi
+            [ "$jwks" = true ] || hint="découverte lue mais clés JWKS illisibles ou absentes (${attendu}/jwks) : ${cible}"
+        fi
+    else
+        hint="$cible"
+    fi
+
+    printf '{"issuer": "%s", "discovery": %s, "jwks": %s, "keys": %s, "redirect_registered": %s, "hint": "%s"}\n' \
+        "$(json_escape "$issuer")" "$discovery" "$jwks" "$keys" "$registered" "$(json_escape "$hint")"
+    [ "$discovery" = true ]
+}
+
+# Publie (ou retire) les ports média : le maître les relaie par wg-mesh vers cette box.
+ports_publier() {
+    local tmp="$PORTS_PUBLICS_DIR/.meet.json.tmp"
+    # Dossier commun à tous les modules qui publient : créé s'il manque, jamais réimposé.
+    [ -d "$PORTS_PUBLICS_DIR" ] \
+        || { install -d -m 0755 -o root -g secubox "$PORTS_PUBLICS_DIR" 2>/dev/null || install -d -m 0755 "$PORTS_PUBLICS_DIR"; } \
+        || return 1
+    printf '{"module":"meet","ports":[{"proto":"tcp","port":%s},{"proto":"udp","port":%s}]}\n' "$TCP_PORT" "$UDP_PORT" > "$tmp" || return 1
+    chmod 0644 "$tmp" && mv -f "$tmp" "$PORTS_PUBLICS_DIR/meet.json"
+}
+ports_depublier() { rm -f "$PORTS_PUBLICS_DIR/meet.json"; }
+
+# ── Exposition des médias (décision de l'administrateur, jamais au postinst) ─
+cmd_media_expose() {
+    case "${1:-}" in
+        --apply)
+            if [ ! -f "$NFT_SRC" ]; then
+                printf '{"success": false, "error": "règle absente: %s"}\n' "$(json_escape "$NFT_SRC")"
+                return 1
+            fi
+            install -d -m 0755 "$(dirname "$NFT_DST")"
+            install -m 0644 "$NFT_SRC" "$NFT_DST"
+            # La table est SUPPRIMÉE avant rechargement : `nft -f` ajoute les
+            # règles, il ne remplace pas la table ; sans cela un second --apply
+            # empile des DNAT identiques et rend le compteur illisible.
+            nft delete table inet secubox-meet 2>/dev/null || true
+            if nft -f "$NFT_DST" 2>/dev/null; then
+                if ! ports_publier; then
+                    nft delete table inet secubox-meet 2>/dev/null || true
+                    rm -f "$NFT_DST"
+                    echo '{"success": false, "error": "publication des ports pour le relais impossible — rien appliqué"}'
+                    return 1
+                fi
+                printf '{"success": true, "applied": "%s", "tcp_port": %s, "udp_port": %s}\n' \
+                    "$(json_escape "$NFT_DST")" "$TCP_PORT" "$UDP_PORT"
+            else
+                rm -f "$NFT_DST"
+                echo '{"success": false, "error": "nft a refusé la règle — rien appliqué"}'
+                return 1
+            fi
+            ;;
+        --revoke)
+            nft delete table inet secubox-meet 2>/dev/null || true
+            rm -f "$NFT_DST"
+            ports_depublier
+            echo '{"success": true, "revoked": true}'
+            ;;
+        *)
+            local installed=false live=false
+            [ -f "$NFT_DST" ] && installed=true
+            nft list table inet secubox-meet >/dev/null 2>&1 && live=true
+            printf '{"file_installed": %s, "rule_live": %s, "file": "%s", "tcp_port": %s, "udp_port": %s, "hint": "meetctl media-expose --apply | --revoke"}\n' \
+                "$installed" "$live" "$(json_escape "$NFT_DST")" "$TCP_PORT" "$UDP_PORT"
+            ;;
+    esac
+}
+
+# ── Démarrage automatique (scripts de maintenance, root) ─────────────────────
+#
+# Bascule la SEULE clé lxc.start.auto de la configuration du conteneur : le
+# prerm la coupe au retrait du paquet (sinon le conteneur revient au démarrage
+# de la box), le postinst la réarme à la réinstallation. Le reste du fichier,
+# commentaires compris, est intact.
+cmd_autostart() {
+    local val cfg="$LXC_PATH/$LXC_NAME/config"
+    case "${1:-}" in
+        on)  val=1 ;;
+        off) val=0 ;;
+        *)   echo '{"success": false, "error": "autostart on|off"}'; return 2 ;;
+    esac
+    [ -f "$cfg" ] || { echo '{"success": false, "error": "not installed"}'; return 1; }
+    if grep -qE '^[[:space:]]*lxc\.start\.auto[[:space:]]*=' "$cfg"; then
+        sed -i -E "s/^([[:space:]]*lxc\.start\.auto[[:space:]]*=[[:space:]]*).*$/\1${val}/" "$cfg"
+    else
+        printf 'lxc.start.auto = %s\n' "$val" >> "$cfg"
+    fi
+    printf '{"success": true, "autostart": %s}\n' "$([ "$val" = 1 ] && echo true || echo false)"
+}
+
+cmd_help() {
+    cat <<EOF
+meetctl v$VERSION — La Suite Meet (LXC-native)
+
+  status                    État conteneur + les 5 services, séparément (JSON)
+  install                   Provisionne le conteneur (idempotent, long)
+  start | stop | restart    Cycle de vie du conteneur
+  oidc-enregistrer [--renouveler]
+                            Enregistre le client OIDC « meet » (secret 0600, jamais imprimé)
+                            et porte un nouveau secret au conteneur s'il tourne
+  oidc-verifier             Lit la découverte OIDC depuis le conteneur (JSON, code 1 si KO)
+  media-expose [--apply|--revoke]
+                            Sans argument : état. --apply pose le DNAT 7881/TCP 7882/UDP et publie les ports pour le relais du maître ; --revoke retire les deux
+  logs <unité> [lignes]     Journal d'un service interne
+                            (postgresql|redis-server|livekit|meet-backend|nginx)
+  autostart on|off          Démarrage du conteneur avec la box (lxc.start.auto)
+  help                      Cette aide
+EOF
+}
+
+case "${1:-help}" in
+    status)           cmd_status ;;
+    install)          cmd_install ;;
+    start)            cmd_start ;;
+    stop)             cmd_stop ;;
+    restart)          cmd_restart ;;
+    oidc-enregistrer) cmd_oidc_enregistrer "${2:-}" ;;
+    oidc-verifier)    cmd_oidc_verifier ;;
+    media-expose)     cmd_media_expose "${2:-}" ;;
+    logs)             cmd_logs "${2:-}" "${3:-}" ;;
+    autostart)        cmd_autostart "${2:-}" ;;
+    help|--help|-h)   cmd_help ;;
+    *)                cmd_help; exit 1 ;;
+esac

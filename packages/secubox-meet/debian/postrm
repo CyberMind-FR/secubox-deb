@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+case "$1" in
+  remove|purge)
+    rm -f /etc/nginx/sites-enabled/visio.conf /etc/nginx/sites-enabled/livekit.conf
+    if command -v nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx 2>/dev/null; then
+      if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+    fi
+    ;;
+esac
+case "$1" in
+  purge)
+    rm -rf /etc/secubox/meet /etc/secubox/secrets/meet
+    rm -f /var/lib/secubox/ports-publics.d/meet.json
+    secubox-oidcctl client-rm meet || true
+    # Le conteneur et ses données (salles) ne sont JAMAIS supprimés ici.
+    ;;
+esac
+#DEBHELPER#
+exit 0
