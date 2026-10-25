@@ -24,6 +24,9 @@
 # exclure le bridge LXC. Cela empêche le trafic sortant du conteneur d'être
 # re-DNAT'é sur lui-même.
 #
+# `fib daddr type local` : seuls les paquets destinés à une adresse de CETTE machine sont redirigés. Sans cette garde,
+# le trafic routé (LAN, conteneurs) vers n'importe quelle destination au port 7881 ou 7882 serait détourné vers Meet.
+#
 # Table dédiée plutôt qu'une règle ajoutée à `inet nat` : le fichier peut être
 # rechargé, remplacé ou retiré sans toucher aux règles des autres modules.
 #
@@ -44,7 +47,7 @@
 table inet secubox-meet {
     chain prerouting {
         type nat hook prerouting priority dstnat; policy accept;
-        iifname != "br-lxc" tcp dport 7881 counter dnat ip to 10.100.0.195:7881 comment "meet-livekit-tcp"
-        iifname != "br-lxc" udp dport 7882 counter dnat ip to 10.100.0.195:7882 comment "meet-livekit-udp"
+        iifname != "br-lxc" fib daddr type local tcp dport 7881 counter dnat ip to 10.100.0.195:7881 comment "meet-livekit-tcp"
+        iifname != "br-lxc" fib daddr type local udp dport 7882 counter dnat ip to 10.100.0.195:7882 comment "meet-livekit-udp"
     }
 }

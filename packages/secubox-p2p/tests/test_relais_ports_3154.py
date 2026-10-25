@@ -68,8 +68,8 @@ def test_port_tenu_par_autre_refuse_le_second_declarant(tmp_path):
 def test_fichier_nft_regenere_dnat_masquerade_forward(tmp_path):
     t = _rendu(tmp_path, {"udp/7882": {"ip": "10.10.0.8", "module": "meet"}, "tcp/7881": {"ip": "10.10.0.8", "module": "meet"}})
     assert "table inet secubox-relais-ports {" in t
-    assert 'iifname != "wg-mesh" udp dport 7882 counter dnat ip to 10.10.0.8:7882 comment "relais-ports meet"' in t
-    assert 'iifname != "wg-mesh" tcp dport 7881 counter dnat ip to 10.10.0.8:7881 comment "relais-ports meet"' in t
+    assert 'iifname != "wg-mesh" fib daddr type local udp dport 7882 counter dnat ip to 10.10.0.8:7882 comment "relais-ports meet"' in t
+    assert 'iifname != "wg-mesh" fib daddr type local tcp dport 7881 counter dnat ip to 10.10.0.8:7881 comment "relais-ports meet"' in t
     assert 'oifname "wg-mesh" ip daddr 10.10.0.8 udp dport 7882 counter masquerade' in t
     assert 'oifname "wg-mesh" ip daddr 10.10.0.8 udp dport 7882 accept' in t
     assert "type nat hook prerouting priority dstnat; policy accept;" in t
@@ -89,12 +89,12 @@ def test_rendu_ignore_le_local_et_les_entrees_invalides(tmp_path):
 def test_synchroniser_appelle_le_relais_des_ports():
     s = TEXTE[TEXTE.index("cmd_synchroniser() {"):TEXTE.index("cmd_retirer() {")]
     assert "public/ports" in s and "port_tenu_par_autre" in s and "relais_port_refuse" in s
-    assert "relais_port_retire" in s and "ports_locaux" in s and "ports_nft_appliquer" in s
+    assert "relais_port_retire" in s and "ports_locaux" in s and "ports_nettoyer_disparus" in s
 
 
 def test_jamais_nft_f_sur_nftables_conf_pour_les_ports():
     f = TEXTE[TEXTE.index("ports_nft_appliquer() {"):TEXTE.index("port_cle_valide()")]
-    assert "nft delete table inet secubox-relais-ports" in f and 'nft -f "$RELAIS_PORTS_NFT"' in f
+    assert "delete table inet secubox-relais-ports" in f and 'nft -f "$RELAIS_PORTS_NFT"' in f and "nft -c -f" in f
     assert "NFT_CONF" not in f
 
 
@@ -122,7 +122,8 @@ def test_relayer_puis_retirer_regenere_le_fichier_et_l_applique(tmp_path):
     assert json.loads(etat.read_text()) == {"udp/7882": {"ip": "10.10.0.8", "module": "meet"}}
     assert "dnat ip to 10.10.0.8:7882" in nft.read_text()
     appels = (tmp_path / "nft-appels").read_text().splitlines()
-    assert appels == ["delete table inet secubox-relais-ports", f"-f {nft}"]        # table supprimée avant, fichier rechargé seul
+    assert appels == [f"-c -f {nft}.sbxtmp", f"-f {nft}"]        # validé avant remplacement, puis une seule transaction
+    assert "delete table inet secubox-relais-ports" in nft.read_text()
     # un second pair ne peut pas prendre le même port
     r = _lance(tmp_path, env, "relayer-port", "udp/7882", "10.10.0.9", "meet")
     assert r.returncode == 1 and json.loads(etat.read_text())["udp/7882"]["ip"] == "10.10.0.8"
@@ -133,3 +134,119 @@ def test_relayer_puis_retirer_regenere_le_fichier_et_l_applique(tmp_path):
     assert _lance(tmp_path, env, "retirer-port", "udp/7882").returncode == 0
     assert json.loads(etat.read_text()) == {} and not nft.exists()
     assert (tmp_path / "nft-appels").read_text().splitlines()[-1] == "delete table inet secubox-relais-ports"
+
+
+# ── relecture de sécurité ────────────────────────────────────────────────────
+def test_regle_dnat_limitee_aux_adresses_locales(tmp_path):
+    t = _rendu(tmp_path, {"udp/7882": {"ip": "10.10.0.8", "module": "meet"}})
+    assert 'iifname != "wg-mesh" fib daddr type local udp dport 7882 counter dnat ip to 10.10.0.8:7882' in t
+
+
+def test_ports_reserves_refuses_partout(tmp_path):
+    reserves = (22, 53, 80, 443, 7331, 8085, 9080, 51820, 51822)
+    corps = json.dumps({"ports": [{"proto": p, "port": n, "module": "x"} for n in reserves for p in ("tcp", "udp")]})
+    assert _execute(tmp_path, "ports_du_pair", entree=corps).stdout.strip() == ""
+    assert len(_execute(tmp_path, "ports_du_pair", "--tous", entree=corps).stdout.split("\n")) >= 9    # l'appelant les audite
+    etat = {f"{p}/{n}": {"ip": "10.10.0.8", "module": "x"} for n in reserves if n >= 1024 for p in ("tcp", "udp")}
+    assert _rendu(tmp_path, etat) == ""
+    env = _banc(tmp_path)
+    for n in reserves:
+        assert _lance(tmp_path, env, "relayer-port", f"udp/{n}", "10.10.0.8", "meet").returncode == 1, n
+
+
+def test_zero_en_tete_refuse(tmp_path):
+    assert _rendu(tmp_path, {"udp/07882": {"ip": "10.10.0.8", "module": "meet"}}) == ""
+    assert _lance(tmp_path, _banc(tmp_path), "relayer-port", "udp/07882", "10.10.0.8", "meet").returncode == 1
+
+
+def test_ports_disparus_ip_absente_du_maillage(tmp_path):
+    etat = {"tcp/7881": {"ip": "10.10.0.8", "module": "meet"}, "udp/7882": {"ip": "10.10.0.9", "module": "meet"},
+            "tcp/8000": {"ip": "127.0.0.1", "module": "local"}}
+    f = tmp_path / "etat.json"
+    f.write_text(json.dumps(etat))
+    r = _execute(tmp_path, "ports_disparus", f, "10.10.0.8")
+    assert r.stdout.splitlines() == ["udp/7882 10.10.0.9"]
+    assert _execute(tmp_path, "ports_disparus", f).stdout.splitlines() == ["tcp/7881 10.10.0.8", "udp/7882 10.10.0.9"]
+
+
+def test_fichier_invalide_refuse_ancien_fichier_conserve(tmp_path):
+    env = _banc(tmp_path)
+    assert _lance(tmp_path, env, "relayer-port", "udp/7882", "10.10.0.8", "meet").returncode == 0
+    nft = tmp_path / "nftables.d" / "secubox-relais-ports.nft"
+    avant = nft.read_text()
+    assert avant.splitlines()[1:3] == ["table inet secubox-relais-ports {}", "delete table inet secubox-relais-ports"]
+    (tmp_path / "bin" / "nft").write_text(f'#!/bin/sh\necho "$*" >> "{tmp_path}/nft-appels"\n[ "$1" = "-c" ] && exit 1\nexit 0\n')
+    (tmp_path / "nft-appels").unlink()
+    env["SECUBOX_RELAIS_AUDIT"] = str(tmp_path / "audit.log")
+    r = _lance(tmp_path, env, "relayer-port", "tcp/7881", "10.10.0.8", "meet")
+    assert r.returncode != 0
+    assert nft.read_text() == avant and not (tmp_path / "nftables.d" / "secubox-relais-ports.nft.sbxtmp").exists()
+    assert not any(a.startswith("delete") or a.startswith("-f") for a in (tmp_path / "nft-appels").read_text().splitlines())
+    assert "relais_ports_nft_refuse" in (tmp_path / "audit.log").read_text()
+
+
+def _banc_sync(tmp_path, ports_pair, ecoute="", wg_pairs=("10.10.0.8",), etat=None):
+    env = _banc(tmp_path)
+    b = tmp_path / "bin"
+    mesh = "\n".join(f"CLE{i}= {ip}/32" for i, ip in enumerate(wg_pairs))
+    (b / "wg").write_text(f"#!/bin/sh\ncat <<'EOT'\n{mesh}\nEOT\n")
+    (b / "ss").write_text(f"#!/bin/sh\ncat <<'EOT'\n{ecoute}\nEOT\n")
+    (b / "curl").write_text("""#!/bin/bash
+sortie=; url=
+while [ $# -gt 0 ]; do case "$1" in -o) sortie=$2; shift 2;; -w|-H|--max-time) shift 2;; -s) shift;; *) url=$1; shift;; esac; done
+case "$url" in
+  */public/ports) printf '%s' "$FAKE_PORTS" > "$sortie"; printf 200 ;;
+  *) printf '{}' ;;
+esac
+""")
+    pkg = tmp_path / "py" / "secubox_core"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "auth.py").write_text("def domaine_box():\n    return 'relais.exemple.test'\n")
+    (tmp_path / "routes.json").write_text("{}")
+    for f in b.iterdir():
+        f.chmod(0o755)
+    if etat is not None:
+        (tmp_path / "etat").mkdir()
+        (tmp_path / "etat" / "relais-ports.json").write_text(json.dumps(etat))
+    env.update(PYTHONPATH=str(tmp_path / "py"), SECUBOX_RELAIS_ROUTES=str(tmp_path / "routes.json"),
+               SECUBOX_RELAIS_AUDIT=str(tmp_path / "audit.log"), SECUBOX_PORTS_PUBLICS_DIR=str(tmp_path / "locaux"),
+               FAKE_PORTS=json.dumps({"domaine": "x.test", "ports": ports_pair}))
+    return env
+
+
+def test_synchroniser_refuse_port_reserve_et_port_en_ecoute_et_les_audite(tmp_path):
+    ports = [{"proto": "udp", "port": 51822, "module": "meet"}, {"proto": "tcp", "port": 5201, "module": "iperf"},
+             {"proto": "tcp", "port": 7881, "module": "meet"}]
+    env = _banc_sync(tmp_path, ports, ecoute="tcp LISTEN 0 128 0.0.0.0:5201 0.0.0.0:*")
+    r = _lance(tmp_path, env, "synchroniser")
+    assert r.returncode == 0, r.stdout + r.stderr
+    etat = json.loads((tmp_path / "etat" / "relais-ports.json").read_text())
+    assert list(etat) == ["tcp/7881"]
+    audit = (tmp_path / "audit.log").read_text()
+    assert '"evenement":"relais_port_refuse","nom":"udp/51822","pair":"10.10.0.8"' in audit
+    assert '"evenement":"relais_port_refuse","nom":"tcp/5201","pair":"10.10.0.8"' in audit
+    assert "fib daddr type local tcp dport 7881" in (tmp_path / "nftables.d" / "secubox-relais-ports.nft").read_text()
+
+
+def test_synchroniser_retire_les_ports_d_un_pair_disparu_et_d_un_pair_qui_ne_les_publie_plus(tmp_path):
+    etat = {"tcp/7881": {"ip": "10.10.0.8", "module": "meet"}, "udp/7882": {"ip": "10.10.0.9", "module": "meet"},
+            "tcp/8000": {"ip": "127.0.0.1", "module": "local"}}
+    env = _banc_sync(tmp_path, [], etat=etat)       # 10.10.0.9 n'est plus au maillage ; 10.10.0.8 répond sans port
+    r = _lance(tmp_path, env, "synchroniser")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert list(json.loads((tmp_path / "etat" / "relais-ports.json").read_text())) == []
+    audit = (tmp_path / "audit.log").read_text()
+    assert '"nom":"udp/7882","pair":"10.10.0.9"' in audit and '"nom":"tcp/7881","pair":"10.10.0.8"' in audit
+    assert not (tmp_path / "nftables.d" / "secubox-relais-ports.nft").exists()
+
+
+def test_synchroniser_sans_aucun_pair_nettoie_aussi(tmp_path):
+    etat = {"tcp/7881": {"ip": "10.10.0.8", "module": "meet"}}
+    env = _banc_sync(tmp_path, [], wg_pairs=(), etat=etat)
+    nft = tmp_path / "nftables.d"
+    nft.mkdir()
+    (nft / "secubox-relais-ports.nft").write_text("ancien")
+    r = _lance(tmp_path, env, "synchroniser")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert json.loads((tmp_path / "etat" / "relais-ports.json").read_text()) == {} and not (nft / "secubox-relais-ports.nft").exists()

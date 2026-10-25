@@ -37,7 +37,7 @@
 set -euo pipefail
 readonly MODULE="relais-maillage"
 
-ROUTES=/etc/secubox/waf/haproxy-routes.json
+ROUTES="${SECUBOX_RELAIS_ROUTES:-/etc/secubox/waf/haproxy-routes.json}"
 CERTS_DIR=/data/haproxy/certs
 WEBROOT=/usr/share/secubox/www
 NFT_CONF=/etc/nftables.conf
@@ -47,12 +47,15 @@ RESOLVEUR=1.1.1.1
 ACME=/root/.acme.sh
 REGLAGES=/etc/secubox/relais-maillage.toml
 ETAT_PERIMES=/var/lib/secubox/p2p/relais-perimes.json   # candidats au retrait du relevé précédent (#3132)
-AUDIT=/var/log/secubox/audit.log
+AUDIT="${SECUBOX_RELAIS_AUDIT:-/var/log/secubox/audit.log}"
 WG_ETAT=/var/lib/secubox/p2p/wg_mesh.json
 PORT_PAIR=9080
 # Ports bruts (média d'une visio…) publiés par les pairs, relayés par DNAT vers leur IP maillée (#3154).
 RELAIS_PORTS_ETAT="${SECUBOX_RELAIS_PORTS_ETAT:-/var/lib/secubox/p2p/relais-ports.json}"
 RELAIS_PORTS_NFT="${SECUBOX_RELAIS_PORTS_NFT:-/etc/nftables.d/secubox-relais-ports.nft}"
+# Ports jamais relayés, quoi que publie un pair : ssh, dns, web, API/WAF/agrégateur de la box, WireGuard (le maître
+# écoute 51820 et 51822 : un pair qui les publierait couperait tout le maillage). Même liste dans les Python ci-dessous.
+PORTS_RESERVES=" 22 53 80 443 7331 8085 9080 51820 51822 "
 PORTS_PUBLICS_LOCAL="${SECUBOX_PORTS_PUBLICS_DIR:-/var/lib/secubox/ports-publics.d}"
 
 log()  { printf '[%s] %s\n' "$MODULE" "$*"; }
@@ -375,8 +378,10 @@ PY
 # ── ports bruts relayés (#3154) ──────────────────────────────────────────────
 # Ports d'un pair (JSON de /public/ports sur l'entrée) → lignes « tcp/7881 meet ». Liste absente ou mal formée : échec,
 # rien n'est ajouté ni retiré. Entrée non fiable : tout est revalidé ici.
-ports_du_pair() {
+ports_du_pair() {   # ports_du_pair [--tous] — --tous : garde aussi les ports réservés (l'appelant les refuse et les audite)
     python3 -c 'import json, re, sys
+RESERVES = {22, 53, 80, 443, 7331, 8085, 9080, 51820, 51822}
+tous = "--tous" in sys.argv[1:]
 try:
     liste = json.load(sys.stdin)["ports"]
 except Exception:
@@ -388,12 +393,20 @@ for p in liste[:16]:
     if not isinstance(p, dict):
         continue
     proto, port, mod = p.get("proto"), p.get("port"), p.get("module")
-    if proto in ("tcp", "udp") and type(port) is int and 1024 <= port <= 65535 \
+    if proto in ("tcp", "udp") and type(port) is int and 1024 <= port <= 65535 and (tous or port not in RESERVES) \
             and isinstance(mod, str) and re.fullmatch(r"[a-z0-9-]{1,32}", mod):
         ligne = "%s/%d %s" % (proto, port, mod)
         if ligne not in vus:
             vus.append(ligne)
-print("\n".join(vus))'
+print("\n".join(vus))' "$@"
+}
+
+# Ports en écoute sur CE relais (« tcp/7881 »…) : un pair ne peut pas se faire rediriger un service local.
+ports_en_ecoute() {
+    local netid loc
+    ss -Hlntu 2>/dev/null | while read -r netid _ _ _ loc _; do
+        printf '%s/%s\n' "$netid" "${loc##*:}"
+    done || true
 }
 
 # Ports que CE relais publie lui-même (même format que les pairs) : ils comptent comme déjà pris.
@@ -418,6 +431,22 @@ for f in fichiers:
         if isinstance(p, dict) and p.get("proto") in ("tcp", "udp") and type(p.get("port")) is int and 1024 <= p["port"] <= 65535:
             vus.add("%s/%d %s" % (p["proto"], p["port"], mod))
 print("\n".join(sorted(vus)))
+PY
+}
+
+# Entrées de l'état dont l'ip n'est ni 127.0.0.1 (ce relais) ni parmi les pairs actuels : « cle ip » par ligne.
+ports_disparus() {   # ports_disparus <etat.json> [<ip-de-pair>…]
+    python3 - "$@" <<'PY'
+import json, sys
+try:
+    e = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    sys.exit(0)
+presents = set(sys.argv[2:]) | {"127.0.0.1"}
+for k, v in sorted(e.items() if isinstance(e, dict) else []):
+    ip = v.get("ip") if isinstance(v, dict) else None
+    if ip not in presents:
+        print("%s %s" % (k, ip))
 PY
 }
 
@@ -473,6 +502,8 @@ os.replace(tmp, chemin)
 PY
 }
 
+# SEULS les paquets destinés à une adresse LOCALE du maître sont redirigés (fib daddr type local) : sans cela, le trafic
+# routé du LAN ou des conteneurs vers n'importe quelle destination au port publié serait détourné vers le pair.
 # Table nft entière de l'état (rien si aucune entrée distante). Les entrées 127.0.0.1 (ports du relais lui-même) n'ont pas
 # de règle ici : le DNAT local est posé par le module (meetctl media-expose). Le masquerade fait repasser le retour par
 # ce relais, sinon la box d'accès verrait une réponse hors de sa table NAT.
@@ -483,9 +514,10 @@ try:
     e = json.load(open(sys.argv[1]))
 except (OSError, ValueError):
     e = {}
+RESERVES = {22, 53, 80, 443, 7331, 8085, 9080, 51820, 51822}
 regles = []
 for cle, v in sorted(e.items() if isinstance(e, dict) else []):
-    m = re.fullmatch(r"(tcp|udp)/([0-9]{4,5})", cle)
+    m = re.fullmatch(r"(tcp|udp)/([1-9][0-9]{3,4})", cle)
     if not m or not isinstance(v, dict):
         continue
     ip, mod = v.get("ip"), v.get("module")
@@ -494,7 +526,7 @@ for cle, v in sorted(e.items() if isinstance(e, dict) else []):
     if not isinstance(mod, str) or not re.fullmatch(r"[a-z0-9-]{1,32}", mod):
         continue
     proto, port = m.groups()
-    if not 1024 <= int(port) <= 65535:
+    if not 1024 <= int(port) <= 65535 or int(port) in RESERVES:
         continue
     regles.append((proto, port, ip, mod))
 if not regles:
@@ -503,7 +535,7 @@ print("table inet secubox-relais-ports {")
 print("    chain prerouting {")
 print("        type nat hook prerouting priority dstnat; policy accept;")
 for proto, port, ip, mod in regles:
-    print('        iifname != "wg-mesh" %s dport %s counter dnat ip to %s:%s comment "relais-ports %s"' % (proto, port, ip, port, mod))
+    print('        iifname != "wg-mesh" fib daddr type local %s dport %s counter dnat ip to %s:%s comment "relais-ports %s"' % (proto, port, ip, port, mod))
 print("    }")
 print("    chain postrouting {")
 print("        type nat hook postrouting priority srcnat; policy accept;")
@@ -523,21 +555,45 @@ PY
 # À CHAUD, table seule : JAMAIS `nft -f nftables.conf` (voir plus bas, il efface les tables vivantes). Table supprimée avant
 # `nft -f` : celui-ci ajoute des règles, il ne remplace pas la table.
 ports_nft_appliquer() {
-    local rendu; rendu="$(rendu_nft_ports "$RELAIS_PORTS_ETAT")"
+    local rendu tmp="$RELAIS_PORTS_NFT.sbxtmp"
+    rendu="$(rendu_nft_ports "$RELAIS_PORTS_ETAT")"
     if [ -z "$rendu" ]; then
         nft delete table inet secubox-relais-ports 2>/dev/null || true
         rm -f "$RELAIS_PORTS_NFT"
         return 0
     fi
     mkdir -p "$(dirname "$RELAIS_PORTS_NFT")"
-    printf '# secubox-relais-maillage (#3154) : ports médias des pairs relayés par ce maître. Régénéré, ne pas éditer.\n%s\n' \
-        "$rendu" > "$RELAIS_PORTS_NFT.sbxtmp"
-    mv -f "$RELAIS_PORTS_NFT.sbxtmp" "$RELAIS_PORTS_NFT"
-    nft delete table inet secubox-relais-ports 2>/dev/null || true
-    nft -f "$RELAIS_PORTS_NFT" || log "nft a refusé $RELAIS_PORTS_NFT — table non appliquée à chaud"
+    # « table {} » puis « delete table » puis la table : une seule transaction `nft -f`, sans instant où la table manque
+    # (et sans erreur si elle n'existait pas). Validé AVANT de remplacer le fichier : nftables.conf inclut
+    # /etc/nftables.d/*.nft, et un fichier invalide ferait échouer tout le jeu de règles au démarrage.
+    printf '# secubox-relais-maillage (#3154) : ports médias des pairs relayés par ce maître. Régénéré, ne pas éditer.\ntable inet secubox-relais-ports {}\ndelete table inet secubox-relais-ports\n%s\n' \
+        "$rendu" > "$tmp"
+    if ! nft -c -f "$tmp"; then
+        rm -f "$tmp"
+        audit_relais relais_ports_nft_refuse secubox-relais-ports -
+        log "nft refuse la table des ports relayés — ancien fichier et table vivante conservés"
+        return 1
+    fi
+    mv -f "$tmp" "$RELAIS_PORTS_NFT"
+    nft -f "$RELAIS_PORTS_NFT" || { log "nft a refusé $RELAIS_PORTS_NFT à chaud"; return 1; }
 }
 
-port_cle_valide() { [[ "$1" =~ ^(tcp|udp)/[0-9]{4,5}$ ]] && [ "${1#*/}" -ge 1024 ] && [ "${1#*/}" -le 65535 ]; }
+# Retire les ports des pairs disparus du maillage (ip absente de <pairs>) puis régénère. Appelée aussi quand il n'y a plus de pair.
+ports_nettoyer_disparus() {   # ports_nettoyer_disparus <pairs>
+    local cle ipp
+    # shellcheck disable=SC2086  # pairs : liste d'IP validées par pairs_32, découpée exprès
+    while read -r cle ipp; do
+        [ -n "$cle" ] || continue
+        ( RELAIS_EN_LOT=1 cmd_retirer_port "$cle" ) >/dev/null 2>&1 || true
+        audit_relais relais_port_retire "$cle" "$ipp"
+        log "port retiré : $cle (le pair $ipp n'est plus dans le maillage)"
+    done < <(ports_disparus "$RELAIS_PORTS_ETAT" $1)
+    ports_nft_appliquer
+}
+
+port_cle_valide() {
+    [[ "$1" =~ ^(tcp|udp)/[1-9][0-9]{3,4}$ ]] && [ "${1#*/}" -ge 1024 ] && [ "${1#*/}" -le 65535 ] && [[ "$PORTS_RESERVES" != *" ${1#*/} "* ]]
+}
 
 cmd_relayer_port() {   # cmd_relayer_port <proto/port> <ip> <module>
     local cle="${1:-}" ip="${2:-}" mod="${3:-}"
@@ -581,8 +637,8 @@ cmd_synchroniser() {
     # `wg show wg-mesh` echoue quand l'interface n'existe pas (box sans maillage) : sous set -e/pipefail cela tuait le script AVANT
     # la garde ci-dessous (#2532). Pas de pair, ce n'est pas une erreur.
     local pairs; pairs="$(pairs_32 || true)"
-    [ -n "$pairs" ] || { log "aucun pair à relayer (pas de pair /32 sur wg-mesh)"; return 0; }
-    [ "$(reglage auto true)" = "true" ] || { log "exposition automatique désactivée ($REGLAGES : auto = false)"; return 0; }
+    [ -n "$pairs" ] || { log "aucun pair à relayer (pas de pair /32 sur wg-mesh)"; ports_nettoyer_disparus "" || true; return 0; }
+    [ "$(reglage auto true)" = "true" ] || { log "exposition automatique désactivée ($REGLAGES : auto = false)"; ports_nettoyer_disparus "$pairs" || true; return 0; }
     local dom exclus labels mode
     dom="$(domaine_box)"; [ -n "$dom" ] || meurt "domaine du relais inconnu"
     # services_des_pairs (#3132) : « tous » (défaut) publie aussi les services propres à un pair ; « communs »
@@ -662,7 +718,8 @@ except Exception: pass' 2>/dev/null)"
     # PORTS BRUTS (#3154). Les ports que ce relais publie lui-même sont notés d'abord (ip 127.0.0.1 : pas de règle ici, le
     # module pose son propre DNAT) ; le premier déclarant d'un <proto/port> le garde. Boucle à part : les « continue » des
     # noms (domaine refusé, liste illisible) ne doivent pas priver un pair de ses ports.
-    local lignes cle mod rep code corps tenus vus_p retires_p=0 relayes_p=0
+    local lignes cle mod rep code corps tenus vus_p ecoutes retires_p=0 relayes_p=0
+    ecoutes=" $(ports_en_ecoute | tr '\n' ' ') "
     export RELAIS_EN_LOT=1
     lignes="$(ports_locaux)"; vus_p=" "
     while read -r cle mod; do
@@ -687,12 +744,16 @@ except Exception: pass' 2>/dev/null)"
         elif [ "$code" != 200 ]; then
             continue
         fi
-        if ! lignes="$(printf '%s' "$corps" | ports_du_pair)"; then
+        if ! lignes="$(printf '%s' "$corps" | ports_du_pair --tous)"; then
             log "pair $ip : liste de ports illisible — rien ajouté ni retiré"; continue
         fi
         tenus=" "
         while read -r cle mod; do
             [ -n "$cle" ] || continue
+            if [[ "$PORTS_RESERVES" == *" ${cle#*/} "* ]] || [[ "$ecoutes" == *" $cle "* ]]; then
+                log "pair $ip : port $cle réservé ou en écoute sur ce relais — refusé"
+                audit_relais relais_port_refuse "$cle" "$ip"; continue
+            fi
             if port_tenu_par_autre "$RELAIS_PORTS_ETAT" "$ip" "$cle"; then
                 log "pair $ip : port $cle déjà relayé vers un autre — refusé"
                 audit_relais relais_port_refuse "$cle" "$ip"; continue
@@ -709,7 +770,8 @@ except Exception: pass' 2>/dev/null)"
         done
     done
     unset RELAIS_EN_LOT
-    ports_nft_appliquer
+    # pairs disparus du maillage : leurs ports ne restent pas (IP morte ou réattribuée) ; régénère aussi le fichier
+    ports_nettoyer_disparus "$pairs" || echecs=$((echecs + 1))
     log "ports : $relayes_p relayé(s), $retires_p retiré(s)"
     if [ "$ajoutes" -gt 0 ] || [ "$retires" -gt 0 ]; then
         # --allow-shrink seulement si des noms ont été retirés : sinon la garde anti-dérive reste entière

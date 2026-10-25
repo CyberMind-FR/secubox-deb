@@ -286,7 +286,7 @@ def test_oidc_verifier_depuis_le_conteneur(tmp_path):
 
 **Interfaces:**
 - Produces: `conf/meet.nft` = table `inet secubox-meet`, chaîne `prerouting` (`type nat hook prerouting priority dstnat`), deux règles
-  `iifname != "br-lxc" tcp dport 7881 counter dnat ip to 10.100.0.195:7881` et `… udp dport 7882 … :7882`. `media-expose --apply`
+  `iifname != "br-lxc" fib daddr type local tcp dport 7881 counter dnat ip to 10.100.0.195:7881` et `… udp dport 7882 … :7882`. `media-expose --apply`
   copie le fichier vers `$NFT_DST`, `nft delete table inet secubox-meet` puis `nft -f` ; refus de `nft` → fichier retiré, code 1.
   `--revoke` : table supprimée, fichier retiré. Sans argument : `{"file_installed":bool,"rule_live":bool,…}`.
 
@@ -295,7 +295,7 @@ def test_oidc_verifier_depuis_le_conteneur(tmp_path):
 ```python
 def test_fichier_nft_deux_regles_vers_le_conteneur():
     t = NFT.read_text()
-    assert "table inet secubox-meet" in t and 'iifname != "br-lxc" tcp dport 7881 counter dnat ip to 10.100.0.195:7881' in t
+    assert "table inet secubox-meet" in t and 'iifname != "br-lxc" fib daddr type local tcp dport 7881 counter dnat ip to 10.100.0.195:7881' in t
     assert "udp dport 7882 counter dnat ip to 10.100.0.195:7882" in t and "input" not in t.split("table")[1]
 
 def test_apply_pose_le_fichier_dans_nftables_d(tmp_path):
@@ -342,11 +342,14 @@ les ports média arrivent sur le maître (cible de la DMZ), qui les renvoie au p
   lu dans `/var/lib/secubox/ports-publics.d/*.json` ; fichier illisible ignoré ; `proto` ∈ {tcp, udp}, `port` entier 1024–65535,
   `module` `[a-z0-9-]{1,32}`, au plus 16 entrées.
 - Relais (maître) : état `/var/lib/secubox/p2p/relais-ports.json` = `{"<proto>/<port>": {"ip": "10.10.0.8", "module": "meet"}}`.
-  Table nft vivante `inet secubox-relais-ports` : chaîne `prerouting` (dstnat) `iifname != "wg-mesh" <proto> dport <port> counter dnat ip to <ip>:<port>
+  Table nft vivante `inet secubox-relais-ports` : chaîne `prerouting` (dstnat) `iifname != "wg-mesh" fib daddr type local <proto> dport <port> counter dnat ip to <ip>:<port>
   comment "relais-ports <module>"`, chaîne `postrouting` (srcnat) `oifname "wg-mesh" ip daddr <ip> <proto> dport <port> counter masquerade`
   (le retour repasse par le maître : sans cela la Freebox verrait une réponse hors de sa table NAT), chaîne `forward` (filter, priority 0)
   `oifname "wg-mesh" ip daddr <ip> <proto> dport <port> accept`. Persistance : fichier `/etc/nftables.d/secubox-relais-ports.nft`
   régénéré à chaque synchronisation (table entière), **jamais `nft -f nftables.conf`**.
+- Garde (relecture de sécurité) : seuls les paquets destinés à une adresse locale du maître sont redirigés (`fib daddr type local`) ; ports réservés refusés
+  (22, 53, 80, 443, 7331, 8085, 9080, 51820, 51822) ainsi que tout port en écoute sur le maître ; les ports des pairs disparus du maillage sont retirés ;
+  le fichier est validé (`nft -c`) avant remplacement et appliqué en une transaction.
 - Règles : un `<proto>/<port>` n'a qu'un propriétaire dans le parc ; le premier déclarant gagne (le maître lui-même compte, via son
   propre `ports-publics.d`) ; un second est refusé avec `audit_relais relais_port_refuse` ; un pair qui répond sans le port le libère
   aussitôt ; un pair injoignable garde ses ports.
@@ -368,7 +371,7 @@ def test_port_tenu_par_autre_refuse_le_second_declarant(tmp_path):
     assert rc("port_tenu_par_autre", etat, "10.10.0.8", "udp/7882") == 0 and rc("port_tenu_par_autre", etat, "10.10.0.5", "udp/7882") == 1
 def test_fichier_nft_regenere_dnat_masquerade_forward(tmp_path):
     t = rendu_nft({"udp/7882": {"ip": "10.10.0.8", "module": "meet"}})
-    assert 'iifname != "wg-mesh" udp dport 7882 counter dnat ip to 10.10.0.8:7882' in t and 'oifname "wg-mesh" ip daddr 10.10.0.8 udp dport 7882 counter masquerade' in t
+    assert 'iifname != "wg-mesh" fib daddr type local udp dport 7882 counter dnat ip to 10.10.0.8:7882' in t and 'oifname "wg-mesh" ip daddr 10.10.0.8 udp dport 7882 counter masquerade' in t
 def test_synchroniser_appelle_le_relais_des_ports():
     s = TEXTE[TEXTE.index("cmd_synchroniser() {"):TEXTE.index("cmd_retirer() {")]
     assert "public/ports" in s and "port_tenu_par_autre" in s and "relais_port_refuse" in s

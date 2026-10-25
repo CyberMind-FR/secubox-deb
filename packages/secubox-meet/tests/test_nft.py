@@ -20,8 +20,8 @@ def _prepare(tmp_path):
 def test_fichier_nft_deux_regles_vers_le_conteneur():
     t = NFT.read_text()
     assert "table inet secubox-meet" in t
-    assert 'iifname != "br-lxc" tcp dport 7881 counter dnat ip to 10.100.0.195:7881 comment "meet-livekit-tcp"' in t
-    assert 'iifname != "br-lxc" udp dport 7882 counter dnat ip to 10.100.0.195:7882 comment "meet-livekit-udp"' in t
+    assert 'iifname != "br-lxc" fib daddr type local tcp dport 7881 counter dnat ip to 10.100.0.195:7881 comment "meet-livekit-tcp"' in t
+    assert 'iifname != "br-lxc" fib daddr type local udp dport 7882 counter dnat ip to 10.100.0.195:7882 comment "meet-livekit-udp"' in t
     assert "type nat hook prerouting priority dstnat; policy accept;" in t
     assert "input" not in t.split("table inet secubox-meet")[1]
 
@@ -96,3 +96,10 @@ def test_apply_refuse_par_nft_ne_publie_rien(tmp_path):
     _prepare(tmp_path)
     run_ctl_rc(tmp_path, "media-expose", "--apply", nft_ok=False)
     assert not (tmp_path / "ports-publics.d" / "meet.json").exists()
+
+
+def test_apply_publication_impossible_renvoie_du_json_et_ne_laisse_rien(tmp_path):
+    dst = _prepare(tmp_path)
+    (tmp_path / "fichier").write_text("x")
+    rc, out = run_ctl_rc(tmp_path, "media-expose", "--apply", nft_ok=True, env_extra={"SECUBOX_PORTS_PUBLICS_DIR": str(tmp_path / "fichier" / "d")})
+    assert rc == 1 and json.loads(out)["success"] is False and not dst.exists()

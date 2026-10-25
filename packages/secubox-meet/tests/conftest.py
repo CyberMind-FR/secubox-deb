@@ -117,7 +117,7 @@ echo "$FAKE_OIDCCTL_SECRET"
         "SECUBOX_MEET_SECRETS_DIR": str(secrets),
         "SECUBOX_MEET_NFT_SRC": str(tmp_path / "meet.nft"),
         "SECUBOX_MEET_NFT_DST": str(tmp_path / "nftables.d" / "secubox-meet-dnat.nft"),
-        "SECUBOX_PORTS_PUBLICS_DIR": str(tmp_path / "ports-publics.d"),
+        "SECUBOX_PORTS_PUBLICS_DIR": (env_extra or {}).get("SECUBOX_PORTS_PUBLICS_DIR", str(tmp_path / "ports-publics.d")),
         "FAKE_URLS_FILE": str(tmp_path / "urls"),
         "FAKE_ATTACH_CURL_DIR": str(reponses),
         "FAKE_OIDCCTL_SECRET": oidcctl_secret or "",
