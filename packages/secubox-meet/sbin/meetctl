@@ -23,6 +23,8 @@ readonly MODULE="meet"
 # Tenue en phase avec debian/changelog.
 readonly VERSION="0.1.0"
 readonly CONFIG_FILE="${SECUBOX_MEET_CONFIG:-/etc/secubox/meet.toml}"
+readonly STATE_DIR="${SECUBOX_MEET_STATE_DIR:-/etc/secubox/meet}"
+readonly INSTALL_SCRIPT="${SECUBOX_MEET_INSTALL_SCRIPT:-/usr/lib/secubox/meet/install-lxc.sh}"
 readonly SECRETS_DIR="${SECUBOX_MEET_SECRETS_DIR:-/etc/secubox/secrets/meet}"
 readonly NFT_DST="${SECUBOX_MEET_NFT_DST:-/etc/nftables.d/secubox-meet-dnat.nft}"
 readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
@@ -179,11 +181,24 @@ cmd_logs() {
         journalctl -u "$unit" -n "$lines" --no-pager 2>/dev/null || true
 }
 
+# Provisionne (ou reprend) le conteneur. Le script est idempotent ; son journal
+# va sur stderr pour que stdout reste un JSON unique.
+cmd_install() {
+    [ -f "$STATE_DIR/.lxc-provisioned" ] && log "déjà provisionné : reprise idempotente"
+    if "$INSTALL_SCRIPT" >&2; then
+        echo '{"success": true}'
+    else
+        echo '{"success": false}'
+        return 1
+    fi
+}
+
 cmd_help() {
     cat <<EOF
 meetctl v$VERSION — La Suite Meet (LXC-native)
 
   status                    État conteneur + les 5 services, séparément (JSON)
+  install                   Provisionne le conteneur (idempotent, long)
   start | stop | restart    Cycle de vie du conteneur
   logs <unité> [lignes]     Journal d'un service interne
                             (postgresql|redis-server|livekit|meet-backend|nginx)
@@ -193,6 +208,7 @@ EOF
 
 case "${1:-help}" in
     status)           cmd_status ;;
+    install)          cmd_install ;;
     start)            cmd_start ;;
     stop)             cmd_stop ;;
     restart)          cmd_restart ;;

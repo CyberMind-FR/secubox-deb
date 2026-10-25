@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: Meet — provisionnement initial du conteneur (idempotent, une fois).
+#
+# Démarré --no-block par le postinst : « installer le paquet » active
+# l'appliance. Le provisionnement (debootstrap trixie, compilation du front,
+# environnement Python, LiveKit : plusieurs minutes, réseau requis) tourne EN
+# ARRIÈRE-PLAN plutôt que de bloquer dpkg.
+[Unit]
+Description=SecuBox Meet — provisionnement initial du conteneur (idempotent, une fois)
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=network-online.target
+Wants=network-online.target
+# install-lxc.sh n'écrit ce témoin QU'après une mise en route entièrement
+# réussie (set -euo pipefail sort avant mark_provisioned au moindre échec) :
+# l'unité est un no-op sûr après succès et re-tente si une passe a échoué.
+ConditionPathExists=!/etc/secubox/meet/.lxc-provisioned
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/secubox/meet/install-lxc.sh
+TimeoutStartSec=3600
+# Au premier démarrage le réseau (DNS, miroirs) peut ne pas être prêt : un
+# échec n'est pas définitif, on retente plus tard.
+Restart=on-failure
+RestartSec=15min
+
+[Install]
+WantedBy=multi-user.target
