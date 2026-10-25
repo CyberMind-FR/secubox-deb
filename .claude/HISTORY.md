@@ -9,6 +9,29 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-25 — gk1 : Unbound en boucle, ancre DNSSEC vide (closes #3167)
+
+- Constat : sur gk1, `unbound` redémarrait sans fin (5 388 fois, « failed to read /var/lib/unbound/root.key ») : le fichier
+  faisait 0 octet depuis le 24/10 07:16 (racine de gk1 alors presque pleine ; hypothèse : écriture interrompue, journal de
+  l'époque disparu). Le helper Debian ne recopie la clé de dns-root-data que si le fichier manque ou est plus ancien.
+- secubox-dns 1.6.2 (PR #3168) : drop-in `unbound.service.d/20-secubox-ancre.conf` → `ExecStartPre=-/usr/sbin/secubox-unbound-ancre`,
+  qui recopie l'ancre (par l'utilisateur unbound, temporaire puis renommage) si elle est présente mais sans clé ; 5 tests.
+- gk1 : ancre recopiée au redémarrage, Unbound actif en 5 s, résolution OK, DNSSEC valide (dnssec-failed.org → SERVFAIL).
+  gk2 : paquet installé sans redémarrer Unbound (garde active au prochain démarrage).
+
+## 2026-10-25 — secubox-meet : fusion, déploiement et premiers correctifs sur gk1 (ref #3154)
+
+- PR #3164 (paquet secubox-meet, relais des ports média par le maître, Boutique « besoin → solutions », carte Visio du Hall),
+  relu tâche par tâche puis en entier ; vague finale : postinst qui resserrait /etc/secubox et /etc/secubox/secrets (aurait cassé
+  l'OIDC de la box), webhook LiveKit, relance des services sur changement, autostart coupé au retrait, sudoers à argv exacts.
+- Publiés : secubox-meet 0.1.1 → 0.1.3, secubox-p2p 1.19.1, secubox-webos 1.20.5, secubox-appstore 0.10.3 ; p2p/webos/appstore
+  sur gk2 et gk1 ; secubox-meet sur gk1 (droits et ACL de /etc/secubox et /etc/secubox/secrets identiques avant et après).
+- Correctifs après déploiement : pages d'erreur SecuBox sur visio.*/livekit.* (#3165, 0.1.2) ; réseau fixe du conteneur, le DHCP
+  de l'image trixie retirait l'adresse (#3166, 0.1.3). Routes du relais pour visio.gk1 et livekit.gk1 posées à la main (le passage
+  automatique refuse un nom dont le service répond 502).
+- En cours : provisionnement du conteneur sur gk1 ; à faire : essai de connexion OIDC, ports média (décision dans /meet/), deux
+  participants. Mineurs reportés : voir le registre archivé (scratchpad sdd-3154).
+
 ## 2026-10-25 — netplan : br-lxc déclaré par secubox-net-detect, gk1 réparé (closes #3162)
 
 - Constat en préparant le déploiement de secubox-meet (#3154) : sur gk1, `br-lxc` existait sans adresse (networkd « unmanaged ») ;
