@@ -8,7 +8,7 @@
 
 #include <tunables/global>
 
-profile secubox-meet-api flags=(attach_disconnected) {
+profile secubox-meet-api {
   #include <abstractions/base>
   #include <abstractions/python>
 
@@ -25,7 +25,6 @@ profile secubox-meet-api flags=(attach_disconnected) {
   /etc/secubox/secubox.conf r,
   /etc/secubox/auth.toml r,
   /etc/secubox/users.json r,
-  /etc/secubox/appareils.json r,
   deny /etc/secubox/secrets/** r,
   /etc/nsswitch.conf r,
   # Registre des sessions (sans lui toute garde d'API refuse) et trace de délégation.

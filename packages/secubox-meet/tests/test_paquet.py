@@ -69,3 +69,13 @@ def test_postrm_purge_retire_les_secrets_mais_jamais_le_conteneur():
 def test_scripts_de_maintenance_valides():
     for f in (POSTINST, PRERM, POSTRM): assert subprocess.run(["bash", "-n", f]).returncode == 0
     assert "DEBHELPER" not in "".join(l for l in POSTINST.read_text().splitlines() if l.strip().startswith("#") and l.strip() != "#DEBHELPER" + "#")
+
+
+def test_postinst_ne_demarre_pas_l_api_sans_profil_charge():
+    t = POSTINST.read_text()
+    charge = t.index("apparmor_parser -r /etc/apparmor.d/secubox-meet")
+    msg = t.index("profil AppArmor secubox-meet-api non chargé")
+    demarre = t.index("systemctl enable --now secubox-meet.service")
+    assert charge < msg < demarre
+    assert 'PROFIL_PRET=0' in t and '[ "$PROFIL_PRET" = 1 ]' in t and "journalctl -k" in t
+    assert "systemctl enable secubox-meet.service" in t

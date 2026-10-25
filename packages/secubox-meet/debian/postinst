@@ -35,14 +35,28 @@ case "$1" in
     fi
 
     # Profil AppArmor (enforce), chargé AVANT l'activation de l'unité qui le nomme.
-    if [ -f /etc/apparmor.d/secubox-meet ] && command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
-      apparmor_parser -r /etc/apparmor.d/secubox-meet || echo "secubox-meet : profil AppArmor non chargé" >&2
+    # Sans AppArmor actif sur la machine, l'unité démarre sans profil ; avec AppArmor actif
+    # et un profil non chargé, elle échouerait au démarrage : on ne la lance alors pas.
+    PROFIL_PRET=1
+    if [ -d /sys/kernel/security/apparmor ]; then
+      if [ -f /etc/apparmor.d/secubox-meet ] && command -v apparmor_parser >/dev/null 2>&1 \
+         && apparmor_parser -r /etc/apparmor.d/secubox-meet; then
+        :
+      else
+        PROFIL_PRET=0
+        echo "secubox-meet : profil AppArmor secubox-meet-api non chargé : l'API ne démarrera pas tant que le profil n'est pas chargé (apparmor_parser -r /etc/apparmor.d/secubox-meet) ; voir journalctl -k" >&2
+      fi
     fi
 
     systemctl daemon-reload 2>/dev/null || true
     # API de l'hôte (unité livrée par une tâche ultérieure : sans effet tant qu'absente).
     if [ -f /usr/lib/systemd/system/secubox-meet.service ]; then
-      systemctl enable --now secubox-meet.service || true
+      if [ "$PROFIL_PRET" = 1 ]; then
+        systemctl enable --now secubox-meet.service || true
+      else
+        systemctl enable secubox-meet.service || true
+        echo "secubox-meet : service activé mais NON démarré (profil AppArmor absent)" >&2
+      fi
     fi
 
     # Vhosts visio.<domaine> et livekit.<domaine>. La route sbxwaf et le vhost

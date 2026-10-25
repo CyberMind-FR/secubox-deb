@@ -162,7 +162,8 @@ def test_demonstration_annoncee_et_actions_inertes(navigateur):
     assert p.is_visible("#demo") and "DÉMONSTRATION" in p.inner_text("#demo")
     p.click("#bascule"); p.click("#confOui")
     p.wait_for_function("document.getElementById('rServ').textContent.includes('inerte')")
-    assert appels == [] and err == []
+    assert appels == [] and err == [] and "Échec" not in p.inner_text("#rServ")
+    assert "ko" not in (p.get_attribute("#rServ", "class") or "").split()
     ctx.close()
 
 

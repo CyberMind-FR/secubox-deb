@@ -168,7 +168,7 @@
 
     <script src="/shared/sidebar.js"></script>
     <script>
-        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        const Q = new URLSearchParams(location.search), DEMO = Q.get('demo') === '1';
         if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/meet';
         const NOMS = { postgresql: 'PostgreSQL', redis: 'Redis', livekit: 'LiveKit', 'meet-backend': 'Meet (backend)', nginx: 'Web (nginx)' };
@@ -198,7 +198,7 @@
             } catch (e) { return { ok: false, statut: 0, data: null }; }
         }
         function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
-        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok === null ? '' : ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
         function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? String(res.data.detail) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
         function domaineValide(d) { return typeof d === 'string' && /^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(d); }
 
@@ -301,11 +301,17 @@
         function issue(r, okMsg) {
             if (r.ok && r.data && r.data.pending) return [true, 'En cours : l’opération continue côté box, actualiser dans un instant.'];
             if (r.ok) return [true, okMsg];
+            if (r.demo) return [null, detail(r)];
             return [false, 'Échec : ' + detail(r)];
+        }
+        // Un bouton d'action reste inactif pendant l'appel (pas de double envoi).
+        async function occupe(ids, fn) {
+            const bs = ids.map($); bs.forEach(b => { b.disabled = true; });
+            try { return await fn(); } finally { bs.forEach(b => { b.disabled = false; }); }
         }
         async function controler(action, okMsg, attente) {
             toast(attente);
-            const r = await ecrire('POST', '/control', { action });
+            const r = await occupe(['bascule', 'redemarrer'], () => ecrire('POST', '/control', { action }));
             const [ok, msg] = issue(r, okMsg);
             retour('rServ', ok, msg); charger();
         }
@@ -321,13 +327,13 @@
             const txt = ouvert ? 'Fermer les ports ' + tcp + '/TCP et ' + udp + '/UDP ? Les réunions en cours perdront le son et l’image.'
                                : 'Ouvrir les ports ' + tcp + '/TCP et ' + udp + '/UDP vers le conteneur ? Ils deviennent joignables depuis Internet.';
             demander(txt, async () => {
-                const r = await ecrire('POST', '/media-expose', ouvert ? CORPS_MEDIA.revoke : CORPS_MEDIA.apply);
+                const r = await occupe(['mediaAction'], () => ecrire('POST', '/media-expose', ouvert ? CORPS_MEDIA.revoke : CORPS_MEDIA.apply));
                 const [ok, msg] = issue(r, ouvert ? 'Ports média fermés.' : 'Ports média ouverts.');
                 retour('rMedia', ok, msg); charger();
             });
         });
         $('oidcEnreg').addEventListener('click', () => demander('Enregistrer Meet comme client OIDC du Hall ? L’adresse de rappel et le secret du client sont posés côté box.', async () => {
-            const r = await ecrire('POST', '/oidc/enregistrer', {});
+            const r = await occupe(['oidcEnreg'], () => ecrire('POST', '/oidc/enregistrer', {}));
             const [ok, msg] = issue(r, 'Client OIDC enregistré.');
             retour('rOidc', ok, msg); charger();
         }));
