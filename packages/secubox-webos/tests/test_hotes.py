@@ -34,3 +34,10 @@ def test_421_n_est_pas_joignable():
     assert h.repond(200) and h.repond(302) and h.repond(401) and h.repond(404)
     assert not h.repond(421)
     assert not h.repond(502) and not h.repond(504)
+
+
+def test_classer_cartes_du_hall_d_abord():
+    noms = ["aaa.gk2.secubox.in", "bbs.gk2.secubox.in", "zzz.gk2.secubox.in", "radio.gk2.secubox.in", "mmm.gk2.secubox.in"]
+    assert hotes.classer(noms, ["radio", "bbs", None, ""]) == [
+        "bbs.gk2.secubox.in", "radio.gk2.secubox.in", "aaa.gk2.secubox.in", "mmm.gk2.secubox.in", "zzz.gk2.secubox.in"]
+    assert hotes.classer(noms, []) == sorted(noms)

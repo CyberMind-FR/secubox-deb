@@ -480,8 +480,11 @@ async def aide_carte(cid: str):
 @public_router.get("/noms")
 async def noms_de_la_box():
     dom = (domaine_box() or "").lower()
+    menu = registry.load_menu_cache()
+    ids = [i.get("id") for cat in menu.get("categories", []) for i in cat.get("items", [])]
+    ids += [s.get("id") for s in registry.charger_registre_d()]
     return {"domaine": dom, "noeud": hotes.nom_noeud(),
-            "noms": hotes.candidats(hotes.lire_sites(), dom)}
+            "noms": hotes.classer(hotes.candidats(hotes.lire_sites(), dom), ids)}
 
 
 # SERVICES DES AUTRES BOX (#3133). Lecture seule du cache de l'annuaire ; webos
