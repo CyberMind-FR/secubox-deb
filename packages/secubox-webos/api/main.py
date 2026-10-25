@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse, Response
 # pas l'administration ; ce qu'il relaie à un module, ce module le juge.
 from secubox_core.auth import require_session, require_personne, create_token, domaine_box
 from secubox_core.health import systemd_batch
-from api import registry, flags, cardlets, actions, aide, hotes, systeme, vignettes, pairs
+from api import registry, flags, cardlets, actions, aide, hotes, systeme, vignettes, pairs, ports
 from api.models import Service  # noqa: F401 — exposé pour les tests (main.Service), ne pas « nettoyer »
 from secubox_core.auth import require_lecture
 
@@ -485,6 +485,13 @@ async def noms_de_la_box():
     ids += [s.get("id") for s in registry.charger_registre_d()]
     return {"domaine": dom, "noeud": hotes.nom_noeud(),
             "noms": hotes.classer(hotes.candidats(hotes.lire_sites(), dom), ids)}
+
+
+# PORTS PUBLIÉS PAR CETTE BOX (#3154), lus par le maître du maillage pour les relayer. Rien d'autre que
+# proto/port/module ; le dossier est écrit par les modules (meetctl media-expose).
+@public_router.get("/ports")
+async def ports_de_la_box():
+    return {"domaine": (domaine_box() or "").lower(), "ports": ports.lire()}
 
 
 # SERVICES DES AUTRES BOX (#3133). Lecture seule du cache de l'annuaire ; webos

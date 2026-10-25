@@ -1,3 +1,12 @@
+secubox-webos (1.20.4-1~trixie1) trixie; urgency=medium
+
+  * GET /public/ports (ref #3154) : publie, en lecture libre comme /public/noms, les ports que les modules déclarent dans
+    /var/lib/secubox/ports-publics.d/*.json, pour que le maître du maillage les relaie. Entrée non fiable : proto tcp
+    ou udp, port entier 1024-65535, module [a-z0-9-]{1,32}, 16 entrées au plus triées, fichier illisible ignoré.
+    Nouveau module api/ports.py.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 18:00:00 +0000
+
 secubox-webos (1.20.3-1~trixie1) trixie; urgency=medium
 
   * Hall (ref #3152) : la Boutique est épinglée dans la carte Accès rapide (après les favoris et les récents, avant la

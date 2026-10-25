@@ -28,6 +28,8 @@ readonly INSTALL_SCRIPT="${SECUBOX_MEET_INSTALL_SCRIPT:-/usr/lib/secubox/meet/in
 readonly SECRETS_DIR="${SECUBOX_MEET_SECRETS_DIR:-/etc/secubox/secrets/meet}"
 readonly NFT_DST="${SECUBOX_MEET_NFT_DST:-/etc/nftables.d/secubox-meet-dnat.nft}"
 readonly NFT_SRC="${SECUBOX_MEET_NFT_SRC:-/usr/share/doc/secubox-meet/examples/meet.nft}"
+# Ports publiés pour le relais du maître (secubox-relais-maillage les lit via webos /public/ports).
+readonly PORTS_PUBLICS_DIR="${SECUBOX_PORTS_PUBLICS_DIR:-/var/lib/secubox/ports-publics.d}"
 readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
 
 readonly RED='\033[0;31m'
@@ -291,6 +293,18 @@ print(len(json.load(sys.stdin)["keys"]))' 2>/dev/null); then
     [ "$discovery" = true ]
 }
 
+# Publie (ou retire) les ports média : le maître les relaie par wg-mesh vers cette box.
+ports_publier() {
+    if ! install -d -m 0755 -o root -g secubox "$PORTS_PUBLICS_DIR" 2>/dev/null; then
+        install -d -m 0755 "$PORTS_PUBLICS_DIR"   # groupe secubox absent (banc d'essai)
+    fi
+    local tmp="$PORTS_PUBLICS_DIR/.meet.json.tmp"
+    printf '{"module":"meet","ports":[{"proto":"tcp","port":%s},{"proto":"udp","port":%s}]}\n' "$TCP_PORT" "$UDP_PORT" > "$tmp"
+    chmod 0644 "$tmp"
+    mv -f "$tmp" "$PORTS_PUBLICS_DIR/meet.json"
+}
+ports_depublier() { rm -f "$PORTS_PUBLICS_DIR/meet.json"; }
+
 # ── Exposition des médias (décision de l'administrateur, jamais au postinst) ─
 cmd_media_expose() {
     case "${1:-}" in
@@ -306,6 +320,7 @@ cmd_media_expose() {
             # empile des DNAT identiques et rend le compteur illisible.
             nft delete table inet secubox-meet 2>/dev/null || true
             if nft -f "$NFT_DST" 2>/dev/null; then
+                ports_publier
                 printf '{"success": true, "applied": "%s", "tcp_port": %s, "udp_port": %s}\n' \
                     "$(json_escape "$NFT_DST")" "$TCP_PORT" "$UDP_PORT"
             else
@@ -317,6 +332,7 @@ cmd_media_expose() {
         --revoke)
             nft delete table inet secubox-meet 2>/dev/null || true
             rm -f "$NFT_DST"
+            ports_depublier
             echo '{"success": true, "revoked": true}'
             ;;
         *)
@@ -340,7 +356,7 @@ meetctl v$VERSION — La Suite Meet (LXC-native)
                             Enregistre le client OIDC « meet » (secret 0600, jamais imprimé)
   oidc-verifier             Lit la découverte OIDC depuis le conteneur (JSON, code 1 si KO)
   media-expose [--apply|--revoke]
-                            Sans argument : état. --apply pose le DNAT 7881/TCP 7882/UDP ; --revoke le retire
+                            Sans argument : état. --apply pose le DNAT 7881/TCP 7882/UDP et publie les ports pour le relais du maître ; --revoke retire les deux
   logs <unité> [lignes]     Journal d'un service interne
                             (postgresql|redis-server|livekit|meet-backend|nginx)
   help                      Cette aide

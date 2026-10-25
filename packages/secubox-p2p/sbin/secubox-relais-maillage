@@ -10,6 +10,7 @@
 # Sur le RELAIS (le nœud qui a le WAN, ex. gk2) :
 #   relayer <nom> <ip-maillée-du-pair> [port]   (port par défaut : 9080)
 #   retirer <nom>
+#   relayer-port <proto/port> <ip-du-pair> <module> | retirer-port <proto/port>   (ports média, #3154)
 #   etat
 # Sur le PAIR (le nœud sans WAN, ex. gk3) :
 #   ouvrir <ip-maillée-du-relais> [port]        (port par défaut : 9080)
@@ -49,6 +50,10 @@ ETAT_PERIMES=/var/lib/secubox/p2p/relais-perimes.json   # candidats au retrait d
 AUDIT=/var/log/secubox/audit.log
 WG_ETAT=/var/lib/secubox/p2p/wg_mesh.json
 PORT_PAIR=9080
+# Ports bruts (média d'une visio…) publiés par les pairs, relayés par DNAT vers leur IP maillée (#3154).
+RELAIS_PORTS_ETAT="${SECUBOX_RELAIS_PORTS_ETAT:-/var/lib/secubox/p2p/relais-ports.json}"
+RELAIS_PORTS_NFT="${SECUBOX_RELAIS_PORTS_NFT:-/etc/nftables.d/secubox-relais-ports.nft}"
+PORTS_PUBLICS_LOCAL="${SECUBOX_PORTS_PUBLICS_DIR:-/var/lib/secubox/ports-publics.d}"
 
 log()  { printf '[%s] %s\n' "$MODULE" "$*"; }
 meurt() { printf '[%s] ERREUR : %s\n' "$MODULE" "$*" >&2; exit 1; }
@@ -367,6 +372,192 @@ for p in d.get("peers") or []:
 PY
 }
 
+# ── ports bruts relayés (#3154) ──────────────────────────────────────────────
+# Ports d'un pair (JSON de /public/ports sur l'entrée) → lignes « tcp/7881 meet ». Liste absente ou mal formée : échec,
+# rien n'est ajouté ni retiré. Entrée non fiable : tout est revalidé ici.
+ports_du_pair() {
+    python3 -c 'import json, re, sys
+try:
+    liste = json.load(sys.stdin)["ports"]
+except Exception:
+    sys.exit(1)
+if not isinstance(liste, list):
+    sys.exit(1)
+vus = []
+for p in liste[:16]:
+    if not isinstance(p, dict):
+        continue
+    proto, port, mod = p.get("proto"), p.get("port"), p.get("module")
+    if proto in ("tcp", "udp") and type(port) is int and 1024 <= port <= 65535 \
+            and isinstance(mod, str) and re.fullmatch(r"[a-z0-9-]{1,32}", mod):
+        ligne = "%s/%d %s" % (proto, port, mod)
+        if ligne not in vus:
+            vus.append(ligne)
+print("\n".join(vus))'
+}
+
+# Ports que CE relais publie lui-même (même format que les pairs) : ils comptent comme déjà pris.
+ports_locaux() {
+    python3 - "$PORTS_PUBLICS_LOCAL" <<'PY'
+import json, re, sys
+from pathlib import Path
+vus = set()
+try:
+    fichiers = sorted(Path(sys.argv[1]).glob("*.json"))
+except OSError:
+    fichiers = []
+for f in fichiers:
+    try:
+        d = json.loads(f.read_text())
+        mod, liste = d["module"], d["ports"]
+    except (OSError, ValueError, KeyError, TypeError):
+        continue
+    if not isinstance(mod, str) or not re.fullmatch(r"[a-z0-9-]{1,32}", mod) or not isinstance(liste, list):
+        continue
+    for p in liste:
+        if isinstance(p, dict) and p.get("proto") in ("tcp", "udp") and type(p.get("port")) is int and 1024 <= p["port"] <= 65535:
+            vus.add("%s/%d %s" % (p["proto"], p["port"], mod))
+print("\n".join(sorted(vus)))
+PY
+}
+
+# <proto/port> déjà tenu par une AUTRE ip ? (0 : oui, refuser — le premier déclarant gagne). État illisible : non.
+port_tenu_par_autre() {   # port_tenu_par_autre <etat.json> <ip> <proto/port>
+    python3 - "$1" "$2" "$3" <<'PY'
+import json, sys
+try:
+    e = json.load(open(sys.argv[1]))
+    v = e.get(sys.argv[3])
+    sys.exit(0 if isinstance(v, dict) and v.get("ip") != sys.argv[2] else 1)
+except (OSError, ValueError, AttributeError):
+    sys.exit(1)
+PY
+}
+
+# Clés <proto/port> que l'état attribue à <ip>.
+ports_de_ip() {   # ports_de_ip <etat.json> <ip>
+    python3 - "$1" "$2" <<'PY'
+import json, sys
+try:
+    e = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    sys.exit(0)
+for k, v in sorted(e.items()):
+    if isinstance(v, dict) and v.get("ip") == sys.argv[2]:
+        print(k)
+PY
+}
+
+# État : poser <cle> <ip> <module> | retirer <cle>. Écriture atomique ; état illisible : repart de zéro.
+etat_ports_maj() {   # etat_ports_maj <etat.json> poser|retirer <cle> [<ip> <module>]
+    python3 - "$@" <<'PY'
+import json, os, sys, tempfile
+chemin, action, cle = sys.argv[1:4]
+try:
+    e = json.load(open(chemin))
+    if not isinstance(e, dict):
+        e = {}
+except (OSError, ValueError):
+    e = {}
+if action == "poser":
+    e[cle] = {"ip": sys.argv[4], "module": sys.argv[5]}
+else:
+    e.pop(cle, None)
+os.makedirs(os.path.dirname(chemin) or ".", exist_ok=True)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(chemin) or ".", prefix=".relais-ports.")
+with os.fdopen(fd, "w") as f:
+    json.dump(e, f, indent=2, sort_keys=True)
+    f.write("\n")
+os.chmod(tmp, 0o644)
+os.replace(tmp, chemin)
+PY
+}
+
+# Table nft entière de l'état (rien si aucune entrée distante). Les entrées 127.0.0.1 (ports du relais lui-même) n'ont pas
+# de règle ici : le DNAT local est posé par le module (meetctl media-expose). Le masquerade fait repasser le retour par
+# ce relais, sinon la box d'accès verrait une réponse hors de sa table NAT.
+rendu_nft_ports() {   # rendu_nft_ports <etat.json>
+    python3 - "$1" <<'PY'
+import json, re, sys
+try:
+    e = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    e = {}
+regles = []
+for cle, v in sorted(e.items() if isinstance(e, dict) else []):
+    m = re.fullmatch(r"(tcp|udp)/([0-9]{4,5})", cle)
+    if not m or not isinstance(v, dict):
+        continue
+    ip, mod = v.get("ip"), v.get("module")
+    if not isinstance(ip, str) or not re.fullmatch(r"10\.10\.0\.(?:[1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])", ip):
+        continue
+    if not isinstance(mod, str) or not re.fullmatch(r"[a-z0-9-]{1,32}", mod):
+        continue
+    proto, port = m.groups()
+    if not 1024 <= int(port) <= 65535:
+        continue
+    regles.append((proto, port, ip, mod))
+if not regles:
+    sys.exit(0)
+print("table inet secubox-relais-ports {")
+print("    chain prerouting {")
+print("        type nat hook prerouting priority dstnat; policy accept;")
+for proto, port, ip, mod in regles:
+    print('        iifname != "wg-mesh" %s dport %s counter dnat ip to %s:%s comment "relais-ports %s"' % (proto, port, ip, port, mod))
+print("    }")
+print("    chain postrouting {")
+print("        type nat hook postrouting priority srcnat; policy accept;")
+for proto, port, ip, mod in regles:
+    print('        oifname "wg-mesh" ip daddr %s %s dport %s counter masquerade' % (ip, proto, port))
+print("    }")
+print("    chain forward {")
+print("        type filter hook forward priority 0; policy accept;")
+for proto, port, ip, mod in regles:
+    print('        oifname "wg-mesh" ip daddr %s %s dport %s accept' % (ip, proto, port))
+print("    }")
+print("}")
+PY
+}
+
+# Régénère le fichier persistant (rechargé au démarrage par l'inclusion de /etc/nftables.d dans nftables.conf) puis l'applique
+# À CHAUD, table seule : JAMAIS `nft -f nftables.conf` (voir plus bas, il efface les tables vivantes). Table supprimée avant
+# `nft -f` : celui-ci ajoute des règles, il ne remplace pas la table.
+ports_nft_appliquer() {
+    local rendu; rendu="$(rendu_nft_ports "$RELAIS_PORTS_ETAT")"
+    if [ -z "$rendu" ]; then
+        nft delete table inet secubox-relais-ports 2>/dev/null || true
+        rm -f "$RELAIS_PORTS_NFT"
+        return 0
+    fi
+    mkdir -p "$(dirname "$RELAIS_PORTS_NFT")"
+    printf '# secubox-relais-maillage (#3154) : ports médias des pairs relayés par ce maître. Régénéré, ne pas éditer.\n%s\n' \
+        "$rendu" > "$RELAIS_PORTS_NFT.sbxtmp"
+    mv -f "$RELAIS_PORTS_NFT.sbxtmp" "$RELAIS_PORTS_NFT"
+    nft delete table inet secubox-relais-ports 2>/dev/null || true
+    nft -f "$RELAIS_PORTS_NFT" || log "nft a refusé $RELAIS_PORTS_NFT — table non appliquée à chaud"
+}
+
+port_cle_valide() { [[ "$1" =~ ^(tcp|udp)/[0-9]{4,5}$ ]] && [ "${1#*/}" -ge 1024 ] && [ "${1#*/}" -le 65535 ]; }
+
+cmd_relayer_port() {   # cmd_relayer_port <proto/port> <ip> <module>
+    local cle="${1:-}" ip="${2:-}" mod="${3:-}"
+    port_cle_valide "$cle" || meurt "port invalide : « $cle » (attendu tcp|udp/1024-65535)"
+    ip_valide "$ip"        || meurt "IP maillée invalide : « $ip » (attendu 10.10.0.x)"
+    [[ "$mod" =~ ^[a-z0-9-]{1,32}$ ]] || meurt "module invalide : « $mod »"
+    port_tenu_par_autre "$RELAIS_PORTS_ETAT" "$ip" "$cle" && meurt "$cle est déjà relayé vers un autre pair"
+    etat_ports_maj "$RELAIS_PORTS_ETAT" poser "$cle" "$ip" "$mod"
+    [ -n "${RELAIS_EN_LOT:-}" ] || ports_nft_appliquer
+    log "port relayé : $cle → $ip ($mod)"
+}
+
+cmd_retirer_port() {   # cmd_retirer_port <proto/port>
+    local cle="${1:-}"
+    port_cle_valide "$cle" || meurt "port invalide : « $cle »"
+    etat_ports_maj "$RELAIS_PORTS_ETAT" retirer "$cle"
+    [ -n "${RELAIS_EN_LOT:-}" ] || ports_nft_appliquer
+    log "port retiré : $cle"
+}
+
 # SYNCHRONISER — sans argument, idempotent, sûr à relancer (minuteur horaire).
 #  • Satellite : le port des vhosts est ouvert au SEUL maître, qui voit donc les
 #    noms de la box ; real_ip lui fait confiance.
@@ -468,6 +659,58 @@ except Exception: pass' 2>/dev/null)"
             fi
         done
     done
+    # PORTS BRUTS (#3154). Les ports que ce relais publie lui-même sont notés d'abord (ip 127.0.0.1 : pas de règle ici, le
+    # module pose son propre DNAT) ; le premier déclarant d'un <proto/port> le garde. Boucle à part : les « continue » des
+    # noms (domaine refusé, liste illisible) ne doivent pas priver un pair de ses ports.
+    local lignes cle mod rep code corps tenus vus_p retires_p=0 relayes_p=0
+    export RELAIS_EN_LOT=1
+    lignes="$(ports_locaux)"; vus_p=" "
+    while read -r cle mod; do
+        [ -n "$cle" ] || continue
+        vus_p="$vus_p$cle "
+        if port_tenu_par_autre "$RELAIS_PORTS_ETAT" 127.0.0.1 "$cle"; then
+            log "port local $cle déjà relayé vers un pair — le pair garde"; audit_relais relais_port_refuse "$cle" 127.0.0.1; continue
+        fi
+        etat_ports_maj "$RELAIS_PORTS_ETAT" poser "$cle" 127.0.0.1 "$mod"
+    done <<<"$lignes"
+    for cle in $(ports_de_ip "$RELAIS_PORTS_ETAT" 127.0.0.1); do
+        [[ "$vus_p" == *" $cle "* ]] || etat_ports_maj "$RELAIS_PORTS_ETAT" retirer "$cle"
+    done
+    for ip in $pairs; do
+        rep="$(mktemp)"
+        code="$(curl -s --max-time 6 -o "$rep" -w '%{http_code}' -H 'Host: hall.localhost' \
+            "http://$ip:$PORT_PAIR/api/v1/webos/public/ports" || true)"
+        corps="$(cat "$rep")"; rm -f "$rep"
+        # injoignable (000) ou en panne (5xx) : les ports du pair restent. 404 : webos ancien, aucun port publié.
+        if [ "$code" = 404 ]; then
+            corps='{"ports": []}'
+        elif [ "$code" != 200 ]; then
+            continue
+        fi
+        if ! lignes="$(printf '%s' "$corps" | ports_du_pair)"; then
+            log "pair $ip : liste de ports illisible — rien ajouté ni retiré"; continue
+        fi
+        tenus=" "
+        while read -r cle mod; do
+            [ -n "$cle" ] || continue
+            if port_tenu_par_autre "$RELAIS_PORTS_ETAT" "$ip" "$cle"; then
+                log "pair $ip : port $cle déjà relayé vers un autre — refusé"
+                audit_relais relais_port_refuse "$cle" "$ip"; continue
+            fi
+            tenus="$tenus$cle "
+            if ( cmd_relayer_port "$cle" "$ip" "$mod" ) >/dev/null 2>&1; then relayes_p=$((relayes_p + 1)); fi
+        done <<<"$lignes"
+        # Le pair a répondu : ce qu'il ne publie plus n'est plus relayé.
+        for cle in $(ports_de_ip "$RELAIS_PORTS_ETAT" "$ip"); do
+            if [[ "$tenus" != *" $cle "* ]]; then
+                ( cmd_retirer_port "$cle" ) >/dev/null 2>&1 || true; retires_p=$((retires_p + 1))
+                audit_relais relais_port_retire "$cle" "$ip"
+            fi
+        done
+    done
+    unset RELAIS_EN_LOT
+    ports_nft_appliquer
+    log "ports : $relayes_p relayé(s), $retires_p retiré(s)"
     if [ "$ajoutes" -gt 0 ] || [ "$retires" -gt 0 ]; then
         # --allow-shrink seulement si des noms ont été retirés : sinon la garde anti-dérive reste entière
         local opt=()
@@ -617,9 +860,11 @@ cmd_fermer() {
 case "${1:-}" in
     relayer) shift; cmd_relayer "$@" ;;
     retirer) shift; cmd_retirer "$@" ;;
+    relayer-port) shift; cmd_relayer_port "$@" ;;
+    retirer-port) shift; cmd_retirer_port "$@" ;;
     etat)    cmd_etat ;;
     ouvrir)  shift; cmd_ouvrir "$@" ;;
     fermer)  shift; cmd_fermer "$@" ;;
     synchroniser) cmd_synchroniser ;;
-    *) sed -n '8,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    *) sed -n '8,21p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

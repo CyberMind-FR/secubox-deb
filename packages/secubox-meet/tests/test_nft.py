@@ -75,3 +75,24 @@ def test_sans_argument_rapporte_l_etat(tmp_path):
     apres = json.loads(run_ctl(tmp_path, "media-expose", nft_ok=True))
     assert apres["file_installed"] is True and apres["rule_live"] is True
     assert json.loads(run_ctl(tmp_path, "status"))["media"]["exposed"] is True
+
+
+def test_apply_publie_les_ports_pour_le_relais_du_maitre(tmp_path):
+    _prepare(tmp_path)
+    run_ctl(tmp_path, "media-expose", "--apply", nft_ok=True)
+    f = tmp_path / "ports-publics.d" / "meet.json"
+    assert json.loads(f.read_text()) == {"module": "meet", "ports": [{"proto": "tcp", "port": 7881}, {"proto": "udp", "port": 7882}]}
+    assert f.stat().st_mode & 0o777 == 0o644
+
+
+def test_revoke_depublie_les_ports(tmp_path):
+    _prepare(tmp_path)
+    run_ctl(tmp_path, "media-expose", "--apply", nft_ok=True)
+    run_ctl(tmp_path, "media-expose", "--revoke", nft_ok=True)
+    assert not (tmp_path / "ports-publics.d" / "meet.json").exists()
+
+
+def test_apply_refuse_par_nft_ne_publie_rien(tmp_path):
+    _prepare(tmp_path)
+    run_ctl_rc(tmp_path, "media-expose", "--apply", nft_ok=False)
+    assert not (tmp_path / "ports-publics.d" / "meet.json").exists()
