@@ -25,8 +25,57 @@ n'est écrit.
   Redis, et un fournisseur OIDC obligatoire. Installation officielle : Docker Compose ou Kubernetes ; Nix et YunoHost en
   communautaire. Aucune installation native Debian n'existe. Documentation encore en beta. Sources :
   <https://documentation-meet.beta.numerique.gouv.fr/self-hosting/> et <https://github.com/suitenumerique/meet>.
-  *Non vérifié :* la liste exacte des variables d'environnement et l'adresse de rappel (`redirect_uri`) de Meet ; à lire dans
-  `docs/installation/` du dépôt avant d'écrire le paquet.
+  La documentation d'installation et de configuration a été lue le 2026-10-25 : voir « Ce que dit la documentation de Meet ».
+
+## Ce que dit la documentation de Meet (lue le 2026-10-25)
+
+Sources : <https://documentation-meet.beta.numerique.gouv.fr/> (auto-hébergement, `reference/env-variables`, `configuration/sso`,
+`configuration/livekit`, `configuration/upgrade`) et `docs/installation/` du dépôt.
+
+**Méthodes officielles :** Kubernetes (celle de la production, seule à avoir un support avancé), Docker Compose, Scalingo. Nix et
+YunoHost sont communautaires, « instables » ou « en construction ». **Aucune installation native Debian n'est documentée** : le
+paquet `secubox-meet` sera une adaptation, sans support amont. Les images publiées sont `lasuite/meet-backend` et
+`lasuite/meet-frontend` (Docker Hub) ; la documentation ne chiffre ni CPU ni mémoire.
+
+**Briques obligatoires :** backend Django, front React, LiveKit, PostgreSQL, Redis (cache et courtier Celery), fournisseur OIDC.
+Facultatives : Egress, S3, résumés, téléphonie.
+
+**OIDC, la concordance avec notre fournisseur :**
+
+| Meet demande | Notre fournisseur | Verdict |
+|---|---|---|
+| Adresse de rappel `https://visio.<domaine>/api/v1.0/callback/` (barre finale obligatoire) | égalité stricte de `redirect_uri` | enregistrer exactement cette adresse |
+| `OIDC_OP_AUTHORIZATION/TOKEN/USER/JWKS_ENDPOINT` | les quatre existent | rien à faire |
+| `OIDC_RP_SIGN_ALGO=RS256` (défaut) | RS256 | rien à faire |
+| `OIDC_RP_SCOPES=openid email` | acceptés | rien à faire |
+| `OIDC_USE_PKCE=True`, méthode `S256` (recommandé) | S256 | activer |
+| `OIDC_USE_NONCE=True` (défaut) | nonce repris dans l'id_token | rien à faire |
+| `OIDC_OP_USER_ENDPOINT_FORMAT=AUTO` | `userinfo` répond en JSON | rien à faire |
+| Nom complet : `given_name`, `usual_name` (défaut) | nous publions `name`, `nickname`, `preferred_username` | **régler** `OIDC_USERINFO_FULLNAME_FIELDS=["name"]` et `OIDC_USERINFO_SHORTNAME_FIELD=nickname` |
+| `FRONTEND_IS_SILENT_LOGIN_ENABLED=True` (défaut) : exige `prompt=none` | `prompt=none` renvoie `login_required` quand il faut | compatible |
+| `OIDC_OP_LOGOUT_ENDPOINT` : facultatif | absent chez nous (écart 3) | **laisser vide** : la déconnexion de Meet ne ferme que la session de Meet |
+| `OIDC_FALLBACK_TO_EMAIL_FOR_IDENTIFICATION=False` (défaut) | le `sub` est stable ; le courriel synthétique n'est pas fiable | garder `False` |
+| `email_verified` : non mentionné par la documentation | faux pour l'adresse synthétique | à essayer ; écart 4 seulement si Meet le refuse |
+
+La documentation ne dit pas si les revendications viennent de l'id_token ou de `userinfo` : les deux portent les mêmes champs chez nous.
+
+**LiveKit :**
+- Signalisation (WebSocket) : en WSS sur 443 par un proxy inverse, vers LiveKit sur **7880** (non exposé).
+- Médias, option A recommandée : `tcp_port: 7881` et `udp_port: 7882` ; ouvrir **7881/TCP et 7882/UDP**. Option B (plage 50000–60000/UDP) :
+  plus large, déconseillée ici. Ne jamais régler `udp_port` et la plage ensemble.
+- **`LIVEKIT_API_URL` est l'adresse publique en HTTPS**, sur un **sous-domaine dédié** (`livekit.<domaine>`), utilisée par les
+  navigateurs *et* par le backend. Le backend doit donc résoudre ce nom depuis le conteneur.
+- `use_external_ip: true` sur un serveur derrière un NAT (LiveKit trouve son adresse publique par STUN) ; à ne pas mettre si l'adresse
+  publique est sur l'interface même. Clé et secret : `keys:` du serveur, `LIVEKIT_API_KEY` et `LIVEKIT_API_SECRET` (32 caractères et plus).
+- TURN : bloc `turn:` (UDP 443, domaine) pour les réseaux d'entreprise.
+
+**Variables de base :** `DJANGO_SETTINGS_MODULE=meet.settings`, `DJANGO_CONFIGURATION=Production`, `DJANGO_SECRET_KEY` (50 caractères et
+plus), `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `MEET_BASE_URL`, `DB_HOST/PORT/NAME/USER/PASSWORD`, `REDIS_URL`.
+**À régler pour nous :** `ALLOW_UNREGISTERED_ROOMS=False` (par défaut, `True` laisse **n'importe qui créer des salles sans compte** sur un
+nom public) ; `RESOURCE_DEFAULT_ACCESS_LEVEL` : `public` (lien suffisant) ou `trusted` selon la décision sur les invités externes.
+
+**Mise à jour :** lire `CHANGELOG.md` et `UPGRADE.md`, sauvegarder la base, puis `python manage.py migrate` **après chaque mise à
+jour**, puis `collectstatic`. LiveKit se met à jour séparément de Meet (vérifier la compatibilité). Épingler les versions.
 
 ## Objectifs
 
@@ -62,8 +111,13 @@ versionné), état, mise à jour (migrations Django, reconstruction du front). M
 
 ### Exposition
 
-- Nom `visio.<domaine>` : vhost nginx `server_name visio.*` sur 9080, route sbxwaf (`secubox-waf-route`), vhost HAProxy vers
-  `sbxwaf_inspector`, **comme la Boutique** (#3150). Aucun contournement du WAF pour la signalisation.
+- **Deux noms** : `visio.<domaine>` (Meet) et `livekit.<domaine>` (signalisation WSS de LiveKit, imposée par la documentation).
+  Pour chacun : vhost nginx `server_name … .*` sur 9080, route sbxwaf (`secubox-waf-route`), vhost HAProxy vers `sbxwaf_inspector`,
+  **comme la Boutique** (#3150). Aucun contournement du WAF pour la signalisation.
+- **À éprouver avant d'écrire le reste :** le WebSocket de LiveKit (mise à niveau HTTP) doit traverser HAProxy puis sbxwaf. C'est le
+  premier essai à faire, car un blocage ici change la conception (nom `livekit.*` servi hors inspection, décision à prendre alors).
+- **NAT :** si la box est derrière une box d'opérateur, il faut *rediriger* 7881/TCP et 7882/UDP vers elle et régler
+  `use_external_ip`. À vérifier pour gk2 : l'adresse publique est-elle sur son interface, ou derrière la Freebox ?
 - **Flux média hors WAF, décision explicite.** LiveKit exige **7881/TCP** et **7882/UDP** entrants (plage UDP selon la
   configuration retenue). Un WAF HTTP ne voit pas du WebRTC : même situation que l'UDP/10000 de Jitsi. Le drop-in nftables est
   livré en exemple (`/usr/share/doc/secubox-meet/examples/meet.nft`), jamais appliqué à l'installation ; la Boutique ou l'écran
@@ -78,11 +132,13 @@ versionné), état, mise à jour (migrations Django, reconstruction du front). M
    puis dans l'environnement du conteneur.
 2. Meet est configuré avec l'émetteur `https://hall.<domaine>/oidc`, ses quatre points d'accès, `RS256`, les portées
    `openid email`, PKCE.
-3. **Le conteneur doit joindre l'émetteur sous son nom public** : l'`iss` des jetons est comparé tel quel, donc pas d'adresse
+3. **Réglage des noms** : `OIDC_USERINFO_FULLNAME_FIELDS=["name"]`, `OIDC_USERINFO_SHORTNAME_FIELD=nickname`, `OIDC_USE_PKCE=True`, pas de
+   `OIDC_OP_LOGOUT_ENDPOINT`, `ALLOW_UNREGISTERED_ROOMS=False`.
+4. **Le conteneur doit joindre l'émetteur sous son nom public** : l'`iss` des jetons est comparé tel quel, donc pas d'adresse
    interne. Résolution du nom public vers la box depuis le conteneur (entrée d'hôtes vers l'adresse du pont LXC, ou DNS de la
    box) ; le certificat présenté est celui du Hall.
-4. Le cookie de session SecuBox couvre `.<domaine>` : le navigateur qui arrive de `visio.<domaine>` porte déjà la session du Hall.
-   Si elle manque, **voir l'écart 1** ci-dessous.
+5. Le cookie de session SecuBox couvre `.<domaine>` : le navigateur qui arrive de `visio.<domaine>` porte déjà la session du Hall.
+   Si elle manque, l'écart 1 (fait) le renvoie vers la connexion et il revient seul.
 
 ### Écarts du fournisseur à combler (#3155)
 
@@ -125,7 +181,8 @@ l'essai le demande.
 
 ## Laissé au constructeur
 
-- Version de Meet à figer et mode de fabrication du front.
+- Version de Meet à figer et mode de fabrication du front : construction Node à partir des sources, ou extraction des fichiers du paquet
+  d'images `lasuite/meet-frontend` à la fabrication (sans jamais lancer Docker sur la box).
 - Plage UDP de LiveKit et choix TURN intégré ou externe.
 - Mémoire cible du conteneur et plafond de participants.
 
@@ -142,5 +199,6 @@ l'essai le demande.
 ## Avancement
 
 - Écart 1 (#3155) : fait, avec les tests (renvoi vers la connexion avec retour, pas de boucle pour une session sans personne).
-- Écart 5 : à traiter avec `meetctl` (test de découverte et de JWKS depuis le conteneur).
+- Documentation d'installation lue : la concordance OIDC est complète sans autre changement du fournisseur (voir le tableau).
+- Écart 5 : à traiter avec `meetctl` (test de découverte et de JWKS depuis le conteneur, et du nom `livekit.<domaine>`).
 - Écarts 2, 3 et 4 : à faire quand Meet demande ce qu'il lui faut ; le 2 est facultatif d'après la décision 1.
