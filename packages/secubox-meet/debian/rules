@@ -23,7 +23,7 @@ override_dh_auto_install:
 	[ -f nginx/visio-vhost.conf ] && install -m 644 nginx/visio-vhost.conf $(P)/etc/nginx/sites-available/visio.conf || true
 	[ -f nginx/livekit-vhost.conf ] && install -m 644 nginx/livekit-vhost.conf $(P)/etc/nginx/sites-available/livekit.conf || true
 	install -d $(P)/etc/nginx/secubox-routes.d
-	[ -f nginx/meet-routes.conf ] && install -m 644 nginx/meet-routes.conf $(P)/etc/nginx/secubox-routes.d/ || true
+	[ -f nginx/meet-routes.conf ] && install -m 644 nginx/meet-routes.conf $(P)/etc/nginx/secubox-routes.d/meet.conf || true
 	# Actionneur root confiné : la seule surface privilégiée du module
 	install -d $(P)/usr/sbin
 	install -m 755 sbin/meetctl $(P)/usr/sbin/

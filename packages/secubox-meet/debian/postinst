@@ -1,0 +1,106 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+case "$1" in
+  configure)
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+
+    # Répertoires partagés : on ne resserre jamais un parent commun.
+    install -d -o root -g root -m 755 /etc/secubox
+    install -d -o root -g root -m 755 /etc/secubox/meet
+    install -d -o root -g root -m 700 /etc/secubox/secrets
+    install -d -o root -g root -m 700 /etc/secubox/secrets/meet
+    install -d -o secubox -g secubox -m 755 /var/cache/secubox/meet
+    # Publications de ports décidées par un administrateur (lues par le panneau).
+    if getent group secubox >/dev/null 2>&1; then
+      install -d -o root -g secubox -m 755 /var/lib/secubox/ports-publics.d
+    else
+      install -d -m 755 /var/lib/secubox/ports-publics.d
+    fi
+
+    if [ ! -f /etc/secubox/meet.toml ] && [ -f /usr/share/doc/secubox-meet/examples/meet.toml.example ]; then
+      cp /usr/share/doc/secubox-meet/examples/meet.toml.example /etc/secubox/meet.toml
+      chown root:secubox /etc/secubox/meet.toml
+      chmod 640 /etc/secubox/meet.toml
+    fi
+
+    # Jamais de sudoers cassé laissé en place.
+    if [ -f /etc/sudoers.d/secubox-meet ]; then
+      visudo -cf /etc/sudoers.d/secubox-meet >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-meet
+    fi
+
+    # Profil AppArmor (livré par une tâche ultérieure : sans effet tant qu'il est absent).
+    if [ -f /etc/apparmor.d/secubox-meet ] && command -v apparmor_parser >/dev/null 2>&1; then
+      apparmor_parser -r /etc/apparmor.d/secubox-meet || echo "secubox-meet : profil AppArmor non chargé" >&2
+    fi
+
+    systemctl daemon-reload 2>/dev/null || true
+    # API de l'hôte (unité livrée par une tâche ultérieure : sans effet tant qu'absente).
+    if [ -f /usr/lib/systemd/system/secubox-meet.service ]; then
+      systemctl enable --now secubox-meet.service || true
+    fi
+
+    # Vhosts visio.<domaine> et livekit.<domaine>. La route sbxwaf et le vhost
+    # HAProxy ne valent que si nginx accepte la configuration : poser l'un sans
+    # l'autre échange un 421 contre un 502.
+    if command -v nginx >/dev/null 2>&1 && [ -f /etc/nginx/sites-available/visio.conf ] \
+       && [ -f /etc/nginx/sites-available/livekit.conf ]; then
+      ln -sf ../sites-available/visio.conf /etc/nginx/sites-enabled/visio.conf
+      ln -sf ../sites-available/livekit.conf /etc/nginx/sites-enabled/livekit.conf
+      if NT=$(nginx -t 2>&1); then
+        HAP_A_RECHARGER=0
+        for NOM in visio livekit; do
+          DOMAINE="$(secubox-domaine "$NOM" 2>/dev/null || true)"
+          [ -n "$DOMAINE" ] || continue
+          command -v secubox-waf-route >/dev/null 2>&1 && { secubox-waf-route "$DOMAINE" 9080 || true; }
+          if command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ] \
+             && ! grep -q "\"$DOMAINE\"" /etc/secubox/haproxy.toml 2>/dev/null; then
+            haproxyctl vhost add "$DOMAINE" sbxwaf_inspector true >/dev/null 2>&1 || true
+            HAP_A_RECHARGER=1
+          fi
+        done
+        if [ "$HAP_A_RECHARGER" = 1 ]; then
+          haproxyctl generate >/dev/null 2>&1 || true
+          systemctl reload haproxy >/dev/null 2>&1 || true
+        fi
+      else
+        echo "secubox-meet : nginx -t a échoué, vhosts visio et livekit NON activés : $NT" >&2
+        rm -f /etc/nginx/sites-enabled/visio.conf /etc/nginx/sites-enabled/livekit.conf
+      fi
+    fi
+    if systemctl is-active --quiet nginx 2>/dev/null; then
+      if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+    fi
+
+    # DÉLIBÉRÉ : la règle nftables des ports média n'est PAS appliquée ici.
+    # Ouvrir des ports entrants est une décision d'exposition, pas un effet de
+    # bord d'un « apt install » : elle se prend depuis la page /meet/ ou par
+    # meetctl, et l'exemple est livré dans /usr/share/doc/secubox-meet/examples/.
+    ;;
+esac
+#DEBHELPER#
+
+# Le provisionnement est démarré APRÈS le bloc debhelper, délibérément.
+#
+# Ce bloc injecte un redémarrage des unités du paquet. Démarré AVANT, le
+# provisionnement se ferait tuer en pleine création du conteneur, laissant un
+# conteneur à moitié créé que la relance refuse ensuite de reprendre.
+#
+# NOTE : ne jamais écrire le jeton de substitution debhelper en toutes lettres
+# dans un commentaire de ce fichier : il est remplacé partout où il apparaît.
+#
+# En arrière-plan (--no-block) : debootstrap, compilation du front et
+# environnement Python prennent 15 à 30 minutes et demandent du réseau. L'unité
+# est un no-op après une mise en route réussie (ConditionPathExists).
+case "$1" in
+  configure)
+    systemctl enable secubox-meet-provision.service 2>/dev/null || true
+    systemctl start --no-block secubox-meet-provision.service 2>/dev/null || true
+    ;;
+esac
+exit 0
