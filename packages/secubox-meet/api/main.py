@@ -18,7 +18,7 @@ Routes (préfixe nginx /api/v1/meet, retiré avant l'application) :
   POST /media-expose       {action: apply|revoke, confirmer: "meet"}  (JWT)
   POST /control            {action: start|stop|restart}               (JWT)
   GET  /oidc               meetctl oidc-verifier                       (JWT)
-  POST /oidc/enregistrer   {renouveler: bool}                         (JWT)
+  POST /oidc/enregistrer   sans option (le renouvellement reste à root)   (JWT)
   GET  /logs               ?unit=&lines=                              (JWT)
 """
 from __future__ import annotations
@@ -37,7 +37,7 @@ from pydantic import BaseModel
 # Aucun repli : sans la bibliothèque d'authentification, l'API ne se charge pas.
 from secubox_core.auth import require_jwt, require_lecture
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 CTL = "/usr/sbin/meetctl"
 
@@ -173,10 +173,6 @@ class MediaRequest(BaseModel):
     confirmer: str = ""
 
 
-class OidcRequest(BaseModel):
-    renouveler: bool = False
-
-
 @app.get("/health")
 async def health() -> Dict[str, str]:
     return {"status": "ok", "module": "meet"}
@@ -223,12 +219,14 @@ async def oidc(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
 
 
 @app.post("/oidc/enregistrer")
-async def oidc_enregistrer(req: OidcRequest | None = None,
-                           _: Any = Depends(require_jwt)) -> Dict[str, Any]:
-    args = ["oidc-enregistrer"]
-    if req is not None and req.renouveler:
-        args.append("--renouveler")
-    return await _borne(lambda: _ctl_json(*args, timeout=60))
+async def oidc_enregistrer(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
+    # argv exact, seul accordé par le sudoers. Un nouveau secret est porté au
+    # conteneur par meetctl (nouveau rendu, relance de meet-backend) : délai large.
+    def _agir():
+        res = _ctl_json("oidc-enregistrer", timeout=120)
+        _invalider_status()
+        return res
+    return await _borne(_agir)
 
 
 @app.get("/logs")

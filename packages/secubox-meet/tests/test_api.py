@@ -4,7 +4,11 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """API hôte dédiée de secubox-meet (#3154) : tout passe par `sudo -n meetctl`."""
 import asyncio
+import fnmatch
 import json
+import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -147,8 +151,10 @@ def test_oidc_verifier_et_enregistrer_exigent_jwt(cli):
     assert cli.appels[-1] == ("oidc-verifier",)
     assert cli.post("/oidc/enregistrer", json={}, jwt=True).status_code == 200
     assert cli.appels[-1] == ("oidc-enregistrer",)
+    # m1 : l'API n'offre plus le renouvellement (le sudoers ne l'accorde pas) : un champ en trop est ignoré.
     assert cli.post("/oidc/enregistrer", json={"renouveler": True}, jwt=True).status_code == 200
-    assert cli.appels[-1] == ("oidc-enregistrer", "--renouveler")
+    assert cli.appels[-1] == ("oidc-enregistrer",)
+    assert "--renouveler" not in (RACINE / "api" / "main.py").read_text()
 
 
 def test_erreur_du_ctl_remonte_en_500(cli, monkeypatch):
@@ -195,3 +201,60 @@ def test_cache_fichier_non_dict_ignore(cli):
 def test_import_strict_de_l_authentification():
     src = (RACINE / "api" / "main.py").read_text()
     assert "except ImportError" not in src and "from secubox_core.auth import require_jwt, require_lecture" in src
+
+
+# ── m1 : le sudoers n'accorde QUE les argv exacts que l'API emploie ─────────────────────────────────
+
+SUDOERS = RACINE / "debian" / "secubox-meet.sudoers"
+
+
+def _regles_sudoers():
+    """Les argv accordés à `secubox` (après /usr/sbin/meetctl), un par commande de la liste."""
+    texte = re.sub(r"\\\n", " ", SUDOERS.read_text())
+    lignes = [li for li in texte.splitlines() if li.strip() and not li.lstrip().startswith("#")]
+    regles = []
+    for ligne in lignes:
+        m = re.match(r"\s*Cmnd_Alias\s+(\w+)\s*=\s*(.*)$", ligne)
+        corps = m.group(2) if m else ligne.split("NOPASSWD:", 1)[1]
+        for cmd in corps.split(","):
+            cmd = cmd.strip()
+            if cmd.startswith("/usr/sbin/meetctl"):
+                regles.append(cmd[len("/usr/sbin/meetctl"):].strip())
+    return regles
+
+
+def test_sudoers_argv_exacts():
+    regles = _regles_sudoers()
+    assert "" not in regles                            # jamais « meetctl » nu (tous les arguments)
+    unites = ("postgresql", "redis-server", "livekit", "meet-backend", "nginx")
+    assert sorted(regles) == sorted(["status", "start", "stop", "restart", "media-expose", "media-expose --apply",
+                                     "media-expose --revoke", "oidc-verifier", "oidc-enregistrer"]
+                                    + [f"logs {u} [0-9]*" for u in unites])
+    assert tuple(unites) == M.KNOWN_UNITS
+    t = SUDOERS.read_text()
+    assert "secubox ALL=(root) NOPASSWD:" in t and "--renouveler" not in t
+
+
+def test_chaque_appel_de_l_api_est_accorde_par_le_sudoers(cli):
+    regles = _regles_sudoers()
+    cli.get("/status")
+    cli.get("/media-expose")
+    for action in ("start", "stop", "restart"):
+        cli.post("/control", json={"action": action}, jwt=True)
+    for action in ("apply", "revoke"):
+        cli.post("/media-expose", json={"action": action, "confirmer": "meet"}, jwt=True)
+    cli.get("/oidc", jwt=True)
+    cli.post("/oidc/enregistrer", json={}, jwt=True)
+    for unite in M.KNOWN_UNITS:
+        cli.get(f"/logs?unit={unite}&lines=7", jwt=True)
+    assert len(cli.appels) == 9 + len(M.KNOWN_UNITS)
+    for argv in cli.appels:
+        assert any(fnmatch.fnmatchcase(" ".join(argv), r) for r in regles), argv
+
+
+def test_sudoers_valide_par_visudo():
+    visudo = shutil.which("visudo") or "/usr/sbin/visudo"
+    if not Path(visudo).exists():
+        pytest.skip("visudo absent")
+    r = subprocess.run([visudo, "-cf", str(SUDOERS)], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stdout + r.stderr

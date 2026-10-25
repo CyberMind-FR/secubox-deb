@@ -10,17 +10,25 @@ case "$1" in
       adduser --system --group --no-create-home \
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
 
-    # Répertoires partagés : on ne resserre jamais un parent commun.
-    install -d -o root -g root -m 755 /etc/secubox
-    install -d -o root -g root -m 755 /etc/secubox/meet
-    install -d -o root -g root -m 700 /etc/secubox/secrets
-    install -d -o root -g root -m 700 /etc/secubox/secrets/meet
-    install -d -o secubox -g secubox -m 755 /var/cache/secubox/meet
-    # Publications de ports décidées par un administrateur (lues par le panneau).
+    # Parents PARTAGÉS : créés seulement s'ils manquent, jamais resserrés ni
+    # réattribués. `install -d` impose mode et propriétaire à un dossier qui
+    # existe déjà : /etc/secubox appartient à secubox (l'agrégateur y écrit
+    # users.json), /etc/secubox/secrets est root:secubox 0750 avec des ACL de
+    # traversée (le fournisseur OIDC y lit sa clé de signature).
+    [ -d /etc/secubox ] || install -d -m 0755 /etc/secubox
+    [ -d /etc/secubox/secrets ] || install -d -o root -g secubox -m 0750 /etc/secubox/secrets
+    [ -d /var/cache/secubox ] || install -d -m 0755 /var/cache/secubox
+    [ -d /var/lib/secubox ] || install -d -m 0755 /var/lib/secubox
+    # Feuilles du module seulement.
+    install -d -o root -g root -m 0755 /etc/secubox/meet
+    install -d -o root -g root -m 0700 /etc/secubox/secrets/meet
+    install -d -o secubox -g secubox -m 0755 /var/cache/secubox/meet
+    # Publications de ports décidées par un administrateur (lues par le panneau),
+    # dossier commun à tous les modules qui publient des ports.
     if getent group secubox >/dev/null 2>&1; then
-      install -d -o root -g secubox -m 755 /var/lib/secubox/ports-publics.d
+      [ -d /var/lib/secubox/ports-publics.d ] || install -d -o root -g secubox -m 0755 /var/lib/secubox/ports-publics.d
     else
-      install -d -m 755 /var/lib/secubox/ports-publics.d
+      [ -d /var/lib/secubox/ports-publics.d ] || install -d -m 0755 /var/lib/secubox/ports-publics.d
     fi
 
     if [ ! -f /etc/secubox/meet.toml ] && [ -f /usr/share/doc/secubox-meet/examples/meet.toml.example ]; then
@@ -115,6 +123,19 @@ case "$1" in
   configure)
     systemctl enable secubox-meet-provision.service 2>/dev/null || true
     systemctl start --no-block secubox-meet-provision.service 2>/dev/null || true
+    if [ -f /etc/secubox/meet/.lxc-provisioned ]; then
+      # Réinstallation après « apt remove » : le prerm a coupé l'autostart et
+      # arrêté le conteneur ; sans cela Meet resterait arrêté, même au démarrage.
+      meetctl autostart on >/dev/null 2>&1 || true
+      meetctl start >/dev/null 2>&1 || true
+      # Mise à jour : nouveau rendu (configuration, secrets, version de Meet) en
+      # arrière-plan, jamais bloquant pour dpkg. L'unité de provisionnement est un
+      # no-op une fois la sentinelle posée : sans ce rendu, rien n'atteindrait
+      # les services du conteneur.
+      if [ -n "${2:-}" ]; then
+        systemctl start --no-block secubox-meet-rerendu.service 2>/dev/null || true
+      fi
+    fi
     ;;
 esac
 exit 0

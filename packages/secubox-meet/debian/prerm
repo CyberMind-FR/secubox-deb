@@ -6,9 +6,15 @@
 set -e
 case "$1" in
   remove)
-    systemctl stop secubox-meet.service secubox-meet-provision.service 2>/dev/null || true
+    systemctl stop secubox-meet.service secubox-meet-provision.service secubox-meet-rerendu.service 2>/dev/null || true
+    # Le lien multi-user.target.wants de l'unité de provisionnement survivrait au
+    # retrait des fichiers : on désactive tant que les unités existent.
+    systemctl disable secubox-meet-provision.service secubox-meet.service 2>/dev/null || true
     # Les ports médias ne restent jamais ouverts vers un conteneur arrêté.
     meetctl media-expose --revoke || true
+    # Sans cela, lxc.start.auto = 1 relancerait le conteneur au prochain démarrage
+    # de la box, paquet retiré. Le postinst le réarme à la réinstallation.
+    meetctl autostart off || true
     meetctl stop || true
     ;;
 esac
