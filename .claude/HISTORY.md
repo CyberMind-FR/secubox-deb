@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-25 — Services des pairs : domaine limité à secubox.in, noms triés par carte du Hall (closes #3146)
+
+- annuaire 0.15.1 : un pair n'est retenu que si son ddns est `<un libellé>.secubox.in` (un seul niveau) ou dans
+  `/etc/secubox/annuaire/domaines-pairs.txt` (liste blanche facultative). webos 1.20.1 : `GET /public/noms` met d'abord
+  les noms dont le libellé est une carte du Hall (190 noms sur gk2, 64 publiés : les cartes d'abord, plus l'alphabet).
+- Déployé sur gk2 (PR #3147), vérifié : tri effectif, cache des pairs inchangé (1 pair, 5 services). **gk1 non mis à jour** :
+  SSH refusé depuis ce poste (clé absente) ; il suivra par apt.
+- Suivi : AppArmor du module p2p = #3145. Échecs de tests préexistants : ytflux_aurora_2638 (webos), 15 tests annuaire
+  (test_api_directory, centers_api, fleet_api), identiques sans ce changement.
+
 ## 2026-10-24 — Maillage, projet 2 : services des pairs dans le Hall, liens WireGuard directs (ref #3133)
 
 - PR #3144 (conception #3141, plan, 7 tâches en sous-agents, revue de chaque tâche, revue finale de la branche, deux re-relectures) :
