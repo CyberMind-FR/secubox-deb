@@ -320,6 +320,68 @@ def test_apply_refuse_par_nft_ne_laisse_rien(tmp_path):
 
 ---
 
+### Tâche 4b : relais des médias par le maître (ports publiés par le pair, DNAT sur gk2)
+
+Décision du propriétaire (2026-10-25) : « redirection via gk2 ». Une box derrière le relais (gk1) n'a pas de redirection Freebox :
+les ports média arrivent sur le maître (cible de la DMZ), qui les renvoie au pair par `wg-mesh`, comme il relaie déjà les noms HTTP.
+
+**Files:**
+- Create: `packages/secubox-webos/api/ports.py`, `packages/secubox-webos/tests/test_ports_publics_3154.py`,
+  `packages/secubox-p2p/tests/test_relais_ports_3154.py`
+- Modify: `packages/secubox-webos/api/main.py` (`GET /public/ports`), `packages/secubox-p2p/sbin/secubox-relais-maillage`
+  (fonctions `ports_du_pair`, `port_tenu_par_autre`, `cmd_relayer_port`, `cmd_retirer_port`, appel dans `cmd_synchroniser`),
+  `packages/secubox-meet/sbin/meetctl` (`media-expose` publie/dépublie), changelogs webos `1.20.4` et p2p `1.19.1`.
+- Reference: `cmd_synchroniser` (boucle sur `pairs_32`, lecture `http://$ip:$PORT_PAIR/api/v1/webos/public/noms` avec
+  `Host: hall.localhost`), `noms_du_pair` (Python intégré, testé par extraction `<<'PY'`), `audit_relais`,
+  `packages/secubox-p2p/tests/test_relais_services_pairs_3132.py` (patron de test des fonctions Python du script).
+
+**Interfaces:**
+- Publication côté pair : `meetctl media-expose --apply` écrit `/var/lib/secubox/ports-publics.d/meet.json` (0644, dossier 0755
+  root:secubox) = `{"module":"meet","ports":[{"proto":"tcp","port":7881},{"proto":"udp","port":7882}]}` ; `--revoke` le retire.
+- webos `GET /public/ports` (libre, comme `/noms`) → `{"domaine": <domaine de la box>, "ports": [{"proto","port","module"}]}`,
+  lu dans `/var/lib/secubox/ports-publics.d/*.json` ; fichier illisible ignoré ; `proto` ∈ {tcp, udp}, `port` entier 1024–65535,
+  `module` `[a-z0-9-]{1,32}`, au plus 16 entrées.
+- Relais (maître) : état `/var/lib/secubox/p2p/relais-ports.json` = `{"<proto>/<port>": {"ip": "10.10.0.8", "module": "meet"}}`.
+  Table nft vivante `inet secubox-relais-ports` : chaîne `prerouting` (dstnat) `iifname != "wg-mesh" <proto> dport <port> counter dnat ip to <ip>:<port>
+  comment "relais-ports <module>"`, chaîne `postrouting` (srcnat) `oifname "wg-mesh" ip daddr <ip> <proto> dport <port> counter masquerade`
+  (le retour repasse par le maître : sans cela la Freebox verrait une réponse hors de sa table NAT), chaîne `forward` (filter, priority 0)
+  `oifname "wg-mesh" ip daddr <ip> <proto> dport <port> accept`. Persistance : fichier `/etc/nftables.d/secubox-relais-ports.nft`
+  régénéré à chaque synchronisation (table entière), **jamais `nft -f nftables.conf`**.
+- Règles : un `<proto>/<port>` n'a qu'un propriétaire dans le parc ; le premier déclarant gagne (le maître lui-même compte, via son
+  propre `ports-publics.d`) ; un second est refusé avec `audit_relais relais_port_refuse` ; un pair qui répond sans le port le libère
+  aussitôt ; un pair injoignable garde ses ports.
+
+- [ ] **Step 1: Tests (rouges)** :
+
+```python
+# webos
+def test_public_ports_lit_le_dossier_et_filtre(tmp_path, monkeypatch):
+    (tmp_path / "meet.json").write_text('{"module":"meet","ports":[{"proto":"tcp","port":7881},{"proto":"udp","port":7882},{"proto":"icmp","port":1},{"proto":"tcp","port":22}]}')
+    (tmp_path / "x.json").write_text("{pas du json")
+    monkeypatch.setattr(ports, "DOSSIER", tmp_path)
+    assert ports.lire() == [{"proto": "tcp", "port": 7881, "module": "meet"}, {"proto": "udp", "port": 7882, "module": "meet"}]
+
+# p2p (extraction du Python du script, comme test_relais_services_pairs_3132)
+def test_ports_du_pair_rejette_une_liste_illisible(): ...        # {"ports": "x"} → rc 1 ; liste valide → "tcp/7881 meet\nudp/7882 meet"
+def test_port_tenu_par_autre_refuse_le_second_declarant(tmp_path):
+    etat = {"udp/7882": {"ip": "10.10.0.5", "module": "meet"}}
+    assert rc("port_tenu_par_autre", etat, "10.10.0.8", "udp/7882") == 0 and rc("port_tenu_par_autre", etat, "10.10.0.5", "udp/7882") == 1
+def test_fichier_nft_regenere_dnat_masquerade_forward(tmp_path):
+    t = rendu_nft({"udp/7882": {"ip": "10.10.0.8", "module": "meet"}})
+    assert 'iifname != "wg-mesh" udp dport 7882 counter dnat ip to 10.10.0.8:7882' in t and 'oifname "wg-mesh" ip daddr 10.10.0.8 udp dport 7882 counter masquerade' in t
+def test_synchroniser_appelle_le_relais_des_ports():
+    s = TEXTE[TEXTE.index("cmd_synchroniser() {"):TEXTE.index("cmd_retirer() {")]
+    assert "public/ports" in s and "port_tenu_par_autre" in s and "relais_port_refuse" in s
+```
+
+- [ ] **Step 2: Vérifier l'échec** → FAIL.
+- [ ] **Step 3: Implémenter** les trois côtés (webos, relais, meetctl). Dans `cmd_synchroniser`, la lecture de `/public/ports` suit celle
+  de `/public/noms` pour le même pair ; un pair sans route `/public/ports` (webos ancien, 404) est traité comme « aucun port ».
+- [ ] **Step 4: Vérifier** → `pytest` de webos, p2p et meet → PASS ; `shellcheck` du relais.
+- [ ] **Step 5: Commit** — `git commit -m "feat: relais des ports média par le maître, ports publiés par le pair (ref #3154)"`.
+
+---
+
 ### Tâche 5 : vhosts hôte, scripts de maintenance, README
 
 **Files:**
@@ -511,7 +573,8 @@ Pas de code. Exécuté par le contrôleur de session, avec l'accord du propriét
 - [ ] Depuis Internet : `https://visio.gk1.secubox.in/` → page Meet (200, `x-secubox-waf: inspected`) ; « Se connecter » → connexion du
   Hall → retour sur Meet avec le compte de la personne ; `wss://livekit.gk1.secubox.in/rtc` → 101.
 - [ ] Depuis la page d'administration : « Ouvrir les ports média » → confirmer → `nft list table inet secubox-meet` montre les deux
-  règles ; sur la Freebox, redirections 7881/TCP et 7882/UDP vers gk1 (à la main tant que #3160 n'est pas livré).
+  règles sur gk1 ; à la synchronisation suivante du relais, `nft list table inet secubox-relais-ports` sur gk2 montre le DNAT vers
+  10.10.0.8 (aucune redirection Freebox : gk2 est la cible de la DMZ).
 - [ ] Deux participants (un sur le LAN, un en 4G) dans une salle : audio et vidéo dans les deux sens ; compteurs `counter` des règles
   nft non nuls. Retirer l'exposition : `media-expose --revoke`, table absente.
 - [ ] `HISTORY.md`, `MIGRATION-MAP.md`, `WIP.md` ; fermeture de #3154 par `closes #3154` une fois déployé.
@@ -521,9 +584,9 @@ Pas de code. Exécuté par le contrôleur de session, avec l'accord du propriét
 ## Auto-revue
 
 - **Couverture de la spec** : conteneur et briques (T2), exposition et noms (T5), médias sur décision (T4, T7, T9), identité (T3, T6),
-  écarts 5 (T3) ; Boutique et solutions par besoin (T8) ; sécurité : secrets (T2/T3), AppArmor (T7), surface réduite (T4/T5),
+  écarts 5 (T3) ; médias d'un pair derrière le relais (T4b) ; Boutique et solutions par besoin (T8) ; sécurité : secrets (T2/T3), AppArmor (T7), surface réduite (T4/T5),
   confinement (T2) ; tests et preuves (chaque tâche + T9). Non couvert, volontairement : fédération d'identité (#3157), redirections
-  Freebox (#3160), enregistrement/transcription/téléphonie, restriction d'accès par client (facultative d'après la décision 1).
+  Freebox (#3160, utile seulement pour une box qui n'est pas derrière le relais), enregistrement/transcription/téléphonie, restriction d'accès par client (facultative d'après la décision 1).
 - **Cohérence des noms** : `meetctl` et ses verbes (`status`, `start`, `stop`, `restart`, `logs`, `install`, `oidc-enregistrer`,
   `oidc-verifier`, `media-expose`) sont identiques dans T1, T3, T4, T6, T7 ; adresse `10.100.0.195` et ports `7881/7882` partout ;
   variables d'environnement de test définies en T1 et réutilisées.

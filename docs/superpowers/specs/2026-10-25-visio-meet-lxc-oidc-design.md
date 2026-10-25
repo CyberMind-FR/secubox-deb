@@ -202,7 +202,10 @@ l'essai le demande.
    le fournisseur l'authentifie déjà). Pas de restriction par défaut ; la politique par client (écart 2) reste une option.
    *Précision de mon fait :* Meet lui-même laisse un participant sans compte rejoindre une salle par son lien ; l'OIDC ne sert qu'à
    créer et gérer des salles.
-2. **Ports média :** ouverts **après confirmation dans la Boutique** (jamais par `apt install`, comme Jitsi).
+2. **Ports média :** ouverts **après confirmation** (jamais par `apt install`, comme Jitsi) ; la confirmation vit dans la page
+   d'administration `/meet/`, que la Boutique ouvre par ⚙️. **Redirection via gk2** (décision du 2026-10-25) : une box derrière le
+   relais publie ses ports média (`/public/ports`) et le maître, cible de la DMZ, les DNAT vers elle par `wg-mesh` avec masquerade
+   (retour par le maître). Aucune redirection Freebox pour ces boxes ; #3160 reste utile pour une box exposée en direct.
 3. **Fédération d'identité entre boxes :** voulue ; projet à part, issue #3157. Les écarts du fournisseur sont conçus pour ne pas
    l'empêcher : l'émetteur reste lu en configuration et le `sub` reste l'identifiant stable de la personne.
 
