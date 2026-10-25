@@ -1450,6 +1450,8 @@ const FEATURED = [
   {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in", carte:"/cardlets/quick.html?svc=photoprism", h:190, auth:true, si_present:"/adm/api/v1/photoprism/status"},
   {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in", micro:"/micro", h:300, admin:false},
   {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in", micro:"/micro.html", h:236},
+  // BOUTIQUE (#3150) : la vitrine client de l'App Store sous son propre vhost, encadrée ici ; ⚙️ → l'administration, admin.<domaine>/appstore/.
+  {id:"boutique",   label:"Boutique", icon:"🛍️", color:"#1d5fa8", url:"boutique.gk2.secubox.in", admin:"/appstore/", h:236},
   // Freebox TV (#1238) : grille des chaînes + lecteur HLS (sas ffmpeg RTSP→HLS
   // on-demand, secubox-freeboxtv). Cardlet locale (pas de vhost). Visible comme
   // les autres cartes média (radio/podcaster) ; la restriction LAN (souveraineté)

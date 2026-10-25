@@ -10,6 +10,26 @@ case "$1" in
         systemctl daemon-reload 2>/dev/null || true
         systemctl enable --now secubox-appstore.service 2>/dev/null || true
         systemctl try-restart secubox-appstore.service 2>/dev/null || true
+        # Vhost boutique.<domaine> (#3150). La route sbxwaf et le vhost HAProxy ne valent que si nginx accepte la
+        # configuration : poser l'un sans l'autre échange un 421 contre un 502.
+        if command -v nginx >/dev/null 2>&1 && [ -f /etc/nginx/sites-available/boutique.conf ]; then
+            ln -sf ../sites-available/boutique.conf /etc/nginx/sites-enabled/boutique.conf
+            if NT=$(nginx -t 2>&1); then
+                DOMAINE="$(secubox-domaine boutique 2>/dev/null || true)"
+                if [ -n "$DOMAINE" ]; then
+                    command -v secubox-waf-route >/dev/null 2>&1 && { secubox-waf-route "$DOMAINE" 9080 || true; }
+                    if command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ] \
+                       && ! grep -q "\"$DOMAINE\"" /etc/secubox/haproxy.toml 2>/dev/null; then
+                        haproxyctl vhost add "$DOMAINE" sbxwaf_inspector true >/dev/null 2>&1 || true
+                        haproxyctl generate >/dev/null 2>&1 || true
+                        systemctl reload haproxy >/dev/null 2>&1 || true
+                    fi
+                fi
+            else
+                echo "secubox-appstore : nginx -t a échoué, vhost boutique NON activé : $NT" >&2
+                rm -f /etc/nginx/sites-enabled/boutique.conf
+            fi
+        fi
         if systemctl is-active --quiet nginx 2>/dev/null; then
             nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
         fi

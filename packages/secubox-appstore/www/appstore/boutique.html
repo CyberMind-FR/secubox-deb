@@ -113,7 +113,7 @@ dialog::backdrop{background:rgba(2,8,20,.65);backdrop-filter:blur(4px)}
     </div>
     <nav class="tabs" role="tablist" id="tabs"></nav>
     <div class="demo" id="demo" hidden>Démonstration : apps et états d’exemple, aucune installation réelle.</div>
-    <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:inherit">Se connecter</a></div>
+    <div class="info" id="session" hidden>Aucune mesure : session requise. <a id="connexion" href="/login.html" style="color:inherit">Se connecter</a></div>
     <div class="erreur" id="erreur" hidden></div>
   </header>
   <main id="main"></main>
@@ -269,6 +269,8 @@ async function charger(){
 function annoncer(){try{parent.postMessage({sbxVue:Math.ceil(document.querySelector('.wrap').getBoundingClientRect().bottom+scrollY),onglet:'boutique'},location.origin)}catch(e){/* hors iframe */}}
 if(window.ResizeObserver)new ResizeObserver(annoncer).observe(document.body);
 addEventListener('resize',annoncer);
+/* Sous boutique.<domaine>, la connexion est celle du Hall de la même box (cookie SSO du domaine). */
+(function(){const h=location.hostname.split('.');if(h[0]==='boutique'&&h.length>2)$('connexion').href=location.protocol+'//hall.'+h.slice(1).join('.')+'/login.html'})();
 charger();
 setInterval(()=>{const a=document.activeElement,saisie=a&&a.tagName==='INPUT';if(document.hidden||DEMO||saisie||$('dlg').open||SUIVI)return;charger()},60000);
 </script>
