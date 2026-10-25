@@ -162,6 +162,17 @@
       ]
     },
     {
+      "id": "visio",
+      "ic": "🎥",
+      "nom": "Visio",
+      "service": "meet",
+      "acces": "session",
+      "role": "La visio de La Suite numérique, hébergée sur la box : des salles d'appel vidéo privées, ouvertes aux invités par un simple lien.",
+      "usage": [
+        "Ouvrir la carte lance la visio avec votre compte SecuBox ; ⚙️ ouvre l'administration (état, ports média) du module."
+      ]
+    },
+    {
       "id": "podcaster", "ic": "🎙️", "nom": "Podcaster", "service": "podcaster", "acces": "public",
       "role": "Les podcasts de la box : abonnements, épisodes téléchargés localement, lecteur qui reprend où vous étiez même après un rafraîchissement.",
       "usage": ["Commandes de lecture, file « à suivre », barre de progression cliquable."],

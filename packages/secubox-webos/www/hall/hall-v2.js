@@ -421,7 +421,7 @@
   // Mur de discussion (bbs), Éphéméride, Zigbee, DevWatch, ZIA, Mes comptes, Lyrion, Freebox TV, L'écoute (mood), YTSaS.
   var MIGREES=['securite','acteurs','radar','guardian','dpi','ipv6guard','activite',
     'metanews','ytflux','billets','radio','bbs','ephemeride','zigbee','devwatch','zia','comptes','lyrion','freeboxtv','mood','ytsas'];
-  var ICO_CARTE={securite:'bouclier',acteurs:'bouclier',radar:'bouclier',guardian:'globe',dpi:'reseau',ipv6guard:'reseau',activite:'actualite',
+  var ICO_CARTE={visio:'media',securite:'bouclier',acteurs:'bouclier',radar:'bouclier',guardian:'globe',dpi:'reseau',ipv6guard:'reseau',activite:'actualite',
     metanews:'actualite',ytflux:'film',billets:'billet',radio:'radio',bbs:'bulle',ephemeride:'calendrier',zigbee:'ampoule',devwatch:'satellite',
     zia:'ia',comptes:'cle',lyrion:'musique',freeboxtv:'ecran',mood:'micro',ytsas:'film',boutique:'grille'};
   // Une carte de curation a un id à elle (pas de module « securite ») : son statut est celui du module qui la sert.

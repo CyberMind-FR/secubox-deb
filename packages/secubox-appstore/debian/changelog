@@ -1,3 +1,14 @@
+secubox-appstore (0.10.2-1~trixie1) trixie; urgency=medium
+
+  * Boutique (ref #3154) : un besoin regroupe plusieurs solutions (boutique-besoins.json). La fiche « Visio » présente
+    Jitsi Meet, La Suite Meet et BigBlueButton (« Bientôt »), chacune avec ses atouts ; le paquet installé est mis en
+    avant et suit le parcours habituel (Obtenir, installation, Ouvrir). Un paquet solution n'est plus listé seul, sauf
+    dans « Installées ». Fiche « La Suite Meet » ajoutée, Jitsi devient « Jitsi Meet ».
+  * Correctif (ref #3150) : la page lit ses fiches par URL relative, ce que le vhost boutique.<domaine> sert (il
+    ne servait pas /appstore/boutique-fiches.json) ; le vhost publie aussi /boutique-besoins.json.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 17:00:00 +0000
+
 secubox-appstore (0.10.1-1~trixie1) trixie; urgency=medium
 
   * Vhost boutique.<domaine> (ref #3150) : la boutique client a son propre nom (server_name boutique.*), encadrable par le

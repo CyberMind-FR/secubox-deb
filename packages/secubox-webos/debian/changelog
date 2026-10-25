@@ -1,3 +1,10 @@
+secubox-webos (1.20.5-1~trixie1) trixie; urgency=medium
+
+  * Carte « Visio » du Hall (ref #3154) : visio.<domaine>, présente seulement si le module meet répond
+    (/api/v1/meet/health), avec son aide (aide_cartes.json) et son icône.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 19:00:00 +0000
+
 secubox-webos (1.20.4-1~trixie1) trixie; urgency=medium
 
   * GET /public/ports (ref #3154) : publie, en lecture libre comme /public/noms, les ports que les modules déclarent dans
