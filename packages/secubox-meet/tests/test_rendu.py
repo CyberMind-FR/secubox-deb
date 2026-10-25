@@ -12,7 +12,7 @@ from conftest import _ecrire_exec, _env_ctl, fonction_bash, script_interne
 
 RACINE = Path(__file__).resolve().parents[1]
 INSTALL = RACINE / "lib" / "meet" / "install-lxc.sh"
-FICHIERS = ("livekit.yaml", "meet.env", "nginx-meet.conf", "meet-backend.service", "livekit.service", "lxc-config")
+FICHIERS = ("livekit.yaml", "meet.env", "nginx-meet.conf", "meet-backend.service", "livekit.service", "lxc-config", "conteneur-eth0.network")
 
 
 def run_install(tmp_path, domaine=None):
@@ -369,3 +369,21 @@ def test_dossier_partage_des_conteneurs_jamais_reimpose():
     d = fonction_bash(TEXTE_INSTALL, "ensure_dirs")
     assert '[ -d "$LXC_PATH" ] || install -d' in d
     assert not re.search(r'^\s*install -d [^\n]*"\$LXC_PATH"$', d, re.M)
+
+
+def test_reseau_fixe_du_conteneur(tmp_path):
+    # gk1, 2026-10-25 : l'image Debian trixie configure eth0 en DHCP (systemd-networkd) ; br-lxc n'a pas de serveur DHCP,
+    # networkd retirait l'adresse posée par LXC et le provisionnement échouait (apt-get 100, puis « n'a pas joint 10.100.0.1 »).
+    n = rendu(tmp_path)["conteneur-eth0.network"]
+    assert "Name=eth0" in n and "Address=10.100.0.195/24" in n and "Gateway=10.100.0.1" in n
+    assert "DHCP" not in n and "LinkLocalAddressing=no" in n
+
+
+def test_installation_pose_le_reseau_avant_le_demarrage():
+    s = (Path(__file__).resolve().parents[1] / "lib" / "meet" / "install-lxc.sh").read_text()
+    m = s[s.index("\nmain() {"):]
+    assert m.index("ecrire_reseau_conteneur") < m.index("start_lxc") < m.index("wait_for_network")
+    f = s[s.index("ecrire_reseau_conteneur() {"):]
+    f = f[:f.index("\n}\n")]
+    assert "rootfs/etc/systemd/network" in f and "/eth0.network" in f and "100000:100000" in f
+    assert "networkctl reload" in f and "networkctl reconfigure eth0" in f   # conteneur déjà démarré (reprise)

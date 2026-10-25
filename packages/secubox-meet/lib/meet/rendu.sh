@@ -219,6 +219,26 @@ lxc.start.delay = 5
 LXC
 }
 
+# Réseau du conteneur, vu de l'intérieur (#3154). L'image Debian trixie configure eth0 en DHCP par systemd-networkd ;
+# br-lxc n'a pas de serveur DHCP : networkd retirait l'adresse posée par LXC et le conteneur perdait son réseau en
+# plein provisionnement (gk1 : apt-get en échec, puis « n'a pas joint 10.100.0.1 »). Adresse fixe, mêmes valeurs que
+# lxc-config ; les résolveurs suivent ensure_resolv d'install-lxc.sh.
+rendre_reseau_conteneur() {
+    cat > "$1/conteneur-eth0.network" <<NET
+# SecuBox-managed - voir secubox-meet / install-lxc.sh
+[Match]
+Name=eth0
+
+[Network]
+Address=${LXC_IP}/24
+Gateway=${LXC_GW:-10.100.0.1}
+DNS=1.1.1.1
+DNS=9.9.9.9
+LinkLocalAddressing=no
+IPv6AcceptRA=no
+NET
+}
+
 rendre_tout() {
     local sortie="${1:-}"
     [ -n "$sortie" ] || { echo "[rendu] dossier de sortie manquant" >&2; return 1; }
@@ -233,6 +253,7 @@ rendre_tout() {
     rendre_nginx "$sortie"
     rendre_unites "$sortie"
     rendre_lxc_config "$sortie"
+    rendre_reseau_conteneur "$sortie"
     # meet.env et livekit.yaml portent des secrets.
     chmod 0600 "$sortie/meet.env" "$sortie/livekit.yaml"
 }
