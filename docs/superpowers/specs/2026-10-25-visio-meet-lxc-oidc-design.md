@@ -70,7 +70,8 @@ La documentation ne dit pas si les revendications viennent de l'id_token ou de `
 - TURN : bloc `turn:` (UDP 443, domaine) pour les réseaux d'entreprise.
 
 **Variables de base :** `DJANGO_SETTINGS_MODULE=meet.settings`, `DJANGO_CONFIGURATION=Production`, `DJANGO_SECRET_KEY` (50 caractères et
-plus), `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `MEET_BASE_URL`, `DB_HOST/PORT/NAME/USER/PASSWORD`, `REDIS_URL`.
+plus), `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `DJANGO_DATA_DIR` (préfixe `DJANGO_` imposé par django-configurations : `DATA_DIR`
+seul est ignoré et collectstatic écrit dans `/data`), `DB_HOST/PORT/NAME/USER/PASSWORD`, `REDIS_URL`.
 **À régler pour nous :** `ALLOW_UNREGISTERED_ROOMS=False` (par défaut, `True` laisse **n'importe qui créer des salles sans compte** sur un
 nom public) ; `RESOURCE_DEFAULT_ACCESS_LEVEL` : `public` (lien suffisant) ou `trusted` selon la décision sur les invités externes.
 

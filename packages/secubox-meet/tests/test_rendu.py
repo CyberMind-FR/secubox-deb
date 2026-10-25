@@ -49,9 +49,14 @@ def test_rendu_env_meet(tmp_path):
     assert e["DJANGO_CONFIGURATION"] == "Production" and e["ALLOW_UNREGISTERED_ROOMS"] == "False"
     assert e["OIDC_OP_AUTHORIZATION_ENDPOINT"] == "https://hall.exemple.test/oidc/authorize"
     assert e["OIDC_RP_SCOPES"] == '"openid email"' and e["OIDC_USE_PKCE"] == "True" and "OIDC_OP_LOGOUT_ENDPOINT" not in e
-    assert e["LIVEKIT_API_URL"] == "https://livekit.exemple.test" and e["LIVEKIT_INTERNAL_URL"] == "http://127.0.0.1:7880"
+    assert e["LIVEKIT_API_URL"] == "https://livekit.exemple.test"
     assert e["DJANGO_ALLOWED_HOSTS"] == "visio.exemple.test" and e["DJANGO_CSRF_TRUSTED_ORIGINS"] == "https://visio.exemple.test"
-    assert e["CELERY_TASK_ALWAYS_EAGER"] == "True" and e["DATA_DIR"] == "/var/lib/meet"
+    assert e["CELERY_TASK_ALWAYS_EAGER"] == "True"
+    # django-configurations préfixe DJANGO_ ce réglage : DATA_DIR seul est
+    # ignoré et collectstatic écrit dans /data (#3154).
+    assert e["DJANGO_DATA_DIR"] == "/var/lib/meet"
+    # Noms que Meet 1.34 ne lit pas : un réglage mort laisse croire qu'il agit.
+    assert not {"DATA_DIR", "MEET_BASE_URL", "LIVEKIT_INTERNAL_URL"} & set(e)
     # ListValue de Meet découpe sur les virgules : pas de syntaxe JSON.
     assert e["OIDC_USERINFO_FULLNAME_FIELDS"] == "name"
 
