@@ -1,0 +1,6 @@
+secubox-meet (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Première version : squelette du paquet et meetctl (cycle de vie, état) pour La Suite Meet
+    en LXC (ref #3154).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 12:00:00 +0200

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox Meet — le panneau/API non privilégié (utilisateur `secubox`) pilote le
+# LXC Meet via meetctl. C'est la SEULE surface privilégiée du module (cycle de
+# vie du conteneur, journaux, exposition média), confinée : le ctl valide
+# lui-même ses entrées (liste blanche d'unités).
+secubox ALL=(root) NOPASSWD: /usr/sbin/meetctl

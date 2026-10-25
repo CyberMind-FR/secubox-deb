@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox Meet — /etc/secubox/meet.toml
+#
+# La Suite Meet tourne NATIVEMENT dans un LXC Debian non privilégié :
+# postgresql + redis + livekit + meet-backend + un nginx interne.
+# L'hôte ne fait que router.
+
+lxc_name = "meet"
+lxc_ip   = "10.100.0.195"
+
+# Noms publics. Absents = visio.<domaine de la box> et livekit.<domaine de la
+# box>, obtenus par secubox-domaine ; jamais un nom de box en dur.
+# domain = ""
+# livekit_domain = ""
+
+# Ports média de LiveKit, redirigés vers le conteneur par le DNAT nft
+# (verbe d'exposition explicite, jamais appliqué à l'installation).
+tcp_port = 7881
+udp_port = 7882
+
+# Tier web servi par le nginx interne ; HAProxy termine le TLS.
+web_port = 80

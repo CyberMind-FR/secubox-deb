@@ -1,0 +1,31 @@
+Source: secubox-meet
+Section: net
+Priority: optional
+Maintainer: Gérald Kerma <devel@cybermind.fr>
+Build-Depends: debhelper (>= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+
+Package: secubox-meet
+Architecture: all
+Depends: ${misc:Depends},
+ secubox-core (>= 1.7.8~),
+ secubox-auth (>= 1.8.9~),
+ python3-uvicorn | python3-pip,
+ lxc,
+ curl,
+ sudo,
+ nftables
+Recommends: nginx
+Description: SecuBox Meet - visioconférence La Suite Meet (LXC-native)
+ La Suite Meet et LiveKit tournent nativement dans un conteneur Debian LXC non
+ privilégié : postgresql, redis, livekit, meet-backend et un nginx interne.
+ L'hôte ne fait que router : HAProxy termine le TLS et relaie vers le
+ conteneur, derrière le WAF.
+ .
+ Fonctions :
+  - meetctl : seule surface privilégiée du module (cycle de vie, état)
+  - connexion des usagers par le fournisseur OIDC du Hall
+  - ports média 7881/TCP et 7882/UDP exposés par une décision explicite
+ .
+ Fournit l'API FastAPI /api/v1/meet/ sur socket Unix.

@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: meetctl
+# CyberMind — https://cybermind.fr
+#
+# Contrôleur côté hôte de La Suite Meet (visioconférence). Meet tourne
+# NATIVEMENT dans un LXC Debian non privilégié (10.100.0.195 sur br-lxc par
+# défaut) : postgresql + redis + livekit + meet-backend (Django) + un nginx
+# interne. L'hôte ne fait que router (HAProxy -> sbxwaf -> conteneur).
+#
+# Chaque verbe écrit du JSON sur stdout ; l'API hôte lui délègue tout (elle ne
+# pilote jamais systemd ni LXC elle-même). Mêmes conventions que jitsictl.
+# Aucun secret n'est lu ni imprimé ici : « enregistré » se déduit de la seule
+# présence d'un fichier.
+
+set -euo pipefail
+
+readonly MODULE="meet"
+# Tenue en phase avec debian/changelog.
+readonly VERSION="0.1.0"
+readonly CONFIG_FILE="${SECUBOX_MEET_CONFIG:-/etc/secubox/meet.toml}"
+readonly SECRETS_DIR="${SECUBOX_MEET_SECRETS_DIR:-/etc/secubox/secrets/meet}"
+readonly NFT_DST="${SECUBOX_MEET_NFT_DST:-/etc/nftables.d/secubox-meet-dnat.nft}"
+readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
+
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly NC='\033[0m'
+
+log()  { printf '%b[meet]%b %s\n'  "$GREEN"  "$NC" "$*" >&2; }
+warn() { printf '%b[warn]%b %s\n'  "$YELLOW" "$NC" "$*" >&2; }
+err()  { printf '%b[error]%b %s\n' "$RED"    "$NC" "$*" >&2; }
+
+# ── Config TOML (lecture plate de scalaires, comme jitsictl) ─────────────────
+config_get() {
+    local key="$1" default="${2:-}" raw=""
+    if [ -f "$CONFIG_FILE" ]; then
+        raw=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null | head -1 || true)
+    fi
+    if [ -z "$raw" ]; then echo "$default"; return; fi
+    local val
+    val=$(echo "$raw" | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' \
+        | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | tr -d '"' | tr -d "'")
+    [ -z "$val" ] && echo "$default" || echo "$val"
+}
+
+LXC_NAME="$(config_get lxc_name meet)"
+LXC_IP="$(config_get lxc_ip 10.100.0.195)"
+DOMAIN="$(config_get domain "$(secubox-domaine visio 2>/dev/null || true)")"
+LIVEKIT_DOMAIN="$(config_get livekit_domain "$(secubox-domaine livekit 2>/dev/null || true)")"
+TCP_PORT="$(config_get tcp_port 7881)"
+UDP_PORT="$(config_get udp_port 7882)"
+WEB_PORT="$(config_get web_port 80)"
+
+# Unités systemd internes connues (liste blanche pour `logs`).
+readonly UNITS="postgresql redis-server livekit meet-backend nginx"
+
+json_escape() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    printf '%s' "$s"
+}
+
+lxc_state() {
+    lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
+        | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }' || true
+}
+
+lxc_exists() { [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; }
+
+# État d'une unité systemd À L'INTÉRIEUR du conteneur : interroger l'hôte
+# rapporterait « inactive » pour tout, ce qui se lit comme une panne alors que
+# c'est une erreur de cible.
+unit_state() {
+    local unit="$1"
+    [ "$(lxc_state)" = "running" ] || { printf 'container-down'; return; }
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        systemctl is-active "$unit" 2>/dev/null | head -1 || printf 'unknown'
+}
+
+# ── status ───────────────────────────────────────────────────────────────────
+#
+# Les cinq services sont rapportés SÉPARÉMENT : base morte = rien ne s'ouvre ;
+# livekit mort = on se connecte et la salle reste muette ; meet-backend mort =
+# la page charge mais l'API échoue. Un « ok/ko » unique perdrait ce signal.
+cmd_status() {
+    local state; state=$(lxc_state)
+    local pg rd lk be web
+    pg=$(unit_state postgresql)
+    rd=$(unit_state redis-server)
+    lk=$(unit_state livekit)
+    be=$(unit_state meet-backend)
+    web=$(unit_state nginx)
+
+    local reachable=false
+    if [ "$state" = "running" ] && curl -fsS --max-time 5 -o /dev/null \
+            "http://${LXC_IP}:${WEB_PORT}/" 2>/dev/null; then
+        reachable=true
+    fi
+
+    cat <<JSON
+{
+  "module": "$MODULE",
+  "version": "$VERSION",
+  "installed": $(lxc_exists && echo true || echo false),
+  "container": "$(json_escape "$state")",
+  "domain": "$(json_escape "$DOMAIN")",
+  "livekit_domain": "$(json_escape "$LIVEKIT_DOMAIN")",
+  "lxc_ip": "$(json_escape "$LXC_IP")",
+  "web_reachable": $reachable,
+  "services": {
+    "postgresql": "$(json_escape "$pg")",
+    "redis": "$(json_escape "$rd")",
+    "livekit": "$(json_escape "$lk")",
+    "meet-backend": "$(json_escape "$be")",
+    "nginx": "$(json_escape "$web")"
+  },
+  "media": {
+    "tcp_port": $TCP_PORT,
+    "udp_port": $UDP_PORT,
+    "exposed": $([ -f "$NFT_DST" ] && echo true || echo false)
+  },
+  "oidc": {
+    "client_registered": $([ -f "$SECRETS_DIR/oidc-client-secret" ] && echo true || echo false)
+  }
+}
+JSON
+}
+
+cmd_start() {
+    lxc_exists || { echo '{"success": false, "error": "not installed"}'; return 1; }
+    if [ "$(lxc_state)" = "running" ]; then
+        echo '{"success": true, "already": true}'
+        return 0
+    fi
+    lxc-start -n "$LXC_NAME" -P "$LXC_PATH"
+    echo '{"success": true}'
+}
+
+cmd_stop() {
+    if [ "$(lxc_state)" != "running" ]; then
+        echo '{"success": true, "already": true}'
+        return 0
+    fi
+    lxc-stop -n "$LXC_NAME" -P "$LXC_PATH"
+    echo '{"success": true}'
+}
+
+cmd_restart() {
+    cmd_stop >/dev/null 2>&1 || true
+    sleep 2
+    cmd_start
+}
+
+cmd_logs() {
+    local unit="${1:-meet-backend}" lines="${2:-50}" u ok=false
+    for u in $UNITS; do [ "$u" = "$unit" ] && ok=true; done
+    if [ "$ok" != true ]; then
+        echo '{"success": false, "error": "unknown unit"}'
+        return 2
+    fi
+    case "$lines" in ''|*[!0-9]*) lines=50 ;; esac
+    [ "$(lxc_state)" = "running" ] || { echo '{"success": false, "error": "container not running"}'; return 1; }
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        journalctl -u "$unit" -n "$lines" --no-pager 2>/dev/null || true
+}
+
+cmd_help() {
+    cat <<EOF
+meetctl v$VERSION — La Suite Meet (LXC-native)
+
+  status                    État conteneur + les 5 services, séparément (JSON)
+  start | stop | restart    Cycle de vie du conteneur
+  logs <unité> [lignes]     Journal d'un service interne
+                            (postgresql|redis-server|livekit|meet-backend|nginx)
+  help                      Cette aide
+EOF
+}
+
+case "${1:-help}" in
+    status)           cmd_status ;;
+    start)            cmd_start ;;
+    stop)             cmd_stop ;;
+    restart)          cmd_restart ;;
+    logs)             cmd_logs "${2:-}" "${3:-}" ;;
+    help|--help|-h)   cmd_help ;;
+    *)                cmd_help; exit 1 ;;
+esac

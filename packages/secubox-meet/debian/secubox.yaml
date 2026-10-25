@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# debian/secubox.yaml
+
+name: secubox-meet
+category: communication
+tier: standard
+description: "SecuBox Meet - visioconférence La Suite Meet"
+
+depends:
+  - secubox-core
+  - secubox-auth
+
+api:
+  socket: /run/secubox/meet.sock
+  health: /api/v1/meet/health
+
+ui:
+  path: /srv/secubox/www/meet

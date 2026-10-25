@@ -1,0 +1,46 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+%:
+	dh $@
+
+P = debian/secubox-meet
+
+override_dh_auto_install:
+	# API hôte
+	install -d $(P)/usr/lib/secubox/meet
+	[ -d api ] && cp -r api $(P)/usr/lib/secubox/meet/ || true
+	# Pages statiques
+	install -d $(P)/usr/share/secubox/www
+	[ -d www ] && cp -r www/. $(P)/usr/share/secubox/www/ || true
+	# Entrées de menu
+	install -d $(P)/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. $(P)/usr/share/secubox/menu.d/ || true
+	# Vhosts publics servis par le nginx hôte (empaquetés, jamais écrits à la main)
+	install -d $(P)/etc/nginx/sites-available
+	[ -f nginx/visio-vhost.conf ] && install -m 644 nginx/visio-vhost.conf $(P)/etc/nginx/sites-available/visio.conf || true
+	[ -f nginx/livekit-vhost.conf ] && install -m 644 nginx/livekit-vhost.conf $(P)/etc/nginx/sites-available/livekit.conf || true
+	install -d $(P)/etc/nginx/secubox-routes.d
+	[ -f nginx/meet-routes.conf ] && install -m 644 nginx/meet-routes.conf $(P)/etc/nginx/secubox-routes.d/ || true
+	# Actionneur root confiné : la seule surface privilégiée du module
+	install -d $(P)/usr/sbin
+	install -m 755 sbin/meetctl $(P)/usr/sbin/
+	# Bibliothèques de provisionnement
+	install -d $(P)/usr/lib/secubox/meet
+	for f in lib/meet/*.sh; do [ -f "$$f" ] && install -m 755 "$$f" $(P)/usr/lib/secubox/meet/ || true; done
+	# Délégation sudo (secubox -> meetctl)
+	install -d $(P)/etc/sudoers.d
+	install -m 440 debian/secubox-meet.sudoers $(P)/etc/sudoers.d/secubox-meet
+	# Exemples (la règle nft n'est JAMAIS appliquée automatiquement : elle ouvre des ports entrants)
+	install -d $(P)/usr/share/doc/secubox-meet/examples
+	for f in conf/*; do [ -f "$$f" ] && install -m 644 "$$f" $(P)/usr/share/doc/secubox-meet/examples/ || true; done
+	# Unités systemd
+	install -d $(P)/usr/lib/systemd/system
+	for f in debian/*.service; do [ -f "$$f" ] && install -m 644 "$$f" $(P)/usr/lib/systemd/system/ || true; done
+
+# Seule secubox-meet.service est gérée par debhelper ; les unités de
+# provisionnement sont activées par le postinst en --no-block.
+override_dh_installsystemd:
+	if [ -f debian/secubox-meet.service ]; then dh_installsystemd --name=secubox-meet; fi
