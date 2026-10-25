@@ -7,7 +7,8 @@ secubox-p2p (1.19.1-1~trixie1) trixie; urgency=medium
     (audit relais_port_refuse). Un pair qui répond sans le port le libère (relais_port_retire) ; injoignable, il garde
     ses ports. État /var/lib/secubox/p2p/relais-ports.json, fichier /etc/nftables.d/secubox-relais-ports.nft
     régénéré à chaque synchronisation et appliqué à chaud, table seule (jamais nft -f nftables.conf).
-    Nouveaux verbes relayer-port et retirer-port.
+    Nouveaux verbes relayer-port et retirer-port. postrm purge : retire ce fichier et la table
+    inet secubox-relais-ports (sans échec si elle est absente), jamais l'état relais-ports.json.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 18:00:00 +0000
 

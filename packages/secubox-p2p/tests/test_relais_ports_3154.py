@@ -250,3 +250,35 @@ def test_synchroniser_sans_aucun_pair_nettoie_aussi(tmp_path):
     r = _lance(tmp_path, env, "synchroniser")
     assert r.returncode == 0, r.stdout + r.stderr
     assert json.loads((tmp_path / "etat" / "relais-ports.json").read_text()) == {} and not (nft / "secubox-relais-ports.nft").exists()
+
+
+POSTRM = Path(__file__).resolve().parents[1] / "debian" / "postrm"
+
+
+def _postrm(tmp_path, action):
+    """postrm avec nft/systemctl/nginx simulés (nft : journal, échec comme une table absente)."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    for nom, code in (("nft", f'echo "$*" >> "{tmp_path}/nft-appels"; exit 1'), ("systemctl", "exit 1"), ("nginx", "exit 1")):
+        f = bin_ / nom
+        f.write_text("#!/bin/sh\n" + code + "\n")
+        f.chmod(0o755)
+    fichier = tmp_path / "secubox-relais-ports.nft"
+    fichier.write_text("table inet secubox-relais-ports {}\n")
+    env = dict(os.environ, PATH=f"{bin_}{os.pathsep}{os.environ['PATH']}", SECUBOX_RELAIS_PORTS_NFT=str(fichier),
+               SBX_P2P_PAIR_CONF=str(tmp_path / "absent.conf"), SBX_P2P_SECRETS_DIR=str(tmp_path / "absent"))
+    r = subprocess.run(["sh", str(POSTRM), action], env=env, capture_output=True, text=True, timeout=30)
+    appels = (tmp_path / "nft-appels").read_text().splitlines() if (tmp_path / "nft-appels").exists() else []
+    return r, fichier, appels
+
+
+def test_postrm_purge_retire_le_fichier_et_la_table_du_relais_des_ports(tmp_path):
+    r, fichier, appels = _postrm(tmp_path, "purge")
+    assert r.returncode == 0, r.stderr                     # table absente (nft en échec) : jamais d'échec
+    assert not fichier.exists() and "delete table inet secubox-relais-ports" in appels
+
+
+def test_postrm_remove_garde_le_relais_des_ports(tmp_path):
+    r, fichier, appels = _postrm(tmp_path, "remove")
+    assert r.returncode == 0, r.stderr
+    assert fichier.exists() and appels == []
