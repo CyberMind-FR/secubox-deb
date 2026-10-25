@@ -53,7 +53,13 @@ config_get() {
 
 LXC_NAME="$(config_get lxc_name meet)"
 LXC_IP="$(config_get lxc_ip 10.100.0.195)"
-DOMAIN="$(config_get domain "$(secubox-domaine visio 2>/dev/null || true)")"
+# Une seule résolution du domaine : variable d'environnement (posée par
+# install-lxc.sh), puis TOML, puis secubox-domaine.
+resolve_domain() {
+    if [ -n "${SECUBOX_MEET_DOMAIN:-}" ]; then printf '%s' "$SECUBOX_MEET_DOMAIN"; return; fi
+    config_get domain "$(secubox-domaine visio 2>/dev/null || true)"
+}
+DOMAIN="$(resolve_domain)"
 LIVEKIT_DOMAIN="$(config_get livekit_domain "$(secubox-domaine livekit 2>/dev/null || true)")"
 TCP_PORT="$(config_get tcp_port 7881)"
 UDP_PORT="$(config_get udp_port 7882)"
@@ -137,7 +143,7 @@ cmd_status() {
     "exposed": $([ -f "$NFT_DST" ] && echo true || echo false)
   },
   "oidc": {
-    "client_registered": $([ -f "$SECRETS_DIR/oidc-client-secret" ] && echo true || echo false)
+    "client_registered": $([ -s "$SECRETS_DIR/oidc-client-secret" ] && echo true || echo false)
   }
 }
 JSON
@@ -200,19 +206,34 @@ cmd_install() {
 # suite en 0600, sans jamais le répéter (ni sur stdout, ni en argv, ni au journal).
 readonly OIDC_SECRET_FILE="$SECRETS_DIR/oidc-client-secret"
 
+# Émetteur attendu : le Hall de la box (même règle que install-lxc.sh).
+oidc_issuer_attendu() { printf 'https://hall.%s/oidc' "${DOMAIN#*.}"; }
+oidc_redirect_attendu() { printf 'https://%s/api/v1.0/callback/' "$DOMAIN"; }
+
+# Vrai si le fournisseur connaît le client « meet » avec EXACTEMENT l'adresse
+# de rappel attendue (client-ls ne montre jamais de secret).
+oidc_client_chez_le_fournisseur() {
+    local liste
+    liste=$(secubox-oidcctl client-ls 2>/dev/null) || return 1
+    printf '%s\n' "$liste" | awk -F'\t' -v r="$(oidc_redirect_attendu)" '
+        $1 == "meet" { n = split($4, a, " "); for (i = 1; i <= n; i++) if (a[i] == r) ok = 1 }
+        END { exit !ok }'
+}
+
 cmd_oidc_enregistrer() {
     local renouveler=false
     [ "${1:-}" = "--renouveler" ] && renouveler=true
-    if [ -f "$OIDC_SECRET_FILE" ] && [ "$renouveler" = false ]; then
-        echo '{"success": true, "already": true}'
-        return 0
-    fi
     if [ -z "$DOMAIN" ]; then
         echo '{"success": false, "error": "domaine de la box inconnu"}'
         return 1
     fi
+    if [ -s "$OIDC_SECRET_FILE" ] && [ "$renouveler" = false ] && oidc_client_chez_le_fournisseur; then
+        echo '{"success": true, "already": true}'
+        return 0
+    fi
     # Adresse de rappel enregistrée EXACTEMENT, barre finale comprise.
-    local redirect="https://${DOMAIN}/api/v1.0/callback/" secret tmp
+    local redirect secret tmp
+    redirect=$(oidc_redirect_attendu)
     if ! secret=$(secubox-oidcctl client-add meet --name Visio --redirect "$redirect" 2>/dev/null) \
             || [ -z "$secret" ]; then
         echo '{"success": false, "error": "secubox-oidcctl client-add a échoué"}'
@@ -228,36 +249,38 @@ cmd_oidc_enregistrer() {
 }
 
 # Interroge le fournisseur DEPUIS le conteneur : c'est son chemin réseau (DNS,
-# NAT en épingle) qui compte, pas celui de l'hôte.
+# NAT en épingle) qui compte, pas celui de l'hôte. Les URL viennent de
+# l'émetteur ATTENDU, jamais d'un champ du document distant (jwks_uri ignoré :
+# Meet lit ${émetteur}/jwks), et curl est limité à https.
 cmd_oidc_verifier() {
-    local issuer="https://hall.${DOMAIN#*.}/oidc"
-    local discovery=false jwks=false keys=0 hint="" doc="" jwks_uri="" body="" parsed
+    local attendu; attendu=$(oidc_issuer_attendu)
+    local issuer="$attendu" discovery=false jwks=false keys=0 hint="" doc="" body="" lu=""
     local registered=false
-    [ -f "$OIDC_SECRET_FILE" ] && registered=true
+    if [ -s "$OIDC_SECRET_FILE" ] && oidc_client_chez_le_fournisseur; then registered=true; fi
     local cible="le conteneur ne joint pas hall.${DOMAIN#*.} : vérifier la résolution DNS/NAT en épingle ; en dernier recours, une entrée /etc/hosts dans le conteneur vers l'adresse LAN du HAProxy qui sert ce nom"
 
     if [ "$(lxc_state)" != "running" ]; then
         hint="conteneur à l'arrêt : le démarrer (meetctl start) avant de vérifier"
     elif doc=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
-            curl -fsS --max-time 10 "${issuer}/.well-known/openid-configuration" 2>/dev/null) \
-            && parsed=$(printf '%s' "$doc" | python3 -c '
+            curl -fsS --max-time 10 --proto =https -- "${attendu}/.well-known/openid-configuration" 2>/dev/null) \
+            && lu=$(printf '%s' "$doc" | python3 -c '
 import json, sys
-d = json.load(sys.stdin)
-print(d.get("issuer", ""))
-print(d.get("jwks_uri", ""))' 2>/dev/null); then
-        discovery=true
-        issuer=$(printf '%s\n' "$parsed" | sed -n 1p)
-        jwks_uri=$(printf '%s\n' "$parsed" | sed -n 2p)
-        if [ -n "$jwks_uri" ] && body=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
-                curl -fsS --max-time 10 "$jwks_uri" 2>/dev/null) \
-                && keys=$(printf '%s' "$body" | python3 -c '
+print(json.load(sys.stdin).get("issuer", ""))' 2>/dev/null); then
+        if [ "$lu" != "$attendu" ]; then
+            hint="issuer du document de découverte ($lu) différent de l'émetteur attendu ($attendu) : vérifier le domaine de la box"
+        else
+            discovery=true
+            if body=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+                    curl -fsS --max-time 10 --proto =https -- "${attendu}/jwks" 2>/dev/null) \
+                    && keys=$(printf '%s' "$body" | python3 -c '
 import json, sys
 print(len(json.load(sys.stdin)["keys"]))' 2>/dev/null); then
-            [ "$keys" -gt 0 ] && jwks=true
-        else
-            keys=0
+                [ "$keys" -gt 0 ] && jwks=true
+            else
+                keys=0
+            fi
+            [ "$jwks" = true ] || hint="découverte lue mais clés JWKS illisibles ou absentes (${attendu}/jwks) : ${cible}"
         fi
-        [ "$jwks" = true ] || hint="découverte lue mais clés JWKS illisibles ou absentes (jwks_uri : ${jwks_uri:-vide}) : ${cible}"
     else
         hint="$cible"
     fi

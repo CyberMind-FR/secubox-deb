@@ -18,7 +18,7 @@ def _ecrire_exec(chemin: Path, contenu: str) -> None:
 
 
 def _env_ctl(tmp_path: Path, lxc_state="RUNNING", is_active=None, rootfs=True, domaine=None,
-             attach_curl=None, oidcctl_secret=None) -> dict:
+             attach_curl=None, oidcctl_secret=None, env_extra=None) -> dict:
     """Prépare le faux PATH et l'arbre de fichiers ; renvoie l'environnement du ctl."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
@@ -34,6 +34,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 if [ "$1" = curl ]; then
+  echo "$*" >> "${FAKE_URLS_FILE:-/dev/null}"
   # Faux curl du conteneur : <clé> est cherchée dans l'URL, la réponse vient de FAKE_ATTACH_CURL_DIR/<clé>.
   for cle in openid-configuration jwks; do
     case "$*" in
@@ -72,7 +73,15 @@ exit 0
     for cle, corps in (attach_curl or {}).items():
         (reponses / cle).write_text(corps)
     # Faux secubox-oidcctl : secret sur stdout, argv ajouté à <tmp>/appels ; échec si aucun secret.
+    # client-add : journalise l'argv dans <tmp>/appels ; client-ls : relit ce journal (clients de l'exécution).
     _ecrire_exec(bin_dir / "secubox-oidcctl", f"""#!/bin/bash
+if [ "$1" = client-ls ]; then
+  [ -f "{tmp_path}/appels" ] || exit 0
+  while read -r cmd id _n nom _r uri; do
+    [ "$cmd" = client-add ] && printf '%s\\t%s\\tapp=-\\t%s\\n' "$id" "$nom" "$uri"
+  done < "{tmp_path}/appels"
+  exit 0
+fi
 echo "$*" >> "{tmp_path}/appels"
 [ -n "${{FAKE_OIDCCTL_SECRET:-}}" ] || exit 1
 echo "$FAKE_OIDCCTL_SECRET"
@@ -88,6 +97,7 @@ echo "$FAKE_OIDCCTL_SECRET"
     secrets = tmp_path / "secrets"
     secrets.mkdir(exist_ok=True)
     return {
+        **(env_extra or {}),
         "PATH": f"{bin_dir}:/usr/bin:/bin:/usr/sbin:/sbin",
         "SECUBOX_MEET_CONFIG": str(conf),
         "SECUBOX_LXC_PATH": str(lxc_path),
@@ -95,6 +105,7 @@ echo "$FAKE_OIDCCTL_SECRET"
         "SECUBOX_MEET_SECRETS_DIR": str(secrets),
         "SECUBOX_MEET_NFT_SRC": str(tmp_path / "meet.nft"),
         "SECUBOX_MEET_NFT_DST": str(tmp_path / "nftables.d" / "secubox-meet-dnat.nft"),
+        "FAKE_URLS_FILE": str(tmp_path / "urls"),
         "FAKE_ATTACH_CURL_DIR": str(reponses),
         "FAKE_OIDCCTL_SECRET": oidcctl_secret or "",
         "FAKE_IS_ACTIVE": ",".join(f"{u}={e}" for u, e in (is_active or {}).items()),

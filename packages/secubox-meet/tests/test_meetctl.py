@@ -91,7 +91,7 @@ def test_oidc_enregistrer_ecrit_le_secret_0600_et_ne_l_imprime_pas(tmp_path):
     f = tmp_path / "secrets" / "oidc-client-secret"
     assert f.read_text().strip() == "S3CR3T" and oct(f.stat().st_mode & 0o777) == "0o600"
     assert (tmp_path / "appels").read_text().split("\n")[0] == f"client-add meet --name Visio --redirect {REDIRECT}"
-    assert not list((tmp_path / "secrets").glob("*.tmp*"))
+    assert not list((tmp_path / "secrets").glob(".oidc-client-secret.*"))
 
 
 def test_oidc_enregistrer_est_idempotent(tmp_path):
@@ -144,3 +144,49 @@ def test_oidc_verifier_conteneur_arrete(tmp_path):
     rc, out = run_ctl_rc(tmp_path, "oidc-verifier", lxc_state="STOPPED")
     d = json.loads(out)
     assert rc == 1 and d["discovery"] is False and "arrêt" in d["hint"]
+
+
+def test_oidc_verifier_ignore_le_jwks_uri_distant(tmp_path):
+    piege = json.dumps({"issuer": "https://hall.exemple.test/oidc", "jwks_uri": "file:///etc/shadow"})
+    d = json.loads(run_ctl(tmp_path, "oidc-verifier", attach_curl={"openid-configuration": piege, "jwks": JWKS}))
+    assert d["discovery"] and d["jwks"] and d["keys"] == 1
+    urls = (tmp_path / "urls").read_text()
+    assert "shadow" not in urls and "https://hall.exemple.test/oidc/jwks" in urls
+    assert all("--proto =https --" in ligne for ligne in urls.splitlines())
+
+
+def test_oidc_verifier_refuse_un_issuer_different(tmp_path):
+    autre = json.dumps({"issuer": "https://hall.autre.test/oidc", "jwks_uri": "x"})
+    rc, out = run_ctl_rc(tmp_path, "oidc-verifier", attach_curl={"openid-configuration": autre, "jwks": JWKS})
+    d = json.loads(out)
+    assert rc == 1 and d["discovery"] is False and d["jwks"] is False
+    assert "issuer" in d["hint"] and "hall.autre.test" in d["hint"] and "hall.exemple.test" in d["hint"]
+
+
+def test_oidc_enregistrer_honore_le_domaine_de_l_environnement(tmp_path):
+    out = json.loads(run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="S",
+                             env_extra={"SECUBOX_MEET_DOMAIN": "autre.exemple.test"}))
+    assert out["redirect_uri"] == "https://autre.exemple.test/api/v1.0/callback/"
+    assert "--redirect https://autre.exemple.test/api/v1.0/callback/" in (tmp_path / "appels").read_text()
+
+
+def test_oidc_enregistrer_reenregistre_si_le_client_a_disparu_chez_le_fournisseur(tmp_path):
+    run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="A")
+    (tmp_path / "appels").unlink()  # le fournisseur ne connaît plus « meet »
+    d = json.loads(run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="B"))
+    assert "already" not in d
+    assert (tmp_path / "secrets" / "oidc-client-secret").read_text().strip() == "B"
+
+
+def test_oidc_enregistrer_reenregistre_si_le_fichier_secret_est_vide(tmp_path):
+    run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="A")
+    (tmp_path / "secrets" / "oidc-client-secret").write_text("")
+    d = json.loads(run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="B"))
+    assert "already" not in d and (tmp_path / "secrets" / "oidc-client-secret").read_text().strip() == "B"
+
+
+def test_oidc_verifier_redirect_registered_suit_le_fournisseur(tmp_path):
+    run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="A")
+    (tmp_path / "appels").unlink()
+    d = json.loads(run_ctl(tmp_path, "oidc-verifier", attach_curl={"openid-configuration": DISCOVERY, "jwks": JWKS}))
+    assert d["redirect_registered"] is False

@@ -90,11 +90,12 @@ secret() {
 # à blanc, seul un SECUBOX_MEETCTL explicite (faux des tests) est appelé : le
 # vrai secubox-oidcctl exige root et le fournisseur de la box.
 enregistrer_client_oidc() {
-    [ -s "$SECRETS_DIR/oidc-client-secret" ] && return 0
     [ -n "$DRY_RUN" ] && [ -z "${SECUBOX_MEETCTL:-}" ] && return 0
     log "Enregistrement du client OIDC « meet » ..."
-    "${SECUBOX_MEETCTL:-/usr/sbin/meetctl}" oidc-enregistrer >/dev/null \
+    SECUBOX_MEET_DOMAIN="$MEET_DOMAIN" "${SECUBOX_MEETCTL:-/usr/sbin/meetctl}" oidc-enregistrer >/dev/null \
         || fail "enregistrement du client OIDC impossible (meetctl oidc-enregistrer)"
+    [ -s "$SECRETS_DIR/oidc-client-secret" ] \
+        || fail "client OIDC enregistré mais secret absent ou vide ($SECRETS_DIR/oidc-client-secret)"
 }
 
 preparer_secrets() {

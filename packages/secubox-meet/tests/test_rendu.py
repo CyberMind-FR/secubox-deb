@@ -136,3 +136,29 @@ def test_echec_de_l_enregistrement_arrete_le_provisionnement(tmp_path):
     env["SECUBOX_MEETCTL"] = str(faux)
     r = subprocess.run(["bash", str(INSTALL)], capture_output=True, text=True, env=env, timeout=60)
     assert r.returncode == 1 and "OIDC" in r.stderr and not (tmp_path / "rendu").exists()
+
+
+def test_secret_oidc_vide_apres_enregistrement_est_un_echec(tmp_path):
+    faux = tmp_path / "meetctl-faux"
+    _ecrire_exec(faux, "#!/bin/bash\nexit 0\n")  # réussit sans rien écrire
+    env = _env_ctl(tmp_path)
+    (tmp_path / "secrets" / "oidc-client-secret").write_text("")
+    _ecrire_exec(tmp_path / "bin" / "lxc-create", "#!/bin/bash\nexit 0\n")
+    env["SECUBOX_MEET_DRY_RUN"] = str(tmp_path / "rendu")
+    env["SECUBOX_MEET_VERSION_FILE"] = str(RACINE / "conf" / "meet.version")
+    env["SECUBOX_MEETCTL"] = str(faux)
+    r = subprocess.run(["bash", str(INSTALL)], capture_output=True, text=True, env=env, timeout=60)
+    assert r.returncode == 1 and "secret absent ou vide" in r.stderr and not (tmp_path / "rendu").exists()
+
+
+def test_install_passe_son_domaine_a_meetctl(tmp_path):
+    faux = tmp_path / "meetctl-faux"
+    secrets = tmp_path / "secrets"
+    _ecrire_exec(faux, f'#!/bin/bash\necho "$SECUBOX_MEET_DOMAIN" > "{tmp_path}/domaine-vu"\necho S > "{secrets}/oidc-client-secret"\n')
+    env = _env_ctl(tmp_path)
+    _ecrire_exec(tmp_path / "bin" / "lxc-create", "#!/bin/bash\nexit 0\n")
+    env.update(SECUBOX_MEET_DRY_RUN=str(tmp_path / "rendu"), SECUBOX_MEETCTL=str(faux),
+               SECUBOX_MEET_VERSION_FILE=str(RACINE / "conf" / "meet.version"))
+    r = subprocess.run(["bash", str(INSTALL)], capture_output=True, text=True, env=env, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert (tmp_path / "domaine-vu").read_text().strip() == "visio.exemple.test"
