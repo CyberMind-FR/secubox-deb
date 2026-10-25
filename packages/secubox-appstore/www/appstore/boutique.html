@@ -174,7 +174,7 @@ const TRAITS=['','oui','att'];
 const solutionsDe=()=>{const s=new Set();Object.keys(BESOINS).forEach(k=>((BESOINS[k]&&BESOINS[k].solutions)||[]).forEach(x=>{if(x&&x.paquet)s.add(x.paquet)}));return s};
 function solution(x){
   const m=x.paquet?MODS.filter(y=>y.name===x.paquet)[0]:null;
-  const ok=!!m&&m.installable!==false&&!m.tier_locked;const a=ok?habiller(m):null;
+  const ok=!!m&&(!!m.installed||m.installable!==false&&!m.tier_locked);const a=ok?habiller(m):null;   // installée : toujours « Ouvrir »
   return{a:a,n:a?a.n:String(x.nom||court(x.paquet)),qui:String(x.qui||''),texte:String(x.texte||''),present:ok,inst:!!(a&&a.inst),
     traits:(Array.isArray(x.traits)?x.traits:[]).map(t=>[TRAITS.indexOf(t[0])>=0?t[0]:'',String(t[1]||'')])}}
 function besoins(){
@@ -189,7 +189,7 @@ const app=id=>toutes().filter(a=>a.id===id)[0];
 function icone(a,cls){const e=el('div','ico'+(cls?' '+cls:''),a.n.charAt(0).toUpperCase());
   e.style.background='linear-gradient(145deg,hsl('+a.h+' 80% 58%),hsl('+((a.h+30)%360)+' 75% 38%))';e.setAttribute('aria-hidden','true');return e}
 function bouton(a,cls){
-  const b=el('button','get '+(cls||''));b.type='button';
+  const b=el('button','get '+(cls||''));b.type='button';b.dataset.id=a.id;
   if(a.besoin){b.textContent=a.inst?'Ouvrir':'Choisir';if(a.inst)b.classList.add('open');
     b.addEventListener('click',ev=>{ev.stopPropagation();ouvrir(a.id)});return b}
   if(a.bientot){b.textContent='Bientôt';b.classList.add('bientot');b.disabled=true;return b}
@@ -265,9 +265,14 @@ function rendre(){
     b.setAttribute('aria-selected',String(etat.onglet===o[0]));b.addEventListener('click',()=>{etat.onglet=o[0];rendre();scrollTo(0,0)});t.appendChild(b)});
   const m=$('main');m.textContent='';
   ({auj:vueAuj,apps:vueApps,fonc:vueFonc,inst:vueInst})[etat.onglet](m);
-  $('session').hidden=SESSION_OK;$('demo').hidden=!DEMO;if($('dlg').open&&OUVERTE)remplir(OUVERTE);annoncer()}
+  $('session').hidden=SESSION_OK;$('demo').hidden=!DEMO;
+  if($('dlg').open&&OUVERTE){const o=app(OUVERTE);if(!o||empreinte(o)!==EMPREINTE)remplir(OUVERTE)}
+  annoncer()}
 
-let OUVERTE=null;
+/* Le suivi d'une installation relit tout toutes les 2,5 s : la fiche ouverte n'est reconstruite que si ce
+   qu'elle montre a changé (sinon focus et défilement sautent à chaque tour). */
+let OUVERTE=null,EMPREINTE='';
+function empreinte(a){return JSON.stringify(a.besoin?a.sols.map(x=>[x.n,x.present,x.inst,x.a?BUSY[x.a.id]||'':'']):[a.n,a.d,a.inst,a.run,a.v,BUSY[a.id]||''])}
 function carteSolution(x){
   const r=el('div','sol'+(x.inst?' choisie':''));const ic=x.a||{n:x.n,h:teinte(x.n)};r.appendChild(icone(ic));
   const t=el('div');t.style.minWidth='0';t.appendChild(el('b',null,x.n));t.appendChild(el('div','qui',x.qui));t.appendChild(el('p',null,x.texte));
@@ -277,8 +282,14 @@ function carteSolution(x){
   else{const b=el('button','get bientot','Bientôt');b.type='button';b.disabled=true;r.appendChild(b)}
   return r}
 function remplir(id){
-  const a=app(id),d=$('dlg');if(!a){d.close();return}d.textContent='';const s=el('div','sheet');
-  const c=el('button','close','Fermer');c.type='button';c.addEventListener('click',()=>d.close());s.appendChild(c);
+  const a=app(id),d=$('dlg');if(!a){d.close();return}
+  const haut=d.scrollTop,f=document.activeElement,cle=f&&f!==d&&d.contains(f)&&f.dataset?f.dataset.id||'':'';
+  EMPREINTE=empreinte(a);d.textContent='';garnir(a,d);
+  d.scrollTop=haut;   // reconstruite : même défilement, focus rendu au même bouton
+  if(cle){const b=[...d.querySelectorAll('[data-id]')].filter(e=>e.dataset.id===cle)[0];if(b&&!b.disabled)b.focus({preventScroll:true})}}
+function garnir(a,d){
+  const s=el('div','sheet');
+  const c=el('button','close','Fermer');c.type='button';c.dataset.id='fermer';c.addEventListener('click',()=>d.close());s.appendChild(c);
   const h=el('div','head');h.appendChild(icone(a));const t=el('div');t.style.minWidth='0';
   if(a.besoin)t.appendChild(el('div','besoin','Un besoin, plusieurs solutions'));
   t.appendChild(el('h3',null,a.n));t.appendChild(el('div','note',a.d));

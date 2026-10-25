@@ -87,7 +87,9 @@ GROUPES = {"groupes": [{"id": "g", "label": "Cinéma", "description": "d",
                         "membres": [{"name": "secubox-jellyfin"}, {"name": "secubox-peertube"}]}]}
 
 
-def ouvre(navigateur, statut=200, install=(202, {"status": "accepted"}), taille=None, besoins=True):
+def ouvre(navigateur, statut=200, install=(202, {"status": "accepted"}), taille=None, besoins=True, donnees=None,
+          requete=""):
+    """`donnees(chemin)` : corps de réponse d'une lecture de l'API (None : réponse par défaut) ; `requete` : ?…"""
     ctx = navigateur.new_context(viewport=taille or {"width": 1200, "height": 900})
     p = ctx.new_page()
     erreurs, appels = [], []
@@ -108,10 +110,12 @@ def ouvre(navigateur, statut=200, install=(202, {"status": "accepted"}), taille=
             return r.fulfill(status=install[0], content_type="application/json", body=json.dumps(install[1]))
         if statut != 200:
             return r.fulfill(status=statut, content_type="application/json", body="{}")
-        corps = {"/api/v1/appstore/catalog": CATALOG, "/api/v1/appstore/groupes": GROUPES, "/api/v1/appstore/jobs": {"jobs": {}}}.get(u)
+        corps = donnees(u) if donnees else None
+        if corps is None:
+            corps = {"/api/v1/appstore/catalog": CATALOG, "/api/v1/appstore/groupes": GROUPES, "/api/v1/appstore/jobs": {"jobs": {}}}.get(u)
         r.fulfill(status=200 if corps is not None else 404, content_type="application/json", body=json.dumps(corps or {}))
     p.route("http://sbx.test/**", tout)
-    p.goto("http://sbx.test/appstore/boutique.html")
+    p.goto("http://sbx.test/appstore/boutique.html" + requete)
     p.wait_for_selector(".pastille:not([hidden]), #session:not([hidden]), #erreur:not([hidden])")
     return ctx, p, erreurs, appels
 
@@ -207,5 +211,75 @@ def test_sans_fichier_de_besoins_la_page_fonctionne(navigateur):
     p.click("[role=tab]:text-is(\"Apps\")")
     noms = p.eval_on_selector_all(".app .txt b", "e=>e.map(x=>x.textContent)")
     assert "Visio" not in noms and "Jitsi Meet" in noms and "La Suite Meet" in noms and "Jellyfin" in noms
+    assert not erreurs
+    ctx.close()
+
+
+def test_solution_installee_mais_non_publiee_s_ouvre(navigateur):
+    """T8b : installée, une solution n'est jamais « Bientôt », même retirée du catalogue (installable:false)."""
+    cat = {"modules": [mod("secubox-jitsi", "communication", True, installable=False), mod("secubox-meet", "communication")]}
+    ctx, p, erreurs, _ = ouvre(navigateur, donnees=lambda u: cat if u.endswith("/catalog") else None)
+    p.click("[role=tab]:text-is(\"Apps\")")
+    p.locator(".app", has_text="Visio").click()
+    jitsi = p.locator("dialog[open] .sol", has_text="Jitsi Meet")
+    assert "Installée" in jitsi.inner_text() and jitsi.locator("button.get").inner_text() == "Ouvrir"
+    assert not jitsi.locator("button.get").is_disabled()
+    assert not erreurs
+    ctx.close()
+
+
+def _suivi(nb_en_cours):
+    """API simulée : secubox-meet « en-cours » pour les `nb_en_cours` premières lectures de /jobs, puis installée."""
+    etat = {"jobs": 0}
+
+    def donnees(u):
+        if u.endswith("/jobs"):
+            etat["jobs"] += 1
+            if etat["jobs"] <= nb_en_cours:
+                return {"jobs": {"secubox-meet": {"etat": "en-cours", "verbe": "install"}}}
+            return {"jobs": {"secubox-meet": {"etat": "ok"}}}
+        if u.endswith("/catalog"):
+            fini = etat["jobs"] > nb_en_cours
+            return {"modules": [mod("secubox-jitsi", "communication", True), mod("secubox-meet", "communication", fini)]}
+        return None
+    return etat, donnees
+
+
+def _fiche_visio_focalisee(p):
+    p.click("[role=tab]:text-is(\"Apps\")")
+    p.locator(".app", has_text="Visio").click()
+    p.wait_for_selector("dialog[open] .sol button.get.busy")
+    assert p.evaluate("(()=>{const d=document.getElementById('dlg');return d.scrollHeight>d.clientHeight+40})()")
+    # Focus d'abord (il fait défiler jusqu'au bouton), puis défilement par l'usager : les deux doivent tenir.
+    p.evaluate("""(()=>{const d=document.getElementById('dlg');
+      const b=[...d.querySelectorAll('.sol')].filter(s=>s.textContent.includes('Jitsi Meet'))[0].querySelector('button.get');
+      b.marque=1;b.focus();d.scrollTop=40})()""")
+    assert p.evaluate("document.getElementById('dlg').scrollTop") == 40
+
+
+def test_fiche_ouverte_pas_reconstruite_pendant_le_suivi(navigateur):
+    """T8a : tant que l'état des solutions ne change pas, la fiche n'est pas reconstruite : focus et défilement restent."""
+    etat, donnees = _suivi(nb_en_cours=99)
+    ctx, p, erreurs, _ = ouvre(navigateur, taille={"width": 400, "height": 480}, donnees=donnees, requete="?sonde=150")
+    _fiche_visio_focalisee(p)
+    vu = etat["jobs"]
+    p.wait_for_timeout(150 * 4)
+    assert etat["jobs"] >= vu + 2                           # au moins deux tours de suivi
+    assert p.evaluate("document.activeElement.marque===1")   # le MÊME élément : la fiche n'a pas été reconstruite
+    assert p.evaluate("document.getElementById('dlg').scrollTop") == 40
+    assert not erreurs
+    ctx.close()
+
+
+def test_fiche_reconstruite_garde_focus_et_defilement(navigateur):
+    """T8a : quand l'état change (installation finie), la fiche est reconstruite, le focus revient au même bouton."""
+    etat, donnees = _suivi(nb_en_cours=3)
+    ctx, p, erreurs, _ = ouvre(navigateur, taille={"width": 400, "height": 480}, donnees=donnees, requete="?sonde=150")
+    _fiche_visio_focalisee(p)
+    p.wait_for_function("""(()=>{const s=[...document.querySelectorAll('dialog[open] .sol')].filter(x=>x.textContent.includes('La Suite Meet'))[0];
+      return s&&s.querySelector('button.get').textContent==='Ouvrir'})()""", timeout=10000)
+    f = p.evaluate("""(()=>{const a=document.activeElement;return [a.dataset.id||'',a.marque===1,
+      document.getElementById('dlg').scrollTop]})()""")
+    assert f[0] == "secubox-jitsi" and f[1] is False and f[2] == 40   # nouvel élément, même bouton, même défilement
     assert not erreurs
     ctx.close()
