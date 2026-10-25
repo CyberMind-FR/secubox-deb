@@ -374,6 +374,19 @@ generate_netplan() {
             ;;
     esac
 
+    # PONT DES CONTENEURS (#3162). br-lxc porte la passerelle 10.100.0.1/24 de tous les conteneurs LXC du parc
+    # (mail, jitsi, meet…), quel que soit le mode réseau : sans membre, il n'a aucun lien avec le LAN ni le WAN.
+    # Absent du netplan, il existait sans adresse (networkd : « unmanaged ») et aucun conteneur ne sortait (gk1).
+    # optional : le démarrage n'attend pas ce pont (pas de porteuse sans conteneur).
+    [[ -n "$bridges" ]] || bridges="  bridges:
+"
+    bridges+="    br-lxc:
+      interfaces: []
+      addresses: [10.100.0.1/24]
+      dhcp4: false
+      optional: true
+"
+
     # Write netplan config
     cat > "$netplan_file" <<EOF
 # /etc/netplan/00-secubox.yaml
