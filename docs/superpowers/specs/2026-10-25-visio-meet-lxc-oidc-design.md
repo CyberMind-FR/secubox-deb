@@ -104,7 +104,7 @@ Un LXC Debian trixie non privilégié, nom `meet`, contenant :
 | Front | fichiers statiques de la version publiée (construction Node à la fabrication du paquet, pas dans le conteneur) |
 | Base | PostgreSQL du conteneur (jamais exposé) |
 | Cache | Redis du conteneur (jamais exposé) |
-| Média | `livekit-server` (binaire Go ; disponibilité d'un build arm64 à confirmer) ; signalisation sous le même nom en HTTPS, médias en UDP/TCP directs |
+| Média | `livekit-server` (binaire Go ; build arm64 confirmé le 2026-10-25, 53 Mo) ; signalisation sous le même nom en HTTPS, médias en UDP/TCP directs |
 
 Gestion par `meetctl` (modèle `jitsictl`) : création du conteneur, secrets dans `/etc/secubox/secrets/meet/` (jamais dans un TOML
 versionné), état, mise à jour (migrations Django, reconstruction du front). Mise à jour sans Docker : **à la charge du paquet**.
@@ -114,10 +114,20 @@ versionné), état, mise à jour (migrations Django, reconstruction du front). M
 - **Deux noms** : `visio.<domaine>` (Meet) et `livekit.<domaine>` (signalisation WSS de LiveKit, imposée par la documentation).
   Pour chacun : vhost nginx `server_name … .*` sur 9080, route sbxwaf (`secubox-waf-route`), vhost HAProxy vers `sbxwaf_inspector`,
   **comme la Boutique** (#3150). Aucun contournement du WAF pour la signalisation.
-- **À éprouver avant d'écrire le reste :** le WebSocket de LiveKit (mise à niveau HTTP) doit traverser HAProxy puis sbxwaf. C'est le
-  premier essai à faire, car un blocage ici change la conception (nom `livekit.*` servi hors inspection, décision à prendre alors).
-- **NAT :** si la box est derrière une box d'opérateur, il faut *rediriger* 7881/TCP et 7882/UDP vers elle et régler
-  `use_external_ip`. À vérifier pour gk2 : l'adresse publique est-elle sur son interface, ou derrière la Freebox ?
+- **Éprouvé le 2026-10-25 : le WebSocket de LiveKit traverse la chaîne complète.** Essai jetable sur gk1 (`livekit-server` 1.13.10 arm64,
+  nginx local, jeton signé HS256) : depuis Internet, `wss://livekit.gk1.secubox.in/rtc` répond **101 Switching Protocols** avec
+  `x-secubox-waf: inspected`, puis les premières trames protobuf de LiveKit. Chemin : HAProxy de gk2, sbxwaf, nginx de gk2, relais du
+  maillage, nginx de gk1, LiveKit. Le relais a posé seul la route sbxwaf et le vhost HAProxy après l'apparition du nom dans le
+  catalogue de gk1 (environ trois minutes). Aucun contournement du WAF n'est donc nécessaire pour la signalisation. Non éprouvé :
+  les médias (7881/TCP, 7882/UDP), qui demandent de vrais pairs.
+- **Un serveur sur gk1 et un nom `livekit.*` :** une box derrière le relais n'a pas son propre HAProxy ; ses noms passent par gk2.
+  Piège relevé : un nom en `x.*` est vu par le relais seulement s'il figure dans les `server_name` nginx de la box.
+- **NAT et Freebox :** gk2 est la **cible de la DMZ** de la Freebox (autoconfig conforme, 0 écart) : 7881/TCP et 7882/UDP lui arrivent sans
+  redirection. gk1 et les autres boxes derrière la même Freebox exigent des **redirections de ports explicites**. `secubox-freebox` sait
+  les lire mais pas les créer (« à venir ») : décision du 2026-10-25, l'autoconfig créera et retirera ces redirections (issue #3160),
+  avec la même garde que le reste (administrateur, droit « Modification des réglages », confirmation, audit). La décision « ouvrir les
+  ports média » de la Boutique posera donc deux choses : le drop-in nftables local et, si la box n'est pas la cible de la DMZ, la
+  redirection. Réglage `use_external_ip` selon que l'adresse publique est sur l'interface ou non (ici non).
 - **Flux média hors WAF, décision explicite.** LiveKit exige **7881/TCP** et **7882/UDP** entrants (plage UDP selon la
   configuration retenue). Un WAF HTTP ne voit pas du WebRTC : même situation que l'UDP/10000 de Jitsi. Le drop-in nftables est
   livré en exemple (`/usr/share/doc/secubox-meet/examples/meet.nft`), jamais appliqué à l'installation ; la Boutique ou l'écran
@@ -200,5 +210,6 @@ l'essai le demande.
 
 - Écart 1 (#3155) : fait, avec les tests (renvoi vers la connexion avec retour, pas de boucle pour une session sans personne).
 - Documentation d'installation lue : la concordance OIDC est complète sans autre changement du fournisseur (voir le tableau).
+- Essai du WebSocket LiveKit réussi (voir Exposition) ; redirections Freebox : #3160.
 - Écart 5 : à traiter avec `meetctl` (test de découverte et de JWKS depuis le conteneur, et du nom `livekit.<domaine>`).
 - Écarts 2, 3 et 4 : à faire quand Meet demande ce qu'il lui faut ; le 2 est facultatif d'après la décision 1.

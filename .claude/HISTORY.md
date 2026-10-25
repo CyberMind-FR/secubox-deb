@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-25 — secubox-meet : le WebSocket de LiveKit traverse HAProxy et sbxwaf (ref #3154, #3160)
+
+- Essai jetable sur gk1 (binaire arm64 1.13.10 sur /data, utilisateur nobody, vhost nginx `livekit.*`, tout retiré ensuite) : depuis Internet,
+  `wss://livekit.gk1.secubox.in/rtc` → 101 Switching Protocols, `x-secubox-waf: inspected`. Le relais de gk2 a posé tout seul la route
+  et le vhost HAProxy en ~3 min. Reste vrai : médias non éprouvés. Les entrées du relais pour ce nom disparaîtront au prochain relevé.
+- gk2 est cible de la DMZ Freebox ; les autres boxes ont besoin de redirections : création par l'autoconfig = #3160.
+- Accès SSH à gk1 rétabli (clé de l'agent posée dans authorized_keys de root) ; la racine de gk1 est à 96 % (330 Mo libres).
+
 ## 2026-10-25 — secubox-meet : documentation d'installation de Meet lue (ref #3154)
 
 - Aucune installation native Debian documentée (Kubernetes, Compose, Scalingo ; Nix et YunoHost communautaires) : le paquet sera une
