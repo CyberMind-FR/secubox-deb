@@ -25,12 +25,14 @@ profile secubox-meet-api {
   /etc/secubox/secubox.conf r,
   /etc/secubox/auth.toml r,
   /etc/secubox/users.json r,
+  /etc/secubox/appareils.json r,
   deny /etc/secubox/secrets/** r,
   /etc/nsswitch.conf r,
   # Registre des sessions (sans lui toute garde d'API refuse) et trace de délégation.
   /var/lib/secubox/auth/ r,
   /var/lib/secubox/auth/** r,
   /var/log/secubox/delegation.log w,
+  /var/log/secubox/garde-origine.log w,
 
   # Cache d'état de l'API.
   /var/cache/secubox/meet/ r,

@@ -79,3 +79,11 @@ def test_postinst_ne_demarre_pas_l_api_sans_profil_charge():
     assert charge < msg < demarre
     assert 'PROFIL_PRET=0' in t and '[ "$PROFIL_PRET" = 1 ]' in t and "journalctl -k" in t
     assert "systemctl enable secubox-meet.service" in t
+
+
+def test_profil_apparmor_couvre_ce_que_lit_l_authentification():
+    p = (RACINE / "apparmor" / "secubox-meet").read_text()
+    for regle in ("/etc/secubox/users.json r,", "/etc/secubox/appareils.json r,", "/etc/secubox/secubox.conf r,",
+                  "/etc/secubox/auth.toml r,", "/var/lib/secubox/auth/** r,",
+                  "/var/log/secubox/delegation.log w,", "/var/log/secubox/garde-origine.log w,"):
+        assert regle in p, regle
