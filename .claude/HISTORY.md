@@ -9,6 +9,13 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-25 — Boutique client façon App Store, peau Aurora (closes #3148)
+
+- appstore 0.10.0 : `/appstore/boutique.html` (onglets Aujourd'hui, Apps, Fonctionnalités, Installées, fiche d'app, Obtenir/Ouvrir),
+  mêmes routes que la page d'administration, aucune écriture nouvelle. `boutique-fiches.json` = noms et catégories grand public
+  (repli sur le nom du paquet ; système, non publiés, verrouillés masqués). Tests : static + navigateur (7), suite appstore 86.
+- Déployé sur gk2 (PR #3149), page et fiches servies (200). gk1 non mis à jour (SSH). Pas encore de lien depuis le Hall.
+
 ## 2026-10-25 — Services des pairs : domaine limité à secubox.in, noms triés par carte du Hall (closes #3146)
 
 - annuaire 0.15.1 : un pair n'est retenu que si son ddns est `<un libellé>.secubox.in` (un seul niveau) ou dans
