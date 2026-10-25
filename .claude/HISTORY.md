@@ -9,6 +9,15 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-25 — OIDC : renvoi vers la connexion avec retour (ref #3155, #3154, #3157)
+
+- Décisions du propriétaire : la visio est ouverte à toute personne de la box, invités compris ; ports média ouverts après confirmation
+  dans la Boutique ; fédération d'identité entre boxes voulue (issue #3157, conception d'abord).
+- secubox-auth 1.8.9 (PR #3158) : sans session, `/oidc/authorize` renvoie vers `/login.html?redirect=…` (chemin de même origine) au lieu
+  d'une impasse ; une session valide sans personne reçoit une page explicative (403), pas de boucle. Vérifié sur gk2 :
+  302 vers la connexion avec la demande intacte. Le déploiement a redémarré l'agrégateur (Hall de retour en 40 s).
+- Reste dans #3155 : écart 5 (joindre l'émetteur depuis le LXC, avec meetctl), 2 (accès par client, facultatif), 3 et 4.
+
 ## 2026-10-25 — Visio : conception de secubox-meet et référence du fournisseur OIDC (ref #3154, #3155)
 
 - Constat : SecuBox a déjà un fournisseur OpenID Connect (composant `oidc` de secubox-auth, code + PKCE, RS256, userinfo, JWKS),
