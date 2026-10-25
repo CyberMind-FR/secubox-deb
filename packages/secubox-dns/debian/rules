@@ -38,5 +38,8 @@ override_dh_auto_install:
 	install -m 644 composants/dns-lan/conf/dns-lan.toml debian/secubox-dns/usr/share/secubox/dns-lan/dns-lan.toml.exemple
 	install -d debian/secubox-dns/usr/lib/systemd/system/unbound.service.d
 	install -m 644 composants/dns-lan/conf/unbound-demarrage.conf debian/secubox-dns/usr/lib/systemd/system/unbound.service.d/10-secubox-demarrage.conf
+	# #3167 : ancre DNSSEC vide réparée avant le démarrage d'Unbound
+	install -m 644 composants/dns-lan/conf/unbound-ancre.conf debian/secubox-dns/usr/lib/systemd/system/unbound.service.d/20-secubox-ancre.conf
+	install -m 755 composants/dns-lan/sbin/secubox-unbound-ancre debian/secubox-dns/usr/sbin/
 	install -D -m 755 composants/dns-lan/debian/postinst debian/secubox-dns/usr/lib/secubox/dns/maintscripts/dns-lan.postinst
 
