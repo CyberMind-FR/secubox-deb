@@ -9,6 +9,15 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-25 — secubox-meet : documentation d'installation de Meet lue (ref #3154)
+
+- Aucune installation native Debian documentée (Kubernetes, Compose, Scalingo ; Nix et YunoHost communautaires) : le paquet sera une
+  adaptation. Concordance OIDC complète avec notre fournisseur : callback `/api/v1.0/callback/`, RS256, PKCE S256, `userinfo` en JSON ;
+  à régler côté Meet : noms (`name`/`nickname`), pas de logout, `ALLOW_UNREGISTERED_ROOMS=False`.
+- Découvertes qui changent la conception : LiveKit veut un **sous-domaine dédié** `livekit.<domaine>` en WSS (donc deux vhosts) et un
+  WebSocket à faire traverser HAProxy + sbxwaf (premier essai à faire) ; derrière un NAT, `use_external_ip` et redirection de 7881/TCP et
+  7882/UDP. Spec mise à jour.
+
 ## 2026-10-25 — OIDC : renvoi vers la connexion avec retour (ref #3155, #3154, #3157)
 
 - Décisions du propriétaire : la visio est ouverte à toute personne de la box, invités compris ; ports média ouverts après confirmation
