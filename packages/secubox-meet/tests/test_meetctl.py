@@ -18,7 +18,7 @@ def test_status_rapporte_les_cinq_services_separement(tmp_path):
 
 def test_status_domaines_et_adresse(tmp_path):
     d = json.loads(run_ctl(tmp_path, "status"))
-    assert d["module"] == "meet" and d["version"] == "0.1.1" and d["installed"] is True
+    assert d["module"] == "meet" and d["version"] == "0.1.6" and d["installed"] is True
     assert d["domain"] == "visio.exemple.test" and d["livekit_domain"] == "livekit.exemple.test"
     assert d["lxc_ip"] == "10.100.0.195" and d["web_reachable"] is False
 

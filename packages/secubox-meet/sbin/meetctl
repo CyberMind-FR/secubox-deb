@@ -21,7 +21,7 @@ set -euo pipefail
 
 readonly MODULE="meet"
 # Tenue en phase avec debian/changelog.
-readonly VERSION="0.1.1"
+readonly VERSION="0.1.6"
 readonly CONFIG_FILE="${SECUBOX_MEET_CONFIG:-/etc/secubox/meet.toml}"
 readonly STATE_DIR="${SECUBOX_MEET_STATE_DIR:-/etc/secubox/meet}"
 readonly INSTALL_SCRIPT="${SECUBOX_MEET_INSTALL_SCRIPT:-/usr/lib/secubox/meet/install-lxc.sh}"

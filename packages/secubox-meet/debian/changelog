@@ -1,3 +1,13 @@
+secubox-meet (0.1.6-1~trixie1) trixie; urgency=medium
+
+  * Provisionnement (ref #3154) : la photo des fichiers des services est celle du dernier état APPLIQUÉ, notée
+    (/etc/meet/.photo-appliquee, 0600) seulement après la relance. Une passe interrompue entre la pose des fichiers
+    et la relance laissait les services sur l'ancien état (gk1 : nginx du conteneur resté sur le site par défaut de
+    Debian, 404 sur /api/). Sans photo (première passe, montée de version), tout est relancé une fois.
+  * meetctl et l'API annoncent la version du paquet (figées à 0.1.1) ; un test les lie au changelog.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 23:55:00 +0100
+
 secubox-meet (0.1.5-1~trixie1) trixie; urgency=medium
 
   * Provisionnement (ref #3154) : meet.env pose DJANGO_DATA_DIR=/var/lib/meet. django-configurations préfixe ce
