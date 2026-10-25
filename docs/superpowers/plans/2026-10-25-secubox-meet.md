@@ -40,7 +40,7 @@ LXC 6, systemd ; dans le LXC : Python 3.13 + uv, Node 20 (trixie), PostgreSQL 17
   jamais dans un JSON de `status` ni dans un journal.
 - Réglages Meet figés : `DJANGO_CONFIGURATION=Production`, `ALLOW_UNREGISTERED_ROOMS=False`, `RESOURCE_DEFAULT_ACCESS_LEVEL=public`,
   `OIDC_RP_CLIENT_ID=meet`, `OIDC_RP_SIGN_ALGO=RS256`, `OIDC_RP_SCOPES="openid email"`, `OIDC_USE_PKCE=True`,
-  `OIDC_PKCE_CODE_CHALLENGE_METHOD=S256`, `OIDC_USERINFO_FULLNAME_FIELDS=["name"]`, `OIDC_USERINFO_SHORTNAME_FIELD=nickname`,
+  `OIDC_PKCE_CODE_CHALLENGE_METHOD=S256`, `OIDC_USERINFO_FULLNAME_FIELDS=name`, `OIDC_USERINFO_SHORTNAME_FIELD=nickname`,
   `OIDC_OP_LOGOUT_ENDPOINT` vide, `CELERY_TASK_ALWAYS_EAGER=True` (pas de travailleur Celery : ni enregistrement ni résumé dans ce
   périmètre), `DATA_DIR=/var/lib/meet`, `REDIS_URL=redis://127.0.0.1:6379/1`, `DB_HOST=127.0.0.1`, `LIVEKIT_API_KEY=meet`,
   `LIVEKIT_API_URL=https://livekit.<domaine>`, `LIVEKIT_INTERNAL_URL=http://127.0.0.1:7880`.

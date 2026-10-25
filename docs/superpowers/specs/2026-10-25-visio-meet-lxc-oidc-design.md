@@ -51,7 +51,7 @@ Facultatives : Egress, S3, résumés, téléphonie.
 | `OIDC_USE_PKCE=True`, méthode `S256` (recommandé) | S256 | activer |
 | `OIDC_USE_NONCE=True` (défaut) | nonce repris dans l'id_token | rien à faire |
 | `OIDC_OP_USER_ENDPOINT_FORMAT=AUTO` | `userinfo` répond en JSON | rien à faire |
-| Nom complet : `given_name`, `usual_name` (défaut) | nous publions `name`, `nickname`, `preferred_username` | **régler** `OIDC_USERINFO_FULLNAME_FIELDS=["name"]` et `OIDC_USERINFO_SHORTNAME_FIELD=nickname` |
+| Nom complet : `given_name`, `usual_name` (défaut) | nous publions `name`, `nickname`, `preferred_username` | **régler** `OIDC_USERINFO_FULLNAME_FIELDS=name` et `OIDC_USERINFO_SHORTNAME_FIELD=nickname` |
 | `FRONTEND_IS_SILENT_LOGIN_ENABLED=True` (défaut) : exige `prompt=none` | `prompt=none` renvoie `login_required` quand il faut | compatible |
 | `OIDC_OP_LOGOUT_ENDPOINT` : facultatif | absent chez nous (écart 3) | **laisser vide** : la déconnexion de Meet ne ferme que la session de Meet |
 | `OIDC_FALLBACK_TO_EMAIL_FOR_IDENTIFICATION=False` (défaut) | le `sub` est stable ; le courriel synthétique n'est pas fiable | garder `False` |
@@ -142,7 +142,7 @@ versionné), état, mise à jour (migrations Django, reconstruction du front). M
    puis dans l'environnement du conteneur.
 2. Meet est configuré avec l'émetteur `https://hall.<domaine>/oidc`, ses quatre points d'accès, `RS256`, les portées
    `openid email`, PKCE.
-3. **Réglage des noms** : `OIDC_USERINFO_FULLNAME_FIELDS=["name"]`, `OIDC_USERINFO_SHORTNAME_FIELD=nickname`, `OIDC_USE_PKCE=True`, pas de
+3. **Réglage des noms** : `OIDC_USERINFO_FULLNAME_FIELDS=name`, `OIDC_USERINFO_SHORTNAME_FIELD=nickname`, `OIDC_USE_PKCE=True`, pas de
    `OIDC_OP_LOGOUT_ENDPOINT`, `ALLOW_UNREGISTERED_ROOMS=False`.
 4. **Le conteneur doit joindre l'émetteur sous son nom public** : l'`iss` des jetons est comparé tel quel, donc pas d'adresse
    interne. Résolution du nom public vers la box depuis le conteneur (entrée d'hôtes vers l'adresse du pont LXC, ou DNS de la

@@ -50,6 +50,8 @@ def test_rendu_env_meet(tmp_path):
     assert e["LIVEKIT_API_URL"] == "https://livekit.exemple.test" and e["LIVEKIT_INTERNAL_URL"] == "http://127.0.0.1:7880"
     assert e["DJANGO_ALLOWED_HOSTS"] == "visio.exemple.test" and e["DJANGO_CSRF_TRUSTED_ORIGINS"] == "https://visio.exemple.test"
     assert e["CELERY_TASK_ALWAYS_EAGER"] == "True" and e["DATA_DIR"] == "/var/lib/meet"
+    # ListValue de Meet découpe sur les virgules : pas de syntaxe JSON.
+    assert e["OIDC_USERINFO_FULLNAME_FIELDS"] == "name"
 
 
 def test_env_secrets_generes_et_coherents(tmp_path):

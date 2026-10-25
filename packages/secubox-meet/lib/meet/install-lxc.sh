@@ -220,7 +220,8 @@ apt-get install -y --no-install-recommends \
 
 id meet >/dev/null 2>&1 || useradd --system --home-dir /var/lib/meet --shell /usr/sbin/nologin meet
 id livekit >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin livekit
-install -d -o meet -g meet -m 0750 /var/lib/meet
+# 0751 : nginx (www-data) doit traverser jusqu'à /var/lib/meet/static.
+install -d -o meet -g meet -m 0751 /var/lib/meet
 install -d -m 0755 /opt/meet /etc/meet /etc/livekit
 
 # Sources : étiquette figée, puis commit vérifié (une étiquette peut être déplacée).
@@ -233,8 +234,13 @@ fi
 
 if [ ! -e "/opt/meet/.construit-$MEET_COMMIT" ]; then
     [ -x /opt/meet/venv/bin/python ] || python3 -m venv /opt/meet/venv
-    /opt/meet/venv/bin/pip install --quiet uv
-    ( cd /opt/meet/src/src/backend && /opt/meet/venv/bin/uv sync --locked --no-dev )
+    # uv vit dans son propre venv : `uv sync --locked` est exact et retirerait
+    # pip/uv du venv de Meet, ce qui casserait toute relance après un échec.
+    [ -x /opt/meet/uv-venv/bin/uv ] || {
+        python3 -m venv /opt/meet/uv-venv
+        /opt/meet/uv-venv/bin/pip install --quiet uv
+    }
+    ( cd /opt/meet/src/src/backend && /opt/meet/uv-venv/bin/uv sync --locked --no-dev )
     ( cd /opt/meet/src/src/frontend && npm ci --ignore-scripts && npm run build )
     rm -rf /opt/meet/frontend
     cp -r /opt/meet/src/src/frontend/dist /opt/meet/frontend
@@ -277,12 +283,15 @@ runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='meet'
 # manage.py avec l'environnement de l'unité (meet.env n'est pas du shell valide :
 # `["name"]` y serait déformé), donc via systemd-run et son EnvironmentFile.
 manage() {
-    systemd-run --quiet --wait --pipe -p User=meet -p EnvironmentFile=/etc/meet/meet.env \
+    systemd-run --quiet --wait --pipe -p "User=${MANAGE_USER:-meet}" -p EnvironmentFile=/etc/meet/meet.env \
         -p WorkingDirectory=/opt/meet/src/src/backend /opt/meet/venv/bin/python manage.py "$@"
 }
 manage migrate --noinput
 manage collectstatic --noinput
-manage compilemessages
+chmod 0755 /var/lib/meet/static
+# En root : les sources ont été clonées par root, `meet` ne peut pas écrire
+# dans locale/ (sinon échec définitif, relancé toutes les 15 min).
+MANAGE_USER=root manage compilemessages
 touch "/opt/meet/.construit-$MEET_COMMIT"
 
 systemctl enable --now postgresql redis-server livekit meet-backend nginx
@@ -325,7 +334,7 @@ main() {
 
     RENDU_DIR="${DRY_RUN:-$(mktemp -d)}"
     if [ -z "$DRY_RUN" ]; then
-        trap 'rm -rf "$RENDU_DIR"' EXIT
+        trap 'rm -rf "$RENDU_DIR" "$LXC_PATH/$LXC_NAME/rootfs/root/meet-rendu"' EXIT
     fi
     rendre_tout "$RENDU_DIR"
     if [ -n "$DRY_RUN" ]; then
