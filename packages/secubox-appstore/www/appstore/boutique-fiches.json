@@ -1,0 +1,171 @@
+{
+ "secubox-jellyfin": {
+  "nom": "Jellyfin",
+  "resume": "Vos films et séries, chez vous",
+  "categorie": "Médias",
+  "detail": "Regardez vos films, séries et photos depuis n'importe quel écran de la maison, sans abonnement ni publicité.",
+  "ordre": 1,
+  "vedette": true
+ },
+ "secubox-peertube": {
+  "nom": "PeerTube",
+  "resume": "Vos vidéos, sans plateforme",
+  "categorie": "Médias",
+  "detail": "Publiez et partagez vos vidéos sur votre propre serveur, avec un lien que vous seul contrôlez.",
+  "ordre": 2,
+  "vedette": true
+ },
+ "secubox-lyrion": {
+  "nom": "Musique",
+  "resume": "La musique dans toutes les pièces",
+  "categorie": "Médias",
+  "detail": "Diffusez votre bibliothèque musicale sur des enceintes synchronisées.",
+  "ordre": 3
+ },
+ "secubox-photoprism": {
+  "nom": "Photos",
+  "resume": "Vos souvenirs, classés",
+  "categorie": "Médias",
+  "detail": "Retrouvez vos photos par lieu, personne ou date, sans les confier à un service en ligne.",
+  "ordre": 4
+ },
+ "secubox-podcaster": {
+  "nom": "Podcasts",
+  "resume": "Publiez votre émission",
+  "categorie": "Médias",
+  "detail": "Enregistrez, hébergez et diffusez votre podcast sur toutes les applications d'écoute.",
+  "ordre": 5
+ },
+ "secubox-radio": {
+  "nom": "Radio",
+  "resume": "Votre radio en ligne",
+  "categorie": "Médias",
+  "detail": "Écoutez et programmez vos flux radio depuis la box.",
+  "ordre": 6
+ },
+ "secubox-nextcloud": {
+  "nom": "Nextcloud",
+  "resume": "Fichiers, agenda et contacts",
+  "categorie": "Cloud",
+  "detail": "Synchronisez vos fichiers, votre agenda et vos contacts entre téléphone et ordinateur, sur votre box.",
+  "ordre": 7
+ },
+ "secubox-mail": {
+  "nom": "Courrier",
+  "resume": "Votre adresse, votre serveur",
+  "categorie": "Communication",
+  "detail": "Une boîte de courrier à votre nom de domaine, avec antispam et webmail inclus.",
+  "ordre": 8
+ },
+ "secubox-matrix": {
+  "nom": "Messagerie Matrix",
+  "resume": "Discutez en privé",
+  "categorie": "Communication",
+  "detail": "Messages et appels chiffrés, hébergés chez vous et compatibles avec les applications Matrix.",
+  "ordre": 9
+ },
+ "secubox-jitsi": {
+  "nom": "Visio",
+  "resume": "Appels vidéo privés",
+  "categorie": "Communication",
+  "detail": "Lancez une visioconférence en un lien, chiffrée et hébergée chez vous.",
+  "ordre": 10
+ },
+ "secubox-bbs": {
+  "nom": "Salon BBS",
+  "resume": "Discussions du maillage",
+  "categorie": "Communication",
+  "detail": "Un forum partagé entre toutes les box de votre cercle, sans compte chez un tiers.",
+  "ordre": 11
+ },
+ "secubox-webfilter": {
+  "nom": "Contrôle parental",
+  "resume": "Protégez les plus jeunes",
+  "categorie": "Protection",
+  "detail": "Des profils par appareil, des catégories à bloquer et des horaires, simples à régler.",
+  "ordre": 12
+ },
+ "secubox-ad-guard": {
+  "nom": "Bloqueur de pubs",
+  "resume": "Moins de pubs, moins de traqueurs",
+  "categorie": "Protection",
+  "detail": "Bloque publicités et traqueurs pour tous les appareils de la maison, sans rien installer dessus.",
+  "ordre": 13
+ },
+ "secubox-waf-ng": {
+  "nom": "Bouclier web",
+  "resume": "Filtre ce qui frappe à la porte",
+  "categorie": "Protection",
+  "detail": "Inspecte chaque requête entrante et bannit automatiquement les sources hostiles.",
+  "ordre": 14
+ },
+ "secubox-wireguard": {
+  "nom": "VPN maison",
+  "resume": "Votre réseau, partout",
+  "categorie": "Réseau",
+  "detail": "Connectez téléphone et ordinateur à votre box depuis l'extérieur avec un simple QR code.",
+  "ordre": 15
+ },
+ "secubox-gitea": {
+  "nom": "Dépôts Git",
+  "resume": "Votre code chez vous",
+  "categorie": "Outils",
+  "detail": "Hébergez vos projets et suivez les tickets sur votre propre forge.",
+  "ordre": 16
+ },
+ "secubox-metablogizer": {
+  "nom": "Métablog",
+  "resume": "Un site en quelques clics",
+  "categorie": "Publication",
+  "detail": "Publiez un blog ou un site vitrine sur votre domaine.",
+  "ordre": 17
+ },
+ "secubox-metanews": {
+  "nom": "Actualités",
+  "resume": "Vos sources, un seul fil",
+  "categorie": "Publication",
+  "detail": "Suivez vos sites et flux préférés dans un fil unique.",
+  "ordre": 18
+ },
+ "secubox-billets": {
+  "nom": "Billets",
+  "resume": "Écrivez et partagez",
+  "categorie": "Publication",
+  "detail": "Rédigez des billets, vivants ou éphémères, et partagez-les avec votre cercle.",
+  "ordre": 19
+ },
+ "secubox-zia": {
+  "nom": "Assistant ZIA",
+  "resume": "Un assistant qui connaît votre box",
+  "categorie": "Intelligence",
+  "detail": "Posez vos questions en langage courant : l'assistant agit sur votre box avec votre accord.",
+  "ordre": 20
+ },
+ "secubox-streamlit": {
+  "cacher": true
+ },
+ "secubox-media": {
+  "cacher": true
+ },
+ "secubox-assist": {
+  "cacher": true
+ },
+ "secubox-ai-gateway": {
+  "cacher": true
+ },
+ "secubox-zia-llm": {
+  "cacher": true
+ },
+ "secubox-voicestudio": {
+  "cacher": true
+ },
+ "secubox-audio-mood": {
+  "cacher": true
+ },
+ "secubox-avatar": {
+  "cacher": true
+ },
+ "secubox-console": {
+  "cacher": true
+ }
+}

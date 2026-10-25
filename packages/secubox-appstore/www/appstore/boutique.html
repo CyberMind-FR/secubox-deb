@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+<title>Boutique SecuBox</title>
+<style>
+/* Concept : vitrine App Store en peau Aurora : fond nuit à deux lueurs, panneaux bleutés à bord fin, cyan = action, un seul thème sombre. */
+:root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+  --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;
+  --pan:rgba(10,22,46,.6);--tuile:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));
+  --font:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(900px 520px at 100% 0%,rgba(59,130,246,.2),transparent 70%),radial-gradient(800px 480px at 0% 100%,rgba(41,182,246,.10),transparent 70%),var(--fond);
+  color:var(--texte);font:15px/1.4 var(--font);-webkit-font-smoothing:antialiased;background-attachment:fixed;
+  padding-block:10px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1000px;margin:0 auto;container-type:inline-size;container-name:a}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:8px}
+.demo,.info{background:rgba(255,159,28,.12);border:1px solid rgba(255,159,28,.5);color:var(--orange);border-radius:10px;padding:6px 12px;font-size:.78rem;margin:6px 0 0}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;padding:12px 0 8px;
+  background:linear-gradient(180deg,rgba(6,13,27,.94),rgba(6,13,27,.78));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--fond);z-index:10}
+.bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.marque{flex:1 1 auto;min-width:0}.marque b{display:block;font-size:1.7rem;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.marque small{color:var(--cyan);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase}
+.pastille{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 10px;font-size:.7rem;font-weight:700}
+.search{flex:0 1 240px;position:relative}
+.search input{width:100%;height:36px;border-radius:10px;border:1px solid var(--trait);background:rgba(18,40,78,.5);color:var(--texte);padding:0 12px 0 34px;font:inherit}
+.search input::placeholder{color:var(--faible)}
+.search svg{position:absolute;left:10px;top:10px;width:16px;height:16px;stroke:var(--faible);fill:none;stroke-width:2}
+nav.tabs{display:flex;gap:4px;margin-top:12px;overflow-x:auto;scrollbar-width:none}
+nav.tabs button{padding:7px 16px;border-radius:999px;color:var(--doux);font-weight:600;white-space:nowrap;border:1px solid transparent}
+nav.tabs button[aria-selected="true"]{background:rgba(41,182,246,.14);border-color:var(--cyan);color:var(--cyan)}
+
+h2{font-size:1.15rem;letter-spacing:-.01em;margin:30px 0 12px;font-weight:700}
+.eyebrow{font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faible)}
+.hero{position:relative;border-radius:18px;overflow:hidden;min-height:330px;padding:28px;margin-top:16px;border:1px solid var(--trait2);
+  display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;
+  background:radial-gradient(70% 90% at 90% 0%,rgba(167,139,250,.55),transparent 62%),radial-gradient(60% 80% at 10% 110%,rgba(41,182,246,.45),transparent 65%),linear-gradient(160deg,#0d2347,#060d1b);
+  box-shadow:0 0 40px rgba(41,182,246,.12)}
+.hero .eyebrow{color:var(--cyan)}
+.hero h3{font-size:2.5rem;line-height:1.05;letter-spacing:-.02em;margin:8px 0 0;max-width:14ch;text-wrap:balance}
+.hero p{max-width:34ch;margin:10px 0 0;color:var(--doux);font-size:1rem}
+.hero .foot{display:flex;align-items:center;gap:12px;background:rgba(6,13,27,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--trait);border-radius:14px;padding:10px 12px;margin:20px 0 0}
+.foot .meta{flex:1;min-width:0}.foot b{display:block}.foot span{font-size:.8rem;color:var(--doux)}
+
+.duo{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
+@container a (min-width:640px){.duo{grid-template-columns:1fr 1fr}}
+.feat{background:var(--tuile);border:1px solid var(--trait);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.feat h3{margin:0;font-size:1.1rem}.feat p{margin:0;color:var(--doux);font-size:.88rem}
+.feat .stack{display:flex;margin:10px 0 4px}
+.feat .stack .ico{margin-right:-10px;border:3px solid #0b1a36}
+.feat .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto;padding-top:12px}
+.feat small{color:var(--faible);font-size:.76rem}
+
+.list{background:var(--pan);border:1px solid var(--trait);border-radius:14px;padding:4px 16px}
+@container a (min-width:760px){.list{display:grid;grid-template-columns:1fr 1fr;column-gap:32px}}
+.app{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid rgba(86,150,255,.12);cursor:pointer;min-width:0}
+.app:hover{background:rgba(41,182,246,.05)}
+.ico{width:56px;height:56px;border-radius:14px;flex:none;display:grid;place-items:center;color:#fff;font-weight:800;font-size:24px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 4px 14px rgba(0,0,0,.35)}
+.app .txt{flex:1;min-width:0}.app .txt b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app .txt span{display:block;color:var(--doux);font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app .txt em{font-style:normal;font-size:.68rem;color:var(--faible);letter-spacing:.04em;text-transform:uppercase}
+.get{min-width:78px;height:30px;border-radius:999px;border:1px solid var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12);font-weight:700;font-size:.82rem;padding:0 16px;flex:none}
+.get:hover{background:rgba(41,182,246,.24)}
+.get.open{border-color:var(--trait2);color:var(--doux);background:transparent}
+.get.busy{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.1)}
+.get.big{height:36px;min-width:104px;font-size:.92rem}
+.hero .get{background:var(--cyan);color:#021226;border-color:var(--cyan)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.chips button{border:1px solid var(--trait);border-radius:999px;padding:5px 14px;font-weight:600;font-size:.82rem;white-space:nowrap;color:var(--doux);background:rgba(18,40,78,.4)}
+.chips button[aria-pressed="true"]{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.14)}
+.empty{padding:32px 8px;text-align:center;color:var(--faible);grid-column:1/-1}
+
+dialog{border:1px solid var(--trait2);border-radius:18px;background:linear-gradient(160deg,rgba(15,32,64,.98),rgba(7,15,32,.98));color:var(--texte);padding:0;
+  width:min(560px,calc(100% - 24px));max-height:88vh;box-shadow:0 0 60px rgba(41,182,246,.18),0 24px 80px rgba(0,0,0,.6)}
+dialog::backdrop{background:rgba(2,8,20,.65);backdrop-filter:blur(4px)}
+.sheet{padding:24px;display:flex;flex-direction:column;gap:16px}
+.sheet .head{display:flex;gap:16px;align-items:flex-start}
+.sheet .ico{width:92px;height:92px;border-radius:22px;font-size:40px}
+.sheet h3{margin:0;font-size:1.6rem;letter-spacing:-.01em}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);border-block:1px solid var(--trait);padding:12px 0;text-align:center}
+.facts div+div{border-left:1px solid var(--trait)}.facts b{display:block;font-variant-numeric:tabular-nums}.facts span{font-size:.7rem;color:var(--faible)}
+.sheet p{margin:0;max-width:60ch;color:var(--texte)}.close{align-self:flex-end;color:var(--cyan);font-weight:600}
+.note{font-size:.8rem;color:var(--doux)}
+.info{background:rgba(41,182,246,.1);border-color:var(--cyan);color:var(--cyan)}
+.erreur{background:rgba(255,77,94,.1);border:1px solid var(--rouge);color:var(--rouge);border-radius:10px;padding:6px 12px;font-size:.78rem;margin:6px 0 0}
+.toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:rgba(18,40,78,.96);border:1px solid var(--cyan);color:var(--texte);
+  padding:10px 18px;border-radius:999px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20;max-width:calc(100% - 32px)}
+.toast.on{opacity:1}
+@media (max-width:520px){.marque b{font-size:1.4rem}.search{flex-basis:100%}.hero h3{font-size:2rem}.hero{min-height:290px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="bar">
+      <div class="marque"><b>Boutique</b><small>Les apps de votre box</small></div>
+      <span class="pastille" id="etat" hidden>BOX EN LIGNE</span>
+      <label class="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M13 13l5 5"/></svg>
+        <input id="q" type="search" placeholder="Rechercher une app" aria-label="Rechercher une app"></label>
+    </div>
+    <nav class="tabs" role="tablist" id="tabs"></nav>
+    <div class="demo" id="demo" hidden>Démonstration : apps et états d’exemple, aucune installation réelle.</div>
+    <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:inherit">Se connecter</a></div>
+    <div class="erreur" id="erreur" hidden></div>
+  </header>
+  <main id="main"></main>
+</div>
+<dialog id="dlg"></dialog>
+<div class="toast" id="toast" role="status"></div>
+<script>
+const Q=new URLSearchParams(location.search),DEMO=!!Q.get('demo');
+if(Q.get('embed'))document.body.classList.add('emb');
+const API='/api/v1/appstore';
+const $=id=>document.getElementById(id);
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+const court=n=>String(n||'').replace(/^secubox-/,'');
+const CAT_FR={media:'Médias',email:'Communication',communication:'Communication',publishing:'Publication',ai:'Intelligence',iot:'Objets',network:'Réseau',security:'Protection',system:'Système',monitoring:'Suivi',dashboard:'Tableaux',mesh:'Maillage',analysis:'Analyse',apps:'Outils',misc:'Divers',wall:'Affichage',mind:'Intelligence'};
+const CAT_VISIBLES=new Set(['media','email','communication','publishing','ai','iot','apps']);   // sans fiche, seules ces catégories sont proposées
+let FICHES={},MODS=[],GROUPES=[],SESSION_OK=true,BUSY={},SUIVI=false;
+const etat={onglet:'auj',cat:'Tout',q:''};
+const SONDE_MS=Number(Q.get('sonde'))||2500;
+
+function jeton(){try{return localStorage.getItem('sbx_token')||''}catch(e){return ''}}
+function entetes(x){const h=Object.assign({Accept:'application/json'},x||{});const t=jeton();if(t)h.Authorization='Bearer '+t;return h}
+async function lire(chemin,base){const r=await fetch((base||API)+chemin,{credentials:'same-origin',cache:'no-store',headers:entetes()});
+  if(!r.ok){const e=new Error('HTTP '+r.status);e.statut=r.status;throw e}return r.json()}
+async function ecrire(methode,chemin){
+  if(DEMO)return{ok:false,demo:true};
+  try{const r=await fetch(API+chemin,{method:methode,credentials:'same-origin',headers:entetes({'Content-Type':'application/json'})});
+    let data=null;try{data=await r.json()}catch(e){/* corps vide */}return{ok:r.ok,statut:r.status,data}}
+  catch(e){return{ok:false,statut:0,data:null}}}
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2800)}
+
+/* ----- Données : le catalogue réel, habillé par les fiches (repli sur le nom du paquet) ----- */
+function habiller(m){
+  const f=FICHES[m.name]||{};
+  const brut=String(m.description||'').replace(/^SecuBox\s*[—-]\s*/,'');
+  const nom=f.nom||court(m.name).replace(/-/g,' ').replace(/^./,c=>c.toUpperCase());
+  return{id:m.name,n:nom,d:f.resume||brut,l:f.detail||brut,c:f.categorie||CAT_FR[m.category]||'Divers',
+    h:teinte(m.name),v:m.version,inst:!!m.installed,run:!!m.running,ordre:f.ordre||999,vedette:!!f.vedette,
+    visible:!f.cacher&&(!!FICHES[m.name]||CAT_VISIBLES.has(m.category))&&m.installable!==false&&!m.tier_locked,fiche:!!FICHES[m.name]}}
+function teinte(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h}
+const apps=()=>MODS.map(habiller).filter(a=>a.visible).sort((a,b)=>a.ordre-b.ordre||a.n.localeCompare(b.n,'fr'));
+const app=id=>apps().filter(a=>a.id===id)[0];
+
+function icone(a,cls){const e=el('div','ico'+(cls?' '+cls:''),a.n.charAt(0).toUpperCase());
+  e.style.background='linear-gradient(145deg,hsl('+a.h+' 80% 58%),hsl('+((a.h+30)%360)+' 75% 38%))';e.setAttribute('aria-hidden','true');return e}
+function bouton(a,cls){
+  const b=el('button','get '+(cls||''));b.type='button';
+  if(BUSY[a.id]){b.textContent=BUSY[a.id]==='remove'?'Retrait…':'Installation…';b.classList.add('busy');b.disabled=true}
+  else if(a.inst){b.textContent='Ouvrir';b.classList.add('open')}
+  else b.textContent='Obtenir';
+  b.addEventListener('click',ev=>{ev.stopPropagation();agir(a)});return b}
+
+async function agir(a){
+  if(a.inst){if(DEMO){toast('Ouverture de '+a.n+' (démonstration)');return}location.assign('/'+court(a.id)+'/');return}
+  const r=await ecrire('POST','/module/'+encodeURIComponent(a.id)+'/action/install');
+  if(r.demo){BUSY[a.id]='install';rendre();setTimeout(()=>{delete BUSY[a.id];const m=MODS.filter(x=>x.name===a.id)[0];if(m)m.installed=true;rendre();toast(a.n+' est installée (démonstration)')},1800);return}
+  if(r.ok&&r.statut===202){BUSY[a.id]='install';rendre();suivre();return}
+  if(r.ok){toast(a.n+' est installée');await charger();return}
+  if(r.statut===401||r.statut===403)toast('Réservé à l’administrateur : connectez-vous pour installer.');
+  else toast('Installation impossible'+(r.data&&r.data.detail?' : '+r.data.detail:'.'));
+  rendre()}
+async function suivre(){
+  if(SUIVI)return;SUIVI=true;let echecs=0;
+  try{while(Object.keys(BUSY).length){
+    await new Promise(f=>setTimeout(f,SONDE_MS));
+    let jobs;try{jobs=(await lire('/jobs')).jobs||{};echecs=0}catch(e){if(++echecs>=20){BUSY={};toast('Suivi interrompu : rechargez la page.');rendre();return}continue}
+    for(const nom of Object.keys(BUSY)){const t=jobs[nom];if(t&&t.etat==='en-cours')continue;delete BUSY[nom];
+      const a=habiller({name:nom});
+      toast(!t?a.n+' : suivi perdu, vérifiez l’état.':t.etat==='ok'?a.n+' est installée.':a.n+' : '+(t.message||'installation impossible'))}
+    await charger()}}
+  finally{SUIVI=false}}
+
+/* ----- Vues ----- */
+function ligne(a){const r=el('div','app');r.tabIndex=0;r.setAttribute('role','button');
+  r.appendChild(icone(a));const t=el('div','txt');t.appendChild(el('b',null,a.n));t.appendChild(el('span',null,a.d));t.appendChild(el('em',null,a.c));
+  r.appendChild(t);r.appendChild(bouton(a));
+  r.addEventListener('click',()=>ouvrir(a.id));r.addEventListener('keydown',e=>{if(e.key==='Enter')ouvrir(a.id)});return r}
+function liste(items){const l=el('div','list');
+  if(!items.length){l.appendChild(el('div','empty','Aucune app ne correspond.'));return l}
+  items.forEach(a=>l.appendChild(ligne(a)));return l}
+const rechercher=items=>{const q=etat.q.trim().toLowerCase();return q?items.filter(a=>(a.n+' '+a.d+' '+a.c).toLowerCase().indexOf(q)>=0):items};
+
+function groupesVisibles(){
+  return GROUPES.map(g=>({id:g.id,t:g.label,d:g.description,m:(g.membres||[]).map(x=>app(x.name)).filter(Boolean)})).filter(g=>g.m.length>=2)}
+function carteGroupe(g){
+  const c=el('article','feat');c.appendChild(el('div','eyebrow','Ensemble'));c.appendChild(el('h3',null,g.t));c.appendChild(el('p',null,g.d));
+  const s=el('div','stack');g.m.slice(0,6).forEach(a=>s.appendChild(icone(a)));c.appendChild(s);
+  const manque=g.m.filter(a=>!a.inst);
+  const r=el('div','row');r.appendChild(el('small',null,manque.length?manque.length+' à installer sur '+g.m.length:'Tout est installé'));
+  const b=el('button','get');b.type='button';b.textContent=manque.length?'Tout obtenir':'Complet';b.disabled=!manque.length;
+  b.addEventListener('click',()=>{manque.forEach(a=>agir(a));toast('Installation de '+manque.length+' app'+(manque.length>1?'s':''))});
+  r.appendChild(b);c.appendChild(r);return c}
+function vueAuj(m){
+  const tous=apps(),a=tous.filter(x=>x.vedette&&!x.inst)[0]||tous.filter(x=>!x.inst)[0];
+  if(a){const h=el('section','hero');const top=el('div');top.appendChild(el('div','eyebrow','À découvrir'));top.appendChild(el('h3',null,a.n));top.appendChild(el('p',null,a.l));h.appendChild(top);
+    const f=el('div','foot');f.appendChild(icone(a));const mt=el('div','meta');mt.appendChild(el('b',null,a.n));mt.appendChild(el('span',null,a.d));f.appendChild(mt);f.appendChild(bouton(a));h.appendChild(f);
+    h.addEventListener('click',()=>ouvrir(a.id));m.appendChild(h)}
+  const g=groupesVisibles();
+  if(g.length){m.appendChild(el('h2',null,'Fonctionnalités'));const d=el('div','duo');g.slice(0,4).forEach(x=>d.appendChild(carteGroupe(x)));m.appendChild(d)}
+  const dispo=tous.filter(x=>!x.inst).slice(0,6);
+  if(dispo.length){m.appendChild(el('h2',null,'À installer'));m.appendChild(liste(dispo))}
+  if(!tous.length)m.appendChild(vide())}
+function vueApps(m){
+  const cats=['Tout'];apps().forEach(a=>{if(cats.indexOf(a.c)<0)cats.push(a.c)});
+  const ch=el('div','chips');ch.style.marginTop='16px';
+  cats.forEach(c=>{const b=el('button',null,c);b.type='button';b.setAttribute('aria-pressed',String(etat.cat===c));b.addEventListener('click',()=>{etat.cat=c;rendre()});ch.appendChild(b)});
+  m.appendChild(ch);const w=el('div');w.style.marginTop='16px';
+  w.appendChild(liste(rechercher(apps().filter(a=>etat.cat==='Tout'||a.c===etat.cat))));m.appendChild(w)}
+function vueFonc(m){m.appendChild(el('h2',null,'Fonctionnalités'));const g=groupesVisibles();
+  if(!g.length){m.appendChild(vide());return}const d=el('div','duo');g.forEach(x=>d.appendChild(carteGroupe(x)));m.appendChild(d)}
+function vueInst(m){m.appendChild(el('h2',null,'Installées sur cette box'));m.appendChild(liste(rechercher(apps().filter(a=>a.inst))))}
+function vide(){return el('div','empty',SESSION_OK?'Le catalogue est vide ou injoignable pour le moment.':'—')}
+
+function rendre(){
+  const t=$('tabs');t.textContent='';
+  [['auj','Aujourd’hui'],['apps','Apps'],['fonc','Fonctionnalités'],['inst','Installées']].forEach(o=>{const b=el('button',null,o[1]);b.type='button';b.setAttribute('role','tab');
+    b.setAttribute('aria-selected',String(etat.onglet===o[0]));b.addEventListener('click',()=>{etat.onglet=o[0];rendre();scrollTo(0,0)});t.appendChild(b)});
+  const m=$('main');m.textContent='';
+  ({auj:vueAuj,apps:vueApps,fonc:vueFonc,inst:vueInst})[etat.onglet](m);
+  $('session').hidden=SESSION_OK;$('demo').hidden=!DEMO;annoncer()}
+
+function ouvrir(id){
+  const a=app(id);if(!a)return;const d=$('dlg');d.textContent='';const s=el('div','sheet');
+  const c=el('button','close','Fermer');c.type='button';c.addEventListener('click',()=>d.close());s.appendChild(c);
+  const h=el('div','head');h.appendChild(icone(a));const t=el('div');t.style.minWidth='0';t.appendChild(el('h3',null,a.n));t.appendChild(el('div','note',a.d));
+  const bt=bouton(a,'big');bt.style.marginTop='12px';t.appendChild(bt);h.appendChild(t);s.appendChild(h);
+  const f=el('div','facts');[[a.c,'Catégorie'],[a.v||'—','Version'],[a.inst?(a.run?'En marche':'Installée'):'Disponible','État']].forEach(x=>{const q=el('div');q.appendChild(el('b',null,x[0]));q.appendChild(el('span',null,x[1]));f.appendChild(q)});s.appendChild(f);
+  s.appendChild(el('p',null,a.l));
+  s.appendChild(el('div','note',a.inst?'Installée sur cette box.':'L’installation est réservée à l’administrateur de la box. Vos données restent chez vous.'));
+  d.appendChild(s);if(!d.open)d.showModal()}
+$('dlg').addEventListener('click',function(e){if(e.target===this)this.close()});
+$('q').addEventListener('input',function(){etat.q=this.value;if(etat.q.trim()&&etat.onglet==='auj')etat.onglet='apps';rendre()});
+
+/* ----- Chargement ----- */
+function demoData(){
+  FICHES={'secubox-jellyfin':{nom:'Jellyfin',resume:'Vos films et séries, chez vous',categorie:'Médias',ordre:1,vedette:true},'secubox-nextcloud':{nom:'Nextcloud',resume:'Fichiers, agenda et contacts',categorie:'Cloud',ordre:2},'secubox-peertube':{nom:'PeerTube',resume:'Vos vidéos, sans plateforme',categorie:'Médias',ordre:3}};
+  MODS=[{name:'secubox-jellyfin',category:'media',description:'SecuBox — médias',installed:true,running:true,version:'10.9.2',installable:true},
+        {name:'secubox-nextcloud',category:'misc',description:'SecuBox — cloud',installed:true,version:'29.0',installable:true},
+        {name:'secubox-peertube',category:'media',description:'SecuBox — vidéo',installed:false,version:'6.0.2',installable:true}];
+  GROUPES=[{id:'ciné',label:'Cinéma à la maison',description:'Regarder chez soi.',membres:[{name:'secubox-jellyfin'},{name:'secubox-peertube'}]}]}
+async function charger(){
+  if(DEMO){demoData();SESSION_OK=true;rendre();return}
+  const e=await Promise.allSettled([lire('/catalog'),lire('/groupes'),lire('/jobs'),fetch('/appstore/boutique-fiches.json',{cache:'no-store'}).then(r=>r.ok?r.json():{})]);
+  const val=i=>e[i].status==='fulfilled'?e[i].value:null;
+  SESSION_OK=!e.slice(0,3).some(x=>x.status==='rejected'&&(x.reason.statut===401||x.reason.statut===403));
+  const c=val(0);if(c&&Array.isArray(c.modules))MODS=c.modules;
+  const g=val(1);if(g&&Array.isArray(g.groupes))GROUPES=g.groupes;
+  const f=val(3);if(f&&typeof f==='object')FICHES=f;
+  const jb=val(2);if(jb&&jb.jobs)Object.keys(jb.jobs).forEach(n=>{if(jb.jobs[n].etat==='en-cours')BUSY[n]=jb.jobs[n].verbe});
+  const rien=e.slice(0,2).every(x=>x.status==='rejected')&&SESSION_OK;
+  $('erreur').hidden=!rien;if(rien)$('erreur').textContent='Impossible de lire l’App Store (service arrêté ou injoignable).';
+  $('etat').hidden=!!rien;
+  rendre();if(Object.keys(BUSY).length)suivre()}
+function annoncer(){try{parent.postMessage({sbxVue:Math.ceil(document.querySelector('.wrap').getBoundingClientRect().bottom+scrollY),onglet:'boutique'},location.origin)}catch(e){/* hors iframe */}}
+if(window.ResizeObserver)new ResizeObserver(annoncer).observe(document.body);
+addEventListener('resize',annoncer);
+charger();
+setInterval(()=>{const a=document.activeElement,saisie=a&&a.tagName==='INPUT';if(document.hidden||DEMO||saisie||$('dlg').open||SUIVI)return;charger()},60000);
+</script>
+</body>
+</html>
