@@ -74,18 +74,48 @@ def _run_ctl(*args: str, timeout: int = 30):
         return 1, "", f"appel de meetctl impossible : {exc}"
 
 
-def _ctl_json(*args: str, timeout: int = 30) -> Dict[str, Any]:
-    rc, out, err = _run_ctl(*args, timeout=timeout)
-    if rc != 0:
-        detail = (err or out or f"meetctl a rendu le code {rc}").strip()[:500]
-        raise HTTPException(status_code=500, detail=detail)
-    out = out.strip()
-    if not out:
-        return {}
+def _objet_json(out: str):
+    """Le dict JSON que meetctl a écrit sur stdout, ou None."""
     try:
-        return json.loads(out)
-    except json.JSONDecodeError:
+        v = json.loads(out.strip())
+    except ValueError:
+        return None
+    return v if isinstance(v, dict) else None
+
+
+def _detail_echec(out: str, err: str, rc: int) -> str:
+    """Message d'un échec de meetctl : son champ « error » (stdout JSON) d'abord,
+    puis stderr, puis stdout brut."""
+    obj = _objet_json(out)
+    if obj is not None and obj.get("error"):
+        return str(obj["error"])[:500]
+    return (err or out or f"meetctl a rendu le code {rc}").strip()[:500]
+
+
+def _ctl_json(*args: str, timeout: int = 30, diagnostic: bool = False) -> Dict[str, Any]:
+    """meetctl signale ses échecs par un JSON sur stdout et un code non nul.
+    Action en échec -> 502 avec le message français du ctl ; sortie qui n'est
+    pas du JSON -> 500. `diagnostic` : un KO est une réponse (200), pas une erreur."""
+    rc, out, err = _run_ctl(*args, timeout=timeout)
+    obj = _objet_json(out)
+    if obj is None:
+        if rc != 0:
+            raise HTTPException(status_code=500, detail=_detail_echec(out, err, rc))
+        if not out.strip():
+            return {}
         raise HTTPException(status_code=500, detail="meetctl n'a pas rendu du JSON")
+    if (rc != 0 or obj.get("success") is False) and not diagnostic:
+        raise HTTPException(status_code=502, detail=_detail_echec(out, err, rc))
+    return obj
+
+
+def _invalider_status() -> None:
+    """Après une écriture réussie, le statut en cache est périmé."""
+    _status_cache["ts"] = 0.0
+    try:
+        STATUS_CACHE_FILE.unlink()
+    except OSError:
+        pass
 
 
 def _refresh_status() -> Dict[str, Any]:
@@ -109,8 +139,9 @@ def _status_frais() -> Dict[str, Any]:
         st = STATUS_CACHE_FILE.stat()
         if now - st.st_mtime < STATUS_TTL:
             data = json.loads(STATUS_CACHE_FILE.read_text())
-            _status_cache.update(data=data, ts=st.st_mtime)
-            return data
+            if isinstance(data, dict):
+                _status_cache.update(data=data, ts=st.st_mtime)
+                return data
     except (OSError, ValueError):
         pass
     try:
@@ -169,19 +200,26 @@ async def media_expose(req: MediaRequest, _: Any = Depends(require_jwt)) -> Dict
                             detail='confirmation requise : renvoyez confirmer: "meet"')
     if req.action not in ("apply", "revoke"):
         raise HTTPException(status_code=400, detail="l'action doit être apply ou revoke")
-    return await asyncio.to_thread(lambda: _ctl_json("media-expose", f"--{req.action}"))
+    res = await asyncio.to_thread(lambda: _ctl_json("media-expose", f"--{req.action}"))
+    _invalider_status()
+    return res
 
 
 @app.post("/control")
 async def control(req: ControlRequest, _: Any = Depends(require_jwt)) -> Dict[str, Any]:
     if req.action not in ("start", "stop", "restart"):
         raise HTTPException(status_code=400, detail="l'action doit être start, stop ou restart")
-    return await _borne(lambda: _ctl_json(req.action, timeout=120))
+
+    def _agir():
+        res = _ctl_json(req.action, timeout=120)
+        _invalider_status()
+        return res
+    return await _borne(_agir)
 
 
 @app.get("/oidc")
 async def oidc(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
-    return await asyncio.to_thread(lambda: _ctl_json("oidc-verifier"))
+    return await asyncio.to_thread(lambda: _ctl_json("oidc-verifier", diagnostic=True))
 
 
 @app.post("/oidc/enregistrer")
@@ -202,5 +240,5 @@ async def logs(unit: str = "meet-backend", lines: int = 50,
     lines = max(1, min(int(lines), 500))
     rc, out, err = await asyncio.to_thread(lambda: _run_ctl("logs", unit, str(lines)))
     if rc != 0:
-        raise HTTPException(status_code=500, detail=(err or out).strip()[:500])
+        raise HTTPException(status_code=500, detail=_detail_echec(out, err, rc))
     return {"unit": unit, "lines": out.splitlines()}

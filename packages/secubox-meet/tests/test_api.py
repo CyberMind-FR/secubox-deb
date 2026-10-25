@@ -157,6 +157,41 @@ def test_erreur_du_ctl_remonte_en_500(cli, monkeypatch):
     assert r.status_code == 500 and "boom" in r.json()["detail"]
 
 
+def test_apply_refuse_donne_502_avec_le_message_du_ctl(cli, monkeypatch):
+    echec = json.dumps({"success": False, "error": "nft a refusé la règle — rien appliqué"})
+    monkeypatch.setattr(M, "_run_ctl", lambda *a, timeout=30: (1, echec, "bruit sur stderr"))
+    r = cli.post("/media-expose", json={"action": "apply", "confirmer": "meet"}, jwt=True)
+    assert r.status_code == 502 and r.json()["detail"] == "nft a refusé la règle — rien appliqué"
+
+
+def test_oidc_ko_est_une_reponse_200(cli, monkeypatch):
+    ko = json.dumps({"issuer": "https://hall.x/oidc", "discovery": False, "hint": "enregistrer le client"})
+    monkeypatch.setattr(M, "_run_ctl", lambda *a, timeout=30: (1, ko, "bruit"))
+    r = cli.get("/oidc", jwt=True)
+    assert r.status_code == 200 and r.json()["discovery"] is False and r.json()["hint"] == "enregistrer le client"
+
+
+def test_control_en_echec_json_502(cli, monkeypatch):
+    monkeypatch.setattr(M, "_run_ctl", lambda *a, timeout=30: (1, json.dumps({"success": False, "error": "conteneur absent"}), ""))
+    r = cli.post("/control", json={"action": "start"}, jwt=True)
+    assert r.status_code == 502 and r.json()["detail"] == "conteneur absent"
+
+
+def test_ecriture_reussie_vide_le_cache_de_statut(cli):
+    cli.get("/status")
+    assert M.STATUS_CACHE_FILE.exists()
+    assert cli.post("/control", json={"action": "restart"}, jwt=True).status_code == 200
+    assert not M.STATUS_CACHE_FILE.exists() and M._status_cache["ts"] == 0.0
+    cli.get("/status")
+    assert cli.appels.count(("status",)) == 2
+
+
+def test_cache_fichier_non_dict_ignore(cli):
+    M.STATUS_CACHE_FILE.write_text("[1, 2]")
+    assert cli.get("/status").json() == {"success": True}
+    assert cli.appels.count(("status",)) == 1
+
+
 def test_import_strict_de_l_authentification():
     src = (RACINE / "api" / "main.py").read_text()
     assert "except ImportError" not in src and "from secubox_core.auth import require_jwt, require_lecture" in src
