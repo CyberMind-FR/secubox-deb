@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Visioconférence La Suite Meet au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Routes lues : /status, /media-expose, /oidc, /logs. Écritures : /control, /media-expose, /oidc/enregistrer.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Visioconférence Meet</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.vert{border-color:var(--vert);color:var(--vert)} .btn.vert:hover{background:rgba(46,204,113,.14)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .info a{color:var(--cyan)}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .installe{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .conf{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:10px 12px;font-size:.82rem;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+        .conf .q{flex:1 1 220px;min-width:0}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .tuile .v.petit{font-size:1.05rem}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .kv a{color:var(--cyan)}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:0;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0;flex:1 1 200px}
+        form.saisie input,form.saisie select,.outils select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus,.outils select:focus{outline:none;border-color:var(--cyan)}
+        .outils{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:end;margin:0 0 10px}
+        .outils label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        .outils select{width:auto}
+        pre.journal{margin:0;background:rgba(3,8,18,.85);border:1px solid var(--trait);border-radius:10px;padding:10px;font-size:.72rem;line-height:1.45;max-height:420px;overflow:auto;white-space:pre;color:var(--doux);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+        .svc{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:7px 0;border-top:1px solid rgba(86,150,255,.12)}
+        .svc:first-of-type{border-top:0}
+        .svc .n{flex:1 1 140px;min-width:0;font-weight:600} .svc .n small{display:block;color:var(--faible);font-weight:400;font-size:.68rem}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="12.5" height="12" rx="2.5"/><path d="M15 10.5l6-3.5v10l-6-3.5z"/></svg>
+                <div><h1>Visioconférence Meet</h1><small>La Suite Meet en conteneur LXC : PostgreSQL, Redis, LiveKit, Meet, nginx</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><a id="ouvrir" class="btn" href="#" target="_blank" rel="noopener" hidden>Ouvrir Meet</a><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button><button class="btn prim" id="bascule" type="button" disabled>—</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div class="installe" id="nonInstalle" hidden><b>Meet n’est pas installé.</b> Le provisionnement se fait sur la box, pas depuis cette page : <span class="mono">systemctl start secubox-meet-provision</span>.</div>
+        <div class="conf" id="conf" role="alertdialog" aria-live="assertive" hidden>
+            <span class="q" id="confTexte"></span>
+            <button class="btn danger" id="confOui" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button>
+        </div>
+
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" id="cEtat" title="État du conteneur LXC qui porte La Suite Meet."><span class="l">Conteneur</span><span class="v petit" id="tEtat">—</span><span class="s">LXC meet</span></div>
+            <div class="tuile" id="cServ" title="Services actifs dans le conteneur : postgresql, redis, livekit, meet-backend, nginx."><span class="l">Services</span><span class="v" id="tServ">—</span><span class="s">actifs sur 5</span></div>
+            <div class="tuile" id="cMedia" title="Les ports média (7881/TCP, 7882/UDP) sont-ils redirigés vers le conteneur depuis l’extérieur ?"><span class="l">Ports média</span><span class="v petit" id="tMedia">—</span><span class="s">exposés à l’extérieur</span></div>
+            <div class="tuile" id="cOidc" title="Meet est-il enregistré comme client OIDC auprès du Hall ?"><span class="l">Identité (OIDC)</span><span class="v petit" id="tOidc">—</span><span class="s" id="sOidc">client du Hall</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections Meet">
+            <button type="button" role="tab" id="o-tableau" data-t="tableau" aria-selected="true" aria-controls="t-tableau">Tableau de bord</button>
+            <button type="button" role="tab" id="o-media" data-t="media" aria-selected="false" aria-controls="t-media">Ports média</button>
+            <button type="button" role="tab" id="o-identite" data-t="identite" aria-selected="false" aria-controls="t-identite">Identité</button>
+            <button type="button" role="tab" id="o-journaux" data-t="journaux" aria-selected="false" aria-controls="t-journaux">Journaux</button>
+        </div>
+
+        <section id="t-tableau" role="tabpanel" aria-labelledby="o-tableau" class="grille">
+            <div class="pan"><h3>Services <i>un par daemon, jamais agrégés</i></h3>
+                <div id="rServ" class="retour" hidden></div>
+                <div id="lServ"></div>
+                <p class="note">PostgreSQL ou Redis morts : Meet ne répond plus. LiveKit mort : salles sans son ni image. Meet mort : plus de connexion.</p>
+                <div class="outils" style="margin-top:8px"><button class="btn sm danger" id="redemarrer" type="button">Redémarrer le conteneur</button></div></div>
+            <div class="pan"><h3>Serveur</h3>
+                <dl class="kv"><dt>Domaine</dt><dd id="iDom">—</dd><dt>Adresse</dt><dd id="iUrl">—</dd><dt>Signalisation</dt><dd id="iLk">—</dd><dt>IP du conteneur</dt><dd class="mono" id="iIp">—</dd><dt>Web joignable</dt><dd id="iWeb">—</dd><dt>Version ctl</dt><dd id="iVer">—</dd></dl></div>
+        </section>
+
+        <section id="t-media" role="tabpanel" aria-labelledby="o-media" hidden>
+            <div class="pan"><h3>Ouvrir les ports média</h3>
+                <p class="note" style="margin:0 0 8px">Les participants échangent le son et l’image par <span class="mono" id="pTcp">7881/TCP</span> et <span class="mono" id="pUdp">7882/UDP</span>. Les ouvrir redirige ces ports de la box vers le conteneur : c’est une exposition de plus sur Internet, jamais faite sans votre accord.</p>
+                <div id="rMedia" class="retour" hidden></div>
+                <dl class="kv"><dt>État</dt><dd id="mEtat">—</dd></dl>
+                <div class="outils" style="margin-top:8px"><button class="btn prim" id="mediaAction" type="button" disabled>—</button></div></div>
+        </section>
+
+        <section id="t-identite" role="tabpanel" aria-labelledby="o-identite" hidden>
+            <div class="pan"><h3>Identité (OIDC) <i>connexion par le Hall</i></h3>
+                <div id="rOidc" class="retour" hidden></div>
+                <div class="outils"><button class="btn" id="oidcVerif" type="button">Vérifier l’identité</button><button class="btn" id="oidcEnreg" type="button">Enregistrer le client</button></div>
+                <dl class="kv" id="oidcRes"><dt>Émetteur</dt><dd>—</dd></dl>
+                <p class="note">« Vérifier » lit l’émetteur, ses clés et l’adresse de rappel sans rien modifier. « Enregistrer » inscrit Meet auprès du Hall.</p></div>
+        </section>
+
+        <section id="t-journaux" role="tabpanel" aria-labelledby="o-journaux" hidden>
+            <div class="pan"><h3>Journaux des services <i>lecture seule</i></h3>
+                <div class="outils">
+                    <label>Service<select id="logService"><option value="meet-backend">Meet</option><option value="livekit">LiveKit</option><option value="postgresql">PostgreSQL</option><option value="redis-server">Redis</option><option value="nginx">Web (nginx)</option></select></label>
+                    <label>Lignes<select id="logLines"><option value="50">50</option><option value="100" selected>100</option><option value="200">200</option></select></label>
+                    <button class="btn" id="logRaf" type="button">Actualiser</button>
+                </div>
+                <pre class="journal" id="journal">Choisir un service puis actualiser.</pre></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/meet';
+        const NOMS = { postgresql: 'PostgreSQL', redis: 'Redis', livekit: 'LiveKit', 'meet-backend': 'Meet (backend)', nginx: 'Web (nginx)' };
+        const ROLES = { postgresql: 'base de données', redis: 'cache et files', livekit: 'média et signalisation', 'meet-backend': 'application Meet', nginx: 'interface web' };
+        // Corps d'écriture : la confirmation « meet » est exigée par l'API pour toute action sur les ports média.
+        const CORPS_MEDIA = { apply: JSON.parse('{"action":"apply","confirmer":"meet"}'), revoke: JSON.parse('{"action":"revoke","confirmer":"meet"}') };
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+
+        let ETAT = null, SESSION_OK = true, INJOIGNABLE = false, CONFIRM = null;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('jwt_token') || localStorage.getItem('token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const r = await fetch(API + chemin, { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? String(res.data.detail) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        function domaineValide(d) { return typeof d === 'string' && /^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(d); }
+
+        function demoData() {
+            ETAT = { module: 'meet', version: '0.1.0', installed: true, container: 'running', domain: 'visio.example.org', livekit_domain: 'livekit.example.org',
+                     lxc_ip: '192.0.2.50', web_reachable: true,
+                     services: { postgresql: 'active', redis: 'active', livekit: 'active', 'meet-backend': 'active', nginx: 'active' },
+                     media: { tcp_port: 7881, udp_port: 7882, exposed: false }, oidc: { client_registered: true } };
+        }
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; INJOIGNABLE = false; rendre(); return; }
+            let refus = false, st = null, ko = false;
+            try { st = await lire('/status'); } catch (e) { if (e.statut === 401 || e.statut === 403) refus = true; else ko = true; }
+            ETAT = st; SESSION_OK = !refus; INJOIGNABLE = ko && !refus;
+            rendre();
+        }
+
+        function etatConteneur(e) {
+            if (!e) return ['neutre', '—'];
+            if (!e.installed) return ['att', 'NON INSTALLÉ'];
+            if (e.container === 'running') return ['ok', 'EN MARCHE'];
+            if (e.container === 'stopped') return ['hors', 'ARRÊTÉ'];
+            return ['att', tiret(e.container).toUpperCase()];
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('erreur').hidden = !INJOIGNABLE;
+            if (INJOIGNABLE) $('erreur').textContent = 'Impossible de lire l’état de Meet (API arrêtée ou injoignable).';
+            const e = ETAT, enMarche = !!(e && e.container === 'running');
+            $('nonInstalle').hidden = !(e && !e.installed);
+            const [c, l] = etatConteneur(e);
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!e) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif' + (c === 'ok' ? '' : ' ' + (c === 'hors' ? 'hors' : 'att')); etat.textContent = l; }
+            $('tEtat').textContent = l; $('cEtat').className = 'tuile ' + (e ? c : '');
+            const s = e && e.services && Object.keys(e.services).length ? e.services : null;
+            if (s) {
+                const n = Object.keys(s).length, a = Object.values(s).filter(v => v === 'active').length;
+                $('tServ').textContent = a + '/' + n; $('cServ').className = 'tuile ' + (a === n ? 'ok' : (enMarche ? 'hors' : 'att'));
+            } else { $('tServ').textContent = '—'; $('cServ').className = 'tuile'; }
+            const m = (e && e.media) || {};
+            const connu = e && typeof m.exposed === 'boolean';
+            $('tMedia').textContent = connu ? (m.exposed ? 'OUI' : 'NON') : '—';
+            $('cMedia').className = 'tuile ' + (connu ? (m.exposed ? 'ok' : 'att') : '');
+            const o = e && e.oidc && typeof e.oidc.client_registered === 'boolean' ? e.oidc.client_registered : null;
+            $('tOidc').textContent = o === null ? '—' : (o ? 'ENREGISTRÉ' : 'NON ENREGISTRÉ');
+            $('cOidc').className = 'tuile ' + (o === null ? '' : (o ? 'ok' : 'att'));
+            // Serveur : l'adresse est un lien relatif au protocole, jamais construit autrement qu'à partir d'un nom validé.
+            const dom = e && domaineValide(e.domain) ? e.domain : null, url = dom ? '//' + dom + '/' : null;
+            $('iDom').textContent = tiret(e && e.domain);
+            const ui = $('iUrl'); ui.replaceChildren();
+            if (url) { const a = el('a', '', dom); a.href = url; a.target = '_blank'; a.rel = 'noopener'; ui.appendChild(a); } else ui.textContent = '—';
+            $('iLk').textContent = tiret(e && e.livekit_domain);
+            $('iIp').textContent = tiret(e && e.lxc_ip);
+            $('iWeb').textContent = e ? (e.web_reachable ? 'oui' : 'non') : '—';
+            $('iVer').textContent = tiret(e && e.version);
+            const ou = $('ouvrir'); ou.hidden = !(enMarche && url); if (url) ou.href = url;
+            // Interrupteur
+            const b = $('bascule');
+            b.disabled = !(e && e.installed);
+            b.textContent = !e ? '—' : !e.installed ? 'Non installé' : (enMarche ? 'Arrêter' : 'Démarrer');
+            b.className = 'btn ' + (!e || !e.installed ? '' : (enMarche ? 'danger' : 'vert'));
+            $('redemarrer').disabled = !(e && e.installed);
+            // Ports média
+            $('pTcp').textContent = tiret(m.tcp_port) + '/TCP'; $('pUdp').textContent = tiret(m.udp_port) + '/UDP';
+            $('mEtat').textContent = connu ? (m.exposed ? 'Ports ouverts vers l’extérieur' : 'Ports fermés') : '—';
+            const ma = $('mediaAction');
+            ma.disabled = !(connu && e.installed);
+            ma.textContent = !connu ? '—' : (m.exposed ? 'Fermer les ports média' : 'Ouvrir les ports média');
+            ma.className = 'btn ' + (!connu ? '' : (m.exposed ? 'danger' : 'prim'));
+            rendreServices();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function rendreServices() {
+            const l = $('lServ'); l.replaceChildren();
+            const s = ETAT && ETAT.services;
+            if (!s || !Object.keys(s).length) { l.appendChild(el('div', 'vide', SESSION_OK ? 'Aucun état de service' : '—')); return; }
+            for (const nom of Object.keys(s)) {
+                const ligne = el('div', 'svc');
+                const n = el('div', 'n', NOMS[nom] || nom); n.appendChild(el('small', '', ROLES[nom] || '')); ligne.appendChild(n);
+                ligne.appendChild(el('span', 'pill ' + (s[nom] === 'active' ? 'ok' : 'hors'), tiret(s[nom]).toUpperCase()));
+                l.appendChild(ligne);
+            }
+        }
+
+        // ----- Confirmation intégrée (jamais de dialogue natif) -----
+        function demander(texte, fn) { CONFIRM = fn; $('confTexte').textContent = texte; $('conf').hidden = false; $('confNon').focus(); annoncer(); }
+        function fermerConf() { CONFIRM = null; $('conf').hidden = true; annoncer(); }
+        $('confNon').addEventListener('click', fermerConf);
+        $('confOui').addEventListener('click', () => { const f = CONFIRM; fermerConf(); if (f) f(); });
+        document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && CONFIRM) fermerConf(); });
+
+        // ----- Actions -----
+        function issue(r, okMsg) {
+            if (r.ok && r.data && r.data.pending) return [true, 'En cours : l’opération continue côté box, actualiser dans un instant.'];
+            if (r.ok) return [true, okMsg];
+            return [false, 'Échec : ' + detail(r)];
+        }
+        async function controler(action, okMsg, attente) {
+            toast(attente);
+            const r = await ecrire('POST', '/control', { action });
+            const [ok, msg] = issue(r, okMsg);
+            retour('rServ', ok, msg); charger();
+        }
+        $('bascule').addEventListener('click', () => {
+            if (!ETAT || !ETAT.installed) return;
+            if (ETAT.container === 'running') demander('Arrêter Meet ? Les réunions en cours seront coupées.', () => controler('stop', 'Conteneur arrêté.', 'Arrêt…'));
+            else controler('start', 'Conteneur démarré.', 'Démarrage…');
+        });
+        $('redemarrer').addEventListener('click', () => demander('Redémarrer le conteneur Meet ? Les réunions en cours seront coupées.', () => controler('restart', 'Conteneur redémarré.', 'Redémarrage…')));
+        $('mediaAction').addEventListener('click', () => {
+            const ouvert = !!(ETAT && ETAT.media && ETAT.media.exposed);
+            const tcp = tiret(ETAT && ETAT.media && ETAT.media.tcp_port), udp = tiret(ETAT && ETAT.media && ETAT.media.udp_port);
+            const txt = ouvert ? 'Fermer les ports ' + tcp + '/TCP et ' + udp + '/UDP ? Les réunions en cours perdront le son et l’image.'
+                               : 'Ouvrir les ports ' + tcp + '/TCP et ' + udp + '/UDP vers le conteneur ? Ils deviennent joignables depuis Internet.';
+            demander(txt, async () => {
+                const r = await ecrire('POST', '/media-expose', ouvert ? CORPS_MEDIA.revoke : CORPS_MEDIA.apply);
+                const [ok, msg] = issue(r, ouvert ? 'Ports média fermés.' : 'Ports média ouverts.');
+                retour('rMedia', ok, msg); charger();
+            });
+        });
+        $('oidcEnreg').addEventListener('click', () => demander('Enregistrer Meet comme client OIDC du Hall ? L’adresse de rappel et le secret du client sont posés côté box.', async () => {
+            const r = await ecrire('POST', '/oidc/enregistrer', {});
+            const [ok, msg] = issue(r, 'Client OIDC enregistré.');
+            retour('rOidc', ok, msg); charger();
+        }));
+        $('oidcVerif').addEventListener('click', async () => {
+            const dl = $('oidcRes'); dl.replaceChildren();
+            const ligne = (k, v) => { dl.appendChild(el('dt', '', k)); dl.appendChild(el('dd', 'mono', v)); };
+            const oui = v => v === true ? 'oui' : v === false ? 'non' : '—';
+            if (DEMO) { ligne('Émetteur', 'hall.example.org/oidc (démonstration)'); ligne('Découverte', 'oui'); ligne('Clés', '1'); ligne('Rappel enregistré', 'oui'); annoncer(); return; }
+            try {
+                const d = await lire('/oidc');
+                ligne('Émetteur', tiret(d.issuer)); ligne('Découverte', oui(d.discovery)); ligne('Clés publiques', tiret(d.keys)); ligne('Adresse de rappel', oui(d.redirect_registered));
+                if (d.hint) ligne('Indication', String(d.hint));
+            } catch (e) { ligne('Émetteur', (e.statut === 401 || e.statut === 403) ? '— (session requise)' : 'Lecture impossible : ' + e.message); }
+            annoncer();
+        });
+
+        // ----- Journaux (lecture) -----
+        async function journaux() {
+            const unit = $('logService').value, lines = $('logLines').value, box = $('journal');
+            if (DEMO) { box.textContent = '2026-10-25 09:12:03 meet: salle créée (démonstration)'; annoncer(); return; }
+            try {
+                const d = await lire('/logs?unit=' + encodeURIComponent(unit) + '&lines=' + encodeURIComponent(lines));
+                box.textContent = (d.lines || []).join('\n') || 'Aucun journal disponible.';
+            } catch (e) { box.textContent = (e.statut === 401 || e.statut === 403) ? '—  (session requise)' : 'Lecture impossible : ' + e.message; }
+            annoncer();
+        }
+        $('logRaf').addEventListener('click', journaux);
+
+        // ----- Onglets -----
+        const TABS = ['tableau', 'media', 'identite', 'journaux'];
+        function onglet(nom) {
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            TABS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            if (nom === 'journaux') journaux();
+            annoncer();
+        }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet:'meet'}, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une confirmation ou une saisie.
+        setInterval(() => {
+            const a = document.activeElement;
+            if (document.hidden || DEMO || CONFIRM || (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT'))) return;
+            charger();
+        }, 30000);
+    </script>
+</body>
+</html>

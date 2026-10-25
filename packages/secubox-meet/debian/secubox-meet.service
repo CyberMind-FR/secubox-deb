@@ -12,6 +12,8 @@ Wants=secubox-core.service
 Type=simple
 User=secubox
 Group=secubox
+# Profil chargé par le postinst avant le démarrage (apparmor/secubox-meet).
+AppArmorProfile=secubox-meet-api
 # /run/secubox est partagé et collé (1777) : on n'y délie que ce qu'on possède.
 # Le préfixe `+` exécute en root malgré User=. Pas de RuntimeDirectory= (#1022).
 ExecStartPre=+/bin/rm -f /run/secubox/meet.sock

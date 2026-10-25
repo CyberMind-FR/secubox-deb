@@ -18,6 +18,9 @@ override_dh_auto_install:
 	# Entrées de menu
 	install -d $(P)/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. $(P)/usr/share/secubox/menu.d/ || true
+	# Profil AppArmor (enforce) de l'API hôte
+	install -d $(P)/etc/apparmor.d
+	install -m 644 apparmor/secubox-meet $(P)/etc/apparmor.d/secubox-meet
 	# Vhosts publics servis par le nginx hôte (empaquetés, jamais écrits à la main)
 	install -d $(P)/etc/nginx/sites-available
 	[ -f nginx/visio-vhost.conf ] && install -m 644 nginx/visio-vhost.conf $(P)/etc/nginx/sites-available/visio.conf || true

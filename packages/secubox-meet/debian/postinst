@@ -34,8 +34,8 @@ case "$1" in
       visudo -cf /etc/sudoers.d/secubox-meet >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-meet
     fi
 
-    # Profil AppArmor (livré par une tâche ultérieure : sans effet tant qu'il est absent).
-    if [ -f /etc/apparmor.d/secubox-meet ] && command -v apparmor_parser >/dev/null 2>&1; then
+    # Profil AppArmor (enforce), chargé AVANT l'activation de l'unité qui le nomme.
+    if [ -f /etc/apparmor.d/secubox-meet ] && command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
       apparmor_parser -r /etc/apparmor.d/secubox-meet || echo "secubox-meet : profil AppArmor non chargé" >&2
     fi
 
