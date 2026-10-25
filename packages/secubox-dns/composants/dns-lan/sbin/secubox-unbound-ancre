@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-unbound-ancre — l'ancre DNSSEC d'Unbound ne reste jamais vide (#3167)
+#
+# Lancé par le drop-in unbound.service.d/20-secubox-ancre.conf (ExecStartPre, après le helper Debian).
+# Unbound tient lui-même /var/lib/unbound/root.key à jour (RFC 5011) ; une écriture interrompue (racine pleine, coupure)
+# peut le laisser vide. Le helper Debian ne recopie alors rien : il ne copie la clé de dns-root-data que si le fichier
+# manque ou est plus ancien. Unbound refuse de démarrer (« failed to read ») et redémarre sans fin — gk1, 5 388 fois.
+# Ici : fichier présent mais sans aucune clé (DNSKEY ou DS) → recopie de la clé de dns-root-data, par l'utilisateur
+# unbound, fichier temporaire puis renommage (même méthode que le helper). Fichier absent : le helper s'en charge.
+set -euo pipefail
+
+ANCRE="${SECUBOX_ANCRE:-/var/lib/unbound/root.key}"
+SOURCE="${SECUBOX_ANCRE_SOURCE:-/usr/share/dns/root.key}"
+
+[ -r "$SOURCE" ] || exit 0
+[ -e "$ANCRE" ] || exit 0
+if grep -Eq '^[^;]*[[:space:]]IN[[:space:]]+(DNSKEY|DS)[[:space:]]' "$ANCRE" 2>/dev/null; then
+    exit 0
+fi
+
+echo "[unbound-ancre] $ANCRE vide ou sans clé : recopiée depuis $SOURCE (#3167)" >&2
+copie="cp --remove-destination \"$SOURCE\" \"$ANCRE.tmp\" && mv -f \"$ANCRE.tmp\" \"$ANCRE\""
+if [ "${SECUBOX_ANCRE_SANS_SETPRIV:-0}" = "1" ]; then
+    sh -c "$copie"
+else
+    setpriv --reuid=unbound --regid=unbound --clear-groups sh -c "$copie"
+fi

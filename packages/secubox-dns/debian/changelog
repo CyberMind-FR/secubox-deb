@@ -1,3 +1,11 @@
+secubox-dns (1.6.2-1~trixie1) trixie; urgency=medium
+
+  * Unbound (ref #3167) : l'ancre DNSSEC /var/lib/unbound/root.key vide ou sans clé est recopiée depuis dns-root-data
+    avant le démarrage (drop-in 20-secubox-ancre.conf, ExecStartPre=-/usr/sbin/secubox-unbound-ancre). Le helper Debian
+    ne la recopie que si elle manque ou est plus ancienne ; vide, Unbound redémarrait sans fin (gk1, 5 388 fois).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 23:30:00 +0100
+
 secubox-dns (1.6.1-1~trixie1) trixie; urgency=medium
 
   * dns-provider : le journal d'audit nomme le compte (ref #3072). Toutes les entrées portaient l'utilisateur « system » :
