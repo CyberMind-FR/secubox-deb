@@ -32,6 +32,14 @@ def test_declaration_statique():
     assert re.search(r"\.sbx-acces", (HALL_DIR / "hall-v2.css").read_text(encoding="utf-8"))
 
 
+def test_boutique_epinglee_apres_les_recents_avant_la_curation():
+    assert "var EPINGLES=['boutique']" in JS
+    i = JS.index("function accesRapide(")
+    corps = JS[i:i + 1600]
+    assert corps.index("recents().forEach(pousse)") < corps.index("EPINGLES.forEach(pousse)") < corps.index("FEATURED")
+    assert "boutique:'grille'" in JS and "boutique:'appstore'" in JS
+
+
 playwright = pytest.importorskip("playwright.sync_api")
 
 

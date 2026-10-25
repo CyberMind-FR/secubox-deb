@@ -423,10 +423,10 @@
     'metanews','ytflux','billets','radio','bbs','ephemeride','zigbee','devwatch','zia','comptes','lyrion','freeboxtv','mood','ytsas'];
   var ICO_CARTE={securite:'bouclier',acteurs:'bouclier',radar:'bouclier',guardian:'globe',dpi:'reseau',ipv6guard:'reseau',activite:'actualite',
     metanews:'actualite',ytflux:'film',billets:'billet',radio:'radio',bbs:'bulle',ephemeride:'calendrier',zigbee:'ampoule',devwatch:'satellite',
-    zia:'ia',comptes:'cle',lyrion:'musique',freeboxtv:'ecran',mood:'micro',ytsas:'film'};
+    zia:'ia',comptes:'cle',lyrion:'musique',freeboxtv:'ecran',mood:'micro',ytsas:'film',boutique:'grille'};
   // Une carte de curation a un id à elle (pas de module « securite ») : son statut est celui du module qui la sert.
   var SOURCE_STATUT={securite:'waf',acteurs:'actor',radar:'actor',guardian:'ad-guard',activite:'sbxid',ytflux:'ytsas',comptes:'sbxid',mood:'sbxos-audio-mood',freeboxtv:'freebox',
-    'mon-coffre':'vault',contenu:'droplet',cloud:'nextcloud',forums:'bbs'};
+    'mon-coffre':'vault',contenu:'droplet',cloud:'nextcloud',forums:'bbs',boutique:'appstore'};
   function habille(c){
     var id=c.getAttribute('data-embed');
     if(!window.SbxUI||MIGREES.indexOf(id)<0||c.classList.contains('sbx-card')) return;
@@ -452,6 +452,7 @@
   var acces=null;
   function libelle(id){ var F=(typeof FEATURED!=='undefined'&&FEATURED)||[]; var f=F.filter(function(x){ return x.id===id; })[0]; if(f) return f.label||id; var r=(window._reg||{})[id]; return (r&&r.name)||null; }
   function statutDe(id){ var p={}; ((regDernier&&regDernier.services)||[]).forEach(function(s){ p[s.id]=s; }); var s=p[id]||p[SOURCE_STATUT[id]]; return (s&&s.status)||'nosource'; }
+  var EPINGLES=['boutique'];
   function accesRapide(){
     var vue=document.getElementById('view-accueil'); if(!vue||!window.SbxUI) return;
     if(!acces){
@@ -464,6 +465,7 @@
     function pousse(id){ if(!id||vus[id]||absents.has(id)||!libelle(id)) return; vus[id]=1; ids.push(id); }
     Array.prototype.forEach.call(document.querySelectorAll('#favbande .fcard[data-embed]'),function(c){ pousse(c.getAttribute('data-embed')); });
     recents().forEach(pousse);
+    EPINGLES.forEach(pousse);   // la Boutique (#3152) : présente par défaut, avant la curation
     ((typeof FEATURED!=='undefined'&&FEATURED)||[]).forEach(function(f){ pousse(f.id); });
     var grille=el('div',{'class':'sbx-tiles'});
     ids.slice(0,8).forEach(function(id){ grille.appendChild(window.SbxUI.Tile({icone:ICO_CARTE[id]||'module',label:libelle(id),status:statutDe(id),attrs:{'data-open':id,'data-mode':'embed',title:'Ouvrir '+libelle(id)}})); });
