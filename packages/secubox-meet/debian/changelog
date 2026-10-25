@@ -1,3 +1,11 @@
+secubox-meet (0.1.2-1~trixie1) trixie; urgency=medium
+
+  * Vhosts visio.* et livekit.* (ref #3154) : pages d'erreur SecuBox (snippets/secubox-errorpages.conf) quand le
+    conteneur est arrêté ou en cours de provisionnement, au lieu de la page nginx par défaut. Pas d'interception des
+    erreurs renvoyées par Meet ou LiveKit.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 22:30:00 +0100
+
 secubox-meet (0.1.1-1~trixie1) trixie; urgency=medium
 
   * Correctifs de la relecture finale (ref #3154).

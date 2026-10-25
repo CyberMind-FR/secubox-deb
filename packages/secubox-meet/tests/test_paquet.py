@@ -106,3 +106,13 @@ def test_profil_apparmor_couvre_ce_que_lit_l_authentification():
                   "/etc/secubox/auth.toml r,", "/var/lib/secubox/auth/** r,",
                   "/var/log/secubox/delegation.log w,", "/var/log/secubox/garde-origine.log w,"):
         assert regle in p, regle
+
+
+def test_vhosts_servent_les_pages_d_erreur_secubox():
+    # Conteneur arrêté ou en cours de provisionnement : la page d'erreur SecuBox, pas celle de nginx par défaut.
+    # Pas le snippet « réveil » : il active proxy_intercept_errors (les erreurs JSON de l'API de Meet deviendraient
+    # du HTML) et sert aux modules à la demande, ce que Meet n'est pas.
+    for vhost in (VISIO, LIVEKIT):
+        t = vhost.read_text()
+        assert "include snippets/secubox-errorpages.conf;" in t
+        assert "secubox-waking.conf" not in t and "proxy_intercept_errors on" not in t
