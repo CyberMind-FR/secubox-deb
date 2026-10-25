@@ -194,6 +194,20 @@ write_lxc_config() {
     fi
 }
 
+# Pose la configuration réseau fixe dans le rootfs (propriété décalée sur l'idmap) avant le démarrage ; si le
+# conteneur tourne déjà (reprise d'un provisionnement), networkd la relit et reconfigure eth0 tout de suite.
+ecrire_reseau_conteneur() {
+    local dossier="$LXC_PATH/$LXC_NAME/rootfs/etc/systemd/network"
+    [ -d "$dossier" ] || return 0   # image sans systemd-networkd : la configuration LXC suffit
+    log "Réseau fixe du conteneur : ${LXC_IP}/24 via ${LXC_GW}"
+    install -m 0644 "$RENDU_DIR/conteneur-eth0.network" "$dossier/eth0.network"
+    chown 100000:100000 "$dossier/eth0.network"
+    if [ "$(lxc_state)" = "running" ]; then
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- networkctl reload || true
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- networkctl reconfigure eth0 || true
+    fi
+}
+
 start_lxc() {
     [ "$(lxc_state)" = "running" ] && { log "Déjà démarré"; return; }
     log "Démarrage du LXC '$LXC_NAME' ..."
@@ -453,6 +467,7 @@ main() {
     ensure_masquerade
     create_lxc
     write_lxc_config
+    ecrire_reseau_conteneur
     start_lxc
     wait_for_network
     ensure_resolv
