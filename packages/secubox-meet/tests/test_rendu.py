@@ -199,8 +199,11 @@ TEXTE_INSTALL = INSTALL.read_text()
 INTERNE = script_interne(TEXTE_INSTALL)
 
 
-def _relancer(tmp_path, modifier):
-    """Exécute les fonctions réelles du script interne sur des fichiers de test ; renvoie le journal des appels."""
+def _relancer(tmp_path, modifier, passe_precedente="noter_applique", relance='relancer_si_change "$(photo_appliquee)"'):
+    """Exécute les fonctions réelles du script interne sur des fichiers de test ; renvoie le journal des appels.
+
+    `passe_precedente` simule ce que la passe d'avant a laissé (par défaut : une passe réussie, photo notée) ;
+    `modifier` puis `relance` sont la passe courante."""
     for nom in ("meet.env", "livekit.yaml", "nginx-meet.conf", "meet-backend.service", "livekit.service", ".livekit"):
         (tmp_path / nom).write_text(nom + "\n")
     journal = tmp_path / "journal"
@@ -209,17 +212,19 @@ def _relancer(tmp_path, modifier):
     for nom in ("systemctl", "nginx"):
         _ecrire_exec(bin_ / nom, f'#!/bin/bash\necho "{nom} $*" >> "{journal}"\n')
     t = tmp_path
-    fonctions = "".join(fonction_bash(INTERNE, n) for n in ("empreinte", "photo", "change", "relancer_si_change"))
+    fonctions = "".join(fonction_bash(INTERNE, n) for n in
+                        ("empreinte", "photo", "change", "relancer_si_change", "photo_appliquee", "noter_applique"))
     script = f"""set -euo pipefail
 {fonctions}
 UNITES="{t}/meet-backend.service {t}/livekit.service"
 ENTREES_BACKEND="{t}/meet.env {t}/meet-backend.service {t}/.construit-abc"
 ENTREES_LIVEKIT="{t}/livekit.yaml {t}/livekit.service {t}/.livekit"
 ENTREES_NGINX="{t}/nginx-meet.conf"
-AVANT=$(photo $ENTREES_BACKEND $ENTREES_LIVEKIT $ENTREES_NGINX)
+PHOTO_APPLIQUEE="{t}/.photo-appliquee"
 cd "{t}"
+{passe_precedente}
 {modifier}
-relancer_si_change "$AVANT"
+{relance}
 """
     r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30,
                        env={"PATH": f"{bin_}:/usr/bin:/bin"})
@@ -251,15 +256,40 @@ def test_nginx_change_recharge_nginx_apres_verification(tmp_path):
     assert _relancer(tmp_path, "echo x >> nginx-meet.conf") == ["nginx -t", "systemctl try-reload-or-restart nginx"]
 
 
+def test_passe_interrompue_avant_la_relance_relance_a_la_suivante(tmp_path):
+    # gk1 : une passe pose sites-enabled/meet puis échoue (collectstatic) avant la relance ; nginx, démarré par
+    # son paquet sur le site par défaut, n'était jamais rechargé (404 sur /api/), la passe suivante ne voyant
+    # aucun changement.
+    passe_echouee = "noter_applique; echo x >> nginx-meet.conf"
+    assert _relancer(tmp_path, "true", passe_precedente=passe_echouee) == ["nginx -t", "systemctl try-reload-or-restart nginx"]
+
+
+def test_sans_photo_appliquee_tout_est_relance(tmp_path):
+    # Première passe, ou montée depuis une version sans photo : rien ne garantit que les services tournent sur
+    # les fichiers posés.
+    assert _relancer(tmp_path, "true", passe_precedente="true") == [
+        "systemctl daemon-reload", "systemctl try-restart meet-backend", "systemctl try-restart livekit",
+        "nginx -t", "systemctl try-reload-or-restart nginx"]
+
+
+def test_photo_notee_apres_relance_puis_plus_rien_a_relancer(tmp_path):
+    relance = 'relancer_si_change "$(photo_appliquee)"; noter_applique; relancer_si_change "$(photo_appliquee)"'
+    assert _relancer(tmp_path, "echo x >> meet.env", relance=relance) == ["systemctl try-restart meet-backend"]
+    assert ((tmp_path / ".photo-appliquee").stat().st_mode & 0o777) == 0o600
+    assert not list(tmp_path.glob(".photo-appliquee.*"))
+
+
 def test_script_interne_cable_les_entrees_et_la_photo():
     assert 'ENTREES_BACKEND="/etc/meet/meet.env /etc/systemd/system/meet-backend.service /opt/meet/.construit-$MEET_COMMIT"' in INTERNE
     assert 'ENTREES_LIVEKIT="/etc/livekit/livekit.yaml /etc/systemd/system/livekit.service /usr/local/bin/.livekit-$LIVEKIT_VERSION"' in INTERNE
     assert 'ENTREES_NGINX="/etc/nginx/sites-enabled/meet"' in INTERNE
-    photo = INTERNE.index("AVANT=$(photo $ENTREES_BACKEND $ENTREES_LIVEKIT $ENTREES_NGINX)")
-    relance = INTERNE.index('relancer_si_change "$AVANT"')
-    assert photo < INTERNE.index("then construire; fi")
-    assert INTERNE.index('touch "/opt/meet/.construit-$MEET_COMMIT"') < relance
-    assert relance < INTERNE.index("systemctl enable --now postgresql redis-server livekit meet-backend nginx")
+    assert "PHOTO_APPLIQUEE=/etc/meet/.photo-appliquee" in INTERNE and "AVANT=" not in INTERNE
+    relance = INTERNE.index('relancer_si_change "$(photo_appliquee)"')
+    activation = INTERNE.index("systemctl enable --now postgresql redis-server livekit meet-backend nginx")
+    assert INTERNE.index("\ninstaller_configs\n") < relance
+    assert INTERNE.index('touch "/opt/meet/.construit-$MEET_COMMIT"') < relance < activation
+    # La photo n'est notée qu'une fois tout appliqué : c'est la dernière commande du script.
+    assert INTERNE.rstrip().endswith("\nnoter_applique") and activation < INTERNE.rindex("\nnoter_applique")
     assert "REDEMARRER" not in TEXTE_INSTALL and "systemctl restart livekit meet-backend" not in INTERNE
 
 

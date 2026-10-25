@@ -37,7 +37,7 @@ from pydantic import BaseModel
 # Aucun repli : sans la bibliothèque d'authentification, l'API ne se charge pas.
 from secubox_core.auth import require_jwt, require_lecture
 
-VERSION = "0.1.1"
+VERSION = "0.1.6"
 
 CTL = "/usr/sbin/meetctl"
 

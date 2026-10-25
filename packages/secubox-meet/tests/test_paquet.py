@@ -116,3 +116,10 @@ def test_vhosts_servent_les_pages_d_erreur_secubox():
         t = vhost.read_text()
         assert "include snippets/secubox-errorpages.conf;" in t
         assert "secubox-waking.conf" not in t and "proxy_intercept_errors on" not in t
+
+
+def test_versions_annoncees_suivent_le_changelog():
+    # meetctl et l'API annonçaient encore 0.1.1 avec le paquet 0.1.5 installé (gk1).
+    amont = re.match(r"secubox-meet \((\d+\.\d+\.\d+)-", (RACINE / "debian/changelog").read_text()).group(1)
+    assert f'readonly VERSION="{amont}"' in (RACINE / "sbin/meetctl").read_text()
+    assert f'VERSION = "{amont}"' in (RACINE / "api/main.py").read_text()

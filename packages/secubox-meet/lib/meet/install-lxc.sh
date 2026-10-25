@@ -289,6 +289,21 @@ change() {
     return 1
 }
 
+# Photo du dernier état appliqué aux services, notée seulement une fois tout
+# relancé. Une passe qui échoue entre la pose des fichiers et la relance laisse
+# l'ancienne photo : la suivante relance (gk1 : nginx, démarré par son paquet sur
+# le site par défaut, n'était jamais rechargé). Sans photo, tout est relancé.
+PHOTO_APPLIQUEE=/etc/meet/.photo-appliquee
+
+photo_appliquee() {
+    cat "$PHOTO_APPLIQUEE" 2>/dev/null || true
+}
+
+noter_applique() {
+    ( umask 077; photo $ENTREES_BACKEND $ENTREES_LIVEKIT $ENTREES_NGINX > "$PHOTO_APPLIQUEE.tmp" )
+    mv "$PHOTO_APPLIQUEE.tmp" "$PHOTO_APPLIQUEE"
+}
+
 # Relance les SEULS services dont une entrée a changé depuis la photo. Un
 # service arrêté n'est pas démarré ici (try-*) : `enable --now` s'en charge.
 relancer_si_change() {
@@ -399,12 +414,12 @@ SQL
     touch "/opt/meet/.construit-$MEET_COMMIT"
 }
 
-AVANT=$(photo $ENTREES_BACKEND $ENTREES_LIVEKIT $ENTREES_NGINX)
 if [ "$RENDRE_SEULEMENT" != 1 ]; then construire; fi
 installer_configs
 if [ "$RENDRE_SEULEMENT" != 1 ]; then preparer_base; fi
-relancer_si_change "$AVANT"
+relancer_si_change "$(photo_appliquee)"
 systemctl enable --now postgresql redis-server livekit meet-backend nginx
+noter_applique
 INNER
 )
 
