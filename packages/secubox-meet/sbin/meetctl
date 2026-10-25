@@ -27,6 +27,7 @@ readonly STATE_DIR="${SECUBOX_MEET_STATE_DIR:-/etc/secubox/meet}"
 readonly INSTALL_SCRIPT="${SECUBOX_MEET_INSTALL_SCRIPT:-/usr/lib/secubox/meet/install-lxc.sh}"
 readonly SECRETS_DIR="${SECUBOX_MEET_SECRETS_DIR:-/etc/secubox/secrets/meet}"
 readonly NFT_DST="${SECUBOX_MEET_NFT_DST:-/etc/nftables.d/secubox-meet-dnat.nft}"
+readonly NFT_SRC="${SECUBOX_MEET_NFT_SRC:-/usr/share/doc/secubox-meet/examples/meet.nft}"
 readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
 
 readonly RED='\033[0;31m'
@@ -290,6 +291,44 @@ print(len(json.load(sys.stdin)["keys"]))' 2>/dev/null); then
     [ "$discovery" = true ]
 }
 
+# ── Exposition des médias (décision de l'administrateur, jamais au postinst) ─
+cmd_media_expose() {
+    case "${1:-}" in
+        --apply)
+            if [ ! -f "$NFT_SRC" ]; then
+                printf '{"success": false, "error": "règle absente: %s"}\n' "$(json_escape "$NFT_SRC")"
+                return 1
+            fi
+            install -d -m 0755 "$(dirname "$NFT_DST")"
+            install -m 0644 "$NFT_SRC" "$NFT_DST"
+            # La table est SUPPRIMÉE avant rechargement : `nft -f` ajoute les
+            # règles, il ne remplace pas la table ; sans cela un second --apply
+            # empile des DNAT identiques et rend le compteur illisible.
+            nft delete table inet secubox-meet 2>/dev/null || true
+            if nft -f "$NFT_DST" 2>/dev/null; then
+                printf '{"success": true, "applied": "%s", "tcp_port": %s, "udp_port": %s}\n' \
+                    "$(json_escape "$NFT_DST")" "$TCP_PORT" "$UDP_PORT"
+            else
+                rm -f "$NFT_DST"
+                echo '{"success": false, "error": "nft a refusé la règle — rien appliqué"}'
+                return 1
+            fi
+            ;;
+        --revoke)
+            nft delete table inet secubox-meet 2>/dev/null || true
+            rm -f "$NFT_DST"
+            echo '{"success": true, "revoked": true}'
+            ;;
+        *)
+            local installed=false live=false
+            [ -f "$NFT_DST" ] && installed=true
+            nft list table inet secubox-meet >/dev/null 2>&1 && live=true
+            printf '{"file_installed": %s, "rule_live": %s, "file": "%s", "tcp_port": %s, "udp_port": %s, "hint": "meetctl media-expose --apply | --revoke"}\n' \
+                "$installed" "$live" "$(json_escape "$NFT_DST")" "$TCP_PORT" "$UDP_PORT"
+            ;;
+    esac
+}
+
 cmd_help() {
     cat <<EOF
 meetctl v$VERSION — La Suite Meet (LXC-native)
@@ -300,6 +339,8 @@ meetctl v$VERSION — La Suite Meet (LXC-native)
   oidc-enregistrer [--renouveler]
                             Enregistre le client OIDC « meet » (secret 0600, jamais imprimé)
   oidc-verifier             Lit la découverte OIDC depuis le conteneur (JSON, code 1 si KO)
+  media-expose [--apply|--revoke]
+                            Sans argument : état. --apply pose le DNAT 7881/TCP 7882/UDP ; --revoke le retire
   logs <unité> [lignes]     Journal d'un service interne
                             (postgresql|redis-server|livekit|meet-backend|nginx)
   help                      Cette aide
@@ -314,6 +355,7 @@ case "${1:-help}" in
     restart)          cmd_restart ;;
     oidc-enregistrer) cmd_oidc_enregistrer "${2:-}" ;;
     oidc-verifier)    cmd_oidc_verifier ;;
+    media-expose)     cmd_media_expose "${2:-}" ;;
     logs)             cmd_logs "${2:-}" "${3:-}" ;;
     help|--help|-h)   cmd_help ;;
     *)                cmd_help; exit 1 ;;

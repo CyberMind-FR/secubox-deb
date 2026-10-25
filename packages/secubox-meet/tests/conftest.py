@@ -18,7 +18,7 @@ def _ecrire_exec(chemin: Path, contenu: str) -> None:
 
 
 def _env_ctl(tmp_path: Path, lxc_state="RUNNING", is_active=None, rootfs=True, domaine=None,
-             attach_curl=None, oidcctl_secret=None, env_extra=None) -> dict:
+             attach_curl=None, oidcctl_secret=None, env_extra=None, nft_ok=False) -> dict:
     """Prépare le faux PATH et l'arbre de fichiers ; renvoie l'environnement du ctl."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
@@ -59,7 +59,19 @@ exit 0
     _ecrire_exec(bin_dir / "lxc-start", "#!/bin/bash\nexit 0\n")
     _ecrire_exec(bin_dir / "lxc-stop", "#!/bin/bash\nexit 0\n")
     _ecrire_exec(bin_dir / "curl", "#!/bin/bash\nexit 7\n")
-    _ecrire_exec(bin_dir / "nft", "#!/bin/bash\nexit 1\n")
+    # Faux nft : journalise son argv (sans le nom du programme) dans <tmp>/nft-appels. « list table »
+    # réussit seulement si un « -f » a réussi avant (marqueur nft-table-vivante, retiré par « delete table »).
+    code_nft = 0 if nft_ok else 1
+    _ecrire_exec(bin_dir / "nft", f"""#!/bin/bash
+echo "$*" >> "{tmp_path}/nft-appels"
+vivante="{tmp_path}/nft-table-vivante"
+case "$1" in
+  list) [ -f "$vivante" ]; exit $? ;;
+  delete) rm -f "$vivante"; exit {code_nft} ;;
+  -f) [ {code_nft} -eq 0 ] && touch "$vivante"; exit {code_nft} ;;
+esac
+exit {code_nft}
+""")
     if domaine is None:
         _ecrire_exec(bin_dir / "secubox-domaine", '#!/bin/bash\necho "$1.exemple.test"\n')
     else:  # sortie brute imposée (caractères de contrôle compris)
