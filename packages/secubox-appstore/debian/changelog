@@ -1,3 +1,12 @@
+secubox-appstore (0.10.1-1~trixie1) trixie; urgency=medium
+
+  * Vhost boutique.<domaine> (ref #3150) : la boutique client a son propre nom (server_name boutique.*), encadrable par le
+    Hall de la box (frame-ancestors). Elle ne joint que trois appels de l'API : lectures du catalogue (catalog, groupes,
+    jobs) et installation d'un module ; l'administration reste sur admin.<domaine>/appstore/. Le postinst active le
+    vhost, puis, nginx -t passé, pose la route sbxwaf et le vhost HAProxy (backend sbxwaf_inspector). postrm : retire le lien.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 16:00:00 +0000
+
 secubox-appstore (0.10.0-1~trixie1) trixie; urgency=medium
 
   * Boutique client (ref #3148) : /appstore/boutique.html, vitrine façon App Store en peau Aurora pour les usagers

@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+case "$1" in
+    remove|purge)
+        rm -f /etc/nginx/sites-enabled/boutique.conf
+        if command -v nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx 2>/dev/null; then
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
+        fi
+        ;;
+esac
+#DEBHELPER#
+exit 0

@@ -16,6 +16,10 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-appstore/etc/nginx/secubox.d
 	install -m 644 $(CURDIR)/nginx/appstore.conf $(CURDIR)/debian/secubox-appstore/etc/nginx/secubox.d/
 
+	# Vhost boutique.<domaine> (#3150) : le lien d'activation est posé en postinst
+	install -d $(CURDIR)/debian/secubox-appstore/etc/nginx/sites-available
+	install -m 644 $(CURDIR)/nginx/boutique.vhost.conf $(CURDIR)/debian/secubox-appstore/etc/nginx/sites-available/boutique.conf
+
 	# Hub menu entry
 	install -d $(CURDIR)/debian/secubox-appstore/usr/share/secubox/menu.d
 	install -m 644 $(CURDIR)/menu.d/580-appstore.json $(CURDIR)/debian/secubox-appstore/usr/share/secubox/menu.d/

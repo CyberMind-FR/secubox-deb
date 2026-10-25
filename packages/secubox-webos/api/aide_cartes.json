@@ -151,6 +151,17 @@
       ]
     },
     {
+      "id": "boutique",
+      "ic": "🛍️",
+      "nom": "Boutique",
+      "service": "appstore",
+      "acces": "session",
+      "role": "La boutique d'apps de la box : découvrir, rechercher et installer les services disponibles, par fonctionnalité ou par catégorie.",
+      "usage": [
+        "Obtenir installe l'app (réservé à l'administrateur) ; Ouvrir la lance ; ⚙️ ouvre l'administration de l'App Store."
+      ]
+    },
+    {
       "id": "podcaster", "ic": "🎙️", "nom": "Podcaster", "service": "podcaster", "acces": "public",
       "role": "Les podcasts de la box : abonnements, épisodes téléchargés localement, lecteur qui reprend où vous étiez même après un rafraîchissement.",
       "usage": ["Commandes de lecture, file « à suivre », barre de progression cliquable."],
