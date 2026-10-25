@@ -1,3 +1,33 @@
+secubox-meet (0.1.1-1~trixie1) trixie; urgency=medium
+
+  * Correctifs de la relecture finale (ref #3154).
+  * postinst : les parents partagés (/etc/secubox, /etc/secubox/secrets, /var/lib/secubox,
+    /var/cache/secubox, ports-publics.d) ne sont plus que créés s'ils manquent, jamais resserrés ni
+    réattribués : /etc/secubox/secrets restait 700 root:root (ACL masquées), le fournisseur OIDC ne
+    lisait plus sa clé de signature ; /etc/secubox passait root:root, l'agrégateur n'écrivait plus
+    users.json. Seules les feuilles du module sont imposées. Idem /data/lxc (install-lxc.sh) et
+    ports-publics.d (meetctl media-expose --apply).
+  * Webhook LiveKit : posté au nginx interne (127.0.0.1:80), qui pose l'hôte public de Meet et
+    X-Forwarded-Proto https (Django refusait Host: 127.0.0.1:8000) ; seul 127.0.0.1 y a accès. Le
+    domaine est validé (nom DNS) avant d'être écrit dans meet.env et nginx-meet.conf.
+  * Un changement de configuration, de secret ou de code atteint enfin les services : le script interne
+    compare les empreintes de meet.env, livekit.yaml, nginx-meet.conf, des unités et des marqueurs de
+    construction, recharge systemd si une unité change et ne relance que les services concernés.
+    Nouveau mode SECUBOX_MEET_RENDRE_SEULEMENT=1 (rendu sans construction, conteneur démarré).
+    meetctl oidc-enregistrer porte un nouveau secret au conteneur qui tourne ("applique": true) ou le
+    dit ("applique": false, "hint"), et l'applique à l'enregistrement suivant ; la page l'affiche.
+    Une mise à jour du paquet relance le rendu en arrière-plan (secubox-meet-rerendu.service).
+  * apt remove : meetctl autostart off (seule la clé lxc.start.auto change), unités désactivées, puis
+    arrêt ; une réinstallation réarme l'autostart et redémarre le conteneur.
+  * br-lxc présent sans 10.100.0.1/24 : échec immédiat et clair (netplan, #3162) au lieu de 30 s
+    d'attente du réseau.
+  * sudoers : argv exacts de l'API seulement (plus de meetctl nu) ; l'API n'offre plus --renouveler.
+  * État de postgresql par pg_isready (l'unité parapluie restait active cluster tombé) ;
+    UV_PYTHON_DOWNLOADS=never dans le conteneur ; Depends: openssl ; README (sauvegarde par runuser,
+    suivi par journalctl).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 25 Oct 2026 20:00:00 +0200
+
 secubox-meet (0.1.0-1~trixie1) trixie; urgency=medium
 
   * Première version : squelette du paquet et meetctl (cycle de vie, état) pour La Suite Meet

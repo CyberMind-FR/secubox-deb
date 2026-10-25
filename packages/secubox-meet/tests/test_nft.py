@@ -103,3 +103,13 @@ def test_apply_publication_impossible_renvoie_du_json_et_ne_laisse_rien(tmp_path
     (tmp_path / "fichier").write_text("x")
     rc, out = run_ctl_rc(tmp_path, "media-expose", "--apply", nft_ok=True, env_extra={"SECUBOX_PORTS_PUBLICS_DIR": str(tmp_path / "fichier" / "d")})
     assert rc == 1 and json.loads(out)["success"] is False and not dst.exists()
+
+
+def test_apply_ne_touche_pas_le_dossier_partage_des_publications(tmp_path):
+    """C1 : ports-publics.d est commun à tous les modules qui publient : jamais de mode imposé s'il existe."""
+    _prepare(tmp_path)
+    d = tmp_path / "ports-publics.d"
+    d.mkdir()
+    d.chmod(0o751)
+    run_ctl(tmp_path, "media-expose", "--apply", nft_ok=True)
+    assert (d / "meet.json").exists() and d.stat().st_mode & 0o777 == 0o751

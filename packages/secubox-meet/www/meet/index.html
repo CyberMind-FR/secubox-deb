@@ -203,7 +203,7 @@
         function domaineValide(d) { return typeof d === 'string' && /^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(d); }
 
         function demoData() {
-            ETAT = { module: 'meet', version: '0.1.0', installed: true, container: 'running', domain: 'visio.example.org', livekit_domain: 'livekit.example.org',
+            ETAT = { module: 'meet', version: '0.1.1', installed: true, container: 'running', domain: 'visio.example.org', livekit_domain: 'livekit.example.org',
                      lxc_ip: '192.0.2.50', web_reachable: true,
                      services: { postgresql: 'active', redis: 'active', livekit: 'active', 'meet-backend': 'active', nginx: 'active' },
                      media: { tcp_port: 7881, udp_port: 7882, exposed: false }, oidc: { client_registered: true } };
@@ -335,7 +335,10 @@
         $('oidcEnreg').addEventListener('click', () => demander('Enregistrer Meet comme client OIDC du Hall ? L’adresse de rappel et le secret du client sont posés côté box.', async () => {
             const r = await occupe(['oidcEnreg'], () => ecrire('POST', '/oidc/enregistrer', {}));
             const [ok, msg] = issue(r, 'Client OIDC enregistré.');
-            retour('rOidc', ok, msg); charger();
+            // Enregistré mais pas encore parvenu au conteneur (arrêté, rendu en échec) : meetctl dit quoi faire.
+            if (ok && r.data && r.data.applique === false) retour('rOidc', null, 'Client OIDC enregistré, secret pas encore appliqué : ' + String(r.data.hint || ''));
+            else retour('rOidc', ok, msg);
+            charger();
         }));
         $('oidcVerif').addEventListener('click', async () => {
             const dl = $('oidcRes'); dl.replaceChildren();

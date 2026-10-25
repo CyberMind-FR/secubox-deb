@@ -173,3 +173,25 @@ def test_largeur_telephone_sans_debordement(navigateur):
     assert p.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
     assert not p.is_visible("#sidebar") and err == []
     ctx.close()
+
+
+def test_enregistrement_oidc_non_applique_est_annonce(navigateur):
+    """I2 : meetctl dit quand le nouveau secret n'a pas atteint le conteneur ; la page le montre (sans « ok »)."""
+    indication = "conteneur à l'arrêt : démarrez-le puis relancez l'enregistrement pour appliquer le secret"
+    routes = {**API, "/oidc/enregistrer": (200, {"success": True, "applique": False, "hint": indication})}
+    ctx, p, err, _ = ouvre(navigateur, "http://sbx.test/meet/", routes)
+    p.click("#o-identite")
+    p.click("#oidcEnreg")
+    p.click("#confOui")
+    p.wait_for_function("document.getElementById('rOidc').textContent.includes('relancez')")
+    assert "pas encore appliqué" in p.inner_text("#rOidc")
+    assert "ok" not in (p.get_attribute("#rOidc", "class") or "").split() and err == []
+    ctx.close()
+    routes = {**API, "/oidc/enregistrer": (200, {"success": True, "applique": True})}
+    ctx, p, err, _ = ouvre(navigateur, "http://sbx.test/meet/", routes)
+    p.click("#o-identite")
+    p.click("#oidcEnreg")
+    p.click("#confOui")
+    p.wait_for_function("document.getElementById('rOidc').textContent.includes('enregistré')")
+    assert p.inner_text("#rOidc") == "Client OIDC enregistré." and "ok" in p.get_attribute("#rOidc", "class").split()
+    ctx.close()

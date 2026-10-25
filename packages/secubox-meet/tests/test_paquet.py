@@ -53,6 +53,25 @@ def test_postinst_dossiers_et_droits():
               "visudo -cf /etc/sudoers.d/secubox-meet", "meet.toml.example"):
         assert m in p
     assert not re.search(r"gk\d", p)
+    # C1 : les parents partagés ne sont créés que s'ils manquent, dans l'état du socle (secrets : root:secubox 0750).
+    assert "[ -d /etc/secubox/secrets ] || install -d -o root -g secubox -m 0750 /etc/secubox/secrets" in p
+    assert "[ -d /etc/secubox ] || install -d -m 0755 /etc/secubox" in p
+    assert not re.search(r"^\s*install -d [^\n]*/etc/secubox(/secrets)?$", p, re.M)
+    assert "install -d -o root -g root -m 0700 /etc/secubox/secrets/meet" in p
+
+
+def test_control_depend_d_openssl():
+    """m2 : install-lxc.sh tire les secrets par `openssl rand`."""
+    depends = (RACINE / "debian" / "control").read_text().split("Depends:", 1)[1].split("Recommends:", 1)[0]
+    assert re.search(r"^\s*openssl,?$", depends, re.M)
+    assert "openssl rand" in (RACINE / "lib" / "meet" / "install-lxc.sh").read_text()
+
+
+def test_readme_sauvegarde_et_suivi_du_provisionnement():
+    """m6 : pg_dump par runuser (le conteneur n'a pas sudo), suivi par le journal de l'unité."""
+    r = (RACINE / "README.md").read_text()
+    assert "lxc-attach -n meet -P /data/lxc -- runuser -u postgres -- pg_dump meet" in r
+    assert "journalctl -u secubox-meet-provision" in r and "sudo -u postgres" not in r
 
 
 def test_prerm_arrete_et_revoque():

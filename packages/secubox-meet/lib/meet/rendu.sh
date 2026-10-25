@@ -17,6 +17,12 @@
 #   OIDC_CLIENT_SECRET (vide admis : il est posé plus tard par `meetctl oidc`)
 #   LXC_NAME LXC_PATH LXC_BRIDGE LXC_GW (défauts : meet, /data/lxc, br-lxc, 10.100.0.1)
 
+# Un nom DNS, rien d'autre : il est écrit tel quel dans meet.env et dans
+# nginx-meet.conf (un « ; » ou un saut de ligne y injecterait une directive).
+_domaine_valide() {
+    [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]
+}
+
 _exiger() {
     local nom
     for nom in "$@"; do
@@ -38,7 +44,7 @@ keys:
   meet: ${LIVEKIT_SECRET}
 webhook:
   api_key: meet
-  urls: ["http://127.0.0.1:8000/api/v1.0/rooms/webhooks-livekit/"]
+  urls: ["http://127.0.0.1:80/api/v1.0/rooms/webhooks-livekit/"]
 logging:
   level: info
 YAML
@@ -96,8 +102,15 @@ ENV
 # nginx INTERNE du conteneur (port 80) : l'hôte (HAProxy -> sbxwaf -> nginx)
 # termine TLS. Le schéma vu par Django vient de l'en-tête de l'hôte, https par
 # défaut s'il manque (sinon Django croit être en http et refuse les cookies sûrs).
+#
+# Le webhook de LiveKit (même conteneur) passe AUSSI par ce nginx : posté en
+# direct sur gunicorn, avec « Host: 127.0.0.1:8000 » et sans X-Forwarded-Proto,
+# Django le refuserait (DisallowedHost, 400) ou le redirigerait vers https.
+# Ici l'hôte public (celui de DJANGO_ALLOWED_HOSTS) et https sont posés, et seul
+# 127.0.0.1 y a accès.
 rendre_nginx() {
-    cat > "$1/nginx-meet.conf" <<'NGINX'
+    local modele
+    modele=$(cat <<'NGINX'
 map $http_x_forwarded_proto $meet_schema {
     default $http_x_forwarded_proto;
     ""      https;
@@ -113,6 +126,15 @@ server {
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $meet_schema;
+
+    location = /api/v1.0/rooms/webhooks-livekit/ {
+        allow 127.0.0.1;
+        deny all;
+        proxy_set_header Host @MEET_DOMAIN@;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_pass http://127.0.0.1:8000;
+    }
 
     location /api/ {
         proxy_pass http://127.0.0.1:8000;
@@ -131,6 +153,8 @@ server {
     }
 }
 NGINX
+)
+    printf '%s\n' "${modele//@MEET_DOMAIN@/$MEET_DOMAIN}" > "$1/nginx-meet.conf"
 }
 
 rendre_unites() {
@@ -199,6 +223,10 @@ rendre_tout() {
     local sortie="${1:-}"
     [ -n "$sortie" ] || { echo "[rendu] dossier de sortie manquant" >&2; return 1; }
     _exiger MEET_DOMAIN LIVEKIT_DOMAIN LXC_IP MEET_ISSUER DJANGO_SECRET_KEY DB_PASSWORD LIVEKIT_SECRET || return 1
+    local d
+    for d in "$MEET_DOMAIN" "$LIVEKIT_DOMAIN"; do
+        _domaine_valide "$d" || { printf '[rendu] domaine invalide : %q\n' "$d" >&2; return 1; }
+    done
     install -d -m 0700 "$sortie"
     rendre_livekit_yaml "$sortie"
     rendre_meet_env "$sortie"

@@ -20,6 +20,11 @@
 #
 # SECUBOX_MEET_DRY_RUN=<dossier> : rend les fichiers puis sort 0 AVANT tout appel
 # lxc-*, sans toucher au pont ni aux pare-feux (utilisé par les tests).
+#
+# SECUBOX_MEET_RENDRE_SEULEMENT=1 : nouveau rendu seul (meetctl, secret OIDC
+# renouvelé) : ni pont, ni pare-feu, ni création, ni construction ; installe les
+# configurations dans le conteneur DÉMARRÉ et ne relance que les services dont
+# une entrée a changé.
 
 # Les variables posées ici (secrets, domaines) sont lues par rendu.sh.
 # shellcheck disable=SC2034
@@ -35,6 +40,7 @@ readonly STATE_DIR="${SECUBOX_MEET_STATE_DIR:-/etc/secubox/meet}"
 readonly SECRETS_DIR="${SECUBOX_MEET_SECRETS_DIR:-/etc/secubox/secrets/meet}"
 readonly VERSION_FILE="${SECUBOX_MEET_VERSION_FILE:-/usr/share/doc/secubox-meet/examples/meet.version}"
 readonly DRY_RUN="${SECUBOX_MEET_DRY_RUN:-}"
+readonly RENDRE_SEULEMENT="${SECUBOX_MEET_RENDRE_SEULEMENT:-0}"
 readonly SENTINEL="$STATE_DIR/.lxc-provisioned"
 readonly DOMAIN_FILE="$STATE_DIR/domaine"
 
@@ -89,10 +95,12 @@ secret() {
 # meet.env porte le secret dès la première passe. Un échec arrête tout. En essai
 # à blanc, seul un SECUBOX_MEETCTL explicite (faux des tests) est appelé : le
 # vrai secubox-oidcctl exige root et le fournisseur de la box.
+# SECUBOX_MEET_APPLIQUER=0 : ce script rend et applique lui-même, meetctl ne
+# relance donc pas un rendu imbriqué.
 enregistrer_client_oidc() {
     [ -n "$DRY_RUN" ] && [ -z "${SECUBOX_MEETCTL:-}" ] && return 0
     log "Enregistrement du client OIDC « meet » ..."
-    SECUBOX_MEET_DOMAIN="$MEET_DOMAIN" "${SECUBOX_MEETCTL:-/usr/sbin/meetctl}" oidc-enregistrer >/dev/null \
+    SECUBOX_MEET_APPLIQUER=0 SECUBOX_MEET_DOMAIN="$MEET_DOMAIN" "${SECUBOX_MEETCTL:-/usr/sbin/meetctl}" oidc-enregistrer >/dev/null \
         || fail "enregistrement du client OIDC impossible (meetctl oidc-enregistrer)"
     [ -s "$SECRETS_DIR/oidc-client-secret" ] \
         || fail "client OIDC enregistré mais secret absent ou vide ($SECRETS_DIR/oidc-client-secret)"
@@ -110,7 +118,8 @@ preparer_secrets() {
 }
 
 ensure_dirs() {
-    install -d -m 0755 -o root -g root "$LXC_PATH"
+    # Dossier commun à tous les conteneurs de la box : créé s'il manque, jamais réimposé.
+    [ -d "$LXC_PATH" ] || install -d -m 0755 -o root -g root "$LXC_PATH"
     install -d -m 0755 -o root -g root "$STATE_DIR"
     install -d -m 0700 -o root -g root "$SECRETS_DIR"
 }
@@ -121,6 +130,12 @@ ensure_bridge() {
         ip link add name "$LXC_BRIDGE" type bridge
         ip addr add "${LXC_GW}/24" dev "$LXC_BRIDGE"
         ip link set "$LXC_BRIDGE" up
+    elif ! ip -4 -br addr show dev "$LXC_BRIDGE" 2>/dev/null \
+            | awk -v a="${LXC_GW}/24" '{ for (i = 3; i <= NF; i++) if ($i == a) ok = 1 } END { exit !ok }'; then
+        # Pont présent sans la passerelle des conteneurs (absent du netplan, son
+        # adresse perdue au redémarrage) : le conteneur attendrait 30 s un réseau
+        # qui ne viendra pas. On le dit tout de suite.
+        fail "$LXC_BRIDGE n'a pas l'adresse ${LXC_GW}/24 : déclarez-le dans le netplan (secubox-net-detect apply ou /etc/netplan) — #3162"
     fi
 }
 
@@ -221,77 +236,118 @@ retirer_rendu() { rm -rf "$LXC_PATH/$LXC_NAME/rootfs/root/meet-rendu"; }
 # Idempotent : chaque étape se saute si son résultat est déjà là.
 # Les variables de version arrivent par l'environnement ; aucun secret n'y
 # passe (le mot de passe de la base est relu dans /etc/meet/meet.env).
+# RENDRE_SEULEMENT=1 : seulement les configurations rendues et la relance.
 SCRIPT_INTERNE=$(cat <<'INNER'
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 export UV_PROJECT_ENVIRONMENT=/opt/meet/venv
+# uv n'ira jamais chercher un interpréteur sur le réseau : le python3 de Debian fait foi.
+export UV_PYTHON_DOWNLOADS=never
+RENDRE_SEULEMENT="${RENDRE_SEULEMENT:-0}"
 
-apt-get update -q
-apt-get install -y --no-install-recommends \
-    postgresql redis-server nginx python3 python3-venv nodejs npm git \
-    ca-certificates curl libmagic1 libpango-1.0-0 gettext
+# Entrées de chaque service (chemins sans espace). `systemctl enable --now` ne
+# relance pas une unité déjà active : sans la comparaison qui suit, un nouveau
+# secret, une nouvelle configuration ou un nouveau code n'atteindraient jamais
+# les services.
+UNITES="/etc/systemd/system/meet-backend.service /etc/systemd/system/livekit.service"
+ENTREES_BACKEND="/etc/meet/meet.env /etc/systemd/system/meet-backend.service /opt/meet/.construit-$MEET_COMMIT"
+ENTREES_LIVEKIT="/etc/livekit/livekit.yaml /etc/systemd/system/livekit.service /usr/local/bin/.livekit-$LIVEKIT_VERSION"
+ENTREES_NGINX="/etc/nginx/sites-enabled/meet"
 
-id meet >/dev/null 2>&1 || useradd --system --home-dir /var/lib/meet --shell /usr/sbin/nologin meet
-id livekit >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin livekit
-# 0751 : nginx (www-data) doit traverser jusqu'à /var/lib/meet/static.
-install -d -o meet -g meet -m 0751 /var/lib/meet
-install -d -m 0755 /opt/meet /etc/meet /etc/livekit
+# Empreinte (sha256) d'un fichier, « absent » s'il n'existe pas.
+empreinte() {
+    if [ -e "$1" ]; then sha256sum < "$1" | cut -d' ' -f1; else echo absent; fi
+}
 
-# Sources : étiquette figée, puis commit vérifié (une étiquette peut être déplacée).
-if [ "$(git -C /opt/meet/src rev-parse HEAD 2>/dev/null || true)" != "$MEET_COMMIT" ]; then
-    rm -rf /opt/meet/src /opt/meet/.construit-*
-    git clone --depth 1 --branch "$MEET_TAG" https://github.com/suitenumerique/meet.git /opt/meet/src
-    [ "$(git -C /opt/meet/src rev-parse HEAD)" = "$MEET_COMMIT" ] \
-        || { echo "commit inattendu pour $MEET_TAG : refus" >&2; rm -rf /opt/meet/src; exit 1; }
-fi
+# Photographie : une ligne « empreinte chemin » par fichier.
+photo() {
+    local f
+    for f in "$@"; do printf '%s %s\n' "$(empreinte "$f")" "$f"; done
+}
 
-if [ ! -e "/opt/meet/.construit-$MEET_COMMIT" ]; then
-    [ -x /opt/meet/venv/bin/python ] || python3 -m venv /opt/meet/venv
-    # uv vit dans son propre venv : `uv sync --locked` est exact et retirerait
-    # pip/uv du venv de Meet, ce qui casserait toute relance après un échec.
-    [ -x /opt/meet/uv-venv/bin/uv ] || {
-        python3 -m venv /opt/meet/uv-venv
-        /opt/meet/uv-venv/bin/pip install --quiet uv
-    }
-    ( cd /opt/meet/src/src/backend && /opt/meet/uv-venv/bin/uv sync --locked --no-dev )
-    ( cd /opt/meet/src/src/frontend && npm ci --ignore-scripts && npm run build )
-    rm -rf /opt/meet/frontend
-    cp -r /opt/meet/src/src/frontend/dist /opt/meet/frontend
-fi
+# change <photo> <fichier>... : vrai si l'un des fichiers diffère de la photo.
+change() {
+    local avant="$1" f
+    shift
+    for f in "$@"; do
+        grep -qxF -- "$(empreinte "$f") $f" <<<"$avant" || return 0
+    done
+    return 1
+}
 
-# LiveKit : binaire téléchargé, somme SHA-256 vérifiée AVANT installation.
-if [ ! -e "/usr/local/bin/.livekit-$LIVEKIT_VERSION" ]; then
-    tmp=$(mktemp -d)
-    archive="livekit_${LIVEKIT_VERSION}_linux_${ARCH}.tar.gz"
-    curl -fsSL -o "$tmp/$archive" \
-        "https://github.com/livekit/livekit/releases/download/v${LIVEKIT_VERSION}/$archive"
-    ( cd "$tmp" && echo "$LIVEKIT_SHA256  $archive" | sha256sum -c - )
-    tar -xzf "$tmp/$archive" -C "$tmp" livekit-server
-    install -m 0755 "$tmp/livekit-server" /usr/local/bin/livekit-server
-    touch "/usr/local/bin/.livekit-$LIVEKIT_VERSION"
-    rm -rf "$tmp"
-fi
+# Relance les SEULS services dont une entrée a changé depuis la photo. Un
+# service arrêté n'est pas démarré ici (try-*) : `enable --now` s'en charge.
+relancer_si_change() {
+    local avant="$1"
+    if change "$avant" $UNITES; then systemctl daemon-reload; fi
+    if change "$avant" $ENTREES_BACKEND; then systemctl try-restart meet-backend; fi
+    if change "$avant" $ENTREES_LIVEKIT; then systemctl try-restart livekit; fi
+    if change "$avant" $ENTREES_NGINX; then
+        nginx -t
+        systemctl try-reload-or-restart nginx
+    fi
+}
+
+# Paquets, comptes, sources, construction, LiveKit (sautés en rendu seul).
+construire() {
+    apt-get update -q
+    apt-get install -y --no-install-recommends \
+        postgresql redis-server nginx python3 python3-venv nodejs npm git \
+        ca-certificates curl libmagic1 libpango-1.0-0 gettext
+
+    id meet >/dev/null 2>&1 || useradd --system --home-dir /var/lib/meet --shell /usr/sbin/nologin meet
+    id livekit >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin livekit
+    # 0751 : nginx (www-data) doit traverser jusqu'à /var/lib/meet/static.
+    install -d -o meet -g meet -m 0751 /var/lib/meet
+    install -d -m 0755 /opt/meet /etc/meet /etc/livekit
+
+    # Sources : étiquette figée, puis commit vérifié (une étiquette peut être déplacée).
+    if [ "$(git -C /opt/meet/src rev-parse HEAD 2>/dev/null || true)" != "$MEET_COMMIT" ]; then
+        rm -rf /opt/meet/src /opt/meet/.construit-*
+        git clone --depth 1 --branch "$MEET_TAG" https://github.com/suitenumerique/meet.git /opt/meet/src
+        [ "$(git -C /opt/meet/src rev-parse HEAD)" = "$MEET_COMMIT" ] \
+            || { echo "commit inattendu pour $MEET_TAG : refus" >&2; rm -rf /opt/meet/src; exit 1; }
+    fi
+
+    if [ ! -e "/opt/meet/.construit-$MEET_COMMIT" ]; then
+        [ -x /opt/meet/venv/bin/python ] || python3 -m venv /opt/meet/venv
+        # uv vit dans son propre venv : `uv sync --locked` est exact et retirerait
+        # pip/uv du venv de Meet, ce qui casserait toute relance après un échec.
+        [ -x /opt/meet/uv-venv/bin/uv ] || {
+            python3 -m venv /opt/meet/uv-venv
+            /opt/meet/uv-venv/bin/pip install --quiet uv
+        }
+        ( cd /opt/meet/src/src/backend && /opt/meet/uv-venv/bin/uv sync --locked --no-dev )
+        ( cd /opt/meet/src/src/frontend && npm ci --ignore-scripts && npm run build )
+        rm -rf /opt/meet/frontend
+        cp -r /opt/meet/src/src/frontend/dist /opt/meet/frontend
+    fi
+
+    # LiveKit : binaire téléchargé, somme SHA-256 vérifiée AVANT installation.
+    if [ ! -e "/usr/local/bin/.livekit-$LIVEKIT_VERSION" ]; then
+        local tmp archive
+        tmp=$(mktemp -d)
+        archive="livekit_${LIVEKIT_VERSION}_linux_${ARCH}.tar.gz"
+        curl -fsSL -o "$tmp/$archive" \
+            "https://github.com/livekit/livekit/releases/download/v${LIVEKIT_VERSION}/$archive"
+        ( cd "$tmp" && echo "$LIVEKIT_SHA256  $archive" | sha256sum -c - )
+        tar -xzf "$tmp/$archive" -C "$tmp" livekit-server
+        install -m 0755 "$tmp/livekit-server" /usr/local/bin/livekit-server
+        touch "/usr/local/bin/.livekit-$LIVEKIT_VERSION"
+        rm -rf "$tmp"
+    fi
+}
 
 # Configurations rendues par l'hôte.
-rendu=/root/meet-rendu
-install -m 0640 -o root -g meet "$rendu/meet.env" /etc/meet/meet.env
-install -m 0640 -o root -g livekit "$rendu/livekit.yaml" /etc/livekit/livekit.yaml
-install -m 0644 "$rendu/nginx-meet.conf" /etc/nginx/sites-enabled/meet
-rm -f /etc/nginx/sites-enabled/default
-install -m 0644 "$rendu/meet-backend.service" /etc/systemd/system/meet-backend.service
-install -m 0644 "$rendu/livekit.service" /etc/systemd/system/livekit.service
-systemctl daemon-reload
-
-# Base : le rôle est créé une fois, le mot de passe est réaligné à chaque passe.
-systemctl enable --now postgresql redis-server
-db_pw=$(sed -n 's/^DB_PASSWORD=//p' /etc/meet/meet.env)
-runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='meet'" | grep -q 1 \
-    || runuser -u postgres -- createuser meet
-runuser -u postgres -- psql -v ON_ERROR_STOP=1 -q <<SQL
-ALTER ROLE meet PASSWORD '$db_pw';
-SQL
-runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='meet'" | grep -q 1 \
-    || runuser -u postgres -- createdb -O meet meet
+installer_configs() {
+    local rendu=/root/meet-rendu
+    install -m 0640 -o root -g meet "$rendu/meet.env" /etc/meet/meet.env
+    install -m 0640 -o root -g livekit "$rendu/livekit.yaml" /etc/livekit/livekit.yaml
+    install -m 0644 "$rendu/nginx-meet.conf" /etc/nginx/sites-enabled/meet
+    rm -f /etc/nginx/sites-enabled/default
+    install -m 0644 "$rendu/meet-backend.service" /etc/systemd/system/meet-backend.service
+    install -m 0644 "$rendu/livekit.service" /etc/systemd/system/livekit.service
+}
 
 # manage.py avec l'environnement de l'unité (meet.env n'est pas du shell valide :
 # `["name"]` y serait déformé), donc via systemd-run et son EnvironmentFile.
@@ -299,37 +355,61 @@ manage() {
     systemd-run --quiet --wait --pipe -p "User=${MANAGE_USER:-meet}" -p EnvironmentFile=/etc/meet/meet.env \
         -p WorkingDirectory=/opt/meet/src/src/backend /opt/meet/venv/bin/python manage.py "$@"
 }
-manage migrate --noinput
-manage collectstatic --noinput
-chmod 0755 /var/lib/meet/static
-# En root : les sources ont été clonées par root, `meet` ne peut pas écrire
-# dans locale/ (sinon échec définitif, relancé toutes les 15 min).
-MANAGE_USER=root manage compilemessages
-touch "/opt/meet/.construit-$MEET_COMMIT"
 
+# Base et Django (sautés en rendu seul) : le rôle est créé une fois, le mot de
+# passe réaligné à chaque passe ; migrations, statiques, traductions.
+preparer_base() {
+    systemctl enable --now postgresql redis-server
+    local db_pw
+    db_pw=$(sed -n 's/^DB_PASSWORD=//p' /etc/meet/meet.env)
+    runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='meet'" | grep -q 1 \
+        || runuser -u postgres -- createuser meet
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -q <<SQL
+ALTER ROLE meet PASSWORD '$db_pw';
+SQL
+    runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='meet'" | grep -q 1 \
+        || runuser -u postgres -- createdb -O meet meet
+
+    manage migrate --noinput
+    manage collectstatic --noinput
+    chmod 0755 /var/lib/meet/static
+    # En root : les sources ont été clonées par root, `meet` ne peut pas écrire
+    # dans locale/ (sinon échec définitif, relancé toutes les 15 min).
+    MANAGE_USER=root manage compilemessages
+    touch "/opt/meet/.construit-$MEET_COMMIT"
+}
+
+AVANT=$(photo $ENTREES_BACKEND $ENTREES_LIVEKIT $ENTREES_NGINX)
+if [ "$RENDRE_SEULEMENT" != 1 ]; then construire; fi
+installer_configs
+if [ "$RENDRE_SEULEMENT" != 1 ]; then preparer_base; fi
+relancer_si_change "$AVANT"
 systemctl enable --now postgresql redis-server livekit meet-backend nginx
-if [ "$REDEMARRER" = 1 ]; then
-    systemctl restart livekit meet-backend
-fi
-nginx -t
-systemctl reload nginx
 INNER
 )
 
 install_in_lxc() {
     log "Installation de Meet dans '$LXC_NAME' (domaine : $MEET_DOMAIN) ..."
-    local redemarrer=0
     if [ -s "$DOMAIN_FILE" ] && [ "$(cat "$DOMAIN_FILE")" != "$MEET_DOMAIN" ]; then
-        log "Le domaine a changé : nouveau rendu et redémarrage des unités (les salles sont conservées)"
-        redemarrer=1
+        log "Le domaine a changé : nouveau rendu, relance des services concernés (les salles sont conservées)"
     fi
     deposer_rendu
     lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- env \
         "MEET_TAG=$MEET_TAG" "MEET_COMMIT=$MEET_COMMIT" \
         "LIVEKIT_VERSION=$LIVEKIT_VERSION" "LIVEKIT_SHA256=$LIVEKIT_SHA256" \
-        "ARCH=$(dpkg --print-architecture)" "REDEMARRER=$redemarrer" \
+        "ARCH=$(dpkg --print-architecture)" "RENDRE_SEULEMENT=$RENDRE_SEULEMENT" \
         bash -e -c "$SCRIPT_INTERNE"
     retirer_rendu
+}
+
+# Empreinte du secret OIDC que le conteneur vient de recevoir (jamais le secret
+# lui-même) : meetctl la compare au secret courant pour savoir s'il reste à
+# l'appliquer.
+noter_secret_applique() {
+    [ -n "$OIDC_CLIENT_SECRET" ] || return 0
+    ( umask 077
+      printf '%s' "$OIDC_CLIENT_SECRET" | sha256sum | cut -d' ' -f1 > "$SECRETS_DIR/.oidc-applique" )
+    chmod 0600 "$SECRETS_DIR/.oidc-applique"
 }
 
 mark_provisioned() {
@@ -340,6 +420,12 @@ mark_provisioned() {
 
 main() {
     require_cmds
+    if [ "$RENDRE_SEULEMENT" = 1 ] && [ -z "$DRY_RUN" ]; then
+        [ -d "$LXC_PATH/$LXC_NAME/rootfs" ] \
+            || fail "conteneur '$LXC_NAME' absent : provisionnement complet requis (meetctl install)"
+        [ "$(lxc_state)" = "running" ] \
+            || fail "conteneur '$LXC_NAME' à l'arrêt : le rendu seul exige un conteneur démarré"
+    fi
     [ -n "$MEET_DOMAIN" ] || fail "domaine de la box inconnu : définir [global] domain, SECUBOX_MEET_DOMAIN ou secubox-domaine"
     [ -n "$LIVEKIT_DOMAIN" ] || fail "domaine LiveKit inconnu (secubox-domaine livekit ou SECUBOX_LIVEKIT_DOMAIN)"
     charger_versions
@@ -355,6 +441,13 @@ main() {
         exit 0
     fi
 
+    if [ "$RENDRE_SEULEMENT" = 1 ]; then
+        install_in_lxc
+        noter_secret_applique
+        log "Nouveau rendu appliqué au conteneur (sans construction)."
+        return 0
+    fi
+
     ensure_dirs
     ensure_bridge
     ensure_masquerade
@@ -364,6 +457,7 @@ main() {
     wait_for_network
     ensure_resolv
     install_in_lxc
+    noter_secret_applique
     mark_provisioned
     log "Terminé. Web interne : http://${LXC_IP}/  -  média : 7881/TCP et 7882/UDP"
     log "Rappel : rediriger 7881/TCP et 7882/UDP de la box vers cet hôte (meetctl media-expose)."

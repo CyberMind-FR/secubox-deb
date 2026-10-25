@@ -3,10 +3,12 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """Rendu des configurations du LXC Meet : install-lxc.sh en mode essai à blanc (aucun lxc-*, aucun root)."""
+import hashlib
+import re
 import subprocess
 from pathlib import Path
 
-from conftest import _ecrire_exec, _env_ctl
+from conftest import _ecrire_exec, _env_ctl, fonction_bash, script_interne
 
 RACINE = Path(__file__).resolve().parents[1]
 INSTALL = RACINE / "lib" / "meet" / "install-lxc.sh"
@@ -162,3 +164,208 @@ def test_install_passe_son_domaine_a_meetctl(tmp_path):
     r = subprocess.run(["bash", str(INSTALL)], capture_output=True, text=True, env=env, timeout=60)
     assert r.returncode == 0, r.stderr
     assert (tmp_path / "domaine-vu").read_text().strip() == "visio.exemple.test"
+
+
+# ── I1 : le webhook de LiveKit passe par le nginx interne, avec l'hôte public et https ──────────────
+
+def test_webhook_livekit_par_le_nginx_interne_avec_l_hote_de_django(tmp_path):
+    f = rendu(tmp_path)
+    assert 'urls: ["http://127.0.0.1:80/api/v1.0/rooms/webhooks-livekit/"]' in f["livekit.yaml"]
+    n = f["nginx-meet.conf"]
+    assert "listen 80 default_server;" in n and "server_name _;" in n     # accepte Host: 127.0.0.1
+    bloc = n[n.index("location = /api/v1.0/rooms/webhooks-livekit/ {"):]
+    bloc = bloc[:bloc.index("}")]
+    hote = re.search(r"proxy_set_header Host (\S+);", bloc).group(1)
+    e = dict(ligne.split("=", 1) for ligne in f["meet.env"].splitlines() if "=" in ligne)
+    assert hote == "visio.exemple.test" and hote in e["DJANGO_ALLOWED_HOSTS"].split(",")
+    assert "proxy_set_header X-Forwarded-Proto https;" in bloc and "proxy_pass http://127.0.0.1:8000;" in bloc
+    assert "proxy_set_header X-Forwarded-For" in bloc            # les en-têtes du server ne sont plus hérités
+    assert "allow 127.0.0.1;" in bloc and "deny all;" in bloc     # seul LiveKit, local, l'appelle
+
+
+def test_rendu_refuse_un_domaine_qui_casserait_les_configurations(tmp_path):
+    rc, err = run_install(tmp_path, domaine="visio.x; deny all")
+    assert rc == 1 and "domaine" in err.lower() and not (tmp_path / "rendu").exists()
+
+
+# ── I2 : le script interne ne relance que les services dont une entrée a changé ────────────────────
+
+TEXTE_INSTALL = INSTALL.read_text()
+INTERNE = script_interne(TEXTE_INSTALL)
+
+
+def _relancer(tmp_path, modifier):
+    """Exécute les fonctions réelles du script interne sur des fichiers de test ; renvoie le journal des appels."""
+    for nom in ("meet.env", "livekit.yaml", "nginx-meet.conf", "meet-backend.service", "livekit.service", ".livekit"):
+        (tmp_path / nom).write_text(nom + "\n")
+    journal = tmp_path / "journal"
+    bin_ = tmp_path / "bin-interne"
+    bin_.mkdir()
+    for nom in ("systemctl", "nginx"):
+        _ecrire_exec(bin_ / nom, f'#!/bin/bash\necho "{nom} $*" >> "{journal}"\n')
+    t = tmp_path
+    fonctions = "".join(fonction_bash(INTERNE, n) for n in ("empreinte", "photo", "change", "relancer_si_change"))
+    script = f"""set -euo pipefail
+{fonctions}
+UNITES="{t}/meet-backend.service {t}/livekit.service"
+ENTREES_BACKEND="{t}/meet.env {t}/meet-backend.service {t}/.construit-abc"
+ENTREES_LIVEKIT="{t}/livekit.yaml {t}/livekit.service {t}/.livekit"
+ENTREES_NGINX="{t}/nginx-meet.conf"
+AVANT=$(photo $ENTREES_BACKEND $ENTREES_LIVEKIT $ENTREES_NGINX)
+cd "{t}"
+{modifier}
+relancer_si_change "$AVANT"
+"""
+    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30,
+                       env={"PATH": f"{bin_}:/usr/bin:/bin"})
+    assert r.returncode == 0, r.stderr
+    return journal.read_text().splitlines() if journal.exists() else []
+
+
+def test_rien_de_change_aucun_redemarrage(tmp_path):
+    assert _relancer(tmp_path, "true") == []
+
+
+def test_meet_env_change_relance_le_seul_backend(tmp_path):
+    assert _relancer(tmp_path, "echo OIDC_RP_CLIENT_SECRET=nouveau >> meet.env") == ["systemctl try-restart meet-backend"]
+
+
+def test_code_construit_relance_le_backend(tmp_path):
+    assert _relancer(tmp_path, "touch .construit-abc") == ["systemctl try-restart meet-backend"]
+
+
+def test_livekit_yaml_change_relance_le_seul_livekit(tmp_path):
+    assert _relancer(tmp_path, "echo x >> livekit.yaml") == ["systemctl try-restart livekit"]
+
+
+def test_unite_changee_recharge_systemd_puis_relance(tmp_path):
+    assert _relancer(tmp_path, "echo x >> livekit.service") == ["systemctl daemon-reload", "systemctl try-restart livekit"]
+
+
+def test_nginx_change_recharge_nginx_apres_verification(tmp_path):
+    assert _relancer(tmp_path, "echo x >> nginx-meet.conf") == ["nginx -t", "systemctl try-reload-or-restart nginx"]
+
+
+def test_script_interne_cable_les_entrees_et_la_photo():
+    assert 'ENTREES_BACKEND="/etc/meet/meet.env /etc/systemd/system/meet-backend.service /opt/meet/.construit-$MEET_COMMIT"' in INTERNE
+    assert 'ENTREES_LIVEKIT="/etc/livekit/livekit.yaml /etc/systemd/system/livekit.service /usr/local/bin/.livekit-$LIVEKIT_VERSION"' in INTERNE
+    assert 'ENTREES_NGINX="/etc/nginx/sites-enabled/meet"' in INTERNE
+    photo = INTERNE.index("AVANT=$(photo $ENTREES_BACKEND $ENTREES_LIVEKIT $ENTREES_NGINX)")
+    relance = INTERNE.index('relancer_si_change "$AVANT"')
+    assert photo < INTERNE.index("then construire; fi")
+    assert INTERNE.index('touch "/opt/meet/.construit-$MEET_COMMIT"') < relance
+    assert relance < INTERNE.index("systemctl enable --now postgresql redis-server livekit meet-backend nginx")
+    assert "REDEMARRER" not in TEXTE_INSTALL and "systemctl restart livekit meet-backend" not in INTERNE
+
+
+def test_rendu_seul_saute_la_construction():
+    construire = fonction_bash(INTERNE, "construire")
+    for etape in ("apt-get install", "git clone", "npm ci", "uv sync", "livekit-server"):
+        assert etape in construire, etape
+    base = fonction_bash(INTERNE, "preparer_base")
+    assert "manage migrate" in base and "createdb" in base
+    assert 'if [ "$RENDRE_SEULEMENT" != 1 ]; then construire; fi' in INTERNE
+    assert 'if [ "$RENDRE_SEULEMENT" != 1 ]; then preparer_base; fi' in INTERNE
+
+
+def _env_rendu_seul(tmp_path, etat_lxc="RUNNING"):
+    env = _env_ctl(tmp_path, lxc_state=etat_lxc)
+    bin_ = tmp_path / "bin"
+    for nom in ("lxc-create", "lxc-start", "ip"):
+        _ecrire_exec(bin_ / nom, f'#!/bin/bash\necho "{nom} $*" >> "{tmp_path}/interdits"\n')
+    _ecrire_exec(bin_ / "chown", "#!/bin/bash\nexit 0\n")
+    # Faux lxc-attach : journalise l'environnement passé au script interne (jamais le script lui-même).
+    _ecrire_exec(bin_ / "lxc-attach", f"""#!/bin/bash
+for a in "$@"; do [ "$a" = bash ] && break; echo "$a"; done >> "{tmp_path}/attach"
+""")
+    faux = tmp_path / "meetctl-faux"
+    _ecrire_exec(faux, f'#!/bin/bash\necho "APPLIQUER=$SECUBOX_MEET_APPLIQUER" >> "{tmp_path}/appels-meetctl"\n'
+                       f'echo OIDC-S3CR3T > "{tmp_path}/secrets/oidc-client-secret"\n')
+    env.update(SECUBOX_MEET_RENDRE_SEULEMENT="1", SECUBOX_MEETCTL=str(faux),
+               SECUBOX_MEET_VERSION_FILE=str(RACINE / "conf" / "meet.version"))
+    return env
+
+
+def test_rendu_seul_applique_sans_construire_ni_recreer(tmp_path):
+    env = _env_rendu_seul(tmp_path)
+    r = subprocess.run(["bash", str(INSTALL)], capture_output=True, text=True, env=env, timeout=60)
+    assert r.returncode == 0, r.stderr
+    attach = (tmp_path / "attach").read_text().splitlines()
+    assert "RENDRE_SEULEMENT=1" in attach and not (tmp_path / "interdits").exists()
+    assert not (tmp_path / "nft-appels").exists() and not (tmp_path / "etat" / ".lxc-provisioned").exists()
+    assert not (tmp_path / "lxc" / "meet" / "rootfs" / "root" / "meet-rendu").exists()
+    assert (tmp_path / "appels-meetctl").read_text().strip() == "APPLIQUER=0"
+    attendu = hashlib.sha256(b"OIDC-S3CR3T").hexdigest()
+    note = tmp_path / "secrets" / ".oidc-applique"
+    assert note.read_text().strip() == attendu and note.stat().st_mode & 0o777 == 0o600
+    assert "OIDC-S3CR3T" not in r.stdout + r.stderr
+
+
+def test_rendu_seul_refuse_un_conteneur_arrete(tmp_path):
+    env = _env_rendu_seul(tmp_path, etat_lxc="STOPPED")
+    r = subprocess.run(["bash", str(INSTALL)], capture_output=True, text=True, env=env, timeout=60)
+    assert r.returncode == 1 and "arrêt" in r.stderr and not (tmp_path / "attach").exists()
+    assert not (tmp_path / "secrets" / ".oidc-applique").exists()
+
+
+def test_provisionnement_complet_passe_appliquer_0_a_meetctl():
+    assert 'SECUBOX_MEET_APPLIQUER=0 SECUBOX_MEET_DOMAIN="$MEET_DOMAIN"' in TEXTE_INSTALL
+
+
+# ── BR : br-lxc présent sans 10.100.0.1/24 → échec clair, sans attendre le réseau ──────────────────
+
+def _pont(tmp_path, lien_existe, adresses):
+    bin_ = tmp_path / "bin-ip"
+    bin_.mkdir()
+    _ecrire_exec(bin_ / "ip", f"""#!/bin/bash
+echo "ip $*" >> "{tmp_path}/ip-appels"
+case "$*" in
+  "link show br-lxc") exit {0 if lien_existe else 1} ;;
+  *"addr show"*) printf '%s\\n' "{adresses}" ;;
+esac
+exit 0
+""")
+    script = ("set -euo pipefail\nLXC_BRIDGE=br-lxc\nLXC_GW=10.100.0.1\n"
+              "log() { echo \"LOG $*\"; }\nfail() { echo \"ERREUR : $*\" >&2; exit 1; }\n"
+              + fonction_bash(TEXTE_INSTALL, "ensure_bridge") + "ensure_bridge\n")
+    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=10,
+                       env={"PATH": f"{bin_}:/usr/bin:/bin"})
+    appels = (tmp_path / "ip-appels").read_text().splitlines() if (tmp_path / "ip-appels").exists() else []
+    return r, appels
+
+
+def test_pont_sans_passerelle_echoue_clairement(tmp_path):
+    r, appels = _pont(tmp_path, True, "br-lxc           UP             192.168.1.5/24")
+    assert r.returncode == 1
+    assert "br-lxc n'a pas l'adresse 10.100.0.1/24" in r.stderr and "netplan" in r.stderr and "#3162" in r.stderr
+    assert not any(" add " in f" {a} " for a in appels)
+
+
+def test_pont_adresse_voisine_refusee(tmp_path):
+    r, _ = _pont(tmp_path, True, "br-lxc           UP             10.100.0.10/24")
+    assert r.returncode == 1
+
+
+def test_pont_avec_passerelle_accepte(tmp_path):
+    r, appels = _pont(tmp_path, True, "br-lxc           UP             10.100.0.1/24")
+    assert r.returncode == 0, r.stderr
+    assert not any(" add " in f" {a} " for a in appels)
+
+
+def test_pont_absent_cree_comme_avant(tmp_path):
+    r, appels = _pont(tmp_path, False, "")
+    assert r.returncode == 0, r.stderr
+    assert "ip link add name br-lxc type bridge" in appels and "ip addr add 10.100.0.1/24 dev br-lxc" in appels
+
+
+# ── m9 : uv ne télécharge jamais d'interpréteur ───────────────────────────────────────────────────
+
+def test_uv_sans_telechargement_d_interpreteur():
+    assert "export UV_PYTHON_DOWNLOADS=never" in INTERNE
+
+
+def test_dossier_partage_des_conteneurs_jamais_reimpose():
+    """C1 : /data/lxc héberge tous les conteneurs de la box : créé s'il manque, jamais réattribué."""
+    d = fonction_bash(TEXTE_INSTALL, "ensure_dirs")
+    assert '[ -d "$LXC_PATH" ] || install -d' in d
+    assert not re.search(r'^\s*install -d [^\n]*"\$LXC_PATH"$', d, re.M)

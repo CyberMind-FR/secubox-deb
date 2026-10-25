@@ -43,6 +43,10 @@ if [ "$1" = curl ]; then
   done
   exit 22
 fi
+if [ "$1" = pg_isready ]; then
+  echo "$*" >> "${FAKE_URLS_FILE:-/dev/null}"
+  exit "${FAKE_PG_READY:-0}"
+fi
 if [ "$1" = systemctl ] && [ "$2" = is-active ]; then
   IFS=, read -ra paires <<< "${FAKE_IS_ACTIVE:-}"
   for p in "${paires[@]}"; do
@@ -59,6 +63,8 @@ exit 0
     _ecrire_exec(bin_dir / "lxc-start", "#!/bin/bash\nexit 0\n")
     _ecrire_exec(bin_dir / "lxc-stop", "#!/bin/bash\nexit 0\n")
     _ecrire_exec(bin_dir / "curl", "#!/bin/bash\nexit 7\n")
+    # Faux systemctl de l'hôte : journalise son argv dans <tmp>/systemctl-appels.
+    _ecrire_exec(bin_dir / "systemctl", f'#!/bin/bash\necho "$*" >> "{tmp_path}/systemctl-appels"\nexit 0\n')
     # Faux nft : journalise son argv (sans le nom du programme) dans <tmp>/nft-appels. « list table »
     # réussit seulement si un « -f » a réussi avant (marqueur nft-table-vivante, retiré par « delete table »).
     code_nft = 0 if nft_ok else 1
@@ -142,3 +148,15 @@ def run_ctl(tmp_path, *args, **kw):
 @pytest.fixture
 def lire_json():
     return json.loads
+
+
+def fonction_bash(texte: str, nom: str) -> str:
+    """Le texte de la fonction bash `nom() {` … `}` (accolade fermante seule en début de ligne)."""
+    debut = texte.index(f"\n{nom}() {{") + 1
+    return texte[debut:texte.index("\n}\n", debut) + 3]
+
+
+def script_interne(texte: str) -> str:
+    """Le script exécuté DANS le conteneur (heredoc INNER d'install-lxc.sh)."""
+    debut = texte.index("<<'INNER'\n") + len("<<'INNER'\n")
+    return texte[debut:texte.index("\nINNER\n", debut) + 1]

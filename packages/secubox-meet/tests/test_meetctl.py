@@ -5,7 +5,7 @@
 """meetctl — contrat du contrôleur confiné de secubox-meet (#3154)."""
 import json
 
-from conftest import run_ctl, run_ctl_rc
+from conftest import _ecrire_exec, run_ctl, run_ctl_rc
 
 
 def test_status_rapporte_les_cinq_services_separement(tmp_path):
@@ -18,7 +18,7 @@ def test_status_rapporte_les_cinq_services_separement(tmp_path):
 
 def test_status_domaines_et_adresse(tmp_path):
     d = json.loads(run_ctl(tmp_path, "status"))
-    assert d["module"] == "meet" and d["version"] == "0.1.0" and d["installed"] is True
+    assert d["module"] == "meet" and d["version"] == "0.1.1" and d["installed"] is True
     assert d["domain"] == "visio.exemple.test" and d["livekit_domain"] == "livekit.exemple.test"
     assert d["lxc_ip"] == "10.100.0.195" and d["web_reachable"] is False
 
@@ -190,3 +190,121 @@ def test_oidc_verifier_redirect_registered_suit_le_fournisseur(tmp_path):
     (tmp_path / "appels").unlink()
     d = json.loads(run_ctl(tmp_path, "oidc-verifier", attach_curl={"openid-configuration": DISCOVERY, "jwks": JWKS}))
     assert d["redirect_registered"] is False
+
+
+# ── m4 : l'état de postgresql vient de pg_isready, pas de l'unité parapluie ─────────────────────────
+
+def test_status_postgresql_par_pg_isready(tmp_path):
+    d = json.loads(run_ctl(tmp_path, "status", is_active={"postgresql": "active"}, env_extra={"FAKE_PG_READY": "2"}))
+    assert d["services"]["postgresql"] == "failed"
+    d = json.loads(run_ctl(tmp_path, "status", is_active={"postgresql": "inactive"}, env_extra={"FAKE_PG_READY": "0"}))
+    assert d["services"]["postgresql"] == "active"
+    assert "pg_isready -q" in (tmp_path / "urls").read_text()
+
+
+# ── I3 : autostart on|off, seule la clé lxc.start.auto change ──────────────────────────────────────
+
+CONFIG_LXC = ("# SecuBox-managed - voir secubox-meet / install-lxc.sh\nlxc.uts.name = meet\n"
+              "# lxc.start.auto = 1 (exemple commenté)\nlxc.start.auto = 1\nlxc.start.delay = 5\n")
+
+
+def _config_lxc(tmp_path, texte=CONFIG_LXC):
+    c = tmp_path / "lxc" / "meet" / "config"
+    c.parent.mkdir(parents=True, exist_ok=True)
+    c.write_text(texte)
+    c.chmod(0o640)
+    return c
+
+
+def test_autostart_off_puis_on_ne_change_que_cette_cle(tmp_path):
+    c = _config_lxc(tmp_path)
+    assert json.loads(run_ctl(tmp_path, "autostart", "off")) == {"success": True, "autostart": False}
+    assert c.read_text() == CONFIG_LXC.replace("\nlxc.start.auto = 1\n", "\nlxc.start.auto = 0\n")
+    assert c.stat().st_mode & 0o777 == 0o640
+    assert json.loads(run_ctl(tmp_path, "autostart", "on")) == {"success": True, "autostart": True}
+    assert c.read_text() == CONFIG_LXC
+
+
+def test_autostart_pose_la_cle_absente(tmp_path):
+    c = _config_lxc(tmp_path, "lxc.uts.name = meet\n")
+    run_ctl(tmp_path, "autostart", "off")
+    assert c.read_text() == "lxc.uts.name = meet\nlxc.start.auto = 0\n"
+
+
+def test_autostart_refuse_une_valeur_inconnue(tmp_path):
+    c = _config_lxc(tmp_path)
+    rc, out = run_ctl_rc(tmp_path, "autostart", "peut-etre")
+    assert rc == 2 and json.loads(out)["success"] is False and c.read_text() == CONFIG_LXC
+
+
+def test_autostart_sans_conteneur(tmp_path):
+    rc, out = run_ctl_rc(tmp_path, "autostart", "off", rootfs=False)
+    assert rc == 1 and json.loads(out)["success"] is False
+
+
+# ── I2 : un NOUVEAU secret OIDC est porté jusqu'au conteneur (rendu seul) ──────────────────────────
+
+def _install_faux(tmp_path, provisionne=True):
+    """Faux install-lxc.sh : journalise son mode ; comme le vrai, note l'empreinte du secret appliqué s'il réussit."""
+    if provisionne:
+        (tmp_path / "etat").mkdir(exist_ok=True)
+        (tmp_path / "etat" / ".lxc-provisioned").write_text("2026-10-25\n")
+    faux = tmp_path / "install-faux.sh"
+    secrets = tmp_path / "secrets"
+    _ecrire_exec(faux, f"""#!/bin/bash
+echo "RENDRE_SEULEMENT=${{SECUBOX_MEET_RENDRE_SEULEMENT:-}}" >> "{tmp_path}/install-appels"
+[ "${{FAKE_INSTALL_RC:-0}}" = 0 ] || exit "$FAKE_INSTALL_RC"
+printf '%s' "$(cat "{secrets}/oidc-client-secret")" | sha256sum | cut -d' ' -f1 > "{secrets}/.oidc-applique"
+""")
+    return {"SECUBOX_MEET_INSTALL_SCRIPT": str(faux)}
+
+
+def _appels_install(tmp_path):
+    f = tmp_path / "install-appels"
+    return f.read_text().splitlines() if f.exists() else []
+
+
+def test_oidc_nouveau_secret_applique_au_conteneur_qui_tourne(tmp_path):
+    env = _install_faux(tmp_path)
+    out = run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="S3CR3T", env_extra=env)
+    d = json.loads(out)
+    assert d["success"] is True and d["applique"] is True and "S3CR3T" not in out
+    assert _appels_install(tmp_path) == ["RENDRE_SEULEMENT=1"]
+
+
+def test_oidc_secret_inchange_et_applique_n_appelle_pas_le_rendu(tmp_path):
+    env = _install_faux(tmp_path)
+    run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="A", env_extra=env)
+    d = json.loads(run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="B", env_extra=env))
+    assert d["already"] is True and "applique" not in d
+    assert _appels_install(tmp_path) == ["RENDRE_SEULEMENT=1"]
+
+
+def test_oidc_conteneur_arrete_le_dit_puis_applique_au_clic_suivant(tmp_path):
+    env = _install_faux(tmp_path)
+    d = json.loads(run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="A", lxc_state="STOPPED", env_extra=env))
+    assert d["success"] is True and d["applique"] is False and "arrêt" in d["hint"]
+    assert _appels_install(tmp_path) == []
+    d = json.loads(run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="B", lxc_state="RUNNING", env_extra=env))
+    assert d["already"] is True and d["applique"] is True
+    assert _appels_install(tmp_path) == ["RENDRE_SEULEMENT=1"]
+
+
+def test_oidc_sans_provisionnement_termine_n_applique_pas(tmp_path):
+    env = _install_faux(tmp_path, provisionne=False)
+    d = json.loads(run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="A", env_extra=env))
+    assert d["applique"] is False and "provisionnement" in d["hint"] and _appels_install(tmp_path) == []
+
+
+def test_oidc_appele_par_le_provisionnement_ne_relance_pas_le_rendu(tmp_path):
+    env = {**_install_faux(tmp_path), "SECUBOX_MEET_APPLIQUER": "0"}
+    d = json.loads(run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="A", env_extra=env))
+    assert d["success"] is True and d["applique"] is False and _appels_install(tmp_path) == []
+
+
+def test_oidc_rendu_en_echec_est_signale(tmp_path):
+    env = {**_install_faux(tmp_path), "FAKE_INSTALL_RC": "1"}
+    rc, out = run_ctl_rc(tmp_path, "oidc-enregistrer", oidcctl_secret="A", env_extra=env)
+    d = json.loads(out)
+    assert rc == 0 and d["success"] is True and d["applique"] is False and "journalctl" in d["hint"]
+    assert not (tmp_path / "secrets" / ".oidc-applique").exists()
