@@ -21,6 +21,9 @@ CACHE_PATH = Path("/var/lib/secubox/annuaire/services-pairs.json")
 VERSION = 1
 MAX_PAIRS = 32
 MAX_SERVICES = 64
+# Politique de domaine (#3146) : un pair ne fait afficher que des liens sous <un libellé>.<parent>. Liste blanche facultative.
+PARENTS = ("secubox.in",)
+BLANCHE_PATH = Path("/etc/secubox/annuaire/domaines-pairs.txt")
 
 _HOTE = re.compile(r"[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?")
 _LIBELLE = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")
@@ -58,8 +61,28 @@ def _domaine(v: Any) -> str:
     return d if len(d) <= 253 and len(libelles) >= 2 and all(_LIBELLE.fullmatch(lib) for lib in libelles) else ""
 
 
-def construire(journal: Any, did_local: str) -> Dict[str, Any]:
-    """Relève dans le journal les offres `service` des autres nœuds, vérifiées contre leur domaine ddns."""
+def domaines_blancs(chemin: Path = BLANCHE_PATH) -> frozenset:
+    """Domaines supplémentaires admis (un par ligne, `#` = commentaire). Fichier absent ou illisible : aucun."""
+    try:
+        lignes = Path(chemin).read_text(encoding="utf-8").splitlines()
+    except (OSError, ValueError):
+        return frozenset()
+    return frozenset(d for d in (_domaine(ligne.split("#", 1)[0]) for ligne in lignes) if d)
+
+
+def _admis(d: str, parents: Any, blancs: Any) -> bool:
+    """`<un libellé>.<parent>` exactement (jamais un niveau de plus), ou un domaine de la liste blanche."""
+    if d in blancs:
+        return True
+    return any(d.endswith("." + p) and "." not in d[: -len(p) - 1] for p in parents)
+
+
+def construire(journal: Any, did_local: str, parents: Any = None, blancs: Any = None) -> Dict[str, Any]:
+    """Relève dans le journal les offres `service` des autres nœuds, vérifiées contre leur domaine ddns.
+
+    `parents` (défaut `PARENTS`) et `blancs` (défaut : le fichier de liste blanche) fixent les domaines admis."""
+    parents = PARENTS if parents is None else parents
+    blancs = domaines_blancs() if blancs is None else blancs
     from annuaire.verbs import _get_nodes, _get_offers  # noqa: PLC0415
     # Le ddns déclaré par un pair est hostile lui aussi : il doit être un vrai domaine (deux libellés au moins),
     # propre à ce seul DID, ni celui de la box locale (ni son parent), ni le parent ambigu du ddns d'un autre nœud.
@@ -73,6 +96,8 @@ def construire(journal: Any, did_local: str) -> Dict[str, Any]:
     for x in declares:
         n, d = x["n"], x["ddns"]
         if n["did"] == did_local:
+            continue
+        if not _admis(d, parents, blancs):
             continue
         if any(y["ddns"] == d and y["n"]["did"] != n["did"] for y in declares):
             continue

@@ -89,3 +89,9 @@ Routes relevées dans le code source, relatives au montage du module. « aucune 
 ## Tests
 
 45 fichier(s) de test. Lancer : `python3 -m pytest packages/secubox-annuaire`.
+
+## Services des pairs : domaines admis (#3146)
+
+Le cache `services-pairs.json` ne retient qu'un pair dont le domaine ddns est `<un libellé>.secubox.in`.
+Pour en admettre d'autres, lister un domaine par ligne (`#` = commentaire) dans
+`/etc/secubox/annuaire/domaines-pairs.txt` (facultatif). Le cache est reconstruit à la prochaine passe de `annuairectl pairs-cache`.

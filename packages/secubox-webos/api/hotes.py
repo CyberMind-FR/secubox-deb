@@ -51,6 +51,14 @@ def candidats(textes: Iterable[str], domaine: str) -> list[str]:
     return sorted(vus)
 
 
+def classer(noms: Iterable[str], ids: Iterable[str]) -> list[str]:
+    """Les noms dont le libellé est une carte du Hall d'abord, puis les autres ; alphabétique dans chaque groupe (#3146).
+
+    Une publication bornée (64 noms) garde ainsi les services que l'on voit dans le Hall plutôt que les premiers de l'alphabet."""
+    cartes = {str(i).lower() for i in ids if i}
+    return sorted(noms, key=lambda n: (n.split(".", 1)[0] not in cartes, n))
+
+
 def lire_sites(dossier: Path = SITES) -> list[str]:
     out = []
     try:

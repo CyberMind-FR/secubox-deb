@@ -52,7 +52,7 @@ def test_seules_les_offres_des_autres_dans_leur_domaine_sont_retenues(tmp_path):
     _svc(j, p_x, d_x, "Orphelin", "https://o.x.exemple.test")
     gone = _svc(j, p_a, d_a, "Revoquee", "https://rev.alpha.exemple.test")
     revoke_offer(j, p_a, d_a, gone.service_id)
-    r = pairs_services.construire(j, d_loc)
+    r = pairs_services.construire(j, d_loc, parents=("exemple.test",), blancs=frozenset())
     assert r["version"] == 1 and r["genere"].endswith("Z")
     assert len(r["pairs"]) == 1
     pair = r["pairs"][0]
@@ -96,7 +96,7 @@ def _noeud_libre(j, boxname, ddns, ip="10.10.0.9"):
 
 def _domaines(j, local="loc.exemple.test"):
     _p, d_loc = _noeud_libre(j, "locale", local, "10.10.0.1")
-    return [p["domaine"] for p in pairs_services.construire(j, d_loc)["pairs"]]
+    return [p["domaine"] for p in pairs_services.construire(j, d_loc, parents=("exemple.test",), blancs=frozenset())["pairs"]]
 
 
 def _avec_offre(j, boxname, ddns, ip="10.10.0.9"):
@@ -146,7 +146,7 @@ def test_mesh_ip_invalide_ou_ipv6_ecarte_et_boxname_strict(tmp_path):
     _avec_offre(j, "b", "b.exemple.test", "fd00::1")
     _avec_offre(j, "Mauvais Nom", "c.exemple.test", "10.10.0.5")
     _p, d_loc = _noeud_libre(j, "locale", "loc.exemple.test", "10.10.0.1")
-    pairs = pairs_services.construire(j, d_loc)["pairs"]
+    pairs = pairs_services.construire(j, d_loc, parents=("exemple.test",), blancs=frozenset())["pairs"]
     assert [(p["domaine"], p["boxname"], p["mesh_ip"]) for p in pairs] == [("c.exemple.test", "", "10.10.0.5")]
 
 
@@ -196,9 +196,33 @@ def test_pairs_cache_journal_corrompu_laisse_l_ancien_cache(tmp_path, monkeypatc
 
 def test_pairs_cache_succes(tmp_path, monkeypatch):
     ctl = _env(tmp_path, monkeypatch)
+    monkeypatch.setattr(pairs_services, "PARENTS", ("exemple.test",))
     j = Journal(str(tmp_path / "journal.db"))
     priv, did = _noeud_libre(j, "alpha", "alpha.exemple.test", "10.10.0.2")
     _svc(j, priv, did, "Radio", "https://radio.alpha.exemple.test")
     assert ctl.cmd_pairs_cache(None) == 0
     d = pairs_services.lire(tmp_path / "cache.json")
     assert d and d["pairs"][0]["services"][0]["nom"] == "Radio"
+
+
+def test_politique_domaine_secubox_in_par_defaut_et_liste_blanche(tmp_path):
+    j = Journal(str(tmp_path / "j.db"))
+    p_loc, d_loc = _noeud(j, "locale", "loc.secubox.in", "10.10.0.1")
+    p_a, d_a = _noeud(j, "alpha", "alpha.secubox.in", "10.10.0.2")
+    p_b, d_b = _noeud(j, "bravo", "pirate.exemple.fr", "10.10.0.3")
+    p_c, d_c = _noeud(j, "charlie", "a.b.secubox.in", "10.10.0.4")
+    p_d, d_d = _noeud(j, "delta", "ami.exemple.org", "10.10.0.5")
+    for p, d, dom in ((p_a, d_a, "alpha.secubox.in"), (p_b, d_b, "pirate.exemple.fr"),
+                      (p_c, d_c, "a.b.secubox.in"), (p_d, d_d, "ami.exemple.org")):
+        _svc(j, p, d, "Radio", "https://radio." + dom)
+    sans = pairs_services.construire(j, d_loc, blancs=frozenset())
+    assert [x["domaine"] for x in sans["pairs"]] == ["alpha.secubox.in"]       # ni autre domaine, ni deux niveaux
+    avec = pairs_services.construire(j, d_loc, blancs=frozenset({"ami.exemple.org"}))
+    assert sorted(x["domaine"] for x in avec["pairs"]) == ["alpha.secubox.in", "ami.exemple.org"]
+
+
+def test_domaines_blancs_fichier(tmp_path):
+    f = tmp_path / "b.txt"
+    f.write_text("# commentaire\nAmi.Exemple.Org  # un ami\n\nmauvais domaine\n*.joker.fr\nseul\n")
+    assert pairs_services.domaines_blancs(f) == frozenset({"ami.exemple.org"})
+    assert pairs_services.domaines_blancs(tmp_path / "absent") == frozenset()
