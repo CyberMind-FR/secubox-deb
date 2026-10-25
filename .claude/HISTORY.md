@@ -9,6 +9,22 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-25 — gk1 : disques calqués sur gk2 (SSD = données, LXC, sauvegardes)
+
+- Piège corrigé d'abord : `/data` était monté par `LABEL=data` alors que deux disques portent ce label (le SSD et une partition p3
+  inutilisée de la carte SD, qui gagnait la résolution) ; `/data` aurait pu basculer sur la SD au redémarrage. Désormais par UUID
+  du SSD, `nofail`, comme gk2.
+- Décisions du propriétaire : supprimer les 31 anciens conteneurs de `/data/lxc` (39 Go, mars 2026, hors streamlit), `docker`,
+  `containerd`, `downloads` et les anciennes données d'apps (peertube, nextcloud, localai, photoprism, gitea, lyrion, hexojs,
+  mitmproxy-in) ; agrandir la racine ; migrer tout de suite. `/data/SHARE` (744 Go, partage de 2021-2022) jamais touché.
+- Racine SD : p3 supprimée, p2 agrandie en ligne (growpart + resize2fs) : **7,2 Go à 96 % → 14,4 Go à 45 %** ; journal réduit à 200 Mo.
+- Migration (arrêt des 66 services et 59 minuteurs SecuBox, 94 s) : `/var/lib/secubox` et `/var/backups` sont des montages liés depuis
+  `/data/lib/secubox` et `/data/backups` (fstab, nofail) ; `lxc.lxcpath = /data/lxc` ; `default.conf` identique à gk2 (br-lxc,
+  idmap non privilégié) ; `backup.toml` = `/data/secubox-backups` + `/data/lxc` ; rootfs de streamlit corrigé (`/srv/lxc` → `/data/lxc`).
+  Copies de repli gardées : `/var/lib/secubox.avant-calque-*` (625 Mo) et `/var/backups.avant-calque-*`, à supprimer après vérification.
+  SSD : 96 % → 88 % (113 Go libres). Seul incident : `secubox-nac-apply` parti pendant la bascule (dossier absent), relancé.
+- Préexistant, non traité : les unités mail de gk1 échouent car le conteneur `mail` n'y existe pas ; streamlit est à l'arrêt.
+
 ## 2026-10-25 — secubox-meet : le WebSocket de LiveKit traverse HAProxy et sbxwaf (ref #3154, #3160)
 
 - Essai jetable sur gk1 (binaire arm64 1.13.10 sur /data, utilisateur nobody, vhost nginx `livekit.*`, tout retiré ensuite) : depuis Internet,
