@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-25 — Visio : conception de secubox-meet et référence du fournisseur OIDC (ref #3154, #3155)
+
+- Constat : SecuBox a déjà un fournisseur OpenID Connect (composant `oidc` de secubox-auth, code + PKCE, RS256, userinfo, JWKS),
+  actif sur gk2 (`https://hall.gk2.secubox.in/oidc`). La Suite Meet s'y branche sans Keycloak.
+- Écrit : `docs/OIDC-FOURNISSEUR.md` (référence à partager : points d'accès, revendications, enregistrement d'un client, limites) et
+  `docs/superpowers/specs/2026-10-25-visio-meet-lxc-oidc-design.md` (LXC, exposition du flux média sur décision, écarts OIDC).
+- Issues : #3154 (paquet secubox-meet), #3155 (écarts OIDC : impasse sans session, accès par client, déconnexion, courriel). Aucun code.
+
 ## 2026-10-25 — Boutique épinglée dans l'Accès rapide du Hall (closes #3152)
 
 - webos 1.20.3 : la Boutique est la première tuile de l'Accès rapide par défaut (après favoris et récents, avant la curation),
