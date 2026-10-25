@@ -9,6 +9,15 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-25 — Boutique sous boutique.<domaine>, encadrée dans le Hall (closes #3150)
+
+- appstore 0.10.1 : vhost `boutique.*` (9080) servant la page, les fiches et trois appels d'API seulement (catalog, groupes, jobs,
+  installation) ; `frame-ancestors` = Hall de la box ; le postinst active le vhost puis, `nginx -t` passé, pose la route sbxwaf et
+  le vhost HAProxy (sbxwaf_inspector). L'administration reste sur admin.<domaine>/appstore/. webos 1.20.2 : entrée « Boutique »
+  du Hall (⚙️ → administration) et sa fiche d'aide.
+- Déployé sur gk2 (PR #3151) : boutique.gk2 en 200, administration et demandes distantes en 404, installation sans session en 401,
+  Hall servant l'entrée. Reste à voir par l'usager : le cadre dans le Hall connecté (cookie SSO du domaine). gk1 non mis à jour (SSH).
+
 ## 2026-10-25 — Boutique client façon App Store, peau Aurora (closes #3148)
 
 - appstore 0.10.0 : `/appstore/boutique.html` (onglets Aujourd'hui, Apps, Fonctionnalités, Installées, fiche d'app, Obtenir/Ouvrir),
