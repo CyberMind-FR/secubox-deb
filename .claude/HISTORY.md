@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-25 — netplan : br-lxc déclaré par secubox-net-detect, gk1 réparé (closes #3162)
+
+- Constat en préparant le déploiement de secubox-meet (#3154) : sur gk1, `br-lxc` existait sans adresse (networkd « unmanaged ») ;
+  son netplan, généré par `secubox-net-detect`, ne déclarait pas le pont, alors que celui de gk2 (écrit à la main) le déclare.
+- secubox-netmodes 1.3.4 (PR #3163) : `generate_netplan` déclare toujours `br-lxc` (10.100.0.1/24, sans membre, optional) dans
+  tous les modes ; validé par `netplan generate` ; 4 nouveaux tests.
+- gk1 en direct : même bloc ajouté à `/etc/netplan/00-secubox.yaml` (copie `/root/00-secubox.yaml.avant-3162.*`), puis
+  `netplan generate`, `networkctl reload` et `reconfigure br-lxc` seulement (pas de `netplan apply` à distance) : `br-lxc`
+  configured, 10.100.0.1/24 ; WAN intact. Paquet publié et installé sur gk1 et gk2 (il ne régénère pas le netplan).
+
 ## 2026-10-25 — gk1 : disques calqués sur gk2 (SSD = données, LXC, sauvegardes)
 
 - Piège corrigé d'abord : `/data` était monté par `LABEL=data` alors que deux disques portent ce label (le SSD et une partition p3
