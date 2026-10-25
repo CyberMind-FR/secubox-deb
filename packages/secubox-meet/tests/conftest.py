@@ -17,7 +17,7 @@ def _ecrire_exec(chemin: Path, contenu: str) -> None:
     chemin.chmod(0o755)
 
 
-def _env_ctl(tmp_path: Path, lxc_state="RUNNING", is_active=None, rootfs=True) -> dict:
+def _env_ctl(tmp_path: Path, lxc_state="RUNNING", is_active=None, rootfs=True, domaine=None) -> dict:
     """Prépare le faux PATH et l'arbre de fichiers ; renvoie l'environnement du ctl."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
@@ -35,7 +35,11 @@ done
 if [ "$1" = systemctl ] && [ "$2" = is-active ]; then
   IFS=, read -ra paires <<< "${FAKE_IS_ACTIVE:-}"
   for p in "${paires[@]}"; do
-    [ "${p%%=*}" = "$3" ] && { echo "${p#*=}"; exit 0; }
+    if [ "${p%%=*}" = "$3" ]; then
+      etat="${p#*=}"; echo "$etat"
+      # Comme le vrai systemctl : code 3 pour tout état différent de « active ».
+      [ "$etat" = active ] && exit 0 || exit 3
+    fi
   done
   echo active
 fi
@@ -45,7 +49,11 @@ exit 0
     _ecrire_exec(bin_dir / "lxc-stop", "#!/bin/bash\nexit 0\n")
     _ecrire_exec(bin_dir / "curl", "#!/bin/bash\nexit 7\n")
     _ecrire_exec(bin_dir / "nft", "#!/bin/bash\nexit 1\n")
-    _ecrire_exec(bin_dir / "secubox-domaine", '#!/bin/bash\necho "$1.exemple.test"\n')
+    if domaine is None:
+        _ecrire_exec(bin_dir / "secubox-domaine", '#!/bin/bash\necho "$1.exemple.test"\n')
+    else:  # sortie brute imposée (caractères de contrôle compris)
+        (tmp_path / "domaine.txt").write_text(domaine)
+        _ecrire_exec(bin_dir / "secubox-domaine", f'#!/bin/bash\ncat "{tmp_path}/domaine.txt"\n')
     lxc_path = tmp_path / "lxc"
     if rootfs:
         (lxc_path / "meet" / "rootfs").mkdir(parents=True, exist_ok=True)

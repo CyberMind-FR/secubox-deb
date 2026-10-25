@@ -64,6 +64,9 @@ json_escape() {
     local s="$1"
     s="${s//\\/\\\\}"
     s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
     printf '%s' "$s"
 }
 
@@ -80,8 +83,13 @@ lxc_exists() { [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; }
 unit_state() {
     local unit="$1"
     [ "$(lxc_state)" = "running" ] || { printf 'container-down'; return; }
-    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
-        systemctl is-active "$unit" 2>/dev/null | head -1 || printf 'unknown'
+    # `systemctl is-active` sort en 3 pour inactive/failed : on garde la sortie
+    # malgré le code (pas de pipeline : pipefail y ajouterait « unknown »).
+    local out
+    out=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        systemctl is-active "$unit" 2>/dev/null || true)
+    out="${out%%$'\n'*}"
+    printf '%s' "${out:-unknown}"
 }
 
 # ── status ───────────────────────────────────────────────────────────────────

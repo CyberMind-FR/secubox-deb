@@ -69,3 +69,11 @@ def test_aide_et_verbe_inconnu(tmp_path):
     assert rc == 0 and "meetctl" in out
     rc, _ = run_ctl_rc(tmp_path, "nimportequoi")
     assert rc == 1
+
+
+def test_status_reste_du_json_valide_avec_des_caracteres_de_controle(tmp_path):
+    # Valeurs venant du TOML ou de secubox-domaine : tabulation, CR, saut de ligne, antislash (config_get retire les guillemets).
+    (tmp_path / "meet.toml").write_bytes(b'lxc_name = "meet"\nlxc_ip = "10.100.0.195"\ndomain = "a\tb\rc\\d"\n')
+    d = json.loads(run_ctl(tmp_path, "status", domaine="x\ny\tz"))
+    assert d["domain"] == "a\tb\rc\\d"
+    assert d["livekit_domain"] == "x\ny\tz"
