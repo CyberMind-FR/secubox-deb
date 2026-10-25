@@ -193,6 +193,80 @@ cmd_install() {
     fi
 }
 
+# ── OIDC ─────────────────────────────────────────────────────────────────────
+#
+# Meet est un client du fournisseur OIDC de la box (secubox-oidcctl). Le secret
+# n'est imprimé qu'UNE fois par client-add : on le capte et on l'écrit tout de
+# suite en 0600, sans jamais le répéter (ni sur stdout, ni en argv, ni au journal).
+readonly OIDC_SECRET_FILE="$SECRETS_DIR/oidc-client-secret"
+
+cmd_oidc_enregistrer() {
+    local renouveler=false
+    [ "${1:-}" = "--renouveler" ] && renouveler=true
+    if [ -f "$OIDC_SECRET_FILE" ] && [ "$renouveler" = false ]; then
+        echo '{"success": true, "already": true}'
+        return 0
+    fi
+    if [ -z "$DOMAIN" ]; then
+        echo '{"success": false, "error": "domaine de la box inconnu"}'
+        return 1
+    fi
+    # Adresse de rappel enregistrée EXACTEMENT, barre finale comprise.
+    local redirect="https://${DOMAIN}/api/v1.0/callback/" secret tmp
+    if ! secret=$(secubox-oidcctl client-add meet --name Visio --redirect "$redirect" 2>/dev/null) \
+            || [ -z "$secret" ]; then
+        echo '{"success": false, "error": "secubox-oidcctl client-add a échoué"}'
+        return 1
+    fi
+    install -d -m 0700 "$SECRETS_DIR"
+    tmp=$(umask 077; mktemp "$SECRETS_DIR/.oidc-client-secret.XXXXXX")
+    printf '%s\n' "$secret" > "$tmp"
+    chmod 0600 "$tmp"
+    mv -f "$tmp" "$OIDC_SECRET_FILE"
+    secret=""
+    printf '{"success": true, "client_id": "meet", "redirect_uri": "%s"}\n' "$(json_escape "$redirect")"
+}
+
+# Interroge le fournisseur DEPUIS le conteneur : c'est son chemin réseau (DNS,
+# NAT en épingle) qui compte, pas celui de l'hôte.
+cmd_oidc_verifier() {
+    local issuer="https://hall.${DOMAIN#*.}/oidc"
+    local discovery=false jwks=false keys=0 hint="" doc="" jwks_uri="" body="" parsed
+    local registered=false
+    [ -f "$OIDC_SECRET_FILE" ] && registered=true
+    local cible="le conteneur ne joint pas hall.${DOMAIN#*.} : vérifier la résolution DNS/NAT en épingle ; en dernier recours, une entrée /etc/hosts dans le conteneur vers l'adresse LAN du HAProxy qui sert ce nom"
+
+    if [ "$(lxc_state)" != "running" ]; then
+        hint="conteneur à l'arrêt : le démarrer (meetctl start) avant de vérifier"
+    elif doc=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+            curl -fsS --max-time 10 "${issuer}/.well-known/openid-configuration" 2>/dev/null) \
+            && parsed=$(printf '%s' "$doc" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print(d.get("issuer", ""))
+print(d.get("jwks_uri", ""))' 2>/dev/null); then
+        discovery=true
+        issuer=$(printf '%s\n' "$parsed" | sed -n 1p)
+        jwks_uri=$(printf '%s\n' "$parsed" | sed -n 2p)
+        if [ -n "$jwks_uri" ] && body=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+                curl -fsS --max-time 10 "$jwks_uri" 2>/dev/null) \
+                && keys=$(printf '%s' "$body" | python3 -c '
+import json, sys
+print(len(json.load(sys.stdin)["keys"]))' 2>/dev/null); then
+            [ "$keys" -gt 0 ] && jwks=true
+        else
+            keys=0
+        fi
+        [ "$jwks" = true ] || hint="découverte lue mais clés JWKS illisibles ou absentes (jwks_uri : ${jwks_uri:-vide}) : ${cible}"
+    else
+        hint="$cible"
+    fi
+
+    printf '{"issuer": "%s", "discovery": %s, "jwks": %s, "keys": %s, "redirect_registered": %s, "hint": "%s"}\n' \
+        "$(json_escape "$issuer")" "$discovery" "$jwks" "$keys" "$registered" "$(json_escape "$hint")"
+    [ "$discovery" = true ]
+}
+
 cmd_help() {
     cat <<EOF
 meetctl v$VERSION — La Suite Meet (LXC-native)
@@ -200,6 +274,9 @@ meetctl v$VERSION — La Suite Meet (LXC-native)
   status                    État conteneur + les 5 services, séparément (JSON)
   install                   Provisionne le conteneur (idempotent, long)
   start | stop | restart    Cycle de vie du conteneur
+  oidc-enregistrer [--renouveler]
+                            Enregistre le client OIDC « meet » (secret 0600, jamais imprimé)
+  oidc-verifier             Lit la découverte OIDC depuis le conteneur (JSON, code 1 si KO)
   logs <unité> [lignes]     Journal d'un service interne
                             (postgresql|redis-server|livekit|meet-backend|nginx)
   help                      Cette aide
@@ -212,6 +289,8 @@ case "${1:-help}" in
     start)            cmd_start ;;
     stop)             cmd_stop ;;
     restart)          cmd_restart ;;
+    oidc-enregistrer) cmd_oidc_enregistrer "${2:-}" ;;
+    oidc-verifier)    cmd_oidc_verifier ;;
     logs)             cmd_logs "${2:-}" "${3:-}" ;;
     help|--help|-h)   cmd_help ;;
     *)                cmd_help; exit 1 ;;

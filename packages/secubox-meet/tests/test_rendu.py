@@ -107,3 +107,32 @@ def test_meetctl_install_delegue_au_script(tmp_path):
     _ecrire_exec(ok, "#!/bin/bash\nexit 4\n")
     r = subprocess.run(["bash", str(RACINE / "sbin" / "meetctl"), "install"], capture_output=True, text=True, env=env)
     assert r.returncode == 1 and r.stdout.strip() == '{"success": false}'
+
+
+def test_secret_oidc_enregistre_avant_le_rendu(tmp_path):
+    """Avec un meetctl simulé qui pose le secret, le rendu le porte dans meet.env."""
+    faux = tmp_path / "meetctl-faux"
+    secrets = tmp_path / "secrets"
+    _ecrire_exec(faux, f'#!/bin/bash\necho "$*" >> "{tmp_path}/appels-meetctl"\nprintf "%s\\n" "OIDC-S3CR3T" > "{secrets}/oidc-client-secret"\necho \'{{"success":true}}\'\n')
+    env = _env_ctl(tmp_path)
+    _ecrire_exec(tmp_path / "bin" / "lxc-create", "#!/bin/bash\nexit 0\n")
+    env["SECUBOX_MEET_DRY_RUN"] = str(tmp_path / "rendu")
+    env["SECUBOX_MEET_VERSION_FILE"] = str(RACINE / "conf" / "meet.version")
+    env["SECUBOX_MEETCTL"] = str(faux)
+    r = subprocess.run(["bash", str(INSTALL)], capture_output=True, text=True, env=env, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert (tmp_path / "appels-meetctl").read_text().strip() == "oidc-enregistrer"
+    assert "OIDC_RP_CLIENT_SECRET=OIDC-S3CR3T" in (tmp_path / "rendu" / "meet.env").read_text()
+    assert "OIDC-S3CR3T" not in r.stdout + r.stderr
+
+
+def test_echec_de_l_enregistrement_arrete_le_provisionnement(tmp_path):
+    faux = tmp_path / "meetctl-faux"
+    _ecrire_exec(faux, "#!/bin/bash\nexit 1\n")
+    env = _env_ctl(tmp_path)
+    _ecrire_exec(tmp_path / "bin" / "lxc-create", "#!/bin/bash\nexit 0\n")
+    env["SECUBOX_MEET_DRY_RUN"] = str(tmp_path / "rendu")
+    env["SECUBOX_MEET_VERSION_FILE"] = str(RACINE / "conf" / "meet.version")
+    env["SECUBOX_MEETCTL"] = str(faux)
+    r = subprocess.run(["bash", str(INSTALL)], capture_output=True, text=True, env=env, timeout=60)
+    assert r.returncode == 1 and "OIDC" in r.stderr and not (tmp_path / "rendu").exists()

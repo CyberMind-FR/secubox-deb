@@ -17,7 +17,8 @@ def _ecrire_exec(chemin: Path, contenu: str) -> None:
     chemin.chmod(0o755)
 
 
-def _env_ctl(tmp_path: Path, lxc_state="RUNNING", is_active=None, rootfs=True, domaine=None) -> dict:
+def _env_ctl(tmp_path: Path, lxc_state="RUNNING", is_active=None, rootfs=True, domaine=None,
+             attach_curl=None, oidcctl_secret=None) -> dict:
     """Prépare le faux PATH et l'arbre de fichiers ; renvoie l'environnement du ctl."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
@@ -32,6 +33,15 @@ while [ $# -gt 0 ]; do
     *) shift ;;
   esac
 done
+if [ "$1" = curl ]; then
+  # Faux curl du conteneur : <clé> est cherchée dans l'URL, la réponse vient de FAKE_ATTACH_CURL_DIR/<clé>.
+  for cle in openid-configuration jwks; do
+    case "$*" in
+      *"$cle"*) [ -f "${FAKE_ATTACH_CURL_DIR:-/nonexistent}/$cle" ] && { cat "$FAKE_ATTACH_CURL_DIR/$cle"; exit 0; } ;;
+    esac
+  done
+  exit 22
+fi
 if [ "$1" = systemctl ] && [ "$2" = is-active ]; then
   IFS=, read -ra paires <<< "${FAKE_IS_ACTIVE:-}"
   for p in "${paires[@]}"; do
@@ -54,6 +64,19 @@ exit 0
     else:  # sortie brute imposée (caractères de contrôle compris)
         (tmp_path / "domaine.txt").write_text(domaine)
         _ecrire_exec(bin_dir / "secubox-domaine", f'#!/bin/bash\ncat "{tmp_path}/domaine.txt"\n')
+    # Réponses du faux curl du conteneur : un fichier par clé (openid-configuration, jwks).
+    reponses = tmp_path / "attach_curl"
+    reponses.mkdir(exist_ok=True)
+    for ancien in reponses.iterdir():  # un appel = ses seules réponses
+        ancien.unlink()
+    for cle, corps in (attach_curl or {}).items():
+        (reponses / cle).write_text(corps)
+    # Faux secubox-oidcctl : secret sur stdout, argv ajouté à <tmp>/appels ; échec si aucun secret.
+    _ecrire_exec(bin_dir / "secubox-oidcctl", f"""#!/bin/bash
+echo "$*" >> "{tmp_path}/appels"
+[ -n "${{FAKE_OIDCCTL_SECRET:-}}" ] || exit 1
+echo "$FAKE_OIDCCTL_SECRET"
+""")
     lxc_path = tmp_path / "lxc"
     if rootfs:
         (lxc_path / "meet" / "rootfs").mkdir(parents=True, exist_ok=True)
@@ -72,6 +95,8 @@ exit 0
         "SECUBOX_MEET_SECRETS_DIR": str(secrets),
         "SECUBOX_MEET_NFT_SRC": str(tmp_path / "meet.nft"),
         "SECUBOX_MEET_NFT_DST": str(tmp_path / "nftables.d" / "secubox-meet-dnat.nft"),
+        "FAKE_ATTACH_CURL_DIR": str(reponses),
+        "FAKE_OIDCCTL_SECRET": oidcctl_secret or "",
         "FAKE_IS_ACTIVE": ",".join(f"{u}={e}" for u, e in (is_active or {}).items()),
     }
 

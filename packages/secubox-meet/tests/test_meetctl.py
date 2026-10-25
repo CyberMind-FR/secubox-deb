@@ -77,3 +77,70 @@ def test_status_reste_du_json_valide_avec_des_caracteres_de_controle(tmp_path):
     d = json.loads(run_ctl(tmp_path, "status", domaine="x\ny\tz"))
     assert d["domain"] == "a\tb\rc\\d"
     assert d["livekit_domain"] == "x\ny\tz"
+
+
+DISCOVERY = json.dumps({"issuer": "https://hall.exemple.test/oidc", "jwks_uri": "https://hall.exemple.test/oidc/jwks"})
+JWKS = json.dumps({"keys": [{"kty": "RSA", "kid": "k1", "n": "abc", "e": "AQAB"}]})
+REDIRECT = "https://visio.exemple.test/api/v1.0/callback/"
+
+
+def test_oidc_enregistrer_ecrit_le_secret_0600_et_ne_l_imprime_pas(tmp_path):
+    out = run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="S3CR3T")
+    assert "S3CR3T" not in out and json.loads(out)["redirect_uri"] == REDIRECT
+    assert json.loads(out)["client_id"] == "meet" and json.loads(out)["success"] is True
+    f = tmp_path / "secrets" / "oidc-client-secret"
+    assert f.read_text().strip() == "S3CR3T" and oct(f.stat().st_mode & 0o777) == "0o600"
+    assert (tmp_path / "appels").read_text().split("\n")[0] == f"client-add meet --name Visio --redirect {REDIRECT}"
+    assert not list((tmp_path / "secrets").glob("*.tmp*"))
+
+
+def test_oidc_enregistrer_est_idempotent(tmp_path):
+    run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="A")
+    d = json.loads(run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="B"))
+    assert d["already"] is True and (tmp_path / "secrets" / "oidc-client-secret").read_text().strip() == "A"
+    assert len((tmp_path / "appels").read_text().splitlines()) == 1
+
+
+def test_oidc_enregistrer_renouveler_reenregistre(tmp_path):
+    run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="A")
+    out = run_ctl(tmp_path, "oidc-enregistrer", "--renouveler", oidcctl_secret="B")
+    assert "already" not in json.loads(out) and "B" not in out.replace("success", "")
+    assert (tmp_path / "secrets" / "oidc-client-secret").read_text().strip() == "B"
+
+
+def test_oidc_enregistrer_echec_ne_laisse_pas_de_fichier(tmp_path):
+    rc, out = run_ctl_rc(tmp_path, "oidc-enregistrer")
+    assert rc == 1 and json.loads(out)["success"] is False
+    assert not (tmp_path / "secrets" / "oidc-client-secret").exists()
+
+
+def test_oidc_enregistrer_sans_domaine_refuse(tmp_path):
+    rc, out = run_ctl_rc(tmp_path, "oidc-enregistrer", domaine="", oidcctl_secret="X")
+    assert rc == 1 and json.loads(out)["success"] is False
+    assert not (tmp_path / "appels").exists()
+
+
+def test_oidc_verifier_depuis_le_conteneur(tmp_path):
+    d = json.loads(run_ctl(tmp_path, "oidc-verifier", attach_curl={"openid-configuration": DISCOVERY, "jwks": JWKS}))
+    assert d["discovery"] and d["jwks"] and d["keys"] == 1 and d["issuer"] == "https://hall.exemple.test/oidc"
+    assert d["redirect_registered"] is False and d["hint"] == ""
+    rc, out = run_ctl_rc(tmp_path, "oidc-verifier", attach_curl={})
+    assert rc == 1 and json.loads(out)["discovery"] is False and "hosts" in json.loads(out)["hint"]
+
+
+def test_oidc_verifier_ne_fuit_pas_le_secret_et_signale_l_enregistrement(tmp_path):
+    run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="S3CR3T")
+    out = run_ctl(tmp_path, "oidc-verifier", attach_curl={"openid-configuration": DISCOVERY, "jwks": JWKS})
+    assert "S3CR3T" not in out and json.loads(out)["redirect_registered"] is True
+
+
+def test_oidc_verifier_jwks_en_echec(tmp_path):
+    rc, out = run_ctl_rc(tmp_path, "oidc-verifier", attach_curl={"openid-configuration": DISCOVERY})
+    d = json.loads(out)
+    assert rc == 0 and d["discovery"] is True and d["jwks"] is False and d["keys"] == 0 and d["hint"]
+
+
+def test_oidc_verifier_conteneur_arrete(tmp_path):
+    rc, out = run_ctl_rc(tmp_path, "oidc-verifier", lxc_state="STOPPED")
+    d = json.loads(out)
+    assert rc == 1 and d["discovery"] is False and "arrêt" in d["hint"]

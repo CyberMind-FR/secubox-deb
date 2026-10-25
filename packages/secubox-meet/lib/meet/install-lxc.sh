@@ -85,11 +85,23 @@ secret() {
     cat "$f"
 }
 
+# Client OIDC : enregistré par meetctl (même hôte) AVANT le rendu, pour que
+# meet.env porte le secret dès la première passe. Un échec arrête tout. En essai
+# à blanc, seul un SECUBOX_MEETCTL explicite (faux des tests) est appelé : le
+# vrai secubox-oidcctl exige root et le fournisseur de la box.
+enregistrer_client_oidc() {
+    [ -s "$SECRETS_DIR/oidc-client-secret" ] && return 0
+    [ -n "$DRY_RUN" ] && [ -z "${SECUBOX_MEETCTL:-}" ] && return 0
+    log "Enregistrement du client OIDC « meet » ..."
+    "${SECUBOX_MEETCTL:-/usr/sbin/meetctl}" oidc-enregistrer >/dev/null \
+        || fail "enregistrement du client OIDC impossible (meetctl oidc-enregistrer)"
+}
+
 preparer_secrets() {
     DJANGO_SECRET_KEY="$(secret django-secret 50)"
     DB_PASSWORD="$(secret db-password 32)"
     LIVEKIT_SECRET="$(secret livekit-secret 32)"
-    # Posé plus tard par `meetctl oidc` ; absent = rendu avec une valeur vide.
+    enregistrer_client_oidc
     OIDC_CLIENT_SECRET=""
     [ -s "$SECRETS_DIR/oidc-client-secret" ] && OIDC_CLIENT_SECRET="$(cat "$SECRETS_DIR/oidc-client-secret")"
     # Émetteur OIDC = le Hall de la box : domaine de Meet sans son premier nom.
