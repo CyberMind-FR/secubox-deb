@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-25 — secubox-meet : provisionnement abouti sur gk1 (ref #3154)
+
+- 0.1.4 (PR #3169) : drop-in `PrivateUsers=no` pour redis-server dans le conteneur (217/USER en LXC non privilégié).
+- 0.1.5 (PR #3170) : `meet.env` pose `DJANGO_DATA_DIR` ; django-configurations préfixe ce réglage, `DATA_DIR` seul était
+  ignoré et collectstatic écrivait dans `/data`. Retrait de `MEET_BASE_URL` et `LIVEKIT_INTERNAL_URL` (non lus par Meet 1.34).
+- 0.1.6 (PR #3171) : la relance compare au dernier état **appliqué** (`/etc/meet/.photo-appliquee`, notée après la relance).
+  Une passe interrompue entre la pose des fichiers et la relance laissait nginx du conteneur sur le site Debian par défaut
+  (404 sur `/api/`). meetctl et l'API annonçaient 0.1.1 : versions liées au changelog par un test.
+- gk1 : 5 services actifs, `meetctl oidc-verifier` OK (émetteur `hall.gk1…/oidc`, JWKS, redirection enregistrée) ; par le chemin
+  public : visio 200, `/api/v1.0/config/` 200, `users/me` 401, authenticate → authorize (PKCE S256) → `login.html` du Hall ;
+  `livekit.gk1` 200, WebSocket `/rtc` sans jeton → 401 de LiveKit (la montée traverse HAProxy et sbxwaf).
+- Reste : connexion réelle avec un compte SecuBox, ouverture des ports média (décision dans `/meet/`), essai à deux.
+
 ## 2026-10-25 — gk1 : Unbound en boucle, ancre DNSSEC vide (closes #3167)
 
 - Constat : sur gk1, `unbound` redémarrait sans fin (5 388 fois, « failed to read /var/lib/unbound/root.key ») : le fichier

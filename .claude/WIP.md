@@ -173,6 +173,9 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
+000000. **#3154 Visio (La Suite Meet) sur gk1 (2026-10-25)** : secubox-meet 0.1.6 provisionné, chemin public et OIDC vérifiés
+  (`HISTORY.md`). Reste, avec le propriétaire : connexion par compte SecuBox sur `visio.gk1.secubox.in`, ouverture des ports
+  média 7881/TCP 7882/UDP depuis `/meet/` (relais par gk2), essai à deux participants ; puis `closes #3154`.
 00000. **#2940 secubox-pseudo-routeur, essai réel sur gk2 (2026-10-19)** : source fusionnée (PR #2945), pas encore installée. Hors heures d'usage du foyer : installer le paquet (la sonde ne démarre pas seule), `POST /activer` depuis une session administrateur (refuse sans sonde active), vérifier `GET /etat`, observer 10-15 min, puis couper `pseudo-routeur-sonde.service` à la main pour vérifier le retour automatique à la Freebox sous 3 minutes. secubox-freebox monté à 0.6.0 (passerelle DHCP, import des appareils) — à déployer avec.
 0000. **ESPRESSObin (2026-10-16)** : #2853 l'agent Auto-Load ne doit plus rejouer ses réponses (priorité : protège la box du client) ; #2854 support SSH posé par l'enrôlement ; #2844 publication WAN automatique + recopie du PEM au renouvellement ; alléger `minimal` (agrégateur 70 Mo, minuteurs fréquents, swap 930/950).
 000. **Suites des vues d'ensemble (2026-10-11)** : « Appareils principaux » de Guardian sur 7 jours alors que les tuiles sont du jour (libellé ou période) et ligne à 0 % dans les catégories ; sélecteur de période 1h/6h/24h/7j de SBXWAF (l'API n'expose que le jour et l'historique par jour) ; formulaire de connexion direct au lieu du lien « Se connecter » ; les cinq plus petits écarts de l'audit Actor Intelligence (définitions des compteurs dans l'API, faux positifs par règle, états « proposé » et « annulé » des actions, source de géolocalisation, mode global) ; baseline par appareil (gros chantier, absent).
