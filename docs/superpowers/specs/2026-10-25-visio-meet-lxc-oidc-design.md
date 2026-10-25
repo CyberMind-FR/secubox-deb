@@ -129,9 +129,18 @@ l'essai le demande.
 - Plage UDP de LiveKit et choix TURN intégré ou externe.
 - Mémoire cible du conteneur et plafond de participants.
 
-## À décider par le propriétaire
+## Décisions du propriétaire (2026-10-25)
 
-1. **Qui peut utiliser la visio ?** Toute personne de la box (comportement actuel) ou un rôle (écart 2).
-2. **Ouverture des ports média :** automatique après confirmation dans la Boutique, ou toujours manuelle comme pour Jitsi.
-3. **Partager avec d'autres boxes plus tard :** garder « un émetteur par box » ou concevoir la fédération d'identité par
-   l'annuaire (projet à part).
+1. **Qui peut utiliser la visio :** toute personne de la box, **invités compris** (rôle `guest` : une invitation crée une personne, donc
+   le fournisseur l'authentifie déjà). Pas de restriction par défaut ; la politique par client (écart 2) reste une option.
+   *Précision de mon fait :* Meet lui-même laisse un participant sans compte rejoindre une salle par son lien ; l'OIDC ne sert qu'à
+   créer et gérer des salles.
+2. **Ports média :** ouverts **après confirmation dans la Boutique** (jamais par `apt install`, comme Jitsi).
+3. **Fédération d'identité entre boxes :** voulue ; projet à part, issue #3157. Les écarts du fournisseur sont conçus pour ne pas
+   l'empêcher : l'émetteur reste lu en configuration et le `sub` reste l'identifiant stable de la personne.
+
+## Avancement
+
+- Écart 1 (#3155) : fait, avec les tests (renvoi vers la connexion avec retour, pas de boucle pour une session sans personne).
+- Écart 5 : à traiter avec `meetctl` (test de découverte et de JWKS depuis le conteneur).
+- Écarts 2, 3 et 4 : à faire quand Meet demande ce qu'il lui faut ; le 2 est facultatif d'après la décision 1.

@@ -75,6 +75,12 @@ secubox-oidcctl client-rm visio
 `--app APP` relie le client à un compte d'application SBX ID pour `preferred_username`. Le registre est
 `/etc/secubox/oidc/clients.json` (identifiants `[a-z0-9][a-z0-9_-]{1,40}`).
 
+## Qui entre
+
+Toute personne SBX ID authentifiée, **invités compris** (rôle `guest` : une invitation crée une personne, donc une identité).
+Un compte système ou un appareil non rattaché n'entre pas. Une restriction par rôle ou capacité, par client, est prévue
+(#3155, écart 2) ; sans elle, le comportement est celui-ci.
+
 ## Brancher une application (valeurs à saisir côté application)
 
 | Réglage | Valeur |
@@ -96,8 +102,9 @@ Application derrière Django (`mozilla-django-oidc`, c'est le cas de La Suite Me
 
 À connaître avant de partager ce fournisseur avec d'autres (suivi : #3155) :
 
-1. **Sans session, impasse.** `/authorize` affiche une page qui demande de se connecter au Hall puis de réessayer ; il ne renvoie
-   pas vers la connexion avec retour automatique.
+1. ~~Sans session, impasse.~~ **Corrigé (#3155).** Sans session, `/authorize` renvoie vers `/login.html?redirect=/oidc/authorize?…`
+   et la personne revient seule sur sa demande. Une session valide sans personne rattachée (compte système, appareil non rattaché)
+   reçoit une page explicative (403) au lieu de tourner en rond.
 2. **Aucune politique d'accès par client.** Toute personne authentifiée de la box obtient un compte dans toute application
    enregistrée.
 3. **Ni déconnexion ni rafraîchissement.** Pas de `end_session_endpoint`, pas de `refresh_token`. Se déconnecter de l'application
