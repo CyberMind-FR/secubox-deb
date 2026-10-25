@@ -308,6 +308,12 @@ construire() {
     apt-get install -y --no-install-recommends \
         postgresql redis-server nginx python3 python3-venv nodejs npm git \
         ca-certificates curl libmagic1 libpango-1.0-0 gettext
+    # L'unité Debian de redis-server porte PrivateUsers=true : refusé dans un conteneur LXC non privilégié
+    # (« Failed to set up user namespacing », 217/USER, gk1). LiveKit et le cache de Meet en dépendent.
+    install -d -m 0755 /etc/systemd/system/redis-server.service.d
+    printf '[Service]\nPrivateUsers=no\n' > /etc/systemd/system/redis-server.service.d/10-secubox-lxc.conf
+    systemctl daemon-reload
+    systemctl reset-failed redis-server 2>/dev/null || true
 
     id meet >/dev/null 2>&1 || useradd --system --home-dir /var/lib/meet --shell /usr/sbin/nologin meet
     id livekit >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin livekit

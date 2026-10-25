@@ -387,3 +387,14 @@ def test_installation_pose_le_reseau_avant_le_demarrage():
     f = f[:f.index("\n}\n")]
     assert "rootfs/etc/systemd/network" in f and "/eth0.network" in f and "100000:100000" in f
     assert "networkctl reload" in f and "networkctl reconfigure eth0" in f   # conteneur déjà démarré (reprise)
+
+
+def test_redis_sans_espace_de_noms_utilisateur_dans_le_conteneur():
+    # gk1, 2026-10-25 : l'unité Debian de redis-server porte PrivateUsers=true, refusé dans un LXC non privilégié
+    # (« Failed to set up user namespacing », 217/USER) ; LiveKit et le cache de Meet en dépendent.
+    s = (Path(__file__).resolve().parents[1] / "lib" / "meet" / "install-lxc.sh").read_text()
+    c = s[s.index("\nconstruire() {"):]
+    c = c[:c.index("\n}\n")]
+    assert "redis-server.service.d/10-secubox-lxc.conf" in c and "PrivateUsers=no" in c
+    assert c.index("apt-get install") < c.index("PrivateUsers=no") < len(c)
+    assert "systemctl daemon-reload" in c[c.index("PrivateUsers=no"):]
