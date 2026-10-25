@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-25 — Boutique épinglée dans l'Accès rapide du Hall (closes #3152)
+
+- webos 1.20.3 : la Boutique est la première tuile de l'Accès rapide par défaut (après favoris et récents, avant la curation),
+  icône de grille, statut du module appstore. Déployé sur gk2 (PR #3153), vérifié au navigateur : `boutique` en tête des tuiles.
+
 ## 2026-10-25 — Boutique sous boutique.<domaine>, encadrée dans le Hall (closes #3150)
 
 - appstore 0.10.1 : vhost `boutique.*` (9080) servant la page, les fiches et trois appels d'API seulement (catalog, groupes, jobs,
