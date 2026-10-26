@@ -502,6 +502,25 @@ def _origine_et_type(entry: dict) -> tuple:
     return "waf", "http"
 
 
+def _heure_utc(ts) -> Optional[str]:
+    """Clé horaire UTC (« 2026-10-26T06 ») d'un horodatage du journal ; un horodatage sans fuseau est en heure locale (#3176)."""
+    try:
+        d = datetime.fromisoformat(str(ts))
+    except ValueError:
+        return None
+    if d.tzinfo is None:
+        d = d.astimezone()
+    return d.astimezone(timezone.utc).strftime("%Y-%m-%dT%H")
+
+
+def _fenetre_24h(par_heure) -> dict:
+    """Menaces bloquées sur les 24 dernières heures, à l'heure près (#3176), et la série horaire (24 valeurs, la plus récente à droite)."""
+    maintenant = datetime.now(timezone.utc)
+    cles = [(maintenant - timedelta(hours=h)).strftime("%Y-%m-%dT%H") for h in range(23, -1, -1)]
+    serie = [int(par_heure.get(k, 0)) for k in cles]
+    return {"menaces_24h": sum(serie), "hourly_blocks": serie}
+
+
 def _get_threat_stats() -> dict:
     """Get threat statistics from log with GeoIP country lookup.
 
@@ -548,6 +567,9 @@ def _get_threat_stats() -> dict:
             efficacite[_cat][_a] = int(_n or 0)
     comptes_vises = defaultdict(int, counters.get("comptes_vises", {}))
     leurres_touches = defaultdict(int, counters.get("leurres_touches", {}))
+    # #3176 : menaces bloquées PAR HEURE (UTC). blocked_24h valait total_threats — le journal depuis sa rotation, pas 24 h. Ces compteurs
+    # survivent à la rotation (le fichier tourné n'est jamais relu, donc rien n'est compté deux fois) ; seule une reprise complète les vide.
+    par_heure = defaultdict(int, counters.get("par_heure", {}))
     total_threats = counters.get("total_threats", 0)
     threats_today = state.get("threats_today", 0)
     # detect-mode matches: seen and logged but NOT blocked — kept apart from the
@@ -561,12 +583,12 @@ def _get_threat_stats() -> dict:
     log_path = Path(THREATS_LOG)
     if not log_path.exists():
         # Return whatever's cached.
-        return _finalize_stats(
+        return {**_finalize_stats(
             total_threats, threats_today, by_category, by_severity,
             top_ips, top_countries, top_vhosts, ip_countries,
             observed_threats, observed_today, noms_non_routes,
             par_origine, par_type, comptes_vises, leurres_touches, efficacite,
-        )
+        ), **_fenetre_24h(par_heure)}
 
     geoip_reader = _get_geoip_reader()
     try:
@@ -581,11 +603,13 @@ def _get_threat_stats() -> dict:
         # de quoi les anciens seraient comptés deux fois.
         if ("noms_non_routes" not in counters or "par_origine" not in counters
                 or "comptes_vises" not in counters
-                or "efficacite" not in counters):
+                or "efficacite" not in counters
+                or "par_heure" not in counters):
             by_category.clear(); by_severity.clear(); top_ips.clear()
             top_countries.clear(); top_vhosts.clear(); noms_non_routes.clear()
             par_origine.clear(); par_type.clear()
             comptes_vises.clear(); leurres_touches.clear(); efficacite.clear()
+            par_heure.clear()
             ip_countries.clear()
             total_threats = 0
             observed_threats = 0
@@ -632,6 +656,9 @@ def _get_threat_stats() -> dict:
 
                         if entry.get("timestamp", "").startswith(today):
                             threats_today += 1
+                        _h = _heure_utc(entry.get("timestamp", ""))
+                        if _h:
+                            par_heure[_h] += 1
 
                         by_category[entry.get("category", "unknown")] += 1
                         by_severity[entry.get("severity", "unknown")] += 1
@@ -680,6 +707,10 @@ def _get_threat_stats() -> dict:
             sorted(ip_countries.items(), key=lambda kv: -top_ips.get(kv[0], 0))[:1000]
         )
 
+    # Deux jours d'heures suffisent à la fenêtre de 24 h : le reste est oublié, le cache ne grossit pas.
+    _seuil = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%dT%H")
+    par_heure = defaultdict(int, {k: n for k, n in par_heure.items() if k >= _seuil})
+
     # Persist before returning so the next call starts from here.
     _save_stats_disk_cache({
         "today_iso": today,
@@ -700,17 +731,18 @@ def _get_threat_stats() -> dict:
             "comptes_vises": dict(comptes_vises),
             "leurres_touches": dict(leurres_touches),
             "efficacite": {c: dict(a) for c, a in efficacite.items()},
+            "par_heure": dict(par_heure),
         },
         "ip_countries": ip_countries,
         "last_updated": int(time.time()),
     })
 
-    return _finalize_stats(
+    return {**_finalize_stats(
         total_threats, threats_today, by_category, by_severity,
         top_ips, top_countries, top_vhosts, ip_countries,
         observed_threats, observed_today, noms_non_routes,
         par_origine, par_type, comptes_vises, leurres_touches, efficacite,
-    )
+    ), **_fenetre_24h(par_heure)}
 
 
 def _finalize_stats(
@@ -803,7 +835,8 @@ def _decorate_dashboard_stats(stats: dict) -> dict:
     stats["version"] = "1.2.0"
     stats["rules_loaded"] = sum(len(p) for p in _compiled_patterns.values())
     stats["blocked_today"] = stats.get("threats_today", 0)
-    stats["blocked_24h"] = stats.get("total_threats", 0)
+    # #3176 : 24 dernières heures (compteurs horaires), et non plus le journal depuis sa rotation. Repli : un relevé sans fenêtre (cache ancien).
+    stats["blocked_24h"] = stats.get("menaces_24h", stats.get("total_threats", 0))
 
     cats = stats.get("by_category", {})
     stats["categories_list"] = [
