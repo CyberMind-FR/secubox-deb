@@ -147,6 +147,9 @@ def test_unite_api_apres_les_dependances_et_sans_bytecode():
 
 def test_unite_lan_dhcp_root_confinee():
     u = unite("debian/secubox-lan-dhcp.service")
+    # relecture finale I7 : Type=exec, `systemctl restart` échoue si l'exec échoue ; le contrôleur vérifie ensuite que
+    # dnsmasq reste actif (refus AppArmor, port pris : sinon l'application serait déclarée réussie)
+    assert u["Type"] == ["exec"]
     assert u["ExecStart"] == ["/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/var/lib/secubox-netmodes/lan-dhcp.conf"
                               " --pid-file="]
     assert CHEMINS["dhcp"] == "/var/lib/secubox-netmodes/lan-dhcp.conf"   # le fichier rendu est bien celui-là

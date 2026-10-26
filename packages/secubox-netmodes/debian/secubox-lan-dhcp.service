@@ -12,7 +12,9 @@ Description=SecuBox — DHCP du LAN (dnsmasq, mode routeur)
 After=systemd-networkd.service
 
 [Service]
-Type=simple
+# exec : `systemctl restart` échoue si l'exec échoue ; netmodesctl vérifie ensuite que dnsmasq reste actif (refus
+# AppArmor, port 67 pris : sans cela il bouclerait en silence et l'application serait déclarée réussie).
+Type=exec
 ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/var/lib/secubox-netmodes/lan-dhcp.conf --pid-file=
 # br-lan pas encore monté : dnsmasq (bind-interfaces) sort en erreur, on retente.
 Restart=on-failure

@@ -61,6 +61,9 @@ AUDIT = "/var/log/secubox/audit.log"
 NETMODESCTL = "/usr/sbin/netmodesctl"
 MINUTEUR = "secubox-netmodes-retour"
 DELAI_RETOUR = 180
+DHCP = "secubox-lan-dhcp.service"
+RELEVES_DHCP = 6                                            # relevés `is-active` après la relance du DHCP…
+PAUSE_DHCP = 1.0                                            # … espacés d'une seconde : 5 s au plus
 PREFIXE_TEMPORAIRE = "sbx-lan-temporaire"
 ADRESSE_GESTION = IPv4Address("192.168.255.1")              # HAProxy :9443 et TURN y écoutent
 ACTEUR = re.compile(r"[A-Za-z0-9._@-]{1,64}")
@@ -95,6 +98,7 @@ class Contexte:
     racine: Path
     executer: Callable[[list[str]], subprocess.CompletedProcess]
     maintenant: Callable[[], datetime]
+    attendre: Callable[[float], None]                       # pause entre deux relevés (faux en test : rien n'attend)
 
 
 def executer_systeme(argv: list[str]) -> subprocess.CompletedProcess:
@@ -107,7 +111,7 @@ def executer_systeme(argv: list[str]) -> subprocess.CompletedProcess:
 
 
 def contexte_systeme() -> Contexte:
-    return Contexte(Path("/"), executer_systeme, lambda: datetime.now(timezone.utc))
+    return Contexte(Path("/"), executer_systeme, lambda: datetime.now(timezone.utc), time.sleep)
 
 
 # --- outils --------------------------------------------------------------------------------------------------------------
@@ -150,6 +154,21 @@ def _exiger(ctx: Contexte, argv: list[str]) -> subprocess.CompletedProcess:
 
 def _actif(ctx: Contexte, unite: str) -> bool:
     return ctx.executer(["systemctl", "is-active", "--quiet", unite]).returncode == 0
+
+
+def _attendre_dhcp_actif(ctx: Contexte) -> None:
+    """Type=exec : `systemctl restart` rend la main dès l'exec de dnsmasq, qui peut encore échouer (refus AppArmor,
+    port 67 pris) puis boucler en auto-restart sans bruit. Il doit être vu actif à deux relevés consécutifs, à
+    PAUSE_DHCP d'écart, dans les RELEVES_DHCP relevés : sinon c'est un échec d'étape."""
+    suite = 0
+    for i in range(RELEVES_DHCP):
+        if i:
+            ctx.attendre(PAUSE_DHCP)
+        suite = suite + 1 if _actif(ctx, DHCP) else 0
+        if suite == 2:
+            return
+    raise Echec(f"{DHCP} n'est pas resté actif après sa relance ({(RELEVES_DHCP - 1) * PAUSE_DHCP:g} s) : dnsmasq "
+                f"refusé (AppArmor ?) ou port 67 déjà pris ; voir journalctl -u {DHCP}")
 
 
 def _verifier_acteur(acteur) -> None:
@@ -387,7 +406,7 @@ def etat(ctx: Contexte) -> dict:
         sortie["etat"], sortie["erreur"] = "config_invalide", erreur
     sortie["config"] = config
     sortie["minuteur_actif"] = _actif(ctx, f"{MINUTEUR}.timer")
-    sortie["dhcp_actif"] = _actif(ctx, "secubox-lan-dhcp.service")
+    sortie["dhcp_actif"] = _actif(ctx, DHCP)
     sortie["adresses_pont"] = [str(a) for a in _adresses_pont(ctx)]
     return sortie
 
@@ -526,8 +545,9 @@ def _basculer(ctx: Contexte, cfg: ConfigRouteur, geo: bool, unbound_change: bool
     if unbound_change:                                                           # 10 : nouvelle écoute
         with _verrou_unbound(ctx):
             _exiger(ctx, ["systemctl", "restart", "unbound.service"])
-    _exiger(ctx, ["systemctl", "enable", "secubox-lan-dhcp.service"])            # 11
-    _exiger(ctx, ["systemctl", "restart", "secubox-lan-dhcp.service"])
+    _exiger(ctx, ["systemctl", "enable", DHCP])                                  # 11
+    _exiger(ctx, ["systemctl", "restart", DHCP])
+    _attendre_dhcp_actif(ctx)
     if geo:                                                                      # 12
         _exiger(ctx, ["systemctl", "reload", "nginx.service"])
     ctx.executer(["systemctl", "stop", f"{MINUTEUR}.timer"])                     # 13 : code ignoré (souvent absent)
@@ -666,9 +686,11 @@ def _sans_attente(bloquer: bool) -> list[str]:
 
 def _retour_dhcp(ctx: Contexte, bloquer: bool = True) -> None:
     if _p(ctx, CHEMINS["dhcp"]).is_file():
-        _exiger(ctx, ["systemctl", "restart", *_sans_attente(bloquer), "secubox-lan-dhcp.service"])
+        _exiger(ctx, ["systemctl", "restart", *_sans_attente(bloquer), DHCP])
+        if bloquer:                                         # au démarrage il part après nous : rien à attendre
+            _attendre_dhcp_actif(ctx)
     else:                                                   # un arrêt n'attend jamais un démarrage ordonné après lui
-        _exiger(ctx, ["systemctl", "disable", "--now", "secubox-lan-dhcp.service"])
+        _exiger(ctx, ["systemctl", "disable", "--now", DHCP])
 
 
 def _recharger_nginx(ctx: Contexte, bloquer: bool = True) -> None:

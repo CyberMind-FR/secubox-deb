@@ -82,6 +82,10 @@ class Faux:
         self.echecs: dict[tuple, list] = {}
         self.crochets: dict[tuple, object] = {}
         self.etats: list = []                           # état du fichier d'état au moment de chaque commande
+        self.pauses: list[float] = []                   # ctx.attendre : rien n'attend vraiment
+
+    def attendre(self, secondes: float) -> None:
+        self.pauses.append(secondes)
 
     def echouer(self, *prefixe, code=1, fois=None, erreur="échec simulé"):
         self.echecs[prefixe] = [code, fois, erreur]
@@ -252,7 +256,7 @@ def faux(racine):
 
 @pytest.fixture
 def ctx(racine, faux):
-    return rc.Contexte(racine=racine, executer=faux, maintenant=Horloge())
+    return rc.Contexte(racine=racine, executer=faux, maintenant=Horloge(), attendre=faux.attendre)
 
 
 @pytest.fixture
@@ -262,7 +266,7 @@ def neuf(tmp_path):
     f = Faux(r, pont_existant=False)
     f.actifs.discard("sbx-lan-dhcp.service")
     f.regles = [r_ for r_ in f.regles if not r_.get("comment", "").startswith("sbx-lan")]
-    return r, f, rc.Contexte(racine=r, executer=f, maintenant=Horloge())
+    return r, f, rc.Contexte(racine=r, executer=f, maintenant=Horloge(), attendre=f.attendre)
 
 
 def instantane(r: Path) -> dict:
@@ -329,6 +333,8 @@ def test_ordre_des_etapes(ctx, faux, racine):
         ["systemctl", "restart", "unbound.service"],                                   # 10
         ["systemctl", "enable", "secubox-lan-dhcp.service"],                           # 11
         ["systemctl", "restart", "secubox-lan-dhcp.service"],
+        ["systemctl", "is-active", "--quiet", "secubox-lan-dhcp.service"],             # Type=exec : resté actif
+        ["systemctl", "is-active", "--quiet", "secubox-lan-dhcp.service"],
         ["systemctl", "reload", "nginx.service"],                                      # 12
         ["systemctl", "stop", "secubox-netmodes-retour.timer"],                        # 13
         ["systemd-run", "--unit=secubox-netmodes-retour", "--on-active=180", "--collect", "--description=…",
@@ -337,6 +343,7 @@ def test_ordre_des_etapes(ctx, faux, racine):
         ["systemctl", "is-active", "--quiet", "secubox-lan-dhcp.service"],
         ["ip", "-j", "-4", "addr", "show", "dev", "br-lan"],
     ]
+    assert faux.pauses == [rc.PAUSE_DHCP]                                          # deux relevés, une pause
     # garde armée dès la première écriture (I1) : rien pendant les refus, « en_attente » dès la validation
     i = faux.journal.index(["nft", "-c", "-f", nft])
     assert faux.etats[:i] == [None] * i
@@ -1025,11 +1032,11 @@ def test_cli_exception_inattendue_code_1(cli, ctx, racine, faux, capsys, monkeyp
 def test_horloge_en_retard_sur_les_sauvegardes(racine, faux):
     futur = Horloge()
     futur.t = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    ctx_futur = rc.Contexte(racine=racine, executer=faux, maintenant=futur)
+    ctx_futur = rc.Contexte(racine=racine, executer=faux, maintenant=futur, attendre=faux.attendre)
     for _ in range(4):
         rc.appliquer(ctx_futur, CFG42, "admin")
         rc.confirmer(ctx_futur, "admin")
-    ctx = rc.Contexte(racine=racine, executer=faux, maintenant=Horloge())        # horloge remise en 2026
+    ctx = rc.Contexte(racine=racine, executer=faux, maintenant=Horloge(), attendre=faux.attendre)   # horloge en 2026
     sortie = rc.appliquer(ctx, CFG50, "admin")
     nom = sortie["sauvegarde"]
     assert nom.startswith("2026") and (racine / SAUVEGARDES / nom).is_dir()
@@ -1165,6 +1172,7 @@ def _deux_applications_dont_la_seconde_en_attente(ctx, faux):
     rc.confirmer(ctx, "admin")
     rc.appliquer(ctx, CFG50, "admin")                       # en attente : la sauvegarde contient le DHCP de CFG42
     faux.journal.clear()
+    faux.pauses.clear()
 
 
 def test_retour_au_demarrage_ne_bloque_pas_sur_le_dhcp_ni_nginx(ctx, racine, faux):
@@ -1179,6 +1187,7 @@ def test_retour_au_demarrage_ne_bloque_pas_sur_le_dhcp_ni_nginx(ctx, racine, fau
     assert not any(a[:2] in (["systemctl", "restart"], ["systemctl", "reload"]) and "--no-block" not in a
                    and a[-1] in ("secubox-lan-dhcp.service", "nginx.service") for a in faux.journal)
     assert "192.168.42.1" in (racine / CHEMINS["dhcp"].lstrip("/")).read_text()
+    assert faux.pauses == []                                                    # rien n'attend une unité ordonnée après
 
 
 @pytest.mark.parametrize("acteur", ["admin", "minuteur"])
@@ -1189,6 +1198,8 @@ def test_retour_hors_demarrage_attend_les_relances(ctx, faux, acteur):
     assert ["systemctl", "restart", "secubox-lan-dhcp.service"] in faux.journal
     assert ["systemctl", "reload", "nginx.service"] in faux.journal
     assert not any("--no-block" in a for a in faux.journal)
+    i = faux.journal.index(["systemctl", "restart", "secubox-lan-dhcp.service"])   # resté actif, vérifié
+    assert faux.journal[i + 1:i + 3] == [["systemctl", "is-active", "--quiet", "secubox-lan-dhcp.service"]] * 2
 
 
 # --- relecture finale : I1 TOML édité à la main avec un octet non UTF-8 ---------------------------------------------------
@@ -1345,3 +1356,59 @@ def test_unbound_inchange_echec_de_bascule_sans_redemarrage(ctx, racine, faux):
         rc.appliquer(ctx, dict(CFG42, bail="30m"), "admin")
     assert ("retour", "echec") in [(a["action"], a["acteur"]) for a in audits(racine)]
     assert REDEMARRER_UNBOUND not in faux.journal
+
+
+# --- relecture finale : I7 dnsmasq doit rester actif après sa relance (Type=exec) ----------------------------------------
+
+EST_ACTIF_DHCP = ("systemctl", "is-active", "--quiet", "secubox-lan-dhcp.service")
+
+
+def test_dhcp_jamais_actif_echec_et_retour(ctx, racine, faux):
+    """Refus AppArmor ou port 67 pris : dnsmasq boucle en auto-restart, `restart` a pourtant rendu 0. Échec d'étape,
+    retour automatique, aucun minuteur armé."""
+    faux.echouer(*EST_ACTIF_DHCP, code=3, erreur="")
+    with pytest.raises(rc.Echec, match="secubox-lan-dhcp.service n'est pas resté actif"):
+        rc.appliquer(ctx, CFG42, "admin")
+    assert faux.pauses == [rc.PAUSE_DHCP] * (rc.RELEVES_DHCP - 1)
+    assert sum(faux.pauses) <= 5.0
+    actions = [(a["action"], a["acteur"]) for a in audits(racine)]
+    assert ("appliquer-echec", "admin") in actions and ("retour", "echec") in actions
+    assert etat_fichier(racine)["etat"] == "inactif"
+    assert (racine / "etc/systemd/network/10-br-lan.network").read_text() == ANCIEN_PONT
+    assert not any("--unit=secubox-netmodes-retour" in a for a in faux.journal)
+
+
+def test_dhcp_actif_puis_tombe(ctx, racine, faux):
+    """Vu actif juste après l'exec, puis mort (auto-restart) : un seul relevé ne suffit pas."""
+    vus = []
+
+    def meurt_apres_le_premier_releve(argv):
+        vus.append(argv)
+        if len(vus) == 2:
+            faux.actifs.discard("secubox-lan-dhcp.service")
+
+    faux.sur(*EST_ACTIF_DHCP, fonction=meurt_apres_le_premier_releve)
+    with pytest.raises(rc.Echec, match="secubox-lan-dhcp.service n'est pas resté actif"):
+        rc.appliquer(ctx, CFG42, "admin")
+    assert ("retour", "echec") in [(a["action"], a["acteur"]) for a in audits(racine)]
+    assert etat_fichier(racine)["etat"] == "inactif"
+
+
+def test_dhcp_actif_en_retard_accepte(ctx, racine, faux):
+    faux.echouer(*EST_ACTIF_DHCP, code=3, fois=2, erreur="")                 # « activating » deux relevés durant
+    sortie = rc.appliquer(ctx, CFG42, "admin")
+    assert sortie["etat"] == "en_attente"
+    assert faux.pauses == [rc.PAUSE_DHCP] * 3
+    assert "retour" not in [a["action"] for a in audits(racine)]
+
+
+def test_retour_dhcp_jamais_actif_retour_incomplet(ctx, racine, faux):
+    """Hors démarrage, un DHCP restauré qui ne reste pas actif rend le retour incomplet (signalé, pas tu)."""
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    rc.appliquer(ctx, CFG50, "admin")
+    faux.echouer(*EST_ACTIF_DHCP, code=3, erreur="")
+    with pytest.raises(rc.Echec, match="retour incomplet : DHCP : secubox-lan-dhcp.service n'est pas resté actif"):
+        rc.retour(ctx, "admin")
+    assert "192.168.42.1/24" in (racine / TOML).read_text()                     # la restauration a eu lieu
+    assert etat_fichier(racine)["etat"] == "actif"

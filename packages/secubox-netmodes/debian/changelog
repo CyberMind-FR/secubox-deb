@@ -31,6 +31,10 @@ secubox-netmodes (1.4.0-1~trixie1) trixie; urgency=medium
     (le supprimer puis recharger networkd reconfigurerait le WAN).
   * Relecture finale (ref #3189) : Unbound n'est redémarré (coupure du DNS de toute la box) que si son drop-in change,
     à l'application (ancien contenu contre rendu) comme au retour (actuel contre restauré) ; audité.
+  * Relecture finale (ref #3189) : secubox-lan-dhcp.service en Type=exec ; après sa relance, netmodesctl exige
+    dnsmasq actif à deux relevés consécutifs (systemctl is-active, 5 s au plus). Un refus AppArmor ou un port 67 pris
+    est un échec d'étape (retour automatique à l'application, retour incomplet signalé sinon), plus un succès déclaré
+    pendant que dnsmasq boucle en silence ; au démarrage, rien n'est attendu (--no-block).
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 14:00:00 +0100
 
