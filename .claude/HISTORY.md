@@ -9,6 +9,25 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-26 — Réseau, livraison 1 : mode routeur durable MOCHAbin déployé sur gk2 (ref #3189)
+
+- **Livré** (PR #3197) : secubox-core 1.7.16 (`lo` 192.168.255.1/32, `00-lo.network` corrigé, copie `.avant-3189`), secubox-hub
+  1.12.29 (géo `$lan_client` inclut `secubox-lan-geo.d/netmodes-lan.conf`), secubox-aggregator 0.4.11 (netmodes à socket
+  dédiée, relais 200 s), secubox-netmodes 1.4.0 (contrôleur `netmodesctl`, API `/routeur/*`, utilisateur dédié, AppArmor API
+  et dnsmasq, retour au démarrage). 10 tâches relues une à une, relecture finale + une vague de corrections.
+- **gk2** : `br-lan` 192.168.42.1/24 (lan0..lan3), DHCP `secubox-lan-dhcp` (.100–.199, 12 h, DNS = la box), Unbound écoute
+  le pont, NAT du seul LAN, rien de neuf du WAN vers le LAN, LAN de confiance pour nginx. Confirmé 15:19. PC sur lan0 :
+  DNS et Internet par le LAN. `eth2` jamais touché. LAN temporaire repris (bail du PC conservé, règles `sbx-lan-temporaire-*`
+  retirées).
+- **Deux défauts du premier vrai déploiement** (contournés à la main, audités ; corrigés en 1.4.1, en relecture) :
+  1. Unbound redémarre en 2,5 à 4 min sur gk2 ; le délai de 120 s par commande coupait le client `systemctl` → échec déclaré
+     à tort, retour, LAN perdu. Contournement : drop-in Unbound posé et Unbound redémarré avant l'application.
+  2. `networkctl reconfigure br-lan` après `reload` → « Failed to create netdev: File exists », ports bloqués en
+     `configuring`. Contournement : `ip link delete br-lan` + `networkctl reload`.
+- **Restent** : 1.4.1 (test du retour automatique), gk1 en pilote (192.168.43.1/24, retirer d'abord `br-lan` de son netplan),
+  essai de redémarrage de gk2, gk4 à renouveler (ancien bail 192.168.255.191). Suites : panneau (#3190), routage inter-LAN
+  par le maillage (#3196).
+
 ## 2026-10-26 — WAF : signalisation LiveKit de la Visio exemptée de credential_harvest (ref #3193)
 
 - **Symptôme** : « wall.gk2.net inaccessible depuis internet », sans erreur ni réponse. Seul l'iPhone du propriétaire (Free,
