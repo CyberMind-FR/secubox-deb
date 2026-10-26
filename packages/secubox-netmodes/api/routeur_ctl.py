@@ -273,6 +273,30 @@ def _network_de_br_lan(texte: str) -> bool:
     return False
 
 
+def _match_br_lan_seul(texte: str) -> bool:
+    """[Match] réduit à une seule ligne `Name=br-lan` : mettre ce fichier de côté (puis `networkctl reload`) ne touche
+    aucune autre interface. `Name=br-lan eth2`, un joker, une seconde ligne ou une autre clé ne le sont pas."""
+    section, cles = None, []
+    for brute in texte.splitlines():
+        ligne = brute.strip()
+        if not ligne or ligne[0] in "#;":
+            continue
+        if ligne.startswith("[") and ligne.endswith("]"):
+            section = ligne[1:-1].strip()
+        elif section == "Match":
+            cle, _, valeur = ligne.partition("=")
+            cles.append((cle.strip(), valeur.strip()))
+    return cles == [("Name", "br-lan")]
+
+
+def _refus_ancien_pont(texte: str) -> Refus | None:
+    if _match_br_lan_seul(texte):
+        return None
+    return Refus(f"{ANCIEN_PONT} ne vise pas br-lan seul ([Match] attendu : la seule ligne Name=br-lan) : le mettre de "
+                 "côté puis recharger networkd reconfigurerait d'autres interfaces, le WAN compris ; le corriger ou "
+                 "le retirer d'abord")
+
+
 def _pont_declare(ctx: Contexte) -> bool:
     for dossier in DOSSIERS_NETWORKD:
         d = _p(ctx, dossier)
@@ -384,8 +408,20 @@ def _verifier_inclusion_nft(ctx: Contexte) -> None:
                     "(base de secubox-hardening) d'abord")
 
 
+def _verifier_ancien_pont(ctx: Contexte) -> None:
+    try:
+        contenu = fichiers.lire(_p(ctx, ANCIEN_PONT))
+    except OSError as exc:
+        raise Refus(f"{ANCIEN_PONT} illisible ({exc.__class__.__name__}) : impossible de vérifier qu'il ne vise que "
+                    "br-lan ; le corriger d'abord") from exc
+    refus = _refus_ancien_pont(contenu.decode("utf-8", "replace")) if contenu is not None else None
+    if refus is not None:
+        raise refus
+
+
 def _refus_prealables(ctx: Contexte, liens: dict[str, list[IPv4Interface]]) -> None:
     _verifier_inclusion_nft(ctx)
+    _verifier_ancien_pont(ctx)
     for f in sorted(_p(ctx, NETPLAN).glob("*.yaml")):
         try:
             doc = yaml.safe_load(f.read_text(encoding="utf-8"))
@@ -427,7 +463,10 @@ def _poser(ctx: Contexte, cfg: ConfigRouteur, rendu: dict[str, str], geo: bool) 
     fichiers.ecrire(_p(ctx, TOML), en_toml(cfg), 0o640)
     ancien = _p(ctx, ANCIEN_PONT)
     contenu = fichiers.lire(ancien)
-    if contenu is not None and _network_de_br_lan(contenu.decode("utf-8", "replace")):
+    if contenu is not None:
+        refus = _refus_ancien_pont(contenu.decode("utf-8", "replace"))
+        if refus is not None:                               # vérifié aux refus préalables : changé depuis
+            raise refus
         ancien.unlink()                                     # sa copie est dans la sauvegarde
 
 

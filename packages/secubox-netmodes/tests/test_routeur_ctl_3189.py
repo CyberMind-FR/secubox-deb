@@ -1252,3 +1252,48 @@ def test_refus_sans_inclusion_de_nftables_d(ctx, racine, faux, contenu):
 def test_inclusion_de_nftables_d_toleree(ctx, racine, ligne):
     (racine / "etc/nftables.conf").write_text(f"flush ruleset\n{ligne}\n")
     assert rc.appliquer(ctx, CFG42, "admin")["etat"] == "en_attente"
+
+
+# --- relecture finale : I4 l'ancien 10-br-lan.network n'est mis de côté que s'il ne vise que br-lan ------------------------
+
+@pytest.mark.parametrize("texte", [
+    ANCIEN_PONT,
+    "# pont fait main\n[Match]\n  Name = br-lan  \n\n[Network]\nAddress=192.168.255.1/24\n",
+])
+def test_ancien_pont_exact_mis_de_cote(ctx, racine, texte):
+    ancien = racine / "etc/systemd/network/10-br-lan.network"
+    ancien.write_text(texte)
+    rc.appliquer(ctx, CFG42, "admin")
+    assert not ancien.exists()
+    rc.retour(ctx, "admin")
+    assert ancien.read_text() == texte
+
+
+@pytest.mark.parametrize("match", [
+    "Name=br-lan eth2",                                                        # supprimé, networkd reconfigurerait le WAN
+    "Name=eth2 br-lan",
+    "Name=br-*",
+    "Name=br-lan\nName=eth2",                                                  # deux lignes : listes concaténées
+    "Name=br-lan\nMACAddress=f0:ad:4e:27:88:9b",                               # autre clé de correspondance
+    "Name=br-lan\nType=bridge",
+    "Name=eth2",
+    "",                                                                        # [Match] vide : toutes les interfaces
+])
+def test_ancien_pont_non_exact_refuse(ctx, racine, faux, match):
+    (racine / "etc/systemd/network/10-br-lan.network").write_text(
+        f"[Match]\n{match}\n\n[Network]\nAddress=192.168.255.1/24\n")
+    instantane_et_refus(ctx, racine, "10-br-lan.network")
+    assert not any(a[0] == "networkctl" for a in faux.journal)
+
+
+def test_ancien_pont_change_apres_les_refus_prealables(ctx, racine, faux):
+    """Modifié entre les refus préalables et la pose : refus sous la garde, fichiers et état d'avant remis."""
+    ancien = racine / "etc/systemd/network/10-br-lan.network"
+    piege = "[Match]\nName=br-lan eth2\n"
+    faux.sur("ip", "-j", "-4", "addr", "show", "dev", "lo", fonction=lambda argv: ancien.write_text(piege))
+    with pytest.raises(rc.Refus, match="10-br-lan.network"):
+        rc.appliquer(ctx, CFG42, "admin")
+    assert ancien.read_text() == piege
+    assert not (racine / ETAT).exists() and not (racine / TOML).exists()
+    assert not any(a[0] == "networkctl" for a in faux.journal)
+    assert audits(racine)[-1]["action"] == "appliquer-echec"

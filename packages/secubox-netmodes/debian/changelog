@@ -26,6 +26,9 @@ secubox-netmodes (1.4.0-1~trixie1) trixie; urgency=medium
     précéder l'adresse de br-lan et refusait sinon de démarrer (DNS de toute la box).
   * Relecture finale (ref #3189) : application refusée si /etc/nftables.conf n'inclut pas /etc/nftables.d/*.nft
     (le pare-feu du LAN ne serait pas rechargé au démarrage).
+  * Relecture finale (ref #3189) : l'ancien 10-br-lan.network n'est mis de côté que si sa section [Match] se réduit
+    à la seule ligne Name=br-lan ; Name=br-lan eth2, un joker ou une autre clé de correspondance sont refusés
+    (le supprimer puis recharger networkd reconfigurerait le WAN).
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 14:00:00 +0100
 
