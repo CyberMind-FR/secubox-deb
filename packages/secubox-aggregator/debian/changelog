@@ -1,3 +1,11 @@
+secubox-aggregator (0.4.10-1~trixie1) trixie; urgency=medium
+
+  * netmodes à socket dédiée (ref #3189). Il appelle netmodesctl par sudo, ce que l'utilisateur de
+    l'agrégateur (secubox, sans sudo) ne peut pas faire : le relais transparent l'atteint désormais sur
+    /run/secubox/netmodes.sock ; le script de migration l'exclut aussi.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 10:05:00 +0100
+
 secubox-aggregator (0.4.9-1~trixie1) trixie; urgency=medium
 
   * nac à socket dédiée (ref #3178). Il tournait deux fois, monté ici ET dans
