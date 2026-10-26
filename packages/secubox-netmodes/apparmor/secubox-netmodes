@@ -57,6 +57,15 @@ profile secubox-netmodes-api {
   /etc/iproute2/** r,
   /usr/share/iproute2/** r,
 
+  # /reseau (#3190) : table de pont, sysfs, baux dnsmasq et liste des ports coupés, en lecture seule.
+  /usr/sbin/bridge ix,
+  /sys/class/net/ r,
+  /sys/class/net/** r,
+  /sys/devices/**/net/** r,
+  /var/lib/misc/dnsmasq.leases r,
+  /etc/systemd/network/ r,
+  /etc/systemd/network/04-secubox-port-*.network r,
+
   # /detect : secubox-net-detect (bash) dans son propre sous-profil, en lecture de /sys et du device tree seulement.
   /usr/sbin/secubox-net-detect Cx -> net_detect,
 

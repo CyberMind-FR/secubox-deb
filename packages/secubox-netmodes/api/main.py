@@ -21,6 +21,7 @@ from secubox_core.config import get_config
 from secubox_core.logger import get_logger
 import asyncio, subprocess, shutil, json
 from .routeur_api import router as routeur_router, est_mochabin
+from .reseau_api import router as reseau_router
 from datetime import datetime
 
 app = FastAPI(title="secubox-netmodes", version="1.0.0",
@@ -37,6 +38,7 @@ async def health_check():
 
 app.include_router(auth_router, prefix="/auth")
 app.include_router(routeur_router)
+app.include_router(reseau_router)
 
 router = APIRouter()
 log    = get_logger("netmodes")
