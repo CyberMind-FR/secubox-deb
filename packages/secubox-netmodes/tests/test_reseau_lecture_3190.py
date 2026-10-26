@@ -252,6 +252,27 @@ def test_carte_anonyme_sans_voisins_wan_admin_avec(client):
     assert "voisins" not in w and w["nb_voisins"] == 1 and "00:07:cb" not in r.text
 
 
+@pytest.mark.parametrize("payload", [{"sub": "bob"}, {"sub": "carol"}, {"sub": "dave"}, {"sub": "alice", "plafond": "user"},
+                                     {"sub": "sbx-0123456789abcdef", "profil": "admin"}],
+                         ids=["usager", "invite", "admin_desactive", "session_plafonnee", "appareil"])
+def test_lecteur_non_admin_sans_mac_ni_voisins_wan(client, payload):
+    """Relecture finale I2 : tout jeton qui n'est pas un administrateur réel reçoit la copie expurgée (des comptes)."""
+    client_sysd.update(wan_addr=WAN_ADDR, voisins_wan=VOISINS_WAN)
+    main.app.dependency_overrides[require_lecture] = lambda: dict(payload)
+    rp, rc = client.get("/reseau/ports"), client.get("/reseau/carte")
+    ports = {p["nom"]: p for p in rp.json()["ports"]}
+    assert "macs" not in ports["lan0"] and ports["lan0"]["nb_appareils"] == 1 and "d4:93:90:27:a7:dd" not in rp.text
+    w = rc.json()["carte"]["wan"]
+    assert "voisins" not in w and w["nb_voisins"] == 1 and "00:07:cb" not in rc.text
+
+
+def test_admin_reel_juge_par_le_socle():
+    fn = next(n for n in ast.parse(Path(reseau_api.__file__).read_text()).body
+              if isinstance(n, ast.FunctionDef) and n.name == "_restreint")
+    corps = ast.unparse(fn.body[-1])                     # le prédicat du socle, jamais « a un sub »
+    assert "est_admin_reel(user)" in corps and "sub" not in corps
+
+
 def test_clients_exige_require_jwt(client):
     main.app.dependency_overrides.pop(require_jwt)
     assert client.get("/reseau/clients").status_code in (401, 403)

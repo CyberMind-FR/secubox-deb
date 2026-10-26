@@ -316,6 +316,47 @@ def test_etat_admin_puis_anonyme(client, monkeypatch):
     assert "acteur" not in client.get("/routeur/etat").json() and len(s.sudo()) == 2
 
 
+# Relecture finale I2 : « avoir un `sub` » n'est pas « être administrateur ». Tout jeton que require_lecture reconnaît
+# (usager, appareil enrôlé, invité, session plafonnée, administrateur désactivé) reçoit la copie expurgée, en cache.
+LECTEURS_RESTREINTS = {
+    "usager": {"sub": "bob"},
+    "invite": {"sub": "carol"},
+    "admin_desactive": {"sub": "dave"},
+    "appareil": {"sub": "sbx-0123456789abcdef", "profil": "admin"},
+    "session_plafonnee": {"sub": "alice", "plafond": "user"},
+}
+
+
+@pytest.mark.parametrize("qui", sorted(LECTEURS_RESTREINTS))
+def test_etat_lecteur_non_admin_expurge_et_en_cache(client, monkeypatch, qui):
+    main.app.dependency_overrides[require_lecture] = lambda: dict(LECTEURS_RESTREINTS[qui])
+    s = faux(monkeypatch, [(0, ETAT)])
+    r1, r2 = client.get("/routeur/etat"), client.get("/routeur/etat")
+    assert r1.status_code == r2.status_code == 200 and r1.json() == r2.json()
+    e = r1.json()
+    assert "acteur" not in e and "sauvegarde" not in e and "alice" not in r1.text and ETAT["sauvegarde"] not in r1.text
+    assert set(e) <= set(routeur_api.CLES_RESTREINTES) and e["etat"] == "actif"
+    assert s.sudo() == [["sudo", "-n", CTL, "routeur-etat"]]                # deux lectures en < 5 s : un seul sudo root
+
+
+def test_etat_usager_puis_admin_jamais_la_copie_de_l_autre(client, monkeypatch):
+    s = faux(monkeypatch, [(0, ETAT), (0, ETAT)])
+    main.app.dependency_overrides[require_lecture] = lambda: {"sub": "bob"}
+    assert "acteur" not in client.get("/routeur/etat").json()
+    main.app.dependency_overrides[require_lecture] = lambda: {"sub": "alice"}
+    e = client.get("/routeur/etat").json()                                    # administratrice réelle : complet, frais
+    assert e["acteur"] == "alice" and e["sauvegarde"] == ETAT["sauvegarde"] and len(s.sudo()) == 2
+    main.app.dependency_overrides[require_lecture] = lambda: {"sub": "bob"}
+    assert "acteur" not in client.get("/routeur/etat").json() and len(s.sudo()) == 2      # cache de l'usager
+
+
+def test_etat_admin_reel_juge_par_le_socle():
+    fn = next(n for n in ast.parse(Path(routeur_api.__file__).read_text()).body
+              if isinstance(n, ast.FunctionDef) and n.name == "_restreint")
+    corps = ast.unparse(fn.body[-1])                     # le prédicat du socle, jamais « a un sub »
+    assert "est_admin_reel(user)" in corps and "sub" not in corps
+
+
 # --- aperçu : avertissement ------------------------------------------------------------------------------------------------
 
 def test_apercu_avertissement_depuis_le_lan(client, monkeypatch):

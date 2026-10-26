@@ -6,7 +6,8 @@
 
 Routes `def` (pool de threads) : elles appellent subprocess. L'acteur est le `sub` du jeton vérifié.
 #3190 : appliquer et retour partent en tâche de fond (202, une bascule peut dépasser le délai d'HAProxy) et leur
-dernier résultat se lit sur /routeur/derniere ; /routeur/etat sert au lecteur anonyme une copie expurgée, en cache 5 s."""
+dernier résultat se lit sur /routeur/derniere ; /routeur/etat sert à tout lecteur qui n'est pas un administrateur réel
+(anonyme du tableau de bord, usager, appareil enrôlé, invité) une copie expurgée, en cache 5 s."""
 from __future__ import annotations
 
 import json
@@ -22,7 +23,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from secubox_core.auth import adresse_client, require_jwt, require_lecture
+from secubox_core.auth import adresse_client, est_admin_reel, require_jwt, require_lecture
 from secubox_core.logger import get_logger
 
 from .routeur_config import ErreurConfig, depuis_dict
@@ -42,8 +43,9 @@ DEVICE_TREE = (Path("/proc/device-tree"), Path("/sys/firmware/devicetree"))
 AVERTISSEMENT = ("Vous appliquez depuis le LAN actuel : vous perdrez la connexion ; "
                  "confirmez depuis la nouvelle adresse sous 3 minutes.")
 TTL_ETAT = 5.0
-# Lecteur anonyme (mode tableau de bord, sans `sub`) : liste blanche, jamais l'acteur ni le nom de la sauvegarde
-CLES_ANONYMES = ("etat", "depuis", "erreur", "config", "minuteur_actif", "echeance", "bascule_en_cours", "dhcp_actif",
+# Lecteur restreint (tout lecteur qui n'est pas un administrateur réel) : liste blanche, jamais l'acteur ni le nom de
+# la sauvegarde
+CLES_RESTREINTES = ("etat", "depuis", "erreur", "config", "minuteur_actif", "echeance", "bascule_en_cours", "dhcp_actif",
                  "adresses_pont", "ports_coupes")
 _DERNIERE_VIDE = {"verbe": None, "code": None, "sortie": None, "fini": True, "debut": None, "fin": None}
 
@@ -51,7 +53,7 @@ log = get_logger("netmodes")
 router = APIRouter(prefix="/routeur")
 
 _monotone = time.monotonic                      # horloge du cache (remplacée en test)
-_cache_anonyme: dict[str, Any] = {}
+_cache_restreint: dict[str, Any] = {}
 _verrou_cache = threading.Lock()
 _derniere: dict[str, Any] = dict(_DERNIERE_VIDE)
 _verrou_derniere = threading.Lock()
@@ -87,8 +89,11 @@ def _acteur(user: Any) -> str:
     return sub
 
 
-def _anonyme(user: Any) -> bool:
-    return not (isinstance(user, dict) and user.get("sub"))
+def _restreint(user: Any) -> bool:
+    """Tout lecteur qui n'est pas un ADMINISTRATEUR RÉEL (`est_admin_reel` du socle, #1581 : compte actif de rôle
+    admin, jamais un appareil ni une session plafonnée) : anonyme du tableau de bord, usager, appareil enrôlé, invité.
+    Avoir un `sub` n'y suffit pas : require_lecture reconnaît tous ces jetons."""
+    return not (isinstance(user, dict) and est_admin_reel(user))
 
 
 def _ctl(verbe: str, *args: str, entree: str | None = None, delai: float = DELAI_CTL) -> dict:
@@ -159,14 +164,14 @@ def _maintenant() -> str:
 
 
 def _reinitialiser() -> None:
-    """Remet le dernier résultat et le cache anonyme à vide (tests)."""
+    """Remet le dernier résultat et le cache restreint à vide (tests)."""
     global _fil
     with _verrou_derniere:
         _derniere.clear()
         _derniere.update(_DERNIERE_VIDE)
         _fil = None
     with _verrou_cache:
-        _cache_anonyme.clear()
+        _cache_restreint.clear()
 
 
 def bascule_lancee() -> bool:
@@ -218,19 +223,19 @@ def _lancer(verbe: str, acteur: str, entree: str | None = None) -> dict:
 
 # --- état ------------------------------------------------------------------------------------------------------------------
 
-def _etat_anonyme() -> dict:
-    """Copie expurgée (CLES_ANONYMES), au plus un sudo par TTL_ETAT, panne comprise ; jamais servie à un
-    administrateur, qui n'est jamais servi depuis ce cache."""
+def _etat_restreint() -> dict:
+    """Copie expurgée (CLES_RESTREINTES), au plus un sudo par TTL_ETAT, panne comprise ; jamais servie à un
+    administrateur réel, qui n'est jamais servi depuis ce cache."""
     with _verrou_cache:
-        t = _cache_anonyme.get("t")
+        t = _cache_restreint.get("t")
         if t is None or _monotone() - t >= TTL_ETAT:
             try:
                 valeur: dict | HTTPException = {k: v for k, v in _ctl("routeur-etat", delai=DELAI_ETAT).items()
-                                                 if k in CLES_ANONYMES}
+                                                 if k in CLES_RESTREINTES}
             except HTTPException as e:
                 valeur = e
-            _cache_anonyme.update(t=_monotone(), valeur=valeur)
-        valeur = _cache_anonyme["valeur"]
+            _cache_restreint.update(t=_monotone(), valeur=valeur)
+        valeur = _cache_restreint["valeur"]
     if isinstance(valeur, HTTPException):
         raise HTTPException(valeur.status_code, valeur.detail)
     return dict(valeur)
@@ -238,8 +243,8 @@ def _etat_anonyme() -> dict:
 
 @router.get("/etat")
 def etat(user=Depends(require_lecture)):
-    if _anonyme(user):                              # lecteur du LAN sans jeton : ni acteur, ni un sudo par requête
-        return _etat_anonyme()
+    if _restreint(user):                            # pas un administrateur réel : ni acteur, ni un sudo par requête
+        return _etat_restreint()
     return _ctl("routeur-etat", delai=DELAI_ETAT)
 
 

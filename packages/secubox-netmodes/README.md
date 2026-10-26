@@ -128,7 +128,7 @@ Chaque décision est écrite dans `/var/log/secubox/audit.log` (une ligne JSON, 
 
 | Méthode | Route | Garde | Contrôleur |
 |---|---|---|---|
-| GET | `/api/v1/netmodes/routeur/etat` | `require_lecture` | `routeur-etat` (lecteur anonyme : copie expurgée, cache 5 s) |
+| GET | `/api/v1/netmodes/routeur/etat` | `require_lecture` | `routeur-etat` (lecteur qui n'est pas administrateur réel : copie expurgée, cache 5 s) |
 | GET | `/api/v1/netmodes/routeur/derniere` | `require_jwt` | aucun : dernier résultat d'une bascule lancée par l'API |
 | POST | `/api/v1/netmodes/routeur/apercu` | `require_jwt` | `routeur-etat` pour l'avertissement ; fichiers rendus, rien d'écrit |
 | POST | `/api/v1/netmodes/routeur/appliquer` | `require_jwt`, corps `"confirmer": "routeur"` | `routeur-appliquer`, **202** puis tâche de fond |
@@ -152,10 +152,12 @@ l'API : `verbe` null et `fini` vrai ; en cours : `fini` faux ; fini : `code` 200
 
 `GET /routeur/etat`, champs ajoutés en 1.5.0 : `echeance` (échéance réelle du minuteur de retour, RFC 3339 UTC, null
 sans minuteur ; le compte à rebours se fait sur elle, jamais sur `depuis` + 180), `bascule_en_cours` (verrou du
-contrôleur tenu ; null s'il est illisible) et `ports_coupes`. Le lecteur anonyme (tableau de bord du LAN, jeton sans
-`sub`) reçoit une liste blanche de champs, **sans `acteur` ni `sauvegarde`**, servie d'un cache de 5 s (au plus un sudo
-par 5 s, panne comprise) ; un administrateur n'est jamais servi depuis ce cache. De même, `/reseau/ports` et
-`/reseau/carte` retirent pour lui les MAC apprises et les voisins du WAN (il garde leur nombre).
+contrôleur tenu ; null s'il est illisible) et `ports_coupes`. Tout lecteur qui n'est pas un **administrateur réel**
+(`est_admin_reel` de `secubox_core.auth` : compte actif de rôle admin, jamais un appareil ni une session plafonnée) —
+lecteur anonyme du tableau de bord, usager, appareil enrôlé, invité — reçoit une liste blanche de champs, **sans
+`acteur` ni `sauvegarde`**, servie d'un cache de 5 s (au plus un sudo par 5 s, panne comprise) ; un administrateur réel
+n'est jamais servi depuis ce cache. De même, `/reseau/ports` et `/reseau/carte` retirent pour ce lecteur les MAC
+apprises et les voisins du WAN (il garde leur nombre).
 
 **Anti-coupure.** `POST /ports/{lanN}/couper` est refusé (409, « vous couperiez votre propre accès ») avant tout appel
 au contrôleur si le poste qui le demande est vu derrière ce port : adresses du client (X-Real-IP et

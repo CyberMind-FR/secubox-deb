@@ -18,7 +18,7 @@ import re
 
 from fastapi import APIRouter, Depends
 
-from secubox_core.auth import require_jwt, require_lecture
+from secubox_core.auth import est_admin_reel, require_jwt, require_lecture
 
 from . import reseau_lecture as lect
 
@@ -100,8 +100,10 @@ def _macs_box(s: dict) -> set[str]:
     return {str(l["address"]).lower() for l in s.get("ip_link") or [] if isinstance(l, dict) and l.get("address")}
 
 
-def _anonyme(user: Any) -> bool:
-    return not (isinstance(user, dict) and user.get("sub"))
+def _restreint(user: Any) -> bool:
+    """Tout lecteur qui n'est pas un ADMINISTRATEUR RÉEL (`est_admin_reel` du socle, #1581) : anonyme du tableau de
+    bord, usager, appareil enrôlé, invité. Il reçoit des comptes, jamais les MAC apprises ni les voisins du WAN."""
+    return not (isinstance(user, dict) and est_admin_reel(user))
 
 
 def _pannes(s: dict, cles: tuple[str, ...]) -> list[str]:
@@ -115,7 +117,7 @@ def lire_ports(user: Any = Depends(require_lecture)) -> dict:
         liste = None
     else:
         liste = lect.ports(s["ip_link"], s["fdb"], s["sysfs"], s["coupes"], _macs_box(s))
-        if _anonyme(user):                      # lecteur anonyme : ni MAC apprises ni acteur, des comptes seulement
+        if _restreint(user):                    # pas un administrateur réel : ni MAC apprises, des comptes seulement
             for p in liste:
                 p["nb_appareils"] = None if p["macs"] is None else len(p["macs"])
                 del p["macs"]
@@ -133,7 +135,7 @@ def lire_clients(_user: Any = Depends(require_jwt)) -> dict:
 def lire_carte(user: Any = Depends(require_lecture)) -> dict:
     s = lire_systeme()
     c = lect.carte(s["wan_addr"], s["route_defaut"], s["voisins_wan"], s["membres_lxc"], s["liens_wg"])
-    if _anonyme(user) and c["wan"] and c["wan"]["voisins"] is not None:
+    if _restreint(user) and c["wan"] and c["wan"]["voisins"] is not None:
         c["wan"]["nb_voisins"] = len(c["wan"]["voisins"])
         del c["wan"]["voisins"]
     return {"carte": c, "pannes": _pannes(s, ("wan_addr", "route_defaut", "voisins_wan", "membres_lxc", "liens_wg"))}
