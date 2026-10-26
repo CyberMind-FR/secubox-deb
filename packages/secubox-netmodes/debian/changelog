@@ -29,6 +29,8 @@ secubox-netmodes (1.4.0-1~trixie1) trixie; urgency=medium
   * Relecture finale (ref #3189) : l'ancien 10-br-lan.network n'est mis de côté que si sa section [Match] se réduit
     à la seule ligne Name=br-lan ; Name=br-lan eth2, un joker ou une autre clé de correspondance sont refusés
     (le supprimer puis recharger networkd reconfigurerait le WAN).
+  * Relecture finale (ref #3189) : Unbound n'est redémarré (coupure du DNS de toute la box) que si son drop-in change,
+    à l'application (ancien contenu contre rendu) comme au retour (actuel contre restauré) ; audité.
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 14:00:00 +0100
 

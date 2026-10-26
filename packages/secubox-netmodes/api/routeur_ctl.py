@@ -456,7 +456,18 @@ def _restaurer(ctx: Contexte, nom: str) -> tuple[list[str], list[str]]:
     return fichiers.restaurer(_p(ctx, SAUVEGARDES) / nom, _geres(ctx), MODES, ctx.racine, STRICTS, NEUTRES)
 
 
-def _poser(ctx: Contexte, cfg: ConfigRouteur, rendu: dict[str, str], geo: bool) -> None:
+def _contenu_unbound(ctx: Contexte) -> object:
+    """Drop-in Unbound du LAN (None : absent). Illisible : une sentinelle neuve, jamais égale, qui force le redémarrage."""
+    try:
+        return fichiers.lire(_p(ctx, CHEMINS["unbound"]))
+    except OSError:
+        return object()
+
+
+def _poser(ctx: Contexte, cfg: ConfigRouteur, rendu: dict[str, str], geo: bool) -> bool:
+    """Pose les fichiers rendus ; renvoie True si le drop-in Unbound change, seul cas où Unbound doit redémarrer
+    (un redémarrage coupe le DNS de toute la box)."""
+    unbound_change = _contenu_unbound(ctx) != rendu["unbound"].encode("utf-8")
     for cle, chemin in CHEMINS.items():
         if cle != "geo" or geo:
             fichiers.ecrire(_p(ctx, chemin), rendu[cle], 0o644, ctx.racine if chemin in STRICTS else None)
@@ -468,6 +479,7 @@ def _poser(ctx: Contexte, cfg: ConfigRouteur, rendu: dict[str, str], geo: bool) 
         if refus is not None:                               # vérifié aux refus préalables : changé depuis
             raise refus
         ancien.unlink()                                     # sa copie est dans la sauvegarde
+    return unbound_change
 
 
 def _valider(ctx: Contexte, geo: bool) -> None:
@@ -504,15 +516,16 @@ def _reprendre_lan_temporaire(ctx: Contexte, cfg: ConfigRouteur) -> None:
         raise Echec(f"« {' '.join(argv)} » a échoué (code {r.returncode}) : {_sortie(r)}")
 
 
-def _basculer(ctx: Contexte, cfg: ConfigRouteur, geo: bool) -> None:
+def _basculer(ctx: Contexte, cfg: ConfigRouteur, geo: bool, unbound_change: bool) -> None:
     nft = str(_p(ctx, CHEMINS["nft"]))
     _exiger(ctx, ["networkctl", "reload"])                                       # 7
     _exiger(ctx, ["networkctl", "reconfigure", "br-lan", *cfg.ports])
     _reprendre_lan_temporaire(ctx, cfg)                                          # 8
     _supprimer_regles(ctx, COMMENTAIRE_NFT)                                      # 9
     _exiger(ctx, ["nft", "-f", nft])
-    with _verrou_unbound(ctx):                                                   # 10 : nouvelle écoute
-        _exiger(ctx, ["systemctl", "restart", "unbound.service"])
+    if unbound_change:                                                           # 10 : nouvelle écoute
+        with _verrou_unbound(ctx):
+            _exiger(ctx, ["systemctl", "restart", "unbound.service"])
     _exiger(ctx, ["systemctl", "enable", "secubox-lan-dhcp.service"])            # 11
     _exiger(ctx, ["systemctl", "restart", "secubox-lan-dhcp.service"])
     if geo:                                                                      # 12
@@ -561,12 +574,13 @@ def _appliquer(ctx: Contexte, cfg_dict: dict, acteur: str) -> None:
         if not geo:
             _auditer(ctx, "geo-absente", acteur, f"{DOSSIER_GEO} absent : fragment géo non posé, nginx inchangé")
         erreurs: list[str] = []
+        unbound_change = True
         try:
             # garde armée avant le premier fichier géré : une coupure d'ici à la fin revient au démarrage
             _ecrire_etat(ctx, "en_attente", acteur, nom)
             with _verrou_unbound(ctx):
                 try:
-                    _poser(ctx, cfg, rendu, geo)                                 # 5
+                    unbound_change = _poser(ctx, cfg, rendu, geo)                # 5
                     _valider(ctx, geo)                                           # 6
                 except BaseException:
                     erreurs += _restaurer(ctx, nom)[1]                           # encore sous le verrou Unbound
@@ -583,7 +597,7 @@ def _appliquer(ctx: Contexte, cfg_dict: dict, acteur: str) -> None:
                 raise Echec(f"{exc} ; {suite}") from exc
             raise
         try:
-            _basculer(ctx, cfg, geo)                                             # 7 à 13
+            _basculer(ctx, cfg, geo, unbound_change)                             # 7 à 13
         except BaseException as exc:                    # même une exception imprévue défait la bascule
             _auditer(ctx, "appliquer-echec", acteur, f"{_texte(exc)} ; retour à la sauvegarde {nom}")
             erreurs = _retour(ctx, "echec", nom)
@@ -593,6 +607,7 @@ def _appliquer(ctx: Contexte, cfg_dict: dict, acteur: str) -> None:
             raise
     _auditer(ctx, "appliquer", acteur,
              f"pont {cfg.adresse}, DHCP {cfg.dhcp_debut}-{cfg.dhcp_fin} ({cfg.bail}), ports {' '.join(cfg.ports)} ; "
+             f"{'Unbound redémarré' if unbound_change else 'Unbound inchangé, non redémarré'} ; "
              f"sauvegarde {nom} ; retour automatique dans {DELAI_RETOUR} s sauf confirmation")
 
 
@@ -678,15 +693,18 @@ def _restaurer_et_relancer(ctx: Contexte, acteur: str, nom: str | None) -> list[
     if nom is None or nom not in noms:
         raise Refus("aucune sauvegarde du mode routeur : rien à restaurer")
     ports_avant = _ports(ctx)
+    unbound_avant = _contenu_unbound(ctx)
     try:
         absents, erreurs = _restaurer(ctx, nom)
     except OSError as exc:
         raise Echec(f"sauvegarde {nom} inutilisable : {exc}") from exc
     ports = tuple(p for p in PORTS_LAN if p in {*ports_avant, *_ports(ctx)}) or PORTS_LAN
+    unbound_change = _contenu_unbound(ctx) != unbound_avant     # identique : le DNS de la box n'est pas coupé
     bloquer = acteur != "demarrage"
-    etapes = (("réseau", lambda: _retour_reseau(ctx, ports)), ("pare-feu", lambda: _retour_pare_feu(ctx)),
-              ("Unbound", lambda: _redemarrer_unbound(ctx)), ("DHCP", lambda: _retour_dhcp(ctx, bloquer)),
-              ("nginx", lambda: _recharger_nginx(ctx, bloquer)))
+    etapes = [("réseau", lambda: _retour_reseau(ctx, ports)), ("pare-feu", lambda: _retour_pare_feu(ctx))]
+    if unbound_change:
+        etapes.append(("Unbound", lambda: _redemarrer_unbound(ctx)))
+    etapes += [("DHCP", lambda: _retour_dhcp(ctx, bloquer)), ("nginx", lambda: _recharger_nginx(ctx, bloquer))]
     for nom_etape, etape in etapes:
         try:
             etape()
@@ -699,6 +717,7 @@ def _restaurer_et_relancer(ctx: Contexte, acteur: str, nom: str | None) -> list[
     except OSError as exc:
         erreurs.append(f"état : {exc}")
     _auditer(ctx, "retour", acteur, f"sauvegarde {nom} restaurée, état {nouvel}"
+             + ("" if unbound_change else ", Unbound inchangé, non redémarré")
              + (f" ; INCOMPLET : {' ; '.join(erreurs)}" if erreurs else ""))
     return erreurs
 

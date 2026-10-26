@@ -1297,3 +1297,51 @@ def test_ancien_pont_change_apres_les_refus_prealables(ctx, racine, faux):
     assert not (racine / ETAT).exists() and not (racine / TOML).exists()
     assert not any(a[0] == "networkctl" for a in faux.journal)
     assert audits(racine)[-1]["action"] == "appliquer-echec"
+
+
+# --- relecture finale : I6 Unbound n'est redémarré que si son drop-in change --------------------------------------------
+
+REDEMARRER_UNBOUND = ["systemctl", "restart", "unbound.service"]
+
+
+def test_unbound_inchange_pas_de_redemarrage(ctx, racine, faux):
+    """Même sous-réseau, bail différent : le drop-in Unbound est identique, le DNS de toute la box n'est pas coupé."""
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    unbound = (racine / CHEMINS["unbound"].lstrip("/")).read_bytes()
+    faux.journal.clear()
+    rc.appliquer(ctx, dict(CFG42, bail="30m"), "admin")
+    assert "30m" in (racine / CHEMINS["dhcp"].lstrip("/")).read_text()
+    assert (racine / CHEMINS["unbound"].lstrip("/")).read_bytes() == unbound
+    assert REDEMARRER_UNBOUND not in faux.journal
+    assert ["systemctl", "restart", "secubox-lan-dhcp.service"] in faux.journal
+    assert "Unbound inchangé" in audits(racine)[-1]["detail"]
+    faux.journal.clear()
+    rc.retour(ctx, "admin")                                                    # restauré identique : pas de coupure
+    assert "12h" in (racine / CHEMINS["dhcp"].lstrip("/")).read_text()
+    assert REDEMARRER_UNBOUND not in faux.journal
+    assert "Unbound inchangé" in audits(racine)[-1]["detail"]
+
+
+def test_unbound_change_redemarre(ctx, racine, faux):
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    faux.journal.clear()
+    rc.appliquer(ctx, CFG50, "admin")                                          # nouvelle adresse : nouvelle écoute
+    assert faux.journal.count(REDEMARRER_UNBOUND) == 1
+    faux.journal.clear()
+    rc.retour(ctx, "admin")                                                    # retour à 192.168.42.1
+    assert "interface: 192.168.42.1" in (racine / CHEMINS["unbound"].lstrip("/")).read_text()
+    assert faux.journal.count(REDEMARRER_UNBOUND) == 1
+
+
+def test_unbound_inchange_echec_de_bascule_sans_redemarrage(ctx, racine, faux):
+    """Bascule en échec avec un drop-in inchangé : le retour automatique ne coupe pas non plus le DNS."""
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    faux.journal.clear()
+    faux.echouer("networkctl", "reconfigure", fois=1)
+    with pytest.raises(rc.Echec, match="networkctl"):
+        rc.appliquer(ctx, dict(CFG42, bail="30m"), "admin")
+    assert ("retour", "echec") in [(a["action"], a["acteur"]) for a in audits(racine)]
+    assert REDEMARRER_UNBOUND not in faux.journal
