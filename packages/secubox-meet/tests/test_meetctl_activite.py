@@ -32,7 +32,7 @@ print(json.dumps({{"success": True, "argv": sys.argv[1:]}}))
 
 
 def test_collecte_de_bout_en_bout_curseur_et_pseudos(tmp_path):
-    _preparer(tmp_path, REELLES, comptes=f"{GANDALF}\x1fgandalf\x1e")
+    _preparer(tmp_path, REELLES, comptes=json.dumps([{"sub": GANDALF, "pseudo": "gandalf"}]))
     d = json.loads(run_ctl(tmp_path, "activite-collecte"))
     assert d["success"] is True and d["evenements"] == 4
     cx = sqlite3.connect(tmp_path / "activite" / "activite.db")
@@ -40,7 +40,7 @@ def test_collecte_de_bout_en_bout_curseur_et_pseudos(tmp_path):
     assert cx.execute("SELECT pseudo FROM comptes").fetchone()[0] == "gandalf"
     appels = (tmp_path / "urls").read_text()
     assert "journalctl -u livekit -o json --no-pager --since -30 days" in appels      # premier relevé : 30 jours
-    assert "psql -d meet -A -t -F" in appels and "meet_user" in appels
+    assert "psql -d meet -A -t -X -q -c" in appels and "json_agg" in appels and "meet_user" in appels
     run_ctl(tmp_path, "activite-collecte")
     assert "--after-cursor s=b100;i=3be" in (tmp_path / "urls").read_text()        # ensuite : après le dernier curseur
 
@@ -51,7 +51,7 @@ def test_collecte_conteneur_absent(tmp_path):
 
 
 def test_reunions_transmet_les_salles_de_meet(tmp_path):
-    _preparer(tmp_path, salles=f"{SALLE}\x1fgii\x1fgii\x1fpublic\x1fgandalf\x1f1\x1f2\x1e")
+    _preparer(tmp_path, salles=json.dumps([{"id": SALLE, "nom": "gii", "slug": "gii", "acces": "public"}]))
     env = _activite_simulee(tmp_path)
     d = json.loads(run_ctl(tmp_path, "reunions", env_extra=env))
     assert d["argv"][0] == "reunions" and "--url" in d["argv"] and "http://10.100.0.195:7880" in d["argv"]
@@ -63,25 +63,49 @@ def test_en_direct(tmp_path):
     assert json.loads(run_ctl(tmp_path, "en-direct", env_extra=env))["argv"][0] == "en-direct"
 
 
-def test_clore_audite_la_decision(tmp_path):
+def test_clore_audite_la_decision_et_son_auteur(tmp_path):
     env = _activite_simulee(tmp_path)
-    d = json.loads(run_ctl(tmp_path, "clore", SALLE, env_extra=env))
+    d = json.loads(run_ctl(tmp_path, "clore", SALLE, "gandalf", env_extra=env))
     assert d["success"] is True and ["--salle", SALLE] == d["argv"][d["argv"].index("--salle"):d["argv"].index("--salle") + 2]
     ligne = json.loads((tmp_path / "audit.log").read_text().splitlines()[-1])
-    assert ligne["module"] == "meet" and ligne["action"] == "clore" and SALLE in ligne["detail"]
+    assert ligne["module"] == "meet" and ligne["action"] == "clore" and SALLE in ligne["detail"] and ligne["acteur"] == "gandalf"
+
+
+def test_clore_en_echec_est_aussi_audite(tmp_path):
+    faux = tmp_path / "activite-ko.py"
+    _ecrire_exec(faux, '#!/usr/bin/env python3\nimport json\nprint(json.dumps({"success": False, "error": "salle inconnue"}))\nraise SystemExit(1)\n')
+    rc, _ = run_ctl_rc(tmp_path, "clore", SALLE, "gandalf", env_extra={"SECUBOX_MEET_ACTIVITE_PY": str(faux)})
+    ligne = json.loads((tmp_path / "audit.log").read_text().splitlines()[-1])
+    assert rc == 1 and ligne["action"] == "clore-echec" and ligne["acteur"] == "gandalf"
 
 
 def test_clore_refuse_un_nom_invalide_ou_des_arguments_en_trop(tmp_path):
     env = _activite_simulee(tmp_path)
-    for args in (["../../etc"], [SALLE, "--autre"], []):
+    for args in (["../../etc"], [SALLE, "gand alf"], [SALLE, "a", "b"], [SALLE + "\n"], []):
         rc, out = run_ctl_rc(tmp_path, "clore", *args, env_extra=env)
         assert rc == 1 and json.loads(out)["success"] is False
     assert not (tmp_path / "activite-appels").exists() and not (tmp_path / "audit.log").exists()
 
 
-def test_media_expose_audite_ouverture_et_fermeture(tmp_path):
+def test_media_expose_audite_ouverture_et_fermeture_avec_l_auteur(tmp_path):
     (tmp_path / "meet.nft").write_text("table inet secubox-meet {}\n")
-    run_ctl(tmp_path, "media-expose", "--apply", nft_ok=True)
+    run_ctl(tmp_path, "media-expose", "--apply", "gandalf", nft_ok=True)
     run_ctl(tmp_path, "media-expose", "--revoke", nft_ok=True)
-    actions = [json.loads(l)["action"] for l in (tmp_path / "audit.log").read_text().splitlines()]
-    assert actions == ["media-expose-ouvrir", "media-expose-fermer"]
+    lignes = [json.loads(l) for l in (tmp_path / "audit.log").read_text().splitlines()]
+    assert [x["action"] for x in lignes] == ["media-expose-ouvrir", "media-expose-fermer"]
+    assert lignes[0]["acteur"] == "gandalf" and lignes[1]["acteur"] == "root"          # sans auteur : la console root
+
+
+def test_media_expose_refuse_un_auteur_invalide(tmp_path):
+    (tmp_path / "meet.nft").write_text("table inet secubox-meet {}\n")
+    rc, out = run_ctl_rc(tmp_path, "media-expose", "--apply", "x;y", nft_ok=True)
+    assert rc == 1 and json.loads(out)["success"] is False and not (tmp_path / "audit.log").exists()
+
+
+def test_collecte_refuse_un_dossier_de_base_lien_symbolique(tmp_path):
+    reel = tmp_path / "ailleurs"
+    reel.mkdir()
+    (tmp_path / "activite").symlink_to(reel)
+    _preparer(tmp_path, REELLES)
+    rc, out = run_ctl_rc(tmp_path, "activite-collecte")
+    assert rc == 1 and not (reel / "activite.db").exists()

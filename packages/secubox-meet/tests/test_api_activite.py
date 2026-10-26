@@ -20,7 +20,7 @@ cli = test_api.cli          # fixture partagée avec test_api (faux meetctl, fau
 def base(monkeypatch, tmp_path):
     chemin = tmp_path / "activite.db"
     cx = A.ouvrir(chemin)
-    A.comptes(cx, [f"{GANDALF}\x1fgandalf"])
+    A.comptes(cx, json.dumps([{"sub": GANDALF, "pseudo": "gandalf"}]))
     A.collecter(cx, [debut(T0, "PA_1"), actif(T0 + 1, "PA_1", client=FIREFOX), fin(T0 + 61, "PA_1"),
                      debut(T0 + 100, "PA_2"), fin(T0 + 101, "PA_2", "SIGNAL_SOURCE_CLOSE"), sans_connexion(T0 + 101, "PA_2")])
     cx.close()
@@ -85,7 +85,7 @@ def test_clore_exige_confirmation_et_nom_valide(cli, base):
     assert cli.post("/clore", json={"salle": "../x", "confirmer": "meet"}, jwt=True).status_code == 400
     assert not cli.appels
     r = cli.post("/clore", json={"salle": SALLE, "confirmer": "meet"}, jwt=True)
-    assert r.status_code == 200 and cli.appels[-1] == ("clore", SALLE)
+    assert r.status_code == 200 and cli.appels[-1] == ("clore", SALLE, "admin")         # l'auteur part à l'audit
 
 
 def test_clore_echec_du_controleur(cli, base, monkeypatch):

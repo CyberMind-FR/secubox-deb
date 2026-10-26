@@ -180,7 +180,7 @@
                 <div class="outils">
                     <label>Période<select id="fJours"><option value="7">7 jours</option><option value="30" selected>30 jours</option></select></label>
                     <label>Salle<select id="fSalle"><option value="">toutes</option></select></label>
-                    <label>Issue<select id="fIssue"><option value="">toutes</option><option value="aboutie">abouties</option><option value="echec">échecs de connexion</option><option value="abandon">abandons</option><option value="en_cours">en cours</option></select></label>
+                    <label>Issue<select id="fIssue"><option value="">toutes</option><option value="aboutie">abouties</option><option value="echec">échecs de connexion</option><option value="abandon">abandons</option><option value="en_cours">en cours</option><option value="perdue">fin non relevée</option></select></label>
                     <button class="btn" id="exportCsv" type="button">Exporter (CSV)</button>
                 </div>
                 <div id="lHisto" class="tab"><div class="vide">Chargement…</div></div>
@@ -441,7 +441,7 @@
 
         // ----- Activité de la visio (#3182) : réunions, connexions, statistiques -----
         const ACCES = { public: ['public', 'cy'], trusted: ['confiance', 'vi'], restricted: ['restreint', 'att'] };
-        const ISSUES = { aboutie: 'ok', echec: 'hors', abandon: '', en_cours: 'cy' };
+        const ISSUES = { aboutie: 'ok', echec: 'hors', abandon: '', en_cours: 'cy', perdue: 'att' };
         const TRANSPORT_PILL = { UDP: 'ok', TCP: 'att', Relais: 'vi' };
         let SALLES = {}, SALLES_TS = 0, HISTO = [], PERIODE = '7';
         const fmtDuree = s => { if (s === null || s === undefined) return '—'; s = Math.max(0, Math.round(s)); if (s < 60) return s + ' s';

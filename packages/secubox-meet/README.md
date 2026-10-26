@@ -52,10 +52,11 @@ Trois onglets de `/meet/`, réservés à l'administrateur :
 | `GET /reunions` | salles de Meet (accès, propriétaire, création, dernière réunion), état en direct ; cache 30 s |
 | `GET /connexions?jours=1..30&salle=&issue=` | participants en direct (cache 15 s) et historique, une ligne par session |
 | `GET /stats?periode=7\|30\|365` | réunions, temps de visio, participants, pic, médiane, échecs, par jour, transport, motifs, appareils, salles |
-| `POST /clore` `{salle, confirmer: "meet"}` | met fin à une réunion en cours (LiveKit `DeleteRoom`), audité |
+| `POST /clore` `{salle, confirmer: "meet"}` | met fin à une réunion en cours (LiveKit `DeleteRoom`), audité avec son auteur, échecs compris |
 
 - **Relevé** : `secubox-meet-activite.timer` (5 min, root) lance `meetctl activite-collecte` : pseudos des comptes de
-  Meet, puis journal de LiveKit après le dernier curseur, dans `/var/lib/secubox/meet/activite.db` (root:secubox 0640),
+  Meet (psql en JSON), puis journal de LiveKit après le dernier curseur, dans `/var/lib/secubox-meet/activite.db`
+  (root:secubox 0640, sous un parent de root ; dossier et fichier vérifiés, ouverts sans suivre de lien),
   que l'API lit en lecture seule.
 - **Vie privée** : aucune adresse IP conservée ; un compte apparaît sous son pseudo, toute autre personne « invité » ;
   le nom tapé dans Meet n'est ni affiché ni gardé. Sessions effacées après 30 jours, totaux par jour gardés 12 mois.

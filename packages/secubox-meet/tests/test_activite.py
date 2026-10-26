@@ -132,7 +132,7 @@ def test_lignes_etrangeres_ou_mal_formees_ignorees(base):
 
 def test_compte_sous_son_pseudo_les_autres_invites(base):
     cx, _ = base
-    A.comptes(cx, [f"{GANDALF}\x1fgandalf", "ligne invalide"])
+    A.comptes(cx, json.dumps([{"sub": GANDALF, "pseudo": "gandalf"}, {"sub": "", "pseudo": "x"}, "pas un objet"]))
     A.collecter(cx, [debut(T0, "PA_6"), actif(T0 + 1, "PA_6"), debut(T0, "PA_7", INVITE), actif(T0 + 1, "PA_7", INVITE, client=SAFARI)])
     s = sessions(cx)
     assert (s["PA_6"]["participant"], s["PA_6"]["compte"]) == ("gandalf", True)
@@ -155,7 +155,7 @@ def test_purge_trente_jours_et_totaux_par_jour_conserves(base):
 
 def test_stats_sept_jours(base):
     cx, _ = base
-    A.comptes(cx, [f"{GANDALF}\x1fgandalf"])
+    A.comptes(cx, json.dumps([{"sub": GANDALF, "pseudo": "gandalf"}]))
     A.collecter(cx, [debut(T0, "PA_a"), actif(T0 + 1, "PA_a"), fin(T0 + 601, "PA_a"),
                      debut(T0 + 60, "PA_b", INVITE), actif(T0 + 61, "PA_b", INVITE, transport="tcp", client=SAFARI),
                      fin(T0 + 361, "PA_b", "DUPLICATE_IDENTITY", INVITE),
@@ -199,7 +199,7 @@ def faux_livekit(salles):
 
 def test_en_direct_pseudo_ou_invite_jamais_le_nom_tape_ni_le_secret_turn(base):
     cx, _ = base
-    A.comptes(cx, [f"{GANDALF}\x1fgandalf"])
+    A.comptes(cx, json.dumps([{"sub": GANDALF, "pseudo": "gandalf"}]))
     A.collecter(cx, [debut(T0, "PA_g"), actif(T0 + 1, "PA_g"), debut(T0, "PA_i", INVITE), actif(T0 + 1, "PA_i", INVITE, client=SAFARI)])
     appel, appels = faux_livekit({SALLE: [
         {"sid": "PA_g", "identity": GANDALF, "name": "gek", "state": "ACTIVE", "joined_at": str(T0),
@@ -220,16 +220,29 @@ def test_reunions_depuis_la_base_de_meet_et_le_direct(base):
     cx, _ = base
     A.collecter(cx, [debut(T0 - 3600, "PA_r", salle="autre-salle"), actif(T0 - 3599, "PA_r", salle="autre-salle"),
                      fin(T0 - 3000, "PA_r", salle="autre-salle")])
-    F = "\x1f"
-    lignes = [F.join([SALLE, "gii-cbvo-lpe", "gii-cbvo-lpe", "public", "gandalf", str(T0 - 600), str(T0 - 300)]),
-              F.join(["autre-salle", "Équipe | « nuit »\nsuite", "yjw-dcvf-cja", "trusted", "", str(T0 - 7200), str(T0 - 3600)]),
-              F.join(["ligne", "tronquée"])]
+    salles = json.dumps([
+        {"id": SALLE, "nom": "gii-cbvo-lpe", "slug": "gii-cbvo-lpe", "acces": "public", "proprietaire": "gandalf", "creee": T0 - 600, "dernier": T0 - 300},
+        # un nom saisi peut contenir n'importe quel caractère : le JSON le porte tel quel, sans décaler les champs
+        {"id": "autre-salle", "nom": "Équipe | « nuit »\nsuite\u001f" + SALLE, "slug": "yjw-dcvf-cja", "acces": "trusted",
+         "proprietaire": None, "creee": T0 - 7200, "dernier": T0 - 3600},
+        {"id": "../etc", "nom": "x"}, "pas un objet"])
     appel, _ = faux_livekit({SALLE: [{"sid": "PA_x", "identity": GANDALF, "state": "ACTIVE", "tracks": []}]})
-    r = A.reunions(lignes, A.en_direct(appel, cx), cx)
+    r = A.reunions(salles, A.en_direct(appel, cx), cx)
     assert [x["slug"] for x in r] == ["gii-cbvo-lpe", "yjw-dcvf-cja"]
     assert r[0]["en_cours"] is True and r[0]["presents"] == 1 and r[0]["acces"] == "public" and r[0]["proprietaire"] == "gandalf"
-    assert r[1]["en_cours"] is False and r[1]["proprietaire"] is None and r[1]["nom"] == "Équipe | « nuit »\nsuite"
+    assert r[1]["en_cours"] is False and r[1]["proprietaire"] is None and r[1]["salle"] == "autre-salle"
     assert r[1]["derniere"] == {"debut": T0 - 3600, "participants": 1, "secondes": 599}
+
+
+def test_sorties_psql_invalides_refusees_sans_rien_effacer(base):
+    cx, _ = base
+    A.comptes(cx, json.dumps([{"sub": GANDALF, "pseudo": "gandalf"}]))
+    for mauvais in ("", "pas du json", json.dumps({"sub": GANDALF})):
+        with pytest.raises(ValueError):
+            A.comptes(cx, mauvais)
+        with pytest.raises(ValueError):
+            A.reunions(mauvais, {"salles": []}, cx)
+    assert A._pseudos(cx) == {GANDALF: "gandalf"}              # une lecture ratée de psql n'efface pas les pseudos
 
 
 def test_clore_appelle_delete_room(base):
@@ -245,7 +258,71 @@ def test_clore_refuse_un_nom_de_salle_invalide(base):
     assert appels == []
 
 
-def test_enregistrements_psql_separateurs_ascii():
-    import io
-    flux = io.StringIO("a\x1fb\x1ec\x1fd\ne\x1e\n")
-    assert A.enregistrements(flux) == ["a\x1fb", "c\x1fd\ne"]
+
+# ── 0.2.1 : relecture de sécurité ──────────────────────────────────────────────────────────────────────────────────
+def test_ouvrir_refuse_un_dossier_lien_ou_ouvert_a_d_autres(tmp_path):
+    reel = tmp_path / "reel"
+    reel.mkdir(mode=0o750)
+    (tmp_path / "lien").symlink_to(reel)
+    with pytest.raises(A.ErreurBase):
+        A.ouvrir(tmp_path / "lien" / "activite.db")
+    ouvert = tmp_path / "ouvert"
+    ouvert.mkdir()
+    ouvert.chmod(0o777)
+    with pytest.raises(A.ErreurBase):
+        A.ouvrir(ouvert / "activite.db")
+    assert not (reel / "activite.db").exists()
+
+
+def test_ouvrir_refuse_une_base_lien_symbolique_ou_lien_dur(tmp_path):
+    d = tmp_path / "base"
+    d.mkdir(mode=0o750)
+    cible = tmp_path / "ailleurs.db"
+    cible.write_bytes(b"")
+    (d / "activite.db").symlink_to(cible)
+    with pytest.raises(A.ErreurBase):
+        A.ouvrir(d / "activite.db")
+    (d / "activite.db").unlink()
+    import os
+    os.link(cible, d / "activite.db")
+    with pytest.raises(A.ErreurBase):
+        A.ouvrir(d / "activite.db")
+
+
+def test_base_creee_en_0640(tmp_path):
+    import stat
+    d = tmp_path / "base"
+    d.mkdir(mode=0o750)
+    A.ouvrir(d / "activite.db").close()
+    assert stat.S_IMODE((d / "activite.db").stat().st_mode) == 0o640
+
+
+def test_session_jamais_close_rattrapee_puis_purgee(base):
+    cx, _ = base
+    vieux = T0 - 2 * 86400
+    A.collecter(cx, [debut(vieux, "PA_p"), actif(vieux + 1, "PA_p"), debut(vieux, "PA_q")])
+    A.purger(cx, maintenant=T0)
+    s = sessions(cx)
+    assert (s["PA_p"]["issue"], s["PA_p"]["motif"], s["PA_p"]["duree"]) == ("perdue", "fin non relevée", 0)
+    assert s["PA_q"]["issue"] == "abandon"
+    A.purger(cx, maintenant=T0 + 30 * 86400)
+    assert sessions(cx) == {}                                    # l'identité ne reste pas indéfiniment
+
+
+def test_nom_de_salle_avec_saut_de_ligne_refuse():
+    appel, appels = faux_livekit({})
+    with pytest.raises(ValueError):
+        A.clore(appel, SALLE + "\n")
+    assert appels == []
+
+
+def test_participant_id_non_textuel_sans_bloquer_le_releve(base):
+    cx, _ = base
+    bizarre = entree(T0, "participant active", {"room": SALLE, "participant": GANDALF, "participantID": {"x": 1}})
+    nombre = entree(T0 + 1, "participant active", {"room": SALLE, "participant": GANDALF, "participantID": 12345, "connectionType": "udp"})
+    A.collecter(cx, [bizarre, nombre, debut(T0 + 2, "PA_ok")])
+    assert set(sessions(cx)) == {"12345", "PA_ok"} and A.curseur(cx) is not None
+
+
+def test_totaux_par_jour_gardes_douze_mois(base):
+    assert A.DUREE_JOURS_J == 366

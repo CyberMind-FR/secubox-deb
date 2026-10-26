@@ -1,3 +1,25 @@
+secubox-meet (0.2.1-1~trixie1) trixie; urgency=medium
+
+  * Corrige les 500 de /connexions et /stats (ref #3182) : SQLite verrouille même en lecture, le
+    profil AppArmor de l'API n'accordait que `r` (« database is locked » sur gk1) ; `rk`.
+  * Relecture de sécurité de 0.2.0 :
+    - la base d'activité quitte /var/lib/secubox/meet (parent au compte partagé secubox, où un
+      lien aurait détourné les écritures root) pour /var/lib/secubox-meet (parent de root) ;
+      dossier et fichier vérifiés (propriétaire, droits, ni lien ni lien dur), ouverture sans
+      suivre de lien, droits posés par descripteur ; les verbes de lecture ouvrent en lecture
+      seule. Le postinst retire l'ancien emplacement ;
+    - unité de relevé confinée (ProtectSystem=strict, ReadWritePaths, UMask=0027, PrivateTmp,
+      ProtectHome, NoNewPrivileges), éprouvée sur gk1 ;
+    - psql rend du JSON : un nom de salle saisi ne peut plus décaler les champs (ni viser une
+      autre salle avec « Clore… ») ; une lecture ratée n'efface plus les pseudos ;
+    - l'audit de « clore » et de media-expose porte l'administrateur authentifié ; les échecs de
+      clôture sont audités ;
+    - une session jamais close est rattrapée (« fin non relevée ») puis purgée ; totaux par jour
+      gardés 12 mois (366 j) ; noms de salle validés en entier (saut de ligne refusé) ; relevé
+      robuste à un identifiant de participant inattendu.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 10:12:35 +0100
+
 secubox-meet (0.2.0-1~trixie1) trixie; urgency=medium
 
   * Panneau d'administration : réunions, connexions, statistiques (ref #3182), maquette validée le

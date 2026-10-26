@@ -38,10 +38,11 @@ profile secubox-meet-api {
   /var/cache/secubox/meet/ r,
   /var/cache/secubox/meet/** rwk,
 
-  # Activité de la visio (#3182) : base écrite par le relevé root, LUE ici seulement (SQLite vérifie le journal à chaud).
-  /var/lib/secubox/meet/ r,
-  /var/lib/secubox/meet/activite.db r,
-  /var/lib/secubox/meet/activite.db-journal r,
+  # Activité de la visio (#3182) : base écrite par le relevé root, LUE ici seulement. k : SQLite verrouille même en lecture
+  # (sans lui, « database is locked » : 500 sur /connexions et /stats, gk1 2026-10-26) ; journal à chaud vérifié en lecture.
+  /var/lib/secubox-meet/ r,
+  /var/lib/secubox-meet/activite.db rk,
+  /var/lib/secubox-meet/activite.db-journal r,
 
   /run/secubox/ r,
   /run/secubox/meet.sock rwk,

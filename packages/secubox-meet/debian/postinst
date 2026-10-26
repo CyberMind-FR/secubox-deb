@@ -67,8 +67,14 @@ case "$1" in
       fi
     fi
 
-    # Relevé de l'activité de la visio (#3182) : root, toutes les 5 minutes ; base lue par l'API (groupe secubox).
-    install -d -m 0750 -o root -g secubox /var/lib/secubox/meet 2>/dev/null || true
+    # Relevé de l'activité de la visio (#3182) : root, toutes les 5 minutes ; base lue par l'API (groupe secubox). Sous
+    # /var/lib (root), jamais sous /var/lib/secubox, qui appartient au compte partagé secubox (relecture : un lien glissé là
+    # aurait détourné les écritures root). 0.2.0 l'y avait mise : retirée (le relevé suivant reprend 30 jours de journal).
+    install -d -m 0750 -o root -g secubox /var/lib/secubox-meet 2>/dev/null || true
+    if [ -d /var/lib/secubox/meet ] && [ ! -L /var/lib/secubox/meet ]; then
+      rm -f -- /var/lib/secubox/meet/activite.db /var/lib/secubox/meet/activite.db-journal
+      rmdir /var/lib/secubox/meet 2>/dev/null || true
+    fi
     if [ -f /usr/lib/systemd/system/secubox-meet-activite.timer ]; then
       systemctl enable --now secubox-meet-activite.timer || true
     fi

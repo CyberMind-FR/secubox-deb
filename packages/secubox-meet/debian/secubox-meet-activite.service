@@ -4,8 +4,9 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # SecuBox-Deb :: Meet — relevé de l'activité de la visio (#3182).
-# Root : lxc-attach (journal de LiveKit, base de Meet) dans le conteneur. Écrit /var/lib/secubox/meet/activite.db
-# (root:secubox 0640), que l'API lit en lecture seule. Aucune adresse IP n'y entre.
+# Root : lxc-attach (journal de LiveKit, base de Meet) dans le conteneur. Écrit /var/lib/secubox-meet/activite.db
+# (root:secubox 0640), que l'API lit en lecture seule. Aucune adresse IP n'y entre. Confinement éprouvé sur gk1
+# (lxc-attach et psql fonctionnent sous ProtectSystem=strict).
 [Unit]
 Description=SecuBox Meet — relevé de l'activité de la visio
 Documentation=https://github.com/CyberMind-FR/secubox-deb
@@ -16,3 +17,11 @@ ExecStart=/usr/sbin/meetctl activite-collecte
 Nice=10
 IOSchedulingClass=idle
 TimeoutStartSec=300
+UMask=0027
+ProtectSystem=strict
+ReadWritePaths=/var/lib/secubox-meet /var/log/secubox
+PrivateTmp=yes
+ProtectHome=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes

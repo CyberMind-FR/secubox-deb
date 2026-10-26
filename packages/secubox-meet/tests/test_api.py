@@ -89,9 +89,9 @@ def test_media_expose_exige_jwt_et_confirmation(cli):
     assert cli.post("/media-expose", json={"action": "apply", "confirmer": "autre"}, jwt=True).status_code == 400
     assert not cli.appels
     assert cli.post("/media-expose", json={"action": "apply", "confirmer": "meet"}, jwt=True).status_code == 200
-    assert cli.appels[-1] == ("media-expose", "--apply")
+    assert cli.appels[-1] == ("media-expose", "--apply", "admin")
     assert cli.post("/media-expose", json={"action": "revoke", "confirmer": "meet"}, jwt=True).status_code == 200
-    assert cli.appels[-1] == ("media-expose", "--revoke")
+    assert cli.appels[-1] == ("media-expose", "--revoke", "admin")
 
 
 def test_media_expose_action_inconnue_400(cli):
@@ -227,9 +227,9 @@ def test_sudoers_argv_exacts():
     regles = _regles_sudoers()
     assert "" not in regles                            # jamais « meetctl » nu (tous les arguments)
     unites = ("postgresql", "redis-server", "livekit", "meet-backend", "nginx")
-    assert sorted(regles) == sorted(["status", "start", "stop", "restart", "media-expose", "media-expose --apply",
-                                     "media-expose --revoke", "oidc-verifier", "oidc-enregistrer",
-                                     "en-direct", "reunions", "clore *"]                         # #3182
+    assert sorted(regles) == sorted(["status", "start", "stop", "restart", "media-expose", "media-expose --apply *",
+                                     "media-expose --revoke *", "oidc-verifier", "oidc-enregistrer",
+                                     "en-direct", "reunions", "clore *"]                         # #3182 : + auteur
                                     + [f"logs {u} [0-9]*" for u in unites])
     assert tuple(unites) == M.KNOWN_UNITS
     t = SUDOERS.read_text()
