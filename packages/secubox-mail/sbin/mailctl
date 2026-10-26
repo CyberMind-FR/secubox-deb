@@ -467,6 +467,9 @@ cmd_webmail_pgp() {
 # Idempotent ; sans clé publiée la table est vide et la règle n'ajoute rien.
 cmd_autocrypt_sync() {
     local ct="$CONTAINER" tpl="${TEMPLATES_DIR:-/usr/lib/secubox/mail/templates}/rspamd" table rc=0
+    # Messagerie installée mais jamais provisionnée (gk1, #3185) : rien à synchroniser, pas une panne de la minuterie.
+    # Un conteneur qui existe et qui est arrêté, lui, reste une panne (plus bas).
+    lxc_exists "$ct" || { log "conteneur '$ct' non provisionné : rien à synchroniser"; return 0; }
     command -v sbx-openpgp >/dev/null 2>&1 || { error "secubox-openpgp absent : pas d'annuaire de clés"; return 1; }
     [ -f "$tpl/autocrypt.lua" ] || { error "gabarit autocrypt.lua introuvable ($tpl)"; return 1; }
     lxc_running "$ct" || { error "conteneur '$ct' a l'arret"; return 1; }
@@ -827,6 +830,8 @@ PY
             ;;
         run)
             local cible="${1:-}" f rc=0
+            # Jamais provisionné (#3185) : rien à rapatrier ; provisionné mais arrêté : panne.
+            lxc_exists "$CONTAINER" || { log "imap-sync run : conteneur $CONTAINER non provisionné, rien à rapatrier"; return 0; }
             lxc_running "$CONTAINER" || { error "imap-sync run : conteneur $CONTAINER à l'arrêt"; return 1; }
             install -d -m 0700 "$IMAP_SYNC_ETAT"
             for f in "$IMAP_SYNC_DIR"/*.json; do
