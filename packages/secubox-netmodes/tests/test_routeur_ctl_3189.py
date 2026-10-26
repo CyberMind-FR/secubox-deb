@@ -1221,8 +1221,9 @@ def test_etat_toml_non_utf8_config_invalide(cli, ctx, racine, capsys, monkeypatc
 
 @pytest.mark.parametrize("appel", [lambda ctx: rc.retour(ctx, "minuteur"), rc.retour_si_en_attente])
 def test_toml_non_utf8_le_retour_automatique_aboutit(ctx, racine, faux, appel):
-    """Le retour ne dépend jamais de la lecture du TOML courant : illisible, tous les ports du LAN sont reconfigurés."""
-    rc.appliquer(ctx, CFG42, "admin")
+    """Le retour ne dépend jamais de la lecture du TOML courant : illisible, tous les ports du LAN sont reconfigurés
+    (appliqué sur lan0 lan1 seulement : lan2 et lan3 ne viennent que du repli)."""
+    rc.appliquer(ctx, dict(CFG42, ports=["lan0", "lan1"]), "admin")
     (racine / TOML).write_bytes(TOML_LATIN1)
     faux.journal.clear()
     sortie = appel(ctx)
