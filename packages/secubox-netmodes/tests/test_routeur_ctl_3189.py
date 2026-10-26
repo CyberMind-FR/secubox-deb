@@ -53,6 +53,8 @@ NETPLAN_GK2 = """network:
       addresses: [10.100.0.1/24]
 """
 ANCIEN_PONT = "[Match]\nName=br-lan\n\n[Network]\nAddress=192.168.255.1/24\n"
+# base de secubox-hardening : nftables.service recharge les fragments de /etc/nftables.d au démarrage
+NFTABLES_CONF = '#!/usr/sbin/nft -f\nflush ruleset\ntable inet filter {\n}\n\ninclude "/etc/nftables.d/*.nft"\n'
 BAUX_TEMPORAIRES = "1761530000 aa:bb:cc:dd:ee:01 192.168.42.150 pc-bureau *\n1761530100 aa:bb:cc:dd:ee:02 192.168.42.151 gk4 *\n"
 
 
@@ -223,6 +225,7 @@ def preparer_racine(r: Path, gk2: bool = True) -> Path:
         (r / d).mkdir(parents=True, exist_ok=True)
     (r / "proc/sys/net/ipv4/ip_forward").write_text("1\n")
     (r / "etc/netplan/00-secubox.yaml").write_text(NETPLAN_GK2)
+    (r / "etc/nftables.conf").write_text(NFTABLES_CONF)
     if gk2:
         (r / "etc/systemd/network/10-br-lan.network").write_text(ANCIEN_PONT)
         (r / "run/sbx-lan-dhcp-42.leases").write_text(BAUX_TEMPORAIRES)
@@ -1217,3 +1220,35 @@ def test_toml_non_utf8_le_retour_automatique_aboutit(ctx, racine, faux, appel):
     assert (racine / "etc/systemd/network/10-br-lan.network").read_text() == ANCIEN_PONT
     assert ["networkctl", "reconfigure", "br-lan", "lan0", "lan1", "lan2", "lan3"] in faux.journal
     assert [a["action"] for a in audits(racine)][-1] == "retour"
+
+
+# --- relecture finale : I3 le fragment nft n'est rechargé au démarrage que par l'inclusion de nftables.conf ---------------
+
+@pytest.mark.parametrize("contenu", [
+    None,                                                                      # absent
+    "#!/usr/sbin/nft -f\nflush ruleset\ntable inet filter {\n}\n",            # sans inclusion
+    '#include "/etc/nftables.d/*.nft"\n',                                      # commentée
+    '# include "/etc/nftables.d/*.nft"\n',
+    'include "/etc/secubox/hardening/nft-site.d/*.nft"\n',                     # un autre dossier
+    'include "/etc/nftables.d/autre.nft"\n',
+])
+def test_refus_sans_inclusion_de_nftables_d(ctx, racine, faux, contenu):
+    conf = racine / "etc/nftables.conf"
+    if contenu is None:
+        conf.unlink()
+    else:
+        conf.write_text(contenu)
+    instantane_et_refus(ctx, racine, "nftables.conf")
+    assert not any(a[0] == "networkctl" for a in faux.journal)
+
+
+@pytest.mark.parametrize("ligne", [
+    'include "/etc/nftables.d/*.nft"',
+    "include '/etc/nftables.d/*.nft'",
+    "   include\t  /etc/nftables.d/*.nft   ",
+    'include "/etc/nftables.d/*.nft"   # services des paquets',
+    'include "/etc/nftables.d/*"',
+])
+def test_inclusion_de_nftables_d_toleree(ctx, racine, ligne):
+    (racine / "etc/nftables.conf").write_text(f"flush ruleset\n{ligne}\n")
+    assert rc.appliquer(ctx, CFG42, "admin")["etat"] == "en_attente"

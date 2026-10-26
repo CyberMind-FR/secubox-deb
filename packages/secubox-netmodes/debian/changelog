@@ -24,6 +24,8 @@ secubox-netmodes (1.4.0-1~trixie1) trixie; urgency=medium
     démarrage) aboutit sans dépendre du TOML courant (ports illisibles : lan0..lan3).
   * Relecture finale (ref #3189) : le drop-in Unbound du LAN porte ip-freebind: yes ; au démarrage, Unbound peut
     précéder l'adresse de br-lan et refusait sinon de démarrer (DNS de toute la box).
+  * Relecture finale (ref #3189) : application refusée si /etc/nftables.conf n'inclut pas /etc/nftables.d/*.nft
+    (le pare-feu du LAN ne serait pas rechargé au démarrage).
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 14:00:00 +0100
 

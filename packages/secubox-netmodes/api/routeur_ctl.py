@@ -52,6 +52,9 @@ ANCIEN_PONT = "/etc/systemd/network/10-br-lan.network"      # pont fait main de 
 DOSSIERS_NETWORKD = ("/etc/systemd/network", "/run/systemd/network")
 DOSSIER_GEO = "/etc/nginx/secubox-lan-geo.d"
 NETPLAN = "/etc/netplan"
+# nftables.service ne recharge au démarrage le fragment du LAN (CHEMINS["nft"]) que par cette inclusion
+NFTABLES_CONF = "/etc/nftables.conf"
+_INCLUSION_NFT = re.compile(r"""include\s+(["']?)/etc/nftables\.d/\*(?:\.nft)?\1\s*;?""")
 IP_FORWARD = "/proc/sys/net/ipv4/ip_forward"
 BAUX = "/var/lib/misc/dnsmasq.leases"                       # déjà lu par le NAC
 AUDIT = "/var/log/secubox/audit.log"
@@ -367,7 +370,22 @@ def etat(ctx: Contexte) -> dict:
 
 # --- appliquer ---------------------------------------------------------------------------------------------------------
 
+def _verifier_inclusion_nft(ctx: Contexte) -> None:
+    """Sans `include "/etc/nftables.d/*.nft"` dans nftables.conf, le pare-feu du LAN (DHCP, DNS, NAT) disparaîtrait au
+    premier redémarrage. Lu comme nft le lit (lien suivi) ; commentaires ignorés, espaces et guillemets tolérés."""
+    try:
+        texte = _p(ctx, NFTABLES_CONF).read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        raise Refus(f"{NFTABLES_CONF} illisible ({exc.__class__.__name__}) : impossible de vérifier que le pare-feu "
+                    "du LAN y est rechargé au démarrage") from exc
+    if not any(_INCLUSION_NFT.fullmatch(ligne.split("#", 1)[0].strip()) for ligne in texte.splitlines()):
+        raise Refus(f"{NFTABLES_CONF} n'inclut pas /etc/nftables.d/*.nft : le pare-feu du LAN ({CHEMINS['nft']}) ne "
+                    "serait pas rechargé au démarrage ; y ajouter include \"/etc/nftables.d/*.nft\" "
+                    "(base de secubox-hardening) d'abord")
+
+
 def _refus_prealables(ctx: Contexte, liens: dict[str, list[IPv4Interface]]) -> None:
+    _verifier_inclusion_nft(ctx)
     for f in sorted(_p(ctx, NETPLAN).glob("*.yaml")):
         try:
             doc = yaml.safe_load(f.read_text(encoding="utf-8"))
