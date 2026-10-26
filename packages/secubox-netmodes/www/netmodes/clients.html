@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — panneau Réseau, onglet « Clients LAN » (#3190), profil Aurora (.claude/AURORA-REFERENCE.md).
+  Appareils du LAN (baux DHCP et voisins du pont br-lan), port, zone NAC, et carte « Hubs et switchs détectés ». Page en LECTURE SEULE.
+  DONNÉES RÉELLES :
+    GET /api/v1/netmodes/reseau/clients   appareils : nom, MAC, adresse, port (session d'administrateur)
+    GET /api/v1/netmodes/reseau/ports     ports à plusieurs appareils (hubs, switchs, points d'accès)
+    GET /api/v1/nac/clients               zone et état d'autorisation, joints par MAC (sans casse)
+  Absent du NAC ou état « unknown » : pastille « à classer ». NAC en panne : « NAC indisponible », jamais « à classer ».
+  Une source en 401/503 : « session requise » ou « source en panne », jamais « aucun appareil ».
+  ?embed=1 : sans menu ; ?demo=1 : données de démonstration (adresses de documentation RFC 5737), aucun appel.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Clients LAN</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(167,139,250,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none;background:transparent} body.emb::-webkit-scrollbar{display:none} body.sm #sidebar{display:none}
+  [hidden]{display:none!important}
+  .page{min-width:0}
+  body:not(.sm) .page{margin-left:220px;padding-top:48px}
+  @media (max-width:900px){body:not(.sm) .page{margin-left:0}}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque b{font-size:1.3rem;font-weight:800;display:block} .marque small{display:block;color:var(--cyan);font-size:.72rem;overflow-wrap:anywhere}
+  .etat{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .etat.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .etat.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .etat.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:5px 12px;min-height:30px;cursor:pointer}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .bandeau{text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo{background:var(--orange);color:#1a1000} .info{background:var(--cyan);color:#04202a} .info a{color:inherit}
+  .sources{display:flex;flex-wrap:wrap;gap:5px 6px;align-items:center;font-size:.7rem}
+  .sources>b{color:var(--faible);font-weight:600;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;margin-right:2px}
+  .src{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.1);border-radius:999px;padding:2px 9px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .src.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.1)} .src.session{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.1)}
+  .src.panne{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.1)} .src.demo{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.1)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+  .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  .v.g{color:var(--vert)} .v.o{color:var(--orange)} .v.n{color:var(--doux)}
+  .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);align-items:start}
+  @container a (min-width:1100px){.grille.deux{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .defile{overflow-x:auto;min-width:0}
+  table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+  th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:4px 8px;font-weight:600;white-space:nowrap}
+  th button{font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;background:none;border:0;padding:2px 0;cursor:pointer}
+  th button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} th[aria-sort] button::after{content:" ▾";color:var(--cyan)} th[aria-sort="ascending"] button::after{content:" ▴"}
+  td{padding:6px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+  tr:hover td{background:rgba(41,182,246,.07)}
+  td.nom{min-width:9rem;overflow-wrap:anywhere} td.nom .cle{display:block;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.66rem;color:var(--faible)}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.76rem;white-space:nowrap}
+  td.nb{white-space:nowrap}
+  .doux{color:var(--doux)} .faible{color:var(--faible)} .rouge{color:var(--rouge)} .cyan{color:var(--cyan)}
+  .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+  .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.ko{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .alerte{color:var(--rouge);border:1px solid var(--rouge);border-radius:8px;padding:6px 10px;margin:0 0 8px;font-size:.76rem;line-height:1.4;background:rgba(255,77,94,.08)}
+  .alerte.session{color:var(--cyan);border-color:var(--cyan);background:rgba(41,182,246,.08)}
+  .vide{color:var(--faible);font-size:.8rem;padding:8px 2px}
+  /* Cadre étroit : chaque ligne devient une fiche (nom et état, puis adresse et échange, puis volumes), rien ne se cache à droite. */
+  @container a (max-width:600px){
+    table.fiches thead{display:none}
+    table.fiches tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;padding:8px 2px;border-top:1px solid rgba(86,150,255,.12)}
+    table.fiches td{border:0;padding:0;min-width:0}
+    table.fiches td.vide{grid-column:1/-1}
+    table.fiches td[data-l]::before{content:attr(data-l);color:var(--faible);margin-right:5px}
+  }
+  .note{color:var(--faible);font-size:.7rem;margin-top:8px;line-height:1.45}
+
+  td.nom{min-width:9rem}
+  td.nom .cle{display:block;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.68rem;color:var(--faible)}
+  .hub{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:6px 0;border-top:1px solid rgba(86,150,255,.12);font-size:.8rem}
+  .hub:first-child{border-top:0} .hub .nm{font-weight:700} .hub .macs{flex-basis:100%;color:var(--faible);font-size:.68rem;font-family:ui-monospace,Menlo,Consolas,monospace;overflow-wrap:anywhere}
+  @container a (max-width:600px){
+    #clients td.c-nom{grid-area:1/1} #clients td.c-zone{grid-area:1/2;text-align:right} #clients td.c-ip{grid-area:2/1} #clients td.c-port{grid-area:2/2;text-align:right}
+  }
+</style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="page"><div class="cadre" id="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>
+      <div><b>Clients LAN</b><small>appareils du LAN · baux DHCP, port du switch et zone NAC · lecture seule</small></div>
+    </div>
+    <span class="etat" id="etatSources" aria-live="polite">LECTURE…</span>
+    <div class="droite"><span id="heure">—</span><button type="button" class="btn" id="rafraichir">⟳ Rafraîchir</button></div>
+  </header>
+  <div class="bandeau demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — adresses de documentation, aucune mesure réelle</div>
+  <div class="bandeau info" id="session" hidden><span id="sessionTexte">Aucune mesure : session requise.</span> <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="sources" id="sources" aria-label="État de chaque source"><b>Sources</b></div>
+
+  <div class="tuiles">
+    <div class="tuile"><span class="l">Appareils</span><span class="v" id="tNb">—</span><span class="s" id="tNbS">baux et voisins du pont</span></div>
+    <div class="tuile"><span class="l">À classer</span><span class="v o" id="tCl">—</span><span class="s" id="tClS">absents du NAC ou « unknown »</span></div>
+    <div class="tuile"><span class="l">Sans port connu</span><span class="v n" id="tSp">—</span><span class="s" id="tSpS">adresse MAC non apprise</span></div>
+    <div class="tuile"><span class="l">Hubs ou switchs</span><span class="v n" id="tHub">—</span><span class="s">ports à plusieurs appareils</span></div>
+  </div>
+  <div class="grille deux">
+    <div class="pan">
+      <h3>Appareils du LAN <i id="note">baux DHCP · table du pont · zone du NAC</i></h3>
+      <div id="clientsPannes"></div>
+      <div class="defile">
+        <table class="fiches">
+          <thead><tr><th scope="col">Appareil</th><th scope="col">Adresse</th><th scope="col">Port</th><th scope="col">Zone NAC</th></tr></thead>
+          <tbody id="clients"><tr><td colspan="4" class="vide">lecture…</td></tr></tbody>
+        </table>
+      </div>
+      <p class="note">Noms : baux DHCP (un voisin sans bail n'a pas de nom). Port : adresse MAC apprise par le pont. Zone : contrôle d'accès réseau (NAC), jointure par adresse MAC. « À classer » : appareil absent du NAC ou encore « unknown » ; cette page ne classe rien.</p>
+    </div>
+    <div class="pan">
+      <h3>Hubs et switchs détectés <i>plusieurs adresses MAC par port</i></h3>
+      <div id="hubsPannes"></div>
+      <div id="hubs"><div class="vide">lecture…</div></div>
+      <p class="note">Plusieurs appareils derrière un même port signalent un switch, un hub ou un point d'accès branché sur ce port.</p>
+    </div>
+  </div>
+</div></div></main>
+
+<script>
+"use strict";
+(function () {
+  var Q = new URLSearchParams(location.search), DEMO = Q.has("demo"), EMB = Q.has("embed");
+  var ONGLET = "clients";
+  if (EMB) { document.body.classList.add("emb"); }
+  if (EMB || DEMO) { document.body.classList.add("sm"); }
+  else {
+    // Menu commun : hors ?embed=1 et hors démonstration.
+    var lien = document.createElement("link"); lien.rel = "stylesheet"; lien.href = "/shared/sidebar-light.css"; document.head.appendChild(lien);
+    var sb = document.createElement("script"); sb.src = "/shared/sidebar.js"; document.body.appendChild(sb);
+  }
+  var $ = function (id) { return document.getElementById(id); };
+  function h(tag, cls, txt) { var e = document.createElement(tag); if (cls) { e.className = cls; } if (txt != null) { e.textContent = txt; } return e; }
+  function vider(el) { while (el.firstChild) { el.removeChild(el.firstChild); } return el; }
+
+  // ── Lecture : chaque source rend {ok, d} ou {ok:false, session|panne} ──────────────────────────────────────────────────────────
+  function jeton() { try { return localStorage.getItem("sbx_token") || ""; } catch (e) { return ""; } }
+  function lire(url) {
+    var t = jeton(), hd = { Accept: "application/json" };
+    if (t) { hd.Authorization = "Bearer " + t; }
+    return fetch(url, { method: "GET", headers: hd, credentials: "same-origin", cache: "no-store" })
+      .then(function (r) {
+        if (r.status === 401 || r.status === 403) { return { ok: false, session: true }; }
+        return r.json().then(function (j) { return j; }, function () { return null; }).then(function (j) {
+          if (!r.ok) { return { ok: false, panne: "HTTP " + r.status + (j && j.detail ? " : " + j.detail : "") }; }
+          if (!j || typeof j !== "object") { return { ok: false, panne: "réponse illisible" }; }
+          return { ok: true, d: j };
+        });
+      })
+      .catch(function () { return { ok: false, panne: "injoignable" }; });
+  }
+  function raison(s) { return s.session ? "session requise" : "source en panne"; }
+  function pastille(cls, txt, titre) { var p = h("span", "pill" + (cls ? " " + cls : ""), txt); if (titre) { p.title = titre; } return p; }
+  function bandeauPanne(z, s, quoi) {
+    var b = h("div", "alerte" + (s.session ? " session" : ""));
+    b.textContent = quoi + " : " + raison(s) + (s.panne ? " (" + s.panne + ")" : "") + ".";
+    z.appendChild(b);
+  }
+  function ligneVide(tb, n, txt, cls) { var tr = h("tr"), td = h("td", "vide" + (cls ? " " + cls : ""), txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+  function vitesse(m) { return m == null ? null : (m >= 1000 ? (m / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " Gb/s" : m + " Mb/s"); }
+  function mini(m) { return String(m || "").toLowerCase(); }
+  function charger(S) {
+    return DEMO ? Promise.resolve(donneesDemo()) : Promise.all(S.map(function (s) { return lire(s.url); })).then(function (rs) {
+      var R = {}; S.forEach(function (s, i) { R[s.cle] = rs[i]; }); return R;
+    });
+  }
+  function sources(R, S) {
+    var z = $("sources");
+    while (z.childNodes.length > 1) { z.removeChild(z.lastChild); }
+    var nPanne = 0, nSession = 0, nPartiel = 0;
+    S.forEach(function (s) {
+      var r = R[s.cle], p = h("span"), pannes = r.ok && Array.isArray(r.d.pannes) ? r.d.pannes : [];
+      if (DEMO) { p.className = "src demo"; p.textContent = s.nom + " · démo"; }
+      else if (r.ok && pannes.length) { nPartiel++; p.className = "src panne"; p.textContent = s.nom + " · partielle"; }
+      else if (r.ok) { p.className = "src ok"; p.textContent = s.nom + " · lue"; }
+      else if (r.session) { nSession++; p.className = "src session"; p.textContent = s.nom + " · session requise"; }
+      else { nPanne++; p.className = "src panne"; p.textContent = s.nom + " · en panne"; }
+      p.title = "GET " + s.url + (r.ok ? (pannes.length ? " — lecture partielle, en panne : " + pannes.join(", ") : " — lue") : " — " + (r.session ? "session requise (401)" : r.panne));
+      z.appendChild(p);
+    });
+    var e = $("etatSources"), np = nPanne + nPartiel;
+    if (DEMO) { e.className = "etat att"; e.textContent = "DÉMONSTRATION"; }
+    else if (np) { e.className = "etat hors"; e.textContent = np + " SOURCE" + (np > 1 ? "S" : "") + " EN PANNE"; }
+    else if (nSession) { e.className = "etat hors"; e.textContent = "SESSION REQUISE"; }
+    else { e.className = "etat ok"; e.textContent = "TOUTES LES SOURCES LUES"; }
+    $("session").hidden = DEMO || !nSession;
+    $("sessionTexte").textContent = nSession === S.length ? "Aucune mesure : session requise." : "Mesures partielles : session requise pour " + nSession + " source" + (nSession > 1 ? "s" : "") + ".";
+  }
+  function hauteur() {
+    if (window.parent === window) { return; }
+    try { window.parent.postMessage({ sbxVue: Math.ceil($("cadre").getBoundingClientRect().bottom + window.scrollY), onglet: ONGLET }, location.origin); }
+    catch (e) { /* hôte inaccessible */ }
+  }
+
+  var SOURCES = [
+    { cle: "clients", nom: "Clients LAN", url: "/api/v1/netmodes/reseau/clients" },
+    { cle: "ports", nom: "Ports", url: "/api/v1/netmodes/reseau/ports" },
+    { cle: "nac", nom: "NAC", url: "/api/v1/nac/clients" }
+  ];
+  var ZONES = { lan: "ok", lxc: "cy", iot: "cy", guest: "att", quarantine: "ko" };
+  var dernier = null, enCours = false;
+  function ipNum(ip) { var m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(ip || ""); return m ? ((+m[1] * 256 + +m[2]) * 256 + +m[3]) * 256 + +m[4] : Infinity; }
+
+  function indexNac(R) {
+    if (!R.nac.ok || !Array.isArray(R.nac.d.clients)) { return null; }
+    var m = {}; R.nac.d.clients.forEach(function (c) { if (c && c.mac) { m[mini(c.mac)] = c; } }); return m;
+  }
+  function rendreClients(R) {
+    var tb = vider($("clients")), z = vider($("clientsPannes")), nac = indexNac(R);
+    if (!R.clients.ok) {
+      bandeauPanne(z, R.clients, "Appareils du LAN"); ligneVide(tb, 4, "Appareils illisibles : " + raison(R.clients) + ".", R.clients.session ? "cyan" : "rouge");
+      ["tNb", "tCl", "tSp"].forEach(function (i) { $(i).textContent = "—"; }); return;
+    }
+    var pn = Array.isArray(R.clients.d.pannes) ? R.clients.d.pannes : [], liste = R.clients.d.clients;
+    if (pn.length) { var b = h("div", "alerte"); b.textContent = "Lecture partielle, source en panne : " + pn.join(", ") + ". Les champs concernés s'affichent « — »."; z.appendChild(b); }
+    if (!R.nac.ok) { bandeauPanne(z, R.nac, "Zones NAC (/api/v1/nac/clients)"); }
+    if (!Array.isArray(liste)) { ligneVide(tb, 4, "Appareils illisibles : source en panne.", "rouge"); ["tNb", "tCl", "tSp"].forEach(function (i) { $(i).textContent = "—"; }); return; }
+    liste = liste.filter(function (c) { return c && typeof c === "object"; }).slice().sort(function (a, b) { return (a.port || "~").localeCompare(b.port || "~") || ipNum(a.ip) - ipNum(b.ip); });
+    var aClasser = 0, sansPort = 0;
+    if (!liste.length) { ligneVide(tb, 4, "Aucun appareil sur le LAN (sources lues)."); }
+    liste.forEach(function (c) {
+      var tr = h("tr"), tdN = h("td", "nom c-nom");
+      tdN.appendChild(h("span", c.nom ? "" : "faible", c.nom || "sans nom"));
+      if (c.bail_inconnu) { tdN.title = "Baux DHCP illisibles : le nom est inconnu"; tdN.firstChild.textContent = "—"; }
+      if (c.mac) { tdN.appendChild(h("span", "cle", c.mac)); }
+      tr.appendChild(tdN);
+      tr.appendChild(h("td", "mono c-ip", c.ip || "—"));
+      var tdP = h("td", "nb c-port" + (c.port ? "" : " faible"), c.port || "—"); tdP.dataset.l = "port"; if (!c.port) { sansPort++; tdP.title = "Adresse MAC non apprise par le pont, ou table illisible"; } tr.appendChild(tdP);
+      var tdZ = h("td", "c-zone");
+      if (!nac) { tdZ.appendChild(pastille("ko", "NAC indisponible", "NAC : " + raison(R.nac))); }
+      else {
+        var n = nac[mini(c.mac)];
+        if (!n || !n.allow_state || n.allow_state === "unknown") { aClasser++; tdZ.appendChild(pastille("att", "à classer", n ? "Connu du NAC mais jamais autorisé ni refusé (unknown)." : "Absent du NAC.")); }
+        else { tdZ.appendChild(pastille(ZONES[n.zone] || "", n.zone_name || n.zone || "—", "Zone du NAC : " + (n.zone || "—") + " · état : " + n.allow_state)); }
+      }
+      tr.appendChild(tdZ);
+      tb.appendChild(tr);
+    });
+    $("tNb").textContent = String(liste.length); $("tNbS").textContent = pn.indexOf("baux") >= 0 ? "voisins seuls : baux illisibles" : "baux et voisins du pont";
+    $("tCl").textContent = nac ? String(aClasser) : "—"; $("tClS").textContent = nac ? "absents du NAC ou « unknown »" : "NAC indisponible : " + raison(R.nac);
+    $("tSp").textContent = String(sansPort);
+  }
+  function rendreHubs(R) {
+    var z = vider($("hubs")), zp = vider($("hubsPannes"));
+    if (!R.ports.ok || !Array.isArray(R.ports.d.ports)) { bandeauPanne(zp, R.ports, "Ports"); z.appendChild(h("div", "vide rouge", "Détection illisible : ports " + raison(R.ports) + ".")); $("tHub").textContent = "—"; return; }
+    var lans = R.ports.d.ports.filter(function (p) { return p && /^lan[0-3]$/.test(p.nom); });
+    var hubs = lans.filter(function (p) { return p.plusieurs_appareils === true; }), inconnus = lans.filter(function (p) { return p.plusieurs_appareils == null; });
+    if (inconnus.length === lans.length && lans.length) { z.appendChild(h("div", "vide rouge", "Détection illisible : table du pont en panne (source en panne).")); $("tHub").textContent = "—"; return; }
+    $("tHub").textContent = String(hubs.length);
+    if (!hubs.length) { z.appendChild(h("div", "vide", "Aucun" + (inconnus.length ? " parmi les ports lus" : "") + " (une adresse MAC par port).")); }
+    hubs.forEach(function (p) {
+      var d = h("div", "hub"), n = Array.isArray(p.macs) ? p.macs.length : p.nb_appareils;
+      d.appendChild(h("span", "nm", p.nom)); d.appendChild(pastille("att", "switch, hub ou point d'accès"));
+      d.appendChild(h("span", "doux", n != null ? n + " appareils" : "plusieurs appareils"));
+      if (Array.isArray(p.macs) && p.macs.length) { d.appendChild(h("span", "macs", p.macs.join(" · "))); }
+      z.appendChild(d);
+    });
+    if (inconnus.length) { z.appendChild(h("div", "vide", "Illisible pour : " + inconnus.map(function (p) { return p.nom; }).join(", ") + " (source en panne).")); }
+  }
+
+  function donneesDemo() {
+    var maintenant = Math.floor(Date.now() / 1000);
+    return {
+      ports: { ok: true, d: { ports: [
+        { nom: "eth2", role: "wan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: null, macs: [], plusieurs_appareils: false, coupe: false },
+        { nom: "eth1", role: "conduit", porteuse: true, vitesse_mbps: 2500, etat_admin: "up", maitre: null, macs: [], plusieurs_appareils: false, coupe: false },
+        { nom: "eth0", role: "sfp", porteuse: false, vitesse_mbps: null, etat_admin: "up", maitre: null, macs: [], plusieurs_appareils: false, coupe: false },
+        { nom: "lan0", role: "lan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:c0"], plusieurs_appareils: false, coupe: false },
+        { nom: "lan1", role: "lan", porteuse: false, vitesse_mbps: null, etat_admin: "up", maitre: "br-lan", macs: [], plusieurs_appareils: false, coupe: false },
+        { nom: "lan2", role: "lan", porteuse: true, vitesse_mbps: 100, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:a1", "00:00:5e:00:53:a2", "00:00:5e:00:53:a3"], plusieurs_appareils: true, coupe: false },
+        { nom: "lan3", role: "lan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:bf"], plusieurs_appareils: false, coupe: false }], pannes: [] } },
+      clients: { ok: true, d: { clients: [
+        { mac: "00:00:5e:00:53:c0", ip: "198.51.100.192", nom: "pc-demo", port: "lan0", source: "bail", expire: maintenant + 3600 },
+        { mac: "00:00:5e:00:53:a1", ip: "198.51.100.150", nom: "imprimante-demo", port: "lan2", source: "bail", expire: maintenant + 3600 },
+        { mac: "00:00:5e:00:53:a2", ip: "198.51.100.151", nom: "", port: "lan2", source: "voisin", expire: null },
+        { mac: "00:00:5e:00:53:a3", ip: "198.51.100.152", nom: "tv-demo", port: "lan2", source: "bail", expire: maintenant + 3600 },
+        { mac: "00:00:5e:00:53:bf", ip: "198.51.100.191", nom: "rpi-demo", port: "lan3", source: "bail", expire: maintenant + 3600 }], pannes: [] } },
+      routeur: { ok: true, d: { etat: "actif", ports_coupes: [], bascule_en_cours: false } },
+      nac: { ok: true, d: { clients: [
+        { mac: "00:00:5E:00:53:C0", ip: "198.51.100.192", hostname: "pc-demo", zone: "lan", zone_name: "LAN", allow_state: "allowed", device_type: "pc" },
+        { mac: "00:00:5e:00:53:a1", ip: "198.51.100.150", hostname: "imprimante-demo", zone: "iot", zone_name: "IoT", allow_state: "allowed", device_type: "printer" },
+        { mac: "00:00:5e:00:53:a3", ip: "198.51.100.152", hostname: "tv-demo", zone: "guest", zone_name: "Invités", allow_state: "unknown", device_type: "tv" }], count: 3, by_zone: {} } }
+    };
+  }
+
+  function rafraichir() {
+    if (enCours) { return Promise.resolve(); }
+    enCours = true;
+    return charger(SOURCES).then(function (R) {
+      enCours = false; dernier = R; sources(R, SOURCES); rendreClients(R); rendreHubs(R);
+      $("heure").textContent = "Relevé " + new Date().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      hauteur();
+    });
+  }
+  $("rafraichir").addEventListener("click", rafraichir);
+  rafraichir();
+  setInterval(function () { if (!document.hidden) { rafraichir(); } }, 30000);
+
+  if (DEMO) { $("demo").hidden = false; }
+  addEventListener("resize", hauteur); addEventListener("load", hauteur);
+  if (window.ResizeObserver) { new ResizeObserver(hauteur).observe(document.body); }
+})();
+</script>
+</body>
+</html>

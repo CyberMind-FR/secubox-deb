@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — panneau Réseau, onglet « Switch » (#3190), profil Aurora (.claude/AURORA-REFERENCE.md).
+  Façade du MOCHAbin (eth2 WAN, SFP+ eth0, lan0 à lan3) et tableau des ports ; Couper… / Rétablir… sur lan0 à lan3 seulement,
+  avec confirmation DANS la page (saisie du nom du port) ; « Isoler » reste désactivé (livraison 3). eth0, eth1 et eth2 : aucune action.
+  DONNÉES RÉELLES :
+    GET  /api/v1/netmodes/reseau/ports           ports : rôle, lien, vitesse, pont, appareils derrière le port (lecture)
+    GET  /api/v1/netmodes/reseau/clients         noms des appareils par port (session d'administrateur)
+    GET  /api/v1/netmodes/routeur/etat           mode routeur et ports coupés (session d'administrateur)
+    POST /api/v1/netmodes/ports/<port>/couper    corps {"confirmer": "<port>"} ; idem /retablir (session d'administrateur)
+  Un champ illisible (None) s'affiche « — » ou comme une panne, jamais comme « faux ». Un refus (409…) est affiché tel quel dans la page.
+  ?embed=1 : sans menu ; ?demo=1 : données de démonstration (adresses de documentation RFC 5737), aucun appel, actions inertes.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Switch</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(167,139,250,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none;background:transparent} body.emb::-webkit-scrollbar{display:none} body.sm #sidebar{display:none}
+  [hidden]{display:none!important}
+  .page{min-width:0}
+  body:not(.sm) .page{margin-left:220px;padding-top:48px}
+  @media (max-width:900px){body:not(.sm) .page{margin-left:0}}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque b{font-size:1.3rem;font-weight:800;display:block} .marque small{display:block;color:var(--cyan);font-size:.72rem;overflow-wrap:anywhere}
+  .etat{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .etat.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .etat.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .etat.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:5px 12px;min-height:30px;cursor:pointer}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .bandeau{text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo{background:var(--orange);color:#1a1000} .info{background:var(--cyan);color:#04202a} .info a{color:inherit}
+  .sources{display:flex;flex-wrap:wrap;gap:5px 6px;align-items:center;font-size:.7rem}
+  .sources>b{color:var(--faible);font-weight:600;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;margin-right:2px}
+  .src{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.1);border-radius:999px;padding:2px 9px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .src.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.1)} .src.session{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.1)}
+  .src.panne{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.1)} .src.demo{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.1)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+  .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  .v.g{color:var(--vert)} .v.o{color:var(--orange)} .v.n{color:var(--doux)}
+  .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);align-items:start}
+  @container a (min-width:1100px){.grille.deux{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .defile{overflow-x:auto;min-width:0}
+  table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+  th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:4px 8px;font-weight:600;white-space:nowrap}
+  th button{font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;background:none;border:0;padding:2px 0;cursor:pointer}
+  th button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} th[aria-sort] button::after{content:" ▾";color:var(--cyan)} th[aria-sort="ascending"] button::after{content:" ▴"}
+  td{padding:6px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+  tr:hover td{background:rgba(41,182,246,.07)}
+  td.nom{min-width:9rem;overflow-wrap:anywhere} td.nom .cle{display:block;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.66rem;color:var(--faible)}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.76rem;white-space:nowrap}
+  td.nb{white-space:nowrap}
+  .doux{color:var(--doux)} .faible{color:var(--faible)} .rouge{color:var(--rouge)} .cyan{color:var(--cyan)}
+  .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+  .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.ko{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .alerte{color:var(--rouge);border:1px solid var(--rouge);border-radius:8px;padding:6px 10px;margin:0 0 8px;font-size:.76rem;line-height:1.4;background:rgba(255,77,94,.08)}
+  .alerte.session{color:var(--cyan);border-color:var(--cyan);background:rgba(41,182,246,.08)}
+  .vide{color:var(--faible);font-size:.8rem;padding:8px 2px}
+  /* Cadre étroit : chaque ligne devient une fiche (nom et état, puis adresse et échange, puis volumes), rien ne se cache à droite. */
+  @container a (max-width:600px){
+    table.fiches thead{display:none}
+    table.fiches tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;padding:8px 2px;border-top:1px solid rgba(86,150,255,.12)}
+    table.fiches td{border:0;padding:0;min-width:0}
+    table.fiches td.vide{grid-column:1/-1}
+    table.fiches td[data-l]::before{content:attr(data-l);color:var(--faible);margin-right:5px}
+  }
+  .note{color:var(--faible);font-size:.7rem;margin-top:8px;line-height:1.45}
+
+  /* Façade */
+  .facade{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:flex-end;padding:12px;border-radius:10px;background:linear-gradient(180deg,#111a2c,#0a111f);border:1px solid #26324a;min-width:0}
+  .port{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;width:78px;text-align:center}
+  .prise{width:64px;height:52px;border-radius:6px;border:2px solid #3b4f73;background:#050b16;display:flex;align-items:flex-end;justify-content:space-between;padding:4px}
+  .prise.sfp{width:76px} .prise.lien{border-color:var(--vert)} .prise.wan{border-color:var(--cyan)} .prise.coupe{border-color:var(--rouge)}
+  .led{width:9px;height:9px;border-radius:50%;background:#26324a} .led.v{background:var(--vert)} .led.o{background:var(--orange)} .led.r{background:var(--rouge)}
+  .port b{font-size:.74rem} .port span{font-size:.68rem;color:var(--doux);overflow-wrap:anywhere;line-height:1.25} .port span.f{color:var(--faible)}
+  .sep{width:1px;align-self:stretch;background:#26324a}
+  td.act{white-space:nowrap} td.act .btn{margin-right:4px}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  .btn.danger{border-color:var(--rouge);color:#ff8b97;background:rgba(255,77,94,.1)} .btn.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.1)}
+  .confirm{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:10px 12px;display:grid;gap:8px;margin-top:10px}
+  .confirm.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)}
+  .confirm p{margin:0;font-size:.8rem;line-height:1.45} .confirm .ligne{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+  .confirm label{font-size:.76rem;color:var(--doux)}
+  .confirm input{font:inherit;font-size:.82rem;color:var(--texte);background:rgba(3,8,20,.8);border:1px solid var(--trait2);border-radius:8px;padding:5px 9px;min-height:30px;width:9rem;max-width:100%}
+  .confirm input:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .resultat{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.08);border-radius:8px;padding:6px 10px;margin-top:10px;font-size:.78rem;line-height:1.4;overflow-wrap:anywhere}
+  .resultat.ko{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.08)} .resultat.demo{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.08)}
+  .multi{display:block;margin-top:3px;color:var(--orange);font-size:.7rem;line-height:1.35}
+  td.mb{overflow-wrap:anywhere} .pt{font-size:.72rem}
+  @container a (max-width:600px){
+    #ports td.c-port{grid-area:1/1;font-weight:700} #ports td.c-role{grid-area:1/2;text-align:right} #ports td.c-lien{grid-area:2/1} #ports td.c-membre{grid-area:2/2;text-align:right}
+    #ports td.c-der{grid-area:3/1/3/3} #ports td.c-act{grid-area:4/1/4/3;white-space:normal}
+  }
+</style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="page"><div class="cadre" id="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 17h.01M11 17h.01M15 17h.01"/><path d="M12 14V9M12 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>
+      <div><b>Switch</b><small>MOCHAbin · ports, liens et appareils derrière chaque port</small></div>
+    </div>
+    <span class="etat" id="etatSources" aria-live="polite">LECTURE…</span>
+    <div class="droite"><span id="heure">—</span><button type="button" class="btn" id="rafraichir">⟳ Rafraîchir</button></div>
+  </header>
+  <div class="bandeau demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — adresses de documentation, aucune mesure réelle</div>
+  <div class="bandeau info" id="session" hidden><span id="sessionTexte">Aucune mesure : session requise.</span> <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="sources" id="sources" aria-label="État de chaque source"><b>Sources</b></div>
+
+  <div class="tuiles">
+    <div class="tuile"><span class="l">Ports avec lien</span><span class="v g" id="tLien">—</span><span class="s" id="tLienS">sur les 7 ports</span></div>
+    <div class="tuile"><span class="l">Appareils vus</span><span class="v" id="tApp">—</span><span class="s" id="tAppS">derrière lan0 à lan3</span></div>
+    <div class="tuile"><span class="l">Ports coupés</span><span class="v o" id="tCoupe">—</span><span class="s" id="tCoupeS">arrêtés par l'administrateur</span></div>
+    <div class="tuile"><span class="l">Hubs ou switchs</span><span class="v n" id="tHub">—</span><span class="s">ports à plusieurs appareils</span></div>
+  </div>
+  <div class="pan">
+    <h3>Façade <i>vue de face · voyant vert = lien, orange = port arrêté</i></h3>
+    <div id="portsPannes"></div>
+    <div class="facade" id="facade" role="group" aria-label="Façade du switch"><span class="faible">lecture…</span></div>
+    <div class="defile" style="margin-top:10px">
+      <table class="fiches">
+        <thead><tr><th scope="col">Port</th><th scope="col">Rôle</th><th scope="col">Lien</th><th scope="col">Membre de</th><th scope="col">Derrière le port</th><th scope="col">Actions</th></tr></thead>
+        <tbody id="ports"><tr><td colspan="6" class="vide">lecture…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="confirm" id="confirm" hidden>
+      <p id="confirmTexte"></p>
+      <div class="ligne"><label for="confirmSaisie" id="confirmEtiq">Nom du port</label><input type="text" id="confirmSaisie" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button type="button" class="btn danger" id="confirmOk" disabled>Confirmer</button><button type="button" class="btn" id="confirmAnnule">Annuler</button></div>
+    </div>
+    <div class="resultat" id="resultat" role="status" aria-live="polite" hidden></div>
+    <p class="note">« Isoler » placera un port dans son propre VLAN (livraison 3). « Couper » arrête le port et « Rétablir » le relance : seuls lan0 à lan3, en mode routeur actif ; chaque geste est confirmé par la saisie du nom du port et inscrit au journal d'audit. Le port derrière lequel vous êtes ne peut pas être coupé. eth1 (conduit du switch) n'est jamais ponté et eth2 (WAN) n'est jamais relancé à distance. Plusieurs adresses MAC derrière un même port signalent un switch, un hub ou un point d'accès.</p>
+  </div>
+</div></div></main>
+
+<script>
+"use strict";
+(function () {
+  var Q = new URLSearchParams(location.search), DEMO = Q.has("demo"), EMB = Q.has("embed");
+  var ONGLET = "switch";
+  if (EMB) { document.body.classList.add("emb"); }
+  if (EMB || DEMO) { document.body.classList.add("sm"); }
+  else {
+    // Menu commun : hors ?embed=1 et hors démonstration.
+    var lien = document.createElement("link"); lien.rel = "stylesheet"; lien.href = "/shared/sidebar-light.css"; document.head.appendChild(lien);
+    var sb = document.createElement("script"); sb.src = "/shared/sidebar.js"; document.body.appendChild(sb);
+  }
+  var $ = function (id) { return document.getElementById(id); };
+  function h(tag, cls, txt) { var e = document.createElement(tag); if (cls) { e.className = cls; } if (txt != null) { e.textContent = txt; } return e; }
+  function vider(el) { while (el.firstChild) { el.removeChild(el.firstChild); } return el; }
+
+  // ── Lecture : chaque source rend {ok, d} ou {ok:false, session|panne} ──────────────────────────────────────────────────────────
+  function jeton() { try { return localStorage.getItem("sbx_token") || ""; } catch (e) { return ""; } }
+  function lire(url) {
+    var t = jeton(), hd = { Accept: "application/json" };
+    if (t) { hd.Authorization = "Bearer " + t; }
+    return fetch(url, { method: "GET", headers: hd, credentials: "same-origin", cache: "no-store" })
+      .then(function (r) {
+        if (r.status === 401 || r.status === 403) { return { ok: false, session: true }; }
+        return r.json().then(function (j) { return j; }, function () { return null; }).then(function (j) {
+          if (!r.ok) { return { ok: false, panne: "HTTP " + r.status + (j && j.detail ? " : " + j.detail : "") }; }
+          if (!j || typeof j !== "object") { return { ok: false, panne: "réponse illisible" }; }
+          return { ok: true, d: j };
+        });
+      })
+      .catch(function () { return { ok: false, panne: "injoignable" }; });
+  }
+  function raison(s) { return s.session ? "session requise" : "source en panne"; }
+  function pastille(cls, txt, titre) { var p = h("span", "pill" + (cls ? " " + cls : ""), txt); if (titre) { p.title = titre; } return p; }
+  function bandeauPanne(z, s, quoi) {
+    var b = h("div", "alerte" + (s.session ? " session" : ""));
+    b.textContent = quoi + " : " + raison(s) + (s.panne ? " (" + s.panne + ")" : "") + ".";
+    z.appendChild(b);
+  }
+  function ligneVide(tb, n, txt, cls) { var tr = h("tr"), td = h("td", "vide" + (cls ? " " + cls : ""), txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+  function vitesse(m) { return m == null ? null : (m >= 1000 ? (m / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " Gb/s" : m + " Mb/s"); }
+  function mini(m) { return String(m || "").toLowerCase(); }
+  function charger(S) {
+    return DEMO ? Promise.resolve(donneesDemo()) : Promise.all(S.map(function (s) { return lire(s.url); })).then(function (rs) {
+      var R = {}; S.forEach(function (s, i) { R[s.cle] = rs[i]; }); return R;
+    });
+  }
+  function sources(R, S) {
+    var z = $("sources");
+    while (z.childNodes.length > 1) { z.removeChild(z.lastChild); }
+    var nPanne = 0, nSession = 0, nPartiel = 0;
+    S.forEach(function (s) {
+      var r = R[s.cle], p = h("span"), pannes = r.ok && Array.isArray(r.d.pannes) ? r.d.pannes : [];
+      if (DEMO) { p.className = "src demo"; p.textContent = s.nom + " · démo"; }
+      else if (r.ok && pannes.length) { nPartiel++; p.className = "src panne"; p.textContent = s.nom + " · partielle"; }
+      else if (r.ok) { p.className = "src ok"; p.textContent = s.nom + " · lue"; }
+      else if (r.session) { nSession++; p.className = "src session"; p.textContent = s.nom + " · session requise"; }
+      else { nPanne++; p.className = "src panne"; p.textContent = s.nom + " · en panne"; }
+      p.title = "GET " + s.url + (r.ok ? (pannes.length ? " — lecture partielle, en panne : " + pannes.join(", ") : " — lue") : " — " + (r.session ? "session requise (401)" : r.panne));
+      z.appendChild(p);
+    });
+    var e = $("etatSources"), np = nPanne + nPartiel;
+    if (DEMO) { e.className = "etat att"; e.textContent = "DÉMONSTRATION"; }
+    else if (np) { e.className = "etat hors"; e.textContent = np + " SOURCE" + (np > 1 ? "S" : "") + " EN PANNE"; }
+    else if (nSession) { e.className = "etat hors"; e.textContent = "SESSION REQUISE"; }
+    else { e.className = "etat ok"; e.textContent = "TOUTES LES SOURCES LUES"; }
+    $("session").hidden = DEMO || !nSession;
+    $("sessionTexte").textContent = nSession === S.length ? "Aucune mesure : session requise." : "Mesures partielles : session requise pour " + nSession + " source" + (nSession > 1 ? "s" : "") + ".";
+  }
+  function hauteur() {
+    if (window.parent === window) { return; }
+    try { window.parent.postMessage({ sbxVue: Math.ceil($("cadre").getBoundingClientRect().bottom + window.scrollY), onglet: ONGLET }, location.origin); }
+    catch (e) { /* hôte inaccessible */ }
+  }
+
+  var SOURCES = [
+    { cle: "ports", nom: "Ports", url: "/api/v1/netmodes/reseau/ports" },
+    { cle: "clients", nom: "Clients LAN", url: "/api/v1/netmodes/reseau/clients" },
+    { cle: "routeur", nom: "Mode routeur", url: "/api/v1/netmodes/routeur/etat" }
+  ];
+  var ORDRE = ["eth2", "eth0", "|", "lan0", "lan1", "lan2", "lan3"], TABLE = ["eth2", "eth1", "lan0", "lan1", "lan2", "lan3", "eth0"];
+  var ROLES = { wan: ["WAN", "cy"], conduit: ["conduit DSA", ""], sfp: ["SFP+ 10G", ""], lan: ["LAN", ""] };
+  var LAN_RE = /^lan[0-3]$/;
+  var dernier = null, ouverte = null, enCours = false, occupe = false;
+
+  function coupeDe(R, p) {          // true / false / null (illisible)
+    if (p.coupe === true || p.coupe === false) { return p.coupe; }
+    return null;
+  }
+  function parNom(R) {
+    var m = {};
+    if (R.ports.ok && Array.isArray(R.ports.d.ports)) { R.ports.d.ports.forEach(function (p) { if (p && p.nom) { m[p.nom] = p; } }); }
+    return m;
+  }
+  function appareilsDe(p) { return Array.isArray(p.macs) ? p.macs.length : (typeof p.nb_appareils === "number" ? p.nb_appareils : null); }
+  function nomsDe(R, nom) {
+    if (!R.clients.ok || !Array.isArray(R.clients.d.clients)) { return null; }
+    return R.clients.d.clients.filter(function (c) { return c && c.port === nom; }).map(function (c) { return c.nom || c.ip || c.mac || "—"; });
+  }
+
+  function facade(R, M) {
+    var z = vider($("facade"));
+    if (!R.ports.ok || !Array.isArray(R.ports.d.ports)) { z.appendChild(h("span", "rouge", "Façade illisible : ports " + raison(R.ports) + ".")); return; }
+    ORDRE.forEach(function (nom) {
+      if (nom === "|") { z.appendChild(h("div", "sep")); return; }
+      var p = M[nom], c = h("div", "port"), pr = h("div", "prise"), l1 = h("span", "led"), l2 = h("span", "led"), sous, cls = "f";
+      var etiq = nom === "eth2" ? "WAN" : nom === "eth0" ? "SFP+" : nom;
+      if (nom === "eth0") { pr.classList.add("sfp"); }
+      if (!p) { sous = "absent"; }
+      else {
+        var coupe = coupeDe(R, p);
+        if (p.porteuse === true) { l1.classList.add("v"); pr.classList.add(nom === "eth2" ? "wan" : "lien"); sous = (vitesse(p.vitesse_mbps) || "lien"); cls = ""; }
+        else if (p.porteuse === false) { sous = "pas de lien"; }
+        else { sous = "lien illisible"; }
+        if (coupe === true || p.etat_admin === "down") { l2.classList.add("o"); pr.classList.add("coupe"); sous = coupe ? "coupé" : "arrêté"; cls = "f"; }
+      }
+      pr.appendChild(l1); pr.appendChild(l2); c.appendChild(pr);
+      c.appendChild(h("b", "", etiq));
+      var sp = h("span", cls, nom === etiq ? sous : nom + " · " + sous); c.appendChild(sp);
+      z.appendChild(c);
+    });
+  }
+
+  function lignePort(R, p, nom) {
+    var tr = h("tr"), coupe = p ? coupeDe(R, p) : null, lan = LAN_RE.test(nom);
+    var tdP = h("td", "c-port"); tdP.appendChild(h("b", "", nom)); tr.appendChild(tdP);
+    var tdR = h("td", "c-role"); var rl = p && p.role ? (ROLES[p.role] || [p.role, ""]) : null;
+    tdR.appendChild(rl ? pastille(rl[1], rl[0]) : h("span", "faible", "—")); tr.appendChild(tdR);
+    var tdL = h("td", "nb c-lien");
+    if (!p) { tdL.appendChild(h("span", "faible", "—")); }
+    else if (coupe === true) { tdL.appendChild(pastille("ko", "coupé", "Port arrêté par l'administrateur")); }
+    else if (p.porteuse === true) { tdL.appendChild(pastille("ok", vitesse(p.vitesse_mbps) || "lien", "Câble branché")); }
+    else if (p.porteuse === false) { tdL.appendChild(pastille("", "aucun", "Pas de câble ou appareil éteint")); }
+    else { tdL.appendChild(h("span", "faible", "—")); tdL.title = "Lien illisible"; }
+    tr.appendChild(tdL);
+    var tdM = h("td", "mb c-membre", p && p.maitre ? p.maitre : "—"); if (!(p && p.maitre)) { tdM.className += " faible"; } tr.appendChild(tdM);
+    var tdD = h("td", "mb c-der");
+    if (nom === "eth1") { tdD.textContent = "switch lan0 à lan3"; }
+    else if (lan && p) {
+      var n = appareilsDe(p), noms = nomsDe(R, nom);
+      if (n == null) { tdD.appendChild(h("span", "faible", "—")); tdD.title = "Table des adresses du pont illisible"; }
+      else if (n === 0) { tdD.appendChild(h("span", "faible", "—")); }
+      else {
+        var txt = n + " appareil" + (n > 1 ? "s" : "");
+        if (noms && noms.length) { txt += " · " + noms.join(", "); }
+        else if (!noms) { txt += " · noms : " + raison(R.clients); }
+        tdD.appendChild(h("span", "", txt));
+      }
+      if (p.plusieurs_appareils === true) { tdD.appendChild(h("span", "multi", "plusieurs appareils derrière ce port (switch, hub ou point d'accès)")); }
+    } else { tdD.appendChild(h("span", "faible", "—")); }
+    tr.appendChild(tdD);
+    var tdA = h("td", "act c-act");
+    if (lan && p) {
+      var iso = h("button", "btn", "Isoler…"); iso.type = "button"; iso.disabled = true; iso.title = "livraison 3"; tdA.appendChild(iso);
+      if (coupe === true) { tdA.appendChild(bouton("Rétablir…", "ok", nom, "retablir")); }
+      else if (coupe === false) { tdA.appendChild(bouton("Couper…", "danger", nom, "couper")); }
+      else { var q = h("span", "faible pt", "état de coupure illisible"); tdA.appendChild(q); }
+    } else if (nom === "eth2") { tdA.appendChild(h("span", "faible pt", "jamais relancé à distance")); }
+    else if (nom === "eth1") { tdA.appendChild(h("span", "faible pt", "jamais ponté")); }
+    else { tdA.appendChild(h("span", "faible", "—")); }
+    tr.appendChild(tdA);
+    return tr;
+  }
+  function bouton(txt, cls, nom, verbe) {
+    var b = h("button", "btn " + cls, txt); b.type = "button"; b.dataset.port = nom; b.dataset.verbe = verbe;
+    b.addEventListener("click", function () { ouvrir(nom, verbe, b); });
+    return b;
+  }
+
+  function rendre(R) {
+    var M = parNom(R), z = vider($("portsPannes")), tb = vider($("ports"));
+    if (!R.ports.ok) { bandeauPanne(z, R.ports, "Ports"); }
+    else {
+      var pn = Array.isArray(R.ports.d.pannes) ? R.ports.d.pannes : [];
+      if (pn.length) { var b = h("div", "alerte"); b.textContent = "Lecture partielle, source en panne : " + pn.join(", ") + ". Les champs concernés s'affichent « — »."; z.appendChild(b); }
+      if (R.ports.d.ports == null) { var b2 = h("div", "alerte"); b2.textContent = "Liste des ports illisible : source en panne."; z.appendChild(b2); }
+    }
+    if (!R.routeur.ok) { bandeauPanne(z, R.routeur, "Mode routeur et ports coupés"); }
+    else if (R.routeur.d.etat && R.routeur.d.etat !== "actif") {
+      var i = h("div", "alerte session"); i.textContent = "Mode routeur « " + R.routeur.d.etat + " » : couper ou rétablir un port exige le mode routeur actif."; z.appendChild(i);
+    }
+    facade(R, M);
+    var lisible = R.ports.ok && Array.isArray(R.ports.d.ports);
+    var tousNoms = TABLE.slice();
+    if (lisible) { R.ports.d.ports.forEach(function (p) { if (p && p.nom && tousNoms.indexOf(p.nom) < 0) { tousNoms.push(p.nom); } }); }
+    if (!lisible) { ligneVide(tb, 6, "Ports illisibles : " + raison(R.ports) + ".", R.ports.session ? "cyan" : "rouge"); }
+    else { tousNoms.forEach(function (nom) { tb.appendChild(lignePort(R, M[nom], nom)); }); }
+
+    var lans = ["lan0", "lan1", "lan2", "lan3"].map(function (n) { return M[n]; }).filter(Boolean);
+    var lien = Object.keys(M).filter(function (k) { return M[k].porteuse === true; }).length, nl = Object.keys(M).length;
+    $("tLien").textContent = lisible ? String(lien) : "—"; $("tLienS").textContent = lisible ? "sur les " + nl + " ports" : "ports illisibles";
+    var napp = 0, inconnu = false; lans.forEach(function (p) { var n = appareilsDe(p); if (n == null) { inconnu = true; } else { napp += n; } });
+    $("tApp").textContent = lisible && lans.length && !inconnu ? String(napp) : "—"; $("tAppS").textContent = inconnu ? "table du pont illisible" : "derrière lan0 à lan3";
+    var nc = 0, cInc = false; lans.forEach(function (p) { var c = coupeDe(R, p); if (c === true) { nc++; } else if (c == null) { cInc = true; } });
+    $("tCoupe").textContent = lisible && lans.length && !cInc ? String(nc) : "—"; $("tCoupeS").textContent = cInc ? "état de coupure illisible" : "arrêtés par l'administrateur";
+    var hubs = 0, hInc = false; lans.forEach(function (p) { if (p.plusieurs_appareils === true) { hubs++; } else if (p.plusieurs_appareils == null) { hInc = true; } });
+    $("tHub").textContent = lisible && lans.length && !(hInc && !hubs) ? String(hubs) : "—";
+    if (ouverte && (!M[ouverte.port] || coupeDe(R, M[ouverte.port]) !== (ouverte.verbe === "retablir"))) { fermer(); }
+  }
+
+  // ── Confirmation intégrée : le nom du port à saisir, ni confirm() ni boîte native ───────────────────────────────────────────
+  function resultat(txt, cls) { var r = $("resultat"); r.hidden = !txt; r.className = "resultat" + (cls ? " " + cls : ""); r.textContent = txt || ""; }
+  function ouvrir(port, verbe, declencheur) {
+    if (!LAN_RE.test(port)) { return; }
+    ouverte = { port: port, verbe: verbe, declencheur: declencheur }; resultat("");
+    var c = $("confirm"); c.hidden = false; c.className = "confirm" + (verbe === "couper" ? " grave" : "");
+    $("confirmTexte").textContent = verbe === "couper"
+      ? "Couper " + port + " arrête le port : les appareils qui y sont branchés perdent le réseau jusqu'au rétablissement. Le port derrière lequel vous êtes est refusé."
+      : "Rétablir " + port + " relance le port et le remet dans le pont br-lan.";
+    $("confirmEtiq").textContent = "Saisir « " + port + " » pour confirmer";
+    var s = $("confirmSaisie"); s.value = ""; $("confirmOk").disabled = true; $("confirmOk").textContent = verbe === "couper" ? "Couper " + port : "Rétablir " + port;
+    s.focus();
+  }
+  function fermer() { var d = ouverte && ouverte.declencheur; ouverte = null; $("confirm").hidden = true; $("confirmSaisie").value = ""; if (d && document.body.contains(d)) { d.focus(); } hauteur(); }
+  $("confirmSaisie").addEventListener("input", function () { $("confirmOk").disabled = !ouverte || occupe || this.value.trim() !== ouverte.port; });
+  $("confirmSaisie").addEventListener("keydown", function (ev) { if (ev.key === "Enter" && !$("confirmOk").disabled) { $("confirmOk").click(); } if (ev.key === "Escape") { fermer(); } });
+  $("confirmAnnule").addEventListener("click", fermer);
+  $("confirmOk").addEventListener("click", function () {
+    if (!ouverte || $("confirmSaisie").value.trim() !== ouverte.port) { return; }
+    var port = ouverte.port, verbe = ouverte.verbe;
+    if (DEMO) { fermer(); resultat("Démonstration : action inerte, rien n'a été " + (verbe === "couper" ? "coupé" : "rétabli") + " sur " + port + ".", "demo"); return; }
+    occupe = true; $("confirmOk").disabled = true;
+    var hd = { Accept: "application/json", "Content-Type": "application/json" }, t = jeton();
+    if (t) { hd.Authorization = "Bearer " + t; }
+    fetch("/api/v1/netmodes/ports/" + port + "/" + verbe, { method: "POST", headers: hd, credentials: "same-origin", cache: "no-store", body: JSON.stringify({ confirmer: port }) })
+      .then(function (r) {
+        return r.json().then(function (j) { return j; }, function () { return null; }).then(function (j) {
+          occupe = false;
+          if (r.ok) { fermer(); resultat(port + (verbe === "couper" ? " coupé." : " rétabli.") + " Relevé actualisé.", ""); return rafraichir(); }
+          var det = j && j.detail ? (typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail)) : "réponse illisible";
+          if (r.status === 401 || r.status === 403) { det = "session d'administrateur requise (" + r.status + ")"; }
+          resultat("Refusé (HTTP " + r.status + ") : " + det, "ko"); $("confirmOk").disabled = false; hauteur();
+        });
+      })
+      .catch(function () { occupe = false; resultat("Contrôleur injoignable : rien ne prouve que l'action ait eu lieu, relire l'état avant de recommencer.", "ko"); $("confirmOk").disabled = false; hauteur(); });
+  });
+
+  function donneesDemo() {
+    var maintenant = Math.floor(Date.now() / 1000);
+    return {
+      ports: { ok: true, d: { ports: [
+        { nom: "eth2", role: "wan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: null, macs: [], plusieurs_appareils: false, coupe: false },
+        { nom: "eth1", role: "conduit", porteuse: true, vitesse_mbps: 2500, etat_admin: "up", maitre: null, macs: [], plusieurs_appareils: false, coupe: false },
+        { nom: "eth0", role: "sfp", porteuse: false, vitesse_mbps: null, etat_admin: "up", maitre: null, macs: [], plusieurs_appareils: false, coupe: false },
+        { nom: "lan0", role: "lan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:c0"], plusieurs_appareils: false, coupe: false },
+        { nom: "lan1", role: "lan", porteuse: false, vitesse_mbps: null, etat_admin: "up", maitre: "br-lan", macs: [], plusieurs_appareils: false, coupe: false },
+        { nom: "lan2", role: "lan", porteuse: true, vitesse_mbps: 100, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:a1", "00:00:5e:00:53:a2", "00:00:5e:00:53:a3"], plusieurs_appareils: true, coupe: false },
+        { nom: "lan3", role: "lan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:bf"], plusieurs_appareils: false, coupe: false }], pannes: [] } },
+      clients: { ok: true, d: { clients: [
+        { mac: "00:00:5e:00:53:c0", ip: "198.51.100.192", nom: "pc-demo", port: "lan0", source: "bail", expire: maintenant + 3600 },
+        { mac: "00:00:5e:00:53:a1", ip: "198.51.100.150", nom: "imprimante-demo", port: "lan2", source: "bail", expire: maintenant + 3600 },
+        { mac: "00:00:5e:00:53:a2", ip: "198.51.100.151", nom: "", port: "lan2", source: "voisin", expire: null },
+        { mac: "00:00:5e:00:53:a3", ip: "198.51.100.152", nom: "tv-demo", port: "lan2", source: "bail", expire: maintenant + 3600 },
+        { mac: "00:00:5e:00:53:bf", ip: "198.51.100.191", nom: "rpi-demo", port: "lan3", source: "bail", expire: maintenant + 3600 }], pannes: [] } },
+      routeur: { ok: true, d: { etat: "actif", ports_coupes: [], bascule_en_cours: false } },
+      nac: { ok: true, d: { clients: [
+        { mac: "00:00:5E:00:53:C0", ip: "198.51.100.192", hostname: "pc-demo", zone: "lan", zone_name: "LAN", allow_state: "allowed", device_type: "pc" },
+        { mac: "00:00:5e:00:53:a1", ip: "198.51.100.150", hostname: "imprimante-demo", zone: "iot", zone_name: "IoT", allow_state: "allowed", device_type: "printer" },
+        { mac: "00:00:5e:00:53:a3", ip: "198.51.100.152", hostname: "tv-demo", zone: "guest", zone_name: "Invités", allow_state: "unknown", device_type: "tv" }], count: 3, by_zone: {} } }
+    };
+  }
+
+  function rafraichir() {
+    if (enCours) { return Promise.resolve(); }
+    enCours = true;
+    return charger(SOURCES).then(function (R) {
+      enCours = false; dernier = R; sources(R, SOURCES); rendre(R);
+      $("heure").textContent = "Relevé " + new Date().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      hauteur();
+    });
+  }
+  $("rafraichir").addEventListener("click", function () { if (!ouverte) { rafraichir(); } else { resultat("Terminer ou annuler la confirmation avant de rafraîchir.", "demo"); } });
+  rafraichir();
+  setInterval(function () { if (!document.hidden && !ouverte && !occupe) { rafraichir(); } }, 30000);
+
+  if (DEMO) { $("demo").hidden = false; }
+  addEventListener("resize", hauteur); addEventListener("load", hauteur);
+  if (window.ResizeObserver) { new ResizeObserver(hauteur).observe(document.body); }
+})();
+</script>
+</body>
+</html>
