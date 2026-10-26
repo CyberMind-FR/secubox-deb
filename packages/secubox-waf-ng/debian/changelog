@@ -1,3 +1,17 @@
+secubox-waf-ng (1.30.4-1~trixie1) trixie; urgency=medium
+
+  * « Menaces 24 h » couvre enfin 24 h (#3176). blocked_24h valait total_threats : tout le journal
+    des menaces depuis sa rotation (≈ minuit, ou plus tôt au-delà de 20 Mo). Il égalait « Menaces du
+    jour » (1 263 = 1 263 sur gk2 à 07:08) et retombait à zéro en pleine journée. Les menaces
+    bloquées sont comptées par heure (UTC), conservées à travers les rotations (le fichier tourné
+    n'est jamais relu) ; blocked_24h = les 24 dernières heures, à l'heure près. La série
+    hourly_blocks (24 valeurs) est fournie : le SOC du hub l'attendait déjà. Une reprise complète,
+    unique, reconstruit les heures depuis le journal courant à la première lecture.
+  * Page Visites : la note ne dit plus que l'agent utilisateur brut n'est « jamais stocké » ; elle
+    dit qu'il reste dans les journaux d'accès de nginx (14 jours) et le journal des menaces (7 jours).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 07:45:01 +0100
+
 secubox-waf-ng (1.30.3-1~trixie1) trixie; urgency=medium
 
   * Vhosts actor et waf livres sans les noms de gk2 (ref #3117) : server_name « actor.* » / « waf.* » (toute box les sert sous son propre domaine), fichiers renommes actor.conf et waf.conf, filtre d'exposition actor.conf / waf.conf. Le postinst migre l'ancien lien d'activation, l'ancien fichier (conserve sous le nouveau nom s'il a ete retouche) et le filtre d'exposition de l'operateur.

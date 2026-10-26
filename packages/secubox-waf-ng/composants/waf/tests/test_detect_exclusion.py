@@ -96,3 +96,58 @@ def test_detect_only_log_reports_zero_blocked(tmp_path, monkeypatch):
     stats = waf_main._get_threat_stats()
     assert stats["total_threats"] == 0
     assert stats["observed_threats"] == 1
+
+
+# #3176 : blocked_24h valait total_threats — tout le journal depuis sa rotation (≈ minuit, ou plus tôt au-delà de 20 Mo). Il égalait « Menaces
+# du jour » et retombait à zéro en pleine journée. Les menaces sont désormais comptées PAR HEURE (UTC), conservées à travers les rotations.
+def _il_y_a(heures, **k):
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) - timedelta(hours=heures, **k)).astimezone().isoformat(timespec="seconds")
+
+
+def _menace(ts, action="banned", ip="203.0.113.1"):
+    return {"action": action, "category": "sqli", "severity": "high", "timestamp": ts, "client_ip": ip}
+
+
+def _banc(tmp_path, monkeypatch, *entries):
+    logp = _write_log(tmp_path, *entries)
+    monkeypatch.setattr(waf_main, "THREATS_LOG", str(logp))
+    monkeypatch.setattr(waf_main, "STATS_DISK_CACHE", str(tmp_path / "cache.json"))
+    return logp
+
+
+def test_menaces_24h_fenetre_glissante_pas_le_journal_entier_3176(tmp_path, monkeypatch):
+    _banc(tmp_path, monkeypatch, _menace(_il_y_a(30)), _menace(_il_y_a(2)), _menace(_il_y_a(0, minutes=5)),
+          _menace(_il_y_a(0, minutes=1), action="detect"))
+    s = waf_main._get_threat_stats()
+    assert s["total_threats"] == 3                                       # le journal entier, comme avant
+    assert s["menaces_24h"] == 2                                         # la ligne d'il y a 30 h sort de la fenêtre ; detect n'est pas une menace bloquée
+    assert len(s["hourly_blocks"]) == 24 and sum(s["hourly_blocks"]) == 2 and s["hourly_blocks"][-1] >= 1   # la plus récente à droite
+
+
+def test_une_rotation_ne_remet_pas_les_24h_a_zero_3176(tmp_path, monkeypatch):
+    import json as _json
+    logp = _banc(tmp_path, monkeypatch, _menace(_il_y_a(3)), _menace(_il_y_a(2)))
+    assert waf_main._get_threat_stats()["menaces_24h"] == 2
+    logp.write_text(_json.dumps(_menace(_il_y_a(0, minutes=2))) + "\n")     # journal tourné : nouveau fichier, plus court
+    s = waf_main._get_threat_stats()
+    assert s["total_threats"] == 1 and s["menaces_24h"] == 3
+
+
+def test_aucune_ligne_n_est_comptee_deux_fois_3176(tmp_path, monkeypatch):
+    import json as _json
+    _banc(tmp_path, monkeypatch, _menace(_il_y_a(1)), _menace(_il_y_a(0, minutes=30)))
+    assert waf_main._get_threat_stats()["menaces_24h"] == 2
+    assert waf_main._get_threat_stats()["menaces_24h"] == 2              # rien de nouveau : rien d'ajouté
+    cache = tmp_path / "cache.json"
+    etat = _json.loads(cache.read_text())
+    del etat["counters"]["par_heure"]                                    # cache d'avant #3176 : reprise complète, une seule fois
+    cache.write_text(_json.dumps(etat))
+    assert waf_main._get_threat_stats()["menaces_24h"] == 2
+
+
+def test_blocked_24h_lit_la_fenetre_et_non_le_journal_3176(monkeypatch):
+    monkeypatch.setattr(waf_main, "_compiled_patterns", {})
+    monkeypatch.setattr(waf_main, "_cfg", lambda: {"enabled": True})
+    s = waf_main._decorate_dashboard_stats({"total_threats": 1263, "threats_today": 1263, "menaces_24h": 2104})
+    assert s["blocked_24h"] == 2104 and s["blocked_today"] == 1263
