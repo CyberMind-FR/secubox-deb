@@ -1,3 +1,25 @@
+secubox-waf-ng (1.30.6-1~trixie1) trixie; urgency=medium
+
+  * La signalisation LiveKit de la Visio ne bannit plus les téléphones (ref #3193). Le client ouvre
+    /rtc/v1?access_token=<JWT> puis /rtc/v1/validate?access_token=<JWT> : c'est le protocole LiveKit.
+    cred-003 (credential_harvest, critique) tirait à chaque connexion et le ban automatique (4 h, nft
+    waf_ban) coupait tous les vhosts de la box pour l'adresse — l'iPhone du propriétaire, toute la
+    matinée du 26/10.
+  * sbxwaf : un profil de service peut déclarer ses propres `suppress_categories`, appliquées à ses
+    seuls `legit_paths`. La liste globale ne gagne pas credential_harvest. La ré-vérification
+    anti-contrebande exclut les catégories supprimables POUR CET HÔTE : l'exemption de livekit
+    n'affaiblit jamais la détection des autres vhosts.
+  * vhost_profiles.json : service `livekit` (^/rtc(/v1)?(/validate)?$, credential_harvest) ; vhosts
+    livekit.gk1, livekit.gk2, livekit.gk3.secubox.in.
+  * Le conffile vhost_profiles.json est modifié à l'exécution (anti-robots, vhosts de l'opérateur) :
+    avec --force-confold la version livrée n'arrivait jamais. Nouvel outil waf-profils-fusion, appelé
+    par le postinst avant le redémarrage du moteur : ajoute les services et vhosts livrés absents
+    (copie de référence /usr/share/secubox/waf/vhost_profiles.json), sans jamais toucher une valeur
+    de l'opérateur ; écriture atomique (mêmes propriétaire et mode), lien symbolique refusé, une
+    ligne au journal d'audit (action profils-fusion) seulement si quelque chose a été ajouté.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 15:00:00 +0100
+
 secubox-waf-ng (1.30.5-1~trixie1) trixie; urgency=medium
 
   * Une mise à jour relance enfin l'API du WAF (ref #3176). Le postinst du composant waf faisait
