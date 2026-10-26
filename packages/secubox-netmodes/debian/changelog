@@ -1,3 +1,41 @@
+secubox-netmodes (1.5.0-1~trixie1) trixie; urgency=medium
+
+  * Panneau « Réseau » (ref #3190) : /netmodes/ devient un hôte à onglets au profil Aurora (une seule iframe de même
+    origine, hauteur annoncée {sbxVue, onglet} vérifiée, ?demo=1 propagé) : Cartographie (par défaut), Switch, Clients
+    LAN, Liens du maillage, Mode routeur, et « Modes (hérité) » qui garde l'ancienne page netplan à l'identique
+    (identifiants, appels, confirmation intégrée). En-tête : pastille du mode routeur, bandeau « LAN temporaire » tant
+    qu'il n'est pas actif. Entrée de menu renommée « Réseau ».
+  * Lecture du réseau (ref #3190) : GET /reseau/ports et /reseau/carte (require_lecture), /reseau/clients
+    (require_jwt). Ports eth2, eth1, eth0, lan0 à lan3 (porteuse, vitesse, état administratif, pont maître, MAC apprises,
+    plusieurs appareils, coupé) ; clients (baux dnsmasq, table du pont, voisins) ; carte (WAN, br-lxc, tunnels WireGuard).
+    Une source en échec vaut null et est nommée dans `pannes`, jamais une liste vide ; le lecteur anonyme ne reçoit ni
+    MAC ni voisins du WAN. Lectures ip -j et bridge -j seulement, cache 5 s ; profil AppArmor étendu en lecture.
+  * Couper ou rétablir un port (ref #3190) : verbes port-couper et port-retablir de netmodesctl (lan0 à lan3 seulement,
+    drop-in networkd 04-secubox-port-<port>-coupe.network en ActivationPolicy=down, résultat vérifié, état précédent
+    remis sur échec, audit), sudoers à verbes exacts ; POST /ports/{port}/couper et /retablir, corps
+    {"confirmer": "<port>"}. Refus 409 si le poste de l'administrateur est vu derrière ce port (adresse, ip neigh, bridge
+    fdb), 503 si cette vérification est impossible. Une coupure survit à une réapplication et à un retour en arrière, et
+    l'attente du pont ignore les ports coupés.
+  * Mode routeur asynchrone (ref #3190) : POST /routeur/appliquer et /routeur/retour répondent 202 et la bascule part en
+    tâche de fond (plus de 502 d'HAProxy sur une bascule lente) ; GET /routeur/derniere rend son dernier résultat.
+    /routeur/etat ajoute echeance (échéance réelle du minuteur de retour, UTC), bascule_en_cours et ports_coupes, et sert
+    au lecteur anonyme une copie expurgée (ni acteur ni sauvegarde) en cache 5 s. L'avertissement de perte de connexion
+    passe sur /routeur/apercu ; la clé wan est refusée (400). Une action humaine attend 2 s le verrou du contrôleur.
+    Carte sans arborescence matérielle : pas un MOCHAbin ; arborescence au modèle illisible : MOCHAbin (anciens chemins
+    netplan refusés).
+  * Onglet « Mode routeur » (ref #3190) : formulaire prérempli depuis l'état (pont, plage DHCP, bail, ports), aperçu des
+    fichiers rendus (volets repliables, texte brut), confirmation intégrée, « bascule en cours » relue toutes les 3 s,
+    puis compte à rebours jusqu'à l'échéance réelle du minuteur (heure de la box, jamais l'heure d'application plus
+    3 minutes) et bouton Confirmer ; « Revenir en arrière… » ; dernier résultat ; rappels eth2, webfilter
+    ([reseau].lan) et garde de 3 minutes. Aucune actualisation page cachée ni pendant une confirmation ouverte ;
+    démonstration simulée sans aucune requête.
+  * Non repris dans cette version : « Isoler » un port (livraison 3, montré désactivé) ; l'écriture de [reseau].lan
+    dans webfilter.toml (signalée, jamais faite par ce module) ; l'anti-coupure ne reconnaît pas un administrateur qui
+    atteint la box par un tunnel ou un routeur sans NAT branché sur un port du LAN (son adresse n'est pas un voisin de
+    br-lan). Les pannes WireGuard s'affichent comme pannes avec secubox-wireguard 1.3.1 (503 quand wgctl dump échoue).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 18:00:00 +0100
+
 secubox-netmodes (1.4.2-1~trixie1) trixie; urgency=medium
 
   * Mise à jour (gk2, 2026-10-26 16:22 ; ref #3189) : le prerm de debhelper arrêtait secubox-lan-dhcp.service (DHCP du

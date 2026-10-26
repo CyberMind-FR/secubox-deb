@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — panneau Réseau, onglet « Mode routeur » (#3190), profil Aurora (.claude/AURORA-REFERENCE.md).
+  LAN du MOCHAbin (pont br-lan, plage DHCP, bail, ports lan0 à lan3) et bascule ASYNCHRONE gardée :
+  aperçu → appliquer (202) → « bascule en cours » (état relu toutes les 3 s) → « à confirmer » avec un compte à rebours
+  jusqu'à `echeance`, l'échéance RÉELLE du minuteur de retour lue sur la box (jamais `depuis` + 180) → confirmer → actif ;
+  revenir en arrière (202). Le WAN (eth2) n'est jamais touché : la clé `wan` n'est jamais envoyée (l'API la refuse en 400).
+  DONNÉES RÉELLES :
+    GET  /api/v1/netmodes/routeur/etat       état, configuration, minuteur, échéance, bascule en cours, DHCP, pont, ports coupés
+    GET  /api/v1/netmodes/routeur/derniere   dernier résultat d'une bascule lancée par l'API (session d'administrateur)
+  ACTIONS (session d'administrateur ; confirmation INTÉGRÉE à la page, jamais confirm()) :
+    POST /api/v1/netmodes/routeur/apercu     {adresse, dhcp_debut, dhcp_fin, bail, ports} → fichiers rendus, avertissement
+    POST /api/v1/netmodes/routeur/appliquer  la même configuration + {"confirmer": "routeur"} → 202
+    POST /api/v1/netmodes/routeur/confirmer  synchrone → état
+    POST /api/v1/netmodes/routeur/retour     {"confirmer": "retour"} → 202
+  Actualisation : 3 s pendant une bascule (ou « à confirmer » sans minuteur), 15 s à confirmer, 30 s sinon ; page visible
+  seulement, jamais pendant une confirmation ouverte.
+  ?embed=1 : sans menu ; ?demo=1 : enchaînement simulé (adresses de documentation RFC 5737), aucune requête, aucune écriture.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Mode routeur</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none;background:transparent} body.emb::-webkit-scrollbar{display:none} body.sm #sidebar{display:none}
+  [hidden]{display:none!important}
+  .page{min-width:0}
+  body:not(.sm) .page{margin-left:220px;padding-top:48px}
+  @media (max-width:900px){body:not(.sm) .page{margin-left:0}}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque b{font-size:1.3rem;font-weight:800;display:block} .marque small{display:block;color:var(--cyan);font-size:.72rem;overflow-wrap:anywhere}
+  .etat{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .etat.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .etat.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .etat.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .etat.info{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:5px 12px;min-height:32px;cursor:pointer}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  .btn.danger{border-color:var(--rouge);color:#ff8b97;background:rgba(255,77,94,.1)} .btn.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12);font-weight:700}
+  .bandeau{text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo{background:var(--orange);color:#1a1000} .info{background:var(--cyan);color:#04202a} .info a{color:inherit}
+  .sources{display:flex;flex-wrap:wrap;gap:5px 6px;align-items:center;font-size:.7rem}
+  .sources>b{color:var(--faible);font-weight:600;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;margin-right:2px}
+  .src{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.1);border-radius:999px;padding:2px 9px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .src.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.1)} .src.session{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.1)}
+  .src.panne{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.1)} .src.demo{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.1)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+  .tuile .v.petit{font-size:.98rem;line-height:1.3;font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600}
+  .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  .v.g{color:var(--vert)} .v.o{color:var(--orange)} .v.r{color:var(--rouge)} .v.c{color:var(--cyan)} .v.n{color:var(--doux)}
+  .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);align-items:start}
+  @container a (min-width:1100px){.grille.deux{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}}
+  .col{display:grid;gap:10px;min-width:0;align-content:start}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .doux{color:var(--doux)} .faible{color:var(--faible)}
+  .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+  .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .pill.ko{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .alerte{color:var(--rouge);border:1px solid var(--rouge);border-radius:8px;padding:6px 10px;margin:0 0 8px;font-size:.78rem;line-height:1.45;background:rgba(255,77,94,.08);overflow-wrap:anywhere}
+  .alerte.att{color:var(--orange);border-color:var(--orange);background:rgba(255,159,28,.08)} .alerte.session{color:var(--cyan);border-color:var(--cyan);background:rgba(41,182,246,.08)}
+  .vide{color:var(--faible);font-size:.8rem;padding:6px 2px}
+  /* Bascule : un titre, le compte à rebours, le texte, les deux gestes */
+  .phase-titre{font-size:1.05rem;font-weight:800;margin:0 0 4px;overflow-wrap:anywhere}
+  .phase-titre.ok{color:var(--vert)} .phase-titre.att{color:var(--orange)} .phase-titre.ko{color:var(--rouge)} .phase-titre.cy{color:var(--cyan)}
+  .compte{font-size:2.3rem;font-weight:800;line-height:1.05;color:var(--orange);font-variant-numeric:tabular-nums;margin:2px 0 4px;overflow-wrap:anywhere}
+  .phase-texte{margin:4px 0 0;font-size:.82rem;line-height:1.5;color:var(--doux);overflow-wrap:anywhere}
+  .actions{display:flex;flex-wrap:wrap;gap:6px 8px;margin-top:10px}
+  /* Formulaire */
+  .champs{display:grid;gap:8px 12px;grid-template-columns:minmax(0,1fr)}
+  @container a (min-width:520px){.champs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .champ{min-width:0} .champ label{display:block;color:var(--doux);font-size:.74rem;margin-bottom:3px}
+  .champ input{font:inherit;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;color:var(--texte);background:rgba(3,8,20,.8);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-height:34px;width:100%}
+  .champ input:focus-visible,.case input:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+  .aide{display:block;color:var(--faible);font-size:.68rem;margin-top:2px}
+  fieldset.ports{border:1px solid var(--trait);border-radius:10px;margin:10px 0 0;padding:4px 10px 6px;display:flex;flex-wrap:wrap;gap:2px 18px;min-width:0}
+  fieldset.ports legend{color:var(--doux);font-size:.74rem;padding:0 4px}
+  .case{display:inline-flex;align-items:center;gap:6px;min-height:34px;font-size:.82rem;cursor:pointer;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .case input{width:18px;height:18px;margin:0;accent-color:var(--cyan)}
+  .coupe-mark{color:var(--orange);font-size:.66rem;font-weight:700;font-family:"IBM Plex Sans","Inter",system-ui,sans-serif}
+  .wan{margin-top:8px;font-size:.76rem;color:var(--doux);overflow-wrap:anywhere}
+  .confirm{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:10px 12px;display:grid;gap:8px;margin-top:10px}
+  .confirm.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)}
+  .confirm p{margin:0;font-size:.8rem;line-height:1.5;overflow-wrap:anywhere} .confirm .ligne{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+  .confirm .alerte{margin:0}
+  .resultat{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.08);border-radius:8px;padding:6px 10px;margin-top:10px;font-size:.78rem;line-height:1.45;overflow-wrap:anywhere}
+  .resultat.ko{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.08)} .resultat.demo{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.08)}
+  .resultat.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.08)}
+  /* Aperçu : un fichier par volet repliable, texte brut */
+  #apercu:not(:empty){margin-top:10px}
+  .apercu-tete{font-size:.8rem;margin-bottom:6px;overflow-wrap:anywhere}
+  details.fichier{border:1px solid var(--trait);border-radius:8px;background:rgba(3,8,20,.55);margin-top:6px;min-width:0}
+  details.fichier summary{cursor:pointer;padding:7px 10px;font-size:.78rem;min-height:32px;overflow-wrap:anywhere}
+  details.fichier summary:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+  details.fichier summary b{margin-right:8px}
+  .chemin{color:var(--faible);font-size:.7rem}
+  pre{margin:0;padding:8px 10px;border-top:1px solid var(--trait);overflow:auto;max-height:18rem;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.74rem;line-height:1.4;color:#cfe8ff;white-space:pre}
+  /* Dernier résultat */
+  .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 12px;font-size:.8rem;align-items:baseline} .kv .k{color:var(--doux)} .kv .x{overflow-wrap:anywhere;min-width:0}
+  ul.notes{margin:0;padding-left:18px;color:var(--doux);font-size:.76rem;line-height:1.5} ul.notes li{margin:0 0 6px} ul.notes b{color:var(--texte)}
+  code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.74rem;color:#cfe8ff;overflow-wrap:anywhere}
+  .note{color:var(--faible);font-size:.7rem;margin-top:8px;line-height:1.45}
+</style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="page"><div class="cadre" id="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="13" width="18" height="7" rx="1.6" fill="rgba(41,182,246,.14)"/><path d="M7 16.5h.01M10.5 16.5h.01M14 16.5h.01"/><path d="M17.5 16.5h0"/><path d="M8 9.5a5.5 5.5 0 0 1 8 0M10.2 11.4a2.6 2.6 0 0 1 3.6 0"/></svg>
+      <div><b>Mode routeur</b><small id="sous">pont br-lan, DHCP, DNS et NAT du LAN · eth2 jamais touché</small></div>
+    </div>
+    <span class="etat" id="pastille" aria-live="polite" title="État du mode routeur, lu sur /api/v1/netmodes/routeur/etat.">LECTURE…</span>
+    <div class="droite"><span id="heure">—</span><button type="button" class="btn" id="rafraichir">⟳ Rafraîchir</button></div>
+  </header>
+  <div class="bandeau demo" id="demo" hidden>DÉMONSTRATION — enchaînement simulé dans la page, adresses de documentation, rien n'est envoyé à la box</div>
+  <div class="bandeau info" id="session" hidden><span id="sessionTexte">Aucune mesure : session requise.</span> <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="sources" id="sources" aria-label="État de chaque source"><b>Sources</b></div>
+
+  <div class="tuiles">
+    <div class="tuile" title="État du mode routeur lu sur le contrôleur (routeur-etat) : inactif, à confirmer (retour automatique armé), actif ou configuration invalide."><span class="l">État</span><span class="v" id="tEtat">—</span><span class="s" id="tEtatS">—</span></div>
+    <div class="tuile" title="Temps restant avant le retour automatique, compté jusqu'à l'échéance réelle du minuteur secubox-netmodes-retour lue sur la box (jamais l'heure d'application plus 3 minutes)."><span class="l">Retour automatique</span><span class="v o" id="tRetour">—</span><span class="s" id="tRetourS">—</span></div>
+    <div class="tuile" title="Adresses IPv4 portées par le pont br-lan, et ports coupés (onglet Switch)."><span class="l">Pont br-lan</span><span class="v petit" id="tPont">—</span><span class="s" id="tPontS">—</span></div>
+    <div class="tuile" title="DHCP du LAN : unité secubox-lan-dhcp (dnsmasq, DHCP seul ; le DNS reste à Unbound)."><span class="l">DHCP du LAN</span><span class="v" id="tDhcp">—</span><span class="s" id="tDhcpS">secubox-lan-dhcp</span></div>
+  </div>
+
+  <div class="grille deux">
+    <div class="col">
+      <div class="pan" id="panBascule">
+        <h3>Bascule <i id="phaseNote">application gardée, retour automatique sous 3 minutes</i></h3>
+        <div class="phase-titre" id="phaseTitre">Lecture…</div>
+        <div class="compte" id="phaseCompte" aria-live="off" hidden>—</div>
+        <p class="phase-texte" id="phaseTexte"></p>
+        <div class="actions">
+          <button type="button" class="btn ok" id="btnConfirmer" hidden title="Garde la nouvelle configuration et annule le retour automatique (POST /routeur/confirmer).">✓ Confirmer le mode routeur</button>
+          <button type="button" class="btn danger" id="btnRetour" hidden title="Restaure la dernière sauvegarde de la configuration du LAN (POST /routeur/retour).">↺ Revenir en arrière…</button>
+        </div>
+        <div class="confirm grave" id="confirmRetour" role="alertdialog" aria-labelledby="confirmRetourTexte" hidden>
+          <p id="confirmRetourTexte"></p>
+          <div class="ligne"><button type="button" class="btn danger" id="confirmRetourOk">Revenir en arrière</button><button type="button" class="btn" id="confirmRetourNon">Annuler</button></div>
+        </div>
+        <div class="resultat" id="resultatBascule" role="status" hidden></div>
+      </div>
+
+      <div class="pan" id="panConfig">
+        <h3>Configuration du LAN <i>/etc/secubox/netmodes/routeur.toml</i></h3>
+        <div class="alerte att" id="configAbsente" hidden></div>
+        <form id="formulaire" novalidate autocomplete="off">
+          <div class="champs">
+            <div class="champ"><label for="fAdresse">Adresse du pont (CIDR)</label><input id="fAdresse" name="adresse" type="text" inputmode="decimal" spellcheck="false" autocapitalize="off" placeholder="a.b.c.1/24"><span class="aide">adresse de la box sur le LAN et préfixe du réseau</span></div>
+            <div class="champ"><label for="fBail">Durée du bail</label><input id="fBail" name="bail" type="text" spellcheck="false" autocapitalize="off" placeholder="12h"><span class="aide">1 à 9999, en m ou h ; vide : 12h</span></div>
+            <div class="champ"><label for="fDebut">Début de la plage DHCP</label><input id="fDebut" name="dhcp_debut" type="text" inputmode="decimal" spellcheck="false" autocapitalize="off" placeholder="a.b.c.100"></div>
+            <div class="champ"><label for="fFin">Fin de la plage DHCP</label><input id="fFin" name="dhcp_fin" type="text" inputmode="decimal" spellcheck="false" autocapitalize="off" placeholder="a.b.c.199"></div>
+          </div>
+          <fieldset class="ports"><legend>Ports du pont</legend>
+            <label class="case"><input type="checkbox" id="p-lan0" checked>lan0 <span class="coupe-mark" id="c-lan0" hidden>coupé</span></label>
+            <label class="case"><input type="checkbox" id="p-lan1" checked>lan1 <span class="coupe-mark" id="c-lan1" hidden>coupé</span></label>
+            <label class="case"><input type="checkbox" id="p-lan2" checked>lan2 <span class="coupe-mark" id="c-lan2" hidden>coupé</span></label>
+            <label class="case"><input type="checkbox" id="p-lan3" checked>lan3 <span class="coupe-mark" id="c-lan3" hidden>coupé</span></label>
+          </fieldset>
+          <div class="wan">WAN : <span class="mono" id="fWan">eth2</span> — lu seulement : jamais reconfiguré, jamais relancé, jamais envoyé par cette page.</div>
+          <div class="actions">
+            <button type="button" class="btn" id="btnApercu" title="Fichiers que la box écrirait pour ces valeurs ; rien n'est écrit (POST /routeur/apercu).">👁 Aperçu</button>
+            <button type="button" class="btn danger" id="btnAppliquer" title="Aperçu, puis confirmation dans la page, puis bascule en tâche de fond (POST /routeur/appliquer).">▶ Appliquer…</button>
+            <button type="button" class="btn" id="btnReprendre" title="Remettre dans le formulaire la configuration en place sur la box.">↺ Valeurs en place</button>
+          </div>
+        </form>
+        <div class="confirm grave" id="confirmApp" role="alertdialog" aria-labelledby="confirmAppTexte" hidden>
+          <p id="confirmAppTexte"></p>
+          <div id="confirmAppAlerte"></div>
+          <div class="ligne"><button type="button" class="btn danger" id="confirmAppOk">Appliquer</button><button type="button" class="btn" id="confirmAppNon">Annuler</button></div>
+        </div>
+        <div class="resultat" id="resultatConfig" role="status" hidden></div>
+        <div id="apercu"></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="pan">
+        <h3>Dernier résultat <i>bascule lancée par l'API</i></h3>
+        <div id="derniere"><div class="vide">lecture…</div></div>
+      </div>
+      <div class="pan">
+        <h3>À savoir</h3>
+        <ul class="notes">
+          <li><b>eth2 n'est jamais touché</b> : le WAN n'est ni reconfiguré, ni relancé, ni envoyé à l'API. Seuls br-lan, les ports lan0 à lan3, le DHCP du LAN, Unbound, le pare-feu du LAN et le fragment géo de nginx changent.</li>
+          <li>Par l'API, une bascule lente (Unbound) continue même si le navigateur perd la connexion : la garde de 3 minutes protège. Sans confirmation avant l'échéance, la box revient d'elle-même à la configuration précédente.</li>
+          <li>Appliquer un autre sous-réseau depuis l'ancien LAN coupe votre connexion : reconnectez-vous par la nouvelle adresse du pont et confirmez avant l'échéance (une autre session peut confirmer).</li>
+          <li>Webfilter : son profil « défaut » ne s'applique au LAN qu'une fois son sous-réseau ajouté à <code>[reseau].lan</code> de <code>/etc/secubox/webfilter.toml</code> ; ce module ne l'écrit pas.</li>
+          <li>Un port coupé dans l'onglet Switch reste coupé après une application ou un retour en arrière.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div></div></main>
+
+<script>
+"use strict";
+(function () {
+  var Q = new URLSearchParams(location.search), DEMO = Q.has("demo"), EMB = Q.has("embed");
+  var ONGLET = "routeur";
+  if (EMB) { document.body.classList.add("emb"); }
+  if (EMB || DEMO) { document.body.classList.add("sm"); }
+  else {
+    // Menu commun : hors ?embed=1 et hors démonstration.
+    var lien = document.createElement("link"); lien.rel = "stylesheet"; lien.href = "/shared/sidebar-light.css"; document.head.appendChild(lien);
+    var sb = document.createElement("script"); sb.src = "/shared/sidebar.js"; document.body.appendChild(sb);
+  }
+  var $ = function (id) { return document.getElementById(id); };
+  function h(tag, cls, txt) { var e = document.createElement(tag); if (cls) { e.className = cls; } if (txt != null) { e.textContent = txt; } return e; }
+  function vider(el) { while (el.firstChild) { el.removeChild(el.firstChild); } return el; }
+
+  var SOURCES = [
+    { cle: "etat", nom: "État du routeur", url: "/api/v1/netmodes/routeur/etat" },
+    { cle: "derniere", nom: "Dernier résultat", url: "/api/v1/netmodes/routeur/derniere" }
+  ];
+  var ECRITURES = {
+    apercu: "/api/v1/netmodes/routeur/apercu", appliquer: "/api/v1/netmodes/routeur/appliquer",
+    confirmer: "/api/v1/netmodes/routeur/confirmer", retour: "/api/v1/netmodes/routeur/retour"
+  };
+  var PORTS = ["lan0", "lan1", "lan2", "lan3"];
+  var CHEMINS = {                                 // fichiers rendus (api/routeur_rendu.py, CHEMINS)
+    netdev: "/etc/systemd/network/05-secubox-br-lan.netdev", pont: "/etc/systemd/network/05-secubox-br-lan.network",
+    ports: "/etc/systemd/network/05-secubox-lan-ports.network", dhcp: "/var/lib/secubox-netmodes/lan-dhcp.conf",
+    unbound: "/etc/unbound/unbound.conf.d/95-secubox-lan-routeur.conf", nft: "/etc/nftables.d/zz-secubox-netmodes-lan.nft",
+    geo: "/etc/nginx/secubox-lan-geo.d/netmodes-lan.conf"
+  };
+  var VERBES = { "routeur-appliquer": "Application", "routeur-retour": "Retour en arrière" };
+  var ETATS = { inactif: "inactif", en_attente: "à confirmer", actif: "actif", config_invalide: "invalide" };
+  var RAPIDE = 3000, ATTENTE = 15000, LENT = 30000, SANS_MINUTEUR_MAX = 300000;
+
+  // ── État de la page ────────────────────────────────────────────────────────────────────────────────────────────────────────
+  var E = null, D = null;            // dernières lectures : {ok, d} ou {ok:false, session|panne}
+  var decalage = 0;                  // heure de la box − heure du poste (en-tête Date), si l'écart dépasse 3 s
+  var lancement = null;              // bascule lancée depuis cette page, suivie jusqu'à sa fin (dernier résultat)
+  var occupe = false, enLecture = false, formModifie = false, apercuFait = null, sansMinuteurDepuis = null, relanceEcheance = false;
+  var minuterie = null, compteDe = null;
+
+  // ── Accès à l'API (même origine, jeton sbx_token en Bearer) ───────────────────────────────────────────────────────────────
+  function jeton() { try { return localStorage.getItem("sbx_token") || ""; } catch (e) { return ""; } }
+  function entetes(json) {
+    var hd = { Accept: "application/json" }, t = jeton();
+    if (json) { hd["Content-Type"] = "application/json"; }
+    if (t) { hd.Authorization = "Bearer " + t; }
+    return hd;
+  }
+  function lire(url, horloge) {
+    var t0 = Date.now();
+    return fetch(url, { method: "GET", headers: entetes(false), credentials: "same-origin", cache: "no-store" })
+      .then(function (r) {
+        if (horloge) { regler(r, t0); }
+        if (r.status === 401 || r.status === 403) { return { ok: false, session: true }; }
+        return r.json().then(function (j) { return j; }, function () { return null; }).then(function (j) {
+          if (!r.ok) { return { ok: false, panne: "HTTP " + r.status + (j && typeof j.detail === "string" ? " : " + j.detail : "") }; }
+          if (!j || typeof j !== "object") { return { ok: false, panne: "réponse illisible" }; }
+          return { ok: true, d: j };
+        });
+      })
+      .catch(function () { return { ok: false, panne: "injoignable" }; });
+  }
+  // Le compte à rebours se fait sur l'heure de la box : l'en-tête Date de sa réponse corrige un poste mal réglé.
+  function regler(r, t0) {
+    var dh = Date.parse(r.headers.get("Date") || ""), t1 = Date.now();
+    if (!isFinite(dh)) { return; }
+    var ecart = dh + 500 - (t0 + t1) / 2;
+    decalage = Math.abs(ecart) > 3000 ? ecart : 0;
+  }
+  // Écriture : {statut, j} ou {reseau:true} (la demande a pu ne jamais arriver). Démonstration : aucune requête.
+  function ecrire(quoi, corps) {
+    if (DEMO) { return Promise.resolve(demoEcrire(quoi, corps)); }
+    var o = { method: "POST", headers: entetes(corps !== undefined), credentials: "same-origin", cache: "no-store" };
+    if (corps !== undefined) { o.body = JSON.stringify(corps); }
+    return fetch(ECRITURES[quoi], o)
+      .then(function (r) { return r.json().then(function (j) { return j; }, function () { return null; }).then(function (j) { return { statut: r.status, j: j }; }); })
+      .catch(function () { return { reseau: true }; });
+  }
+  function erreurTexte(r) {
+    if (r.reseau) { return "Box injoignable : rien ne prouve que la demande soit arrivée."; }
+    if (r.statut === 401 || r.statut === 403) { return "Session d'administrateur requise (HTTP " + r.statut + ") : se connecter."; }
+    var det = r.j && r.j.detail != null ? (typeof r.j.detail === "string" ? r.j.detail : JSON.stringify(r.j.detail)) : "réponse illisible";
+    return (r.statut >= 500 ? "Échec" : "Refusé") + " (HTTP " + r.statut + ") : " + det;
+  }
+
+  // ── Formats ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  function delai(ms) {
+    var s = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(s / 60), hh = Math.floor(m / 60);
+    if (hh >= 48) { return Math.round(hh / 24) + " j"; }
+    if (hh) { return hh + " h " + String(m % 60).padStart(2, "0") + " min"; }
+    return m ? m + " min " + String(s % 60).padStart(2, "0") + " s" : s + " s";
+  }
+  function heure(iso) { var t = typeof iso === "string" ? Date.parse(iso) : NaN; return isFinite(t) ? new Date(t).toLocaleTimeString("fr-FR") : "—"; }
+  function date(iso) {
+    var t = typeof iso === "string" ? Date.parse(iso) : NaN;
+    return isFinite(t) ? new Date(t).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
+  }
+  function texte(v) { return typeof v === "string" ? v : ""; }
+  function liste(v) { return Array.isArray(v) ? v.filter(function (x) { return typeof x === "string"; }) : null; }
+
+  // ── Où en est la bascule ───────────────────────────────────────────────────────────────────────────────────────────────────
+  function etat() { return E && E.ok ? E.d : null; }
+  function restant() {
+    var e = etat(), ech = e && typeof e.echeance === "string" ? Date.parse(e.echeance) : NaN;
+    return isFinite(ech) ? ech - (Date.now() + decalage) : null;
+  }
+  function phase() {
+    var e = etat();
+    if (!e) { return lancement ? "injoignable" : "inconnu"; }
+    if (e.bascule_en_cours === true || (D && D.ok && D.d.fini === false) || (lancement && !(D && D.ok))) { return "bascule"; }
+    if (e.etat === "en_attente") { return "a_confirmer"; }
+    if (e.etat === "actif") { return "actif"; }
+    if (e.etat === "config_invalide") { return "invalide"; }
+    if (e.etat === "inactif") { return "inactif"; }
+    return "inconnu";
+  }
+  // Une bascule lancée ici est finie quand le dernier résultat dit « fini » pour CE lancement (début différent de celui
+  // d'avant le 202) ; API redémarrée (verbe null) : l'état fait foi. Dernier résultat illisible : fin présumée après 15 s
+  // d'un état lisible sans bascule.
+  function suivreLancement() {
+    if (!lancement) { return; }
+    if (D && D.ok) {
+      var d = D.d;
+      if (d.verbe == null) { lancement = null; return; }
+      if (d.fini === false) { lancement.debut = d.debut; return; }
+      if (lancement.debut ? d.debut === lancement.debut : d.debut !== lancement.debutAvant) {
+        var ok = d.code === 200, l = lancement;
+        lancement = null;
+        if (ok) { formModifie = false; }          // le formulaire suit de nouveau l'état ; un échec garde la saisie
+        annonce("resultatBascule", ok
+          ? (l.verbe === "routeur-retour" ? "Retour en arrière terminé." : "Bascule terminée : confirmer avant l'échéance du retour automatique.")
+          : (VERBES[l.verbe] || "Bascule") + " en échec" + (d.code != null ? " (HTTP " + d.code + ")" : "") + " : " + message(d), ok ? "" : "ko");
+      } else if (Date.now() - lancement.t > 20000) {
+        lancement = null;                         // fini, mais indiscernable du précédent (même seconde) : l'état fait foi
+      }
+    } else if (E && E.ok && E.d.bascule_en_cours === false && Date.now() - lancement.t > 15000) {
+      lancement = null;
+    }
+  }
+  function intervalle() {
+    var ph = phase(), e = etat();
+    if (ph === "bascule" || ph === "injoignable" || lancement) { return RAPIDE; }
+    if (ph === "a_confirmer") {
+      if (!e.minuteur_actif) {
+        if (sansMinuteurDepuis == null) { sansMinuteurDepuis = Date.now(); }
+        if (Date.now() - sansMinuteurDepuis < SANS_MINUTEUR_MAX) { return RAPIDE; }
+      } else {
+        sansMinuteurDepuis = null;
+        var r = restant();
+        if (r != null && r <= 0) { return RAPIDE; }
+      }
+      return ATTENTE;
+    }
+    sansMinuteurDepuis = null;
+    return LENT;
+  }
+
+  // ── Rendu ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  function raison(s) { return s.session ? "session requise" : "source en panne"; }
+  function annonce(id, txt, cls) {
+    var z = $(id);
+    z.hidden = !txt; z.className = "resultat" + (DEMO ? " demo" : (cls ? " " + cls : ""));
+    z.textContent = txt ? (DEMO ? "Démonstration (rien n'est envoyé) : " : "") + txt : "";
+    hauteur();
+  }
+  function sources() {
+    var z = $("sources"), R = { etat: E, derniere: D }, nSession = 0;
+    while (z.childNodes.length > 1) { z.removeChild(z.lastChild); }
+    SOURCES.forEach(function (s) {
+      var r = R[s.cle], p = h("span");
+      if (!r) { p.className = "src"; p.textContent = s.nom + " · lecture…"; }
+      else if (DEMO) { p.className = "src demo"; p.textContent = s.nom + " · démo"; }
+      else if (r.ok) { p.className = "src ok"; p.textContent = s.nom + " · lue"; }
+      else if (r.session) { nSession++; p.className = "src session"; p.textContent = s.nom + " · session requise"; }
+      else { p.className = "src panne"; p.textContent = s.nom + " · en panne"; }
+      p.title = "GET " + s.url + (r ? " — " + (r.ok ? "lue" : r.session ? "session requise (401)" : r.panne) : "");
+      z.appendChild(p);
+    });
+    $("session").hidden = DEMO || !nSession;
+    $("sessionTexte").textContent = nSession === SOURCES.length ? "Aucune mesure : session requise." : "Lecture partielle : session requise pour le dernier résultat et pour toute action.";
+  }
+  function pastille() {
+    var p = $("pastille"), ph = phase(), e = etat(), adr = e ? liste(e.adresses_pont) : null, cls = "etat", t;
+    if (!e) {
+      if (ph === "injoignable") { cls += " hors"; t = "BOX INJOIGNABLE"; }
+      else if (!E) { t = "LECTURE…"; }
+      else { cls += " hors"; t = E.session ? "SESSION REQUISE" : "ÉTAT DU ROUTEUR ILLISIBLE"; }
+    } else if (ph === "bascule") { cls += " info"; t = "BASCULE EN COURS"; }
+    else if (ph === "a_confirmer") { cls += " att"; t = "MODE ROUTEUR À CONFIRMER"; }
+    else if (ph === "actif") { cls += " ok"; t = "MODE ROUTEUR ACTIF"; }
+    else if (ph === "invalide") { cls += " hors"; t = "CONFIGURATION INVALIDE"; }
+    else if (ph === "inactif") { if (adr && adr.length) { cls += " att"; t = "LAN TEMPORAIRE"; } else { t = "MODE ROUTEUR INACTIF"; } }
+    else { t = "ÉTAT INCONNU"; }
+    p.className = cls; p.textContent = t;
+  }
+  function tuiles() {
+    var e = etat(), ph = phase();
+    var tE = $("tEtat"), tES = $("tEtatS"), tR = $("tRetour"), tRS = $("tRetourS"), tP = $("tPont"), tPS = $("tPontS"), tD = $("tDhcp");
+    if (!e) { [tE, tR, tP, tD].forEach(function (x) { x.textContent = "—"; }); tES.textContent = E && !E.ok ? raison(E) : "—"; tRS.textContent = "—"; tPS.textContent = "—"; return; }
+    tE.textContent = ph === "bascule" ? "bascule" : (ETATS[e.etat] || "—");
+    tE.className = "v " + (ph === "bascule" ? "c" : e.etat === "actif" ? "g" : e.etat === "en_attente" ? "o" : e.etat === "config_invalide" ? "r" : "n");
+    tES.textContent = (e.depuis ? "depuis " + date(e.depuis) : "—") + (e.bascule_en_cours === null ? " · bascule en cours : —" : "");
+    compte();
+    var adr = liste(e.adresses_pont), coupes = liste(e.ports_coupes);
+    tP.textContent = adr == null ? "—" : adr.length ? adr.join(" ") : "aucune";
+    tPS.textContent = "ports coupés : " + (coupes == null ? "—" : coupes.length ? coupes.join(", ") : "aucun");
+    tD.textContent = e.dhcp_actif === true ? "actif" : e.dhcp_actif === false ? "arrêté" : "—";
+    tD.className = "v " + (e.dhcp_actif === true ? "g" : "n");
+  }
+  // Compte à rebours : seule source, l'échéance réelle du minuteur (`echeance`), corrigée de l'écart d'horloge de la box.
+  function compte() {
+    var e = etat(), tR = $("tRetour"), tRS = $("tRetourS"), c = $("phaseCompte"), r = restant();
+    if (!e) { return; }
+    if (r == null) {
+      tR.textContent = "—";
+      tRS.textContent = e.minuteur_actif === true ? "échéance inconnue" : e.minuteur_actif === false ? "aucun minuteur armé" : "minuteur : —";
+      c.textContent = "échéance inconnue";
+    } else {
+      var txt = r > 0 ? delai(r) : "échéance atteinte";
+      tR.textContent = r > 0 ? delai(r) : "0 s"; c.textContent = txt;
+      tRS.textContent = "retour à " + new Date(Date.parse(e.echeance)).toLocaleTimeString("fr-FR") + (decalage ? " (heure de la box)" : "");
+      if (e.echeance !== compteDe) { compteDe = e.echeance; relanceEcheance = false; }
+      if (r <= 0 && !relanceEcheance && phase() === "a_confirmer") { relanceEcheance = true; planifier(); }
+    }
+  }
+  function rendrePhase() {
+    var ph = phase(), e = etat(), t = $("phaseTitre"), x = $("phaseTexte"), c = $("phaseCompte");
+    var adr = e ? liste(e.adresses_pont) : null, cls = "", titre = "", txt = "";
+    c.hidden = ph !== "a_confirmer";
+    if (ph === "inconnu") {
+      if (!E) { titre = "Lecture…"; }
+      else if (!E.ok) { cls = E.session ? "cy" : "ko"; titre = E.session ? "Session requise" : "État illisible";
+        txt = E.session ? "L'état du mode routeur se lit avec une session : se connecter." : "État du mode routeur : source en panne (" + E.panne + "). Rien n'est déduit : ni actif, ni inactif."; }
+      else { titre = "État inconnu"; txt = "Le contrôleur rend un état non reconnu (" + texte(e.etat) + ")."; }
+    } else if (ph === "injoignable") {
+      cls = "ko"; titre = "Box injoignable depuis ce poste";
+      txt = (VERBES[lancement.verbe] || "Une bascule") + " a été lancée" + (lancement.adresse ? " (pont " + lancement.adresse + ")" : "") + ". Si votre poste était sur l'ancien LAN, il a perdu la connexion : reconnectez-vous par la nouvelle adresse du pont et confirmez avant l'échéance du retour automatique (3 minutes après la fin de la bascule). L'état se relit toutes les 3 s.";
+    } else if (ph === "bascule") {
+      var v = D && D.ok && D.d.verbe ? D.d.verbe : (lancement ? lancement.verbe : null), deb = D && D.ok ? D.d.debut : null;
+      cls = "cy"; titre = "Bascule en cours" + (v === "routeur-retour" ? " : retour en arrière" : v === "routeur-appliquer" ? " : application" : "");
+      txt = (v === "routeur-retour" ? "La box restaure la configuration précédente du LAN" : v === "routeur-appliquer" ? "La box applique la nouvelle configuration du LAN" : "Le contrôleur du mode routeur travaille")
+        + (deb ? " (lancée à " + heure(deb) + ")" : "") + ". Elle peut durer plusieurs minutes quand Unbound redémarre lentement ; l'état se relit toutes les 3 s. Par l'API, une bascule lente continue même si le navigateur perd la connexion : la garde de 3 minutes protège.";
+      if (lancement && lancement.avertissement) { txt += " Si la connexion se perd : reconnectez-vous par " + lancement.adresse + " et confirmez sous 3 minutes après la fin."; }
+    } else if (ph === "a_confirmer") {
+      cls = "att"; titre = "À confirmer";
+      var r = restant();
+      txt = r != null ? "Sans confirmation, la box revient d'elle-même à la configuration précédente à " + new Date(Date.parse(e.echeance)).toLocaleTimeString("fr-FR") + (decalage ? " (heure de la box, votre poste a " + delai(Math.abs(decalage)) + (decalage > 0 ? " de retard" : " d'avance") + ")" : "") + "."
+        : e.minuteur_actif === true ? "Le minuteur de retour est armé mais son échéance est illisible : confirmer ou revenir en arrière sans attendre."
+          : "Retour automatique non armé : rien ne défera cette configuration avant un redémarrage. Confirmer ou revenir en arrière.";
+      if (e.bascule_en_cours === null) { txt += " Bascule en cours : —."; }
+    } else if (ph === "actif") {
+      cls = "ok"; titre = "Mode routeur actif";
+      var cfg = e.config && typeof e.config === "object" ? e.config : null;
+      txt = (e.depuis ? "Depuis le " + date(e.depuis) + ". " : "") + (cfg ? "Pont " + texte(cfg.adresse) + ", DHCP " + texte(cfg.dhcp_debut) + " – " + texte(cfg.dhcp_fin) + ", bail " + (texte(cfg.bail) || "—") + ", ports " + (liste(cfg.ports) || []).join(", ") + "." : "Configuration non fournie par le contrôleur.");
+    } else if (ph === "invalide") {
+      cls = "ko"; titre = "Configuration invalide";
+      txt = (texte(e.erreur) || "motif non fourni") + ". Revenir en arrière restaure la dernière sauvegarde ; une nouvelle application la remplace.";
+    } else if (ph === "inactif") {
+      titre = adr && adr.length ? "LAN temporaire — mode routeur non actif" : "Mode routeur non actif";
+      cls = adr && adr.length ? "att" : "";
+      txt = adr == null ? "Adresses du pont : —." : adr.length
+        ? "br-lan porte " + adr.join(", ") + (e.dhcp_actif === true ? " (DHCP actif)" : "") + ", hors du mode routeur durable. Appliquer la configuration ci-dessous le rend durable (il survit au redémarrage)."
+        : "br-lan ne porte aucune adresse : les ports lan0 à lan3 ne servent pas de LAN.";
+      if (texte(e.erreur)) { txt += " Contrôleur : " + e.erreur + "."; }
+    }
+    t.className = "phase-titre" + (cls ? " " + cls : ""); t.textContent = titre; x.textContent = txt;
+  }
+  function message(d) {
+    var s = d.sortie;
+    if (!s || typeof s !== "object") { return "—"; }
+    if (s.erreur != null) { return typeof s.erreur === "string" ? s.erreur : JSON.stringify(s.erreur); }
+    if (typeof s.etat === "string") {
+      return (ETATS[s.etat] || s.etat) + (typeof s.delai_confirmation === "number" ? " (confirmer sous " + delai(s.delai_confirmation * 1000) + ")" : "");
+    }
+    return "—";
+  }
+  function ligneKv(kv, k, v) {
+    kv.appendChild(h("div", "k", k));
+    var x = h("div", "x"); if (typeof v === "string") { x.textContent = v; } else { x.appendChild(v); }
+    kv.appendChild(x);
+  }
+  function rendreDerniere() {
+    var z = vider($("derniere"));
+    if (!D) { z.appendChild(h("div", "vide", "lecture…")); return; }
+    if (!D.ok) { z.appendChild(h("div", "alerte" + (D.session ? " session" : ""), "Dernier résultat : " + raison(D) + (D.panne ? " (" + D.panne + ")" : "") + ".")); return; }
+    var d = D.d;
+    if (d.verbe == null) {
+      z.appendChild(h("div", "vide", "Aucune bascule lancée par l'API depuis son démarrage."));
+      z.appendChild(h("p", "note", "Un redémarrage de l'API efface ce relevé alors qu'une bascule peut se poursuivre : l'état du mode routeur fait foi."));
+      return;
+    }
+    var kv = h("div", "kv"), issue;
+    ligneKv(kv, "Action", VERBES[d.verbe] || String(d.verbe));
+    if (d.fini === false) { issue = h("span", "pill cy", "en cours"); }
+    else if (d.code === 200) { issue = h("span", "pill ok", "réussie"); }
+    else { issue = h("span", "pill ko", "échec" + (d.code != null ? " · HTTP " + d.code : "")); }
+    ligneKv(kv, "Issue", issue);
+    ligneKv(kv, "Lancée", heure(d.debut));
+    ligneKv(kv, "Terminée", d.fini === false ? "—" : heure(d.fin));
+    if (d.fini !== false) { ligneKv(kv, d.code === 200 ? "État atteint" : "Message", message(d)); }
+    z.appendChild(kv);
+  }
+  function boutons() {
+    var ph = phase(), e = etat();
+    $("btnApercu").disabled = occupe;
+    $("btnAppliquer").disabled = occupe || ph === "bascule" || ph === "injoignable";
+    $("btnConfirmer").hidden = ph !== "a_confirmer" || (e && e.bascule_en_cours === true);
+    $("btnConfirmer").disabled = occupe;
+    $("btnRetour").hidden = ["a_confirmer", "actif", "invalide"].indexOf(ph) < 0;
+    $("btnRetour").disabled = occupe;
+    $("btnReprendre").disabled = !(e && e.config && typeof e.config === "object");
+  }
+  function rendre() {
+    sources(); pastille(); tuiles(); rendrePhase(); rendreDerniere(); formulaire(); boutons();
+    $("heure").textContent = "Relevé " + new Date().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    hauteur();
+  }
+
+  // ── Formulaire : prérempli depuis etat.config tant que l'administrateur n'a rien saisi ; `wan` n'est jamais envoyé ──────────
+  function remplir(cfg) {
+    $("fAdresse").value = texte(cfg.adresse); $("fDebut").value = texte(cfg.dhcp_debut); $("fFin").value = texte(cfg.dhcp_fin); $("fBail").value = texte(cfg.bail);
+    var ports = liste(cfg.ports) || PORTS;
+    PORTS.forEach(function (p) { $("p-" + p).checked = ports.indexOf(p) >= 0; });
+  }
+  function formulaire() {
+    var e = etat(), cfg = e && e.config && typeof e.config === "object" ? e.config : null, coupes = e ? liste(e.ports_coupes) || [] : [];
+    PORTS.forEach(function (p) { var m = $("c-" + p); m.hidden = coupes.indexOf(p) < 0; m.title = "Port coupé : il reste coupé après l'application (le rétablir dans l'onglet Switch)."; });
+    $("fWan").textContent = cfg && texte(cfg.wan) ? cfg.wan : "eth2";
+    var absente = $("configAbsente");
+    absente.hidden = !(e && !cfg);
+    absente.textContent = e && !cfg ? (e.etat === "config_invalide" ? "Configuration enregistrée illisible : saisir les valeurs voulues." : "Aucune configuration enregistrée sur la box : saisir l'adresse du pont et la plage DHCP.") : "";
+    if (cfg && !formModifie) { remplir(cfg); }
+  }
+  function val(id) { return $(id).value.trim(); }
+  function corps() {
+    var c = { adresse: val("fAdresse"), dhcp_debut: val("fDebut"), dhcp_fin: val("fFin"), ports: PORTS.filter(function (p) { return $("p-" + p).checked; }) };
+    var b = val("fBail");
+    if (b) { c.bail = b; }
+    return c;
+  }
+  function cleDe(c) { return JSON.stringify([c.adresse, c.dhcp_debut, c.dhcp_fin, c.bail || "", c.ports]); }
+  function oublierApercu() { apercuFait = null; vider($("apercu")); }
+  $("formulaire").addEventListener("submit", function (ev) { ev.preventDefault(); });
+  $("formulaire").addEventListener("input", function () { formModifie = true; oublierApercu(); annonce("resultatConfig", ""); });
+  $("btnReprendre").addEventListener("click", function () {
+    var e = etat();
+    formModifie = false; oublierApercu(); annonce("resultatConfig", "");
+    if (e && e.config && typeof e.config === "object") { remplir(e.config); }
+    hauteur();
+  });
+
+  function afficherApercu(j) {
+    var z = vider($("apercu")), t = h("div", "apercu-tete");
+    t.appendChild(h("b", "", "Aperçu des fichiers rendus"));
+    t.appendChild(h("span", "faible", " · rien n'est écrit" + (DEMO ? " (rendu simulé dans la page)" : "") + " ; un clic ouvre un fichier."));
+    z.appendChild(t);
+    if (j.avertissement != null) { z.appendChild(h("div", "alerte", "⚠ " + String(j.avertissement))); }
+    var f = j.fichiers && typeof j.fichiers === "object" ? j.fichiers : {}, cles = Object.keys(f);
+    if (!cles.length) { z.appendChild(h("div", "vide", "Aucun fichier rendu.")); }
+    cles.forEach(function (k) {
+      var d = h("details", "fichier"), s = h("summary");
+      s.appendChild(h("b", "mono", k));
+      if (CHEMINS[k]) { s.appendChild(h("span", "chemin mono", CHEMINS[k])); }
+      d.appendChild(s);
+      d.appendChild(h("pre", "", typeof f[k] === "string" ? f[k] : JSON.stringify(f[k], null, 2)));
+      d.addEventListener("toggle", hauteur);
+      z.appendChild(d);
+    });
+    hauteur();
+  }
+  function demanderApercu() {
+    var c = corps(), k = cleDe(c);
+    occupe = true; boutons(); annonce("resultatConfig", "");
+    return ecrire("apercu", c).then(function (r) {
+      occupe = false; boutons();
+      if (r.statut === 200 && r.j && typeof r.j === "object") {
+        afficherApercu(r.j);
+        apercuFait = { cle: k, avertissement: r.j.avertissement != null ? String(r.j.avertissement) : null };
+        return apercuFait;
+      }
+      oublierApercu(); annonce("resultatConfig", erreurTexte(r), "ko");
+      return null;
+    });
+  }
+  $("btnApercu").addEventListener("click", function () { if (!occupe) { demanderApercu(); } });
+
+  // ── Confirmations intégrées (jamais de boîte native) ; aucune actualisation tant que l'une est ouverte ─────────────────────
+  var ouverte = null;                 // {zone, declencheur}
+  function confirmationOuverte() { return !!ouverte; }
+  function ouvrir(zone, declencheur, focus) {
+    ouverte = { zone: zone, declencheur: declencheur };
+    $(zone).hidden = false; hauteur();
+    $(zone).scrollIntoView({ block: "nearest" }); $(focus).focus();
+  }
+  function fermer() {
+    if (!ouverte) { return; }
+    var o = ouverte; ouverte = null;
+    $(o.zone).hidden = true;
+    if (o.declencheur && !$(o.declencheur).hidden && !$(o.declencheur).disabled) { $(o.declencheur).focus(); }
+    hauteur(); planifier();
+  }
+  ["confirmApp", "confirmRetour"].forEach(function (z) {
+    $(z).addEventListener("keydown", function (ev) { if (ev.key === "Escape") { fermer(); } });
+  });
+  $("confirmAppNon").addEventListener("click", fermer);
+  $("confirmRetourNon").addEventListener("click", fermer);
+
+  var aAppliquer = null;
+  $("btnAppliquer").addEventListener("click", function () {
+    if (occupe || ouverte) { return; }
+    var c = corps(), k = cleDe(c);
+    // Toujours un aperçu des valeurs exactes avant la confirmation : son avertissement (perte de connexion) y est repris.
+    (apercuFait && apercuFait.cle === k ? Promise.resolve(apercuFait) : demanderApercu()).then(function (a) {
+      if (!a) { return; }
+      aAppliquer = { corps: c, avertissement: a.avertissement };
+      $("confirmAppTexte").textContent = "Appliquer le mode routeur : pont br-lan " + c.adresse + ", DHCP " + c.dhcp_debut + " – " + c.dhcp_fin
+        + ", bail " + (c.bail || "12h (par défaut)") + ", ports " + (c.ports.join(", ") || "aucun") + ". Le LAN est reconfiguré ; eth2 n'est jamais touché. "
+        + "La bascule part en tâche de fond ; à sa fin, confirmez avant l'échéance du retour automatique (3 minutes), sinon la box revient d'elle-même en arrière.";
+      var z = vider($("confirmAppAlerte"));
+      if (a.avertissement) { z.appendChild(h("div", "alerte", "⚠ " + a.avertissement + " Nouvelle adresse du pont : " + c.adresse.split("/")[0] + ".")); }
+      ouvrir("confirmApp", "btnAppliquer", "confirmAppNon");
+    });
+  });
+  $("confirmAppOk").addEventListener("click", function () {
+    if (!aAppliquer || occupe) { return; }
+    var a = aAppliquer, envoi = {};
+    Object.keys(a.corps).forEach(function (k) { envoi[k] = a.corps[k]; });
+    envoi.confirmer = "routeur";
+    var avant = D && D.ok ? D.d.debut : null;
+    aAppliquer = null; fermer();
+    occupe = true; boutons();
+    ecrire("appliquer", envoi).then(function (r) {
+      occupe = false;
+      if (r.statut === 202 || r.reseau) {
+        lancement = { verbe: "routeur-appliquer", t: Date.now(), debutAvant: avant, debut: null, adresse: a.corps.adresse.split("/")[0], avertissement: a.avertissement };
+        oublierApercu();
+        annonce("resultatBascule", r.reseau ? "Box injoignable : rien ne prouve que la demande soit arrivée ; l'état se relit toutes les 3 s." : "Application lancée (202) : bascule en cours sur la box, l'état se relit toutes les 3 s.", r.reseau ? "ko" : "cy");
+        $("panBascule").scrollIntoView({ block: "nearest" });
+      } else {
+        annonce("resultatConfig", erreurTexte(r), "ko");
+      }
+      return charge();
+    }).then(planifier);
+  });
+
+  $("btnConfirmer").addEventListener("click", function () {
+    if (occupe || ouverte) { return; }
+    occupe = true; boutons();
+    ecrire("confirmer").then(function (r) {
+      occupe = false;
+      if (r.statut === 200) { annonce("resultatBascule", "Mode routeur confirmé : le retour automatique est annulé.", ""); }
+      else { annonce("resultatBascule", erreurTexte(r), "ko"); }
+      return charge();
+    }).then(planifier);
+  });
+  $("btnRetour").addEventListener("click", function () {
+    if (occupe || ouverte) { return; }
+    var e = etat();
+    $("confirmRetourTexte").textContent = "Revenir en arrière : la dernière sauvegarde de la configuration du LAN est restaurée (pont br-lan, DHCP, Unbound, pare-feu du LAN) ; eth2 n'est jamais touché. La bascule part en tâche de fond."
+      + (e && e.etat === "en_attente" ? " Le retour automatique l'aurait fait à l'échéance." : " Le LAN actuel est remplacé : un poste branché sur lan0 à lan3 peut perdre sa connexion.");
+    ouvrir("confirmRetour", "btnRetour", "confirmRetourNon");
+  });
+  $("confirmRetourOk").addEventListener("click", function () {
+    if (occupe) { return; }
+    var avant = D && D.ok ? D.d.debut : null;
+    fermer();
+    occupe = true; boutons();
+    ecrire("retour", { confirmer: "retour" }).then(function (r) {
+      occupe = false;
+      if (r.statut === 202 || r.reseau) {
+        lancement = { verbe: "routeur-retour", t: Date.now(), debutAvant: avant, debut: null, adresse: null, avertissement: null };
+        annonce("resultatBascule", r.reseau ? "Box injoignable : rien ne prouve que la demande soit arrivée ; l'état se relit toutes les 3 s." : "Retour en arrière lancé (202) : l'état se relit toutes les 3 s.", r.reseau ? "ko" : "cy");
+      } else {
+        annonce("resultatBascule", erreurTexte(r), "ko");
+      }
+      return charge();
+    }).then(planifier);
+  });
+
+  // ── Démonstration : la bascule est simulée dans la page (2,5 s), aucune requête, aucune écriture ─────────────────────────
+  var DM = null;
+  function iso(t) { return new Date(t).toISOString().replace(/\.\d{3}Z$/, "Z"); }
+  function ipv4(s) {
+    var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(s || "").trim()), n = 0;
+    if (!m) { return null; }
+    for (var i = 1; i < 5; i++) { if (+m[i] > 255) { return null; } n = n * 256 + (+m[i]); }
+    return n;
+  }
+  function ipTexte(n) { return [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join("."); }
+  function cidr(s) {
+    var m = /^([^/]+)\/(\d{1,2})$/.exec(String(s || "").trim()), ip = m ? ipv4(m[1]) : null, p = m ? +m[2] : 99;
+    if (ip == null || p > 32) { return null; }
+    var masque = p ? (0xFFFFFFFF << (32 - p)) >>> 0 : 0;
+    return { ip: ip, p: p, masque: masque, reseau: (ip & masque) >>> 0 };
+  }
+  function demoInit() {
+    DM = { etat: "inactif", depuis: null, adresses: ["198.51.100.1/24"], dhcp: true, coupes: ["lan2"], echeance: null, bascule: null,
+      config: { adresse: "198.51.100.1/24", dhcp_debut: "198.51.100.100", dhcp_fin: "198.51.100.199", bail: "12h", ports: PORTS.slice(), wan: "eth2" },
+      derniere: { verbe: null, code: null, sortie: null, fini: true, debut: null, fin: null } };
+  }
+  function demoAvancer() {
+    var t = Date.now(), b = DM.bascule;
+    if (b && t >= b.fin) {
+      DM.bascule = null; DM.depuis = iso(t);
+      if (b.verbe === "routeur-appliquer") {
+        DM.etat = "en_attente"; DM.config = b.cfg; DM.adresses = [b.cfg.adresse]; DM.echeance = iso(t + 180000);   // le minuteur du contrôleur
+        DM.derniere = { verbe: b.verbe, code: 200, sortie: { etat: "en_attente", delai_confirmation: 180 }, fini: true, debut: b.debut, fin: iso(t) };
+      } else {
+        DM.etat = "inactif"; DM.echeance = null; DM.adresses = ["198.51.100.1/24"]; DM.config = b.avant;
+        DM.derniere = { verbe: b.verbe, code: 200, sortie: { etat: "inactif" }, fini: true, debut: b.debut, fin: iso(t) };
+      }
+    }
+    if (DM.etat === "en_attente" && !DM.bascule && DM.echeance && t >= Date.parse(DM.echeance)) {
+      DM.etat = "inactif"; DM.echeance = null; DM.depuis = iso(t); DM.adresses = ["198.51.100.1/24"];
+    }
+  }
+  function demoEtat() {
+    demoAvancer();
+    return { ok: true, d: { etat: DM.etat, depuis: DM.depuis, acteur: "admin-demo", sauvegarde: null, config: DM.config, minuteur_actif: !!DM.echeance,
+      echeance: DM.echeance, bascule_en_cours: !!DM.bascule, dhcp_actif: DM.dhcp, adresses_pont: DM.adresses.slice(), ports_coupes: DM.coupes.slice() } };
+  }
+  function demoDerniere() { demoAvancer(); return { ok: true, d: JSON.parse(JSON.stringify(DM.derniere)) }; }
+  function demoFichiers(c) {
+    var a = cidr(c.adresse), ip = ipTexte(a.ip), res = ipTexte(a.reseau) + "/" + a.p, e = "# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n# GÉNÉRÉ par secubox-netmodes\n";
+    var f = {
+      netdev: "[NetDev]\nName=br-lan\nKind=bridge\n\n[Bridge]\nSTP=no\n",
+      pont: "[Match]\nName=br-lan\n\n[Network]\nAddress=" + c.adresse + "\nConfigureWithoutCarrier=yes\nIPv6AcceptRA=no\n",
+      ports: "[Match]\nName=" + c.ports.join(" ") + "\n\n[Network]\nBridge=br-lan\n",
+      dhcp: "port=0\ninterface=br-lan\nbind-interfaces\nexcept-interface=lo\ndhcp-authoritative\ndhcp-range=" + c.dhcp_debut + "," + c.dhcp_fin + "," + ipTexte(a.masque) + "," + (c.bail || "12h")
+        + "\ndhcp-option=option:router," + ip + "\ndhcp-option=option:dns-server," + ip + "\ndhcp-leasefile=/var/lib/misc/dnsmasq.leases\nuser=dnsmasq\n",
+      unbound: "server:\n    ip-freebind: yes\n    interface: " + ip + "\n    access-control: " + res + " allow\n",
+      nft: "add rule inet filter input iifname \"br-lan\" udp dport 67 accept comment \"secubox netmodes lan dhcp\"\n"
+        + "add rule inet filter input iifname \"br-lan\" udp dport 53 accept comment \"secubox netmodes lan dns\"\n"
+        + "add rule inet filter input iifname \"br-lan\" tcp dport 53 accept comment \"secubox netmodes lan dns-tcp\"\n"
+        + "table inet secubox_netmodes_lan {\n    chain postrouting {\n        type nat hook postrouting priority srcnat; policy accept;\n"
+        + "        ip saddr " + res + " oifname \"eth2\" masquerade comment \"secubox netmodes lan nat\"\n    }\n}\n",
+      geo: res + " 1;\n"
+    };
+    Object.keys(f).forEach(function (k) { f[k] = e + f[k]; });
+    return f;
+  }
+  function demoEcrire(quoi, c) {
+    demoAvancer();
+    var t = Date.now(), refus = function (code, txt) { return { statut: code, j: { detail: txt } }; };
+    if (quoi === "apercu" || quoi === "appliquer") {
+      var a = cidr(c.adresse), d = ipv4(c.dhcp_debut), f = ipv4(c.dhcp_fin);
+      if (!a || a.p > 30) { return refus(400, "adresse : « " + c.adresse + " » n'est pas une adresse IPv4 avec un préfixe de /30 au plus"); }
+      if (d == null || f == null || ((d & a.masque) >>> 0) !== a.reseau || ((f & a.masque) >>> 0) !== a.reseau) { return refus(400, "la plage DHCP doit être dans le réseau " + ipTexte(a.reseau) + "/" + a.p); }
+      if (d > f) { return refus(400, "la plage DHCP est inversée : " + c.dhcp_debut + " > " + c.dhcp_fin); }
+      if (d <= a.ip && a.ip <= f) { return refus(400, "la plage DHCP " + c.dhcp_debut + "-" + c.dhcp_fin + " contient l'adresse du pont " + ipTexte(a.ip)); }
+      if (c.bail && !/^[1-9][0-9]{0,3}[mh]$/.test(c.bail)) { return refus(400, "bail « " + c.bail + " » invalide : nombre de 1 à 9999 suivi de m ou h (ex. 12h)"); }
+      if (!c.ports.length) { return refus(400, "ports : au moins un port du commutateur est nécessaire"); }
+      if (quoi === "apercu") {
+        // Le poste de démonstration est sur le LAN actuel : un autre réseau lui ferait perdre la connexion.
+        var autre = DM.adresses.every(function (x) { var y = cidr(x); return !y || y.reseau !== a.reseau || y.p !== a.p; });
+        var j = { fichiers: demoFichiers(c) };
+        if (autre) { j.avertissement = "Vous appliquez depuis le LAN actuel : vous perdrez la connexion ; confirmez depuis la nouvelle adresse sous 3 minutes."; }
+        return { statut: 200, j: j };
+      }
+      if (DM.bascule) { return refus(409, "une bascule est déjà en cours"); }
+      DM.bascule = { verbe: "routeur-appliquer", fin: t + 2500, debut: iso(t), avant: DM.config,
+        cfg: { adresse: c.adresse, dhcp_debut: c.dhcp_debut, dhcp_fin: c.dhcp_fin, bail: c.bail || "12h", ports: c.ports.slice(), wan: "eth2" } };
+      DM.etat = "en_attente"; DM.depuis = iso(t);
+      DM.derniere = { verbe: "routeur-appliquer", code: null, sortie: null, fini: false, debut: iso(t), fin: null };
+      return { statut: 202, j: { lancee: true } };
+    }
+    if (quoi === "confirmer") {
+      if (DM.bascule) { return refus(409, "une application est déjà en cours"); }
+      if (DM.etat !== "en_attente") { return refus(409, "rien à confirmer : le mode routeur n'attend pas de confirmation"); }
+      DM.etat = "actif"; DM.echeance = null; DM.depuis = iso(t);
+      return { statut: 200, j: demoEtat().d };
+    }
+    if (quoi === "retour") {
+      if (DM.bascule) { return refus(409, "une bascule est déjà en cours"); }
+      DM.bascule = { verbe: "routeur-retour", fin: t + 2500, debut: iso(t), avant: { adresse: "198.51.100.1/24", dhcp_debut: "198.51.100.100", dhcp_fin: "198.51.100.199", bail: "12h", ports: PORTS.slice(), wan: "eth2" } };
+      DM.echeance = null;
+      DM.derniere = { verbe: "routeur-retour", code: null, sortie: null, fini: false, debut: iso(t), fin: null };
+      return { statut: 202, j: { lancee: true } };
+    }
+    return refus(404, "action inconnue");
+  }
+
+  // ── Hauteur annoncée à l'hôte (la page mesure son cadre, pas le document) ──────────────────────────────────────────────────────
+  function hauteur() {
+    if (window.parent === window) { return; }
+    try { window.parent.postMessage({ sbxVue: Math.ceil($("cadre").getBoundingClientRect().bottom + window.scrollY), onglet: ONGLET }, location.origin); }
+    catch (e) { /* hôte inaccessible */ }
+  }
+
+  // ── Lecture et cadence : 3 s pendant une bascule, jamais page cachée ni confirmation ouverte ──────────────────────────────────
+  function charge() {
+    if (enLecture) { return Promise.resolve(); }
+    enLecture = true;
+    var p = DEMO ? Promise.resolve([demoEtat(), demoDerniere()]) : Promise.all([lire(SOURCES[0].url, true), lire(SOURCES[1].url, false)]);
+    return p.then(function (rs) {
+      enLecture = false;
+      E = rs[0]; D = rs[1];
+      // Une erreur de rendu reste visible (console, pageerror) sans arrêter la cadence d'actualisation.
+      try { suivreLancement(); rendre(); } catch (err) { setTimeout(function () { throw err; }); }
+    });
+  }
+  function planifier() {
+    clearTimeout(minuterie);
+    minuterie = setTimeout(function () {
+      if (document.hidden || confirmationOuverte() || occupe) { planifier(); return; }
+      charge().then(planifier);
+    }, intervalle());
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && !confirmationOuverte() && !occupe) { charge().then(planifier); }
+  });
+  setInterval(function () { if (!document.hidden) { compte(); } }, 1000);   // le compte à rebours, sans requête
+
+  if (DEMO) { demoInit(); $("demo").hidden = false; }
+  $("rafraichir").addEventListener("click", function () { if (!confirmationOuverte()) { charge().then(planifier); } });
+  addEventListener("resize", hauteur); addEventListener("load", hauteur);
+  if (window.ResizeObserver) { new ResizeObserver(hauteur).observe(document.body); }
+  sources(); boutons();
+  charge().then(planifier);
+})();
+</script>
+</body>
+</html>

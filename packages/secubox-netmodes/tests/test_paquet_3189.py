@@ -361,12 +361,16 @@ def test_control_depends_et_version():
     assert re.search(r"python3 \(>= 3\.11\)", depends)                    # tomllib
     assert "Architecture: all" in ctl and "Standards-Version: 4.6.2" in ctl and "debhelper-compat (= 13)" in ctl
     tete = lire("debian/changelog").split("\n -- ", 1)
-    assert tete[0].startswith("secubox-netmodes (1.4.2-1~trixie1) trixie; urgency=medium")
-    assert "(ref #3189)" in tete[0]
-    assert tete[1].startswith("Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 16:30:00 +0100")
+    # 1.5.0 (#3190) : panneau Réseau, ports, application asynchrone ; dit aussi ce qui n'est pas repris (Isoler)
+    assert tete[0].startswith("secubox-netmodes (1.5.0-1~trixie1) trixie; urgency=medium")
+    assert "(ref #3190)" in tete[0] and "Isoler" in tete[0] and "livraison 3" in tete[0]
+    assert tete[1].startswith("Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 18:00:00 +0100")
+    e142 = lire("debian/changelog").split("secubox-netmodes (1.4.2-1~trixie1) trixie; urgency=medium", 1)[1].split("\n -- ", 1)
+    assert "(ref #3189)" in e142[0]
+    assert e142[1].startswith("Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 16:30:00 +0100")
     # 1.4.2 : le DHCP du LAN, arrêté par le prerm de debhelper à la mise à jour, est relancé s'il est activé
     for mot in ("secubox-lan-dhcp", "--no-start", "postinst"):
-        assert mot in tete[0], mot
+        assert mot in e142[0], mot
 
 
 @pytest.mark.parametrize("script", ["postinst", "prerm"])
