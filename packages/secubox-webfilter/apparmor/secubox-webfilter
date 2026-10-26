@@ -119,7 +119,7 @@
   # Lecture : configuration, état du service (config.json, listes, connus), drop-in d'ad-guard (adresses déjà liées à une vue)
   /etc/secubox/webfilter.toml r,
   /var/lib/secubox/webfilter/ r,
-  /var/lib/secubox/webfilter/config.json r,
+  /var/lib/secubox/webfilter/config.json rw,   # rw : rendu au service s'il appartient à root (fchown/fchmod par descripteur, #3172)
   /var/lib/secubox/webfilter/listes/ r,
   /var/lib/secubox/webfilter/listes/** r,
   /etc/unbound/unbound.conf.d/ r,

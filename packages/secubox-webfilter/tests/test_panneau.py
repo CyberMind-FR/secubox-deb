@@ -100,6 +100,16 @@ def test_mode_inconnu_ne_dit_jamais_rien_n_est_bloque_3172(navigateur):
     p.wait_for_selector("[data-cat='adulte']")
     b = p.inner_text("#bandeau-observe")
     assert "rien n'est bloqué" not in b and "inconnu" in b.lower() and "inconnu" in p.inner_text("#mode-pastille").lower()
+    assert "inc" in p.get_attribute("#mode-pastille", "class").split()                    # se distingue du mode observe à l'œil
+    assert not erreurs
+    ctx.close()
+
+
+def test_etat_illisible_le_bandeau_ne_reste_pas_sur_rien_n_est_bloque_3172(navigateur):
+    """Relecture #3172 : le texte d'origine de la page disait « rien n'est bloqué », et restait affiché si /etat échouait."""
+    ctx, p, erreurs, _ = _page(navigateur, {("GET", "/etat"): (503, {"detail": "catalogue illisible"})})
+    p.wait_for_timeout(500)
+    assert "rien n'est bloqué" not in p.inner_text("#bandeau-observe") and "inconnu" in p.inner_text("#mode-pastille").lower()
     assert not erreurs
     ctx.close()
 

@@ -9,6 +9,7 @@ Lecture agrégée (`require_lecture`) ; tout ce qui détaille un appareil ou lan
 """
 import copy
 import json
+import logging
 import re
 import sys
 import threading
@@ -55,14 +56,23 @@ def _meta(cat_id: str, source_nom: str) -> dict:
         return {}
 
 
+log = logging.getLogger("secubox.webfilter")
+_config_lisible = True                                              # avertir au CHANGEMENT d'état : /etat est interrogé en continu
+
+
 def _mode_global(cats) -> str:
     """« block » si un profil ou une exception met une catégorie en `block` : l'agrégat dit « blocage actif », sans nom de profil ni d'appareil.
     « inconnu » si la configuration est illisible (#3172 : réécrite par root en 0600, l'API ne la lisait plus et annonçait « rien n'est bloqué »
     pendant que le DNS bloquait) : sans configuration, l'API ne sait pas, elle ne suppose jamais l'observation."""
+    global _config_lisible
     try:
         cfg = fichiers.lire_config(ETAT, {c.id for c in cats})
-    except profils.ErreurProfils:
+    except profils.ErreurProfils as e:
+        if _config_lisible:
+            log.warning("config.json illisible (%s) : mode de blocage inconnu", e)
+        _config_lisible = False
         return "inconnu"
+    _config_lisible = True
     bloque = (any(m == "block" for p in cfg["profils"].values() for m in p["categories"].values())
               or any(m == "block" for a in cfg["appareils"].values() for m in a["exceptions"].values()))
     return "block" if bloque else "observe"

@@ -153,3 +153,56 @@ def test_categorie_absente_ou_hostile(tmp_path):
         assert zones.charger_sur(e, "jeux", ["s1"], etatsur.Budget(1000)) == [] and zones.charger_sur(e, "../x", ["s1"], etatsur.Budget(1000)) == []
     finally:
         e.fermer()
+
+
+# #3172 : config.json réécrit par root en 0600 dans le dossier du service — l'API ne le lisait plus. Le contrôleur root le rend au service,
+# sans jamais suivre un lien que le compte du service aurait posé (systemd-tmpfiles refuse ce chemin : « unsafe path transition »).
+@pytest.fixture
+def repris(tmp_path, monkeypatch):
+    """Le compte courant joue root (propriétaire du fichier), le service est un autre uid ; fchown est noté, pas exécuté (tests non root)."""
+    monkeypatch.setattr(etatsur, "UID_ROOT", os.getuid())
+    appels = []
+    monkeypatch.setattr(etatsur.os, "fchown", lambda fd, uid, gid: appels.append((uid, gid)))
+    e = etatsur.EtatSur(tmp_path)
+    e.uid, e.gid = os.getuid() + 1, os.getgid() + 1
+    yield tmp_path, e, appels
+    e.fermer()
+
+
+def test_un_fichier_de_root_est_rendu_au_service_en_0600_3172(repris):
+    d, e, appels = repris
+    (d / "config.json").write_text("{}")
+    os.chmod(d / "config.json", 0o644)
+    assert e.rendre_au_service("config.json", 0o600) is True
+    assert appels == [(e.uid, e.gid)] and stat.S_IMODE(os.stat(d / "config.json").st_mode) == 0o600
+
+
+def test_rien_a_faire_si_absent_ou_deja_au_service_3172(repris):
+    d, e, appels = repris
+    assert e.rendre_au_service("config.json", 0o600) is False
+    (d / "config.json").write_text("{}")
+    e.uid = os.getuid()
+    assert e.rendre_au_service("config.json", 0o600) is False and appels == []
+
+
+def test_un_lien_symbolique_ou_un_lien_dur_n_est_jamais_repris_3172(repris):
+    d, e, appels = repris
+    (d / "cible").write_text("secret")
+    os.chmod(d / "cible", 0o644)
+    (d / "config.json").symlink_to(d / "cible")
+    with pytest.raises(etatsur.ErreurEtat):
+        e.rendre_au_service("config.json", 0o600)
+    (d / "config.json").unlink()
+    os.link(d / "cible", d / "config.json")                                              # lien dur : un autre nom pour un autre fichier
+    with pytest.raises(etatsur.ErreurEtat):
+        e.rendre_au_service("config.json", 0o600)
+    assert appels == [] and stat.S_IMODE(os.stat(d / "cible").st_mode) == 0o644
+
+
+def test_un_autre_proprietaire_que_root_n_est_pas_repris_3172(repris, monkeypatch):
+    d, e, appels = repris
+    (d / "config.json").write_text("{}")
+    monkeypatch.setattr(etatsur, "UID_ROOT", os.getuid() + 7)
+    with pytest.raises(etatsur.ErreurEtat):
+        e.rendre_au_service("config.json", 0o600)
+    assert appels == []

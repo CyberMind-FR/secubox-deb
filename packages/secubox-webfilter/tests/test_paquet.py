@@ -192,9 +192,14 @@ def test_profil_du_controleur_peut_consommer_la_demande_d_application_2441():
     assert "sync.demande" not in ctl
 
 
-def test_la_configuration_est_rendue_au_compte_du_service_3172():
-    """#3172 : une écriture par root (0600 root:root) rendait config.json illisible par l'API — 503 sur /appareils, « rien n'est bloqué »
-    sur la Vigie. La ligne `z` la rend au service, à l'installation (systemd-tmpfiles --create du postinst) et à chaque démarrage."""
-    t = lire("tmpfiles/secubox-webfilter.conf")
-    assert "z /var/lib/secubox/webfilter/config.json 0600 secubox-webfilter secubox-webfilter -" in t
-    assert "systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-webfilter.conf" in lire("debian/postinst")
+def test_la_configuration_est_rendue_au_service_par_le_controleur_3172():
+    """#3172 : config.json réécrit par root en 0600 n'était plus lisible par l'API. systemd-tmpfiles ne peut pas le reprendre (« unsafe path
+    transition » : /var/lib/secubox appartient à secubox) : c'est le contrôleur root qui le rend, par descripteur. Le postinst lui dépose une
+    demande d'application si le fichier n'appartient pas au service ; le profil du contrôleur peut changer son propriétaire."""
+    assert "config.json" not in lire("tmpfiles/secubox-webfilter.conf")
+    p = lire("apparmor/secubox-webfilter")
+    ctl = p[p.index("/usr/sbin/secubox-webfilter-ctl {"):]
+    assert "/var/lib/secubox/webfilter/config.json rw," in ctl
+    post = lire("debian/postinst")
+    assert "stat -c %U /var/lib/secubox/webfilter/config.json" in post
+    assert "runuser -u secubox-webfilter -- /usr/bin/touch /var/lib/secubox/webfilter/appliquer.demande" in post

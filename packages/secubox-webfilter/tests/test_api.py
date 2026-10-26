@@ -391,3 +391,17 @@ def test_configuration_illisible_donne_un_mode_inconnu_jamais_observe_3172(banc2
     (banc2 / "config.json").write_text(contenu)
     lecteur()
     assert TestClient(main.app).get("/etat").json()["mode_global"] == "inconnu"
+
+
+def test_lecture_refusee_donne_un_mode_inconnu_et_un_avertissement_3172(banc2, monkeypatch, caplog):
+    """La cause réelle sur gk2 : l'ouverture de config.json refusée (EACCES), pas un contenu invalide."""
+    (banc2 / "config.json").write_text("{}")
+
+    def refuse(*a, **k):
+        raise PermissionError(13, "Permission denied")
+    monkeypatch.setattr("webfilter.etat.open", refuse, raising=False)
+    monkeypatch.setattr(main, "_config_lisible", True)                                    # l'avertissement se donne au changement d'état
+    lecteur()
+    with caplog.at_level("WARNING"):
+        assert TestClient(main.app).get("/etat").json()["mode_global"] == "inconnu"
+    assert any("config.json" in r.getMessage() for r in caplog.records)
