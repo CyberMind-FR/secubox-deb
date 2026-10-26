@@ -6,7 +6,9 @@
 
 Aucune commande ne nomme eth* : le WAN mvpp2 bloque son comphy si on le relance à distance (redémarrage à froid).
 Seule exception : `nft -c -f` / `nft -f` du fichier généré, qui lit le nom du WAN dans ses règles (NAT, transit).
-Tout chemin absolu est préfixé par `ctx.racine`, toute commande passe par `ctx.executer` (faux en test)."""
+Tout chemin absolu est préfixé par `ctx.racine`, toute commande passe par `ctx.executer` (faux en test).
+L'état, les sauvegardes et lan-dhcp.conf vivent dans un arbre root seul (/var/lib/secubox-netmodes, 0700) vérifié à
+chaque usage : /var/lib/secubox appartient à secubox, qui pourrait sinon substituer un retour piégé."""
 from __future__ import annotations
 
 import contextlib
@@ -14,8 +16,10 @@ import fcntl
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -34,8 +38,11 @@ from .routeur_rendu import CHEMINS, COMMENTAIRE_NFT, TABLE_NFT, rendre
 VERROU = "/run/lock/secubox-netmodes.lock"
 VERROU_UNBOUND = "/run/lock/secubox-dns-lan.lock"           # partagé avec secubox-dns-lan
 DELAI_VERROU_UNBOUND = 30.0
-ETAT = "/var/lib/secubox/netmodes/routeur-etat.json"
-SAUVEGARDES = "/var/lib/secubox/netmodes-backup/routeur"
+DELAI_VERROU_RETOUR = 60.0                                  # minuteur et démarrage attendent, un humain non
+ARBRE = "/var/lib/secubox-netmodes"                         # root seul, 0700
+ETAT = f"{ARBRE}/routeur-etat.json"
+SAUVEGARDES = f"{ARBRE}/sauvegardes"
+STRICTS = frozenset({CHEMINS["dhcp"]})                      # gérés ET dans l'arbre root : contrôle strict
 TOML = "/etc/secubox/netmodes/routeur.toml"
 ANCIEN_PONT = "/etc/systemd/network/10-br-lan.network"      # pont fait main de gk2 : mis de côté, remis au retour
 DOSSIERS_NETWORKD = ("/etc/systemd/network", "/run/systemd/network")
@@ -54,6 +61,7 @@ GERES = (*CHEMINS.values(), TOML, ANCIEN_PONT)
 MODES = {TOML: 0o640}                                       # le reste en 0644 : lu par les démons
 LISTE_INPUT = ["nft", "-j", "-a", "list", "chain", "inet", "filter", "input"]
 _ETATS = ("inactif", "en_attente", "actif")
+_SIGNAUX = (signal.SIGTERM, signal.SIGHUP, signal.SIGINT)
 
 
 class Occupe(RuntimeError):
@@ -62,6 +70,10 @@ class Occupe(RuntimeError):
 
 class Refus(RuntimeError):
     """Refus expliqué à l'administrateur : rien n'a été basculé."""
+
+
+class CheminRefuse(Refus):
+    """Un chemin de l'arbre root seul pourrait être substitué par un autre compte."""
 
 
 class Echec(RuntimeError):
@@ -140,14 +152,24 @@ def _ouvrir_verrou(chemin: Path) -> int:
     return os.open(chemin, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
 
 
-@contextlib.contextmanager
-def _verrou(ctx: Contexte) -> Generator[None, None, None]:
-    fd = _ouvrir_verrou(_p(ctx, VERROU))
-    try:
+def _prendre(fd: int, attente: float) -> bool:
+    limite = time.monotonic() + attente
+    while True:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
         except BlockingIOError:
-            raise Occupe("une autre opération du mode routeur est en cours : réessayer dans un instant") from None
+            if time.monotonic() >= limite:
+                return False
+            time.sleep(0.1)
+
+
+@contextlib.contextmanager
+def _verrou(ctx: Contexte, attente: float = 0.0) -> Generator[None, None, None]:
+    fd = _ouvrir_verrou(_p(ctx, VERROU))
+    try:
+        if not _prendre(fd, attente):
+            raise Occupe("une autre opération du mode routeur est en cours : réessayer dans un instant")
         yield
     finally:
         os.close(fd)
@@ -157,19 +179,50 @@ def _verrou(ctx: Contexte) -> Generator[None, None, None]:
 def _verrou_unbound(ctx: Contexte) -> Generator[None, None, None]:
     fd = _ouvrir_verrou(_p(ctx, VERROU_UNBOUND))
     try:
-        limite = time.monotonic() + DELAI_VERROU_UNBOUND
-        while True:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError:
-                if time.monotonic() >= limite:
-                    raise Refus(f"Unbound est tenu par secubox-dns-lan depuis {DELAI_VERROU_UNBOUND:g} s : "
-                                "réessayer dans un instant") from None
-                time.sleep(0.1)
+        if not _prendre(fd, DELAI_VERROU_UNBOUND):
+            raise Refus(f"Unbound est tenu par secubox-dns-lan depuis {DELAI_VERROU_UNBOUND:g} s : "
+                        "réessayer dans un instant")
         yield
     finally:
         os.close(fd)
+
+
+@contextlib.contextmanager
+def _sans_interruption() -> Generator[None, None, None]:
+    """Un arrêt au milieu laisserait le réseau à moitié basculé : TERM, HUP et INT sont ignorés le temps de finir."""
+    if threading.current_thread() is not threading.main_thread():   # signal.signal n'existe que là (CLI : toujours)
+        yield
+        return
+    anciens = [(s, signal.signal(s, signal.SIG_IGN)) for s in _SIGNAUX]
+    try:
+        yield
+    finally:
+        for s, ancien in anciens:
+            signal.signal(s, ancien if ancien is not None else signal.SIG_DFL)
+
+
+def _chemin_sur(ctx: Contexte, chemin: str) -> Path:
+    p = _p(ctx, chemin)
+    try:
+        fichiers.verifier_sur(ctx.racine, p)
+    except fichiers.CheminNonSur as exc:
+        raise CheminRefuse(f"{exc} : un autre compte pourrait y substituer son contenu ; corriger propriétaire "
+                           "et droits avant toute opération") from exc
+    return p
+
+
+def _verifier_arbre(ctx: Contexte) -> None:
+    for chemin in (ETAT, SAUVEGARDES, *sorted(STRICTS)):
+        _chemin_sur(ctx, chemin)
+
+
+@contextlib.contextmanager
+def _auditer_chemins(ctx: Contexte, acteur: str) -> Generator[None, None, None]:
+    try:
+        yield
+    except CheminRefuse as exc:
+        _auditer(ctx, "chemin-refuse", acteur, str(exc))
+        raise
 
 
 def _adresses(ctx: Contexte, dev: str | None = None) -> dict[str, list[IPv4Interface]]:
@@ -252,8 +305,9 @@ def _en_dict(cfg: ConfigRouteur) -> dict:
 
 def _lire_etat(ctx: Contexte) -> dict:
     vide = {"etat": "inactif", "depuis": None, "acteur": None, "sauvegarde": None}
+    chemin = _chemin_sur(ctx, ETAT)                         # CheminRefuse : l'appelant décide (refus ou affichage)
     try:
-        brut = fichiers.lire(_p(ctx, ETAT))
+        brut = fichiers.lire(chemin)
         d = json.loads(brut) if brut is not None else vide
     except (OSError, ValueError) as exc:
         return {**vide, "erreur": f"fichier d'état {ETAT} illisible ({exc.__class__.__name__})"}
@@ -266,11 +320,26 @@ def _lire_etat(ctx: Contexte) -> dict:
 def _ecrire_etat(ctx: Contexte, valeur: str, acteur: str, sauvegarde: str | None) -> None:
     contenu = {"etat": valeur, "depuis": _utc(ctx).strftime("%Y-%m-%dT%H:%M:%SZ"), "acteur": acteur,
                "sauvegarde": sauvegarde}
-    fichiers.ecrire(_p(ctx, ETAT), json.dumps(contenu, ensure_ascii=False) + "\n", 0o640)
+    fichiers.ecrire(_p(ctx, ETAT), json.dumps(contenu, ensure_ascii=False) + "\n", 0o640, ctx.racine)
+
+
+def _remettre_etat(ctx: Contexte, brut: bytes | None) -> list[str]:
+    """Remet le fichier d'état tel qu'il était avant l'application (absent compris)."""
+    try:
+        if brut is None:
+            _p(ctx, ETAT).unlink(missing_ok=True)
+        else:
+            fichiers.ecrire(_p(ctx, ETAT), brut, 0o640, ctx.racine)
+    except OSError as exc:
+        return [f"état : {exc}"]
+    return []
 
 
 def etat(ctx: Contexte) -> dict:
-    sortie = _lire_etat(ctx)
+    try:
+        sortie = _lire_etat(ctx)
+    except CheminRefuse as exc:                             # lecture seule et interrogée en boucle : affiché, pas audité
+        sortie = {"etat": "inactif", "depuis": None, "acteur": None, "sauvegarde": None, "erreur": str(exc)}
     erreur = sortie.pop("erreur", None)
     config = None
     if os.path.lexists(_p(ctx, TOML)):
@@ -321,13 +390,13 @@ def _refus_prealables(ctx: Contexte, liens: dict[str, list[IPv4Interface]]) -> N
 
 
 def _restaurer(ctx: Contexte, nom: str) -> tuple[list[str], list[str]]:
-    return fichiers.restaurer(_p(ctx, SAUVEGARDES) / nom, _geres(ctx), MODES)
+    return fichiers.restaurer(_p(ctx, SAUVEGARDES) / nom, _geres(ctx), MODES, ctx.racine, STRICTS)
 
 
 def _poser(ctx: Contexte, cfg: ConfigRouteur, rendu: dict[str, str], geo: bool) -> None:
     for cle, chemin in CHEMINS.items():
         if cle != "geo" or geo:
-            fichiers.ecrire(_p(ctx, chemin), rendu[cle], 0o644)
+            fichiers.ecrire(_p(ctx, chemin), rendu[cle], 0o644, ctx.racine if chemin in STRICTS else None)
     fichiers.ecrire(_p(ctx, TOML), en_toml(cfg), 0o640)
     ancien = _p(ctx, ANCIEN_PONT)
     contenu = fichiers.lire(ancien)
@@ -358,11 +427,18 @@ def _reprendre_lan_temporaire(ctx: Contexte, cfg: ConfigRouteur) -> None:
             fichiers.ecrire(baux, b"".join(fichiers.lire(p) or b"" for p in sources), 0o644)
     _supprimer_regles(ctx, PREFIXE_TEMPORAIRE)
     for a in _adresses(ctx, "br-lan").get("br-lan", []):
-        if a != cfg.adresse:
-            _exiger(ctx, ["ip", "addr", "del", str(a), "dev", "br-lan"])
+        if a == cfg.adresse:
+            continue
+        argv = ["ip", "addr", "del", str(a), "dev", "br-lan"]
+        r = ctx.executer(argv)
+        # networkd retire lui-même ce que le nouveau .network ne déclare plus : course bénigne si l'adresse a disparu
+        if r.returncode == 0 or (r.returncode == 2 and "Cannot assign requested address" in (r.stderr or "")
+                                 and a not in _adresses(ctx, "br-lan").get("br-lan", [])):
+            continue
+        raise Echec(f"« {' '.join(argv)} » a échoué (code {r.returncode}) : {_sortie(r)}")
 
 
-def _basculer(ctx: Contexte, cfg: ConfigRouteur, geo: bool, acteur: str, nom: str) -> None:
+def _basculer(ctx: Contexte, cfg: ConfigRouteur, geo: bool) -> None:
     nft = str(_p(ctx, CHEMINS["nft"]))
     _exiger(ctx, ["networkctl", "reload"])                                       # 7
     _exiger(ctx, ["networkctl", "reconfigure", "br-lan", *cfg.ports])
@@ -376,15 +452,23 @@ def _basculer(ctx: Contexte, cfg: ConfigRouteur, geo: bool, acteur: str, nom: st
     if geo:                                                                      # 12
         _exiger(ctx, ["systemctl", "reload", "nginx.service"])
     ctx.executer(["systemctl", "stop", f"{MINUTEUR}.timer"])                     # 13 : code ignoré (souvent absent)
-    _ecrire_etat(ctx, "en_attente", acteur, nom)            # avant le minuteur : un arrêt brutal ici revient au boot
     # --collect : un retour en échec ne laisse pas l'unité chargée, le nom reste réutilisable
     _exiger(ctx, ["systemd-run", f"--unit={MINUTEUR}", f"--on-active={DELAI_RETOUR}", "--collect",
                   "--description=Retour automatique du mode routeur SecuBox sauf confirmation",
                   NETMODESCTL, "routeur-retour", "minuteur"])
 
 
+def _connue(exc: BaseException) -> bool:
+    return isinstance(exc, (Refus, Echec, OSError))
+
+
+def _texte(exc: BaseException) -> str:
+    return str(exc) if _connue(exc) else f"{exc.__class__.__name__} : {exc}"
+
+
 def _appliquer(ctx: Contexte, cfg_dict: dict, acteur: str) -> None:
     try:
+        _verifier_arbre(ctx)
         courant = _lire_etat(ctx)
         if courant["etat"] == "en_attente":
             raise Refus("une application attend déjà sa confirmation : confirmer ou revenir en arrière d'abord")
@@ -393,41 +477,54 @@ def _appliquer(ctx: Contexte, cfg_dict: dict, acteur: str) -> None:
         verifier_reseaux(cfg, [a.network for nom_lien, adresses in liens.items()
                                if nom_lien not in ("br-lan", "lo") for a in adresses])
         _refus_prealables(ctx, liens)                                            # 3
-        try:                                                                     # 4
-            nom = fichiers.sauvegarder(_p(ctx, SAUVEGARDES), _utc(ctx).strftime("%Y%m%dT%H%M%SZ"), _geres(ctx),
-                                       proteger=courant["sauvegarde"])
-        except fichiers.LienSymbolique as exc:
-            raise Refus(f"{exc.filename} est un lien symbolique : sauvegarde et écriture refusées") from exc
     except (ErreurConfig, Refus) as exc:
-        _auditer(ctx, "appliquer-refus", acteur, str(exc))
+        if not isinstance(exc, CheminRefuse):              # audité par _auditer_chemins
+            _auditer(ctx, "appliquer-refus", acteur, str(exc))
         raise
     geo = _p(ctx, DOSSIER_GEO).is_dir()
-    if not geo:
-        _auditer(ctx, "geo-absente", acteur, f"{DOSSIER_GEO} absent : fragment géo non posé, nginx inchangé")
     rendu = rendre(cfg)
-    try:
-        with _verrou_unbound(ctx):
-            try:
-                _poser(ctx, cfg, rendu, geo)                                     # 5
-                _valider(ctx, geo)                                               # 6
-            except (Refus, OSError) as exc:
-                _, erreurs = _restaurer(ctx, nom)
-                lien = isinstance(exc, fichiers.LienSymbolique)
-                motif = f"{exc.filename} est un lien symbolique" if lien else str(exc)
-                suite = "fichiers d'avant restaurés" if not erreurs else "restauration INCOMPLÈTE : " + " ; ".join(erreurs)
-                if lien or isinstance(exc, Refus):
-                    raise Refus(f"{motif} ; {suite}") from exc
-                raise Echec(f"écriture impossible : {motif} ; {suite}") from exc
-    except (Refus, Echec) as exc:
-        _auditer(ctx, "appliquer-echec", acteur, str(exc))
-        raise
-    try:
-        _basculer(ctx, cfg, geo, acteur, nom)                                    # 7 à 13
-    except (Echec, Refus, OSError) as exc:
-        _auditer(ctx, "appliquer-echec", acteur, f"{exc} ; retour à la sauvegarde {nom}")
-        erreurs = _retour(ctx, "echec", nom)
-        suite = "configuration précédente restaurée" if not erreurs else "retour INCOMPLET : " + " ; ".join(erreurs)
-        raise Echec(f"{exc} ; {suite}") from exc
+    with _sans_interruption():                          # de la première écriture à la fin de la bascule
+        etat_avant = fichiers.lire(_p(ctx, ETAT))           # remis tel quel si la validation refuse
+        try:                                                                     # 4
+            nom = fichiers.sauvegarder(_p(ctx, SAUVEGARDES), _utc(ctx).strftime("%Y%m%dT%H%M%SZ"), _geres(ctx),
+                                       ctx.racine, STRICTS, proteger=courant["sauvegarde"])
+        except fichiers.LienSymbolique as exc:
+            refus = Refus(f"{exc.filename} est un lien symbolique : sauvegarde et écriture refusées")
+            _auditer(ctx, "appliquer-refus", acteur, str(refus))
+            raise refus from exc
+        if not geo:
+            _auditer(ctx, "geo-absente", acteur, f"{DOSSIER_GEO} absent : fragment géo non posé, nginx inchangé")
+        erreurs: list[str] = []
+        try:
+            # garde armée avant le premier fichier géré : une coupure d'ici à la fin revient au démarrage
+            _ecrire_etat(ctx, "en_attente", acteur, nom)
+            with _verrou_unbound(ctx):
+                try:
+                    _poser(ctx, cfg, rendu, geo)                                 # 5
+                    _valider(ctx, geo)                                           # 6
+                except BaseException:
+                    erreurs += _restaurer(ctx, nom)[1]                           # encore sous le verrou Unbound
+                    raise
+        except BaseException as exc:
+            erreurs += _remettre_etat(ctx, etat_avant)
+            suite = "fichiers et état d'avant remis" if not erreurs else "remise INCOMPLÈTE : " + " ; ".join(erreurs)
+            _auditer(ctx, "appliquer-echec", acteur, f"{_texte(exc)} ; {suite}")
+            if isinstance(exc, fichiers.LienSymbolique):
+                raise Refus(f"{exc.filename} est un lien symbolique ; {suite}") from exc
+            if isinstance(exc, Refus):
+                raise Refus(f"{exc} ; {suite}") from exc
+            if _connue(exc):
+                raise Echec(f"{exc} ; {suite}") from exc
+            raise
+        try:
+            _basculer(ctx, cfg, geo)                                             # 7 à 13
+        except BaseException as exc:                    # même une exception imprévue défait la bascule
+            _auditer(ctx, "appliquer-echec", acteur, f"{_texte(exc)} ; retour à la sauvegarde {nom}")
+            erreurs = _retour(ctx, "echec", nom)
+            suite = "configuration précédente restaurée" if not erreurs else "retour INCOMPLET : " + " ; ".join(erreurs)
+            if _connue(exc):
+                raise Echec(f"{exc} ; {suite}") from exc
+            raise
     _auditer(ctx, "appliquer", acteur,
              f"pont {cfg.adresse}, DHCP {cfg.dhcp_debut}-{cfg.dhcp_fin} ({cfg.bail}), ports {' '.join(cfg.ports)} ; "
              f"sauvegarde {nom} ; retour automatique dans {DELAI_RETOUR} s sauf confirmation")
@@ -435,7 +532,7 @@ def _appliquer(ctx: Contexte, cfg_dict: dict, acteur: str) -> None:
 
 def appliquer(ctx: Contexte, cfg_dict: dict, acteur: str) -> dict:
     _verifier_acteur(acteur)
-    with _verrou(ctx):                                                           # 1
+    with _verrou(ctx), _auditer_chemins(ctx, acteur):                            # 1
         _appliquer(ctx, cfg_dict, acteur)
     return {**etat(ctx), "delai_confirmation": DELAI_RETOUR}
 
@@ -444,7 +541,8 @@ def appliquer(ctx: Contexte, cfg_dict: dict, acteur: str) -> dict:
 
 def confirmer(ctx: Contexte, acteur: str) -> dict:
     _verifier_acteur(acteur)
-    with _verrou(ctx):
+    with _verrou(ctx), _auditer_chemins(ctx, acteur):
+        _verifier_arbre(ctx)
         courant = _lire_etat(ctx)
         if courant["etat"] != "en_attente":
             raise Refus(f"rien à confirmer : le mode routeur est « {courant['etat']} »")
@@ -492,10 +590,16 @@ def _recharger_nginx(ctx: Contexte) -> None:
 
 
 def _retour(ctx: Contexte, acteur: str, nom: str | None = None) -> list[str]:
+    with _sans_interruption():
+        _verifier_arbre(ctx)
+        return _restaurer_et_relancer(ctx, acteur, nom)
+
+
+def _restaurer_et_relancer(ctx: Contexte, acteur: str, nom: str | None) -> list[str]:
     """Restaure une sauvegarde et la remet en service ; continue après une erreur et les renvoie toutes.
     Sans `nom` : celle de la dernière application réussie (fichier d'état), sinon la plus récente — une application
     refusée à la validation laisse une sauvegarde identique à l'état courant, qui ne doit pas masquer la bonne."""
-    noms = fichiers.sauvegardes(_p(ctx, SAUVEGARDES))
+    noms = fichiers.sauvegardes(_p(ctx, SAUVEGARDES), ctx.racine)
     if nom is None:
         reference = _lire_etat(ctx)["sauvegarde"]           # fichier non fiable : seul un nom listé est retenu
         nom = reference if reference in noms else (noms[-1] if noms else None)
@@ -528,7 +632,10 @@ def _retour(ctx: Contexte, acteur: str, nom: str | None = None) -> list[str]:
 
 def retour(ctx: Contexte, acteur: str) -> dict:
     _verifier_acteur(acteur)
-    with _verrou(ctx):
+    # le minuteur n'a qu'une chance : il attend le verrou au lieu de laisser la config non gardée
+    attente = DELAI_VERROU_RETOUR if acteur in ("minuteur", "demarrage") else 0.0
+    with _verrou(ctx, attente), _auditer_chemins(ctx, acteur):
+        _verifier_arbre(ctx)
         courant = _lire_etat(ctx)["etat"]
         if acteur == "minuteur" and courant != "en_attente":   # échu après une confirmation : ne rien défaire
             _auditer(ctx, "retour-ignore", acteur, f"minuteur échu hors attente (état {courant}) : rien à faire")
@@ -541,7 +648,8 @@ def retour(ctx: Contexte, acteur: str) -> dict:
 
 def retour_si_en_attente(ctx: Contexte) -> dict:
     """Au démarrage : le minuteur transitoire a disparu avec le redémarrage, l'attente non confirmée est défaite."""
-    with _verrou(ctx):
+    with _verrou(ctx, DELAI_VERROU_RETOUR), _auditer_chemins(ctx, "demarrage"):
+        _verifier_arbre(ctx)
         courant = _lire_etat(ctx)["etat"]
         if courant != "en_attente":
             return {"etat": courant}

@@ -10,14 +10,18 @@ import io
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
 from api import routeur_ctl as rc
+from api import routeur_fichiers as rf
 from api.routeur_config import ErreurConfig
 from api.routeur_rendu import CHEMINS, TABLE_NFT
 
@@ -27,8 +31,9 @@ CFG42 = {"adresse": "192.168.42.1/24", "dhcp_debut": "192.168.42.100",
          "ports": ["lan0", "lan1", "lan2", "lan3"], "wan": "eth2"}
 CFG50 = dict(CFG42, adresse="192.168.50.1/24", dhcp_debut="192.168.50.100", dhcp_fin="192.168.50.199")
 TOML = "etc/secubox/netmodes/routeur.toml"
-ETAT = "var/lib/secubox/netmodes/routeur-etat.json"
-SAUVEGARDES = "var/lib/secubox/netmodes-backup/routeur"
+ARBRE = "var/lib/secubox-netmodes"
+ETAT = ARBRE + "/routeur-etat.json"
+SAUVEGARDES = ARBRE + "/sauvegardes"
 AUDIT = "var/log/secubox/audit.log"
 LISTE_INPUT = ["nft", "-j", "-a", "list", "chain", "inet", "filter", "input"]
 NETPLAN_GK2 = """network:
@@ -67,19 +72,36 @@ class Faux:
         self.prochain = 40
         self.table_lan = False
         self.echecs: dict[tuple, list] = {}
+        self.crochets: dict[tuple, object] = {}
+        self.etats: list = []                           # état du fichier d'état au moment de chaque commande
 
-    def echouer(self, *prefixe, code=1, fois=None):
-        self.echecs[prefixe] = [code, fois]
+    def echouer(self, *prefixe, code=1, fois=None, erreur="échec simulé"):
+        self.echecs[prefixe] = [code, fois, erreur]
+
+    def sur(self, *prefixe, fonction):
+        """Appelée avec argv avant l'effet de la commande : peut modifier l'état simulé ou lever."""
+        self.crochets[prefixe] = fonction
 
     def __call__(self, argv):
         assert isinstance(argv, list) and all(isinstance(a, str) for a in argv), argv
         self.journal.append(list(argv))
+        self.etats.append(self._etat())
+        for prefixe, fonction in self.crochets.items():
+            if tuple(argv[:len(prefixe)]) == prefixe:
+                fonction(argv)
         for prefixe, regle in self.echecs.items():
             if tuple(argv[:len(prefixe)]) == prefixe and regle[1] != 0:
                 if regle[1] is not None:
                     regle[1] -= 1
-                return cp(argv, regle[0], "", "échec simulé")
+                return cp(argv, regle[0], "", regle[2])
         return self._effet(argv)
+
+    def _etat(self):
+        f = self.racine / ETAT
+        try:
+            return json.loads(f.read_text())["etat"] if f.exists() else None
+        except (ValueError, KeyError, TypeError):
+            return "illisible"
 
     def _entree(self, nom):
         return {"ifindex": 1, "ifname": nom, "addr_info": [
@@ -197,6 +219,14 @@ def preparer_racine(r: Path, gk2: bool = True) -> Path:
     return r
 
 
+@pytest.fixture(autouse=True)
+def umask_022():
+    # umask 0002 du poste : les contrôles de droits (C1) verraient des dossiers de test inscriptibles par le groupe
+    ancien = os.umask(0o022)
+    yield
+    os.umask(ancien)
+
+
 @pytest.fixture
 def racine(tmp_path):
     return preparer_racine(tmp_path / "racine")
@@ -287,6 +317,10 @@ def test_ordre_des_etapes(ctx, faux, racine):
         ["systemctl", "is-active", "--quiet", "secubox-lan-dhcp.service"],
         ["ip", "-j", "-4", "addr", "show", "dev", "br-lan"],
     ]
+    # garde armée dès la première écriture (I1) : rien pendant les refus, « en_attente » dès la validation
+    i = faux.journal.index(["nft", "-c", "-f", nft])
+    assert faux.etats[:i] == [None] * i
+    assert set(faux.etats[i:]) == {"en_attente"}
 
 
 def test_fichiers_poses(ctx, racine):
@@ -324,7 +358,7 @@ def instantane_et_refus(ctx, racine, attendu):
     with pytest.raises(rc.Refus, match=attendu):
         rc.appliquer(ctx, CFG42, "admin")
     assert instantane(racine) == avant
-    assert not (racine / "var/lib/secubox/netmodes-backup").exists()
+    assert not (racine / SAUVEGARDES).exists()
     assert audits(racine)[-1]["action"] == "appliquer-refus"
 
 
@@ -367,7 +401,7 @@ def test_refus_reseau_deja_porte(ctx, racine):
         rc.appliquer(ctx, dict(CFG42, adresse="192.168.1.1/24", dhcp_debut="192.168.1.100",
                                dhcp_fin="192.168.1.199"), "admin")
     assert instantane(racine) == avant
-    assert not (racine / "var/lib/secubox/netmodes-backup").exists()
+    assert not (racine / SAUVEGARDES).exists()
 
 
 def test_occupe(ctx, racine, faux):
@@ -384,7 +418,7 @@ def test_occupe(ctx, racine, faux):
         os.close(fd)
     assert faux.journal == []
     assert instantane(racine) == avant
-    assert not (racine / "var/lib/secubox/netmodes-backup").exists()
+    assert not (racine / SAUVEGARDES).exists()
 
 
 def test_refus_si_application_en_attente(ctx, racine):
@@ -757,14 +791,14 @@ def test_cli_usage(cli, ctx, faux, capsys, argv):
 
 
 def test_cli_non_root(cli, ctx, faux, capsys, monkeypatch):
-    monkeypatch.setattr(os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(cli, "_est_root", lambda: False)
     assert cli.main(["routeur-etat"], ctx=ctx) == 1
     assert "root" in sortie_json(capsys)["erreur"]
     assert faux.journal == []
 
 
 def test_cli_verbes_et_codes(cli, ctx, racine, capsys, monkeypatch):
-    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    monkeypatch.setattr(cli, "_est_root", lambda: True)
     assert cli.main(["routeur-etat"], ctx=ctx) == 0
     assert sortie_json(capsys)["etat"] == "inactif"
     entree = io.BytesIO(json.dumps(CFG42).encode())
@@ -791,7 +825,7 @@ def test_cli_verbes_et_codes(cli, ctx, racine, capsys, monkeypatch):
 
 
 def test_cli_echec_systeme_code_1(cli, ctx, faux, capsys, monkeypatch):
-    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    monkeypatch.setattr(cli, "_est_root", lambda: True)
     faux.echouer("networkctl", "reload", fois=1)
     assert cli.main(["routeur-appliquer", "admin"], ctx=ctx, entree=io.BytesIO(json.dumps(CFG42).encode())) == 1
     assert "networkctl" in sortie_json(capsys)["erreur"]
@@ -810,3 +844,242 @@ def test_cli_entete_et_executable():
     assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in texte
     assert os.access(SCRIPT, os.X_OK)
     assert "shell=True" not in texte and "environ" not in texte
+
+
+# --- relecture : C1 arbre root seul ---------------------------------------------------------------------------------------
+
+def mode(p: Path) -> int:
+    return p.stat().st_mode & 0o777
+
+
+def test_arbre_root_seul(ctx, racine):
+    rc.appliquer(ctx, CFG42, "admin")
+    assert mode(racine / ARBRE) == 0o700
+    assert mode(racine / SAUVEGARDES) == 0o700
+    assert mode(racine / ETAT) == 0o640
+    dhcp = racine / CHEMINS["dhcp"].lstrip("/")
+    assert dhcp.parent == racine / ARBRE and mode(dhcp) == 0o644
+
+
+def test_ancetre_inscriptible_refuse_rien_restaure(ctx, racine, faux):
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    os.chmod(racine / "var/lib", 0o775)
+    avant = instantane(racine)
+    faux.journal.clear()
+    with pytest.raises(rc.Refus, match="inscriptible"):
+        rc.retour(ctx, "admin")
+    assert instantane(racine) == avant and faux.journal == []
+    assert audits(racine)[-1]["action"] == "chemin-refuse"
+    with pytest.raises(rc.Refus, match="inscriptible"):
+        rc.appliquer(ctx, CFG50, "admin")
+    assert instantane(racine) == avant
+    e = rc.etat(ctx)
+    assert e["etat"] == "config_invalide" and "inscriptible" in e["erreur"]
+
+
+def test_arbre_preexistant_non_sur(ctx, racine):
+    (racine / ARBRE).mkdir(parents=True)
+    os.chmod(racine / ARBRE, 0o770)
+    avant = instantane(racine)
+    with pytest.raises(rc.Refus, match="inscriptible"):
+        rc.appliquer(ctx, CFG42, "admin")
+    assert instantane(racine) == avant and not (racine / SAUVEGARDES).exists()
+
+
+def test_arbre_lien_symbolique(ctx, racine, tmp_path):
+    ailleurs = tmp_path / "ailleurs"
+    ailleurs.mkdir()
+    (racine / "var/lib").mkdir(parents=True, exist_ok=True)
+    (racine / ARBRE).symlink_to(ailleurs)
+    with pytest.raises(rc.Refus, match="lien symbolique"):
+        rc.appliquer(ctx, CFG42, "admin")
+    assert list(ailleurs.iterdir()) == []
+
+
+def test_arbre_autre_proprietaire(ctx, racine, monkeypatch):
+    monkeypatch.setattr(os, "geteuid", lambda: os.getuid() + 1)   # les fichiers du test ne sont plus « à nous »
+    with pytest.raises(rc.Refus, match="appartient"):
+        rc.appliquer(ctx, CFG42, "admin")
+    assert not (racine / SAUVEGARDES).exists()
+
+
+def test_creer_dossiers_refuse_un_dossier_preexistant_non_sur(tmp_path):
+    (tmp_path / "a").mkdir()
+    os.chmod(tmp_path / "a", 0o777)
+    with pytest.raises(rf.CheminNonSur):
+        rf.creer_dossiers(tmp_path / "a" / "b", 0o700, racine=tmp_path)
+    assert not (tmp_path / "a" / "b").exists()
+
+
+# --- relecture : I1 garde armée dès la première écriture ------------------------------------------------------------------
+
+def test_etat_en_attente_des_le_premier_fichier(ctx, racine, faux, monkeypatch):
+    vus = []
+    ecrire = rf.ecrire
+    geres = {str(racine / c.lstrip("/")) for c in (*CHEMINS.values(), "/" + TOML)}
+
+    def espion(chemin, *args, **kwargs):
+        if str(chemin) in geres and not vus:
+            f = racine / ETAT
+            vus.append(json.loads(f.read_text()) if f.exists() else None)
+        return ecrire(chemin, *args, **kwargs)
+
+    monkeypatch.setattr(rf, "ecrire", espion)
+    au_reload = []
+
+    def panne(argv):
+        au_reload.append(json.loads((racine / ETAT).read_text()))
+        raise RuntimeError("panne simulée à l'étape 7")
+
+    faux.sur("networkctl", "reload", fonction=panne)
+    with pytest.raises(RuntimeError, match="étape 7"):
+        rc.appliquer(ctx, CFG42, "admin")
+    (nom,) = [d.name for d in (racine / SAUVEGARDES).iterdir()]
+    assert vus[0]["etat"] == "en_attente" and vus[0]["sauvegarde"] == nom
+    assert au_reload[0]["etat"] == "en_attente" and au_reload[0]["sauvegarde"] == nom
+
+
+def test_exception_inattendue_etape_9_revient(ctx, racine, faux):
+    nft = str(racine / CHEMINS["nft"].lstrip("/"))
+    appels = []
+
+    def panne(argv):
+        if argv == ["nft", "-f", nft] and not appels:
+            appels.append(argv)
+            raise RuntimeError("panne simulée à l'étape 9")
+
+    faux.sur("nft", "-f", fonction=panne)
+    with pytest.raises(RuntimeError, match="étape 9"):
+        rc.appliquer(ctx, CFG42, "admin")
+    assert etat_fichier(racine)["etat"] == "inactif"
+    assert (racine / "etc/systemd/network/10-br-lan.network").read_text() == ANCIEN_PONT
+    for chemin in CHEMINS.values():
+        assert not (racine / chemin.lstrip("/")).exists()
+    actions = [(a["action"], a["acteur"]) for a in audits(racine)]
+    assert ("appliquer-echec", "admin") in actions and ("retour", "echec") in actions
+
+
+def test_refus_de_validation_remet_l_etat_d_avant(ctx, racine, faux):
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    avant = (racine / ETAT).read_bytes()
+    faux.echouer("unbound-checkconf", fois=1)
+    with pytest.raises(rc.Refus):
+        rc.appliquer(ctx, CFG50, "admin")
+    assert (racine / ETAT).read_bytes() == avant
+
+
+def test_signaux_ignores_pendant_bascule_et_retour(ctx, faux):
+    signaux = (signal.SIGTERM, signal.SIGHUP, signal.SIGINT)
+    avant = [signal.getsignal(s) for s in signaux]
+    vus = []
+    faux.sur("networkctl", "reload", fonction=lambda argv: vus.append([signal.getsignal(s) for s in signaux]))
+    rc.appliquer(ctx, CFG42, "admin")
+    assert [signal.getsignal(s) for s in signaux] == avant
+    rc.retour(ctx, "admin")
+    assert len(vus) == 2 and all(v == [signal.SIG_IGN] * 3 for v in vus)
+    assert [signal.getsignal(s) for s in signaux] == avant
+
+
+def test_cli_exception_inattendue_code_1(cli, ctx, racine, faux, capsys, monkeypatch):
+    monkeypatch.setattr(cli, "_est_root", lambda: True)
+    faux.sur("nft", "-f", fonction=lambda argv: (_ for _ in ()).throw(RuntimeError("panne simulée")))
+    code = cli.main(["routeur-appliquer", "admin"], ctx=ctx, entree=io.BytesIO(json.dumps(CFG42).encode()))
+    assert code == 1
+    assert "RuntimeError" in sortie_json(capsys)["erreur"]
+
+
+# --- relecture : I2 sauvegardes ordonnées par séquence ---------------------------------------------------------------------
+
+def test_horloge_en_retard_sur_les_sauvegardes(racine, faux):
+    futur = Horloge()
+    futur.t = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    ctx_futur = rc.Contexte(racine=racine, executer=faux, maintenant=futur)
+    for _ in range(4):
+        rc.appliquer(ctx_futur, CFG42, "admin")
+        rc.confirmer(ctx_futur, "admin")
+    ctx = rc.Contexte(racine=racine, executer=faux, maintenant=Horloge())        # horloge remise en 2026
+    sortie = rc.appliquer(ctx, CFG50, "admin")
+    nom = sortie["sauvegarde"]
+    assert nom.startswith("2026") and (racine / SAUVEGARDES / nom).is_dir()
+    assert len([d for d in (racine / SAUVEGARDES).iterdir() if d.is_dir()]) == 4
+    rc.retour(ctx, "admin")                                                    # revient à la config de 2030 (42)
+    assert "192.168.42.1/24" in (racine / TOML).read_text()
+
+
+def test_sauvegarde_porte_une_sequence(ctx, racine):
+    for _ in range(2):
+        rc.appliquer(ctx, CFG42, "admin")
+        rc.confirmer(ctx, "admin")
+    sequences = sorted(int((d / "sequence").read_text()) for d in (racine / SAUVEGARDES).iterdir())
+    assert sequences == [1, 2]
+
+
+# --- relecture : M1 adresse déjà retirée par networkd ---------------------------------------------------------------------
+
+def test_adresse_deja_retiree_par_networkd(ctx, racine, faux):
+    def networkd_plus_rapide(argv):
+        if argv[3] in faux.adresses.get("br-lan", []):
+            faux.adresses["br-lan"].remove(argv[3])
+
+    faux.sur("ip", "addr", "del", fonction=networkd_plus_rapide)
+    sortie = rc.appliquer(ctx, CFG42, "admin")
+    assert sortie["etat"] == "en_attente"
+    i = faux.journal.index(["ip", "addr", "del", "192.168.255.1/24", "dev", "br-lan"])
+    assert faux.journal[i + 1] == ["ip", "-j", "-4", "addr", "show", "dev", "br-lan"]     # relu avant de tolérer
+    assert "retour" not in [a["action"] for a in audits(racine)]
+
+
+@pytest.mark.parametrize("code, erreur", [(2, "RTNETLINK answers: Cannot assign requested address"),
+                                          (2, "RTNETLINK answers: Operation not permitted"),
+                                          (1, "Cannot assign requested address")])
+def test_ip_addr_del_echec_reel_fatal(ctx, racine, faux, code, erreur):
+    faux.echouer("ip", "addr", "del", code=code, erreur=erreur)                # l'adresse reste en place
+    with pytest.raises(rc.Echec, match="ip addr del"):
+        rc.appliquer(ctx, CFG42, "admin")
+    assert ("retour", "echec") in [(a["action"], a["acteur"]) for a in audits(racine)]
+
+
+# --- relecture : M4 le minuteur et le démarrage attendent le verrou --------------------------------------------------------
+
+def tenir_puis_lacher(chemin: Path, duree: float) -> threading.Thread:
+    pret = threading.Event()
+
+    def tenir_():
+        fd = tenir(chemin)
+        pret.set()
+        time.sleep(duree)
+        os.close(fd)
+
+    t = threading.Thread(target=tenir_)
+    t.start()
+    pret.wait()
+    return t
+
+
+@pytest.mark.parametrize("appel", [lambda ctx: rc.retour(ctx, "minuteur"), rc.retour_si_en_attente])
+def test_retour_automatique_attend_le_verrou(ctx, racine, appel):
+    rc.appliquer(ctx, CFG42, "admin")
+    t = tenir_puis_lacher(racine / "run/lock/secubox-netmodes.lock", 0.4)
+    try:
+        sortie = appel(ctx)
+    finally:
+        t.join()
+    assert sortie["etat"] == "inactif"
+
+
+def test_retour_automatique_abandonne_apres_le_delai(ctx, racine, monkeypatch):
+    rc.appliquer(ctx, CFG42, "admin")
+    monkeypatch.setattr(rc, "DELAI_VERROU_RETOUR", 0.3)
+    fd = tenir(racine / "run/lock/secubox-netmodes.lock")
+    try:
+        with pytest.raises(rc.Occupe):
+            rc.retour(ctx, "minuteur")
+        debut = time.monotonic()
+        with pytest.raises(rc.Occupe):
+            rc.retour(ctx, "admin")                                            # un humain : réponse immédiate
+        assert time.monotonic() - debut < 0.2
+    finally:
+        os.close(fd)
+    assert etat_fichier(racine)["etat"] == "en_attente"

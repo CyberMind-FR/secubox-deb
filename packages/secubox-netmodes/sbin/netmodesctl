@@ -34,6 +34,10 @@ def _repondre(donnees, code):
     return code
 
 
+def _est_root():
+    return os.geteuid() == 0
+
+
 def _controleur():
     # le paquet installé ; l'arbre source seulement s'il est absent (tests du dépôt)
     racine = INSTALLE if INSTALLE.is_dir() else Path(__file__).resolve().parents[1]
@@ -68,7 +72,7 @@ def main(argv=None, ctx=None, entree=None):
     if acteur is not None and not ACTEUR.fullmatch(acteur):
         return _repondre({"erreur": "acteur invalide : lettres, chiffres et . _ @ - (64 au plus)"}, 2)
     # 2. root
-    if os.geteuid() != 0:
+    if not _est_root():
         return _repondre({"erreur": "netmodesctl doit tourner en root"}, 1)
     rc = _controleur()
     ctx = ctx or rc.contexte_systeme()
@@ -89,7 +93,7 @@ def main(argv=None, ctx=None, entree=None):
         return _repondre({"erreur": str(exc)}, 3)
     except rc.Echec as exc:
         return _repondre({"erreur": str(exc)}, 1)
-    except Exception as exc:                                # dernier filet : l'API reçoit un JSON, journald la trace
+    except (Exception, KeyboardInterrupt) as exc:           # dernier filet (après retour) : JSON pour l'API, trace au journal
         traceback.print_exc(file=sys.stderr)
         return _repondre({"erreur": f"échec inattendu : {exc.__class__.__name__} : {exc}"}, 1)
     return _repondre(resultat, 0)

@@ -29,6 +29,8 @@ def test_cles_et_constantes(sortie):
     assert set(sortie) == set(rr.CHEMINS)
     assert rr.CHEMINS["nft"] == "/etc/nftables.d/zz-secubox-netmodes-lan.nft"
     assert rr.CHEMINS["geo"] == "/etc/nginx/secubox-lan-geo.d/netmodes-lan.conf"
+    # lu brut par dnsmasq lancé en root : arbre root seul, pas /etc/secubox (propriété de secubox)
+    assert rr.CHEMINS["dhcp"] == "/var/lib/secubox-netmodes/lan-dhcp.conf"
     assert rr.COMMENTAIRE_NFT == "secubox netmodes lan"
     assert rr.TABLE_NFT == "secubox_netmodes_lan"
 

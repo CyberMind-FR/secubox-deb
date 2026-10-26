@@ -15,7 +15,7 @@ CHEMINS: dict[str, str] = {
     "netdev": "/etc/systemd/network/05-secubox-br-lan.netdev",
     "pont": "/etc/systemd/network/05-secubox-br-lan.network",
     "ports": "/etc/systemd/network/05-secubox-lan-ports.network",
-    "dhcp": "/etc/secubox/netmodes/lan-dhcp.conf",
+    "dhcp": "/var/lib/secubox-netmodes/lan-dhcp.conf",  # lu brut par dnsmasq root : arbre root seul
     "unbound": "/etc/unbound/unbound.conf.d/95-secubox-lan-routeur.conf",
     "nft": "/etc/nftables.d/zz-secubox-netmodes-lan.nft",
     "geo": "/etc/nginx/secubox-lan-geo.d/netmodes-lan.conf",
