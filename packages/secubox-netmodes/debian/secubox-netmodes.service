@@ -1,27 +1,58 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox Network Modes — API (#3189). Utilisateur dédié, sans capacité ; la seule surface privilégiée est netmodesctl
+# (root), appelé par sudo -n à verbes exacts (/etc/sudoers.d/secubox-netmodes). Exception écrite dans
+# .claude/RULES-CODE.md (§ Exceptions), figée par tests/test_paquet_3189.py::test_unite_api_durcie_et_exception.
 [Unit]
 Description=SecuBox Network Modes API
 After=network.target secubox-core.service
 Wants=secubox-core.service
 
 [Service]
-# UMask=0002 (#1416) : jamais d'écriture « autres » ; les lectures restent.
-UMask=0002
 Type=simple
-User=secubox
+User=secubox-netmodes
 Group=secubox
-AmbientCapabilities=CAP_NET_ADMIN
+UMask=0027
 WorkingDirectory=/usr/lib/secubox/netmodes
-# /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on
-# possede. Une socket laissee par un autre utilisateur rendrait le
-# demarrage impossible, en boucle et en silence. Le prefixe `+` execute en
-# root malgre User= — sans lui la ligne echouerait comme le demon.
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+# Profil chargé par le postinst avant le démarrage (apparmor/secubox-netmodes).
+AppArmorProfile=secubox-netmodes-api
+# /run/secubox est PARTAGÉ et collant (1777) : on n'y délie que ce qu'on possède. « + » : en root et hors profil.
 ExecStartPre=+/bin/rm -f /run/secubox/netmodes.sock
-ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
-    --uds /run/secubox/netmodes.sock \
-    --log-level warning
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/netmodes.sock --workers 1 --log-level warning
+# uvicorn pose la socket en 0666 après le bind (l'umask n'y change rien) : 660, groupe secubox (agrégateur, nginx).
+# « + » : hors profil AppArmor, qui ne donne aucun shell au processus de l'API.
+ExecStartPost=+/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/netmodes.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/netmodes.sock'
+TimeoutStartSec=180
 Restart=on-failure
 RestartSec=5
-PrivateTmp=true
+# Le contrôleur tourne par sudo DANS ce groupe de contrôle : il doit survivre à un redémarrage de l'API (mise à jour du
+# paquet) en pleine bascule, sinon le réseau resterait à moitié posé. Seul le processus principal est arrêté.
+KillMode=process
+
+# Durcissement. NoNewPrivileges=no est requis : sudo -> netmodesctl. ATTENTION — NE PAS AJOUTER ProtectKernelTunables,
+# LockPersonality, RestrictSUIDSGID, SystemCallFilter, RestrictNamespaces, RestrictAddressFamilies, PrivateDevices,
+# MemoryDenyWriteExecute… : chacun pose un filtre seccomp, donc NoNewPrivileges d'office pour un User= non root, et sudo
+# répond « no new privileges flag is set » (mesuré sur gk2 et gk3 : secubox-ad-guard-auto, secubox-voicestudio-api).
+# Le confinement de l'API passe par le profil AppArmor (enforce) et ces chemins.
+NoNewPrivileges=no
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+# Le contrôleur root lancé par sudo hérite de cet espace de montage : chaque dossier qu'il écrit doit être ouvert ici
+# (socket, verrous, état de l'ancien mode, arbre root seul, audit, networkd, TOML, Unbound, nft, fragment géo, baux).
+# « - » : dossier d'un autre paquet, absent tant qu'il n'est pas installé (l'unité démarrerait sinon en 226/NAMESPACE).
+ReadWritePaths=/run/secubox /run/lock /var/lib/secubox/netmodes /var/lib/secubox-netmodes /var/log/secubox /etc/systemd/network /etc/secubox/netmodes -/etc/unbound/unbound.conf.d /etc/nftables.d -/etc/nginx/secubox-lan-geo.d /var/lib/misc
+# `nginx -t` (validation du fragment géo, lancé par le contrôleur) ouvre en écriture /run/nginx.pid et ses journaux :
+# en lecture seule il échoue et le mode routeur serait toujours refusé. Ouvrir /run/nginx.pid seul ne tient pas : nginx
+# le supprime à l'arrêt, ce qui détache le montage (le suivant serait en lecture seule). L'API n'y gagne rien : hors
+# /run/secubox et /run/lock, /run n'a aucun dossier où son compte écrive, et son profil AppArmor borne ses écritures.
+ReadWritePaths=/run -/var/log/nginx
 
 [Install]
 WantedBy=multi-user.target

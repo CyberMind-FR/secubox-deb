@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE du DHCP du LAN (#3189), nommé par secubox-lan-dhcp.service (AppArmorProfile=). Aucun profil
+# Debian n'existe pour dnsmasq sur la cible : liste tirée de l'ancien usr.sbin.dnsmasq de Debian, réduite au DHCP seul
+# (port=0 : ni DNS, ni TFTP, ni D-Bus, ni script). Posé dans /etc/apparmor.d/secubox-lan-dhcp, chargé par le postinst.
+# Capacités : exactement CapabilityBoundingSet= de l'unité (dac_override en est absent : root lit ses propres fichiers).
+
+#include <tunables/global>
+
+profile secubox-lan-dhcp {
+  #include <abstractions/base>
+
+  capability chown,
+  capability net_admin,
+  capability net_bind_service,
+  capability net_raw,
+  capability setgid,
+  capability setuid,
+
+  # DHCP (UDP 67), sonde ICMP avant bail (raw), interfaces et adresses par netlink.
+  network inet dgram,
+  network inet stream,
+  network inet raw,
+  network inet6 dgram,
+  network inet6 stream,
+  network inet6 raw,
+  network netlink raw,
+
+  /usr/sbin/dnsmasq mr,
+  /var/lib/secubox-netmodes/lan-dhcp.conf r,
+  /var/lib/misc/dnsmasq.leases* rw,
+
+  # Descente vers l'utilisateur dnsmasq (user=dnsmasq) et son groupe.
+  /etc/passwd r,
+  /etc/group r,
+  /etc/nsswitch.conf r,
+}

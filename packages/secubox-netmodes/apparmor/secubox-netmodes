@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de l'API secubox-netmodes (#3189). Posé dans /etc/apparmor.d/secubox-netmodes, chargé par le
+# postinst AVANT le (re)démarrage de l'unité, qui le nomme par AppArmorProfile=. Le contrôleur root (netmodesctl) tourne
+# hors confinement via sudo ; ce qu'il peut faire est borné par le sudoers (verbes exacts) et sa propre validation.
+
+#include <tunables/global>
+
+profile secubox-netmodes-api {
+  #include <abstractions/base>
+  #include <abstractions/python>
+
+  /usr/bin/python3* rix,
+  /usr/lib/secubox/ r,
+  /usr/lib/secubox/netmodes/ r,
+  /usr/lib/secubox/netmodes/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # Configuration et authentification (secubox_core) : fichiers nommés, jamais /etc/secubox/** (les secrets y sont).
+  /etc/secubox/ r,
+  /etc/secubox/secubox.conf r,
+  /etc/secubox/auth.toml r,
+  /etc/secubox/users.json r,
+  /etc/secubox/appareils.json r,
+  deny /etc/secubox/secrets/** r,
+  /etc/nsswitch.conf r,
+  # Registre des sessions (sans lui toute garde d'API refuse), traces de délégation et d'origine.
+  /var/lib/secubox/auth/ r,
+  /var/lib/secubox/auth/** r,
+  /var/log/secubox/*.log w,
+  owner @{PROC}/@{pid}/cgroup r,
+
+  # Modèles netplan des anciens modes et TOML du mode routeur.
+  /etc/secubox/netmodes/ r,
+  /etc/secubox/netmodes/** r,
+
+  # Carte (MOCHAbin ou non) : /proc/device-tree est un lien vers /sys/firmware/devicetree/base.
+  /proc/device-tree/model r,
+  /sys/firmware/devicetree/base/model r,
+  @{PROC}/uptime r,
+
+  # État de l'ancien mode (state.json, 0750 secubox-netmodes:secubox).
+  /var/lib/secubox/netmodes/ r,
+  /var/lib/secubox/netmodes/** rwk,
+
+  /run/secubox/ r,
+  /run/secubox/netmodes.sock rwk,
+  /run/secubox/net-detect.json rw,
+
+  # /status : liens, adresses et route par défaut (lecture, netlink).
+  /{usr/,}{s,}bin/ip ix,
+  /etc/iproute2/** r,
+  /usr/share/iproute2/** r,
+
+  # /detect : secubox-net-detect (bash) dans son propre sous-profil, en lecture de /sys et du device tree seulement.
+  /usr/sbin/secubox-net-detect Cx -> net_detect,
+
+  # Le SEUL passage privilégié : sudo -> netmodesctl (sudoers à verbes exacts), hors confinement.
+  /usr/bin/sudo Ux,
+
+  network unix stream,
+  network unix dgram,
+  network netlink raw,
+  /proc/sys/net/core/somaxconn r,
+
+  profile net_detect {
+    #include <abstractions/base>
+
+    /usr/sbin/secubox-net-detect r,
+    /{usr/,}bin/bash ix,
+    /{usr/,}bin/{tr,grep,cat,cut,xargs,basename,dirname,mkdir,date,sort,echo,mawk,gawk,original-awk} ix,
+    /{usr/,}{s,}bin/ip ix,
+    /etc/iproute2/** r,
+    /usr/share/iproute2/** r,
+    /sys/firmware/devicetree/base/ r,
+    /sys/firmware/devicetree/base/{model,compatible} r,
+    /sys/class/net/ r,
+    /sys/devices/** r,
+    /run/secubox/net-detect.json w,
+    network netlink raw,
+  }
+}

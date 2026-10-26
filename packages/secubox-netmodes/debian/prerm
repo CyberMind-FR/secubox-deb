@@ -1,14 +1,18 @@
-#!/bin/bash
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
 set -e
 case "$1" in
   remove|deconfigure)
     rm -f /etc/nginx/secubox.d/netmodes.conf
     systemctl reload nginx 2>/dev/null || true
-    ;;
-  upgrade)
-    # Don't remove nginx config on upgrade
+    systemctl disable secubox-netmodes.service 2>/dev/null || true
     ;;
 esac
-systemctl stop    secubox-netmodes.service 2>/dev/null || true
-systemctl disable secubox-netmodes.service 2>/dev/null || true
+# L'API seulement. Le LAN posé par le mode routeur (pont, DHCP du LAN, pare-feu) reste en place : retirer ou mettre à
+# jour le paquet ne coupe jamais le réseau. Un contrôleur en pleine bascule survit à cet arrêt (KillMode=process).
+systemctl stop secubox-netmodes.service 2>/dev/null || true
 #DEBHELPER#
+exit 0

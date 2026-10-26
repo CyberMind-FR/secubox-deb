@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Retour au démarrage du mode routeur (#3189) : une application restée « en attente » (coupure, redémarrage avant la
+# confirmation ou l'échéance des 180 s) est défaite ; sinon rien. Activé par le paquet.
+# Root, comme l'unité transitoire du minuteur (secubox-netmodes-retour, lancée par systemd-run hors de tout bac à sable) :
+# le filet de sécurité doit pouvoir remettre chaque fichier géré ; pas de ProtectSystem ici, pour qu'un chemin oublié ne
+# le fasse jamais échouer. Unité root qui pilote nftables : RULES-CODE § Exceptions, revue au cas par cas.
+[Unit]
+Description=SecuBox — retour au démarrage d'un mode routeur non confirmé
+After=network-online.target nftables.service unbound.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/netmodesctl routeur-retour-demarrage
+# Le contrôleur attend jusqu'à 60 s son verrou, puis peut passer 120 s par commande.
+TimeoutStartSec=300
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
