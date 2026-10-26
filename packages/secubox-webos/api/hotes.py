@@ -16,16 +16,23 @@ domaine de la box, ET une réponse non-5xx par son chemin PUBLIC (DNS public →
 relais éventuel → cette box). Un vhost présent mais jamais relayé n'est pas
 local : la carte retomberait dans le vide. Calcul en tâche de fond, jamais dans
 la requête (le script est bloquant dans la page).
+
+Un nom absent de la table de routes du WAF n'est pas sondé (#3174) : le WAF
+répondrait 421, et chaque sonde laissait une anomalie « host_anomaly:unrouted »
+dans son journal des menaces — la box devenait sa propre « dernière attaque ».
 """
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import time
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 SITES = Path("/etc/nginx/sites-enabled")
+ROUTES_WAF = Path("/etc/secubox/waf/haproxy-routes.json")
+A_LA_DEMANDE = Path("/etc/secubox/waf/on-demand-vhosts.json")
 PERIODE_S = 600
 DELAI_S = 5.0
 
@@ -72,6 +79,26 @@ def lire_sites(dossier: Path = SITES) -> list[str]:
     return out
 
 
+def noms_routes(routes: Path = None, a_la_demande: Path = None) -> Optional[set]:
+    """Les noms que sbxwaf sert : les clés de sa table de routes, plus les vhosts endormis à la demande (il leur sert
+    la page de réveil, pas un 421). Même règle que sbxwaf (nom exact, en minuscules). None sans table lisible — une box
+    dont les noms sont relayés par une autre n'en a pas : rien n'est exclu, on sonde comme avant."""
+    try:
+        table = json.loads((routes or ROUTES_WAF).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(table, dict):
+        return None
+    noms = {str(k).lower() for k in table}
+    try:
+        endormis = json.loads((a_la_demande or A_LA_DEMANDE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        endormis = []
+    if isinstance(endormis, list):
+        noms |= {str(n).lower() for n in endormis}
+    return noms
+
+
 def repond(code: int) -> bool:
     """Un code HTTP dit-il que le service est servi par son chemin public ?
 
@@ -95,6 +122,9 @@ async def _joignable(nom: str) -> bool:
 
 async def recalculer(domaine: str) -> list[str]:
     noms = candidats(lire_sites(), domaine)
+    servis = noms_routes()
+    if servis is not None:
+        noms = [n for n in noms if n in servis]                 # #3174 : non routé = 421 d'avance, aucune requête
     oks = await asyncio.gather(*(_joignable(n) for n in noms))
     _etat["locaux"] = [n for n, ok in zip(noms, oks) if ok]
     _etat["t"] = time.time()

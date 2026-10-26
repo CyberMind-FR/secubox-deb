@@ -1,3 +1,15 @@
+secubox-webos (1.20.6-1~trixie1) trixie; urgency=medium
+
+  * Les sondes du Hall n'interrogent plus les noms que le WAF ne route pas (#3174). Sur gk2, la
+    sonde des hôtes locaux (toutes les 10 min) et celle des vignettes laissaient 261 anomalies
+    « host_anomaly:unrouted » par matinée dans le journal des menaces du WAF, et la box était sa
+    propre « dernière attaque » dans le bandeau. La table de routes de sbxwaf
+    (/etc/secubox/waf/haproxy-routes.json, plus on-demand-vhosts.json) dit d'avance qu'un tel nom
+    répondrait 421 : il est classé non servi (hôtes) ou « sans page : non routé par le WAF »
+    (vignettes) sans aucune requête. Sans table lisible (box relayée par une autre), rien ne change.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 07:39:37 +0100
+
 secubox-webos (1.20.5-1~trixie1) trixie; urgency=medium
 
   * Carte « Visio » du Hall (ref #3154) : visio.<domaine>, présente seulement si le module meet répond

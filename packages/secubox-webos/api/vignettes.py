@@ -130,11 +130,20 @@ def acquire_lock(lock_path: Path):
     return fh
 
 
-async def capture_module(sid: str, domaine: str, cache_dir: Path = CACHE_DIR, *, ca: Optional[str] = CA, _capture=None, _sonde=None) -> dict:
+async def capture_module(sid: str, domaine: str, cache_dir: Path = CACHE_DIR, *, ca: Optional[str] = CA, _capture=None, _sonde=None,
+                         _routes=None) -> dict:
     """Capture UN module ; un échec est enregistré (l'ancienne vignette est conservée) et renvoyé, jamais propagé.
-    Sans page réelle (421, erreur, connexion), on note « sans page » pour la semaine et Chromium ne démarre pas."""
+    Sans page réelle (421, erreur, connexion), on note « sans page » pour la semaine et Chromium ne démarre pas.
+    Un domaine absent de la table de routes du WAF n'est même pas sondé (#3174) : il répondrait 421, et la sonde laissait
+    une anomalie dans le journal des menaces du WAF."""
     from secubox_core import screenshots, shotter
+
+    from api import hotes
     url = f"https://{domaine}/?theme=dark&embed=1"
+    servis = (_routes or hotes.noms_routes)()
+    if servis is not None and domaine.lower() not in servis:
+        marque_sans_page(cache_dir, sid, fingerprint(domaine), "non routé par le WAF")
+        return {"ok": False, "id": sid, "url": url, "sans_page": True, "error": "non routé par le WAF"}
     ok, raison = (_sonde or sonde)(url)
     if not ok:
         marque_sans_page(cache_dir, sid, fingerprint(domaine), raison)
