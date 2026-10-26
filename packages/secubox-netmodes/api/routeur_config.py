@@ -75,7 +75,7 @@ def depuis_dict(d: dict) -> ConfigRouteur:
         raise ErreurConfig(f"la plage DHCP {debut}-{fin} contient l'adresse du pont {adresse.ip}")
 
     bail = d.get("bail", "12h")
-    if not isinstance(bail, str) or not _BAIL.match(bail):
+    if not isinstance(bail, str) or not _BAIL.fullmatch(bail):
         raise ErreurConfig(f"bail « {bail} » invalide : nombre de 1 à 9999 suivi de m ou h (ex. 12h)")
 
     ports = d.get("ports", PORTS_LAN)
@@ -91,7 +91,7 @@ def depuis_dict(d: dict) -> ConfigRouteur:
         raise ErreurConfig("ports : un port est cité plusieurs fois")
 
     wan = d.get("wan", "eth2")
-    if not isinstance(wan, str) or not _WAN.match(wan):
+    if not isinstance(wan, str) or not _WAN.fullmatch(wan):
         raise ErreurConfig(f"wan « {wan} » invalide : attendu ethN (un chiffre)")
     return ConfigRouteur(adresse, debut, fin, bail, ports, wan)
 

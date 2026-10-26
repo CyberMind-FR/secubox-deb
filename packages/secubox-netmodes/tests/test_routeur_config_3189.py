@@ -47,6 +47,11 @@ def test_defauts():
     {"bail": "99999h"},
     {"wan": "wlan0"},
     {"wan": "eth10"},
+    {"bail": "12h\n"},
+    {"wan": "eth2\n"},
+    {"ports": ["lan0\n"]},
+    {"adresse": "192.168.42.1/24\n"},
+    {"dhcp_debut": "192.168.42.100\n"},
 ])
 def test_refus(surcharge):
     with pytest.raises(ErreurConfig):
