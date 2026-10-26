@@ -69,7 +69,7 @@ class Systeme:
             if self.bloquer is not None:
                 assert self.bloquer.wait(10)
             r = self.reponses.pop(0)
-            if isinstance(r, Exception):
+            if isinstance(r, BaseException):
                 raise r
             code, sortie = r
             return subprocess.CompletedProcess(argv, code, stdout=sortie if isinstance(sortie, str)
@@ -177,6 +177,24 @@ def test_derniere_delai_et_exception(client, monkeypatch):
     attendre_fin()
     d = client.get("/routeur/derniere").json()
     assert d["code"] == 500 and d["fini"] is True and "RuntimeError" in d["sortie"]["erreur"]
+
+
+class Arret(BaseException):
+    """Hors d'Exception, comme SystemExit ou KeyboardInterrupt."""
+
+
+def test_fil_interrompu_par_une_baseexception_libere_la_bascule(client, monkeypatch):
+    vues = []
+    monkeypatch.setattr(threading, "excepthook", lambda args: vues.append(args.exc_type))
+    s = faux(monkeypatch, [Arret(), (0, {**ETAT, "etat": "inactif"})])
+    assert client.post("/routeur/appliquer", json={**CONFIG, "confirmer": "routeur"}).status_code == 202
+    attendre_fin()
+    d = client.get("/routeur/derniere").json()
+    assert d["fini"] is True and d["code"] == 500 and d["fin"] and "Arret" in d["sortie"]["erreur"]
+    assert vues == [Arret]                                      # propagée hors du fil, pas avalée
+    assert client.post("/routeur/retour", json={"confirmer": "retour"}).status_code == 202   # plus « en cours »
+    attendre_fin()
+    assert len(s.sudo()) == 2
 
 
 def test_retour_202_argv_exact(client, monkeypatch):
@@ -337,8 +355,10 @@ def test_apercu_invalide_400_sans_sudo(client, monkeypatch):
 
 def test_est_mochabin_ferme_par_defaut(tmp_path, monkeypatch):
     absent, autre, lisible = tmp_path / "absent", tmp_path / "absent2", tmp_path / "model"
+    (tmp_path / "dt").mkdir()
+    monkeypatch.setattr(routeur_api, "DEVICE_TREE", (tmp_path / "pas-de-proc-dt", tmp_path / "dt"))
     monkeypatch.setattr(routeur_api, "MODELES", (absent, autre))
-    assert VRAI_EST_MOCHABIN() is True                          # modèle illisible : les anciens chemins restent refusés
+    assert VRAI_EST_MOCHABIN() is True                          # device tree présent, modèle illisible : fermé
     monkeypatch.setattr(routeur_api, "MODELES", (absent, lisible))
     lisible.write_bytes(b"Raspberry Pi 4 Model B\x00")
     assert VRAI_EST_MOCHABIN() is False                         # le second chemin lisible fait foi
@@ -346,11 +366,41 @@ def test_est_mochabin_ferme_par_defaut(tmp_path, monkeypatch):
     assert VRAI_EST_MOCHABIN() is True
 
 
+def test_est_mochabin_sans_device_tree_x86(tmp_path, monkeypatch):
+    proc_dt, sys_dt = tmp_path / "proc-device-tree", tmp_path / "sys-devicetree"
+    monkeypatch.setattr(routeur_api, "MODELES", (tmp_path / "m1", tmp_path / "m2"))
+    monkeypatch.setattr(routeur_api, "DEVICE_TREE", (proc_dt, sys_dt))
+    assert VRAI_EST_MOCHABIN() is False                         # ni modèle ni device tree (absents tous deux) : x86, VM
+    sys_dt.mkdir()
+    assert VRAI_EST_MOCHABIN() is True                          # l'un présent, modèle illisible : fermé
+    sys_dt.rmdir()
+    proc_dt.symlink_to(tmp_path / "nulle-part")                 # lien pendant : présent (lstat), fermé
+    assert VRAI_EST_MOCHABIN() is True
+
+
+def test_est_mochabin_erreur_autre_qu_absent_ferme(tmp_path, monkeypatch):
+    fichier = tmp_path / "fichier"
+    fichier.write_text("")
+    monkeypatch.setattr(routeur_api, "MODELES", (tmp_path / "m",))
+    monkeypatch.setattr(routeur_api, "DEVICE_TREE", (fichier / "dt", tmp_path / "absent"))   # NotADirectoryError
+    assert VRAI_EST_MOCHABIN() is True
+
+
 def test_anciens_chemins_refuses_sur_carte_non_identifiee(client, monkeypatch, tmp_path):
+    (tmp_path / "dt").mkdir()
     monkeypatch.setattr(routeur_api, "MODELES", (tmp_path / "absent",))
+    monkeypatch.setattr(routeur_api, "DEVICE_TREE", (tmp_path / "dt", tmp_path / "absent-dt"))
     monkeypatch.setattr(main, "est_mochabin", VRAI_EST_MOCHABIN)
     r = client.post("/apply_mode", json={"mode": "router"})
     assert r.status_code == 409 and "WAN" in r.json()["detail"]
+
+
+def test_anciens_chemins_ouverts_sans_device_tree(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(routeur_api, "MODELES", (tmp_path / "absent",))
+    monkeypatch.setattr(routeur_api, "DEVICE_TREE", (tmp_path / "absent-proc", tmp_path / "absent-sys"))
+    monkeypatch.setattr(main, "est_mochabin", VRAI_EST_MOCHABIN)
+    r = client.post("/apply_mode", json={"mode": "inconnu"})  # x86 : pas le refus MOCHAbin, le mode est jugé
+    assert r.status_code == 400 and "WAN" not in r.json()["detail"]
 
 
 # --- ports : couper, rétablir ----------------------------------------------------------------------------------------------
@@ -668,3 +718,87 @@ def test_appliquer_rend_l_echeance_reelle_puis_confirmer_l_efface(racine):
     assert e["echeance"] == (h.t + timedelta(seconds=180)).strftime("%Y-%m-%dT%H:%M:%SZ")
     e = rc.confirmer(ctx, "admin")
     assert e["etat"] == "actif" and e["minuteur_actif"] is False and e["echeance"] is None
+
+
+# --- verrou : une lecture d'état ne fait pas échouer une action humaine (revue tâche 3) ------------------------------------
+
+VERROU_CTL = "run/lock/secubox-netmodes.lock"
+
+
+def partage_puis_lacher(chemin: Path, duree: float) -> threading.Thread:
+    """Une lecture d'état (essai LOCK_SH de bascule_en_cours) qui tiendrait le verrou `duree` secondes."""
+    pret = threading.Event()
+
+    def tenir_():
+        fd = os.open(chemin, os.O_RDONLY | os.O_CREAT, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_SH)
+        pret.set()
+        time.sleep(duree)
+        os.close(fd)
+
+    t = threading.Thread(target=tenir_)
+    t.start()
+    pret.wait()
+    return t
+
+
+@pytest.fixture
+def applique(racine):
+    from test_routeur_ctl_3189 import CFG42, Faux, Horloge
+    f = Faux(racine)
+    ctx = rc.Contexte(racine=racine, executer=f, maintenant=Horloge(), attendre=f.attendre, monotone=f.monotone)
+    rc.appliquer(ctx, CFG42, "admin")
+    return ctx
+
+
+def test_confirmer_attend_une_lecture_d_etat(applique, racine):
+    t = partage_puis_lacher(racine / VERROU_CTL, 0.3)
+    try:
+        assert rc.confirmer(applique, "admin")["etat"] == "actif"       # pas « une application est déjà en cours »
+    finally:
+        t.join()
+
+
+def test_confirmer_occupe_apres_2_s(applique, racine):
+    assert rc.DELAI_VERROU_ACTION == 2.0
+    t = partage_puis_lacher(racine / VERROU_CTL, 2.6)
+    try:
+        debut = time.monotonic()
+        with pytest.raises(rc.Occupe):
+            rc.confirmer(applique, "admin")
+        assert 1.9 <= time.monotonic() - debut < 2.5
+    finally:
+        t.join()
+
+
+@pytest.mark.parametrize("action, attente", [
+    (lambda ctx: rc.appliquer(ctx, {"adresse": "192.168.77.1/24", "dhcp_debut": "192.168.77.100",
+                                    "dhcp_fin": "192.168.77.199"}, "admin"), "DELAI_VERROU_ACTION"),
+    (lambda ctx: rc.confirmer(ctx, "admin"), "DELAI_VERROU_ACTION"),
+    (lambda ctx: rc.retour(ctx, "admin"), "DELAI_VERROU_ACTION"),
+    (lambda ctx: rc.port_couper(ctx, "lan1", "admin"), "DELAI_VERROU_ACTION"),
+    (lambda ctx: rc.port_retablir(ctx, "lan1", "admin"), "DELAI_VERROU_ACTION"),
+    (lambda ctx: rc.retour(ctx, "minuteur"), "DELAI_VERROU_RETOUR"),            # minuteur et démarrage : 60 s, inchangé
+    (rc.retour_si_en_attente, "DELAI_VERROU_RETOUR"),
+])
+def test_attente_du_verrou_par_action(racine, monkeypatch, action, attente):
+    """Horloge et pause injectées : l'attente est mesurée sans attendre, puis Occupe."""
+    horloge, pauses = [0.0], []
+    monkeypatch.setattr(rc, "_horloge_verrou", lambda: horloge[0])
+
+    def dormir(s):
+        pauses.append(s)
+        horloge[0] += s
+
+    monkeypatch.setattr(rc, "_dormir_verrou", dormir)
+    s = SystemeEtat(minuteur=False)
+    fd = tenir(racine / VERROU_CTL)
+    try:
+        with pytest.raises(rc.Occupe):
+            action(contexte(racine, s))
+    finally:
+        os.close(fd)
+    delai = getattr(rc, attente)
+    assert delai <= horloge[0] < delai + rc.PAUSE_VERROU + 1e-9
+    assert set(pauses) == {rc.PAUSE_VERROU} and rc.PAUSE_VERROU <= 0.1
+    assert s.journal == []                                      # rien n'a été lancé

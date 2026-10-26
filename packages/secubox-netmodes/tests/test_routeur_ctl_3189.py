@@ -428,6 +428,20 @@ def tenir(chemin: Path) -> int:
     return fd
 
 
+def injecter_horloge_verrou(monkeypatch) -> list[float]:
+    """#3190 : une action humaine attend le verrou DELAI_VERROU_ACTION (2 s) ; horloge et pause injectées, l'attente
+    se déroule sans dormir. Rend le temps simulé écoulé (liste d'un élément)."""
+    horloge = [0.0]
+    monkeypatch.setattr(rc, "_horloge_verrou", lambda: horloge[0])
+    monkeypatch.setattr(rc, "_dormir_verrou", lambda s: horloge.__setitem__(0, horloge[0] + s))
+    return horloge
+
+
+@pytest.fixture
+def verrou_instantane(monkeypatch):
+    return injecter_horloge_verrou(monkeypatch)
+
+
 # --- appliquer : ordre, garde eth*, refus ---------------------------------------------------------------------------------
 
 def test_ordre_des_etapes(ctx, faux, racine):
@@ -563,7 +577,7 @@ def test_refus_reseau_deja_porte(ctx, racine):
     assert not (racine / SAUVEGARDES).exists()
 
 
-def test_occupe(ctx, racine, faux):
+def test_occupe(ctx, racine, faux, verrou_instantane):
     avant = instantane(racine)
     fd = tenir(racine / "run/lock/secubox-netmodes.lock")
     try:
@@ -575,6 +589,7 @@ def test_occupe(ctx, racine, faux):
             rc.retour(ctx, "admin")
     finally:
         os.close(fd)
+    assert verrou_instantane[0] >= 3 * rc.DELAI_VERROU_ACTION         # #3190 : chacun a attendu ses 2 s avant Occupe
     assert faux.journal == []
     assert instantane(racine) == avant
     assert not (racine / SAUVEGARDES).exists()
@@ -968,7 +983,7 @@ def test_cli_non_root(cli, ctx, faux, capsys, monkeypatch):
     assert faux.journal == []
 
 
-def test_cli_verbes_et_codes(cli, ctx, racine, capsys, monkeypatch):
+def test_cli_verbes_et_codes(cli, ctx, racine, capsys, monkeypatch, verrou_instantane):
     monkeypatch.setattr(cli, "_est_root", lambda: True)
     assert cli.main(["routeur-etat"], ctx=ctx) == 0
     assert sortie_json(capsys)["etat"] == "inactif"
@@ -1268,14 +1283,15 @@ def test_retour_automatique_attend_le_verrou(ctx, racine, appel):
 def test_retour_automatique_abandonne_apres_le_delai(ctx, racine, monkeypatch):
     rc.appliquer(ctx, CFG42, "admin")
     monkeypatch.setattr(rc, "DELAI_VERROU_RETOUR", 0.3)
+    monkeypatch.setattr(rc, "DELAI_VERROU_ACTION", 0.1)
     fd = tenir(racine / "run/lock/secubox-netmodes.lock")
     try:
         with pytest.raises(rc.Occupe):
             rc.retour(ctx, "minuteur")
         debut = time.monotonic()
         with pytest.raises(rc.Occupe):
-            rc.retour(ctx, "admin")                                            # un humain : réponse immédiate
-        assert time.monotonic() - debut < 0.2
+            rc.retour(ctx, "admin")                    # un humain : son propre délai, court (#3190 : 2 s, pas 60)
+        assert 0.1 <= time.monotonic() - debut < 0.3
     finally:
         os.close(fd)
     assert etat_fichier(racine)["etat"] == "en_attente"

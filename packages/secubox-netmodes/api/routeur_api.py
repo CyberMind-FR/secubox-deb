@@ -10,6 +10,7 @@ dernier résultat se lit sur /routeur/derniere ; /routeur/etat sert au lecteur a
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import threading
@@ -37,6 +38,7 @@ ACTEUR_RE = re.compile(r"^[A-Za-z0-9._@-]{1,64}$")
 CLES_CONFIG = ("adresse", "dhcp_debut", "dhcp_fin", "bail", "ports")      # #3190 : plus `wan`, le contrôleur garde eth2
 REFUS_WAN = "le WAN ne se configure pas ici : il reste eth2, jamais relancé à distance (clé « wan » refusée)"
 MODELES = (Path("/proc/device-tree/model"), Path("/sys/firmware/devicetree/base/model"))
+DEVICE_TREE = (Path("/proc/device-tree"), Path("/sys/firmware/devicetree"))
 AVERTISSEMENT = ("Vous appliquez depuis le LAN actuel : vous perdrez la connexion ; "
                  "confirmez depuis la nouvelle adresse sous 3 minutes.")
 TTL_ETAT = 5.0
@@ -57,15 +59,25 @@ _fil: threading.Thread | None = None
 
 
 def est_mochabin() -> bool:
-    """Même test que detect_board : modèle du device tree. Fermé par défaut (#3190) : aucun modèle lisible ⇒ vrai, les
-    anciens chemins netplan (qui réécriraient tout netplan et relanceraient le WAN mvpp2) restent refusés."""
+    """Même test que detect_board : modèle du device tree. Fermé par défaut (#3190) : aucun modèle lisible, c'est vrai
+    (les anciens chemins netplan, qui réécriraient tout netplan et relanceraient le WAN mvpp2, restent refusés), SAUF
+    quand il n'y a pas de device tree du tout (x86, VM) : `lstat` des deux racines en FileNotFoundError l'une et
+    l'autre. Toute autre erreur, ou l'une des deux présente (même lien pendant) : vrai."""
     for chemin in MODELES:
         try:
             modele = chemin.read_bytes().decode("utf-8", "replace")
         except OSError:
             continue
         return any(m in modele for m in ("MOCHAbin", "mochabin", "7040"))
-    return True
+    for racine in DEVICE_TREE:
+        try:
+            os.lstat(racine)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            return True
+        return True
+    return False
 
 
 def _acteur(user: Any) -> str:
@@ -164,6 +176,9 @@ def bascule_lancee() -> bool:
 
 
 def _en_fond(verbe: str, acteur: str, entree: str | None) -> None:
+    """Le dernier résultat est rendu « fini » dans un `finally` : même une BaseException (SystemExit,
+    KeyboardInterrupt) ne laisse jamais la bascule « en cours » (toute nouvelle bascule serait refusée en 409)."""
+    code, sortie = 500, {"erreur": "fil d'arrière-plan interrompu"}
     try:
         code, sortie = 200, _ctl(verbe, acteur, entree=entree, delai=DELAI_FOND)
     except HTTPException as e:
@@ -171,10 +186,14 @@ def _en_fond(verbe: str, acteur: str, entree: str | None) -> None:
     except Exception as e:  # noqa: BLE001 — filet : le dernier résultat ne reste jamais « en cours »
         log.exception("%s : échec inattendu du fil d'arrière-plan", verbe)
         code, sortie = 500, {"erreur": f"échec inattendu : {e.__class__.__name__}"}
+    except BaseException as e:                      # propagée (arrêt), mais le résultat est rendu par le finally
+        sortie = {"erreur": f"fil d'arrière-plan interrompu : {e.__class__.__name__}"}
+        raise
+    finally:
+        with _verrou_derniere:
+            _derniere.update(code=code, sortie=sortie, fini=True, fin=_maintenant())
     if code != 200:
         log.warning("%s par %s : %s (%s)", verbe, acteur, sortie["erreur"], code)
-    with _verrou_derniere:
-        _derniere.update(code=code, sortie=sortie, fini=True, fin=_maintenant())
 
 
 def _lancer(verbe: str, acteur: str, entree: str | None = None) -> dict:

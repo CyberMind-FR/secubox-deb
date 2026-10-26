@@ -34,7 +34,8 @@ from api import routeur_ctl as rc  # noqa: E402
 from api.routeur_config import PORTS_LAN  # noqa: E402
 from api.routeur_rendu import CHEMINS  # noqa: E402
 from test_routeur_ctl_3189 import (  # noqa: E402
-    CFG42, CFG50, PORTS, SCRIPT, TOML, Faux, Horloge, audits, cp, etat_fichier, instantane, preparer_racine, tenir,
+    CFG42, CFG50, PORTS, SCRIPT, TOML, Faux, Horloge, audits, cp, etat_fichier, injecter_horloge_verrou, instantane,
+    preparer_racine, tenir,
 )
 
 COUPE = "etc/systemd/network/04-secubox-port-{}-coupe.network"
@@ -132,6 +133,12 @@ def racine(tmp_path):
 @pytest.fixture
 def faux(racine):
     return FauxPorts(racine)
+
+
+@pytest.fixture
+def verrou_instantane(monkeypatch):
+    """Attente du verrou (2 s pour une action humaine, #3190) déroulée sur une horloge injectée."""
+    return injecter_horloge_verrou(monkeypatch)
 
 
 @pytest.fixture
@@ -441,7 +448,7 @@ def test_acteur_invalide(actif, racine, faux, verbe, acteur):
 
 
 @pytest.mark.parametrize("verbe", VERBES)
-def test_occupe(actif, racine, faux, verbe):
+def test_occupe(actif, racine, faux, verbe, verrou_instantane):
     fd = tenir(racine / "run/lock/secubox-netmodes.lock")
     try:
         with pytest.raises(rc.Occupe):
@@ -593,7 +600,7 @@ def test_cli_port_refuse_avant_tout(cli, ctx, faux, racine, capsys, argv):
     assert faux.journal == [] and instantane(racine) == avant
 
 
-def test_cli_port_verbes_et_codes(cli, ctx, racine, faux, capsys, monkeypatch):
+def test_cli_port_verbes_et_codes(cli, ctx, racine, faux, capsys, monkeypatch, verrou_instantane):
     monkeypatch.setattr(cli, "_est_root", lambda: True)
     assert cli.main(["port-couper", "lan1", "admin"], ctx=ctx) == 3                 # mode routeur inactif
     assert "mode routeur" in sortie_json(capsys)["erreur"]

@@ -39,7 +39,11 @@ from .routeur_rendu import CHEMINS, COMMENTAIRE_NFT, MARQUE, TABLE_NFT, rendre
 VERROU = "/run/lock/secubox-netmodes.lock"
 VERROU_UNBOUND = "/run/lock/secubox-dns-lan.lock"           # partagé avec secubox-dns-lan
 DELAI_VERROU_UNBOUND = 30.0
-DELAI_VERROU_RETOUR = 60.0                                  # minuteur et démarrage attendent, un humain non
+DELAI_VERROU_RETOUR = 60.0                                  # minuteur et démarrage : une seule chance, ils attendent
+# Un humain (appliquer, confirmer, retour, port) attend 2 s : une lecture d'état (essai LOCK_SH de bascule_en_cours)
+# peut tenir le verrou un instant ; une confirmation perdue ainsi laisserait le minuteur défaire la bascule (#3190)
+DELAI_VERROU_ACTION = 2.0
+PAUSE_VERROU = 0.05
 ARBRE = "/var/lib/secubox-netmodes"                         # root seul, 0700
 ETAT = f"{ARBRE}/routeur-etat.json"
 SAUVEGARDES = f"{ARBRE}/sauvegardes"
@@ -231,20 +235,27 @@ def _ouvrir_verrou(chemin: Path) -> int:
     return os.open(chemin, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
 
 
+_horloge_verrou = time.monotonic                            # attente des verrous : horloge et pause réelles,
+_dormir_verrou = time.sleep                                 # remplacées en test (ctx.attendre est simulé ailleurs)
+
+
 def _prendre(fd: int, attente: float) -> bool:
-    limite = time.monotonic() + attente
+    """LOCK_EX par essais LOCK_NB espacés de PAUSE_VERROU, `attente` secondes au plus."""
+    limite = _horloge_verrou() + attente
     while True:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             return True
         except BlockingIOError:
-            if time.monotonic() >= limite:
+            if _horloge_verrou() >= limite:
                 return False
-            time.sleep(0.1)
+            _dormir_verrou(PAUSE_VERROU)
 
 
 @contextlib.contextmanager
-def _verrou(ctx: Contexte, attente: float = 0.0) -> Generator[None, None, None]:
+def _verrou(ctx: Contexte, attente: float | None = None) -> Generator[None, None, None]:
+    """Verrou du contrôleur ; `attente` None : celle d'une action humaine (DELAI_VERROU_ACTION)."""
+    attente = DELAI_VERROU_ACTION if attente is None else attente
     fd = _ouvrir_verrou(_p(ctx, VERROU))
     try:
         if not _prendre(fd, attente):
@@ -1065,7 +1076,7 @@ def _restaurer_et_relancer(ctx: Contexte, acteur: str, nom: str | None, unbound_
 def retour(ctx: Contexte, acteur: str) -> dict:
     _verifier_acteur(acteur)
     # le minuteur n'a qu'une chance : il attend le verrou au lieu de laisser la config non gardée
-    attente = DELAI_VERROU_RETOUR if acteur in ("minuteur", "demarrage") else 0.0
+    attente = DELAI_VERROU_RETOUR if acteur in ("minuteur", "demarrage") else DELAI_VERROU_ACTION
     with _verrou(ctx, attente), _auditer_chemins(ctx, acteur):
         _verifier_arbre(ctx)
         courant = _lire_etat(ctx)["etat"]

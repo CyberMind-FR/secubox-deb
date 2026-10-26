@@ -169,7 +169,11 @@ def test_anciens_chemins_inchanges_ailleurs(client, monkeypatch):
 def test_est_mochabin_lit_le_modele(tmp_path, monkeypatch):
     m = tmp_path / "model"
     monkeypatch.setattr(routeur_api, "MODELES", (m,))
-    assert routeur_api.est_mochabin() is True                  # #3190 : illisible ⇒ fermé (anciens chemins refusés)
+    monkeypatch.setattr(routeur_api, "DEVICE_TREE", (tmp_path / "absent-proc", tmp_path / "absent-sys"))
+    assert routeur_api.est_mochabin() is False                 # #3190 : aucun device tree (x86, VM) : pas une MOCHAbin
+    (tmp_path / "sys-dt").mkdir()
+    monkeypatch.setattr(routeur_api, "DEVICE_TREE", (tmp_path / "absent-proc", tmp_path / "sys-dt"))
+    assert routeur_api.est_mochabin() is True                  # #3190 : device tree présent, modèle illisible ⇒ fermé
     m.write_bytes(b"Globalscale Technologies MOCHAbin\x00")
     assert routeur_api.est_mochabin() is True
     m.write_bytes(b"Raspberry Pi\x00")
