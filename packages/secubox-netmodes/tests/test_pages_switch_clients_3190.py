@@ -10,6 +10,7 @@ pannes (file://, 401, NAC en panne), jointure NAC par adresse MAC."""
 import ipaddress
 import json
 import re
+import time
 from pathlib import Path
 
 import pytest
@@ -337,3 +338,74 @@ def test_sans_session_sous_file_les_sources_sont_en_panne(page):
     (etat, pannes, corps, tuile, d1, d2), erreurs = _avec_navigateur(scenario)
     assert "EN PANNE" in etat and pannes == 3 and "illisibles : source en panne" in corps and "Aucun" not in corps and tuile == "—"
     assert d1 and d2 and erreurs == []
+
+
+# ── Relecture finale I3 : la relecture après une action n'est jamais sautée ─────────────────────────────────────────────────────
+from test_page_routeur_3190 import _attendre, _page as _page_tenue  # noqa: E402  (réponses retenues par le scénario)
+
+
+def test_switch_relecture_enchainee_et_lecture_d_avant_l_action_jetee_dans_le_code():
+    code = _code(SRC["switch"])
+    assert "suite = lecture.then(" in code and "if (g !== generation) { return; }" in code and "enCours" not in code
+    assert code.count("generation++") == 3                  # avant l'envoi, à la réponse, à l'échec réseau de l'action
+
+
+def test_switch_action_pendant_une_lecture_en_vol_relit_apres_elle():
+    """Une lecture en vol quand Rétablir réussit revient APRÈS lui avec l'état d'avant (lan1 coupé) : elle est jetée (le
+    tableau n'est pas redessiné), et la relecture part dès sa fin, jamais sautée ; elle montre lan1 rétabli."""
+    coupe = json.loads(json.dumps(PORTS))
+    for p in coupe["ports"]:
+        if p["nom"] == "lan1":
+            p["coupe"], p["etat_admin"] = True, "down"
+    box = {"garder": 0, "retabli": False}
+
+    def ports(_m, _c):
+        if box["garder"]:
+            box["garder"] -= 1
+            return None                                     # réponse retenue, donnée par le scénario
+        return 200, (PORTS if box["retabli"] else coupe)
+
+    def retablir(_m, _c):
+        box["retabli"] = True
+        return 200, ROUTEUR
+    api = {"netmodes/reseau/ports": ports, "netmodes/reseau/clients": (200, CLIENTS), "netmodes/routeur/etat": (200, ROUTEUR),
+           "netmodes/ports/lan1/retablir": retablir}
+
+    def scenario(nav):
+        ctx, pg, j = _page_tenue(nav, api)
+        pg.goto("http://t.test/netmodes/switch.html")
+        pg.wait_for_selector("button[data-port=lan1][data-verbe=retablir]")
+        box["garder"] = 1
+        pg.click("#rafraichir")
+        _attendre(pg, lambda: len(j["gardees"]) == 1)                       # une lecture en vol
+        pg.click("button[data-port=lan1]")
+        pg.fill("#confirmSaisie", "lan1")
+        pg.click("#confirmOk")
+        pg.wait_for_function("document.getElementById('resultat').textContent.includes('rétabli')")
+        box["garder"] = 1                                                   # retient aussi la relecture enchaînée
+        pg.evaluate("document.querySelector('button[data-port=lan1]').closest('tr').dataset.marque = 'avant'")
+        lache = time.time()
+        j["gardees"][0].fulfill(status=200, content_type="application/json", body=json.dumps(coupe))   # l'état d'avant, en retard
+        try:
+            _attendre(pg, lambda: len(j["gardees"]) == 2, 2.0)
+        except AssertionError:
+            pass
+        pg.wait_for_timeout(300)
+        lectures = [c[3] for c in j["appels"] if c[1].endswith("reseau/ports")]
+        r = {"enchainee": len(j["gardees"]) == 2, "delai": lectures[-1] - lache,
+             "jetee": pg.evaluate("!!document.querySelector('#ports tr[data-marque=avant]')")}
+        if r["enchainee"]:
+            j["gardees"][1].fulfill(status=200, content_type="application/json", body=json.dumps(PORTS))
+            try:
+                pg.wait_for_function("document.querySelector('button[data-port=lan1]').dataset.verbe === 'couper'", timeout=3000)
+            except Exception:                               # l'assertion qui suit dit ce qui est affiché
+                pass
+        r.update(verbe=pg.get_attribute("button[data-port=lan1]", "data-verbe"), tuile=pg.inner_text("#tCoupe"), res=pg.inner_text("#resultat"))
+        ctx.close()
+        return r, j
+    r, j = _avec_navigateur(scenario)
+    assert r["enchainee"], "aucune relecture après l'action : sautée parce qu'une lecture était en vol"
+    assert 0 <= r["delai"] < 1.0, r["delai"]                                 # dès la fin de la lecture en vol
+    assert r["jetee"], "la lecture partie avant l'action a été rendue"
+    assert r["verbe"] == "couper" and r["tuile"] == "0" and "lan1 rétabli" in r["res"]
+    assert j["erreurs"] == [] and j["natifs"] == []

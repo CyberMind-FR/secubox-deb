@@ -73,7 +73,7 @@ def _ports_du_poste(request: Request) -> set[str]:
 
 
 def _apres_action() -> None:
-    reseau._cache.clear()                       # l'onglet Switch relit l'état réel, pas une lecture d'avant l'action
+    reseau.invalider()                          # l'onglet Switch relit l'état réel, pas une lecture d'avant l'action
 
 
 @router.post("/{port}/couper")

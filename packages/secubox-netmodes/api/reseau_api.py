@@ -42,7 +42,10 @@ SOURCES = {          # clé -> argv (lecture seule : ip/bridge en mode show)
 }
 
 _cache: dict[str, Any] = {}
-_verrou = threading.Lock()
+_verrou = threading.Lock()                      # une lecture du système à la fois
+# Génération du cache, avancée par invalider() : une lecture commencée avant n'inscrit pas son résultat (#3190, I3).
+_generation = 0
+_verrou_generation = threading.Lock()           # bref : jamais tenu pendant une lecture
 
 
 def _json(argv: list[str]):
@@ -67,11 +70,22 @@ def ports_coupes(noms: list[str]) -> set[str]:
     return {m.group(1) for n in noms if (m := COUPE_RE.fullmatch(n))}
 
 
+def invalider() -> None:
+    """Après une action sur un port : le prochain relevé est relu. Une lecture en vol, commencée avant, rend son
+    résultat à son appelant mais ne l'inscrit pas au cache (il montrerait l'état d'avant l'action) ; on ne l'attend pas."""
+    global _generation
+    with _verrou_generation:
+        _generation += 1
+        _cache.clear()
+
+
 def lire_systeme() -> dict:
     """Toutes les lectures, cache mémoire de 5 s. Source en échec : clé None et nom dans `pannes`."""
     with _verrou:
-        if _cache.get("t") and time.monotonic() - _cache["t"] < TTL_CACHE:
-            return _cache["valeur"]
+        with _verrou_generation:
+            if _cache.get("t") and time.monotonic() - _cache["t"] < TTL_CACHE:
+                return _cache["valeur"]
+            generation = _generation
         res: dict[str, Any] = {}
         pannes: list[str] = []
         for cle, argv in SOURCES.items():
@@ -92,7 +106,9 @@ def lire_systeme() -> dict:
             res["coupes"] = None
             pannes.append("coupes")
         res["pannes"] = pannes
-        _cache.update(t=time.monotonic(), valeur=res)
+        with _verrou_generation:
+            if generation == _generation:          # aucune invalidation pendant la lecture : elle est à jour
+                _cache.update(t=time.monotonic(), valeur=res)
         return res
 
 

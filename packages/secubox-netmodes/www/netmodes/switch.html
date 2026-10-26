@@ -239,7 +239,9 @@
   var ORDRE = ["eth2", "eth0", "|", "lan0", "lan1", "lan2", "lan3"], TABLE = ["eth2", "eth1", "lan0", "lan1", "lan2", "lan3", "eth0"];
   var ROLES = { wan: ["WAN", "cy"], conduit: ["conduit DSA", ""], sfp: ["SFP+ 10G", ""], lan: ["LAN", ""] };
   var LAN_RE = /^lan[0-3]$/;
-  var dernier = null, ouverte = null, enCours = false, occupe = false;
+  var dernier = null, ouverte = null, occupe = false;
+  var lecture = null, suite = null;
+  var generation = 0;               // +1 avant l'envoi d'une action de port et à sa réponse : une lecture partie avant est jetée
 
   function coupeDe(R, p) {          // true / false / null (illisible)
     if (p.coupe === true || p.coupe === false) { return p.coupe; }
@@ -380,17 +382,18 @@
     occupe = true; $("confirmOk").disabled = true;
     var hd = { Accept: "application/json", "Content-Type": "application/json" }, t = jeton();
     if (t) { hd.Authorization = "Bearer " + t; }
+    generation++;
     fetch("/api/v1/netmodes/ports/" + port + "/" + verbe, { method: "POST", headers: hd, credentials: "same-origin", cache: "no-store", body: JSON.stringify({ confirmer: port }) })
       .then(function (r) {
         return r.json().then(function (j) { return j; }, function () { return null; }).then(function (j) {
-          occupe = false;
+          occupe = false; generation++;
           if (r.ok) { fermer(); resultat(port + (verbe === "couper" ? " coupé." : " rétabli.") + " Relevé actualisé.", ""); return rafraichir(); }
           var det = j && j.detail ? (typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail)) : "réponse illisible";
           if (r.status === 401 || r.status === 403) { det = "session d'administrateur requise (" + r.status + ")"; }
           resultat("Refusé (HTTP " + r.status + ") : " + det, "ko"); $("confirmOk").disabled = false; hauteur();
         });
       })
-      .catch(function () { occupe = false; resultat("Contrôleur injoignable : rien ne prouve que l'action ait eu lieu, relire l'état avant de recommencer.", "ko"); $("confirmOk").disabled = false; hauteur(); });
+      .catch(function () { occupe = false; generation++; resultat("Contrôleur injoignable : rien ne prouve que l'action ait eu lieu, relire l'état avant de recommencer.", "ko"); $("confirmOk").disabled = false; hauteur(); });
   });
 
   function donneesDemo() {
@@ -418,14 +421,26 @@
     };
   }
 
+  // Une seule lecture à la fois. Demandée pendant qu'une autre est en vol (après une action de port), elle est enchaînée à sa
+  // suite, jamais abandonnée. Une lecture partie avant une action (génération changée) est jetée à son arrivée.
   function rafraichir() {
-    if (enCours) { return Promise.resolve(); }
-    enCours = true;
-    return charger(SOURCES).then(function (R) {
-      enCours = false; dernier = R; sources(R, SOURCES); rendre(R);
-      $("heure").textContent = "Relevé " + new Date().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-      hauteur();
+    if (lecture) {
+      if (!suite) { suite = lecture.then(function () { suite = null; return rafraichir(); }); }
+      return suite;
+    }
+    var g = generation;
+    lecture = charger(SOURCES).then(function (R) {
+      lecture = null;
+      if (g !== generation) { return; }
+      dernier = R;
+      // Une erreur de rendu reste visible (console, pageerror) sans bloquer les lectures suivantes.
+      try {
+        sources(R, SOURCES); rendre(R);
+        $("heure").textContent = "Relevé " + new Date().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+        hauteur();
+      } catch (err) { setTimeout(function () { throw err; }); }
     });
+    return lecture;
   }
   $("rafraichir").addEventListener("click", function () { if (!ouverte) { rafraichir(); } else { resultat("Terminer ou annuler la confirmation avant de rafraîchir.", "demo"); } });
   rafraichir();

@@ -578,6 +578,45 @@ def test_port_reussi_invalide_le_cache_de_lecture(client, monkeypatch):
     assert "t" not in reseau_api._cache                         # l'onglet Switch relit l'état réel tout de suite
 
 
+def test_invalidation_jette_la_lecture_en_vol_sans_l_attendre(monkeypatch, tmp_path):
+    """Relecture finale I3 : une lecture de /reseau commencée AVANT l'action rend son résultat à son appelant mais ne
+    l'inscrit pas au cache (il montrerait l'état d'avant l'action pendant 5 s) ; l'invalidation n'attend pas cette
+    lecture ; la lecture suivante relit, et le cache sert de nouveau."""
+    from api import reseau_api
+    reseau_api._cache.clear()
+    monkeypatch.setattr(reseau_api, "BAUX", tmp_path / "baux")
+    monkeypatch.setattr(reseau_api, "RESEAU_D", tmp_path)
+    entree, lacher, n = threading.Event(), threading.Event(), [0]
+
+    def run(argv, **kw):
+        if argv == reseau_api.SOURCES["ip_link"]:
+            n[0] += 1
+            if n[0] == 1:                                       # la première lecture reste en vol
+                entree.set()
+                assert lacher.wait(10)
+        return subprocess.CompletedProcess(argv, 0, stdout="[]", stderr="")
+    monkeypatch.setattr(reseau_api.subprocess, "run", run)
+    res: dict = {}
+    fil = threading.Thread(target=lambda: res.update(v=reseau_api.lire_systeme()))
+    fil.start()
+    assert entree.wait(5)
+    inval = threading.Thread(target=ports_api._apres_action)
+    inval.start()
+    inval.join(2)
+    en_attente = inval.is_alive()
+    lacher.set()
+    fil.join(5)
+    inval.join(5)
+    assert not en_attente                                       # l'action répond sans attendre la lecture en vol
+    assert res["v"]["ip_link"] == []                            # l'appelant en vol reçoit sa lecture…
+    assert "t" not in reseau_api._cache                         # … qui n'est pas inscrite au cache
+    reseau_api.lire_systeme()
+    assert n[0] == 2 and "t" in reseau_api._cache               # la suivante relit, puis le cache sert
+    reseau_api.lire_systeme()
+    assert n[0] == 2
+    reseau_api._cache.clear()
+
+
 # --- gardes et structure ---------------------------------------------------------------------------------------------------
 
 def test_routes_gardees():
