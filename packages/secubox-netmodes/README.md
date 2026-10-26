@@ -79,6 +79,15 @@ Seule surface privilégiée du module ; l'API (utilisateur `secubox-netmodes`) l
 | `routeur-retour <acteur>` | restaure la dernière sauvegarde (`minuteur` : seulement si l'application attend sa confirmation) |
 | `routeur-retour-demarrage` | au démarrage (`secubox-netmodes-retour-boot.service`), défait une application restée en attente ; jamais accordé à l'API |
 
+Avant toute écriture, `routeur-appliquer` refuse si netplan déclare `br-lan`, si le pseudo-routeur (#2940) est actif,
+si `net.ipv4.ip_forward` ne vaut pas 1, si `dnsmasq.service` est actif, si `/etc/nftables.conf` n'inclut pas
+`/etc/nftables.d/*.nft` (le pare-feu du LAN ne serait pas rechargé au démarrage), ou si l'ancien
+`/etc/systemd/network/10-br-lan.network` ne vise pas `br-lan` seul (section `[Match]` réduite à la ligne
+`Name=br-lan` : sinon le mettre de côté reconfigurerait d'autres interfaces, le WAN compris). Pendant la bascule,
+Unbound n'est redémarré (coupure du DNS de toute la box) que si son drop-in change ; après la relance du DHCP,
+dnsmasq doit être vu actif deux fois de suite (5 s au plus), sinon la bascule est défaite. Un `routeur.toml` illisible
+(édité à la main, non UTF-8) rend l'état `config_invalide` et n'empêche jamais le retour.
+
 Chaque décision est écrite dans `/var/log/secubox/audit.log` (une ligne JSON, `"module": "netmodes"`).
 
 ### Routes
@@ -118,8 +127,8 @@ coupure ou un redémarrage avant la confirmation est défait au démarrage par `
 - `secubox-netmodes.service` : API, utilisateur `secubox-netmodes`, profil AppArmor `secubox-netmodes-api`,
   `KillMode=process` (un contrôleur en pleine bascule survit à un redémarrage de l'API). État des anciens modes :
   `/var/lib/secubox-netmodes-api/state.json` (`StateDirectory`).
-- `secubox-lan-dhcp.service` : dnsmasq en DHCP seul, profil AppArmor `secubox-lan-dhcp` ; ni activé ni démarré par le
-  paquet, le contrôleur l'active à la bascule et le désactive au retour.
+- `secubox-lan-dhcp.service` : dnsmasq en DHCP seul (`Type=exec`), profil AppArmor `secubox-lan-dhcp` ; ni activé ni
+  démarré par le paquet, le contrôleur l'active à la bascule et le désactive au retour.
 - `secubox-netmodes-retour-boot.service` : oneshot root durci, activé par le paquet, ordonné avant
   `secubox-lan-dhcp.service` : après un redémarrage, aucun bail n'est servi sur un sous-réseau non confirmé.
 

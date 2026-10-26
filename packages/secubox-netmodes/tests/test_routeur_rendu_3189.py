@@ -136,7 +136,7 @@ def test_nft_valide(sortie, tmp_path):
 def test_unbound_ip_freebind(sortie):
     """Relecture finale I2 : au démarrage, Unbound peut précéder l'adresse de br-lan ; sans ip-freebind il refuse de
     démarrer (DNS de toute la box perdu). Même réglage que le drop-in IPv6 de dns-lan."""
-    l = lignes(sortie["unbound"])
-    i = l.index("server:")
-    assert "    ip-freebind: yes" in l[i + 1:]
-    assert l.index("    ip-freebind: yes") < l.index("    interface: 192.168.42.1")
+    unbound = lignes(sortie["unbound"])
+    i = unbound.index("server:")
+    assert "    ip-freebind: yes" in unbound[i + 1:]
+    assert unbound.index("    ip-freebind: yes") < unbound.index("    interface: 192.168.42.1")
