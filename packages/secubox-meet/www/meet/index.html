@@ -6,7 +6,8 @@
   See LICENCE-CMSD-1.0.md for terms.
 
   Visioconférence La Suite Meet au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
-  Routes lues : /status, /media-expose, /oidc, /logs. Écritures : /control, /media-expose, /oidc/enregistrer.
+  Routes lues : /status, /media-expose, /oidc, /logs, /reunions, /connexions, /stats (#3182).
+  Écritures : /control, /media-expose, /oidc/enregistrer, /clore (#3182).
   Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
 -->
 <html lang="fr">
@@ -79,6 +80,25 @@
         .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
         .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
         .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        /* #3182 : réunions, connexions, statistiques */
+        .pill.vi{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+        .sous{color:var(--faible);font-size:.72rem;display:block}
+        .periode{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+        .periode .btn[aria-pressed=true]{border-color:var(--cyan);background:rgba(41,182,246,.22);color:#d9f2ff;font-weight:700}
+        .duo{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.duo{grid-template-columns:1fr 1fr}}
+        .barres{display:grid;gap:6px}
+        .barres .b{display:grid;grid-template-columns:minmax(90px,150px) minmax(0,1fr) auto;gap:10px;align-items:center;font-size:.78rem}
+        .barres .b span{overflow-wrap:anywhere}
+        .jauge{height:10px;border-radius:5px;background:rgba(159,179,214,.12);overflow:hidden}
+        .jauge i{display:block;height:100%;border-radius:5px;background:var(--cyan)}
+        .jours{display:flex;align-items:flex-end;gap:4px;height:170px;padding:0 2px}
+        .jour{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+        .jour .pile{width:100%;max-width:42px;display:flex;flex-direction:column-reverse;gap:2px;flex:1 1 auto;justify-content:flex-start}
+        .jour .pile i{display:block;border-radius:3px;min-height:0}
+        .jour small{color:var(--faible);font-size:.62rem;white-space:nowrap}
+        .leg{display:inline-flex;align-items:center;gap:5px;color:var(--doux);font-size:.72rem}
+        .leg i{width:10px;height:10px;border-radius:3px;display:inline-block}
         form.saisie{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:0;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
         form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0;flex:1 1 200px}
         form.saisie input,form.saisie select,.outils select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
@@ -123,6 +143,9 @@
 
         <div class="onglets" role="tablist" aria-label="Sections Meet">
             <button type="button" role="tab" id="o-tableau" data-t="tableau" aria-selected="true" aria-controls="t-tableau">Tableau de bord</button>
+            <button type="button" role="tab" id="o-reunions" data-t="reunions" aria-selected="false" aria-controls="t-reunions">Réunions</button>
+            <button type="button" role="tab" id="o-connexions" data-t="connexions" aria-selected="false" aria-controls="t-connexions">Connexions</button>
+            <button type="button" role="tab" id="o-stats" data-t="stats" aria-selected="false" aria-controls="t-stats">Statistiques</button>
             <button type="button" role="tab" id="o-media" data-t="media" aria-selected="false" aria-controls="t-media">Ports média</button>
             <button type="button" role="tab" id="o-identite" data-t="identite" aria-selected="false" aria-controls="t-identite">Identité</button>
             <button type="button" role="tab" id="o-journaux" data-t="journaux" aria-selected="false" aria-controls="t-journaux">Journaux</button>
@@ -136,6 +159,57 @@
                 <div class="outils" style="margin-top:8px"><button class="btn sm danger" id="redemarrer" type="button">Redémarrer le conteneur</button></div></div>
             <div class="pan"><h3>Serveur</h3>
                 <dl class="kv"><dt>Domaine</dt><dd id="iDom">—</dd><dt>Adresse</dt><dd id="iUrl">—</dd><dt>Signalisation</dt><dd id="iLk">—</dd><dt>IP du conteneur</dt><dd class="mono" id="iIp">—</dd><dt>Web joignable</dt><dd id="iWeb">—</dd><dt>Version ctl</dt><dd id="iVer">—</dd></dl></div>
+        </section>
+
+        <section id="t-reunions" role="tabpanel" aria-labelledby="o-reunions" hidden>
+            <section class="tuiles" aria-label="Réunions" style="margin-bottom:10px">
+                <div class="tuile cy" title="Salles créées dans Meet sur cette box."><span class="l">Salles</span><span class="v" id="tSalles">—</span><span class="s">créées sur la box</span></div>
+                <div class="tuile ok" title="Réunions ouvertes en ce moment (LiveKit)."><span class="l">En cours</span><span class="v" id="tEnCours">—</span><span class="s">réunions ouvertes</span></div>
+                <div class="tuile" title="Participants connectés en ce moment."><span class="l">Participants</span><span class="v" id="tPresents">—</span><span class="s">connectés maintenant</span></div>
+            </section>
+            <div class="pan"><h3>Salles <i>base de Meet · état en direct par LiveKit</i></h3>
+                <div id="rReunions" class="retour" hidden></div>
+                <div id="lReunions" class="tab"><div class="vide">Chargement…</div></div>
+                <p class="note">Accès : <b>public</b> = le lien suffit (invités sans compte), <b>confiance</b> = comptes de la box, <b>restreint</b> = membres invités dans la salle. « Clore… » met fin à une réunion en cours après confirmation et l’inscrit au journal d’audit.</p></div>
+        </section>
+
+        <section id="t-connexions" role="tabpanel" aria-labelledby="o-connexions" hidden>
+            <div class="pan" style="margin-bottom:10px"><h3>En ce moment <i>LiveKit</i></h3>
+                <div id="lDirect" class="tab"><div class="vide">Chargement…</div></div></div>
+            <div class="pan"><h3>Historique <i>une ligne par session</i></h3>
+                <div class="outils">
+                    <label>Période<select id="fJours"><option value="7">7 jours</option><option value="30" selected>30 jours</option></select></label>
+                    <label>Salle<select id="fSalle"><option value="">toutes</option></select></label>
+                    <label>Issue<select id="fIssue"><option value="">toutes</option><option value="aboutie">abouties</option><option value="echec">échecs de connexion</option><option value="abandon">abandons</option><option value="en_cours">en cours</option></select></label>
+                    <button class="btn" id="exportCsv" type="button">Exporter (CSV)</button>
+                </div>
+                <div id="lHisto" class="tab"><div class="vide">Chargement…</div></div>
+                <p class="note">Aucune adresse IP n’est conservée : seulement le pays, l’appareil, le transport et la durée. Un compte de la box apparaît sous son pseudo, toute autre personne « invité ». Sessions effacées après 30 jours ; totaux par jour gardés 12 mois.</p></div>
+        </section>
+
+        <section id="t-stats" role="tabpanel" aria-labelledby="o-stats" hidden>
+            <div class="periode" role="group" aria-label="Période" style="margin-bottom:10px">
+                <button class="btn" type="button" data-periode="7" aria-pressed="true">7 jours</button>
+                <button class="btn" type="button" data-periode="30" aria-pressed="false">30 jours</button>
+                <button class="btn" type="button" data-periode="365" aria-pressed="false">12 mois</button>
+            </div>
+            <section class="tuiles" aria-label="Statistiques" style="margin-bottom:10px">
+                <div class="tuile cy" title="Salles ouvertes au moins une fois sur la période."><span class="l">Réunions</span><span class="v" id="sReunions">—</span><span class="s">salles utilisées</span></div>
+                <div class="tuile" title="Somme des durées de connexion des participants."><span class="l">Temps de visio</span><span class="v" id="sTemps">—</span><span class="s">participants × durée</span></div>
+                <div class="tuile" title="Personnes distinctes : comptes de la box, invités."><span class="l">Participants</span><span class="v" id="sParticipants">—</span><span class="s">compte · invité</span></div>
+                <div class="tuile" title="Nombre maximal de participants connectés en même temps."><span class="l">Pic simultané</span><span class="v" id="sPic">—</span><span class="s" id="sPicQuand">—</span></div>
+                <div class="tuile" title="Durée médiane des sessions abouties."><span class="l">Durée médiane</span><span class="v" id="sMediane">—</span><span class="s">sessions abouties</span></div>
+                <div class="tuile att" title="Sessions qui n’ont jamais établi de chemin média, sur toutes les sessions."><span class="l">Échecs de connexion</span><span class="v" id="sEchecs">—</span><span class="s">sur toutes les sessions</span></div>
+            </section>
+            <div class="duo">
+                <div class="pan"><h3>Sessions par jour <span class="leg"><i style="background:var(--vert)"></i>abouties</span><span class="leg"><i style="background:var(--orange)"></i>échecs</span></h3>
+                    <div id="sJours"><div class="vide">Chargement…</div></div></div>
+                <div class="pan"><h3>Transport des médias</h3><div id="sTransport" class="barres"></div>
+                    <p class="note">Une part de TCP ou de relais qui grandit signale des participants derrière un pare-feu strict.</p>
+                    <h3 style="margin-top:10px">Fin des sessions</h3><div id="sMotifs" class="barres"></div></div>
+                <div class="pan"><h3>Appareils</h3><div id="sAppareils" class="barres"></div></div>
+                <div class="pan"><h3>Salles les plus utilisées</h3><div id="sSalles" class="barres"></div></div>
+            </div>
         </section>
 
         <section id="t-media" role="tabpanel" aria-labelledby="o-media" hidden>
@@ -179,7 +253,7 @@
         const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
         const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        let ETAT = null, SESSION_OK = true, INJOIGNABLE = false, CONFIRM = null;
+        let ETAT = null, SESSION_OK = true, INJOIGNABLE = false, CONFIRM = null, ONGLET = 'tableau';
 
         function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('jwt_token') || localStorage.getItem('token') || ''; } catch (e) { return ''; } }
         function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
@@ -365,12 +439,198 @@
         }
         $('logRaf').addEventListener('click', journaux);
 
+        // ----- Activité de la visio (#3182) : réunions, connexions, statistiques -----
+        const ACCES = { public: ['public', 'cy'], trusted: ['confiance', 'vi'], restricted: ['restreint', 'att'] };
+        const ISSUES = { aboutie: 'ok', echec: 'hors', abandon: '', en_cours: 'cy' };
+        const TRANSPORT_PILL = { UDP: 'ok', TCP: 'att', Relais: 'vi' };
+        let SALLES = {}, SALLES_TS = 0, HISTO = [], PERIODE = '7';
+        const fmtDuree = s => { if (s === null || s === undefined) return '—'; s = Math.max(0, Math.round(s)); if (s < 60) return s + ' s';
+            const m = Math.floor(s / 60); if (m < 60) return m + ' min'; return Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0'); };
+        const fmtDate = ts => ts ? new Date(ts * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '') : '—';
+        const nomSalle = id => (SALLES[id] && SALLES[id].slug) || (id ? String(id).slice(0, 8) : '—');
+        const pill = (txt, cls) => el('span', 'pill' + (cls ? ' ' + cls : ''), txt);
+        function refus(box, e) {
+            box.replaceChildren(el('div', 'vide', (e && (e.statut === 401 || e.statut === 403)) ? 'Session requise : connexion administrateur.' : 'Lecture impossible : ' + (e ? e.message : '')));
+        }
+        function tableau(entetes, lignes) {
+            const t = el('table'), th = el('thead'), tr = el('tr');
+            entetes.forEach(h => tr.appendChild(el('th', '', h))); th.appendChild(tr); t.appendChild(th);
+            const tb = el('tbody'); lignes.forEach(l => tb.appendChild(l)); t.appendChild(tb); return t;
+        }
+        function ligne(cellules) {
+            const tr = el('tr');
+            cellules.forEach(c => { const td = el('td'); if (c instanceof Node) td.appendChild(c); else td.textContent = tiret(c); tr.appendChild(td); });
+            return tr;
+        }
+        function barres(box, valeurs, fmt, couleur) {
+            box.replaceChildren();
+            const items = Object.entries(valeurs || {}).sort((a, b) => b[1] - a[1]);
+            if (!items.length) { box.appendChild(el('div', 'vide', 'Aucune mesure sur la période')); return; }
+            const max = Math.max(...items.map(i => i[1]), 1);
+            items.forEach(([k, v]) => {
+                const b = el('div', 'b'), j = el('div', 'jauge'), i = el('i');
+                i.style.width = (100 * v / max).toFixed(1) + '%'; if (couleur) i.style.background = couleur(k);
+                j.appendChild(i); b.appendChild(el('span', '', k)); b.appendChild(j); b.appendChild(el('span', '', fmt ? fmt(v) : String(v)));
+                box.appendChild(b);
+            });
+        }
+
+        function demoActivite() {
+            const t = Math.floor(Date.now() / 1000), s1 = '2c8ef9e1-ba03-407e-b506-339c292c7573', s2 = '98cbd21d-522f-42db-a961-75c2f86a33fe';
+            const jours = []; for (let i = 6; i >= 0; i--) { const d = new Date((t - i * 86400) * 1000); jours.push({ jour: d.toISOString().slice(0, 10), abouties: i === 0 ? 4 : (i === 1 ? 1 : 0), echecs: i === 0 ? 5 : 0 }); }
+            return {
+                reunions: { reunions: [
+                    { salle: s1, nom: 'point-hebdo', slug: 'pnt-hbdo-mtg', acces: 'public', proprietaire: 'gandalf', creee: t - 900, derniere: { debut: t - 1500, participants: 2, secondes: 2880 }, en_cours: true, presents: 2 },
+                    { salle: s2, nom: 'équipe', slug: 'eqp-tchn-rdv', acces: 'trusted', proprietaire: 'gandalf', creee: t - 86400, derniere: { debut: t - 80000, participants: 1, secondes: 0 }, en_cours: false, presents: 0 }] },
+                connexions: { en_direct: { salles: [{ salle: s1, debut: t - 1500, participants: [
+                    { participant: 'gandalf', compte: true, depuis: t - 1440, medias: { son: true, image: true, ecran: false }, transport: 'UDP', appareil: 'Linux · Firefox' },
+                    { participant: 'invité', compte: false, depuis: t - 1320, medias: { son: true, image: true, ecran: false }, transport: 'UDP', appareil: 'iOS · Safari' }] }] },
+                    historique: [
+                        { salle: s2, debut: t - 80000, fin: t - 80000, duree: 0, participant: 'gandalf', compte: true, appareil: 'Linux · Firefox', transport: null, issue: 'echec', motif: 'aucun chemin média' }] },
+                stats: { periode: 7, sessions: 10, sessions_abouties: 5, echecs: 5, secondes: 4320, reunions: 2, participants: { comptes: 1, invites: 1 }, mediane: 840,
+                         pic: { nombre: 2, quand: t - 1320 }, transport: { UDP: 5 }, motifs: { 'a quitté': 2, 'aucun chemin média': 5, 'rejoint ailleurs': 1 },
+                         appareils: { 'Linux · Firefox': 4, 'iOS · Safari': 1 }, salles: { [s1]: 2880, [s2]: 1440 }, par_jour: jours } };
+        }
+        async function lireActivite(chemin, cle) {
+            if (DEMO) return demoActivite()[cle];
+            return lire(chemin);
+        }
+        async function chargerSalles(force) {
+            if (!force && Date.now() - SALLES_TS < 30000) return null;
+            const d = await lireActivite('/reunions', 'reunions');
+            SALLES = {}; (d.reunions || []).forEach(r => { SALLES[r.salle] = r; }); SALLES_TS = Date.now();
+            const f = $('fSalle'), choix = f.value; f.replaceChildren(el('option', '', 'toutes')); f.firstChild.value = '';
+            Object.values(SALLES).forEach(r => { const o = el('option', '', r.slug || r.salle); o.value = r.salle; f.appendChild(o); });
+            f.value = choix;
+            return d;
+        }
+
+        async function reunions() {
+            const box = $('lReunions');
+            let d;
+            try { d = await chargerSalles(true); } catch (e) { refus(box, e); ['tSalles', 'tEnCours', 'tPresents'].forEach(i => { $(i).textContent = '—'; }); annoncer(); return; }
+            const rs = d.reunions || [];
+            $('tSalles').textContent = String(rs.length);
+            $('tEnCours').textContent = String(rs.filter(r => r.en_cours).length);
+            $('tPresents').textContent = String(rs.reduce((n, r) => n + (r.presents || 0), 0));
+            if (!rs.length) { box.replaceChildren(el('div', 'vide', 'Aucune salle créée pour l’instant')); annoncer(); return; }
+            const dom = ETAT && domaineValide(ETAT.domain) ? ETAT.domain : null;
+            box.replaceChildren(tableau(['Salle', 'Accès', 'Propriétaire', 'Créée', 'Dernière réunion', 'État', 'Actions'], rs.map(r => {
+                const nom = el('div'); nom.appendChild(el('b', '', tiret(r.nom)));
+                const slugOk = typeof r.slug === 'string' && /^[A-Za-z0-9-]{3,64}$/.test(r.slug);
+                if (dom && slugOk) { const a = el('a', 'mono sous', dom + '/' + r.slug); a.href = '//' + dom + '/' + r.slug; a.target = '_blank'; a.rel = 'noopener'; nom.appendChild(a); }
+                const [libAcces, clsAcces] = ACCES[r.acces] || [tiret(r.acces), ''];
+                const der = r.derniere ? fmtDate(r.derniere.debut) + ' · ' + r.derniere.participants + ' participant' + (r.derniere.participants > 1 ? 's' : '') + ' · ' + fmtDuree(r.derniere.secondes) : '—';
+                const actions = el('div', 'outils'); actions.style.margin = '0';
+                if (dom && slugOk) {
+                    const c = el('button', 'btn sm', 'Copier le lien'); c.type = 'button';
+                    c.addEventListener('click', async () => { try { await navigator.clipboard.writeText(location.protocol + '//' + dom + '/' + r.slug); toast('Lien copié.'); } catch (e) { toast('Copie impossible : ' + dom + '/' + r.slug); } });
+                    actions.appendChild(c);
+                }
+                if (r.en_cours) {
+                    const b = el('button', 'btn sm danger', 'Clore…'); b.type = 'button';
+                    b.addEventListener('click', () => demander('Clore la réunion « ' + (r.slug || r.nom) + ' » ? Les ' + (r.presents || 0) + ' participant(s) seront déconnectés.', async () => {
+                        const res = await occupe([], () => ecrire('POST', '/clore', { salle: r.salle, confirmer: 'meet' }));
+                        const [ok, msg] = issue(res, 'Réunion close.'); retour('rReunions', ok, msg); if (!DEMO) reunions();
+                    }));
+                    actions.appendChild(b);
+                }
+                return ligne([nom, pill(libAcces, clsAcces), r.proprietaire || '—', fmtDate(r.creee), der,
+                              r.en_cours ? pill('EN COURS · ' + (r.presents || 0), 'ok') : pill('inactive'), actions]);
+            })));
+            annoncer();
+        }
+
+        async function connexions() {
+            const bd = $('lDirect'), bh = $('lHisto');
+            try { await chargerSalles(false); } catch (e) { /* noms de salle abrégés */ }
+            const q = new URLSearchParams({ jours: $('fJours').value }); if ($('fSalle').value) q.set('salle', $('fSalle').value); if ($('fIssue').value) q.set('issue', $('fIssue').value);
+            let d;
+            try { d = await lireActivite('/connexions?' + q.toString(), 'connexions'); } catch (e) { refus(bd, e); refus(bh, e); HISTO = []; annoncer(); return; }
+            const now = Math.floor(Date.now() / 1000);
+            if (!d.en_direct) bd.replaceChildren(el('div', 'vide', 'Direct indisponible' + (d.erreur_direct ? ' : ' + d.erreur_direct : '')));
+            else {
+                const ps = []; (d.en_direct.salles || []).forEach(s => (s.participants || []).forEach(p => ps.push([s, p])));
+                if (!ps.length) bd.replaceChildren(el('div', 'vide', 'Aucune réunion en cours'));
+                else bd.replaceChildren(tableau(['Participant', 'Salle', 'Depuis', 'Appareil', 'Transport', 'Médias'], ps.map(([s, p]) => {
+                    const qui = el('span', '', p.participant + ' '); qui.appendChild(pill(p.compte ? 'compte' : 'invité', p.compte ? 'vi' : ''));
+                    const m = p.medias || {}, med = [m.son && 'son', m.image && 'image', m.ecran && 'écran'].filter(Boolean).join(' · ') || '—';
+                    return ligne([qui, nomSalle(s.salle), p.depuis ? fmtDuree(now - p.depuis) : '—', p.appareil, p.transport ? pill(p.transport, TRANSPORT_PILL[p.transport]) : '—', med]);
+                })));
+            }
+            HISTO = d.historique || [];
+            if (!HISTO.length) bh.replaceChildren(el('div', 'vide', 'Aucune session sur la période'));
+            else bh.replaceChildren(tableau(['Début', 'Durée', 'Participant', 'Salle', 'Appareil', 'Transport', 'Issue'], HISTO.map(h => ligne([
+                fmtDate(h.debut), h.issue === 'en_cours' ? 'en cours' : fmtDuree(h.duree), h.participant, nomSalle(h.salle), h.appareil,
+                h.transport ? pill(h.transport, TRANSPORT_PILL[h.transport]) : '—',
+                pill(h.issue === 'en_cours' ? 'en cours' : tiret(h.motif || h.issue), ISSUES[h.issue])]))));
+            annoncer();
+        }
+        ['fJours', 'fSalle', 'fIssue'].forEach(i => $(i).addEventListener('change', connexions));
+
+        // Export CSV fait ici : rien de plus ne sort de la box. Une cellule qui commencerait une formule de tableur est neutralisée.
+        function cellule(v) {
+            let s = v === null || v === undefined ? '' : String(v);
+            if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+            return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        }
+        $('exportCsv').addEventListener('click', () => {
+            const lignes = [['Début', 'Durée', 'Participant', 'Salle', 'Appareil', 'Transport', 'Issue', 'Motif', 'Pays']].concat(HISTO.map(h => [
+                h.debut ? new Date(h.debut * 1000).toISOString() : '', String(h.duree || 0), h.participant, nomSalle(h.salle), h.appareil, h.transport, h.issue, h.motif, h.pays]));
+            const blob = new Blob(['﻿' + lignes.map(l => l.map(cellule).join(';')).join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+            const a = el('a'); a.href = URL.createObjectURL(blob); a.download = 'visio-connexions.csv'; document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        });
+
+        async function stats() {
+            const box = $('sJours');
+            document.querySelectorAll('[data-periode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.periode === PERIODE)));
+            try { await chargerSalles(false); } catch (e) { /* noms de salle abrégés */ }
+            let d;
+            try { d = await lireActivite('/stats?periode=' + PERIODE, 'stats'); }
+            catch (e) { refus(box, e); ['sReunions', 'sTemps', 'sParticipants', 'sPic', 'sMediane', 'sEchecs'].forEach(i => { $(i).textContent = '—'; }); annoncer(); return; }
+            $('sReunions').textContent = tiret(d.reunions);
+            $('sTemps').textContent = fmtDuree(d.secondes);
+            $('sParticipants').textContent = d.participants ? d.participants.comptes + ' + ' + d.participants.invites : '—';
+            $('sPic').textContent = d.pic ? String(d.pic.nombre) : '—';
+            $('sPicQuand').textContent = d.pic && d.pic.quand ? fmtDate(d.pic.quand) : '—';
+            $('sMediane').textContent = d.mediane === null || d.mediane === undefined ? '—' : fmtDuree(d.mediane);
+            $('sEchecs').textContent = d.echecs + ' / ' + d.sessions;
+            // Sessions par jour ; sur 12 mois, regroupées par mois.
+            let barresJ = (d.par_jour || []).map(j => ({ l: j.jour.slice(8, 10) + '/' + j.jour.slice(5, 7), a: j.abouties, e: j.echecs }));
+            if (PERIODE === '365') {
+                const mois = {}; (d.par_jour || []).forEach(j => { const k = j.jour.slice(5, 7) + '/' + j.jour.slice(2, 4); mois[k] = mois[k] || { l: k, a: 0, e: 0 }; mois[k].a += j.abouties; mois[k].e += j.echecs; });
+                barresJ = Object.values(mois);
+            }
+            const max = Math.max(1, ...barresJ.map(b => b.a + b.e)), ch = el('div', 'jours');
+            ch.setAttribute('role', 'img');
+            const resume = barresJ.filter(b => b.a || b.e).map(b => b.l + ' ' + b.a + ' abouties, ' + b.e + ' échecs').join(' ; ');
+            ch.setAttribute('aria-label', 'Sessions par ' + (PERIODE === '365' ? 'mois' : 'jour') + ' : ' + (resume || 'aucune session'));
+            barresJ.forEach(b => {
+                const j = el('div', 'jour'), pile = el('div', 'pile'), ia = el('i'), ie = el('i');
+                ia.style.height = (100 * b.a / max) + '%'; ia.style.background = 'var(--vert)';
+                ie.style.height = (100 * b.e / max) + '%'; ie.style.background = 'var(--orange)';
+                pile.appendChild(ia); pile.appendChild(ie); j.appendChild(pile); j.appendChild(el('small', '', b.l)); ch.appendChild(j);
+            });
+            box.replaceChildren(ch);
+            barres($('sTransport'), d.transport, null, k => k === 'UDP' ? 'var(--vert)' : k === 'TCP' ? 'var(--orange)' : 'var(--violet)');
+            barres($('sMotifs'), d.motifs, null, k => k === 'aucun chemin média' ? 'var(--orange)' : 'var(--cyan)');
+            barres($('sAppareils'), d.appareils);
+            const parSalle = {}; Object.entries(d.salles || {}).forEach(([k, v]) => { parSalle[nomSalle(k)] = (parSalle[nomSalle(k)] || 0) + v; });
+            barres($('sSalles'), parSalle, fmtDuree, () => 'var(--vert)');
+            annoncer();
+        }
+        document.querySelectorAll('[data-periode]').forEach(b => b.addEventListener('click', () => { PERIODE = b.dataset.periode; stats(); }));
+
         // ----- Onglets -----
-        const TABS = ['tableau', 'media', 'identite', 'journaux'];
+        const TABS = ['tableau', 'reunions', 'connexions', 'stats', 'media', 'identite', 'journaux'];
+        const CHARGEURS = { reunions, connexions, stats };
         function onglet(nom) {
             document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
             TABS.forEach(t => { $('t-' + t).hidden = t !== nom; });
             if (nom === 'journaux') journaux();
+            if (CHARGEURS[nom]) CHARGEURS[nom]();
+            ONGLET = nom;
             annoncer();
         }
         document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
@@ -395,6 +655,12 @@
             if (document.hidden || DEMO || CONFIRM || (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT'))) return;
             charger();
         }, 30000);
+        // Réunions et connexions en direct : relues toutes les 15 s tant que leur onglet est affiché.
+        setInterval(() => {
+            const a = document.activeElement;
+            if (document.hidden || DEMO || CONFIRM || (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT'))) return;
+            if (ONGLET === 'reunions' || ONGLET === 'connexions') CHARGEURS[ONGLET]();
+        }, 15000);
     </script>
 </body>
 </html>

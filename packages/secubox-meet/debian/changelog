@@ -1,3 +1,22 @@
+secubox-meet (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * Panneau d'administration : réunions, connexions, statistiques (ref #3182), maquette validée le
+    2026-10-26. Onglet Réunions : salles de Meet (accès, propriétaire, dernière réunion), état en
+    direct, « Clore… » une réunion en cours (confirmation, journal d'audit). Onglet Connexions :
+    participants en direct (appareil, transport, médias), historique 30 jours filtrable, export
+    CSV (formules neutralisées). Onglet Statistiques : 7 j / 30 j / 12 mois.
+  * Sources : base de Meet en lecture seule (runuser postgres psql dans le conteneur, séparateurs
+    ASCII), API Twirp de LiveKit (jeton HS256 signé par meetctl, root), journal de LiveKit relevé
+    toutes les 5 min (secubox-meet-activite.timer) vers /var/lib/secubox/meet/activite.db,
+    lu en lecture seule par l'API (AppArmor : r seulement).
+  * Vie privée : aucune adresse IP conservée ; compte sous son pseudo, toute autre personne
+    « invité », jamais le nom tapé dans Meet ; le turn_password ne sort pas du contrôleur.
+    Sessions effacées après 30 jours, totaux par jour gardés 12 mois.
+  * meetctl : verbes activite-collecte, en-direct, reunions, clore <salle> ; sudoers étendu aux
+    seuls verbes de l'API. media-expose écrit désormais sa décision au journal d'audit.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 09:58:19 +0100
+
 secubox-meet (0.1.6-1~trixie1) trixie; urgency=medium
 
   * Provisionnement (ref #3154) : la photo des fichiers des services est celle du dernier état APPLIQUÉ, notée

@@ -41,6 +41,27 @@ publication des ports ; `meetctl media-expose` seul donne l'état.
 - Box derrière le maillage : le **maître** relaie les ports publiés (`/var/lib/secubox/ports-publics.d/meet.json`).
 - Box exposée directement : voir #3160.
 
+Chaque ouverture ou fermeture est inscrite au journal d'audit (`/var/log/secubox/audit.log`).
+
+## Réunions, connexions, statistiques (#3182)
+
+Trois onglets de `/meet/`, réservés à l'administrateur :
+
+| Route (`/api/v1/meet/…`) | Contenu |
+|---|---|
+| `GET /reunions` | salles de Meet (accès, propriétaire, création, dernière réunion), état en direct ; cache 30 s |
+| `GET /connexions?jours=1..30&salle=&issue=` | participants en direct (cache 15 s) et historique, une ligne par session |
+| `GET /stats?periode=7\|30\|365` | réunions, temps de visio, participants, pic, médiane, échecs, par jour, transport, motifs, appareils, salles |
+| `POST /clore` `{salle, confirmer: "meet"}` | met fin à une réunion en cours (LiveKit `DeleteRoom`), audité |
+
+- **Relevé** : `secubox-meet-activite.timer` (5 min, root) lance `meetctl activite-collecte` : pseudos des comptes de
+  Meet, puis journal de LiveKit après le dernier curseur, dans `/var/lib/secubox/meet/activite.db` (root:secubox 0640),
+  que l'API lit en lecture seule.
+- **Vie privée** : aucune adresse IP conservée ; un compte apparaît sous son pseudo, toute autre personne « invité » ;
+  le nom tapé dans Meet n'est ni affiché ni gardé. Sessions effacées après 30 jours, totaux par jour gardés 12 mois.
+- **LiveKit** : `meetctl en-direct`, `meetctl reunions` et `meetctl clore <salle>` signent un jeton HS256 avec
+  `/etc/secubox/secrets/meet/livekit-secret` ; l'API n'y a jamais accès.
+
 ## Connexion (OIDC)
 
 Les usagers se connectent par le fournisseur OIDC du Hall (émetteur `https://hall.<domaine>/oidc`).
@@ -84,5 +105,6 @@ l'applique.
 |---|---|
 | `sbin/meetctl` | seule surface privilégiée (sudo `secubox` → `meetctl`) |
 | `lib/meet/` | provisionnement du conteneur |
+| `api/activite.py` | activité de la visio : relevé du journal, en direct, réunions, statistiques |
 | `nginx/` | vhosts `visio.*`, `livekit.*` et routes `/api/v1/meet/`, `/meet/` |
 | `conf/` | `meet.toml.example`, `meet.nft`, `meet.version` |
