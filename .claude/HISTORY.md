@@ -24,9 +24,21 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
      à tort, retour, LAN perdu. Contournement : drop-in Unbound posé et Unbound redémarré avant l'application.
   2. `networkctl reconfigure br-lan` après `reload` → « Failed to create netdev: File exists », ports bloqués en
      `configuring`. Contournement : `ip link delete br-lan` + `networkctl reload`.
-- **Restent** : 1.4.1 (test du retour automatique), gk1 en pilote (192.168.43.1/24, retirer d'abord `br-lan` de son netplan),
-  essai de redémarrage de gk2, gk4 à renouveler (ancien bail 192.168.255.191). Suites : panneau (#3190), routage inter-LAN
-  par le maillage (#3196).
+- **1.4.1** (PR #3198) : Unbound attendu jusqu'à un état actif nouveau (échéance = délais d'arrêt + démarrage de l'unité,
+  bornée 180–900 s) ; jamais de `reconfigure br-lan`, pont supprimé avant `reload` quand nos fichiers changent ou que les
+  ports ne lui sont pas attachés, attachement vérifié (≤ 30 s) à l'application comme au retour ; le retour d'une bascule
+  échouée ne relance Unbound que si la bascule l'a fait. **1.4.2** (PR #3199) : le postinst relance `secubox-lan-dhcp`
+  activé (la mise à jour 1.4.0 → 1.4.1 l'avait arrêté sans le relancer). gk2 et gk1 en 1.4.2, DHCP actif après mise à jour.
+- **Retour automatique validé sur gk2** : réapplication avec bail 6 h non confirmée → à 16:28:40 le minuteur restaure la
+  configuration confirmée (12 h), pont et ports intacts, Unbound non relancé (aucune coupure DNS), PC jamais coupé.
+- **gk1 en pilote** : `br-lan` retiré de `00-secubox.yaml` (copie `.avant-3189`, `netplan generate` seul, fichier `eth2`
+  identique, empreinte `ad8c9ec5…`), mode routeur 192.168.43.1/24 appliqué en 13 s et confirmé (aucun câble sur ses ports
+  LAN) ; `lo` /32, géo, NAT et refus WAN → LAN en place, aucun refus AppArmor.
+- **Vu en passant** : depuis le nouveau LAN, SSH vers la box est refusé par le pare-feu de base (SSH limité à 10/8 et
+  192.168.1.0/24) ; le PC, Wi-Fi coupé, passait par le LAN — accès SSH par rebond via gk1. `apt-publier.sh` aussi (enveloppes
+  `ssh`/`scp` à `ProxyJump` dans le bloc-notes de session).
+- **Restent** : essai de redémarrage de gk2 et gk1 (persistance), gk4 à renouveler (ancien bail 192.168.255.191). Suites :
+  panneau (#3190), routage inter-LAN par le maillage (#3196).
 
 ## 2026-10-26 — WAF : signalisation LiveKit de la Visio exemptée de credential_harvest (ref #3193)
 
