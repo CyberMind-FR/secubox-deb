@@ -40,13 +40,25 @@
         "^/cron\\.php",
         "^/status\\.php"
       ]
+    },
+    "livekit": {
+      "_note": "#3193 — signalisation LiveKit de la Visio (secubox-meet). Le client ouvre /rtc/v1?access_token=<JWT> (WebSocket) puis /rtc/v1/validate?access_token=<JWT> : le jeton dans l'URL est le protocole LiveKit, pas une fuite. credential_harvest (cred-003) y est supprime sur CES SEULS chemins (le chemin est compare sans la requete) ; partout ailleurs, et sur tout autre vhost, un jeton dans l'URL reste une alerte. Ne jamais ajouter credential_harvest a la liste globale.",
+      "legit_paths": [
+        "^/rtc(/v1)?(/validate)?$"
+      ],
+      "suppress_categories": [
+        "credential_harvest"
+      ]
     }
   },
   "vhosts": {
     "gitea.gk2.secubox.in": "gitea",
     "git.gk2.secubox.in": "gitea",
     "peertube.gk2.secubox.in": "peertube",
-    "nc.gk2.secubox.in": "nextcloud"
+    "nc.gk2.secubox.in": "nextcloud",
+    "livekit.gk1.secubox.in": "livekit",
+    "livekit.gk2.secubox.in": "livekit",
+    "livekit.gk3.secubox.in": "livekit"
   },
   "suppress_categories": [
     "scanners",

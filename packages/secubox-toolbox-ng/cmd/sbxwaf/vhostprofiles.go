@@ -28,6 +28,15 @@
 // « Autoadaptatif » : le profil défini une fois, chaque vhost de ce service
 // hérite automatiquement des bonnes exceptions, sans réécrire de règle.
 //
+// CATÉGORIES PROPRES À UN SERVICE (#3193). Un service peut ajouter, pour SES
+// seuls `legit_paths`, des catégories à la liste globale (`suppress_categories`
+// dans son profil). Cas d'origine : la signalisation LiveKit de la Visio passe
+// son jeton dans l'URL (`/rtc/v1?access_token=<JWT>`) par conception du
+// protocole ; cred-003 (credential_harvest) la prenait pour une moisson
+// d'identifiants et le ban automatique coupait toute la box. La liste GLOBALE ne
+// gagne pas credential_harvest : un jeton dans l'URL reste une alerte partout
+// ailleurs, y compris sur les chemins légitimes des autres services.
+//
 // Opt-in : sans `--vhost-profiles`, le récepteur est nil et `doitSupprimer`
 // rend toujours false — la Phase F est strictement inchangée.
 package main
@@ -46,6 +55,13 @@ import (
 type serviceProfile struct {
 	nom   string
 	legit []*regexp.Regexp
+	// propres : catégories supprimables pour CE service seulement (#3193),
+	// en plus de la liste globale. Nil si le service n'en déclare aucune.
+	propres map[string]bool
+	// exclues : union globale ∪ propres, précalculée au chargement pour la
+	// ré-vérification anti-contrebande (immuable ensuite). Nil si le service
+	// n'a pas de catégorie propre : la liste globale s'applique telle quelle.
+	exclues map[string]bool
 }
 
 // VhostProfiles porte la table hôte→service, les profils compilés et les
@@ -62,6 +78,10 @@ type VhostProfiles struct {
 type fichierProfils struct {
 	Services map[string]struct {
 		LegitPaths []string `json:"legit_paths"`
+		// SuppressCategories (#3193) : catégories supprimables sur les seuls
+		// legit_paths de CE service. Clé absente = aucune (fichier antérieur
+		// valide tel quel).
+		SuppressCategories []string `json:"suppress_categories"`
 	} `json:"services"`
 	Vhosts             map[string]string `json:"vhosts"`
 	SuppressCategories []string          `json:"suppress_categories"`
@@ -93,6 +113,9 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 		supprimables: make(map[string]bool, len(f.SuppressCategories)),
 		antirobots:   make(map[string]bool, len(f.AntiRobots)),
 	}
+	for _, cat := range f.SuppressCategories {
+		vp.supprimables[cat] = true
+	}
 	for nom, s := range f.Services {
 		prof := serviceProfile{nom: nom}
 		for _, motif := range s.LegitPaths {
@@ -101,6 +124,17 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 				return nil, fmt.Errorf("service %q : motif %q invalide : %w", nom, motif, err)
 			}
 			prof.legit = append(prof.legit, re)
+		}
+		if len(s.SuppressCategories) > 0 {
+			prof.propres = make(map[string]bool, len(s.SuppressCategories))
+			prof.exclues = make(map[string]bool, len(vp.supprimables)+len(s.SuppressCategories))
+			for cat := range vp.supprimables {
+				prof.exclues[cat] = true
+			}
+			for _, cat := range s.SuppressCategories {
+				prof.propres[cat] = true
+				prof.exclues[cat] = true
+			}
 		}
 		vp.services[nom] = prof
 	}
@@ -111,9 +145,6 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 			return nil, fmt.Errorf("vhost %q renvoie au service inconnu %q", hote, service)
 		}
 		vp.hoteService[normaliserHote(hote)] = service
-	}
-	for _, cat := range f.SuppressCategories {
-		vp.supprimables[cat] = true
 	}
 	// Un hôte coché anti-robots n'a PAS besoin d'un profil de service : on
 	// peut vouloir épargner un site vitrine sans lui décrire de chemins
@@ -136,8 +167,8 @@ func normaliserHote(host string) string {
 	return host
 }
 
-// catSupprimable dit si une catégorie touchée peut être annulée sur un chemin
-// légitime. Récepteur nil-safe : Phase G est opt-in.
+// catSupprimable dit si une catégorie touchée figure dans la liste GLOBALE des
+// catégories supprimables. Récepteur nil-safe : Phase G est opt-in.
 func (v *VhostProfiles) catSupprimable(cat string) bool {
 	if v == nil {
 		return false
@@ -145,6 +176,25 @@ func (v *VhostProfiles) catSupprimable(cat string) bool {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	return v.supprimables[cat]
+}
+
+// catSupprimablePour dit si une catégorie peut être annulée sur cet hôte :
+// liste globale, OU catégorie propre au service que fait tourner CET hôte
+// (#3193). Hôte inconnu → liste globale seule. Nil-safe.
+func (v *VhostProfiles) catSupprimablePour(host, cat string) bool {
+	if v == nil {
+		return false
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	if v.supprimables[cat] {
+		return true
+	}
+	service, ok := v.hoteService[normaliserHote(host)]
+	if !ok {
+		return false
+	}
+	return v.services[service].propres[cat]
 }
 
 // estLegitime dit si le service qui tourne sur cet hôte déclare ce chemin comme
@@ -171,12 +221,24 @@ func (v *VhostProfiles) estLegitime(host, chemin string) bool {
 	return false
 }
 
-// categoriesSupprimables rend l'ensemble des catégories supprimables, pour la
-// ré-vérification de sécurité côté détection (voir Rules.MatchExcept). Le set
-// est immuable après chargement ; on rend la référence. Nil-safe.
-func (v *VhostProfiles) categoriesSupprimables() map[string]bool {
+// categoriesSupprimablesPour rend l'ensemble des catégories supprimables POUR
+// CET HÔTE — liste globale ∪ catégories propres à son service (#3193) — pour la
+// ré-vérification de sécurité côté détection (voir Rules.MatchExcept).
+//
+// PAR HÔTE, et c'est la garde : une union de TOUS les services ferait exclure
+// credential_harvest (propre à livekit) de la ré-vérification d'un autre vhost,
+// et l'exemption de livekit affaiblirait la détection partout. Les ensembles
+// sont immuables après chargement ; on rend la référence. Nil-safe.
+func (v *VhostProfiles) categoriesSupprimablesPour(host string) map[string]bool {
 	if v == nil {
 		return nil
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	if service, ok := v.hoteService[normaliserHote(host)]; ok {
+		if ex := v.services[service].exclues; ex != nil {
+			return ex
+		}
 	}
 	return v.supprimables
 }
@@ -194,9 +256,10 @@ func (v *VhostProfiles) antiRobots(host string) bool {
 }
 
 // doitSupprimer combine les deux gardes : on n'annule un déclenchement que si
-// la catégorie est une empreinte de reconnaissance ET que le chemin est
-// légitime pour le service de ce vhost. Point d'intégration unique dans le
-// chemin de détection. Nil-safe (opt-in).
+// la catégorie est supprimable POUR CET HÔTE (liste globale ou catégorie propre
+// à son service, #3193) ET que le chemin est légitime pour le service de ce
+// vhost. Point d'intégration unique dans le chemin de détection. Nil-safe
+// (opt-in).
 func (v *VhostProfiles) doitSupprimer(host, chemin, cat string) bool {
-	return v != nil && v.catSupprimable(cat) && v.estLegitime(host, chemin)
+	return v != nil && v.catSupprimablePour(host, cat) && v.estLegitime(host, chemin)
 }

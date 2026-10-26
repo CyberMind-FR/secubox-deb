@@ -100,3 +100,116 @@ func TestChargerRejetteRegexInvalide(t *testing.T) {
 		t.Fatal("une regex invalide doit faire échouer le chargement, pas passer en silence")
 	}
 }
+
+// #3193 : la signalisation LiveKit de la Visio passe son jeton dans l'URL
+// (`/rtc/v1?access_token=<JWT>`) — c'est le protocole, pas une fuite. La règle
+// cred-003 (credential_harvest, critique) la prenait pour une moisson
+// d'identifiants et le ban automatique coupait toute la box au téléphone du
+// propriétaire. Parade : `suppress_categories` PAR SERVICE, appliqué aux seuls
+// `legit_paths` de CE service. La liste globale ne gagne pas credential_harvest.
+const profilsLivekitTest = `{
+  "services": {
+    "livekit": {
+      "_note": "signalisation LiveKit : jeton dans l'URL par conception",
+      "legit_paths": ["^/rtc(/v1)?(/validate)?$"],
+      "suppress_categories": ["credential_harvest"]
+    },
+    "gitea": { "legit_paths": ["^/api/v1/"] }
+  },
+  "vhosts": {
+    "livekit.gk1.secubox.in": "livekit",
+    "gitea.gk2.secubox.in": "gitea"
+  },
+  "suppress_categories": ["scanners", "recon_crawler", "product_absent_probes"]
+}`
+
+func profilsLivekit(t *testing.T) *VhostProfiles {
+	t.Helper()
+	vp, err := chargerVhostProfilesDepuis([]byte(profilsLivekitTest))
+	if err != nil {
+		t.Fatalf("chargement des profils livekit : %v", err)
+	}
+	return vp
+}
+
+func TestDoitSupprimerCategorieParService_3193(t *testing.T) {
+	vp := profilsLivekit(t)
+	cas := []struct {
+		nom, host, chemin, cat string
+		want                   bool
+	}{
+		{"signalisation livekit", "livekit.gk1.secubox.in", "/rtc/v1", "credential_harvest", true},
+		{"validation livekit", "livekit.gk1.secubox.in", "/rtc/v1/validate", "credential_harvest", true},
+		{"ancienne signalisation sans version", "livekit.gk1.secubox.in", "/rtc", "credential_harvest", true},
+		{"host avec port", "LiveKit.gk1.secubox.in:443", "/rtc/v1", "credential_harvest", true},
+		// La liste GLOBALE reste valable pour ce service.
+		{"catégorie globale sur chemin livekit", "livekit.gk1.secubox.in", "/rtc/v1", "scanners", true},
+		// Hors des legit_paths du service : la règle tire.
+		{"chemin hors profil dans livekit", "livekit.gk1.secubox.in", "/admin", "credential_harvest", false},
+		{"préfixe seulement", "livekit.gk1.secubox.in", "/rtc/v1/autre", "credential_harvest", false},
+		// Un autre vhost (hall) : aucune exemption.
+		{"même chemin sur le hall", "hall.gk2.secubox.in", "/rtc/v1", "credential_harvest", false},
+		// La catégorie propre à livekit ne fuit pas vers un autre service,
+		// même sur un chemin légitime DE CE service.
+		{"pas de fuite vers gitea", "gitea.gk2.secubox.in", "/api/v1/repos", "credential_harvest", false},
+		// Une injection n'est jamais supprimée.
+		{"sqli sur chemin livekit", "livekit.gk1.secubox.in", "/rtc/v1", "sqli", false},
+	}
+	for _, c := range cas {
+		t.Run(c.nom, func(t *testing.T) {
+			if got := vp.doitSupprimer(c.host, c.chemin, c.cat); got != c.want {
+				t.Fatalf("doitSupprimer(%q,%q,%q)=%v ; attendu %v",
+					c.host, c.chemin, c.cat, got, c.want)
+			}
+		})
+	}
+}
+
+func TestListeGlobaleSansCategorieDeService_3193(t *testing.T) {
+	vp := profilsLivekit(t)
+	if vp.catSupprimable("credential_harvest") {
+		t.Fatal("credential_harvest déclarée par UN service ne doit pas entrer dans la liste globale")
+	}
+}
+
+// La ré-vérification anti-contrebande (main.go, MatchDetail avec exclusion)
+// doit exclure les catégories supprimables POUR CET HÔTE : l'exemption de
+// livekit ne doit jamais affaiblir la détection des autres vhosts.
+func TestCategoriesSupprimablesPourHote_3193(t *testing.T) {
+	vp := profilsLivekit(t)
+	lk := vp.categoriesSupprimablesPour("livekit.gk1.secubox.in:443")
+	for _, cat := range []string{"credential_harvest", "scanners", "recon_crawler", "product_absent_probes"} {
+		if !lk[cat] {
+			t.Errorf("livekit : %q devrait être exclue de la ré-vérification", cat)
+		}
+	}
+	for _, host := range []string{"gitea.gk2.secubox.in", "hall.gk2.secubox.in"} {
+		set := vp.categoriesSupprimablesPour(host)
+		if set["credential_harvest"] {
+			t.Errorf("%s : credential_harvest ne doit pas être exclue (fuite de l'exemption livekit)", host)
+		}
+		if !set["scanners"] {
+			t.Errorf("%s : la liste globale doit rester exclue", host)
+		}
+	}
+	var nul *VhostProfiles
+	if nul.categoriesSupprimablesPour("livekit.gk1.secubox.in") != nil {
+		t.Fatal("un profil nil ne rend aucune catégorie")
+	}
+}
+
+func TestServiceSansLegitPathsNeSupprimeRien_3193(t *testing.T) {
+	// Un service qui supprime une catégorie SANS déclarer de chemin légitime
+	// ne supprime rien (estLegitime faux) : le chargement l'accepte, la
+	// détection reste entière. On le fige pour qu'un refactor n'en fasse pas
+	// une exemption sur TOUT le vhost.
+	vp, err := chargerVhostProfilesDepuis([]byte(`{
+	  "services": {"lk": {"suppress_categories": ["credential_harvest"]}},
+	  "vhosts": {"lk.example": "lk"}, "suppress_categories": []}`))
+	if err != nil {
+		t.Fatalf("chargement : %v", err)
+	}
+	if vp.doitSupprimer("lk.example", "/rtc/v1", "credential_harvest") {
+		t.Fatal("sans legit_paths, aucune suppression")
+	}
+}
