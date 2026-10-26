@@ -43,8 +43,8 @@ Configuration file: `/etc/secubox/netmodes.toml`
 
 ## Mode routeur durable (MOCHAbin)
 
-Depuis 1.4.0 (#3189). Le LAN du MOCHAbin (pont `br-lan` sur `lan0`..`lan3`, DHCP, DNS, NAT) est posé par
-systemd-networkd, dnsmasq, Unbound et nftables, sans netplan : aucune commande ne relance ni ne reconfigure une
+Depuis 1.4.0 (#3189), corrigé en 1.4.1. Le LAN du MOCHAbin (pont `br-lan` sur `lan0`..`lan3`, DHCP, DNS, NAT)
+est posé par systemd-networkd, dnsmasq, Unbound et nftables, sans netplan : aucune commande ne relance ni ne reconfigure une
 interface `eth*` (le WAN mvpp2 bloque son PHY si son lien est relancé à distance). Sur MOCHAbin, les anciennes routes
 netplan (`/apply_mode`, `/auto_apply`, `/rollback`…) répondent 409.
 
@@ -87,6 +87,29 @@ si `net.ipv4.ip_forward` ne vaut pas 1, si `dnsmasq.service` est actif, si `/etc
 Unbound n'est redémarré (coupure du DNS de toute la box) que si son drop-in change ; après la relance du DHCP,
 dnsmasq doit être vu actif deux fois de suite (5 s au plus), sinon la bascule est défaite. Un `routeur.toml` illisible
 (édité à la main, non UTF-8) rend l'état `config_invalide` et n'empêche jamais le retour.
+
+**Pont `br-lan` (1.4.1).** networkd ne crée, puis n'asservit ses ports, qu'à un netdev qu'il a créé lui-même : un
+`br-lan` déjà là (pont fait main, ancien netdev) donne « Failed to create netdev: File exists » et des ports
+« configuring » à jamais. Quand les fichiers du pont changent (ou qu'un pont fait main est remplacé), le contrôleur
+supprime `br-lan`, et lui seul, avant `networkctl reload`, puis reconfigure les ports seuls (`networkctl reconfigure
+lan0 …`, jamais `br-lan`). Il relit ensuite le résultat, toutes les 2 s et 30 s au plus : chaque port a `br-lan` pour
+maître (avec ou sans porteuse), `br-lan` est UP et porte l'adresse configurée ; sinon la bascule est défaite. Au retour,
+même règle ; un pont fait main que networkd ne saurait recréer (seul un `.network` le vise) est gardé, et son absence
+rend le retour incomplet.
+
+**Unbound lent (1.4.1).** Sur gk2, Unbound met jusqu'à 115 s à s'arrêter et 38 à 112 s à démarrer. Il est relancé par
+`systemctl restart --no-block` puis attendu jusqu'à sa vraie issue (relevé toutes les 5 s) : actif et nouvellement
+démarré (`ActiveEnterTimestampMonotonic`), `failed` après le début du nouveau démarrage, ou délai dépassé. Le délai
+vient de l'unité : `TimeoutStopUSec` + `TimeoutStartUSec` + 30 s, borné à [180 s, 900 s] (illisible ou `infinity` :
+900 s). Même attente au retour et au démarrage ; `secubox-netmodes-retour-boot.service` a `TimeoutStartSec=1200`.
+
+**API et Unbound lent.** L'API attend le contrôleur 150 s, le relais de l'agrégateur 200 s. Sur une box où Unbound
+redémarre lentement (gk2), `POST /routeur/appliquer` ou `/routeur/retour` peut répondre 502 ou 504 alors que la bascule
+se poursuit : seul le client `sudo` est tué au délai, le contrôleur ignore TERM, HUP et INT pendant la bascule (et
+survit à un redémarrage de l'API, `KillMode=process`) ; il la défait lui-même si une étape échoue, et la garde de
+3 minutes, armée à sa fin, la protège ensuite. Relire alors `GET /routeur/etat` (`en_attente` : confirmer depuis la
+nouvelle adresse). La voie prise en charge sur ces box est la console (`netmodesctl routeur-appliquer <acteur>`) ou le
+panneau asynchrone à venir (#3190) ; l'API n'est pas rendue synchrone longue.
 
 Chaque décision est écrite dans `/var/log/secubox/audit.log` (une ligne JSON, `"module": "netmodes"`).
 

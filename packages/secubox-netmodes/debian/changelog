@@ -1,3 +1,25 @@
+secubox-netmodes (1.4.1-1~trixie1) trixie; urgency=medium
+
+  * Unbound lent (ref #3189, gk2 : arrêt 115 s, démarrage 38 à 112 s) : le client `systemctl restart unbound.service`,
+    tué à 120 s, déclarait en échec une bascule qui aboutissait, puis le retour aussi (retour INCOMPLET). Unbound est
+    relancé par `systemctl restart --no-block` et son issue réelle attendue (relevé toutes les 5 s) : actif ET
+    nouvellement démarré (ActiveEnterTimestampMonotonic), « failed » après le début du nouveau démarrage, ou délai
+    déduit de l'unité (TimeoutStopUSec + TimeoutStartUSec + 30 s, borné à [180 s, 900 s]). Même attente à la bascule,
+    au retour et au démarrage ; verrou Unbound tenu tout du long ; DHCP et nginx toujours sans attente au démarrage.
+  * secubox-netmodes-retour-boot.service (ref #3189) : TimeoutStartSec=1200 (verrou 60 s, Unbound 900 s au pire, reste).
+  * Pont br-lan (ref #3189, gk2) : `networkctl reconfigure br-lan` après la création du netdev donnait « Failed to
+    create netdev: File exists », ports « configuring » à jamais, pont DOWN, et la bascule était déclarée réussie.
+    Jamais plus `reconfigure br-lan` : `ip link delete br-lan` (br-lan seul) avant `networkctl reload` quand les
+    fichiers du pont changent ou qu'un pont fait main est remplacé, puis `networkctl reconfigure` des ports seuls ;
+    résultat relu (ports asservis à br-lan, porteuse ou non ; br-lan UP avec son adresse ; 30 s au plus), sinon échec
+    d'étape et retour automatique. Au retour, même règle ; un pont fait main que networkd ne peut recréer est gardé,
+    son absence signalée.
+  * README (ref #3189) : sur une box où Unbound redémarre lentement, une application par l'API peut répondre 502/504
+    alors que la bascule se poursuit sous la garde de 3 minutes ; la console (netmodesctl) ou le panneau asynchrone
+    (#3190) est la voie prise en charge.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 15:30:00 +0100
+
 secubox-netmodes (1.4.0-1~trixie1) trixie; urgency=medium
 
   * Mode routeur durable du MOCHAbin (ref #3189), sans netplan ni relance d'eth* : configuration validée
