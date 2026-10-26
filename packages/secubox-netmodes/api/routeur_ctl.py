@@ -74,6 +74,14 @@ MARGE_UNBOUND = 30.0
 DELAI_UNBOUND_MIN = 180.0
 DELAI_UNBOUND_MAX = 900.0
 PREFIXE_TEMPORAIRE = "sbx-lan-temporaire"
+# networkd ne crée, puis n'asservit ses ports, qu'à un netdev qu'il a créé lui-même : un br-lan déjà là (pont fait main,
+# ou netdev d'avant) donne « br-lan: Failed to create netdev: File exists », ports « configuring » à jamais (gk2,
+# 2026-10-26). br-lan, et lui seul, est supprimé avant `networkctl reload` quand les fichiers du pont changent ; jamais
+# `networkctl reconfigure br-lan`. Le résultat est relu toutes les PAUSE_PONT s, DELAI_PONT s au plus.
+PONT = ("netdev", "pont", "ports")                         # clés de CHEMINS lues par networkd pour br-lan
+SUPPRIMER_PONT = ["ip", "link", "delete", "br-lan"]
+DELAI_PONT = 30.0
+PAUSE_PONT = 2.0
 ADRESSE_GESTION = IPv4Address("192.168.255.1")              # HAProxy :9443 et TURN y écoutent
 ACTEUR = re.compile(r"[A-Za-z0-9._@-]{1,64}")
 GERES = (*CHEMINS.values(), TOML, ANCIEN_PONT)
@@ -303,7 +311,8 @@ def _adresses_pont(ctx: Contexte) -> list[IPv4Interface]:
         return []
 
 
-def _network_de_br_lan(texte: str) -> bool:
+def _network_de_br_lan(texte: str, visee: str = "Match") -> bool:
+    """`Name=` de la section visée ([Match] d'un .network, [NetDev] d'un .netdev) nomme br-lan."""
     section = None
     for brute in texte.splitlines():
         ligne = brute.strip()
@@ -311,7 +320,7 @@ def _network_de_br_lan(texte: str) -> bool:
             continue
         if ligne.startswith("[") and ligne.endswith("]"):
             section = ligne[1:-1].strip()
-        elif section == "Match" and "=" in ligne:
+        elif section == visee and "=" in ligne:
             cle, valeur = ligne.split("=", 1)
             if cle.strip() == "Name" and "br-lan" in valeur.split():
                 return True
@@ -342,13 +351,74 @@ def _refus_ancien_pont(texte: str) -> Refus | None:
                  "le retirer d'abord")
 
 
-def _pont_declare(ctx: Contexte) -> bool:
+def _pont_declare(ctx: Contexte, extension: str = "network") -> bool:
+    """Un .network (ou, extension="netdev", un .netdev) de networkd vise br-lan."""
     for dossier in DOSSIERS_NETWORKD:
         d = _p(ctx, dossier)
-        for f in sorted(d.glob("*.network")) if d.is_dir() else []:
-            if _network_de_br_lan(f.read_text(encoding="utf-8", errors="replace")):
+        for f in sorted(d.glob(f"*.{extension}")) if d.is_dir() else []:
+            if _network_de_br_lan(f.read_text(encoding="utf-8", errors="replace"),
+                                  "NetDev" if extension == "netdev" else "Match"):
                 return True
     return False
+
+
+def _pont_existe(ctx: Contexte) -> bool:
+    return ctx.executer(["ip", "link", "show", "dev", "br-lan"]).returncode == 0
+
+
+def _json_liens(r: subprocess.CompletedProcess) -> list[dict]:
+    """Sortie de `ip -j` : les objets non vides (`ip -4` rend {} pour un lien sans IPv4) ; illisible : aucun."""
+    if r.returncode != 0:
+        return []
+    try:
+        liens = json.loads(r.stdout or "[]")
+    except ValueError:
+        return []
+    return [lien for lien in liens if isinstance(lien, dict) and lien] if isinstance(liens, list) else []
+
+
+def _manque_au_pont(ctx: Contexte, cfg: ConfigRouteur) -> list[str]:
+    """Ce qui manque encore au pont, relu (jamais déduit des codes de retour de networkctl) ; vide : prêt. Chaque port
+    doit avoir br-lan pour maître, porteuse ou non ; br-lan doit être UP et porter l'adresse configurée."""
+    manque = []
+    pont = _json_liens(ctx.executer(["ip", "-j", "-4", "addr", "show", "dev", "br-lan"]))
+    if not pont and not _pont_existe(ctx):
+        return ["br-lan absent"]
+    adresses = set()
+    for lien in pont:
+        for a in lien.get("addr_info") or []:
+            if isinstance(a, dict) and a.get("family") == "inet":
+                try:
+                    adresses.add(IPv4Interface(f"{a['local']}/{a['prefixlen']}"))
+                except (KeyError, ValueError):
+                    continue
+    if cfg.adresse not in adresses:
+        manque.append(f"{cfg.adresse} absente de br-lan")
+    elif not any("UP" in (lien.get("flags") or []) for lien in pont):
+        manque.append("br-lan n'est pas UP")
+    asservis = {lien.get("ifname") for lien in _json_liens(ctx.executer(["ip", "-j", "link", "show", "master", "br-lan"]))
+                if lien.get("master") == "br-lan"}
+    for port in cfg.ports:
+        if port in asservis:
+            continue
+        lien = next(iter(_json_liens(ctx.executer(["ip", "-j", "link", "show", "dev", port]))), {})
+        if lien.get("master") == "br-lan":                  # asservi entre les deux relevés
+            continue
+        porteuse = "LOWER_UP" in (lien.get("flags") or [])
+        manque.append(f"{port} non asservi à br-lan ({'porteuse présente' if porteuse else 'sans porteuse'})")
+    return manque
+
+
+def _attendre_pont(ctx: Contexte, cfg: ConfigRouteur) -> None:
+    limite = ctx.monotone() + DELAI_PONT
+    while True:
+        manque = _manque_au_pont(ctx, cfg)
+        if not manque:
+            return
+        if ctx.monotone() >= limite:
+            raise Echec(f"br-lan n'est pas prêt après {DELAI_PONT:g} s : {' ; '.join(manque)} ; networkd n'a pas créé "
+                        f"son pont ou pas asservi ses ports (networkctl status br-lan {' '.join(cfg.ports)})")
+        ctx.attendre(PAUSE_PONT)
 
 
 def _supprimer_regles(ctx: Contexte, prefixe: str) -> None:
@@ -501,18 +571,25 @@ def _restaurer(ctx: Contexte, nom: str) -> tuple[list[str], list[str]]:
     return fichiers.restaurer(_p(ctx, SAUVEGARDES) / nom, _geres(ctx), MODES, ctx.racine, STRICTS, NEUTRES)
 
 
-def _contenu_unbound(ctx: Contexte) -> object:
-    """Drop-in Unbound du LAN (None : absent). Illisible : une sentinelle neuve, jamais égale, qui force le redémarrage."""
+def _contenu(ctx: Contexte, cle: str) -> object:
+    """Fichier rendu `cle` tel que posé (None : absent). Illisible : une sentinelle neuve, jamais égale, qui force le
+    redémarrage d'Unbound ou la recréation du pont."""
     try:
-        return fichiers.lire(_p(ctx, CHEMINS["unbound"]))
+        return fichiers.lire(_p(ctx, CHEMINS[cle]))
     except OSError:
         return object()
 
 
-def _poser(ctx: Contexte, cfg: ConfigRouteur, rendu: dict[str, str], geo: bool) -> bool:
-    """Pose les fichiers rendus ; renvoie True si le drop-in Unbound change, seul cas où Unbound doit redémarrer
-    (un redémarrage coupe le DNS de toute la box)."""
-    unbound_change = _contenu_unbound(ctx) != rendu["unbound"].encode("utf-8")
+def _contenus_pont(ctx: Contexte) -> list[object]:
+    return [_contenu(ctx, cle) for cle in PONT]
+
+
+def _poser(ctx: Contexte, cfg: ConfigRouteur, rendu: dict[str, str], geo: bool) -> tuple[bool, bool]:
+    """Pose les fichiers rendus. Renvoie (unbound_change, pont_change) : Unbound ne redémarre (coupure du DNS de toute
+    la box) que si son drop-in change ; br-lan n'est supprimé puis recréé par networkd (coupure du LAN) que si les
+    fichiers du pont changent ou si l'ancien pont fait main était déclaré."""
+    unbound_change = _contenu(ctx, "unbound") != rendu["unbound"].encode("utf-8")
+    pont_change = _contenus_pont(ctx) != [rendu[cle].encode("utf-8") for cle in PONT]
     for cle, chemin in CHEMINS.items():
         if cle != "geo" or geo:
             fichiers.ecrire(_p(ctx, chemin), rendu[cle], 0o644, ctx.racine if chemin in STRICTS else None)
@@ -524,7 +601,8 @@ def _poser(ctx: Contexte, cfg: ConfigRouteur, rendu: dict[str, str], geo: bool) 
         if refus is not None:                               # vérifié aux refus préalables : changé depuis
             raise refus
         ancien.unlink()                                     # sa copie est dans la sauvegarde
-    return unbound_change
+        pont_change = True                                  # pont fait main : networkd doit créer le sien
+    return unbound_change, pont_change
 
 
 def _valider(ctx: Contexte, geo: bool) -> None:
@@ -561,10 +639,13 @@ def _reprendre_lan_temporaire(ctx: Contexte, cfg: ConfigRouteur) -> None:
         raise Echec(f"« {' '.join(argv)} » a échoué (code {r.returncode}) : {_sortie(r)}")
 
 
-def _basculer(ctx: Contexte, cfg: ConfigRouteur, geo: bool, unbound_change: bool) -> None:
+def _basculer(ctx: Contexte, cfg: ConfigRouteur, geo: bool, unbound_change: bool, pont_change: bool) -> None:
     nft = str(_p(ctx, CHEMINS["nft"]))
-    _exiger(ctx, ["networkctl", "reload"])                                       # 7
-    _exiger(ctx, ["networkctl", "reconfigure", "br-lan", *cfg.ports])
+    if pont_change and _pont_existe(ctx):                                        # 7 : networkd n'asservit qu'à
+        _exiger(ctx, SUPPRIMER_PONT)                                             # son propre netdev (br-lan seul)
+    _exiger(ctx, ["networkctl", "reload"])                                       # crée br-lan depuis notre .netdev
+    _exiger(ctx, ["networkctl", "reconfigure", *cfg.ports])                      # les ports, jamais br-lan
+    _attendre_pont(ctx, cfg)                                                     # résultat relu, pas supposé
     _reprendre_lan_temporaire(ctx, cfg)                                          # 8
     _supprimer_regles(ctx, COMMENTAIRE_NFT)                                      # 9
     _exiger(ctx, ["nft", "-f", nft])
@@ -619,13 +700,13 @@ def _appliquer(ctx: Contexte, cfg_dict: dict, acteur: str) -> None:
         if not geo:
             _auditer(ctx, "geo-absente", acteur, f"{DOSSIER_GEO} absent : fragment géo non posé, nginx inchangé")
         erreurs: list[str] = []
-        unbound_change = True
+        unbound_change = pont_change = True
         try:
             # garde armée avant le premier fichier géré : une coupure d'ici à la fin revient au démarrage
             _ecrire_etat(ctx, "en_attente", acteur, nom)
             with _verrou_unbound(ctx):
                 try:
-                    unbound_change = _poser(ctx, cfg, rendu, geo)                # 5
+                    unbound_change, pont_change = _poser(ctx, cfg, rendu, geo)   # 5
                     _valider(ctx, geo)                                           # 6
                 except BaseException:
                     erreurs += _restaurer(ctx, nom)[1]                           # encore sous le verrou Unbound
@@ -642,7 +723,7 @@ def _appliquer(ctx: Contexte, cfg_dict: dict, acteur: str) -> None:
                 raise Echec(f"{exc} ; {suite}") from exc
             raise
         try:
-            _basculer(ctx, cfg, geo, unbound_change)                             # 7 à 13
+            _basculer(ctx, cfg, geo, unbound_change, pont_change)                # 7 à 13
         except BaseException as exc:                    # même une exception imprévue défait la bascule
             _auditer(ctx, "appliquer-echec", acteur, f"{_texte(exc)} ; retour à la sauvegarde {nom}")
             erreurs = _retour(ctx, "echec", nom)
@@ -681,12 +762,23 @@ def confirmer(ctx: Contexte, acteur: str) -> dict:
     return etat(ctx)
 
 
-def _retour_reseau(ctx: Contexte, ports: tuple[str, ...]) -> None:
+def _retour_reseau(ctx: Contexte, ports: tuple[str, ...], pont_change: bool) -> None:
+    """Jamais `networkctl reconfigure br-lan`. Un .netdev déclare encore br-lan et ses fichiers ont changé : br-lan est
+    supprimé avant reload, networkd le recrée et y asservit les ports. Seul un .network le vise (pont fait main
+    d'origine) : gardé, networkd ne saurait pas le recréer ; reload le reconfigure (networkctl(1) : tout lien dont le
+    .network change). Plus rien ne le déclare : supprimé (networkd ne supprime jamais un netdev dont le .netdev a
+    disparu)."""
+    netdev = _pont_declare(ctx, "netdev")
+    if netdev and pont_change and _pont_existe(ctx):
+        _exiger(ctx, SUPPRIMER_PONT)
     _exiger(ctx, ["networkctl", "reload"])
-    if _pont_declare(ctx):
-        _exiger(ctx, ["networkctl", "reconfigure", "br-lan", *ports])
-    elif ctx.executer(["ip", "link", "show", "dev", "br-lan"]).returncode == 0:
-        _exiger(ctx, ["ip", "link", "delete", "br-lan"])  # networkd ne supprime jamais un netdev dont le .netdev a disparu
+    if netdev or _pont_declare(ctx):
+        _exiger(ctx, ["networkctl", "reconfigure", *ports])
+        if not netdev and not _pont_existe(ctx):            # pont fait main supprimé à la bascule, jamais recréé
+            raise Echec("br-lan absent : seul un .network le déclare (pont fait main d'origine), networkd ne le "
+                        "recrée pas ; le recréer à la main ou réappliquer le mode routeur")
+    elif _pont_existe(ctx):
+        _exiger(ctx, SUPPRIMER_PONT)
 
 
 def _retour_pare_feu(ctx: Contexte) -> None:
@@ -797,15 +889,17 @@ def _restaurer_et_relancer(ctx: Contexte, acteur: str, nom: str | None) -> list[
     if nom is None or nom not in noms:
         raise Refus("aucune sauvegarde du mode routeur : rien à restaurer")
     ports_avant = _ports(ctx)
-    unbound_avant = _contenu_unbound(ctx)
+    unbound_avant = _contenu(ctx, "unbound")
+    pont_avant = _contenus_pont(ctx)
     try:
         absents, erreurs = _restaurer(ctx, nom)
     except OSError as exc:
         raise Echec(f"sauvegarde {nom} inutilisable : {exc}") from exc
     ports = tuple(p for p in PORTS_LAN if p in {*ports_avant, *_ports(ctx)}) or PORTS_LAN
-    unbound_change = _contenu_unbound(ctx) != unbound_avant     # identique : le DNS de la box n'est pas coupé
+    unbound_change = _contenu(ctx, "unbound") != unbound_avant  # identique : le DNS de la box n'est pas coupé
+    pont_change = _contenus_pont(ctx) != pont_avant             # identiques : le LAN n'est pas coupé
     bloquer = acteur != "demarrage"
-    etapes = [("réseau", lambda: _retour_reseau(ctx, ports)), ("pare-feu", lambda: _retour_pare_feu(ctx))]
+    etapes = [("réseau", lambda: _retour_reseau(ctx, ports, pont_change)), ("pare-feu", lambda: _retour_pare_feu(ctx))]
     if unbound_change:
         etapes.append(("Unbound", lambda: _redemarrer_unbound(ctx)))
     etapes += [("DHCP", lambda: _retour_dhcp(ctx, bloquer)), ("nginx", lambda: _recharger_nginx(ctx, bloquer))]

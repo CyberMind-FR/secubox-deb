@@ -42,6 +42,7 @@ ETAT = ARBRE + "/routeur-etat.json"
 SAUVEGARDES = ARBRE + "/sauvegardes"
 AUDIT = "var/log/secubox/audit.log"
 LISTE_INPUT = ["nft", "-j", "-a", "list", "chain", "inet", "filter", "input"]
+PORTS = ("lan0", "lan1", "lan2", "lan3")
 NETPLAN_GK2 = """network:
   version: 2
   renderer: networkd
@@ -74,6 +75,17 @@ class Faux:
                          "br-lxc": ["10.100.0.1/24"]}
         if pont_existant:
             self.adresses["br-lan"] = ["192.168.255.1/24", "192.168.42.1/24"]
+        # Pont (#3189, gk2) : networkd ne crée, puis n'asservit ses ports, qu'à un netdev qu'il a créé lui-même. Un
+        # br-lan déjà là (pont fait main du LAN temporaire de gk2) : « br-lan: Failed to create netdev: File exists »,
+        # netdev en échec, pont DOWN, ports « configuring » à jamais.
+        self.maitres = {p: "br-lan" for p in PORTS} if pont_existant else {}    # gk2 : asservis à la main
+        self.porteuse = {"lan0", "lan3"}                # deux postes branchés
+        self.pont_networkd = False                      # br-lan créé par networkd depuis notre .netdev
+        self.netdev_en_echec = False
+        self.creation_refusee = False                   # networkd n'arrive pas à créer br-lan, même absent
+        self.asservir = True                            # networkd asservit les ports déclarés à son pont
+        self.ports_refuses: set[str] = set()
+        self.adresse_networkd = True                    # networkd pose l'Address= du .network de br-lan
         self.regles = [{"handle": 4, "comment": "secubox-hardening established"}, {"handle": 9},
                        {"handle": 12, "comment": "sbx-lan-temporaire-dhcp"},
                        {"handle": 13, "comment": "sbx-lan-temporaire-ping"}]
@@ -150,7 +162,8 @@ class Faux:
             return "illisible"
 
     def _entree(self, nom):
-        return {"ifindex": 1, "ifname": nom, "addr_info": [
+        drapeaux = ["BROADCAST", "MULTICAST"] + ([] if nom == "br-lan" and self.netdev_en_echec else ["UP", "LOWER_UP"])
+        return {"ifindex": 1, "ifname": nom, "flags": drapeaux, "addr_info": [
             {"family": "inet", "local": a.split("/")[0], "prefixlen": int(a.split("/")[1]), "scope": "global"}
             for a in self.adresses[nom]]}
 
@@ -160,6 +173,35 @@ class Faux:
             texte = f.read_text()
             if "Name=br-lan" in texte:
                 yield texte
+
+    def _ports_declares(self) -> set[str]:
+        f = self.racine / CHEMINS["ports"].lstrip("/")
+        texte = f.read_text() if f.is_file() else ""
+        return next((set(x[5:].split()) for x in texte.splitlines() if x.startswith("Name=")), set())
+
+    def _asservir(self, port: str) -> None:
+        if port not in self._ports_declares():          # sans .network : non géré, laissé tel quel
+            return
+        if ("br-lan" in self.adresses and self.pont_networkd and not self.netdev_en_echec and self.asservir
+                and port not in self.ports_refuses):
+            self.maitres[port] = "br-lan"
+        else:
+            self.maitres.pop(port, None)                # « configuring » : jamais asservi
+
+    def _configurer_pont(self) -> None:
+        if "br-lan" not in self.adresses or self.netdev_en_echec or not self.adresse_networkd:
+            return
+        for texte in self._networks_br_lan():
+            for ligne in texte.splitlines():
+                if ligne.startswith("Address=") and ligne[8:] not in self.adresses["br-lan"]:
+                    self.adresses["br-lan"].append(ligne[8:])
+
+    def _lien(self, port: str) -> dict:
+        drapeaux = ["BROADCAST", "MULTICAST", "UP", "LOWER_UP"] if port in self.porteuse else \
+            ["NO-CARRIER", "BROADCAST", "MULTICAST", "UP"]
+        maitre = {"master": self.maitres[port]} if port in self.maitres else {}
+        return {"ifindex": 10 + PORTS.index(port), "ifname": port, "flags": drapeaux, "mtu": 1500,
+                "operstate": "UP" if port in self.porteuse else "LOWERLAYERDOWN", **maitre}
 
     def _effet(self, a):
         if a == ["ip", "-j", "-4", "addr"]:
@@ -176,7 +218,19 @@ class Faux:
         if a == ["ip", "link", "show", "dev", "br-lan"]:
             return cp(a, 0 if "br-lan" in self.adresses else 1)
         if a == ["ip", "link", "delete", "br-lan"]:
-            return cp(a, 0) if self.adresses.pop("br-lan", None) is not None else cp(a, 1, "", "Cannot find device")
+            if self.adresses.pop("br-lan", None) is None:
+                return cp(a, 1, "", "Cannot find device")
+            self.maitres = {p: m for p, m in self.maitres.items() if m != "br-lan"}   # ports libérés
+            self.pont_networkd = self.netdev_en_echec = False
+            return cp(a)
+        if a == ["ip", "-j", "link", "show", "master", "br-lan"]:
+            if "br-lan" not in self.adresses:
+                return cp(a, 1, "", 'Device "br-lan" does not exist.\n')
+            return cp(a, 0, json.dumps([self._lien(p) for p in PORTS if self.maitres.get(p) == "br-lan"]))
+        if a[:5] == ["ip", "-j", "link", "show", "dev"] and len(a) == 6:
+            if a[5] not in PORTS:
+                return cp(a, 1, "", f'Device "{a[5]}" does not exist.\n')
+            return cp(a, 0, json.dumps([self._lien(a[5])]))
         if a[:3] == ["systemctl", "is-active", "--quiet"]:
             return cp(a, 0 if a[3] in self.actifs else 3)
         # Unbound : jamais un `systemctl restart` bloquant (gk2 : client tué à 120 s, redémarrage pourtant réussi)
@@ -217,15 +271,23 @@ class Faux:
             self.actifs.add(unite + ".timer")
             return cp(a)
         if a == ["networkctl", "reload"]:
-            if (self.racine / CHEMINS["netdev"].lstrip("/")).is_file():
-                self.adresses.setdefault("br-lan", [])
+            # networkctl(1) : un .netdev NOUVEAU est créé (jamais mis à jour ni supprimé) ; tout lien dont le .network
+            # est nouveau, modifié ou retiré est reconfiguré
+            if (self.racine / CHEMINS["netdev"].lstrip("/")).is_file() and not self.pont_networkd:
+                if "br-lan" in self.adresses or self.creation_refusee:
+                    self.netdev_en_echec = True         # « Failed to create netdev: File exists »
+                else:
+                    self.adresses["br-lan"] = []
+                    self.pont_networkd = True
+            self._configurer_pont()
+            for p in PORTS:
+                self._asservir(p)
             return cp(a)
-        if a[:3] == ["networkctl", "reconfigure", "br-lan"]:
-            for texte in self._networks_br_lan():
-                for ligne in texte.splitlines():
-                    if ligne.startswith("Address=") and "br-lan" in self.adresses:
-                        if ligne[8:] not in self.adresses["br-lan"]:
-                            self.adresses["br-lan"].append(ligne[8:])
+        if a[:2] == ["networkctl", "reconfigure"]:
+            # jamais le netdev br-lan (gk2 : « File exists », ports « configuring » à jamais) : ses ports seuls
+            assert len(a) > 2 and all(p in PORTS for p in a[2:]), a
+            for p in a[2:]:
+                self._asservir(p)
             return cp(a)
         if a == LISTE_INPUT:
             regles = [{"rule": {"family": "inet", "table": "filter", "chain": "input", "handle": r["handle"],
@@ -371,15 +433,18 @@ def test_ordre_des_etapes(ctx, faux, racine):
         ["nft", "-c", "-f", nft],                                                      # 6
         ["unbound-checkconf"],
         NGINX_T,                                                                       # hors bac à sable
-        ["networkctl", "reload"],                                                      # 7
-        ["networkctl", "reconfigure", "br-lan", "lan0", "lan1", "lan2", "lan3"],
+        ["ip", "link", "show", "dev", "br-lan"],                                       # 7 : pont fait main…
+        ["ip", "link", "delete", "br-lan"],                                            # … supprimé (br-lan seul)
+        ["networkctl", "reload"],                                                      # networkd crée SON pont
+        ["networkctl", "reconfigure", "lan0", "lan1", "lan2", "lan3"],                 # les ports, jamais br-lan
+        ["ip", "-j", "-4", "addr", "show", "dev", "br-lan"],                           # résultat relu : adresse…
+        ["ip", "-j", "link", "show", "master", "br-lan"],                              # … et ports asservis
         ["systemctl", "is-active", "--quiet", "sbx-lan-dhcp.service"],                 # 8
         ["systemctl", "stop", "sbx-lan-dhcp.service"],
         LISTE_INPUT,
         ["nft", "delete", "rule", "inet", "filter", "input", "handle", "12"],
         ["nft", "delete", "rule", "inet", "filter", "input", "handle", "13"],
-        ["ip", "-j", "-4", "addr", "show", "dev", "br-lan"],
-        ["ip", "addr", "del", "192.168.255.1/24", "dev", "br-lan"],
+        ["ip", "-j", "-4", "addr", "show", "dev", "br-lan"],                           # 192.168.255.1/24 partie
         LISTE_INPUT,                                                                   # 9
         ["nft", "-f", nft],
         ["systemctl", "show", "-p", "TimeoutStopUSec", "-p", "TimeoutStartUSec", "--value", "unbound.service"],  # 10
@@ -589,8 +654,10 @@ def test_reprise_lan_temporaire(ctx, racine, faux):
     assert ["systemctl", "stop", "sbx-lan-dhcp.service"] in j
     assert ["nft", "delete", "rule", "inet", "filter", "input", "handle", "12"] in j
     assert ["nft", "delete", "rule", "inet", "filter", "input", "handle", "13"] in j
-    assert ["ip", "addr", "del", "192.168.255.1/24", "dev", "br-lan"] in j
-    assert ["ip", "addr", "del", "192.168.42.1/24", "dev", "br-lan"] not in j
+    assert ["ip", "link", "delete", "br-lan"] in j                              # pont fait main : ses adresses avec lui
+    assert faux.adresses["br-lan"] == ["192.168.42.1/24"]
+    assert "192.168.255.1/32" in faux.adresses["lo"]                           # HAProxy :9443 et TURN restent joignables
+    assert not any(a[:3] == ["ip", "addr", "del"] for a in j)
     assert not [r for r in faux.regles if r.get("comment", "").startswith("sbx-lan-temporaire")]
     assert [r["handle"] for r in faux.regles][:2] == [4, 9]                        # règles de base intactes
     assert (racine / "var/lib/misc/dnsmasq.leases").read_text() == BAUX_TEMPORAIRES
@@ -679,8 +746,10 @@ def test_retour_gk2_remet_l_ancien_pont(ctx, racine, faux):
             assert not (racine / chemin.lstrip("/")).exists()
     assert geo_vide(racine)                                                     # jamais supprimé : include de nginx
     j = faux.journal
+    # seul un .network vise br-lan : networkd ne saurait pas le recréer, il est gardé ; reload le reconfigure
+    # (networkctl(1) : tout lien dont le .network change), les ports sont reconfigurés, jamais br-lan
     assert j[:2] == [["networkctl", "reload"],
-                     ["networkctl", "reconfigure", "br-lan", "lan0", "lan1", "lan2", "lan3"]]
+                     ["networkctl", "reconfigure", "lan0", "lan1", "lan2", "lan3"]]
     assert ["ip", "link", "delete", "br-lan"] not in j
     assert ["nft", "delete", "table", "inet", TABLE_NFT] in j
     assert faux.regles_lan() == []
@@ -1114,13 +1183,33 @@ def test_sauvegarde_porte_une_sequence(ctx, racine):
 
 # --- relecture : M1 adresse déjà retirée par networkd ---------------------------------------------------------------------
 
+def _adresse_etrangere_sur_le_pont(ctx, faux):
+    """Pont créé par networkd, puis une adresse posée à la main : une réapplication qui ne change pas les fichiers du
+    pont le garde (pas de suppression) et retire l'adresse étrangère à l'étape 8."""
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    faux.adresses["br-lan"].insert(0, "192.168.255.1/24")
+    faux.journal.clear()
+    return dict(CFG42, bail="30m")
+
+
+def test_adresse_etrangere_retiree_sans_supprimer_le_pont(ctx, racine, faux):
+    rc.appliquer(ctx, _adresse_etrangere_sur_le_pont(ctx, faux), "admin")
+    assert ["ip", "addr", "del", "192.168.255.1/24", "dev", "br-lan"] in faux.journal
+    assert ["ip", "addr", "del", "192.168.42.1/24", "dev", "br-lan"] not in faux.journal
+    assert ["ip", "link", "delete", "br-lan"] not in faux.journal
+    assert faux.adresses["br-lan"] == ["192.168.42.1/24"]
+
+
 def test_adresse_deja_retiree_par_networkd(ctx, racine, faux):
+    cfg = _adresse_etrangere_sur_le_pont(ctx, faux)
+
     def networkd_plus_rapide(argv):
         if argv[3] in faux.adresses.get("br-lan", []):
             faux.adresses["br-lan"].remove(argv[3])
 
     faux.sur("ip", "addr", "del", fonction=networkd_plus_rapide)
-    sortie = rc.appliquer(ctx, CFG42, "admin")
+    sortie = rc.appliquer(ctx, cfg, "admin")
     assert sortie["etat"] == "en_attente"
     i = faux.journal.index(["ip", "addr", "del", "192.168.255.1/24", "dev", "br-lan"])
     assert faux.journal[i + 1] == ["ip", "-j", "-4", "addr", "show", "dev", "br-lan"]     # relu avant de tolérer
@@ -1131,9 +1220,10 @@ def test_adresse_deja_retiree_par_networkd(ctx, racine, faux):
                                           (2, "RTNETLINK answers: Operation not permitted"),
                                           (1, "Cannot assign requested address")])
 def test_ip_addr_del_echec_reel_fatal(ctx, racine, faux, code, erreur):
+    cfg = _adresse_etrangere_sur_le_pont(ctx, faux)
     faux.echouer("ip", "addr", "del", code=code, erreur=erreur)                # l'adresse reste en place
     with pytest.raises(rc.Echec, match="ip addr del"):
-        rc.appliquer(ctx, CFG42, "admin")
+        rc.appliquer(ctx, cfg, "admin")
     assert ("retour", "echec") in [(a["action"], a["acteur"]) for a in audits(racine)]
 
 
@@ -1291,7 +1381,7 @@ def test_toml_non_utf8_le_retour_automatique_aboutit(ctx, racine, faux, appel):
     assert sortie["etat"] == "inactif" and etat_fichier(racine)["etat"] == "inactif"
     assert not (racine / TOML).exists()
     assert (racine / "etc/systemd/network/10-br-lan.network").read_text() == ANCIEN_PONT
-    assert ["networkctl", "reconfigure", "br-lan", "lan0", "lan1", "lan2", "lan3"] in faux.journal
+    assert ["networkctl", "reconfigure", "lan0", "lan1", "lan2", "lan3"] in faux.journal
     assert [a["action"] for a in audits(racine)][-1] == "retour"
 
 
