@@ -66,15 +66,18 @@ if [ -L "$RESEAU" ]; then
     echo "secubox-lo-alias : $RESEAU est un lien symbolique, non modifié" >&2
 elif [ -f "$RESEAU" ] && grep -qE "^[[:space:]]*Address=${ADRESSE//./\\.}/24[[:space:]]*$" "$RESEAU"; then
     sauve="${RESEAU}.avant-3189"
-    [ -e "$sauve" ] || install -m 0644 "$RESEAU" "$sauve"
-    tmp="$(mktemp "${RESEAU}.XXXXXX")"
-    trap 'rm -f "$tmp"' EXIT
-    sed -E "s|^([[:space:]]*Address=${ADRESSE//./\\.})/24([[:space:]]*)$|\1/32\2|" "$RESEAU" > "$tmp"
-    chmod 0644 "$tmp"
-    sync "$tmp" 2>/dev/null || true
-    mv -f "$tmp" "$RESEAU"
-    trap - EXIT
-    audit "$RESEAU : Address=${ADRESSE}/24 remplacée par /32 (copie ${sauve})"
+    tmp=""
+    if { [ -e "$sauve" ] || install -m 0644 "$RESEAU" "$sauve"; } \
+       && tmp="$(mktemp "${RESEAU}.XXXXXX")" \
+       && sed -E "s|^([[:space:]]*Address=${ADRESSE//./\\.})/24([[:space:]]*)$|\1/32\2|" "$RESEAU" > "$tmp" \
+       && chmod 0644 "$tmp" \
+       && { sync "$tmp" 2>/dev/null || true; } \
+       && mv -f "$tmp" "$RESEAU"; then
+        audit "$RESEAU : Address=${ADRESSE}/24 remplacée par /32 (copie ${sauve})"
+    else
+        [ -z "$tmp" ] || rm -f "$tmp"
+        echo "secubox-lo-alias : $RESEAU non corrigé (écriture impossible), fichier laissé intact" >&2
+    fi
 fi
 
 exit 0

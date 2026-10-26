@@ -11,6 +11,7 @@ l'etat de lo dans un fichier et journalise chaque appel.
 """
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -121,4 +122,26 @@ def test_wait_network_appelle_l_outil():
     txt = WAIT.read_text()
     assert 'LOOPBACK_ALIAS="${SECUBOX_LOOPBACK_ALIAS:-192.168.255.1/32}"' in txt
     assert "secubox-lo-alias" in txt
-    assert 'ip addr add "$LOOPBACK_ALIAS"' not in txt
+    code = "\n".join(l for l in txt.splitlines() if not l.lstrip().startswith("#"))
+    assert not re.search(r"\bip\s+(-\S+\s+)*addr(ess)?\s+add\b", code)
+    assert re.search(r"^\s*/usr/sbin/secubox-lo-alias\b", txt, re.M)
+
+
+def test_ecriture_impossible_sort_0_fichier_intact(tmp_path):
+    d = tmp_path / "ro"
+    d.mkdir()
+    f = d / "00-lo.network"
+    texte = "[Network]\nAddress=192.168.255.1/24\n"
+    f.write_text(texte)
+    d.chmod(0o555)
+    try:
+        if os.access(d, os.W_OK):
+            import pytest
+            pytest.skip("root : le dossier reste inscriptible")
+        r, _, _, _ = lancer(tmp_path, ["192.168.255.1/32"], reseau=f)
+    finally:
+        d.chmod(0o755)
+    assert r.returncode == 0, r.stderr
+    assert f.read_text() == texte
+    assert "non corrigé" in r.stderr
+    assert list(d.glob("00-lo.network.*")) == []

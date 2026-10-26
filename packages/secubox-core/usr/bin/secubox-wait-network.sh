@@ -104,9 +104,8 @@ ip link set lo up 2>/dev/null || true
 # ajoute le /32 avant de retirer un ancien /24, sans jamais perdre l'adresse.
 if [ -x /usr/sbin/secubox-lo-alias ]; then
     /usr/sbin/secubox-lo-alias || log "secubox-lo-alias en echec"
-elif ! ip -4 addr show lo 2>/dev/null | grep -q "${LOOPBACK_ALIAS%%/*}"; then
-    ip addr add "${LOOPBACK_ALIAS}" dev lo 2>/dev/null \
-        || log "alias de bouclage ${LOOPBACK_ALIAS} NON pose — nginx peut refuser de demarrer"
+else
+    log "secubox-lo-alias absent — alias de bouclage ${LOOPBACK_ALIAS} non pose"
 fi
 
 # ── Ponts et veth des conteneurs ────────────────────────────────────────────
