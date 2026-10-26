@@ -422,6 +422,11 @@ if [ "$1" = "configure" ]; then
     if [ -x /usr/sbin/secubox-lxc-reseau ]; then /usr/sbin/secubox-lxc-reseau || true; fi
 fi
 
+# 192.168.255.1 en /32 sur lo, /32 posé avant de retirer l'ancien /24 (#3189).
+if [ "$1" = "configure" ]; then
+    if [ -x /usr/sbin/secubox-lo-alias ]; then /usr/sbin/secubox-lo-alias || true; fi
+fi
+
 # TRACE DE L'ADMINISTRATION DÉLÉGUÉE (#1720). Chaque requête d'une session
 # ouverte par délégation (compte <aidant>.<centre>) y est écrite : qui, depuis
 # quel nœud, au titre de quelle session, quelle route. Les modules tournent

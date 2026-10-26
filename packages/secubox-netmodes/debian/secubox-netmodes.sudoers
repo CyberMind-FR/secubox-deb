@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox Network Modes (#3189) — l'API (utilisateur secubox-netmodes) pilote le mode routeur par netmodesctl, SEULE
+# surface privilégiée du module (root : networkd, nft, Unbound, dnsmasq, nginx, audit). Verbes exacts :
+#   routeur-etat                      GET  /routeur/etat       (sans argument : la règle n'en admet aucun)
+#   routeur-appliquer <acteur>        POST /routeur/appliquer  (configuration JSON sur l'entrée standard, revalidée)
+#   routeur-confirmer <acteur>        POST /routeur/confirmer
+#   routeur-retour <acteur>           POST /routeur/retour
+# L'acteur est le `sub` du jeton vérifié ; netmodesctl le revalide (^[A-Za-z0-9._@-]{1,64}$) et refuse tout autre nombre
+# d'arguments. routeur-retour-demarrage n'est PAS accordé : unité root du démarrage seulement.
+secubox-netmodes ALL=(root) NOPASSWD: /usr/sbin/netmodesctl routeur-etat, /usr/sbin/netmodesctl routeur-appliquer *, /usr/sbin/netmodesctl routeur-confirmer *, /usr/sbin/netmodesctl routeur-retour *

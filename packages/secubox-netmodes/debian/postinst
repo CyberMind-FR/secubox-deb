@@ -1,19 +1,78 @@
-#!/bin/bash
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
 set -e
 case "$1" in
   configure)
+    getent group secubox >/dev/null 2>&1 || addgroup --system secubox >/dev/null
     id -u secubox >/dev/null 2>&1 || \
-      adduser --system --group --no-create-home \
-        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+      adduser --system --ingroup secubox --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox >/dev/null
+    # #3189 : l'API a son propre compte, sans capacité ; seul netmodesctl (root, par sudo) agit sur le réseau.
+    id -u secubox-netmodes >/dev/null 2>&1 || \
+      adduser --system --ingroup secubox --no-create-home --home /nonexistent \
+        --shell /usr/sbin/nologin secubox-netmodes >/dev/null
+
+    # Parents PARTAGÉS : créés seulement s'ils manquent, jamais resserrés ni réattribués.
     install -d -o root -g root -m 1777 /run/secubox
-    install -d -o secubox -g secubox -m 755 /var/lib/secubox
-    install -d -o root -g root -m 755 /var/lib/secubox/netmodes-backup
-    install -d -o root -g root -m 755 /etc/secubox/netmodes
-    systemctl daemon-reload
-    systemctl enable secubox-netmodes.service
-    systemctl start  secubox-netmodes.service || true
-    install -d -m 755 /etc/nginx/secubox.d
-    systemctl reload nginx 2>/dev/null || true
+    [ -d /var/log/secubox ] || install -d -m 0755 /var/log/secubox
+    install -d -o root -g root -m 0755 /etc/secubox/netmodes
+
+    # Arbre root seul du contrôleur : sauvegardes, état du mode routeur, lan-dhcp.conf. netmodesctl vérifie propriétaire
+    # et mode de chaque composant et refuse sinon.
+    install -d -m 0700 -o root -g root /var/lib/secubox-netmodes
+
+    # Aucune opération root sous /var/lib/secubox : ce dossier appartient au compte partagé secubox, qui pourrait y
+    # substituer un lien entre une vérification et l'opération. L'état des anciens modes vit dans
+    # /var/lib/secubox-netmodes-api (StateDirectory de l'unité) ; l'ancien fichier, qui ne portait que le nom du mode,
+    # n'est pas repris.
+
+    # Jamais de sudoers cassé laissé en place.
+    if [ -f /etc/sudoers.d/secubox-netmodes ]; then
+      visudo -cf /etc/sudoers.d/secubox-netmodes >/dev/null 2>&1 || {
+        rm -f /etc/sudoers.d/secubox-netmodes
+        echo "secubox-netmodes : sudoers refusé par visudo et retiré : le mode routeur est inutilisable depuis l'API" >&2
+      }
+    fi
+
+    # Profils AppArmor (enforce), chargés AVANT de (re)démarrer les unités qui les nomment. Sans AppArmor actif, les
+    # unités démarrent sans profil ; avec AppArmor actif et un profil non chargé, elles échoueraient au démarrage.
+    # Système démarré seulement : dans le chroot d'une image, /sys est celui de l'hôte ; apparmor.service les charge au
+    # premier démarrage depuis /etc/apparmor.d.
+    PROFIL_API=1
+    if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ]; then
+      if command -v apparmor_parser >/dev/null 2>&1 && [ -f /etc/apparmor.d/secubox-netmodes ] \
+         && apparmor_parser -r /etc/apparmor.d/secubox-netmodes; then
+        :
+      else
+        PROFIL_API=0
+        echo "secubox-netmodes : profil AppArmor secubox-netmodes-api non chargé : l'API ne démarrera pas tant qu'il ne l'est pas (apparmor_parser -r /etc/apparmor.d/secubox-netmodes) ; voir journalctl -k" >&2
+      fi
+      if command -v apparmor_parser >/dev/null 2>&1 && [ -f /etc/apparmor.d/secubox-lan-dhcp ] \
+         && apparmor_parser -r /etc/apparmor.d/secubox-lan-dhcp; then
+        :
+      else
+        echo "secubox-netmodes : profil AppArmor secubox-lan-dhcp non chargé : le DHCP du LAN ne démarrera pas et une bascule en mode routeur reviendrait en arrière (apparmor_parser -r /etc/apparmor.d/secubox-lan-dhcp)" >&2
+      fi
+    fi
+
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload || true
+      systemctl enable secubox-netmodes.service >/dev/null 2>&1 || true
+      # Filet de sécurité : défait au démarrage une application restée en attente de confirmation.
+      systemctl enable secubox-netmodes-retour-boot.service >/dev/null 2>&1 || true
+      # L'API est dédiée (sa propre socket) : redémarrée pour prendre le nouveau code, le compte et le profil.
+      if [ "$PROFIL_API" = 1 ]; then
+        systemctl restart secubox-netmodes.service || true
+      else
+        echo "secubox-netmodes : API activée mais NON démarrée (profil AppArmor absent)" >&2
+      fi
+      systemctl reload nginx 2>/dev/null || true
+    fi
+    install -d -m 0755 /etc/nginx/secubox.d
     ;;
 esac
 #DEBHELPER#
+exit 0

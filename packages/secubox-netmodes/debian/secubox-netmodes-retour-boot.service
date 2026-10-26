@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Retour au démarrage du mode routeur (#3189) : une application restée « en attente » (coupure, redémarrage avant la
+# confirmation ou l'échéance des 180 s) est défaite ; sinon rien. Activé par le paquet.
+# Root sans AppArmor ni sudo : défaire demande root (networkd, nft, Unbound, DHCP) ; le contrôleur vérifie lui-même son
+# arbre root seul. Exception écrite dans .claude/RULES-CODE.md, figée par
+# tests/test_paquet_3189.py::test_unite_retour_boot_root_durcie.
+[Unit]
+Description=SecuBox — retour au démarrage d'un mode routeur non confirmé
+# Dès que networkd, le pare-feu et Unbound sont là, sans attendre network-online : secubox-lan-dhcp (activé par une
+# application) démarre APRÈS ce retour, donc jamais de bail servi sur un sous-réseau non confirmé. Au démarrage, le
+# contrôleur relance le DHCP et nginx sans attendre (--no-block) : ils sont ordonnés après lui ou attendent le réseau.
+After=systemd-networkd.service nftables.service unbound.service
+Before=secubox-lan-dhcp.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/netmodesctl routeur-retour-demarrage
+# Le contrôleur attend jusqu'à 60 s son verrou, puis peut passer 120 s par commande.
+TimeoutStartSec=300
+NoNewPrivileges=yes
+ProtectSystem=strict
+# Les chemins que le contrôleur écrit : même liste que secubox-netmodes.service (le retour remet chaque fichier géré).
+ReadWritePaths=/run/secubox /run/lock /var/lib/secubox-netmodes /var/log/secubox /etc/systemd/network /etc/secubox/netmodes -/etc/unbound/unbound.conf.d /etc/nftables.d -/etc/nginx/secubox-lan-geo.d /var/lib/misc
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

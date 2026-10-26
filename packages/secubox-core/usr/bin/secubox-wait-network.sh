@@ -38,7 +38,7 @@
 set -uo pipefail
 
 readonly TIMEOUT="${SECUBOX_NET_TIMEOUT:-45}"
-readonly LOOPBACK_ALIAS="${SECUBOX_LOOPBACK_ALIAS:-192.168.255.1/24}"
+readonly LOOPBACK_ALIAS="${SECUBOX_LOOPBACK_ALIAS:-192.168.255.1/32}"
 
 log() { printf 'SecuBox: %s\n' "$*"; }
 
@@ -100,12 +100,12 @@ fi
 # Debian moderne — c'est ce qui faisait echouer networking.service alors que
 # la machine utilise netplan/networkd. On la pose ici, idempotemment.
 ip link set lo up 2>/dev/null || true
-if ! ip -4 addr show lo 2>/dev/null | grep -q "${LOOPBACK_ALIAS%%/*}"; then
-    if ip addr add "$LOOPBACK_ALIAS" dev lo 2>/dev/null; then
-        log "alias de bouclage ${LOOPBACK_ALIAS} pose"
-    else
-        log "alias de bouclage ${LOOPBACK_ALIAS} NON pose — nginx peut refuser de demarrer"
-    fi
+# Posee en /32 (un /24 rendrait tout 192.168.255.0/24 local, #3189) : l'outil
+# ajoute le /32 avant de retirer un ancien /24, sans jamais perdre l'adresse.
+if [ -x /usr/sbin/secubox-lo-alias ]; then
+    /usr/sbin/secubox-lo-alias || log "secubox-lo-alias en echec"
+else
+    log "secubox-lo-alias absent — alias de bouclage ${LOOPBACK_ALIAS} non pose"
 fi
 
 # ── Ponts et veth des conteneurs ────────────────────────────────────────────

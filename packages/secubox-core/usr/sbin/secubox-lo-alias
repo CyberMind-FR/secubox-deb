@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-lo-alias — 192.168.255.1 en /32 sur lo (#3189)
+#
+# HAProxy (:9443) et le serveur TURN (:3478) écoutent sur 192.168.255.1, portée
+# par lo. En /24, tout 192.168.255.0/24 devient local : la box répond à l'ARP de
+# chaque adresse et la détection de conflit des clients DHCP échoue. En /32,
+# l'adresse reste joignable et le reste du /24 ne l'est plus.
+#
+# Ordre imposé : le /32 est posé AVANT de retirer le /24, l'adresse ne
+# disparaît jamais. Le fichier networkd (00-lo.network) est corrigé de même,
+# par réécriture atomique, copie 0644 gardée à côté ; lien symbolique refusé.
+#
+# Idempotent, sortie 0 sauf erreur d'usage (un assistant de démarrage ne doit
+# pas emporter le frontal TLS). Surcharges de test : SECUBOX_LO_NETWORK,
+# SECUBOX_AUDIT_LOG, PATH.
+set -euo pipefail
+
+if [ "$#" -ne 0 ]; then
+    echo "usage : secubox-lo-alias (sans argument)" >&2
+    exit 2
+fi
+
+readonly ADRESSE="192.168.255.1"
+readonly RESEAU="${SECUBOX_LO_NETWORK:-/etc/systemd/network/00-lo.network}"
+readonly AUDIT="${SECUBOX_AUDIT_LOG:-/var/log/secubox/audit.log}"
+
+audit() {
+    # $1 = détail ; une ligne JSON, échec d'écriture non bloquant.
+    local ts
+    ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    mkdir -p "$(dirname "$AUDIT")" 2>/dev/null || true
+    printf '{"ts": "%s", "module": "core", "action": "lo-alias-32", "acteur": "root", "detail": "%s"}\n' \
+        "$ts" "$1" >> "$AUDIT" 2>/dev/null || true
+}
+
+ip link set lo up 2>/dev/null || true
+
+adresses="$(ip -o -4 addr show dev lo 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="inet") print $(i+1)}' || true)"
+
+# 1. Le /32 d'abord.
+if ! grep -qxF "${ADRESSE}/32" <<<"$adresses"; then
+    if ip addr add "${ADRESSE}/32" dev lo 2>/dev/null; then
+        audit "${ADRESSE}/32 posée sur lo"
+    else
+        echo "secubox-lo-alias : ${ADRESSE}/32 non posée sur lo" >&2
+    fi
+fi
+
+# 2. Puis le /24 (seulement si le /32 est bien là).
+if grep -qxF "${ADRESSE}/24" <<<"$adresses" \
+   && ip -o -4 addr show dev lo 2>/dev/null | grep -qF "${ADRESSE}/32"; then
+    if ip addr del "${ADRESSE}/24" dev lo 2>/dev/null; then
+        audit "${ADRESSE}/24 retirée de lo, ${ADRESSE}/32 conservée"
+    else
+        echo "secubox-lo-alias : ${ADRESSE}/24 non retirée de lo" >&2
+    fi
+fi
+
+# 3. Fichier networkd : pas de lien symbolique, copie, réécriture atomique.
+if [ -L "$RESEAU" ]; then
+    echo "secubox-lo-alias : $RESEAU est un lien symbolique, non modifié" >&2
+elif [ -f "$RESEAU" ] && grep -qE "^[[:space:]]*Address=${ADRESSE//./\\.}/24[[:space:]]*$" "$RESEAU"; then
+    sauve="${RESEAU}.avant-3189"
+    tmp=""
+    if { [ -e "$sauve" ] || install -m 0644 "$RESEAU" "$sauve"; } \
+       && tmp="$(mktemp "${RESEAU}.XXXXXX")" \
+       && sed -E "s|^([[:space:]]*Address=${ADRESSE//./\\.})/24([[:space:]]*)$|\1/32\2|" "$RESEAU" > "$tmp" \
+       && chmod 0644 "$tmp" \
+       && { sync "$tmp" 2>/dev/null || true; } \
+       && mv -f "$tmp" "$RESEAU"; then
+        audit "$RESEAU : Address=${ADRESSE}/24 remplacée par /32 (copie ${sauve})"
+    else
+        [ -z "$tmp" ] || rm -f "$tmp"
+        echo "secubox-lo-alias : $RESEAU non corrigé (écriture impossible), fichier laissé intact" >&2
+    fi
+fi
+
+exit 0

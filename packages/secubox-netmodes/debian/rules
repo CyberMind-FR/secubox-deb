@@ -1,4 +1,8 @@
 #!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
 %:
 	dh $@
 
@@ -8,6 +12,16 @@ override_dh_auto_install:
 	install -m 0755 sbin/secubox-net-fallback debian/secubox-netmodes/usr/sbin/
 	# #2508 : detection/application du mode reseau, appelee par l'assistant premier-pas.
 	install -m 0755 sbin/secubox-net-detect debian/secubox-netmodes/usr/sbin/
+	# #3189 : controleur root du mode routeur, seule surface privilegiee (sudoers a verbes exacts).
+	install -m 0755 sbin/netmodesctl debian/secubox-netmodes/usr/sbin/
+	install -d debian/secubox-netmodes/etc/sudoers.d
+	install -m 0440 debian/secubox-netmodes.sudoers debian/secubox-netmodes/etc/sudoers.d/secubox-netmodes
+	# Profils AppArmor (enforce) de l'API et du DHCP du LAN, charges par le postinst.
+	install -d debian/secubox-netmodes/etc/apparmor.d
+	install -m 0644 apparmor/secubox-netmodes debian/secubox-netmodes/etc/apparmor.d/secubox-netmodes
+	install -m 0644 apparmor/secubox-lan-dhcp debian/secubox-netmodes/etc/apparmor.d/secubox-lan-dhcp
+	# Ouvert en ecriture par l'unite de l'API (ReadWritePaths) : il doit exister.
+	install -d debian/secubox-netmodes/etc/nftables.d
 	install -d debian/secubox-netmodes/lib/systemd/system
 	install -m 0644 systemd/secubox-net-fallback.service \
 	  debian/secubox-netmodes/lib/systemd/system/
@@ -29,6 +43,10 @@ override_dh_auto_install:
 	install -d debian/secubox-netmodes/etc/nginx/secubox-routes.d
 	[ -f nginx/netmodes.conf ] && cp nginx/netmodes.conf debian/secubox-netmodes/etc/nginx/secubox-routes.d/ || true
 
+execute_after_dh_install:
+	# Jamais de bytecode de l'arbre de travail dans le paquet (cp -r et dh_install copient api/ tel quel).
+	find debian/secubox-netmodes -name __pycache__ -type d -prune -exec rm -rf {} +
+
 override_dh_installsystemd:
 	# NOMMER CHAQUE UNITE. Un `dh_installsystemd` nu traite TOUTES les unites du
 	# paquet, donc il activait et demarrait aussi le filet de secours — qui a
@@ -37,3 +55,7 @@ override_dh_installsystemd:
 	# L'appel --no-enable qui suivait arrivait trop tard (#1362).
 	dh_installsystemd --name=secubox-netmodes
 	dh_installsystemd --name=secubox-net-fallback --no-enable --no-start
+	# DHCP du LAN : ni active ni demarre ; netmodesctl l'active a la bascule, le desactive au retour (#3189).
+	dh_installsystemd --name=secubox-lan-dhcp --no-enable --no-start
+	# Retour au demarrage d'une application non confirmee : active, jamais lance a l'installation.
+	dh_installsystemd --name=secubox-netmodes-retour-boot --no-start

@@ -161,6 +161,9 @@ override_dh_auto_install:
 	# installée par l'image, et routage IPv4 qui survit au durcissement.
 	install -m 755 usr/sbin/secubox-lxc-reseau \
 	               debian/secubox-core/usr/sbin/secubox-lxc-reseau
+	# 192.168.255.1 EN /32 SUR lo (#3189) : plus de réponse ARP pour tout le /24.
+	install -m 755 usr/sbin/secubox-lo-alias \
+	               debian/secubox-core/usr/sbin/secubox-lo-alias
 	# ROOTFS DÉCALÉ POUR LES CONTENEURS NON PRIVILÉGIÉS (#1729).
 	install -m 755 usr/sbin/secubox-lxc-decaler \
 	               debian/secubox-core/usr/sbin/secubox-lxc-decaler

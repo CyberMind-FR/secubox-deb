@@ -29,7 +29,8 @@ def test_br_lxc_toujours_declare(tmp_path, mode, lan):
 
 
 def test_br_lan_inchange_en_mode_routeur(tmp_path):
-    b = _netplan(tmp_path, "router")["bridges"]
+    # hors MOCHAbin (#3189 : sur MOCHAbin br-lan appartient au mode routeur durable)
+    b = _netplan(tmp_path, "router", carte="espressobin-v7")["bridges"]
     assert b["br-lan"]["interfaces"] == ["lan0", "lan1", "lan2", "lan3"] and b["br-lan"]["addresses"] == ["192.168.10.1/24"]
 
 

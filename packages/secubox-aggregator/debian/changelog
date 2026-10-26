@@ -1,3 +1,19 @@
+secubox-aggregator (0.4.11-1~trixie1) trixie; urgency=medium
+
+  * Délai du relais par module (ref #3189) : netmodes 200 s, les autres modules à socket dédiée inchangés (60 s).
+    Une application du mode routeur par le chemin public (Unbound, nginx -t, networkd, DHCP vérifié) peut durer
+    jusqu'au délai de l'API netmodes (150 s) : à 60 s le relais rendait 502 pendant que la bascule continuait.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 16:30:00 +0100
+
+secubox-aggregator (0.4.10-1~trixie1) trixie; urgency=medium
+
+  * netmodes à socket dédiée (ref #3189). Il appelle netmodesctl par sudo, ce que l'utilisateur de
+    l'agrégateur (secubox, sans sudo) ne peut pas faire : le relais transparent l'atteint désormais sur
+    /run/secubox/netmodes.sock ; le script de migration l'exclut aussi.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 10:05:00 +0100
+
 secubox-aggregator (0.4.9-1~trixie1) trixie; urgency=medium
 
   * nac à socket dédiée (ref #3178). Il tournait deux fois, monté ici ET dans

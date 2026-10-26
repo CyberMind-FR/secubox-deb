@@ -1,3 +1,43 @@
+secubox-netmodes (1.4.0-1~trixie1) trixie; urgency=medium
+
+  * Mode routeur durable du MOCHAbin (ref #3189), sans netplan ni relance d'eth* : configuration validée
+    /etc/secubox/netmodes/routeur.toml (pont, plage DHCP, bail, ports lan0..lan3, WAN lu seulement) ; refus de
+    192.168.255.0/24, 10.100.0.0/24 et de tout réseau déjà porté par une autre interface.
+  * Rendu (ref #3189) : pont br-lan par systemd-networkd, DHCP du LAN par dnsmasq (DHCP seul, le DNS reste à Unbound),
+    écoute Unbound, pare-feu nft (DHCP et DNS sur br-lan, NAT, rien de neuf du WAN vers le LAN), fragment géo nginx.
+  * netmodesctl (ref #3189), contrôleur root : sauvegarde, écriture atomique, validation (nft -c, unbound-checkconf,
+    nginx -t lancé par systemd-run hors du bac à sable de l'API), bascule sous verrou, retour automatique sous 180 s
+    sauf confirmation (unité transitoire secubox-netmodes-retour), audit JSON ; arbre root seul /var/lib/secubox-netmodes
+    (0700) vérifié à chaque usage ; au démarrage, DHCP et nginx relancés sans attendre (--no-block).
+  * API (ref #3189) : /routeur/etat, /routeur/apercu, /routeur/appliquer, /routeur/confirmer, /routeur/retour par
+    sudo -n netmodesctl ; les anciens chemins netplan sont refusés sur MOCHAbin (409).
+  * secubox-net-detect (ref #3189) : ne réécrit plus le netplan d'un MOCHAbin dont le WAN est configuré ou indéterminé
+    (relancer le WAN mvpp2 à distance bloque son PHY).
+  * Paquet (ref #3189) : utilisateur dédié secubox-netmodes ; unité de l'API durcie (profil AppArmor
+    secubox-netmodes-api, KillMode=process, plus d'AmbientCapabilities) ; sudoers à verbes exacts ;
+    secubox-lan-dhcp.service (dnsmasq, profil AppArmor, ni activé ni démarré par le paquet) ;
+    secubox-netmodes-retour-boot.service (root durci, avant secubox-lan-dhcp : défait au démarrage une application non
+    confirmée avant tout bail) ; état des anciens modes dans /var/lib/secubox-netmodes-api (StateDirectory), plus aucune
+    opération root sous /var/lib/secubox ; scripts de maintenance en sh POSIX.
+  * Relecture finale (ref #3189) : un routeur.toml édité à la main (octet non UTF-8, imbrication trop profonde) est
+    une configuration invalide, jamais une trace ; routeur-etat rend config_invalide et le retour (minuteur,
+    démarrage) aboutit sans dépendre du TOML courant (ports illisibles : lan0..lan3).
+  * Relecture finale (ref #3189) : le drop-in Unbound du LAN porte ip-freebind: yes ; au démarrage, Unbound peut
+    précéder l'adresse de br-lan et refusait sinon de démarrer (DNS de toute la box).
+  * Relecture finale (ref #3189) : application refusée si /etc/nftables.conf n'inclut pas /etc/nftables.d/*.nft
+    (le pare-feu du LAN ne serait pas rechargé au démarrage).
+  * Relecture finale (ref #3189) : l'ancien 10-br-lan.network n'est mis de côté que si sa section [Match] se réduit
+    à la seule ligne Name=br-lan ; Name=br-lan eth2, un joker ou une autre clé de correspondance sont refusés
+    (le supprimer puis recharger networkd reconfigurerait le WAN).
+  * Relecture finale (ref #3189) : Unbound n'est redémarré (coupure du DNS de toute la box) que si son drop-in change,
+    à l'application (ancien contenu contre rendu) comme au retour (actuel contre restauré) ; audité.
+  * Relecture finale (ref #3189) : secubox-lan-dhcp.service en Type=exec ; après sa relance, netmodesctl exige
+    dnsmasq actif à deux relevés consécutifs (systemctl is-active, 5 s au plus). Un refus AppArmor ou un port 67 pris
+    est un échec d'étape (retour automatique à l'application, retour incomplet signalé sinon), plus un succès déclaré
+    pendant que dnsmasq boucle en silence ; au démarrage, rien n'est attendu (--no-block).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 14:00:00 +0100
+
 secubox-netmodes (1.3.4-1~trixie1) trixie; urgency=medium
 
   * secubox-net-detect (ref #3162) : le netplan généré déclare toujours br-lxc (10.100.0.1/24, sans membre, optional),

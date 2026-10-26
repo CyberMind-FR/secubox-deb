@@ -177,8 +177,15 @@ RETIRED_MODULES = frozenset({
 # root active et leur socket ; montés ici, sous `secubox`, leurs actions échouaient (mailctl : « Not installed »).
 # #3178 : nac tournait deux fois, ici ET dans secubox-nac.service — deux collecteurs sur la même base, et la page lisait l'instantané en
 # mémoire de l'agrégateur (« 0 connecté » sur gk2 pendant que la Vigie voyait 13 appareils). Un seul collecteur : celui de son service.
+# #3189 : netmodes appelle netmodesctl par sudo, impossible sous l'utilisateur de l'agrégateur (secubox, pas de sudo) — son service root le fait.
 DEDICATED_MODULES = frozenset({"lyrion", "exposure", "nettweak", "traffic", "qos",
-                               "admin", "cloner", "netdiag", "certs", "cookies", "mail", "nac"})
+                               "admin", "cloner", "netdiag", "certs", "cookies", "mail", "nac", "netmodes"})
+
+# Délai du relais vers une socket dédiée : DELAI_RELAIS, sauf pour un module dont une action dure davantage.
+# #3189 : netmodes — une application du mode routeur (Unbound, nginx -t, networkd, DHCP vérifié actif) peut prendre
+# jusqu'au délai de son API (DELAI_CTL = 150 s) ; à 60 s le relais rendait 502 pendant que la bascule continuait.
+DELAI_RELAIS = 60.0
+DELAIS_RELAIS_MODULE: Dict[str, float] = {"netmodes": 200.0}
 
 
 def _load_config() -> dict:
@@ -452,7 +459,8 @@ def _build_app() -> FastAPI:
                 return refus
         try:
             async with httpx.AsyncClient(
-                transport=httpx.AsyncHTTPTransport(uds=sock), timeout=60.0
+                transport=httpx.AsyncHTTPTransport(uds=sock),
+                timeout=DELAIS_RELAIS_MODULE.get(name, DELAI_RELAIS),
             ) as client:
                 r = await client.request(request.method, url, content=body, headers=fwd)
         except Exception as e:  # socket gone / module down

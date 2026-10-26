@@ -20,6 +20,7 @@ from secubox_core.auth   import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
 import asyncio, subprocess, shutil, json
+from .routeur_api import router as routeur_router, est_mochabin
 from datetime import datetime
 
 app = FastAPI(title="secubox-netmodes", version="1.0.0",
@@ -35,6 +36,7 @@ async def health_check():
     return {"status": "ok", "module": "deb"}
 
 app.include_router(auth_router, prefix="/auth")
+app.include_router(routeur_router)
 
 router = APIRouter()
 log    = get_logger("netmodes")
@@ -42,9 +44,19 @@ log    = get_logger("netmodes")
 NETPLAN_DIR    = Path("/etc/netplan")
 TEMPLATES_DIR  = Path("/etc/secubox/netmodes")
 BACKUP_DIR     = Path("/var/lib/secubox/netmodes-backup")
-STATE_FILE     = Path("/var/lib/secubox/netmodes-state.json")
+# Hors de /var/lib/secubox (compte partagé secubox) : StateDirectory=secubox-netmodes-api de l'unité (#3189).
+STATE_FILE     = Path("/var/lib/secubox-netmodes-api/state.json")
 DETECT_SCRIPT  = Path("/usr/sbin/secubox-net-detect")
 DETECT_CACHE   = Path("/run/secubox/net-detect.json")
+
+REFUS_MOCHABIN = ("Refusé sur MOCHAbin : ce chemin réécrirait tout netplan et relancerait le WAN mvpp2 (eth2) ; "
+                  "utiliser /routeur/appliquer.")
+
+
+def _refuser_sur_mochabin():
+    if est_mochabin():
+        raise HTTPException(409, REFUS_MOCHABIN)
+
 
 AVAILABLE_MODES = {
     "router":          {"name": "Routeur",          "desc": "Mode routeur NAT complet avec DHCP, NAC, DPI"},
@@ -197,6 +209,7 @@ async def set_mode(req: ModeRequest, user=Depends(require_jwt)):
 @router.post("/apply_mode")
 def apply_mode(req: ModeRequest, user=Depends(require_jwt)):
     """Applique le mode réseau : backup + render template + netplan apply."""
+    _refuser_sur_mochabin()
     if req.mode not in AVAILABLE_MODES:
         raise HTTPException(400, f"Mode inconnu: {req.mode}")
 
@@ -251,6 +264,7 @@ async def confirm_mode(user=Depends(require_jwt)):
 @router.post("/rollback")
 def rollback(user=Depends(require_jwt)):
     """Restaure la dernière sauvegarde netplan et réapplique."""
+    _refuser_sur_mochabin()
     backups = sorted(BACKUP_DIR.glob("00-secubox.yaml.*"))
     if not backups:
         raise HTTPException(404, "Aucun backup disponible")
@@ -525,6 +539,7 @@ def auto_apply(req: AutoApplyRequest, user=Depends(require_jwt)):
     2. Generate netplan based on detected interfaces
     3. Apply configuration (unless dry_run=True)
     """
+    _refuser_sur_mochabin()
     # Run detection
     detect_result = _run_detect()
     if "error" in detect_result:

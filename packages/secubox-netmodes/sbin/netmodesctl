@@ -1,0 +1,103 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""netmodesctl : contrôleur root du mode routeur (#3189), verbes étroits appelés par sudo depuis l'API netmodes.
+
+  routeur-etat                    état, configuration, minuteur, DHCP, adresses du pont
+  routeur-appliquer <acteur>      configuration JSON sur l'entrée standard (64 Kio au plus)
+  routeur-confirmer <acteur>      annule le retour automatique
+  routeur-retour <acteur>         restaure la dernière sauvegarde (« minuteur » : seulement si en attente)
+  routeur-retour-demarrage        au démarrage, défait une application restée en attente
+
+Sortie standard : toujours un JSON (l'état, ou {"erreur": "…"}). Codes : 0 succès, 2 usage ou acteur invalide,
+3 refus (configuration ou garde), 4 occupé, 1 autre échec."""
+import json
+import os
+import re
+import sys
+import traceback
+from pathlib import Path
+
+INSTALLE = Path("/usr/lib/secubox/netmodes")
+AVEC_ACTEUR = ("routeur-appliquer", "routeur-confirmer", "routeur-retour")
+SANS_ACTEUR = ("routeur-etat", "routeur-retour-demarrage")
+ACTEUR = re.compile(r"[A-Za-z0-9._@-]{1,64}")
+ENTREE_MAX = 64 * 1024
+USAGE = ("usage : netmodesctl routeur-etat | routeur-retour-demarrage"
+         " | {routeur-appliquer|routeur-confirmer|routeur-retour} <acteur>")
+
+
+def _repondre(donnees, code):
+    print(json.dumps(donnees, ensure_ascii=False))
+    return code
+
+
+def _est_root():
+    return os.geteuid() == 0
+
+
+def _controleur():
+    # le paquet installé ; l'arbre source seulement s'il est absent (tests du dépôt)
+    racine = INSTALLE if INSTALLE.is_dir() else Path(__file__).resolve().parents[1]
+    if str(racine) not in sys.path:
+        sys.path.insert(0, str(racine))
+    from api import routeur_ctl
+    return routeur_ctl
+
+
+def _config(entree, rc):
+    brut = entree.read(ENTREE_MAX + 1)
+    if len(brut) > ENTREE_MAX:
+        raise rc.ErreurConfig("configuration de plus de 64 Kio refusée")
+    try:
+        cfg = json.loads(brut)
+    except ValueError as exc:
+        raise rc.ErreurConfig(f"configuration JSON illisible : {exc}") from exc
+    if not isinstance(cfg, dict):
+        raise rc.ErreurConfig("la configuration doit être un objet JSON")
+    return cfg
+
+
+def main(argv=None, ctx=None, entree=None):
+    args = list(sys.argv[1:] if argv is None else argv)
+    # 1. verbe et acteur, avant toute autre chose
+    if not args or args[0] not in AVEC_ACTEUR + SANS_ACTEUR:
+        return _repondre({"erreur": USAGE}, 2)
+    verbe = args[0]
+    if len(args) != (2 if verbe in AVEC_ACTEUR else 1):
+        return _repondre({"erreur": USAGE}, 2)
+    acteur = args[1] if verbe in AVEC_ACTEUR else None
+    if acteur is not None and not ACTEUR.fullmatch(acteur):
+        return _repondre({"erreur": "acteur invalide : lettres, chiffres et . _ @ - (64 au plus)"}, 2)
+    # 2. root
+    if not _est_root():
+        return _repondre({"erreur": "netmodesctl doit tourner en root"}, 1)
+    rc = _controleur()
+    ctx = ctx or rc.contexte_systeme()
+    try:
+        if verbe == "routeur-etat":
+            resultat = rc.etat(ctx)
+        elif verbe == "routeur-retour-demarrage":
+            resultat = rc.retour_si_en_attente(ctx)
+        elif verbe == "routeur-confirmer":
+            resultat = rc.confirmer(ctx, acteur)
+        elif verbe == "routeur-retour":
+            resultat = rc.retour(ctx, acteur)
+        else:
+            resultat = rc.appliquer(ctx, _config(entree or sys.stdin.buffer, rc), acteur)
+    except rc.Occupe as exc:
+        return _repondre({"erreur": str(exc)}, 4)
+    except (rc.Refus, rc.ErreurConfig) as exc:
+        return _repondre({"erreur": str(exc)}, 3)
+    except rc.Echec as exc:
+        return _repondre({"erreur": str(exc)}, 1)
+    except (Exception, KeyboardInterrupt) as exc:           # dernier filet (après retour) : JSON pour l'API, trace au journal
+        traceback.print_exc(file=sys.stderr)
+        return _repondre({"erreur": f"échec inattendu : {exc.__class__.__name__} : {exc}"}, 1)
+    return _repondre(resultat, 0)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
