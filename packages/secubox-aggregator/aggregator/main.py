@@ -181,6 +181,12 @@ RETIRED_MODULES = frozenset({
 DEDICATED_MODULES = frozenset({"lyrion", "exposure", "nettweak", "traffic", "qos",
                                "admin", "cloner", "netdiag", "certs", "cookies", "mail", "nac", "netmodes"})
 
+# Délai du relais vers une socket dédiée : DELAI_RELAIS, sauf pour un module dont une action dure davantage.
+# #3189 : netmodes — une application du mode routeur (Unbound, nginx -t, networkd, DHCP vérifié actif) peut prendre
+# jusqu'au délai de son API (DELAI_CTL = 150 s) ; à 60 s le relais rendait 502 pendant que la bascule continuait.
+DELAI_RELAIS = 60.0
+DELAIS_RELAIS_MODULE: Dict[str, float] = {"netmodes": 200.0}
+
 
 def _load_config() -> dict:
     """Read the TOML config. Returns a dict with at least 'modules' key.
@@ -453,7 +459,8 @@ def _build_app() -> FastAPI:
                 return refus
         try:
             async with httpx.AsyncClient(
-                transport=httpx.AsyncHTTPTransport(uds=sock), timeout=60.0
+                transport=httpx.AsyncHTTPTransport(uds=sock),
+                timeout=DELAIS_RELAIS_MODULE.get(name, DELAI_RELAIS),
             ) as client:
                 r = await client.request(request.method, url, content=body, headers=fwd)
         except Exception as e:  # socket gone / module down
