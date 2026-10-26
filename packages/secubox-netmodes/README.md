@@ -93,15 +93,20 @@ dnsmasq doit être vu actif deux fois de suite (5 s au plus), sinon la bascule e
 « configuring » à jamais. Quand les fichiers du pont changent (ou qu'un pont fait main est remplacé), le contrôleur
 supprime `br-lan`, et lui seul, avant `networkctl reload`, puis reconfigure les ports seuls (`networkctl reconfigure
 lan0 …`, jamais `br-lan`). Il relit ensuite le résultat, toutes les 2 s et 30 s au plus : chaque port a `br-lan` pour
-maître (avec ou sans porteuse), `br-lan` est UP et porte l'adresse configurée ; sinon la bascule est défaite. Au retour,
-même règle ; un pont fait main que networkd ne saurait recréer (seul un `.network` le vise) est gardé, et son absence
-rend le retour incomplet.
+maître (avec ou sans porteuse), `br-lan` est UP et porte l'adresse configurée ; sinon la bascule est défaite. Un `br-lan`
+dont les ports n'ont pas `br-lan` pour maître (netdev de networkd en échec) est lui aussi supprimé avant reload, même
+si ses fichiers ne changent pas. Au retour, même règle, et le pont du `routeur.toml` restauré est relu de la même façon
+(pas prêt : retour incomplet) ; un pont fait main que networkd ne saurait recréer (seul un `.network` le vise) est
+gardé, et son absence rend le retour incomplet.
 
 **Unbound lent (1.4.1).** Sur gk2, Unbound met jusqu'à 115 s à s'arrêter et 38 à 112 s à démarrer. Il est relancé par
 `systemctl restart --no-block` puis attendu jusqu'à sa vraie issue (relevé toutes les 5 s) : actif et nouvellement
 démarré (`ActiveEnterTimestampMonotonic`), `failed` après le début du nouveau démarrage, ou délai dépassé. Le délai
 vient de l'unité : `TimeoutStopUSec` + `TimeoutStartUSec` + 30 s, borné à [180 s, 900 s] (illisible ou `infinity` :
 900 s). Même attente au retour et au démarrage ; `secubox-netmodes-retour-boot.service` a `TimeoutStartSec=1200`.
+Le verrou partagé avec `secubox-dns-lan` est tenu de la pose des fichiers jusqu'à la relance d'Unbound. Le retour d'une
+bascule en échec ne relance Unbound que si la bascule l'avait relancé (un échec au pont ne coupe plus le DNS de la
+box) ; le minuteur, le démarrage et l'administrateur le relancent si le drop-in restauré diffère de celui en place.
 
 **API et Unbound lent.** L'API attend le contrôleur 150 s, le relais de l'agrégateur 200 s. Sur une box où Unbound
 redémarre lentement (gk2), `POST /routeur/appliquer` ou `/routeur/retour` peut répondre 502 ou 504 alors que la bascule

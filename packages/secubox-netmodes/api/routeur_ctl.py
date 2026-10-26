@@ -135,6 +135,12 @@ class Contexte:
     monotone: Callable[[], float]                           # horloge des délais d'attente (faux en test : simulée)
 
 
+@dataclass
+class _Suivi:
+    """Ce que la bascule a réellement fait : son retour ne défait que cela (revue I2)."""
+    unbound_relance: bool = False                           # `restart --no-block` accepté : nouveau drop-in chargé
+
+
 def executer_systeme(argv: list[str]) -> subprocess.CompletedProcess:
     try:
         return subprocess.run(argv, capture_output=True, text=True, timeout=120, check=False)
@@ -396,9 +402,15 @@ def _manque_au_pont(ctx: Contexte, cfg: ConfigRouteur) -> list[str]:
         manque.append(f"{cfg.adresse} absente de br-lan")
     elif not any("UP" in (lien.get("flags") or []) for lien in pont):
         manque.append("br-lan n'est pas UP")
+    return manque + _ports_non_asservis(ctx, cfg.ports)
+
+
+def _ports_non_asservis(ctx: Contexte, ports: tuple[str, ...]) -> list[str]:
+    """Ports qui n'ont pas br-lan pour maître, porteuse ou non ; vide : tous asservis."""
     asservis = {lien.get("ifname") for lien in _json_liens(ctx.executer(["ip", "-j", "link", "show", "master", "br-lan"]))
                 if lien.get("master") == "br-lan"}
-    for port in cfg.ports:
+    manque = []
+    for port in ports:
         if port in asservis:
             continue
         lien = next(iter(_json_liens(ctx.executer(["ip", "-j", "link", "show", "dev", port]))), {})
@@ -407,6 +419,15 @@ def _manque_au_pont(ctx: Contexte, cfg: ConfigRouteur) -> list[str]:
         porteuse = "LOWER_UP" in (lien.get("flags") or [])
         manque.append(f"{port} non asservi à br-lan ({'porteuse présente' if porteuse else 'sans porteuse'})")
     return manque
+
+
+def _pont_a_recreer(ctx: Contexte, pont_change: bool, ports: tuple[str, ...] | None) -> bool:
+    """br-lan existe et doit être supprimé avant `networkctl reload` : ses fichiers changent, ou ses ports n'ont pas
+    br-lan pour maître (revue I1 : netdev de networkd en échec, pont fait main) ; sinon une réapplication du seul bail
+    échouait à chaque fois, et le retour vers des fichiers identiques laissait le LAN mort."""
+    if not _pont_existe(ctx):
+        return False
+    return pont_change or (ports is not None and bool(_ports_non_asservis(ctx, ports)))
 
 
 def _attendre_pont(ctx: Contexte, cfg: ConfigRouteur) -> None:
@@ -639,9 +660,11 @@ def _reprendre_lan_temporaire(ctx: Contexte, cfg: ConfigRouteur) -> None:
         raise Echec(f"« {' '.join(argv)} » a échoué (code {r.returncode}) : {_sortie(r)}")
 
 
-def _basculer(ctx: Contexte, cfg: ConfigRouteur, geo: bool, unbound_change: bool, pont_change: bool) -> None:
+def _basculer(ctx: Contexte, cfg: ConfigRouteur, geo: bool, unbound_change: bool, pont_change: bool, suivi: _Suivi,
+              liberer_unbound: Callable[[], None]) -> None:
+    """Étapes 7 à 13, verrou Unbound tenu par l'appelant depuis la pose (5) : libéré après l'étape 10."""
     nft = str(_p(ctx, CHEMINS["nft"]))
-    if pont_change and _pont_existe(ctx):                                        # 7 : networkd n'asservit qu'à
+    if _pont_a_recreer(ctx, pont_change, cfg.ports):                             # 7 : networkd n'asservit qu'à
         _exiger(ctx, SUPPRIMER_PONT)                                             # son propre netdev (br-lan seul)
     _exiger(ctx, ["networkctl", "reload"])                                       # crée br-lan depuis notre .netdev
     _exiger(ctx, ["networkctl", "reconfigure", *cfg.ports])                      # les ports, jamais br-lan
@@ -650,7 +673,8 @@ def _basculer(ctx: Contexte, cfg: ConfigRouteur, geo: bool, unbound_change: bool
     _supprimer_regles(ctx, COMMENTAIRE_NFT)                                      # 9
     _exiger(ctx, ["nft", "-f", nft])
     if unbound_change:                                                           # 10 : nouvelle écoute
-        _redemarrer_unbound(ctx)                                                 # attendu jusqu'à sa vraie issue
+        _relancer_unbound(ctx, suivi)                                            # attendu jusqu'à sa vraie issue
+    liberer_unbound()                                                            # la suite ne touche plus Unbound
     _exiger(ctx, ["systemctl", "enable", DHCP])                                  # 11
     _exiger(ctx, ["systemctl", "restart", DHCP])
     _attendre_dhcp_actif(ctx)
@@ -701,36 +725,43 @@ def _appliquer(ctx: Contexte, cfg_dict: dict, acteur: str) -> None:
             _auditer(ctx, "geo-absente", acteur, f"{DOSSIER_GEO} absent : fragment géo non posé, nginx inchangé")
         erreurs: list[str] = []
         unbound_change = pont_change = True
-        try:
-            # garde armée avant le premier fichier géré : une coupure d'ici à la fin revient au démarrage
-            _ecrire_etat(ctx, "en_attente", acteur, nom)
-            with _verrou_unbound(ctx):
+        suivi = _Suivi()
+        # verrou Unbound tenu sans trou de la pose (5) à la relance d'Unbound (10) : secubox-dns-lan ne relance pas
+        # Unbound sur le nouveau drop-in à l'insu de la bascule, dont le retour se fie à `suivi` (revue I2)
+        with contextlib.ExitStack() as verrou_unbound:
+            try:
+                # garde armée avant le premier fichier géré : une coupure d'ici à la fin revient au démarrage
+                _ecrire_etat(ctx, "en_attente", acteur, nom)
+                verrou_unbound.enter_context(_verrou_unbound(ctx))
                 try:
                     unbound_change, pont_change = _poser(ctx, cfg, rendu, geo)   # 5
                     _valider(ctx, geo)                                           # 6
                 except BaseException:
                     erreurs += _restaurer(ctx, nom)[1]                           # encore sous le verrou Unbound
                     raise
-        except BaseException as exc:
-            erreurs += _remettre_etat(ctx, etat_avant)
-            suite = "fichiers et état d'avant remis" if not erreurs else "remise INCOMPLÈTE : " + " ; ".join(erreurs)
-            _auditer(ctx, "appliquer-echec", acteur, f"{_texte(exc)} ; {suite}")
-            if isinstance(exc, fichiers.LienSymbolique):
-                raise Refus(f"{exc.filename} est un lien symbolique ; {suite}") from exc
-            if isinstance(exc, Refus):
-                raise Refus(f"{exc} ; {suite}") from exc
-            if _connue(exc):
-                raise Echec(f"{exc} ; {suite}") from exc
-            raise
-        try:
-            _basculer(ctx, cfg, geo, unbound_change, pont_change)                # 7 à 13
-        except BaseException as exc:                    # même une exception imprévue défait la bascule
-            _auditer(ctx, "appliquer-echec", acteur, f"{_texte(exc)} ; retour à la sauvegarde {nom}")
-            erreurs = _retour(ctx, "echec", nom)
-            suite = "configuration précédente restaurée" if not erreurs else "retour INCOMPLET : " + " ; ".join(erreurs)
-            if _connue(exc):
-                raise Echec(f"{exc} ; {suite}") from exc
-            raise
+            except BaseException as exc:
+                verrou_unbound.close()
+                erreurs += _remettre_etat(ctx, etat_avant)
+                suite = "fichiers et état d'avant remis" if not erreurs else "remise INCOMPLÈTE : " + " ; ".join(erreurs)
+                _auditer(ctx, "appliquer-echec", acteur, f"{_texte(exc)} ; {suite}")
+                if isinstance(exc, fichiers.LienSymbolique):
+                    raise Refus(f"{exc.filename} est un lien symbolique ; {suite}") from exc
+                if isinstance(exc, Refus):
+                    raise Refus(f"{exc} ; {suite}") from exc
+                if _connue(exc):
+                    raise Echec(f"{exc} ; {suite}") from exc
+                raise
+            try:
+                _basculer(ctx, cfg, geo, unbound_change, pont_change, suivi, verrou_unbound.close)   # 7 à 13
+            except BaseException as exc:                # même une exception imprévue défait la bascule
+                verrou_unbound.close()                  # le retour reprend lui-même le verrou s'il relance Unbound
+                _auditer(ctx, "appliquer-echec", acteur, f"{_texte(exc)} ; retour à la sauvegarde {nom}")
+                erreurs = _retour(ctx, "echec", nom, unbound_relance=suivi.unbound_relance)
+                suite = ("configuration précédente restaurée" if not erreurs
+                         else "retour INCOMPLET : " + " ; ".join(erreurs))
+                if _connue(exc):
+                    raise Echec(f"{exc} ; {suite}") from exc
+                raise
     _auditer(ctx, "appliquer", acteur,
              f"pont {cfg.adresse}, DHCP {cfg.dhcp_debut}-{cfg.dhcp_fin} ({cfg.bail}), ports {' '.join(cfg.ports)} ; "
              f"{'Unbound redémarré' if unbound_change else 'Unbound inchangé, non redémarré'} ; "
@@ -762,14 +793,15 @@ def confirmer(ctx: Contexte, acteur: str) -> dict:
     return etat(ctx)
 
 
-def _retour_reseau(ctx: Contexte, ports: tuple[str, ...], pont_change: bool) -> None:
+def _retour_reseau(ctx: Contexte, ports: tuple[str, ...], pont_change: bool, cfg: ConfigRouteur | None) -> None:
     """Jamais `networkctl reconfigure br-lan`. Un .netdev déclare encore br-lan et ses fichiers ont changé : br-lan est
     supprimé avant reload, networkd le recrée et y asservit les ports. Seul un .network le vise (pont fait main
     d'origine) : gardé, networkd ne saurait pas le recréer ; reload le reconfigure (networkctl(1) : tout lien dont le
     .network change). Plus rien ne le déclare : supprimé (networkd ne supprime jamais un netdev dont le .netdev a
-    disparu)."""
+    disparu). Un routeur.toml restauré (`cfg`) : ses ports sans br-lan pour maître font aussi recréer le pont (revue
+    I1), et le pont est relu ensuite comme à la bascule (revue I3 : jamais un retour réussi sur un LAN mort)."""
     netdev = _pont_declare(ctx, "netdev")
-    if netdev and pont_change and _pont_existe(ctx):
+    if netdev and _pont_a_recreer(ctx, pont_change, cfg.ports if cfg is not None else None):
         _exiger(ctx, SUPPRIMER_PONT)
     _exiger(ctx, ["networkctl", "reload"])
     if netdev or _pont_declare(ctx):
@@ -779,6 +811,8 @@ def _retour_reseau(ctx: Contexte, ports: tuple[str, ...], pont_change: bool) -> 
                         "recrée pas ; le recréer à la main ou réappliquer le mode routeur")
     elif _pont_existe(ctx):
         _exiger(ctx, SUPPRIMER_PONT)
+    if cfg is not None:
+        _attendre_pont(ctx, cfg)
 
 
 def _retour_pare_feu(ctx: Contexte) -> None:
@@ -824,32 +858,40 @@ def _horodatage_unbound(ctx: Contexte, propriete: str) -> int | None:
 
 
 def _redemarrer_unbound(ctx: Contexte) -> None:
-    """Relance Unbound sans bloquer et attend sa vraie issue, sous le verrou partagé avec secubox-dns-lan.
+    """Retour : relance Unbound sous le verrou partagé avec secubox-dns-lan (la bascule le tient déjà)."""
+    with _verrou_unbound(ctx):
+        _relancer_unbound(ctx)
+
+
+def _relancer_unbound(ctx: Contexte, suivi: _Suivi | None = None) -> None:
+    """Relance Unbound sans bloquer et attend sa vraie issue ; l'appelant tient le verrou Unbound.
 
     Succès : actif ET entré dans cet état après la relance (ActiveEnterTimestampMonotonic plus récent) ; tant que le
     travail attend dans la file de PID 1, `is-active` rend encore l'état d'avant. Échec : « failed » APRÈS le début du
     nouveau démarrage (InactiveExitTimestampMonotonic plus récent ; un Unbound déjà en échec ne compte pas), ou délai
-    déduit de l'unité dépassé."""
-    with _verrou_unbound(ctx):
-        delai = _delai_unbound(ctx)
-        entree = _horodatage_unbound(ctx, "ActiveEnterTimestampMonotonic")
-        sortie = _horodatage_unbound(ctx, "InactiveExitTimestampMonotonic")
-        if entree is None or sortie is None:
-            raise Echec(f"horodatages de {UNBOUND} illisibles : son nouveau démarrage ne pourrait pas être reconnu ; "
-                        "non redémarré")
-        limite = ctx.monotone() + delai
-        _exiger(ctx, ["systemctl", "restart", "--no-block", UNBOUND])
-        while True:
-            etat_unbound = (ctx.executer(["systemctl", "is-active", UNBOUND]).stdout or "").strip()
-            if etat_unbound == "active" and (_horodatage_unbound(ctx, "ActiveEnterTimestampMonotonic") or 0) > entree:
-                return
-            if etat_unbound == "failed" and (_horodatage_unbound(ctx, "InactiveExitTimestampMonotonic") or 0) > sortie:
-                raise Echec(f"{UNBOUND} a échoué à son redémarrage ; voir journalctl -u {UNBOUND}")
-            if ctx.monotone() >= limite:
-                raise Echec(f"{UNBOUND} n'est pas redevenu actif en {delai:g} s (arrêt et démarrage bornés par "
-                            f"l'unité, + {MARGE_UNBOUND:g} s) ; dernier état : {etat_unbound or 'inconnu'} ; "
-                            f"voir journalctl -u {UNBOUND}")
-            ctx.attendre(PAUSE_UNBOUND)
+    déduit de l'unité dépassé. `suivi.unbound_relance` dès que la relance est acceptée : le nouveau drop-in sera
+    chargé, le retour d'une bascule en échec devra relancer Unbound sur l'ancien."""
+    delai = _delai_unbound(ctx)
+    entree = _horodatage_unbound(ctx, "ActiveEnterTimestampMonotonic")
+    sortie = _horodatage_unbound(ctx, "InactiveExitTimestampMonotonic")
+    if entree is None or sortie is None:
+        raise Echec(f"horodatages de {UNBOUND} illisibles : son nouveau démarrage ne pourrait pas être reconnu ; "
+                    "non redémarré")
+    limite = ctx.monotone() + delai
+    _exiger(ctx, ["systemctl", "restart", "--no-block", UNBOUND])
+    if suivi is not None:
+        suivi.unbound_relance = True
+    while True:
+        etat_unbound = (ctx.executer(["systemctl", "is-active", UNBOUND]).stdout or "").strip()
+        if etat_unbound == "active" and (_horodatage_unbound(ctx, "ActiveEnterTimestampMonotonic") or 0) > entree:
+            return
+        if etat_unbound == "failed" and (_horodatage_unbound(ctx, "InactiveExitTimestampMonotonic") or 0) > sortie:
+            raise Echec(f"{UNBOUND} a échoué à son redémarrage ; voir journalctl -u {UNBOUND}")
+        if ctx.monotone() >= limite:
+            raise Echec(f"{UNBOUND} n'est pas redevenu actif en {delai:g} s (arrêt et démarrage bornés par "
+                        f"l'unité, + {MARGE_UNBOUND:g} s) ; dernier état : {etat_unbound or 'inconnu'} ; "
+                        f"voir journalctl -u {UNBOUND}")
+        ctx.attendre(PAUSE_UNBOUND)
 
 
 def _sans_attente(bloquer: bool) -> list[str]:
@@ -872,16 +914,28 @@ def _recharger_nginx(ctx: Contexte, bloquer: bool = True) -> None:
         _exiger(ctx, ["systemctl", "reload", *_sans_attente(bloquer), "nginx.service"])
 
 
-def _retour(ctx: Contexte, acteur: str, nom: str | None = None) -> list[str]:
+def _retour(ctx: Contexte, acteur: str, nom: str | None = None, unbound_relance: bool | None = None) -> list[str]:
     with _sans_interruption():
         _verifier_arbre(ctx)
-        return _restaurer_et_relancer(ctx, acteur, nom)
+        return _restaurer_et_relancer(ctx, acteur, nom, unbound_relance)
 
 
-def _restaurer_et_relancer(ctx: Contexte, acteur: str, nom: str | None) -> list[str]:
+def _config_restauree(ctx: Contexte) -> ConfigRouteur | None:
+    """routeur.toml remis par le retour ; absent ou illisible : None (le retour n'en dépend jamais, relecture I1)."""
+    if not os.path.lexists(_p(ctx, TOML)):
+        return None
+    try:
+        return charger(_p(ctx, TOML))
+    except (ErreurConfig, OSError, ValueError, TypeError, RecursionError):
+        return None
+
+
+def _restaurer_et_relancer(ctx: Contexte, acteur: str, nom: str | None, unbound_relance: bool | None) -> list[str]:
     """Restaure une sauvegarde et la remet en service ; continue après une erreur et les renvoie toutes.
     Sans `nom` : celle de la dernière application réussie (fichier d'état), sinon la plus récente — une application
-    refusée à la validation laisse une sauvegarde identique à l'état courant, qui ne doit pas masquer la bonne."""
+    refusée à la validation laisse une sauvegarde identique à l'état courant, qui ne doit pas masquer la bonne.
+    `unbound_relance` (retour d'une bascule en échec) : Unbound n'est relancé que si la bascule l'a relancé ; sinon
+    (minuteur, démarrage, administrateur : la bascule avait abouti) si le drop-in restauré diffère de celui en place."""
     noms = fichiers.sauvegardes(_p(ctx, SAUVEGARDES), ctx.racine)
     if nom is None:
         reference = _lire_etat(ctx)["sauvegarde"]           # fichier non fiable : seul un nom listé est retenu
@@ -896,10 +950,17 @@ def _restaurer_et_relancer(ctx: Contexte, acteur: str, nom: str | None) -> list[
     except OSError as exc:
         raise Echec(f"sauvegarde {nom} inutilisable : {exc}") from exc
     ports = tuple(p for p in PORTS_LAN if p in {*ports_avant, *_ports(ctx)}) or PORTS_LAN
-    unbound_change = _contenu(ctx, "unbound") != unbound_avant  # identique : le DNS de la box n'est pas coupé
+    if unbound_relance is None:
+        unbound_change = _contenu(ctx, "unbound") != unbound_avant  # identique : le DNS de la box n'est pas coupé
+        pas_relance = ", Unbound inchangé, non redémarré"
+    else:                                                       # revue I2 : 2,5 à 5 min sans DNS sur gk2 sinon
+        unbound_change = unbound_relance
+        pas_relance = ", Unbound jamais relancé par la bascule, non redémarré"
     pont_change = _contenus_pont(ctx) != pont_avant             # identiques : le LAN n'est pas coupé
+    cfg = _config_restauree(ctx)
     bloquer = acteur != "demarrage"
-    etapes = [("réseau", lambda: _retour_reseau(ctx, ports, pont_change)), ("pare-feu", lambda: _retour_pare_feu(ctx))]
+    etapes = [("réseau", lambda: _retour_reseau(ctx, ports, pont_change, cfg)),
+              ("pare-feu", lambda: _retour_pare_feu(ctx))]
     if unbound_change:
         etapes.append(("Unbound", lambda: _redemarrer_unbound(ctx)))
     etapes += [("DHCP", lambda: _retour_dhcp(ctx, bloquer)), ("nginx", lambda: _recharger_nginx(ctx, bloquer))]
@@ -915,7 +976,7 @@ def _restaurer_et_relancer(ctx: Contexte, acteur: str, nom: str | None) -> list[
     except OSError as exc:
         erreurs.append(f"état : {exc}")
     _auditer(ctx, "retour", acteur, f"sauvegarde {nom} restaurée, état {nouvel}"
-             + ("" if unbound_change else ", Unbound inchangé, non redémarré")
+             + ("" if unbound_change else pas_relance)
              + (f" ; INCOMPLET : {' ; '.join(erreurs)}" if erreurs else ""))
     return erreurs
 

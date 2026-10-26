@@ -206,24 +206,81 @@ def test_horodatages_illisibles_echec_sans_relance(ctx, racine, faux):
     assert ("retour", "echec") in [(a["action"], a["acteur"]) for a in audits(racine)]
 
 
+def _verrou_pris(racine) -> bool:
+    fd = os.open(racine / "run/lock/secubox-dns-lan.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return False
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
+
+
 def test_verrou_unbound_tenu_pendant_toute_l_attente(ctx, racine, faux):
     """secubox-dns-lan ne touche pas Unbound pendant qu'on attend son redémarrage."""
     faux.unbound_arret, faux.unbound_demarrage = 115.0, 85.0
     tenus = []
-
-    def essayer(argv):
-        fd = os.open(racine / "run/lock/secubox-dns-lan.lock", os.O_RDWR)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            tenus.append(False)
-        except BlockingIOError:
-            tenus.append(True)
-        finally:
-            os.close(fd)
-
-    faux.sur(*EST_ACTIF, fonction=essayer)
+    faux.sur(*EST_ACTIF, fonction=lambda argv: tenus.append(_verrou_pris(racine)))
     rc.appliquer(ctx, CFG42, "admin")
     assert len(tenus) == 41 and all(tenus)
+
+
+@pytest.mark.parametrize("cfg", [CFG42, dict(CFG42, bail="30m")], ids=["unbound-relance", "unbound-inchange"])
+def test_verrou_unbound_tenu_de_la_pose_a_l_etape_10(ctx, racine, faux, cfg):
+    """Revue I2 : tenu du premier fichier posé jusqu'à la relance d'Unbound (étape 10), sans trou où secubox-dns-lan
+    relancerait Unbound sur le nouveau drop-in à l'insu de la bascule ; libéré avant le DHCP (étape 11)."""
+    if cfg is not CFG42:
+        rc.appliquer(ctx, CFG42, "admin")
+        rc.confirmer(ctx, "admin")
+    tenu = {}
+    for etape, prefixe in (("6", ("unbound-checkconf",)), ("7", ("networkctl", "reload")), ("9", ("nft", "-f")),
+                           ("11", ("systemctl", "enable", "secubox-lan-dhcp.service"))):
+        faux.sur(*prefixe, fonction=lambda argv, e=etape: tenu.__setitem__(e, _verrou_pris(racine)))
+    rc.appliquer(ctx, cfg, "admin")
+    assert tenu == {"6": True, "7": True, "9": True, "11": False}
+
+
+# --- revue I2 : le retour d'une bascule ne relance Unbound que si la bascule l'a relancé --------------------------------
+
+EST_ACTIF_DHCP = ["systemctl", "is-active", "--quiet", "secubox-lan-dhcp.service"]
+
+
+def test_echec_au_pont_retour_sans_relancer_unbound(ctx, racine, faux):
+    """Échec à l'étape 7 : le nouveau drop-in est posé mais Unbound n'a jamais été relancé. Le relancer au retour
+    coupait le DNS de toute la box 2,5 à 5 min sur gk2 et tenait le verrou jusqu'à 900 s, pour rien."""
+    faux.asservir = False
+    with pytest.raises(rc.Echec, match="br-lan n'est pas prêt.*configuration précédente restaurée"):
+        rc.appliquer(ctx, CFG42, "admin")
+    assert REDEMARRER not in faux.journal
+    assert sum(faux.pauses) == rc.DELAI_PONT                                   # seule l'attente du pont
+    assert "Unbound jamais relancé par la bascule, non redémarré" in audits(racine)[-1]["detail"]
+
+
+def test_relance_refusee_par_systemctl_retour_sans_relancer(ctx, racine, faux):
+    """`restart --no-block` refusé : aucun travail en file, l'ancien drop-in reste chargé, rien à relancer au retour."""
+    faux.echouer(*REDEMARRER, fois=1)
+    with pytest.raises(rc.Echec, match="unbound.service.*configuration précédente restaurée"):
+        rc.appliquer(ctx, CFG42, "admin")
+    assert _relances(faux) == 1
+
+
+def test_echec_apres_l_etape_10_retour_relance_unbound(ctx, racine, faux):
+    faux.echouer(*EST_ACTIF_DHCP, code=3, erreur="")
+    with pytest.raises(rc.Echec, match="secubox-lan-dhcp.service n'est pas resté actif"):
+        rc.appliquer(ctx, CFG42, "admin")
+    assert _relances(faux) == 2                                                 # bascule, puis retour (ancien drop-in)
+    assert "non redémarré" not in audits(racine)[-1]["detail"]
+    assert "INCOMPLET" not in audits(racine)[-1]["detail"]
+
+
+def test_retour_minuteur_compare_toujours_les_fichiers(ctx, racine, faux):
+    """La bascule a abouti : le minuteur (comme le démarrage et l'administrateur) relance Unbound si le drop-in restauré
+    diffère de celui en place."""
+    rc.appliquer(ctx, CFG42, "admin")
+    faux.journal.clear()
+    rc.retour(ctx, "minuteur")
+    assert _relances(faux) == 1
 
 
 # --- retour : même attente, au démarrage aussi -------------------------------------------------------------------------

@@ -14,6 +14,12 @@ secubox-netmodes (1.4.1-1~trixie1) trixie; urgency=medium
     résultat relu (ports asservis à br-lan, porteuse ou non ; br-lan UP avec son adresse ; 30 s au plus), sinon échec
     d'étape et retour automatique. Au retour, même règle ; un pont fait main que networkd ne peut recréer est gardé,
     son absence signalée.
+  * Revue (ref #3189) : un br-lan dont les ports n'ont pas br-lan pour maître (netdev de networkd en échec, pont fait
+    main) est aussi supprimé avant reload quand les fichiers du pont sont inchangés (réapplication du seul bail), à la
+    bascule comme au retour ; le retour relit le pont du routeur.toml restauré et se dit INCOMPLET s'il n'est pas prêt.
+  * Revue (ref #3189) : le retour d'une bascule en échec ne relance Unbound que si la bascule l'a relancé (échec au
+    pont : plus de coupure DNS de 2,5 à 5 min) ; minuteur, démarrage et administrateur comparent toujours le drop-in.
+    Le verrou Unbound est tenu sans trou de la pose des fichiers à la relance d'Unbound (étape 10).
   * README (ref #3189) : sur une box où Unbound redémarre lentement, une application par l'API peut répondre 502/504
     alors que la bascule se poursuit sous la garde de 3 minutes ; la console (netmodesctl) ou le panneau asynchrone
     (#3190) est la voie prise en charge.

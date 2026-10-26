@@ -112,10 +112,80 @@ def test_fichiers_du_pont_inchanges_pas_de_suppression(ctx, racine, faux):
     rc.confirmer(ctx, "admin")
     faux.journal.clear()
     rc.appliquer(ctx, dict(CFG42, bail="30m"), "admin")
-    assert SUPPRIMER not in faux.journal
-    assert ["ip", "link", "show", "dev", "br-lan"] not in faux.journal
-    assert RECONFIGURER_PORTS in faux.journal and ASSERVIS in faux.journal
-    jamais_reconfigure_br_lan(faux.journal)
+    j = faux.journal
+    assert SUPPRIMER not in j
+    # revue I1 : le pont est d'abord relu (ses ports ont-ils br-lan pour maître ?), avant reload
+    assert j.index(["ip", "link", "show", "dev", "br-lan"]) < j.index(ASSERVIS) < j.index(RELOAD)
+    assert RECONFIGURER_PORTS in j
+    jamais_reconfigure_br_lan(j)
+
+
+# --- revue I1 : un br-lan que networkd n'a pas (ou plus) en main, fichiers du pont inchangés -------------------------
+
+def _netdev_en_echec_sous_un_pont_confirme(ctx, faux):
+    """Rejeu de la revue : pont confirmé, puis netdev de networkd en échec, ports sans maître (LAN mort)."""
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    faux.netdev_en_echec = True
+    faux.maitres.clear()
+    faux.journal.clear()
+    faux.pauses.clear()
+
+
+def test_pont_sans_ports_asservis_fichiers_inchanges_recree(ctx, racine, faux):
+    """Réapplication du seul bail sur un netdev en échec : sans cela, pas de suppression, échec après 30 s, retour vers
+    des fichiers identiques déclaré réussi avec un LAN toujours mort, et toute application suivante échouait pareil."""
+    _netdev_en_echec_sous_un_pont_confirme(ctx, faux)
+    sortie = rc.appliquer(ctx, dict(CFG42, bail="30m"), "admin")
+    assert sortie["etat"] == "en_attente"
+    j = faux.journal
+    assert j.index(ASSERVIS) < j.index(SUPPRIMER) < j.index(RELOAD)
+    assert not faux.netdev_en_echec and asservis(faux) == set(PORTS)
+    assert faux.pauses == [rc.PAUSE_DHCP]                                       # pont prêt sans attendre 30 s
+    assert "retour" not in [a["action"] for a in audits(racine)]
+    jamais_reconfigure_br_lan(j)
+    sans_eth(j)
+
+
+def test_retour_pont_sans_ports_asservis_fichiers_inchanges_recree(ctx, racine, faux):
+    """Même règle au retour : un .netdev reste, les fichiers du pont ne changent pas, mais ses ports n'ont pas br-lan
+    pour maître (configuration restaurée relue) : supprimé, recréé par networkd."""
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    rc.appliquer(ctx, dict(CFG42, bail="30m"), "admin")
+    faux.netdev_en_echec = True
+    faux.maitres.clear()
+    faux.journal.clear()
+    sortie = rc.retour(ctx, "admin")
+    assert sortie["etat"] == "actif"
+    j = faux.journal
+    assert j.index(SUPPRIMER) < j.index(RELOAD)
+    assert asservis(faux) == set(PORTS)
+    assert "INCOMPLET" not in audits(racine)[-1]["detail"]
+
+
+# --- revue : br-lan doit être UP (sonde de la revue) -----------------------------------------------------------------
+
+@pytest.mark.parametrize("drapeaux, reussit", [
+    (["NO-CARRIER", "BROADCAST", "MULTICAST", "UP"], True),                     # aucun poste : UP, sans porteuse
+    (["BROADCAST", "MULTICAST"], False),                                        # pont DOWN, adresse et ports présents
+])
+def test_pont_up(ctx, racine, faux, drapeaux, reussit):
+    faux.porteuse = set()
+    entree = faux._entree
+
+    def drapeaux_du_pont(nom):
+        e = entree(nom)
+        if nom == "br-lan":
+            e["flags"] = drapeaux
+        return e
+
+    faux._entree = drapeaux_du_pont
+    if reussit:
+        assert rc.appliquer(ctx, CFG42, "admin")["etat"] == "en_attente"
+    else:
+        with pytest.raises(rc.Echec, match="br-lan n'est pas UP"):
+            rc.appliquer(ctx, CFG42, "admin")
 
 
 def test_nouvelle_adresse_pont_recree(ctx, racine, faux):
@@ -243,6 +313,48 @@ def test_retour_carte_neuve_pont_supprime(neuf):
     assert f.journal.index(RELOAD) < f.journal.index(SUPPRIMER)                 # aucun fichier ne le déclare plus
     assert "br-lan" not in f.adresses and asservis(f) == set()
     assert not any(a[:2] == ["networkctl", "reconfigure"] for a in f.journal)
+    assert ASSERVIS not in f.journal                                            # aucun routeur.toml : rien à relire
+
+
+# --- revue I3 : le retour relit le pont de la configuration restaurée -------------------------------------------------
+
+@pytest.mark.parametrize("appel", [lambda ctx: rc.retour(ctx, "admin"), lambda ctx: rc.retour(ctx, "minuteur"),
+                                   rc.retour_si_en_attente])
+def test_retour_pont_non_recree_incomplet(ctx, racine, faux, appel):
+    """networkd ne recrée pas br-lan après suppression et reload : le retour ne se dit plus réussi, LAN mort."""
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    rc.appliquer(ctx, CFG50, "admin")
+    faux.creation_refusee = True
+    faux.journal.clear()
+    faux.pauses.clear()
+    with pytest.raises(rc.Echec, match="retour incomplet : réseau : br-lan n'est pas prêt après 30 s : br-lan absent"):
+        appel(ctx)
+    assert etat_fichier(racine)["etat"] == "actif"                             # état calculé, inchangé
+    assert "INCOMPLET : réseau : br-lan n'est pas prêt" in audits(racine)[-1]["detail"]
+    assert faux.pauses[:15] == [P] * 15
+    assert ["systemctl", "restart", "--no-block", "unbound.service"] in faux.journal    # les étapes suivantes ont lieu
+
+
+def test_retour_pont_relu_avec_la_configuration_restauree(ctx, racine, faux):
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    rc.appliquer(ctx, CFG50, "admin")
+    faux.journal.clear()
+    rc.retour(ctx, "admin")
+    j = faux.journal
+    assert j.index(RECONFIGURER_PORTS) < j.index(ASSERVIS)                      # relu après le réseau
+    assert faux.adresses["br-lan"] == ["192.168.42.1/24"]                      # adresse restaurée vérifiée
+
+
+def test_retour_pont_en_echec_apres_bascule_incomplet(ctx, racine, faux):
+    """Bascule en échec au pont, puis networkd refuse aussi de recréer le pont restauré : le retour le dit."""
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    faux.journal.clear()
+    faux.asservir = False                                                       # bascule : ports jamais asservis
+    with pytest.raises(rc.Echec, match="retour INCOMPLET : réseau : br-lan n'est pas prêt"):
+        rc.appliquer(ctx, CFG50, "admin")
 
 
 def test_cycle_complet_jamais_br_lan_reconfigure_ni_eth(ctx, racine, faux):
