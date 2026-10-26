@@ -335,7 +335,11 @@ generate_netplan() {
 
     case "$mode" in
         router)
-            if [[ -n "$lan_array" ]]; then
+            if [[ "$board" == "mochabin" ]]; then
+                # MOCHAbin (#3189) : br-lan appartient au mode routeur durable (fichiers systemd-networkd de
+                # netmodesctl) ; le déclarer aussi ici ferait deux propriétaires qui se battent. Reste br-lxc.
+                bridges=""
+            elif [[ -n "$lan_array" ]]; then
                 bridges="  bridges:
     br-lan:
       interfaces: [${lan_array}]
@@ -448,6 +452,12 @@ main() {
             echo "$config"
             ;;
         apply)
+            # MOCHAbin (#3189) : le WAN mvpp2 (eth2) se bloque si son lien est relancé à distance (redémarrage à
+            # froid). Déjà adressé en IPv4 : ni réécriture du netplan, ni netplan apply.
+            if [[ "$board" == "mochabin" && -n "$(ip -4 -o addr show dev "$wan_iface" 2>/dev/null)" ]]; then
+                log "MOCHAbin : $wan_iface (mvpp2) a déjà une IPv4, netplan non réécrit ni appliqué (relancer son lien à distance bloque le PHY). Mode routeur durable : netmodesctl / panneau Réseau."
+                return 0
+            fi
             # Generate and apply netplan configuration
             generate_netplan "$board" "$wan_iface" "$lan_ifaces" "$sfp_ifaces" "$mode"
             log "Applying netplan..."
