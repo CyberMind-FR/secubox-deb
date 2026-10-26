@@ -226,9 +226,13 @@ ou son refus s'affiche dans la page, et aucune actualisation n'a lieu pendant un
 `wan` n'est jamais renvoyé). « Aperçu » montre les fichiers rendus (texte brut, repliables) et l'avertissement de perte
 de connexion ; « Appliquer… » refait l'aperçu des valeurs exactes, demande confirmation, puis `POST /routeur/appliquer`
 (202). La page passe en « bascule en cours » (état et dernier résultat relus toutes les 3 s tant que
-`bascule_en_cours` est vrai, que `derniere.fini` est faux, ou qu'une application attend sans minuteur), puis en « à
-confirmer » : compte à rebours jusqu'à `echeance`, corrigé de l'écart d'horloge entre le poste et la box (en-tête `Date`
-de la réponse), « échéance inconnue » si elle manque, et bouton **Confirmer** (`POST /routeur/confirmer`) → « actif ».
+`bascule_en_cours` est vrai ou que `derniere.fini` est faux), puis en « à confirmer » (relu toutes les 3 s aussi) :
+compte à rebours jusqu'à `echeance`, corrigé de l'écart d'horloge entre le poste et la box (en-tête `Date` de la
+réponse), « échéance inconnue » si elle manque, et bouton **Confirmer** (`POST /routeur/confirmer`) → « actif ». Une
+lecture d'état ratée ne fait rien oublier : la page garde le dernier relevé, l'annonce « relevé ancien », laisse
+Confirmer jusqu'à l'échéance et relit toutes les 3 s. Une lecture partie avant une écriture (appliquer, confirmer,
+retour) est jetée à son arrivée, et la relecture qui suit l'écriture s'enchaîne à elle. Un Confirmer refusé dit le
+temps qui reste avant le retour automatique, ou « échéance dépassée ».
 « Revenir en arrière… » (`POST /routeur/retour`, 202) suit le même chemin. Si le poste perd la box (changement de
 sous-réseau), la page continue d'essayer toutes les 3 s et rappelle la nouvelle adresse du pont : par l'API, une bascule
 lente (Unbound) continue même si le navigateur perd la connexion, et la garde de 3 minutes protège.

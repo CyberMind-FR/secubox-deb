@@ -18,8 +18,9 @@
     POST /api/v1/netmodes/routeur/appliquer  la même configuration + {"confirmer": "routeur"} → 202
     POST /api/v1/netmodes/routeur/confirmer  synchrone → état
     POST /api/v1/netmodes/routeur/retour     {"confirmer": "retour"} → 202
-  Actualisation : 3 s pendant une bascule (ou « à confirmer » sans minuteur), 15 s à confirmer, 30 s sinon ; page visible
-  seulement, jamais pendant une confirmation ouverte.
+  Actualisation : 3 s pendant une bascule, « à confirmer » ou un état illisible, 30 s sinon ; page visible seulement, jamais
+  pendant une confirmation ouverte. Une lecture ratée garde le dernier relevé (« relevé ancien ») : Confirmer reste là
+  jusqu'à l'échéance. Une lecture partie avant une écriture est jetée (compteur de génération).
   ?embed=1 : sans menu ; ?demo=1 : enchaînement simulé (adresses de documentation RFC 5737), aucune requête, aucune écriture.
 -->
 <html lang="fr">
@@ -147,6 +148,7 @@
     <div class="col">
       <div class="pan" id="panBascule">
         <h3>Bascule <i id="phaseNote">application gardée, retour automatique sous 3 minutes</i></h3>
+        <div class="alerte att" id="ancien" role="status" hidden></div>
         <div class="phase-titre" id="phaseTitre">Lecture…</div>
         <div class="compte" id="phaseCompte" aria-live="off" hidden>—</div>
         <p class="phase-texte" id="phaseTexte"></p>
@@ -246,14 +248,16 @@
   };
   var VERBES = { "routeur-appliquer": "Application", "routeur-retour": "Retour en arrière" };
   var ETATS = { inactif: "inactif", en_attente: "à confirmer", actif: "actif", config_invalide: "invalide" };
-  var RAPIDE = 3000, ATTENTE = 15000, LENT = 30000, SANS_MINUTEUR_MAX = 300000;
+  var RAPIDE = 3000, LENT = 30000;
 
   // ── État de la page ────────────────────────────────────────────────────────────────────────────────────────────────────────
   var E = null, D = null;            // dernières lectures : {ok, d} ou {ok:false, session|panne}
+  var B = null, releveB = 0;         // dernier état LU avec succès et son heure : une lecture ratée ne fait rien oublier
   var decalage = 0;                  // heure de la box − heure du poste (en-tête Date), si l'écart dépasse 3 s
   var lancement = null;              // bascule lancée depuis cette page, suivie jusqu'à sa fin (dernier résultat)
-  var occupe = false, enLecture = false, formModifie = false, apercuFait = null, sansMinuteurDepuis = null, relanceEcheance = false;
-  var minuterie = null, compteDe = null;
+  var occupe = false, formModifie = false, apercuFait = null;
+  var minuterie = null, lecture = null, suite = null;
+  var generation = 0;                // +1 au début et à la fin de chaque écriture d'état : une lecture partie avant est jetée
 
   // ── Accès à l'API (même origine, jeton sbx_token en Bearer) ───────────────────────────────────────────────────────────────
   function jeton() { try { return localStorage.getItem("sbx_token") || ""; } catch (e) { return ""; } }
@@ -293,6 +297,12 @@
       .then(function (r) { return r.json().then(function (j) { return j; }, function () { return null; }).then(function (j) { return { statut: r.status, j: j }; }); })
       .catch(function () { return { reseau: true }; });
   }
+  // Écriture qui change l'état (appliquer, confirmer, retour) : la génération avance avant l'envoi et après la réponse ;
+  // toute lecture partie avant est jetée à son arrivée (elle pourrait montrer l'état d'avant l'écriture).
+  function ecrireEtat(quoi, corps) {
+    generation++;
+    return ecrire(quoi, corps).then(function (r) { generation++; return r; });
+  }
   function erreurTexte(r) {
     if (r.reseau) { return "Box injoignable : rien ne prouve que la demande soit arrivée."; }
     if (r.statut === 401 || r.statut === 403) { return "Session d'administrateur requise (HTTP " + r.statut + ") : se connecter."; }
@@ -316,14 +326,18 @@
   function liste(v) { return Array.isArray(v) ? v.filter(function (x) { return typeof x === "string"; }) : null; }
 
   // ── Où en est la bascule ───────────────────────────────────────────────────────────────────────────────────────────────────
-  function etat() { return E && E.ok ? E.d : null; }
+  // La décision (phase, Confirmer, compte à rebours) se fait sur le dernier état lu avec succès : une lecture ratée au milieu
+  // des 180 s ne cache pas Confirmer ; la page dit alors « relevé ancien ».
+  function etat() { return E && E.ok ? E.d : (B ? B.d : null); }
+  function ancien() { return !!(E && !E.ok && B); }
   function restant() {
     var e = etat(), ech = e && typeof e.echeance === "string" ? Date.parse(e.echeance) : NaN;
     return isFinite(ech) ? ech - (Date.now() + decalage) : null;
   }
   function phase() {
     var e = etat();
-    if (!e) { return lancement ? "injoignable" : "inconnu"; }
+    if (lancement && E && !E.ok && !E.session) { return "injoignable"; }
+    if (!e) { return "inconnu"; }
     if (e.bascule_en_cours === true || (D && D.ok && D.d.fini === false) || (lancement && !(D && D.ok))) { return "bascule"; }
     if (e.etat === "en_attente") { return "a_confirmer"; }
     if (e.etat === "actif") { return "actif"; }
@@ -354,21 +368,11 @@
       lancement = null;
     }
   }
+  // 3 s pendant une bascule, tant que la dernière phase connue est « à confirmer » (la fenêtre de 180 s), et tant que l'état
+  // est illisible ; 30 s sinon.
   function intervalle() {
-    var ph = phase(), e = etat();
-    if (ph === "bascule" || ph === "injoignable" || lancement) { return RAPIDE; }
-    if (ph === "a_confirmer") {
-      if (!e.minuteur_actif) {
-        if (sansMinuteurDepuis == null) { sansMinuteurDepuis = Date.now(); }
-        if (Date.now() - sansMinuteurDepuis < SANS_MINUTEUR_MAX) { return RAPIDE; }
-      } else {
-        sansMinuteurDepuis = null;
-        var r = restant();
-        if (r != null && r <= 0) { return RAPIDE; }
-      }
-      return ATTENTE;
-    }
-    sansMinuteurDepuis = null;
+    var ph = phase();
+    if (ph === "bascule" || ph === "injoignable" || ph === "a_confirmer" || lancement || (E && !E.ok)) { return RAPIDE; }
     return LENT;
   }
 
@@ -398,9 +402,9 @@
   }
   function pastille() {
     var p = $("pastille"), ph = phase(), e = etat(), adr = e ? liste(e.adresses_pont) : null, cls = "etat", t;
-    if (!e) {
-      if (ph === "injoignable") { cls += " hors"; t = "BOX INJOIGNABLE"; }
-      else if (!E) { t = "LECTURE…"; }
+    if (ph === "injoignable") { cls += " hors"; t = "BOX INJOIGNABLE"; }
+    else if (!e) {
+      if (!E) { t = "LECTURE…"; }
       else { cls += " hors"; t = E.session ? "SESSION REQUISE" : "ÉTAT DU ROUTEUR ILLISIBLE"; }
     } else if (ph === "bascule") { cls += " info"; t = "BASCULE EN COURS"; }
     else if (ph === "a_confirmer") { cls += " att"; t = "MODE ROUTEUR À CONFIRMER"; }
@@ -408,6 +412,7 @@
     else if (ph === "invalide") { cls += " hors"; t = "CONFIGURATION INVALIDE"; }
     else if (ph === "inactif") { if (adr && adr.length) { cls += " att"; t = "LAN TEMPORAIRE"; } else { t = "MODE ROUTEUR INACTIF"; } }
     else { t = "ÉTAT INCONNU"; }
+    if (ancien() && ph !== "injoignable") { t += " · RELEVÉ ANCIEN"; }
     p.className = cls; p.textContent = t;
   }
   function tuiles() {
@@ -416,7 +421,8 @@
     if (!e) { [tE, tR, tP, tD].forEach(function (x) { x.textContent = "—"; }); tES.textContent = E && !E.ok ? raison(E) : "—"; tRS.textContent = "—"; tPS.textContent = "—"; return; }
     tE.textContent = ph === "bascule" ? "bascule" : (ETATS[e.etat] || "—");
     tE.className = "v " + (ph === "bascule" ? "c" : e.etat === "actif" ? "g" : e.etat === "en_attente" ? "o" : e.etat === "config_invalide" ? "r" : "n");
-    tES.textContent = (e.depuis ? "depuis " + date(e.depuis) : "—") + (e.bascule_en_cours === null ? " · bascule en cours : —" : "");
+    tES.textContent = ancien() ? "relevé ancien (" + new Date(releveB).toLocaleTimeString("fr-FR") + ")"
+      : (e.depuis ? "depuis " + date(e.depuis) : "—") + (e.bascule_en_cours === null ? " · bascule en cours : —" : "");
     compte();
     var adr = liste(e.adresses_pont), coupes = liste(e.ports_coupes);
     tP.textContent = adr == null ? "—" : adr.length ? adr.join(" ") : "aucune";
@@ -436,8 +442,6 @@
       var txt = r > 0 ? delai(r) : "échéance atteinte";
       tR.textContent = r > 0 ? delai(r) : "0 s"; c.textContent = txt;
       tRS.textContent = "retour à " + new Date(Date.parse(e.echeance)).toLocaleTimeString("fr-FR") + (decalage ? " (heure de la box)" : "");
-      if (e.echeance !== compteDe) { compteDe = e.echeance; relanceEcheance = false; }
-      if (r <= 0 && !relanceEcheance && phase() === "a_confirmer") { relanceEcheance = true; planifier(); }
     }
   }
   function rendrePhase() {
@@ -481,6 +485,10 @@
       if (texte(e.erreur)) { txt += " Contrôleur : " + e.erreur + "."; }
     }
     t.className = "phase-titre" + (cls ? " " + cls : ""); t.textContent = titre; x.textContent = txt;
+    var z = $("ancien"), vieux = ancien() && ph !== "injoignable";
+    z.hidden = !vieux;
+    z.textContent = vieux ? "Relevé ancien de " + new Date(releveB).toLocaleTimeString("fr-FR") + " : la dernière lecture de l'état a échoué ("
+      + (E.session ? "session requise" : E.panne) + "). Ce qui suit vient de ce relevé ; l'état se relit toutes les 3 s." : "";
   }
   function message(d) {
     var s = d.sortie;
@@ -521,7 +529,9 @@
     var ph = phase(), e = etat();
     $("btnApercu").disabled = occupe;
     $("btnAppliquer").disabled = occupe || ph === "bascule" || ph === "injoignable";
-    $("btnConfirmer").hidden = ph !== "a_confirmer" || (e && e.bascule_en_cours === true);
+    // Une lecture ratée ne cache jamais Confirmer tant que l'échéance du dernier relevé n'est pas passée.
+    var r = restant(), echu = ancien() && r != null && r <= 0;
+    $("btnConfirmer").hidden = ph !== "a_confirmer" || (e && e.bascule_en_cours === true) || echu;
     $("btnConfirmer").disabled = occupe;
     $("btnRetour").hidden = ["a_confirmer", "actif", "invalide"].indexOf(ph) < 0;
     $("btnRetour").disabled = occupe;
@@ -646,7 +656,7 @@
     var avant = D && D.ok ? D.d.debut : null;
     aAppliquer = null; fermer();
     occupe = true; boutons();
-    ecrire("appliquer", envoi).then(function (r) {
+    ecrireEtat("appliquer", envoi).then(function (r) {
       occupe = false;
       if (r.statut === 202 || r.reseau) {
         lancement = { verbe: "routeur-appliquer", t: Date.now(), debutAvant: avant, debut: null, adresse: a.corps.adresse.split("/")[0], avertissement: a.avertissement };
@@ -663,10 +673,20 @@
   $("btnConfirmer").addEventListener("click", function () {
     if (occupe || ouverte) { return; }
     occupe = true; boutons();
-    ecrire("confirmer").then(function (r) {
+    ecrireEtat("confirmer").then(function (r) {
       occupe = false;
-      if (r.statut === 200) { annonce("resultatBascule", "Mode routeur confirmé : le retour automatique est annulé.", ""); }
-      else { annonce("resultatBascule", erreurTexte(r), "ko"); }
+      if (r.statut === 200) {
+        // La réponse est l'état du contrôleur APRÈS la confirmation : affiché tout de suite, Confirmer disparaît.
+        if (r.j && typeof r.j === "object" && typeof r.j.etat === "string") { E = B = { ok: true, d: r.j }; releveB = Date.now(); }
+        annonce("resultatBascule", "Mode routeur confirmé : le retour automatique est annulé.", "");
+        rendre();
+      } else {
+        // Échec : dire le temps qui reste avant le retour automatique (dernier relevé), pour réessayer à temps.
+        var reste = restant();
+        annonce("resultatBascule", erreurTexte(r) + " — " + (reste == null ? "échéance inconnue ; réessayez sans attendre."
+          : reste > 0 ? "il reste " + delai(reste) + " avant le retour automatique ; réessayez."
+            : "échéance dépassée : le retour automatique a eu lieu ou est en cours."), "ko");
+      }
       return charge();
     }).then(planifier);
   });
@@ -682,7 +702,7 @@
     var avant = D && D.ok ? D.d.debut : null;
     fermer();
     occupe = true; boutons();
-    ecrire("retour", { confirmer: "retour" }).then(function (r) {
+    ecrireEtat("retour", { confirmer: "retour" }).then(function (r) {
       occupe = false;
       if (r.statut === 202 || r.reseau) {
         lancement = { verbe: "routeur-retour", t: Date.now(), debutAvant: avant, debut: null, adresse: null, avertissement: null };
@@ -805,16 +825,24 @@
   }
 
   // ── Lecture et cadence : 3 s pendant une bascule, jamais page cachée ni confirmation ouverte ──────────────────────────────────
+  // Une seule lecture à la fois. Demandée pendant qu'une autre est en vol (après une écriture), elle est enchaînée à sa
+  // suite, jamais abandonnée. Une lecture partie avant une écriture (génération changée) est jetée à son arrivée.
   function charge() {
-    if (enLecture) { return Promise.resolve(); }
-    enLecture = true;
+    if (lecture) {
+      if (!suite) { suite = lecture.then(function () { suite = null; return charge(); }); }
+      return suite;
+    }
+    var g = generation;
     var p = DEMO ? Promise.resolve([demoEtat(), demoDerniere()]) : Promise.all([lire(SOURCES[0].url, true), lire(SOURCES[1].url, false)]);
-    return p.then(function (rs) {
-      enLecture = false;
+    lecture = p.then(function (rs) {
+      lecture = null;
+      if (g !== generation) { return; }
       E = rs[0]; D = rs[1];
+      if (E.ok) { B = E; releveB = Date.now(); }
       // Une erreur de rendu reste visible (console, pageerror) sans arrêter la cadence d'actualisation.
       try { suivreLancement(); rendre(); } catch (err) { setTimeout(function () { throw err; }); }
     });
+    return lecture;
   }
   function planifier() {
     clearTimeout(minuterie);
@@ -829,7 +857,7 @@
   setInterval(function () { if (!document.hidden) { compte(); } }, 1000);   // le compte à rebours, sans requête
 
   if (DEMO) { demoInit(); $("demo").hidden = false; }
-  $("rafraichir").addEventListener("click", function () { if (!confirmationOuverte()) { charge().then(planifier); } });
+  $("rafraichir").addEventListener("click", function () { if (!confirmationOuverte() && !occupe) { charge().then(planifier); } });
   addEventListener("resize", hauteur); addEventListener("load", hauteur);
   if (window.ResizeObserver) { new ResizeObserver(hauteur).observe(document.body); }
   sources(); boutons();

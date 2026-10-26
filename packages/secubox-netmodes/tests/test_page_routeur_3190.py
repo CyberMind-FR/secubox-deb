@@ -70,7 +70,7 @@ def test_routes_de_lecture_et_d_ecriture_citees():
         assert r in SRC, r
     code = _code(SRC)
     assert 'envoi.confirmer = "routeur";' in code                      # appliquer : la confirmation exigée par l'API
-    assert 'ecrire("retour", { confirmer: "retour" })' in code
+    assert 'ecrireEtat("retour", { confirmer: "retour" })' in code
     assert 'method: "POST"' in code and 'method: "GET"' in code and code.count("fetch(") == 2
     # démonstration : aucune requête, les écritures passent par la simulation
     assert "if (DEMO) { return Promise.resolve(demoEcrire(quoi, corps)); }" in code
@@ -123,10 +123,11 @@ def _avec_navigateur(scenario):
 
 
 def _page(nav, api=None, taille=(1400, 900)):
-    """Pages servies par une origine http fictive ; `api` : chemin -> (statut, corps[, en-têtes]) ou fonction(méthode, corps)."""
+    """Pages servies par une origine http fictive ; `api` : chemin -> (statut, corps[, en-têtes]) ou fonction(méthode, corps).
+    Une fonction qui rend None garde la requête en suspens (j["gardees"]) : le scénario y répondra plus tard."""
     ctx = nav.new_context(viewport={"width": taille[0], "height": taille[1]})
     pg = ctx.new_page()
-    j = {"erreurs": [], "natifs": [], "appels": []}
+    j = {"erreurs": [], "natifs": [], "appels": [], "gardees": []}
     pg.on("pageerror", lambda e: j["erreurs"].append(str(e)))
     pg.on("dialog", lambda d: (j["natifs"].append(d.type), d.dismiss()))
 
@@ -138,6 +139,9 @@ def _page(nav, api=None, taille=(1400, 900)):
             rep = (api or {}).get(chemin[len("api/v1/"):], (404, {"detail": "absent"}))
             if callable(rep):
                 rep = rep(r.request.method, json.loads(corps) if corps else None)
+                if rep is None:                      # réponse retardée : le scénario la donnera
+                    j["gardees"].append(r)
+                    return None
             st, b = rep[0], rep[1]
             entetes = rep[2] if len(rep) > 2 else {}
             return r.fulfill(status=st, content_type="application/json", body=json.dumps(b), headers=entetes or None)
@@ -473,3 +477,126 @@ def test_sans_session_sous_file_aucune_erreur():
         return r, erreurs
     (pastille, etat, ok), erreurs = _avec_navigateur(scenario)
     assert pastille == "ÉTAT DU ROUTEUR ILLISIBLE" and etat == "—" and ok and erreurs == []
+
+
+# ── Relecture de la tâche 7 : le bouton Confirmer dans la fenêtre de 180 s (Review Focus 3) ─────────────────────────────────────
+def test_garde_du_dernier_releve_et_generation_dans_le_code():
+    code = _code(SRC)
+    assert "if (E.ok) { B = E; releveB = Date.now(); }" in code                     # dernier état lu avec succès gardé
+    assert "if (g !== generation) { return; }" in code                               # lecture partie avant une écriture : jetée
+    assert "suite = lecture.then(" in code                                           # relecture enchaînée, jamais abandonnée
+    for verbe in ("appliquer", "confirmer", "retour"):
+        assert 'ecrireEtat("%s"' % verbe in code, verbe
+    assert "RELEVÉ ANCIEN" in code and "avant le retour automatique ; réessayez." in code and "échéance dépassée" in code
+
+
+def _attendre(pg, condition, delai=6.0):
+    fin = time.time() + delai
+    while not condition():
+        if time.time() > fin:
+            raise AssertionError("condition non atteinte")
+        pg.wait_for_timeout(50)
+
+
+def test_une_lecture_ratee_garde_confirmer_et_relit_a_3_s():
+    """À confirmer, puis l'état devient illisible (502) : Confirmer reste là, la page dit « relevé ancien » et relit à 3 s."""
+    ech = _iso(time.time() + 100)
+    lus = []
+
+    def etat(_m, _c):
+        lus.append(time.time())
+        if len(lus) == 1:
+            return 200, _etat(etat="en_attente", depuis=_iso(time.time() - 10), minuteur_actif=True, echeance=ech)
+        return 502, {"detail": "contrôleur réseau injoignable"}
+    api = {"netmodes/routeur/etat": etat, "netmodes/routeur/derniere": (200, VIDE)}
+
+    def scenario(nav):
+        ctx, pg, j = _page(nav, api)
+        pg.goto("http://t.test/netmodes/routeur.html")
+        _pastille(pg, "MODE ROUTEUR À CONFIRMER")
+        _pastille(pg, "MODE ROUTEUR À CONFIRMER · RELEVÉ ANCIEN", 6000)          # 2e lecture, ratée
+        r = {"confirmer": pg.is_visible("#btnConfirmer"), "retour": pg.is_visible("#btnRetour"), "ancien": pg.inner_text("#ancien"),
+             "compte": pg.inner_text("#phaseCompte"), "titre": pg.inner_text("#phaseTitre"), "tuile": pg.inner_text("#tEtatS"),
+             "sources": pg.inner_text("#sources")}
+        _attendre(pg, lambda: len(lus) >= 3)                                           # la lecture suivante, au rythme rapide
+        ctx.close()
+        return r, j
+    r, j = _avec_navigateur(scenario)
+    assert r["confirmer"] and r["retour"] and r["titre"] == "À confirmer"
+    assert "Relevé ancien de" in r["ancien"] and "contrôleur réseau injoignable" in r["ancien"] and "3 s" in r["ancien"]
+    assert re.fullmatch(r"1 min ([0-3]\d|40) s", r["compte"]), r["compte"]               # l'échéance du dernier relevé, toujours comptée
+    assert r["tuile"].startswith("relevé ancien") and "État du routeur · en panne" in r["sources"]
+    assert 2.5 <= lus[1] - lus[0] <= 4.5 and 2.5 <= lus[2] - lus[1] <= 4.5, [b - a for a, b in zip(lus, lus[1:])]
+    assert j["erreurs"] == [] and not any(c[0] == "POST" for c in j["appels"])
+
+
+def test_lecture_partie_avant_confirmer_jetee_et_relecture_enchainee():
+    """Une lecture d'état en vol pendant Confirmer revient APRÈS lui avec l'ancien « en_attente » : elle est jetée, Confirmer
+    ne réapparaît pas, et la relecture qui suit l'écriture part dès la fin de la lecture en vol (pas au tic suivant)."""
+    ech = time.time() + 120
+    box = {"phase": "attente", "garder": 0, "posts": 0}
+    attente = _etat(etat="en_attente", minuteur_actif=True, echeance=_iso(ech))
+
+    def etat(_m, _c):
+        if box["garder"]:
+            box["garder"] -= 1
+            return None                                            # réponse retardée, donnée par le scénario
+        return 200, (attente if box["phase"] == "attente" else _etat(etat="actif"))
+
+    def confirmer(_m, _c):
+        box["posts"] += 1
+        box["phase"] = "actif"
+        return 200, _etat(etat="actif")
+    api = {"netmodes/routeur/etat": etat, "netmodes/routeur/derniere": (200, VIDE), "netmodes/routeur/confirmer": confirmer}
+
+    def scenario(nav):
+        ctx, pg, j = _page(nav, api)
+        pg.goto("http://t.test/netmodes/routeur.html")
+        _pastille(pg, "MODE ROUTEUR À CONFIRMER")
+        box["garder"] = 1
+        _attendre(pg, lambda: len(j["gardees"]) == 1)                                # une lecture en vol (tic à 3 s)
+        pg.click("#btnConfirmer")
+        _pastille(pg, "MODE ROUTEUR ACTIF", 3000)                                    # la réponse de Confirmer, tout de suite
+        r = {"apres_post": pg.is_hidden("#btnConfirmer")}
+        box["garder"] = 1                                                              # retient aussi la relecture enchaînée
+        lache = time.time()
+        j["gardees"][0].fulfill(status=200, content_type="application/json", body=json.dumps(attente))   # l'ancien état, en retard
+        _attendre(pg, lambda: len(j["gardees"]) == 2, 2.0)
+        suivante = [c[3] for c in j["appels"] if c[1].endswith("/etat")][-1]
+        pg.wait_for_timeout(300)
+        r["pendant"] = (pg.inner_text("#pastille"), pg.is_hidden("#btnConfirmer"))  # l'ancien état n'a pas été rendu
+        j["gardees"][1].fulfill(status=200, content_type="application/json", body=json.dumps(_etat(etat="actif")))
+        pg.wait_for_timeout(300)
+        r["fin"] = (pg.inner_text("#pastille"), pg.is_hidden("#btnConfirmer"), pg.inner_text("#resultatBascule"))
+        r["delai_relecture"] = suivante - lache
+        ctx.close()
+        return r, j
+    r, j = _avec_navigateur(scenario)
+    assert r["apres_post"]
+    assert r["pendant"] == ("MODE ROUTEUR ACTIF", True), r["pendant"]               # jamais « à confirmer » de retour
+    assert r["delai_relecture"] < 1.0, r["delai_relecture"]                          # enchaînée, pas le tic de 3 s
+    pastille, cache, resultat = r["fin"]
+    assert pastille == "MODE ROUTEUR ACTIF" and cache and "confirmé" in resultat
+    assert box["posts"] == 1 and j["erreurs"] == [] and j["natifs"] == []
+
+
+def test_confirmer_en_echec_dit_le_temps_restant_ou_l_echeance_depassee():
+    def scenario(nav):
+        r = []
+        for ech, refus in ((time.time() + 100, "une application est déjà en cours"),
+                           (time.time() - 5, "rien à confirmer : le mode routeur n'est pas en attente")):
+            api = {"netmodes/routeur/etat": (200, _etat(etat="en_attente", minuteur_actif=True, echeance=_iso(ech))),
+                   "netmodes/routeur/derniere": (200, VIDE), "netmodes/routeur/confirmer": (409, {"detail": refus})}
+            ctx, pg, j = _page(nav, api)
+            pg.goto("http://t.test/netmodes/routeur.html")
+            _pastille(pg, "MODE ROUTEUR À CONFIRMER")
+            pg.click("#btnConfirmer")
+            pg.wait_for_selector("#resultatBascule:not([hidden])")
+            r.append((pg.inner_text("#resultatBascule"), j["erreurs"]))
+            ctx.close()
+        return r
+    (reste, e1), (depasse, e2) = _avec_navigateur(scenario)
+    assert reste.startswith("Refusé (HTTP 409) : une application est déjà en cours — ")
+    assert re.search(r"il reste 1 min ([0-3]\d|40) s avant le retour automatique ; réessayez\.$", reste), reste
+    assert "rien à confirmer" in depasse and "échéance dépassée" in depasse and "il reste" not in depasse
+    assert e1 == [] and e2 == []
