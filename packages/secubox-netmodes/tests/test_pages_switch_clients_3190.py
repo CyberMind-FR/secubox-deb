@@ -409,3 +409,85 @@ def test_switch_action_pendant_une_lecture_en_vol_relit_apres_elle():
     assert r["jetee"], "la lecture partie avant l'action a été rendue"
     assert r["verbe"] == "couper" and r["tuile"] == "0" and "lan1 rétabli" in r["res"]
     assert j["erreurs"] == [] and j["natifs"] == []
+
+
+# ── Relecture finale I1 : rétablir est permis en tout mode (arbitrage, contrôleur) ───────────────────────────────────────────────
+def _ports_lan1_coupe():
+    coupe = json.loads(json.dumps(PORTS))
+    for p in coupe["ports"]:
+        if p["nom"] == "lan1":
+            p.update(coupe=True, etat_admin="down", porteuse=False, vitesse_mbps=None, maitre=None)
+    return coupe
+
+
+def test_switch_rien_ne_dit_que_retablir_exige_le_mode_routeur():
+    s = SRC["switch"]
+    assert "couper ou rétablir un port exige" not in s
+    assert "« Rétablir » le relance : seuls lan0 à lan3, en mode routeur actif" not in s
+    assert "le relance en tout mode" in s and "hors du pont" in s
+
+
+def test_switch_mode_inactif_port_coupe_retablir_propose_hors_du_pont():
+    """Mode routeur inactif, lan1 coupé : bandeau limité à Couper, Rétablir proposé, son texte dit « hors du pont » (jamais
+    « dans le pont br-lan »), et l'action part (le contrôleur la permet en tout mode). Captures à 1400 et 420 px."""
+    inactif = {"etat": "inactif", "depuis": None, "config": None, "ports_coupes": ["lan1"], "bascule_en_cours": False}
+    api = _api(**{"netmodes/reseau/ports": (200, _ports_lan1_coupe()), "netmodes/routeur/etat": (200, inactif),
+                  "netmodes/ports/lan1/retablir": (200, inactif)})
+
+    def scenario(nav):
+        r = {}
+        for largeur in (1400, 420):
+            ctx, pg, j = _page(nav, api, taille=(largeur, 900))
+            pg.goto("http://t.test/netmodes/switch.html")
+            pg.wait_for_selector("button[data-port=lan1]")
+            r["bandeau"] = pg.inner_text("#portsPannes")
+            r["verbe"], r["texte"] = pg.get_attribute("button[data-port=lan1]", "data-verbe"), pg.inner_text("button[data-port=lan1]")
+            r["lien"] = pg.inner_text("#ports tr:nth-child(4) td:nth-child(3)")
+            pg.click("button[data-port=lan1]")
+            r["confirm"] = pg.inner_text("#confirmTexte")
+            r["deb_%d" % largeur] = _sans_debordement(pg)
+            pg.screenshot(path=str(CAPT / ("switch-inactif-coupe-%d.png" % largeur)), full_page=True)
+            if largeur == 1400:
+                pg.fill("#confirmSaisie", "lan1")
+                pg.click("#confirmOk")
+                pg.wait_for_function("document.getElementById('resultat').textContent.includes('rétabli')")
+                r["res"], r["appels"] = pg.inner_text("#resultat"), list(j["appels"])
+            r["erreurs_%d" % largeur], r["natifs_%d" % largeur] = j["erreurs"], j["natifs"]
+            ctx.close()
+        return r, None
+    r, _ = _avec_navigateur(scenario)
+    b = r["bandeau"]
+    assert "Mode routeur « inactif » : couper un port exige le mode routeur actif" in b, b
+    assert "Rétablir un port coupé reste possible en tout mode" in b and "couper ou rétablir" not in b, b
+    assert r["verbe"] == "retablir" and r["texte"] == "Rétablir…" and r["lien"] == "coupé"
+    c = r["confirm"]
+    assert "Rétablir lan1 remonte le port hors du pont" in c and "« inactif »" in c and "remet dans le pont" not in c, c
+    assert ("POST", "api/v1/netmodes/ports/lan1/retablir") in r["appels"] and "lan1 rétabli" in r["res"]
+    assert r["deb_1400"] and r["deb_420"]
+    assert r["erreurs_1400"] == r["erreurs_420"] == [] and r["natifs_1400"] == r["natifs_420"] == []
+
+
+@pytest.mark.parametrize("routeur,attendu,absent", [
+    ((200, {"etat": "actif", "config": {"ports": ["lan0", "lan1", "lan2", "lan3"]}, "ports_coupes": ["lan1"]}),
+     "Rétablir lan1 relance le port et le remet dans le pont br-lan", "hors du pont"),
+    ((200, {"etat": "actif", "config": {"ports": ["lan0", "lan2"]}, "ports_coupes": ["lan1"]}),
+     "Rétablir lan1 remonte le port hors du pont : lan1 n'est pas un port configuré du mode routeur", "remet dans le pont"),
+    ((200, {"etat": "en_attente", "config": {"ports": ["lan0", "lan1"]}, "ports_coupes": ["lan1"]}),
+     "Rétablir lan1 remonte le port hors du pont : le mode routeur est « en_attente »", "remet dans le pont"),
+    ((503, {"detail": "contrôleur en échec"}),
+     "dans le pont br-lan si le mode routeur est actif et le port configuré, sinon hors du pont", "remet dans le pont"),
+], ids=["actif_configure", "actif_non_configure", "en_attente", "illisible"])
+def test_switch_texte_de_retablir_suit_le_controleur(routeur, attendu, absent):
+    api = _api(**{"netmodes/reseau/ports": (200, _ports_lan1_coupe()), "netmodes/routeur/etat": routeur})
+
+    def scenario(nav):
+        ctx, pg, j = _page(nav, api)
+        pg.goto("http://t.test/netmodes/switch.html")
+        pg.wait_for_selector("button[data-port=lan1][data-verbe=retablir]")
+        pg.click("button[data-port=lan1]")
+        t = pg.inner_text("#confirmTexte")
+        ctx.close()
+        return t, j
+    t, j = _avec_navigateur(scenario)
+    assert attendu in t and absent not in t, t
+    assert j["erreurs"] == [] and all(m == "GET" for m, _ in j["appels"])

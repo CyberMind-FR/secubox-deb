@@ -152,7 +152,7 @@
         <button type="button" class="btn danger" id="confirmOk" disabled>Confirmer</button><button type="button" class="btn" id="confirmAnnule">Annuler</button></div>
     </div>
     <div class="resultat" id="resultat" role="status" aria-live="polite" hidden></div>
-    <p class="note">« Isoler » placera un port dans son propre VLAN (livraison 3). « Couper » arrête le port et « Rétablir » le relance : seuls lan0 à lan3, en mode routeur actif ; chaque geste est confirmé par la saisie du nom du port et inscrit au journal d'audit. Le port derrière lequel vous êtes ne peut pas être coupé. eth1 (conduit du switch) n'est jamais ponté et eth2 (WAN) n'est jamais relancé à distance. Plusieurs adresses MAC derrière un même port signalent un switch, un hub ou un point d'accès.</p>
+    <p class="note">« Isoler » placera un port dans son propre VLAN (livraison 3). « Couper » arrête un port du pont (lan0 à lan3, en mode routeur actif seulement) ; « Rétablir » le relance en tout mode : dans le pont br-lan si le mode routeur est actif et le port configuré, sinon hors du pont. Chaque geste est confirmé par la saisie du nom du port et inscrit au journal d'audit. Le port derrière lequel vous êtes ne peut pas être coupé. eth1 (conduit du switch) n'est jamais ponté et eth2 (WAN) n'est jamais relancé à distance. Plusieurs adresses MAC derrière un même port signalent un switch, un hub ou un point d'accès.</p>
   </div>
 </div></div></main>
 
@@ -337,7 +337,7 @@
     }
     if (!R.routeur.ok) { bandeauPanne(z, R.routeur, "Mode routeur et ports coupés"); }
     else if (R.routeur.d.etat && R.routeur.d.etat !== "actif") {
-      var i = h("div", "alerte session"); i.textContent = "Mode routeur « " + R.routeur.d.etat + " » : couper ou rétablir un port exige le mode routeur actif."; z.appendChild(i);
+      var i = h("div", "alerte session"); i.textContent = "Mode routeur « " + R.routeur.d.etat + " » : couper un port exige le mode routeur actif. Rétablir un port coupé reste possible en tout mode (le port remonte alors hors du pont)."; z.appendChild(i);
     }
     facade(R, M);
     var lisible = R.ports.ok && Array.isArray(R.ports.d.ports);
@@ -359,6 +359,24 @@
   }
 
   // ── Confirmation intégrée : le nom du port à saisir, ni confirm() ni boîte native ───────────────────────────────────────────
+  // Où Rétablir remet le port, comme le contrôleur (port-retablir, permis en tout mode) : dans br-lan si le mode routeur est
+  // actif et le port configuré, sinon hors du pont. null : état du mode routeur ou ports configurés illisibles.
+  function retabliAuPont(port) {
+    var R = dernier;
+    if (!R || !R.routeur.ok || typeof R.routeur.d.etat !== "string") { return null; }
+    if (R.routeur.d.etat !== "actif") { return false; }
+    var cf = R.routeur.d.config;
+    if (cf === null) { return false; }                      // aucune configuration du mode routeur : hors du pont
+    if (!cf || !Array.isArray(cf.ports)) { return null; }
+    return cf.ports.indexOf(port) >= 0;
+  }
+  function texteRetablir(port) {
+    var au = retabliAuPont(port);
+    if (au === true) { return "Rétablir " + port + " relance le port et le remet dans le pont br-lan (mode routeur actif, port configuré)."; }
+    if (au === false && dernier.routeur.d.etat !== "actif") { return "Rétablir " + port + " remonte le port hors du pont : le mode routeur est « " + dernier.routeur.d.etat + " » (rétablir est permis en tout mode)."; }
+    if (au === false) { return "Rétablir " + port + " remonte le port hors du pont : " + port + " n'est pas un port configuré du mode routeur."; }
+    return "Rétablir " + port + " relance le port : dans le pont br-lan si le mode routeur est actif et le port configuré, sinon hors du pont (état du mode routeur illisible ici).";
+  }
   function resultat(txt, cls) { var r = $("resultat"); r.hidden = !txt; r.className = "resultat" + (cls ? " " + cls : ""); r.textContent = txt || ""; }
   function ouvrir(port, verbe, declencheur) {
     if (!LAN_RE.test(port)) { return; }
@@ -366,7 +384,7 @@
     var c = $("confirm"); c.hidden = false; c.className = "confirm" + (verbe === "couper" ? " grave" : "");
     $("confirmTexte").textContent = verbe === "couper"
       ? "Couper " + port + " arrête le port : les appareils qui y sont branchés perdent le réseau jusqu'au rétablissement. Le port derrière lequel vous êtes est refusé."
-      : "Rétablir " + port + " relance le port et le remet dans le pont br-lan.";
+      : texteRetablir(port);
     $("confirmEtiq").textContent = "Saisir « " + port + " » pour confirmer";
     var s = $("confirmSaisie"); s.value = ""; $("confirmOk").disabled = true; $("confirmOk").textContent = verbe === "couper" ? "Couper " + port : "Rétablir " + port;
     s.focus();
@@ -413,7 +431,7 @@
         { mac: "00:00:5e:00:53:a2", ip: "198.51.100.151", nom: "", port: "lan2", source: "voisin", expire: null },
         { mac: "00:00:5e:00:53:a3", ip: "198.51.100.152", nom: "tv-demo", port: "lan2", source: "bail", expire: maintenant + 3600 },
         { mac: "00:00:5e:00:53:bf", ip: "198.51.100.191", nom: "rpi-demo", port: "lan3", source: "bail", expire: maintenant + 3600 }], pannes: [] } },
-      routeur: { ok: true, d: { etat: "actif", ports_coupes: [], bascule_en_cours: false } },
+      routeur: { ok: true, d: { etat: "actif", config: { ports: ["lan0", "lan1", "lan2", "lan3"] }, ports_coupes: [], bascule_en_cours: false } },
       nac: { ok: true, d: { clients: [
         { mac: "00:00:5E:00:53:C0", ip: "198.51.100.192", hostname: "pc-demo", zone: "lan", zone_name: "LAN", allow_state: "allowed", device_type: "pc" },
         { mac: "00:00:5e:00:53:a1", ip: "198.51.100.150", hostname: "imprimante-demo", zone: "iot", zone_name: "IoT", allow_state: "allowed", device_type: "printer" },
