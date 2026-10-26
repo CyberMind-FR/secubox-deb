@@ -155,6 +155,10 @@ def _human_bytes(b: int) -> str:
     return f"{b:.1f} PB"
 
 
+class WgDumpError(Exception):
+    """`wgctl dump` en échec (code, délai, exception) : ce n'est pas « aucun pair » (#3190)."""
+
+
 def _parse_wg_show() -> Dict[str, Any]:
     """Parse `wg show all dump` for all interfaces.
 
@@ -165,6 +169,9 @@ def _parse_wg_show() -> Dict[str, Any]:
     The interface private key (field 2 of the interface line) is deliberately
     never read into the result — this runs as root, so the dump contains the
     real key and any of it in a response would be a disclosure.
+
+    Lève WgDumpError si `wgctl dump` échoue : une panne ne doit jamais se lire
+    comme une liste vide (#3190).
     """
     result = {"interfaces": {}}
     try:
@@ -175,7 +182,8 @@ def _parse_wg_show() -> Dict[str, Any]:
             capture_output=True, text=True, timeout=5
         )
         if proc.returncode != 0:
-            return result
+            raison = (proc.stderr or "").strip()[:200] or f"code {proc.returncode}"
+            raise WgDumpError(raison)
 
         for line in proc.stdout.strip().split("\n"):
             if not line:
@@ -204,10 +212,24 @@ def _parse_wg_show() -> Dict[str, Any]:
                     "tx_bytes": int(parts[7]),
                     "persistent_keepalive": int(parts[8]) if parts[8] != "off" else None,
                 })
+    except WgDumpError:
+        raise
+    except subprocess.TimeoutExpired as e:
+        raise WgDumpError("délai dépassé (5 s)") from e
     except Exception as e:
         log.error("Error parsing wg show: %s", e)
+        raise WgDumpError(f"{type(e).__name__}: {e}") from e
 
     return result
+
+
+def _wg_data_ou_503() -> Dict[str, Any]:
+    """Relevé wgctl pour une route : 503 explicite si le dump est en échec."""
+    try:
+        return _parse_wg_show()
+    except WgDumpError as e:
+        log.error("wgctl dump en échec : %s", e)
+        raise HTTPException(status_code=503, detail=f"wgctl dump en échec : {e}")
 
 
 async def _trigger_webhooks(event: str, payload: dict):
@@ -264,7 +286,11 @@ async def _periodic_stats_collector():
         try:
             await asyncio.sleep(60)  # Collect every minute
 
-            wg_data = _parse_wg_show()
+            try:
+                wg_data = _parse_wg_show()
+            except WgDumpError as e:
+                log.warning("collecte de stats ignorée, wgctl dump en échec : %s", e)
+                continue
             history = _load_json(STATS_HISTORY_FILE, {"records": []})
 
             for iface, iface_data in wg_data.get("interfaces", {}).items():
@@ -583,13 +609,13 @@ def health():
 # ═══════════════════════════════════════════════════════════════════════
 
 @app.get("/stats")
-async def get_stats(user=Depends(require_jwt)):
+def get_stats(user=Depends(require_jwt)):
     """Get current traffic statistics for all interfaces."""
     cached = stats_cache.get("traffic_stats")
     if cached:
         return cached
 
-    wg_data = _parse_wg_show()
+    wg_data = _wg_data_ou_503()
     stats = {"interfaces": {}, "totals": {"rx_bytes": 0, "tx_bytes": 0, "peers": 0, "online": 0}}
 
     now = time.time()
@@ -670,9 +696,9 @@ async def get_stats_history(
 # ═══════════════════════════════════════════════════════════════════════
 
 @app.get("/peers/status")
-async def get_peers_status(user=Depends(require_jwt)):
+def get_peers_status(user=Depends(require_jwt)):
     """Get detailed status of all peers."""
-    wg_data = _parse_wg_show()
+    wg_data = _wg_data_ou_503()
     peers = []
     now = time.time()
 
@@ -906,9 +932,9 @@ async def test_webhook(webhook_id: str, user=Depends(require_jwt)):
 # ═══════════════════════════════════════════════════════════════════════
 
 @app.get("/summary")
-async def get_wireguard_summary(user=Depends(require_jwt)):
+def get_wireguard_summary(user=Depends(require_jwt)):
     """Get comprehensive WireGuard summary."""
-    wg_data = _parse_wg_show()
+    wg_data = _wg_data_ou_503()
     now = time.time()
 
     interfaces = []
