@@ -175,8 +175,10 @@ RETIRED_MODULES = frozenset({
 # #3077 : audit du 2026-10-23 — admin (systemctl, reboot), cloner (tar de /etc et /var/lib), netdiag (ping, ss -p), certs
 # (certbot, /etc/letsencrypt), cookies (/etc/secubox/cookies.json, clé Fernet), mail (mailctl, lxc-attach) ont tous une unité
 # root active et leur socket ; montés ici, sous `secubox`, leurs actions échouaient (mailctl : « Not installed »).
+# #3178 : nac tournait deux fois, ici ET dans secubox-nac.service — deux collecteurs sur la même base, et la page lisait l'instantané en
+# mémoire de l'agrégateur (« 0 connecté » sur gk2 pendant que la Vigie voyait 13 appareils). Un seul collecteur : celui de son service.
 DEDICATED_MODULES = frozenset({"lyrion", "exposure", "nettweak", "traffic", "qos",
-                               "admin", "cloner", "netdiag", "certs", "cookies", "mail"})
+                               "admin", "cloner", "netdiag", "certs", "cookies", "mail", "nac"})
 
 
 def _load_config() -> dict:

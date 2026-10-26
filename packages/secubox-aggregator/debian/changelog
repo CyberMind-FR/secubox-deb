@@ -1,3 +1,13 @@
+secubox-aggregator (0.4.9-1~trixie1) trixie; urgency=medium
+
+  * nac à socket dédiée (ref #3178). Il tournait deux fois, monté ici ET dans
+    secubox-nac.service : deux collecteurs écrivaient la même base, et la page NAC lisait
+    l'instantané en mémoire de l'agrégateur (« Connectés : 0 » sur gk2 pendant que la Vigie voyait
+    13 appareils vus dans les 15 dernières minutes). Le relais transparent l'atteint désormais sur
+    /run/secubox/nac.sock ; le script de migration l'exclut aussi.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 07:51:05 +0100
+
 secubox-aggregator (0.4.8-1~trixie1) trixie; urgency=medium
 
   * admin, cloner, netdiag, certs, cookies et mail à socket dédiée (ref #3077). Audit du 2026-10-23 : ces six modules ont une

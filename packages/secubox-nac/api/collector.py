@@ -276,7 +276,12 @@ class Collector:
         loop = asyncio.get_running_loop()
         try:
             while True:
-                await loop.run_in_executor(None, self.cycle_once)
+                # #3178 : une exception d'un cycle (« database is locked »…) arrêtait la boucle POUR DE BON, sans un mot : l'instantané
+                # restait vide et la page annonçait « 0 connecté ». Elle est journalisée, et le cycle suivant a lieu.
+                try:
+                    await loop.run_in_executor(None, self.cycle_once)
+                except Exception:
+                    logger.warning("collector: cycle en erreur, nouvel essai au prochain cycle", exc_info=True)
                 await asyncio.sleep(self.interval)
         except asyncio.CancelledError:
             logger.info("collector: run_forever cancelled, exiting cleanly")
