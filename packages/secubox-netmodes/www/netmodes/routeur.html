@@ -18,8 +18,8 @@
     POST /api/v1/netmodes/routeur/appliquer  la même configuration + {"confirmer": "routeur"} → 202
     POST /api/v1/netmodes/routeur/confirmer  synchrone → état
     POST /api/v1/netmodes/routeur/retour     {"confirmer": "retour"} → 202
-  Actualisation : 3 s pendant une bascule, « à confirmer » ou un état illisible, 30 s sinon ; page visible seulement, jamais
-  pendant une confirmation ouverte. Une lecture ratée garde le dernier relevé (« relevé ancien ») : Confirmer reste là
+  Actualisation bornée : 3 s pendant une bascule ; « à confirmer » : 3 s jusqu'à l'échéance + 15 s ; échéance inconnue ou
+  état illisible : 3 s pendant 5 minutes au plus ; 30 s sinon. Page visible seulement, jamais pendant une confirmation ouverte. Une lecture ratée garde le dernier relevé (« relevé ancien ») : Confirmer reste là
   jusqu'à l'échéance. Une lecture partie avant une écriture est jetée (compteur de génération).
   ?embed=1 : sans menu ; ?demo=1 : enchaînement simulé (adresses de documentation RFC 5737), aucune requête, aucune écriture.
 -->
@@ -248,7 +248,7 @@
   };
   var VERBES = { "routeur-appliquer": "Application", "routeur-retour": "Retour en arrière" };
   var ETATS = { inactif: "inactif", en_attente: "à confirmer", actif: "actif", config_invalide: "invalide" };
-  var RAPIDE = 3000, LENT = 30000;
+  var RAPIDE = 3000, LENT = 30000, BORNE_RAPIDE = 300000, GRACE_ECHEANCE = 15000;
 
   // ── État de la page ────────────────────────────────────────────────────────────────────────────────────────────────────────
   var E = null, D = null;            // dernières lectures : {ok, d} ou {ok:false, session|panne}
@@ -258,6 +258,7 @@
   var occupe = false, formModifie = false, apercuFait = null;
   var minuterie = null, lecture = null, suite = null;
   var generation = 0;                // +1 au début et à la fin de chaque écriture d'état : une lecture partie avant est jetée
+  var depuisIllisible = null, depuisInconnue = null;   // début de « état illisible » et de « échéance inconnue »
 
   // ── Accès à l'API (même origine, jeton sbx_token en Bearer) ───────────────────────────────────────────────────────────────
   function jeton() { try { return localStorage.getItem("sbx_token") || ""; } catch (e) { return ""; } }
@@ -368,11 +369,24 @@
       lancement = null;
     }
   }
-  // 3 s pendant une bascule, tant que la dernière phase connue est « à confirmer » (la fenêtre de 180 s), et tant que l'état
-  // est illisible ; 30 s sinon.
+  // Cadence BORNÉE (un relevé admin = un sudo root) :
+  // - bascule en cours (ou suivie depuis cette page) : 3 s ;
+  // - « à confirmer », échéance connue : 3 s jusqu'à l'échéance + 15 s (le retour automatique s'observe), puis 30 s ;
+  // - échéance inconnue, ou état illisible : 3 s pendant 5 minutes au plus depuis le début de cette situation, puis 30 s ;
+  // - sinon 30 s.
+  function situations() {            // appelée à chaque rendu : date le début de chaque situation, l'oublie à sa fin
+    var t = Date.now(), illisible = !!(E && !E.ok), inconnue = phase() === "a_confirmer" && restant() == null;
+    depuisIllisible = illisible ? (depuisIllisible == null ? t : depuisIllisible) : null;
+    depuisInconnue = inconnue ? (depuisInconnue == null ? t : depuisInconnue) : null;
+  }
   function intervalle() {
-    var ph = phase();
-    if (ph === "bascule" || ph === "injoignable" || ph === "a_confirmer" || lancement || (E && !E.ok)) { return RAPIDE; }
+    var ph = phase(), t = Date.now(), r = restant();
+    if (depuisIllisible != null) { return t - depuisIllisible < BORNE_RAPIDE ? RAPIDE : LENT; }
+    if (ph === "bascule" || lancement) { return RAPIDE; }
+    if (ph === "a_confirmer") {
+      if (r == null) { return depuisInconnue != null && t - depuisInconnue >= BORNE_RAPIDE ? LENT : RAPIDE; }
+      return r > -GRACE_ECHEANCE ? RAPIDE : LENT;
+    }
     return LENT;
   }
 
@@ -538,6 +552,7 @@
     $("btnReprendre").disabled = !(e && e.config && typeof e.config === "object");
   }
   function rendre() {
+    situations();
     sources(); pastille(); tuiles(); rendrePhase(); rendreDerniere(); formulaire(); boutons();
     $("heure").textContent = "Relevé " + new Date().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
     hauteur();

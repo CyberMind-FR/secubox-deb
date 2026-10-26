@@ -600,3 +600,119 @@ def test_confirmer_en_echec_dit_le_temps_restant_ou_l_echeance_depassee():
     assert re.search(r"il reste 1 min ([0-3]\d|40) s avant le retour automatique ; réessayez\.$", reste), reste
     assert "rien à confirmer" in depasse and "échéance dépassée" in depasse and "il reste" not in depasse
     assert e1 == [] and e2 == []
+
+
+# ── Arbitrage : cadence rapide BORNÉE (un relevé administrateur = un sudo root) ──────────────────────────────────────────────────
+def test_cadence_rapide_bornee_dans_le_code():
+    code = _code(SRC)
+    assert "BORNE_RAPIDE = 300000" in code and "GRACE_ECHEANCE = 15000" in code
+    assert "return r > -GRACE_ECHEANCE ? RAPIDE : LENT;" in code
+    assert "if (depuisIllisible != null) { return t - depuisIllisible < BORNE_RAPIDE ? RAPIDE : LENT; }" in code
+
+
+def _horloge(nav, api, base):
+    """Page sous horloge simulée (page.clock), `base` en ms : le temps de la page avance seul jusqu'à pause_at, puis
+    seulement sur ordre (run_for, fast_forward) ; le réseau reste réel."""
+    ctx, pg, j = _page(nav, api)
+    pg.clock.install(time=base / 1000)                      # en secondes (API Python), comme pause_at
+    return ctx, pg, j
+
+
+def _lus(j):
+    return sum(1 for c in j["appels"] if c[1].endswith("/etat"))
+
+
+def _rythme(pg, j, ms):
+    """Lectures d'état déclenchées en avançant l'horloge de la page de `ms` (la lecture se termine en temps réel)."""
+    avant = _lus(j)
+    pg.clock.run_for(ms)
+    pg.wait_for_timeout(400)
+    return _lus(j) - avant
+
+
+def _saut(pg, ms):
+    """Saut dans le temps de la page : la minuterie en attente part une fois, la suivante est planifiée après la lecture."""
+    pg.clock.fast_forward(ms)
+    pg.wait_for_timeout(400)
+
+
+def test_a_confirmer_rapide_jusqu_a_l_echeance_plus_15_s_puis_normal():
+    base = (int(time.time()) + 1) * 1000
+    api = {"netmodes/routeur/etat": (200, _etat(etat="en_attente", minuteur_actif=True, echeance=_iso(base / 1000 + 60))),
+           "netmodes/routeur/derniere": (200, VIDE)}
+
+    def scenario(nav):
+        ctx, pg, j = _horloge(nav, api, base)
+        pg.goto("http://t.test/netmodes/routeur.html")
+        _pastille(pg, "MODE ROUTEUR À CONFIRMER")
+        pg.clock.pause_at((base + 10000) / 1000)
+        pg.wait_for_timeout(400)
+        r = {"avant": [_rythme(pg, j, 3100), _rythme(pg, j, 3100)]}                    # ~16 s : échéance à 60 s
+        _saut(pg, 46000)                                                                 # ~62 s : échéance passée de 2 s
+        r["grace"] = _rythme(pg, j, 3100)                                                # encore 3 s (retour à observer)
+        r["confirmer"] = pg.is_visible("#btnConfirmer")
+        _saut(pg, 20000)                                                                 # ~85 s : au-delà de échéance + 15 s
+        r["apres"] = [_rythme(pg, j, 3100), _rythme(pg, j, 27500)]                      # rien à 3 s, une lecture à 30 s
+        ctx.close()
+        return r, j
+    r, j = _avec_navigateur(scenario)
+    assert r["avant"] == [1, 1] and r["grace"] == 1, r
+    assert r["apres"] == [0, 1], r
+    assert r["confirmer"] and j["erreurs"] == []
+
+
+def test_echeance_inconnue_rapide_5_minutes_puis_lent():
+    base = (int(time.time()) + 1) * 1000
+    api = {"netmodes/routeur/etat": (200, _etat(etat="en_attente", minuteur_actif=False, echeance=None)),
+           "netmodes/routeur/derniere": (200, VIDE)}
+
+    def scenario(nav):
+        ctx, pg, j = _horloge(nav, api, base)
+        pg.goto("http://t.test/netmodes/routeur.html")
+        _pastille(pg, "MODE ROUTEUR À CONFIRMER")
+        pg.clock.pause_at((base + 10000) / 1000)
+        pg.wait_for_timeout(400)
+        r = {"debut": _rythme(pg, j, 3100)}                                              # ~13 s depuis le début
+        _saut(pg, 240000)                                                                # ~253 s : moins de 5 min
+        r["avant_borne"] = _rythme(pg, j, 3100)
+        r["compte"] = pg.inner_text("#phaseCompte")
+        _saut(pg, 60000)                                                                 # ~316 s : plus de 5 min
+        r["apres"] = [_rythme(pg, j, 3100), _rythme(pg, j, 27500)]
+        r["confirmer"] = pg.is_visible("#btnConfirmer")
+        ctx.close()
+        return r, j
+    r, j = _avec_navigateur(scenario)
+    assert r["debut"] == 1 and r["avant_borne"] == 1 and r["apres"] == [0, 1], r
+    assert r["compte"] == "échéance inconnue" and r["confirmer"] and j["erreurs"] == []
+
+
+def test_etat_illisible_rapide_5_minutes_puis_lent_et_confirmer_jusqu_a_l_echeance():
+    base = (int(time.time()) + 1) * 1000
+    lus = []
+
+    def etat(_m, _c):
+        lus.append(1)
+        if len(lus) == 1:
+            return 200, _etat(etat="en_attente", minuteur_actif=True, echeance=_iso(base / 1000 + 100))
+        return 502, {"detail": "contrôleur réseau injoignable"}
+    api = {"netmodes/routeur/etat": etat, "netmodes/routeur/derniere": (200, VIDE)}
+
+    def scenario(nav):
+        ctx, pg, j = _horloge(nav, api, base)
+        pg.goto("http://t.test/netmodes/routeur.html")
+        _pastille(pg, "MODE ROUTEUR À CONFIRMER")
+        _pastille(pg, "MODE ROUTEUR À CONFIRMER · RELEVÉ ANCIEN", 8000)                # illisible depuis ~3 s
+        pg.clock.pause_at((base + 10000) / 1000)
+        pg.wait_for_timeout(400)
+        r = {"debut": _rythme(pg, j, 3100), "confirmer_avant": pg.is_visible("#btnConfirmer")}
+        _saut(pg, 100000)                                                                # ~113 s : échéance (100 s) passée
+        r["echu"] = (_rythme(pg, j, 3100), pg.is_hidden("#btnConfirmer"))               # encore 3 s ; relevé ancien échu
+        _saut(pg, 200000)                                                                # ~316 s : illisible depuis > 5 min
+        r["apres"] = [_rythme(pg, j, 3100), _rythme(pg, j, 27500)]
+        ctx.close()
+        return r, j
+    r, j = _avec_navigateur(scenario)
+    assert r["debut"] == 1 and r["confirmer_avant"], r
+    assert r["echu"] == (1, True), r
+    assert r["apres"] == [0, 1], r
+    assert j["erreurs"] == []

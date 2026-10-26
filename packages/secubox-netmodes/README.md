@@ -226,11 +226,13 @@ ou son refus s'affiche dans la page, et aucune actualisation n'a lieu pendant un
 `wan` n'est jamais renvoyé). « Aperçu » montre les fichiers rendus (texte brut, repliables) et l'avertissement de perte
 de connexion ; « Appliquer… » refait l'aperçu des valeurs exactes, demande confirmation, puis `POST /routeur/appliquer`
 (202). La page passe en « bascule en cours » (état et dernier résultat relus toutes les 3 s tant que
-`bascule_en_cours` est vrai ou que `derniere.fini` est faux), puis en « à confirmer » (relu toutes les 3 s aussi) :
+`bascule_en_cours` est vrai ou que `derniere.fini` est faux), puis en « à confirmer » (relu toutes les 3 s jusqu'à
+l'échéance + 15 s, le temps d'observer le retour automatique, puis toutes les 30 s) :
 compte à rebours jusqu'à `echeance`, corrigé de l'écart d'horloge entre le poste et la box (en-tête `Date` de la
 réponse), « échéance inconnue » si elle manque, et bouton **Confirmer** (`POST /routeur/confirmer`) → « actif ». Une
-lecture d'état ratée ne fait rien oublier : la page garde le dernier relevé, l'annonce « relevé ancien », laisse
-Confirmer jusqu'à l'échéance et relit toutes les 3 s. Une lecture partie avant une écriture (appliquer, confirmer,
+lecture d'état ratée ne fait rien oublier : la page garde le dernier relevé, l'annonce « relevé ancien » et laisse
+Confirmer jusqu'à l'échéance. Échéance inconnue ou état illisible : relecture toutes les 3 s pendant 5 minutes au plus
+depuis le début de la situation, puis toutes les 30 s (chaque relevé d'administrateur coûte un sudo root). Une lecture partie avant une écriture (appliquer, confirmer,
 retour) est jetée à son arrivée, et la relecture qui suit l'écriture s'enchaîne à elle. Un Confirmer refusé dit le
 temps qui reste avant le retour automatique, ou « échéance dépassée ».
 « Revenir en arrière… » (`POST /routeur/retour`, 202) suit le même chemin. Si le poste perd la box (changement de

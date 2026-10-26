@@ -29,8 +29,9 @@ secubox-netmodes (1.5.0-1~trixie1) trixie; urgency=medium
     3 minutes) et bouton Confirmer ; « Revenir en arrière… » ; dernier résultat ; rappels eth2, webfilter
     ([reseau].lan) et garde de 3 minutes. Aucune actualisation page cachée ni pendant une confirmation ouverte ;
     démonstration simulée sans aucune requête. Une lecture d'état ratée garde le dernier relevé (« relevé ancien »)
-    et Confirmer jusqu'à l'échéance, relu toutes les 3 s ; une lecture partie avant une écriture est jetée ; un
-    Confirmer refusé dit le temps qui reste avant le retour automatique.
+    et Confirmer jusqu'à l'échéance ; une lecture partie avant une écriture est jetée ; un Confirmer refusé dit le
+    temps qui reste avant le retour automatique. Relecture rapide (3 s) bornée : jusqu'à l'échéance + 15 s, ou
+    5 minutes au plus quand l'échéance est inconnue ou l'état illisible ; 30 s ensuite.
   * Non repris dans cette version : « Isoler » un port (livraison 3, montré désactivé) ; l'écriture de [reseau].lan
     dans webfilter.toml (signalée, jamais faite par ce module) ; l'anti-coupure ne reconnaît pas un administrateur qui
     atteint la box par un tunnel ou un routeur sans NAT branché sur un port du LAN (son adresse n'est pas un voisin de
