@@ -87,6 +87,41 @@ def test_run_forever_offloads_cycle_off_the_loop(tmp_path, monkeypatch):
     assert all(t != loop_thread for t in cycle_threads), "cycle_once ran on the loop thread (not offloaded)"
 
 
+def test_run_forever_survit_a_un_cycle_en_erreur_3178(tmp_path, monkeypatch):
+    """#3178 : une exception d'un cycle (« database is locked »…) arrêtait la boucle pour de bon, sans un mot — l'instantané restait vide et la
+    page NAC annonçait « 0 connecté » pendant que d'autres lisaient des appareils vus il y a 30 s. Le cycle suivant doit avoir lieu."""
+    import asyncio
+    import sqlite3
+    from api.store import DeviceStore
+    from api.collector import Collector
+    import api.collector as C
+
+    s = DeviceStore(str(tmp_path / "d.db"))
+    monkeypatch.setattr(C, "discover", lambda **k: [])
+    col = Collector(s, oui_map={}, interval=0.01)
+    appels = []
+
+    def cycle():
+        appels.append(1)
+        if len(appels) == 1:
+            raise sqlite3.OperationalError("database is locked")
+    col.cycle_once = cycle
+
+    async def drive():
+        task = asyncio.create_task(col.run_forever())
+        await asyncio.sleep(0.1)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    avertis = []
+    monkeypatch.setattr(C.logger, "warning", lambda msg, *a, **k: avertis.append((msg, k.get("exc_info"))))   # indépendant de la config des journaux
+    asyncio.run(drive())
+    assert len(appels) >= 2, "la boucle s'est arrêtée au premier cycle en erreur"
+    assert avertis and avertis[0][1] is True
+
+
 def test_router_vendor_generic_hostname_classifies_as_router_high_risk(tmp_path, monkeypatch):
     """#817 addendum Part B: a router-vendor MAC (in `ROUTER_VENDORS`,
     e.g. TP-Link's `EC:08:6B`) paired with a hostname that hits none of
