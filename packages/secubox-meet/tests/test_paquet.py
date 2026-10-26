@@ -148,5 +148,22 @@ def test_minuterie_de_releve_toutes_les_cinq_minutes():
 
 def test_profil_apparmor_lit_la_base_d_activite_sans_l_ecrire():
     p = (RACINE / "apparmor" / "secubox-meet").read_text()
-    assert "/var/lib/secubox/meet/activite.db r," in p and "/var/lib/secubox/meet/activite.db-journal r," in p
-    assert "/var/lib/secubox/meet/** w" not in p and "activite.db rw" not in p
+    # k : SQLite pose des verrous même en lecture ; sans lui, « database is locked » sous AppArmor (gk1)
+    assert "/var/lib/secubox-meet/activite.db rk," in p and "/var/lib/secubox-meet/activite.db-journal r," in p
+    assert "/var/lib/secubox-meet/** w" not in p and "activite.db rw" not in p and "/var/lib/secubox/meet/" not in p
+
+
+def test_base_d_activite_sous_un_parent_de_root_et_migration_postinst():
+    """Relecture #3182 : /var/lib/secubox appartient au compte partagé secubox, qui pouvait y glisser un lien sous les
+    écritures root. La base vit sous /var/lib/secubox-meet (parent /var/lib, root)."""
+    post = (RACINE / "debian" / "postinst").read_text()
+    assert "install -d -m 0750 -o root -g secubox /var/lib/secubox-meet" in post
+    assert "/var/lib/secubox/meet" in post and '[ ! -L /var/lib/secubox/meet ]' in post
+    assert 'readonly ACTIVITE_DB="${SECUBOX_MEET_ACTIVITE_DB:-/var/lib/secubox-meet/activite.db}"' in (RACINE / "sbin" / "meetctl").read_text()
+
+
+def test_unite_de_releve_durcie():
+    svc = (RACINE / "debian" / "secubox-meet-activite.service").read_text()
+    for ligne in ("UMask=0027", "ProtectSystem=strict", "ReadWritePaths=/var/lib/secubox-meet /var/log/secubox",
+                  "PrivateTmp=yes", "ProtectHome=yes", "NoNewPrivileges=yes", "ProtectKernelTunables=yes", "ProtectControlGroups=yes"):
+        assert ligne in svc, ligne

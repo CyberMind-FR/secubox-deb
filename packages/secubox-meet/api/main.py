@@ -48,7 +48,7 @@ from secubox_core.auth import require_jwt, require_lecture
 
 from api import activite
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 CTL = "/usr/sbin/meetctl"
 
@@ -56,7 +56,7 @@ CACHE_DIR = Path("/var/cache/secubox/meet")
 STATUS_CACHE_FILE = CACHE_DIR / "status.json"
 STATUS_TTL = 60.0
 
-ACTIVITE_DB = Path("/var/lib/secubox/meet/activite.db")
+ACTIVITE_DB = Path("/var/lib/secubox-meet/activite.db")
 # Durées de cache des lectures qui passent par meetctl (psql et LiveKit à chaque appel).
 TTL_REUNIONS, TTL_DIRECT = 30.0, 15.0
 # Unités que l'API nomme à meetctl (qui revalide : liste blanche indépendante).
@@ -226,15 +226,21 @@ def media_expose_etat() -> Dict[str, Any]:
     return _ctl_json("media-expose")
 
 
+def _acteur(payload: Any) -> str:
+    """L'administrateur authentifié, tel que meetctl l'inscrit au journal d'audit (motif strict, sinon « inconnu »)."""
+    sub = str((payload or {}).get("sub") or "") if isinstance(payload, dict) else ""
+    return sub if activite.ACTEUR_RE.fullmatch(sub) else "inconnu"
+
+
 @app.post("/media-expose")
-async def media_expose(req: MediaRequest, _: Any = Depends(require_jwt)) -> Dict[str, Any]:
+async def media_expose(req: MediaRequest, payload: Any = Depends(require_jwt)) -> Dict[str, Any]:
     # Ouvre des ports entrants : confirmation explicite, comme ACTIONS_CONFIRMEES.
     if req.confirmer != "meet":
         raise HTTPException(status_code=400,
                             detail='confirmation requise : renvoyez confirmer: "meet"')
     if req.action not in ("apply", "revoke"):
         raise HTTPException(status_code=400, detail="l'action doit être apply ou revoke")
-    res = await asyncio.to_thread(lambda: _ctl_json("media-expose", f"--{req.action}"))
+    res = await asyncio.to_thread(lambda: _ctl_json("media-expose", f"--{req.action}", _acteur(payload)))
     _invalider_status()
     return res
 
@@ -288,7 +294,7 @@ def reunions(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
 
 @app.get("/connexions")
 def connexions(jours: int = Query(30, ge=1, le=30), salle: Optional[str] = Query(None, max_length=64),
-               issue: Optional[Literal["aboutie", "echec", "abandon", "en_cours"]] = None,
+               issue: Optional[Literal["aboutie", "echec", "abandon", "en_cours", "perdue"]] = None,
                _: Any = Depends(require_jwt)) -> Dict[str, Any]:
     sortie: Dict[str, Any] = {"en_direct": None}
     try:
@@ -313,12 +319,12 @@ def stats(periode: Literal["7", "30", "365"] = "7", _: Any = Depends(require_jwt
 
 
 @app.post("/clore")
-async def clore(req: ClotureRequest, _: Any = Depends(require_jwt)) -> Dict[str, Any]:
+async def clore(req: ClotureRequest, payload: Any = Depends(require_jwt)) -> Dict[str, Any]:
     # Déconnecte tous les participants : confirmation explicite, nom de salle strict (meetctl revalide et audite).
     if req.confirmer != "meet":
         raise HTTPException(status_code=400, detail='confirmation requise : renvoyez confirmer: "meet"')
-    if not activite.SALLE_RE.match(req.salle):
+    if not activite.SALLE_RE.fullmatch(req.salle):
         raise HTTPException(status_code=400, detail="nom de salle invalide")
-    res = await asyncio.to_thread(lambda: _ctl_json("clore", req.salle))
+    res = await asyncio.to_thread(lambda: _ctl_json("clore", req.salle, _acteur(payload)))
     _activite_cache.clear()
     return res

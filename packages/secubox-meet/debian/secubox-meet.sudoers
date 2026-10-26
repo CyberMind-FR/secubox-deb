@@ -10,14 +10,15 @@
 # root), ni le renouvellement forcé du secret OIDC (root seulement). Pour `logs`, une
 # ligne par unité de la liste blanche, le nombre de lignes en motif ; meetctl
 # revalide unité et nombre. #3182 : lectures de l'activité (en-direct, reunions) et « clore <salle> », dont meetctl exige un
-# seul argument au format strict ; le relevé (activite-collecte) reste à la minuterie root.
+# argument au format strict, plus l'auteur (motif strict, revalidé) ; media-expose --apply|--revoke portent aussi l'auteur, inscrit
+# au journal d'audit. Le relevé (activite-collecte) reste à la minuterie root.
 Cmnd_Alias SECUBOX_MEETCTL_API = /usr/sbin/meetctl status, \
     /usr/sbin/meetctl start, \
     /usr/sbin/meetctl stop, \
     /usr/sbin/meetctl restart, \
     /usr/sbin/meetctl media-expose, \
-    /usr/sbin/meetctl media-expose --apply, \
-    /usr/sbin/meetctl media-expose --revoke, \
+    /usr/sbin/meetctl media-expose --apply *, \
+    /usr/sbin/meetctl media-expose --revoke *, \
     /usr/sbin/meetctl oidc-verifier, \
     /usr/sbin/meetctl oidc-enregistrer, \
     /usr/sbin/meetctl logs postgresql [0-9]*, \

@@ -226,8 +226,9 @@ Demande du propriétaire, maquette validée le 2026-10-26 (« parfait ») : troi
 **Sources.** Base de Meet en lecture seule (`meet_room`, `meet_resource`, `meet_resource_access`, `meet_user`) ; API Twirp de
 LiveKit (`ListRooms`, `ListParticipants`, `DeleteRoom`) sur `10.100.0.195:7880`, jeton HS256 signé par `meetctl` (root) avec la
 clé `meet` et `/etc/secubox/secrets/meet/livekit-secret`, jamais par l'API ; journal de LiveKit (`journalctl -o json`, relu
-après le dernier curseur) toutes les 5 min par `secubox-meet-activite.timer` vers `/var/lib/secubox/meet/activite.db`
-(SQLite, root:secubox 0640, journal en mode DELETE pour que l'API le lise en lecture seule).
+après le dernier curseur) toutes les 5 min par `secubox-meet-activite.timer` (confinée) vers `/var/lib/secubox-meet/activite.db`
+(SQLite, root:secubox 0640, sous un parent de root, journal en mode DELETE pour que l'API le lise en lecture seule, AppArmor
+`rk`). La base de Meet est lue en JSON (`json_agg`). Le jeton LiveKit (60 s) passe en clair sur le pont LXC local.
 
 **Session.** Une session est un `participantID` : « starting RTC session » la commence, « participant active » la dit aboutie
 (transport `connectionType`, appareil `clientInfo.os` / `browser`), « participant closing » la termine (motif `reason`, pays) ;
@@ -236,11 +237,11 @@ Une fermeture `isExpectedToResume` n'est pas une fin.
 
 **Vie privée.** Aucune adresse IP conservée (les candidats ICE du journal ne sont pas lus) ; un participant dont l'identité est
 le `sub` d'un compte de Meet apparaît sous son pseudo, tout autre « invité » — le nom tapé dans Meet n'est ni affiché ni
-conservé. Le `turn_password` des salles ne sort jamais du contrôleur. Sessions effacées après 30 jours ; totaux par jour et
-par salle gardés 12 mois.
+conservé. Le `turn_password` des salles ne sort jamais du contrôleur. Sessions effacées après 30 jours (une session sans fin relevée depuis 24 h est
+close « fin non relevée ») ; totaux par jour et par salle gardés 12 mois.
 
-**Accès.** Routes réservées à l'administrateur (`require_jwt`). `meetctl media-expose` écrit aussi sa décision au journal
-d'audit (défaut relevé le 2026-10-26).
+**Accès.** Routes réservées à l'administrateur (`require_jwt`). `clore` et `media-expose` écrivent leur décision au journal
+d'audit avec l'administrateur authentifié (échecs de clôture compris).
 
 ## Avancement
 

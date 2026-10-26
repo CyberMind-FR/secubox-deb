@@ -20,6 +20,9 @@ from __future__ import annotations
 
 import argparse
 import base64
+import grp
+import os
+import stat
 import hashlib
 import hmac
 import json
@@ -32,8 +35,14 @@ import urllib.request
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 DUREE_SESSIONS_J = 30
-DUREE_JOURS_J = 400
-SALLE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$")
+DUREE_JOURS_J = 366                       # « 12 mois » de la page
+OUVERTE_MAX_S = 86400                     # une session sans fin relevée depuis 24 h est close (« fin non relevée »)
+SALLE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{2,63}")   # toujours en fullmatch (un « $ » laisserait passer un \n final)
+ACTEUR_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._@-]{0,63}")  # auteur inscrit à l'audit (même motif que meetctl)
+
+
+class ErreurBase(RuntimeError):
+    """Dossier ou fichier de la base refusé (lien, propriétaire, droits)."""
 
 # Motifs de fin : noms de LiveKit (ParticipantCloseReason dans le journal, DisconnectReason ailleurs) → français.
 MOTIFS = {
@@ -54,9 +63,7 @@ MOTIFS = {
     "MIGRATION": "migration",
 }
 TRANSPORTS = {"udp": "UDP", "tcp": "TCP", "turn": "Relais"}
-# Sorties de psql : `-A -F $'\x1f' -R $'\x1e'`. Un nom de salle est saisi par l'utilisateur : il peut contenir « | » ou un
-# retour à la ligne, jamais ces séparateurs ASCII.
-CHAMP, ENREG = "\x1f", "\x1e"
+# psql rend du JSON (json_agg) : un nom de salle saisi peut contenir n'importe quel caractère sans décaler les champs.
 SANS_CHEMIN = "aucun chemin média"
 
 SCHEMA = """
@@ -73,18 +80,57 @@ CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
 
 
 # ── Base ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+def _verifier(chemin) -> None:
+    """Refuse un dossier qui n'appartient pas au processus (root en production), un lien, un dossier inscriptible par
+    d'autres, une base lien symbolique ou à liens multiples : root n'écrit jamais là où un autre compte a la main."""
+    dossier = os.path.dirname(os.path.abspath(chemin))
+    try:
+        d = os.lstat(dossier)
+    except OSError:
+        raise ErreurBase(f"dossier de la base absent : {dossier}") from None
+    if not stat.S_ISDIR(d.st_mode) or d.st_uid != os.geteuid() or d.st_mode & 0o022:
+        raise ErreurBase(f"dossier de la base refusé (lien, propriétaire ou droits) : {dossier}")
+    try:
+        f = os.lstat(chemin)
+    except FileNotFoundError:
+        return
+    if not stat.S_ISREG(f.st_mode) or f.st_nlink != 1 or f.st_uid != os.geteuid():
+        raise ErreurBase(f"base refusée (lien ou propriétaire) : {chemin}")
+
+
+def _droits(chemin) -> None:
+    """0640, groupe secubox (lecture de l'API) ; par descripteur, sans suivre de lien."""
+    fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        os.fchmod(fd, 0o640)
+        if os.geteuid() == 0:
+            try:
+                os.fchown(fd, 0, grp.getgrnam("secubox").gr_gid)
+            except KeyError:
+                pass
+    finally:
+        os.close(fd)
+
+
 def ouvrir(chemin) -> sqlite3.Connection:
-    """Base en écriture (root). Journal en mode DELETE : l'API la lit en lecture seule, sans fichier -shm à créer."""
-    cx = sqlite3.connect(str(chemin), timeout=10)
+    """Base en écriture (root). Dossier et fichier vérifiés, ouverture sans suivre de lien. Journal en mode DELETE : l'API
+    la lit en lecture seule, sans fichier -shm à créer."""
+    if str(chemin) == ":memory:":
+        cx = sqlite3.connect(":memory:")
+    else:
+        _verifier(chemin)
+        cx = sqlite3.connect(f"file:{os.path.abspath(chemin)}?nofollow=1", uri=True, timeout=10)
     cx.row_factory = sqlite3.Row
     cx.execute("PRAGMA journal_mode=DELETE")
     cx.executescript(SCHEMA)
+    if str(chemin) != ":memory:":
+        _droits(chemin)
     return cx
 
 
 def ouvrir_lecture(chemin) -> sqlite3.Connection:
-    """Base en lecture seule (API). Lève sqlite3.OperationalError si elle n'existe pas encore."""
-    cx = sqlite3.connect(f"file:{chemin}?mode=ro", uri=True, timeout=5)
+    """Base en lecture seule (API, verbes de lecture). Lève sqlite3.OperationalError si elle n'existe pas encore."""
+    cx = sqlite3.connect(f"file:{os.path.abspath(chemin)}?mode=ro&nofollow=1", uri=True, timeout=5)
     cx.row_factory = sqlite3.Row
     return cx
 
@@ -112,7 +158,7 @@ def _evenement(ligne: str) -> Optional[Dict[str, Any]]:
         champs = json.loads(parties[5])
     except ValueError:
         return None
-    if not isinstance(champs, dict) or not champs.get("participantID") or not champs.get("room"):
+    if not isinstance(champs, dict) or not isinstance(champs.get("participantID"), (str, int)) or not champs.get("room"):
         return None
     return {"type": parties[4], "ts": ts, "champs": champs, "curseur": e.get("__CURSOR")}
 
@@ -138,7 +184,7 @@ def collecter(cx, lignes: Iterable[str]) -> int:
             continue
         n += 1
         dernier = ev["curseur"] or dernier
-        c, ts, sid = ev["champs"], ev["ts"], ev["champs"]["participantID"]
+        c, ts, sid = ev["champs"], ev["ts"], str(ev["champs"]["participantID"])[:64]
         salle, ident = str(c["room"])[:64], str(c.get("participant") or "")[:64]
         cx.execute("INSERT OR IGNORE INTO sessions (sid, salle, identite, debut, issue) VALUES (?, ?, ?, ?, 'en_cours')",
                    (sid, salle, ident, ts))
@@ -160,18 +206,21 @@ def collecter(cx, lignes: Iterable[str]) -> int:
     return n
 
 
-def enregistrements(flux) -> List[str]:
-    """Les enregistrements d'une sortie de psql (séparateur \\x1e), sans le saut de ligne final."""
-    return [e for e in flux.read().strip("\n").split(ENREG) if e]
+def _liste_json(texte: str) -> List[Any]:
+    """La liste JSON rendue par psql (json_agg) ; ValueError sinon — une lecture ratée ne doit rien effacer."""
+    try:
+        v = json.loads(texte or "")
+    except ValueError:
+        raise ValueError("sortie de psql illisible") from None
+    if not isinstance(v, list):
+        raise ValueError("sortie de psql inattendue")
+    return v
 
 
-def comptes(cx, lignes: Iterable[str]) -> int:
-    """`sub` CHAMP `pseudo` (psql sur meet_user) : remplace la table des pseudos."""
-    paires = []
-    for ligne in lignes:
-        morceaux = ligne.strip("\n").split(CHAMP)
-        if len(morceaux) == 2 and morceaux[0] and morceaux[1]:
-            paires.append((morceaux[0][:64], morceaux[1][:64]))
+def comptes(cx, texte: str) -> int:
+    """Pseudos des comptes de Meet (JSON `[{sub, pseudo}]`) : remplace la table, seulement si la lecture a réussi."""
+    paires = [(str(e["sub"])[:64], str(e["pseudo"])[:64]) for e in _liste_json(texte)
+              if isinstance(e, dict) and e.get("sub") and e.get("pseudo")]
     cx.execute("DELETE FROM comptes")
     cx.executemany("INSERT OR REPLACE INTO comptes (identite, pseudo) VALUES (?, ?)", paires)
     cx.commit()
@@ -191,13 +240,18 @@ def _duree(r, maintenant: int) -> int:
 def purger(cx, maintenant: Optional[int] = None) -> int:
     """Sessions terminées de plus de 30 jours versées dans `jours`, puis effacées ; `jours` borné à ~13 mois."""
     maintenant = int(maintenant or time.time())
+    # Une session sans fin relevée (LiveKit arrêté, reprise jamais suivie) ne reste ni « en cours » ni indéfiniment : close
+    # sans durée inventée, puis purgée comme les autres.
+    cx.execute("UPDATE sessions SET fin = COALESCE(actif, debut), motif = 'fin non relevée', "
+               "issue = CASE WHEN actif IS NULL THEN 'abandon' ELSE 'perdue' END WHERE fin IS NULL AND debut < ?",
+               (maintenant - OUVERTE_MAX_S,))
     seuil = maintenant - DUREE_SESSIONS_J * 86400
     vieilles = cx.execute("SELECT * FROM sessions WHERE debut < ? AND fin IS NOT NULL", (seuil,)).fetchall()
     for r in vieilles:
         cx.execute("INSERT INTO jours (jour, salle, abouties, echecs, secondes) VALUES (?, ?, 0, 0, 0) "
                    "ON CONFLICT(jour, salle) DO NOTHING", (_jour(r["debut"]), r["salle"]))
         cx.execute("UPDATE jours SET abouties=abouties+?, echecs=echecs+?, secondes=secondes+? WHERE jour=? AND salle=?",
-                   (1 if r["issue"] == "aboutie" else 0, 1 if r["issue"] == "echec" else 0, _duree(r, maintenant),
+                   (1 if r["issue"] in ("aboutie", "perdue") else 0, 1 if r["issue"] == "echec" else 0, _duree(r, maintenant),
                     _jour(r["debut"]), r["salle"]))
     cx.execute("DELETE FROM sessions WHERE debut < ? AND fin IS NOT NULL", (seuil,))
     cx.execute("DELETE FROM jours WHERE jour < ?", (_jour(maintenant - DUREE_JOURS_J * 86400),))
@@ -241,7 +295,7 @@ def stats(cx, periode: int = 7, maintenant: Optional[int] = None) -> Dict[str, A
     debut = maintenant - periode * 86400
     lignes = cx.execute("SELECT * FROM sessions WHERE debut >= ?", (debut,)).fetchall()
     pseudos = _pseudos(cx)
-    abouties = [r for r in lignes if r["issue"] in ("aboutie", "en_cours") and r["actif"] is not None]
+    abouties = [r for r in lignes if r["issue"] in ("aboutie", "en_cours", "perdue") and r["actif"] is not None]
     durees = [_duree(r, maintenant) for r in abouties]
     st: Dict[str, Any] = {
         "periode": periode, "sessions": len(lignes), "sessions_abouties": len(abouties),
@@ -338,7 +392,7 @@ def en_direct(appel, cx) -> Dict[str, Any]:
     sortie = []
     for salle in appel("ListRooms", {}, {"roomList": True}).get("rooms", []):
         nom = str(salle.get("name") or "")
-        if not SALLE_RE.match(nom):
+        if not SALLE_RE.fullmatch(nom):
             continue
         ps = []
         for p in appel("ListParticipants", {"room": nom}, {"roomAdmin": True, "room": nom}).get("participants", []):
@@ -351,32 +405,32 @@ def en_direct(appel, cx) -> Dict[str, Any]:
     return {"salles": sortie, "releve": int(time.time())}
 
 
-def reunions(lignes: Iterable[str], direct: Dict[str, Any], cx) -> List[Dict[str, Any]]:
-    """Salles de Meet (id, nom, slug, accès, propriétaire, créée, dernier démarrage ; champs séparés par CHAMP), avec l'état
-    en direct et le bilan de la dernière réunion (sessions depuis le dernier démarrage)."""
+def reunions(texte: str, direct: Dict[str, Any], cx) -> List[Dict[str, Any]]:
+    """Salles de Meet (JSON `[{id, nom, slug, acces, proprietaire, creee, dernier}]`, psql json_agg), avec l'état en direct
+    et le bilan de la dernière réunion (sessions depuis le dernier démarrage)."""
     ouvertes = {s["salle"]: len(s["participants"]) for s in direct.get("salles", [])}
     sortie = []
-    for ligne in lignes:
-        m = ligne.strip("\n").split(CHAMP)
-        if len(m) != 7 or not SALLE_RE.match(m[0]):
+    for e in _liste_json(texte):
+        if not isinstance(e, dict) or not SALLE_RE.fullmatch(str(e.get("id") or "")):
             continue
-        rid, nom, slug, acces, proprio, cree, dernier = m
-        dernier_ts = _entier(dernier)
+        rid = str(e["id"])
+        dernier_ts = _entier(e.get("dernier"))
         derniere = None
         if dernier_ts is not None:
             r = cx.execute("SELECT COUNT(DISTINCT identite) n, SUM(CASE WHEN actif IS NOT NULL THEN "
                            "COALESCE(fin, CAST(strftime('%s','now') AS INTEGER)) - actif ELSE 0 END) s "
                            "FROM sessions WHERE salle = ? AND debut >= ?", (rid, dernier_ts)).fetchone()
             derniere = {"debut": dernier_ts, "participants": r["n"] or 0, "secondes": max(0, r["s"] or 0)}
-        sortie.append({"salle": rid, "nom": nom[:120], "slug": slug[:64], "acces": acces[:20], "proprietaire": proprio[:64] or None,
-                       "creee": _entier(cree), "derniere": derniere, "en_cours": rid in ouvertes, "presents": ouvertes.get(rid, 0)})
+        sortie.append({"salle": rid, "nom": str(e.get("nom") or "")[:120], "slug": str(e.get("slug") or "")[:64],
+                       "acces": str(e.get("acces") or "")[:20], "proprietaire": (str(e["proprietaire"])[:64] if e.get("proprietaire") else None),
+                       "creee": _entier(e.get("creee")), "derniere": derniere, "en_cours": rid in ouvertes, "presents": ouvertes.get(rid, 0)})
     sortie.sort(key=lambda x: (x["derniere"] or {}).get("debut") or x["creee"] or 0, reverse=True)
     return sortie
 
 
 def clore(appel, salle: str) -> Dict[str, Any]:
     """Met fin à une réunion en cours (DeleteRoom) : tous les participants sont déconnectés."""
-    if not SALLE_RE.match(salle or ""):
+    if not SALLE_RE.fullmatch(salle or ""):
         raise ValueError("nom de salle invalide")
     appel("DeleteRoom", {"room": salle}, {"roomCreate": True})
     return {"success": True, "salle": salle}
@@ -398,7 +452,17 @@ def principal(argv=None) -> int:
     ap.add_argument("--secret", default="/etc/secubox/secrets/meet/livekit-secret")
     ap.add_argument("--salle", default="")
     a = ap.parse_args(argv)
-    cx = ouvrir(a.db)
+    try:
+        if a.commande in ("curseur", "collecte", "comptes"):
+            cx = ouvrir(a.db)                       # écriture : dossier et fichier vérifiés
+        else:
+            try:
+                cx = ouvrir_lecture(a.db)            # lecture : jamais de création sous sudo
+            except sqlite3.OperationalError:
+                cx = ouvrir(":memory:")
+    except ErreurBase as e:
+        print(json.dumps({"success": False, "error": str(e)[:300]}))
+        return 1
     try:
         if a.commande == "curseur":
             print(curseur(cx) or "")
@@ -406,12 +470,12 @@ def principal(argv=None) -> int:
             n = collecter(cx, sys.stdin)
             print(json.dumps({"success": True, "evenements": n, "purgees": purger(cx)}))
         elif a.commande == "comptes":
-            print(json.dumps({"success": True, "comptes": comptes(cx, enregistrements(sys.stdin))}))
+            print(json.dumps({"success": True, "comptes": comptes(cx, sys.stdin.read())}))
         elif a.commande == "en-direct":
             print(json.dumps(en_direct(_appelant(a), cx)))
         elif a.commande == "reunions":
             direct = en_direct(_appelant(a), cx)
-            print(json.dumps({"reunions": reunions(enregistrements(sys.stdin), direct, cx), "releve": direct["releve"]}))
+            print(json.dumps({"reunions": reunions(sys.stdin.read(), direct, cx), "releve": direct["releve"]}))
         else:
             print(json.dumps(clore(_appelant(a), a.salle)))
     except ValueError as e:
