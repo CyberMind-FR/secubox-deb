@@ -5,153 +5,287 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — Modes réseau, profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  SecuBox — panneau « Réseau » (#3190), hôte à onglets au profil Aurora (.claude/AURORA-REFERENCE.md, modèle : /soc/index.html).
+  Une seule iframe de même origine, une page autonome par onglet (carte.html, switch.html, clients.html, maillage.html,
+  routeur.html, toutes en ?embed=1) ; hauteur annoncée par la page encadrée ({sbxVue, onglet}, origine ET source vérifiées).
+  En-tête : pastille du mode routeur lue sur GET /api/v1/netmodes/routeur/etat ; bandeau « LAN temporaire / mode routeur
+  non actif » quand l'état n'est pas « actif ». Lien direct vers un onglet : #carte, #switch, #clients, #maillage, #routeur, #modes.
+
+  Onglet « Modes (hérité) » : l'ANCIENNE page, conservée dans le DOM avec tous ses identifiants (#2457).
   DONNÉES RÉELLES : GET /api/v1/netmodes/status, /get_available_modes, /preview_changes?mode=, /validate_config, /detect.
   Actions (confirmation INTÉGRÉE, jamais confirm()) : POST /apply_mode, /rollback. Le mode n'est jamais inventé : sans état enregistré, « inconnu ».
-  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes, propagé aux onglets.
 -->
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox — Modes réseau</title>
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <title>SecuBox — Réseau</title>
     <style>
         :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
           --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
         *{box-sizing:border-box}
-        html,body{margin:0;min-height:100%}
-        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+        html,body{margin:0}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
              color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
-        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.sm #sidebar{display:none}
+        [hidden]{display:none!important}
         .principal{min-width:0}
-        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
-        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
-        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        body:not(.sm) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.sm) .principal{margin-left:0}}
+        body.mobile-mode:not(.sm) .principal{margin-left:0}
         .cadre{container-type:inline-size;container-name:a;padding:10px}
         .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;align-content:start}
         .app>*{min-width:0}
         .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
-        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
-        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem;display:block;overflow-wrap:anywhere}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
         .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .actif.info{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
         .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
-        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;min-height:30px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
         .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
         .btn.primary{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff} .btn.danger{background:rgba(255,77,94,.16);border-color:var(--rouge);color:#ffd9de} .btn.good{background:rgba(46,204,113,.16);border-color:var(--vert);color:#d6f7e3}
         .btn.sm{padding:3px 9px;font-size:.72rem}
         .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
-        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem} .info a{color:inherit}
+        .bandeau-lan{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem;line-height:1.4}
+        .bandeau-lan.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)}
+        .bandeau-lan>span{flex:1 1 320px;min-width:0;overflow-wrap:anywhere}
+
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglet{font:inherit;font-size:.8rem;color:var(--doux);background:rgba(10,22,46,.5);border:1px solid var(--trait);border-radius:9px;padding:6px 13px;min-height:34px;cursor:pointer}
+        .onglet:hover{border-color:var(--trait2);color:var(--texte)}
+        .onglet[aria-selected="true"]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .onglet:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglet.herite{border-style:dashed}
+        .ecran{display:grid;gap:10px;min-width:0} .ecran>*{min-width:0}
+        #vue{width:100%;height:1000px;border:0;display:block;background:transparent}
+
+        /* Onglet « Modes (hérité) » : la peau de l'ancienne page, inchangée. */
+        .sous-tete{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px} .sous-tete b{font-size:1rem} .sous-tete small{color:var(--doux);font-size:.74rem;overflow-wrap:anywhere}
+        .note-herite{color:var(--faible);font-size:.74rem;line-height:1.4}
         #dialogue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
-        #dialogue.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)} #dialogue[hidden]{display:none} #dialogue span{flex:1 1 260px;line-height:1.4}
-        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
-        @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        #dialogue.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)} #dialogue span{flex:1 1 260px;line-height:1.4}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}
+        @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,minmax(0,1fr))}}
         .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
-        .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:28px;height:28px}
-        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
         .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
         @container a (min-width:900px){.g2{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
-        .pan,.card{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
-        .pan h3,.card h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
-        .iface{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;margin-bottom:8px;background:rgba(8,18,38,.5)} .iface.up{border-left-color:var(--vert)} .iface.down{border-left-color:var(--rouge)}
-        .iface-head{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;cursor:pointer}
-        .iface-emoji{font-size:1.3rem} .iface-id .name{font-weight:700;overflow-wrap:anywhere} .iface-id .role{color:var(--faible);font-size:.72rem}
-        .iface-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end} .m{text-align:right} .mv{font-weight:700;font-variant-numeric:tabular-nums;font-size:.82rem} .ml{color:var(--faible);font-size:.64rem;text-transform:uppercase}
-        .pill{border:1px solid;border-radius:999px;padding:1px 10px;font-size:.68rem;font-weight:700} .pill.up{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)} .pill.down{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
-        .chev{color:var(--faible);transition:transform .15s} .iface.open .chev{transform:rotate(90deg)}
-        .iface-body{display:none;padding:6px 10px 10px;border-top:1px solid rgba(86,150,255,.12)} .iface.open .iface-body{display:block}
-        .iface-sub{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--doux);font-size:.76rem;margin-bottom:8px} .iface-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
         code{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;overflow-wrap:anywhere}
-        .peer-note{color:var(--faible);font-size:.76rem;padding:6px 0} .peer-list{display:flex;flex-direction:column;gap:4px}
-        .peer{display:grid;grid-template-columns:1.2em minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:5px 8px;border:1px solid rgba(86,150,255,.12);border-radius:8px;font-size:.76rem}
-        .peer.active{border-color:rgba(46,204,113,.45);background:rgba(46,204,113,.06)} .peer .ip{font-weight:600} .peer .key{color:var(--faible);font-size:.64rem;font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
-        .peer .hs{color:var(--doux);white-space:nowrap} .peer .rx{color:var(--cyan)} .peer .tx{color:var(--jaune)} .peer .xfer{white-space:nowrap;font-variant-numeric:tabular-nums}
-        .hl{display:grid;grid-template-columns:minmax(70px,.9fr) minmax(0,2.4fr) auto;gap:8px;align-items:center;font-size:.74rem;padding:2px 0} .hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .hl b{font-variant-numeric:tabular-nums;color:var(--doux);font-weight:600;white-space:nowrap} .hb{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden} .hbi{display:flex;height:100%;min-width:3px} .hbi i{display:block;min-width:1px}
-        .repart{display:flex;gap:14px;align-items:center;flex-wrap:wrap} .leg{flex:1 1 150px;min-width:0} .leg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:6px;align-items:center;font-size:.74rem;padding:1px 0;white-space:nowrap}
-        .leg i{width:9px;height:9px;border-radius:50%;display:inline-block} .leg b{font-weight:600} svg .dn{fill:#eaf1ff;font-size:18px;font-weight:700} svg .dp{fill:#9fb3d6;font-size:9px}
+        .peer-note{color:var(--faible);font-size:.76rem;padding:6px 0}
+        .pill{border:1px solid;border-radius:999px;padding:1px 10px;font-size:.68rem;font-weight:700;white-space:nowrap} .pill.up{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)} .pill.down{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.neutre{color:var(--doux);border-color:var(--faible);background:rgba(159,179,214,.1)}
         .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:.78rem;margin-bottom:8px} .kv .k{color:var(--doux)}
         pre{margin:0;background:rgba(3,8,20,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;overflow:auto;font-size:.74rem;color:#cfe8ff;max-height:16rem}
         .vide{color:var(--faible);font-size:.78rem;padding:6px 0}
-        .modal{position:fixed;inset:0;background:rgba(2,6,16,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:100} .modal.show{display:flex}
-        .modal-content{background:#0b1830;border:1px solid var(--trait2);border-radius:14px;padding:14px 16px;max-width:560px;width:100%;max-height:90vh;overflow:auto}
-        .modal-content h3{margin:0 0 10px;font-size:1rem} .modal-content img{display:block;max-width:220px;width:100%;margin:8px auto;border-radius:8px;background:#fff;padding:6px}
-        .form-group{display:grid;gap:4px;margin-bottom:8px} .form-group label{color:var(--doux);font-size:.76rem}
-        input[type=text],input:not([type]){font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
-        input:focus{outline:none;border-color:var(--cyan)} .btn-group{display:flex;gap:6px;flex-wrap:wrap}
-        .toast{position:fixed;bottom:16px;right:16px;max-width:26rem;padding:9px 14px;background:var(--cyan);color:#04202a;border-radius:10px;font-size:.82rem;z-index:200;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
-        .toast.show{opacity:1;transform:translateY(0)} .toast.error{background:var(--rouge);color:#fff}
-        @media (max-width:560px){.iface-head{grid-template-columns:2em minmax(0,1fr) auto}.iface-meta .m{display:none}.peer{grid-template-columns:1.2em minmax(0,1fr) auto}.peer .xfer{display:none}}
-    
-        .moteurs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
-        .mot{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);display:grid;gap:2px}
-        .mot.ok{border-left-color:var(--vert)} .mot.ko{border-left-color:var(--rouge)} .mot b{font-size:.84rem} .mot small{color:var(--faible);font-size:.7rem}
-        .win{display:flex;gap:6px;flex-wrap:wrap} .win .btn.on{background:rgba(41,182,246,.22);border-color:var(--cyan)}
-        .liste{display:flex;flex-wrap:wrap;gap:5px;max-height:11rem;overflow:auto} .liste code{border:1px solid var(--trait);border-radius:6px;padding:1px 7px;background:rgba(8,18,38,.6)}
-        .carte svg.monde{width:100%;height:auto;display:block;border-radius:8px} .pays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 18px;font-size:.78rem;margin-top:8px}
-        .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)} .pays .vide{grid-column:1/-1}
-        .g3{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)} @container a (min-width:760px){.g3{grid-template-columns:repeat(3,minmax(0,1fr))}}
-        svg.serie{width:100%;height:auto;display:block} svg .ax{fill:#6f84a8;font-size:9px}
-            .modes{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
-        .mode{border:1px solid var(--trait);border-radius:10px;padding:10px;background:rgba(8,18,38,.5);display:grid;gap:6px;align-content:start} .mode.cur{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(41,182,246,.3)}
+        .modes{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr))}
+        .mode{border:1px solid var(--trait);border-radius:10px;padding:10px;background:rgba(8,18,38,.5);display:grid;gap:6px;align-content:start;min-width:0} .mode.cur{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(41,182,246,.3)}
         .mode b{font-size:.9rem} .mode small{color:var(--doux);font-size:.74rem;line-height:1.35} .mode .row{display:flex;gap:6px;flex-wrap:wrap}
-        table.t{width:100%;border-collapse:collapse;font-size:.78rem} table.t th{color:var(--faible);font-weight:600;text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px}
-        table.t td{padding:5px 8px;border-top:1px solid rgba(86,150,255,.12);overflow-wrap:anywhere} .tw{overflow-x:auto}
-        .pill.neutre{color:var(--doux);border-color:var(--faible);background:rgba(159,179,214,.1)}
+        table.t{width:100%;border-collapse:collapse;font-size:.78rem} table.t th{color:var(--faible);font-weight:600;text-align:left;font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px}
+        table.t td{padding:5px 8px;border-top:1px solid rgba(86,150,255,.12);overflow-wrap:anywhere} table.t tr:hover td{background:rgba(41,182,246,.07)} .tw{overflow-x:auto}
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="principal"><div class="cadre"><div class="app">
+    <main class="principal"><div class="cadre" id="cadre"><div class="app">
         <header class="tete">
             <div class="marque">
-                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.4" fill="rgba(41,182,246,.14)"/><circle cx="5" cy="19" r="2.4"/><circle cx="19" cy="19" r="2.4"/><path d="M12 7.5v5M12 12.5l-6 4.5M12 12.5l6 4.5"/></svg>
-                <div><b>Modes réseau</b><small id="subline">Mode de la box, interfaces et connexion</small></div>
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="14" width="18" height="6" rx="1.5" fill="rgba(41,182,246,.14)"/><path d="M7 17h.01M11 17h.01M15 17h.01"/><path d="M12 14V9M12 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>
+                <div><b>Réseau</b><small id="sousTitre">cartographie, switch, clients, maillage et mode routeur</small></div>
             </div>
-            <span class="actif neutre" id="pastille">LECTURE…</span>
-            <div class="droite"><span id="heure"></span><button class="btn" id="btn-refresh">⟳ Actualiser</button></div>
+            <span class="actif neutre" id="pastilleRouteur" title="État du mode routeur, lu sur /api/v1/netmodes/routeur/etat (actif, à confirmer, inactif, configuration invalide).">LECTURE…</span>
+            <div class="droite"><span id="heure"></span><button class="btn" id="btn-refresh" type="button" title="Relire l'état du mode routeur et recharger l'onglet affiché">⟳ Actualiser</button></div>
         </header>
         <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, actions inertes</div>
-        <div class="info" id="inconnu" hidden>Le mode réseau de cette box n’est pas enregistré : elle n’a jamais changé de mode par ce module. Ce qui tourne réellement est lu dans les interfaces et la route par défaut ci-dessous.</div>
-        <div id="dialogue" role="alertdialog" aria-label="Confirmation" hidden></div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
+        <div class="bandeau-lan" id="bandeauLan" role="status" hidden><span id="bandeauTexte"></span><button class="btn primary" id="versRouteur" type="button">Passer au mode routeur durable…</button></div>
 
-        <div class="tuiles">
-            <div class="tuile"><div class="l">Mode</div><div class="v" id="sMode" style="font-size:1.1rem">—</div><div class="s" id="sModeS">enregistré par ce module</div></div>
-            <div class="tuile"><div class="l">Interfaces</div><div class="v" id="sIf">—</div><div class="s">montées / total</div></div>
-            <div class="tuile"><div class="l">Sortie Internet (WAN)</div><div class="v" id="sWan" style="font-size:1.1rem">—</div><div class="s" id="sWanS">route par défaut</div></div>
-            <div class="tuile"><div class="l">Détection matérielle</div><div class="v" id="sDet" style="font-size:1.1rem">—</div><div class="s" id="sDetS">secubox-net-detect</div></div>
-            <div class="tuile"><div class="l">Dernier changement</div><div class="v" id="sLast" style="font-size:1.1rem">—</div><div class="s">par ce module</div></div>
+        <div class="onglets" role="tablist" aria-label="Pages du panneau Réseau">
+            <button class="onglet" type="button" role="tab" id="onglet-carte" aria-controls="ecran-vue" aria-selected="true" data-onglet="carte" data-vue="carte.html">Cartographie</button>
+            <button class="onglet" type="button" role="tab" id="onglet-switch" aria-controls="ecran-vue" aria-selected="false" tabindex="-1" data-onglet="switch" data-vue="switch.html">Switch</button>
+            <button class="onglet" type="button" role="tab" id="onglet-clients" aria-controls="ecran-vue" aria-selected="false" tabindex="-1" data-onglet="clients" data-vue="clients.html">Clients LAN</button>
+            <button class="onglet" type="button" role="tab" id="onglet-maillage" aria-controls="ecran-vue" aria-selected="false" tabindex="-1" data-onglet="maillage" data-vue="maillage.html">Liens du maillage</button>
+            <button class="onglet" type="button" role="tab" id="onglet-routeur" aria-controls="ecran-vue" aria-selected="false" tabindex="-1" data-onglet="routeur" data-vue="routeur.html">Mode routeur</button>
+            <button class="onglet herite" type="button" role="tab" id="onglet-modes" aria-controls="ecran-modes" aria-selected="false" tabindex="-1" data-onglet="modes" title="L'ancienne page des modes réseau (netplan)">Modes (hérité)</button>
         </div>
 
-        <div class="pan"><h3>Modes disponibles <i>appliquer remplace la configuration réseau : une sauvegarde est faite avant</i></h3><div class="modes" id="modes"><div class="vide">Chargement…</div></div>
-            <div class="row" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
-                <button class="btn sm" id="btnValider">✓ Valider la configuration actuelle</button>
-                <button class="btn danger sm" id="btnRestaurer">↺ Restaurer la dernière sauvegarde</button>
+        <!-- Les cinq pages du panneau : une seule iframe de même origine, la page annonce sa hauteur. -->
+        <section class="ecran" id="ecran-vue" role="tabpanel" aria-labelledby="onglet-carte">
+            <iframe id="vue" title="Cartographie réseau"></iframe>
+        </section>
+
+        <!-- Onglet « Modes (hérité) » : l'ancienne page, identifiants et comportements conservés (#2457). -->
+        <section class="ecran" id="ecran-modes" role="tabpanel" aria-labelledby="onglet-modes" hidden>
+            <div class="sous-tete"><b>Modes réseau</b><span class="actif neutre" id="pastille">LECTURE…</span><small id="subline">Mode de la box, interfaces et connexion</small></div>
+            <div class="note-herite">Ancien mécanisme (netplan). Sur un MOCHAbin, ses actions sont refusées : le mode routeur se règle dans l’onglet « Mode routeur ».</div>
+            <div class="info" id="inconnu" hidden>Le mode réseau de cette box n’est pas enregistré : elle n’a jamais changé de mode par ce module. Ce qui tourne réellement est lu dans les interfaces et la route par défaut ci-dessous.</div>
+            <div id="dialogue" role="alertdialog" aria-label="Confirmation" hidden></div>
+
+            <div class="tuiles">
+                <div class="tuile" title="Mode enregistré par ce module (GET /status, champ current_mode) ; « Inconnu » s'il n'a jamais été changé ici."><div class="l">Mode</div><div class="v" id="sMode" style="font-size:1.1rem">—</div><div class="s" id="sModeS">enregistré par ce module</div></div>
+                <div class="tuile" title="Interfaces montées sur le total des interfaces lues (GET /status)."><div class="l">Interfaces</div><div class="v" id="sIf">—</div><div class="s">montées / total</div></div>
+                <div class="tuile" title="Interface de la route par défaut et sa passerelle (GET /status)."><div class="l">Sortie Internet (WAN)</div><div class="v" id="sWan" style="font-size:1.1rem">—</div><div class="s" id="sWanS">route par défaut</div></div>
+                <div class="tuile" title="Carte détectée par secubox-net-detect (GET /detect)."><div class="l">Détection matérielle</div><div class="v" id="sDet" style="font-size:1.1rem">—</div><div class="s" id="sDetS">secubox-net-detect</div></div>
+                <div class="tuile" title="Date du dernier changement de mode fait par ce module."><div class="l">Dernier changement</div><div class="v" id="sLast" style="font-size:1.1rem">—</div><div class="s">par ce module</div></div>
             </div>
-            <div class="peer-note" id="resultat" role="status"></div>
-        </div>
 
-        <div class="grille g2">
-            <div class="pan"><h3>Interfaces réseau <i>lues sur la box</i></h3><div class="tw" id="interfaces"><div class="vide">—</div></div></div>
-            <div class="pan"><h3>Détection du matériel</h3><div id="detection"><div class="vide">—</div></div></div>
-        </div>
+            <div class="pan"><h3>Modes disponibles <i>appliquer remplace la configuration réseau : une sauvegarde est faite avant</i></h3><div class="modes" id="modes"><div class="vide">Chargement…</div></div>
+                <div class="row" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+                    <button class="btn sm" id="btnValider" type="button">✓ Valider la configuration actuelle</button>
+                    <button class="btn danger sm" id="btnRestaurer" type="button">↺ Restaurer la dernière sauvegarde</button>
+                </div>
+                <div class="peer-note" id="resultat" role="status"></div>
+            </div>
 
-        <div class="pan" id="aperc" hidden><h3>Aperçu <i id="aperN"></i></h3><pre id="yaml"></pre></div>
+            <div class="grille g2">
+                <div class="pan"><h3>Interfaces réseau <i>lues sur la box</i></h3><div class="tw" id="interfaces"><div class="vide">—</div></div></div>
+                <div class="pan"><h3>Détection du matériel</h3><div id="detection"><div class="vide">—</div></div></div>
+            </div>
+
+            <div class="pan" id="aperc" hidden><h3>Aperçu <i id="aperN"></i></h3><pre id="yaml"></pre></div>
+        </section>
     </div></div></main>
 
-    <script src="/shared/sidebar.js"></script>
     <script>
         const API = '/api/v1/netmodes';
-        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
-        if (Q.get('embed')) document.body.classList.add('emb');
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMB = !!Q.get('embed');
+        if (EMB) document.body.classList.add('emb');
+        if (EMB || DEMO) document.body.classList.add('sm');
+        else {
+            // Menu commun : hors ?embed=1 et hors démonstration.
+            const lien = document.createElement('link'); lien.rel = 'stylesheet'; lien.href = '/shared/sidebar-light.css'; document.head.appendChild(lien);
+            const sb = document.createElement('script'); sb.src = '/shared/sidebar.js'; document.body.appendChild(sb);
+        }
         const $ = id => document.getElementById(id);
         let etat = null, modes = [];
         function token() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
         function entetes(x) { const h = Object.assign({}, x || {}), t = token(); if (t) h['Authorization'] = 'Bearer ' + t; return h; }
         const fmtDate = s => { try { return new Date(s).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return '—'; } };
         function vide(el, msg) { el.replaceChildren(); const d = document.createElement('div'); d.className = 'vide'; d.textContent = msg; el.append(d); }
+        function releve() { $('heure').textContent = 'Relevé ' + new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
 
-        // Tous les appels passent ici. 401 = session requise ; en démonstration, lectures fictives et écritures inertes.
+        // ── Hauteur annoncée à l'hôte (la page mesure son cadre, pas le document) ─────────────────────────────────────────────────────
+        function hauteur() {
+            if (window.parent === window) return;
+            try { parent.postMessage({ sbxVue: Math.ceil($('cadre').getBoundingClientRect().bottom + window.scrollY), onglet: 'netmodes' }, location.origin); } catch (e) { /* hors cadre */ }
+        }
+
+        // ── Mode routeur : pastille d'en-tête et bandeau « LAN temporaire » (GET /routeur/etat) ─────────────────────────────────────────
+        let routeur = null, tCompte = null;
+        async function lireRouteur() {
+            if (DEMO) return { ok: true, d: { etat: 'inactif', depuis: null, config: null, minuteur_actif: false, echeance: null, bascule_en_cours: false, dhcp_actif: true, adresses_pont: ['198.51.100.1/24'], ports_coupes: [] } };
+            try {
+                const r = await fetch(API + '/routeur/etat', { headers: entetes({ Accept: 'application/json' }), credentials: 'same-origin', cache: 'no-store' });
+                if (r.status === 401 || r.status === 403) return { ok: false, session: true };
+                let j = null; try { j = await r.json(); } catch (e) { /* pas de JSON */ }
+                if (!r.ok || !j || typeof j !== 'object') return { ok: false, panne: (j && j.detail) || ('HTTP ' + r.status) };
+                return { ok: true, d: j };
+            } catch (e) { return { ok: false, panne: 'injoignable' }; }
+        }
+        function delai(ms) {
+            const s = Math.max(0, Math.round(ms / 1000)), m = Math.floor(s / 60), h = Math.floor(m / 60);
+            if (h >= 48) return Math.round(h / 24) + ' j';
+            if (h) return h + ' h ' + String(m % 60).padStart(2, '0') + ' min';
+            return m ? m + ' min ' + String(s % 60).padStart(2, '0') + ' s' : s + ' s';
+        }
+        function rendreRouteur(r) {
+            routeur = r;
+            const pa = $('pastilleRouteur'), bd = $('bandeauLan'), tx = $('bandeauTexte'), bt = $('versRouteur');
+            clearInterval(tCompte); tCompte = null;
+            $('session').hidden = DEMO || !r.session;
+            if (!r.ok) {
+                pa.textContent = r.session ? 'SESSION REQUISE' : 'ÉTAT DU ROUTEUR ILLISIBLE';
+                pa.className = 'actif hors'; pa.title = r.session ? 'Session requise pour lire l’état du mode routeur.' : 'Source en panne : ' + r.panne;
+                bd.hidden = true; return;
+            }
+            const e = r.d, adr = Array.isArray(e.adresses_pont) ? e.adresses_pont : [];
+            let classe = 'actif neutre', libelle = 'MODE ROUTEUR INACTIF';
+            if (e.bascule_en_cours === true) { classe = 'actif info'; libelle = 'BASCULE EN COURS'; }
+            else if (e.etat === 'actif') { classe = 'actif'; libelle = 'MODE ROUTEUR ACTIF'; }
+            else if (e.etat === 'en_attente') { classe = 'actif att'; libelle = 'MODE ROUTEUR À CONFIRMER'; }
+            else if (e.etat === 'config_invalide') { classe = 'actif hors'; libelle = 'CONFIGURATION INVALIDE'; }
+            else if (e.etat === 'inactif' && adr.length) { classe = 'actif att'; libelle = 'LAN TEMPORAIRE'; }
+            else if (e.etat !== 'inactif') { libelle = 'ÉTAT INCONNU'; }
+            pa.className = classe; pa.textContent = libelle;
+            pa.title = 'État du mode routeur : ' + (e.etat || '—') + (e.depuis ? ' depuis ' + fmtDate(e.depuis) : '') + (e.bascule_en_cours === null ? ' ; bascule en cours : —' : '');
+            // Bandeau : seulement quand l'état est lu, connu, et n'est pas « actif ».
+            if (!['inactif', 'en_attente', 'config_invalide'].includes(e.etat) && e.bascule_en_cours !== true) { bd.hidden = true; return; }
+            tx.replaceChildren(); bd.className = 'bandeau-lan';
+            const titre = document.createElement('b'), suite = document.createTextNode('');
+            if (e.bascule_en_cours === true) {
+                titre.textContent = 'Bascule du mode routeur en cours';
+                suite.textContent = ' : application ou retour en arrière en cours sur la box ; l’état se relit toutes les 30 s.';
+                bt.textContent = 'Suivre dans l’onglet Mode routeur…';
+            } else if (e.etat === 'en_attente') {
+                titre.textContent = 'Mode routeur appliqué, à confirmer';
+                const ech = e.echeance ? Date.parse(e.echeance) : NaN;
+                const maj = () => { suite.textContent = isNaN(ech) ? ' : échéance du retour automatique illisible (—).' : ' : retour automatique à ' + new Date(ech).toLocaleTimeString('fr-FR') + ' (dans ' + delai(ech - Date.now()) + ') sans confirmation.'; };
+                maj(); if (!isNaN(ech)) tCompte = setInterval(maj, 1000);
+                bt.textContent = 'Confirmer dans l’onglet Mode routeur…';
+            } else if (e.etat === 'config_invalide') {
+                bd.className = 'bandeau-lan grave';
+                titre.textContent = 'Configuration du mode routeur invalide';
+                suite.textContent = ' : ' + (e.erreur || 'motif non fourni') + '.';
+                bt.textContent = 'Voir l’onglet Mode routeur…';
+            } else {
+                titre.textContent = adr.length ? 'LAN temporaire — mode routeur non actif' : 'Mode routeur non actif';
+                suite.textContent = adr.length
+                    ? ' : br-lan porte ' + adr.join(', ') + (e.dhcp_actif === true ? ' (DHCP actif)' : '') + ', hors du mode routeur durable. Le WAN (eth2) n’est jamais relancé.'
+                    : ' : br-lan ne porte aucune adresse ; les ports lan0 à lan3 ne servent pas de LAN.';
+                bt.textContent = 'Passer au mode routeur durable…';
+            }
+            tx.append(titre, suite); bd.hidden = false;
+        }
+        async function chargerRouteur() { rendreRouteur(await lireRouteur()); releve(); hauteur(); }
+
+        // ── Onglets : une iframe, ?embed=1 et ?demo=1 propagés ; « Modes (hérité) » = l'ancien contenu ─────────────────────────────────
+        const onglets = [...document.querySelectorAll('.onglet')], vue = $('vue');
+        let courant = null, modesCharges = false;
+        const HAUTEUR_DEFAUT = 1000;
+        function adresse(page) { return page + '?embed=1' + (DEMO ? '&demo=1' : ''); }
+        function choisir(nom, focus) {
+            const o = onglets.find(x => x.dataset.onglet === nom) || onglets[0];
+            courant = o.dataset.onglet;
+            onglets.forEach(x => { const sel = x === o; x.setAttribute('aria-selected', String(sel)); x.tabIndex = sel ? 0 : -1; });
+            const page = o.dataset.vue;
+            $('ecran-vue').hidden = !page; $('ecran-modes').hidden = !!page;
+            if (page) {
+                $('ecran-vue').setAttribute('aria-labelledby', o.id); vue.title = o.textContent;
+                if (vue.dataset.page !== page) { vue.dataset.page = page; vue.style.height = HAUTEUR_DEFAUT + 'px'; vue.src = adresse(page); }
+            } else if (!modesCharges) { modesCharges = true; charger(); }
+            try { if (location.hash !== '#' + courant) history.replaceState(null, '', '#' + courant); } catch (e) { /* file:// ou bac à sable */ }
+            if (focus) o.focus();
+            hauteur();
+        }
+        onglets.forEach((o, i) => {
+            o.addEventListener('click', () => choisir(o.dataset.onglet));
+            o.addEventListener('keydown', ev => {
+                const n = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
+                if (ev.key === 'Home' || ev.key === 'End') { ev.preventDefault(); choisir(onglets[ev.key === 'Home' ? 0 : onglets.length - 1].dataset.onglet, true); }
+                else if (n) { ev.preventDefault(); choisir(onglets[(i + n + onglets.length) % onglets.length].dataset.onglet, true); }
+            });
+        });
+        window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (h && h !== courant) choisir(h); });
+        $('versRouteur').addEventListener('click', () => choisir('routeur', true));
+        // Hauteur annoncée par la page encadrée : même origine, même fenêtre source, et l'onglet annoncé est celui qui est affiché.
+        window.addEventListener('message', e => {
+            if (e.origin !== location.origin || !e.data || e.source !== vue.contentWindow) return;
+            const h = Number(e.data.sbxVue);
+            if (!isFinite(h) || h <= 0 || e.data.onglet !== courant) return;
+            vue.style.height = Math.min(4000, Math.max(300, Math.ceil(h) + 4)) + 'px';
+            hauteur();
+        });
+        $('btn-refresh').addEventListener('click', () => {
+            chargerRouteur();
+            if (courant === 'modes') charger();
+            else if (vue.dataset.page) vue.src = adresse(vue.dataset.page);
+        });
+
+        // ── Onglet « Modes (hérité) » : tous les appels passent ici. 401 = session requise ; en démonstration, lectures fictives et écritures inertes.
         async function appeler(chemin, methode, corps) {
             if (DEMO) return demo(chemin, methode);
             try {
@@ -201,8 +335,8 @@
                 const b = document.createElement('b'); b.textContent = m.name + (etat && etat.current_mode === m.id ? ' · actuel' : '');
                 const d = document.createElement('small'); d.textContent = m.desc;
                 const r = document.createElement('div'); r.className = 'row';
-                const ap = document.createElement('button'); ap.className = 'btn sm'; ap.textContent = '👁 Aperçu du YAML'; ap.addEventListener('click', () => apercu(m));
-                const ok = document.createElement('button'); ok.className = 'btn danger sm'; ok.textContent = '▶ Appliquer'; ok.addEventListener('click', () => appliquer(m));
+                const ap = document.createElement('button'); ap.type = 'button'; ap.className = 'btn sm'; ap.textContent = '👁 Aperçu du YAML'; ap.addEventListener('click', () => apercu(m));
+                const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'btn danger sm'; ok.textContent = '▶ Appliquer'; ok.addEventListener('click', () => appliquer(m));
                 r.append(ap, ok); c.append(b, d, r); z.append(c);
             }
         }
@@ -217,7 +351,7 @@
             if (!await confirmer('Appliquer le mode « ' + m.name + ' » ?\n\nLa configuration réseau est remplacée (une sauvegarde est faite avant) puis « netplan apply » est lancé. Si vous êtes connecté par le réseau, la connexion peut être coupée : n’appliquez que depuis la console ou en ayant un autre accès.', true)) return;
             msg('Application du mode ' + m.name + '…');
             const r = await appeler('/apply_mode', 'POST', { mode: m.id });
-            if (r && r.success) { msg('✅ Mode « ' + m.name + ' » appliqué.'); await charger(); } else msg('❌ ' + (r && (r.stderr || r._erreur || r.error)) || 'échec');
+            if (r && r.success) { msg('✅ Mode « ' + m.name + ' » appliqué.'); await charger(); } else msg('❌ ' + ((r && (r.stderr || r._erreur || r.error)) || 'échec'));
         }
         async function valider() {
             const r = await appeler('/validate_config');
@@ -245,7 +379,6 @@
             z.append(kv);
         }
 
-        let tConf = null;
         function confirmer(message, grave) {
             return new Promise(resolve => {
                 const z = $('dialogue'); z.replaceChildren(); z.className = grave ? 'grave' : '';
@@ -262,16 +395,11 @@
             const [mm, s, d] = await Promise.all([appeler('/get_available_modes'), appeler('/status'), appeler('/detect')]);
             modes = Array.isArray(mm) ? mm : [];
             rendreEtat(s); rendreModes(); rendreDetection(d);
-            $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-            hauteur();
-        }
-        function hauteur() {
-            if (window.parent === window) return;
-            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().height), onglet: 'netmodes' }, location.origin); } catch (e) { /* hors cadre */ }
+            releve(); hauteur();
         }
         window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
-        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
-        $('btn-refresh').addEventListener('click', charger); $('btnValider').addEventListener('click', valider); $('btnRestaurer').addEventListener('click', restaurer);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.body);
+        $('btnValider').addEventListener('click', valider); $('btnRestaurer').addEventListener('click', restaurer);
 
         // ── Démonstration : lectures fictives, écritures inertes ─────────────────────────────────────────────────────────────────────────
         function demo(chemin, methode) {
@@ -285,8 +413,15 @@
             return rep(null);
         }
         if (DEMO) $('demo').hidden = false;
-        charger();
-        setInterval(charger, 30000);
+
+        // Démarrage : l'onglet du lien (#carte, #modes…) ou la Cartographie. Actualisation 30 s, page visible, jamais pendant une confirmation.
+        choisir(location.hash.slice(1) || 'carte');
+        chargerRouteur();
+        setInterval(() => {
+            if (document.hidden) return;
+            chargerRouteur();
+            if (courant === 'modes' && $('dialogue').hidden) charger();
+        }, 30000);
     </script>
 </body>
 </html>

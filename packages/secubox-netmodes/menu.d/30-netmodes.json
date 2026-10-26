@@ -1,10 +1,10 @@
 {
   "id": "netmodes",
-  "name": "Network Modes",
+  "name": "Réseau",
   "category": "mesh",
   "icon": "🔀",
   "path": "/netmodes/",
   "order": 200,
-  "description": "Network topology configuration",
+  "description": "Cartographie, switch, clients du LAN, liens du maillage et mode routeur",
   "theme": "reseau"
 }
