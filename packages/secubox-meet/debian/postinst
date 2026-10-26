@@ -67,6 +67,12 @@ case "$1" in
       fi
     fi
 
+    # Relevé de l'activité de la visio (#3182) : root, toutes les 5 minutes ; base lue par l'API (groupe secubox).
+    install -d -m 0750 -o root -g secubox /var/lib/secubox/meet 2>/dev/null || true
+    if [ -f /usr/lib/systemd/system/secubox-meet-activite.timer ]; then
+      systemctl enable --now secubox-meet-activite.timer || true
+    fi
+
     # Vhosts visio.<domaine> et livekit.<domaine>. La route sbxwaf et le vhost
     # HAProxy ne valent que si nginx accepte la configuration : poser l'un sans
     # l'autre échange un 421 contre un 502.

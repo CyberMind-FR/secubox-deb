@@ -41,7 +41,7 @@ override_dh_auto_install:
 	for f in conf/*; do [ -f "$$f" ] && install -m 644 "$$f" $(P)/usr/share/doc/secubox-meet/examples/ || true; done
 	# Unités systemd
 	install -d $(P)/usr/lib/systemd/system
-	for f in debian/*.service; do [ -f "$$f" ] && install -m 644 "$$f" $(P)/usr/lib/systemd/system/ || true; done
+	for f in debian/*.service debian/*.timer; do [ -f "$$f" ] && install -m 644 "$$f" $(P)/usr/lib/systemd/system/ || true; done
 
 # Seule secubox-meet.service est gérée par debhelper ; les unités de
 # provisionnement sont activées par le postinst en --no-block.

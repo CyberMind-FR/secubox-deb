@@ -6,10 +6,11 @@
 set -e
 case "$1" in
   remove)
-    systemctl stop secubox-meet.service secubox-meet-provision.service secubox-meet-rerendu.service 2>/dev/null || true
+    systemctl stop secubox-meet.service secubox-meet-provision.service secubox-meet-rerendu.service \
+      secubox-meet-activite.timer secubox-meet-activite.service 2>/dev/null || true
     # Le lien multi-user.target.wants de l'unité de provisionnement survivrait au
     # retrait des fichiers : on désactive tant que les unités existent.
-    systemctl disable secubox-meet-provision.service secubox-meet.service 2>/dev/null || true
+    systemctl disable secubox-meet-provision.service secubox-meet.service secubox-meet-activite.timer 2>/dev/null || true
     # Les ports médias ne restent jamais ouverts vers un conteneur arrêté.
     meetctl media-expose --revoke || true
     # Sans cela, lxc.start.auto = 1 relancerait le conteneur au prochain démarrage

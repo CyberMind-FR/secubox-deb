@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: Meet — relevé de l'activité de la visio (#3182).
+# Root : lxc-attach (journal de LiveKit, base de Meet) dans le conteneur. Écrit /var/lib/secubox/meet/activite.db
+# (root:secubox 0640), que l'API lit en lecture seule. Aucune adresse IP n'y entre.
+[Unit]
+Description=SecuBox Meet — relevé de l'activité de la visio
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/meetctl activite-collecte
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=300

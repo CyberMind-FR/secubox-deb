@@ -228,7 +228,8 @@ def test_sudoers_argv_exacts():
     assert "" not in regles                            # jamais « meetctl » nu (tous les arguments)
     unites = ("postgresql", "redis-server", "livekit", "meet-backend", "nginx")
     assert sorted(regles) == sorted(["status", "start", "stop", "restart", "media-expose", "media-expose --apply",
-                                     "media-expose --revoke", "oidc-verifier", "oidc-enregistrer"]
+                                     "media-expose --revoke", "oidc-verifier", "oidc-enregistrer",
+                                     "en-direct", "reunions", "clore *"]                         # #3182
                                     + [f"logs {u} [0-9]*" for u in unites])
     assert tuple(unites) == M.KNOWN_UNITS
     t = SUDOERS.read_text()
@@ -247,7 +248,11 @@ def test_chaque_appel_de_l_api_est_accorde_par_le_sudoers(cli):
     cli.post("/oidc/enregistrer", json={}, jwt=True)
     for unite in M.KNOWN_UNITS:
         cli.get(f"/logs?unit={unite}&lines=7", jwt=True)
-    assert len(cli.appels) == 9 + len(M.KNOWN_UNITS)
+    M._activite_cache.clear()                                               # #3182 : réunions, direct, clore
+    cli.get("/reunions", jwt=True)
+    cli.get("/connexions", jwt=True)
+    cli.post("/clore", json={"salle": "2c8ef9e1-ba03-407e-b506-339c292c7573", "confirmer": "meet"}, jwt=True)
+    assert len(cli.appels) == 12 + len(M.KNOWN_UNITS)
     for argv in cli.appels:
         assert any(fnmatch.fnmatchcase(" ".join(argv), r) for r in regles), argv
 
