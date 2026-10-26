@@ -83,6 +83,26 @@ def test_sans_page_reelle_chromium_ne_demarre_pas_et_le_module_est_ecarte_pour_l
     assert vignettes.pick_next([SERVICES[1]], tmp_path, date(2027, 1, 6)) == ("waf", "waf.sbx.test")
 
 
+def test_module_non_route_par_le_waf_ecarte_sans_aucune_requete_3174(tmp_path):
+    """#3174 : la sonde d'un nom non routé laissait une anomalie dans le journal des menaces du WAF ; la table de routes le dit d'avance."""
+    sondes, captures = [], []
+
+    def sonde(url):
+        sondes.append(url)
+        return True, "Page"
+
+    async def capture(url):
+        captures.append(url)
+        return PNG
+    r = asyncio.run(vignettes.capture_module("dpi", "dpi.sbx.test", tmp_path, _capture=capture, _sonde=sonde, _routes=lambda: {"radio.sbx.test"}))
+    assert r["sans_page"] and "non routé" in r["error"] and not sondes and not captures
+    assert vignettes.sans_page_frais(tmp_path, "dpi", vignettes.fingerprint("dpi.sbx.test"))
+    r = asyncio.run(vignettes.capture_module("radio", "Radio.sbx.test", tmp_path, _capture=capture, _sonde=sonde, _routes=lambda: {"radio.sbx.test"}))
+    assert r["ok"] and len(sondes) == 1                                                # routé : sondé puis capturé
+    r = asyncio.run(vignettes.capture_module("bbs", "bbs.sbx.test", tmp_path, _capture=capture, _sonde=sonde, _routes=lambda: None))
+    assert r["ok"] and len(sondes) == 2                                                # sans table : comme avant
+
+
 def test_la_sonde_refuse_421_erreur_et_connexion(monkeypatch):
     import io
 
