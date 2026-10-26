@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — panneau Réseau, onglet « Liens du maillage » (#3190), profil Aurora (.claude/AURORA-REFERENCE.md).
+  Tableau des pairs du maillage wg-mesh (pair, IP de maillage, dernier échange, reçu, état actif/muet, « à retirer ? ») et des
+  autres tunnels WireGuard. Page en LECTURE SEULE : aucune action, aucun appel d'écriture.
+  DONNÉES RÉELLES :
+    GET /api/v1/p2p/peers                noms et adresses de maillage des pairs (registre p2p)
+    GET /api/v1/wireguard/peers/status   état, dernier échange et volumes (jointure par clé publique complète)
+    GET /api/v1/wireguard/summary        autres tunnels (port, pairs, en ligne, volumes)
+  Une source en 401/503 : « session requise » ou « source en panne » sur ses colonnes et sa pastille, jamais « aucun pair ».
+  ?embed=1 : sans menu ; ?demo=1 : données de démonstration (adresses de documentation RFC 5737, noms fictifs), aucun appel.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Liens du maillage</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(167,139,250,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none;background:transparent} body.emb::-webkit-scrollbar{display:none} body.sm #sidebar{display:none}
+  [hidden]{display:none!important}
+  .page{min-width:0}
+  body:not(.sm) .page{margin-left:220px;padding-top:48px}
+  @media (max-width:900px){body:not(.sm) .page{margin-left:0}}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque b{font-size:1.3rem;font-weight:800;display:block} .marque small{display:block;color:var(--cyan);font-size:.72rem;overflow-wrap:anywhere}
+  .etat{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .etat.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .etat.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .etat.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:5px 12px;min-height:30px;cursor:pointer}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .bandeau{text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo{background:var(--orange);color:#1a1000} .info{background:var(--cyan);color:#04202a} .info a{color:inherit}
+  .sources{display:flex;flex-wrap:wrap;gap:5px 6px;align-items:center;font-size:.7rem}
+  .sources>b{color:var(--faible);font-weight:600;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;margin-right:2px}
+  .src{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.1);border-radius:999px;padding:2px 9px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .src.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.1)} .src.session{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.1)}
+  .src.panne{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.1)} .src.demo{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.1)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+  .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  .v.g{color:var(--vert)} .v.o{color:var(--orange)} .v.n{color:var(--doux)}
+  .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);align-items:start}
+  @container a (min-width:1100px){.grille.deux{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .defile{overflow-x:auto;min-width:0}
+  table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+  th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:4px 8px;font-weight:600;white-space:nowrap}
+  th button{font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;background:none;border:0;padding:2px 0;cursor:pointer}
+  th button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} th[aria-sort] button::after{content:" ▾";color:var(--cyan)} th[aria-sort="ascending"] button::after{content:" ▴"}
+  td{padding:6px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+  tr:hover td{background:rgba(41,182,246,.07)}
+  td.nom{min-width:9rem;overflow-wrap:anywhere} td.nom .cle{display:block;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.66rem;color:var(--faible)}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.76rem;white-space:nowrap}
+  td.nb{white-space:nowrap}
+  .doux{color:var(--doux)} .faible{color:var(--faible)} .rouge{color:var(--rouge)} .cyan{color:var(--cyan)}
+  .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+  .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.ko{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .alerte{color:var(--rouge);border:1px solid var(--rouge);border-radius:8px;padding:6px 10px;margin:0 0 8px;font-size:.76rem;line-height:1.4;background:rgba(255,77,94,.08)}
+  .alerte.session{color:var(--cyan);border-color:var(--cyan);background:rgba(41,182,246,.08)}
+  .vide{color:var(--faible);font-size:.8rem;padding:8px 2px}
+  /* Cadre étroit : chaque ligne devient une fiche (nom et état, puis adresse et échange, puis volumes), rien ne se cache à droite. */
+  @container a (max-width:600px){
+    table.fiches thead{display:none}
+    table.fiches tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;padding:8px 2px;border-top:1px solid rgba(86,150,255,.12)}
+    table.fiches td{border:0;padding:0;min-width:0}
+    table.fiches td.vide{grid-column:1/-1}
+    table.fiches td[data-l]::before{content:attr(data-l);color:var(--faible);margin-right:5px}
+    #pairs td.c-nom{grid-area:1/1} #pairs td.c-etat{grid-area:1/2;text-align:right} #pairs td.c-ip{grid-area:2/1}
+    #pairs td.c-dern{grid-area:2/2;text-align:right} #pairs td.c-recu{grid-area:3/2;text-align:right}
+    #tunnels td.c-tun{grid-area:1/1} #tunnels td.c-etat{grid-area:1/2;text-align:right} #tunnels td.c-port{grid-area:2/1}
+    #tunnels td.c-pairs{grid-area:2/2;text-align:right} #tunnels td.c-rx{grid-area:3/1} #tunnels td.c-tx{grid-area:3/2;text-align:right}
+  }
+  .note{color:var(--faible);font-size:.7rem;margin-top:8px;line-height:1.45}
+</style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="page"><div class="cadre" id="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="6" r="2.3" fill="rgba(167,139,250,.16)"/><circle cx="19" cy="6" r="2.3"/><circle cx="12" cy="19" r="2.3"/><path d="M7.3 6h9.4M6.2 8l4.6 9M17.8 8l-4.6 9"/></svg>
+      <div><b>Liens du maillage</b><small id="sous">wg-mesh et autres tunnels WireGuard · lecture seule</small></div>
+    </div>
+    <span class="etat" id="etatSources" aria-live="polite">LECTURE…</span>
+    <div class="droite"><span id="heure">—</span><button type="button" class="btn" id="rafraichir">⟳ Rafraîchir</button></div>
+  </header>
+  <div class="bandeau demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — adresses de documentation, aucune mesure réelle</div>
+  <div class="bandeau info" id="session" hidden><span id="sessionTexte">Aucune mesure : session requise.</span> <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="sources" id="sources" aria-label="État de chaque source"><b>Sources</b></div>
+
+  <div class="tuiles">
+    <div class="tuile" title="Pairs du maillage wg-mesh : registre p2p, complété par les pairs de l'interface wg-mesh absents du registre."><span class="l">Pairs du maillage</span><span class="v" id="tPairs">—</span><span class="s" id="tPairsS">registre p2p et wg-mesh</span></div>
+    <div class="tuile" title="Pairs dont la dernière poignée de main WireGuard date de moins de 3 minutes."><span class="l">Actifs</span><span class="v g" id="tActifs">—</span><span class="s" id="tActifsS">échange de moins de 3 min</span></div>
+    <div class="tuile" title="Pairs sans poignée de main récente : éteints, injoignables ou jamais connectés."><span class="l">Muets</span><span class="v o" id="tMuets">—</span><span class="s" id="tMuetsS">aucun échange récent</span></div>
+    <div class="tuile" title="Pair sans nom dans le registre p2p, ou sans échange depuis plus de 30 jours : candidat au retrait. Cette page ne retire rien."><span class="l">À retirer ?</span><span class="v n" id="tRetirer">—</span><span class="s">sans nom ou muet depuis 30 j</span></div>
+  </div>
+
+  <div class="grille deux">
+    <div class="pan">
+      <h3>Liens du maillage <i id="meshNote">wg-mesh</i></h3>
+      <div id="meshPannes"></div>
+      <div class="defile">
+        <table class="fiches">
+          <thead><tr>
+            <th scope="col" data-tri="nom"><button type="button">Pair</button></th>
+            <th scope="col" data-tri="ip"><button type="button">IP de maillage</button></th>
+            <th scope="col" data-tri="dernier"><button type="button">Dernier échange</button></th>
+            <th scope="col" data-tri="recu"><button type="button">Reçu</button></th>
+            <th scope="col" data-tri="etat" aria-sort="ascending"><button type="button">État</button></th>
+          </tr></thead>
+          <tbody id="pairs"><tr><td colspan="5" class="vide">lecture…</td></tr></tbody>
+        </table>
+      </div>
+      <p class="note">Noms : registre p2p ; état, dernier échange et volumes : WireGuard (interface wg-mesh), joints par la clé publique complète. « Actif » = poignée de main de moins de 3 minutes. « À retirer ? » signale un pair sans nom ou sans échange depuis plus de 30 jours ; aucune action n’est proposée ici.</p>
+    </div>
+    <div class="pan">
+      <h3>Autres tunnels <i>WireGuard, hors maillage</i></h3>
+      <div id="tunnelsPanne"></div>
+      <div class="defile">
+        <table class="fiches">
+          <thead><tr><th scope="col">Tunnel</th><th scope="col">Port UDP</th><th scope="col">Pairs</th><th scope="col">Reçu</th><th scope="col">Émis</th><th scope="col">État</th></tr></thead>
+          <tbody id="tunnels"><tr><td colspan="6" class="vide">lecture…</td></tr></tbody>
+        </table>
+      </div>
+      <p class="note">Volumes cumulés de tous les pairs de l’interface depuis son démarrage. « Aucun lien » : aucun pair n’a échangé depuis 3 minutes.</p>
+    </div>
+  </div>
+</div></div></main>
+
+<script>
+"use strict";
+(function () {
+  var Q = new URLSearchParams(location.search), DEMO = Q.has("demo"), EMB = Q.has("embed");
+  var ONGLET = "maillage";
+  if (EMB) { document.body.classList.add("emb"); }
+  if (EMB || DEMO) { document.body.classList.add("sm"); }
+  else {
+    // Menu commun : hors ?embed=1 et hors démonstration.
+    var lien = document.createElement("link"); lien.rel = "stylesheet"; lien.href = "/shared/sidebar-light.css"; document.head.appendChild(lien);
+    var sb = document.createElement("script"); sb.src = "/shared/sidebar.js"; document.body.appendChild(sb);
+  }
+  var $ = function (id) { return document.getElementById(id); };
+  function h(tag, cls, txt) { var e = document.createElement(tag); if (cls) { e.className = cls; } if (txt != null) { e.textContent = txt; } return e; }
+  function vider(el) { while (el.firstChild) { el.removeChild(el.firstChild); } return el; }
+
+  // ── Lecture : chaque source rend {ok, d} ou {ok:false, session|panne} ──────────────────────────────────────────────────────────
+  var SOURCES = [
+    { cle: "p2p", nom: "Pairs p2p", url: "/api/v1/p2p/peers" },
+    { cle: "wg", nom: "WireGuard · pairs", url: "/api/v1/wireguard/peers/status" },
+    { cle: "wgsum", nom: "WireGuard · tunnels", url: "/api/v1/wireguard/summary" }
+  ];
+  function jeton() { try { return localStorage.getItem("sbx_token") || ""; } catch (e) { return ""; } }
+  function lire(url) {
+    var t = jeton(), hd = { Accept: "application/json" };
+    if (t) { hd.Authorization = "Bearer " + t; }
+    return fetch(url, { method: "GET", headers: hd, credentials: "same-origin", cache: "no-store" })
+      .then(function (r) {
+        if (r.status === 401 || r.status === 403) { return { ok: false, session: true }; }
+        return r.json().then(function (j) { return j; }, function () { return null; }).then(function (j) {
+          if (!r.ok) { return { ok: false, panne: "HTTP " + r.status + (j && j.detail ? " : " + j.detail : "") }; }
+          if (!j || typeof j !== "object") { return { ok: false, panne: "réponse illisible" }; }
+          return { ok: true, d: j };
+        });
+      })
+      .catch(function () { return { ok: false, panne: "injoignable" }; });
+  }
+  function raison(s) { return s.session ? "session requise" : "source en panne"; }
+
+  // ── Formats ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  function octets(n) {
+    if (n == null || !isFinite(n)) { return "—"; }
+    var u = ["o", "Ko", "Mo", "Go", "To"], i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return (i ? n.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) : String(n)) + " " + u[i];
+  }
+  function ilya(d) {
+    if (!d || !d.connu) { return "—"; }
+    if (d.s == null) { return "jamais"; }
+    var s = d.s;
+    if (s < 60) { return "il y a " + s + " s"; }
+    if (s < 3600) { return "il y a " + Math.round(s / 60) + " min"; }
+    if (s < 86400) { return "il y a " + Math.round(s / 3600) + " h"; }
+    return "il y a " + Math.round(s / 86400) + " j";
+  }
+  function hote(liste) {
+    var a = (Array.isArray(liste) ? liste : String(liste || "").split(",")).map(function (x) { return String(x).trim(); });
+    for (var i = 0; i < a.length; i++) { if (/\/32$/.test(a[i]) || /\/128$/.test(a[i])) { return a[i].split("/")[0]; } }
+    return "";
+  }
+  function cleCourte(k) { return k ? String(k).slice(0, 10) + "…" : ""; }
+
+  // ── Jointure : pairs p2p (noms) × pairs WireGuard de wg-mesh (état, volumes), par clé publique complète ─────────────────────────
+  // last_seen du registre p2p : secondes epoch (nombre) ou ISO 8601 (registre peers.json hérité, UTC naïf de
+  // datetime.utcnow().isoformat()) ; toute autre valeur est inconnue (null), jamais « il y a NaN s ».
+  function epoque(v) {
+    if (typeof v === "number") { return isFinite(v) && v > 0 ? v : null; }
+    if (typeof v !== "string" || !v.trim()) { return null; }
+    var s = v.trim();
+    if (/^\d+(\.\d+)?$/.test(s)) { return +s > 0 ? +s : null; }
+    s = s.replace(/(\.\d{3})\d+/, "$1");
+    if (/T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s)) { s += "Z"; }
+    var t = Date.parse(s);
+    return isNaN(t) ? null : t / 1000;
+  }
+  function nombre(v) { return typeof v === "number" && isFinite(v) ? v : null; }
+  var MAILLAGE = "wg-mesh", TRENTE_JOURS = 30 * 86400;
+  function sansNom(p) {
+    var n = String(p.name || "").trim();
+    return !n || n === p.address || n === String(p.public_key || "").slice(0, 12) || n === "peer";
+  }
+  function joindre(p2p, wg) {
+    var parCle = {}, liste = [], maintenant = Date.now() / 1000;
+    var mesh = wg.ok ? (wg.d.peers || []).filter(function (x) { return x && x.interface === MAILLAGE; }) : null;
+    if (p2p.ok) {
+      (p2p.d.peers || []).forEach(function (p) {
+        if (!p || typeof p !== "object") { return; }
+        var e = { cle: String(p.public_key || ""), nom: sansNom(p) ? "" : String(p.name).trim(), sansNom: sansNom(p), ip: String(p.address || ""), p2p: p, wg: null };
+        liste.push(e); if (e.cle) { parCle[e.cle] = e; }
+      });
+    }
+    (mesh || []).forEach(function (w) {
+      var e = w.full_key && parCle[w.full_key];
+      if (e) { e.wg = w; if (!e.ip) { e.ip = hote(w.allowed_ips); } }
+      // Absent du registre p2p : « sans nom » seulement si le registre a été LU (sinon le nom est inconnu, pas absent).
+      else { liste.push({ cle: String(w.full_key || ""), nom: "", sansNom: p2p.ok, ip: hote(w.allowed_ips), p2p: null, wg: w }); }
+    });
+    liste.forEach(function (e) {
+      if (e.wg) {
+        e.etat = e.wg.status === "online" ? "actif" : "muet";
+        var sh = e.wg.seconds_since_handshake;
+        e.dernier = sh == null ? { connu: true, s: null } : (nombre(+sh) != null ? { connu: true, s: +sh } : { connu: false });
+        e.recu = nombre(e.wg.rx_bytes);
+      } else if (wg.ok) {
+        e.etat = "absent"; e.dernier = { connu: false }; e.recu = null;
+      } else {
+        var st = e.p2p && e.p2p.status;
+        e.etat = st === "online" ? "actif" : st === "offline" ? "muet" : null;     // WireGuard illisible : état du registre p2p, volumes inconnus
+        var brut = e.p2p ? e.p2p.last_seen : null, vu = epoque(brut);
+        e.dernier = vu != null ? { connu: true, s: Math.max(0, Math.round(maintenant - vu)) }
+          : ((brut == null || brut === 0 || brut === "") && st === "offline" ? { connu: true, s: null } : { connu: false });   // jamais, ou illisible : « — »
+        e.recu = null;
+      }
+      e.aRetirer = e.sansNom || (e.dernier.connu && e.dernier.s != null && e.dernier.s > TRENTE_JOURS);
+    });
+    return { liste: liste, meshLu: !!mesh };
+  }
+
+  // ── Tri côté client ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+  var tri = { cle: "etat", sens: 1 }, dernier = null;
+  function rangEtat(e) { return e.aRetirer ? 3 : e.etat === "actif" ? 0 : e.etat === "muet" ? 1 : 2; }
+  function ipNum(ip) { var m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(ip || ""); return m ? ((+m[1] * 256 + +m[2]) * 256 + +m[3]) * 256 + +m[4] : Infinity; }
+  function comparer(a, b) {
+    var k = tri.cle, x, y;
+    if (k === "nom") { x = (a.nom || "~").toLowerCase(); y = (b.nom || "~").toLowerCase(); return x < y ? -1 : x > y ? 1 : 0; }
+    if (k === "ip") { return ipNum(a.ip) - ipNum(b.ip); }
+    if (k === "dernier") { x = a.dernier.connu ? (a.dernier.s == null ? 1e12 : a.dernier.s) : 2e12; y = b.dernier.connu ? (b.dernier.s == null ? 1e12 : b.dernier.s) : 2e12; return x - y; }
+    if (k === "recu") { return (b.recu == null ? -1 : b.recu) - (a.recu == null ? -1 : a.recu); }
+    return rangEtat(a) - rangEtat(b) || (b.recu || 0) - (a.recu || 0) || ipNum(a.ip) - ipNum(b.ip);
+  }
+  [].slice.call(document.querySelectorAll("th[data-tri]")).forEach(function (th) {
+    th.querySelector("button").addEventListener("click", function () {
+      var k = th.getAttribute("data-tri");
+      tri = { cle: k, sens: tri.cle === k ? -tri.sens : 1 };
+      [].slice.call(document.querySelectorAll("th[data-tri]")).forEach(function (o) { o.removeAttribute("aria-sort"); });
+      th.setAttribute("aria-sort", tri.sens > 0 ? "ascending" : "descending");
+      if (dernier) { rendrePairs(dernier); }
+    });
+  });
+
+  // ── Rendu ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  function pastille(cls, txt, titre) { var p = h("span", "pill" + (cls ? " " + cls : ""), txt); if (titre) { p.title = titre; } return p; }
+  function bandeauPanne(z, s, quoi) {
+    var b = h("div", "alerte" + (s.session ? " session" : ""));
+    b.textContent = quoi + " : " + raison(s) + (s.panne ? " (" + s.panne + ")" : "") + ".";
+    z.appendChild(b);
+  }
+  function ligneVide(tb, n, txt, cls) { var tr = h("tr"), td = h("td", "vide" + (cls ? " " + cls : ""), txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+
+  function rendrePairs(R) {
+    var J = joindre(R.p2p, R.wg), tb = vider($("pairs")), z = vider($("meshPannes"));
+    if (!R.p2p.ok) { bandeauPanne(z, R.p2p, "Noms des pairs (registre p2p)"); }
+    if (!R.wg.ok) { bandeauPanne(z, R.wg, "État, dernier échange et volumes (WireGuard)"); }
+    var mInt = null;
+    if (R.wgsum.ok) { (R.wgsum.d.interfaces || []).forEach(function (i) { if (i && i.name === MAILLAGE) { mInt = i; } }); }
+    $("meshNote").textContent = "wg-mesh" + (mInt && mInt.listen_port ? " · UDP " + mInt.listen_port : "");
+
+    // Tuiles : « — » dès que la source qui fonde le chiffre n'a pas été lue.
+    var lu = R.p2p.ok || R.wg.ok, etatsConnus = R.wg.ok || R.p2p.ok;
+    $("tPairs").textContent = lu ? String(J.liste.length) : "—";
+    $("tPairsS").textContent = !lu ? "aucune source lue" : (R.p2p.ok && R.wg.ok ? "registre p2p et wg-mesh" : "partiel : " + (R.p2p.ok ? "WireGuard " : "registre p2p ") + raison(R.p2p.ok ? R.wg : R.p2p));
+    $("tActifs").textContent = etatsConnus ? String(J.liste.filter(function (e) { return e.etat === "actif" && !e.aRetirer; }).length) : "—";
+    $("tActifsS").textContent = R.wg.ok ? "échange de moins de 3 min" : (R.p2p.ok ? "selon le registre p2p" : "—");
+    $("tMuets").textContent = etatsConnus ? String(J.liste.filter(function (e) { return e.etat === "muet" && !e.aRetirer; }).length) : "—";
+    $("tMuetsS").textContent = R.wg.ok ? "aucun échange récent" : (R.p2p.ok ? "selon le registre p2p" : "—");
+    $("tRetirer").textContent = R.p2p.ok ? String(J.liste.filter(function (e) { return e.aRetirer; }).length) : "—";
+
+    if (!lu) { ligneVide(tb, 5, "Maillage illisible : registre p2p " + raison(R.p2p) + ", WireGuard " + raison(R.wg) + ".", "rouge"); return; }
+    if (!J.liste.length) { ligneVide(tb, 5, "Aucun pair dans le maillage."); return; }
+    J.liste.sort(function (a, b) { return tri.sens * comparer(a, b); });
+    J.liste.forEach(function (e) {
+      var tr = h("tr"), tdN = h("td", "nom c-nom"), nom = e.nom || (e.sansNom ? "sans nom" : "—");
+      tdN.appendChild(h("span", e.nom ? "" : "faible", nom));
+      if (e.cle) { var k = h("span", "cle", cleCourte(e.cle)); k.title = "Clé publique (tronquée)"; tdN.appendChild(k); }
+      tr.appendChild(tdN);
+      tr.appendChild(h("td", "mono c-ip", e.ip || "—"));
+      var tdD = h("td", "nb c-dern" + (e.dernier.connu ? "" : " faible"), ilya(e.dernier)); tdD.dataset.l = "échange";
+      if (!e.wg && !R.wg.ok && e.dernier.connu) { tdD.title = "WireGuard illisible : dernier échange selon le registre p2p"; }
+      tr.appendChild(tdD);
+      var tdR = h("td", "nb c-recu" + (e.recu == null || e.recu === 0 ? " faible" : ""), e.recu == null ? "—" : octets(e.recu)); tdR.dataset.l = "reçu";
+      if (e.recu == null && !R.wg.ok) { tdR.title = "WireGuard : " + raison(R.wg); }
+      tr.appendChild(tdR);
+      var tdE = h("td", "c-etat");
+      if (e.aRetirer) { tdE.appendChild(pastille("", "à retirer ?", e.sansNom ? "Pair sans nom dans le registre p2p : candidat au retrait (aucune action ici)." : "Aucun échange depuis plus de 30 jours : candidat au retrait (aucune action ici).")); }
+      else if (e.etat === "actif") { tdE.appendChild(pastille("ok", "actif", R.wg.ok ? "Poignée de main WireGuard de moins de 3 minutes." : "Selon le registre p2p (WireGuard illisible).")); }
+      else if (e.etat === "muet") { tdE.appendChild(pastille("att", "muet", R.wg.ok ? "Aucune poignée de main depuis 3 minutes ou plus." : "Selon le registre p2p (WireGuard illisible).")); }
+      else if (e.etat === "absent") { tdE.appendChild(pastille("att", "absent de wg-mesh", "Inscrit au registre p2p mais absent de l'interface wg-mesh.")); }
+      else { tdE.appendChild(h("span", "faible", "—")); }
+      tr.appendChild(tdE);
+      tb.appendChild(tr);
+    });
+  }
+
+  function rendreTunnels(R) {
+    var tb = vider($("tunnels")), z = vider($("tunnelsPanne"));
+    if (!R.wgsum.ok) { bandeauPanne(z, R.wgsum, "Tunnels WireGuard"); ligneVide(tb, 6, "Tunnels illisibles : " + raison(R.wgsum) + ".", R.wgsum.session ? "cyan" : "rouge"); return; }
+    var autres = (R.wgsum.d.interfaces || []).filter(function (i) { return i && i.name !== MAILLAGE; });
+    if (!autres.length) { ligneVide(tb, 6, "Aucun autre tunnel WireGuard."); return; }
+    autres.forEach(function (i) {
+      var tr = h("tr");
+      tr.appendChild(h("td", "mono c-tun", i.name));
+      var c = function (cls, l, v) { var td = h("td", "nb " + cls, v); td.dataset.l = l; tr.appendChild(td); };
+      c("c-port", "UDP", i.listen_port == null ? "—" : String(i.listen_port));
+      c("c-pairs", "pairs", nombre(i.peers) == null ? "—" : String(i.peers));
+      c("c-rx", "reçu", octets(i.rx_bytes));
+      c("c-tx", "émis", octets(i.tx_bytes));
+      var td = h("td", "c-etat");
+      var en = nombre(i.online);                                   // absent : « — » ; seul un vrai 0 dit « aucun lien »
+      td.appendChild(en == null ? h("span", "faible", "—") : en > 0 ? pastille("ok", en + " en ligne") : pastille("", "aucun lien"));
+      tr.appendChild(td);
+      tb.appendChild(tr);
+    });
+  }
+
+  function sources(R) {
+    var z = $("sources");
+    while (z.childNodes.length > 1) { z.removeChild(z.lastChild); }
+    var nPanne = 0, nSession = 0;
+    SOURCES.forEach(function (s) {
+      var r = R[s.cle], p = h("span");
+      if (DEMO) { p.className = "src demo"; p.textContent = s.nom + " · démo"; }
+      else if (r.ok) { p.className = "src ok"; p.textContent = s.nom + " · lue"; }
+      else if (r.session) { nSession++; p.className = "src session"; p.textContent = s.nom + " · session requise"; }
+      else { nPanne++; p.className = "src panne"; p.textContent = s.nom + " · en panne"; }
+      p.title = "GET " + s.url + " — " + (r.ok ? "lue" : r.session ? "session requise (401)" : r.panne);
+      z.appendChild(p);
+    });
+    var e = $("etatSources");
+    if (DEMO) { e.className = "etat att"; e.textContent = "DÉMONSTRATION"; }
+    else if (nPanne) { e.className = "etat hors"; e.textContent = nPanne + " SOURCE" + (nPanne > 1 ? "S" : "") + " EN PANNE"; }
+    else if (nSession) { e.className = "etat hors"; e.textContent = "SESSION REQUISE"; }
+    else { e.className = "etat ok"; e.textContent = "TOUTES LES SOURCES LUES"; }
+    $("session").hidden = DEMO || !nSession;
+    $("sessionTexte").textContent = nSession === SOURCES.length ? "Aucune mesure : session requise." : "Mesures partielles : session requise pour " + nSession + " source" + (nSession > 1 ? "s" : "") + ".";
+  }
+
+  // ── Démonstration : adresses de documentation (RFC 5737), noms fictifs, aucune requête ──────────────────────────────────────────
+  function cleDemo(i) { return "DEMO" + String(i).padStart(2, "0") + "cle-publique-fictive-de-documentation=="; }
+  function donneesDemo() {
+    var maintenant = Math.floor(Date.now() / 1000);
+    var pairs = [["gk1-demo", "203.0.113.8", 1], ["live-demo", "203.0.113.5", 2], ["ebin-demo", "203.0.113.7", 3], ["rpi-demo", "203.0.113.6", 4],
+      ["vm-demo", "203.0.113.4", 5], ["gk1-demo-ancienne-cle", "203.0.113.3", 6], ["203.0.113.2", "203.0.113.2", 7]];
+    var hs = { 1: 6, 2: 64, 6: 45 * 86400 }, rx = { 1: 4.5 * 1073741824, 2: 5.9 * 1073741824, 6: 12582912 };
+    return {
+      p2p: { ok: true, d: { peers: pairs.map(function (p) { return { id: p[0], name: p[0], address: p[1], public_key: cleDemo(p[2]), status: hs[p[2]] && hs[p[2]] < 180 ? "online" : "offline", latency: null, last_seen: hs[p[2]] ? maintenant - hs[p[2]] : null }; }), count: pairs.length } },
+      wg: { ok: true, d: { peers: pairs.map(function (p) { var k = cleDemo(p[2]); return { interface: "wg-mesh", public_key: k.slice(0, 16) + "...", full_key: k, status: hs[p[2]] && hs[p[2]] < 180 ? "online" : "offline",
+        endpoint: null, allowed_ips: [p[1] + "/32"], last_handshake: null, seconds_since_handshake: hs[p[2]] || null, rx_bytes: rx[p[2]] || 0, tx_bytes: 0, persistent_keepalive: 25 }; }) } },
+      wgsum: { ok: true, d: { interfaces: [{ name: "wg-mesh", listen_port: 51822, peers: 7, online: 2, rx_bytes: 11286781952, tx_bytes: 3221225472 },
+        { name: "wg-autoload", listen_port: 51830, peers: 2, online: 0, rx_bytes: 0, tx_bytes: 0 }, { name: "wg-toolbox", listen_port: 51820, peers: 8, online: 0, rx_bytes: 734003200, tx_bytes: 157286400 }], totals: {} } }
+    };
+  }
+
+  // ── Hauteur annoncée à l'hôte (la page mesure son cadre, pas le document) ──────────────────────────────────────────────────────
+  function hauteur() {
+    if (window.parent === window) { return; }
+    try { window.parent.postMessage({ sbxVue: Math.ceil($("cadre").getBoundingClientRect().bottom + window.scrollY), onglet: ONGLET }, location.origin); }
+    catch (e) { /* hôte inaccessible */ }
+  }
+
+  function charge() {
+    var lectures = DEMO ? Promise.resolve(donneesDemo()) : Promise.all(SOURCES.map(function (s) { return lire(s.url); })).then(function (rs) {
+      var R = {}; SOURCES.forEach(function (s, i) { R[s.cle] = rs[i]; }); return R;
+    });
+    return lectures.then(function (R) {
+      dernier = R; sources(R); rendrePairs(R); rendreTunnels(R);
+      $("heure").textContent = "Relevé " + new Date().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      hauteur();
+    });
+  }
+  if (DEMO) { $("demo").hidden = false; }
+  $("rafraichir").addEventListener("click", charge);
+  addEventListener("resize", hauteur); addEventListener("load", hauteur);
+  if (window.ResizeObserver) { new ResizeObserver(hauteur).observe(document.body); }
+  charge();
+  setInterval(function () { if (!document.hidden) { charge(); } }, 30000);
+})();
+</script>
+</body>
+</html>

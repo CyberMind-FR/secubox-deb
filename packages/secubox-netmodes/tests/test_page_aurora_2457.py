@@ -11,7 +11,7 @@ sync_api = pytest.importorskip("playwright.sync_api")
 PAGE = pathlib.Path(__file__).resolve().parents[1] / "www" / "netmodes" / "index.html"
 
 
-def _navigateur(scenario, query="?demo=1", route=None):
+def _navigateur(scenario, query="?demo=1#modes", route=None):   # #3190 : l'ancienne page est l'onglet « Modes (hérité) »
     def tache():
         with sync_api.sync_playwright() as p:
             try:
@@ -24,7 +24,7 @@ def _navigateur(scenario, query="?demo=1", route=None):
             pg.on("dialog", lambda d: (natifs.append(d.type), d.dismiss()))
             if route:      # fetch() refuse file:// : la page est servie par une origine http fictive, l'API simulée par `route`
                 pg.route("http://t.test/**", lambda r: r.fulfill(status=200, content_type="text/html", body=PAGE.read_text(encoding="utf-8")) if r.request.url.endswith("/page") else route(r))
-                pg.goto("http://t.test/page")
+                pg.goto("http://t.test/page#modes")
             else:
                 pg.goto("file://" + str(PAGE) + query)
             pg.wait_for_timeout(500)

@@ -23,7 +23,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address, IPv4Interface
 from pathlib import Path
 from typing import Callable, Generator
@@ -39,7 +39,11 @@ from .routeur_rendu import CHEMINS, COMMENTAIRE_NFT, MARQUE, TABLE_NFT, rendre
 VERROU = "/run/lock/secubox-netmodes.lock"
 VERROU_UNBOUND = "/run/lock/secubox-dns-lan.lock"           # partagé avec secubox-dns-lan
 DELAI_VERROU_UNBOUND = 30.0
-DELAI_VERROU_RETOUR = 60.0                                  # minuteur et démarrage attendent, un humain non
+DELAI_VERROU_RETOUR = 60.0                                  # minuteur et démarrage : une seule chance, ils attendent
+# Un humain (appliquer, confirmer, retour, port) attend 2 s : une lecture d'état (essai LOCK_SH de bascule_en_cours)
+# peut tenir le verrou un instant ; une confirmation perdue ainsi laisserait le minuteur défaire la bascule (#3190)
+DELAI_VERROU_ACTION = 2.0
+PAUSE_VERROU = 0.05
 ARBRE = "/var/lib/secubox-netmodes"                         # root seul, 0700
 ETAT = f"{ARBRE}/routeur-etat.json"
 SAUVEGARDES = f"{ARBRE}/sauvegardes"
@@ -82,6 +86,13 @@ PONT = ("netdev", "pont", "ports")                         # clés de CHEMINS lu
 SUPPRIMER_PONT = ["ip", "link", "delete", "br-lan"]
 DELAI_PONT = 30.0
 PAUSE_PONT = 2.0
+# Port coupé (#3190) : un .network de préfixe plus bas gagne pour un même lien (premier trouvé dans l'ordre lexical) ;
+# celui-ci sort le port du pont et le baisse, en lieu et place de 05-secubox-lan-ports.network (Bridge=br-lan). Retiré,
+# `networkctl reload` puis `networkctl reconfigure <port>` rendent le port au 05. Nom exact lu par reseau_api (tâche 1).
+# Le résultat est relu (`ip -j link show dev <port>`) toutes les PAUSE_PORT s, DELAI_PORT s au plus.
+FICHIER_COUPE = "/etc/systemd/network/04-secubox-port-{port}-coupe.network"
+DELAI_PORT = 15.0
+PAUSE_PORT = 1.0
 ADRESSE_GESTION = IPv4Address("192.168.255.1")              # HAProxy :9443 et TURN y écoutent
 ACTEUR = re.compile(r"[A-Za-z0-9._@-]{1,64}")
 GERES = (*CHEMINS.values(), TOML, ANCIEN_PONT)
@@ -108,6 +119,9 @@ _UNITES_DUREE = {
 _COMPOSANTE_DUREE = re.compile(r"\s*([0-9]+(?:\.[0-9]+)?)\s*("
                                + "|".join(sorted((re.escape(u) for u in _UNITES_DUREE if u), key=len, reverse=True))
                                + r")?")
+# Horodatage de `systemctl show` (NextElapseUSecRealtime) : « Mon 2026-10-26 16:28:29 CET », dans le fuseau du système
+_HORODATAGE_SYSTEMD = re.compile(r"[A-Za-z]{3} (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?:\.\d+)?(?: (\S+))?")
+_RFC3339 = "%Y-%m-%dT%H:%M:%SZ"
 
 
 class Occupe(RuntimeError):
@@ -221,20 +235,27 @@ def _ouvrir_verrou(chemin: Path) -> int:
     return os.open(chemin, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
 
 
+_horloge_verrou = time.monotonic                            # attente des verrous : horloge et pause réelles,
+_dormir_verrou = time.sleep                                 # remplacées en test (ctx.attendre est simulé ailleurs)
+
+
 def _prendre(fd: int, attente: float) -> bool:
-    limite = time.monotonic() + attente
+    """LOCK_EX par essais LOCK_NB espacés de PAUSE_VERROU, `attente` secondes au plus."""
+    limite = _horloge_verrou() + attente
     while True:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             return True
         except BlockingIOError:
-            if time.monotonic() >= limite:
+            if _horloge_verrou() >= limite:
                 return False
-            time.sleep(0.1)
+            _dormir_verrou(PAUSE_VERROU)
 
 
 @contextlib.contextmanager
-def _verrou(ctx: Contexte, attente: float = 0.0) -> Generator[None, None, None]:
+def _verrou(ctx: Contexte, attente: float | None = None) -> Generator[None, None, None]:
+    """Verrou du contrôleur ; `attente` None : celle d'une action humaine (DELAI_VERROU_ACTION)."""
+    attente = DELAI_VERROU_ACTION if attente is None else attente
     fd = _ouvrir_verrou(_p(ctx, VERROU))
     try:
         if not _prendre(fd, attente):
@@ -372,6 +393,11 @@ def _pont_existe(ctx: Contexte) -> bool:
     return ctx.executer(["ip", "link", "show", "dev", "br-lan"]).returncode == 0
 
 
+def ports_coupes(ctx: Contexte) -> set[str]:
+    """Ports du LAN dont le fichier de coupure existe (nom exact, ports de PORTS_LAN seuls) ; aucune commande."""
+    return {p for p in PORTS_LAN if os.path.lexists(_p(ctx, FICHIER_COUPE.format(port=p)))}
+
+
 def _json_liens(r: subprocess.CompletedProcess) -> list[dict]:
     """Sortie de `ip -j` : les objets non vides (`ip -4` rend {} pour un lien sans IPv4) ; illisible : aucun."""
     if r.returncode != 0:
@@ -406,12 +432,15 @@ def _manque_au_pont(ctx: Contexte, cfg: ConfigRouteur) -> list[str]:
 
 
 def _ports_non_asservis(ctx: Contexte, ports: tuple[str, ...]) -> list[str]:
-    """Ports qui n'ont pas br-lan pour maître, porteuse ou non ; vide : tous asservis."""
+    """Ports qui n'ont pas br-lan pour maître, porteuse ou non ; vide : tous asservis. Un port coupé (#3190) n'est
+    jamais attendu : sans cela chaque application échouait puis revenait en arrière, et le pont était recréé (coupure
+    du LAN) à chaque application ou retour, même sur des fichiers du pont inchangés (Review Focus 4)."""
+    coupes = ports_coupes(ctx)
     asservis = {lien.get("ifname") for lien in _json_liens(ctx.executer(["ip", "-j", "link", "show", "master", "br-lan"]))
                 if lien.get("master") == "br-lan"}
     manque = []
     for port in ports:
-        if port in asservis:
+        if port in asservis or port in coupes:
             continue
         lien = next(iter(_json_liens(ctx.executer(["ip", "-j", "link", "show", "dev", port]))), {})
         if lien.get("master") == "br-lan":                  # asservi entre les deux relevés
@@ -523,9 +552,72 @@ def etat(ctx: Contexte) -> dict:
         sortie["etat"], sortie["erreur"] = "config_invalide", erreur
     sortie["config"] = config
     sortie["minuteur_actif"] = _actif(ctx, f"{MINUTEUR}.timer")
+    sortie["echeance"] = _echeance(ctx) if sortie["minuteur_actif"] else None      # #3190 : jamais `depuis` + 180
+    sortie["bascule_en_cours"] = _bascule_en_cours(ctx)
     sortie["dhcp_actif"] = _actif(ctx, DHCP)
     sortie["adresses_pont"] = [str(a) for a in _adresses_pont(ctx)]
+    sortie["ports_coupes"] = sorted(ports_coupes(ctx))
     return sortie
+
+
+def _horodatage_systemd(texte: str) -> datetime | None:
+    """« Mon 2026-10-26 16:28:29 CET » : UTC/GMT tel quel, toute autre zone lue dans le fuseau du système (celui
+    dans lequel systemctl, lancé par ce même processus, l'a écrit) ; vide, `n/a` ou illisible : None."""
+    m = _HORODATAGE_SYSTEMD.fullmatch(texte.strip())
+    if m is None:
+        return None
+    try:
+        naif = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+    if m.group(2) in ("UTC", "GMT"):
+        return naif.replace(tzinfo=timezone.utc)
+    return naif.astimezone(timezone.utc)                    # heure naïve : prise comme heure locale
+
+
+def _echeance(ctx: Contexte) -> str | None:
+    """Échéance du retour automatique (RFC 3339 UTC), relue sur le minuteur. `systemd-run --on-active` pose un
+    minuteur MONOTONE : NextElapseUSecRealtime y reste vide et NextElapseUSecMonotonic donne l'instant sur l'horloge
+    monotone (depuis le démarrage, ex. « 11h 21min 21.304385s »), ramené à l'heure par ctx.monotone (CLOCK_MONOTONIC,
+    la même horloge). Les deux propriétés sont lues ; la plus proche fait foi. Rien de lisible : None."""
+    r = ctx.executer(["systemctl", "show", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic",
+                      f"{MINUTEUR}.timer"])
+    if r.returncode != 0:
+        return None
+    proprietes = dict(ligne.split("=", 1) for ligne in (r.stdout or "").splitlines() if "=" in ligne)
+    candidats = []
+    reel = _horodatage_systemd(proprietes.get("NextElapseUSecRealtime", ""))
+    if reel is not None:
+        candidats.append(reel)
+    monotone = _duree_systemd(proprietes.get("NextElapseUSecMonotonic", ""))
+    if monotone is not None and 0 < monotone < math.inf:    # 0 : aucun déclencheur monotone ; infinity : unité absente
+        try:
+            candidats.append(_utc(ctx) + timedelta(seconds=monotone - ctx.monotone()))
+        except OverflowError:                               # valeur aberrante : pas d'échéance plutôt qu'un état en échec
+            pass
+    return min(candidats).strftime(_RFC3339) if candidats else None
+
+
+def _bascule_en_cours(ctx: Contexte) -> bool | None:
+    """Le verrou du contrôleur est-il tenu (appliquer, retour, port) ? Essai LOCK_SH | LOCK_NB sur un descripteur à
+    part, relâché aussitôt : partagé, deux lectures simultanées ne se voient pas l'une l'autre. Le fichier n'est
+    jamais créé par une lecture (absent : aucune opération depuis le démarrage) ; illisible ou lien symbolique : None.
+    O_NONBLOCK : /run/lock est ouvert à tous, un tube nommé posé à ce nom ne doit pas suspendre la lecture d'état."""
+    try:
+        fd = os.open(_p(ctx, VERROU), os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return None
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    except OSError:
+        return None
+    finally:
+        os.close(fd)                                        # fermer relâche l'essai réussi
+    return False
 
 
 # --- appliquer ---------------------------------------------------------------------------------------------------------
@@ -984,7 +1076,7 @@ def _restaurer_et_relancer(ctx: Contexte, acteur: str, nom: str | None, unbound_
 def retour(ctx: Contexte, acteur: str) -> dict:
     _verifier_acteur(acteur)
     # le minuteur n'a qu'une chance : il attend le verrou au lieu de laisser la config non gardée
-    attente = DELAI_VERROU_RETOUR if acteur in ("minuteur", "demarrage") else 0.0
+    attente = DELAI_VERROU_RETOUR if acteur in ("minuteur", "demarrage") else DELAI_VERROU_ACTION
     with _verrou(ctx, attente), _auditer_chemins(ctx, acteur):
         _verifier_arbre(ctx)
         courant = _lire_etat(ctx)["etat"]
@@ -1008,3 +1100,164 @@ def retour_si_en_attente(ctx: Contexte) -> dict:
     if erreurs:
         raise Echec("retour incomplet : " + " ; ".join(erreurs))
     return etat(ctx)
+
+
+# --- ports du switch (#3190) -------------------------------------------------------------------------------------------
+
+def _verifier_port(port) -> None:
+    if not isinstance(port, str) or port not in PORTS_LAN:
+        raise Refus(f"port refusé : seuls {', '.join(PORTS_LAN)} se coupent ou se rétablissent")
+
+
+def _rendu_coupe(port: str) -> str:
+    return (f"# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n# {MARQUE}\n"
+            f"# {port} coupé (netmodesctl port-couper) : hors du pont et baissé ; netmodesctl port-retablir le rétablit\n"
+            f"[Match]\nName={port}\n\n[Link]\nActivationPolicy=down\n")
+
+
+# Ce que la vérification attend du port : coupé ; rétabli au pont (mode routeur actif et port du pont configuré) ;
+# rétabli hors du pont (sinon : décision prise hors du mode routeur, ni br-lan ni .network du 05 n'attendent le port).
+COUPE, AU_PONT, LEVE = "coupé", "au pont", "levé"
+_ATTENDUS = {COUPE: "hors de br-lan et baissé", AU_PONT: "br-lan pour maître", LEVE: "UP"}
+
+
+def _lien_port(ctx: Contexte, port: str) -> dict:
+    return next(iter(_json_liens(ctx.executer(["ip", "-j", "link", "show", "dev", port]))), {})
+
+
+def _constat_port(lien: dict, attendu: str) -> str | None:
+    """None : l'état voulu est constaté ; sinon ce qui est vu. COUPE : sans br-lan pour maître ET baissé (ni drapeau UP,
+    état DOWN : sans câble, un port UP est aussi DOWN) ; AU_PONT : br-lan pour maître, porteuse ou non ; LEVE :
+    drapeau UP, maître ou non. Un port illisible n'est jamais constaté."""
+    maitre = lien.get("master")
+    drapeaux = lien.get("flags") or []
+    operstate = str(lien.get("operstate") or "")
+    if attendu == COUPE:
+        constate = maitre != "br-lan" and "UP" not in drapeaux and operstate.upper() == "DOWN"
+    elif attendu == AU_PONT:
+        constate = maitre == "br-lan"
+    else:
+        constate = "UP" in drapeaux
+    if constate:
+        return None
+    if not lien:
+        return "état illisible"
+    return f"maître {maitre or 'aucun'}, {'UP' if 'UP' in drapeaux else 'baissé'}, état {operstate or 'inconnu'}"
+
+
+def _attendre_port(ctx: Contexte, port: str, attendu: str) -> None:
+    """Le résultat est relu (`ip -j link show dev <port>`, jamais br-lan nommé), pas déduit des codes de networkctl."""
+    limite = ctx.monotone() + DELAI_PORT
+    while True:
+        constat = _constat_port(_lien_port(ctx, port), attendu)
+        if constat is None:
+            return
+        if ctx.monotone() >= limite:
+            raise Echec(f"{port} n'est pas {'coupé' if attendu == COUPE else 'rétabli'} après {DELAI_PORT:g} s : "
+                        f"{constat} ; attendu : {_ATTENDUS[attendu]} (networkctl status {port})")
+        ctx.attendre(PAUSE_PORT)
+
+
+def _lever_port(ctx: Contexte, port: str) -> bool:
+    """Rétabli hors du pont : le fichier de coupure retiré, plus aucun .network ne vise peut-être le port (netplan en
+    pose un sur gk2, pas forcément ailleurs) et networkd le laisse baissé. Toujours pas UP après reload et reconfigure :
+    `ip link set dev <port> up` (le port seul, jamais eth* ni br-lan). Renvoie vrai s'il a fallu le lever."""
+    if _constat_port(_lien_port(ctx, port), LEVE) is None:
+        return False
+    _exiger(ctx, ["ip", "link", "set", "dev", port, "up"])
+    return True
+
+
+def _preparer_port(ctx: Contexte, port: str, chemin: Path, coupe: bool) -> tuple[bytes | None, str]:
+    """Gardes, sans aucune commande. Couper : mode routeur actif et port du pont configuré. Rétablir : en tout mode
+    (une coupure est une décision de l'administrateur, indépendante du mode routeur, qui survit à tout retour).
+    Renvoie le fichier de coupure tel qu'il est (None : absent ; remis tel quel en cas d'échec) et l'état attendu."""
+    _verifier_arbre(ctx)
+    courant = _lire_etat(ctx)["etat"]
+    if coupe and courant != "actif":
+        raise Refus(f"le mode routeur est « {courant} » : un port ne se coupe qu'en mode routeur actif (appliqué puis "
+                    "confirmé) ; il se rétablit en tout mode")
+    try:
+        cfg = charger(_p(ctx, TOML)) if os.path.lexists(_p(ctx, TOML)) else None
+    except ErreurConfig as exc:
+        if coupe:
+            raise Refus(f"configuration du mode routeur illisible ({exc}) : ports du pont inconnus") from exc
+        cfg = None                                          # rétablir : vérifié levé, sans le pont
+    au_pont = courant == "actif" and cfg is not None and port in cfg.ports
+    if coupe and not au_pont:
+        raise Refus(f"{port} n'est pas un port du pont (ports configurés : "
+                    f"{' '.join(cfg.ports) if cfg is not None else 'aucun'}) : rien à couper")
+    try:
+        avant = fichiers.lire(chemin)
+    except fichiers.LienSymbolique as exc:
+        raise Refus(f"{exc.filename} est un lien symbolique : ni suivi, ni remplacé") from exc
+    except OSError as exc:
+        raise Refus(f"{chemin} illisible ({exc.__class__.__name__}) : le corriger d'abord") from exc
+    return avant, COUPE if coupe else AU_PONT if au_pont else LEVE
+
+
+def _remettre_port(ctx: Contexte, chemin: Path, avant: bytes | None, port: str) -> list[str]:
+    """Remet le fichier de coupure tel qu'il était (absent compris), puis le fait relire par networkd (le port seul) ;
+    continue après une erreur et les renvoie toutes. Aucune nouvelle attente : l'échec est déjà rendu."""
+    erreurs: list[str] = []
+    try:
+        if avant is None:
+            chemin.unlink(missing_ok=True)
+        else:
+            fichiers.ecrire(chemin, avant, 0o644)
+    except OSError as exc:
+        erreurs.append(f"fichier : {exc}")
+    for argv in (["networkctl", "reload"], ["networkctl", "reconfigure", port]):
+        try:
+            _exiger(ctx, argv)
+        except Echec as exc:
+            erreurs.append(str(exc))
+    return erreurs
+
+
+def _agir_port(ctx: Contexte, port: str, acteur: str, coupe: bool) -> dict:
+    _verifier_acteur(acteur)
+    _verifier_port(port)                                    # liste blanche, avant tout (jamais eth*, jamais br-lan)
+    action = "port-couper" if coupe else "port-retablir"
+    chemin = _p(ctx, FICHIER_COUPE.format(port=port))
+    with _verrou(ctx), _auditer_chemins(ctx, acteur):
+        try:
+            avant, attendu = _preparer_port(ctx, port, chemin, coupe)
+        except Refus as exc:
+            if not isinstance(exc, CheminRefuse):          # audité par _auditer_chemins
+                _auditer(ctx, f"{action}-refus", acteur, str(exc))
+            raise
+        leve = False
+        with _sans_interruption():                          # de l'écriture à la vérification (ou à la remise)
+            try:
+                if coupe:
+                    fichiers.ecrire(chemin, _rendu_coupe(port), 0o644)
+                else:
+                    chemin.unlink(missing_ok=True)
+                _exiger(ctx, ["networkctl", "reload"])
+                _exiger(ctx, ["networkctl", "reconfigure", port])           # le port seul, jamais br-lan
+                if attendu == LEVE:
+                    leve = _lever_port(ctx, port)
+                _attendre_port(ctx, port, attendu)
+            except BaseException as exc:                    # même une exception imprévue remet l'état d'avant
+                erreurs = _remettre_port(ctx, chemin, avant, port)
+                suite = ("fichier d'avant remis, networkd rechargé" if not erreurs
+                         else "remise INCOMPLÈTE : " + " ; ".join(erreurs))
+                _auditer(ctx, f"{action}-echec", acteur, f"{_texte(exc)} ; {suite}")
+                if _connue(exc):
+                    raise Echec(f"{exc} ; {suite}") from exc
+                raise
+        fichier = FICHIER_COUPE.format(port=port)
+        _auditer(ctx, action, acteur,
+                 f"{port} coupé : hors du pont et baissé ({fichier})" if coupe
+                 else f"{port} rétabli : br-lan pour maître ({fichier} retiré)" if attendu == AU_PONT
+                 else f"{port} rétabli hors du pont : UP{' (ip link set up)' if leve else ''} ({fichier} retiré)")
+    return etat(ctx)
+
+
+def port_couper(ctx: Contexte, port: str, acteur: str) -> dict:
+    return _agir_port(ctx, port, acteur, coupe=True)
+
+
+def port_retablir(ctx: Contexte, port: str, acteur: str) -> dict:
+    return _agir_port(ctx, port, acteur, coupe=False)

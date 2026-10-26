@@ -19,7 +19,7 @@ import secubox_core.config as _cfg
 
 _cfg._CONFIG = {"global": {}, "api": {"socket_dir": "/tmp/secubox", "jwt_secret": "test"}, "auth": {"users": {}}}
 with mock.patch("pathlib.Path.mkdir"):
-    from api import main, routeur_api, routeur_ctl  # noqa: E402
+    from api import main, ports_api, routeur_api, routeur_ctl  # noqa: E402
 
 from api.routeur_rendu import CHEMINS  # noqa: E402
 from secubox_core.auth import require_jwt, require_lecture  # noqa: E402
@@ -99,7 +99,8 @@ def test_unite_api_durcie_et_exception():
     assert any("chmod 660 /run/secubox/netmodes.sock" in v for v in u.get("ExecStartPost", []))
     # l'exception est écrite, avec sa raison et ce test
     ligne = ligne_exception("secubox-netmodes.service")
-    for mot in ("NoNewPrivileges=no", "KillMode=process", "ReadWritePaths", "netmodesctl", TEST_EXCEPTION):
+    for mot in ("NoNewPrivileges=no", "KillMode=process", "ReadWritePaths", "netmodesctl", TEST_EXCEPTION,
+                "port-couper", "port-retablir"):
         assert mot in ligne, mot
 
 
@@ -109,7 +110,8 @@ def test_unite_couvre_chaque_ecriture_du_controleur(fichier):
     rw = chemins_rw(unite(fichier))
     ecrits = {os.path.dirname(c) for c in CHEMINS.values()}
     ecrits |= {os.path.dirname(c) for c in (routeur_ctl.TOML, routeur_ctl.ANCIEN_PONT, routeur_ctl.AUDIT,
-                                            routeur_ctl.VERROU, routeur_ctl.VERROU_UNBOUND, routeur_ctl.BAUX)}
+                                            routeur_ctl.VERROU, routeur_ctl.VERROU_UNBOUND, routeur_ctl.BAUX,
+                                            routeur_ctl.FICHIER_COUPE)}            # #3190 : port coupé
     ecrits |= {routeur_ctl.ARBRE}
     for dossier in sorted(ecrits):
         assert any(dossier == c or dossier.startswith(c + "/") for c in rw), dossier
@@ -201,7 +203,8 @@ def test_unite_retour_boot_root_durcie():
 
 LIGNE_SUDOERS = ("secubox-netmodes ALL=(root) NOPASSWD: /usr/sbin/netmodesctl routeur-etat, "
                  "/usr/sbin/netmodesctl routeur-appliquer *, /usr/sbin/netmodesctl routeur-confirmer *, "
-                 "/usr/sbin/netmodesctl routeur-retour *")
+                 "/usr/sbin/netmodesctl routeur-retour *, "
+                 "/usr/sbin/netmodesctl port-couper *, /usr/sbin/netmodesctl port-retablir *")    # #3190
 
 
 def regles_sudoers() -> list[str]:
@@ -247,46 +250,80 @@ def accorde(argv: list[str]) -> bool:
 
 
 class Faux:
+    """sudo : réponses scriptées, argv relevés ; lectures sans privilège de l'anti-coupure (#3190) : tables vides."""
+    LECTURES = (["ip", "-j", "neigh", "show", "dev", "br-lan"], ["bridge", "-j", "fdb", "show", "br", "br-lan"])
+
     def __init__(self, reponses):
         self.reponses = list(reponses)
         self.appels = []
+        self.lectures = []
 
     def __call__(self, argv, **kw):
+        if argv[:1] != ["sudo"]:
+            assert argv in self.LECTURES, argv                            # jamais une autre commande hors sudo
+            self.lectures.append(argv)
+            return subprocess.CompletedProcess(argv, 0, stdout="[]", stderr="")
         self.appels.append(argv)
         code, sortie = self.reponses.pop(0)
         return subprocess.CompletedProcess(argv, code, stdout=json.dumps(sortie), stderr="")
 
 
-def test_sudoers_conforme_aux_appels_de_l_api(monkeypatch):
+def test_sudoers_conforme_aux_appels_de_l_api(monkeypatch, tmp_path):
     """Croisé avec test_routeur_api_3189.py::test_argv_conformes_au_sudoers : les argv qu'émet l'API sont exactement
-    ceux que la ligne accorde ; un verbe sans `*` est appelé sans argument, un verbe à `*` avec un seul acteur."""
+    ceux que la ligne accorde ; un verbe sans `*` est appelé sans argument, un verbe à `*` avec un seul acteur, un
+    verbe de port avec le port (lan0..lan3) puis l'acteur ; et chaque verbe accordé sert (#3190 : invariant rétabli)."""
     grants = autorisations()
     assert all(c == CTL for c, _ in grants)
     sans_acteur = {m[0] for _, m in grants if len(m) == 1}
-    avec_acteur = {m[0] for _, m in grants if len(m) == 2 and m[1] == "*"}
-    assert len(grants) == len(sans_acteur) + len(avec_acteur)
+    etoiles = {m[0] for _, m in grants if len(m) == 2 and m[1] == "*"}
+    assert len(grants) == len(sans_acteur) + len(etoiles)
     # le contrôleur : mêmes verbes ; le retour au démarrage n'est jamais accordé (unité root seulement)
     ctl = (PKG / "sbin/netmodesctl").read_text(encoding="utf-8")
-    assert avec_acteur == set(re.search(r"AVEC_ACTEUR = \(([^)]*)\)", ctl).group(1).replace('"', "").replace(" ", "")
-                              .strip(",").split(","))
-    assert sans_acteur == {"routeur-etat"} and "routeur-retour-demarrage" not in sans_acteur | avec_acteur
+
+    def verbes_du_controleur(nom: str) -> set[str]:
+        return set(re.search(nom + r" = \(([^)]*)\)", ctl).group(1).replace('"', "").replace(" ", "")
+                   .strip(",").split(","))
+
+    avec_acteur = verbes_du_controleur("AVEC_ACTEUR")
+    avec_port = verbes_du_controleur("AVEC_PORT")                         # #3190 : <port> <acteur>
+    assert avec_port == {"port-couper", "port-retablir"} and not avec_acteur & avec_port
+    assert etoiles == avec_acteur | avec_port
+    assert sans_acteur == {"routeur-etat"} and "routeur-retour-demarrage" not in sans_acteur | etoiles
 
     main.app.dependency_overrides[require_jwt] = lambda: {"sub": "alice"}
     main.app.dependency_overrides[require_lecture] = lambda: {"sub": "alice"}
     monkeypatch.setattr(routeur_api, "est_mochabin", lambda: False)
+    pont = tmp_path / "br-lan"
+    pont.mkdir()
+    monkeypatch.setattr(ports_api, "PONT_SYS", pont)                     # br-lan présent : l'anti-coupure lit
     etat = {"etat": "actif", "adresses_pont": ["192.168.42.1/24"]}
-    faux = Faux([(0, etat), (0, etat), (0, {}), (0, {}), (0, {})])
+    faux = Faux([(0, etat), (0, etat), (0, {}), (0, {}), (0, {}), (0, {}), (0, {})])
     monkeypatch.setattr(routeur_api.subprocess, "run", faux)
+    routeur_api._reinitialiser()
+
+    def attendre_fin():                                                   # appliquer et retour : en tâche de fond
+        if routeur_api._fil is not None:
+            routeur_api._fil.join(10)
+            assert not routeur_api._fil.is_alive()
+
     try:
         client = TestClient(main.app, base_url="http://testserver")
         client.get("/routeur/etat")
+        client.post("/routeur/apercu", json={"adresse": "192.168.77.1/24", "dhcp_debut": "192.168.77.100",
+                                             "dhcp_fin": "192.168.77.199"})
         client.post("/routeur/appliquer", json={"adresse": "192.168.77.1/24", "dhcp_debut": "192.168.77.100",
                                                 "dhcp_fin": "192.168.77.199", "confirmer": "routeur"})
+        attendre_fin()
         client.post("/routeur/confirmer")
         client.post("/routeur/retour", json={"confirmer": "retour"})
+        attendre_fin()
+        client.post("/ports/lan1/couper", json={"confirmer": "lan1"}, headers={"X-Real-IP": "192.168.42.50"})
+        client.post("/ports/lan2/retablir", json={"confirmer": "lan2"})
     finally:
         main.app.dependency_overrides.clear()
-    assert len(faux.appels) == 5
+        routeur_api._reinitialiser()
+    assert len(faux.appels) == 7 and faux.reponses == []
+    assert faux.lectures == [list(Faux.LECTURES[0])]                     # poste sans voisin : pas de table de pont
     verbes = set()
     for argv in faux.appels:
         assert argv[:2] == ["sudo", "-n"], argv
@@ -296,9 +333,16 @@ def test_sudoers_conforme_aux_appels_de_l_api(monkeypatch):
         verbes.add(verbe)
         if verbe in sans_acteur:
             assert len(cmd) == 2, cmd                                     # aucun argument : la règle n'en tolère aucun
+        elif verbe in avec_port:                                          # #3190 : <port> <acteur>, port en liste blanche
+            assert len(cmd) == 4 and cmd[2] in routeur_ctl.PORTS_LAN and routeur_ctl.ACTEUR.fullmatch(cmd[3]), cmd
         else:
             assert verbe in avec_acteur and len(cmd) == 3 and routeur_ctl.ACTEUR.fullmatch(cmd[2]), cmd
-    assert verbes == sans_acteur | avec_acteur                            # rien d'accordé qui ne serve
+    assert verbes == sans_acteur | etoiles                                # rien d'accordé qui ne serve (#3190 rétabli)
+    # netmodesctl revalide l'arité, le port (lan0..lan3) et l'acteur avant tout
+    # (test_ports_coupes_3190.py::test_cli_port_refuse_avant_tout)
+    for verbe in avec_port:
+        assert accorde([CTL, verbe, "lan1", "alice"])
+        assert not accorde([CTL, verbe])
     # et ce que la règle refuse
     assert not accorde([CTL, "routeur-etat", "alice"])
     assert not accorde([CTL, "routeur-appliquer"])
@@ -317,12 +361,16 @@ def test_control_depends_et_version():
     assert re.search(r"python3 \(>= 3\.11\)", depends)                    # tomllib
     assert "Architecture: all" in ctl and "Standards-Version: 4.6.2" in ctl and "debhelper-compat (= 13)" in ctl
     tete = lire("debian/changelog").split("\n -- ", 1)
-    assert tete[0].startswith("secubox-netmodes (1.4.2-1~trixie1) trixie; urgency=medium")
-    assert "(ref #3189)" in tete[0]
-    assert tete[1].startswith("Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 16:30:00 +0100")
+    # 1.5.0 (#3190) : panneau Réseau, ports, application asynchrone ; dit aussi ce qui n'est pas repris (Isoler)
+    assert tete[0].startswith("secubox-netmodes (1.5.0-1~trixie1) trixie; urgency=medium")
+    assert "(ref #3190)" in tete[0] and "Isoler" in tete[0] and "livraison 3" in tete[0]
+    assert tete[1].startswith("Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 18:00:00 +0100")
+    e142 = lire("debian/changelog").split("secubox-netmodes (1.4.2-1~trixie1) trixie; urgency=medium", 1)[1].split("\n -- ", 1)
+    assert "(ref #3189)" in e142[0]
+    assert e142[1].startswith("Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 16:30:00 +0100")
     # 1.4.2 : le DHCP du LAN, arrêté par le prerm de debhelper à la mise à jour, est relancé s'il est activé
     for mot in ("secubox-lan-dhcp", "--no-start", "postinst"):
-        assert mot in tete[0], mot
+        assert mot in e142[0], mot
 
 
 @pytest.mark.parametrize("script", ["postinst", "prerm"])

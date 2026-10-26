@@ -1,3 +1,9 @@
+secubox-wireguard (1.3.1-1~trixie1) trixie; urgency=medium
+
+  * Un `wgctl dump` en echec (code non nul, delai, exception) n'est plus lu comme « aucun pair » : `/peers/status`, `/summary` et `/stats` repondent 503 `wgctl dump en échec : <raison>` au lieu de `total: 0`. Le collecteur periodique journalise et saute le cycle. Forme de la reponse inchangee en cas de succes. Ces trois routes deviennent des `def` simples (appel bloquant hors de la boucle asyncio) (ref #3190).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 17:00:00 +0100
+
 secubox-wireguard (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * `wgctl serveur init [--port N] [--endpoint H:P]` (#2845) : cree l'interface serveur wg-clients (10.66.0.1/24, cle generee une fois, jamais regeneree), une table nft propre (forward + masquerade, sans recharger le pare-feu), le routage IPv4 persistant, et active wg-quick@wg-clients. Verbe d'operateur (root), arguments valides (hote:port, port 1-65535).

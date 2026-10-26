@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — panneau Réseau, onglet « Cartographie » (#3190), profil Aurora (.claude/AURORA-REFERENCE.md).
+  Schéma SVG écrit à la main (disposition de la maquette approuvée, version étroite sous 1000 px de cadre) :
+  Internet → passerelle → voisins WAN ; cette box (WAN eth2) ; maillage wg-mesh ; autres tunnels ; pont LXC ; switch, ports et clients ;
+  carte « Hubs et switchs détectés ».
+  DONNÉES RÉELLES, lecture seule (aucun appel d'écriture) :
+    GET /api/v1/netmodes/reseau/carte    passerelle, voisins WAN, adresse WAN, conteneurs actifs, interfaces WireGuard
+    GET /api/v1/netmodes/reseau/ports    porteuse, vitesse, coupure, adresses MAC apprises par port (table de br-lan)
+    GET /api/v1/netmodes/reseau/clients  noms et adresses des appareils du LAN (session d'administrateur)
+    GET /api/v1/netmodes/routeur/etat    adresses de br-lan, mode routeur actif ou non
+    GET /api/v1/p2p/peers                noms des pairs du maillage
+    GET /api/v1/wireguard/peers/status   état et volumes des pairs (jointure par clé publique complète)
+    GET /api/v1/wireguard/summary        autres tunnels (port, pairs, en ligne)
+  Chaque source a sa pastille ; une source en 401/503 affiche « session requise » ou « source en panne » sur SON bloc, jamais « aucun ».
+  ?embed=1 : sans menu ; ?demo=1 : données de démonstration (adresses de documentation RFC 5737, noms fictifs), aucun appel.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Cartographie réseau</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;
+    /* teintes de structure du schéma (maquette approuvée) */
+    --n-fond:#0d1a33;--n-fond2:#0f2040;--n-bord:#3b4f73;--n-bord2:#567ab5;--n-fil:#5d7fb8;--n-eteint:#8ea2c4}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none;background:transparent} body.emb::-webkit-scrollbar{display:none} body.sm #sidebar{display:none}
+  [hidden]{display:none!important}
+  .page{min-width:0}
+  body:not(.sm) .page{margin-left:220px;padding-top:48px}
+  @media (max-width:900px){body:not(.sm) .page{margin-left:0}}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque b{font-size:1.3rem;font-weight:800;display:block} .marque small{display:block;color:var(--cyan);font-size:.72rem;overflow-wrap:anywhere}
+  .etat{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .etat.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .etat.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .etat.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:5px 12px;min-height:30px;cursor:pointer}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .bandeau{text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo{background:var(--orange);color:#1a1000} .info{background:var(--cyan);color:#04202a} .info a{color:inherit}
+  .sources{display:flex;flex-wrap:wrap;gap:5px 6px;align-items:center;font-size:.7rem}
+  .sources>b{color:var(--faible);font-weight:600;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;margin-right:2px}
+  .src{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.1);border-radius:999px;padding:2px 9px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .src.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.1)} .src.partiel{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.1)}
+  .src.session{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.1)} .src.panne{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.1)}
+  .src.demo{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.1)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .defile{overflow-x:auto;min-width:0}
+  svg.schema{display:block;width:100%;height:auto;margin:0 auto}
+  svg.schema.etroit{max-width:560px}
+  .note{color:var(--faible);font-size:.68rem;margin-top:8px;line-height:1.45}
+  /* Téléphone : le schéma prend toute la largeur utile (marges resserrées, légende plus dense). */
+  @container a (max-width:520px){.app{padding:10px}.pan.schema-pan{padding:8px 6px}.legende{gap:3px 10px}}
+  .legende{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;padding-top:8px;border-top:1px solid var(--trait);font-size:.68rem;color:var(--doux)}
+  .legende em{display:inline-block;width:18px;height:0;border-top:2px solid;vertical-align:middle;margin-right:5px}
+  /* schéma : boîtes, fils, textes */
+  svg .n-sombre{fill:var(--n-fond);stroke:var(--n-bord);stroke-width:1}
+  svg .n-bleu{fill:var(--n-fond2);stroke:var(--n-bord2);stroke-width:1}
+  svg .n-central{fill:url(#degCentral);stroke:var(--cyan);stroke-width:2}
+  svg .n-maillage{fill:var(--n-fond2);stroke:var(--violet);stroke-width:1}
+  svg .n-tunnels{fill:var(--n-fond);stroke:var(--faible);stroke-width:1;stroke-dasharray:6 6}
+  svg .n-port-ok{fill:#0f2a26;stroke:var(--vert);stroke-width:1}
+  svg .n-port-off{fill:#0b1426;stroke:var(--n-bord);stroke-width:1;stroke-dasharray:6 6}
+  svg .n-port-coupe{fill:rgba(255,77,94,.07);stroke:var(--rouge);stroke-width:1;stroke-dasharray:6 4}
+  svg .n-panne{fill:rgba(255,77,94,.05);stroke:var(--rouge);stroke-width:1;stroke-dasharray:4 4}
+  svg .n-barre{fill:#0b1426;stroke:var(--n-bord);stroke-width:1}
+  svg .f{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  svg .f-neutre{stroke:var(--n-fil)} svg .f-cyan{stroke:var(--cyan)} svg .f-violet{stroke:var(--violet)} svg .f-vert{stroke:var(--vert)}
+  svg .f-faible{stroke:var(--faible);stroke-dasharray:6 6} svg .f-eteint{stroke:var(--n-bord);stroke-dasharray:6 6} svg .f-rouge{stroke:var(--rouge);stroke-dasharray:6 4}
+  svg text{fill:var(--texte);font-size:13px;font-variant-numeric:tabular-nums}
+  svg .t-grand{font-size:22px;font-weight:700} svg .t-moyen{font-size:15px} svg .t-petit{font-size:12px}
+  svg .g{font-weight:700} svg .c-doux{fill:var(--doux)} svg .c-eteint{fill:var(--n-eteint)} svg .c-cyan{fill:var(--cyan)} svg .c-vert{fill:var(--vert)}
+  svg .c-orange{fill:var(--orange)} svg .c-rouge{fill:var(--rouge)} svg .c-violet{fill:var(--violet)} svg .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+</style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="page"><div class="cadre" id="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.4" fill="rgba(41,182,246,.14)"/><circle cx="5" cy="19" r="2.4"/><circle cx="19" cy="19" r="2.4"/><path d="M12 7.5v5M12 12.5l-6 4.5M12 12.5l6 4.5"/></svg>
+      <div><b>Cartographie réseau</b><small id="sous">WAN, maillage, tunnels, conteneurs, switch et clients</small></div>
+    </div>
+    <span class="etat" id="etatSources" aria-live="polite">LECTURE…</span>
+    <div class="droite"><span id="heure">—</span><button type="button" class="btn" id="rafraichir">⟳ Rafraîchir</button></div>
+  </header>
+  <div class="bandeau demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — adresses de documentation, aucune mesure réelle</div>
+  <div class="bandeau info" id="session" hidden><span id="sessionTexte">Aucune mesure : session requise.</span> <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="sources" id="sources" aria-label="État de chaque source de la carte"><b>Sources</b></div>
+  <div class="pan schema-pan">
+    <h3>Schéma du réseau <i id="schemaNote">lu sur la box</i></h3>
+    <div class="defile" id="defile"><svg class="schema" id="schema" role="img" aria-labelledby="schemaTitre"><title id="schemaTitre">Schéma du réseau de la box</title></svg></div>
+    <div class="legende" aria-hidden="true">
+      <span><em style="border-color:var(--cyan)"></em>WAN</span>
+      <span><em style="border-color:var(--violet)"></em>maillage wg-mesh</span>
+      <span><em style="border-color:var(--faible);border-top-style:dashed"></em>autres tunnels</span>
+      <span><em style="border-color:var(--vert)"></em>port avec lien</span>
+      <span><em style="border-color:var(--n-bord);border-top-style:dashed"></em>pas de lien</span>
+      <span><em style="border-color:var(--rouge);border-top-style:dashed"></em>coupé ou source en panne</span>
+    </div>
+    <p class="note" id="notes">Les noms des pairs viennent du registre p2p ; l’état et les volumes, de WireGuard (jointure par clé publique). « Conteneurs actifs » compte les interfaces rattachées au pont br-lxc ; le total des conteneurs n’est pas fourni. Plusieurs adresses MAC derrière un même port signalent un hub ou un switch.</p>
+  </div>
+</div></div></main>
+
+<script>
+"use strict";
+(function () {
+  var Q = new URLSearchParams(location.search), DEMO = Q.has("demo"), EMB = Q.has("embed");
+  var ONGLET = "carte";
+  if (EMB) { document.body.classList.add("emb"); }
+  if (EMB || DEMO) { document.body.classList.add("sm"); }
+  else {
+    // Menu commun : hors ?embed=1 et hors démonstration.
+    var lien = document.createElement("link"); lien.rel = "stylesheet"; lien.href = "/shared/sidebar-light.css"; document.head.appendChild(lien);
+    var sb = document.createElement("script"); sb.src = "/shared/sidebar.js"; document.body.appendChild(sb);
+  }
+  var $ = function (id) { return document.getElementById(id); };
+  var NS = "http://www.w3.org/2000/svg";
+
+  // ── Lecture : chaque source rend {ok, d} ou {ok:false, session|panne} ──────────────────────────────────────────────────────────
+  var SOURCES = [
+    { cle: "carte", nom: "Carte réseau", url: "/api/v1/netmodes/reseau/carte" },
+    { cle: "ports", nom: "Ports du switch", url: "/api/v1/netmodes/reseau/ports" },
+    { cle: "clients", nom: "Clients LAN", url: "/api/v1/netmodes/reseau/clients" },
+    { cle: "routeur", nom: "Mode routeur", url: "/api/v1/netmodes/routeur/etat" },
+    { cle: "p2p", nom: "Pairs p2p", url: "/api/v1/p2p/peers" },
+    { cle: "wg", nom: "WireGuard · pairs", url: "/api/v1/wireguard/peers/status" },
+    { cle: "wgsum", nom: "WireGuard · tunnels", url: "/api/v1/wireguard/summary" }
+  ];
+  function jeton() { try { return localStorage.getItem("sbx_token") || ""; } catch (e) { return ""; } }
+  function lire(url) {
+    var t = jeton(), h = { Accept: "application/json" };
+    if (t) { h.Authorization = "Bearer " + t; }
+    return fetch(url, { method: "GET", headers: h, credentials: "same-origin", cache: "no-store" })
+      .then(function (r) {
+        if (r.status === 401 || r.status === 403) { return { ok: false, session: true }; }
+        return r.json().then(function (j) { return j; }, function () { return null; }).then(function (j) {
+          if (!r.ok) { return { ok: false, panne: "HTTP " + r.status + (j && j.detail ? " : " + j.detail : "") }; }
+          if (!j || typeof j !== "object") { return { ok: false, panne: "réponse illisible" }; }
+          return { ok: true, d: j };
+        });
+      })
+      .catch(function () { return { ok: false, panne: "injoignable" }; });
+  }
+  function raison(s) { return s.session ? "session requise" : "source en panne"; }
+  function couleurRaison(s) { return s.session ? "c-cyan" : "c-rouge"; }
+
+  // ── Formats ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  function debit(mbps) {
+    if (mbps == null || !isFinite(mbps) || mbps <= 0) { return null; }
+    return mbps >= 1000 ? String(+(mbps / 1000).toFixed(1)).replace(".", ",") + " Gb/s" : mbps + " Mb/s";
+  }
+  function octets(n) {
+    if (n == null || !isFinite(n)) { return "—"; }
+    var u = ["o", "Ko", "Mo", "Go", "To"], i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return (i ? n.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) : String(n)) + " " + u[i];
+  }
+  function reseau(cidr) {
+    var m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)\/(\d+)$/.exec(cidr || "");
+    if (!m) { return null; }
+    var p = +m[5], ip = ((+m[1] << 24) >>> 0) + (+m[2] << 16) + (+m[3] << 8) + (+m[4]);
+    var masque = p === 0 ? 0 : (0xffffffff << (32 - p)) >>> 0, n = (ip & masque) >>> 0;
+    return [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join(".") + "/" + p;
+  }
+  function hote(liste) {
+    var a = (Array.isArray(liste) ? liste : String(liste || "").split(",")).map(function (x) { return String(x).trim(); });
+    for (var i = 0; i < a.length; i++) { if (/\/32$/.test(a[i]) || /\/128$/.test(a[i])) { return a[i].split("/")[0]; } }
+    return "";
+  }
+
+  // ── Maillage : pairs p2p (noms) joints aux pairs WireGuard de wg-mesh (état, volumes) par clé publique complète ──────────────────
+  // last_seen du registre p2p : secondes epoch (nombre) ou ISO 8601 (registre peers.json hérité, UTC naïf de
+  // datetime.utcnow().isoformat()) ; toute autre valeur est inconnue (null), jamais « il y a NaN s ».
+  function epoque(v) {
+    if (typeof v === "number") { return isFinite(v) && v > 0 ? v : null; }
+    if (typeof v !== "string" || !v.trim()) { return null; }
+    var s = v.trim();
+    if (/^\d+(\.\d+)?$/.test(s)) { return +s > 0 ? +s : null; }
+    s = s.replace(/(\.\d{3})\d+/, "$1");
+    if (/T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s)) { s += "Z"; }
+    var t = Date.parse(s);
+    return isNaN(t) ? null : t / 1000;
+  }
+  function nombre(v) { return typeof v === "number" && isFinite(v) ? v : null; }
+  var MAILLAGE = "wg-mesh", TRENTE_JOURS = 30 * 86400;
+  function sansNom(p) {
+    var n = String(p.name || "").trim();
+    return !n || n === p.address || n === String(p.public_key || "").slice(0, 12) || n === "peer";
+  }
+  function joindre(p2p, wg) {
+    var parCle = {}, liste = [], maintenant = Date.now() / 1000;
+    var mesh = wg.ok ? (wg.d.peers || []).filter(function (x) { return x && x.interface === MAILLAGE; }) : null;
+    if (p2p.ok) {
+      (p2p.d.peers || []).forEach(function (p) {
+        if (!p || typeof p !== "object") { return; }
+        var e = { cle: String(p.public_key || ""), nom: sansNom(p) ? "" : String(p.name).trim(), sansNom: sansNom(p), ip: String(p.address || ""), p2p: p, wg: null };
+        liste.push(e); if (e.cle) { parCle[e.cle] = e; }
+      });
+    }
+    (mesh || []).forEach(function (w) {
+      var e = w.full_key && parCle[w.full_key];
+      if (e) { e.wg = w; if (!e.ip) { e.ip = hote(w.allowed_ips); } }
+      // Absent du registre p2p : « sans nom » seulement si le registre a été LU (sinon le nom est inconnu, pas absent).
+      else { liste.push({ cle: String(w.full_key || ""), nom: "", sansNom: p2p.ok, ip: hote(w.allowed_ips), p2p: null, wg: w }); }
+    });
+    liste.forEach(function (e) {
+      if (e.wg) {
+        e.etat = e.wg.status === "online" ? "actif" : "muet";
+        var sh = e.wg.seconds_since_handshake;
+        e.dernier = sh == null ? { connu: true, s: null } : (nombre(+sh) != null ? { connu: true, s: +sh } : { connu: false });
+        e.recu = nombre(e.wg.rx_bytes);
+      } else if (wg.ok) {
+        e.etat = "absent"; e.dernier = { connu: false }; e.recu = null;           // sur le registre p2p, pas sur l'interface wg-mesh
+      } else {
+        var st = e.p2p && e.p2p.status;
+        e.etat = st === "online" ? "actif" : st === "offline" ? "muet" : null;     // WireGuard illisible : état du registre p2p, volumes inconnus
+        var brut = e.p2p ? e.p2p.last_seen : null, vu = epoque(brut);
+        e.dernier = vu != null ? { connu: true, s: Math.max(0, Math.round(maintenant - vu)) }
+          : ((brut == null || brut === 0 || brut === "") && st === "offline" ? { connu: true, s: null } : { connu: false });   // jamais, ou illisible : « — »
+        e.recu = null;
+      }
+      e.aRetirer = e.sansNom || (e.dernier.connu && e.dernier.s != null && e.dernier.s > TRENTE_JOURS);
+    });
+    var rang = function (e) { return e.aRetirer ? 3 : e.etat === "actif" ? 0 : e.etat === "muet" ? 1 : 2; };
+    liste.sort(function (a, b) { return rang(a) - rang(b) || (b.recu || 0) - (a.recu || 0) || a.ip.localeCompare(b.ip, "fr", { numeric: true }); });
+    return { liste: liste, meshLu: !!mesh };
+  }
+
+  // ── Modèle : ce que chaque bloc du schéma affiche, indépendant de la disposition ───────────────────────────────────────────────
+  // Une ligne : { s: [segments {t, c, coupe}], f: "grand|moyen|normal|petit" } ; c = classes CSS du segment.
+  function L(f) { var segs = [].slice.call(arguments, 1); return { f: f, s: segs }; }
+  function S(t, c, coupe) { return { t: t == null ? "—" : String(t), c: c || "", coupe: !!coupe }; }
+
+  function modele(R, hoteNom) {
+    // Une réponse 200 sans bloc « carte » est une panne de la source, pas une carte vide.
+    if (R.carte.ok && (!R.carte.d.carte || typeof R.carte.d.carte !== "object")) { R = Object.assign({}, R, { carte: { ok: false, panne: "réponse sans carte" } }); }
+    var M = {}, carte = R.carte.ok ? R.carte.d.carte : null, pannesCarte = R.carte.ok ? (R.carte.d.pannes || []) : [];
+    var ports = R.ports.ok ? R.ports.d.ports : null;
+    var parNom = {}; (ports || []).forEach(function (p) { if (p && p.nom) { parNom[p.nom] = p; } });
+    var wan = carte ? carte.wan : null;
+
+    // Internet, passerelle, voisins WAN
+    M.internet = { style: "n-sombre", l: [L("moyen", S("Internet", "c-doux"))] };
+    if (!R.carte.ok || !wan) {
+      var rc = R.carte.ok ? { panne: true } : R.carte;
+      M.passerelle = { style: "n-panne", l: [L("moyen", S("Passerelle", "g")), L("normal", S(raison(rc), couleurRaison(rc))), L("petit", S("adresse WAN illisible", "c-doux"))] };
+      M.voisins = { style: "n-panne", l: [L("normal", S("Voisins WAN", "g")), L("petit", S(raison(rc), couleurRaison(rc)))] };
+    } else {
+      var gw = wan.passerelle ? S(wan.passerelle, "mono") : (pannesCarte.indexOf("route_defaut") >= 0 ? S("source en panne", "c-rouge") : S("aucune route par défaut", "c-orange"));
+      M.passerelle = { style: "n-bleu", l: [L("moyen", S("Passerelle", "g")), L("normal", gw), L("petit", S("route par défaut", "c-doux"))] };
+      var net = reseau(wan.adresse), v2;
+      if (Array.isArray(wan.voisins)) {
+        var ips = wan.voisins.map(function (v) { return v.ip; });
+        v2 = ips.length ? S(ips.length + " voisin" + (ips.length > 1 ? "s" : "") + " : " + ips.map(function (ip) { return net && ip.lastIndexOf(".") > 0 ? "." + ip.split(".").pop() : ip; }).join(" · "), "c-doux", true) : S("aucun voisin vu", "c-doux");
+      } else if (typeof wan.nb_voisins === "number") {
+        v2 = S(wan.nb_voisins + " voisin" + (wan.nb_voisins > 1 ? "s" : "") + " · adresses : session requise", "c-doux", true);
+      } else { v2 = S("voisins : source en panne", "c-rouge"); }
+      M.voisins = { style: "n-sombre", l: [L("normal", S("Réseau WAN", "g")), L("normal", S(net || "réseau —", "mono")), L("petit", v2)] };
+    }
+    var pw = parNom.eth2;
+    M.wan = { panne: !R.carte.ok || !wan, l: [S("WAN " + ((wan && wan.interface) || "eth2") + (pw && pw.porteuse && debit(pw.vitesse_mbps) ? " · " + debit(pw.vitesse_mbps) : ""), "c-cyan"), S(wan ? (wan.adresse || "adresse —") : raison(R.carte.ok ? { panne: true } : R.carte), wan ? "c-cyan" : couleurRaison(R.carte.ok ? { panne: true } : R.carte))] };
+
+    // Cette box
+    var nT = carte && Array.isArray(carte.tunnels) ? carte.tunnels.length : (R.wgsum.ok ? (R.wgsum.d.interfaces || []).length : null);
+    M.box = { style: "n-central", l: [L("grand", S("Cette box", "g")), L("normal", S(hoteNom || "—", "c-cyan", true)),
+      L("petit", S("WAN eth2 · LAN br-lan · br-lxc · " + (nT == null ? "tunnels —" : nT + " tunnel" + (nT > 1 ? "s" : "") + " WireGuard"), "c-doux"))] };
+
+    // Pont LXC
+    if (!carte || !carte.lxc) {
+      var rl = R.carte.ok ? { panne: true } : R.carte;
+      M.lxc = { style: "n-panne", l: [L("moyen", S("br-lxc", "g")), L("normal", S("conteneurs : " + raison(rl), couleurRaison(rl)))] };
+    } else {
+      var n = nombre(carte.lxc.actifs);
+      M.lxc = { style: "n-bleu", l: [L("moyen", S(carte.lxc.pont || "br-lxc", "g"), S(" · pont des conteneurs", "c-doux")), L("normal", n == null ? S("conteneurs actifs —", "c-doux") : S(n + " conteneur" + (n > 1 ? "s" : "") + " actif" + (n > 1 ? "s" : ""), "c-vert"))] };
+    }
+
+    // Maillage wg-mesh
+    var J = joindre(R.p2p, R.wg), mInt = null;
+    if (R.wgsum.ok) { (R.wgsum.d.interfaces || []).forEach(function (i) { if (i && i.name === MAILLAGE) { mInt = i; } }); }
+    var titreM = [S("wg-mesh", "g"), S((mInt && mInt.listen_port ? " · UDP " + mInt.listen_port : "") + (R.p2p.ok || J.meshLu ? " · " + J.liste.length + " pair" + (J.liste.length > 1 ? "s" : "") : ""), "c-doux")];
+    var lm = [], notesM = [];
+    if (!R.p2p.ok) { notesM.push(L("petit", S("noms : registre p2p, " + raison(R.p2p), couleurRaison(R.p2p)))); }
+    if (!R.wg.ok) { notesM.push(L("petit", S("état et volumes : WireGuard, " + raison(R.wg), couleurRaison(R.wg)))); }
+    if (!R.p2p.ok && !R.wg.ok) { lm.push(L("normal", S("Maillage illisible : aucune source lue", "c-rouge"))); }
+    else if (!J.liste.length) { lm.push(L("normal", S("aucun pair dans le maillage", "c-doux"))); }
+    J.liste.forEach(function (e) {
+      var nom = e.nom || (e.sansNom ? "sans nom" : "—"), ip = e.ip || "—";
+      if (e.aRetirer) { lm.push(L("normal", S("○ " , "c-eteint"), S(nom, "c-eteint", true), S(" · " + ip + " · " + (e.etat === "actif" ? "actif" : e.etat === "muet" ? "muet" : "—") + " · à retirer ?", "c-eteint"))); return; }
+      if (e.etat === "actif") { lm.push(L("normal", S("● ", "c-vert"), S(nom, "", true), S(" · " + ip + " · ", ""), S("actif", "c-vert"), S(e.recu != null ? " · reçu " + octets(e.recu) : "", ""))); return; }
+      if (e.etat === "muet") { lm.push(L("normal", S("○ ", "c-orange"), S(nom, "", true), S(" · " + ip + " · ", ""), S("muet", "c-orange"))); return; }
+      if (e.etat === "absent") { lm.push(L("normal", S("○ ", "c-orange"), S(nom, "", true), S(" · " + ip + " · ", ""), S("absent de wg-mesh", "c-orange"))); return; }
+      lm.push(L("normal", S("○ ", "c-doux"), S(nom, "", true), S(" · " + ip + " · état —", "c-doux")));
+    });
+    M.maillage = { style: R.p2p.ok || R.wg.ok ? "n-maillage" : "n-panne", titre: titreM, l: lm, notes: notesM };
+
+    // Autres tunnels
+    var lt = [];
+    if (R.wgsum.ok) {
+      (R.wgsum.d.interfaces || []).filter(function (i) { return i && i.name !== MAILLAGE; }).forEach(function (i) {
+        var np = nombre(i.peers), en = nombre(i.online);         // absent : « — » ; seul un vrai 0 dit « aucun lien »
+        lt.push(L("normal", S(i.name, "", true), S(" · UDP " + (i.listen_port || "—") + " · " + (np == null ? "pairs —" : np + " pair" + (np > 1 ? "s" : "")) + " · ", ""),
+          en == null ? S("liens —", "c-doux") : en > 0 ? S(en + " en ligne", "c-vert") : S("aucun lien", "c-eteint")));
+      });
+      if (!lt.length) { lt.push(L("normal", S("aucun autre tunnel", "c-doux"))); }
+    } else if (carte && Array.isArray(carte.tunnels)) {
+      carte.tunnels.filter(function (t) { return t && t.nom !== MAILLAGE; }).forEach(function (t) {
+        lt.push(L("normal", S(t.nom, "", true), S(" · interface ", ""), S(t.etat === "up" ? "montée" : "descendue", t.etat === "up" ? "c-vert" : "c-orange")));
+      });
+      if (!lt.length) { lt.push(L("normal", S("aucun autre tunnel", "c-doux"))); }
+      lt.push(L("petit", S("ports et pairs : WireGuard, " + raison(R.wgsum), couleurRaison(R.wgsum))));
+    } else {
+      lt.push(L("normal", S("tunnels : " + raison(R.wgsum), couleurRaison(R.wgsum))));
+    }
+    M.tunnels = { style: R.wgsum.ok || (carte && carte.tunnels) ? "n-tunnels" : "n-panne", titre: [S("Autres tunnels WireGuard", "g")], l: lt, notes: [] };
+
+    // Switch : conduit eth1, br-lan, SFP eth0
+    var c1 = parNom.eth1, sfp = parNom.eth0, l2, l3;
+    if (R.routeur.ok) {
+      var adr = R.routeur.d.adresses_pont || [], temp = R.routeur.d.etat !== "actif";
+      l2 = adr.length ? L("normal", S("br-lan " + adr.join(", ") + (temp ? " (temp.)" : ""), temp ? "c-orange" : "c-vert", true)) : L("normal", S("br-lan sans adresse", "c-doux"));
+    } else { l2 = L("normal", S("br-lan : " + raison(R.routeur), couleurRaison(R.routeur))); }
+    if (!ports) { l3 = L("petit", S("ports : " + raison(R.ports.ok ? { panne: true } : R.ports), couleurRaison(R.ports.ok ? { panne: true } : R.ports))); }
+    else { l3 = L("petit", S("SFP eth0 · " + (!sfp ? "—" : sfp.porteuse ? (debit(sfp.vitesse_mbps) || "lien") : sfp.porteuse === false ? "pas de lien" : "lien —"), "c-eteint")); }
+    M.sw = { style: ports ? "n-bleu" : "n-panne", l: [L("moyen", S("Switch DSA", "g"), S(" · eth1 " + (c1 && debit(c1.vitesse_mbps) ? debit(c1.vitesse_mbps) : "—"), "")), l2, l3] };
+
+    // Ports lan0..lan3 et ce qu'il y a derrière
+    var clients = R.clients.ok ? R.clients.d.clients : null;
+    M.ports = ["lan0", "lan1", "lan2", "lan3"].map(function (nom) {
+      var p = parNom[nom];
+      if (!ports) { var rp = R.ports.ok ? { panne: true } : R.ports; return { nom: nom, style: "n-panne", fil: "f-rouge", l: [L("moyen", S(nom, "g")), L("normal", S(raison(rp), couleurRaison(rp)))] }; }
+      if (!p) { return { nom: nom, style: "n-port-off", fil: "f-eteint", l: [L("moyen", S(nom, "g")), L("normal", S("port absent", "c-eteint"))] }; }
+      var t1 = L("moyen", S(nom, "g"), S(p.porteuse && debit(p.vitesse_mbps) ? " · " + debit(p.vitesse_mbps) : "", ""));
+      if (p.coupe === true) { return { nom: nom, style: "n-port-coupe", fil: "f-rouge", l: [t1, L("normal", S("coupé", "c-rouge")), L("petit", S("par l’administrateur", "c-eteint"))] }; }
+      var noteCoupe = p.coupe == null ? L("petit", S("coupure illisible", "c-rouge")) : null;
+      if (p.etat_admin === "down") { return { nom: nom, style: "n-port-off", fil: "f-eteint", l: [t1, L("normal", S("désactivé", "c-eteint"))].concat(noteCoupe ? [noteCoupe] : []) }; }
+      if (p.porteuse !== true) { return { nom: nom, style: "n-port-off", fil: "f-eteint", l: [t1, L("normal", S(p.porteuse === false ? "pas de lien" : "lien —", "c-eteint"))].concat(noteCoupe ? [noteCoupe] : []) }; }
+      var macs = Array.isArray(p.macs) ? p.macs : null, nb = macs ? macs.length : (typeof p.nb_appareils === "number" ? p.nb_appareils : null), l2p, l3p;
+      if (nb == null) { l2p = L("normal", S("appareils —", "c-doux")); l3p = L("petit", S("table de br-lan illisible", "c-rouge")); }
+      else if (nb === 0) { l2p = L("normal", S("aucun appareil vu", "c-doux")); }
+      else if (nb > 1) { l2p = L("normal", S(nb + " appareils", "c-orange")); l3p = L("petit", S("hub ou switch ?", "c-orange")); }
+      else if (clients) {
+        var c = clients.filter(function (x) { return x.port === nom || (macs && macs.indexOf(x.mac) >= 0); })[0];
+        l2p = L("normal", S(c ? (c.nom || "appareil sans nom") : "1 appareil", c && c.nom ? "" : "c-doux", true));
+        l3p = L("petit", S(c ? c.ip : "adresse —", "c-doux mono"));
+      } else {
+        var rcl = R.clients.ok ? { panne: true } : R.clients;
+        l2p = L("normal", S("1 appareil", "")); l3p = L("petit", S("nom : " + raison(rcl), couleurRaison(rcl)));
+      }
+      return { nom: nom, style: "n-port-ok", fil: "f-vert", l: [t1, l2p].concat(l3p ? [l3p] : []).concat(noteCoupe ? [noteCoupe] : []) };
+    });
+
+    // Hubs et switchs détectés
+    var lans = (ports || []).filter(function (p) { return p && p.role === "lan"; }), th;
+    if (!ports) { th = S("Hubs et switchs détectés : ports, " + raison(R.ports.ok ? { panne: true } : R.ports), couleurRaison(R.ports.ok ? { panne: true } : R.ports)); }
+    else if (lans.some(function (p) { return p.plusieurs_appareils == null; })) { th = S("Hubs et switchs détectés : table de br-lan illisible (source en panne)", "c-rouge"); }
+    else {
+      var multi = lans.filter(function (p) { return p.plusieurs_appareils; });
+      th = multi.length
+        ? S("Hubs et switchs détectés : " + multi.map(function (p) { var k = Array.isArray(p.macs) ? p.macs.length : p.nb_appareils; return p.nom + " (" + k + " adresses MAC)"; }).join(" · ") + " · plusieurs appareils derrière un même port", "c-orange")
+        : S("Hubs et switchs détectés : aucun · au plus une adresse MAC par port (table de br-lan)", "c-doux");
+    }
+    M.hubs = { style: "n-barre", t: th };
+    return M;
+  }
+
+  // ── Dessin SVG (createElementNS + textContent : aucune donnée n'est interprétée comme du HTML) ─────────────────────────────────
+  function el(tag, at, parent) { var n = document.createElementNS(NS, tag); for (var k in at) { n.setAttribute(k, at[k]); } if (parent) { parent.appendChild(n); } return n; }
+  var HAUT = { grand: 30, moyen: 21, normal: 19, petit: 16 }, TAILLE = { grand: 22, moyen: 15, normal: 13, petit: 12 };
+  function largeurTexte(t, f) { var w = 0; try { w = t.getComputedTextLength(); } catch (e) { w = 0; } return w > 0 ? w : t.textContent.length * TAILLE[f] * 0.56; }
+  // Une ligne de texte ; si elle dépasse `max`, le segment marqué `coupe` est raccourci (texte complet en infobulle).
+  function ligne(g, x, y, ln, ancre, max) {
+    var t = el("text", { x: x, y: y, "text-anchor": ancre, "class": "t-" + ln.f }, g), complet = "";
+    ln.s.forEach(function (sg) { var ts = el("tspan", sg.c ? { "class": sg.c } : {}, t); ts.textContent = sg.t; sg.el = ts; complet += sg.t; });
+    var cible = ln.s.filter(function (sg) { return sg.coupe; })[0] || ln.s[ln.s.length - 1];
+    var garde = 0;
+    while (max && largeurTexte(t, ln.f) > max && cible.el.textContent.length > 2 && garde++ < 80) {
+      cible.el.textContent = cible.el.textContent.slice(0, -2).replace(/[\s·]+$/, "") + "…";
+    }
+    if (t.textContent !== complet) { var ti = el("title", {}, t); ti.textContent = complet; }
+    return t;
+  }
+  function boite(g, b, style, lignes, opts) {
+    opts = opts || {};
+    el("rect", { x: b.x, y: b.y, width: b.w, height: b.h, rx: opts.rx || 12, "class": style }, g);
+    var pad = opts.pad || 10, max = b.w - 2 * pad;
+    if (opts.gauche) {
+      var y = b.y + pad + 4;
+      if (opts.titre) { y += 15; ligne(g, b.x + pad + 4, y, { f: "moyen", s: opts.titre }, "start", max - 4); y += 8; }
+      lignes.forEach(function (ln) { y += opts.pas || 22; ligne(g, b.x + pad + 4, y - 6, ln, "start", max - 4); });
+      return;
+    }
+    var total = lignes.reduce(function (a, ln) { return a + HAUT[ln.f]; }, 0), yy = b.y + (b.h - total) / 2;
+    lignes.forEach(function (ln) { yy += HAUT[ln.f]; ligne(g, b.x + b.w / 2, yy - HAUT[ln.f] * 0.28, ln, "middle", max); });
+  }
+  function fil(g, d, classe, fleche) {
+    var at = { d: d, "class": "f " + classe };
+    if (fleche) { at["marker-end"] = "url(#m-" + classe.replace("f-", "") + ")"; }
+    return el("path", at, g);
+  }
+  function defs(svg) {
+    var d = el("defs", {}, svg);
+    var lg = el("linearGradient", { id: "degCentral", x1: "0", y1: "0", x2: "1", y2: "1" }, d);
+    el("stop", { offset: "0", "stop-color": "#13305e" }, lg); el("stop", { offset: "1", "stop-color": "#0a1a36" }, lg);
+    [["neutre", "#5d7fb8"], ["cyan", "#29b6f6"], ["violet", "#a78bfa"], ["vert", "#2ecc71"], ["faible", "#6f84a8"], ["eteint", "#3b4f73"], ["rouge", "#ff4d5e"]].forEach(function (m) {
+      var mk = el("marker", { id: "m-" + m[0], orient: "auto", markerWidth: "5", markerHeight: "5", refX: "2", refY: "2", overflow: "visible" }, d);
+      el("path", { d: "M0 0 L4 2 L0 4 Z", fill: m[1] }, mk);
+    });
+  }
+  // Listes du maillage et des tunnels : plafonnées pour garder la disposition ; le reste est annoncé, jamais tu.
+  function plafonne(lignes, notes, n, quoi) {
+    var place = Math.max(1, n - notes.length);
+    if (lignes.length <= place) { return lignes.concat(notes); }
+    var garde = lignes.slice(0, place - 1);
+    garde.push(L("petit", S("… et " + (lignes.length - place + 1) + " " + quoi + " de plus (onglet Liens du maillage)", "c-doux")));
+    return garde.concat(notes);
+  }
+
+  // Disposition large : celle de la maquette (coordonnées d'origine), à l'échelle du cadre.
+  function dessinerLarge(svg, M) {
+    svg.setAttribute("viewBox", "50 128 1345 768"); svg.classList.remove("etroit");
+    var g = el("g", {}, svg);
+    fil(g, "M174 204 L174 295", "f-neutre", true);
+    fil(g, "M174 396 L174 415", "f-neutre", true);
+    fil(g, "M284 348 L515 348", M.wan.panne ? "f-rouge" : "f-cyan", true);
+    fil(g, "M880 348 L995 348", "f-violet", true);
+    fil(g, "M700 428 L700 515", "f-neutre", true);
+    fil(g, "M560 428 L560 568 L289 568", "f-neutre", true);
+    fil(g, "M840 428 L840 620 L995 620", "f-faible", true);
+    fil(g, "M700 600 L700 650", "f-neutre", false);
+    fil(g, "M412 650 L988 650", "f-neutre", false);
+    var xs = [412, 604, 796, 988];
+    M.ports.forEach(function (p, i) { fil(g, "M" + xs[i] + " 650 L" + xs[i] + " 695", p.fil, p.fil === "f-vert"); });
+    boite(g, { x: 64, y: 140, w: 220, h: 64 }, M.internet.style, M.internet.l);
+    boite(g, { x: 64, y: 300, w: 220, h: 96 }, M.passerelle.style, M.passerelle.l);
+    boite(g, { x: 64, y: 420, w: 220, h: 72 }, M.voisins.style, M.voisins.l);
+    boite(g, { x: 64, y: 520, w: 220, h: 96 }, M.lxc.style, M.lxc.l);
+    boite(g, { x: 520, y: 268, w: 360, h: 160 }, M.box.style, M.box.l, { rx: 16 });
+    boite(g, { x: 1000, y: 198, w: 380, h: 300 }, M.maillage.style, plafonne(M.maillage.l, M.maillage.notes, 10, "pairs"), { gauche: true, titre: M.maillage.titre, pad: 12 });
+    boite(g, { x: 1000, y: 560, w: 380, h: 120 }, M.tunnels.style, plafonne(M.tunnels.l, M.tunnels.notes, 3, "tunnels"), { gauche: true, titre: M.tunnels.titre, pad: 12 });
+    boite(g, { x: 575, y: 520, w: 250, h: 80 }, M.sw.style, M.sw.l);
+    M.ports.forEach(function (p, i) { boite(g, { x: 328 + 192 * i, y: 700, w: 168, h: 104 }, p.style, p.l); });
+    boite(g, { x: 328, y: 836, w: 744, h: 48 }, M.hubs.style, [L("normal", M.hubs.t)], { rx: 10 });
+    ligne(g, 402, 318, L("normal", M.wan.l[0]), "middle", 220);
+    ligne(g, 402, 336, L("normal", M.wan.l[1]), "middle", 220);
+    ligne(g, 940, 336, L("normal", S("maillage", "c-violet")), "middle", 110);
+  }
+
+  // Disposition étroite (cadre < 1000 px) : même contenu, empilé sur 340 unités de large.
+  function dessinerEtroit(svg, M) {
+    svg.classList.add("etroit");
+    var g = el("g", {}, svg), X = 18, W = 312;
+    fil(g, "M92 48 L92 69", "f-neutre", true);
+    fil(g, "M166 112 L177 112", "f-neutre", true);
+    fil(g, "M92 152 L92 209", M.wan.panne ? "f-rouge" : "f-cyan", true);
+    boite(g, { x: X, y: 8, w: 148, h: 40 }, M.internet.style, M.internet.l);
+    boite(g, { x: X, y: 74, w: 148, h: 78 }, M.passerelle.style, M.passerelle.l);
+    boite(g, { x: 182, y: 74, w: 148, h: 78 }, M.voisins.style, M.voisins.l.map(function (ln) { return { f: "petit", s: ln.s }; }));
+    ligne(g, 104, 177, L("petit", M.wan.l[0]), "start", 220);
+    ligne(g, 104, 194, L("petit", M.wan.l[1]), "start", 220);
+    boite(g, { x: X, y: 214, w: W, h: 100 }, M.box.style, M.box.l, { rx: 16 });
+    var y = 314 + 26, branches = [];
+    function liste(bloc, n, quoi, classe) {
+      var lignes = plafonne(bloc.l, bloc.notes, n, quoi), h = 44 + 22 * lignes.length;
+      boite(g, { x: X, y: y, w: W, h: h }, bloc.style, lignes, { gauche: true, titre: bloc.titre, pad: 10 });
+      branches.push([y + 22, classe]); y += h + 16;
+    }
+    liste(M.maillage, 10, "pairs", "f-violet");
+    liste(M.tunnels, 4, "tunnels", "f-faible");
+    boite(g, { x: X, y: y, w: W, h: 56 }, M.lxc.style, M.lxc.l); branches.push([y + 28, "f-neutre"]); y += 56 + 16;
+    boite(g, { x: X, y: y, w: W, h: 76 }, M.sw.style, M.sw.l); branches.push([y + 38, "f-neutre"]);
+    var basSw = y + 76; y = basSw + 24;
+    fil(g, "M" + X + " 264 L8 264 L8 " + branches[branches.length - 1][0], "f-neutre", false);
+    branches.forEach(function (b) { fil(g, "M8 " + b[0] + " L" + (X - 4) + " " + b[0], b[1], true); });
+    var hp = 92, mi = [y + hp / 2, y + hp + 14 + hp / 2];
+    fil(g, "M174 " + basSw + " L174 " + mi[1], "f-neutre", false);
+    M.ports.forEach(function (p, i) {
+      var col = i % 2, rang = Math.floor(i / 2), bx = col ? 182 : X;
+      boite(g, { x: bx, y: y + rang * (hp + 14), w: 148, h: hp }, p.style, p.l.map(function (ln) { return ln.f === "moyen" ? ln : { f: ln.f === "normal" ? "normal" : "petit", s: ln.s }; }));
+      fil(g, col ? "M174 " + mi[rang] + " L178 " + mi[rang] : "M174 " + mi[rang] + " L170 " + mi[rang], p.fil, p.fil === "f-vert");
+    });
+    y += 2 * hp + 14 + 16;
+    // La phrase des hubs, coupée en deux lignes au séparateur « · ».
+    var t = M.hubs.t.t, k = t.indexOf(" · "), l1 = k > 0 ? t.slice(0, k) : t, l2 = k > 0 ? t.slice(k + 3) : "";
+    boite(g, { x: X, y: y, w: W, h: l2 ? 56 : 40 }, M.hubs.style, [L("petit", S(l1, M.hubs.t.c, true))].concat(l2 ? [L("petit", S(l2, M.hubs.t.c, true))] : []), { rx: 10 });
+    y += (l2 ? 56 : 40) + 8;
+    svg.setAttribute("viewBox", "0 0 340 " + Math.ceil(y));
+  }
+
+  var dernier = null, disposition = null;
+  function dessiner() {
+    if (!dernier) { return; }
+    var svg = $("schema"), large = $("defile").clientWidth >= 1000;
+    disposition = large ? "large" : "etroit";
+    [].slice.call(svg.childNodes).forEach(function (n) { if (n.nodeName !== "title") { svg.removeChild(n); } });
+    defs(svg);
+    var M = modele(dernier, DEMO ? "admin.gk2-demo.example" : location.hostname);
+    if (large) { dessinerLarge(svg, M); } else { dessinerEtroit(svg, M); }
+    hauteur();
+  }
+
+  // ── Pastilles des sources, bandeaux, pastille d'ensemble ─────────────────────────────────────────────────────────────────────────
+  function sources(R) {
+    var z = $("sources");
+    while (z.childNodes.length > 1) { z.removeChild(z.lastChild); }
+    var nPanne = 0, nSession = 0, nPartiel = 0;
+    SOURCES.forEach(function (s) {
+      var r = R[s.cle], p = document.createElement("span"), pannes = r.ok && Array.isArray(r.d.pannes) ? r.d.pannes : [];
+      if (DEMO) { p.className = "src demo"; p.textContent = s.nom + " · démo"; }
+      else if (r.ok && pannes.length) { nPartiel++; p.className = "src partiel"; p.textContent = s.nom + " · partielle"; }
+      else if (r.ok) { p.className = "src ok"; p.textContent = s.nom + " · lue"; }
+      else if (r.session) { nSession++; p.className = "src session"; p.textContent = s.nom + " · session requise"; }
+      else { nPanne++; p.className = "src panne"; p.textContent = s.nom + " · en panne"; }
+      p.title = "GET " + s.url + (r.ok ? (pannes.length ? " — lecture partielle, en panne : " + pannes.join(", ") : " — lue") : " — " + (r.session ? "session requise (401)" : r.panne));
+      z.appendChild(p);
+    });
+    var e = $("etatSources");
+    if (DEMO) { e.className = "etat att"; e.textContent = "DÉMONSTRATION"; }
+    else if (nPanne) { e.className = "etat hors"; e.textContent = nPanne + " SOURCE" + (nPanne > 1 ? "S" : "") + " EN PANNE"; }
+    else if (nSession) { e.className = "etat hors"; e.textContent = "SESSION REQUISE"; }
+    else if (nPartiel) { e.className = "etat att"; e.textContent = "LECTURE PARTIELLE"; }
+    else { e.className = "etat ok"; e.textContent = "TOUTES LES SOURCES LUES"; }
+    $("session").hidden = DEMO || !nSession;
+    $("sessionTexte").textContent = nSession === SOURCES.length ? "Aucune mesure : session requise." : "Mesures partielles : session requise pour " + nSession + " source" + (nSession > 1 ? "s" : "") + ".";
+  }
+
+  // ── Démonstration : adresses de documentation (RFC 5737), noms fictifs, aucune requête ──────────────────────────────────────────
+  function cleDemo(i) { return "DEMO" + String(i).padStart(2, "0") + "cle-publique-fictive-de-documentation=="; }
+  function donneesDemo() {
+    var maintenant = Math.floor(Date.now() / 1000);
+    var pairs = [["gk1-demo", "203.0.113.8", 1], ["live-demo", "203.0.113.5", 2], ["ebin-demo", "203.0.113.7", 3], ["rpi-demo", "203.0.113.6", 4],
+      ["vm-demo", "203.0.113.4", 5], ["gk1-demo-ancienne-cle", "203.0.113.3", 6], ["203.0.113.2", "203.0.113.2", 7]];
+    var hs = { 1: 6, 2: 64, 6: 45 * 86400 }, rx = { 1: 4.5 * 1073741824, 2: 5.9 * 1073741824, 6: 12582912 };
+    return {
+      carte: { ok: true, d: { carte: { wan: { interface: "eth2", adresse: "192.0.2.200/24", passerelle: "192.0.2.254",
+        voisins: [{ ip: "192.0.2.94", mac: "00:00:5e:00:53:94" }, { ip: "192.0.2.3", mac: "00:00:5e:00:53:03" }] },
+        lxc: { pont: "br-lxc", actifs: 7 }, tunnels: [{ nom: "wg-mesh", etat: "up" }, { nom: "wg-autoload", etat: "up" }, { nom: "wg-toolbox", etat: "up" }] }, pannes: [] } },
+      ports: { ok: true, d: { ports: [
+        { nom: "eth2", role: "wan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: null, macs: [], plusieurs_appareils: false, coupe: false },
+        { nom: "eth1", role: "conduit", porteuse: true, vitesse_mbps: 2500, etat_admin: "up", maitre: null, macs: [], plusieurs_appareils: false, coupe: false },
+        { nom: "eth0", role: "sfp", porteuse: false, vitesse_mbps: null, etat_admin: "up", maitre: null, macs: [], plusieurs_appareils: false, coupe: false },
+        { nom: "lan0", role: "lan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:c0"], plusieurs_appareils: false, coupe: false },
+        { nom: "lan1", role: "lan", porteuse: false, vitesse_mbps: null, etat_admin: "up", maitre: "br-lan", macs: [], plusieurs_appareils: false, coupe: false },
+        { nom: "lan2", role: "lan", porteuse: true, vitesse_mbps: 100, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:a1", "00:00:5e:00:53:a2", "00:00:5e:00:53:a3"], plusieurs_appareils: true, coupe: false },
+        { nom: "lan3", role: "lan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:bf"], plusieurs_appareils: false, coupe: false }], pannes: [] } },
+      clients: { ok: true, d: { clients: [
+        { mac: "00:00:5e:00:53:c0", ip: "198.51.100.192", nom: "pc-demo", port: "lan0", source: "bail", expire: maintenant + 3600 },
+        { mac: "00:00:5e:00:53:a1", ip: "198.51.100.150", nom: "imprimante-demo", port: "lan2", source: "bail", expire: maintenant + 3600 },
+        { mac: "00:00:5e:00:53:a2", ip: "198.51.100.151", nom: "", port: "lan2", source: "voisin", expire: null },
+        { mac: "00:00:5e:00:53:a3", ip: "198.51.100.152", nom: "tv-demo", port: "lan2", source: "bail", expire: maintenant + 3600 },
+        { mac: "00:00:5e:00:53:bf", ip: "198.51.100.191", nom: "rpi-demo", port: "lan3", source: "bail", expire: maintenant + 3600 }], pannes: [] } },
+      routeur: { ok: true, d: { etat: "inactif", depuis: null, config: null, minuteur_actif: false, echeance: null, bascule_en_cours: false, dhcp_actif: true, adresses_pont: ["198.51.100.1/24"], ports_coupes: [] } },
+      p2p: { ok: true, d: { peers: pairs.map(function (p) { return { id: p[0], name: p[0], address: p[1], public_key: cleDemo(p[2]), status: hs[p[2]] && hs[p[2]] < 180 ? "online" : "offline", latency: null, last_seen: hs[p[2]] ? maintenant - hs[p[2]] : null }; }), count: pairs.length } },
+      wg: { ok: true, d: { peers: pairs.map(function (p) { var k = cleDemo(p[2]); return { interface: "wg-mesh", public_key: k.slice(0, 16) + "...", full_key: k, status: hs[p[2]] && hs[p[2]] < 180 ? "online" : "offline",
+        endpoint: null, allowed_ips: [p[1] + "/32"], last_handshake: null, seconds_since_handshake: hs[p[2]] || null, rx_bytes: rx[p[2]] || 0, tx_bytes: 0, persistent_keepalive: 25 }; }) } },
+      wgsum: { ok: true, d: { interfaces: [{ name: "wg-mesh", listen_port: 51822, peers: 7, online: 2, rx_bytes: 0, tx_bytes: 0 },
+        { name: "wg-autoload", listen_port: 51830, peers: 2, online: 0, rx_bytes: 0, tx_bytes: 0 }, { name: "wg-toolbox", listen_port: 51820, peers: 8, online: 0, rx_bytes: 0, tx_bytes: 0 }], totals: {} } }
+    };
+  }
+
+  // ── Hauteur annoncée à l'hôte (la page mesure son cadre, pas le document) ──────────────────────────────────────────────────────
+  function hauteur() {
+    if (window.parent === window) { return; }
+    try { window.parent.postMessage({ sbxVue: Math.ceil($("cadre").getBoundingClientRect().bottom + window.scrollY), onglet: ONGLET }, location.origin); }
+    catch (e) { /* hôte inaccessible */ }
+  }
+
+  // ── Chargement ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  function charge() {
+    var lectures = DEMO ? Promise.resolve(donneesDemo()) : Promise.all(SOURCES.map(function (s) { return lire(s.url); })).then(function (rs) {
+      var R = {}; SOURCES.forEach(function (s, i) { R[s.cle] = rs[i]; }); return R;
+    });
+    return lectures.then(function (R) {
+      dernier = R; sources(R); dessiner();
+      $("heure").textContent = "Relevé " + new Date().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      var lanTemp = R.routeur.ok && R.routeur.d.etat !== "actif";
+      $("sous").textContent = "WAN, maillage, tunnels, conteneurs, switch et clients" + (lanTemp ? " · LAN temporaire, mode routeur non actif" : "");
+      hauteur();
+    });
+  }
+  if (DEMO) { $("demo").hidden = false; $("schemaNote").textContent = "démonstration"; }
+  $("rafraichir").addEventListener("click", charge);
+  var tRedim = null;
+  function redim() {
+    clearTimeout(tRedim);
+    tRedim = setTimeout(function () { var large = $("defile").clientWidth >= 1000; if (dernier && (large ? "large" : "etroit") !== disposition) { dessiner(); } hauteur(); }, 80);
+  }
+  addEventListener("resize", redim);
+  if (window.ResizeObserver) { new ResizeObserver(function () { redim(); }).observe(document.body); }
+  addEventListener("load", hauteur);
+  charge();
+  setInterval(function () { if (!document.hidden) { charge(); } }, 30000);
+})();
+</script>
+</body>
+</html>

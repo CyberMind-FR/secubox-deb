@@ -105,6 +105,7 @@ class Faux:
         self.unbound_demarrage = 0.0
         self.unbound_issue = "active"                   # "active", "failed" ou "activating" (ne finit jamais)
         self.unbound_relance: float | None = None
+        self.minuteur_arme: float | None = None         # #3190 : instant monotone où systemd-run a armé le retour
 
     def attendre(self, secondes: float) -> None:
         self.pauses.append(secondes)
@@ -244,6 +245,12 @@ class Faux:
                 return cp(a, 0, f"{self.unbound['entree']}\n")
             if proprietes == ["-p", "InactiveExitTimestampMonotonic"]:
                 return cp(a, 0, f"{self.unbound['sortie']}\n")
+        if a == ["systemctl", "show", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic",
+                 "secubox-netmodes-retour.timer"]:
+            # #3190 : minuteur MONOTONE (systemd-run --on-active) : NextElapseUSecRealtime vide, l'instant est sur
+            # l'horloge monotone, au format des durées de systemd ; unité absente : infinity
+            prochain = "infinity" if self.minuteur_arme is None else f"{self.minuteur_arme + 180:.6f}s"
+            return cp(a, 0, f"NextElapseUSecRealtime=\nNextElapseUSecMonotonic={prochain}\n")
         if a == ["systemctl", "restart", "--no-block", "unbound.service"]:
             self.unbound_relance = self.t
             return cp(a)
@@ -269,6 +276,7 @@ class Faux:
         if a[0] == "systemd-run":
             unite = next(x.split("=", 1)[1] for x in a if x.startswith("--unit="))
             self.actifs.add(unite + ".timer")
+            self.minuteur_arme = self.t
             return cp(a)
         if a == ["networkctl", "reload"]:
             # networkctl(1) : un .netdev NOUVEAU est créé (jamais mis à jour ni supprimé) ; tout lien dont le .network
@@ -420,6 +428,20 @@ def tenir(chemin: Path) -> int:
     return fd
 
 
+def injecter_horloge_verrou(monkeypatch) -> list[float]:
+    """#3190 : une action humaine attend le verrou DELAI_VERROU_ACTION (2 s) ; horloge et pause injectées, l'attente
+    se déroule sans dormir. Rend le temps simulé écoulé (liste d'un élément)."""
+    horloge = [0.0]
+    monkeypatch.setattr(rc, "_horloge_verrou", lambda: horloge[0])
+    monkeypatch.setattr(rc, "_dormir_verrou", lambda s: horloge.__setitem__(0, horloge[0] + s))
+    return horloge
+
+
+@pytest.fixture
+def verrou_instantane(monkeypatch):
+    return injecter_horloge_verrou(monkeypatch)
+
+
 # --- appliquer : ordre, garde eth*, refus ---------------------------------------------------------------------------------
 
 def test_ordre_des_etapes(ctx, faux, racine):
@@ -462,6 +484,8 @@ def test_ordre_des_etapes(ctx, faux, racine):
         ["systemd-run", "--unit=secubox-netmodes-retour", "--on-active=180", "--collect", "--description=…",
          "/usr/sbin/netmodesctl", "routeur-retour", "minuteur"],
         ["systemctl", "is-active", "--quiet", "secubox-netmodes-retour.timer"],        # état rendu
+        ["systemctl", "show", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic",
+         "secubox-netmodes-retour.timer"],                                             # #3190 : échéance réelle
         ["systemctl", "is-active", "--quiet", "secubox-lan-dhcp.service"],
         ["ip", "-j", "-4", "addr", "show", "dev", "br-lan"],
     ]
@@ -553,7 +577,7 @@ def test_refus_reseau_deja_porte(ctx, racine):
     assert not (racine / SAUVEGARDES).exists()
 
 
-def test_occupe(ctx, racine, faux):
+def test_occupe(ctx, racine, faux, verrou_instantane):
     avant = instantane(racine)
     fd = tenir(racine / "run/lock/secubox-netmodes.lock")
     try:
@@ -565,6 +589,7 @@ def test_occupe(ctx, racine, faux):
             rc.retour(ctx, "admin")
     finally:
         os.close(fd)
+    assert verrou_instantane[0] >= 3 * rc.DELAI_VERROU_ACTION         # #3190 : chacun a attendu ses 2 s avant Occupe
     assert faux.journal == []
     assert instantane(racine) == avant
     assert not (racine / SAUVEGARDES).exists()
@@ -958,7 +983,7 @@ def test_cli_non_root(cli, ctx, faux, capsys, monkeypatch):
     assert faux.journal == []
 
 
-def test_cli_verbes_et_codes(cli, ctx, racine, capsys, monkeypatch):
+def test_cli_verbes_et_codes(cli, ctx, racine, capsys, monkeypatch, verrou_instantane):
     monkeypatch.setattr(cli, "_est_root", lambda: True)
     assert cli.main(["routeur-etat"], ctx=ctx) == 0
     assert sortie_json(capsys)["etat"] == "inactif"
@@ -1258,14 +1283,15 @@ def test_retour_automatique_attend_le_verrou(ctx, racine, appel):
 def test_retour_automatique_abandonne_apres_le_delai(ctx, racine, monkeypatch):
     rc.appliquer(ctx, CFG42, "admin")
     monkeypatch.setattr(rc, "DELAI_VERROU_RETOUR", 0.3)
+    monkeypatch.setattr(rc, "DELAI_VERROU_ACTION", 0.1)
     fd = tenir(racine / "run/lock/secubox-netmodes.lock")
     try:
         with pytest.raises(rc.Occupe):
             rc.retour(ctx, "minuteur")
         debut = time.monotonic()
         with pytest.raises(rc.Occupe):
-            rc.retour(ctx, "admin")                                            # un humain : réponse immédiate
-        assert time.monotonic() - debut < 0.2
+            rc.retour(ctx, "admin")                    # un humain : son propre délai, court (#3190 : 2 s, pas 60)
+        assert 0.1 <= time.monotonic() - debut < 0.3
     finally:
         os.close(fd)
     assert etat_fichier(racine)["etat"] == "en_attente"
