@@ -23,7 +23,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address, IPv4Interface
 from pathlib import Path
 from typing import Callable, Generator
@@ -115,6 +115,9 @@ _UNITES_DUREE = {
 _COMPOSANTE_DUREE = re.compile(r"\s*([0-9]+(?:\.[0-9]+)?)\s*("
                                + "|".join(sorted((re.escape(u) for u in _UNITES_DUREE if u), key=len, reverse=True))
                                + r")?")
+# Horodatage de `systemctl show` (NextElapseUSecRealtime) : « Mon 2026-10-26 16:28:29 CET », dans le fuseau du système
+_HORODATAGE_SYSTEMD = re.compile(r"[A-Za-z]{3} (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?:\.\d+)?(?: (\S+))?")
+_RFC3339 = "%Y-%m-%dT%H:%M:%SZ"
 
 
 class Occupe(RuntimeError):
@@ -538,10 +541,72 @@ def etat(ctx: Contexte) -> dict:
         sortie["etat"], sortie["erreur"] = "config_invalide", erreur
     sortie["config"] = config
     sortie["minuteur_actif"] = _actif(ctx, f"{MINUTEUR}.timer")
+    sortie["echeance"] = _echeance(ctx) if sortie["minuteur_actif"] else None      # #3190 : jamais `depuis` + 180
+    sortie["bascule_en_cours"] = _bascule_en_cours(ctx)
     sortie["dhcp_actif"] = _actif(ctx, DHCP)
     sortie["adresses_pont"] = [str(a) for a in _adresses_pont(ctx)]
     sortie["ports_coupes"] = sorted(ports_coupes(ctx))
     return sortie
+
+
+def _horodatage_systemd(texte: str) -> datetime | None:
+    """« Mon 2026-10-26 16:28:29 CET » : UTC/GMT tel quel, toute autre zone lue dans le fuseau du système (celui
+    dans lequel systemctl, lancé par ce même processus, l'a écrit) ; vide, `n/a` ou illisible : None."""
+    m = _HORODATAGE_SYSTEMD.fullmatch(texte.strip())
+    if m is None:
+        return None
+    try:
+        naif = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+    if m.group(2) in ("UTC", "GMT"):
+        return naif.replace(tzinfo=timezone.utc)
+    return naif.astimezone(timezone.utc)                    # heure naïve : prise comme heure locale
+
+
+def _echeance(ctx: Contexte) -> str | None:
+    """Échéance du retour automatique (RFC 3339 UTC), relue sur le minuteur. `systemd-run --on-active` pose un
+    minuteur MONOTONE : NextElapseUSecRealtime y reste vide et NextElapseUSecMonotonic donne l'instant sur l'horloge
+    monotone (depuis le démarrage, ex. « 11h 21min 21.304385s »), ramené à l'heure par ctx.monotone (CLOCK_MONOTONIC,
+    la même horloge). Les deux propriétés sont lues ; la plus proche fait foi. Rien de lisible : None."""
+    r = ctx.executer(["systemctl", "show", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic",
+                      f"{MINUTEUR}.timer"])
+    if r.returncode != 0:
+        return None
+    proprietes = dict(ligne.split("=", 1) for ligne in (r.stdout or "").splitlines() if "=" in ligne)
+    candidats = []
+    reel = _horodatage_systemd(proprietes.get("NextElapseUSecRealtime", ""))
+    if reel is not None:
+        candidats.append(reel)
+    monotone = _duree_systemd(proprietes.get("NextElapseUSecMonotonic", ""))
+    if monotone is not None and 0 < monotone < math.inf:    # 0 : aucun déclencheur monotone ; infinity : unité absente
+        try:
+            candidats.append(_utc(ctx) + timedelta(seconds=monotone - ctx.monotone()))
+        except OverflowError:                               # valeur aberrante : pas d'échéance plutôt qu'un état en échec
+            pass
+    return min(candidats).strftime(_RFC3339) if candidats else None
+
+
+def _bascule_en_cours(ctx: Contexte) -> bool | None:
+    """Le verrou du contrôleur est-il tenu (appliquer, retour, port) ? Essai LOCK_SH | LOCK_NB sur un descripteur à
+    part, relâché aussitôt : partagé, deux lectures simultanées ne se voient pas l'une l'autre. Le fichier n'est
+    jamais créé par une lecture (absent : aucune opération depuis le démarrage) ; illisible ou lien symbolique : None.
+    O_NONBLOCK : /run/lock est ouvert à tous, un tube nommé posé à ce nom ne doit pas suspendre la lecture d'état."""
+    try:
+        fd = os.open(_p(ctx, VERROU), os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return None
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    except OSError:
+        return None
+    finally:
+        os.close(fd)                                        # fermer relâche l'essai réussi
+    return False
 
 
 # --- appliquer ---------------------------------------------------------------------------------------------------------

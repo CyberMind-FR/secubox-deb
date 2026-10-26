@@ -105,6 +105,7 @@ class Faux:
         self.unbound_demarrage = 0.0
         self.unbound_issue = "active"                   # "active", "failed" ou "activating" (ne finit jamais)
         self.unbound_relance: float | None = None
+        self.minuteur_arme: float | None = None         # #3190 : instant monotone où systemd-run a armé le retour
 
     def attendre(self, secondes: float) -> None:
         self.pauses.append(secondes)
@@ -244,6 +245,12 @@ class Faux:
                 return cp(a, 0, f"{self.unbound['entree']}\n")
             if proprietes == ["-p", "InactiveExitTimestampMonotonic"]:
                 return cp(a, 0, f"{self.unbound['sortie']}\n")
+        if a == ["systemctl", "show", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic",
+                 "secubox-netmodes-retour.timer"]:
+            # #3190 : minuteur MONOTONE (systemd-run --on-active) : NextElapseUSecRealtime vide, l'instant est sur
+            # l'horloge monotone, au format des durées de systemd ; unité absente : infinity
+            prochain = "infinity" if self.minuteur_arme is None else f"{self.minuteur_arme + 180:.6f}s"
+            return cp(a, 0, f"NextElapseUSecRealtime=\nNextElapseUSecMonotonic={prochain}\n")
         if a == ["systemctl", "restart", "--no-block", "unbound.service"]:
             self.unbound_relance = self.t
             return cp(a)
@@ -269,6 +276,7 @@ class Faux:
         if a[0] == "systemd-run":
             unite = next(x.split("=", 1)[1] for x in a if x.startswith("--unit="))
             self.actifs.add(unite + ".timer")
+            self.minuteur_arme = self.t
             return cp(a)
         if a == ["networkctl", "reload"]:
             # networkctl(1) : un .netdev NOUVEAU est créé (jamais mis à jour ni supprimé) ; tout lien dont le .network
@@ -462,6 +470,8 @@ def test_ordre_des_etapes(ctx, faux, racine):
         ["systemd-run", "--unit=secubox-netmodes-retour", "--on-active=180", "--collect", "--description=…",
          "/usr/sbin/netmodesctl", "routeur-retour", "minuteur"],
         ["systemctl", "is-active", "--quiet", "secubox-netmodes-retour.timer"],        # état rendu
+        ["systemctl", "show", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic",
+         "secubox-netmodes-retour.timer"],                                             # #3190 : échéance réelle
         ["systemctl", "is-active", "--quiet", "secubox-lan-dhcp.service"],
         ["ip", "-j", "-4", "addr", "show", "dev", "br-lan"],
     ]

@@ -22,6 +22,7 @@ from secubox_core.logger import get_logger
 import asyncio, subprocess, shutil, json
 from .routeur_api import router as routeur_router, est_mochabin
 from .reseau_api import router as reseau_router
+from .ports_api import router as ports_router
 from datetime import datetime
 
 app = FastAPI(title="secubox-netmodes", version="1.0.0",
@@ -39,6 +40,7 @@ async def health_check():
 app.include_router(auth_router, prefix="/auth")
 app.include_router(routeur_router)
 app.include_router(reseau_router)
+app.include_router(ports_router)
 
 router = APIRouter()
 log    = get_logger("netmodes")
@@ -51,8 +53,9 @@ STATE_FILE     = Path("/var/lib/secubox-netmodes-api/state.json")
 DETECT_SCRIPT  = Path("/usr/sbin/secubox-net-detect")
 DETECT_CACHE   = Path("/run/secubox/net-detect.json")
 
-REFUS_MOCHABIN = ("Refusé sur MOCHAbin : ce chemin réécrirait tout netplan et relancerait le WAN mvpp2 (eth2) ; "
-                  "utiliser /routeur/appliquer.")
+# #3190 : est_mochabin() est fermé par défaut, une carte dont le modèle est illisible est traitée comme une MOCHAbin
+REFUS_MOCHABIN = ("Refusé sur MOCHAbin (ou carte non identifiée) : ce chemin réécrirait tout netplan et relancerait "
+                  "le WAN mvpp2 (eth2) ; utiliser /routeur/appliquer.")
 
 
 def _refuser_sur_mochabin():
