@@ -9,6 +9,23 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-26 — Visio sur gk1 : ports média ouverts par le relais de gk2 ; gk1 coupé par une capture (ref #3154)
+
+- Coupures image et son, participants retirés toutes les 15 s : ICE en échec (LiveKit annonce `82.67.100.75:7882/udp`,
+  8 requêtes, 0 réponse). Les médias arrivaient à gk2 (cible DMZ de la Freebox), rien ne les relayait vers gk1.
+- Décision du propriétaire (2026-10-26, 09:17) : ouvrir 7881/TCP et 7882/UDP. `meetctl media-expose --apply` sur gk1
+  (DNAT vers le conteneur 10.100.0.195, ports publiés), puis passage du relais de gk2 : `secubox-relais-ports` redirige vers
+  10.10.0.8 par `wg-mesh` avec masquerade. Vérifié : connexion TCP publique sur 7881 jusqu'à LiveKit, compteurs de bout en
+  bout ; depuis 09:22, « participant active », audio et vidéo publiés, plus aucun échec ICE.
+- Défaut relevé : `meetctl media-expose` (CLI) n'écrit rien dans `/var/log/secubox/audit.log` (seule l'API le précède d'une
+  confirmation) — une ouverture de ports est une décision de sécurité à auditer.
+- **Incident provoqué** : pour identifier l'émetteur des trames trop longues (dmesg, ~45/h, 1 530 octets, mêmes sur gk1 et
+  gk2), le MTU d'`eth2` de gk1 a été relevé à 1530 (08:34) ; le port mvpp2 s'est bloqué (plus d'ARP, maillage coupé), le
+  repli `down`/`up` du script n'a rien rattrapé — `secubox-wan-link-guard` l'interdit (« needs a cold boot »). gk1 hors
+  ligne 08:34 → 09:09, redémarré par le propriétaire. Leçon : jamais de MTU ni de `down`/`up` sur le WAN mvpp2 à distance ;
+  une capture de trames hors norme se fait sur un autre poste filaire. Émetteur toujours inconnu.
+- Hors incident : `secubox-sbxid-activites` échoue sur gk1 (« no such table: categories »), déjà avant le redémarrage.
+
 ## 2026-10-26 — Dossier d'analyse des captures : quatre défauts confirmés, corrigés et déployés sur gk2
 
 Un dossier externe (« SecuBox — Supervision, protection et contrôle du réseau », lu sur captures seules) a été confronté au
