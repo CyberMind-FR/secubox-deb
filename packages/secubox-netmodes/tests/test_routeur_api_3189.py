@@ -64,6 +64,7 @@ def test_appliquer_transmet_json_et_acteur(client, monkeypatch):
     f = _faux(monkeypatch, [(0, ETAT_LAN), (0, {"etat": "en_attente"})])
     r = client.post("/routeur/appliquer", json={**CONFIG, "confirmer": "routeur"})
     assert r.status_code == 200 and r.json()["etat"] == "en_attente"
+    assert f.appels[0][0] == ["sudo", "-n", "/usr/sbin/netmodesctl", "routeur-etat"]
     argv, kw = f.appels[-1]
     assert argv == ["sudo", "-n", "/usr/sbin/netmodesctl", "routeur-appliquer", "alice"]
     assert json.loads(kw["input"]) == CONFIG and kw["timeout"] == 150 and kw["check"] is False
@@ -114,7 +115,7 @@ def test_retour_et_etat(client, monkeypatch):
     assert f.appels[0][0][-2:] == ["routeur-retour", "alice"]
     f = _faux(monkeypatch, [(0, ETAT_LAN)])
     assert client.get("/routeur/etat").json()["etat"] == "actif"
-    assert f.appels[0][0] == ["sudo", "-n", "/usr/sbin/netmodesctl", "routeur-etat", "alice"]
+    assert f.appels[0][0] == ["sudo", "-n", "/usr/sbin/netmodesctl", "routeur-etat"]
 
 
 def test_apercu_sans_sudo(client, monkeypatch):
@@ -164,3 +165,29 @@ def test_pas_de_subprocess_dans_async():
     for fn in ast.walk(arbre):
         if isinstance(fn, ast.AsyncFunctionDef):
             assert "subprocess" not in ast.dump(fn)
+
+
+def test_etat_sans_sub(client, monkeypatch):
+    main.app.dependency_overrides[require_lecture] = lambda: {"sub": None, "tableau_de_bord": True}
+    _faux(monkeypatch, [(0, ETAT_LAN)])
+    assert client.get("/routeur/etat").status_code == 200
+
+
+def test_precontrole_en_echec_n_empeche_pas_d_appliquer(client, monkeypatch):
+    _faux(monkeypatch, [(1, {"erreur": "x"}), (0, {"etat": "en_attente"})])
+    r = client.post("/routeur/appliquer", json={**CONFIG, "confirmer": "routeur"})
+    assert r.status_code == 200 and "avertissement" not in r.json()
+
+
+def test_argv_conformes_au_sudoers(client, monkeypatch):
+    f = _faux(monkeypatch, [(0, ETAT_LAN), (0, ETAT_LAN), (0, {}), (0, {}), (0, {})])
+    client.get("/routeur/etat")
+    client.post("/routeur/appliquer", json={**CONFIG, "confirmer": "routeur"})
+    client.post("/routeur/confirmer")
+    client.post("/routeur/retour", json={"confirmer": "retour"})
+    ctl = "/usr/sbin/netmodesctl"
+    assert len(f.appels) == 5
+    for argv, _ in f.appels:
+        assert argv == ["sudo", "-n", ctl, "routeur-etat"] or (
+            len(argv) == 5 and argv[:3] == ["sudo", "-n", ctl]
+            and argv[3] in ("routeur-appliquer", "routeur-confirmer", "routeur-retour") and argv[4] == "alice"), argv

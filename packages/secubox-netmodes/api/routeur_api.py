@@ -17,6 +17,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from secubox_core.auth import require_jwt, require_lecture
+from secubox_core.logger import get_logger
 
 from .routeur_config import ErreurConfig, depuis_dict
 from .routeur_rendu import rendre
@@ -29,6 +30,7 @@ MODELES = (Path("/proc/device-tree/model"), Path("/sys/firmware/devicetree/base/
 AVERTISSEMENT = ("Vous appliquez depuis le LAN actuel : vous perdrez la connexion ; "
                  "confirmez depuis la nouvelle adresse sous 3 minutes.")
 
+log = get_logger("netmodes")
 router = APIRouter(prefix="/routeur")
 
 
@@ -50,9 +52,10 @@ def _acteur(user: Any) -> str:
     return sub
 
 
-def _ctl(verbe: str, acteur: str, entree: str | None = None) -> dict:
+def _ctl(verbe: str, acteur: str | None = None, entree: str | None = None) -> dict:
+    argv = ["sudo", "-n", CTL, verbe] + ([acteur] if acteur else [])      # routeur-etat : sans acteur (sudoers exact)
     try:
-        r = subprocess.run(["sudo", "-n", CTL, verbe, acteur], input=entree, capture_output=True,
+        r = subprocess.run(argv, input=entree, capture_output=True,
                            text=True, timeout=DELAI_CTL, check=False)
     except subprocess.TimeoutExpired:
         raise HTTPException(502, "le contrôleur réseau n'a pas répondu à temps")
@@ -95,7 +98,7 @@ def _client(request: Request) -> str:
 
 @router.get("/etat")
 def etat(user=Depends(require_lecture)):
-    return _ctl("routeur-etat", _acteur(user))
+    return _ctl("routeur-etat")                    # lecture : pas d'acteur, un lecteur du LAN peut être anonyme
 
 
 @router.post("/apercu")
@@ -110,7 +113,11 @@ def appliquer(corps: dict, request: Request, user=Depends(require_jwt)):
     acteur = _acteur(user)
     cfg = _config(corps)
     nouveau = _valider(cfg).adresse.network
-    actuel = _ctl("routeur-etat", acteur)
+    try:
+        actuel = _ctl("routeur-etat")
+    except HTTPException as e:                    # l'avertissement est facultatif : on applique quand même
+        log.warning("routeur-etat indisponible, avertissement omis : %s", e.detail)
+        actuel = {}
     res = _ctl("routeur-appliquer", acteur, json.dumps(cfg))
     try:
         ip = ip_address(_client(request))
