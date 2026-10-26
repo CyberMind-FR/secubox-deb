@@ -21,14 +21,18 @@ def _code() -> str:
     return SCRIPT.read_text().rsplit('main "$@"', 1)[0]
 
 
-def _run(tmp_path: Path, corps: str, ipv4_wan: bool = False, carte: str = "mochabin"):
+def _run(tmp_path: Path, corps: str, ipv4_wan: bool = False, carte: str = "mochabin", ip_code: int = 0, carrier: str = "0"):
     """Exécute `corps` après chargement du script ; faux ip/netplan dans tmp_path/bin, NETPLAN_DIR dans tmp_path."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     appels = tmp_path / "appels.log"
     ip = bin_dir / "ip"
-    ip.write_text('#!/bin/sh\n[ "$*" = "-4 -o addr show dev eth2" ] && %s\nexit 0\n'
-                  % ('echo "2: eth2    inet 192.168.1.5/24 brd 192.168.1.255 scope global eth2"' if ipv4_wan else ":"))
+    ip.write_text('#!/bin/sh\n[ "$*" = "-4 -o addr show dev eth2" ] && %s\nexit %d\n'
+                  % ('echo "2: eth2    inet 192.168.1.5/24 brd 192.168.1.255 scope global eth2"' if ipv4_wan else ":", ip_code))
+    sysnet = tmp_path / "sys"
+    (sysnet / "eth2").mkdir(parents=True, exist_ok=True)
+    (sysnet / "eth2" / "carrier").write_text(carrier + "\n")
+    (sysnet / "eth2" / "operstate").write_text("up\n" if carrier == "1" else "down\n")
     np = bin_dir / "netplan"
     np.write_text(f'#!/bin/sh\necho "netplan $*" >> {appels}\nexit 0\n')
     for f in (ip, np):
@@ -36,7 +40,7 @@ def _run(tmp_path: Path, corps: str, ipv4_wan: bool = False, carte: str = "mocha
     netplan_dir = tmp_path / "netplan"
     netplan_dir.mkdir(exist_ok=True)
     env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}")
-    script = _code() + f'\nNETPLAN_DIR="{netplan_dir}"\ndetect_board() {{ echo {carte}; }}\n{corps}\n'
+    script = _code() + f'\nNETPLAN_DIR="{netplan_dir}"\nSYS_NET="{sysnet}"\ndetect_board() {{ echo {carte}; }}\n{corps}\n'
     r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env)
     return r, netplan_dir / "00-secubox.yaml", appels
 
@@ -67,5 +71,31 @@ def test_wan_configure_ni_reecriture_ni_apply(tmp_path):
 def test_wan_sans_adresse_comportement_actuel(tmp_path):
     r, f, appels = _run(tmp_path, "main apply router", ipv4_wan=False)
     assert r.returncode == 0, r.stderr
+    assert f.exists()
+    assert "netplan apply" in appels.read_text()
+
+
+def _rien(r, f, appels):
+    assert r.returncode == 0, r.stderr
+    assert not f.exists()
+    assert not appels.exists()
+    assert "mvpp2" in r.stdout
+
+
+def test_ip_en_erreur_vaut_configure(tmp_path):
+    _rien(*_run(tmp_path, "main apply router", ip_code=1))
+
+
+def test_wan_vide_vaut_configure(tmp_path):
+    corps = 'get_interface_config() { echo \'{"interfaces": {"wan": "", "lan": "lan0", "sfp": ""}, "profile": "router"}\'; }\nmain apply router'
+    _rien(*_run(tmp_path, corps))
+
+
+def test_porteuse_sans_ipv4_vaut_configure(tmp_path):
+    _rien(*_run(tmp_path, "main apply router", carrier="1"))
+
+
+def test_sans_porteuse_ni_ipv4_carte_neuve(tmp_path):
+    r, f, appels = _run(tmp_path, "main apply router", carrier="0")
     assert f.exists()
     assert "netplan apply" in appels.read_text()

@@ -8,6 +8,7 @@ set -u  # Exit on undefined variables, but allow command failures
 
 SECUBOX_CONF="/etc/secubox/secubox.conf"
 NETPLAN_DIR="/etc/netplan"
+SYS_NET="/sys/class/net"
 OUTPUT_JSON="${1:-/run/secubox/net-detect.json}"
 
 # Colors for terminal output
@@ -409,6 +410,19 @@ EOF
     log "Netplan configuration written to: $netplan_file"
 }
 
+# ── WAN MOCHAbin à ne pas toucher (#3189) ───────────────────────────
+# Échoue ouvert côté sûr : « impossible de savoir » vaut « configuré ». Seul un WAN sans porteuse ni IPv4 (carte
+# neuve) retourne 1.
+wan_a_ne_pas_toucher() {
+    local wan="$1" adr
+    [[ -n "$wan" ]] || return 0
+    adr=$(ip -4 -o addr show dev "$wan" 2>/dev/null) || return 0
+    [[ -n "$adr" ]] && return 0
+    [[ "$(cat "$SYS_NET/$wan/carrier" 2>/dev/null)" == "1" ]] && return 0
+    [[ "$(cat "$SYS_NET/$wan/operstate" 2>/dev/null)" == "up" ]] && return 0
+    return 1
+}
+
 # ── Main ────────────────────────────────────────────────────────────
 main() {
     local action="${1:-detect}"
@@ -454,8 +468,8 @@ main() {
         apply)
             # MOCHAbin (#3189) : le WAN mvpp2 (eth2) se bloque si son lien est relancé à distance (redémarrage à
             # froid). Déjà adressé en IPv4 : ni réécriture du netplan, ni netplan apply.
-            if [[ "$board" == "mochabin" && -n "$(ip -4 -o addr show dev "$wan_iface" 2>/dev/null)" ]]; then
-                log "MOCHAbin : $wan_iface (mvpp2) a déjà une IPv4, netplan non réécrit ni appliqué (relancer son lien à distance bloque le PHY). Mode routeur durable : netmodesctl / panneau Réseau."
+            if [[ "$board" == "mochabin" ]] && wan_a_ne_pas_toucher "$wan_iface"; then
+                log "MOCHAbin : $wan_iface (mvpp2) est configuré ou indéterminé (IPv4, porteuse ou lecture impossible), netplan non réécrit ni appliqué (relancer son lien à distance bloque le PHY). Mode routeur durable : netmodesctl / panneau Réseau."
                 return 0
             fi
             # Generate and apply netplan configuration
