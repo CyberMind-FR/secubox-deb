@@ -83,9 +83,43 @@ class Faux:
         self.crochets: dict[tuple, object] = {}
         self.etats: list = []                           # état du fichier d'état au moment de chaque commande
         self.pauses: list[float] = []                   # ctx.attendre : rien n'attend vraiment
+        self.t = 1000.0                                 # ctx.monotone : horloge simulée, avancée par attendre() seul
+        # Unbound simulé (#3189, redémarrage lent de gk2) : horodatages monotones en µs, comme `systemctl show`.
+        # Un `restart --no-block` passe par la file de PID 1 (état d'avant inchangé), l'arrêt, le démarrage, l'issue.
+        self.unbound = {"etat": "active", "entree": 500_000_000, "sortie": 400_000_000}
+        self.unbound_delais = "10min\n1min 30s\n"       # TimeoutStartUSec, TimeoutStopUSec (ordre du bus) : 720 s
+        self.unbound_file = 0.0
+        self.unbound_arret = 0.0
+        self.unbound_demarrage = 0.0
+        self.unbound_issue = "active"                   # "active", "failed" ou "activating" (ne finit jamais)
+        self.unbound_relance: float | None = None
 
     def attendre(self, secondes: float) -> None:
         self.pauses.append(secondes)
+        self.t += secondes
+
+    def monotone(self) -> float:
+        return self.t
+
+    def _unbound_avancer(self) -> None:
+        if self.unbound_relance is None:
+            return
+        u, t0 = self.unbound, self.unbound_relance
+        if self.t < t0 + self.unbound_file:                 # travail en file : état et horodatages d'avant
+            return
+        debut = t0 + self.unbound_file + self.unbound_arret
+        if self.t < debut:
+            u["etat"] = "deactivating"
+            return
+        if u["etat"] != "activating":                       # le démarrage commence : InactiveExit avance, une fois
+            u["sortie"] = max(int(debut * 1e6), u["sortie"] + 1)
+            u["etat"] = "activating"
+        if self.unbound_issue == "activating" or self.t < debut + self.unbound_demarrage:
+            return
+        if self.unbound_issue == "active":
+            u["entree"] = max(int((debut + self.unbound_demarrage) * 1e6), u["entree"] + 1)
+        u["etat"] = self.unbound_issue
+        self.unbound_relance = None
 
     def echouer(self, *prefixe, code=1, fois=None, erreur="échec simulé"):
         self.echecs[prefixe] = [code, fois, erreur]
@@ -145,6 +179,23 @@ class Faux:
             return cp(a, 0) if self.adresses.pop("br-lan", None) is not None else cp(a, 1, "", "Cannot find device")
         if a[:3] == ["systemctl", "is-active", "--quiet"]:
             return cp(a, 0 if a[3] in self.actifs else 3)
+        # Unbound : jamais un `systemctl restart` bloquant (gk2 : client tué à 120 s, redémarrage pourtant réussi)
+        assert a != ["systemctl", "restart", "unbound.service"], a
+        if a[:2] == ["systemctl", "show"] and a[-2:] == ["--value", "unbound.service"]:
+            self._unbound_avancer()
+            proprietes = a[2:-2]
+            if proprietes == ["-p", "TimeoutStopUSec", "-p", "TimeoutStartUSec"]:
+                return cp(a, 0, self.unbound_delais)
+            if proprietes == ["-p", "ActiveEnterTimestampMonotonic"]:
+                return cp(a, 0, f"{self.unbound['entree']}\n")
+            if proprietes == ["-p", "InactiveExitTimestampMonotonic"]:
+                return cp(a, 0, f"{self.unbound['sortie']}\n")
+        if a == ["systemctl", "restart", "--no-block", "unbound.service"]:
+            self.unbound_relance = self.t
+            return cp(a)
+        if a == ["systemctl", "is-active", "unbound.service"]:
+            self._unbound_avancer()
+            return cp(a, 0 if self.unbound["etat"] == "active" else 3, self.unbound["etat"] + "\n")
         if a[:2] == ["systemctl", "stop"]:
             if a[2].endswith(".timer") and a[2] not in self.actifs:
                 return cp(a, 5, "", f"Failed to stop {a[2]}: Unit {a[2]} not loaded.\n")
@@ -256,7 +307,8 @@ def faux(racine):
 
 @pytest.fixture
 def ctx(racine, faux):
-    return rc.Contexte(racine=racine, executer=faux, maintenant=Horloge(), attendre=faux.attendre)
+    return rc.Contexte(racine=racine, executer=faux, maintenant=Horloge(), attendre=faux.attendre,
+                      monotone=faux.monotone)
 
 
 @pytest.fixture
@@ -266,7 +318,7 @@ def neuf(tmp_path):
     f = Faux(r, pont_existant=False)
     f.actifs.discard("sbx-lan-dhcp.service")
     f.regles = [r_ for r_ in f.regles if not r_.get("comment", "").startswith("sbx-lan")]
-    return r, f, rc.Contexte(racine=r, executer=f, maintenant=Horloge(), attendre=f.attendre)
+    return r, f, rc.Contexte(racine=r, executer=f, maintenant=Horloge(), attendre=f.attendre, monotone=f.monotone)
 
 
 def instantane(r: Path) -> dict:
@@ -330,7 +382,12 @@ def test_ordre_des_etapes(ctx, faux, racine):
         ["ip", "addr", "del", "192.168.255.1/24", "dev", "br-lan"],
         LISTE_INPUT,                                                                   # 9
         ["nft", "-f", nft],
-        ["systemctl", "restart", "unbound.service"],                                   # 10
+        ["systemctl", "show", "-p", "TimeoutStopUSec", "-p", "TimeoutStartUSec", "--value", "unbound.service"],  # 10
+        ["systemctl", "show", "-p", "ActiveEnterTimestampMonotonic", "--value", "unbound.service"],
+        ["systemctl", "show", "-p", "InactiveExitTimestampMonotonic", "--value", "unbound.service"],
+        ["systemctl", "restart", "--no-block", "unbound.service"],
+        ["systemctl", "is-active", "unbound.service"],                                 # nouveau démarrage
+        ["systemctl", "show", "-p", "ActiveEnterTimestampMonotonic", "--value", "unbound.service"],
         ["systemctl", "enable", "secubox-lan-dhcp.service"],                           # 11
         ["systemctl", "restart", "secubox-lan-dhcp.service"],
         ["systemctl", "is-active", "--quiet", "secubox-lan-dhcp.service"],             # Type=exec : resté actif
@@ -511,7 +568,7 @@ def test_validation_premiere_application_restaure(neuf):
 
 
 def test_echec_apres_bascule_revient(ctx, racine, faux):
-    faux.echouer("systemctl", "restart", "unbound.service", fois=1)
+    faux.echouer("systemctl", "restart", "--no-block", "unbound.service", fois=1)
     with pytest.raises(rc.Echec, match="unbound"):
         rc.appliquer(ctx, CFG42, "admin")
     actions = [(a["action"], a["acteur"]) for a in audits(racine)]
@@ -627,7 +684,7 @@ def test_retour_gk2_remet_l_ancien_pont(ctx, racine, faux):
     assert ["ip", "link", "delete", "br-lan"] not in j
     assert ["nft", "delete", "table", "inet", TABLE_NFT] in j
     assert faux.regles_lan() == []
-    assert ["systemctl", "restart", "unbound.service"] in j
+    assert ["systemctl", "restart", "--no-block", "unbound.service"] in j
     assert ["systemctl", "disable", "--now", "secubox-lan-dhcp.service"] in j
     assert ["systemctl", "reload", "nginx.service"] in j
     assert ["systemctl", "stop", "secubox-netmodes-retour.timer"] in j
@@ -1032,11 +1089,13 @@ def test_cli_exception_inattendue_code_1(cli, ctx, racine, faux, capsys, monkeyp
 def test_horloge_en_retard_sur_les_sauvegardes(racine, faux):
     futur = Horloge()
     futur.t = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    ctx_futur = rc.Contexte(racine=racine, executer=faux, maintenant=futur, attendre=faux.attendre)
+    ctx_futur = rc.Contexte(racine=racine, executer=faux, maintenant=futur, attendre=faux.attendre,
+                            monotone=faux.monotone)
     for _ in range(4):
         rc.appliquer(ctx_futur, CFG42, "admin")
         rc.confirmer(ctx_futur, "admin")
-    ctx = rc.Contexte(racine=racine, executer=faux, maintenant=Horloge(), attendre=faux.attendre)   # horloge en 2026
+    ctx = rc.Contexte(racine=racine, executer=faux, maintenant=Horloge(), attendre=faux.attendre,
+                      monotone=faux.monotone)   # horloge en 2026
     sortie = rc.appliquer(ctx, CFG50, "admin")
     nom = sortie["sauvegarde"]
     assert nom.startswith("2026") and (racine / SAUVEGARDES / nom).is_dir()
@@ -1197,7 +1256,9 @@ def test_retour_hors_demarrage_attend_les_relances(ctx, faux, acteur):
     rc.retour(ctx, acteur)
     assert ["systemctl", "restart", "secubox-lan-dhcp.service"] in faux.journal
     assert ["systemctl", "reload", "nginx.service"] in faux.journal
-    assert not any("--no-block" in a for a in faux.journal)
+    # Unbound part sans bloquer mais son issue est attendue (relevés `is-active`) : voir test_unbound_lent_3189
+    assert not any("--no-block" in a for a in faux.journal if a[-1] != "unbound.service")
+    assert ["systemctl", "is-active", "unbound.service"] in faux.journal
     i = faux.journal.index(["systemctl", "restart", "secubox-lan-dhcp.service"])   # resté actif, vérifié
     assert faux.journal[i + 1:i + 3] == [["systemctl", "is-active", "--quiet", "secubox-lan-dhcp.service"]] * 2
 
@@ -1313,7 +1374,7 @@ def test_ancien_pont_change_apres_les_refus_prealables(ctx, racine, faux):
 
 # --- relecture finale : I6 Unbound n'est redémarré que si son drop-in change --------------------------------------------
 
-REDEMARRER_UNBOUND = ["systemctl", "restart", "unbound.service"]
+REDEMARRER_UNBOUND = ["systemctl", "restart", "--no-block", "unbound.service"]
 
 
 def test_unbound_inchange_pas_de_redemarrage(ctx, racine, faux):

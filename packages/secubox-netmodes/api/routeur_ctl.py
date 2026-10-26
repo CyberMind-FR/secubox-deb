@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import json
+import math
 import os
 import re
 import signal
@@ -64,6 +65,14 @@ DELAI_RETOUR = 180
 DHCP = "secubox-lan-dhcp.service"
 RELEVES_DHCP = 6                                            # relevés `is-active` après la relance du DHCP…
 PAUSE_DHCP = 1.0                                            # … espacés d'une seconde : 5 s au plus
+# Unbound de gk2 : arrêt 115 s, démarrage 38 à 112 s (zones locales énormes, carte chargée). Le client `systemctl
+# restart` tué à 120 s déclarait en échec un redémarrage qui aboutissait : il part sans bloquer et son issue est relevée
+# toutes les PAUSE_UNBOUND s, jusqu'à arrêt + démarrage bornés par l'unité + MARGE_UNBOUND, dans [MIN, MAX].
+UNBOUND = "unbound.service"
+PAUSE_UNBOUND = 5.0
+MARGE_UNBOUND = 30.0
+DELAI_UNBOUND_MIN = 180.0
+DELAI_UNBOUND_MAX = 900.0
 PREFIXE_TEMPORAIRE = "sbx-lan-temporaire"
 ADRESSE_GESTION = IPv4Address("192.168.255.1")              # HAProxy :9443 et TURN y écoutent
 ACTEUR = re.compile(r"[A-Za-z0-9._@-]{1,64}")
@@ -75,6 +84,22 @@ LISTE_INPUT = ["nft", "-j", "-a", "list", "chain", "inet", "filter", "input"]
 NGINX_T = ["systemd-run", "--wait", "--pipe", "--collect", "--quiet", "/usr/sbin/nginx", "-t"]
 _ETATS = ("inactif", "en_attente", "actif")
 _SIGNAUX = (signal.SIGTERM, signal.SIGHUP, signal.SIGINT)
+# Durées de systemd (`systemctl show` : `1min 30s`, `10min`, `600ms`, `infinity`) ; nombre seul : secondes.
+_UNITES_DUREE = {
+    **dict.fromkeys(("y", "year", "years"), 31_557_600.0),
+    **dict.fromkeys(("M", "month", "months"), 2_629_800.0),
+    **dict.fromkeys(("w", "week", "weeks"), 604_800.0),
+    **dict.fromkeys(("d", "day", "days"), 86_400.0),
+    **dict.fromkeys(("h", "hr", "hour", "hours"), 3_600.0),
+    **dict.fromkeys(("m", "min", "minute", "minutes"), 60.0),
+    **dict.fromkeys(("", "s", "sec", "second", "seconds"), 1.0),
+    **dict.fromkeys(("ms", "msec"), 1e-3),
+    **dict.fromkeys(("us", "usec", "µs", "μs"), 1e-6),
+}
+# les unités les plus longues d'abord : « min » n'est pas lu « m » suivi de « in », ni « ms » « m » suivi de « s »
+_COMPOSANTE_DUREE = re.compile(r"\s*([0-9]+(?:\.[0-9]+)?)\s*("
+                               + "|".join(sorted((re.escape(u) for u in _UNITES_DUREE if u), key=len, reverse=True))
+                               + r")?")
 
 
 class Occupe(RuntimeError):
@@ -99,6 +124,7 @@ class Contexte:
     executer: Callable[[list[str]], subprocess.CompletedProcess]
     maintenant: Callable[[], datetime]
     attendre: Callable[[float], None]                       # pause entre deux relevés (faux en test : rien n'attend)
+    monotone: Callable[[], float]                           # horloge des délais d'attente (faux en test : simulée)
 
 
 def executer_systeme(argv: list[str]) -> subprocess.CompletedProcess:
@@ -111,7 +137,7 @@ def executer_systeme(argv: list[str]) -> subprocess.CompletedProcess:
 
 
 def contexte_systeme() -> Contexte:
-    return Contexte(Path("/"), executer_systeme, lambda: datetime.now(timezone.utc), time.sleep)
+    return Contexte(Path("/"), executer_systeme, lambda: datetime.now(timezone.utc), time.sleep, time.monotonic)
 
 
 # --- outils --------------------------------------------------------------------------------------------------------------
@@ -543,8 +569,7 @@ def _basculer(ctx: Contexte, cfg: ConfigRouteur, geo: bool, unbound_change: bool
     _supprimer_regles(ctx, COMMENTAIRE_NFT)                                      # 9
     _exiger(ctx, ["nft", "-f", nft])
     if unbound_change:                                                           # 10 : nouvelle écoute
-        with _verrou_unbound(ctx):
-            _exiger(ctx, ["systemctl", "restart", "unbound.service"])
+        _redemarrer_unbound(ctx)                                                 # attendu jusqu'à sa vraie issue
     _exiger(ctx, ["systemctl", "enable", DHCP])                                  # 11
     _exiger(ctx, ["systemctl", "restart", DHCP])
     _attendre_dhcp_actif(ctx)
@@ -673,9 +698,66 @@ def _retour_pare_feu(ctx: Contexte) -> None:
         _exiger(ctx, ["nft", "delete", "table", "inet", TABLE_NFT])
 
 
+def _duree_systemd(texte: str) -> float | None:
+    """Durée au format de systemd, en secondes (`infinity` : math.inf) ; illisible : None."""
+    texte = texte.strip()
+    if texte == "infinity":
+        return math.inf
+    total, pos = 0.0, 0
+    while pos < len(texte):
+        m = _COMPOSANTE_DUREE.match(texte, pos)
+        if m is None:
+            return None
+        total += float(m.group(1)) * _UNITES_DUREE[m.group(2) or ""]
+        pos = m.end()
+    return total if pos else None
+
+
+def _delai_unbound(ctx: Contexte) -> float:
+    """Arrêt + démarrage tels que l'unité les borne, + MARGE_UNBOUND, dans [DELAI_UNBOUND_MIN, DELAI_UNBOUND_MAX].
+    Les deux valeurs sont additionnées : leur ordre de sortie (celui du bus) est indifférent. Illisible : le plafond,
+    mieux vaut attendre un Unbound lent que déclarer en échec un redémarrage qui aboutit."""
+    r = ctx.executer(["systemctl", "show", "-p", "TimeoutStopUSec", "-p", "TimeoutStartUSec", "--value", UNBOUND])
+    durees = [_duree_systemd(ligne) for ligne in (r.stdout or "").splitlines()] if r.returncode == 0 else []
+    if len(durees) != 2 or any(d is None for d in durees):
+        return DELAI_UNBOUND_MAX
+    return min(max(sum(d for d in durees if d is not None) + MARGE_UNBOUND, DELAI_UNBOUND_MIN), DELAI_UNBOUND_MAX)
+
+
+def _horodatage_unbound(ctx: Contexte, propriete: str) -> int | None:
+    """Horodatage monotone (µs) d'Unbound ; illisible : None."""
+    r = ctx.executer(["systemctl", "show", "-p", propriete, "--value", UNBOUND])
+    valeur = (r.stdout or "").strip()
+    return int(valeur) if r.returncode == 0 and valeur.isascii() and valeur.isdigit() else None
+
+
 def _redemarrer_unbound(ctx: Contexte) -> None:
+    """Relance Unbound sans bloquer et attend sa vraie issue, sous le verrou partagé avec secubox-dns-lan.
+
+    Succès : actif ET entré dans cet état après la relance (ActiveEnterTimestampMonotonic plus récent) ; tant que le
+    travail attend dans la file de PID 1, `is-active` rend encore l'état d'avant. Échec : « failed » APRÈS le début du
+    nouveau démarrage (InactiveExitTimestampMonotonic plus récent ; un Unbound déjà en échec ne compte pas), ou délai
+    déduit de l'unité dépassé."""
     with _verrou_unbound(ctx):
-        _exiger(ctx, ["systemctl", "restart", "unbound.service"])
+        delai = _delai_unbound(ctx)
+        entree = _horodatage_unbound(ctx, "ActiveEnterTimestampMonotonic")
+        sortie = _horodatage_unbound(ctx, "InactiveExitTimestampMonotonic")
+        if entree is None or sortie is None:
+            raise Echec(f"horodatages de {UNBOUND} illisibles : son nouveau démarrage ne pourrait pas être reconnu ; "
+                        "non redémarré")
+        limite = ctx.monotone() + delai
+        _exiger(ctx, ["systemctl", "restart", "--no-block", UNBOUND])
+        while True:
+            etat_unbound = (ctx.executer(["systemctl", "is-active", UNBOUND]).stdout or "").strip()
+            if etat_unbound == "active" and (_horodatage_unbound(ctx, "ActiveEnterTimestampMonotonic") or 0) > entree:
+                return
+            if etat_unbound == "failed" and (_horodatage_unbound(ctx, "InactiveExitTimestampMonotonic") or 0) > sortie:
+                raise Echec(f"{UNBOUND} a échoué à son redémarrage ; voir journalctl -u {UNBOUND}")
+            if ctx.monotone() >= limite:
+                raise Echec(f"{UNBOUND} n'est pas redevenu actif en {delai:g} s (arrêt et démarrage bornés par "
+                            f"l'unité, + {MARGE_UNBOUND:g} s) ; dernier état : {etat_unbound or 'inconnu'} ; "
+                            f"voir journalctl -u {UNBOUND}")
+            ctx.attendre(PAUSE_UNBOUND)
 
 
 def _sans_attente(bloquer: bool) -> list[str]:

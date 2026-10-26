@@ -190,8 +190,10 @@ def test_unite_retour_boot_root_durcie():
     for mot in ("ProtectSystem", "ReadWritePaths", "netmodesctl", TESTS + "test_unite_retour_boot_root_durcie"):
         assert mot in ligne, mot
     assert u["ExecStart"] == [f"{CTL} routeur-retour-demarrage"]
-    # le contrôleur attend jusqu'à 60 s son verrou puis peut passer 120 s par commande
-    assert int(u["TimeoutStartSec"][0]) >= routeur_ctl.DELAI_VERROU_RETOUR + 120
+    # le contrôleur attend jusqu'à 60 s son verrou, puis jusqu'à 900 s le redémarrage d'Unbound (gk2 : arrêt 115 s,
+    # démarrage jusqu'à 112 s), puis le reste (120 s par commande au plus)
+    assert int(u["TimeoutStartSec"][0]) == 1200
+    assert int(u["TimeoutStartSec"][0]) >= routeur_ctl.DELAI_VERROU_RETOUR + routeur_ctl.DELAI_UNBOUND_MAX + 120
     assert u["WantedBy"] == ["multi-user.target"]
 
 
