@@ -44,7 +44,8 @@ log    = get_logger("netmodes")
 NETPLAN_DIR    = Path("/etc/netplan")
 TEMPLATES_DIR  = Path("/etc/secubox/netmodes")
 BACKUP_DIR     = Path("/var/lib/secubox/netmodes-backup")
-STATE_FILE     = Path("/var/lib/secubox/netmodes/state.json")
+# Hors de /var/lib/secubox (compte partagé secubox) : StateDirectory=secubox-netmodes-api de l'unité (#3189).
+STATE_FILE     = Path("/var/lib/secubox-netmodes-api/state.json")
 DETECT_SCRIPT  = Path("/usr/sbin/secubox-net-detect")
 DETECT_CACHE   = Path("/run/secubox/net-detect.json")
 

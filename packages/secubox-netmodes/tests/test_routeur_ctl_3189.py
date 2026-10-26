@@ -30,6 +30,12 @@ CFG42 = {"adresse": "192.168.42.1/24", "dhcp_debut": "192.168.42.100",
          "dhcp_fin": "192.168.42.199", "bail": "12h",
          "ports": ["lan0", "lan1", "lan2", "lan3"], "wan": "eth2"}
 CFG50 = dict(CFG42, adresse="192.168.50.1/24", dhcp_debut="192.168.50.100", dhcp_fin="192.168.50.199")
+# nginx -t hors du bac à sable de l'API (R4) : il ouvre /run/nginx.pid et ses journaux en écriture
+NGINX_T = ["systemd-run", "--wait", "--pipe", "--collect", "--quiet", "/usr/sbin/nginx", "-t"]
+
+
+def touche_nginx(a: list[str]) -> bool:
+    return a[0] == "nginx" or "/usr/sbin/nginx" in a or a[-1] == "nginx.service"
 TOML = "etc/secubox/netmodes/routeur.toml"
 ARBRE = "var/lib/secubox-netmodes"
 ETAT = ARBRE + "/routeur-etat.json"
@@ -139,11 +145,15 @@ class Faux:
             self.actifs.discard(a[2])
             return cp(a)
         if a[:2] in (["systemctl", "restart"], ["systemctl", "enable"], ["systemctl", "reload"]):
+            unite = a[3] if a[2:3] == ["--no-block"] and a[1] != "enable" else a[2]
+            assert len(a) == (4 if a[2:3] == ["--no-block"] else 3), a
             if a[1] == "restart":
-                self.actifs.add(a[2])
+                self.actifs.add(unite)
             return cp(a)
         if a[:3] == ["systemctl", "disable", "--now"]:
             self.actifs.discard(a[3])
+            return cp(a)
+        if a == NGINX_T:
             return cp(a)
         if a[0] == "systemd-run":
             unite = next(x.split("=", 1)[1] for x in a if x.startswith("--unit="))
@@ -190,7 +200,7 @@ class Faux:
         if a == ["nft", "delete", "table", "inet", TABLE_NFT]:
             present, self.table_lan = self.table_lan, False
             return cp(a, 0 if present else 1)
-        if a in (["unbound-checkconf"], ["nginx", "-t"]):
+        if a == ["unbound-checkconf"]:
             return cp(a)
         raise AssertionError(f"commande inattendue : {a}")
 
@@ -301,7 +311,7 @@ def test_ordre_des_etapes(ctx, faux, racine):
         ["ip", "-j", "-4", "addr", "show", "dev", "lo"],
         ["nft", "-c", "-f", nft],                                                      # 6
         ["unbound-checkconf"],
-        ["nginx", "-t"],
+        NGINX_T,                                                                       # hors bac à sable
         ["networkctl", "reload"],                                                      # 7
         ["networkctl", "reconfigure", "br-lan", "lan0", "lan1", "lan2", "lan3"],
         ["systemctl", "is-active", "--quiet", "sbx-lan-dhcp.service"],                 # 8
@@ -503,7 +513,7 @@ def test_echec_apres_bascule_revient(ctx, racine, faux):
             assert not (racine / chemin.lstrip("/")).exists()
     assert geo_vide(racine)                                                     # jamais supprimé : include de nginx
     assert not (racine / TOML).exists()
-    assert not any(a[0] == "systemd-run" for a in faux.journal)
+    assert not any(a[0] == "systemd-run" and a != NGINX_T for a in faux.journal)    # aucun minuteur armé
 
 
 def test_reprise_lan_temporaire(ctx, racine, faux):
@@ -545,7 +555,7 @@ def test_idempotent(ctx, racine, faux):
 def test_geo_absente(ctx, racine, faux):
     (racine / "etc/nginx/secubox-lan-geo.d").rmdir()
     rc.appliquer(ctx, CFG42, "admin")
-    assert not any(a[0] == "nginx" or a[-1] == "nginx.service" for a in faux.journal)
+    assert not any(touche_nginx(a) for a in faux.journal)
     assert not (racine / "etc/nginx/secubox-lan-geo.d").exists()
     assert "geo-absente" in [a["action"] for a in audits(racine)]
 
@@ -554,7 +564,7 @@ def test_geo_absente(ctx, racine, faux):
 
 def test_minuteur_puis_confirmer(ctx, racine, faux):
     rc.appliquer(ctx, CFG42, "admin")
-    run = [a for a in faux.journal if a[0] == "systemd-run"]
+    run = [a for a in faux.journal if a[0] == "systemd-run" and a != NGINX_T]
     assert len(run) == 1
     assert "--unit=secubox-netmodes-retour" in run[0] and "--on-active=180" in run[0]
     assert run[0][-3:] == ["/usr/sbin/netmodesctl", "routeur-retour", "minuteur"]
@@ -1125,4 +1135,54 @@ def test_geo_dossier_absent_rien(ctx, racine, faux):
     with pytest.raises(rc.Refus):
         rc.appliquer(ctx, CFG42, "admin")
     assert not (racine / "etc/nginx/secubox-lan-geo.d").exists()
-    assert not any(a[0] == "nginx" or a[-1] == "nginx.service" for a in faux.journal)
+    assert not any(touche_nginx(a) for a in faux.journal)
+
+
+# --- revue T7 : nginx -t hors du bac à sable, retour au démarrage sans attendre une unité ordonnée après lui --------------
+
+def test_nginx_t_hors_bac_a_sable_et_refus(ctx, racine, faux):
+    """nginx -t passe par systemd-run (contexte de PID 1) : dans l'espace de montage de l'API, /run/nginx.pid et
+    /var/log/nginx sont en lecture seule et il échouerait toujours. Un refus reste un refus, fichiers remis."""
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    avant = instantane(racine)
+    faux.journal.clear()
+    faux.echouer(*NGINX_T, code=1, fois=1, erreur="nginx: [emerg] unexpected end of file\n")
+    with pytest.raises(rc.Refus, match="nginx -t refuse la configuration : nginx: \\[emerg\\] unexpected"):
+        rc.appliquer(ctx, CFG50, "admin")
+    assert NGINX_T in faux.journal
+    assert not any(a[:2] == ["nginx", "-t"] for a in faux.journal)
+    assert hors_sauvegardes(instantane(racine)) == hors_sauvegardes(avant)        # fichiers d'avant restaurés
+    assert etat_fichier(racine)["etat"] == "actif"
+    assert not any(a[0] == "networkctl" or "--unit=secubox-netmodes-retour" in a for a in faux.journal)
+
+
+def _deux_applications_dont_la_seconde_en_attente(ctx, faux):
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.confirmer(ctx, "admin")
+    rc.appliquer(ctx, CFG50, "admin")                       # en attente : la sauvegarde contient le DHCP de CFG42
+    faux.journal.clear()
+
+
+def test_retour_au_demarrage_ne_bloque_pas_sur_le_dhcp_ni_nginx(ctx, racine, faux):
+    """secubox-netmodes-retour-boot est ordonné AVANT secubox-lan-dhcp : un `systemctl restart` bloquant du DHCP
+    attendrait la fin de l'unité qui l'attend (blocage jusqu'au délai de 120 s, retour faussement incomplet). Au
+    démarrage, les relances partent sans attendre ; le DHCP démarre après, sur la configuration remise."""
+    _deux_applications_dont_la_seconde_en_attente(ctx, faux)
+    sortie = rc.retour_si_en_attente(ctx)
+    assert sortie["etat"] == "actif"
+    assert ["systemctl", "restart", "--no-block", "secubox-lan-dhcp.service"] in faux.journal
+    assert ["systemctl", "reload", "--no-block", "nginx.service"] in faux.journal
+    assert not any(a[:2] in (["systemctl", "restart"], ["systemctl", "reload"]) and "--no-block" not in a
+                   and a[-1] in ("secubox-lan-dhcp.service", "nginx.service") for a in faux.journal)
+    assert "192.168.42.1" in (racine / CHEMINS["dhcp"].lstrip("/")).read_text()
+
+
+@pytest.mark.parametrize("acteur", ["admin", "minuteur"])
+def test_retour_hors_demarrage_attend_les_relances(ctx, faux, acteur):
+    """Hors démarrage, le retour attend chaque relance pour signaler un échec (retour incomplet)."""
+    _deux_applications_dont_la_seconde_en_attente(ctx, faux)
+    rc.retour(ctx, acteur)
+    assert ["systemctl", "restart", "secubox-lan-dhcp.service"] in faux.journal
+    assert ["systemctl", "reload", "nginx.service"] in faux.journal
+    assert not any("--no-block" in a for a in faux.journal)

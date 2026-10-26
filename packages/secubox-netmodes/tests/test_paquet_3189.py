@@ -27,7 +27,8 @@ from secubox_core.auth import require_jwt, require_lecture  # noqa: E402
 PKG = Path(__file__).resolve().parents[1]
 DEPOT = PKG.parents[1]
 CTL = "/usr/sbin/netmodesctl"
-TEST_EXCEPTION = "packages/secubox-netmodes/tests/test_paquet_3189.py::test_unite_api_durcie_et_exception"
+TESTS = "packages/secubox-netmodes/tests/test_paquet_3189.py::"
+TEST_EXCEPTION = TESTS + "test_unite_api_durcie_et_exception"
 # Options qui posent un filtre seccomp : sous User= non root, systemd active alors NoNewPrivileges d'office et sudo répond
 # « no new privileges flag is set » (mesuré sur gk2 et gk3 : secubox-ad-guard-auto.service, secubox-voicestudio-api.service).
 SECCOMP = ("ProtectKernelTunables", "LockPersonality", "RestrictSUIDSGID", "SystemCallFilter", "SystemCallArchitectures",
@@ -61,6 +62,15 @@ def sans_commentaires(texte: str) -> str:
     return "\n".join(ligne for ligne in texte.splitlines() if not ligne.lstrip().startswith("#"))
 
 
+def ligne_exception(nom_unite: str) -> str:
+    """La ligne de RULES-CODE.md § Exceptions dont la colonne « Exception » commence par cette unité (une seule)."""
+    regles = (DEPOT / ".claude/RULES-CODE.md").read_text(encoding="utf-8")
+    lignes = [ligne for ligne in regles.splitlines()
+              if ligne.startswith("|") and ligne.count(" | ") >= 3 and ligne.split(" | ")[1].startswith(f"`{nom_unite}`")]
+    assert len(lignes) == 1, lignes
+    return lignes[0]
+
+
 # --- unité de l'API ----------------------------------------------------------------------------------------------------
 
 def test_unite_api_durcie_et_exception():
@@ -68,33 +78,35 @@ def test_unite_api_durcie_et_exception():
     for cle, valeur in {"User": "secubox-netmodes", "Group": "secubox", "UMask": "0027", "NoNewPrivileges": "no",
                         "ProtectSystem": "strict", "ProtectHome": "yes", "PrivateTmp": "yes",
                         "ProtectControlGroups": "yes", "AppArmorProfile": "secubox-netmodes-api",
-                        "KillMode": "process"}.items():
+                        "KillMode": "process", "StateDirectory": "secubox-netmodes-api",
+                        "StateDirectoryMode": "0750"}.items():
         assert u.get(cle) == [valeur], (cle, u.get(cle))
     # sudo vers netmodesctl : rien qui impose NoNewPrivileges, plus de capacité ambiante (l'API n'en a jamais eu besoin)
     for cle in SECCOMP + ("AmbientCapabilities", "RuntimeDirectory"):
         assert cle not in u, cle
     # le contrôleur root lancé par sudo hérite de cet espace de montage : chaque dossier qu'il écrit doit y être ouvert
     rw = chemins_rw(u)
-    for chemin in ("/run/secubox", "/run/lock", "/var/lib/secubox/netmodes", "/var/lib/secubox-netmodes",
+    for chemin in ("/run/secubox", "/run/lock", "/var/lib/secubox-netmodes",
                    "/var/log/secubox", "/etc/systemd/network", "/etc/secubox/netmodes", "/etc/unbound/unbound.conf.d",
                    "/etc/nftables.d", "/etc/nginx/secubox-lan-geo.d", "/var/lib/misc"):
         assert chemin in rw, chemin
-    assert "/var/lib/secubox/netmodes-backup" not in rw                         # remplacé par l'arbre root seul
+    # rien sous /var/lib/secubox (compte partagé secubox), rien que seul nginx -t demandait (il passe par systemd-run)
+    assert not any(c == "/var/lib/secubox" or c.startswith("/var/lib/secubox/") for c in rw), rw
+    assert "/run" not in rw and "/var/log/nginx" not in rw
     # socket : § 2 et MODULE-COMPLIANCE § Socket
     assert u["ExecStartPre"] == ["+/bin/rm -f /run/secubox/netmodes.sock"]
     assert "--uds /run/secubox/netmodes.sock" in u["ExecStart"][0]
     assert any("chmod 660 /run/secubox/netmodes.sock" in v for v in u.get("ExecStartPost", []))
     # l'exception est écrite, avec sa raison et ce test
-    regles = (DEPOT / ".claude/RULES-CODE.md").read_text(encoding="utf-8")
-    lignes = [ligne for ligne in regles.splitlines() if ligne.startswith("|") and "`secubox-netmodes.service`" in ligne]
-    assert len(lignes) == 1, lignes
+    ligne = ligne_exception("secubox-netmodes.service")
     for mot in ("NoNewPrivileges=no", "KillMode=process", "ReadWritePaths", "netmodesctl", TEST_EXCEPTION):
-        assert mot in lignes[0], mot
+        assert mot in ligne, mot
 
 
-def test_unite_api_couvre_chaque_ecriture_du_controleur():
-    """Croisé avec le code : tout dossier où netmodesctl écrit est ouvert, sinon EROFS en pleine bascule."""
-    rw = chemins_rw(unite("debian/secubox-netmodes.service"))
+@pytest.mark.parametrize("fichier", ["debian/secubox-netmodes.service", "debian/secubox-netmodes-retour-boot.service"])
+def test_unite_couvre_chaque_ecriture_du_controleur(fichier):
+    """Croisé avec le code : tout dossier où netmodesctl écrit est ouvert, sinon EROFS en pleine bascule ou au retour."""
+    rw = chemins_rw(unite(fichier))
     ecrits = {os.path.dirname(c) for c in CHEMINS.values()}
     ecrits |= {os.path.dirname(c) for c in (routeur_ctl.TOML, routeur_ctl.ANCIEN_PONT, routeur_ctl.AUDIT,
                                             routeur_ctl.VERROU, routeur_ctl.VERROU_UNBOUND, routeur_ctl.BAUX)}
@@ -103,12 +115,26 @@ def test_unite_api_couvre_chaque_ecriture_du_controleur():
         assert any(dossier == c or dossier.startswith(c + "/") for c in rw), dossier
 
 
-def test_nginx_t_du_controleur_peut_ouvrir_ses_fichiers():
-    """`nginx -t` (validation du fragment géo, lancé par le contrôleur DANS l'espace de montage de l'API) ouvre en écriture
-    /run/nginx.pid et ses journaux : en lecture seule il échoue, et le mode routeur serait toujours refusé. Un lien de
-    /run/nginx.pid seul est détaché au premier redémarrage de nginx (fichier supprimé) : c'est /run qu'il faut ouvrir."""
+def test_nginx_t_du_controleur_hors_du_bac_a_sable():
+    """`nginx -t` ouvre en écriture /run/nginx.pid et ses journaux : lancé par sudo DANS l'espace de montage de l'API il
+    échouerait toujours. Le contrôleur le passe à systemd-run (contexte de PID 1) ; l'unité n'ouvre donc ni /run ni
+    /var/log/nginx."""
+    assert routeur_ctl.NGINX_T == ["systemd-run", "--wait", "--pipe", "--collect", "--quiet", "/usr/sbin/nginx", "-t"]
     rw = chemins_rw(unite("debian/secubox-netmodes.service"))
-    assert "/run" in rw and "/var/log/nginx" in rw
+    assert "/run" not in rw and "/var/log/nginx" not in rw
+
+
+def test_etat_des_anciens_modes_hors_du_compte_partage():
+    """L'état des anciens modes (nom du mode) quitte /var/lib/secubox, dossier du compte partagé secubox : un lien posé
+    là aurait détourné les opérations root du postinst. StateDirectory le crée au compte de l'API ; surtout pas
+    « secubox-netmodes », que systemd réattribuerait alors que c'est l'arbre root seul du contrôleur."""
+    assert main.STATE_FILE == Path("/var/lib/secubox-netmodes-api/state.json")
+    u = unite("debian/secubox-netmodes.service")
+    assert u["StateDirectory"] == ["secubox-netmodes-api"] and u["StateDirectoryMode"] == ["0750"]
+    assert Path(routeur_ctl.ARBRE).name not in u["StateDirectory"][0].split()
+    r = regles_aa("apparmor/secubox-netmodes")
+    assert "/var/lib/secubox-netmodes-api/ r," in r and "/var/lib/secubox-netmodes-api/** rwk," in r
+    assert not any(ligne.startswith("/var/lib/secubox/") and not ligne.endswith(" r,") for ligne in r), r
 
 
 def test_unite_api_apres_les_dependances_et_sans_bytecode():
@@ -119,7 +145,7 @@ def test_unite_api_apres_les_dependances_et_sans_bytecode():
 
 # --- DHCP du LAN et retour au démarrage --------------------------------------------------------------------------------
 
-def test_unite_lan_dhcp():
+def test_unite_lan_dhcp_root_confinee():
     u = unite("debian/secubox-lan-dhcp.service")
     assert u["ExecStart"] == ["/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/var/lib/secubox-netmodes/lan-dhcp.conf"
                               " --pid-file="]
@@ -134,12 +160,32 @@ def test_unite_lan_dhcp():
                                                           "CAP_SETUID", "CAP_SETGID", "CAP_CHOWN"}
     assert u["WantedBy"] == ["multi-user.target"]                         # le contrôleur l'active : [Install] requis
     assert "User" not in u                                                # root le temps de lire la conf root seule
+    for cle in ("RestrictSUIDSGID", "LockPersonality"):
+        assert u.get(cle) == ["yes"], cle
+    # root : exception écrite, avec ce test
+    ligne = ligne_exception("secubox-lan-dhcp.service")
+    for mot in ("user=dnsmasq", "AppArmor", "CapabilityBoundingSet", TESTS + "test_unite_lan_dhcp_root_confinee"):
+        assert mot in ligne, mot
 
 
-def test_unite_retour_au_demarrage():
+def test_unite_retour_boot_root_durcie():
     u = unite("debian/secubox-netmodes-retour-boot.service")
     assert u["Type"] == ["oneshot"]
-    assert set(u["After"][0].split()) >= {"network-online.target", "nftables.service", "unbound.service"}
+    # avant le DHCP du LAN : après un redémarrage, jamais de bail servi sur un sous-réseau non confirmé
+    assert set(u["After"][0].split()) == {"systemd-networkd.service", "nftables.service", "unbound.service"}
+    assert u["Before"] == ["secubox-lan-dhcp.service"]
+    assert not any("network-online" in v for k in ("After", "Wants", "Requires") for v in u.get(k, []))
+    # root sans sudo ni AppArmor : tout le socle § 10 sauf User=, chemins du contrôleur seulement
+    for cle, valeur in {"NoNewPrivileges": "yes", "ProtectSystem": "strict", "ProtectHome": "yes", "PrivateTmp": "yes",
+                        "ProtectKernelTunables": "yes", "ProtectControlGroups": "yes", "RestrictSUIDSGID": "yes",
+                        "LockPersonality": "yes", "UMask": "0027"}.items():
+        assert u.get(cle) == [valeur], (cle, u.get(cle))
+    assert "User" not in u and "AppArmorProfile" not in u
+    api = unite("debian/secubox-netmodes.service")
+    assert sorted(" ".join(u["ReadWritePaths"]).split()) == sorted(" ".join(api["ReadWritePaths"]).split())
+    ligne = ligne_exception("secubox-netmodes-retour-boot.service")
+    for mot in ("ProtectSystem", "ReadWritePaths", "netmodesctl", TESTS + "test_unite_retour_boot_root_durcie"):
+        assert mot in ligne, mot
     assert u["ExecStart"] == [f"{CTL} routeur-retour-demarrage"]
     # le contrôleur attend jusqu'à 60 s son verrou puis peut passer 120 s par commande
     assert int(u["TimeoutStartSec"][0]) >= routeur_ctl.DELAI_VERROU_RETOUR + 120
@@ -284,10 +330,9 @@ def test_postinst():
     p = re.sub(r"\\\n\s*", " ", sans_commentaires(lire("debian/postinst")))      # lignes continuées jointes
     assert re.search(r"adduser --system --ingroup secubox .*secubox-netmodes", p)
     assert "install -d -m 0700 -o root -g root /var/lib/secubox-netmodes" in p
-    assert "install -d -m 0750 -o secubox-netmodes -g secubox /var/lib/secubox/netmodes" in p
-    # état de l'ancien mode : déplacé (mv ne suit pas un lien), vérifié une fois hors de portée du compte secubox
-    assert "/var/lib/secubox/netmodes-state.json" in p and "/var/lib/secubox/netmodes/state.json" in p
-    assert re.search(r"mv -f -- \"\$ANCIEN\" \"\$NOUVEAU\"", p)
+    # aucune opération root sous /var/lib/secubox (dossier du compte partagé secubox : un lien y détournerait root)
+    assert "/var/lib/secubox/" not in p
+    assert not re.search(r"\b(install|chown|chmod|mv|rm|ln|mkdir|cp)\b[^\n]*/var/lib/secubox\b(?!-)", p)
     assert "visudo -cf /etc/sudoers.d/secubox-netmodes" in p
     assert "rm -f /etc/sudoers.d/secubox-netmodes" in p                  # jamais de sudoers cassé laissé en place
     for profil in ("secubox-netmodes", "secubox-lan-dhcp"):
@@ -320,7 +365,7 @@ def test_profil_api():
     assert "profile secubox-netmodes-api {" in r
     for regle in ("/usr/bin/sudo Ux,", "/usr/lib/secubox/netmodes/** r,", "/etc/secubox/netmodes/** r,",
                   "/proc/device-tree/model r,", "/sys/firmware/devicetree/base/model r,",
-                  "/run/secubox/netmodes.sock rwk,", "/var/lib/secubox/netmodes/** rwk,", "/var/log/secubox/*.log w,",
+                  "/run/secubox/netmodes.sock rwk,", "/var/lib/secubox-netmodes-api/** rwk,", "/var/log/secubox/*.log w,",
                   "deny /etc/secubox/secrets/** r,"):
         assert regle in r, regle
     texte = "\n".join(r)

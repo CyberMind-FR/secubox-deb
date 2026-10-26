@@ -17,34 +17,17 @@ case "$1" in
 
     # Parents PARTAGÉS : créés seulement s'ils manquent, jamais resserrés ni réattribués.
     install -d -o root -g root -m 1777 /run/secubox
-    [ -d /var/lib/secubox ] || install -d -o secubox -g secubox -m 0755 /var/lib/secubox
     [ -d /var/log/secubox ] || install -d -m 0755 /var/log/secubox
-    install -d -o root -g root -m 0755 /var/lib/secubox/netmodes-backup
     install -d -o root -g root -m 0755 /etc/secubox/netmodes
 
     # Arbre root seul du contrôleur : sauvegardes, état du mode routeur, lan-dhcp.conf. netmodesctl vérifie propriétaire
-    # et mode de chaque composant et refuse sinon (/var/lib/secubox appartient au compte secubox).
+    # et mode de chaque composant et refuse sinon.
     install -d -m 0700 -o root -g root /var/lib/secubox-netmodes
 
-    # État des anciens modes, écrit par l'API. Dans /var/lib/secubox (compte secubox) : un lien posé là est retiré.
-    if [ -L /var/lib/secubox/netmodes ]; then
-      rm -f /var/lib/secubox/netmodes
-    fi
-    install -d -m 0750 -o secubox-netmodes -g secubox /var/lib/secubox/netmodes
-    # Migration de l'ancien fichier d'état. mv ne suit pas un lien : le nom est déplacé tel quel, puis vérifié une fois
-    # dans un dossier où le compte secubox n'écrit plus (ni lien, ni fichier spécial, ni lien physique).
-    ANCIEN=/var/lib/secubox/netmodes-state.json
-    NOUVEAU=/var/lib/secubox/netmodes/state.json
-    if [ -f "$ANCIEN" ] && [ ! -L "$ANCIEN" ] && [ ! -e "$NOUVEAU" ] && [ ! -L "$NOUVEAU" ]; then
-      mv -f -- "$ANCIEN" "$NOUVEAU"
-      if [ -L "$NOUVEAU" ] || [ ! -f "$NOUVEAU" ] || [ "$(stat -c %h -- "$NOUVEAU")" != 1 ]; then
-        rm -rf -- "$NOUVEAU"
-        echo "secubox-netmodes : ancien état $ANCIEN ignoré (lien ou fichier spécial)" >&2
-      else
-        chown secubox-netmodes:secubox "$NOUVEAU"
-        chmod 0640 "$NOUVEAU"
-      fi
-    fi
+    # Aucune opération root sous /var/lib/secubox : ce dossier appartient au compte partagé secubox, qui pourrait y
+    # substituer un lien entre une vérification et l'opération. L'état des anciens modes vit dans
+    # /var/lib/secubox-netmodes-api (StateDirectory de l'unité) ; l'ancien fichier, qui ne portait que le nom du mode,
+    # n'est pas repris.
 
     # Jamais de sudoers cassé laissé en place.
     if [ -f /etc/sudoers.d/secubox-netmodes ]; then

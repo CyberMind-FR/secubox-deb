@@ -74,7 +74,7 @@ Seule surface privilégiée du module ; l'API (utilisateur `secubox-netmodes`) l
 | Verbe | Rôle |
 |---|---|
 | `routeur-etat` | état (`inactif`, `en_attente`, `actif`), configuration, minuteur, DHCP, adresses du pont |
-| `routeur-appliquer <acteur>` | configuration JSON sur l'entrée standard : sauvegarde, rendu, validation (`nft -c`, `unbound-checkconf`, `nginx -t`), bascule, minuteur de retour |
+| `routeur-appliquer <acteur>` | configuration JSON sur l'entrée standard : sauvegarde, rendu, validation (`nft -c`, `unbound-checkconf`, `nginx -t` par `systemd-run`), bascule, minuteur de retour |
 | `routeur-confirmer <acteur>` | garde la nouvelle configuration, annule le retour automatique |
 | `routeur-retour <acteur>` | restaure la dernière sauvegarde (`minuteur` : seulement si l'application attend sa confirmation) |
 | `routeur-retour-demarrage` | au démarrage (`secubox-netmodes-retour-boot.service`), défait une application restée en attente ; jamais accordé à l'API |
@@ -116,10 +116,12 @@ coupure ou un redémarrage avant la confirmation est défait au démarrage par `
 ### Unités
 
 - `secubox-netmodes.service` : API, utilisateur `secubox-netmodes`, profil AppArmor `secubox-netmodes-api`,
-  `KillMode=process` (un contrôleur en pleine bascule survit à un redémarrage de l'API).
+  `KillMode=process` (un contrôleur en pleine bascule survit à un redémarrage de l'API). État des anciens modes :
+  `/var/lib/secubox-netmodes-api/state.json` (`StateDirectory`).
 - `secubox-lan-dhcp.service` : dnsmasq en DHCP seul, profil AppArmor `secubox-lan-dhcp` ; ni activé ni démarré par le
   paquet, le contrôleur l'active à la bascule et le désactive au retour.
-- `secubox-netmodes-retour-boot.service` : oneshot activé par le paquet.
+- `secubox-netmodes-retour-boot.service` : oneshot root durci, activé par le paquet, ordonné avant
+  `secubox-lan-dhcp.service` : après un redémarrage, aucun bail n'est servi sur un sous-réseau non confirmé.
 
 Retirer ou mettre à jour le paquet n'arrête que l'API : le LAN posé reste en place.
 

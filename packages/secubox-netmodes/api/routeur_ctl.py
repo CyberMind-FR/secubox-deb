@@ -64,6 +64,9 @@ ACTEUR = re.compile(r"[A-Za-z0-9._@-]{1,64}")
 GERES = (*CHEMINS.values(), TOML, ANCIEN_PONT)
 MODES = {TOML: 0o640}                                       # le reste en 0644 : lu par les démons
 LISTE_INPUT = ["nft", "-j", "-a", "list", "chain", "inet", "filter", "input"]
+# nginx -t ouvre /run/nginx.pid et ses journaux en écriture : dans l'espace de montage de l'API (ProtectSystem=strict,
+# hérité par sudo) il échouerait toujours. systemd-run le lance dans le contexte de PID 1 ; --pipe rend sa sortie.
+NGINX_T = ["systemd-run", "--wait", "--pipe", "--collect", "--quiet", "/usr/sbin/nginx", "-t"]
 _ETATS = ("inactif", "en_attente", "actif")
 _SIGNAUX = (signal.SIGTERM, signal.SIGHUP, signal.SIGINT)
 
@@ -412,7 +415,7 @@ def _valider(ctx: Contexte, geo: bool) -> None:
     controles = [(["nft", "-c", "-f", str(_p(ctx, CHEMINS["nft"]))], "nft refuse le pare-feu généré"),
                  (["unbound-checkconf"], "unbound-checkconf refuse la configuration DNS")]
     if geo:
-        controles.append((["nginx", "-t"], "nginx -t refuse la configuration"))
+        controles.append((NGINX_T, "nginx -t refuse la configuration"))
     for argv, motif in controles:
         r = ctx.executer(argv)
         if r.returncode != 0:
@@ -581,16 +584,22 @@ def _redemarrer_unbound(ctx: Contexte) -> None:
         _exiger(ctx, ["systemctl", "restart", "unbound.service"])
 
 
-def _retour_dhcp(ctx: Contexte) -> None:
+def _sans_attente(bloquer: bool) -> list[str]:
+    """Au démarrage, secubox-netmodes-retour-boot est ordonné AVANT secubox-lan-dhcp (et nginx attend le réseau) :
+    attendre leur relance bloquerait jusqu'au délai. La relance part alors sans attendre et s'exécute après."""
+    return [] if bloquer else ["--no-block"]
+
+
+def _retour_dhcp(ctx: Contexte, bloquer: bool = True) -> None:
     if _p(ctx, CHEMINS["dhcp"]).is_file():
-        _exiger(ctx, ["systemctl", "restart", "secubox-lan-dhcp.service"])
-    else:
+        _exiger(ctx, ["systemctl", "restart", *_sans_attente(bloquer), "secubox-lan-dhcp.service"])
+    else:                                                   # un arrêt n'attend jamais un démarrage ordonné après lui
         _exiger(ctx, ["systemctl", "disable", "--now", "secubox-lan-dhcp.service"])
 
 
-def _recharger_nginx(ctx: Contexte) -> None:
+def _recharger_nginx(ctx: Contexte, bloquer: bool = True) -> None:
     if _p(ctx, DOSSIER_GEO).is_dir():
-        _exiger(ctx, ["systemctl", "reload", "nginx.service"])
+        _exiger(ctx, ["systemctl", "reload", *_sans_attente(bloquer), "nginx.service"])
 
 
 def _retour(ctx: Contexte, acteur: str, nom: str | None = None) -> list[str]:
@@ -615,9 +624,10 @@ def _restaurer_et_relancer(ctx: Contexte, acteur: str, nom: str | None) -> list[
     except OSError as exc:
         raise Echec(f"sauvegarde {nom} inutilisable : {exc}") from exc
     ports = tuple(p for p in PORTS_LAN if p in {*ports_avant, *_ports(ctx)}) or PORTS_LAN
+    bloquer = acteur != "demarrage"
     etapes = (("réseau", lambda: _retour_reseau(ctx, ports)), ("pare-feu", lambda: _retour_pare_feu(ctx)),
-              ("Unbound", lambda: _redemarrer_unbound(ctx)), ("DHCP", lambda: _retour_dhcp(ctx)),
-              ("nginx", lambda: _recharger_nginx(ctx)))
+              ("Unbound", lambda: _redemarrer_unbound(ctx)), ("DHCP", lambda: _retour_dhcp(ctx, bloquer)),
+              ("nginx", lambda: _recharger_nginx(ctx, bloquer)))
     for nom_etape, etape in etapes:
         try:
             etape()

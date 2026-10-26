@@ -44,9 +44,9 @@ profile secubox-netmodes-api {
   /sys/firmware/devicetree/base/model r,
   @{PROC}/uptime r,
 
-  # État de l'ancien mode (state.json, 0750 secubox-netmodes:secubox).
-  /var/lib/secubox/netmodes/ r,
-  /var/lib/secubox/netmodes/** rwk,
+  # État des anciens modes (state.json, StateDirectory=secubox-netmodes-api, 0750 secubox-netmodes:secubox).
+  /var/lib/secubox-netmodes-api/ r,
+  /var/lib/secubox-netmodes-api/** rwk,
 
   /run/secubox/ r,
   /run/secubox/netmodes.sock rwk,
