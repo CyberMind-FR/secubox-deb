@@ -317,11 +317,11 @@ def test_control_depends_et_version():
     assert re.search(r"python3 \(>= 3\.11\)", depends)                    # tomllib
     assert "Architecture: all" in ctl and "Standards-Version: 4.6.2" in ctl and "debhelper-compat (= 13)" in ctl
     tete = lire("debian/changelog").split("\n -- ", 1)
-    assert tete[0].startswith("secubox-netmodes (1.4.1-1~trixie1) trixie; urgency=medium")
+    assert tete[0].startswith("secubox-netmodes (1.4.2-1~trixie1) trixie; urgency=medium")
     assert "(ref #3189)" in tete[0]
-    assert tete[1].startswith("Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 15:30:00 +0100")
-    # 1.4.1 : Unbound lent attendu, pont créé et asservi par networkd (gk2, 2026-10-26)
-    for mot in ("Unbound", "--no-block", "TimeoutStartSec=1200", "reconfigure br-lan", "ip link delete br-lan"):
+    assert tete[1].startswith("Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 16:30:00 +0100")
+    # 1.4.2 : le DHCP du LAN, arrêté par le prerm de debhelper à la mise à jour, est relancé s'il est activé
+    for mot in ("secubox-lan-dhcp", "--no-start", "postinst"):
         assert mot in tete[0], mot
 
 
@@ -351,7 +351,10 @@ def test_postinst():
     assert p.index("apparmor_parser -r /etc/apparmor.d/secubox-netmodes") < p.index(
         "systemctl restart secubox-netmodes.service")
     # le DHCP du LAN n'est jamais démarré par le paquet : c'est la bascule du contrôleur qui le fait
-    assert not re.search(r"systemctl (enable|start|restart)[^\n]*secubox-lan-dhcp", p)
+    # seule exception : la relance après mise à jour, gardée par is-enabled (voir test_postinst_relance_lan_dhcp_*)
+    assert not re.search(r"systemctl (enable|start)[^\n]*secubox-lan-dhcp", p)
+    assert not re.search(r"systemctl restart[^\n]*secubox-lan-dhcp", p.replace(
+        "systemctl restart secubox-lan-dhcp.service", "", 1))
     # jamais de netplan ni de relance d'interface
     assert "netplan" not in p and not re.search(r"\bip link\b", p)
 
@@ -442,3 +445,19 @@ def test_readme_mode_routeur():
                 "/routeur/etat", "/routeur/apercu", "3 minutes", "secubox-lan-dhcp", CHEMINS["dhcp"],
                 *CHEMINS.values()):
         assert mot in r, mot
+
+
+def test_postinst_relance_lan_dhcp_si_active_apres_apparmor():
+    texte = lire("debian/postinst")
+    assert subprocess.run(["sh", "-n", str(PKG / "debian" / "postinst")], timeout=30, check=False).returncode == 0
+    ligne = "systemctl restart secubox-lan-dhcp.service"
+    assert texte.count(ligne) == 1
+    assert texte.rindex("apparmor_parser -r /etc/apparmor.d/secubox-lan-dhcp") < texte.index(ligne)
+    avant = texte[:texte.index(ligne)].rsplit("\n", 6)
+    bloc = "\n".join(avant)
+    assert "systemctl is-enabled --quiet secubox-lan-dhcp.service" in bloc
+    assert "[ -d /run/systemd/system ]" in bloc
+    assert re.search(r"restart secubox-lan-dhcp\.service \|\|[\s\\]*echo .*>&2", texte)
+    # le paquet n'active ni ne démarre jamais le DHCP lui-même
+    assert "--no-enable --no-start" in lire("debian/rules")
+    assert "systemctl enable secubox-lan-dhcp" not in texte

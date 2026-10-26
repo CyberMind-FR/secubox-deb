@@ -69,6 +69,13 @@ case "$1" in
       else
         echo "secubox-netmodes : API activée mais NON démarrée (profil AppArmor absent)" >&2
       fi
+      # Le prerm de debhelper arrête secubox-lan-dhcp à la mise à jour et, sous --no-start, rien ne le relance : s'il a
+      # été activé par le contrôleur (mode routeur appliqué), il est relancé ici, profil AppArmor déjà chargé.
+      # Jamais activé ni démarré par le paquet lui-même ; un échec ne fait pas échouer l'installation.
+      if systemctl is-enabled --quiet secubox-lan-dhcp.service 2>/dev/null; then
+        systemctl restart secubox-lan-dhcp.service || \
+          echo "secubox-netmodes : le DHCP du LAN (secubox-lan-dhcp.service) n'a pas pu être relancé après la mise à jour : le LAN n'a plus de DHCP ; voir journalctl -u secubox-lan-dhcp, puis le relancer à la main" >&2
+      fi
       systemctl reload nginx 2>/dev/null || true
     fi
     install -d -m 0755 /etc/nginx/secubox.d
