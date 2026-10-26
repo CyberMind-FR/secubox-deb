@@ -243,13 +243,15 @@ premiers, et repris par le moteur de #2891 le jour où il existe.
 - **Essai réel sur gk2** : reprise du LAN temporaire, PC et gk4 servis, DNS par la box, une confirmation puis un retour
   automatique volontaire ; puis un redémarrage de gk2 au moment choisi par le propriétaire pour prouver la persistance.
 
-## À trancher par le propriétaire
+## Décisions du propriétaire (2026-10-26)
 
-1. **Nouveaux appareils branchés sur le LAN** : Internet ouvert dès le branchement (affichés « à classer » dans le NAC), ou
-   quarantaine jusqu'à classement, comme décidé le 2026-10-19 pour le pseudo-routeur ?
-2. **Confiance du LAN** : 192.168.42.0/24 entre-t-il dans le « LAN » de nginx (`$lan_client`), comme le réseau de la Freebox
-   et l'ancien segment 192.168.255.0/24 — accès sans connexion aux applis réservées au LAN — ou reste-t-il soumis à la
-   connexion ?
+Conception approuvée le 2026-10-26 (« lance le plan »), avec :
+
+1. **Nouveaux appareils branchés sur le LAN : ouverts.** Internet dès le branchement ; l'appareil apparaît « à classer »
+   dans le NAC et dans l'onglet Clients LAN. Pas de quarantaine automatique dans cette version.
+2. **Le LAN est de confiance**, comme le réseau de la Freebox et l'ancien segment 192.168.255.0/24 : son sous-réseau entre
+   dans le « LAN » de nginx (`$lan_client`). Le sous-réseau étant réglable, il n'est pas écrit en dur dans `secubox-hub` :
+   le bloc `geo` inclut un fragment généré par le mode routeur **(mon choix)**, retiré au retour arrière.
 
 ## Laissé au constructeur
 
