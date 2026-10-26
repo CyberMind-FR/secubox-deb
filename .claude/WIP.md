@@ -173,6 +173,9 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
+0000000. **#3178 NAC (2026-10-26)** : un seul collecteur sur gk2 (aggregator 0.4.9, nac 3.9.4). Reste : constater sur la page
+  NAC « Connectés : N maintenant » (≈ 20) avec une session d'administrateur, puis `closes #3178`. **#3181** : glossaire des
+  indicateurs, état de protection unique, fraîcheur par panneau — arbitrage du propriétaire avant tout travail.
 000000. **#3154 Visio (La Suite Meet) sur gk1 (2026-10-25)** : secubox-meet 0.1.6 provisionné, chemin public et OIDC vérifiés
   (`HISTORY.md`). Reste, avec le propriétaire : connexion par compte SecuBox sur `visio.gk1.secubox.in`, ouverture des ports
   média 7881/TCP 7882/UDP depuis `/meet/` (relais par gk2), essai à deux participants ; puis `closes #3154`.

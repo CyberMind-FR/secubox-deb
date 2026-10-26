@@ -9,6 +9,39 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-26 — Dossier d'analyse des captures : quatre défauts confirmés, corrigés et déployés sur gk2
+
+Un dossier externe (« SecuBox — Supervision, protection et contrôle du réseau », lu sur captures seules) a été confronté au
+code et à gk2. Points sans objet : 1 263 / 1 264 (captures à une minute d'écart), NAC 48 = 16 + 25 + 7 (états exclusifs),
+Vigie 1 258 = 542 + 716, barre d'état « superposée » (barre fixée en bas d'écran figée par la capture pleine page).
+Points de conception restants : issue #3181, à arbitrer.
+
+- **Filtrage web (closes #3172)** — webfilter 0.4.4, soc 1.8.1, PR #3173. `config.json` réécrit par root en 0600 le 20/10 :
+  l'API (secubox-webfilter) ne le lisait plus, `/etat` disait `observe`, la Vigie et le panneau « rien n'est bloqué » alors
+  que le profil `defaut` bloquait trois catégories ; `/appareils` en 503 depuis le 20/10 (73 fois). Configuration illisible
+  → `mode_global: inconnu` (« état du blocage inconnu »), `/etat` en échec → « indisponible ». Le contrôleur root rend
+  `config.json` au service au début de chaque application, par descripteur (lien, lien dur, autre propriétaire : refus
+  audité) ; AppArmor `owner … w`. Une ligne tmpfiles `z` avait d'abord été écrite : systemd-tmpfiles la refuse (« unsafe
+  path transition », /var/lib/secubox appartient à secubox) — vu par relecteur-securite, vérifié sur gk2 (rc 73).
+  gk2 : reprise auditée à 08:07, `config.json` à secubox-webfilter 0600, `/etat` → `block`.
+- **Sondes webos (closes #3174)** — webos 1.20.6, PR #3175. 261 anomalies `host_anomaly:unrouted` par matinée venaient de
+  nos sondes `secubox-webos-hotes` / `-vignettes` (noms non routés : boot, dork, yacy, wpad, zkp et ~40 modules), et la box
+  était sa propre « dernière attaque » dans le bandeau du WAF. Lecture de la table de routes de sbxwaf
+  (`haproxy-routes.json` + `on-demand-vhosts.json`) : un nom absent n'est plus sondé. sbxwaf inchangé (le LAN reste
+  journalisé). gk2 : 0 anomalie de nos sondes depuis 08:06.
+- **WAF « Menaces 24 h » (closes #3176)** — waf-ng 1.30.4 (PR #3177) puis 1.30.5 (PR #3180). `blocked_24h` valait le
+  journal depuis sa rotation. Compteurs par heure UTC conservés à travers les rotations, `blocked_24h` = 24 dernières
+  heures, `hourly_blocks` fourni (le SOC du hub l'attendait). Note Visites exacte (l'agent utilisateur brut reste dans
+  nginx 14 j et le journal des menaces 7 j). 1.30.5 : le postinst du composant faisait `start secubox-waf.service` — depuis
+  #2050, une montée de version ne rechargeait JAMAIS le code de l'API ; désormais `restart` en mise à jour.
+  gk2 : `menaces_24h` et `hourly_blocks` servis ; la fenêtre ne diverge de « du jour » qu'à partir de la rotation suivante.
+- **NAC « 0 connecté » (ref #3178)** — aggregator 0.4.9, nac 3.9.4, PR #3179. nac tournait deux fois (monté dans
+  l'agrégateur ET secubox-nac.service) : deux collecteurs sur `devices.db`, la page lisait l'instantané de l'agrégateur.
+  nac rejoint `DEDICATED_MODULES` ; `run_forever` journalise un cycle en erreur et continue (il s'arrêtait pour de bon).
+  gk2 : seul secubox-nac tient la base, `last_seen` à 3 s, 20 appareils vus en 2 min. Reste : voir la page NAC.
+- Déploiement groupé : un seul redémarrage de l'agrégateur (08:09 → 08:12). CI : échecs antérieurs connus
+  (secubox-core, secubox-hub) et nouveau `go test · secubox-bbs` (`salon_membres` absente), étrangers à ces PR.
+
 ## 2026-10-25 — secubox-meet : provisionnement abouti sur gk1 (ref #3154)
 
 - 0.1.4 (PR #3169) : drop-in `PrivateUsers=no` pour redis-server dans le conteneur (217/USER en LXC non privilégié).
