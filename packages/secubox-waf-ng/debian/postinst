@@ -157,6 +157,26 @@ case "$1" in
       apparmor_parser -r /etc/apparmor.d/usr.sbin.sbxwaf 2>/dev/null || true
     fi
 
+    # ── 5b. Profils de vhost : services et vhosts livrés absents (#3193) ──────
+    # /etc/secubox/waf/vhost_profiles.json est un conffile MODIFIÉ à l'exécution
+    # (cases anti-robots du panneau Vhost, vhosts ajoutés par l'opérateur) : avec
+    # --force-confold la version livrée n'arrive jamais — le service livekit de la
+    # Visio restait inconnu et sa signalisation bannissait les téléphones. On
+    # ajoute les SEULS services et vhosts livrés qui manquent ; aucune valeur de
+    # l'opérateur n'est touchée, et rien n'est écrit (ni audité) s'il ne manque rien.
+    #
+    # sbxwaf ne lit ce fichier qu'au démarrage (SIGHUP ne répare que nft) : la
+    # fusion se fait AVANT la section 6, dont le redémarrage inconditionnel le lui
+    # fait relire. Pas de redémarrage de plus ici : il en ferait deux.
+    if [ -x /usr/sbin/waf-profils-fusion ] && command -v python3 >/dev/null 2>&1; then
+      sbx_fusion=0
+      /usr/sbin/waf-profils-fusion || sbx_fusion=$?
+      case "$sbx_fusion" in
+        0|10) ;;
+        *) echo "secubox-waf-ng: fusion des profils de vhost refusée (code $sbx_fusion) — /etc/secubox/waf/vhost_profiles.json laissé intact" >&2 ;;
+      esac
+    fi
+
     # ── 6. Systemd: single hardened unit (#896 reconcile) ────────────────────
     # The crash-looping worker@ fan-out is retired. Retire any leftover worker@
     # instances, drop the hand-created /etc override that shadowed the packaged

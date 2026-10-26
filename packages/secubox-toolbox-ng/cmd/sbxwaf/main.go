@@ -632,11 +632,16 @@ func (s *Server) handler() http.Handler {
 				// ban, pas de report, pas de ligne de menace : le journal serait
 				// inondé par chaque clone). Décision auditable par le fichier
 				// déclaratif versionné.
+				//
+				// #3193 : un service peut ajouter SES catégories (livekit :
+				// credential_harvest, jeton dans l'URL par protocole). La
+				// ré-vérification exclut les catégories supprimables POUR CET
+				// HÔTE seulement, jamais celles des autres services.
 				if hit && s.vhostProfiles.doitSupprimer(r.Host, rawPath, cat) {
 					c2, s2, m2, mo2, h2 := s.rules.MatchDetail(
 						r.Method, rawPath, r.URL.RawQuery, string(bodyBytes),
 						r.Header.Get("User-Agent"), includeBlock,
-						s.vhostProfiles.categoriesSupprimables(),
+						s.vhostProfiles.categoriesSupprimablesPour(r.Host),
 					)
 					if h2 {
 						cat, sev, mode, motif, hit = c2, s2, m2, mo2, true

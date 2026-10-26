@@ -102,6 +102,10 @@ override_dh_auto_install:
 	[ -f composants/waf/scripts/wafctl ] && install -m 755 composants/waf/scripts/wafctl debian/secubox-waf-ng/usr/sbin/ || true
 	# Mise à jour des règles livrées sans perdre les générées (#1858)
 	install -m 755 composants/waf/scripts/waf-rules-sync debian/secubox-waf-ng/usr/sbin/waf-rules-sync
+	# #3193 : vhost_profiles.json est un conffile MODIFIÉ à l'exécution (anti-robots, vhosts de l'opérateur) :
+	# --force-confold n'installe jamais la version livrée. Le postinst complète la copie de la box avec les
+	# services et vhosts livrés absents, depuis la copie de référence /usr/share/secubox/waf/vhost_profiles.json.
+	install -m 755 composants/waf/scripts/waf-profils-fusion debian/secubox-waf-ng/usr/sbin/waf-profils-fusion
 	# Sudoers : `secubox` peut purger le cache média du WAF (wafctl purge-cache).
 	# Conffile /etc/sudoers.d (0440) — permet aux tâches de contenu tournant sous
 	# `secubox` (metablog-sync) de rafraîchir le cache après une synchro git.
