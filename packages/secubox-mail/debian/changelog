@@ -1,3 +1,11 @@
+secubox-mail (2.16.7-1~trixie1) trixie; urgency=medium
+
+  * Minuteries autocrypt-sync et imap-sync (ref #3185) : un conteneur mail jamais provisionné les fait
+    s'abstenir (code 0, message) au lieu d'échouer à chaque passage (gk1 « degraded ») ; un conteneur
+    provisionné mais arrêté reste une panne.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 10:29:02 +0100
+
 secubox-mail (2.16.6-1~trixie1) trixie; urgency=medium
 
   * Webmail d'office (greffon secubox_sso, ref #3059) : la déconnexion de Roundcube posait `secubox_sso_off=1` en

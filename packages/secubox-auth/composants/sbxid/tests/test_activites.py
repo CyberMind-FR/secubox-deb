@@ -75,3 +75,21 @@ def test_collecte_bbs_et_diffusions(tmp_path):
     emis, _ = A.collecte(sbx, NOEUD, bbs_db=tmp_path / "index.db", diffusions=tmp_path / "hist.json",
                          curseurs=cur, maintenant=T0 + 3000)
     assert emis["bbs_post"] == 1
+
+
+def test_base_du_bbs_vide_ou_sans_tables_equivaut_a_pas_de_bbs_3185(tmp_path):
+    """#3185 : sur gk1, BBS non installé mais /var/lib/secubox/bbs/index.db vide (0 octet) — « no such table: categories »
+    faisait échouer toute la collecte, diffusions comprises."""
+    sbx = sqlite3.connect(":memory:", isolation_level=None)
+    S.initialise(sbx)
+    (tmp_path / "hist.json").write_text(json.dumps([{"url": "/s/1", "titre": "Direct", "par": "", "ts": T0 + 700.5}]))
+    for contenu in (b"", None):
+        db = tmp_path / "index.db"
+        db.unlink(missing_ok=True)
+        if contenu is None:
+            sqlite3.connect(db).execute("CREATE TABLE autre (x)").connection.close()     # une base, mais pas celle du BBS
+        else:
+            db.write_bytes(contenu)
+        emis, _ = A.collecte(sbx, NOEUD, bbs_db=db, diffusions=tmp_path / "hist.json", curseurs={}, maintenant=T0 + 1000)
+        assert emis["bbs_post"] == 0 and emis["file_shared"] == 0 and emis["radio_live"] == 1     # les diffusions restent collectées
+        sbx.execute("DELETE FROM sbx_activity")

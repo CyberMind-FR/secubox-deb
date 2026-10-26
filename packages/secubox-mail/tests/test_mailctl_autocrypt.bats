@@ -8,6 +8,7 @@ setup() {
   echo "-- regle" > "$TEMPLATES_DIR/rspamd/autocrypt.lua"
   : > "$CALLS"
   source_mailctl_functions
+  lxc_exists() { return 0; }
   lxc_running() { return 0; }
   error() { echo "ERREUR: $*" >&2; }
   lxc_attach() { echo "ATTACH: $*" >> "$CALLS"; timeout 1 cat > /dev/null 2>&1 || true; }
@@ -46,4 +47,32 @@ setup() {
   grep -q "task:has_header('Autocrypt')" "$f"
   grep -q "adresse ~= boite" "$f"
   ! grep -qi "secret\|private" <(grep -v '^--' "$f")
+}
+
+# #3185 : gk1 a secubox-mail sans conteneur provisionné — les minuteries échouaient à chaque passage.
+@test "autocrypt-sync sans conteneur provisionne s'abstient sans erreur" {
+  export SBX_TABLE='{"alice@secubox.in":"QUJD"}'
+  lxc_exists() { return 1; }
+  lxc_running() { return 1; }
+  run cmd_autocrypt_sync
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"non provisionn"* ]]
+  ! grep -q 'ATTACH' "$CALLS"
+}
+
+@test "autocrypt-sync avec un conteneur provisionne mais arrete reste une panne" {
+  export SBX_TABLE='{"alice@secubox.in":"QUJD"}'
+  lxc_exists() { return 0; }
+  lxc_running() { return 1; }
+  run cmd_autocrypt_sync
+  [ "$status" -ne 0 ]
+}
+
+@test "imap-sync run sans conteneur provisionne s'abstient sans erreur" {
+  lxc_exists() { return 1; }
+  lxc_running() { return 1; }
+  export IMAP_SYNC_DIR="$BATS_TEST_TMPDIR/imap" IMAP_SYNC_ETAT="$BATS_TEST_TMPDIR/imap-etat"
+  run cmd_imap_sync run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"non provisionn"* ]]
 }

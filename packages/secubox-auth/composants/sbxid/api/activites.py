@@ -72,6 +72,23 @@ def _auteurs(sbx: sqlite3.Connection) -> Dict[str, str]:
         "SELECT user_uuid, app_id FROM sbx_app_links WHERE app='bbs'")}
 
 
+def _base_bbs(chemin: Path) -> bool:
+    """Une vraie base du BBS (tables des salons présentes) ? Un fichier vide ou étranger — gk1 : BBS non installé, index.db
+    de 0 octet — n'est pas une base du BBS : sans cela « no such table: categories » faisait échouer toute la collecte,
+    diffusions comprises (#3185)."""
+    try:
+        if chemin.stat().st_size == 0:
+            return False
+        b = sqlite3.connect(f"file:{chemin}?mode=ro", uri=True, timeout=5)
+        try:
+            noms = {r[0] for r in b.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        finally:
+            b.close()
+    except (OSError, sqlite3.DatabaseError):
+        return False
+    return {"categories", "threads", "files", "users"} <= noms
+
+
 def collecte(sbx: sqlite3.Connection, origine: str, *, bbs_db: Path = None,
              diffusions: Path = None, curseurs: Optional[Dict[str, Any]] = None,
              maintenant: Optional[int] = None) -> Tuple[Dict[str, int], Dict[str, Any]]:
@@ -86,7 +103,7 @@ def collecte(sbx: sqlite3.Connection, origine: str, *, bbs_db: Path = None,
     def auteur(handle: str) -> str:
         return auteurs.get((handle or "").lower()) or f"bbs:{handle}"
 
-    if bbs_db.exists():
+    if _base_bbs(bbs_db):
         b = sqlite3.connect(f"file:{bbs_db}?mode=ro", uri=True, timeout=5)
         try:
             salons = {r[0]: r for r in b.execute(
