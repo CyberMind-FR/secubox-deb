@@ -123,3 +123,30 @@ def test_versions_annoncees_suivent_le_changelog():
     amont = re.match(r"secubox-meet \((\d+\.\d+\.\d+)-", (RACINE / "debian/changelog").read_text()).group(1)
     assert f'readonly VERSION="{amont}"' in (RACINE / "sbin/meetctl").read_text()
     assert f'VERSION = "{amont}"' in (RACINE / "api/main.py").read_text()
+
+
+# ── #3182 : activité de la visio ────────────────────────────────────────────────────────────────────────────────────
+def test_sudoers_accorde_les_seuls_verbes_d_activite_de_l_api():
+    s = (RACINE / "debian" / "secubox-meet.sudoers").read_text()
+    for ligne in ("/usr/sbin/meetctl en-direct", "/usr/sbin/meetctl reunions", "/usr/sbin/meetctl clore *"):
+        assert ligne in s
+    assert "meetctl activite-collecte" not in s                       # la minuterie tourne en root, jamais l'API
+
+
+def test_minuterie_de_releve_toutes_les_cinq_minutes():
+    svc = (RACINE / "debian" / "secubox-meet-activite.service").read_text()
+    tim = (RACINE / "debian" / "secubox-meet-activite.timer").read_text()
+    assert "ExecStart=/usr/sbin/meetctl activite-collecte" in svc and "Type=oneshot" in svc
+    assert "OnUnitActiveSec=5min" in tim and "OnActiveSec=" in tim and "WantedBy=timers.target" in tim   # #2919
+    regles = (RACINE / "debian" / "rules").read_text()
+    assert "debian/*.timer" in regles
+    post = (RACINE / "debian" / "postinst").read_text()
+    assert "systemctl enable --now secubox-meet-activite.timer" in post
+    pre = (RACINE / "debian" / "prerm").read_text()
+    assert "secubox-meet-activite.timer" in pre
+
+
+def test_profil_apparmor_lit_la_base_d_activite_sans_l_ecrire():
+    p = (RACINE / "apparmor" / "secubox-meet").read_text()
+    assert "/var/lib/secubox/meet/activite.db r," in p and "/var/lib/secubox/meet/activite.db-journal r," in p
+    assert "/var/lib/secubox/meet/** w" not in p and "activite.db rw" not in p

@@ -210,6 +210,38 @@ l'essai le demande.
 3. **Fédération d'identité entre boxes :** voulue ; projet à part, issue #3157. Les écarts du fournisseur sont conçus pour ne pas
    l'empêcher : l'émetteur reste lu en configuration et le `sub` reste l'identifiant stable de la personne.
 
+## Panneau d'administration : réunions, connexions, statistiques (2026-10-26, #3182)
+
+Demande du propriétaire, maquette validée le 2026-10-26 (« parfait ») : trois onglets ajoutés à `/meet/`.
+
+- **Réunions** : salles de Meet (nom, lien, accès, propriétaire, création, dernière réunion avec participants et durée), état en
+  direct (en cours, présents), détail de la réunion en cours ; action **« Clore… »** (DeleteRoom de LiveKit) après confirmation,
+  inscrite au journal d'audit.
+- **Connexions** : participants en direct (appareil, transport, médias publiés) ; historique 30 jours, une ligne par session
+  (début, durée, participant, salle, appareil, transport, issue), filtres salle et issue, export CSV fait par la page.
+- **Statistiques** : 7 j, 30 j, 12 mois — réunions, temps de visio (participants × minutes), participants (comptes, invités),
+  pic simultané, durée médiane des sessions abouties, échecs de connexion ; sessions par jour (abouties, échecs), transport,
+  motifs de fin, appareils, salles.
+
+**Sources.** Base de Meet en lecture seule (`meet_room`, `meet_resource`, `meet_resource_access`, `meet_user`) ; API Twirp de
+LiveKit (`ListRooms`, `ListParticipants`, `DeleteRoom`) sur `10.100.0.195:7880`, jeton HS256 signé par `meetctl` (root) avec la
+clé `meet` et `/etc/secubox/secrets/meet/livekit-secret`, jamais par l'API ; journal de LiveKit (`journalctl -o json`, relu
+après le dernier curseur) toutes les 5 min par `secubox-meet-activite.timer` vers `/var/lib/secubox/meet/activite.db`
+(SQLite, root:secubox 0640, journal en mode DELETE pour que l'API le lise en lecture seule).
+
+**Session.** Une session est un `participantID` : « starting RTC session » la commence, « participant active » la dit aboutie
+(transport `connectionType`, appareil `clientInfo.os` / `browser`), « participant closing » la termine (motif `reason`, pays) ;
+une fermeture sans activité ou « removing participant without connection » est un échec de connexion (aucun chemin média).
+Une fermeture `isExpectedToResume` n'est pas une fin.
+
+**Vie privée.** Aucune adresse IP conservée (les candidats ICE du journal ne sont pas lus) ; un participant dont l'identité est
+le `sub` d'un compte de Meet apparaît sous son pseudo, tout autre « invité » — le nom tapé dans Meet n'est ni affiché ni
+conservé. Le `turn_password` des salles ne sort jamais du contrôleur. Sessions effacées après 30 jours ; totaux par jour et
+par salle gardés 12 mois.
+
+**Accès.** Routes réservées à l'administrateur (`require_jwt`). `meetctl media-expose` écrit aussi sa décision au journal
+d'audit (défaut relevé le 2026-10-26).
+
 ## Avancement
 
 - Écart 1 (#3155) : fait, avec les tests (renvoi vers la connexion avec retour, pas de boucle pour une session sans personne).

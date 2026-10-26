@@ -9,7 +9,8 @@
 # n'admet que ceux-là) : ni `install`, ni `autostart` (scripts de maintenance,
 # root), ni le renouvellement forcé du secret OIDC (root seulement). Pour `logs`, une
 # ligne par unité de la liste blanche, le nombre de lignes en motif ; meetctl
-# revalide unité et nombre.
+# revalide unité et nombre. #3182 : lectures de l'activité (en-direct, reunions) et « clore <salle> », dont meetctl exige un
+# seul argument au format strict ; le relevé (activite-collecte) reste à la minuterie root.
 Cmnd_Alias SECUBOX_MEETCTL_API = /usr/sbin/meetctl status, \
     /usr/sbin/meetctl start, \
     /usr/sbin/meetctl stop, \
@@ -23,5 +24,8 @@ Cmnd_Alias SECUBOX_MEETCTL_API = /usr/sbin/meetctl status, \
     /usr/sbin/meetctl logs redis-server [0-9]*, \
     /usr/sbin/meetctl logs livekit [0-9]*, \
     /usr/sbin/meetctl logs meet-backend [0-9]*, \
-    /usr/sbin/meetctl logs nginx [0-9]*
+    /usr/sbin/meetctl logs nginx [0-9]*, \
+    /usr/sbin/meetctl en-direct, \
+    /usr/sbin/meetctl reunions, \
+    /usr/sbin/meetctl clore *
 secubox ALL=(root) NOPASSWD: SECUBOX_MEETCTL_API

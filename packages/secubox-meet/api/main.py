@@ -20,6 +20,12 @@ Routes (préfixe nginx /api/v1/meet, retiré avant l'application) :
   GET  /oidc               meetctl oidc-verifier                       (JWT)
   POST /oidc/enregistrer   sans option (le renouvellement reste à root)   (JWT)
   GET  /logs               ?unit=&lines=                              (JWT)
+  GET  /reunions           salles de Meet, état en direct (cache 30 s)  (JWT)   #3182
+  GET  /connexions         ?jours=&salle=&issue= — direct + historique  (JWT)
+  GET  /stats              ?periode=7|30|365                           (JWT)
+  POST /clore              {salle, confirmer: "meet"}                   (JWT)
+L'historique et les statistiques sont lus dans activite.db (relevé de meetctl, root) en lecture seule : aucune adresse IP,
+pseudo d'un compte ou « invité », jamais le nom tapé dans Meet.
 """
 from __future__ import annotations
 
@@ -31,13 +37,18 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import Depends, FastAPI, HTTPException
+import sqlite3
+from typing import Literal, Optional
+
+from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
 # Aucun repli : sans la bibliothèque d'authentification, l'API ne se charge pas.
 from secubox_core.auth import require_jwt, require_lecture
 
-VERSION = "0.1.6"
+from api import activite
+
+VERSION = "0.2.0"
 
 CTL = "/usr/sbin/meetctl"
 
@@ -45,6 +56,9 @@ CACHE_DIR = Path("/var/cache/secubox/meet")
 STATUS_CACHE_FILE = CACHE_DIR / "status.json"
 STATUS_TTL = 60.0
 
+ACTIVITE_DB = Path("/var/lib/secubox/meet/activite.db")
+# Durées de cache des lectures qui passent par meetctl (psql et LiveKit à chaque appel).
+TTL_REUNIONS, TTL_DIRECT = 30.0, 15.0
 # Unités que l'API nomme à meetctl (qui revalide : liste blanche indépendante).
 KNOWN_UNITS = ("postgresql", "redis-server", "livekit", "meet-backend", "nginx")
 
@@ -60,6 +74,7 @@ app = FastAPI(
 )
 
 _status_cache: Dict[str, Any] = {"data": None, "ts": 0.0}
+_activite_cache: Dict[str, Any] = {}
 
 
 def _run_ctl(*args: str, timeout: int = 30):
@@ -173,6 +188,29 @@ class MediaRequest(BaseModel):
     confirmer: str = ""
 
 
+class ClotureRequest(BaseModel):
+    salle: str = ""
+    confirmer: str = ""
+
+
+def _ctl_cache(cle: str, ttl: float) -> Dict[str, Any]:
+    """meetctl <cle>, gardé `ttl` secondes en mémoire (une page ouverte relit souvent)."""
+    vu = _activite_cache.get(cle)
+    if vu and time.time() - vu[0] < ttl:
+        return vu[1]
+    data = _ctl_json(cle)
+    _activite_cache[cle] = (time.time(), data)
+    return data
+
+
+def _base_lecture() -> sqlite3.Connection:
+    """activite.db en lecture seule ; base pas encore relevée : base vide en mémoire (aucun fichier créé)."""
+    try:
+        return activite.ouvrir_lecture(ACTIVITE_DB)
+    except sqlite3.OperationalError:
+        return activite.ouvrir(":memory:")
+
+
 @app.get("/health")
 async def health() -> Dict[str, str]:
     return {"status": "ok", "module": "meet"}
@@ -240,3 +278,47 @@ async def logs(unit: str = "meet-backend", lines: int = 50,
     if rc != 0:
         raise HTTPException(status_code=500, detail=_detail_echec(out, err, rc))
     return {"unit": unit, "lines": out.splitlines()}
+
+
+# ── Activité de la visio (#3182) ─────────────────────────────────────────────
+@app.get("/reunions")
+def reunions(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
+    return _ctl_cache("reunions", TTL_REUNIONS)
+
+
+@app.get("/connexions")
+def connexions(jours: int = Query(30, ge=1, le=30), salle: Optional[str] = Query(None, max_length=64),
+               issue: Optional[Literal["aboutie", "echec", "abandon", "en_cours"]] = None,
+               _: Any = Depends(require_jwt)) -> Dict[str, Any]:
+    sortie: Dict[str, Any] = {"en_direct": None}
+    try:
+        sortie["en_direct"] = _ctl_cache("en-direct", TTL_DIRECT)
+    except HTTPException as e:              # LiveKit muet : l'historique reste lisible
+        sortie["erreur_direct"] = str(e.detail)
+    cx = _base_lecture()
+    try:
+        sortie["historique"] = activite.historique(cx, jours=jours, maintenant=int(time.time()), salle=salle, issue=issue)
+    finally:
+        cx.close()
+    return sortie
+
+
+@app.get("/stats")
+def stats(periode: Literal["7", "30", "365"] = "7", _: Any = Depends(require_jwt)) -> Dict[str, Any]:
+    cx = _base_lecture()
+    try:
+        return activite.stats(cx, periode=int(periode), maintenant=int(time.time()))
+    finally:
+        cx.close()
+
+
+@app.post("/clore")
+async def clore(req: ClotureRequest, _: Any = Depends(require_jwt)) -> Dict[str, Any]:
+    # Déconnecte tous les participants : confirmation explicite, nom de salle strict (meetctl revalide et audite).
+    if req.confirmer != "meet":
+        raise HTTPException(status_code=400, detail='confirmation requise : renvoyez confirmer: "meet"')
+    if not activite.SALLE_RE.match(req.salle):
+        raise HTTPException(status_code=400, detail="nom de salle invalide")
+    res = await asyncio.to_thread(lambda: _ctl_json("clore", req.salle))
+    _activite_cache.clear()
+    return res

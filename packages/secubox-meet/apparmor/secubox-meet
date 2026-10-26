@@ -38,6 +38,11 @@ profile secubox-meet-api {
   /var/cache/secubox/meet/ r,
   /var/cache/secubox/meet/** rwk,
 
+  # Activité de la visio (#3182) : base écrite par le relevé root, LUE ici seulement (SQLite vérifie le journal à chaud).
+  /var/lib/secubox/meet/ r,
+  /var/lib/secubox/meet/activite.db r,
+  /var/lib/secubox/meet/activite.db-journal r,
+
   /run/secubox/ r,
   /run/secubox/meet.sock rwk,
   /run/secubox/meet.sock.lock rwk,
