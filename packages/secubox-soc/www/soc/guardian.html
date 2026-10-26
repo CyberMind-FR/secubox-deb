@@ -254,7 +254,8 @@
     if(!E||!Array.isArray(E.categories)){note.textContent='';box.innerHTML='<div class="vide">'+(E===null?'Session requise.':'Filtrage web indisponible.')+'</div>';return;}
     var C=E.categories,max=Math.max.apply(null,C.map(function(c){return num(c.requetes_7j);}).concat([1])),tot=0,bl=0;
     C.forEach(function(c){tot+=num(c.requetes_7j);bl+=num(c.bloque_7j);});
-    note.textContent=E.mode_global==='block'?'blocage actif sur certains profils':'mode observe : rien n’est bloqué';
+    /* #3172 : « inconnu » = configuration des profils illisible par l'API ; seul « observe » permet de dire que rien n'est bloqué. */
+    note.textContent=E.mode_global==='block'?'blocage actif sur certains profils':E.mode_global==='observe'?'mode observe : rien n’est bloqué':'état du blocage inconnu';
     box.innerHTML=C.map(function(c,i){var n=num(c.requetes_7j),b=num(c.bloque_7j),col=COUL_WF[c.id]||'#29b6f6';
       return '<div class="ligne" style="grid-template-columns:minmax(80px,1fr) minmax(0,2.4fr) auto"><span class="n" title="'+esc(c.libelle||c.id)+' — mode '+esc(c.mode||'—')+'">'+esc(c.libelle||c.id)+'</span>'
         +'<div style="height:10px;border-radius:5px;background:rgba(159,179,214,.12);overflow:hidden"><div style="display:flex;height:100%;width:'+Math.max(2,100*n/max).toFixed(1)+'%"><i style="flex:'+b+';background:#ff4d5e" title="bloqué : '+esc(fmt(b))+'"></i><i style="flex:'+Math.max(n-b,0)+';background:'+col+'" title="observé : '+esc(fmt(Math.max(n-b,0)))+'"></i></div></div><span>'+esc(fmt(b))+' / '+esc(fmt(n))+'</span></div>';}).join('')

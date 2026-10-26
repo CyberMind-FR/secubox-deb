@@ -1,3 +1,15 @@
+secubox-webfilter (0.4.4-1~trixie1) trixie; urgency=medium
+
+  * « Rien n'est bloqué » n'est plus affiché quand l'API ne sait pas (#3172). Sur gk2, config.json
+    avait été réécrit par root en 0600 le 2026-10-20 : l'API (secubox-webfilter) ne le lisait plus,
+    /etat annonçait mode_global « observe » pendant que le profil par défaut bloquait trois
+    catégories, et /appareils répondait 503. Une configuration illisible donne désormais
+    mode_global « inconnu », que le panneau affiche comme tel (« État du blocage inconnu »).
+  * tmpfiles : ligne `z` qui rend config.json au compte du service (0600 secubox-webfilter),
+    appliquée par le postinst (systemd-tmpfiles --create) et à chaque démarrage.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 07:29:28 +0100
+
 secubox-webfilter (0.4.3-1~trixie1) trixie; urgency=medium
 
   * Unité d'application : TimeoutStartSec 5 min → 20 min (ref #3005), cohérent avec le budget

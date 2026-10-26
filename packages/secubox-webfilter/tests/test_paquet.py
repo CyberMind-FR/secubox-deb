@@ -190,3 +190,11 @@ def test_profil_du_controleur_peut_consommer_la_demande_d_application_2441():
     assert re.search(r"^\s*/var/lib/secubox/webfilter/appliquer\.demande\s+rw,", ctl, re.M)
     # la demande de synchronisation reste hors de portée du contrôleur
     assert "sync.demande" not in ctl
+
+
+def test_la_configuration_est_rendue_au_compte_du_service_3172():
+    """#3172 : une écriture par root (0600 root:root) rendait config.json illisible par l'API — 503 sur /appareils, « rien n'est bloqué »
+    sur la Vigie. La ligne `z` la rend au service, à l'installation (systemd-tmpfiles --create du postinst) et à chaque démarrage."""
+    t = lire("tmpfiles/secubox-webfilter.conf")
+    assert "z /var/lib/secubox/webfilter/config.json 0600 secubox-webfilter secubox-webfilter -" in t
+    assert "systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-webfilter.conf" in lire("debian/postinst")

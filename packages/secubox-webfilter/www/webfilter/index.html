@@ -221,8 +221,13 @@
         function rendreBandeau(mode) {
             const b = $('bandeau-observe');
             b.replaceChildren();
-            const pa = $('mode-pastille'); pa.textContent = mode === 'block' ? 'BLOCAGE ACTIF' : 'MODE OBSERVE'; pa.className = 'actif' + (mode === 'block' ? '' : ' obs');
-            if (mode === 'block') {
+            const pa = $('mode-pastille');
+            pa.textContent = mode === 'block' ? 'BLOCAGE ACTIF' : mode === 'observe' ? 'MODE OBSERVE' : 'ÉTAT INCONNU'; pa.className = 'actif' + (mode === 'block' ? '' : ' obs');
+            if (mode !== 'block' && mode !== 'observe') {          // #3172 : configuration illisible par l'API — ne jamais affirmer « rien n'est bloqué »
+                b.append(el('strong', '', '❔ État du blocage inconnu.'),
+                         " L'API ne peut pas lire la configuration des profils : des catégories peuvent être bloquées sans que ce panneau le sache. " +
+                         'Les comptes ci-dessous restent ceux mesurés sur le DNS (rouge : bloqué).');
+            } else if (mode === 'block') {
                 b.append(el('strong', '', '🛡️ Blocage actif sur certains profils.'),
                          ' Les appareils assignés à un profil qui bloque une catégorie ne joignent plus ces sites ; les autres restent en observation (« aurait bloqué »). ' +
                          'Limites connues : un résolveur DoH, un VPN ou une adresse IP directe contournent un filtre DNS, et les requêtes de la box ne sont pas comptées.');

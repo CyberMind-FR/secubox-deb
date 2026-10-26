@@ -34,7 +34,7 @@ DEMANDE_PERIMEE_S = 600
 _MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 _VERROU_CONFIG = threading.Lock()                                      # lecture-modification-écriture de config.json
 
-app = FastAPI(title="SecuBox WebFilter", version="0.4.3")
+app = FastAPI(title="SecuBox WebFilter", version="0.4.4")
 
 
 def _categories() -> list:
@@ -55,14 +55,17 @@ def _meta(cat_id: str, source_nom: str) -> dict:
         return {}
 
 
-def _bloque_quelque_chose(cats) -> bool:
-    """Vrai si un profil ou une exception met une catégorie en `block` : l'agrégat dit « blocage actif », sans nom de profil ni d'appareil."""
+def _mode_global(cats) -> str:
+    """« block » si un profil ou une exception met une catégorie en `block` : l'agrégat dit « blocage actif », sans nom de profil ni d'appareil.
+    « inconnu » si la configuration est illisible (#3172 : réécrite par root en 0600, l'API ne la lisait plus et annonçait « rien n'est bloqué »
+    pendant que le DNS bloquait) : sans configuration, l'API ne sait pas, elle ne suppose jamais l'observation."""
     try:
         cfg = fichiers.lire_config(ETAT, {c.id for c in cats})
     except profils.ErreurProfils:
-        return False
-    return (any(m == "block" for p in cfg["profils"].values() for m in p["categories"].values())
-            or any(m == "block" for a in cfg["appareils"].values() for m in a["exceptions"].values()))
+        return "inconnu"
+    bloque = (any(m == "block" for p in cfg["profils"].values() for m in p["categories"].values())
+              or any(m == "block" for a in cfg["appareils"].values() for m in a["exceptions"].values()))
+    return "block" if bloque else "observe"
 
 
 @app.get("/health")
@@ -87,7 +90,7 @@ def etat():
             srcs.append({"nom": s.nom, "licence": s.licence, "n": m.get("n"), "ts": m.get("ts")})
         sortie.append({"id": c.id, "libelle": c.libelle, "mode": c.mode, "requetes_7j": comptes.get(c.id, 0),
                        "bloque_7j": decisions.get(c.id, {}).get("bloque", 0), "sources": srcs})
-    return {"mode_global": "block" if _bloque_quelque_chose(cats) else "observe", "categories": sortie,
+    return {"mode_global": _mode_global(cats), "categories": sortie,
             "dernier_evenement": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(dernier)) if dernier else None}
 
 
