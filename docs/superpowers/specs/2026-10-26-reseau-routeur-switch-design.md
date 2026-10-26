@@ -7,8 +7,10 @@
 
 # Réseau de gk2 : mode routeur durable, switch et cartographie — conception (ref #3189, #3190)
 
-Statut : **maquette approuvée par le propriétaire le 2026-10-26** (artifact « Réseau gk2 — switch et cartographie », deux
-écrans). Ce document en tire la conception ; les points marqués **(mon choix)** sont des décisions de l'auteur.
+Statut : **maquette approuvée par le propriétaire le 2026-10-26** (« Réseau gk2 — switch et cartographie », deux écrans :
+https://claude.ai/artifact/YR3N8rfGMX7xQaYDAoD1cE, fichiers `project/Main.dc.html` et `project/Switch.dc.html`). Ce
+document en tire la conception ; les points marqués **(mon choix)** sont des décisions de l'auteur. Relu par un constructeur
+neuf le 2026-10-26 ; ses constats sont intégrés.
 
 ## Intention
 
@@ -45,7 +47,22 @@ Pourquoi c'est mieux qu'un réseau plat : derrière un vrai routeur, aller **et*
 - Pare-feu d'entrée : `inet filter input` (secubox-hardening) en `policy drop`. Une règle `accept` dans une autre table ne
   suffit pas : les paquets doivent être acceptés par **toutes** les chaînes de base. Les paquets ajoutent donc leurs règles
   à cette chaîne par un fichier `/etc/nftables.d/zz-<paquet>.nft` (`add rule inet filter input …`), comme Auto-Load.
-- NAT : la règle existante `oif "eth2" masquerade` couvre déjà le LAN. Transit (`inet filter forward`) en `policy accept`.
+- NAT : sur gk2, une règle `oif "eth2" masquerade` posée à la main couvre le LAN ; **la base livrée ne masque que
+  10.100.0.0/24** (`secubox-hardening`, table `secubox_lxc_nat`). Sur un autre MOCHAbin, le LAN ne sortirait pas. Transit
+  (`inet filter forward`) en `policy accept`.
+- `ip_forward` est déjà à 1 par `secubox-core` (`99-secubox-zz-lxc-forward.conf`, trié après `99-secubox-hardening.conf`
+  qui le met à 0).
+- `secubox-wait-network.sh` ne tourne qu'au démarrage (unité à exécution unique) et contient un repli `netplan apply`
+  complet : on ne peut pas l'appeler depuis un script d'installation sur un MOCHAbin.
+- `secubox-net-detect` est appelé **depuis l'interface web** par l'assistant premier-pas (`premier_pas/moteur.py`) : il
+  réécrit `00-secubox.yaml` et lance `netplan apply` complet. Son mode routeur déclare `br-lan` (192.168.10.1/24) dans
+  netplan : un second propriétaire du pont si rien ne change.
+- Le pseudo-routeur (#2940) n'est **pas installé** sur gk2 ; sa chaîne `forward` (`policy drop`, n'accepte que les appareils
+  déjà rangés dans une zone du NAC) est faite pour le réseau plat et ne doit pas coexister avec le mode routeur.
+- Confiance « LAN » de nginx (`secubox-hub`, `secubox-lan-geo.conf`, `$lan_client`) : 192.168.1.0/24 et 192.168.255.0/24
+  (« segment lan3 ») passent la porte d'authentification des applis réservées au LAN ; 192.168.42.0/24 n'y est pas.
+- Webfilter : son profil « défaut » ne s'applique qu'aux réseaux de `[reseau].lan` dans `/etc/secubox/webfilter.toml`, vide
+  à la livraison ; les affectations par appareil s'appliquent, elles.
 - Le NAC lit déjà les baux de `dnsmasq` dans `/var/lib/misc/dnsmasq.leases` (`api/discovery.py`) ; `dnsmasq.service` est
   masqué sur gk2 et ce fichier n'est plus alimenté.
 - DNS du LAN : `secubox-dns-lan` génère `96-secubox-lan.conf` pour **une** interface (`192.168.1.200`). Une nouvelle écoute
@@ -88,14 +105,21 @@ Pourquoi c'est mieux qu'un réseau plat : derrière un vrai routeur, aller **et*
 
 ### 1. `lo` en /32 (secubox-core) — livré en premier
 
-- `LOOPBACK_ALIAS` passe à `192.168.255.1/32`. Si `lo` porte `192.168.255.1/24`, le script **ajoute d'abord le /32 puis
-  retire le /24** : l'adresse ne disparaît jamais, HAProxy et TURN gardent leurs sockets.
-- Le même script corrige `/etc/systemd/network/00-lo.network` s'il contient `Address=192.168.255.1/24` (copie de secours à
-  côté, ligne remplacée par le /32), pour que networkd ne repose pas le /24 **(mon choix : `secubox-core` possède l'alias,
-  il possède sa correction ; le fichier n'appartient à aucun paquet)**. Chaque correction est auditée.
+- Un petit outil dédié de `secubox-core` (sans aucun appel à netplan) **(mon choix)** : si `lo` porte `192.168.255.1/24`, il
+  **ajoute d'abord le /32 puis retire le /24** — l'adresse ne disparaît jamais, HAProxy et TURN gardent leurs sockets ; il
+  corrige `/etc/systemd/network/00-lo.network` s'il contient `Address=192.168.255.1/24` (copie de secours à côté, ligne
+  remplacée par le /32), pour que networkd ne repose pas le /24 **(mon choix : `secubox-core` possède l'alias, il possède sa
+  correction ; ce fichier n'appartient à aucun paquet)**. Idempotent, chaque correction auditée.
+- Appelé par le `postinst` de `secubox-core` (correction à la mise à jour, sans redémarrage) et par
+  `secubox-wait-network.sh`, dont `LOOPBACK_ALIAS` passe à `192.168.255.1/32` (son test actuel, « l'adresse est-elle
+  présente », laissait le /24 en place).
 - Vaut pour gk2, gk1 et toute image qui embarque `secubox-core` (rpi400 compris) à la prochaine mise à jour.
 
 ### 2. Mode routeur MOCHAbin (secubox-netmodes)
+
+**Portée** **(mon choix)** : tout MOCHAbin (gk2 d'abord, gk1 et les nouvelles images ensuite), donc le module porte tout ce
+dont le LAN a besoin, NAT compris, sans compter sur une règle faite main. Le contrôleur **refuse** d'appliquer si un fichier
+netplan déclare déjà `br-lan` (deux propriétaires) ou si le pseudo-routeur (#2940) est actif, avec l'explication.
 
 **Configuration** : `/etc/secubox/netmodes/routeur.toml` — adresse du pont (CIDR), plage DHCP, durée des baux, ports
 membres (par défaut `lan0` à `lan3`). Valeur posée sur gk2 : **192.168.42.1/24**, plage .100 à .199, 12 h, la même que le LAN
@@ -125,10 +149,21 @@ validé par `unbound-checkconf`, écrit sous le verrou `/run/lock/secubox-dns-la
 mémoire « verrou obligatoire unbound »), suivi d'un **redémarrage** d'Unbound (nouvelle écoute). Marque « GÉNÉRÉ par
 secubox-netmodes ».
 
-**Pare-feu d'entrée** : `/etc/nftables.d/zz-secubox-netmodes-lan.nft` : sur `br-lan`, DHCP (udp 67), DNS (udp et tcp 53),
-ICMP. L'administration HTTPS reste régie par `secubox-hardening` (déjà ouverte) ; **pas de SSH depuis le LAN (mon choix)**.
-Appliqué aussi à chaud par le contrôleur, de façon idempotente (règles retrouvées par leur commentaire). `ip_forward` posé
-par un drop-in sysctl du paquet.
+**Pare-feu** : `/etc/nftables.d/zz-secubox-netmodes-lan.nft`, généré :
+
+- entrée (`add rule inet filter input`, la seule façon d'ouvrir une chaîne en `policy drop`) : sur `br-lan`, DHCP (udp 67),
+  DNS (udp et tcp 53), ICMP. L'administration HTTPS reste régie par `secubox-hardening` (déjà ouverte) ; **pas de SSH depuis
+  le LAN (mon choix)** ;
+- table propre `inet secubox_netmodes_lan` : NAT `ip saddr <sous-réseau du LAN> oifname <WAN> masquerade` ; au transit,
+  **les connexions nouvelles du WAN vers `br-lan` sont refusées** (seuls les retours `established,related` entrent), comme
+  tout routeur domestique **(mon choix)**.
+
+Appliqué aussi à chaud par le contrôleur, de façon idempotente (règles d'entrée retrouvées par leur commentaire, table
+remplacée d'un bloc). `ip_forward` : vérifié à l'application (refus s'il vaut 0), pas réécrit.
+
+**Filtrage** : le DNS de la box rend effectifs ad-guard et dns-guard pour le LAN ; le profil « défaut » de webfilter ne s'y
+applique qu'une fois le sous-réseau ajouté à `[reseau].lan` de `webfilter.toml`. La page le signale ; le module n'écrit
+pas dans la configuration de webfilter **(mon choix)**.
 
 **Application gardée** (comme #2940 et #2891) : sauvegarde de l'état courant (fichiers networkd, drop-in Unbound,
 `lan-dhcp.conf`, `.nft`) → génération en **shadow** → validation (`networkd` : syntaxe des fichiers ; `unbound-checkconf` ;
@@ -140,8 +175,10 @@ ne touche que `br-lan`, ses ports, Unbound, dnsmasq et la règle d'entrée : **j
 `sbx-lan-temporaire-*` par leur handle, retire 192.168.255.1 du pont **après** l'étape 1 (le /32 sur `lo` doit être là).
 
 **Anciens chemins de netmodes** : sur une carte détectée MOCHAbin, `apply_mode`, `auto_apply` et `rollback` (netplan complet)
-répondent 409 avec l'explication (« réécrirait le WAN mvpp2 »). `secubox-net-detect` au premier démarrage reste inchangé
-(machine locale, pas de session à distance).
+répondent 409 avec l'explication (« réécrirait le WAN mvpp2 »). `secubox-net-detect` (appelé depuis l'interface web par
+premier-pas) change sur MOCHAbin **(mon choix)** : il ne déclare plus `br-lan` dans netplan (le LAN passe par le même
+contrôleur que le mode routeur) et, si le WAN a déjà une adresse IPv4, il ne réécrit pas `00-secubox.yaml` et ne lance pas
+`netplan apply`. Une carte neuve sans WAN configuré garde le comportement actuel.
 
 **Privilèges** : un contrôleur root `netmodesctl` à verbes étroits (sudoers) : `routeur-appliquer`, `routeur-confirmer`,
 `routeur-retour`, `routeur-etat`, `port-couper <lanN>`, `port-retablir <lanN>`. netmodes rejoint `DEDICATED_MODULES` de
@@ -162,7 +199,9 @@ contenu (modes, interfaces, détection) passe sous « Mode routeur ». Mobile d'
   « à classer » si le NAC ne connaît pas l'appareil.
 - `GET /reseau/carte` : WAN (adresse, passerelle, voisins de `eth2` avec les noms connus), pont des conteneurs (conteneurs
   actifs = interfaces membres de `br-lxc`), résumé des tunnels. Les pairs du maillage viennent de l'API WireGuard
-  (`/peers/status`) et des noms de `secubox-p2p` ; la page les compose **(mon choix : pas de seconde lecture de `wg`)**.
+  (`/peers/status`, réservée à l'administrateur, comme ce panneau) et des noms de `secubox-p2p` ; la page les compose
+  **(mon choix : pas de seconde lecture de `wg`)**. Correction dans `secubox-wireguard` : quand `wgctl dump` échoue,
+  `/peers/status` répond une erreur (503), pas une liste vide prise pour « aucun pair ».
 - **Hubs** : plus d'une adresse MAC apprise derrière un port → « plusieurs appareils derrière ce port (switch, hub ou point
   d'accès) ».
 - Lectures légères (`ip -j`, `bridge -j`, fichiers) : cache mémoire de quelques secondes, pas de tâche de fond.
@@ -194,11 +233,23 @@ premiers, et repris par le moteur de #2891 le jour où il existe.
 - Contrôleur (faux `networkctl`, `nft`, `unbound-checkconf`, `systemctl`, `systemd-run`) : ordre des étapes, aucun appel qui
   nomme `eth*`, retour sur échec de validation, minuteur armé puis désarmé par la confirmation, retour automatique,
   idempotence (deux applications = un seul jeu de règles).
-- `lo` : passage /24 → /32 sans fenêtre sans adresse (ordre ajout puis retrait), correction de `00-lo.network`.
+- `lo` : passage /24 → /32 sans fenêtre sans adresse (ordre ajout puis retrait), correction de `00-lo.network`, aucun appel
+  à netplan.
+- Pare-feu : NAT du seul sous-réseau du LAN vers le WAN, refus des connexions nouvelles WAN → LAN, `nft -c` sur le fichier.
+- `secubox-net-detect` sur MOCHAbin au WAN configuré : ni `br-lan` dans netplan, ni réécriture, ni `netplan apply`.
+- Refus d'appliquer si netplan déclare `br-lan` ou si le pseudo-routeur est actif.
 - API : gardes, 409 des anciens chemins sur MOCHAbin, refus anti-coupure, pannes de source affichées comme pannes.
 - Page : onglets, pas d'`innerHTML`, mode démo.
 - **Essai réel sur gk2** : reprise du LAN temporaire, PC et gk4 servis, DNS par la box, une confirmation puis un retour
   automatique volontaire ; puis un redémarrage de gk2 au moment choisi par le propriétaire pour prouver la persistance.
+
+## À trancher par le propriétaire
+
+1. **Nouveaux appareils branchés sur le LAN** : Internet ouvert dès le branchement (affichés « à classer » dans le NAC), ou
+   quarantaine jusqu'à classement, comme décidé le 2026-10-19 pour le pseudo-routeur ?
+2. **Confiance du LAN** : 192.168.42.0/24 entre-t-il dans le « LAN » de nginx (`$lan_client`), comme le réseau de la Freebox
+   et l'ancien segment 192.168.255.0/24 — accès sans connexion aux applis réservées au LAN — ou reste-t-il soumis à la
+   connexion ?
 
 ## Laissé au constructeur
 
