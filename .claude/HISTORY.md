@@ -9,6 +9,28 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-26 — WAF : signalisation LiveKit de la Visio exemptée de credential_harvest (ref #3193)
+
+- **Symptôme** : « wall.gk2.net inaccessible depuis internet », sans erreur ni réponse. Seul l'iPhone du propriétaire (Free,
+  78.243.x.x) était touché : chaque essai de Visio ouvre `livekit.gk1/rtc/v1?access_token=<JWT>`, la règle `cred-003`
+  (`credential_harvest`, critique) tirait et l'auto-ban (4 h, `inet secubox waf_ban`) coupait **tous** les vhosts de gk2 ;
+  Actor en a fait ACT-6998 (30 bans, TARPIT puis DENY).
+- **À chaud** : 5 bans levés par `wafctl unban` + ligne `unban` dans `bans.jsonl` (sinon `Reload()` les réinjecte), audités.
+- **Correctif** (PR #3194, `secubox-waf-ng` 1.30.6, déployé gk2) : `suppress_categories` par service dans les profils de
+  vhost (ré-vérification limitée à l'hôte) ; service `livekit` (`^/rtc(/v1)?(/validate)?$`, `credential_harvest` seule) ;
+  `waf-profils-fusion` complète au postinst le conffile modifié à l'exécution (ajoute les services et vhosts livrés absents,
+  n'écrase rien). Vérifié : « vhost-profiles chargé (phase G active) », anti-robots et `git.maegia.tv` conservés.
+- **Reste** : une Visio depuis le téléphone sans ban pour clore. Constats mineurs de relecture dans l'issue (verrou commun
+  avec `wafctl anti-robots`, catégories d'injection à interdire par code dans les listes par service).
+
+## 2026-10-26 — gk2 saturé : Hall et admin sans réponse, blogs intacts (ref #3191)
+
+- Charge 33–40 sur 4 cœurs : transcodage PeerTube (1 cœur, poids 300), `sbx-actord` (20–60 %), PID 1 (363 changements
+  d'état d'unités en 5 min : minuteries à la minute, `p2p-mesh-liveness` 20 s), démarrages Python. Agrégateur gelé 1–2 s
+  toutes les ~10 s → 504 de la porte d'authentification nginx.
+- `secubox-surf` (POC MITM hors chaîne) en boucle à 31 % depuis 49 h sans client : **arrêté** (audité). Erreurs/min ~80 → 20–45.
+- Vu en passant : `antirootkitctl execscan` réamorce son point de contrôle toutes les ~30 s (`ausearch rc=12`).
+
 ## 2026-10-26 — Visio : panneau d'administration — réunions, connexions, statistiques (closes #3182)
 
 - Maquette validée (« parfait »), spec complétée (section #3182 de la spec Visio). secubox-meet 0.2.0 (PR #3183) : onglets
