@@ -131,3 +131,12 @@ def test_nft_valide(sortie, tmp_path):
     if r.returncode != 0 and ("Operation not permitted" in r.stderr or "Permission denied" in r.stderr):
         pytest.skip("droits insuffisants pour nft -c")
     assert r.returncode == 0, r.stderr
+
+
+def test_unbound_ip_freebind(sortie):
+    """Relecture finale I2 : au démarrage, Unbound peut précéder l'adresse de br-lan ; sans ip-freebind il refuse de
+    démarrer (DNS de toute la box perdu). Même réglage que le drop-in IPv6 de dns-lan."""
+    l = lignes(sortie["unbound"])
+    i = l.index("server:")
+    assert "    ip-freebind: yes" in l[i + 1:]
+    assert l.index("    ip-freebind: yes") < l.index("    interface: 192.168.42.1")

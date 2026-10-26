@@ -44,7 +44,8 @@ def rendre(cfg: ConfigRouteur) -> dict[str, str]:
             f"dhcp-option=option:dns-server,{ip}\n"
             "dhcp-leasefile=/var/lib/misc/dnsmasq.leases\nuser=dnsmasq\n"
         ),
-        "unbound": f"server:\n    interface: {ip}\n    access-control: {reseau} allow\n",
+        # ip-freebind : au démarrage Unbound peut précéder l'adresse de br-lan ; sans lui il ne démarre pas du tout
+        "unbound": f"server:\n    ip-freebind: yes\n    interface: {ip}\n    access-control: {reseau} allow\n",
         "nft": (
             # seul moyen d'ouvrir un port dans la chaîne input en policy drop
             f'add rule inet filter input iifname "br-lan" udp dport 67 accept comment "{COMMENTAIRE_NFT} dhcp"\n'

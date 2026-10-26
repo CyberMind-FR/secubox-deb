@@ -22,6 +22,8 @@ secubox-netmodes (1.4.0-1~trixie1) trixie; urgency=medium
   * Relecture finale (ref #3189) : un routeur.toml édité à la main (octet non UTF-8, imbrication trop profonde) est
     une configuration invalide, jamais une trace ; routeur-etat rend config_invalide et le retour (minuteur,
     démarrage) aboutit sans dépendre du TOML courant (ports illisibles : lan0..lan3).
+  * Relecture finale (ref #3189) : le drop-in Unbound du LAN porte ip-freebind: yes ; au démarrage, Unbound peut
+    précéder l'adresse de br-lan et refusait sinon de démarrer (DNS de toute la box).
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 14:00:00 +0100
 
