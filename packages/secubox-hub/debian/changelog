@@ -1,3 +1,13 @@
+secubox-hub (1.12.29-1~trixie1) trixie; urgency=medium
+
+  * La géo $lan_client accepte des fragments (ref #3189) : secubox-lan-geo.conf inclut
+    /etc/nginx/secubox-lan-geo.d/netmodes-lan.conf dans son bloc geo (le include d'un bloc geo n'expanse pas
+    de joker), et le postinst crée le dossier (0755 root) et ce fichier vide.
+    Le LAN du mode routeur de secubox-netmodes y pose « <cidr> 1; » et devient de confiance comme le
+    LAN de la Freebox.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 10:00:00 +0100
+
 secubox-hub (1.12.28-1~trixie1) trixie; urgency=medium
 
   * Vhost du panneau (webui.conf) livré sans le nom de gk2 (ref #3117) : admin.gk2.secubox.in retiré du
