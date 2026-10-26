@@ -154,7 +154,10 @@ def _bloque_quelque_chose(cfg: dict) -> bool:
 
 def _reprendre_config(s, es) -> None:
     """#3172 : une configuration laissée à root (0600) est illisible par l'API, qui annonçait alors « rien n'est bloqué ». Rendue au service
-    avant d'être lue ; un refus (lien, autre propriétaire) est audité et n'empêche pas l'application, qui lit toujours en root."""
+    avant d'être lue ; un refus (lien, autre propriétaire) est audité et n'empêche pas l'application, qui lit toujours en root. Sans compte du
+    service, le propriétaire du dossier n'a pas été vérifié : rien n'est donné à personne."""
+    if s.uid_service() is None:
+        return
     try:
         if es.rendre_au_service("config.json", 0o600):
             s.audit("reprise", "config.json appartenait à root : rendu au service (0600)")

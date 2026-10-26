@@ -7,12 +7,15 @@ secubox-webfilter (0.4.4-1~trixie1) trixie; urgency=medium
     mode_global « inconnu », que le panneau affiche comme tel (« État du blocage inconnu »).
   * Le contrôleur root rend config.json au service (0600 secubox-webfilter) au début de chaque
     application, par descripteur et sans suivre de lien ; un lien dur ou un autre propriétaire que
-    root est refusé et audité. systemd-tmpfiles ne peut pas le faire (« unsafe path transition » :
-    /var/lib/secubox appartient à secubox). Profil AppArmor du contrôleur : config.json en rw. Le
-    postinst dépose une demande d'application quand config.json n'appartient pas au service.
+    root est refusé et audité, un échec du changement aussi ; rien n'est repris sans compte du service.
+    systemd-tmpfiles ne peut pas le faire (« unsafe path transition » : /var/lib/secubox appartient à
+    secubox). Profil AppArmor du contrôleur : écriture de config.json seulement tant que root le
+    possède (owner). Le postinst dépose une demande d'application quand config.json n'appartient pas
+    au service.
   * API : avertissement journalisé quand la configuration devient illisible. Panneau : texte
     d'attente neutre au chargement (il disait « rien n'est bloqué » et le gardait si /etat
-    échouait), état inconnu en orange.
+    échouait) ; « indisponible » quand /etat ne répond pas, distinct de « inconnu » ; ces deux états
+    en orange.
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 07:29:28 +0100
 

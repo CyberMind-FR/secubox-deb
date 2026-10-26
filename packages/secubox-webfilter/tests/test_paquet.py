@@ -199,7 +199,8 @@ def test_la_configuration_est_rendue_au_service_par_le_controleur_3172():
     assert "config.json" not in lire("tmpfiles/secubox-webfilter.conf")
     p = lire("apparmor/secubox-webfilter")
     ctl = p[p.index("/usr/sbin/secubox-webfilter-ctl {"):]
-    assert "/var/lib/secubox/webfilter/config.json rw," in ctl
+    assert "/var/lib/secubox/webfilter/config.json r," in ctl and "owner /var/lib/secubox/webfilter/config.json w," in ctl   # écrire : seulement tant que root le possède
+    assert "/var/lib/secubox/webfilter/config.json rw," not in ctl
     post = lire("debian/postinst")
-    assert "stat -c %U /var/lib/secubox/webfilter/config.json" in post
+    assert '[ ! -L "$cfg" ]' in post and 'stat -c %u "$cfg"' in post and "id -u secubox-webfilter" in post
     assert "runuser -u secubox-webfilter -- /usr/bin/touch /var/lib/secubox/webfilter/appliquer.demande" in post

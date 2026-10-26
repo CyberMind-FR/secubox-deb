@@ -224,7 +224,10 @@
             b.replaceChildren();
             const pa = $('mode-pastille');
             pa.textContent = mode === 'block' ? 'BLOCAGE ACTIF' : mode === 'observe' ? 'MODE OBSERVE' : 'ÉTAT INCONNU'; pa.className = 'actif' + (mode === 'block' ? '' : mode === 'observe' ? ' obs' : ' inc');
-            if (mode !== 'block' && mode !== 'observe') {          // #3172 : configuration illisible par l'API — ne jamais affirmer « rien n'est bloqué »
+            if (mode === 'indisponible') {                         // /etat n'a pas répondu : on ne sait rien, et on ne sait pas pourquoi
+                b.append(el('strong', '', '❔ État du filtrage indisponible.'),
+                         " Le service n'a pas répondu : impossible de dire ce qui est bloqué en ce moment.");
+            } else if (mode !== 'block' && mode !== 'observe') {   // #3172 : configuration illisible par l'API — ne jamais affirmer « rien n'est bloqué »
                 b.append(el('strong', '', '❔ État du blocage inconnu.'),
                          " L'API ne peut pas lire la configuration des profils : des catégories peuvent être bloquées sans que ce panneau le sache. " +
                          'Les comptes ci-dessous restent ceux mesurés sur le DNS (rouge : bloqué).');
@@ -309,7 +312,7 @@
 
         async function refresh() {
             const e = await api('/etat');
-            if (!e.ok) { rendreBandeau('inconnu'); errorToast('État indisponible : ' + (e.data.detail || e.status)); return; }   // #3172 : jamais « rien n'est bloqué » par défaut
+            if (!e.ok) { rendreBandeau('indisponible'); errorToast('État indisponible : ' + (e.data.detail || e.status)); return; }   // #3172 : jamais « rien n'est bloqué » par défaut
             rendreBandeau(e.data.mode_global);
             const ids = rendreEtat(e.data);
             rendreGraphes(e.data);

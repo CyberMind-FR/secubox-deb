@@ -206,3 +206,15 @@ def test_un_autre_proprietaire_que_root_n_est_pas_repris_3172(repris, monkeypatc
     with pytest.raises(etatsur.ErreurEtat):
         e.rendre_au_service("config.json", 0o600)
     assert appels == []
+
+
+def test_un_echec_du_changement_de_proprietaire_devient_un_refus_3172(repris, monkeypatch):
+    """Relecture #3172 : une PermissionError de fchown faisait avorter toute l'application, sans résultat ni audit."""
+    d, e, _ = repris
+    (d / "config.json").write_text("{}")
+
+    def refuse(fd, uid, gid):
+        raise PermissionError(1, "Operation not permitted")
+    monkeypatch.setattr(etatsur.os, "fchown", refuse)
+    with pytest.raises(etatsur.ErreurEtat, match="reprise impossible"):
+        e.rendre_au_service("config.json", 0o600)

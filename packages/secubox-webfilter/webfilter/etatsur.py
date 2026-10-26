@@ -114,8 +114,11 @@ class EtatSur:
                 return False
             if st.st_uid != UID_ROOT or st.st_nlink != 1:
                 raise ErreurEtat(f"{nom} : propriétaire ou liens inattendus, non repris")
-            os.fchmod(f, mode)
-            os.fchown(f, self.uid, self.gid)
+            try:
+                os.fchmod(f, mode)                                              # AVANT fchown : efface aussi d'éventuels bits setuid
+                os.fchown(f, self.uid, self.gid)
+            except OSError as e:
+                raise ErreurEtat(f"{nom} : reprise impossible ({e.strerror})") from None
             return True
         finally:
             os.close(f)

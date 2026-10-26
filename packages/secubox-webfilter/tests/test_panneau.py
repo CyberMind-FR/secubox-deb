@@ -110,6 +110,7 @@ def test_etat_illisible_le_bandeau_ne_reste_pas_sur_rien_n_est_bloque_3172(navig
     ctx, p, erreurs, _ = _page(navigateur, {("GET", "/etat"): (503, {"detail": "catalogue illisible"})})
     p.wait_for_timeout(500)
     assert "rien n'est bloqué" not in p.inner_text("#bandeau-observe") and "inconnu" in p.inner_text("#mode-pastille").lower()
+    assert "indisponible" in p.inner_text("#bandeau-observe") and "configuration" not in p.inner_text("#bandeau-observe")   # pas la cause d'un « inconnu »
     assert not erreurs
     ctx.close()
 

@@ -41,8 +41,8 @@ case "$1" in
     # #3172 : une configuration laissée à root (0600) est illisible par l'API (« rien n'est bloqué », 503 sur /appareils). systemd-tmpfiles ne
     # peut pas la reprendre (« unsafe path transition ») : le contrôleur root la rend au service, par descripteur, au début de chaque
     # application. On lui en dépose une demande ; l'unité .path s'en charge, et Unbound n'est rechargé que si les vues changent.
-    if [ -f /var/lib/secubox/webfilter/config.json ] \
-       && [ "$(stat -c %U /var/lib/secubox/webfilter/config.json)" != secubox-webfilter ]; then
+    cfg=/var/lib/secubox/webfilter/config.json
+    if [ -f "$cfg" ] && [ ! -L "$cfg" ] && [ "$(stat -c %u "$cfg")" != "$(id -u secubox-webfilter)" ]; then
       runuser -u secubox-webfilter -- /usr/bin/touch /var/lib/secubox/webfilter/appliquer.demande >/dev/null 2>&1 || true
     fi
     ;;
