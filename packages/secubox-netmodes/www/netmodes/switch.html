@@ -152,7 +152,7 @@
         <button type="button" class="btn danger" id="confirmOk" disabled>Confirmer</button><button type="button" class="btn" id="confirmAnnule">Annuler</button></div>
     </div>
     <div class="resultat" id="resultat" role="status" aria-live="polite" hidden></div>
-    <p class="note">« Isoler » placera un port dans son propre VLAN (livraison 3). « Couper » arrête un port du pont (lan0 à lan3, en mode routeur actif seulement) ; « Rétablir » le relance en tout mode : dans le pont br-lan si le mode routeur est actif et le port configuré, sinon hors du pont. Chaque geste est confirmé par la saisie du nom du port et inscrit au journal d'audit. Le port derrière lequel vous êtes ne peut pas être coupé. eth1 (conduit du switch) n'est jamais ponté et eth2 (WAN) n'est jamais relancé à distance. Plusieurs adresses MAC derrière un même port signalent un switch, un hub ou un point d'accès.</p>
+    <p class="note">« Isoler » placera un port dans son propre VLAN (livraison 3). « Couper » arrête un port du pont (lan0 à lan3, en mode routeur actif seulement) ; « Rétablir » le relance en tout mode : dans le pont br-lan si le mode routeur est actif et le port configuré, sinon hors du pont. Chaque geste est confirmé par la saisie du nom du port et inscrit au journal d'audit. Le port derrière lequel votre poste est vu (sa MAC apprise sur ce port) ne peut pas être coupé ; cette garde ne reconnaît ni un accès par un tunnel ou par un routeur sans NAT branché sur un port du LAN, ni une MAC sortie de la table du pont. eth1 (conduit du switch) n'est jamais ponté et eth2 (WAN) n'est jamais relancé à distance. Plusieurs adresses MAC derrière un même port signalent un switch, un hub ou un point d'accès.</p>
   </div>
 </div></div></main>
 
@@ -383,7 +383,7 @@
     ouverte = { port: port, verbe: verbe, declencheur: declencheur }; resultat("");
     var c = $("confirm"); c.hidden = false; c.className = "confirm" + (verbe === "couper" ? " grave" : "");
     $("confirmTexte").textContent = verbe === "couper"
-      ? "Couper " + port + " arrête le port : les appareils qui y sont branchés perdent le réseau jusqu'au rétablissement. Le port derrière lequel vous êtes est refusé."
+      ? "Couper " + port + " arrête le port : les appareils qui y sont branchés perdent le réseau jusqu'au rétablissement. Le port derrière lequel votre poste est vu est refusé ; un accès par un tunnel ou par un routeur sans NAT branché sur un port du LAN n'est pas reconnu : vérifiez que le vôtre ne passe pas par " + port + "."
       : texteRetablir(port);
     $("confirmEtiq").textContent = "Saisir « " + port + " » pour confirmer";
     var s = $("confirmSaisie"); s.value = ""; $("confirmOk").disabled = true; $("confirmOk").textContent = verbe === "couper" ? "Couper " + port : "Rétablir " + port;

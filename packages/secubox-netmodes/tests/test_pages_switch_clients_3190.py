@@ -491,3 +491,26 @@ def test_switch_texte_de_retablir_suit_le_controleur(routeur, attendu, absent):
     t, j = _avec_navigateur(scenario)
     assert attendu in t and absent not in t, t
     assert j["erreurs"] == [] and all(m == "GET" for m, _ in j["appels"])
+
+
+# ── Relecture finale I4 : la garde anti-coupure dit sa limite (comme le README) ──────────────────────────────────────────────────
+def test_switch_note_dit_la_limite_de_l_anti_coupure():
+    s = SRC["switch"]
+    assert "Le port derrière lequel vous êtes ne peut pas être coupé." not in s           # jamais présentée comme absolue
+    note = re.search(r'<p class="note">(.*?)</p>', s, re.S).group(1)
+    assert "tunnel" in note and "routeur sans NAT" in note and "table du pont" in note, note
+
+
+def test_switch_confirmation_de_couper_dit_la_limite_de_l_anti_coupure():
+    def scenario(nav):
+        ctx, pg, j = _page(nav)
+        pg.goto("http://t.test/netmodes/switch.html?demo=1&embed=1")
+        pg.wait_for_selector("button[data-port=lan0][data-verbe=couper]")
+        pg.click("button[data-port=lan0][data-verbe=couper]")
+        t = pg.inner_text("#confirmTexte")
+        ctx.close()
+        return t, j
+    t, j = _avec_navigateur(scenario)
+    assert "Le port derrière lequel votre poste est vu est refusé" in t, t
+    assert "tunnel" in t and "routeur sans NAT" in t and "lan0" in t, t
+    assert j["erreurs"] == [] and j["appels"] == []
