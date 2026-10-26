@@ -10,8 +10,10 @@
   routeur-confirmer <acteur>      annule le retour automatique
   routeur-retour <acteur>         restaure la dernière sauvegarde (« minuteur » : seulement si en attente)
   routeur-retour-demarrage        au démarrage, défait une application restée en attente
+  port-couper <port> <acteur>     sort un port du switch (lan0..lan3) du pont et le baisse (#3190)
+  port-retablir <port> <acteur>   rend le port au pont
 
-Sortie standard : toujours un JSON (l'état, ou {"erreur": "…"}). Codes : 0 succès, 2 usage ou acteur invalide,
+Sortie standard : toujours un JSON (l'état, ou {"erreur": "…"}). Codes : 0 succès, 2 usage, port ou acteur invalide,
 3 refus (configuration ou garde), 4 occupé, 1 autre échec."""
 import json
 import os
@@ -22,11 +24,14 @@ from pathlib import Path
 
 INSTALLE = Path("/usr/lib/secubox/netmodes")
 AVEC_ACTEUR = ("routeur-appliquer", "routeur-confirmer", "routeur-retour")
+AVEC_PORT = ("port-couper", "port-retablir")                # <port> <acteur>
 SANS_ACTEUR = ("routeur-etat", "routeur-retour-demarrage")
+PORTS = ("lan0", "lan1", "lan2", "lan3")                    # PORTS_LAN : seuls actionnables, jamais eth* ni br-lan
 ACTEUR = re.compile(r"[A-Za-z0-9._@-]{1,64}")
 ENTREE_MAX = 64 * 1024
 USAGE = ("usage : netmodesctl routeur-etat | routeur-retour-demarrage"
-         " | {routeur-appliquer|routeur-confirmer|routeur-retour} <acteur>")
+         " | {routeur-appliquer|routeur-confirmer|routeur-retour} <acteur>"
+         " | {port-couper|port-retablir} <port> <acteur>")
 
 
 def _repondre(donnees, code):
@@ -62,13 +67,16 @@ def _config(entree, rc):
 
 def main(argv=None, ctx=None, entree=None):
     args = list(sys.argv[1:] if argv is None else argv)
-    # 1. verbe et acteur, avant toute autre chose
-    if not args or args[0] not in AVEC_ACTEUR + SANS_ACTEUR:
+    # 1. verbe, port et acteur, avant toute autre chose
+    if not args or args[0] not in AVEC_ACTEUR + AVEC_PORT + SANS_ACTEUR:
         return _repondre({"erreur": USAGE}, 2)
     verbe = args[0]
-    if len(args) != (2 if verbe in AVEC_ACTEUR else 1):
+    if len(args) != (3 if verbe in AVEC_PORT else 2 if verbe in AVEC_ACTEUR else 1):
         return _repondre({"erreur": USAGE}, 2)
-    acteur = args[1] if verbe in AVEC_ACTEUR else None
+    port = args[1] if verbe in AVEC_PORT else None
+    if port is not None and port not in PORTS:
+        return _repondre({"erreur": f"port refusé : seuls {', '.join(PORTS)} se coupent ou se rétablissent"}, 2)
+    acteur = args[-1] if verbe in AVEC_ACTEUR + AVEC_PORT else None
     if acteur is not None and not ACTEUR.fullmatch(acteur):
         return _repondre({"erreur": "acteur invalide : lettres, chiffres et . _ @ - (64 au plus)"}, 2)
     # 2. root
@@ -85,6 +93,10 @@ def main(argv=None, ctx=None, entree=None):
             resultat = rc.confirmer(ctx, acteur)
         elif verbe == "routeur-retour":
             resultat = rc.retour(ctx, acteur)
+        elif verbe == "port-couper":
+            resultat = rc.port_couper(ctx, port, acteur)
+        elif verbe == "port-retablir":
+            resultat = rc.port_retablir(ctx, port, acteur)
         else:
             resultat = rc.appliquer(ctx, _config(entree or sys.stdin.buffer, rc), acteur)
     except rc.Occupe as exc:

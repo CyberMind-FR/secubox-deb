@@ -99,7 +99,8 @@ def test_unite_api_durcie_et_exception():
     assert any("chmod 660 /run/secubox/netmodes.sock" in v for v in u.get("ExecStartPost", []))
     # l'exception est écrite, avec sa raison et ce test
     ligne = ligne_exception("secubox-netmodes.service")
-    for mot in ("NoNewPrivileges=no", "KillMode=process", "ReadWritePaths", "netmodesctl", TEST_EXCEPTION):
+    for mot in ("NoNewPrivileges=no", "KillMode=process", "ReadWritePaths", "netmodesctl", TEST_EXCEPTION,
+                "port-couper", "port-retablir"):
         assert mot in ligne, mot
 
 
@@ -109,7 +110,8 @@ def test_unite_couvre_chaque_ecriture_du_controleur(fichier):
     rw = chemins_rw(unite(fichier))
     ecrits = {os.path.dirname(c) for c in CHEMINS.values()}
     ecrits |= {os.path.dirname(c) for c in (routeur_ctl.TOML, routeur_ctl.ANCIEN_PONT, routeur_ctl.AUDIT,
-                                            routeur_ctl.VERROU, routeur_ctl.VERROU_UNBOUND, routeur_ctl.BAUX)}
+                                            routeur_ctl.VERROU, routeur_ctl.VERROU_UNBOUND, routeur_ctl.BAUX,
+                                            routeur_ctl.FICHIER_COUPE)}            # #3190 : port coupé
     ecrits |= {routeur_ctl.ARBRE}
     for dossier in sorted(ecrits):
         assert any(dossier == c or dossier.startswith(c + "/") for c in rw), dossier
@@ -201,7 +203,8 @@ def test_unite_retour_boot_root_durcie():
 
 LIGNE_SUDOERS = ("secubox-netmodes ALL=(root) NOPASSWD: /usr/sbin/netmodesctl routeur-etat, "
                  "/usr/sbin/netmodesctl routeur-appliquer *, /usr/sbin/netmodesctl routeur-confirmer *, "
-                 "/usr/sbin/netmodesctl routeur-retour *")
+                 "/usr/sbin/netmodesctl routeur-retour *, "
+                 "/usr/sbin/netmodesctl port-couper *, /usr/sbin/netmodesctl port-retablir *")    # #3190
 
 
 def regles_sudoers() -> list[str]:
@@ -263,13 +266,20 @@ def test_sudoers_conforme_aux_appels_de_l_api(monkeypatch):
     grants = autorisations()
     assert all(c == CTL for c, _ in grants)
     sans_acteur = {m[0] for _, m in grants if len(m) == 1}
-    avec_acteur = {m[0] for _, m in grants if len(m) == 2 and m[1] == "*"}
-    assert len(grants) == len(sans_acteur) + len(avec_acteur)
+    etoiles = {m[0] for _, m in grants if len(m) == 2 and m[1] == "*"}
+    assert len(grants) == len(sans_acteur) + len(etoiles)
     # le contrôleur : mêmes verbes ; le retour au démarrage n'est jamais accordé (unité root seulement)
     ctl = (PKG / "sbin/netmodesctl").read_text(encoding="utf-8")
-    assert avec_acteur == set(re.search(r"AVEC_ACTEUR = \(([^)]*)\)", ctl).group(1).replace('"', "").replace(" ", "")
-                              .strip(",").split(","))
-    assert sans_acteur == {"routeur-etat"} and "routeur-retour-demarrage" not in sans_acteur | avec_acteur
+
+    def verbes_du_controleur(nom: str) -> set[str]:
+        return set(re.search(nom + r" = \(([^)]*)\)", ctl).group(1).replace('"', "").replace(" ", "")
+                   .strip(",").split(","))
+
+    avec_acteur = verbes_du_controleur("AVEC_ACTEUR")
+    avec_port = verbes_du_controleur("AVEC_PORT")                         # #3190 : <port> <acteur>
+    assert avec_port == {"port-couper", "port-retablir"} and not avec_acteur & avec_port
+    assert etoiles == avec_acteur | avec_port
+    assert sans_acteur == {"routeur-etat"} and "routeur-retour-demarrage" not in sans_acteur | etoiles
 
     main.app.dependency_overrides[require_jwt] = lambda: {"sub": "alice"}
     main.app.dependency_overrides[require_lecture] = lambda: {"sub": "alice"}
@@ -299,6 +309,12 @@ def test_sudoers_conforme_aux_appels_de_l_api(monkeypatch):
         else:
             assert verbe in avec_acteur and len(cmd) == 3 and routeur_ctl.ACTEUR.fullmatch(cmd[2]), cmd
     assert verbes == sans_acteur | avec_acteur                            # rien d'accordé qui ne serve
+    # #3190 : verbes de port accordés à (port, acteur) ; netmodesctl revalide l'arité, le port (lan0..lan3) et l'acteur
+    # avant tout (test_ports_coupes_3190.py::test_cli_port_refuse_avant_tout). Leurs routes viennent avec la tâche 3,
+    # qui les croisera ici avec les argv de l'API.
+    for verbe in avec_port:
+        assert accorde([CTL, verbe, "lan1", "alice"])
+        assert not accorde([CTL, verbe])
     # et ce que la règle refuse
     assert not accorde([CTL, "routeur-etat", "alice"])
     assert not accorde([CTL, "routeur-appliquer"])
