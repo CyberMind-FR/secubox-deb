@@ -32,7 +32,8 @@ def _fdb_apprises(fdb) -> list[dict]:
     return sortie
 
 
-def ports(ip_link: list, fdb: list, sysfs: dict, coupes: set, macs_box: set) -> list[dict]:
+def ports(ip_link: list, fdb: list | None, sysfs: dict, coupes: set | None, macs_box: set) -> list[dict]:
+    """fdb ou coupes None (source en échec) : `macs`/`plusieurs_appareils` ou `coupe` valent None, jamais « aucun »."""
     macs_box = {m.lower() for m in macs_box}
     par_port: dict[str, list[str]] = {}
     for e in _fdb_apprises(fdb):
@@ -51,15 +52,15 @@ def ports(ip_link: list, fdb: list, sysfs: dict, coupes: set, macs_box: set) -> 
         sys_p = (sysfs or {}).get(nom) or {}
         carrier = _entier(sys_p.get("carrier"))
         vitesse = _entier(sys_p.get("speed"))
-        macs = par_port.get(nom, [])
+        macs = None if fdb is None else par_port.get(nom, [])
         sortie.append({
             "nom": nom, "role": role,
             "porteuse": None if carrier is None else carrier == 1,
             "vitesse_mbps": vitesse if vitesse is not None and vitesse > 0 else None,
             "etat_admin": "up" if "UP" in (lien.get("flags") or []) else "down",
             "maitre": lien.get("master"),
-            "macs": macs, "plusieurs_appareils": len(macs) > 1,
-            "coupe": nom in coupes,
+            "macs": macs, "plusieurs_appareils": None if macs is None else len(macs) > 1,
+            "coupe": None if coupes is None else nom in coupes,
         })
     return sortie
 
@@ -74,7 +75,10 @@ def _baux(texte: str) -> list[dict]:
     return sortie
 
 
-def clients(baux: str, fdb: list, voisins: list) -> list[dict]:
+def clients(baux: str | None, fdb: list | None, voisins: list | None) -> list[dict] | None:
+    """baux None : clients bâtis des voisins seuls, chacun marqué `bail_inconnu`. baux et voisins None : None."""
+    if baux is None and voisins is None:
+        return None
     port_de = {}
     for e in _fdb_apprises(fdb):
         port_de.setdefault(str(e["mac"]).lower(), e["ifname"])
@@ -90,24 +94,31 @@ def clients(baux: str, fdb: list, voisins: list) -> list[dict]:
         if not mac or not v.get("dst") or mac in vus or "FAILED" in (v.get("state") or []):
             continue
         vus.add(mac)
-        sortie.append({"mac": mac, "ip": v["dst"], "nom": "", "port": port_de.get(mac),
-                       "source": "voisin", "expire": None})
+        c = {"mac": mac, "ip": v["dst"], "nom": "", "port": port_de.get(mac), "source": "voisin", "expire": None}
+        if baux is None:
+            c["bail_inconnu"] = True
+        sortie.append(c)
     return sortie
 
 
-def carte(wan_addr: list, route_defaut: list, voisins_wan: list, membres_lxc: list, liens_wg: list) -> dict:
-    adresse = None
-    for lien in wan_addr or []:
-        for a in lien.get("addr_info") or []:
-            if a.get("family", "inet") == "inet" and a.get("local"):
-                adresse = f"{a['local']}/{a.get('prefixlen')}"
-                break
-    passerelle = next((r.get("gateway") for r in route_defaut or [] if r.get("gateway")), None)
+def carte(wan_addr, route_defaut, voisins_wan, membres_lxc, liens_wg) -> dict:
+    """Chaque bloc vaut None quand sa source a échoué (wan : adresse ; voisins : None si ip neigh a échoué)."""
+    wan = None
+    if wan_addr is not None:
+        adresse = None
+        for lien in wan_addr:
+            for a in lien.get("addr_info") or []:
+                if a.get("family", "inet") == "inet" and a.get("local"):
+                    adresse = f"{a['local']}/{a.get('prefixlen')}"
+                    break
+        passerelle = None if route_defaut is None else next(
+            (r.get("gateway") for r in route_defaut if r.get("gateway")), None)
+        wan = {"interface": WAN, "adresse": adresse, "passerelle": passerelle,
+               "voisins": None if voisins_wan is None else
+               [{"ip": v["dst"], "mac": v["lladdr"]} for v in voisins_wan if v.get("dst") and v.get("lladdr")]}
     return {
-        "wan": {"interface": WAN, "adresse": adresse, "passerelle": passerelle,
-                "voisins": [{"ip": v["dst"], "mac": v["lladdr"]} for v in voisins_wan or []
-                            if v.get("dst") and v.get("lladdr")]},
-        "lxc": {"pont": PONT_LXC, "actifs": len(membres_lxc or [])},
-        "tunnels": [{"nom": l.get("ifname"), "etat": "up" if "UP" in (l.get("flags") or []) else "down"}
-                    for l in liens_wg or []],
+        "wan": wan,
+        "lxc": None if membres_lxc is None else {"pont": PONT_LXC, "actifs": len(membres_lxc)},
+        "tunnels": None if liens_wg is None else
+        [{"nom": l.get("ifname"), "etat": "up" if "UP" in (l.get("flags") or []) else "down"} for l in liens_wg],
     }

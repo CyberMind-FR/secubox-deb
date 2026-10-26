@@ -17,7 +17,7 @@ _cfg._CONFIG = {"global": {}, "api": {"socket_dir": "/tmp/secubox", "jwt_secret"
 with mock.patch("pathlib.Path.mkdir"):
     from api import main, reseau_api, reseau_lecture  # noqa: E402
 
-from secubox_core.auth import require_lecture  # noqa: E402
+from secubox_core.auth import require_jwt, require_lecture  # noqa: E402
 
 MAC_BOX = "f0:ad:4e:27:88:9a"
 IP_LINK = [
@@ -172,12 +172,18 @@ def test_lire_systeme_aucune_action_sur_interface(monkeypatch):
 
 # ---- routes -----------------------------------------------------------------------------------------------------
 
+client_sysd: dict = {}
+
+
 @pytest.fixture
 def client(monkeypatch):
     sysd = {"ip_link": IP_LINK, "fdb": FDB, "voisins_lan": [], "wan_addr": [], "route_defaut": [], "voisins_wan": [],
             "membres_lxc": [], "liens_wg": [], "sysfs": SYSFS, "baux": BAUX, "coupes": set(), "pannes": []}
-    monkeypatch.setattr(reseau_api, "lire_systeme", lambda: dict(sysd))
+    monkeypatch.setattr(reseau_api, "lire_systeme", lambda: dict(client_sysd))
     main.app.dependency_overrides[require_lecture] = lambda: {"sub": "alice"}
+    main.app.dependency_overrides[require_jwt] = lambda: {"sub": "alice"}
+    client_sysd.clear()
+    client_sysd.update(sysd)
     yield TestClient(main.app, base_url="http://testserver")
     main.app.dependency_overrides.clear()
 
@@ -195,8 +201,9 @@ def test_routes_gardees_require_lecture():
     routes = [f for f in arbre.body if isinstance(f, ast.FunctionDef)
               and any(isinstance(d, ast.Call) and getattr(d.func, "attr", "") == "get" for d in f.decorator_list)]
     assert len(routes) == 3
-    for f in routes:
-        assert "require_lecture" in ast.unparse(f.args), f.name
+    garde = {f.name: ("require_jwt" if "require_jwt" in ast.unparse(f.args) else
+                      "require_lecture" if "require_lecture" in ast.unparse(f.args) else None) for f in routes}
+    assert garde == {"lire_ports": "require_lecture", "lire_clients": "require_jwt", "lire_carte": "require_lecture"}
 
 
 def test_pas_de_subprocess_dans_async_def():
@@ -210,7 +217,102 @@ def test_lecture_pure_sans_subprocess():
     assert "subprocess" not in Path(reseau_lecture.__file__).read_text()
 
 
-def test_anonyme_sans_acteur(client):
+def _anon():
     main.app.dependency_overrides[require_lecture] = lambda: {"sub": None, "tableau_de_bord": True}
-    for chemin in ("/reseau/ports", "/reseau/clients", "/reseau/carte"):
+
+
+def test_anonyme_sans_acteur(client):
+    _anon()
+    for chemin in ("/reseau/ports", "/reseau/carte"):
         assert "acteur" not in client.get(chemin).text
+
+
+def test_anonyme_ports_sans_mac_avec_compte(client):
+    _anon()
+    ports = {p["nom"]: p for p in client.get("/reseau/ports").json()["ports"]}
+    assert "macs" not in ports["lan0"] and ports["lan0"]["nb_appareils"] == 1 and ports["lan0"]["plusieurs_appareils"] is False
+    assert "d4:93:90:27:a7:dd" not in client.get("/reseau/ports").text
+
+
+def test_admin_ports_avec_mac(client):
+    p = {p["nom"]: p for p in client.get("/reseau/ports").json()["ports"]}
+    assert p["lan0"]["macs"] == ["d4:93:90:27:a7:dd"] and "nb_appareils" not in p["lan0"]
+
+
+WAN_ADDR = [{"ifname": "eth2", "addr_info": [{"family": "inet", "local": "192.168.1.200", "prefixlen": 24}]}]
+VOISINS_WAN = [{"dst": "192.168.1.254", "lladdr": "00:07:cb:aa:bb:cc", "state": ["REACHABLE"]}]
+
+
+def test_carte_anonyme_sans_voisins_wan_admin_avec(client):
+    client_sysd.update(wan_addr=WAN_ADDR, voisins_wan=VOISINS_WAN)
+    assert client.get("/reseau/carte").json()["carte"]["wan"]["voisins"][0]["mac"] == "00:07:cb:aa:bb:cc"
+    _anon()
+    r = client.get("/reseau/carte")
+    w = r.json()["carte"]["wan"]
+    assert "voisins" not in w and w["nb_voisins"] == 1 and "00:07:cb" not in r.text
+
+
+def test_clients_exige_require_jwt(client):
+    main.app.dependency_overrides.pop(require_jwt)
+    assert client.get("/reseau/clients").status_code in (401, 403)
+
+
+# ---- fichiers des ports coupés (contrat tâche 2) ------------------------------------------------------------------
+
+def test_coupes_depuis_vrai_listage(monkeypatch, tmp_path):
+    for n in ("04-secubox-port-lan1-coupe.network", "04-secubox-port-lan3-coupe.network", "04-secubox-port-lan1.network",
+              "04-secubox-port-eth2-coupe.network", "04-secubox-port-lan4-coupe.network", "10-autre.network",
+              "x04-secubox-port-lan0-coupe.network"):
+        (tmp_path / n).write_text("")
+    (tmp_path / "baux").write_text(BAUX)
+    reseau_api._cache.clear()
+    monkeypatch.setattr(reseau_api, "BAUX", tmp_path / "baux")
+    monkeypatch.setattr(reseau_api, "RESEAU_D", tmp_path)
+    monkeypatch.setattr(reseau_api.subprocess, "run", _faux_run())
+    assert reseau_api.lire_systeme()["coupes"] == {"lan1", "lan3"}
+
+
+# ---- pannes visibles champ par champ ------------------------------------------------------------------------------
+
+def test_coupes_en_panne_coupe_none(client):
+    client_sysd.update(coupes=None, pannes=["coupes"])
+    r = client.get("/reseau/ports").json()
+    assert all(p["coupe"] is None for p in r["ports"]) and r["pannes"] == ["coupes"]
+
+
+def test_fdb_en_panne_macs_none(client):
+    client_sysd.update(fdb=None, pannes=["fdb"])
+    r = client.get("/reseau/ports").json()
+    assert all(p["macs"] is None and p["plusieurs_appareils"] is None for p in r["ports"]) and r["pannes"] == ["fdb"]
+
+
+def test_ip_link_en_panne_ports_none(client):
+    client_sysd.update(ip_link=None, pannes=["ip_link", "membres_lxc"])
+    r = client.get("/reseau/ports").json()
+    assert r["ports"] is None and r["pannes"] == ["ip_link"]            # pannes limitées aux sources de la route
+
+
+def test_baux_en_panne_clients_voisins_marques(client):
+    voisins = [{"dst": "192.168.42.50", "lladdr": "dc:a6:32:e6:74:e1", "state": ["STALE"]}]
+    client_sysd.update(baux=None, voisins_lan=voisins, pannes=["baux"])
+    r = client.get("/reseau/clients").json()
+    assert r["pannes"] == ["baux"] and r["clients"][0]["bail_inconnu"] is True and r["clients"][0]["source"] == "voisin"
+
+
+def test_clients_source_principale_en_panne_none(client):
+    client_sysd.update(baux=None, voisins_lan=None, pannes=["baux", "voisins_lan"])
+    assert client.get("/reseau/clients").json()["clients"] is None
+
+
+def test_clients_fdb_en_panne_port_none(client):
+    client_sysd.update(fdb=None, pannes=["fdb"])
+    c = client.get("/reseau/clients").json()
+    assert c["clients"][0]["port"] is None and c["pannes"] == ["fdb"]
+
+
+def test_carte_blocs_none(client):
+    client_sysd.update(wan_addr=None, membres_lxc=None, liens_wg=None,
+                       pannes=["wan_addr", "membres_lxc", "liens_wg", "baux"])
+    r = client.get("/reseau/carte").json()
+    assert r["carte"] == {"wan": None, "lxc": None, "tunnels": None}
+    assert r["pannes"] == ["wan_addr", "membres_lxc", "liens_wg"]

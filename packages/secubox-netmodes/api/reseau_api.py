@@ -14,9 +14,11 @@ import time
 from pathlib import Path
 from typing import Any
 
+import re
+
 from fastapi import APIRouter, Depends
 
-from secubox_core.auth import require_lecture
+from secubox_core.auth import require_jwt, require_lecture
 
 from . import reseau_lecture as lect
 
@@ -57,6 +59,14 @@ def _sys(port: str, fichier: str) -> str | None:
         return None
 
 
+COUPE_RE = re.compile(r"^04-secubox-port-(lan[0-3])-coupe\.network$")
+
+
+def ports_coupes(noms: list[str]) -> set[str]:
+    """Ports coupés d'après les noms de fichiers (contrat avec la tâche 2) ; tout autre nom est ignoré."""
+    return {m.group(1) for n in noms if (m := COUPE_RE.fullmatch(n))}
+
+
 def lire_systeme() -> dict:
     """Toutes les lectures, cache mémoire de 5 s. Source en échec : clé None et nom dans `pannes`."""
     with _verrou:
@@ -77,8 +87,7 @@ def lire_systeme() -> dict:
             res["baux"] = None
             pannes.append("baux")
         try:
-            pref, suf = "04-secubox-port-", ".network"
-            res["coupes"] = {f.name[len(pref):-len(suf)] for f in RESEAU_D.glob(pref + "*" + suf)}
+            res["coupes"] = ports_coupes([f.name for f in RESEAU_D.iterdir()])
         except OSError:
             res["coupes"] = None
             pannes.append("coupes")
@@ -91,21 +100,40 @@ def _macs_box(s: dict) -> set[str]:
     return {str(l["address"]).lower() for l in s.get("ip_link") or [] if isinstance(l, dict) and l.get("address")}
 
 
+def _anonyme(user: Any) -> bool:
+    return not (isinstance(user, dict) and user.get("sub"))
+
+
+def _pannes(s: dict, cles: tuple[str, ...]) -> list[str]:
+    return [p for p in s["pannes"] if p in cles]
+
+
 @router.get("/ports")
-def lire_ports(_user: Any = Depends(require_lecture)) -> dict:
+def lire_ports(user: Any = Depends(require_lecture)) -> dict:
     s = lire_systeme()
-    return {"ports": lect.ports(s["ip_link"] or [], s["fdb"] or [], s["sysfs"], s["coupes"] or set(), _macs_box(s)),
-            "pannes": s["pannes"]}
+    if s["ip_link"] is None:
+        liste = None
+    else:
+        liste = lect.ports(s["ip_link"], s["fdb"], s["sysfs"], s["coupes"], _macs_box(s))
+        if _anonyme(user):                      # lecteur anonyme : ni MAC apprises ni acteur, des comptes seulement
+            for p in liste:
+                p["nb_appareils"] = None if p["macs"] is None else len(p["macs"])
+                del p["macs"]
+    return {"ports": liste, "pannes": _pannes(s, ("ip_link", "fdb", "coupes"))}
 
 
 @router.get("/clients")
-def lire_clients(_user: Any = Depends(require_lecture)) -> dict:
+def lire_clients(_user: Any = Depends(require_jwt)) -> dict:
     s = lire_systeme()
-    return {"clients": lect.clients(s["baux"] or "", s["fdb"] or [], s["voisins_lan"] or []), "pannes": s["pannes"]}
+    return {"clients": lect.clients(s["baux"], s["fdb"], s["voisins_lan"]),
+            "pannes": _pannes(s, ("baux", "voisins_lan", "fdb"))}
 
 
 @router.get("/carte")
-def lire_carte(_user: Any = Depends(require_lecture)) -> dict:
+def lire_carte(user: Any = Depends(require_lecture)) -> dict:
     s = lire_systeme()
-    return {"carte": lect.carte(s["wan_addr"] or [], s["route_defaut"] or [], s["voisins_wan"] or [],
-                                s["membres_lxc"] or [], s["liens_wg"] or []), "pannes": s["pannes"]}
+    c = lect.carte(s["wan_addr"], s["route_defaut"], s["voisins_wan"], s["membres_lxc"], s["liens_wg"])
+    if _anonyme(user) and c["wan"] and c["wan"]["voisins"] is not None:
+        c["wan"]["nb_voisins"] = len(c["wan"]["voisins"])
+        del c["wan"]["voisins"]
+    return {"carte": c, "pannes": _pannes(s, ("wan_addr", "route_defaut", "voisins_wan", "membres_lxc", "liens_wg"))}
