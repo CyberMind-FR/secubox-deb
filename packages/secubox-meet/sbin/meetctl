@@ -31,6 +31,10 @@ readonly NFT_SRC="${SECUBOX_MEET_NFT_SRC:-/usr/share/doc/secubox-meet/examples/m
 # Ports publiés pour le relais du maître (secubox-relais-maillage les lit via webos /public/ports).
 readonly PORTS_PUBLICS_DIR="${SECUBOX_PORTS_PUBLICS_DIR:-/var/lib/secubox/ports-publics.d}"
 readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
+# Activité de la visio (#3182) : base lue par l'API (root:secubox 0640), bibliothèque partagée avec elle.
+readonly ACTIVITE_DB="${SECUBOX_MEET_ACTIVITE_DB:-/var/lib/secubox/meet/activite.db}"
+readonly ACTIVITE_PY="${SECUBOX_MEET_ACTIVITE_PY:-/usr/lib/secubox/meet/api/activite.py}"
+readonly AUDIT_LOG="${SECUBOX_AUDIT_LOG:-/var/log/secubox/audit.log}"
 
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
@@ -112,6 +116,13 @@ pg_state() {
     else
         printf 'failed'
     fi
+}
+
+# Décision de sécurité → une ligne au journal d'audit (append-only). Un journal inaccessible n'empêche pas l'action, il le dit.
+audit() {   # audit <action> <détail>
+    printf '{"ts": "%s", "module": "meet", "action": "%s", "detail": "%s"}\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(json_escape "$1")" "$(json_escape "$2")" >> "$AUDIT_LOG" 2>/dev/null \
+        || warn "journal d'audit inaccessible : $AUDIT_LOG"
 }
 
 # ── status ───────────────────────────────────────────────────────────────────
@@ -374,6 +385,7 @@ cmd_media_expose() {
                     echo '{"success": false, "error": "publication des ports pour le relais impossible — rien appliqué"}'
                     return 1
                 fi
+                audit media-expose-ouvrir "ports ${TCP_PORT}/tcp ${UDP_PORT}/udp redirigés vers $LXC_IP et publiés pour le relais"
                 printf '{"success": true, "applied": "%s", "tcp_port": %s, "udp_port": %s}\n' \
                     "$(json_escape "$NFT_DST")" "$TCP_PORT" "$UDP_PORT"
             else
@@ -386,6 +398,7 @@ cmd_media_expose() {
             nft delete table inet secubox-meet 2>/dev/null || true
             rm -f "$NFT_DST"
             ports_depublier
+            audit media-expose-fermer "ports ${TCP_PORT}/tcp ${UDP_PORT}/udp retirés"
             echo '{"success": true, "revoked": true}'
             ;;
         *)
@@ -420,6 +433,63 @@ cmd_autostart() {
     printf '{"success": true, "autostart": %s}\n' "$([ "$val" = 1 ] && echo true || echo false)"
 }
 
+# ── Activité de la visio (#3182) ─────────────────────────────────────────────
+#
+# La base de Meet est lue par `runuser -u postgres -- psql` DANS le conteneur, argv sans shell ; séparateurs ASCII \x1f/\x1e
+# (un nom de salle saisi peut contenir « | » ou un retour à la ligne). L'API Twirp de LiveKit est appelée par activite.py
+# avec un jeton signé ici (root) : le secret ne quitte pas ce processus.
+psql_meet() {   # psql_meet <requête>
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- env LC_ALL=C.UTF-8 \
+        runuser -u postgres -- psql -d meet -A -t -F $'\x1f' -R $'\x1e' -X -q -c "$1"
+}
+
+activite() {    # activite <commande> [args…]
+    python3 "$ACTIVITE_PY" "$@" --db "$ACTIVITE_DB" --url "http://${LXC_IP}:7880" --secret "$SECRETS_DIR/livekit-secret"
+}
+
+activite_base_prete() {
+    local dir; dir=$(dirname "$ACTIVITE_DB")
+    [ -d "$dir" ] || install -d -m 0750 -o root -g secubox "$dir" 2>/dev/null || install -d -m 0750 "$dir"
+}
+
+readonly SQL_COMPTES="SELECT sub, COALESCE(NULLIF(short_name, ''), NULLIF(full_name, ''), 'compte') FROM meet_user WHERE sub IS NOT NULL AND sub <> ''"
+readonly SQL_SALLES="SELECT r.resource_id, r.name, r.slug, r.access_level, COALESCE((SELECT COALESCE(NULLIF(u.short_name, ''), u.full_name, '') FROM meet_resource_access a JOIN meet_user u ON u.id = a.user_id WHERE a.resource_id = r.resource_id AND a.role = 'owner' LIMIT 1), ''), CAST(EXTRACT(EPOCH FROM res.created_at) AS BIGINT), COALESCE(CAST(CAST(EXTRACT(EPOCH FROM r.last_started_at) AS BIGINT) AS TEXT), '') FROM meet_room r JOIN meet_resource res ON res.id = r.resource_id"
+
+# Relevé (minuterie, 5 min) : pseudos des comptes, puis journal de LiveKit après le dernier curseur (30 jours au premier passage).
+cmd_activite_collecte() {
+    lxc_exists || { echo '{"success": false, "error": "conteneur Meet absent"}'; return 1; }
+    activite_base_prete
+    psql_meet "$SQL_COMPTES" | python3 "$ACTIVITE_PY" comptes --db "$ACTIVITE_DB" >/dev/null \
+        || warn "pseudos des comptes non relus"
+    local cur
+    cur=$(python3 "$ACTIVITE_PY" curseur --db "$ACTIVITE_DB")
+    local args=(-u livekit -o json --no-pager)
+    if [ -n "$cur" ]; then args+=(--after-cursor "$cur"); else args+=(--since "-30 days"); fi
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- journalctl "${args[@]}" | python3 "$ACTIVITE_PY" collecte --db "$ACTIVITE_DB"
+    chgrp secubox "$ACTIVITE_DB" 2>/dev/null || true
+    chmod 0640 "$ACTIVITE_DB"
+}
+
+cmd_en_direct() { activite en-direct; }
+
+cmd_reunions() {
+    lxc_exists || { echo '{"success": false, "error": "conteneur Meet absent"}'; return 1; }
+    psql_meet "$SQL_SALLES" | activite reunions
+}
+
+# Met fin à une réunion en cours : décision de l'administrateur, auditée. Un seul argument, nom de salle LiveKit strict.
+cmd_clore() {
+    if [ "$#" -ne 1 ] || ! [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$ ]]; then
+        echo '{"success": false, "error": "usage : meetctl clore <salle> (nom de salle LiveKit)"}'
+        return 1
+    fi
+    local out rc=0
+    out=$(activite clore --salle "$1") || rc=$?
+    [ "$rc" -eq 0 ] && audit clore "réunion $1 close par l'administrateur"
+    printf '%s\n' "$out"
+    return "$rc"
+}
+
 cmd_help() {
     cat <<EOF
 meetctl v$VERSION — La Suite Meet (LXC-native)
@@ -436,6 +506,10 @@ meetctl v$VERSION — La Suite Meet (LXC-native)
   logs <unité> [lignes]     Journal d'un service interne
                             (postgresql|redis-server|livekit|meet-backend|nginx)
   autostart on|off          Démarrage du conteneur avec la box (lxc.start.auto)
+  activite-collecte         Relève le journal de LiveKit dans la base d'activité (minuterie, 5 min)
+  en-direct                 Réunions ouvertes et participants (JSON)
+  reunions                  Salles de Meet, état en direct et dernière réunion (JSON)
+  clore <salle>             Met fin à une réunion en cours (audité)
   help                      Cette aide
 EOF
 }
@@ -451,6 +525,10 @@ case "${1:-help}" in
     media-expose)     cmd_media_expose "${2:-}" ;;
     logs)             cmd_logs "${2:-}" "${3:-}" ;;
     autostart)        cmd_autostart "${2:-}" ;;
+    activite-collecte) cmd_activite_collecte ;;
+    en-direct)        cmd_en_direct ;;
+    reunions)         cmd_reunions ;;
+    clore)            shift; cmd_clore "$@" ;;
     help|--help|-h)   cmd_help ;;
     *)                cmd_help; exit 1 ;;
 esac

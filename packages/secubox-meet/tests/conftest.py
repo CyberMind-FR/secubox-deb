@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 CTL = Path(__file__).resolve().parents[1] / "sbin" / "meetctl"
+ACTIVITE_PY = Path(__file__).resolve().parents[1] / "api" / "activite.py"
 
 
 def _ecrire_exec(chemin: Path, contenu: str) -> None:
@@ -42,6 +43,28 @@ if [ "$1" = curl ]; then
     esac
   done
   exit 22
+fi
+# Comme le vrai env : « env VAR=valeur… commande » lance la commande.
+if [ "$1" = env ]; then
+  shift
+  while [ $# -gt 0 ] && [[ "$1" == *=* ]]; do shift; done
+fi
+if [ "$1" = journalctl ]; then
+  # Faux journal de LiveKit : argv noté, entrées JSON tirées de FAKE_JOURNAL_FILE.
+  echo "$*" >> "${FAKE_URLS_FILE:-/dev/null}"
+  [ -f "${FAKE_JOURNAL_FILE:-/nonexistent}" ] && cat "$FAKE_JOURNAL_FILE"
+  exit 0
+fi
+if [ "$1" = runuser ]; then
+  # Faux psql (runuser -u postgres -- psql …) : la requête est notée, la réponse vient de FAKE_PSQL_DIR/<n>.
+  echo "$*" >> "${FAKE_URLS_FILE:-/dev/null}"
+  case "$*" in
+    *meet_user*) f=comptes ;;
+    *meet_room*) f=salles ;;
+    *) f=autre ;;
+  esac
+  [ -f "${FAKE_PSQL_DIR:-/nonexistent}/$f" ] && cat "$FAKE_PSQL_DIR/$f"
+  exit 0
 fi
 if [ "$1" = pg_isready ]; then
   echo "$*" >> "${FAKE_URLS_FILE:-/dev/null}"
@@ -128,6 +151,11 @@ echo "$FAKE_OIDCCTL_SECRET"
         "FAKE_ATTACH_CURL_DIR": str(reponses),
         "FAKE_OIDCCTL_SECRET": oidcctl_secret or "",
         "FAKE_IS_ACTIVE": ",".join(f"{u}={e}" for u, e in (is_active or {}).items()),
+        "FAKE_JOURNAL_FILE": str(tmp_path / "journal.jsonl"),
+        "FAKE_PSQL_DIR": str(tmp_path / "psql"),
+        "SECUBOX_MEET_ACTIVITE_DB": str(tmp_path / "activite" / "activite.db"),
+        "SECUBOX_MEET_ACTIVITE_PY": (env_extra or {}).get("SECUBOX_MEET_ACTIVITE_PY", str(ACTIVITE_PY)),
+        "SECUBOX_AUDIT_LOG": str(tmp_path / "audit.log"),
     }
 
 
