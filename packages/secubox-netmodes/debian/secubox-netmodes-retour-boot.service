@@ -19,8 +19,9 @@ Before=secubox-lan-dhcp.service
 [Service]
 Type=oneshot
 ExecStart=/usr/sbin/netmodesctl routeur-retour-demarrage
-# Le contrôleur attend jusqu'à 60 s son verrou, puis peut passer 120 s par commande.
-TimeoutStartSec=300
+# Le contrôleur attend jusqu'à 60 s son verrou, puis jusqu'à 900 s le redémarrage d'Unbound (arrêt + démarrage bornés
+# par son unité, + 30 s ; gk2 : arrêt 115 s, démarrage jusqu'à 112 s), puis le reste (120 s par commande au plus).
+TimeoutStartSec=1200
 NoNewPrivileges=yes
 ProtectSystem=strict
 # Les chemins que le contrôleur écrit : même liste que secubox-netmodes.service (le retour remet chaque fichier géré).

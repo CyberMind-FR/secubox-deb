@@ -190,8 +190,10 @@ def test_unite_retour_boot_root_durcie():
     for mot in ("ProtectSystem", "ReadWritePaths", "netmodesctl", TESTS + "test_unite_retour_boot_root_durcie"):
         assert mot in ligne, mot
     assert u["ExecStart"] == [f"{CTL} routeur-retour-demarrage"]
-    # le contrôleur attend jusqu'à 60 s son verrou puis peut passer 120 s par commande
-    assert int(u["TimeoutStartSec"][0]) >= routeur_ctl.DELAI_VERROU_RETOUR + 120
+    # le contrôleur attend jusqu'à 60 s son verrou, puis jusqu'à 900 s le redémarrage d'Unbound (gk2 : arrêt 115 s,
+    # démarrage jusqu'à 112 s), puis le reste (120 s par commande au plus)
+    assert int(u["TimeoutStartSec"][0]) == 1200
+    assert int(u["TimeoutStartSec"][0]) >= routeur_ctl.DELAI_VERROU_RETOUR + routeur_ctl.DELAI_UNBOUND_MAX + 120
     assert u["WantedBy"] == ["multi-user.target"]
 
 
@@ -315,9 +317,12 @@ def test_control_depends_et_version():
     assert re.search(r"python3 \(>= 3\.11\)", depends)                    # tomllib
     assert "Architecture: all" in ctl and "Standards-Version: 4.6.2" in ctl and "debhelper-compat (= 13)" in ctl
     tete = lire("debian/changelog").split("\n -- ", 1)
-    assert tete[0].startswith("secubox-netmodes (1.4.0-1~trixie1) trixie; urgency=medium")
+    assert tete[0].startswith("secubox-netmodes (1.4.1-1~trixie1) trixie; urgency=medium")
     assert "(ref #3189)" in tete[0]
-    assert tete[1].startswith("Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 14:00:00 +0100")
+    assert tete[1].startswith("Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 15:30:00 +0100")
+    # 1.4.1 : Unbound lent attendu, pont créé et asservi par networkd (gk2, 2026-10-26)
+    for mot in ("Unbound", "--no-block", "TimeoutStartSec=1200", "reconfigure br-lan", "ip link delete br-lan"):
+        assert mot in tete[0], mot
 
 
 @pytest.mark.parametrize("script", ["postinst", "prerm"])
