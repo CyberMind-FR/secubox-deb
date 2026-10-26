@@ -1,3 +1,13 @@
+secubox-core (1.7.16-1~trixie1) trixie; urgency=medium
+
+  * secubox-lo-alias (ref #3189) : 192.168.255.1 passe en /32 sur lo. En /24, tout 192.168.255.0/24 était local : la box
+    répondait à l'ARP de chaque adresse et la détection de conflit des clients DHCP échouait. Le /32 est posé avant de
+    retirer l'ancien /24 (l'adresse ne disparaît jamais) ; 00-lo.network corrigé par réécriture atomique (copie
+    .avant-3189, lien symbolique refusé), décision écrite à l'audit. secubox-wait-network.sh appelle l'outil (défaut /32) ;
+    appelé aussi par le postinst.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 12:00:00 +0200
+
 secubox-core (1.7.15-1~trixie1) trixie; urgency=high
 
   * secubox-firstboot (ref #3113) : « --help » rejouait tout le premier démarrage (gk1 : secret JWT, secubox.conf,
