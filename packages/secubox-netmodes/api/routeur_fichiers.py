@@ -162,9 +162,11 @@ def sauvegarder(base: Path, horodatage: str, geres: dict[str, Path], racine: Pat
 
 
 def restaurer(dossier: Path, geres: dict[str, Path], modes: dict[str, int], racine: Path,
-              stricts: frozenset[str]) -> tuple[list[str], list[str]]:
+              stricts: frozenset[str], neutres: dict[str, str] | None = None) -> tuple[list[str], list[str]]:
     """Réécrit chaque fichier sauvegardé, supprime ceux qui étaient absents ; continue après une erreur.
-    Renvoie (chemins absents de la sauvegarde, erreurs)."""
+    Une référence de `neutres` n'est jamais supprimée (un autre paquet l'inclut nommément) : absente de la sauvegarde,
+    elle reçoit son contenu neutre si son dossier existe, et rien sinon. Renvoie (chemins absents, erreurs)."""
+    neutres = neutres or {}
     brut = lire(dossier / "absents.json", racine)
     try:
         absents = json.loads((brut or b"").decode("utf-8"))
@@ -176,6 +178,10 @@ def restaurer(dossier: Path, geres: dict[str, Path], modes: dict[str, int], raci
     for reference, reel in geres.items():                   # seuls les chemins gérés : rien d'autre n'est touché
         strict = racine if reference in stricts else None
         try:
+            if reference in absents and reference in neutres:
+                if reel.parent.is_dir():
+                    ecrire(reel, neutres[reference], modes.get(reference, 0o644), strict)
+                continue
             if reference in absents:
                 if strict is not None:
                     verifier_sur(racine, reel)

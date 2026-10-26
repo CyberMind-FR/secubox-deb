@@ -33,7 +33,7 @@ from . import routeur_fichiers as fichiers
 from .routeur_config import (
     PORTS_LAN, ConfigRouteur, ErreurConfig, charger, depuis_dict, en_toml, verifier_reseaux,
 )
-from .routeur_rendu import CHEMINS, COMMENTAIRE_NFT, TABLE_NFT, rendre
+from .routeur_rendu import CHEMINS, COMMENTAIRE_NFT, MARQUE, TABLE_NFT, rendre
 
 VERROU = "/run/lock/secubox-netmodes.lock"
 VERROU_UNBOUND = "/run/lock/secubox-dns-lan.lock"           # partagé avec secubox-dns-lan
@@ -43,6 +43,10 @@ ARBRE = "/var/lib/secubox-netmodes"                         # root seul, 0700
 ETAT = f"{ARBRE}/routeur-etat.json"
 SAUVEGARDES = f"{ARBRE}/sauvegardes"
 STRICTS = frozenset({CHEMINS["dhcp"]})                      # gérés ET dans l'arbre root : contrôle strict
+# secubox-hub inclut ce fichier nommément dans son bloc geo (nginx refuse un joker) : absent, `nginx -t` échoue.
+# Jamais supprimé : un retour le remet neutre (commentaires seuls), s'il a un dossier où vivre.
+NEUTRES = {CHEMINS["geo"]: ("# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"
+                            f"# {MARQUE}\n# mode routeur inactif : aucun réseau LAN ajouté\n")}
 TOML = "/etc/secubox/netmodes/routeur.toml"
 ANCIEN_PONT = "/etc/systemd/network/10-br-lan.network"      # pont fait main de gk2 : mis de côté, remis au retour
 DOSSIERS_NETWORKD = ("/etc/systemd/network", "/run/systemd/network")
@@ -390,7 +394,7 @@ def _refus_prealables(ctx: Contexte, liens: dict[str, list[IPv4Interface]]) -> N
 
 
 def _restaurer(ctx: Contexte, nom: str) -> tuple[list[str], list[str]]:
-    return fichiers.restaurer(_p(ctx, SAUVEGARDES) / nom, _geres(ctx), MODES, ctx.racine, STRICTS)
+    return fichiers.restaurer(_p(ctx, SAUVEGARDES) / nom, _geres(ctx), MODES, ctx.racine, STRICTS, NEUTRES)
 
 
 def _poser(ctx: Contexte, cfg: ConfigRouteur, rendu: dict[str, str], geo: bool) -> None:

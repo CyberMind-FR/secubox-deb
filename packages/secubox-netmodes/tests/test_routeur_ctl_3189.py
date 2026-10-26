@@ -259,6 +259,13 @@ def instantane(r: Path) -> dict:
             and not p.relative_to(r).as_posix().startswith("run/lock/")}
 
 
+def geo_vide(r: Path) -> bool:
+    """Fragment géo neutre : présent (nginx l'inclut nommément), 0644, rien que des commentaires."""
+    f = r / CHEMINS["geo"].lstrip("/")
+    return (f.is_file() and not f.is_symlink() and (f.stat().st_mode & 0o777) == 0o644
+            and f.read_text().strip() != "" and all(x.startswith("#") for x in f.read_text().splitlines()))
+
+
 def hors_sauvegardes(fichiers: dict) -> dict:
     return {k: v for k, v in fichiers.items() if not k.startswith(SAUVEGARDES)}
 
@@ -477,7 +484,9 @@ def test_validation_premiere_application_restaure(neuf):
     f.echouer("unbound-checkconf")
     with pytest.raises(rc.Refus, match="unbound-checkconf"):
         rc.appliquer(ctx, CFG42, "admin")
-    assert hors_sauvegardes(instantane(r)) == avant
+    apres = hors_sauvegardes(instantane(r))
+    assert apres.pop(CHEMINS["geo"].lstrip("/")) is not None and geo_vide(r)   # absent avant : remis vide, pas supprimé
+    assert apres == avant
     assert not (r / ETAT).exists()
 
 
@@ -489,8 +498,10 @@ def test_echec_apres_bascule_revient(ctx, racine, faux):
     assert ("appliquer-echec", "admin") in actions and ("retour", "echec") in actions
     assert etat_fichier(racine)["etat"] == "inactif"
     assert (racine / "etc/systemd/network/10-br-lan.network").read_text() == ANCIEN_PONT
-    for chemin in CHEMINS.values():
-        assert not (racine / chemin.lstrip("/")).exists()
+    for cle, chemin in CHEMINS.items():
+        if cle != "geo":
+            assert not (racine / chemin.lstrip("/")).exists()
+    assert geo_vide(racine)                                                     # jamais supprimé : include de nginx
     assert not (racine / TOML).exists()
     assert not any(a[0] == "systemd-run" for a in faux.journal)
 
@@ -586,8 +597,10 @@ def test_retour_gk2_remet_l_ancien_pont(ctx, racine, faux):
     faux.journal.clear()
     sortie = rc.retour(ctx, "admin")
     assert (racine / "etc/systemd/network/10-br-lan.network").read_text() == ANCIEN_PONT
-    for chemin in CHEMINS.values():
-        assert not (racine / chemin.lstrip("/")).exists()
+    for cle, chemin in CHEMINS.items():
+        if cle != "geo":
+            assert not (racine / chemin.lstrip("/")).exists()
+    assert geo_vide(racine)                                                     # jamais supprimé : include de nginx
     j = faux.journal
     assert j[:2] == [["networkctl", "reload"],
                      ["networkctl", "reconfigure", "br-lan", "lan0", "lan1", "lan2", "lan3"]]
@@ -608,8 +621,10 @@ def test_retour_premiere_application(neuf):
     assert f.table_lan and "br-lan" in f.adresses
     f.journal.clear()
     sortie = rc.retour(ctx, "admin")
-    for chemin in CHEMINS.values():
-        assert not (r / chemin.lstrip("/")).exists()
+    for cle, chemin in CHEMINS.items():
+        if cle != "geo":
+            assert not (r / chemin.lstrip("/")).exists()
+    assert geo_vide(r)                                                     # jamais supprimé : include de nginx
     assert not (r / TOML).exists()
     j = f.journal
     assert ["ip", "link", "delete", "br-lan"] in j
@@ -954,8 +969,10 @@ def test_exception_inattendue_etape_9_revient(ctx, racine, faux):
         rc.appliquer(ctx, CFG42, "admin")
     assert etat_fichier(racine)["etat"] == "inactif"
     assert (racine / "etc/systemd/network/10-br-lan.network").read_text() == ANCIEN_PONT
-    for chemin in CHEMINS.values():
-        assert not (racine / chemin.lstrip("/")).exists()
+    for cle, chemin in CHEMINS.items():
+        if cle != "geo":
+            assert not (racine / chemin.lstrip("/")).exists()
+    assert geo_vide(racine)                                                     # jamais supprimé : include de nginx
     actions = [(a["action"], a["acteur"]) for a in audits(racine)]
     assert ("appliquer-echec", "admin") in actions and ("retour", "echec") in actions
 
@@ -1083,3 +1100,29 @@ def test_retour_automatique_abandonne_apres_le_delai(ctx, racine, monkeypatch):
     finally:
         os.close(fd)
     assert etat_fichier(racine)["etat"] == "en_attente"
+
+
+# --- suivi T8 : nginx inclut le fragment géo nommément, il ne disparaît jamais ---------------------------------------------
+
+def test_geo_absent_de_la_sauvegarde_remis_vide(ctx, racine, faux):
+    geo = racine / CHEMINS["geo"].lstrip("/")
+    assert geo.parent.is_dir() and not geo.exists()
+    rc.appliquer(ctx, CFG42, "admin")
+    (d,) = list((racine / SAUVEGARDES).iterdir())
+    assert CHEMINS["geo"] in json.loads((d / "absents.json").read_text())
+    assert "192.168.42.0/24 1;" in geo.read_text()
+    faux.journal.clear()
+    rc.retour(ctx, "admin")
+    assert geo_vide(racine)
+    assert ["systemctl", "reload", "nginx.service"] in faux.journal
+
+
+def test_geo_dossier_absent_rien(ctx, racine, faux):
+    (racine / "etc/nginx/secubox-lan-geo.d").rmdir()
+    rc.appliquer(ctx, CFG42, "admin")
+    rc.retour(ctx, "admin")
+    faux.echouer("nft", "-c", fois=1)
+    with pytest.raises(rc.Refus):
+        rc.appliquer(ctx, CFG42, "admin")
+    assert not (racine / "etc/nginx/secubox-lan-geo.d").exists()
+    assert not any(a[0] == "nginx" or a[-1] == "nginx.service" for a in faux.journal)
