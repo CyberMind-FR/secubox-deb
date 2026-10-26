@@ -420,3 +420,65 @@ def test_wireguard_503_et_401_affiches_en_panne_jamais_aucun_pair():
     assert "2 voisins · adresses : session requise" in schema and "nom : session requise" in schema
     assert "2 sources" in session_txt                                        # clients et tunnels en 401 ; pairs WireGuard en 503
     assert j["erreurs"] == [] and all(meth == "GET" for meth, _ in j["appels"])
+
+
+# ── Valeurs absentes ou d'un autre format : « — », jamais « null », « aucun » ni « NaN » (revue de la tâche 5) ──────────────────
+SUM_NULL = {"interfaces": [{"name": "wg-x", "listen_port": 51999, "peers": None, "online": None, "rx_bytes": None, "tx_bytes": None},
+                           {"name": "wg-zero", "listen_port": 51998, "peers": 3, "online": 0, "rx_bytes": 0, "tx_bytes": 0}], "totals": {}}
+
+
+def test_tunnels_pairs_et_en_ligne_absents_affiches_tiret_seul_un_vrai_zero_dit_aucun_lien():
+    api = {"p2p/peers": (200, {"peers": [], "count": 0}), "wireguard/peers/status": (200, {"peers": [], "total": 0, "online": 0, "offline": 0}),
+           "wireguard/summary": (200, SUM_NULL),
+           "netmodes/reseau/carte": (200, {"carte": {"wan": None, "lxc": {"pont": "br-lxc", "actifs": None}, "tunnels": None}, "pannes": ["wan_addr", "liens_wg"]})}
+
+    def scenario(nav):
+        ctx, pg, j = _page(nav, api)
+        pg.goto("http://t.test/netmodes/maillage.html")
+        pg.wait_for_function("document.getElementById('etatSources').textContent !== 'LECTURE…'")
+        lignes = pg.evaluate("[...document.querySelectorAll('#tunnels tr')].map(tr => [...tr.cells].map(td => td.textContent.trim()))")
+        pg.goto("http://t.test/netmodes/carte.html")
+        pg.wait_for_function("document.getElementById('etatSources').textContent !== 'LECTURE…'")
+        schema = pg.evaluate("[...document.querySelectorAll('#schema text')].map(t => t.textContent)")
+        ctx.close()
+        return lignes, schema, j
+    lignes, schema, j = _avec_navigateur(scenario)
+    par_nom = {ligne[0]: ligne for ligne in lignes}
+    assert par_nom["wg-x"] == ["wg-x", "51999", "—", "—", "—", "—"]                     # pairs, reçu, émis, état : absents
+    assert par_nom["wg-zero"][2] == "3" and par_nom["wg-zero"][5] == "aucun lien"          # 0 en ligne mesuré : « aucun lien »
+    x = [t for t in schema if t.startswith("wg-x")]
+    z = [t for t in schema if t.startswith("wg-zero")]
+    assert x == ["wg-x · UDP 51999 · pairs — · liens —"] and z == ["wg-zero · UDP 51998 · 3 pairs · aucun lien"]
+    assert "conteneurs actifs —" in schema and not any("null" in t or "NaN" in t or "undefined" in t for t in schema)
+    assert j["erreurs"] == []
+
+
+def test_dernier_echange_p2p_iso_ou_illisible_jamais_nan():
+    """WireGuard en panne : le dernier échange vient du registre p2p, dont `last_seen` est un epoch, un ISO 8601 naïf en UTC
+    (peers.json hérité, datetime.utcnow().isoformat()) ou n'importe quoi."""
+    iso = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - 125)) + ".123456"
+    p2p = {"peers": [
+        {"id": "a", "name": "iso-demo", "address": "203.0.113.21", "public_key": "KA", "status": "online", "last_seen": iso},
+        {"id": "b", "name": "epoch-demo", "address": "203.0.113.22", "public_key": "KB", "status": "online", "last_seen": int(time.time()) - 30},
+        {"id": "c", "name": "texte-demo", "address": "203.0.113.23", "public_key": "KC", "status": "offline", "last_seen": "hier"},
+        {"id": "d", "name": "jamais-demo", "address": "203.0.113.24", "public_key": "KD", "status": "offline", "last_seen": None}], "count": 4}
+    api = {"p2p/peers": (200, p2p), "wireguard/peers/status": (503, {"detail": "wgctl dump en échec"}), "wireguard/summary": (503, {"detail": "wgctl dump en échec"})}
+
+    def scenario(nav):
+        ctx, pg, j = _page(nav, api)
+        pg.goto("http://t.test/netmodes/maillage.html")
+        pg.wait_for_function("document.getElementById('etatSources').textContent !== 'LECTURE…'")
+        lignes = pg.evaluate("[...document.querySelectorAll('#pairs tr')].map(tr => [...tr.cells].map(td => td.textContent.trim()))")
+        pg.goto("http://t.test/netmodes/carte.html")
+        pg.wait_for_function("document.getElementById('etatSources').textContent !== 'LECTURE…'")
+        schema = pg.evaluate("document.getElementById('schema').textContent")
+        ctx.close()
+        return lignes, schema, j
+    lignes, schema, j = _avec_navigateur(scenario)
+    par_ip = {ligne[1]: ligne for ligne in lignes}
+    assert par_ip["203.0.113.21"][2] in ("il y a 2 min", "il y a 3 min") and par_ip["203.0.113.21"][4] == "actif"
+    assert re.fullmatch(r"il y a (29|3\d) s", par_ip["203.0.113.22"][2])
+    assert par_ip["203.0.113.23"][2] == "—" and par_ip["203.0.113.23"][4] == "muet"        # illisible : inconnu, pas « jamais »
+    assert par_ip["203.0.113.24"][2] == "jamais"
+    assert not any("NaN" in c for ligne in lignes for c in ligne) and "NaN" not in schema
+    assert "iso-demo" in schema and j["erreurs"] == []

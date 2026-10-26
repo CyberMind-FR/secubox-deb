@@ -185,6 +185,19 @@
   }
 
   // ── Maillage : pairs p2p (noms) joints aux pairs WireGuard de wg-mesh (état, volumes) par clé publique complète ──────────────────
+  // last_seen du registre p2p : secondes epoch (nombre) ou ISO 8601 (registre peers.json hérité, UTC naïf de
+  // datetime.utcnow().isoformat()) ; toute autre valeur est inconnue (null), jamais « il y a NaN s ».
+  function epoque(v) {
+    if (typeof v === "number") { return isFinite(v) && v > 0 ? v : null; }
+    if (typeof v !== "string" || !v.trim()) { return null; }
+    var s = v.trim();
+    if (/^\d+(\.\d+)?$/.test(s)) { return +s > 0 ? +s : null; }
+    s = s.replace(/(\.\d{3})\d+/, "$1");
+    if (/T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s)) { s += "Z"; }
+    var t = Date.parse(s);
+    return isNaN(t) ? null : t / 1000;
+  }
+  function nombre(v) { return typeof v === "number" && isFinite(v) ? v : null; }
   var MAILLAGE = "wg-mesh", TRENTE_JOURS = 30 * 86400;
   function sansNom(p) {
     var n = String(p.name || "").trim();
@@ -209,14 +222,17 @@
     liste.forEach(function (e) {
       if (e.wg) {
         e.etat = e.wg.status === "online" ? "actif" : "muet";
-        e.dernier = { connu: true, s: e.wg.seconds_since_handshake == null ? null : +e.wg.seconds_since_handshake };
-        e.recu = e.wg.rx_bytes == null ? null : +e.wg.rx_bytes;
+        var sh = e.wg.seconds_since_handshake;
+        e.dernier = sh == null ? { connu: true, s: null } : (nombre(+sh) != null ? { connu: true, s: +sh } : { connu: false });
+        e.recu = nombre(e.wg.rx_bytes);
       } else if (wg.ok) {
         e.etat = "absent"; e.dernier = { connu: false }; e.recu = null;           // sur le registre p2p, pas sur l'interface wg-mesh
       } else {
         var st = e.p2p && e.p2p.status;
         e.etat = st === "online" ? "actif" : st === "offline" ? "muet" : null;     // WireGuard illisible : état du registre p2p, volumes inconnus
-        e.dernier = e.p2p && e.p2p.last_seen ? { connu: true, s: Math.max(0, Math.round(maintenant - e.p2p.last_seen)) } : (st === "offline" ? { connu: true, s: null } : { connu: false });
+        var brut = e.p2p ? e.p2p.last_seen : null, vu = epoque(brut);
+        e.dernier = vu != null ? { connu: true, s: Math.max(0, Math.round(maintenant - vu)) }
+          : ((brut == null || brut === 0 || brut === "") && st === "offline" ? { connu: true, s: null } : { connu: false });   // jamais, ou illisible : « — »
         e.recu = null;
       }
       e.aRetirer = e.sansNom || (e.dernier.connu && e.dernier.s != null && e.dernier.s > TRENTE_JOURS);
@@ -270,8 +286,8 @@
       var rl = R.carte.ok ? { panne: true } : R.carte;
       M.lxc = { style: "n-panne", l: [L("moyen", S("br-lxc", "g")), L("normal", S("conteneurs : " + raison(rl), couleurRaison(rl)))] };
     } else {
-      var n = carte.lxc.actifs;
-      M.lxc = { style: "n-bleu", l: [L("moyen", S(carte.lxc.pont || "br-lxc", "g"), S(" · pont des conteneurs", "c-doux")), L("normal", S(n + " conteneur" + (n > 1 ? "s" : "") + " actif" + (n > 1 ? "s" : ""), "c-vert"))] };
+      var n = nombre(carte.lxc.actifs);
+      M.lxc = { style: "n-bleu", l: [L("moyen", S(carte.lxc.pont || "br-lxc", "g"), S(" · pont des conteneurs", "c-doux")), L("normal", n == null ? S("conteneurs actifs —", "c-doux") : S(n + " conteneur" + (n > 1 ? "s" : "") + " actif" + (n > 1 ? "s" : ""), "c-vert"))] };
     }
 
     // Maillage wg-mesh
@@ -297,8 +313,9 @@
     var lt = [];
     if (R.wgsum.ok) {
       (R.wgsum.d.interfaces || []).filter(function (i) { return i && i.name !== MAILLAGE; }).forEach(function (i) {
-        lt.push(L("normal", S(i.name, "", true), S(" · UDP " + (i.listen_port || "—") + " · " + i.peers + " pair" + (i.peers > 1 ? "s" : "") + " · ", ""),
-          i.online > 0 ? S(i.online + " en ligne", "c-vert") : S("aucun lien", "c-eteint")));
+        var np = nombre(i.peers), en = nombre(i.online);         // absent : « — » ; seul un vrai 0 dit « aucun lien »
+        lt.push(L("normal", S(i.name, "", true), S(" · UDP " + (i.listen_port || "—") + " · " + (np == null ? "pairs —" : np + " pair" + (np > 1 ? "s" : "")) + " · ", ""),
+          en == null ? S("liens —", "c-doux") : en > 0 ? S(en + " en ligne", "c-vert") : S("aucun lien", "c-eteint")));
       });
       if (!lt.length) { lt.push(L("normal", S("aucun autre tunnel", "c-doux"))); }
     } else if (carte && Array.isArray(carte.tunnels)) {
