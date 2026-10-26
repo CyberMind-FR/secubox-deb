@@ -19,6 +19,9 @@ secubox-netmodes (1.4.0-1~trixie1) trixie; urgency=medium
     secubox-netmodes-retour-boot.service (root durci, avant secubox-lan-dhcp : défait au démarrage une application non
     confirmée avant tout bail) ; état des anciens modes dans /var/lib/secubox-netmodes-api (StateDirectory), plus aucune
     opération root sous /var/lib/secubox ; scripts de maintenance en sh POSIX.
+  * Relecture finale (ref #3189) : un routeur.toml édité à la main (octet non UTF-8, imbrication trop profonde) est
+    une configuration invalide, jamais une trace ; routeur-etat rend config_invalide et le retour (minuteur,
+    démarrage) aboutit sans dépendre du TOML courant (ports illisibles : lan0..lan3).
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 14:00:00 +0100
 

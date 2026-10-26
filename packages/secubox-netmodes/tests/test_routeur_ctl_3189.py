@@ -1186,3 +1186,34 @@ def test_retour_hors_demarrage_attend_les_relances(ctx, faux, acteur):
     assert ["systemctl", "restart", "secubox-lan-dhcp.service"] in faux.journal
     assert ["systemctl", "reload", "nginx.service"] in faux.journal
     assert not any("--no-block" in a for a in faux.journal)
+
+
+# --- relecture finale : I1 TOML édité à la main avec un octet non UTF-8 ---------------------------------------------------
+
+TOML_LATIN1 = (b'[lan]\nadresse = "192.168.42.1/24"\ndhcp_debut = "192.168.42.100"\ndhcp_fin = "192.168.42.199"\n'
+               b"# r\xe9seau du bureau\n")
+
+
+def test_etat_toml_non_utf8_config_invalide(cli, ctx, racine, capsys, monkeypatch):
+    rc.appliquer(ctx, CFG42, "admin")
+    (racine / TOML).write_bytes(TOML_LATIN1)
+    e = rc.etat(ctx)
+    assert e["etat"] == "config_invalide" and "UTF-8" in e["erreur"] and e["config"] is None
+    json.dumps(e)
+    monkeypatch.setattr(cli, "_est_root", lambda: True)
+    assert cli.main(["routeur-etat"], ctx=ctx) == 0                              # plus de trace, plus de 502
+    assert sortie_json(capsys)["etat"] == "config_invalide"
+
+
+@pytest.mark.parametrize("appel", [lambda ctx: rc.retour(ctx, "minuteur"), rc.retour_si_en_attente])
+def test_toml_non_utf8_le_retour_automatique_aboutit(ctx, racine, faux, appel):
+    """Le retour ne dépend jamais de la lecture du TOML courant : illisible, tous les ports du LAN sont reconfigurés."""
+    rc.appliquer(ctx, CFG42, "admin")
+    (racine / TOML).write_bytes(TOML_LATIN1)
+    faux.journal.clear()
+    sortie = appel(ctx)
+    assert sortie["etat"] == "inactif" and etat_fichier(racine)["etat"] == "inactif"
+    assert not (racine / TOML).exists()
+    assert (racine / "etc/systemd/network/10-br-lan.network").read_text() == ANCIEN_PONT
+    assert ["networkctl", "reconfigure", "br-lan", "lan0", "lan1", "lan2", "lan3"] in faux.journal
+    assert [a["action"] for a in audits(racine)][-1] == "retour"

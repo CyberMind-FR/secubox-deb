@@ -295,11 +295,13 @@ def _supprimer_regles(ctx: Contexte, prefixe: str) -> None:
 
 
 def _ports(ctx: Contexte) -> tuple[str, ...]:
+    """Ports du TOML ; absent : aucun ; illisible ou invalide : tous ceux du LAN. Ne lève pas : le retour s'en sert
+    pour savoir quels ports reconfigurer et ne doit jamais dépendre d'un TOML édité à la main (relecture finale I1)."""
     if not os.path.lexists(_p(ctx, TOML)):
         return ()
     try:
         return charger(_p(ctx, TOML)).ports
-    except ErreurConfig:
+    except (ErreurConfig, OSError, ValueError, TypeError, RecursionError):   # charger les convertit ; filet du retour
         return PORTS_LAN
 
 

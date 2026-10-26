@@ -81,3 +81,15 @@ def test_charger_invalide(tmp_path):
         charger(f)
     with pytest.raises(ErreurConfig):
         charger(tmp_path / "absent.toml")
+
+
+def test_charger_octet_non_utf8_et_imbrication_profonde(tmp_path):
+    """Relecture finale I1 : un TOML édité à la main (octet Latin-1) ou trop imbriqué reste une ErreurConfig, jamais une
+    UnicodeDecodeError ou une RecursionError qui ferait tomber l'état et le retour."""
+    f = tmp_path / "x.toml"
+    f.write_bytes(b'[lan]\nadresse = "192.168.42.1/24"\n# r\xe9seau du bureau\n')
+    with pytest.raises(ErreurConfig, match="UTF-8"):
+        charger(f)
+    f.write_text("a = " + "[" * 100000)
+    with pytest.raises(ErreurConfig, match="imbrication"):
+        charger(f)

@@ -106,13 +106,20 @@ def verifier_reseaux(cfg: ConfigRouteur, occupes: Iterable[IPv4Network]) -> None
 
 
 def charger(chemin: Path) -> ConfigRouteur:
+    """Tout défaut du fichier (absent, non UTF-8, TOML invalide, trop imbriqué, table [lan] fausse) est une
+    ErreurConfig : un TOML édité à la main ne doit jamais faire tomber l'état ni le retour (relecture finale I1)."""
     try:
         with open(chemin, "rb") as f:
             donnees = tomllib.load(f)
     except OSError as exc:
         raise ErreurConfig(f"lecture de {chemin} impossible : {exc.strerror or exc}") from exc
-    except tomllib.TOMLDecodeError as exc:
+    except UnicodeDecodeError as exc:                       # tomllib décode en UTF-8 strict (octet Latin-1 édité main)
+        raise ErreurConfig(f"{chemin} n'est pas en UTF-8 (octet {exc.object[exc.start:exc.start + 1]!r} "
+                           f"à la position {exc.start})") from exc
+    except ValueError as exc:                               # TOMLDecodeError en est une
         raise ErreurConfig(f"{chemin} n'est pas un TOML valide : {exc}") from exc
+    except RecursionError as exc:
+        raise ErreurConfig(f"{chemin} : imbrication trop profonde") from exc
     lan = donnees.get("lan")
     if not isinstance(lan, dict):
         raise ErreurConfig(f"{chemin} : table [lan] absente")
