@@ -1,3 +1,14 @@
+secubox-waf-ng (1.30.5-1~trixie1) trixie; urgency=medium
+
+  * Une mise à jour relance enfin l'API du WAF (ref #3176). Le postinst du composant waf faisait
+    `systemctl start secubox-waf.service`, sans effet sur un service qui tourne, et ni le prerm ni
+    dh_installsystemd ne le touchent : depuis l'absorption de waf dans waf-ng (#2050), une montée de
+    version ne chargeait jamais le nouveau code de l'API. Sur gk2, 1.30.4 installée, /stats servait
+    encore blocked_24h = journal depuis la rotation. En mise à jour : `restart` ; à la première
+    installation : `start`.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 08:12:18 +0100
+
 secubox-waf-ng (1.30.4-1~trixie1) trixie; urgency=medium
 
   * « Menaces 24 h » couvre enfin 24 h (#3176). blocked_24h valait total_threats : tout le journal
