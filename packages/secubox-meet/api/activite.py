@@ -35,8 +35,15 @@ DUREE_SESSIONS_J = 30
 DUREE_JOURS_J = 400
 SALLE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$")
 
+# Motifs de fin : noms de LiveKit (ParticipantCloseReason dans le journal, DisconnectReason ailleurs) → français.
 MOTIFS = {
+    "CLIENT_REQUEST_LEAVE": "a quitté",
     "CLIENT_INITIATED": "a quitté",
+    "PEER_CONNECTION_DISCONNECTED": "connexion perdue",
+    "SERVICE_REQUEST_DELETE_ROOM": "réunion close",
+    "SERVICE_REQUEST_REMOVE_PARTICIPANT": "retiré",
+    "NEGOTIATE_FAILED": "échec de négociation",
+    "STALE": "inactif",
     "DUPLICATE_IDENTITY": "rejoint ailleurs",
     "SIGNAL_SOURCE_CLOSE": "connexion perdue",
     "ROOM_DELETED": "réunion close",

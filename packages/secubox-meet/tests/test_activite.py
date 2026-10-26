@@ -90,7 +90,11 @@ def test_session_aboutie_duree_motif_pays_et_aucune_adresse(base):
 
 
 @pytest.mark.parametrize("raison,motif", [("DUPLICATE_IDENTITY", "rejoint ailleurs"), ("SIGNAL_SOURCE_CLOSE", "connexion perdue"),
-                                          ("ROOM_DELETED", "réunion close"), ("INCONNUE_X", "inconnue x")])
+                                          ("ROOM_DELETED", "réunion close"), ("INCONNUE_X", "inconnue x"),
+                                          # noms réels relevés sur gk1 le 2026-10-26
+                                          ("CLIENT_REQUEST_LEAVE", "a quitté"), ("PEER_CONNECTION_DISCONNECTED", "connexion perdue"),
+                                          ("SERVICE_REQUEST_DELETE_ROOM", "réunion close"),
+                                          ("SERVICE_REQUEST_REMOVE_PARTICIPANT", "retiré")])
 def test_motifs_de_fin(base, raison, motif):
     cx, _ = base
     A.collecter(cx, [debut(T0, "PA_2"), actif(T0 + 1, "PA_2"), fin(T0 + 61, "PA_2", raison)])
