@@ -9,6 +9,23 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-26 — Visio : panneau d'administration — réunions, connexions, statistiques (closes #3182)
+
+- Maquette validée (« parfait »), spec complétée (section #3182 de la spec Visio). secubox-meet 0.2.0 (PR #3183) : onglets
+  Réunions (salles de Meet, état en direct, « Clore… » confirmé et audité), Connexions (direct, historique 30 j, filtres,
+  export CSV aux formules neutralisées), Statistiques (7 j / 30 j / 12 mois). Sources : base de Meet (psql), API Twirp de
+  LiveKit (jeton HS256 signé par meetctl, root), journal de LiveKit relevé toutes les 5 min (`secubox-meet-activite.timer`)
+  vers une base SQLite lue en lecture seule par l'API. Aucune IP conservée ; compte sous son pseudo, sinon « invité ».
+- Validé sur les données réelles de gk1 avant installation : 509 événements, 22 sessions (9 abouties, 12 échecs « aucun
+  chemin média » d'avant l'ouverture des ports), pic de 5 participants. Motifs aux noms réels de LiveKit corrigés.
+- **500 sur Connexions et Statistiques** (signalé par le propriétaire) : « database is locked » — SQLite verrouille même en
+  lecture, le profil AppArmor n'accordait que `r`. Corrigé en 0.2.1 (PR #3184, `rk`), vérifié sous le profil sur gk1.
+- Relecture de sécurité de 0.2.0 (1 bloquant, 5 à corriger), traitée en 0.2.1 : base déplacée de /var/lib/secubox/meet
+  (parent au compte partagé secubox → un lien y aurait détourné les écritures root) vers /var/lib/secubox-meet, vérifiée et
+  ouverte sans suivre de lien ; unité de relevé confinée (ProtectSystem=strict…, éprouvée sur gk1) ; psql en JSON (un nom de
+  salle ne décale plus les champs) ; auteur de `clore` et `media-expose` à l'audit, échecs audités ; sessions jamais closes
+  rattrapées et purgées ; noms validés en entier.
+
 ## 2026-10-26 — Visio sur gk1 : ports média ouverts par le relais de gk2 ; gk1 coupé par une capture (ref #3154)
 
 - Coupures image et son, participants retirés toutes les 15 s : ICE en échec (LiveKit annonce `82.67.100.75:7882/udp`,
