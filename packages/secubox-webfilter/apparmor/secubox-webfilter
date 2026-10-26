@@ -120,6 +120,7 @@
   /etc/secubox/webfilter.toml r,
   /var/lib/secubox/webfilter/ r,
   /var/lib/secubox/webfilter/config.json r,
+  owner /var/lib/secubox/webfilter/config.json w,   # #3172 : fchown/fchmod par descripteur, permis seulement tant que root le possède
   /var/lib/secubox/webfilter/listes/ r,
   /var/lib/secubox/webfilter/listes/** r,
   /etc/unbound/unbound.conf.d/ r,

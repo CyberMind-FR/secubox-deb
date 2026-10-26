@@ -190,3 +190,17 @@ def test_profil_du_controleur_peut_consommer_la_demande_d_application_2441():
     assert re.search(r"^\s*/var/lib/secubox/webfilter/appliquer\.demande\s+rw,", ctl, re.M)
     # la demande de synchronisation reste hors de portée du contrôleur
     assert "sync.demande" not in ctl
+
+
+def test_la_configuration_est_rendue_au_service_par_le_controleur_3172():
+    """#3172 : config.json réécrit par root en 0600 n'était plus lisible par l'API. systemd-tmpfiles ne peut pas le reprendre (« unsafe path
+    transition » : /var/lib/secubox appartient à secubox) : c'est le contrôleur root qui le rend, par descripteur. Le postinst lui dépose une
+    demande d'application si le fichier n'appartient pas au service ; le profil du contrôleur peut changer son propriétaire."""
+    assert "config.json" not in lire("tmpfiles/secubox-webfilter.conf")
+    p = lire("apparmor/secubox-webfilter")
+    ctl = p[p.index("/usr/sbin/secubox-webfilter-ctl {"):]
+    assert "/var/lib/secubox/webfilter/config.json r," in ctl and "owner /var/lib/secubox/webfilter/config.json w," in ctl   # écrire : seulement tant que root le possède
+    assert "/var/lib/secubox/webfilter/config.json rw," not in ctl
+    post = lire("debian/postinst")
+    assert '[ ! -L "$cfg" ]' in post and 'stat -c %u "$cfg"' in post and "id -u secubox-webfilter" in post
+    assert "runuser -u secubox-webfilter -- /usr/bin/touch /var/lib/secubox/webfilter/appliquer.demande" in post

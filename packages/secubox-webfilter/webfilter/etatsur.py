@@ -10,6 +10,8 @@ import os
 import secrets
 import stat
 
+UID_ROOT = 0
+
 
 class ErreurEtat(RuntimeError):
     pass
@@ -92,6 +94,34 @@ class EtatSur:
             with contextlib.suppress(OSError):
                 os.unlink(tmp, dir_fd=self.fd)
             raise
+
+    def rendre_au_service(self, nom: str, mode: int) -> bool:
+        """Rend au propriétaire du dossier un fichier régulier que root y a laissé (#3172 : config.json réécrit par root en 0600, illisible par
+        l'API). Ouvert sans suivre de lien et changé PAR DESCRIPTEUR, jamais par chemin. Seul un fichier de root à lien unique est repris : un
+        lien dur (st_nlink > 1) ou un autre propriétaire est refusé — le compte du service ne doit pas pouvoir se faire donner un fichier
+        d'ailleurs. True si le fichier a été repris, False s'il n'y avait rien à faire (absent ou déjà au service)."""
+        try:
+            f = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=self.fd)
+        except FileNotFoundError:
+            return False
+        except OSError:
+            raise ErreurEtat(f"{nom} : lien symbolique ou fichier illisible, non repris") from None
+        try:
+            st = os.fstat(f)
+            if not stat.S_ISREG(st.st_mode):
+                raise ErreurEtat(f"{nom} : fichier non régulier, non repris")
+            if st.st_uid == self.uid:
+                return False
+            if st.st_uid != UID_ROOT or st.st_nlink != 1:
+                raise ErreurEtat(f"{nom} : propriétaire ou liens inattendus, non repris")
+            try:
+                os.fchmod(f, mode)                                              # AVANT fchown : efface aussi d'éventuels bits setuid
+                os.fchown(f, self.uid, self.gid)
+            except OSError as e:
+                raise ErreurEtat(f"{nom} : reprise impossible ({e.strerror})") from None
+            return True
+        finally:
+            os.close(f)
 
     def supprimer(self, nom: str) -> None:
         with contextlib.suppress(FileNotFoundError):

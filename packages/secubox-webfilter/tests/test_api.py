@@ -382,3 +382,26 @@ def test_domaine_toujours_bloque_ecrit_lu_et_refuse_s_il_est_invalide_2433(banc2
     # sans domaine forcé, la clé n'est jamais écrite (retour arrière sûr)
     c.post(f"/appareils/{MAC1}", json={"nom": "reepost", "profil": "enfants", "exceptions": {}})
     assert "bloque" not in cfg_fichier(banc2)["appareils"][MAC1]
+
+
+@pytest.mark.parametrize("contenu", ["{pas du json", json.dumps({"version": 1, "profils": "pas un dictionnaire"})])
+def test_configuration_illisible_donne_un_mode_inconnu_jamais_observe_3172(banc2, contenu):
+    """#3172 : gk2, config.json réécrit par root en 0600, illisible par l'API — « rien ne bloque » était affiché alors que le profil
+    par défaut bloquait trois catégories. Sans configuration lisible, l'API ne sait pas : elle le dit."""
+    (banc2 / "config.json").write_text(contenu)
+    lecteur()
+    assert TestClient(main.app).get("/etat").json()["mode_global"] == "inconnu"
+
+
+def test_lecture_refusee_donne_un_mode_inconnu_et_un_avertissement_3172(banc2, monkeypatch, caplog):
+    """La cause réelle sur gk2 : l'ouverture de config.json refusée (EACCES), pas un contenu invalide."""
+    (banc2 / "config.json").write_text("{}")
+
+    def refuse(*a, **k):
+        raise PermissionError(13, "Permission denied")
+    monkeypatch.setattr("webfilter.etat.open", refuse, raising=False)
+    monkeypatch.setattr(main, "_config_lisible", True)                                    # l'avertissement se donne au changement d'état
+    lecteur()
+    with caplog.at_level("WARNING"):
+        assert TestClient(main.app).get("/etat").json()["mode_global"] == "inconnu"
+    assert any("config.json" in r.getMessage() for r in caplog.records)

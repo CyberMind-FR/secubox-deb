@@ -152,8 +152,22 @@ def _bloque_quelque_chose(cfg: dict) -> bool:
             or any(m == "block" for a in cfg["appareils"].values() for m in a["exceptions"].values()))
 
 
+def _reprendre_config(s, es) -> None:
+    """#3172 : une configuration laissée à root (0600) est illisible par l'API, qui annonçait alors « rien n'est bloqué ». Rendue au service
+    avant d'être lue ; un refus (lien, autre propriétaire) est audité et n'empêche pas l'application, qui lit toujours en root. Sans compte du
+    service, le propriétaire du dossier n'a pas été vérifié : rien n'est donné à personne."""
+    if s.uid_service() is None:
+        return
+    try:
+        if es.rendre_au_service("config.json", 0o600):
+            s.audit("reprise", "config.json appartenait à root : rendu au service (0600)")
+    except etatsur.ErreurEtat as e:
+        s.audit("refuse", str(e)[:200])
+
+
 def _appliquer(s, es, racine: Path, dropin: Path, cat_chemin: Path, maintenant, t0) -> dict:
     es.supprimer("appliquer.demande")                                   # consommée DÈS LE DÉBUT : une demande qui arrive pendant l'exécution n'est pas perdue
+    _reprendre_config(s, es)
     try:
         conf = catalogue.charger_config(cat_chemin)
         ids = {c.id for c in conf.categories}

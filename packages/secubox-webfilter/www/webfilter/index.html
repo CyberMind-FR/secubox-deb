@@ -33,6 +33,7 @@
         .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
         .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
         .actif.obs{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .actif.inc{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
         .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
         .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
         .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
@@ -90,7 +91,7 @@
                 <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(41,182,246,.14)"/><path d="M9 12l2 2 4-4"/></svg>
                 <div><b>Filtrage de contenus</b><small id="subline">Observation par catégorie, profils par appareil</small></div>
             </div>
-            <span class="actif obs" id="mode-pastille">MODE OBSERVE</span>
+            <span class="actif inc" id="mode-pastille">LECTURE…</span>
             <div class="droite"><span id="heure"></span>
                 <button class="btn" id="btn-refresh">⟳ Actualiser</button>
                 <button class="btn primary" id="btn-sync">⬇ Synchroniser les listes</button></div>
@@ -99,9 +100,9 @@
         <div id="confirmation" role="alertdialog" aria-label="Confirmation" hidden></div>
 
         <div class="bandeau" id="bandeau-observe">
-            <strong>👁️ Mode observe : rien n'est bloqué.</strong>
-            Ce panneau montre ce que le filtrage de contenus <em>aurait</em> bloqué. Limites connues : un résolveur DoH, un VPN ou une adresse IP
-            directe contournent un filtre DNS, et les requêtes de la box elle-même ne sont pas comptées.
+            <strong>Lecture de l'état du filtrage…</strong>
+            Limites connues : un résolveur DoH, un VPN ou une adresse IP directe contournent un filtre DNS, et les requêtes de la box elle-même
+            ne sont pas comptées.
         </div>
 
         <div class="tabs" id="onglets">
@@ -221,8 +222,16 @@
         function rendreBandeau(mode) {
             const b = $('bandeau-observe');
             b.replaceChildren();
-            const pa = $('mode-pastille'); pa.textContent = mode === 'block' ? 'BLOCAGE ACTIF' : 'MODE OBSERVE'; pa.className = 'actif' + (mode === 'block' ? '' : ' obs');
-            if (mode === 'block') {
+            const pa = $('mode-pastille');
+            pa.textContent = mode === 'block' ? 'BLOCAGE ACTIF' : mode === 'observe' ? 'MODE OBSERVE' : 'ÉTAT INCONNU'; pa.className = 'actif' + (mode === 'block' ? '' : mode === 'observe' ? ' obs' : ' inc');
+            if (mode === 'indisponible') {                         // /etat n'a pas répondu : on ne sait rien, et on ne sait pas pourquoi
+                b.append(el('strong', '', '❔ État du filtrage indisponible.'),
+                         " Le service n'a pas répondu : impossible de dire ce qui est bloqué en ce moment.");
+            } else if (mode !== 'block' && mode !== 'observe') {   // #3172 : configuration illisible par l'API — ne jamais affirmer « rien n'est bloqué »
+                b.append(el('strong', '', '❔ État du blocage inconnu.'),
+                         " L'API ne peut pas lire la configuration des profils : des catégories peuvent être bloquées sans que ce panneau le sache. " +
+                         'Les comptes ci-dessous restent ceux mesurés sur le DNS (rouge : bloqué).');
+            } else if (mode === 'block') {
                 b.append(el('strong', '', '🛡️ Blocage actif sur certains profils.'),
                          ' Les appareils assignés à un profil qui bloque une catégorie ne joignent plus ces sites ; les autres restent en observation (« aurait bloqué »). ' +
                          'Limites connues : un résolveur DoH, un VPN ou une adresse IP directe contournent un filtre DNS, et les requêtes de la box ne sont pas comptées.');
@@ -303,7 +312,7 @@
 
         async function refresh() {
             const e = await api('/etat');
-            if (!e.ok) { errorToast('État indisponible : ' + (e.data.detail || e.status)); return; }
+            if (!e.ok) { rendreBandeau('indisponible'); errorToast('État indisponible : ' + (e.data.detail || e.status)); return; }   // #3172 : jamais « rien n'est bloqué » par défaut
             rendreBandeau(e.data.mode_global);
             const ids = rendreEtat(e.data);
             rendreGraphes(e.data);

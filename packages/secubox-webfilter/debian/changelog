@@ -1,3 +1,24 @@
+secubox-webfilter (0.4.4-1~trixie1) trixie; urgency=medium
+
+  * « Rien n'est bloqué » n'est plus affiché quand l'API ne sait pas (#3172). Sur gk2, config.json
+    avait été réécrit par root en 0600 le 2026-10-20 : l'API (secubox-webfilter) ne le lisait plus,
+    /etat annonçait mode_global « observe » pendant que le profil par défaut bloquait trois
+    catégories, et /appareils répondait 503. Une configuration illisible donne désormais
+    mode_global « inconnu », que le panneau affiche comme tel (« État du blocage inconnu »).
+  * Le contrôleur root rend config.json au service (0600 secubox-webfilter) au début de chaque
+    application, par descripteur et sans suivre de lien ; un lien dur ou un autre propriétaire que
+    root est refusé et audité, un échec du changement aussi ; rien n'est repris sans compte du service.
+    systemd-tmpfiles ne peut pas le faire (« unsafe path transition » : /var/lib/secubox appartient à
+    secubox). Profil AppArmor du contrôleur : écriture de config.json seulement tant que root le
+    possède (owner). Le postinst dépose une demande d'application quand config.json n'appartient pas
+    au service.
+  * API : avertissement journalisé quand la configuration devient illisible. Panneau : texte
+    d'attente neutre au chargement (il disait « rien n'est bloqué » et le gardait si /etat
+    échouait) ; « indisponible » quand /etat ne répond pas, distinct de « inconnu » ; ces deux états
+    en orange.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 07:29:28 +0100
+
 secubox-webfilter (0.4.3-1~trixie1) trixie; urgency=medium
 
   * Unité d'application : TimeoutStartSec 5 min → 20 min (ref #3005), cohérent avec le budget

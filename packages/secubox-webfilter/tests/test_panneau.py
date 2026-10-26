@@ -94,6 +94,27 @@ def test_affiche_cartes_listes_et_avertissement_observe(navigateur):
     ctx.close()
 
 
+def test_mode_inconnu_ne_dit_jamais_rien_n_est_bloque_3172(navigateur):
+    """#3172 : configuration illisible par l'API — le bandeau disait « rien n'est bloqué » alors que le DNS bloquait."""
+    ctx, p, erreurs, _ = _page(navigateur, {("GET", "/etat"): (200, {**ETAT, "mode_global": "inconnu"})})
+    p.wait_for_selector("[data-cat='adulte']")
+    b = p.inner_text("#bandeau-observe")
+    assert "rien n'est bloqué" not in b and "inconnu" in b.lower() and "inconnu" in p.inner_text("#mode-pastille").lower()
+    assert "inc" in p.get_attribute("#mode-pastille", "class").split()                    # se distingue du mode observe à l'œil
+    assert not erreurs
+    ctx.close()
+
+
+def test_etat_illisible_le_bandeau_ne_reste_pas_sur_rien_n_est_bloque_3172(navigateur):
+    """Relecture #3172 : le texte d'origine de la page disait « rien n'est bloqué », et restait affiché si /etat échouait."""
+    ctx, p, erreurs, _ = _page(navigateur, {("GET", "/etat"): (503, {"detail": "catalogue illisible"})})
+    p.wait_for_timeout(500)
+    assert "rien n'est bloqué" not in p.inner_text("#bandeau-observe") and "inconnu" in p.inner_text("#mode-pastille").lower()
+    assert "indisponible" in p.inner_text("#bandeau-observe") and "configuration" not in p.inner_text("#bandeau-observe")   # pas la cause d'un « inconnu »
+    assert not erreurs
+    ctx.close()
+
+
 def test_valeur_manquante_donne_un_tiret_jamais_zero(navigateur):
     ctx, p, _, _ = _page(navigateur)
     p.wait_for_selector("[data-source='hagezi-gambling-medium']")

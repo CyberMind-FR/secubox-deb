@@ -239,3 +239,37 @@ def test_statut_en_ligne_de_commande(banc, capsys):
     lancer(banc, Faux())
     assert ctl.principal(["--etat", str(banc / "etat"), "status"]) == 0
     assert json.loads(capsys.readouterr().out)["statut"] == "applique"
+
+
+def test_l_application_rend_la_configuration_au_service_et_l_audite_3172(banc, monkeypatch):
+    """#3172 : la reprise passe AVANT la lecture de la configuration, et se voit dans le journal d'audit."""
+    ecrire_config(banc, config())
+    vus = []
+    monkeypatch.setattr(ctl.etatsur.EtatSur, "rendre_au_service", lambda self, nom, mode: vus.append((nom, mode)) or True)
+    s = Faux()
+    s.uid_service = lambda: os.getuid()
+    assert lancer(banc, s)["statut"] == "applique"
+    assert vus == [("config.json", 0o600)] and any(a == "reprise" and "config.json" in d for a, d in s.audits)
+
+
+def test_une_reprise_refusee_est_auditee_et_n_empeche_pas_l_application_3172(banc, monkeypatch):
+    ecrire_config(banc, config())
+
+    def refuse(self, nom, mode):
+        raise ctl.etatsur.ErreurEtat("config.json : propriétaire ou liens inattendus, non repris")
+    monkeypatch.setattr(ctl.etatsur.EtatSur, "rendre_au_service", refuse)
+    s = Faux()
+    s.uid_service = lambda: os.getuid()
+    assert lancer(banc, s)["statut"] == "applique"
+    assert any(a == "refuse" and "non repris" in d for a, d in s.audits)
+
+
+def test_sans_compte_du_service_aucune_reprise_3172(banc, monkeypatch):
+    """Relecture #3172 : sans compte secubox-webfilter, le propriétaire du dossier n'est pas vérifié — ne rien donner à personne."""
+    ecrire_config(banc, config())
+    vus = []
+    monkeypatch.setattr(ctl.etatsur.EtatSur, "rendre_au_service", lambda self, nom, mode: vus.append(nom) or True)
+    s = Faux()
+    s.uid_service = lambda: None
+    lancer(banc, s)
+    assert vus == []

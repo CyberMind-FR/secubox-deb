@@ -89,7 +89,9 @@ domaines) ne fait qu'ajouter un faux classement en mode observe. Le parking n'a 
 | `GET /appareils`, `POST/DELETE /appareils/{mac}` | appareils assignés et vus récemment |
 | `GET /appliquer`, `POST /appliquer` | en attente, estimation (zones, mémoire, durée), dernier résultat ; demande d'application |
 
-`/etat` (`require_lecture`) dit `mode_global: "block"` dès qu'un profil bloque, sans nom de profil ni d'appareil.
+`/etat` (`require_lecture`) dit `mode_global: "block"` dès qu'un profil bloque, sans nom de profil ni d'appareil. `mode_global: "inconnu"` si la configuration des profils
+est illisible par l'API (#3172) : jamais « observe » par défaut. `config.json` appartient au service ; s'il
+appartient à root, le contrôleur le lui rend au début de chaque application (par descripteur, audité).
 
 **Configuration** : renseigner `[reseau] lan` dans `/etc/secubox/webfilter.toml` (vide par défaut : le paquet n'applique jamais les réseaux d'un autre site).
 

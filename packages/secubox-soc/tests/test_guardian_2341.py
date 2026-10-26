@@ -140,3 +140,15 @@ def test_panneau_filtrage_web_2430():
     assert "980 / 1 240" in texte.replace(" ", " ").replace(" ", " ") and "aurait bloqué" in texte
     src = page.read_text(encoding="utf-8")
     assert "/api/v1/webfilter/etat" in src and "Session requise" in src
+
+
+@pytest.mark.parametrize("mode,attendu", [("inconnu", "inconnu"), ("observe", "rien n’est bloqué"), ("block", "blocage actif")])
+def test_filtrage_web_mode_inconnu_n_affirme_pas_que_rien_n_est_bloque_3172(nav, mode, attendu):
+    """#3172 : l'API du filtrage rend « inconnu » quand sa configuration est illisible ; la Vigie disait « rien n'est bloqué » pour tout ce qui n'était pas « block »."""
+    etat = {"mode_global": mode, "categories": [{"id": "adulte", "libelle": "Contenu adulte", "mode": "observe", "requetes_7j": 5932, "bloque_7j": 5932}]}
+    p, _, erreurs = ouvre(nav, {"/api/v1/waf/stats": STATS, "/api/v1/webfilter/etat": etat})
+    note = p.inner_text("#wfNote")
+    assert attendu in note and not erreurs
+    if mode == "inconnu":
+        assert "rien n" not in note
+    p.context.close()
