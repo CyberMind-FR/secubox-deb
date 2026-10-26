@@ -9,6 +9,24 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-26 — Réseau, livraison 2 : panneau « Réseau » déployé sur gk2 et gk1 (ref #3190)
+
+- **Livré** (PR #3200) : secubox-netmodes 1.5.0, secubox-wireguard 1.3.1. La page `/netmodes/` devient le panneau Réseau
+  de la maquette : hôte à onglets (Cartographie, Switch, Clients LAN, Liens du maillage, Mode routeur, Modes hérités).
+- **Lecture** : `/reseau/{ports,clients,carte}` (`ip -j`, `bridge -j`, `/sys/class/net`, baux) ; panne par champ, jamais
+  « aucun » ; lecteur non administrateur (`est_admin_reel` faux) : comptes sans MAC ni voisins, `/reseau/clients` connecté.
+- **Ports** : `netmodesctl port-couper|port-retablir` (`04-secubox-port-<port>-coupe.network`, `ActivationPolicy=down`),
+  rétablir permis en tout mode ; API avec refus de couper le port de la session (adresse → MAC → port, lu à chaud).
+- **Mode routeur asynchrone** : 202, `/routeur/derniere`, échéance réelle du minuteur (`NextElapseUSecMonotonic`),
+  Confirmer protégé contre une lecture ratée ou périmée, relecture rapide bornée ; `wan` retiré de l'API.
+- **WireGuard** : `wgctl dump` en échec rend 503 au lieu de « aucun pair ».
+- **Vérifié sur gk2** : pages 200 par le chemin public, données réelles (7 conteneurs, 5 tunnels, 28 voisins WAN),
+  lecteur anonyme expurgé, `/reseau/clients` 401 sans session ; **couper puis rétablir `lan1`** en console : hors du pont et
+  baissé, puis remis dans `br-lan` (première vérification sur matériel de `ActivationPolicy=down`) ; LAN et `eth2` intacts.
+  gk1 en 1.5.0, mode routeur actif.
+- **À valider par le propriétaire** (navigateur connecté) : refus de couper `lan0` depuis le PC (409), application par le
+  panneau (202 → compte à rebours → Confirmer). Ensuite `closes #3190`.
+
 ## 2026-10-26 — Réseau, livraison 1 : mode routeur durable MOCHAbin déployé sur gk2 (ref #3189)
 
 - **Livré** (PR #3197) : secubox-core 1.7.16 (`lo` 192.168.255.1/32, `00-lo.network` corrigé, copie `.avant-3189`), secubox-hub
