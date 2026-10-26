@@ -10,8 +10,8 @@
   routeur-confirmer <acteur>      annule le retour automatique
   routeur-retour <acteur>         restaure la dernière sauvegarde (« minuteur » : seulement si en attente)
   routeur-retour-demarrage        au démarrage, défait une application restée en attente
-  port-couper <port> <acteur>     sort un port du switch (lan0..lan3) du pont et le baisse (#3190)
-  port-retablir <port> <acteur>   rend le port au pont
+  port-couper <port> <acteur>     sort un port du switch (lan0..lan3) du pont et le baisse (mode routeur actif, #3190)
+  port-retablir <port> <acteur>   en tout mode : le rend au pont (mode routeur actif) ou le relève
 
 Sortie standard : toujours un JSON (l'état, ou {"erreur": "…"}). Codes : 0 succès, 2 usage, port ou acteur invalide,
 3 refus (configuration ou garde), 4 occupé, 1 autre échec."""

@@ -8,7 +8,10 @@ Leçon de gk2 (2026-10-26) : un .network de préfixe plus bas gagne pour un mêm
 lexical) : 04-secubox-port-<port>-coupe.network ([Match] Name=<port>, [Link] ActivationPolicy=down) sort le port du pont
 et le baisse ; retiré, `networkctl reload` puis `networkctl reconfigure <port>` le rendent au 05 (Bridge=br-lan). Jamais
 une commande qui nomme eth* ou br-lan ; le résultat est relu (`ip -j link show dev <port>`), jamais supposé.
-Review Focus 4 : un port coupé ne fait ni échouer, ni recréer le pont d'une réapplication du mode routeur, ni du retour."""
+Review Focus 4 : un port coupé ne fait ni échouer, ni recréer le pont d'une réapplication du mode routeur, ni du retour.
+Arbitrage du contrôleur : une coupure est une décision de l'administrateur, indépendante du mode routeur ; elle survit à
+tout retour (même vers « inactif ») et `port-retablir` est permis en tout mode. Rétabli : br-lan pour maître si le mode
+routeur est actif ET le port dans le pont configuré, sinon port UP (au besoin `ip link set dev <port> up`)."""
 import io
 import json
 import os
@@ -31,7 +34,7 @@ from api import routeur_ctl as rc  # noqa: E402
 from api.routeur_config import PORTS_LAN  # noqa: E402
 from api.routeur_rendu import CHEMINS  # noqa: E402
 from test_routeur_ctl_3189 import (  # noqa: E402
-    CFG42, CFG50, PORTS, SCRIPT, Faux, Horloge, audits, etat_fichier, instantane, preparer_racine, tenir,
+    CFG42, CFG50, PORTS, SCRIPT, TOML, Faux, Horloge, audits, cp, etat_fichier, instantane, preparer_racine, tenir,
 )
 
 COUPE = "etc/systemd/network/04-secubox-port-{}-coupe.network"
@@ -41,6 +44,8 @@ LECTURES_ETAT = [["systemctl", "is-active", "--quiet", "secubox-netmodes-retour.
                  ["systemctl", "is-active", "--quiet", "secubox-lan-dhcp.service"],
                  ["ip", "-j", "-4", "addr", "show", "dev", "br-lan"]]
 VERBES = ["port_couper", "port_retablir"]
+LEVER = ["ip", "link", "set", "dev", "lan1", "up"]
+NETPLAN_LAN1 = "run/systemd/network/10-netplan-lan1.network"           # posé par netplan sur gk2 (lan1: optional)
 
 
 def contenu_coupe(port: str) -> str:
@@ -63,7 +68,8 @@ def action(verbe: str) -> str:
 
 class FauxPorts(Faux):
     """networkd simulé, en plus : 04-secubox-port-<port>-coupe.network gagne sur le 05 pour ce port (hors du pont,
-    baissé) ; retiré, le port revient sous le 05 au rechargement ou à sa reconfiguration."""
+    baissé) ; retiré, le port n'est relevé que si un autre .network le vise (05 du mode routeur, 10-netplan-<port> de
+    gk2) : sinon networkd le laisse baissé, seul `ip link set dev <port> up` le relève."""
 
     def __init__(self, racine: Path, **kw):
         super().__init__(racine, **kw)
@@ -74,15 +80,34 @@ class FauxPorts(Faux):
     def _coupe(self, port: str) -> bool:
         return (self.racine / COUPE.format(port)).is_file()
 
+    def _declare(self, port: str) -> bool:
+        """Un .network autre qu'un fichier de coupure vise le port ([Match] Name=…)."""
+        for dossier in ("etc/systemd/network", "run/systemd/network"):
+            d = self.racine / dossier
+            for f in sorted(d.glob("*.network")) if d.is_dir() else []:
+                if re.fullmatch(r"04-secubox-port-lan[0-3]-coupe\.network", f.name):
+                    continue
+                if any(x.startswith("Name=") and port in x[5:].split() for x in f.read_text().splitlines()):
+                    return True
+        return False
+
     def _asservir(self, port: str) -> None:
         if self._coupe(port) and not self.coupe_ignoree:
             self.maitres.pop(port, None)
             self.baisses.add(port)
             return
-        if port in self.baisses and self.retour_refuse:
-            return
-        self.baisses.discard(port)
+        if port in self.baisses:
+            if self.retour_refuse or not self._declare(port):
+                return                                  # aucun .network ne le vise : networkd le laisse baissé
+            self.baisses.discard(port)
         super()._asservir(port)
+
+    def _effet(self, a):
+        if a[:4] == ["ip", "link", "set", "dev"]:
+            assert len(a) == 6 and a[4] in PORTS and a[5] == "up", a      # le port seul, jamais eth* ni br-lan
+            self.baisses.discard(a[4])
+            return cp(a)
+        return super()._effet(a)
 
     def _lien(self, port: str) -> dict:
         e = super()._lien(port)
@@ -283,36 +308,128 @@ def test_port_hors_liste_refuse(actif, racine, faux, verbe, port):
     assert faux.journal == [] and instantane(racine) == avant
 
 
-@pytest.mark.parametrize("verbe", VERBES)
-def test_mode_routeur_inactif_refuse(ctx, racine, faux, verbe):
+def test_couper_en_mode_inactif_refuse(ctx, racine, faux):
     avant = instantane(racine)
     with pytest.raises(rc.Refus, match="mode routeur"):
-        getattr(rc, verbe)(ctx, "lan1", "admin")
+        rc.port_couper(ctx, "lan1", "admin")
     assert faux.journal == [] and instantane(racine) == avant
     a = audits(racine)[-1]
-    assert (a["action"], a["acteur"]) == (f"{action(verbe)}-refus", "admin")
+    assert (a["action"], a["acteur"]) == ("port-couper-refus", "admin")
 
 
-@pytest.mark.parametrize("verbe", VERBES)
-def test_mode_routeur_en_attente_refuse(ctx, racine, faux, verbe):
+def test_couper_en_attente_refuse(ctx, racine, faux):
     rc.appliquer(ctx, CFG42, "admin")
     faux.journal.clear()
     avant = instantane(racine)
     with pytest.raises(rc.Refus, match="mode routeur"):
-        getattr(rc, verbe)(ctx, "lan1", "admin")
+        rc.port_couper(ctx, "lan1", "admin")
     assert faux.journal == [] and instantane(racine) == avant
 
 
-@pytest.mark.parametrize("verbe", VERBES)
-def test_port_hors_du_pont_configure_refuse(ctx, racine, faux, verbe):
-    """Rétablir un port qui n'est pas au pont ne pourrait jamais être constaté (maître br-lan) : refusé avant tout."""
+def test_couper_hors_du_pont_configure_refuse(ctx, racine, faux):
     rc.appliquer(ctx, dict(CFG42, ports=["lan0", "lan3"]), "admin")
     rc.confirmer(ctx, "admin")
     faux.journal.clear()
     avant = instantane(racine)
     with pytest.raises(rc.Refus, match="lan1 n'est pas un port du pont"):
-        getattr(rc, verbe)(ctx, "lan1", "admin")
+        rc.port_couper(ctx, "lan1", "admin")
     assert faux.journal == [] and instantane(racine) == avant
+
+
+# --- arbitrage : une coupure survit à tout retour, se rétablit en tout mode ---------------------------------------------
+
+def test_retour_a_inactif_garde_la_coupure(actif, racine, faux):
+    rc.port_couper(actif, "lan1", "admin")
+    sortie = rc.retour(actif, "admin")
+    assert sortie["etat"] == "inactif" and sortie["ports_coupes"] == ["lan1"]
+    assert coupe(racine, "lan1").read_text() == contenu_coupe("lan1")
+    assert "lan1" in faux.baisses and "lan1" not in faux.maitres
+
+
+def test_retablir_en_mode_inactif_sans_netplan_leve_le_port(actif, racine, faux):
+    """Plus aucun .network ne vise lan1 : networkd le laisse baissé, `ip link set dev lan1 up` le relève."""
+    rc.port_couper(actif, "lan1", "admin")
+    rc.retour(actif, "admin")
+    faux.journal.clear()
+    sortie = rc.port_retablir(actif, "lan1", "admin")
+    assert sortie["etat"] == "inactif" and sortie["ports_coupes"] == []
+    assert not coupe(racine, "lan1").exists()
+    assert faux.journal == [RELOAD, reconfigurer("lan1"), lien("lan1"), LEVER, lien("lan1"), *LECTURES_ETAT]
+    sans_eth_ni_br_lan(faux.journal[:5])
+    assert "lan1" not in faux.baisses
+    a = audits(racine)[-1]
+    assert a["action"] == "port-retablir" and "hors du pont" in a["detail"] and "ip link set up" in a["detail"]
+
+
+def test_retablir_en_mode_inactif_avec_netplan(actif, racine, faux):
+    """netplan vise encore lan1 (gk2 : lan1 optional) : networkd le relève lui-même, aucune commande de plus."""
+    rc.port_couper(actif, "lan1", "admin")
+    rc.retour(actif, "admin")
+    f = racine / NETPLAN_LAN1
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text("[Match]\nName=lan1\n\n[Network]\nLinkLocalAddressing=ipv6\n")
+    faux.journal.clear()
+    assert rc.port_retablir(actif, "lan1", "admin")["ports_coupes"] == []
+    assert LEVER not in faux.journal
+    assert faux.journal[:4] == [RELOAD, reconfigurer("lan1"), lien("lan1"), lien("lan1")]
+    assert "lan1" not in faux.baisses
+
+
+def test_retablir_un_port_retire_du_pont(actif, racine, faux):
+    """Coupé puis retiré de la configuration du pont : rétabli vérifié UP, sans br-lan pour maître."""
+    rc.port_couper(actif, "lan1", "admin")
+    rc.appliquer(actif, dict(CFG42, ports=["lan0", "lan2", "lan3"]), "admin")
+    rc.confirmer(actif, "admin")
+    faux.journal.clear()
+    sortie = rc.port_retablir(actif, "lan1", "admin")
+    assert sortie["etat"] == "actif" and sortie["ports_coupes"] == []
+    assert LEVER in faux.journal
+    assert "lan1" not in faux.baisses and "lan1" not in faux.maitres          # UP, pas au pont
+    assert asservis(faux) == {"lan0", "lan2", "lan3"}
+
+
+def test_retablir_en_attente(actif, racine, faux):
+    """Application en attente de confirmation : rétabli vérifié UP (networkd l'a remis au pont par le 05)."""
+    rc.port_couper(actif, "lan1", "admin")
+    rc.appliquer(actif, dict(CFG42, bail="30m"), "admin")
+    faux.journal.clear()
+    assert rc.port_retablir(actif, "lan1", "admin")["etat"] == "en_attente"
+    assert LEVER not in faux.journal
+    assert faux.maitres["lan1"] == "br-lan" and "lan1" not in faux.baisses
+
+
+def test_retablir_configuration_illisible(actif, racine, faux):
+    rc.port_couper(actif, "lan1", "admin")
+    (racine / TOML).write_text("[lan\n")
+    faux.journal.clear()
+    assert rc.port_retablir(actif, "lan1", "admin")["ports_coupes"] == []
+    assert faux.journal[:3] == [RELOAD, reconfigurer("lan1"), lien("lan1")]
+
+
+def test_lever_en_echec_fichier_remis(actif, racine, faux):
+    rc.port_couper(actif, "lan1", "admin")
+    rc.retour(actif, "admin")
+    avant = coupe(racine, "lan1").read_bytes()
+    faux.echouer("ip", "link", "set", fois=1)
+    faux.journal.clear()
+    with pytest.raises(rc.Echec, match="ip link set dev lan1 up"):
+        rc.port_retablir(actif, "lan1", "admin")
+    assert coupe(racine, "lan1").read_bytes() == avant
+    assert faux.journal[-2:] == [RELOAD, reconfigurer("lan1")]
+    assert "lan1" in faux.baisses
+    assert audits(racine)[-1]["action"] == "port-retablir-echec"
+
+
+def test_leve_mais_jamais_up_echec(actif, racine, faux):
+    rc.port_couper(actif, "lan1", "admin")
+    rc.retour(actif, "admin")
+    faux.echouer("ip", "link", "set", code=0, fois=1)                       # accepté, sans effet
+    faux.journal.clear()
+    faux.pauses.clear()
+    with pytest.raises(rc.Echec, match=r"lan1 n'est pas rétabli après 15 s : maître aucun, baissé.*attendu : UP"):
+        rc.port_retablir(actif, "lan1", "admin")
+    assert faux.pauses == [rc.PAUSE_PORT] * 15
+    assert coupe(racine, "lan1").is_file()
 
 
 @pytest.mark.parametrize("verbe", VERBES)
@@ -374,6 +491,18 @@ def test_reappliquer_avec_un_port_coupe(actif, racine, faux):
     assert coupe(racine, "lan1").read_text() == contenu_coupe("lan1")       # la coupure survit à l'application
     assert "lan1" in faux.baisses and asservis(faux) == {"lan0", "lan2", "lan3"}
     assert rc.confirmer(actif, "admin")["etat"] == "actif"
+
+
+def test_tous_les_ports_coupes_application(actif, racine, faux):
+    """Aucun port attendu : le pont doit seulement être UP et porter son adresse (sonde de la revue)."""
+    for p in PORTS:
+        rc.port_couper(actif, p, "admin")
+    faux.journal.clear()
+    faux.pauses.clear()
+    sortie = rc.appliquer(actif, dict(CFG42, bail="30m"), "admin")
+    assert sortie["etat"] == "en_attente" and sortie["ports_coupes"] == list(PORTS)
+    assert SUPPRIMER not in faux.journal and faux.pauses == [rc.PAUSE_DHCP]
+    assert asservis(faux) == set() and faux.baisses == set(PORTS)
 
 
 def test_nouvelle_adresse_avec_un_port_coupe(actif, racine, faux):

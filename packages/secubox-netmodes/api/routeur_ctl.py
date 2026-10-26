@@ -1039,16 +1039,29 @@ def _rendu_coupe(port: str) -> str:
             f"[Match]\nName={port}\n\n[Link]\nActivationPolicy=down\n")
 
 
-def _constat_port(lien: dict, coupe: bool) -> str | None:
-    """None : l'état voulu est constaté ; sinon ce qui est vu. Coupé : sans br-lan pour maître ET baissé (ni drapeau UP,
-    état DOWN) ; rétabli : br-lan pour maître, porteuse ou non. Un port illisible n'est jamais constaté."""
+# Ce que la vérification attend du port : coupé ; rétabli au pont (mode routeur actif et port du pont configuré) ;
+# rétabli hors du pont (sinon : décision prise hors du mode routeur, ni br-lan ni .network du 05 n'attendent le port).
+COUPE, AU_PONT, LEVE = "coupé", "au pont", "levé"
+_ATTENDUS = {COUPE: "hors de br-lan et baissé", AU_PONT: "br-lan pour maître", LEVE: "UP"}
+
+
+def _lien_port(ctx: Contexte, port: str) -> dict:
+    return next(iter(_json_liens(ctx.executer(["ip", "-j", "link", "show", "dev", port]))), {})
+
+
+def _constat_port(lien: dict, attendu: str) -> str | None:
+    """None : l'état voulu est constaté ; sinon ce qui est vu. COUPE : sans br-lan pour maître ET baissé (ni drapeau UP,
+    état DOWN : sans câble, un port UP est aussi DOWN) ; AU_PONT : br-lan pour maître, porteuse ou non ; LEVE :
+    drapeau UP, maître ou non. Un port illisible n'est jamais constaté."""
     maitre = lien.get("master")
     drapeaux = lien.get("flags") or []
     operstate = str(lien.get("operstate") or "")
-    if coupe:
+    if attendu == COUPE:
         constate = maitre != "br-lan" and "UP" not in drapeaux and operstate.upper() == "DOWN"
-    else:
+    elif attendu == AU_PONT:
         constate = maitre == "br-lan"
+    else:
+        constate = "UP" in drapeaux
     if constate:
         return None
     if not lien:
@@ -1056,42 +1069,55 @@ def _constat_port(lien: dict, coupe: bool) -> str | None:
     return f"maître {maitre or 'aucun'}, {'UP' if 'UP' in drapeaux else 'baissé'}, état {operstate or 'inconnu'}"
 
 
-def _attendre_port(ctx: Contexte, port: str, coupe: bool) -> None:
+def _attendre_port(ctx: Contexte, port: str, attendu: str) -> None:
     """Le résultat est relu (`ip -j link show dev <port>`, jamais br-lan nommé), pas déduit des codes de networkctl."""
     limite = ctx.monotone() + DELAI_PORT
     while True:
-        constat = _constat_port(next(iter(_json_liens(ctx.executer(["ip", "-j", "link", "show", "dev", port]))), {}),
-                                coupe)
+        constat = _constat_port(_lien_port(ctx, port), attendu)
         if constat is None:
             return
         if ctx.monotone() >= limite:
-            raise Echec(f"{port} n'est pas {'coupé' if coupe else 'rétabli'} après {DELAI_PORT:g} s : {constat} "
-                        f"(networkctl status {port})")
+            raise Echec(f"{port} n'est pas {'coupé' if attendu == COUPE else 'rétabli'} après {DELAI_PORT:g} s : "
+                        f"{constat} ; attendu : {_ATTENDUS[attendu]} (networkctl status {port})")
         ctx.attendre(PAUSE_PORT)
 
 
-def _preparer_port(ctx: Contexte, port: str, chemin: Path) -> bytes | None:
-    """Gardes, sans aucune commande : mode routeur actif, port du pont configuré, fichier de coupure lisible sans lien.
-    Renvoie le fichier de coupure tel qu'il est (None : absent), remis tel quel en cas d'échec."""
+def _lever_port(ctx: Contexte, port: str) -> bool:
+    """Rétabli hors du pont : le fichier de coupure retiré, plus aucun .network ne vise peut-être le port (netplan en
+    pose un sur gk2, pas forcément ailleurs) et networkd le laisse baissé. Toujours pas UP après reload et reconfigure :
+    `ip link set dev <port> up` (le port seul, jamais eth* ni br-lan). Renvoie vrai s'il a fallu le lever."""
+    if _constat_port(_lien_port(ctx, port), LEVE) is None:
+        return False
+    _exiger(ctx, ["ip", "link", "set", "dev", port, "up"])
+    return True
+
+
+def _preparer_port(ctx: Contexte, port: str, chemin: Path, coupe: bool) -> tuple[bytes | None, str]:
+    """Gardes, sans aucune commande. Couper : mode routeur actif et port du pont configuré. Rétablir : en tout mode
+    (une coupure est une décision de l'administrateur, indépendante du mode routeur, qui survit à tout retour).
+    Renvoie le fichier de coupure tel qu'il est (None : absent ; remis tel quel en cas d'échec) et l'état attendu."""
     _verifier_arbre(ctx)
     courant = _lire_etat(ctx)["etat"]
-    if courant != "actif":
-        raise Refus(f"le mode routeur est « {courant} » : un port ne se coupe ni ne se rétablit qu'en mode routeur "
-                    "actif (appliqué puis confirmé)")
+    if coupe and courant != "actif":
+        raise Refus(f"le mode routeur est « {courant} » : un port ne se coupe qu'en mode routeur actif (appliqué puis "
+                    "confirmé) ; il se rétablit en tout mode")
     try:
-        cfg = charger(_p(ctx, TOML))
+        cfg = charger(_p(ctx, TOML)) if os.path.lexists(_p(ctx, TOML)) else None
     except ErreurConfig as exc:
-        raise Refus(f"configuration du mode routeur illisible ({exc}) : ports du pont inconnus") from exc
-    if port not in cfg.ports:
-        # rétabli, il ne pourrait jamais être constaté : networkd ne l'asservit qu'aux ports du 05
-        raise Refus(f"{port} n'est pas un port du pont (ports configurés : {' '.join(cfg.ports)}) : l'ajouter au mode "
-                    "routeur et réappliquer d'abord")
+        if coupe:
+            raise Refus(f"configuration du mode routeur illisible ({exc}) : ports du pont inconnus") from exc
+        cfg = None                                          # rétablir : vérifié levé, sans le pont
+    au_pont = courant == "actif" and cfg is not None and port in cfg.ports
+    if coupe and not au_pont:
+        raise Refus(f"{port} n'est pas un port du pont (ports configurés : "
+                    f"{' '.join(cfg.ports) if cfg is not None else 'aucun'}) : rien à couper")
     try:
-        return fichiers.lire(chemin)
+        avant = fichiers.lire(chemin)
     except fichiers.LienSymbolique as exc:
         raise Refus(f"{exc.filename} est un lien symbolique : ni suivi, ni remplacé") from exc
     except OSError as exc:
         raise Refus(f"{chemin} illisible ({exc.__class__.__name__}) : le corriger d'abord") from exc
+    return avant, COUPE if coupe else AU_PONT if au_pont else LEVE
 
 
 def _remettre_port(ctx: Contexte, chemin: Path, avant: bytes | None, port: str) -> list[str]:
@@ -1120,11 +1146,12 @@ def _agir_port(ctx: Contexte, port: str, acteur: str, coupe: bool) -> dict:
     chemin = _p(ctx, FICHIER_COUPE.format(port=port))
     with _verrou(ctx), _auditer_chemins(ctx, acteur):
         try:
-            avant = _preparer_port(ctx, port, chemin)
+            avant, attendu = _preparer_port(ctx, port, chemin, coupe)
         except Refus as exc:
             if not isinstance(exc, CheminRefuse):          # audité par _auditer_chemins
                 _auditer(ctx, f"{action}-refus", acteur, str(exc))
             raise
+        leve = False
         with _sans_interruption():                          # de l'écriture à la vérification (ou à la remise)
             try:
                 if coupe:
@@ -1133,7 +1160,9 @@ def _agir_port(ctx: Contexte, port: str, acteur: str, coupe: bool) -> dict:
                     chemin.unlink(missing_ok=True)
                 _exiger(ctx, ["networkctl", "reload"])
                 _exiger(ctx, ["networkctl", "reconfigure", port])           # le port seul, jamais br-lan
-                _attendre_port(ctx, port, coupe)
+                if attendu == LEVE:
+                    leve = _lever_port(ctx, port)
+                _attendre_port(ctx, port, attendu)
             except BaseException as exc:                    # même une exception imprévue remet l'état d'avant
                 erreurs = _remettre_port(ctx, chemin, avant, port)
                 suite = ("fichier d'avant remis, networkd rechargé" if not erreurs
@@ -1142,9 +1171,11 @@ def _agir_port(ctx: Contexte, port: str, acteur: str, coupe: bool) -> dict:
                 if _connue(exc):
                     raise Echec(f"{exc} ; {suite}") from exc
                 raise
+        fichier = FICHIER_COUPE.format(port=port)
         _auditer(ctx, action, acteur,
-                 f"{port} coupé : hors du pont et baissé ({FICHIER_COUPE.format(port=port)})" if coupe
-                 else f"{port} rétabli : br-lan pour maître ({FICHIER_COUPE.format(port=port)} retiré)")
+                 f"{port} coupé : hors du pont et baissé ({fichier})" if coupe
+                 else f"{port} rétabli : br-lan pour maître ({fichier} retiré)" if attendu == AU_PONT
+                 else f"{port} rétabli hors du pont : UP{' (ip link set up)' if leve else ''} ({fichier} retiré)")
     return etat(ctx)
 
 
