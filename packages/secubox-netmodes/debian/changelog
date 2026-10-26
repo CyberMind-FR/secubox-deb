@@ -1,3 +1,13 @@
+secubox-netmodes (1.4.2-1~trixie1) trixie; urgency=medium
+
+  * Mise à jour (gk2, 2026-10-26 16:22 ; ref #3189) : le prerm de debhelper arrêtait secubox-lan-dhcp.service (DHCP du
+    LAN du mode routeur, activé par le contrôleur) et, sous `--no-start`, rien ne le relançait : le LAN perdait son
+    DHCP. Le postinst le relance (`systemctl restart`) seulement s'il est activé, une fois les profils AppArmor
+    chargés, sans jamais faire échouer l'installation. Le paquet n'active ni ne démarre toujours pas le DHCP
+    (`--no-enable --no-start` conservé). secubox-netmodes-retour-boot.service (oneshot au démarrage) inchangé (ref #3189).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 26 Oct 2026 16:30:00 +0100
+
 secubox-netmodes (1.4.1-1~trixie1) trixie; urgency=medium
 
   * Unbound lent (ref #3189, gk2 : arrêt 115 s, démarrage 38 à 112 s) : le client `systemctl restart unbound.service`,
