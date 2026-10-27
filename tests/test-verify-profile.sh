@@ -3,13 +3,19 @@
 # Test de la porte verify-profile (#1112).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-# 1) les deux profils réels passent
-bash scripts/verify-profile.sh isp  >/dev/null || { echo "FAIL: isp devrait passer"; exit 1; }
-bash scripts/verify-profile.sh full >/dev/null || { echo "FAIL: full devrait passer"; exit 1; }
-# 2) working-set amputé de 'waf' → isp DOIT être refusé (preuve que la porte mord)
-tmp="$(mktemp)"; grep -vx waf image/profiles/working-set.gk2.txt > "$tmp"
-if WORKING_SET="$tmp" bash scripts/verify-profile.sh isp >/dev/null 2>&1; then
-  echo "FAIL: isp aurait dû être refusé (waf retiré du working-set)"; rm -f "$tmp"; exit 1
-fi
-rm -f "$tmp"
+# 1) les QUATRE profils réels passent (minimal manquait : alpha.19, deux images refusées sur « courbes », #3208)
+for prof in minimal lite isp full; do
+  bash scripts/verify-profile.sh "$prof" >/dev/null || { echo "FAIL: $prof devrait passer"; exit 1; }
+done
+# 2) working-set amputé d'un module dont le profil dépend → profil REFUSÉ (preuve que la porte mord).
+#    'waf' ne prouvait plus rien : isp n'en dépend plus. modem (isp) et courbes (minimal) sont des dépendances directes.
+refuse() {  # refuse <profil> <module retiré>
+  local tmp; tmp="$(mktemp)"; grep -vx "$2" image/profiles/working-set.gk2.txt > "$tmp"
+  if WORKING_SET="$tmp" bash scripts/verify-profile.sh "$1" >/dev/null 2>&1; then
+    echo "FAIL: $1 aurait dû être refusé ($2 retiré du working-set)"; rm -f "$tmp"; exit 1
+  fi
+  rm -f "$tmp"
+}
+refuse isp modem
+refuse minimal courbes
 echo "OK: verify-profile — profils valides acceptés, module hors working-set refusé"
