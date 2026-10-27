@@ -129,6 +129,14 @@ and HAProxy were tried and removed. Step-by-step install: [docs/INSTALL-ESPRESSO
 Side-by-side table, glossary and a popularisation prompt:
 [docs/PROFILS-COMPARATIF.md](docs/PROFILS-COMPARATIF.md).
 
+**Validating a fleet.** The *Profile comparison* page (`/profiles/comparatif.html#parc`) has a second tab, *Fleet
+validation*, that shows what really runs on every box of the WireGuard mesh: one row per SecuBox package, one column
+per box, and four levels per cell — expected by that box's profile, package and version, services (systemd units and
+modules served by the aggregator), and memory/CPU actually used. Each box records its own state every 5 minutes and
+signs it with its Ed25519 key; the page only displays what the boxes signed, flags version mismatches and errors, and
+names any box whose record cannot be read. Read-only. Guide (French):
+[wiki — Valider un parc](https://github.com/CyberMind-FR/secubox-deb/wiki/Valider-un-parc).
+
 ## 📘 Official AMD64 Installation
 
 Install and reproduce the GK2 development box on an AMD64 PC, VirtualBox,

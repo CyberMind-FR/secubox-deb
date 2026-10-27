@@ -798,6 +798,86 @@ class MetricSnapshot(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# ModulesSnapshot — relevé de validation des modules signé par la box (#3212)
+# ---------------------------------------------------------------------------
+# Produit par secubox-profiles (secubox-profilectl releve), signé par sbx-fleetctl publish-modules, lu par les pairs du
+# maillage pour le comparateur des profils. Modèle SÉPARÉ de MetricSnapshot : extra="forbid" partout, un champ ajouté
+# à MetricSnapshot casserait les pairs pas encore à jour. Tout est borné : un pair signe ce qu'il veut, la lecture
+# valide quand même la forme (fleet.verify_modules).
+
+_ETATS_UNITE = Literal["actif", "erreur", "declenche", "non_requis", "termine", "veille", "arrete", "inconnu"]
+_ETATS_PAQUET = Literal["fonctionnel", "veille", "arrete", "erreur", "manquant", "absent", "inconnu"]
+_RFC3339 = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$"
+
+
+class UniteEtat(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    unite:     str = Field(..., pattern=r"^[A-Za-z0-9_.:-]{1,128}\.(service|timer)$")
+    etat:      _ETATS_UNITE
+    memoire_o: Optional[int] = Field(default=None, ge=0, le=2 ** 63)
+
+
+class AgregateurEtat(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    module:  str = Field(..., pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    etat:    Literal["actif", "erreur", "inconnu"]
+    message: Optional[str] = Field(default=None, max_length=200)
+
+
+class PaquetEtat(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    paquet:      str = Field(..., pattern=r"^(secubox|sbxos)-[a-z0-9][a-z0-9.+-]{0,80}$")
+    version:     Optional[str] = Field(default=None, max_length=64)
+    statut_dpkg: str = Field(..., max_length=8)
+    installe:    bool
+    attendu:     bool
+    recommande:  bool
+    meta:        bool
+    hors_profil: bool
+    etat:        _ETATS_PAQUET
+    unites:      List[UniteEtat] = Field(default_factory=list, max_length=16)
+    agregateur:  List[AgregateurEtat] = Field(default_factory=list, max_length=16)
+    memoire_o:   Optional[int] = Field(default=None, ge=0, le=2 ** 63)
+    cpu_pct:     Optional[float] = Field(default=None, ge=0.0, le=10_000.0, allow_inf_nan=False)
+    erreurs:     List[str] = Field(default_factory=list, max_length=5)
+
+    @field_validator("erreurs")
+    @classmethod
+    def erreurs_bornees(cls, v: List[str]) -> List[str]:
+        if any(not isinstance(e, str) or len(e) > 200 for e in v):
+            raise ValueError("erreur de plus de 200 caractères")
+        return v
+
+
+class ModulesSnapshot(BaseModel):
+    """Relevé de validation signé d'une box : profil attendu, paquets, services, ressources (#3212)."""
+    model_config = ConfigDict(extra="forbid")
+
+    node_did:          str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    issued_by:         str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    hostname:          str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9.-]{0,62}$")
+    ts:                str = Field(..., max_length=40, pattern=_RFC3339, description="RFC 3339, signature")
+    releve_ts:         str = Field(..., max_length=40, pattern=_RFC3339, description="RFC 3339, relevé")
+    profil_actif:      Optional[Literal["minimal", "lite", "isp", "full"]] = None
+    profils_installes: List[Literal["minimal", "lite", "isp", "full"]] = Field(default_factory=list, max_length=4)
+    partiel:           List[str] = Field(default_factory=list, max_length=8)
+    paquets:           List[PaquetEtat] = Field(default_factory=list, max_length=400)
+    sig:               Optional[str] = Field(default=None, max_length=200)
+    signer_did:        Optional[str] = Field(default=None, pattern=r"^did:plc:[0-9a-f]{32}$")
+    signer_pub:        Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("partiel")
+    @classmethod
+    def partiel_borne(cls, v: List[str]) -> List[str]:
+        if any(not isinstance(e, str) or len(e) > 80 for e in v):
+            raise ValueError("motif de relevé partiel de plus de 80 caractères")
+        return v
+
+
+# ---------------------------------------------------------------------------
 # Progressive Release Rings (center-driven artifact delivery)
 # ---------------------------------------------------------------------------
 

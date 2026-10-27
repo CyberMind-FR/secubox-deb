@@ -39,3 +39,5 @@ Un module absent du profil peut toujours s'installer à la main ; le profil fixe
 Sur une machine de 2 Go, les listes de blocage DNS restent celles par défaut, petites, avec un seul profil de blocage. Un puits DNS de production de plus de 650 000 zones occupe environ 295 Mo, et chaque configuration de blocage distincte de webfilter ajoute environ 100 Mo : à réserver aux niveaux standard et pro.
 
 Tableau complet, glossaire et prompt de vulgarisation : [`docs/PROFILS-COMPARATIF.md`](https://github.com/CyberMind-FR/secubox-deb/blob/master/docs/PROFILS-COMPARATIF.md).
+
+Pour vérifier ce qui tourne réellement sur chaque box d'un maillage, et non ce que les profils déclarent : [[Valider-un-parc|Valider un parc]].

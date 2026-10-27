@@ -8,6 +8,9 @@
   SecuBox — Comparatif des profils (#2819), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
   LECTURE SEULE. Le CONTENU des profils (minimal, lite, isp, full) est lu des meta-paquets secubox-<profil> à la construction : jamais saisi ici.
   Le profil ACTIF et les modules installés viennent de dpkg sur cette box ; la mémoire est celle MESURÉE (jamais estimée).
+  Onglet « Validation du parc » (#3212) : l'état RÉEL de chaque box du maillage (profil attendu, paquet et version,
+  services, mémoire), tel que chaque box l'a signé (annuaire /fleet/modules) ; la page n'invente aucun état et nomme les
+  box sans relevé lisible. #parc ouvre cet onglet.
   ?embed=1 : sans menu ; ?demo=1 : données fictives.
 -->
 <html lang="fr">
@@ -65,6 +68,26 @@
         .pan h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
         .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
         .absent .chip{border-color:rgba(255,77,94,.4)} .vide{color:var(--faible);font-size:.78rem;padding:6px 0}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:6px}
+        .onglet{font:inherit;font-size:.82rem;font-weight:700;padding:6px 14px;border-radius:9px 9px 0 0;border:1px solid var(--trait);border-bottom:none;background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer}
+        .onglet i{font-style:normal;font-weight:500;font-size:.66rem;color:var(--faible);margin-left:6px}
+        .onglet[aria-selected="true"]{color:var(--texte);border-color:var(--cyan);background:rgba(41,182,246,.16)}
+        .onglet:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .vue{display:grid;gap:10px;min-width:0} .vue[hidden]{display:none}
+        .filtres{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:.74rem;color:var(--doux)}
+        .legende{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:.68rem;color:var(--doux)} .legende span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle;background:var(--c)}
+        .defile{overflow-x:auto;border:1px solid var(--trait);border-radius:12px;max-height:70vh}
+        #parc{border-collapse:separate;border-spacing:0;width:100%;font-size:.74rem}
+        #parc th,#parc td{border-bottom:1px solid var(--trait);padding:5px 8px;text-align:left;vertical-align:top}
+        #parc thead th{position:sticky;top:0;z-index:2;font-weight:700;min-width:130px}
+        #parc th.paquet,#parc td.paquet{position:sticky;left:0;z-index:1;min-width:170px;font-weight:600}
+        #parc thead th.paquet{z-index:3}
+        #parc .sous{display:block;color:var(--faible);font-size:.64rem;font-weight:500;margin-top:2px}
+        #parc .badge{margin-left:4px} #parc .badge.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        #parc td .e{font-weight:700} #parc td .v{display:block;color:var(--doux);font-size:.66rem;font-variant-numeric:tabular-nums}
+        #parc tr.ecart-version td .v{color:var(--jaune)} #parc tr.ecart-version td.paquet::after{content:" ≠ version";color:var(--jaune);font-size:.62rem;font-weight:500}
+        #parcAlerte{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem} #parcAlerte[hidden]{display:none}
+        #parcErreurs{margin:0;padding-left:18px;font-size:.74rem;color:var(--doux)} #parcErreurs b{color:var(--texte)}
     </style>
 </head>
 <body>
@@ -73,7 +96,7 @@
         <header class="tete">
             <div class="marque">
                 <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="2.2"/></svg>
-                <div><b>Comparatif des profils</b><small>Ce que contient chaque profil, lu des méta-paquets</small></div>
+                <div><b>Comparatif des profils</b><small>Ce que déclarent les profils, et l'état réel de chaque box</small></div>
             </div>
             <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
             <div class="droite"><span id="maj">—</span><a class="btn" href="/profiles/">← Profils de modules</a><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
@@ -82,6 +105,12 @@
         <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:#001">Se connecter</a></div>
         <div id="erreur" role="alert" hidden></div>
 
+        <nav class="onglets" role="tablist" aria-label="Vues">
+            <button class="onglet" role="tab" type="button" id="ongletProfils" aria-selected="true" aria-controls="vueProfils">Profils déclarés<i>métadonnées des méta-paquets</i></button>
+            <button class="onglet" role="tab" type="button" id="ongletParc" aria-selected="false" aria-controls="vueParc">Validation du parc<i>état réel de chaque box</i></button>
+        </nav>
+
+        <div class="vue" id="vueProfils" role="tabpanel" aria-labelledby="ongletProfils">
         <section class="tuiles" aria-label="Indicateurs">
             <div class="tuile" title="Le profil dont le méta-paquet secubox-&lt;profil&gt; est installé sur cette box (dpkg). Le plus large l'emporte quand plusieurs sont présents."><span class="l">Profil actif</span><span class="v" id="tActif">—</span><span class="s" id="tActifS">méta-paquet installé</span></div>
             <div class="tuile" title="Modules du profil actif dont le paquet est installé, sur le total que le méta-paquet demande."><span class="l">Modules installés</span><span class="v" id="tInst">—</span><span class="s">du profil actif</span></div>
@@ -94,6 +123,22 @@
 
         <div class="pan absent" id="pAbsent"><h3>Ce que Minimal n’embarque pas <i id="aStat"></i></h3><div id="absents"></div>
             <p class="note">Liste calculée : les modules des trois autres profils qui ne sont pas dans Minimal. Un module ajouté à un méta-paquet apparaît ici à la construction suivante.</p></div>
+        </div>
+
+        <div class="vue" id="vueParc" role="tabpanel" aria-labelledby="ongletParc" hidden>
+            <div id="parcAlerte" role="status" hidden></div>
+            <div class="filtres">
+                <span>Afficher :</span>
+                <button class="btn" type="button" id="fEcarts" aria-pressed="true" title="Versions différentes, ou une box en erreur, arrêtée, manquante ou d'état inconnu">Écarts</button>
+                <button class="btn" type="button" id="fErreurs" aria-pressed="false" title="Une box en erreur, ou un paquet attendu et manquant">Erreurs</button>
+                <button class="btn" type="button" id="fTous" aria-pressed="false">Tous les paquets</button>
+                <span id="parcCompte"></span>
+            </div>
+            <div class="legende" aria-label="Légende" id="legende"></div>
+            <div class="defile"><table id="parc"><thead></thead><tbody></tbody></table></div>
+            <div class="pan"><h3>Erreurs et relevés incomplets <i id="parcErrStat"></i></h3><ul id="parcErreurs"></ul>
+                <p class="note">Chaque box relève elle-même son état toutes les 5 minutes (secubox-profiles) et le signe (annuaire) ; cette page lit ces relevés par le maillage et n'en déduit rien. « Absent » : ni installé ni demandé par le profil de la box. « Manquant » : demandé par son profil, pas installé. « En veille » : module à la demande endormi. Un service lancé par un minuteur, dont la condition de démarrage n'est pas remplie ou servi par l'agrégateur n'est pas « arrêté ».</p></div>
+        </div>
     </div></div></main>
 
     <script src="/shared/sidebar.js"></script>
@@ -111,9 +156,10 @@
         let DATA = null, MEM = null, SESSION_OK = true, CUMUL = false, PANNE = null;
 
         function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
-        async function lire(chemin) {
+        async function lire(chemin) { return lireUrl(API + chemin); }
+        async function lireUrl(url) {
             const h = { Accept: 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t;
-            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: h });
+            const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store', headers: h });
             if (!r.ok) { let d = ''; try { d = (await r.json()).detail || ''; } catch (e) { /* corps vide */ } const e = new Error(d || 'HTTP ' + r.status); e.statut = r.status; throw e; }
             return r.json();
         }
@@ -162,6 +208,7 @@
 
         function rendre() {
             $('demo').hidden = !DEMO; $('session').hidden = SESSION_OK;
+            if (VUE !== 'profils') return;
             const e = $('erreur'); e.hidden = !PANNE; e.textContent = PANNE ? 'Contenu des profils indisponible : ' + PANNE : '';
             const etat = $('etat');
             const profils = DATA && Array.isArray(DATA.profils) ? DATA.profils : null;
@@ -204,10 +251,138 @@
         }
 
         $('cumul').addEventListener('click', () => { CUMUL = !CUMUL; $('cumul').setAttribute('aria-pressed', String(CUMUL)); $('cumul').textContent = CUMUL ? 'Afficher seulement ce que chaque profil ajoute' : 'Afficher le contenu cumulé'; rendre(); });
-        $('rafraichir').addEventListener('click', charger);
+        $('rafraichir').addEventListener('click', () => (VUE === 'parc' ? chargerParc() : charger()));
+
+        // ── Validation du parc (#3212) : l'état SIGNÉ par chaque box, jamais déduit ici ───────────────────────────────
+        const ETATS = {
+            fonctionnel: { l: 'fonctionnel', c: '#2ecc71', f: 'rgba(46,204,113,.13)' }, veille: { l: 'en veille', c: '#a78bfa', f: 'rgba(167,139,250,.13)' },
+            arrete: { l: 'arrêté', c: '#ff9f1c', f: 'rgba(255,159,28,.16)' }, erreur: { l: 'en erreur', c: '#ff4d5e', f: 'rgba(255,77,94,.20)' },
+            manquant: { l: 'manquant', c: '#ff4d5e', f: 'rgba(255,77,94,.09)' }, inconnu: { l: 'inconnu', c: '#ffd23f', f: 'rgba(255,210,63,.12)' },
+            absent: { l: 'absent', c: '#6f84a8', f: 'rgba(8,18,38,.55)' }, indisponible: { l: '—', c: '#6f84a8', f: 'rgba(8,18,38,.30)' } };
+        const ANORMAUX = ['erreur', 'arrete', 'manquant', 'inconnu'];
+        let VUE = 'profils', FILTRE = 'ecarts', PARC = null, PARC_ALERTE = null;
+
+        function demoParc() {
+            const pq = (paquet, etat, version, sur) => Object.assign({ paquet, etat, version: etat === 'manquant' ? null : version, installe: etat !== 'manquant', hors_profil: false, memoire_o: null, erreurs: [], unites: [], agregateur: [] }, sur || {});
+            const n = (hostname, profil, paquets, sur) => Object.assign({ hostname, profil_actif: profil, releve_ts: new Date().toISOString(), stale: false, partiel: [], paquets }, sur || {});
+            return { noeuds: [n('gk2', 'full', [pq('secubox-p2p', 'fonctionnel', '1.19.3', { memoire_o: 52428800 }), pq('secubox-mail', 'erreur', '2.16.7', { erreurs: ['secubox-mail-imap-sync.service en échec (exit-code)'] }), pq('secubox-core', 'fonctionnel', '1.7.20')]),
+                n('gk3', 'lite', [pq('secubox-p2p', 'fonctionnel', '1.19.2'), pq('secubox-core', 'fonctionnel', '1.7.20'), pq('secubox-gitea', 'manquant', null, { erreurs: ['attendu par le profil lite, non installé'] })]),
+                n('gk4', 'isp', [pq('secubox-p2p', 'fonctionnel', '1.19.3'), pq('secubox-core', 'fonctionnel', '1.7.20'), pq('secubox-lyrion', 'veille', '1.7.2', { hors_profil: true })])],
+                indisponibles: [{ nom: 'gk1', raison: 'injoignable' }] };
+        }
+
+        async function chargerParc() {
+            PARC_ALERTE = null;
+            if (DEMO) { PARC = demoParc(); SESSION_OK = true; rendreParc(); return; }
+            try {
+                PARC = await lireUrl('/api/v1/annuaire/fleet/modules'); SESSION_OK = true;
+                if (PARC && PARC.erreur) { const e = new Error('lecture des relevés en échec'); e.statut = 500; throw e; }
+            } catch (e) {
+                if (e.statut === 401 || e.statut === 403) { SESSION_OK = false; PARC = null; rendreParc(); return; }
+                PARC_ALERTE = 'Comparaison du parc indisponible (' + e.message + ') : seul le relevé de cette box est affiché.';
+                try { PARC = { noeuds: [await lire('/validation')], indisponibles: [] }; }
+                catch (e2) { PARC = { noeuds: [], indisponibles: [] }; PARC_ALERTE = 'Comparaison du parc et relevé de cette box indisponibles (' + e2.message + ').'; }
+            }
+            rendreParc();
+        }
+
+        const ilYa = ts => { const m = Math.round((Date.now() - Date.parse(ts)) / 60000); return isNaN(m) ? '' : m < 1 ? 'à l’instant' : m < 120 ? 'il y a ' + m + ' min' : 'il y a ' + Math.round(m / 60) + ' h'; };
+        const mo = o => Math.round(o / 1048576) + ' Mo';
+
+        // Colonnes indexées par DID, jamais par le nom qu'une box déclare (revue #3212) : deux box au même nom ne s'écrasent
+        // pas, et un nom piège (« constructor ») ne touche aucun objet : des Map, pas des objets ordinaires.
+        function colonnesParc() {
+            const cols = ((PARC && PARC.noeuds) || []).map(n => ({ id: 'did:' + String(n.node_did || n.hostname), nom: String(n.hostname || '?'), n }))
+                .concat(((PARC && PARC.indisponibles) || []).map((i, k) => ({ id: 'indispo:' + k, nom: String(i.nom || i.mesh_ip || '?'), raison: i.raison || 'indisponible' })));
+            return cols.sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { numeric: true }) || a.id.localeCompare(b.id));
+        }
+
+        function lignesParc(cols) {
+            const par = new Map();
+            cols.forEach(c => ((c.n && c.n.paquets) || []).forEach(q => { if (!par.has(q.paquet)) par.set(q.paquet, new Map()); par.get(q.paquet).set(c.id, q); }));
+            return Array.from(par.keys()).sort().map(nomP => {
+                const ici = par.get(nomP);
+                const cellules = cols.map(c => ({ c, q: ici.get(c.id) || null, etat: c.n ? (ici.has(c.id) ? ici.get(c.id).etat : 'absent') : 'indisponible' }));
+                const versions = new Set(cellules.filter(x => x.q && x.q.installe && x.q.version).map(x => x.q.version));
+                const ecartVersion = versions.size > 1;
+                const erreurs = cellules.some(x => x.etat === 'erreur' || x.etat === 'manquant');
+                return { nomP, cellules, ecartVersion, erreurs, ecart: ecartVersion || cellules.some(x => ANORMAUX.includes(x.etat)) };
+            });
+        }
+
+        function rendreParc() {
+            $('demo').hidden = !DEMO; $('session').hidden = SESSION_OK;
+            const etat = $('etat'), al = $('parcAlerte');
+            al.hidden = !PARC_ALERTE; al.textContent = PARC_ALERTE || '';
+            const thead = $('parc').tHead, tbody = $('parc').tBodies[0]; thead.replaceChildren(); tbody.replaceChildren();
+            const errs = $('parcErreurs'); errs.replaceChildren();
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; return annoncer(); }
+            const cols = colonnesParc(), lignes = lignesParc(cols);
+            const tr = el('tr'); tr.appendChild(peint(el('th', 'paquet', 'Paquet'), 'rgba(10,22,46,.97)'));
+            cols.forEach(c => {
+                const th = peint(el('th'), 'rgba(10,22,46,.97)'); th.dataset.box = c.nom; if (c.n) th.dataset.did = String(c.n.node_did || '');
+                th.appendChild(el('div', null, c.nom));
+                if (c.n && c.n.nom_conteste) { const b = el('span', 'badge att', 'nom contesté'); b.title = 'Une autre box du maillage déclare le même nom : ' + String(c.n.node_did || ''); th.appendChild(b); }
+                if (c.n) {
+                    const s = el('span', 'sous', (c.n.profil_actif ? 'profil ' + c.n.profil_actif : 'aucun profil') + (c.n.releve_ts ? ' · ' + ilYa(c.n.releve_ts) : ''));
+                    if (c.n.stale) s.appendChild(el('span', 'badge att', 'périmé'));
+                    if ((c.n.partiel || []).length) { const b = el('span', 'badge att', 'partiel'); b.title = 'Relevé partiel : ' + c.n.partiel.join(', '); s.appendChild(b); }
+                    const tot = (c.n.paquets || []).reduce((a, q) => a + (q.memoire_o || 0), 0);
+                    th.appendChild(s); th.appendChild(el('span', 'sous', (c.n.paquets || []).filter(q => q.installe).length + ' paquets' + (tot ? ' · ' + mo(tot) : '')));
+                } else { th.appendChild(el('span', 'sous', 'relevé indisponible : ' + c.raison)); }
+                tr.appendChild(th);
+            });
+            thead.appendChild(tr);
+            const visibles = lignes.filter(l => FILTRE === 'tous' || (FILTRE === 'erreurs' ? l.erreurs : l.ecart));
+            visibles.forEach(l => {
+                const r = el('tr'); r.dataset.paquet = l.nomP; if (l.ecartVersion) r.className = 'ecart-version';
+                r.appendChild(peint(el('td', 'paquet', nom(l.nomP)), 'rgba(10,22,46,.97)'));
+                l.cellules.forEach(x => {
+                    const e = ETATS[x.etat] || ETATS.inconnu, td = peint(el('td'), e.f);
+                    td.dataset.box = x.c.nom; td.dataset.etat = x.etat;
+                    const t = el('span', 'e', e.l); t.style.color = e.c; td.appendChild(t);
+                    if (x.q && x.q.hors_profil) td.appendChild(el('span', 'badge att', 'hors profil'));
+                    if (x.q && x.q.version) td.appendChild(el('span', 'v', x.q.version + (x.q.memoire_o ? ' · ' + mo(x.q.memoire_o) : '') + (x.q.cpu_pct ? ' · ' + x.q.cpu_pct + ' % CPU' : '')));
+                    if (x.q) td.title = [].concat((x.q.unites || []).map(u => u.unite + ' : ' + u.etat), (x.q.agregateur || []).map(a => 'agrégateur ' + a.module + ' : ' + a.etat), x.q.erreurs || []).join('\n');
+                    r.appendChild(td);
+                });
+                tbody.appendChild(r);
+            });
+            if (!visibles.length) { const r = el('tr'), td = el('td', 'vide', lignes.length ? 'Aucun paquet pour ce filtre.' : 'Aucun relevé à comparer.'); td.colSpan = cols.length + 1; r.appendChild(td); tbody.appendChild(r); }
+            let nErr = 0;
+            cols.forEach(c => {
+                if (!c.n) { const li = el('li'); li.appendChild(el('b', null, c.nom)); li.append(' — relevé indisponible : ' + c.raison); errs.appendChild(li); nErr += 1; return; }
+                if ((c.n.partiel || []).length) { const li = el('li'); li.appendChild(el('b', null, c.nom)); li.append(' — relevé partiel : ' + c.n.partiel.join(', ')); errs.appendChild(li); nErr += 1; }
+                (c.n.paquets || []).forEach(q => (q.erreurs || []).forEach(m => { const li = el('li'); li.appendChild(el('b', null, c.nom + ' · ' + q.paquet)); li.append(' — ' + m); errs.appendChild(li); nErr += 1; }));
+            });
+            if (!nErr) errs.appendChild(el('li', null, 'Aucune.'));
+            $('parcErrStat').textContent = nErr ? nErr + ' ligne(s)' : '';
+            const nEcarts = lignes.filter(l => l.ecart).length;
+            $('parcCompte').textContent = visibles.length + ' / ' + lignes.length + ' paquets';
+            etat.className = 'actif' + (lignes.some(l => l.erreurs) ? ' att' : '');
+            etat.textContent = cols.length + ' BOX · ' + nEcarts + ' ÉCART' + (nEcarts > 1 ? 'S' : '');
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function afficher(vue) {
+            VUE = vue === 'parc' ? 'parc' : 'profils';
+            $('vueProfils').hidden = VUE !== 'profils'; $('vueParc').hidden = VUE !== 'parc';
+            $('ongletProfils').setAttribute('aria-selected', String(VUE === 'profils')); $('ongletParc').setAttribute('aria-selected', String(VUE === 'parc'));
+            try { history.replaceState(null, '', VUE === 'parc' ? '#parc' : location.pathname + location.search); } catch (e) { /* hors navigateur */ }
+            if (VUE === 'parc') { if (PARC === null) chargerParc(); else rendreParc(); }
+            else if (DATA === null) charger(); else rendre();
+        }
+        function filtrer(f) { FILTRE = f; ['fEcarts', 'fErreurs', 'fTous'].forEach(id => $(id).setAttribute('aria-pressed', String(id === { ecarts: 'fEcarts', erreurs: 'fErreurs', tous: 'fTous' }[f]))); rendreParc(); }
+        $('ongletProfils').addEventListener('click', () => afficher('profils'));
+        $('ongletParc').addEventListener('click', () => afficher('parc'));
+        $('fEcarts').addEventListener('click', () => filtrer('ecarts'));
+        $('fErreurs').addEventListener('click', () => filtrer('erreurs'));
+        $('fTous').addEventListener('click', () => filtrer('tous'));
+        Object.keys(ETATS).filter(k => k !== 'indisponible').forEach(k => { const s = el('span', null, ETATS[k].l); s.style.setProperty('--c', ETATS[k].c); $('legende').appendChild(s); });
         function annoncer() { try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'profiles' }, location.origin); } catch (e) { /* hors iframe */ } }
         if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
-        charger();
+        afficher(location.hash === '#parc' ? 'parc' : 'profils');
     </script>
 </body>
 </html>

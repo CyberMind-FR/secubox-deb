@@ -8,6 +8,9 @@
 override_dh_auto_install:
 	install -d debian/secubox-profiles/etc/sudoers.d
 	install -m 0440 sudoers.d/secubox-profiles debian/secubox-profiles/etc/sudoers.d/secubox-profiles
+	# Profil AppArmor du relevé de validation (#3212), chargé par le postinst.
+	install -d debian/secubox-profiles/etc/apparmor.d
+	install -m 0644 apparmor/secubox-profiles-releve debian/secubox-profiles/etc/apparmor.d/secubox-profiles-releve
 	install -d debian/secubox-profiles/usr/sbin
 	install -m 0755 sbin/secubox-cache-warm debian/secubox-profiles/usr/sbin/secubox-cache-warm
 	# Politique de cycle de vie livree par le paquet. Une copie dans
@@ -47,6 +50,8 @@ override_dh_installsystemd:
 	# Le laisser desactive reproduirait exactement le defaut de #1028 : un
 	# mecanisme correct, livre, et qui ne s'execute jamais.
 	dh_installsystemd --name=secubox-pins-apply
+	# Relevé de validation de la box (#3212) : lecture seule, au compte secubox, toutes les 5 min.
+	dh_installsystemd --name=secubox-profiles-releve
 	# Rechauffage des caches par minuterie (#1028). Le template lui-meme n'est
 	# ni active ni demarre — ce sont les minuteries par module qui le tirent.
 	dh_installsystemd --no-enable --no-start --name=secubox-cache-warm@

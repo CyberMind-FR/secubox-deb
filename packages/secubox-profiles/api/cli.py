@@ -420,6 +420,24 @@ def _cmd_set_lifecycle(args) -> int:
     return 0
 
 
+def _cmd_releve(args) -> int:
+    """Relevé de validation (#3212), écrit pour annuaire (signature, maillage) et pour l'API locale."""
+    from collections import Counter
+
+    from . import validation
+    chemin = validation.chemin_releve()
+    r = validation.releve(Path(args.root), chemin)
+    resume = {"chemin": str(chemin), "profil_actif": r["profil_actif"], "paquets": len(r["paquets"]),
+              "partiel": r["partiel"], "etats": dict(Counter(x["etat"] for x in r["paquets"]))}
+    if args.json:
+        print(json.dumps(resume, ensure_ascii=False))
+    else:
+        etats = ", ".join(f"{k} {n}" for k, n in sorted(resume["etats"].items()))
+        partiel = f" — PARTIEL : {', '.join(r['partiel'])}" if r["partiel"] else ""
+        print(f"{resume['paquets']} paquets ({etats}), profil {r['profil_actif'] or 'aucun'} → {chemin}{partiel}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="secubox-profilectl",
@@ -471,6 +489,11 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--wake-class", dest="wake_class", required=True, choices=list(WAKE_CLASSES))
     sp.add_argument("--json", action="store_true", help="rapport JSON sur stdout")
     sp.set_defaults(func=_cmd_set_lifecycle)
+
+    sp = sub.add_parser("releve", help="relevé de validation de cette box (profil attendu, paquets, services, "
+                                          "ressources ; #3212)")
+    sp.add_argument("--json", action="store_true", help="résumé JSON sur stdout")
+    sp.set_defaults(func=_cmd_releve)
 
     args = p.parse_args(argv)
     try:

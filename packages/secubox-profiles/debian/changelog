@@ -1,3 +1,22 @@
+secubox-profiles (0.24.0-1~trixie1) trixie; urgency=medium
+
+  * Validation du parc (#3212) : `secubox-profilectl releve` (secubox-profiles-releve.timer, 5 min, User=secubox,
+    lecture seule) relève pour chaque paquet SecuBox le profil attendu (Depends du méta-paquet installé le plus haut),
+    la version et le statut dpkg, les unités livrées et les modules montés dans l'agrégateur, la mémoire et le CPU ;
+    une unité déclenchée, non activée, à condition non remplie ou oneshot terminé n'est jamais « arrêtée ». Écrit
+    /var/lib/secubox/profiles/validation/releve.json ; GET /api/v1/profiles/validation (require_lecture).
+  * /profiles/comparatif.html : onglet « Validation du parc » (une colonne par box du maillage, état signé par chaque
+    box via annuaire /fleet/modules, écarts de version, filtres Écarts / Erreurs / Tous, box indisponibles nommées) ;
+    l'onglet existant devient « Profils déclarés » (ref #3212).
+  * Revue de sécurité : le relevé tourne sous un compte dédié `secubox-profiles` (groupe secubox), socle § 10 complet
+    (UMask 0027, ProtectKernelTunables, ProtectControlGroups, RestrictSUIDSGID, LockPersonality, PrivateDevices,
+    IPAddressDeny, AF_UNIX seul) et profil AppArmor enforce `secubox-profiles-releve` ; dossier setgid 2750, relevé
+    0640. Cycles de vie illisibles annoncés (relevé partiel) ; échecs de l'agrégateur réduits au type d'erreur
+    (jamais un chemin dans un relevé signé et servi aux pairs) ; bornes du modèle signé appliquées dès la collecte ;
+    la page indexe les colonnes par DID (deux box au même nom ne s'écrasent pas, « nom contesté » affiché).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 12:00:00 +0100
+
 secubox-profiles (0.23.13-1~trixie1) trixie; urgency=medium
 
   * Réveil (nginx-sync) : find_config et wire retrouvent aussi un vhost livré en joker générique « <label>.* »

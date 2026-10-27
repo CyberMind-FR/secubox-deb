@@ -32,7 +32,8 @@ server {
     allow 10.10.0.0/24;
     deny all;
 
-    # Read-only federation pull surface — these three exact paths, nothing else.
+    # Read-only federation pull surface — the exact paths below, nothing else (each one a SIGNED record the
+    # reader verifies, or a static file whose trust comes from WireGuard).
     location = /api/v1/annuaire/services {
         limit_except GET { deny all; }
         rewrite ^/api/v1/annuaire/(.*)$ /$1 break;
@@ -70,6 +71,16 @@ server {
         proxy_intercept_errors on;
     }
 
+    # Relevé de validation des modules de CETTE box (#3212), signé par sbx-fleetctl publish-modules : même posture que
+    # /fleet/self (public sur le maillage, auto-certifié, le lecteur vérifie signature ET forme).
+    location = /api/v1/annuaire/fleet/modules/self {
+        limit_except GET { deny all; }
+        rewrite ^/api/v1/annuaire/(.*)$ /$1 break;
+        proxy_pass http://unix:/run/secubox/annuaire.sock;
+        include /etc/nginx/snippets/secubox-proxy.conf;
+        proxy_set_header X-SecuBox-Maillage 1;
+        proxy_intercept_errors on;
+    }
     # Adresses de CETTE box pour les noms <box>.lan/.mesh.<zone> (#1556) : un
     # fichier statique écrit par secubox-annuaire-noms ({boxname, node_id,
     # mesh_ip, lan_ip}). Non signé — la confiance vient de WireGuard : seule la

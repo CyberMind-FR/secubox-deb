@@ -17,6 +17,7 @@
 * [[Hardware-Matrix]]
 * [[Roadmap]]
 * [[Profils]]
+* [[Valider-un-parc|Valider un parc]]
 * [[DNS-Filtrage]]
 
 ### Soutenir

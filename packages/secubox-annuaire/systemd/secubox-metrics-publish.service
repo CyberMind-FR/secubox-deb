@@ -13,3 +13,5 @@ Group=secubox
 # Signs with the box's own node.key (owned by secubox) — never root. A
 # missing/disabled config degrades to a no-op (see sbx-fleetctl --help).
 ExecStart=/usr/sbin/sbx-fleetctl publish
+# Relevé de validation des modules (#3212) : « - » — un relevé absent ou refusé ne fait pas échouer l'unité.
+ExecStart=-/usr/sbin/sbx-fleetctl publish-modules
