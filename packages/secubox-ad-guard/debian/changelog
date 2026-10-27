@@ -1,3 +1,16 @@
+secubox-ad-guard (1.16.0-1~trixie1) trixie; urgency=medium
+
+  * Listes DNS compilées (#3205) : secubox-adblock-sync et secubox-adguard-adult-sync DÉPOSENT leur rendu comme source de
+    secubox-dns-listes (/var/lib/secubox/dns-listes/sources) au lieu d'écrire dans unbound.conf.d et de recharger Unbound
+    eux-mêmes. Un seul service compile webfilter, adblock et adult, vérifie, recharge et revient en arrière : les 383 980
+    dérogations par client exempté deviennent quelques étiquettes. L'attente de fin de rechargement (#2969) passe dans
+    secubox-dns-listes. Statut : `source` (depose, inchange, retire, absent) et `application` remplacent `reloaded`.
+  * /statut-direct : « rechargé » se lit dans l'état de secubox-dns-listes, s'il est postérieur à la source (sinon
+    l'application est en cours) ; un échec d'application est affiché.
+  * Depends: secubox-core (>= 1.8.0).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 15:30:00 +0100
+
 secubox-ad-guard (1.15.8-1~bookworm1) bookworm; urgency=medium
 
   * Minuterie adulte (#2983) : 1 min (#2976) → 10 min. Une fois le vrai correctif en place

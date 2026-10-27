@@ -25,12 +25,17 @@ ailleurs), seuls les domaines adultes lui sont ouverts.
 Ne modifie JAMAIS `secubox_filterlists` (bibliothèque commune, utilisée
 aussi par ad_ghost MITM) : source et compilation sont propres à ce script.
 
+#3205 : le rendu est DÉPOSÉ comme source de secubox-dns-listes (secubox-core), qui
+compile webfilter, adblock et adult en un seul fichier à étiquettes (les 383 980
+dérogations par client exempté y deviennent quelques étiquettes), vérifie,
+recharge et revient en arrière. Ce script ne parle plus au résolveur.
+
 Usage:
-  secubox-adguard-adult-sync sync     # fetch + compile + render + reload
-  secubox-adguard-adult-sync disable  # drop the drop-in + reload
+  secubox-adguard-adult-sync sync     # fetch + compile + render + deposit the source
+  secubox-adguard-adult-sync disable  # withdraw the source
   secubox-adguard-adult-sync status   # print JSON status
 
-Runs as root (writes /etc/unbound, reloads the resolver).
+Runs as root (writes /var/lib/secubox/dns-listes/sources).
 """
 from __future__ import annotations
 
@@ -45,7 +50,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-import secubox_unbound as _unbound
+from secubox_unbound import depot as _depot
 
 # Importé en lecture seule : la liste générale déjà compilée par
 # secubox-adblock-sync (#740), pour savoir quels domaines adultes sont DÉJÀ
@@ -77,8 +82,7 @@ EXEMPT_IP = DATA_DIR / "adult-exempt-ip.txt"
 # MAC, elle, ne change pas ; on résout ses adresses COURANTES (IPv4 ET
 # IPv6, table de voisinage du noyau) à chaque synchronisation.
 EXEMPT_MAC = DATA_DIR / "adult-exempt-mac.txt"
-DROPIN = Path("/etc/unbound/unbound.conf.d/96-secubox-adult.conf")
-UNBOUND_CONF = Path("/etc/unbound/unbound.conf")
+SOURCE = _depot.SOURCES / "96-secubox-adult.conf"
 STATUS = DATA_DIR / "adult-sinkhole-status.json"
 STATE = DATA_DIR / "adult-sinkhole.enabled"
 
@@ -213,7 +217,7 @@ def _exempt_ips() -> list[str]:
 
 
 def _render(adult: set[str], general: set[str]) -> str:
-    """Rend le drop-in Unbound. `adult` → always_nxdomain pour tout le monde
+    """Rend la source. `adult` → always_nxdomain pour tout le monde
     (sauf ce que le sinkhole général bloque déjà — un seul `local-zone` par
     nom, Unbound refuse les doublons).
 
@@ -245,28 +249,15 @@ def _render(adult: set[str], general: set[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
-# Combien de temps attendre, après `unbound-control reload`, que le
-# service repasse réellement « active » (#2969). `unbound-control reload`
-# rend la main dès que le signal est accepté, PAS quand le rechargement est
-# terminé — avec un gros drop-in, Unbound reste en `reloading` une bonne
-# minute, DNS indisponible le temps que ça dure. Ne pas attendre fait
-# croire « reloaded: true » alors que le service est encore en train de
-# ré-analyser sa config.
-_ATTENTE_RECHARGEMENT_S = 90
-_PAS_ATTENTE_S = 2
-
 ERREUR_VERROU = RuntimeError
 
 
 @contextlib.contextmanager
 def _verrou(bloquant: bool = True):
-    """Un seul `do_sync`/`do_disable` à la fois sur le socket de contrôle
-    Unbound (minuterie 1 min, #2976, + synchros manuelles). Constaté en
-    direct sur gk2 : deux `unbound-control` concurrents (un `reload` et un
-    `dump_cache` d'un autre service) ont laissé Unbound coincé en
-    « reloading » puis l'ont fait mourir — panne DNS complète pour tout le
-    réseau. Même verrou que `secubox-adguard-tv.verrou_controleur()`
-    (fichier dédié, exclusif, `O_NOFOLLOW`)."""
+    """Un seul `do_sync`/`do_disable` à la fois (minuterie, #2976, + synchros
+    manuelles) : cache de la source, liste des domaines et source déposée.
+    Fichier dédié, exclusif, `O_NOFOLLOW`. Depuis #3205, le script ne parle
+    plus à Unbound : secubox-dns-listes, seul, recharge."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     fd = os.open(DATA_DIR / "sync.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     try:
@@ -280,32 +271,7 @@ def _verrou(bloquant: bool = True):
         os.close(fd)
 
 
-class Systeme(_unbound.SystemeUnbound):
-    MODULE = "adguard-adult-sync"
-    ERREUR = RuntimeError
-
-    def verifier_unbound(self):
-        return _unbound.commande(["unbound-checkconf", str(UNBOUND_CONF)], 300)
-
-    def recharger_unbound(self):
-        super().recharger_unbound()
-        # `unbound-control reload` rend la main dès le signal accepté : on
-        # attend `systemctl is-active` (reload-notify, cf. l'unité) pour
-        # confirmer que le service est VRAIMENT repassé actif, pas juste
-        # que la commande a été envoyée.
-        fin = time.time() + _ATTENTE_RECHARGEMENT_S
-        while time.time() < fin:
-            ok, sortie = _unbound.commande(["systemctl", "is-active", "unbound"], 10)
-            if ok and sortie.strip() == "active":
-                return
-            time.sleep(_PAS_ATTENTE_S)
-        raise self.ERREUR(
-            f"unbound n'est pas revenu actif {_ATTENTE_RECHARGEMENT_S}s après le rechargement"
-        )
-
-
-def do_sync(force: bool = False, systeme=None) -> dict:
-    s = systeme or Systeme()
+def do_sync(force: bool = False) -> dict:
     try:
         with _verrou(bloquant=False):
             text = _fetch(force=force)
@@ -322,17 +288,18 @@ def do_sync(force: bool = False, systeme=None) -> dict:
             ADULT_DOMAINS.write_text("\n".join(sorted(adult)) + "\n")
 
             general = _general_domains()
+            # Dépôt atomique ; secubox-dns-listes.path déclenche la compilation et le rechargement.
             try:
-                etat = _unbound.poser_vue(DROPIN, _render(adult, general), s)
-            except RuntimeError as e:
+                etat = _depot.deposer_source(SOURCE.name, _render(adult, general), SOURCE.parent)
+            except (_depot.ErreurDepot, OSError) as e:
                 st = {"ok": False, "error": str(e), "adult": len(adult)}
                 _write_status(st)
                 return st
 
             STATE.parent.mkdir(parents=True, exist_ok=True)
             STATE.write_text("1\n")
-            st = {"ok": True, "enabled": True, "adult": len(adult),
-                  "exempt_ip": len(_exempt_ips()), "reloaded": etat == "applique"}
+            st = {"ok": True, "enabled": True, "adult": len(adult), "exempt_ip": len(_exempt_ips()),
+                  "source": etat, "application": "secubox-dns-listes"}
             _write_status(st)
             return st
     except ERREUR_VERROU as e:
@@ -341,23 +308,22 @@ def do_sync(force: bool = False, systeme=None) -> dict:
         return st
 
 
-def do_disable(systeme=None) -> dict:
-    s = systeme or Systeme()
+def do_disable() -> dict:
     try:
         with _verrou(bloquant=False):
             try:
-                etat = _unbound.retirer_vue(DROPIN, s)
-            except RuntimeError as e:
-                st = {"ok": False, "enabled": False, "reloaded": False, "error": str(e)}
+                etat = _depot.retirer_source(SOURCE.name, SOURCE.parent)
+            except (_depot.ErreurDepot, OSError) as e:
+                st = {"ok": False, "enabled": False, "error": str(e)}
                 _write_status(st)
                 return st
             STATE.parent.mkdir(parents=True, exist_ok=True)
             STATE.write_text("0\n")
-            st = {"ok": True, "enabled": False, "reloaded": etat == "retire", "error": None}
+            st = {"ok": True, "enabled": False, "source": etat, "application": "secubox-dns-listes", "error": None}
             _write_status(st)
             return st
     except ERREUR_VERROU as e:
-        st = {"ok": False, "enabled": False, "reloaded": False, "error": f"{e} — désactivation ignorée"}
+        st = {"ok": False, "enabled": False, "error": f"{e} — désactivation ignorée"}
         _write_status(st)
         return st
 

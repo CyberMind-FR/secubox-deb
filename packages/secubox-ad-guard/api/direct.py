@@ -18,7 +18,9 @@ from pathlib import Path
 from typing import Callable, Optional
 
 SINKHOLE_STATUS = Path("/var/lib/secubox/ad-guard/sinkhole-status.json")
-DROPIN_PUITS = Path("/etc/unbound/unbound.conf.d/95-secubox-adblock.conf")
+# #3205 : la synchronisation DÉPOSE la source ; secubox-dns-listes compile, recharge et note son état.
+SOURCE_PUITS = Path("/var/lib/secubox/dns-listes/sources/95-secubox-adblock.conf")
+ETAT_LISTES = Path("/var/lib/secubox/dns-listes/etat.json")
 ETAT_CAPTEUR = Path("/var/lib/secubox/ad-guard/dnstv/dnssensor-etat.json")
 UNITE_RESOLVEUR = "unbound.service"
 UNITE_CAPTEUR = "secubox-ad-guard-dnssensor.timer"
@@ -65,18 +67,35 @@ def _mtime(chemin: Path) -> Optional[int]:
         return None
 
 
-def puits_et_listes(statut: Optional[dict], mtime_dropin: Optional[int]) -> tuple:
-    """(puits, listes) d'après sinkhole-status.json. Fichier absent : tout est inconnu."""
+def _recharge(statut: dict, mtime_source: Optional[int], etat_listes: Optional[dict]) -> tuple:
+    """(rechargé ?, erreur d'application). Un ancien statut porte `reloaded` ; depuis #3205, c'est l'état de
+    secubox-dns-listes qui le dit, et seulement s'il est POSTÉRIEUR à la source déposée (sinon l'application est en cours)."""
+    if isinstance(statut.get("reloaded"), bool):
+        return statut["reloaded"], None
+    if not isinstance(etat_listes, dict) or mtime_source is None:
+        return None, None
+    t = _entier(etat_listes.get("t"))
+    if t is None or t < mtime_source:
+        return None, None
+    if etat_listes.get("etat") in ("applique", "inchange"):
+        return True, None
+    if etat_listes.get("etat") == "erreur":
+        return False, str(etat_listes.get("erreur") or "secubox-dns-listes : échec")[:200]
+    return None, None
+
+
+def puits_et_listes(statut: Optional[dict], mtime_source: Optional[int], etat_listes: Optional[dict] = None) -> tuple:
+    """(puits, listes) d'après sinkhole-status.json et l'état de secubox-dns-listes. Fichier absent : tout est inconnu."""
     if statut is None:
         return ({"actif": None, "ok": None, "erreur": None, "recharge": None},
-                {"domaines": None, "maj_ts": mtime_dropin, "peremption_s": PEREMPTION_LISTES_S})
+                {"domaines": None, "maj_ts": mtime_source, "peremption_s": PEREMPTION_LISTES_S})
     ok = statut.get("ok") if isinstance(statut.get("ok"), bool) else None
     enabled = statut.get("enabled") if isinstance(statut.get("enabled"), bool) else None
     erreur = statut.get("error")
-    puits = {"actif": enabled, "ok": ok, "erreur": str(erreur)[:200] if erreur else None,
-             "recharge": statut.get("reloaded") if isinstance(statut.get("reloaded"), bool) else None}
-    # Date de la dernière mise à jour RÉUSSIE : le ts du statut seulement si la synchronisation a réussi, sinon l'âge du fichier de règles posé.
-    maj = _entier(statut.get("ts")) if ok else mtime_dropin
+    recharge, erreur_application = _recharge(statut, mtime_source, etat_listes)
+    puits = {"actif": enabled, "ok": ok, "erreur": str(erreur)[:200] if erreur else erreur_application, "recharge": recharge}
+    # Date de la dernière mise à jour RÉUSSIE : le ts du statut seulement si la synchronisation a réussi, sinon l'âge de la source déposée.
+    maj = _entier(statut.get("ts")) if ok else mtime_source
     return puits, {"domaines": _entier(statut.get("blocked")), "maj_ts": maj, "peremption_s": PEREMPTION_LISTES_S}
 
 
@@ -91,7 +110,7 @@ def capteur(actif: Optional[bool], etat: Optional[dict], now: int) -> dict:
 def etat_direct(now: Optional[int] = None, *, magasin=None, lancer: Optional[Callable] = None) -> dict:
     """Le relevé complet ; `magasin` : le magasin de compteurs DNS (api.dnstv.Magasin) ou None s'il est illisible."""
     now = int(now if now is not None else time.time())
-    puits, listes = puits_et_listes(_json(SINKHOLE_STATUS), _mtime(DROPIN_PUITS))
+    puits, listes = puits_et_listes(_json(SINKHOLE_STATUS), _mtime(SOURCE_PUITS), _json(ETAT_LISTES))
     dernier, actifs, vus = None, None, None
     if magasin is not None:
         try:

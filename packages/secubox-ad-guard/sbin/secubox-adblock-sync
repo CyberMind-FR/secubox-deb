@@ -9,20 +9,24 @@ SecuBox-Deb :: secubox-adblock-sync (#740)
 CyberMind — https://cybermind.fr
 
 Board-wide DNS ad/tracker sinkhole. Compiles the modular filter-list resource
-(secubox_filterlists, shipped by secubox-core) then renders the DNS-blockable domain set as an
-Unbound drop-in of `local-zone "<domain>." always_nxdomain` — so EVERY device on
-the LAN (not just R3 MITM clients) gets ads/trackers NXDOMAIN'd at resolve time.
+(secubox_filterlists, shipped by secubox-core) then renders the DNS-blockable domain set as
+`local-zone "<domain>." always_nxdomain` lines — so EVERY device on the LAN (not just R3 MITM
+clients) gets ads/trackers NXDOMAIN'd at resolve time.
+
+#3205 : the render is DEPOSITED as a source of secubox-dns-listes (secubox-core), which compiles
+webfilter, adblock and adult lists into one tagged file, checks, reloads and rolls back as one
+transaction. This script no longer touches the resolver or its configuration.
 
 Whitelisted domains are already removed by the compiler. IPs in the operator IP
 allowlist are exempted via an Unbound *view* with no local-zones (best effort;
 requires `views:` support).
 
 Usage:
-  secubox-adblock-sync sync     # compile lists + render + reload unbound
-  secubox-adblock-sync disable  # drop the sinkhole drop-in + reload
+  secubox-adblock-sync sync     # compile lists + render + deposit the source
+  secubox-adblock-sync disable  # withdraw the source
   secubox-adblock-sync status   # print JSON status
 
-Runs as root (writes /etc/unbound, reloads the resolver). Driven by a weekly
+Runs as root (writes /var/lib/secubox/dns-listes/sources). Driven by a weekly
 systemd timer and on-demand from the dns-guard WebUI.
 """
 from __future__ import annotations
@@ -33,8 +37,8 @@ import sys
 import time
 from pathlib import Path
 
-# D4 (#2050) : pose, vérification, rechargement et retour arrière — la bibliothèque commune, pas une copie de plus.
-import secubox_unbound as _unbound
+# #3205 : dépôt de la source ; secubox-dns-listes compile, vérifie, recharge et revient en arrière.
+from secubox_unbound import depot as _depot
 
 # ── Locate the shared filter-list resource ────────────────────────────────
 # #2863 : secubox_filterlists est livré par secubox-core (comme secubox_unbound) — secubox-toolbox n'est PAS nécessaire (profil minimal). Repli sur l'ancien
@@ -51,8 +55,7 @@ except Exception:
         print(json.dumps({"ok": False, "error": f"filterlists import failed: {e}"}))
         sys.exit(2)
 
-DROPIN = Path("/etc/unbound/unbound.conf.d/95-secubox-adblock.conf")
-UNBOUND_CONF = Path("/etc/unbound/unbound.conf")
+SOURCE = _depot.SOURCES / "95-secubox-adblock.conf"
 STATUS = Path("/var/lib/secubox/ad-guard/sinkhole-status.json")
 IP_ALLOWLIST = Path("/var/lib/secubox/ad-guard/ip-allowlist.txt")
 # DOMAINES EXEMPTÉS (#1819) : ceux dont la BOX ELLE-MÊME a besoin — une liste
@@ -93,8 +96,8 @@ def _domain_allowlist() -> list:
 
 
 def _render(domains: list) -> str:
-    """Render the Unbound drop-in. Domains → always_nxdomain. IP allowlist →
-    a view with no blocking so those clients bypass the sinkhole."""
+    """Render the source. Domains → always_nxdomain. IP allowlist → a view with
+    no local-zone (view-first: global zones still apply to those clients)."""
     lines = [
         "# Managed by secubox-adblock-sync (#740). DO NOT EDIT BY HAND.",
         "# Regenerate: secubox-adblock-sync sync",
@@ -122,18 +125,7 @@ def _render(domains: list) -> str:
     return "\n".join(lines) + "\n"
 
 
-class Systeme(_unbound.SystemeUnbound):
-    """Effets de bord sur Unbound. Vérification de /etc/unbound/unbound.conf (qui inclut le drop-in), rechargement par le canal de contrôle ;
-    AUCUN repli par redémarrage : l'ancien repli pouvait couper la résolution de tout le réseau sur un échec de rechargement."""
-    MODULE = "adblock-sync"
-    ERREUR = RuntimeError
-
-    def verifier_unbound(self):
-        return _unbound.commande(["unbound-checkconf", str(UNBOUND_CONF)], 300)
-
-
-def do_sync(force: bool = False, systeme=None) -> dict:
-    s = systeme or Systeme()
+def do_sync(force: bool = False) -> dict:
     stats = F.compile_lists(force=force)
     domains = []
     if F.OUT_DNS.exists():
@@ -143,33 +135,32 @@ def do_sync(force: bool = False, systeme=None) -> dict:
         _write_status(st)
         return st
 
-    # Pose atomique, vérification, rechargement ; au moindre échec l'ancienne vue est remise octet pour octet (et rechargée).
+    # Dépôt atomique ; secubox-dns-listes.path déclenche la compilation et le rechargement.
     try:
-        etat = _unbound.poser_vue(DROPIN, _render(domains), s)
-    except RuntimeError as e:
+        etat = _depot.deposer_source(SOURCE.name, _render(domains), SOURCE.parent)
+    except (_depot.ErreurDepot, OSError) as e:
         st = {"ok": False, "error": str(e), "blocked": len(domains)}
         _write_status(st)
         return st
 
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text("1\n")
-    st = {"ok": True, "enabled": True, "blocked": len(domains),
-          "ip_allowlist": len(_ip_allowlist()), "reloaded": etat == "applique", "compile": stats}
+    st = {"ok": True, "enabled": True, "blocked": len(domains), "ip_allowlist": len(_ip_allowlist()),
+          "source": etat, "application": "secubox-dns-listes", "compile": stats}
     _write_status(st)
     return st
 
 
-def do_disable(systeme=None) -> dict:
-    s = systeme or Systeme()
+def do_disable() -> dict:
     try:
-        etat = _unbound.retirer_vue(DROPIN, s)
-    except RuntimeError as e:
-        st = {"ok": False, "enabled": False, "reloaded": False, "error": str(e)}
+        etat = _depot.retirer_source(SOURCE.name, SOURCE.parent)
+    except (_depot.ErreurDepot, OSError) as e:
+        st = {"ok": False, "enabled": False, "error": str(e)}
         _write_status(st)
         return st
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text("0\n")
-    st = {"ok": True, "enabled": False, "reloaded": etat == "retire", "error": None}
+    st = {"ok": True, "enabled": False, "source": etat, "application": "secubox-dns-listes", "error": None}
     _write_status(st)
     return st
 
