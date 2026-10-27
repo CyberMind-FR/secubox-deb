@@ -315,7 +315,10 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
 
     avant = (len(cfg.zones_sources) + sum(len(d["zones"]) for v, d in cfg.vues.items() if v not in vues_gardees)
              + sum(1 for b, zs in cfg.ov_par_bloc.items() for z in zs if z not in cfg.ov_contexte))
-    exclus = (set(cfg.zones) - cfg.zones_sources) | {z for v in vues_gardees for z in cfg.vues[v]["zones"]} | {"."}
+    # Seules les zones GLOBALES du contexte restent à leur fichier. Une zone d'une vue gardée (TV d'ad-guard) n'est pas une
+    # zone globale : la retirer des candidats laissait doubleclick.net, adnxs.com… sans blocage pour tout appareil hors TV
+    # (constaté sur gk2 le 2026-10-27). La vue, évaluée d'abord par Unbound, garde la main pour ses propres clients.
+    exclus = (set(cfg.zones) - cfg.zones_sources) | {"."}
     references = cfg.ov_contexte
 
     def candidats():

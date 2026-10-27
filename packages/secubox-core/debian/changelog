@@ -1,3 +1,12 @@
+secubox-core (1.8.4-1~trixie1) trixie; urgency=medium
+
+  * secubox-dns-listes (#3205), constaté sur gk2 en production : une zone des listes AUSSI présente dans une vue TV
+    d'ad-guard (doubleclick.net, adnxs.com, criteo.com, google-analytics.com…) était retirée des candidats globaux, donc
+    plus bloquée pour aucun appareil hors TV. Seules les zones globales du contexte restent à leur fichier ; une zone de
+    vue n'en est pas une. gk2 était revenu en mode direct (environ 4 minutes d'exposition).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 19:30:00 +0100
+
 secubox-core (1.8.3-1~trixie1) trixie; urgency=medium
 
   * Seconde relecture de sécurité de secubox-dns-listes (#3205) :
