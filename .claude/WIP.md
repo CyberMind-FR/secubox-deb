@@ -173,14 +173,13 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
-00000000. **Réseau MOCHAbin (2026-10-27)** : mode routeur durable (#3189, netmodes 1.4.2) et panneau Réseau (#3190, 1.5.0)
-  déployés sur gk2 (192.168.42.1/24) et gk1 (192.168.43.1/24). Reste au propriétaire : redémarrer gk2 et gk1 pour prouver la
-  persistance (puis `closes #3189`) ; dans le navigateur connecté, refus de couper `lan0` (409) et application par le panneau
-  (202 → compte à rebours → Confirmer ; elle met aussi Unbound à jour pour #3201), puis `closes #3190`. **#3201** isoler un port : 1.6.0 déployée (gk1 essayé de bout en bout ; gk2 isolera après la réapplication
-  du propriétaire, puis `closes #3201`). **Ensuite** (ordre arbitré le 2026-10-27) : zones du NAC/Guardian correctes en
-  réseau routé (#2891 : règles par IP depuis les baux, `ether daddr` inopérant en routé), puis #3196 maillage inter-LAN
-  (gk3 inclus, noms des baux en DNS, SSH depuis les LAN de confiance, LXC par l'IP des box) ; #3203 premier démarrage
-  (rpi400, automaillage, reprise ou TR-069) ; #3191 saturation de gk2 ; #3195 www ; #3192 radio.
+00000000. **Réseau (2026-10-27)** : mode routeur, panneau Réseau et isolement de port **clôturés** (#3189, #3190, #3201 ;
+  netmodes 1.6.1 sur gk2 et gk1). **Ensuite** : zones du NAC/Guardian correctes en réseau routé (#2891 : règles par IP
+  depuis les baux, `ether daddr` inopérant en routé) ; #3205 listes DNS en RPZ (banc en cours sur gk1) ; #3196 maillage
+  inter-LAN (gk3 inclus, public par gk2, chaque nœud distribue les autres, noms des baux, SSH depuis les LAN de
+  confiance, LXC par l'IP des box) ; #3203 premier démarrage (rpi400, automaillage auto/désactivé, enrôlement
+  automatique, reprise ou TR-069) ; Samba sur le LAN routé (ksmbd `eth2` seul) ; Nextcloud arrêté (WebDAV) ;
+  #3191 saturation de gk2 (mémoire, Actor, WAF) ; #3195 www ; #3192 radio.
 0000000. **#3178 NAC (2026-10-26)** : un seul collecteur sur gk2 (aggregator 0.4.9, nac 3.9.4). Reste : constater sur la page
   NAC « Connectés : N maintenant » (≈ 20) avec une session d'administrateur, puis fermer l'issue (marqueur dans HISTORY). **#3181** : glossaire des
   indicateurs, état de protection unique, fraîcheur par panneau — arbitrage du propriétaire avant tout travail.

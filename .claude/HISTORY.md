@@ -9,6 +9,20 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-27 — Réseau MOCHAbin : mode routeur clôturé (closes #3189, closes #3190, closes #3201)
+
+- **netmodes 1.6.1** (PR #3204) : `unbound-checkconf` a son propre délai (900 s au lieu des 120 s communs). Sur gk2, la
+  première application depuis le panneau avait échoué sans rien changer : 101 Mo de listes dans `unbound.conf.d`, lus à
+  froid sur une box saturée. Un dépassement est désormais annoncé comme tel, et non plus comme « refuse ».
+- **Validé par le propriétaire sur gk2**, depuis le panneau, le 2026-10-27 :
+  - Appliquer : validation, puis Unbound arrêté de 07:28 à 07:31:43, soit environ 3 min 30 sans DNS ;
+  - minuteur armé jusqu'à 07:34:59, Confirmer à 07:32:20.
+  - Après la bascule : DNS servi sur le LAN et le WAN, DHCP en `bind-dynamic`, Unbound à l'écoute des 4 passerelles isolées,
+    4 ports dans `br-lan`.
+- **Jugement du propriétaire :** « mode routeur parfait ». Il clôt le mode routeur durable (#3189), le panneau Réseau (#3190) et l'isolement de port
+  (#3201, essayé de bout en bout sur gk1). La preuve par redémarrage de #3189 n'a pas été faite : le propriétaire la juge
+  inutile pour clore.
+
 ## 2026-10-27 — Réseau, livraison 3 : isoler un port du switch, déployé sur gk1 et gk2 (ref #3201)
 
 - **Livré** (PR #3202) : secubox-netmodes 1.6.0. « Isoler » sort `lanN` du pont vers `192.168.(248+N).0/24`, avec DHCP et
