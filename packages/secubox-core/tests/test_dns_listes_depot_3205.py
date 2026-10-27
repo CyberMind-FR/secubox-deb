@@ -183,6 +183,116 @@ def test_sans_aucune_source_92_retire(lieux):
     assert not (lieux["conf_d"] / "92-secubox-listes.conf").exists()
 
 
+# ── ne recompiler que si une entrée a changé (le .path surveille AUSSI unbound.conf.d) ──────────────────────────
+
+@pytest.fixture
+def compilations(monkeypatch):
+    vrai, appels = D.listes.compiler, []
+
+    def compter(sources, contexte):
+        appels.append(sorted(p.name for p in sources))
+        return vrai(sources, contexte)
+    monkeypatch.setattr(D.listes, "compiler", compter)
+    return appels
+
+
+def test_rien_de_neuf_ne_recompile_pas(lieux, compilations):
+    D.deposer_source("95-secubox-adblock.conf", ADBLOCK, lieux["sources"])
+    _appliquer(lieux)
+    s = Faux()
+    r = _appliquer(lieux, s)
+    assert r["etat"] == "inchange" and len(compilations) == 1 and s.appels == []
+    assert r["stats"]["emis"] == 1                                            # le relevé de la dernière compilation reste lisible
+
+
+def test_un_contexte_qui_ne_decide_rien_ne_recompile_pas(lieux, compilations):
+    D.deposer_source("95-secubox-adblock.conf", ADBLOCK, lieux["sources"])
+    _appliquer(lieux)
+    (lieux["conf_d"] / "60-noms.conf").write_text('server:\n    local-data: "box.lan. A 192.168.1.1"\n')
+    assert _appliquer(lieux)["etat"] == "inchange" and len(compilations) == 1
+
+
+def test_un_reseau_nouveau_dans_le_contexte_recompile(lieux, compilations):
+    """Une vue TV ou un réseau ajouté après la compilation : ses adresses ne porteraient aucune étiquette du 92."""
+    D.deposer_source("95-secubox-adblock.conf", ADBLOCK, lieux["sources"])
+    _appliquer(lieux)
+    (lieux["conf_d"] / "94-tv.conf").write_text("server:\n    access-control-view: 192.168.1.95/32 tv\nview:\n    name: \"tv\"\n")
+    _appliquer(lieux)
+    assert len(compilations) == 2
+
+
+def test_une_source_deposee_pendant_la_compilation_est_reprise(lieux, monkeypatch):
+    """systemd ne relance pas une unité déjà active : un dépôt arrivé pendant la compilation serait perdu jusqu'au lendemain."""
+    vrai, appels = D.listes.compiler, []
+
+    def compiler(sources, contexte):
+        appels.append(1)
+        if len(appels) == 1:
+            D.deposer_source("96-secubox-adult.conf", ADULT, lieux["sources"])
+        return vrai(sources, contexte)
+    monkeypatch.setattr(D.listes, "compiler", compiler)
+    D.deposer_source("95-secubox-adblock.conf", ADBLOCK, lieux["sources"])
+    r = _appliquer(lieux)
+    assert len(appels) == 2 and r["etat"] == "applique" and r["passes"] == 2
+    assert '"porn.example."' in (lieux["conf_d"] / "92-secubox-listes.conf").read_text()
+
+
+def test_un_echec_n_est_pas_retente_sur_les_memes_entrees(lieux, compilations):
+    """La remise en place après un échec écrit dans unbound.conf.d, que le .path surveille : sans cette garde, deux minutes
+    de compilation en boucle."""
+    (lieux["conf_d"] / "95-secubox-adblock.conf").write_text(ADBLOCK)
+    assert D.appliquer(systeme=Faux(verif=(False, "x")), maintenant=lambda: 1000.0, **lieux)["etat"] == "erreur"
+    s = Faux()
+    r = D.appliquer(systeme=s, maintenant=lambda: 1000.0 + D.REESSAI_S - 1, **lieux)
+    assert r["etat"] == "erreur" and len(compilations) == 1 and s.appels == []
+
+
+def test_un_echec_ancien_est_retente(lieux, compilations):
+    (lieux["conf_d"] / "95-secubox-adblock.conf").write_text(ADBLOCK)
+    D.appliquer(systeme=Faux(verif=(False, "x")), maintenant=lambda: 1000.0, **lieux)
+    r = D.appliquer(systeme=Faux(), maintenant=lambda: 1000.0 + D.REESSAI_S + 1, **lieux)
+    assert r["etat"] == "applique" and len(compilations) == 2
+
+
+def test_une_nouvelle_version_du_compilateur_recompile(lieux, compilations, monkeypatch, tmp_path):
+    code = tmp_path / "listes.py"
+    code.write_text("v1")
+    monkeypatch.setattr(D, "_CODE", (code,))
+    D.deposer_source("95-secubox-adblock.conf", ADBLOCK, lieux["sources"])
+    _appliquer(lieux)
+    code.write_text("v2, plus longue")
+    _appliquer(lieux)
+    assert len(compilations) == 2
+
+
+# ── le rechargement n'est réussi que quand Unbound répond de nouveau (#2969) ─────────────────────────────────────
+
+def _commandes(monkeypatch, statuts):
+    appels, reponses = [], iter(statuts)
+
+    def commande(args, delai):
+        appels.append(args[-1])
+        return (True, "ok") if args[-1] == "reload" else next(reponses)
+    monkeypatch.setattr(U, "commande", commande)
+    monkeypatch.setattr(D, "commande", commande)
+    monkeypatch.setattr(D.time, "sleep", lambda s: None)
+    return appels
+
+
+def test_le_rechargement_attend_qu_unbound_reponde(monkeypatch):
+    appels = _commandes(monkeypatch, [(False, "refusé"), (False, "refusé"), (True, "is running")])
+    D.SystemeListes().recharger_unbound()
+    assert appels == ["reload", "status", "status", "status"]
+
+
+def test_un_unbound_qui_ne_repond_plus_est_une_erreur(monkeypatch):
+    _commandes(monkeypatch, [(False, "refusé")] * 1000)
+    s = D.SystemeListes()
+    s.ATTENTE_S = 0
+    with pytest.raises(U.ErreurUnbound, match="ne répond plus"):
+        s.recharger_unbound()
+
+
 # ── empaquetage ──────────────────────────────────────────────────────────────
 
 PAQUET = Path(__file__).resolve().parents[1]
@@ -209,10 +319,14 @@ def test_service_root_durci_et_exception_ecrite():
     assert "secubox-dns-listes.service" in regles and "test_service_root_durci_et_exception_ecrite" in regles
 
 
-def test_le_declencheur_ne_surveille_pas_ce_que_le_service_ecrit():
+def test_le_declencheur_surveille_les_sources_et_le_contexte():
+    """Le service écrit dans unbound.conf.d : c'est l'empreinte des entrées (test_rien_de_neuf_ne_recompile_pas) qui arrête
+    le redéclenchement, et une limite de démarrages large garde le .path actif."""
     p = _unite("secubox-dns-listes.path")
-    assert p["PathChanged"] == ["/var/lib/secubox/dns-listes/sources"] and "PathExists" not in p
+    assert p["PathChanged"] == ["/var/lib/secubox/dns-listes/sources", "/etc/unbound/unbound.conf.d"] and "PathExists" not in p
     assert p["Unit"] == ["secubox-dns-listes.service"]
+    u = _unite("secubox-dns-listes.service")
+    assert int(u["StartLimitBurst"][0]) >= 20
 
 
 def test_profil_apparmor_n_ecrit_que_ses_fichiers():

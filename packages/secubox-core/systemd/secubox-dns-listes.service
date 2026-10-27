@@ -12,6 +12,10 @@
 Description=SecuBox — compilation des listes DNS d'Unbound (#3205)
 After=unbound.service
 ConditionPathIsDirectory=/etc/unbound/unbound.conf.d
+# Déclenché par fichier : des écritures en rafale dans unbound.conf.d (passes sautées en une fraction de seconde) ne doivent
+# pas atteindre la limite de démarrages, qui désactiverait le .path.
+StartLimitIntervalSec=300
+StartLimitBurst=30
 
 [Service]
 Type=oneshot
@@ -19,6 +23,8 @@ ExecStart=/usr/sbin/secubox-dns-listes appliquer
 Nice=10
 IOSchedulingClass=idle
 TimeoutStartSec=30min
+# Pic mesuré : 487 Mo pour la configuration de gk2 (1,9 million de zones lues).
+MemoryMax=1G
 UMask=0022
 NoNewPrivileges=yes
 ProtectSystem=strict

@@ -16,11 +16,7 @@ import os
 import sys
 from pathlib import Path
 
-from secubox_unbound import SystemeUnbound, depot, listes
-
-
-class Systeme(SystemeUnbound):
-    MODULE = "dns-listes"
+from secubox_unbound import depot, listes
 
 
 def main(argv=None) -> int:
@@ -33,15 +29,13 @@ def main(argv=None) -> int:
         print("secubox-dns-listes : à lancer en root (écrit /etc/unbound)", file=sys.stderr)
         return 2
     if cmd == "appliquer" and len(args) <= 1:
-        r = depot.appliquer(Systeme())
+        r = depot.appliquer(depot.SystemeListes())
         print(json.dumps(r, ensure_ascii=False))
         return 1 if r.get("etat") == "erreur" else 0
     if cmd == "compiler" and len(args) == 2:
         sources = [depot.SOURCES / n for n in listes.SOURCES_CONNUES if (depot.SOURCES / n).is_file()]
-        contexte = [p for p in sorted(depot.CONF_D.glob("*.conf"))
-                    if p.name not in listes.SOURCES_CONNUES and p.name != listes.SORTIE]
         try:
-            texte, stats = listes.compiler(sources, contexte)
+            texte, stats = listes.compiler(sources, depot.fichiers_contexte(depot.CONF_D))
         except listes.ErreurListes as e:
             print(json.dumps({"erreur": str(e)}, ensure_ascii=False), file=sys.stderr)
             return 1

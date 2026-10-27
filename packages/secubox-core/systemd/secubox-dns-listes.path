@@ -3,13 +3,15 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 #
-# Un générateur dépose ou retire sa source : compilation (#3205). On ne surveille PAS unbound.conf.d, que le service
-# écrit lui-même (aucune boucle) ; un ancien fichier réécrit par un générateur non mis à jour est rattrapé par le minuteur.
+# Un générateur dépose ou retire sa source, ou un fichier de CONTEXTE change dans unbound.conf.d (une vue TV, un réseau :
+# leurs adresses ne porteraient aucune étiquette du 92) : nouvelle passe (#3205). Le service écrit lui-même dans
+# unbound.conf.d ; la passe qui suit ses propres écritures trouve la même empreinte d'entrées et s'arrête sans compiler.
 [Unit]
 Description=SecuBox — sources des listes DNS modifiées (#3205)
 
 [Path]
 PathChanged=/var/lib/secubox/dns-listes/sources
+PathChanged=/etc/unbound/unbound.conf.d
 MakeDirectory=yes
 DirectoryMode=0755
 Unit=secubox-dns-listes.service

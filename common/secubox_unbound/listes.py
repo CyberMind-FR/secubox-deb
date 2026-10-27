@@ -23,6 +23,7 @@ Les vues et fichiers qui ne sont pas des sources (TV d'ad-guard, dns-lan, routeu
 qu'au calcul. STDLIB SEULEMENT, aucun effet de bord : appelé par un service root sous AppArmor."""
 from __future__ import annotations
 
+import hashlib
 import io
 import ipaddress
 import re
@@ -135,6 +136,37 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
                     if b not in cfg.allow:
                         cfg.allow.append(b)
     return cfg
+
+
+# Ce que `lire` retient d'un fichier : un CONTEXTE qui ne change qu'ailleurs (local-data, interface:) ne change aucune décision.
+_DECISIFS = ("local-zone:", "local-zone-override:", "access-control:", "access-control-view:", "name:", "view-first:")
+
+
+def empreinte(fichiers: Iterable[Path]) -> str:
+    """Empreinte de ce que le compilateur lit des fichiers de CONTEXTE (sections, vues, zones, dérogations, access-control),
+    fichier par fichier dans l'ordre de lecture : 60-secubox-noms change plusieurs fois par jour (local-data) sans qu'il
+    faille relancer deux minutes de compilation, mais une vue TV ou un réseau nouveau impose de recompiler (ses adresses ne
+    porteraient aucune étiquette)."""
+    h = hashlib.sha256()
+    for f in sorted(fichiers, key=lambda p: Path(p).name):
+        f = Path(f)
+        fichier_vu, section, section_vue = False, "", False
+        with f.open(encoding="utf-8", errors="replace") as fh:
+            for ligne in fh:
+                s = ligne.strip()
+                if not ligne[:1].isspace() and re.fullmatch(r"[a-z-]+:", s):
+                    section, section_vue = s, False
+                    continue
+                if not s.startswith(_DECISIFS):
+                    continue
+                if not fichier_vu:                     # un fichier sans ligne décisive (que des local-data) ne compte pas
+                    h.update(b"\0F" + f.name.encode())
+                    fichier_vu = True
+                if not section_vue:
+                    h.update(b"\0S" + section.encode())
+                    section_vue = True
+                h.update(b"\n" + " ".join(s.split()).encode())
+    return h.hexdigest()
 
 
 def _contient(petit: ipaddress._BaseNetwork, grand: ipaddress._BaseNetwork) -> bool:

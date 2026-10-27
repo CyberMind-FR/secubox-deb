@@ -251,3 +251,40 @@ def test_blocs_d_adresses_normalises(tmp_path):
 def test_sources_vides():
     texte, stats = L.compiler([], [])
     assert stats["emis"] == 0 and "local-zone:" not in texte
+
+
+# ── empreinte du contexte : ce qui oblige à recompiler ───────────────────────
+
+def _empreinte(tmp_path, textes):
+    tmp_path.mkdir()
+    fichiers = []
+    for i, t in enumerate(textes):
+        p = tmp_path / f"{i:02d}-ctx.conf"
+        p.write_text(t)
+        fichiers.append(p)
+    return L.empreinte(fichiers)
+
+
+def test_empreinte_ignore_ce_que_le_compilateur_ne_lit_pas(tmp_path):
+    """60-secubox-noms change plusieurs fois par jour (local-data) : sans effet sur les décisions, il ne doit pas
+    relancer deux minutes de compilation."""
+    base = 'server:\n    access-control: 10.0.0.0/8 allow\n    local-zone: "lan." static\n'
+    bruit = base + '    local-data: "box.lan. A 10.0.0.1"\n    interface: 10.0.0.1\n    # commentaire\n\n'
+    assert _empreinte(tmp_path / "a", [base]) == _empreinte(tmp_path / "b", [bruit])
+
+
+@pytest.mark.parametrize("ajout", ['    access-control: 10.9.0.0/16 allow\n',
+                                   '    access-control-view: 10.0.0.9/32 tv\n',
+                                   '    local-zone-override: "x.example." 10.0.0.9/32 transparent\n',
+                                   '    local-zone: "x.example." transparent\n',
+                                   'view:\n    name: "tv"\n    view-first: yes\n    local-zone: "x.example." always_nxdomain\n'])
+def test_empreinte_change_avec_ce_qui_decide(tmp_path, ajout):
+    base = 'server:\n    access-control: 10.0.0.0/8 allow\n'
+    assert _empreinte(tmp_path / "a", [base]) != _empreinte(tmp_path / "b", [base + ajout])
+
+
+def test_empreinte_distingue_le_fichier_qui_porte_la_ligne(tmp_path):
+    """La première zone lue gagne (ordre des fichiers) : la même ligne déplacée d'un fichier à l'autre peut changer une décision."""
+    a = 'server:\n    local-zone: "x.example." transparent\n'
+    b = 'server:\n    local-zone: "x.example." always_nxdomain\n'
+    assert _empreinte(tmp_path / "a", [a, b]) != _empreinte(tmp_path / "b", [b, a])
