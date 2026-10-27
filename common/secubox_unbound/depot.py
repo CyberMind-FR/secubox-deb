@@ -85,6 +85,7 @@ def preparer_sources(sources: Path = SOURCES) -> Path:
     if not os.path.lexists(sources):
         with contextlib.suppress(FileExistsError):
             os.mkdir(sources, 0o755)
+            os.chmod(sources, 0o755)                   # sous UMask=0027 il naîtrait 0750 : l'API ad-guard date la source
     _dossier_sur(sources)
     return sources
 

@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # Listes DNS compilées par étiquettes (#3205) : webfilter, adblock et adult déposent leur source dans
-# /var/lib/secubox/dns-listes/sources ; ce service compile, pose /etc/unbound/unbound.conf.d/92-secubox-listes.conf,
+# /var/lib/secubox-dns-listes/sources ; ce service compile, pose /etc/unbound/unbound.conf.d/92-secubox-listes.conf,
 # retire les anciens fichiers et recharge Unbound en une transaction (retour arrière complet au moindre échec).
 # Root : il écrit /etc/unbound et lance unbound-control. Confiné par le profil AppArmor « /usr/sbin/secubox-dns-listes ».
 # Exception au compte dédié (RULES-CODE § 10) : voir le profil et .claude/RULES-CODE.md.
@@ -24,8 +24,12 @@ Nice=10
 IOSchedulingClass=idle
 # Pire cas : 3 passes × (compilation ~2,5 min + unbound-checkconf ≤ 10 min + rechargement ≤ 2 min + attente ≤ 5 min).
 TimeoutStartSec=90min
+# Sur SIGTERM : remise en place, second rechargement et attente d'Unbound avant de sortir (sinon SIGKILL au bout de 90 s).
+TimeoutStopSec=8min
 # Pic mesuré : 487 Mo pour la configuration de gk2 (1,9 million de zones lues), PLUS unbound-checkconf dans le même cgroup.
-MemoryMax=2G
+# En pourcentage : 2G dépassait la RAM d'un ESPRESSObin (l'OOM global aurait pu tuer Unbound) ; le service est la victime désignée.
+MemoryMax=50%
+OOMScoreAdjust=500
 UMask=0027
 # Une seule capacité : audit.log appartient à secubox (0640), root ne l'écrit qu'avec CAP_DAC_OVERRIDE (constaté sur gk1).
 # Le reste est à root : unbound.conf.d, l'arbre des listes, /run/unbound.ctl (root:unbound 0660). Réseau : boucle locale

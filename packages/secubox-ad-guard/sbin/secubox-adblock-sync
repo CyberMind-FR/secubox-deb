@@ -26,7 +26,7 @@ Usage:
   secubox-adblock-sync disable  # withdraw the source
   secubox-adblock-sync status   # print JSON status
 
-Runs as root (writes /var/lib/secubox/dns-listes/sources). Driven by a weekly
+Runs as root (writes /var/lib/secubox-dns-listes/sources). Driven by a weekly
 systemd timer and on-demand from the dns-guard WebUI.
 """
 from __future__ import annotations

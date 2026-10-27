@@ -47,6 +47,7 @@ _OV = re.compile(r'local-zone-override:\s*"([^"]+)"\s+(\S+)\s+([a-z_]+)$')
 _ACV = re.compile(r'access-control-view:\s*(\S+)\s+"?([A-Za-z0-9_.-]+)"?$')
 _AC = re.compile(r"access-control:\s*(\S+)\s+([a-z_]+)$")
 _NAME = re.compile(r'name:\s*"?([^"\s]+)"?$')
+_VIEW_FIRST = re.compile(r"view-first:\s*(yes|no)")
 _NOM_ZONE = re.compile(r"[a-z0-9_.-]{1,253}|\.")
 # Ce qu'une SOURCE peut contenir. Toute autre directive est refusée : rien ne se perd en silence.
 _PERMIS_SOURCE = ("local-zone:", "local-zone-override:", "access-control-view:", "name:", "view-first:")
@@ -91,6 +92,7 @@ class Config:
         self.vues: Dict[str, dict] = {}                       # nom -> {first, zones, fichier}
         self.acv: Dict[str, Tuple[str, str]] = {}             # bloc -> (vue, fichier)
         self.acl: Dict[str, str] = {}                         # bloc -> action d'access-control (le premier gagne, comme Unbound)
+        self.conflits_vue: set = set()                        # blocs vus par une source ET par le contexte
         self.allow: List[str] = []
 
 
@@ -147,8 +149,8 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
                     if m and vue is None:
                         vue = m.group(1)
                         cfg.vues[vue] = {"first": False, "zones": {}, "fichier": f.name}
-                    elif s.startswith("view-first:") and vue:
-                        cfg.vues[vue]["first"] = s.split(":", 1)[1].strip() == "yes"
+                    elif (m := _VIEW_FIRST.fullmatch(s)) and vue:  # « view-first: yes include: … » : refusé (relecture #3205)
+                        cfg.vues[vue]["first"] = m.group(1) == "yes"
                     elif (m := _LZ.match(s)) and vue:
                         cfg.vues[vue]["zones"].setdefault(_nom(m.group(1)), sys.intern(m.group(2)))
                     else:
@@ -167,7 +169,15 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
                         if est_source:
                             cfg.zones_sources.add(z)
                 elif (m := _ACV.match(s)):
-                    cfg.acv[_bloc_lu(m.group(1), ou)] = (m.group(2), f.name)
+                    b = _bloc_lu(m.group(1), ou)
+                    deja = cfg.acv.get(b)
+                    if deja and (deja[1] in sources) != est_source:
+                        # Même bloc dans une source ET dans le contexte (IP de l'allowlist d'adblock qui est aussi une TV) :
+                        # seule la vue du contexte reste dans le nouvel ensemble, c'est elle qui compte (et le conflit est dit).
+                        cfg.conflits_vue.add(b)
+                        if est_source:
+                            continue
+                    cfg.acv[b] = (m.group(2), f.name)
                 elif (m := _AC.match(s)):
                     b = _bloc_lu(m.group(1), ou)
                     cfg.acl.setdefault(b, m.group(2))
@@ -411,11 +421,12 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
                 sortie.write(f"    access-control-tag-action: {c} {t} always_transparent\n")
     for d in emis:
         if not _NOM_ZONE.fullmatch(d):
-            raise ErreurListes(f"nom de zone inattendu : {d!r}")
+            raise ErreurListes(f"nom de zone inattendu ({len(d)} caractères, caractère hors de [a-z0-9_.-])")
         sortie.write(f'    local-zone: "{d}." always_nxdomain\n')
         if d in etiquette:
             sortie.write(f'    local-zone-tag: "{d}." "{etiquette[d]}"\n')
     stats = {"sources": sorted(noms_sources), "classes": len(classes), "profils": len(profils),
              "zones_chargees_avant": avant, "candidats": nb_candidats, "elagues": nb_elagues, "emis": len(emis),
-             "etiquettes": len(groupes), "exceptions": nb_exceptions, "duree_s": round(time.monotonic() - debut, 1)}
+             "etiquettes": len(groupes), "exceptions": nb_exceptions, "conflits_vue": len(cfg.conflits_vue),
+             "duree_s": round(time.monotonic() - debut, 1)}
     return sortie.getvalue(), stats

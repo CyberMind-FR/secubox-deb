@@ -418,3 +418,53 @@ def test_une_ligne_permise_mais_illisible_est_refusee(tmp_path, ligne):
     s.write_text("server:\n" + ligne + "\n")
     with pytest.raises(L.ErreurListes, match="95-secubox-adblock.conf:2"):
         L.compiler([s], [])
+
+
+def test_view_first_suivi_d_une_autre_directive_est_refuse(tmp_path):
+    """Seconde relecture #3205 : la grammaire d'Unbound ignore les sauts de ligne ; « view-first: yes include: … » passait
+    le contrôle par préfixe, et le mode direct l'aurait recopié tel quel."""
+    s = tmp_path / "93-secubox-webfilter.conf"
+    s.write_text('server:\nview:\n    name: "v"\n    view-first: yes include: "/etc/x"\n')
+    with pytest.raises(L.ErreurListes, match="93-secubox-webfilter.conf:4"):
+        L.compiler([s], [])
+
+
+def test_un_nom_de_zone_inattendu_n_est_pas_recopie(tmp_path):
+    s = tmp_path / "95-secubox-adblock.conf"
+    s.write_text('server:\n    local-zone: "jeton secret.example." always_nxdomain\n')
+    with pytest.raises(L.ErreurListes) as e:
+        L.compiler([s], [])
+    assert "secret" not in str(e.value)
+
+
+def test_un_bloc_vu_par_une_source_et_par_le_contexte_prend_la_vue_du_contexte(tmp_path):
+    """Une IP de l'allowlist d'adblock (vue sbx-allow) qui est aussi une TV d'ad-guard (vue 94) : dans le nouvel ensemble,
+    seule la vue du contexte reste. Le compilateur la prend pour le calcul et compte le conflit."""
+    ctx = tmp_path / "94-tv.conf"
+    ctx.write_text('server:\n    access-control: 192.168.0.0/16 allow\n    access-control-view: 192.168.1.95/32 tv\n'
+                   'view:\n    name: "tv"\n    view-first: yes\n    local-zone: "tvads.example." always_nxdomain\n')
+    src = tmp_path / "95-secubox-adblock.conf"
+    src.write_text('server:\n    access-control-view: 192.168.1.95 sbx-allow\n    local-zone: "ads.example." always_nxdomain\n'
+                   'view:\n    name: "sbx-allow"\n    view-first: yes\n')
+    texte, stats = L.compiler([src], [ctx])
+    assert stats["conflits_vue"] == 1 and "sbx-allow" not in texte
+
+
+def test_acl_deny_refuse_non_local_et_ipv6(tmp_path):
+    contexte = {"10-acl.conf": """server:
+    access-control: 10.0.0.0/8 deny
+    access-control: 172.16.0.0/12 refuse_non_local
+    access-control: 2001:db8::/64 allow
+"""}
+    sources = {"96-secubox-adult.conf": """server:
+    local-zone: "cam.example." always_nxdomain
+    local-zone-override: "cam.example." 10.1.1.1 always_transparent
+    local-zone-override: "cam.example." 172.16.1.1 always_transparent
+    local-zone-override: "cam.example." 2001:db8::5 always_transparent
+"""}
+    texte, ecarts = _comparer(sources, contexte, ["10.1.1.1", "172.16.1.1", "172.16.9.9", "2001:db8::5", "2001:db8::9"],
+                              ["cam.example", "www.cam.example"], tmp_path)
+    assert ecarts == []
+    assert "10.1.1.1" not in texte                                            # deny : ni élément ni étiquette
+    assert "access-control: 172.16.1.1/32 refuse_non_local\n" in texte      # action reprise telle quelle
+    assert "access-control: 2001:db8::5/128 allow\n" in texte

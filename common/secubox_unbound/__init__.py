@@ -19,6 +19,8 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -125,13 +127,47 @@ class SystemeUnboundRedemarrable(SystemeUnbound):
             raise self.ERREUR("redémarrage d'unbound refusé : " + sortie)
 
 
-def _restaurer(chemin: Path, ancien: bytes | None) -> None:
+def _restaurer(chemin: Path, ancien: bytes | None, mode: int = 0o644) -> None:
+    """Remet l'ancien contenu AVEC son mode, posé explicitement : sous UMask=0027 un fichier réécrit naîtrait en 0640 root,
+    illisible pour Unbound qui relit sa configuration sous son compte au rechargement suivant (seconde relecture #3205)."""
     if ancien is None:
         chemin.unlink(missing_ok=True)
-    else:
-        tmp = chemin.parent / (".sbx-restaure-" + chemin.name)
-        tmp.write_bytes(ancien)
+        return
+    tmp = chemin.parent / (".sbx-restaure-" + chemin.name)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(ancien)
+            f.flush()
+            os.fchmod(f.fileno(), mode)
+            os.fsync(f.fileno())
         os.replace(tmp, chemin)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+def _mode(chemin: Path) -> int:
+    try:
+        return stat.S_IMODE(os.stat(chemin).st_mode)
+    except OSError:
+        return 0o644
+
+
+@contextlib.contextmanager
+def _sans_interruption():
+    """SIGTERM et SIGINT retenus le temps d'une remise en place : un arrêt reçu au milieu laisserait la configuration à
+    moitié remise. Le signal est délivré à la sortie (le gestionnaire de l'appelant lève alors SystemExit)."""
+    try:
+        anciens = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
+    except (ValueError, OSError):                      # hors du fil principal, ou plateforme sans masque : sans garde
+        yield
+        return
+    try:
+        yield
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, anciens)
 
 
 def _lire_octets(chemin: Path) -> bytes | None:
@@ -148,13 +184,14 @@ def ecrire_verifier(chemin: Path | str, texte: str, systeme: SystemeUnbound | No
     Rend « inchange » (fichier identique, rien n'est écrit ni vérifié) ou « ecrit »."""
     s = systeme or SystemeUnbound()
     chemin = Path(chemin)
-    ancien = _lire_octets(chemin)
+    ancien, ancien_mode = _lire_octets(chemin), _mode(chemin)
     if ancien is not None and ancien == texte.encode("utf-8"):
         return "inchange"
     ecrire_atomique(chemin, texte, mode, erreur=s.ERREUR)
     ok, sortie = s.verifier_unbound()
     if not ok:
-        _restaurer(chemin, ancien)
+        with _sans_interruption():
+            _restaurer(chemin, ancien, ancien_mode)
         raise s.ERREUR("unbound-checkconf refuse la configuration : " + sortie)
     return "ecrit"
 
@@ -166,15 +203,16 @@ def poser_vue(chemin: Path | str, texte: str, systeme: SystemeUnbound | None = N
     ERREUR du système) sur un échec, après restauration."""
     s = systeme or SystemeUnbound()
     chemin = Path(chemin)
-    ancien = _lire_octets(chemin)
+    ancien, ancien_mode = _lire_octets(chemin), _mode(chemin)
     if ecrire_verifier(chemin, texte, s, mode) == "inchange":
         return "inchange"
     try:
         s.recharger_unbound()
     except BaseException:
-        _restaurer(chemin, ancien)
-        with contextlib.suppress(Exception):
-            s.recharger_unbound()          # Unbound garde la NOUVELLE vue en mémoire tant qu'on ne lui a pas fait relire l'ancienne
+        with _sans_interruption():
+            _restaurer(chemin, ancien, ancien_mode)
+            with contextlib.suppress(Exception):
+                s.recharger_unbound()      # Unbound garde la NOUVELLE vue en mémoire tant qu'on ne lui a pas fait relire l'ancienne
         raise
     return "applique"
 
@@ -200,16 +238,18 @@ def poser_vues(changements: dict, systeme: SystemeUnbound | None = None, mode: i
     s = systeme or SystemeUnbound()
     voulu = {Path(p): t for p, t in changements.items()}
     anciens = {p: _lire_octets(p) for p in voulu}
+    modes = {p: _mode(p) for p in voulu}
     if not forcer and all(anciens[p] == (t.encode("utf-8") if t is not None else None) for p, t in voulu.items()):
         return "inchange"
 
     def tout_remettre() -> list:
         echecs = []
-        for p, a in anciens.items():
-            try:
-                _restaurer(p, a)
-            except OSError as e:
-                echecs.append(f"{p.name} non remis ({e.strerror or e})")
+        with _sans_interruption():
+            for p, a in anciens.items():
+                try:
+                    _restaurer(p, a, modes[p])
+                except OSError as e:
+                    echecs.append(f"{p.name} non remis ({e.strerror or e})")
         return echecs
 
     try:
@@ -227,11 +267,12 @@ def poser_vues(changements: dict, systeme: SystemeUnbound | None = None, mode: i
     try:
         s.recharger_unbound()
     except BaseException as e:
-        echecs = tout_remettre()
-        try:
-            s.recharger_unbound()          # Unbound garde la NOUVELLE configuration en mémoire tant qu'on ne lui a pas fait relire l'ancienne
-        except Exception as e2:
-            echecs.append(f"second rechargement : {e2}")
+        with _sans_interruption():
+            echecs = tout_remettre()
+            try:
+                s.recharger_unbound()      # Unbound garde la NOUVELLE configuration en mémoire tant qu'on ne lui a pas fait relire l'ancienne
+            except Exception as e2:
+                echecs.append(f"second rechargement : {e2}")
         _signaler_retour(s, e, echecs)
         raise
     return "applique"

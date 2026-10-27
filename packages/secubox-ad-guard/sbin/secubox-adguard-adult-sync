@@ -35,7 +35,7 @@ Usage:
   secubox-adguard-adult-sync disable  # withdraw the source
   secubox-adguard-adult-sync status   # print JSON status
 
-Runs as root (writes /var/lib/secubox/dns-listes/sources).
+Runs as root (writes /var/lib/secubox-dns-listes/sources).
 """
 from __future__ import annotations
 

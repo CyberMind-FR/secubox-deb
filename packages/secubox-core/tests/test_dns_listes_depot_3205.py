@@ -100,10 +100,10 @@ def test_une_restauration_qui_echoue_est_dite(tmp_path, monkeypatch):
     a.write_text("ancien")
     reel = U._restaurer
 
-    def plein(chemin, ancien):
+    def plein(chemin, ancien, mode=0o644):
         if chemin == a:
             raise OSError(28, "No space left on device")
-        return reel(chemin, ancien)
+        return reel(chemin, ancien, mode)
     monkeypatch.setattr(U, "_restaurer", plein)
     s = Faux(verif=(False, "refus"))
     with pytest.raises(U.ErreurUnbound, match="INCOMPLET"):
@@ -130,6 +130,45 @@ def test_un_arret_pendant_la_verification_remet_tout(tmp_path):
     with pytest.raises(SystemExit):
         U.poser_vues({a: "neuf"}, Arrete())
     assert a.read_text() == "ancien"
+
+
+def test_une_remise_en_place_garde_le_mode_meme_sous_umask_0027(tmp_path):
+    """Seconde relecture #3205 : sous UMask=0027, la remise en place réécrivait en 0640 root — illisible pour Unbound, qui
+    relit sa configuration sous son compte au rechargement suivant : DNS coupé pour tout le réseau."""
+    a, b = tmp_path / "a.conf", tmp_path / "b.conf"
+    a.write_text("ancien")
+    os.chmod(a, 0o644)
+    vieux = os.umask(0o027)
+    try:
+        with pytest.raises(U.ErreurUnbound):
+            U.poser_vues({a: "neuf", b: None}, Faux(verif=(False, "x")))
+        with pytest.raises(U.ErreurUnbound):
+            U.poser_vue(a, "neuf", Faux(verif=(False, "x")))
+    finally:
+        os.umask(vieux)
+    assert a.read_text() == "ancien" and stat.S_IMODE(a.stat().st_mode) == 0o644
+
+
+def test_un_sigterm_pendant_la_remise_en_place_ne_la_coupe_pas(tmp_path, monkeypatch):
+    a, b = tmp_path / "a.conf", tmp_path / "b.conf"
+    a.write_text("ancien a")
+    b.write_text("ancien b")
+
+    def terminer(signum, frame):
+        raise SystemExit(143)
+    reel = U._restaurer
+
+    def restaurer(chemin, ancien, mode=0o644):
+        os.kill(os.getpid(), signal.SIGTERM)            # arrive au milieu de la remise en place
+        return reel(chemin, ancien, mode)
+    avant = signal.signal(signal.SIGTERM, terminer)
+    monkeypatch.setattr(U, "_restaurer", restaurer)
+    try:
+        with pytest.raises(SystemExit):
+            U.poser_vues({a: "neuf a", b: "neuf b"}, Faux(verif=(False, "x")))
+    finally:
+        signal.signal(signal.SIGTERM, avant)
+    assert a.read_text() == "ancien a" and b.read_text() == "ancien b"
 
 
 # ── dépôt des sources par les générateurs ────────────────────────────────────
@@ -178,6 +217,16 @@ def test_un_dossier_ouvert_au_groupe_est_refuse(tmp_path, lequel):
 def test_le_dossier_des_sources_est_cree_ferme(tmp_path):
     D.deposer_source("95-secubox-adblock.conf", ADBLOCK, tmp_path / "sources")
     assert stat.S_IMODE((tmp_path / "sources").stat().st_mode) & 0o022 == 0
+
+
+def test_le_dossier_des_sources_reste_lisible_sous_umask_0027(tmp_path):
+    """L'API ad-guard (compte secubox) date la source : le dossier doit rester traversable même sous UMask=0027."""
+    vieux = os.umask(0o027)
+    try:
+        D.deposer_source("95-secubox-adblock.conf", ADBLOCK, tmp_path / "sources")
+    finally:
+        os.umask(vieux)
+    assert stat.S_IMODE((tmp_path / "sources").stat().st_mode) == 0o755
 
 
 def test_une_source_n_est_pas_ecrite_a_travers_un_lien(tmp_path):
@@ -494,12 +543,14 @@ def test_service_root_durci_et_exception_ecrite():
                      "ProtectKernelModules": "yes", "ProtectKernelLogs": "yes", "RestrictNamespaces": "yes",
                      "RestrictRealtime": "yes", "SystemCallArchitectures": "native", "UMask": "0027",
                      "CapabilityBoundingSet": "CAP_DAC_OVERRIDE", "IPAddressDeny": "any", "IPAddressAllow": "localhost",
-                     "RestrictAddressFamilies": "AF_UNIX AF_NETLINK AF_INET AF_INET6", "MemoryMax": "2G"}.items():
+                     "RestrictAddressFamilies": "AF_UNIX AF_NETLINK AF_INET AF_INET6", "MemoryMax": "50%",
+                     "OOMScoreAdjust": "500"}.items():
         assert u.get(cle) == [val], cle
     assert "User" not in u
     assert set(u["ReadWritePaths"][0].split()) == {"/etc/unbound/unbound.conf.d", "/var/lib/secubox-dns-listes",
                                                     "-/var/log/secubox/audit.log"}
     assert int(u["TimeoutStartSec"][0].removesuffix("min")) >= 60          # 3 passes × (compilation + checkconf 10 min + attente)
+    assert int(u["TimeoutStopSec"][0].removesuffix("min")) >= 8             # remise en place + second rechargement + attente
     regles = (PAQUET.parents[1] / ".claude" / "RULES-CODE.md").read_text()
     assert "secubox-dns-listes.service" in regles and "test_service_root_durci_et_exception_ecrite" in regles
 
@@ -537,7 +588,9 @@ def test_paquet_installe_et_postinst_ne_bloque_pas_apt():
         assert f in regles, f
     postinst = (PAQUET / "debian" / "postinst").read_text()
     assert "install -d -m 0755 -o root -g root /var/lib/secubox-dns-listes /var/lib/secubox-dns-listes/sources" in postinst
-    assert "rm -rf /var/lib/secubox/dns-listes" in postinst                       # l'ancien arbre (1.8.0) est repris puis retiré
+    # l'ancien arbre (1.8.0 seulement) est repris par descripteurs, dossier par dossier, sans bloquer sur une FIFO, puis retiré
+    assert 'dpkg --compare-versions "$2" lt 1.8.1~' in postinst and "O_DIRECTORY" in postinst and "O_NONBLOCK" in postinst
+    assert "rm -rf /var/lib/secubox/dns-listes || true" in postinst
     assert "apparmor_parser -r /etc/apparmor.d/secubox-dns-listes" in postinst
     assert "systemctl start --no-block secubox-dns-listes.service" in postinst
     assert postinst.index("apparmor_parser -r /etc/apparmor.d/secubox-dns-listes") < postinst.index("--no-block secubox-dns-listes")

@@ -6,7 +6,7 @@
 """secubox-dns-listes — compile les listes DNS (webfilter, adblock, adult) en un fichier Unbound à étiquettes (#3205).
 
   secubox-dns-listes appliquer          une passe : adoption des anciens fichiers, compilation, pose, rechargement
-  secubox-dns-listes etat               le dernier état noté (/var/lib/secubox/dns-listes/etat.json)
+  secubox-dns-listes etat               le dernier état noté (/var/lib/secubox-dns-listes/etat.json)
   secubox-dns-listes compiler FICHIER   compile vers FICHIER sans rien poser ni recharger (diagnostic)
 
 Lancé par secubox-dns-listes.service (root, profil AppArmor), lui-même déclenché par secubox-dns-listes.path dès qu'un

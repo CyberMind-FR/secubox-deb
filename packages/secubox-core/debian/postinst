@@ -302,26 +302,43 @@ PY
     # Listes DNS compilees par etiquettes (#3205). Le profil AppArmor AVANT le service ; la premiere passe (adoption des
     # anciens fichiers webfilter/adblock/adult, compilation de quelques minutes) est lancee SANS l'attendre : apt ne bloque pas.
     # L'arbre est à root et HORS de /var/lib/secubox (compte partagé « secubox » : il pourrait renommer un sous-dossier
-    # root et le remplacer). 1.8.0 l'avait mis sous /var/lib/secubox/dns-listes : ses sources sont reprises PAR
-    # DESCRIPTEUR (O_NOFOLLOW, fichier ordinaire de root : un lien posé là par le compte partagé n'est jamais suivi), puis
-    # l'ancien arbre est retiré (rm ne suit pas les liens).
+    # root et le remplacer). Seul 1.8.0 l'avait mis sous /var/lib/secubox/dns-listes : en montant DEPUIS 1.8.0, ses sources
+    # sont reprises en descendant dossier par dossier (O_DIRECTORY|O_NOFOLLOW, root, fermé en écriture), fichier ouvert
+    # O_NONBLOCK|O_NOFOLLOW (une FIFO posée là ne bloque pas dpkg), ordinaire, de root ; puis l'ancien arbre est retiré.
     install -d -m 0755 -o root -g root /var/lib/secubox-dns-listes /var/lib/secubox-dns-listes/sources
-    python3 -I - <<'REPRISE' || echo "secubox-core : reprise des sources de /var/lib/secubox/dns-listes incomplète" >&2
+    if [ -n "$2" ] && dpkg --compare-versions "$2" ge 1.8.0~ && dpkg --compare-versions "$2" lt 1.8.1~; then
+        python3 -I - <<'REPRISE' || echo "secubox-core : reprise des sources de /var/lib/secubox/dns-listes incomplète" >&2
 import os, stat
 from secubox_unbound import depot
+
+def dossier(parent_fd, nom):
+    fd = os.open(nom, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)
+    st = os.fstat(fd)
+    if st.st_uid != 0 or st.st_mode & 0o022:
+        os.close(fd)
+        raise PermissionError(nom)
+    return fd
+
+racine = os.open("/var/lib/secubox", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+    ancien = dossier(racine, "dns-listes")
+    sources = dossier(ancien, "sources")
+except OSError:
+    raise SystemExit(0)
 for n in ("93-secubox-webfilter.conf", "95-secubox-adblock.conf", "96-secubox-adult.conf"):
     if os.path.lexists(depot.SOURCES / n):
         continue
     try:
-        fd = os.open("/var/lib/secubox/dns-listes/sources/" + n, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(n, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=sources)
     except OSError:
         continue
-    with os.fdopen(fd, encoding="utf-8", errors="replace") as f:
+    with os.fdopen(fd, "rb") as f:
         st = os.fstat(f.fileno())
         if stat.S_ISREG(st.st_mode) and st.st_uid == 0 and st.st_size <= 512 * 1024 * 1024:
-            depot.deposer_source(n, f.read())
+            depot.deposer_source(n, f.read().decode("utf-8", "replace"))
 REPRISE
-    rm -rf /var/lib/secubox/dns-listes
+        rm -rf /var/lib/secubox/dns-listes || true
+    fi
     if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1 \
        && [ -f /etc/apparmor.d/secubox-dns-listes ]; then
         apparmor_parser -r /etc/apparmor.d/secubox-dns-listes \

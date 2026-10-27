@@ -1,3 +1,10 @@
+secubox-ad-guard (1.16.2-1~trixie1) trixie; urgency=medium
+
+  * Seconde relecture de sécurité (#3205) : Depends: secubox-core (>= 1.8.3) — remise en place des fichiers d'Unbound
+    avec leur mode (0644) sous UMask=0027, reprise de l'arbre 1.8.0 par descripteurs, view-first strict.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 18:55:00 +0100
+
 secubox-ad-guard (1.16.1-1~trixie1) trixie; urgency=medium
 
   * Relecture de sécurité (#3205) : les sources vont dans /var/lib/secubox-dns-listes (arbre root, hors de

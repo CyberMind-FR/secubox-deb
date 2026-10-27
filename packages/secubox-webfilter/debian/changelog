@@ -1,3 +1,10 @@
+secubox-webfilter (0.5.2-1~trixie1) trixie; urgency=medium
+
+  * Seconde relecture de sécurité (#3205) : Depends: secubox-core (>= 1.8.3) — remise en place des fichiers d'Unbound
+    avec leur mode (0644) sous UMask=0027, reprise de l'arbre 1.8.0 par descripteurs, view-first strict.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 18:56:00 +0100
+
 secubox-webfilter (0.5.1-1~trixie1) trixie; urgency=medium
 
   * Relecture de sécurité (#3205) : la source est déposée dans /var/lib/secubox-dns-listes/sources (arbre root, hors

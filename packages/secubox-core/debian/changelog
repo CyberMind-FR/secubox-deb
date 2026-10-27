@@ -1,3 +1,18 @@
+secubox-core (1.8.3-1~trixie1) trixie; urgency=medium
+
+  * Seconde relecture de sécurité de secubox-dns-listes (#3205) :
+    - bloquant : la remise en place réécrivait les fichiers d'Unbound sans mode explicite, donc en 0640 sous UMask=0027,
+      illisibles pour Unbound au rechargement suivant (DNS coupé). Elle remet désormais le mode d'origine ;
+    - SIGTERM et SIGINT retenus pendant une remise en place (délivrés ensuite) ; TimeoutStopSec 8 min ;
+    - reprise de l'arbre 1.8.0 seulement en montant depuis 1.8.0, en descendant par descripteurs (O_DIRECTORY,
+      O_NOFOLLOW, root, fermé en écriture), fichier ouvert O_NONBLOCK (une FIFO ne bloque plus dpkg) ; rm -rf || true ;
+    - « view-first: » strict (yes|no) : « view-first: yes include: … » ne passe plus, ni en mode direct ;
+    - un bloc vu par une source ET par le contexte prend la vue du contexte (stats : conflits_vue) ;
+    - nom de zone inattendu : le message ne recopie plus le nom ; dossier des sources toujours 0755 ;
+    - MemoryMax=50 % et OOMScoreAdjust=500 (2G dépassait la RAM d'un ESPRESSObin).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 18:50:00 +0100
+
 secubox-core (1.8.2-1~trixie1) trixie; urgency=medium
 
   * secubox-dns-listes (#3205), constaté sur gk1 avec 1.8.1 : unbound-checkconf liste les interfaces (getifaddrs,

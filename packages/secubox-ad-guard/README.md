@@ -140,7 +140,7 @@ une vue doit contenir une zone transparente (`local-zone: "." transparent`). Voi
 
 `secubox-adblock-sync` et `secubox-adguard-adult-sync` ne touchent plus Unbound : ils **déposent** leur rendu
 (`95-secubox-adblock.conf`, `96-secubox-adult.conf`) dans `/var/lib/secubox-dns-listes/sources`. Le service root
-`secubox-dns-listes` (secubox-core ≥ 1.8.1) compile les trois listes (webfilter, adblock, adult) en un seul
+`secubox-dns-listes` (secubox-core ≥ 1.8.3) compile les trois listes (webfilter, adblock, adult) en un seul
 `92-secubox-listes.conf` à étiquettes, vérifie, recharge et revient en arrière au moindre échec. Statut des
 synchronisations : `source` (`depose`, `inchange`, `retire`, `absent`) et `application: "secubox-dns-listes"` ;
 `reloaded` disparaît. `/statut-direct` lit `puits.recharge` dans `/var/lib/secubox-dns-listes/etat.json`
