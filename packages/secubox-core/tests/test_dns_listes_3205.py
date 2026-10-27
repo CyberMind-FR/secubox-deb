@@ -288,3 +288,15 @@ def test_empreinte_distingue_le_fichier_qui_porte_la_ligne(tmp_path):
     a = 'server:\n    local-zone: "x.example." transparent\n'
     b = 'server:\n    local-zone: "x.example." always_nxdomain\n'
     assert _empreinte(tmp_path / "a", [a, b]) != _empreinte(tmp_path / "b", [b, a])
+
+
+def test_les_clients_locaux_par_defaut_sont_une_classe(tmp_path):
+    """Unbound autorise 127.0.0.0/8 et ::1 sans qu'aucun fichier ne le dise. Sans ces classes, une zone bloquée pour tous
+    SAUF un client exempté ne s'appliquait plus à la box elle-même — et disparaissait quand aucun réseau n'était déclaré."""
+    s = tmp_path / "96-secubox-adult.conf"
+    s.write_text('server:\n    local-zone: "cam.example." always_nxdomain\n'
+                 '    local-zone-override: "cam.example." 192.168.1.3 always_transparent\n')
+    texte, stats = L.compiler([s], [])
+    assert '"cam.example." always_nxdomain' in texte
+    assert re.search(r'access-control-tag: 127\.0\.0\.0/8 "sbx\d+"', texte) and "access-control-tag: ::1/128 " in texte
+    assert "access-control: 127.0.0.0/8" not in texte and "access-control: ::1/128" not in texte    # défauts : pas redéclarés

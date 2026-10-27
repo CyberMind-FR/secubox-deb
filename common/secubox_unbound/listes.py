@@ -37,6 +37,8 @@ SOURCES_CONNUES = ("93-secubox-webfilter.conf", "95-secubox-adblock.conf", "96-s
 SORTIE = "92-secubox-listes.conf"
 BLOQUANTS = {"always_nxdomain", "static", "always_refuse", "refuse", "deny", "always_null"}
 TRAVERSANTS = {"transparent", "typetransparent"}       # dans une vue view-first : ne tranchent pas (banc)
+# Autorisés par Unbound sans qu'aucun fichier ne le dise (acl_list_apply_cfg) : des classes comme les autres, jamais redéclarées.
+DEFAUTS_UNBOUND = ("127.0.0.0/8", "::1/128", "::ffff:7f00:1/128")
 
 _LZ = re.compile(r'local-zone:\s*"([^"]+)"\s+([a-z_]+)$')
 _OV = re.compile(r'local-zone-override:\s*"([^"]+)"\s+(\S+)\s+([a-z_]+)$')
@@ -239,7 +241,7 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
     vues_gardees = {v for v, d in cfg.vues.items() if d["fichier"] not in noms_sources}
     m = _Modele(cfg, vues_gardees)
 
-    classes = sorted({*cfg.allow, *cfg.acv, *cfg.ov_par_bloc},
+    classes = sorted({*cfg.allow, *cfg.acv, *cfg.ov_par_bloc, *DEFAUTS_UNBOUND},
                      key=lambda b: (ipaddress.ip_network(b).version, ipaddress.ip_network(b).prefixlen, b))
     idx = {c: i for i, c in enumerate(classes)}
     toutes = (1 << len(classes)) - 1
@@ -317,7 +319,7 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
             groupes[cle] = f"sbx{len(groupes)}"
         etiquette[d] = groupes[cle]
 
-    allow = set(cfg.allow)
+    allow = set(cfg.allow) | set(DEFAUTS_UNBOUND)
     for grand in (cfg.zones, cfg.vues, cfg.ov_par_bloc, cfg.zones_sources):   # libéré avant le rendu (pic mesuré sur gk2)
         grand.clear()
     sortie = io.StringIO()                       # pas de liste d'1,5 million de lignes : un seul tampon

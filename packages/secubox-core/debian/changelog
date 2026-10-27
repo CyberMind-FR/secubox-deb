@@ -5,6 +5,12 @@ secubox-core (1.8.0-1~trixie1) trixie; urgency=medium
     (transaction sur plusieurs fichiers : une vérification, un rechargement, retour arrière complet), commande
     secubox-dns-listes (root, profil AppArmor), unités secubox-dns-listes.service/.path/.timer. Banc sur gk1 avec la
     configuration réelle de gk2 : Unbound 743 → 387 Mo, décisions identiques sur 145 530 questions et 27 classes.
+  * Le .path surveille aussi unbound.conf.d (une vue TV, un réseau nouveau changent les classes) ; une empreinte de ce
+    que le compilateur lit du contexte évite de recompiler pour rien (local-data de 60-secubox-noms, propres écritures,
+    échec sur les mêmes entrées : retenté au bout d'une heure). Une source déposée pendant la compilation est reprise.
+  * Rechargement réussi seulement quand Unbound répond de nouveau (unbound-control status, #2969) ; sinon retour arrière.
+  * Les clients locaux autorisés par défaut par Unbound (127.0.0.0/8, ::1) sont des classes même sans déclaration.
+  * Compilateur allégé : pic 963 → 487 Mo sur la configuration de gk2, sortie identique ; MemoryMax=1G.
 
  -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 15:00:00 +0100
 
