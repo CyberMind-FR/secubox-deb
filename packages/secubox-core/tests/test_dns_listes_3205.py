@@ -104,7 +104,7 @@ BLOQ = {"always_nxdomain", "static", "always_refuse", "refuse", "deny", "always_
 
 def _parse_nouveau(textes):
     """Zones globales (type, étiquettes), dérogations, vues et éléments d'ACL (étiquettes, actions) du NOUVEL ensemble."""
-    z, zt, ov, vues, acv, acl_tags, acl_act, blocs = {}, {}, {}, {}, {}, {}, {}, set()
+    z, zt, ov, vues, acv, acl_tags, acl_act, blocs, actions = {}, {}, {}, {}, {}, {}, {}, set(), {}
     for texte in textes:
         section, vue = None, None
         for ligne in texte.splitlines():
@@ -142,9 +142,28 @@ def _parse_nouveau(textes):
                 b = str(ipaddress.ip_network(m.group(1), strict=False))
                 acl_act.setdefault(b, {})[m.group(2)] = m.group(3)
                 blocs.add(b)
-            elif (m := re.match(r"access-control:\s*(\S+)\s+allow", s)):
-                blocs.add(str(ipaddress.ip_network(m.group(1), strict=False)))
-    return z, zt, ov, vues, acv, acl_tags, acl_act, blocs
+            elif (m := re.match(r"access-control:\s*(\S+)\s+(\S+)", s)):
+                b = str(ipaddress.ip_network(m.group(1), strict=False))
+                actions.setdefault(b, m.group(2))                # doublon : le premier gagne, le second est ignoré (avertissement)
+                blocs.add(b)
+    return z, zt, ov, vues, acv, acl_tags, acl_act, blocs, actions
+
+
+# Autorisés par Unbound sans déclaration (acl_list_apply_cfg), ignorés s'ils sont déjà déclarés.
+DEFAUTS = {"127.0.0.0/8", "::1/128"}
+
+
+def _noeud(ip, etat):
+    """L'élément d'ACL d'Unbound pour un client : le PLUS PRÉCIS de tous (access-control, vue, étiquettes) — sa vue et ses
+    étiquettes seulement, rien n'est hérité d'un bloc plus large."""
+    return _plus_specifique(ip, etat[7] | DEFAUTS)
+
+
+def acces(etat, ip):
+    """Action d'accès du client : celle de son élément d'ACL ; un élément créé par une vue ou une étiquette est « allow » ;
+    aucun élément : refusé."""
+    n = _noeud(ip, etat)
+    return "refuse" if n is None else etat[8].get(n, "allow")
 
 
 def _plus_specifique(ip, blocs):
@@ -159,10 +178,10 @@ def _ancetres(q):
 
 
 def simuler_nouveau(etat, q, ip):
-    z, zt, ov, vues, acv, acl_tags, acl_act, blocs = etat
-    elem = _plus_specifique(ip, blocs)
+    z, zt, ov, vues, acv, acl_tags, acl_act, blocs, _ = etat
+    elem = _noeud(ip, etat)
     tags, actions = acl_tags.get(elem, set()), acl_act.get(elem, {})
-    v = acv.get(_plus_specifique(ip, acv)) if _plus_specifique(ip, acv) else None
+    v = acv.get(elem)
     if v:
         zv = next((a for a in _ancetres(q) if a in vues[v]["zones"]), None)
         if zv is not None and not (vues[v]["first"] and vues[v]["zones"][zv] in ("transparent", "typetransparent")):
@@ -186,12 +205,27 @@ def simuler_nouveau(etat, q, ip):
 
 # ── tests ────────────────────────────────────────────────────────────────────
 
-def test_memes_decisions_pour_chaque_client_et_chaque_nom(compile_):
+def _comparer(sources, contexte, clients, noms, tmp_path):
+    """Ancienne configuration (sources + contexte) et nouvelle (92 + contexte) passées au MÊME simulateur : mêmes accès,
+    mêmes décisions pour chaque client autorisé."""
+    src = _ecrire(tmp_path / "sources", sources)
+    ctx = _ecrire(tmp_path / "conf.d", contexte)
+    texte, _ = L.compiler(sorted(src.glob("*.conf")), sorted(ctx.glob("*.conf")))
+    ancien = _parse_nouveau(list(sources.values()) + list(contexte.values()))
+    nouveau = _parse_nouveau([texte] + list(contexte.values()))
+    ecarts = [(ip, "acces", acces(ancien, ip), acces(nouveau, ip)) for ip in clients if acces(ancien, ip) != acces(nouveau, ip)]
+    ecarts += [(ip, q, simuler_nouveau(ancien, q, ip), simuler_nouveau(nouveau, q, ip)) for ip in clients for q in noms
+               if acces(ancien, ip).startswith("allow") and simuler_nouveau(ancien, q, ip) != simuler_nouveau(nouveau, q, ip)]
+    return texte, ecarts
+
+
+def test_memes_decisions_pour_chaque_client_et_chaque_nom(compile_, tmp_path):
     texte, stats, cfg, ctx = compile_
     etat = _parse_nouveau([texte] + [(ctx / n).read_text() for n in CONTEXTE])
     ecarts = [(ip, q, L.decision_ancienne(cfg, q, ip), simuler_nouveau(etat, q, ip))
               for ip in CLIENTS for q in NOMS if L.decision_ancienne(cfg, q, ip) != simuler_nouveau(etat, q, ip)]
     assert ecarts == []
+    assert _comparer(SOURCES, CONTEXTE, CLIENTS, NOMS, tmp_path / "b")[1] == []
 
 
 @pytest.mark.parametrize("ip,q,bloque", [
@@ -300,3 +334,87 @@ def test_les_clients_locaux_par_defaut_sont_une_classe(tmp_path):
     assert '"cam.example." always_nxdomain' in texte
     assert re.search(r'access-control-tag: 127\.0\.0\.0/8 "sbx\d+"', texte) and "access-control-tag: ::1/128 " in texte
     assert "access-control: 127.0.0.0/8" not in texte and "access-control: ::1/128" not in texte    # défauts : pas redéclarés
+
+
+# ── éléments d'ACL : le compilateur n'ouvre rien que l'ancienne configuration n'ouvrait (relecture #3205) ─────────────
+
+ACL_CONTEXTE = {
+    "10-acl.conf": """server:
+    access-control: 192.168.0.0/16 allow
+    access-control: 10.0.0.0/8 allow_snoop
+""",
+    "94-tv.conf": """server:
+    access-control-view: 192.168.1.96/30 tv
+view:
+    name: "tv"
+    view-first: yes
+    local-zone: "tvads.example." always_nxdomain
+""",
+}
+ACL_SOURCES = {"96-secubox-adult.conf": """server:
+    local-zone: "cam.example." always_nxdomain
+    local-zone: "tube.example." always_nxdomain
+    local-zone-override: "cam.example." 192.168.1.3 always_transparent
+    local-zone-override: "cam.example." 192.168.1.97 always_transparent
+    local-zone-override: "cam.example." 203.0.113.7 always_transparent
+    local-zone-override: "cam.example." 10.1.2.3 always_transparent
+"""}
+ACL_CLIENTS = ["192.168.1.3", "192.168.1.50", "192.168.1.97", "192.168.1.98", "203.0.113.7", "10.1.2.3", "10.9.9.9", "8.8.8.8",
+               "127.0.0.1"]
+ACL_NOMS = ["cam.example", "www.cam.example", "tube.example", "tvads.example", "free.example"]
+
+
+def test_une_derogation_hors_des_reseaux_autorises_n_ouvre_pas_le_resolveur(tmp_path):
+    """Avant : une dérogation ne créait aucun élément d'ACL. Une adresse exemptée hors des réseaux autorisés (ou 0.0.0.0/0)
+    ne devient pas un client autorisé : résolveur ouvert sinon."""
+    texte, ecarts = _comparer(ACL_SOURCES, ACL_CONTEXTE, ACL_CLIENTS, ACL_NOMS, tmp_path)
+    assert ecarts == []
+    assert "203.0.113.7" not in texte and "access-control: 192.168.1.3/32 allow\n" in texte
+
+
+def test_une_derogation_reprend_l_action_du_reseau_qui_la_couvre(tmp_path):
+    texte, _ = _comparer(ACL_SOURCES, ACL_CONTEXTE, ACL_CLIENTS, ACL_NOMS, tmp_path)
+    assert "access-control: 10.1.2.3/32 allow_snoop\n" in texte
+
+
+def test_une_derogation_sous_une_vue_tv_garde_la_vue(tmp_path):
+    """Unbound ne fait pas hériter la vue d'un bloc plus large : l'élément /32 créé pour l'exempté doit porter la vue TV."""
+    texte, ecarts = _comparer(ACL_SOURCES, ACL_CONTEXTE, ACL_CLIENTS, ACL_NOMS, tmp_path)
+    assert ecarts == [] and "access-control-view: 192.168.1.97/32 tv\n" in texte
+
+
+def test_une_derogation_sur_tout_internet_reste_sans_element_d_acl(tmp_path):
+    sources = {"96-secubox-adult.conf": ACL_SOURCES["96-secubox-adult.conf"]
+               + '    local-zone-override: "tube.example." 0.0.0.0/0 always_transparent\n'}
+    texte, ecarts = _comparer(sources, ACL_CONTEXTE, ACL_CLIENTS, ACL_NOMS, tmp_path)
+    assert ecarts == [] and "0.0.0.0/0" not in texte
+
+
+# ── sources : lues sans suivre de lien, erreurs sans recopier le contenu ─────────────────────────────────────────────
+
+def test_une_source_lien_symbolique_est_refusee(tmp_path):
+    secret = tmp_path / "secret"
+    secret.write_text("server:\n")
+    s = tmp_path / "95-secubox-adblock.conf"
+    s.symlink_to(secret)
+    with pytest.raises(L.ErreurListes, match="lien"):
+        L.compiler([s], [])
+
+
+def test_une_erreur_ne_recopie_pas_la_ligne(tmp_path):
+    s = tmp_path / "95-secubox-adblock.conf"
+    s.write_text("root:$y$j9T$empreinte-secrete:19000:0:99999:7:::\n")
+    with pytest.raises(L.ErreurListes) as e:
+        L.compiler([s], [])
+    assert "empreinte-secrete" not in str(e.value) and "$y$" not in str(e.value) and "95-secubox-adblock.conf:1" in str(e.value)
+
+
+@pytest.mark.parametrize("ligne", ['    local-zone: ads.example. always_nxdomain',
+                                   '    local-zone: "ads.example." always_nxdomain # commentaire',
+                                   '    access-control-view: pas-une-adresse vue'])
+def test_une_ligne_permise_mais_illisible_est_refusee(tmp_path, ligne):
+    """« Rien ne se perd en silence » : une ligne au préfixe permis que le compilateur ne reconnaît pas lève une erreur."""
+    s = tmp_path / "95-secubox-adblock.conf"
+    s.write_text("server:\n" + ligne + "\n")
+    with pytest.raises(L.ErreurListes, match="95-secubox-adblock.conf:2"):
+        L.compiler([s], [])

@@ -26,7 +26,9 @@ from __future__ import annotations
 import hashlib
 import io
 import ipaddress
+import os
 import re
+import stat
 import sys
 import time
 from collections import defaultdict
@@ -48,6 +50,9 @@ _NAME = re.compile(r'name:\s*"?([^"\s]+)"?$')
 _NOM_ZONE = re.compile(r"[a-z0-9_.-]{1,253}|\.")
 # Ce qu'une SOURCE peut contenir. Toute autre directive est refusée : rien ne se perd en silence.
 _PERMIS_SOURCE = ("local-zone:", "local-zone-override:", "access-control-view:", "name:", "view-first:")
+_DIRECTIVE = re.compile(r"[a-z-]{1,40}")              # ce qu'un message d'erreur cite d'une ligne : jamais le reste (relecture #3205)
+MAX_SOURCE = 512 * 1024 * 1024                        # 42 Mo pour webfilter sur gk2
+_ACTIONS_FERMEES = ("deny", "refuse")                 # le client n'est pas servi : ses étiquettes ne servent à rien
 
 
 class ErreurListes(ValueError):
@@ -85,7 +90,34 @@ class Config:
         self.ov_contexte: set = set()                         # zones dérogées par un fichier de CONTEXTE (TV) : jamais retirées
         self.vues: Dict[str, dict] = {}                       # nom -> {first, zones, fichier}
         self.acv: Dict[str, Tuple[str, str]] = {}             # bloc -> (vue, fichier)
+        self.acl: Dict[str, str] = {}                         # bloc -> action d'access-control (le premier gagne, comme Unbound)
         self.allow: List[str] = []
+
+
+def _directive(s: str) -> str:
+    m = _DIRECTIVE.match(s)
+    return m.group(0) if m else "?"
+
+
+def _ouvrir_source(f: Path):
+    """Une source est lue SANS suivre de lien, doit être un fichier ordinaire du compte qui compile, et plafonnée : un lien
+    vers /etc/shadow ne devient ni une « source » ni un message d'erreur (relecture #3205)."""
+    try:
+        fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError as e:
+        raise ErreurListes(f"{f.name} : illisible ou lien symbolique ({e.strerror})") from None
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid() or st.st_size > MAX_SOURCE:
+        os.close(fd)
+        raise ErreurListes(f"{f.name} : pas un fichier ordinaire du service, ou trop gros")
+    return os.fdopen(fd, encoding="utf-8", errors="replace")
+
+
+def _bloc_lu(b: str, ou: str) -> str:
+    try:
+        return bloc(b)
+    except ValueError:
+        raise ErreurListes(f"{ou} : bloc d'adresses invalide") from None
 
 
 def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> Config:
@@ -96,18 +128,20 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
         f = Path(f)
         est_source = f.name in sources
         section, vue = None, None
-        with f.open(encoding="utf-8", errors="replace") as fh:
+        with (_ouvrir_source(f) if est_source else f.open(encoding="utf-8", errors="replace")) as fh:
             for n, ligne in enumerate(fh, 1):
                 s = ligne.strip()
                 if not s or s.startswith("#"):
                     continue
+                ou = f"{f.name}:{n}"
                 if not ligne[:1].isspace() and s.endswith(":") and re.fullmatch(r"[a-z-]+:", s):
                     section, vue = s[:-1], None
                     if est_source and section not in ("server", "view"):
-                        raise ErreurListes(f"{f.name}:{n} : section « {section} » non reprise par le compilateur")
+                        raise ErreurListes(f"{ou} : section « {_directive(section)} » non reprise par le compilateur")
                     continue
                 if est_source and not s.startswith(_PERMIS_SOURCE):
-                    raise ErreurListes(f"{f.name}:{n} : directive non reprise par le compilateur : {s.split()[0]}")
+                    raise ErreurListes(f"{ou} : directive non reprise par le compilateur : {_directive(s)}")
+                reconnue = True
                 if section == "view":
                     m = _NAME.match(s)
                     if m and vue is None:
@@ -117,12 +151,13 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
                         cfg.vues[vue]["first"] = s.split(":", 1)[1].strip() == "yes"
                     elif (m := _LZ.match(s)) and vue:
                         cfg.vues[vue]["zones"].setdefault(_nom(m.group(1)), sys.intern(m.group(2)))
-                    continue
-                if section != "server":
-                    continue
-                if (m := _OV.match(s)):
+                    else:
+                        reconnue = False
+                elif section != "server":
+                    reconnue = False
+                elif (m := _OV.match(s)):
                     z = _nom(m.group(1))
-                    cfg.ov_par_bloc[sys.intern(bloc(m.group(2)))][z] = sys.intern(m.group(3))
+                    cfg.ov_par_bloc[sys.intern(_bloc_lu(m.group(2), ou))][z] = sys.intern(m.group(3))
                     if not est_source:
                         cfg.ov_contexte.add(z)
                 elif (m := _LZ.match(s)):
@@ -132,11 +167,16 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
                         if est_source:
                             cfg.zones_sources.add(z)
                 elif (m := _ACV.match(s)):
-                    cfg.acv[bloc(m.group(1))] = (m.group(2), f.name)
-                elif (m := _AC.match(s)) and m.group(2) == "allow":
-                    b = bloc(m.group(1))
-                    if b not in cfg.allow:
+                    cfg.acv[_bloc_lu(m.group(1), ou)] = (m.group(2), f.name)
+                elif (m := _AC.match(s)):
+                    b = _bloc_lu(m.group(1), ou)
+                    cfg.acl.setdefault(b, m.group(2))
+                    if m.group(2) == "allow" and b not in cfg.allow:
                         cfg.allow.append(b)
+                else:
+                    reconnue = False
+                if est_source and not reconnue:                 # préfixe permis, forme inattendue : jamais ignorée en silence
+                    raise ErreurListes(f"{ou} : ligne non reconnue ({_directive(s)})")
     return cfg
 
 
@@ -190,11 +230,23 @@ class _Modele:
     def __init__(self, cfg: Config, vues_gardees: set):
         self.cfg, self.vues_gardees = cfg, vues_gardees
         self.ov_par_bloc = cfg.ov_par_bloc
+        self.noeuds = {*cfg.acl, *cfg.acv, *DEFAUTS_UNBOUND}            # éléments d'ACL de l'ANCIENNE configuration
+
+    def noeud(self, net) -> Optional[str]:
+        """L'élément d'ACL d'un client : le PLUS PRÉCIS de tous (access-control, vue). Unbound ne fait rien hériter d'un
+        bloc plus large : ni sa vue, ni ses étiquettes (relecture #3205)."""
+        return _plus_specifique(net, self.noeuds)
+
+    def action(self, noeud: Optional[str]) -> Optional[str]:
+        """Action d'accès de l'élément ; un élément créé par une vue (ou un défaut d'Unbound) est « allow » ; None : refusé."""
+        if noeud is None:
+            return None
+        return self.cfg.acl.get(noeud, "allow")
 
     def profil(self, net) -> Tuple[Optional[str], Tuple[str, ...]]:
         """(vue, blocs de dérogation qui contiennent ce client, du plus spécifique au plus large)."""
-        vb = _plus_specifique(net, self.cfg.acv)
-        vue = self.cfg.acv[vb][0] if vb else None
+        vb = self.noeud(net)
+        vue = self.cfg.acv[vb][0] if vb in self.cfg.acv else None
         blocs = [b for b in self.ov_par_bloc if _contient(net, ipaddress.ip_network(b))]
         blocs.sort(key=lambda b: -ipaddress.ip_network(b).prefixlen)
         return vue, tuple(blocs)
@@ -241,7 +293,7 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
     vues_gardees = {v for v, d in cfg.vues.items() if d["fichier"] not in noms_sources}
     m = _Modele(cfg, vues_gardees)
 
-    classes = sorted({*cfg.allow, *cfg.acv, *cfg.ov_par_bloc, *DEFAUTS_UNBOUND},
+    classes = sorted({*cfg.acl, *cfg.acv, *cfg.ov_par_bloc, *DEFAUTS_UNBOUND},
                      key=lambda b: (ipaddress.ip_network(b).version, ipaddress.ip_network(b).prefixlen, b))
     idx = {c: i for i, c in enumerate(classes)}
     toutes = (1 << len(classes)) - 1
@@ -308,7 +360,7 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
 
     nb_candidats, nb_elagues, nb_exceptions = len(S), len(elagues), len(X)
     emis = sorted(d for d, sd in S.items() if d not in elagues and (sd or d in X or d in references))
-    del elagues, m
+    del elagues
     groupes: Dict[Tuple[int, int], str] = {}
     etiquette: Dict[str, str] = {}
     for d in emis:
@@ -319,19 +371,37 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
             groupes[cle] = f"sbx{len(groupes)}"
         etiquette[d] = groupes[cle]
 
-    allow = set(cfg.allow) | set(DEFAUTS_UNBOUND)
+    # Éléments d'ACL du 92. Une classe qui existe déjà dans la nouvelle configuration (access-control du contexte, vue du
+    # contexte, défaut d'Unbound) n'est pas redéclarée. Une classe NOUVELLE (vue d'une source compilée, cible d'une
+    # dérogation) reprend l'ACTION et la VUE GARDÉE de l'élément qui la couvrait : rien n'est ouvert qui ne l'était pas, et
+    # un exempté sous une vue TV garde sa vue. Sans élément couvrant, la classe était refusée : aucun élément n'est créé.
+    acl_rendu: Dict[str, Tuple[Optional[str], Optional[str]]] = {}            # classe -> (action à déclarer, vue à déclarer)
+    sans_element = set()
+    for c in classes:
+        n = m.noeud(ipaddress.ip_network(c))
+        action = m.action(n)
+        if action is None or action in _ACTIONS_FERMEES:
+            sans_element.add(c)                       # refusé avant, refusé après : ni élément nouveau, ni étiquettes
+            continue
+        if c in cfg.acl or c in DEFAUTS_UNBOUND or (c in cfg.acv and cfg.acv[c][1] not in noms_sources):
+            continue                                  # existe déjà dans la nouvelle configuration
+        vue = cfg.acv[n][0] if n in cfg.acv and cfg.acv[n][0] in vues_gardees else None
+        acl_rendu[c] = (action, vue)
     for grand in (cfg.zones, cfg.vues, cfg.ov_par_bloc, cfg.zones_sources):   # libéré avant le rendu (pic mesuré sur gk2)
         grand.clear()
     sortie = io.StringIO()                       # pas de liste d'1,5 million de lignes : un seul tampon
     sortie.write("# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"
-                 "# GÉNÉRÉ par secubox-dns-listes — ne pas éditer : les sources sont dans /var/lib/secubox/dns-listes/sources (#3205).\n"
+                 "# GÉNÉRÉ par secubox-dns-listes — ne pas éditer : les sources sont dans /var/lib/secubox-dns-listes/sources (#3205).\n"
                  "server:\n")
     if groupes:
         sortie.write('    define-tag: "' + " ".join(groupes.values()) + '"\n')
+    for c, (action, vue) in acl_rendu.items():
+        sortie.write(f"    access-control: {c} {action}\n")
+        if vue:
+            sortie.write(f"    access-control-view: {c} {vue}\n")
     for c in classes:
-        if c not in allow:
-            sortie.write(f"    access-control: {c} allow\n")
-    for c in classes:
+        if c in sans_element:
+            continue
         i = idx[c]
         tags = [t for (s, x), t in groupes.items() if ((s | x) >> i) & 1]
         if tags:
