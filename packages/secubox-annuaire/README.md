@@ -69,6 +69,8 @@ Socket Unix : `/run/secubox/annuaire.sock`, `/run/secubox/openpgp.sock`.
 | `POST` | `/log/pull` | require_jwt |
 | `GET` | `/fleet/self` | aucune |
 | `GET` | `/fleet` | require_jwt |
+| `GET` | `/fleet/modules/self` | aucune (écoute du maillage :8799) — relevé de validation signé de cette box (#3212) |
+| `GET` | `/fleet/modules` | require_jwt — relevés vérifiés de toutes les box + `indisponibles` (raison) |
 | `GET` | `/centers` | require_lecture |
 | `GET` | `/centers/ownership` | require_lecture |
 | `GET` | `/centers/proposals` | require_lecture |
@@ -76,6 +78,15 @@ Socket Unix : `/run/secubox/annuaire.sock`, `/run/secubox/openpgp.sock`.
 | `POST` | `/centers/grant` | require_jwt |
 | `POST` | `/centers/revoke` | require_jwt |
 | `POST` | `/centers/proposal/accept` | require_jwt |
+
+**Relevé de validation des modules (#3212)** : `sbx-fleetctl publish-modules` (à la suite de `publish`, dans
+`secubox-metrics-publish.service`) signe `/var/lib/secubox/profiles/validation/releve.json` (secubox-profiles) en
+`ModulesSnapshot` — modèle séparé de `MetricSnapshot`, borné (400 paquets, 16 unités, 5 erreurs de 200 caractères) —
+et l'écrit en `/var/lib/secubox/annuaire/fleet/modules.json`. Saute si le relevé est absent ou inchangé.
+`fleet.verify_modules` vérifie la signature ET la forme : un relevé bien signé mais hors bornes est refusé.
+`/fleet/modules` tire chaque pair de `wg_mesh.json` en parallèle et nomme les box sans relevé lisible
+(`injoignable`, `version trop ancienne` — 404, `signature invalide`, `relevé non publié`). Lu par
+`/profiles/comparatif.html#parc`.
 
 La page `/fleet/` (WebUI) lit `GET /fleet` (nœuds du maillage à annuaire) et, séparément, deux autres sources : `GET /api/v1/autoload/boxes` (box enrôlées par Auto-Load, #2840) et
 `GET /api/v1/p2p/peers` (pairs `wg-mesh`, statut mesuré par poignée de main, #2842). Un panneau est masqué si son module est absent ou si sa liste est vide.

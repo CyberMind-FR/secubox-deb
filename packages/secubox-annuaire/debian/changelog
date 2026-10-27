@@ -1,3 +1,12 @@
+secubox-annuaire (0.16.0-1~trixie1) trixie; urgency=medium
+
+  * Relevé de validation des modules (#3212) : modèle ModulesSnapshot (borné, séparé de MetricSnapshot),
+    fleet.sign_modules / verify_modules (signature ET forme), sbx-fleetctl publish-modules (signe le relevé de
+    secubox-profiles, saute s'il est absent ou inchangé, à la suite de publish), GET /fleet/modules/self sur l'écoute
+    du maillage :8799 et GET /fleet/modules (JWT) qui rassemble les box et nomme celles sans relevé lisible (ref #3212).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 12:00:00 +0100
+
 secubox-annuaire (0.15.1-1~trixie1) trixie; urgency=medium
 
   * Services des pairs (ref #3146) : un pair n'est retenu que si son domaine est `<un libellé>.secubox.in`

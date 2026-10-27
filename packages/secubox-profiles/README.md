@@ -21,6 +21,8 @@ Inventaire et profils des modules SecuBox. **Phase 1 : lecture seule.**
     secubox-profilectl apply <nom> [--yes]       # applique un profil (dry-run par défaut)
     secubox-profilectl rollback <snapshot> [--yes]  # restaure un snapshot (R1..R4)
 
+    secubox-profilectl releve [--json]   # relevé de validation de cette box (#3212)
+
 `scan`, `status`, `diff` et `export` sont en lecture seule : ils lisent dpkg et la
 config, ne touchent à rien. `apply` et `rollback` n'agissent qu'avec `--yes` ; sans
 lui, ils décrivent seulement ce qu'ils feraient. `apply` est le SEUL décideur de ce
@@ -64,6 +66,7 @@ stderr, `⚠️`) — jamais silencieusement omis de l'installateur.
 | `/etc/secubox/profiles/<nom>.toml` | profil (état désiré, exhaustif) |
 | `/etc/secubox/profiles/pins.toml` | surcharges individuelles persistantes |
 | `/etc/secubox/profiles/active` | nom du profil actif |
+| `/var/lib/secubox/profiles/validation/releve.json` | relevé de validation de la box (#3212), écrit toutes les 5 min par `secubox-profiles-releve.timer` (User=secubox) |
 
 `menu.d/` reste la source UI (path, ordre, icône) et n'est pas dupliqué ici.
 
@@ -87,6 +90,8 @@ toutes les routes (`Depends(require_jwt)`).
 | POST | `/api/v1/profiles/rollback` | recharge le dernier snapshot 4R (webui→ctl : `secubox-profilectl rollback --yes --json`) |
 | POST | `/api/v1/profiles/wake` | `{"id"}` — réveille manuellement UN module on-demand (webui→ctl, **synchrone** : `secubox-wakectl wake <id> --json`) |
 | POST | `/api/v1/profiles/sleep` | `{"id"}` — endort manuellement UN module sleepable (webui→ctl : `secubox-profilectl apply --only <id> --yes --json`) |
+| GET | `/api/v1/profiles/comparatif` | contenu des profils (méta-paquets) + profil actif et modules installés ici (`require_lecture`, #2819) |
+| GET | `/api/v1/profiles/validation` | relevé de validation de cette box (`require_lecture`, #3212) ; 503 tant que le minuteur n'a pas tourné |
 
 Écritures limitées à `/etc/secubox/profiles/<nom>.toml` et `pins.toml`
 (atomique : fichier temporaire + `os.replace`) — c'est ce qui rend Phase 1
@@ -98,6 +103,28 @@ within a timeout derived from the unit's own systemd `TimeoutStop/StartUSec` —
 slow-but-successful transition is never mistaken for a failure.
 
 Panel webui : `/profiles/` (hybrid-dark, cf. `.claude/WEBUI-PANEL-GUIDELINES.md`).
+
+## Validation du parc (#3212)
+
+`/profiles/comparatif.html#parc` compare **l'état réel** des box du maillage, sans le confondre avec les métadonnées
+des profils (onglet « Profils déclarés »). Une ligne par paquet SecuBox, une colonne par box, quatre niveaux :
+
+1. **attendu** — le paquet est dans la fermeture des `Depends` du méta-paquet de profil installé le plus haut sur la box
+   (`recommande` pour ses `Recommends`, `hors_profil` s'il est installé sans être demandé) ;
+2. **paquet** — version et statut dpkg (`iF`, `iU`… : configuration inachevée, donc erreur) ;
+3. **services** — unités livrées par le paquet (`/var/lib/dpkg/info/<paquet>.list`) et modules montés dans l'agrégateur
+   (`/health`) ;
+4. **ressources** — mémoire des unités actives (cgroup entier), CPU en % d'un cœur depuis le relevé précédent.
+
+États : `fonctionnel`, `veille` (module à la demande endormi), `arrete`, `erreur` (unité en échec, paquet inachevé,
+échec de chargement dans l'agrégateur), `manquant` (demandé, pas installé), `absent`, `inconnu` (sonde en échec).
+Ne sont **jamais** « arrêtées » : une unité lancée par un minuteur, non activée au démarrage, dont la condition de
+démarrage n'est pas remplie, un oneshot terminé avec succès, un module servi par l'agrégateur.
+
+Chaîne : `secubox-profilectl releve` (ce paquet, sans privilège) → `sbx-fleetctl publish-modules` (secubox-annuaire,
+signature Ed25519 de la box) → `GET /api/v1/annuaire/fleet/modules/self` sur l'écoute du maillage (:8799) →
+`GET /api/v1/annuaire/fleet/modules` (JWT) rassemble les box et nomme celles sans relevé lisible. Une sonde en échec
+rend le relevé **partiel**, annoncé dans l'en-tête de la colonne. Lecture seule.
 
 ## Manifeste
 

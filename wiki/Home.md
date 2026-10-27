@@ -156,6 +156,7 @@ Portail de services : `https://<ip>/` (ou `all.gk2.net` sur le LAN). Comptes ma�
 La documentation technique couvre l'installation sur différentes cibles matérielles et virtuelles.
 
 - **[[Trixie]]** — Debian 13 : profils, zram, plafond mémoire, cycle de vie, moteur DPI
+- **[[Valider-un-parc|Valider un parc]]** — l'état réel de chaque box du maillage : profil attendu, paquet, services, mémoire
 - **[[Architecture]]** — Vue d'ensemble des six modules et de la stack technique
 - **[[Hardware-Matrix]]** — Matrice de compatibilité BYOH par carte et SoC
 - **[[Installation]]** — Guide d'installation complet (APT, Live USB, ARM)
