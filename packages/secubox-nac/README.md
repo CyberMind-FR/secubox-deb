@@ -69,6 +69,13 @@ Statut réel : `/var/lib/secubox/nac/nft-applied.json` (repris par `/status`). L
 `priority filter - 5` : un drop est final, un oubli ne rend rien accessible. `GET /sync_zones`
 redemande l'application. Preuve de bout en bout : topologie client/routeur/serveur en espaces de noms.
 
+### Depuis le LAN du mode routeur (br-lan, 3.9.5, #3206)
+
+netmodes 1.7.0 accepte `br-lan` en entrée comme le réseau de la Freebox. Pour que « IoT isolé » et « Invités » le
+restent, la chaîne d'entrée du NAC (filter - 5, avant tout accept) n'y laisse aux zones IoT et Invités que DNS (53) et
+DHCP (67) vers la box ; les réponses aux connexions ouvertes par la box (ping de dnsmasq avant bail) passent. Hors
+`br-lan`, rien ne change.
+
 ## Détection passive de l'OS et du type fin (#2236)
 
 `devices.db` porte quatre colonnes de plus, remplies par le collecteur (`api/osdetect.py`, fonctions pures) et exposées par `GET /api/v1/nac/clients` et

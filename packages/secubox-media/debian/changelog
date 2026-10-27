@@ -1,3 +1,12 @@
+secubox-media (1.9.4-1~trixie1) trixie; urgency=medium
+
+  * Samba servi aussi sur le LAN du mode routeur : ksmbd écoute eth2 et br-lan, secubox_smb accepte le 445 depuis
+    br-lan avant le refus. Le postinst migre l'ancien défaut exact « interfaces = eth2 » (un choix de l'administrateur
+    reste). Rechargement du .nft idempotent (création puis suppression de la table) : les règles ne s'empilent plus à
+    chaque mise à jour. Ports isolés toujours refusés (ref #3206).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 13:00:00 +0100
+
 secubox-media (1.9.3-1~trixie1) trixie; urgency=medium
 
   * Unité (ref #3000) : ReadWritePaths + /etc/ksmbd, /var/log/secubox et /run —

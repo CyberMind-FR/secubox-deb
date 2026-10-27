@@ -15,6 +15,8 @@ override_dh_auto_install:
 	# Composant absorbé : dns-provider (#2050)
 	install -d debian/secubox-dns/usr/lib/secubox/dns-provider
 	cp -r composants/dns-provider/api debian/secubox-dns/usr/lib/secubox/dns-provider/
+	# Joker DNS des pairs du maillage, appelé en root par secubox-relais-maillage (#3206)
+	install -D -m 755 composants/dns-provider/sbin/secubox-dns-joker debian/secubox-dns/usr/sbin/secubox-dns-joker
 	install -d debian/secubox-dns/usr/share/secubox/www/dns-provider
 	cp -r composants/dns-provider/www/dns-provider/. debian/secubox-dns/usr/share/secubox/www/dns-provider/
 	install -d debian/secubox-dns/usr/share/secubox/menu.d

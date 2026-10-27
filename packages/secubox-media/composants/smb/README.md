@@ -16,6 +16,13 @@ Composant absorbé par `secubox-media` (#2050) ; panneau de gestion depuis 1.9.0
 - `nft/zz-secubox-smb.nft` : port 445 ouvert depuis le LAN seulement
 - `sbin/smbctl` : seule surface privilégiée (JSON), appelée par l'API en `sudo -n`
 
+## LAN du mode routeur (1.9.4, #3206)
+
+ksmbd écoute `eth2 br-lan` (une interface absente est ignorée par le noyau jusqu'à son apparition) et la table
+`secubox_smb` accepte le 445 depuis `br-lan` avant le refus ; les ports isolés restent refusés. `ksmbd.conf` étant
+modifié en place par smbctl, le postinst ne migre que l'ancien défaut exact `interfaces = eth2`. Le `.nft` se recharge
+de façon idempotente (création puis suppression de la table).
+
 ## smbctl
 
 | Commande | Effet |

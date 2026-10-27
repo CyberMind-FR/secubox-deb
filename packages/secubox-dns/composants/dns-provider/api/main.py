@@ -441,29 +441,37 @@ class GandiAdapter(DNSProviderAdapter):
     """Gandi LiveDNS API adapter."""
 
     API_URL = "https://api.gandi.net/v5/livedns"
+    _transport = None                                    # httpx.MockTransport en test (comme OVHAdapter)
 
     async def _request(self, method: str, path: str, data: Dict = None) -> Any:
+        """Un refus de Gandi (409 doublon, 401 clé, 404 zone…) ou une API injoignable lève HTTPException 502 avec le
+        message de Gandi : avant #3206, tout était rendu comme un succès."""
         import httpx
+        if method not in ("GET", "POST", "PUT", "DELETE"):
+            raise ValueError(f"Unknown method: {method}")
         headers = {
             "Authorization": f"Bearer {self.credentials.get('api_key')}",
             "Content-Type": "application/json"
         }
-        async with httpx.AsyncClient(timeout=30) as client:
-            url = f"{self.API_URL}{path}"
-            if method == "GET":
-                resp = await client.get(url, headers=headers)
-            elif method == "POST":
-                resp = await client.post(url, headers=headers, json=data)
-            elif method == "PUT":
-                resp = await client.put(url, headers=headers, json=data)
-            elif method == "DELETE":
-                resp = await client.delete(url, headers=headers)
-            else:
-                raise ValueError(f"Unknown method: {method}")
-
-            if resp.status_code == 204:
-                return {"success": True}
+        async with httpx.AsyncClient(timeout=30, transport=self._transport) as client:
+            try:
+                resp = await client.request(method, f"{self.API_URL}{path}", headers=headers,
+                                            json=data if method in ("POST", "PUT") else None)
+            except httpx.HTTPError as e:
+                # le type seul : une erreur d'en-tête httpx recopie la valeur Bearer (clé d'API), revue #3206
+                raise HTTPException(502, f"Gandi API injoignable ({type(e).__name__})")
+        if resp.status_code == 204:
+            return {"success": True}
+        if resp.status_code >= 400:
+            try:
+                msg = resp.json().get("message", resp.text)
+            except (ValueError, AttributeError):
+                msg = resp.text
+            raise HTTPException(502, f"Gandi API {resp.status_code} : {msg}")
+        try:
             return resp.json()
+        except ValueError:
+            return {"success": True}
 
     async def list_domains(self) -> List[Dict[str, Any]]:
         result = await self._request("GET", "/domains")
@@ -494,7 +502,7 @@ class GandiAdapter(DNSProviderAdapter):
             "rrset_values": [record.value],
             "rrset_ttl": record.ttl
         }
-        result = await self._request("POST", f"/domains/{domain}/records", data)
+        await self._request("POST", f"/domains/{domain}/records", data)   # lève sur un refus de Gandi (#3206)
         return {"success": True, "id": f"{record.name}_{record.type.value}"}
 
     async def update_record(self, domain: str, record_id: str, record: RecordUpdate) -> Dict[str, Any]:

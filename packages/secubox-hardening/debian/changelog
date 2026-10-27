@@ -1,3 +1,11 @@
+secubox-hardening (1.6.2-1~trixie1) trixie; urgency=medium
+
+  * Garde des backends étendue au LAN du mode routeur (br-lan) : netmodes 1.7.0 l'accepte en entrée comme eth2, donc
+    mêmes ports fermés (admin nginx :9080 sans HAProxy ni sbxwaf, statistiques HAProxy :8404, toolbox, ACME, leurres
+    sbx-authwatch) et 7331 jamais en IPv6. Même liste que pour eth2, imposée par un test (ref #3206).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 13:30:00 +0100
+
 secubox-hardening (1.6.1-1~trixie1) trixie; urgency=medium
 
   * secubox-wan-guard.nft (ref #3103) : le port 7331 (jonction au maillage) n'est plus coupé pour les

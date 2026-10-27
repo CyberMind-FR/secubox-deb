@@ -71,3 +71,19 @@ def test_jonction_du_maillage_ouverte_au_lan_fermee_a_internet():
         assert reseau in v4[0]
     assert "drop" in v4[0]
     assert any("nfproto ipv6" in l and "drop" in l for l in regles)     # jamais en IPv6 depuis eth2
+
+
+def test_lan_route_meme_garde_que_eth2():
+    """#3206 : netmodes accepte br-lan en entrée comme eth2 ; sans la même garde, l'admin nginx :9080 (sans HAProxy ni
+    sbxwaf), les statistiques HAProxy :8404 et les leurres seraient joignables depuis le LAN du mode routeur."""
+    import re
+    texte = LIVREE.read_text()
+    listes = {}
+    for ligne in texte.splitlines():
+        m = re.search(r'iifname "(\w[\w-]*)" tcp dport \{ ([\d, ]+) \} counter drop', ligne)
+        if m and not ligne.lstrip().startswith("#"):
+            listes[m.group(1)] = sorted(int(p) for p in m.group(2).split(","))
+    assert set(listes) == {"eth2", "br-lan"}
+    assert listes["br-lan"] == listes["eth2"]                      # une seule liste, jamais deux qui divergent
+    assert 9080 in listes["br-lan"] and 8404 in listes["br-lan"]
+    assert re.search(r'iifname "br-lan" meta nfproto ipv6 tcp dport 7331 counter drop', texte)

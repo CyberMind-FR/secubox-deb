@@ -29,5 +29,12 @@ table inet secubox_wan_guard {
 			comment "jonction du maillage : LAN seulement (#3103)"
 		iifname "eth2" meta nfproto ipv6 tcp dport 7331 counter drop \
 			comment "jonction du maillage : jamais en IPv6 depuis eth2 (#3103)"
+		# LAN du mode routeur (br-lan, #3206) : netmodes l'accepte en entrée comme eth2 ; mêmes backends fermés, MÊME
+		# liste (un test l'exige), sans quoi l'admin nginx :9080 serait joignable sans HAProxy ni sbxwaf. La jonction
+		# du maillage (7331, adresses privées) y reste ouverte : c'est ainsi qu'un nœud du LAN routé rejoint le maillage.
+		iifname "br-lan" tcp dport { 23, 1433, 3306, 3389, 5432, 5900, 6379, 8088, 8404, 8880, 8900, 8910, 9080, 9200, 27017 } counter drop \
+			comment "backends + leurres sbx-authwatch fermes cote LAN route (#3206)"
+		iifname "br-lan" meta nfproto ipv6 tcp dport 7331 counter drop \
+			comment "jonction du maillage : jamais en IPv6 depuis le LAN route (#3206)"
 	}
 }

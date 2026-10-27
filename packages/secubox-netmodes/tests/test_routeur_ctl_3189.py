@@ -315,10 +315,13 @@ class Faux:
         if a[:2] == ["nft", "-f"] and len(a) == 3:
             texte = Path(a[2]).read_text()
             for ligne in texte.splitlines():
-                if ligne.startswith("add rule inet filter input"):
+                if ligne.startswith(("add rule inet filter input", "insert rule inet filter input")):
                     self.prochain += 1
-                    self.regles.append({"handle": self.prochain,
-                                        "comment": re.search(r'comment "([^"]*)"', ligne).group(1)})
+                    regle = {"handle": self.prochain, "comment": re.search(r'comment "([^"]*)"', ligne).group(1)}
+                    if ligne.startswith("insert"):                   # nft : `insert` place la règle en tête
+                        self.regles.insert(0, regle)
+                    else:
+                        self.regles.append(regle)
             if f"table inet {TABLE_NFT} {{" in texte:
                 self.table_lan = True
             return cp(a)
@@ -684,7 +687,9 @@ def test_reprise_lan_temporaire(ctx, racine, faux):
     assert "192.168.255.1/32" in faux.adresses["lo"]                           # HAProxy :9443 et TURN restent joignables
     assert not any(a[:3] == ["ip", "addr", "del"] for a in j)
     assert not [r for r in faux.regles if r.get("comment", "").startswith("sbx-lan-temporaire")]
-    assert [r["handle"] for r in faux.regles][:2] == [4, 9]                        # règles de base intactes
+    assert faux.regles[0]["comment"] == "secubox netmodes lan ssh"                # #3206 : SSH du LAN inséré en tête
+    base = [r["handle"] for r in faux.regles if not r.get("comment", "").startswith("secubox netmodes lan")]
+    assert base[:2] == [4, 9]                                                      # règles de base intactes
     assert (racine / "var/lib/misc/dnsmasq.leases").read_text() == BAUX_TEMPORAIRES
 
 
@@ -700,7 +705,7 @@ def test_idempotent(ctx, racine, faux):
     rc.appliquer(ctx, CFG42, "admin")
     rc.confirmer(ctx, "admin")
     premieres = [r["handle"] for r in faux.regles_lan()]
-    assert len(premieres) == 3
+    assert len(premieres) == 5                                                     # dhcp, dns, dns-tcp, confiance, ssh (#3206)
     faux.journal.clear()
     rc.appliquer(ctx, CFG42, "admin")
     rc.confirmer(ctx, "admin")
@@ -708,7 +713,7 @@ def test_idempotent(ctx, racine, faux):
     i_nft = j.index(["nft", "-f", str(racine / CHEMINS["nft"].lstrip("/"))])
     suppressions = [int(a[7]) for a in j[:i_nft] if a[:7] == ["nft", "delete", "rule", "inet", "filter", "input", "handle"]]
     assert suppressions == premieres
-    assert len(faux.regles_lan()) == 3                                             # un seul jeu de règles
+    assert len(faux.regles_lan()) == 5                                             # un seul jeu de règles
 
 
 def test_geo_absente(ctx, racine, faux):

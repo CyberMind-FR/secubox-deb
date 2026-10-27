@@ -60,6 +60,10 @@ def rendre(cfg: ConfigRouteur) -> dict[str, str]:
             f'add rule inet filter input iifname "br-lan" udp dport 67 accept comment "{COMMENTAIRE_NFT} dhcp"\n'
             f'add rule inet filter input iifname "br-lan" udp dport 53 accept comment "{COMMENTAIRE_NFT} dns"\n'
             f'add rule inet filter input iifname "br-lan" tcp dport 53 accept comment "{COMMENTAIRE_NFT} dns-tcp"\n'
+            # LAN de confiance comme le réseau de la Freebox (`iif "eth2" accept` du durcissement, #3206) : jonction du
+            # maillage, SSH, services de la box. SSH en tête : le durcissement refuse le 22 hors 10/8 et 192.168.1.0/24.
+            f'add rule inet filter input iifname "br-lan" accept comment "{COMMENTAIRE_NFT} confiance"\n'
+            f'insert rule inet filter input iifname "br-lan" tcp dport 22 accept comment "{COMMENTAIRE_NFT} ssh"\n'
             # créer puis supprimer : idiome idempotent au rechargement
             f"table inet {TABLE_NFT}\n"
             f"delete table inet {TABLE_NFT}\n"

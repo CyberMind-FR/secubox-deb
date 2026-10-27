@@ -1,3 +1,10 @@
+secubox-nac (3.9.5-1~trixie1) trixie; urgency=medium
+
+  * Depuis le LAN du mode routeur (br-lan, accepté en entrée par netmodes 1.7.0), les zones IoT et Invités n'ont vers
+    la box que DNS et DHCP (« IoT isolé » reste vrai en mode routeur) ; hors br-lan, rien ne change (ref #3206).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 13:30:00 +0100
+
 secubox-nac (3.9.4-1~trixie1) trixie; urgency=medium
 
   * Collecteur : une exception d'un cycle n'arrête plus la boucle (ref #3178). run_forever ne

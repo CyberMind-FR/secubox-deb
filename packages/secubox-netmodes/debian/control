@@ -11,6 +11,7 @@ Package: secubox-netmodes
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0), netplan.io, iproute2, bridge-utils,
  python3 (>= 3.11), python3-yaml, python3-jinja2, dnsmasq-base, nftables, sudo, apparmor
+Breaks: secubox-hardening (<< 1.6.2~), secubox-nac (<< 3.9.5~)
 Description: SecuBox Network Modes
  Commutation de modes réseau : router, sniffer-inline, sniffer-passif, AP, relay. Templates netplan par mode.
  Mode routeur durable (MOCHAbin) : pont br-lan par systemd-networkd, DHCP du LAN par dnsmasq,
