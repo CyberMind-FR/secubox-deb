@@ -127,7 +127,8 @@ def test_nft_valide(sortie, tmp_path):
     if not shutil.which("nft"):
         pytest.skip("nft absent")
     f = tmp_path / "t.nft"
-    f.write_text("table inet filter { chain input { type filter hook input priority filter; policy drop; } }\n"
+    # sur plusieurs lignes : nft 1.0.9 refuse `policy drop; } }` sur une seule (#3206)
+    f.write_text("table inet filter {\n  chain input {\n    type filter hook input priority filter; policy drop;\n  }\n}\n"
                  + sortie["nft"])
     r = subprocess.run(["nft", "-c", "-f", str(f)], capture_output=True, text=True, timeout=20)
     if r.returncode != 0 and ("Operation not permitted" in r.stderr or "Permission denied" in r.stderr):
