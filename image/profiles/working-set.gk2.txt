@@ -13,6 +13,11 @@
 # snapshot qui ne releve que les services « running » ne la verrait pas. Sans cette ligne,
 # verify-profile refuse lite, isp et full (sept images en echec sur le tag alpha.11, #2285).
 autoload-agent
+# AJOUT MANUEL 2026-10-27 : courbes (#2865, #3208). secubox-minimal en depend depuis le 2026-10-17 (historique et
+# systeme en direct sans secubox-metrics). Le paquet est INSTALLE sur gk2 (secubox-courbes 0.1.4) mais ne livre aucune
+# unite systemd (servi par l'agregateur) : le snapshot, qui ne releve que les services « enabled », ne le voit pas.
+# Sans cette ligne, verify-profile refuse minimal (ESPRESSObin et RPi400 en echec sur le tag alpha.19).
+courbes
 # NE PAS regenerer a l'aveugle : un snapshot pris pendant que le sleeper
 # a endormi les modules on-demand RETIRE dns, hub, hardening et consorts,
 # et invalide les trois profils. Verifie le 2026-09-19 (#1308).
