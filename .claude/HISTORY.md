@@ -9,6 +9,35 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-27 — Comparateur des profils : validation du parc, déployé sur les quatre box (closes #3212)
+
+- **Livré** (PR #3215, conception approuvée par le propriétaire, relecture de sécurité : 0 critique, 8 importants et 7
+  mineurs, tous corrigés avec un test) : secubox-profiles 0.24.0, secubox-annuaire 0.16.0, sur gk1, gk2, gk3, gk4 + apt.
+  - `secubox-profilectl releve` (minuteur 5 min, compte dédié `secubox-profiles`, socle § 10, profil AppArmor enforce
+    `secubox-profiles-releve`) : profil attendu, paquet et version, unités et modules de l'agrégateur, mémoire et CPU.
+  - `sbx-fleetctl publish-modules` signe le relevé (Ed25519 de la box), servi sur :8799 (`/fleet/modules/self`) ;
+    `/fleet/modules` (JWT) relie chaque relevé à la box qui le sert (fiches signées du répertoire), sans proxy ni
+    redirection, échéance par pair, pool dédié.
+  - Page `/profiles/comparatif.html#parc` : matrice paquet × box (colonnes par DID), écarts, erreurs, box indisponibles.
+  - Docs : README des paquets et racine, wiki `Valider-un-parc`.
+- **Vérifié** : sur les 4 box, profil AppArmor chargé, **aucun refus**, relevé en 2 à 8 s de CPU (≤ 23 Mo), fichier
+  0640 au compte dédié, relevé signé publié. Relevés complets : gk1 (isp, 59 paquets), gk3 (lite, 211), gk4 (isp, 85).
+  Depuis gk2, les relevés de gk1, gk3, gk4 sont lus sur :8799 et **vérifiés** (signature et forme).
+- **gk2** : relevé annoncé « partiel : agrégateur injoignable » à deux passages sur trois — `/health` de l'agrégateur
+  dépasse 10 s quand sa boucle se fige sous la charge (le défaut que vise #3216) ; 11 paquets en « inconnu », jamais en
+  faux « arrêté ». Vraies erreurs relevées sur gk2 : `secubox-mail` (imap-sync et ssl-renew en échec), `secubox-surf`.
+
+## 2026-10-27 — p2p : gk3 n'est plus « secubox-live » chez le maître (closes #3213)
+
+- **Cause** : gk3 a rejoint le maillage le 2026-09-26 sous son nom d'installation (live USB) ; au retour d'un pair
+  approuvé, le maître mettait à jour adresse et clé, jamais le nom.
+- **Livré** (PR #3214) : secubox-p2p 1.19.3 sur gk1, gk2, gk3, gk4 + apt — renommage au retour (`requests.json`,
+  `peers.json`, `wg_mesh.json`), audit `pair_renomme` ; refus pour un nom par défaut, invalide ou pris.
+- **Fait** : code de jonction émis sur gk2 (`sbx-mesh-invite --code --nom gk3 --ttl 900`), passé à gk3 par un tube sans
+  être affiché, déposé en `automesh.code` (0600) ; automaillage « approuvé », code consommé. Sur gk2 : `gk3` dans les
+  trois registres, audit `pair_renomme` (secubox-live → gk3), tunnels WireGuard intacts.
+- Agrégateur de gk2 redémarré une fois (p2p y est monté) à 12:19:55.
+
 ## 2026-10-27 — Release v3.0.0-alpha.19 préparée (ref #3208)
 
 - **Notes propres à la version** : `docs/release-notes/v3.0.0-alpha.19.md` (réseau MOCHAbin, maillage, Hall v2,

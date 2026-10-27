@@ -173,13 +173,15 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
-00000000. **Release v3.0.0-alpha.19 (#3208, 2026-10-27)** : notes, TODO et wiki (Hardware-Matrix) dans la PR de la
-  release ; puis étiquette `v3.0.0-alpha.19` et workflow Release (≈ 6 h) jusqu'aux images publiées ; ensuite README
-  racine et accueil du wiki (Home, `scripts/sync-wiki.sh`), puis fermer l'issue de la release par son marqueur.
-  **Réseau** : mode routeur, panneau, isolement **clôturés** (#3189, #3190, #3201) ; nœuds en automatique (#3206) et
-  correctif hardening `ip_forward` (#3209) **déployés et clos** (HISTORY). **Ensuite, dans l'ordre arbitré** (TODO du
-  2026-10-27) : zones du NAC/Guardian en réseau routé (#2891) ; listes DNS en RPZ, mémoire à réduire (#3205) ; maillage
-  inter-LAN (#3196) ; premier démarrage (#3203) ; charge (#3191) ; Nextcloud/WebDAV ; #3195 www ; #3192 radio.
+00000000. **Consommation (#3191, ordre arbitré par le propriétaire le 2026-10-27)** : objectif 2 Go (minimal) et 4 Go
+  (référence), mesurer avant/après avec le comparateur (#3212, livré). (1) **secubox-metrics** : 1,4 Go dus aux origines
+  Surf (152 878 seaux) — PR #3219 (metrics 1.29.6, ~130 Mo mesurés sur une copie du cache), à fusionner et déployer ;
+  (2) **listes d'Unbound** (836 Mo sur gk2 ; RPZ écarté, ×3) — dédoublonner, alléger (#3205) ; (3) **groupes avec
+  veille** (groupd `--veille`/`--veille-modules` non passés) ; (4) **agrégateur non bloquant** (#3216, conception
+  notée). Puis variante 1 Go de `minimal` (#3218).
+  **Release alpha.19 (#3208)** : workflow en cours (paquets, puis images) ; ensuite README racine et accueil du wiki,
+  puis fermer l'issue de la release par son marqueur. **Autres** : zones NAC en routé (#2891), maillage inter-LAN
+  (#3196), premier démarrage et TR-069 (#3203), Nextcloud/WebDAV, #3195 www, #3192 radio.
 0000000. **#3178 NAC (2026-10-26)** : un seul collecteur sur gk2 (aggregator 0.4.9, nac 3.9.4). Reste : constater sur la page
   NAC « Connectés : N maintenant » (≈ 20) avec une session d'administrateur, puis fermer l'issue (marqueur dans HISTORY). **#3181** : glossaire des
   indicateurs, état de protection unique, fraîcheur par panneau — arbitrage du propriétaire avant tout travail.
