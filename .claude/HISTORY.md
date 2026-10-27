@@ -9,6 +9,28 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-27 — Réseau, livraison 3 : isoler un port du switch, déployé sur gk1 et gk2 (ref #3201)
+
+- **Livré** (PR #3202) : secubox-netmodes 1.6.0. « Isoler » sort `lanN` du pont vers `192.168.(248+N).0/24`, avec DHCP et
+  DNS de la box et Internet seul. « Rendre au LAN » le rattache. Verbes `netmodesctl port-isoler|port-rattacher`, routes
+  `POST /ports/{port}/isoler|rattacher` (409 sur le port de la session), boutons dans l'onglet Switch.
+- **Fichiers par port** : `04-secubox-port-<port>-isole.network`, `/var/lib/secubox-netmodes/dhcp.d/isole-<port>.conf`
+  (`--conf-dir` de `secubox-lan-dhcp`), `zz-secubox-netmodes-isole-<port>.nft`. La table refuse les réseaux privés, l'IPv6 et
+  l'administration, et fait le NAT du /24.
+- **Unbound** écoute d'avance les quatre passerelles (`ip-freebind`) : isoler ne le redémarre jamais. En contrepartie, il faut
+  **une** réapplication du mode routeur après la mise à jour ; sans elle, l'isolement est refusé avec ce motif.
+- **DHCP du LAN en `bind-dynamic`**, constat de la relecture finale : avec `bind-interfaces`, un port isolé sans adresse
+  arrêtait dnsmasq, donc le DHCP de tout le LAN.
+- **Vérifié sur gk1** :
+  - réapplication en 13 s, puis confirmation ;
+  - `port-isoler lan1` : hors du pont, 192.168.249.1/24, table nft, DHCP actif, DNS servi sur la passerelle
+    (`dig -b 192.168.249.1`) ;
+  - trois relances du DHCP sans erreur ;
+  - `port-rattacher lan1` : retour dans `br-lan`, table, règles et fichiers retirés ;
+  - LAN et `eth2` intacts.
+- **gk2** : paquet seul, `br-lan` intact, panneau 200. L'isolement y est **refusé** proprement (code 3, audité, aucun fichier)
+  jusqu'à la réapplication par le propriétaire (« Appliquer » du panneau, 2 à 4 min sans DNS). Ensuite `closes #3201`.
+
 ## 2026-10-26 — Réseau, livraison 2 : panneau « Réseau » déployé sur gk2 et gk1 (ref #3190)
 
 - **Livré** (PR #3200) : secubox-netmodes 1.5.0, secubox-wireguard 1.3.1. La page `/netmodes/` devient le panneau Réseau
