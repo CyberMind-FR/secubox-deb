@@ -287,7 +287,7 @@ def test_sudoers_conforme_aux_appels_de_l_api(monkeypatch, tmp_path):
 
     avec_acteur = verbes_du_controleur("AVEC_ACTEUR")
     avec_port = verbes_du_controleur("AVEC_PORT")                         # #3190 : <port> <acteur>
-    assert avec_port == {"port-couper", "port-retablir"} and not avec_acteur & avec_port
+    assert avec_port == {"port-couper", "port-retablir", "port-isoler", "port-rattacher"} and not avec_acteur & avec_port
     assert etoiles == avec_acteur | avec_port
     assert sans_acteur == {"routeur-etat"} and "routeur-retour-demarrage" not in sans_acteur | etoiles
 
@@ -298,7 +298,7 @@ def test_sudoers_conforme_aux_appels_de_l_api(monkeypatch, tmp_path):
     pont.mkdir()
     monkeypatch.setattr(ports_api, "PONT_SYS", pont)                     # br-lan présent : l'anti-coupure lit
     etat = {"etat": "actif", "adresses_pont": ["192.168.42.1/24"]}
-    faux = Faux([(0, etat), (0, etat), (0, {}), (0, {}), (0, {}), (0, {}), (0, {})])
+    faux = Faux([(0, etat), (0, etat), (0, {}), (0, {}), (0, {}), (0, {}), (0, {}), (0, {}), (0, {})])
     monkeypatch.setattr(routeur_api.subprocess, "run", faux)
     routeur_api._reinitialiser()
 
@@ -320,11 +320,13 @@ def test_sudoers_conforme_aux_appels_de_l_api(monkeypatch, tmp_path):
         attendre_fin()
         client.post("/ports/lan1/couper", json={"confirmer": "lan1"}, headers={"X-Real-IP": "192.168.42.50"})
         client.post("/ports/lan2/retablir", json={"confirmer": "lan2"})
+        client.post("/ports/lan3/isoler", json={"confirmer": "lan3"})        # #3201
+        client.post("/ports/lan3/rattacher", json={"confirmer": "lan3"})
     finally:
         main.app.dependency_overrides.clear()
         routeur_api._reinitialiser()
-    assert len(faux.appels) == 7 and faux.reponses == []
-    assert faux.lectures == [list(Faux.LECTURES[0])]                     # poste sans voisin : pas de table de pont
+    assert len(faux.appels) == 9 and faux.reponses == []
+    assert faux.lectures == [list(Faux.LECTURES[0])] * 2                 # couper puis isoler : poste sans voisin, pas de table de pont
     verbes = set()
     for argv in faux.appels:
         assert argv[:2] == ["sudo", "-n"], argv

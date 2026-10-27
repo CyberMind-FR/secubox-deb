@@ -208,7 +208,7 @@ def test_precontrole_en_echec_n_empeche_pas_l_apercu(client, monkeypatch):
 
 def test_argv_conformes_au_sudoers(client, monkeypatch, tmp_path):
     monkeypatch.setattr(ports_api, "PONT_SYS", tmp_path / "sans-pont")    # anti-coupure sans lecture : sudo seul
-    f = _faux(monkeypatch, [(0, ETAT_LAN), (0, ETAT_LAN), (0, {}), (0, {}), (0, {}), (0, {}), (0, {})])
+    f = _faux(monkeypatch, [(0, ETAT_LAN), (0, ETAT_LAN), (0, {}), (0, {}), (0, {}), (0, {}), (0, {}), (0, {}), (0, {})])
     client.get("/routeur/etat")
     client.post("/routeur/apercu", json=CONFIG)
     client.post("/routeur/appliquer", json={**CONFIG, "confirmer": "routeur"})
@@ -218,11 +218,14 @@ def test_argv_conformes_au_sudoers(client, monkeypatch, tmp_path):
     attendre_fin()
     client.post("/ports/lan1/couper", json={"confirmer": "lan1"})
     client.post("/ports/lan1/retablir", json={"confirmer": "lan1"})
+    client.post("/ports/lan1/isoler", json={"confirmer": "lan1"})
+    client.post("/ports/lan1/rattacher", json={"confirmer": "lan1"})
     ctl = "/usr/sbin/netmodesctl"
-    assert len(f.appels) == 7
+    assert len(f.appels) == 9
     for argv, _ in f.appels:
         assert argv == ["sudo", "-n", ctl, "routeur-etat"] or (
             len(argv) == 5 and argv[:3] == ["sudo", "-n", ctl]
             and argv[3] in ("routeur-appliquer", "routeur-confirmer", "routeur-retour") and argv[4] == "alice") or (
             len(argv) == 6 and argv[:3] == ["sudo", "-n", ctl]
-            and argv[3] in ("port-couper", "port-retablir") and argv[4] == "lan1" and argv[5] == "alice"), argv
+            and argv[3] in ("port-couper", "port-retablir", "port-isoler", "port-rattacher")
+            and argv[4] == "lan1" and argv[5] == "alice"), argv
