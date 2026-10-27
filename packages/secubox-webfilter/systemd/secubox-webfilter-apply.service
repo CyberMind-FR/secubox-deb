@@ -1,22 +1,23 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 [Unit]
-Description=SecuBox WebFilter — application des profils à Unbound (contrôleur root, #1962)
+Description=SecuBox WebFilter — application des profils (contrôleur root, #1962 ; source de secubox-dns-listes, #3205)
 After=unbound.service
 # Des refus en rafale (configuration invalide) ne doivent pas désactiver l'unité .path : limite de démarrages large.
 StartLimitIntervalSec=300
 StartLimitBurst=20
-# Aucune dépendance forte envers Unbound : le contrôleur ne démarre jamais le DNS ; s'il est absent, l'application est refusée avec un message.
+# Aucune dépendance envers Unbound : le contrôleur ne le touche plus (#3205), secubox-dns-listes compile, vérifie et recharge.
 
 [Service]
 Type=oneshot
-# Root : le contrôleur écrit le drop-in d'Unbound et recharge Unbound. Déclenché par FICHIER (apply.path) et à 4 h (apply.timer), jamais par sudo.
+# Root : le contrôleur dépose la source de secubox-dns-listes (dossier root) et lit l'état 0700 du compte du service. Déclenché par FICHIER
+# (apply.path) et à 4 h (apply.timer), jamais par sudo.
 ExecStart=/usr/sbin/secubox-webfilter-ctl apply
 # La demande déposée par l'API est consommée PAR LE CONTRÔLEUR, dès le début de l'exécution : une demande qui arrive pendant l'exécution n'est pas perdue,
 # l'unité .path la reprend.
-# #3005 : construction ~100-150 s + unbound-checkconf jusqu'à 10 min sous charge (DELAI_CHECKCONF de secubox_unbound) + reload.
-TimeoutStartSec=20min
+# Construction ~100-150 s sur gk2 ; la vérification et le rechargement appartiennent à secubox-dns-listes.
+TimeoutStartSec=10min
 MemoryMax=512M
-# Root, mais sans autre pouvoir que changer le propriétaire des résultats et lire les clés d'unbound-control (voir RULES-CODE, exceptions).
+# Root, mais sans autre pouvoir que changer le propriétaire des résultats et traverser l'état du compte du service (voir RULES-CODE, exceptions).
 CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE
 UMask=0027
 NoNewPrivileges=true
@@ -33,9 +34,8 @@ RestrictNamespaces=true
 RestrictRealtime=true
 LockPersonality=true
 SystemCallArchitectures=native
-# AF_NETLINK : `ip -j neigh` et `ip -j addr`. AF_INET/AF_INET6 : `unbound-control` parle à Unbound sur la boucle locale, et rien d'autre.
-RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+# AF_NETLINK : `ip -j neigh` et `ip -j addr`. Aucun réseau IP : plus d'unbound-control (#3205).
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
 IPAddressDeny=any
-IPAddressAllow=localhost
-ReadWritePaths=/etc/unbound/unbound.conf.d /var/lib/secubox/webfilter /var/lib/secubox-webfilter-ctl -/var/log/secubox/audit.log
+ReadWritePaths=/var/lib/secubox/dns-listes/sources /var/lib/secubox/webfilter /var/lib/secubox-webfilter-ctl -/var/log/secubox/audit.log
 ReadOnlyPaths=/etc/secubox

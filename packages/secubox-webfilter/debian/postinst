@@ -14,8 +14,10 @@ case "$1" in
     # sinon l'API et la synchronisation liraient tout le journal. Retiré aussi des installations faites avant ce correctif.
     deluser secubox-webfilter systemd-journal >/dev/null 2>&1 || true
     systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-webfilter.conf >/dev/null 2>&1 || true
-    # État du contrôleur root (instantané du drop-in précédent, dernière configuration appliquée) : hors de l'arbre du compte du service.
+    # État du contrôleur root (dernière configuration appliquée) : hors de l'arbre du compte du service.
     install -d -m 0700 -o root -g root /var/lib/secubox-webfilter-ctl
+    # #3205 : le retour arrière appartient à secubox-dns-listes ; l'ancienne copie du drop-in (~40 Mo) n'a plus d'usage.
+    rm -f /var/lib/secubox-webfilter-ctl/precedent.conf
 
     # --- Confinement AppArmor (enforce) : un échec de chargement ne bloque pas l'installation, il est affiché ---
     if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then

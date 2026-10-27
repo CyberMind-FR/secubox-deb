@@ -526,7 +526,7 @@
                 if (ADMIN(r)) errorToast('🔒 Connexion administrateur requise pour appliquer.');
                 else if (!r.ok) echec(r, 'Application refusée');
                 else {
-                    toast('Application demandée : Unbound sera rechargé dans quelques secondes.');
+                    toast('Application demandée : les listes DNS seront compilées puis Unbound rechargé (quelques minutes).');
                     let essais = 0;
                     clearInterval(minuterie);
                     minuterie = setInterval(async () => { essais++; const d = await chargerAppliquer(); if ((d && !d.en_attente) || essais >= 20) clearInterval(minuterie); }, 3000);

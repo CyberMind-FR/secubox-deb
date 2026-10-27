@@ -35,7 +35,7 @@ DEMANDE_PERIMEE_S = 600
 _MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 _VERROU_CONFIG = threading.Lock()                                      # lecture-modification-écriture de config.json
 
-app = FastAPI(title="SecuBox WebFilter", version="0.4.4")
+app = FastAPI(title="SecuBox WebFilter", version="0.5.0")
 
 
 def _categories() -> list:

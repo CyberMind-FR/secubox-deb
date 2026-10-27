@@ -75,10 +75,12 @@ domaines) ne fait qu'ajouter un faux classement en mode observe. Le parking n'a 
   assigné a une entrée `/32` ou `/128` plus précise. Zones `always_nxdomain` ; les autorisations sont des zones `transparent` plus précises.
 - **Application** : `POST /api/v1/webfilter/appliquer` dépose `appliquer.demande` ; l'unité root `secubox-webfilter-apply` (déclenchée par
   `secubox-webfilter-apply.path`, jamais par sudo) lance `secubox-webfilter-ctl apply`, qui valide `config.json` comme une entrée hostile, génère
-  `/etc/unbound/unbound.conf.d/93-secubox-webfilter.conf`, vérifie le budget de zones (`[limites] zones_max`), contrôle avec `unbound-checkconf`, recharge
-  Unbound et **restaure l'ancien fichier octet pour octet** en cas d'échec. Un fichier généré identique ne déclenche **aucun rechargement**.
-- **Nuit** : `secubox-webfilter-apply.timer` applique les changements en attente à 04:00. Un rechargement coupe le DNS 7 à 10 s (mesuré : 6,9 s avec le
-  puits d'ad-guard seul, 9,4 s avec 312 000 zones de catégories en plus). La synchronisation des listes ne recharge jamais Unbound.
+  `93-secubox-webfilter.conf`, vérifie le budget de zones (`[limites] zones_max`) et le **dépose** dans `/var/lib/secubox/dns-listes/sources` (0.5.0,
+  #3205). Le service root `secubox-dns-listes` (secubox-core ≥ 1.8.0) compile webfilter, adblock et adult en un seul `92-secubox-listes.conf` à
+  étiquettes (chaque domaine une fois au lieu d'une copie par vue), contrôle avec `unbound-checkconf`, recharge Unbound et **remet tout l'état
+  précédent** au moindre échec ; son état se lit dans `/var/lib/secubox/dns-listes/etat.json`. Un rendu identique n'est **pas redéposé** (rien n'est
+  recompilé). Le contrôleur ne touche plus Unbound : ni `unbound-checkconf`, ni `unbound-control`, ni accès réseau.
+- **Nuit** : `secubox-webfilter-apply.timer` applique les changements en attente à 04:00. La synchronisation des listes ne recharge jamais Unbound.
 - **Audit** : chaque changement effectif (profil, mode d'une catégorie, appareil, application, refus, échec) est écrit dans `/var/log/secubox/audit.log`
   par le contrôleur root (module `webfilter-ctl`).
 - **Comptage** : « bloqué » et « aurait bloqué » sont comptés à part d'après `carte.json` (adresse → profil et modes), publiée par le contrôleur.

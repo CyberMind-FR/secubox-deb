@@ -1,3 +1,17 @@
+secubox-webfilter (0.5.0-1~trixie1) trixie; urgency=medium
+
+  * Listes DNS compilées (#3205) : secubox-webfilter-ctl DÉPOSE son rendu (93-secubox-webfilter.conf) dans
+    /var/lib/secubox/dns-listes/sources au lieu d'écrire dans unbound.conf.d, de vérifier et de recharger Unbound.
+    secubox-dns-listes (secubox-core 1.8.0) compile webfilter, adblock et adult en un seul fichier à étiquettes : la
+    liste n'est plus recopiée dans chaque vue (399 194 zones deux fois sur gk2). Le retour arrière lui appartient :
+    plus de precedent.conf (retiré au postinst). Un rendu identique n'est pas redéposé.
+  * Profil AppArmor et unité du contrôleur resserrés : plus d'écriture dans /etc/unbound, plus d'unbound-checkconf ni
+    d'unbound-control, aucun réseau IP (RestrictAddressFamilies=AF_UNIX AF_NETLINK). Option --source (ex --dropin).
+  * prerm (remove) : retire la source ; secubox-dns-listes recompile sans webfilter et recharge.
+  * Depends: secubox-core (>= 1.8.0).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 16:00:00 +0100
+
 secubox-webfilter (0.4.4-1~trixie1) trixie; urgency=medium
 
   * « Rien n'est bloqué » n'est plus affiché quand l'API ne sait pas (#3172). Sur gk2, config.json
