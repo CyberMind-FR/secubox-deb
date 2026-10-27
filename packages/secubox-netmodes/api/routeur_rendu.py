@@ -5,7 +5,7 @@
 """Rendu des fichiers du mode routeur (#3189) : fonction pure, sans effet de bord."""
 from __future__ import annotations
 
-from .routeur_config import ConfigRouteur
+from .routeur_config import PORTS_LAN, RESERVE_ISOLES, ConfigRouteur
 
 MARQUE = "GÉNÉRÉ par secubox-netmodes"
 COMMENTAIRE_NFT = "secubox netmodes lan"
@@ -20,6 +20,9 @@ CHEMINS: dict[str, str] = {
     "nft": "/etc/nftables.d/zz-secubox-netmodes-lan.nft",
     "geo": "/etc/nginx/secubox-lan-geo.d/netmodes-lan.conf",
 }
+
+# passerelles des ports isolés (#3201), calculées ici depuis routeur_config : isolement importe MARQUE d'ici
+_PASSERELLES_ISOLEES = tuple(RESERVE_ISOLES.network_address + 256 * i + 1 for i in range(len(PORTS_LAN)))
 
 _ENTETE = f"# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n# {MARQUE}\n"
 
@@ -45,7 +48,13 @@ def rendre(cfg: ConfigRouteur) -> dict[str, str]:
             "dhcp-leasefile=/var/lib/misc/dnsmasq.leases\nuser=dnsmasq\n"
         ),
         # ip-freebind : au démarrage Unbound peut précéder l'adresse de br-lan ; sans lui il ne démarre pas du tout
-        "unbound": f"server:\n    ip-freebind: yes\n    interface: {ip}\n    access-control: {reseau} allow\n",
+        # idem pour les passerelles des ports isolés, écoutées d'avance : isoler ne redémarre jamais Unbound (#3201)
+        "unbound": (
+            f"server:\n    ip-freebind: yes\n    interface: {ip}\n    access-control: {reseau} allow\n"
+            "    # passerelles des ports isolés écoutées d'avance (ip-freebind) : isoler ne redémarre jamais Unbound (#3201)\n"
+            + "".join(f"    interface: {g}\n" for g in _PASSERELLES_ISOLEES)
+            + f"    access-control: {RESERVE_ISOLES} allow\n"
+        ),
         "nft": (
             # seul moyen d'ouvrir un port dans la chaîne input en policy drop
             f'add rule inet filter input iifname "br-lan" udp dport 67 accept comment "{COMMENTAIRE_NFT} dhcp"\n'
