@@ -159,3 +159,11 @@ def test_joker_deja_juste_meme_avec_un_enregistrement_simple():
     g = Faux(["secubox.in"], {"secubox.in": [{"name": "gk1", "type": "A", "value": "82.67.100.75"},
                                              {"name": "*.gk1", "type": "A", "value": "82.67.100.75"}]})
     assert assurer([("df97", g)], "gk1.secubox.in")["etat"] == "inchange" and g.crees == []
+
+
+def test_un_joker_etranger_d_un_autre_type_bloque():
+    """Revue #3206 : un « *.gk4 AAAA » étranger ne doit pas recevoir un A à côté de lui."""
+    g = Faux(["secubox.in"], {"secubox.in": list(GANDI) + [{"name": "*.gk4", "type": "AAAA", "value": "2001:db8::7"}]})
+    with pytest.raises(joker.Refus, match="déjà utilisé"):
+        assurer([("df97", g)], "gk4.secubox.in")
+    assert g.crees == []

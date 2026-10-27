@@ -83,10 +83,10 @@ async def assurer(fournisseurs: list[tuple[str, Any]], domaine: str, ip: str,
         return {"etat": "inchange", **sortie}
     if vus:
         raise Refus(f"{nom}.{zone} existe déjà vers {', '.join(sorted(vus))} : jamais écrasé")
-    siens = {nom, f"_acme-challenge.{libelle}"}
-    autres = sorted({str(r.get("name")) for r in enregistrements
+    siens = {(nom, "A"), (f"_acme-challenge.{libelle}", "TXT")}       # son joker et son défi ACME, rien d'autre
+    autres = sorted({f"{r.get('name')} {r.get('type')}" for r in enregistrements
                      if (r.get("name") == libelle or str(r.get("name", "")).endswith("." + libelle))
-                     and r.get("name") not in siens})
+                     and (r.get("name"), r.get("type")) not in siens})
     if autres:
         raise Refus(f"le nom {libelle}.{zone} est déjà utilisé dans la zone ({', '.join(autres)}) : aucun joker")
     await adaptateur.create_record(zone, fabrique(nom, ip))

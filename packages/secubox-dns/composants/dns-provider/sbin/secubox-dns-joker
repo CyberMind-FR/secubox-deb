@@ -48,7 +48,18 @@ def charger_systeme():
     def fabrique(nom, ip):
         return m.RecordCreate(type=m.RecordType("A"), name=nom, value=ip, ttl=300)
 
-    return fournisseurs, fabrique, m._audit_log, (m.HTTPException,)
+    def auditer(action, details):
+        """_audit_log du module ; un fichier qu'il vient de créer en root est rendu au compte du service (le propriétaire
+        de son dossier), sans quoi l'API (secubox) ne pourrait plus y écrire (revue #3206)."""
+        m._audit_log(action, details)
+        try:
+            dossier, f = os.stat(m.DATA_DIR), m.AUDIT_LOG_FILE
+            if os.stat(f).st_uid == 0 and dossier.st_uid != 0:
+                os.chown(f, dossier.st_uid, dossier.st_gid)
+        except OSError:
+            pass
+
+    return fournisseurs, fabrique, auditer, (m.HTTPException,)
 
 
 def main(argv=None, charger=None):

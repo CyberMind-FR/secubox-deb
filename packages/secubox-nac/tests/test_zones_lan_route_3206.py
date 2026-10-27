@@ -37,3 +37,12 @@ def test_hors_br_lan_rien_ne_change():
 def test_description_dit_la_regle():
     for nom in ("iot", "guest"):
         assert any("br-lan" in r and "DNS" in r for r in zones_info.ZONES_COMPORTEMENT[nom]["regles"]), nom
+
+
+def test_reponses_aux_connexions_de_la_box_avant_les_refus():
+    """Revue #3206 : sans cela, l'écho ICMP d'un appareil IoT au ping de dnsmasq (avant bail) était refusé."""
+    regles = _entree()
+    ret = 'iifname "br-lan" ct state established,related return'
+    i = next(i for i, l in enumerate(regles) if l.startswith(ret))
+    premiers_drops = [i2 for i2, l in enumerate(regles) if l.startswith('iifname "br-lan" ether saddr @') and "drop" in l]
+    assert premiers_drops and i < min(premiers_drops)

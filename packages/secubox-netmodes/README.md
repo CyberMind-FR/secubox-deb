@@ -273,6 +273,19 @@ gestes passent par la confirmation intégrée (saisie du nom du port) et sont in
 - L'isolement survit à un retour en arrière du mode routeur (la vérification du pont ignore les ports isolés) ; sans
   mode routeur il n'y a toutefois plus de DHCP pour le port.
 
+## LAN de confiance (1.7.0)
+
+Le LAN du mode routeur est de confiance comme le réseau de la Freebox (décision du propriétaire du 2026-10-26, #3206) :
+le fragment nft du mode routeur ajoute `iifname "br-lan" accept` en fin de `inet filter input` (pendant de
+`iif "eth2" accept`) et insère en tête `iifname "br-lan" tcp dport 22 accept` (le durcissement refuse le 22 hors
+10/8 et 192.168.1.0/24 plus haut). Un nœud du LAN routé rejoint ainsi le maillage (API de jonction, 7331). Les deux
+règles portent le préfixe `secubox netmodes lan` : la réapplication et le retour les retirent. Prend effet à la
+prochaine application du mode routeur (Unbound inchangé, pas de redémarrage).
+
+Gardes qui l'accompagnent, imposées par `Breaks: secubox-hardening (<< 1.6.2~), secubox-nac (<< 3.9.5~)` :
+backends fermés depuis br-lan comme depuis eth2 (secubox-hardening 1.6.2), zones IoT et Invités limitées à DNS et
+DHCP vers la box (secubox-nac 3.9.5). Les ports isolés (`lanN`, 1.6.0) ne sont pas br-lan : ils restent Internet seul.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
