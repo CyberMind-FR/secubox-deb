@@ -79,7 +79,7 @@ def test_aucun_eth_dans_les_name(ports, wan, adr):
 
 def test_dhcp(sortie):
     l = lignes(sortie["dhcp"])
-    for x in ("port=0", "interface=br-lan", "bind-interfaces", "except-interface=lo",
+    for x in ("port=0", "interface=br-lan", "bind-dynamic", "except-interface=lo",
               "dhcp-authoritative",
               "dhcp-range=192.168.42.100,192.168.42.199,255.255.255.0,12h",
               "dhcp-option=option:router,192.168.42.1",
@@ -87,6 +87,8 @@ def test_dhcp(sortie):
               "dhcp-leasefile=/var/lib/misc/dnsmasq.leases", "user=dnsmasq"):
         assert x in l
     assert "conf-dir" not in sortie["dhcp"]
+    # #3201 : un port isolé sans adresse (encore, ou plus) ne doit pas arrêter dnsmasq pour tout le LAN
+    assert "bind-interfaces" not in l
     assert "no-ping" not in sortie["dhcp"]
 
 

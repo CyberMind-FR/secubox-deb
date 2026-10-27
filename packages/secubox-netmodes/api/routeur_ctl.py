@@ -1465,8 +1465,8 @@ def port_isoler(ctx: Contexte, port: str, acteur: str) -> dict:
                 _exiger(ctx, ["networkctl", "reconfigure", port])           # le port seul, jamais br-lan
                 _supprimer_regles(ctx, f"{isolement.COMMENTAIRE} {port}")   # idempotence : jamais deux fois
                 _exiger(ctx, ["nft", "-f", nft])
+                _attendre_port(ctx, port, ISOLE)                            # adresse posée AVANT la relance du DHCP
                 _relancer_dhcp(ctx)                                         # nouveau fragment lu, relu actif
-                _attendre_port(ctx, port, ISOLE)
             except BaseException as exc:                    # même une exception imprévue remet l'état d'avant
                 # le DHCP tournait (garde) : relancé sur les fichiers d'avant, le LAN n'en reste jamais privé
                 erreurs = _remettre_isolement(ctx, port, chemins, avant, dhcp=True)
@@ -1514,8 +1514,10 @@ def port_rattacher(ctx: Contexte, port: str, acteur: str) -> dict:
         leve = dhcp_relance = False
         with _sans_interruption():                          # de la première suppression à la vérification
             try:
-                for cle, chemin in chemins.items():
-                    _poser_fichier(ctx, cle, chemin, None)
+                # fragment DHCP d'abord : une coupure entre deux suppressions ne laisse jamais un fragment pour un
+                # port sans adresse (dnsmasq en boucle, plus de DHCP du LAN)
+                for cle in ("dhcp", "network", "nft"):
+                    _poser_fichier(ctx, cle, chemins[cle], None)
                 _exiger(ctx, ["networkctl", "reload"])
                 _exiger(ctx, ["networkctl", "reconfigure", port])           # le port seul, jamais br-lan
                 _retirer_pare_feu_isole(ctx, port)

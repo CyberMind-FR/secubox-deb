@@ -2,7 +2,7 @@ secubox-netmodes (1.6.0-1~trixie1) trixie; urgency=medium
 
   * Isoler un port du switch (ref #3201) : verbes port-isoler et port-rattacher de netmodesctl (lan0 à lan3 seulement,
     audit, état précédent remis sur échec). Trois fichiers par port : 04-secubox-port-<port>-isole.network (réseau du
-    port), dnsmasq/dhcp.d/isole-<port>.conf (DHCP et DNS de la box, dossier root seul en 0700) et la table nft
+    port), /var/lib/secubox-netmodes/dhcp.d/isole-<port>.conf (DHCP et DNS de la box, dossier root seul en 0700) et la table nft
     inet secubox_netmodes_isole_<port> (Internet seul : ni le LAN, ni la Freebox, ni un tunnel, ni l'administration,
     en IPv4 comme en IPv6). Réserve 192.168.248.0/22 : lanN reçoit 192.168.(248+N).0/24, passerelle .1, DHCP .100 à .199.
   * Unbound écoute d'avance les passerelles des ports isolés (ref #3201) : une réapplication du mode routeur est
@@ -14,6 +14,8 @@ secubox-netmodes (1.6.0-1~trixie1) trixie; urgency=medium
     (vrai, faux ou null) et reseau_isole ; /routeur/etat ajoute ports_isoles. L'attente du pont d'une application ou
     d'un retour du mode routeur ignore les ports isolés, et l'isolement survit à un retour en arrière (pas de DHCP sans
     mode routeur).
+  * DHCP du LAN en bind-dynamic (ref #3201) : un port isolé sans adresse n'arrête plus le DHCP de tout le LAN ; l'isolement
+    attend l'adresse du port avant de relancer dnsmasq, le rattachement retire le fragment DHCP en premier.
   * Gardes croisées (ref #3201) : un port isolé ne se coupe pas, un port coupé ne s'isole pas ; Rétablir et Rendre au
     LAN restent permis en tout mode.
   * Onglet Switch (ref #3201) : pastille « isolé » (Internet seul et le réseau du port), « Isoler… » et « Rendre au

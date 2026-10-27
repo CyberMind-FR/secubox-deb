@@ -63,6 +63,7 @@ class FauxIsoles(FauxPorts):
         super().__init__(racine, **kw)
         self.isoles: set[str] = set()
         self.tables: set[str] = set()
+        self.adresse_due: set[str] = set()              # IPv4 pas encore posée : networkd la pose après `reconfigure`
 
     def _isole(self, port: str) -> bool:
         return fichier(self.racine, "network", port).is_file()
@@ -71,11 +72,14 @@ class FauxIsoles(FauxPorts):
         if self._isole(port) and not self._coupe(port):
             self.maitres.pop(port, None)
             self.baisses.discard(port)
-            self.adresses[port] = [str(iso.passerelle(port))]
+            if port not in self.isoles:                 # `reconfigure` rend la main AVANT l'adresse (relevé sur gk1)
+                self.adresses[port] = []
+                self.adresse_due.add(port)
             self.isoles.add(port)
             return
         if port in self.isoles:                         # fichier retiré : networkd lâche le port, baissé
             self.isoles.discard(port)
+            self.adresse_due.discard(port)
             self.adresses.pop(port, None)
             self.baisses.add(port)
         super()._asservir(port)
@@ -88,7 +92,17 @@ class FauxIsoles(FauxPorts):
             if a[1] == "delete":
                 self.tables.discard(a[4])
             return cp(a, 0 if present else 1)
+        if a[:3] == ["systemctl", "restart", rc.DHCP]:
+            r = super()._effet(a)
+            # dnsmasq en bind-interfaces sort en code 2 si un fragment vise un port sans adresse (bind-dynamic : non)
+            conf = self.racine / CHEMINS["dhcp"].lstrip("/")
+            if "bind-interfaces" in conf.read_text() and any(not self.adresses.get(p) for p in self.isoles):
+                self.actifs.discard(rc.DHCP)
+            return r
         r = super()._effet(a)
+        if a[:6] == ["ip", "-j", "-4", "addr", "show", "dev"] and a[6] in self.adresse_due:
+            self.adresse_due.discard(a[6])              # lue vide cette fois ; posée pour la relecture suivante
+            self.adresses[a[6]] = [str(iso.passerelle(a[6]))]
         if a[:2] == ["nft", "-f"] and r.returncode == 0:
             self.tables |= set(re.findall(r"^table inet (secubox_netmodes_isole_lan[0-3]) \{", Path(a[2]).read_text(),
                                           re.M))
@@ -153,8 +167,9 @@ def test_isoler_ordre_des_commandes(actif, racine, faux):
         ["nft", "-c", "-f", nft],
         RELOAD, reconfigurer("lan2"),                                       # le port seul, jamais br-lan
         LISTE_INPUT, ["nft", "-f", nft],
-        RELANCER_DHCP, DHCP_ACTIF, DHCP_ACTIF,
-        lien("lan2"), adresses_port("lan2"),                                # relu, pas supposé
+        lien("lan2"), adresses_port("lan2"),                                # relu, pas supposé : adresse pas encore posée
+        lien("lan2"), adresses_port("lan2"),                                # relu : posée
+        RELANCER_DHCP, DHCP_ACTIF, DHCP_ACTIF,                              # dnsmasq ne repart qu'avec l'adresse (#3201)
         *LECTURES_ETAT]
     rendu = iso.rendre("lan2", "eth2")
     for cle in ("network", "dhcp", "nft"):
@@ -162,7 +177,7 @@ def test_isoler_ordre_des_commandes(actif, racine, faux):
         assert f.read_text() == rendu[cle], cle
         assert f.stat().st_mode & 0o777 == 0o644, cle
     assert (racine / "var/lib/secubox-netmodes/dhcp.d").stat().st_mode & 0o777 == 0o700   # arbre root seul
-    assert faux.pauses == [rc.PAUSE_DHCP]
+    assert faux.pauses == [rc.PAUSE_PORT, rc.PAUSE_DHCP]
     assert "lan2" in faux.isoles and "lan2" not in faux.maitres and asservis(faux) == {"lan0", "lan1", "lan3"}
     assert faux.adresses["lan2"] == ["192.168.250.1/24"]
     assert {r["comment"] for r in regles_isolees(faux)} == {
@@ -336,7 +351,7 @@ def test_isoler_non_constate_remet_tout(actif, racine, faux, monkeypatch):
     monkeypatch.setattr(faux, "_isole", lambda port: False)
     with pytest.raises(rc.Echec, match=r"lan2 n'est pas isolé après 15 s : maître br-lan.*192\.168\.250\.1/24 absente"):
         rc.port_isoler(actif, "lan2", "admin")
-    assert faux.pauses == [rc.PAUSE_DHCP] + [rc.PAUSE_PORT] * 15 + [rc.PAUSE_DHCP]   # DHCP, port, DHCP remis relu
+    assert faux.pauses == [rc.PAUSE_PORT] * 15 + [rc.PAUSE_DHCP]   # port (DHCP pas relancé avant), DHCP remis relu
     assert faux.journal.count(adresses_port("lan2")) == 16
     assert not any(fichier(racine, cle).exists() for cle in iso.CHEMINS)
     assert regles_isolees(faux) == [] and faux.tables == set()
@@ -387,6 +402,22 @@ def test_rattacher_ordre_et_au_pont(actif, racine, faux):
     assert sortie["ports_isoles"] == [] and sortie["etat"] == "actif"
     a = audits(racine)[-1]
     assert (a["action"], a["acteur"]) == ("port-rattacher", "admin") and "lan2" in a["detail"]
+
+
+def test_rattacher_retire_le_fragment_dhcp_en_premier(actif, racine, faux, monkeypatch):
+    """Une coupure entre deux suppressions ne laisse jamais un fragment pour un port sans adresse (#3201)."""
+    rc.port_isoler(actif, "lan2", "admin")
+    ordre = []
+    vrai = rc._poser_fichier
+
+    def espion(ctx, cle, chemin, contenu):
+        if contenu is None:
+            ordre.append(cle)
+        return vrai(ctx, cle, chemin, contenu)
+
+    monkeypatch.setattr(rc, "_poser_fichier", espion)
+    rc.port_rattacher(actif, "lan2", "admin")
+    assert ordre == ["dhcp", "network", "nft"]
 
 
 def test_rattacher_hors_mode_routeur_leve(actif, racine, faux):

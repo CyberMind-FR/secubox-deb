@@ -262,6 +262,8 @@ gestes passent par la confirmation intégrée (saisie du nom du port) et sont in
   `192.168.251.0/24`), passerelle `.1`, DHCP `.100` à `.199`, bail 2 h.
 - Table nft `inet secubox_netmodes_isole_<port>` : les clients du port peuvent joindre Internet, le DHCP et le DNS de la
   box ; ils ne joignent ni le LAN, ni la Freebox, ni un tunnel, ni l'administration, en IPv4 comme en IPv6.
+- Le DHCP du LAN tourne en `bind-dynamic` : un port isolé sans adresse n'arrête pas dnsmasq ; l'isolement attend l'adresse
+  du port avant de relancer le DHCP, et le rattachement retire le fragment DHCP en premier.
 - Unbound écoute les passerelles des ports isolés d'avance : **réappliquer une fois le mode routeur** (puis confirmer)
   avant le premier isolement ; sans cela l'isolement est refusé, sans rien poser. La réapplication redémarre Unbound
   (jusqu'à quelques minutes sans DNS pour le foyer).

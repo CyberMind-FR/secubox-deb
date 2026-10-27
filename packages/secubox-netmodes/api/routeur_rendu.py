@@ -38,9 +38,9 @@ def rendre(cfg: ConfigRouteur) -> dict[str, str]:
             f"[Network]\nAddress={cfg.adresse}\nConfigureWithoutCarrier=yes\nIPv6AcceptRA=no\n"
         ),
         "ports": f"[Match]\nName={' '.join(cfg.ports)}\n\n[Network]\nBridge=br-lan\n",
-        # DHCP seul : le DNS reste à Unbound (port=0)
+        # DHCP seul : le DNS reste à Unbound (port=0) ; bind-dynamic : un port isolé sans adresse n'arrête pas dnsmasq (#3201)
         "dhcp": (
-            "port=0\ninterface=br-lan\nbind-interfaces\nexcept-interface=lo\n"
+            "port=0\ninterface=br-lan\nbind-dynamic\nexcept-interface=lo\n"
             "dhcp-authoritative\n"
             f"dhcp-range={cfg.dhcp_debut},{cfg.dhcp_fin},{reseau.netmask},{cfg.bail}\n"
             f"dhcp-option=option:router,{ip}\n"
