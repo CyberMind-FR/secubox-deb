@@ -9,6 +9,46 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-27 — Release v3.0.0-alpha.19 préparée (ref #3208)
+
+- **Notes propres à la version** : `docs/release-notes/v3.0.0-alpha.19.md` (réseau MOCHAbin, maillage, Hall v2,
+  services, sécurité, plateformes, connu et en cours). `release.yml` les insère sous le titre, sans l'en-tête SPDX, avant
+  le texte générique ; étape simulée en local. Deux issues déjà livrées en alpha.18 (#2808, #2816) retirées du brouillon.
+- **Wiki** : Raspberry Pi 400 « tested » (gk4 en service), MOCHAbin en mode routeur (Hardware-Matrix). **TODO** : file
+  arbitrée après le mode routeur (#2891, #3205, #3196, #3203, #3191, Nextcloud, Streamlit).
+- **Restent** : étiquette `v3.0.0-alpha.19` et workflow Release (paquets, images, live USB ; environ 6 h en alpha.18),
+  puis README racine et accueil du wiki une fois les images publiées.
+
+## 2026-10-27 — hardening : la mise à jour coupait le routage IPv4 (closes #3209)
+
+- **Constat** au déploiement de #3206 : après `secubox-hardening` 1.6.2, `net.ipv4.ip_forward = 0` sur gk1, gk3 et gk4,
+  environ 10 minutes : conteneurs LXC sans sortie, LAN routé de gk1 coupé. Rétabli par `sysctl --system`.
+- **Cause** : postinst et `hardeningctl apply` faisaient `sysctl -p` sur le seul `99-secubox-hardening.conf`
+  (`ip_forward = 0`) ; `99-secubox-zz-lxc-forward.conf` (secubox-core), qui le remet à 1 au démarrage, n'était pas rejoué.
+  Toute mise à jour de hardening coupait donc le routage jusqu'au redémarrage suivant.
+- **gk2** : garde temporaire `garde-forward-3206` (unité systemd-run, journal `-t garde-forward-3206`) pendant la
+  configuration ; elle a remis 1 à 10:46:15, puis `sysctl --system` et fin d'elle-même à 10:47:13. Rien ne reste.
+- **Livré** (PR #3210) : `sysctl --system` aux deux endroits, test `test_sysctl_ordre_3209.py` (rouge puis vert),
+  hardening 1.6.3 sur gk1, gk2, gk3, gk4 + apt : `ip_forward` reste à 1 pendant la mise à jour, vérifié sur les quatre.
+
+## 2026-10-27 — Nœuds en automatique : LAN routé de confiance, Samba, joker DNS par le relais (closes #3206)
+
+- **Livré** (PR #3207) : netmodes 1.7.0, hardening 1.6.2, nac 3.9.5, media 1.9.4, dns 1.6.3, p2p 1.19.2, sur gk1, gk2,
+  gk3, gk4 + apt (suite trixie).
+  - LAN routé (`br-lan`) de confiance comme le réseau de la Freebox ; SSH en tête de chaîne.
+  - Garde WAN : mêmes ports internes fermés sur `br-lan` que sur `eth2` (liste imposée par un test), 7331 jamais en IPv6.
+  - NAC : IoT et Invités limités à DNS et DHCP vers la box depuis `br-lan`.
+  - Samba (ksmbd) écoute `eth2 br-lan`, 445 ouvert sur le LAN routé.
+  - `secubox-dns-joker` (root) : `*.<nœud> A <ip publique>` chez Gandi, appelé par le relais avant le certificat
+    joker ; jamais d'écrasement, nom déjà utilisé refusé, zone parente seule, création relue.
+- **Mode routeur réappliqué et confirmé** : gk1 en 7 s, gk2 en 45 s (règles « lan ssh » en tête, « lan confiance »).
+- **Vérifié depuis gk4**, client du LAN de gk2 (192.168.42.191) : 22, 445 et 7331 ouverts (bannière OpenSSH) ; 9080,
+  8404 et 6379 fermés alors que 9080 écoute (12 paquets comptés par la garde) ; DNS servi. Avant la réapplication :
+  tout fermé sauf DNS.
+- **Joker réel sur gk2** : `secubox-dns-joker assurer` gk4, gk3, gk1 → « inchange » chez Gandi (`*.gk4` présent depuis 08:01,
+  `record_created` dans l'audit) ; refus audités, `audit.log` reste au compte `secubox`.
+- gk1 n'a aucun client branché (`br-lan` éteint) ni Samba : essai réel fait sur gk2 seulement.
+
 ## 2026-10-27 — Réseau MOCHAbin : mode routeur clôturé (closes #3189, closes #3190, closes #3201)
 
 - **netmodes 1.6.1** (PR #3204) : `unbound-checkconf` a son propre délai (900 s au lieu des 120 s communs). Sur gk2, la

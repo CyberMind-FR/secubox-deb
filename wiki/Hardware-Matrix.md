@@ -32,7 +32,7 @@ SecuBox-Deb fonctionne sur du matériel que vous possédez ou achetez directemen
 
 | Carte | SoC | RAM | Réseau | Prix | Statut | Notes |
 |-------|-----|-----|--------|------|--------|-------|
-| [**MOCHAbin**](https://globalscaletechnologies.com/product/mochabin/) | Armada 7040 | 4 GB | 4× GbE + 10GbE SFP+ | ~350 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible principale Full |
+| [**MOCHAbin**](https://globalscaletechnologies.com/product/mochabin/) | Armada 7040 | 4 GB | 4× GbE + 10GbE SFP+ | ~350 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible principale Full ; mode routeur (pont `br-lan`, DHCP, DNS, isolement de port) |
 | [**MOCHAbin**](https://globalscaletechnologies.com/product/mochabin/) | Armada 7040 | 8 GB | 4× GbE + 10GbE SFP+ | ~450 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Full profile, DPI |
 | [**ESPRESSObin v7**](https://globalscaletechnologies.com/product/espressobin-v7/) | Armada 3720 | 1 GB | 3× GbE (Topaz) | ~50 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible Lite entry |
 | [**ESPRESSObin v7**](https://globalscaletechnologies.com/product/espressobin-v7/) | Armada 3720 | 2 GB | 3× GbE (Topaz) | ~70 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible Lite, DDR4 |
@@ -45,7 +45,7 @@ SecuBox-Deb fonctionne sur du matériel que vous possédez ou achetez directemen
 
 | Carte | SoC | RAM | Réseau | Prix | Statut | Notes |
 |-------|-----|-----|--------|------|--------|-------|
-| [**Raspberry Pi 400**](https://www.raspberrypi.com/products/raspberry-pi-400/) | BCM2711 | 4 GB | 1× GbE | ~80 € | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | USB-Eth recommandé |
+| [**Raspberry Pi 400**](https://www.raspberrypi.com/products/raspberry-pi-400/) | BCM2711 | 4 GB | 1× GbE | ~80 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | En service depuis le 27/10/2026 : nœud du maillage, publié par une MOCHAbin. USB-Eth recommandé pour un rôle de passerelle |
 | [**NanoPi R6S**](https://www.friendlyelec.com/index.php?route=product/product&product_id=289) | RK3588S | 8 GB | 2× 2.5GbE | ~140 € | ![Experimental](https://img.shields.io/badge/-experimental-C04E24?style=flat-square) | En test |
 | [**Banana Pi BPI-R4**](https://docs.banana-pi.org/en/BPI-R4/BananaPi_BPI-R4) | MT7988A | 4 GB | 4× GbE + 2× 10G SFP | ~110 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Edge/budget |
 | [**Banana Pi BPI-R4 Pro**](https://docs.banana-pi.org/en/BPI-R4_Pro/BananaPi_BPI-R4_Pro) | MT7988A | 4 GB | 4× 2.5GbE + 2× 10G SFP+ | ~150 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Candidat medium |
