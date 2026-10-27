@@ -468,3 +468,22 @@ def test_acl_deny_refuse_non_local_et_ipv6(tmp_path):
     assert "10.1.1.1" not in texte                                            # deny : ni élément ni étiquette
     assert "access-control: 172.16.1.1/32 refuse_non_local\n" in texte      # action reprise telle quelle
     assert "access-control: 2001:db8::5/128 allow\n" in texte
+
+
+def test_une_zone_des_listes_aussi_presente_dans_une_vue_tv_reste_bloquee_pour_tous(tmp_path):
+    """Constaté en production sur gk2 (2026-10-27) : doubleclick.net, adnxs.com, criteo.com… figurent dans les vues TV
+    d'ad-guard (94) ET dans la liste adblock. Le compilateur les retirait des candidats globaux : plus bloqués pour aucun
+    appareil hors TV. Une zone de VUE n'est pas une zone globale ; seule une zone globale du contexte reste à son fichier."""
+    contexte = {"10-acl.conf": "server:\n    access-control: 192.168.0.0/16 allow\n",
+                "94-tv.conf": """server:
+    access-control-view: 192.168.1.95/32 tv
+view:
+    name: "tv"
+    view-first: yes
+    local-zone: "doubleclick.net." always_nxdomain
+"""}
+    sources = {"95-secubox-adblock.conf": 'server:\n    local-zone: "doubleclick.net." always_nxdomain\n'}
+    texte, ecarts = _comparer(sources, contexte, ["192.168.1.50", "192.168.1.95", "127.0.0.1"],
+                              ["doubleclick.net", "stats.doubleclick.net", "example.org"], tmp_path)
+    assert ecarts == []
+    assert 'local-zone: "doubleclick.net." always_nxdomain\n' in texte
