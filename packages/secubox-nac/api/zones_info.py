@@ -29,13 +29,15 @@ ZONES_COMPORTEMENT = {
         "nom": "IoT isolé", "ensemble": "iot_zone",
         "internet": "oui", "lan": "non", "box_dns_dhcp": "oui", "isolement": "LAN privé refusé",
         "regles": ["Vers 10.0.0.0/8, 172.16.0.0/12 et 192.168.0.0/16 : refusé (isolé du LAN).",
-                   "Vers Internet : autorisé."],
+                   "Vers Internet : autorisé.",
+                   "Depuis le LAN du mode routeur (br-lan) : vers la box, DNS et DHCP seulement."],
     },
     "guest": {
         "nom": "Invités", "ensemble": "guest_zone",
         "internet": "oui", "lan": "non", "box_dns_dhcp": "oui", "isolement": "LAN privé refusé",
         "regles": ["Vers 10.0.0.0/8, 172.16.0.0/12 et 192.168.0.0/16 : refusé (isolé du LAN).",
-                   "Vers Internet : autorisé."],
+                   "Vers Internet : autorisé.",
+                   "Depuis le LAN du mode routeur (br-lan) : vers la box, DNS et DHCP seulement."],
     },
     "quarantine": {
         "nom": "Quarantaine", "ensemble": "quarantine_zone",

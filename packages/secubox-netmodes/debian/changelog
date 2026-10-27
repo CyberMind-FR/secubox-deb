@@ -5,6 +5,8 @@ secubox-netmodes (1.7.0-1~trixie1) trixie; urgency=medium
     durcissement refuse le 22 hors 10/8 et 192.168.1.0/24). Un nœud du LAN routé rejoint ainsi le maillage (API de
     jonction 7331, constaté sur gk4). Ports isolés exclus ; retirées par le retour comme les autres règles du LAN.
     Prend effet à la prochaine application du mode routeur (Unbound inchangé, pas de redémarrage) (ref #3206).
+  * Breaks: secubox-hardening (<< 1.6.2), secubox-nac (<< 3.9.5) : la confiance de br-lan exige leurs gardes (backends
+    fermés, IoT et Invités limités à DNS et DHCP).
 
  -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 13:00:00 +0100
 

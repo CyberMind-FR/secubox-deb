@@ -458,7 +458,8 @@ class GandiAdapter(DNSProviderAdapter):
                 resp = await client.request(method, f"{self.API_URL}{path}", headers=headers,
                                             json=data if method in ("POST", "PUT") else None)
             except httpx.HTTPError as e:
-                raise HTTPException(502, f"Gandi API injoignable : {e}")
+                # le type seul : une erreur d'en-tête httpx recopie la valeur Bearer (clé d'API), revue #3206
+                raise HTTPException(502, f"Gandi API injoignable ({type(e).__name__})")
         if resp.status_code == 204:
             return {"success": True}
         if resp.status_code >= 400:

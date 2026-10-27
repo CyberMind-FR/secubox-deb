@@ -4,6 +4,7 @@ secubox-p2p (1.19.2-1~trixie1) trixie; urgency=medium
     secubox-dns-joker AVANT le certificat joker, dont le défi DNS-01 masquait le joker parent (gk3, puis gk4 le
     2026-10-27 : 19 noms refusés). Propagation attendue 2 min au plus. Délai de l'unité porté de 15 à 45 min
     (ref #3206).
+  * Revue #3206 : zone autorisée = zone parente du relais, création écrite dans l'audit central, appel borné à 180 s.
 
  -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 13:00:00 +0100
 

@@ -4,6 +4,9 @@ secubox-dns (1.6.3-1~trixie1) trixie; urgency=medium
     injoignable comprise) au lieu d'un « succès » ; transport injectable pour les essais, comme OVH.
     Nouveau secubox-dns-joker (root) : assure « *.<nœud> A <ip publique> » d'un pair du maillage dans une zone gérée
     (idempotent, jamais d'écrasement, création relue), audité, sortie JSON, codes 0/1/2/3 (ref #3206).
+  * Revue #3206 : le joker n'écrit que dans la zone autorisée passée par le relais (sa zone parente), refuse un
+    libellé déjà utilisé dans la zone (sauf *.<libellé> et _acme-challenge.<libellé>), ne retient que les
+    fournisseurs Gandi activés ; une erreur de transport ne recopie plus la clé d'API (type d'erreur seul).
 
  -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 13:00:00 +0100
 

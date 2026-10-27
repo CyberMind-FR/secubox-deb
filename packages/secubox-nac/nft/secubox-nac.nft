@@ -34,6 +34,14 @@ table inet secubox_nac {
 		ether saddr @blocked counter drop comment "nac : appareil bloque"
 		ether saddr @quarantine_zone udp dport { 53, 67, 68 } return
 		ether saddr @quarantine_zone counter drop comment "nac : quarantaine"
+		# LAN du mode routeur (br-lan, #3206) : netmodes l'accepte en entree comme le reseau de la Freebox. IoT et
+		# invites n'y gardent que DNS et DHCP vers la box (le drop d'ici, a filter - 5, est final).
+		iifname "br-lan" ether saddr @iot_zone udp dport { 53, 67 } return
+		iifname "br-lan" ether saddr @iot_zone tcp dport 53 return
+		iifname "br-lan" ether saddr @iot_zone counter drop comment "nac : IoT sans acces a la box depuis le LAN route"
+		iifname "br-lan" ether saddr @guest_zone udp dport { 53, 67 } return
+		iifname "br-lan" ether saddr @guest_zone tcp dport 53 return
+		iifname "br-lan" ether saddr @guest_zone counter drop comment "nac : invites sans acces a la box depuis le LAN route"
 	}
 
 	chain forward {

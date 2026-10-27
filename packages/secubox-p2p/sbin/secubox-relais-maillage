@@ -211,17 +211,19 @@ cmd_relayer() {
 # _acme-challenge.<domaine-du-pair>, après quoi le joker parent (*.secubox.in) ne couvre plus les noms du pair (vécu
 # sur gk3 puis gk4, 2026-10-27 : 19 noms refusés). Idempotent ; jamais d'écrasement d'un enregistrement étranger.
 # Rend 0 si le joker est en place (créé ou déjà juste) ; 1 sinon (module absent, refus, échec : dit au journal).
-dns_joker_assure() {
-    local d="$1" pub="$2" sortie i
+dns_joker_assure() {   # dns_joker_assure <domaine-du-pair> <ip-publique> <zone-autorisée> <ip-du-pair>
+    local d="$1" pub="$2" zone="$3" pair="$4" sortie
     [ -x "$DNS_JOKER" ] || return 1
     [ -n "$pub" ] || { log "joker DNS *.$d non assuré : IP publique du relais inconnue"; return 1; }
-    if ! sortie="$("$DNS_JOKER" assurer "$d" "$pub" 2>&1)"; then
+    # zone = zone parente de CE relais (gk2.secubox.in → secubox.in) : un pair ne fait jamais écrire ailleurs (revue #3206)
+    if ! sortie="$(timeout 180 "$DNS_JOKER" assurer "$d" "$pub" "$zone" 2>&1)"; then
         log "joker DNS *.$d non assuré : $sortie"; return 1
     fi
     case "$sortie" in
         *'"etat": "cree"'*)
+            audit_relais joker_dns_cree "*.$d" "$pair"
             log "joker DNS *.$d créé chez le registraire → $pub ; attente de la propagation…"
-            for i in $(seq 1 "$ATTENTE_DNS_PAS"); do
+            for _ in $(seq 1 "$ATTENTE_DNS_PAS"); do
                 resout_vers "hall.$d" "$pub" && { log "    hall.$d → $pub"; return 0; }
                 sleep "$PAS_DNS"
             done
@@ -699,7 +701,7 @@ except Exception: pass' 2>/dev/null)"
         # NXDOMAIN. Un enregistrement *.<domaine> propre au pair l'évite (vécu
         # sur gk3, #1682). On le dit plutôt que de laisser 14 échecs muets.
         local temoin="hall.$dpair" pub; pub="$(ip_publique)"
-        dns_joker_assure "$dpair" "$pub" || true      # #3206 : avant le certificat, qui masquerait le joker parent
+        dns_joker_assure "$dpair" "$pub" "${dom#*.}" "$ip" || true   # #3206 : avant le certificat (masquerait le parent)
         local avant=0; resout_vers "$temoin" "$pub" && avant=1
         joker_assure "$dpair" || log "pair $ip : pas de joker *.$dpair — certificats par nom"
         if [ "$avant" = 1 ] && ! resout_vers "$temoin" "$pub"; then
