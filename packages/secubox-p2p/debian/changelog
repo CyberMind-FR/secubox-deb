@@ -1,3 +1,12 @@
+secubox-p2p (1.19.3-1~trixie1) trixie; urgency=medium
+
+  * Un pair approuvé qui revient sous un autre nom d'hôte est renommé chez le maître (demande de jonction, registre
+    hérité, transport wg_mesh.json), audit `pair_renomme`. gk3 restait « secubox-live », son nom d'installation. Jamais
+    un nom par défaut, jamais un nom que les liens directs écarteraient, jamais celui d'un autre pair approuvé
+    (`renommage_refuse`, la jonction continue sous l'ancien nom) (ref #3213).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 11:30:00 +0100
+
 secubox-p2p (1.19.2-1~trixie1) trixie; urgency=medium
 
   * Relais du maillage : le joker DNS d'un pair (*.<domaine-du-pair> vers l'IP publique du relais) est assuré par

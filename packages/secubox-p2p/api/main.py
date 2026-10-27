@@ -2133,6 +2133,7 @@ def ml_join(req: JoinRequest, request: Request):
         existing["address"] = peer_address or existing.get("address")
         _record_wg_identity(existing, req)
         if existing.get("status") == "approved":
+            _renommer_au_retour(existing, req, requests)
             _provision(existing)
             save_ml_requests(requests)
             return {
@@ -2233,6 +2234,29 @@ def _audit_jonction(evenement: str, **champs) -> None:
         ancre.audit(evenement, chemin=os.environ.get("SBX_AUDIT", "/var/log/secubox/audit.log"), **champs)
     except OSError as e:
         log.warning("audit jonction non écrit: %s", e)
+
+
+def _renommer_au_retour(existing: Dict, req: "JoinRequest", requests: List[Dict]) -> None:
+    """#3213 : un pair approuvé qui revient sous un autre nom d'hôte est renommé (demande, registre hérité ; le
+    transport suit par `_provision`). gk3 restait « secubox-live », son nom d'installation, chez le maître.
+
+    Jamais un nom par défaut, jamais un nom que `pairs_directs.valider_pair` écarterait, jamais celui d'un autre
+    pair approuvé : la jonction continue alors sous l'ancien nom."""
+    nom = (req.hostname or "").strip()
+    ancien = existing.get("hostname") or ""
+    if nom == ancien or nom.lower() in NOMS_PAR_DEFAUT or not pairs_directs._NOM.fullmatch(nom):
+        return
+    if any(r.get("hostname") == nom and r.get("status") == "approved"
+           and r.get("fingerprint") != existing.get("fingerprint") for r in requests):
+        _audit_jonction("renommage_refuse", raison="nom deja pris", nom=nom, ancien_nom=ancien)
+        return
+    existing["hostname"] = nom
+    legacy = load_json(PEERS_FILE, {"peers": []})
+    for lp in legacy.get("peers", []):
+        if lp.get("fingerprint") == existing.get("fingerprint"):
+            lp["name"] = nom
+    save_json(PEERS_FILE, legacy)
+    _audit_jonction("pair_renomme", nom=nom, ancien_nom=ancien, mesh_ip=existing.get("mesh_ip"))
 
 
 def _remplacer_homonyme(join_request: Dict, ancien: Dict, requests: List[Dict]) -> None:
