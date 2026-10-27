@@ -9,6 +9,45 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-27 — Listes DNS compilées par étiquettes, déployées sur gk1 et gk2 (closes #3205, ref #3191)
+
+- **Livré** (PR #3222, #3224) : compilateur `secubox_unbound.listes` (classes = éléments d'ACL, chaque domaine une fois,
+  `define-tag`/`local-zone-tag`, exceptions par `access-control-tag-action`), service root `secubox-dns-listes`
+  (.path sources + unbound.conf.d, minuteur, AppArmor enforce, une transaction : vérification, rechargement confirmé par
+  `unbound-control status`, retour arrière complet). webfilter-ctl, adblock-sync et adult-sync DÉPOSENT leur source dans
+  `/var/lib/secubox-dns-listes/sources` et ne touchent plus Unbound. secubox-core 1.8.4, ad-guard 1.16.2, webfilter 0.5.2.
+- **Banc gk1, configuration réelle de gk2** : 145 530 questions, 28 classes, décisions identiques (seuls écarts : `onion`,
+  délai contre SERVFAIL dans les deux sens, faux amont). Unbound 743 → 384 Mo, chargement 21 → 11 s ; compilation 147 s,
+  pic 488 Mo (963 avant l'allègement).
+- **Deux relectures de sécurité** (relecteur-securite) : arbre sorti de `/var/lib/secubox` (compte partagé, remplaçable),
+  ACL fidèles (une dérogation n'ouvre plus le résolveur), sources lues sans lien et erreurs sans contenu, signature des
+  entrées compilées, marque « en-cours » + SIGTERM, remise en place avec le mode d'origine sous UMask 0027, verrou 0600,
+  `view-first` strict, reprise 1.8.0 par descripteurs, unité durcie (CAP_DAC_OVERRIDE seule, pour audit.log).
+- **gk1** (AppArmor enforce) a révélé AF_NETLINK (unbound-checkconf) et l'audit (1.8.2) ; la transaction avait tout remis.
+- **gk2, régression vue en production et corrigée** : une zone des listes AUSSI présente dans une vue TV d'ad-guard
+  (doubleclick.net, adnxs.com, criteo.com, google-analytics.com…) sortait des candidats globaux. Retour en `mode = "direct"`
+  en 4 minutes (17:15:44 → 17:20, audit `mode-direct`), correctif 1.8.4 + test au simulateur, retour en `compile` à 17:56
+  (719 508 zones émises, 219 s, aucun refus AppArmor). Unbound reste à 748 Mo tant qu'il n'est pas REDÉMARRÉ (un
+  rechargement ne rend pas la mémoire) : redémarrage à planifier avec le propriétaire.
+- **ad-guard TV** : `secubox-ad-guard-dnsfeed` était démarré mais pas activé ; depuis le redémarrage du 24, l'apprentissage
+  des TV tournait à vide. Activé (`enable --now`, audit `dnsfeed-active`).
+- **Pubs Netflix** (régression signalée, « zéro pub » validé le 2026-10-03) : six pubs relevées sur `tv-banc`, même
+  signature — appel `nrdp26.prod.ftl.netflix.com` ~20-60 s avant, `logs.netflix.com` bloqué après, AUCUN domaine tiers ;
+  la 2e pub d'une série ne fait aucune requête DNS. Les blocages Netflix sont identiques à la période sans pub (comptes
+  dnstv 3-23 octobre). gk2 ne voit que le DNS des TV (passerelle : la Freebox) ; IPv6 temporaires de `tv-banc`
+  (`…8452…`, `…304e…`) non liées à sa vue mais inutilisées pour le DNS. Surveillance en cours ; passage par gk2 proposé,
+  laissé de côté par le propriétaire.
+
+## 2026-10-27 — Release alpha.19 : images minimal refusées, working-set corrigé (ref #3208)
+
+- Tag v3.0.0-alpha.19 : 10 images construites ; ESPRESSObin et RPi400 `minimal` refusées par verify-profile
+  (« courbes hors working-set » : secubox-minimal en dépend depuis le 2026-10-17, #2865, sans unité systemd donc absent du
+  snapshot). PR #3223 : `courbes` ajouté à la main au working-set ; `tests/test-verify-profile.sh` (en échec latent : isp ne
+  dépend plus de waf) couvre les quatre profils et le refus sans modem / sans courbes.
+- Clé live MOCHAbin : eMMC > 4 h (3 h pour alpha.18), le job ne tient plus dans 6 h → #3225 (scinder eMMC / live USB).
+- Décision du propriétaire : publier alpha.19 sans les images minimal et les compléter quand elles seront prêtes
+  (build-packages complet arm64+amd64 sur master 3a97a015a lancé, puis build-image minimal ×2).
+
 ## 2026-10-27 — secubox-metrics : 1,4 Go ramenés à ~250 Mo sur gk2 (closes #3217, ref #3191)
 
 - **Mesure d'abord** (#3191) : gk2 saturé (6,7 Go de RAM sur 7,9, 5,5 Go de swap) ; metrics 1,4 Go (pic 1,9 Go), Unbound
