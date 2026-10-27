@@ -179,6 +179,43 @@ def poser_vue(chemin: Path | str, texte: str, systeme: SystemeUnbound | None = N
     return "applique"
 
 
+def poser_vues(changements: dict, systeme: SystemeUnbound | None = None, mode: int = 0o644) -> str:
+    """Pose plusieurs fichiers (texte) et en retire d'autres (None) en UNE transaction : une vérification, un rechargement ; au
+    moindre échec, TOUS sont remis octet pour octet (#3205 : 92-secubox-listes.conf remplace trois fichiers à la fois — un
+    état intermédiaire chargerait les mêmes zones deux fois). Rend « inchange » (rien d'écrit ni de rechargé) ou « applique »."""
+    s = systeme or SystemeUnbound()
+    voulu = {Path(p): t for p, t in changements.items()}
+    anciens = {p: _lire_octets(p) for p in voulu}
+    if all(anciens[p] == (t.encode("utf-8") if t is not None else None) for p, t in voulu.items()):
+        return "inchange"
+
+    def tout_remettre() -> None:
+        for p, a in anciens.items():
+            with contextlib.suppress(OSError):
+                _restaurer(p, a)
+
+    try:
+        for p, t in voulu.items():
+            if t is None:
+                p.unlink(missing_ok=True)
+            elif anciens[p] != t.encode("utf-8"):
+                ecrire_atomique(p, t, mode, erreur=s.ERREUR)
+        ok, sortie = s.verifier_unbound()
+        if not ok:
+            raise s.ERREUR("unbound-checkconf refuse la configuration : " + sortie)
+    except BaseException:
+        tout_remettre()
+        raise
+    try:
+        s.recharger_unbound()
+    except BaseException:
+        tout_remettre()
+        with contextlib.suppress(Exception):
+            s.recharger_unbound()          # Unbound garde la NOUVELLE configuration en mémoire tant qu'on ne lui a pas fait relire l'ancienne
+        raise
+    return "applique"
+
+
 def retirer_vue(chemin: Path | str, systeme: SystemeUnbound | None = None) -> str:
     """Supprime une vue, vérifie la configuration restante, recharge. Si la vérification refuse, la vue est remise. « absent » si elle n'existait pas
     (aucun rechargement)."""

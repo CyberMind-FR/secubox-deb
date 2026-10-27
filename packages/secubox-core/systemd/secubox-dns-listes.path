@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Un générateur dépose ou retire sa source : compilation (#3205). On ne surveille PAS unbound.conf.d, que le service
+# écrit lui-même (aucune boucle) ; un ancien fichier réécrit par un générateur non mis à jour est rattrapé par le minuteur.
+[Unit]
+Description=SecuBox — sources des listes DNS modifiées (#3205)
+
+[Path]
+PathChanged=/var/lib/secubox/dns-listes/sources
+MakeDirectory=yes
+DirectoryMode=0755
+Unit=secubox-dns-listes.service
+
+[Install]
+WantedBy=paths.target

@@ -299,6 +299,20 @@ PY
     systemctl enable --now secubox-dirs-guard.timer 2>/dev/null || true
     systemctl start secubox-dirs-guard.service 2>/dev/null || true
 
+    # Listes DNS compilees par etiquettes (#3205). Le profil AppArmor AVANT le service ; la premiere passe (adoption des
+    # anciens fichiers webfilter/adblock/adult, compilation de quelques minutes) est lancee SANS l'attendre : apt ne bloque pas.
+    install -d -o root -g root -m 0755 /var/lib/secubox/dns-listes /var/lib/secubox/dns-listes/sources
+    if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1 \
+       && [ -f /etc/apparmor.d/secubox-dns-listes ]; then
+        apparmor_parser -r /etc/apparmor.d/secubox-dns-listes \
+          || echo "secubox-core : profil AppArmor secubox-dns-listes non charge (apparmor_parser -r /etc/apparmor.d/secubox-dns-listes)" >&2
+    fi
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable --now secubox-dns-listes.path secubox-dns-listes.timer 2>/dev/null || true
+        [ -d /etc/unbound/unbound.conf.d ] && systemctl start --no-block secubox-dns-listes.service 2>/dev/null || true
+    fi
+
     # HAProxy tire par network-online.target, pas seulement par
     # multi-user.target (#998). Un [Install] pose en drop-in n'est pas honore
     # par `systemctl enable` : le lien doit etre cree explicitement.

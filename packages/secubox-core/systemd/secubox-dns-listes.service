@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Listes DNS compilées par étiquettes (#3205) : webfilter, adblock et adult déposent leur source dans
+# /var/lib/secubox/dns-listes/sources ; ce service compile, pose /etc/unbound/unbound.conf.d/92-secubox-listes.conf,
+# retire les anciens fichiers et recharge Unbound en une transaction (retour arrière complet au moindre échec).
+# Root : il écrit /etc/unbound et lance unbound-control. Confiné par le profil AppArmor « /usr/sbin/secubox-dns-listes ».
+# Exception au compte dédié (RULES-CODE § 10) : voir le profil et .claude/RULES-CODE.md.
+[Unit]
+Description=SecuBox — compilation des listes DNS d'Unbound (#3205)
+After=unbound.service
+ConditionPathIsDirectory=/etc/unbound/unbound.conf.d
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-dns-listes appliquer
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=30min
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=/etc/unbound/unbound.conf.d /var/lib/secubox/dns-listes /var/log/secubox /run/lock

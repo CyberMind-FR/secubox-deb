@@ -23,8 +23,10 @@ Les vues et fichiers qui ne sont pas des sources (TV d'ad-guard, dns-lan, routeu
 qu'au calcul. STDLIB SEULEMENT, aucun effet de bord : appelé par un service root sous AppArmor."""
 from __future__ import annotations
 
+import io
 import ipaddress
 import re
+import sys
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -55,8 +57,10 @@ def bloc(b: str) -> str:
 
 
 def _nom(z: str) -> str:
+    """Nom de zone canonique, PARTAGÉ (sys.intern) : le même domaine dans deux listes et deux vues n'occupe qu'une
+    chaîne (mesuré : 963 Mo de pic sur la configuration de gk2 sans partage)."""
     z = z.strip().lower().rstrip(".")
-    return z or "."
+    return sys.intern(z or ".")
 
 
 def _parents(d: str):
@@ -73,8 +77,9 @@ class Config:
 
     def __init__(self):
         self.zones: Dict[str, str] = {}                       # zone globale -> type (la première lue gagne, comme Unbound)
-        self.source_zone: Dict[str, str] = {}
-        self.overrides: Dict[str, Dict[str, Tuple[str, str]]] = defaultdict(dict)   # zone -> bloc -> (type, fichier)
+        self.zones_sources: set = set()                       # zones globales venues d'une SOURCE (les autres : contexte)
+        self.ov_par_bloc: Dict[str, Dict[str, str]] = defaultdict(dict)   # bloc -> zone -> type (dérogations)
+        self.ov_contexte: set = set()                         # zones dérogées par un fichier de CONTEXTE (TV) : jamais retirées
         self.vues: Dict[str, dict] = {}                       # nom -> {first, zones, fichier}
         self.acv: Dict[str, Tuple[str, str]] = {}             # bloc -> (vue, fichier)
         self.allow: List[str] = []
@@ -108,16 +113,21 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
                     elif s.startswith("view-first:") and vue:
                         cfg.vues[vue]["first"] = s.split(":", 1)[1].strip() == "yes"
                     elif (m := _LZ.match(s)) and vue:
-                        cfg.vues[vue]["zones"].setdefault(_nom(m.group(1)), m.group(2))
+                        cfg.vues[vue]["zones"].setdefault(_nom(m.group(1)), sys.intern(m.group(2)))
                     continue
                 if section != "server":
                     continue
                 if (m := _OV.match(s)):
-                    cfg.overrides[_nom(m.group(1))][bloc(m.group(2))] = (m.group(3), f.name)
+                    z = _nom(m.group(1))
+                    cfg.ov_par_bloc[sys.intern(bloc(m.group(2)))][z] = sys.intern(m.group(3))
+                    if not est_source:
+                        cfg.ov_contexte.add(z)
                 elif (m := _LZ.match(s)):
                     z = _nom(m.group(1))
                     if z not in cfg.zones:
-                        cfg.zones[z], cfg.source_zone[z] = m.group(2), f.name
+                        cfg.zones[z] = sys.intern(m.group(2))
+                        if est_source:
+                            cfg.zones_sources.add(z)
                 elif (m := _ACV.match(s)):
                     cfg.acv[bloc(m.group(1))] = (m.group(2), f.name)
                 elif (m := _AC.match(s)) and m.group(2) == "allow":
@@ -145,10 +155,7 @@ class _Modele:
 
     def __init__(self, cfg: Config, vues_gardees: set):
         self.cfg, self.vues_gardees = cfg, vues_gardees
-        self.ov_par_bloc: Dict[str, Dict[str, str]] = defaultdict(dict)
-        for z, par_bloc in cfg.overrides.items():
-            for b, (t, _f) in par_bloc.items():
-                self.ov_par_bloc[b][z] = t
+        self.ov_par_bloc = cfg.ov_par_bloc
 
     def profil(self, net) -> Tuple[Optional[str], Tuple[str, ...]]:
         """(vue, blocs de dérogation qui contiennent ce client, du plus spécifique au plus large)."""
@@ -200,7 +207,7 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
     vues_gardees = {v for v, d in cfg.vues.items() if d["fichier"] not in noms_sources}
     m = _Modele(cfg, vues_gardees)
 
-    classes = sorted({*cfg.allow, *cfg.acv, *(b for ov in cfg.overrides.values() for b in ov)},
+    classes = sorted({*cfg.allow, *cfg.acv, *cfg.ov_par_bloc},
                      key=lambda b: (ipaddress.ip_network(b).version, ipaddress.ip_network(b).prefixlen, b))
     idx = {c: i for i, c in enumerate(classes)}
     toutes = (1 << len(classes)) - 1
@@ -210,41 +217,54 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
         vue, blocs = m.profil(ipaddress.ip_network(c))
         profils[(vue, blocs, vue in vues_gardees)] |= 1 << idx[c]
 
-    candidats = {z for z, src in cfg.source_zone.items() if src in noms_sources}
-    for v, d in cfg.vues.items():
-        if v not in vues_gardees:
-            candidats |= set(d["zones"])
-    candidats.discard(".")
-    candidats -= {z for z, src in cfg.source_zone.items() if src not in noms_sources}       # définis ailleurs
-    candidats -= {z for v in vues_gardees for z in cfg.vues[v]["zones"]}
-    references = {z for z, ov in cfg.overrides.items() if any(src not in noms_sources for _, src in ov.values())}
+    avant = (len(cfg.zones_sources) + sum(len(d["zones"]) for v, d in cfg.vues.items() if v not in vues_gardees)
+             + sum(1 for b, zs in cfg.ov_par_bloc.items() for z in zs if z not in cfg.ov_contexte))
+    exclus = (set(cfg.zones) - cfg.zones_sources) | {z for v in vues_gardees for z in cfg.vues[v]["zones"]} | {"."}
+    references = cfg.ov_contexte
 
+    def candidats():
+        vus = set()
+        for z in cfg.zones_sources:
+            if z not in exclus:
+                vus.add(z)
+                yield z
+        for v, d in cfg.vues.items():
+            if v not in vues_gardees:
+                for z in d["zones"]:
+                    if z not in exclus and z not in vus:
+                        vus.add(z)
+                        yield z
+
+    # S : classes qui voient chaque domaine bloqué ; X (rare) : classes à rendre transparentes sous un parent bloqué.
     S: Dict[str, int] = {}
-    for d in candidats:
+    for d in candidats():
         s = 0
         for (vue, blocs, garde), masque in profils.items():
             if m.decision(d, (vue, blocs), global_seul=garde):
                 s |= masque
         S[d] = s
     X: Dict[str, int] = {}
-    for d in candidats:
-        x, nonb = 0, toutes & ~S[d]
+    for d, sd in S.items():
+        nonb = toutes & ~sd
         if nonb:
+            x = 0
             for a in _parents(d):
-                if a in S:
-                    x |= nonb & S[a]
-        X[d] = x
+                sa = S.get(a)
+                if sa:
+                    x |= nonb & sa
+            if x:
+                X[d] = x
 
     elagues = set()
-    for d in candidats:
-        if X[d] or d in references or not S[d]:
+    for d, sd in S.items():
+        if not sd or d in X or d in references:
             continue
-        reste = S[d]
+        reste = sd
         for a in _parents(d):
             if not reste:
                 break
             if a in S:
-                touche = reste & (S[a] | X[a])
+                touche = reste & (S[a] | X.get(a, 0))
                 if touche & ~S[a]:
                     reste = -1                                 # le plus proche parent applicable répondrait autrement
                     break
@@ -252,43 +272,46 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
         if reste == 0:
             elagues.add(d)
 
-    emis = sorted(d for d in candidats if d not in elagues and (S[d] or X[d] or d in references))
+    nb_candidats, nb_elagues, nb_exceptions = len(S), len(elagues), len(X)
+    emis = sorted(d for d, sd in S.items() if d not in elagues and (sd or d in X or d in references))
+    del elagues, m
     groupes: Dict[Tuple[int, int], str] = {}
     etiquette: Dict[str, str] = {}
     for d in emis:
-        cle = (S[d], X[d])
+        cle = (S[d], X.get(d, 0))
         if cle == (toutes, 0):
             continue
         if cle not in groupes:
             groupes[cle] = f"sbx{len(groupes)}"
         etiquette[d] = groupes[cle]
 
-    lignes = ["# SPDX-License-Identifier: LicenseRef-CMSD-1.0",
-              "# GÉNÉRÉ par secubox-dns-listes — ne pas éditer : les sources sont dans /var/lib/secubox/dns-listes/sources (#3205).",
-              "server:"]
+    allow = set(cfg.allow)
+    for grand in (cfg.zones, cfg.vues, cfg.ov_par_bloc, cfg.zones_sources):   # libéré avant le rendu (pic mesuré sur gk2)
+        grand.clear()
+    sortie = io.StringIO()                       # pas de liste d'1,5 million de lignes : un seul tampon
+    sortie.write("# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"
+                 "# GÉNÉRÉ par secubox-dns-listes — ne pas éditer : les sources sont dans /var/lib/secubox/dns-listes/sources (#3205).\n"
+                 "server:\n")
     if groupes:
-        lignes.append('    define-tag: "' + " ".join(groupes.values()) + '"')
+        sortie.write('    define-tag: "' + " ".join(groupes.values()) + '"\n')
     for c in classes:
-        if c not in cfg.allow:
-            lignes.append(f"    access-control: {c} allow")
+        if c not in allow:
+            sortie.write(f"    access-control: {c} allow\n")
     for c in classes:
         i = idx[c]
         tags = [t for (s, x), t in groupes.items() if ((s | x) >> i) & 1]
         if tags:
-            lignes.append(f'    access-control-tag: {c} "' + " ".join(tags) + '"')
+            sortie.write(f'    access-control-tag: {c} "' + " ".join(tags) + '"\n')
         for (s, x), t in groupes.items():
             if (x >> i) & 1:
-                lignes.append(f"    access-control-tag-action: {c} {t} always_transparent")
+                sortie.write(f"    access-control-tag-action: {c} {t} always_transparent\n")
     for d in emis:
         if not _NOM_ZONE.fullmatch(d):
             raise ErreurListes(f"nom de zone inattendu : {d!r}")
-        lignes.append(f'    local-zone: "{d}." always_nxdomain')
+        sortie.write(f'    local-zone: "{d}." always_nxdomain\n')
         if d in etiquette:
-            lignes.append(f'    local-zone-tag: "{d}." "{etiquette[d]}"')
+            sortie.write(f'    local-zone-tag: "{d}." "{etiquette[d]}"\n')
     stats = {"sources": sorted(noms_sources), "classes": len(classes), "profils": len(profils),
-             "zones_chargees_avant": sum(1 for z, s in cfg.source_zone.items() if s in noms_sources)
-             + sum(len(d["zones"]) for v, d in cfg.vues.items() if v not in vues_gardees)
-             + sum(1 for ov in cfg.overrides.values() for _, src in ov.values() if src in noms_sources),
-             "candidats": len(candidats), "elagues": len(elagues), "emis": len(emis), "etiquettes": len(groupes),
-             "exceptions": sum(1 for d in candidats if X[d]), "duree_s": round(time.monotonic() - debut, 1)}
-    return "\n".join(lignes) + "\n", stats
+             "zones_chargees_avant": avant, "candidats": nb_candidats, "elagues": nb_elagues, "emis": len(emis),
+             "etiquettes": len(groupes), "exceptions": nb_exceptions, "duree_s": round(time.monotonic() - debut, 1)}
+    return sortie.getvalue(), stats
