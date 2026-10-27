@@ -153,7 +153,7 @@ def test_unite_lan_dhcp_root_confinee():
     # dnsmasq reste actif (refus AppArmor, port pris : sinon l'application serait déclarée réussie)
     assert u["Type"] == ["exec"]
     assert u["ExecStart"] == ["/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/var/lib/secubox-netmodes/lan-dhcp.conf"
-                              " --pid-file="]
+                              " --conf-dir=/var/lib/secubox-netmodes/dhcp.d,*.conf --pid-file="]    # #3201
     assert CHEMINS["dhcp"] == "/var/lib/secubox-netmodes/lan-dhcp.conf"   # le fichier rendu est bien celui-là
     assert "systemd-networkd.service" in u["After"][0].split()
     for cle, valeur in {"Restart": "on-failure", "ProtectSystem": "strict", "ReadWritePaths": "/var/lib/misc",
@@ -204,7 +204,8 @@ def test_unite_retour_boot_root_durcie():
 LIGNE_SUDOERS = ("secubox-netmodes ALL=(root) NOPASSWD: /usr/sbin/netmodesctl routeur-etat, "
                  "/usr/sbin/netmodesctl routeur-appliquer *, /usr/sbin/netmodesctl routeur-confirmer *, "
                  "/usr/sbin/netmodesctl routeur-retour *, "
-                 "/usr/sbin/netmodesctl port-couper *, /usr/sbin/netmodesctl port-retablir *")    # #3190
+                 "/usr/sbin/netmodesctl port-couper *, /usr/sbin/netmodesctl port-retablir *, "
+                 "/usr/sbin/netmodesctl port-isoler *, /usr/sbin/netmodesctl port-rattacher *")    # #3190, #3201
 
 
 def regles_sudoers() -> list[str]:

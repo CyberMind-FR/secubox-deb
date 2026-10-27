@@ -11,7 +11,9 @@
 #   routeur-retour <acteur>           POST /routeur/retour
 #   port-couper <port> <acteur>       POST /ports/<port>/couper    (#3190)
 #   port-retablir <port> <acteur>     POST /ports/<port>/retablir  (#3190)
+#   port-isoler <port> <acteur>       POST /ports/<port>/isoler    (#3201)
+#   port-rattacher <port> <acteur>    POST /ports/<port>/rattacher (#3201)
 # L'acteur est le `sub` du jeton vérifié ; netmodesctl le revalide (^[A-Za-z0-9._@-]{1,64}$) et refuse tout autre nombre
 # d'arguments ; le port, d'abord, par liste blanche (lan0 lan1 lan2 lan3 : jamais eth*, jamais br-lan).
 # routeur-retour-demarrage n'est PAS accordé : unité root du démarrage seulement.
-secubox-netmodes ALL=(root) NOPASSWD: /usr/sbin/netmodesctl routeur-etat, /usr/sbin/netmodesctl routeur-appliquer *, /usr/sbin/netmodesctl routeur-confirmer *, /usr/sbin/netmodesctl routeur-retour *, /usr/sbin/netmodesctl port-couper *, /usr/sbin/netmodesctl port-retablir *
+secubox-netmodes ALL=(root) NOPASSWD: /usr/sbin/netmodesctl routeur-etat, /usr/sbin/netmodesctl routeur-appliquer *, /usr/sbin/netmodesctl routeur-confirmer *, /usr/sbin/netmodesctl routeur-retour *, /usr/sbin/netmodesctl port-couper *, /usr/sbin/netmodesctl port-retablir *, /usr/sbin/netmodesctl port-isoler *, /usr/sbin/netmodesctl port-rattacher *

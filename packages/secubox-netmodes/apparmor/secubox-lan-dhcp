@@ -31,6 +31,9 @@ profile secubox-lan-dhcp {
 
   /usr/sbin/dnsmasq mr,
   /var/lib/secubox-netmodes/lan-dhcp.conf r,
+  # Un fragment par port isolé (#3201), lecture seule.
+  /var/lib/secubox-netmodes/dhcp.d/ r,
+  /var/lib/secubox-netmodes/dhcp.d/*.conf r,
   /var/lib/misc/dnsmasq.leases* rw,
 
   # Descente vers l'utilisateur dnsmasq (user=dnsmasq) et son groupe.
