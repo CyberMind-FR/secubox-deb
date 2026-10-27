@@ -15,6 +15,10 @@ case "$1" in
             nft -f /etc/nftables.d/zz-secubox-smb.nft 2>/dev/null || true
         fi
 
+        # ksmbd.conf est modifie en place par smbctl (partages) : dpkg garde l'ancien fichier. On ajoute br-lan
+        # (LAN du mode routeur, #3206) a l'ancien defaut exact seulement ; un choix de l'administrateur reste.
+        [ -f /etc/ksmbd/ksmbd.conf ] && sed -i -E 's/^([[:space:]]*interfaces[[:space:]]*=[[:space:]]*)eth2[[:space:]]*$/\1eth2 br-lan/' /etc/ksmbd/ksmbd.conf
+
         systemctl daemon-reload 2>/dev/null || true
         systemctl enable ksmbd 2>/dev/null || true
         # try-restart et non restart : ne pas demarrer un partage que

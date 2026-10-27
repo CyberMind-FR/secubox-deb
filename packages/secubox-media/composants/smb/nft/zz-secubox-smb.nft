@@ -16,6 +16,10 @@
 # est le DROP explicite de tout ce qui n'est pas LAN, y compris les bridges
 # LXC et les interfaces WireGuard, sur lesquels ksmbd n'a rien a faire.
 
+# Creer puis supprimer : le postinst recharge ce fichier a chaque mise a jour ; sans cela les regles
+# s'empilaient (#3206).
+table inet secubox_smb
+delete table inet secubox_smb
 table inet secubox_smb {
 	chain input {
 		type filter hook input priority filter + 10; policy accept;
@@ -23,6 +27,9 @@ table inet secubox_smb {
 		# LAN : autorise.
 		iifname "eth2" ip saddr 192.168.1.0/24 tcp dport 445 accept \
 			comment "SMB depuis le LAN"
+		# LAN du mode routeur (br-lan) : de confiance comme le reseau de la Freebox (#3206). Les ports
+		# isoles (lan0..lan3 hors du pont, #3201) n'y sont pas : ils restent refuses ci-dessous.
+		iifname "br-lan" tcp dport 445 accept comment "SMB depuis le LAN route"
 
 		# Tout le reste : refuse. reject plutot que drop — un client SMB
 		# qui tombe dans un trou noir reessaie longuement, ce qui se
