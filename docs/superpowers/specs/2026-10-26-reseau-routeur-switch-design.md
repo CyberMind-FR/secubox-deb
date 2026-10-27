@@ -220,6 +220,23 @@ son propre petit sous-réseau et son DHCP, et la box n'y laisse passer qu'Intern
 réseaux privés, ni à l'administration). C'est le profil « Visiteurs » de #2891 réduit à un port. Livré après les deux
 premiers, et repris par le moteur de #2891 le jour où il existe.
 
+**Précisions du constructeur (livraison 3, #3201, 2026-10-27 — mes choix, dans « Laissé au constructeur »)** :
+
+- **Sous-réseaux** : réserve fixe `192.168.248.0/22`, un /24 par port, déduit de son numéro : `lanN` → `192.168.(248+N).0/24`,
+  passerelle `.1`, DHCP `.100` à `.199`, bail `2h`. Le LAN du mode routeur ne peut plus chevaucher cette réserve ; un port ne
+  s'isole pas si son /24 chevauche un réseau déjà porté par une autre interface (WAN compris).
+- **DNS** : Unbound écoute **d'avance** les quatre passerelles (`ip-freebind` est déjà posé) et accepte la réserve
+  (`access-control`). Isoler ne touche donc jamais Unbound, dont le redémarrage coupe le DNS de la box 2,5 à 4 min sur gk2.
+  Le drop-in du mode routeur change une fois. Tant qu'il n'a pas été réappliqué, l'isolement est refusé avec ce motif.
+- **DHCP** : le même dnsmasq (`secubox-lan-dhcp`) lit un fragment par port isolé, dans l'arbre root seul (`--conf-dir`) ; il est
+  relancé à chaque isolement.
+- **Pare-feu** : une table nft par port isolé. Elle autorise DHCP et DNS vers la box, et rien d'autre ; transit vers le seul WAN, hors réseaux privés
+  (`10/8`, `100.64/10`, `169.254/16`, `172.16/12`, `192.168/16` : LAN, Freebox, tunnels) ; IPv6 refusé ; rien de neuf vers le
+  port ; NAT de son /24.
+- **Verbes** : `port-isoler` et `port-rattacher` (« Rendre au LAN »), sur le modèle de couper/rétablir. Isoler exige le mode routeur actif
+  et refuse le port du poste de l'administrateur. Un port n'est jamais à la fois coupé et isolé. L'isolement survit à un retour
+  du mode routeur, comme la coupure ; « Rendre au LAN » est permis en tout mode.
+
 ## Livrables (déployables séparément, dans cet ordre)
 
 1. **`lo` /32** (secubox-core) + **mode routeur durable** (netmodes, contrôleur, agrégateur) ; reprise du LAN temporaire de gk2.

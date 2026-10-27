@@ -583,7 +583,7 @@ def sortie_json(capsys):
 
 
 def test_cli_constantes(cli):
-    assert cli.AVEC_PORT == ("port-couper", "port-retablir")
+    assert cli.AVEC_PORT == ("port-couper", "port-retablir", "port-isoler", "port-rattacher")
     assert cli.PORTS == PORTS_LAN == PORTS
 
 

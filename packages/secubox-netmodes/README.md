@@ -244,6 +244,35 @@ lente (Unbound) continue même si le navigateur perd la connexion, et la garde d
 Le profil « défaut » de webfilter ne s'applique au LAN qu'une fois son sous-réseau ajouté à `[reseau].lan` de
 `/etc/secubox/webfilter.toml` : la page le rappelle, le module ne l'écrit pas.
 
+## Isoler un port (1.6.0)
+
+Depuis 1.6.0 (#3201), l'onglet Switch propose **Isoler…** : un port `lan0` à `lan3` sort du pont `br-lan` et reçoit son
+propre réseau, avec le DHCP et le DNS de la box, et un accès à Internet seul. **Rendre au LAN…** le rattache. Les deux
+gestes passent par la confirmation intégrée (saisie du nom du port) et sont inscrits au journal d'audit.
+
+- Routes (`require_jwt`, corps `{"confirmer": "<port>"}`) : `POST /api/v1/netmodes/ports/{port}/isoler` et `/rattacher`,
+  mêmes formes d'erreur que `/couper`. `GET /reseau/ports` rend par port `isole` (vrai, faux, `null` si illisible) et
+  `reseau_isole` ; `GET /routeur/etat` ajoute `ports_isoles`.
+- Verbes de `netmodesctl` (root, via sudoers à verbes exacts) : `port-isoler <port> <acteur>` et
+  `port-rattacher <port> <acteur>`.
+- Trois fichiers par port : `/etc/systemd/network/04-secubox-port-<port>-isole.network`,
+  `/var/lib/secubox-netmodes/dhcp.d/isole-<port>.conf` (arbre root seul, dossier `0700`, lu par dnsmasq en
+  `--conf-dir`) et `/etc/nftables.d/zz-secubox-netmodes-isole-<port>.nft`.
+- Réserve `192.168.248.0/22` : `lanN` reçoit `192.168.(248+N).0/24` (lan0 `192.168.248.0/24` … lan3
+  `192.168.251.0/24`), passerelle `.1`, DHCP `.100` à `.199`, bail 2 h.
+- Table nft `inet secubox_netmodes_isole_<port>` : les clients du port peuvent joindre Internet, le DHCP et le DNS de la
+  box ; ils ne joignent ni le LAN, ni la Freebox, ni un tunnel, ni l'administration, en IPv4 comme en IPv6.
+- Le DHCP du LAN tourne en `bind-dynamic` : un port isolé sans adresse n'arrête pas dnsmasq ; l'isolement attend l'adresse
+  du port avant de relancer le DHCP, et le rattachement retire le fragment DHCP en premier.
+- Unbound écoute les passerelles des ports isolés d'avance : **réappliquer une fois le mode routeur** (puis confirmer)
+  avant le premier isolement ; sans cela l'isolement est refusé, sans rien poser. La réapplication redémarre Unbound
+  (jusqu'à quelques minutes sans DNS pour le foyer).
+- Gardes : isoler est refusé (409, avant tout appel au contrôleur) derrière le port où se trouve le poste de
+  l'administrateur ; le contrôleur le refuse aussi hors mode routeur actif et sur un port coupé, et refuse de couper un
+  port isolé (la page ne propose alors que « Rendre au LAN… »). Rendre au LAN et Rétablir restent permis en tout mode.
+- L'isolement survit à un retour en arrière du mode routeur (la vérification du pont ignore les ports isolés) ; sans
+  mode routeur il n'y a toutefois plus de DHCP pour le port.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.

@@ -23,6 +23,8 @@ case "$1" in
     # Arbre root seul du contrôleur : sauvegardes, état du mode routeur, lan-dhcp.conf. netmodesctl vérifie propriétaire
     # et mode de chaque composant et refuse sinon.
     install -d -m 0700 -o root -g root /var/lib/secubox-netmodes
+    # Fragments DHCP des ports isolés (#3201) : le dossier doit exister avant la relance de secubox-lan-dhcp.
+    install -d -m 0700 -o root -g root /var/lib/secubox-netmodes/dhcp.d
 
     # Aucune opération root sous /var/lib/secubox : ce dossier appartient au compte partagé secubox, qui pourrait y
     # substituer un lien entre une vérification et l'opération. L'état des anciens modes vit dans

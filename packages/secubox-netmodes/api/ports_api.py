@@ -2,10 +2,12 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""Actions sur les ports du switch (#3190) : POST /ports/{port}/couper et /retablir, par netmodesctl (root, sudo -n).
+"""Actions sur les ports du switch (#3190, #3201) : POST /ports/{port}/couper, /retablir, /isoler et /rattacher, par
+netmodesctl (root, sudo -n). Isoler met le port dans son propre réseau (hors du pont, sans accès au LAN) ; rattacher le
+remet au pont.
 
 Routes `def` (pool de threads) : elles appellent subprocess. Seuls lan0..lan3 (PORTS_LAN), jamais eth* ni br-lan.
-Couper refuse (409) le port derrière lequel se trouve le poste de l'administrateur, AVANT tout appel au contrôleur :
+Couper et isoler refusent (409) le port derrière lequel se trouve le poste de l'administrateur, AVANT tout appel au contrôleur :
 adresse du poste → MAC (`ip -j neigh show dev br-lan`) → port où cette MAC est apprise (`bridge -j fdb show br br-lan`),
 lus frais (pas le cache de 5 s de /reseau : un poste qui vient de changer de port doit être vu là où il est)."""
 from __future__ import annotations
@@ -33,7 +35,7 @@ router = APIRouter(prefix="/ports")
 
 def _verifier(port: str, corps: Any) -> None:
     if port not in PORTS_LAN:                   # liste blanche d'abord, avant même de lire le corps
-        raise HTTPException(400, f"port refusé : seuls {', '.join(PORTS_LAN)} se coupent ou se rétablissent")
+        raise HTTPException(400, f"port refusé : seuls {', '.join(PORTS_LAN)} sont actionnables")
     if not isinstance(corps, dict) or corps.get("confirmer") != port:
         raise HTTPException(400, f'confirmation requise : "confirmer": "{port}"')
 
@@ -94,5 +96,27 @@ def retablir(port: str, corps: Any = Body(default=None), user=Depends(require_jw
     acteur = _acteur(user)
     _pas_pendant_une_bascule()
     res = _ctl("port-retablir", port, acteur, delai=DELAI_PORT)
+    _apres_action()
+    return res
+
+
+@router.post("/{port}/isoler")
+def isoler(port: str, request: Request, corps: Any = Body(default=None), user=Depends(require_jwt)):
+    _verifier(port, corps)
+    acteur = _acteur(user)
+    _pas_pendant_une_bascule()
+    if port in _ports_du_poste(request):
+        raise HTTPException(409, f"vous perdriez votre propre accès (votre poste est derrière {port})")
+    res = _ctl("port-isoler", port, acteur, delai=DELAI_PORT)
+    _apres_action()
+    return res
+
+
+@router.post("/{port}/rattacher")
+def rattacher(port: str, corps: Any = Body(default=None), user=Depends(require_jwt)):
+    _verifier(port, corps)
+    acteur = _acteur(user)
+    _pas_pendant_une_bascule()
+    res = _ctl("port-rattacher", port, acteur, delai=DELAI_PORT)
     _apres_action()
     return res

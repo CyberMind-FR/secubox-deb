@@ -70,6 +70,14 @@ def ports_coupes(noms: list[str]) -> set[str]:
     return {m.group(1) for n in noms if (m := COUPE_RE.fullmatch(n))}
 
 
+ISOLE_RE = re.compile(r"^04-secubox-port-(lan[0-3])-isole\.network$")
+
+
+def ports_isoles(noms: list[str]) -> set[str]:
+    """Ports isolés (#3201) d'après les noms de fichiers, même listage que les coupures ; tout autre nom est ignoré."""
+    return {m.group(1) for n in noms if (m := ISOLE_RE.fullmatch(n))}
+
+
 def invalider() -> None:
     """Après une action sur un port : le prochain relevé est relu. Une lecture en vol, commencée avant, rend son
     résultat à son appelant mais ne l'inscrit pas au cache (il montrerait l'état d'avant l'action) ; on ne l'attend pas."""
@@ -101,10 +109,11 @@ def lire_systeme() -> dict:
             res["baux"] = None
             pannes.append("baux")
         try:
-            res["coupes"] = ports_coupes([f.name for f in RESEAU_D.iterdir()])
-        except OSError:
-            res["coupes"] = None
-            pannes.append("coupes")
+            noms = [f.name for f in RESEAU_D.iterdir()]
+            res["coupes"], res["isoles"] = ports_coupes(noms), ports_isoles(noms)
+        except OSError:                         # un seul listage : s'il échoue, coupés et isolés sont tous deux inconnus
+            res["coupes"] = res["isoles"] = None
+            pannes += ["coupes", "isoles"]
         res["pannes"] = pannes
         with _verrou_generation:
             if generation == _generation:          # aucune invalidation pendant la lecture : elle est à jour
@@ -132,12 +141,12 @@ def lire_ports(user: Any = Depends(require_lecture)) -> dict:
     if s["ip_link"] is None:
         liste = None
     else:
-        liste = lect.ports(s["ip_link"], s["fdb"], s["sysfs"], s["coupes"], _macs_box(s))
+        liste = lect.ports(s["ip_link"], s["fdb"], s["sysfs"], s["coupes"], _macs_box(s), s["isoles"])
         if _restreint(user):                    # pas un administrateur réel : ni MAC apprises, des comptes seulement
             for p in liste:
                 p["nb_appareils"] = None if p["macs"] is None else len(p["macs"])
                 del p["macs"]
-    return {"ports": liste, "pannes": _pannes(s, ("ip_link", "fdb", "coupes"))}
+    return {"ports": liste, "pannes": _pannes(s, ("ip_link", "fdb", "coupes", "isoles"))}
 
 
 @router.get("/clients")

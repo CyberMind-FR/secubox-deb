@@ -1,3 +1,29 @@
+secubox-netmodes (1.6.0-1~trixie1) trixie; urgency=medium
+
+  * Isoler un port du switch (ref #3201) : verbes port-isoler et port-rattacher de netmodesctl (lan0 à lan3 seulement,
+    audit, état précédent remis sur échec). Trois fichiers par port : 04-secubox-port-<port>-isole.network (réseau du
+    port), /var/lib/secubox-netmodes/dhcp.d/isole-<port>.conf (DHCP et DNS de la box, dossier root seul en 0700) et la table nft
+    inet secubox_netmodes_isole_<port> (Internet seul : ni le LAN, ni la Freebox, ni un tunnel, ni l'administration,
+    en IPv4 comme en IPv6). Réserve 192.168.248.0/22 : lanN reçoit 192.168.(248+N).0/24, passerelle .1, DHCP .100 à .199.
+  * Unbound écoute d'avance les passerelles des ports isolés (ref #3201) : une réapplication du mode routeur est
+    nécessaire une fois avant le premier isolement (sinon refus clair, aucun fichier posé). dnsmasq lit dhcp.d
+    (--conf-dir), profil AppArmor et sudoers étendus ; si dnsmasq refuse de repartir, les fichiers d'avant sont remis
+    et le DHCP du LAN relancé.
+  * API (ref #3201) : POST /ports/{port}/isoler et /rattacher, corps {"confirmer": "<port>"}, mêmes formes d'erreur que
+    /couper (409 si le poste de l'administrateur est derrière le port). GET /reseau/ports rend par port isole
+    (vrai, faux ou null) et reseau_isole ; /routeur/etat ajoute ports_isoles. L'attente du pont d'une application ou
+    d'un retour du mode routeur ignore les ports isolés, et l'isolement survit à un retour en arrière (pas de DHCP sans
+    mode routeur).
+  * DHCP du LAN en bind-dynamic (ref #3201) : un port isolé sans adresse n'arrête plus le DHCP de tout le LAN ; l'isolement
+    attend l'adresse du port avant de relancer dnsmasq, le rattachement retire le fragment DHCP en premier.
+  * Gardes croisées (ref #3201) : un port isolé ne se coupe pas, un port coupé ne s'isole pas ; Rétablir et Rendre au
+    LAN restent permis en tout mode.
+  * Onglet Switch (ref #3201) : pastille « isolé » (Internet seul et le réseau du port), « Isoler… » et « Rendre au
+    LAN… » avec confirmation intégrée (saisie du nom du port) ; la confirmation se ferme si l'état du port ne permet
+    plus le verbe ; démonstration avec lan2 isolé, sans aucune écriture.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 12:00:00 +0100
+
 secubox-netmodes (1.5.0-1~trixie1) trixie; urgency=medium
 
   * Panneau « Réseau » (ref #3190) : /netmodes/ devient un hôte à onglets au profil Aurora (une seule iframe de même

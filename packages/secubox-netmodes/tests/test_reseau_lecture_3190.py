@@ -48,7 +48,7 @@ MACS_BOX = {MAC_BOX}
 
 
 def _ports(**kw):
-    a = dict(ip_link=IP_LINK, fdb=FDB, sysfs=SYSFS, coupes=set(), macs_box=MACS_BOX)
+    a = dict(ip_link=IP_LINK, fdb=FDB, sysfs=SYSFS, coupes=set(), macs_box=MACS_BOX, isoles=set())
     a.update(kw)
     return {p["nom"]: p for p in reseau_lecture.ports(**a)}
 
@@ -63,7 +63,8 @@ def test_roles_exacts():
 def test_port_lan0_forme():
     p = _ports()["lan0"]
     assert p == {"nom": "lan0", "role": "lan", "porteuse": True, "vitesse_mbps": 1000, "etat_admin": "up",
-                 "maitre": "br-lan", "macs": ["d4:93:90:27:a7:dd"], "plusieurs_appareils": False, "coupe": False}
+                 "maitre": "br-lan", "macs": ["d4:93:90:27:a7:dd"], "plusieurs_appareils": False, "coupe": False,
+                 "isole": False, "reseau_isole": None}
 
 
 def test_mac_de_la_box_exclue_et_permanentes():
@@ -178,7 +179,7 @@ client_sysd: dict = {}
 @pytest.fixture
 def client(monkeypatch):
     sysd = {"ip_link": IP_LINK, "fdb": FDB, "voisins_lan": [], "wan_addr": [], "route_defaut": [], "voisins_wan": [],
-            "membres_lxc": [], "liens_wg": [], "sysfs": SYSFS, "baux": BAUX, "coupes": set(), "pannes": []}
+            "membres_lxc": [], "liens_wg": [], "sysfs": SYSFS, "baux": BAUX, "coupes": set(), "isoles": set(), "pannes": []}
     monkeypatch.setattr(reseau_api, "lire_systeme", lambda: dict(client_sysd))
     main.app.dependency_overrides[require_lecture] = lambda: {"sub": "alice"}
     main.app.dependency_overrides[require_jwt] = lambda: {"sub": "alice"}
@@ -296,9 +297,9 @@ def test_coupes_depuis_vrai_listage(monkeypatch, tmp_path):
 # ---- pannes visibles champ par champ ------------------------------------------------------------------------------
 
 def test_coupes_en_panne_coupe_none(client):
-    client_sysd.update(coupes=None, pannes=["coupes"])
+    client_sysd.update(coupes=None, isoles=None, pannes=["coupes", "isoles"])
     r = client.get("/reseau/ports").json()
-    assert all(p["coupe"] is None for p in r["ports"]) and r["pannes"] == ["coupes"]
+    assert all(p["coupe"] is None for p in r["ports"]) and r["pannes"] == ["coupes", "isoles"]
 
 
 def test_fdb_en_panne_macs_none(client):

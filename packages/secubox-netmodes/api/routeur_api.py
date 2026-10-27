@@ -46,7 +46,7 @@ TTL_ETAT = 5.0
 # Lecteur restreint (tout lecteur qui n'est pas un administrateur réel) : liste blanche, jamais l'acteur ni le nom de
 # la sauvegarde
 CLES_RESTREINTES = ("etat", "depuis", "erreur", "config", "minuteur_actif", "echeance", "bascule_en_cours", "dhcp_actif",
-                 "adresses_pont", "ports_coupes")
+                 "adresses_pont", "ports_coupes", "ports_isoles")
 _DERNIERE_VIDE = {"verbe": None, "code": None, "sortie": None, "fini": True, "debut": None, "fin": None}
 
 log = get_logger("netmodes")

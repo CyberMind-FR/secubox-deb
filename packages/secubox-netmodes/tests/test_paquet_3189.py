@@ -153,7 +153,7 @@ def test_unite_lan_dhcp_root_confinee():
     # dnsmasq reste actif (refus AppArmor, port pris : sinon l'application serait déclarée réussie)
     assert u["Type"] == ["exec"]
     assert u["ExecStart"] == ["/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/var/lib/secubox-netmodes/lan-dhcp.conf"
-                              " --pid-file="]
+                              " --conf-dir=/var/lib/secubox-netmodes/dhcp.d,*.conf --pid-file="]    # #3201
     assert CHEMINS["dhcp"] == "/var/lib/secubox-netmodes/lan-dhcp.conf"   # le fichier rendu est bien celui-là
     assert "systemd-networkd.service" in u["After"][0].split()
     for cle, valeur in {"Restart": "on-failure", "ProtectSystem": "strict", "ReadWritePaths": "/var/lib/misc",
@@ -204,7 +204,8 @@ def test_unite_retour_boot_root_durcie():
 LIGNE_SUDOERS = ("secubox-netmodes ALL=(root) NOPASSWD: /usr/sbin/netmodesctl routeur-etat, "
                  "/usr/sbin/netmodesctl routeur-appliquer *, /usr/sbin/netmodesctl routeur-confirmer *, "
                  "/usr/sbin/netmodesctl routeur-retour *, "
-                 "/usr/sbin/netmodesctl port-couper *, /usr/sbin/netmodesctl port-retablir *")    # #3190
+                 "/usr/sbin/netmodesctl port-couper *, /usr/sbin/netmodesctl port-retablir *, "
+                 "/usr/sbin/netmodesctl port-isoler *, /usr/sbin/netmodesctl port-rattacher *")    # #3190, #3201
 
 
 def regles_sudoers() -> list[str]:
@@ -286,7 +287,7 @@ def test_sudoers_conforme_aux_appels_de_l_api(monkeypatch, tmp_path):
 
     avec_acteur = verbes_du_controleur("AVEC_ACTEUR")
     avec_port = verbes_du_controleur("AVEC_PORT")                         # #3190 : <port> <acteur>
-    assert avec_port == {"port-couper", "port-retablir"} and not avec_acteur & avec_port
+    assert avec_port == {"port-couper", "port-retablir", "port-isoler", "port-rattacher"} and not avec_acteur & avec_port
     assert etoiles == avec_acteur | avec_port
     assert sans_acteur == {"routeur-etat"} and "routeur-retour-demarrage" not in sans_acteur | etoiles
 
@@ -297,7 +298,7 @@ def test_sudoers_conforme_aux_appels_de_l_api(monkeypatch, tmp_path):
     pont.mkdir()
     monkeypatch.setattr(ports_api, "PONT_SYS", pont)                     # br-lan présent : l'anti-coupure lit
     etat = {"etat": "actif", "adresses_pont": ["192.168.42.1/24"]}
-    faux = Faux([(0, etat), (0, etat), (0, {}), (0, {}), (0, {}), (0, {}), (0, {})])
+    faux = Faux([(0, etat), (0, etat), (0, {}), (0, {}), (0, {}), (0, {}), (0, {}), (0, {}), (0, {})])
     monkeypatch.setattr(routeur_api.subprocess, "run", faux)
     routeur_api._reinitialiser()
 
@@ -319,11 +320,13 @@ def test_sudoers_conforme_aux_appels_de_l_api(monkeypatch, tmp_path):
         attendre_fin()
         client.post("/ports/lan1/couper", json={"confirmer": "lan1"}, headers={"X-Real-IP": "192.168.42.50"})
         client.post("/ports/lan2/retablir", json={"confirmer": "lan2"})
+        client.post("/ports/lan3/isoler", json={"confirmer": "lan3"})        # #3201
+        client.post("/ports/lan3/rattacher", json={"confirmer": "lan3"})
     finally:
         main.app.dependency_overrides.clear()
         routeur_api._reinitialiser()
-    assert len(faux.appels) == 7 and faux.reponses == []
-    assert faux.lectures == [list(Faux.LECTURES[0])]                     # poste sans voisin : pas de table de pont
+    assert len(faux.appels) == 9 and faux.reponses == []
+    assert faux.lectures == [list(Faux.LECTURES[0])] * 2                 # couper puis isoler : poste sans voisin, pas de table de pont
     verbes = set()
     for argv in faux.appels:
         assert argv[:2] == ["sudo", "-n"], argv
@@ -360,7 +363,8 @@ def test_control_depends_et_version():
         assert d in deps, d
     assert re.search(r"python3 \(>= 3\.11\)", depends)                    # tomllib
     assert "Architecture: all" in ctl and "Standards-Version: 4.6.2" in ctl and "debhelper-compat (= 13)" in ctl
-    tete = lire("debian/changelog").split("\n -- ", 1)
+    tete = lire("debian/changelog").split("secubox-netmodes (1.5.0-1~trixie1)", 1)[1].split("\n -- ", 1)
+    tete[0] = "secubox-netmodes (1.5.0-1~trixie1)" + tete[0]
     # 1.5.0 (#3190) : panneau Réseau, ports, application asynchrone ; dit aussi ce qui n'est pas repris (Isoler)
     assert tete[0].startswith("secubox-netmodes (1.5.0-1~trixie1) trixie; urgency=medium")
     assert "(ref #3190)" in tete[0] and "Isoler" in tete[0] and "livraison 3" in tete[0]

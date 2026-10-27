@@ -7,6 +7,8 @@
 Aucun appel système ici : reseau_api.lire_systeme() lit, ce module interprète. Lecture seule, jamais d'action."""
 from __future__ import annotations
 
+from . import isolement
+
 ROLES = {"eth2": "wan", "eth1": "conduit", "eth0": "sfp", "lan0": "lan", "lan1": "lan", "lan2": "lan", "lan3": "lan"}
 PONT_LAN = "br-lan"
 PONT_LXC = "br-lxc"
@@ -32,8 +34,10 @@ def _fdb_apprises(fdb) -> list[dict]:
     return sortie
 
 
-def ports(ip_link: list, fdb: list | None, sysfs: dict, coupes: set | None, macs_box: set) -> list[dict]:
-    """fdb ou coupes None (source en échec) : `macs`/`plusieurs_appareils` ou `coupe` valent None, jamais « aucun »."""
+def ports(ip_link: list, fdb: list | None, sysfs: dict, coupes: set | None, macs_box: set,
+          isoles: set | None) -> list[dict]:
+    """fdb, coupes ou isoles None (source en échec) : `macs`/`plusieurs_appareils`, `coupe` ou `isole` valent None, jamais
+    « aucun ». Seuls les ports lan* s'isolent (#3201) : `reseau_isole` est le réseau du port isolé, sinon None."""
     macs_box = {m.lower() for m in macs_box}
     par_port: dict[str, list[str]] = {}
     for e in _fdb_apprises(fdb):
@@ -61,6 +65,8 @@ def ports(ip_link: list, fdb: list | None, sysfs: dict, coupes: set | None, macs
             "maitre": lien.get("master"),
             "macs": macs, "plusieurs_appareils": None if macs is None else len(macs) > 1,
             "coupe": None if coupes is None else nom in coupes,
+            "isole": None if isoles is None else role == "lan" and nom in isoles,
+            "reseau_isole": str(isolement.passerelle(nom).network) if role == "lan" and isoles and nom in isoles else None,
         })
     return sortie
 

@@ -19,6 +19,7 @@ RESEAUX_INTERDITS: tuple[IPv4Network, ...] = (
     IPv4Network("192.168.255.0/24"),  # gestion des box
     IPv4Network("10.100.0.0/24"),
 )
+RESERVE_ISOLES = IPv4Network("192.168.248.0/22")  # un /24 par port isolé (#3201)
 _BAIL = re.compile(r"^[1-9][0-9]{0,3}[mh]$")
 _WAN = re.compile(r"^eth[0-9]$")
 
@@ -49,6 +50,8 @@ def _interdit(reseau: IPv4Network) -> None:
         if reseau.overlaps(interdit):
             raise ErreurConfig(
                 f"{interdit} est le réseau de gestion des box : choisir un autre sous-réseau")
+    if reseau.overlaps(RESERVE_ISOLES):
+        raise ErreurConfig(f"{RESERVE_ISOLES} est réservé aux ports isolés : choisir un autre sous-réseau")
 
 
 def depuis_dict(d: dict) -> ConfigRouteur:

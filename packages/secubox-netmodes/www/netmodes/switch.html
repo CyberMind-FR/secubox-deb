@@ -7,14 +7,16 @@
 
   SecuBox — panneau Réseau, onglet « Switch » (#3190), profil Aurora (.claude/AURORA-REFERENCE.md).
   Façade du MOCHAbin (eth2 WAN, SFP+ eth0, lan0 à lan3) et tableau des ports ; Couper… / Rétablir… sur lan0 à lan3 seulement,
-  avec confirmation DANS la page (saisie du nom du port) ; « Isoler » reste désactivé (livraison 3). eth0, eth1 et eth2 : aucune action.
+  avec confirmation DANS la page (saisie du nom du port) ; Isoler… / Rendre au LAN… (#3201) sur les mêmes ports. eth0, eth1 et eth2 : aucune action.
   DONNÉES RÉELLES :
     GET  /api/v1/netmodes/reseau/ports           ports : rôle, lien, vitesse, pont, appareils derrière le port (lecture)
     GET  /api/v1/netmodes/reseau/clients         noms des appareils par port (session d'administrateur)
     GET  /api/v1/netmodes/routeur/etat           mode routeur et ports coupés (session d'administrateur)
-    POST /api/v1/netmodes/ports/<port>/couper    corps {"confirmer": "<port>"} ; idem /retablir (session d'administrateur)
+    POST /api/v1/netmodes/ports/<port>/couper    corps {"confirmer": "<port>"} ; idem /retablir, /isoler, /rattacher (session d'administrateur)
+  Un port isolé (isole === true) a son propre réseau dans la réserve 192.168.248.0/22 (lan0 : 192.168.248.0/24 … lan3 : 192.168.251.0/24) ;
+  isole à null (état illisible) : aucun bouton Isoler.
   Un champ illisible (None) s'affiche « — » ou comme une panne, jamais comme « faux ». Un refus (409…) est affiché tel quel dans la page.
-  ?embed=1 : sans menu ; ?demo=1 : données de démonstration (adresses de documentation RFC 5737), aucun appel, actions inertes.
+  ?embed=1 : sans menu ; ?demo=1 : données de démonstration (adresses de documentation RFC 5737, plus lan2 isolé dans la réserve des ports isolés), aucun appel, actions inertes.
 -->
 <html lang="fr">
 <head>
@@ -152,7 +154,7 @@
         <button type="button" class="btn danger" id="confirmOk" disabled>Confirmer</button><button type="button" class="btn" id="confirmAnnule">Annuler</button></div>
     </div>
     <div class="resultat" id="resultat" role="status" aria-live="polite" hidden></div>
-    <p class="note">« Isoler » placera un port dans son propre VLAN (livraison 3). « Couper » arrête un port du pont (lan0 à lan3, en mode routeur actif seulement) ; « Rétablir » le relance en tout mode : dans le pont br-lan si le mode routeur est actif et le port configuré, sinon hors du pont. Chaque geste est confirmé par la saisie du nom du port et inscrit au journal d'audit. Le port derrière lequel votre poste est vu (sa MAC apprise sur ce port) ne peut pas être coupé ; cette garde ne reconnaît ni un accès par un tunnel ou par un routeur sans NAT branché sur un port du LAN, ni une MAC sortie de la table du pont. eth1 (conduit du switch) n'est jamais ponté et eth2 (WAN) n'est jamais relancé à distance. Plusieurs adresses MAC derrière un même port signalent un switch, un hub ou un point d'accès.</p>
+    <p class="note">« Isoler » sort un port du pont : son propre réseau (192.168.248.0/24 pour lan0 … 192.168.251.0/24 pour lan3), DHCP et DNS de la box, Internet seul ; en mode routeur actif seulement, jamais sur le port de votre poste. « Rendre au LAN » le rattache en tout mode. « Couper » arrête un port du pont (lan0 à lan3, en mode routeur actif seulement) ; « Rétablir » le relance en tout mode : dans le pont br-lan si le mode routeur est actif et le port configuré, sinon hors du pont. Chaque geste est confirmé par la saisie du nom du port et inscrit au journal d'audit. Le port derrière lequel votre poste est vu (sa MAC apprise sur ce port) ne peut pas être coupé ; cette garde ne reconnaît ni un accès par un tunnel ou par un routeur sans NAT branché sur un port du LAN, ni une MAC sortie de la table du pont. eth1 (conduit du switch) n'est jamais ponté et eth2 (WAN) n'est jamais relancé à distance. Plusieurs adresses MAC derrière un même port signalent un switch, un hub ou un point d'accès.</p>
   </div>
 </div></div></main>
 
@@ -247,6 +249,12 @@
     if (p.coupe === true || p.coupe === false) { return p.coupe; }
     return null;
   }
+  function isoleDe(p) {             // true / false / null (illisible ou absent)
+    return p.isole === true || p.isole === false ? p.isole : null;
+  }
+  function reseauDe(p, nom) {       // /24 du port : celui que donne l'API, sinon calculé de la réserve (lanN : 248 + N)
+    return typeof p.reseau_isole === "string" && p.reseau_isole ? p.reseau_isole : "192.168." + (248 + Number(nom.charAt(3))) + ".0/24";
+  }
   function parNom(R) {
     var m = {};
     if (R.ports.ok && Array.isArray(R.ports.d.ports)) { R.ports.d.ports.forEach(function (p) { if (p && p.nom) { m[p.nom] = p; } }); }
@@ -273,6 +281,7 @@
         else if (p.porteuse === false) { sous = "pas de lien"; }
         else { sous = "lien illisible"; }
         if (coupe === true || p.etat_admin === "down") { l2.classList.add("o"); pr.classList.add("coupe"); sous = coupe ? "coupé" : "arrêté"; cls = "f"; }
+        else if (isoleDe(p) === true) { sous = "isolé"; }
       }
       pr.appendChild(l1); pr.appendChild(l2); c.appendChild(pr);
       c.appendChild(h("b", "", etiq));
@@ -282,7 +291,7 @@
   }
 
   function lignePort(R, p, nom) {
-    var tr = h("tr"), coupe = p ? coupeDe(R, p) : null, lan = LAN_RE.test(nom);
+    var tr = h("tr"), coupe = p ? coupeDe(R, p) : null, lan = LAN_RE.test(nom), isole = p ? isoleDe(p) : null;
     var tdP = h("td", "c-port"); tdP.appendChild(h("b", "", nom)); tr.appendChild(tdP);
     var tdR = h("td", "c-role"); var rl = p && p.role ? (ROLES[p.role] || [p.role, ""]) : null;
     tdR.appendChild(rl ? pastille(rl[1], rl[0]) : h("span", "faible", "—")); tr.appendChild(tdR);
@@ -292,6 +301,7 @@
     else if (p.porteuse === true) { tdL.appendChild(pastille("ok", vitesse(p.vitesse_mbps) || "lien", "Câble branché")); }
     else if (p.porteuse === false) { tdL.appendChild(pastille("", "aucun", "Pas de câble ou appareil éteint")); }
     else { tdL.appendChild(h("span", "faible", "—")); tdL.title = "Lien illisible"; }
+    if (p && isole === true) { tdL.appendChild(document.createTextNode(" ")); tdL.appendChild(pastille("att", "isolé", "Internet seul — " + reseauDe(p, nom))); }
     tr.appendChild(tdL);
     var tdM = h("td", "mb c-membre", p && p.maitre ? p.maitre : "—"); if (!(p && p.maitre)) { tdM.className += " faible"; } tr.appendChild(tdM);
     var tdD = h("td", "mb c-der");
@@ -311,9 +321,12 @@
     tr.appendChild(tdD);
     var tdA = h("td", "act c-act");
     if (lan && p) {
-      var iso = h("button", "btn", "Isoler…"); iso.type = "button"; iso.disabled = true; iso.title = "livraison 3"; tdA.appendChild(iso);
-      if (coupe === true) { tdA.appendChild(bouton("Rétablir…", "ok", nom, "retablir")); }
-      else if (coupe === false) { tdA.appendChild(bouton("Couper…", "danger", nom, "couper")); }
+      if (isole === true) { tdA.appendChild(bouton("Rendre au LAN…", "ok", nom, "rattacher")); }
+      else if (coupe === true) { tdA.appendChild(bouton("Rétablir…", "ok", nom, "retablir")); }
+      else if (coupe === false) {
+        if (isole === false) { tdA.appendChild(bouton("Isoler…", "", nom, "isoler")); }
+        tdA.appendChild(bouton("Couper…", "danger", nom, "couper"));
+      }
       else { var q = h("span", "faible pt", "état de coupure illisible"); tdA.appendChild(q); }
     } else if (nom === "eth2") { tdA.appendChild(h("span", "faible pt", "jamais relancé à distance")); }
     else if (nom === "eth1") { tdA.appendChild(h("span", "faible pt", "jamais ponté")); }
@@ -355,9 +368,19 @@
     $("tCoupe").textContent = lisible && lans.length && !cInc ? String(nc) : "—"; $("tCoupeS").textContent = cInc ? "état de coupure illisible" : "arrêtés par l'administrateur";
     var hubs = 0, hInc = false; lans.forEach(function (p) { if (p.plusieurs_appareils === true) { hubs++; } else if (p.plusieurs_appareils == null) { hInc = true; } });
     $("tHub").textContent = lisible && lans.length && !(hInc && !hubs) ? String(hubs) : "—";
-    if (ouverte && (!M[ouverte.port] || coupeDe(R, M[ouverte.port]) !== (ouverte.verbe === "retablir"))) { fermer(); }
+    if (ouverte && !verbeAdmis(M[ouverte.port], ouverte.verbe, R)) { fermer(); }
   }
 
+  // Le verbe reste permis tant que l'état du port le permet : rattacher exige isolé ; isoler exige coupe et isole à false ;
+  // couper exige coupe à false et un port non isolé ; rétablir exige un port coupé.
+  function verbeAdmis(p, verbe, R) {
+    if (!p) { return false; }
+    var c = coupeDe(R, p), i = isoleDe(p);
+    if (verbe === "rattacher") { return i === true; }
+    if (verbe === "isoler") { return c === false && i === false; }
+    if (verbe === "couper") { return c === false && i !== true; }
+    return c === true;
+  }
   // ── Confirmation intégrée : le nom du port à saisir, ni confirm() ni boîte native ───────────────────────────────────────────
   // Où Rétablir remet le port, comme le contrôleur (port-retablir, permis en tout mode) : dans br-lan si le mode routeur est
   // actif et le port configuré, sinon hors du pont. null : état du mode routeur ou ports configurés illisibles.
@@ -377,16 +400,24 @@
     if (au === false) { return "Rétablir " + port + " remonte le port hors du pont : " + port + " n'est pas un port configuré du mode routeur."; }
     return "Rétablir " + port + " relance le port : dans le pont br-lan si le mode routeur est actif et le port configuré, sinon hors du pont (état du mode routeur illisible ici).";
   }
+  function texteIsoler(port) {
+    return "Isoler " + port + " : il sort du pont et reçoit son propre réseau " + reseauDe({}, port) + " (DHCP et DNS de la box). Les appareils branchés n'auront accès qu'à Internet : ni au LAN, ni à la Freebox, ni à l'administration. Ceux déjà branchés changent d'adresse au renouvellement de leur bail (débrancher puis rebrancher pour l'immédiat).";
+  }
+  function texteRattacher(port) {
+    return "Rendre " + port + " au LAN : il rejoint le pont br-lan si le mode routeur est actif. Les appareils branchés reprennent une adresse du LAN au renouvellement de leur bail.";
+  }
+  var VERBES = { couper: { bouton: "Couper", fait: "coupé", demo: "coupé" }, retablir: { bouton: "Rétablir", fait: "rétabli", demo: "rétabli" },
+                 isoler: { bouton: "Isoler", fait: "isolé", demo: "isolé" }, rattacher: { bouton: "Rendre", fait: "rendu au LAN", demo: "rendu au LAN" } };
   function resultat(txt, cls) { var r = $("resultat"); r.hidden = !txt; r.className = "resultat" + (cls ? " " + cls : ""); r.textContent = txt || ""; }
   function ouvrir(port, verbe, declencheur) {
     if (!LAN_RE.test(port)) { return; }
     ouverte = { port: port, verbe: verbe, declencheur: declencheur }; resultat("");
     var c = $("confirm"); c.hidden = false; c.className = "confirm" + (verbe === "couper" ? " grave" : "");
-    $("confirmTexte").textContent = verbe === "couper"
+    $("confirmTexte").textContent = verbe === "isoler" ? texteIsoler(port) : verbe === "rattacher" ? texteRattacher(port) : verbe === "couper"
       ? "Couper " + port + " arrête le port : les appareils qui y sont branchés perdent le réseau jusqu'au rétablissement. Le port derrière lequel votre poste est vu est refusé ; un accès par un tunnel ou par un routeur sans NAT branché sur un port du LAN n'est pas reconnu : vérifiez que le vôtre ne passe pas par " + port + "."
       : texteRetablir(port);
     $("confirmEtiq").textContent = "Saisir « " + port + " » pour confirmer";
-    var s = $("confirmSaisie"); s.value = ""; $("confirmOk").disabled = true; $("confirmOk").textContent = verbe === "couper" ? "Couper " + port : "Rétablir " + port;
+    var s = $("confirmSaisie"); s.value = ""; $("confirmOk").disabled = true; $("confirmOk").textContent = VERBES[verbe].bouton + " " + port + (verbe === "rattacher" ? " au LAN" : "");
     s.focus();
   }
   function fermer() { var d = ouverte && ouverte.declencheur; ouverte = null; $("confirm").hidden = true; $("confirmSaisie").value = ""; if (d && document.body.contains(d)) { d.focus(); } hauteur(); }
@@ -396,7 +427,7 @@
   $("confirmOk").addEventListener("click", function () {
     if (!ouverte || $("confirmSaisie").value.trim() !== ouverte.port) { return; }
     var port = ouverte.port, verbe = ouverte.verbe;
-    if (DEMO) { fermer(); resultat("Démonstration : action inerte, rien n'a été " + (verbe === "couper" ? "coupé" : "rétabli") + " sur " + port + ".", "demo"); return; }
+    if (DEMO) { fermer(); resultat("Démonstration : action inerte, rien n'a été " + VERBES[verbe].demo + " sur " + port + ".", "demo"); return; }
     occupe = true; $("confirmOk").disabled = true;
     var hd = { Accept: "application/json", "Content-Type": "application/json" }, t = jeton();
     if (t) { hd.Authorization = "Bearer " + t; }
@@ -405,7 +436,7 @@
       .then(function (r) {
         return r.json().then(function (j) { return j; }, function () { return null; }).then(function (j) {
           occupe = false; generation++;
-          if (r.ok) { fermer(); resultat(port + (verbe === "couper" ? " coupé." : " rétabli.") + " Relevé actualisé.", ""); return rafraichir(); }
+          if (r.ok) { fermer(); resultat(port + " " + VERBES[verbe].fait + ". Relevé actualisé.", ""); return rafraichir(); }
           var det = j && j.detail ? (typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail)) : "réponse illisible";
           if (r.status === 401 || r.status === 403) { det = "session d'administrateur requise (" + r.status + ")"; }
           resultat("Refusé (HTTP " + r.status + ") : " + det, "ko"); $("confirmOk").disabled = false; hauteur();
@@ -421,10 +452,11 @@
         { nom: "eth2", role: "wan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: null, macs: [], plusieurs_appareils: false, coupe: false },
         { nom: "eth1", role: "conduit", porteuse: true, vitesse_mbps: 2500, etat_admin: "up", maitre: null, macs: [], plusieurs_appareils: false, coupe: false },
         { nom: "eth0", role: "sfp", porteuse: false, vitesse_mbps: null, etat_admin: "up", maitre: null, macs: [], plusieurs_appareils: false, coupe: false },
-        { nom: "lan0", role: "lan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:c0"], plusieurs_appareils: false, coupe: false },
-        { nom: "lan1", role: "lan", porteuse: false, vitesse_mbps: null, etat_admin: "up", maitre: "br-lan", macs: [], plusieurs_appareils: false, coupe: false },
-        { nom: "lan2", role: "lan", porteuse: true, vitesse_mbps: 100, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:a1", "00:00:5e:00:53:a2", "00:00:5e:00:53:a3"], plusieurs_appareils: true, coupe: false },
-        { nom: "lan3", role: "lan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:bf"], plusieurs_appareils: false, coupe: false }], pannes: [] } },
+        { nom: "lan0", role: "lan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:c0"], plusieurs_appareils: false, coupe: false, isole: false, reseau_isole: null },
+        { nom: "lan1", role: "lan", porteuse: false, vitesse_mbps: null, etat_admin: "up", maitre: "br-lan", macs: [], plusieurs_appareils: false, coupe: false, isole: false, reseau_isole: null },
+        // lan2 isolé : 192.168.250.0/24 est une adresse de la réserve des ports isolés (192.168.248.0/22), une valeur de conception, pas une mesure.
+        { nom: "lan2", role: "lan", porteuse: true, vitesse_mbps: 100, etat_admin: "up", maitre: null, macs: ["00:00:5e:00:53:a1", "00:00:5e:00:53:a2", "00:00:5e:00:53:a3"], plusieurs_appareils: true, coupe: false, isole: true, reseau_isole: "192.168.250.0/24" },
+        { nom: "lan3", role: "lan", porteuse: true, vitesse_mbps: 1000, etat_admin: "up", maitre: "br-lan", macs: ["00:00:5e:00:53:bf"], plusieurs_appareils: false, coupe: false, isole: false, reseau_isole: null }], pannes: [] } },
       clients: { ok: true, d: { clients: [
         { mac: "00:00:5e:00:53:c0", ip: "198.51.100.192", nom: "pc-demo", port: "lan0", source: "bail", expire: maintenant + 3600 },
         { mac: "00:00:5e:00:53:a1", ip: "198.51.100.150", nom: "imprimante-demo", port: "lan2", source: "bail", expire: maintenant + 3600 },
