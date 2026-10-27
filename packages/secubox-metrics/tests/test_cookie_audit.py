@@ -379,3 +379,23 @@ def test_un_instantane_disparu_sort_du_cache(tmp_path):
     f.unlink()
     assert agg._read_ingest(d) == {}
     assert agg._ingest_cache == {}, "un fichier disparu reste en memoire"
+
+
+def test_le_registre_se_lit_en_flux_sans_le_charger_en_entier(tmp_path):
+    """#3217 — sur gk2, le registre pesait 219 Mo (686 000 lignes, plus de rotation depuis le 19 août) : la première
+    lecture après chaque démarrage faisait read() + decode() + splitlines() de tout, soit ~1,4 Go de pic pour en garder
+    28 Mo. La lecture se fait désormais ligne à ligne : le pic ne dépend plus de la taille du fichier."""
+    import tracemalloc
+    ledger = tmp_path / "server.jsonl"
+    with ledger.open("w", encoding="utf-8") as fh:
+        for i in range(200_000):
+            fh.write(json.dumps({"vhost": "a.fr", "name": f"c{i % 50}", "value_hash": "x" * 40}) + "\n")
+    assert ledger.stat().st_size > 15 * 1024 * 1024
+    agg = CookieAuditAggregator({"enabled": True, "ledger_path": str(ledger), "ingest_dir": str(tmp_path / "i")},
+                                cache_path=tmp_path / "cache.json")
+    tracemalloc.start()
+    out = agg._read_ledger(ledger)
+    _, pic = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    assert len(out["a.fr"]) == 50 and agg._ledger_pos == ledger.stat().st_size
+    assert pic < 8 * 1024 * 1024, f"pic de {pic / 1048576:.0f} Mo pour un registre de 16 Mo"
