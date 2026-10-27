@@ -11,4 +11,6 @@ Wants=network-online.target
 Type=oneshot
 ExecStart=/usr/sbin/secubox-relais-maillage synchroniser
 # Émettre un certificat joker peut prendre quelques minutes (DNS-01).
-TimeoutStartSec=15min
+# 45 min : une vingtaine de noms d'un nouveau pair (vhost, route, vérification) sur gk2 saturé dépassaient
+# 15 min (gk4, 2026-10-27, #3206).
+TimeoutStartSec=45min

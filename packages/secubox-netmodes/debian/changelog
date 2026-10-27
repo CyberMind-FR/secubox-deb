@@ -1,3 +1,13 @@
+secubox-netmodes (1.7.0-1~trixie1) trixie; urgency=medium
+
+  * Le LAN du mode routeur est de confiance comme le réseau de la Freebox (décision du 2026-10-26) : br-lan reçoit en
+    entrée l'équivalent de « iif eth2 accept » du durcissement, et SSH depuis br-lan est inséré en tête (le
+    durcissement refuse le 22 hors 10/8 et 192.168.1.0/24). Un nœud du LAN routé rejoint ainsi le maillage (API de
+    jonction 7331, constaté sur gk4). Ports isolés exclus ; retirées par le retour comme les autres règles du LAN.
+    Prend effet à la prochaine application du mode routeur (Unbound inchangé, pas de redémarrage) (ref #3206).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 13:00:00 +0100
+
 secubox-netmodes (1.6.1-1~trixie1) trixie; urgency=medium
 
   * unbound-checkconf a son propre délai (900 s) au lieu des 120 s communs (ref #3201) : sur gk2 (101 Mo de listes

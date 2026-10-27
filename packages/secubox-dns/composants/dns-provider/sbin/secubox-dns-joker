@@ -1,0 +1,74 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-dns-joker : assure « *.<nœud> A <ip> » chez le registraire, par les fournisseurs du module DNS (#3206).
+
+  secubox-dns-joker assurer <domaine-du-pair> <ipv4-publique>
+
+Appelé par secubox-relais-maillage (root) avant le certificat joker d'un pair. Sortie : une ligne JSON. Codes : 0 créé ou
+déjà juste ; 2 usage ; 3 refus (domaine, IP, zone non gérée, enregistrement étranger) ; 1 échec du fournisseur.
+Les clés d'API (providers.json, 0600) ne sont jamais écrites dans la sortie ni dans l'audit."""
+import asyncio
+import json
+import os
+import sys
+
+INSTALLE = "/usr/lib/secubox/dns-provider"
+USAGE = "usage : secubox-dns-joker assurer <domaine-du-pair> <ipv4-publique>"
+
+
+def _repondre(donnees, code):
+    print(json.dumps(donnees, ensure_ascii=False))
+    return code
+
+
+def charger_systeme():
+    """(fournisseurs, fabrique, auditer, erreurs_fournisseur) depuis le module installé."""
+    racine = INSTALLE if os.path.isdir(INSTALLE) else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if racine not in sys.path:
+        sys.path.insert(0, racine)
+    from api import main as m
+    fournisseurs = []
+    for p in m._load_json(m.PROVIDERS_FILE, {"providers": []}).get("providers", []):
+        try:
+            fournisseurs.append((p["id"], m.get_adapter(m.ProviderType(p["provider"]), p["credentials"])))
+        except Exception:                                   # fournisseur incomplet : ignoré, jamais bloquant
+            continue
+
+    def fabrique(nom, ip):
+        return m.RecordCreate(type=m.RecordType("A"), name=nom, value=ip, ttl=300)
+
+    return fournisseurs, fabrique, m._audit_log, (m.HTTPException,)
+
+
+def main(argv=None, charger=None):
+    args = list(sys.argv[1:] if argv is None else argv)
+    if len(args) != 3 or args[0] != "assurer":
+        return _repondre({"erreur": USAGE}, 2)
+    if charger is None and os.geteuid() != 0:
+        return _repondre({"erreur": "secubox-dns-joker doit tourner en root (clés d'API en 0600)"}, 1)
+    domaine, ip = args[1], args[2]
+    fournisseurs, fabrique, auditer, erreurs = (charger or charger_systeme)()
+    racine = INSTALLE if os.path.isdir(INSTALLE) else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if racine not in sys.path:
+        sys.path.insert(0, racine)
+    from api import joker
+    try:
+        r = asyncio.run(joker.assurer(fournisseurs, domaine, ip, fabrique))
+    except joker.Refus as exc:
+        auditer("joker_refuse", {"domaine": domaine, "ip": ip, "motif": str(exc)})
+        return _repondre({"erreur": str(exc)}, 3)
+    except (joker.Echec, *erreurs) as exc:
+        motif = getattr(exc, "detail", None) or str(exc)
+        auditer("joker_echec", {"domaine": domaine, "ip": ip, "motif": motif})
+        return _repondre({"erreur": motif}, 1)
+    if r["etat"] == "cree":
+        auditer("record_created", {"domain": r["zone"], "provider": r["fournisseur"], "type": "A", "name": r["nom"],
+                                   "motif": f"joker du pair {domaine} (relais du maillage, #3206)"})
+    return _repondre(r, 0)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

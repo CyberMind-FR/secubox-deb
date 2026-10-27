@@ -1,3 +1,12 @@
+secubox-dns (1.6.3-1~trixie1) trixie; urgency=medium
+
+  * dns-provider : l'adaptateur Gandi rend ses vraies erreurs (HTTPException 502 avec le message de Gandi, API
+    injoignable comprise) au lieu d'un « succès » ; transport injectable pour les essais, comme OVH.
+    Nouveau secubox-dns-joker (root) : assure « *.<nœud> A <ip publique> » d'un pair du maillage dans une zone gérée
+    (idempotent, jamais d'écrasement, création relue), audité, sortie JSON, codes 0/1/2/3 (ref #3206).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 13:00:00 +0100
+
 secubox-dns (1.6.2-1~trixie1) trixie; urgency=medium
 
   * Unbound (ref #3167) : l'ancre DNSSEC /var/lib/unbound/root.key vide ou sans clé est recopiée depuis dns-root-data
