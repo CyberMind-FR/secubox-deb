@@ -16,6 +16,14 @@ _is_dryrun, a box key that is loaded — never generated — from
 ANNUAIRE_KEY_PATH).
 
 Commands:
+  publish-modules
+            Signe le relevé de validation des modules (#3212) écrit par
+            secubox-profiles (SECUBOX_PROFILS_VALIDATION, défaut
+            /var/lib/secubox/profiles/validation/releve.json) et l'écrit en
+            FLEET_MODULES_PATH (défaut /var/lib/secubox/annuaire/fleet/
+            modules.json), que GET /fleet/modules/self sert aux pairs sur
+            :8799. Sans relevé, relevé inchangé ou fleet_publish = false :
+            {"skipped": …}, rc0.
   publish   Sign + persist a fresh MetricSnapshot for this box. A no-op
             ({"skipped": "fleet_publish disabled"}, rc0) when
             [metrics] fleet_publish = false in secubox.conf. Meant to be
@@ -53,10 +61,14 @@ if LIB not in sys.path:
 # node-key lookups: one box, one sovereign identity.
 KEY_PATH = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
 SECUBOX_CONF = os.environ.get("SECUBOX_CONF", "/etc/secubox/secubox.conf")
+RELEVE_PATH = os.environ.get("SECUBOX_PROFILS_VALIDATION", "/var/lib/secubox/profiles/validation/releve.json")
+# Champs d'un paquet que le relevé signé porte (ModulesSnapshot) ; cpu_ns et releve_epoch restent internes au relevé.
+_CHAMPS_PAQUET = ("paquet", "version", "statut_dpkg", "installe", "attendu", "recommande", "meta", "hors_profil",
+                  "etat", "unites", "agregateur", "memoire_o", "cpu_pct", "erreurs")
 
 
 def _die(msg: str, code: int = 1) -> "None":
-    print(json.dumps({"error": msg}), file=sys.stderr)
+    print(json.dumps({"error": msg}, ensure_ascii=False), file=sys.stderr)
     raise SystemExit(code)
 
 
@@ -138,6 +150,47 @@ def cmd_publish(args) -> int:
     return 0
 
 
+def cmd_publish_modules(args) -> int:
+    """Signe le relevé de validation des modules de cette box (#3212)."""
+    if not _fleet_publish_enabled():
+        print(json.dumps({"skipped": "fleet_publish disabled"}))
+        return 0
+    try:
+        with open(RELEVE_PATH, encoding="utf-8") as f:
+            releve = json.load(f)
+    except FileNotFoundError:
+        print(json.dumps({"skipped": "aucun relevé des modules (secubox-profilectl releve)"}, ensure_ascii=False))
+        return 0
+    except (OSError, ValueError) as e:
+        _die(f"relevé illisible : {type(e).__name__}")
+    if not isinstance(releve, dict):
+        _die("relevé illisible : pas un objet JSON")
+    from annuaire import fleet, fleet_store  # noqa: PLC0415
+    from annuaire.model import now_rfc3339  # noqa: PLC0415
+    precedent = fleet_store.read(fleet_store.MODULES_PATH)
+    if precedent and precedent.get("releve_ts") == releve.get("releve_ts"):
+        print(json.dumps({"skipped": "relevé inchangé"}, ensure_ascii=False))
+        return 0
+    priv = _load_box_priv()
+    node_did = _self_did(priv)
+    if _is_dryrun():
+        print(json.dumps({"dryrun": True, "would": "publish-modules", "node_did": node_did}, indent=2))
+        return 0
+    paquets = [{k: p[k] for k in _CHAMPS_PAQUET if k in p} if isinstance(p, dict) else p
+               for p in releve.get("paquets") or []]
+    fields = {"node_did": node_did, "issued_by": node_did, "hostname": releve.get("hostname"), "ts": now_rfc3339(),
+              "releve_ts": releve.get("releve_ts"), "profil_actif": releve.get("profil_actif"),
+              "profils_installes": releve.get("profils_installes") or [], "partiel": releve.get("partiel") or [],
+              "paquets": paquets}
+    try:
+        rec = fleet.sign_modules(priv, fields)
+    except Exception as e:  # noqa: BLE001 — ValidationError : relevé hors bornes, jamais signé
+        _die(f"relevé refusé par le modèle : {type(e).__name__}")
+    fleet_store.write(rec, fleet_store.MODULES_PATH)
+    print(json.dumps({"published": node_did, "paquets": len(rec["paquets"])}, indent=2))
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(
         prog="sbx-fleetctl",
@@ -149,6 +202,9 @@ def main(argv=None) -> int:
         "publish", help="sign + persist a fresh MetricSnapshot for this box"
     ).set_defaults(fn=cmd_publish)
 
+    sub.add_parser(
+        "publish-modules", help="signe le relevé de validation des modules de cette box (#3212)"
+    ).set_defaults(fn=cmd_publish_modules)
     args = p.parse_args(argv)
     return args.fn(args)
 

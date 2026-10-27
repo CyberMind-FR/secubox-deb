@@ -32,6 +32,12 @@ SELF_PATH = os.environ.get(
     "/var/lib/secubox/annuaire/fleet/self.json",
 )
 
+# Relevé de validation des modules signé (#3212), même dossier, même écriture atomique.
+MODULES_PATH = os.environ.get(
+    "FLEET_MODULES_PATH",
+    "/var/lib/secubox/annuaire/fleet/modules.json",
+)
+
 
 def write(rec: Dict[str, Any], path: str = SELF_PATH) -> None:
     """Atomically persist `rec` as JSON at `path`.

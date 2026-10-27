@@ -26,7 +26,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from . import crypto
-from .model import MetricSnapshot
+from .model import MetricSnapshot, ModulesSnapshot
 
 _EXCLUDED_FROM_PAYLOAD = ("sig", "signer_did", "signer_pub")
 
@@ -80,6 +80,29 @@ def verify_snapshot(rec: Dict[str, Any]) -> bool:
             return False
 
         return crypto.verify(signer_pub, crypto.canonical_bytes(payload), sig)
+    except Exception:
+        return False
+
+
+def sign_modules(priv: bytes, fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Signe le relevé de validation des modules de cette box (#3212), validé par ModulesSnapshot (borné).
+
+    Même chaîne de confiance que sign_snapshot : signer_pub → signer_did = node_did = issued_by."""
+    pub = crypto.public_from_private(priv)
+    payload = {k: v for k, v in fields.items() if k not in _EXCLUDED_FROM_PAYLOAD}
+    payload = ModulesSnapshot(**payload).model_dump(exclude={"sig", "signer_did", "signer_pub"})
+    sig = crypto.sign(priv, crypto.canonical_bytes(payload))
+    return {**payload, "sig": sig, "signer_did": crypto.did_from_pubkey(pub), "signer_pub": pub.hex()}
+
+
+def verify_modules(rec: Dict[str, Any]) -> bool:
+    """Relevé d'un pair : signature ET forme. Un pair signe ce qu'il veut ; un relevé hors bornes (taille, noms, états)
+    est refusé même bien signé. FAIL-CLOSED."""
+    try:
+        if not verify_snapshot(rec):
+            return False
+        ModulesSnapshot(**rec)
+        return True
     except Exception:
         return False
 

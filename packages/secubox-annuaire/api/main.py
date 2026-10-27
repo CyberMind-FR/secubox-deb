@@ -910,6 +910,78 @@ async def get_fleet():
 
 
 # ---------------------------------------------------------------------------
+# Relevé de validation des modules (#3212) — comparateur des profils, toutes les box du maillage.
+#
+# /fleet/modules/self : le relevé SIGNÉ de cette box (sbx-fleetctl publish-modules), servi aux pairs sur :8799 comme
+# /fleet/self. /fleet/modules (JWT) : soi + chaque pair de wg_mesh.json, vérifiés (signature ET forme), et les box sans
+# relevé lisible NOMMÉES avec leur raison — une colonne « relevé indisponible », jamais une box qui disparaît.
+# ---------------------------------------------------------------------------
+
+_MODULES_TTL_S = 15 * 60  # 3 relevés (secubox-profiles-releve.timer, 5 min)
+
+
+@app.get("/fleet/modules/self", dependencies=[Depends(lecture_ou_pair)])
+async def get_fleet_modules_self():
+    """Le relevé de validation signé de cette box, ou {} s'il n'est pas encore publié."""
+    return fleet_store.read(fleet_store.MODULES_PATH) or {}
+
+
+def _fetch_modules_peer(url: str, timeout: int = 3) -> "tuple[Optional[Dict[str, Any]], Optional[str]]":
+    """(relevé, None) ou (None, raison) : la raison s'affiche dans la colonne de la box (injectable en test)."""
+    import json as _json          # noqa: PLC0415
+    import urllib.error           # noqa: PLC0415
+    import urllib.request         # noqa: PLC0415
+
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (maillage seulement)
+            corps = resp.read(4 * 1024 * 1024)
+    except urllib.error.HTTPError as e:
+        return None, "version trop ancienne" if e.code == 404 else f"réponse HTTP {e.code}"
+    except Exception:
+        return None, "injoignable"
+    try:
+        data = _json.loads(corps)
+    except ValueError:
+        return None, "réponse illisible"
+    return (data, None) if isinstance(data, dict) else (None, "réponse illisible")
+
+
+@app.get("/fleet/modules", dependencies=[Depends(_require_jwt)])
+async def get_fleet_modules():
+    """Les relevés vérifiés de toutes les box ({noeuds}), et les box sans relevé lisible ({indisponibles}). Ne lève jamais."""
+    try:
+        from annuaire.model import now_rfc3339  # noqa: PLC0415
+        now = now_rfc3339()
+        noeuds: Dict[str, Dict[str, Any]] = {}
+        indisponibles: List[Dict[str, str]] = []
+
+        def retenir(rec: Optional[Dict[str, Any]], erreur: Optional[str], nom: str, ip: Optional[str]) -> None:
+            if erreur is None and not rec:
+                erreur = "relevé non publié"
+            elif erreur is None and not fleet.verify_modules(rec):
+                erreur = "signature invalide"
+            if erreur:
+                indisponibles.append({"nom": nom, "mesh_ip": ip or "", "raison": erreur})
+            elif rec["node_did"] not in noeuds:
+                noeuds[rec["node_did"]] = {**rec, "stale": fleet.is_stale(rec, now, _MODULES_TTL_S)}
+
+        retenir(fleet_store.read(fleet_store.MODULES_PATH), None, "cette box", None)
+        pairs = [p for p in mesh_sync.read_mesh_peers() if p.get("mesh_ip")]
+        urls = [f"http://{p['mesh_ip']}:{mesh_sync.DEFAULT_MESH_PORT}/api/v1/annuaire/fleet/modules/self" for p in pairs]
+        # En parallèle, hors de la boucle : cette API est servie dans l'agrégateur (boucle partagée, voir /fleet).
+        resultats = await asyncio.gather(*[asyncio.to_thread(_fetch_modules_peer, u) for u in urls],
+                                         return_exceptions=True)
+        for pair, res in zip(pairs, resultats):
+            rec, erreur = res if isinstance(res, tuple) else (None, "injoignable")
+            retenir(rec, erreur, pair.get("name") or pair["mesh_ip"], pair["mesh_ip"])
+        return {"noeuds": sorted(noeuds.values(), key=lambda n: n.get("hostname", "")),
+                "indisponibles": indisponibles}
+    except Exception:
+        return {"noeuds": [], "indisponibles": [], "erreur": True}
+
+
+# ---------------------------------------------------------------------------
 # Centers — delegated config-property ownership (feat/centers-grants-remote-config, Task 8)
 #
 # Read endpoints (GET) resolve entirely in-process from the journal
