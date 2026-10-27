@@ -9,6 +9,22 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-27 — secubox-metrics : 1,4 Go ramenés à ~250 Mo sur gk2 (closes #3217, ref #3191)
+
+- **Mesure d'abord** (#3191) : gk2 saturé (6,7 Go de RAM sur 7,9, 5,5 Go de swap) ; metrics 1,4 Go (pic 1,9 Go), Unbound
+  836 Mo, LXC ~1,2 Go ; l'agrégateur ne pèse que ~200 Mo (77 modules montés). Les 12 « redémarrages » de metrics
+  étaient le filet `RuntimeMaxSec=6h`, conservé.
+- **Cause 1** (PR #3219, metrics 1.29.6) : Surf sert chaque site sous `surf-<hôte-aplati>.<box>` ; vhost_stats en
+  faisait 152 878 seaux (83 Mo de cache). Une seule entrée `surf.<box>`, plafond de 2 000 seaux par jour, fusion du
+  cache au chargement, `sans_ref` enfin persisté. Cache 79 → 15 Mo.
+- **Cause 2** (PR #3220, metrics 1.29.7, waf-ng 1.30.7) : mesure étape par étape sur gk2 (metrics arrêté) — import
+  128 Mo, collecte 146, autres collecteurs ≤ 202, **cookie_audit : pic 1 436 Mo en 27 s**. Le registre des cookies de
+  sbxwaf (219 Mo, sans rotation depuis le 19 août : règle partie avec secubox-mitmproxy le 2026-09-08) était lu d'un
+  bloc. Lecture ligne à ligne ; rotation rétablie (copytruncate : sbxwaf garde le fichier ouvert), vérifiée à blanc.
+- **Déployé** : metrics 1.29.7 sur les quatre box ; waf-ng 1.30.7 sur gk2 et gk4 (gk1 reste en 1.30.3, gk3 en 1.29.0 :
+  sauts non forcés, registre vide sur ces box) ; site public 200 après la relance de sbxwaf.
+- **Vérifié sur gk2** : metrics 288, 236, 253, 260 Mo sur 10 min (1 208 Mo avant), cache vhost 15 Mo.
+
 ## 2026-10-27 — Comparateur des profils : validation du parc, déployé sur les quatre box (closes #3212)
 
 - **Livré** (PR #3215, conception approuvée par le propriétaire, relecture de sécurité : 0 critique, 8 importants et 7
