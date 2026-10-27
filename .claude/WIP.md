@@ -175,7 +175,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 00000000. **Release v3.0.0-alpha.19 (#3208, 2026-10-27)** : notes, TODO et wiki (Hardware-Matrix) dans la PR de la
   release ; puis étiquette `v3.0.0-alpha.19` et workflow Release (≈ 6 h) jusqu'aux images publiées ; ensuite README
-  racine et accueil du wiki (Home, `scripts/sync-wiki.sh`), et `closes #3208`.
+  racine et accueil du wiki (Home, `scripts/sync-wiki.sh`), puis fermer l'issue de la release par son marqueur.
   **Réseau** : mode routeur, panneau, isolement **clôturés** (#3189, #3190, #3201) ; nœuds en automatique (#3206) et
   correctif hardening `ip_forward` (#3209) **déployés et clos** (HISTORY). **Ensuite, dans l'ordre arbitré** (TODO du
   2026-10-27) : zones du NAC/Guardian en réseau routé (#2891) ; listes DNS en RPZ, mémoire à réduire (#3205) ; maillage
