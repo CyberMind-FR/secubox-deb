@@ -186,30 +186,27 @@ Flashing, U-Boot and first-boot steps:
 [ARM / U-Boot](https://github.com/CyberMind-FR/secubox-deb/wiki/ARM-Installation) ·
 [Supported hardware](https://github.com/CyberMind-FR/secubox-deb/wiki/Hardware)
 
-### 🧪 Current release: `v3.0.0-alpha.18`
+### 🧪 Current release: `v3.0.0-alpha.19`
 
-Published 2026-10-16. This is a **pre-release line**: run it on a test box, not on the link your
-household depends on. Since alpha 11 (346 commits), the main changes are:
+Published 2026-10-27. This is a **pre-release line**: run it on a test box, not on the link your
+household depends on. Since alpha 18, the main changes are:
 
-- **Aurora admin.** The shared Aurora look now covers the admin pages (overview, WAF, DPI, identity and access,
-  SOC watch, releases and centers, publishing, torrent, BBS, Hall…), with honest data: a missing measure
-  shows as « — », never as zero.
-- **1 GB boards.** A `minimal` profile (DPI, DNS guard, ad-guard, NAC, Freebox, IPv6 guard, web filter,
-  WireGuard, admin UI), an ESPRESSObin `lite` image, `secubox-install-emmc`, a USB boot script and an eMMC
-  fix-bootcmd. Measured on a real 951 MB board: see [docs/INSTALL-ESPRESSOBIN.md](docs/INSTALL-ESPRESSOBIN.md).
-- **Curves and live system.** `Courbes` (7-day history, one point per minute) replaces the Grafana page;
-  `Système en direct` replaces Glances; a package `secubox-courbes` serves them without the full metrics stack.
-- **DPI.** nDPId flows grouped by protocol, application, host or risk; an aggregated statistics view;
-  ad-guard 1.14 with live status and a DNS sensor feeding the DNS guard alerts.
-- **App store.** Remote installation through the OpenPGP box, totals per category; profile comparison page
-  read from the meta-packages.
-- **Services.** YouTube flow administration (`ytsas` 0.8), BBS image replies as thumbnails, identity row for
-  PhotoPrism (SSO), a static-CDN cache in the MITM engine (`proxypac` step 2).
-- **Still from alpha 11:** Actor Intelligence 2.0 ([activation](docs/ACTOR-INTELLIGENCE-ACTIVATION.md)), headless
-  auto-install (it **wipes the first disk**), Auto-Load ([guide](docs/AUTOLOAD-ATELIER.md); network boot is not shipped).
+- **MOCHAbin as a real router.** Durable router mode (bridge `br-lan` under systemd-networkd, LAN DHCP, the box's
+  DNS with filtering and ad-guard, NAT, firewall), applied without ever restarting the mvpp2 WAN, with an automatic
+  rollback when not confirmed within 3 minutes (#3189). A « Réseau » panel maps WAN, mesh, tunnels, containers,
+  switch and clients (#3190); a port can be isolated into its own network (#3201); trusted routed LAN (#3206).
+- **WireGuard mesh.** New boxes join automatically under their own name, a node without WAN is relayed, and a
+  wildcard DNS record is created at the registrar for each new node.
+- **Hall « master view »** (Hall v2) is the default.
+- **Services.** Video conferencing (La Suite Meet), an App-Store-like shop, mail (external IMAP fetch, local relay,
+  webmail), SMB shares (ksmbd), podcaster portal and RSS, backups on `/data`, OVH DNS management.
+- **Debian stock kernel 6.12.113** on MOCHAbin (WAN and switch handled by the initrd), TFTP netboot and eMMC flash
+  from the live system.
 
-Known limits: the release notes list a live USB for ESPRESSObin, but no such file is among the release assets
-(only the `lite` image above). Guided path: first section of the [wiki home](https://github.com/CyberMind-FR/secubox-deb/wiki).
+Images: `lite` (ESPRESSObin v7, MOCHAbin, RPi 400), `isp` (MOCHAbin, RPi 400, VM x64), `full` (RPi 400, VM x64),
+x64 live and the installer. The `minimal` images (ESPRESSObin v7, RPi 400) are added to the release once rebuilt
+(#3223); the MOCHAbin live USB is missing this time, its build now exceeds GitHub's 6-hour job limit (#3225).
+Guided path: first section of the [wiki home](https://github.com/CyberMind-FR/secubox-deb/wiki).
 
 ### Verifying downloads
 

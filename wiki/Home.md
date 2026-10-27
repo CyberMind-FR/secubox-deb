@@ -85,9 +85,9 @@ L'architecture repose sur six modules canoniques organisés en chemin hamiltonie
 
 ---
 
-## 🔴 Démarrage rapide — Alpha 18
+## 🔴 Démarrage rapide — Alpha 19
 
-> Tester, installer ou booter la release **`v3.0.0-alpha.18`** — en machine virtuelle ou sur matériel réel arm64. Toutes les commandes se lancent depuis un clone du dépôt (`git clone` puis `cd secubox-deb`).
+> Tester, installer ou booter la release **`v3.0.0-alpha.19`** — en machine virtuelle ou sur matériel réel arm64. Toutes les commandes se lancent depuis un clone du dépôt (`git clone` puis `cd secubox-deb`).
 
 ### 🖥️ A. En VM — le plus rapide (une commande)
 
@@ -95,7 +95,7 @@ VirtualBox amd64, image **téléchargée** depuis les releases GitHub, VM créé
 
 ```bash
 bash image/create-vbox-vm.sh --download
-# ou une release précise :  bash image/create-vbox-vm.sh --download v3.0.0-alpha.18
+# ou une release précise :  bash image/create-vbox-vm.sh --download v3.0.0-alpha.19
 ```
 
 La VM redirige les ports invité 22/80/443 vers l'hôte. Accès :
@@ -181,7 +181,7 @@ SecuBox-Deb est un projet libre sans campagne de financement participatif, sans 
 
 | Élément | Valeur |
 |---------|--------|
-| Release courante | **v3.0.0-alpha.18** (pré-version, 16 octobre 2026) |
+| Release courante | **v3.0.0-alpha.19** (pré-version, 27 octobre 2026) |
 | Base Debian | **trixie (13)** |
 | Kernel | 6.12 |
 | Paquets | environ 190 |
