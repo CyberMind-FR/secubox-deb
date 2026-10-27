@@ -75,10 +75,10 @@ domaines) ne fait qu'ajouter un faux classement en mode observe. Le parking n'a 
   assigné a une entrée `/32` ou `/128` plus précise. Zones `always_nxdomain` ; les autorisations sont des zones `transparent` plus précises.
 - **Application** : `POST /api/v1/webfilter/appliquer` dépose `appliquer.demande` ; l'unité root `secubox-webfilter-apply` (déclenchée par
   `secubox-webfilter-apply.path`, jamais par sudo) lance `secubox-webfilter-ctl apply`, qui valide `config.json` comme une entrée hostile, génère
-  `93-secubox-webfilter.conf`, vérifie le budget de zones (`[limites] zones_max`) et le **dépose** dans `/var/lib/secubox/dns-listes/sources` (0.5.0,
-  #3205). Le service root `secubox-dns-listes` (secubox-core ≥ 1.8.0) compile webfilter, adblock et adult en un seul `92-secubox-listes.conf` à
+  `93-secubox-webfilter.conf`, vérifie le budget de zones (`[limites] zones_max`) et le **dépose** dans `/var/lib/secubox-dns-listes/sources` (0.5.0,
+  #3205). Le service root `secubox-dns-listes` (secubox-core ≥ 1.8.1) compile webfilter, adblock et adult en un seul `92-secubox-listes.conf` à
   étiquettes (chaque domaine une fois au lieu d'une copie par vue), contrôle avec `unbound-checkconf`, recharge Unbound et **remet tout l'état
-  précédent** au moindre échec ; son état se lit dans `/var/lib/secubox/dns-listes/etat.json`. Un rendu identique n'est **pas redéposé** (rien n'est
+  précédent** au moindre échec ; son état se lit dans `/var/lib/secubox-dns-listes/etat.json`. Un rendu identique n'est **pas redéposé** (rien n'est
   recompilé). Le contrôleur ne touche plus Unbound : ni `unbound-checkconf`, ni `unbound-control`, ni accès réseau.
 - **Nuit** : `secubox-webfilter-apply.timer` applique les changements en attente à 04:00. La synchronisation des listes ne recharge jamais Unbound.
 - **Audit** : chaque changement effectif (profil, mode d'une catégorie, appareil, application, refus, échec) est écrit dans `/var/log/secubox/audit.log`

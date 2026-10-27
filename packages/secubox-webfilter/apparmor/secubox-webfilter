@@ -127,9 +127,9 @@
   /etc/unbound/unbound.conf.d/94-secubox-adguard-tv.conf r,
 
   # Écriture : la SEULE source de webfilter pour secubox-dns-listes (#3205), ses résultats, son état racine et l'audit
-  /var/lib/secubox/dns-listes/sources/ r,
-  /var/lib/secubox/dns-listes/sources/93-secubox-webfilter.conf rw,
-  /var/lib/secubox/dns-listes/sources/.sbx-* rw,
+  /var/lib/secubox-dns-listes/sources/ r,
+  /var/lib/secubox-dns-listes/sources/93-secubox-webfilter.conf rw,
+  /var/lib/secubox-dns-listes/sources/.sbx-* rw,
   /var/lib/secubox/webfilter/resultat.json rw,
   /var/lib/secubox/webfilter/carte.json rw,
   /var/lib/secubox/webfilter/appliquer.demande rw,   # consommée (effacée) dès le début d'une application (#2441)

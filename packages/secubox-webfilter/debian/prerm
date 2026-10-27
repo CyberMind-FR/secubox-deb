@@ -9,10 +9,10 @@ case "$1" in
     # Le blocage ne survit pas au paquet : sans lui, plus aucun moyen de l'annuler depuis l'interface. La source est retirée (et l'ancien fichier
     # d'avant #3205 s'il reste) ; secubox-dns-listes recompile sans webfilter, vérifie et recharge Unbound (jamais lors d'une simple mise à jour :
     # seul « remove » arrive ici).
-    SOURCE=/var/lib/secubox/dns-listes/sources/93-secubox-webfilter.conf
+    SOURCE=/var/lib/secubox-dns-listes/sources/93-secubox-webfilter.conf
     ANCIEN=/etc/unbound/unbound.conf.d/93-secubox-webfilter.conf
     if [ -f "$SOURCE" ] || [ -f "$ANCIEN" ]; then
-      rm -f /var/lib/secubox/dns-listes/sources/93-secubox-webfilter.conf /etc/unbound/unbound.conf.d/93-secubox-webfilter.conf
+      rm -f /var/lib/secubox-dns-listes/sources/93-secubox-webfilter.conf /etc/unbound/unbound.conf.d/93-secubox-webfilter.conf
       systemctl start --no-block secubox-dns-listes.service >/dev/null 2>&1 || true
       printf '{"ts": "%s", "module": "webfilter-ctl", "action": "retrait", "detail": "paquet retiré : source retirée, secubox-dns-listes recompile"}\n' \
         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /var/log/secubox/audit.log 2>/dev/null || true

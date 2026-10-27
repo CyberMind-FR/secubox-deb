@@ -91,7 +91,7 @@ def test_service_du_controleur_est_root_deplenche_par_fichier_et_bac_a_sable():
     assert "NoNewPrivileges=true" in u and "ProtectSystem=strict" in u and "PrivateTmp=true" in u
     assert "Wants=unbound" not in u and "Requires=unbound" not in u
     rw = [x.lstrip("-") for x in re.search(r"^ReadWritePaths=(.*)$", u, re.M).group(1).split()]
-    assert set(rw) == {"/var/lib/secubox/dns-listes/sources", "/var/lib/secubox/webfilter", "/var/lib/secubox-webfilter-ctl", "/var/log/secubox/audit.log"}
+    assert set(rw) == {"/var/lib/secubox-dns-listes/sources", "/var/lib/secubox/webfilter", "/var/lib/secubox-webfilter-ctl", "/var/log/secubox/audit.log"}
     assert "AF_INET" not in u and "IPAddressDeny=any" in u and "IPAddressAllow" not in u          # #3205 : plus d'unbound-control, aucun réseau
 
 
@@ -142,9 +142,9 @@ def test_profil_du_controleur_n_ecrit_que_sa_source():
     assert "/usr/sbin/secubox-webfilter-ctl {" in p
     ctl = p[p.index("/usr/sbin/secubox-webfilter-ctl {"):]
     regles = "\n".join(ligne.split("#")[0] for ligne in ctl.splitlines())
-    assert "/var/lib/secubox/dns-listes/sources/93-secubox-webfilter.conf rw," in regles
+    assert "/var/lib/secubox-dns-listes/sources/93-secubox-webfilter.conf rw," in regles
     assert not re.search(r"^\s*/etc/unbound/\S*\s+\S*w", regles, re.M)                         # plus rien n'est écrit dans /etc/unbound
-    assert not re.search(r"^\s*/var/lib/secubox/dns-listes/sources/\*", regles, re.M)            # ni les sources des autres générateurs
+    assert not re.search(r"^\s*/var/lib/secubox-dns-listes/sources/\*", regles, re.M)            # ni les sources des autres générateurs
     assert "unbound-checkconf" not in regles and "unbound-control" not in regles and "network inet" not in regles
     assert "/var/lib/secubox-webfilter-ctl/" in regles
 
@@ -163,7 +163,7 @@ def test_exception_root_ecrite_dans_les_regles():
 def test_retrait_du_paquet_retire_le_blocage_et_purge_l_etat_racine():
     pre, post = lire("debian/prerm"), lire("debian/postrm")
     assert "secubox-webfilter-apply.service" in pre                                          # l'application en cours est arrêtée
-    assert "rm -f /var/lib/secubox/dns-listes/sources/93-secubox-webfilter.conf" in pre and "secubox-dns-listes" in pre
+    assert "rm -f /var/lib/secubox-dns-listes/sources/93-secubox-webfilter.conf" in pre and "secubox-dns-listes" in pre
     assert "unbound-control" not in pre                                                      # #3205 : secubox-dns-listes recompile et recharge
     assert re.search(r"remove\)", pre) and "upgrade" not in pre.split("remove)")[0].split("case")[-1]       # jamais lors d'une simple mise à jour
     assert "rm -rf /var/lib/secubox-webfilter-ctl" in post

@@ -37,5 +37,5 @@ SystemCallArchitectures=native
 # AF_NETLINK : `ip -j neigh` et `ip -j addr`. Aucun réseau IP : plus d'unbound-control (#3205).
 RestrictAddressFamilies=AF_UNIX AF_NETLINK
 IPAddressDeny=any
-ReadWritePaths=/var/lib/secubox/dns-listes/sources /var/lib/secubox/webfilter /var/lib/secubox-webfilter-ctl -/var/log/secubox/audit.log
+ReadWritePaths=/var/lib/secubox-dns-listes/sources /var/lib/secubox/webfilter /var/lib/secubox-webfilter-ctl -/var/log/secubox/audit.log
 ReadOnlyPaths=/etc/secubox

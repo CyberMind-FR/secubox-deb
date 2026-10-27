@@ -59,7 +59,8 @@ def banc(tmp_path):
         (tmp_path / "etat" / "listes" / cat).mkdir(exist_ok=True)                     # une liste par source du catalogue : n'importe quelle catégorie peut passer en block
         (tmp_path / "etat" / "listes" / cat / f"{source}.lst").write_text(nom + "\n")
     (tmp_path / "racine").mkdir()
-    (tmp_path / "u").mkdir()
+    (tmp_path / "u").mkdir(mode=0o755)
+    os.chmod(tmp_path / "u", 0o755)                                     # dossier des sources : fermé en écriture, comme en production (#3205)
     os.chmod(tmp_path / "etat", 0o700)                                  # comme en production (tmpfiles) : le contrôleur refuse un dossier ouvert au groupe
     toml = tmp_path / "w.toml"
     toml.write_text(CONF.replace("lan = []", 'lan = ["192.168.1.0/24", "2a01:db8::/64"]')
