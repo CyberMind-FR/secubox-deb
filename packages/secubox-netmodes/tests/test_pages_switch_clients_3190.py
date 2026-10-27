@@ -21,7 +21,8 @@ ICI = Path(__file__).resolve().parents[1]
 WWW = ICI / "www" / "netmodes"
 PAGES = {"switch": WWW / "switch.html", "clients": WWW / "clients.html"}
 SRC = {k: p.read_text(encoding="utf-8") for k, p in PAGES.items()}
-DOC = [ipaddress.ip_network(n) for n in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24")]
+DOC = [ipaddress.ip_network(n) for n in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24", "192.168.248.0/22")]
+# 192.168.248.0/22 : réserve des ports isolés (#3201), une valeur de conception fixe et non une mesure.
 ROUTES = {"switch": ["/api/v1/netmodes/reseau/ports", "/api/v1/netmodes/reseau/clients", "/api/v1/netmodes/routeur/etat"],
           "clients": ["/api/v1/netmodes/reseau/clients", "/api/v1/netmodes/reseau/ports", "/api/v1/nac/clients"]}
 
@@ -95,7 +96,6 @@ def test_switch_une_seule_ecriture_ports_lan_seulement():
     assert '"/api/v1/netmodes/ports/" + port + "/" + verbe' in s and "JSON.stringify({ confirmer: port })" in s
     assert "var LAN_RE = /^lan[0-3]$/;" in s
     assert re.search(r"if \(DEMO\) \{ fermer\(\); resultat\(\"Démonstration : action inerte", s)       # la démo ne mène jamais au fetch
-    assert 'iso.disabled = true; iso.title = "livraison 3"' in s
     for t in ("jamais ponté", "jamais relancé à distance", "plusieurs appareils derrière ce port (switch, hub ou point d'accès)", "Couper…", "Rétablir…"):
         assert t in s, t
     assert not re.search(r"bouton\([^)]*eth[012]", s)
@@ -149,7 +149,7 @@ def test_switch_demo_facade_tableau_et_confirmation_inerte():
         ctx.close()
         return r, j
     r, j = _avec_navigateur(scenario)
-    assert r["ports_facade"] == 6 and all(d and t == "livraison 3" for d, t in r["iso"]) and len(r["iso"]) == 4
+    assert r["ports_facade"] == 6 and len(r["iso"]) == 3 and not any(d for d, _t in r["iso"])      # lan2 est isolé en démonstration (#3201)
     assert r["boutons_eth"] == [0, 0, 0]
     assert r["lignes"]["eth2"][5] == "jamais relancé à distance" and r["lignes"]["eth1"][5] == "jamais ponté"
     assert "plusieurs appareils derrière ce port (switch, hub ou point d'accès)" in r["lignes"]["lan2"][4]

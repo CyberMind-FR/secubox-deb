@@ -363,7 +363,8 @@ def test_control_depends_et_version():
         assert d in deps, d
     assert re.search(r"python3 \(>= 3\.11\)", depends)                    # tomllib
     assert "Architecture: all" in ctl and "Standards-Version: 4.6.2" in ctl and "debhelper-compat (= 13)" in ctl
-    tete = lire("debian/changelog").split("\n -- ", 1)
+    tete = lire("debian/changelog").split("secubox-netmodes (1.5.0-1~trixie1)", 1)[1].split("\n -- ", 1)
+    tete[0] = "secubox-netmodes (1.5.0-1~trixie1)" + tete[0]
     # 1.5.0 (#3190) : panneau Réseau, ports, application asynchrone ; dit aussi ce qui n'est pas repris (Isoler)
     assert tete[0].startswith("secubox-netmodes (1.5.0-1~trixie1) trixie; urgency=medium")
     assert "(ref #3190)" in tete[0] and "Isoler" in tete[0] and "livraison 3" in tete[0]
