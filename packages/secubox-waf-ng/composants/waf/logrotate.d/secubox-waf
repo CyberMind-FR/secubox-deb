@@ -41,3 +41,23 @@
     # (#1318).
     create 0660 secubox-waf secubox-waf
 }
+
+# REGISTRE DES COOKIES DE SBXWAF (#3217). Sa règle vivait dans secubox-mitmproxy, purgé le 2026-09-08 : sur gk2 le
+# fichier n'avait plus tourné depuis le 19 août (219 Mo), et secubox-metrics, qui le relit à chaque démarrage, en tirait
+# 1,4 Go de pic.
+#
+# `copytruncate`, ICI ET SEULEMENT ICI. sbxwaf (cookieaudit.go) ouvre ce fichier UNE fois, en O_APPEND, et ne le
+# rouvre jamais : un renommage le laisserait écrire dans le fichier tourné. Avec O_APPEND, l'écriture suivante va à
+# la nouvelle fin du fichier vidé. Ce n'est qu'un inventaire des cookies observés (le dernier état par cookie), pas le
+# journal d'audit CSPN : les quelques lignes écrites entre la copie et la troncature sont un risque accepté.
+/var/log/secubox/cookie-audit/server.jsonl {
+    su secubox-waf secubox-waf
+    daily
+    maxsize 20M
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

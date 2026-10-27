@@ -1,3 +1,12 @@
+secubox-waf-ng (1.30.7-1~trixie1) trixie; urgency=medium
+
+  * logrotate : le registre des cookies de sbxwaf (/var/log/secubox/cookie-audit/server.jsonl) tourne de nouveau
+    (quotidien, 20 Mo au plus, 7 rotations, copytruncate : sbxwaf garde le fichier ouvert en O_APPEND). Sa règle
+    vivait dans secubox-mitmproxy, purgé le 2026-09-08 : sur gk2 il n'avait plus tourné depuis le 19 août (219 Mo)
+    (ref #3217).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 13:30:00 +0100
+
 secubox-waf-ng (1.30.6-1~trixie1) trixie; urgency=medium
 
   * La signalisation LiveKit de la Visio ne bannit plus les téléphones (ref #3193). Le client ouvre

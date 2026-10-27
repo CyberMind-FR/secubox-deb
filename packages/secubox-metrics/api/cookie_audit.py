@@ -168,32 +168,32 @@ class CookieAuditAggregator:
             if st.st_size == self._ledger_pos:
                 return self._ledger_out          # rien de neuf : cas le plus courant
 
+            # EN FLUX, LIGNE A LIGNE (#3217). Lire d'un bloc (read + decode + splitlines) coutait ~4 fois la taille du
+            # fichier : sur gk2, 219 Mo sans rotation depuis le 19 aout, la premiere lecture apres chaque demarrage
+            # montait a ~1,4 Go pour n'en garder que 28. Le pic ne depend plus de la taille du registre.
             with path.open("rb") as fh:
                 fh.seek(self._ledger_pos)
-                brut = fh.read(st.st_size - self._ledger_pos)
-
-            # UNE LIGNE PARTIELLE NE SE DECODE PAS. Le producteur ecrit pendant
-            # qu'on lit : sans cette coupure, la derniere ligne serait tronquee,
-            # rejetee comme illisible, et PERDUE — puisqu'on ne la relirait
-            # jamais. On s'arrete au dernier saut de ligne complet.
-            coupe = brut.rfind(b"\n")
-            if coupe < 0:
-                return self._ledger_out          # pas encore une ligne entiere
-            consomme, brut = coupe + 1, brut[:coupe + 1]
-            self._ledger_pos += consomme
-
-            for line in brut.decode("utf-8", "replace").splitlines():
-                if not line.strip():
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                vhost = (rec.get("vhost") or "").strip()
-                name = (rec.get("name") or "").strip()
-                if not vhost or not name:
-                    continue
-                self._ledger_out.setdefault(vhost, {})[name] = rec
+                for brute in fh:
+                    # UNE LIGNE PARTIELLE NE SE DECODE PAS. Le producteur ecrit pendant qu'on lit : sans cet arret, la
+                    # derniere ligne serait tronquee, rejetee comme illisible, et PERDUE — puisqu'on ne la relirait
+                    # jamais. On s'arrete avant elle ; elle sera lue entiere au prochain passage.
+                    if not brute.endswith(b"\n"):
+                        break
+                    self._ledger_pos += len(brute)
+                    line = brute.decode("utf-8", "replace").strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(rec, dict):
+                        continue
+                    vhost = (rec.get("vhost") or "").strip()
+                    name = (rec.get("name") or "").strip()
+                    if not vhost or not name:
+                        continue
+                    self._ledger_out.setdefault(vhost, {})[name] = rec
         except Exception as e:
             log.warning("ledger read failed: %s", e)
         return self._ledger_out
