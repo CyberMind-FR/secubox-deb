@@ -165,3 +165,15 @@ def test_mesh_listener_depot_openpgp_borne():
     # Aucune autre route n'accepte autre chose que GET.
     assert tpl.count("limit_except POST") == 1
 
+
+
+def test_mesh_listener_exposes_fleet_modules_self_3212():
+    """#3212 : le relevé de validation signé est servi sur :8799 comme /fleet/self — GET seul, marque du maillage,
+    avant le refus final ; /fleet/modules (l'agrégat, JWT) n'y est JAMAIS exposé."""
+    tpl = (ROOT / "nginx" / "annuaire-mesh.conf.tpl").read_text()
+    debut = tpl.index("location = /api/v1/annuaire/fleet/modules/self {")
+    bloc = tpl[debut:tpl.index("\n    }", debut)]
+    assert "limit_except GET { deny all; }" in bloc and "proxy_set_header X-SecuBox-Maillage 1;" in bloc
+    assert "proxy_pass http://unix:/run/secubox/annuaire.sock;" in bloc
+    assert debut < tpl.index("location / { return 403; }")
+    assert "location = /api/v1/annuaire/fleet/modules {" not in tpl and "location /api/v1/annuaire/fleet" not in tpl

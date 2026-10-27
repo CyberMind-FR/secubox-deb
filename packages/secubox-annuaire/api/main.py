@@ -16,6 +16,10 @@ Mutating endpoints: require JWT via Depends(require_jwt).
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
+import time
+import urllib.error
+import urllib.request
 import logging
 import os
 import subprocess
@@ -856,8 +860,8 @@ def _fetch_fleet_peer(url: str, timeout: int = 2) -> Optional[Dict[str, Any]]:
 
     try:
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (mesh-local)
-            data = _json.loads(resp.read())
+        with _OUVREUR_MAILLAGE.open(req, timeout=timeout) as resp:  # sans proxy ni redirection (revue #3212)
+            data = _json.loads(resp.read(4 * 1024 * 1024))
         return data if isinstance(data, dict) else None
     except Exception:
         return None
@@ -918,66 +922,129 @@ async def get_fleet():
 # ---------------------------------------------------------------------------
 
 _MODULES_TTL_S = 15 * 60  # 3 relevés (secubox-profiles-releve.timer, 5 min)
+_DELAI_PARC_S = 12.0      # au-delà, les pairs encore en lecture sont « délai dépassé » (la page ne reste pas pendue)
+_log_parc = logging.getLogger("secubox.annuaire.parc")
+
+
+class _SansRedirection(urllib.request.HTTPRedirectHandler):
+    """Revue #3212 : un pair ne redirige pas l'agrégateur vers 127.0.0.1 ou le LAN — toute redirection est une erreur."""
+
+    def redirect_request(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        return None
+
+
+# Lectures des pairs du maillage : jamais de proxy (http_proxy de l'environnement), jamais de redirection.
+_OUVREUR_MAILLAGE = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SansRedirection())
+# Pool DÉDIÉ et petit : l'exécuteur par défaut est partagé par tous les modules de l'agrégateur.
+_POOL_MAILLAGE = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="annuaire-parc")
 
 
 @app.get("/fleet/modules/self", dependencies=[Depends(lecture_ou_pair)])
 async def get_fleet_modules_self():
     """Le relevé de validation signé de cette box, ou {} s'il n'est pas encore publié."""
-    return fleet_store.read(fleet_store.MODULES_PATH) or {}
+    return await asyncio.to_thread(fleet_store.read, fleet_store.MODULES_PATH) or {}
 
 
-def _fetch_modules_peer(url: str, timeout: int = 3) -> "tuple[Optional[Dict[str, Any]], Optional[str]]":
-    """(relevé, None) ou (None, raison) : la raison s'affiche dans la colonne de la box (injectable en test)."""
-    import json as _json          # noqa: PLC0415
-    import urllib.error           # noqa: PLC0415
-    import urllib.request         # noqa: PLC0415
+def _fetch_modules_peer(url: str, timeout: float = 3, echeance_s: float = 5.0,
+                        limite: int = 4 * 1024 * 1024) -> "tuple[Optional[Dict[str, Any]], Optional[str]]":
+    """(relevé brut, None) ou (None, raison) — raison affichée dans la colonne de la box (injectable en test).
 
+    `timeout` borne chaque lecture ; `echeance_s` borne l'échange ENTIER (un pair qui distille un octet à la fois ne
+    tient pas un thread des heures) ; `limite` borne la taille."""
+    debut = time.monotonic()
+    morceaux: List[bytes] = []
     try:
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (maillage seulement)
-            corps = resp.read(4 * 1024 * 1024)
+        with _OUVREUR_MAILLAGE.open(req, timeout=timeout) as resp:
+            taille = 0
+            while True:
+                if time.monotonic() - debut > echeance_s:
+                    return None, "délai dépassé"
+                morceau = resp.read(65536)
+                if not morceau:
+                    break
+                taille += len(morceau)
+                if taille > limite:
+                    return None, "réponse trop volumineuse"
+                morceaux.append(morceau)
     except urllib.error.HTTPError as e:
         return None, "version trop ancienne" if e.code == 404 else f"réponse HTTP {e.code}"
-    except Exception:
+    except (urllib.error.URLError, OSError, ValueError):
         return None, "injoignable"
     try:
-        data = _json.loads(corps)
+        data = fleet.charger_json(b"".join(morceaux))
     except ValueError:
         return None, "réponse illisible"
     return (data, None) if isinstance(data, dict) else (None, "réponse illisible")
+
+
+def _releve_pair(url: str) -> "tuple[Optional[Dict[str, Any]], Optional[str]]":
+    """Lecture ET vérification (signature, forme) dans le pool : rien de coûteux sur la boucle partagée."""
+    data, raison = _fetch_modules_peer(url)
+    if raison:
+        return None, raison
+    if not data:
+        return None, "relevé non publié"
+    norm = fleet.normaliser_modules(data)
+    return (norm, None) if norm else (None, "signature invalide")
+
+
+def _contexte_parc() -> "tuple[Optional[Dict[str, Any]], List[Dict[str, str]], Dict[str, str], str]":
+    """Relevé local vérifié, pairs (WireGuard + répertoire, sans soi), lien adresse → did des fiches signées, réseau."""
+    from collections import Counter  # noqa: PLC0415
+    brut = fleet_store.read(fleet_store.MODULES_PATH)
+    soi = fleet.normaliser_modules(brut) if brut else None
+    meta = mesh_sync.read_self_meta() or {}
+    reseau = mesh_sync.reseau_maillage()
+    noeuds = mesh_sync.noeuds_du_repertoire(get_journal())
+    ici = meta.get("mesh_ip", "")
+    pairs = [p for p in mesh_sync.completer_pairs(mesh_sync.read_mesh_peers(), noeuds, soi=ici, reseau=reseau)
+             if p.get("mesh_ip") and p.get("mesh_ip") != ici]
+    revendiquees = Counter(str(n.get("mesh_ip") or "") for n in noeuds)
+    attendus = {str(n["mesh_ip"]): str(n["did"]) for n in noeuds
+                if n.get("mesh_ip") and n.get("did") and revendiquees[str(n["mesh_ip"])] == 1}
+    return soi, pairs, attendus, reseau
 
 
 @app.get("/fleet/modules", dependencies=[Depends(_require_jwt)])
 async def get_fleet_modules():
     """Les relevés vérifiés de toutes les box ({noeuds}), et les box sans relevé lisible ({indisponibles}). Ne lève jamais."""
     try:
+        import ipaddress  # noqa: PLC0415
         from annuaire.model import now_rfc3339  # noqa: PLC0415
-        now = now_rfc3339()
-        noeuds: Dict[str, Dict[str, Any]] = {}
-        indisponibles: List[Dict[str, str]] = []
-
-        def retenir(rec: Optional[Dict[str, Any]], erreur: Optional[str], nom: str, ip: Optional[str]) -> None:
-            if erreur is None and not rec:
-                erreur = "relevé non publié"
-            elif erreur is None and not fleet.verify_modules(rec):
-                erreur = "signature invalide"
-            if erreur:
-                indisponibles.append({"nom": nom, "mesh_ip": ip or "", "raison": erreur})
-            elif rec["node_did"] not in noeuds:
-                noeuds[rec["node_did"]] = {**rec, "stale": fleet.is_stale(rec, now, _MODULES_TTL_S)}
-
-        retenir(fleet_store.read(fleet_store.MODULES_PATH), None, "cette box", None)
-        pairs = [p for p in mesh_sync.read_mesh_peers() if p.get("mesh_ip")]
-        urls = [f"http://{p['mesh_ip']}:{mesh_sync.DEFAULT_MESH_PORT}/api/v1/annuaire/fleet/modules/self" for p in pairs]
-        # En parallèle, hors de la boucle : cette API est servie dans l'agrégateur (boucle partagée, voir /fleet).
-        resultats = await asyncio.gather(*[asyncio.to_thread(_fetch_modules_peer, u) for u in urls],
-                                         return_exceptions=True)
-        for pair, res in zip(pairs, resultats):
-            rec, erreur = res if isinstance(res, tuple) else (None, "injoignable")
-            retenir(rec, erreur, pair.get("name") or pair["mesh_ip"], pair["mesh_ip"])
-        return {"noeuds": sorted(noeuds.values(), key=lambda n: n.get("hostname", "")),
-                "indisponibles": indisponibles}
+        maintenant = now_rfc3339()
+        soi, pairs, attendus, reseau = await asyncio.to_thread(_contexte_parc)
+        net = ipaddress.ip_network(reseau, strict=False)
+        valides, resultats = [], []
+        for p in pairs:
+            try:
+                dedans = ipaddress.ip_address(p["mesh_ip"]) in net
+            except ValueError:
+                dedans = False
+            if dedans:
+                valides.append(p)
+            else:
+                resultats.append((p, None, "adresse hors du maillage"))
+        boucle = asyncio.get_running_loop()
+        taches = [boucle.run_in_executor(
+            _POOL_MAILLAGE, _releve_pair,
+            f"http://{p['mesh_ip']}:{mesh_sync.DEFAULT_MESH_PORT}/api/v1/annuaire/fleet/modules/self") for p in valides]
+        if taches:
+            _fait, reste = await asyncio.wait(taches, timeout=_DELAI_PARC_S)
+            for t in reste:
+                t.cancel()
+        for p, t in zip(valides, taches):
+            if not t.done() or t.cancelled():
+                resultats.append((p, None, "délai dépassé"))
+            elif t.exception() is not None:
+                resultats.append((p, None, "injoignable"))
+            else:
+                rec, raison = t.result()
+                resultats.append((p, rec, raison))
+        noeuds, indisponibles = fleet.resoudre_releves(soi, resultats, attendus, maintenant, _MODULES_TTL_S)
+        return {"noeuds": noeuds, "indisponibles": indisponibles}
     except Exception:
+        _log_parc.exception("relevés de validation du parc illisibles")
         return {"noeuds": [], "indisponibles": [], "erreur": True}
 
 

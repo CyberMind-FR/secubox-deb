@@ -807,6 +807,7 @@ class MetricSnapshot(BaseModel):
 
 _ETATS_UNITE = Literal["actif", "erreur", "declenche", "non_requis", "termine", "veille", "arrete", "inconnu"]
 _ETATS_PAQUET = Literal["fonctionnel", "veille", "arrete", "erreur", "manquant", "absent", "inconnu"]
+_RFC3339 = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$"
 
 
 class UniteEtat(BaseModel):
@@ -814,7 +815,7 @@ class UniteEtat(BaseModel):
 
     unite:     str = Field(..., pattern=r"^[A-Za-z0-9_.:-]{1,128}\.(service|timer)$")
     etat:      _ETATS_UNITE
-    memoire_o: Optional[int] = Field(default=None, ge=0)
+    memoire_o: Optional[int] = Field(default=None, ge=0, le=2 ** 63)
 
 
 class AgregateurEtat(BaseModel):
@@ -839,8 +840,8 @@ class PaquetEtat(BaseModel):
     etat:        _ETATS_PAQUET
     unites:      List[UniteEtat] = Field(default_factory=list, max_length=16)
     agregateur:  List[AgregateurEtat] = Field(default_factory=list, max_length=16)
-    memoire_o:   Optional[int] = Field(default=None, ge=0)
-    cpu_pct:     Optional[float] = Field(default=None, ge=0.0)
+    memoire_o:   Optional[int] = Field(default=None, ge=0, le=2 ** 63)
+    cpu_pct:     Optional[float] = Field(default=None, ge=0.0, le=10_000.0, allow_inf_nan=False)
     erreurs:     List[str] = Field(default_factory=list, max_length=5)
 
     @field_validator("erreurs")
@@ -858,15 +859,15 @@ class ModulesSnapshot(BaseModel):
     node_did:          str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
     issued_by:         str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
     hostname:          str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9.-]{0,62}$")
-    ts:                str = Field(..., description="RFC 3339, signature")
-    releve_ts:         str = Field(..., max_length=40, description="RFC 3339, relevé")
+    ts:                str = Field(..., max_length=40, pattern=_RFC3339, description="RFC 3339, signature")
+    releve_ts:         str = Field(..., max_length=40, pattern=_RFC3339, description="RFC 3339, relevé")
     profil_actif:      Optional[Literal["minimal", "lite", "isp", "full"]] = None
     profils_installes: List[Literal["minimal", "lite", "isp", "full"]] = Field(default_factory=list, max_length=4)
     partiel:           List[str] = Field(default_factory=list, max_length=8)
     paquets:           List[PaquetEtat] = Field(default_factory=list, max_length=400)
-    sig:               Optional[str] = None
-    signer_did:        Optional[str] = None
-    signer_pub:        Optional[str] = None
+    sig:               Optional[str] = Field(default=None, max_length=200)
+    signer_did:        Optional[str] = Field(default=None, pattern=r"^did:plc:[0-9a-f]{32}$")
+    signer_pub:        Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @field_validator("partiel")
     @classmethod

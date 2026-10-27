@@ -209,7 +209,8 @@ def test_rassemble_soi_et_les_pairs_et_nomme_les_indisponibles(client, tmp_path,
     monkeypatch.setattr(apimain.mesh_sync, "read_mesh_peers", lambda *a, **k: [
         {"mesh_ip": ip, "name": n} for ip, n in (("10.10.0.5", "secubox-live"), ("10.10.0.9", "gk4"),
                                                  ("10.10.0.8", "gk1"), ("10.10.0.7", "vieux"), ("10.10.0.1", "master"))])
-    monkeypatch.setattr(apimain, "_fetch_modules_peer", lambda url, timeout=3: reponses[url.split("/")[2].split(":")[0]])
+    monkeypatch.setattr(apimain.mesh_sync, "read_self_meta", lambda *a, **k: {"mesh_ip": "10.10.0.1"})   # soi : jamais lu comme pair
+    monkeypatch.setattr(apimain, "_fetch_modules_peer", lambda url, **k: reponses[url.split("/")[2].split(":")[0]])
     d = tc.get("/fleet/modules").json()
     assert sorted(n["hostname"] for n in d["noeuds"]) == ["gk2", "gk3"]               # gk3 sous son vrai nom
     assert all("stale" in n for n in d["noeuds"])
@@ -220,7 +221,7 @@ def test_rassemble_soi_et_les_pairs_et_nomme_les_indisponibles(client, tmp_path,
 def test_releve_pas_encore_publie_et_jamais_de_500(client, monkeypatch):
     tc, apimain = client
     monkeypatch.setattr(apimain.mesh_sync, "read_mesh_peers", lambda *a, **k: [{"mesh_ip": "10.10.0.5", "name": "gk3"}])
-    monkeypatch.setattr(apimain, "_fetch_modules_peer", lambda url, timeout=3: ({}, None))
+    monkeypatch.setattr(apimain, "_fetch_modules_peer", lambda url, **k: ({}, None))
     d = tc.get("/fleet/modules").json()
     assert d["noeuds"] == [] and {i["nom"]: i["raison"] for i in d["indisponibles"]} == {
         "cette box": "relevé non publié", "gk3": "relevé non publié"}
@@ -239,7 +240,7 @@ def test_lecture_d_un_pair_distingue_les_raisons(monkeypatch):
 
     class Rep:
         def __init__(self, corps):
-            self.corps = corps
+            self.reste = corps
 
         def __enter__(self):
             return self
@@ -248,7 +249,8 @@ def test_lecture_d_un_pair_distingue_les_raisons(monkeypatch):
             return False
 
         def read(self, n=-1):
-            return self.corps
+            morceau, self.reste = self.reste, b""
+            return morceau
 
     def ouvrir(effet):
         def f(req, timeout):
@@ -258,9 +260,127 @@ def test_lecture_d_un_pair_distingue_les_raisons(monkeypatch):
         return f
     cas = [(urllib.error.HTTPError("u", 404, "nf", {}, None), (None, "version trop ancienne")),
            (urllib.error.URLError("refused"), (None, "injoignable")),
+           (urllib.error.HTTPError("u", 302, "redirection refusée", {}, None), (None, "réponse HTTP 302")),
+           (b"x" * (4 * 1024 * 1024 + 1), (None, "réponse trop volumineuse")),
            (b"pas du json", (None, "réponse illisible")),
            (b"[1]", (None, "réponse illisible")),
            (b'{"a": 1}', ({"a": 1}, None))]
     for effet, attendu in cas:
-        monkeypatch.setattr(urllib.request, "urlopen", ouvrir(effet))
+        monkeypatch.setattr(apimain._OUVREUR_MAILLAGE, "open", ouvrir(effet))
         assert apimain._fetch_modules_peer("http://10.10.0.5:8799/x") == attendu
+
+
+# ── revue #3212 : pairs malveillants du maillage ──────────────────────────────
+
+@pytest.mark.parametrize("sur", [
+    {"paquets": [{**PAQUET, "cpu_pct": float("inf")}]},
+    {"paquets": [{**PAQUET, "cpu_pct": float("nan")}]},
+    {"paquets": [{**PAQUET, "memoire_o": 2 ** 64}]},
+    {"ts": "demain"},
+    {"releve_ts": "x" * 41},
+])
+def test_valeurs_non_finies_et_horodatages_refuses(sur):
+    priv, did = _acteur()
+    with pytest.raises(ValidationError):
+        fleet.sign_modules(priv, _champs(did, **sur))
+
+
+def test_json_sans_nan_ni_infini():
+    assert fleet.charger_json('{"a": 1.5}') == {"a": 1.5}
+    for texte in ('{"a": Infinity}', '{"a": NaN}', '{"a": -Infinity}'):
+        with pytest.raises(ValueError):
+            fleet.charger_json(texte)
+
+
+def test_normalise_rend_le_modele_pas_l_objet_brut():
+    priv, did = _acteur()
+    rec = fleet.sign_modules(priv, _champs(did))
+    norm = fleet.normaliser_modules(rec)
+    assert norm == rec and norm is not rec
+    rec["paquets"][0]["etat"] = "erreur"
+    assert fleet.normaliser_modules(rec) is None
+
+
+def _res(ip, nom, rec=None, raison=None):
+    return ({"mesh_ip": ip, "name": nom}, rec, raison)
+
+
+def test_resoudre_relie_chaque_releve_a_la_box_qui_le_sert():
+    soi_p, soi = _acteur()
+    p3, d3 = _acteur()
+    p4, d4 = _acteur()
+    rec_soi = fleet.sign_modules(soi_p, _champs(soi, hostname="gk2"))
+    rec3 = fleet.sign_modules(p3, _champs(d3, hostname="gk3"))
+    rec4 = fleet.sign_modules(p4, _champs(d4, hostname="gk4"))
+    attendus = {"10.10.0.5": d3, "10.10.0.9": d4}
+    # gk4 (10.10.0.9) rejoue le relevé authentique de gk3, et 10.10.0.6 rejoue celui de la box locale
+    noeuds, indispo = fleet.resoudre_releves(rec_soi, [
+        _res("10.10.0.9", "gk4", rec3), _res("10.10.0.5", "gk3", rec3), _res("10.10.0.6", "x", rec_soi)],
+        attendus, "2026-10-27T10:01:00Z", 900)
+    assert [n["hostname"] for n in noeuds] == ["gk2", "gk3"]
+    assert {i["nom"]: i["raison"] for i in indispo} == {"gk4": "relevé d'une autre box", "x": "relevé d'une autre box"}
+    # sans lien connu, le premier venu ne chasse pas le vrai : le doublon est signalé, pas avalé
+    noeuds, indispo = fleet.resoudre_releves(None, [_res("10.10.0.9", "gk4", rec3), _res("10.10.0.5", "gk3", rec3)],
+                                             {"10.10.0.5": d3}, "2026-10-27T10:01:00Z", 900)
+    assert [n["hostname"] for n in noeuds] == ["gk3"]
+    assert {i["nom"]: i["raison"] for i in indispo} == {"cette box": "relevé non publié", "gk4": "relevé d'une autre box"}
+    _ = rec4
+
+
+def test_resoudre_signale_un_nom_revendique_par_deux_box():
+    p1, d1 = _acteur()
+    p2, d2 = _acteur()
+    a = fleet.sign_modules(p1, _champs(d1, hostname="gk2"))
+    b = fleet.sign_modules(p2, _champs(d2, hostname="gk2"))
+    noeuds, _ = fleet.resoudre_releves(a, [_res("10.10.0.7", "intrus", b)], {}, "2026-10-27T10:01:00Z", 900)
+    assert len(noeuds) == 2 and all(n["nom_conteste"] for n in noeuds)
+
+
+def test_resoudre_refuse_un_horodatage_dans_le_futur():
+    p, d = _acteur()
+    rec = fleet.sign_modules(p, _champs(d, ts="2026-10-27T11:00:00Z"))
+    noeuds, indispo = fleet.resoudre_releves(None, [_res("10.10.0.5", "gk3", rec)], {}, "2026-10-27T10:01:00Z", 900)
+    assert not [n for n in noeuds if n["hostname"] == "gk3"] and indispo[-1]["raison"] == "horodatage dans le futur"
+
+
+def test_aucune_redirection_ni_proxy_et_adresse_hors_maillage(monkeypatch):
+    from api import main as apimain
+    gestionnaires = [type(h).__name__ for h in apimain._OUVREUR_MAILLAGE.handlers]
+    assert "HTTPRedirectHandler" not in gestionnaires and "_SansRedirection" in gestionnaires
+    # ProxyHandler({}) remplace celui de l'environnement (http_proxy) ; vide, il n'est même pas inscrit : aucun proxy.
+    monkeypatch.setenv("http_proxy", "http://192.168.1.1:3128")
+    assert "ProxyHandler" not in gestionnaires
+
+
+def test_lecture_bornee_dans_le_temps(monkeypatch):
+    """Un pair qui distille un octet à la fois ne tient pas un thread au-delà de l'échéance totale."""
+    from api import main as apimain
+    import time as _t
+
+    class Lent:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self, n=-1):
+            _t.sleep(0.05)
+            return b"{"
+
+    monkeypatch.setattr(apimain._OUVREUR_MAILLAGE, "open", lambda req, timeout: Lent())
+    debut = _t.monotonic()
+    assert apimain._fetch_modules_peer("http://10.10.0.5:8799/x", echeance_s=0.3) == (None, "délai dépassé")
+    assert _t.monotonic() - debut < 1.0
+
+
+def test_pairs_hors_du_reseau_du_maillage_jamais_contactes(client, monkeypatch):
+    tc, apimain = client
+    vus = []
+    monkeypatch.setattr(apimain.mesh_sync, "read_mesh_peers", lambda *a, **k: [
+        {"mesh_ip": "127.0.0.1", "name": "boucle"}, {"mesh_ip": "10.10.0.5", "name": "gk3"}])
+    monkeypatch.setattr(apimain.mesh_sync, "reseau_maillage", lambda *a, **k: "10.10.0.0/24")
+    monkeypatch.setattr(apimain, "_fetch_modules_peer", lambda url, **k: (vus.append(url), (None, "injoignable"))[1])
+    d = tc.get("/fleet/modules").json()
+    assert vus == ["http://10.10.0.5:8799/api/v1/annuaire/fleet/modules/self"]
+    assert {i["nom"]: i["raison"] for i in d["indisponibles"]}["boucle"] == "adresse hors du maillage"

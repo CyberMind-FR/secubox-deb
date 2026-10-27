@@ -32,7 +32,8 @@ server {
     allow 10.10.0.0/24;
     deny all;
 
-    # Read-only federation pull surface — these three exact paths, nothing else.
+    # Read-only federation pull surface — the exact paths below, nothing else (each one a SIGNED record the
+    # reader verifies, or a static file whose trust comes from WireGuard).
     location = /api/v1/annuaire/services {
         limit_except GET { deny all; }
         rewrite ^/api/v1/annuaire/(.*)$ /$1 break;

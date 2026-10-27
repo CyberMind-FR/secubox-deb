@@ -182,10 +182,11 @@ def cmd_publish_modules(args) -> int:
               "releve_ts": releve.get("releve_ts"), "profil_actif": releve.get("profil_actif"),
               "profils_installes": releve.get("profils_installes") or [], "partiel": releve.get("partiel") or [],
               "paquets": paquets}
+    from pydantic import ValidationError  # noqa: PLC0415
     try:
         rec = fleet.sign_modules(priv, fields)
-    except Exception as e:  # noqa: BLE001 — ValidationError : relevé hors bornes, jamais signé
-        _die(f"relevé refusé par le modèle : {type(e).__name__}")
+    except ValidationError as e:  # relevé hors bornes : jamais signé
+        _die(f"relevé refusé par le modèle : {e.error_count()} erreur(s), champ {e.errors()[0].get('loc')}")
     fleet_store.write(rec, fleet_store.MODULES_PATH)
     print(json.dumps({"published": node_did, "paquets": len(rec["paquets"])}, indent=2))
     return 0

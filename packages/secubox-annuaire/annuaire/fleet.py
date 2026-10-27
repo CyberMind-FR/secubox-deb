@@ -22,7 +22,9 @@ field, or mismatch is treated as an untrusted record (→ False / stale).
 """
 from __future__ import annotations
 
-from datetime import datetime
+import json
+from collections import Counter
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from . import crypto
@@ -95,16 +97,79 @@ def sign_modules(priv: bytes, fields: Dict[str, Any]) -> Dict[str, Any]:
     return {**payload, "sig": sig, "signer_did": crypto.did_from_pubkey(pub), "signer_pub": pub.hex()}
 
 
+def charger_json(texte: Any) -> Any:
+    """json.loads sans NaN ni Infinity : la valeur serait signée, validée, puis ferait échouer la réponse JSON (#3212)."""
+    def refus(c: str) -> Any:
+        raise ValueError(f"constante JSON refusée : {c}")
+    return json.loads(texte, parse_constant=refus)
+
+
+def normaliser_modules(rec: Any) -> Optional[Dict[str, Any]]:
+    """Relevé d'un pair VÉRIFIÉ (signature ET forme), rendu tel que le modèle le décrit — jamais l'objet brut du pair.
+    None s'il ne se vérifie pas. FAIL-CLOSED."""
+    try:
+        if not isinstance(rec, dict) or not verify_snapshot(rec):
+            return None
+        return ModulesSnapshot(**rec).model_dump()
+    except Exception:
+        return None
+
+
 def verify_modules(rec: Dict[str, Any]) -> bool:
     """Relevé d'un pair : signature ET forme. Un pair signe ce qu'il veut ; un relevé hors bornes (taille, noms, états)
     est refusé même bien signé. FAIL-CLOSED."""
-    try:
-        if not verify_snapshot(rec):
-            return False
-        ModulesSnapshot(**rec)
-        return True
-    except Exception:
-        return False
+    return normaliser_modules(rec) is not None
+
+
+def resoudre_releves(
+    soi: Optional[Dict[str, Any]],
+    resultats: List[Any],
+    attendus: Dict[str, str],
+    maintenant: str,
+    ttl_s: int,
+) -> "tuple[List[Dict[str, Any]], List[Dict[str, str]]]":
+    """La vue du parc à partir des relevés DÉJÀ vérifiés (#3212, revue).
+
+    resultats : [(pair {mesh_ip, name}, relevé normalisé ou None, raison ou None)] ; attendus : {mesh_ip: did} tirés des
+    fiches signées du répertoire (une adresse revendiquée par un seul did). Un relevé n'est retenu que s'il vient de la
+    box qui le sert : did attendu pour cette adresse, did pas déjà vu (dont la box locale), horodatage pas dans le futur.
+    Sinon la box est NOMMÉE avec sa raison — jamais une box qui disparaît, jamais un pair qui en remplace un autre. Les
+    relevés liés à leur adresse passent d'abord : un rejeu non lié ne chasse pas la vraie box. Un nom d'hôte revendiqué
+    par deux did est marqué `nom_conteste`."""
+    noeuds: Dict[str, Dict[str, Any]] = {}
+    indisponibles: List[Dict[str, str]] = []
+    if soi:
+        noeuds[soi["node_did"]] = {**soi, "stale": is_stale(soi, maintenant, ttl_s)}
+    else:
+        indisponibles.append({"nom": "cette box", "mesh_ip": "", "raison": "relevé non publié"})
+    futur = _parse_ts(maintenant) + timedelta(minutes=5)
+
+    def lie(item: Any) -> int:
+        pair, rec, _raison = item
+        return 0 if rec and attendus.get(str(pair.get("mesh_ip") or "")) == rec.get("node_did") else 1
+
+    for pair, rec, raison in sorted(resultats, key=lie):
+        ip = str(pair.get("mesh_ip") or "")
+        nom = str(pair.get("name") or ip or "?")
+        if raison is None and not rec:
+            raison = "relevé non publié"
+        elif raison is None:
+            attendu = attendus.get(ip)
+            if (attendu and attendu != rec["node_did"]) or rec["node_did"] in noeuds:
+                raison = "relevé d'une autre box"
+            else:
+                try:
+                    if _parse_ts(rec["ts"]) > futur:
+                        raison = "horodatage dans le futur"
+                except Exception:
+                    raison = "horodatage illisible"
+        if raison:
+            indisponibles.append({"nom": nom, "mesh_ip": ip, "raison": raison})
+            continue
+        noeuds[rec["node_did"]] = {**rec, "stale": is_stale(rec, maintenant, ttl_s)}
+    compte = Counter(n.get("hostname") for n in noeuds.values())
+    sortie = [{**n, "nom_conteste": compte[n.get("hostname")] > 1} for n in noeuds.values()]
+    return sorted(sortie, key=lambda n: (str(n.get("hostname")), n["node_did"])), indisponibles
 
 
 def fleet_snapshots(
