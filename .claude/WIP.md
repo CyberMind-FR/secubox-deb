@@ -6,7 +6,7 @@
 -->
 
 # WIP — chantier en cours + Next Up
-*Mis à jour : 2026-10-27.* Moins de 200 lignes, par construction : l'historique du
+*Mis à jour : 2026-10-27 (release alpha.19).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
 ## ✅ Fusionné et nettoyé le 2026-10-02 et 03
@@ -173,13 +173,13 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
-00000000. **Réseau (2026-10-27)** : mode routeur, panneau Réseau et isolement de port **clôturés** (#3189, #3190, #3201 ;
-  netmodes 1.6.1 sur gk2 et gk1). **Ensuite** : zones du NAC/Guardian correctes en réseau routé (#2891 : règles par IP
-  depuis les baux, `ether daddr` inopérant en routé) ; #3205 listes DNS en RPZ (banc en cours sur gk1) ; #3196 maillage
-  inter-LAN (gk3 inclus, public par gk2, chaque nœud distribue les autres, noms des baux, SSH depuis les LAN de
-  confiance, LXC par l'IP des box) ; #3203 premier démarrage (rpi400, automaillage auto/désactivé, enrôlement
-  automatique, reprise ou TR-069) ; Samba sur le LAN routé (ksmbd `eth2` seul) ; Nextcloud arrêté (WebDAV) ;
-  #3191 saturation de gk2 (mémoire, Actor, WAF) ; #3195 www ; #3192 radio.
+00000000. **Release v3.0.0-alpha.19 (#3208, 2026-10-27)** : notes, TODO et wiki (Hardware-Matrix) dans la PR de la
+  release ; puis étiquette `v3.0.0-alpha.19` et workflow Release (≈ 6 h) jusqu'aux images publiées ; ensuite README
+  racine et accueil du wiki (Home, `scripts/sync-wiki.sh`), et `closes #3208`.
+  **Réseau** : mode routeur, panneau, isolement **clôturés** (#3189, #3190, #3201) ; nœuds en automatique (#3206) et
+  correctif hardening `ip_forward` (#3209) **déployés et clos** (HISTORY). **Ensuite, dans l'ordre arbitré** (TODO du
+  2026-10-27) : zones du NAC/Guardian en réseau routé (#2891) ; listes DNS en RPZ, mémoire à réduire (#3205) ; maillage
+  inter-LAN (#3196) ; premier démarrage (#3203) ; charge (#3191) ; Nextcloud/WebDAV ; #3195 www ; #3192 radio.
 0000000. **#3178 NAC (2026-10-26)** : un seul collecteur sur gk2 (aggregator 0.4.9, nac 3.9.4). Reste : constater sur la page
   NAC « Connectés : N maintenant » (≈ 20) avec une session d'administrateur, puis fermer l'issue (marqueur dans HISTORY). **#3181** : glossaire des
   indicateurs, état de protection unique, fraîcheur par panneau — arbitrage du propriétaire avant tout travail.

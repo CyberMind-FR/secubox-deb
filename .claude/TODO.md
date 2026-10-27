@@ -6,11 +6,29 @@
 -->
 
 # TODO — SecuBox-DEB : backlog actif
-*Mis à jour : 2026-10-16 (ESPRESSObin lgm-ebin).* Seul le backlog actif est ici (≥ 2026-09-01).
+*Mis à jour : 2026-10-27 (release alpha.19).* Seul le backlog actif est ici (≥ 2026-09-01).
 Le reste est archivé, jamais perdu : `.claude/archive/INDEX.md` (≈ 240 cases ouvertes
 y dorment, par mois) — ne le lire que sur demande.
 
 ---
+
+## 2026-10-27 — après le mode routeur (release alpha.19, #3208), dans l'ordre arbitré
+- [ ] **Zones du NAC/Guardian en réseau routé (#2891, reprise demandée le 2026-10-27)** : le client Guardian relié au
+  réseau pour des zones cohérentes ; règles par IP depuis les baux (`ether daddr` inopérant en routé). Le minimum est
+  livré par #3206 (IoT et Invités : DNS et DHCP seulement vers la box depuis `br-lan`).
+- [ ] **Listes DNS (#3205)** : RPZ mesuré sur gk1 (rechargement sans coupure, mémoire ×3 : 832 Mo pour adblock seul) ;
+  réduire la mémoire avant de livrer ; dédoublonner ; journalisation d'Unbound allégée si sans effet ; nft pour les
+  listes d'IP et pour DoH/DoT.
+- [ ] **Maillage inter-LAN (#3196)** : gk3 joint les LAN de gk2 et gk1 ; chaque nœud distribue les autres ; nœuds
+  joignables depuis le réseau de la Freebox (routes par gk2) ; LXC par l'IP des box ; isolement NAC possible par défaut.
+- [ ] **Premier démarrage (#3203)** : rpi400 en terminal ; automaillage auto/désactivé au premier démarrage, à
+  l'installation et dans les réglages (entrer dans le maillage de gk2 ou en sortir) ; enrôlement entièrement
+  automatique ; mot de passe par défaut non restreint ; reprise d'une ancienne installation ou fin par TR-069 ;
+  rassembler Auto-Load, préparer-box et premier-pas.
+- [ ] **Charge (#3191)** : secubox-metrics à 1 Go, systemd et sudo en boucle, Actor et WAF à vérifier et optimiser sans
+  casser ; chromium sur gk4 ; la page Système affiche à tort `eth0` comme WAN.
+- [ ] **Nextcloud** arrêté sur gk2 : le relancer ou non (décision du propriétaire), puis essayer le WebDAV.
+- [ ] **Streamlit** rattaché à `br-lan` : le passer sur `br-lxc` (mineur).
 
 ## 2026-10-17 — demandes du proprietaire en attente (file, a prioriser)
 - [ ] **IPv6 — UDP aussi (demande du 2026-10-19)** : WireGuard (51820-51825, la socket UDP de wg est double pile d'office ; la regle d'entree nftables est dans la table `inet`, donc deja valable en IPv6), DNS (unbound : verifier l'ecoute en IPv6), relais UDP gk2 → cartes (`table ip secubox_relais_wg` : IPv4 SEULEMENT, a doubler en `ip6`/`inet`). HAProxy ne fait que du TCP (80/443) : pas de QUIC. A integrer a la conception d'ensemble.
@@ -18,7 +36,7 @@ y dorment, par mois) — ne le lire que sur demande.
 - [ ] **Cartes ESPRESSObin : 2 Go requis** (decision du proprietaire, 2026-10-19) : le .92 se verrouille apres redemarrage avec le profil minimal sur 1 Go. Mettre a jour README, wiki et guide d'installation (minimal = 2 Go recommandes), choisir le micrologiciel 2 Go (DDR4 2CS) AVANT de flasher, sur une carte dont la memoire a ete lue (`bdinfo`).
 - [ ] **IPv6 complet (« all full specs », demande du 2026-10-19)** : pare-feu et zones (le pare-feu par zones #2891 est suspendu), ipv6guard et gardes (dns-guard, wan-guard), metrics et auto-controle, WireGuard / mesh / p2p. PREPARE : freebox lit/ecrit la vraie cle `ipv6_prefix_firewall` (#2930, interrupteur global, pas de regle par port) ; sbxwaf normalise l'adresse cliente, ::1 mandataire (#2932) ; haproxy `ipv6 = true` ecouteurs 80/443 v6only, desactive par defaut (#2934). RESTE : conception d'ensemble a faire par brainstorming (spec ecrite), validation avant ouverture (desactiver le pare-feu IPv6 de la Freebox, retablir l'AAAA supprime le 2026-10-19 — sauvegarde /root/secubox.in-AAAA-sauvegarde.json sur gk2 —, essai depuis l'exterieur), p2p : le point d'acces WireGuard d'un pair IPv6 doit s'ecrire `[adresse]:port` (a verifier dans _record_wg_identity), reseau interne du mesh toujours IPv4 (10.10.0.0/24).
 - [ ] **File du 2026-10-18 (ebin)** : (1) reparer /freebox/ et /meshname/ (services actives par moi, a verifier) ; (2) puits anti-pub INACTIF : ad-guard 1.14.4 installe, relancer la sync ; (3) /premier-pas-maitre/ a retirer de l'ebin et du profil minimal : la page vit dans secubox-premier-pas, que l'agent Auto-Load importe (Depends) → il faut sortir la page dans un petit paquet a part, pas retirer premier-pas ; (4) /portal/ : le bloc « Services » (WAF/HAProxy/nginx/Systeme, « etat inconnu ») est a remplacer par « Services vitaux (5) » de /health/ ; (5) /netdiag/ ajouter a minimal et a l'ebin (netdiag vit dans secubox-routes, composante absorbee), y deplacer « SOC Reseau » en onglet direct, integrer l'outil iperf3 absent (« Outils absents de ce noeud : iperf3 »).
-- [ ] **Pare-feu par zones (#2891) — SUSPENDU le 2026-10-18 sur demande du proprietaire.** Conception ecrite et relue (branche de l'issue, `docs/superpowers/specs/2026-10-18-firewall-zones-design.md`, non fusionnee) : zone = port physique + zone logique par appareil (MAC, prime sur le port), profils Enfants/Objets/Visiteurs/Libre, trois livrables (moteur, ports, API+UI). Reprise : trancher l'adressage par zone (sous-reseau + DHCP par port, ou un seul sous-reseau) et les boxes de la premiere livraison, puis plan. Rien n'est code.
+- [ ] **Pare-feu par zones (#2891) — SUSPENDU le 2026-10-18 sur demande du proprietaire, REPRIS le 2026-10-27 (voir plus haut).** Conception ecrite et relue (branche de l'issue, `docs/superpowers/specs/2026-10-18-firewall-zones-design.md`, non fusionnee) : zone = port physique + zone logique par appareil (MAC, prime sur le port), profils Enfants/Objets/Visiteurs/Libre, trois livrables (moteur, ports, API+UI). Reprise : trancher l'adressage par zone (sous-reseau + DHCP par port, ou un seul sous-reseau) et les boxes de la premiere livraison, puis plan. Rien n'est code.
 - [ ] **Auto-appairage p2p des esclaves** a la premiere preparation (Auto-Load) et en reparation : la box prete rejoint le maitre seule (code `sbxmesh1.` ou jeton auto-approuve cote preparation, par le tunnel wg-autoload ; l'enrolement 7331 l'admet depuis #2883/p2p 1.16.2), puis une reparation periodique si le pair est tombe. Concevoir d'abord : ou vit le jeton (jamais en clair dans l'image), duree, rejeu apres reinstallation. Essai manuel en cours : lgm-ebin esclave de gk2.
 - [ ] **WAF et Acteurs : tendances recentes** (mini-courbes SVG + fleche/pourcentage) ; WAF depuis `/waf/history` (9 jours), acteurs : derive des dates ou instantane quotidien (a trancher).
 - [ ] **Modules LXC** : sleep / wake / restart / stop dans les panneaux d'administration de chaque conteneur ; Lyrion « a la demande » (la route de la table sbxwaf reste apres `profilectl apply --only lyrion` : 502 au lieu du reveil).

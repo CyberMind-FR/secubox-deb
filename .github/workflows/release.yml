@@ -250,6 +250,16 @@ jobs:
 
           EOF
 
+          # Notes propres à la version (#3208) : docs/release-notes/<version>.md, sans son en-tête SPDX, sous le titre.
+          PROPRES="docs/release-notes/${VERSION}.md"
+          if [ -f "$PROPRES" ]; then
+            { sed -n '1,2p' release/RELEASE_NOTES.md
+              awk 'NR == 1 && /^<!--/ { dans = 1 } dans { if (/-->/) dans = 0; next } { print }' "$PROPRES"
+              echo
+              sed '1,2d' release/RELEASE_NOTES.md; } > release/RELEASE_NOTES.tmp
+            mv release/RELEASE_NOTES.tmp release/RELEASE_NOTES.md
+          fi
+
       - name: Split files over the GitHub 2 GiB asset limit
         run: |
           # GitHub refuse tout fichier de 2 Gio ou plus (« size must be less than 2147483648 », alpha.12 #2427).
