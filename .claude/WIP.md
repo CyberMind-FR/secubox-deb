@@ -180,10 +180,8 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   l'accord du propriétaire (748 Mo tant qu'il n'est que rechargé ; 384 Mo au banc) ; (3) **groupes avec
   veille** (groupd `--veille`/`--veille-modules` non passés) ; (4) **agrégateur non bloquant** (#3216, conception
   notée). Puis variante 1 Go de `minimal` (#3218).
-  **Release alpha.19 (#3208)** : run 40484831899 attend la fin (ou la coupure à 6 h) de la clé live MOCHAbin, puis
-  `create-release` publie les 10 images ; compléter avec les images minimal (build-packages 40544247461 puis build-image
-  ×2, sur master 3a97a015a) ; notes : signaler les minimal à compléter ; puis README racine, accueil du wiki, marqueur.
-  #3225 : scinder la clé live MOCHAbin (eMMC / live USB). **Pubs Netflix** (régression) : surveillance DNS des TV. **Autres** : zones NAC en routé (#2891), maillage inter-LAN
+  **Release alpha.19 (#3208)** : publiée et complétée (images minimal ajoutées). Reste #3225 (clé live MOCHAbin à
+  scinder) et #3227 (wiki : une seule source, sync-wiki dangereux). **Pubs Netflix** (#3226) : essai « tri par insistance » sur tv-banc (LAN gk2), à confirmer puis livrer. **Autres** : zones NAC en routé (#2891), maillage inter-LAN
   (#3196), premier démarrage et TR-069 (#3203), Nextcloud/WebDAV, #3195 www, #3192 radio.
 0000000. **#3178 NAC (2026-10-26)** : un seul collecteur sur gk2 (aggregator 0.4.9, nac 3.9.4). Reste : constater sur la page
   NAC « Connectés : N maintenant » (≈ 20) avec une session d'administrateur, puis fermer l'issue (marqueur dans HISTORY). **#3181** : glossaire des

@@ -45,8 +45,11 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   snapshot). PR #3223 : `courbes` ajouté à la main au working-set ; `tests/test-verify-profile.sh` (en échec latent : isp ne
   dépend plus de waf) couvre les quatre profils et le refus sans modem / sans courbes.
 - Clé live MOCHAbin : eMMC > 4 h (3 h pour alpha.18), le job ne tient plus dans 6 h → #3225 (scinder eMMC / live USB).
-- Décision du propriétaire : publier alpha.19 sans les images minimal et les compléter quand elles seront prêtes
-  (build-packages complet arm64+amd64 sur master 3a97a015a lancé, puis build-image minimal ×2).
+- Décision du propriétaire : publier alpha.19 sans les images minimal et les compléter quand elles seront prêtes.
+  **Publiée** (create-release après la coupure à 6 h de la clé MOCHAbin) : 10 images + installeur ; images `minimal`
+  ESPRESSObin v7 et RPi400 construites sur master 3a97a015a (build-packages complet arm64+amd64), sommes vérifiées,
+  ajoutées avec SHA256SUMS ; notes, README racine et accueil du wiki (par `.wiki/`, page Valider-un-parc publiée) à jour.
+  `sync-wiki.sh` aurait effacé 42 pages du wiki : non poussé, #3227. Clé live MOCHAbin : #3225. closes #3208
 
 ## 2026-10-27 — secubox-metrics : 1,4 Go ramenés à ~250 Mo sur gk2 (closes #3217, ref #3191)
 

@@ -204,8 +204,8 @@ household depends on. Since alpha 18, the main changes are:
   from the live system.
 
 Images: `lite` (ESPRESSObin v7, MOCHAbin, RPi 400), `isp` (MOCHAbin, RPi 400, VM x64), `full` (RPi 400, VM x64),
-x64 live and the installer. The `minimal` images (ESPRESSObin v7, RPi 400) are added to the release once rebuilt
-(#3223); the MOCHAbin live USB is missing this time, its build now exceeds GitHub's 6-hour job limit (#3225).
+x64 live, the installer, and `minimal` (ESPRESSObin v7, RPi 400, rebuilt from master after the tag, #3223); the
+MOCHAbin live USB is missing this time, its build now exceeds GitHub's 6-hour job limit (#3225).
 Guided path: first section of the [wiki home](https://github.com/CyberMind-FR/secubox-deb/wiki).
 
 ### Verifying downloads
