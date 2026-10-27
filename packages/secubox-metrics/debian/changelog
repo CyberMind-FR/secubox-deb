@@ -1,3 +1,15 @@
+secubox-metrics (1.29.6-1~trixie1) trixie; urgency=medium
+
+  * Statistiques des vhosts (#3217, ref #3191) : toutes les origines Surf d'une box (`surf-<hôte-aplati>.<box>`, une
+    par site distant et par pisteur) comptent comme UN site, `surf.<box>`. Sur gk2 elles faisaient 152 878 seaux sur
+    30 jours (9 231 le 26/10, dont 7 936 à deux requêtes ou moins), un cache de 83 Mo et 1,4 Go de RAM (pic 1,9 Go).
+    Plafond de 2 000 seaux par jour (au-delà, « (autres) ») : aucun flot de noms ne fait plus grossir la mémoire.
+    Le cache existant est fusionné au chargement, cumul compris, sans perdre un compte. Mesuré sur une copie du cache
+    de gk2 : 9 859 seaux, cache réécrit de 80 à 29 Mo, puis 128 Mo de RSS et 0,4 s au démarrage suivant (contre
+    679 Mo et 3,6 s). `sans_ref` (part d'accès directs) est enfin persisté : il repartait de zéro à chaque redémarrage.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 13:00:00 +0100
+
 secubox-metrics (1.29.5-1~trixie1) trixie; urgency=medium
 
   * Vhost grafana (source, non installé par le paquet) sans le nom de gk2 (ref #3117) : server_name «
