@@ -37,6 +37,8 @@ case "$1" in
         # never narrowed to 0750.
         install -d -o secubox -g secubox -m 0755 /var/log/secubox
         install -d -o root -g root -m 0750 /var/lib/secubox/profiles/rollback
+        # Relevé de validation (#3212), écrit par secubox-profiles-releve (User=secubox), lu par annuaire et l'API.
+        install -d -o secubox -g secubox -m 0755 /var/lib/secubox/profiles/validation
 
         # Own dedicated socket, own service — never served by the aggregator
         # (the profile engine must not depend on something it may later

@@ -524,6 +524,16 @@ def create_app() -> FastAPI:
         dpkg = Path(os.environ.get("SECUBOX_DPKG_STATUS", "/var/lib/dpkg/status"))
         return await asyncio.to_thread(_comparatif, contenu, dpkg)
 
+    @app.get("/api/v1/profiles/validation", dependencies=[Depends(require_lecture)])
+    async def get_validation():
+        """Relevé de validation de CETTE box (#3212) : profil attendu, paquet, services, ressources. Écrit toutes les
+        5 min par secubox-profiles-releve.timer ; la vue du parc (toutes les box) passe par annuaire /fleet/modules."""
+        from . import validation
+        r = await asyncio.to_thread(validation.lire)
+        if r is None:
+            raise HTTPException(503, "Aucun relevé de validation : secubox-profiles-releve.timer n'a pas encore tourné.")
+        return r
+
     @app.get("/api/v1/profiles/profiles")
     async def list_profiles(_claims=Depends(require_jwt)):
         root = _root()
