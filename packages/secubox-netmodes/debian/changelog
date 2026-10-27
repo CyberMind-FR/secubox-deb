@@ -1,3 +1,12 @@
+secubox-netmodes (1.6.1-1~trixie1) trixie; urgency=medium
+
+  * unbound-checkconf a son propre délai (900 s) au lieu des 120 s communs (ref #3201) : sur gk2 (101 Mo de listes
+    dans unbound.conf.d, box saturée), la validation dépassait 120 s à froid et l'application du panneau échouait
+    (« unbound-checkconf refuse la configuration DNS : délai de 120 s dépassé ») sans rien changer. Un dépassement se
+    dit désormais comme tel, jamais « refuse ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 12:30:00 +0100
+
 secubox-netmodes (1.6.0-1~trixie1) trixie; urgency=medium
 
   * Isoler un port du switch (ref #3201) : verbes port-isoler et port-rattacher de netmodesctl (lan0 à lan3 seulement,

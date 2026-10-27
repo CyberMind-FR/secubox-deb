@@ -78,6 +78,10 @@ PAUSE_UNBOUND = 5.0
 MARGE_UNBOUND = 30.0
 DELAI_UNBOUND_MIN = 180.0
 DELAI_UNBOUND_MAX = 900.0
+# Délai de toute commande ; unbound-checkconf relit tout unbound.conf.d (101 Mo de listes de blocage sur gk2) : à froid,
+# sur une box saturée, plus de 120 s (#3201, 2026-10-27 : l'application du panneau a échoué ainsi, rien n'a changé).
+DELAI_COMMANDE = 120.0
+DELAIS_COMMANDES = {"unbound-checkconf": DELAI_UNBOUND_MAX}
 PREFIXE_TEMPORAIRE = "sbx-lan-temporaire"
 # networkd ne crée, puis n'asservit ses ports, qu'à un netdev qu'il a créé lui-même : un br-lan déjà là (pont fait main,
 # ou netdev d'avant) donne « br-lan: Failed to create netdev: File exists », ports « configuring » à jamais (gk2,
@@ -157,12 +161,13 @@ class _Suivi:
 
 
 def executer_systeme(argv: list[str]) -> subprocess.CompletedProcess:
+    delai = DELAIS_COMMANDES.get(argv[0], DELAI_COMMANDE) if argv else DELAI_COMMANDE
     try:
-        return subprocess.run(argv, capture_output=True, text=True, timeout=120, check=False)
+        return subprocess.run(argv, capture_output=True, text=True, timeout=delai, check=False)
     except FileNotFoundError:
         return subprocess.CompletedProcess(argv, 127, "", f"{argv[0]} introuvable")
     except subprocess.TimeoutExpired:
-        return subprocess.CompletedProcess(argv, 124, "", "délai de 120 s dépassé")
+        return subprocess.CompletedProcess(argv, 124, "", f"délai de {delai:g} s dépassé")
 
 
 def contexte_systeme() -> Contexte:
@@ -740,6 +745,9 @@ def _valider(ctx: Contexte, geo: bool) -> None:
         controles.append((NGINX_T, "nginx -t refuse la configuration"))
     for argv, motif in controles:
         r = ctx.executer(argv)
+        if r.returncode == 124:                             # délai dépassé : rien n'est refusé, rien n'est appliqué
+            raise Refus(f"{argv[0]} n'a pas fini à temps ({_sortie(r)}) : configuration non vérifiée, rien n'est "
+                        "appliqué ; la box est peut-être saturée, réessayer")
         if r.returncode != 0:
             raise Refus(f"{motif} : {_sortie(r)}")
 

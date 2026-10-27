@@ -202,7 +202,8 @@ def test_confirmation_ouverte_se_ferme_si_l_etat_ne_permet_plus_le_verbe():
 
 def test_changelog_1_6_0():
     ch = (Path(__file__).resolve().parents[1] / "debian" / "changelog").read_text(encoding="utf-8")
-    assert ch.startswith("secubox-netmodes (1.6.0-1~trixie1) trixie; urgency=medium")
-    tete = ch.split("\n -- ", 1)
+    entete = "secubox-netmodes (1.6.0-1~trixie1) trixie; urgency=medium"
+    assert entete in ch                                      # retrouvée par son en-tête : d'autres versions la suivent
+    tete = ch[ch.index(entete):].split("\n -- ", 1)
     assert "(ref #3201)" in tete[0] and "192.168.248.0/22" in tete[0] and "Unbound" in tete[0]
     assert tete[1].startswith("Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 12:00:00 +0100")
