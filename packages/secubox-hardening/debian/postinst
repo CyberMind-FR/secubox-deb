@@ -3,10 +3,12 @@ set -e
 
 case "$1" in
     configure)
-        # Apply sysctl hardening on install
+        # Apply sysctl hardening on install. `sysctl --system`, jamais `-p` sur ce seul fichier (#3209) : il porte
+        # ip_forward = 0, que 99-secubox-zz-lxc-forward.conf (secubox-core) remet à 1 en passant après ; appliqué
+        # seul, il coupait le routage (LXC, LAN routé) jusqu'au redémarrage suivant.
         if [ -f /etc/secubox/hardening/99-secubox-hardening.conf ]; then
             cp /etc/secubox/hardening/99-secubox-hardening.conf /etc/sysctl.d/
-            sysctl -p /etc/sysctl.d/99-secubox-hardening.conf >/dev/null 2>&1 || true
+            sysctl --system >/dev/null 2>&1 || true
         fi
 
         # Install module blacklist

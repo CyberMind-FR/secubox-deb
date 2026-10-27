@@ -147,7 +147,8 @@ cmd_apply() {
 
     # Apply sysctl settings
     if [[ -f "$SYSCTL_CONF" ]]; then
-        sysctl -p "$SYSCTL_CONF" >/dev/null 2>&1 || warn "Some sysctl settings may not apply"
+        # Ordre du démarrage (#3209) : $SYSCTL_CONF porte ip_forward = 0, remis à 1 par 99-secubox-zz-lxc-forward.conf.
+        sysctl --system >/dev/null 2>&1 || warn "Some sysctl settings may not apply"
         ok "Sysctl settings applied"
     else
         warn "Sysctl config not found at $SYSCTL_CONF"

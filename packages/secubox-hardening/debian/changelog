@@ -1,3 +1,12 @@
+secubox-hardening (1.6.3-1~trixie1) trixie; urgency=medium
+
+  * Le postinst et `hardeningctl apply` appliquent les sysctl par `sysctl --system` (ordre du démarrage), jamais plus
+    par `sysctl -p` sur le seul 99-secubox-hardening.conf : ce fichier porte ip_forward = 0, que
+    99-secubox-zz-lxc-forward.conf (secubox-core) remet à 1 en passant après. La mise à jour 1.6.2 a ainsi coupé le
+    routage (conteneurs LXC, LAN routé) sur gk1, gk3 et gk4 jusqu'à un `sysctl --system` (ref #3209).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 11:00:00 +0100
+
 secubox-hardening (1.6.2-1~trixie1) trixie; urgency=medium
 
   * Garde des backends étendue au LAN du mode routeur (br-lan) : netmodes 1.7.0 l'accepte en entrée comme eth2, donc
