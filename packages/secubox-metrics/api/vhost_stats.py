@@ -46,6 +46,12 @@ SUFFIXE = "_access.log"
 
 RETENTION = 30          # jours conserves
 PLAFOND_IP = 20000      # IP distinctes memorisees par vhost et par jour
+# #3217 — seaux (sites) par jour : au-dela, un seul seau « (autres) ». Sans borne, un flot de noms (les origines
+# surf-*, un scanner qui invente des en-tetes Host) ouvrait un seau chacun : 152 878 seaux, 1,4 Go sur gk2.
+PLAFOND_SEAUX_JOUR = 2000
+AUTRES = "(autres)"
+# Surf sert chaque site distant sous sa propre origine `surf-<hote-aplati>.<box>` (cookies cloisonnes) : c'est UN site.
+_SURF = re.compile(r"surf-[a-z0-9_-]+\.(.+)")
 
 # Deux garde-fous contre la famine de la boucle. Le parsing est du Python pur :
 # meme lance dans un thread il garde le GIL, et un gros volume affame la boucle
@@ -310,6 +316,30 @@ def _drapeau(cc: Optional[str]) -> str:
     return chr(0x1F1E6 + ord(cc[0].upper()) - 65) + chr(0x1F1E6 + ord(cc[1].upper()) - 65)
 
 
+def cle_seau(hote: str) -> str:
+    """Le site auquel une requete est imputee : toutes les origines Surf d'une box sont « surf.<box> » (#3217)."""
+    m = _SURF.fullmatch(hote)
+    return f"surf.{m.group(1)}" if m else hote
+
+
+def _ajouter(t: dict, s: dict, plafond_ip: Optional[int] = None) -> None:
+    """Verse le seau `s` dans `t`. Avec `plafond_ip` (seau CONSERVE, pas une vue), les IP restent bornees."""
+    for c in ("visites", "requetes", "octets", "sondes", "erreurs", "robots", "sans_ref"):
+        t[c] += s.get(c, 0)
+    for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents", "pays"):
+        t[c].update(s.get(c, {}))
+    # Union et non somme : un visiteur qui passe sur deux origines est une personne, pas deux.
+    t["ips"].update(s.get("ips", ()))
+    t["ips_debordees"] |= bool(s.get("ips_debordees", False))
+    t["ips_lan"].update(s.get("ips_lan", ()))
+    if plafond_ip is not None:
+        for c in ("ips", "ips_lan"):
+            if len(t[c]) > plafond_ip:
+                t[c] = set(sorted(t[c])[:plafond_ip])
+                if c == "ips":
+                    t["ips_debordees"] = True
+
+
 def _vierge() -> dict:
     return {
         "visites": 0, "requetes": 0, "octets": 0,
@@ -416,6 +446,14 @@ class VhostStatsAggregator:
         self._charger()
 
     # ── lecture incrementale ─────────────────────────────────────────────
+    def _seau(self, jour: str, hote: str) -> dict:
+        """Le seau du site `hote` ce jour-la (origines Surf regroupees, plafond de seaux par jour, #3217)."""
+        seaux = self._jours[jour]
+        cle = cle_seau(hote)
+        if cle not in seaux and len(seaux) >= PLAFOND_SEAUX_JOUR:
+            cle = AUTRES
+        return seaux[cle]
+
     def _journaux(self) -> list[Path]:
         return sorted(REP_LOGS.glob(f"*{SUFFIXE}")) if REP_LOGS.is_dir() else []
 
@@ -490,7 +528,7 @@ class VhostStatsAggregator:
                     hote = m.group("hote").split(":")[0].lower()
                     if not _hote_reel(hote):
                         continue        # la box qui se parle : pas une visite
-                    _compter(self._jours[jour][hote], m)
+                    _compter(self._seau(jour, hote), m)
         else:
             for f in self._journaux():
                 if budget <= 0:
@@ -506,7 +544,7 @@ class VhostStatsAggregator:
                         continue
                     jour = _jour_de(m.group("date"))
                     if jour:
-                        _compter(self._jours[jour][vhost], m)
+                        _compter(self._seau(jour, vhost), m)
         self._tailler()
         self._elaguer()
         self._maj = datetime.now().astimezone().isoformat()
@@ -586,16 +624,9 @@ class VhostStatsAggregator:
         total: dict[str, dict] = defaultdict(_vierge)
         for j in jours:
             for vhost, s in self._jours.get(j, {}).items():
-                t = total[vhost]
-                for c in ("visites", "requetes", "octets", "sondes", "erreurs", "robots", "sans_ref"):
-                    t[c] += s[c]
-                for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents", "pays"):
-                    t[c].update(s[c])
                 # Union des IP : sur plusieurs jours c'est bien un nombre de
                 # visiteurs distincts, pas une somme de journees.
-                t["ips"] |= s["ips"]
-                t["ips_debordees"] |= s["ips_debordees"]
-                t["ips_lan"] |= s["ips_lan"]
+                _ajouter(total[vhost], s)
         return total
 
     def _fenetre(self, periode: str) -> list[str]:
@@ -640,16 +671,9 @@ class VhostStatsAggregator:
         for vhost, s in brut.items():
             f = famille(vhost)
             membres[f].append(vhost)
-            t = fam[f]
-            for c in ("visites", "requetes", "octets", "sondes", "erreurs", "robots", "sans_ref"):
-                t[c] += s[c]
-            for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents", "pays"):
-                t[c].update(s[c])
             # Union et non somme : un visiteur qui passe sur le .com et le .fr
             # est une personne, pas deux.
-            t["ips"] |= s["ips"]
-            t["ips_debordees"] |= s["ips_debordees"]
-            t["ips_lan"] |= s["ips_lan"]
+            _ajouter(fam[f], s)
         for f, s in fam.items():
             s["membres"] = sorted(membres[f])
         return fam
@@ -890,7 +914,7 @@ class VhostStatsAggregator:
                       for v, c in self._cumul.items()},
             "jours": {
                 j: {v: {**{c: s[c] for c in ("visites", "requetes", "octets",
-                                             "sondes", "erreurs", "robots")},
+                                             "sondes", "erreurs", "robots", "sans_ref")},
                         "ips": sorted(s["ips"]),
                         "ips_debordees": s["ips_debordees"],
                         "ips_lan": sorted(s["ips_lan"]),
@@ -930,10 +954,14 @@ class VhostStatsAggregator:
         for v, c in d.get("cumul", {}).items():
             if not _hote_reel(v):
                 continue
-            self._cumul[v] = {"depuis": c.get("depuis", ""),
-                              "visites": c.get("visites", 0),
-                              "requetes": c.get("requetes", 0),
-                              "pays": Counter(c.get("pays", {}))}
+            # #3217 : les origines Surf du cache existant se fondent dans « surf.<box> ».
+            t = self._cumul.setdefault(cle_seau(v), {"depuis": "", "visites": 0, "requetes": 0, "pays": Counter()})
+            depuis = c.get("depuis", "")
+            if depuis and (not t["depuis"] or depuis < t["depuis"]):
+                t["depuis"] = depuis
+            t["visites"] += c.get("visites", 0)
+            t["requetes"] += c.get("requetes", 0)
+            t["pays"].update(c.get("pays", {}))
         for j, vhosts in d.get("jours", {}).items():
             for v, s in vhosts.items():
                 # #1191 — filtrer AUSSI au rechargement : le cache d'avant ce
@@ -951,7 +979,8 @@ class VhostStatsAggregator:
                 seau["ips_lan"] = set(s.get("ips_lan", []))
                 for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents", "pays"):
                     seau[c] = Counter(s.get(c, {}))
-                self._jours[j][v] = seau
+                # #3217 : fusion des origines Surf et plafond de seaux, comme a la collecte.
+                _ajouter(self._seau(j, v), seau, plafond_ip=PLAFOND_IP)
         self._elaguer()
 
     async def run_forever(self) -> None:
