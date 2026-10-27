@@ -12,19 +12,21 @@ couvre QUE le nom exact donné — avec une seule entrée sur l'apex, l'apex
 résolvait pour l'IP exemptée mais ses sous-domaines restaient bloqués.
 Une `view:` avec `view-first: yes` (#2976) a aussi été vérifiée en direct
 et NE SURCHARGE PAS un `always_nxdomain` global pour la même zone —
-abandonnée."""
+abandonnée.
+
+#3205 : le rendu est DÉPOSÉ comme source de secubox-dns-listes, qui compile, vérifie, recharge (et attend qu'Unbound
+réponde, #2969) et revient en arrière ; le script ne touche plus ni Unbound ni sa configuration."""
 import importlib.machinery
 import importlib.util
 import sys
 import types
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
 ICI = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ICI.parents[1] / "common"))
-import secubox_unbound as U  # noqa: E402
+from secubox_unbound import depot as D  # noqa: E402
 
 SCRIPT = ICI / "sbin" / "secubox-adguard-adult-sync"
 
@@ -50,32 +52,13 @@ def mod(tmp_path, monkeypatch):
     m.CACHE = tmp_path / "ad-guard" / "adult-source-cache.txt"
     m.ADULT_DOMAINS = tmp_path / "ad-guard" / "adult-domains.txt"
     m.EXEMPT_IP = tmp_path / "ad-guard" / "adult-exempt-ip.txt"
-    m.DROPIN = tmp_path / "unbound.d" / "96-secubox-adult.conf"
+    m.SOURCE = tmp_path / "sources" / "96-secubox-adult.conf"
     m.STATUS = tmp_path / "ad-guard" / "adult-sinkhole-status.json"
     m.STATE = tmp_path / "ad-guard" / "adult-sinkhole.enabled"
     m.DATA_DIR = tmp_path / "ad-guard"
     m.DATA_DIR.mkdir(parents=True, exist_ok=True)
     m._fetch = lambda force=False: HOSTS_ADULTE
     return m
-
-
-class Faux(U.SystemeUnbound):
-    MODULE = "adguard-adult-sync"
-
-    def __init__(self, verif=(True, ""), recharge_ok=True):
-        self.verif, self.recharge_ok, self.appels = verif, recharge_ok, []
-
-    def verifier_unbound(self):
-        self.appels.append("verifier")
-        return self.verif
-
-    def recharger_unbound(self):
-        self.appels.append("recharger")
-        if not self.recharge_ok:
-            raise self.ERREUR("reload a échoué")
-
-    def audit(self, action, detail=""):
-        pass
 
 
 def test_parse_hosts_lit_le_format_hosts_et_ignore_les_commentaires():
@@ -90,26 +73,36 @@ def test_parse_hosts_lit_le_format_hosts_et_ignore_les_commentaires():
     }
 
 
-def test_la_synchronisation_pose_verifie_et_recharge(mod):
-    s = Faux()
-    st = mod.do_sync(systeme=s)
-    assert st["ok"] is True and st["adult"] == 3 and st["reloaded"] is True
-    assert "cam-adulte.example" in mod.DROPIN.read_text()
-    assert s.appels == ["verifier", "recharger"]
+def test_la_synchronisation_depose_la_source(mod):
+    st = mod.do_sync()
+    assert st["ok"] is True and st["adult"] == 3 and st["source"] == "depose"
+    assert st["application"] == "secubox-dns-listes" and "reloaded" not in st
+    assert "cam-adulte.example" in mod.SOURCE.read_text()
+    assert mod.do_sync()["source"] == "inchange"
+
+
+def test_le_rendu_avec_exemptions_est_accepte_par_le_compilateur(mod, tmp_path):
+    mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
+    mod.EXEMPT_IP.write_text("192.168.1.3\n")
+    mod.do_sync()
+    acl = tmp_path / "10-acl.conf"                                   # le LAN autorisé, comme sur une box
+    acl.write_text("server:\n    access-control: 192.168.0.0/16 allow\n")
+    texte, stats = D.listes.compiler([mod.SOURCE], [acl])
+    assert '"cam-adulte.example." always_nxdomain' in texte and "192.168.1.3/32" in texte and stats["etiquettes"] >= 1
 
 
 def test_un_domaine_deja_bloque_par_le_general_nest_pas_redeclare(mod):
     # "deja-bloque.example" est dans le sinkhole GÉNÉRAL (fixture) ET dans la
     # source adulte : le déclarer une 2e fois en `local-zone` ferait refuser
     # la config par Unbound (deux `local-zone` pour le même nom).
-    mod.do_sync(systeme=Faux())
-    texte = mod.DROPIN.read_text()
+    mod.do_sync()
+    texte = mod.SOURCE.read_text()
     assert texte.count('local-zone: "deja-bloque.example."') == 0
 
 
 def test_sans_appareil_exempte_aucun_override(mod):
-    mod.do_sync(systeme=Faux())
-    assert "local-zone-override" not in mod.DROPIN.read_text()
+    mod.do_sync()
+    assert "local-zone-override" not in mod.SOURCE.read_text()
 
 
 def test_appareil_exempte_recoit_un_override_par_domaine_adulte_individuel(mod):
@@ -118,8 +111,8 @@ def test_appareil_exempte_recoit_un_override_par_domaine_adulte_individuel(mod):
     # (#2976, cassée — view-first:yes ne surcharge pas always_nxdomain).
     mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
     mod.EXEMPT_IP.write_text("192.168.1.3\n")
-    st = mod.do_sync(systeme=Faux())
-    texte = mod.DROPIN.read_text()
+    st = mod.do_sync()
+    texte = mod.SOURCE.read_text()
     assert st["exempt_ip"] == 1
     assert "view:" not in texte and "access-control-view" not in texte
     assert 'local-zone-override: "cam-adulte.example." 192.168.1.3 always_transparent' in texte
@@ -140,8 +133,8 @@ def test_apex_et_sous_domaine_recoivent_chacun_leur_propre_override(mod):
     )
     mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
     mod.EXEMPT_IP.write_text("192.168.1.3\n")
-    mod.do_sync(systeme=Faux())
-    texte = mod.DROPIN.read_text()
+    mod.do_sync()
+    texte = mod.SOURCE.read_text()
     overrides = {ligne.strip() for ligne in texte.splitlines() if ligne.strip().startswith("local-zone-override:")}
     assert overrides == {
         'local-zone-override: "chaturbate.com." 192.168.1.3 always_transparent',
@@ -150,39 +143,23 @@ def test_apex_et_sous_domaine_recoivent_chacun_leur_propre_override(mod):
     }
 
 
-def test_une_config_refusee_remet_l_ancienne_octet_pour_octet(mod):
-    mod.DROPIN.parent.mkdir(parents=True)
-    mod.DROPIN.write_bytes(b"# ancienne vue\n")
-    st = mod.do_sync(systeme=Faux(verif=(False, "syntax error")))
-    assert st["ok"] is False and "unbound-checkconf" in st["error"]
-    assert mod.DROPIN.read_bytes() == b"# ancienne vue\n"
+def test_un_depot_refuse_est_annonce(mod, tmp_path):
+    mod.SOURCE.parent.mkdir(parents=True)
+    mod.SOURCE.symlink_to(tmp_path / "ailleurs")
+    st = mod.do_sync()
+    assert st["ok"] is False and "lien symbolique" in st["error"] and not (tmp_path / "ailleurs").exists()
 
 
-def test_un_rechargement_qui_echoue_restaure_et_ne_redemarre_jamais(mod):
-    mod.DROPIN.parent.mkdir(parents=True)
-    mod.DROPIN.write_bytes(b"# ancienne vue\n")
-    s = Faux(recharge_ok=False)
-    st = mod.do_sync(systeme=s)
-    assert st["ok"] is False and mod.DROPIN.read_bytes() == b"# ancienne vue\n"
-    assert not hasattr(mod.Systeme, "redemarrer_unbound")
+def test_desactiver_retire_la_source(mod):
+    mod.do_sync()
+    st = mod.do_disable()
+    assert st["ok"] is True and st["enabled"] is False and st["source"] == "retire" and not mod.SOURCE.exists()
+    assert mod.do_disable()["source"] == "absent"
 
 
-def test_desactiver_retire_la_vue_et_recharge(mod):
-    mod.do_sync(systeme=Faux())
-    s = Faux()
-    st = mod.do_disable(systeme=s)
-    assert st["ok"] is True and st["enabled"] is False and not mod.DROPIN.exists()
-    assert s.appels == ["verifier", "recharger"]
-
-
-# ── Verrou (#2979 bis) : une synchro en cours (minuterie 1 min, #2976) ──
-# qui recharge Unbound ne doit jamais chevaucher une autre invocation sur
-# le même socket de contrôle — constaté en direct sur gk2 : deux
-# `unbound-control` concurrents (reload + dump_cache) ont bloqué le
-# service en « reloading » pendant 24h affichées, puis Unbound est mort
-# (connexion refusée, panne DNS complète). Même verrou que
-# `secubox-adguard-tv.verrou_controleur()` (fichier dédié, exclusif,
-# `O_NOFOLLOW`).
+# ── Verrou (#2979 bis) : deux synchros ne se chevauchent jamais (cache de la
+# source adulte, liste des domaines, source déposée). Depuis #3205, le script
+# ne parle plus à Unbound : c'est secubox-dns-listes, seul, qui recharge.
 
 def test_verrou_exclusif_refuse_une_seconde_synchro_concurrente(mod):
     with mod._verrou():
@@ -194,57 +171,28 @@ def test_verrou_exclusif_refuse_une_seconde_synchro_concurrente(mod):
 
 
 def test_do_sync_echoue_proprement_si_une_synchro_est_deja_en_cours(mod):
-    s = Faux()
     with mod._verrou():
-        st = mod.do_sync(systeme=s)
+        st = mod.do_sync()
     assert st["ok"] is False and "en cours" in st["error"]
-    assert s.appels == []  # jamais touché unbound-control pendant que le verrou était pris
+    assert not mod.SOURCE.exists()  # rien n'est déposé pendant que le verrou était pris
 
 
 def test_source_injoignable_sans_cache_echoue_proprement(mod):
     mod._fetch = lambda force=False: None
-    st = mod.do_sync(systeme=Faux())
+    st = mod.do_sync()
     assert st["ok"] is False and "unreachable" in st["error"]
 
 
-# ── La vraie Systeme (#2969) : `unbound-control reload` rend la main dès le
-# signal accepté — `recharger_unbound` doit ATTENDRE que `systemctl
-# is-active` redevienne « active » avant de rendre la main, au lieu de
-# croire le rechargement terminé. ──────────────────────────────────────────
-
-def test_recharger_unbound_attend_que_le_service_redevienne_actif(mod):
-    etats = iter(["reloading", "reloading", "active"])
-    appels = []
-
-    def _commande(args, delai):
-        appels.append(args)
-        if args[-1] == "reload":
-            return True, ""
-        if args == ["systemctl", "is-active", "unbound"]:
-            return True, next(etats)
-        raise AssertionError(args)
-
-    s = mod.Systeme()
-    with mock.patch.object(mod._unbound, "commande", side_effect=_commande), \
-         mock.patch.object(mod.time, "sleep"):
-        s.recharger_unbound()
-    # 1 reload + 3 sondes (deux "reloading" avant le "active").
-    assert sum(1 for a in appels if a[-1] == "reload") == 1
-    assert appels.count(["systemctl", "is-active", "unbound"]) == 3
+def test_le_script_ne_touche_plus_unbound():
+    """#2969 (attendre qu'Unbound soit revenu) vit désormais dans secubox_unbound.depot.SystemeListes."""
+    src = SCRIPT.read_text()
+    for interdit in ("unbound.conf.d", "unbound-control", "unbound-checkconf", "poser_vue", "retirer_vue", "systemctl"):
+        assert interdit not in src, interdit
 
 
-def test_recharger_unbound_leve_si_le_service_ne_redevient_jamais_actif(mod):
-    def _commande(args, delai):
-        if args[-1] == "reload":
-            return True, ""
-        if args == ["systemctl", "is-active", "unbound"]:
-            return True, "reloading"
-        raise AssertionError(args)
-
-    s = mod.Systeme()
-    horloge = iter([0, 10, 9999])  # 1er appel < fin, puis dépasse l'attente
-    with mock.patch.object(mod._unbound, "commande", side_effect=_commande), \
-         mock.patch.object(mod.time, "sleep"), \
-         mock.patch.object(mod.time, "time", side_effect=lambda: next(horloge)):
-        with pytest.raises(RuntimeError, match="n'est pas revenu actif"):
-            s.recharger_unbound()
+def test_une_adresse_exemptee_invalide_est_ignoree(mod):
+    mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
+    mod.EXEMPT_IP.write_text("192.168.1.3\nfaux\n300.1.1.1\n")
+    assert mod._exempt_ips() == ["192.168.1.3"]
+    mod.do_sync()
+    D.listes.compiler([mod.SOURCE], [])

@@ -136,6 +136,16 @@ Modèle Pydantic : `AutoEssaiIn{actif}`. L'état gagne `auto_essai` (faux par d�
 Limite connue du module existant : l'exemption d'un client par une vue Unbound **vide** (allowlist d'IP de `secubox-adblock-sync`) ne fonctionne pas ;
 une vue doit contenir une zone transparente (`local-zone: "." transparent`). Voir l'audit, §5.
 
+### Listes DNS compilées (1.16.0, #3205)
+
+`secubox-adblock-sync` et `secubox-adguard-adult-sync` ne touchent plus Unbound : ils **déposent** leur rendu
+(`95-secubox-adblock.conf`, `96-secubox-adult.conf`) dans `/var/lib/secubox-dns-listes/sources`. Le service root
+`secubox-dns-listes` (secubox-core ≥ 1.8.3) compile les trois listes (webfilter, adblock, adult) en un seul
+`92-secubox-listes.conf` à étiquettes, vérifie, recharge et revient en arrière au moindre échec. Statut des
+synchronisations : `source` (`depose`, `inchange`, `retire`, `absent`) et `application: "secubox-dns-listes"` ;
+`reloaded` disparaît. `/statut-direct` lit `puits.recharge` dans `/var/lib/secubox-dns-listes/etat.json`
+(`null` tant que l'application est en cours, `false` et `puits.erreur` sur un échec).
+
 ### Panneau simplifié (1.8.0, #2174)
 
 La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil avec un interrupteur « Anti-pub » (mode `auto` en interne, `off` à l'arrêt), et la liste « Une pub passe encore ? ». Les anciens onglets (Overview, Devices, Blocklist, Delayed, DNS AdBlock TV) et les modes observe, block, off sont sous « Avancé ». Un appareil déclaré sans mode est en `auto` par défaut.

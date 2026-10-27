@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Un générateur dépose ou retire sa source, ou un fichier de CONTEXTE change dans unbound.conf.d (une vue TV, un réseau :
+# leurs adresses ne porteraient aucune étiquette du 92) : nouvelle passe (#3205). Le service écrit lui-même dans
+# unbound.conf.d ; la passe qui suit ses propres écritures trouve la même empreinte d'entrées et s'arrête sans compiler.
+[Unit]
+Description=SecuBox — sources des listes DNS modifiées (#3205)
+
+[Path]
+# Pas de MakeDirectory : il créerait aussi /etc/unbound/unbound.conf.d sur une box sans Unbound. Le postinst crée les sources.
+PathChanged=/var/lib/secubox-dns-listes/sources
+PathChanged=/etc/unbound/unbound.conf.d
+Unit=secubox-dns-listes.service
+
+[Install]
+WantedBy=paths.target

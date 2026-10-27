@@ -80,9 +80,9 @@ def test_le_lanceur_de_l_api_utilise_une_socket_en_0660():
 # ── phase 2 : contrôleur root et unités d'application (#1962) ────────────────────────────────────────────────────────────────────
 def test_service_du_controleur_est_root_deplenche_par_fichier_et_bac_a_sable():
     u = lire("systemd/secubox-webfilter-apply.service")
-    assert not re.search(r"^User=", u, re.M) and "Type=oneshot" in u                       # root : écrit dans /etc/unbound
+    assert not re.search(r"^User=", u, re.M) and "Type=oneshot" in u                       # root : dépose la source de secubox-dns-listes
     assert "ExecStart=/usr/sbin/secubox-webfilter-ctl apply" in u
-    assert re.search(r"^TimeoutStartSec=(\d+)min$", u, re.M) and int(re.search(r"^TimeoutStartSec=(\d+)min$", u, re.M).group(1)) >= 15   # checkconf 10 min (#3005)
+    assert re.search(r"^TimeoutStartSec=(\d+)min$", u, re.M) and int(re.search(r"^TimeoutStartSec=(\d+)min$", u, re.M).group(1)) >= 5    # construction ~150 s
     assert "ExecStopPost" not in u                                                           # la demande est consommée PAR LE CONTRÔLEUR, au début
     assert re.search(r"^StartLimitIntervalSec=\d+", u, re.M) and re.search(r"^StartLimitBurst=\d+", u, re.M)
     for d in ("CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE", "ProtectKernelTunables=true", "RestrictSUIDSGID=true", "ProtectKernelLogs=true"):
@@ -91,8 +91,8 @@ def test_service_du_controleur_est_root_deplenche_par_fichier_et_bac_a_sable():
     assert "NoNewPrivileges=true" in u and "ProtectSystem=strict" in u and "PrivateTmp=true" in u
     assert "Wants=unbound" not in u and "Requires=unbound" not in u
     rw = [x.lstrip("-") for x in re.search(r"^ReadWritePaths=(.*)$", u, re.M).group(1).split()]
-    assert set(rw) == {"/etc/unbound/unbound.conf.d", "/var/lib/secubox/webfilter", "/var/lib/secubox-webfilter-ctl", "/var/log/secubox/audit.log"}
-    assert "AF_INET" in u and "IPAddressDeny=any" in u and "IPAddressAllow=localhost" in u        # unbound-control : boucle locale seulement
+    assert set(rw) == {"/var/lib/secubox-dns-listes/sources", "/var/lib/secubox/webfilter", "/var/lib/secubox-webfilter-ctl", "/var/log/secubox/audit.log"}
+    assert "AF_INET" not in u and "IPAddressDeny=any" in u and "IPAddressAllow" not in u          # #3205 : plus d'unbound-control, aucun réseau
 
 
 def test_la_demande_et_la_minuterie_de_4_heures():
@@ -107,13 +107,13 @@ def test_la_synchronisation_ne_recharge_jamais_unbound():
     assert "unbound-control" not in lire("webfilter/sources.py")
 
 
-def test_le_controleur_ne_redemarre_jamais_unbound():
-    # la propriété se lit maintenant sur le comportement : le contrôleur n'a PAS la capacité de redémarrer (elle vit dans une sous-classe de
-    # secubox_unbound que seul dns-lan utilise), et son source ne parle ni de restart ni de systemctl
+def test_le_controleur_ne_parle_plus_a_unbound():
+    """#3205 : secubox-dns-listes vérifie, recharge et revient en arrière ; le contrôleur dépose sa source et s'arrête là."""
     from webfilter import ctl
     src = lire("webfilter/ctl.py")
-    assert '"restart"' not in src and "systemctl" not in src
-    assert hasattr(ctl.Systeme, "recharger_unbound") and not hasattr(ctl.Systeme, "redemarrer_unbound")
+    for interdit in ('"restart"', "systemctl", "recharger_unbound", "verifier_unbound", "unbound-control", "unbound-checkconf"):
+        assert interdit not in src, interdit
+    assert not hasattr(ctl.Systeme, "redemarrer_unbound")
 
 
 def test_l_api_n_utilise_ni_sudo_ni_la_levee_de_no_new_privileges():
@@ -137,18 +137,21 @@ def test_regles_installent_le_controleur_et_la_version_est_0_2_0():
     assert "secubox-webfilter (0.1.0-1~bookworm1)" in lire("debian/changelog")                   # l'historique est conservé
 
 
-def test_profil_du_controleur_n_ecrit_que_son_fichier_dans_unbound():
+def test_profil_du_controleur_n_ecrit_que_sa_source():
     p = lire("apparmor/secubox-webfilter")
     assert "/usr/sbin/secubox-webfilter-ctl {" in p
     ctl = p[p.index("/usr/sbin/secubox-webfilter-ctl {"):]
-    assert "/etc/unbound/unbound.conf.d/93-secubox-webfilter.conf rw," in ctl
-    assert not re.search(r"/etc/unbound/\*\*?\s+\S*w", ctl) and "/etc/unbound/unbound.conf.d/** w" not in ctl
-    assert "/usr/sbin/unbound-checkconf" in ctl and "/usr/sbin/unbound-control" in ctl and "/var/lib/secubox-webfilter-ctl/" in ctl
+    regles = "\n".join(ligne.split("#")[0] for ligne in ctl.splitlines())
+    assert "/var/lib/secubox-dns-listes/sources/93-secubox-webfilter.conf rw," in regles
+    assert not re.search(r"^\s*/etc/unbound/\S*\s+\S*w", regles, re.M)                         # plus rien n'est écrit dans /etc/unbound
+    assert not re.search(r"^\s*/var/lib/secubox-dns-listes/sources/\*", regles, re.M)            # ni les sources des autres générateurs
+    assert "unbound-checkconf" not in regles and "unbound-control" not in regles and "network inet" not in regles
+    assert "/var/lib/secubox-webfilter-ctl/" in regles
 
 
 def test_le_readme_decrit_la_phase_2():
     r = lire("README.md")
-    for mot in ("profils", "appliquer.demande", "93-secubox-webfilter.conf", "04:00", "ad-guard"):
+    for mot in ("profils", "appliquer.demande", "93-secubox-webfilter.conf", "04:00", "ad-guard", "secubox-dns-listes"):
         assert mot in r, mot
 
 
@@ -160,7 +163,8 @@ def test_exception_root_ecrite_dans_les_regles():
 def test_retrait_du_paquet_retire_le_blocage_et_purge_l_etat_racine():
     pre, post = lire("debian/prerm"), lire("debian/postrm")
     assert "secubox-webfilter-apply.service" in pre                                          # l'application en cours est arrêtée
-    assert "rm -f /etc/unbound/unbound.conf.d/93-secubox-webfilter.conf" in pre and "unbound-checkconf" in pre and "unbound-control reload" in pre
+    assert "rm -f /var/lib/secubox-dns-listes/sources/93-secubox-webfilter.conf" in pre and "secubox-dns-listes" in pre
+    assert "unbound-control" not in pre                                                      # #3205 : secubox-dns-listes recompile et recharge
     assert re.search(r"remove\)", pre) and "upgrade" not in pre.split("remove)")[0].split("case")[-1]       # jamais lors d'une simple mise à jour
     assert "rm -rf /var/lib/secubox-webfilter-ctl" in post
 

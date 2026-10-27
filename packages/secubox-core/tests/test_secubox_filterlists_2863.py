@@ -7,6 +7,7 @@
 secubox-adblock-sync (ad-guard) et /sinkhole/sources (dns-guard) l'importaient depuis secubox_toolbox : sur le profil `minimal` (sans toolbox), la mise à jour du puits DNS
 publicitaire échouait (« cannot import name 'filterlists' from 'secubox_toolbox' »)."""
 import importlib
+import re
 import sys
 from pathlib import Path
 
@@ -46,4 +47,5 @@ def test_ad_guard_et_dns_guard_l_importent_de_la():
     assert "import secubox_filterlists" in sync or "from secubox_filterlists" in sync
     assert "secubox_filterlists" in dns
     ctl = (RACINE / "packages" / "secubox-ad-guard" / "debian" / "control").read_text(encoding="utf-8")
-    assert "secubox-core (>= 1.7.10)" in ctl
+    plancher = re.search(r"secubox-core \(>= ([0-9.]+)\)", ctl)                 # 1.7.10 livre secubox_filterlists ; un plancher plus haut convient
+    assert plancher and tuple(map(int, plancher.group(1).split("."))) >= (1, 7, 10)

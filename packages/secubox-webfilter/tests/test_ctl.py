@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
-"""Contrôleur root : application des vues, retour arrière, audit, résultat et carte (#1962, phase 2)."""
+"""Contrôleur root : application des vues, audit, résultat et carte (#1962, phase 2).
+
+#3205 : le rendu est DÉPOSÉ comme source de secubox-dns-listes, qui compile webfilter, adblock et adult en un seul
+fichier, vérifie, recharge et revient en arrière. Le contrôleur ne vérifie ni ne recharge plus Unbound lui-même."""
 import fcntl
 import json
 import os
@@ -8,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from secubox_unbound import listes
 from webfilter import ctl
 
 RACINE = Path(__file__).resolve().parent.parent
@@ -16,20 +20,16 @@ MAC = "aa:bb:cc:dd:ee:01"
 
 
 class Faux(ctl.Systeme):
-    def __init__(self, voisins=None, adguard="", box=(), checkconf_ok=True, reloads_en_echec=0):
+    def __init__(self, voisins=None, adguard="", box=()):
         self._v, self._a, self._b = voisins if voisins is not None else {MAC: ["192.168.1.50"]}, adguard, set(box)
-        self.checkconf_ok, self.reloads_en_echec = checkconf_ok, reloads_en_echec
         self.appels, self.audits = [], []
 
-    def verifier_unbound(self):
+    def verifier_unbound(self):                   # #3205 : jamais appelé, secubox-dns-listes vérifie et recharge
         self.appels.append("checkconf")
-        return self.checkconf_ok, "" if self.checkconf_ok else "unbound-checkconf: erreur simulée"
+        return True, ""
 
     def recharger_unbound(self):
         self.appels.append("reload")
-        if self.reloads_en_echec > 0:
-            self.reloads_en_echec -= 1
-            raise ctl.ErreurCtl("unbound-control reload a échoué : simulé")
 
     def adguard_texte(self):
         return self._a
@@ -59,7 +59,8 @@ def banc(tmp_path):
         (tmp_path / "etat" / "listes" / cat).mkdir(exist_ok=True)                     # une liste par source du catalogue : n'importe quelle catégorie peut passer en block
         (tmp_path / "etat" / "listes" / cat / f"{source}.lst").write_text(nom + "\n")
     (tmp_path / "racine").mkdir()
-    (tmp_path / "u").mkdir()
+    (tmp_path / "u").mkdir(mode=0o755)
+    os.chmod(tmp_path / "u", 0o755)                                     # dossier des sources : fermé en écriture, comme en production (#3205)
     os.chmod(tmp_path / "etat", 0o700)                                  # comme en production (tmpfiles) : le contrôleur refuse un dossier ouvert au groupe
     toml = tmp_path / "w.toml"
     toml.write_text(CONF.replace("lan = []", 'lan = ["192.168.1.0/24", "2a01:db8::/64"]')
@@ -75,7 +76,7 @@ def lancer(banc, systeme, **k):
     return ctl.appliquer(banc / "etat", banc / "racine", banc / "u" / "93-secubox-webfilter.conf", banc / "w.toml", systeme=systeme, **k)
 
 
-def dropin(banc):
+def source(banc):
     return banc / "u" / "93-secubox-webfilter.conf"
 
 
@@ -83,18 +84,20 @@ def test_premiere_application(banc):
     ecrire_config(banc, config())
     s = Faux()
     r = lancer(banc, s)
-    assert r["statut"] == "applique" and r["zones"] == 2 and r["version"] == 5 and s.appels == ["checkconf", "reload"]
-    assert "access-control-view: 192.168.1.50/32 wf-" in dropin(banc).read_text()
+    assert r["statut"] == "applique" and r["zones"] == 2 and r["version"] == 5 and s.appels == []    # ni checkconf ni reload
+    assert "access-control-view: 192.168.1.50/32 wf-" in source(banc).read_text() and "secubox-dns-listes" in r["message"]
     assert json.loads((banc / "etat" / "resultat.json").read_text())["statut"] == "applique"
     assert any(a == "application" and "zones=2" in d for a, d in s.audits)
 
 
-def test_application_identique_ne_recharge_pas(banc):
+def test_application_identique_ne_redepose_pas(banc):
     ecrire_config(banc, config())
     lancer(banc, Faux())
+    avant = source(banc).stat().st_mtime_ns
     s = Faux()
     r = lancer(banc, s)
     assert r["statut"] == "inchange" and s.appels == [] and not any(a == "application" for a, _ in s.audits)
+    assert source(banc).stat().st_mtime_ns == avant                    # aucun dépôt : secubox-dns-listes n'est pas déclenché
     assert json.loads((banc / "etat" / "resultat.json").read_text())["statut"] == "inchange"
 
 
@@ -104,7 +107,7 @@ def test_bascule_observe_vers_block_est_auditee(banc):
     ecrire_config(banc, config())
     s = Faux()
     lancer(banc, s)
-    assert ("changement", "profil enfants jeux observe->block") in s.audits and "reload" in s.appels
+    assert ("changement", "profil enfants jeux observe->block") in s.audits and s.appels == []
 
 
 def test_appareil_reassigne_est_audite(banc):
@@ -116,67 +119,46 @@ def test_appareil_reassigne_est_audite(banc):
     assert ("changement", f"appareil {MAC} profil defaut->enfants") in s.audits
 
 
-def test_controle_refuse_restaure_l_ancien_fichier(banc):
-    ecrire_config(banc, config({"adulte": "block", "jeux": "observe", "phishing": "observe"}))
+def test_le_rendu_est_accepte_par_le_compilateur(banc):
+    ecrire_config(banc, config({"adulte": "block", "jeux": "block", "phishing": "observe"}))
     lancer(banc, Faux())
-    avant = dropin(banc).read_bytes()
+    texte, stats = listes.compiler([source(banc)], [])
+    assert stats["emis"] == 3 and '"bet.example.org." always_nxdomain' in texte
+
+
+def test_un_depot_refuse_est_une_erreur_auditee(banc):
     ecrire_config(banc, config())
-    s = Faux(checkconf_ok=False)
+    source(banc).symlink_to(banc / "ailleurs")
+    s = Faux()
     r = lancer(banc, s)
-    assert r["statut"] == "refuse" and "erreur simulée" in r["message"] and dropin(banc).read_bytes() == avant
-    assert "reload" not in s.appels and s.audits[-1][0] == "refuse"
+    assert r["statut"] == "erreur" and "lien symbolique" in r["message"] and not (banc / "ailleurs").exists()
+    assert s.audits[-1][0] == "depot-echoue" and not (banc / "racine" / "applique.json").exists()
 
 
-def test_premiere_application_refusee_ne_laisse_rien(banc):
-    ecrire_config(banc, config())
-    assert lancer(banc, Faux(checkconf_ok=False))["statut"] == "refuse" and not dropin(banc).exists()
-
-
-def test_rechargement_en_echec_restaure_et_recharge_l_ancien_etat(banc):
-    ecrire_config(banc, config({"adulte": "block", "jeux": "observe", "phishing": "observe"}))
-    lancer(banc, Faux())
-    avant = dropin(banc).read_bytes()
-    ecrire_config(banc, config())
-    s = Faux(reloads_en_echec=1)
-    r = lancer(banc, s)
-    assert r["statut"] == "erreur" and dropin(banc).read_bytes() == avant
-    assert s.appels == ["checkconf", "reload", "reload"] and s.audits[-1][0] == "rechargement-echoue"
-
-
-def test_restauration_incomplete_est_dite(banc, monkeypatch):
+def test_plus_de_copie_precedente(banc):
+    """Le retour arrière appartient à secubox-dns-listes : plus de copie de 40 Mo dans /var/lib/secubox-webfilter-ctl."""
     ecrire_config(banc, config({"adulte": "block", "jeux": "observe", "phishing": "observe"}))
     lancer(banc, Faux())
     ecrire_config(banc, config())
-    reel = ctl._ecrire_atomique
-
-    def capricieux(chemin, texte, mode=0o644):
-        if capricieux.restauration:
-            raise OSError("disque plein")
-        return reel(chemin, texte, mode)
-    capricieux.restauration = False
-    s = Faux(checkconf_ok=False)
-    ancien = s.verifier_unbound
-    s.verifier_unbound = lambda: (setattr(capricieux, "restauration", True), ancien())[1]
-    monkeypatch.setattr(ctl, "_ecrire_atomique", capricieux)
-    r = lancer(banc, s)
-    assert r["statut"] == "erreur" and "INCOMPLÈTE" in r["message"]
+    lancer(banc, Faux())
+    assert not (banc / "racine" / "precedent.conf").exists()
 
 
 @pytest.mark.parametrize("contenu", ["pas du json", "[1, 2]", "null", '{"inconnu": 1}', json.dumps({"profils": {"defaut": {"categories": {"x": "block"}}}}),
                                      "x" * (1024 * 1024 + 10)])
-def test_config_hostile_refusee_sans_toucher_au_dropin(banc, contenu):
+def test_config_hostile_refusee_sans_toucher_a_la_source(banc, contenu):
     ecrire_config(banc, config({"adulte": "block", "jeux": "observe", "phishing": "observe"}))
     lancer(banc, Faux())
-    avant = dropin(banc).read_bytes()
+    avant = source(banc).read_bytes()
     (banc / "etat" / "config.json").write_text(contenu)
     r = lancer(banc, Faux())
-    assert r["statut"] == "refuse" and dropin(banc).read_bytes() == avant and str(banc) not in r["message"]
+    assert r["statut"] == "refuse" and source(banc).read_bytes() == avant and str(banc) not in r["message"]
 
 
 def test_config_absente_n_est_pas_une_erreur_et_ne_fait_aucun_bruit(banc):
     s = Faux()
     r = lancer(banc, s)
-    assert r["statut"] == "inchange" and s.appels == [] and s.audits == [] and not dropin(banc).exists()
+    assert r["statut"] == "inchange" and s.appels == [] and s.audits == [] and not source(banc).exists()
 
 
 def test_config_lien_symbolique_ou_non_regulier_refusee(banc):
@@ -193,7 +175,7 @@ def test_budget_de_zones_refuse(banc):
     (banc / "etat" / "listes" / "jeux" / "hagezi-gambling-medium.lst").write_text("".join(f"d{i}.example.org\n" for i in range(1500)))      # 1 500 zones > zones_max = 1 000
     ecrire_config(banc, config())
     r = lancer(banc, Faux())
-    assert r["statut"] == "refuse" and "budget" in r["message"] and not dropin(banc).exists()
+    assert r["statut"] == "refuse" and "budget" in r["message"] and not source(banc).exists()
 
 
 def test_verrou_deja_tenu(banc):
@@ -220,14 +202,14 @@ def test_carte_des_adresses_et_du_profil_par_defaut(banc):
 def test_appareil_d_adguard_est_exclu_et_signale(banc):
     ecrire_config(banc, config())
     r = lancer(banc, Faux(adguard="server:\n    access-control-view: 192.168.1.50/32 sbx-tv-auto-tv-banc\n"))
-    assert "192.168.1.50/32 wf-" not in dropin(banc).read_text()
+    assert "192.168.1.50/32 wf-" not in source(banc).read_text()
     assert json.loads((banc / "etat" / "resultat.json").read_text())["exclus"] == {MAC: "geree par ad-guard"} and r["statut"] == "applique"
 
 
 def test_droits_des_fichiers(banc):
     ecrire_config(banc, config())
     lancer(banc, Faux())
-    assert stat.S_IMODE(dropin(banc).stat().st_mode) == 0o644
+    assert stat.S_IMODE(source(banc).stat().st_mode) == 0o644
     for f in ("resultat.json", "carte.json"):
         assert stat.S_IMODE((banc / "etat" / f).stat().st_mode) == 0o640
     assert sorted(p.name for p in (banc / "u").iterdir()) == ["93-secubox-webfilter.conf"]      # aucun résidu temporaire

@@ -83,7 +83,8 @@ def test_etat_direct_lit_les_fichiers_et_systemd(tmp_path, monkeypatch):
     et.write_text(json.dumps({"emis": {"a|dns.dga|x.test": now - 100, "b|dns.dga|y.test": now - 3 * 86400}}))
     monkeypatch.setattr(d, "SINKHOLE_STATUS", st)
     monkeypatch.setattr(d, "ETAT_CAPTEUR", et)
-    monkeypatch.setattr(d, "DROPIN_PUITS", tmp_path / "absent.conf")
+    monkeypatch.setattr(d, "SOURCE_PUITS", tmp_path / "absent.conf")
+    monkeypatch.setattr(d, "ETAT_LISTES", tmp_path / "absent.json")
     r = d.etat_direct(now, magasin=_Magasin(now), lancer=lambda argv, **kw: _Rep("active\n" if "unbound.service" in argv else "inactive\n"))
     assert r["maintenant"] == now
     assert r["resolveur"] == {"actif": True} and r["capteur"]["actif"] is False and r["flux"]["actif"] is False
@@ -98,7 +99,8 @@ def test_ce_qui_est_illisible_reste_inconnu_jamais_un_zero(tmp_path, monkeypatch
     d = _modules()
     monkeypatch.setattr(d, "SINKHOLE_STATUS", tmp_path / "nope.json")
     monkeypatch.setattr(d, "ETAT_CAPTEUR", tmp_path / "nope2.json")
-    monkeypatch.setattr(d, "DROPIN_PUITS", tmp_path / "nope3.conf")
+    monkeypatch.setattr(d, "SOURCE_PUITS", tmp_path / "nope3.conf")
+    monkeypatch.setattr(d, "ETAT_LISTES", tmp_path / "nope4.json")
 
     def boum(argv, **kw):
         raise OSError("pas de systemctl")
@@ -114,6 +116,50 @@ def test_synchronisation_en_echec_date_les_listes_sur_le_fichier_de_regles(tmp_p
     d = _modules()
     puits, listes = d.puits_et_listes({"ok": False, "enabled": True, "error": "unbound-checkconf a refusé", "ts": 5, "blocked": 10}, 1234)
     assert puits["ok"] is False and "refusé" in puits["erreur"] and listes["maj_ts"] == 1234 and listes["domaines"] == 10
+
+
+# #3205 : la synchronisation DÉPOSE la source ; secubox-dns-listes compile et recharge ensuite. « Rechargé » se lit donc dans
+# l'état de secubox-dns-listes, et seulement s'il est postérieur à la source (sinon : application en cours, inconnu).
+
+STATUT_3205 = {"ok": True, "enabled": True, "blocked": 10, "ts": 1000, "source": "depose", "application": "secubox-dns-listes"}
+
+
+def test_recharge_confirme_par_secubox_dns_listes_apres_le_depot():
+    d = _modules()
+    puits, _ = d.puits_et_listes(STATUT_3205, 1000, {"etat": "applique", "t": 1150})
+    assert puits["recharge"] is True and puits["erreur"] is None
+
+
+def test_application_en_cours_reste_inconnue():
+    d = _modules()
+    puits, _ = d.puits_et_listes(STATUT_3205, 1000, {"etat": "applique", "t": 900})
+    assert puits["recharge"] is None
+
+
+def test_echec_de_secubox_dns_listes_annonce():
+    d = _modules()
+    puits, _ = d.puits_et_listes(STATUT_3205, 1000, {"etat": "erreur", "t": 1150, "erreur": "unbound-checkconf refuse la configuration"})
+    assert puits["recharge"] is False and "checkconf" in puits["erreur"]
+
+
+def test_ancien_statut_avec_reloaded_toujours_lu():
+    d = _modules()
+    puits, _ = d.puits_et_listes({"ok": True, "enabled": True, "reloaded": False, "ts": 5}, 1, {"etat": "applique", "t": 9})
+    assert puits["recharge"] is False
+
+
+def test_l_etat_des_listes_est_lu_plafonne_et_sans_lien(tmp_path, monkeypatch):
+    d = _modules()
+    gros = tmp_path / "gros.json"
+    gros.write_text(json.dumps({"etat": "applique", "t": 1, "x": "y" * 70000}))
+    assert d._json_borne(gros) is None
+    vrai = tmp_path / "vrai.json"
+    vrai.write_text(json.dumps({"etat": "applique", "t": 1}))
+    lien = tmp_path / "lien.json"
+    lien.symlink_to(vrai)
+    assert d._json_borne(lien) is None and d._json_borne(vrai) == {"etat": "applique", "t": 1}
+    assert str(d.ETAT_LISTES) == "/var/lib/secubox-dns-listes/etat.json"
+    assert str(d.SOURCE_PUITS) == "/var/lib/secubox-dns-listes/sources/95-secubox-adblock.conf"
 
 
 def test_la_route_existe_en_lecture_seule():

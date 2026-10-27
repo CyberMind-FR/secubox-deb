@@ -1,3 +1,62 @@
+secubox-core (1.8.3-1~trixie1) trixie; urgency=medium
+
+  * Seconde relecture de sécurité de secubox-dns-listes (#3205) :
+    - bloquant : la remise en place réécrivait les fichiers d'Unbound sans mode explicite, donc en 0640 sous UMask=0027,
+      illisibles pour Unbound au rechargement suivant (DNS coupé). Elle remet désormais le mode d'origine ;
+    - SIGTERM et SIGINT retenus pendant une remise en place (délivrés ensuite) ; TimeoutStopSec 8 min ;
+    - reprise de l'arbre 1.8.0 seulement en montant depuis 1.8.0, en descendant par descripteurs (O_DIRECTORY,
+      O_NOFOLLOW, root, fermé en écriture), fichier ouvert O_NONBLOCK (une FIFO ne bloque plus dpkg) ; rm -rf || true ;
+    - « view-first: » strict (yes|no) : « view-first: yes include: … » ne passe plus, ni en mode direct ;
+    - un bloc vu par une source ET par le contexte prend la vue du contexte (stats : conflits_vue) ;
+    - nom de zone inattendu : le message ne recopie plus le nom ; dossier des sources toujours 0755 ;
+    - MemoryMax=50 % et OOMScoreAdjust=500 (2G dépassait la RAM d'un ESPRESSObin).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 18:50:00 +0100
+
+secubox-core (1.8.2-1~trixie1) trixie; urgency=medium
+
+  * secubox-dns-listes (#3205), constaté sur gk1 avec 1.8.1 : unbound-checkconf liste les interfaces (getifaddrs,
+    AF_NETLINK) et l'audit s'écrit dans /var/log/secubox/audit.log, au compte secubox (0640). L'unité garde
+    CAP_DAC_OVERRIDE comme seule capacité et autorise AF_NETLINK ; le profil AppArmor suit. La transaction avait
+    correctement tout remis en place (92 précédent intact, DNS inchangé).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 18:40:00 +0100
+
+secubox-core (1.8.1-1~trixie1) trixie; urgency=medium
+
+  * Relecture de sécurité de secubox-dns-listes (#3205) :
+    - l'arbre passe de /var/lib/secubox/dns-listes (sous le dossier du compte partagé « secubox », qui pouvait le
+      renommer et le remplacer) à /var/lib/secubox-dns-listes, root 0755 ; chaque dépôt vérifie le dossier et son
+      parent (pas de lien, root, fermé en écriture). Le postinst reprend les sources de 1.8.0 par descripteur
+      (O_NOFOLLOW, fichiers ordinaires de root) puis retire l'ancien arbre ;
+    - verrou 0600 dans cet arbre (celui de /run/lock était ouvrable et bloquable par tout compte local) ;
+    - compilateur : un élément d'ACL nouveau reprend l'action et la vue gardée de l'élément qui couvrait la classe
+      (une dérogation ne peut plus ouvrir le résolveur) ; Unbound ne fait rien hériter d'un bloc plus large ; sources
+      lues sans suivre de lien ; messages d'erreur sans le contenu des lignes ; lignes illisibles refusées ;
+    - signature notée = entrées réellement compilées (un dépôt pendant la dernière passe n'est plus perdu) ; état
+      « en-cours » avant la bascule, passe suivante forcée (vérification et rechargement) ; SIGTERM remet tout en place ;
+      retour arrière incomplet dit et audité ; mode direct validé ; fichiers cachés exclus du contexte ;
+    - unité : aucune capacité, boucle locale seulement, UMask 0027, MemoryMax 2G, TimeoutStartSec 90 min ; .path sans
+      MakeDirectory ; profil AppArmor : /run/unbound.ctl, abstractions/openssl, plus aucune capacité.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 18:00:00 +0100
+
+secubox-core (1.8.0-1~trixie1) trixie; urgency=medium
+
+  * Listes DNS compilées par étiquettes (#3205) : secubox_unbound.listes (compilateur), secubox_unbound.depot (sources
+    des générateurs, application, adoption des anciens fichiers, mode « direct » de retour arrière), poser_vues
+    (transaction sur plusieurs fichiers : une vérification, un rechargement, retour arrière complet), commande
+    secubox-dns-listes (root, profil AppArmor), unités secubox-dns-listes.service/.path/.timer. Banc sur gk1 avec la
+    configuration réelle de gk2 : Unbound 743 → 387 Mo, décisions identiques sur 145 530 questions et 27 classes.
+  * Le .path surveille aussi unbound.conf.d (une vue TV, un réseau nouveau changent les classes) ; une empreinte de ce
+    que le compilateur lit du contexte évite de recompiler pour rien (local-data de 60-secubox-noms, propres écritures,
+    échec sur les mêmes entrées : retenté au bout d'une heure). Une source déposée pendant la compilation est reprise.
+  * Rechargement réussi seulement quand Unbound répond de nouveau (unbound-control status, #2969) ; sinon retour arrière.
+  * Les clients locaux autorisés par défaut par Unbound (127.0.0.0/8, ::1) sont des classes même sans déclaration.
+  * Compilateur allégé : pic 963 → 487 Mo sur la configuration de gk2, sortie identique ; MemoryMax=1G.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 15:00:00 +0100
+
 secubox-core (1.7.16-1~trixie1) trixie; urgency=medium
 
   * secubox-lo-alias (ref #3189) : 192.168.255.1 passe en /32 sur lo. En /24, tout 192.168.255.0/24 était local : la box

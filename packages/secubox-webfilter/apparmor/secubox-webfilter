@@ -108,7 +108,7 @@
 /usr/sbin/secubox-webfilter-ctl {
   #include <abstractions/base>
   #include <abstractions/python>
-  #include <abstractions/nameservice>      # unbound-checkconf résout l'utilisateur « unbound » (passwd, nsswitch)
+  #include <abstractions/nameservice>      # compte secubox-webfilter (passwd, nsswitch)
 
   /usr/sbin/secubox-webfilter-ctl r,
   /usr/bin/python3* rix,
@@ -126,9 +126,10 @@
   /etc/unbound/unbound.conf.d/ r,
   /etc/unbound/unbound.conf.d/94-secubox-adguard-tv.conf r,
 
-  # Écriture : le SEUL drop-in d'Unbound de webfilter, ses résultats, son état racine et l'audit
-  /etc/unbound/unbound.conf.d/93-secubox-webfilter.conf rw,
-  /etc/unbound/unbound.conf.d/.wf-* rw,
+  # Écriture : la SEULE source de webfilter pour secubox-dns-listes (#3205), ses résultats, son état racine et l'audit
+  /var/lib/secubox-dns-listes/sources/ r,
+  /var/lib/secubox-dns-listes/sources/93-secubox-webfilter.conf rw,
+  /var/lib/secubox-dns-listes/sources/.sbx-* rw,
   /var/lib/secubox/webfilter/resultat.json rw,
   /var/lib/secubox/webfilter/carte.json rw,
   /var/lib/secubox/webfilter/appliquer.demande rw,   # consommée (effacée) dès le début d'une application (#2441)
@@ -137,20 +138,14 @@
   /var/lib/secubox-webfilter-ctl/** rwk,
   /var/log/secubox/audit.log w,
 
-  # Unbound : contrôle de la configuration puis rechargement (jamais de redémarrage), table de voisinage
-  /usr/sbin/unbound-checkconf rix,
-  /usr/sbin/unbound-control rix,
+  # Table de voisinage et adresses de la box. Unbound n'est plus touché : secubox-dns-listes vérifie et recharge (#3205).
   /usr/sbin/ip rix,
   /usr/bin/ip rix,
   /usr/share/iproute2/** r,
-  /etc/unbound/** r,
-  /var/lib/unbound/** r,
 
   capability chown,
   capability dac_override,
   capability fowner,
-  network inet stream,
-  network inet6 stream,
   network netlink raw,
   network unix stream,
 }

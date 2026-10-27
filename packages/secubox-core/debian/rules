@@ -73,6 +73,13 @@ override_dh_auto_install:
 	install -D -m 0644 etc/default/secubox debian/secubox-core/etc/default/secubox
 	install -D -m 0755 sbin/secubox-defaults-aligner debian/secubox-core/usr/sbin/secubox-defaults-aligner
 
+	# Listes DNS compilees par etiquettes (#3205) : commande, unites (service, path, timer) et profil AppArmor.
+	install -D -m 0755 sbin/secubox-dns-listes debian/secubox-core/usr/sbin/secubox-dns-listes
+	install -D -m 0644 systemd/secubox-dns-listes.service debian/secubox-core/usr/lib/systemd/system/secubox-dns-listes.service
+	install -D -m 0644 systemd/secubox-dns-listes.path debian/secubox-core/usr/lib/systemd/system/secubox-dns-listes.path
+	install -D -m 0644 systemd/secubox-dns-listes.timer debian/secubox-core/usr/lib/systemd/system/secubox-dns-listes.timer
+	install -D -m 0644 apparmor/secubox-dns-listes debian/secubox-core/etc/apparmor.d/secubox-dns-listes
+
 	# SSH : root par mot de passe depuis le reseau local seulement (#2528). Fichier de configuration (conffile) :
 	# supprime par l'operateur, il n'est pas repose.
 	install -D -m 0644 ssh/20-secubox-root-lan.conf \
