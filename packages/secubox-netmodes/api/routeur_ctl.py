@@ -30,6 +30,7 @@ from typing import Callable, Generator
 
 import yaml
 
+from . import isolement
 from . import routeur_fichiers as fichiers
 from .routeur_config import (
     PORTS_LAN, ConfigRouteur, ErreurConfig, charger, depuis_dict, en_toml, verifier_reseaux,
@@ -398,6 +399,12 @@ def ports_coupes(ctx: Contexte) -> set[str]:
     return {p for p in PORTS_LAN if os.path.lexists(_p(ctx, FICHIER_COUPE.format(port=p)))}
 
 
+def ports_isoles(ctx: Contexte) -> set[str]:
+    """Ports du LAN dont le .network d'isolement existe (#3201 ; nom exact, ports de PORTS_LAN seuls) ; aucune
+    commande. Un fragment DHCP ou un .nft resté seul n'isole rien : « Rendre au LAN » le retire quand même."""
+    return {p for p in PORTS_LAN if os.path.lexists(_p(ctx, isolement.chemins(p)["network"]))}
+
+
 def _json_liens(r: subprocess.CompletedProcess) -> list[dict]:
     """Sortie de `ip -j` : les objets non vides (`ip -4` rend {} pour un lien sans IPv4) ; illisible : aucun."""
     if r.returncode != 0:
@@ -409,6 +416,19 @@ def _json_liens(r: subprocess.CompletedProcess) -> list[dict]:
     return [lien for lien in liens if isinstance(lien, dict) and lien] if isinstance(liens, list) else []
 
 
+def _ipv4_des_liens(liens: list[dict]) -> set[IPv4Interface]:
+    """Adresses IPv4 lues dans une sortie de `ip -j -4 addr` ; une entrée illisible est ignorée, jamais levée."""
+    adresses = set()
+    for lien in liens:
+        for a in lien.get("addr_info") or []:
+            if isinstance(a, dict) and a.get("family") == "inet":
+                try:
+                    adresses.add(IPv4Interface(f"{a['local']}/{a['prefixlen']}"))
+                except (KeyError, ValueError):
+                    continue
+    return adresses
+
+
 def _manque_au_pont(ctx: Contexte, cfg: ConfigRouteur) -> list[str]:
     """Ce qui manque encore au pont, relu (jamais déduit des codes de retour de networkctl) ; vide : prêt. Chaque port
     doit avoir br-lan pour maître, porteuse ou non ; br-lan doit être UP et porter l'adresse configurée."""
@@ -416,14 +436,7 @@ def _manque_au_pont(ctx: Contexte, cfg: ConfigRouteur) -> list[str]:
     pont = _json_liens(ctx.executer(["ip", "-j", "-4", "addr", "show", "dev", "br-lan"]))
     if not pont and not _pont_existe(ctx):
         return ["br-lan absent"]
-    adresses = set()
-    for lien in pont:
-        for a in lien.get("addr_info") or []:
-            if isinstance(a, dict) and a.get("family") == "inet":
-                try:
-                    adresses.add(IPv4Interface(f"{a['local']}/{a['prefixlen']}"))
-                except (KeyError, ValueError):
-                    continue
+    adresses = _ipv4_des_liens(pont)
     if cfg.adresse not in adresses:
         manque.append(f"{cfg.adresse} absente de br-lan")
     elif not any("UP" in (lien.get("flags") or []) for lien in pont):
@@ -432,15 +445,16 @@ def _manque_au_pont(ctx: Contexte, cfg: ConfigRouteur) -> list[str]:
 
 
 def _ports_non_asservis(ctx: Contexte, ports: tuple[str, ...]) -> list[str]:
-    """Ports qui n'ont pas br-lan pour maître, porteuse ou non ; vide : tous asservis. Un port coupé (#3190) n'est
-    jamais attendu : sans cela chaque application échouait puis revenait en arrière, et le pont était recréé (coupure
-    du LAN) à chaque application ou retour, même sur des fichiers du pont inchangés (Review Focus 4)."""
-    coupes = ports_coupes(ctx)
+    """Ports qui n'ont pas br-lan pour maître, porteuse ou non ; vide : tous asservis. Un port coupé (#3190) ou isolé
+    (#3201) n'est jamais attendu : sans cela chaque application échouait puis revenait en arrière, et le pont était
+    recréé (coupure du LAN) à chaque application ou retour, même sur des fichiers du pont inchangés (Review Focus 4 de
+    #3190, 1 de #3201)."""
+    hors_pont = ports_coupes(ctx) | ports_isoles(ctx)
     asservis = {lien.get("ifname") for lien in _json_liens(ctx.executer(["ip", "-j", "link", "show", "master", "br-lan"]))
                 if lien.get("master") == "br-lan"}
     manque = []
     for port in ports:
-        if port in asservis or port in coupes:
+        if port in asservis or port in hors_pont:
             continue
         lien = next(iter(_json_liens(ctx.executer(["ip", "-j", "link", "show", "dev", port]))), {})
         if lien.get("master") == "br-lan":                  # asservi entre les deux relevés
@@ -557,6 +571,7 @@ def etat(ctx: Contexte) -> dict:
     sortie["dhcp_actif"] = _actif(ctx, DHCP)
     sortie["adresses_pont"] = [str(a) for a in _adresses_pont(ctx)]
     sortie["ports_coupes"] = sorted(ports_coupes(ctx))
+    sortie["ports_isoles"] = sorted(ports_isoles(ctx))
     return sortie
 
 
@@ -1106,7 +1121,7 @@ def retour_si_en_attente(ctx: Contexte) -> dict:
 
 def _verifier_port(port) -> None:
     if not isinstance(port, str) or port not in PORTS_LAN:
-        raise Refus(f"port refusé : seuls {', '.join(PORTS_LAN)} se coupent ou se rétablissent")
+        raise Refus(f"port refusé : seuls {', '.join(PORTS_LAN)} sont actionnables")
 
 
 def _rendu_coupe(port: str) -> str:
@@ -1116,44 +1131,62 @@ def _rendu_coupe(port: str) -> str:
 
 
 # Ce que la vérification attend du port : coupé ; rétabli au pont (mode routeur actif et port du pont configuré) ;
-# rétabli hors du pont (sinon : décision prise hors du mode routeur, ni br-lan ni .network du 05 n'attendent le port).
-COUPE, AU_PONT, LEVE = "coupé", "au pont", "levé"
-_ATTENDUS = {COUPE: "hors de br-lan et baissé", AU_PONT: "br-lan pour maître", LEVE: "UP"}
+# rétabli hors du pont (sinon : décision prise hors du mode routeur, ni br-lan ni .network du 05 n'attendent le port) ;
+# isolé (#3201 : hors du pont, UP, sa passerelle portée).
+COUPE, AU_PONT, LEVE, ISOLE = "coupé", "au pont", "levé", "isolé"
+_ATTENDUS = {COUPE: "hors de br-lan et baissé", AU_PONT: "br-lan pour maître", LEVE: "UP",
+             ISOLE: "hors de br-lan, UP et sa passerelle portée"}
+_DITS = {COUPE: "coupé", AU_PONT: "rétabli", LEVE: "rétabli", ISOLE: "isolé"}
 
 
 def _lien_port(ctx: Contexte, port: str) -> dict:
     return next(iter(_json_liens(ctx.executer(["ip", "-j", "link", "show", "dev", port]))), {})
 
 
-def _constat_port(lien: dict, attendu: str) -> str | None:
+def _constat_port(lien: dict, attendu: str, passerelle: IPv4Interface | None = None,
+                  adresses: set[IPv4Interface] | None = None) -> str | None:
     """None : l'état voulu est constaté ; sinon ce qui est vu. COUPE : sans br-lan pour maître ET baissé (ni drapeau UP,
     état DOWN : sans câble, un port UP est aussi DOWN) ; AU_PONT : br-lan pour maître, porteuse ou non ; LEVE :
-    drapeau UP, maître ou non. Un port illisible n'est jamais constaté."""
+    drapeau UP, maître ou non ; ISOLE : sans br-lan pour maître, drapeau UP (porteuse ou non) et `passerelle` parmi
+    les `adresses` du port. Un port illisible n'est jamais constaté."""
     maitre = lien.get("master")
     drapeaux = lien.get("flags") or []
     operstate = str(lien.get("operstate") or "")
+    portee = passerelle is not None and passerelle in (adresses or set())
     if attendu == COUPE:
         constate = maitre != "br-lan" and "UP" not in drapeaux and operstate.upper() == "DOWN"
     elif attendu == AU_PONT:
         constate = maitre == "br-lan"
+    elif attendu == ISOLE:
+        constate = maitre != "br-lan" and "UP" in drapeaux and portee
     else:
         constate = "UP" in drapeaux
     if constate:
         return None
     if not lien:
         return "état illisible"
-    return f"maître {maitre or 'aucun'}, {'UP' if 'UP' in drapeaux else 'baissé'}, état {operstate or 'inconnu'}"
+    vu = f"maître {maitre or 'aucun'}, {'UP' if 'UP' in drapeaux else 'baissé'}, état {operstate or 'inconnu'}"
+    return vu + (f", {passerelle} {'portée' if portee else 'absente'}" if attendu == ISOLE else "")
 
 
-def _attendre_port(ctx: Contexte, port: str, attendu: str) -> None:
-    """Le résultat est relu (`ip -j link show dev <port>`, jamais br-lan nommé), pas déduit des codes de networkctl."""
+def _adresses_port(ctx: Contexte, port: str) -> set[IPv4Interface]:
+    """IPv4 relues sur le port seul (`ip -j -4 addr show dev <port>`) ; port absent ou sortie illisible : aucune."""
+    return _ipv4_des_liens(_json_liens(ctx.executer(["ip", "-j", "-4", "addr", "show", "dev", port])))
+
+
+def _attendre_port(ctx: Contexte, port: str, attendu: str, dit: str | None = None) -> None:
+    """Le résultat est relu (`ip -j link show dev <port>`, et pour ISOLE `ip -j -4 addr show dev <port>` ; jamais
+    br-lan nommé), pas déduit des codes de networkctl. `dit` : ce que l'échec dit du port (« rendu au LAN »)."""
     limite = ctx.monotone() + DELAI_PORT
+    passerelle = isolement.passerelle(port) if attendu == ISOLE else None
     while True:
-        constat = _constat_port(_lien_port(ctx, port), attendu)
+        lien = _lien_port(ctx, port)
+        adresses = _adresses_port(ctx, port) if attendu == ISOLE else None
+        constat = _constat_port(lien, attendu, passerelle, adresses)
         if constat is None:
             return
         if ctx.monotone() >= limite:
-            raise Echec(f"{port} n'est pas {'coupé' if attendu == COUPE else 'rétabli'} après {DELAI_PORT:g} s : "
+            raise Echec(f"{port} n'est pas {dit or _DITS[attendu]} après {DELAI_PORT:g} s : "
                         f"{constat} ; attendu : {_ATTENDUS[attendu]} (networkctl status {port})")
         ctx.attendre(PAUSE_PORT)
 
@@ -1171,8 +1204,13 @@ def _lever_port(ctx: Contexte, port: str) -> bool:
 def _preparer_port(ctx: Contexte, port: str, chemin: Path, coupe: bool) -> tuple[bytes | None, str]:
     """Gardes, sans aucune commande. Couper : mode routeur actif et port du pont configuré. Rétablir : en tout mode
     (une coupure est une décision de l'administrateur, indépendante du mode routeur, qui survit à tout retour).
-    Renvoie le fichier de coupure tel qu'il est (None : absent ; remis tel quel en cas d'échec) et l'état attendu."""
+    Renvoie le fichier de coupure tel qu'il est (None : absent ; remis tel quel en cas d'échec) et l'état attendu.
+    Un port isolé (#3201) n'est ni coupé ni rétabli : son .network d'isolement le tient hors du pont, seul « Rendre au
+    LAN » l'en retire (rétablir laisserait le port isolé en se disant réussi, ou échouerait sur le pont attendu)."""
     _verifier_arbre(ctx)
+    if port in ports_isoles(ctx):
+        raise Refus(f"{port} est isolé : le rendre au LAN d'abord" if coupe
+                    else f"{port} est isolé, pas coupé : « Rendre au LAN » le rattache au pont")
     courant = _lire_etat(ctx)["etat"]
     if coupe and courant != "actif":
         raise Refus(f"le mode routeur est « {courant} » : un port ne se coupe qu'en mode routeur actif (appliqué puis "
@@ -1261,3 +1299,241 @@ def port_couper(ctx: Contexte, port: str, acteur: str) -> dict:
 
 def port_retablir(ctx: Contexte, port: str, acteur: str) -> dict:
     return _agir_port(ctx, port, acteur, coupe=False)
+
+
+# --- isoler un port, le rendre au LAN (#3201) --------------------------------------------------------------------------
+# Un port isolé sort du pont par 04-secubox-port-<port>-isole.network (le mécanisme de la coupure : premier .network
+# trouvé dans l'ordre lexical, avant le 05 qui le met au pont) et porte son /24 de la réserve 192.168.248.0/22. Le DHCP
+# de la box le sert par un fragment de dnsmasq (arbre root seul), Unbound y écoute d'avance (drop-in du mode routeur :
+# isoler ne le redémarre jamais), la table nft du port ne lui ouvre que l'Internet. Comme une coupure, c'est une décision
+# de l'administrateur qui survit à tout retour du mode routeur ; « Rendre au LAN » (rattacher) est permis en tout mode.
+REFUS_UNBOUND = ("Unbound n'écoute pas encore les passerelles des ports isolés : réappliquer le mode routeur "
+                 "(Unbound redémarre, 2 à 4 min sans DNS) puis isoler")
+
+
+def _chemins_isolement(ctx: Contexte, port: str) -> dict[str, Path]:
+    return {cle: _p(ctx, chemin) for cle, chemin in isolement.chemins(port).items()}
+
+
+def _verifier_arbre_isolement(ctx: Contexte, port: str) -> None:
+    """L'arbre root seul, et le fragment DHCP qui y vit : dnsmasq root le lit brut, comme lan-dhcp.conf."""
+    _verifier_arbre(ctx)
+    _chemin_sur(ctx, isolement.chemins(port)["dhcp"])
+
+
+def _lire_isolement(chemins: dict[str, Path]) -> dict[str, bytes | None]:
+    """Les trois fichiers tels qu'ils sont (None : absent), remis tels quels en cas d'échec ; jamais un lien suivi."""
+    avant: dict[str, bytes | None] = {}
+    for cle, chemin in chemins.items():
+        try:
+            avant[cle] = fichiers.lire(chemin)
+        except fichiers.LienSymbolique as exc:
+            raise Refus(f"{exc.filename} est un lien symbolique : ni suivi, ni remplacé") from exc
+        except OSError as exc:
+            raise Refus(f"{chemin} illisible ({exc.__class__.__name__}) : le corriger d'abord") from exc
+    return avant
+
+
+def _poser_fichier(ctx: Contexte, cle: str, chemin: Path, contenu: bytes | str | None) -> None:
+    """Pose `contenu` en 0644 (None : retire le fichier). Le fragment DHCP, dans l'arbre root seul, est écrit ou retiré
+    sous contrôle strict ; le .network et le .nft, lus par networkd et nft, comme le fichier de coupure."""
+    strict = ctx.racine if cle == "dhcp" else None
+    if contenu is not None:
+        fichiers.ecrire(chemin, contenu, 0o644, strict)
+        return
+    if strict is not None:
+        fichiers.verifier_sur(strict, chemin)
+    chemin.unlink(missing_ok=True)
+
+
+def _retirer_pare_feu_isole(ctx: Contexte, port: str) -> None:
+    """Règles d'entrée du port, par leur préfixe (`secubox netmodes isole <port>`, jamais celui du LAN), puis sa table
+    si elle existe : idempotent, sans toucher au pare-feu du LAN ni à celui des autres ports isolés."""
+    _supprimer_regles(ctx, f"{isolement.COMMENTAIRE} {port}")
+    table = isolement.table(port)
+    if ctx.executer(["nft", "list", "table", "inet", table]).returncode == 0:
+        _exiger(ctx, ["nft", "delete", "table", "inet", table])
+
+
+def _relancer_dhcp(ctx: Contexte) -> None:
+    """dnsmasq ne relit ses fragments qu'à son démarrage ; relancé, il est relu actif (_attendre_dhcp_actif)."""
+    _exiger(ctx, ["systemctl", "restart", DHCP])
+    _attendre_dhcp_actif(ctx)
+
+
+def _remettre_isolement(ctx: Contexte, port: str, chemins: dict[str, Path], avant: dict[str, bytes | None],
+                        dhcp: bool) -> list[str]:
+    """Remet les trois fichiers tels qu'ils étaient (absents compris), puis networkd (le port seul), le pare-feu du port
+    et, si `dhcp`, le DHCP du LAN sur eux ; continue après chaque erreur, même imprévue, et les renvoie toutes. Le DHCP
+    relancé est relu (Review Focus 4) : un LAN laissé sans DHCP n'est jamais rendu comme une remise réussie."""
+    erreurs: list[str] = []
+    non_remis = set()
+    for cle, chemin in chemins.items():
+        try:
+            _poser_fichier(ctx, cle, chemin, avant[cle])
+        except OSError as exc:
+            non_remis.add(cle)
+            erreurs.append(f"{cle} : {exc}")
+    etapes: list[tuple[str, Callable[[], object]]] = [
+        ("networkd", lambda: _exiger(ctx, ["networkctl", "reload"])),
+        ("networkd", lambda: _exiger(ctx, ["networkctl", "reconfigure", port])),
+        ("pare-feu", lambda: _retirer_pare_feu_isole(ctx, port))]
+    if avant["nft"] is not None and "nft" not in non_remis:          # .nft d'avant remis : rechargé tel quel
+        etapes.append(("pare-feu", lambda: _exiger(ctx, ["nft", "-f", str(chemins["nft"])])))
+    if dhcp:
+        etapes.append(("DHCP", lambda: _relancer_dhcp(ctx)))
+    for nom, etape in etapes:
+        try:
+            etape()
+        except Exception as exc:                            # chaque étape remise compte, même après une imprévue
+            erreurs.append(f"{nom} : {_texte(exc)}")
+    return erreurs
+
+
+def _auditer_echec_isolement(ctx: Contexte, action: str, acteur: str, exc: BaseException, erreurs: list[str]) -> str:
+    suite = "fichiers d'avant remis et rechargés" if not erreurs else "remise INCOMPLÈTE : " + " ; ".join(erreurs)
+    _auditer(ctx, f"{action}-echec", acteur, f"{_texte(exc)} ; {suite}")
+    return suite
+
+
+def _preparer_isoler(ctx: Contexte, port: str,
+                     chemins: dict[str, Path]) -> tuple[dict[str, str], dict[str, bytes | None]]:
+    """Gardes, sans aucune commande d'action (lectures seules : `systemctl is-active`, `ip -j -4 addr`). Renvoie les
+    trois fichiers rendus et ceux d'avant (remis tels quels en cas d'échec)."""
+    _verifier_arbre_isolement(ctx, port)
+    courant = _lire_etat(ctx)["etat"]
+    if courant != "actif":
+        raise Refus(f"le mode routeur est « {courant} » : un port ne s'isole qu'en mode routeur actif (appliqué puis "
+                    "confirmé) ; il se rend au LAN en tout mode")
+    try:
+        cfg = charger(_p(ctx, TOML)) if os.path.lexists(_p(ctx, TOML)) else None
+    except ErreurConfig as exc:
+        raise Refus(f"configuration du mode routeur illisible ({exc}) : ports du pont et WAN inconnus") from exc
+    if cfg is None or port not in cfg.ports:
+        raise Refus(f"{port} n'est pas un port du pont (ports configurés : "
+                    f"{' '.join(cfg.ports) if cfg is not None else 'aucun'}) : rien à isoler")
+    if port in ports_coupes(ctx):
+        raise Refus(f"{port} est coupé : le rétablir d'abord")
+    if port in ports_isoles(ctx):
+        raise Refus(f"{port} est déjà isolé")
+    if not _actif(ctx, DHCP):
+        raise Refus(f"{DHCP} n'est pas actif : le port isolé n'aurait pas d'adresse ; réappliquer le mode routeur "
+                    "d'abord")
+    _verifier_inclusion_nft(ctx)                            # sinon la table du port disparaîtrait au redémarrage
+    # Unbound doit déjà écouter les passerelles (drop-in de 1.6.0) : isoler ne le redémarre jamais (2 à 4 min sans DNS
+    # pour toute la box sur gk2). Absent ou illisible : pas à jour (Review Focus 3).
+    try:
+        unbound = fichiers.lire(_p(ctx, CHEMINS["unbound"]))
+    except OSError:
+        unbound = None
+    if unbound != rendre(cfg)["unbound"].encode("utf-8"):
+        raise Refus(REFUS_UNBOUND)
+    reseau = isolement.passerelle(port).network
+    try:
+        liens = _adresses(ctx)
+    except Echec as exc:
+        raise Refus(f"adresses des interfaces illisibles ({exc}) : impossible de vérifier que {reseau} est libre") \
+            from exc
+    for nom, adresses in sorted(liens.items()):
+        for a in adresses:
+            if nom != port and a.network.overlaps(reseau):
+                raise Refus(f"{reseau} chevauche {a.network} porté par {nom} : {port} ne peut pas y être isolé ; "
+                            "libérer ce réseau d'abord")
+    return isolement.rendre(port, cfg.wan), _lire_isolement(chemins)
+
+
+def port_isoler(ctx: Contexte, port: str, acteur: str) -> dict:
+    """Sort `port` du pont vers son propre /24, avec le DHCP et le DNS de la box, Internet seul (mode routeur actif)."""
+    _verifier_acteur(acteur)
+    _verifier_port(port)                                    # liste blanche, avant tout (jamais eth*, jamais br-lan)
+    chemins = _chemins_isolement(ctx, port)
+    with _verrou(ctx), _auditer_chemins(ctx, acteur):
+        try:
+            rendu, avant = _preparer_isoler(ctx, port, chemins)
+        except Refus as exc:
+            if not isinstance(exc, CheminRefuse):          # audité par _auditer_chemins
+                _auditer(ctx, "port-isoler-refus", acteur, str(exc))
+            raise
+        nft = str(chemins["nft"])
+        with _sans_interruption():                          # de la première écriture à la vérification (ou à la remise)
+            try:
+                fichiers.creer_dossiers(_p(ctx, isolement.DOSSIER_DHCP), 0o700, ctx.racine)
+                for cle in ("network", "nft", "dhcp"):
+                    _poser_fichier(ctx, cle, chemins[cle], rendu[cle])
+                _exiger(ctx, ["nft", "-c", "-f", nft])
+                _exiger(ctx, ["networkctl", "reload"])
+                _exiger(ctx, ["networkctl", "reconfigure", port])           # le port seul, jamais br-lan
+                _supprimer_regles(ctx, f"{isolement.COMMENTAIRE} {port}")   # idempotence : jamais deux fois
+                _exiger(ctx, ["nft", "-f", nft])
+                _relancer_dhcp(ctx)                                         # nouveau fragment lu, relu actif
+                _attendre_port(ctx, port, ISOLE)
+            except BaseException as exc:                    # même une exception imprévue remet l'état d'avant
+                # le DHCP tournait (garde) : relancé sur les fichiers d'avant, le LAN n'en reste jamais privé
+                erreurs = _remettre_isolement(ctx, port, chemins, avant, dhcp=True)
+                suite = _auditer_echec_isolement(ctx, "port-isoler", acteur, exc, erreurs)
+                if _connue(exc):
+                    raise Echec(f"{exc} ; {suite}") from exc
+                raise
+        passerelle = isolement.passerelle(port)
+        _auditer(ctx, "port-isoler", acteur,
+                 f"{port} isolé : {passerelle.network}, passerelle {passerelle.ip} (DHCP et DNS de la box), Internet "
+                 f"seul ({', '.join(isolement.chemins(port).values())})")
+    return etat(ctx)
+
+
+def _preparer_rattacher(ctx: Contexte, port: str, chemins: dict[str, Path]) -> tuple[str, dict[str, bytes | None]]:
+    """Gardes, sans aucune commande. En tout mode, comme rétablir : rendu au pont si le mode routeur est actif et le
+    port du pont configuré, sinon relevé. Renvoie l'état attendu et les fichiers d'avant."""
+    _verifier_arbre_isolement(ctx, port)
+    presents = [isolement.chemins(port)[cle] for cle, chemin in chemins.items() if os.path.lexists(chemin)]
+    if not presents:
+        raise Refus(f"{port} n'est pas isolé")
+    if port in ports_coupes(ctx):                           # fait main : couper et isoler se refusent l'un l'autre
+        raise Refus(f"{port} est à la fois coupé ({FICHIER_COUPE.format(port=port)}) et isolé ({', '.join(presents)}) "
+                    ": état fait main, rien n'est deviné ; retirer l'un des deux à la main d'abord")
+    courant = _lire_etat(ctx)["etat"]
+    try:
+        cfg = charger(_p(ctx, TOML)) if courant == "actif" and os.path.lexists(_p(ctx, TOML)) else None
+    except ErreurConfig:
+        cfg = None                                          # vérifié levé, sans le pont
+    return AU_PONT if cfg is not None and port in cfg.ports else LEVE, _lire_isolement(chemins)
+
+
+def port_rattacher(ctx: Contexte, port: str, acteur: str) -> dict:
+    """« Rendre au LAN » : retire l'isolement de `port`, en tout mode."""
+    _verifier_acteur(acteur)
+    _verifier_port(port)                                    # liste blanche, avant tout (jamais eth*, jamais br-lan)
+    chemins = _chemins_isolement(ctx, port)
+    with _verrou(ctx), _auditer_chemins(ctx, acteur):
+        try:
+            attendu, avant = _preparer_rattacher(ctx, port, chemins)
+        except Refus as exc:
+            if not isinstance(exc, CheminRefuse):          # audité par _auditer_chemins
+                _auditer(ctx, "port-rattacher-refus", acteur, str(exc))
+            raise
+        leve = dhcp_relance = False
+        with _sans_interruption():                          # de la première suppression à la vérification
+            try:
+                for cle, chemin in chemins.items():
+                    _poser_fichier(ctx, cle, chemin, None)
+                _exiger(ctx, ["networkctl", "reload"])
+                _exiger(ctx, ["networkctl", "reconfigure", port])           # le port seul, jamais br-lan
+                _retirer_pare_feu_isole(ctx, port)
+                if _actif(ctx, DHCP):                       # arrêté (mode routeur inactif) : rien à relancer
+                    dhcp_relance = True
+                    _relancer_dhcp(ctx)
+                if attendu == LEVE:
+                    leve = _lever_port(ctx, port)
+                _attendre_port(ctx, port, attendu, "rendu au LAN")
+            except BaseException as exc:                    # même une exception imprévue remet l'état d'avant
+                # DHCP relancé ici seulement s'il l'a été : sinon dnsmasq tourne encore sur les fichiers d'avant
+                erreurs = _remettre_isolement(ctx, port, chemins, avant, dhcp=dhcp_relance)
+                suite = _auditer_echec_isolement(ctx, "port-rattacher", acteur, exc, erreurs)
+                if _connue(exc):
+                    raise Echec(f"{exc} ; {suite}") from exc
+                raise
+        _auditer(ctx, "port-rattacher", acteur,
+                 f"{port} rendu au LAN : br-lan pour maître (fichiers d'isolement retirés)" if attendu == AU_PONT
+                 else f"{port} rendu au LAN hors du pont : UP{' (ip link set up)' if leve else ''} "
+                      "(fichiers d'isolement retirés)")
+    return etat(ctx)
