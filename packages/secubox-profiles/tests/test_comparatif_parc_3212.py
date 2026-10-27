@@ -176,3 +176,18 @@ def test_les_fonds_des_cellules_survivent_a_hybrid_skin(navigateur):
     fond = p.evaluate("getComputedStyle(document.querySelector('#parc td[data-etat=\"erreur\"]')).backgroundColor")
     assert fond not in ("rgba(0, 0, 0, 0)", "transparent")
     ctx.close()
+
+
+def test_deux_box_au_meme_nom_ne_s_ecrasent_pas(navigateur):
+    """Revue #3212 : colonnes indexées par did ; un nom revendiqué par deux box est signalé, un nom piège ne casse rien."""
+    a = {**noeud("gk2", [paquet("secubox-mail", "erreur")], "full"), "node_did": "did:plc:" + "a" * 32, "nom_conteste": True}
+    b = {**noeud("gk2", [paquet("secubox-mail", "fonctionnel")], "full"), "node_did": "did:plc:" + "b" * 32, "nom_conteste": True}
+    c = noeud("constructor", [paquet("secubox-mail", "fonctionnel")])
+    ctx, p, err, _ = ouvre(navigateur, flotte={"noeuds": [a, b, c], "indisponibles": []})
+    p.wait_for_selector("#parc th[data-box]")
+    assert p.locator('#parc thead th[data-box="gk2"]').count() == 2
+    assert "nom contesté" in p.inner_text('#parc thead th[data-did="did:plc:' + "a" * 32 + '"]')
+    etats = sorted(p.locator('#parc tr[data-paquet="secubox-mail"] td[data-box="gk2"]').evaluate_all("l => l.map(x => x.dataset.etat)"))
+    assert etats == ["erreur", "fonctionnel"]
+    assert cellule(p, "secubox-mail", "constructor").get_attribute("data-etat") == "fonctionnel" and err == []
+    ctx.close()

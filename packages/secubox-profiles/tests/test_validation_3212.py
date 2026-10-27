@@ -177,7 +177,7 @@ def test_etat_unite(props, sommeil, attendu):
 
 # ── collecte complète (sondes simulées) ──────────────────────────────────────
 
-def _collecter(sante=SANTE, precedent=None, dpkg=DPKG, show=SHOW, cycles=None):
+def _collecter(sante=SANTE, precedent=None, dpkg=DPKG, show=SHOW, cycles="defaut"):
     def executer(argv):
         if argv[0] == "dpkg-query":
             return (0, dpkg) if dpkg is not None else (2, "")
@@ -185,7 +185,7 @@ def _collecter(sante=SANTE, precedent=None, dpkg=DPKG, show=SHOW, cycles=None):
             return (0, show) if show is not None else (1, "")
         raise AssertionError(argv)
     return v.collecter(executer=executer, lire_liste=lambda p: LISTES.get(p, ""), sante_agregateur=lambda: sante,
-                       cycles=cycles if cycles is not None else {"lyrion": "on-demand"}, precedent=precedent,
+                       cycles={"lyrion": "on-demand"} if cycles == "defaut" else cycles, precedent=precedent,
                        hostname="gk2", maintenant=1000.0)
 
 
@@ -315,3 +315,78 @@ def test_cli_releve_resume_json(monkeypatch, capsys, tmp_path):
     resume = json.loads(capsys.readouterr().out)
     assert resume["paquets"] == len(_collecter()["paquets"]) and resume["partiel"] == []
     assert resume["etats"]["erreur"] >= 1 and vus == {"racine": str(tmp_path), "chemin": str(tmp_path / "releve.json")}
+
+
+# ── revue #3212 ──────────────────────────────────────────────────────────────
+
+def test_cycles_de_vie_illisibles_annonces():
+    """Sans les manifestes, un module à la demande endormi paraîtrait « arrêté » : le relevé le dit partiel."""
+    r = _collecter(cycles=None)
+    assert "cycles de vie illisibles" in r["partiel"]
+
+
+@pytest.mark.parametrize("message,resume", [
+    ("exec_module: ImportError: cannot import name 'x' from '/usr/lib/secubox/p2p/api/secret.py'", "exec_module: ImportError"),
+    ("mount: RuntimeError: boum /etc/secubox/secrets/x", "mount: RuntimeError"),
+    ("main.py not found under /usr/lib/secubox/{p2p,p2p}/api/", "main.py introuvable"),
+    ("no FastAPI 'app' attribute at module level", "échec de chargement"),
+])
+def test_echec_de_l_agregateur_reduit_au_type(message, resume):
+    """Le relevé est signé et servi aux pairs : le type d'erreur seulement, jamais un chemin ni une valeur."""
+    r = _collecter(sante={"mounted": [], "failed": {"p2p": message}})
+    p2p = _ligne(r, "secubox-p2p")
+    assert p2p["agregateur"][0]["message"] == resume
+    assert all("/" not in e or "service" in e for e in p2p["erreurs"]) and any(resume in e for e in p2p["erreurs"])
+
+
+def test_bornes_appliquees_des_la_collecte(monkeypatch):
+    listes = dict(LISTES)
+    listes["secubox-p2p"] = LISTES["secubox-p2p"] + "".join(f"/usr/lib/secubox/m{i:02d}\n" for i in range(20))
+    r = v.collecter(executer=lambda argv: (0, DPKG) if argv[0] == "dpkg-query" else (0, SHOW),
+                    lire_liste=lambda p: listes.get(p, ""), sante_agregateur=lambda: {"mounted": [f"m{i:02d}" for i in range(20)]},
+                    cycles={}, precedent=None, hostname="gk2_box.lan", maintenant=1000.0)
+    assert len(_ligne(r, "secubox-p2p")["agregateur"]) == v.MAX_UNITES
+    assert r["hostname"] == "gk2-box.lan"
+
+
+@pytest.mark.parametrize("nom,attendu", [("gk2", "gk2"), ("GK3.lan", "GK3.lan"), ("_x_", "x-"), ("", "box"),
+                                         ("a" * 80, "a" * 63)])
+def test_nom_d_hote_normalise(nom, attendu):
+    assert v.nom_hote(nom) == attendu
+
+
+def _unite(nom):
+    from pathlib import Path
+    texte = (Path(__file__).resolve().parents[1] / "debian" / nom).read_text()
+    out = {}
+    for ligne in texte.splitlines():
+        if "=" in ligne and not ligne.startswith("#"):
+            k, val = ligne.split("=", 1)
+            out.setdefault(k.strip(), []).append(val.strip())
+    return out
+
+
+def test_unite_du_releve_durcie_et_dediee():
+    """RULES-CODE § 10 : compte dédié, socle de durcissement complet, profil AppArmor nommé."""
+    u = _unite("secubox-profiles-releve.service")
+    for cle, val in {"User": "secubox-profiles", "Group": "secubox", "NoNewPrivileges": "yes", "ProtectSystem": "strict",
+                     "ProtectHome": "yes", "PrivateTmp": "yes", "ProtectKernelTunables": "yes",
+                     "ProtectControlGroups": "yes", "RestrictSUIDSGID": "yes", "LockPersonality": "yes", "UMask": "0027",
+                     "PrivateDevices": "yes", "IPAddressDeny": "any", "RestrictAddressFamilies": "AF_UNIX",
+                     "ReadWritePaths": "/var/lib/secubox/profiles/validation",
+                     "AppArmorProfile": "secubox-profiles-releve"}.items():
+        assert u.get(cle) == [val], (cle, u.get(cle))
+
+
+def test_dossier_du_releve_et_profil_apparmor_livres():
+    from pathlib import Path
+    racine = Path(__file__).resolve().parents[1]
+    postinst = (racine / "debian" / "postinst").read_text()
+    assert "secubox-profiles" in postinst and "adduser --system --ingroup secubox" in postinst
+    # setgid : les fichiers du relevé restent au groupe secubox (lecteurs : API et sbx-fleetctl), 0640 par UMask=0027
+    assert "install -d -o secubox-profiles -g secubox -m 2750 /var/lib/secubox/profiles/validation" in postinst
+    assert "apparmor_parser -r /etc/apparmor.d/secubox-profiles-releve" in postinst
+    profil = (racine / "apparmor" / "secubox-profiles-releve").read_text()
+    assert "profile secubox-profiles-releve" in profil and "deny /etc/secubox/secrets/** r," in profil
+    assert "/var/lib/secubox/profiles/validation/** rw" in profil and "/usr/bin/sudo" not in profil
+    assert "apparmor/secubox-profiles-releve" in (racine / "debian" / "rules").read_text()

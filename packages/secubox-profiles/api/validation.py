@@ -17,8 +17,10 @@ sert aux pairs du maillage (sbx-fleetctl publish-modules). Une sonde en échec r
 de faux « absent » ni de faux « arrêté »."""
 from __future__ import annotations
 
+import contextlib
 import http.client
 import json
+import logging
 import os
 import re
 import socket
@@ -52,6 +54,8 @@ MAX_TEXTE = 200
 _UNITE = re.compile(r"/(?:usr/)?lib/systemd/system/([A-Za-z0-9_.:-]+\.(?:service|timer))")
 _MODULE = re.compile(r"/usr/lib/secubox/([a-z0-9][a-z0-9_-]*)")
 _ENTIER = re.compile(r"[0-9]{1,19}")
+_TYPE_ERREUR = re.compile(r"^((?:[a-z_()]+ ?)+: )?([A-Za-z_][A-Za-z0-9_]*(?:Error|Exception|Exit|Interrupt))\b")
+log = logging.getLogger("secubox.profiles.validation")
 
 Executer = Callable[[List[str]], Tuple[int, str]]
 
@@ -167,6 +171,23 @@ def etat_paquet(installe: bool, statut: str, attendu: bool, etats: Iterable[str]
     return "fonctionnel"                                   # sans service propre (pages, bibliothèques, méta-paquets)
 
 
+def nom_hote(nom: str) -> str:
+    """Nom d'hôte tel que le relevé signé l'accepte ([A-Za-z0-9.-], 63 caractères) : jamais un relevé refusé pour un `_`."""
+    propre = re.sub(r"[^A-Za-z0-9.-]", "-", str(nom or "")).lstrip(".-")[:63]
+    return propre or "box"
+
+
+def resume_echec(message: str) -> str:
+    """Échec de chargement de l'agrégateur réduit à son TYPE (le relevé est signé et servi aux pairs : jamais un chemin,
+    jamais une valeur)."""
+    m = _TYPE_ERREUR.match(str(message or ""))
+    if m:
+        return (m.group(1) or "") + m.group(2)
+    if "not found" in str(message):
+        return "main.py introuvable"
+    return "échec de chargement"
+
+
 def _texte(s: str) -> str:
     return re.sub(r"[\x00-\x1f\x7f]", " ", str(s))[:MAX_TEXTE]
 
@@ -182,11 +203,14 @@ def _entier(valeur: Optional[str]) -> Optional[int]:
 # ── collecte ─────────────────────────────────────────────────────────────────
 
 def collecter(*, executer: Executer, lire_liste: Callable[[str], str],
-              sante_agregateur: Callable[[], Optional[Dict[str, Any]]], cycles: Dict[str, str],
+              sante_agregateur: Callable[[], Optional[Dict[str, Any]]], cycles: Optional[Dict[str, str]],
               precedent: Optional[Dict[str, Any]], hostname: str, maintenant: float) -> Dict[str, Any]:
     """Le relevé complet ; chaque sonde est injectée (tests). Ne lève pas : une sonde en échec rend le relevé partiel."""
     partiel: List[str] = []
-    base = {"version": VERSION, "hostname": hostname, "releve_epoch": maintenant,
+    if cycles is None:                                    # manifestes illisibles : aucun module tenu pour endormi
+        partiel.append("cycles de vie illisibles")
+        cycles = {}
+    base = {"version": VERSION, "hostname": nom_hote(hostname), "releve_epoch": maintenant,
             "releve_ts": datetime.fromtimestamp(maintenant, timezone.utc).isoformat().replace("+00:00", "Z"),
             "profil_actif": None, "profils_installes": [], "partiel": partiel, "paquets": []}
 
@@ -249,14 +273,15 @@ def collecter(*, executer: Executer, lire_liste: Callable[[str], str],
                 if etat == "erreur":
                     erreurs.append(f"{u} en échec ({(props or {}).get('Result') or '?'})")
                 ligne["unites"].append({"unite": u, "etat": etat, "memoire_o": m_o if etat == "actif" else None})
-            for mod in modules:
+            for mod in modules[:MAX_UNITES]:
                 if sante is None:
                     ligne["agregateur"].append({"module": mod, "etat": "inconnu"})
                 elif mod in montes:
                     ligne["agregateur"].append({"module": mod, "etat": "actif"})
                 elif mod in echecs:
-                    ligne["agregateur"].append({"module": mod, "etat": "erreur", "message": _texte(echecs[mod])})
-                    erreurs.append(f"agrégateur, module {mod} : {echecs[mod]}")
+                    resume = resume_echec(echecs[mod])
+                    ligne["agregateur"].append({"module": mod, "etat": "erreur", "message": resume})
+                    erreurs.append(f"agrégateur, module {mod} : {resume}")
             ligne["memoire_o"], ligne["cpu_ns"] = memoire, cpu
             avant = precedents.get(nom, {}).get("cpu_ns")
             if cpu is not None and isinstance(avant, int) and duree > 0 and cpu >= avant:
@@ -289,6 +314,7 @@ def lire(chemin: Optional[Path] = None) -> Optional[Dict[str, Any]]:
 
 def _executer(argv: List[str]) -> Tuple[int, str]:
     try:
+        # check=False VOULU : le code de retour est traité par l'appelant (dpkg-query rend 1 si un motif ne trouve rien).
         r = subprocess.run(argv, capture_output=True, text=True, timeout=60, check=False)
         return r.returncode, r.stdout
     except (OSError, subprocess.SubprocessError):
@@ -320,23 +346,25 @@ class _UnixHTTP(http.client.HTTPConnection):
 
 def _sante_agregateur() -> Optional[Dict[str, Any]]:
     try:
-        c = _UnixHTTP(SOCKET_AGREGATEUR, 10)
-        c.request("GET", "/health")
-        r = c.getresponse()
-        d = json.loads(r.read()) if r.status == 200 else None
-        c.close()
+        with contextlib.closing(_UnixHTTP(SOCKET_AGREGATEUR, 10)) as c:
+            c.request("GET", "/health")
+            r = c.getresponse()
+            d = json.loads(r.read()) if r.status == 200 else None
         return d if isinstance(d, dict) else None
-    except (OSError, ValueError, http.client.HTTPException):
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        log.warning("santé de l'agrégateur illisible : %s", e)
         return None
 
 
-def _cycles(racine: Path) -> Dict[str, str]:
+def _cycles(racine: Path) -> Optional[Dict[str, str]]:
+    """Cycle de vie de chaque module ; None (relevé partiel annoncé) si les manifestes ne se lisent pas."""
+    from .lifecycle import effective_lifecycle
+    from .manifest import ManifestError, load_all
     try:
-        from .lifecycle import effective_lifecycle
-        from .manifest import load_all
         return {mid: effective_lifecycle(m) for mid, m in load_all(Path(racine) / "modules.d").items()}
-    except Exception:  # noqa: BLE001 — manifestes illisibles : aucun module tenu pour endormi
-        return {}
+    except (OSError, ValueError, ManifestError) as e:
+        log.warning("manifestes des modules illisibles : %s", e)
+        return None
 
 
 def releve(racine: Path = Path("/etc/secubox"), chemin: Optional[Path] = None) -> Dict[str, Any]:

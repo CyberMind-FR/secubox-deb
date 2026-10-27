@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE du relevé de validation (#3212), nommé par AppArmorProfile= dans
+# secubox-profiles-releve.service et chargé par le postinst. LECTURE de dpkg, des manifestes et de systemd (D-Bus),
+# /health de l'agrégateur par sa socket Unix ; ÉCRITURE du seul dossier du relevé. Aucun sudo, aucun secret.
+
+#include <tunables/global>
+
+profile secubox-profiles-releve {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/dbus-strict>
+
+  # secubox-profilectl (bash) -> python3 -m api.cli releve
+  /usr/sbin/secubox-profilectl r,
+  /{usr/,}bin/bash ix,
+  /usr/bin/python3* rix,
+  /usr/lib/secubox/ r,
+  /usr/lib/secubox/profiles/ r,
+  /usr/lib/secubox/profiles/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+  /etc/nsswitch.conf r,
+  /etc/passwd r,
+  /etc/group r,
+
+  # Manifestes des modules (cycle de vie) ; jamais les secrets.
+  /etc/secubox/ r,
+  /etc/secubox/modules.d/ r,
+  /etc/secubox/modules.d/** r,
+  deny /etc/secubox/secrets/** r,
+
+  # Niveaux 1 et 2 : dpkg-query et les listes de fichiers des paquets, en lecture.
+  /usr/bin/dpkg-query ix,
+  /etc/dpkg/** r,
+  /var/lib/dpkg/ r,
+  /var/lib/dpkg/** r,
+
+  # Niveau 3 : systemctl show, par D-Bus (le gestionnaire de systemd seulement), en lecture de propriétés.
+  /{usr/,}bin/systemctl ix,
+  /run/systemd/ r,
+  /run/systemd/** r,
+  /etc/systemd/** r,
+  /usr/lib/systemd/** r,
+  owner @{PROC}/@{pid}/** r,
+  @{PROC}/sys/kernel/** r,
+  /sys/fs/cgroup/ r,
+  dbus send bus=system path=/org/freedesktop/DBus interface=org.freedesktop.DBus
+       member={Hello,AddMatch,RemoveMatch,GetNameOwner,NameHasOwner,GetConnectionUnixUser} peer=(name=org.freedesktop.DBus),
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface={org.freedesktop.DBus.Properties,org.freedesktop.systemd1.Manager}
+       member={Get,GetAll,GetUnit,LoadUnit,ListUnitsByNames,GetUnitByPID} peer=(name=org.freedesktop.systemd1),
+  dbus receive bus=system peer=(name=org.freedesktop.systemd1),
+  dbus receive bus=system peer=(name=org.freedesktop.DBus),
+
+  # Agrégateur : /health par sa socket.
+  /run/secubox/ r,
+  /run/secubox/aggregator.sock rw,
+
+  # Le relevé.
+  /var/lib/secubox/profiles/validation/ r,
+  /var/lib/secubox/profiles/validation/** rw,
+
+  network unix stream,
+}

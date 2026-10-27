@@ -289,17 +289,20 @@
         const ilYa = ts => { const m = Math.round((Date.now() - Date.parse(ts)) / 60000); return isNaN(m) ? '' : m < 1 ? 'à l’instant' : m < 120 ? 'il y a ' + m + ' min' : 'il y a ' + Math.round(m / 60) + ' h'; };
         const mo = o => Math.round(o / 1048576) + ' Mo';
 
+        // Colonnes indexées par DID, jamais par le nom qu'une box déclare (revue #3212) : deux box au même nom ne s'écrasent
+        // pas, et un nom piège (« constructor ») ne touche aucun objet : des Map, pas des objets ordinaires.
         function colonnesParc() {
-            const cols = ((PARC && PARC.noeuds) || []).map(n => ({ nom: n.hostname || '?', n }))
-                .concat(((PARC && PARC.indisponibles) || []).map(i => ({ nom: i.nom || i.mesh_ip || '?', raison: i.raison || 'indisponible' })));
-            return cols.sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { numeric: true }));
+            const cols = ((PARC && PARC.noeuds) || []).map(n => ({ id: 'did:' + String(n.node_did || n.hostname), nom: String(n.hostname || '?'), n }))
+                .concat(((PARC && PARC.indisponibles) || []).map((i, k) => ({ id: 'indispo:' + k, nom: String(i.nom || i.mesh_ip || '?'), raison: i.raison || 'indisponible' })));
+            return cols.sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { numeric: true }) || a.id.localeCompare(b.id));
         }
 
         function lignesParc(cols) {
-            const par = {};
-            cols.forEach(c => ((c.n && c.n.paquets) || []).forEach(q => { (par[q.paquet] = par[q.paquet] || {})[c.nom] = q; }));
-            return Object.keys(par).sort().map(nomP => {
-                const cellules = cols.map(c => ({ c, q: par[nomP][c.nom] || null, etat: c.n ? (par[nomP][c.nom] ? par[nomP][c.nom].etat : 'absent') : 'indisponible' }));
+            const par = new Map();
+            cols.forEach(c => ((c.n && c.n.paquets) || []).forEach(q => { if (!par.has(q.paquet)) par.set(q.paquet, new Map()); par.get(q.paquet).set(c.id, q); }));
+            return Array.from(par.keys()).sort().map(nomP => {
+                const ici = par.get(nomP);
+                const cellules = cols.map(c => ({ c, q: ici.get(c.id) || null, etat: c.n ? (ici.has(c.id) ? ici.get(c.id).etat : 'absent') : 'indisponible' }));
                 const versions = new Set(cellules.filter(x => x.q && x.q.installe && x.q.version).map(x => x.q.version));
                 const ecartVersion = versions.size > 1;
                 const erreurs = cellules.some(x => x.etat === 'erreur' || x.etat === 'manquant');
@@ -317,8 +320,9 @@
             const cols = colonnesParc(), lignes = lignesParc(cols);
             const tr = el('tr'); tr.appendChild(peint(el('th', 'paquet', 'Paquet'), 'rgba(10,22,46,.97)'));
             cols.forEach(c => {
-                const th = peint(el('th'), 'rgba(10,22,46,.97)'); th.dataset.box = c.nom;
+                const th = peint(el('th'), 'rgba(10,22,46,.97)'); th.dataset.box = c.nom; if (c.n) th.dataset.did = String(c.n.node_did || '');
                 th.appendChild(el('div', null, c.nom));
+                if (c.n && c.n.nom_conteste) { const b = el('span', 'badge att', 'nom contesté'); b.title = 'Une autre box du maillage déclare le même nom : ' + String(c.n.node_did || ''); th.appendChild(b); }
                 if (c.n) {
                     const s = el('span', 'sous', (c.n.profil_actif ? 'profil ' + c.n.profil_actif : 'aucun profil') + (c.n.releve_ts ? ' · ' + ilYa(c.n.releve_ts) : ''));
                     if (c.n.stale) s.appendChild(el('span', 'badge att', 'périmé'));

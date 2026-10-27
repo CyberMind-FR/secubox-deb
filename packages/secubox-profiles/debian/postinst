@@ -37,8 +37,19 @@ case "$1" in
         # never narrowed to 0750.
         install -d -o secubox -g secubox -m 0755 /var/log/secubox
         install -d -o root -g root -m 0750 /var/lib/secubox/profiles/rollback
-        # Relevé de validation (#3212), écrit par secubox-profiles-releve (User=secubox), lu par annuaire et l'API.
-        install -d -o secubox -g secubox -m 0755 /var/lib/secubox/profiles/validation
+        # Relevé de validation (#3212) : compte dédié, sans shell ni capacité, pour secubox-profiles-releve ; dossier
+        # setgid au groupe secubox (lecteurs : l'API et sbx-fleetctl, User=secubox), fichiers 0640 par UMask=0027.
+        id -u secubox-profiles >/dev/null 2>&1 || \
+          adduser --system --ingroup secubox --no-create-home --home /nonexistent \
+            --shell /usr/sbin/nologin secubox-profiles >/dev/null
+        install -d -o secubox-profiles -g secubox -m 2750 /var/lib/secubox/profiles/validation
+        # Profil AppArmor AVANT le démarrage du minuteur (l'unité le nomme). Système démarré seulement : dans le chroot
+        # d'une image, apparmor.service le charge au premier démarrage depuis /etc/apparmor.d.
+        if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ] \
+           && command -v apparmor_parser >/dev/null 2>&1 && [ -f /etc/apparmor.d/secubox-profiles-releve ]; then
+            apparmor_parser -r /etc/apparmor.d/secubox-profiles-releve \
+              || echo "secubox-profiles : profil AppArmor secubox-profiles-releve non chargé : le relevé de validation ne tournera pas (apparmor_parser -r /etc/apparmor.d/secubox-profiles-releve ; journalctl -k)" >&2
+        fi
 
         # Own dedicated socket, own service — never served by the aggregator
         # (the profile engine must not depend on something it may later

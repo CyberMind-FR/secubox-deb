@@ -8,6 +8,9 @@
 override_dh_auto_install:
 	install -d debian/secubox-profiles/etc/sudoers.d
 	install -m 0440 sudoers.d/secubox-profiles debian/secubox-profiles/etc/sudoers.d/secubox-profiles
+	# Profil AppArmor du relevé de validation (#3212), chargé par le postinst.
+	install -d debian/secubox-profiles/etc/apparmor.d
+	install -m 0644 apparmor/secubox-profiles-releve debian/secubox-profiles/etc/apparmor.d/secubox-profiles-releve
 	install -d debian/secubox-profiles/usr/sbin
 	install -m 0755 sbin/secubox-cache-warm debian/secubox-profiles/usr/sbin/secubox-cache-warm
 	# Politique de cycle de vie livree par le paquet. Une copie dans

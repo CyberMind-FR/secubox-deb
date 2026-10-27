@@ -66,7 +66,7 @@ stderr, `⚠️`) — jamais silencieusement omis de l'installateur.
 | `/etc/secubox/profiles/<nom>.toml` | profil (état désiré, exhaustif) |
 | `/etc/secubox/profiles/pins.toml` | surcharges individuelles persistantes |
 | `/etc/secubox/profiles/active` | nom du profil actif |
-| `/var/lib/secubox/profiles/validation/releve.json` | relevé de validation de la box (#3212), écrit toutes les 5 min par `secubox-profiles-releve.timer` (User=secubox) |
+| `/var/lib/secubox/profiles/validation/releve.json` | relevé de validation de la box (#3212), écrit toutes les 5 min par `secubox-profiles-releve.timer` (compte dédié `secubox-profiles`, profil AppArmor `secubox-profiles-releve`, fichier 0640 au groupe secubox) |
 
 `menu.d/` reste la source UI (path, ordre, icône) et n'est pas dupliqué ici.
 
