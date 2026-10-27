@@ -13,13 +13,21 @@ Lancé par secubox-dns-listes.service (root, profil AppArmor), lui-même déclen
 générateur dépose sa source. Codes : 0 appliqué ou inchangé ; 1 erreur (l'état précédent est remis) ; 2 usage."""
 import json
 import os
+import signal
 import sys
 from pathlib import Path
 
 from secubox_unbound import depot, listes
 
 
+def _terminer(signum, _frame):
+    """SIGTERM (arrêt, délai de systemd) devient SystemExit : la transaction en cours remet tout en place avant de sortir.
+    Python ne fait rien de tel sur SIGTERM par défaut (relecture #3205)."""
+    raise SystemExit(128 + signum)
+
+
 def main(argv=None) -> int:
+    signal.signal(signal.SIGTERM, _terminer)
     args = list(sys.argv[1:] if argv is None else argv)
     cmd = args[0] if args else "appliquer"
     if cmd == "etat":

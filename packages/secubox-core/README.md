@@ -41,8 +41,8 @@ Shared Python modules for all SecuBox services:
 
 webfilter, adblock and adult no longer write into `/etc/unbound/unbound.conf.d`: each **deposits** its render
 (`93-secubox-webfilter.conf`, `95-secubox-adblock.conf`, `96-secubox-adult.conf`) in
-`/var/lib/secubox/dns-listes/sources` (`secubox_unbound.depot.deposer_source` / `retirer_source`). The root oneshot
-`secubox-dns-listes.service` (AppArmor `/usr/sbin/secubox-dns-listes`, `MemoryMax=1G`) then:
+`/var/lib/secubox-dns-listes/sources` (`secubox_unbound.depot.deposer_source` / `retirer_source`). The root oneshot
+`secubox-dns-listes.service` (AppArmor `/usr/sbin/secubox-dns-listes`, no capabilities, `MemoryMax=2G`) then:
 
 1. adopts an old file still present in `unbound.conf.d` (older generator, previous install) as its source;
 2. compiles the sources with `secubox_unbound.listes`: one client class per address block that carries a policy
@@ -54,9 +54,15 @@ webfilter, adblock and adult no longer write into `/etc/unbound/unbound.conf.d`:
    `unbound-checkconf`, one reload, full byte-for-byte rollback); the reload only counts once
    `unbound-control status` answers again (#2969).
 
+The tree `/var/lib/secubox-dns-listes` (sources, state, 0600 lock) is root-owned and **outside** `/var/lib/secubox`
+(owned by the shared `secubox` account, which could rename and replace a sub-directory); every deposit checks the
+directory and its parent (no symlink, owner, not group/world-writable). New ACL elements in the 92 reuse the action and
+kept view of the element that covered the class: the compiled file never opens access the old files did not.
+
 Triggers: `secubox-dns-listes.path` (sources **and** `unbound.conf.d`: a new TV view or network changes the classes),
-daily timer. The state `/var/lib/secubox/dns-listes/etat.json` (0644) holds `etat` (`applique`, `inchange`,
-`erreur`, `sans-unbound`), `stats`, `adoptes`, `passes`, `t` and the input `signature`: a pass whose inputs (sources,
+daily timer. The state `/var/lib/secubox-dns-listes/etat.json` (0644) holds `etat` (`applique`, `inchange`,
+`en-cours` — left by a killed pass, the next one verifies and reloads —, `erreur`, `sans-unbound`), `stats`,
+`adoptes`, `passes`, `t`, `t_echec` and the `signature` of the inputs actually compiled: a pass whose inputs (sources,
 what the compiler reads from the context, compiler code, written files) are unchanged does not recompile, a failure on
 the same inputs is retried after one hour, a source deposited during a compilation is picked up (up to three passes).
 
@@ -115,7 +121,7 @@ apt install secubox-core
 /usr/sbin/secubox-dns-listes
 /usr/lib/python3/dist-packages/secubox_unbound/{__init__,listes,depot}.py
 /etc/apparmor.d/secubox-dns-listes
-/var/lib/secubox/dns-listes/{sources/,etat.json}
+/var/lib/secubox-dns-listes/{sources/,etat.json}
 /usr/lib/systemd/system/secubox-*.service
 /usr/share/secubox-core/nginx/
 /etc/nginx/secubox.d/

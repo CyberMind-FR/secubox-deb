@@ -179,20 +179,38 @@ def poser_vue(chemin: Path | str, texte: str, systeme: SystemeUnbound | None = N
     return "applique"
 
 
-def poser_vues(changements: dict, systeme: SystemeUnbound | None = None, mode: int = 0o644) -> str:
+def _signaler_retour(s: SystemeUnbound, e: BaseException, echecs: list) -> None:
+    """Un retour arrière incomplet (disque plein, second rechargement refusé) laisse un état mélangé : il est audité et dit
+    dans l'erreur, jamais tu (l'ancien webfilter-ctl le disait déjà)."""
+    if not echecs:
+        return
+    detail = " ; ".join(echecs)
+    with contextlib.suppress(Exception):
+        s.audit("restauration-echouee", detail[:280])
+    if isinstance(e, Exception):
+        raise s.ERREUR(f"{e} ; retour arrière INCOMPLET : {detail}"[:600]) from e
+
+
+def poser_vues(changements: dict, systeme: SystemeUnbound | None = None, mode: int = 0o644, forcer: bool = False) -> str:
     """Pose plusieurs fichiers (texte) et en retire d'autres (None) en UNE transaction : une vérification, un rechargement ; au
     moindre échec, TOUS sont remis octet pour octet (#3205 : 92-secubox-listes.conf remplace trois fichiers à la fois — un
-    état intermédiaire chargerait les mêmes zones deux fois). Rend « inchange » (rien d'écrit ni de rechargé) ou « applique »."""
+    état intermédiaire chargerait les mêmes zones deux fois). Rend « inchange » (rien d'écrit ni de rechargé) ou « applique ».
+
+    `forcer` : vérifier et recharger même si tout est déjà en place (une passe précédente tuée après la bascule)."""
     s = systeme or SystemeUnbound()
     voulu = {Path(p): t for p, t in changements.items()}
     anciens = {p: _lire_octets(p) for p in voulu}
-    if all(anciens[p] == (t.encode("utf-8") if t is not None else None) for p, t in voulu.items()):
+    if not forcer and all(anciens[p] == (t.encode("utf-8") if t is not None else None) for p, t in voulu.items()):
         return "inchange"
 
-    def tout_remettre() -> None:
+    def tout_remettre() -> list:
+        echecs = []
         for p, a in anciens.items():
-            with contextlib.suppress(OSError):
+            try:
                 _restaurer(p, a)
+            except OSError as e:
+                echecs.append(f"{p.name} non remis ({e.strerror or e})")
+        return echecs
 
     try:
         for p, t in voulu.items():
@@ -203,15 +221,18 @@ def poser_vues(changements: dict, systeme: SystemeUnbound | None = None, mode: i
         ok, sortie = s.verifier_unbound()
         if not ok:
             raise s.ERREUR("unbound-checkconf refuse la configuration : " + sortie)
-    except BaseException:
-        tout_remettre()
+    except BaseException as e:
+        _signaler_retour(s, e, tout_remettre())
         raise
     try:
         s.recharger_unbound()
-    except BaseException:
-        tout_remettre()
-        with contextlib.suppress(Exception):
+    except BaseException as e:
+        echecs = tout_remettre()
+        try:
             s.recharger_unbound()          # Unbound garde la NOUVELLE configuration en mémoire tant qu'on ne lui a pas fait relire l'ancienne
+        except Exception as e2:
+            echecs.append(f"second rechargement : {e2}")
+        _signaler_retour(s, e, echecs)
         raise
     return "applique"
 

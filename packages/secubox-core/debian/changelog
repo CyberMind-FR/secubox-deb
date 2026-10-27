@@ -1,3 +1,22 @@
+secubox-core (1.8.1-1~trixie1) trixie; urgency=medium
+
+  * Relecture de sécurité de secubox-dns-listes (#3205) :
+    - l'arbre passe de /var/lib/secubox/dns-listes (sous le dossier du compte partagé « secubox », qui pouvait le
+      renommer et le remplacer) à /var/lib/secubox-dns-listes, root 0755 ; chaque dépôt vérifie le dossier et son
+      parent (pas de lien, root, fermé en écriture). Le postinst reprend les sources de 1.8.0 par descripteur
+      (O_NOFOLLOW, fichiers ordinaires de root) puis retire l'ancien arbre ;
+    - verrou 0600 dans cet arbre (celui de /run/lock était ouvrable et bloquable par tout compte local) ;
+    - compilateur : un élément d'ACL nouveau reprend l'action et la vue gardée de l'élément qui couvrait la classe
+      (une dérogation ne peut plus ouvrir le résolveur) ; Unbound ne fait rien hériter d'un bloc plus large ; sources
+      lues sans suivre de lien ; messages d'erreur sans le contenu des lignes ; lignes illisibles refusées ;
+    - signature notée = entrées réellement compilées (un dépôt pendant la dernière passe n'est plus perdu) ; état
+      « en-cours » avant la bascule, passe suivante forcée (vérification et rechargement) ; SIGTERM remet tout en place ;
+      retour arrière incomplet dit et audité ; mode direct validé ; fichiers cachés exclus du contexte ;
+    - unité : aucune capacité, boucle locale seulement, UMask 0027, MemoryMax 2G, TimeoutStartSec 90 min ; .path sans
+      MakeDirectory ; profil AppArmor : /run/unbound.ctl, abstractions/openssl, plus aucune capacité.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 18:00:00 +0100
+
 secubox-core (1.8.0-1~trixie1) trixie; urgency=medium
 
   * Listes DNS compilées par étiquettes (#3205) : secubox_unbound.listes (compilateur), secubox_unbound.depot (sources

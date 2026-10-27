@@ -13,6 +13,7 @@
   #include <abstractions/base>
   #include <abstractions/python>
   #include <abstractions/nameservice>      # unbound-checkconf résout l'utilisateur « unbound »
+  #include <abstractions/openssl>          # unbound-control en TCP/TLS (openssl.cnf) sur les box sans socket Unix
 
   /usr/sbin/secubox-dns-listes r,
   /usr/bin/python3* rix,
@@ -22,9 +23,9 @@
   /etc/secubox/dns-listes.toml r,
   deny /etc/secubox/secrets/** r,
 
-  /var/lib/secubox/dns-listes/ rw,
-  /var/lib/secubox/dns-listes/** rwk,
-  /run/lock/secubox-dns-listes.lock rwk,
+  # Arbre root à part (pas sous /var/lib/secubox, au compte partagé) : sources, état, verrou 0600.
+  /var/lib/secubox-dns-listes/ rw,
+  /var/lib/secubox-dns-listes/** rwk,
   /var/log/secubox/audit.log w,
 
   /etc/unbound/** r,
@@ -38,9 +39,8 @@
 
   /usr/sbin/unbound-checkconf rix,
   /usr/sbin/unbound-control rix,
+  /run/unbound.ctl rw,                      # control-interface Debian : socket Unix root:unbound 0660
 
-  capability dac_override,
-  capability dac_read_search,
   network inet stream,
   network inet6 stream,
   network unix stream,

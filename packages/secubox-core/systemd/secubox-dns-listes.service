@@ -22,10 +22,22 @@ Type=oneshot
 ExecStart=/usr/sbin/secubox-dns-listes appliquer
 Nice=10
 IOSchedulingClass=idle
-TimeoutStartSec=30min
-# Pic mesuré : 487 Mo pour la configuration de gk2 (1,9 million de zones lues).
-MemoryMax=1G
-UMask=0022
+# Pire cas : 3 passes × (compilation ~2,5 min + unbound-checkconf ≤ 10 min + rechargement ≤ 2 min + attente ≤ 5 min).
+TimeoutStartSec=90min
+# Pic mesuré : 487 Mo pour la configuration de gk2 (1,9 million de zones lues), PLUS unbound-checkconf dans le même cgroup.
+MemoryMax=2G
+UMask=0027
+# Aucune capacité : il écrit des fichiers root et parle à /run/unbound.ctl (root:unbound 0660). Réseau : boucle locale
+# seulement (unbound-control en TCP sur les box qui n'ont pas de socket Unix).
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
@@ -35,4 +47,4 @@ ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
-ReadWritePaths=/etc/unbound/unbound.conf.d /var/lib/secubox/dns-listes /var/log/secubox /run/lock
+ReadWritePaths=/etc/unbound/unbound.conf.d /var/lib/secubox-dns-listes -/var/log/secubox/audit.log

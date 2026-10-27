@@ -10,10 +10,9 @@
 Description=SecuBox — sources des listes DNS modifiées (#3205)
 
 [Path]
-PathChanged=/var/lib/secubox/dns-listes/sources
+# Pas de MakeDirectory : il créerait aussi /etc/unbound/unbound.conf.d sur une box sans Unbound. Le postinst crée les sources.
+PathChanged=/var/lib/secubox-dns-listes/sources
 PathChanged=/etc/unbound/unbound.conf.d
-MakeDirectory=yes
-DirectoryMode=0755
 Unit=secubox-dns-listes.service
 
 [Install]
