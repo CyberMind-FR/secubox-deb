@@ -148,6 +148,20 @@ def test_ancien_statut_avec_reloaded_toujours_lu():
     assert puits["recharge"] is False
 
 
+def test_l_etat_des_listes_est_lu_plafonne_et_sans_lien(tmp_path, monkeypatch):
+    d = _modules()
+    gros = tmp_path / "gros.json"
+    gros.write_text(json.dumps({"etat": "applique", "t": 1, "x": "y" * 70000}))
+    assert d._json_borne(gros) is None
+    vrai = tmp_path / "vrai.json"
+    vrai.write_text(json.dumps({"etat": "applique", "t": 1}))
+    lien = tmp_path / "lien.json"
+    lien.symlink_to(vrai)
+    assert d._json_borne(lien) is None and d._json_borne(vrai) == {"etat": "applique", "t": 1}
+    assert str(d.ETAT_LISTES) == "/var/lib/secubox-dns-listes/etat.json"
+    assert str(d.SOURCE_PUITS) == "/var/lib/secubox-dns-listes/sources/95-secubox-adblock.conf"
+
+
 def test_la_route_existe_en_lecture_seule():
     from api import main
     routes = [r for r in main.app.routes if getattr(r, "path", "") == "/statut-direct"]

@@ -11,6 +11,7 @@ ni un zéro. Les lectures systemd passent par `systemctl is-active`, qui ne dema
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import threading
 import time
@@ -19,8 +20,9 @@ from typing import Callable, Optional
 
 SINKHOLE_STATUS = Path("/var/lib/secubox/ad-guard/sinkhole-status.json")
 # #3205 : la synchronisation DÉPOSE la source ; secubox-dns-listes compile, recharge et note son état.
-SOURCE_PUITS = Path("/var/lib/secubox/dns-listes/sources/95-secubox-adblock.conf")
-ETAT_LISTES = Path("/var/lib/secubox/dns-listes/etat.json")
+SOURCE_PUITS = Path("/var/lib/secubox-dns-listes/sources/95-secubox-adblock.conf")
+ETAT_LISTES = Path("/var/lib/secubox-dns-listes/etat.json")
+MAX_ETAT_LISTES = 64 * 1024
 ETAT_CAPTEUR = Path("/var/lib/secubox/ad-guard/dnstv/dnssensor-etat.json")
 UNITE_RESOLVEUR = "unbound.service"
 UNITE_CAPTEUR = "secubox-ad-guard-dnssensor.timer"
@@ -54,6 +56,27 @@ def _json(chemin: Path) -> Optional[dict]:
         return d if isinstance(d, dict) else None
     except (OSError, ValueError):
         return None
+
+
+def _json_borne(chemin: Path, plafond: int = MAX_ETAT_LISTES) -> Optional[dict]:
+    """Lu par descripteur, sans suivre de lien, plafonné : un fichier qu'on ne sait pas lire est inconnu (None)."""
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        return None
+    try:
+        brut = os.read(fd, plafond + 1)
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+    if len(brut) > plafond:
+        return None
+    try:
+        d = json.loads(brut.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    return d if isinstance(d, dict) else None
 
 
 def _entier(v) -> Optional[int]:
@@ -110,7 +133,7 @@ def capteur(actif: Optional[bool], etat: Optional[dict], now: int) -> dict:
 def etat_direct(now: Optional[int] = None, *, magasin=None, lancer: Optional[Callable] = None) -> dict:
     """Le relevé complet ; `magasin` : le magasin de compteurs DNS (api.dnstv.Magasin) ou None s'il est illisible."""
     now = int(now if now is not None else time.time())
-    puits, listes = puits_et_listes(_json(SINKHOLE_STATUS), _mtime(SOURCE_PUITS), _json(ETAT_LISTES))
+    puits, listes = puits_et_listes(_json(SINKHOLE_STATUS), _mtime(SOURCE_PUITS), _json_borne(ETAT_LISTES))
     dernier, actifs, vus = None, None, None
     if magasin is not None:
         try:

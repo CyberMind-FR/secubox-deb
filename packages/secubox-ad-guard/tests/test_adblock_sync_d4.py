@@ -90,3 +90,12 @@ def test_le_script_ne_touche_plus_unbound():
     src = SCRIPT.read_text()
     for interdit in ("unbound.conf.d", "unbound-control", "unbound-checkconf", "poser_vue", "retirer_vue", '"restart"', "systemctl"):
         assert interdit not in src, interdit
+
+
+def test_une_adresse_invalide_de_l_allowlist_est_ignoree(mod):
+    """Une seule ligne invalide faisait échouer la compilation des TROIS listes (relecture #3205) : elle est écartée ici."""
+    mod.IP_ALLOWLIST.parent.mkdir(parents=True, exist_ok=True)
+    mod.IP_ALLOWLIST.write_text("192.168.1.7\npas-une-adresse\n10.0.0.0/33\n# commentaire\n")
+    assert mod._ip_allowlist() == ["192.168.1.7"]
+    mod.do_sync()
+    D.listes.compiler([mod.SOURCE], [])                                   # ne lève pas

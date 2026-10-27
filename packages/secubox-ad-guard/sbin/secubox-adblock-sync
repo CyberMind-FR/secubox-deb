@@ -31,6 +31,7 @@ systemd timer and on-demand from the dns-guard WebUI.
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 import sys
@@ -76,12 +77,19 @@ def _write_status(d: dict) -> None:
 
 
 def _ip_allowlist() -> list:
+    """Adresses ou blocs valides seulement : une ligne invalide faisait échouer la compilation des TROIS listes (#3205)."""
     out = []
     if IP_ALLOWLIST.exists():
         for line in IP_ALLOWLIST.read_text().splitlines():
-            ip = line.strip()
-            if ip and not ip.startswith("#"):
-                out.append(ip)
+            ip = line.split("#", 1)[0].strip()
+            if not ip:
+                continue
+            try:
+                ipaddress.ip_network(ip, strict=False)
+            except ValueError:
+                print(f"secubox-adblock-sync : {IP_ALLOWLIST.name} : adresse ignorée (invalide)", file=sys.stderr)
+                continue
+            out.append(ip)
     return out
 
 

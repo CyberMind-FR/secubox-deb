@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
+import ipaddress
 import json
 import os
 import re
@@ -202,8 +203,14 @@ def _exempt_ips() -> list[str]:
     if EXEMPT_IP.exists():
         for line in EXEMPT_IP.read_text().splitlines():
             ip = line.split("#", 1)[0].strip()
-            if ip:
-                out.append(ip)
+            if not ip:
+                continue
+            try:                      # une ligne invalide faisait échouer la compilation des TROIS listes (#3205)
+                ipaddress.ip_network(ip, strict=False)
+            except ValueError:
+                print(f"secubox-adguard-adult-sync : {EXEMPT_IP.name} : adresse ignorée (invalide)", file=sys.stderr)
+                continue
+            out.append(ip)
     out.extend(_ips_des_macs(_exempt_macs()))
     # Dédoublonne en gardant l'ordre (une IP figée ET résolue par MAC ne
     # doit pas produire deux `access-control-view` pour le même nom).

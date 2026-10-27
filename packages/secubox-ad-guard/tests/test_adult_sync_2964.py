@@ -81,11 +81,13 @@ def test_la_synchronisation_depose_la_source(mod):
     assert mod.do_sync()["source"] == "inchange"
 
 
-def test_le_rendu_avec_exemptions_est_accepte_par_le_compilateur(mod):
+def test_le_rendu_avec_exemptions_est_accepte_par_le_compilateur(mod, tmp_path):
     mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
     mod.EXEMPT_IP.write_text("192.168.1.3\n")
     mod.do_sync()
-    texte, stats = D.listes.compiler([mod.SOURCE], [])
+    acl = tmp_path / "10-acl.conf"                                   # le LAN autorisé, comme sur une box
+    acl.write_text("server:\n    access-control: 192.168.0.0/16 allow\n")
+    texte, stats = D.listes.compiler([mod.SOURCE], [acl])
     assert '"cam-adulte.example." always_nxdomain' in texte and "192.168.1.3/32" in texte and stats["etiquettes"] >= 1
 
 
@@ -186,3 +188,11 @@ def test_le_script_ne_touche_plus_unbound():
     src = SCRIPT.read_text()
     for interdit in ("unbound.conf.d", "unbound-control", "unbound-checkconf", "poser_vue", "retirer_vue", "systemctl"):
         assert interdit not in src, interdit
+
+
+def test_une_adresse_exemptee_invalide_est_ignoree(mod):
+    mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
+    mod.EXEMPT_IP.write_text("192.168.1.3\nfaux\n300.1.1.1\n")
+    assert mod._exempt_ips() == ["192.168.1.3"]
+    mod.do_sync()
+    D.listes.compiler([mod.SOURCE], [])
