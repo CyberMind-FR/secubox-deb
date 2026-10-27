@@ -27,10 +27,11 @@ TimeoutStartSec=90min
 # Pic mesuré : 487 Mo pour la configuration de gk2 (1,9 million de zones lues), PLUS unbound-checkconf dans le même cgroup.
 MemoryMax=2G
 UMask=0027
-# Aucune capacité : il écrit des fichiers root et parle à /run/unbound.ctl (root:unbound 0660). Réseau : boucle locale
-# seulement (unbound-control en TCP sur les box qui n'ont pas de socket Unix).
-CapabilityBoundingSet=
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Une seule capacité : audit.log appartient à secubox (0640), root ne l'écrit qu'avec CAP_DAC_OVERRIDE (constaté sur gk1).
+# Le reste est à root : unbound.conf.d, l'arbre des listes, /run/unbound.ctl (root:unbound 0660). Réseau : boucle locale
+# seulement (unbound-control en TCP sur les box sans socket Unix) ; AF_NETLINK : unbound-checkconf liste les interfaces.
+CapabilityBoundingSet=CAP_DAC_OVERRIDE
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
 IPAddressDeny=any
 IPAddressAllow=localhost
 ProtectKernelModules=yes

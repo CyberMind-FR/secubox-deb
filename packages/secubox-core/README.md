@@ -42,7 +42,7 @@ Shared Python modules for all SecuBox services:
 webfilter, adblock and adult no longer write into `/etc/unbound/unbound.conf.d`: each **deposits** its render
 (`93-secubox-webfilter.conf`, `95-secubox-adblock.conf`, `96-secubox-adult.conf`) in
 `/var/lib/secubox-dns-listes/sources` (`secubox_unbound.depot.deposer_source` / `retirer_source`). The root oneshot
-`secubox-dns-listes.service` (AppArmor `/usr/sbin/secubox-dns-listes`, no capabilities, `MemoryMax=2G`) then:
+`secubox-dns-listes.service` (AppArmor `/usr/sbin/secubox-dns-listes`, only `CAP_DAC_OVERRIDE` for `audit.log`, `MemoryMax=2G`) then:
 
 1. adopts an old file still present in `unbound.conf.d` (older generator, previous install) as its source;
 2. compiles the sources with `secubox_unbound.listes`: one client class per address block that carries a policy

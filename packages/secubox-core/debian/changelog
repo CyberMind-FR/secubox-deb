@@ -1,3 +1,12 @@
+secubox-core (1.8.2-1~trixie1) trixie; urgency=medium
+
+  * secubox-dns-listes (#3205), constaté sur gk1 avec 1.8.1 : unbound-checkconf liste les interfaces (getifaddrs,
+    AF_NETLINK) et l'audit s'écrit dans /var/log/secubox/audit.log, au compte secubox (0640). L'unité garde
+    CAP_DAC_OVERRIDE comme seule capacité et autorise AF_NETLINK ; le profil AppArmor suit. La transaction avait
+    correctement tout remis en place (92 précédent intact, DNS inchangé).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 27 Oct 2026 18:40:00 +0100
+
 secubox-core (1.8.1-1~trixie1) trixie; urgency=medium
 
   * Relecture de sécurité de secubox-dns-listes (#3205) :

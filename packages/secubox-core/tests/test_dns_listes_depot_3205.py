@@ -9,6 +9,7 @@ Les générateurs (webfilter, adblock, adult) déposent leur rendu inchangé com
 moindre échec TOUT est remis octet pour octet. Un ancien fichier trouvé dans unbound.conf.d est adopté comme source."""
 import json
 import os
+import re
 import signal
 import stat
 import sys
@@ -492,8 +493,8 @@ def test_service_root_durci_et_exception_ecrite():
                      "LockPersonality": "yes", "Type": "oneshot", "Nice": "10", "IOSchedulingClass": "idle",
                      "ProtectKernelModules": "yes", "ProtectKernelLogs": "yes", "RestrictNamespaces": "yes",
                      "RestrictRealtime": "yes", "SystemCallArchitectures": "native", "UMask": "0027",
-                     "CapabilityBoundingSet": "", "IPAddressDeny": "any", "IPAddressAllow": "localhost",
-                     "RestrictAddressFamilies": "AF_UNIX AF_INET AF_INET6", "MemoryMax": "2G"}.items():
+                     "CapabilityBoundingSet": "CAP_DAC_OVERRIDE", "IPAddressDeny": "any", "IPAddressAllow": "localhost",
+                     "RestrictAddressFamilies": "AF_UNIX AF_NETLINK AF_INET AF_INET6", "MemoryMax": "2G"}.items():
         assert u.get(cle) == [val], cle
     assert "User" not in u
     assert set(u["ReadWritePaths"][0].split()) == {"/etc/unbound/unbound.conf.d", "/var/lib/secubox-dns-listes",
@@ -525,7 +526,8 @@ def test_profil_apparmor_n_ecrit_que_ses_fichiers():
                       "/etc/unbound/unbound.conf.d/96-secubox-adult.conf", "/etc/unbound/unbound.conf.d/.sbx-*"}
     regles = "\n".join(ligne for ligne in profil.splitlines() if not ligne.strip().startswith("#"))
     assert "deny /etc/secubox/secrets/** r," in regles and "sudo" not in regles and "/bin/sh" not in regles
-    assert "capability" not in regles and "#include <abstractions/openssl>" in profil
+    # dac_override SEULE : audit.log appartient à secubox (0640) ; constaté sur gk1, sans elle l'audit était perdu.
+    assert re.findall(r"capability\s+(\S+),", regles) == ["dac_override"] and "#include <abstractions/openssl>" in profil
 
 
 def test_paquet_installe_et_postinst_ne_bloque_pas_apt():

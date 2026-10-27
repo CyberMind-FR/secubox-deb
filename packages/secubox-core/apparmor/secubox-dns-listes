@@ -41,7 +41,9 @@
   /usr/sbin/unbound-control rix,
   /run/unbound.ctl rw,                      # control-interface Debian : socket Unix root:unbound 0660
 
+  capability dac_override,                  # audit.log appartient à secubox (0640)
   network inet stream,
   network inet6 stream,
   network unix stream,
+  network netlink raw,                      # unbound-checkconf : getifaddrs (noms d'interfaces)
 }
