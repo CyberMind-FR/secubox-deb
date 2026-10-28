@@ -1,3 +1,11 @@
+secubox-soc (1.8.2-1~trixie1) trixie; urgency=medium
+
+  * secubox-dpi passe de Depends a Suggests (ref #3218) : le DPI quitte le profil lite, qui ne doit plus le tirer
+    par le SOC. Un Recommends le ramenerait (apt les installe par defaut). Sans lui, l'onglet « Trafic (DPI) »
+    reste vide ; isp et full l'installent par secubox-isp.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 14:00:00 +0100
+
 secubox-soc (1.8.1-1~trixie1) trixie; urgency=medium
 
   * Vigie, carte Filtrage web : « mode observe : rien n'est bloqué » seulement quand l'API du

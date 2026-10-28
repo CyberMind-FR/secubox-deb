@@ -11,7 +11,8 @@ MINIMAL = load_profile(Path(__file__).resolve().parent.parent / "profiles" / "mi
 
 
 def test_les_modules_du_profil_minimal_sont_allumes():
-    for mid in ("dpi", "ndpid-engine", "dns-guard", "ad-guard", "nac", "freebox", "ipv6guard", "webfilter", "hub", "portal", "auth", "aggregator", "core", "system", "hardening", "autoload-agent", "wireguard"):
+    # #3218 : ni dpi ni ndpid-engine (banc gk5), ni le service portal (sans tête : son paquet reste pour login.html).
+    for mid in ("dns-guard", "ad-guard", "nac", "freebox", "ipv6guard", "webfilter", "hub", "auth", "aggregator", "core", "system", "hardening", "autoload-agent", "wireguard"):
         assert mid in MINIMAL.on, mid
 
 

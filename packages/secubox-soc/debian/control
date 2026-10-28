@@ -9,11 +9,13 @@ Package: secubox-soc
 Architecture: all
 # Les onglets du SOC encadrent les pages du pare-feu (secubox-waf-ng : /waf, et actord pour Actor), du DPI (secubox-dpi : /dpi)
 # et d'Actor Intelligence (secubox-webos : /actor-intelligence) : sans eux l'onglet est vide (#2358). Le profil lite les porte donc
-# tous par le SOC, avec leurs dependances.
+# par le SOC, avec leurs dependances. SAUF le DPI (#3218) : il quitte lite (decision du proprietaire du 2026-10-28), il reste dans
+# isp et full. En Suggests et non en Recommends : apt installe les Recommends par defaut, il le ramenerait dans lite. Sans lui,
+# l'onglet « Trafic (DPI) » du SOC reste vide.
 Depends: ${misc:Depends}, secubox-core (>= 1.4.0),
  secubox-waf-ng (>= 1.29.0),
- secubox-dpi (>= 1.11.2),
  secubox-webos (>= 1.9.7)
+Suggests: secubox-dpi (>= 1.11.2)
 Replaces: secubox-hub, secubox-soc-web
 # secubox-soc-web EST DECOMMISSIONNE (#1323) : son bundle React interrogeait
 # /api/v1/soc-gateway/*, console de flotte multi-box jamais deployee — aucune

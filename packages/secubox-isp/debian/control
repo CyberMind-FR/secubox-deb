@@ -11,6 +11,9 @@ Package: secubox-isp
 Architecture: all
 Depends: ${misc:Depends},
  secubox-lite (>= 1.5.0),
+# DPI et nDPId (#3218) : sortis de lite (cartes de 1 Go), ils restent dans isp et full.
+ secubox-dpi (>= 1.7.0),
+ secubox-ndpid-engine (>= 1.7.2),
  secubox-modem (>= 1.0),
  secubox-cdn,
  secubox-saas-relay,
@@ -22,7 +25,7 @@ Depends: ${misc:Depends},
 Recommends: wireguard-tools
 Description: SecuBox ISP — protection + operateur + publication
  Herite de secubox-lite (toutes les protections, HAProxy et le WAF sbxwaf) et
- ajoute le reseau d'operateur (modem, CDN, relais SaaS, maillage p2p,
+ ajoute l'inspection des paquets (DPI, nDPId), le reseau d'operateur (modem, CDN, relais SaaS, maillage p2p,
  federation, metriques), le courrier et la publication de sites
  (metablogizer). Les plugins du Hall (billets, actualites, messagerie,
  Nextcloud, BBS) sont dans secubox-full ; Matrix, Gitea et mesh s'installent

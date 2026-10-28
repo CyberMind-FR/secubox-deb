@@ -15,15 +15,12 @@ case "$1" in
         # Phase 1 (scan) and is left untouched here.
         install -d -o secubox -g secubox -m 755 /etc/secubox/profiles
 
-        # Seed reference profiles into the operator-editable dir on first
-        # install only — never overwrite an edited profile on upgrade.
-        for f in /usr/share/secubox/profiles/*.toml; do
-            [ -e "$f" ] || continue
-            dest="/etc/secubox/profiles/$(basename "$f")"
-            if [ ! -e "$dest" ]; then
-                install -o secubox -g secubox -m 644 "$f" "$dest"
-            fi
-        done
+        # Profils de référence (#3218). Ils n'étaient semés qu'à la première installation : une mise à jour ne
+        # changeait jamais /etc/secubox/profiles/minimal.toml, et l'apply suivait l'ANCIEN profil. Désormais une
+        # copie identique à une version déjà livrée (non modifiée par l'opérateur) est remplacée ; une copie modifiée
+        # est gardée, la nouvelle référence posée à côté en .dpkg-dist (voir maj-references.sh).
+        PROPRIO=secubox:secubox bash /usr/lib/secubox/profiles/maj-references.sh \
+            || echo "secubox-profiles : mise à jour des profils de référence en échec (voir ci-dessus)" >&2
 
         # The actuator (api/actuate.py + snapshot.py + audit.py, driven both
         # by secubox-profilectl apply/rollback and by secubox-sleeper's

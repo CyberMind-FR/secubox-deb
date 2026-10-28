@@ -20,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import apply, export, healthsync, manifest_edit, nginxgen, wafsync
+from . import apply, export, healthsync, manifest_edit, minuteurs, nginxgen, wafsync
 from .actuate import TIMED_OUT
 from .audit import AUDIT_LOG
 from .diff import (ProtectedViolation, changements_epingles,
@@ -99,9 +99,11 @@ def _cmd_status(args) -> int:
 
 def _cmd_diff(args) -> int:
     root = Path(args.root)
-    mod_dir, _, pins_file, _ = _paths(root)
+    mod_dir, prof_dir, pins_file, _ = _paths(root)
     manifests = load_all(mod_dir)
     profile = _load_profile_or_none(root, _active_profile_name(root, args.profile))
+    # Minuteries et protégés coupés par le profil (#3218) : le même plan que celui d'apply.
+    manifests, profile = minuteurs.etendre(manifests, profile, prof_dir)
     pins = load_pins(pins_file)
     actuals = _observe_all(manifests, load_routes())
     changes = plan_changes(manifests, profile, pins, actuals)
@@ -130,9 +132,11 @@ def _cmd_apply(args) -> int:
               file=sys.stderr)
         return 1
     root = Path(args.root)
-    mod_dir, _, pins_file, _ = _paths(root)
+    mod_dir, prof_dir, pins_file, _ = _paths(root)
     manifests = load_all(mod_dir)
     profile = _load_profile_or_none(root, _active_profile_name(root, args.profile))
+    # Minuteries (`minuteurs_off`) et protégés coupés (`proteges_off`) du profil (#3218), pour ce plan seulement.
+    manifests, profile = minuteurs.etendre(manifests, profile, prof_dir)
     pins = load_pins(pins_file)
     routes = load_routes()
     actuals = _observe_all(manifests, routes)
@@ -198,6 +202,9 @@ def _cmd_rollback(args) -> int:
     mod_dir, _, _, _ = _paths(root)
     manifests = load_all(mod_dir)
     snap = read_snapshot(args.target, root=SNAP_DIR)
+    # Les minuteries qu'un apply a basculées (#3218) sont dans le snapshot sous `minuteur:<id>` : sans leur
+    # pseudo-manifeste, le retour arrière les ignorerait.
+    manifests.update(minuteurs.manifestes_du_snapshot(snap))
     routes = load_routes()
     actuals = _observe_all(manifests, routes)
     # apply.rollback_to (attribut du module) — même raison que apply.apply_plan
