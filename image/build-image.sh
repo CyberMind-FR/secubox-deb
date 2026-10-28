@@ -712,9 +712,11 @@ log "Installing security services and optional components..."
 chroot "${ROOTFS}" apt-get update -q 2>/dev/null
 # PAS DE HAPROXY DANS MINIMAL (#2849, #3218). Le profil n'a ni WAF ni frontal TLS, et aucun de ses paquets
 # n'exige haproxy ; c'est CETTE ligne qui l'installait (« installé manuellement » sur gk5, 2 processus, 41 Mo,
-# aucun port d'écoute : nginx tient 80 et 443). qrencode reste (QR d'appairage).
+# aucun port d'écoute : nginx tient 80 et 443). qrencode reste (QR d'appairage). La branche minimal passe AVANT celle
+# des cartes non lite : elle retire donc aussi glances, mosquitto et coturn qu'une image minimal sur une carte non lite
+# (VM, MOCHAbin) recevait ; aucun paquet du profil ne s'en sert.
 if [[ "${PROFILE_TAG}" == "minimal" ]]; then
-  log "  Installing minimal services (no haproxy, no glances)..."
+  log "  Installing minimal services (no haproxy, glances, mosquitto, coturn)..."
   chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     qrencode 2>/dev/null" || warn "Some services not installed"
 elif [[ "${SECUBOX_LITE:-0}" != "1" ]]; then

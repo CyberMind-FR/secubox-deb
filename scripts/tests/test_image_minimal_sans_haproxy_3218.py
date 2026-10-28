@@ -44,3 +44,11 @@ def test_network_ready_ordonne_haproxy_sans_le_tirer():
     assert re.search(r"^Before=.*haproxy\.service", NETREADY, re.M)
     for cle in ("Wants", "Requires", "BindsTo", "Requisite", "Upholds", "PartOf"):
         assert not re.search(rf"^{cle}=.*haproxy", NETREADY, re.M), cle
+
+
+def test_le_commentaire_dit_que_minimal_retire_aussi_glances_mosquitto_et_coturn():
+    """Relecture #3248 : sur une carte non lite, la branche minimal (testée d'abord) prive aussi l'image de ces trois-là."""
+    i = BUILD.index('if [[ "${PROFILE_TAG}" == "minimal" ]]; then')
+    commentaire = BUILD[BUILD.rindex("PAS DE HAPROXY DANS MINIMAL", 0, i):i]
+    for paquet in ("glances", "mosquitto", "coturn"):
+        assert paquet in commentaire, paquet
