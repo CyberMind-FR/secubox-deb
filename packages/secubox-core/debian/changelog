@@ -1,3 +1,9 @@
+secubox-core (1.8.5-1~trixie1) trixie; urgency=high
+
+  * secubox-renouvelle-secrets (#3243) : les images publiees embarquaient des secrets generes dans le chroot de CI (cles d'hote SSH, cle de signature OIDC, cle TLS, cle WireGuard du p2p ephemere, jeton d'appairage, machine-id) et un compte admin au nom du runner. Constat par defaut (rien ne change) ; --absents cree ceux qui manquent ; --tout --oui les regenere tous par le generateur de chaque paquet (ssh-keygen -A, secubox-oidcctl init, postinst de secubox-p2p, openssl comme l'etape 9 de secubox-firstboot) et desactive le compte de construction sans mot de passe ; --machine-id en option. Audit : noms des secrets, jamais leur valeur. 7 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 11:29:34 +0100
+
 secubox-core (1.8.4-1~trixie1) trixie; urgency=medium
 
   * secubox-dns-listes (#3205), constaté sur gk2 en production : une zone des listes AUSSI présente dans une vue TV
