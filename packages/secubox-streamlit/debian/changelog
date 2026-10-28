@@ -48,8 +48,16 @@ secubox-streamlit (1.7.0-1~trixie1) trixie; urgency=medium
   * `streamlitctl app depublier-anciennes [--apply]` (décision du propriétaire) : retire proprement les
     publications historiques cassées (route sbxwaf, vhost HAProxy nginx_vhosts, vhost nginx), marque
     l'entrée non publiée, garde l'appli déposée et la référence couture ; rapport JSON, audit.
-  * Documenté : toutes les applis tournent en root dans un conteneur privilégié — le fichier
-    d'environnement n'isole rien d'une appli à l'autre (isolation par appli : issue séparée).
+  * Documenté : toutes les applis tournent en root dans le conteneur (privilégié quand il est créé par
+    streamlitctl install, non privilégié sur gk2) — le fichier d'environnement n'isole rien d'une appli à
+    l'autre (isolation par appli : issue séparée).
+  * Seconde relecture (#3249) : depublier-anciennes garde tout nom servi par un autre fichier nginx et tout
+    domaine porté par une entrée gardée, ne retire une route directe qu'à une adresse du pont ; déclaration
+    finale validée avant le premier geste ; une ligne d'audit par entrée avec l'état réel de chaque maillon
+    (« partiel » si HAProxy refuse, si une route est re-pointée…). Le dossier des applis n'est jamais un
+    lien (O_NOFOLLOW depuis son parent, propriétaire et mode vérifiés ; garde aussi dans le ctl). Dépôt :
+    place disque vérifiée avant extraction, pip borné dans le conteneur (timeout 230), échec de nettoyage
+    signalé ; le ctl relaie la cause exacte du module.
 
  -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 16:00:00 +0100
 

@@ -77,17 +77,19 @@ declared in `haproxy.toml` or published for another app.
 
 ## Sécurité : ce que le conteneur isole, et ce qu'il n'isole pas (#3247)
 
-- **Toutes les applis tournent en root** dans le conteneur `streamlit`, qui est **privilégié, sans idmap**, et
-  `/srv/streamlit` y est monté en écriture. Le fichier d'environnement d'une appli
-  (`/etc/streamlit/env/<appli>.env`) **n'isole donc rien** d'une appli à l'autre : toute appli peut lire les
-  variables des autres et écrire dans tous les dossiers d'applis. Ne déposez que des applis de confiance.
-  L'isolation par appli (`User=`/`DynamicUser=` par unité, conteneur non privilégié avec idmap) fait l'objet
-  d'une issue séparée.
+- **Toutes les applis tournent en root** dans le conteneur `streamlit`. Ce conteneur est **privilégié quand il est
+  créé par `streamlitctl install`** (aucun `lxc.idmap`) et **non privilégié sur gk2** (`lxc.idmap = u 0 100000
+  65536`) ; `/srv/streamlit` y est monté en écriture dans les deux cas. Toutes les applis partageant le même root
+  du conteneur, le fichier d'environnement d'une appli (`/etc/streamlit/env/<appli>.env`) **n'isole rien** d'une
+  appli à l'autre : chacune peut lire les variables des autres et écrire là où ce root le peut (sur le montage,
+  selon l'idmap). Ne déposez que des applis de confiance. L'isolation par appli (`User=`/`DynamicUser=` par
+  unité, idmap à l'installation) fait l'objet d'une issue séparée.
 - Ce que l'hôte garantit malgré cela (relecture de sécurité de #3249) :
   - root ne suit **aucun lien** et ne s'arrête sur **aucune FIFO** sous `/srv/streamlit/apps` : fichiers de port
     lus et écrits par descripteurs (`O_NOFOLLOW`, `O_NONBLOCK`, fichier ordinaire exigé, taille plafonnée),
     toujours en `0644` root, jamais le mode ni le propriétaire d'un lien ; un dossier d'appli qui est un lien est
-    refusé (code 3) ;
+    refusé (code 3), et le dossier des applis lui-même aussi (ouvert `O_NOFOLLOW` depuis son parent, propriétaire
+    root ou secubox, jamais inscriptible par tous) ;
   - un dépôt est **extrait par root** dans un brouillon non prévisible, sans rien laisser sortir du dossier de
     l'appli (ni chemin absolu, ni `..`, ni lien, ni FIFO, ni périphérique ; 10 000 entrées et 1 Gio au plus) ;
     l'archive doit être un fichier ordinaire appartenant à l'appelant ;
