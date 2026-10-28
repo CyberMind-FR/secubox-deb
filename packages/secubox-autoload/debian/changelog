@@ -1,3 +1,14 @@
+secubox-autoload (0.7.0-1~trixie1) trixie; urgency=medium
+
+  * Pilotage distant, lot L1 « Voir » (#3126) : `autoloadctl exporter-pairs` publie la projection publique des pairs
+    (`/var/lib/secubox/autoload/pairs-publics.json`, 0644) : adresse du tunnel, client, lot, série, profil, abonnement,
+    pour les seuls pairs non retirés dont le jeton est réclamé. Aucune clé, empreinte ni valeur de jeton.
+  * Écriture par descripteur (dossier ouvert sans suivre de lien et vérifié, fichier temporaire `O_EXCL|O_NOFOLLOW`,
+    renommage atomique, fsync) ; base lue en lecture seule, jamais créée ; base absente = projection vide.
+  * `tunnel-sync` appelle l'export en dernier ; un échec de l'export est journalisé sur stderr sans changer son code de retour.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 12:00:00 +0200
+
 secubox-autoload (0.6.1-1~bookworm1) bookworm; urgency=medium
 
   * Profil `minimal` au choix dans l'atelier et dans le rapport du client (#2838).
