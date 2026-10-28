@@ -40,7 +40,7 @@ func main() {
 
 	m := construireModele(lanceurSystemctl(cheminSystemctl, delaiSystemctl))
 
-	maitre, ipSource := attendreMaitre(ctx)
+	maitre, ipSource := attendreMaitre(ctx, os.Getenv("PILOTAGE_MAITRE"), lireInterfaces, reverifMaitre)
 	if ctx.Err() != nil {
 		log.Print("arrêt avant connexion")
 		return
@@ -81,19 +81,23 @@ func construireModele(lanceur func(ctx context.Context, args ...string) ([]byte,
 	)
 }
 
-// attendreMaitre applique la règle de découverte, puis revérifie toutes les 300 s
-// tant qu'aucun maître n'est utilisable ; rend la main à l'annulation de ctx.
-func attendreMaitre(ctx context.Context) (maitre, ipSource string) {
+// attendreMaitre applique la règle de découverte, puis revérifie à chaque pause
+// tant qu'aucune interface du maillage n'est utilisable ; rend la main à
+// l'annulation de ctx (maître vide). Une valeur PILOTAGE_MAITRE refusée ne
+// change qu'au redémarrage de l'unité : elle est journalisée une fois, puis
+// l'agent attend l'arrêt (sortir en erreur ferait boucler Restart=on-failure).
+func attendreMaitre(ctx context.Context, env string, interfaces func() []ifaceAdr, pause time.Duration) (maitre, ipSource string) {
+	if err := validerMaitre(env); err != nil {
+		log.Printf("PILOTAGE_MAITRE refusé : %v ; l'agent reste en attente (corriger puis redémarrer l'unité)", err)
+		<-ctx.Done()
+		return "", ""
+	}
 	for {
-		env := os.Getenv("PILOTAGE_MAITRE")
-		if err := validerMaitre(env); err != nil {
-			log.Printf("PILOTAGE_MAITRE refusé : %v ; nouvel essai dans %v", err, reverifMaitre)
-		} else if mt, ip, ok := choisirMaitre(env, lireInterfaces()); ok {
+		if mt, ip, ok := choisirMaitre(env, interfaces()); ok {
 			return mt, ip
-		} else {
-			log.Printf("aucune interface du maillage : nouvel essai dans %v", reverifMaitre)
 		}
-		if attendreReel(ctx, reverifMaitre) != nil {
+		log.Printf("aucune interface du maillage : nouvel essai dans %v", pause)
+		if attendreReel(ctx, pause) != nil {
 			return "", ""
 		}
 	}

@@ -40,3 +40,48 @@ func TestSurveillerArreteAvecLeContexte(t *testing.T) {
 		t.Fatal("surveiller ne s'arrête pas")
 	}
 }
+
+func TestMaitreRefuseNeReessaiePas(t *testing.T) {
+	appels := 0
+	lister := func() []ifaceAdr { appels++; return nil }
+	ctx, annule := context.WithCancel(context.Background())
+	type res struct{ m, ip string }
+	ch := make(chan res, 1)
+	go func() {
+		m, ip := attendreMaitre(ctx, "maitre.example:8472", lister, 10*time.Millisecond)
+		ch <- res{m, ip}
+	}()
+	time.Sleep(200 * time.Millisecond) // vingt périodes de revérification : aucune ne doit avoir lieu
+	select {
+	case <-ch:
+		t.Fatal("rendu avant l'annulation")
+	default:
+	}
+	annule()
+	select {
+	case r := <-ch:
+		if r.m != "" {
+			t.Fatalf("maître %q rendu pour une valeur refusée", r.m)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("pas de retour à l'annulation")
+	}
+	if appels != 0 {
+		t.Fatalf("%d lectures d'interfaces pour une valeur refusée", appels)
+	}
+}
+
+func TestMaitreAbsentRevérifie(t *testing.T) {
+	appels := 0
+	lister := func() []ifaceAdr {
+		appels++
+		if appels < 3 {
+			return nil
+		}
+		return []ifaceAdr{ia("wg-mesh", "10.10.0.7/24")}
+	}
+	m, ip := attendreMaitre(context.Background(), "", lister, 10*time.Millisecond)
+	if m != "10.10.0.1:8472" || ip != "10.10.0.7/24" || appels != 3 {
+		t.Fatalf("%q %q %d", m, ip, appels)
+	}
+}

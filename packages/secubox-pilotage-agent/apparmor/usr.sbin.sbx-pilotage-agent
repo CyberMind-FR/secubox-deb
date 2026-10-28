@@ -48,6 +48,8 @@
   /sys/class/net/** r,
   # Les liens de /sys/class/net/<if>/ se résolvent sous /sys/devices/**/net/<if>/ (adresse MAC).
   /sys/devices/**/net/** r,
+  # /sys/class/dmi/id est un lien vers /sys/devices/virtual/dmi/id/ (x86 : modèle et fabricant).
+  /sys/devices/virtual/dmi/id/{product_name,sys_vendor} r,
   # /proc/device-tree est un lien : AppArmor contrôle le chemin résolu (modèle de carte).
   /sys/firmware/devicetree/base/model r,
   /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,

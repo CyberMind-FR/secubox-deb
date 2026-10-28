@@ -126,3 +126,9 @@ def test_postinst_postrm_robustes():
 def test_regles_goarch_complet():
     r = lire("debian/rules")
     assert "armhf" in r and "386" in r and "GOARM" in r
+
+
+def test_apparmor_dmi_x86_par_le_chemin_resolu():
+    # /sys/class/dmi/id est un lien vers /sys/devices/virtual/dmi/id/
+    code = sans_commentaires(lire("apparmor/usr.sbin.sbx-pilotage-agent"))
+    assert "/sys/devices/virtual/dmi/id/{product_name,sys_vendor} r," in code
