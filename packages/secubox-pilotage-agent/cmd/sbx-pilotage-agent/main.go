@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -37,14 +38,7 @@ func main() {
 	ctx, arret := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer arret()
 
-	m := modele.NouveauModele(
-		collecte.NouvelleSourceSysteme(""),
-		collecte.NouvelleSourceSystemd(lanceurSystemctl(cheminSystemctl, delaiSystemctl)),
-		collecte.NouvelleSourcePaquets(""),
-		collecte.NouvelleSourceExposition(""),
-		collecte.NouvelleSourceMaillage(func() ([]net.Interface, error) { return net.Interfaces() }),
-		collecte.NouvelleSourcePilotage("", version),
-	)
+	m := construireModele(lanceurSystemctl(cheminSystemctl, delaiSystemctl))
 
 	maitre, ipSource := attendreMaitre(ctx)
 	if ctx.Err() != nil {
@@ -54,7 +48,12 @@ func main() {
 	log.Printf("agent %s : maître %s, source %s", version, maitre, ipSource)
 
 	ev := make(chan notifs.Evenement, tailleEvents)
-	go surveiller(ctx, m, intervalleReleve(os.Getenv("PILOTAGE_RELEVE_INTERVALLE_S")), ev)
+	var suivi sync.WaitGroup
+	suivi.Add(1)
+	go func() {
+		defer suivi.Done()
+		surveiller(ctx, m, intervalleReleve(os.Getenv("PILOTAGE_RELEVE_INTERVALLE_S")), ev)
+	}()
 
 	cl := canal.NouveauClient(canal.Config{
 		Maitre:   maitre,
@@ -65,17 +64,35 @@ func main() {
 	if err := cl.Tourner(ctx, ev); err != nil && ctx.Err() == nil {
 		log.Fatalf("canal : %v", err)
 	}
+	arret()
+	suivi.Wait()
 	log.Print("arrêt propre")
+}
+
+// construireModele assemble les six sources, lues sous la racine « / ».
+func construireModele(lanceur func(ctx context.Context, args ...string) ([]byte, error)) *modele.Modele {
+	return modele.NouveauModele(
+		collecte.NouvelleSourceSysteme("/"),
+		collecte.NouvelleSourceSystemd(lanceur),
+		collecte.NouvelleSourcePaquets("/"),
+		collecte.NouvelleSourceExposition("/"),
+		collecte.NouvelleSourceMaillage(func() ([]net.Interface, error) { return net.Interfaces() }),
+		collecte.NouvelleSourcePilotage("/", version),
+	)
 }
 
 // attendreMaitre applique la règle de découverte, puis revérifie toutes les 300 s
 // tant qu'aucun maître n'est utilisable ; rend la main à l'annulation de ctx.
 func attendreMaitre(ctx context.Context) (maitre, ipSource string) {
 	for {
-		if mt, ip, ok := choisirMaitre(os.Getenv("PILOTAGE_MAITRE"), lireInterfaces()); ok {
+		env := os.Getenv("PILOTAGE_MAITRE")
+		if err := validerMaitre(env); err != nil {
+			log.Printf("PILOTAGE_MAITRE refusé : %v ; nouvel essai dans %v", err, reverifMaitre)
+		} else if mt, ip, ok := choisirMaitre(env, lireInterfaces()); ok {
 			return mt, ip
+		} else {
+			log.Printf("aucune interface du maillage : nouvel essai dans %v", reverifMaitre)
 		}
-		log.Printf("aucune interface du maillage : nouvel essai dans %v", reverifMaitre)
 		if attendreReel(ctx, reverifMaitre) != nil {
 			return "", ""
 		}

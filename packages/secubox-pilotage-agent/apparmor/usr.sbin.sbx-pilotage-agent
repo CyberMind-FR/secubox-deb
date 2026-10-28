@@ -17,7 +17,7 @@
   # bind : liaison de l'adresse de SORTIE du tunnel (IPSource), port éphémère.
   network (create, bind, connect, shutdown, getattr, setattr, getopt, setopt, send, receive) inet stream,
   # systemctl parle à systemd par la socket D-Bus ; netlink : adresses des interfaces (lecture).
-  network unix stream,
+  network (create, connect, shutdown, getattr, setattr, getopt, setopt, send, receive) unix stream,
   network netlink raw,
 
   # --- Le binaire lui-même et le seul programme lancé : systemctl (même profil).
@@ -28,8 +28,15 @@
   /run/systemd/ r,
   /run/systemd/** r,
   /run/dbus/system_bus_socket rw,
-  /run/systemd/private rw,
-  dbus (send, receive) bus=system,
+  /sys/fs/cgroup/ r,
+  # D-Bus système, limité au gestionnaire de systemd en lecture (précédent : secubox-profiles-releve).
+  dbus send bus=system path=/org/freedesktop/DBus interface=org.freedesktop.DBus
+       member={Hello,AddMatch,RemoveMatch,GetNameOwner,NameHasOwner,GetConnectionUnixUser} peer=(name=org.freedesktop.DBus),
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface={org.freedesktop.DBus.Properties,org.freedesktop.systemd1.Manager}
+       member={Get,GetAll,GetUnit,LoadUnit,ListUnitsByNames,ListUnitsByPatterns} peer=(name=org.freedesktop.systemd1),
+  dbus receive bus=system peer=(name=org.freedesktop.systemd1),
+  dbus receive bus=system peer=(name=org.freedesktop.DBus),
   /etc/localtime r,
   /etc/passwd r,
   /etc/nsswitch.conf r,
@@ -39,9 +46,10 @@
   @{PROC}/** r,
   /sys/class/net/ r,
   /sys/class/net/** r,
-  /sys/devices/** r,
-  /sys/class/dmi/id/product_name r,
-  /sys/class/dmi/id/sys_vendor r,
+  # Les liens de /sys/class/net/<if>/ se résolvent sous /sys/devices/**/net/<if>/ (adresse MAC).
+  /sys/devices/**/net/** r,
+  # /proc/device-tree est un lien : AppArmor contrôle le chemin résolu (modèle de carte).
+  /sys/firmware/devicetree/base/model r,
   /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
 
   # --- Paquets, exposition, état du pilotage : fichiers nommés, lecture seule.
@@ -56,5 +64,7 @@
   # Les secrets restent interdits, quoi qu'une règle large ajoute un jour.
   deny /etc/secubox/secrets/** r,
   deny /etc/shadow r,
+  # Jamais la ligne de commande ni l'environnement d'un processus (secrets possibles) : seulement comm/stat/statm.
+  deny @{PROC}/[0-9]*/{cmdline,environ} r,
   deny /root/** rwx,
 }

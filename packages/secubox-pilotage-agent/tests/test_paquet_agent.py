@@ -76,6 +76,53 @@ def test_paquet_coherent():
 
 
 def test_entetes_spdx():
-    for rel in ("debian/rules", "debian/postinst", "debian/prerm", "systemd/secubox-pilotage-agent.service",
-                "apparmor/usr.sbin.sbx-pilotage-agent", "conf/pilotage-agent.env", "cmd/sbx-pilotage-agent/main.go"):
+    fichiers = ["debian/rules", "debian/postinst", "debian/prerm", "debian/postrm", "README.md",
+                "systemd/secubox-pilotage-agent.service", "apparmor/usr.sbin.sbx-pilotage-agent",
+                "conf/pilotage-agent.env", "tests/test_paquet_agent.py"]
+    fichiers += [str(f.relative_to(RACINE)) for f in (RACINE / "cmd").rglob("*.go")]
+    for rel in fichiers:
         assert "LicenseRef-CMSD-1.0" in lire(rel), rel
+
+
+def test_apparmor_modele_de_carte_par_le_chemin_resolu():
+    # /proc/device-tree est un lien : AppArmor contrôle /sys/firmware/devicetree/base/model
+    code = sans_commentaires(lire("apparmor/usr.sbin.sbx-pilotage-agent"))
+    assert "/sys/firmware/devicetree/base/model r," in code
+    assert "/sys/class/dmi/id" not in code
+
+
+def test_apparmor_dbus_restreint_a_systemd():
+    code = sans_commentaires(lire("apparmor/usr.sbin.sbx-pilotage-agent"))
+    assert not re.search(r"^\s*dbus\s*(\([^)]*\))?\s*bus=system\s*,", code, re.M)  # jamais de dbus nu
+    assert "peer=(name=org.freedesktop.systemd1)" in code
+    assert "peer=(name=org.freedesktop.DBus)" in code
+    assert "ListUnitsByPatterns" in code
+    assert "/run/systemd/private" not in code
+    assert "/sys/fs/cgroup/ r," in code
+
+
+def test_apparmor_resserre():
+    code = sans_commentaires(lire("apparmor/usr.sbin.sbx-pilotage-agent"))
+    assert "deny @{PROC}/[0-9]*/{cmdline,environ} r," in code
+    assert re.search(r"^\s*network \([^)]*\) unix stream,", code, re.M)
+    assert not re.search(r"^\s*network unix stream,", code, re.M)
+    assert "/sys/devices/** r," not in code
+
+
+def test_unite_confinee_et_ordonnee():
+    u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
+    for d in ("AppArmorProfile=/usr/sbin/sbx-pilotage-agent", "RestrictSUIDSGID=yes", "UMask=0027",
+              "Wants=network-online.target"):
+        assert d in u, d
+    after = re.search(r"^After=(.*)$", u, re.M).group(1).split()
+    assert {"network-online.target", "wg-quick@wg-mesh.service", "wg-quick@wg-autoload.service"} <= set(after)
+
+
+def test_postinst_postrm_robustes():
+    assert "[ -d /run/systemd/system ]" in lire("debian/postinst")
+    assert "apparmor_parser -R" in lire("debian/postrm")
+
+
+def test_regles_goarch_complet():
+    r = lire("debian/rules")
+    assert "armhf" in r and "386" in r and "GOARM" in r

@@ -11,7 +11,10 @@
 DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
 GOARCH_amd64 = amd64
 GOARCH_arm64 = arm64
+GOARCH_armhf = arm
+GOARCH_i386 = 386
 export GOARCH = $(or $(GOARCH_$(DEB_HOST_ARCH)),$(DEB_HOST_ARCH))
+export GOARM = 7
 export GOOS = linux
 export CGO_ENABLED = 0
 export GOFLAGS = -trimpath

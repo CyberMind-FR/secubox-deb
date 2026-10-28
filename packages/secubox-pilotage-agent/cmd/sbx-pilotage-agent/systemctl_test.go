@@ -36,7 +36,8 @@ func TestLanceurRendLaSortie(t *testing.T) {
 func TestLanceurTueAuDelai(t *testing.T) {
 	pidf := filepath.Join(t.TempDir(), "pid")
 	// le script lance un petit-fils qui garde la sortie ouverte : tout le groupe doit tomber
-	p := faux(t, "echo $$ > "+pidf+"\nsleep 30 &\nwait\n")
+	fils := filepath.Join(t.TempDir(), "fils")
+	p := faux(t, "echo $$ > "+pidf+"\nsleep 30 &\necho $! > "+fils+"\nwait\n")
 	debut := time.Now()
 	_, err := lanceurSystemctl(p, 500*time.Millisecond)(context.Background(), "show")
 	if err == nil {
@@ -50,13 +51,36 @@ func TestLanceurTueAuDelai(t *testing.T) {
 	if pid == 0 {
 		t.Fatal("pid non écrit")
 	}
-	time.Sleep(100 * time.Millisecond)
-	if err := syscall.Kill(pid, 0); err == nil {
-		t.Fatalf("le processus %d existe encore", pid)
+	fb, _ := os.ReadFile(fils)
+	pf, _ := strconv.Atoi(strings.TrimSpace(string(fb)))
+	if pf == 0 {
+		t.Fatal("pid du petit-fils non écrit")
 	}
-	if err := syscall.Kill(-pid, 0); err == nil {
-		t.Fatalf("le groupe %d existe encore", pid)
+	for _, p := range []int{pid, pf} {
+		mort := false
+		for i := 0; i < 100 && !mort; i++ { // borne : 2 s
+			mort = !vivant(p)
+			if !mort {
+				time.Sleep(20 * time.Millisecond)
+			}
+		}
+		if !mort {
+			t.Fatalf("le processus %d existe encore", p)
+		}
 	}
+}
+
+// vivant : le processus existe et n'est pas un zombie en attente de récolte.
+func vivant(pid int) bool {
+	if syscall.Kill(pid, 0) != nil {
+		return false
+	}
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return false
+	}
+	s := string(b)
+	return !strings.HasPrefix(strings.TrimSpace(s[strings.LastIndexByte(s, ')')+1:]), "Z")
 }
 
 func TestLanceurAnnulation(t *testing.T) {

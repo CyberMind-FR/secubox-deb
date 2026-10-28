@@ -1,3 +1,9 @@
+<!--
+SPDX-License-Identifier: LicenseRef-CMSD-1.0
+Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+Source-Disclosed License — All rights reserved except as expressly granted.
+See LICENCE-CMSD-1.0.md for terms.
+-->
 # secubox-pilotage-agent
 
 Agent de pilotage distant d'une box SecuBox (#3126, livraison L1 « Voir », lecture seule). Binaire Go unique
@@ -13,12 +19,17 @@ Agent de pilotage distant d'une box SecuBox (#3126, livraison L1 « Voir », lec
 - Toute autre commande est refusée (L1 : lecture seule). Jamais la ligne de commande d'un processus (`comm`).
 - Le maître est choisi ainsi : `PILOTAGE_MAITRE` s'il est posé ; sinon `wg-mesh` en `10.10.0.0/24`, puis
   `wg-autoload` en `10.64.0.0/16` ; sinon l'agent attend et revérifie toutes les 300 s. L'adresse de sortie
-  est celle de l'interface retenue.
+  est celle de l'interface du maillage dont la plage contient le maître.
+  `PILOTAGE_MAITRE` n'accepte qu'une IP littérale parmi `10.10.0.1`, `10.64.0.1`, `127.0.0.1`, `::1` (pas de nom
+  d'hôte : pas de DNS sous le profil) ; sinon message au journal et nouvel essai toutes les 300 s.
+- **Limite connue** : le maître est choisi au démarrage seulement. Si l'adresse du tunnel change ou disparaît
+  durablement, le canal recule jusqu'à 300 s sans refaire ce choix ; `Restart=on-failure` ou un redémarrage de
+  l'unité le refait.
 
 ## Configuration (`/etc/secubox/pilotage-agent.env`, facultatif)
 
 Voir `conf/pilotage-agent.env` (installé en exemple sous `/usr/share/doc/secubox-pilotage-agent/`) :
-`PILOTAGE_MAITRE`, `PILOTAGE_RELEVE_INTERVALLE_S` (30), `PILOTAGE_MEMOIRE_SEUIL_MO` (200),
+`PILOTAGE_MAITRE`, `PILOTAGE_RELEVE_INTERVALLE_S` (30, de 5 à 300), `PILOTAGE_MEMOIRE_SEUIL_MO` (200),
 `PILOTAGE_SWAP_SEUIL_PCT` (80), `PILOTAGE_BOUCLE_RELANCES` (3), `PILOTAGE_BOUCLE_FENETRE_S` (600).
 
 ## Durcissement

@@ -40,8 +40,10 @@ func TestOperateFormeJSON(t *testing.T) {
 	if m["duree_s"].(float64) != 10 {
 		t.Errorf("duree_s : %v", m["duree_s"])
 	}
-	if strings.ContainsAny(string(b), "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
-		t.Errorf("clé non snake_case : %s", b)
+	for k := range m {
+		if strings.ContainsAny(k, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+			t.Errorf("clé non snake_case : %s", k)
+		}
 	}
 	if top, _ := m["top"].([]any); top == nil {
 		t.Errorf("top doit être une liste (même vide) : %s", b)

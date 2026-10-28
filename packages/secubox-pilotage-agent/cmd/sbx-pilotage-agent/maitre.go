@@ -6,6 +6,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"net/netip"
 	"strconv"
@@ -30,30 +31,83 @@ var canauxMaitre = []struct {
 }
 
 // choisirMaitre applique la règle de découverte. PILOTAGE_MAITRE (explicite)
-// l'emporte pour l'adresse du maître ; l'adresse de sortie (IPSource, forme CIDR)
-// vient de la première interface du maillage qui porte une adresse dans sa plage.
+// l'emporte pour l'adresse du maître ; l'adresse de sortie (IPSource, forme
+// CIDR) est celle de l'interface du maillage dont la plage contient le maître
+// (les paquets sortis d'un autre tunnel seraient jetés). Sans correspondance
+// (loopback, interface absente), elle reste vide : le noyau choisit.
 // trouve est faux quand il n'y a ni maître explicite ni interface utilisable.
 func choisirMaitre(explicite string, ifs []ifaceAdr) (maitre, ipSource string, trouve bool) {
 	explicite = strings.TrimSpace(explicite)
-	for _, c := range canauxMaitre {
-		for _, i := range ifs {
-			if i.Nom != c.iface {
-				continue
+	if explicite != "" {
+		hote := explicite
+		if h, _, err := net.SplitHostPort(explicite); err == nil {
+			hote = h
+		}
+		ip, err := netip.ParseAddr(strings.Trim(hote, "[]"))
+		if err != nil {
+			return explicite, "", true
+		}
+		for _, c := range canauxMaitre {
+			if c.plage.Contains(ip) {
+				return explicite, adresseDe(c.iface, c.plage, ifs), true
 			}
-			for _, a := range i.Adresses {
-				if a.Addr().Is4() && c.plage.Contains(a.Addr()) {
-					if explicite != "" {
-						return explicite, a.String(), true
-					}
-					return c.maitre, a.String(), true
-				}
+		}
+		return explicite, "", true
+	}
+	for _, c := range canauxMaitre {
+		if a := adresseDe(c.iface, c.plage, ifs); a != "" {
+			return c.maitre, a, true
+		}
+	}
+	return "", "", false
+}
+
+// adresseDe rend l'adresse (CIDR) de l'interface qui tombe dans la plage.
+func adresseDe(iface string, plage netip.Prefix, ifs []ifaceAdr) string {
+	for _, i := range ifs {
+		if i.Nom != iface {
+			continue
+		}
+		for _, a := range i.Adresses {
+			if a.Addr().Is4() && plage.Contains(a.Addr()) {
+				return a.String()
 			}
 		}
 	}
-	if explicite != "" {
-		return explicite, "", true
+	return ""
+}
+
+// maitresAdmis : seuls ces maîtres sont joignables (IPAddressAllow de l'unité).
+// Pas de nom d'hôte : aucune résolution DNS sous le profil AppArmor.
+var maitresAdmis = []netip.Addr{
+	netip.MustParseAddr("10.10.0.1"), netip.MustParseAddr("10.64.0.1"),
+	netip.MustParseAddr("127.0.0.1"), netip.MustParseAddr("::1"),
+}
+
+// validerMaitre contrôle PILOTAGE_MAITRE : vide (découverte) ou « IP[:port] »
+// avec une IP littérale admise et un port de 1 à 65535.
+func validerMaitre(m string) error {
+	m = strings.TrimSpace(m)
+	if m == "" {
+		return nil
 	}
-	return "", "", false
+	hote := m
+	if h, p, err := net.SplitHostPort(m); err == nil {
+		hote = h
+		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
+			return fmt.Errorf("port %q invalide", p)
+		}
+	}
+	ip, err := netip.ParseAddr(strings.Trim(hote, "[]"))
+	if err != nil {
+		return fmt.Errorf("%q : adresse IP littérale attendue (pas de nom d'hôte)", m)
+	}
+	for _, ok := range maitresAdmis {
+		if ip == ok {
+			return nil
+		}
+	}
+	return fmt.Errorf("%q : maître non admis (10.10.0.1, 10.64.0.1 ou loopback)", m)
 }
 
 // lireInterfaces relève les interfaces de la box et leurs adresses.
@@ -83,14 +137,18 @@ func lireInterfaces() []ifaceAdr {
 const (
 	intervalleDefaut = 30 * time.Second
 	intervalleMin    = 5 * time.Second
+	intervalleMax    = 300 * time.Second
 )
 
 // intervalleReleve lit PILOTAGE_RELEVE_INTERVALLE_S : 30 s par défaut, jamais
-// sous 5 s (le détecteur ne doit pas saturer la box).
+// sous 5 s ni au-dessus de 300 s (le détecteur ne doit pas saturer la box).
 func intervalleReleve(env string) time.Duration {
 	n, err := strconv.Atoi(strings.TrimSpace(env))
 	if err != nil || n <= 0 {
 		return intervalleDefaut
+	}
+	if n >= int(intervalleMax/time.Second) {
+		return intervalleMax
 	}
 	if d := time.Duration(n) * time.Second; d > intervalleMin {
 		return d

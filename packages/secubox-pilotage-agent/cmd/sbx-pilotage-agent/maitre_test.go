@@ -35,8 +35,11 @@ func TestChoixMaitre(t *testing.T) {
 		{"mesh sans adresse", "", ifs(ia("wg-mesh")), "", "", false},
 		{"autoload hors plage", "", ifs(ia("wg-autoload", "10.65.0.2/16")), "", "", false},
 		{"aucune", "", nil, "", "", false},
-		{"explicite", "10.99.0.1:9000", ifs(ia("wg-mesh", "10.10.0.7/24")), "10.99.0.1:9000", "10.10.0.7/24", true},
-		{"explicite sans interface", "10.99.0.1:9000", nil, "10.99.0.1:9000", "", true},
+		{"explicite hors plages", "10.10.0.1:9000", ifs(ia("wg-mesh", "10.10.0.7/24")), "10.10.0.1:9000", "10.10.0.7/24", true},
+		{"explicite sans interface", "10.10.0.1:9000", nil, "10.10.0.1:9000", "", true},
+		{"explicite autoload, mesh présent", "10.64.0.1:8472", ifs(ia("wg-mesh", "10.10.0.7/24"), ia("wg-autoload", "10.64.3.9/16")), "10.64.0.1:8472", "10.64.3.9/16", true},
+		{"explicite mesh, autoload présent", "10.10.0.1", ifs(ia("wg-autoload", "10.64.3.9/16"), ia("wg-mesh", "10.10.0.7/24")), "10.10.0.1", "10.10.0.7/24", true},
+		{"explicite loopback : le noyau choisit", "127.0.0.1:8472", ifs(ia("wg-mesh", "10.10.0.7/24")), "127.0.0.1:8472", "", true},
 		{"adresse v6 ignorée", "", ifs(ia("wg-mesh", "fd00::1/64")), "", "", false},
 	}
 	for _, c := range cas {
@@ -50,9 +53,24 @@ func TestChoixMaitre(t *testing.T) {
 }
 
 func TestIntervalleReleve(t *testing.T) {
-	for env, att := range map[string]int{"": 30, "abc": 30, "0": 30, "-4": 30, "45": 45, "2": 5} {
+	for env, att := range map[string]int{"": 30, "abc": 30, "0": 30, "-4": 30, "45": 45, "2": 5, "300": 300, "301": 300, "99999999999999999999": 30, "9223372036854775807": 300} {
 		if got := intervalleReleve(env).Seconds(); int(got) != att {
 			t.Errorf("%q : %v s, attendu %d", env, got, att)
+		}
+	}
+}
+
+func TestValiderMaitre(t *testing.T) {
+	bons := []string{"", "10.10.0.1", "10.10.0.1:8472", "10.64.0.1:8472", "127.0.0.1:8472", "[::1]:8472", "::1"}
+	for _, b := range bons {
+		if err := validerMaitre(b); err != nil {
+			t.Errorf("%q refusé : %v", b, err)
+		}
+	}
+	mauvais := []string{"maitre.example:8472", "10.10.0.2:8472", "192.168.1.1", "10.10.0.1:abc", "10.10.0.1:0", "10.10.0.1:70000", "http://10.10.0.1", "10.10.0.1:8472/x"}
+	for _, b := range mauvais {
+		if err := validerMaitre(b); err == nil {
+			t.Errorf("%q accepté", b)
 		}
 	}
 }

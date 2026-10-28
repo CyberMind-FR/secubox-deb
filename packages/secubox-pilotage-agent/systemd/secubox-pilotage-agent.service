@@ -5,13 +5,16 @@
 [Unit]
 Description=SecuBox — agent de pilotage distant (L1, lecture seule)
 Documentation=https://secubox.in
-After=network-online.target
+After=network-online.target wg-quick@wg-mesh.service wg-quick@wg-autoload.service
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=secubox-pilotage
 Group=secubox-pilotage
 EnvironmentFile=-/etc/secubox/pilotage-agent.env
+AppArmorProfile=/usr/sbin/sbx-pilotage-agent
+UMask=0027
 ExecStart=/usr/sbin/sbx-pilotage-agent
 Restart=on-failure
 RestartSec=10
@@ -32,6 +35,7 @@ ProtectControlGroups=yes
 RestrictNamespaces=yes
 RestrictRealtime=yes
 LockPersonality=yes
+RestrictSUIDSGID=yes
 MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
 # AF_NETLINK : le runtime Go lit les adresses des interfaces par netlink (lecture seule, sans capacité).
