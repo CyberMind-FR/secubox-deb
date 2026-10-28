@@ -334,7 +334,7 @@ async def publish(req: PublishReq, user=Depends(require_jwt)):
 TFTP_ROOT = Path("/srv/secubox/netboot/tftp")
 HTTP_ROOT = Path("/srv/secubox/netboot/http")
 _RE_NOM_LIVE = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
-_RE_IMAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.img\.gz")
+_RE_IMAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.img\.(gz|xz)")   # .xz : images de la release (#3233)
 _LIRE_MAX = 64 * 1024
 
 
@@ -355,15 +355,17 @@ def _lire_court(f: Path) -> Optional[str]:
 
 
 def _images_live(d: Path) -> List[Dict[str, Any]]:
-    """images.txt du live (« nom taille sha256 » par ligne) ; noms douteux et lignes illisibles écartés."""
+    """images.txt du live (« nom taille sha256 [taille_décompressée] » par ligne, #3233) ; noms douteux et lignes
+    illisibles écartés."""
     out: List[Dict[str, Any]] = []
     for ligne in (_lire_court(d / "images.txt") or "").splitlines():
         mots = ligne.split()
-        if len(mots) != 3 or not _RE_IMAGE.fullmatch(mots[0]) or not mots[1].isdigit() \
-                or not re.fullmatch(r"[0-9a-f]{64}", mots[2]):
+        if len(mots) not in (3, 4) or not _RE_IMAGE.fullmatch(mots[0]) or not mots[1].isdigit() \
+                or not re.fullmatch(r"[0-9a-f]{64}", mots[2]) or (len(mots) == 4 and not mots[3].isdigit()):
             continue
         out.append({"nom": mots[0], "taille": int(mots[1]), "sha256": mots[2],
-                    "signee": (d / (mots[0] + ".sig")).is_file()})
+                    "signee": (d / (mots[0] + ".sig")).is_file(),
+                    "taille_brute": int(mots[3]) if len(mots) == 4 else None})
         if len(out) >= 50:
             break
     return out

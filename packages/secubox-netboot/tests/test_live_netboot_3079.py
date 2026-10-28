@@ -72,10 +72,13 @@ def test_le_squashfs_ne_reste_pas_sous_srv():
 def test_les_adresses_de_chargement_evitent_la_zone_reservee_du_firmware():
     # Armada 7040 : 0x04000000-0x04200000 réservé (PSCI/ATF). Le noyau Debian 6.12 (~37 Mo)
     # chargé à 0x02080000 débordait dessus : TFTP tronqué puis « Synchronous Abort » au booti.
+    # #3233 : les adresses vivent dans board/mochabin/live.env ; le script les pose telles quelles.
     import re
+    env = dict(re.findall(r"^(LIVE_\w+_ADDR)=(0x[0-9a-fA-F]+)$", (ICI / "board" / "mochabin" / "live.env").read_text(), re.M))
+    noyau, fdt, initrd = (int(env[k], 16) for k in ("LIVE_KERNEL_ADDR", "LIVE_FDT_ADDR", "LIVE_RAMDISK_ADDR"))
     s = BUILD.read_text()
-    adr = {k: int(v, 16) for k, v in re.findall(r"setenv (\w+_addr_r) (0x[0-9a-fA-F]+)", s)}
-    noyau, fdt, initrd = adr["kernel_addr_r"], adr["fdt_addr_r"], adr["ramdisk_addr_r"]
+    for k, var in (("kernel_addr_r", "LIVE_KERNEL_ADDR"), ("fdt_addr_r", "LIVE_FDT_ADDR"), ("ramdisk_addr_r", "LIVE_RAMDISK_ADDR")):
+        assert f"setenv {k} ${var}" in s
     assert noyau >= 0x04200000 and noyau % 0x200000 == 0
     assert fdt >= noyau + 0x04000000          # 64 Mo laissés au noyau décompressé
     assert initrd >= fdt + 0x00100000
@@ -175,13 +178,17 @@ def test_le_live_garde_le_reseau_de_l_initrd():
     # DUT 2026-10-23 : réseau OK dans l'initrd (squashfs téléchargé), perdu ensuite :
     #  - mv88e6xxx (module sur noyau Debian) chargé tard : mvpp2 rouvre ses ports, eth2 sans porteuse (#2004) ;
     #  - le netplan de l'image met eth1 (conduit DSA) et eth2 dans br-lan : plus d'adresse, lan0..3 sourds.
+    # #3233 : les options propres à la carte viennent de board/mochabin/live.env (LIVE_BOOTARGS, 2e ligne bootargs).
+    import re
     s = BUILD.read_text()
-    lignes = [l for l in s.splitlines() if l.startswith("setenv bootargs")]
-    assert all(len(l) < 200 for l in lignes)  # tampon de ligne U-Boot parfois à 256
-    ligne = " ".join(lignes)
-    assert "modprobe.blacklist=mv88e6xxx" in ligne
-    assert "systemd.mask=systemd-networkd.service" in ligne
-    assert "systemd.mask=systemd-networkd.socket" in ligne
+    lignes = [x for x in s.splitlines() if x.startswith("setenv bootargs")]
+    assert any("$LIVE_BOOTARGS" in x for x in lignes)
+    env = (ICI / "board" / "mochabin" / "live.env").read_text()
+    extra = re.search(r'^LIVE_BOOTARGS="([^"]*)"$', env, re.M).group(1)
+    assert all(len(x.replace("$LIVE_BOOTARGS", extra)) < 200 for x in lignes)  # tampon de ligne U-Boot parfois à 256
+    assert "modprobe.blacklist=mv88e6xxx" in extra
+    assert "systemd.mask=systemd-networkd.service" in extra
+    assert "systemd.mask=systemd-networkd.socket" in extra
 
 
 def test_sbx_netflash_montre_l_erreur_du_telechargement_de_la_liste():
