@@ -9,6 +9,21 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-28 — Agrégateur : démarrage non bloquant, montage progressif (closes #3216, ref #3191)
+
+- **Livré** (PR #3231, secubox-aggregator 0.5.0) : la socket écoute avant tout montage ; une tâche de démarrage monte
+  les modules un par un sur la boucle (auth, hub, sbxid, portal, users d'abord), pause au moins égale à la durée de
+  l'import (50 ms à 2 s) ; un module pas encore monté répond 503 + Retry-After (montage inséré AVANT la route du
+  relais) ; `/health` ajoute `pret`, `a_monter`, `duree_montage_s`, `interrompu`. Relecture de sécurité : vault,
+  actor, radio jamais montés ; `sys.exit()` à l'import isolé ; `secubox-aggregator-migrate` attend `pret` ; exception
+  § 6 écrite dans RULES-CODE. Défaut antérieur nginx (auth à identité vide sur vhost à la demande) : #3230.
+- **Mesuré** : gk2 avant (27/10) 101 s sans socket puis délais jusqu'à 8 min ; après, `/health` et menu du Hall à
+  **39 s** (démarrage de Python sous charge), `pret` à 163 s (77 montés, 3 échecs inchangés), 151 Mo. gk1 : 9,7 s / 15,5 s.
+- **Mémoire de gk2** (même jour) : Unbound redémarré, 902 → 367 Mo (coupure DNS de 47 s, audit). Analyse par cgroup
+  dans #3191 : 36 modules servis deux fois (#3229, dont 24 à tâche de fond → sockets dédiées), threatmesh 402 Mo
+  (`/decisions` à 50 000 entrées), pics sans plafond.
+- Piège : `agent-worktree.sh finish` après un squash a rouvert la PR en double #3232 (fermée).
+
 ## 2026-10-27 — Listes DNS compilées par étiquettes, déployées sur gk1 et gk2 (closes #3205, ref #3191)
 
 - **Livré** (PR #3222, #3224) : compilateur `secubox_unbound.listes` (classes = éléments d'ACL, chaque domaine une fois,

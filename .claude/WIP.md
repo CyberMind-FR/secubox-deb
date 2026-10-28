@@ -174,12 +174,12 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 ## ⬜ Next Up (dans l'ordre)
 
 00000000. **Consommation (#3191, ordre arbitré par le propriétaire le 2026-10-27)** : objectif 2 Go (minimal) et 4 Go
-  (référence), mesurer avant/après avec le comparateur (#3212, livré). (1) **secubox-metrics** : 1,4 Go dus aux origines
-  Surf (152 878 seaux) — PR #3219 (metrics 1.29.6, ~130 Mo mesurés sur une copie du cache), à fusionner et déployer ;
-  (2) **listes d'Unbound** : FAIT et déployé (gk1, gk2 ; secubox-core 1.8.4) — reste à REDÉMARRER Unbound sur gk2 avec
-  l'accord du propriétaire (748 Mo tant qu'il n'est que rechargé ; 384 Mo au banc) ; (3) **groupes avec
-  veille** (groupd `--veille`/`--veille-modules` non passés) ; (4) **agrégateur non bloquant** (#3216, conception
-  notée). Puis variante 1 Go de `minimal` (#3218).
+  (référence), mesurer avant/après avec le comparateur (#3212, livré). FAITS : metrics (#3217), listes d'Unbound
+  (#3205, redémarré le 28 : 367 Mo), agrégateur non bloquant (#3216, 0.5.0 gk1+gk2). **Suite** : (a) **#3229** 36
+  modules servis deux fois — 24 à tâche de fond → `DEDICATED_MODULES`, ~12 sans → service propre arrêté + postinst
+  qui ne le réactive plus, routes nginx/appels Python repointés (~500 Mo) ; (b) threatmesh 402 Mo (`/decisions`) et
+  `MemoryHigh` sur les pics sans plafond (billets, nginx, vault, ytsas) — analyse dans #3191 ; (c) **groupes avec
+  veille** (groupd `--veille`/`--veille-modules` non passés). Puis variante 1 Go de `minimal` (#3218).
   **Release alpha.19 (#3208)** : publiée et complétée (images minimal ajoutées). Reste #3225 (clé live MOCHAbin à
   scinder) et #3227 (wiki : une seule source, sync-wiki dangereux). **Pubs Netflix** (#3226) : essai « tri par insistance » sur tv-banc (LAN gk2), à confirmer puis livrer. **Autres** : zones NAC en routé (#2891), maillage inter-LAN
   (#3196), premier démarrage et TR-069 (#3203), Nextcloud/WebDAV, #3195 www, #3192 radio.
