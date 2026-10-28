@@ -12,7 +12,7 @@ set -e
 VERSION="1.1.0"
 
 LXC_NAME="streamlit"
-LXC_PATH="/var/lib/lxc/$LXC_NAME"
+LXC_PATH="${SECUBOX_STREAMLIT_LXC_PATH:-/var/lib/lxc/$LXC_NAME}"
 DATA_PATH="/srv/streamlit"
 APPS_PATH="${SECUBOX_STREAMLIT_APPS_PATH:-$DATA_PATH/apps}"
 CONF_PATH="${SECUBOX_STREAMLIT_CONF:-/etc/secubox/streamlit.toml}"
@@ -643,6 +643,38 @@ _set_toml_key_in_section() {
 # source tree's own lxc/ during development.
 LXC_ASSETS_PATH="${SECUBOX_STREAMLIT_LXC_ASSETS_PATH:-/usr/lib/secubox/streamlit/lxc}"
 
+# Pose l'unité par appli et son lanceur DANS le conteneur (cmd_install, et
+# _lxc_assets_sync pour un conteneur déjà en place). Code 1 si les actifs
+# du paquet manquent.
+_lxc_assets_install() {
+    [ -f "$LXC_ASSETS_PATH/streamlit-app@.service" ] && [ -f "$LXC_ASSETS_PATH/streamlit-launch" ] || return 1
+    tar -C "$LXC_ASSETS_PATH" -cf - "streamlit-app@.service" streamlit-launch \
+        | lxc-attach -n "$LXC_NAME" -- tar -C /tmp -xf -
+    lxc-attach -n "$LXC_NAME" -- sh -c '
+        install -m 644 "/tmp/streamlit-app@.service" /etc/systemd/system/
+        install -m 755 /tmp/streamlit-launch /usr/local/bin/streamlit-launch
+        rm -f "/tmp/streamlit-app@.service" /tmp/streamlit-launch
+        systemctl daemon-reload
+    '
+}
+
+# Un conteneur installé AVANT une évolution de l'unité (#3247 : fichier
+# d'environnement, données hors du dossier de l'appli) garde l'ancienne copie
+# tant que rien ne la remplace : cmd_install ne repasse jamais. On compare
+# l'empreinte de ce que le paquet livre à celle de ce que le conteneur porte
+# (un seul lxc-attach) et on repose seulement si elles diffèrent.
+_lxc_assets_sync() {
+    lxc_running || return 0
+    [ -f "$LXC_ASSETS_PATH/streamlit-app@.service" ] && [ -f "$LXC_ASSETS_PATH/streamlit-launch" ] || return 0
+    local voulu pose
+    voulu=$(cat "$LXC_ASSETS_PATH/streamlit-app@.service" "$LXC_ASSETS_PATH/streamlit-launch" | sha256sum | cut -d' ' -f1)
+    pose=$(lxc-attach -n "$LXC_NAME" -- sh -c 'cat /etc/systemd/system/streamlit-app@.service /usr/local/bin/streamlit-launch 2>/dev/null | sha256sum' 2>/dev/null | cut -d' ' -f1 || true)
+    [ "$voulu" = "$pose" ] && return 0
+    log "Mise à jour de l'unité streamlit-app@ et du lanceur dans le conteneur"
+    _lxc_assets_install || error "actifs du conteneur introuvables sous $LXC_ASSETS_PATH"
+    return 0
+}
+
 cmd_install() {
     if lxc_exists; then
         log "Container already exists. Use 'update' to upgrade."
@@ -707,18 +739,7 @@ EOF
     # started here: an app comes up on demand (`app wake`) or, for the
     # ones declared `[apps.<name>].autostart = true`, via `systemctl
     # enable` (see cmd_autostart) — never all of them, never by default.
-    if [ -f "$LXC_ASSETS_PATH/streamlit-app@.service" ] && [ -f "$LXC_ASSETS_PATH/streamlit-launch" ]; then
-        tar -C "$LXC_ASSETS_PATH" -cf - "streamlit-app@.service" streamlit-launch \
-            | lxc-attach -n "$LXC_NAME" -- tar -C /tmp -xf -
-        lxc-attach -n "$LXC_NAME" -- sh -c '
-            install -m 644 "/tmp/streamlit-app@.service" /etc/systemd/system/
-            install -m 755 /tmp/streamlit-launch /usr/local/bin/streamlit-launch
-            rm -f "/tmp/streamlit-app@.service" /tmp/streamlit-launch
-            systemctl daemon-reload
-        '
-    else
-        error "install: lxc unit assets not found under $LXC_ASSETS_PATH — per-app units not deployed"
-    fi
+    _lxc_assets_install || error "install: lxc unit assets not found under $LXC_ASSETS_PATH — per-app units not deployed"
 
     # Create hello world app (dormant: no port declared, never started
     # automatically — an operator must `app start hello <port>` or
@@ -1968,6 +1989,11 @@ cmd_app_restart() {
 # streamlitctl never launches `streamlit run` itself any more — that is
 # lxc/streamlit-launch's job, executed BY the unit. This function only
 # ever resolves/validates the port and asks systemd to start the unit.
+#
+# Codes de retour DISTINCTS (#3247) — l'API en fait un statut HTTP lisible au
+# lieu d'un 500 vide : 2 appli inconnue (404), 3 refus d'état — archivée, sans
+# point d'entrée, sans port (409), 4 port pris par une autre appli (409),
+# 75 conteneur arrêté (503), 1 échec du démarrage de l'unité (500).
 cmd_app_start() {
     local name="$1"
     local explicit_port="${2:-}"
@@ -1983,10 +2009,10 @@ cmd_app_start() {
     _app_entrypoint "$name" || ep_rc=$?
     if [ "$ep_rc" -eq 3 ]; then
         error "App not found: $name"
-        return 1
+        return 2
     elif [ "$ep_rc" -eq 4 ]; then
         error "No entrypoint found in $name"
-        return 1
+        return 3
     fi
     local rel_entrypoint="$_EP_RESULT"
 
@@ -1994,12 +2020,12 @@ cmd_app_start() {
     # de désarchivage (#956). Refus net plutôt qu'un démarrage silencieux.
     if _app_archived "$name"; then
         error "App archivée : $name — désarchivez-la d'abord (streamlitctl app unarchive $name --apply)"
-        return 1
+        return 3
     fi
 
     if ! lxc_running; then
-        error "Container not running. Start it first."
-        return 1
+        error "Conteneur streamlit arrêté (Container not running) : réveillez-le d'abord (streamlitctl start)"
+        return 75
     fi
 
     # Port resolution — NEVER a default. The old `local port="${2:-8501}"`
@@ -2012,7 +2038,7 @@ cmd_app_start() {
     local port
     if ! port=$(_resolve_app_port "$name" "$explicit_port"); then
         error "No port configured for $name — declare [apps.$name].port in $CONF_PATH or pass one explicitly (streamlitctl app start $name <port>)"
-        return 1
+        return 3
     fi
 
     # Conflict guard: refuse rather than let two apps fight over the same
@@ -2028,7 +2054,7 @@ cmd_app_start() {
             [ "$o" != "$name" ] && [ "${_RUN_PORT[$o]}" = "$port" ] && other="$o" && break
         done
         error "Port $port is already in use by running app '$other' — refusing to start $name on a conflicting port"
-        return 1
+        return 4
     fi
 
     # Persist port + entrypoint — cf. _app_port_file : dans le répertoire
@@ -2044,6 +2070,10 @@ cmd_app_start() {
         printf 'port = %s\n' "$port"
         printf 'entrypoint = "%s"\n' "$rel_entrypoint"
     } > "$port_file"
+
+    # L'unité du conteneur doit être celle du paquet (fichier d'environnement,
+    # données persistantes, #3247) avant de démarrer quoi que ce soit.
+    _lxc_assets_sync
 
     log "Starting app $name on port $port..."
     if ! lxc-attach -n "$LXC_NAME" -- systemctl start "$(_unit_instance "$name")"; then
@@ -2463,8 +2493,27 @@ cmd_app_wake() {
         return 0
     fi
 
+    # Le CONTENEUR peut dormir lui aussi (#3247 : arrêté après un redémarrage
+    # de gk2, `app start` refusait alors « Container not running ») : on le
+    # réveille par le même chemin que `streamlitctl start` / POST /power/wake,
+    # dans le même budget. Code 75 s'il ne se lève pas : l'API en fait un 503.
+    if ! lxc_running; then
+        log "wake: conteneur $LXC_NAME arrêté — réveil"
+        cmd_start >/dev/null 2>&1 || true
+        if ! lxc_running; then
+            error "wake: conteneur $LXC_NAME injoignable — réveil impossible (lxc-start)"
+            return 75
+        fi
+    fi
+
     log "wake: starting $name (will wait up to ${wait_sec}s)"
-    cmd_app_start "$name" >/dev/null 2>&1 || { error "wake: failed to start $name"; return 1; }
+    local start_rc=0
+    cmd_app_start "$name" >/dev/null 2>&1 || start_rc=$?
+    if [ "$start_rc" -ne 0 ]; then
+        error "wake: failed to start $name (code $start_rc)"
+        [ "$start_rc" -eq 75 ] && return 75
+        return 1
+    fi
 
     local elapsed=0
     while [ "$elapsed" -lt "$wait_sec" ]; do
@@ -2874,6 +2923,148 @@ cmd_gitea_clone() {
 }
 
 # ─────────────────────────────────────────────────────────────────────
+# PORTS, PUBLICATION, ENVIRONNEMENT (#3247)
+# ─────────────────────────────────────────────────────────────────────
+# Le travail sur les données — streamlit.toml, vhost nginx, route sbxwaf
+# (par secubox-waf-route), haproxyctl, journal d'audit, fichier
+# d'environnement — est fait par api/publication.py, exécuté ICI en root et
+# en mode isolé (`python3 -I` : ni PYTHONPATH, ni dossier courant, ni
+# dossier du script). Une seule implémentation, que l'API importe aussi pour
+# valider avant sudo. Ce script ne lui apporte que ce que seul root voit :
+# les ports en écoute DANS le conteneur et son adresse.
+PUBLICATION_PY="${SECUBOX_STREAMLIT_PUBLICATION_PY:-/usr/lib/secubox/streamlit/api/publication.py}"
+
+_publication() {
+    python3 -I "$PUBLICATION_PY" --conf "$CONF_PATH" --apps "$APPS_PATH" "$@"
+}
+
+# Ports en écoute dans le conteneur, tous processus confondus (un seul lxc-attach).
+_ports_en_ecoute() {
+    lxc_running || return 0
+    lxc-attach -n "$LXC_NAME" -- ss -Htln 2>/dev/null \
+        | awk '{print $4}' | sed -nE 's/.*:([0-9]+)$/\1/p' | sort -un | tr '\n' ' '
+}
+
+# app port <name> [<port>] [--apply] — port de l'appli : celui demandé s'il
+# est libre (refus clair sinon), le sien s'il en a un, sinon le premier libre
+# de [ports] min..max (8501-8600). Libre = ni attribué à une autre appli
+# (fichier de port, [apps.*], [instances.*], route directe), ni en écoute dans
+# le conteneur. --apply le persiste et DÉCLARE l'appli ([apps.<name>]).
+cmd_app_port() {
+    local name="$1"; shift || true
+    local args=(port "$name") a
+    for a in "$@"; do
+        case "$a" in
+            --apply) args+=(--apply) ;;
+            *) args+=(--demande "$a") ;;
+        esac
+    done
+    _scan_running_apps
+    local processus="" n ip=""
+    for n in "${!_RUN_PORT[@]}"; do
+        if [ "${_RUN_PORT[$n]}" != "0" ]; then
+            processus+="$n:${_RUN_PORT[$n]} "
+        fi
+    done
+    ip=$(_lxc_ip) || ip=""
+    args+=(--ecoute "$(_ports_en_ecoute)" --processus "$processus")
+    if [ -n "$ip" ]; then
+        args+=(--ip-vive "$ip")
+    fi
+    _publication "${args[@]}"
+}
+
+# app publish <name> [<nom public>] [--par <qui>] [--apply] — pose (ou met à
+# jour, ou renomme) la chaîne publiée : vhost nginx :9080, route sbxwaf,
+# vhost HAProxy, [instances.<nom>] ; sans nom public, la publication actuelle
+# suit le port de l'appli. Audité.
+cmd_app_publish() {
+    local name="$1"; shift || true
+    local args=(publier "$name") port ip
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --apply) args+=(--apply) ;;
+            --par) args+=(--par "${2:-}"); shift ;;
+            *) args+=(--nom "$1") ;;
+        esac
+        shift
+    done
+    if port=$(_resolve_app_port "$name" ""); then
+        args+=(--port "$port")
+    fi
+    if ip=$(_lxc_ip); then
+        args+=(--ip-vive "$ip")
+    fi
+    _publication "${args[@]}"
+}
+
+# app unpublish <name> [--par <qui>] [--apply] — retire les quatre maillons.
+cmd_app_unpublish() {
+    local name="$1"; shift || true
+    local args=(depublier "$name")
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --apply) args+=(--apply) ;;
+            --par) args+=(--par "${2:-}"); shift ;;
+        esac
+        shift
+    done
+    _publication "${args[@]}"
+}
+
+cmd_app_publication() {
+    _publication etat "$1"
+}
+
+# app env <name> list | set [--unset CLE]... [--par <qui>] [--apply] — variables de
+# l'appli, une ligne CLE=valeur par variable sur l'ENTRÉE STANDARD (jamais en
+# argument : une valeur peut être un secret). Fichier root 0600 DANS le
+# conteneur (/etc/streamlit/env/<name>.env), lu par l'unité streamlit-app@
+# (EnvironmentFile) au prochain démarrage. `list` ne rend que les noms.
+cmd_app_env() {
+    local name="$1" mode="${2:-}"
+    shift 2 || true
+    case "$mode" in
+        list)
+            _publication env "$name" --lister
+            ;;
+        set)
+            local args=(env "$name")
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --apply) args+=(--apply) ;;
+                    --unset) args+=(--retirer "${2:-}"); shift ;;
+                    --par) args+=(--par "${2:-}"); shift ;;
+                esac
+                shift
+            done
+            _lxc_assets_sync
+            _publication "${args[@]}"
+            ;;
+        *)
+            error "Usage: streamlitctl app env <name> list | set [--unset CLE]... [--par <qui>] [--apply]  (CLE=valeur sur l'entrée standard)"
+            return 64
+            ;;
+    esac
+}
+
+# boot — au démarrage de la box (secubox-streamlit-demarrage.service) : le
+# conteneur n'est démarré QUE si une appli publiée doit rester active
+# (autostart posé par la publication). Sinon il reste arrêté : le parc dort
+# par conception (#982), rien n'est démarré « au cas où ».
+cmd_boot() {
+    if ! lxc_exists; then
+        log "boot: conteneur absent — rien à démarrer"
+        return 0
+    fi
+    if [ -f "$CONF_PATH" ] && grep -qE '^[[:space:]]*autostart_publication[[:space:]]*=[[:space:]]*true' "$CONF_PATH"; then
+        cmd_start
+    else
+        log "boot: aucune appli publiée à garder active — conteneur laissé arrêté"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────
 
@@ -2904,6 +3095,11 @@ _refuser() { error "argument refuse : $(printf '%q' "${1:-}")"; exit 64; }
 _exiger_nom()    { _nom_admis "${1:-}" || _refuser "${1:-}"; }
 _exiger_entier() { _entier_admis "${1:-}" || _refuser "${1:-}"; }
 _si_entier()     { [ -z "${1:-}" ] || _entier_admis "$1" || _refuser "$1"; }
+# Nom public (#3247) : UNE étiquette DNS stricte. Auteur d'une action (sub du
+# jeton) : jamais une option. Nom de variable d'environnement.
+_label_admis()    { [[ "${1:-}" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; }
+_acteur_admis()   { [[ "${1:-}" =~ ^[A-Za-z0-9][A-Za-z0-9_.@-]{0,63}$ ]]; }
+_cle_env_admise() { [[ "${1:-}" =~ ^[A-Za-z_][A-Za-z0-9_]{0,63}$ ]]; }
 
 case "${1:-}:${2:-}" in
     app:archive)
@@ -2916,6 +3112,29 @@ case "${1:-}:${2:-}" in
         _exiger_entier "${3:-}"; [ "${4:-}" = "--check" ] || _si_entier "${4:-}" ;;
     app:deploy)
         [ -z "${4:-}" ] || _exiger_nom "$4" ;;
+    app:port)
+        _exiger_nom "${3:-}"
+        for _a in "${@:4}"; do
+            [ "$_a" = "--apply" ] || _entier_admis "$_a" || _refuser "$_a"
+        done ;;
+    app:publish|app:unpublish|app:publication|app:env)
+        _exiger_nom "${3:-}"
+        _attendu=""
+        for _a in "${@:4}"; do
+            case "$_attendu" in
+                par) _acteur_admis "$_a" || _refuser "$_a"; _attendu=""; continue ;;
+                cle) _cle_env_admise "$_a" || _refuser "$_a"; _attendu=""; continue ;;
+            esac
+            case "$2:$_a" in
+                publish:--apply|unpublish:--apply|env:--apply) ;;
+                publish:--par|unpublish:--par|env:--par) _attendu=par ;;
+                env:--unset) _attendu=cle ;;
+                env:list|env:set) ;;
+                publish:*) _label_admis "$_a" || _refuser "$_a" ;;
+                *) _refuser "$_a" ;;
+            esac
+        done
+        [ -z "$_attendu" ] || _refuser "--$_attendu" ;;
     instance:start|instance:stop|gitea:push)
         _exiger_nom "${3:-}" ;;
     gitea:clone)
@@ -2936,6 +3155,7 @@ case "${1:-}" in
     start)      cmd_start ;;
     stop)       cmd_stop ;;
     restart)    cmd_stop; sleep 1; cmd_start ;;
+    boot)       cmd_boot ;;
 
     app)
         case "${2:-}" in
@@ -2962,7 +3182,12 @@ case "${1:-}" in
             logs)   cmd_app_logs "$3" "$4" ;;
             info)   cmd_app_info "$3" ;;
             restart) cmd_app_restart "$3" ;;
-            *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|autostart|start|stop|restart|deploy|remove|logs|info|idle-check [--dry-run]|wake|shot-target} [args]" ;;
+            port)        cmd_app_port "${@:3}" ;;
+            publish)     cmd_app_publish "${@:3}" ;;
+            unpublish)   cmd_app_unpublish "${@:3}" ;;
+            publication) cmd_app_publication "$3" ;;
+            env)         cmd_app_env "${@:3}" ;;
+            *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|autostart|start|stop|restart|deploy|remove|logs|info|idle-check [--dry-run]|wake|shot-target|port|publish|unpublish|publication|env} [args]" ;;
         esac
         ;;
 
@@ -3003,6 +3228,7 @@ Container:
   start         Start container
   stop          Stop container
   restart       Restart container
+  boot          Start container at boot only if a published app must stay up
 
 Apps:
   app list              List all apps (directories only, legacy)
@@ -3018,6 +3244,11 @@ Apps:
   app deploy <zip> [name]   Deploy from ZIP
   app remove <name>         Remove an app
   app logs <name> [lines]   View app logs
+  app port <name> [port] [--apply]     Port of the app: requested (refused if taken), own, or first free (JSON)
+  app publish <name> [public-name] [--par who] [--apply]   Publish/rename: nginx :9080 + sbxwaf route + HAProxy + TOML
+  app unpublish <name> [--par who] [--apply]               Remove the published chain
+  app publication <name>    Published names of the app (JSON)
+  app env <name> list|set [--unset KEY]... [--par who] [--apply]  App environment (KEY=value lines on stdin)
 
 Instances:
   instance list         List configured instances

@@ -1,2 +1,3 @@
 debian/secubox-streamlit-idle.service usr/lib/systemd/system/
 debian/secubox-streamlit-idle.timer   usr/lib/systemd/system/
+debian/secubox-streamlit-demarrage.service usr/lib/systemd/system/

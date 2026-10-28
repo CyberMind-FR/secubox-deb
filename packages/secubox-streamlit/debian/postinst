@@ -34,6 +34,10 @@ case "$1" in
     # reads it — so the Mosaic tab stops paying the ~31s streamlitctl audit
     # cost on every request.
     systemctl enable --now streamlit-audit.timer || true
+
+    # Conteneur au boot SEULEMENT si une appli publiée doit rester active (#3247) : activée, jamais démarrée ici
+    # (une mise à jour ne réveille pas le conteneur) ; `streamlitctl boot` est un no-op sans publication.
+    systemctl enable secubox-streamlit-demarrage.service 2>/dev/null || true
     ;;
 esac
 # RÈGLES SUDO lxc-* (#1785) : une version locale ou ancienne de

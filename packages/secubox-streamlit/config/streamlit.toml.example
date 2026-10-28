@@ -38,6 +38,29 @@ url = "http://localhost:3001"
 # emancipated = true
 # domain = "myapp.example.com"
 
+# Ports des applis (#3247). Sans port fourni, `streamlitctl app port` prend le
+# premier port de cette plage qui n'est ni attribué à une autre appli (fichier
+# de port, [apps.*], [instances.*], route directe) ni en écoute dans le conteneur.
+[ports]
+min = 8501
+max = 8600
+
+# Publication des applis (#3247) : chaîne HAProxy → sbxwaf → nginx :9080 →
+# conteneur, posée par `streamlitctl app publish` et déclarée ci-dessous en
+# [instances.<nom public>]. Jamais de contournement du WAF.
+[publication]
+# false : publication SUR DEMANDE (bouton « Publier », champ « Nom public » au
+# dépôt). true : une appli déposée ou démarrée sans nom public est publiée sous
+# <nom du dossier>.<domaine de la box>.
+auto = false
+# true : une appli publiée reste démarrée (autostart, hors mise en veille) et le
+# conteneur est démarré au boot (secubox-streamlit-demarrage.service) — rien ne
+# réveille encore une appli par son vhost (#746). false : la veille s'applique.
+autostart = true
+# Adresse du conteneur pour nginx (proxy_pass). Vide : adresse vive (lxc-info),
+# sinon celle des publications existantes.
+# ip_conteneur = "10.100.0.50"
+
 # Power management (sleep/wake optimization)
 [power]
 auto_pause = false
