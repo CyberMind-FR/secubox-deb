@@ -38,12 +38,13 @@ Shared Python modules for all SecuBox services:
 - `/usr/sbin/secubox-dns-listes` - `appliquer` (default), `etat`, `compiler FICHIER` (#3205)
 - `/usr/sbin/secubox-renouvelle-secrets` - secrets generated on the box itself (#3243)
 
-## Secrets propres à la box (`secubox-renouvelle-secrets`, 1.8.5–1.8.6, #3243)
+## Secrets propres à la box (`secubox-renouvelle-secrets`, 1.8.5–1.8.7, #3243)
 
 Images built in CI used to carry secrets generated in the chroot (SSH host keys, OIDC signing key, TLS key, p2p
 ephemeral WireGuard key and pairing token, machine-id) plus an admin account named after the CI runner: every box of
 an image shared them, and the images are public. The tool, root only (run it under
-`systemd-run --wait --pipe --collect` so a dropped SSH session cannot interrupt it):
+`systemd-run -E SUDO_USER --wait --pipe --collect` so a dropped SSH session cannot interrupt it and the audit still
+names the operator):
 
 - no argument: report (date of each secret, origin of the host key, build-host accounts) — changes nothing;
 - `--absents`: create the missing ones (first boot of a cleaned image);
@@ -52,8 +53,20 @@ an image shared them, and the images are public. The tool, root only (run it und
   HAProxy copies of the old TLS key, disable the build-host account first.
 
 Each secret is generated in a root 0700 directory, checked, then put in place by rename; the old one is kept and
-restored if generation or checking fails. `audit.log` names the renewed secrets (`secret_renouvele`,
-`compte_desactive`), never a value. Recommends `openssh-client` and `wireguard-tools`.
+restored if generation or checking fails. The TLS key and certificate are placed through a directory descriptor
+(`/etc/secubox/tls` belongs to `secubox`: no link is ever followed). `audit.log` names the renewed secrets
+(`secret_renouvele`, `compte_desactive`), never a value. The `secubox-p2p` postinst output goes to
+`/var/log/secubox-renouvelle-secrets.log` (root 0600, opened without following a link). Recommends `openssh-client` and
+`wireguard-tools`.
+
+Exit codes, for firstboot, which is meant to call `--absents` (not wired yet; on first boot `ssh` is started with
+`--no-block`):
+
+- `0`: everything is in place (including nothing to do);
+- `1`: a secret could not be created or renewed, or the audit could not be written — named on stderr, the old one stays,
+  the box keeps booting;
+- `2`: usage (argument, not root, `--oui` missing);
+- `130`: interrupted (the step in progress is put back).
 
 ## Listes DNS compilées (`secubox-dns-listes`, 1.8.0, #3205)
 

@@ -1,3 +1,20 @@
+secubox-core (1.8.7-1~trixie1) trixie; urgency=high
+
+  * secubox-renouvelle-secrets (#3243), seconde relecture de securite (2 bloquants, 3 mineurs, 2 remarques) :
+    - journal du postinst p2p deplace sous /var/log (root) : /var/log/secubox-renouvelle-secrets.log, ouvert par un
+      helper Python en O_NOFOLLOW|O_NONBLOCK|O_CREAT|O_APPEND (0600), refuse s'il n'est pas un fichier ordinaire a root,
+      mode remis par descripteur ; ouvert AVANT de retirer jeton et cle (un lien ou une FIFO ne mene ni ne bloque root) ;
+    - TLS : mise de cote, pose et remise PAR DESCRIPTEUR de dossier (O_DIRECTORY|O_NOFOLLOW, proprietaire verifie,
+      linkat/renameat depuis le dossier de travail root 0700) : un /etc/secubox/tls remplace par un lien entre les deux
+      poses n'est jamais suivi, ni a la pose ni a la remise ; un dossier TLS qui n'en est pas un : rien n'est pose ;
+    - HAProxy : le dossier crt ET chacun de ses ancetres (chemin ecrit et resolu) doivent etre a root, non inscriptibles ;
+    - p2p remis apres un controle en echec : secubox-p2pctl iface-up remet l'ancienne cle dans wg-ephemeral ;
+    - un echec cite toujours un journal qui survit a l'outil ;
+    - aide et README : systemd-run -E SUDO_USER, codes de retour de --absents pour firstboot ; ssh demarre en
+      --no-block au premier demarrage. 50 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 12:47:49 +0100
+
 secubox-core (1.8.6-1~trixie1) trixie; urgency=high
 
   * secubox-renouvelle-secrets (#3243), relecture de securite (2 bloquants, 7 importants, 9 mineurs) :

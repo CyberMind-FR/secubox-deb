@@ -108,6 +108,7 @@ def banc(tmp_path):
         # sans interface wg-ephemeral : `wg show` échoue
         "SBX_WG": script("wg", 'case "$1" in show) exit 1 ;; pubkey) cat >/dev/null; echo PUB ;; esac\n'),
         "SBX_HAPROXY": script("haproxy", "exit 0\n"),
+        "SBX_P2PCTL": script("p2pctl", "exit 0\n"),
         # le vrai `secubox-oidcctl init` crée la clé si elle manque
         "SBX_OIDCCTL": script("oidcctl", f"c={r}/etc/secubox/secrets/oidc/signing.pem\n[ -f $c ] || head -c 32 /dev/urandom | od -An -tx1 > $c\n"),
         # le vrai postinst de secubox-p2p crée jeton et clé s'ils manquent ; perl y râle sur la locale
@@ -117,9 +118,9 @@ def banc(tmp_path):
                                    "[ -f $d/wg-ephemeral.key ] || head -c 32 /dev/urandom | od -An -tx1 > $d/wg-ephemeral.key\n"),
     }
 
-    def lance(*args, erreur_attendue=False, **surcharges):
+    def lance(*args, erreur_attendue=False, delai=DELAI, **surcharges):
         e = {k: v for k, v in {**env, **surcharges}.items() if v is not None}
-        res = subprocess.run(["bash", str(OUTIL), *args], capture_output=True, text=True, env=e, timeout=DELAI)
+        res = subprocess.run(["bash", str(OUTIL), *args], capture_output=True, text=True, env=e, timeout=delai)
         if not erreur_attendue:                           # chaque échec prévu est nommé, jamais « erreur inattendue »
             assert "erreur inattendue" not in res.stderr, res.stderr
         return res, (appels.read_text() if appels.exists() else "")
@@ -214,6 +215,16 @@ def test_audit_nomme_les_secrets_sans_jamais_leur_valeur(box):
         assert valeur not in texte
 
 
+def test_absents_demarre_ssh_sans_attendre(banc):
+    # r3 : au premier démarrage, firstboot ne doit pas attendre ssh (start --no-block).
+    for p in (banc.r / "etc/ssh").glob("ssh_host_*"):
+        p.unlink()
+    systemctl = banc.script("systemctl-arrete", 'case "$1" in is-active) exit 3 ;; esac\nexit 0\n')
+    res, appels = banc.lance("--absents", SBX_SYSTEMCTL=systemctl)
+    assert res.returncode == 0, res.stderr
+    assert "start --no-block ssh" in appels
+
+
 def test_absents_ne_cree_que_ce_qui_manque(box):
     r, lance = box
     (r / "etc/secubox/secrets/oidc/signing.pem").unlink()
@@ -287,8 +298,9 @@ def test_aide_recommande_systemd_run(box):
     _, lance = box
     res, _ = lance("--help")
     assert res.returncode == 0
-    assert "systemd-run --wait --pipe --collect" in res.stdout
+    assert "systemd-run -E SUDO_USER --wait --pipe --collect" in res.stdout      # r2 : l'acteur de l'audit suit
     assert "--desactiver" in res.stdout and "SBX_RACINE" in res.stdout
+    assert "Codes de retour" in res.stdout and "--absents" in res.stdout          # r3 : ce que firstboot peut lire
 
 
 # ── Constat 2 et 10 : TLS généré hors du dossier du compte secubox, jamais en suivant un lien ───────────────────────────
@@ -314,6 +326,55 @@ def test_tls_genere_hors_du_dossier_secubox_sans_suivre_de_lien(banc):
     assert not (tls / "key.pem").is_symlink() and "PRIVATE KEY" in (tls / "key.pem").read_text()
     assert _mode(tls) == 0o750                            # constat 10 : le mode d'un dossier existant ne change pas
     assert sorted(p.name for p in tls.iterdir()) == ["cert.pem", "key.pem"]
+
+
+def _bascule_tls(banc, remise: bool):
+    """Remplace /etc/secubox/tls par un lien vers un dossier témoin entre les deux poses : par le crochet
+    SBX_ENTRE_POSES_TLS (pose par descripteur), ou après le `mv` de la clé (pose par chemin, 1.8.6). Une seule fois."""
+    tls = banc.r / "etc/secubox/tls"
+    temoin = banc.tmp / "temoin-tls"
+    temoin.mkdir()
+    marque = banc.tmp / "bascule-faite"
+    bascule = banc.script("bascule", f"[ -e {marque} ] && exit 0\n: > {marque}\n"
+                          f"/usr/bin/mv {tls} {tls}.vrai && ln -s {temoin} {tls}\n"
+                          + (f"rm -f {tls}.vrai/cert.pem && mkdir {tls}.vrai/cert.pem\n" if remise else ""))
+    enveloppe = banc.tmp / "enveloppe-mv"
+    enveloppe.mkdir()
+    (enveloppe / "mv").write_text('#!/bin/sh\n/usr/bin/mv "$@" || exit $?\nfor a in "$@"; do d=$a; done\n'
+                                  f'case "$d" in */tls/key.pem) {bascule} ;; esac\n')
+    (enveloppe / "mv").chmod(0o755)
+    res, _ = banc.lance("--tout", "--oui", SBX_ENTRE_POSES_TLS=bascule, PATH=f"{enveloppe}:/usr/bin:/bin")
+    assert marque.exists()                                # la bascule a eu lieu
+    return res, temoin, banc.r / "etc/secubox/tls.vrai"
+
+
+def test_tls_lien_substitue_entre_les_deux_poses_jamais_suivi(banc):
+    # B2 : la seconde pose va dans LE dossier ouvert au départ (descripteur), jamais dans la cible du lien.
+    res, temoin, vrai = _bascule_tls(banc, remise=False)
+    assert list(temoin.iterdir()) == []
+    assert "PRIVATE KEY" in (vrai / "key.pem").read_text() and "CERTIFICATE" in (vrai / "cert.pem").read_text()
+    assert res.returncode == 0, res.stderr
+
+
+def test_tls_remise_par_descripteur_ne_suit_pas_le_lien(banc):
+    # B2 : seconde pose refusée après la bascule ; l'ancienne clé revient dans le vrai dossier, rien dans le témoin.
+    res, temoin, vrai = _bascule_tls(banc, remise=True)
+    assert list(temoin.iterdir()) == []
+    assert (vrai / "key.pem").read_text() == "ANCIENNE-CLE-TLS"
+    assert res.returncode == 1 and "tls" in res.stderr and "tls" not in _renouveles(banc.r)
+
+
+def test_tls_dossier_qui_est_un_lien_des_le_depart_rien_n_est_pose(banc):
+    tls = banc.r / "etc/secubox/tls"
+    temoin = banc.tmp / "temoin-tls"
+    temoin.mkdir()
+    for p in tls.iterdir():
+        p.unlink()
+    tls.rmdir()
+    tls.symlink_to(temoin)
+    res, _ = banc.lance("--tout", "--oui")
+    assert res.returncode == 1 and "tls" in res.stderr
+    assert list(temoin.iterdir()) == [] and tls.is_symlink()
 
 
 def test_tls_second_renommage_refuse_premier_defait(banc):
@@ -351,8 +412,8 @@ def _haproxy(banc):
     lan = r / "data/haproxy/lan.pem"
     lan.write_text(defaut.read_text())
     lan.chmod(0o640)
-    for d in (certs, r / "data/haproxy"):
-        d.chmod(0o755)                                    # comme $CERTS_DIR : root 0755, écrit par root seul
+    for d in (r / "srv", r / "srv/haproxy", certs, r / "data", r / "data/haproxy"):
+        d.chmod(0o755)                                    # comme $CERTS_DIR et ses parents : root 0755, écrits par root seul
     return defaut, autre, lan
 
 
@@ -381,6 +442,18 @@ def test_haproxy_refuse_la_configuration_ancien_certificat_remis(banc):
     assert "haproxy-defaut" in res.stderr and "unable to load certificate" in res.stderr
     assert "haproxy-defaut" not in _renouveles(banc.r) and "systemctl reload haproxy" not in appels
     assert "tls" in _renouveles(banc.r)
+
+
+def test_haproxy_ancetre_inscriptible_refuse(banc):
+    # m1 : le dossier crt est à root 0755, mais son parent est inscriptible par le groupe : un autre compte pourrait
+    # renommer le dossier et le remplacer par un lien.
+    defaut, _, lan = _haproxy(banc)
+    defaut.parent.parent.chmod(0o775)
+    avant = _empreinte(defaut)
+    res, _ = banc.lance("--tout", "--oui")
+    assert res.returncode == 1 and "root seul" in res.stderr
+    assert _empreinte(defaut) == avant
+    assert _cle_publique(lan) == _cle_publique(banc.r / "etc/secubox/tls/key.pem")
 
 
 def test_haproxy_dossier_ecrit_par_un_autre_compte_non_touche(banc):
@@ -484,6 +557,7 @@ def test_postinst_p2p_en_echec_jeton_restaure_sans_audit(banc):
     assert (r / "etc/nginx/secubox-p2p-pair.conf").read_text() == "ANCIENNE-CONF"
     assert "p2p" not in _renouveles(r)
     assert "is masked" in res.stderr and "perl" not in res.stderr        # constat 19 : la dernière ligne seulement
+    assert _journal_cite_existe(r, res.stderr) and f"journal : /{JOURNAL})" in res.stderr
 
 
 def test_cle_wg_vide_apres_postinst_restauree(banc):
@@ -502,6 +576,23 @@ def test_interface_wg_qui_garde_l_ancienne_cle_pas_d_audit(banc):
     assert res.returncode == 1
     assert "p2p" not in _renouveles(banc.r) and "wg-ephemeral" in res.stderr
     assert "secubox-p2pctl iface-up" in res.stderr
+
+
+def test_p2p_remis_l_interface_reprend_l_ancienne_cle(banc):
+    # m2 : le postinst a monté wg-ephemeral avec la clé neuve, puis échoue ; les anciens fichiers reviennent, et
+    # secubox-p2pctl iface-up remet l'ancienne clé dans le noyau.
+    d = banc.r / "etc/secubox/secrets/p2p"
+    noyau = banc.tmp / "noyau-wg"
+    noyau.write_text("ANCIENNE-CLE-WG")
+    wg = banc.script("wg-etat", f'case "$1" in show) cat {noyau} ;; pubkey) cat ;; esac\n')
+    p2pctl = banc.script("p2pctl", f'[ "$1" = iface-up ] && cat {d}/wg-ephemeral.key > {noyau}\n')
+    postinst = banc.script("p2p-iface-puis-refus", banc.p2p + "echo neuf > $d/pair.token\necho NEUVE > $d/wg-ephemeral.key\n"
+                           f"cat $d/wg-ephemeral.key > {noyau}\nexit 1\n")
+    res, appels = banc.lance("--tout", "--oui", SBX_WG=wg, SBX_P2PCTL=p2pctl, SBX_P2P_POSTINST=postinst)
+    assert res.returncode == 1
+    assert (d / "wg-ephemeral.key").read_text() == "ANCIENNE-CLE-WG"
+    assert "p2pctl iface-up" in appels and noyau.read_text() == "ANCIENNE-CLE-WG"
+    assert "p2p" not in _renouveles(banc.r)
 
 
 def test_postinst_p2p_relance_sous_umask_022(box):
@@ -524,13 +615,69 @@ def test_refus_si_apt_ou_dpkg_tourne(box):
     assert _etat(r) == avant and appels == ""
 
 
+JOURNAL = "var/log/secubox-renouvelle-secrets.log"         # sous /var/log (root), jamais sous /var/log/secubox (secubox)
+
+
 def test_sortie_du_postinst_au_journal_root(box):
     r, lance = box
+    journal = r / JOURNAL
+    journal.write_text("ancienne ligne\n")
+    journal.chmod(0o644)                                  # remis en 0600 par descripteur
     res, _ = lance("--tout", "--oui")
     assert res.returncode == 0, res.stderr
     assert "perl" not in res.stdout + res.stderr and "bavardage" not in res.stdout + res.stderr
-    journal = r / "var/log/secubox/renouvelle-secrets.log"
     assert "Setting locale failed" in journal.read_text() and _mode(journal) == 0o600
+    assert journal.read_text().startswith("ancienne ligne\n")
+    assert not (r / "var/log/secubox/renouvelle-secrets.log").exists()
+
+
+def _piege(chemin: Path, sorte: str, temoin: Path):
+    if sorte == "lien":
+        chemin.symlink_to(temoin)
+    else:
+        os.mkfifo(chemin)
+
+
+@pytest.mark.parametrize("sorte", ["lien", "fifo"])
+def test_journal_piege_sous_var_log_secubox_jamais_suivi(banc, sorte):
+    # B1 : /var/log/secubox appartient souvent à secubox ; un lien ou une FIFO posé là ne mène ni n'arrête root.
+    temoin = banc.tmp / "temoin"
+    temoin.write_text("TEMOIN\n")
+    temoin.chmod(0o644)
+    _piege(banc.r / "var/log/secubox/renouvelle-secrets.log", sorte, temoin)
+    res, _ = banc.lance("--tout", "--oui", delai=60)
+    assert res.returncode == 0, res.stderr
+    assert temoin.read_text() == "TEMOIN\n" and _mode(temoin) == 0o644
+    assert "p2p" in _renouveles(banc.r)
+
+
+@pytest.mark.parametrize("sorte", ["lien", "fifo"])
+def test_journal_root_piege_refuse_avant_de_toucher_au_p2p(banc, sorte):
+    temoin = banc.tmp / "temoin"
+    temoin.write_text("TEMOIN\n")
+    temoin.chmod(0o644)
+    _piege(banc.r / JOURNAL, sorte, temoin)
+    res, appels = banc.lance("--tout", "--oui", delai=60)
+    assert res.returncode == 1 and "journal" in res.stderr
+    assert temoin.read_text() == "TEMOIN\n" and _mode(temoin) == 0o644
+    assert (banc.r / "etc/secubox/secrets/p2p/pair.token").read_text() == "ANCIEN-JETON"
+    assert (banc.r / "etc/secubox/secrets/p2p/wg-ephemeral.key").read_text() == "ANCIENNE-CLE-WG"
+    assert "p2p-postinst" not in appels and "p2p" not in _renouveles(banc.r)
+    assert {"ssh-hote", "tls", "oidc"} <= _renouveles(banc.r)       # l'outil va au bout pour le reste
+
+
+def _journal_cite_existe(r: Path, stderr: str) -> bool:
+    cite = re.search(r"journal : (\S+?)\)", stderr)
+    return bool(cite) and (r / cite.group(1).lstrip("/")).is_file()
+
+
+def test_journal_cite_dans_un_echec_survit_a_l_outil(banc):
+    # m3 : même sans /var/log/secubox, le journal cité par un échec existe encore après l'outil (jamais dans TRAVAIL).
+    (banc.r / "var/log/secubox").rmdir()
+    postinst = banc.script("p2p-refus-m3", "echo 'Unit secubox-p2p.service is masked.' >&2\nexit 1\n")
+    res, _ = banc.lance("--tout", "--oui", SBX_P2P_POSTINST=postinst)
+    assert res.returncode == 1 and "is masked" in res.stderr
+    assert _journal_cite_existe(banc.r, res.stderr), res.stderr
 
 
 # ── Constat 9 : machine-id ────────────────────────────────────────────────────────────────────────────────────────────
