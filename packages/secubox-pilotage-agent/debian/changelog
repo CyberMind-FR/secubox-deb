@@ -1,0 +1,7 @@
+secubox-pilotage-agent (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Première version (ref #3126, L1 « Voir ») : agent de pilotage distant en
+    lecture seule, connexion sortante vers le maître par le tunnel WireGuard,
+    unité durcie et profil AppArmor enforce.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 10:00:00 +0100

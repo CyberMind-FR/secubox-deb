@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox — agent de pilotage distant (L1, lecture seule)
+Documentation=https://secubox.in
+After=network-online.target
+
+[Service]
+Type=simple
+User=secubox-pilotage
+Group=secubox-pilotage
+EnvironmentFile=-/etc/secubox/pilotage-agent.env
+ExecStart=/usr/sbin/sbx-pilotage-agent
+Restart=on-failure
+RestartSec=10
+MemoryMax=32M
+
+# Durcissement : connexion sortante vers le maître seulement, aucune capacité.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ReadOnlyPaths=/
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# AF_NETLINK : le runtime Go lit les adresses des interfaces par netlink (lecture seule, sans capacité).
+RestrictAddressFamilies=AF_INET AF_UNIX AF_NETLINK
+IPAddressDeny=any
+IPAddressAllow=10.10.0.1 10.64.0.1 localhost
+
+[Install]
+WantedBy=multi-user.target

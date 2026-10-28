@@ -1,0 +1,23 @@
+Source: secubox-pilotage-agent
+Section: admin
+Priority: optional
+Maintainer: Gérald Kerma <devel@cybermind.fr>
+Build-Depends: debhelper (>= 13), golang-go (>= 2:1.22~)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-pilotage-agent
+Architecture: any
+Depends: ${misc:Depends}, systemd, adduser
+Recommends: apparmor
+Description: SecuBox — agent de pilotage distant (L1 « Voir », lecture seule)
+ Agent Go de la box pour le pilotage distant du maillage (TR-369/USP) :
+ il se connecte en sortie au maître par le tunnel WireGuard (wg-mesh ou
+ wg-autoload), répond aux lectures du modèle de données (Get, GetSupportedDM),
+ notifie les événements utiles (boucle de relances, mémoire basse, swap) et
+ réalise un relevé de charge à la demande.
+ .
+ Lecture seule : aucune commande de modification. L'agent n'ouvre aucun port
+ d'écoute, tourne sous l'utilisateur dédié secubox-pilotage, sous AppArmor
+ enforce et sous une unité systemd durcie (32 Mo).
