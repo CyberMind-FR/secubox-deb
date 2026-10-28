@@ -1,0 +1,13 @@
+# vhost générique
+server {
+    listen 80 default_server;
+    server_name _;
+}
+server {
+    listen 443 ssl;
+    server_name admin.gk5.secubox.in hub.gk5.secubox.in; # deux noms
+}
+server {
+    listen 127.0.0.1:9080;
+    server_name localhost;
+}

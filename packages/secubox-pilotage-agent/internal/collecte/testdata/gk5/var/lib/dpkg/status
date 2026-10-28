@@ -1,0 +1,182 @@
+Package: secubox-core
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.0.0-1~trixie1
+Description: module 0
+
+Package: secubox-mod01
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.1.0-1~trixie1
+Description: module 1
+
+Package: secubox-mod02
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.2.0-1~trixie1
+Description: module 2
+
+Package: secubox-mod03
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.3.0-1~trixie1
+Description: module 3
+
+Package: secubox-mod04
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.4.0-1~trixie1
+Description: module 4
+
+Package: secubox-mod05
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.5.0-1~trixie1
+Description: module 5
+
+Package: secubox-mod06
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.6.0-1~trixie1
+Description: module 6
+
+Package: secubox-mod07
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.7.0-1~trixie1
+Description: module 7
+
+Package: secubox-mod08
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.8.0-1~trixie1
+Description: module 8
+
+Package: secubox-mod09
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.9.0-1~trixie1
+Description: module 9
+
+Package: secubox-mod10
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.10.0-1~trixie1
+Description: module 10
+
+Package: secubox-mod11
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.11.0-1~trixie1
+Description: module 11
+
+Package: secubox-mod12
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.12.0-1~trixie1
+Description: module 12
+
+Package: secubox-mod13
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.13.0-1~trixie1
+Description: module 13
+
+Package: secubox-mod14
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.14.0-1~trixie1
+Description: module 14
+
+Package: secubox-mod15
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.15.0-1~trixie1
+Description: module 15
+
+Package: secubox-mod16
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.16.0-1~trixie1
+Description: module 16
+
+Package: secubox-mod17
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.17.0-1~trixie1
+Description: module 17
+
+Package: secubox-mod18
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.18.0-1~trixie1
+Description: module 18
+
+Package: secubox-mod19
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.19.0-1~trixie1
+Description: module 19
+
+Package: secubox-mod20
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.20.0-1~trixie1
+Description: module 20
+
+Package: secubox-mod21
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.21.0-1~trixie1
+Description: module 21
+
+Package: secubox-mod22
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.22.0-1~trixie1
+Description: module 22
+
+Package: secubox-mod23
+Status: install ok installed
+Priority: optional
+Architecture: all
+Version: 1.23.0-1~trixie1
+Description: module 23
+
+Package: secubox-retire
+Status: deinstall ok config-files
+Version: 0.1.0-1
+Description: retiré
+
+Package: secubox-casse
+Status: install ok half-configured
+Version: 0.2.0-1
+Description: à moitié configuré
+
+Package: nginx
+Status: install ok installed
+Version: 1.26.0-1
+Description: serveur
