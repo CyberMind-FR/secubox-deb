@@ -490,3 +490,44 @@ def test_journaux_d_une_appli_rendus_tels_quels_meme_finis_par_du_json():
                                                                                     stderr="")):
         r = api_main._run_ctl("app", "logs", "x", "100", brut=True)
     assert r["output"] == sortie
+
+
+# ─── Relecture de sécurité (#3249) : mineurs de l'API ──────────────────────
+
+def test_depot_dependances_non_installees_422_lisible(ctl):
+    client, etat = ctl
+    vus = {}
+
+    def depot(args):
+        return {"ok": False, "code": 6, "error": "appli déposée, mais dépendances non installées (pip) : segno"}
+    etat["reponses"][("app", "deploy")] = depot
+    ancien = api_main._run_ctl
+
+    def espion(*args, timeout=30, entree=None, brut=False):
+        if args[:2] == ("app", "deploy"):
+            vus["timeout"] = timeout
+        return ancien(*args, timeout=timeout, entree=entree)
+    api_main._run_ctl = espion
+    try:
+        r = client.post("/deploy", files={"file": ("x.zip", zip_appli(), "application/zip")}, data={"name": "atelier"})
+    finally:
+        api_main._run_ctl = ancien
+    assert r.status_code == 422, r.text
+    assert "segno" in r.json()["detail"]
+    # pip dans le conteneur (240 s au plus) : le ctl n'est pas coupé avant, et la réponse part avant le délai
+    # de lecture de nginx (300 s, snippet secubox-proxy.conf).
+    assert 280 <= vus["timeout"] < 300
+
+
+def test_journaux_servis_hors_de_la_boucle():
+    import inspect
+    assert not inspect.iscoroutinefunction(api_main.get_logs)
+
+
+@pytest.mark.parametrize("chemin,verbe", [("/app/fantome/stop", ("app", "stop")),
+                                          ("/instance/fantome/stop", ("instance", "stop"))])
+def test_arret_rend_l_echec_du_ctl(ctl, chemin, verbe):
+    client, etat = ctl
+    etat["reponses"][verbe] = {"output": "", "code": 2, "error": "App not found: fantome"}
+    r = client.post(chemin)
+    assert r.status_code == 404 and "fantome" in r.json()["detail"]

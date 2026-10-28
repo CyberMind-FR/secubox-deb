@@ -124,6 +124,8 @@ STREAMLIT_CONF = Path(os.environ.get("SECUBOX_STREAMLIT_CONF", "/etc/secubox/str
 CONTENEUR_REVEIL_DELAI_S = 20
 # Publication : nginx -t + rechargement, route sbxwaf, génération HAProxy (le plus long).
 PUBLICATION_DELAI_S = 90
+# Dépôt : extraction + installation des dépendances (pip, 240 s au plus côté ctl), sous les 300 s de nginx.
+DEPOT_DELAI_S = 290
 
 # Vignettes capturées (#958) — répertoire de cache DÉDIÉ, jamais à
 # l'intérieur de APPS_PATH : la moitié du parc est constituée de scripts
@@ -262,7 +264,7 @@ def _run_ctl(*args, timeout: int = 30, entree: Optional[str] = None, brut: bool 
 
 
 # Codes de streamlitctl (et d'api/publication.py) → statut HTTP. Un échec non classé reste un 500, mais lisible.
-_STATUTS_CTL = {2: 404, 3: 409, 4: 409, 5: 409, 64: 400, 75: 503}
+_STATUTS_CTL = {2: 404, 3: 409, 4: 409, 5: 409, 6: 422, 64: 400, 75: 503}
 
 
 def _ctl_ok(*args, timeout: int = 30, entree: Optional[str] = None) -> dict:
@@ -1016,7 +1018,8 @@ def deploy(
             shutil.copyfileobj(file.file, fh)
         _verifier_zip(Path(tmp))
         reveille = _reveiller_conteneur(f"le dépôt de « {name} »")
-        result = _ctl_ok("app", "deploy", tmp, name, timeout=120)
+        # Extraction par root + pip DANS le conteneur (240 s au plus) : réponse avant les 300 s de nginx.
+        result = _ctl_ok("app", "deploy", tmp, name, timeout=DEPOT_DELAI_S)
     finally:
         Path(tmp).unlink(missing_ok=True)
     attrib = _attribuer_port(name, port_n)
@@ -1051,9 +1054,9 @@ def start_app(name: str, port: int = 0, user=Depends(require_jwt)):
 
 @router.post("/app/{name}/stop")
 def stop_app(name: str, user=Depends(require_jwt)):
-    """Stop an app."""
+    """Stop an app (l'échec du ctl est rendu, plus masqué)."""
     _exiger_nom_appli(name)
-    _run_ctl("app", "stop", name)
+    _ctl_ok("app", "stop", name)
     log.info("Stopped app: %s", name)
     return {"success": True, "name": name}
 
@@ -1172,7 +1175,7 @@ def put_env(name: str, req: EnvAppli, user=Depends(require_jwt)):
 
 
 @router.get("/app/{name}/logs")
-async def get_logs(name: str, lines: int = 100, user=Depends(require_jwt)):
+def get_logs(name: str, lines: int = 100, user=Depends(require_jwt)):
     """Get app logs."""
     _exiger_nom_appli(name)
     result = _run_ctl("app", "logs", name, str(lines), brut=True)
@@ -1427,9 +1430,9 @@ def start_instance(id: str, user=Depends(require_jwt)):
 
 @router.post("/instance/{id}/stop")
 def stop_instance(id: str, user=Depends(require_jwt)):
-    """Stop an instance."""
+    """Stop an instance (l'échec du ctl est rendu, plus masqué)."""
     _exiger_nom_appli(id)
-    _run_ctl("instance", "stop", id)
+    _ctl_ok("instance", "stop", id)
     return {"success": True, "id": id}
 
 
