@@ -73,8 +73,8 @@ def test_live_decrit_le_boot_cmd_servi(racines):
     ]
     assert live["squashfs"] is True
     assert live["images"] == [
-        {"nom": "secubox-isp-mochabin-trixie.img.gz", "taille": 2669000177, "sha256": "a" * 64, "signee": True},
-        {"nom": "secubox-lite-mochabin-trixie.img.gz", "taille": 2164961075, "sha256": "b" * 64, "signee": False},
+        {"nom": "secubox-isp-mochabin-trixie.img.gz", "taille": 2669000177, "sha256": "a" * 64, "signee": True, "taille_brute": None},
+        {"nom": "secubox-lite-mochabin-trixie.img.gz", "taille": 2164961075, "sha256": "b" * 64, "signee": False, "taille_brute": None},
     ]
 
 

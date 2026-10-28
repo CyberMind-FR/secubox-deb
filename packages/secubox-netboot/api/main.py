@@ -17,7 +17,7 @@ from pydantic import BaseModel
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import ipaddress
 import logging
 import os
@@ -334,7 +334,7 @@ async def publish(req: PublishReq, user=Depends(require_jwt)):
 TFTP_ROOT = Path("/srv/secubox/netboot/tftp")
 HTTP_ROOT = Path("/srv/secubox/netboot/http")
 _RE_NOM_LIVE = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
-_RE_IMAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.img\.gz")
+_RE_IMAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.img\.(gz|xz)")   # .xz : images de la release (#3233)
 _LIRE_MAX = 64 * 1024
 
 
@@ -355,18 +355,47 @@ def _lire_court(f: Path) -> Optional[str]:
 
 
 def _images_live(d: Path) -> List[Dict[str, Any]]:
-    """images.txt du live (« nom taille sha256 » par ligne) ; noms douteux et lignes illisibles écartés."""
+    """images.txt du live (« nom taille sha256 [taille_décompressée] » par ligne, #3233) ; noms douteux et lignes
+    illisibles écartés."""
     out: List[Dict[str, Any]] = []
     for ligne in (_lire_court(d / "images.txt") or "").splitlines():
         mots = ligne.split()
-        if len(mots) != 3 or not _RE_IMAGE.fullmatch(mots[0]) or not mots[1].isdigit() \
-                or not re.fullmatch(r"[0-9a-f]{64}", mots[2]):
+        # [0-9] et non isdigit() : un chiffre Unicode (« ² ») passerait isdigit() puis ferait échouer int() (500)
+        if len(mots) not in (3, 4) or not _RE_IMAGE.fullmatch(mots[0]) or not re.fullmatch(r"[0-9]{1,15}", mots[1]) \
+                or not re.fullmatch(r"[0-9a-f]{64}", mots[2]) or (len(mots) == 4 and not re.fullmatch(r"[0-9]{1,15}", mots[3])):
             continue
         out.append({"nom": mots[0], "taille": int(mots[1]), "sha256": mots[2],
-                    "signee": (d / (mots[0] + ".sig")).is_file()})
+                    "signee": (d / (mots[0] + ".sig")).is_file(),
+                    "taille_brute": int(mots[3]) if len(mots) == 4 else None})
         if len(out) >= 50:
             break
     return out
+
+
+_CLE_USB = "cle-usb.img.gz"
+_RE_CMD_USB = re.compile(r"^(tester|autoflash)\t([ -~]{1,200})$")
+
+
+def _cle_usb(d: Path) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, str]]]:
+    """Clé USB « finale » publiée à côté du live (#3233, build-cle-finale.sh) : l'image système qui tourne sur la clé
+    pour les tests, et qui s'écrit seule sur l'eMMC (autoflash). Commandes U-Boot lues dans cle-usb.txt
+    (« tester|autoflash<TAB>commande ») ; tout autre rôle et toute ligne trop longue ou non imprimable sont écartés."""
+    f = d / _CLE_USB
+    try:
+        if not f.is_file():
+            return None, []
+        taille = f.stat().st_size
+    except OSError:
+        return None, []
+    cle = {"nom": _CLE_USB, "taille": taille, "signee": (d / (_CLE_USB + ".sig")).is_file()}
+    cmds = []
+    for ligne in (_lire_court(d / "cle-usb.txt") or "").splitlines():
+        m = _RE_CMD_USB.fullmatch(ligne)
+        if m:
+            cmds.append({"role": m.group(1), "commande": m.group(2)})
+        if len(cmds) >= 4:
+            break
+    return cle, cmds
 
 
 def live_infos() -> List[Dict[str, Any]]:
@@ -384,8 +413,15 @@ def live_infos() -> List[Dict[str, Any]]:
             continue
         serveur = re.search(r"^setenv serverip (\S+)\s*$", texte, re.M)
         fetch = re.search(r"\bfetch=(http://\S+)/filesystem\.squashfs\b", texte)
+        titre = re.search(r"^# SecuBox ([^\n—]{1,40}?) — live", texte, re.M)
+        console = re.search(r"\bconsole=([A-Za-z0-9,]{1,32})\b", texte)
+        cle, cmds_usb = _cle_usb(HTTP_ROOT / d.name)
         lives.append({
             "nom": d.name,
+            "titre": titre.group(1) if titre else None,
+            "console": console.group(1) if console else None,
+            "usb": cle,
+            "commandes_usb": cmds_usb,
             "serveur": serveur.group(1) if serveur else None,
             "http_base": fetch.group(1) if fetch else None,
             "commandes": re.findall(r"^#   (\S.*?)\s*$", texte, re.M),

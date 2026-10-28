@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: sbx-autoflash (#3233) — SUR LA CLÉ USB « FINALE » (build-cle-finale.sh).
+#
+# Quand le noyau porte sbx_autoflash=1 — démarrage par autoflash.scr, tapé à la console U-Boot : c'est la confirmation
+# de l'opérateur —, écrit sur l'eMMC l'image signée rangée dans la partition SBXFLASH de la clé, puis éteint la carte.
+# L'empreinte du fichier est calculée AVANT la vérification de la signature, puis imposée à l'écriture en flux
+# (secubox-flash-emmc --stdin, qui revérifie la signature au fil de l'eau) : un fichier changé entre les deux ne
+# correspond plus et l'eMMC est invalidée. Signature invalide = rien n'est écrit.
+set -euo pipefail
+
+PUB=/etc/secubox/netboot-image.pub
+MONT=/run/sbx-autoflash
+
+log()  { echo "[sbx-autoflash] $*"; logger -t sbx-autoflash -- "$*" 2>/dev/null || true; }
+fail() { log "ERREUR : $*"; exit 1; }
+
+demande_autoflash() { # [CMDLINE] — vrai seulement pour le mot exact sbx_autoflash=1
+    tr ' ' '\n' < "${1:-/proc/cmdline}" | grep -qx 'sbx_autoflash=1'
+}
+
+choisit_image() { # DOSSIER → la seule image .img.gz|.img.xz accompagnée de sa signature ; zéro ou plusieurs = refus
+    local d="$1" f img="" n=0
+    for f in "$d"/*.img.gz "$d"/*.img.xz; do
+        [ -f "$f" ] || continue
+        n=$((n + 1)); img="$f"
+    done
+    [ "$n" -eq 1 ] && [ -f "$img.sig" ] || return 1
+    echo "$img"
+}
+
+verifie_signature() { # CLE_PUB IMAGE
+    openssl dgst -sha256 -verify "$1" -signature "$2.sig" "$2" >/dev/null 2>&1
+}
+
+main() {
+    demande_autoflash /proc/cmdline || { log "démarrage sans sbx_autoflash=1 : rien à écrire"; exit 0; }
+    [ -s "$PUB" ] || fail "clé publique absente ($PUB) : clé construite sans elle"
+    mkdir -p "$MONT"
+    mountpoint -q "$MONT" || mount -o ro LABEL=SBXFLASH "$MONT" || fail "partition SBXFLASH introuvable sur la clé"
+    img="$(choisit_image "$MONT")" || fail "une seule image signée attendue dans SBXFLASH — rien n'a été écrit"
+    case "$img" in *.img.xz) format=xz ;; *) format=gz ;; esac
+    log "empreinte de $(basename "$img")…"
+    sha="$(sha256sum "$img" | awk '{print $1}')"
+    log "vérification de la signature (clé embarquée)…"
+    verifie_signature "$PUB" "$img" || fail "SIGNATURE INVALIDE — rien n'a été écrit"
+    log "signature VALIDE : écriture de l'eMMC (signature et empreinte revérifiées pendant l'écriture)…"
+    secubox-flash-emmc --stdin "$format" --sig "$img.sig" --pub "$PUB" --sha256 "$sha" --auto --no-reboot < "$img" \
+        || fail "écriture de l'eMMC refusée ou interrompue (eMMC invalidée si elle avait été entamée)"
+    umount "$MONT" 2>/dev/null || true
+    log "eMMC écrite. Extinction dans 10 s : retirer la clé, puis rallumer — la carte démarre sur l'eMMC."
+    sleep 10
+    systemctl poweroff
+}
+
+# Chargeable sans exécuter (tests) : SBX_AUTOFLASH_SOURCE=1.
+if [ -z "${SBX_AUTOFLASH_SOURCE:-}" ]; then main "$@"; fi

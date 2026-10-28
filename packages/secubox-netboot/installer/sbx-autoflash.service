@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# SecuBox-Deb :: sbx-autoflash (#3233) — posé par build-cle-finale.sh sur la SEULE clé USB finale, jamais sur une box.
+# Root : il écrit le périphérique bloc de l'eMMC et monte la partition SBXFLASH de la clé.
+[Unit]
+Description=SecuBox — écriture de l'eMMC depuis la clé USB finale (sbx_autoflash=1)
+ConditionKernelCommandLine=sbx_autoflash=1
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sbx-autoflash
+StandardOutput=journal+console
+StandardError=journal+console
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
