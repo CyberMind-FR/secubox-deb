@@ -10,12 +10,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
@@ -35,6 +37,8 @@ type fauxMaitre struct {
 	notifs   [][]byte
 	bonjour  [][]byte
 	recu     chan struct{}
+
+	echecsNotifs int // nombre de POST /notifs à refuser en 503 avant d'accepter
 }
 
 func (f *fauxMaitre) handler() http.Handler {
@@ -69,6 +73,12 @@ func (f *fauxMaitre) handler() http.Handler {
 	mux.HandleFunc("/canal/v1/notifs", func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		f.mu.Lock()
+		if f.echecsNotifs > 0 {
+			f.echecsNotifs--
+			f.mu.Unlock()
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		f.notifs = append(f.notifs, b)
 		f.mu.Unlock()
 		f.signal()
@@ -85,10 +95,18 @@ func (f *fauxMaitre) signal() {
 
 func demarrer(t *testing.T, f *fauxMaitre, m *modele.Modele, operer func(context.Context, string, map[string]any) (any, error), ev <-chan notifs.Evenement) (stop func()) {
 	t.Helper()
+	return demarrerAvec(t, f, m, operer, ev, nil)
+}
+
+func demarrerAvec(t *testing.T, f *fauxMaitre, m *modele.Modele, operer func(context.Context, string, map[string]any) (any, error), ev <-chan notifs.Evenement, regler func(*Client)) (stop func()) {
+	t.Helper()
 	f.recu = make(chan struct{}, 8)
 	srv := httptest.NewServer(f.handler())
 	t.Cleanup(srv.Close)
 	c := NouveauClient(Config{Maitre: strings.TrimPrefix(srv.URL, "http://"), Attente: time.Second}, m, operer)
+	if regler != nil {
+		regler(c)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	fini := make(chan error, 1)
 	go func() { fini <- c.Tourner(ctx, ev) }()
@@ -186,15 +204,21 @@ func TestClientOperateMesurer(t *testing.T) {
 			`{"msg_id":"fedcba9876543210","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Releve.Mesurer()","args":{"duree_s":"60; rm"}}}]`}}
 	stop := demarrer(t, f, modeleTest(nil), operer, nil)
 	defer stop()
-	attendre(t, f)
+	attendreCond(t, f, "ERROR puis OPERATE_RESP", func() bool { return len(f.reponses) >= 2 })
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	l := decoder(t, f.reponses[0])
-	if l[0]["type"] != "OPERATE_RESP" || vu["duree_s"] != 60 {
-		t.Fatalf("OPERATE_RESP attendu avec duree_s=60 : %v %v", l[0], vu)
+	// l'argument invalide est refusé tout de suite ; le relevé répond dans son propre POST
+	// (l'ordre des deux POST n'est pas garanti)
+	vus := map[string]string{}
+	for _, b := range f.reponses {
+		l := decoder(t, b)
+		if len(l) != 1 {
+			t.Fatalf("une réponse par POST attendue : %s", b)
+		}
+		vus[l[0]["msg_id"].(string)] = l[0]["type"].(string)
 	}
-	if l[1]["type"] != "ERROR" {
-		t.Fatalf("argument non entier doit être refusé : %v", l[1])
+	if vus["fedcba9876543210"] != "ERROR" || vus["0123456789abcdef"] != "OPERATE_RESP" || vu["duree_s"] != 60 {
+		t.Fatalf("ERROR et OPERATE_RESP (duree_s=60) attendus : %v %v", vus, vu)
 	}
 }
 
@@ -228,10 +252,10 @@ func TestClientValideLesRequetes(t *testing.T) {
 
 func TestClientIgnoreUnJSONMalForme(t *testing.T) {
 	c := NouveauClient(Config{Maitre: "127.0.0.1"}, modeleTest(nil), nil)
-	if r := c.traiter(context.Background(), []byte(`pas du json`)); len(r) != 0 {
-		t.Fatalf("liste illisible : aucune réponse attendue, reçu %v", r)
+	if r, _, err := c.traiter(context.Background(), []byte(`pas du json`)); len(r) != 0 || err == nil {
+		t.Fatalf("liste illisible : erreur et aucune réponse attendues, reçu %v (err=%v)", r, err)
 	}
-	r := c.traiter(context.Background(), []byte(`[42,{"msg_id":1},{"msg_id":"0123456789abcdef","type":"GET_SUPPORTED_DM","body":{}}]`))
+	r, _, _ := c.traiter(context.Background(), []byte(`[42,{"msg_id":1},{"msg_id":"0123456789abcdef","type":"GET_SUPPORTED_DM","body":{}}]`))
 	if len(r) != 1 || r[0].Type != "GET_SUPPORTED_DM_RESP" {
 		t.Fatalf("seule la requête valable reçoit une réponse : %v", r)
 	}
@@ -243,7 +267,7 @@ func TestClientBorneLeNombreDeRequetes(t *testing.T) {
 		l = append(l, fmt.Sprintf(`{"msg_id":"%016x","type":"GET_SUPPORTED_DM","body":{}}`, i))
 	}
 	c := NouveauClient(Config{Maitre: "127.0.0.1"}, modeleTest(nil), nil)
-	if r := c.traiter(context.Background(), []byte("["+strings.Join(l, ",")+"]")); len(r) != 32 {
+	if r, _, _ := c.traiter(context.Background(), []byte("["+strings.Join(l, ",")+"]")); len(r) != 32 {
 		t.Fatalf("32 réponses au plus, reçu %d", len(r))
 	}
 }
@@ -291,11 +315,15 @@ func TestClientReculRepartApresUnSucces(t *testing.T) {
 	var mu sync.Mutex
 	n := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/bonjour") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		mu.Lock()
 		n++
 		k := n
 		mu.Unlock()
-		if strings.HasSuffix(r.URL.Path, "/bonjour") || k == 4 {
+		if k == 3 {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -307,15 +335,22 @@ func TestClientReculRepartApresUnSucces(t *testing.T) {
 	var delais []time.Duration
 	c.dormir = func(ctx context.Context, d time.Duration) error {
 		delais = append(delais, d)
-		if len(delais) == 3 {
+		if len(delais) == 4 {
 			cancel()
 		}
 		return ctx.Err()
 	}
 	c.Tourner(ctx, nil)
-	// bonjour(1) ok, sondage(2) 502 → 5 s, sondage(3) 502 → 10 s, sondage(4) 204 ok, sondage(5) 502 → 5 s
-	if len(delais) != 3 || delais[0] != 5*time.Second || delais[1] != 10*time.Second || delais[2] != 5*time.Second {
+	// sondage 1 et 2 en 502 → 5 s, 10 s ; sondage 3 en 204 immédiat → plancher 1 s ;
+	// sondage 4 en 502 → le recul repart de 5 s
+	att := []time.Duration{5 * time.Second, 10 * time.Second, time.Second, 5 * time.Second}
+	if len(delais) != 4 {
 		t.Fatalf("délais %v", delais)
+	}
+	for i := range att {
+		if delais[i] != att[i] {
+			t.Fatalf("délais %v, attendu %v", delais, att)
+		}
 	}
 }
 
@@ -389,5 +424,413 @@ func TestClientNeSuitPasLesRedirections(t *testing.T) {
 	c := NouveauClient(Config{Maitre: strings.TrimPrefix(srv.URL, "http://")}, modeleTest(nil), nil)
 	if err := c.poster(context.Background(), "/bonjour", map[string]string{}); err == nil || cible != 0 {
 		t.Fatalf("la redirection doit échouer sans être suivie (err=%v, cible=%d)", err, cible)
+	}
+}
+
+// attendreCond attend (3 s au plus) qu'une condition, évaluée sous le verrou du faux maître, devienne vraie.
+func attendreCond(t *testing.T, f *fauxMaitre, quoi string, cond func() bool) {
+	t.Helper()
+	fin := time.Now().Add(3 * time.Second)
+	for time.Now().Before(fin) {
+		f.mu.Lock()
+		ok := cond()
+		f.mu.Unlock()
+		if ok {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("condition jamais remplie : %s", quoi)
+}
+
+func TestClientDecoupeLesReponsesEnPlusieursPost(t *testing.T) {
+	params := map[string]any{"Device.Test.gros": strings.Repeat("v", 200<<10)}
+	f := &fauxMaitre{requetes: []string{`[` +
+		`{"msg_id":"0000000000000001","type":"GET","body":{"paths":["Device.Test."]}},` +
+		`{"msg_id":"0000000000000002","type":"GET","body":{"paths":["Device.Test."]}}]`}}
+	stop := demarrer(t, f, modeleTest(params), nil, nil)
+	defer stop()
+	attendreCond(t, f, "deux POST /reponses", func() bool { return len(f.reponses) >= 2 })
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.reponses) != 2 {
+		t.Fatalf("2 POST attendus, reçu %d", len(f.reponses))
+	}
+	for i, b := range f.reponses {
+		if len(b) > 256<<10 {
+			t.Fatalf("POST %d de %d octets > 256 Kio", i, len(b))
+		}
+		if l := decoder(t, b); len(l) != 1 || l[0]["type"] != "GET_RESP" {
+			t.Fatalf("POST %d inattendu : %.100s", i, b)
+		}
+	}
+}
+
+func TestLotsReponsesRespecteLaTaille(t *testing.T) {
+	var reps []reponse
+	for i := 0; i < 10; i++ {
+		reps = append(reps, reponse{MsgID: fmt.Sprintf("%016x", i), Type: "GET_RESP", Body: map[string]any{"x": strings.Repeat("a", 100)}})
+	}
+	lots := lotsReponses(reps, 400)
+	total := 0
+	for _, b := range lots {
+		if len(b) > 400 {
+			t.Fatalf("lot de %d octets > 400", len(b))
+		}
+		var l []reponse
+		if err := json.Unmarshal(b, &l); err != nil {
+			t.Fatalf("lot illisible : %v", err)
+		}
+		total += len(l)
+	}
+	if total != 10 || len(lots) < 2 {
+		t.Fatalf("10 réponses en plusieurs lots attendues : total=%d lots=%d", total, len(lots))
+	}
+}
+
+func TestClientUneReponsePileATailleMaxEstRefusee(t *testing.T) {
+	// l'enveloppe « [ ] » ajoute 2 octets : une réponse qui tient à l'octet près ne tient pas dans un POST
+	for taille := 800; taille < 1000; taille++ {
+		cl := NouveauClient(Config{Maitre: "127.0.0.1", TailleMax: 1000}, modeleTest(map[string]any{"Device.Test.v": strings.Repeat("v", taille)}), nil)
+		rep := cl.repondre(context.Background(), requete{MsgID: "0123456789abcdef", Type: "GET", Body: json.RawMessage(`{"paths":["Device.Test."]}`)})
+		b, _ := json.Marshal(rep)
+		if len(b)+2 > 1000 {
+			t.Fatalf("réponse de %d octets, enveloppe comprise %d > 1000 (type %s)", len(b), len(b)+2, rep.Type)
+		}
+	}
+}
+
+func TestClientRelevePasSynchrone(t *testing.T) {
+	entre := make(chan struct{}, 4)
+	liberer := make(chan struct{})
+	operer := func(context.Context, string, map[string]any) (any, error) {
+		entre <- struct{}{}
+		<-liberer
+		return map[string]any{"ok": true}, nil
+	}
+	mesure := `"type":"OPERATE","body":{"command":"Device.X_SECUBOX_Releve.Mesurer()","args":{"duree_s":60}}`
+	f := &fauxMaitre{requetes: []string{
+		`[{"msg_id":"00000000000000a1",` + mesure + `}]`,
+		`[{"msg_id":"00000000000000b2","type":"GET_SUPPORTED_DM","body":{}}]`,
+		`[{"msg_id":"00000000000000c3",` + mesure + `}]`,
+	}}
+	stop := demarrer(t, f, modeleTest(nil), operer, nil)
+	defer func() {
+		select {
+		case <-liberer:
+		default:
+			close(liberer)
+		}
+		stop()
+	}()
+	select {
+	case <-entre:
+	case <-time.After(3 * time.Second):
+		t.Fatal("le relevé n'a pas démarré")
+	}
+	attendreCond(t, f, "GET_SUPPORTED_DM_RESP et refus du second relevé avant la fin du premier", func() bool { return len(f.reponses) >= 2 })
+	f.mu.Lock()
+	if !strings.Contains(string(f.reponses[0]), "GET_SUPPORTED_DM_RESP") {
+		t.Errorf("la requête suivante doit être servie pendant le relevé : %s", f.reponses[0])
+	}
+	if !strings.Contains(string(f.reponses[1]), `"ERROR"`) || !strings.Contains(string(f.reponses[1]), "relevé déjà en cours") {
+		t.Errorf("le second relevé doit recevoir ERROR : %s", f.reponses[1])
+	}
+	f.mu.Unlock()
+	close(liberer)
+	attendreCond(t, f, "OPERATE_RESP", func() bool { return len(f.reponses) >= 3 })
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	l := decoder(t, f.reponses[2])
+	if len(l) != 1 || l[0]["type"] != "OPERATE_RESP" || l[0]["msg_id"] != "00000000000000a1" {
+		t.Fatalf("OPERATE_RESP seule dans son POST attendue : %s", f.reponses[2])
+	}
+}
+
+func TestTournerAttendLeReleve(t *testing.T) {
+	entre := make(chan struct{})
+	liberer := make(chan struct{})
+	termine := make(chan struct{})
+	operer := func(context.Context, string, map[string]any) (any, error) {
+		close(entre)
+		<-liberer
+		close(termine)
+		return nil, nil
+	}
+	f := &fauxMaitre{requetes: []string{`[{"msg_id":"00000000000000a1","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Releve.Mesurer()","args":{}}}]`}}
+	f.recu = make(chan struct{}, 8)
+	srv := httptest.NewServer(f.handler())
+	defer srv.Close()
+	c := NouveauClient(Config{Maitre: strings.TrimPrefix(srv.URL, "http://"), Attente: time.Second}, modeleTest(nil), operer)
+	ctx, cancel := context.WithCancel(context.Background())
+	fini := make(chan error, 1)
+	go func() { fini <- c.Tourner(ctx, nil) }()
+	<-entre
+	cancel()
+	select {
+	case <-fini:
+		t.Fatal("Tourner ne doit rendre la main qu'après le relevé")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(liberer)
+	select {
+	case <-fini:
+		select {
+		case <-termine:
+		default:
+			t.Fatal("Tourner rendu avant la fin du relevé")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Tourner ne rend pas la main")
+	}
+}
+
+func TestClientPasDeRafaleSiLeMaitreRepondVite(t *testing.T) {
+	cas := map[string]func(w http.ResponseWriter){
+		"204 immédiat":         func(w http.ResponseWriter) { w.WriteHeader(http.StatusNoContent) },
+		"200 liste vide":       func(w http.ResponseWriter) { w.Write([]byte("[]")) },
+		"200 illisible":        func(w http.ResponseWriter) { w.Write([]byte("pas du json")) },
+		"200 msg_id invalides": func(w http.ResponseWriter) { w.Write([]byte(`[{"msg_id":"ZZ","type":"GET","body":{}}]`)) },
+	}
+	for nom, rep := range cas {
+		t.Run(nom, func(t *testing.T) {
+			var mu sync.Mutex
+			sondages := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/requetes") {
+					mu.Lock()
+					sondages++
+					mu.Unlock()
+					rep(w)
+				}
+			}))
+			defer srv.Close()
+			c := NouveauClient(Config{Maitre: strings.TrimPrefix(srv.URL, "http://"), Attente: time.Second}, modeleTest(nil), nil)
+			ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+			defer cancel()
+			c.Tourner(ctx, nil)
+			mu.Lock()
+			defer mu.Unlock()
+			if sondages > 2 {
+				t.Fatalf("%d sondages en 400 ms : rafale", sondages)
+			}
+		})
+	}
+}
+
+func TestClientRetenteLesNotificationsSansNouvelEvenement(t *testing.T) {
+	ev := make(chan notifs.Evenement, 4)
+	f := &fauxMaitre{echecsNotifs: 2}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, ev, func(c *Client) {
+		c.reprise = func(time.Duration) *time.Timer { return time.NewTimer(10 * time.Millisecond) }
+	})
+	defer stop()
+	ev <- notifs.Evenement{Type: "X_SECUBOX_Boot", Instant: 42}
+	attendreCond(t, f, "Boot finit par arriver", func() bool {
+		return len(f.notifs) == 1 && strings.Contains(string(f.notifs[0]), "X_SECUBOX_Boot")
+	})
+}
+
+func TestClientReculDesNotifications(t *testing.T) {
+	ev := make(chan notifs.Evenement, 4)
+	f := &fauxMaitre{echecsNotifs: 1000}
+	var mu sync.Mutex
+	var delais []time.Duration
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, ev, func(c *Client) {
+		c.reprise = func(d time.Duration) *time.Timer {
+			mu.Lock()
+			delais = append(delais, d)
+			mu.Unlock()
+			return time.NewTimer(time.Millisecond)
+		}
+	})
+	defer stop()
+	ev <- notifs.Evenement{Type: "X_SECUBOX_Boot", Instant: 1}
+	fin := time.Now().Add(3 * time.Second)
+	for time.Now().Before(fin) {
+		mu.Lock()
+		n := len(delais)
+		mu.Unlock()
+		if n >= 4 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	att := []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second, 40 * time.Second}
+	if len(delais) < 4 {
+		t.Fatalf("reprises %v", delais)
+	}
+	for i := range att {
+		if delais[i] != att[i] {
+			t.Fatalf("reprises %v, attendu un recul doublé %v", delais, att)
+		}
+	}
+}
+
+func TestClientNotificationsParLotsDe16(t *testing.T) {
+	ev := make(chan notifs.Evenement, 64)
+	f := &fauxMaitre{}
+	for i := 0; i < 40; i++ {
+		ev <- notifs.Evenement{Type: "X_SECUBOX_MemoryLow", Valeur: int64(i), Instant: int64(i)}
+	}
+	stop := demarrer(t, f, modeleTest(nil), nil, ev)
+	defer stop()
+	attendreCond(t, f, "40 notifications", func() bool {
+		n := 0
+		for _, b := range f.notifs {
+			var l []json.RawMessage
+			json.Unmarshal(b, &l)
+			n += len(l)
+		}
+		return n == 40
+	})
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, b := range f.notifs {
+		var l []json.RawMessage
+		json.Unmarshal(b, &l)
+		if len(l) > 16 {
+			t.Fatalf("lot de %d notifications > 16", len(l))
+		}
+	}
+}
+
+func TestClientLieLaSourceDuTunnel(t *testing.T) {
+	for _, src := range []string{"127.0.0.2", "127.0.0.2/24"} {
+		t.Run(src, func(t *testing.T) {
+			vu := make(chan string, 1)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h, _, _ := net.SplitHostPort(r.RemoteAddr)
+				select {
+				case vu <- h:
+				default:
+				}
+			}))
+			defer srv.Close()
+			c := NouveauClient(Config{Maitre: strings.TrimPrefix(srv.URL, "http://"), IPSource: src}, modeleTest(nil), nil)
+			if err := c.poster(context.Background(), "/bonjour", map[string]string{}); err != nil {
+				t.Fatal(err)
+			}
+			if h := <-vu; h != "127.0.0.2" {
+				t.Fatalf("adresse source vue par le maître : %s", h)
+			}
+		})
+	}
+}
+
+func TestClientIPSourceInvalideNeSeConnectePas(t *testing.T) {
+	appels := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { appels++ }))
+	defer srv.Close()
+	for _, src := range []string{"pas-une-ip", "10.10.0.5/99", "10.10.0.5 ", "10.10.0.5:80"} {
+		c := NouveauClient(Config{Maitre: strings.TrimPrefix(srv.URL, "http://"), IPSource: src}, modeleTest(nil), nil)
+		b := false
+		if _, err := c.cycle(context.Background(), &b); err == nil || !strings.Contains(err.Error(), "ip_source") {
+			t.Fatalf("%q : erreur visible attendue, reçu %v", src, err)
+		}
+	}
+	if appels != 0 {
+		t.Fatalf("aucune connexion attendue, %d appels", appels)
+	}
+}
+
+func TestClientDureeSBornee(t *testing.T) {
+	operer := func(context.Context, string, map[string]any) (any, error) { return nil, nil }
+	for _, c := range []struct {
+		d  string
+		ok bool
+	}{{"9", false}, {"10", true}, {"300", true}, {"301", false}, {"3600", false}, {"1", false}} {
+		cl := NouveauClient(Config{Maitre: "127.0.0.1"}, modeleTest(nil), operer)
+		corps := `[{"msg_id":"0123456789abcdef","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Releve.Mesurer()","args":{"duree_s":` + c.d + `}}}]`
+		reps, lances, _ := cl.traiter(context.Background(), []byte(corps))
+		cl.suivi.Wait()
+		if c.ok && (lances != 1 || len(reps) != 0) {
+			t.Errorf("duree_s=%s doit être acceptée : %v %d", c.d, reps, lances)
+		}
+		if !c.ok {
+			if len(reps) != 1 || reps[0].Type != "ERROR" || !strings.Contains(fmt.Sprint(reps[0].Body["err"]), "10 à 300") {
+				t.Errorf("duree_s=%s doit être refusée avec la plage 10 à 300 : %v", c.d, reps)
+			}
+		}
+	}
+}
+
+func TestValiderCheminsDedoublonne(t *testing.T) {
+	l := make([]any, 64)
+	for i := range l {
+		l[i] = "Device."
+	}
+	l = append(l[:3], "Device.A.", "Device.")
+	out, err := validerChemins(l)
+	if err != nil || len(out) != 2 || out[0] != "Device." || out[1] != "Device.A." {
+		t.Fatalf("doublons à retirer en gardant l'ordre : %v %v", out, err)
+	}
+}
+
+func TestClientRannonceSonBonjourApresUneErreur(t *testing.T) {
+	var mu sync.Mutex
+	bonjours, sondages := 0, 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		if strings.HasSuffix(r.URL.Path, "/bonjour") {
+			bonjours++
+			return
+		}
+		sondages++
+		if sondages == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	c := NouveauClient(Config{Maitre: strings.TrimPrefix(srv.URL, "http://"), Attente: time.Second}, modeleTest(nil), nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	c.dormir = func(ctx context.Context, d time.Duration) error {
+		time.Sleep(5 * time.Millisecond)
+		return ctx.Err()
+	}
+	fini := make(chan struct{})
+	go func() { c.Tourner(ctx, nil); close(fini) }()
+	fin := time.Now().Add(3 * time.Second)
+	for time.Now().Before(fin) {
+		mu.Lock()
+		n := bonjours
+		mu.Unlock()
+		if n >= 2 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	<-fini
+	mu.Lock()
+	defer mu.Unlock()
+	if bonjours < 2 {
+		t.Fatalf("/bonjour doit être réannoncé après un cycle en erreur (reçu %d)", bonjours)
+	}
+}
+
+func TestClientBorneLesEnTetesDeReponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Gros", strings.Repeat("a", 64<<10))
+	}))
+	defer srv.Close()
+	c := NouveauClient(Config{Maitre: strings.TrimPrefix(srv.URL, "http://")}, modeleTest(nil), nil)
+	if err := c.poster(context.Background(), "/bonjour", map[string]string{}); err == nil {
+		t.Fatal("des en-têtes de 64 Kio doivent être refusés")
+	}
+}
+
+func TestErreurTronqueSansCouperUnCaractere(t *testing.T) {
+	for _, msg := range []string{strings.Repeat("é", 150), "a" + strings.Repeat("é", 150), "aa" + strings.Repeat("€", 100)} {
+		r := erreur("0123456789abcdef", msg)
+		s := r.Body["err"].(string)
+		if !utf8.ValidString(s) || len(s) > 200 || len(s) < 197 {
+			t.Fatalf("message mal coupé : %d octets, valide=%v", len(s), utf8.ValidString(s))
+		}
 	}
 }

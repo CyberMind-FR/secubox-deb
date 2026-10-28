@@ -24,7 +24,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
@@ -49,7 +51,10 @@ const (
 	delaiConnexion = 5 * time.Second
 	commandeMesure = "Device.X_SECUBOX_Releve.Mesurer()"
 	dureeDefautS   = 60
-	dureeMaxS      = 3600
+	dureeMinS      = 10
+	dureeMaxS      = 300
+	planchCycle    = time.Second // un cycle sans requête revenu plus vite est suivi de cette pause
+	maxEntetes     = 16 << 10
 )
 
 const msgRefus = "commande refusée (L1 : lecture seule)"
@@ -73,12 +78,16 @@ type Config struct {
 
 // Client interroge le maître et lui répond.
 type Client struct {
-	cfg    Config
-	m      *modele.Modele
-	operer func(ctx context.Context, cmd string, args map[string]any) (any, error)
-	http   *http.Client
-	base   string
-	dormir func(ctx context.Context, d time.Duration) error // injectable pour les tests
+	cfg     Config
+	m       *modele.Modele
+	operer  func(ctx context.Context, cmd string, args map[string]any) (any, error)
+	http    *http.Client
+	base    string
+	dormir  func(ctx context.Context, d time.Duration) error // injectable pour les tests
+	reprise func(d time.Duration) *time.Timer                // minuteur de reprise des notifications, injectable
+	suivi   sync.WaitGroup                                   // relevés en tâche de fond, attendus par Tourner
+	releve  atomic.Bool                                      // un relevé est en cours
+	errCfg  error                                            // configuration invalide : aucune connexion
 }
 
 // NouveauClient prépare le client ; rien n'est envoyé avant Tourner.
@@ -99,15 +108,22 @@ func NouveauClient(c Config, m *modele.Modele, operer func(ctx context.Context, 
 		c.TailleMax = TailleMaxDefaut
 	}
 	d := &net.Dialer{Timeout: delaiConnexion}
-	if ip := net.ParseIP(c.IPSource); ip != nil {
-		d.LocalAddr = &net.TCPAddr{IP: ip}
+	var errCfg error
+	if c.IPSource != "" {
+		ip, err := ipSource(c.IPSource)
+		if err != nil {
+			errCfg = err
+		} else {
+			d.LocalAddr = &net.TCPAddr{IP: ip}
+		}
 	}
 	tr := &http.Transport{
-		Proxy:                 nil, // jamais de proxy d'environnement
-		DialContext:           d.DialContext,
-		ResponseHeaderTimeout: c.Attente + 10*time.Second,
-		MaxIdleConns:          2,
-		IdleConnTimeout:       90 * time.Second,
+		Proxy:                  nil, // jamais de proxy d'environnement
+		DialContext:            d.DialContext,
+		ResponseHeaderTimeout:  c.Attente + 10*time.Second,
+		MaxResponseHeaderBytes: maxEntetes,
+		MaxIdleConns:           2,
+		IdleConnTimeout:        90 * time.Second,
 	}
 	cl := &http.Client{
 		Transport: tr,
@@ -119,7 +135,18 @@ func NouveauClient(c Config, m *modele.Modele, operer func(ctx context.Context, 
 	if !strings.Contains(hote, ":") || strings.HasSuffix(hote, "]") {
 		hote = net.JoinHostPort(strings.Trim(hote, "[]"), portCanal)
 	}
-	return &Client{cfg: c, m: m, operer: operer, http: cl, base: "http://" + hote + prefixe, dormir: dormirReel}
+	return &Client{cfg: c, m: m, operer: operer, http: cl, base: "http://" + hote + prefixe, dormir: dormirReel, reprise: time.NewTimer, errCfg: errCfg}
+}
+
+// ipSource accepte une adresse seule ou sa forme CIDR (« 10.10.0.5/24 »).
+func ipSource(s string) (net.IP, error) {
+	if ip := net.ParseIP(s); ip != nil {
+		return ip, nil
+	}
+	if ip, _, err := net.ParseCIDR(s); err == nil {
+		return ip, nil
+	}
+	return nil, fmt.Errorf("ip_source %q invalide : adresse IP ou CIDR attendue, aucune connexion", s)
 }
 
 func dormirReel(ctx context.Context, d time.Duration) error {
@@ -147,6 +174,7 @@ func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error 
 		}()
 	}
 	defer wg.Wait()
+	defer c.suivi.Wait() // relevés en tâche de fond
 
 	recul := c.cfg.ReculMin
 	bonjour := false
@@ -154,11 +182,19 @@ func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		err := c.cycle(ctx, &bonjour)
+		debut := time.Now()
+		actif, err := c.cycle(ctx, &bonjour)
 		if err == nil {
 			recul = c.cfg.ReculMin
+			if !actif && time.Since(debut) < planchCycle {
+				// le maître répond tout de suite sans rien demander : pas de rafale
+				if e := c.dormir(ctx, planchCycle); e != nil {
+					return e
+				}
+			}
 			continue
 		}
+		bonjour = false // le maître a pu redémarrer : on se réannonce
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -173,7 +209,11 @@ func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error 
 }
 
 // cycle fait un tour : bonjour (une fois), sondage, traitement, réponses.
-func (c *Client) cycle(ctx context.Context, bonjour *bool) error {
+// Il rend vrai si le maître a demandé quelque chose de valable.
+func (c *Client) cycle(ctx context.Context, bonjour *bool) (bool, error) {
+	if c.errCfg != nil {
+		return false, c.errCfg
+	}
 	if !*bonjour {
 		corps := map[string]any{
 			"agent_version": c.cfg.Version,
@@ -181,25 +221,56 @@ func (c *Client) cycle(ctx context.Context, bonjour *bool) error {
 			"modele":        c.m.Supportes(),
 		}
 		if err := c.poster(ctx, "/bonjour", corps); err != nil {
-			return fmt.Errorf("bonjour : %w", err)
+			return false, fmt.Errorf("bonjour : %w", err)
 		}
 		*bonjour = true
 	}
 	brut, err := c.sonder(ctx)
 	if err != nil {
-		return fmt.Errorf("sondage : %w", err)
+		return false, fmt.Errorf("sondage : %w", err)
 	}
 	if len(brut) == 0 {
-		return nil
+		return false, nil
 	}
-	reps := c.traiter(ctx, brut)
+	reps, lances, err := c.traiter(ctx, brut)
+	if err != nil {
+		return false, err
+	}
+	actif := len(reps)+lances > 0
 	if len(reps) == 0 {
-		return nil
+		return actif, nil
 	}
-	if err := c.poster(ctx, "/reponses", reps); err != nil {
-		return fmt.Errorf("réponses : %w", err)
+	for _, lot := range lotsReponses(reps, c.cfg.TailleMax) {
+		if e := c.poster(ctx, "/reponses", json.RawMessage(lot)); e != nil && err == nil {
+			err = fmt.Errorf("réponses : %w", e)
+		}
 	}
-	return nil
+	return actif, err
+}
+
+// lotsReponses range les réponses en listes JSON dont chacune, crochets
+// compris, tient dans max octets (un POST par lot).
+func lotsReponses(reps []reponse, max int) [][]byte {
+	var lots [][]byte
+	cur := []byte{'['}
+	for _, r := range reps {
+		b, err := json.Marshal(r)
+		if err != nil {
+			continue
+		}
+		if len(cur) > 1 && len(cur)+1+len(b)+1 > max {
+			lots = append(lots, append(cur, ']'))
+			cur = []byte{'['}
+		}
+		if len(cur) > 1 {
+			cur = append(cur, ',')
+		}
+		cur = append(cur, b...)
+	}
+	if len(cur) > 1 {
+		lots = append(lots, append(cur, ']'))
+	}
+	return lots
 }
 
 // sonder attend une liste de requêtes (200) ou rien (204).
@@ -259,10 +330,25 @@ func (c *Client) poster(ctx context.Context, chemin string, corps any) error {
 	return nil
 }
 
-// notifier regroupe les événements (16 par POST) ; en cas d'échec le lot est
-// gardé (64 au plus, les plus anciens tombent) et retenté à l'événement suivant.
+// notifier regroupe les événements (16 par POST) ; en cas d'échec ils sont
+// gardés (64 au plus, les plus anciens tombent) et retentés par un minuteur à
+// recul doublé de ReculMin à ReculMax, sans attendre l'événement suivant.
 func (c *Client) notifier(ctx context.Context, ev <-chan notifs.Evenement) {
 	var att []notifs.Evenement
+	var minuteur *time.Timer
+	var reprise <-chan time.Time
+	recul := c.cfg.ReculMin
+	defer func() {
+		if minuteur != nil {
+			minuteur.Stop()
+		}
+	}()
+	ajouter := func(e notifs.Evenement) {
+		att = append(att, e)
+		if len(att) > maxNotifsAtt {
+			att = att[len(att)-maxNotifsAtt:]
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -271,39 +357,58 @@ func (c *Client) notifier(ctx context.Context, ev <-chan notifs.Evenement) {
 			if !ok {
 				return
 			}
-			att = append(att, e)
+			ajouter(e)
+		case <-reprise:
+			reprise = nil
 		}
-		for ouvert := true; ouvert && len(att) < maxNotifsAtt; {
+		for ouvert := true; ouvert; {
 			select {
 			case e, ok := <-ev:
 				if !ok {
 					ouvert = false
 					break
 				}
-				att = append(att, e)
+				ajouter(e)
 			default:
 				ouvert = false
 			}
 		}
-		for len(att) > 0 {
-			n := min(len(att), maxLotNotifs)
-			lot := make([]map[string]any, n)
-			for i, e := range att[:n] {
-				lot[i] = map[string]any{"type": "NOTIFY", "body": map[string]any{"event": e}}
-			}
-			if err := c.poster(ctx, "/notifs", lot); err != nil {
-				if ctx.Err() != nil {
-					return
-				}
-				log.Printf("canal : notifications non remises : %v", err)
-				if len(att) > maxNotifsAtt {
-					att = att[len(att)-maxNotifsAtt:]
-				}
-				break
-			}
-			att = att[n:]
+		if c.vider(ctx, &att) {
+			recul = c.cfg.ReculMin
+			continue
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		if minuteur != nil {
+			minuteur.Stop()
+		}
+		minuteur = c.reprise(recul)
+		reprise = minuteur.C
+		if recul *= 2; recul > c.cfg.ReculMax {
+			recul = c.cfg.ReculMax
 		}
 	}
+}
+
+// vider envoie les notifications en attente par lots ; faux au premier échec,
+// les lots non remis restant dans att.
+func (c *Client) vider(ctx context.Context, att *[]notifs.Evenement) bool {
+	for len(*att) > 0 {
+		n := min(len(*att), maxLotNotifs)
+		lot := make([]map[string]any, n)
+		for i, e := range (*att)[:n] {
+			lot[i] = map[string]any{"type": "NOTIFY", "body": map[string]any{"event": e}}
+		}
+		if err := c.poster(ctx, "/notifs", lot); err != nil {
+			if ctx.Err() == nil {
+				log.Printf("canal : notifications non remises : %v", err)
+			}
+			return false
+		}
+		*att = (*att)[n:]
+	}
+	return true
 }
 
 // requete est un message du maître, tel que décodé.
@@ -320,18 +425,20 @@ type reponse struct {
 }
 
 // traiter décode la liste brute et répond à chaque requête valable. Une liste
-// illisible ou une requête sans msg_id correct est journalisée puis ignorée.
-func (c *Client) traiter(ctx context.Context, brut []byte) []reponse {
+// illisible est une erreur (recul) ; une requête sans msg_id correct est
+// journalisée puis ignorée. Les relevés partent en tâche de fond : lances les
+// compte, leur réponse part seule, plus tard.
+func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, error) {
 	var liste []json.RawMessage
 	if err := json.Unmarshal(brut, &liste); err != nil {
-		log.Printf("canal : liste de requêtes illisible, ignorée")
-		return nil
+		return nil, 0, errors.New("liste de requêtes illisible")
 	}
 	if len(liste) > maxRequetes {
 		log.Printf("canal : %d requêtes reçues, %d traitées", len(liste), maxRequetes)
 		liste = liste[:maxRequetes]
 	}
 	var reps []reponse
+	lances := 0
 	for _, r := range liste {
 		if ctx.Err() != nil {
 			break
@@ -341,18 +448,65 @@ func (c *Client) traiter(ctx context.Context, brut []byte) []reponse {
 			log.Printf("canal : requête malformée ignorée")
 			continue
 		}
+		if rq.Type == "OPERATE" {
+			rep, run := c.operate(rq)
+			if run == nil {
+				reps = append(reps, c.borner(rep))
+			} else if c.lancerReleve(ctx, rq.MsgID, run) {
+				lances++
+			} else {
+				reps = append(reps, erreur(rq.MsgID, "relevé déjà en cours"))
+			}
+			continue
+		}
 		reps = append(reps, c.repondre(ctx, rq))
 	}
-	return reps
+	return reps, lances, nil
+}
+
+// lancerReleve exécute run en tâche de fond, suivie par Tourner, et poste sa
+// réponse seule. Faux si un relevé est déjà en cours.
+func (c *Client) lancerReleve(ctx context.Context, id string, run func(context.Context) reponse) bool {
+	if !c.releve.CompareAndSwap(false, true) {
+		return false
+	}
+	c.suivi.Add(1)
+	go func() {
+		defer c.suivi.Done()
+		defer c.releve.Store(false)
+		rep := c.borner(run(ctx))
+		if ctx.Err() != nil {
+			return
+		}
+		for _, lot := range lotsReponses([]reponse{rep}, c.cfg.TailleMax) {
+			if err := c.poster(ctx, "/reponses", json.RawMessage(lot)); err != nil && ctx.Err() == nil {
+				log.Printf("canal : réponse du relevé non remise : %v", err)
+			}
+		}
+	}()
+	return true
+}
+
+// borner remplace une réponse qui, mise en liste, dépasserait TailleMax.
+func (c *Client) borner(rep reponse) reponse {
+	if b, err := json.Marshal(rep); err != nil || len(b)+2 > c.cfg.TailleMax {
+		return erreur(rep.MsgID, "réponse trop volumineuse")
+	}
+	return rep
 }
 
 func erreur(id, msg string) reponse {
 	if len(msg) > maxErreurLong {
-		msg = msg[:maxErreurLong]
+		n := maxErreurLong
+		for n > 0 && !utf8.RuneStart(msg[n]) {
+			n--
+		}
+		msg = msg[:n]
 	}
 	return reponse{MsgID: id, Type: "ERROR", Body: map[string]any{"err": msg}}
 }
 
+// repondre traite les requêtes à réponse immédiate ; OPERATE passe par traiter.
 func (c *Client) repondre(ctx context.Context, rq requete) reponse {
 	var rep reponse
 	switch rq.Type {
@@ -370,15 +524,10 @@ func (c *Client) repondre(ctx context.Context, rq requete) reponse {
 		rep = c.tronquer(rq.MsgID, c.m.Get(ctx, chemins))
 	case "GET_SUPPORTED_DM":
 		rep = reponse{MsgID: rq.MsgID, Type: "GET_SUPPORTED_DM_RESP", Body: map[string]any{"paths": c.m.Supportes()}}
-	case "OPERATE":
-		rep = c.operate(ctx, rq)
 	default:
 		return erreur(rq.MsgID, "type de requête inconnu")
 	}
-	if b, err := json.Marshal(rep); err != nil || len(b) > c.cfg.TailleMax {
-		return erreur(rq.MsgID, "réponse trop volumineuse")
-	}
-	return rep
+	return c.borner(rep)
 }
 
 func validerChemins(l []any) ([]string, error) {
@@ -386,40 +535,48 @@ func validerChemins(l []any) ([]string, error) {
 		return nil, fmt.Errorf("nombre de chemins invalide (1 à %d)", maxChemins)
 	}
 	out := make([]string, 0, len(l))
+	vus := make(map[string]bool, len(l))
 	for _, v := range l {
 		s, ok := v.(string)
 		if !ok || len(s) > maxCheminLong || !strings.HasPrefix(s, "Device.") {
 			return nil, errors.New("chemin invalide")
 		}
-		out = append(out, s)
+		if !vus[s] {
+			vus[s] = true
+			out = append(out, s)
+		}
 	}
 	return out, nil
 }
 
-func (c *Client) operate(ctx context.Context, rq requete) reponse {
+// operate valide un OPERATE. Rend soit une réponse immédiate (refus, argument
+// invalide) avec run nul, soit la fonction qui fera le relevé.
+func (c *Client) operate(rq requete) (reponse, func(context.Context) reponse) {
 	var b struct {
 		Command string         `json:"command"`
 		Args    map[string]any `json:"args"`
 	}
 	if err := json.Unmarshal(rq.Body, &b); err != nil {
-		return erreur(rq.MsgID, "corps OPERATE invalide")
+		return erreur(rq.MsgID, "corps OPERATE invalide"), nil
 	}
 	if b.Command != commandeMesure || c.operer == nil {
-		return erreur(rq.MsgID, msgRefus)
+		return erreur(rq.MsgID, msgRefus), nil
 	}
 	duree := dureeDefautS
 	for k, v := range b.Args {
 		f, ok := v.(float64)
-		if k != "duree_s" || !ok || f != float64(int(f)) || f < 1 || f > dureeMaxS {
-			return erreur(rq.MsgID, "argument invalide (duree_s : entier de 1 à 3600)")
+		if k != "duree_s" || !ok || f != float64(int(f)) || f < dureeMinS || f > dureeMaxS {
+			return erreur(rq.MsgID, fmt.Sprintf("argument invalide (duree_s : entier de %d à %d)", dureeMinS, dureeMaxS)), nil
 		}
 		duree = int(f)
 	}
-	sortie, err := c.operer(ctx, b.Command, map[string]any{"duree_s": duree})
-	if err != nil {
-		return erreur(rq.MsgID, err.Error())
+	return reponse{}, func(ctx context.Context) reponse {
+		sortie, err := c.operer(ctx, b.Command, map[string]any{"duree_s": duree})
+		if err != nil {
+			return erreur(rq.MsgID, err.Error())
+		}
+		return reponse{MsgID: rq.MsgID, Type: "OPERATE_RESP", Body: map[string]any{"output": sortie}}
 	}
-	return reponse{MsgID: rq.MsgID, Type: "OPERATE_RESP", Body: map[string]any{"output": sortie}}
 }
 
 // tronquer construit la GET_RESP ; au-delà de TailleMax, les entrées de listes
@@ -437,7 +594,7 @@ func (c *Client) tronquer(id string, res []modele.Resultat) reponse {
 		if err != nil {
 			return c.cfg.TailleMax + 1
 		}
-		return len(b)
+		return len(b) + 2 // crochets de la liste du POST
 	}
 	if rep := fait(res, false); taille(rep) <= c.cfg.TailleMax {
 		return rep
