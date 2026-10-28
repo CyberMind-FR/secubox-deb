@@ -41,7 +41,7 @@ Configuration file: `/etc/secubox/streamlit.toml` (example: `config/streamlit.to
 | `[ports] min`, `max` | `8501`, `8600` | Range of the automatic port (first free port, see below) |
 | `[publication] auto` | `false` | `false`: publication **on demand** (“Publier” button, “Nom public” at deposit). `true`: an app deployed or started without a public name is published as `<folder>.<box domain>` |
 | `[publication] autostart` | `true` | A published app stays up (`[apps.<name>] autostart = true`, exempt from idle sleep) and the container is started at boot by `secubox-streamlit-demarrage.service`; `false`: idle sleep applies (nothing wakes an app from its vhost yet, #746) |
-| `[publication] ip_conteneur` | — | Container address for nginx `proxy_pass`; empty: live address (`lxc-info -i`), else the one of existing publications |
+| `[publication] ip_conteneur` | — | Container address for nginx `proxy_pass`; empty: live address (`lxc-info -i`), else the one of existing publications — both only inside the container's bridge subnet |
 
 Declarations written by `streamlitctl` (root): `[apps.<folder>]` (port, enabled, autostart) and, for a
 published app, `[instances.<public name>]` (`app`, `port`, `domain`, `enabled`, `emancipated`, `waf_enabled`,
@@ -74,6 +74,26 @@ before any change.
 Public name: one strict DNS label (`[a-z0-9]`, hyphens inside, 1–63), never a box service name
 (`admin`, `hall`, `www`, `api`, `mail`, `git`, `waf`, …), never a name already routed, served by nginx,
 declared in `haproxy.toml` or published for another app.
+
+## Sécurité : ce que le conteneur isole, et ce qu'il n'isole pas (#3247)
+
+- **Toutes les applis tournent en root** dans le conteneur `streamlit`, qui est **privilégié, sans idmap**, et
+  `/srv/streamlit` y est monté en écriture. Le fichier d'environnement d'une appli
+  (`/etc/streamlit/env/<appli>.env`) **n'isole donc rien** d'une appli à l'autre : toute appli peut lire les
+  variables des autres et écrire dans tous les dossiers d'applis. Ne déposez que des applis de confiance.
+  L'isolation par appli (`User=`/`DynamicUser=` par unité, conteneur non privilégié avec idmap) fait l'objet
+  d'une issue séparée.
+- Ce que l'hôte garantit malgré cela (relecture de sécurité de #3249) :
+  - root ne suit **aucun lien** et ne s'arrête sur **aucune FIFO** sous `/srv/streamlit/apps` : fichiers de port
+    lus et écrits par descripteurs (`O_NOFOLLOW`, `O_NONBLOCK`, fichier ordinaire exigé, taille plafonnée),
+    toujours en `0644` root, jamais le mode ni le propriétaire d'un lien ; un dossier d'appli qui est un lien est
+    refusé (code 3) ;
+  - un dépôt est **extrait par root** dans un brouillon non prévisible, sans rien laisser sortir du dossier de
+    l'appli (ni chemin absolu, ni `..`, ni lien, ni FIFO, ni périphérique ; 10 000 entrées et 1 Gio au plus) ;
+    l'archive doit être un fichier ordinaire appartenant à l'appelant ;
+  - nginx ne vise que le **sous-réseau du pont** du conteneur (adresses de sa configuration LXC), sauf adresse
+    fixée par l'opérateur (`[publication] ip_conteneur`) ;
+  - le verrou des publications vit dans `/run/secubox-streamlit/` (root, `0700`), jamais dans `/run/lock`.
 
 ## App environment and data
 
@@ -114,8 +134,23 @@ App names reaching `streamlitctl` must match `[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}`
 
 `streamlitctl app port <name> [port] [--apply]`, `app publish <name> [public-name] [--par who] [--apply]`,
 `app unpublish <name> [--par who] [--apply]`, `app publication <name>`,
-`app env <name> list|set [--unset KEY]... [--par who] [--apply]`, `boot`. Dry-run without `--apply`.
-Exit codes: 2 unknown app, 3 state, 4 conflict, 5 no free port, 64 refused argument, 75 container unavailable.
+`app env <name> list|set [--unset KEY]... [--par who] [--apply]`, `app depublier-anciennes [--par who] [--apply]`,
+`boot`. Dry-run without `--apply`.
+Exit codes: 2 unknown app, 3 state, 4 conflict, 5 no free port, 6 dependencies not installed (pip),
+64 refused argument, 75 container unavailable.
+
+`app deploy <zip> [name]` extracts as root through the module (see Sécurité) then runs
+`pip3 install --break-system-packages -r /srv/streamlit/apps/<name>/requirements.txt` **inside the container**
+(same path, identity mount; 240 s at most). A failure is returned (code 6, HTTP 422 on `POST /deploy`), never hidden:
+the app is deployed but not started. Dependencies are installed into the container's shared Python.
+
+`app depublier-anciennes` removes the **broken legacy publications** (owner's decision): every `[instances.*]` or
+`[apps.*]` carrying a `domain` without the generated chain — neither `publication_geree` nor a
+`sites-enabled/streamlit-<name>.conf` serving that name (so `couture` is kept). Removed: the sbxwaf route (if it
+targets :9080 or the entry's port), the HAProxy vhost (only `backend = nginx_vhosts`), `streamlit-<name>.conf`;
+another nginx file serving the name is reported, never deleted (it may serve others). The entry is marked
+unpublished (`enabled = false` for an instance, `domain` → `domaine_retire`, `depubliee` timestamp); the app stays
+deployed. JSON report, audit line per entry.
 
 Thumbnails are captured on event only (first registration, source update,
 or a manual recapture) — never on a timer, and never for an app that isn't

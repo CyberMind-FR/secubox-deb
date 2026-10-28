@@ -58,7 +58,8 @@ auto = false
 # réveille encore une appli par son vhost (#746). false : la veille s'applique.
 autostart = true
 # Adresse du conteneur pour nginx (proxy_pass). Vide : adresse vive (lxc-info),
-# sinon celle des publications existantes.
+# sinon celle des publications existantes — l'une comme l'autre SEULEMENT dans le
+# sous-réseau du pont du conteneur. Réglée ici, elle est prise telle quelle.
 # ip_conteneur = "10.100.0.50"
 
 # Power management (sleep/wake optimization)

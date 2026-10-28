@@ -33,6 +33,23 @@ secubox-streamlit (1.7.0-1~trixie1) trixie; urgency=medium
   * Page : champ « Nom public » au dépôt, port vide = automatique, colonne « Nom public » et actions
     Publier / Renommer / Retirer ; le message d'erreur du serveur est affiché tel quel. Archive ZIP refusée
     si une entrée sort du dossier de l'appli ou est un lien ; fichier temporaire non prévisible.
+  * Relecture de sécurité de la PR #3249 : /srv/streamlit/apps est inscriptible par le conteneur (applis en
+    root). Root n'y suit plus aucun lien et ne s'y bloque plus sur une FIFO : fichiers de port lus et écrits
+    par descripteurs (O_NOFOLLOW, O_NONBLOCK, fichier ordinaire, taille plafonnée), mode fixe 0644 root,
+    jamais hérité d'un lien ; dossier d'appli lien refusé ; `app start` et `app repair` passent par le
+    module (plus de `> fichier` ni de `cp -p` en shell). Dépôt extrait par root dans un brouillon non
+    prévisible (plus de /tmp/streamlit_extract_$$), entrées hostiles refusées, archive de l'appelant.
+    Dépendances : `pip install` DANS le conteneur au bon chemin (il visait /srv/apps, inexistant, et
+    l'échec était masqué), échec rendu (code 6 → 422) ; même correction pour `gitea clone`. Verrou dans
+    /run/secubox-streamlit (0700). Adresse visée par nginx bornée au pont du conteneur. Retrait : la chaîne
+    avant la déclaration ; HAProxy retiré seulement pour backend nginx_vhosts ; un fichier nginx posé à la
+    main est copié avant retrait ; les échecs de retour arrière sont rendus. Environnement : refus au-delà
+    de 64 Kio. API : journaux et arrêts hors de la boucle, échecs d'arrêt rendus.
+  * `streamlitctl app depublier-anciennes [--apply]` (décision du propriétaire) : retire proprement les
+    publications historiques cassées (route sbxwaf, vhost HAProxy nginx_vhosts, vhost nginx), marque
+    l'entrée non publiée, garde l'appli déposée et la référence couture ; rapport JSON, audit.
+  * Documenté : toutes les applis tournent en root dans un conteneur privilégié — le fichier
+    d'environnement n'isole rien d'une appli à l'autre (isolation par appli : issue séparée).
 
  -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 16:00:00 +0100
 
