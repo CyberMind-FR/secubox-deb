@@ -20,23 +20,64 @@ WINDOW="${SECUBOX_DPI_WINDOW:-60}"
 PAUSE="${SECUBOX_DPI_PAUSE:-0}"
 CSV="${SECUBOX_DPI_CSV:-/run/secubox/dpi/flows.csv}"
 COLLECTOR="${SECUBOX_DPI_COLLECTOR:-/usr/sbin/secubox-dpi-collector}"
+# #3245 : jamais de relance en boucle. Interface absente -> on le dit une fois et on revérifie toutes les IFACE_WAIT s
+# sans lancer ndpiReader. ndpiReader qui sort en moins de FAST_EXIT s -> attente croissante (BACKOFF_MIN, x2, plafond
+# BACKOFF_MAX), remise à zéro après une passe normale.
+IFACE_WAIT="${SECUBOX_DPI_IFACE_WAIT:-300}"
+FAST_EXIT="${SECUBOX_DPI_FAST_EXIT:-10}"
+BACKOFF_MIN="${SECUBOX_DPI_BACKOFF_MIN:-10}"
+BACKOFF_MAX="${SECUBOX_DPI_BACKOFF_MAX:-300}"
+# Variables de substitution (tests) : interface, attente, état, et borne de la boucle (absente en production).
+SYS_NET="${SECUBOX_SYS_NET:-/sys/class/net}"
+SLEEP_CMD="${SECUBOX_DPI_SLEEP_CMD:-sleep}"
+STATE_DIR="${SECUBOX_DPI_STATE:-/var/lib/secubox/dpi}"
+MAX_ITER="${SECUBOX_DPI_MAX_ITER:-0}"
 
-mkdir -p "$(dirname "$CSV")" /var/lib/secubox/dpi
+mkdir -p "$(dirname "$CSV")" "$STATE_DIR"
 
 if ! command -v ndpiReader >/dev/null 2>&1; then
     echo "[$MODULE] ndpiReader missing (apt install libndpi-bin) — idle" >&2
-    sleep 3600; exit 0
+    "$SLEEP_CMD" 3600; exit 0
 fi
 
 echo "[$MODULE] capturing $IFACE in ${WINDOW}s windows → $COLLECTOR"
+iface_absente=0
+backoff=0
+iter=0
 while true; do
+    iter=$((iter + 1))
+    if [ "$MAX_ITER" -gt 0 ] 2>/dev/null && [ "$iter" -gt "$MAX_ITER" ]; then
+        exit 0
+    fi
+    if [ ! -e "$SYS_NET/$IFACE" ]; then
+        if [ "$iface_absente" -eq 0 ]; then
+            echo "[$MODULE] l'interface $IFACE n'existe pas — en attente, nouvelle vérification toutes les ${IFACE_WAIT}s" >&2
+            iface_absente=1
+        fi
+        "$SLEEP_CMD" "$IFACE_WAIT"
+        continue
+    fi
+    if [ "$iface_absente" -eq 1 ]; then
+        echo "[$MODULE] l'interface $IFACE est apparue — capture reprise" >&2
+        iface_absente=0
+    fi
     # one capture window → CSV (niced; nDPI is ~1% CPU but the board is busy)
+    debut=$SECONDS
     nice -n 15 ndpiReader -i "$IFACE" -s "$WINDOW" -C "$CSV" >/dev/null 2>&1 || true
+    duree=$((SECONDS - debut))
     if [ -s "$CSV" ]; then
         nice -n 15 "$COLLECTOR" "$CSV" >/dev/null 2>&1 || \
             echo "[$MODULE] collector run failed" >&2
     fi
+    if [ "$duree" -lt "$FAST_EXIT" ]; then
+        if [ "$backoff" -eq 0 ]; then backoff="$BACKOFF_MIN"; else backoff=$((backoff * 2)); fi
+        [ "$backoff" -gt "$BACKOFF_MAX" ] && backoff="$BACKOFF_MAX"
+        echo "[$MODULE] ndpiReader sorti en ${duree}s (< ${FAST_EXIT}s) — nouvelle tentative dans ${backoff}s" >&2
+        "$SLEEP_CMD" "$backoff"
+        continue
+    fi
+    backoff=0
     if [ "$PAUSE" -gt 0 ] 2>/dev/null; then
-        sleep "$PAUSE"
+        "$SLEEP_CMD" "$PAUSE"
     fi
 done
