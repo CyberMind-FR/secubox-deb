@@ -155,3 +155,29 @@ def test_aide_et_readme_disent_que_les_applis_tournent_en_root():
     readme = (ICI / "README.md").read_text()
     for texte in (aide, readme):
         assert "root" in texte and "isole" in texte
+
+
+# ─── Seconde relecture (#3249) ──────────────────────────────────────────────
+
+def test_ctl_dossier_des_applis_lien_refuse(box):
+    box.eveil.touch()
+    vrai = box.apps.parent / "apps-vrai"
+    box.apps.rename(vrai)
+    box.apps.symlink_to(vrai)
+    (vrai / "foo").mkdir()
+    (vrai / "foo" / "app.py").write_text("import streamlit\n")
+    r = box.ctl("app", "start", "foo", "8510")
+    assert r.returncode == 3, (r.returncode, r.stderr)
+    assert "lien" in r.stderr
+    assert not (vrai / "foo" / ".streamlit.toml").exists()
+    assert not box.journal.exists() or "systemctl start" not in box.journal.read_text()
+
+
+def test_ctl_relaie_la_cause_du_module(box):
+    box.eveil.touch()
+    s = _secret(box)
+    box.appli("foo")
+    (box.apps / "foo" / ".streamlit.toml").symlink_to(s)
+    r = box.ctl("app", "start", "foo", "8510")
+    assert r.returncode == 3
+    assert ".streamlit.toml : lien symbolique" in r.stderr                  # la cause réelle, pas un générique

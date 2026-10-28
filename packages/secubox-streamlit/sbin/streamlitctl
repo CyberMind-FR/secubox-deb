@@ -1559,11 +1559,12 @@ cmd_app_repair() {
                 sauv=(--sauvegarde "$backup_suffix")
                 backed_up["$toml"]=1
             fi
-            if _publication ecrire-port "$name" --port "$real" "${sauv[@]}" --apply >/dev/null 2>&1; then
+            local cause
+            if cause=$(_publication ecrire-port "$name" --port "$real" "${sauv[@]}" --apply 2>&1 >/dev/null); then
                 did=true
                 applied=$(( applied + 1 ))
             else
-                error "repair: fichier de port de $name refusé (lien, FIFO ou dossier lien) — non modifié"
+                error "repair: fichier de port de $name non modifié : ${cause:-refusé}"
             fi
         fi
         total=$(( total + 1 ))
@@ -1628,12 +1629,13 @@ cmd_app_repair() {
                 sauv=(--sauvegarde "$backup_suffix")
                 backed_up["$toml"]=1
             fi
-            if _publication ecrire-port "$name" --port "$real_port" --entrypoint "$ep_for_file" "${sauv[@]}" \
-                    --apply >/dev/null 2>&1; then
+            local cause
+            if cause=$(_publication ecrire-port "$name" --port "$real_port" --entrypoint "$ep_for_file" \
+                    "${sauv[@]}" --apply 2>&1 >/dev/null); then
                 did=true
                 applied=$(( applied + 1 ))
             else
-                error "repair: fichier de port de $name refusé (lien, FIFO ou dossier lien) — non modifié"
+                error "repair: fichier de port de $name non modifié : ${cause:-refusé}"
             fi
         fi
         total=$(( total + 1 ))
@@ -2058,10 +2060,11 @@ cmd_app_start() {
     # Écrit par le module (#3249) : descripteurs, jamais à travers un lien, 0644 root — ce
     # dossier est inscriptible par le conteneur. Refus (lien, FIFO, dossier lien) : code 3,
     # l'unité n'est pas démarrée.
-    local ecrit_rc=0
-    _publication ecrire-port "$name" --port "$port" --entrypoint "$rel_entrypoint" --apply >/dev/null || ecrit_rc=$?
+    local ecrit_rc=0 cause
+    cause=$(_publication ecrire-port "$name" --port "$port" --entrypoint "$rel_entrypoint" --apply 2>&1 >/dev/null) \
+        || ecrit_rc=$?
     if [ "$ecrit_rc" -ne 0 ]; then
-        error "fichier de port de $name refusé (lien symbolique, FIFO ou dossier lien) — $name non démarrée"
+        error "fichier de port de $name refusé : ${cause:-code $ecrit_rc} — $name non démarrée"
         return 3
     fi
 
@@ -2994,7 +2997,7 @@ cmd_app_publication() {
 # seulement), vhost nginx streamlit-<nom>.conf retirés ; l'entrée est marquée non publiée,
 # l'appli reste déposée. À blanc par défaut ; rapport JSON ; audit.
 cmd_app_depublier_anciennes() {
-    local args=(depublier-anciennes)
+    local args=(depublier-anciennes --lxc-config "$LXC_PATH/config")
     while [ $# -gt 0 ]; do
         case "$1" in
             --apply) args+=(--apply) ;;
@@ -3064,6 +3067,14 @@ load_config
 APPS_PATH="${SECUBOX_STREAMLIT_APPS_PATH:-$APPS_PATH}"
 CONF_PATH="${SECUBOX_STREAMLIT_CONF:-$CONF_PATH}"
 IDLE_STATE_DIR="${SECUBOX_STREAMLIT_IDLE_DIR:-$IDLE_STATE_DIR}"
+
+# Le dossier des applis n'est JAMAIS un lien (#3249) : son parent est monté en écriture dans le
+# conteneur, qui pourrait le remplacer par un lien et faire écrire root ailleurs. Le module
+# revérifie à chaque ouverture (O_NOFOLLOW, propriétaire et mode).
+if [[ -L "$APPS_PATH" ]]; then
+    error "dossier des applis $APPS_PATH : lien symbolique refusé"
+    exit 3
+fi
 
 # ── ARGUMENTS ADMIS AVANT TOUT GESTE ───────────────────────────────────────
 # L'API refuse deja les noms malformes avant sudo (_NOM_APPLI_RE), mais la
@@ -3259,10 +3270,11 @@ Apps:
   app depublier-anciennes [--par who] [--apply]  Remove broken legacy publications (dry-run by default)
 
 Sécurité (#3247) :
-  Toutes les applis tournent en root dans le conteneur (privilégié, sans idmap) : le fichier
-  d'environnement d'une appli (/etc/streamlit/env/<appli>.env) n'isole RIEN d'une appli à
-  l'autre, et chacune peut écrire dans /srv/streamlit. Ne déposez que des applis de confiance ;
-  l'isolation par appli (compte dédié, conteneur non privilégié) fait l'objet d'une issue à part.
+  Toutes les applis tournent en root dans le conteneur (privilégié quand il est créé par
+  "streamlitctl install", non privilégié sur gk2) : le fichier d'environnement d'une appli
+  (/etc/streamlit/env/<appli>.env) n'isole RIEN d'une appli à l'autre. Ne déposez que des
+  applis de confiance ; l'isolation par appli (compte dédié par unité, idmap à l'installation)
+  fait l'objet d'une issue à part.
 
 Instances:
   instance list         List configured instances

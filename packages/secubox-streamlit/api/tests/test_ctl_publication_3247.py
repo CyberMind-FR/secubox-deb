@@ -50,7 +50,7 @@ touch "{eveil}"
 shift 2; shift
 case "$1" in
   systemctl) echo "$*" >> "{journal}"; touch "{demarre}"; exit 0 ;;
-  pip3) echo "$*" >> "{journal}"; exit 0 ;;
+  pip3|timeout) echo "$*" >> "{journal}"; exit 0 ;;
   ss)
     if [ "$2" = "-Htln" ]; then
       echo "LISTEN 0 128 0.0.0.0:8501 0.0.0.0:*"

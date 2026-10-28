@@ -382,3 +382,143 @@ def test_depublier_anciennes_retire_les_restes_garde_couture_et_les_applis(box, 
     pubs = P.publications(conf, "gk2.secubox.in")
     assert "bazi" not in pubs and "basic" not in pubs                          # retirées : plus des publications
     assert pubs["atelier-partage-1"][0]["domaine"] == "couture.gk2.secubox.in"
+
+
+# ─── Seconde relecture (#3249) ──────────────────────────────────────────────
+
+def test_depublier_anciennes_garde_un_nom_servi_par_un_autre_fichier_nginx(box, capsys):
+    """Route :9080 + vhost HAProxy nginx_vhosts, c'est la forme de TOUT vhost nginx de la box : si un autre fichier
+    de sites-enabled sert ce nom, c'est un autre service — on n'y touche pas."""
+    _gk2(box)
+    (box.nginx / "sites-enabled" / "autre-service").write_text(
+        "server {\n    listen 9080;\n    server_name pix.gk2.secubox.in;\n}\n")
+    rc, r = run(box, capsys, "depublier-anciennes")
+    assert rc == 0, r
+    garde = next(g for g in r["gardes"] if g["nom"] == "pix")
+    assert "autre-service" in garde["raison"]
+    assert "pix" not in [x["nom"] for x in r["retires"]]
+    rc, r = run(box, capsys, "depublier-anciennes", "--apply")
+    assert rc == 0, r
+    assert json.loads(box.routes.read_text())["pix.gk2.secubox.in"] == ["192.168.1.200", 9080]
+    assert "pix_gk2_secubox_in" not in box.appels()
+    assert 'domain = "pix.gk2.secubox.in"' in section(box.conf.read_text(), "instances.pix")
+
+
+def test_depublier_anciennes_garde_le_domaine_d_une_entree_gardee(box, capsys):
+    """couture gardée d'un côté ([instances.couture], chaîne en place) ne doit pas tomber par l'autre
+    ([apps.atelier-partage-1] domain = couture.gk2…)."""
+    _gk2(box)
+    box.conf.write_text(box.conf.read_text().replace(
+        "[apps.enhance_app]", '[apps.atelier-partage-1]\nport = 8529\ndomain = "couture.gk2.secubox.in"\n\n'
+                              '[apps.enhance_app]'))
+    rc, r = run(box, capsys, "depublier-anciennes", "--apply")
+    assert rc == 0, r
+    assert "atelier-partage-1" in [g["nom"] for g in r["gardes"]]
+    assert json.loads(box.routes.read_text())["couture.gk2.secubox.in"] == ["192.168.1.200", 9080]
+    assert "couture" not in box.appels()
+    assert 'domain = "couture.gk2.secubox.in"' in section(box.conf.read_text(), "apps.atelier-partage-1")
+
+
+def test_depublier_anciennes_route_directe_retiree_seulement_dans_le_pont(box, capsys):
+    for a in ("x", "y"):
+        box.appli(a)
+    box.conf.write_text(box.conf.read_text()
+                        + '\n[instances.x]\napp = "x"\nport = 8540\ndomain = "x.gk2.secubox.in"\n'
+                        + '\n[instances.y]\napp = "y"\nport = 8541\ndomain = "y.gk2.secubox.in"\n')
+    routes = json.loads(box.routes.read_text())
+    routes.update({"x.gk2.secubox.in": ["10.100.0.50", 8540], "y.gk2.secubox.in": ["10.9.9.9", 8541]})
+    box.routes.write_text(json.dumps(routes))
+    rc, r = run(box, capsys, "depublier-anciennes", "--lxc-config", str(_config_lxc(box)), "--apply")
+    assert rc == 0, r
+    routes = json.loads(box.routes.read_text())
+    assert "x.gk2.secubox.in" not in routes                                  # dans le pont : retirée
+    assert routes["y.gk2.secubox.in"] == ["10.9.9.9", 8541]                  # hors du pont : laissée
+
+
+def test_dossier_des_applis_lien_refuse(box, capsys):
+    vrai = box.tmp / "apps-vrai"
+    box.apps.rename(vrai)
+    box.apps.symlink_to(vrai)
+    (vrai / "nouvelle").mkdir()
+    (vrai / "nouvelle" / "app.py").write_text("import streamlit\n")
+    rc, r, _ = cli(box, "port", "nouvelle", "--apply")
+    assert rc == 3 and "lien" in r["error"], r
+    assert not (vrai / "nouvelle" / ".streamlit.toml").exists()
+    z = fabriquer_zip(box.tmp / "x.zip", [("app.py", "x\n", None)])
+    rc, r, _ = cli(box, "deposer", str(z), "autre", "--apply")
+    assert rc == 3 and not (vrai / "autre").exists()
+
+
+def test_dossier_des_applis_inscriptible_par_tous_refuse(box):
+    box.appli("nouvelle")
+    box.apps.chmod(0o777)
+    rc, r, _ = cli(box, "port", "nouvelle", "--apply")
+    assert rc == 3 and "apps" in r["error"], r
+    assert not (box.apps / "nouvelle" / ".streamlit.toml").exists()
+
+
+def test_audit_par_entree_avec_le_resultat_reel(box, capsys):
+    """Régénération HAProxy refusée : l'audit ne dit pas « retiré »."""
+    _gk2(box)
+    (box.tmp / "haproxy.refus").touch()
+    rc, r = run(box, capsys, "depublier-anciennes", "--apply")
+    assert rc == 0, r
+    pix = next(x for x in lignes_audit(box) if x.get("nom_public") == "pix")
+    assert pix["route"] == "retiree" and pix["haproxy"] not in ("retire", "a_retirer")
+    assert pix["resultat"] == "partiel"
+    basic = next(x for x in lignes_audit(box) if x.get("nom_public") == "basic")
+    assert basic["route"] == "absente" and basic["resultat"] == "applique"
+
+
+def test_depublier_anciennes_toml_final_invalide_rien_n_est_touche(box, capsys):
+    _gk2(box)
+    box.conf.write_text(box.conf.read_text().replace('[instances.pix]\napp = "bazi"',
+                                                     '[instances.pix]\n"enabled" = true\napp = "bazi"'))
+    avant = (box.conf.read_text(), box.routes.read_text())
+    rc, r = run(box, capsys, "depublier-anciennes", "--apply")
+    assert rc == 1 and "TOML" in r["error"], r
+    assert avant == (box.conf.read_text(), box.routes.read_text())
+    assert box.appels() == "" and lignes_audit(box) == []
+
+
+def test_depublier_toml_final_invalide_rien_n_est_touche(box, capsys):
+    box.appli("atelier", port=8529)
+    assert run(box, capsys, "publier", "atelier", "--nom", "atelier", "--port", "8529", "--ip-vive", "10.100.0.50",
+               "--apply")[0] == 0
+    box.conf.write_text(box.conf.read_text().replace("autostart = true", '"autostart" = true'))
+    avant = (box.conf.read_text(), box.routes.read_text())
+    n = len(lignes_audit(box))
+    rc, r = run(box, capsys, "depublier", "atelier", "--apply")
+    assert rc == 1 and "TOML" in r["error"], r
+    assert avant == (box.conf.read_text(), box.routes.read_text())
+    assert (box.nginx / "sites-enabled" / "streamlit-atelier.conf").exists()
+    assert len(lignes_audit(box)) == n
+
+
+def test_depublier_audit_par_entree_avec_le_resultat_reel(box, capsys):
+    box.appli("atelier", port=8529)
+    assert run(box, capsys, "publier", "atelier", "--nom", "atelier", "--port", "8529", "--ip-vive", "10.100.0.50",
+               "--apply")[0] == 0
+    (box.tmp / "haproxy.refus").touch()
+    rc, r = run(box, capsys, "depublier", "atelier", "--apply")
+    assert rc == 0, r
+    ligne = lignes_audit(box)[-1]
+    assert ligne["evenement"] == "depublication" and ligne["route"] == "retiree" and ligne["nginx"] == "retire"
+    assert ligne["haproxy"] not in ("retire",) and ligne["resultat"] == "partiel"
+
+
+def test_depot_refuse_quand_l_espace_manque(box, monkeypatch, capsys):
+    class Plein:
+        f_bavail, f_frsize = 10, 4096
+    monkeypatch.setattr(P.os, "fstatvfs", lambda fd: Plein())
+    z = fabriquer_zip(box.tmp / "x.zip", [("app.py", "x" * 100000, None)])
+    rc, r = run(box, capsys, "deposer", str(z), "atelier", "--apply")
+    assert rc == 3 and "espace" in r["error"], r
+    assert list(box.apps.iterdir()) == []
+
+
+def test_pip_borne_dans_le_conteneur(box):
+    z = fabriquer_zip(box.tmp / "x.zip", [("app.py", "import segno\n", None), ("requirements.txt", "segno\n", None)])
+    rc, r, _ = cli(box, "deposer", str(z), "atelier", "--apply")
+    assert rc == 0, r
+    assert "-- timeout 230 pip3 install" in box.appels()

@@ -52,6 +52,9 @@ exit 0
 """)
     _exe(bin_ / "haproxyctl", f"""#!/bin/bash
 echo "haproxyctl $*" >> "{journal}"
+if [ "$1" = vhost ] && [ "$2" = remove ] && [ -f "{tmp_path}/haproxy.refus" ]; then
+  echo "Drift guard: generated cfg has fewer vhosts/backends than live" >&2; exit 1
+fi
 if [ "$1" = vhost ] && [ "$2" = add ]; then
   printf '\\n[vhosts.%s]\\ndomain = "%s"\\nbackend = "%s"\\n' "$(printf '%s' "$3" | tr '.-' '__')" "$3" "$4" >> "{haproxy}"
 fi

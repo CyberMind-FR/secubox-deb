@@ -37,6 +37,7 @@ import fcntl
 import ipaddress
 import json
 import os
+import pwd
 import re
 import secrets
 import shutil
@@ -88,6 +89,8 @@ ENV_MAX = 64 * 1024                # environnement d'une appli : au-delà, refus
 ZIP_MAX_OCTETS = 1 << 30           # archive et contenu décompressé : 1 Gio
 ZIP_MAX_ENTREES = 10000
 PIP_DELAI_S = 240                  # la requête de dépôt doit répondre avant les 300 s de lecture de nginx
+PIP_DELAI_CONTENEUR_S = 230        # `timeout` DANS le conteneur : pip s'arrête avant que lxc-attach ne soit coupé
+MARGE_DISQUE = 64 * 1024 * 1024    # place laissée libre après un dépôt (gk2 a peu d'espace racine)
 
 
 class Refus(Exception):
@@ -502,12 +505,43 @@ def domaine_box() -> str:
 
 
 
-def _fd_apps(apps: Path) -> int:
-    # Le dossier des applis lui-même est un réglage (root) ; tout ce qui est DESSOUS se lit sans suivre de lien.
+def _proprietaires_admis() -> tuple[set, set]:
+    """(uids, gids) admis pour le dossier des applis : root, secubox, et nous-mêmes."""
+    uids, gids = {0, os.geteuid()}, {0, os.getegid()}
     try:
-        return os.open(apps, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        compte = pwd.getpwnam("secubox")
+        uids.add(compte.pw_uid)
+        gids.add(compte.pw_gid)
+    except KeyError:
+        pass
+    return uids, gids
+
+
+def _fd_apps(apps: Path) -> int:
+    """Le dossier des applis, ouvert SANS suivre de lien : son parent (/srv/streamlit) est monté en écriture dans le
+    conteneur, qui pourrait remplacer `apps` par un lien. Propriétaire root ou secubox, jamais inscriptible par le
+    groupe ni par tous. Refus : code 3."""
+    apps = Path(os.path.abspath(apps))
+    try:
+        pfd = os.open(apps.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     except OSError as e:
+        raise Refus(ECHEC, f"dossier {apps.parent} inaccessible ({e.strerror})")
+    try:
+        fd = os.open(apps.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=pfd)
+    except OSError as e:
+        if e.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise Refus(ETAT, f"dossier des applis {apps} : lien symbolique (ou pas un dossier) — refusé")
         raise Refus(ECHEC, f"dossier des applis {apps} inaccessible ({e.strerror})")
+    finally:
+        os.close(pfd)
+    st = os.fstat(fd)
+    uids, gids = _proprietaires_admis()
+    if (st.st_mode & 0o002 or (st.st_mode & 0o020 and st.st_gid not in gids) or st.st_uid not in uids):
+        os.close(fd)
+        raise Refus(ETAT, f"dossier des applis {apps} : propriétaire ou mode inattendu (attendu root ou secubox, "
+                          f"jamais inscriptible par tous ; vu uid {st.st_uid}, gid {st.st_gid}, "
+                          f"{oct(st.st_mode & 0o777)})")
+    return fd
 
 
 def forme_appli(apps: Path, appli: str) -> str | None:
@@ -598,11 +632,14 @@ def ecrire_port_appli(apps: Path, appli: str, port: int | None = None, entrypoin
 
 def _entrees_applis(apps: Path):
     """Les applis du dossier : dossiers et scripts .py ORDINAIRES ; les liens sont ignorés, jamais suivis."""
+    afd = _fd_apps(apps)
     try:
-        with os.scandir(apps) as it:
+        with os.scandir(afd) as it:
             entrees = sorted(it, key=lambda e: e.name)
     except OSError:
         return
+    finally:
+        os.close(afd)
     for e in entrees:
         if e.name.startswith(".") or e.name in _EXCLUS:
             continue
@@ -952,14 +989,15 @@ def nginx_restaurer(label: str, avant: tuple) -> str | None:
     return f"nginx après restauration : {erreur}" if erreur else None
 
 
-def nginx_retirer(label: str, domaine: str, avert: list[str]) -> bool:
+def nginx_retirer(label: str, domaine: str, avert: list[str]) -> str:
+    """'retire' | 'absent' | 'laisse' (sert un autre nom) | 'annule' (nginx -t refuse le retrait)."""
     dispo, actif = _fichiers_nginx(label)
     if nginx_etat(label, domaine, "") == "autre":
         avert.append(f"nginx : {actif.name} sert un autre nom — laissé en place")
-        return False
+        return "laisse"
     avant = (_instantane(dispo), _instantane(actif))
     if avant == (None, None):
-        return False
+        return "absent"
     # Un fichier posé à la main (référence couture.gk2) n'est jamais perdu : copié hors de sites-enabled d'abord.
     for f, etat in ((actif, avant[1]), (dispo, avant[0])):
         if etat and etat[0] == "fichier" and not etat[1].decode("utf-8", "replace").startswith(MARQUE_NGINX):
@@ -972,8 +1010,8 @@ def nginx_retirer(label: str, domaine: str, avert: list[str]) -> bool:
     if erreur:
         echec = nginx_restaurer(label, avant)
         avert.append(f"nginx : retrait de {actif.name} annulé ({erreur})" + (f" ; {echec}" if echec else ""))
-        return False
-    return True
+        return "annule"
+    return "retire"
 
 
 def route_poser(domaine: str) -> None:
@@ -985,18 +1023,19 @@ def route_poser(domaine: str) -> None:
         raise Refus(ECHEC, f"secubox-waf-route : {_court(sortie) or f'code {rc}'}")
 
 
-def route_retirer(domaine: str, ports_admis: set, avert: list[str]) -> bool:
-    """Retire la route SEULEMENT si elle vise un port à nous (nginx :9080, ou l'ancien port direct de l'appli)."""
+def route_retirer(domaine: str, ports_admis: set, avert: list[str]) -> str:
+    """Retire la route SEULEMENT si elle vise un port à nous (nginx :9080, ou l'ancien port direct de l'appli).
+    'retiree' | 'absente' | 'laissee' (re-pointée ailleurs)."""
     routes = lire_routes()
     cible = routes.get(domaine)
     if cible is None:
-        return False
+        return "absente"
     if not (isinstance(cible, list) and len(cible) == 2 and _port(cible[1]) in ports_admis):
         avert.append(f"route sbxwaf de {domaine} re-pointée ailleurs ({cible}) — laissée en place")
-        return False
+        return "laissee"
     del routes[domaine]
     ecrire_atomique(chemin_routes(), json.dumps(routes, indent=2, sort_keys=True) + "\n")
-    return True
+    return "retiree"
 
 
 def haproxy_table(domaine: str) -> tuple[str, str] | None:
@@ -1035,27 +1074,44 @@ def haproxy_poser(domaine: str, avert: list[str]) -> None:
         avert.append(f"HAProxy : rechargement en échec ({_court(sortie)})")
 
 
-def haproxy_retirer(domaine: str, avert: list[str]) -> None:
+def haproxy_retirer(domaine: str, avert: list[str]) -> str:
+    """'retire' | 'absent' | 'laisse' (autre backend) | 'haproxyctl-absent' | 'regeneration-refusee' (table retirée,
+    génération refusée) | 'echec' (table toujours là) | 'rechargement-refuse'."""
     table = haproxy_table(domaine)
     if table is None:
-        return
+        return "absent"
     cle, backend = table
     if backend != "nginx_vhosts":
         # Pas la forme que nous posons : un autre service déclare ce nom. On ne retire pas ce qu'on n'a pas posé.
         avert.append(f"HAProxy : {domaine} déclaré avec backend « {backend} » — laissé en place")
-        return
+        return "laisse"
     b = _haproxyctl()
     if b is None:
         avert.append(f"haproxyctl absent : vhost {domaine} laissé dans haproxy.toml")
-        return
+        return "haproxyctl-absent"
     rc, sortie = _cmd([b, "vhost", "remove", cle], timeout=120)
     if rc:
         # Typiquement le garde de dérive : la table est retirée, la régénération refusée. On ne force JAMAIS
         # --allow-shrink : il effacerait aussi les vhosts tenus hors de haproxy.toml.
-        avert.append(f"HAProxy : {domaine} retiré de haproxy.toml, régénération refusée ({_court(sortie)}) — "
-                     "à régénérer par l'opérateur")
-        return
-    _cmd([b, "reload"], timeout=60)
+        if haproxy_table(domaine) is None:
+            avert.append(f"HAProxy : {domaine} retiré de haproxy.toml, régénération refusée ({_court(sortie)}) — "
+                         "à régénérer par l'opérateur")
+            return "regeneration-refusee"
+        avert.append(f"HAProxy : retrait de {domaine} en échec ({_court(sortie) or f'code {rc}'})")
+        return "echec"
+    rc, sortie = _cmd([b, "reload"], timeout=60)
+    if rc:
+        avert.append(f"HAProxy : {domaine} retiré, rechargement en échec ({_court(sortie)})")
+        return "rechargement-refuse"
+    return "retire"
+
+
+_RETRAITS_ACQUIS = {"route": {"retiree", "absente"}, "nginx": {"retire", "absent"}, "haproxy": {"retire", "absent"}}
+
+
+def _resultat(etats: dict) -> str:
+    """'applique' seulement si chaque maillon est réellement retiré (ou n'existait pas) ; sinon 'partiel'."""
+    return "applique" if all(v in _RETRAITS_ACQUIS[k] for k, v in etats.items()) else "partiel"
 
 
 def conteneur_systemctl(verbe: str, appli: str, avert: list[str]) -> None:
@@ -1226,6 +1282,7 @@ def _publier(a, conf: Path, apps: Path) -> dict:
               "ancien": {"nom_public": ancienne["id"], "domaine": ancien_dom} if renommage else None}
     if not a.apply or evenement == "inchange":
         return sortie
+    _valider_toml(texte, nouveau)                    # la déclaration finale se relit AVANT le premier geste
 
     journal = Journal(a.par)
     try:
@@ -1246,21 +1303,25 @@ def _publier(a, conf: Path, apps: Path) -> dict:
         # HAProxy : l'ancien d'abord, le nouveau ensuite — la génération suivante garde alors le même nombre de
         # vhosts et le garde de dérive l'accepte ; son refus du retrait seul n'est rapporté que s'il persiste.
         retrait_ha: list[str] = []
+        anciens = {}
         if renommage:
-            haproxy_retirer(ancien_dom, retrait_ha)
+            anciens["haproxy"] = haproxy_retirer(ancien_dom, retrait_ha)
         n = len(avert)
         if haproxy_declare(domaine) is not True:
             haproxy_poser(domaine, avert)
         if len(avert) > n:
             avert.extend(retrait_ha)
         if renommage:
-            route_retirer(ancien_dom, {PORT_NGINX, ancienne["port"] or port}, avert)
-            nginx_retirer(ancienne["id"], ancien_dom, avert)
+            anciens["route"] = route_retirer(ancien_dom, {PORT_NGINX, ancienne["port"] or port}, avert)
+            anciens["nginx"] = nginx_retirer(ancienne["id"], ancien_dom, avert) if NOM_APPLI_RE.fullmatch(
+                ancienne["id"]) else "laisse"
         if toujours:
             conteneur_systemctl("enable", a.appli, avert)
         journal.ecrire(evenement=evenement, appli=a.appli, nom_public=label, domaine=domaine,
                        cible=f"{ip}:{port}", ancien_nom_public=ancienne["id"] if renommage else None,
-                       ancien_domaine=ancien_dom or None, resultat="applique")
+                       ancien_domaine=ancien_dom or None,
+                       **({f"ancien_{k}": v for k, v in anciens.items()}),
+                       resultat=_resultat(anciens) if anciens else "applique")
     finally:
         journal.fermer()
     sortie["applique"] = True
@@ -1308,27 +1369,46 @@ def verbe_depublier(a, conf: Path, apps: Path) -> dict:
             return sortie
         avert = sortie["avertissements"]
         lire_routes()                     # table illisible : on s'arrête AVANT de toucher quoi que ce soit
+        _valider_toml(texte, nouveau)     # la déclaration finale se relit AVANT le premier geste
         journal = Journal(a.par)
         try:
             # La chaîne d'abord : si un retrait échoue, la déclaration dit encore la vérité (toujours publiée).
+            # Une ligne d'audit par entrée, juste après son retrait, avec l'état RÉEL de chaque maillon.
             for inst, r in zip(miennes, sortie["retires"]):
                 dom = r["domaine"]
+                etats = {"route": "absente", "nginx": "absent", "haproxy": "absent"}
                 if dom:
-                    r["route_retiree"] = route_retirer(dom, {PORT_NGINX} | ({inst["port"]} if inst["port"] else
-                                                                           set()), avert)
-                    r["nginx_retire"] = nginx_retirer(inst["id"], dom, avert) if NOM_APPLI_RE.fullmatch(
-                        inst["id"]) else False
-                    haproxy_retirer(dom, avert)
-            _ecrire_conf(conf, texte, nouveau)
-            for inst, r in zip(miennes, sortie["retires"]):
-                journal.ecrire(evenement="depublication", appli=a.appli, nom_public=inst["id"],
-                               domaine=r["domaine"], resultat="applique")
+                    etats["route"] = route_retirer(dom, {PORT_NGINX} | ({inst["port"]} if inst["port"] else set()),
+                                                   avert)
+                    etats["nginx"] = nginx_retirer(inst["id"], dom, avert) if NOM_APPLI_RE.fullmatch(
+                        inst["id"]) else "laisse"
+                    etats["haproxy"] = haproxy_retirer(dom, avert)
+                r.update(etats)
+                journal.ecrire(evenement="depublication", appli=a.appli, nom_public=inst["id"], domaine=dom,
+                               **etats, resultat=_resultat(etats))
+            _ecrire_declaration(journal, conf, texte, nouveau, a.appli, "depublication")
             if par_publication:
                 conteneur_systemctl("disable", a.appli, avert)
         finally:
             journal.fermer()
         sortie["applique"] = True
         return sortie
+
+
+def _ecrire_declaration(journal, conf: Path, texte: str, nouveau: str, appli: str, evenement: str) -> None:
+    """Écrit la déclaration finale (déjà validée) ; un échec est audité avant d'être rendu."""
+    try:
+        _ecrire_conf(conf, texte, nouveau)
+    except (Refus, OSError) as e:
+        cause = e.message if isinstance(e, Refus) else (e.strerror or str(e))
+        journal.ecrire(evenement=evenement, appli=appli, resultat="echec-declaration", erreur=cause[:300])
+        raise
+
+
+def _dans_le_pont(ip, reseaux: list | None) -> bool:
+    """Strict : sans sous-réseau connu, aucune adresse n'est « dans le pont »."""
+    ip = _ipv4(ip)
+    return bool(ip and reseaux and any(ipaddress.IPv4Address(ip) in r for r in reseaux))
 
 
 def _chaine_en_place(nom: str, domaine: str) -> bool:
@@ -1341,68 +1421,95 @@ def _chaine_en_place(nom: str, domaine: str) -> bool:
 
 def verbe_depublier_anciennes(a, conf: Path, apps: Path) -> dict:
     """Retire PROPREMENT les publications historiques cassées (décision du propriétaire, #3247) : toute entrée
-    `[instances.*]` ou `[apps.*]` qui porte un `domain` sans la chaîne générée (ni `publication_geree`, ni
-    sites-enabled/streamlit-<nom>.conf servant ce nom). Restes retirés : route sbxwaf (si elle vise :9080 ou le
-    port de l'entrée), vhost HAProxy (seulement backend nginx_vhosts), vhost nginx streamlit-<nom>.conf ; un autre
-    fichier nginx qui servirait ce nom est signalé, jamais supprimé (il peut en servir d'autres). L'entrée est
-    marquée non publiée (enabled = false pour une instance, domain → domaine_retire) ; l'appli reste déposée."""
+    `[instances.*]` ou `[apps.*]` qui porte un `domain` sans la chaîne générée. GARDÉES, jamais touchées :
+    une publication gérée active, une entrée dont la chaîne est en place (sites-enabled/streamlit-<nom>.conf sert
+    ce nom — couture.gk2), toute entrée dont le domaine est aussi porté par une entrée gardée, et tout nom qu'un
+    AUTRE fichier de sites-enabled sert (route :9080 + vhost nginx_vhosts est la forme de tout vhost nginx de la
+    box : ce serait un autre service). Pour les autres : route sbxwaf retirée si elle vise :9080, ou le port de
+    l'entrée à une adresse DU PONT ; vhost HAProxy seulement si backend nginx_vhosts ; streamlit-<nom>.conf.
+    La déclaration finale est calculée et validée AVANT le premier geste ; une ligne d'audit par entrée, juste
+    après son retrait, avec l'état réel de chaque maillon ; l'entrée est marquée non publiée (enabled = false
+    pour une instance, domain → domaine_retire) ; l'appli reste déposée."""
     with verrou() if a.apply else contextlib.nullcontext():
         texte = _lire_conf(conf)
         routes = lire_routes()
+        reseaux = reseaux_pont(a.lxc_config)
         candidats = [("instance", i["id"], i["app"], i["domain"], i["port"], i["valeurs"])
                      for i in instances(texte) if i["domain"]]
         candidats += [("appli", nom, nom, v["domain"], _port(v.get("port")), v)
                       for nom, v in applis_declarees(texte).items() if isinstance(v.get("domain"), str)
                       and v.get("domain")]
+
+        def raison_de_garder(typ, nom, v, dom):
+            if v.get("publication_geree") is True and v.get("enabled", True) is not False:
+                return "publication gérée par streamlitctl"
+            if _chaine_en_place(nom, dom):
+                return f"chaîne en place (sites-enabled/streamlit-{nom}.conf)"
+            return None
+
+        domaines_gardes: dict[str, str] = {}
+        for typ, nom, _appli, dom, _port_e, v in candidats:
+            if (raison := raison_de_garder(typ, nom, v, dom)):
+                domaines_gardes.setdefault(dom, f"{nom} : {raison}")
+
         retires, gardes, avert = [], [], []
         for typ, nom, appli, dom, port, v in candidats:
-            if v.get("publication_geree") is True:
-                gardes.append({"type": typ, "nom": nom, "domaine": dom, "raison": "publication gérée par streamlitctl"})
-            elif _chaine_en_place(nom, dom):
-                gardes.append({"type": typ, "nom": nom, "domaine": dom,
-                               "raison": f"chaîne en place (sites-enabled/streamlit-{nom}.conf)"})
+            raison = raison_de_garder(typ, nom, v, dom)
+            if raison is None and dom in domaines_gardes:
+                raison = f"domaine aussi porté par une entrée gardée ({domaines_gardes[dom]})"
+            if raison is None and (ailleurs := nginx_sert_ailleurs(dom, {f"streamlit-{nom}.conf"})):
+                raison = f"servi par un autre fichier nginx ({ailleurs}) : un autre service, pas une publication cassée"
+            if raison is None and not DOMAINE_RE.fullmatch(dom):
+                raison = "domaine illisible — laissé à l'opérateur"
+            if raison:
+                gardes.append({"type": typ, "nom": nom, "domaine": dom, "raison": raison})
+                continue
+            cible = routes.get(dom)
+            if cible is None:
+                route = "absente"
+            elif isinstance(cible, list) and len(cible) == 2 and (
+                    _port(cible[1]) == PORT_NGINX
+                    or (port and _port(cible[1]) == port and _dans_le_pont(cible[0], reseaux))):
+                route = "a_retirer"
             else:
-                cible = routes.get(dom)
-                ailleurs = nginx_sert_ailleurs(dom, {f"streamlit-{nom}.conf"})
-                table = haproxy_table(dom)
-                retires.append({"type": typ, "nom": nom, "appli": appli, "domaine": dom,
-                                "route": "absente" if cible is None else (
-                                    "a_retirer" if isinstance(cible, list) and len(cible) == 2
-                                    and _port(cible[1]) in ({PORT_NGINX} | ({port} if port else set()))
-                                    else "laissee"),
-                                "haproxy": "absent" if table is None else (
-                                    "a_retirer" if table[1] == "nginx_vhosts" else "laisse"),
-                                "nginx_ailleurs": ailleurs})
+                route = "laissee"
+            table = haproxy_table(dom)
+            retires.append({"type": typ, "nom": nom, "appli": appli, "domaine": dom, "route": route,
+                            "haproxy": "absent" if table is None else (
+                                "a_retirer" if table[1] == "nginx_vhosts" else "laisse")})
         sortie = {"ok": True, "applique": False, "retires": retires, "gardes": gardes, "avertissements": avert}
         if not a.apply or not retires:
             return sortie
+
+        # Déclaration finale calculée et validée AVANT le premier geste.
+        nouveau = texte
+        horodatage = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for r in retires:
+            entete = f"instances.{r['nom']}" if r["type"] == "instance" else f"apps.{r['nom']}"
+            champs = {"domaine_retire": r["domaine"], "depubliee": horodatage}
+            if r["type"] == "instance":
+                champs = {"enabled": False, **champs}
+            nouveau = poser_cles(retirer_cles(nouveau, entete, {"domain"}), entete, champs)
+        _valider_toml(texte, nouveau)
+
         journal = Journal(a.par)
         try:
-            nouveau = texte
-            horodatage = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             for r in retires:
                 dom = r["domaine"]
+                etats = {"route": "absente", "nginx": "absent", "haproxy": "absent"}
                 if r["route"] == "a_retirer":
-                    route_retirer(dom, {PORT_NGINX} | ({_port(routes[dom][1])} if dom in routes else set()), avert)
-                    r["route"] = "retiree"
+                    etats["route"] = route_retirer(dom, {PORT_NGINX, _port(routes[dom][1])}, avert)
                 elif r["route"] == "laissee":
+                    etats["route"] = "laissee"
                     avert.append(f"route sbxwaf de {dom} vise autre chose ({routes.get(dom)}) — laissée en place")
                 if NOM_APPLI_RE.fullmatch(r["nom"]):
-                    nginx_retirer(r["nom"], dom, avert)
-                if r["nginx_ailleurs"]:
-                    avert.append(f"nginx : {dom} est servi par {r['nginx_ailleurs']} — fichier partagé, laissé")
+                    etats["nginx"] = nginx_retirer(r["nom"], dom, avert)
                 if r["haproxy"] != "absent":
-                    haproxy_retirer(dom, avert)
-                    r["haproxy"] = "retire" if r["haproxy"] == "a_retirer" else "laisse"
-                entete = f"instances.{r['nom']}" if r["type"] == "instance" else f"apps.{r['nom']}"
-                champs = {"domaine_retire": dom, "depubliee": horodatage}
-                if r["type"] == "instance":
-                    champs = {"enabled": False, **champs}
-                nouveau = poser_cles(retirer_cles(nouveau, entete, {"domain"}), entete, champs)
-            _ecrire_conf(conf, texte, nouveau)
-            for r in retires:
-                journal.ecrire(evenement="depublication-ancienne", appli=r["appli"], nom_public=r["nom"],
-                               domaine=r["domaine"], route=r["route"], haproxy=r["haproxy"], resultat="applique")
+                    etats["haproxy"] = haproxy_retirer(dom, avert)
+                r.update(etats)
+                journal.ecrire(evenement="depublication-ancienne", appli=r["appli"], nom_public=r["nom"], domaine=dom,
+                               **etats, resultat=_resultat(etats))
+            _ecrire_declaration(journal, conf, texte, nouveau, "*", "depublication-ancienne")
         finally:
             journal.fermer()
         sortie["applique"] = True
@@ -1637,9 +1744,15 @@ def _deposer(a, apps: Path) -> dict:
             req = any(p == ["requirements.txt"] and not d for _i, p, d in entrees)
             sortie = {"ok": True, "success": True, "name": a.appli, "path": str(apps / a.appli),
                       "fichiers": sum(1 for _i, _p, d in entrees if not d),
-                      "requirements": {"present": req, "installe": False}, "applique": False}
+                      "requirements": {"present": req, "installe": False}, "applique": False,
+                      "avertissements": []}
             if not a.apply:
                 return sortie
+            sv = os.fstatvfs(afd)
+            besoin = sum(i.file_size for i, _p, d in entrees if not d) + MARGE_DISQUE
+            if sv.f_bavail * sv.f_frsize < besoin:
+                raise Refus(ETAT, f"espace disque insuffisant sous {apps} : {sv.f_bavail * sv.f_frsize // 1048576} Mio "
+                                  f"libres, {besoin // 1048576} Mio nécessaires (contenu + marge) — rien n'est déposé")
             with verrou():
                 brouillon = f".depot-{a.appli}-{secrets.token_hex(6)}"
                 os.mkdir(brouillon, 0o755, dir_fd=afd)
@@ -1656,17 +1769,26 @@ def _deposer(a, apps: Path) -> dict:
                     os.rename(brouillon, a.appli, src_dir_fd=afd, dst_dir_fd=afd)
                     brouillon = None
                     if ancien:
-                        shutil.rmtree(ancien, dir_fd=afd)
+                        try:
+                            shutil.rmtree(ancien, dir_fd=afd)
+                        except OSError as e:
+                            msg = f"ancienne version {apps}/{ancien} non supprimée ({e.strerror}) — à retirer à la main"
+                            sortie["avertissements"].append(msg)
+                            print(msg, file=sys.stderr)
                 finally:
                     if brouillon:
-                        shutil.rmtree(brouillon, dir_fd=afd, ignore_errors=True)
+                        try:
+                            shutil.rmtree(brouillon, dir_fd=afd)
+                        except OSError as e:
+                            print(f"brouillon {apps}/{brouillon} non supprimé ({e.strerror}) — à retirer à la main",
+                                  file=sys.stderr)
         finally:
             os.close(afd)
     sortie["applique"] = True
     if req:
         chemin = f"{apps}/{a.appli}/requirements.txt"          # même chemin dans le conteneur (montage identité)
-        rc, out = _cmd(["lxc-attach", "-n", CONTENEUR, "--", "pip3", "install", "--break-system-packages", "-r",
-                        chemin], timeout=PIP_DELAI_S)
+        rc, out = _cmd(["lxc-attach", "-n", CONTENEUR, "--", "timeout", str(PIP_DELAI_CONTENEUR_S), "pip3", "install",
+                        "--break-system-packages", "-r", chemin], timeout=PIP_DELAI_S)
         if rc:
             raise Refus(DEPENDANCES, f"appli déposée, mais dépendances non installées (pip, code {rc}) : "
                                      f"{_court(out) or 'sans message'} — corrigez requirements.txt puis redéposez")
@@ -1729,6 +1851,7 @@ def _parseur() -> _Parseur:
     s.add_argument("--apply", action="store_true")
     s = sub.add_parser("depublier-anciennes")
     s.add_argument("--par", type=_type_acteur, default="inconnu")
+    s.add_argument("--lxc-config", dest="lxc_config")
     s.add_argument("--apply", action="store_true")
     s = sub.add_parser("env")
     s.add_argument("appli", type=_type_appli)
