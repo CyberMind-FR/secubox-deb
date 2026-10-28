@@ -42,17 +42,19 @@ def test_l_espressobin_a_son_dtb_eMMC_son_pilote_et_sa_console():
     assert e["LIVE_DTB"] == "armada-3720-espressobin-v7-emmc.dtb"
     assert (e["LIVE_PILOTE"], e["LIVE_CONSOLE"], e["LIVE_ETHACT"]) == ("mvneta", "ttyMV0,115200", "neta@30000")
     # le switch 88E6341 reste dans l'état laissé par U-Boot : mv88e6xxx ferait d'eth0 un simple conduit DSA
-    assert "modprobe.blacklist=mv88e6xxx" in e["LIVE_BOOTARGS"]
+    assert "modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core,ath10k_pci,ath10k_core" in e["LIVE_BOOTARGS"]
+    assert "sdhci.debug_quirks2=0x40" in e["LIVE_BOOTARGS"]           # sans lui, l'eMMC à écrire est instable
+    assert len("setenv bootargs ${bootargs} " + e["LIVE_BOOTARGS"]) < 200  # tampon de ligne U-Boot
 
 
 def test_les_adresses_de_l_espressobin_tiennent_dans_1_go_hors_zone_reservee():
     e = charge("espressobin-v7")
-    script, fdt, noyau, initrd = (int(e[k], 16) for k in
-                                  ("LIVE_SCRIPT_ADDR", "LIVE_FDT_ADDR", "LIVE_KERNEL_ADDR", "LIVE_RAMDISK_ADDR"))
-    for a in (script, fdt, noyau, initrd):
+    assert e["LIVE_SCRIPT_ADDR"] == "${loadaddr}"                     # adresse usine des procédures validées de l'image
+    fdt, noyau, initrd = (int(e[k], 16) for k in ("LIVE_FDT_ADDR", "LIVE_KERNEL_ADDR", "LIVE_RAMDISK_ADDR"))
+    for a in (fdt, noyau, initrd):
         assert not PSCI[0] <= a < PSCI[1]
     assert noyau >= PSCI[1] and noyau % 0x200000 == 0
-    assert script + 0x100000 <= fdt and fdt + 0x100000 <= noyau     # script et DTB sous le noyau, sans chevauchement
+    assert fdt + 0x100000 <= noyau                                   # DTB sous le noyau, sans chevauchement
     assert initrd >= noyau + 0x04000000                              # 64 Mo laissés au noyau (Debian ~37 Mo)
     assert initrd + 0x08000000 < 0x3F000000                          # 128 Mo d'initrd sous U-Boot relogé, 1 Go de RAM
 
@@ -115,3 +117,49 @@ def test_la_page_netboot_liste_les_images_xz_a_quatre_colonnes(tmp_path):
          "signee": True, "taille_brute": 7516192768},
         {"nom": "ancienne.img.gz", "taille": 10, "sha256": "b" * 64, "signee": False, "taille_brute": None},
     ]
+
+
+def test_live_api_carte_console_et_cle_usb_finale(tmp_path):
+    import importlib
+    import sys
+    from fastapi.testclient import TestClient
+    sys.path.insert(0, str(ICI))
+    sys.path.insert(0, str(ICI.parents[1] / "common"))
+    tftp, http = tmp_path / "tftp", tmp_path / "http"
+    (tftp / "espressobin-live").mkdir(parents=True)
+    (tftp / "espressobin-live" / "boot.cmd").write_text(
+        "# SecuBox ESPRESSObin v7 — live réseau (#3079, #3233). Depuis le U-Boot usine (console série) :\n"
+        "#   setenv ethact neta@30000; setenv ipaddr <ip libre>; setenv serverip 192.168.42.1\n"
+        "#   tftpboot ${loadaddr} espressobin-live/boot.scr; source ${loadaddr}\n"
+        "setenv serverip 192.168.42.1\n"
+        "setenv bootargs console=ttyMV0,115200 boot=live components"
+        " fetch=http://192.168.1.200:8099/espressobin-live/filesystem.squashfs ip=dhcp\n")
+    (http / "espressobin-live").mkdir(parents=True)
+    (http / "espressobin-live" / "cle-usb.img.gz").write_bytes(b"x" * 1234)
+    (http / "espressobin-live" / "cle-usb.img.gz.sig").write_bytes(b"s")
+    (http / "espressobin-live" / "cle-usb.txt").write_text(
+        "tester\tusb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}\n"
+        "autoflash\tusb start; load usb 0:1 ${loadaddr} autoflash.scr; source ${loadaddr}\n"
+        "inconnu\techo x\n"
+        "tester\t" + "y" * 300 + "\n")
+    sys.modules.pop("api.lot", None)
+    sys.modules.pop("api.main", None)
+    main = importlib.import_module("api.main")
+    main.TFTP_ROOT, main.HTTP_ROOT = tftp, http
+    main.app.dependency_overrides[main.require_jwt] = lambda: {"sub": "admin"}
+    live = TestClient(main.app).get("/live").json()["lives"][0]
+    assert live["titre"] == "ESPRESSObin v7" and live["console"] == "ttyMV0,115200"
+    assert live["usb"] == {"nom": "cle-usb.img.gz", "taille": 1234, "signee": True}
+    assert live["commandes_usb"] == [
+        {"role": "tester", "commande": "usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}"},
+        {"role": "autoflash", "commande": "usb start; load usb 0:1 ${loadaddr} autoflash.scr; source ${loadaddr}"},
+    ]
+
+
+def test_live_sans_cle_usb():
+    import importlib
+    import sys
+    sys.path.insert(0, str(ICI))
+    sys.path.insert(0, str(ICI.parents[1] / "common"))
+    main = importlib.import_module("api.main")
+    assert main._cle_usb(Path("/nexiste/pas")) == (None, [])

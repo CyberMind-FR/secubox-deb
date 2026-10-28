@@ -200,7 +200,9 @@ def test_3100_netbooter_et_preparer_un_flash(navigateur):
     ctx, p, err, appels = ouvre(navigateur, "http://sbx.test/netboot/", {**API, "/live": (200, LIVES)})
     p.wait_for_selector("#lives pre", state="attached")
     texte = p.inner_text("#lives")
-    assert "tftpboot ${scriptaddr} mochabin-live/boot.scr" in texte and "sbx-netflash --nom NOM" in texte
+    assert "tftpboot ${scriptaddr} mochabin-live/boot.scr" in texte
+    # #3233 : sans --image, sbx-netflash ne fait que lister — la page donne la commande complète
+    assert "sbx-netflash --image secubox-isp-mochabin-trixie.img.gz --nom NOM" in texte
     assert "secubox-isp-mochabin-trixie.img.gz" in texte and "2,67 Go" in texte and "signée" in texte
     assert p.get_attribute("#lives a", "href") == "http://192.0.2.10:8099/mochabin-live/images.txt"
     # nom invalide : rien n'est envoyé
@@ -222,5 +224,33 @@ def test_3100_netbooter_et_preparer_un_flash(navigateur):
 def test_3100_aucun_live_publie(navigateur):
     ctx, p, err, _ = ouvre(navigateur, "http://sbx.test/netboot/", {**API, "/live": (200, {"lives": []})})
     p.wait_for_function("document.getElementById('lives').textContent.includes('Aucun live')")
+    assert err == []
+    ctx.close()
+
+
+LIVE_EBIN = {"lives": [{"nom": "espressobin-live", "titre": "ESPRESSObin v7", "console": "ttyMV0,115200",
+                        "serveur": "192.0.2.42", "http_base": "http://192.0.2.10:8099/espressobin-live", "squashfs": True,
+                        "commandes": ["setenv ethact neta@30000; setenv ipaddr <ip libre>; setenv serverip 192.0.2.42",
+                                      "tftpboot ${loadaddr} espressobin-live/boot.scr; source ${loadaddr}"],
+                        "usb": {"nom": "cle-usb.img.gz", "taille": 951000000, "signee": True},
+                        "commandes_usb": [
+                            {"role": "tester", "commande": "usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}"},
+                            {"role": "autoflash", "commande": "usb start; load usb 0:1 ${loadaddr} autoflash.scr; source ${loadaddr}"}],
+                        "images": [{"nom": "secubox-minimal-espressobin-v7-trixie.img.xz", "taille": 793388832,
+                                    "sha256": "b" * 64, "signee": True, "taille_brute": 7516192768}]}]}
+
+
+def test_3233_espressobin_reseau_cle_usb_finale_et_flux(navigateur):
+    ctx, p, err, _ = ouvre(navigateur, "http://sbx.test/netboot/", {**API, "/live": (200, LIVE_EBIN)})
+    p.wait_for_selector("#lives pre", state="attached")
+    texte = p.inner_text("#lives")
+    assert "ESPRESSObin v7" in texte and "ttyMV0,115200" in texte
+    assert "setenv ethact neta@30000" in texte and "tftpboot ${loadaddr} espressobin-live/boot.scr" in texte
+    assert "sbx-netflash --image secubox-minimal-espressobin-v7-trixie.img.xz --nom NOM" in texte
+    assert "en flux" in texte
+    assert "load usb 0:1 ${loadaddr} boot-usb.scr" in texte and "load usb 0:1 ${loadaddr} autoflash.scr" in texte
+    assert "7,52 Go" in texte and "0,79 Go" in texte                          # décompressée et compressée
+    liens = p.eval_on_selector_all("#lives a", "els => els.map(e => e.getAttribute('href'))")
+    assert "http://192.0.2.10:8099/espressobin-live/cle-usb.img.gz" in liens
     assert err == []
     ctx.close()

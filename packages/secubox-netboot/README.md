@@ -244,6 +244,13 @@ Depuis le U-Boot usine (console série `ttyMV0`) :
 - la signature et le SHA-256 du flux compressé sont vérifiés pendant l'écriture ;
 - en cas d'échec (signature, empreinte, flux coupé), le début et la fin de l'eMMC sont remis à zéro.
 
+**Clé USB finale** (`scripts/build-cle-finale.sh --image IMG.img.xz --sortie CLE.img.gz [--publier espressobin-live]`). La clé porte l'image système elle-même, avec des étiquettes et des GUID propres à la clé (`rootfs-usb`, `data-usb`, `BOOTUSB`) : sa racine n'est jamais confondue avec celle d'une eMMC déjà écrite. Elle contient en plus une partition `SBXFLASH` qui range l'image signée. Deux commandes U-Boot :
+
+- **tester** : `usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}`. Le système tourne sur la clé ; l'eMMC n'est pas touchée.
+- **autoflash** : `usb start; load usb 0:1 ${loadaddr} autoflash.scr; source ${loadaddr}`. Avec `sbx_autoflash=1`, `sbx-autoflash` vérifie la signature, puis écrit l'image sur l'eMMC par le flux vérifié, et la carte s'éteint. On retire alors la clé : la carte démarre sur l'eMMC.
+
+Publiée avec `--publier`, la clé apparaît sur la page `/netboot/` (`cle-usb.img.gz`, signée, et `cle-usb.txt`). L'API `/live` renvoie `titre`, `console`, `usb` et `commandes_usb`.
+
 `images.txt` porte une 4ᵉ colonne, la taille décompressée. Une image plus grande que l'eMMC est refusée avant toute écriture. Formats acceptés : `.img.gz` et `.img.xz`.
 
 ---

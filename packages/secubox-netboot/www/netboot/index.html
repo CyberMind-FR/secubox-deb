@@ -129,9 +129,9 @@
                 <div id="rServeur" class="retour" hidden></div>
                 <p class="note">Ce serveur ne fait que servir : aucun overlay ni flash n’est posé sur lui.</p></div>
 
-            <div class="pan large"><h3>Netbooter une box <i>live en RAM, puis flash de l’eMMC</i></h3>
+            <div class="pan large"><h3>Netbooter une box <i>par le réseau ou par clé USB, puis l’eMMC</i></h3>
                 <div id="lives"></div>
-                <p class="note">Le U-Boot d’usine ne sait que DHCP/TFTP : on charge le live par TFTP, le live récupère son système par HTTP (port 8099, réseau local seulement), puis <span class="mono">sbx-netflash</span> écrit l’image choisie après en avoir vérifié la signature.</p></div>
+                <p class="note">Par le réseau : le U-Boot d’usine charge le live par TFTP, le live récupère son système par HTTP (port 8099, réseau local seulement), puis <span class="mono">sbx-netflash</span> écrit l’image choisie après en avoir vérifié la signature. Par la clé USB finale : le système lui-même tourne sur la clé pour les tests, et l’autoflash l’écrit sur l’eMMC.</p></div>
 
             <div class="pan large"><h3>Préparer un flash <i>la box rejoint seule ce maître</i></h3>
                 <form class="saisie" id="fFlash" autocomplete="off">
@@ -215,7 +215,13 @@
             SERVEUR = { server: { tftp_root: '/srv/secubox/netboot/tftp', http_root: '/srv/secubox/netboot/http', tftpd: 'active', nginx_sbxboot: 'yes', published_boards: 2 } };
             LIVES = { lives: [{ nom: 'mochabin-live', serveur: '192.0.2.10', http_base: 'http://192.0.2.10:8099/mochabin-live', squashfs: true,
                                 commandes: ['setenv ethact mvpp2-2; setenv ipaddr <ip libre>; setenv serverip 192.0.2.10', 'tftpboot ${scriptaddr} mochabin-live/boot.scr; source ${scriptaddr}'],
-                                images: [{ nom: 'secubox-isp-mochabin-trixie.img.gz', taille: 2669000177, sha256: '35b4…', signee: true }] }] };
+                                images: [{ nom: 'secubox-isp-mochabin-trixie.img.gz', taille: 2669000177, sha256: '35b4…', signee: true, taille_brute: null }] },
+                              { nom: 'espressobin-live', titre: 'ESPRESSObin v7', console: 'ttyMV0,115200', serveur: '192.0.2.42', http_base: 'http://192.0.2.10:8099/espressobin-live', squashfs: true,
+                                commandes: ['setenv ethact neta@30000; setenv ipaddr <ip libre>; setenv serverip 192.0.2.42', 'tftpboot ${loadaddr} espressobin-live/boot.scr; source ${loadaddr}'],
+                                usb: { nom: 'cle-usb.img.gz', taille: 951000000, signee: true },
+                                commandes_usb: [{ role: 'tester', commande: 'usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}' },
+                                                { role: 'autoflash', commande: 'usb start; load usb 0:1 ${loadaddr} autoflash.scr; source ${loadaddr}' }],
+                                images: [{ nom: 'secubox-minimal-espressobin-v7-trixie.img.xz', taille: 793388832, sha256: '9f1c…', signee: true, taille_brute: 7516192768 }] }] };
             PROFILS = { profiles: [
                 { id: '02005e005301', model: 'mochabin', image: 'secubox-2.39.0', boot_level: 'B2', srv: '192.0.2.10' },
                 { id: '02005e005302', model: 'espressobin-v7', image: null, boot_level: 'B0', srv: null }] };
@@ -353,20 +359,34 @@
             if (!lives.length) { z.appendChild(el('p', 'vide', 'Aucun live publié — le construire avec build-live-netboot.sh sur ce maître.')); return; }
             lives.forEach(lv => {
                 const dl = el('dl', 'kv');
-                ligne(dl, 'Live', lv.nom); ligne(dl, 'Serveur TFTP', tiret(lv.serveur));
+                ligne(dl, 'Live', lv.nom);
+                if (lv.titre) ligne(dl, 'Carte', lv.titre);
+                if (lv.console) ligne(dl, 'Console série', el('span', 'mono', lv.console));
+                ligne(dl, 'Serveur TFTP', tiret(lv.serveur));
                 ligne(dl, 'Système (HTTP)', lv.squashfs ? pastille('ok', 'servi') : pastille('hors', 'absent'));
                 if (lv.http_base) { const a = el('a', 'mono', lv.http_base + '/images.txt'); a.href = lv.http_base + '/images.txt'; a.target = '_blank'; a.rel = 'noopener'; a.style.color = 'var(--cyan)'; ligne(dl, 'Liste des images', a); }
                 z.appendChild(dl);
-                z.appendChild(el('p', 'note', '1. Console série de la box, câble sur le port qui joint ce maître, U-Boot interrompu :'));
+                z.appendChild(el('p', 'note', '1. Par le réseau — console série de la box, câble sur un port qui joint ce maître, U-Boot interrompu :'));
                 z.appendChild(blocCopie((lv.commandes || []).join('\n') || '—', 'Commandes U-Boot'));
-                z.appendChild(el('p', 'note', '2. Dans le live, après « Préparer un flash » ci-dessous (NOM = nom préparé) :'));
-                z.appendChild(blocCopie('sbx-netflash --list\nsbx-netflash --nom NOM', 'Commandes du live'));
                 const imgs = lv.images || [];
+                z.appendChild(el('p', 'note', '2. Dans le live (NOM = nom préparé ci-dessous : la box rejoindra seule le maillage) :'));
+                z.appendChild(blocCopie('sbx-netflash --list\nsbx-netflash --image ' + (imgs.length ? imgs[0].nom : 'IMAGE') + ' --nom NOM', 'Commandes du live'));
+                z.appendChild(el('p', 'note', 'Sur une carte à petite mémoire (ESPRESSObin, 1 Go), l’image s’écrit en flux : signature et empreinte vérifiées pendant l’écriture, eMMC invalidée en cas d’échec.'));
+                if (lv.usb) {
+                    const p = el('p', 'note', 'Ou par la clé USB finale (le système lui-même, à écrire sur une clé) : ');
+                    if (lv.http_base) { const a = el('a', 'mono', lv.usb.nom + ' · ' + Go(lv.usb.taille)); a.href = lv.http_base + '/' + lv.usb.nom; a.style.color = 'var(--cyan)'; p.appendChild(a); }
+                    p.appendChild(document.createTextNode(' ')); p.appendChild(pastille(lv.usb.signee ? 'ok' : 'hors', lv.usb.signee ? 'signée' : 'non signée'));
+                    z.appendChild(p);
+                    (lv.commandes_usb || []).forEach(c => {
+                        z.appendChild(el('p', 'note', c.role === 'autoflash' ? 'Écrire sur l’eMMC (autoflash : signature vérifiée, puis la carte s’éteint ; retirer la clé et rallumer) :' : 'Tester : le système tourne sur la clé, l’eMMC n’est pas touchée :'));
+                        z.appendChild(blocCopie(c.commande, c.role === 'autoflash' ? 'Commande U-Boot : autoflash' : 'Commande U-Boot : tester sur la clé'));
+                    });
+                }
                 if (imgs.length) {
                     const t = el('table'), th = el('thead'), tr = el('tr');
-                    ['Image eMMC', 'Taille', 'Signature', 'SHA-256'].forEach(h => tr.appendChild(el('th', '', h))); th.appendChild(tr); t.appendChild(th);
+                    ['Image eMMC', 'Compressée', 'Décompressée', 'Signature', 'SHA-256'].forEach(h => tr.appendChild(el('th', '', h))); th.appendChild(tr); t.appendChild(th);
                     const tb = el('tbody');
-                    imgs.forEach(im => { const r = el('tr'); r.appendChild(el('td', 'mono', im.nom)); r.appendChild(el('td', '', Go(im.taille)));
+                    imgs.forEach(im => { const r = el('tr'); r.appendChild(el('td', 'mono', im.nom)); r.appendChild(el('td', '', Go(im.taille))); r.appendChild(el('td', '', Go(im.taille_brute)));
                         const s = el('td'); s.appendChild(pastille(im.signee ? 'ok' : 'hors', im.signee ? 'signée' : 'absente')); r.appendChild(s);
                         const h = el('td', 'mono', String(im.sha256 || '').slice(0, 16) + '…'); h.title = im.sha256 || ''; r.appendChild(h); tb.appendChild(r); });
                     t.appendChild(tb); const w = el('div', 'tab'); w.appendChild(t); z.appendChild(w);

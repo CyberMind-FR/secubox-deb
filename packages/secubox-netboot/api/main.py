@@ -17,7 +17,7 @@ from pydantic import BaseModel
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import ipaddress
 import logging
 import os
@@ -371,6 +371,32 @@ def _images_live(d: Path) -> List[Dict[str, Any]]:
     return out
 
 
+_CLE_USB = "cle-usb.img.gz"
+_RE_CMD_USB = re.compile(r"^(tester|autoflash)\t([ -~]{1,200})$")
+
+
+def _cle_usb(d: Path) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, str]]]:
+    """Clé USB « finale » publiée à côté du live (#3233, build-cle-finale.sh) : l'image système qui tourne sur la clé
+    pour les tests, et qui s'écrit seule sur l'eMMC (autoflash). Commandes U-Boot lues dans cle-usb.txt
+    (« tester|autoflash<TAB>commande ») ; tout autre rôle et toute ligne trop longue ou non imprimable sont écartés."""
+    f = d / _CLE_USB
+    try:
+        if not f.is_file():
+            return None, []
+        taille = f.stat().st_size
+    except OSError:
+        return None, []
+    cle = {"nom": _CLE_USB, "taille": taille, "signee": (d / (_CLE_USB + ".sig")).is_file()}
+    cmds = []
+    for ligne in (_lire_court(d / "cle-usb.txt") or "").splitlines():
+        m = _RE_CMD_USB.fullmatch(ligne)
+        if m:
+            cmds.append({"role": m.group(1), "commande": m.group(2)})
+        if len(cmds) >= 4:
+            break
+    return cle, cmds
+
+
 def live_infos() -> List[Dict[str, Any]]:
     """Un live = un dossier TFTP qui porte un boot.cmd. Les commandes U-Boot à taper sont celles que le
     boot.cmd généré documente en tête (« #   … ») : la page dit exactement ce que la box exécutera."""
@@ -386,8 +412,15 @@ def live_infos() -> List[Dict[str, Any]]:
             continue
         serveur = re.search(r"^setenv serverip (\S+)\s*$", texte, re.M)
         fetch = re.search(r"\bfetch=(http://\S+)/filesystem\.squashfs\b", texte)
+        titre = re.search(r"^# SecuBox ([^\n—]{1,40}?) — live", texte, re.M)
+        console = re.search(r"\bconsole=([A-Za-z0-9,]{1,32})\b", texte)
+        cle, cmds_usb = _cle_usb(HTTP_ROOT / d.name)
         lives.append({
             "nom": d.name,
+            "titre": titre.group(1) if titre else None,
+            "console": console.group(1) if console else None,
+            "usb": cle,
+            "commandes_usb": cmds_usb,
             "serveur": serveur.group(1) if serveur else None,
             "http_base": fetch.group(1) if fetch else None,
             "commandes": re.findall(r"^#   (\S.*?)\s*$", texte, re.M),

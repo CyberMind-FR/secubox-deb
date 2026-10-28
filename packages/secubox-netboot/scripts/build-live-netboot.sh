@@ -173,6 +173,10 @@ for d in "$t:$w/out/tftp" "$h:$w/out/http"; do
     cible="${d%%:*}"; src="${d#*:}"
     rm -rf "$cible.avant"; [ -d "$cible" ] && mv "$cible" "$cible.avant"
     mkdir -p "$(dirname "$cible")"; cp -a "$src" "$cible"
+    # la clé USB finale publiée par build-cle-finale.sh (#3233) survit à la republication du live
+    for f in "$cible.avant"/cle-usb.*; do
+        { [ -e "$f" ] || [ -L "$f" ]; } && [ ! -e "$cible/$(basename "$f")" ] && mv "$f" "$cible/"
+    done
 done
 # Le squashfs (plus de 2 Go) ne reste pas sous /srv : sur gk2, /srv est sur la racine (eMMC à ~75 %). Il va sur le
 # stockage (défaut : /data/sbx-netboot/<nom>), servi par un lien, comme les images eMMC (#3079).
