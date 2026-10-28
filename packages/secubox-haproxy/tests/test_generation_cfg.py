@@ -152,8 +152,8 @@ def test_les_delais_longs_restent_des_exceptions_les_30_secondes_protegent_le_re
     cfg, _, _ = generation
     assert "timeout server 30s" in cfg                                           # la protection générale est intacte
     bloc = _backend_inspecteur(cfg)
-    # exactement trois exceptions : dépôts de fichiers, voix, studio — rien de plus
-    assert bloc.count("set-timeout server") == 3
+    # exactement quatre exceptions : dépôts de fichiers, voix, studio, dépôt/publication Streamlit — rien de plus
+    assert bloc.count("set-timeout server") == 4
     for interdit in ("path_beg /api/v1/ ", "path_beg / ", "hdr_beg(host) -i hall", "hdr_beg(host) -i admin"):
         assert interdit not in bloc
 
@@ -172,3 +172,36 @@ def test_le_backend_nginx_direct_porte_aussi_le_delai_du_studio_natif(generation
     bloc = cfg[debut:cfg.index("\nbackend ", debut + 10) if "\nbackend " in cfg[debut + 10:] else len(cfg)]
     assert "acl est_studio_natif hdr_beg(host) -i voicestudio." in bloc and "set-timeout server 1h if est_studio_natif" in bloc
     assert bloc.count("set-timeout server") == 1
+
+
+# ── Streamlit (#3247) : dépôt et publication dépassent les 30 s — chemins EXACTS, deux backends ──────────────────
+ACL_STREAMLIT = "acl est_streamlit_long path_reg ^/api/v1/streamlit/(deploy|app/[^/]+/(publish|rename))$"
+
+
+def test_le_depot_et_la_publication_streamlit_ne_sont_plus_coupes_a_30_secondes(generation):
+    """Constaté (#3247) : extraction + pip install dans le conteneur, nginx -t et génération HAProxy au
+    publish/rename dépassent 30 s ; le client voyait 504 pendant que le serveur finissait."""
+    bloc = _backend_inspecteur(generation[0])
+    assert ACL_STREAMLIT in bloc
+    assert "http-request set-timeout server 10m if est_streamlit_long" in bloc
+
+
+def test_l_acces_direct_au_webui_porte_le_meme_delai_streamlit(generation):
+    """admin.<box> passe par webui_direct (expression stricte) : sans la règle là aussi, le panneau resterait coupé."""
+    cfg = generation[0]
+    for debut in [i for i in range(len(cfg)) if cfg.startswith("\nbackend webui_direct", i)]:
+        fin = cfg.find("\nbackend ", debut + 10)
+        bloc = cfg[debut:fin if fin != -1 else len(cfg)]
+        assert ACL_STREAMLIT in bloc and "set-timeout server 10m if est_streamlit_long" in bloc
+        assert bloc.count("set-timeout server") == 1
+
+
+def test_la_regle_streamlit_ne_couvre_que_ses_chemins():
+    import re
+    motif = re.compile(r"^/api/v1/streamlit/(deploy|app/[^/]+/(publish|rename))$")
+    for oui in ("/api/v1/streamlit/deploy", "/api/v1/streamlit/app/atelier/publish",
+                "/api/v1/streamlit/app/atelier-partage-1/rename"):
+        assert motif.match(oui)
+    for non in ("/api/v1/streamlit/status", "/api/v1/streamlit/app/a/b/publish", "/api/v1/streamlit/deploy/x",
+                "/api/v1/streamlit/app/atelier/start", "/api/v1/autre/deploy"):
+        assert not motif.match(non)

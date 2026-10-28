@@ -1398,6 +1398,11 @@ backend sbxwaf_inspector
     acl est_studio_natif hdr_beg(host) -i voicestudio.
     http-request set-timeout server 10m if est_voix_longue
     http-request set-timeout server 1h if est_studio_natif
+    # STREAMLIT (#3247) : depot (extraction et dependances pip dans le conteneur) et publication ou renommage
+    # (nginx -t, generation HAProxy) depassent 30 s ; le client voyait 504 pendant que le serveur finissait.
+    # Chemins EXACTS : le reste du panneau garde les 30 s.
+    acl est_streamlit_long path_reg ^/api/v1/streamlit/(deploy|app/[^/]+/(publish|rename))\$
+    http-request set-timeout server 10m if est_streamlit_long
     option forwardfor
     http-request set-header X-Real-IP %[src]
     # %[query] rend la chaine de requete SANS le « ? » qui l'introduit : une
@@ -1421,6 +1426,9 @@ EOF
         cat >> "$out" << 'EOF'
 backend webui_direct
     mode http
+    # Meme delai que sbxwaf_inspector pour le depot et la publication Streamlit (#3247), chemins exacts.
+    acl est_streamlit_long path_reg ^/api/v1/streamlit/(deploy|app/[^/]+/(publish|rename))$
+    http-request set-timeout server 10m if est_streamlit_long
     server srv0 127.0.0.1:9080 check
 EOF
     fi
@@ -1490,6 +1498,9 @@ EOF
 
 backend webui_direct
     mode http
+    # Meme delai que sbxwaf_inspector pour le depot et la publication Streamlit (#3247), chemins exacts.
+    acl est_streamlit_long path_reg ^/api/v1/streamlit/(deploy|app/[^/]+/(publish|rename))\$
+    http-request set-timeout server 10m if est_streamlit_long
     server srv0 127.0.0.1:9080 check
 EOF
     grep -q '^backend sbxwaf_inspector$' "$out" || cat >> "$out" << EOF
