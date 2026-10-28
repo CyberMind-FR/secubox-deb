@@ -172,16 +172,23 @@ _LOAD_ERRORS: Dict[str, str] = {}
 # D'abord : auth (la porte d'authentification de nginx passe par /api/v1/auth/auth/verify), hub (menu du Hall), sbxid
 # (« Mes comptes »), portal, users.
 ESSENTIELS = ("auth", "hub", "sbxid", "portal", "users")
-PAUSE_MONTAGE_S = 0.05      # la boucle sert les requêtes en attente entre deux imports
+# Entre deux imports, la boucle sert les requêtes en attente au moins aussi longtemps que l'import l'a occupée
+# (plancher PAUSE_MONTAGE_S, plafond PAUSE_MAX_S) : sous swap, un import prend 3 à 6 s.
+PAUSE_MONTAGE_S = 0.05
+PAUSE_MAX_S = 2.0
 RETRY_AFTER_S = 5
 _A_MONTER: List[str] = []
-_MONTAGE: Dict[str, object] = {"pret": False, "duree_s": None}
+_MONTAGE: Dict[str, object] = {"pret": False, "duree_s": None, "interrompu": None}
 _TACHE_MONTAGE: asyncio.Task | None = None
 
 
 def _ordre_montage(modules: List[str]) -> List[str]:
     """Les essentiels présents d'abord, dans l'ordre d'ESSENTIELS ; le reste dans l'ordre de la configuration."""
     return [m for m in ESSENTIELS if m in modules] + [m for m in modules if m not in ESSENTIELS]
+
+
+def _pause_apres(duree_import: float) -> float:
+    return max(PAUSE_MONTAGE_S, min(duree_import, PAUSE_MAX_S))
 
 
 # Modules RETIRÉS du dépôt : encore cités dans /etc/secubox/aggregator.toml d'une box mise à jour
@@ -226,7 +233,9 @@ def _load_config() -> dict:
         if CONFIG_FILE.exists():
             with CONFIG_FILE.open("rb") as f:
                 data = tomllib.load(f)
-            ecartes = RETIRED_MODULES | DEDICATED_MODULES
+            # Les sockets réservées (#3216, relecture) : montées ici, elles échapperaient à la garde et aux marques du relais
+            # (Coffre : compte/*, personne/*, second facteur) — jamais, même citées à la main dans le TOML.
+            ecartes = RETIRED_MODULES | DEDICATED_MODULES | _SOCKETS_ADMIN
             cfg["modules"] = [m for m in data.get("modules", []) if m not in ecartes]
             ignores = [m for m in data.get("modules", []) if m in ecartes]
             if ignores:
@@ -385,19 +394,30 @@ async def _monter_progressivement(app: FastAPI, chemin_origine: List[str]) -> No
     debut = time.monotonic()
     while _A_MONTER:
         name = _A_MONTER[0]
+        t0 = time.monotonic()
         try:
             _mount_module(app, name)
-        except Exception as e:  # noqa: BLE001 — un module ne doit pas arrêter le montage des suivants
+        except (Exception, SystemExit) as e:  # noqa: BLE001 — un module (même un sys.exit à l'import) n'arrête ni les suivants ni la passerelle
             _LOAD_ERRORS[name] = f"mount: {type(e).__name__}: {e}"
             log.error("[mount] %s FAILED: %s", name, e)
         finally:
             _A_MONTER.pop(0)
             ajouts = [p for p in sys.path if p not in chemin_origine]
             sys.path[:] = chemin_origine + ajouts
-        await asyncio.sleep(PAUSE_MONTAGE_S)
+        await asyncio.sleep(_pause_apres(time.monotonic() - t0))
     _MONTAGE["duree_s"] = round(time.monotonic() - debut, 1)
     _MONTAGE["pret"] = True
     log.info("montage terminé : %d montés, %d échecs en %s s", len(_MOUNTED), len(_LOAD_ERRORS), _MONTAGE["duree_s"])
+
+
+def _fin_du_montage(tache: asyncio.Task) -> None:
+    """Une tâche sortie sur une exception laisserait les modules restants en 503 pour toujours, sans un mot : on le dit
+    (journal et /health `interrompu`). Une annulation à l'arrêt n'est pas une interruption."""
+    if tache.cancelled() or tache.exception() is None:
+        return
+    e = tache.exception()
+    _MONTAGE["interrompu"] = f"{type(e).__name__}: {e}"
+    log.error("montage interrompu : %s — modules restants : %s", _MONTAGE["interrompu"], ", ".join(_A_MONTER) or "aucun")
 
 
 def _build_app() -> FastAPI:
@@ -428,17 +448,20 @@ def _build_app() -> FastAPI:
     _MOUNTED.clear()
     _LOAD_ERRORS.clear()
     _A_MONTER[:] = _ordre_montage(cfg.get("modules", []))
-    _MONTAGE.update(pret=False, duree_s=None)
+    _MONTAGE.update(pret=False, duree_s=None, interrompu=None)
 
     @app.on_event("startup")
     async def _lancer_montage() -> None:
         global _TACHE_MONTAGE
         _TACHE_MONTAGE = asyncio.create_task(_monter_progressivement(app, chemin_origine))
+        _TACHE_MONTAGE.add_done_callback(_fin_du_montage)
 
     @app.on_event("shutdown")
     async def _arreter_montage() -> None:
-        if _TACHE_MONTAGE is not None and not _TACHE_MONTAGE.done():
-            _TACHE_MONTAGE.cancel()
+        tache = _TACHE_MONTAGE
+        if tache is not None and not tache.done():
+            tache.cancel()
+            await asyncio.gather(tache, return_exceptions=True)
 
     @app.on_event("startup")
     async def _raise_threadpool() -> None:
@@ -454,19 +477,21 @@ def _build_app() -> FastAPI:
             log.warning("could not raise threadpool limiter: %s", e)
 
     @app.get("/health")
-    def health() -> dict:
+    async def health() -> dict:
         """Aggregator health. Reports per-module load state.
 
-        Répondre, c'est « passerelle prête » ; `pret` dit « tous les modules traités » (#3216)."""
+        Répondre, c'est « passerelle prête » ; `pret` dit « tous les modules traités » (#3216). Servie sur la boucle,
+        comme le montage : l'instantané est cohérent (un module n'est jamais à la fois monté et à monter)."""
         return {
             "status": "ok",
-            "mounted": _MOUNTED,
-            "failed": _LOAD_ERRORS,
+            "mounted": list(_MOUNTED),
+            "failed": dict(_LOAD_ERRORS),
             "total_mounted": len(_MOUNTED),
             "total_failed": len(_LOAD_ERRORS),
             "pret": _MONTAGE["pret"],
             "a_monter": list(_A_MONTER),
             "duree_montage_s": _MONTAGE["duree_s"],
+            "interrompu": _MONTAGE["interrompu"],
         }
 
     @app.get("/")

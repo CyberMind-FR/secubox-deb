@@ -11,9 +11,12 @@ Paquet Debian : version `0.5.0-1~trixie1`, architecture `all`.
 
 ## Démarrage (#3216)
 
-La socket écoute en quelques secondes : `/health`, `/` et le relais vers les sockets dédiées répondent tout de suite.
-Les modules d'`aggregator.toml` se montent ensuite un par un, `auth`, `hub`, `sbxid`, `portal` et `users` d'abord.
-Un module pas encore monté répond `503` avec `Retry-After`. Un module en échec reste isolé dans `failed`.
+La socket écoute en quelques secondes : `/health`, `/` et le relais vers les sockets dédiées répondent dès ce moment.
+Les modules d'`aggregator.toml` se montent ensuite un par un sur la boucle, `auth`, `hub`, `sbxid`, `portal` et
+`users` d'abord. Pendant l'import d'un module, la boucle est occupée (quelques secondes sous swap) ; entre deux
+imports, elle sert les requêtes en attente au moins aussi longtemps (de 50 ms à 2 s). Un module pas encore monté
+répond `503` avec `Retry-After`. Un module en échec, même sur un `sys.exit()` à l'import, reste isolé dans `failed`.
+`vault`, `actor` et `radio` ne sont jamais montés, même cités dans le TOML : le relais les garde.
 
 `GET /health` garde ses clés (`status`, `mounted`, `failed`, `total_mounted`, `total_failed`) et ajoute :
 
@@ -22,6 +25,9 @@ Un module pas encore monté répond `503` avec `Retry-After`. Un module en éche
 | `pret` | `true` quand tous les modules ont été traités (montés ou en échec) |
 | `a_monter` | modules qui restent à monter, dans l'ordre |
 | `duree_montage_s` | durée du montage complet, `null` avant la fin |
+| `interrompu` | motif si la tâche de montage s'est arrêtée sur une exception (les modules restants répondent 503), sinon `null` |
+
+`secubox-aggregator-migrate` attend `pret` (900 s au plus) avant de lire `mounted`.
 
 ## Contenu
 

@@ -8,11 +8,13 @@ se montent ensuite un par un, les essentiels d'abord, et un module pas encore mo
 import importlib
 import sys
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 ag = importlib.import_module("aggregator.main")
+MIGRATE = Path(__file__).resolve().parents[1] / "sbin" / "secubox-aggregator-migrate"
 
 MODULE = """from fastapi import FastAPI
 app = FastAPI()
@@ -21,6 +23,14 @@ app = FastAPI()
 def ping():
     return {{"module": "{nom}"}}
 """
+
+
+def _etat_vierge(monkeypatch):
+    """L'état du montage est global au module : chaque test part de listes neuves, rendues à la fin."""
+    monkeypatch.setattr(ag, "_MOUNTED", [])
+    monkeypatch.setattr(ag, "_LOAD_ERRORS", {})
+    monkeypatch.setattr(ag, "_A_MONTER", [])
+    monkeypatch.setattr(ag, "_MONTAGE", {"pret": False, "duree_s": None, "interrompu": None})
 
 
 def _module(lib, nom, avant=""):
@@ -41,6 +51,7 @@ def banc(tmp_path, monkeypatch):
     monkeypatch.setattr(ag, "RUN_DIR", str(run))
     monkeypatch.setattr(ag, "CONFIG_FILE", conf)
     monkeypatch.setattr(sys, "path", list(sys.path))
+    _etat_vierge(monkeypatch)
 
     def configurer(*noms):
         conf.write_text("modules = [%s]\n" % ", ".join('"%s"' % n for n in noms), encoding="utf-8")
@@ -133,3 +144,61 @@ def test_le_chemin_python_est_remis_en_ordre_apres_chaque_module(banc):
         _attendre_pret(client)
     assert sys.path[: len(origine)] == origine
     assert "/faux/dist-packages" in sys.path[len(origine):]
+
+
+def test_un_module_qui_appelle_sys_exit_n_arrete_pas_la_passerelle(banc):
+    lib, configurer = banc
+    _module(lib, "sortie", avant="raise SystemExit(3)\n")
+    _module(lib, "soc")
+    configurer("sortie", "soc")
+    with TestClient(ag._build_app()) as client:
+        etat = _attendre_pret(client)
+        assert etat["mounted"] == ["soc"] and "SystemExit" in etat["failed"]["sortie"]
+
+
+def test_un_montage_interrompu_est_signale(banc, monkeypatch):
+    lib, configurer = banc
+    _module(lib, "soc")
+    configurer("soc")
+
+    class Coupure(BaseException):
+        pass
+
+    def _casse(parent, name):
+        raise Coupure("arrêt imprévu")
+
+    monkeypatch.setattr(ag, "_mount_module", _casse)
+    with TestClient(ag._build_app()) as client:
+        fin = time.monotonic() + 10
+        while not client.get("/health").json()["interrompu"] and time.monotonic() < fin:
+            time.sleep(0.02)
+        etat = client.get("/health").json()
+        assert "Coupure" in etat["interrompu"] and etat["pret"] is False
+
+
+def test_la_pause_suit_la_duree_de_l_import():
+    assert ag._pause_apres(0.0) == ag.PAUSE_MONTAGE_S
+    assert ag._pause_apres(0.5) == 0.5
+    assert ag._pause_apres(30.0) == ag.PAUSE_MAX_S
+
+
+def test_les_sockets_reservees_ne_sont_jamais_montees(tmp_path, monkeypatch):
+    conf = tmp_path / "aggregator.toml"
+    conf.write_text('modules = ["hub", "vault", "actor", "radio"]\n', encoding="utf-8")
+    monkeypatch.setattr(ag, "CONFIG_FILE", conf)
+    assert ag._load_config()["modules"] == ["hub"]
+    ligne = [x for x in MIGRATE.read_text(encoding="utf-8").splitlines() if x.startswith("readonly AGG_EXCLUDE=")][0]
+    assert {"vault", "actor", "radio"} <= set(ligne.split("=", 1)[1].strip('"').split())
+
+
+def test_la_garde_passe_avant_le_503_pour_un_module_reserve(monkeypatch):
+    _etat_vierge(monkeypatch)
+    app = ag._build_app()
+    ag._A_MONTER.append("actor")          # même « à monter », un module réservé exige d'abord un administrateur
+    r = TestClient(app).get("/api/v1/actor/vue")
+    assert r.status_code == 401
+
+
+def test_la_migration_attend_la_fin_du_montage():
+    texte = MIGRATE.read_text(encoding="utf-8")
+    assert '"pret"' in texte and "sleep 8\n" not in texte

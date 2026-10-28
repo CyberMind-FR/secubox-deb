@@ -6,6 +6,10 @@ secubox-aggregator (0.5.0-1~trixie1) trixie; urgency=medium
     l'authentification et l'administration à chaque redémarrage de gk2. Un module pas encore monté répond 503 +
     Retry-After ; /health ajoute pret, a_monter, duree_montage_s ; le chemin Python reprend son ordre après
     chaque module (#1680).
+  * Relecture de sécurité : pause après chaque import au moins égale à sa durée (50 ms à 2 s) ; un sys.exit()
+    à l'import n'arrête plus la passerelle ; une tâche de montage interrompue est journalisée et signalée
+    (/health interrompu) ; vault, actor et radio ne sont jamais montés, même cités dans le TOML (relais gardé) ;
+    secubox-aggregator-migrate attend pret avant de lire mounted (liste partielle sinon). Exception § 6 écrite.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 08:30:00 +0100
 
