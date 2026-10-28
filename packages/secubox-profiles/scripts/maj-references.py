@@ -22,8 +22,16 @@ posée à la place d'un profil bloquait dpkg sans fin. Ici :
   * une copie locale n'est lue que si c'est un fichier ordinaire (fstat sur le descripteur ouvert sans suivre de lien
     et sans bloquer), et au plus TAILLE_MAX octets ; un lien, une FIFO, un dossier sont laissés et signalés.
 
-Usage : maj-references.py [SOURCE] [CIBLE] [EMPREINTES]   (env. PREPA=/etc, PROPRIO=utilisateur:groupe en postinst)
-Lancé par le postinst en `python3 -I` (aucun module pris dans le dossier courant)."""
+LES DOSSIERS AUSSI (seconde relecture). Le postinst créait /etc/secubox/{profiles,health,waf} et
+/var/lib/secubox/profiles/{rollback,validation} par `install -d -o … -m …`. Leurs parents appartiennent au compte
+secubox ; or GNU `install -d` sur un dossier existant SUIT un lien et applique chown et chmod à la cible :
+`profiles -> /etc/apt/apt.conf.d` donnait ce dossier à secubox, donc root. `--dossiers` les crée ou les répare ici :
+parent ouvert sans suivre de lien, mkdir relatif s'il manque, ouverture O_DIRECTORY|O_NOFOLLOW, puis fchown et fchmod
+SUR LE DESCRIPTEUR. Un lien à la place d'un dossier est refusé bruyamment (rc 1), jamais suivi.
+
+Usage : maj-references.py [--dossiers] [SOURCE] [CIBLE] [EMPREINTES]
+  env. PREPA=/etc, PROPRIO=utilisateur:groupe (postinst) ; ETC_SECUBOX=/etc/secubox, VARLIB_SECUBOX=/var/lib/secubox,
+  SOURCE_PROFILS=/usr/share/secubox/profiles (tests). Lancé par le postinst en `python3 -I` (rien du dossier courant)."""
 from __future__ import annotations
 
 import errno
@@ -38,6 +46,17 @@ from pathlib import Path
 
 TAILLE_MAX = 1 << 20          # un profil fait quelques Ko ; au-delà, la copie est tenue pour modifiée
 PREFIXE_PREPA = ".secubox-profiles."
+
+# (ancre, chemin relatif, utilisateur, groupe, mode, réparé à chaque passage). Mêmes valeurs que les anciens `install -d`
+# du postinst ; waf n'était créé que s'il manquait, le parent /var/lib/secubox/profiles n'était jamais nommé.
+DOSSIERS = (
+    ("etc", "profiles", "secubox", "secubox", 0o755, True),
+    ("etc", "health", "root", "root", 0o755, True),
+    ("etc", "waf", "root", "root", 0o750, False),
+    ("varlib", "profiles", "root", "root", 0o755, False),
+    ("varlib", "profiles/rollback", "root", "root", 0o750, True),
+    ("varlib", "profiles/validation", "secubox-profiles", "secubox", 0o2750, True),
+)
 
 
 def dire(message: str) -> None:
@@ -65,10 +84,8 @@ def lire_local(nom: str, dossier_fd: int) -> tuple[str, bytes | None]:
         fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dossier_fd)
     except FileNotFoundError:
         return "absent", None
-    except OSError as exc:
-        if exc.errno == errno.ELOOP:
-            return "lien", None
-        raise
+    except OSError as exc:                       # lien (ELOOP), socket (ENXIO), droits… : jamais une trace, jamais suivi
+        return ("lien" if exc.errno == errno.ELOOP else "autre"), None
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode):
@@ -85,6 +102,76 @@ def lire_local(nom: str, dossier_fd: int) -> tuple[str, bytes | None]:
         return "ordinaire", b"".join(morceaux)[:TAILLE_MAX + 1]
     finally:
         os.close(fd)
+
+
+class DossierRefuse(Exception):
+    """Un composant du chemin est un lien, ou n'est pas un dossier."""
+
+
+def assurer_dossier(ancre_fd: int, relatif: str, ids: tuple[int, int] | None, mode: int, reparer: bool) -> bool:
+    """Crée (s'il manque) puis, si `reparer` ou s'il vient d'être créé, pose propriétaire et mode PAR DESCRIPTEUR.
+    Rend True s'il a été créé. Lève DossierRefuse si un composant est un lien ou pas un dossier."""
+    fd, cree = os.dup(ancre_fd), False
+    parts = relatif.split("/")
+    try:
+        for i, part in enumerate(parts):
+            try:
+                os.mkdir(part, 0o700, dir_fd=fd)                  # 0700 le temps de poser propriétaire et mode
+                cree = True
+            except FileExistsError:
+                cree = False
+            try:
+                suivant = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            except OSError as exc:
+                if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                    raise DossierRefuse(f"{part} est un lien ou n'est pas un dossier") from exc
+                raise
+            os.close(fd)
+            fd = suivant
+            if cree and i < len(parts) - 1:
+                os.fchmod(fd, 0o755)                              # parent intermédiaire créé ici
+        if cree or reparer:
+            if ids is not None:
+                os.fchown(fd, *ids)
+            os.fchmod(fd, mode)
+        return cree
+    finally:
+        os.close(fd)
+
+
+def preparer_dossiers(ancres: dict[str, Path], *, proprietaires: bool) -> int:
+    """Les dossiers de DOSSIERS, chacun sous son ancre ouverte sans suivre de lien. rc 1 si l'un est refusé."""
+    rc, fds = 0, {}
+    try:
+        for cle, chemin in ancres.items():
+            try:
+                fds[cle] = ouvrir_dossier(chemin)
+            except OSError as exc:
+                dire(f"{chemin} inutilisable ({exc.strerror}) : dossiers non préparés dessous")
+                rc = 1
+        for ancre, relatif, utilisateur, groupe, mode, reparer in DOSSIERS:
+            if ancre not in fds:
+                continue
+            ids = None
+            if proprietaires:
+                try:
+                    ids = (pwd.getpwnam(utilisateur).pw_uid, grp.getgrnam(groupe).gr_gid)
+                except KeyError:
+                    dire(f"compte {utilisateur}:{groupe} absent : propriétaire de {ancres[ancre] / relatif} non posé")
+                    rc = 1
+            try:
+                if assurer_dossier(fds[ancre], relatif, ids, mode, reparer):
+                    dire(f"dossier {ancres[ancre] / relatif} créé")
+            except DossierRefuse as exc:
+                dire(f"{ancres[ancre] / relatif} REFUSÉ : {exc} ; ni suivi ni modifié (lien posé par le compte secubox ?)")
+                rc = 1
+            except OSError as exc:
+                dire(f"{ancres[ancre] / relatif} : {exc.strerror}")
+                rc = 1
+    finally:
+        for fd in fds.values():
+            os.close(fd)
+    return rc
 
 
 def proprietaire(proprio: str | None) -> tuple[int, int] | None:
@@ -135,7 +222,10 @@ def maj(source: Path, cible: Path, empreintes: Path, *, prepa: Path = Path("/etc
             for ref in sorted(source.glob("*.toml")):
                 if ref.is_symlink() or not ref.is_file():
                     continue
-                _un_profil(ref, livrees, prepa_fd, cible_fd, ids)
+                try:
+                    _un_profil(ref, livrees, prepa_fd, cible_fd, ids)
+                except OSError as exc:                       # un profil en échec n'arrête pas les suivants
+                    dire(f"{ref.name} : {exc.strerror}")
         finally:
             for reste in os.listdir(prepa_fd):
                 os.unlink(reste, dir_fd=prepa_fd)
@@ -174,11 +264,20 @@ def _un_profil(ref: Path, livrees: set[str], prepa_fd: int, cible_fd: int, ids) 
 
 
 def main(argv: list[str]) -> int:
-    source = Path(argv[1]) if len(argv) > 1 else Path("/usr/share/secubox/profiles")
-    cible = Path(argv[2]) if len(argv) > 2 else Path("/etc/secubox/profiles")
-    empreintes = Path(argv[3]) if len(argv) > 3 else source / "empreintes-livrees.txt"
-    return maj(source, cible, empreintes, prepa=Path(os.environ.get("PREPA", "/etc")),
-               proprio=os.environ.get("PROPRIO") or None)
+    args = argv[1:]
+    dossiers = bool(args) and args[0] == "--dossiers"
+    if dossiers:
+        args = args[1:]
+    etc = Path(os.environ.get("ETC_SECUBOX", "/etc/secubox"))
+    source = Path(args[0]) if args else Path(os.environ.get("SOURCE_PROFILS", "/usr/share/secubox/profiles"))
+    cible = Path(args[1]) if len(args) > 1 else etc / "profiles"
+    empreintes = Path(args[2]) if len(args) > 2 else source / "empreintes-livrees.txt"
+    rc = 0
+    if dossiers:
+        rc = preparer_dossiers({"etc": etc, "varlib": Path(os.environ.get("VARLIB_SECUBOX", "/var/lib/secubox"))},
+                               proprietaires=os.geteuid() == 0)
+    return max(rc, maj(source, cible, empreintes, prepa=Path(os.environ.get("PREPA", "/etc")),
+                       proprio=os.environ.get("PROPRIO") or None))
 
 
 if __name__ == "__main__":

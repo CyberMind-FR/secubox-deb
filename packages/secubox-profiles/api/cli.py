@@ -199,11 +199,25 @@ def _cmd_apply(args) -> int:
     return 0 if report.status == "applied" else 2
 
 
-def _lire_borne(chemin: Path, maximum: int = 1 << 20) -> str | None:
-    """Texte d'un fichier ORDINAIRE, lu sans suivre de lien ni bloquer ; None sinon. Le dossier des profils appartient au
-    compte secubox : une FIFO posée à la place de `active` ou d'un profil bloquerait le postinst (root) sans fin."""
+def _ouvrir_sans_lien(chemin: Path) -> int:
+    """Descripteur du dossier `chemin`, ouvert depuis / composant par composant sans suivre aucun lien."""
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
     try:
-        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        for part in Path(os.path.abspath(chemin)).parts[1:]:
+            suivant = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = suivant
+    except OSError:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _lire_borne(nom: str, dossier_fd: int, maximum: int = 1 << 20) -> str | None:
+    """Texte d'un fichier ORDINAIRE du dossier ouvert, lu sans suivre de lien ni bloquer ; None sinon. Le dossier des
+    profils appartient au compte secubox : une FIFO posée à la place de `active` ou d'un profil bloquerait le postinst."""
+    try:
+        fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dossier_fd)
     except OSError:
         return None
     try:
@@ -219,20 +233,29 @@ def _lire_borne(chemin: Path, maximum: int = 1 << 20) -> str | None:
 
 def _cmd_coupe(args) -> int:
     """0 si le profil ACTIF coupe explicitement cette unité (minuterie de `minuteurs_off`, protégé de `proteges_off`),
-    1 sinon (aucun profil actif compris), 2 si l'unité est invalide. Pour les postinst : ne pas réactiver à chaque
-    mise à jour ce que le profil actif a coupé (#3218). Un module simplement absent de `on` n'est pas « coupé » ici."""
+    1 sinon (aucun profil actif compris), 2 si l'unité ou le profil actif est invalide. Pour le postinst (root) : ne
+    pas réactiver à chaque mise à jour ce que le profil actif a coupé (#3218). Un module simplement absent de `on`
+    n'est pas « coupé » ici. La racine puis `profiles/` sont ouverts sans suivre de lien, et lus relativement."""
     m = _UNITE_COUPABLE.fullmatch(args.unite)
     if not m:
         print(f"unité invalide : {args.unite!r}", file=sys.stderr)
         return 2
-    _, prof_dir, _, active = _paths(Path(args.root))
-    nom = (_lire_borne(active, 256) or "").strip()
-    if not _NOM_PROFIL.fullmatch(nom):
-        return 1
-    texte = _lire_borne(prof_dir / f"{nom}.toml")
+    try:
+        racine_fd = _ouvrir_sans_lien(Path(args.root))
+        try:
+            prof_fd = os.open("profiles", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=racine_fd)
+        finally:
+            os.close(racine_fd)
+    except OSError:
+        return 1                                       # pas de dossier de profils sûr : rien n'est coupé
+    try:
+        nom = (_lire_borne("active", prof_fd, 256) or "").strip()
+        texte = _lire_borne(f"{nom}.toml", prof_fd) if _NOM_PROFIL.fullmatch(nom) else None
+    finally:
+        os.close(prof_fd)
     if texte is None:
         return 1
-    prof = parse_profile(texte, prof_dir / f"{nom}.toml")
+    prof = parse_profile(texte, Path(args.root) / "profiles" / f"{nom}.toml")
     coupe = m["id"] in (prof.minuteurs_off if m["type"] == "timer" else prof.proteges_off)
     if args.json:
         print(json.dumps({"unite": args.unite, "profil": nom, "coupe": coupe}))

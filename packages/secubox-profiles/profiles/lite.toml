@@ -25,7 +25,8 @@ on = [
   "watchdog", "wireguard",
   "console", "kiosk",
   # #3218 — socle absent du profil (l'apply l'aurait arrêté) : maillage, sommeil et réveil, connexion, premier démarrage.
-  # Pas le sleeper (relecture #3248) : livré désactivé, il reste le choix de l'opérateur, hors profil.
+  # Pas le sleeper (relecture #3248) : livré désactivé, choix de l'opérateur. Absent de `on`, l'apply l'ARRÊTE s'il tourne :
+  # pour le garder, l'épingler, `sleeper = "on"` dans pins.toml.
   "autoload-agent", "firstboot", "groupe-declares", "meshname", "net-fallback", "openpgp", "premier-pas", "waker",
   # #3218 — protections du méta-paquet secubox-lite absentes du profil.
   "freebox", "nac", "ipv6guard", "webfilter", "webfilter-feed", "network-anomaly", "netmodes", "netdiag",

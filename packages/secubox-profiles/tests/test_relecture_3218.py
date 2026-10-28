@@ -228,3 +228,131 @@ def test_un_profil_illisible_ignore_est_journalise(tmp_path, caplog):
     with caplog.at_level(logging.WARNING):
         assert minuteurs.minuteurs_geres(tmp_path) == {"netstats"}
     assert any("casse.toml" in r.getMessage() for r in caplog.records)
+
+
+# ── seconde relecture : les dossiers sous les dossiers du compte secubox ─────
+# /etc/secubox et /var/lib/secubox appartiennent à secubox. GNU `install -d` sur un dossier existant SUIT le lien et y fait
+# chown + chmod : `profiles -> /etc/apt/apt.conf.d` donnait ce dossier à secubox, donc root. Le postinst ne les crée plus.
+
+ATTENDUS = {("etc", "profiles"): 0o755, ("etc", "health"): 0o755, ("etc", "waf"): 0o750,
+            ("varlib", "profiles"): 0o755, ("varlib", "profiles/rollback"): 0o750, ("varlib", "profiles/validation"): 0o2750}
+
+
+@pytest.fixture()
+def ancres(tmp_path):
+    etc, varlib, share = tmp_path / "etc" / "secubox", tmp_path / "var" / "lib" / "secubox", tmp_path / "share"
+    etc.mkdir(parents=True)
+    varlib.mkdir(parents=True)
+    share.mkdir()
+    (share / "minimal.toml").write_bytes(b'name = "minimal"\non = []\n')
+    (share / "empreintes-livrees.txt").write_text("", encoding="utf-8")
+    return {"etc": etc, "varlib": varlib, "share": share, "prepa": tmp_path / "etc"}
+
+
+def _dossiers(a, timeout=20):
+    env = dict(os.environ, ETC_SECUBOX=str(a["etc"]), VARLIB_SECUBOX=str(a["varlib"]), SOURCE_PROFILS=str(a["share"]),
+               PREPA=str(a["prepa"]))
+    env.pop("PROPRIO", None)
+    return subprocess.run([sys.executable, "-I", str(SCRIPT), "--dossiers"], env=env, capture_output=True, text=True,
+                          timeout=timeout, check=False)
+
+
+def test_le_postinst_ne_cree_plus_par_install_d_sous_les_dossiers_du_compte_secubox():
+    for chemin in ("/etc/secubox/profiles", "/etc/secubox/health", "/etc/secubox/waf",
+                   "/var/lib/secubox/profiles/rollback", "/var/lib/secubox/profiles/validation"):
+        assert not [ligne for ligne in POSTINST.splitlines()
+                    if "install -d" in ligne and chemin in ligne and not ligne.lstrip().startswith("#")], chemin
+    assert "maj-references.py --dossiers" in POSTINST
+    # Les dossiers sont prêts AVANT le minuteur du relevé, l'AppArmor et les synchronisations de wakectl.
+    assert POSTINST.index("maj-references.py --dossiers") < POSTINST.index("secubox-wakectl waf-sync")
+    assert POSTINST.index("adduser --system --ingroup secubox") < POSTINST.index("maj-references.py --dossiers")
+
+
+def test_les_dossiers_absents_sont_crees_avec_leur_mode(ancres):
+    r = _dossiers(ancres)
+    assert r.returncode == 0, r.stderr
+    for (ancre, rel), mode in ATTENDUS.items():
+        assert (ancres[ancre] / rel).stat().st_mode & 0o7777 == mode, rel
+    assert (ancres["etc"] / "profiles" / "minimal.toml").is_file()             # puis les profils sont semés
+
+
+def test_les_dossiers_existants_sont_repares_sauf_waf(ancres):
+    for (ancre, rel) in ATTENDUS:
+        (ancres[ancre] / rel).mkdir(parents=True, exist_ok=True)
+        os.chmod(ancres[ancre] / rel, 0o700)
+    r = _dossiers(ancres)
+    assert r.returncode == 0, r.stderr
+    # waf (comme avant : créé s'il manque) et le parent /var/lib/secubox/profiles ne sont jamais retouchés.
+    non_repares = {("etc", "waf"), ("varlib", "profiles")}
+    for cle, mode in ATTENDUS.items():
+        attendu = 0o700 if cle in non_repares else mode
+        assert (ancres[cle[0]] / cle[1]).stat().st_mode & 0o7777 == attendu, cle
+
+
+@pytest.mark.parametrize("ancre, nom", [("etc", "profiles"), ("etc", "health"), ("etc", "waf"), ("varlib", "profiles")])
+def test_un_dossier_remplace_par_un_lien_n_est_ni_suivi_ni_modifie(ancres, tmp_path, ancre, nom):
+    victime = tmp_path / f"victime-{nom}"
+    victime.mkdir()
+    os.chmod(victime, 0o700)
+    avant = victime.stat()
+    (ancres[ancre] / nom).symlink_to(victime)
+    r = _dossiers(ancres)
+    assert r.returncode != 0 and "lien" in r.stderr
+    apres = victime.stat()
+    assert (apres.st_mode, apres.st_uid, apres.st_gid) == (avant.st_mode, avant.st_uid, avant.st_gid)
+    assert list(victime.iterdir()) == []
+    assert (ancres[ancre] / nom).is_symlink()
+
+
+def test_une_socket_a_la_place_d_un_profil_n_arrete_pas_les_suivants(arbre):
+    import socket
+    src, prepa, cible, emp = arbre
+    s = socket.socket(socket.AF_UNIX)
+    s.bind(str(cible / "lite.toml"))                         # « lite » avant « minimal » dans l'ordre de parcours
+    try:
+        r = _lancer(src, prepa, cible, emp)
+    finally:
+        s.close()
+    assert r.returncode == 0, r.stderr
+    assert "pas un fichier ordinaire" in r.stderr and "Traceback" not in r.stderr
+    assert (cible / "minimal.toml").read_bytes() == (src / "minimal.toml").read_bytes()
+
+
+# ── seconde relecture : `coupe` ne suit aucun lien et ne bloque pas ──────────
+
+def test_coupe_ignore_une_fifo_a_la_place_de_active(racine):
+    os.mkfifo(racine / "profiles" / "active")
+    assert main(["--root", str(racine), "coupe", "secubox-profiles.service"]) == 1     # sans bloquer
+
+
+def test_coupe_ne_suit_pas_un_lien_sur_active_ni_sur_le_profil(racine, tmp_path):
+    ailleurs = tmp_path / "ailleurs"
+    ailleurs.write_text("minimal\n")
+    (racine / "profiles" / "active").symlink_to(ailleurs)
+    assert main(["--root", str(racine), "coupe", "secubox-profiles.service"]) == 1
+    (racine / "profiles" / "active").unlink()
+    (racine / "profiles" / "active").write_text("autre\n")
+    (racine / "profiles" / "autre.toml").symlink_to(racine / "profiles" / "minimal.toml")
+    assert main(["--root", str(racine), "coupe", "secubox-profiles.service"]) == 1
+
+
+def test_coupe_ne_suit_pas_un_dossier_profiles_remplace_par_un_lien(racine, tmp_path):
+    vrai = tmp_path / "vrai"
+    (racine / "profiles").rename(vrai)
+    (racine / "profiles").symlink_to(vrai)
+    (vrai / "active").write_text("minimal\n")
+    assert main(["--root", str(racine), "coupe", "secubox-profiles.service"]) == 1
+
+
+def test_coupe_sur_un_profil_actif_invalide_rend_2(racine):
+    (racine / "profiles" / "active").write_text("minimal\n")
+    (racine / "profiles" / "minimal.toml").write_text('name = "minimal"\non = []\nproteges_off = ["auth"]\n')
+    assert main(["--root", str(racine), "coupe", "secubox-profiles.service"]) == 2
+
+
+def test_les_profils_disent_qu_un_module_absent_de_on_est_arrete():
+    for f in ("minimal.toml", "lite.toml"):
+        texte = (PKG / "profiles" / f).read_text(encoding="utf-8")
+        assert "pins.toml" in texte and 'sleeper = "on"' in texte, f
+    readme = (PKG / "README.md").read_text(encoding="utf-8")
+    assert 'sleeper = "on"' in readme

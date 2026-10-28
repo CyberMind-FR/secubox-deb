@@ -7,7 +7,8 @@
 # Pendant du méta-paquet secubox-minimal, pour une carte de 1 Go (ESPRESSObin, mesurée sur gk5 le 2026-10-28) : boîtier de garde
 # sans tête. Garde DNS, filtre de publicités, filtrage web, NAC, Freebox, garde IPv6, WireGuard, le socle d'administration et le
 # maillage. Ni DPI ni nDPId (#3218), ni WAF ni HAProxy (#2849), ni Hall, ni metrics, ni kiosque, ni Tor.
-# Le sleeper n'y figure pas (relecture #3248) : livré désactivé, il reste le choix de l'opérateur, hors profil.
+# Le sleeper n'y figure pas (relecture #3248) : livré désactivé, il reste le choix de l'opérateur. Comme tout module absent
+# de `on`, l'apply l'ARRÊTE et le désactive s'il tourne : pour le garder, l'épingler, `sleeper = "on"` dans pins.toml.
 # Les ids sont ceux des manifestes dérivés des unités. N'y figurent que des services durables ou des oneshot RemainAfterExit :
 # un oneshot de minuterie listé ici serait DÉMARRÉ par l'apply, ne deviendrait jamais « actif » et annulerait tout l'apply.
 name  = "minimal"

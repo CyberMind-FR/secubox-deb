@@ -42,7 +42,7 @@ Après avoir modifié un profil de référence : `python3 scripts/gen-empreintes
 |---|---|
 | `full` | tous les modules |
 | `lite` | protections (pendant du méta-paquet `secubox-lite`) ; ni KSM, ni Centres, ni DPI/nDPId (#3218) |
-| `minimal` | carte de 1 Go sans tête (pendant de `secubox-minimal`) : garde DNS, ad-guard, webfilter, NAC, Freebox, WireGuard, socle et maillage (#3218) ; le sleeper reste hors profil, livré désactivé |
+| `minimal` | carte de 1 Go sans tête (pendant de `secubox-minimal`) : garde DNS, ad-guard, webfilter, NAC, Freebox, WireGuard, socle et maillage (#3218) ; le sleeper n'y est pas (livré désactivé) |
 | `secure-gateway` | passerelle durcie (firewall/WAF/IDS, pas de media) |
 | `media-lab` | modules media (peertube, lyrion, photoprism…) en plus du socle |
 
@@ -50,7 +50,7 @@ Clés d'un profil :
 
 | Clé | Rôle |
 |---|---|
-| `on` | ids allumés ; **exhaustif** : un module absent est arrêté et désactivé par `apply`. N'y lister que des services durables ou des oneshot `RemainAfterExit` : un oneshot de minuterie y serait démarré, ne deviendrait jamais actif et ferait annuler tout l'apply |
+| `on` | ids allumés ; **exhaustif** : un module absent est arrêté et désactivé par `apply` — y compris un sleeper activé par l'opérateur : pour le garder, l'épingler (`sleeper = "on"` dans `pins.toml`). N'y lister que des services durables ou des oneshot `RemainAfterExit` : un oneshot de minuterie y serait démarré, ne deviendrait jamais actif et ferait annuler tout l'apply |
 | `menu_off` | entrées de menu masquées tant que le profil est actif (lu par le hub, #2897) |
 | `minuteurs_off` | minuteries (`secubox-<id>.timer`) arrêtées et désactivées (#3218). L'ensemble géré est l'union des `minuteurs_off` de tous les profils : un profil qui ne la nomme pas la **rétablit** (activée, démarrée). N'y nommer que des minuteries activées par défaut par leur paquet ; une unité absente du disque n'est pas gérée. Dans le plan : pseudo-module `minuteur:<id>`, priorité 10 |
 | `proteges_off` | protégés coupés par ce profil, limités à `PROTEGES_COUPABLES` (`profiles` seul : la CLI `secubox-profilectl` reste) ; tout autre id (auth, aggregator…) fait refuser le profil au chargement (#3218) |
