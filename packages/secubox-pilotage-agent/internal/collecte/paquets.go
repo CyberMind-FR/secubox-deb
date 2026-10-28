@@ -6,7 +6,6 @@
 package collecte
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -56,13 +55,7 @@ func (s *paquets) Lire(ctx context.Context) (map[string]any, error) {
 		}
 		nom, version, etat = "", "", ""
 	}
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
-	for sc.Scan() {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		l := sc.Text()
+	err = parcourirLignes(ctx, f, func(l string) {
 		switch {
 		case l == "":
 			clore()
@@ -73,10 +66,13 @@ func (s *paquets) Lire(ctx context.Context) (map[string]any, error) {
 		case strings.HasPrefix(l, "Status: "):
 			etat = strings.TrimSpace(l[len("Status: "):])
 		}
-	}
-	if err := sc.Err(); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
-	clore()
+	// Fichier coupé par le plafond : la strophe finale est incomplète, on ne la publie pas.
+	if !f.Tronque() {
+		clore()
+	}
 	return p, nil
 }

@@ -7,6 +7,8 @@ package collecte
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -35,5 +37,26 @@ func TestPaquetsNeGardeQueSecuboxInstalles(t *testing.T) {
 func TestPaquetsSansStatusEnErreur(t *testing.T) {
 	if _, err := NouvelleSourcePaquets(t.TempDir()).Lire(context.Background()); err == nil {
 		t.Error("une erreur est attendue")
+	}
+}
+
+func TestPaquetsStropheTronqueeNonPubliee(t *testing.T) {
+	r := t.TempDir()
+	os.MkdirAll(filepath.Join(r, "var/lib/dpkg"), 0o755)
+	b := "Package: secubox-b\nStatus: install ok installed\nVersion: 2.3.4-1\n"
+	// Le plafond coupe la ligne « Version: 2. » de secubox-b.
+	coupe := len(b) - len("3.4-1\n")
+	entete := "Package: zz\nStatus: install ok installed\nDescription: "
+	remplissage := plafondDpkg - coupe - len(entete) - len("\n\n")
+	contenu := entete + strings.Repeat("y", remplissage) + "\n\n" + b
+	os.WriteFile(filepath.Join(r, "var/lib/dpkg/status"), []byte(contenu), 0o600)
+	p, err := NouvelleSourcePaquets(r).Lire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range p {
+		if v == "secubox-b" || v == "2." {
+			t.Errorf("strophe tronquée publiée : %s = %v", k, v)
+		}
 	}
 }
