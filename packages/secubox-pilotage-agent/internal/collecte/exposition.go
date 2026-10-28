@@ -8,6 +8,7 @@ package collecte
 import (
 	"context"
 	"errors"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/lecture"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -58,11 +59,11 @@ func (s *exposition) noms(ctx context.Context) ([]string, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		f, err := ouvrirBorne(fich, plafondVhost)
+		f, err := lecture.Ouvrir(fich, plafondVhost)
 		if err != nil {
 			continue
 		}
-		err = parcourirLignes(ctx, f, func(l string) {
+		err = lecture.Lignes(ctx, f, func(l string) {
 			l, _, _ = strings.Cut(l, "#")
 			champs := strings.Fields(strings.TrimSuffix(strings.TrimSpace(l), ";"))
 			if len(champs) < 2 || champs[0] != "server_name" {
@@ -90,12 +91,12 @@ func (s *exposition) ports(ctx context.Context) ([]int, error) {
 	vus := map[int]bool{}
 	lu := false
 	for _, nom := range []string{"proc/net/tcp", "proc/net/tcp6"} {
-		f, err := ouvrirBorne(filepath.Join(s.racine, nom), plafondReseau)
+		f, err := lecture.Ouvrir(filepath.Join(s.racine, nom), plafondReseau)
 		if err != nil {
 			continue
 		}
 		lu = true
-		err = parcourirLignes(ctx, f, func(l string) {
+		err = lecture.Lignes(ctx, f, func(l string) {
 			c := strings.Fields(l)
 			if len(c) < 4 || c[3] != "0A" {
 				return

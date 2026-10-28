@@ -8,6 +8,7 @@ package collecte
 import (
 	"context"
 	"fmt"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/lecture"
 	"path/filepath"
 	"strings"
 
@@ -36,7 +37,7 @@ func (s *paquets) Chemins() []string {
 }
 
 func (s *paquets) Lire(ctx context.Context) (map[string]any, error) {
-	f, err := ouvrirBorne(filepath.Join(s.racine, "var/lib/dpkg/status"), plafondDpkg)
+	f, err := lecture.Ouvrir(filepath.Join(s.racine, "var/lib/dpkg/status"), plafondDpkg)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +56,7 @@ func (s *paquets) Lire(ctx context.Context) (map[string]any, error) {
 		}
 		nom, version, etat = "", "", ""
 	}
-	err = parcourirLignes(ctx, f, func(l string) {
+	err = lecture.Lignes(ctx, f, func(l string) {
 		switch {
 		case l == "":
 			clore()

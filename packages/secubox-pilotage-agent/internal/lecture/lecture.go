@@ -2,7 +2,9 @@
 // Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 // Source-Disclosed License — All rights reserved except as expressly granted.
 // See LICENCE-CMSD-1.0.md for terms.
-package collecte
+
+// Package lecture : lecture bornée et non bloquante de fichiers (/proc, /sys, …).
+package lecture
 
 import (
 	"bufio"
@@ -14,28 +16,17 @@ import (
 	"syscall"
 )
 
-// Plafonds de lecture : l'agent est borné en mémoire et lit des arbres que
-// d'autres processus peuvent modifier (FIFO, liens vers de gros fichiers).
-const (
-	plafondPetit   = 64 << 10  // fichiers d'une ligne ou presque
-	plafondProc    = 1 << 20   // /proc, /sys
-	plafondVhost   = 256 << 10 // un fichier de sites-enabled
-	plafondReseau  = 4 << 20   // /proc/net/tcp*
-	plafondDpkg    = 16 << 20  // /var/lib/dpkg/status
-	maxFichiersVhs = 256
-)
-
 var errNonRegulier = errors.New("pas un fichier régulier")
 
-// lecteurBorne rend au plus restant octets, puis sonde un octet de plus pour
+// Borne rend au plus restant octets, puis sonde un octet de plus pour
 // savoir si le fichier a été coupé par le plafond.
-type lecteurBorne struct {
+type Borne struct {
 	f       *os.File
 	restant int64
 	coupe   bool
 }
 
-func (l *lecteurBorne) Read(p []byte) (int, error) {
+func (l *Borne) Read(p []byte) (int, error) {
 	if l.restant <= 0 {
 		var un [1]byte
 		if n, _ := l.f.Read(un[:]); n > 0 {
@@ -51,14 +42,14 @@ func (l *lecteurBorne) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (l *lecteurBorne) Close() error { return l.f.Close() }
+func (l *Borne) Close() error { return l.f.Close() }
 
 // Tronque dit si le plafond a coupé le fichier (valable une fois la fin atteinte).
-func (l *lecteurBorne) Tronque() bool { return l.coupe }
+func (l *Borne) Tronque() bool { return l.coupe }
 
-// ouvrirBorne ouvre sans bloquer (une FIFO ne retient pas l'agent), exige un
+// Ouvrir ouvre sans bloquer (une FIFO ne retient pas l'agent), exige un
 // fichier régulier et ne rend jamais plus de max octets. Les liens sont suivis.
-func ouvrirBorne(chemin string, max int64) (*lecteurBorne, error) {
+func Ouvrir(chemin string, max int64) (*Borne, error) {
 	f, err := os.OpenFile(chemin, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
@@ -72,14 +63,14 @@ func ouvrirBorne(chemin string, max int64) (*lecteurBorne, error) {
 		f.Close()
 		return nil, errNonRegulier
 	}
-	return &lecteurBorne{f: f, restant: max}, nil
+	return &Borne{f: f, restant: max}, nil
 }
 
-// parcourirLignes appelle fn pour chaque ligne complète. Si le plafond a coupé
+// Lignes appelle fn pour chaque ligne complète. Si le plafond a coupé
 // le fichier, la dernière ligne (sans fin de ligne) est ignorée : elle peut
 // s'arrêter au milieu d'un nom ou d'une version. Les erreurs de lecture et
 // l'annulation du contexte sont remontées.
-func parcourirLignes(ctx context.Context, r *lecteurBorne, fn func(ligne string)) error {
+func Lignes(ctx context.Context, r *Borne, fn func(ligne string)) error {
 	br := bufio.NewReader(r)
 	for {
 		if err := ctx.Err(); err != nil {
@@ -100,9 +91,9 @@ func parcourirLignes(ctx context.Context, r *lecteurBorne, fn func(ligne string)
 	}
 }
 
-// lireBorne lit au plus max octets d'un fichier régulier.
-func lireBorne(chemin string, max int64) ([]byte, error) {
-	r, err := ouvrirBorne(chemin, max)
+// Lire lit au plus max octets d'un fichier régulier.
+func Lire(chemin string, max int64) ([]byte, error) {
+	r, err := Ouvrir(chemin, max)
 	if err != nil {
 		return nil, err
 	}

@@ -7,6 +7,7 @@ package collecte
 
 import (
 	"context"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/lecture"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -38,7 +39,7 @@ func (s *pilotage) Lire(ctx context.Context) (map[string]any, error) {
 	profil := ""
 	// Lecture bornée à 128 octets ; une valeur qui n'est pas un nom de profil
 	// valide n'est pas publiée.
-	if b, err := lireBorne(filepath.Join(s.racine, "var/lib/secubox/profiles/actif"), 128); err == nil {
+	if b, err := lecture.Lire(filepath.Join(s.racine, "var/lib/secubox/profiles/actif"), 128); err == nil {
 		if v := strings.TrimSpace(string(b)); nomProfil.MatchString(v) {
 			profil = v
 		}
