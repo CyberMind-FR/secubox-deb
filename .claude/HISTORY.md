@@ -9,6 +9,30 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-28 — Sécurité : secrets de construction dans les images publiées, rotation de la flotte (ref #3243)
+
+- **Constat** (banc gk5) : les images de CI (dépôt public) embarquaient des secrets générés dans le chroot — clés
+  d'hôte SSH (`root@runnervm…`), clé de signature OIDC, clé TLS, clé WireGuard p2p éphémère, `pair.token`,
+  `machine-id` — et un admin `runnervm…` sans mot de passe (seed `admin + $(hostname)` de secubox-users). gk1, gk3,
+  gk4 et gk5 en portaient ; gk2 (construit hors CI) non. Issue publique complète (choix du propriétaire).
+- **Livré** : `secubox-renouvelle-secrets` (secubox-core 1.8.5 → 1.8.7, PR #3244) — constat, `--absents`,
+  `--tout --oui [--machine-id] [--desactiver NOM]`, chaque secret par le générateur de son paquet, posé par
+  renommage depuis un dossier root 0700, ancien remis sur échec, TLS par descripteur, journal root
+  `/var/log/secubox-renouvelle-secrets.log`, copies HAProxy de l'ancienne clé remplacées, audit sans valeur.
+  Trois relectures de sécurité (1.8.5 : 2 bloquants ; 1.8.6 : 2 bloquants ; 1.8.7 : 0) ; 50 tests.
+- **Rotation faite** (1.8.5, puis résidus à la main) : gk1, gk3, gk4, gk5 — empreintes vérifiées depuis gk2,
+  known_hosts de gk2 mis à jour ; HAProxy de gk3 servait encore l'ancien certificat par défaut (remplacé) ;
+  `machine-id` de gk5 recopié depuis dbus par `systemd-machine-id-setup` (refait ; redémarrage de gk5 à prévoir) ;
+  `/etc/secubox/tls` remis en 0750. Validation réelle de la 1.8.7 en `--tout` sur gk5 (code 0, 23 Mo). 1.8.7
+  installée partout ; constat propre.
+- **Reste** (#3243) : 1.8.8 (deux points mineurs de la 3ᵉ relecture), nettoyage des images à la construction
+  (`image/nettoie-secrets.sh` prêt hors dépôt ; jeton p2p aussi dans `/etc/nginx/secubox-p2p-pair.conf` ; image RPi
+  sans premier démarrage), firstboot qui appelle `--absents`, reconstruction des images alpha.19, `/etc/secubox`
+  détenu par `secubox` (#468, problème de fond).
+- Même journée : nDPIsrvd en boucle sans toolbox (#3240, PR #3241, ndpid-engine 1.7.3) ; renommage de la page
+  Système cassé (#3242) ; gk5 maillée et relayée (`admin.gk5.secubox.in`) ; banc d'allègement gk5 (#3218) ; DPI
+  coupé sur gk1 (visio seule).
+
 ## 2026-10-28 — Agrégateur : démarrage non bloquant, montage progressif (closes #3216, ref #3191)
 
 - **Livré** (PR #3231, secubox-aggregator 0.5.0) : la socket écoute avant tout montage ; une tâche de démarrage monte
