@@ -300,8 +300,13 @@ if [ "$(mode_ecriture "$taille" "$dispo")" = flux ]; then
     if [ -n "$nom" ]; then opts+=(--no-reboot); else opts+=("${reboot_opt[@]}"); fi
     log "téléchargement et écriture en flux de $BASE/$image…"
     set +e
-    telecharge_flux "$BASE/$image" | secubox-flash-emmc "${opts[@]}"
-    st=("${PIPESTATUS[@]}")
+    if command -v pv >/dev/null 2>&1; then      # progression sur la console (le maître la suit aussi, page NetBoot)
+        telecharge_flux "$BASE/$image" | pv -f -s "$taille" | secubox-flash-emmc "${opts[@]}"
+        st=("${PIPESTATUS[0]}" "${PIPESTATUS[2]}")
+    else
+        telecharge_flux "$BASE/$image" | secubox-flash-emmc "${opts[@]}"
+        st=("${PIPESTATUS[@]}")
+    fi
     set -e
     [ "${st[1]}" -eq 0 ] || fail "écriture en flux refusée ou interrompue (téléchargement=${st[0]}, flash=${st[1]}) : eMMC invalidée si elle avait été entamée"
     rm -f "$TRAVAIL/$image.sig"

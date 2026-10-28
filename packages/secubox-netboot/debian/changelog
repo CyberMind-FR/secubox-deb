@@ -1,3 +1,13 @@
+secubox-netboot (0.8.2-1~trixie1) trixie; urgency=medium
+
+  * Suivre un flash depuis la page (ref #3233, demande du propriétaire) : route /flashs — octets acquittés par la
+    carte sur sa connexion au vhost :8099 (ss -ti), fichier demandé (journal du vhost : la sonde HEAD de
+    sbx-netflash et le fetch= du live y sont journalisés dès la requête), taille publiée → pourcentage, débit
+    réel et temps restant ; bloc « Flash en cours » / « Chargement du live » avec barre dans l'onglet de la
+    carte, relu toutes les 3 s pendant un transfert. sbx-netflash : barre pv sur la console en mode flux.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 11:00:00 +0100
+
 secubox-netboot (0.8.1-1~trixie1) trixie; urgency=medium
 
   * Seconde relecture de sécurité (ref #3233). Clé finale : signature fournie (--sig) ou décision explicite

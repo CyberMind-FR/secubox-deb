@@ -286,6 +286,100 @@ PREFIXES_GLOBALSCALE = ("f0:ad:4e",)
 _RE_BAIL = re.compile(r"^([0-9]{1,12}) ([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5}) ((?:[0-9]{1,3}\.){3}[0-9]{1,3}) (\S+) \S+$")
 
 
+# ── Suivre un flash depuis la page (#3233) ──────────────────────────────────────────────────────────────────────
+# Le noyau compte les octets que la carte a ACQUITTÉS sur sa connexion au vhost :8099 (ss -ti : bytes_acked) ; le journal
+# du vhost dit quel fichier elle a demandé (la sonde HEAD de sbx-netflash, et le fetch= du live, y sont journalisés dès
+# la requête) ; la taille publiée donne le pourcentage. Deux relevés successifs donnent le débit réel et le reste.
+JOURNAL_8099 = Path("/var/log/nginx/netboot-access.log")
+_RE_REQ_8099 = re.compile(r'^(\S+) \S+ \S+ \[[^\]]*\] "(?:HEAD|GET) /([A-Za-z0-9._-]{1,64})/([A-Za-z0-9._-]{1,128}) HTTP')
+_RE_ACKED = re.compile(r"\bbytes_acked:(\d{1,15})\b")
+_ECHANTILLONS: Dict[Tuple[str, str], Tuple[float, int]] = {}
+
+
+def analyse_transferts(ss_texte: str, journal: str, taille, maintenant: float,
+                       memo: Dict[Tuple[str, str], Tuple[float, int]]) -> List[Dict[str, Any]]:
+    """Transferts en cours vers les cartes. `taille(live, fichier)` → octets publiés ou None ; `memo` garde le relevé
+    précédent de chaque connexion (débit). Seuls les fichiers publiés d'un live (images, squashfs) sont retenus."""
+    connexions, courante = [], None
+    for ligne in ss_texte.splitlines():
+        if ligne[:1] in (" ", "\t"):
+            m = _RE_ACKED.search(ligne)
+            if courante and m:
+                connexions.append((courante[0], courante[1], int(m.group(1))))
+            courante = None
+            continue
+        champs = ligne.split()
+        if len(champs) >= 4 and ":" in champs[3]:
+            ip, port = champs[3].rsplit(":", 1)
+            ip = ip.strip("[]")
+            if ip.startswith("::ffff:"):
+                ip = ip[7:]
+            courante = (ip, port)
+    demande: Dict[str, Tuple[str, str]] = {}
+    for ligne in journal.splitlines():
+        m = _RE_REQ_8099.match(ligne)
+        if m and ".." not in m.group(2) + m.group(3) and not m.group(3).endswith((".sig", ".txt")):
+            demande[m.group(1)] = (m.group(2), m.group(3))
+    out: List[Dict[str, Any]] = []
+    vues = set()
+    for ip, port, acked in connexions:
+        if ip not in demande:
+            continue
+        live, fichier = demande[ip]
+        total = taille(live, fichier)
+        if not total:
+            continue
+        cle = (ip, port)
+        vues.add(cle)
+        debit = reste = None
+        if cle in memo and maintenant > memo[cle][0] and acked >= memo[cle][1]:
+            debit = int((acked - memo[cle][1]) / (maintenant - memo[cle][0]))
+            reste = (total - acked) // debit if debit > 0 else None
+        memo[cle] = (maintenant, acked)
+        out.append({"ip": ip, "live": live, "fichier": fichier,
+                    "type": "live" if fichier.endswith(".squashfs") else "image",
+                    "octets": acked, "taille": total, "pourcent": min(100, acked * 100 // total),
+                    "debit": debit, "reste_s": reste})
+    for cle in [c for c in memo if c not in vues]:
+        memo.pop(cle, None)
+    return out
+
+
+def _fin_du_journal(f: Path, n: int = 262144) -> str:
+    """Les n derniers octets d'un journal, sans suivre de lien (service root)."""
+    try:
+        fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return ""
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return ""
+        taille = os.fstat(fd).st_size
+        os.lseek(fd, max(0, taille - n), os.SEEK_SET)
+        return os.read(fd, n).decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+    finally:
+        os.close(fd)
+
+
+def _taille_publiee(live: str, fichier: str) -> Optional[int]:
+    if not (_RE_NOM_LIVE.fullmatch(live) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", fichier)):
+        return None
+    try:
+        return (HTTP_ROOT / live / fichier).stat().st_size
+    except OSError:
+        return None
+
+
+@router.get("/flashs")
+async def flashs(user=Depends(require_jwt)):
+    """Flashs et chargements de live en cours : fichier, pourcentage, débit, temps restant (#3233)."""
+    r = await _run("ss", "-tniH", "state", "established", "( sport = :8099 )", timeout=5)
+    journal = await asyncio.to_thread(_fin_du_journal, JOURNAL_8099)
+    return {"transferts": analyse_transferts(r["stdout"], journal, _taille_publiee, time.monotonic(), _ECHANTILLONS)}
+
+
 @router.get("/vues")
 async def vues(user=Depends(require_jwt)):
     out: List[Dict[str, Any]] = []

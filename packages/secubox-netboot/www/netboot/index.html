@@ -69,6 +69,8 @@
         .onglet{font:inherit;font-size:.78rem;font-weight:700;padding:5px 14px;border-radius:999px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--doux);cursor:pointer;min-height:30px}
         .onglet:hover{border-color:var(--cyan)} .onglet:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
         .onglet[aria-selected="true"]{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.18)}
+        .barre{height:9px;border-radius:999px;background:rgba(159,179,214,.15);overflow:hidden;margin:4px 0}
+        .barre>i{display:block;height:100%;background:var(--cyan);transition:width .6s}
         .boxes{display:grid;gap:6px;margin:6px 0} .boxes .box{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.8rem}
         .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
         .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
@@ -177,7 +179,7 @@
         const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
         let INV = null, SHADOW = null, AUDIT = null, SERVEUR = null, PROFILS = null, LIVES = null, SESSION_OK = true;
-        let BOARDS = null, VUES = null, CARTE = null;   // onglets de cartes (#3233) : /boards, baux DHCP vus, carte choisie
+        let BOARDS = null, VUES = null, CARTE = null, FLASHS = null;   // FLASHS : transferts en cours (/flashs)   // onglets de cartes (#3233) : /boards, baux DHCP vus, carte choisie
         let CONF = null;        // { texte, fn } : confirmation en cours, jamais de dialogue natif
         let SAISIE = false;     // formulaire de profil modifié : pas d'actualisation tant qu'il est ouvert
 
@@ -240,12 +242,12 @@
 
         async function charger() {
             if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
-            const essais = await Promise.allSettled([lire('/inventory'), lire('/shadow'), lire('/audit?limit=40'), lire('/server'), lire('/profiles'), lire('/live'), lire('/boards'), lire('/vues')]);
+            const essais = await Promise.allSettled([lire('/inventory'), lire('/shadow'), lire('/audit?limit=40'), lire('/server'), lire('/profiles'), lire('/live'), lire('/boards'), lire('/vues'), lire('/flashs')]);
             const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
             const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
             const tous = essais.every(e => e.status === 'rejected');
             SESSION_OK = !refus;
-            INV = val(0); SHADOW = val(1); AUDIT = val(2); SERVEUR = val(3); PROFILS = val(4); LIVES = val(5); BOARDS = val(6); VUES = val(7);
+            INV = val(0); SHADOW = val(1); AUDIT = val(2); SERVEUR = val(3); PROFILS = val(4); LIVES = val(5); BOARDS = val(6); VUES = val(7); FLASHS = val(8);
             $('erreur').hidden = !(tous && !refus);
             if (tous && !refus) $('erreur').textContent = 'Impossible de lire NetBoot (service arrêté ou injoignable).';
             rendre();
@@ -395,6 +397,7 @@
             });
             const c = cartes.find(x => x.id === CARTE);
             if (lives && !lives.length) z.appendChild(el('p', 'vide', 'Aucun live publié sur ce maître pour l’instant.'));
+            rendreTransferts(z, c);
             const etat = el('div', 'boxes'), e = el('div', 'box');
             e.appendChild(pastille(c.live ? 'ok' : 'hors', c.live ? 'live réseau publié' : 'pas de live réseau'));
             e.appendChild(pastille(c.live && c.live.usb ? 'ok' : '', c.live && c.live.usb ? 'clé USB finale publiée' : 'pas de clé USB finale'));
@@ -410,6 +413,21 @@
                     + 'bash ' + s + 'build-live-netboot.sh --live ' + d + '/live.img.gz --carte ' + c.model + ' --tftp <IP du LAN> --flash IMAGE.img.xz', 'Construire le live'));
             }
             rendreBoxes(z, c);
+        }
+        // Flashs et chargements de live en cours vers cette carte (#3233) : octets acquittés, débit réel, reste.
+        const duree = s => s == null ? '—' : (s >= 60 ? Math.floor(s / 60) + ' min ' : '') + (s % 60) + ' s';
+        function rendreTransferts(z, c) {
+            const ts = ((FLASHS && FLASHS.transferts) || []).filter(t => t.live === c.live_nom);
+            ts.forEach(t => {
+                const b = el('div', 'info');
+                const h = el('div', '', (t.type === 'live' ? 'Chargement du live' : 'Flash en cours') + ' → ' + t.ip + ' : ');
+                h.appendChild(el('span', 'mono', t.fichier)); b.appendChild(h);
+                const barre = el('div', 'barre'), i = el('i'); i.style.width = Math.max(0, Math.min(100, t.pourcent)) + '%';
+                barre.appendChild(i); b.appendChild(barre);
+                b.appendChild(el('div', 'mono', t.pourcent + ' % · ' + Go(t.octets) + ' / ' + Go(t.taille)
+                    + (t.debit ? ' · ' + (t.debit / 1e6).toFixed(1).replace('.', ',') + ' Mo/s · reste ' + duree(t.reste_s) : '')));
+                z.appendChild(b);
+            });
         }
         // Boxes de ce modèle (profils, en ligne si un bail DHCP porte leur MAC) et boxes vues sans profil.
         function rendreBoxes(z, c) {
@@ -586,6 +604,11 @@
             const a = document.activeElement; if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return;
             charger();
         }, 20000);
+        // Pendant un flash, la progression est relue toutes les 3 s (seule la route /flashs).
+        setInterval(async () => {
+            if (document.hidden || DEMO || CONF || SAISIE || !(FLASHS && FLASHS.transferts && FLASHS.transferts.length)) return;
+            try { FLASHS = await lire('/flashs'); rendreLives(LIVES && Array.isArray(LIVES.lives) ? LIVES.lives : null); } catch (e) { /* prochain tour */ }
+        }, 3000);
     </script>
 </body>
 </html>
