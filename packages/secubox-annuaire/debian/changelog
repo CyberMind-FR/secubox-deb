@@ -1,3 +1,9 @@
+secubox-annuaire (0.16.1-1~trixie1) trixie; urgency=medium
+
+  * secubox-annuaire-offres.service : ConditionPathExists=/etc/secubox/secrets/annuaire/node.key (#3245). Au premier démarrage la minuterie la lançait avant annuairectl init et l unité échouait (« no node key ») ; elle est maintenant sautée proprement.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 14:48:50 +0100
+
 secubox-annuaire (0.16.0-1~trixie1) trixie; urgency=medium
 
   * Relevé de validation des modules (#3212) : modèle ModulesSnapshot (borné, séparé de MetricSnapshot),

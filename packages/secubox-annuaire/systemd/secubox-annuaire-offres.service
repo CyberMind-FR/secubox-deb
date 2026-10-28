@@ -7,6 +7,8 @@ Description=SecuBox Annuaire — offres de services réelles du nœud (#3021)
 Documentation=file:///usr/share/doc/secubox-annuaire/README
 After=secubox-annuaire.service tor.service
 Wants=secubox-annuaire.service
+# #3245 : au premier démarrage la clé du nœud (annuairectl init) n'existe pas encore : unité sautée, pas en échec.
+ConditionPathExists=/etc/secubox/secrets/annuaire/node.key
 
 [Service]
 Type=oneshot
