@@ -38,7 +38,8 @@ command -v curl >/dev/null || err "curl required"
 # (secubox-exposure.service) existe pour ça ; dans l'agrégateur il rend 500 (lecture seule).
 # nac (#3178) : son collecteur tournait aussi ici, en double, sur la même base ; la page lisait l'instantané de l'agrégateur.
 # netmodes (#3189) : appelle netmodesctl par sudo, impossible sous l'utilisateur de l'agrégateur.
-readonly AGG_EXCLUDE="lyrion exposure nettweak traffic qos admin cloner netdiag certs cookies mail nac netmodes"
+# vault, actor, radio (#3216) : sockets réservées à l'administration, gardées et marquées par le relais ; montées, elles y échapperaient.
+readonly AGG_EXCLUDE="lyrion exposure nettweak traffic qos admin cloner netdiag certs cookies mail nac netmodes vault actor radio"
 
 _is_excluded() {
     local n="$1" e
@@ -91,12 +92,23 @@ install -m 0644 "$TOML_TMP" /etc/secubox/aggregator.toml
 rm -f "$TOML_TMP"
 
 # ── Step 3 : Restart aggregator + wait for mount completion ──────────────
+#
+# #3216 : la socket répond dès le démarrage et les modules se montent ensuite. On attend `pret` (tous traités) :
+# lu plus tôt, `mounted` serait partiel — bascule nginx et arrêt des unités pour les seuls premiers modules,
+# les suivants montés plus tard alors que leur service propre tourne encore. Échéance : la grâce du watchdog.
 systemctl restart secubox-aggregator
-sleep 8
+HEALTH=""
+for _i in $(seq 1 450); do
+    sleep 2
+    h=$(curl -s --max-time 10 --unix-socket /run/secubox/aggregator.sock http://localhost/health 2>/dev/null) || continue
+    if printf '%s' "$h" | python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin).get("pret") else 1)' 2>/dev/null; then
+        HEALTH="$h"
+        break
+    fi
+done
+[ -n "$HEALTH" ] || err "aggregator /health never reported pret=true within 900 s"
 
 # ── Step 4 : Grab mounted module list from /health ───────────────────────
-HEALTH=$(curl -s --unix-socket /run/secubox/aggregator.sock http://localhost/health 2>&1) || \
-    err "aggregator /health unreachable"
 
 MOUNTED=$(printf '%s' "$HEALTH" | python3 -c "
 import sys, json
