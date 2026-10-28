@@ -13,10 +13,8 @@ RuntimeDirectoryMode=0755
 # `secubox-ndpi`. Sans `-G`, le socket appartiendrait au seul producteur et
 # sbxdpi resterait déconnecté — exactement le symptôme qu'on vient de corriger,
 # sous une autre cause.
-ExecStart=/usr/sbin/nDPIsrvd -l \
-  -c ${COLLECTEUR} -s ${DISTRIBUTEUR} \
-  -u ${UTILISATEUR} -g ${GROUPE} \
-  -G ${UTILISATEUR}:${GROUPE_LECTEUR}
+# Lanceur : groupe lecteur absent (box sans toolbox) → socket laissé au producteur au lieu d'une sortie en erreur (#3240)
+ExecStart=/usr/sbin/secubox-ndpisrvd-run
 Restart=on-failure
 RestartSec=3
 ProtectSystem=strict

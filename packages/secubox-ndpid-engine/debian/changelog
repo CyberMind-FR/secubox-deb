@@ -1,3 +1,9 @@
+secubox-ndpid-engine (1.7.3-1~trixie1) trixie; urgency=medium
+
+  * nDPIsrvd ne boucle plus sur une box sans toolbox (#3240). L'unite passait -G secubox-ndpi:secubox-toolbox ; sans le paquet toolbox (profil minimal, ESPRESSObin v7) le groupe n'existe pas, nDPIsrvd sortait en 1 (Could not chmod/chown ... No such file or directory), Restart=on-failure le relancait toutes les 3 s et le moteur (Requires=) tombait avec lui. Nouveau lanceur secubox-ndpisrvd-run : le groupe lecteur s'il existe, sinon (absent ou vide) le groupe du producteur, le socket distributeur reste ferme a tout autre compte. 5 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 10:47:31 +0100
+
 secubox-ndpid-engine (1.7.2-1~bookworm1) bookworm; urgency=medium
 
   * nDPId choisit son interface au lieu de dependre d'un `eth2` livre en dur (#2740). Constate sur un RPi400 : `pcap_open_live: eth2: No such device exists`, 820 redemarrages en ~1 h. conf/ndpid-engine.env livrait INTERFACE=eth2 (valeur de gk2) a toutes les cartes ; la carte du RPi400 s'appelle end0. Nouveau lanceur secubox-ndpid-engine-run : (1) l'interface configuree si elle existe — une box qui a bien regle la sienne ne change pas ; (2) celle de la route par defaut ; (3) la premiere carte PHYSIQUE (lien `device` dans /sys/class/net : jamais lo, un pont, un conteneur ni un tunnel) ; aucune : on le dit et on sort avec le code 0, Restart=on-failure ne relance pas. L'unite l'appelle ; la configuration livree est vide (auto). Une box dont /etc/secubox/ndpid-engine.env dit encore eth2 (conffile conserve) retombe sur la detection. 11 tests avec une fausse arborescence reseau. Paquet arch: any (compile nDPId) : construit en CI.
