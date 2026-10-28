@@ -1,3 +1,14 @@
+secubox-aggregator (0.5.0-1~trixie1) trixie; urgency=medium
+
+  * Démarrage non bloquant, montage progressif des modules (ref #3216, ref #3191). La socket écoute en quelques
+    secondes (/health, relais) ; les modules se montent ensuite un par un sur la boucle, en lui rendant la main
+    entre deux, auth, hub, sbxid, portal et users d'abord. Avant : 4 à 8 min de 502 sur le Hall,
+    l'authentification et l'administration à chaque redémarrage de gk2. Un module pas encore monté répond 503 +
+    Retry-After ; /health ajoute pret, a_monter, duree_montage_s ; le chemin Python reprend son ordre après
+    chaque module (#1680).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 08:30:00 +0100
+
 secubox-aggregator (0.4.11-1~trixie1) trixie; urgency=medium
 
   * Délai du relais par module (ref #3189) : netmodes 200 s, les autres modules à socket dédiée inchangés (60 s).

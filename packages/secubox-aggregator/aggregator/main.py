@@ -13,23 +13,29 @@ Design constraints:
   broken module doesn't poison startup. Failures recorded in `_LOAD_ERRORS`
   visible at `/health`.
 * **No code in modules changes** — sub-apps work as standalone uvicorn AND
-  as mounted sub-apps. Modules with `app.on_event("startup")` keep working
-  because FastAPI fires sub-app lifespan events on mount.
+  as mounted sub-apps. Starlette does NOT fire a mounted sub-app's
+  startup/lifespan events: a module needing a background loop runs on its
+  own socket.
 * **Path layout matches nginx convention** — nginx already routes
   `/api/v1/<name>/...` to the per-module unix socket. After migration, the
   same routes hit aggregator socket; the path-prefix mount preserves URLs.
 * **Graceful degradation** — modules that fail to import don't take down
-  the gateway. Their routes return 503 (FastAPI's default for unmounted).
+  the gateway (their routes fall through to the socket relay, 404).
+* **Progressive mount (#3216)** — the gateway serves `/health` and the relay
+  as soon as uvicorn listens; modules are mounted afterwards, one by one,
+  essentials first. A module not mounted yet answers 503 + Retry-After.
 
 Modules to mount are listed in /etc/secubox/aggregator.toml so the package
 postinst can manage the migration set without code edits.
 """
 from __future__ import annotations
 
+import asyncio
 import importlib
 import logging
 import os
 import sys
+import time
 import tomllib
 from pathlib import Path
 from typing import Dict, List
@@ -38,6 +44,7 @@ import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
+from starlette.routing import Mount
 
 log = logging.getLogger("secubox.aggregator")
 
@@ -155,6 +162,26 @@ def _porteur(request: Request) -> HTTPAuthorizationCredentials | None:
 # Track which modules were successfully mounted and which failed.
 _MOUNTED: List[str] = []
 _LOAD_ERRORS: Dict[str, str] = {}
+
+# ── Montage progressif (#3216) ───────────────────────────────────────────────
+# Monter ~80 modules AVANT qu'uvicorn n'écoute coûtait 4 à 8 minutes de 502 sur le Hall, l'authentification et
+# l'administration à chaque redémarrage (gk2, sous swap). La passerelle sert donc tout de suite ; une tâche lancée au
+# démarrage monte ensuite les modules un par un, sur le fil de la boucle (`_load_app_from_path` permute `sys.modules['api*']`
+# et `sys.path` : jamais en parallèle), en lui rendant la main entre deux. Ceux qui restent à monter répondent 503.
+#
+# D'abord : auth (la porte d'authentification de nginx passe par /api/v1/auth/auth/verify), hub (menu du Hall), sbxid
+# (« Mes comptes »), portal, users.
+ESSENTIELS = ("auth", "hub", "sbxid", "portal", "users")
+PAUSE_MONTAGE_S = 0.05      # la boucle sert les requêtes en attente entre deux imports
+RETRY_AFTER_S = 5
+_A_MONTER: List[str] = []
+_MONTAGE: Dict[str, object] = {"pret": False, "duree_s": None}
+_TACHE_MONTAGE: asyncio.Task | None = None
+
+
+def _ordre_montage(modules: List[str]) -> List[str]:
+    """Les essentiels présents d'abord, dans l'ordre d'ESSENTIELS ; le reste dans l'ordre de la configuration."""
+    return [m for m in ESSENTIELS if m in modules] + [m for m in modules if m not in ESSENTIELS]
 
 
 # Modules RETIRÉS du dépôt : encore cités dans /etc/secubox/aggregator.toml d'une box mise à jour
@@ -330,18 +357,47 @@ def _load_app_from_path(name: str) -> FastAPI | None:
 
 
 def _mount_module(parent: FastAPI, name: str) -> None:
-    """Resolve and mount a SecuBox module's FastAPI under /api/v1/<name>."""
+    """Resolve and mount a SecuBox module's FastAPI under /api/v1/<name>.
+
+    Le montage est inséré AVANT la route du relais `/api/v1/{name}/{path}` : monté après coup, un `app.mount()`
+    finirait derrière elle et le relais répondrait à sa place (#3216)."""
     sub_app = _load_app_from_path(name)
     if sub_app is None:
         log.warning("[mount] %s SKIPPED — %s", name, _LOAD_ERRORS.get(name, "?"))
         return
     try:
-        parent.mount(f"{API_PREFIX}/{name}", sub_app, name=name)
+        routes = parent.router.routes
+        relais = next((i for i, r in enumerate(routes) if getattr(r, "name", None) == "_dedicated_socket_proxy"),
+                      len(routes))
+        routes.insert(relais, Mount(f"{API_PREFIX}/{name}", app=sub_app, name=name))
         _MOUNTED.append(name)
         log.info("[mount] %s OK at %s/%s", name, API_PREFIX, name)
     except Exception as e:
         _LOAD_ERRORS[name] = f"mount: {type(e).__name__}: {e}"
         log.error("[mount] %s FAILED on mount: %s", name, e)
+
+
+async def _monter_progressivement(app: FastAPI, chemin_origine: List[str]) -> None:
+    """Monte les modules de `_A_MONTER` un par un. Un module reste « à monter » (503) jusqu'à la fin de son montage.
+
+    Après chaque module, le chemin Python reprend son ordre d'origine (#1680) : les ajouts d'un module passent derrière,
+    pour que les imports différés des requêtes servies entre deux montages ne prennent pas le websockets de Debian."""
+    debut = time.monotonic()
+    while _A_MONTER:
+        name = _A_MONTER[0]
+        try:
+            _mount_module(app, name)
+        except Exception as e:  # noqa: BLE001 — un module ne doit pas arrêter le montage des suivants
+            _LOAD_ERRORS[name] = f"mount: {type(e).__name__}: {e}"
+            log.error("[mount] %s FAILED: %s", name, e)
+        finally:
+            _A_MONTER.pop(0)
+            ajouts = [p for p in sys.path if p not in chemin_origine]
+            sys.path[:] = chemin_origine + ajouts
+        await asyncio.sleep(PAUSE_MONTAGE_S)
+    _MONTAGE["duree_s"] = round(time.monotonic() - debut, 1)
+    _MONTAGE["pret"] = True
+    log.info("montage terminé : %d montés, %d échecs en %s s", len(_MOUNTED), len(_LOAD_ERRORS), _MONTAGE["duree_s"])
 
 
 def _build_app() -> FastAPI:
@@ -368,11 +424,21 @@ def _build_app() -> FastAPI:
         pass
     chemin_origine = list(sys.path)
 
-    for name in cfg.get("modules", []):
-        _mount_module(app, name)
+    # Rien n'est monté ici (#3216) : la tâche de démarrage s'en charge, une fois la socket à l'écoute.
+    _MOUNTED.clear()
+    _LOAD_ERRORS.clear()
+    _A_MONTER[:] = _ordre_montage(cfg.get("modules", []))
+    _MONTAGE.update(pret=False, duree_s=None)
 
-    ajouts = [p for p in sys.path if p not in chemin_origine]
-    sys.path[:] = chemin_origine + ajouts
+    @app.on_event("startup")
+    async def _lancer_montage() -> None:
+        global _TACHE_MONTAGE
+        _TACHE_MONTAGE = asyncio.create_task(_monter_progressivement(app, chemin_origine))
+
+    @app.on_event("shutdown")
+    async def _arreter_montage() -> None:
+        if _TACHE_MONTAGE is not None and not _TACHE_MONTAGE.done():
+            _TACHE_MONTAGE.cancel()
 
     @app.on_event("startup")
     async def _raise_threadpool() -> None:
@@ -389,13 +455,18 @@ def _build_app() -> FastAPI:
 
     @app.get("/health")
     def health() -> dict:
-        """Aggregator health. Reports per-module load state."""
+        """Aggregator health. Reports per-module load state.
+
+        Répondre, c'est « passerelle prête » ; `pret` dit « tous les modules traités » (#3216)."""
         return {
             "status": "ok",
             "mounted": _MOUNTED,
             "failed": _LOAD_ERRORS,
             "total_mounted": len(_MOUNTED),
             "total_failed": len(_LOAD_ERRORS),
+            "pret": _MONTAGE["pret"],
+            "a_monter": list(_A_MONTER),
+            "duree_montage_s": _MONTAGE["duree_s"],
         }
 
     @app.get("/")
@@ -439,6 +510,10 @@ def _build_app() -> FastAPI:
             porteur = await garde(request, _porteur(request))
         else:
             porteur = None
+        if name in _A_MONTER:
+            # Pas encore monté (#3216) : jamais un relais vers une socket absente ou périmée.
+            return JSONResponse({"detail": "module en cours de montage", "module": name}, status_code=503,
+                                headers={"Retry-After": str(RETRY_AFTER_S)})
         sock = f"{RUN_DIR}/{name}.sock"
         if not os.path.exists(sock):
             return Response(status_code=404)

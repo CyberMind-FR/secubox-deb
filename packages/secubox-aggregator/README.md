@@ -7,7 +7,21 @@ Mounts SecuBox module FastAPIs as sub-apps under /api/v1/<module>, eliminating t
 
 Pilot mounts (per /etc/secubox/aggregator.toml) save ~30 MB RAM per migrated module versus a per-module systemd unit. Full migration of the ~100 SecuBox modules would free ~3 GB on a typical install.
 
-Paquet Debian : version `0.3.11-1~bookworm1`, architecture `all`.
+Paquet Debian : version `0.5.0-1~trixie1`, architecture `all`.
+
+## Démarrage (#3216)
+
+La socket écoute en quelques secondes : `/health`, `/` et le relais vers les sockets dédiées répondent tout de suite.
+Les modules d'`aggregator.toml` se montent ensuite un par un, `auth`, `hub`, `sbxid`, `portal` et `users` d'abord.
+Un module pas encore monté répond `503` avec `Retry-After`. Un module en échec reste isolé dans `failed`.
+
+`GET /health` garde ses clés (`status`, `mounted`, `failed`, `total_mounted`, `total_failed`) et ajoute :
+
+| Clé | Sens |
+|---|---|
+| `pret` | `true` quand tous les modules ont été traités (montés ou en échec) |
+| `a_monter` | modules qui restent à monter, dans l'ordre |
+| `duree_montage_s` | durée du montage complet, `null` avant la fin |
 
 ## Contenu
 
