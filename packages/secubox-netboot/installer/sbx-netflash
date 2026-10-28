@@ -75,8 +75,9 @@ confirme_flash() { # IMAGE CIBLE SOURCE SHA256 — « FLASH » lu sur le termina
 
 # Délais bornés : un serveur qui fige la connexion ne laisse pas le flash en suspens (l'opérateur couperait le courant).
 telecharge_flux() { # URL → sortie standard ; jamais de reprise : un flux recommencé serait corrompu
-    if command -v curl >/dev/null 2>&1; then curl -fsS --connect-timeout 20 --speed-limit 4096 --speed-time 60 "$1"
-    else wget -qO- --tries=1 --timeout=60 "$1"; fi
+    # 10 min de tolérance : en flux, la carte ne lit que ce que l'eMMC écrit, et une eMMC lente marque des pauses.
+    if command -v curl >/dev/null 2>&1; then curl -fsS --connect-timeout 20 --speed-limit 1024 --speed-time 600 "$1"
+    else wget -qO- --tries=1 --timeout=600 "$1"; fi
 }
 
 

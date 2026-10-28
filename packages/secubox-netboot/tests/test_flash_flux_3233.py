@@ -125,8 +125,9 @@ def test_le_flux_passe_par_les_gardes_de_secubox_flash_emmc():
     s = NETFLASH.read_text()
     assert 'opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto)' in s
     assert 'telecharge_flux "$BASE/$image" | secubox-flash-emmc "${opts[@]}"' in s
-    corps = s[s.index("telecharge_flux()"):].split("\n")[1]          # pas de reprise : un flux recommencé serait corrompu
-    assert "curl -fsS " in corps and corps.rstrip().endswith('"$1"') and "--retry" not in corps
+    fonction = s[s.index("telecharge_flux()"):].split("\n}")[0]
+    corps = next(x for x in fonction.split("\n") if "curl -fsS " in x)  # pas de reprise : un flux recommencé serait corrompu
+    assert corps.rstrip().endswith('"$1"') and "--retry" not in corps
     f = FLASH_EMMC.read_text()
     assert "--stdin exige --auto" in f          # l'entrée standard porte l'image : la confirmation vient de l'appelant
     g = f.index("SAFETY STOP")

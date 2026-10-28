@@ -5,6 +5,11 @@ secubox-netboot (0.8.2-1~trixie1) trixie; urgency=medium
     sbx-netflash et le fetch= du live y sont journalisés dès la requête), taille publiée → pourcentage, débit
     réel et temps restant ; bloc « Flash en cours » / « Chargement du live » avec barre dans l'onglet de la
     carte, relu toutes les 3 s pendant un transfert. sbx-netflash : barre pv sur la console en mode flux.
+  * Banc du 2026-10-28 : flash en flux coupé à 51 % (curl 18, le serveur ferme). La carte (1 Go, eMMC lente)
+    cessait de lire le flux plus de 60 s pendant les vidages de son cache d'écriture, et nginx (send_timeout 60 s)
+    fermait. Vhost de boot : send_timeout 900s. secubox-flash-emmc : écriture DIRECTE vers l'eMMC (débit
+    régulier, iflag=fullblock oflag=direct). sbx-netflash : tolérance de 10 min en flux (curl
+    --speed-limit 1024 --speed-time 600). Le flux tronqué a bien été refusé et l'eMMC invalidée.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 11:00:00 +0100
 

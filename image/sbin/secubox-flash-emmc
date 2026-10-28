@@ -66,7 +66,13 @@ invalide_cible() { # CIBLE — début (table, chargeur) et fin (GPT de secours) 
 
 ecrit_corps() { # CIBLE FICHIER_TETE — les TETE_MO premiers Mo vont dans FICHIER_TETE, le reste sur la cible à leur suite
     dd of="$2" bs=1M count="$TETE_MO" iflag=fullblock status=none || return 1
-    exec dd of="$1" bs=1M seek="$TETE_MO" conv=fsync,notrunc status=none   # exec : arrêter le flux arrête ce dd
+    # Vers l'eMMC : écriture DIRECTE, débit régulier. Par le cache, une carte à 1 Go accumulait des pages sales puis
+    # cessait de lire le flux pendant les vidages (> 60 s) et le téléchargement était coupé (banc du 2026-10-28).
+    # exec : arrêter le flux arrête ce dd.
+    if [ -b "$1" ]; then
+        exec dd of="$1" bs=1M seek="$TETE_MO" iflag=fullblock oflag=direct conv=fsync,notrunc status=none
+    fi
+    exec dd of="$1" bs=1M seek="$TETE_MO" conv=fsync,notrunc status=none
 }
 
 # Code : 0 écrite et vérifiée ; 1 refusée, cible invalidée ; 2 paramètres refusés, rien touché ; 3 refusée et

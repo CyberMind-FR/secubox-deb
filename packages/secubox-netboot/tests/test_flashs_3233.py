@@ -102,3 +102,26 @@ def test_la_page_montre_le_flash_en_cours(navigateur):  # noqa: F811
     assert "Flash en cours" in texte and "21 %" in texte and "192.168.42.161" in texte and "6 min 56 s" in texte
     assert err == []
     ctx.close()
+
+
+# ── Banc du 2026-10-28 : téléchargement coupé à 51 % (519 Mo sur 1 013) pendant un flash en flux ──────────────────
+# La carte (1 Go, eMMC lente) cessait de lire plus de 60 s pendant les vidages du cache d'écriture : curl
+# (--speed-time 60) ou nginx (send_timeout 60 s) coupait. Écriture directe sur l'eMMC (débit régulier) et tolérance
+# portée à 10 min en flux ; un serveur réellement figé reste détecté.
+def test_ecriture_directe_vers_l_emmc_seulement():
+    s = (ICI.parents[1] / "image" / "sbin" / "secubox-flash-emmc").read_text()
+    corps = s[s.index("ecrit_corps() {"):s.index("ecrit_corps() {") + 900]
+    assert 'if [ -b "$1" ]' in corps and "oflag=direct" in corps and "iflag=fullblock" in corps
+
+
+def test_flux_tolere_les_pauses_de_l_emmc():
+    s = (ICI / "installer" / "sbx-netflash").read_text()
+    fonction = s[s.index("telecharge_flux()"):].split("\n}")[0]
+    assert "--speed-limit 1024 --speed-time 600" in fonction and "--timeout=600" in fonction
+    assert "--speed-limit 4096 --speed-time 60 -o" in s                 # téléchargement vers la RAM : inchangé
+
+
+def test_vhost_de_boot_tolere_un_lecteur_lent():
+    s = (ICI / "nginx" / "boot-vhost.conf").read_text()
+    bloc = s[s.index("location / {"):]
+    assert "send_timeout 900s;" in bloc[:bloc.index("}")]
