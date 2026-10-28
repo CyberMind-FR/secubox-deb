@@ -233,26 +233,78 @@ async def server_up(user=Depends(require_jwt)):
 BOARD_DIR = Path("/usr/share/secubox/netboot/board")
 
 
+_RE_LIVE_ENV = re.compile(r"^(LIVE_[A-Z_]{1,24})=(.*)$")
+_LIVE_CHAMPS = {"LIVE_NOM": re.compile(r"[a-z0-9-]{1,32}"), "LIVE_TITRE": re.compile(r"[A-Za-z0-9 .-]{1,32}"),
+                "LIVE_CONSOLE": re.compile(r"tty[A-Za-z0-9]{1,8},[0-9]{4,7}")}
+
+
+def _live_env(d: Path) -> Dict[str, Optional[str]]:
+    """board/<carte>/live.env lu comme des DONNÉES (jamais exécuté), champs validés par motif (#3233)."""
+    vals: Dict[str, Optional[str]] = {k: None for k in _LIVE_CHAMPS}
+    for ligne in (_lire_court(d / "live.env") or "").splitlines():
+        m = _RE_LIVE_ENV.fullmatch(ligne.strip())
+        if not m or m.group(1) not in _LIVE_CHAMPS:
+            continue
+        v = m.group(2).strip()
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+            v = v[1:-1]
+        if _LIVE_CHAMPS[m.group(1)].fullmatch(v):
+            vals[m.group(1)] = v
+    return vals
+
+
 @router.get("/boards")
 async def boards(user=Depends(require_jwt)):
-    """Modèles de board supportés (depuis board/<name>/), avec leurs adresses de
-    chargement — alimente le sélecteur de modèle des profils."""
+    """Modèles de board supportés (depuis board/<name>/) : adresses de chargement de l'overlay (addrs.env) et live
+    réseau de la carte (live.env : nom du live, titre, console) — alimente les onglets de cartes et le sélecteur de
+    modèle des profils."""
     out: List[Dict[str, Any]] = []
     if BOARD_DIR.exists():
         for d in sorted(BOARD_DIR.iterdir()):
-            if not (d / "addrs.env").exists():
+            if d.is_symlink() or not d.is_dir() or not ((d / "addrs.env").exists() or (d / "live.env").exists()):
                 continue
             addrs = {}
-            for line in (d / "addrs.env").read_text(errors="ignore").splitlines():
+            for line in (_lire_court(d / "addrs.env") or "").splitlines():
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
                     k, v = line.split("=", 1)
                     v = v.split("#", 1)[0].strip()   # retire un commentaire inline
                     addrs[k.strip()] = v
+            live = _live_env(d)
             out.append({"model": d.name, "defconfig": addrs.get("DEFCONFIG"),
                         "overlay_load": addrs.get("OVERLAY_LOAD"),
-                        "has_fragment": (d / "uboot.fragment").exists()})
+                        "has_fragment": (d / "uboot.fragment").exists(),
+                        "live_nom": live["LIVE_NOM"], "titre": live["LIVE_TITRE"], "console": live["LIVE_CONSOLE"]})
     return {"boards": out}
+
+
+# ── Boxes vues sur le LAN de ce maître (#3233) ──────────────────────────────────────────────────────────────────
+# Baux DHCP du LAN (dnsmasq) des cartes Globalscale (MOCHAbin, ESPRESSObin : préfixe f0:ad:4e) : la page les range
+# sous leur profil, ou les propose « sans profil » avec un profil prérempli.
+BAUX_DHCP = Path("/var/lib/misc/dnsmasq.leases")
+PREFIXES_GLOBALSCALE = ("f0:ad:4e",)
+_RE_BAIL = re.compile(r"^([0-9]{1,12}) ([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5}) ((?:[0-9]{1,3}\.){3}[0-9]{1,3}) (\S+) \S+$")
+
+
+@router.get("/vues")
+async def vues(user=Depends(require_jwt)):
+    out: List[Dict[str, Any]] = []
+    for ligne in (_lire_court(BAUX_DHCP) or "").splitlines():
+        m = _RE_BAIL.fullmatch(ligne.strip())
+        if not m:
+            continue
+        mac = m.group(2).lower()
+        if not mac.startswith(PREFIXES_GLOBALSCALE):
+            continue
+        try:
+            ip = str(ipaddress.IPv4Address(m.group(3)))
+        except ValueError:
+            continue
+        nom = m.group(4) if m.group(4) != "*" and re.fullmatch(r"[A-Za-z0-9._-]{1,63}", m.group(4)) else None
+        out.append({"mac": mac, "ip": ip, "nom": nom, "expire": int(m.group(1))})
+        if len(out) >= 200:
+            break
+    return {"vues": out}
 
 
 @router.get("/profiles")

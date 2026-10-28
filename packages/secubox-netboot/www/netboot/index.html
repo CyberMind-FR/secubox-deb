@@ -65,6 +65,11 @@
         td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
         tbody tr:hover{background:rgba(41,182,246,.07)}
         td.act{white-space:nowrap}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 12px}
+        .onglet{font:inherit;font-size:.78rem;font-weight:700;padding:5px 14px;border-radius:999px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--doux);cursor:pointer;min-height:30px}
+        .onglet:hover{border-color:var(--cyan)} .onglet:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglet[aria-selected="true"]{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.18)}
+        .boxes{display:grid;gap:6px;margin:6px 0} .boxes .box{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.8rem}
         .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
         .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
         .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
@@ -98,7 +103,7 @@
         </div>
 
         <section class="tuiles" aria-label="Indicateurs">
-            <div class="tuile cy" title="Modèle de la carte sur laquelle tourne ce service, d’après la sonde matérielle."><span class="l">Carte</span><span class="v" id="tModele">—</span><span class="s" id="sModele">modèle détecté</span></div>
+            <div class="tuile cy" title="Modèle de la carte sur laquelle tourne CE serveur de boot (ce maître), d’après la sonde matérielle — les cartes à démarrer sont dans « Cartes »."><span class="l">Ce serveur</span><span class="v" id="tModele">—</span><span class="s" id="sModele">modèle détecté</span></div>
             <div class="tuile" id="cEnv" title="Environnement U-Boot calibré : condition pour poser l’overlay. Sans lui, l’application réelle est désactivée."><span class="l">Environnement U-Boot</span><span class="v" id="tEnv">—</span><span class="s">calibré</span></div>
             <div class="tuile" id="cOverlay" title="L’amorce de la carte passe par l’overlay U-Boot chaîné (bootcmd détourné)."><span class="l">Overlay actif</span><span class="v" id="tOverlay">—</span><span class="s" id="sOverlay">bootcmd détourné</span></div>
             <div class="tuile" id="cSrv" title="État du démon TFTP (tftpd-hpa) de ce serveur de boot."><span class="l">Serveur TFTP</span><span class="v" id="tSrv">—</span><span class="s" id="sSrv">tftpd-hpa</span></div>
@@ -107,7 +112,7 @@
         </section>
 
         <div class="grille">
-            <div class="pan"><h3>Carte <i>sonde matérielle</i></h3>
+            <div class="pan"><h3>Ce serveur de boot <i>sonde matérielle du maître</i></h3>
                 <dl class="kv" id="kBoard"></dl></div>
             <div class="pan"><h3>Overlay U-Boot <i>amorce chaînée</i></h3>
                 <dl class="kv" id="kOverlay"></dl>
@@ -129,8 +134,9 @@
                 <div id="rServeur" class="retour" hidden></div>
                 <p class="note">Ce serveur ne fait que servir : aucun overlay ni flash n’est posé sur lui.</p></div>
 
-            <div class="pan large"><h3>Netbooter une box <i>par le réseau ou par clé USB, puis l’eMMC</i></h3>
-                <div id="lives"></div>
+            <div class="pan large"><h3>Cartes <i>netbooter une box : par le réseau ou par clé USB, puis l’eMMC</i></h3>
+                <div id="cartes" class="onglets" role="tablist" aria-label="Cartes"></div>
+                <div id="lives" role="tabpanel"></div>
                 <p class="note">Par le réseau : le U-Boot d’usine charge le live par TFTP, le live récupère son système par HTTP (port 8099, réseau local seulement), puis <span class="mono">sbx-netflash</span> écrit l’image choisie après en avoir vérifié la signature. Par la clé USB finale : le système lui-même tourne sur la clé pour les tests, et l’autoflash l’écrit sur l’eMMC.</p></div>
 
             <div class="pan large"><h3>Préparer un flash <i>la box rejoint seule ce maître</i></h3>
@@ -171,6 +177,7 @@
         const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
         let INV = null, SHADOW = null, AUDIT = null, SERVEUR = null, PROFILS = null, LIVES = null, SESSION_OK = true;
+        let BOARDS = null, VUES = null, CARTE = null;   // onglets de cartes (#3233) : /boards, baux DHCP vus, carte choisie
         let CONF = null;        // { texte, fn } : confirmation en cours, jamais de dialogue natif
         let SAISIE = false;     // formulaire de profil modifié : pas d'actualisation tant qu'il est ouvert
 
@@ -222,6 +229,9 @@
                                 commandes_usb: [{ role: 'tester', commande: 'usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}' },
                                                 { role: 'autoflash', commande: 'usb start; load usb 0:1 ${loadaddr} autoflash.scr; source ${loadaddr}' }],
                                 images: [{ nom: 'secubox-minimal-espressobin-v7-trixie.img.xz', taille: 793388832, sha256: '9f1c…', signee: true, taille_brute: 7516192768 }] }] };
+            BOARDS = { boards: [{ model: 'espressobin-v7', live_nom: 'espressobin-live', titre: 'ESPRESSObin v7', console: 'ttyMV0,115200' },
+                                { model: 'mochabin', live_nom: 'mochabin-live', titre: 'MOCHAbin', console: 'ttyS0,115200' }] };
+            VUES = { vues: [{ mac: 'f0:ad:4e:08:ab:71', ip: '192.168.42.161', nom: null, expire: 1793219012 }] };
             PROFILS = { profiles: [
                 { id: '02005e005301', model: 'mochabin', image: 'secubox-2.39.0', boot_level: 'B2', srv: '192.0.2.10' },
                 { id: '02005e005302', model: 'espressobin-v7', image: null, boot_level: 'B0', srv: null }] };
@@ -230,12 +240,12 @@
 
         async function charger() {
             if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
-            const essais = await Promise.allSettled([lire('/inventory'), lire('/shadow'), lire('/audit?limit=40'), lire('/server'), lire('/profiles'), lire('/live')]);
+            const essais = await Promise.allSettled([lire('/inventory'), lire('/shadow'), lire('/audit?limit=40'), lire('/server'), lire('/profiles'), lire('/live'), lire('/boards'), lire('/vues')]);
             const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
             const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
             const tous = essais.every(e => e.status === 'rejected');
             SESSION_OK = !refus;
-            INV = val(0); SHADOW = val(1); AUDIT = val(2); SERVEUR = val(3); PROFILS = val(4); LIVES = val(5);
+            INV = val(0); SHADOW = val(1); AUDIT = val(2); SERVEUR = val(3); PROFILS = val(4); LIVES = val(5); BOARDS = val(6); VUES = val(7);
             $('erreur').hidden = !(tous && !refus);
             if (tous && !refus) $('erreur').textContent = 'Impossible de lire NetBoot (service arrêté ou injoignable).';
             rendre();
@@ -353,11 +363,90 @@
             bt.addEventListener('click', async () => { try { await navigator.clipboard.writeText(texte); bt.textContent = 'Copié'; } catch (e) { bt.textContent = 'Copie impossible'; } setTimeout(() => { bt.textContent = 'Copier'; }, 1500); });
             b.appendChild(pre); const l = el('div'); l.appendChild(bt); b.appendChild(l); return b;
         }
+        // ----- Cartes (#3233) : un onglet par carte de board/<carte>/ ; un live publié sans carte connue a le sien -----
+        const hexMac = m => String(m || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+        function lireCarteChoisie() { try { return localStorage.getItem('netboot.carte'); } catch (e) { return null; } }
+        function garderCarteChoisie(id) { try { localStorage.setItem('netboot.carte', id); } catch (e) { /* facultatif */ } }
+        function cartesConnues(lives) {
+            const cartes = [], pris = new Set();
+            ((BOARDS && BOARDS.boards) || []).forEach(b => {
+                const nom = b.live_nom || (b.model + '-live');
+                const lv = (lives || []).find(l => l.nom === nom) || null;
+                if (lv) pris.add(lv.nom);
+                cartes.push({ id: b.model, model: b.model, titre: b.titre || b.model, console: b.console, live_nom: nom, live: lv });
+            });
+            (lives || []).filter(l => !pris.has(l.nom)).forEach(l =>
+                cartes.push({ id: 'live:' + l.nom, model: null, titre: l.titre || l.nom, console: l.console, live_nom: l.nom, live: l }));
+            return cartes;
+        }
         function rendreLives(lives) {
-            const z = $('lives'); z.replaceChildren();
-            if (!lives) { z.appendChild(el('p', 'vide', '—')); return; }
-            if (!lives.length) { z.appendChild(el('p', 'vide', 'Aucun live publié — le construire avec build-live-netboot.sh sur ce maître.')); return; }
-            lives.forEach(lv => {
+            const bar = $('cartes'), z = $('lives'); bar.replaceChildren(); z.replaceChildren();
+            const cartes = cartesConnues(lives || []);
+            if (!cartes.length) { z.appendChild(el('p', 'vide', lives === null ? '—' : 'Aucune carte ni live publié — construire un live avec build-live-netboot.sh sur ce maître.')); return; }
+            if (!cartes.some(c => c.id === CARTE)) {
+                const garde = lireCarteChoisie();
+                CARTE = cartes.some(c => c.id === garde) ? garde : (cartes.find(c => c.live) || cartes[0]).id;
+            }
+            cartes.forEach(c => {
+                const b = el('button', 'onglet', c.titre); b.type = 'button'; b.setAttribute('role', 'tab');
+                b.setAttribute('aria-selected', c.id === CARTE ? 'true' : 'false');
+                b.addEventListener('click', () => { CARTE = c.id; garderCarteChoisie(c.id); rendreLives(lives); });
+                bar.appendChild(b);
+            });
+            const c = cartes.find(x => x.id === CARTE);
+            if (lives && !lives.length) z.appendChild(el('p', 'vide', 'Aucun live publié sur ce maître pour l’instant.'));
+            const etat = el('div', 'boxes'), e = el('div', 'box');
+            e.appendChild(pastille(c.live ? 'ok' : 'hors', c.live ? 'live réseau publié' : 'pas de live réseau'));
+            e.appendChild(pastille(c.live && c.live.usb ? 'ok' : '', c.live && c.live.usb ? 'clé USB finale publiée' : 'pas de clé USB finale'));
+            const n = c.live ? (c.live.images || []).filter(i => i.signee).length : 0;
+            e.appendChild(pastille(n ? 'ok' : '', n + ' image' + (n > 1 ? 's' : '') + ' signée' + (n > 1 ? 's' : '')));
+            etat.appendChild(e); z.appendChild(etat);
+            if (c.live) rendreLive(z, c.live);
+            else {
+                const dl = el('dl', 'kv'); ligne(dl, 'Carte', c.titre); if (c.console) ligne(dl, 'Console série', el('span', 'mono', c.console)); z.appendChild(dl);
+                z.appendChild(el('p', 'note', 'Pas encore de live pour cette carte — à construire sur ce maître (live léger, puis live réseau et images signées) :'));
+                const d = '/data/sbx-netboot/' + c.live_nom, s = '/usr/share/secubox/netboot/scripts/';
+                z.appendChild(blocCopie('bash ' + s + 'build-live-leger.sh --carte ' + c.model + ' --sortie ' + d + '/live.img.gz --pub /etc/secubox/netboot/keys/secubox-netboot.crt.pub\n'
+                    + 'bash ' + s + 'build-live-netboot.sh --live ' + d + '/live.img.gz --carte ' + c.model + ' --tftp <IP du LAN> --flash IMAGE.img.xz', 'Construire le live'));
+            }
+            rendreBoxes(z, c);
+        }
+        // Boxes de ce modèle (profils, en ligne si un bail DHCP porte leur MAC) et boxes vues sans profil.
+        function rendreBoxes(z, c) {
+            const profs = ((PROFILS && PROFILS.profiles) || []), vues = ((VUES && VUES.vues) || []);
+            const bail = mac => vues.find(v => hexMac(v.mac) === hexMac(mac));
+            const siens = c.model ? profs.filter(p => p.model === c.model) : [];
+            z.appendChild(el('p', 'note', 'Boxes ' + c.titre + ' (profils) :'));
+            const l = el('div', 'boxes');
+            if (!siens.length) l.appendChild(el('span', 'vide', 'aucun profil de ce modèle'));
+            siens.forEach(p => {
+                const r = el('div', 'box'); r.appendChild(el('span', 'mono', p.id)); const v = bail(p.id);
+                r.appendChild(v ? pastille('ok', 'en ligne · ' + v.ip) : pastille('', 'pas de bail DHCP'));
+                l.appendChild(r);
+            });
+            z.appendChild(l);
+            const libres = vues.filter(v => !profs.some(p => hexMac(p.id) === hexMac(v.mac)));
+            if (!libres.length) return;
+            z.appendChild(el('p', 'note', 'Boxes Globalscale vues sur le LAN de ce maître, sans profil :'));
+            const w = el('div', 'boxes');
+            libres.forEach(v => {
+                const r = el('div', 'box'); r.appendChild(el('span', 'mono', v.mac)); r.appendChild(el('span', '', v.ip + (v.nom ? ' · ' + v.nom : '')));
+                r.appendChild(pastille('att', 'sans profil'));
+                if (c.model) {
+                    const b = el('button', 'btn sm', 'Profil ' + c.titre); b.type = 'button';
+                    b.title = 'Préremplit le formulaire « Profils de cartes » avec cette MAC et le modèle ' + c.model;
+                    b.addEventListener('click', () => {
+                        const f = $('fProf'); f.querySelector('[name=id]').value = v.mac; f.querySelector('[name=model]').value = c.model;
+                        SAISIE = true; f.scrollIntoView({ block: 'center' }); f.querySelector('[name=image]').focus();
+                    });
+                    r.appendChild(b);
+                }
+                w.appendChild(r);
+            });
+            z.appendChild(w);
+        }
+        function rendreLive(z, lv) {
+            {
                 const dl = el('dl', 'kv');
                 ligne(dl, 'Live', lv.nom);
                 if (lv.titre) ligne(dl, 'Carte', lv.titre);
@@ -408,7 +497,7 @@
                         const h = el('td', 'mono', String(im.sha256 || '').slice(0, 16) + '…'); h.title = im.sha256 || ''; r.appendChild(h); tb.appendChild(r); });
                     t.appendChild(tb); const w = el('div', 'tab'); w.appendChild(t); z.appendChild(w);
                 }
-            });
+            }
         }
 
         // ----- Préparer un flash -----
