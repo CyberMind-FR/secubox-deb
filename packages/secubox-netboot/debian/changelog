@@ -1,3 +1,27 @@
+secubox-netboot (0.8.1-1~trixie1) trixie; urgency=medium
+
+  * Seconde relecture de sécurité (ref #3233). Clé finale : signature fournie (--sig) ou décision explicite
+    (--signer-ici), toujours auditée avec le SHA-256 ; image montée nodev,nosuid,noexec et refus des liens
+    symboliques qui sortiraient de l'image ; fstab traité espaces comme tabulations, aucune étiquette de
+    l'eMMC ne reste ; seule la carte espressobin-v7 ; garde de place ; empreinte gravée dans la clé ;
+    publication atomique avec SHA-256, signature et clé publique. sbx-autoflash : partition SBXFLASH de son
+    propre disque, empreinte gravée exigée, annonce de la cible et de son contenu (« box déjà installée »),
+    compte à rebours de 30 s (60 s) annulable à la console ; unité durcie (ProtectSystem=strict,
+    capacités bornées), exception écrite dans RULES-CODE. Flux : trap posé avant la tâche, dd final en exec,
+    invalidation ratée signalée (code 3) et auditée, refus si une partition de l'eMMC est montée ou en swap.
+    sbx-netflash : sonde bornée avec repli wget, ligne du noyau lue sans globbing. Live léger : dépôt
+    -security. /live : empreinte et clé publique de la clé USB, rôle et commande recoupés. Page : empreinte,
+    commande de vérification, autoflash signalé « efface l'eMMC ». Statut du vhost :8099 lu dans le vhost posé
+    (nginx -T échouait sous ProtectSystem=strict : la page affichait « no »).
+  * Page NetBoot multi-cartes (demande du propriétaire) : panneau « Cartes » avec un onglet par carte
+    (board/<carte>/, plus tout live publié sans carte connue), état de la carte (live réseau, clé USB finale,
+    images signées), commandes, commande de construction pour une carte sans live, boxes de ce modèle avec
+    leur bail DHCP, et boxes Globalscale vues sur le LAN sans profil avec profil prérempli. Haut de page
+    renommé « Ce serveur » (c'est la sonde du maître, pas une carte à démarrer). API : /boards porte le live
+    de chaque carte (live.env lu comme des données), /vues lit les baux DHCP (f0:ad:4e, sans lien suivi).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 14:30:00 +0100
+
 secubox-netboot (0.8.0-1~trixie1) trixie; urgency=medium
 
   * Live léger ESPRESSObin et flash en flux (ref #3233). scripts/build-live-leger.sh : Debian minimale

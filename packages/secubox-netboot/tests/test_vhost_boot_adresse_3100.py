@@ -71,11 +71,18 @@ def test_gabarit_sans_marqueur_dans_les_commentaires():
     assert s.count("@ADRESSE_LAN@") == 1
 
 
-def test_statut_ne_dit_pas_non_quand_nginx_sert_la_racine(tmp_path):
+def test_statut_lit_le_vhost_pose_et_non_nginx_T(tmp_path):
+    """#3233 : sous ProtectSystem=strict (API), `nginx -T` échouait et le statut disait « no » alors que le vhost servait."""
+    vhost = tmp_path / "secubox-netboot-boot.conf"
+    vhost.write_text("server {\n    listen 192.168.1.200:8099;\n    root /srv/secubox/netboot/http;\n}\n")
     faux = tmp_path / "nginx"
-    # beaucoup de sortie après la ligne trouvée : grep -q fermerait le tube (SIGPIPE + pipefail)
-    faux.write_text("#!/bin/sh\necho 'root /srv/secubox/netboot/http;'\nyes x | head -n 200000\n")
+    faux.write_text("#!/bin/sh\nexit 1\n")                       # nginx -T en échec, comme sous le bac à sable
     faux.chmod(0o755)
+    env = {"PATH": f"{tmp_path}:/usr/bin:/bin", "SBX_NETBOOT_VHOST": str(vhost)}
     r = subprocess.run(["bash", "-c", f"source {SERVE} --bibliotheque; set -o pipefail; cmd_status"],
-                       capture_output=True, text=True, env={"PATH": f"{tmp_path}:/usr/bin:/bin"})
+                       capture_output=True, text=True, env=env, timeout=60)
     assert '"nginx_sbxboot":"yes"' in r.stdout.replace(" ", ""), r.stdout
+    vhost.unlink()
+    r = subprocess.run(["bash", "-c", f"source {SERVE} --bibliotheque; set -o pipefail; cmd_status"],
+                       capture_output=True, text=True, env=env, timeout=60)
+    assert '"nginx_sbxboot":"no"' in r.stdout.replace(" ", ""), r.stdout

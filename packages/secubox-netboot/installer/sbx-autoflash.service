@@ -1,24 +1,41 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # SecuBox-Deb :: sbx-autoflash (#3233) — posé par build-cle-finale.sh sur la SEULE clé USB finale, jamais sur une box.
-# Root : il écrit le périphérique bloc de l'eMMC et monte la partition SBXFLASH de la clé.
+# @CONSOLE@ est remplacé à la construction par la console série de la carte (board/<carte>/live.env).
+# Root (exception écrite dans RULES-CODE § 10) : il écrit le périphérique bloc de l'eMMC et monte la partition SBXFLASH.
 [Unit]
 Description=SecuBox — écriture de l'eMMC depuis la clé USB finale (sbx_autoflash=1)
 ConditionKernelCommandLine=sbx_autoflash=1
 After=local-fs.target
+Before=getty.target serial-getty@@CONSOLE@.service
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/sbx-autoflash
-StandardOutput=journal+console
+# La console série affiche l'annonce et reçoit l'annulation.
+StandardInput=tty
+StandardOutput=tty
 StandardError=journal+console
+TTYPath=/dev/@CONSOLE@
+TTYReset=yes
+TTYVHangup=yes
+RuntimeDirectory=sbx-autoflash
+UMask=0027
 NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/run/sbx-autoflash /var/log -/run/systemd -/run/dbus
 ProtectHome=yes
 PrivateTmp=yes
+ProtectKernelTunables=yes
 ProtectKernelModules=yes
+ProtectKernelLogs=yes
 ProtectControlGroups=yes
+RestrictSUIDSGID=yes
 RestrictRealtime=yes
+RestrictNamespaces=yes
 LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_DAC_OVERRIDE
 
 [Install]
 WantedBy=multi-user.target

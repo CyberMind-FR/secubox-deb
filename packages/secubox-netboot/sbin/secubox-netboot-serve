@@ -92,8 +92,11 @@ CFG
 
 cmd_status() {
   local tftp_act=absent; command -v systemctl >/dev/null && tftp_act="$(systemctl is-active tftpd-hpa 2>/dev/null || echo absent)"
-  local http_ok=no; # grep -c lit tout : grep -q fermerait le tube, nginx -T prendrait SIGPIPE et pipefail dirait « no »
-  [ "$(nginx -T 2>/dev/null | grep -c '/srv/secubox/netboot/http')" -gt 0 ] && http_ok=yes
+  # Le vhost POSÉ fait foi, pas `nginx -T` (#3233) : l'API tourne sous ProtectSystem=strict, où nginx -t ne peut
+  # ouvrir ses journaux et échoue — la page disait « no » alors que le vhost servait ; nginx -T relisait aussi toute
+  # la configuration de gk2 à chaque rafraîchissement.
+  local http_ok=no vhost="${SBX_NETBOOT_VHOST:-/etc/nginx/sites-enabled/secubox-netboot-boot.conf}"
+  if [ -f "$vhost" ] && grep -q '/srv/secubox/netboot/http' "$vhost" 2>/dev/null; then http_ok=yes; fi
   local boards=0; [ -d "$HTTP" ] && boards="$(find "$HTTP" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l)"
   cat <<JSON
 { "module":"$MODULE","tftp_root":"$TFTP","http_root":"$HTTP","tftpd":"$tftp_act",

@@ -11,7 +11,7 @@ Package: secubox-netboot
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, u-boot-tools, mtd-utils, openssl, secubox-p2p
 Recommends: python3-argon2, tftpd-hpa, isc-dhcp-server, squashfs-tools, rsync
-Suggests: debootstrap, debian-archive-keyring, dosfstools, fdisk, gdisk, xz-utils, qemu-user-static
+Suggests: debootstrap, debian-archive-keyring, dosfstools, fdisk, gdisk, xz-utils, openssh-client, qemu-user-static, binfmt-support
 Description: SecuBox provisioning réseau + overlay U-Boot (#737)
  Service d'installation/boot réseau pour les boards Marvell Armada (MOCHAbin,
  ESPRESSObin). Fournit un overlay U-Boot chainloadé (HTTP + FIT-signature) sans

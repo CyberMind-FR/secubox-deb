@@ -35,8 +35,8 @@ def test_etiquettes_et_identifiants_propres_a_la_cle():
     assert 'e2label "${loop}p2" rootfs-usb' in s and 'e2label "${loop}p3" data-usb' in s
     assert 'fatlabel "${loop}p1" BOOTUSB' in s
     assert "tune2fs -U random" in s
-    for a, b in (("LABEL=rootfs ", "LABEL=rootfs-usb "), ("LABEL=data ", "LABEL=data-usb "), ("LABEL=boot ", "LABEL=BOOTUSB ")):
-        assert f"s/^{a}/{b}/" in s, a                                # fstab de la clé
+    for a, b in (("rootfs", "rootfs-usb"), ("data", "data-usb"), ("boot", "BOOTUSB")):     # fstab de la clé
+        assert f"s/^LABEL={a}\\([[:space:]]\\)/LABEL={b}\\1/" in s, a
 
 
 def test_scripts_u_boot_de_la_cle():

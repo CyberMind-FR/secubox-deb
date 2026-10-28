@@ -66,13 +66,13 @@ invalide_cible() { # CIBLE — début (table, chargeur) et fin (GPT de secours) 
 
 ecrit_corps() { # CIBLE FICHIER_TETE — les TETE_MO premiers Mo vont dans FICHIER_TETE, le reste sur la cible à leur suite
     dd of="$2" bs=1M count="$TETE_MO" iflag=fullblock status=none || return 1
-    dd of="$1" bs=1M seek="$TETE_MO" conv=fsync,notrunc status=none
+    exec dd of="$1" bs=1M seek="$TETE_MO" conv=fsync,notrunc status=none   # exec : arrêter le flux arrête ce dd
 }
 
 # Code : 0 écrite et vérifiée ; 1 refusée, cible invalidée ; 2 paramètres refusés, rien touché ; 3 refusée et
 # INVALIDATION ÉCHOUÉE (ne pas démarrer sur la cible).
 ecrit_flux_verifie() { # CIBLE FORMAT(gz|xz) SIGNATURE CLE_PUB SHA256 — flux compressé sur l'entrée standard
-    local cible="$1" format="$2" sig="$3" pub="$4" attendu="$5" t p_sig p_sha p_flux v somme dec
+    local cible="$1" format="$2" sig="$3" pub="$4" attendu="$5" t p_sig p_sha p_flux v somme dec m="" rc=0
     case "$format" in
         gz) dec="gzip" ;;
         xz) dec="xz" ;;
@@ -88,18 +88,23 @@ ecrit_flux_verifie() { # CIBLE FORMAT(gz|xz) SIGNATURE CLE_PUB SHA256 — flux c
     # Le flux tourne en tâche de fond (entrée standard gardée explicitement) : bash ne lance un trap qu'APRÈS la
     # commande au premier plan, mais `wait`, lui, est interrompu par le signal. Interruption (Ctrl+C, SSH coupé,
     # arrêt) : le flux est arrêté, la tête n'est pas écrite, et ce qui l'a été est effacé.
+    # Trap posé AVANT de lancer le flux ; il distingue l'invalidation réussie (130) de l'invalidation ratée (3).
+    p_flux=""
+    trap 'if [ -n "$p_flux" ]; then pkill -TERM -P "$p_flux" 2>/dev/null; kill "$p_flux" 2>/dev/null; wait "$p_flux" 2>/dev/null; fi
+          kill "$p_sig" "$p_sha" 2>/dev/null
+          if invalide_cible "$cible"; then rc=130; m="cible invalidée"; else rc=3; m="INVALIDATION ÉCHOUÉE : ne pas démarrer sur la cible"; fi
+          declare -F audit >/dev/null && audit "flux interrompu cible=$cible sha256=$attendu ($m)"
+          rm -rf "$t"; echo "flux interrompu : $m" >&2; exit "$rc"' INT TERM HUP
     ( set +e; tee "$t/sig" "$t/sha" | "$dec" -dc | ecrit_corps "$cible" "$t/tete"; echo "${PIPESTATUS[*]}" > "$t/etats" ) 0<&0 &
     p_flux=$!
-    trap 'pkill -TERM -P "$p_flux" 2>/dev/null; kill "$p_flux" "$p_sig" "$p_sha" 2>/dev/null; invalide_cible "$cible";
-          rm -rf "$t"; echo "flux interrompu : cible invalidée" >&2; exit 130' INT TERM HUP
     set +e
     wait "$p_flux"
     local etats
     read -r -a etats < "$t/etats" 2>/dev/null || etats=(1 1 1)
     wait "$p_sig"; v=$?
     wait "$p_sha"
-    set -e
     somme="$(awk '{print $1}' "$t/somme" 2>/dev/null)"
+    set -e
     if [ "${etats[0]}" -eq 0 ] && [ "${etats[1]}" -eq 0 ] && [ "${etats[2]}" -eq 0 ] && [ "$v" -eq 0 ] \
             && [ "$somme" = "$attendu" ] \
             && dd if="$t/tete" of="$cible" bs=1M conv=fsync,notrunc status=none; then
@@ -238,6 +243,12 @@ fi
 # Verify eMMC is accessible
 if [[ ! -b "$EMMC_DEVICE" ]]; then
     err "eMMC device not accessible: $EMMC_DEVICE"
+fi
+
+# Aucune partition de l'eMMC montée ni en swap (#3233) : la garde du démarrage ne regarde que /.
+if lsblk -nro MOUNTPOINTS "$EMMC_DEVICE" 2>/dev/null | grep -q . || lsblk -nro MOUNTPOINT "$EMMC_DEVICE" 2>/dev/null | grep -q . \
+        || grep -q "^${EMMC_DEVICE}" /proc/swaps 2>/dev/null; then
+    err "SAFETY STOP: une partition de $EMMC_DEVICE est montée ou en swap — la démonter avant d'écrire"
 fi
 
 # ── Mode flux (#3233) : gardes passées, écriture vérifiée au fil de l'eau ─
