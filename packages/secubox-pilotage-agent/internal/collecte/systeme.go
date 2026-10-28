@@ -65,7 +65,7 @@ func (s *systeme) Chemins() []string {
 }
 
 func (s *systeme) lire(rel string) (string, error) {
-	b, err := os.ReadFile(filepath.Join(s.racine, rel))
+	b, err := lireBorne(filepath.Join(s.racine, rel), plafondProc)
 	return string(b), err
 }
 
@@ -167,7 +167,7 @@ func (s *systeme) numeroSerie() string {
 	}
 	sort.Strings(noms)
 	for _, d := range noms {
-		b, err := os.ReadFile(filepath.Join(filepath.Dir(d), "address"))
+		b, err := lireBorne(filepath.Join(filepath.Dir(d), "address"), plafondPetit)
 		if err != nil {
 			continue
 		}

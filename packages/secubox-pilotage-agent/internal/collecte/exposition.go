@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -33,36 +32,44 @@ func (s *exposition) Chemins() []string {
 }
 
 func (s *exposition) Lire(ctx context.Context) (map[string]any, error) {
-	ports, err := s.ports()
+	ports, err := s.ports(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return map[string]any{
-		racineExposition + "Names": s.noms(),
+		racineExposition + "Names": s.noms(ctx),
 		racineExposition + "Ports": ports,
 	}, nil
 }
 
 // noms rend les server_name non génériques, triés et sans doublon. Un
 // répertoire absent donne une liste vide.
-func (s *exposition) noms() []string {
+func (s *exposition) noms(ctx context.Context) []string {
 	fichiers, _ := filepath.Glob(filepath.Join(s.racine, "etc/nginx/sites-enabled/*"))
 	vus := map[string]bool{}
 	noms := []string{}
+	if len(fichiers) > maxFichiersVhs {
+		fichiers = fichiers[:maxFichiersVhs]
+	}
 	for _, fich := range fichiers {
-		f, err := os.Open(fich)
+		if ctx.Err() != nil {
+			break
+		}
+		f, err := ouvrirBorne(fich, plafondVhost)
 		if err != nil {
 			continue
 		}
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
+			if ctx.Err() != nil {
+				break
+			}
 			l, _, _ := strings.Cut(sc.Text(), "#")
-			l = strings.TrimSpace(l)
-			if !strings.HasPrefix(l, "server_name") {
+			champs := strings.Fields(strings.TrimSuffix(strings.TrimSpace(l), ";"))
+			if len(champs) < 2 || champs[0] != "server_name" {
 				continue
 			}
-			l = strings.TrimSuffix(strings.TrimSpace(strings.TrimPrefix(l, "server_name")), ";")
-			for _, n := range strings.Fields(l) {
+			for _, n := range champs[1:] {
 				if n == "_" || n == "localhost" || strings.HasPrefix(n, "~") || vus[n] {
 					continue
 				}
@@ -77,17 +84,21 @@ func (s *exposition) noms() []string {
 }
 
 // ports rend les ports TCP à l'écoute (état 0A), triés, de tcp et tcp6.
-func (s *exposition) ports() ([]int, error) {
+func (s *exposition) ports(ctx context.Context) ([]int, error) {
 	vus := map[int]bool{}
 	lu := false
 	for _, nom := range []string{"proc/net/tcp", "proc/net/tcp6"} {
-		f, err := os.Open(filepath.Join(s.racine, nom))
+		f, err := ouvrirBorne(filepath.Join(s.racine, nom), plafondReseau)
 		if err != nil {
 			continue
 		}
 		lu = true
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
+			if ctx.Err() != nil {
+				f.Close()
+				return nil, ctx.Err()
+			}
 			c := strings.Fields(sc.Text())
 			if len(c) < 4 || c[3] != "0A" {
 				continue
@@ -100,7 +111,11 @@ func (s *exposition) ports() ([]int, error) {
 				vus[int(v)] = true
 			}
 		}
+		err = sc.Err()
 		f.Close()
+		if err != nil {
+			return nil, err
+		}
 	}
 	if !lu {
 		return nil, errors.New("/proc/net/tcp illisible")

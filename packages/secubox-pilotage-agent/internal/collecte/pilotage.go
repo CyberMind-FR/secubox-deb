@@ -9,10 +9,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
 )
+
+var nomProfil = regexp.MustCompile(`^[a-z0-9_.-]{1,64}$`)
 
 const racinePilotage = "Device.X_SECUBOX_Pilotage."
 
@@ -33,8 +36,12 @@ func (s *pilotage) Chemins() []string {
 func (s *pilotage) Lire(ctx context.Context) (map[string]any, error) {
 	_, err := os.Stat(filepath.Join(s.racine, "etc/secubox/pilotage/mains-liees"))
 	profil := ""
-	if b, err := os.ReadFile(filepath.Join(s.racine, "var/lib/secubox/profiles/actif")); err == nil {
-		profil = strings.TrimSpace(string(b))
+	// Lecture bornée à 128 octets ; une valeur qui n'est pas un nom de profil
+	// valide n'est pas publiée.
+	if b, err := lireBorne(filepath.Join(s.racine, "var/lib/secubox/profiles/actif"), 128); err == nil {
+		if v := strings.TrimSpace(string(b)); nomProfil.MatchString(v) {
+			profil = v
+		}
 	}
 	return map[string]any{
 		racinePilotage + "AgentVersion": s.version,

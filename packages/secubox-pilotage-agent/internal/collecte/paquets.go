@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -38,7 +37,7 @@ func (s *paquets) Chemins() []string {
 }
 
 func (s *paquets) Lire(ctx context.Context) (map[string]any, error) {
-	f, err := os.Open(filepath.Join(s.racine, "var/lib/dpkg/status"))
+	f, err := ouvrirBorne(filepath.Join(s.racine, "var/lib/dpkg/status"), plafondDpkg)
 	if err != nil {
 		return nil, err
 	}
