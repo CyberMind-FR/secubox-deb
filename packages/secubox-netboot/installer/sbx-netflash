@@ -75,8 +75,9 @@ confirme_flash() { # IMAGE CIBLE SOURCE SHA256 — « FLASH » lu sur le termina
 
 # Délais bornés : un serveur qui fige la connexion ne laisse pas le flash en suspens (l'opérateur couperait le courant).
 telecharge_flux() { # URL → sortie standard ; jamais de reprise : un flux recommencé serait corrompu
-    if command -v curl >/dev/null 2>&1; then curl -fsS --connect-timeout 20 --speed-limit 4096 --speed-time 60 "$1"
-    else wget -qO- --tries=1 --timeout=60 "$1"; fi
+    # 10 min de tolérance : en flux, la carte ne lit que ce que l'eMMC écrit, et une eMMC lente marque des pauses.
+    if command -v curl >/dev/null 2>&1; then curl -fsS --connect-timeout 20 --speed-limit 1024 --speed-time 600 "$1"
+    else wget -qO- --tries=1 --timeout=600 "$1"; fi
 }
 
 
@@ -300,8 +301,13 @@ if [ "$(mode_ecriture "$taille" "$dispo")" = flux ]; then
     if [ -n "$nom" ]; then opts+=(--no-reboot); else opts+=("${reboot_opt[@]}"); fi
     log "téléchargement et écriture en flux de $BASE/$image…"
     set +e
-    telecharge_flux "$BASE/$image" | secubox-flash-emmc "${opts[@]}"
-    st=("${PIPESTATUS[@]}")
+    if command -v pv >/dev/null 2>&1; then      # progression sur la console (le maître la suit aussi, page NetBoot)
+        telecharge_flux "$BASE/$image" | pv -f -s "$taille" | secubox-flash-emmc "${opts[@]}"
+        st=("${PIPESTATUS[0]}" "${PIPESTATUS[2]}")
+    else
+        telecharge_flux "$BASE/$image" | secubox-flash-emmc "${opts[@]}"
+        st=("${PIPESTATUS[@]}")
+    fi
     set -e
     [ "${st[1]}" -eq 0 ] || fail "écriture en flux refusée ou interrompue (téléchargement=${st[0]}, flash=${st[1]}) : eMMC invalidée si elle avait été entamée"
     rm -f "$TRAVAIL/$image.sig"
