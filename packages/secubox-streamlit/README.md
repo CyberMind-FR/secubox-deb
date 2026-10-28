@@ -150,9 +150,13 @@ the app is deployed but not started. Dependencies are installed into the contain
 `[apps.*]` carrying a `domain` without the generated chain — neither `publication_geree` nor a
 `sites-enabled/streamlit-<name>.conf` serving that name (so `couture` is kept). Removed: the sbxwaf route (if it
 targets :9080 or the entry's port), the HAProxy vhost (only `backend = nginx_vhosts`), `streamlit-<name>.conf`;
-another nginx file serving the name is reported, never deleted (it may serve others). The entry is marked
-unpublished (`enabled = false` for an instance, `domain` → `domaine_retire`, `depubliee` timestamp); the app stays
-deployed. JSON report, audit line per entry.
+another nginx file serving the name is reported, never deleted (it may serve others). An entry whose links are
+ALL removed is marked unpublished (`enabled = false` for an instance, `domain` → `domaine_retire`, `depubliee`
+timestamp); a partial removal (`resultat = "partiel"`: HAProxy refused, route re-pointed, name not usable as a file,
+direct route without the bridge subnet…) leaves the entry declared so that a second run takes up the remainder
+(`reliquat` in the JSON report). The app stays deployed. Audit line per entry, with the real state of each link.
+Follow-ups (bridge host address, nginx 300 s on `/deploy`, exact-argv sudoers, per-app isolation, wake by vhost):
+issue #3252.
 
 Thumbnails are captured on event only (first registration, source update,
 or a manual recapture) — never on a timer, and never for an app that isn't

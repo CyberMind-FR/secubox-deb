@@ -519,8 +519,8 @@ def _proprietaires_admis() -> tuple[set, set]:
 
 def _fd_apps(apps: Path) -> int:
     """Le dossier des applis, ouvert SANS suivre de lien : son parent (/srv/streamlit) est monté en écriture dans le
-    conteneur, qui pourrait remplacer `apps` par un lien. Propriétaire root ou secubox, jamais inscriptible par le
-    groupe ni par tous. Refus : code 3."""
+    conteneur, qui pourrait remplacer `apps` par un lien. Propriétaire root, secubox ou nous ; jamais inscriptible
+    par tous ; inscriptible par le groupe seulement si ce groupe est root, secubox ou le nôtre. Refus : code 3."""
     apps = Path(os.path.abspath(apps))
     try:
         pfd = os.open(apps.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
@@ -1355,24 +1355,30 @@ def verbe_depublier(a, conf: Path, apps: Path) -> dict:
             sortie["evenement"] = "inchange"
             return sortie
         dom_box = domaine_box() if any(not i["domain"] for i in miennes) else ""
-        nouveau = texte
         for inst in miennes:
-            nouveau = retirer_section(nouveau, f"instances.{inst['id']}")
             sortie["retires"].append({"nom_public": inst["id"], "domaine": domaine_de(inst, dom_box)})
-        decl = applis_declarees(nouveau).get(a.appli, {})
-        par_publication = decl.get("autostart_publication") is True
-        if par_publication:
-            nouveau = retirer_cles(poser_cles(nouveau, f"apps.{a.appli}", {"autostart": False}),
-                                   f"apps.{a.appli}", {"autostart_publication"})
+        par_publication = applis_declarees(texte).get(a.appli, {}).get("autostart_publication") is True
+
+        def declaration(acquises: list) -> str:
+            """Déclaration finale pour les instances RÉELLEMENT retirées ; la veille ne revient que si toutes le sont."""
+            nouveau = texte
+            for inst in acquises:
+                nouveau = retirer_section(nouveau, f"instances.{inst['id']}")
+            if par_publication and len(acquises) == len(miennes):
+                nouveau = retirer_cles(poser_cles(nouveau, f"apps.{a.appli}", {"autostart": False}),
+                                       f"apps.{a.appli}", {"autostart_publication"})
+            return nouveau
         sortie["evenement"] = "depublication"
         if not a.apply:
             return sortie
         avert = sortie["avertissements"]
         lire_routes()                     # table illisible : on s'arrête AVANT de toucher quoi que ce soit
-        _valider_toml(texte, nouveau)     # la déclaration finale se relit AVANT le premier geste
+        _valider_toml(texte, declaration(miennes))   # la déclaration finale se relit AVANT le premier geste
         journal = Journal(a.par)
+        acquises = []
         try:
-            # La chaîne d'abord : si un retrait échoue, la déclaration dit encore la vérité (toujours publiée).
+            # La chaîne d'abord : si un retrait échoue, la déclaration dit encore la vérité (toujours publiée) —
+            # une instance au retrait « partiel » reste déclarée, un second passage reprendra le reliquat.
             # Une ligne d'audit par entrée, juste après son retrait, avec l'état RÉEL de chaque maillon.
             for inst, r in zip(miennes, sortie["retires"]):
                 dom = r["domaine"]
@@ -1383,15 +1389,19 @@ def verbe_depublier(a, conf: Path, apps: Path) -> dict:
                     etats["nginx"] = nginx_retirer(inst["id"], dom, avert) if NOM_APPLI_RE.fullmatch(
                         inst["id"]) else "laisse"
                     etats["haproxy"] = haproxy_retirer(dom, avert)
-                r.update(etats)
+                r.update(etats, resultat=_resultat(etats))
+                if r["resultat"] == "applique":
+                    acquises.append(inst)
                 journal.ecrire(evenement="depublication", appli=a.appli, nom_public=inst["id"], domaine=dom,
-                               **etats, resultat=_resultat(etats))
-            _ecrire_declaration(journal, conf, texte, nouveau, a.appli, "depublication")
-            if par_publication:
+                               **etats, resultat=r["resultat"])
+            _ecrire_declaration(journal, conf, texte, declaration(acquises), a.appli, "depublication")
+            if par_publication and len(acquises) == len(miennes):
                 conteneur_systemctl("disable", a.appli, avert)
         finally:
             journal.fermer()
         sortie["applique"] = True
+        sortie["partiel"] = len(acquises) < len(miennes)
+        sortie["reliquat"] = [i["id"] for i in miennes if i not in acquises]
         return sortie
 
 
@@ -1481,16 +1491,20 @@ def verbe_depublier_anciennes(a, conf: Path, apps: Path) -> dict:
         if not a.apply or not retires:
             return sortie
 
-        # Déclaration finale calculée et validée AVANT le premier geste.
-        nouveau = texte
         horodatage = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        for r in retires:
-            entete = f"instances.{r['nom']}" if r["type"] == "instance" else f"apps.{r['nom']}"
-            champs = {"domaine_retire": r["domaine"], "depubliee": horodatage}
-            if r["type"] == "instance":
-                champs = {"enabled": False, **champs}
-            nouveau = poser_cles(retirer_cles(nouveau, entete, {"domain"}), entete, champs)
-        _valider_toml(texte, nouveau)
+
+        def declaration(acquis: list) -> str:
+            """Marque non publiées les seules entrées RÉELLEMENT retirées : un reliquat (« partiel ») garde son
+            `domain`, pour qu'un second passage le reprenne."""
+            nouveau = texte
+            for r in acquis:
+                entete = f"instances.{r['nom']}" if r["type"] == "instance" else f"apps.{r['nom']}"
+                champs = {"domaine_retire": r["domaine"], "depubliee": horodatage}
+                if r["type"] == "instance":
+                    champs = {"enabled": False, **champs}
+                nouveau = poser_cles(retirer_cles(nouveau, entete, {"domain"}), entete, champs)
+            return nouveau
+        _valider_toml(texte, declaration(retires))          # calculée et validée AVANT le premier geste
 
         journal = Journal(a.par)
         try:
@@ -1502,17 +1516,20 @@ def verbe_depublier_anciennes(a, conf: Path, apps: Path) -> dict:
                 elif r["route"] == "laissee":
                     etats["route"] = "laissee"
                     avert.append(f"route sbxwaf de {dom} vise autre chose ({routes.get(dom)}) — laissée en place")
-                if NOM_APPLI_RE.fullmatch(r["nom"]):
-                    etats["nginx"] = nginx_retirer(r["nom"], dom, avert)
+                # Un nom inutilisable comme fichier nginx n'est pas vérifiable : « laisse », jamais « absent ».
+                etats["nginx"] = nginx_retirer(r["nom"], dom, avert) if NOM_APPLI_RE.fullmatch(r["nom"]) else "laisse"
                 if r["haproxy"] != "absent":
                     etats["haproxy"] = haproxy_retirer(dom, avert)
-                r.update(etats)
+                r.update(etats, resultat=_resultat(etats))
                 journal.ecrire(evenement="depublication-ancienne", appli=r["appli"], nom_public=r["nom"], domaine=dom,
-                               **etats, resultat=_resultat(etats))
-            _ecrire_declaration(journal, conf, texte, nouveau, "*", "depublication-ancienne")
+                               **etats, resultat=r["resultat"])
+            acquis = [r for r in retires if r["resultat"] == "applique"]
+            _ecrire_declaration(journal, conf, texte, declaration(acquis), "*", "depublication-ancienne")
         finally:
             journal.fermer()
         sortie["applique"] = True
+        sortie["partiel"] = len(acquis) < len(retires)
+        sortie["reliquat"] = [r["nom"] for r in retires if r["resultat"] != "applique"]
         return sortie
 
 

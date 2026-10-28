@@ -522,3 +522,57 @@ def test_pip_borne_dans_le_conteneur(box):
     rc, r, _ = cli(box, "deposer", str(z), "atelier", "--apply")
     assert rc == 0, r
     assert "-- timeout 230 pip3 install" in box.appels()
+
+
+# ─── Dernière passe (#3249) : un reliquat reste déclaré, un nom illisible n'est jamais « absent » ─
+
+def test_depublier_anciennes_nom_illisible_nginx_laisse_et_partiel(box, capsys):
+    box.appli("bazi")
+    box.conf.write_text(box.conf.read_text() + '\n[instances."vieux-pix"]\napp = "bazi"\nport = 8511\n'
+                        'domain = "vieux.gk2.secubox.in"\n')
+    rc, r = run(box, capsys, "depublier-anciennes", "--apply")
+    assert rc == 0, r
+    ligne = next(x for x in lignes_audit(box) if x.get("nom_public") == '"vieux-pix"')
+    assert ligne["nginx"] == "laisse" and ligne["resultat"] == "partiel"
+    assert 'domain = "vieux.gk2.secubox.in"' in box.conf.read_text()
+
+
+def test_depublier_anciennes_reliquat_garde_l_entree_declaree(box, capsys):
+    """HAProxy en échec : audit « partiel », et l'entrée reste telle quelle pour qu'un second passage reprenne."""
+    _gk2(box)
+    (box.tmp / "haproxy.refus").touch()
+    avant_pix = section(box.conf.read_text(), "instances.pix")
+    rc, r = run(box, capsys, "depublier-anciennes", "--apply")
+    assert rc == 0, r
+    assert next(x for x in lignes_audit(box) if x.get("nom_public") == "pix")["resultat"] == "partiel"
+    assert section(box.conf.read_text(), "instances.pix") == avant_pix
+    basic = section(box.conf.read_text(), "instances.basic")                  # les entrées acquises sont marquées
+    assert "enabled = false" in basic and 'domaine_retire = "basic.gk2.secubox.in"' in basic
+
+
+def test_depublier_anciennes_sans_lxc_config_route_directe_laissee(box, capsys):
+    box.appli("x")
+    box.conf.write_text(box.conf.read_text() + '\n[instances.x]\napp = "x"\nport = 8540\ndomain = "x.gk2.secubox.in"\n')
+    routes = json.loads(box.routes.read_text())
+    routes["x.gk2.secubox.in"] = ["10.100.0.50", 8540]
+    box.routes.write_text(json.dumps(routes))
+    rc, r = run(box, capsys, "depublier-anciennes", "--apply")
+    assert rc == 0, r
+    assert json.loads(box.routes.read_text())["x.gk2.secubox.in"] == ["10.100.0.50", 8540]
+    ligne = next(x for x in lignes_audit(box) if x.get("nom_public") == "x")
+    assert ligne["route"] == "laissee" and ligne["resultat"] == "partiel"
+    assert 'domain = "x.gk2.secubox.in"' in section(box.conf.read_text(), "instances.x")
+
+
+def test_depublier_reliquat_garde_la_declaration_et_la_veille_inchangee(box, capsys):
+    box.appli("atelier", port=8529)
+    assert run(box, capsys, "publier", "atelier", "--nom", "atelier", "--port", "8529", "--ip-vive", "10.100.0.50",
+               "--apply")[0] == 0
+    (box.tmp / "haproxy.refus").touch()
+    rc, r = run(box, capsys, "depublier", "atelier", "--apply")
+    assert rc == 0, r
+    assert r["partiel"] is True
+    conf = box.conf.read_text()
+    assert "[instances.atelier]" in conf                                      # la déclaration dit encore vrai
+    assert "autostart_publication = true" in section(conf, "apps.atelier")
+    assert "systemctl disable" not in box.appels()

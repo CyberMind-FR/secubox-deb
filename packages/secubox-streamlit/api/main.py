@@ -1070,6 +1070,10 @@ def delete_app(name: str, user=Depends(require_jwt)):
     if retrait.get("code") != 0:
         raise HTTPException(_STATUTS_CTL.get(retrait.get("code"), 500),
                             f"suppression annulée, la publication n'a pas pu être retirée : {retrait.get('error')}")
+    if retrait.get("partiel"):
+        raise HTTPException(409, "suppression annulée : publication retirée en partie seulement (reliquat : "
+                                 f"{', '.join(retrait.get('reliquat') or [])}) — voir /var/log/secubox/audit.log, "
+                                 "puis « Retirer » de nouveau")
     _ctl_ok("app", "remove", name)
     log.info("Removed app: %s", name)
     return {"success": True, "name": name, "publication_retiree": retrait.get("retires", [])}
@@ -1140,8 +1144,8 @@ def unpublish_app(name: str, user=Depends(require_jwt)):
     """Retire la publication (les quatre maillons) ; l'appli reste déposée et retrouve la mise en veille."""
     _exiger_nom_appli(name)
     r = _ctl_ok("app", "unpublish", name, "--par", _acteur(user), "--apply", timeout=PUBLICATION_DELAI_S)
-    return {"success": True, "name": name, "retires": r.get("retires", []),
-            "avertissements": r.get("avertissements") or []}
+    return {"success": True, "name": name, "retires": r.get("retires", []), "partiel": bool(r.get("partiel")),
+            "reliquat": r.get("reliquat") or [], "avertissements": r.get("avertissements") or []}
 
 
 @router.get("/app/{name}/env")

@@ -531,3 +531,12 @@ def test_arret_rend_l_echec_du_ctl(ctl, chemin, verbe):
     etat["reponses"][verbe] = {"output": "", "code": 2, "error": "App not found: fantome"}
     r = client.post(chemin)
     assert r.status_code == 404 and "fantome" in r.json()["detail"]
+
+
+def test_suppression_annulee_si_la_publication_n_est_retiree_qu_en_partie(ctl):
+    client, etat = ctl
+    etat["reponses"][("app", "unpublish")] = {"ok": True, "code": 0, "partiel": True, "reliquat": ["atelier"],
+                                              "retires": [{"nom_public": "atelier", "haproxy": "echec"}]}
+    r = client.delete("/app/atelier")
+    assert r.status_code == 409 and "atelier" in r.json()["detail"]
+    assert ("app", "remove") not in verbes(etat)
