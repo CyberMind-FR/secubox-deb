@@ -175,7 +175,7 @@ All endpoints require JWT (`Authorization: Bearer <token>`).
 | POST | `/api/v1/netboot/overlay/revert` | Revert to factory bootcmd |
 | POST | `/api/v1/netboot/overlay/persist` | Lock overlay as permanent boot |
 | POST | `/api/v1/netboot/overlay/confirm-healthy` | Mark boot healthy (bootcount=0) |
-| GET | `/api/v1/netboot/live` | Lives servis (#3100) : commandes U-Boot lues dans le `boot.cmd` servi, base HTTP, images eMMC (taille, SHA-256, signature) |
+| GET | `/api/v1/netboot/live` | Lives servis (#3100) : commandes U-Boot lues dans le `boot.cmd` servi, base HTTP, images eMMC (taille, SHA-256, signature, `taille_brute` décompressée si connue, #3233) |
 | POST | `/api/v1/netboot/flash/prepare` | Préparer le (re)flash d'une box (#3100) : `{"nom", "mot_de_passe"?}`, 24 h |
 
 Hors JWT, servi par le **seul vhost de boot `:8099`** (404 sur le vhost principal) :
@@ -208,6 +208,43 @@ ordinaire : un nom neuf rejoint le maillage, un nom déjà approuvé reçoit un 
 (« nom déjà pris : préparer un flash… »).
 
 Noms admis partout (lot, `sbx-netflash`, `sbx-netflash-profil`) : `^[a-z]([a-z0-9-]{0,29}[a-z0-9])?$`.
+
+## Live léger multi-carte et flash en flux (#3233)
+
+**Réglages par carte.** `board/<carte>/live.env` fixe ce qui est propre à chaque carte : DTB, pilote Ethernet, console, `ethact`, adresses de chargement (hors zone PSCI 0x04000000-0x04200000) et options du noyau. Deux cartes existent : `mochabin` et `espressobin-v7` (eMMC, 1 Go).
+
+**Live léger** (ESPRESSObin). Le script `scripts/build-live-leger.sh --carte espressobin-v7 --sortie LIVE.img.gz --pub CLE.pub [--cle-ssh ID.pub] [--srv HOTE:PORT]` construit une Debian minimale. Elle contient le réseau, SSH par clé et les outils de flash, en démarrage normal. Le live :
+- n'a pas de pile SecuBox ;
+- ouvre une session root sur la console série (accès de banc) ;
+- n'a aucun mot de passe.
+
+L'image produite sert de deux façons :
+- **clé USB** :
+  - partition 1 : FAT `SBXBOOT`, avec `boot.scr` pour `fatload usb 0:1` ;
+  - partition 2 : ext4 `SBXLIVE` ;
+- **netboot** : `scripts/build-live-netboot.sh --live LIVE.img.gz --carte espressobin-v7 --srv 192.168.1.200:8099 --tftp 192.168.42.1 --flash IMAGE.img.xz`.
+
+Depuis le U-Boot usine (console série `ttyMV0`) :
+
+- par le réseau :
+
+  ```
+  setenv ethact neta@30000; setenv ipaddr <ip libre>; setenv serverip 192.168.42.1
+  tftpboot 0x06d00000 espressobin-live/boot.scr; source 0x06d00000
+  ```
+
+- par la clé USB :
+
+  ```
+  usb start; fatload usb 0:1 0x06d00000 boot.scr; source 0x06d00000
+  ```
+
+**Flash en flux.** Quand l'image ne tient pas en RAM, `sbx-netflash` la passe à `secubox-flash-emmc --stdin gz|xz --sig --pub --sha256 --auto` :
+- elle est écrite au fil du téléchargement ;
+- la signature et le SHA-256 du flux compressé sont vérifiés pendant l'écriture ;
+- en cas d'échec (signature, empreinte, flux coupé), le début et la fin de l'eMMC sont remis à zéro.
+
+`images.txt` porte une 4ᵉ colonne, la taille décompressée. Une image plus grande que l'eMMC est refusée avant toute écriture. Formats acceptés : `.img.gz` et `.img.xz`.
 
 ---
 

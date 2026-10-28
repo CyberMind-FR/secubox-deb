@@ -196,7 +196,10 @@ if [ -z "$srv" ] || [ -z "$dir" ]; then
 fi
 [ -n "$srv" ] || srv="$(printf '%s\n' $CMDLINE | sed -n 's#^sbx_srv=##p' | head -n1)"
 [ -n "$srv" ] || fail "serveur inconnu : --srv HOTE[:PORT]"
+# live sur clé USB (#3233) : pas de fetch=, le dossier des images vient de sbx_dir= (posé par build-live-leger.sh)
+[ -n "$dir" ] || dir="$(printf '%s\n' $CMDLINE | sed -n 's#^sbx_dir=##p' | head -n1)"
 [ -n "$dir" ] || dir="mochabin-live"
+case "$dir" in *[!A-Za-z0-9._-]*|.*) fail "dossier d'images invalide : $dir" ;; esac
 BASE="http://$srv/$dir"
 
 telecharge() { # URL DEST
