@@ -1,3 +1,40 @@
+secubox-streamlit (1.7.0-1~trixie1) trixie; urgency=medium
+
+  * Dépôt et démarrage en 500 quand le conteneur dort (gk2, 2026-10-28, ref #3247) : POST /deploy,
+    /app/{name}/start, /publish, /rename, /instance/{id}/start et /autostart/run réveillent le conteneur
+    par le chemin de POST /power/wake (`streamlitctl start`, borné à 20 s) ; échec : 503 avec la cause,
+    409 si le conteneur n'est pas installé. `app wake` réveille aussi le conteneur (code 75 → 503).
+  * Plus jamais d'erreur vide : `_run_ctl` lit le JSON du ctl même précédé de lignes de journal (un dépôt
+    RÉUSSI devenait un 500 « Deploy failed: »), rend stderr puis stdout sans horodatage ni secret, et le
+    code. `streamlitctl app start` rend des codes distincts (2 inconnue, 3 état, 4 port pris, 75 conteneur)
+    traduits en 404/409/503. /power/wake ne répond plus 500 après un réveil réussi.
+  * Port automatique : `streamlitctl app port` (root : voit ce qui écoute DANS le conteneur) garde le port
+    de l'appli, sinon prend le premier libre de [ports] min..max (8501-8600) — ni attribué à une autre appli
+    (fichier de port, [apps.*], [instances.*], route directe), ni en écoute ; un port demandé et pris est
+    refusé (409) avec son propriétaire. L'API n'impose plus `default_port`. Le dépôt DÉCLARE l'appli
+    ([apps.<nom>]).
+  * Publication déclarative (forme de la référence posée à la main pour couture.gk2) : vhost nginx :9080
+    généré (WebSocket, proxy_read_timeout 86400s) → route sbxwaf par `secubox-waf-route` → vhost HAProxy
+    par `haproxyctl vhost add <d> nginx_vhosts true` → [instances.<nom public>] (emancipated, domain,
+    waf_enabled). Jamais de contournement du WAF. Sur demande par défaut (« Publier », nom public au
+    dépôt) ; automatique avec [publication] auto = true. Une appli publiée reste démarrée
+    ([publication] autostart = true) ; secubox-streamlit-demarrage.service démarre le conteneur au boot
+    seulement dans ce cas.
+  * Nom public modifiable : POST /app/{name}/rename (require_jwt, libellé DNS strict, noms réservés et pris
+    refusés) pose le nouveau nom et retire l'ancien par le même chemin ; POST /app/{name}/unpublish ;
+    GET /publications ; DELETE /app/{name} retire d'abord la publication. Chaque changement est écrit dans
+    /var/log/secubox/audit.log ; un retrait ne touche jamais une route ou un vhost qui n'est plus à nous.
+  * Environnement et données de l'appli : `streamlitctl app env` (valeurs par l'entrée standard) et
+    GET/PUT /app/{name}/env (noms seulement en lecture) ; fichier root 0600 /etc/streamlit/env/<appli>.env
+    DANS le conteneur, lu par l'unité streamlit-app@ (EnvironmentFile) ; données persistantes hors du
+    dossier de l'appli (StateDirectory, STREAMLIT_DATA_DIR=/var/lib/streamlit-apps/<appli>). L'unité est
+    reposée dans un conteneur déjà installé quand elle change.
+  * Page : champ « Nom public » au dépôt, port vide = automatique, colonne « Nom public » et actions
+    Publier / Renommer / Retirer ; le message d'erreur du serveur est affiché tel quel. Archive ZIP refusée
+    si une entrée sort du dossier de l'appli ou est un lien ; fichier temporaire non prévisible.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 16:00:00 +0100
+
 secubox-streamlit (1.6.2-1~trixie1) trixie; urgency=medium
 
   * `GET /apps/vitrine` : la vitrine des applis pour le Hall — nom, en ligne, domaine de la
