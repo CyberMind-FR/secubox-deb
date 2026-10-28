@@ -16,6 +16,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -32,9 +34,12 @@ from .observe import Actual, is_on, load_route_values, load_routes, observe, obs
 from .scan import charger_politique, discover, write_drafts
 from .snapshot import SNAP_DIR
 from .snapshot import read as read_snapshot
-from .state import OFF, StateError, load_pins, load_profile
+from .state import OFF, StateError, load_pins, load_profile, parse_profile
 
 DEFAULT_ROOT = Path("/etc/secubox")
+# `coupe` (#3218) : seules les unités secubox d'un service ou d'une minuterie, et un nom de profil actif sûr.
+_UNITE_COUPABLE = re.compile(r"secubox-(?P<id>[a-z0-9][a-z0-9-]{0,62}(?:@[a-z0-9][a-z0-9_.-]{0,62})?)\.(?P<type>service|timer)")
+_NOM_PROFIL = re.compile(r"[a-z0-9][a-z0-9_-]{0,40}")
 
 
 def _paths(root: Path):
@@ -192,6 +197,46 @@ def _cmd_apply(args) -> int:
         print(f"apply: {report.status} — changed={report.changed} "
               f"failed={report.failed} rolled_back={report.rolled_back}")
     return 0 if report.status == "applied" else 2
+
+
+def _lire_borne(chemin: Path, maximum: int = 1 << 20) -> str | None:
+    """Texte d'un fichier ORDINAIRE, lu sans suivre de lien ni bloquer ; None sinon. Le dossier des profils appartient au
+    compte secubox : une FIFO posée à la place de `active` ou d'un profil bloquerait le postinst (root) sans fin."""
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        donnees = os.read(fd, maximum + 1)
+        return donnees.decode("utf-8") if len(donnees) <= maximum else None
+    except (OSError, UnicodeDecodeError):
+        return None
+    finally:
+        os.close(fd)
+
+
+def _cmd_coupe(args) -> int:
+    """0 si le profil ACTIF coupe explicitement cette unité (minuterie de `minuteurs_off`, protégé de `proteges_off`),
+    1 sinon (aucun profil actif compris), 2 si l'unité est invalide. Pour les postinst : ne pas réactiver à chaque
+    mise à jour ce que le profil actif a coupé (#3218). Un module simplement absent de `on` n'est pas « coupé » ici."""
+    m = _UNITE_COUPABLE.fullmatch(args.unite)
+    if not m:
+        print(f"unité invalide : {args.unite!r}", file=sys.stderr)
+        return 2
+    _, prof_dir, _, active = _paths(Path(args.root))
+    nom = (_lire_borne(active, 256) or "").strip()
+    if not _NOM_PROFIL.fullmatch(nom):
+        return 1
+    texte = _lire_borne(prof_dir / f"{nom}.toml")
+    if texte is None:
+        return 1
+    prof = parse_profile(texte, prof_dir / f"{nom}.toml")
+    coupe = m["id"] in (prof.minuteurs_off if m["type"] == "timer" else prof.proteges_off)
+    if args.json:
+        print(json.dumps({"unite": args.unite, "profil": nom, "coupe": coupe}))
+    return 0 if coupe else 1
 
 
 def _cmd_rollback(args) -> int:
@@ -488,6 +533,11 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--yes", action="store_true")
     sp.add_argument("--json", action="store_true", help="rapport JSON sur stdout")
     sp.set_defaults(func=_cmd_rollback)
+
+    sp = sub.add_parser("coupe", help="le profil actif coupe-t-il cette unité ? (rc 0 oui, 1 non ; pour les postinst)")
+    sp.add_argument("unite", help="secubox-<id>.service ou secubox-<id>.timer")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=_cmd_coupe)
 
     sp = sub.add_parser("set-lifecycle",
                         help="fixe le niveau d'éveil d'un module (lifecycle + wake_class) + resync")

@@ -22,6 +22,7 @@ Inventaire et profils des modules SecuBox. **Phase 1 : lecture seule.**
     secubox-profilectl rollback <snapshot> [--yes]  # restaure un snapshot (R1..R4)
 
     secubox-profilectl releve [--json]   # relevé de validation de cette box (#3212)
+    secubox-profilectl coupe <unité> [--json]   # rc 0 si le profil actif coupe secubox-<id>.service|.timer (#3218)
 
 `scan`, `status`, `diff` et `export` sont en lecture seule : ils lisent dpkg et la
 config, ne touchent à rien. `apply` et `rollback` n'agissent qu'avec `--yes` ; sans
@@ -31,7 +32,7 @@ qui est allumé ou éteint (voir `docs/dossiers/simplification-modules-beta.md`)
 ## Profils & export
 
 Cinq profils livrés dans `/usr/share/secubox/profiles/`, copiés dans `/etc/secubox/profiles/` par le postinst
-(`/usr/lib/secubox/profiles/maj-references.sh`, #3218) : absent, le profil est installé ; identique à une version
+(`/usr/lib/secubox/profiles/maj-references.py`, #3218) : absent, le profil est installé ; identique à une version
 déjà LIVRÉE (empreintes sha256 de l'historique git, `empreintes-livrees.txt`), il est **remplacé** par la nouvelle
 référence ; modifié par l'opérateur ou réécrit par le panneau, il est **gardé** et la nouvelle référence posée à
 côté en `<nom>.toml.dpkg-dist`. Avant #3218, une mise à jour ne changeait jamais `/etc/secubox/profiles/minimal.toml`.
@@ -41,7 +42,7 @@ Après avoir modifié un profil de référence : `python3 scripts/gen-empreintes
 |---|---|
 | `full` | tous les modules |
 | `lite` | protections (pendant du méta-paquet `secubox-lite`) ; ni KSM, ni Centres, ni DPI/nDPId (#3218) |
-| `minimal` | carte de 1 Go sans tête (pendant de `secubox-minimal`) : garde DNS, ad-guard, webfilter, NAC, Freebox, WireGuard, socle et maillage (#3218) |
+| `minimal` | carte de 1 Go sans tête (pendant de `secubox-minimal`) : garde DNS, ad-guard, webfilter, NAC, Freebox, WireGuard, socle et maillage (#3218) ; le sleeper reste hors profil, livré désactivé |
 | `secure-gateway` | passerelle durcie (firewall/WAF/IDS, pas de media) |
 | `media-lab` | modules media (peertube, lyrion, photoprism…) en plus du socle |
 
@@ -55,7 +56,9 @@ Clés d'un profil :
 | `proteges_off` | protégés coupés par ce profil, limités à `PROTEGES_COUPABLES` (`profiles` seul : la CLI `secubox-profilectl` reste) ; tout autre id (auth, aggregator…) fait refuser le profil au chargement (#3218) |
 
 Le panneau, quand il bascule un module d'un profil, réécrit le fichier en gardant `menu_off`, `minuteurs_off` et
-`proteges_off`. Le profil `minimal` coupant l'API du panneau, on l'applique par la CLI :
+`proteges_off`. Le postinst de ce paquet demande `secubox-profilectl coupe <unité>` avant de réactiver ses unités : ce que le
+profil actif coupe n'est plus rallumé à chaque mise à jour (#3218). Le profil `minimal` coupant l'API du panneau, le
+panneau refuse de l'appliquer (409, `POST /api/v1/profiles/apply`) ; on l'applique par la CLI :
 `secubox-profilectl apply --profile minimal --yes`.
 
 **Piège pins** : un module pinné `off` reste listé par `diff` (le pin est une
@@ -86,7 +89,7 @@ stderr, `⚠️`) — jamais silencieusement omis de l'installateur.
 | `/etc/secubox/profiles/active` | nom du profil actif |
 | `/usr/share/secubox/profiles/*.toml` | profils de référence livrés |
 | `/usr/share/secubox/profiles/empreintes-livrees.txt` | sha256 de toutes les versions livrées des profils (#3218) |
-| `/usr/lib/secubox/profiles/maj-references.sh` | mise à jour des profils non modifiés, appelée par le postinst (#3218) |
+| `/usr/lib/secubox/profiles/maj-references.py` | mise à jour des profils non modifiés, appelée par le postinst en root : préparée dans un dossier root seul sous /etc, renommée par descripteur sans suivre de lien, FIFO et liens laissés (#3218, relecture #3248) |
 | `/var/lib/secubox/profiles/validation/releve.json` | relevé de validation de la box (#3212), écrit toutes les 5 min par `secubox-profiles-releve.timer` (compte dédié `secubox-profiles`, profil AppArmor `secubox-profiles-releve`, fichier 0640 au groupe secubox) |
 
 `menu.d/` reste la source UI (path, ordre, icône) et n'est pas dupliqué ici.

@@ -18,8 +18,9 @@ case "$1" in
         # Profils de référence (#3218). Ils n'étaient semés qu'à la première installation : une mise à jour ne
         # changeait jamais /etc/secubox/profiles/minimal.toml, et l'apply suivait l'ANCIEN profil. Désormais une
         # copie identique à une version déjà livrée (non modifiée par l'opérateur) est remplacée ; une copie modifiée
-        # est gardée, la nouvelle référence posée à côté en .dpkg-dist (voir maj-references.sh).
-        PROPRIO=secubox:secubox bash /usr/lib/secubox/profiles/maj-references.sh \
+        # est gardée, la nouvelle référence posée à côté en .dpkg-dist. En root sur un dossier du compte secubox :
+        # tout passe par descripteur, préparé dans un dossier root seul sous /etc (voir maj-references.py, relecture #3248).
+        PROPRIO=secubox:secubox PREPA=/etc python3 -I /usr/lib/secubox/profiles/maj-references.py \
             || echo "secubox-profiles : mise à jour des profils de référence en échec (voir ci-dessus)" >&2
 
         # The actuator (api/actuate.py + snapshot.py + audit.py, driven both
@@ -59,11 +60,24 @@ case "$1" in
     # minuteries etaient `disabled / inactive` apres un dpkg -i reussi, ce qui
     # aurait reproduit, une fois de plus, le defaut corrige ici : un mecanisme
     # livre qui ne s'execute jamais.
+    #
+    # CE QUE LE PROFIL ACTIF COUPE RESTE COUPÉ (#3218, relecture #3248). Le profil minimal arrête ces minuteries
+    # (minuteurs_off) et l'API du panneau (proteges_off) : les réactiver ici les rallumait à chaque mise à jour, donc
+    # chaque nuit (majauto). `secubox-profilectl coupe` rend 0 si le profil actif coupe l'unité ; tout autre code
+    # (aucun profil actif, profil illisible) garde le comportement d'avant.
     for _m in metacatalog jitsi; do
-      systemctl enable --now "secubox-cache-warm@${_m}.timer" >/dev/null 2>&1 || true
-    done 2>/dev/null || true
-        systemctl enable secubox-profiles.service 2>/dev/null || true
-        systemctl restart secubox-profiles.service 2>/dev/null || true
+      if /usr/sbin/secubox-profilectl coupe "secubox-cache-warm@${_m}.timer" >/dev/null 2>&1; then
+        echo "secubox-profiles : secubox-cache-warm@${_m}.timer coupée par le profil actif, laissée arrêtée" >&2
+      else
+        systemctl enable --now "secubox-cache-warm@${_m}.timer" >/dev/null 2>&1 || true
+      fi
+    done
+        if /usr/sbin/secubox-profilectl coupe secubox-profiles.service >/dev/null 2>&1; then
+            echo "secubox-profiles : API du panneau coupée par le profil actif (proteges_off), ni activée ni redémarrée" >&2
+        else
+            systemctl enable secubox-profiles.service 2>/dev/null || true
+            systemctl restart secubox-profiles.service 2>/dev/null || true
+        fi
 
         # secubox-waker (ref #896, scale-to-zero): safe to enable+run — it only
         # serves the wake splash and fires a single wake per vhost; it never

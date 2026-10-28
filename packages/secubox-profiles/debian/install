@@ -3,7 +3,7 @@ templates/waking.html  usr/lib/secubox/profiles/templates/
 templates/down.html  usr/lib/secubox/profiles/templates/
 profiles/*.toml        usr/share/secubox/profiles/
 profiles/empreintes-livrees.txt usr/share/secubox/profiles/
-scripts/maj-references.sh usr/lib/secubox/profiles/
+scripts/maj-references.py usr/lib/secubox/profiles/
 sbin/secubox-profilectl usr/sbin/
 sbin/secubox-wakectl   usr/sbin/
 www/profiles/index.html usr/share/secubox/www/profiles/

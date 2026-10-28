@@ -56,8 +56,19 @@ def _liste(d: dict, cle: str, path: Path) -> list[str]:
 def load_profile(path: Path) -> Profile:
     path = Path(path)
     try:
-        d = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as exc:
+        texte = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise StateError(f"{path}: profil illisible: {exc}") from exc
+    return parse_profile(texte, path)
+
+
+def parse_profile(texte: str, path: Path) -> Profile:
+    """Profil validé à partir de son TEXTE (`path` : nom de fichier attendu et messages). Sert à qui lit le fichier
+    lui-même, sans suivre de lien ni bloquer (secubox-profilectl coupe, appelé en root par le postinst)."""
+    path = Path(path)
+    try:
+        d = tomllib.loads(texte)
+    except tomllib.TOMLDecodeError as exc:
         raise StateError(f"{path}: profil illisible: {exc}") from exc
     name = d.get("name")
     if name != path.stem:

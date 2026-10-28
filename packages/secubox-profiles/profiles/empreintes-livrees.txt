@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Empreintes (sha256) des versions LIVRÉES des profils de référence, tirées de l'historique git (#3218).
-# Générées par scripts/gen-empreintes-livrees.py ; lues par scripts/maj-references.sh (postinst).
+# Générées par scripts/gen-empreintes-livrees.py ; lues par scripts/maj-references.py (postinst).
 2f7902761fa6417271023ec0bbe886e21a2cef68a059c82c66c9d260e340d9c7  full.toml
 74683ca0751e38529099bb89935ac03bdc75ec08bc2c2e63115f61686d8e692d  full.toml
 75d02658158ce1c02407c25c685b985b06848a2ccc5891a587bef6b262df4296  full.toml
@@ -19,6 +19,7 @@ fecd99a0d92db772d9ea6d54587d2cb9ff9f1f717143e6f1fbfe450afbb5b6fb  full.toml
 8da1a272096469181dc93956cf731470e498165b721ab1a76a27150a06fa2395  lite.toml
 b398c2ef0e4d7772b9414ec392c0e13079cf49c189b423e4a513a3468eddd4e0  lite.toml
 cc9a7cf462debae6100159b1d3bbc4c42c7538ce36515fbf7c9b41631034ccd7  lite.toml
+d9172b287d2110ee5ad528da9612e82234e2f2c46485c285bfdda1d576c92e00  lite.toml
 dd0ff92208c9abe6a63ece4443533e477853980c8b302058680c1dabc950b2e6  lite.toml
 3d1e334d4283f8a84c97589c1c0459f78cf079faa689847b6286cfa734094872  media-lab.toml
 4c75d944dca4762de4a216656a3a55d376d364638e62a7498435fd7c24b7efc2  media-lab.toml
@@ -37,6 +38,7 @@ ff05b5f570bb6b29843af1c74b9f9514062352fbcd9c1cf39fd13b6e777f68c4  media-lab.toml
 21ded9d7aa20c9bf9ec0fec7815d2a52df89087c1606543809dead03946fd5b8  minimal.toml
 29afd8423d0072878ab2bcccb6bbb571e25bd06b43761029b166e9257d688b4c  minimal.toml
 38a6405d68d444ec2bfc9873ac2a2c090aa6afaa2cb6c8fd3a09ae328f18ded6  minimal.toml
+39c6b808a55601a11ae3cd1bd0b2f5f788762d4fdbbc7c2b12f51ef03b7604fb  minimal.toml
 81f52394002c0b25dd9ccbb19704b5b06080d4c3ec2453bb7aad2456dd9803ce  minimal.toml
 8535825be45f51296c52ead2b6884fc559cbc8efd5a692139fda9a8971c48f6f  minimal.toml
 b8b50be4d7ab6d8bbd38956caa1d7267c04d869ca33ead1b14e062c327d30dd7  minimal.toml

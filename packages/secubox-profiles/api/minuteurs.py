@@ -28,6 +28,7 @@ Les manifestes sur disque ne sont jamais modifiés ; sans profil actif, rien n'e
 from __future__ import annotations
 
 import dataclasses
+import logging
 from pathlib import Path
 
 from .manifest import PROTEGES_COUPABLES, Manifest
@@ -37,6 +38,7 @@ PREFIXE = "minuteur:"
 # Priorité basse : arrêtées les premières, rétablies les dernières (diff.plan_changes trie par priorité).
 PRIORITE = 10
 DOSSIERS_UNITES = (Path("/etc/systemd/system"), Path("/usr/lib/systemd/system"), Path("/lib/systemd/system"))
+log = logging.getLogger("secubox.profiles.minuteurs")
 
 
 def unite(tid: str) -> str:
@@ -71,13 +73,15 @@ def unite_presente(nom: str, dossiers=None) -> bool:
 
 def minuteurs_geres(prof_dir: Path) -> set[str]:
     """Union des `minuteurs_off` des profils du dossier. Un profil illisible n'empêche pas d'appliquer les autres :
-    il est ignoré ici (son propre chargement, lui, échoue en le disant)."""
+    il est ignoré ici, et dit (son propre chargement, lui, échoue). pins.toml n'est pas un profil."""
     out: set[str] = set()
     for p in sorted(Path(prof_dir).glob("*.toml")):
+        if p.name == "pins.toml":
+            continue
         try:
             out |= load_profile(p).minuteurs_off
-        except StateError:
-            continue
+        except StateError as exc:
+            log.warning("profil %s ignoré pour les minuteries gérées : %s", p.name, exc)
     return out
 
 

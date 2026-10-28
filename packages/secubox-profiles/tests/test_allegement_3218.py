@@ -42,7 +42,8 @@ HORS_MINIMAL = {"admin", "profiles", "routes", "netdiag", "network-anomaly", "pr
 MINUTEURS_MINIMAL = {"dpi-resume", "yt-dlp-refresh", "courbes-serie", "metrics-publish", "netstats",
                      "network-anomaly-collecte", "profiles-releve", "cache-warm@jitsi", "cache-warm@metacatalog"}
 # Le socle que `profilectl diff --profile minimal` voulait ARRÊTER sur gk5, et ce qui reste.
-SOCLE = {"p2p", "annuaire", "users", "sleeper", "waker", "meshname", "net-fallback", "groupe-declares"}
+# Le sleeper en est sorti par la relecture (#3248) : livré désactivé, hors profil (test_relecture_3218).
+SOCLE = {"p2p", "annuaire", "users", "waker", "meshname", "net-fallback", "groupe-declares"}
 FONCTIONS_MINIMAL = {"freebox", "ipv6guard", "nac", "dns-guard", "ad-guard", "webfilter", "wireguard", "autoload-agent",
                      "auth", "aggregator", "core", "hub", "system", "hardening"}
 
@@ -142,6 +143,7 @@ HORS_PROFIL_MINIMAL = {
     "ad-guard-dnsfeed": "POC TV : le paquet ne l'active pas",
     "openpgp": "à l'arrêt sur gk5 pendant le banc ; échange de clés inter-box",
     "led-heartbeat": "source restée dans secubox-core, unité livrée par secubox-led-heartbeat (hors profil)",
+    "sleeper": "livré désactivé, choix de l'opérateur ; hors profil (relecture #3248)",
 }
 HORS_PROFIL_LITE = {
     "ksm": "décision du 2026-10-28",
@@ -151,6 +153,7 @@ HORS_PROFIL_LITE = {
     "premier-pas-console": "assistant tty1 du premier démarrage ; le démarrer arrêterait la console",
     "sentinelle-gsm": "matériel, à la demande",
     "webos": "Hall, hors de lite (tiré par secubox-soc pour la vue Actor)",
+    "sleeper": "livré désactivé, choix de l'opérateur ; hors profil (relecture #3248)",
     "led-heartbeat": "source restée dans secubox-core, unité livrée par secubox-led-heartbeat (hors profil)",
 }
 
@@ -335,7 +338,7 @@ def test_profile_reste_constructible_sans_les_cles_facultatives():
 
 # ── profils de référence : mise à jour à l'installation ──────────────────────
 
-SCRIPT = PKG / "scripts" / "maj-references.sh"
+SCRIPT = PKG / "scripts" / "maj-references.py"
 EMPREINTES = PROFILS / "empreintes-livrees.txt"
 
 
@@ -353,14 +356,16 @@ def test_les_versions_actuelles_sont_dans_les_empreintes_livrees():
 
 def test_le_paquet_installe_le_script_et_les_empreintes_et_le_postinst_l_appelle():
     install = (PKG / "debian" / "install").read_text(encoding="utf-8")
-    assert "profiles/empreintes-livrees.txt" in install and "scripts/maj-references.sh" in install
+    assert "profiles/empreintes-livrees.txt" in install and "scripts/maj-references.py" in install
     post = (PKG / "debian" / "postinst").read_text(encoding="utf-8")
-    assert "bash /usr/lib/secubox/profiles/maj-references.sh" in post
+    assert "python3 -I /usr/lib/secubox/profiles/maj-references.py" in post
 
 
 def _lancer(src: Path, dst: Path, emp: Path) -> str:
-    r = subprocess.run(["bash", str(SCRIPT), str(src), str(dst), str(emp)], capture_output=True, text=True,
-                       timeout=30, check=True)
+    import os
+    import sys
+    r = subprocess.run([sys.executable, "-I", str(SCRIPT), str(src), str(dst), str(emp)], capture_output=True,
+                       text=True, timeout=30, check=True, env=dict(os.environ, PREPA=str(dst.parent)))
     return r.stderr
 
 

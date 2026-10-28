@@ -1,3 +1,19 @@
+secubox-profiles (0.25.1-1~trixie1) trixie; urgency=medium
+
+  * Relecture de securite de la PR #3248 (ref #3218). La mise a jour des profils de reference (postinst, root)
+    passe en Python par descripteur (maj-references.py, remplace maj-references.sh) : cible ouverte sans suivre de
+    lien (un dossier profiles/ remplace par un lien est refuse), fichiers crees dans un dossier root seul 0700 sous
+    /etc puis renommes (renameat), copie locale lue seulement si c'est un fichier ordinaire (une FIFO bloquait dpkg),
+    bornee a 1 Mo. Avant : temporaire cree DANS le dossier du compte secubox puis cp/chmod/chown par chemin.
+  * Le postinst ne reactive plus ce que le profil actif coupe : nouvelle commande `secubox-profilectl coupe <unite>`
+    (rc 0 si le profil actif la coupe par minuteurs_off ou proteges_off ; lecture sans lien ni blocage) ; l'API du
+    panneau et les minuteries cache-warm@* ne sont plus rallumees a chaque mise a jour.
+  * Le panneau refuse (409) d'appliquer un profil qui coupe sa propre API (proteges_off) et renvoie a la CLI.
+  * Le sleeper sort des profils minimal et lite : livre desactive, il reste le choix de l'operateur.
+  * Un profil illisible ignore pour les minuteries gerees est journalise.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 18:00:00 +0100
+
 secubox-profiles (0.25.0-1~trixie1) trixie; urgency=medium
 
   * Allegement des profils minimal et lite, d'apres le banc de l'ESPRESSObin de 1 Go gk5 du 2026-10-28 (ref #3218).

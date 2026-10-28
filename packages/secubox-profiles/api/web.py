@@ -32,6 +32,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import os
+import re
 import sys
 import tempfile
 import time
@@ -67,6 +68,7 @@ from .state import OFF, ON, Profile, StateError, load_pins, load_profile
 from secubox_core.auth import require_lecture
 
 DEFAULT_ROOT = Path("/etc/secubox")
+_NOM_PROFIL = re.compile(r"[a-z0-9][a-z0-9_-]{0,40}")          # même motif que le hub (menu_off du profil actif)
 
 
 def _root() -> Path:
@@ -665,8 +667,19 @@ def create_app() -> FastAPI:
         _mod, prof_dir, _pins, active_file = _cli._paths(root)
         active_path = Path(active_file)
         async with _apply_lock:
-            if not (Path(prof_dir) / f"{body.profile}.toml").exists():
+            prof_path = Path(prof_dir) / f"{body.profile}.toml"
+            if not _NOM_PROFIL.fullmatch(body.profile) or not prof_path.exists():
                 raise HTTPException(status_code=404, detail=f"profil inconnu: {body.profile}")
+            try:
+                cible = load_profile(prof_path)
+            except StateError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            # Un profil qui coupe l'API du panneau (proteges_off, #3218) l'arrêterait PENDANT cette requête : la
+            # réponse se perdrait et `active` resterait réécrit. Refus AVANT toute écriture ; la CLI root le fait.
+            if "profiles" in cible.proteges_off:
+                raise HTTPException(status_code=409, detail=(
+                    f"le profil « {cible.name} » coupe l'API de ce panneau (proteges_off) : l'appliquer d'ici couperait "
+                    f"cette requête. En root sur la box : secubox-profilectl apply --profile {cible.name} --yes"))
             prior = active_path.read_text(encoding="utf-8") if active_path.exists() else None
             _atomic_write(active_path, body.profile + "\n")
             report = await _run_ctl_json("apply")

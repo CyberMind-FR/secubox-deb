@@ -6,7 +6,7 @@
 """SecuBox-Deb :: gen-empreintes-livrees — empreintes de toutes les versions LIVRÉES des profils de référence (#3218).
 
 Lit l'historique git de packages/secubox-profiles/profiles/*.toml et écrit profiles/empreintes-livrees.txt
-(« <sha256>  <nom>.toml », format de sha256sum). Le postinst (scripts/maj-references.sh) y reconnaît une copie de
+(« <sha256>  <nom>.toml », format de sha256sum). Le postinst (scripts/maj-references.py) y reconnaît une copie de
 /etc/secubox/profiles que l'opérateur n'a pas modifiée, et la remplace par la nouvelle référence.
 
 À relancer après toute modification d'un profil de référence (le test test_references_3218 le rappelle) :
@@ -24,7 +24,7 @@ PROFILS = PKG / "profiles"
 SORTIE = PROFILS / "empreintes-livrees.txt"
 ENTETE = ("# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"
           "# Empreintes (sha256) des versions LIVRÉES des profils de référence, tirées de l'historique git (#3218).\n"
-          "# Générées par scripts/gen-empreintes-livrees.py ; lues par scripts/maj-references.sh (postinst).\n")
+          "# Générées par scripts/gen-empreintes-livrees.py ; lues par scripts/maj-references.py (postinst).\n")
 
 
 def _git(*args: str, cwd: Path = PKG) -> bytes:
