@@ -950,8 +950,12 @@ def _publication_apres(name: str, user, nom_public: str = "") -> dict:
     actuelles = _publications_de(name, texte)
     if nom_public:
         args = ["app", "publish", name, nom_public]
-    elif len(actuelles) == 1:
+    elif len(actuelles) == 1 and actuelles[0].get("geree"):
         args = ["app", "publish", name]
+    elif len(actuelles) == 1:
+        return {"publiee": True, "synchronisee": False, "domaine": actuelles[0].get("domaine"),
+                "raison": "publication posée hors de streamlitctl : laissée telle quelle ; « Renommer » sous le même "
+                          "nom la reprend dans la chaîne gérée"}
     elif actuelles:
         return {"publiee": True, "synchronisee": False,
                 "raison": "plusieurs instances publient cette appli : rien n'est resynchronisé"}

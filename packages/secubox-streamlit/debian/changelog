@@ -19,7 +19,8 @@ secubox-streamlit (1.7.0-1~trixie1) trixie; urgency=medium
     waf_enabled). Jamais de contournement du WAF. Sur demande par défaut (« Publier », nom public au
     dépôt) ; automatique avec [publication] auto = true. Une appli publiée reste démarrée
     ([publication] autostart = true) ; secubox-streamlit-demarrage.service démarre le conteneur au boot
-    seulement dans ce cas.
+    seulement dans ce cas. Seule une publication posée par streamlitctl (publication_geree) suit le port
+    au démarrage : une [instances.*] posée à la main n'est reprise que par Publier / Renommer.
   * Nom public modifiable : POST /app/{name}/rename (require_jwt, libellé DNS strict, noms réservés et pris
     refusés) pose le nouveau nom et retire l'ancien par le même chemin ; POST /app/{name}/unpublish ;
     GET /publications ; DELETE /app/{name} retire d'abord la publication. Chaque changement est écrit dans

@@ -229,7 +229,8 @@ def publications(texte: str, dom_box: str) -> dict[str, list[dict]]:
     res: dict[str, list[dict]] = {}
     for inst in instances(texte):
         res.setdefault(inst["app"], []).append({"nom_public": inst["id"], "domaine": domaine_de(inst, dom_box),
-                                                "port": inst["port"], "enabled": inst["enabled"]})
+                                                "port": inst["port"], "enabled": inst["enabled"],
+                                                "geree": inst["valeurs"].get("publication_geree") is True})
     return res
 
 
@@ -937,8 +938,10 @@ def _publier(a, conf: Path, apps: Path) -> dict:
         raise Refus(CONFLIT, conflit)
 
     # Déclaration voulue : [instances.<nom>] (forme de la référence couture.gk2) et [apps.<dossier>].
+    # `publication_geree` : posée par streamlitctl. Seule une publication gérée suit d'elle-même le port de l'appli
+    # à son démarrage ; une publication posée à la main n'est reprise que par un geste (Publier, Renommer).
     champs_inst = {"app": a.appli, "port": port, "domain": domaine, "enabled": True, "emancipated": True,
-                   "waf_enabled": True}
+                   "waf_enabled": True, "publication_geree": True}
     nouveau = texte
     if renommage:
         report = {k: v for k, v in ancienne["valeurs"].items() if k not in champs_inst}

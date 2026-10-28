@@ -44,7 +44,10 @@ Configuration file: `/etc/secubox/streamlit.toml` (example: `config/streamlit.to
 | `[publication] ip_conteneur` | — | Container address for nginx `proxy_pass`; empty: live address (`lxc-info -i`), else the one of existing publications |
 
 Declarations written by `streamlitctl` (root): `[apps.<folder>]` (port, enabled, autostart) and, for a
-published app, `[instances.<public name>]` (`app`, `port`, `domain`, `enabled`, `emancipated`, `waf_enabled`).
+published app, `[instances.<public name>]` (`app`, `port`, `domain`, `enabled`, `emancipated`, `waf_enabled`,
+`publication_geree`). Only a publication marked `publication_geree` follows the app's port by itself when the
+app is started or redeployed; an `[instances.*]` written by hand is left untouched until an explicit
+“Publier” / “Renommer” (same name) takes it over into the managed chain.
 
 ## Publication (#3247)
 

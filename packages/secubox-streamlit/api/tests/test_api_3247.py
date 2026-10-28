@@ -313,10 +313,25 @@ def test_publication_automatique_activee_par_le_reglage(ctl):
 def test_appli_deja_publiee_la_route_suit_le_port(ctl):
     client, etat = ctl
     etat["conteneur"] = True
-    etat["conf"].write_text('[instances.at]\napp = "atelier"\nport = 8529\ndomain = "at.gk2.secubox.in"\n')
+    etat["conf"].write_text('[instances.at]\napp = "atelier"\nport = 8529\ndomain = "at.gk2.secubox.in"\n'
+                            "publication_geree = true\n")
     r = client.post("/app/atelier/start")
     assert r.status_code == 200, r.text
     assert ("app", "publish", "atelier", "--par", "admin", "--apply") in etat["appels"]
+
+
+def test_publication_posee_a_la_main_jamais_reprise_en_silence(ctl):
+    """Les ~23 publications historiques de gk2 ([instances.*] posées à la main) ne sont ni migrées ni passées en
+    « toujours active » par un simple démarrage : seul un geste explicite (Publier, Renommer) les reprend."""
+    client, etat = ctl
+    etat["conteneur"] = True
+    etat["conf"].write_text("[publication]\nauto = true\n\n"
+                            '[instances.cpf]\napp = "cineposter"\nport = 8523\ndomain = "cpf.gk2.secubox.in"\n')
+    r = client.post("/app/cineposter/start")
+    assert r.status_code == 200, r.text
+    assert ("app", "publish") not in verbes(etat)
+    pub = r.json()["publication"]
+    assert pub["publiee"] is True and pub["synchronisee"] is False and pub["domaine"] == "cpf.gk2.secubox.in"
 
 
 def test_depot_avec_nom_public_publie(ctl):

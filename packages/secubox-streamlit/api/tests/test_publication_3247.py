@@ -248,7 +248,7 @@ def test_publier_pose_nginx_route_haproxy_toml_et_audite(box, capsys):
     conf = box.conf.read_text()
     inst = section(conf, "instances.atelier")
     for attendu in ('app = "atelier-partage-1"', "port = 8529", 'domain = "atelier.gk2.secubox.in"',
-                    "enabled = true", "emancipated = true", "waf_enabled = true"):
+                    "enabled = true", "emancipated = true", "waf_enabled = true", "publication_geree = true"):
         assert attendu in inst, attendu
     assert "waf_bypass" not in conf
     decl = section(conf, "apps.atelier-partage-1")
@@ -486,7 +486,8 @@ def test_etat_et_lecture_pour_l_api(box, capsys):
     assert _publier(box, capsys)[0] == 0
     rc, r = run(box, capsys, "etat", "atelier-partage-1")
     assert rc == 0
-    attendu = [{"nom_public": "atelier", "domaine": "atelier.gk2.secubox.in", "port": 8529, "enabled": True}]
+    attendu = [{"nom_public": "atelier", "domaine": "atelier.gk2.secubox.in", "port": 8529, "enabled": True,
+                "geree": True}]
     assert r["publications"] == attendu
     assert P.publications(box.conf.read_text(), "gk2.secubox.in") == {"atelier-partage-1": attendu}
     assert P.reglages(box.conf.read_text())["auto"] is False
