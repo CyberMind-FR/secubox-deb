@@ -43,7 +43,13 @@ if [ -f "{tmp_path}/nginx.echec" ]; then echo "nginx: [emerg] unexpected end of 
 exit 0
 """)
     _exe(bin_ / "systemctl", f'#!/bin/bash\necho "systemctl $*" >> "{journal}"\nexit 0\n')
-    _exe(bin_ / "lxc-attach", f'#!/bin/bash\necho "lxc-attach $*" >> "{journal}"\nexit 0\n')
+    _exe(bin_ / "lxc-attach", f"""#!/bin/bash
+echo "lxc-attach $*" >> "{journal}"
+if [[ "$*" == *pip3* ]] && [ -f "{tmp_path}/pip.echec" ]; then
+  echo "ERROR: No matching distribution found for segno==99" >&2; exit 1
+fi
+exit 0
+""")
     _exe(bin_ / "haproxyctl", f"""#!/bin/bash
 echo "haproxyctl $*" >> "{journal}"
 if [ "$1" = vhost ] && [ "$2" = add ]; then

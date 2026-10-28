@@ -62,7 +62,7 @@ _idle_config() {
 # Returns 0 if the app is listening on its port INSIDE the LXC, else 1.
 _app_running() {
     local name="$1"
-    local port; port=$(grep -E "^port\s*=" "$(_app_port_file "$name")" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+    local port; port=$(_lire_port_fichier "$(_app_port_file "$name")")
     [ -z "$port" ] && return 1
     lxc_running || return 1
     lxc-attach -n "$LXC_NAME" -- ss -tln "sport = :$port" 2>/dev/null \
@@ -99,6 +99,22 @@ _app_touch_active() {
 # apparaîtrait comme une entrée disque en double dans `app audit`/`app
 # list` (#959 : la moitié des applis de la board sont des scripts .py à
 # plat, pas des répertoires).
+# Port lu dans un fichier de port d'appli SANS suivre de lien ni bloquer (#3247, relecture
+# #3249) : ces dossiers sont inscriptibles par le conteneur, où les applis tournent en root.
+# Un lien (fichier ou dossier), une FIFO, un périphérique valent « pas de port » ; `timeout`
+# borne la lecture si l'entrée change entre le test et grep.
+_lire_port_fichier() {
+    local f="$1"
+    _fichier_port_sur "$f" || return 0
+    timeout 5 grep -m1 -E '^port[ \t]*=' -- "$f" 2>/dev/null | cut -d'=' -f2 | tr -d ' "' || true
+}
+
+# Vrai si $1 est un fichier ORDINAIRE dont ni lui ni son dossier n'est un lien.
+_fichier_port_sur() {
+    local f="$1"
+    [ ! -L "$(dirname -- "$f")" ] && [ -f "$f" ] && [ ! -L "$f" ]
+}
+
 _app_port_file() {
     local name="$1"
     if [ -d "$APPS_PATH/$name" ]; then
@@ -143,8 +159,7 @@ _resolve_app_port() {
     fi
     local port_file; port_file=$(_app_port_file "$name")
     local persisted=""
-    [ -f "$port_file" ] && persisted=$(grep -E '^port[ \t]*=' "$port_file" 2>/dev/null \
-        | head -1 | cut -d'=' -f2 | tr -d ' "')
+    persisted=$(_lire_port_fichier "$port_file")
     if [ -n "$persisted" ] && [ "$persisted" != "0" ]; then
         printf '%s' "$persisted"
         return 0
@@ -699,7 +714,7 @@ cmd_install() {
     }
 
     # Configure container. Identity bind mount (DATA_PATH at the SAME
-    # absolute path inside the container, not remapped to /srv/apps):
+    # absolute path inside the container, never remapped elsewhere):
     # matches the board's actual running container, where
     # /srv/streamlit/apps is confirmed to be the cwd of every streamlit
     # process (see cmd_app_start's own note) — lxc/streamlit-launch relies
@@ -927,7 +942,7 @@ cmd_access() {
         local name=$(basename "$app_dir")
         [ "$name" = "*" ] && continue
 
-        local port=$(grep -E "^port\s*=" "$app_dir/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "")
+        local port; port=$(_lire_port_fichier "${app_dir%/}/.streamlit.toml")
         local running=false
         [ -n "$port" ] && ss -tln "sport = :$port" 2>/dev/null | grep -q "$port" && running=true
 
@@ -1235,7 +1250,7 @@ cmd_app_audit() {
             _app_entrypoint "$n" || ep_rc=$?
             entrypoint_candidates="$_EP_CANDIDATES"
             [ "$ep_rc" -eq 0 ] && entrypoint="${_EP_RESULT#"$n"/}"
-            persisted_port=$(grep -E "^port\s*=" "$dpath/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+            persisted_port=$(_lire_port_fichier "$dpath/.streamlit.toml")
         elif [ "$shape" = "script" ]; then
             local ep_rc=0
             _app_entrypoint "$n" || ep_rc=$?
@@ -1375,34 +1390,6 @@ _set_toml_path_in_section() {
         in_sec && /^path[ \t]*=/ { print "path = \"" newp "\""; next }
         { print }
     ' "$file" > "$tmp"
-    _toml_atomic_replace "$file" "$tmp"
-}
-
-# Remplace (ou ajoute) la ligne "port = ..." d'un .streamlit.toml par-appli.
-_set_app_port() {
-    local file="$1" new_port="$2" tmp
-    tmp=$(_toml_mktemp "$file")
-    if [ -f "$file" ] && grep -qE '^port[ \t]*=' "$file"; then
-        awk -v p="$new_port" '/^port[ \t]*=/ { print "port = " p; next } { print }' "$file" > "$tmp"
-    else
-        { [ -f "$file" ] && cat "$file"; printf 'port = %s\n' "$new_port"; } > "$tmp"
-    fi
-    _toml_atomic_replace "$file" "$tmp"
-}
-
-# Remplace (ou ajoute) la ligne "entrypoint = "..."" d'un .streamlit.toml
-# par-appli (fichier PLAT, sans section — même format que _set_app_port,
-# jamais _set_toml_key_in_section qui vise les sections [apps.NAME] du
-# CONF_PATH central). $new_value est écrit TEL QUEL (déjà entre guillemets
-# par l'appelant) — cf. cmd_app_repair, seul appelant à ce jour.
-_set_app_entrypoint() {
-    local file="$1" new_value="$2" tmp
-    tmp=$(_toml_mktemp "$file")
-    if [ -f "$file" ] && grep -qE '^entrypoint[ \t]*=' "$file"; then
-        awk -v v="$new_value" '/^entrypoint[ \t]*=/ { print "entrypoint = " v; next } { print }' "$file" > "$tmp"
-    else
-        { [ -f "$file" ] && cat "$file"; printf 'entrypoint = %s\n' "$new_value"; } > "$tmp"
-    fi
     _toml_atomic_replace "$file" "$tmp"
 }
 
@@ -1557,8 +1544,8 @@ cmd_app_repair() {
         [ "${disk_shape[$name]}" = "dir" ] || continue
         [ "${run_seen[$name]:-}" = "1" ] || continue
         local toml="${disk_path[$name]}/.streamlit.toml"
-        [ -f "$toml" ] || continue
-        local persisted; persisted=$(grep -E '^port\s*=' "$toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+        _fichier_port_sur "$toml" || continue
+        local persisted; persisted=$(_lire_port_fichier "$toml")
         local real="${run_port[$name]:-}"
         [ -z "$persisted" ] && continue
         [ -z "$real" ] && continue
@@ -1566,13 +1553,18 @@ cmd_app_repair() {
 
         local did=false
         if [ "$apply" = "true" ]; then
+            # Écrit par le module (descripteurs, sans suivre de lien, 0644 root), copie de l'original comprise.
+            local sauv=()
             if [ -z "${backed_up[$toml]:-}" ]; then
-                cp -p "$toml" "${toml}.bak.${backup_suffix}"
+                sauv=(--sauvegarde "$backup_suffix")
                 backed_up["$toml"]=1
             fi
-            _set_app_port "$toml" "$real"
-            did=true
-            applied=$(( applied + 1 ))
+            if _publication ecrire-port "$name" --port "$real" "${sauv[@]}" --apply >/dev/null 2>&1; then
+                did=true
+                applied=$(( applied + 1 ))
+            else
+                error "repair: fichier de port de $name refusé (lien, FIFO ou dossier lien) — non modifié"
+            fi
         fi
         total=$(( total + 1 ))
         $first || out+=","
@@ -1609,7 +1601,7 @@ cmd_app_repair() {
         fi
 
         local has_entrypoint=false
-        [ -f "$toml" ] && grep -qE '^entrypoint[ \t]*=' "$toml" 2>/dev/null && has_entrypoint=true
+        _fichier_port_sur "$toml" && timeout 5 grep -qE '^entrypoint[ \t]*=' -- "$toml" 2>/dev/null && has_entrypoint=true
         [ "$has_entrypoint" = "true" ] && continue
 
         local real_port="${run_port[$name]:-}"
@@ -1631,19 +1623,18 @@ cmd_app_repair() {
 
         local did=false
         if [ "$apply" = "true" ]; then
-            mkdir -p "$(dirname "$toml")"
-            if [ -f "$toml" ]; then
-                if [ -z "${backed_up[$toml]:-}" ]; then
-                    cp -p "$toml" "${toml}.bak.${backup_suffix}"
-                    backed_up["$toml"]=1
-                fi
-                _set_app_port "$toml" "$real_port"
-            else
-                printf 'port = %s\n' "$real_port" > "$toml"
+            local sauv=()
+            if [ -z "${backed_up[$toml]:-}" ]; then
+                sauv=(--sauvegarde "$backup_suffix")
+                backed_up["$toml"]=1
             fi
-            _set_app_entrypoint "$toml" "\"$ep_for_file\""
-            did=true
-            applied=$(( applied + 1 ))
+            if _publication ecrire-port "$name" --port "$real_port" --entrypoint "$ep_for_file" "${sauv[@]}" \
+                    --apply >/dev/null 2>&1; then
+                did=true
+                applied=$(( applied + 1 ))
+            else
+                error "repair: fichier de port de $name refusé (lien, FIFO ou dossier lien) — non modifié"
+            fi
         fi
         total=$(( total + 1 ))
         $first || out+=","
@@ -1937,7 +1928,7 @@ cmd_app_info() {
         [ -f "$d/$c" ] && entry="$c" && break
     done
     local port=""
-    [ -f "$d/.streamlit.toml" ] && port=$(grep -E "^port" "$d/.streamlit.toml" 2>/dev/null | cut -d= -f2 | tr -d ' ')
+    port=$(_lire_port_fichier "$d/.streamlit.toml")
     local pidf="/var/run/streamlit-${name}.pid"
     local pid="" alive="no"
     if lxc_running; then
@@ -1970,8 +1961,7 @@ cmd_app_restart() {
     # decides — never a silently-guessed port.
     local port_file; port_file=$(_app_port_file "$name")
     local port=""
-    [ -f "$port_file" ] && \
-        port=$(grep -E "^port" "$port_file" 2>/dev/null | cut -d= -f2 | tr -d ' ')
+    port=$(_lire_port_fichier "$port_file")
     if [ -n "$port" ]; then
         cmd_app_start "$name" "$port"
     else
@@ -2064,12 +2054,16 @@ cmd_app_start() {
     # This file is the ONLY thing lxc/streamlit-launch reads inside the
     # container (via the APPS_PATH bind mount) — never a second,
     # independently-derived resolution of entrypoint/port (#958/#959).
-    local port_file; port_file=$(_app_port_file "$name")
-    mkdir -p "$(dirname "$port_file")"
-    {
-        printf 'port = %s\n' "$port"
-        printf 'entrypoint = "%s"\n' "$rel_entrypoint"
-    } > "$port_file"
+    #
+    # Écrit par le module (#3249) : descripteurs, jamais à travers un lien, 0644 root — ce
+    # dossier est inscriptible par le conteneur. Refus (lien, FIFO, dossier lien) : code 3,
+    # l'unité n'est pas démarrée.
+    local ecrit_rc=0
+    _publication ecrire-port "$name" --port "$port" --entrypoint "$rel_entrypoint" --apply >/dev/null || ecrit_rc=$?
+    if [ "$ecrit_rc" -ne 0 ]; then
+        error "fichier de port de $name refusé (lien symbolique, FIFO ou dossier lien) — $name non démarrée"
+        return 3
+    fi
 
     # L'unité du conteneur doit être celle du paquet (fichier d'environnement,
     # données persistantes, #3247) avant de démarrer quoi que ce soit.
@@ -2399,8 +2393,7 @@ _app_owning_port() {
         else
             continue
         fi
-        [ -f "$toml" ] || continue
-        p=$(grep -E '^port[ \t]*=' "$toml" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "')
+        p=$(_lire_port_fichier "$toml")
         if [ -n "$p" ] && [ "$p" = "$want" ]; then
             printf '%s' "$name"
             return 0
@@ -2613,53 +2606,23 @@ cmd_app_shot_target() {
         "$ip" "$port" "$(_json_escape "$APPS_PATH/$rel_entrypoint")"
 }
 
+# app deploy <zip> [name] — dépôt d'une appli (#3247, relecture #3249). L'archive est validée
+# ENTIÈREMENT puis extraite par le module, en root, sans rien laisser sortir du dossier de
+# l'appli (ni chemin absolu, ni « .. », ni lien, ni FIFO, ni périphérique ; plafonds), dans un
+# brouillon non prévisible (sous le dossier des applis) mis en place par renommage — jamais un
+# dossier temporaire au nom prévisible.
+# requirements.txt est installé DANS le conteneur (chemin identique, montage identité) ;
+# son échec est rendu (code 6), jamais masqué.
 cmd_app_deploy() {
-    local zip_file="$1"
-    local name="$2"
-
-    [ -z "$zip_file" ] || [ ! -f "$zip_file" ] && {
+    local zip_file="${1:-}"
+    local name="${2:-}"
+    if [ -z "$zip_file" ]; then
         error "Usage: streamlitctl app deploy <zipfile> [name]"
-        return 1
-    }
-
-    # Auto-name from filename if not specified
-    [ -z "$name" ] && name=$(basename "$zip_file" .zip | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-
-    local app_dir="$APPS_PATH/$name"
-    log "Deploying $name from $zip_file..."
-
-    # Remove existing
-    [ -d "$app_dir" ] && rm -rf "$app_dir"
-    mkdir -p "$app_dir"
-
-    # Extract with flattening
-    local tmpdir="/tmp/streamlit_extract_$$"
-    mkdir -p "$tmpdir"
-    unzip -q "$zip_file" -d "$tmpdir"
-
-    # Check for single root directory
-    local root_count=$(ls -1 "$tmpdir" | wc -l)
-    if [ "$root_count" = "1" ]; then
-        local single_root="$tmpdir/$(ls -1 $tmpdir | head -1)"
-        if [ -d "$single_root" ]; then
-            mv "$single_root"/* "$app_dir/" 2>/dev/null || true
-            mv "$single_root"/.[!.]* "$app_dir/" 2>/dev/null || true
-        else
-            mv "$single_root" "$app_dir/"
-        fi
-    else
-        mv "$tmpdir"/* "$app_dir/" 2>/dev/null || true
+        return 64
     fi
-    rm -rf "$tmpdir"
-
-    # Install requirements if present and container is running
-    if [ -f "$app_dir/requirements.txt" ] && lxc_running; then
-        log "Installing requirements..."
-        lxc-attach -n "$LXC_NAME" -- pip3 install --break-system-packages -r "/srv/apps/$name/requirements.txt" || true
-    fi
-
-    log "App $name deployed to $app_dir"
-    echo '{"success": true, "name": "'"$name"'", "path": "'"$app_dir"'"}'
+    [ -z "$name" ] && name=$(basename -- "$zip_file" .zip | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+    _nom_admis "$name" || _refuser "$name"
+    _publication deposer "$zip_file" "$name" --apply
 }
 
 cmd_app_remove() {
@@ -2916,7 +2879,11 @@ cmd_gitea_clone() {
 
     # Install requirements if present
     if [ -f "$app_dir/requirements.txt" ] && lxc_running; then
-        lxc-attach -n "$LXC_NAME" -- pip3 install --break-system-packages -r "/srv/apps/$name/requirements.txt" || true
+        # Même chemin dans le conteneur (montage identité) ; l'échec est dit, jamais masqué (#3249).
+        if ! lxc-attach -n "$LXC_NAME" -- pip3 install --break-system-packages -r "$APPS_PATH/$name/requirements.txt"; then
+            error "dépendances de $name non installées (pip) — appli clonée, corrigez requirements.txt"
+            return 6
+        fi
     fi
 
     log "Cloned $name from Gitea"
@@ -2933,6 +2900,9 @@ cmd_gitea_clone() {
 # valider avant sudo. Ce script ne lui apporte que ce que seul root voit :
 # les ports en écoute DANS le conteneur et son adresse.
 PUBLICATION_PY="${SECUBOX_STREAMLIT_PUBLICATION_PY:-/usr/lib/secubox/streamlit/api/publication.py}"
+if [ ! -f "$PUBLICATION_PY" ] && [ -z "${SECUBOX_STREAMLIT_PUBLICATION_PY:-}" ]; then
+    PUBLICATION_PY="$(cd -- "$(dirname -- "$(readlink -f -- "$0")")/.." && pwd)/api/publication.py"
+fi
 
 _publication() {
     python3 -I "$PUBLICATION_PY" --conf "$CONF_PATH" --apps "$APPS_PATH" "$@"
@@ -2995,6 +2965,7 @@ cmd_app_publish() {
     if ip=$(_lxc_ip); then
         args+=(--ip-vive "$ip")
     fi
+    args+=(--lxc-config "$LXC_PATH/config")
     _publication "${args[@]}"
 }
 
@@ -3014,6 +2985,24 @@ cmd_app_unpublish() {
 
 cmd_app_publication() {
     _publication etat "$1"
+}
+
+# app depublier-anciennes [--par <qui>] [--apply] — retire PROPREMENT les publications
+# historiques cassées (décision du propriétaire, #3247) : toute entrée qui porte un `domain`
+# sans la chaîne générée (ni publication_geree, ni sites-enabled/streamlit-<nom>.conf qui le
+# sert — couture.gk2 est donc gardée). Route sbxwaf, vhost HAProxy (backend nginx_vhosts
+# seulement), vhost nginx streamlit-<nom>.conf retirés ; l'entrée est marquée non publiée,
+# l'appli reste déposée. À blanc par défaut ; rapport JSON ; audit.
+cmd_app_depublier_anciennes() {
+    local args=(depublier-anciennes)
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --apply) args+=(--apply) ;;
+            --par) args+=(--par "${2:-}"); shift ;;
+        esac
+        shift
+    done
+    _publication "${args[@]}"
 }
 
 # app env <name> list | set [--unset CLE]... [--par <qui>] [--apply] — variables de
@@ -3111,7 +3100,24 @@ case "${1:-}:${2:-}" in
     app:wake-by-port)
         _exiger_entier "${3:-}"; [ "${4:-}" = "--check" ] || _si_entier "${4:-}" ;;
     app:deploy)
+        # Archive : chemin absolu en .zip, sans « .. » (le module revérifie : fichier ordinaire de l'appelant).
+        { [[ "${3:-}" =~ ^/[A-Za-z0-9._/-]+\.zip$ ]] && [[ "${3:-}" != *..* ]]; } || _refuser "${3:-}"
         [ -z "${4:-}" ] || _exiger_nom "$4" ;;
+    app:depublier-anciennes)
+        _attendu=""
+        for _a in "${@:3}"; do
+            if [ "$_attendu" = "par" ]; then
+                _acteur_admis "$_a" || _refuser "$_a"
+                _attendu=""
+                continue
+            fi
+            case "$_a" in
+                --apply) ;;
+                --par) _attendu=par ;;
+                *) _refuser "$_a" ;;
+            esac
+        done
+        [ -z "$_attendu" ] || _refuser "--par" ;;
     app:port)
         _exiger_nom "${3:-}"
         for _a in "${@:4}"; do
@@ -3187,6 +3193,7 @@ case "${1:-}" in
             unpublish)   cmd_app_unpublish "${@:3}" ;;
             publication) cmd_app_publication "$3" ;;
             env)         cmd_app_env "${@:3}" ;;
+            depublier-anciennes) cmd_app_depublier_anciennes "${@:3}" ;;
             *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|autostart|start|stop|restart|deploy|remove|logs|info|idle-check [--dry-run]|wake|shot-target|port|publish|unpublish|publication|env} [args]" ;;
         esac
         ;;
@@ -3249,6 +3256,13 @@ Apps:
   app unpublish <name> [--par who] [--apply]               Remove the published chain
   app publication <name>    Published names of the app (JSON)
   app env <name> list|set [--unset KEY]... [--par who] [--apply]  App environment (KEY=value lines on stdin)
+  app depublier-anciennes [--par who] [--apply]  Remove broken legacy publications (dry-run by default)
+
+Sécurité (#3247) :
+  Toutes les applis tournent en root dans le conteneur (privilégié, sans idmap) : le fichier
+  d'environnement d'une appli (/etc/streamlit/env/<appli>.env) n'isole RIEN d'une appli à
+  l'autre, et chacune peut écrire dans /srv/streamlit. Ne déposez que des applis de confiance ;
+  l'isolation par appli (compte dédié, conteneur non privilégié) fait l'objet d'une issue à part.
 
 Instances:
   instance list         List configured instances

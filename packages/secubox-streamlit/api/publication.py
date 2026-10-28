@@ -32,25 +32,29 @@ from __future__ import annotations
 import argparse
 import collections
 import contextlib
+import errno
 import fcntl
 import ipaddress
 import json
 import os
 import re
+import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 try:
     import tomllib
 except ModuleNotFoundError:  # Python < 3.11 : la validation du résultat est alors sautée
     tomllib = None
 
-OK, ECHEC, INCONNUE, ETAT, CONFLIT, EPUISE, ARGUMENT, INDISPONIBLE = 0, 1, 2, 3, 4, 5, 64, 75
+OK, ECHEC, INCONNUE, ETAT, CONFLIT, EPUISE, DEPENDANCES, ARGUMENT, INDISPONIBLE = 0, 1, 2, 3, 4, 5, 6, 64, 75
 
 # Libellé DNS strict : minuscules, chiffres, tirets, 1 à 63, ni tiret en tête ni en fin. Le soulignement est refusé
 # (pas un nom d'hôte valide) et le point aussi : un nom public est UNE étiquette sous le domaine de la box.
@@ -77,6 +81,13 @@ CONTENEUR = "streamlit"
 ENV_CONTENEUR = "/etc/streamlit/env"          # dans le conteneur, root 0600, hors des applis, jamais servi
 MARQUE_NGINX = "# secubox-streamlit:"
 _EXCLUS = {"__pycache__", "pages"}
+# Verrou dans un dossier root 0700 À NOUS (jamais /run/lock, partagé et inscriptible par tous).
+VERROU_DEFAUT = "/run/secubox-streamlit/publication.lock"
+TAILLE_PORT_MAX = 64 * 1024        # un fichier de port est une poignée de lignes
+ENV_MAX = 64 * 1024                # environnement d'une appli : au-delà, refus (jamais tronqué)
+ZIP_MAX_OCTETS = 1 << 30           # archive et contenu décompressé : 1 Gio
+ZIP_MAX_ENTREES = 10000
+PIP_DELAI_S = 240                  # la requête de dépôt doit répondre avant les 300 s de lecture de nginx
 
 
 class Refus(Exception):
@@ -103,7 +114,7 @@ def chemin_audit() -> Path:
 
 
 def chemin_verrou() -> Path:
-    return Path(_env("SECUBOX_STREAMLIT_VERROU", "/run/lock/secubox-streamlit-publication.lock"))
+    return Path(_env("SECUBOX_STREAMLIT_VERROU", VERROU_DEFAUT))
 
 
 def dossier_nginx() -> Path:
@@ -228,6 +239,8 @@ def publications(texte: str, dom_box: str) -> dict[str, list[dict]]:
     """{appli: [{nom_public, domaine, port, enabled}]} — lu par l'API (GET /publications)."""
     res: dict[str, list[dict]] = {}
     for inst in instances(texte):
+        if not inst["enabled"]:
+            continue
         res.setdefault(inst["app"], []).append({"nom_public": inst["id"], "domaine": domaine_de(inst, dom_box),
                                                 "port": inst["port"], "enabled": inst["enabled"],
                                                 "geree": inst["valeurs"].get("publication_geree") is True})
@@ -306,25 +319,88 @@ def _valider_toml(ancien: str, nouveau: str) -> None:
 # ─── Fichiers, commandes, verrou, audit ───────────────────────────────────
 
 def ecrire_atomique(chemin: Path, data: str, mode_defaut: int = 0o644) -> None:
-    """Temporaire VOISIN + rename(2) ; mode et propriétaire du fichier remplacé conservés."""
+    """Temporaire VOISIN + rename(2). Mode et propriétaire repris d'un fichier ORDINAIRE remplacé seulement : une
+    cible qui est un lien (ou une FIFO, un périphérique) est refusée, jamais suivie ni imitée."""
     try:
         st = os.stat(chemin, follow_symlinks=False)
     except FileNotFoundError:
         st = None
+    if st is not None and not stat.S_ISREG(st.st_mode):
+        raise Refus(ETAT, f"{chemin} : lien symbolique ou fichier spécial — refusé, rien n'est écrit")
     fd, tmp = tempfile.mkstemp(dir=chemin.parent, prefix=f".{chemin.name}.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(data)
-        if st is not None:
-            os.chmod(tmp, st.st_mode & 0o7777)
-            with contextlib.suppress(PermissionError):
-                os.chown(tmp, st.st_uid, st.st_gid)
-        else:
-            os.chmod(tmp, mode_defaut)
+            if st is not None:
+                os.fchmod(f.fileno(), st.st_mode & 0o7777)
+                with contextlib.suppress(PermissionError):
+                    os.fchown(f.fileno(), st.st_uid, st.st_gid)
+            else:
+                os.fchmod(f.fileno(), mode_defaut)
         os.replace(tmp, chemin)
     except BaseException:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(tmp)
+        raise
+
+
+def _lstat_dans(dfd: int, nom: str):
+    try:
+        return os.stat(nom, dir_fd=dfd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+
+
+def _lire_dans(dfd: int, nom: str, limite: int = TAILLE_PORT_MAX) -> str | None:
+    """Contenu d'un fichier ORDINAIRE du dossier `dfd`, None s'il n'existe pas. Jamais à travers un lien
+    (O_NOFOLLOW), jamais bloqué par une FIFO (refusée avant ouverture, O_NONBLOCK en ceinture), taille plafonnée.
+    Les dossiers d'applis sont inscriptibles par le conteneur : ce que root y lit ne se suit pas."""
+    st = _lstat_dans(dfd, nom)
+    if st is None:
+        return None
+    if not stat.S_ISREG(st.st_mode):
+        raise Refus(ETAT, f"{nom} : lien symbolique, FIFO ou périphérique — refusé")
+    try:
+        fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        raise Refus(ETAT, f"{nom} : {'lien symbolique refusé' if e.errno == errno.ELOOP else e.strerror}")
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise Refus(ETAT, f"{nom} : n'est plus un fichier ordinaire — refusé")
+        morceaux, total = [], 0
+        while True:
+            m = os.read(fd, 65536)
+            if not m:
+                break
+            total += len(m)
+            if total > limite:
+                raise Refus(ETAT, f"{nom} : trop gros (plus de {limite} octets) — refusé")
+            morceaux.append(m)
+        return b"".join(morceaux).decode("utf-8", errors="replace")
+    finally:
+        os.close(fd)
+
+
+def _ecrire_dans(dfd: int, nom: str, texte: str, mode: int = 0o644) -> None:
+    """Écrit `nom` dans le dossier `dfd` : temporaire créé O_EXCL|O_NOFOLLOW, mode FIXE (jamais hérité), root
+    propriétaire quand on l'est, puis renameat — la cible, si elle existe, doit être un fichier ordinaire."""
+    st = _lstat_dans(dfd, nom)
+    if st is not None and not stat.S_ISREG(st.st_mode):
+        raise Refus(ETAT, f"{nom} : lien symbolique, FIFO ou périphérique — refusé, rien n'est écrit")
+    tmp = f".{nom}.{secrets.token_hex(6)}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=dfd)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(texte)
+            os.fchmod(f.fileno(), mode)
+            if os.geteuid() == 0:
+                os.fchown(f.fileno(), 0, 0)
+        os.replace(tmp, nom, src_dir_fd=dfd, dst_dir_fd=dfd)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp, dir_fd=dfd)
         raise
 
 
@@ -353,9 +429,19 @@ def _court(texte: str) -> str:
 
 @contextlib.contextmanager
 def verrou(delai: float = 20.0):
+    """Verrou exclusif dans un dossier à nous, 0700, sans lien (jamais /run/lock, inscriptible par tous)."""
     chemin = chemin_verrou()
+    dossier = chemin.parent
+    with contextlib.suppress(FileExistsError):
+        os.mkdir(dossier, 0o700)
     try:
-        fd = os.open(chemin, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        st = os.stat(dossier, follow_symlinks=False)
+    except OSError as e:
+        raise Refus(ECHEC, f"dossier du verrou {dossier} inaccessible ({e.strerror})")
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o077:
+        raise Refus(ECHEC, f"dossier du verrou {dossier} non protégé (attendu : dossier à nous, 0700, sans lien)")
+    try:
+        fd = os.open(chemin, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
     except OSError as e:
         raise Refus(ECHEC, f"verrou {chemin} inaccessible ({e.strerror})")
     try:
@@ -404,46 +490,129 @@ def domaine_box() -> str:
 
 # ─── Applis et ports ──────────────────────────────────────────────────────
 
-def appli_existe(apps: Path, appli: str) -> bool:
-    return (apps / appli).is_dir() or (apps / f"{appli}.py").is_file()
 
 
-def fichier_port(apps: Path, appli: str) -> Path:
-    return apps / appli / ".streamlit.toml" if (apps / appli).is_dir() else apps / f".streamlit-{appli}.toml"
 
 
-def lire_port_fichier(f: Path) -> int | None:
+
+
+
+
+
+
+
+
+def _fd_apps(apps: Path) -> int:
+    # Le dossier des applis lui-même est un réglage (root) ; tout ce qui est DESSOUS se lit sans suivre de lien.
     try:
-        m = re.search(r'^port[ \t]*=[ \t]*"?(\d+)', f.read_text(encoding="utf-8"), re.M)
-    except (OSError, UnicodeDecodeError):
+        return os.open(apps, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    except OSError as e:
+        raise Refus(ECHEC, f"dossier des applis {apps} inaccessible ({e.strerror})")
+
+
+def forme_appli(apps: Path, appli: str) -> str | None:
+    """'dossier' | 'script' | None (inconnue). Une entrée qui est un LIEN est refusée (code 3), jamais suivie :
+    un lien vers /etc ferait lire ou écrire root ailleurs que dans le dossier de l'appli."""
+    afd = _fd_apps(apps)
+    try:
+        for nom, forme in ((appli, "dossier"), (f"{appli}.py", "script")):
+            st = _lstat_dans(afd, nom)
+            if st is None:
+                continue
+            if stat.S_ISLNK(st.st_mode):
+                raise Refus(ETAT, f"« {nom} » sous {apps} est un lien symbolique — refusé")
+            if forme == "dossier" and stat.S_ISDIR(st.st_mode):
+                return "dossier"
+            if forme == "script" and stat.S_ISREG(st.st_mode):
+                return "script"
         return None
+    finally:
+        os.close(afd)
+
+
+def appli_existe(apps: Path, appli: str) -> bool:
+    return forme_appli(apps, appli) is not None
+
+
+@contextlib.contextmanager
+def _dossier_port(apps: Path, appli: str):
+    """(descripteur du dossier qui porte le fichier de port, nom du fichier) — même règle que _app_port_file du
+    ctl : DANS le dossier de l'appli, ou `.streamlit-<appli>.toml` voisin d'un script à plat. Ouvert O_NOFOLLOW."""
+    forme = forme_appli(apps, appli)
+    if forme is None:
+        raise Refus(INCONNUE, f"appli inconnue : {appli}")
+    afd = _fd_apps(apps)
+    try:
+        if forme == "dossier":
+            try:
+                dfd = os.open(appli, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=afd)
+            except OSError as e:
+                raise Refus(ETAT, f"dossier de l'appli « {appli} » : {e.strerror} (lien refusé)")
+            try:
+                yield dfd, ".streamlit.toml"
+            finally:
+                os.close(dfd)
+        else:
+            yield afd, f".streamlit-{appli}.toml"
+    finally:
+        os.close(afd)
+
+
+def lire_port_appli(apps: Path, appli: str, strict: bool = True) -> int | None:
+    """Port persisté de l'appli. strict=False (ports des AUTRES applis) : un lien, une FIFO… comptent pour rien."""
+    try:
+        with _dossier_port(apps, appli) as (dfd, nom):
+            texte = _lire_dans(dfd, nom)
+    except Refus:
+        if strict:
+            raise
+        return None
+    m = re.search(r'^port[ \t]*=[ \t]*"?(\d+)', texte or "", re.M)
     return _port(m.group(1)) if m else None
 
 
-def ecrire_port_fichier(f: Path, port: int) -> None:
-    try:
-        texte = f.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        texte = ""
-    if re.search(r"^port[ \t]*=", texte, re.M):
-        texte = re.sub(r"^port[ \t]*=.*$", f"port = {port}", texte, count=1, flags=re.M)
-    else:
-        texte = (texte if not texte or texte.endswith("\n") else texte + "\n") + f"port = {port}\n"
-    ecrire_atomique(f, texte)
+def _poser_ligne(texte: str, cle: str, valeur: str) -> str:
+    if re.search(rf"^{cle}[ \t]*=", texte, re.M):
+        return re.sub(rf"^{cle}[ \t]*=.*$", f"{cle} = {valeur}", texte, count=1, flags=re.M)
+    return (texte if not texte or texte.endswith("\n") else texte + "\n") + f"{cle} = {valeur}\n"
+
+
+def ecrire_port_appli(apps: Path, appli: str, port: int | None = None, entrypoint: str | None = None,
+                      sauvegarde: str | None = None) -> bool:
+    """Pose `port` et/ou `entrypoint` dans le fichier de port de l'appli, en 0644 root, sans jamais suivre un lien
+    ni hériter d'un mode. Rend True si le fichier a changé."""
+    with _dossier_port(apps, appli) as (dfd, nom):
+        ancien = _lire_dans(dfd, nom) or ""
+        texte = ancien
+        if port is not None:
+            texte = _poser_ligne(texte, "port", str(port))
+        if entrypoint is not None:
+            texte = _poser_ligne(texte, "entrypoint", f'"{entrypoint}"')
+        if texte == ancien:
+            return False
+        if sauvegarde and ancien:
+            _ecrire_dans(dfd, f"{nom}.bak.{sauvegarde}", ancien)
+        _ecrire_dans(dfd, nom, texte)
+        return True
 
 
 def _entrees_applis(apps: Path):
+    """Les applis du dossier : dossiers et scripts .py ORDINAIRES ; les liens sont ignorés, jamais suivis."""
     try:
-        entrees = sorted(apps.iterdir())
+        with os.scandir(apps) as it:
+            entrees = sorted(it, key=lambda e: e.name)
     except OSError:
         return
     for e in entrees:
         if e.name.startswith(".") or e.name in _EXCLUS:
             continue
-        if e.is_dir():
-            yield e.name
-        elif e.suffix == ".py" and e.is_file():
-            yield e.stem
+        try:
+            if e.is_dir(follow_symlinks=False):
+                yield e.name
+            elif e.name.endswith(".py") and e.is_file(follow_symlinks=False):
+                yield e.name[:-3]
+        except OSError:
+            continue
 
 
 def routes_lisibles() -> dict:
@@ -482,28 +651,81 @@ def _ipv4(x) -> str | None:
     return None if ip.is_loopback or ip.is_unspecified or ip.is_multicast else str(ip)
 
 
-def ip_conteneur(texte: str, routes: dict, ip_vive: str | None) -> tuple[str | None, str]:
-    """(adresse, origine) du conteneur pour proxy_pass : réglage > adresse vive > voisines (anciennes routes
-    directes des instances, vhosts streamlit déjà générés)."""
+def reseaux_pont(lxc_config: str | None) -> list | None:
+    """Sous-réseaux du conteneur : ses adresses déclarées (lxc.net.N.ipv4.address) et celles de son pont
+    (lxc.net.N.link, lues par `ip -j`). None : aucune configuration fournie, donc pas de restriction (usage hors
+    ctl) ; [] : configuration fournie mais aucun sous-réseau trouvé — seule l'adresse réglée passe alors."""
+    if not lxc_config:
+        return None
+    texte = _lire(Path(lxc_config)) or ""
+    reseaux, ponts = [], []
+    for ligne in texte.splitlines():
+        m = re.match(r"^\s*lxc\.net\.\d+\.ipv4\.address\s*=\s*([\d.]+/\d{1,2})\s*$", ligne)
+        if m:
+            with contextlib.suppress(ValueError):
+                reseaux.append(ipaddress.IPv4Interface(m.group(1)).network)
+        m = re.match(r"^\s*lxc\.net\.\d+\.link\s*=\s*([A-Za-z0-9_.-]{1,15})\s*$", ligne)
+        if m:
+            ponts.append(m.group(1))
+    for pont in ponts:
+        rc, sortie = _cmd(["ip", "-j", "-4", "addr", "show", "dev", pont], timeout=10)
+        if rc:
+            continue
+        with contextlib.suppress(ValueError, TypeError, KeyError):
+            for lien in json.loads(sortie or "[]"):
+                for adr in lien.get("addr_info", []):
+                    reseaux.append(ipaddress.IPv4Interface(f"{adr['local']}/{adr['prefixlen']}").network)
+    return reseaux
+
+
+def _dans(ip: str | None, reseaux: list | None) -> bool:
+    if ip is None:
+        return False
+    return reseaux is None or any(ipaddress.IPv4Address(ip) in r for r in reseaux)
+
+
+def ip_conteneur(texte: str, routes: dict, ip_vive: str | None,
+                 reseaux: list | None = None) -> tuple[str | None, str, str]:
+    """(adresse, origine, motif d'un rejet) pour proxy_pass : réglage `[publication] ip_conteneur` (choix de
+    l'opérateur), sinon l'adresse vive, sinon celle des publications existantes — ces deux-là SEULEMENT dans le
+    sous-réseau du pont du conteneur : une adresse posée par le conteneur lui-même ne doit jamais faire viser à
+    nginx un autre hôte."""
     cfg = _ipv4(reglages(texte)["ip_conteneur"])
     if cfg:
-        return cfg, "reglage"
+        return cfg, "reglage", ""
+    rejet = ""
     vive = _ipv4(ip_vive) if ip_vive else None
+    if vive and _dans(vive, reseaux):
+        return vive, "vive", ""
     if vive:
-        return vive, "vive"
+        rejet = f"adresse vive {vive} hors du sous-réseau du pont du conteneur"
     compte: collections.Counter = collections.Counter()
     for inst in instances(texte):
         c = routes.get(inst["domain"]) if inst["domain"] else None
         if isinstance(c, list) and len(c) == 2 and _port(c[1]) not in (None, PORT_NGINX) and _ipv4(c[0]):
             compte[_ipv4(c[0])] += 1
+    for _appli, ip, _p in vhosts_generes():
+        compte[ip] += 1
+    for ip, _n in compte.most_common():
+        if _dans(ip, reseaux):
+            return ip, "voisine", ""
+    if reseaux is not None and not reseaux and not rejet:
+        rejet = "sous-réseau du pont du conteneur introuvable"
+    return None, "", rejet
+
+
+def vhosts_generes() -> list[tuple[str, str, int]]:
+    """(appli, ip, port) des vhosts nginx que NOUS avons générés (marque en tête de fichier)."""
+    out = []
     for f in sorted((dossier_nginx() / "sites-available").glob("streamlit-*.conf")):
-        with contextlib.suppress(OSError, UnicodeDecodeError):
-            m = re.search(r"proxy_pass\s+http://([\d.]+):\d+", f.read_text(encoding="utf-8"))
-            if m and _ipv4(m.group(1)):
-                compte[_ipv4(m.group(1))] += 1
-    if compte:
-        return compte.most_common(1)[0][0], "voisine"
-    return None, ""
+        texte = _lire(f) if not f.is_symlink() else None
+        if not texte or not texte.startswith(MARQUE_NGINX):
+            continue
+        m_app = re.match(rf"{re.escape(MARQUE_NGINX)} appli=(\S+)", texte)
+        m_pp = re.search(r"proxy_pass\s+http://([\d.]+):(\d+)", texte)
+        if m_app and m_pp and _ipv4(m_pp.group(1)) and _port(m_pp.group(2)):
+            out.append((m_app.group(1), _ipv4(m_pp.group(1)), _port(m_pp.group(2))))
+    return out
 
 
 def ports_pris(appli: str, texte: str, apps: Path, routes: dict, ecoute: set, processus: dict,
@@ -518,9 +740,12 @@ def ports_pris(appli: str, texte: str, apps: Path, routes: dict, ecoute: set, pr
             pris.setdefault(inst["port"], f"déjà publié pour l'appli « {inst['app']} » ({inst['id']})")
     for nom in _entrees_applis(apps):
         if nom != appli:
-            p = lire_port_fichier(fichier_port(apps, nom))
+            p = lire_port_appli(apps, nom, strict=False)
             if p:
                 pris.setdefault(p, f"déjà attribué à l'appli « {nom} »")
+    for nom, _ip, p in vhosts_generes():
+        if nom != appli:
+            pris.setdefault(p, f"déjà publié par nginx pour l'appli « {nom} »")
     for nom, p in processus.items():
         if nom != appli:
             pris.setdefault(p, f"utilisé par l'appli « {nom} » en cours")
@@ -538,7 +763,7 @@ def ports_pris(appli: str, texte: str, apps: Path, routes: dict, ecoute: set, pr
 
 
 def port_actuel(appli: str, texte: str, apps: Path) -> tuple[int | None, str]:
-    p = lire_port_fichier(fichier_port(apps, appli))
+    p = lire_port_appli(apps, appli, strict=True)
     if p:
         return p, "fichier"
     p = _port(applis_declarees(texte).get(appli, {}).get("port"))
@@ -553,7 +778,7 @@ def port_actuel(appli: str, texte: str, apps: Path) -> tuple[int | None, str]:
 def choisir_port(appli: str, demande: int | None, texte: str, apps: Path, ecoute: set, processus: dict,
                  ip_vive: str | None) -> tuple[int, str, list[str]]:
     routes = routes_lisibles()
-    ip, _o = ip_conteneur(texte, routes, ip_vive)
+    ip, _o, _r = ip_conteneur(texte, routes, ip_vive)
     pris = ports_pris(appli, texte, apps, routes, ecoute, processus, ip)
     avert: list[str] = []
     if demande is not None:
@@ -709,16 +934,22 @@ def nginx_poser(label: str, contenu: str) -> tuple:
     os.replace(tmp, actif)
     erreur = _nginx_tester_recharger()
     if erreur:
-        nginx_restaurer(label, avant)
-        raise Refus(ECHEC, f"{erreur} — vhost retiré, rien n'est publié")
+        echec = nginx_restaurer(label, avant)
+        raise Refus(ECHEC, f"{erreur} — vhost retiré, rien n'est publié"
+                    + (f" — retour arrière incomplet : {echec}" if echec else ""))
     return avant
 
 
-def nginx_restaurer(label: str, avant: tuple) -> None:
+def nginx_restaurer(label: str, avant: tuple) -> str | None:
+    """Remet l'état d'avant ; rend la cause si ce retour arrière lui-même échoue (jamais tu)."""
     dispo, actif = _fichiers_nginx(label)
-    _restaurer(dispo, avant[0])
-    _restaurer(actif, avant[1])
-    _nginx_tester_recharger()
+    try:
+        _restaurer(dispo, avant[0])
+        _restaurer(actif, avant[1])
+    except OSError as e:
+        return f"nginx : {actif.name} non restauré ({e.strerror})"
+    erreur = _nginx_tester_recharger()
+    return f"nginx après restauration : {erreur}" if erreur else None
 
 
 def nginx_retirer(label: str, domaine: str, avert: list[str]) -> bool:
@@ -729,13 +960,18 @@ def nginx_retirer(label: str, domaine: str, avert: list[str]) -> bool:
     avant = (_instantane(dispo), _instantane(actif))
     if avant == (None, None):
         return False
+    # Un fichier posé à la main (référence couture.gk2) n'est jamais perdu : copié hors de sites-enabled d'abord.
+    for f, etat in ((actif, avant[1]), (dispo, avant[0])):
+        if etat and etat[0] == "fichier" and not etat[1].decode("utf-8", "replace").startswith(MARQUE_NGINX):
+            ecrire_atomique(dispo.with_name(f.name + ".avant-secubox"), etat[1].decode("utf-8", "replace"))
+            break
     for f in (actif, dispo):
         with contextlib.suppress(FileNotFoundError):
             f.unlink()
     erreur = _nginx_tester_recharger()
     if erreur:
-        nginx_restaurer(label, avant)
-        avert.append(f"nginx : retrait de {actif.name} annulé ({erreur})")
+        echec = nginx_restaurer(label, avant)
+        avert.append(f"nginx : retrait de {actif.name} annulé ({erreur})" + (f" ; {echec}" if echec else ""))
         return False
     return True
 
@@ -761,6 +997,14 @@ def route_retirer(domaine: str, ports_admis: set, avert: list[str]) -> bool:
     del routes[domaine]
     ecrire_atomique(chemin_routes(), json.dumps(routes, indent=2, sort_keys=True) + "\n")
     return True
+
+
+def haproxy_table(domaine: str) -> tuple[str, str] | None:
+    """(clé de la table [vhosts.<clé>], backend) du vhost qui porte ce domaine, ou None."""
+    for entete, _d, _f, v in sections(_lire(chemin_haproxy()) or ""):
+        if entete.startswith("vhosts.") and v.get("domain") == domaine:
+            return entete[len("vhosts."):], str(v.get("backend") or "")
+    return None
 
 
 def haproxy_declare(domaine: str) -> bool | None:
@@ -792,13 +1036,19 @@ def haproxy_poser(domaine: str, avert: list[str]) -> None:
 
 
 def haproxy_retirer(domaine: str, avert: list[str]) -> None:
-    if not haproxy_declare(domaine):
+    table = haproxy_table(domaine)
+    if table is None:
+        return
+    cle, backend = table
+    if backend != "nginx_vhosts":
+        # Pas la forme que nous posons : un autre service déclare ce nom. On ne retire pas ce qu'on n'a pas posé.
+        avert.append(f"HAProxy : {domaine} déclaré avec backend « {backend} » — laissé en place")
         return
     b = _haproxyctl()
     if b is None:
         avert.append(f"haproxyctl absent : vhost {domaine} laissé dans haproxy.toml")
         return
-    rc, sortie = _cmd([b, "vhost", "remove", cle_vhost(domaine)], timeout=120)
+    rc, sortie = _cmd([b, "vhost", "remove", cle], timeout=120)
     if rc:
         # Typiquement le garde de dérive : la table est retirée, la régénération refusée. On ne force JAMAIS
         # --allow-shrink : il effacerait aussi les vhosts tenus hors de haproxy.toml.
@@ -831,8 +1081,14 @@ def _ecrire_conf(conf: Path, ancien: str, nouveau: str) -> None:
     if nouveau == ancien:
         return
     _valider_toml(ancien, nouveau)
-    if conf.exists():
-        shutil.copy2(conf, conf.with_name(conf.name + ".avant-publication"))
+    try:
+        st = os.stat(conf, follow_symlinks=False)
+    except FileNotFoundError:
+        st = None
+    if st is not None:
+        if not stat.S_ISREG(st.st_mode):
+            raise Refus(ETAT, f"{conf} : lien symbolique ou fichier spécial — refusé, rien n'est écrit")
+        ecrire_atomique(conf.with_name(conf.name + ".avant-publication"), ancien, 0o640)
     ecrire_atomique(conf, nouveau, 0o640)
 
 
@@ -856,9 +1112,7 @@ def verbe_port(a, conf: Path, apps: Path) -> dict:
         texte = _lire_conf(conf)
         port, source, avert = choisir_port(a.appli, a.demande, texte, apps, ecoute, processus, a.ip_vive)
         if a.apply:
-            f = fichier_port(apps, a.appli)
-            if lire_port_fichier(f) != port:
-                ecrire_port_fichier(f, port)
+            ecrire_port_appli(apps, a.appli, port=port)
             _ecrire_conf(conf, texte, _declarer_appli(texte, a.appli, port))
     return {"ok": True, "appli": a.appli, "port": port, "source": source, "applique": bool(a.apply),
             "avertissements": avert}
@@ -896,7 +1150,7 @@ def _publier(a, conf: Path, apps: Path) -> dict:
     texte = _lire_conf(conf)
     if applis_declarees(texte).get(a.appli, {}).get("archived") is True:
         raise Refus(ETAT, f"appli archivée : {a.appli} — désarchivez-la avant de la publier")
-    miennes = [i for i in instances(texte) if i["app"] == a.appli]
+    miennes = [i for i in instances(texte) if i["app"] == a.appli and i["enabled"]]
     if len(miennes) > 1:
         raise Refus(ETAT, "plusieurs instances publient cette appli (" + ", ".join(i["id"] for i in miennes)
                     + ") : retirez la publication puis republiez-la sous un seul nom")
@@ -921,10 +1175,11 @@ def _publier(a, conf: Path, apps: Path) -> dict:
 
     routes = lire_routes()
     avert: list[str] = []
-    ip, origine = ip_conteneur(texte, routes, a.ip_vive)
+    ip, origine, rejet = ip_conteneur(texte, routes, a.ip_vive, reseaux_pont(a.lxc_config))
     if ip is None:
-        raise Refus(INDISPONIBLE, "adresse du conteneur Streamlit inconnue : réveillez-le, ou fixez "
-                                  "[publication] ip_conteneur dans streamlit.toml")
+        raise Refus(INDISPONIBLE, "adresse du conteneur Streamlit inconnue" + (f" ({rejet})" if rejet else "")
+                    + " : réveillez-le, ou fixez [publication] ip_conteneur dans streamlit.toml (le sous-réseau du "
+                      "pont du conteneur est la seule cible admise autrement)")
     if origine != "vive" and _ipv4(a.ip_vive) and _ipv4(a.ip_vive) != ip:
         avert.append(f"adresse vive du conteneur {a.ip_vive} différente de celle retenue ({ip}, {origine})")
     if garde_nom:
@@ -980,10 +1235,13 @@ def _publier(a, conf: Path, apps: Path) -> dict:
             if routes.get(domaine) != route_voulue:
                 route_poser(domaine)
             _ecrire_conf(conf, texte, nouveau)
-        except (Refus, OSError):
-            _defaire_route(domaine, route_avant)
-            if avant_nginx is not None:
-                nginx_restaurer(label, avant_nginx)
+        except (Refus, OSError) as e:
+            echecs = [x for x in (_defaire_route(domaine, route_avant),
+                                  nginx_restaurer(label, avant_nginx) if avant_nginx is not None else None) if x]
+            if echecs:
+                cause = e.message if isinstance(e, Refus) else f"{e.filename or ''} : {e.strerror or e}"
+                raise Refus(e.code if isinstance(e, Refus) else ECHEC,
+                            f"{cause} — retour arrière incomplet : {' ; '.join(echecs)}") from e
             raise
         # HAProxy : l'ancien d'abord, le nouveau ensuite — la génération suivante garde alors le même nombre de
         # vhosts et le garde de dérive l'accepte ; son refus du retrait seul n'est rapporté que s'il persiste.
@@ -1009,14 +1267,22 @@ def _publier(a, conf: Path, apps: Path) -> dict:
     return sortie
 
 
-def _defaire_route(domaine: str, avant) -> None:
-    with contextlib.suppress(Refus, OSError):
+def _defaire_route(domaine: str, avant) -> str | None:
+    """Remet la route d'avant ; rend la cause si ce retour arrière échoue (jamais tu)."""
+    try:
         routes = lire_routes()
+        if routes.get(domaine) == avant:
+            return None
         if avant is None:
             routes.pop(domaine, None)
         else:
             routes[domaine] = avant
         ecrire_atomique(chemin_routes(), json.dumps(routes, indent=2, sort_keys=True) + "\n")
+    except Refus as e:
+        return f"route sbxwaf de {domaine} non restaurée : {e.message}"
+    except OSError as e:
+        return f"route sbxwaf de {domaine} non restaurée : {e.strerror or e}"
+    return None
 
 
 def verbe_depublier(a, conf: Path, apps: Path) -> dict:
@@ -1041,20 +1307,102 @@ def verbe_depublier(a, conf: Path, apps: Path) -> dict:
         if not a.apply:
             return sortie
         avert = sortie["avertissements"]
+        lire_routes()                     # table illisible : on s'arrête AVANT de toucher quoi que ce soit
         journal = Journal(a.par)
         try:
-            _ecrire_conf(conf, texte, nouveau)
+            # La chaîne d'abord : si un retrait échoue, la déclaration dit encore la vérité (toujours publiée).
             for inst, r in zip(miennes, sortie["retires"]):
                 dom = r["domaine"]
                 if dom:
-                    haproxy_retirer(dom, avert)
                     r["route_retiree"] = route_retirer(dom, {PORT_NGINX} | ({inst["port"]} if inst["port"] else
                                                                            set()), avert)
-                    r["nginx_retire"] = nginx_retirer(inst["id"], dom, avert)
-                journal.ecrire(evenement="depublication", appli=a.appli, nom_public=inst["id"], domaine=dom,
-                               resultat="applique")
+                    r["nginx_retire"] = nginx_retirer(inst["id"], dom, avert) if NOM_APPLI_RE.fullmatch(
+                        inst["id"]) else False
+                    haproxy_retirer(dom, avert)
+            _ecrire_conf(conf, texte, nouveau)
+            for inst, r in zip(miennes, sortie["retires"]):
+                journal.ecrire(evenement="depublication", appli=a.appli, nom_public=inst["id"],
+                               domaine=r["domaine"], resultat="applique")
             if par_publication:
                 conteneur_systemctl("disable", a.appli, avert)
+        finally:
+            journal.fermer()
+        sortie["applique"] = True
+        return sortie
+
+
+def _chaine_en_place(nom: str, domaine: str) -> bool:
+    """La forme générée (ou la référence couture posée à la main) : sites-enabled/streamlit-<nom>.conf sert ce nom."""
+    if not NOM_APPLI_RE.fullmatch(nom):
+        return False
+    actif = dossier_nginx() / "sites-enabled" / f"streamlit-{nom}.conf"
+    return _sert(_lire(actif), domaine)
+
+
+def verbe_depublier_anciennes(a, conf: Path, apps: Path) -> dict:
+    """Retire PROPREMENT les publications historiques cassées (décision du propriétaire, #3247) : toute entrée
+    `[instances.*]` ou `[apps.*]` qui porte un `domain` sans la chaîne générée (ni `publication_geree`, ni
+    sites-enabled/streamlit-<nom>.conf servant ce nom). Restes retirés : route sbxwaf (si elle vise :9080 ou le
+    port de l'entrée), vhost HAProxy (seulement backend nginx_vhosts), vhost nginx streamlit-<nom>.conf ; un autre
+    fichier nginx qui servirait ce nom est signalé, jamais supprimé (il peut en servir d'autres). L'entrée est
+    marquée non publiée (enabled = false pour une instance, domain → domaine_retire) ; l'appli reste déposée."""
+    with verrou() if a.apply else contextlib.nullcontext():
+        texte = _lire_conf(conf)
+        routes = lire_routes()
+        candidats = [("instance", i["id"], i["app"], i["domain"], i["port"], i["valeurs"])
+                     for i in instances(texte) if i["domain"]]
+        candidats += [("appli", nom, nom, v["domain"], _port(v.get("port")), v)
+                      for nom, v in applis_declarees(texte).items() if isinstance(v.get("domain"), str)
+                      and v.get("domain")]
+        retires, gardes, avert = [], [], []
+        for typ, nom, appli, dom, port, v in candidats:
+            if v.get("publication_geree") is True:
+                gardes.append({"type": typ, "nom": nom, "domaine": dom, "raison": "publication gérée par streamlitctl"})
+            elif _chaine_en_place(nom, dom):
+                gardes.append({"type": typ, "nom": nom, "domaine": dom,
+                               "raison": f"chaîne en place (sites-enabled/streamlit-{nom}.conf)"})
+            else:
+                cible = routes.get(dom)
+                ailleurs = nginx_sert_ailleurs(dom, {f"streamlit-{nom}.conf"})
+                table = haproxy_table(dom)
+                retires.append({"type": typ, "nom": nom, "appli": appli, "domaine": dom,
+                                "route": "absente" if cible is None else (
+                                    "a_retirer" if isinstance(cible, list) and len(cible) == 2
+                                    and _port(cible[1]) in ({PORT_NGINX} | ({port} if port else set()))
+                                    else "laissee"),
+                                "haproxy": "absent" if table is None else (
+                                    "a_retirer" if table[1] == "nginx_vhosts" else "laisse"),
+                                "nginx_ailleurs": ailleurs})
+        sortie = {"ok": True, "applique": False, "retires": retires, "gardes": gardes, "avertissements": avert}
+        if not a.apply or not retires:
+            return sortie
+        journal = Journal(a.par)
+        try:
+            nouveau = texte
+            horodatage = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            for r in retires:
+                dom = r["domaine"]
+                if r["route"] == "a_retirer":
+                    route_retirer(dom, {PORT_NGINX} | ({_port(routes[dom][1])} if dom in routes else set()), avert)
+                    r["route"] = "retiree"
+                elif r["route"] == "laissee":
+                    avert.append(f"route sbxwaf de {dom} vise autre chose ({routes.get(dom)}) — laissée en place")
+                if NOM_APPLI_RE.fullmatch(r["nom"]):
+                    nginx_retirer(r["nom"], dom, avert)
+                if r["nginx_ailleurs"]:
+                    avert.append(f"nginx : {dom} est servi par {r['nginx_ailleurs']} — fichier partagé, laissé")
+                if r["haproxy"] != "absent":
+                    haproxy_retirer(dom, avert)
+                    r["haproxy"] = "retire" if r["haproxy"] == "a_retirer" else "laisse"
+                entete = f"instances.{r['nom']}" if r["type"] == "instance" else f"apps.{r['nom']}"
+                champs = {"domaine_retire": dom, "depubliee": horodatage}
+                if r["type"] == "instance":
+                    champs = {"enabled": False, **champs}
+                nouveau = poser_cles(retirer_cles(nouveau, entete, {"domain"}), entete, champs)
+            _ecrire_conf(conf, texte, nouveau)
+            for r in retires:
+                journal.ecrire(evenement="depublication-ancienne", appli=r["appli"], nom_public=r["nom"],
+                               domaine=r["domaine"], route=r["route"], haproxy=r["haproxy"], resultat="applique")
         finally:
             journal.fermer()
         sortie["applique"] = True
@@ -1114,6 +1462,8 @@ def verbe_env(a, conf: Path, apps: Path, entree: str) -> dict:
         raise Refus(INCONNUE, f"appli inconnue : {a.appli}")
     if a.lister:
         return {"ok": True, "appli": a.appli, "cles": sorted(_env_lire(a.appli)), "fichier": _env_chemin(a.appli)}
+    if len(entree.encode("utf-8")) > ENV_MAX:
+        raise Refus(ARGUMENT, f"environnement trop long (plus de {ENV_MAX} octets) : refusé, rien n'est écrit")
     definir: dict[str, str] = {}
     for ligne in entree.splitlines():
         if not ligne.strip():
@@ -1142,6 +1492,186 @@ def verbe_env(a, conf: Path, apps: Path, entree: str) -> dict:
                 journal.fermer()
     return {"ok": True, "appli": a.appli, "cles": sorted(nouvelles), "applique": bool(a.apply and change),
             "redemarrage_requis": bool(change), "fichier": _env_chemin(a.appli)}
+
+
+# ─── Fichier de port écrit pour le ctl (app start, app repair) ────────────
+
+def verbe_ecrire_port(a, conf: Path, apps: Path) -> dict:
+    if a.entrypoint is not None:
+        # Chemin RELATIF au dossier des applis, en .py, sans « .. » ; ni guillemet, ni barre oblique inverse, ni
+        # saut de ligne (il est écrit entre guillemets dans le fichier que lit streamlit-launch).
+        e = a.entrypoint
+        if (not e or len(e) > 255 or e.startswith(("/", "-")) or ".." in e.split("/") or not e.endswith(".py")
+                or any(c in e for c in '"\\\n\r\x00')):
+            raise Refus(ARGUMENT, f"point d'entrée invalide : {e[:120]}")
+    if a.sauvegarde is not None and not re.fullmatch(r"[0-9A-Za-z_.-]{1,40}", a.sauvegarde):
+        raise Refus(ARGUMENT, "suffixe de sauvegarde invalide")
+    if a.port is not None and not _port(a.port):
+        raise Refus(ARGUMENT, f"port invalide : {a.port}")
+    if not appli_existe(apps, a.appli):
+        raise Refus(INCONNUE, f"appli inconnue : {a.appli}")
+    change = False
+    if a.apply:
+        # Un seul fichier, écrit par renameat : pas de verrou (rien d'autre n'est modifié).
+        change = ecrire_port_appli(apps, a.appli, a.port, a.entrypoint, a.sauvegarde)
+    return {"ok": True, "appli": a.appli, "port": a.port, "entrypoint": a.entrypoint, "applique": change}
+
+
+# ─── Dépôt d'une archive : extraction PAR ROOT, rien ne sort du dossier ─────
+
+def _ouvrir_zip(chemin: str) -> int:
+    """Descripteur de l'archive à déposer. Chemin absolu en .zip, sans « .. », fichier ordinaire (jamais un lien),
+    taille plafonnée ; appelé par sudo, l'archive doit appartenir à l'appelant (SUDO_UID) : root ne lit pas pour
+    lui un fichier qu'il ne pourrait pas lire."""
+    pp = PurePosixPath(chemin)
+    if not pp.is_absolute() or ".." in pp.parts or pp.suffix != ".zip":
+        raise Refus(ARGUMENT, "archive refusée : chemin absolu en .zip attendu, sans « .. »")
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError as e:
+        raise Refus(ARGUMENT, f"archive refusée : {'lien symbolique' if e.errno == errno.ELOOP else e.strerror}")
+    st = os.fstat(fd)
+    appelant = os.environ.get("SUDO_UID", "")
+    if not stat.S_ISREG(st.st_mode) or st.st_size > ZIP_MAX_OCTETS or (
+            appelant.isdigit() and st.st_uid != int(appelant)):
+        os.close(fd)
+        raise Refus(ARGUMENT, "archive refusée : fichier ordinaire de l'appelant, 1 Gio au plus")
+    return fd
+
+
+def _entrees_zip(z: zipfile.ZipFile) -> list[tuple]:
+    """[(info, parties, est_dossier)] — tout est refusé avant la moindre écriture : chemin absolu ou « .. »,
+    lien symbolique, FIFO, périphérique, trop d'entrées, contenu trop gros."""
+    infos = z.infolist()
+    if len(infos) > ZIP_MAX_ENTREES:
+        raise Refus(ARGUMENT, f"archive refusée : plus de {ZIP_MAX_ENTREES} entrées")
+    out, total = [], 0
+    for info in infos:
+        nom = info.filename
+        if "\\" in nom or "\x00" in nom or nom.startswith("/") or re.match(r"^[A-Za-z]:", nom):
+            raise Refus(ARGUMENT, f"archive refusée : chemin hors du dossier de l'appli ({nom[:120]})")
+        parties = [x for x in nom.split("/") if x not in ("", ".")]
+        if ".." in parties:
+            raise Refus(ARGUMENT, f"archive refusée : chemin hors du dossier de l'appli ({nom[:120]})")
+        if not parties:
+            continue
+        type_ = stat.S_IFMT((info.external_attr >> 16) & 0xFFFF)
+        if type_ not in (0, stat.S_IFREG, stat.S_IFDIR):
+            raise Refus(ARGUMENT, f"archive refusée : lien symbolique, FIFO ou périphérique ({nom[:120]})")
+        total += info.file_size
+        if total > ZIP_MAX_OCTETS:
+            raise Refus(ARGUMENT, "archive refusée : plus de 1 Gio une fois décompressée")
+        out.append((info, parties, info.is_dir() or type_ == stat.S_IFDIR))
+    # Une seule racine qui est un dossier (« monappli/… ») : son contenu devient l'appli (comportement historique).
+    tetes = {p[0] for _i, p, _d in out}
+    if len(tetes) == 1 and all(len(p) > 1 or d for _i, p, d in out) and any(len(p) > 1 for _i, p, _d in out):
+        out = [(i, p[1:], d) for i, p, d in out if len(p) > 1]
+    return out
+
+
+def _descendre(racine_fd: int, parties: list[str]) -> int:
+    """Descripteur du sous-dossier `parties` sous `racine_fd`, créé au besoin, jamais à travers un lien."""
+    fd = os.dup(racine_fd)
+    for partie in parties:
+        with contextlib.suppress(FileExistsError):
+            os.mkdir(partie, 0o755, dir_fd=fd)
+        try:
+            nfd = os.open(partie, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd)
+        finally:
+            os.close(fd)
+        fd = nfd
+    return fd
+
+
+def _extraire(z: zipfile.ZipFile, entrees: list[tuple], racine_fd: int) -> int:
+    ecrits, n = 0, 0
+    for info, parties, est_dossier in entrees:
+        dfd = _descendre(racine_fd, parties if est_dossier else parties[:-1])
+        try:
+            if est_dossier:
+                continue
+            try:
+                fd = os.open(parties[-1], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                             0o644, dir_fd=dfd)
+            except FileExistsError:
+                raise Refus(ARGUMENT, f"archive refusée : entrée en double ({info.filename[:120]})")
+            with z.open(info) as src, os.fdopen(fd, "wb") as dst:
+                os.fchmod(dst.fileno(), 0o644)
+                while True:
+                    bloc = src.read(1 << 16)
+                    if not bloc:
+                        break
+                    ecrits += len(bloc)
+                    if ecrits > ZIP_MAX_OCTETS:
+                        raise Refus(ARGUMENT, "archive refusée : plus de 1 Gio une fois décompressée")
+                    dst.write(bloc)
+            n += 1
+        finally:
+            os.close(dfd)
+    return n
+
+
+def verbe_deposer(a, conf: Path, apps: Path) -> dict:
+    """Dépose une appli depuis un ZIP : validé ENTIÈREMENT, extrait dans un brouillon sous le dossier des applis
+    (mkdtemp, rien de prévisible), puis mis en place par renommage ; les dépendances (requirements.txt) sont
+    installées DANS le conteneur, et leur échec est rendu (code 6), jamais masqué."""
+    try:
+        return _deposer(a, apps)
+    except zipfile.BadZipFile as e:
+        raise Refus(ARGUMENT, f"archive ZIP illisible ou corrompue ({e})")
+
+
+def _deposer(a, apps: Path) -> dict:
+    fd = _ouvrir_zip(a.archive)
+    with os.fdopen(fd, "rb") as fh, zipfile.ZipFile(fh) as z:
+        entrees = _entrees_zip(z)
+        if not any(not d for _i, _p, d in entrees):
+            raise Refus(ARGUMENT, "archive vide")
+        afd = _fd_apps(apps)
+        try:
+            st = _lstat_dans(afd, a.appli)
+            if st is not None and stat.S_ISLNK(st.st_mode):
+                raise Refus(ETAT, f"« {a.appli} » sous {apps} est un lien symbolique — refusé, rien n'est déposé")
+            if st is not None and not stat.S_ISDIR(st.st_mode):
+                raise Refus(ETAT, f"« {a.appli} » sous {apps} n'est pas un dossier — refusé")
+            req = any(p == ["requirements.txt"] and not d for _i, p, d in entrees)
+            sortie = {"ok": True, "success": True, "name": a.appli, "path": str(apps / a.appli),
+                      "fichiers": sum(1 for _i, _p, d in entrees if not d),
+                      "requirements": {"present": req, "installe": False}, "applique": False}
+            if not a.apply:
+                return sortie
+            with verrou():
+                brouillon = f".depot-{a.appli}-{secrets.token_hex(6)}"
+                os.mkdir(brouillon, 0o755, dir_fd=afd)
+                try:
+                    bfd = os.open(brouillon, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=afd)
+                    try:
+                        _extraire(z, entrees, bfd)
+                    finally:
+                        os.close(bfd)
+                    ancien = None
+                    if st is not None:
+                        ancien = f".ancien-{a.appli}-{secrets.token_hex(6)}"
+                        os.rename(a.appli, ancien, src_dir_fd=afd, dst_dir_fd=afd)
+                    os.rename(brouillon, a.appli, src_dir_fd=afd, dst_dir_fd=afd)
+                    brouillon = None
+                    if ancien:
+                        shutil.rmtree(ancien, dir_fd=afd)
+                finally:
+                    if brouillon:
+                        shutil.rmtree(brouillon, dir_fd=afd, ignore_errors=True)
+        finally:
+            os.close(afd)
+    sortie["applique"] = True
+    if req:
+        chemin = f"{apps}/{a.appli}/requirements.txt"          # même chemin dans le conteneur (montage identité)
+        rc, out = _cmd(["lxc-attach", "-n", CONTENEUR, "--", "pip3", "install", "--break-system-packages", "-r",
+                        chemin], timeout=PIP_DELAI_S)
+        if rc:
+            raise Refus(DEPENDANCES, f"appli déposée, mais dépendances non installées (pip, code {rc}) : "
+                                     f"{_court(out) or 'sans message'} — corrigez requirements.txt puis redéposez")
+        sortie["requirements"]["installe"] = True
+    return sortie
 
 
 # ─── Ligne de commande ────────────────────────────────────────────────────
@@ -1178,6 +1708,7 @@ def _parseur() -> _Parseur:
     s.add_argument("--nom")
     s.add_argument("--port", type=int)
     s.add_argument("--ip-vive", dest="ip_vive")
+    s.add_argument("--lxc-config", dest="lxc_config")
     s.add_argument("--par", type=_type_acteur, default="inconnu")
     s.add_argument("--apply", action="store_true")
     s = sub.add_parser("depublier")
@@ -1186,6 +1717,19 @@ def _parseur() -> _Parseur:
     s.add_argument("--apply", action="store_true")
     s = sub.add_parser("etat")
     s.add_argument("appli", type=_type_appli)
+    s = sub.add_parser("ecrire-port")
+    s.add_argument("appli", type=_type_appli)
+    s.add_argument("--port", type=int)
+    s.add_argument("--entrypoint")
+    s.add_argument("--sauvegarde")
+    s.add_argument("--apply", action="store_true")
+    s = sub.add_parser("deposer")
+    s.add_argument("archive")
+    s.add_argument("appli", type=_type_appli)
+    s.add_argument("--apply", action="store_true")
+    s = sub.add_parser("depublier-anciennes")
+    s.add_argument("--par", type=_type_acteur, default="inconnu")
+    s.add_argument("--apply", action="store_true")
     s = sub.add_parser("env")
     s.add_argument("appli", type=_type_appli)
     s.add_argument("--lister", action="store_true")
@@ -1207,9 +1751,16 @@ def main(argv: list[str] | None = None, entree: str | None = None) -> int:
             r = verbe_depublier(a, conf, apps)
         elif a.verbe == "etat":
             r = verbe_etat(a, conf, apps)
+        elif a.verbe == "ecrire-port":
+            r = verbe_ecrire_port(a, conf, apps)
+        elif a.verbe == "deposer":
+            r = verbe_deposer(a, conf, apps)
+        elif a.verbe == "depublier-anciennes":
+            r = verbe_depublier_anciennes(a, conf, apps)
         else:
+            # Tout l'entrée standard jusqu'à la limite + 1 : au-delà, refus (jamais une coupe silencieuse).
             r = verbe_env(a, conf, apps, entree if entree is not None else
-                          ("" if a.lister or sys.stdin is None or sys.stdin.isatty() else sys.stdin.read(65536)))
+                          ("" if a.lister or sys.stdin is None or sys.stdin.isatty() else sys.stdin.read(ENV_MAX + 1)))
     except OSError as e:
         e = Refus(ECHEC, f"écriture impossible : {e.filename or ''} : {e.strerror or e}".replace(" :  :", " :"))
         print(json.dumps({"ok": False, "error": e.message, "code": e.code}, ensure_ascii=False))

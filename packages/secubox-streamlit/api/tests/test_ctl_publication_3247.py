@@ -50,6 +50,7 @@ touch "{eveil}"
 shift 2; shift
 case "$1" in
   systemctl) echo "$*" >> "{journal}"; touch "{demarre}"; exit 0 ;;
+  pip3) echo "$*" >> "{journal}"; exit 0 ;;
   ss)
     if [ "$2" = "-Htln" ]; then
       echo "LISTEN 0 128 0.0.0.0:8501 0.0.0.0:*"
@@ -75,6 +76,7 @@ esac
     apps.mkdir()
     lxc = tmp_path / "lxc" / "streamlit"
     (lxc / "rootfs").mkdir(parents=True)
+    (lxc / "config").write_text("lxc.net.0.link = br-lxc\nlxc.net.0.ipv4.address = 10.100.0.50/24\n")
     conf = tmp_path / "streamlit.toml"
     conf.write_text("[main]\nenabled = true\n")
     routes = tmp_path / "haproxy-routes.json"
