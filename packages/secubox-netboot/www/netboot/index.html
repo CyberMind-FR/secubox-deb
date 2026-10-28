@@ -218,7 +218,7 @@
                                 images: [{ nom: 'secubox-isp-mochabin-trixie.img.gz', taille: 2669000177, sha256: '35b4…', signee: true, taille_brute: null }] },
                               { nom: 'espressobin-live', titre: 'ESPRESSObin v7', console: 'ttyMV0,115200', serveur: '192.0.2.42', http_base: 'http://192.0.2.10:8099/espressobin-live', squashfs: true,
                                 commandes: ['setenv ethact neta@30000; setenv ipaddr <ip libre>; setenv serverip 192.0.2.42', 'tftpboot ${loadaddr} espressobin-live/boot.scr; source ${loadaddr}'],
-                                usb: { nom: 'cle-usb.img.gz', taille: 951000000, signee: true },
+                                usb: { nom: 'cle-usb.img.gz', taille: 951000000, signee: true, sha256: 'c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00', cle_publique: true },
                                 commandes_usb: [{ role: 'tester', commande: 'usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}' },
                                                 { role: 'autoflash', commande: 'usb start; load usb 0:1 ${loadaddr} autoflash.scr; source ${loadaddr}' }],
                                 images: [{ nom: 'secubox-minimal-espressobin-v7-trixie.img.xz', taille: 793388832, sha256: '9f1c…', signee: true, taille_brute: 7516192768 }] }] };
@@ -375,10 +375,27 @@
                 if (lv.usb) {
                     const p = el('p', 'note', 'Ou par la clé USB finale (le système lui-même, à écrire sur une clé) : ');
                     if (lv.http_base) { const a = el('a', 'mono', lv.usb.nom + ' · ' + Go(lv.usb.taille)); a.href = lv.http_base + '/' + lv.usb.nom; a.style.color = 'var(--cyan)'; p.appendChild(a); }
-                    p.appendChild(document.createTextNode(' ')); p.appendChild(pastille(lv.usb.signee ? 'ok' : 'hors', lv.usb.signee ? 'signée' : 'non signée'));
+                    p.appendChild(document.createTextNode(' ')); p.appendChild(pastille(lv.usb.signee ? 'ok' : 'hors', lv.usb.signee ? 'signature publiée' : 'non signée'));
                     z.appendChild(p);
+                    // Le HTTP du port 8099 n'est pas chiffré : vérifier la clé AVANT de l'écrire (empreinte, signature).
+                    if (lv.usb.sha256) {
+                        const e = el('p', 'note', 'SHA-256 : '); e.appendChild(el('span', 'mono', lv.usb.sha256)); z.appendChild(e);
+                    }
+                    if (lv.http_base) {
+                        const v = el('p', 'note', 'Vérifier avant d’écrire la clé (');
+                        [['cle-usb.img.gz.sig', 'signature'], ['netboot-image.pub', 'clé publique']].forEach(([f, t], i) => {
+                            if (i) v.appendChild(document.createTextNode(', '));
+                            const a = el('a', 'mono', t); a.href = lv.http_base + '/' + f; a.style.color = 'var(--cyan)'; v.appendChild(a);
+                        });
+                        v.appendChild(document.createTextNode(') :')); z.appendChild(v);
+                        z.appendChild(blocCopie('sha256sum cle-usb.img.gz\nopenssl dgst -sha256 -verify netboot-image.pub -signature cle-usb.img.gz.sig cle-usb.img.gz', 'Vérifier la clé'));
+                    }
                     (lv.commandes_usb || []).forEach(c => {
-                        z.appendChild(el('p', 'note', c.role === 'autoflash' ? 'Écrire sur l’eMMC (autoflash : signature vérifiée, puis la carte s’éteint ; retirer la clé et rallumer) :' : 'Tester : le système tourne sur la clé, l’eMMC n’est pas touchée :'));
+                        const n = el('p', 'note', c.role === 'autoflash'
+                            ? 'Écrire sur l’eMMC (autoflash) : la carte annonce la cible et compte 30 s (60 s si un système est déjà installé), une touche annule ; signature vérifiée, puis la carte s’éteint — retirer la clé et rallumer. '
+                            : 'Tester : le système tourne sur la clé, l’eMMC n’est pas touchée :');
+                        if (c.role === 'autoflash') n.appendChild(pastille('hors', 'efface l’eMMC'));
+                        z.appendChild(n);
                         z.appendChild(blocCopie(c.commande, c.role === 'autoflash' ? 'Commande U-Boot : autoflash' : 'Commande U-Boot : tester sur la clé'));
                     });
                 }

@@ -199,16 +199,16 @@ if [ -n "$nom" ] && ! [[ "$nom" =~ $NOM_RE ]]; then fail "nom invalide : $nom"; 
 # Serveur et dossier par défaut : ceux qui ont servi le live (fetch=http://HOTE:PORT/DOSSIER/filesystem.squashfs).
 CMDLINE="$(cat /proc/cmdline 2>/dev/null || true)"
 if [ -z "$srv" ] || [ -z "$dir" ]; then
-    f="$(printf '%s\n' $CMDLINE | sed -n 's#^fetch=http://##p' | head -n1)"
+    f="$(tr ' ' '\n' <<<"$CMDLINE" | sed -n 's#^fetch=http://##p' | head -n1)"
     if [ -n "$f" ]; then
         [ -n "$srv" ] || srv="${f%%/*}"
         [ -n "$dir" ] || { d="${f#*/}"; dir="${d%/*}"; }
     fi
 fi
-[ -n "$srv" ] || srv="$(printf '%s\n' $CMDLINE | sed -n 's#^sbx_srv=##p' | head -n1)"
+[ -n "$srv" ] || srv="$(tr ' ' '\n' <<<"$CMDLINE" | sed -n 's#^sbx_srv=##p' | head -n1)"
 [ -n "$srv" ] || fail "serveur inconnu : --srv HOTE[:PORT]"
 # live sur clé USB (#3233) : pas de fetch=, le dossier des images vient de sbx_dir= (posé par build-live-leger.sh)
-[ -n "$dir" ] || dir="$(printf '%s\n' $CMDLINE | sed -n 's#^sbx_dir=##p' | head -n1)"
+[ -n "$dir" ] || dir="$(tr ' ' '\n' <<<"$CMDLINE" | sed -n 's#^sbx_dir=##p' | head -n1)"
 [ -n "$dir" ] || dir="mochabin-live"
 case "$dir" in *[!A-Za-z0-9._-]*|.*) fail "dossier d'images invalide : $dir" ;; esac
 BASE="http://$srv/$dir"
@@ -288,7 +288,11 @@ if [ "$(mode_ecriture "$taille" "$dispo")" = flux ]; then
     log "$((dispo/1048576)) Mo libres pour une image de $((taille/1048576)) Mo : écriture EN FLUX, signature et empreinte vérifiées pendant l'écriture"
     telecharge "$BASE/$image.sig" "$TRAVAIL/$image.sig" || fail "téléchargement de la signature KO"
     # l'image doit être joignable AVANT la confirmation : l'écriture commence par effacer la tête de l'eMMC
-    curl -fsSI --connect-timeout 20 "$BASE/$image" >/dev/null || fail "image injoignable : $BASE/$image — rien n'a été écrit"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSI --connect-timeout 20 --max-time 30 "$BASE/$image" >/dev/null
+    else
+        wget -q --spider --timeout=30 --tries=1 "$BASE/$image"
+    fi || fail "image injoignable : $BASE/$image — rien n'a été écrit"
     if [ "$auto" -eq 0 ]; then
         confirme_flash "$image" "${dev_emmc:-?}" "$BASE" "$sha" || fail "flash annulé — rien n'a été écrit"
     fi

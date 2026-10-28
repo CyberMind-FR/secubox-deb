@@ -374,27 +374,35 @@ def _images_live(d: Path) -> List[Dict[str, Any]]:
 
 _CLE_USB = "cle-usb.img.gz"
 _RE_CMD_USB = re.compile(r"^(tester|autoflash)\t([ -~]{1,200})$")
+_RE_SHA_USB = re.compile(r"^sha256\t([0-9a-f]{64})$")
+# Rôle et commande recoupés : une ligne « tester » qui chargerait autoflash.scr serait affichée comme sans danger.
+_SCRIPT_DU_ROLE = {"tester": "boot-usb.scr", "autoflash": "autoflash.scr"}
 
 
 def _cle_usb(d: Path) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, str]]]:
     """Clé USB « finale » publiée à côté du live (#3233, build-cle-finale.sh) : l'image système qui tourne sur la clé
-    pour les tests, et qui s'écrit seule sur l'eMMC (autoflash). Commandes U-Boot lues dans cle-usb.txt
-    (« tester|autoflash<TAB>commande ») ; tout autre rôle et toute ligne trop longue ou non imprimable sont écartés."""
+    pour les tests, et qui s'écrit sur l'eMMC (autoflash). cle-usb.txt : « sha256<TAB>empreinte » et
+    « tester|autoflash<TAB>commande » ; tout autre rôle, toute commande qui ne charge pas le script de son rôle et toute
+    ligne trop longue ou non imprimable sont écartés."""
     f = d / _CLE_USB
     try:
-        if not f.is_file():
+        if d.is_symlink() or not f.is_file():
             return None, []
         taille = f.stat().st_size
-    except OSError:
+    except OSError as e:
+        logging.getLogger("secubox.netboot").warning("clé USB du live %s illisible : %s", d.name, e)
         return None, []
-    cle = {"nom": _CLE_USB, "taille": taille, "signee": (d / (_CLE_USB + ".sig")).is_file()}
+    cle: Dict[str, Any] = {"nom": _CLE_USB, "taille": taille, "signee": (d / (_CLE_USB + ".sig")).is_file(),
+                           "sha256": None, "cle_publique": (d / "netboot-image.pub").is_file()}
     cmds = []
     for ligne in (_lire_court(d / "cle-usb.txt") or "").splitlines():
-        m = _RE_CMD_USB.fullmatch(ligne)
+        m = _RE_SHA_USB.fullmatch(ligne)
         if m:
+            cle["sha256"] = m.group(1)
+            continue
+        m = _RE_CMD_USB.fullmatch(ligne)
+        if m and _SCRIPT_DU_ROLE[m.group(1)] in m.group(2) and len(cmds) < 4:
             cmds.append({"role": m.group(1), "commande": m.group(2)})
-        if len(cmds) >= 4:
-            break
     return cle, cmds
 
 

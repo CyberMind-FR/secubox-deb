@@ -87,6 +87,9 @@ debootstrap --arch=arm64 --variant=minbase --keyring="$KEYRING" "$suite" "$w/roo
 for m in /proc /sys /dev /dev/pts; do mkdir -p "$w/root$m"; done
 mount -t proc proc "$w/root/proc"; mount -t sysfs sys "$w/root/sys"
 mount --bind /dev "$w/root/dev"; mount --bind /dev/pts "$w/root/dev/pts"
+# Mises à jour de sécurité : le live expose sshd sur le LAN.
+printf 'deb %s %s main\ndeb http://security.debian.org/debian-security %s-security main\n' "$miroir" "$suite" "$suite" \
+    > "$w/root/etc/apt/sources.list"
 # Aucun démon ne démarre dans la racine en construction.
 printf '#!/bin/sh\nexit 101\n' > "$w/root/usr/sbin/policy-rc.d"; chmod 0755 "$w/root/usr/sbin/policy-rc.d"
 log "paquets du live…"

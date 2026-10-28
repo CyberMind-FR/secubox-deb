@@ -6,15 +6,22 @@
 
 # SecuBox-Deb :: sbx-autoflash (#3233) — SUR LA CLÉ USB « FINALE » (build-cle-finale.sh).
 #
-# Quand le noyau porte sbx_autoflash=1 — démarrage par autoflash.scr, tapé à la console U-Boot : c'est la confirmation
-# de l'opérateur —, écrit sur l'eMMC l'image signée rangée dans la partition SBXFLASH de la clé, puis éteint la carte.
-# L'empreinte du fichier est calculée AVANT la vérification de la signature, puis imposée à l'écriture en flux
-# (secubox-flash-emmc --stdin, qui revérifie la signature au fil de l'eau) : un fichier changé entre les deux ne
-# correspond plus et l'eMMC est invalidée. Signature invalide = rien n'est écrit.
+# Démarrage par autoflash.scr (tapé à la console U-Boot ; aucun bootcmd automatique ne le charge) → noyau avec
+# sbx_autoflash=1 → cette unité, sur la console série :
+#   1. prend l'image dans la partition SBXFLASH de SON disque de démarrage (jamais « la première clé venue ») ;
+#   2. exige l'empreinte GRAVÉE à la construction de la clé (/etc/secubox/autoflash.sha256 : pas de retour à une
+#      image plus ancienne, même signée), puis la signature (clé publique embarquée) ;
+#   3. ANNONCE la cible, sa taille, ce qu'elle porte (« box déjà installée »), l'image et son empreinte, puis compte à
+#      rebours : une touche à la console ANNULE, rien n'est écrit (confirmation de l'opérateur, doctrine netboot) ;
+#   4. écrit par le flux vérifié de secubox-flash-emmc (signature et empreinte revérifiées pendant l'écriture, tête de
+#      l'image écrite en dernier), puis éteint la carte : retirer la clé, rallumer → démarrage sur l'eMMC.
 set -euo pipefail
 
 PUB=/etc/secubox/netboot-image.pub
+SHA_GRAVEE=/etc/secubox/autoflash.sha256
 MONT=/run/sbx-autoflash
+DELAI=30
+DELAI_BOX_INSTALLEE=60
 
 log()  { echo "[sbx-autoflash] $*"; logger -t sbx-autoflash -- "$*" 2>/dev/null || true; }
 fail() { log "ERREUR : $*"; exit 1; }
@@ -37,18 +44,73 @@ verifie_signature() { # CLE_PUB IMAGE
     openssl dgst -sha256 -verify "$1" -signature "$2.sig" "$2" >/dev/null 2>&1
 }
 
+attend_annulation() { # SECONDES → 1 si une touche est frappée (annulation), 0 sinon
+    local s="$1" debut=$SECONDS rc=0 reste
+    IFS= read -r -s -n 1 -t "$s" _touche || rc=$?
+    [ "$rc" -eq 0 ] && return 1
+    if [ "$rc" -le 128 ]; then                      # pas de console (fin de flux) : la durée annoncée est tenue
+        reste=$(( s - (SECONDS - debut) ))
+        [ "$reste" -gt 0 ] && sleep "$reste"
+    fi
+    return 0
+}
+
+partition_flash() { # → la partition étiquetée SBXFLASH du disque qui porte la racine
+    local src disque n
+    src="$(findmnt -no SOURCE /)" || return 1
+    disque="$(lsblk -no PKNAME "$src" 2>/dev/null | head -n1)"
+    [ -n "$disque" ] || return 1
+    for n in $(lsblk -lnpo NAME "/dev/$disque" | tail -n +2); do
+        if [ "$(blkid -s LABEL -o value "$n" 2>/dev/null)" = SBXFLASH ]; then echo "$n"; return 0; fi
+    done
+    return 1
+}
+
+emmc_detectee() { # comme secubox-flash-emmc : le premier mmcblk doté d'une partition boot0
+    local d
+    for d in /dev/mmcblk0 /dev/mmcblk1 /dev/mmcblk2; do
+        if [ -b "${d}boot0" ]; then echo "$d"; return 0; fi
+    done
+    return 1
+}
+
 main() {
     demande_autoflash /proc/cmdline || { log "démarrage sans sbx_autoflash=1 : rien à écrire"; exit 0; }
     [ -s "$PUB" ] || fail "clé publique absente ($PUB) : clé construite sans elle"
+    attendue="$(cat "$SHA_GRAVEE" 2>/dev/null || true)"
+    [[ "$attendue" =~ ^[0-9a-f]{64}$ ]] || fail "empreinte attendue absente ($SHA_GRAVEE) — rien n'a été écrit"
+    part="$(partition_flash)" || fail "partition SBXFLASH introuvable sur le disque de démarrage — rien n'a été écrit"
     mkdir -p "$MONT"
-    mountpoint -q "$MONT" || mount -o ro LABEL=SBXFLASH "$MONT" || fail "partition SBXFLASH introuvable sur la clé"
+    mountpoint -q "$MONT" || mount -o ro,nodev,nosuid,noexec "$part" "$MONT" || fail "montage de $part impossible"
     img="$(choisit_image "$MONT")" || fail "une seule image signée attendue dans SBXFLASH — rien n'a été écrit"
     case "$img" in *.img.xz) format=xz ;; *) format=gz ;; esac
     log "empreinte de $(basename "$img")…"
     sha="$(sha256sum "$img" | awk '{print $1}')"
+    [ "$sha" = "$attendue" ] || fail "image différente de celle gravée à la construction de la clé — rien n'a été écrit"
     log "vérification de la signature (clé embarquée)…"
     verifie_signature "$PUB" "$img" || fail "SIGNATURE INVALIDE — rien n'a été écrit"
-    log "signature VALIDE : écriture de l'eMMC (signature et empreinte revérifiées pendant l'écriture)…"
+
+    cible="$(emmc_detectee)" || fail "eMMC introuvable — rien n'a été écrit"
+    taille=$(( $(blockdev --getsize64 "$cible" 2>/dev/null || echo 0) / 1048576 ))
+    etiquettes="$(lsblk -lno LABEL "$cible" 2>/dev/null | grep . | paste -sd, - || true)"
+    delai=$DELAI
+    echo
+    echo "════════════════ AUTOFLASH — ÉCRITURE DE L'eMMC ════════════════"
+    echo "  Cible   : $cible ($taille Mo) — contenu actuel : ${etiquettes:-vide}"
+    if lsblk -lno LABEL "$cible" 2>/dev/null | grep -qx rootfs; then
+        delai=$DELAI_BOX_INSTALLEE
+        echo "  ⚠ BOX DÉJÀ INSTALLÉE : son système et ses données (/data) seront EFFACÉS"
+    fi
+    echo "  Image   : $(basename "$img")"
+    echo "  SHA-256 : $sha (signature valide)"
+    echo "  Écriture dans $delai s — appuyer sur une touche pour ANNULER (rien ne sera écrit)."
+    echo "═════════════════════════════════════════════════════════════════"
+    if ! attend_annulation "$delai"; then
+        umount "$MONT" 2>/dev/null || true
+        log "autoflash ANNULÉ à la console : rien n'a été écrit. Éteindre, retirer la clé ou démarrer par boot-usb.scr."
+        exit 0
+    fi
+    log "écriture de l'eMMC (signature et empreinte revérifiées pendant l'écriture)…"
     secubox-flash-emmc --stdin "$format" --sig "$img.sig" --pub "$PUB" --sha256 "$sha" --auto --no-reboot < "$img" \
         || fail "écriture de l'eMMC refusée ou interrompue (eMMC invalidée si elle avait été entamée)"
     umount "$MONT" 2>/dev/null || true

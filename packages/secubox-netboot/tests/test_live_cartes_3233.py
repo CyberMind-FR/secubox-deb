@@ -150,7 +150,7 @@ def test_live_api_carte_console_et_cle_usb_finale(tmp_path):
     main.app.dependency_overrides[main.require_jwt] = lambda: {"sub": "admin"}
     live = TestClient(main.app).get("/live").json()["lives"][0]
     assert live["titre"] == "ESPRESSObin v7" and live["console"] == "ttyMV0,115200"
-    assert live["usb"] == {"nom": "cle-usb.img.gz", "taille": 1234, "signee": True}
+    assert live["usb"] == {"nom": "cle-usb.img.gz", "taille": 1234, "signee": True, "sha256": None, "cle_publique": False}
     assert live["commandes_usb"] == [
         {"role": "tester", "commande": "usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}"},
         {"role": "autoflash", "commande": "usb start; load usb 0:1 ${loadaddr} autoflash.scr; source ${loadaddr}"},

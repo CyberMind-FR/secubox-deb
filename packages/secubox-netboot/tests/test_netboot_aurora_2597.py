@@ -232,7 +232,8 @@ LIVE_EBIN = {"lives": [{"nom": "espressobin-live", "titre": "ESPRESSObin v7", "c
                         "serveur": "192.0.2.42", "http_base": "http://192.0.2.10:8099/espressobin-live", "squashfs": True,
                         "commandes": ["setenv ethact neta@30000; setenv ipaddr <ip libre>; setenv serverip 192.0.2.42",
                                       "tftpboot ${loadaddr} espressobin-live/boot.scr; source ${loadaddr}"],
-                        "usb": {"nom": "cle-usb.img.gz", "taille": 951000000, "signee": True},
+                        "usb": {"nom": "cle-usb.img.gz", "taille": 951000000, "signee": True, "sha256": "c" * 64,
+                                "cle_publique": True},
                         "commandes_usb": [
                             {"role": "tester", "commande": "usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}"},
                             {"role": "autoflash", "commande": "usb start; load usb 0:1 ${loadaddr} autoflash.scr; source ${loadaddr}"}],
@@ -250,6 +251,8 @@ def test_3233_espressobin_reseau_cle_usb_finale_et_flux(navigateur):
     assert "en flux" in texte
     assert "load usb 0:1 ${loadaddr} boot-usb.scr" in texte and "load usb 0:1 ${loadaddr} autoflash.scr" in texte
     assert "7,52 Go" in texte and "0,79 Go" in texte                          # décompressée et compressée
+    assert "c" * 64 in texte and "openssl dgst -sha256 -verify netboot-image.pub" in texte   # vérifier avant d'écrire
+    assert "efface l’eMMC" in texte
     liens = p.eval_on_selector_all("#lives a", "els => els.map(e => e.getAttribute('href'))")
     assert "http://192.0.2.10:8099/espressobin-live/cle-usb.img.gz" in liens
     assert err == []
