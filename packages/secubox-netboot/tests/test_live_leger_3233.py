@@ -40,7 +40,7 @@ def test_meme_format_que_la_cle_live_mochabin():
 
 def test_la_carte_vient_de_son_live_env():
     s = texte()
-    assert '"$HERE/board/$carte/live.env"' in s and 'case "$carte" in *[!a-z0-9-]*|"") die' in s
+    assert 'charge_live_env "$carte" "$HERE" || die' in s
     assert "$LIVE_DTB" in s and "$LIVE_CONSOLE" in s and "$LIVE_BOOTARGS" in s and "$LIVE_KERNEL_ADDR" in s
 
 
@@ -75,3 +75,31 @@ def test_les_montages_du_chroot_sont_toujours_defaits():
 def test_sbx_netflash_lit_sbx_dir_depuis_le_noyau():
     s = NETFLASH.read_text()
     assert "s#^sbx_dir=##p" in s
+
+
+
+def test_debootstrap_verifie_les_signatures_et_installe_en_deux_temps():
+    s = texte()
+    assert '--keyring="$KEYRING"' in s and "debian-archive-keyring.gpg" in s
+    assert "policy-rc.d" in s and "exit 101" in s                       # aucun démon dans la racine en construction
+    assert "--include=" not in s                                        # python3-argon2 cassait la configuration de base
+
+
+def test_cles_publiques_seulement():
+    s = texte()
+    assert s.count("grep -q 'PRIVATE KEY'") >= 2
+    assert 'openssl pkey -pubin -in "$pub" -noout' in s and 'ssh-keygen -l -f "$cle_ssh"' in s
+
+
+def test_sshd_genere_ses_cles_avant_son_controle():
+    s = texte()
+    assert "ExecStartPre=\\nExecStartPre=/usr/bin/ssh-keygen -A\\nExecStartPre=/usr/sbin/sshd -t" in s
+
+
+def test_live_sans_identifiant_partage_avec_pare_feu_et_licences():
+    s = texte()
+    assert ': > "$w/root/etc/machine-id"' in s
+    assert "policy drop" in s and "tcp dport 22 accept" in s and "nftables.service" in s
+    assert "! -name copyright" in s
+    assert "rm -rf --one-file-system" in s
+    assert "live-leger construit" in s                                  # trace d'audit

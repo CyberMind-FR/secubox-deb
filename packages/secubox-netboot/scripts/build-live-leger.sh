@@ -39,22 +39,29 @@ esac; done
 log() { echo "[live-leger] $*"; }
 die() { echo "[live-leger] ERREUR : $*" >&2; exit 1; }
 
-case "$carte" in *[!a-z0-9-]*|"") die "--carte invalide" ;; esac
-[ -s "$HERE/board/$carte/live.env" ] || die "carte sans live réseau : $HERE/board/$carte/live.env absent"
-# shellcheck source=/dev/null
-. "$HERE/board/$carte/live.env"
+# shellcheck source=live-env.sh
+. "$HERE/scripts/live-env.sh"
+charge_live_env "$carte" "$HERE" || die "réglages de la carte $carte refusés"
 [ -n "$sortie" ] || die "--sortie FICHIER.img.gz manquant"
 case "$sortie" in *.img.gz) : ;; *) die "--sortie : .img.gz attendu" ;; esac
-[ -s "$pub" ] || die "--pub : clé publique de signature des images introuvable"
-[ -z "$cle_ssh" ] || [ -s "$cle_ssh" ] || die "--cle-ssh : clé publique SSH introuvable"
+# Jamais une clé PRIVÉE dans l'image : elle finirait dans le squashfs servi en HTTP sur le LAN.
+[ -s "$pub" ] && ! grep -q 'PRIVATE KEY' "$pub" && openssl pkey -pubin -in "$pub" -noout 2>/dev/null \
+    || die "--pub : clé PUBLIQUE de signature des images attendue"
+if [ -n "$cle_ssh" ]; then
+    [ -s "$cle_ssh" ] && ! grep -q 'PRIVATE KEY' "$cle_ssh" && ssh-keygen -l -f "$cle_ssh" >/dev/null 2>&1 \
+        || die "--cle-ssh : clé PUBLIQUE SSH attendue"
+fi
+KEYRING=/usr/share/keyrings/debian-archive-keyring.gpg
+[ -s "$KEYRING" ] || die "trousseau Debian absent ($KEYRING) : debootstrap ne vérifierait pas les signatures"
 case "$srv" in *[!A-Za-z0-9.:-]*|"") die "--srv invalide" ;; esac
 [ "$(id -u)" -eq 0 ] || die "à lancer en root"
-for c in debootstrap sfdisk losetup mkfs.vfat mkfs.ext4 mkimage rsync gzip; do
+for c in debootstrap sfdisk losetup mkfs.vfat mkfs.ext4 mkimage rsync gzip openssl ssh-keygen sha256sum; do
     command -v "$c" >/dev/null || die "outil manquant : $c"
 done
 FLASHER="$REPO/image/sbin/secubox-flash-emmc"
 [ -f "$FLASHER" ] || FLASHER="$HERE/installer/secubox-flash-emmc"
-[ -f "$FLASHER" ] || die "secubox-flash-emmc introuvable"
+[ -f "$FLASHER" ] || FLASHER="$(command -v secubox-flash-emmc || true)"
+[ -n "$FLASHER" ] && [ -f "$FLASHER" ] || die "secubox-flash-emmc introuvable"
 
 mkdir -p "$travail"
 w="$(mktemp -d "$travail/live-leger.XXXXXX")"
@@ -63,24 +70,35 @@ nettoie() {
     for m in /dev/pts /dev /sys /proc; do umount -l "$w/root$m" 2>/dev/null || true; done
     umount "$w/mnt/boot" 2>/dev/null || true; umount "$w/mnt/root" 2>/dev/null || true
     [ -n "$loop" ] && losetup -d "$loop" 2>/dev/null || true
-    rm -rf "$w"
+    rm -rf --one-file-system "$w"
 }
 trap nettoie EXIT
 
 # ── 1. racine Debian minimale ────────────────────────────────────────────────
-PAQUETS="systemd-sysv,udev,kmod,linux-image-arm64,initramfs-tools,zstd,live-boot,live-boot-initramfs-tools"
-PAQUETS+=",openssh-server,curl,ca-certificates,openssl,xz-utils,gzip,pv,util-linux,e2fsprogs,parted,dosfstools"
-PAQUETS+=",iproute2,iputils-ping,procps,less,python3,python3-argon2"
+# Deux temps : socle minbase (signatures vérifiées par le trousseau Debian), puis apt-get dans la racine — les paquets
+# Python (python3-argon2) cassaient la configuration de base de debootstrap lorsqu'ils étaient dans --include.
+PAQUETS="systemd-sysv udev kmod linux-image-arm64 initramfs-tools zstd live-boot live-boot-initramfs-tools"
+PAQUETS+=" openssh-server curl ca-certificates openssl xz-utils gzip pv util-linux e2fsprogs parted dosfstools"
+PAQUETS+=" iproute2 iputils-ping procps less nftables python3 python3-argon2"
 log "debootstrap $suite arm64 (minbase)…"
-debootstrap --arch=arm64 --variant=minbase --include="$PAQUETS" "$suite" "$w/root" "$miroir" > "$w/debootstrap.log" 2>&1 \
+debootstrap --arch=arm64 --variant=minbase --keyring="$KEYRING" "$suite" "$w/root" "$miroir" > "$w/debootstrap.log" 2>&1 \
     || { tail -n 30 "$w/debootstrap.log" >&2; die "debootstrap a échoué"; }
 
 for m in /proc /sys /dev /dev/pts; do mkdir -p "$w/root$m"; done
 mount -t proc proc "$w/root/proc"; mount -t sysfs sys "$w/root/sys"
 mount --bind /dev "$w/root/dev"; mount --bind /dev/pts "$w/root/dev/pts"
+# Aucun démon ne démarre dans la racine en construction.
+printf '#!/bin/sh\nexit 101\n' > "$w/root/usr/sbin/policy-rc.d"; chmod 0755 "$w/root/usr/sbin/policy-rc.d"
+log "paquets du live…"
+# shellcheck disable=SC2086
+chroot "$w/root" /bin/sh -c "apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends $PAQUETS" \
+    > "$w/apt.log" 2>&1 || { tail -n 30 "$w/apt.log" >&2; die "installation des paquets du live"; }
+rm -f "$w/root/usr/sbin/policy-rc.d"
 
 # ── 2. configuration ─────────────────────────────────────────────────────────
 echo "sbx-live" > "$w/root/etc/hostname"
+# Identifiant de machine vidé : régénéré au démarrage (sinon tous les lives présentent le même client DHCP).
+: > "$w/root/etc/machine-id"; rm -f "$w/root/var/lib/dbus/machine-id"
 printf '127.0.0.1\tlocalhost\n127.0.1.1\tsbx-live\n' > "$w/root/etc/hosts"
 printf 'LABEL=SBXLIVE / ext4 defaults,noatime 0 1\n' > "$w/root/etc/fstab"
 mkdir -p "$w/root/etc/systemd/network"
@@ -106,8 +124,30 @@ if [ -n "$cle_ssh" ]; then
     install -m0600 "$cle_ssh" "$w/root/root/.ssh/authorized_keys"
 fi
 rm -f "$w/root"/etc/ssh/ssh_host_*      # clés d'hôte régénérées au démarrage : jamais les mêmes sur deux lives
+# ssh.service de Debian lance `sshd -t` en ExecStartPre : sans clés il échoue AVANT tout ExecStartPre ajouté. On
+# remplace la liste : génération des clés d'abord, contrôle de la configuration ensuite.
 mkdir -p "$w/root/etc/systemd/system/ssh.service.d"
-printf '[Service]\nExecStartPre=/usr/bin/ssh-keygen -A\n' > "$w/root/etc/systemd/system/ssh.service.d/10-cles-hote.conf"
+printf '[Service]\nExecStartPre=\nExecStartPre=/usr/bin/ssh-keygen -A\nExecStartPre=/usr/sbin/sshd -t\n' \
+    > "$w/root/etc/systemd/system/ssh.service.d/10-cles-hote.conf"
+
+# Pare-feu : refus par défaut en entrée ; SSH, DHCP client et ICMP seulement.
+cat > "$w/root/etc/nftables.conf" <<'EOF'
+#!/usr/sbin/nft -f
+flush ruleset
+table inet sbx_live {
+    chain input {
+        type filter hook input priority 0; policy drop;
+        ct state established,related accept
+        iif "lo" accept
+        meta l4proto { icmp, ipv6-icmp } accept
+        udp sport 67 udp dport 68 accept
+        udp sport 547 udp dport 546 accept
+        tcp dport 22 accept
+    }
+    chain forward { type filter hook forward priority 0; policy drop; }
+}
+EOF
+chroot "$w/root" systemctl enable nftables.service >/dev/null 2>&1
 
 # Outils de flash et clé PUBLIQUE de signature des images (la clé privée ne quitte jamais le serveur).
 install -m0755 "$HERE/installer/sbx-netflash" "$w/root/usr/local/sbin/sbx-netflash"
@@ -130,7 +170,8 @@ chroot "$w/root" update-initramfs -u -k all > "$w/initramfs.log" 2>&1 || { tail 
 
 # Allègement : listes apt, documentation, pages de manuel, locales.
 chroot "$w/root" apt-get clean
-rm -rf "$w/root"/var/lib/apt/lists/* "$w/root"/usr/share/doc/* "$w/root"/usr/share/man/* "$w/root"/usr/share/info/*
+rm -rf "$w/root"/var/lib/apt/lists/* "$w/root"/usr/share/man/* "$w/root"/usr/share/info/*
+find "$w/root/usr/share/doc" -type f ! -name copyright -delete 2>/dev/null || true    # licences gardées
 find "$w/root/usr/share/locale" -mindepth 1 -maxdepth 1 ! -name 'fr*' ! -name 'en*' -exec rm -rf {} + 2>/dev/null || true
 for m in /dev/pts /dev /sys /proc; do umount -l "$w/root$m"; done
 
@@ -177,3 +218,6 @@ losetup -d "$loop"; loop=""
 log "compression → $sortie"
 gzip -c "$w/live.img" > "$sortie.tmp" && mv -f "$sortie.tmp" "$sortie"
 log "prêt : $sortie ($(du -h "$sortie" | awk '{print $1}')), noyau $v, DTB $LIVE_DTB"
+mkdir -p /var/log/secubox/netboot
+echo "$(date -Iseconds) live-leger construit carte=$carte sortie=$(basename "$sortie") sha256=$(sha256sum "$sortie" | awk '{print $1}') cle_images=$(openssl pkey -pubin -in "$pub" -outform DER 2>/dev/null | sha256sum | cut -c1-16) cle_ssh=$( [ -n "$cle_ssh" ] && ssh-keygen -l -f "$cle_ssh" | awk '{print $2}' || echo aucune)" \
+    >> /var/log/secubox/netboot/audit.log

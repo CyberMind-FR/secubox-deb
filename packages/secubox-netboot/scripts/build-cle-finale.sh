@@ -39,10 +39,9 @@ esac; done
 log() { echo "[cle-finale] $*"; }
 die() { echo "[cle-finale] ERREUR : $*" >&2; exit 1; }
 
-case "$carte" in *[!a-z0-9-]*|"") die "--carte invalide" ;; esac
-[ -s "$HERE/board/$carte/live.env" ] || die "carte inconnue : $carte"
-# shellcheck source=/dev/null
-. "$HERE/board/$carte/live.env"
+# shellcheck source=live-env.sh
+. "$HERE/scripts/live-env.sh"
+charge_live_env "$carte" "$HERE" || die "réglages de la carte $carte refusés"
 [ -s "$image" ] || die "--image : image système introuvable"
 case "$image" in *.img.xz|*.img.gz) : ;; *) die "--image : .img.xz ou .img.gz attendu" ;; esac
 case "$sortie" in *.img.gz) : ;; *) die "--sortie : .img.gz attendu" ;; esac
@@ -51,10 +50,12 @@ case "$sortie" in *.img.gz) : ;; *) die "--sortie : .img.gz attendu" ;; esac
 for c in sgdisk losetup e2label e2fsck tune2fs fatlabel mkfs.ext4 mkimage openssl sha256sum gzip; do
     command -v "$c" >/dev/null || die "outil manquant : $c"
 done
-[ -s "$pub" ] || die "clé publique absente : $pub"
+[ -s "$pub" ] && ! grep -q 'PRIVATE KEY' "$pub" && openssl pkey -pubin -in "$pub" -noout 2>/dev/null \
+    || die "clé publique absente ou invalide : $pub"
 FLASHER="$REPO/image/sbin/secubox-flash-emmc"
 [ -f "$FLASHER" ] || FLASHER="$HERE/installer/secubox-flash-emmc"
-[ -f "$FLASHER" ] || die "secubox-flash-emmc introuvable"
+[ -f "$FLASHER" ] || FLASHER="$(command -v secubox-flash-emmc || true)"
+[ -n "$FLASHER" ] && [ -f "$FLASHER" ] || die "secubox-flash-emmc introuvable"
 
 mkdir -p "$travail"
 w="$(mktemp -d "$travail/cle-finale.XXXXXX")"
@@ -62,7 +63,7 @@ loop=""
 nettoie() {
     for m in flash boot root; do umount "$w/mnt/$m" 2>/dev/null || true; done
     [ -n "$loop" ] && losetup -d "$loop" 2>/dev/null || true
-    rm -rf "$w"
+    rm -rf --one-file-system "$w"
 }
 trap nettoie EXIT
 

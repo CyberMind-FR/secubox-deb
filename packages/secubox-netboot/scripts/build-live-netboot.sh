@@ -42,11 +42,11 @@ esac; done
 log() { echo "[live-netboot] $*"; }
 die() { echo "[live-netboot] ERREUR : $*" >&2; exit 1; }
 [ "$(id -u)" -eq 0 ] || die "à lancer en root"
-case "$carte" in *[!a-z0-9-]*|"") die "--carte invalide" ;; esac
-[ -s "$HERE/board/$carte/live.env" ] || die "carte sans live réseau : $HERE/board/$carte/live.env absent"
-# shellcheck source=/dev/null
-. "$HERE/board/$carte/live.env"
+# shellcheck source=live-env.sh
+. "$HERE/scripts/live-env.sh"
+charge_live_env "$carte" "$HERE" || die "réglages de la carte $carte refusés"
 [ -n "$nom" ] || nom="$LIVE_NOM"
+[ -z "$tftp_ip" ] || [[ "$tftp_ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || die "--tftp : adresse IPv4 attendue"
 [ -s "$live" ] || die "--live : image live introuvable"
 case "$nom" in *[!A-Za-z0-9._-]*|"") die "--nom invalide" ;; esac
 for c in losetup mksquashfs mkimage openssl rsync lsinitramfs; do command -v "$c" >/dev/null || die "outil manquant : $c"; done
@@ -55,7 +55,8 @@ for c in losetup mksquashfs mkimage openssl rsync lsinitramfs; do command -v "$c
 FLASHER="$HERE/../../image/sbin/secubox-flash-emmc"
 [ -f "$FLASHER" ] || FLASHER="$REPO/image/sbin/secubox-flash-emmc"
 [ -f "$FLASHER" ] || FLASHER="$HERE/installer/secubox-flash-emmc"
-[ -f "$FLASHER" ] || die "secubox-flash-emmc introuvable (image/sbin du dépôt)"
+[ -f "$FLASHER" ] || FLASHER="$(command -v secubox-flash-emmc || true)"
+[ -n "$FLASHER" ] && [ -f "$FLASHER" ] || die "secubox-flash-emmc introuvable (image/sbin du dépôt)"
 
 mkdir -p "$travail"
 w="$(mktemp -d "$travail/live.XXXXXX")"

@@ -41,22 +41,38 @@ detect_emmc() {
 # ── Écriture en flux vérifiée (#3233) ─────────────────────────────
 # Sur 1 Go de RAM (ESPRESSObin), l'image ne tient pas en mémoire : elle arrive sur l'entrée standard et s'écrit au fil
 # de l'eau. La signature (clé publique) et l'empreinte SHA-256 du flux COMPRESSÉ sont calculées pendant l'écriture ;
-# elles ne se concluent qu'à la fin. En cas d'échec, ce qui vient d'être écrit est invalidé : rien d'amorçable ne reste.
+# elles ne se concluent qu'à la fin. La TÊTE (2 premiers Mo : MBR de protection, GPT primaire, début de p1) est gardée
+# de côté et n'est écrite qu'APRÈS validation : une écriture interrompue de quelque façon que ce soit (Ctrl+C, SSH
+# coupé, OOM, courant coupé, serveur figé) laisse un disque sans table de partitions, donc rien d'amorçable. L'ancienne
+# tête et l'ancienne GPT de secours sont effacées AVANT la première écriture.
+TETE_MO=2
 
-invalide_cible() { # CIBLE — début (table de partitions, chargeur) et fin (GPT de secours) remis à zéro
-    local c="$1" taille n
-    taille="$(blockdev --getsize64 "$c" 2>/dev/null || stat -c %s "$c")"
-    n=$(( taille / 1048576 )); [ "$n" -gt 64 ] && n=64
-    dd if=/dev/zero of="$c" bs=1M count="$n" conv=fsync,notrunc status=none || true
+invalide_cible() { # CIBLE — début (table, chargeur) et fin (GPT de secours) remis à zéro ; code ≠ 0 si impossible
+    local c="$1" taille n rc=0
+    if [ -b "$c" ]; then
+        taille="$(blockdev --getsize64 "$c")" || return 1
+    else
+        taille="$(stat -c %s "$c")" || return 1          # cible ordinaire : bancs d'essai seulement
+    fi
+    [ "${taille:-0}" -gt 0 ] || return 1
+    n=$(( taille / 1048576 )); [ "$n" -gt 64 ] && n=64; [ "$n" -ge 1 ] || n=1
+    dd if=/dev/zero of="$c" bs=1M count="$n" conv=fsync,notrunc status=none || rc=1
     if [ "$taille" -gt $(( 128 * 1048576 )) ]; then
-        dd if=/dev/zero of="$c" bs=1M seek=$(( taille / 1048576 - 1 )) count=1 conv=fsync,notrunc status=none || true
+        dd if=/dev/zero of="$c" bs=1M seek=$(( taille / 1048576 - 1 )) count=1 conv=fsync,notrunc status=none || rc=1
     fi
     sync
+    return "$rc"
 }
 
+ecrit_corps() { # CIBLE FICHIER_TETE — les TETE_MO premiers Mo vont dans FICHIER_TETE, le reste sur la cible à leur suite
+    dd of="$2" bs=1M count="$TETE_MO" iflag=fullblock status=none || return 1
+    dd of="$1" bs=1M seek="$TETE_MO" conv=fsync,notrunc status=none
+}
+
+# Code : 0 écrite et vérifiée ; 1 refusée, cible invalidée ; 2 paramètres refusés, rien touché ; 3 refusée et
+# INVALIDATION ÉCHOUÉE (ne pas démarrer sur la cible).
 ecrit_flux_verifie() { # CIBLE FORMAT(gz|xz) SIGNATURE CLE_PUB SHA256 — flux compressé sur l'entrée standard
-    local cible="$1" format="$2" sig="$3" pub="$4" attendu="$5" t p_sig p_sha v somme
-    local dec
+    local cible="$1" format="$2" sig="$3" pub="$4" attendu="$5" t p_sig p_sha p_flux v somme dec
     case "$format" in
         gz) dec="gzip" ;;
         xz) dec="xz" ;;
@@ -65,29 +81,50 @@ ecrit_flux_verifie() { # CIBLE FORMAT(gz|xz) SIGNATURE CLE_PUB SHA256 — flux c
     [ -s "$sig" ] && [ -s "$pub" ] && [[ "$attendu" =~ ^[0-9a-f]{64}$ ]] \
         || { echo "signature, clé publique ou empreinte manquante : rien n'est écrit" >&2; return 2; }
     t="$(mktemp -d)" || return 1
+    invalide_cible "$cible" || { rm -rf "$t"; echo "cible impossible à préparer : rien n'est écrit" >&2; return 3; }
     mkfifo "$t/sig" "$t/sha"
     openssl dgst -sha256 -verify "$pub" -signature "$sig" < "$t/sig" > "$t/verdict" 2>&1 & p_sig=$!
     sha256sum < "$t/sha" > "$t/somme" & p_sha=$!
+    # Le flux tourne en tâche de fond (entrée standard gardée explicitement) : bash ne lance un trap qu'APRÈS la
+    # commande au premier plan, mais `wait`, lui, est interrompu par le signal. Interruption (Ctrl+C, SSH coupé,
+    # arrêt) : le flux est arrêté, la tête n'est pas écrite, et ce qui l'a été est effacé.
+    ( set +e; tee "$t/sig" "$t/sha" | "$dec" -dc | ecrit_corps "$cible" "$t/tete"; echo "${PIPESTATUS[*]}" > "$t/etats" ) 0<&0 &
+    p_flux=$!
+    trap 'pkill -TERM -P "$p_flux" 2>/dev/null; kill "$p_flux" "$p_sig" "$p_sha" 2>/dev/null; invalide_cible "$cible";
+          rm -rf "$t"; echo "flux interrompu : cible invalidée" >&2; exit 130' INT TERM HUP
     set +e
-    tee "$t/sig" "$t/sha" | "$dec" -dc | dd of="$cible" bs=4M conv=fsync,notrunc status=none
-    local etats=("${PIPESTATUS[@]}")
+    wait "$p_flux"
+    local etats
+    read -r -a etats < "$t/etats" 2>/dev/null || etats=(1 1 1)
     wait "$p_sig"; v=$?
     wait "$p_sha"
     set -e
     somme="$(awk '{print $1}' "$t/somme" 2>/dev/null)"
-    rm -rf "$t"
     if [ "${etats[0]}" -eq 0 ] && [ "${etats[1]}" -eq 0 ] && [ "${etats[2]}" -eq 0 ] && [ "$v" -eq 0 ] \
-            && [ "$somme" = "$attendu" ]; then
+            && [ "$somme" = "$attendu" ] \
+            && dd if="$t/tete" of="$cible" bs=1M conv=fsync,notrunc status=none; then
+        trap - INT TERM HUP
+        rm -rf "$t"
         sync
         return 0
     fi
-    echo "flux refusé (tee=${etats[0]} ${dec}=${etats[1]} dd=${etats[2]} signature=$v empreinte=${somme:-?}) : cible invalidée" >&2
-    invalide_cible "$cible"
+    trap - INT TERM HUP
+    rm -rf "$t"
+    echo "flux refusé (tee=${etats[0]} ${dec}=${etats[1]} corps=${etats[2]} signature=$v empreinte=${somme:-?})" >&2
+    invalide_cible "$cible" || { echo "INVALIDATION ÉCHOUÉE : ne pas démarrer sur la cible" >&2; return 3; }
     return 1
 }
 
-# Chargeable sans exécuter (tests) : SBX_FLASH_EMMC_SOURCE=1.
-if [[ -n "${SBX_FLASH_EMMC_SOURCE:-}" ]]; then return 0 2>/dev/null || exit 0; fi
+# Chargeable sans exécuter (tests) : SBX_FLASH_EMMC_SOURCE=1. EXÉCUTÉ avec cette variable, il refuse (code 2) : sortir
+# en succès sans rien écrire ferait croire à l'appelant que l'eMMC est écrite.
+if [[ -n "${SBX_FLASH_EMMC_SOURCE:-}" ]]; then
+    if (return 0 2>/dev/null); then return 0; fi      # chargé par `source` : seul cas où `return` est permis
+    echo "SBX_FLASH_EMMC_SOURCE est réservée aux tests : refus" >&2
+    exit 2
+fi
+
+AUDIT=/var/log/secubox/netboot/audit.log
+audit() { mkdir -p "$(dirname "$AUDIT")" 2>/dev/null && echo "$(date -Iseconds) flash-emmc $*" >> "$AUDIT" 2>/dev/null || true; }
 
 EMMC_DEVICE=""
 
@@ -212,9 +249,18 @@ if [[ -n "$STDIN_FORMAT" ]]; then
         exit 0
     fi
     sync
-    if ! ecrit_flux_verifie "$EMMC_DEVICE" "$STDIN_FORMAT" "$SIG_FILE" "$PUB_FILE" "$SHA_ATTENDU"; then
-        err "VÉRIFICATION ÉCHOUÉE (signature, empreinte ou flux interrompu) — eMMC invalidée, rien d'amorçable n'y reste"
-    fi
+    audit "flux debut cible=$EMMC_DEVICE format=$STDIN_FORMAT sha256=$SHA_ATTENDU"
+    set +e
+    ecrit_flux_verifie "$EMMC_DEVICE" "$STDIN_FORMAT" "$SIG_FILE" "$PUB_FILE" "$SHA_ATTENDU" 2>>"$LOG_FILE"
+    rc=$?
+    set -e
+    case "$rc" in
+        0) audit "flux ecrit cible=$EMMC_DEVICE sha256=$SHA_ATTENDU verdict=valide" ;;
+        3) audit "flux refuse cible=$EMMC_DEVICE sha256=$SHA_ATTENDU invalidation=ECHEC"
+           err "VÉRIFICATION ÉCHOUÉE et INVALIDATION ÉCHOUÉE : NE PAS démarrer sur l'eMMC ($EMMC_DEVICE) — détail : $LOG_FILE" ;;
+        *) audit "flux refuse cible=$EMMC_DEVICE sha256=$SHA_ATTENDU invalidation=ok code=$rc"
+           err "VÉRIFICATION ÉCHOUÉE (signature, empreinte ou flux interrompu) — eMMC invalidée, rien d'amorçable n'y reste ; détail : $LOG_FILE" ;;
+    esac
     ok "Image écrite et vérifiée (signature et empreinte)"
     partprobe "$EMMC_DEVICE" 2>/dev/null || true
     if [[ $NO_REBOOT -eq 0 ]]; then

@@ -61,8 +61,9 @@ def test_les_adresses_de_l_espressobin_tiennent_dans_1_go_hors_zone_reservee():
 
 def test_le_script_lit_la_carte_et_refuse_un_nom_douteux():
     s = BUILD.read_text()
-    assert "--carte)" in s and '"$HERE/board/$carte/live.env"' in s
-    assert 'case "$carte" in *[!a-z0-9-]*|"") die' in s
+    assert "--carte)" in s and 'charge_live_env "$carte" "$HERE" || die' in s
+    env = (ICI / "scripts" / "live-env.sh").read_text()
+    assert '"$ici/board/$carte/live.env"' in env and 'case "$carte" in *[!a-z0-9-]*|"")' in env
     assert '-name "$LIVE_DTB"' in s and '"$LIVE_PILOTE"' in s
     assert "armada-7040-mochabin.dtb" not in s and "mvpp2-2" not in s     # plus rien de la MOCHAbin en dur
 
@@ -163,3 +164,45 @@ def test_live_sans_cle_usb():
     sys.path.insert(0, str(ICI.parents[1] / "common"))
     main = importlib.import_module("api.main")
     assert main._cle_usb(Path("/nexiste/pas")) == (None, [])
+
+
+
+def _charge(ici, carte="essai"):
+    return subprocess.run(["bash", "-c", '. "$0"; charge_live_env "$1" "$2"', str(ICI / "scripts" / "live-env.sh"),
+                           carte, str(ici)], capture_output=True, text=True, timeout=60)
+
+
+def test_les_vraies_cartes_passent_la_validation():
+    for carte in ("mochabin", "espressobin-v7"):
+        r = _charge(ICI, carte)
+        assert r.returncode == 0, (carte, r.stderr)
+
+
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize("cle,valeur", [
+    ("LIVE_DTB", "x.dtb; reset"), ("LIVE_BOOTARGS", '"a; reset"'), ("LIVE_KERNEL_ADDR", "0x07000000;reset"),
+    ("LIVE_CONSOLE", "ttyMV0,115200 init=/bin/sh;"), ("LIVE_NOM", "../x"), ("LIVE_ETHACT", "neta@30000;reset"),
+    ("LIVE_BOOTARGS", '"$(id)"'), ("LIVE_SCRIPT_ADDR", "'${a;b}'"),
+])
+def test_une_valeur_douteuse_du_live_env_est_refusee(tmp_path, cle, valeur):
+    base = (ICI / "board" / "espressobin-v7" / "live.env").read_text()
+    lignes = [x for x in base.splitlines() if not x.startswith(cle + "=")] + [f"{cle}={valeur}"]
+    (tmp_path / "board" / "essai").mkdir(parents=True)
+    (tmp_path / "board" / "essai" / "live.env").write_text("\n".join(lignes) + "\n")
+    assert _charge(tmp_path).returncode != 0
+
+
+def test_tftp_valide_en_ipv4():
+    assert '[[ "$tftp_ip" =~ ^([0-9]{1,3}\\.){3}[0-9]{1,3}$ ]] || die' in BUILD.read_text()
+
+
+
+def test_le_live_env_n_est_jamais_execute(tmp_path):
+    piege = tmp_path / "piege"
+    base = (ICI / "board" / "espressobin-v7" / "live.env").read_text()
+    (tmp_path / "board" / "essai").mkdir(parents=True)
+    (tmp_path / "board" / "essai" / "live.env").write_text(base + f"LIVE_TITRE=x; touch {piege}\n")
+    _charge(tmp_path)
+    assert not piege.exists()

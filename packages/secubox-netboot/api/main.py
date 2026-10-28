@@ -360,8 +360,9 @@ def _images_live(d: Path) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for ligne in (_lire_court(d / "images.txt") or "").splitlines():
         mots = ligne.split()
-        if len(mots) not in (3, 4) or not _RE_IMAGE.fullmatch(mots[0]) or not mots[1].isdigit() \
-                or not re.fullmatch(r"[0-9a-f]{64}", mots[2]) or (len(mots) == 4 and not mots[3].isdigit()):
+        # [0-9] et non isdigit() : un chiffre Unicode (« ² ») passerait isdigit() puis ferait échouer int() (500)
+        if len(mots) not in (3, 4) or not _RE_IMAGE.fullmatch(mots[0]) or not re.fullmatch(r"[0-9]{1,15}", mots[1]) \
+                or not re.fullmatch(r"[0-9a-f]{64}", mots[2]) or (len(mots) == 4 and not re.fullmatch(r"[0-9]{1,15}", mots[3])):
             continue
         out.append({"nom": mots[0], "taille": int(mots[1]), "sha256": mots[2],
                     "signee": (d / (mots[0] + ".sig")).is_file(),

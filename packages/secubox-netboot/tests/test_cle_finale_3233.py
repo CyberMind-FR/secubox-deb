@@ -108,3 +108,11 @@ def test_l_ecriture_passe_par_le_flux_verifie():
     assert i_sha < i_sig < i_flash
     assert '--sha256 "$sha"' in s and "--auto" in s and "--no-reboot" in s
     assert "systemctl poweroff" in s
+
+
+
+def test_la_cle_finale_refuse_une_cle_privee_et_charge_la_carte():
+    s = CLE.read_text()
+    assert "grep -q 'PRIVATE KEY' \"$pub\"" in s and 'openssl pkey -pubin -in "$pub" -noout' in s
+    assert 'charge_live_env "$carte" "$HERE" || die' in s
+    assert "rm -rf --one-file-system" in s

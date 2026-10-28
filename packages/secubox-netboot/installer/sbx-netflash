@@ -42,6 +42,12 @@ log()  { echo "[sbx-netflash] $*"; echo "[$(date -Iseconds)] $*" >> "$JOURNAL" 2
 fail() { log "ERREUR : $*"; exit 1; }
 
 # ── Petite RAM (#3233) ─────────────────────────────────────────────────────
+# images.txt arrive en HTTP clair, non signé : chaque champ est validé par motif AVANT tout calcul. Une « taille »
+# telle que a[$(cmd)] serait sinon EXÉCUTÉE par l'arithmétique de bash, en root, avant la vérification de signature.
+champs_valides() { # TAILLE SHA256 [TAILLE_DECOMPRESSEE]
+    [[ "$1" =~ ^[0-9]{1,15}$ ]] && [[ "$2" =~ ^[0-9a-f]{64}$ ]] && { [ -z "${3:-}" ] || [[ "$3" =~ ^[0-9]{1,15}$ ]]; }
+}
+
 mode_ecriture() { # TAILLE DISPO → « ram » si l'image tient en tmpfs avec 768 Mo de marge, sinon « flux »
     if [ "$2" -gt $(( $1 + 768 * 1048576 )) ]; then echo ram; else echo flux; fi
 }
@@ -58,14 +64,19 @@ emmc_detectee() { # comme secubox-flash-emmc : le premier mmcblk doté d'une par
     return 1
 }
 
-confirme_flash() { # IMAGE — « FLASH » lu sur le terminal : en flux, l'entrée standard du flasheur porte l'image
-    local r tty="${SBX_TTY:-/dev/tty}"
+confirme_flash() { # IMAGE CIBLE SOURCE SHA256 — « FLASH » lu sur le terminal (en flux, l'entrée standard porte l'image)
+    local r tty="${SBX_TTY:-/dev/tty}" cap
+    cap="$(blockdev --getsize64 "$2" 2>/dev/null || echo 0)"
+    printf 'Cible  : %s (%s Mo) — TOUT SERA EFFACÉ\nImage  : %s\nSource : %s\nSHA-256: %s…\n' \
+        "$2" "$((cap / 1048576))" "$1" "$3" "${4:0:16}" >&2
     IFS= read -r -p "Taper FLASH pour effacer l'eMMC et y écrire $1 : " r < "$tty" >&2 || return 1
     [ "$r" = "FLASH" ]
 }
 
-telecharge_flux() { # URL → sortie standard ; jamais de reprise (--retry) : un flux recommencé serait corrompu
-    if command -v curl >/dev/null 2>&1; then curl -fsS "$1"; else wget -qO- "$1"; fi
+# Délais bornés : un serveur qui fige la connexion ne laisse pas le flash en suspens (l'opérateur couperait le courant).
+telecharge_flux() { # URL → sortie standard ; jamais de reprise : un flux recommencé serait corrompu
+    if command -v curl >/dev/null 2>&1; then curl -fsS --connect-timeout 20 --speed-limit 4096 --speed-time 60 "$1"
+    else wget -qO- --tries=1 --timeout=60 "$1"; fi
 }
 
 
@@ -203,8 +214,8 @@ case "$dir" in *[!A-Za-z0-9._-]*|.*) fail "dossier d'images invalide : $dir" ;; 
 BASE="http://$srv/$dir"
 
 telecharge() { # URL DEST
-    if command -v curl >/dev/null 2>&1; then curl -fSL --retry 3 -o "$2" "$1"
-    else wget -O "$2" "$1"; fi
+    if command -v curl >/dev/null 2>&1; then curl -fSL --retry 3 --connect-timeout 20 --speed-limit 4096 --speed-time 60 -o "$2" "$1"
+    else wget -O "$2" --tries=3 --timeout=60 "$1"; fi
 }
 
 mkdir -p "$TRAVAIL"
@@ -222,6 +233,8 @@ ligne="$(awk -v n="$image" '$1==n' "$TRAVAIL/images.txt")"
 [ -n "$ligne" ] || fail "image absente de la liste du serveur : $image"
 taille="$(echo "$ligne" | awk '{print $2}')"
 sha="$(echo "$ligne" | awk '{print $3}')"
+brut="$(echo "$ligne" | awk '{print $4}')"
+champs_valides "$taille" "$sha" "$brut" || fail "ligne d'images.txt invalide pour $image — rien n'a été écrit"
 [ -s "$PUB" ] || fail "clé publique absente ($PUB) : ce live n'a pas été construit pour le flash réseau"
 
 # --nom : lot signé récupéré et VÉRIFIÉ avant toute écriture ; refus = rien n'est écrit.
@@ -248,7 +261,6 @@ fi
 
 format="$(format_image "$image")" || fail "format non pris en charge : $image (.img.gz ou .img.xz)"
 dev_emmc="${SBX_EMMC:-$(emmc_detectee || true)}"
-brut="$(echo "$ligne" | awk '{print $4}')"
 if [ -n "$brut" ] && [ -n "$dev_emmc" ] && [ -b "$dev_emmc" ]; then
     cap="$(blockdev --getsize64 "$dev_emmc" 2>/dev/null || echo 0)"
     if [ "$cap" -gt 0 ] && [ "$brut" -gt "$cap" ]; then
@@ -275,7 +287,11 @@ fi
 if [ "$(mode_ecriture "$taille" "$dispo")" = flux ]; then
     log "$((dispo/1048576)) Mo libres pour une image de $((taille/1048576)) Mo : écriture EN FLUX, signature et empreinte vérifiées pendant l'écriture"
     telecharge "$BASE/$image.sig" "$TRAVAIL/$image.sig" || fail "téléchargement de la signature KO"
-    if [ "$auto" -eq 0 ]; then confirme_flash "$image" || fail "flash annulé — rien n'a été écrit"; fi
+    # l'image doit être joignable AVANT la confirmation : l'écriture commence par effacer la tête de l'eMMC
+    curl -fsSI --connect-timeout 20 "$BASE/$image" >/dev/null || fail "image injoignable : $BASE/$image — rien n'a été écrit"
+    if [ "$auto" -eq 0 ]; then
+        confirme_flash "$image" "${dev_emmc:-?}" "$BASE" "$sha" || fail "flash annulé — rien n'a été écrit"
+    fi
     opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto)
     if [ -n "$nom" ]; then opts+=(--no-reboot); else opts+=("${reboot_opt[@]}"); fi
     log "téléchargement et écriture en flux de $BASE/$image…"
@@ -327,6 +343,9 @@ depose_lot_et_termine
 # carte SD occupe mmcblk0), puis redémarrage si demandé.
 depose_lot_et_termine() {
     [ -n "$dev_emmc" ] || fail "eMMC introuvable (aucun mmcblk avec boot0) : image écrite, lot NON déposé"
+    partprobe "$dev_emmc" 2>/dev/null || true
+    udevadm settle --timeout=30 2>/dev/null || true
+    [ -b "${dev_emmc}p2" ] && [ -b "${dev_emmc}p1" ] || fail "partitions de $dev_emmc absentes après l'écriture : lot NON déposé"
     depose_sur_emmc "${dev_emmc}p2" "${dev_emmc}p1" "$lot" "$profil" || fail "dépôt du lot KO (image écrite, ni code ni profil déposés)"
     rm -rf "$TRAVAIL/lot"
     log "code de jonction, ancre et profil déposés pour $nom."

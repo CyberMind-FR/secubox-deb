@@ -15,6 +15,17 @@ secubox-netboot (0.8.0-1~trixie1) trixie; urgency=medium
     console, usb, commandes_usb ; page /netboot/ : carte, console, clé USB (tester, autoflash), colonne
     décompressée, commande « sbx-netflash --image … --nom … » (sans --image, il ne faisait que lister).
     board/espressobin-v7/live.env aligné sur l'image validée (ath10k bloqué, quirk eMMC, ${loadaddr}).
+  * Relecture de sécurité (2 bloquants corrigés) : la TÊTE de l'image (2 premiers Mo : table de partitions,
+    début de p1) n'est écrite qu'après validation de la signature et de l'empreinte, et l'ancienne tête et la
+    GPT de secours sont effacées avant toute écriture — une écriture interrompue (Ctrl+C, SSH, OOM, courant,
+    serveur figé) ne laisse rien d'amorçable ; flux en tâche de fond pour que INT/TERM/HUP l'arrêtent et
+    invalident ; champs d'images.txt validés par motif avant tout calcul (une « taille » a[$(cmd)] était
+    exécutée en root) ; délais curl/wget ; image sondée avant la confirmation, qui montre cible, taille,
+    source et empreinte ; invalidation qui signale son échec (code 3), audit append-only ; refus d'exécuter
+    secubox-flash-emmc avec la variable de test. Live léger : debootstrap en deux temps avec trousseau Debian,
+    clés d'hôte SSH générées avant `sshd -t`, refus de toute clé privée en --pub/--cle-ssh, machine-id vidé,
+    pare-feu nftables en refus par défaut, licences gardées, audit. live.env lu comme des données (jamais
+    exécuté) et validé par motif (live-env.sh) ; --tftp en IPv4 ; Suggests des outils de construction.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 11:30:00 +0100
 
