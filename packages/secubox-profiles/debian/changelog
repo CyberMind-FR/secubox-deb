@@ -1,3 +1,60 @@
+secubox-profiles (0.25.2-1~trixie1) trixie; urgency=medium
+
+  * Seconde relecture de la PR #3248 (ref #3218). Le postinst ne cree plus par `install -d -o ... -m ...` les
+    dossiers places sous des dossiers du compte secubox (/etc/secubox/{profiles,health,waf},
+    /var/lib/secubox/profiles/{rollback,validation}) : GNU install -d sur un dossier existant suit un lien et y fait
+    chown et chmod, `profiles -> /etc/apt/apt.conf.d` donnait ce dossier a secubox. `maj-references.py --dossiers`
+    les cree ou les repare par descripteur (mkdir relatif, ouverture sans suivre de lien, fchown et fchmod) et
+    refuse bruyamment un lien ; memes proprietaires et modes qu'avant (validation : secubox-profiles:secubox 2750).
+  * maj-references.py : une socket ou tout autre objet a la place d'un profil est laisse (« pas un fichier
+    ordinaire »), sans trace ; les profils suivants sont mis a jour.
+  * `secubox-profilectl coupe` ouvre la racine puis profiles/ sans suivre de lien et lit relativement.
+  * Profils minimal et lite, README : un module absent de `on`, dont un sleeper active par l'operateur, est arrete
+    par l'apply ; pour le garder, `sleeper = "on"` dans pins.toml.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 20:00:00 +0100
+
+secubox-profiles (0.25.1-1~trixie1) trixie; urgency=medium
+
+  * Relecture de securite de la PR #3248 (ref #3218). La mise a jour des profils de reference (postinst, root)
+    passe en Python par descripteur (maj-references.py, remplace maj-references.sh) : cible ouverte sans suivre de
+    lien (un dossier profiles/ remplace par un lien est refuse), fichiers crees dans un dossier root seul 0700 sous
+    /etc puis renommes (renameat), copie locale lue seulement si c'est un fichier ordinaire (une FIFO bloquait dpkg),
+    bornee a 1 Mo. Avant : temporaire cree DANS le dossier du compte secubox puis cp/chmod/chown par chemin.
+  * Le postinst ne reactive plus ce que le profil actif coupe : nouvelle commande `secubox-profilectl coupe <unite>`
+    (rc 0 si le profil actif la coupe par minuteurs_off ou proteges_off ; lecture sans lien ni blocage) ; l'API du
+    panneau et les minuteries cache-warm@* ne sont plus rallumees a chaque mise a jour.
+  * Le panneau refuse (409) d'appliquer un profil qui coupe sa propre API (proteges_off) et renvoie a la CLI.
+  * Le sleeper sort des profils minimal et lite : livre desactive, il reste le choix de l'operateur.
+  * Un profil illisible ignore pour les minuteries gerees est journalise.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 18:00:00 +0100
+
+secubox-profiles (0.25.0-1~trixie1) trixie; urgency=medium
+
+  * Allegement des profils minimal et lite, d'apres le banc de l'ESPRESSObin de 1 Go gk5 du 2026-10-28 (ref #3218).
+    minimal et lite : ni ksm, ni Centres, ni nDPId, DPI ou Media Flow, ni « Boxes a preparer » (entrees de menu
+    masquees). minimal : ni admin, ni API profiles, ni routes, netdiag, network-anomaly, premier-pas-console, ni le
+    service portal (sans tete : login.html et l'API auth restent servis par nginx et l'agregateur), ni courbes.
+  * Socle ajoute aux deux profils (l'apply l'aurait arrete) : p2p, annuaire, users, sleeper, waker, meshname,
+    net-fallback, groupe-declares. lite recale sur son meta-paquet : protections livrees mais absentes du profil
+    (nac, webfilter, freebox, ipv6guard, tor, qos, soc, threats, toolbox, vault...) et unites a garder actives
+    (eth2-flowctl-off, depot-deverrouille, toolbox-wg-restore).
+  * Oneshot de minuterie retires de « on » (annuaire-apply, annuaire-noms, webfilter-apply, webfilter-sync,
+    premier-pas-appliquer, premier-pas-decouverte, dpi-resume) : l'apply les demarrait, ils ne devenaient jamais
+    actifs et l'attente expiree annulait tout l'apply.
+  * Nouvelle cle `minuteurs_off` : le profil arrete et desactive des minuteries (minimal : dpi-resume, yt-dlp-refresh,
+    courbes-serie, metrics-publish, netstats, network-anomaly-collecte, profiles-releve, cache-warm@jitsi,
+    cache-warm@metacatalog ; lite : dpi-resume, yt-dlp-refresh) ; les autres profils les retablissent.
+  * Nouvelle cle `proteges_off`, limitee a `profiles` : minimal coupe l'API du panneau (41 Mo) ; la CLI
+    secubox-profilectl reste le moyen de changer de profil. Tout autre protege fait refuser le profil.
+  * Le postinst met a jour les profils de reference non modifies (copie identique a une version livree, empreintes
+    tirees de l'historique git) ; une copie modifiee est gardee, la reference posee en .dpkg-dist. Avant, une mise
+    a jour ne changeait jamais /etc/secubox/profiles/minimal.toml.
+  * Le panneau garde menu_off, minuteurs_off et proteges_off quand il reecrit un profil (menu_off etait perdu).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 14:00:00 +0100
+
 secubox-profiles (0.24.0-1~trixie1) trixie; urgency=medium
 
   * Validation du parc (#3212) : `secubox-profilectl releve` (secubox-profiles-releve.timer, 5 min, User=secubox,

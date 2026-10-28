@@ -15,10 +15,12 @@ PAQUETS = Path(__file__).resolve().parents[2]
 META = "secubox-minimal"
 CONTROL = (PAQUETS / META / "debian" / "control").read_text(encoding="utf8")
 
-REQUIS = {"secubox-dpi", "secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox", "secubox-ipv6guard", "secubox-webfilter", "secubox-autoload-agent", "secubox-wireguard"}
+REQUIS = {"secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox", "secubox-ipv6guard", "secubox-webfilter", "secubox-autoload-agent", "secubox-wireguard"}
 SOCLE_ADMIN = {"secubox-core", "secubox-aggregator", "secubox-hub", "secubox-portal", "secubox-auth"}
 INTERDITS = {"secubox-waf-ng", "secubox-waf", "secubox-haproxy", "secubox-toolbox", "secubox-webos", "secubox-isp", "secubox-lite", "secubox-full",
-             "secubox-metrics", "secubox-soc", "secubox-toolbox-ng", "secubox-mediaflow", "secubox-torrent", "secubox-mail"}
+             "secubox-metrics", "secubox-soc", "secubox-toolbox-ng", "secubox-mediaflow", "secubox-torrent", "secubox-mail",
+             # #3218 : DPI, nDPId, Courbes et Routes (netdiag) sortent du profil minimal.
+             "secubox-dpi", "secubox-ndpid-engine", "secubox-courbes", "secubox-routes"}
 
 
 def noms(chunk):
@@ -115,9 +117,10 @@ def test_pas_de_postinst_de_leurre_ni_de_binaire_haproxy():
     assert "haproxy" not in CONTROL.split(f"Package: {META}", 1)[1].split("Conflicts:")[0]
 
 
-def test_ndpid_engine_exige_la_version_qui_choisit_son_interface():
-    """1.7.1 lance nDPId sur `eth2` (valeur de gk2) : sur l'ESPRESSObin, 61 redemarrages et la carte noyee (#2851). Le choix de l'interface est dans 1.7.2 (#2740)."""
-    assert re.search(r"secubox-ndpid-engine \(>= 1\.7\.2\)", CONTROL)
+def test_ndpid_engine_n_est_plus_exige():
+    """#2851 exigeait ndpid-engine >= 1.7.2 (choix de l'interface) ; #3218 retire nDPId du profil : il prenait tout le CPU de la carte."""
+    depends = CONTROL.split(f"Package: {META}", 1)[1].split("Conflicts:")[0]
+    assert "secubox-ndpid-engine" not in re.sub(r"^#.*$", "", depends, flags=re.M)
 
 
 def test_toolbox_et_rlevel_sont_exclus_et_ad_guard_ne_l_exige_plus():

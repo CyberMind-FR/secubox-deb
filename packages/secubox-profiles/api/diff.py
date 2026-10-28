@@ -126,6 +126,12 @@ def _reason(m: Manifest, profile: Profile | None, pins: dict[str, str], desired:
         return "module protégé (toujours allumé)"
     if pins.get(m.id) in (ON, OFF):
         return f"épinglé sur '{pins[m.id]}'"
+    if profile is not None and m.id.startswith("minuteur:"):           # pseudo-module de minuteurs.etendre (#3218)
+        if desired == OFF:
+            return f"minuterie arrêtée par le profil '{profile.name}' (minuteurs_off)"
+        return f"minuterie rétablie : le profil '{profile.name}' ne l'arrête pas"
+    if profile is not None and m.id in profile.proteges_off:
+        return f"protégé, coupé par le profil '{profile.name}' (proteges_off ; la CLI reste)"
     if profile is not None and m.id in profile.on:
         return f"listé dans le profil '{profile.name}'"
     if profile is not None:

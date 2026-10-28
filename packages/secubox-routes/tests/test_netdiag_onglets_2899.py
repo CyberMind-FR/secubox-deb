@@ -4,6 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """#2899 — netdiag absorbe Routes et SOC Reseau en onglets ; iperf3 est integre ; minimal l'embarque."""
 import re
+import tomllib
 from pathlib import Path
 
 ICI = Path(__file__).resolve().parents[1]
@@ -27,8 +28,11 @@ def test_iperf3_est_integre_pas_seulement_recommande():
     assert "iperf3" in dep
 
 
-def test_minimal_embarque_routes_et_son_profil_les_active():
+def test_routes_et_netdiag_quittent_minimal_3218():
+    """#2899 les embarquait dans minimal ; le banc de l'ESPRESSObin de 1 Go (#3218) en a fait un surplus (39 Mo chacun)."""
     ctrl = (PAQUETS / "secubox-minimal/debian/control").read_text()
-    assert re.search(r"secubox-routes \(>= 1\.5\.0\)", ctrl)
-    prof = (PAQUETS / "secubox-profiles/profiles/minimal.toml").read_text()
-    assert '"netdiag"' in prof and '"routes"' in prof
+    depends, conflicts = ctrl.split("Package: secubox-minimal", 1)[1].split("Conflicts:", 1)
+    assert "secubox-routes" not in re.sub(r"^#.*$", "", depends, flags=re.M)
+    assert "secubox-routes" in conflicts.split("Description:")[0]
+    on = tomllib.loads((PAQUETS / "secubox-profiles/profiles/minimal.toml").read_text())["on"]
+    assert "netdiag" not in on and "routes" not in on

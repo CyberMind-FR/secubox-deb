@@ -3,19 +3,40 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 
-# Profil d'activation « minimal » (#2838) : ce que `secubox-profilectl apply --profile minimal` laisse allume.
-# C'est le pendant du meta-paquet secubox-minimal : DPI, garde DNS, filtre de publicites, controle d'acces reseau, Freebox, garde IPv6, filtrage web,
-# la seule WebUI d'administration et WireGuard (#2845). Ni WAF (#2849), ni Hall, ni metrics, ni kiosque, ni Tor. Les ids sont ceux des manifestes derives des unites.
+# Profil d'activation « minimal » (#2838, allégé par #3218) : ce que `secubox-profilectl apply --profile minimal` laisse allumé.
+# Pendant du méta-paquet secubox-minimal, pour une carte de 1 Go (ESPRESSObin, mesurée sur gk5 le 2026-10-28) : boîtier de garde
+# sans tête. Garde DNS, filtre de publicités, filtrage web, NAC, Freebox, garde IPv6, WireGuard, le socle d'administration et le
+# maillage. Ni DPI ni nDPId (#3218), ni WAF ni HAProxy (#2849), ni Hall, ni metrics, ni kiosque, ni Tor.
+# Le sleeper n'y figure pas (relecture #3248) : livré désactivé, il reste le choix de l'opérateur. Comme tout module absent
+# de `on`, l'apply l'ARRÊTE et le désactive s'il tourne : pour le garder, l'épingler, `sleeper = "on"` dans pins.toml.
+# Les ids sont ceux des manifestes dérivés des unités. N'y figurent que des services durables ou des oneshot RemainAfterExit :
+# un oneshot de minuterie listé ici serait DÉMARRÉ par l'apply, ne deviendrait jamais « actif » et annulerait tout l'apply.
 name  = "minimal"
-label = "Minimal — DPI, dns-guard, ad-guard, NAC, Freebox"
-# #2897 : entrees de menu masquees tant que ce profil est actif (leurs paquets restent : premier-pas est importe par l'agent Auto-Load).
-menu_off = ["ksm", "premier-pas-maitre", "zkp", "assist"]
+label = "Minimal — garde DNS, ad-guard, webfilter, NAC, Freebox, WireGuard"
+# Entrées de menu masquées tant que ce profil est actif (#2897) : leurs paquets restent (premier-pas est importé par l'agent
+# Auto-Load, admin et ksm sont des composants de secubox-system, network-anomaly de dns-guard, Centres d'annuaire) ou sont
+# exclus (DPI, Courbes, netdiag) ; « Boxes à préparer » (premier-pas-maitre) est le panneau du maître, pas d'une box de 1 Go.
+menu_off = [
+  "zkp", "assist", "ksm", "premier-pas-maitre", "centers",
+  "dpi", "ndpid", "mediaflow", "admin", "profiles", "network-anomaly", "netdiag", "grafana", "glances",
+]
+# Minuteries arrêtées et désactivées par ce profil (#3218, banc gk5) ; les autres profils les rétablissent.
+minuteurs_off = [
+  "dpi-resume", "yt-dlp-refresh",
+  "courbes-serie", "metrics-publish", "netstats", "network-anomaly-collecte", "profiles-releve",
+  "cache-warm@jitsi", "cache-warm@metacatalog",
+]
+# L'API du panneau /profiles/ (41 Mo) est coupée : `secubox-profilectl` (CLI root) reste le moyen de changer de profil.
+proteges_off = ["profiles"]
 on = [
-  "aggregator", "annuaire-apply", "annuaire-noms", "auth", "autoload-agent", "core", "hardening", "hub", "portal", "system",
-  "dpi", "dpi-flowcap", "dpi-resume", "ndpid-engine", "ndpisrvd",
-  "dns-guard", "ad-guard", "webfilter", "webfilter-apply", "webfilter-feed", "webfilter-sync",
-  "nac", "freebox", "ipv6guard",
-  "network-ready", "runtime", "firstboot",
-  "wireguard", "courbes", "netdiag", "routes",
-  "premier-pas", "premier-pas-appliquer", "premier-pas-console", "premier-pas-decouverte",
+  # Socle d'administration : API, connexion, menu (secubox-portal reste INSTALLÉ, il livre login.html ; son API est servie
+  # par l'agrégateur, son service propre est arrêté : nginx sert les pages et passe les API).
+  "core", "aggregator", "auth", "users", "system", "hardening", "hub",
+  "network-ready", "runtime", "firstboot", "net-fallback",
+  "autoload-agent", "premier-pas", "waker",
+  # Maillage et relais : la box rejoint son maître et reste administrable par lui.
+  "p2p", "meshname", "annuaire", "groupe-declares",
+  # Fonctions du boîtier de garde.
+  "dns-guard", "ad-guard", "webfilter", "webfilter-feed",
+  "nac", "freebox", "ipv6guard", "wireguard",
 ]

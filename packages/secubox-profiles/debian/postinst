@@ -9,21 +9,8 @@ case "$1" in
         getent passwd secubox >/dev/null || useradd --system --gid secubox \
             --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
 
+        # /etc et /var/log sont à root : leurs enfants directs ne peuvent pas être remplacés par un lien du compte secubox.
         install -d -o secubox -g secubox -m 755 /etc/secubox
-        # The only directory this module ever writes to (profiles/*.toml +
-        # pins.toml) — see api/web.py _atomic_write. modules.d/ belongs to
-        # Phase 1 (scan) and is left untouched here.
-        install -d -o secubox -g secubox -m 755 /etc/secubox/profiles
-
-        # Seed reference profiles into the operator-editable dir on first
-        # install only — never overwrite an edited profile on upgrade.
-        for f in /usr/share/secubox/profiles/*.toml; do
-            [ -e "$f" ] || continue
-            dest="/etc/secubox/profiles/$(basename "$f")"
-            if [ ! -e "$dest" ]; then
-                install -o secubox -g secubox -m 644 "$f" "$dest"
-            fi
-        done
 
         # The actuator (api/actuate.py + snapshot.py + audit.py, driven both
         # by secubox-profilectl apply/rollback and by secubox-sleeper's
@@ -36,13 +23,21 @@ case "$1" in
         # reasserted here matching the repo-wide shared-parent convention,
         # never narrowed to 0750.
         install -d -o secubox -g secubox -m 0755 /var/log/secubox
-        install -d -o root -g root -m 0750 /var/lib/secubox/profiles/rollback
         # Relevé de validation (#3212) : compte dédié, sans shell ni capacité, pour secubox-profiles-releve ; dossier
         # setgid au groupe secubox (lecteurs : l'API et sbx-fleetctl, User=secubox), fichiers 0640 par UMask=0027.
         id -u secubox-profiles >/dev/null 2>&1 || \
           adduser --system --ingroup secubox --no-create-home --home /nonexistent \
             --shell /usr/sbin/nologin secubox-profiles >/dev/null
-        install -d -o secubox-profiles -g secubox -m 2750 /var/lib/secubox/profiles/validation
+
+        # DOSSIERS ET PROFILS DE RÉFÉRENCE (#3218, relectures de #3248). /etc/secubox et /var/lib/secubox appartiennent
+        # au compte secubox ; GNU `install -d` sur un dossier existant SUIT un lien et y fait chown et chmod : un
+        # `profiles -> /etc/apt/apt.conf.d` posé par ce compte lui donnait le dossier, donc root. Les dossiers
+        # /etc/secubox/{profiles,health,waf} et /var/lib/secubox/profiles/{rollback,validation} (snapshot.SNAP_DIR, relevé
+        # #3212 : setgid secubox, compte secubox-profiles) sont créés ou réparés PAR DESCRIPTEUR, un lien est refusé.
+        # Puis les profils de référence non modifiés (copie identique à une version livrée) sont mis à jour ; une copie
+        # modifiée est gardée, la nouvelle référence posée en .dpkg-dist. Avant, ils n'étaient semés qu'une fois.
+        PROPRIO=secubox:secubox PREPA=/etc python3 -I /usr/lib/secubox/profiles/maj-references.py --dossiers \
+            || echo "secubox-profiles : dossiers ou profils de référence en échec (voir ci-dessus)" >&2
         # Profil AppArmor AVANT le démarrage du minuteur (l'unité le nomme). Système démarré seulement : dans le chroot
         # d'une image, apparmor.service le charge au premier démarrage depuis /etc/apparmor.d.
         if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ] \
@@ -62,11 +57,24 @@ case "$1" in
     # minuteries etaient `disabled / inactive` apres un dpkg -i reussi, ce qui
     # aurait reproduit, une fois de plus, le defaut corrige ici : un mecanisme
     # livre qui ne s'execute jamais.
+    #
+    # CE QUE LE PROFIL ACTIF COUPE RESTE COUPÉ (#3218, relecture #3248). Le profil minimal arrête ces minuteries
+    # (minuteurs_off) et l'API du panneau (proteges_off) : les réactiver ici les rallumait à chaque mise à jour, donc
+    # chaque nuit (majauto). `secubox-profilectl coupe` rend 0 si le profil actif coupe l'unité ; tout autre code
+    # (aucun profil actif, profil illisible) garde le comportement d'avant.
     for _m in metacatalog jitsi; do
-      systemctl enable --now "secubox-cache-warm@${_m}.timer" >/dev/null 2>&1 || true
-    done 2>/dev/null || true
-        systemctl enable secubox-profiles.service 2>/dev/null || true
-        systemctl restart secubox-profiles.service 2>/dev/null || true
+      if /usr/sbin/secubox-profilectl coupe "secubox-cache-warm@${_m}.timer" >/dev/null 2>&1; then
+        echo "secubox-profiles : secubox-cache-warm@${_m}.timer coupée par le profil actif, laissée arrêtée" >&2
+      else
+        systemctl enable --now "secubox-cache-warm@${_m}.timer" >/dev/null 2>&1 || true
+      fi
+    done
+        if /usr/sbin/secubox-profilectl coupe secubox-profiles.service >/dev/null 2>&1; then
+            echo "secubox-profiles : API du panneau coupée par le profil actif (proteges_off), ni activée ni redémarrée" >&2
+        else
+            systemctl enable secubox-profiles.service 2>/dev/null || true
+            systemctl restart secubox-profiles.service 2>/dev/null || true
+        fi
 
         # secubox-waker (ref #896, scale-to-zero): safe to enable+run — it only
         # serves the wake splash and fires a single wake per vhost; it never
@@ -107,8 +115,7 @@ case "$1" in
         # "voluntarily asleep" from "down". Both are idempotent, best-effort
         # (an empty modules.d before the first `scan` just yields an empty
         # list — never a postinst failure).
-        [ -d /etc/secubox/waf ] || install -d -m 0750 /etc/secubox/waf
-        install -d -o root -g root -m 0755 /etc/secubox/health
+        # /etc/secubox/waf et /etc/secubox/health : préparés plus haut par maj-references.py --dossiers.
         /usr/sbin/secubox-wakectl waf-sync 2>/dev/null || true
         /usr/sbin/secubox-wakectl health-sync 2>/dev/null || true
 

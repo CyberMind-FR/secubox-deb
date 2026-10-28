@@ -10,7 +10,8 @@ Rules-Requires-Root: no
 Package: secubox-minimal
 Architecture: all
 Depends: ${misc:Depends},
-# SOCLE D'ADMINISTRATION (WebUI admin seulement, pas de Hall) : l'API, le menu, la connexion.
+# SOCLE D'ADMINISTRATION (WebUI admin seulement, pas de Hall) : l'API, le menu, la connexion. secubox-portal livre login.html ; son API est
+# servie par l'agregateur, son service propre est arrete par le profil minimal (#3218, sans tete).
  secubox-core (>= 1.0),
  secubox-aggregator,
  secubox-system (>= 1.0),
@@ -18,9 +19,7 @@ Depends: ${misc:Depends},
  secubox-hub (>= 1.0),
  secubox-portal (>= 1.0),
  secubox-auth (>= 1.4.0),
-# LES MODULES DEMANDES : DPI (avec son moteur nDPI), garde DNS, filtre de publicites, controle d'acces reseau, Freebox.
- secubox-dpi (>= 1.7.0),
- secubox-ndpid-engine (>= 1.7.2),
+# LES MODULES DEMANDES : garde DNS, filtre de publicites, controle d'acces reseau, Freebox, garde IPv6, filtrage web.
  secubox-dns-guard,
  secubox-ad-guard (>= 1.6.2),
  secubox-nac (>= 1.0),
@@ -29,21 +28,22 @@ Depends: ${misc:Depends},
  secubox-webfilter (>= 0.2.1),
 # AUTO-LOAD (#2838) : la box se prepare avant livraison et s'enrole toute seule au premier demarrage (tunnel SORTANT vers l'infrastructure, aucun port entrant).
 # L'unite ne demarre que si un fichier de reponses SIGNE est present sur /boot : une box ordinaire n'est jamais touchee.
+# Elle tire secubox-profiles (la CLI secubox-profilectl, le sleeper et le waker) et secubox-premier-pas.
  secubox-autoload-agent,
 # WireGuard distant (#2845) : la box offre la sortie Internet a des clients, par un relais UDP sur l'infrastructure.
- secubox-wireguard (>= 1.3.0),
-# COURBES et GLANCES (#2865) : historique 7 jours et systeme en direct, sans secubox-metrics (350 Mo de processus sur gk2).
- secubox-courbes (>= 0.1.0),
-# DIAGNOSTIC RESEAU (#2899) : /netdiag/ (ping, traceroute, DNS, MTR, iperf3) avec la gestion des routes en onglet.
- secubox-routes (>= 1.5.0)
+ secubox-wireguard (>= 1.3.0)
 # WAF et HAProxy retires (#2849) : essayes sur la carte de 951 Mo, ils l'ont saturee (swap plein, charge > 10). Le WAF reste sur l'infrastructure.
 # toolbox et R-level retires (#2855) : decision du proprietaire ; ad-guard ne l'exige plus (Recommends).
 # annuaire et p2p RESTENT dans le profil (#2877) : mais plus rien ne les exige (auth et p2p : Recommends), ils sont emancipes.
-Conflicts: secubox-webos, secubox-waf-ng, secubox-waf, secubox-metrics, secubox-toolbox
-Description: SecuBox Minimal — DPI, garde DNS, filtre de publicites, NAC, Freebox, WireGuard, Courbes et Glances
- Profil minimal, pour une petite carte (ESPRESSObin) : inspection des paquets (DPI), detection d'anomalies DNS (dns-guard), filtrage
- des publicites et traqueurs (ad-guard), controle d'acces reseau (NAC), module Freebox, garde IPv6 et filtrage web, avec la seule interface d'administration.
- WireGuard offre la sortie Internet a des clients distants.
- Ni WAF (il reste sur l'infrastructure), ni profil ISP, ni Hall, ni metrics (le module « visites »), ni service heberge. Les modules exclus sont en Conflicts :
- un Recommends de secubox-auth ou de secubox-freebox ramenait le Hall dans l'image.
+# DPI, nDPId, Courbes et Routes/netdiag retires (#3218, banc gk5 de 1 Go, 2026-10-28) : nDPId prenait tout le CPU, le DPI sans lui n'affiche
+# rien, Courbes et netdiag sont des surplus de visualisation. En Conflicts : le proprietaire ne les veut plus sur ces box, et apt les retire
+# a la mise a jour du meta-paquet (majauto installe par `apt-get install --only-upgrade`, qui retire un paquet en conflit).
+Conflicts: secubox-webos, secubox-waf-ng, secubox-waf, secubox-metrics, secubox-toolbox,
+ secubox-dpi, secubox-ndpid-engine, secubox-courbes, secubox-routes
+Description: SecuBox Minimal — garde DNS, filtre de publicites, NAC, Freebox, WireGuard (carte de 1 Go)
+ Profil minimal, pour une petite carte (ESPRESSObin, 1 Go) tenue en boitier de garde sans tete : detection d'anomalies DNS (dns-guard),
+ filtrage des publicites et traqueurs (ad-guard), filtrage web, controle d'acces reseau (NAC), module Freebox et garde IPv6, avec le seul
+ socle d'administration et le maillage vers le maitre. WireGuard offre la sortie Internet a des clients distants.
+ Ni DPI ni nDPId (#3218), ni WAF (il reste sur l'infrastructure), ni profil ISP, ni Hall, ni metrics, ni Courbes, ni service heberge.
+ Les modules exclus sont en Conflicts : un Recommends de secubox-auth ou de secubox-freebox ramenait le Hall dans l'image.
  Ni secubox-toolbox ni R-level (ad-guard ne l'exige plus), ni le moteur d'interception secubox-toolbox-ng.

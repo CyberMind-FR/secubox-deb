@@ -19,8 +19,19 @@ Elle manque de mémoire vive : swap plein (950/950 Mo), `systemd-journald : Unde
 
 ## `ndpid-engine` redémarre toutes les 5 s (« pcap_open_live: eth2 : No such device »)
 
-`secubox-ndpid-engine` 1.7.1 lance nDPId sur `eth2` (valeur de gk2). Le choix de l'interface est dans **1.7.2** (#2740) ; `secubox-minimal` >= 0.5.1 l'exige (#2851).
-Vérifier : `systemctl show secubox-ndpid-engine -p NRestarts`.
+`secubox-ndpid-engine` 1.7.1 lance nDPId sur `eth2` (valeur de gk2). Le choix de l'interface est dans **1.7.2** (#2740) ; `secubox-minimal` >= 0.5.1 l'exigeait (#2851).
+Vérifier : `systemctl show secubox-ndpid-engine -p NRestarts`. Depuis `secubox-minimal` 0.10.0 (#3218), nDPId et le DPI ne sont plus dans le profil (en `Conflicts`).
+
+## Alléger une carte déjà installée (#3218, banc gk5 du 2026-10-28)
+
+Mesuré : swap de 819 à 489 Mo, PSS Python de 1012 à 646 Mo, une fois le DPI, les surplus (admin, profiles, routes, netdiag,
+network-anomaly, ksm, premier-pas-console et huit minuteries), haproxy et le service portal arrêtés. DNS, blocage, pare-feu, maillage et
+administration relayée par le maître restent corrects. Sur la carte, par la CLI (le profil coupe l'API du panneau /profiles/) :
+
+1. `apt-get update && apt-get install secubox-minimal secubox-profiles` (en tâche détachée) : retire DPI, nDPId, Courbes et Routes, et
+   met à jour `/etc/secubox/profiles/minimal.toml` s'il n'a pas été modifié (sinon la référence est posée en `minimal.toml.dpkg-dist`) ;
+2. `secubox-profilectl diff --profile minimal` puis `secubox-profilectl apply --profile minimal --yes` ;
+3. `systemctl disable --now haproxy` (préinstallé par les anciennes images, il n'écoute aucun port).
 
 ## L'agent Auto-Load a rejoué le nom et le mot de passe au redémarrage
 
@@ -40,6 +51,7 @@ tournent sur gk2 (`sbx-authwatch`, dans `secubox-toolbox-ng`) ; l'administration
 ## `secubox-portal` : pourquoi le garder ?
 
 Il livre `login.html`, la page de connexion de la WebUI (le hub ne la livre plus depuis 1.9.6). Sans lui, plus de connexion par navigateur.
+Son **service** est arrêté par le profil minimal (#3218, sans tête) : nginx sert la page, l'agrégateur sert `/api/v1/portal` et `/api/v1/auth`.
 
 ## La carte annonce 951 Mo : est-ce une 2 Go bridée ?
 

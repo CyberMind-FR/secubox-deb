@@ -4,6 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """#2865 — secubox-courbes : Courbes (/grafana/) et Glances (/glances/) sans secubox-metrics (350 Mo de processus), pour le profil minimal."""
 import re
+import tomllib
 from pathlib import Path
 
 PKG = Path(__file__).resolve().parents[1]
@@ -59,8 +60,10 @@ def test_metrics_depend_de_courbes_et_ne_garde_plus_la_copie():
     assert not (REPO / "packages" / "secubox-metrics" / "api" / "systeme.py").exists()
 
 
-def test_minimal_embarque_courbes_et_profil_l_allume():
+def test_courbes_quitte_minimal_3218():
+    """#2865 l'embarquait dans minimal ; le banc de l'ESPRESSObin de 1 Go (#3218) en a fait un surplus : Conflicts, profil et minuterie."""
     m = (REPO / "packages" / "secubox-minimal" / "debian" / "control").read_text(encoding="utf-8")
-    assert re.search(r"^ secubox-courbes", m, re.M)
-    toml = (REPO / "packages" / "secubox-profiles" / "profiles" / "minimal.toml").read_text(encoding="utf-8")
-    assert '"courbes"' in toml
+    assert not re.search(r"^ secubox-courbes", m.split("Conflicts:")[0], re.M)
+    assert re.search(r"^Conflicts:(.*\n)*?.*secubox-courbes", m, re.M)
+    toml = tomllib.loads((REPO / "packages" / "secubox-profiles" / "profiles" / "minimal.toml").read_text(encoding="utf-8"))
+    assert "courbes" not in toml["on"] and "courbes-serie" in toml["minuteurs_off"]

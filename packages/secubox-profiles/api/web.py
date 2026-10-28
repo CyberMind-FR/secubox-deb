@@ -30,7 +30,9 @@ Deux règles structurelles, indépendantes de diff.plan_changes :
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import os
+import re
 import sys
 import tempfile
 import time
@@ -56,6 +58,7 @@ except ImportError:  # pragma: no cover - dev sans secubox_core installé
     require_session = require_jwt
 
 from . import cli as _cli
+from . import minuteurs as _minuteurs
 from .diff import ProtectedViolation, plan_changes
 from .lifecycle import effective_lifecycle, is_sleepable, wake_budget
 from .manifest import LIFECYCLES, WAKE_CLASSES, ManifestError, load_all
@@ -65,6 +68,7 @@ from .state import OFF, ON, Profile, StateError, load_pins, load_profile
 from secubox_core.auth import require_lecture
 
 DEFAULT_ROOT = Path("/etc/secubox")
+_NOM_PROFIL = re.compile(r"[a-z0-9][a-z0-9_-]{0,40}")          # même motif que le hub (menu_off du profil actif)
 
 
 def _root() -> Path:
@@ -115,6 +119,12 @@ def _write_profile(path: Path, profile: Profile) -> None:
         f"label = {_toml_str(profile.label)}",
         f"on    = {_toml_list(sorted(profile.on))}",
     ]
+    # Les clés facultatives SURVIVENT à la réécriture (#3218) : basculer un module depuis le panneau ne doit ni
+    # rallumer les minuteries que le profil arrête, ni rendre les entrées de menu qu'il masque.
+    for cle in ("menu_off", "minuteurs_off", "proteges_off"):
+        valeurs = getattr(profile, cle)
+        if valeurs:
+            lines.append(f"{cle} = {_toml_list(sorted(valeurs))}")
     _atomic_write(path, "\n".join(lines) + "\n")
 
 
@@ -561,13 +571,15 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/profiles/diff")
     async def get_diff(profile: Optional[str] = None, _claims=Depends(require_jwt)):
         root = _root()
-        mod_dir, _prof_dir, pins_file, _active = _cli._paths(root)
+        mod_dir, prof_dir, pins_file, _active = _cli._paths(root)
         manifests = _load_manifests_or_500(mod_dir)
         name = _cli._active_profile_name(root, profile)
         try:
             prof = _cli._load_profile_or_none(root, name)
         except StateError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        # Même plan que `secubox-profilectl apply` : minuteries et protégés coupés du profil (#3218).
+        manifests, prof = _minuteurs.etendre(manifests, prof, prof_dir)
         pins = _load_pins_or_500(pins_file)
         actuals = _cli._observe_all(manifests, load_routes())
         try:
@@ -601,7 +613,7 @@ def create_app() -> FastAPI:
             new_on.add(body.id)
         else:
             new_on.discard(body.id)
-        updated = Profile(name=prof.name, label=prof.label, on=frozenset(new_on))
+        updated = dataclasses.replace(prof, on=frozenset(new_on))      # garde menu_off, minuteurs_off, proteges_off (#3218)
         _write_profile(prof_path, updated)
         return {"name": updated.name, "label": updated.label, "on": sorted(updated.on)}
 
@@ -655,8 +667,19 @@ def create_app() -> FastAPI:
         _mod, prof_dir, _pins, active_file = _cli._paths(root)
         active_path = Path(active_file)
         async with _apply_lock:
-            if not (Path(prof_dir) / f"{body.profile}.toml").exists():
+            prof_path = Path(prof_dir) / f"{body.profile}.toml"
+            if not _NOM_PROFIL.fullmatch(body.profile) or not prof_path.exists():
                 raise HTTPException(status_code=404, detail=f"profil inconnu: {body.profile}")
+            try:
+                cible = load_profile(prof_path)
+            except StateError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            # Un profil qui coupe l'API du panneau (proteges_off, #3218) l'arrêterait PENDANT cette requête : la
+            # réponse se perdrait et `active` resterait réécrit. Refus AVANT toute écriture ; la CLI root le fait.
+            if "profiles" in cible.proteges_off:
+                raise HTTPException(status_code=409, detail=(
+                    f"le profil « {cible.name} » coupe l'API de ce panneau (proteges_off) : l'appliquer d'ici couperait "
+                    f"cette requête. En root sur la box : secubox-profilectl apply --profile {cible.name} --yes"))
             prior = active_path.read_text(encoding="utf-8") if active_path.exists() else None
             _atomic_write(active_path, body.profile + "\n")
             report = await _run_ctl_json("apply")

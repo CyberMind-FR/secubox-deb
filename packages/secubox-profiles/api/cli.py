@@ -16,11 +16,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import stat
 import subprocess
 import sys
 from pathlib import Path
 
-from . import apply, export, healthsync, manifest_edit, nginxgen, wafsync
+from . import apply, export, healthsync, manifest_edit, minuteurs, nginxgen, wafsync
 from .actuate import TIMED_OUT
 from .audit import AUDIT_LOG
 from .diff import (ProtectedViolation, changements_epingles,
@@ -32,9 +34,12 @@ from .observe import Actual, is_on, load_route_values, load_routes, observe, obs
 from .scan import charger_politique, discover, write_drafts
 from .snapshot import SNAP_DIR
 from .snapshot import read as read_snapshot
-from .state import OFF, StateError, load_pins, load_profile
+from .state import OFF, StateError, load_pins, load_profile, parse_profile
 
 DEFAULT_ROOT = Path("/etc/secubox")
+# `coupe` (#3218) : seules les unités secubox d'un service ou d'une minuterie, et un nom de profil actif sûr.
+_UNITE_COUPABLE = re.compile(r"secubox-(?P<id>[a-z0-9][a-z0-9-]{0,62}(?:@[a-z0-9][a-z0-9_.-]{0,62})?)\.(?P<type>service|timer)")
+_NOM_PROFIL = re.compile(r"[a-z0-9][a-z0-9_-]{0,40}")
 
 
 def _paths(root: Path):
@@ -99,9 +104,11 @@ def _cmd_status(args) -> int:
 
 def _cmd_diff(args) -> int:
     root = Path(args.root)
-    mod_dir, _, pins_file, _ = _paths(root)
+    mod_dir, prof_dir, pins_file, _ = _paths(root)
     manifests = load_all(mod_dir)
     profile = _load_profile_or_none(root, _active_profile_name(root, args.profile))
+    # Minuteries et protégés coupés par le profil (#3218) : le même plan que celui d'apply.
+    manifests, profile = minuteurs.etendre(manifests, profile, prof_dir)
     pins = load_pins(pins_file)
     actuals = _observe_all(manifests, load_routes())
     changes = plan_changes(manifests, profile, pins, actuals)
@@ -130,9 +137,11 @@ def _cmd_apply(args) -> int:
               file=sys.stderr)
         return 1
     root = Path(args.root)
-    mod_dir, _, pins_file, _ = _paths(root)
+    mod_dir, prof_dir, pins_file, _ = _paths(root)
     manifests = load_all(mod_dir)
     profile = _load_profile_or_none(root, _active_profile_name(root, args.profile))
+    # Minuteries (`minuteurs_off`) et protégés coupés (`proteges_off`) du profil (#3218), pour ce plan seulement.
+    manifests, profile = minuteurs.etendre(manifests, profile, prof_dir)
     pins = load_pins(pins_file)
     routes = load_routes()
     actuals = _observe_all(manifests, routes)
@@ -190,6 +199,69 @@ def _cmd_apply(args) -> int:
     return 0 if report.status == "applied" else 2
 
 
+def _ouvrir_sans_lien(chemin: Path) -> int:
+    """Descripteur du dossier `chemin`, ouvert depuis / composant par composant sans suivre aucun lien."""
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in Path(os.path.abspath(chemin)).parts[1:]:
+            suivant = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = suivant
+    except OSError:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _lire_borne(nom: str, dossier_fd: int, maximum: int = 1 << 20) -> str | None:
+    """Texte d'un fichier ORDINAIRE du dossier ouvert, lu sans suivre de lien ni bloquer ; None sinon. Le dossier des
+    profils appartient au compte secubox : une FIFO posée à la place de `active` ou d'un profil bloquerait le postinst."""
+    try:
+        fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dossier_fd)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        donnees = os.read(fd, maximum + 1)
+        return donnees.decode("utf-8") if len(donnees) <= maximum else None
+    except (OSError, UnicodeDecodeError):
+        return None
+    finally:
+        os.close(fd)
+
+
+def _cmd_coupe(args) -> int:
+    """0 si le profil ACTIF coupe explicitement cette unité (minuterie de `minuteurs_off`, protégé de `proteges_off`),
+    1 sinon (aucun profil actif compris), 2 si l'unité ou le profil actif est invalide. Pour le postinst (root) : ne
+    pas réactiver à chaque mise à jour ce que le profil actif a coupé (#3218). Un module simplement absent de `on`
+    n'est pas « coupé » ici. La racine puis `profiles/` sont ouverts sans suivre de lien, et lus relativement."""
+    m = _UNITE_COUPABLE.fullmatch(args.unite)
+    if not m:
+        print(f"unité invalide : {args.unite!r}", file=sys.stderr)
+        return 2
+    try:
+        racine_fd = _ouvrir_sans_lien(Path(args.root))
+        try:
+            prof_fd = os.open("profiles", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=racine_fd)
+        finally:
+            os.close(racine_fd)
+    except OSError:
+        return 1                                       # pas de dossier de profils sûr : rien n'est coupé
+    try:
+        nom = (_lire_borne("active", prof_fd, 256) or "").strip()
+        texte = _lire_borne(f"{nom}.toml", prof_fd) if _NOM_PROFIL.fullmatch(nom) else None
+    finally:
+        os.close(prof_fd)
+    if texte is None:
+        return 1
+    prof = parse_profile(texte, Path(args.root) / "profiles" / f"{nom}.toml")
+    coupe = m["id"] in (prof.minuteurs_off if m["type"] == "timer" else prof.proteges_off)
+    if args.json:
+        print(json.dumps({"unite": args.unite, "profil": nom, "coupe": coupe}))
+    return 0 if coupe else 1
+
+
 def _cmd_rollback(args) -> int:
     if not _running_as_root():
         print("rollback doit être lancé en root.", file=sys.stderr)
@@ -198,6 +270,9 @@ def _cmd_rollback(args) -> int:
     mod_dir, _, _, _ = _paths(root)
     manifests = load_all(mod_dir)
     snap = read_snapshot(args.target, root=SNAP_DIR)
+    # Les minuteries qu'un apply a basculées (#3218) sont dans le snapshot sous `minuteur:<id>` : sans leur
+    # pseudo-manifeste, le retour arrière les ignorerait.
+    manifests.update(minuteurs.manifestes_du_snapshot(snap))
     routes = load_routes()
     actuals = _observe_all(manifests, routes)
     # apply.rollback_to (attribut du module) — même raison que apply.apply_plan
@@ -481,6 +556,11 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--yes", action="store_true")
     sp.add_argument("--json", action="store_true", help="rapport JSON sur stdout")
     sp.set_defaults(func=_cmd_rollback)
+
+    sp = sub.add_parser("coupe", help="le profil actif coupe-t-il cette unité ? (rc 0 oui, 1 non ; pour les postinst)")
+    sp.add_argument("unite", help="secubox-<id>.service ou secubox-<id>.timer")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=_cmd_coupe)
 
     sp = sub.add_parser("set-lifecycle",
                         help="fixe le niveau d'éveil d'un module (lifecycle + wake_class) + resync")

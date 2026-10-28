@@ -35,10 +35,12 @@ HORS_PROFIL = {
     "secubox-autoload",                                                         # infrastructure seulement (admin.gk2.secubox.in), jamais sur une box cliente (#2182)
 }
 PROTECTIONS = {f"secubox-{m}" for m in (
-    "waf-ng", "ipblock", "toolbox-ng", "toolbox", "dpi", "ndpid-engine", "interceptor",
+    "waf-ng", "ipblock", "toolbox-ng", "toolbox", "interceptor",
     "security-posture", "threats", "threatmesh", "ad-guard", "webfilter", "dns-guard",
     "cookies", "soc", "nac", "ipv6guard", "wan-link-guard", "hardening",
     "wireguard", "vault", "backup", "haproxy", "dns", "routes", "qos", "freebox", "certs", "tor")}
+# #3218 (decision du 2026-10-28, banc de l'ESPRESSObin de 1 Go) : l'inspection des paquets quitte lite pour isp (full en herite).
+INSPECTION = {"secubox-dpi", "secubox-ndpid-engine"}
 HEBERGEMENT = {f"secubox-{m}" for m in (
     "mail", "matrix", "nextcloud", "gitea", "metablogizer", "bbs",
     "billets", "metanews", "messagerie", "cdn", "saas-relay")}
@@ -50,6 +52,11 @@ HALL = {f"secubox-{m}" for m in (
 
 def test_lite_porte_toutes_les_protections():
     assert PROTECTIONS <= _champ("lite", "Depends")
+
+
+def test_le_dpi_est_dans_isp_et_plus_dans_lite_3218():
+    assert not (INSPECTION & (_champ("lite", "Depends") | _champ("lite", "Recommends")))
+    assert INSPECTION <= _champ("isp", "Depends")
 
 
 def test_lite_porte_la_console_partie_headless_de_l_interface_locale():

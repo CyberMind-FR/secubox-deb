@@ -93,7 +93,8 @@ def test_sur_le_vrai_depot_minimal_a_wireguard_mais_ni_waf_ni_hall_ni_metrics():
     mini = {m["paquet"] for m in next(x for x in d["profils"] if x["id"] == "minimal")["modules"]}
     assert not mini & {"secubox-waf-ng", "secubox-haproxy", "secubox-webos", "secubox-metrics", "secubox-isp"}
     assert "secubox-wireguard" in mini      # #2845
-    assert {"secubox-dpi", "secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox"} <= mini
+    assert {"secubox-dns-guard", "secubox-ad-guard", "secubox-nac", "secubox-freebox"} <= mini
+    assert not mini & {"secubox-dpi", "secubox-ndpid-engine", "secubox-courbes", "secubox-routes"}      # #3218
 
 
 def test_la_construction_genere_et_installe_le_contenu_des_profils():
