@@ -1,0 +1,28 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-DEB :: secubox-ndpisrvd-run — lance nDPIsrvd avec un groupe lecteur qui EXISTE (#3240)
+#
+# POURQUOI. L'unité passait `-G ${UTILISATEUR}:${GROUPE_LECTEUR}` avec `GROUPE_LECTEUR=secubox-toolbox` (le lecteur sbxdpi
+# tourne sous ce compte). Sans le paquet toolbox (profil minimal, ESPRESSObin) le groupe n'existe pas : « Could not chmod/chown
+# … No such file or directory », nDPIsrvd sort en 1, `Restart=on-failure` le relance toutes les 3 s et le moteur nDPId
+# (`Requires=`) tombe avec lui. Même famille que #2740 (interface `eth2` en dur).
+#
+# CHOIX. Le groupe lecteur s'il existe ; sinon (absent ou vide) le groupe du producteur : le socket distributeur reste fermé à
+# tout autre compte — sans toolbox il n'y a pas de lecteur — et nDPIsrvd tourne au lieu de mourir.
+#
+# Variables de substitution (tests) : SECUBOX_NDPISRVD_BIN, SECUBOX_GETENT_CMD.
+NDPISRVD="${SECUBOX_NDPISRVD_BIN:-/usr/sbin/nDPIsrvd}"
+GETENT="${SECUBOX_GETENT_CMD:-getent}"
+
+lecteur="${GROUPE_LECTEUR:-}"
+if [ -z "$lecteur" ]; then
+    lecteur="$GROUPE"
+elif ! "$GETENT" group "$lecteur" >/dev/null 2>&1; then
+    echo "nDPIsrvd : le groupe lecteur « $lecteur » n'existe pas sur cette box (pas de lecteur), socket distributeur laissé au groupe $GROUPE" >&2
+    lecteur="$GROUPE"
+fi
+exec "$NDPISRVD" -l -c "$COLLECTEUR" -s "$DISTRIBUTEUR" -u "$UTILISATEUR" -g "$GROUPE" -G "$UTILISATEUR:$lecteur"
