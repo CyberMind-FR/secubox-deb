@@ -30,7 +30,7 @@ Depends: ${misc:Depends}, ${python3:Depends},
  systemd-timesyncd | time-daemon,
  nftables,
  openssl
-Recommends: wireguard-tools
+Recommends: wireguard-tools, openssh-client
 Description: SecuBox-DEB — bibliothèque centrale et infrastructure
  Bibliothèque Python partagée (JWT auth, config TOML, logging structuré),
  configuration nginx reverse proxy, et scripts d'initialisation firstboot.

@@ -173,6 +173,12 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
+000000000. **Sécurité et pilotage distant (2026-10-28)** : #3243 — 1.8.8, nettoyage des images + firstboot
+  `--absents`, images alpha.19 à reconstruire, redémarrer gk5 (machine-id). Pilotage distant TR-369 (forme USP, agent
+  Go) : conception `2026-10-28-pilotage-distant-design.md` à faire approuver, puis plans L1 Voir → L2 Agir (support,
+  temps réel) → L5 interface headless care-safe (mains liées) ; box clientes Auto-Load dans le périmètre. Profils
+  minimal ET lite sans nDPId, DPI, mediaflow, ksm, centres, « box à préparer » ; haproxy hors image minimal (#3218).
+  gk1 = visio seule (profil à écrire).
 00000000. **Consommation (#3191, ordre arbitré par le propriétaire le 2026-10-27)** : objectif 2 Go (minimal) et 4 Go
   (référence), mesurer avant/après avec le comparateur (#3212, livré). FAITS : metrics (#3217), listes d'Unbound
   (#3205, redémarré le 28 : 367 Mo), agrégateur non bloquant (#3216, 0.5.0 gk1+gk2). **Suite** : (a) **#3229** 36
