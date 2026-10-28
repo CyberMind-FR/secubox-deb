@@ -160,3 +160,28 @@ func TestReleveAnnule(t *testing.T) {
 		t.Error("une annulation doit remonter")
 	}
 }
+
+func TestReleveResoutApresLeTop(t *testing.T) {
+	r := t.TempDir()
+	echantillon1(t, r)
+	for i := 100; i < 150; i++ {
+		ecrire(t, r, "proc/"+strconv.Itoa(i)+"/stat", stat(0, 0))
+	}
+	var lectures int
+	avant := lirePSS
+	lirePSS = func(racine string, pid int) int { lectures++; return avant(racine, pid) }
+	defer func() { lirePSS = avant }()
+	rel, err := Mesurer(context.Background(), r, 10*time.Second, func(context.Context, time.Duration) error {
+		echantillon2(t, r)
+		for i := 100; i < 150; i++ {
+			ecrire(t, r, "proc/"+strconv.Itoa(i)+"/stat", stat(i, 0))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lectures > 10 || len(rel.Top) != 10 {
+		t.Errorf("lectures PSS = %d, top = %d", lectures, len(rel.Top))
+	}
+}

@@ -2,7 +2,7 @@
 // Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 // Source-Disclosed License — All rights reserved except as expressly granted.
 // See LICENCE-CMSD-1.0.md for terms.
-// Package lecture : lecture bornée et non bloquante de fichiers (/proc, /sys, …).
+
 package collecte
 
 // Plafonds de lecture : l'agent est borné en mémoire et lit des arbres que

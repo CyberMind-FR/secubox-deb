@@ -212,27 +212,36 @@ func memoire(racine string) (dispoMo, swapMo int) {
 	return int(dispo / 1024), int((st - sf) / 1024)
 }
 
+// lirePSS est remplaçable par les tests pour compter les lectures de smaps_rollup.
+var lirePSS = pss
+
+// classer trie d'abord sur le seul CPU (pid en départage), tronque au top, puis
+// résout nom et mémoire pour ces seuls processus : smaps_rollup coûte au noyau.
 func classer(racine string, p1, p2 map[int]uint64, secs float64) []ProcRel {
-	var top []ProcRel
+	type cand struct {
+		pid int
+		cpu float64
+	}
+	var cs []cand
 	for pid, v := range p2 {
 		d, ok := p1[pid]
 		if !ok || v <= d {
 			continue
 		}
-		top = append(top, ProcRel{
-			Nom:    nom(racine, pid),
-			CPUPct: float64(v-d) * 100 / hzNoyau / secs,
-			PSSMo:  pss(racine, pid),
-		})
+		cs = append(cs, cand{pid, float64(v-d) * 100 / hzNoyau / secs})
 	}
-	sort.Slice(top, func(i, j int) bool {
-		if top[i].CPUPct != top[j].CPUPct {
-			return top[i].CPUPct > top[j].CPUPct
+	sort.Slice(cs, func(i, j int) bool {
+		if cs[i].cpu != cs[j].cpu {
+			return cs[i].cpu > cs[j].cpu
 		}
-		return top[i].Nom < top[j].Nom
+		return cs[i].pid < cs[j].pid
 	})
-	if len(top) > tailleTop {
-		top = top[:tailleTop]
+	if len(cs) > tailleTop {
+		cs = cs[:tailleTop]
+	}
+	var top []ProcRel
+	for _, c := range cs {
+		top = append(top, ProcRel{Nom: nom(racine, c.pid), CPUPct: c.cpu, PSSMo: lirePSS(racine, c.pid)})
 	}
 	return top
 }
