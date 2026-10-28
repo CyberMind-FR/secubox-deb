@@ -11,6 +11,9 @@
 #   signature détachée dans /run (tmpfs) → VÉRIFICATION de la signature avec la clé publique EMBARQUÉE dans le
 #   live (/etc/secubox/netboot-image.pub) → secubox-flash-emmc (refuse si l'on a démarré de l'eMMC, demande
 #   « FLASH » sauf --auto). Signature invalide = rien n'est écrit, le fichier est supprimé.
+# #3233 (ESPRESSObin, 1 Go) : quand l'image ne tient pas en RAM, elle s'écrit EN FLUX (curl | secubox-flash-emmc
+#   --stdin) ; signature et empreinte sont vérifiées pendant l'écriture et un échec invalide l'eMMC. Formats .img.gz et
+#   .img.xz. Une image dont la taille décompressée (4e colonne d'images.txt) dépasse l'eMMC est refusée avant d'écrire.
 #
 # Serveur : --srv HOTE[:PORT], sinon l'hôte de `fetch=` (ou `sbx_srv=`) de la ligne de commande du noyau.
 # Avec --nom (#3100) : le maître sert un lot signé (GET http://SRV/lot-flash?nom=NOM, même clé que les images) ;
@@ -37,6 +40,33 @@ EOF
 
 log()  { echo "[sbx-netflash] $*"; echo "[$(date -Iseconds)] $*" >> "$JOURNAL" 2>/dev/null || true; }
 fail() { log "ERREUR : $*"; exit 1; }
+
+# ── Petite RAM (#3233) ─────────────────────────────────────────────────────
+mode_ecriture() { # TAILLE DISPO → « ram » si l'image tient en tmpfs avec 768 Mo de marge, sinon « flux »
+    if [ "$2" -gt $(( $1 + 768 * 1048576 )) ]; then echo ram; else echo flux; fi
+}
+
+format_image() { # NOM → gz | xz
+    case "$1" in *.img.gz) echo gz ;; *.img.xz) echo xz ;; *) return 1 ;; esac
+}
+
+emmc_detectee() { # comme secubox-flash-emmc : le premier mmcblk doté d'une partition boot0 (eMMC, jamais une carte SD)
+    local d
+    for d in /dev/mmcblk0 /dev/mmcblk1 /dev/mmcblk2; do
+        if [ -b "${d}boot0" ]; then echo "$d"; return 0; fi
+    done
+    return 1
+}
+
+confirme_flash() { # IMAGE — « FLASH » lu sur le terminal : en flux, l'entrée standard du flasheur porte l'image
+    local r tty="${SBX_TTY:-/dev/tty}"
+    IFS= read -r -p "Taper FLASH pour effacer l'eMMC et y écrire $1 : " r < "$tty" >&2 || return 1
+    [ "$r" = "FLASH" ]
+}
+
+telecharge_flux() { # URL → sortie standard ; jamais de reprise (--retry) : un flux recommencé serait corrompu
+    if command -v curl >/dev/null 2>&1; then curl -fsS "$1"; else wget -qO- "$1"; fi
+}
 
 
 # ── Dépôt du lot (#3100) ───────────────────────────────────────────────────
@@ -213,8 +243,19 @@ if [ -n "$nom" ]; then
     unset empreinte
 fi
 
+format="$(format_image "$image")" || fail "format non pris en charge : $image (.img.gz ou .img.xz)"
+dev_emmc="${SBX_EMMC:-$(emmc_detectee || true)}"
+brut="$(echo "$ligne" | awk '{print $4}')"
+if [ -n "$brut" ] && [ -n "$dev_emmc" ] && [ -b "$dev_emmc" ]; then
+    cap="$(blockdev --getsize64 "$dev_emmc" 2>/dev/null || echo 0)"
+    if [ "$cap" -gt 0 ] && [ "$brut" -gt "$cap" ]; then
+        fail "image de $((brut/1048576)) Mo décompressée, eMMC $dev_emmc de $((cap/1048576)) Mo : elle ne tient pas — rien n'a été écrit"
+    fi
+fi
+
 # L'image transite par la RAM (tmpfs) : il faut sa taille + 768 Mo pour le reste du système.
 # Le live garde toute la pile SecuBox (6,9 Go sur 8 sur DUT) : on ne la stoppe que si la mémoire manque.
+# Si elle manque encore (ESPRESSObin, 1 Go, #3233), l'image s'écrit en flux.
 libere_memoire() {
     log "mémoire insuffisante : arrêt de la pile SecuBox du live (le live redevient complet au prochain démarrage)…"
     systemctl stop 'secubox-*' 'tor@*' tor haproxy nginx 2>/dev/null || true
@@ -227,7 +268,23 @@ if [ "$dispo" -le "$besoin" ]; then
     libere_memoire
     dispo="$(awk '/^MemAvailable:/{print $2*1024}' /proc/meminfo)"
 fi
-[ "$dispo" -gt "$besoin" ] || fail "mémoire insuffisante : $((dispo/1048576)) Mo libres, $((besoin/1048576)) Mo nécessaires (choisir une image plus petite)"
+
+if [ "$(mode_ecriture "$taille" "$dispo")" = flux ]; then
+    log "$((dispo/1048576)) Mo libres pour une image de $((taille/1048576)) Mo : écriture EN FLUX, signature et empreinte vérifiées pendant l'écriture"
+    telecharge "$BASE/$image.sig" "$TRAVAIL/$image.sig" || fail "téléchargement de la signature KO"
+    if [ "$auto" -eq 0 ]; then confirme_flash "$image" || fail "flash annulé — rien n'a été écrit"; fi
+    opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto)
+    if [ -n "$nom" ]; then opts+=(--no-reboot); else opts+=("${reboot_opt[@]}"); fi
+    log "téléchargement et écriture en flux de $BASE/$image…"
+    set +e
+    telecharge_flux "$BASE/$image" | secubox-flash-emmc "${opts[@]}"
+    st=("${PIPESTATUS[@]}")
+    set -e
+    [ "${st[1]}" -eq 0 ] || fail "écriture en flux refusée ou interrompue (téléchargement=${st[0]}, flash=${st[1]}) : eMMC invalidée si elle avait été entamée"
+    rm -f "$TRAVAIL/$image.sig"
+    [ -n "$nom" ] || exit 0
+    depose_lot_et_termine
+fi
 
 # /run est un tmpfs plafonné à 10 % de la RAM (792 Mo sur 8 Go) : l'image a son propre tmpfs, à sa taille.
 mkdir -p "$TRAVAIL/image"
@@ -260,11 +317,18 @@ if [ -z "$nom" ]; then
     exec secubox-flash-emmc "${opts[@]}"
 fi
 secubox-flash-emmc "${opts[@]}" || fail "écriture de l'eMMC KO — rien n'a été déposé"
-dev="${SBX_EMMC:-/dev/mmcblk0}"
-depose_sur_emmc "${dev}p2" "${dev}p1" "$lot" "$profil" || fail "dépôt du lot KO (image écrite, ni code ni profil déposés)"
-rm -rf "$TRAVAIL/lot"
-log "code de jonction, ancre et profil déposés pour $nom."
-if [ "$reboot_demande" -eq 1 ]; then log "redémarrage…"; sleep 2; systemctl reboot || reboot; fi
+depose_lot_et_termine
+}
+
+# Après l'écriture (RAM ou flux) avec --nom : code de jonction, ancre et profil sur l'eMMC DÉTECTÉE (mmcblk1 quand une
+# carte SD occupe mmcblk0), puis redémarrage si demandé.
+depose_lot_et_termine() {
+    [ -n "$dev_emmc" ] || fail "eMMC introuvable (aucun mmcblk avec boot0) : image écrite, lot NON déposé"
+    depose_sur_emmc "${dev_emmc}p2" "${dev_emmc}p1" "$lot" "$profil" || fail "dépôt du lot KO (image écrite, ni code ni profil déposés)"
+    rm -rf "$TRAVAIL/lot"
+    log "code de jonction, ancre et profil déposés pour $nom."
+    if [ "$reboot_demande" -eq 1 ]; then log "redémarrage…"; sleep 2; systemctl reboot || reboot; fi
+    exit 0
 }
 
 # Chargeable sans exécuter (tests) : SBX_NETFLASH_SOURCE=1.
