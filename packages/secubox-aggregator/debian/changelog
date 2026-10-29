@@ -1,3 +1,13 @@
+secubox-aggregator (0.5.1-1~trixie1) trixie; urgency=medium
+
+  * `system` passe en socket dédiée (ref #3254) : ses actions démarrent des unités root par polkit, accordé au
+    seul secubox-system.service ; monté ici, la désactivation du kiosque échouait sur gk2 (« Interactive
+    authentication required »). Exclu aussi de secubox-aggregator-migrate.
+  * `socialrelay` rejoint RETIRED_MODULES (ref #3256) : retiré de toutes les box, des profils et du dépôt apt ;
+    un aggregator.toml qui le cite encore ne provoque plus d'erreur de chargement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 05:42:31 +0100
+
 secubox-aggregator (0.5.0-1~trixie1) trixie; urgency=medium
 
   * Démarrage non bloquant, montage progressif des modules (ref #3216, ref #3191). La socket écoute en quelques

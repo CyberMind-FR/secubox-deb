@@ -61,7 +61,7 @@ Depends: ${misc:Depends},
  secubox-certs (>= 1.0),
  secubox-tor (>= 1.0),
  secubox-p2p (>= 1.12.1)
-Recommends: wireguard-tools, secubox-sentinelle-gsm
+Recommends: wireguard-tools, secubox-sentinelle-gsm, secubox-kiosk
 Description: SecuBox Lite — tous les modules de protection
  Maillage et support à distance : la box rejoint son parent (jonction automatique par code, appel sortant) et accepte une
  assistance sur consentement. Profil de PROTECTION : routage, QoS, certificats, Tor, Freebox, pare-feu nftables, WAF (sbxwaf), interception

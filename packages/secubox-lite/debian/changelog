@@ -1,3 +1,12 @@
+secubox-lite (1.9.1-1~trixie1) trixie; urgency=medium
+
+  * Recommande secubox-kiosk (ref #3254) : le profil lite active le kiosque, mais le script qui le
+    configure (/usr/sbin/secubox-kiosk-setup) n'etait installe que par le meta-paquet complet ; la page
+    Systeme echouait sur « Kiosk setup script not installed » (gk4, RPi400). Paquet leger : les paquets
+    graphiques ne sont tires qu'a la demande par secubox-kiosk-setup install.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 05:30:30 +0100
+
 secubox-lite (1.9.0-1~trixie1) trixie; urgency=medium
 
   * DPI et nDPId quittent le profil lite (ref #3218, decision du proprietaire du 2026-10-28 apres le banc de
