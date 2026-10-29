@@ -159,6 +159,8 @@ var parametreRequis = map[string]string{
 	"fichiers_vides":          "vides_min",
 	"variables_nombre":        "variables_min",
 	"upload_progress_present": "",
+	// #3273, étiquettes d'outil (tâche 7) : la seule qui vaut un signal.
+	"sonde_php_cgi": "",
 }
 
 // controlesRequete : contrôles qui lisent EntreePHP.Requete (#3273, relecture
@@ -171,6 +173,7 @@ var controlesRequete = map[string]bool{
 	"rc_markasjunk_uid_requete": true,
 	"rc_image_non_raster":       true, // _task et _action peuvent venir de la requête
 	"variables_nombre":          true, // C4 : max_input_vars compte aussi la requête
+	"sonde_php_cgi":             true, // tâche 7 : « -d allow_url_include » dans la chaîne de requête
 }
 
 // servicesPHPConnus : services que "services" peut nommer (#3273, R-W8 M1).
@@ -318,6 +321,9 @@ func (s signatureStructurelle) declenche(e *EntreePHP) bool {
 		return e.variablesMax() >= s.params["variables_min"]
 	case "upload_progress_present":
 		return e.Multipart != nil && e.Multipart.Progress
+	// Étiquettes d'outil (tâche 7) : la sonde PHP-CGI seule vaut un signal.
+	case "sonde_php_cgi":
+		return e.SondePHPCGI
 	case "rc_image_non_raster":
 		if e.Multipart == nil || !e.Multipart.NonRaster {
 			return false

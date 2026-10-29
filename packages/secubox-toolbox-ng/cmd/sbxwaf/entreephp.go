@@ -69,7 +69,12 @@ type EntreePHP struct {
 	CookieFauxPrefixe bool // R-PHP3 : nom de cookie normalisé en __Host-/__Secure- sans l'être à l'origine
 	// Compléments C1 à C5 (tâche 6).
 	SansLongueur bool // C1 : POST multipart ou urlencoded sans Content-Length, ou chunked
-	// les tâches 3 à 7 ajoutent leurs champs ici
+	// Étiquettes d'outil (tâche 7). Posées par analyserRequetePHP, jamais
+	// avant le relais. Elles n'ajoutent qu'un trait à une ligne existante ;
+	// SondePHPCGI est la seule à valoir un signal (contrôle sonde_php_cgi).
+	Etiquettes  []string
+	SondePHPCGI bool
+	requete     *http.Request // en-têtes, chemin et requête des étiquettes
 }
 
 // estUrlencodedPHP reproduit le test de SAPI.c, comme estMultipartPHP :
@@ -119,6 +124,7 @@ func (s *Server) nouvelleEntreePHP(r *http.Request, service string) *EntreePHP {
 		Chemin:       r.URL.Path,
 		requeteBrute: r.URL.RawQuery,
 		SansLongueur: corpsSansLongueur(r),
+		requete:      r,
 	}
 	// R-NC1 : sans Authorization. Ces quatre chemins sont appelés de serveur
 	// à serveur : un cookie de session (forgeable, sans valeur ici) n'exempte
@@ -326,6 +332,11 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 	if s.rules.litLaRequete() {
 		e.lireRequete()
 	}
+	// Sonde PHP-CGI (tâche 7) : lit la chaîne de requête brute, seulement si
+	// la signature est chargée. Aucune autre étiquette n'est calculée ici.
+	if e.requete != nil && s.rules.aControle("sonde_php_cgi") {
+		e.SondePHPCGI = sondePHPCGI(e.requeteBrute)
+	}
 	// R-PHP3 (relecture I1) : les cookies ne sont parcourus qu'ici, après la
 	// réponse et sous le recover, et seulement si cookie_prefixe_normalise est
 	// chargée. Rien n'est calculé avant le relais.
@@ -342,10 +353,26 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 		e.AppelsFederes = s.appelsFederes.noter(rm.ip, time.Now())
 	}
 	signaux := e.Signaux()
-	for _, d := range s.rules.EvaluerPHP(e) {
+	detections := s.rules.EvaluerPHP(e)
+	var traits []string
+	if len(detections) > 0 && e.requete != nil {
+		// Étiquettes d'outil : calculées une fois, à l'écriture de la première
+		// ligne. Elles aggravent la ligne (trait, tool) sans toucher sa gravité.
+		e.Etiquettes = etiquettesOutilPHP(e.requete, e.requete.URL.EscapedPath())
+		for _, et := range e.Etiquettes {
+			traits = append(traits, "outil:"+et)
+		}
+		if len(e.Etiquettes) > 0 {
+			s.etiqueterRequete(rmp)
+			if rmp.tool == "" {
+				rmp.tool = e.Etiquettes[0]
+			}
+		}
+	}
+	for _, d := range detections {
 		s.journaliserMultipart(rmp, ThreatRecord{
 			Category: d.Categorie, Severity: d.Severity, RuleID: d.RuleID,
-			Action: "detect", Mode: modeDetect, Signaux: signaux,
+			Action: "detect", Mode: modeDetect, Signaux: signaux, Traits: traits,
 		})
 		log.Printf("sbxwaf: DETECT %s rule=%s host=%s path=%s ip=%s",
 			d.Categorie, d.RuleID, rm.host, rm.path, rm.ip)

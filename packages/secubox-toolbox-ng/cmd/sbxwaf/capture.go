@@ -176,19 +176,25 @@ func (s *Server) rendreCapture(genre genreCorps) {
 	}
 }
 
+// etiqueterRequete calcule ja4 et tool une seule fois par requête.
+func (s *Server) etiqueterRequete(rm *requeteMultipart) {
+	if rm.etiquetee {
+		return
+	}
+	rm.etiquetee = true
+	if s.ja4Header != "" && rm.entetes != nil {
+		rm.ja4 = rm.entetes.Get(s.ja4Header)
+	}
+	rm.tool = etiquetteOutilPHP(rm.ua, rm.path)
+}
+
 // journaliserMultipart complète rec avec la requête et l'écrit (nil-safe).
 // ja4 et tool sont calculés ici, une fois par requête.
 func (s *Server) journaliserMultipart(rm *requeteMultipart, rec ThreatRecord) {
 	if s.threatLog == nil {
 		return
 	}
-	if !rm.etiquetee {
-		rm.etiquetee = true
-		if s.ja4Header != "" && rm.entetes != nil {
-			rm.ja4 = rm.entetes.Get(s.ja4Header)
-		}
-		rm.tool = etiquetteOutilPHP(rm.ua, rm.path)
-	}
+	s.etiqueterRequete(rm)
 	rec.ClientIP, rec.Host, rec.Method, rec.Path, rec.UA = rm.ip, rm.host, rm.method, rm.path, rm.ua
 	rec.JA4, rec.Tool = rm.ja4, rm.tool
 	s.threatLog.Record(rec)
