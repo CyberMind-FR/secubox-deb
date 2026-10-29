@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"reflect"
 	"testing"
 
@@ -47,11 +48,49 @@ func TestVerifierAncreParLeCtl(t *testing.T) {
 			vu = args
 			return []byte(c.sortie), c.err
 		}
-		if got := verifieurAncre(lancer)(context.Background()); got != c.v {
+		if got := verifieurAncre(lancer, "10.10.0.1:8472")(context.Background()); got != c.v {
 			t.Errorf("sortie %q, err %v : %q, attendu %q", c.sortie, c.err, got, c.v)
 		}
-		if want := []string{"-n", "/usr/sbin/secubox-pilotagectl", "ancre-verifier"}; !reflect.DeepEqual(vu, want) {
+		if want := []string{"-n", "/usr/sbin/secubox-pilotagectl", "ancre-verifier", "wg-mesh"}; !reflect.DeepEqual(vu, want) {
 			t.Fatalf("argv %v, attendu %v", vu, want)
+		}
+	}
+}
+
+// TestAgentWgMeshSansAdresseVerifieLeBonCanal (I1, R-L2-23) : wg-mesh existe mais n'a pas (encore) d'adresse,
+// l'agent prend le maître de wg-autoload ; la vérification porte sur l'interface de CE canal, déduite du maître
+// retenu, jamais sur la seule présence de wg-mesh. Un maître hors des deux canaux vaut illisible sans appeler le ctl.
+func TestAgentWgMeshSansAdresseVerifieLeBonCanal(t *testing.T) {
+	ifs := []ifaceAdr{
+		{Nom: "wg-mesh"},
+		{Nom: "wg-autoload", Adresses: []netip.Prefix{netip.MustParsePrefix("10.64.0.9/16")}},
+	}
+	maitre, _, ok := choisirMaitre("", ifs)
+	if !ok || maitre != "10.64.0.1:8472" {
+		t.Fatalf("maître attendu 10.64.0.1:8472, %q", maitre)
+	}
+	var vu []string
+	lancer := func(_ context.Context, args ...string) ([]byte, error) {
+		vu = args
+		return []byte(`{"ok": true}`), nil
+	}
+	if v := verifieurAncre(lancer, maitre)(context.Background()); v != canal.AncreOK {
+		t.Fatalf("verdict %q", v)
+	}
+	if want := []string{"-n", "/usr/sbin/secubox-pilotagectl", "ancre-verifier", "wg-autoload"}; !reflect.DeepEqual(vu, want) {
+		t.Fatalf("argv %v, attendu %v", vu, want)
+	}
+	for m, iface := range map[string]string{"10.10.0.1": "wg-mesh", "10.10.0.1:8472": "wg-mesh", "10.64.0.1": "wg-autoload"} {
+		vu = nil
+		verifieurAncre(lancer, m)(context.Background())
+		if len(vu) != 4 || vu[3] != iface {
+			t.Errorf("%s : argv %v, interface %s attendue", m, vu, iface)
+		}
+	}
+	for _, m := range []string{"127.0.0.1", "127.0.0.1:8472", "10.10.0.2", ""} {
+		vu = nil
+		if v := verifieurAncre(lancer, m)(context.Background()); v != canal.AncreIllisible || vu != nil {
+			t.Errorf("%q : verdict %q, appel %v ; illisible sans appel attendu", m, v, vu)
 		}
 	}
 }

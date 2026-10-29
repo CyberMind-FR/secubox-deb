@@ -64,7 +64,7 @@ func main() {
 		Version:  version,
 		BootID:   bootID(),
 		// D1 : au démarrage puis toutes les heures, par le ctl root ; échec → canal coupé.
-		Ancre: verifieurAncre(lanceurSystemctl(cheminSudo, delaiCtl)),
+		Ancre: verifieurAncre(lanceurSystemctl(cheminSudo, delaiCtl), maitre),
 	}, m, operateur("", nil))
 	if err := cl.Tourner(ctx, ev); err != nil && ctx.Err() == nil {
 		log.Fatalf("canal : %v", err)

@@ -39,6 +39,14 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
       ctl. Ancre différente ou illisible : canal coupé (rien ne part, aucun Operate traité), revérifié avec recul
       jusqu'à 1 h ; la reconnexion suivante qui réussit notifie X_SECUBOX_AnchorFailed.
     - Unité : CAP_NET_ADMIN ajouté à la borne (le noyau l'exige pour `wg show`). Dépend de wireguard-tools.
+  * Relecture de la tâche 2, tour 1 :
+    - I1 / R-L2-23 : `ancre-verifier <wg-mesh|wg-autoload>`, argument obligatoire (liste fermée). L'agent passe
+      l'interface du canal du maître retenu (10.10.0.1 → wg-mesh, 10.64.0.1 → wg-autoload ; autre maître :
+      illisible sans appeler le ctl), plus la présence de /sys/class/net/wg-mesh. Le ctl exige la cohérence
+      (wg-mesh ⇒ ancre-maitre.json, wg-autoload ⇒ configuration cliente ; l'ancre de l'autre canal seule ⇒
+      illisible).
+    - M2 : sortie de wg décodée en ASCII ; une sortie non décodable, ou toute exception imprévue de la
+      vérification, rend « illisible » et l'échec est audité.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
 

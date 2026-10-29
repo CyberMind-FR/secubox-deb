@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net"
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/canal"
@@ -23,13 +24,36 @@ const (
 	delaiCtl   = 60 * time.Second
 )
 
-// verifieurAncre rend la vérification passée au canal. AncreOK seulement si le
+// interfaceAncre rend l'interface du canal du maître retenu (R-L2-23) : celle
+// que le ctl doit vérifier. Vide pour un maître hors des deux canaux.
+func interfaceAncre(maitre string) string {
+	hote := maitre
+	if h, _, err := net.SplitHostPort(maitre); err == nil {
+		hote = h
+	}
+	switch hote {
+	case "10.10.0.1":
+		return "wg-mesh"
+	case "10.64.0.1":
+		return "wg-autoload"
+	}
+	return ""
+}
+
+// verifieurAncre rend la vérification passée au canal, pour l'interface du
+// canal de maitre (jamais deviné d'après les interfaces présentes : I1). AncreOK seulement si le
 // ctl a écrit exactement un objet JSON {"ok": true} ; {"ok": false} reprend sa
 // « raison » (absente, differente, illisible ; R-L2-19). Erreur, code non nul,
 // sortie illisible, en trop ou incohérente : AncreIllisible (fermé par défaut).
-func verifieurAncre(lancer func(ctx context.Context, args ...string) ([]byte, error)) func(ctx context.Context) canal.Verdict {
+func verifieurAncre(lancer func(ctx context.Context, args ...string) ([]byte, error), maitre string) func(ctx context.Context) canal.Verdict {
+	iface := interfaceAncre(maitre)
 	return func(ctx context.Context) canal.Verdict {
-		b, err := lancer(ctx, "-n", cheminCtl, "ancre-verifier")
+		if iface == "" {
+			// Maître hors de wg-mesh et wg-autoload (127.0.0.1 des essais) : aucune ancre ne le couvre.
+			log.Printf("ancre : maître %q hors des canaux du maillage, non vérifiable", maitre)
+			return canal.AncreIllisible
+		}
+		b, err := lancer(ctx, "-n", cheminCtl, "ancre-verifier", iface)
 		if err != nil {
 			log.Printf("ancre : vérification impossible (%v)", err)
 			return canal.AncreIllisible

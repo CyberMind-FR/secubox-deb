@@ -86,6 +86,11 @@ class Banc:
                         FAUX_ABSENTES=str(self.absentes), FAUX_WG_SORTIE=str(self.wg_sortie),
                         FAUX_WG_APPELS=str(self.wg_appels))
 
+    def ancre_verifier(self, env=None):
+        """`ancre-verifier <interface>` comme l'agent l'appelle : l'interface de son canal (R-L2-23)."""
+        canal = "wg-autoload" if (self.r / "sys/class/net/wg-autoload").exists() else "wg-mesh"
+        return self.run("ancre-verifier", canal, agent=True, env=env)
+
     def cliente(self):
         (self.r / "sys/class/net/wg-mesh").rmdir()
         (self.r / "sys/class/net/wg-autoload").mkdir()
@@ -174,6 +179,10 @@ def test_argv_invalide_rend_2(banc):
         ["mains-liees", "peut-etre"],
         ["mains-liees"],
         ["ancre-verifier", "x"],
+        ["ancre-verifier"],
+        ["ancre-verifier", "wg-mesh", "en-trop"],
+        ["ancre-verifier", "wg-mesh0"],
+        ["ancre-verifier", "eth0"],
         ["politique"],
         ["politique", "tout-casser"],
         ["renouveler-secrets", "--machine-id"],
@@ -203,7 +212,7 @@ def test_argv_invalide_rend_2(banc):
 def test_verbes_valides_acceptes_ou_non_disponibles(banc):
     """R-L2-1 : argv validé pour toute la liste fermée ; support, renommer « non disponible » (code 0) ; ancre-verifier
     est livré (tâche 2) : sans ancre, il rend ok faux, raison « absente »."""
-    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
+    rc, sortie, _ = banc.ancre_verifier()
     assert rc == 0 and sortie == {"ok": False, "raison": "absente"}
     for argv in (["support", "ouvrir", "s-01"], ["support", "fermer", "s-01"], ["renommer", "box-2"]):
         rc, sortie, _ = banc.run(*argv, agent=True)
@@ -535,14 +544,14 @@ def test_ancre_conforme(banc):
     l'agent (lecture permise), sans refus audité. Box cliente : wg-autoload, clé du hub posée à l'enrôlement."""
     banc.ancre(CLE_MAITRE)
     banc.pairs((CLE_PAIR, "10.10.0.7/32"), (CLE_MAITRE, "10.10.0.0/24 192.168.50.0/24"))
-    rc, sortie, p = banc.run("ancre-verifier", agent=True)
+    rc, sortie, p = banc.ancre_verifier()
     assert rc == 0 and sortie == {"ok": True}, p.stderr
     assert banc.appels_wg() == ["show wg-mesh allowed-ips"]
     assert refus_ancre(banc) == []
     banc.cliente()
     banc.tunnel_autoload(CLE_MAITRE)
     banc.pairs((CLE_MAITRE, "10.64.0.1/32"))
-    rc, sortie, p = banc.run("ancre-verifier", agent=True)
+    rc, sortie, p = banc.ancre_verifier()
     assert rc == 0 and sortie == {"ok": True}, p.stderr
     assert banc.appels_wg()[-1] == "show wg-autoload allowed-ips"
     assert refus_ancre(banc) == [] and banc.lancements() == []
@@ -555,13 +564,13 @@ def test_ancre_differente_refuse(banc):
     banc.ancre(CLE_MAITRE)
     differente = {"ok": False, "raison": "differente"}
     banc.pairs((CLE_AUTRE, "10.10.0.0/24"))
-    assert banc.run("ancre-verifier", agent=True)[:2] == (0, differente)
+    assert banc.ancre_verifier()[:2] == (0, differente)
     # un pair qui s'approprie 10.10.0.1/32 l'emporte sur le /24 légitime : refusé
     banc.pairs((CLE_MAITRE, "10.10.0.0/24"), (CLE_AUTRE, "10.10.0.1/32"))
-    assert banc.run("ancre-verifier", agent=True)[:2] == (0, differente)
+    assert banc.ancre_verifier()[:2] == (0, differente)
     for lignes in (((CLE_MAITRE, "10.10.1.0/24"),), ((CLE_MAITRE, "(none)"),)):
         banc.pairs(*lignes)
-        assert banc.run("ancre-verifier", agent=True)[:2] == (0, differente), lignes
+        assert banc.ancre_verifier()[:2] == (0, differente), lignes
     refus = refus_ancre(banc)
     assert [e["refus"] for e in refus] == ["ancre différente"] * 4
     assert all(e["origine"] == "maitre" for e in refus)
@@ -572,7 +581,7 @@ def test_ancre_differente_refuse(banc):
     banc.cliente()
     banc.tunnel_autoload(CLE_MAITRE)
     banc.pairs((CLE_AUTRE, "10.64.0.1/32"))
-    assert banc.run("ancre-verifier", agent=True)[:2] == (0, differente)
+    assert banc.ancre_verifier()[:2] == (0, differente)
 
 
 def test_ancre_absente_rend_absente(banc):
@@ -580,10 +589,10 @@ def test_ancre_absente_rend_absente(banc):
     configuration wg-autoload) → ok faux, raison « absente », code 0, refus « ancre absente » audité ; wg n'est pas
     interrogé (rien à comparer). L'agent garde alors le canal en lecture et refuse toute action."""
     banc.pairs((CLE_MAITRE, "10.10.0.0/24 10.64.0.1/32"))
-    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
+    rc, sortie, _ = banc.ancre_verifier()
     assert rc == 0 and sortie == {"ok": False, "raison": "absente"}
     banc.cliente()
-    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
+    rc, sortie, _ = banc.ancre_verifier()
     assert rc == 0 and sortie == {"ok": False, "raison": "absente"}
     assert banc.appels_wg() == []
     assert [e["refus"] for e in refus_ancre(banc)] == ["ancre absente", "ancre absente"]
@@ -598,7 +607,7 @@ def test_ancre_illisible_jamais_vraie(banc):
     resultats = []
 
     def verdict(env=None):
-        rc, sortie, _ = banc.run("ancre-verifier", agent=True, env=env)
+        rc, sortie, _ = banc.ancre_verifier(env=env)
         resultats.append((rc, sortie))
 
     f = banc.r / "etc/secubox/p2p/ancre-maitre.json"
@@ -637,3 +646,33 @@ def test_ancre_illisible_jamais_vraie(banc):
     assert all(r == (0, {"ok": False, "raison": "illisible"}) for r in resultats), resultats
     assert [e["refus"] for e in refus_ancre(banc)] == ["ancre illisible"] * len(resultats)
     assert banc.lancements() == []
+
+
+def test_ancre_canal_incoherent_illisible(banc):
+    """R-L2-23 : le ctl vérifie l'interface du canal que l'agent utilise (argument fermé) ; wg-mesh suppose
+    ancre-maitre.json, wg-autoload la configuration cliente. L'ancre de l'autre canal présente seule → « illisible »
+    (jamais « absente », qui garderait la lecture) ; wg-mesh présente mais sans adresse ne trompe plus le choix."""
+    banc.pairs((CLE_MAITRE, "10.10.0.0/24 10.64.0.1/32"))
+    banc.ancre(CLE_MAITRE)                                  # box du propriétaire, ancre posée
+    rc, sortie, _ = banc.run("ancre-verifier", "wg-autoload", agent=True)
+    assert rc == 0 and sortie == {"ok": False, "raison": "illisible"}
+    assert banc.appels_wg() == []
+    (banc.r / "etc/secubox/p2p/ancre-maitre.json").unlink()
+    banc.tunnel_autoload(CLE_MAITRE)                        # configuration cliente seule, wg-mesh encore présente
+    rc, sortie, _ = banc.run("ancre-verifier", "wg-mesh", agent=True)
+    assert rc == 0 and sortie == {"ok": False, "raison": "illisible"}
+    # le canal réellement utilisé (wg-autoload, wg-mesh sans adresse) est vérifié, quoi qu'en dise /sys/class/net
+    rc, sortie, _ = banc.run("ancre-verifier", "wg-autoload", agent=True)
+    assert rc == 0 and sortie == {"ok": True}
+    assert banc.appels_wg() == ["show wg-autoload allowed-ips"]
+    assert [e["refus"] for e in refus_ancre(banc)] == ["ancre illisible", "ancre illisible"]
+
+
+def test_ancre_sortie_wg_non_utf8_auditee(banc):
+    """M2 : une sortie de wg non décodable (ou toute exception imprévue) rend « illisible », code 0, et l'échec est
+    audité — jamais une « erreur interne » muette."""
+    banc.ancre(CLE_MAITRE)
+    banc.wg_sortie.write_bytes(CLE_MAITRE.encode() + b"\t10.10.0.0/24 \xff\xfe\n")
+    rc, sortie, _ = banc.ancre_verifier()
+    assert rc == 0 and sortie == {"ok": False, "raison": "illisible"}
+    assert [e["refus"] for e in refus_ancre(banc)] == ["ancre illisible"]

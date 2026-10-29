@@ -24,9 +24,10 @@ Verbes (liste fermée) :
   renouveler-secrets                       secubox-renouvelle-secrets --tout --oui, opération longue
   renommer <nom>                           libellé DNS ; « non disponible » jusqu'à la tâche 5
   support <ouvrir|fermer> <id>             « non disponible » jusqu'à la tâche 4
-  ancre-verifier                           {"ok": true} | {"ok": false, "raison": absente|differente|illisible} : le
-                                           pair WireGuard qui porte l'adresse du maître a-t-il la clé de l'ancre ?
-                                           (lecture, permise depuis l'agent ; échec audité)
+  ancre-verifier <wg-mesh|wg-autoload>     {"ok": true} | {"ok": false, "raison": absente|differente|illisible} : le
+                                           pair WireGuard de l'interface du canal de l'agent qui porte l'adresse du
+                                           maître a-t-il la clé de l'ancre ? (lecture, permise depuis l'agent ; échec
+                                           audité)
   consentement <accepter|refuser> <id>     LOCAL SEULEMENT (refusé quand l'agent l'appelle par sudo)
   mains-liees <on|off>                     LOCAL SEULEMENT
   politique <action>                       {"autorise", "consentement", "raison"} ; actions : releve, reboot,
@@ -56,9 +57,9 @@ la progression se lit dans le journal de l'unité ; sa fin est auditée par `Exe
 ligne JSON par demande, refus, consentement et résultat dans /var/log/secubox/audit.log (ouvert sans suivre de lien) ;
 identifiants seulement, jamais une valeur secrète, jamais l'argv d'une demande refusée.
 
-Ancre (D1, tâche 2) : box du propriétaire (wg-mesh) → le pair de wg-mesh qui porte 10.10.0.1 doit avoir la clé
-`cle_publique` de /etc/secubox/p2p/ancre-maitre.json (posée au flash ou à la jonction) ; box cliente (sans wg-mesh,
-R-L2-9) → le pair de wg-autoload qui porte 10.64.0.1 doit avoir la clé du hub posée à l'enrôlement par
+Ancre (D1, tâche 2) : l'interface est celle du canal de l'agent, passée en argument (R-L2-23). wg-mesh → le pair qui
+porte 10.10.0.1 doit avoir la clé `cle_publique` de /etc/secubox/p2p/ancre-maitre.json (posée au flash ou à la
+jonction) ; wg-autoload → le pair de wg-autoload qui porte 10.64.0.1 doit avoir la clé du hub posée à l'enrôlement par
 secubox-autoload-agent (`PublicKey` de /etc/wireguard/wg-autoload.conf, root 0600 : c'est le hub.pub d'Auto-Load
 reçu par HTTPS épinglé). Le pair retenu est celui que WireGuard choisit (préfixe le plus long qui contient l'adresse).
 Comparaison en temps constant. Sortie, code 0 : {"ok": true}, ou {"ok": false, "raison": r} avec r = « absente »
@@ -502,13 +503,14 @@ def pair_du_maitre(ctx, interface, maitre):
     porte son adresse, None si la lecture échoue ou si deux pairs se la disputent au même préfixe."""
     try:
         r = subprocess.run([ctx.wg, "show", interface, "allowed-ips"], env=ctx.env, stdin=subprocess.DEVNULL,
-                           capture_output=True, text=True, timeout=30)
-    except (OSError, subprocess.TimeoutExpired):
+                           capture_output=True, timeout=30)
+        sortie_wg = r.stdout.decode("ascii")             # clés base64 et préfixes : rien d'autre n'est attendu
+    except (OSError, subprocess.TimeoutExpired, UnicodeDecodeError):
         return None
     if r.returncode != 0:
         return None
     meilleur, retenu, ex_aequo = -1, "", False
-    for ligne in r.stdout.splitlines():
+    for ligne in sortie_wg.splitlines():
         if not ligne.strip():
             continue
         cle_pub, _, reste = ligne.partition("\t")
@@ -532,14 +534,40 @@ def pair_du_maitre(ctx, interface, maitre):
 RAISONS = {"absente": "ancre absente", "differente": "ancre différente", "illisible": "ancre illisible"}
 
 
-def verifier_ancre(ctx):
-    """{"ok": true} seulement si le pair qui porte l'adresse du maître a la clé de l'ancre. Sinon {"ok": false,
-    "raison": absente|differente|illisible} (R-L2-19 : l'agent garde la lecture sur « absente », coupe sinon) ;
-    chaque échec est audité."""
-    interface = "wg-mesh" if proprietaire(ctx) else "wg-autoload"     # R-L2-9 : sans wg-mesh, box cliente
+def ancre_posee(ctx, interface):
+    """Le fichier d'ancre de ce canal existe-t-il (même lien ou illisible) ?"""
+    return os.path.lexists(ctx.ancre if interface == "wg-mesh" else ctx.conf_autoload)
+
+
+def verifier_ancre(ctx, interface):
+    """{"ok": true} seulement si le pair de `interface` (le canal de l'agent, R-L2-23) qui porte l'adresse du maître
+    a la clé de l'ancre. Sinon {"ok": false, "raison": absente|differente|illisible} (R-L2-19 : l'agent garde la
+    lecture sur « absente », coupe sinon) ; chaque échec est audité. Toute exception imprévue (hors audit impossible)
+    vaut « illisible », auditée (M2)."""
+    try:
+        raison = raison_ancre(ctx, interface)
+    except Erreur:
+        raise
+    except Exception as e:  # noqa: BLE001 — fermé par défaut, et audité
+        err(f"vérification de l'ancre interrompue : {e.__class__.__name__}")
+        raison = "illisible"
+    if raison is None:
+        return {"ok": True}
+    err(f"{RAISONS[raison]} ({interface})")
+    auditer(ctx, "pilotage_refus", verbe="ancre-verifier", refus=RAISONS[raison])
+    return {"ok": False, "raison": raison}
+
+
+def raison_ancre(ctx, interface):
+    """None si l'ancre est vérifiée, sinon la raison de l'échec."""
     maitre = MAILLAGES[interface]
     attendue = ancre_attendue(ctx, interface, maitre)
-    if attendue is ABSENT:
+    autre = "wg-autoload" if interface == "wg-mesh" else "wg-mesh"
+    if attendue is ABSENT and ancre_posee(ctx, autre):
+        # R-L2-23 : wg-mesh suppose ancre-maitre.json, wg-autoload la configuration cliente ; l'ancre de l'autre canal
+        # seule n'est pas une box sans ancre (la lecture n'y est pas gardée) : canal incohérent.
+        raison = "illisible"
+    elif attendue is ABSENT:
         raison = "absente"                              # rien à comparer : wg n'est pas interrogé
     elif attendue is None:
         raison = "illisible"
@@ -548,12 +576,10 @@ def verifier_ancre(ctx):
         if vue is None:
             raison = "illisible"
         elif vue and hmac.compare_digest(vue.encode("ascii"), attendue.encode("ascii")):
-            return {"ok": True}
+            return None
         else:
             raison = "differente"                       # autre clé, ou aucun pair ne porte l'adresse du maître
-    err(f"{RAISONS[raison]} ({interface})")
-    auditer(ctx, "pilotage_refus", verbe="ancre-verifier", refus=RAISONS[raison])
-    return {"ok": False, "raison": raison}
+    return raison
 
 
 # --- Analyse de l'argv ------------------------------------------------------------------------------------------------
@@ -575,7 +601,11 @@ def analyser(argv):
         if len(a) != 1 or not RE_ID.fullmatch(a[0]):
             raise ArgvInvalide
         return verbe, {"job": a[0]}
-    if verbe in ("reboot", "maj-paquets", "renouveler-secrets", "ancre-verifier"):
+    if verbe == "ancre-verifier":
+        if len(a) != 1 or a[0] not in MAILLAGES:
+            raise ArgvInvalide
+        return verbe, {"interface": a[0]}
+    if verbe in ("reboot", "maj-paquets", "renouveler-secrets"):
         if a:
             raise ArgvInvalide
         return verbe, {}
@@ -723,7 +753,7 @@ def executer(ctx, verbe, p):
         return finir(ctx, p["job"])
 
     if verbe == "ancre-verifier":
-        return verifier_ancre(ctx)              # lecture : seul un échec est audité
+        return verifier_ancre(ctx, p["interface"])  # lecture : seul un échec est audité
 
     action = action_de(verbe, p)
     unite = p.get("unite")

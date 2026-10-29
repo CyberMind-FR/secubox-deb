@@ -69,7 +69,7 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 | `service <demarrer\|arreter\|redemarrer> <unité>` | unité `^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`, jamais celle de l'agent (`secubox-pilotage-agent.*`, `@…` compris), ni une unité du ctl (`secubox-pilotage-op-*`), ni une unité inconnue de systemd, ni une unité protégée (`protected = true` dans `/etc/secubox/modules.d/*.toml`, ou socle : auth, aggregator, core, nginx, firewall, profiles, vault, autoload-agent) |
 | `renouveler-secrets` | `secubox-renouvelle-secrets --tout --oui`, opération longue |
 | `renommer <nom>`, `support <ouvrir\|fermer> <id>` | argv validé ; `{"ok": false, "refus": "non disponible"}` jusqu'aux tâches 5 et 4 |
-| `ancre-verifier` | lecture, permise depuis l'agent : `{"ok": true}` si le pair WireGuard qui porte l'adresse du maître a la clé de l'ancre, sinon `{"ok": false, "raison": "absente"\|"differente"\|"illisible"}` (code 0, refus audité) ; voir « Ancre du maître » |
+| `ancre-verifier <wg-mesh\|wg-autoload>` | lecture, permise depuis l'agent : `{"ok": true}` si le pair WireGuard de l'interface du canal de l'agent qui porte l'adresse du maître a la clé de l'ancre, sinon `{"ok": false, "raison": "absente"\|"differente"\|"illisible"}` (code 0, refus audité) ; voir « Ancre du maître » |
 | `consentement <accepter\|refuser> <id>` | **local seulement** : décision du détenteur sur un consentement en attente |
 | `mains-liees <on\|off>` | **local seulement** : lie ou délie les mains du maître |
 | `_fin <job>` | **interne, local seulement** : `ExecStopPost` de chaque unité transitoire ; audite la fin (`succes`/`echec`, code de sortie numérique) et libère l'opération exclusive |
@@ -102,14 +102,18 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 ## Ancre du maître (D1)
 
 L'agent ne parle qu'au vrai maître : **au démarrage, puis toutes les heures**, il appelle
-`sudo -n /usr/sbin/secubox-pilotagectl ancre-verifier`. Le ctl rend toujours le code 0 et l'un de ces verdicts :
+`sudo -n /usr/sbin/secubox-pilotagectl ancre-verifier <interface>`, où `<interface>` est celle du canal du maître
+qu'il a retenu (R-L2-23) : `10.10.0.1` → `wg-mesh`, `10.64.0.1` → `wg-autoload`. Ce n'est jamais deviné d'après les
+interfaces présentes : une box où `wg-mesh` existe sans adresse parle par `wg-autoload`, et c'est ce canal-là qui est
+vérifié. Un maître hors de ces deux canaux (`PILOTAGE_MAITRE=127.0.0.1`, réservé aux essais) vaut `illisible` sans
+appeler le ctl : le canal reste coupé. Le ctl rend toujours le code 0 et l'un de ces verdicts :
 
 | Sortie du ctl | Cas | Comportement de l'agent |
 |---|---|---|
 | `{"ok": true}` | le pair du maître a la clé de l'ancre | canal ouvert, Operate traités |
 | `{"ok": false, "raison": "absente"}` | aucune ancre posée : pas d'`ancre-maitre.json` sur une box du propriétaire, pas de configuration `wg-autoload` sur une box cliente | **canal ouvert en lecture** (comme en L1) ; **tout Operate est refusé** (`ancre absente : action refusée`), et chaque refus redemande la vérification au ctl, qui l'audite « ancre absente » (R-L2-19) |
 | `{"ok": false, "raison": "differente"}` | le pair qui porte l'adresse du maître a une autre clé, ou aucun pair ne la porte | **canal coupé** |
-| `{"ok": false, "raison": "illisible"}` | ancre en JSON invalide, clé mal formée, lien, droits ; `wg` en échec ou sortie illisible | **canal coupé** |
+| `{"ok": false, "raison": "illisible"}` | ancre en JSON invalide, clé mal formée, lien, droits ; `wg` en échec ou sortie illisible (non ASCII comprise) ; canal incohérent (seule l'ancre de l'autre canal est posée) ; toute erreur imprévue du ctl | **canal coupé** |
 
 Côté agent, toute autre sortie, une erreur ou un code non nul vaut `illisible` (fermé par défaut).
 
@@ -117,14 +121,16 @@ Côté agent, toute autre sortie, une erreur ou un code non nul vaut `illisible`
   L'agent revérifie avec un recul doublé de 5 s jusqu'à 1 h (chaque échec écrit une ligne d'audit). Une revérification
   horaire qui échoue coupe le canal en cours de route. À la reconnexion suivante qui réussit, l'agent notifie la coupure
   au maître : événement `X_SECUBOX_AnchorFailed` (`value` = instant Unix de la coupure).
-- Ce que vérifie le ctl (root), sur l'interface choisie comme pour la politique (R-L2-9) :
-  - **box du propriétaire** (interface `wg-mesh` présente) : le pair de `wg-mesh` qui porte `10.10.0.1` doit avoir la
+- Ce que vérifie le ctl (root), sur l'interface reçue en argument, et elle seule :
+  - **`wg-mesh`** (box du propriétaire) : le pair de `wg-mesh` qui porte `10.10.0.1` doit avoir la
     clé `cle_publique` de `/etc/secubox/p2p/ancre-maitre.json` (ancre posée au flash ou à la jonction, #3100). Le
     fichier appartient à root ou au compte `secubox` (premier-pas l'écrit sous ce compte) et n'est inscriptible ni par
     le groupe ni par les autres, sinon il est « illisible » (R-L2-20) ;
-  - **box cliente** (sans `wg-mesh`) : le pair de `wg-autoload` qui porte `10.64.0.1` doit avoir la clé du hub reçue à
+  - **`wg-autoload`** (box cliente) : le pair de `wg-autoload` qui porte `10.64.0.1` doit avoir la clé du hub reçue à
     l'enrôlement Auto-Load (le `hub.pub` du hub, rendu par HTTPS épinglé et écrit par `secubox-autoload-agent` dans
     `PublicKey` de `/etc/wireguard/wg-autoload.conf`, root 0600, un seul `[Peer]`) (R-L2-17).
+  - Cohérence (R-L2-23) : `wg-mesh` suppose `ancre-maitre.json`, `wg-autoload` la configuration cliente. Si seule
+    l'ancre de l'autre canal est posée, le verdict est `illisible` (coupure), jamais `absente`.
   - Le pair retenu est celui que WireGuard choisit pour l'adresse du maître (`wg show <interface> allowed-ips`, préfixe
     le plus long) : un pair qui s'approprie `10.10.0.1/32` l'emporte sur le `/24` du maître et la vérification échoue.
   - Comparaison en temps constant (`hmac.compare_digest`). `/usr/bin/wg` est lancé par chemin absolu, sans shell, et
