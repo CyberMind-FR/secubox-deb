@@ -40,18 +40,22 @@ func TestCorpusLivrePhp2shellEnDernier(t *testing.T) {
 		t.Fatal(err)
 	}
 	// L'ordre des clés n'est conservé que par un décodage par jetons.
-	dec := json.NewDecoder(bytes.NewReader(brut))
-	var noms []string
 	var racine struct {
 		Categories json.RawMessage `json:"categories"`
 	}
 	if err := json.Unmarshal(brut, &racine); err != nil {
 		t.Fatal(err)
 	}
-	dec = json.NewDecoder(bytes.NewReader(racine.Categories))
-	dec.Token()
+	dec := json.NewDecoder(bytes.NewReader(racine.Categories))
+	if _, err := dec.Token(); err != nil {
+		t.Fatal(err)
+	}
+	var noms []string
 	for dec.More() {
-		k, _ := dec.Token()
+		k, err := dec.Token()
+		if err != nil {
+			t.Fatal(err)
+		}
 		noms = append(noms, k.(string))
 		var ignore json.RawMessage
 		if err := dec.Decode(&ignore); err != nil {
@@ -64,7 +68,9 @@ func TestCorpusLivrePhp2shellEnDernier(t *testing.T) {
 	var cats map[string]struct {
 		Mode string `json:"mode"`
 	}
-	json.Unmarshal(racine.Categories, &cats)
+	if err := json.Unmarshal(racine.Categories, &cats); err != nil {
+		t.Fatal(err)
+	}
 	if cats["php2shell"].Mode != "detect" {
 		t.Errorf("mode = %q", cats["php2shell"].Mode)
 	}
