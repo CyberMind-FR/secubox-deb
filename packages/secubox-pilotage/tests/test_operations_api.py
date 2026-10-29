@@ -107,14 +107,40 @@ async def test_action_acceptee_auditee_et_rangee(m):
     assert o["id"] == j["operation"] and o["etat"] == "accepte" and o["acteur"] == "alice" and o["nom"] == "gk5"
 
 
+def ouvrir_support(m, box, sid="s1", duree_min=30):
+    """Session de support demandée par le maître puis acceptée sur la box (notification « ouvert »)."""
+    m.s.support_demander(box.cle, sid, duree_min, "alice")
+    assert m.s.support_noter(box.cle, sid, "ouvert", None)
+
+
+def test_box_cliente_action_seulement_pendant_un_support(tmp_path):
+    """I3 (R-L2-47) : le catalogue d'une box cliente n'est servi que pendant une session de support ouverte et non échue de
+    CETTE box, appliqué par le serveur (la page seule ne suffit pas) : sinon 409, rien d'audité ni d'envoyé."""
+    m = Monde(tmp_path)
+    m.s.vu(GK5_AUTOLOAD, {})
+    m.s.vu(GK2, {})
+    c = TestClient(m.app)
+    url = "/boxes/autoload:gk5/actions/maj-paquets"
+    assert c.post(url, json={}).status_code == 409                                 # sans support
+    m.s.support_demander(GK5_AUTOLOAD.cle, "s1", 30, "alice")
+    assert c.post(url, json={"support": "s1"}).status_code == 409                  # demandé, pas accepté
+    ouvrir_support(m, GK2, "s2")
+    assert c.post(url, json={"support": "s2"}).status_code == 409                  # session d'une autre box
+    assert m.s.support_noter(GK5_AUTOLOAD.cle, "s1", "ouvert", None)
+    m.h.avance(31 * 60)
+    assert c.post(url, json={"support": "s1"}).status_code == 409                  # échue
+    assert m.lignes == [] and m.f.en_attente(GK5_AUTOLOAD.cle) == 0 and m.s.operations(GK5_AUTOLOAD.cle) == []
+
+
 @pytest.mark.asyncio
 async def test_box_cliente_consentement_renvoye_tel_quel(tmp_path):
     m = Monde(tmp_path)
     m.s.vu(GK5_AUTOLOAD, {})
+    ouvrir_support(m, GK5_AUTOLOAD)
     rep = {"etat": "consentement", "job": "", "raison": "consentement requis : accord du détenteur"}
     async with m.client() as c:
         # box cliente : la confirmation forte n'est pas exigée (l'accord du détenteur la remplace)
-        t = asyncio.create_task(c.post("/boxes/autoload:gk5/actions/reboot", json={}))
+        t = asyncio.create_task(c.post("/boxes/autoload:gk5/actions/reboot", json={"support": "s1"}))
         await m.repondre(GK5_AUTOLOAD, rep)
         r = await t
     j = r.json()
@@ -339,8 +365,9 @@ async def test_pas_de_rejoindre_pour_une_box_cliente_ni_un_echec(tmp_path):
     m = Monde(tmp_path)
     m.s.vu(GK5_AUTOLOAD, {})
     m.s.vu(GK5, {})
+    ouvrir_support(m, GK5_AUTOLOAD)
     async with m.client() as c:
-        await lancer(m, c, GK5_AUTOLOAD, "renommer", {"args": {"nom": "gk9"}}, "j1")
+        await lancer(m, c, GK5_AUTOLOAD, "renommer", {"args": {"nom": "gk9"}, "support": "s1"}, "j1")
         await fin(m, GK5_AUTOLOAD, "j1")
         await lancer(m, c, GK5, "renommer", {"args": {"nom": "gk8"}, "confirmation": "gk5"}, "j2")
         await fin(m, GK5, "j2", rc=1)

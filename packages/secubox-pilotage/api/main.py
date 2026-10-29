@@ -19,8 +19,9 @@ unique parmi les box connues (ambigu → 409).
 L2 « Agir » (tâche 6) :
   POST   /boxes/{x}/actions/{action} {args, confirmation?, support?}   action du catalogue (pilotage/operations.py) ; confirmation
                                     forte (= nom exact de la box) pour reboot, service-arreter, renouveler, renommer sur une box du
-                                    propriétaire (400 sinon) ; OPERATE_RESP renvoyé tel quel (accepte, consentement, refuse) ;
-                                    audit pilotage_action (demande, puis réponse avec le job)
+                                    propriétaire (400 sinon) ; box cliente (réseau ≠ maillage) : `support` exigé, session
+                                    ouverte et non échue de CETTE box (409 sinon) ; OPERATE_RESP renvoyé tel quel (accepte,
+                                    consentement, refuse) ; audit pilotage_action (demande, puis réponse avec le job)
   GET    /operations?nom=&limite=   journal des opérations (fin, progression, résultat succes|echec|inconnu)
   POST   /boxes/{x}/support {duree_min}   demande d'une session de support (1..240 min, 30 par défaut) ; audit pilotage_support
   GET    /boxes/{x}/support         sessions de la box (une session ouverte passée sa fin est « expire », R-L2-33)
@@ -292,6 +293,10 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
         if (a.forte and b["reseau"] == "maillage") or corps.confirmation is not None:
             if corps.confirmation != b["nom"]:
                 raise HTTPException(400, "confirmation : retapez exactement le nom de la box")
+        if b["reseau"] != "maillage" and corps.support is None:
+            # I3 (R-L2-47, R-L2-38) : le catalogue d'une box cliente n'est servi que pendant une session de support ouverte et non
+            # échue de cette box ; la garde est ici, pas seulement dans la page
+            raise HTTPException(409, "box cliente : action seulement pendant une session de support ouverte (champ support)")
         if corps.support is not None and await asyncio.to_thread(stockage.support_ouvert, b["cle"], corps.support) is None:
             raise HTTPException(409, "session de support non ouverte ou échue")
         if action == "renommer":
