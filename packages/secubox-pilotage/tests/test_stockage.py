@@ -444,3 +444,12 @@ def test_octets_autre_box_intacte(tmp_path):
     for i in range(6):
         _passe_degradee(s, h, GK5, i)
     assert s.inventaire(GK5_AUTOLOAD.cle)["valeurs"] == avant
+
+
+def test_tri_temporaire_en_memoire_m15(tmp_path):
+    """M15 : SQLite sous AppArmor n'a pas accès à /tmp ; ses fichiers temporaires (tri, index transitoire) restent en mémoire."""
+    s, _ = neuf(tmp_path)
+    with s._cx() as cx:
+        assert cx.execute("PRAGMA temp_store").fetchone()[0] == 2   # 2 = MEMORY
+    with s._tx() as cx:
+        assert cx.execute("PRAGMA temp_store").fetchone()[0] == 2

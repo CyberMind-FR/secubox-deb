@@ -199,6 +199,7 @@ class StockageSqlite:
             cx.row_factory = sqlite3.Row
             cx.execute("PRAGMA busy_timeout=5000")
             cx.execute("PRAGMA synchronous=NORMAL")
+            cx.execute("PRAGMA temp_store=MEMORY")   # M15 : le profil AppArmor ne donne pas /tmp ; tris et index transitoires en mémoire
             yield cx
         finally:
             cx.close()

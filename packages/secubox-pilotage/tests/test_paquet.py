@@ -179,7 +179,7 @@ def test_spdx_partout():
     assert suivis
     for rel in suivis:
         chemin = ICI / rel
-        if not chemin.exists() or chemin.suffix in (".pyc", ".json") or chemin.name in ("compat", "pytest.ini", "control", "changelog", "format"):
+        if not chemin.exists() or chemin.suffix in (".pyc", ".json") or chemin.name in ("compat", "control", "changelog", "format"):
             continue
         assert "LicenseRef-CMSD-1.0" in chemin.read_text(encoding="utf-8")[:600], chemin
         assert chemin.name == "test_paquet.py" or "SA" + "SU" not in chemin.read_text(encoding="utf-8"), chemin
