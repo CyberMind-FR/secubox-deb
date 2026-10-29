@@ -52,29 +52,6 @@ func TestCheminPartageFedere(t *testing.T) {
 	}
 }
 
-func TestSessionNextcloud(t *testing.T) {
-	cas := []struct {
-		lignes  []string
-		attendu bool
-	}{
-		{[]string{"ocabcdef1234=x"}, true},
-		{[]string{"a=1", "nc_session_id=1"}, true},
-		{[]string{"oc_sessionPassphrase=p"}, true},
-		{[]string{"nc_token=t"}, true},
-		{[]string{"x=1; nc_username=alice"}, true},
-		{[]string{"ocabc=1"}, false},
-		{[]string{"ocABCDEF1234=1"}, false},
-		{[]string{"ocabcdef12345=1"}, false},
-		{[]string{"foo=1"}, false},
-		{nil, false},
-	}
-	for _, c := range cas {
-		if got := sessionNextcloud(c.lignes); got != c.attendu {
-			t.Errorf("sessionNextcloud(%q) = %v, attendu %v", c.lignes, got, c.attendu)
-		}
-	}
-}
-
 func TestCompteurFenetre(t *testing.T) {
 	if federationPeriode != 1200*time.Second || federationIPMax != 4096 || federationGarde != 64 {
 		t.Fatalf("constantes %v/%d/%d, attendu 1200 s, 4096, 64", federationPeriode, federationIPMax, federationGarde)

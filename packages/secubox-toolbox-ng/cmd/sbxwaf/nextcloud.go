@@ -125,42 +125,6 @@ func cheminPartageFedere(chemin string) bool {
 	return false
 }
 
-// sessionNextcloud : un cookie de session Nextcloud est présent (nc_session_id,
-// nc_token, nc_username, oc_sessionPassphrase, ou le nom d'instance
-// ^oc[a-z0-9]{10}$), sur n'importe laquelle des lignes Cookie. Noms lus comme
-// PHP (parcourirCookiesPHP) ; aucune valeur n'est lue ni gardée.
-// N'exempte plus R-NC1 depuis R-W11 (M3) : sur les chemins serveur à serveur,
-// seul Authorization exempte. Gardée (et testée, cookies sur plusieurs
-// lignes) pour les contrôles qui distingueront un client connecté.
-func sessionNextcloud(lignesCookie []string) bool {
-	trouve := false
-	parcourirCookiesPHP(lignesCookie, func(_, nom string) {
-		if trouve {
-			return
-		}
-		switch nom {
-		case "nc_session_id", "nc_token", "nc_username", "oc_sessionPassphrase":
-			trouve = true
-		default:
-			trouve = nomInstanceNextcloud(nom)
-		}
-	})
-	return trouve
-}
-
-// nomInstanceNextcloud : ^oc[a-z0-9]{10}$ (instanceid, cookie de session PHP).
-func nomInstanceNextcloud(nom string) bool {
-	if len(nom) != 12 || !strings.HasPrefix(nom, "oc") {
-		return false
-	}
-	for i := 2; i < len(nom); i++ {
-		if c := nom[i]; !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9') {
-			return false
-		}
-	}
-	return true
-}
-
 // reProxyAgenda : principal d'agenda délégué, celui que le contournement de
 // l'éditeur bloque (CVE-2026-45281).
 var reProxyAgenda = regexp.MustCompile(`^/remote\.php/dav/principals/users/([^/]+)/calendar-proxy-(read|write)/?$`)

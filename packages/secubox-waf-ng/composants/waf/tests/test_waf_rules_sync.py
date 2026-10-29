@@ -144,3 +144,46 @@ def test_sync_n_audite_rien_sans_ecart(tmp_path, monkeypatch):
     vivant.write_text(json.dumps({"categories": {"a": cat("a0", enabled=True)}}))
     assert _lancer_sync(monkeypatch, livre, vivant, audit) == 10
     assert not audit.exists()
+
+
+# ── #3273 : catalogue 1.7.0 (roundcube, nextcloud, php_requete) ──
+
+LIVRE_REEL = Path(__file__).resolve().parents[1] / "config" / "waf-rules.json"
+NOUVELLES = ("roundcube", "nextcloud", "php_requete")
+
+
+def _livre_reel():
+    return json.loads(LIVRE_REEL.read_text(encoding="utf-8"))
+
+
+def test_sync_nouvelles_categories_posees_actives():
+    livre = _livre_reel()
+    vivant = {"_meta": {"version": "1.6.0"},
+              "categories": {k: v for k, v in livre["categories"].items() if k not in NOUVELLES}}
+    neuf = sync.fusionne(livre, vivant)
+    assert neuf["_meta"]["version"] == "1.7.0"
+    for nom in NOUVELLES:
+        assert nom in neuf["categories"], nom
+        assert neuf["categories"][nom]["enabled"] is True
+        assert neuf["categories"][nom]["mode"] == "detect"
+        assert neuf["categories"][nom]["structural"]
+    # php2shell reste la dernière catégorie livrée
+    assert list(neuf["categories"])[-1] == "php2shell"
+
+
+def test_sync_garde_false_de_la_box_sur_roundcube():
+    livre = _livre_reel()
+    vivant = {"categories": {**livre["categories"],
+                             "roundcube": {**livre["categories"]["roundcube"], "enabled": False}}}
+    neuf = sync.fusionne(livre, vivant)
+    assert neuf["categories"]["roundcube"]["enabled"] is False
+    assert neuf["categories"]["roundcube"]["structural"] == livre["categories"]["roundcube"]["structural"]
+    assert ("roundcube", False, True) in sync.ecarts_enabled(livre, vivant)
+
+
+def test_sync_true_de_la_box_suit_le_livre_sur_nextcloud():
+    livre = _livre_reel()
+    livre["categories"]["nextcloud"]["enabled"] = False       # le paquet retire la catégorie
+    vivant = {"categories": {**_livre_reel()["categories"]}}   # la box la porte active
+    assert vivant["categories"]["nextcloud"]["enabled"] is True
+    assert sync.fusionne(livre, vivant)["categories"]["nextcloud"]["enabled"] is False

@@ -7,6 +7,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"os"
 	"strings"
@@ -78,6 +79,26 @@ func TestVhostProfilesLivreChargeAvecPHP(t *testing.T) {
 	}
 	if vp.estPHP("gitea.gk2.secubox.in") {
 		t.Error("gitea n'est pas PHP")
+	}
+	// R-NC1 (#3273) : fédération non utilisée par défaut ; le service se déduit de l'hôte.
+	if vp.federationUtilisee("nc.gk2.secubox.in") {
+		t.Error("federation_vhosts livré doit être vide : fédération inutilisée")
+	}
+	if sv, ok := vp.servicePHP("webmail.gk2.secubox.in"); sv != "roundcube" || !ok {
+		t.Errorf("servicePHP(webmail) = (%q, %v), attendu (roundcube, true)", sv, ok)
+	}
+	brut, err := os.ReadFile(fichierLivreWafNg(t, "vhost_profiles.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cles map[string]json.RawMessage
+	if err := json.Unmarshal(brut, &cles); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"federation_vhosts", "_comment_federation_vhosts"} {
+		if _, ok := cles[k]; !ok {
+			t.Errorf("clé %s absente du fichier livré", k)
+		}
 	}
 }
 
