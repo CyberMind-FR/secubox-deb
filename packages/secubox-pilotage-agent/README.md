@@ -32,6 +32,14 @@ Voir `conf/pilotage-agent.env` (installé en exemple sous `/usr/share/doc/secubo
 `PILOTAGE_MAITRE`, `PILOTAGE_RELEVE_INTERVALLE_S` (30, de 5 à 300), `PILOTAGE_MEMOIRE_SEUIL_MO` (200),
 `PILOTAGE_SWAP_SEUIL_PCT` (80), `PILOTAGE_BOUCLE_RELANCES` (3), `PILOTAGE_BOUCLE_FENETRE_S` (600).
 
+`/etc/secubox` appartient au compte partagé `secubox` (R12, R36) : le fichier est lu par l'agent lui-même au démarrage,
+pas par systemd (pas d'`EnvironmentFile=`), par descripteur et sans suivre aucun lien. Il doit être un fichier régulier
+`root:root`, sans droit d'écriture pour le groupe ni les autres (`0644`), à un seul lien physique ; sinon il est ignoré en
+entier, avec une ligne de journal. Même règle pour le drapeau « mains liées » `/etc/secubox/pilotage/mains-liees` : non
+fiable, il vaut « non » (ligne de journal à chaque refus nouveau). Le paquet ne crée rien sous `/etc/secubox`.
+Limite connue, pour L2 : le compte `secubox` peut encore renommer, dans `/etc/secubox`, un autre fichier `root:root` à
+la place de ceux-ci ; l'état « mains liées » de L2 devra vivre hors d'un dossier inscriptible par `secubox`.
+
 ## Durcissement
 
 Utilisateur `secubox-pilotage-agent`, `NoNewPrivileges`, `ProtectSystem=strict`, `ReadOnlyPaths=/`, aucune capacité,

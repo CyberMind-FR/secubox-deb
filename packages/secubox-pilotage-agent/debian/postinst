@@ -9,7 +9,7 @@ case "$1" in
     if ! getent passwd secubox-pilotage-agent >/dev/null; then
       adduser --system --no-create-home --group secubox-pilotage-agent
     fi
-    install -d -m 0755 /etc/secubox/pilotage
+    # Rien n'est créé ni modifié sous /etc/secubox (compte partagé secubox : un install -d de root y suivrait un lien, I1/R36).
     # Profil AppArmor (enforce) chargé AVANT le démarrage du service.
     if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1; then
       apparmor_parser -r /etc/apparmor.d/usr.sbin.sbx-pilotage-agent \

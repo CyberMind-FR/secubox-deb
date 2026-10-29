@@ -23,7 +23,7 @@ def test_unite_durcie():
         "User=secubox-pilotage-agent", "Group=secubox-pilotage-agent", "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes",
         "PrivateTmp=yes", "IPAddressDeny=any", "IPAddressAllow=10.10.0.1 10.64.0.1 localhost",
         "MemoryMax=32M", "Restart=on-failure", "RestartSec=10", "ReadOnlyPaths=/",
-        "EnvironmentFile=-/etc/secubox/pilotage-agent.env", "ExecStart=/usr/sbin/sbx-pilotage-agent",
+        "ExecStart=/usr/sbin/sbx-pilotage-agent",
     ):
         assert d in u, d
     fam = re.search(r"^RestrictAddressFamilies=(.*)$", u, re.M).group(1).split()
@@ -67,9 +67,9 @@ def test_paquet_coherent():
     c = lire("debian/control")
     assert "Architecture: any" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
-    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.1.1-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.1.2-1~trixie1) trixie;")
     pi = lire("debian/postinst")
-    for m in ("adduser --system --no-create-home --group secubox-pilotage-agent", "install -d -m 0755 /etc/secubox/pilotage",
+    for m in ("adduser --system --no-create-home --group secubox-pilotage-agent",
               "apparmor_parser", "systemctl enable --now secubox-pilotage-agent"):
         assert m in pi, m
     assert "systemctl stop secubox-pilotage-agent" in lire("debian/prerm")
@@ -140,3 +140,22 @@ def test_compte_propre_distinct_du_maitre():
     assert "User=secubox-pilotage\n" not in u + "\n" and "Group=secubox-pilotage\n" not in u + "\n"
     p = sans_commentaires(lire("debian/postinst"))
     assert "getent passwd secubox-pilotage-agent" in p and "getent passwd secubox-pilotage >" not in p
+
+
+def test_postinst_ne_touche_rien_sous_etc_secubox():
+    """I1/R36 : /etc/secubox appartient au compte partagé secubox ; un `install -d -m`, `chmod`, `chown` ou `mkdir` de root y suivrait un lien
+    posé par ce compte (root rendrait lisible /etc/secubox/secrets). Le postinst ne crée ni ne modifie rien sous /etc/secubox."""
+    code = sans_commentaires(lire("debian/postinst"))
+    assert "/etc/secubox" not in code
+    assert not re.search(r"\b(install\s+-d|mkdir|chmod|chown)\b", code)
+
+
+def test_reglages_lus_par_l_agent_jamais_par_systemd():
+    """R36 : le fichier d'environnement est lu par l'agent lui-même (par descripteur, root:root, sans écriture groupe/autres, sans lien) :
+    un EnvironmentFile= de systemd suivrait un lien déposé dans /etc/secubox."""
+    u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
+    assert "EnvironmentFile" not in u
+    code = sans_commentaires(lire("apparmor/usr.sbin.sbx-pilotage-agent"))
+    assert "/etc/secubox/pilotage-agent.env r," in code
+    main = lire("cmd/sbx-pilotage-agent/main.go")
+    assert 'chargerReglages("/", lecture.Root, os.Setenv)' in main

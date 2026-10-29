@@ -21,6 +21,7 @@ import (
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/canal"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/collecte"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/lecture"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
 )
@@ -35,6 +36,8 @@ const (
 
 func main() {
 	log.SetFlags(0) // journald horodate
+	// Réglages lus par l'agent, par descripteur, root:root seulement (R36) : jamais par EnvironmentFile.
+	chargerReglages("/", lecture.Root, os.Setenv)
 	ctx, arret := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer arret()
 

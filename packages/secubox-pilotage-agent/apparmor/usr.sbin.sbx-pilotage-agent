@@ -59,7 +59,8 @@
   /etc/nginx/sites-enabled/ r,
   /etc/nginx/sites-enabled/* r,
   /etc/nginx/sites-available/* r,
-  /etc/secubox/pilotage/ r,
+  # Réglages et drapeau : ouverts par descripteur, sans suivre de lien, root:root exigé (R36).
+  /etc/secubox/pilotage-agent.env r,
   /etc/secubox/pilotage/mains-liees r,
   /var/lib/secubox/profiles/actif r,
 

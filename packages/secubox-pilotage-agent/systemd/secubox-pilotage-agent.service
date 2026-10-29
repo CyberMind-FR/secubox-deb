@@ -12,7 +12,8 @@ Wants=network-online.target
 Type=simple
 User=secubox-pilotage-agent
 Group=secubox-pilotage-agent
-EnvironmentFile=-/etc/secubox/pilotage-agent.env
+# Réglages : /etc/secubox/pilotage-agent.env est lu par l'agent lui-même, par descripteur et root:root seulement
+# (R36). Pas d'EnvironmentFile= : systemd suivrait un lien déposé dans /etc/secubox par le compte partagé secubox.
 AppArmorProfile=/usr/sbin/sbx-pilotage-agent
 UMask=0027
 ExecStart=/usr/sbin/sbx-pilotage-agent
