@@ -216,3 +216,48 @@ def test_calculer_ne_decode_que_les_lignes_des_familles_php(monkeypatch):
     assert len(decodees) == 4
     assert r["familles"] == {"php2shell": 1, "roundcube": 1, "nextcloud": 1, "php_requete": 1, "outil": 0}
 
+
+def test_detections_cache_altere_rend_inconnu(monkeypatch, tmp_path):
+    """M7 : un relevé altéré (compteur non entier, fenêtre illisible) ne lève pas d'erreur 500 : « inconnu »."""
+    client, _ = _client(monkeypatch, tmp_path)
+    for familles, fenetre in (({"php2shell": "beaucoup"}, 24), ({"php2shell": 1}, "x"), ({"php2shell": None}, 24),
+                              ({"php2shell": [1]}, 24)):
+        (tmp_path / "php-signaux.json").write_text(json.dumps(
+            {"fenetre_h": fenetre, "calcule_a": MAINTENANT.timestamp(), "etat": "ok", "familles": familles}))
+        rep = client.get("/detections")
+        assert rep.status_code == 200, (familles, fenetre)
+        e = {x["id"]: x for x in rep.json()["detections"]}["analyse_php"]
+        assert "inconnu" in e["detail"], (familles, fenetre, e["detail"])
+
+
+MENACES = Path(__file__).resolve().parent.parent / "www" / "waf" / "menaces.html"
+
+
+def test_menaces_demo_porte_les_identifiants_du_catalogue():
+    """M7 : la démo de menaces.html nomme les règles comme le catalogue (nc-003, rc-001)."""
+    src = MENACES.read_text(encoding="utf-8")
+    assert "'nc-003'" in src and "'rc-001'" in src
+    assert "nextcloud-003" not in src and "roundcube-001" not in src
+
+
+def test_menaces_affiche_l_etat_perime():
+    """M7 : quand l'API rend etat « perime », la carte le dit (texte d'état produit par etatPhp)."""
+    import re
+    import shutil
+    import subprocess
+    src = MENACES.read_text(encoding="utf-8")
+    m = re.search(r"function etatPhp\(ph\)\{.*?\n", src)
+    assert m, "fonction etatPhp absente de menaces.html"
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node absent : comportement JS non exécuté")
+    js = m.group(0) + (
+        "var ok={etat:'ok',calcule_a:1798545600,familles:{php2shell:1}},"
+        "vieux={etat:'perime',calcule_a:1798545600,familles:{php2shell:1}};"
+        "console.log(JSON.stringify([etatPhp(ok),etatPhp(vieux),etatPhp({etat:'inconnu',familles:null}),etatPhp(null)]));")
+    sortie = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=30, check=True).stdout
+    ok, vieux, inconnu, sans = json.loads(sortie)
+    assert "périmé" not in ok
+    assert "périmé" in vieux
+    assert "inconnu" in inconnu
+    assert sans == "Session requise."

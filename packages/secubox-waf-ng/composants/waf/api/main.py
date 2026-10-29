@@ -1162,11 +1162,14 @@ async def get_detections():
     # ── Analyse des requêtes PHP (#3273) ──────────────────────────────────
     armes = _vhosts_php_armes()
     releve = _php_signaux.lire_cache(PHP_SIGNAUX_CACHE)
+    detail = "signaux en 24 h : inconnu (relevé absent)"
     if releve:
-        n = sum(int(releve["familles"].get(f, 0)) for f in _php_signaux.FAMILLES)
-        detail = f"{n} signaux en {int(releve.get('fenetre_h', 24))} h"
-    else:
-        detail = "signaux en 24 h : inconnu (relevé absent)"
+        # Un relevé altéré (compteur ou fenêtre non entiers) rend « inconnu », jamais une erreur 500.
+        try:
+            n = sum(int(releve["familles"].get(f, 0)) for f in _php_signaux.FAMILLES)
+            detail = f"{n} signaux en {int(releve.get('fenetre_h', 24))} h"
+        except (TypeError, ValueError, OverflowError):
+            detail = "signaux en 24 h : inconnu (relevé illisible)"
     detections.append({
         "id": "analyse_php",
         "nom": "Analyse des requêtes PHP",
