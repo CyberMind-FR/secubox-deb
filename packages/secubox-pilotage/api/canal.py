@@ -127,9 +127,11 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
                     taille_max: int = TAILLE_MAX, vu_intervalle_s: float = VU_INTERVALLE_S,
                     audit_intervalle_s: float = AUDIT_INTERVALLE_S, horloge: Callable[[], float] = time.monotonic,
                     notifs_par_minute: int = NOTIFS_PAR_MINUTE,
-                    apres_fin: Optional[Callable[[Box, dict], Awaitable[None]]] = None) -> FastAPI:
+                    apres_fin: Optional[Callable[[Box, dict], Awaitable[None]]] = None,
+                    diffuser: Optional[Callable[[Box, dict], None]] = None) -> FastAPI:
     """`identifier(adresse)` rend la Box ou None (appelée hors boucle) ; `audit(evenement, champs)` écrit une ligne dans l'audit.
-    `apres_fin(box, operation)` : appelée une fois par opération terminée (première X_SECUBOX_OperationDone de son job)."""
+    `apres_fin(box, operation)` : appelée une fois par opération terminée (première X_SECUBOX_OperationDone de son job).
+    `diffuser(box, evenement)` : chaque notification rangée (épurée), pour le temps réel vers la page."""
     app = FastAPI(title="SecuBox Pilotage — canal", docs_url=None, redoc_url=None, openapi_url=None)
 
     refus: dict = {}  # (motif, adresse) -> [instant de la dernière ligne, refus tus depuis] ; bornée à AUDIT_ADRESSES_MAX
@@ -318,6 +320,11 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             except Exception:
                 log.exception("stockage de la notification impossible")
                 continue
+            if diffuser is not None:
+                try:
+                    diffuser(box, ev)   # temps réel vers la page (tâche 7) : synchrone, ne bloque jamais
+                except Exception:
+                    log.exception("diffusion de la notification impossible")
             if termine is not None and apres_fin is not None:
                 try:
                     await apres_fin(box, termine)

@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from api.canal import creer_app_canal
 from api.main import creer_app_admin
 from pilotage import audit as A
+from pilotage.diffusion import Diffusion
 from pilotage.files import Files
 from pilotage.identite import box_par_adresse, noms_du_maillage
 from pilotage.inventaire import Inventaire
@@ -29,8 +30,9 @@ def assembler(stockage, files, inventaire, audit, identifier, horloge=time.time,
     """Les deux applications sur les mêmes files, le même stockage et la même boucle de relève (cycle de vie partagé, par compteur).
     Le suivi des opérations est partagé : le canal lui remet chaque fin, l'API chaque réponse arrivée après la fin."""
     suivi = Suivi(stockage, files, audit, emettre=emettre)
-    admin = creer_app_admin(stockage, files, inventaire, audit, horloge=horloge, suivi=suivi, noms_pris=noms_pris)
-    canal = creer_app_canal(files, identifier, stockage, audit, apres_fin=suivi.apres_fin)
+    diffusion = Diffusion()   # temps réel vers la page : le canal publie, l'API sert les flux (même processus, même boucle)
+    admin = creer_app_admin(stockage, files, inventaire, audit, horloge=horloge, suivi=suivi, noms_pris=noms_pris, diffusion=diffusion)
+    canal = creer_app_canal(files, identifier, stockage, audit, apres_fin=suivi.apres_fin, diffuser=diffusion.diffuser_notification)
 
     @asynccontextmanager
     async def vie_canal(app):

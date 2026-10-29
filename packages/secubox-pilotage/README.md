@@ -63,6 +63,26 @@ Toutes les routes portent `require_jwt` (administrateur réel), aucune route d'u
 | `GET /boxes/{x}/support` | | sessions de la box |
 | `DELETE /boxes/{x}/support/{id}` | | fermée sur le maître tout de suite, puis `Support.Fermer()` envoyé si la box est en ligne (`etat: hors_ligne` sinon) |
 
+## Temps réel (L2, tâche 7)
+`GET /api/v1/pilotage/boxes/{x}/flux` (`require_jwt`) : `text/event-stream`, à lire côté page par `fetch` + `ReadableStream` (l'en-tête
+`Authorization` reste possible). Premier événement `etat {box, cle, connecte, en_ligne, support}`, puis :
+
+| Événement | Contenu |
+|---|---|
+| `notify` | toute notification de la box (forme épurée du canal : `type`, `unit`, `value`, `job`, `etape`, `pct`, `rc`, `resume`, `id`, `etat`, `decision`, `fin`, `ts`) + `box`, `cle` |
+| `operation` | `X_SECUBOX_OperationProgress` / `OperationDone` de la box, et la réponse à une action lancée (`operation`, `action`, `args`, `acteur`, `etat`, `job`, `raison`) |
+| `etat` | `X_SECUBOX_HandsTied`, `Consent`, `Support` ; ouverture/fermeture de support demandée au maître ; `{perte: n}` (file pleine : n événements abandonnés, relire `GET /operations`) ; `{support: "termine"}` (fin de session d'une box cliente, le flux se ferme) |
+
+Un commentaire `: battement` est envoyé toutes les 15 s sans événement. Chaque événement est une ligne `event:` et UNE ligne `data:` de JSON
+(`ensure_ascii` : un saut de ligne, U+2028 ou un caractère de contrôle dans `resume`, `raison`, `args` ou `nom` est échappé). Les
+notifications reçues « au moins une fois » peuvent se répéter : la page dédoublonne par `job` (et `id`).
+- **Limite** : 4 flux au plus par login d'administrateur ; le 5e reçoit `429`. L'abonnement est libéré à la déconnexion, à la fin du flux, à
+  une écriture en échec ou à l'arrêt du service. Files de 64 événements par abonné ; un abonné lent perd ses plus vieux, jamais un autre n'attend.
+- **Box cliente (R-L2-31)** : `403` hors session de support ouverte et non échue ; vérifié à la connexion et à chaque battement. Box du
+  propriétaire (maillage) : toujours servie à l'administrateur.
+- **nginx** : `proxy_buffering off` et `proxy_read_timeout` (30 s au moins) du snippet `secubox-proxy.conf` suffisent (battement 15 s) ; l'application
+  envoie `X-Accel-Buffering: no`. L'agrégateur qui sert ce module en interne doit relayer le flux sans tampon.
+
 Catalogue fermé (`pilotage/operations.py`) :
 
 | Action | Commande | `args` | Confirmation forte |

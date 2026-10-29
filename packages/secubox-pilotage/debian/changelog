@@ -8,6 +8,17 @@ secubox-pilotage (0.1.2-1~trixie1) trixie; urgency=medium
     directement la socket (il le forge aussi) : la barrière reste la socket, 0660 groupe www-data. Le postinst rend le
     nouveau gabarit (et recharge nginx) avant de redémarrer le service.
 
+  * Temps réel vers la page (ref #3126 L2 tâche 7) : GET /boxes/{x}/flux (require_jwt), réponse text/event-stream
+    (`X-Accel-Buffering: no`, `Cache-Control: no-cache`), événements `notify` (toute notification de la box),
+    `operation` (progression, fin, demande d'action) et `etat` (mains liées, consentement, support, connexion, perte) ;
+    battement `: battement` toutes les 15 s ; une ligne `data:` de JSON par événement (un saut de ligne dans `resume`,
+    `raison`, `args` ou `nom` ne peut pas couper le format). 4 flux au plus par login (le 5e reçoit 429) ; abonnement
+    libéré à la fin du flux, y compris déconnexion brutale ou écriture en échec ; files bornées à 64 événements, les
+    plus vieux abandonnés (`etat {perte: n}`), `publier` ne bloque jamais. Box cliente : vue en direct seulement pendant
+    une session de support ouverte et non échue (403 sinon, flux clos à la fin de la session, revérifié à chaque
+    battement) ; box du propriétaire : toujours. Aucun secret : seules les clés épurées du canal passent. Module
+    pilotage/diffusion.py ; le canal publie après le rangement de chaque notification.
+
   * Retour au maillage après un renommage (ref #3126 L2 tâche 5, ref #3242) : pilotage/renommage.py —
     après l'OperationDone réussi d'un Renommer (box du maillage), code `sbx-mesh-invite --code --nom
     <nouveau>` vérifié (forme, somme, nom) et envoyé par Device.X_SECUBOX_Maillage.Rejoindre() {"code"}
