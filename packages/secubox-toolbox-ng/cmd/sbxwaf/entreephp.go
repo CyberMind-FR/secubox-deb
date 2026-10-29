@@ -18,9 +18,13 @@
 // fichier ni la valeur d'un paramètre.
 //
 // AUCUNE LECTURE DE PLUS. Le corps urlencoded passe par la même capture en
-// flux que le multipart (capture.go) : même fenêtre (fenetreCapture), même
-// sémaphore de capturesMultipartMax jetons. Une requête sans corps ne prend
-// aucun jeton : ses contrôles (méthode, chemin, requête) restent évalués.
+// flux que le multipart (capture.go), avec la même fenêtre (fenetreCapture),
+// mais sur un sémaphore DISTINCT (R-W7) : capturesUrlencodedMax jetons pour
+// l'urlencoded, capturesMultipartMax pour le multipart, pour qu'une rafale de
+// formulaires ne prive jamais PHP2Shell de sa capture. Le prologue XML et le
+// début d'un PUT se capturent sans jeton (R-W2). Un genre n'est capturé que
+// si un contrôle actif le lit (passe finale M4). Une requête sans corps ne
+// prend aucun jeton : ses contrôles (méthode, chemin, requête) restent évalués.
 
 package main
 
