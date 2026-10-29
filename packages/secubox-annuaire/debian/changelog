@@ -1,3 +1,11 @@
+secubox-annuaire (0.16.1-1~trixie1) trixie; urgency=medium
+
+  * Page Flotte : panneau « Pilotage » (GET /api/v1/pilotage/boxes, #3126 L1 « Voir ») : une ligne par box (réseau,
+    en ligne, mémoire, swap, CPU, services en échec, boucles 24 h, mains liées), lecture seule, valeurs absentes en « — »,
+    box hors ligne grisée, panneau masqué si le module est absent ou la liste vide, rafraîchi toutes les 30 s (ref #3126).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 10:00:00 +0100
+
 secubox-annuaire (0.16.0-1~trixie1) trixie; urgency=medium
 
   * Relevé de validation des modules (#3212) : modèle ModulesSnapshot (borné, séparé de MetricSnapshot),

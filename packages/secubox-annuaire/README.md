@@ -88,8 +88,8 @@ et l'écrit en `/var/lib/secubox/annuaire/fleet/modules.json`. Saute si le relev
 (`injoignable`, `version trop ancienne` — 404, `signature invalide`, `relevé non publié`). Lu par
 `/profiles/comparatif.html#parc`.
 
-La page `/fleet/` (WebUI) lit `GET /fleet` (nœuds du maillage à annuaire) et, séparément, deux autres sources : `GET /api/v1/autoload/boxes` (box enrôlées par Auto-Load, #2840) et
-`GET /api/v1/p2p/peers` (pairs `wg-mesh`, statut mesuré par poignée de main, #2842). Un panneau est masqué si son module est absent ou si sa liste est vide.
+La page `/fleet/` (WebUI) lit `GET /fleet` (nœuds du maillage à annuaire) et, séparément, trois autres sources : `GET /api/v1/autoload/boxes` (box enrôlées par Auto-Load, #2840) et
+`GET /api/v1/p2p/peers` (pairs `wg-mesh`, statut mesuré par poignée de main, #2842) ; `GET /api/v1/pilotage/boxes` (panneau « Pilotage », #3126 L1 : inventaire relevé par le maître, lecture seule, rafraîchi toutes les 30 s, onglet masqué suspendu, valeur absente affichée « — », `mains_liees` absent « inconnu »). Un panneau est masqué si son module est absent ou si sa liste est vide.
 
 Routes relevées dans le code source, relatives au montage du module. « aucune » : pas de garde déclarée à cet endroit de la route.
 
