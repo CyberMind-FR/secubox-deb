@@ -440,3 +440,57 @@ func TestSupportSansJob(t *testing.T) {
 		}
 	}
 }
+
+// TestRattraperLesFinsRecentes (I4, R-L2-47) : au démarrage, l'agent lit au ctl les dernières fins enregistrées
+// (`fins-recentes`, argv exact du sudoers) et dépose une X_SECUBOX_OperationDone pour chacune : une opération dont le
+// suivi a été interrompu (agent ou box redémarrés) est close côté maître, qui dédoublonne par job. Une entrée hors
+// forme n'est jamais recopiée ; un ctl en erreur ou une réponse incohérente ne dépose rien.
+func TestRattraperLesFinsRecentes(t *testing.T) {
+	ctl := &fauxCtl{repondre: func(args []string) ([]byte, error) {
+		return []byte(`{"ok":true,"fins":[` +
+			`{"job":"00000000000000a1","verbe":"maj-paquets","resultat":"succes","rc":0},` +
+			`{"job":"00000000000000a2","verbe":"service","resultat":"echec","rc":3},` +
+			`{"job":"00000000000000a3","verbe":"reboot","resultat":"echec","rc":null},` +
+			`{"job":"../x","verbe":"reboot","resultat":"succes","rc":0},` +
+			`{"job":"00000000000000a4","verbe":"reboot","resultat":"lance","rc":0},` +
+			`{"job":"00000000000000a5","verbe":"rm -rf /","resultat":"succes","rc":0},` +
+			`{"job":"00000000000000a6","verbe":"reboot","resultat":"succes","rc":999}]}` + "\n"), nil
+	}}
+	e := executeurTest(ctl)
+	if n := e.Rattraper(context.Background()); n != 5 {
+		t.Fatalf("5 fins déposées attendues, %d", n)
+	}
+	if got := strings.Join(ctl.dernier(), " "); got != "-n "+CheminCtl+" fins-recentes" {
+		t.Fatalf("argv du ctl : %q", got)
+	}
+	evs, _ := e.cfg.Resultats.Prendre(10)
+	var vus []string
+	for _, ev := range evs {
+		if ev.Type != notifs.TypeOperationDone || ev.RC == nil {
+			t.Fatalf("événement inattendu : %+v", ev)
+		}
+		vus = append(vus, fmt.Sprintf("%s|%d|%s", ev.Job, *ev.RC, ev.Resume))
+	}
+	attendus := []string{
+		"00000000000000a1|0|maj-paquets : succès",
+		"00000000000000a2|3|service : échec (code 3)",
+		"00000000000000a3|-1|reboot : échec (interrompu)",
+		"00000000000000a5|0|opération : succès",
+		"00000000000000a6|-1|reboot : succès",
+	}
+	if strings.Join(vus, " ; ") != strings.Join(attendus, " ; ") {
+		t.Fatalf("fins rattrapées :\n%s\nattendues :\n%s", strings.Join(vus, "\n"), strings.Join(attendus, "\n"))
+	}
+	for _, sortie := range []func([]string) ([]byte, error){
+		func([]string) ([]byte, error) { return nil, errors.New("sudo en échec") },
+		func([]string) ([]byte, error) { return []byte(`{"ok":false,"erreur":"état non fiable"}`), nil },
+		func([]string) ([]byte, error) { return []byte(`{"ok":true,"fins":{}}`), nil },
+		func([]string) ([]byte, error) { return []byte(`pas du json`), nil },
+	} {
+		c := &fauxCtl{repondre: sortie}
+		x := executeurTest(c)
+		if n := x.Rattraper(context.Background()); n != 0 || x.cfg.Resultats.Taille() != 0 {
+			t.Fatalf("rien à déposer attendu, %d", n)
+		}
+	}
+}

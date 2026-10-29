@@ -162,3 +162,15 @@ func TestOperateurDeProductionLitLaRacineAbsolue(t *testing.T) {
 		t.Fatal("main.go doit passer operateurBox(nil) au canal")
 	}
 }
+
+// TestMainRattrapeLesFinsApresLAncre (I4, R-L2-47) : en production, la première ancre vérifiée déclenche la lecture des
+// fins récentes au ctl par l'exécuteur réel.
+func TestMainRattrapeLesFinsApresLAncre(t *testing.T) {
+	b, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "ApresAncre: func(ctx context.Context) { ex.Rattraper(ctx) },") {
+		t.Fatal("main.go ne branche pas ex.Rattraper sur ApresAncre")
+	}
+}

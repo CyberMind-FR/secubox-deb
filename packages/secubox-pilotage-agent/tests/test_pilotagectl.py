@@ -1040,6 +1040,39 @@ def test_audit_manque_avant_lancement_refuse_toujours(banc):
     assert banc.lancements() == []
 
 
+def test_fins_recentes_lues_par_l_agent(banc):
+    """I4 (R-L2-47) : verbe de lecture `fins-recentes`, permis depuis l'agent, audité (pilotage_lecture) : les dernières fins
+    enregistrées par _fin (job, verbe, résultat, rc ; rien d'autre), de la plus ancienne à la plus récente. L'agent les
+    renvoie à son démarrage : une opération interrompue par un redémarrage de l'agent ou de la box n'est jamais perdue."""
+    rc, sortie, _ = banc.run("fins-recentes", agent=True)
+    assert rc == 0 and sortie == {"ok": True, "fins": []}                      # rien d'enregistré encore
+    _, a, _ = banc.run("maj-paquets", agent=True)
+    banc.actifs.write_text("")
+    _fin(banc, a["job"], "success", "exited", "0")
+    _, b, _ = banc.run("service", "redemarrer", "secubox-lyrion.service", agent=True)
+    _fin(banc, b["job"], "exit-code", "exited", "3")
+    _, c, _ = banc.run("renouveler-secrets", agent=True)                        # lancé, pas fini : pas une fin
+    rc, sortie, _ = banc.run("fins-recentes", agent=True)
+    assert rc == 0 and sortie == {"ok": True, "fins": [
+        {"job": a["job"], "verbe": "maj-paquets", "resultat": "succes", "rc": 0},
+        {"job": b["job"], "verbe": "service", "resultat": "echec", "rc": 3}]}
+    lectures = [e for e in banc.audit() if e["evenement"] == "pilotage_lecture" and e["verbe"] == "fins-recentes"]
+    assert len(lectures) == 2 and all(e["origine"] == "maitre" for e in lectures)
+    # au plus FINS_RECENTES (20), les plus récentes ; une entrée de forme inattendue n'est jamais recopiée
+    f = banc.r / "var/lib/secubox-pilotagectl/fins.json"
+    fins = [{"job": f"{i:016x}", "verbe": "reboot", "resultat": "succes", "rc": 0, "quand": i} for i in range(25)]
+    fins.append({"job": "00000000000000ff", "verbe": "rm -rf", "resultat": "echec", "rc": "x", "quand": 99, "secret": "S"})
+    f.write_text(json.dumps(fins))
+    rc, sortie, _ = banc.run("fins-recentes", agent=True)
+    assert rc == 0 and len(sortie["fins"]) == 20
+    assert [x["job"] for x in sortie["fins"][:19]] == [f"{i:016x}" for i in range(6, 25)]
+    assert sortie["fins"][-1] == {"job": "00000000000000ff", "verbe": None, "resultat": "echec", "rc": None}
+    for argv in (["fins-recentes", "20"], ["fins-recentes", "--tout"]):
+        rc, sortie, _ = banc.run(*argv, agent=True)
+        assert rc == 2 and sortie == {"ok": False, "refus": "argv invalide"}, argv
+    assert len(banc.lancements()) == 3 and c["ok"] is True                      # lecture seule
+
+
 # --- Tâche 4 : support, état lu par l'agent et par la commande locale ------------------------------------------------
 
 PERMIS_AUDIT = {"ts", "module", "evenement", "box", "verbe", "action", "unite", "acteur", "origine", "job", "resultat",

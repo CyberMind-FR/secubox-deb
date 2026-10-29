@@ -66,6 +66,7 @@ const (
 	prefixeOp      = "secubox-pilotage-op-"
 	dureeSupport   = 30 // minutes, défaut d'une session de support (maximum 240)
 	dureeSupMax    = 240
+	maxRattrapees  = 20 // fins récentes renvoyées au démarrage (FINS_RECENTES du ctl)
 )
 
 var (
@@ -74,6 +75,7 @@ var (
 	reSupport = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 	reJob     = regexp.MustCompile(`^[0-9a-f]{16}$`)
 	reActeur  = regexp.MustCompile(`^[a-z_][a-z0-9_.-]{0,63}$`) // même motif que le ctl (R-L2-14)
+	reVerbe   = regexp.MustCompile(`^[a-z][a-z-]{0,31}$`)       // verbe du ctl dans une fin récente (affichage)
 	// Code d'invitation du maillage (secubox-p2p api/automesh) : « sbxmesh1.<base64url>.<sha256[:4]> », 600 au plus.
 	reCode = regexp.MustCompile(`^sbxmesh1\.[A-Za-z0-9_-]{8,590}\.[0-9a-f]{4}$`)
 	// Le maître peut envoyer l'action en anglais (vocabulaire systemd) ou en français (verbes du ctl).
@@ -183,6 +185,56 @@ func (e *Executeur) Operer(ctx context.Context, cmd string, args map[string]any,
 		e.suivre(ctx, r.Job, verbe[0])
 	}
 	return r
+}
+
+// Rattraper (I4, R-L2-47, révision de R-L2-27) lit au ctl les dernières fins enregistrées par _fin (verbe de lecture
+// `fins-recentes`, audité) et dépose une X_SECUBOX_OperationDone pour chacune ; rend leur nombre. Appelé une fois au
+// démarrage de l'agent, l'ancre vérifiée : une opération dont le suivi a été interrompu (agent redémarré, box
+// redémarrée pendant un reboot ou une mise à jour) est close côté maître, qui dédoublonne par job (une fin déjà remise
+// ne change rien). Une entrée hors forme est ignorée ; un ctl en erreur ou une réponse incohérente ne déposent rien.
+func (e *Executeur) Rattraper(ctx context.Context) int {
+	b, err := e.cfg.Ctl(ctx, "-n", CheminCtl, "fins-recentes")
+	if err != nil {
+		log.Printf("operations : fins récentes illisibles (%v) : rien à rattraper", err)
+		return 0
+	}
+	var r struct {
+		OK   *bool `json:"ok"`
+		Fins []struct {
+			Job      string  `json:"job"`
+			Verbe    *string `json:"verbe"`
+			Resultat string  `json:"resultat"`
+			RC       *int    `json:"rc"`
+		} `json:"fins"`
+	}
+	if json.Unmarshal(bytes.TrimSpace(b), &r) != nil || r.OK == nil || !*r.OK {
+		log.Print("operations : réponse du ctl incohérente (fins récentes) : rien à rattraper")
+		return 0
+	}
+	fins := r.Fins
+	if len(fins) > maxRattrapees {
+		fins = fins[len(fins)-maxRattrapees:]
+	}
+	n := 0
+	for _, f := range fins {
+		if !reJob.MatchString(f.Job) || (f.Resultat != "succes" && f.Resultat != "echec") {
+			continue
+		}
+		verbe := "opération"
+		if f.Verbe != nil && reVerbe.MatchString(*f.Verbe) {
+			verbe = *f.Verbe
+		}
+		rc := -1
+		if f.RC != nil && *f.RC >= 0 && *f.RC <= 255 {
+			rc = *f.RC
+		}
+		e.fin(f.Job, rc, resume(verbe, f.Resultat == "succes", rc))
+		n++
+	}
+	if n > 0 {
+		log.Printf("operations : %d fin(s) récente(s) renvoyée(s) au maître", n)
+	}
+	return n
 }
 
 // Traduire rend l'argv du ctl d'une commande de la liste fermée, ou une erreur (refus de l'agent) : commande

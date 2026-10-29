@@ -57,6 +57,9 @@ Verbes (liste fermée) :
                                            {"ok", "box", "mains_liees", "canal", "consentements", "support"}, plus
                                            "agent" (ActiveState de l'unité de l'agent) en local ; les expirations
                                            qu'elle constate (consentement à 24 h, support) sont écrites et auditées
+  fins-recentes                            lecture, permise depuis l'agent, auditée (pilotage_lecture) : {"ok": true, "fins":
+                                           [{job, verbe, resultat, rc}]}, les 20 dernières fins enregistrées par _fin ; lue
+                                           au démarrage de l'agent (I4, R-L2-47)
   etat-operation <job>                     lecture, permise depuis l'agent, auditée (pilotage_lecture) : {"ok": true, "job",
                                            "etat": en_cours|termine|inconnu} et, terminée, "verbe", "resultat"
                                            (succes|echec), "rc" (entier ou null) ; la fin est enregistrée par _fin
@@ -151,8 +154,8 @@ SERVICE = {"demarrer": "start", "arreter": "stop", "redemarrer": "restart"}
 ACTIONS = ("releve", "reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
            "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer", "maillage-rejoindre")
 VERBES = ("reboot", "maj-paquets", "service", "renommer", "renouveler-secrets", "support", "consentement",
-          "mains-liees", "ancre-verifier", "politique", "etat", "etat-operation", "_fin", "maillage-rejoindre",
-          "_rejoindre")
+          "mains-liees", "ancre-verifier", "politique", "etat", "etat-operation", "fins-recentes", "_fin",
+          "maillage-rejoindre", "_rejoindre")
 RENOMMER = "/usr/sbin/secubox-renommer"
 DELAI_RENOMMER = 120                                     # s, durée maximale de l'unité transitoire du renommage
 DELAI_REJOINDRE = 300                                    # s ; secubox-automesh.service est borné à 240 s
@@ -181,6 +184,7 @@ ACTIFS = frozenset({"active", "activating", "deactivating", "reloading", "refres
 VALIDITE = 24 * 3600
 VALIDITE_ANCRE = 2 * 3600                                # canal vérifié : l'agent revérifie toutes les heures
 FINS_MAX = 100                                           # fins d'opération gardées pour etat-operation
+FINS_RECENTES = 20                                       # fins rendues par fins-recentes (I4, R-L2-47)
 GARDE = 7 * 24 * 3600                                    # consentements décidés gardés une semaine (au plus 200)
 TAILLE_MAX = 1 << 20
 PATH_SUR = "/usr/sbin:/usr/bin:/sbin:/bin"
@@ -709,7 +713,7 @@ def analyser(argv):
         if len(a) != 1 or not RE_ID.fullmatch(a[0]):
             raise ArgvInvalide
         return verbe, {"job": a[0]}
-    if verbe in ("reboot", "maj-paquets", "renouveler-secrets"):
+    if verbe in ("reboot", "maj-paquets", "renouveler-secrets", "fins-recentes"):
         if a:
             raise ArgvInvalide
         return verbe, {}
@@ -921,6 +925,9 @@ def executer(ctx, verbe, p):
     if verbe == "etat-operation":
         return etat_operation(ctx, p["job"])
 
+    if verbe == "fins-recentes":
+        return fins_recentes(ctx)                   # lecture, auditée (pilotage_lecture) : une fois au démarrage de l'agent
+
     if verbe == "etat":
         return lire_etat(ctx)                       # lecture sondée par l'agent : non auditée (ses expirations le sont)
 
@@ -1053,6 +1060,24 @@ def etat_operation(ctx, job):
         if r.stdout.strip() in ACTIFS:
             return {"ok": True, "job": job, "etat": "en_cours"}
     return {"ok": True, "job": job, "etat": "inconnu"}
+
+
+def fins_recentes(ctx):
+    """I4 (R-L2-47, révision de R-L2-27) : lecture seule, auditée. Les FINS_RECENTES dernières fins enregistrées par _fin, de la
+    plus ancienne à la plus récente : {job, verbe, resultat (succes|echec), rc (entier ou null)}, rien d'autre. L'agent les
+    lit à son démarrage, une fois l'ancre vérifiée, et renvoie au maître une X_SECUBOX_OperationDone pour chacune (le maître
+    dédoublonne par job) : une opération dont le suivi a été interrompu (agent redémarré, box redémarrée) est close."""
+    auditer(ctx, "pilotage_lecture", verbe="fins-recentes")
+    fd = ouvrir_etat(ctx, creer=False)
+    if fd is None:
+        return {"ok": True, "fins": []}
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH)
+        fins = [f for f in charger_fins(fd) if f.get("resultat") in ("succes", "echec")][-FINS_RECENTES:]
+    finally:
+        os.close(fd)
+    return {"ok": True, "fins": [{"job": f["job"], "verbe": f.get("verbe") if f.get("verbe") in VERBES else None,
+                                  "resultat": f["resultat"], "rc": entier(f.get("rc"))} for f in fins]}
 
 
 def traiter(ctx, verbe, p, action, unite):

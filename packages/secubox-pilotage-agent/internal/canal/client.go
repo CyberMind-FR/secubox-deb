@@ -118,6 +118,9 @@ type Config struct {
 	Agir func(ctx context.Context, cmd string, args map[string]any, acteur string) operations.Reponse
 	// Resultats : fins d'opération à remettre au maître, renvoyées à la reconnexion ; nil : aucune.
 	Resultats *operations.Boite
+	// ApresAncre est appelée une fois, à la première vérification réussie de l'ancre (avant le premier bonjour) :
+	// l'agent y renvoie les fins récentes enregistrées par le ctl (I4, R-L2-47) ; nil : rien.
+	ApresAncre func(ctx context.Context)
 }
 
 // Client interroge le maître et lui répond.
@@ -309,12 +312,17 @@ func (c *Client) verifierAncre(ctx context.Context) Verdict {
 		log.Print("ancre : disparue après une vérification réussie, traitée comme illisible")
 		v = AncreIllisible
 	}
+	premiere := v == AncreOK && !c.dejaOK
 	if v == AncreOK {
 		c.dejaOK = true
 	}
 	c.verdict.Store(v)
 	if ouvert(v) {
 		c.ancreVue = c.horloge()
+	}
+	if premiere && c.cfg.ApresAncre != nil {
+		// I4 : une fois par démarrage, le canal ouvert (les fins déposées partent dès le bonjour)
+		c.cfg.ApresAncre(ctx)
 	}
 	return v
 }

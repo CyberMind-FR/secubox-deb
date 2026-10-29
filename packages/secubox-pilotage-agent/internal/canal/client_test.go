@@ -1014,6 +1014,49 @@ func TestClientAncreVerifieeChaqueHeure(t *testing.T) {
 	}
 }
 
+// TestClientApresAncreUneFois (I4, R-L2-47) : le crochet ApresAncre (lecture des fins récentes) est appelé une fois,
+// à la première vérification réussie de l'ancre, avant le premier bonjour ; jamais rappelé aux revérifications, jamais
+// appelé sur une ancre absente (lecture seule : aucune action, donc aucune fin à rattraper).
+func TestClientApresAncreUneFois(t *testing.T) {
+	var verifs, appels atomic.Int32
+	var bonjoursAvant atomic.Int32
+	var decalage atomic.Int64
+	f := &fauxMaitre{}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) Verdict { verifs.Add(1); return AncreOK }
+		c.cfg.ApresAncre = func(context.Context) {
+			appels.Add(1)
+			f.mu.Lock()
+			bonjoursAvant.Store(int32(len(f.bonjour)))
+			f.mu.Unlock()
+		}
+		c.horloge = func() time.Time { return time.Now().Add(time.Duration(decalage.Load())) }
+	})
+	defer stop()
+	attendreQue(t, "premier sondage", func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.sondages >= 1 })
+	if a := appels.Load(); a != 1 || bonjoursAvant.Load() != 0 {
+		t.Fatalf("ApresAncre : %d appel(s), %d bonjour(s) avant ; 1 appel avant le premier bonjour attendu", a, bonjoursAvant.Load())
+	}
+	decalage.Store(int64(time.Hour))
+	attendreQue(t, "revérification", func() bool { return verifs.Load() >= 2 })
+	time.Sleep(50 * time.Millisecond)
+	if a := appels.Load(); a != 1 {
+		t.Fatalf("ApresAncre rappelé à la revérification : %d appels", a)
+	}
+
+	var absente atomic.Int32
+	g := &fauxMaitre{}
+	stop2 := demarrerAvec(t, g, modeleTest(nil), nil, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) Verdict { return AncreAbsente }
+		c.cfg.ApresAncre = func(context.Context) { absente.Add(1) }
+	})
+	defer stop2()
+	attendreQue(t, "sondage en lecture seule", func() bool { g.mu.Lock(); defer g.mu.Unlock(); return g.sondages >= 1 })
+	if absente.Load() != 0 {
+		t.Fatal("ApresAncre appelé sur une ancre absente")
+	}
+}
+
 // TestAgentAncreAbsenteUnSeulAppelParLot (I2, R-L2-24) : un pair non vérifié n'inonde pas l'audit. 32 OPERATE dans
 // un lot → au plus un appel au ctl ; un second lot dans la minute → aucun ; tous refusés, aucun exécuté.
 func TestAgentAncreAbsenteUnSeulAppelParLot(t *testing.T) {

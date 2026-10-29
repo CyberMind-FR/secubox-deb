@@ -46,6 +46,9 @@ const (
 	instantContrat = 1793000000
 	supportContrat = "5e55105000000001"
 	consentContrat = "00000000000000c1"
+	// I4 (R-L2-47) : fin d'un reboot enregistrée par le ctl avant le redémarrage de la box, relue au démarrage de l'agent
+	// (fins-recentes) et renvoyée au maître.
+	jobRattrape = "00000000f1500001"
 )
 
 // attenteMaitre : ce que l'agent doit faire de chaque requête du maître. ctl : argv du ctl après « -n <ctl> » (vide :
@@ -122,6 +125,8 @@ func (c *ctlContrat) repondre(args []string) ([]byte, error) {
 	switch {
 	case verbe[0] == "etat-operation":
 		return []byte(fmt.Sprintf(`{"ok":true,"job":%q,"etat":"termine","resultat":"succes","rc":0}`, verbe[1])), nil
+	case verbe[0] == "fins-recentes" && len(verbe) == 1:
+		return []byte(`{"ok":true,"fins":[{"job":"` + jobRattrape + `","verbe":"reboot","resultat":"succes","rc":0}]}`), nil
 	}
 	argv := strings.Join(verbe, " ")
 	c.mu.Lock()
@@ -267,13 +272,15 @@ func rejouerMaitre(t *testing.T, fixtures []fixtureMaitre) resultatContrat {
 		Ancre:     func(context.Context) canal.Verdict { return canal.AncreOK },
 		Agir:      ex.Operer,
 		Resultats: boite,
+		// comme main.go : à la première ancre vérifiée, les fins récentes du ctl repartent (I4)
+		ApresAncre: func(ctx context.Context) { ex.Rattraper(ctx) },
 	}, m, operateur(racineTest, func(context.Context, time.Duration) error { return nil }))
 	ctx, arreter := context.WithCancel(context.Background())
 	fini := make(chan struct{})
 	go func() { _ = cl.Tourner(ctx, ev); close(fini) }()
 
-	// Attendus : une réponse par requête, puis les notifications de L2 : 3 bascules (mains liées, support, consentement) et,
-	// pour chaque job accepté, sa progression « lancee » et « terminee » et sa fin.
+	// Attendus : une réponse par requête, puis les notifications de L2 : 3 bascules (mains liées, support, consentement),
+	// la fin rattrapée au démarrage (I4) et, pour chaque job accepté, sa progression « lancee » et « terminee » et sa fin.
 	echeance := time.Now().Add(10 * time.Second)
 	for time.Now().Before(echeance) {
 		fm.mu.Lock()
@@ -289,7 +296,7 @@ func rejouerMaitre(t *testing.T, fixtures []fixtureMaitre) resultatContrat {
 				jobs++
 			}
 		}
-		fini := complet && len(fm.notifs) >= 3+3*jobs
+		fini := complet && len(fm.notifs) >= 3+1+3*jobs
 		fm.mu.Unlock()
 		if fini {
 			break
@@ -445,7 +452,12 @@ func fixturesAgentL2(fixtures []fixtureMaitre, res resultatContrat) map[string]f
 	out["notify_operation_progress"] = fixtureAgent{Route: "/canal/v1/notifs", Envoi: notifsDe(res.notifs, func(e map[string]any) bool {
 		return e["type"] == notifs.TypeOperationProgress && e["job"] == jobReboot
 	})}
-	out["notify_operation_done"] = fixtureAgent{Route: "/canal/v1/notifs", Envoi: notifsDe(res.notifs, type_(notifs.TypeOperationDone))}
+	out["notify_operation_done"] = fixtureAgent{Route: "/canal/v1/notifs", Envoi: notifsDe(res.notifs, func(e map[string]any) bool {
+		return e["type"] == notifs.TypeOperationDone && e["job"] != jobRattrape
+	})}
+	out["notify_operation_done_rattrapee"] = fixtureAgent{Route: "/canal/v1/notifs", Envoi: notifsDe(res.notifs, func(e map[string]any) bool {
+		return e["type"] == notifs.TypeOperationDone && e["job"] == jobRattrape
+	})}
 	out["notify_hands_tied"] = fixtureAgent{Route: "/canal/v1/notifs", Envoi: notifsDe(res.notifs, type_(notifs.TypeMainsLiees))}
 	out["notify_consent"] = fixtureAgent{Route: "/canal/v1/notifs", Envoi: notifsDe(res.notifs, type_(notifs.TypeConsentement))}
 	out["notify_support"] = fixtureAgent{Route: "/canal/v1/notifs", Envoi: notifsDe(res.notifs, type_(notifs.TypeSupport))}
@@ -465,7 +477,8 @@ func TestContratRequetesDuMaitre(t *testing.T) {
 	// ce que les fixtures doivent montrer, sans quoi le contrat de L2 ne couvre plus le cas
 	for nom, sous := range map[string]string{
 		"notify_operation_progress": `"etape":"lancee"`, "notify_operation_done": `"rc":0`, "notify_hands_tied": `"etat":"on"`,
-		"notify_consent": `"decision":"accepte"`, "notify_support": `"fin":"`, "reponse_operate_releve": `"top":`,
+		"notify_operation_done_rattrapee": `"job":"` + jobRattrape + `"`,
+		"notify_consent":                  `"decision":"accepte"`, "notify_support": `"fin":"`, "reponse_operate_releve": `"top":`,
 		"reponse_operate_support_ouvrir": `"etat":"consentement"`,
 	} {
 		if !bytes.Contains(l2[nom].Envoi, []byte(sous)) {

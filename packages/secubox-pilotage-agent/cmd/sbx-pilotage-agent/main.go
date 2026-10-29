@@ -78,6 +78,8 @@ func main() {
 		Ancre:     verifieurAncre(lanceurSystemctl(cheminSudo, delaiCtl), maitre),
 		Agir:      apresOperate(ex.Operer, relire),
 		Resultats: resultats,
+		// I4 (R-L2-47) : à la première ancre vérifiée, les fins enregistrées par le ctl repartent vers le maître.
+		ApresAncre: func(ctx context.Context) { ex.Rattraper(ctx) },
 	}, m, operateurBox(nil))
 	if err := cl.Tourner(ctx, ev); err != nil && ctx.Err() == nil {
 		log.Fatalf("canal : %v", err)
