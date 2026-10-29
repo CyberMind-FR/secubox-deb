@@ -139,7 +139,15 @@ appel au ctl (paramètre manquant, inconnu, mal typé ou hors motif : refus, le 
   NOTIFY `X_SECUBOX_OperationDone {job, rc, resume}` : `resume` est court (« maj-paquets : succès »,
   « … : échec (code 100) », « … : échec (interrompu) »), jamais une sortie d'apt ni un secret ; `rc` vaut -1 quand le
   code n'est pas un nombre ou que la fin reste introuvable après 3 lectures (« résultat inconnu »). Au plus 32
-  opérations suivies en même temps. L'arrêt de l'agent (ou le reboot de la box) interrompt le suivi sans résultat.
+  opérations suivies en même temps ; 12 lectures `systemctl show` en échec de suite (bus injoignable) donnent aussi
+  « résultat inconnu » et libèrent l'emplacement. L'arrêt de l'agent (ou le reboot de la box) interrompt le suivi
+  sans résultat.
+- **Coupure du canal pendant une opération** (voulu par le brief) : l'opération continue sur la box (`systemd-run`),
+  et son suivi aussi, maître joignable ou non ; la progression émise pendant la coupure suit la file ordinaire des
+  notifications, la fin attend dans la boîte des résultats et est remise à la reconnexion.
+- Si le ctl répond « ancre non vérifiée » alors que l'agent se croit ancré (canal enregistré périmé ou retiré),
+  l'agent force une revérification de l'ancre, au plus une par lot et par minute (même limiteur que R-L2-24).
+- Un exécuteur d'actions sans vérification d'ancre est une configuration refusée : l'agent ne se connecte pas.
 - **Résultats non remis** : les `X_SECUBOX_OperationDone` sont gardés en mémoire (au plus **50** ; au-delà, le plus
   ancien est évincé et journalisé) jusqu'à un POST `/notifs` réussi (2xx), puis retirés : renvoyés à la reconnexion
   (chaque bonjour relance l'envoi), une seule fois chacun. La progression, elle, suit la file ordinaire des

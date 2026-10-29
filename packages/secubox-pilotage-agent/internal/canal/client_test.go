@@ -1111,7 +1111,10 @@ func TestClientOperateActionRepondEtat(t *testing.T) {
 	f := &fauxMaitre{requetes: []string{`[` +
 		`{"msg_id":"0000000000000001","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Services.Agir()","args":{"unite":"secubox-lyrion.service","action":"restart"},"acteur":"gk2admin"}},` +
 		`{"msg_id":"0000000000000002","type":"OPERATE","body":{"command":"Device.Reboot()","args":{},"acteur":42}}]`}}
-	stop := demarrerAvec(t, f, modeleTest(nil), nil, nil, func(c *Client) { c.cfg.Agir = agir })
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, nil, func(c *Client) {
+		c.cfg.Agir = agir
+		c.cfg.Ancre = func(context.Context) Verdict { return AncreOK } // M5 : jamais d'actions sans ancre
+	})
 	defer stop()
 	attendre(t, f)
 	f.mu.Lock()
@@ -1163,6 +1166,7 @@ func TestAgentRenvoieLeResultatApresReconnexion(t *testing.T) {
 		`[{"msg_id":"0000000000000001","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Packages.MettreAJour()","args":{},"acteur":"gk2admin"}}]`}}
 	stop := demarrerAvec(t, f, modeleTest(nil), nil, ev, func(c *Client) {
 		c.cfg.Agir = ex.Operer
+		c.cfg.Ancre = func(context.Context) Verdict { return AncreOK }
 		c.cfg.Resultats = boite
 		c.dormir = func(ctx context.Context, d time.Duration) error { return dormirReel(ctx, 2*time.Millisecond) }
 	})
@@ -1217,5 +1221,64 @@ func TestAgentRenvoieLeResultatApresReconnexion(t *testing.T) {
 		if !strings.Contains(corps, sous) {
 			t.Fatalf("fin incomplète, %s absent : %s", sous, corps)
 		}
+	}
+}
+
+// TestAgentReverifieSiLeCtlRefuseFauteDAncre (M3, R-L2-28) : l'agent se croit ancré (AncreOK) mais le ctl répond
+// « ancre non vérifiée » (canal enregistré périmé ou retiré) : l'agent force une revérification, au plus une par
+// lot et par minute (même limiteur que R-L2-24).
+func TestAgentReverifieSiLeCtlRefuseFauteDAncre(t *testing.T) {
+	var verifs atomic.Int32
+	var decalage atomic.Int64
+	agir := func(context.Context, string, map[string]any, string) operations.Reponse {
+		return operations.Reponse{Etat: operations.Refuse, Raison: "ancre non vérifiée"}
+	}
+	lot := func(base int) string {
+		l := make([]string, 3)
+		for i := range l {
+			l[i] = fmt.Sprintf(`{"msg_id":"%016x","type":"OPERATE","body":{"command":"Device.Reboot()","args":{}}}`, base+i)
+		}
+		return "[" + strings.Join(l, ",") + "]"
+	}
+	f := &fauxMaitre{requetes: []string{lot(1), lot(10)}}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, nil, func(c *Client) {
+		c.cfg.Agir = agir
+		c.cfg.Ancre = func(context.Context) Verdict { verifs.Add(1); return AncreOK }
+		c.horloge = func() time.Time { return time.Now().Add(time.Duration(decalage.Load())) }
+	})
+	defer stop()
+	nbReponses := func() int {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.reponses)
+	}
+	attendreQue(t, "deux lots refusés", func() bool { return nbReponses() == 2 })
+	if v := verifs.Load(); v != 2 {
+		t.Fatalf("1 vérification au démarrage + 1 forcée pour les deux lots de la même minute, %d", v)
+	}
+	decalage.Store(int64(61 * time.Second))
+	f.mu.Lock()
+	f.requetes = append(f.requetes, lot(20))
+	f.mu.Unlock()
+	attendreQue(t, "troisième lot", func() bool { return nbReponses() == 3 })
+	if v := verifs.Load(); v != 3 {
+		t.Fatalf("une minute plus tard, une nouvelle revérification forcée attendue, %d", v)
+	}
+}
+
+// TestClientAgirSansAncreRefuse (M5, R-L2-28) : des actions sans vérification d'ancre sont une configuration
+// invalide : aucune connexion.
+func TestClientAgirSansAncreRefuse(t *testing.T) {
+	agir := func(context.Context, string, map[string]any, string) operations.Reponse { return operations.Reponse{} }
+	c := NouveauClient(Config{Maitre: "127.0.0.1", Agir: agir}, modeleTest(nil), nil)
+	if c.errCfg == nil {
+		t.Fatal("Agir sans Ancre : errCfg attendu")
+	}
+	if _, err := c.cycle(context.Background(), new(bool)); err == nil || err != c.errCfg {
+		t.Fatalf("aucune connexion attendue : %v", err)
+	}
+	c = NouveauClient(Config{Maitre: "127.0.0.1", Agir: agir, Ancre: func(context.Context) Verdict { return AncreOK }}, modeleTest(nil), nil)
+	if c.errCfg != nil {
+		t.Fatalf("Agir avec Ancre : configuration valable, %v", c.errCfg)
 	}
 }

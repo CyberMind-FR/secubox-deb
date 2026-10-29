@@ -185,6 +185,10 @@ func NouveauClient(c Config, m *modele.Modele, operer func(ctx context.Context, 
 			return errors.New("redirection refusée")
 		},
 	}
+	if c.Agir != nil && c.Ancre == nil && errCfg == nil {
+		// M5 : des actions sans vérification de l'ancre du maître ne sont jamais servies.
+		errCfg = errors.New("actions (Agir) sans vérification d'ancre (Ancre) : configuration refusée, aucune connexion")
+	}
 	hote := strings.TrimPrefix(c.Maitre, "http://")
 	if !strings.Contains(hote, ":") || strings.HasSuffix(hote, "]") {
 		hote = net.JoinHostPort(strings.Trim(hote, "[]"), portCanal)
@@ -673,8 +677,7 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 					// vérification est redemandée : une ancre posée depuis rend la main aux actions suivantes.
 					// R-L2-24 : au plus une fois par lot et par minute (un pair non vérifié n'inonde pas l'audit) ;
 					// les autres refus sont seulement comptés dans le journal de l'agent.
-					if maintenant := c.horloge(); !reverifie && (c.reverif.IsZero() || maintenant.Sub(c.reverif) >= reverifRefus) {
-						reverifie, c.reverif = true, maintenant
+					if c.peutReverifier(&reverifie) {
 						c.verifierAncre(ctx)
 					} else {
 						sansAppel++
@@ -686,6 +689,12 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 				continue
 			}
 			rep, run := c.operate(ctx, rq)
+			if refusSansAncre(rep) && c.peutReverifier(&reverifie) {
+				// M3 : le ctl ne voit pas d'ancre vérifiée alors que l'agent se croit ancré (canal enregistré périmé
+				// ou retiré) : revérification forcée, au plus une par lot et par minute (limiteur de R-L2-24).
+				log.Print("canal : le ctl refuse faute d'ancre vérifiée, revérification forcée")
+				c.verifierAncre(ctx)
+			}
 			if run == nil {
 				reps = append(reps, c.borner(rep))
 			} else if c.lancerReleve(ctx, rq.MsgID, run) {
@@ -701,6 +710,22 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 		log.Printf("canal : %d Operate refusés (ancre absente) sans revérification auprès du ctl", sansAppel)
 	}
 	return reps, lances, nil
+}
+
+// peutReverifier applique le limiteur des revérifications demandées par un Operate (R-L2-24, M3) : une par lot et
+// par minute au plus. Vrai : la revérification est permise et comptée.
+func (c *Client) peutReverifier(reverifie *bool) bool {
+	maintenant := c.horloge()
+	if *reverifie || (!c.reverif.IsZero() && maintenant.Sub(c.reverif) < reverifRefus) {
+		return false
+	}
+	*reverifie, c.reverif = true, maintenant
+	return true
+}
+
+// refusSansAncre : OPERATE_RESP « refuse » du ctl faute d'ancre vérifiée de son côté.
+func refusSansAncre(rep reponse) bool {
+	return rep.Type == "OPERATE_RESP" && rep.Body["etat"] == string(operations.Refuse) && rep.Body["raison"] == operations.RaisonAncre
 }
 
 // lancerReleve exécute run en tâche de fond, suivie par Tourner, et poste sa

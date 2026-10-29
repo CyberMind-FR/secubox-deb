@@ -379,3 +379,29 @@ func attendreQue(t *testing.T, quoi string, cond func() bool) {
 	}
 	t.Fatalf("délai dépassé : %s", quoi)
 }
+
+// TestSuiviSystemctlEnEchecBorne (M4, R-L2-28) : systemctl show en échec sans fin (bus injoignable) → après
+// maxErreursShow erreurs consécutives, « résultat inconnu » est déposé et l'emplacement de suivi est libéré.
+func TestSuiviSystemctlEnEchecBorne(t *testing.T) {
+	var appels atomic.Int32
+	ctl := &fauxCtl{}
+	e := Nouveau(Config{Ctl: ctl.lancer, Pas: time.Millisecond, Resultats: NouvelleBoite(0),
+		Systemctl: func(context.Context, ...string) ([]byte, error) {
+			appels.Add(1)
+			return nil, errors.New("systemctl : code 1")
+		}})
+	ctx, annule := context.WithTimeout(context.Background(), 2*time.Second) // sans borne, le suivi ne finirait jamais
+	defer annule()
+	e.Operer(ctx, CmdMettreAJour, nil, "")
+	e.Attendre()
+	evs, _ := e.cfg.Resultats.Prendre(16)
+	if len(evs) != 1 || *evs[0].RC != -1 || evs[0].Resume != "maj-paquets : résultat inconnu" {
+		t.Fatalf("« résultat inconnu » attendu : %+v", evs)
+	}
+	if n := appels.Load(); n != maxErreursShow || maxErreursShow != 12 {
+		t.Fatalf("%d lectures, attendu 12", n)
+	}
+	if s := e.suivis.Load(); s != 0 {
+		t.Fatalf("emplacement de suivi non libéré : %d", s)
+	}
+}

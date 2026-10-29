@@ -42,6 +42,10 @@ const (
 	CmdSupportFermer = "Device.X_SECUBOX_Support.Fermer()"
 )
 
+// RaisonAncre est le refus du ctl quand aucune ancre n'est vérifiée de son côté (R-L2-21) : le canal force alors
+// une revérification (M3, R-L2-28).
+const RaisonAncre = "ancre non vérifiée"
+
 // Bornes et réglages.
 const (
 	CheminCtl    = "/usr/sbin/secubox-pilotagectl"
@@ -50,9 +54,11 @@ const (
 	maxSuivis    = 32              // opérations suivies en même temps
 	maxRaison    = 120             // octets de la raison d'un refus
 	essaisFin    = 3               // lectures de la fin d'une unité disparue avant « résultat inconnu »
-	prefixeOp    = "secubox-pilotage-op-"
-	dureeSupport = 30 // minutes, défaut d'une session de support (maximum 240)
-	dureeSupMax  = 240
+	// erreurs consécutives de systemctl show (bus injoignable) avant « résultat inconnu » : 1 min au pas de 5 s
+	maxErreursShow = 12
+	prefixeOp      = "secubox-pilotage-op-"
+	dureeSupport   = 30 // minutes, défaut d'une session de support (maximum 240)
+	dureeSupMax    = 240
 )
 
 var (
@@ -324,7 +330,7 @@ func (e *Executeur) fin(job string, rc int, resume string) {
 func (e *Executeur) boucler(ctx context.Context, job, verbe string) {
 	e.progression(job, "lancee", 0)
 	enCours := false
-	essais := 0
+	essais, erreurs := 0, 0
 	minuteur := time.NewTimer(e.cfg.Pas)
 	defer minuteur.Stop()
 	for {
@@ -336,11 +342,19 @@ func (e *Executeur) boucler(ctx context.Context, job, verbe string) {
 		minuteur.Reset(e.cfg.Pas)
 		actif, err := e.actif(ctx, job)
 		if err != nil {
-			if ctx.Err() == nil {
-				log.Printf("operations : état de %s illisible (%v), nouvel essai", job, err)
+			if ctx.Err() != nil {
+				return
 			}
+			// M4 : un bus injoignable ne garde pas l'emplacement de suivi à vie.
+			if erreurs++; erreurs >= maxErreursShow {
+				log.Printf("operations : état de %s illisible %d fois de suite (%v), résultat inconnu", job, erreurs, err)
+				e.fin(job, -1, verbe+" : résultat inconnu")
+				return
+			}
+			log.Printf("operations : état de %s illisible (%v), nouvel essai", job, err)
 			continue
 		}
+		erreurs = 0
 		if actif {
 			if !enCours {
 				enCours = true

@@ -64,6 +64,12 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
       R-L2-21 : agir et politique refusent toute demande du maître sans ancre vérifiée (« ancre non vérifiée »,
       audité avec le verbe). R-L2-26 : ancre-verifier enregistre le canal vérifié (ancre.json, atomique, 2 h) ; la
       nature de la box (propriétaire ou cliente) se lit dans ce canal, plus dans la présence de wg-mesh.
+  * Relecture de la tâche 3, tour 1 (R-L2-28) :
+    - M1 : _fin audite la fin avant d'écrire fins.json ; un fins.json illisible repart d'une liste vide (journalisé).
+    - M2 : une écriture de fins.json manquée après le lancement est journalisée ; la réponse reste {"ok": true, "job"}.
+    - M3 : refus « ancre non vérifiée » du ctl alors que l'agent est ancré → revérification forcée (une par minute).
+    - M4 : 12 erreurs consécutives de systemctl show → « résultat inconnu », emplacement de suivi libéré.
+    - M5 : Agir sans Ancre → configuration refusée, aucune connexion. README : suivi maintenu pendant une coupure.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
 
