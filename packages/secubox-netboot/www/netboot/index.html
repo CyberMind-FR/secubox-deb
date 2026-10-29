@@ -223,7 +223,7 @@
             AUDIT = { audit: ['2026-10-13T08:12:03 publish board=02005e005301 image=secubox-2.39.0 ok', '2026-10-12T17:40:51 overlay apply (simulation)'] };
             SERVEUR = { server: { tftp_root: '/srv/secubox/netboot/tftp', http_root: '/srv/secubox/netboot/http', tftpd: 'active', nginx_sbxboot: 'yes', published_boards: 2 } };
             LIVES = { lives: [{ nom: 'mochabin-live', serveur: '192.0.2.10', http_base: 'http://192.0.2.10:8099/mochabin-live', squashfs: true,
-                                commandes: ['setenv ethact mvpp2-2; setenv ipaddr <ip libre>; setenv serverip 192.0.2.10', 'tftpboot ${scriptaddr} mochabin-live/boot.scr; source ${scriptaddr}'],
+                                commandes: ['setenv ethact mvpp2-2; setenv ipaddr <ip libre>; setenv serverip 192.0.2.10', 'tftpboot ${loadaddr} mochabin-live/boot.scr; source ${loadaddr}'],
                                 images: [{ nom: 'secubox-isp-mochabin-trixie.img.gz', taille: 2669000177, sha256: '35b4…', signee: true, taille_brute: null }] },
                               { nom: 'espressobin-live', titre: 'ESPRESSObin v7', console: 'ttyMV0,115200', serveur: '192.0.2.42', http_base: 'http://192.0.2.10:8099/espressobin-live', squashfs: true,
                                 commandes: ['setenv ethact neta@30000; setenv ipaddr <ip libre>; setenv serverip 192.0.2.42', 'tftpboot ${loadaddr} espressobin-live/boot.scr; source ${loadaddr}'],

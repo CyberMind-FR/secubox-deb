@@ -1,3 +1,12 @@
+secubox-netboot (0.8.3-1~trixie1) trixie; urgency=medium
+
+  * Netboot MOCHAbin depuis le U-Boot d'usine Marvell (ref #3271) : il n'a pas de scriptaddr (env relevé :
+    loadaddr=0x6000000, kernel_addr_r=0x7000000, fdt_addr_r=0x6f00000, ramdisk_addr_r=-). board/mochabin/live.env
+    charge boot.scr à ${loadaddr}, comme l'ESPRESSObin ; page netboot alignée. Le boot.scr du live pose lui-même
+    ses adresses de noyau, de DTB et d'initrd (aucune variable absente de l'usine).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 10:00:00 +0100
+
 secubox-netboot (0.8.2-1~trixie1) trixie; urgency=medium
 
   * Suivre un flash depuis la page (ref #3233, demande du propriétaire) : route /flashs — octets acquittés par la
