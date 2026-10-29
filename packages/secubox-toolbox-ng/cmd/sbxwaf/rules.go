@@ -61,6 +61,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -103,6 +104,102 @@ type compiledCategory struct {
 	severity string
 	mode     string // modeBlock | modeDetect — never empty after loadFile
 	patterns []compiledPattern
+	// structurelles : signatures lues sur le ResultatMultipart de l'analyseur
+	// (#3257). Jamais consultees par MatchDetail.
+	structurelles []signatureStructurelle
+}
+
+// signatureStructurelle est une signature qui ne lit pas le texte de la
+// requete mais la STRUCTURE d'un envoi multipart. params porte les seuils
+// (entiers >= 1) du controle nomme par check.
+type signatureStructurelle struct {
+	id, check, severity, cve, confidence string
+	params                               map[string]int
+}
+
+// DetectionStructurelle est le constat d'une signature structurelle. Severity
+// est celle de la signature, sinon celle de la categorie.
+type DetectionStructurelle struct {
+	Categorie string
+	RuleID    string
+	Severity  string
+	CVE       string
+}
+
+// parametreRequis donne, par controle connu, le parametre entier obligatoire
+// ("" : aucun). Un controle absent de cette table est inconnu donc rejete.
+var parametreRequis = map[string]string{
+	"upload_progress_fichiers": "fichiers_apres_min",
+	"parties_nombre":           "parties_min",
+	"noms_profondeur":          "profondeur_min",
+	"filename_charge":          "",
+}
+
+// structurelJSON : champs inconnus ignores ; "source" (liste d'URL, ou tout
+// autre type) n'est volontairement pas declare, pour qu'un type inattendu ne
+// fasse jamais echouer le chargement.
+type structurelJSON struct {
+	ID         string                     `json:"id"`
+	Check      string                     `json:"check"`
+	Params     map[string]json.RawMessage `json:"params"`
+	Severity   string                     `json:"severity"`
+	CVE        string                     `json:"cve"`
+	Confidence string                     `json:"confidence"`
+}
+
+// compileStructurel valide une entree "structural". Une erreur rend un motif
+// de rejet, jamais un echec du fichier.
+func compileStructurel(brut json.RawMessage, mode string) (signatureStructurelle, string, error) {
+	var sj structurelJSON
+	if err := json.Unmarshal(brut, &sj); err != nil {
+		return signatureStructurelle{}, "", err
+	}
+	if sj.ID == "" {
+		return signatureStructurelle{}, "", errStructurel("id vide")
+	}
+	if mode != modeDetect {
+		return signatureStructurelle{}, sj.ID, errStructurel("categorie en mode " + mode + " : l'analyse en flux ne peut que detecter")
+	}
+	requis, connu := parametreRequis[sj.Check]
+	if !connu {
+		return signatureStructurelle{}, sj.ID, errStructurel("controle inconnu " + strconv.Quote(sj.Check))
+	}
+	params := make(map[string]int, len(sj.Params))
+	for nom, v := range sj.Params {
+		n, err := strconv.Atoi(strings.TrimSpace(string(v)))
+		if err != nil {
+			return signatureStructurelle{}, sj.ID, errStructurel("parametre " + nom + " non entier")
+		}
+		params[nom] = n
+	}
+	if requis != "" {
+		if n, ok := params[requis]; !ok || n < 1 {
+			return signatureStructurelle{}, sj.ID, errStructurel("parametre " + requis + " absent ou < 1")
+		}
+	}
+	return signatureStructurelle{
+		id: sj.ID, check: sj.Check, severity: sj.Severity, cve: sj.CVE,
+		confidence: sj.Confidence, params: params,
+	}, sj.ID, nil
+}
+
+type errStructurel string
+
+func (e errStructurel) Error() string { return string(e) }
+
+// declenche applique le controle au resultat de l'analyseur (seuils a >=).
+func (s signatureStructurelle) declenche(res ResultatMultipart) bool {
+	switch s.check {
+	case "upload_progress_fichiers":
+		return res.Progress && res.FichiersApresProgress >= s.params["fichiers_apres_min"]
+	case "parties_nombre":
+		return res.Parties >= s.params["parties_min"]
+	case "noms_profondeur":
+		return res.ProfondeurMax >= s.params["profondeur_min"]
+	case "filename_charge":
+		return res.FilenamePHP || res.FilenameObjet
+	}
+	return false
 }
 
 // rulesData is the hot-swappable payload — a slice of categories in the order
@@ -184,6 +281,9 @@ func loadRulesJSON(path string) *rulesData {
 		Enabled  *bool         `json:"enabled"` // pointer: nil means absent (default true)
 		Mode     *string       `json:"mode"`    // pointer: nil means absent (default block)
 		Patterns []patternJSON `json:"patterns"`
+		// Brut : une forme inattendue est rejetee nommement plus bas, elle ne
+		// doit pas faire sauter la categorie entiere (ses motifs regex).
+		Structural json.RawMessage `json:"structural"`
 	}
 
 	// Use a simple ordered parse: json.Decoder over the categories object,
@@ -276,6 +376,35 @@ func loadRulesJSON(path string) *rulesData {
 				severity: sev,
 			})
 			total++
+		}
+
+		// Signatures structurelles (#3257) : chacune est chargee ou rejetee
+		// NOMMEMENT, jamais ignoree. Une erreur locale ne touche ni les autres
+		// signatures ni les motifs regex.
+		if len(cat.Structural) > 0 && string(cat.Structural) != "null" {
+			var entrees []json.RawMessage
+			if err := json.Unmarshal(cat.Structural, &entrees); err != nil {
+				log.Printf("sbxwaf/rules: category %q structural is not a list (rejected): %v", catID, err)
+				data.declares++
+				data.rejetes = append(data.rejetes, catID+"#structural")
+			}
+			for i, brut := range entrees {
+				data.declares++
+				sig, id, err := compileStructurel(brut, mode)
+				if err != nil {
+					nom := catID + "#" + strconv.Itoa(i)
+					if id != "" {
+						nom = catID + "/" + id
+					}
+					log.Printf("sbxwaf/rules: category %q structural %s rejected: %v", catID, nom, err)
+					data.rejetes = append(data.rejetes, nom)
+					continue
+				}
+				if sig.severity == "" {
+					sig.severity = sev
+				}
+				cc.structurelles = append(cc.structurelles, sig)
+			}
 		}
 
 		data.cats = append(data.cats, struct {
@@ -459,7 +588,30 @@ func (r *Rules) Integrite() (declares, charges int, rejetes []string) {
 		return 0, 0, nil
 	}
 	for _, c := range cur.cats {
-		charges += len(c.data.patterns)
+		charges += len(c.data.patterns) + len(c.data.structurelles)
 	}
 	return cur.declares, charges, append([]string(nil), cur.rejetes...)
+}
+
+// EvaluerStructurel rend toutes les signatures structurelles qui declenchent
+// sur res : categories activees dans l'ordre du fichier, puis signatures dans
+// l'ordre. Pur et sans effet de bord ; ne bloque rien (mode detect seulement).
+func (r *Rules) EvaluerStructurel(res ResultatMultipart) []DetectionStructurelle {
+	r.mu.RLock()
+	cur := r.current
+	r.mu.RUnlock()
+	if cur == nil {
+		return nil
+	}
+	var out []DetectionStructurelle
+	for _, c := range cur.cats {
+		for _, s := range c.data.structurelles {
+			if s.declenche(res) {
+				out = append(out, DetectionStructurelle{
+					Categorie: c.id, RuleID: s.id, Severity: s.severity, CVE: s.cve,
+				})
+			}
+		}
+	}
+	return out
 }
