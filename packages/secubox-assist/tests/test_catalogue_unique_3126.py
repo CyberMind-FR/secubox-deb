@@ -112,3 +112,17 @@ def test_la_page_annonce_le_pilotage_avec_un_lien():
     assert 'id="avis-pilotage"' in html
     assert 'href="/fleet/"' in html
     assert "status === 410" in html
+
+
+@pytest.mark.parametrize("installee", ["0.3.2-1~bookworm1", "0.3.2-1~trixie1"])
+def test_maintscript_retire_la_regle_sudoers_pour_les_deux_estampilles(installee):
+    import shutil
+    import subprocess
+    if shutil.which("dpkg") is None:
+        pytest.skip("dpkg absent")
+    ligne = next(l.split() for l in (ROOT / "debian" / "maintscript").read_text().splitlines()
+                 if l.startswith("rm_conffile"))
+    assert ligne[1] == "/etc/sudoers.d/secubox-assist"
+    # même test que dpkg-maintscript-helper : version installée <= version indiquée
+    r = subprocess.run(["dpkg", "--compare-versions", installee, "le-nl", ligne[2]])
+    assert r.returncode == 0

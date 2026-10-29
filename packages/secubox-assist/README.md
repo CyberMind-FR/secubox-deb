@@ -59,13 +59,17 @@ fixe, voir `secubox-pilotage-agent`). `assist/catalog.py` est supprimé et le d�
 
 Les routes de session rendent **410 Gone** : `{"detail": "...", "remplace_par": "/api/v1/pilotage/boxes/<nom>/support"}`.
 La garde `require_jwt` passe avant : sans authentification la réponse reste 401. Le marché (offres, demandes, appariements,
-`/joinlink`) et les délégations web (`/delegations`, `/delegation/assertion`) ne changent pas.
+`/joinlink`) et les délégations web (`/delegations`, `/delegation/assertion`) ne changent pas, mais le marché (`/match/accept`) n'ouvre plus de session : l'ouverture passe par le support du pilotage
+(R-L2-44).
 
 | Action d'assist | Verbe du ctl |
 |---|---|
-| `service.restart <module>` | `service redemarrer <unité>` |
-| `service.toggle <module>:on` | `service demarrer <unité>` |
-| `service.toggle <module>:off` | `service arreter <unité>` |
+| `service.restart secubox-dns` | `service redemarrer secubox-dns.service` |
+| `service.toggle secubox-dns:on` | `service demarrer secubox-dns.service` |
+| `service.toggle secubox-dns:off` | `service arreter secubox-dns.service` |
+
+Le ctl vise des **unités** (`secubox-dns.service`, `.timer`), non des modules. Sur une box cliente, `arreter` et `redemarrer`
+exigent l'accord du détenteur (consentement local, 24 h) ; `demarrer` n'en exige pas.
 
 Retirées, sans équivalent (le ctl reste une liste fermée) : `status.all`, `diag.collect`, `logs.tail`, `config.reload`,
 `config.rollback`. L'état se lit par le relevé du pilotage (`Get`, `Device.X_SECUBOX_Releve.Mesurer()`). Un équivalent éventuel

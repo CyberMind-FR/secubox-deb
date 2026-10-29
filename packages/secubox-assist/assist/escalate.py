@@ -10,7 +10,7 @@ ephemeral, NEVER promoted to a persistent gondwana member. Layer 2: a
 session-scoped WireGuard peer in EPHEMERAL_RANGE (10.11.0.0/24) on the
 wg-ephemeral iface (established via secubox-p2p). teardown() removes both.
 These builders return argv LISTS (shell=False); the privileged exec is done by
-secubox-assistctl under a scoped sudoers entry — never in the web daemon.
+secubox-assistctl — never in the web daemon.
 """
 from __future__ import annotations
 

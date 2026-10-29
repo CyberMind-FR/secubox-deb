@@ -52,8 +52,8 @@ else
 wg-ephemeral / 10.11.0.0/24 (assist/escalate.py EPHEMERAL_RANGE/EPHEMERAL_IFACE)
 is provisioned on demand, per session, by secubox-p2p — not as a standing
 interface created at install time. escalate.add_ephemeral_peer() shells out
-to `secubox-p2pctl peer-add --iface wg-ephemeral --ephemeral ...` via the
-scoped secubox-assistctl sudoers entry; secubox-p2p does not yet implement
+to `secubox-p2pctl peer-add --iface wg-ephemeral --ephemeral ...` via
+secubox-assistctl; secubox-p2p does not yet implement
 that subcommand, so escalation fails closed (EscalateError) until it does.
 This file is just a breadcrumb — nothing here is a workaround or a
 substitute CLI.
