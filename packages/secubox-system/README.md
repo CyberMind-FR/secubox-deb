@@ -51,7 +51,16 @@ Configuration file: `/etc/secubox/system.toml`
   Le nom actuel (comparé à `gethostname()`, sans casse) n'est pas un renommage : un fuseau seul passe même sur une box
   nommée `secubox` (réservé). La page n'envoie `hostname` que s'il a changé. Règle polkit : l'unité
   `secubox-systeme-renommer@<nom>` n'est que démarrée (`start`), pour une instance au motif DNS seulement.
-  Reportés de la relecture de la tâche 5 (R-L2-36) : M5, M7, M8, M11 (non corrigés dans ce tour).
+  Limites connues du renommage :
+  - acteur dans l'audit : par l'unité `secubox-systeme-renommer@`, `box_renommee` est audité avec l'acteur `root` ;
+    l'administrateur réel n'apparaît que dans la ligne `service_control` de l'API ;
+  - alias de `/etc/hosts` : une ligne 127.0.1.1 qui ne porte ni l'ancien ni le nouveau nom est retirée avec ses alias,
+    et la nouvelle ligne est ajoutée en fin de fichier ;
+  - instances en échec : une instance `secubox-systeme-renommer@<nom>` en échec reste listée par `systemctl --failed`
+    jusqu'à un `reset-failed` ;
+  - durcissement : les deux unités de renommage (celle-ci et l'unité transitoire du ctl de pilotage) gardent leur bac à
+    sable actuel ; une borne plus stricte (`CapabilityBoundingSet`, `RestrictAddressFamilies=AF_UNIX`) reste à mesurer
+    au banc.
 
 ## License
 
