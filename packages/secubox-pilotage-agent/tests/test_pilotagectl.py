@@ -1098,3 +1098,16 @@ def test_etat_sans_arbre_d_etat(banc_nu):
     rc, etat, _ = banc_nu.run("etat", agent=True)
     assert rc == 0 and etat["ok"] is True and etat["canal"] is None and etat["consentements"] == []
     assert not (banc_nu.r / "var/lib/secubox-pilotagectl").exists()
+
+
+def test_mains_liees_posees_malgre_un_support_illisible(banc):
+    """Lier les mains ne dépend pas de l'état du support : un support.json illisible n'empêche ni la pose ni son audit
+    (et aucune session ne peut s'ouvrir sur un état non fiable)."""
+    (banc.r / "var/lib/secubox-pilotagectl/support.json").write_text("{pas du json")
+    rc, sortie, p = banc.run("mains-liees", "on")
+    assert rc == 0 and sortie == {"ok": True, "mains_liees": True}, p.stderr
+    assert "support" in p.stderr
+    assert [e["etat"] for e in banc.audit() if e["evenement"] == "mains_liees"] == ["on"]
+    banc.run("mains-liees", "off")
+    rc, sortie, _ = banc.run("support", "ouvrir", "s-01", agent=True)
+    assert rc == 1 and sortie == {"ok": False, "erreur": "état non fiable"}

@@ -996,7 +996,15 @@ def basculer_mains(ctx, fd, liees, maintenant):
                 auditer(ctx, "consentement_annule", consentement=c["id"], action=c.get("action"), unite=c.get("unite"))
         ecrire_json(fd, "consentements.json", consentements)
         # Aucune session de support sous mains liées : la demande en attente est annulée, la session ouverte fermée.
-        sup = charger_support(ctx, fd, maintenant)
+        try:
+            sup = charger_support(ctx, fd, maintenant)
+        except Erreur as e:
+            # Les mains se lient quand même (et la bascule est auditée) : sur un état non fiable, aucune session ne
+            # peut s'ouvrir ni être acceptée (gerer_support échoue de même).
+            if str(e) == "audit impossible":
+                raise
+            err("support.json non fiable : mains liées posées sans toucher au support")
+            sup = None
         if sup is not None and sup["etat"] in ("en_attente", "ouvert"):
             ouvert = sup["etat"] == "ouvert"
             sup["etat"] = "ferme" if ouvert else "annule"
