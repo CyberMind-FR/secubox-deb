@@ -74,6 +74,7 @@ type VhostProfiles struct {
 	supprimables map[string]bool           // id de catégorie -> supprimable
 	antirobots   map[string]bool           // hôte -> refuser les robots (#1216)
 	phpServices  map[string]bool           // nom de service -> fait tourner PHP (#3257)
+	phpHotes     []*regexp.Regexp          // motifs d'hôte PHP (#3257, R15)
 }
 
 // fichierProfils est la forme JSON sur disque de vhost_profiles.json.
@@ -95,6 +96,11 @@ type fichierProfils struct {
 	// ces hôtes voient leurs envois multipart analysés (PHP2Shell). Clé absente
 	// = aucun vhost PHP.
 	PHPServices []string `json:"php_services"`
+	// PHPHotes (#3257, R15) : expressions régulières sur le nom d'hôte
+	// normalisé ; un hôte qui correspond est PHP même sans vhost déclaré. Lues
+	// une à une : un motif invalide (ou qui n'est pas une chaîne) est rejeté
+	// seul, journalisé, sans refuser le fichier.
+	PHPHotes []json.RawMessage `json:"php_hotes"`
 }
 
 // chargerVhostProfiles lit et compile le fichier déclaratif. Une erreur de
@@ -166,6 +172,19 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 			continue
 		}
 		vp.phpServices[nom] = true
+	}
+	for i, brutMotif := range f.PHPHotes {
+		var motif string
+		if err := json.Unmarshal(brutMotif, &motif); err != nil {
+			log.Printf("vhost_profiles : php_hotes #%d n'est pas une chaîne, rejeté : %v", i, err)
+			continue
+		}
+		re, err := regexp.Compile(motif)
+		if err != nil {
+			log.Printf("vhost_profiles : php_hotes %q invalide, rejeté : %v", motif, err)
+			continue
+		}
+		vp.phpHotes = append(vp.phpHotes, re)
 	}
 	return vp, nil
 }
@@ -279,14 +298,52 @@ func (v *VhostProfiles) doitSupprimer(host, chemin, cat string) bool {
 	return v != nil && v.catSupprimablePour(host, cat) && v.estLegitime(host, chemin)
 }
 
-// estPHP dit si cet hôte fait tourner un service déclaré PHP (#3257). Hôte
-// normalisé comme ailleurs ; hôte inconnu, clé absente ou récepteur nil → false.
+// estPHP dit si cet hôte fait tourner PHP (#3257) : son service est déclaré
+// dans php_services, OU l'hôte normalisé correspond à un motif de php_hotes
+// (R15 : un alias nextcloud.* ou une box sans liste propre reste couvert).
+// Récepteur nil → false.
 func (v *VhostProfiles) estPHP(host string) bool {
 	if v == nil {
 		return false
 	}
 	v.mu.RLock()
 	defer v.mu.RUnlock()
-	service, ok := v.hoteService[normaliserHote(host)]
-	return ok && v.phpServices[service]
+	h := normaliserHote(host)
+	if service, ok := v.hoteService[h]; ok && v.phpServices[service] {
+		return true
+	}
+	for _, re := range v.phpHotes {
+		if re.MatchString(h) {
+			return true
+		}
+	}
+	return false
+}
+
+// armementPHP rend le nombre de vhosts PHP explicites (vhost dont le service
+// est déclaré PHP) et de motifs d'hôte PHP armés. Nil-safe.
+func (v *VhostProfiles) armementPHP() (explicites, motifs int) {
+	if v == nil {
+		return 0, 0
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	for _, service := range v.hoteService {
+		if v.phpServices[service] {
+			explicites++
+		}
+	}
+	return explicites, len(v.phpHotes)
+}
+
+// ligneArmementPHP est la ligne de démarrage qui dit ce que la capture PHP2Shell
+// couvre (relecture finale I3) : une box où rien n'est armé se voit au journal,
+// au lieu de passer pour une box sans faux positif.
+func ligneArmementPHP(v *VhostProfiles) string {
+	n, m := v.armementPHP()
+	l := fmt.Sprintf("sbxwaf: vhosts PHP armés : %d explicites, %d motifs", n, m)
+	if v == nil {
+		l += " (vhost-profiles absent ou illisible : capture PHP2Shell coupée)"
+	}
+	return l
 }

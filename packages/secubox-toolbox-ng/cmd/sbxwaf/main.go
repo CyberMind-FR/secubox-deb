@@ -1397,13 +1397,15 @@ func main() {
 	var profils *VhostProfiles
 	if *vhostProfiles != "" {
 		if p, err := chargerVhostProfiles(*vhostProfiles); err != nil {
-			log.Printf("sbxwaf: vhost-profiles ILLISIBLE (%s) — phase G désactivée : %v",
+			log.Printf("sbxwaf: vhost-profiles ILLISIBLE (%s) — phase G et capture PHP2Shell désactivées : %v",
 				*vhostProfiles, err)
 		} else {
 			profils = p
 			log.Printf("sbxwaf: vhost-profiles chargé → %s (phase G active)", *vhostProfiles)
 		}
 	}
+	// #3257 (I3) : ce que couvre la capture PHP2Shell, dit une fois au démarrage.
+	log.Print(ligneArmementPHP(profils))
 
 	// #1240 : le journal de menaces émet aussi (fire-and-forget) vers sbx-actord.
 	// Émission désactivable (--actor-socket ""); si actord est absent, les

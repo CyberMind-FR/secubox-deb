@@ -75,6 +75,20 @@
     "nextcloud",
     "roundcube"
   ],
+  "_comment_php_hotes": "#3257 (R15) — motifs d'hote PHP : expressions regulieres (RE2) sur le nom d'hote normalise (minuscules, sans port). Un hote qui correspond est analyse comme un vhost PHP meme s'il n'est nomme dans 'vhosts' : alias nextcloud.*, box sans liste propre. Un motif invalide est rejete seul (journalise), le fichier reste valide. Relu au demarrage seulement : apres edition, 'systemctl restart secubox-waf-ng' puis verifier la ligne 'vhosts PHP armes'.",
+  "php_hotes": [
+    "^(nc|nextcloud|cloud)\\.",
+    "^(webmail|roundcube)\\."
+  ],
+  "_comment_proposes": "#3257 (R14) — tenu par waf-profils-fusion : noms et motifs DEJA proposes par le paquet. Un nom retire de php_services ou php_hotes par l'operateur et present ici n'est jamais remis. Ne pas editer a la main.",
+  "php_services_proposes": [
+    "nextcloud",
+    "roundcube"
+  ],
+  "php_hotes_proposes": [
+    "^(nc|nextcloud|cloud)\\.",
+    "^(webmail|roundcube)\\."
+  ],
   "_comment_anti_robots": "#1216 — vhosts qui refusent les robots d'indexation (case a cocher dans le panneau Vhost). Ce n'est PAS de la detection de menace : aucun bannissement, aucun signalement, journalise a part sous action:robot. Motif : un robot parcourant les pages couteuses d'un service (les /compare de gitea reconstruisent un diff sur tout l'historique) le fait deborder de son plafond memoire. /robots.txt reste toujours servi, c'est par la qu'un robot conforme apprend a s'arreter. Liste vide ou clef absente = personne n'est filtre.",
   "anti_robots": [
     "gitea.gk2.secubox.in",
