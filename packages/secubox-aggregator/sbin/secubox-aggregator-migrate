@@ -39,7 +39,7 @@ command -v curl >/dev/null || err "curl required"
 # nac (#3178) : son collecteur tournait aussi ici, en double, sur la même base ; la page lisait l'instantané de l'agrégateur.
 # netmodes (#3189) : appelle netmodesctl par sudo, impossible sous l'utilisateur de l'agrégateur.
 # vault, actor, radio (#3216) : sockets réservées à l'administration, gardées et marquées par le relais ; montées, elles y échapperaient.
-readonly AGG_EXCLUDE="lyrion exposure nettweak traffic qos admin cloner netdiag certs cookies mail nac netmodes vault actor radio"
+readonly AGG_EXCLUDE="lyrion exposure nettweak traffic qos admin cloner netdiag certs cookies mail nac netmodes vault actor radio system"
 
 _is_excluded() {
     local n="$1" e

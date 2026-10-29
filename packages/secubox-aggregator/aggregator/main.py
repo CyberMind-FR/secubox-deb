@@ -212,8 +212,10 @@ RETIRED_MODULES = frozenset({
 # #3178 : nac tournait deux fois, ici ET dans secubox-nac.service — deux collecteurs sur la même base, et la page lisait l'instantané en
 # mémoire de l'agrégateur (« 0 connecté » sur gk2 pendant que la Vigie voyait 13 appareils). Un seul collecteur : celui de son service.
 # #3189 : netmodes appelle netmodesctl par sudo, impossible sous l'utilisateur de l'agrégateur (secubox, pas de sudo) — son service root le fait.
+# #3254 : system démarre des unités root (kiosque…) par polkit, accordé au seul secubox-system.service ; monté ici, l'appel venait de
+# secubox-aggregator.service et systemd répondait « Interactive authentication required » (gk2).
 DEDICATED_MODULES = frozenset({"lyrion", "exposure", "nettweak", "traffic", "qos",
-                               "admin", "cloner", "netdiag", "certs", "cookies", "mail", "nac", "netmodes"})
+                               "admin", "cloner", "netdiag", "certs", "cookies", "mail", "nac", "netmodes", "system"})
 
 # Délai du relais vers une socket dédiée : DELAI_RELAIS, sauf pour un module dont une action dure davantage.
 # #3189 : netmodes — une application du mode routeur (Unbound, nginx -t, networkd, DHCP vérifié actif) peut prendre
