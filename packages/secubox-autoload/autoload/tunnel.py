@@ -15,16 +15,20 @@ Une adresse retirée n'est jamais réattribuée ; une clé retirée ne revient p
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import errno
+import fcntl
 import ipaddress
 import os
 import re
 import sqlite3
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Iterator, List, Optional
 
 RESEAU = "10.64.0.0/16"
 HUB = "10.64.0.1"
@@ -33,6 +37,8 @@ INTERFACE = "wg-autoload"
 INFRA = "admin.gk2.secubox.in"
 CLE_HUB_DEFAUT = Path("/etc/secubox/secrets/autoload-hub.key")
 CONF_DEFAUT = Path("/etc/wireguard/wg-autoload.conf")
+UNITE = f"wg-quick@{INTERFACE}.service"
+VERROU_DEFAUT = Path("/run/secubox/autoload-sync.lock")
 TIMEOUT_S = 30
 
 _CLE_WG = re.compile(r"^[A-Za-z0-9+/]{43}=$")
@@ -140,15 +146,78 @@ def _avec_cle(strip: str, cle_hub: Path) -> str:
     supprimé ensuite) ; elle n'est jamais dans la configuration posée ni en argument de commande."""
     cle = Path(cle_hub).read_text(encoding="ascii").strip()
     lignes = strip.splitlines()
-    for i, l in enumerate(lignes):
-        if l.strip() == "[Interface]":
+    for i, ligne in enumerate(lignes):
+        if ligne.strip() == "[Interface]":
             lignes.insert(i + 1, f"PrivateKey = {cle}")
             return "\n".join(lignes) + "\n"
     raise TunnelErreur("configuration sans section [Interface]")
 
 
-def synchroniser(pairs: Pairs, conf: Path = CONF_DEFAUT, cle_hub: Path = CLE_HUB_DEFAUT, executeur=subprocess.run) -> int:
-    """Valide la configuration (wg-quick strip), la pose atomiquement, puis `wg syncconf` : aucun pair existant n'est coupé."""
+def _ouvrir_verrou(chemin: Path) -> int:
+    """Le descripteur du verrou : un fichier ORDINAIRE du compte courant (root en production), jamais suivi s'il est un lien.
+
+    Il vit dans /run/secubox (1777, sticky) : un autre compte peut y avoir posé ce nom avant root (lien, FIFO, fichier à lui, que root ne peut
+    d'ailleurs pas ouvrir : protected_regular, et l'assistant n'a pas CAP_DAC_OVERRIDE). Ce nom est alors retiré (root possède le dossier, le
+    bit sticky le lui permet) puis recréé en O_EXCL. Un fichier à root n'est JAMAIS retiré : c'est le verrou d'un autre passage."""
+    drapeaux = os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+    for _ in range(3):
+        try:
+            fd = os.open(chemin, drapeaux | os.O_CREAT, 0o600)
+        except OSError as e:
+            if e.errno not in (errno.ELOOP, errno.EACCES, errno.EPERM, errno.ENXIO):
+                raise TunnelErreur(f"verrou {chemin} : {e.strerror}") from None
+        else:
+            st = os.fstat(fd)
+            if stat.S_ISREG(st.st_mode) and st.st_uid == os.geteuid():
+                return fd
+            os.close(fd)
+        try:
+            os.unlink(chemin)
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            raise TunnelErreur(f"verrou {chemin} piégé et non retirable : {e.strerror}") from None
+        try:
+            return os.open(chemin, drapeaux | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            continue
+        except OSError as e:
+            raise TunnelErreur(f"verrou {chemin} : {e.strerror}") from None
+    raise TunnelErreur(f"verrou {chemin} disputé")
+
+
+@contextlib.contextmanager
+def verrou_sync(chemin: Path = VERROU_DEFAUT) -> Iterator[None]:
+    """tunnel-sync et exporter-pairs passent UN PAR UN, quel que soit l'appelant (enrôlement, révocation, abonnement, minuterie) (#3126, N3).
+
+    Sans lui, un passage qui avait lu les pairs AVANT une révocation reposait le pair révoqué APRÈS la synchronisation de la révocation, pour
+    une heure ; un export lent pouvait de même écraser une projection plus fraîche. Chaque passage lit la base sous le verrou, et toute
+    écriture dans la base (révocation, enrôlement) est suivie d'un tunnel-sync : le dernier passage voit toujours le dernier état. L'écriture
+    dans la base n'a pas besoin du verrou (le service le prendrait puis attendrait son propre tunnel-sync lancé par sudo). Attente bloquante :
+    un passage est borné par les délais de ses commandes (TIMEOUT_S chacune)."""
+    fd = _ouvrir_verrou(Path(chemin))
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)                                                                   # libère le verrou
+
+
+def _unite_activee(executeur) -> bool:
+    """L'unité de l'interface est-elle activée (au démarrage) ? « disabled » ou « masked » : l'exploitant l'a arrêtée."""
+    try:
+        r = executeur(["systemctl", "is-enabled", "--quiet", UNITE], capture_output=True, text=True, timeout=TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0
+
+
+def synchroniser(pairs: Pairs, conf: Path = CONF_DEFAUT, cle_hub: Path = CLE_HUB_DEFAUT, executeur=subprocess.run, activer: bool = True) -> int:
+    """Valide la configuration (wg-quick strip), la pose atomiquement, puis `wg syncconf` : aucun pair existant n'est coupé.
+
+    Interface absente : `activer` (enrôlement, révocation, abonnement) la monte (`enable --now`), même jamais activée (première box).
+    `activer=False` (minuterie horaire, #3126 N4) : seulement si son unité est activée ; désactivée, l'exploitant l'a arrêtée, elle n'est pas
+    relancée — la configuration est posée pour le jour où il la relancera."""
     conf = Path(conf)
     if not Path(cle_hub).is_file():
         raise TunnelErreur("clé du hub absente (autoloadctl tunnel-init)")
@@ -169,25 +238,35 @@ def synchroniser(pairs: Pairs, conf: Path = CONF_DEFAUT, cle_hub: Path = CLE_HUB
         _ecrit_prive(conf, texte)
         s = executeur(["wg", "syncconf", INTERFACE, str(nu)], capture_output=True, text=True, timeout=TIMEOUT_S)
         if s.returncode != 0:                                                       # interface pas encore montée : on la monte
-            d = executeur(["systemctl", "enable", "--now", f"wg-quick@{INTERFACE}.service"], capture_output=True, text=True, timeout=TIMEOUT_S)
+            if not activer and not _unite_activee(executeur):
+                print(f"autoload : {UNITE} désactivée par l'exploitant : configuration posée, interface non relancée", file=sys.stderr)
+                return len(actifs)
+            d = executeur(["systemctl", "enable", "--now", UNITE], capture_output=True, text=True, timeout=TIMEOUT_S)
             if d.returncode != 0:
                 raise TunnelErreur("tunnel non monté : " + (d.stderr or s.stderr or "").strip()[:200])
     return len(actifs)
 
 
 DOSSIER_DEFAUT = Path("/var/lib/secubox/autoload")
-SUDO_SYNC = ["sudo", "-n", "/usr/sbin/autoloadctl", "tunnel-sync"]       # UN argv exact : c'est ce que le sudoers du paquet accorde, rien d'autre
+SUDO_SYNC = ["sudo", "-n", "/usr/sbin/autoloadctl", "tunnel-sync"]       # argv exacts : c'est ce que le sudoers du paquet accorde, rien d'autre
+SUDO_SYNC_HORAIRE = SUDO_SYNC + ["--horaire"]                              # minuterie : ne relance pas une interface désactivée (#3126, N4)
 
 
-def appliquer_par_sudo(executeur=subprocess.run, timeout: int = 30) -> None:
+def appliquer_par_sudo(executeur=subprocess.run, timeout: int = 30, argv: Optional[List[str]] = None) -> None:
     """Le service d'enrôlement n'est PAS root (et aucune nouvelle unité root n'est permise) : il demande l'application du tunnel au SEUL assistant
     que son sudoers lui accorde. L'enrôlement n'est confirmé à la box qu'une fois les pairs réellement appliqués."""
     try:
-        r = executeur(SUDO_SYNC, capture_output=True, text=True, timeout=timeout)
+        r = executeur(argv or SUDO_SYNC, capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise TunnelErreur(f"synchronisation impossible ({type(e).__name__})") from e
     if r.returncode != 0:
         raise TunnelErreur("synchronisation refusée : " + (r.stderr or r.stdout or "").strip()[:200])
+
+
+def appliquer_horaire_par_sudo(executeur=subprocess.run, timeout: int = 30) -> None:
+    """Le passage de la minuterie : `autoloadctl tunnel-sync --horaire` (argv exact du sudoers) réexporte la projection et resynchronise les
+    pairs, mais ne relance jamais un wg-autoload dont l'unité est désactivée (#3126, N4)."""
+    appliquer_par_sudo(executeur, timeout, SUDO_SYNC_HORAIRE)
 
 
 REPUBLICATION_S = 3600            # R37 (#3126) : la projection publique est recalculée au moins une fois par heure

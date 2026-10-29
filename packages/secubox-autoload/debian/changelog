@@ -1,3 +1,19 @@
+secubox-autoload (0.7.4-1~trixie1) trixie; urgency=medium
+
+  * Reprise des reports de L1 pour L2 « Agir » (ref #3126, tâche 0) : la projection publique des pairs suit toujours
+    les révocations.
+    - N2 : `tunnel-sync` exporte la projection même si WireGuard échoue (erreur du tunnel, délai dépassé, E/S, base) ;
+      le code de retour reste 1 pour dire l'échec du tunnel.
+    - N3 : `tunnel-sync` et `exporter-pairs` passent un par un (`flock` sur `/run/secubox/autoload-sync.lock`, fichier
+      ordinaire de root, ouvert sans suivre de lien ; un nom posé par un autre compte dans ce dossier 1777 est retiré puis
+      recréé en O_EXCL). Un passage horaire qui avait lu les pairs avant une révocation reposait le pair révoqué pour une
+      heure après la synchronisation de la révocation.
+    - N4 : la minuterie passe par `autoloadctl tunnel-sync --horaire` (second argv exact du sudoers) : un `wg-autoload`
+      dont l'exploitant a désactivé l'unité n'est plus relancé chaque heure ; la configuration est posée et la projection
+      publiée. Une unité activée mais tombée est relancée ; l'enrôlement monte toujours l'interface (première box).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:40:00 +0100
+
 secubox-autoload (0.7.3-1~trixie1) trixie; urgency=medium
 
   * Relecture finale du pilotage L1 (#3126, I2/R37) : un changement d'abonnement par l'API
