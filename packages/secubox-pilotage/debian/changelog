@@ -19,6 +19,14 @@ secubox-pilotage (0.1.2-1~trixie1) trixie; urgency=medium
     battement) ; box du propriétaire : toujours. Aucun secret : seules les clés épurées du canal passent. Module
     pilotage/diffusion.py ; le canal publie après le rangement de chaque notification.
 
+  * Temps réel, corrections de relecture (ref #3126 L2 tâche 7, R-L2-41) : le flux revérifie à chaque battement et à l'échéance de
+    exp (dans un thread) secubox_core.auth.session_toujours_admin (jeton échu, session révoquée, administrateur rétrogradé ou
+    désactivé) et se ferme sur `etat {session: "expiree"}` ; box cliente : la fin annoncée de la session arme l'échéance et tout
+    événement X_SECUBOX_Support fait relire la session avant de servir le suivant (`etat {support: "termine"}`) ; le lanceur ferme
+    la diffusion au signal d'arrêt (sous-classe d'uvicorn.Server, timeout_graceful_shutdown=5) : un flux ouvert ne bloque plus
+    l'arrêt ; `box` et `cle` ne sont plus écrasables par une notification ; plafond global de 32 flux (429). Exige secubox-core
+    >= 1.8.10 (session_toujours_admin).
+
   * Retour au maillage après un renommage (ref #3126 L2 tâche 5, ref #3242) : pilotage/renommage.py —
     après l'OperationDone réussi d'un Renommer (box du maillage), code `sbx-mesh-invite --code --nom
     <nouveau>` vérifié (forme, somme, nom) et envoyé par Device.X_SECUBOX_Maillage.Rejoindre() {"code"}

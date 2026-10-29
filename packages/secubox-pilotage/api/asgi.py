@@ -34,6 +34,8 @@ def assembler(stockage, files, inventaire, audit, identifier, horloge=time.time,
     admin = creer_app_admin(stockage, files, inventaire, audit, horloge=horloge, suivi=suivi, noms_pris=noms_pris, diffusion=diffusion)
     canal = creer_app_canal(files, identifier, stockage, audit, apres_fin=suivi.apres_fin, diffuser=diffusion.diffuser_notification)
 
+    admin.state.diffusion = diffusion   # le lanceur la ferme au signal d'arrêt
+
     @asynccontextmanager
     async def vie_canal(app):
         async with inventaire.utiliser():

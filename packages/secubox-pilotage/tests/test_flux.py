@@ -6,6 +6,7 @@
 administrateur, libéré à la déconnexion, files bornées, vue en direct d'une box cliente réservée à une session de support ouverte."""
 import asyncio
 import json
+import time
 
 import httpx
 import pytest
@@ -19,7 +20,7 @@ from pilotage.files import Files
 from pilotage.inventaire import Inventaire
 from pilotage.stockage import StockageSqlite
 from outils import GK5_AUTOLOAD, Horloge
-from test_canal import CONNUES, GK5 as GK5_CANAL, client as client_canal
+from test_canal import CONNUES, GK5 as GK5_CANAL, LGM, client as client_canal
 
 MARQUEUR_TUNNEL = "x-secubox-pilotage-tunnel"
 
@@ -92,17 +93,21 @@ class Flux:
 
 
 class Monde:
-    def __init__(self, tmp_path, battement_s=15.0, **diff):
+    def __init__(self, tmp_path, mp, battement_s=15.0, **diff):
         self.h = Horloge()
         self.s = StockageSqlite(tmp_path / "p", horloge=self.h)
         self.f = Files()
         self.lignes = []
         self.diffusion = Diffusion(**diff)
         self.sub = "alice"
+        self.session_ok, self.admin_ok, self.exp = True, True, time.time() + 3600
+        # l'état de la session est lu par le VRAI session_toujours_admin, via ses deux points d'injection
+        mp.setattr(auth, "_session_validator", lambda jti: self.session_ok)
+        mp.setattr(auth, "est_admin_reel", lambda payload: self.admin_ok)
         inv = Inventaire(self.f, self.s, horloge=self.h)
         self.app = creer_app_admin(self.s, self.f, inv, lambda e, c: self.lignes.append((e, c)), horloge=self.h, diffusion=self.diffusion,
                                    battement_s=battement_s)
-        self.app.dependency_overrides[auth.require_jwt] = lambda: {"sub": self.sub}
+        self.app.dependency_overrides[auth.require_jwt] = lambda: {"sub": self.sub, "jti": "j1", "exp": self.exp}
         self.canal = creer_app_canal(self.f, CONNUES.get, self.s, lambda e, c: None, vu_intervalle_s=0, audit_intervalle_s=0,
                                      diffuser=self.diffusion.diffuser_notification)
 
@@ -118,8 +123,8 @@ class Monde:
 
 
 @pytest.fixture
-def m(tmp_path):
-    w = Monde(tmp_path)
+def m(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch)
     w.s.vu(GK5_CANAL, {})
     return w
 
@@ -163,8 +168,8 @@ async def test_flux_ne_recoit_que_sa_box(m):
 
 
 @pytest.mark.asyncio
-async def test_flux_garde_jwt_et_box_inconnue(tmp_path):
-    w = Monde(tmp_path)
+async def test_flux_garde_jwt_et_box_inconnue(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch)
     w.s.vu(GK5_CANAL, {})
     sans = dict(w.app.dependency_overrides)
     w.app.dependency_overrides.clear()
@@ -196,8 +201,8 @@ async def test_flux_libere_a_la_deconnexion(m):
 
 
 @pytest.mark.asyncio
-async def test_flux_battement_puis_liberation_si_l_ecriture_echoue(tmp_path):
-    w = Monde(tmp_path, battement_s=0.02)
+async def test_flux_battement_puis_liberation_si_l_ecriture_echoue(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch, battement_s=0.02)
     w.s.vu(GK5_CANAL, {})
     f = w.ouvrir()
     ev = await f.evenements(3)
@@ -326,8 +331,8 @@ async def test_action_publie_l_operation(m):
 # --- R-L2-31 : vue en direct d'une box cliente = session de support ouverte et non échue ---
 
 @pytest.mark.asyncio
-async def test_box_cliente_flux_exige_une_session_de_support(tmp_path):
-    w = Monde(tmp_path)
+async def test_box_cliente_flux_exige_une_session_de_support(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch)
     w.s.vu(GK5_AUTOLOAD, {})
     f = w.ouvrir("autoload:gk5")
     await asyncio.wait_for(f.demarre.wait(), 3)
@@ -348,8 +353,8 @@ async def test_box_cliente_flux_exige_une_session_de_support(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_box_cliente_flux_se_ferme_a_la_fin_du_support(tmp_path):
-    w = Monde(tmp_path, battement_s=0.02)
+async def test_box_cliente_flux_se_ferme_a_la_fin_du_support(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch, battement_s=0.02)
     w.s.vu(GK5_AUTOLOAD, {})
     w.s.support_demander(GK5_AUTOLOAD.cle, "s1", 1, "alice")
     w.s.support_noter(GK5_AUTOLOAD.cle, "s1", "ouvert", None)
@@ -382,3 +387,163 @@ def test_nginx_laisse_passer_le_flux_sans_tampon_ni_coupure():
     snippet = (Path(__file__).resolve().parents[3] / "common" / "nginx" / "secubox-proxy.conf").read_text()
     delai = int(re.search(r"^proxy_read_timeout\s+(\d+)s;", snippet, re.M).group(1))
     assert delai > 2 * 15 and re.search(r"^proxy_buffering\s+off;", snippet, re.M)
+
+
+# --- tour 1 (R-L2-41) ---
+
+async def _coupe(w, f, cause):
+    await asyncio.wait_for(f.t, 3)
+    ev = analyser(f.corps)
+    assert ev[-1][0] == "etat" and ev[-1][1]["session"] == "expiree", cause
+    assert not any(n == "notify" for n, _ in ev)
+    assert w.diffusion.total() == 0
+
+
+@pytest.mark.asyncio
+async def test_flux_coupe_a_la_revocation_du_jeton(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch, battement_s=0.05)
+    w.s.vu(GK5_CANAL, {})
+    f = w.ouvrir()
+    await f.evenements(1)
+    w.session_ok = False                       # déconnexion / révocation de la session
+    await _coupe(w, f, "revocation")
+    await f.fermer()
+
+
+@pytest.mark.asyncio
+async def test_flux_coupe_si_l_admin_est_retrograde(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch, battement_s=0.05)
+    w.s.vu(GK5_CANAL, {})
+    f = w.ouvrir()
+    await f.evenements(1)
+    w.admin_ok = False                         # rétrogradé ou désactivé
+    await _coupe(w, f, "retrograde")
+    await f.fermer()
+
+
+@pytest.mark.asyncio
+async def test_flux_coupe_a_l_expiration_du_jwt_avant_le_battement(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch, battement_s=30.0)     # le battement ne viendrait qu'après le test : l'échéance est celle de exp
+    w.s.vu(GK5_CANAL, {})
+    w.exp = time.time() + 0.2
+    f = w.ouvrir()
+    await f.evenements(1)
+    await _coupe(w, f, "exp")
+    await f.fermer()
+
+
+@pytest.mark.asyncio
+async def test_flux_verifie_dans_un_thread(tmp_path, monkeypatch):
+    import threading
+    w = Monde(tmp_path, monkeypatch, battement_s=0.02)
+    w.s.vu(GK5_CANAL, {})
+    fils = []
+    monkeypatch.setattr(auth, "_session_validator", lambda jti: fils.append(threading.current_thread()) or True)
+    f = w.ouvrir()
+    await f.evenements(3)
+    assert fils and all(t is not threading.main_thread() for t in fils)
+    await f.fermer()
+
+
+@pytest.mark.asyncio
+async def test_fermeture_du_support_coupe_avant_tout_autre_evenement(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch)                        # battement 15 s : seul l'événement Support peut déclencher la coupure
+    w.s.vu(LGM, {})
+    w.s.support_demander(LGM.cle, "s1", 30, "alice")
+    w.s.support_noter(LGM.cle, "s1", "ouvert", None)
+    f = w.ouvrir(LGM.cle)
+    await f.evenements(1)
+    w.s.support_fermer_local(LGM.cle, "s1")                 # fermé depuis le maître
+    w.diffusion.publier(LGM.cle, "etat", {"type": "X_SECUBOX_Support", "id": "s1", "etat": "ferme", "box": "x", "cle": LGM.cle})
+    w.diffusion.publier(LGM.cle, "notify", {"type": "X_SECUBOX_ServiceLoop", "unit": "secret.service", "box": "x", "cle": LGM.cle})
+    await asyncio.wait_for(f.t, 3)
+    ev = analyser(f.corps)
+    assert ev[-1][0] == "etat" and ev[-1][1]["support"] == "termine"
+    assert not any(n == "notify" for n, _ in ev)
+    assert w.diffusion.total() == 0
+    await f.fermer()
+
+
+@pytest.mark.asyncio
+async def test_support_echu_coupe_a_sa_fin_sans_attendre_le_battement(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch)
+    w.s.vu(LGM, {})
+    w.s.support_demander(LGM.cle, "s1", 1, "alice")
+    w.s.support_noter(LGM.cle, "s1", "ouvert", None)
+    # l'horloge du maître court plus vite que la boucle : la fin (60 s) est dans la boucle dès que l'horloge avance
+    f = w.ouvrir(LGM.cle)
+    await f.evenements(1)
+    w.h.avance(61)
+    w.diffusion.publier(LGM.cle, "notify", {"type": "X_SECUBOX_ServiceLoop"})           # réveille la boucle sans attendre 15 s
+    await asyncio.wait_for(f.t, 3)
+    assert analyser(f.corps)[-1][1].get("support") == "termine"
+    await f.fermer()
+
+
+@pytest.mark.asyncio
+async def test_arret_du_service_n_attend_pas_les_flux(tmp_path, monkeypatch):
+    """Le lanceur ferme la diffusion au signal d'arrêt (avant que uvicorn n'attende les réponses en cours)."""
+    import importlib.machinery
+    import importlib.util
+    from pathlib import Path
+    chargeur = importlib.machinery.SourceFileLoader("lanceur_t7", str(Path(__file__).resolve().parents[1] / "sbin" / "secubox-pilotage-api"))
+    spec = importlib.util.spec_from_loader("lanceur_t7", chargeur)
+    lanceur = importlib.util.module_from_spec(spec)
+    chargeur.exec_module(lanceur)
+    w = Monde(tmp_path, monkeypatch)
+    w.s.vu(GK5_CANAL, {})
+    w.app.state.diffusion = w.diffusion
+    import socket
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.bind(str(tmp_path / "a.sock"))
+    sock.listen(1)
+    try:
+        srv_admin, _ = lanceur.serveurs(w.app, w.canal, sock.fileno(), sock.fileno())
+        assert srv_admin.config.timeout_graceful_shutdown == 5
+        f = w.ouvrir()
+        await f.evenements(1)
+
+        async def attend_les_connexions(self, sockets=None):    # uvicorn.Server.shutdown : attend la fin des réponses en cours
+            await asyncio.wait_for(f.t, 2)
+
+        monkeypatch.setattr(lanceur.uvicorn.Server, "shutdown", attend_les_connexions)
+        await srv_admin.shutdown([])                       # sans la fermeture préalable de la diffusion : TimeoutError (SIGKILL à 90 s)
+        assert w.diffusion.total() == 0
+    finally:
+        sock.close()
+
+
+@pytest.mark.asyncio
+async def test_box_et_cle_ne_peuvent_pas_etre_ecrasees(m):
+    f = m.ouvrir()
+    await f.evenements(1)
+    m.diffusion.diffuser_notification(GK5_CANAL, {"type": "T", "ts": 1, "box": "autre", "cle": "autre:autre"})
+    ev = await f.evenements(2)
+    assert ev[1][1]["box"] == "gk5" and ev[1][1]["cle"] == "maillage:gk5"
+    await f.fermer()
+
+
+@pytest.mark.asyncio
+async def test_plafond_global_de_flux(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch, plafond_global=3, plafond_par_login=2)
+    w.s.vu(GK5_CANAL, {})
+    ouverts = []
+    for sub in ("a", "a", "b"):
+        ouverts.append(w.ouvrir(sub=sub))
+        await ouverts[-1].evenements(1)
+    de_trop = w.ouvrir(sub="c")
+    await asyncio.wait_for(de_trop.demarre.wait(), 3)
+    assert de_trop.statut == 429 and w.diffusion.total() == 3
+    await de_trop.fermer()
+    for x in ouverts:
+        await x.fermer()
+
+
+def test_plafond_global_par_defaut_32():
+    from pilotage.diffusion import PLAFOND_GLOBAL
+    assert PLAFOND_GLOBAL == 32
+    d = Diffusion(plafond_par_login=100)
+    for i in range(32):
+        d.abonner(f"u{i}", "k")
+    with pytest.raises(LimiteAtteinte):
+        d.abonner("autre", "k")

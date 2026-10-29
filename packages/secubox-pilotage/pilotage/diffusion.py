@@ -19,6 +19,7 @@ import logging
 from collections import deque
 
 PLAFOND_PAR_LOGIN = 4
+PLAFOND_GLOBAL = 32      # tous administrateurs confondus : borne les files et les fils de lecture du service
 FILE_MAX = 64
 NOMS = ("notify", "operation", "etat")
 TYPES_OPERATION = ("X_SECUBOX_OperationProgress", "X_SECUBOX_OperationDone")
@@ -30,7 +31,7 @@ FIN = object()   # rendu par Abonnement.suivant quand le service s'arrête
 
 
 class LimiteAtteinte(Exception):
-    """Le login a déjà `PLAFOND_PAR_LOGIN` flux ouverts."""
+    """Le login a déjà `PLAFOND_PAR_LOGIN` flux ouverts, ou le service en sert déjà `PLAFOND_GLOBAL`."""
 
 
 def formater(nom: str, data: dict) -> str:
@@ -86,13 +87,13 @@ class Abonnement:
 
 
 class Diffusion:
-    def __init__(self, plafond_par_login: int = PLAFOND_PAR_LOGIN, file_max: int = FILE_MAX) -> None:
-        self.plafond, self.file_max = plafond_par_login, file_max
+    def __init__(self, plafond_par_login: int = PLAFOND_PAR_LOGIN, file_max: int = FILE_MAX, plafond_global: int = PLAFOND_GLOBAL) -> None:
+        self.plafond, self.file_max, self.plafond_global = plafond_par_login, file_max, plafond_global
         self._abonnes: set = set()
         self._par_login: dict = {}
 
     def abonner(self, login: str, cle: str) -> Abonnement:
-        if self._par_login.get(login, 0) >= self.plafond:
+        if self._par_login.get(login, 0) >= self.plafond or len(self._abonnes) >= self.plafond_global:
             raise LimiteAtteinte(login)
         ab = Abonnement(login, cle, self.file_max)
         self._abonnes.add(ab)
@@ -130,7 +131,7 @@ class Diffusion:
     def diffuser_notification(self, box, ev: dict) -> None:
         """Appelée par le canal après le rangement d'une notification (déjà épurée). Ne lève jamais."""
         try:
-            data = {"box": box.nom, "cle": box.cle, **ev}
+            data = {**ev, "box": box.nom, "cle": box.cle}   # box et cle ne s'écrasent pas
             self.publier(box.cle, "notify", data)
             if ev.get("type") in TYPES_OPERATION:
                 self.publier(box.cle, "operation", data)

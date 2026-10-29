@@ -42,9 +42,25 @@ def descripteurs(env, pid: int) -> "tuple[int, int]":
     return SD_LISTEN_FDS_START + noms.index("admin"), SD_LISTEN_FDS_START + noms.index("canal")
 
 
+class Serveur(uvicorn.Server):
+    """uvicorn attend la fin des réponses en cours AVANT le lifespan.shutdown : un flux SSE ouvert bloquerait l'arrêt jusqu'au SIGKILL de
+    systemd, au milieu d'une écriture SQLite. On ferme donc la diffusion (les flux se terminent) dès le début de l'arrêt."""
+
+    def __init__(self, config, diffusion=None) -> None:
+        super().__init__(config)
+        self.diffusion = diffusion
+
+    async def shutdown(self, sockets=None) -> None:
+        if self.diffusion is not None:
+            self.diffusion.fermer()
+        await super().shutdown(sockets)
+
+
 def serveurs(admin, canal, fd_admin: int, fd_canal: int):
-    options = dict(access_log=False, log_level="warning", lifespan="on")
-    return uvicorn.Server(uvicorn.Config(admin, fd=fd_admin, **options)), uvicorn.Server(uvicorn.Config(canal, fd=fd_canal, **options))
+    options = dict(access_log=False, log_level="warning", lifespan="on", timeout_graceful_shutdown=5)
+    diffusion = getattr(getattr(admin, "state", None), "diffusion", None)
+    return (Serveur(uvicorn.Config(admin, fd=fd_admin, **options), diffusion),
+            Serveur(uvicorn.Config(canal, fd=fd_canal, **options), diffusion))
 
 
 async def _serve(srv) -> None:

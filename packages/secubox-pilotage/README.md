@@ -76,10 +76,15 @@ Toutes les routes portent `require_jwt` (administrateur réel), aucune route d'u
 Un commentaire `: battement` est envoyé toutes les 15 s sans événement. Chaque événement est une ligne `event:` et UNE ligne `data:` de JSON
 (`ensure_ascii` : un saut de ligne, U+2028 ou un caractère de contrôle dans `resume`, `raison`, `args` ou `nom` est échappé). Les
 notifications reçues « au moins une fois » peuvent se répéter : la page dédoublonne par `job` (et `id`).
-- **Limite** : 4 flux au plus par login d'administrateur ; le 5e reçoit `429`. L'abonnement est libéré à la déconnexion, à la fin du flux, à
+- **Limite** : 4 flux au plus par login d'administrateur et 32 au total ; le suivant reçoit `429`. L'abonnement est libéré à la déconnexion, à la fin du flux, à
   une écriture en échec ou à l'arrêt du service. Files de 64 événements par abonné ; un abonné lent perd ses plus vieux, jamais un autre n'attend.
 - **Box cliente (R-L2-31)** : `403` hors session de support ouverte et non échue ; vérifié à la connexion et à chaque battement. Box du
-  propriétaire (maillage) : toujours servie à l'administrateur.
+  propriétaire (maillage) : toujours servie à l'administrateur. Un événement `X_SECUBOX_Support` fait relire la session avant tout autre
+  événement ; la fin annoncée de la session arme aussi l'échéance. Pendant un support, une box cliente est visible par **tout** administrateur du
+  maître (la spec ne lie pas un administrateur à un client).
+- **Session** : à chaque battement, et à l'échéance du jeton (`exp`), le flux revérifie dans un thread `secubox_core.auth.session_toujours_admin`
+  (jeton non échu, `jti` vivant, administrateur réel actif) ; sinon `etat {session: "expiree"}` puis fermeture.
+- **Arrêt du service** : le lanceur ferme la diffusion dès le signal d'arrêt (les flux se terminent), `timeout_graceful_shutdown=5`.
 - **nginx** : `proxy_buffering off` et `proxy_read_timeout` (30 s au moins) du snippet `secubox-proxy.conf` suffisent (battement 15 s) ; l'application
   envoie `X-Accel-Buffering: no`. L'agrégateur qui sert ce module en interne doit relayer le flux sans tampon.
 

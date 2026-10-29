@@ -35,6 +35,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import re
 import secrets
 import time
@@ -46,7 +47,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
-from secubox_core.auth import require_jwt
+from secubox_core.auth import require_jwt, session_toujours_admin
 
 from pilotage.diffusion import FIN, Diffusion, LimiteAtteinte, formater
 from pilotage.files import COMMANDE_MESURE, DUREE_DEFAUT_S, DUREE_MAX_S, DUREE_MIN_S, FileDeBoxPleine, Files
@@ -394,25 +395,49 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
         except LimiteAtteinte:
             raise HTTPException(429, "trop de flux ouverts pour cet administrateur") from None
 
+        fin_support = session["fin"] if session else None
+        exp = jwt.get("exp") if isinstance(jwt.get("exp"), (int, float)) and not isinstance(jwt.get("exp"), bool) else None
+
         async def corps():
+            nonlocal fin_support
             try:
                 yield formater("etat", {"box": b["nom"], "cle": b["cle"], "connecte": True, "en_ligne": en_ligne(b),
                                         "support": session["id"] if session else None})
                 loop = asyncio.get_running_loop()
                 echeance = loop.time() + battement_s
                 while True:
-                    e = await ab.suivant(max(0.0, echeance - loop.time()))
+                    # prochaine vérification : le battement, l'échéance du jeton ou la fin de la session de support, la plus proche
+                    prochaine = echeance
+                    if exp is not None and math.isfinite(exp):
+                        prochaine = min(prochaine, loop.time() + max(0.0, exp - time.time()))
+                    if cliente and fin_support is not None:
+                        prochaine = min(prochaine, loop.time() + max(0.0, fin_support - horloge()))
+                    e = await ab.suivant(max(0.0, prochaine - loop.time()))
                     if e is FIN:
                         return
                     if e is not None:
                         yield formater(*e)
-                    if loop.time() < echeance:
+                        if cliente and e[1].get("type") == "X_SECUBOX_Support":
+                            # un changement de session de support : relu AVANT tout autre événement (M2), la fermeture coupe tout de suite
+                            s = await asyncio.to_thread(stockage.support_ouvert, b["cle"])
+                            if s is None:
+                                yield formater("etat", {"box": b["nom"], "cle": b["cle"], "support": "termine"})
+                                return
+                            fin_support = s["fin"]
                         continue
-                    echeance = loop.time() + battement_s
-                    if cliente and await asyncio.to_thread(stockage.support_ouvert, b["cle"]) is None:
-                        yield formater("etat", {"box": b["nom"], "cle": b["cle"], "support": "termine"})
+                    # délai écoulé sans événement : vérifier le jeton (fil), puis la session de support, puis battre
+                    if not await asyncio.to_thread(session_toujours_admin, jwt):
+                        yield formater("etat", {"box": b["nom"], "cle": b["cle"], "session": "expiree"})
                         return
-                    yield ": battement\n\n"
+                    if cliente:
+                        s = await asyncio.to_thread(stockage.support_ouvert, b["cle"])
+                        if s is None:
+                            yield formater("etat", {"box": b["nom"], "cle": b["cle"], "support": "termine"})
+                            return
+                        fin_support = s["fin"]
+                    if loop.time() >= echeance:
+                        echeance = loop.time() + battement_s
+                        yield ": battement\n\n"
             finally:
                 diffusion.liberer(ab)
 
