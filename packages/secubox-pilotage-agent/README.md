@@ -69,7 +69,11 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 | `maj-paquets` | `apt-get update` puis `upgrade` (jamais `dist-upgrade` ni `autoremove`), opération longue |
 | `service <demarrer\|arreter\|redemarrer> <unité>` | unité `^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`, jamais celle de l'agent (`secubox-pilotage-agent.*`, `@…` compris), ni une unité du ctl (`secubox-pilotage-op-*`), ni une unité inconnue de systemd, ni une unité protégée (`protected = true` dans `/etc/secubox/modules.d/*.toml`, ou socle : auth, aggregator, core, nginx, firewall, profiles, vault, autoload-agent) |
 | `renouveler-secrets` | `secubox-renouvelle-secrets --tout --oui`, opération longue |
-| `renommer <nom>`, `support <ouvrir\|fermer> <id>` | argv validé ; `{"ok": false, "refus": "non disponible"}` jusqu'aux tâches 5 et 4 |
+| `renommer <nom>` | argv validé ; `{"ok": false, "refus": "non disponible"}` jusqu'à la tâche 5 |
+| `support ouvrir <id> [<duree_min>]` | demande d'ouverture (maître) : support **en attente** de l'accord du détenteur, `{"ok": false, "refus": "consentement requis", "support": "<id>"}` ; `duree_min` entier de 1 à 240 (`^[1-9][0-9]{0,2}$`), 30 par défaut ; voir « Support » |
+| `support <accepter\|refuser> <id>` | **local seulement** : le détenteur ouvre la session (pour la durée demandée, comptée à partir de l'accord) ou la refuse |
+| `support fermer <id>` | permis **des deux côtés** (maître et détenteur) : ferme la session ouverte ou retire la demande en attente |
+| `etat` | lecture, permise depuis l'agent, **non auditée** (sondée chaque minute) : `{"ok": true, "box", "mains_liees", "canal", "consentements": [{id, action, unite, etat, cree, expire, decide}], "support": {id, etat, duree_min, cree, expire, ouvert, fin}\|null}`, plus `agent` (état de l'unité de l'agent) en local. Les expirations qu'elle constate sont écrites et auditées |
 | `ancre-verifier <wg-mesh\|wg-autoload>` | lecture, permise depuis l'agent : `{"ok": true}` si le pair WireGuard de l'interface du canal de l'agent qui porte l'adresse du maître a la clé de l'ancre, sinon `{"ok": false, "raison": "absente"\|"differente"\|"illisible"}` (code 0, refus audité) ; voir « Ancre du maître » |
 | `consentement <accepter\|refuser> <id>` | **local seulement** : décision du détenteur sur un consentement en attente |
 | `mains-liees <on\|off>` | **local seulement** : lie ou délie les mains du maître |
@@ -81,7 +85,17 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 
 - **Mains liées** : tout est refusé au maître sauf le relevé. État root `/var/lib/secubox-pilotagectl/mains-liees`,
   projection `/etc/secubox/pilotage/mains-liees` (root, 0644, posée par descripteur) ; l'un OU l'autre lie les mains.
-  Les poser annule les consentements en attente ou acceptés non consommés.
+  Les poser annule les consentements en attente ou acceptés non consommés, ferme la session de support ouverte et
+  annule la demande en attente ; sous mains liées, aucune session ne s'ouvre, même en local.
+- **Support** (tâche 4) : une seule session à la fois (état root `support.json`). Le maître la demande
+  (`support_demande`), le détenteur l'accepte (`support_ouvert`, avec `fin`) ou la refuse (`support_refuse`) par
+  `secubox-pilotage support accepter|refuser <id>` ; chacun la ferme (`support_ferme`, avec l'origine). Une demande
+  non décidée expire à 24 h, une session ouverte à sa fin (`support_expire`, une fois), constatée à la lecture
+  suivante (l'agent lit `etat` chaque minute ; `secubox-pilotage etat` aussi). Le support **ne lance rien** sur la
+  box (jamais de shell) : il dit au maître que le détenteur ouvre l'accès au catalogue d'actions et à la vue en
+  direct ; chaque action reste soumise à la politique (mains liées, ancre, consentement d'une box cliente). Refus
+  possibles : `support déjà en cours` (autre session), `support déjà ouvert`, `support inconnu`,
+  `support déjà décidé`, `support annulé`, `support expiré`, `support déjà fermé`.
 - **Ancre vérifiée exigée** (R-L2-21) : toute demande du maître (actions et `politique`) est refusée tant
   qu'aucune ancre n'est vérifiée (`{"ok": false, "refus": "ancre non vérifiée"}`, ou `"raison"` pour `politique`),
   refus audité avec le verbe. Chaque `ancre-verifier` réussi enregistre le canal vérifié (`ancre.json` dans l'état
@@ -100,9 +114,9 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
   --property=ExecStopPost=/usr/sbin/secubox-pilotagectl _fin <job>`, sans délai imposé ; la progression se lit dans le
   journal de l'unité, la fin est auditée (`pilotage_resultat`, `succes`/`echec`).
 - **Audit** : une ligne JSON par demande, refus, consentement et résultat dans `/var/log/secubox/audit.log` (ouvert sans
-  suivre de lien ; identifiants seulement, jamais une valeur secrète ni l'argv refusé). `politique` n'est pas auditée, sauf son refus faute d'ancre vérifiée ; `etat-operation` l'est (`pilotage_lecture`).
+  suivre de lien ; identifiants seulement, jamais une valeur secrète ni l'argv refusé). `politique` n'est pas auditée, sauf son refus faute d'ancre vérifiée ; `etat-operation` l'est (`pilotage_lecture`) ; `etat` ne l'est pas (lecture sondée), mais les expirations qu'elle constate le sont.
 - État root `0700` `/var/lib/secubox-pilotagectl` (tmpfiles.d du paquet) : consentements, mains liées, opération en
-  cours, canal vérifié (`ancre.json`), opérations lancées et finies (`fins.json`). Non fiable (propriétaire, droits,
+  cours, canal vérifié (`ancre.json`), support (`support.json`), opérations lancées et finies (`fins.json`). Non fiable (propriétaire, droits,
   lien) : tout est refusé.
   Une écriture d'état qui échoue **avant** le lancement refuse (rien ne part) ; **après** un lancement réussi
   (`fins.json`, `operation.json`, consommation d'un consentement), elle est journalisée et la réponse reste
@@ -123,8 +137,8 @@ appel au ctl (paramètre manquant, inconnu, mal typé ou hors motif : refus, le 
 | `Device.X_SECUBOX_Services.Agir()` | `unite` (`^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`), `action` (`demarrer`/`start`, `arreter`/`stop`, `redemarrer`/`restart`) | `service <demarrer\|arreter\|redemarrer> <unite>` |
 | `Device.X_SECUBOX_Nom.Renommer()` | `nom` (libellé DNS) | `renommer <nom>` |
 | `Device.X_SECUBOX_Secrets.Renouveler()` | aucun | `renouveler-secrets` |
-| `Device.X_SECUBOX_Support.Ouvrir()` | `id` (`^[a-z0-9][a-z0-9-]{0,63}$`), `duree_min` facultatif (entier 1 à 240, défaut 30) | `support ouvrir <id>` |
-| `Device.X_SECUBOX_Support.Fermer()` | `id` | `support fermer <id>` |
+| `Device.X_SECUBOX_Support.Ouvrir()` | `id` (`^[a-z0-9][a-z0-9-]{0,63}$`), `duree_min` facultatif (entier 1 à 240, défaut 30) | `support ouvrir <id> <duree_min>` (rend `consentement` : accord du détenteur à donner en local) |
+| `Device.X_SECUBOX_Support.Fermer()` | `id` | `support fermer <id>` (rend `accepte` sans `job` : rien n'est suivi) |
 | `Device.X_SECUBOX_Releve.Mesurer()` | `duree_s` (10 à 300) | aucun : relevé de L1, fait par l'agent |
 
 - Le corps de l'Operate peut porter `"acteur": "<login de l'admin du maître>"` (R-L2-14) : l'agent le passe au ctl en
@@ -156,6 +170,32 @@ appel au ctl (paramètre manquant, inconnu, mal typé ou hors motif : refus, le 
   ancien est évincé et journalisé) jusqu'à un POST `/notifs` réussi (2xx), puis retirés : renvoyés à la reconnexion
   (chaque bonjour relance l'envoi), une seule fois chacun. La progression, elle, suit la file ordinaire des
   notifications (64, les plus anciennes tombent).
+
+## Commande locale du détenteur : `secubox-pilotage`
+
+En root sur la box (console, SSH local ; hors root : « à lancer en root », code 1). Texte en français ; simple
+affichage au-dessus de `secubox-pilotagectl` (argv en liste, sans shell), aucune politique réimplémentée. Le login
+sudo de l'humain est passé au ctl (`--acteur`) et audité ; jamais le compte de l'agent.
+
+| Commande | Effet |
+|---|---|
+| `secubox-pilotage etat` | agent en marche ou non, ancre vérifiée et canal (box du propriétaire ou cliente), mains liées, consentements en attente, support |
+| `secubox-pilotage consentements` | consentements en attente (temps restant avant l'expiration à 24 h), puis les 20 dernières décisions (accepté, refusé, utilisé, expiré, annulé) |
+| `secubox-pilotage accepter\|refuser <id>` | décision sur un consentement (`consentement accepter\|refuser <id>`) |
+| `secubox-pilotage mains-liees on\|off` | lie ou délie les mains du maître |
+| `secubox-pilotage support accepter\|refuser <id>` | ouvre ou refuse la session demandée par le maître |
+| `secubox-pilotage support fermer [<id>]` | ferme la session (en cours par défaut) |
+
+Codes : 0 fait ; 1 refus du ctl (motif affiché), erreur, ou hors root ; 2 usage.
+
+**Comment le maître l'apprend** (notifications des bascules locales). La commande tourne en root, l'agent non ; il
+ne reçoit **aucun droit nouveau** : chaque minute, il lit l'état par le verbe de lecture `etat` du ctl, avec le sudo
+qu'il a déjà (`secubox-pilotagectl *`), et compare au précédent. Il notifie alors `X_SECUBOX_HandsTied {etat: on|off}`,
+`X_SECUBOX_Consent {id, decision: accepte|refuse|expire|annule}` et `X_SECUBOX_Support {id, etat}` (en_attente,
+ouvert, refuse, ferme, annule, expire). Le premier état lu après le démarrage de l'agent sert de référence (rien
+n'est notifié ; le maître lit l'état courant par Get) ; une bascule faite puis défaite entre deux lectures n'est pas
+vue (l'audit local la garde). Une sortie du ctl inattendue ne produit aucune notification (journalisée une fois).
+Cette lecture fait aussi expirer, côté ctl, les consentements à 24 h et le support à sa fin.
 
 ## Ancre du maître (D1)
 

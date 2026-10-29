@@ -73,6 +73,20 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
     - R-L2-29 : toute écriture d'état APRÈS un lancement réussi (fins.json, operation.json, consommation d'un
       consentement) est rattrapée et journalisée ; réponse {"ok": true, "job"}, « lance » audité. Un accord non
       consommé est audité (consentement_non_consomme), sans nouvel essai. Avant le lancement, l'échec refuse toujours.
+  * L2 « Agir », tâche 4 (ref #3126) : consentement, mains liées et support, côté local.
+    - Nouvelle commande `secubox-pilotage` (root, texte en français) : etat, consentements, accepter|refuser <id>,
+      mains-liees on|off, support accepter|refuser <id>, support fermer [<id>]. Simple affichage au-dessus du ctl
+      (argv en liste, sans shell) ; refuse de tourner hors root ; login sudo de l'humain audité comme acteur.
+    - Ctl : `support ouvrir <id> [<duree_min>]` (1 à 240, 30 par défaut) crée une session EN ATTENTE
+      (« consentement requis ») ; `support accepter|refuser <id>` local seulement ; `support fermer <id>` des deux
+      côtés ; une session à la fois, expirée à sa fin ou à 24 h sans décision ; mains liées : aucune ouverture
+      (même locale), session ouverte fermée, demande annulée ; tout audité (support_demande, support_ouvert,
+      support_refuse, support_ferme, support_annule, support_expire). Le support ne lance rien (jamais de shell).
+    - Ctl : verbe de lecture `etat` (agent et local, non audité ; ses expirations le sont) : mains liées, canal
+      vérifié, consentements, support, et l'unité de l'agent en local.
+    - Agent : lit `etat` chaque minute (aucun droit nouveau, le sudoers existant) et notifie
+      X_SECUBOX_HandsTied {etat}, X_SECUBOX_Consent {id, decision}, X_SECUBOX_Support {id, etat} ;
+      Support.Ouvrir transmet duree_min au ctl ; Support.Fermer réussi rend « accepte » sans job (aucun suivi).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
 
