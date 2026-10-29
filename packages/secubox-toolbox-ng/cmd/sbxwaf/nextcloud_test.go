@@ -238,6 +238,12 @@ func TestPutWebDAVPremierSegment(t *testing.T) {
 		{"PUT", "/remote.php/dav/files/alice/dossier/", "", "", false},
 		{"GET", "/remote.php/dav/files/alice/x/photo.JPG", "", "", false},
 		{"PUT", "/index.php/apps/files", "", "", false},
+		// R-W10 : anciens points d'entrée, mono-fichier, Destination ignorée.
+		{"PUT", "/remote.php/webdav/dossier/photo.png", "", "photo.png", true},
+		{"PUT", "/remote.php/webdav/photo.png", dest, "photo.png", true},
+		{"PUT", "/public.php/webdav/photo.gif", "", "photo.gif", true},
+		{"PUT", "/public.php/webdav/", "", "", false},
+		{"GET", "/public.php/webdav/photo.gif", "", "", false},
 	}
 	for _, c := range cas {
 		nom, ok := putWebDAVPremierSegment(c.methode, c.chemin, c.destination)
@@ -306,14 +312,18 @@ func TestNextcloudPartageFedere(t *testing.T) {
 	}
 	avecAuth := http.Header{"Content-Type": {"application/json"}, "Authorization": {basic("alice:pw")}}
 	b.requeteNC(http.MethodPost, "/ocm/shares", ipPublique, avecAuth, strings.NewReader(`{}`))
-	avecSession := http.Header{"Content-Type": {"application/json"}, "Cookie": {"a=1", "nc_session_id=x"}}
-	b.requeteNC(http.MethodPost, "/ocm/shares", ipPublique, avecSession, strings.NewReader(`{}`))
 	if ls := lignesDe(b.lignes(t), "nextcloud"); len(ls) != 1 {
-		t.Errorf("avec Authorization ou session : aucune ligne de plus attendue, eu %v", ls)
+		t.Errorf("avec Authorization : aucune ligne de plus attendue, eu %v", ls)
+	}
+	// R-W11 (M3) : chemins serveur à serveur, un cookie (forgeable) n'exempte pas.
+	avecCookie := http.Header{"Content-Type": {"application/json"}, "Cookie": {"nc_token=x"}}
+	b.requeteNC(http.MethodPost, "/ocm/shares", ipPublique, avecCookie, strings.NewReader(`{}`))
+	if ls := lignesDe(b.lignes(t), "nextcloud"); len(ls) != 2 || ls[1]["rule_id"] != "nc-001" {
+		t.Errorf("Cookie nc_token=x : une ligne nc-001 de plus attendue, eu %v", ls)
 	}
 	// R12 : une adresse privée est analysée, journalisée « local ».
 	b.requeteNC(http.MethodPost, "/ocm/shares", "192.168.1.10", ct, strings.NewReader(`{}`))
-	if ls := lignesDe(b.lignes(t), "nextcloud"); len(ls) != 2 || ls[1]["client_ip"] != "local" {
+	if ls := lignesDe(b.lignes(t), "nextcloud"); len(ls) != 3 || ls[2]["client_ip"] != "local" {
 		t.Errorf("adresse privée : une ligne « local » attendue, eu %v", ls)
 	}
 	if strings.Contains(b.journalBrut(t), "192.168.1.10") {
@@ -502,8 +512,12 @@ func TestEntreeNextcloud(t *testing.T) {
 		t.Errorf("POST anonyme /ocm/shares/ : %+v", e)
 	}
 	r.Header.Set("Cookie", "nc_token=x")
+	if e = s.nouvelleEntreePHP(r, "nextcloud"); !e.PartageFedereAnonyme {
+		t.Errorf("avec un cookie seul : PartageFedereAnonyme attendu vrai (R-W11, M3)")
+	}
+	r.Header.Set("Authorization", "Bearer x")
 	if e = s.nouvelleEntreePHP(r, "nextcloud"); e.PartageFedereAnonyme {
-		t.Errorf("avec session : PartageFedereAnonyme attendu faux")
+		t.Errorf("avec Authorization : PartageFedereAnonyme attendu faux")
 	}
 
 	r = httptest.NewRequest("PROPPATCH", "http://nc.example/remote.php/dav/principals/users/al%69ce/calendar-proxy-read", nil)
@@ -556,6 +570,7 @@ func TestCheminJournalNextcloud(t *testing.T) {
 		{"/remote.php/dav/files/alice/secret.png", "/remote.php/dav/files/*"},
 		{"/remote.php/dav/uploads/alice/1/1", "/remote.php/dav/uploads/*"},
 		{"/remote.php/webdav/secret.png", "/remote.php/webdav/*"},
+		{"/public.php/webdav/secret.png", "/public.php/webdav/*"},
 	}
 	for _, c := range cas {
 		if m, ok := cheminJournalNextcloud(c.chemin); !ok || m != c.masque {
@@ -564,5 +579,64 @@ func TestCheminJournalNextcloud(t *testing.T) {
 	}
 	if _, ok := cheminJournalNextcloud("/ocm/shares"); ok {
 		t.Error("/ocm/shares : rien à masquer")
+	}
+}
+
+// R-W10 : les anciens points d'entrée WebDAV (toujours servis par Nextcloud 32)
+// sont couverts par R-IMG2 ; extension lue dans le chemin lui-même.
+func TestNextcloudPutAnciensWebDAV(t *testing.T) {
+	for _, chemin := range []string{"/remote.php/webdav/vacances/a.png", "/public.php/webdav/a.png"} {
+		b := bancNextcloud(t, "")
+		corps := corpsTaille("%!PS-Adobe-3.0\n", 8192)
+		b.requeteNC(http.MethodPut, chemin, ipPublique, http.Header{"Content-Type": {"application/octet-stream"}}, bytes.NewReader(corps))
+		b.verifierRecu(t, corps)
+		ls := lignesDe(b.lignes(t), "nextcloud")
+		if len(ls) != 1 || ls[0]["rule_id"] != "nc-005" {
+			t.Errorf("%s : une ligne nc-005 attendue, eu %v", chemin, b.lignes(t))
+			continue
+		}
+		if brut := b.journalBrut(t); strings.Contains(brut, "a.png") || strings.Contains(brut, "vacances") {
+			t.Errorf("%s : nom de fichier au journal : %s", chemin, brut)
+		}
+	}
+}
+
+// R-W11 (M1) : deux noter dont les heures se croisent (heure lue hors verrou)
+// ne perdent aucun horodatage.
+func TestCompteurFenetreHeuresCroisees(t *testing.T) {
+	t0 := time.Unix(1_800_000_000, 0)
+	c := nouveauCompteurFenetre(federationPeriode, federationGarde, federationIPMax)
+	if n := c.noter("1.2.3.4", t0.Add(2*time.Second)); n != 1 {
+		t.Fatalf("1er appel : %d, attendu 1", n)
+	}
+	// Le second appel a lu l'heure AVANT le premier, mais prend le verrou après.
+	if n := c.noter("1.2.3.4", t0.Add(time.Second)); n != 2 {
+		t.Errorf("appel croisé : %d, attendu 2 (aucun horodatage perdu)", n)
+	}
+	if n := c.noter("1.2.3.4", t0.Add(3*time.Second)); n != 3 {
+		t.Errorf("3e appel : %d, attendu 3", n)
+	}
+	// Horodatages en int64 (nanosecondes Unix) : 8 octets au lieu de 24.
+	var _ []int64 = c.parIP["1.2.3.4"]
+}
+
+// R-W11 (M5) : le chemin WebDAV est masqué dès la construction de la requête
+// journalisée, donc aussi dans la ligne capture-concurrence.
+func TestNextcloudCaptureConcurrenceCheminMasque(t *testing.T) {
+	b := bancNextcloud(t, "")
+	b.s.capturesMultipart = make(chan struct{}, 1)
+	b.s.capturesMultipart <- struct{}{}
+	corps := corpsExploit()
+	b.envoyer("nc.example", "/remote.php/dav/files/alice/secret-dossier/x.php", ipPublique, ctTest, bytes.NewReader(corps))
+	b.verifierRecu(t, corps)
+	conc := lignesDe(b.lignes(t), "capture-concurrence")
+	if len(conc) != 1 {
+		t.Fatalf("une ligne capture-concurrence attendue, eu %v", b.lignes(t))
+	}
+	if conc[0]["path"] != "/remote.php/dav/files/*" {
+		t.Errorf("path = %v, attendu /remote.php/dav/files/*", conc[0]["path"])
+	}
+	if brut := b.journalBrut(t); strings.Contains(brut, "alice") || strings.Contains(brut, "secret-dossier") {
+		t.Errorf("chemin brut au journal : %s", brut)
 	}
 }

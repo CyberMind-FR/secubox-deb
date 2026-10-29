@@ -90,10 +90,12 @@ func (s *Server) nouvelleEntreePHP(r *http.Request, service string) *EntreePHP {
 		Chemin:       r.URL.Path,
 		requeteBrute: r.URL.RawQuery,
 	}
-	// R-NC1 : ni Authorization ni session Nextcloud. Federation ne sert qu'à
-	// ce cas : l'hôte n'est cherché que pour lui.
+	// R-NC1 : sans Authorization. Ces quatre chemins sont appelés de serveur
+	// à serveur : un cookie de session (forgeable, sans valeur ici) n'exempte
+	// pas (R-W11, M3). Federation ne sert qu'à ce cas : l'hôte n'est cherché
+	// que pour lui.
 	if strings.EqualFold(r.Method, "POST") && cheminPartageFedere(e.Chemin) &&
-		r.Header.Get("Authorization") == "" && !sessionNextcloud(r.Header.Values("Cookie")) {
+		r.Header.Get("Authorization") == "" {
 		e.PartageFedereAnonyme = true
 		e.Federation = s.vhostProfiles.federationUtilisee(r.Host)
 	}
@@ -257,12 +259,6 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 	// capture avant un 403 ; cette requête n'a jamais atteint le backend.
 	if !relaye || s.rules == nil {
 		return
-	}
-	// Chemin WebDAV : uid et nom de fichier masqués dans toute ligne et tout
-	// message de cette requête (le journal ne porte ni nom de fichier ni uid).
-	// Après les defer et figer() : une panique ici rend le jeton, capture figée.
-	if masque, ok := cheminJournalNextcloud(e.Chemin); ok {
-		rm.path = masque
 	}
 	if s.rules.litLaRequete() {
 		e.lireRequete()

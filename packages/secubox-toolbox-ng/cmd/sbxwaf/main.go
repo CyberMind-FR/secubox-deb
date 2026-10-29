@@ -549,6 +549,12 @@ func (s *Server) handler() http.Handler {
 					rm := requeteMultipart{ip: ip, host: r.Host, method: r.Method, path: rawPath,
 						ua: r.Header.Get("User-Agent"), contentType: r.Header.Get("Content-Type"),
 						entetes: r.Header}
+					// Chemin WebDAV masqué dès ici (R-W9, R-W11 M5) : ni uid ni
+					// nom de fichier dans aucune ligne (capture-concurrence
+					// comprise) ni dans le message de panique de l'analyse.
+					if masque, ok := cheminJournalNextcloud(r.URL.Path); ok {
+						rm.path = masque
+					}
 					e := s.nouvelleEntreePHP(r, service)
 					genre, plafond, jeton := s.corpsACapturer(r, e)
 					if jeton && !s.prendreCapture(genre) {

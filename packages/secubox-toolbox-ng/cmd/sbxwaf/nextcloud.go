@@ -48,25 +48,31 @@ const federationGarde = 64
 // entre goroutines (un seul verrou, tenu le temps d'un calcul en mémoire).
 // MÉMOIRE BORNÉE : au plus ipMax IP et garde horodatages par IP ; les tranches
 // ne dépassent jamais garde en capacité (décalage sur place, pas de ré-allocation).
+// Horodatages en nanosecondes Unix (int64, R-W10) : 8 octets chacun, soit au
+// pire 4096 × 64 × 8 o = 2 Mio, plus la carte.
 type compteurFenetre struct {
 	mu           sync.Mutex
 	periode      time.Duration
 	garde, ipMax int
-	parIP        map[string][]time.Time
+	parIP        map[string][]int64
 }
 
 func nouveauCompteurFenetre(periode time.Duration, garde, ipMax int) *compteurFenetre {
-	return &compteurFenetre{periode: periode, garde: garde, ipMax: ipMax, parIP: make(map[string][]time.Time)}
+	return &compteurFenetre{periode: periode, garde: garde, ipMax: ipMax, parIP: make(map[string][]int64)}
 }
 
-// noter ajoute t pour ip et rend le nombre d'appels de ip dans ]t-periode, t],
-// plafonné à garde. Carte pleine : purge des IP sans horodatage récent (les
-// plus anciennes) ; encore pleine, l'IP n'est pas suivie et noter rend 1.
+// noter ajoute t pour ip et rend le nombre d'appels de ip postérieurs à
+// t-periode, plafonné à garde. Seule la borne basse filtre (R-W11, M1) :
+// l'heure est lue par l'appelant HORS verrou, et un appel concurrent peut
+// avoir noté une heure plus tardive que t ; elle reste comptée, jamais perdue.
+// Carte pleine : purge des IP sans horodatage récent (les plus anciennes) ;
+// encore pleine, l'IP n'est pas suivie et noter rend 1.
 func (c *compteurFenetre) noter(ip string, t time.Time) int {
 	if c.garde < 1 || c.ipMax < 1 {
 		return 1
 	}
-	debut := t.Add(-c.periode)
+	maintenant := t.UnixNano()
+	debut := t.Add(-c.periode).UnixNano()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ts, suivie := c.parIP[ip]
@@ -76,10 +82,10 @@ func (c *compteurFenetre) noter(ip string, t time.Time) int {
 			return 1
 		}
 	}
-	// Garder, sur place, les horodatages de ]debut, t].
+	// Garder, sur place, les horodatages postérieurs à debut.
 	n := 0
 	for _, x := range ts {
-		if x.After(debut) && !x.After(t) {
+		if x > debut {
 			ts[n] = x
 			n++
 		}
@@ -90,17 +96,17 @@ func (c *compteurFenetre) noter(ip string, t time.Time) int {
 		copy(ts, ts[len(ts)-c.garde+1:])
 		ts = ts[:c.garde-1]
 	}
-	ts = append(ts, t)
+	ts = append(ts, maintenant)
 	c.parIP[ip] = ts
 	return len(ts)
 }
 
-// purger retire les IP dont le dernier horodatage (le plus récent : ajouté
-// en dernier) n'est pas postérieur à debut. Sous verrou ; O(ipMax), un seul
-// horodatage lu par IP.
-func (c *compteurFenetre) purger(debut time.Time) {
+// purger retire les IP dont le dernier horodatage (ajouté en dernier, donc le
+// plus récent à un croisement de quelques microsecondes près) n'est pas
+// postérieur à debut. Sous verrou ; O(ipMax), un seul horodatage lu par IP.
+func (c *compteurFenetre) purger(debut int64) {
 	for ip, ts := range c.parIP {
-		if len(ts) == 0 || !ts[len(ts)-1].After(debut) {
+		if len(ts) == 0 || ts[len(ts)-1] <= debut {
 			delete(c.parIP, ip)
 		}
 	}
@@ -123,6 +129,9 @@ func cheminPartageFedere(chemin string) bool {
 // nc_token, nc_username, oc_sessionPassphrase, ou le nom d'instance
 // ^oc[a-z0-9]{10}$), sur n'importe laquelle des lignes Cookie. Noms lus comme
 // PHP (parcourirCookiesPHP) ; aucune valeur n'est lue ni gardée.
+// N'exempte plus R-NC1 depuis R-W11 (M3) : sur les chemins serveur à serveur,
+// seul Authorization exempte. Gardée (et testée, cookies sur plusieurs
+// lignes) pour les contrôles qui distingueront un client connecté.
 func sessionNextcloud(lignesCookie []string) bool {
 	trouve := false
 	parcourirCookiesPHP(lignesCookie, func(_, nom string) {
@@ -204,10 +213,15 @@ func extensionRaster(nom string) bool {
 const (
 	prefixeDAVFichiers = "/remote.php/dav/files/"
 	prefixeDAVEnvois   = "/remote.php/dav/uploads/"
+	// Anciens points d'entrée, toujours servis par Nextcloud 32 (R-W10) :
+	// mono-fichier, le nom cible est le dernier segment du chemin.
+	prefixeWebDAVAncien = "/remote.php/webdav/"
+	prefixeWebDAVPublic = "/public.php/webdav/" // partage public en écriture
 )
 
-// putWebDAVPremierSegment : PUT (sans casse) sur /remote.php/dav/files/… →
-// dernier segment du chemin ; sur /remote.php/dav/uploads/<u>/<id>/<n> avec n
+// putWebDAVPremierSegment : PUT (sans casse) sur /remote.php/dav/files/…,
+// /remote.php/webdav/… ou /public.php/webdav/… (R-W10) → dernier segment du
+// chemin (Destination ignorée) ; sur /remote.php/dav/uploads/<u>/<id>/<n> avec n
 // décimal de valeur <= 1 (premier segment d'un envoi en morceaux : 0 en v1,
 // 1 en v2, seul à porter l'en-tête du fichier) → dernier segment du chemin de
 // Destination. Nom vide : faux.
@@ -216,7 +230,9 @@ func putWebDAVPremierSegment(methode, chemin, destination string) (nomCible stri
 		return "", false
 	}
 	switch {
-	case strings.HasPrefix(chemin, prefixeDAVFichiers):
+	case strings.HasPrefix(chemin, prefixeDAVFichiers),
+		strings.HasPrefix(chemin, prefixeWebDAVAncien),
+		strings.HasPrefix(chemin, prefixeWebDAVPublic):
 		nomCible = dernierSegment(chemin)
 	case strings.HasPrefix(chemin, prefixeDAVEnvois):
 		parts := strings.Split(chemin[len(prefixeDAVEnvois):], "/")
@@ -266,7 +282,7 @@ func cheminJournalNextcloud(chemin string) (masque string, ok bool) {
 	if m := reProxyAgenda.FindStringSubmatch(chemin); m != nil {
 		return "/remote.php/dav/principals/users/*/calendar-proxy-" + m[2], true
 	}
-	for _, p := range []string{prefixeDAVFichiers, prefixeDAVEnvois, "/remote.php/dav/principals/users/", "/remote.php/webdav/"} {
+	for _, p := range []string{prefixeDAVFichiers, prefixeDAVEnvois, "/remote.php/dav/principals/users/", prefixeWebDAVAncien, prefixeWebDAVPublic} {
 		if strings.HasPrefix(chemin, p) {
 			return p + "*", true
 		}
