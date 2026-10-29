@@ -13,7 +13,7 @@
 # the same helpers work from mailctl, mail-migrate-to-single-lxc.sh, and
 # the bats suite (which overrides $LXC_BASE/$DATA_PATH to a tmpdir).
 
-# Bootstrap a fresh Debian bookworm rootfs into ${LXC_BASE}/${container}/rootfs.
+# Bootstrap a fresh Debian trixie rootfs (#3274 : Roundcube 1.6.20, PHP 8.4) into ${LXC_BASE}/${container}/rootfs.
 # Idempotent: safe to skip if rootfs already exists.
 bootstrap_debian() {
     local container="$1"
@@ -46,7 +46,7 @@ bootstrap_debian() {
     # systemd, systemd-sysv, dbus : le conteneur démarre sur /sbin/init
     # (comme nextcloud) ; minbase ne les apporte pas (#1729).
     debootstrap --variant=minbase --include=systemd,systemd-sysv,dbus,ca-certificates,curl,gnupg,locales \
-        bookworm "$lxc_path/rootfs" http://deb.debian.org/debian
+        trixie "$lxc_path/rootfs" http://deb.debian.org/debian
 
     echo "$container" > "$lxc_path/rootfs/etc/hostname"
     cat > "$lxc_path/rootfs/etc/resolv.conf" <<'EOF'
@@ -102,10 +102,10 @@ install_webmail_packages() {
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
-    apache2 libapache2-mod-php8.2 \
-    php8.2-imap php8.2-ldap php8.2-curl php8.2-xml \
-    php8.2-mbstring php8.2-intl php8.2-sqlite3 \
-    php8.2-zip php8.2-gd \
+    apache2 libapache2-mod-php \
+    php-ldap php-curl php-xml \
+    php-mbstring php-intl php-sqlite3 \
+    php-zip php-gd \
     roundcube roundcube-core roundcube-plugins roundcube-sqlite3 \
     roundcube-skin-classic roundcube-skin-larry \
     php-net-sieve \
@@ -490,18 +490,19 @@ EOF
     # post 8M → attachements bridés. Drop-in conf.d (survit aux MAJ du paquet php,
     # contrairement à php.ini). À apparier avec max_message_size dans le .local
     # ci-dessous (plafond compose = max_message_size / 1.33 à cause du base64).
-    mkdir -p "$rootfs/etc/php/8.2/apache2/conf.d"
-    cat > "$rootfs/etc/php/8.2/apache2/conf.d/99-secubox-attach.ini" <<'EOF'
+    # Version de PHP lue dans le conteneur (8.4 en trixie), jamais en dur (#3274).
+    chroot "$rootfs" /bin/bash <<'CHROOT_EOF'
+PHPV=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+mkdir -p "/etc/php/$PHPV/apache2/conf.d"
+cat > "/etc/php/$PHPV/apache2/conf.d/99-secubox-attach.ini" <<'INI_EOF'
 ; SecuBox — pièces jointes webmail ≥100 Mo
 upload_max_filesize = 128M
 post_max_size = 160M
 memory_limit = 256M
-EOF
-
-    chroot "$rootfs" /bin/bash <<'CHROOT_EOF'
+INI_EOF
 a2dissite 000-default 2>/dev/null || true
 a2ensite roundcube
-a2enmod php8.2 rewrite 2>/dev/null || true
+a2enmod "php$PHPV" rewrite 2>/dev/null || true
 CHROOT_EOF
 
     # SQLite backend + local Dovecot/Postfix (issue #152). The Debian Roundcube
