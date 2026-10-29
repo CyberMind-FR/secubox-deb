@@ -138,10 +138,13 @@ func TestTraductionVersLeCtl(t *testing.T) {
 			"-n /usr/sbin/secubox-pilotagectl service arreter secubox-lyrion.service"},
 		{"Device.X_SECUBOX_Nom.Renommer()", map[string]any{"nom": "box-2"}, "gk2admin",
 			"-n /usr/sbin/secubox-pilotagectl --acteur gk2admin renommer box-2"},
+		// Tâche 4 : la durée (bornée ici, revalidée par le ctl) est transmise ; absente, 30 min.
 		{"Device.X_SECUBOX_Support.Ouvrir()", map[string]any{"id": "s-01", "duree_min": 240.0}, "",
-			"-n /usr/sbin/secubox-pilotagectl support ouvrir s-01"},
+			"-n /usr/sbin/secubox-pilotagectl support ouvrir s-01 240"},
+		{"Device.X_SECUBOX_Support.Ouvrir()", map[string]any{"id": "s-01", "duree_min": 1.0}, "",
+			"-n /usr/sbin/secubox-pilotagectl support ouvrir s-01 1"},
 		{"Device.X_SECUBOX_Support.Ouvrir()", map[string]any{"id": "s-01"}, "",
-			"-n /usr/sbin/secubox-pilotagectl support ouvrir s-01"},
+			"-n /usr/sbin/secubox-pilotagectl support ouvrir s-01 30"},
 		{"Device.X_SECUBOX_Support.Fermer()", map[string]any{"id": "s-01"}, strings.Repeat("a", 65),
 			"-n /usr/sbin/secubox-pilotagectl support fermer s-01"},
 	}
@@ -403,5 +406,37 @@ func TestSuiviSystemctlEnEchecBorne(t *testing.T) {
 	}
 	if s := e.suivis.Load(); s != 0 {
 		t.Fatalf("emplacement de suivi non libéré : %d", s)
+	}
+}
+
+// TestSupportSansJob (tâche 4) : le support ne lance rien. Ouvrir rend « consentement » (en attente de l'accord du
+// détenteur) ; fermer rend « accepte » SANS job et rien n'est suivi ; un ok sans job hors support reste incohérent.
+func TestSupportSansJob(t *testing.T) {
+	reponses := map[string]string{
+		"ouvrir": `{"ok": false, "refus": "consentement requis", "support": "s-01"}`,
+		"fermer": `{"ok": true, "support": "s-01", "etat": "ferme"}`,
+	}
+	// argv : -n <ctl> --acteur gk2admin support <op> …
+	ctl := &fauxCtl{repondre: func(a []string) ([]byte, error) { return []byte(reponses[a[5]] + "\n"), nil }}
+	var progres atomic.Int32
+	e := Nouveau(Config{Ctl: ctl.lancer, Resultats: NouvelleBoite(0), Pas: time.Millisecond,
+		Systemctl:   func(context.Context, ...string) ([]byte, error) { return []byte("inactive\ninactive\n"), nil },
+		Progression: func(notifs.Evenement) { progres.Add(1) }})
+	r := e.Operer(context.Background(), CmdSupportOuvrir, map[string]any{"id": "s-01", "duree_min": 45.0}, "gk2admin")
+	if r.Etat != Consentement || r.Job != "" {
+		t.Fatalf("ouvrir : %+v", r)
+	}
+	r = e.Operer(context.Background(), CmdSupportFermer, map[string]any{"id": "s-01"}, "gk2admin")
+	if r.Etat != Accepte || r.Job != "" || r.Raison != "" {
+		t.Fatalf("fermer : %+v", r)
+	}
+	e.Attendre()
+	if progres.Load() != 0 {
+		t.Fatalf("aucun suivi attendu, %d progressions", progres.Load())
+	}
+	for _, s := range []string{`{"ok": true}`, `{"ok": true, "etat": "ferme"}`, `{"ok": true, "support": "S 1"}`} {
+		if r := lireReponse([]byte(s)); r.Etat != Refuse {
+			t.Errorf("%s : refus attendu, %+v", s, r)
+		}
 	}
 }

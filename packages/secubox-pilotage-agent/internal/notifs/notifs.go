@@ -69,15 +69,18 @@ func SeuilsDepuisEnv() Seuils {
 // X_SECUBOX_OperationProgress {job, etape, pct} et X_SECUBOX_OperationDone {job, rc, resume} ; pct et rc sont des
 // pointeurs pour que 0 parte quand même.
 type Evenement struct {
-	Type    string `json:"type"`
-	Unite   string `json:"unit,omitempty"`
-	Valeur  int64  `json:"value,omitempty"`
-	Instant int64  `json:"ts"`
-	Job     string `json:"job,omitempty"`
-	Etape   string `json:"etape,omitempty"`
-	Pct     *int   `json:"pct,omitempty"`
-	RC      *int   `json:"rc,omitempty"`
-	Resume  string `json:"resume,omitempty"`
+	Type     string `json:"type"`
+	Unite    string `json:"unit,omitempty"`
+	Valeur   int64  `json:"value,omitempty"`
+	Instant  int64  `json:"ts"`
+	Job      string `json:"job,omitempty"`
+	Etape    string `json:"etape,omitempty"`
+	Pct      *int   `json:"pct,omitempty"`
+	RC       *int   `json:"rc,omitempty"`
+	Resume   string `json:"resume,omitempty"`
+	ID       string `json:"id,omitempty"`
+	Etat     string `json:"etat,omitempty"`
+	Decision string `json:"decision,omitempty"`
 }
 
 type echantillon struct {

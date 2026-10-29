@@ -60,6 +60,12 @@ func main() {
 
 	// L2 : Operate d'action par le ctl root (sudo), opérations suivies par systemctl, fins gardées jusqu'à leur remise.
 	ex, resultats := executeur(lanceurSystemctl(cheminSudo, delaiCtl), lanceurSystemctl(cheminSystemctl, delaiSystemctl), ev)
+	// L2, tâche 4 : bascules locales (mains liées, consentements, support) lues au ctl et notifiées au maître.
+	suivi.Add(1)
+	go func() {
+		defer suivi.Done()
+		veiller(ctx, lanceurSystemctl(cheminSudo, delaiCtl), pasVeille, ev)
+	}()
 	cl := canal.NouveauClient(canal.Config{
 		Maitre:   maitre,
 		IPSource: ipSource,

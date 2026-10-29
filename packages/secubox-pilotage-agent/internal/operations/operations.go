@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -156,7 +157,7 @@ func (e *Executeur) Operer(ctx context.Context, cmd string, args map[string]any,
 		return refus("action impossible (ctl en erreur)")
 	}
 	r := lireReponse(sortie)
-	if r.Etat == Accepte {
+	if r.Etat == Accepte && r.Job != "" {
 		e.suivre(ctx, r.Job, verbe[0])
 	}
 	return r
@@ -238,14 +239,19 @@ func Traduire(cmd string, args map[string]any) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		if op == "fermer" {
+			return []string{"support", op, id}, nil
+		}
+		duree := dureeSupport
 		if v, ok := args["duree_min"]; ok {
-			// Durée bornée (défaut 30 min, au plus 4 h) ; validée ici, transmise au ctl avec la session (tâche 4).
+			// Durée bornée (défaut 30 min, au plus 4 h) ; validée ici, revalidée et appliquée par le ctl (tâche 4).
 			f, ok := v.(float64)
 			if !ok || f != float64(int(f)) || f < 1 || f > dureeSupMax {
 				return nil, fmt.Errorf("argument invalide : duree_min (entier de 1 à %d, défaut %d)", dureeSupMax, dureeSupport)
 			}
+			duree = int(f)
 		}
-		return []string{"support", op, id}, nil
+		return []string{"support", op, id, strconv.Itoa(duree)}, nil
 	}
 	return nil, fmt.Errorf("commande inconnue")
 }
@@ -267,6 +273,11 @@ func lireReponse(b []byte) Reponse {
 	switch string(r["ok"]) {
 	case "true":
 		if job == "" {
+			// Tâche 4 : une décision de support (fermer) ne lance rien : acceptée sans job, donc sans suivi.
+			var sup string
+			if raw, ok := r["support"]; ok && json.Unmarshal(raw, &sup) == nil && reSupport.MatchString(sup) {
+				return Reponse{Etat: Accepte}
+			}
 			return incoherente
 		}
 		return Reponse{Etat: Accepte, Job: job}
