@@ -20,14 +20,16 @@ Agent de pilotage distant d'une box SecuBox (#3126, livraison L1 « Voir », lec
 - Le maître est choisi ainsi : `PILOTAGE_MAITRE` s'il est posé ; sinon `wg-mesh` en `10.10.0.0/24`, puis
   `wg-autoload` en `10.64.0.0/16` ; sinon l'agent attend et revérifie toutes les 300 s. L'adresse de sortie
   est celle de l'interface du maillage dont la plage contient le maître.
+  `PILOTAGE_MAITRE` n'accepte qu'une IP littérale parmi `10.10.0.1`, `10.64.0.1`, `127.0.0.1` (pas de nom
+  d'hôte : pas de DNS sous le profil ; pas d'IPv6 : ni `AF_INET6` dans l'unité ni `inet6` dans le profil). Une valeur
+  refusée est journalisée une fois, puis l'agent attend l'arrêt sans réessayer : la corriger, puis redémarrer l'unité.
 - **Sur le maître lui-même** (gk2 : `wg-mesh` en `10.10.0.1`, `wg-autoload` en `10.64.0.1`), l'agent ne se pilote pas
   par son propre canal en L1 (R35) : il journalise une fois « cette box porte l'adresse du maître », puis attend l'arrêt
   sans jamais contacter le canal (qui refuserait `.1` et écrirait une ligne d'audit à chaque essai).
-  `PILOTAGE_MAITRE` n'accepte qu'une IP littérale parmi `10.10.0.1`, `10.64.0.1`, `127.0.0.1`, `::1` (pas de nom
-  d'hôte : pas de DNS sous le profil) ; sinon message au journal et nouvel essai toutes les 300 s.
 - **Limite connue** : le maître est choisi au démarrage seulement. Si l'adresse du tunnel change ou disparaît
-  durablement, le canal recule jusqu'à 300 s sans refaire ce choix ; `Restart=on-failure` ou un redémarrage de
-  l'unité le refait.
+  durablement, le canal recule jusqu'à 300 s et réessaie sans fin, sans refaire ce choix ni sortir en échec :
+  `Restart=on-failure` n'y peut rien, seul un redémarrage de l'unité (`systemctl restart secubox-pilotage-agent`)
+  refait le choix du maître.
 
 ## Configuration (`/etc/secubox/pilotage-agent.env`, facultatif)
 

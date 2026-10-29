@@ -78,10 +78,11 @@ func adresseDe(iface string, plage netip.Prefix, ifs []ifaceAdr) string {
 }
 
 // maitresAdmis : seuls ces maîtres sont joignables (IPAddressAllow de l'unité).
-// Pas de nom d'hôte : aucune résolution DNS sous le profil AppArmor.
+// Pas de nom d'hôte : aucune résolution DNS sous le profil AppArmor. Pas
+// d'IPv6 (« ::1 ») : l'unité n'a pas AF_INET6 ni le profil inet6, le canal
+// reculerait sans fin.
 var maitresAdmis = []netip.Addr{
-	netip.MustParseAddr("10.10.0.1"), netip.MustParseAddr("10.64.0.1"),
-	netip.MustParseAddr("127.0.0.1"), netip.MustParseAddr("::1"),
+	netip.MustParseAddr("10.10.0.1"), netip.MustParseAddr("10.64.0.1"), netip.MustParseAddr("127.0.0.1"),
 }
 
 // validerMaitre contrôle PILOTAGE_MAITRE : vide (découverte) ou « IP[:port] »
@@ -107,7 +108,7 @@ func validerMaitre(m string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("%q : maître non admis (10.10.0.1, 10.64.0.1 ou loopback)", m)
+	return fmt.Errorf("%q : maître non admis (10.10.0.1, 10.64.0.1 ou 127.0.0.1)", m)
 }
 
 // lireInterfaces relève les interfaces de la box et leurs adresses.

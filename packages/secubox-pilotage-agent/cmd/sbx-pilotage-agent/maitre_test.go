@@ -61,13 +61,15 @@ func TestIntervalleReleve(t *testing.T) {
 }
 
 func TestValiderMaitre(t *testing.T) {
-	bons := []string{"", "10.10.0.1", "10.10.0.1:8472", "10.64.0.1:8472", "127.0.0.1:8472", "[::1]:8472", "::1"}
+	bons := []string{"", "10.10.0.1", "10.10.0.1:8472", "10.64.0.1:8472", "127.0.0.1:8472"}
 	for _, b := range bons {
 		if err := validerMaitre(b); err != nil {
 			t.Errorf("%q refusé : %v", b, err)
 		}
 	}
-	mauvais := []string{"maitre.example:8472", "10.10.0.2:8472", "192.168.1.1", "10.10.0.1:abc", "10.10.0.1:0", "10.10.0.1:70000", "http://10.10.0.1", "10.10.0.1:8472/x"}
+	// ::1 : inutilisable (RestrictAddressFamilies sans AF_INET6, AppArmor inet seul), le canal reculerait sans fin (M10)
+	mauvais := []string{"maitre.example:8472", "10.10.0.2:8472", "192.168.1.1", "10.10.0.1:abc", "10.10.0.1:0", "10.10.0.1:70000", "http://10.10.0.1", "10.10.0.1:8472/x",
+		"[::1]:8472", "::1", "[::ffff:10.10.0.1]:8472"}
 	for _, b := range mauvais {
 		if err := validerMaitre(b); err == nil {
 			t.Errorf("%q accepté", b)
