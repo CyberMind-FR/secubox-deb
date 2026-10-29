@@ -359,7 +359,7 @@
         const PB_RE = { unite: /^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service|timer)$/, nom: /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/ };
         const PB_ACTIF = ['demande', 'en_attente', 'ouvert'];
         const PB_LIVE_MAX = 100, PB_TAMPON_MAX = 1 << 20;
-        let pilBoites = [], pbBoite = null, pbSupports = [], pbSig = '', pbFlux = null, pbNote = '', pbOpsTimer = null;
+        let pilBoites = [], pbMainsDirect = null, pbBoite = null, pbSupports = [], pbSig = '', pbFlux = null, pbNote = '', pbOpsTimer = null;
         const pbVus = new Set();      // dédoublonnage par (type, id, état) : remise « au moins une fois »
         const pbJobs = new Map();     // dédoublonnage par job : une ligne par job, progression jamais en arrière, première fin seule retenue
 
@@ -425,10 +425,10 @@
                 conf.setAttribute('aria-label', a.lib + ' : retapez le nom de la box pour confirmer'); ligne.append(conf);
             }
             const go = el('button', 'btn sm pb-go ' + (a.forte ? 'danger' : 'primary'), 'Lancer'); go.type = 'button'; go.dataset.action = a.id; ligne.append(go);
-            const maj = () => { go.disabled = !(d.ok && (!arg || pbArgValide(a.arg, arg.value)) && (!conf || conf.value === b.nom)); };
+            const maj = () => { go.disabled = !(d.ok && (!arg || pbArgValide(a.arg, arg.value)) && (!conf || (b.nom !== '' && conf.value === b.nom))); };
             if (arg) arg.addEventListener('input', maj);
             if (conf) conf.addEventListener('input', maj);
-            go.addEventListener('click', () => pbLancer(a, arg ? arg.value : null, conf ? conf.value : null, d.support, go, maj));
+            go.addEventListener('click', () => pbLancer(a, arg, conf, d.support, go, maj));
             maj();
             return ligne;
         }
@@ -461,10 +461,10 @@
             if (!eligible) pbFermerFlux();
         }
 
-        async function pbLancer(a, valeur, confirmation, support, go, maj) {
+        async function pbLancer(a, arg, conf, support, go, maj) {
             const b = pbBoite, corps = { args: {} };
-            if (a.arg) corps.args[a.arg] = valeur;
-            if (confirmation != null) corps.confirmation = confirmation;
+            if (a.arg) corps.args[a.arg] = arg.value;
+            if (conf) corps.confirmation = conf.value;
             if (support) corps.support = support;
             go.disabled = true; pbMessage('Envoi de « ' + a.lib + ' »…', false);
             try {
@@ -477,6 +477,9 @@
                     else pbMessage('« ' + a.lib + ' » refusée par la box : ' + (pbRaison(rep.raison) || 'sans motif') + '.', true);
                 }
             } catch (e) { pbMessage('Action non envoyée : ' + String(e && e.message || e).slice(0, 200), true); }
+            // R-L2-42 : la confirmation forte ne survit pas à l'envoi (ni l'argument) : un second clic exige de la retaper
+            if (arg) arg.value = '';
+            if (conf) conf.value = '';
             maj(); pbOperations();
         }
 
@@ -611,7 +614,7 @@
             if (pbVus.size > 2000) pbVus.clear();       // borne la mémoire d'un flux très long
             if (t === 'X_SECUBOX_HandsTied') {
                 const cle = t + '|' + d.etat;
-                if (d.etat === 'on' || d.etat === 'off') { if (pbBoite) pbBoite.mains_liees = d.etat === 'on'; pbMaj(); }
+                if ((d.etat === 'on' || d.etat === 'off') && pbBoite) { pbMainsDirect = { cle: pbId(pbBoite), valeur: d.etat === 'on', instant: Date.now() / 1000 }; pbBoite.mains_liees = pbMainsDirect.valeur; pbMaj(); }
                 pbLigneLive(cle, 'Mains liées : ' + (d.etat === 'on' ? 'activées' : d.etat === 'off' ? 'levées' : String(d.etat)));
             } else if (t === 'X_SECUBOX_Consent' || t === 'X_SECUBOX_Support') {
                 const k = t + '|' + (d.id == null ? '' : d.id) + '|' + (d.etat == null ? '' : d.etat);
@@ -631,6 +634,11 @@
                 pbLigneLive(k, String(d.type || 'notification') + (d.unit ? ' · ' + d.unit : '') + (d.value != null ? ' · ' + String(d.value).slice(0, 200) : ''));
             }
         }
+        // CRLF/CR → LF ; un « \r » final peut être le début d'un CRLF coupé entre deux morceaux : il est gardé tel quel jusqu'au morceau suivant
+        function pbNormaliser(tampon, morceau) {
+            const brut = tampon + morceau, fin = brut.endsWith('\r') ? '\r' : '';
+            return brut.slice(0, brut.length - fin.length).replace(/\r\n?/g, '\n') + fin;
+        }
         function pbBloc(bloc) {
             let nom = 'message', data = [];
             bloc.split('\n').forEach(l => {
@@ -638,32 +646,34 @@
                 const i = l.indexOf(':'), champ = i < 0 ? l : l.slice(0, i), val = i < 0 ? '' : l.slice(i + 1).replace(/^ /, '');
                 if (champ === 'event') nom = val; else if (champ === 'data') data.push(val);
             });
-            if (!data.length || ['notify', 'operation', 'etat'].indexOf(nom) < 0) return;
-            let d; try { d = JSON.parse(data.join('\n')); } catch (e) { return; }
-            if (d && typeof d === 'object' && !Array.isArray(d)) pbEvenement(nom, d);
+            if (!data.length || ['notify', 'operation', 'etat'].indexOf(nom) < 0) return false;
+            let d; try { d = JSON.parse(data.join('\n')); } catch (e) { return false; }
+            if (!d || typeof d !== 'object' || Array.isArray(d)) return false;
+            pbEvenement(nom, d); return true;
         }
         function pbFermerFlux() { if (pbFlux) { pbFlux.stop = true; try { pbFlux.ctl.abort(); } catch (e) { /* déjà clos */ } } pbFlux = null; }
         async function pbOuvrirFlux(b) {
             pbFermerFlux();
             const cur = { ctl: new AbortController(), cle: pbId(b), stop: false }; pbFlux = cur;
             if (DEMO) { cur.stop = true; pbEtatFlux('Démonstration : pas de flux.'); return; }
-            let delai = 3000;
+            let delai = 3000, connexions = 0;
             while (!cur.stop) {
                 try {
                     const r = await fetch(pbUrl(b, '/flux'), { headers: pbEntetes({ Accept: 'text/event-stream' }), credentials: 'same-origin', cache: 'no-store', signal: cur.ctl.signal });
                     if (r.status === 401) { cur.stop = true; pbLogin(); return; }
                     if (r.status === 403 || r.status === 404) { cur.stop = true; pbEtatFlux('Vue en direct indisponible (HTTP ' + r.status + ').'); return; }
                     if (!r.ok || !r.body) throw new Error('HTTP ' + r.status);
-                    pbEtatFlux('Vue en direct connectée.'); delai = 3000;
+                    pbEtatFlux('Vue en direct connectée.');
+                    if (connexions++ > 0) chargerPilotage();       // reconnexion : état des mains liées resynchronisé (le « lié » direct garde la priorité s'il est plus récent)
                     pbOperations();                          // relecture après chaque (re)connexion : rien n'est supposé reçu
                     const rd = r.body.getReader(), dec = new TextDecoder('utf-8'); let tampon = '';
                     for (;;) {
                         const lu = await rd.read();
                         if (lu.done) break;
-                        tampon = (tampon + dec.decode(lu.value, { stream: true })).replace(/\r\n?/g, '\n');
+                        tampon = pbNormaliser(tampon, dec.decode(lu.value, { stream: true }));
                         if (tampon.length > PB_TAMPON_MAX) throw new Error('flux trop volumineux');
                         let i;
-                        while ((i = tampon.indexOf('\n\n')) >= 0) { const bloc = tampon.slice(0, i); tampon = tampon.slice(i + 2); pbBloc(bloc); if (cur.stop) break; }
+                        while ((i = tampon.indexOf('\n\n')) >= 0) { const bloc = tampon.slice(0, i); tampon = tampon.slice(i + 2); if (pbBloc(bloc)) delai = 3000; if (cur.stop) break; }      // M6 : délai remis à zéro après un événement reçu seulement
                         if (cur.stop) { try { await rd.cancel(); } catch (e) { /* clos */ } break; }
                     }
                 } catch (e) { if (cur.stop || cur.ctl.signal.aborted) return; }
@@ -675,7 +685,7 @@
 
         // ---- ouverture / fermeture de la page de la box ----
         async function pbOuvrir(b) {
-            pbFermerFlux(); pbJobs.clear(); pbVus.clear(); pbNote = ''; pbSig = ''; pbSupports = [];
+            pbFermerFlux(); pbJobs.clear(); pbVus.clear(); pbNote = ''; pbSig = ''; pbSupports = []; pbMainsDirect = null;
             clear($('pb-live')); $('pb-releve-sortie').textContent = ''; pbMessage('', false); pbEtatFlux('');
             pbBoite = b; $('pb-pan').hidden = false; pbMarquer();
             await pbSupportsLire();
@@ -690,6 +700,12 @@
             if (!pbBoite) return;
             const n = pilBoites.find(x => pbId(x) === pbId(pbBoite));
             if (!n) { pbFermer(); return; }
+            // le « lié » reçu en direct prime sur un inventaire relevé avant lui (le relevé a jusqu'à 60 s de retard) ; plus récent, il reprend la main
+            const releve = typeof n.inventaire_le === 'number' ? n.inventaire_le : Number(n.vu_le);
+            if (pbMainsDirect && pbMainsDirect.cle === pbId(n)) {
+                if (Number.isFinite(releve) && releve > pbMainsDirect.instant) pbMainsDirect = null;
+                else n.mains_liees = pbMainsDirect.valeur;
+            }
             pbBoite = n;
             pbSupportsLire().then(() => pbMaj());
         }

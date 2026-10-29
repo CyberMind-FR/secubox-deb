@@ -26,6 +26,45 @@ def _js():
     return m.group(1)
 
 
+
+# ---------------------------------------------------------------- détecteur d'injection (M4)
+
+def _injections(src):
+    """Constats d'injection possible dans une page : liste de fragments fautifs (vide = page saine).
+    Affectation de href/src/srcdoc seulement par une chaîne constante ; aucun innerHTML (même en clé de chaîne ou d'objet) ; pas d'analyse
+    de HTML ni d'évaluation de code ; pas de setAttribute vers un attribut dangereux ni à nom variable ; pas de on…= (script ou HTML statique)."""
+    sans_commentaires = re.sub(r"<!--.*?-->", "", src, flags=re.S)
+    trouves = [m.group(0) for m in re.finditer(
+        r"innerHTML|outerHTML|insertAdjacentHTML|document\.write|DOMParser|createContextualFragment|\beval\s*\(|\bnew\s+Function\b|\bFunction\s*\("
+        r"|\bset(?:Timeout|Interval)\s*\(\s*['\"`]|['\"]inner['\"]\s*\+|\bon[a-z]+\s*=\s*['\"]"
+        r"|\bsetAttribute\s*\(\s*(?:['\"`](?:href|src|srcdoc|action|formaction|on[a-z]*)['\"`]|[^'\"`\s])"
+        r"|<[^>]*\son[a-z]+\s*=", sans_commentaires, re.I)]
+    for m in re.finditer(r"(?<!dataset)\.(?:href|src|srcdoc)\s*=(?!=)\s*([^;\n]*)", sans_commentaires):
+        if not re.fullmatch(r"(['\"])[^'\"`$]*\1\s*", m.group(1).strip()):
+            trouves.append(m.group(0))
+    return trouves
+
+
+FAUTIFS = ["x.href = v;", "a.src = d.url", "f.srcdoc = h", "e.setAttribute('onclick', x)", "e.setAttribute('href', x)", "e.setAttribute(k, v)",
+           "new DOMParser()", "r.createContextualFragment(h)", "eval(x)", "new Function('a')", "setTimeout('f()', 5)", "x['innerHTML'] = 1",
+           "const o = {innerHTML: v}", "x['inner' + 'HTML'] = h", "x.innerHTML = d.nom", '<div onclick="x()">', "<a href=x onmouseover = 'y'>"]
+SAINS = ["location.href = '/login.html';", "x.textContent = d.nom", "e.setAttribute('aria-label', a)", "const href = '/x'"]
+
+
+@pytest.mark.parametrize("echantillon", FAUTIFS)
+def test_detecteur_injection_voit_les_echantillons_fautifs(echantillon):
+    assert _injections(echantillon), echantillon
+
+
+@pytest.mark.parametrize("echantillon", SAINS)
+def test_detecteur_injection_laisse_passer_le_sain(echantillon):
+    assert not _injections(echantillon), echantillon
+
+
+def test_page_sans_injection_script_et_html_statique():
+    # la démonstration (?demo=1) porte volontairement une donnée hostile comme jeu d'essai : elle est posée en textContent
+    assert _injections(HTML.replace("<img src=x onerror=alert(1)>", "FIXTURE")) == []
+
 # ---------------------------------------------------------------- statiques
 
 def test_bloc_et_panneau_presents():
@@ -378,3 +417,72 @@ def test_box_tiree_pas_de_nom_en_html_dans_le_titre():
     f = Faux([box(nom=HTML_MALVEILLANT)])
     (titre, imgs), erreurs, natifs = ouvrir(f, lambda pg: (pg.inner_text("#pb-titre"), pg.locator("#pb-pan img").count()))
     assert erreurs == [] and natifs == [] and imgs == 0 and HTML_MALVEILLANT in titre
+
+
+# ---------------------------------------------------------------- tour de correction 1 (R-L2-42)
+
+def test_i1_mains_liees_direct_non_ecrase_par_un_inventaire_plus_ancien():
+    """HandsTied « on » reçu en direct, puis la liste rafraîchie rend un inventaire plus ancien à false : les boutons restent désactivés."""
+    ancien = box(mains=False)
+    ancien["vu_le"] = ancien["inventaire_le"] = 1700000000
+    f = Faux([ancien], flux=sse(("etat", {"type": "X_SECUBOX_HandsTied", "etat": "on", "box": "gk5", "cle": "maillage:gk5"})))
+
+    def sc(pg):
+        avant = boutons(pg)
+        pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))")      # rafraîchit la liste (inventaire ancien, mains_liees false)
+        pg.wait_for_timeout(700)
+        return avant, boutons(pg), pg.inner_text("#pb-sous")
+    (avant, apres, sous), erreurs, _ = ouvrir(f, sc)
+    assert erreurs == [] and all(d for _, d in avant) and all(d for _, d in apres) and "mains liées : oui" in sous
+
+
+def test_i1_un_inventaire_plus_recent_reprend_la_main():
+    ancien = box(mains=False)
+    ancien["vu_le"] = ancien["inventaire_le"] = 1700000000
+    f = Faux([ancien], flux=sse(("etat", {"type": "X_SECUBOX_HandsTied", "etat": "on", "box": "gk5", "cle": "maillage:gk5"})))
+
+    def sc(pg):
+        f.boites = [box(mains=False)]            # inventaire daté de 2100 : postérieur au direct
+        pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        pg.wait_for_timeout(700)
+        return boutons(pg)
+    bts, erreurs, _ = ouvrir(f, sc)
+    assert erreurs == [] and any(not d for _, d in bts)
+
+
+def test_i2_confirmation_et_argument_vides_apres_l_envoi():
+    f = Faux([box()])
+
+    def sc(pg):
+        sel = "#pb-actions [data-action=service-arreter]"
+        pg.fill(sel + " input.pb-arg", "secubox-hub.service")
+        pg.fill(sel + " input.pb-conf", "gk5")
+        pg.click(sel + " button.pb-go")
+        pg.wait_for_timeout(500)
+        return pg.is_disabled(sel + " button.pb-go"), pg.input_value(sel + " input.pb-conf"), pg.input_value(sel + " input.pb-arg")
+    (desactive, conf, arg), erreurs, _ = ouvrir(f, sc)
+    assert erreurs == [] and len(f.posts) == 1 and desactive and conf == "" and arg == ""
+
+
+def test_m3_cr_final_memorise_avant_normalisation():
+    def sc(pg):
+        return pg.evaluate("(() => { const a = pbNormaliser('', 'event: etat\\r'); return [a, pbNormaliser(a, '\\ndata: {}\\r\\n\\r\\n')]; })()")
+    (a, b), erreurs, _ = _nav(lambda pg: (pg.wait_for_selector("#pil-body tr"), sc(pg))[1], api=Faux([box()]))
+    assert erreurs == [] and a.endswith("\r") and b == "event: etat\ndata: {}\n\n"
+
+
+def test_m5_nom_vide_garde_le_bouton_desactive():
+    f = Faux([box(nom="")])
+    bts, erreurs, _ = ouvrir(f, lambda pg: dict(boutons(pg)))
+    assert erreurs == [] and all(bts[a] for a in ("reboot", "renouveler", "renommer", "service-arreter")) and bts["maj-paquets"] is False
+
+
+def test_m6_delai_de_reconnexion_remis_a_zero_seulement_apres_un_evenement():
+    """Un flux qui se connecte puis se ferme sans rien dire : le délai double (3 s, 6 s…) au lieu de rester à 3 s."""
+    f = Faux([box()], flux=": battement\n\n")
+
+    def sc(pg):
+        pg.wait_for_timeout(7500)
+        return f.nb_flux
+    n, erreurs, _ = ouvrir(f, sc)
+    assert erreurs == [] and n == 2

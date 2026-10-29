@@ -10,6 +10,11 @@ secubox-annuaire (0.16.3-1~trixie1) trixie; urgency=medium
   * Mains liées ou inconnues, box hors ligne : boutons d'action désactivés avec le motif, seul le relevé reste. Box
     cliente : ni catalogue ni vue en direct hors session de support ouverte (« en attente de l'accord du détenteur »).
     Toute donnée venue de la box ou de l'administrateur est posée en textContent (ref #3126).
+  * Relecture de la tâche 8 (ref #3126, R-L2-42) : le « mains liées » reçu en direct n'est plus écrasé par un inventaire plus
+    ancien (resynchronisé à la reconnexion du flux) ; confirmation forte et argument vidés après l'envoi ; nom de box vide :
+    bouton désactivé ; CR final d'un morceau de flux mémorisé avant la normalisation des CRLF ; délai de reconnexion remis à
+    3 s seulement après un événement reçu ; test anti-injection élargi (href/src/srcdoc, setAttribute, DOMParser, eval,
+    innerHTML en clé, on*= du HTML statique). Sous mains liées, les boutons sont désactivés avec le motif.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 14:00:00 +0100
 
