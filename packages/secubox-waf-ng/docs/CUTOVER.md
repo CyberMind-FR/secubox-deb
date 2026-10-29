@@ -214,27 +214,45 @@ Operator sign-off: `[ ] body-inspect gap reviewed and mitigated / accepted`
 
 ### 1.6bis Corps multipart des vhosts PHP — capture en flux (#3257)
 
-Sur les seuls vhosts rattachés à un service listé dans `php_services`
-(`vhost_profiles.json` : `nextcloud`, `roundcube`), sbxwaf capture en flux le
-début d'un envoi `multipart/form-data` et l'analyse (PHP2Shell, CVE-2026-109618
-et CVE-2026-109619). La catégorie `php2shell` du corpus livré (`_meta` 1.6.0)
-est en mode `detect` : les détections sont journalisées, **jamais bloquées** ni
-bannies. Le corps relayé au backend n'est pas modifié.
+Sur les vhosts PHP, sbxwaf capture en flux le début d'un envoi
+`multipart/form-data` et l'analyse (PHP2Shell, CVE-2026-109618 et
+CVE-2026-109619). Un vhost est PHP si son service figure dans `php_services`
+(`vhost_profiles.json` : `nextcloud`, `roundcube`) **ou** si son nom d'hôte
+normalisé correspond à un motif de `php_hotes` (livrés : `^(nc|nextcloud|cloud)\.`
+et `^(webmail|roundcube)\.` ; un motif invalide est rejeté seul, journalisé).
+La catégorie `php2shell` du corpus livré (`_meta` 1.6.0) est en mode `detect` :
+les détections sont journalisées, **jamais bloquées** ni bannies. Le corps
+relayé au backend n'est pas modifié. Le corps est lu comme PHP 8.2 le lit
+(`main/rfc1867.c` transcrit) : fins de ligne mélangées, apostrophes, en-têtes
+tolérés et parties placées après `--frontière--` sont vus.
 
-- **Mémoire** : la fenêtre de capture est réglée par `--max-body-inspect`
-  (1 Mio par défaut). Jusqu'à 16 captures simultanées : au pire
-  **16 × la fenêtre** en mémoire (16 Mio par défaut ; 128 Mio avec l'option A
-  ci-dessus à 8 Mio). Tenir compte de ce produit avant de relever la fenêtre.
+- **Tous les clients** sont analysés, réseau local et 127.0.0.1 compris (Tor
+  arrive en 127.0.0.1) : une adresse privée est journalisée `local` et n'est
+  jamais émise vers actord.
+- **Mémoire** : la fenêtre de capture vaut **min(`--max-body-inspect`, 1 Mio)**.
+  Relever l'inspection texte (option A ci-dessus, 8 Mio) ne la relève pas.
+  Jusqu'à 16 captures simultanées : au pire **16 Mio** en mémoire.
 - **Statuts de journal** (compteurs et booléens seulement, jamais le corps ni un
-  nom de fichier) :
+  nom de fichier ; `ja4` et `tool` comme une ligne detect) :
   `multipart-tronque` (fenêtre atteinte), `multipart-malforme`,
   `multipart-limite` (plafond de 2000 parties) et `multipart-concurrence`
   (sémaphore de 16 captures plein : l'envoi n'est pas analysé).
 - **Gravité `audit`** : ces statuts portent la gravité `audit`, de valeur 10 (au
-  lieu de 40) : ce sont des observations, pas des attaques.
+  lieu de 40) : ce sont des observations, pas des attaques. Le panneau les
+  compte à part, en « états » (`etats`, `etats_today`), hors menaces.
+- **Avant le canari, sur chaque box** : déclarer ses vhosts PHP (`php_services`,
+  ou un motif `php_hotes`), puis `systemctl restart secubox-waf-ng` —
+  `vhost_profiles.json` n'est lu qu'au démarrage — et vérifier au journal la
+  ligne `sbxwaf: vhosts PHP armés : N explicites, M motifs`. Avec 0 et 0, la
+  box est aveugle : zéro ligne `php2shell` ne prouve alors rien.
 - **Retour arrière** : passer `"enabled": false` sur la catégorie `php2shell`
-  dans `/etc/secubox/waf/waf-rules.json` (rechargement à chaud), ou réinstaller
-  le paquet précédent (1.30.7).
+  dans `/etc/secubox/waf/waf-rules.json` (rechargement à chaud) : sans
+  signature structurelle active, aucune capture n'est posée et aucune ligne
+  `multipart-*` n'est écrite. Ce choix survit aux mises à jour : `waf-rules-sync`
+  garde la valeur `enabled` de la box (ligne d'audit si elle diffère de la
+  valeur livrée), et `waf-profils-fusion` ne remet jamais un nom de
+  `php_services` ou de `php_hotes` retiré par l'opérateur. Ou réinstaller le
+  paquet précédent (1.30.7).
 
 ### 1.7 Parity harness green — BLOCKING
 

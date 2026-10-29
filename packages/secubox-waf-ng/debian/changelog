@@ -4,13 +4,28 @@ secubox-waf-ng (1.31.0-1~trixie1) trixie; urgency=medium
     analyseur multipart borné, signatures structurelles en mode detect
     (php2shell-001 à -004), php_services et vhost webmail (roundcube) dans
     vhost_profiles, capture en flux sur les vhosts PHP (statuts multipart-tronque,
-    -malforme, -limite, -concurrence ; fenêtre = --max-body-inspect, au pire 16 fois
-    la fenêtre en mémoire), correctif A2 du chemin texte.
+    -malforme, -limite, -concurrence), correctif A2 du chemin texte.
   * sevToInt("audit") vaut 10 au lieu de 40.
   * Corpus livré : catégorie php2shell, _meta 1.6.0 ; waf-rules-sync propage
     désormais _meta de la copie livrée.
+  * Relecture finale : l'analyseur lit le corps comme PHP 8.2 (main/rfc1867.c
+    transcrit, en remplacement de mime/multipart) : fins de ligne mélangées,
+    apostrophes, valeur nue coupée au blanc, ligne d'en-tête sans « : »,
+    parties après la frontière finale, frontière vide, filename* ignoré.
+  * Capture : posée seulement si une signature structurelle est chargée et
+    active ; tous les clients analysés, réseau local journalisé « local » et
+    jamais émis vers actord ; fenêtre = min(--max-body-inspect, 1 Mio) ; JA4
+    et outil sur les lignes multipart.
+  * php_hotes : motifs d'hôte PHP (^(nc|nextcloud|cloud)\. et
+    ^(webmail|roundcube)\.), ligne « vhosts PHP armés » au démarrage.
+  * waf-rules-sync garde le « enabled » de la box (audité s'il diffère) ;
+    waf-profils-fusion ne remet jamais un nom de php_services ou php_hotes
+    retiré par l'opérateur (php_services_proposes, php_hotes_proposes).
+  * Panneau : lignes d'état (multipart-*, body-inspect-*, gravité audit)
+    comptées à part, plus comme des menaces.
   * Retour arrière : "enabled": false sur la catégorie php2shell de
-    /etc/secubox/waf/waf-rules.json (à chaud), ou paquet précédent (1.30.7).
+    /etc/secubox/waf/waf-rules.json (à chaud, aucune capture ensuite, tenu à
+    la mise à jour), ou paquet précédent (1.30.7).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 12:00:00 +0100
 
