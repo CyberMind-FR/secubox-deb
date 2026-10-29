@@ -31,7 +31,10 @@ ProtectHome=yes
 PrivateTmp=yes
 ProtectControlGroups=yes
 CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_NET_ADMIN CAP_AUDIT_WRITE CAP_DAC_READ_SEARCH
-ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload /run/secubox /etc/wireguard
+# L'assistant root (sudo) hérite de CET espace de montage : il écrit la configuration du tunnel (/etc/wireguard), son verrou (/run/secubox) et la
+# projection publique des pairs (#3126). Le dossier de la projection est créé par le postinst (autoloadctl exporter-pairs) avant le démarrage ;
+# « - » : absent, il est ignoré au lieu d'empêcher le service de démarrer (l'export échoue alors jusqu'au prochain démarrage).
+ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload /run/secubox /etc/wireguard -/var/lib/secubox/autoload-public
 
 [Install]
 WantedBy=multi-user.target

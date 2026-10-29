@@ -221,3 +221,16 @@ def test_la_minuterie_passe_par_l_argv_horaire():
     assert "T.republier_periodiquement(T.appliquer_horaire_par_sudo)" in lanceur
     sudoers = [x for x in (ICI / "sudoers.d" / "secubox-autoload").read_text().splitlines() if x and not x.startswith("#")]
     assert "secubox-autoload ALL=(root) NOPASSWD: /usr/sbin/autoloadctl " + " ".join(vus[0][3:]) in sudoers
+
+
+def test_l_export_lance_par_le_service_peut_ecrire():
+    """L'assistant root lancé par sudo HÉRITE de l'espace de montage de l'unité (ProtectSystem=strict) : sans le dossier de la projection dans
+    ReadWritePaths, l'export de la minuterie et des révocations par l'API échouait en lecture seule (seul `autoloadctl` lancé à la main
+    publiait). Le dossier doit exister avant le démarrage du service pour être monté en écriture : le postinst l'exporte d'abord."""
+    unite = (ICI / "systemd" / "secubox-autoload.service").read_text().splitlines()
+    chemins = [c for x in unite if x.startswith("ReadWritePaths=") for c in x.split("=", 1)[1].split()]
+    assert "-/var/lib/secubox/autoload-public" in chemins
+    assert {"/run/secubox", "/etc/wireguard"} <= set(chemins)                                 # le verrou et la configuration du tunnel
+    post = (ICI / "debian" / "postinst").read_text()
+    assert "/usr/sbin/autoloadctl exporter-pairs" in post
+    assert post.index("/usr/sbin/autoloadctl exporter-pairs") < post.index("systemctl enable secubox-autoload.service")

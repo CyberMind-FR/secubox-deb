@@ -11,6 +11,9 @@ secubox-autoload (0.7.4-1~trixie1) trixie; urgency=medium
     - N4 : la minuterie passe par `autoloadctl tunnel-sync --horaire` (second argv exact du sudoers) : un `wg-autoload`
       dont l'exploitant a désactivé l'unité n'est plus relancé chaque heure ; la configuration est posée et la projection
       publiée. Une unité activée mais tombée est relancée ; l'enrôlement monte toujours l'interface (première box).
+    - L'assistant root lancé par sudo hérite de l'espace de montage du service (ProtectSystem=strict) : le dossier de la
+      projection (`/var/lib/secubox/autoload-public`) rejoint `ReadWritePaths`, et le postinst l'exporte (donc le crée)
+      avant de démarrer le service. Sans cela, la minuterie et les révocations par l'API n'exportaient rien (lecture seule).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:40:00 +0100
 
