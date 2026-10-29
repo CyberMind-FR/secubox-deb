@@ -38,7 +38,7 @@ Depends: ${misc:Depends},
 # DPI, nDPId, Courbes et Routes/netdiag retires (#3218, banc gk5 de 1 Go, 2026-10-28) : nDPId prenait tout le CPU, le DPI sans lui n'affiche
 # rien, Courbes et netdiag sont des surplus de visualisation. En Conflicts : le proprietaire ne les veut plus sur ces box, et apt les retire
 # a la mise a jour du meta-paquet (majauto installe par `apt-get install --only-upgrade`, qui retire un paquet en conflit).
-Conflicts: secubox-webos, secubox-waf-ng, secubox-waf, secubox-metrics, secubox-toolbox,
+Conflicts: secubox-webos, secubox-waf-ng, secubox-waf, secubox-metrics, secubox-toolbox, secubox-toolbox-ng,
  secubox-dpi, secubox-ndpid-engine, secubox-courbes, secubox-routes
 Description: SecuBox Minimal — garde DNS, filtre de publicites, NAC, Freebox, WireGuard (carte de 1 Go)
  Profil minimal, pour une petite carte (ESPRESSObin, 1 Go) tenue en boitier de garde sans tete : detection d'anomalies DNS (dns-guard),

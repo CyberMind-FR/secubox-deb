@@ -45,11 +45,10 @@ Depends: ${misc:Depends},
  secubox-wireguard (>= 1.0),
  secubox-waf-ng (>= 1.0),
  secubox-ipblock (>= 1.3.0),
- secubox-toolbox-ng,
- secubox-toolbox (>= 1.0),
+# Toolbox (cabine numérique Gondwana) et moteur d'interception (#3259, décision du propriétaire du 2026-10-29) : sortis de lite,
+# ils passent dans secubox-isp, dont full hérite. Pas de Conflicts ici : isp et full DÉPENDENT de lite.
 # DPI et nDPId quittent lite (#3218, decision du proprietaire du 2026-10-28 apres le banc de l'ESPRESSObin de 1 Go) : ils passent dans
 # secubox-isp, dont full herite. Pas de Conflicts ici : isp et full DEPENDENT de lite et gardent le DPI.
- secubox-interceptor,
  secubox-security-posture (>= 2.2.0),
  secubox-threats (>= 1.0),
  secubox-threatmesh,
