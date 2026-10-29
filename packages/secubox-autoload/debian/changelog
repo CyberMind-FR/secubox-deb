@@ -1,3 +1,13 @@
+secubox-autoload (0.7.2-1~trixie1) trixie; urgency=medium
+
+  * Projection publique des pairs (#3126) : une base verrouillée (« database is locked ») ou corrompue ne remplace plus
+    la projection par une liste vide (motif « passe dégradée », #3011) : seule l'absence de table donne une projection
+    vide ; toute autre erreur SQLite est journalisée, `exporter-pairs` rend 1, `tunnel-sync` garde son code de retour.
+  * Descripteur fermé si `fchmod` échoue ; une seule lecture de la base ; dossier public existant trop fermé
+    (0700/0750) remis en 0755 (root le possède).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 09:00:00 +0200
+
 secubox-autoload (0.7.1-1~trixie1) trixie; urgency=medium
 
   * Projection publique des pairs (#3126) : le fichier passe dans `/var/lib/secubox/autoload-public/pairs-publics.json`

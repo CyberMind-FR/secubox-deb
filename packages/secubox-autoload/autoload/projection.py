@@ -31,6 +31,7 @@ from .jetons import etat_abonnement
 NOM = "pairs-publics.json"
 DOSSIER_PUBLIC = "autoload-public"
 VERSION = 1
+DELAI_S = 15
 
 _REQUETE = (
     "SELECT p.adresse AS adresse, j.client AS client, j.lot AS lot, j.serie AS serie, j.profil AS profil, "
@@ -56,15 +57,21 @@ def lire_pairs(db: Path, maintenant: float = None) -> list:
     if not db.exists():
         return []
     now = time.time() if maintenant is None else maintenant
-    cx = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=15, isolation_level=None)
-    cx.row_factory = sqlite3.Row
+    cx = None
     try:
+        cx = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=DELAI_S, isolation_level=None)
+        cx.row_factory = sqlite3.Row
         return [{"adresse": r["adresse"], "client": r["client"], "lot": r["lot"], "serie": r["serie"], "profil": r["profil"],
                  "abonnement": etat_abonnement(r["abonnement"], r["abonnement_expire_le"], now)} for r in cx.execute(_REQUETE)]
-    except sqlite3.OperationalError:                      # base présente mais tables pas encore créées par le service
-        return []
+    except sqlite3.OperationalError as e:
+        if "no such table" in str(e):                     # base présente mais tables pas encore créées par le service : rien à publier
+            return []
+        raise ProjectionErreur(f"base illisible ({e})") from e      # verrouillée, etc. : on ne publie PAS une projection vide (#3011)
+    except sqlite3.Error as e:                            # corrompue
+        raise ProjectionErreur(f"base illisible ({e})") from e
     finally:
-        cx.close()
+        if cx is not None:
+            cx.close()
 
 
 def _ouvrir(nom, dir_fd=None) -> int:
@@ -95,8 +102,8 @@ def _ouvrir_public(dossier: Path) -> int:
         fd = _ouvrir(dossier.name, racine)
         try:
             _verifier(fd, dossier, strict=True)
-            if cree:
-                os.fchmod(fd, 0o755)                      # indépendant de l'umask
+            if cree or stat.S_IMODE(os.fstat(fd).st_mode) != 0o755:
+                os.fchmod(fd, 0o755)                      # indépendant de l'umask ; dossier existant trop fermé : root le possède, on le rouvre en lecture
             return fd
         except BaseException:
             os.close(fd)
@@ -115,8 +122,8 @@ def ecrire(dossier: Path, projection: dict) -> Path:
     try:
         try:
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
-            os.fchmod(fd, 0o644)                          # indépendant de l'umask
-            with os.fdopen(fd, "wb") as f:
+            with os.fdopen(fd, "wb") as f:                # fdopen d'abord : le descripteur est fermé même si fchmod échoue
+                os.fchmod(f.fileno(), 0o644)              # indépendant de l'umask
                 f.write(donnees)
                 f.flush()
                 os.fsync(f.fileno())
@@ -134,5 +141,7 @@ def ecrire(dossier: Path, projection: dict) -> Path:
     return Path(dossier) / NOM
 
 
-def exporter(db: Path, dossier: Path) -> Path:
-    return ecrire(dossier, {"version": VERSION, "pairs": lire_pairs(db)})
+def exporter(db: Path, dossier: Path):
+    """(chemin du fichier, nombre de pairs publiés) : une seule lecture de la base."""
+    pairs = lire_pairs(db)
+    return ecrire(dossier, {"version": VERSION, "pairs": pairs}), len(pairs)

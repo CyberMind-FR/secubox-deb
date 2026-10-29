@@ -6,6 +6,7 @@
 import importlib.machinery
 import importlib.util
 import json
+import os
 import stat
 import sys
 from pathlib import Path
@@ -156,3 +157,88 @@ def test_abonnement_echu_est_projete_comme_lister(base):
     _charger_ctl().main(["exporter-pairs"])
     assert _lire(base)["pairs"][0]["abonnement"] == "echu"
     assert base["reg"].lister()[0]["abonnement"] == "echu"
+
+
+def test_base_verrouillee_ne_remplace_pas_la_projection(base, monkeypatch, capsys):
+    import sqlite3
+    from autoload import projection as P
+    ctl = _charger_ctl()
+    assert ctl.main(["exporter-pairs"]) == 0
+    avant = base["sortie"].read_bytes()
+    monkeypatch.setattr(P, "DELAI_S", 0.2)
+    verrou = sqlite3.connect(base["db"], isolation_level=None)
+    verrou.execute("BEGIN EXCLUSIVE")
+    try:
+        assert ctl.main(["exporter-pairs"]) == 1
+        assert "exporter-pairs" in capsys.readouterr().err
+        monkeypatch.setattr(ctl.T, "synchroniser", lambda *a, **k: 1)
+        assert ctl.main(["tunnel-sync"]) == 0
+    finally:
+        verrou.rollback()
+        verrou.close()
+    assert base["sortie"].read_bytes() == avant
+
+
+def test_base_corrompue_sans_trace(base, capsys):
+    ctl = _charger_ctl()
+    base["db"].write_bytes(os.urandom(4096))
+    assert ctl.main(["exporter-pairs"]) == 1
+    err = capsys.readouterr().err
+    assert "exporter-pairs" in err and "Traceback" not in err
+    import unittest.mock as mock
+    with mock.patch.object(ctl.T, "synchroniser", lambda *a, **k: 1):
+        assert ctl.main(["tunnel-sync"]) == 0
+    assert not base["sortie"].exists()
+
+
+def test_projection_sans_les_valeurs_reelles_de_la_base(base):
+    import sqlite3
+    cx = sqlite3.connect(base["db"])
+    secrets_ = [v for ligne in cx.execute("SELECT cle_pub, empreinte FROM jetons") for v in ligne if v] + [base["jeton"]]
+    cx.close()
+    assert len(secrets_) >= 3
+    _charger_ctl().main(["exporter-pairs"])
+    brut = base["sortie"].read_text()
+    assert all(v not in brut for v in secrets_)
+
+
+def test_temporaire_nettoye_si_le_renommage_echoue(base, monkeypatch):
+    from autoload import projection as P
+    def casse(*a, **k):
+        raise OSError(5, "Input/output error")
+    monkeypatch.setattr(P.os, "replace", casse)
+    with pytest.raises(P.ProjectionErreur):
+        P.exporter(base["db"], base["public"])
+    assert list(base["public"].iterdir()) == []
+
+
+def test_fd_ferme_si_fchmod_echoue(base, monkeypatch):
+    from autoload import projection as P
+    vus = []
+    reel_fchmod = os.fchmod
+
+    def fchmod(fd, mode):
+        if mode == 0o644:
+            vus.append(fd)
+            raise OSError(1, "Operation not permitted")
+        return reel_fchmod(fd, mode)
+    monkeypatch.setattr(P.os, "fchmod", fchmod)
+    with pytest.raises(P.ProjectionErreur):
+        P.exporter(base["db"], base["public"])
+    assert len(vus) == 1
+    with pytest.raises(OSError):
+        os.fstat(vus[0])                                        # EBADF : le descripteur du temporaire est fermé
+    assert list(base["public"].iterdir()) == []
+
+
+def test_dossier_public_existant_trop_ferme_est_remis_en_0755(base):
+    base["public"].mkdir(mode=0o700)
+    base["public"].chmod(0o700)
+    assert _charger_ctl().main(["exporter-pairs"]) == 0
+    assert stat.S_IMODE(base["public"].stat().st_mode) == 0o755 and base["sortie"].exists()
+
+
+def test_exporter_rend_le_nombre_de_pairs(base):
+    from autoload import projection as P
+    chemin, n = P.exporter(base["db"], base["public"])
+    assert n == 1 and chemin == base["sortie"]

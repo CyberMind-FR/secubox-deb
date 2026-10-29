@@ -139,7 +139,8 @@ def main(argv=None):
                 print(f"exporter-pairs : {err}", file=sys.stderr)
         elif a.cmd == "exporter-pairs":
             try:
-                print(f"{len(P.lire_pairs(db))} pair(s) publié(s) dans {P.exporter(db, P.dossier_public(db))}")
+                chemin, n = P.exporter(db, P.dossier_public(db))
+                print(f"{n} pair(s) publié(s) dans {chemin}")
             except (P.ProjectionErreur, OSError, ValueError) as err:
                 print(f"exporter-pairs : {err}", file=sys.stderr)
                 return 1
