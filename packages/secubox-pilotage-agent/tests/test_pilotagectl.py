@@ -38,9 +38,30 @@ exit 0
 
 FAUX_SYSTEMCTL = """#!/bin/sh
 # faux systemctl : « show -p ActiveState --value <unité> » → active si l'unité figure dans $FAUX_ACTIFS ;
-# « show -p LoadState --value -- <unité> » → not-found si elle figure dans $FAUX_ABSENTES, sinon loaded
+# « show -p LoadState --value -- <unité> » → not-found si elle figure dans $FAUX_ABSENTES, sinon loaded ;
+# « show -p Id -p Type -p Names -p LoadState -- <unité> » (C1, R-L2-46) → lignes clé=valeur : la ligne de $FAUX_UNITES
+# « <unité> <Id> <Type> <Names…> » si elle existe (alias, oneshot ; Type « - » = aucun), sinon l'unité elle-même,
+# Type=simple pour un .service (aucun Type pour une minuterie), LoadState=not-found si elle figure dans $FAUX_ABSENTES
 unite=""
 for a in "$@"; do unite="$a"; done
+if [ "$1" = show ] && [ "$3" = Id ]; then
+  printf '%s\\n' "$*" >> "$FAUX_DESCRIPTIONS"
+  ligne=$(grep "^$unite " "$FAUX_UNITES" 2>/dev/null | head -n 1)
+  if [ -n "$ligne" ]; then
+    set -- $ligne
+    id=$2; type=$3; shift 3; noms="$*"
+  else
+    id=$unite; noms=$unite; type=-
+    case "$unite" in *.service) type=simple ;; esac
+  fi
+  etat=loaded
+  if grep -qx "$unite" "$FAUX_ABSENTES" 2>/dev/null; then etat=not-found; fi
+  echo "Id=$id"
+  echo "Names=$noms"
+  [ "$type" = - ] || echo "Type=$type"
+  echo "LoadState=$etat"
+  exit 0
+fi
 if [ "$1" = show ] && [ "$3" = LoadState ]; then
   if grep -qx "$unite" "$FAUX_ABSENTES" 2>/dev/null; then echo not-found; else echo loaded; fi
   exit 0
@@ -89,11 +110,14 @@ class Banc:
         self.absentes = tmp_path / "absentes"
         self.wg_sortie = tmp_path / "wg-sortie"
         self.wg_appels = tmp_path / "wg-appels"
+        self.unites = tmp_path / "unites"
+        self.descriptions = tmp_path / "descriptions"
         self.env = {k: v for k, v in os.environ.items() if not k.startswith(("SUDO_", "SBX_"))}
         self.env.update(PATH=f"{faux}:/usr/bin:/bin", SBX_RACINE=str(self.r),
                         FAUX_LANCES=str(self.lances), FAUX_ACTIFS=str(self.actifs),
                         FAUX_ABSENTES=str(self.absentes), FAUX_WG_SORTIE=str(self.wg_sortie),
-                        FAUX_WG_APPELS=str(self.wg_appels))
+                        FAUX_WG_APPELS=str(self.wg_appels), FAUX_UNITES=str(self.unites),
+                        FAUX_DESCRIPTIONS=str(self.descriptions))
         self.ancree = ancree
         if ancree:
             self.ancrer()
@@ -164,6 +188,13 @@ class Banc:
     def audit(self):
         a = self.r / "var/log/secubox/audit.log"
         return [json.loads(ligne) for ligne in a.read_text().splitlines() if ligne.strip()]
+
+    def unite(self, nom, type_="simple", ident=None, noms=None):
+        """Ce que systemd dit de `nom` (C1) : unité réelle `ident` (alias), Type (« - » : aucun), tous ses noms."""
+        ident = ident or nom
+        noms = noms or [ident, nom] if ident != nom else noms or [nom]
+        with self.unites.open("a") as f:
+            f.write(f"{nom} {ident} {type_} {' '.join(noms)}\n")
 
     def module(self, ident, unites, protege):
         (self.r / f"etc/secubox/modules.d/{ident}.toml").write_text(
@@ -347,7 +378,7 @@ def test_cliente_exige_un_consentement(banc):
     banc.cliente()
     for action, attendu in (("reboot", True), ("maj-paquets", True), ("service-arreter", True),
                             ("service-redemarrer", True), ("renommer", True), ("renouveler-secrets", True),
-                            ("support-ouvrir", True), ("service-demarrer", False), ("releve", False)):
+                            ("support-ouvrir", True), ("service-demarrer", True), ("releve", False)):
         _, pol, _ = banc.run("politique", action, agent=True)
         assert pol["autorise"] is True and pol["consentement"] is attendu, (action, pol)
     # la demande crée un consentement en attente, une seule fois ; rien n'est lancé
@@ -377,9 +408,9 @@ def test_cliente_exige_un_consentement(banc):
     assert len(banc.lancements()) == 1
     evts = [e["evenement"] for e in banc.audit()]
     assert evts.count("consentement_demande") == 2 and evts.count("consentement") == 2
-    # l'accord vaut pour CETTE action : un service démarré ne demande rien, un autre service redemande
+    # R-L2-46 : démarrer un service exige aussi l'accord sur une box cliente (l'accord du reboot n'en tient pas lieu)
     rc, sortie, _ = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True)
-    assert sortie["ok"] is True
+    assert sortie["ok"] is False and sortie["refus"] == "consentement requis"
 
 
 def test_mains_liees_annule_les_consentements(banc):
@@ -432,6 +463,8 @@ def test_audit_sans_valeur_secrete(banc):
     banc.run("renommer", "SECRET_ARGV_9902", agent=True, env=env)
     banc.run("mains-liees", "on", env=env)
     banc.run("mains-liees", "off", env=env)
+    _, s, _ = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True, env=env)
+    banc.run("consentement", "accepter", s["consentement"], env=env)     # R-L2-46 : démarrer exige l'accord (cliente)
     banc.run("service", "demarrer", "secubox-lyrion.service", agent=True, env=env)
     texte = (banc.r / "var/log/secubox/audit.log").read_text()
     assert "SECRET" not in texte and "9902" not in texte and "0451" not in texte
@@ -560,7 +593,84 @@ def test_gabarit_exige_le_consentement_sur_cliente(banc):
     rc, sortie, _ = banc.run("service", "demarrer", "secubox-foo@bar.service", agent=True)
     assert sortie["refus"] == "consentement requis"
     rc, sortie, _ = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True)
-    assert sortie["ok"] is True
+    assert sortie["refus"] == "consentement requis"                # R-L2-46 : démarrer exige l'accord, gabarit ou non
+
+
+# --- Passe finale, C1 (R-L2-46) : seulement des services durables, Id résolu contrôlé ------------------------------------
+
+PONCTUELLE = "unité ponctuelle : passez par l'action dédiée"
+
+
+def test_unite_ponctuelle_refusee_sur_les_deux_natures_de_box(banc):
+    """`service demarrer` d'une unité oneshot (action root : redémarrer, éteindre, majauto…) contournait l'accord du détenteur,
+    la confirmation forte du maître et « une opération longue à la fois » : refusée partout, sans consentement ni lancement."""
+    banc.unite("secubox-systeme-redemarrer.service", "oneshot")
+    banc.unite("secubox-majauto.service", "oneshot")
+    for nature in ("proprietaire", "cliente"):
+        if nature == "cliente":
+            banc.cliente()
+        for unite in ("secubox-systeme-redemarrer.service", "secubox-majauto.service"):
+            for verbe in ("demarrer", "arreter", "redemarrer"):
+                rc, sortie, _ = banc.run("service", verbe, unite, agent=True)
+                assert rc == 0 and sortie == {"ok": False, "refus": PONCTUELLE}, (nature, verbe, unite, sortie)
+        # en local aussi : le ctl ne pilote que des services durables
+        rc, sortie, _ = banc.run("service", "demarrer", "secubox-systeme-redemarrer.service")
+        assert sortie == {"ok": False, "refus": PONCTUELLE}, nature
+    assert banc.lancements() == []
+    assert not any(e["evenement"] == "consentement_demande" for e in banc.audit())
+    # systemd interrogé sans shell, par Id, Type, Names et LoadState
+    assert any(ligne.startswith("show -p Id -p Type -p Names -p LoadState -- secubox-systeme-redemarrer.service")
+               for ligne in banc.descriptions.read_text().splitlines())
+
+
+def test_minuterie_refusee(banc):
+    """Une minuterie n'est pas un service durable : l'armer déclenche une action ponctuelle."""
+    rc, sortie, _ = banc.run("service", "demarrer", "secubox-majauto.timer", agent=True)
+    assert rc == 0 and sortie == {"ok": False, "refus": PONCTUELLE}
+    assert banc.lancements() == []
+
+
+def test_alias_vers_une_unite_protegee_refuse(banc):
+    """R-L2-15 refermé : l'Id RÉSOLU (un alias pointe vers son unité réelle) et tous ses noms sont contrôlés."""
+    banc.module("auth", ["secubox-auth.service"], True)
+    banc.unite("secubox-authentification.service", ident="secubox-auth.service")
+    banc.unite("secubox-veilleur.service", ident="secubox-pilotage-agent.service")
+    banc.unite("secubox-apt.service", ident="secubox-pilotage-op-0123456789abcdef.service")
+    banc.unite("secubox-ssh.service", ident="ssh.service")
+    # gabarit : l'instance est un nom de plus de l'unité réelle protégée
+    banc.unite("secubox-x@y.service", ident="secubox-lyrion.service", noms=["secubox-lyrion.service", "secubox-x@y.service",
+                                                                           "secubox-auth.service"])
+    attendus = {"secubox-authentification.service": "unité protégée", "secubox-veilleur.service": "unité de l'agent",
+                "secubox-apt.service": "unité du ctl", "secubox-ssh.service": "unité hors périmètre",
+                "secubox-x@y.service": "unité protégée"}
+    for unite, motif in attendus.items():
+        for verbe in ("demarrer", "arreter", "redemarrer"):
+            rc, sortie, _ = banc.run("service", verbe, unite, agent=True)
+            assert rc == 0 and sortie == {"ok": False, "refus": motif}, (verbe, unite, sortie)
+    assert banc.lancements() == []
+
+
+def test_service_durable_demarre(banc):
+    """Un service durable (Type=simple, notify…) démarre librement sur la box du propriétaire, avec l'accord sur une cliente."""
+    banc.unite("secubox-lyrion.service", "notify")
+    rc, sortie, _ = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True)
+    assert rc == 0 and sortie["ok"] is True
+    assert banc.lancements()[-1].endswith("-- /usr/bin/systemctl start secubox-lyrion.service")
+    banc.cliente()
+    rc, sortie, _ = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True)
+    assert sortie["refus"] == "consentement requis"
+    assert len(banc.lancements()) == 1
+    banc.run("consentement", "accepter", sortie["consentement"])
+    rc, sortie, _ = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True)
+    assert rc == 0 and sortie["ok"] is True and len(banc.lancements()) == 2
+
+
+def test_unite_introuvable_refusee(banc):
+    banc.absentes.write_text("secubox-fantome.service\n")
+    for verbe in ("demarrer", "arreter", "redemarrer"):
+        rc, sortie, _ = banc.run("service", verbe, "secubox-fantome.service", agent=True)
+        assert rc == 0 and sortie == {"ok": False, "refus": "unité inconnue"}, verbe
+    assert banc.lancements() == []
 
 
 def test_acteur_du_maitre_audite(banc):

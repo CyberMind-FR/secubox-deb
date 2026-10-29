@@ -20,7 +20,11 @@ Verbes (liste fermée) :
   service <demarrer|arreter|redemarrer> <unité>
                                            unité ^secubox-[a-z0-9][a-z0-9@.-]{0,62}\\.(service|timer)$, jamais celle de
                                            l'agent, ni une unité du ctl (secubox-pilotage-op-*), ni une unité
-                                           protégée (modules.d `protected = true`, ou socle) ; unité inconnue refusée
+                                           protégée (modules.d `protected = true`, ou socle) ; unité inconnue refusée.
+                                           R-L2-46 : SERVICE DURABLE seulement (systemctl show -p Id,Type,Names,
+                                           LoadState) : Type=oneshot ou minuterie refusés (« unité ponctuelle :
+                                           passez par l'action dédiée ») ; l'Id résolu (alias) et tous ses noms
+                                           passent les mêmes contrôles ; un Id hors secubox-* est « hors périmètre »
   renouveler-secrets                       secubox-renouvelle-secrets --tout --oui, opération longue
   renommer <nom>                           libellé DNS (tâche 5, D3) : /usr/sbin/secubox-renommer --acteur <acteur>
                                            <nom> dans une unité transitoire bornée (RuntimeMaxSec=120) ; hosts,
@@ -73,8 +77,8 @@ Politique, pour une demande du maître (origine « maitre » = appel par sudo de
     (état root ancre.json, écriture atomique, valable 2 h) ; un échec le retire.
   - box cliente (canal vérifié wg-autoload ; wg-mesh = box du propriétaire ; jamais déduit de la seule présence d'une
     interface ; sans canal vérifié, une demande locale voit une box cliente) : reboot, maj-paquets,
-    service arreter|redemarrer, renommer, renouveler-secrets, et toute action sur une unité gabarit (« @ »), même
-    demarrer, exigent l'accord du détenteur. La demande crée un
+    service demarrer|arreter|redemarrer (R-L2-46), renommer, renouveler-secrets exigent l'accord du détenteur.
+    La demande crée un
     consentement en attente (valable 24 h), accepté ou refusé en local ; la demande suivante identique consomme
     l'accord une fois. Poser les mains liées annule les consentements en attente ou acceptés non consommés.
   - une seule opération longue à la fois (maj-paquets, renouveler-secrets, et le reboot pendant ses 5 s de délai).
@@ -163,8 +167,13 @@ OPS_SUPPORT = ("ouvrir", "fermer", "accepter", "refuser")
 ETATS_SUPPORT = frozenset({"en_attente", "ouvert", "refuse", "ferme", "annule", "expire"})
 DUREE_SUPPORT = 30                                       # minutes, défaut d'une session de support
 DUREE_SUPPORT_MAX = 240
-CONSENTEMENT_CLIENTE = frozenset({"reboot", "maj-paquets", "service-arreter", "service-redemarrer", "renommer",
-                                  "renouveler-secrets"})
+CONSENTEMENT_CLIENTE = frozenset({"reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
+                                  "renommer", "renouveler-secrets"})
+# R-L2-46 : `service` ne pilote qu'un service DURABLE. Une unité ponctuelle (oneshot : secubox-systeme-redemarrer,
+# secubox-majauto, secubox-firstboot…) est une action root à part entière ; la démarrer contournerait l'accord du
+# détenteur, la confirmation forte du maître et « une opération longue à la fois ». Une minuterie (sans Type) l'arme.
+PONCTUELLE = "unité ponctuelle : passez par l'action dédiée"
+DELAI_SYSTEMD = 20                                       # s, lecture de la description d'une unité
 # Opérations exclusives, enregistrées dans operation.json : un reboot pendant apt laisserait dpkg à moitié configuré,
 # et rien de long ne démarre pendant les 5 s qui précèdent un reboot.
 EXCLUSIVES = frozenset({"maj-paquets", "renouveler-secrets", "reboot"})
@@ -783,16 +792,38 @@ def operation_en_cours(ctx, fd):
     return None
 
 
-def unite_connue(ctx, unite):
-    """LoadState ≠ not-found. systemd injoignable → Erreur (refus audité)."""
+def decrire_unite(ctx, unite):
+    """R-L2-46 : ce que systemd dit de `unite`, {Id, Type, Names (liste), LoadState}. Chemin absolu, sans shell, délai
+    borné. Lignes clé=valeur (sans --value : systemctl rend les propriétés dans l'ordre du bus, pas dans celui des -p,
+    et omet une propriété absente, comme le Type d'une minuterie). systemd injoignable ou réponse illisible → Erreur
+    (refus audité)."""
     try:
-        r = subprocess.run([ctx.systemctl, "show", "-p", "LoadState", "--value", "--", unite], env=ctx.env,
-                           capture_output=True, text=True, timeout=60)
-    except (OSError, subprocess.TimeoutExpired):
+        r = subprocess.run([ctx.systemctl, "show", "-p", "Id", "-p", "Type", "-p", "Names", "-p", "LoadState", "--", unite],
+                           env=ctx.env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=DELAI_SYSTEMD)
+    except (OSError, subprocess.TimeoutExpired, UnicodeDecodeError):
         raise Erreur("systemd injoignable") from None
     if r.returncode != 0:
         raise Erreur("systemd injoignable")
-    return r.stdout.strip() != "not-found"
+    d = {}
+    for ligne in r.stdout.splitlines():
+        cle_, sep, valeur = ligne.partition("=")
+        if sep and cle_ in ("Id", "Type", "Names", "LoadState"):
+            d[cle_] = valeur.strip()
+    if not d.get("Id") or not d.get("LoadState"):
+        raise Erreur("systemd injoignable")
+    d["Names"] = d.get("Names", "").split()
+    return d
+
+
+def refus_unite(nom, protegees):
+    """Motif de refus d'un nom d'unité (argv, Id résolu ou l'un de ses noms), ou None."""
+    if nom.split("@", 1)[0].rsplit(".", 1)[0] == AGENT:
+        return "unité de l'agent"                    # l'agent ne se coupe pas lui-même
+    if nom.startswith(PREFIXE_OP):
+        return "unité du ctl"                        # couper l'unité d'un apt en cours laisserait dpkg à moitié configuré
+    if nom in protegees:
+        return "unité protégée"
+    return None
 
 
 def commande(ctx, verbe, p):
@@ -1265,22 +1296,29 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
             return refus("code invalide")
         p["code"] = code
     if unite is not None:
-        if unite.split("@", 1)[0].rsplit(".", 1)[0] == AGENT:
-            return refus("unité de l'agent")         # l'agent ne se coupe pas lui-même
-        if unite.startswith(PREFIXE_OP):
-            return refus("unité du ctl")             # couper l'unité d'un apt en cours laisserait dpkg à moitié configuré
-        if unite in unites_protegees(ctx):
-            return refus("unité protégée")
-        if not unite_connue(ctx, unite):
+        protegees = unites_protegees(ctx)
+        motif = refus_unite(unite, protegees)
+        if motif is not None:
+            return refus(motif)
+        d = decrire_unite(ctx, unite)
+        if d["LoadState"] == "not-found":
             return refus("unité inconnue")           # M10 : ni consentement ni lancement pour une unité absente
+        # R-L2-46 (R-L2-15 refermé) : l'unité RÉELLE (un alias pointe vers elle) et chacun de ses noms sont contrôlés.
+        for nom in (d["Id"], *d["Names"]):
+            motif = refus_unite(nom, protegees)
+            if motif is not None:
+                return refus(motif)
+        if not RE_UNITE.fullmatch(d["Id"]):
+            return refus("unité hors périmètre")     # alias secubox-* vers une unité qui n'est pas de SecuBox
+        if not d["Id"].endswith(".service") or d.get("Type", "") in ("", "oneshot"):
+            return refus(PONCTUELLE)
     if verbe in EXCLUSIVES:
         job = operation_en_cours(ctx, fd)
         if job is not None:
             return refus("opération en cours", job=job)
     accord, consentements = None, None
-    # R-L2-13 : sur une box cliente, une unité gabarit (« @ ») est une action arbitraire : accord exigé, même pour démarrer.
-    gabarit = unite is not None and "@" in unite
-    if du_maitre and (politique(action, False, du_proprietaire)[1] or (gabarit and not du_proprietaire)):
+    # R-L2-13, élargi par R-L2-46 : sur une box cliente, toute action de service (gabarit ou non, même démarrer) exige l'accord.
+    if du_maitre and politique(action, False, du_proprietaire)[1]:
         consentements = charger_consentements(ctx, fd, maintenant)
         accord = next((c for c in consentements if c.get("etat") == "accepte" and cle(c) == (action, unite)), None)
         if accord is None:
