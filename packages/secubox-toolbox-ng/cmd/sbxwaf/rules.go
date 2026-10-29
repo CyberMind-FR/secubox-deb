@@ -115,6 +115,9 @@ type compiledCategory struct {
 type signatureStructurelle struct {
 	id, check, severity, cve, confidence string
 	params                               map[string]int
+	// services (#3273) : services PHP visés ; vide = tous. Un hôte PHP reconnu
+	// par motif (service "") est toujours visé.
+	services []string
 }
 
 // DetectionStructurelle est le constat d'une signature structurelle. Severity
@@ -145,6 +148,7 @@ type structurelJSON struct {
 	Severity   string                     `json:"severity"`
 	CVE        string                     `json:"cve"`
 	Confidence string                     `json:"confidence"`
+	Services   []string                   `json:"services"`
 }
 
 // compileStructurel valide une entree "structural". Une erreur rend un motif
@@ -152,7 +156,9 @@ type structurelJSON struct {
 func compileStructurel(brut json.RawMessage, mode string) (signatureStructurelle, string, error) {
 	var sj structurelJSON
 	if err := json.Unmarshal(brut, &sj); err != nil {
-		return signatureStructurelle{}, "", err
+		// Un champ mal typé ("services": "roundcube") n'arrête pas le
+		// décodage des autres (encoding/json) : l'id lu nomme le rejet.
+		return signatureStructurelle{}, sj.ID, err
 	}
 	if sj.ID == "" {
 		return signatureStructurelle{}, "", errStructurel("id vide")
@@ -179,7 +185,7 @@ func compileStructurel(brut json.RawMessage, mode string) (signatureStructurelle
 	}
 	return signatureStructurelle{
 		id: sj.ID, check: sj.Check, severity: sj.Severity, cve: sj.CVE,
-		confidence: sj.Confidence, params: params,
+		confidence: sj.Confidence, params: params, services: sj.Services,
 	}, sj.ID, nil
 }
 
@@ -187,8 +193,13 @@ type errStructurel string
 
 func (e errStructurel) Error() string { return string(e) }
 
-// declenche applique le controle au resultat de l'analyseur (seuils a >=).
-func (s signatureStructurelle) declenche(res ResultatMultipart) bool {
+// declenche applique le controle a l'entree PHP (seuils a >=). Les controles
+// multipart sont faux sans corps multipart analyse.
+func (s signatureStructurelle) declenche(e *EntreePHP) bool {
+	if e.Multipart == nil {
+		return false
+	}
+	res := *e.Multipart
 	switch s.check {
 	case "upload_progress_fichiers":
 		return res.Progress && res.FichiersApresProgress >= s.params["fichiers_apres_min"]
@@ -615,10 +626,30 @@ func (r *Rules) aDesStructurelles() bool {
 	return false
 }
 
-// EvaluerStructurel rend toutes les signatures structurelles qui declenchent
-// sur res : categories activees dans l'ordre du fichier, puis signatures dans
-// l'ordre. Pur et sans effet de bord ; ne bloque rien (mode detect seulement).
+// visePHP dit si la signature s'applique au service de l'entree : liste
+// vide = tous les services ; service "" (hote PHP par motif) = toujours.
+func (s signatureStructurelle) visePHP(service string) bool {
+	if len(s.services) == 0 || service == "" {
+		return true
+	}
+	for _, v := range s.services {
+		if v == service {
+			return true
+		}
+	}
+	return false
+}
+
+// EvaluerStructurel evalue un seul resultat multipart, sans service (#3257).
 func (r *Rules) EvaluerStructurel(res ResultatMultipart) []DetectionStructurelle {
+	return r.EvaluerPHP(&EntreePHP{Multipart: &res})
+}
+
+// EvaluerPHP rend toutes les signatures structurelles qui declenchent sur
+// l'entree : categories activees dans l'ordre du fichier, puis signatures dans
+// l'ordre, filtrees par service. Pur et sans effet de bord ; ne bloque rien
+// (mode detect seulement).
+func (r *Rules) EvaluerPHP(e *EntreePHP) []DetectionStructurelle {
 	r.mu.RLock()
 	cur := r.current
 	r.mu.RUnlock()
@@ -628,7 +659,7 @@ func (r *Rules) EvaluerStructurel(res ResultatMultipart) []DetectionStructurelle
 	var out []DetectionStructurelle
 	for _, c := range cur.cats {
 		for _, s := range c.data.structurelles {
-			if s.declenche(res) {
+			if s.visePHP(e.Service) && s.declenche(e) {
 				out = append(out, DetectionStructurelle{
 					Categorie: c.id, RuleID: s.id, Severity: s.severity, CVE: s.cve,
 				})

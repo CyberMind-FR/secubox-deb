@@ -31,8 +31,6 @@ package main
 
 import (
 	"io"
-	"log"
-	"runtime/debug"
 	"sync"
 )
 
@@ -171,57 +169,6 @@ func (s *Server) limiteCaptureAtteinte(rm requeteMultipart) {
 		Category: "multipart-concurrence", Severity: "audit", Action: "multipart-concurrence",
 		Signaux: map[string]int{"concurrence": cap(s.capturesMultipart)},
 	})
-}
-
-// analyserCaptureMultipart fige la capture, l'analyse et journalise. Appelée
-// par defer dans le gestionnaire, donc après le relais et la réponse. relaye
-// dit que le corps a été confié au proxy : faux (403, ban, cache média), la
-// capture est figée et le jeton rendu, sans analyse ni ligne.
-//
-// MODE DETECT SEULEMENT : aucun appel au ban, à nft ni à l'escalade. La
-// gravité journalisée est celle de la signature ; elle part vers actord comme
-// toute ligne du journal. Une ligne d'état (tronque, malforme, limite) est
-// d'une gravité « audit », qui ne compte pas comme hostile.
-//
-// Le jeton est rendu APRÈS l'analyse : le préfixe vit jusque-là, et la borne
-// mémoire couvre aussi les allocations de l'analyseur. Son defer est posé
-// avant tout le reste : il est rendu quoi qu'il arrive.
-func (s *Server) analyserCaptureMultipart(capt *captureCorps, rm requeteMultipart, relaye bool) {
-	defer s.rendreCapture()
-	// Une panique de l'analyseur ne doit pas casser une réponse déjà relayée :
-	// en detect, l'analyse n'a pas le droit d'empêcher quoi que ce soit. Ce
-	// recover est différé PAR CETTE FONCTION : il ne rattrape que ses propres
-	// paniques, jamais celle du gestionnaire (http.ErrAbortHandler) qui
-	// traverserait ce defer.
-	defer func() {
-		if e := recover(); e != nil {
-			log.Printf("sbxwaf: ERREUR analyse multipart host=%s path=%s ip=%s : %v\n%s",
-				rm.host, rm.path, rm.ip, e, debug.Stack())
-		}
-	}()
-	prefixe, lus, complet := capt.figer()
-	// Non relayé : un chemin texte a pu lire la fenêtre au travers de la
-	// capture avant un 403 ; ce corps n'a jamais atteint le backend. lus == 0 :
-	// le proxy n'a rien lu (backend muet, erreur de connexion).
-	if !relaye || lus == 0 || s.rules == nil {
-		return
-	}
-	res := analyserMultipart(prefixe, rm.contentType, !complet, LimitesMultipart{})
-	signaux := res.Signaux()
-	for _, d := range s.rules.EvaluerStructurel(res) {
-		s.journaliserMultipart(rm, ThreatRecord{
-			Category: d.Categorie, Severity: d.Severity, RuleID: d.RuleID,
-			Action: "detect", Mode: modeDetect, Signaux: signaux,
-		})
-		log.Printf("sbxwaf: DETECT %s rule=%s host=%s path=%s ip=%s parties=%d",
-			d.Categorie, d.RuleID, rm.host, rm.path, rm.ip, res.Parties)
-	}
-	if res.Statut != MultipartAnalyse {
-		statut := "multipart-" + string(res.Statut)
-		s.journaliserMultipart(rm, ThreatRecord{
-			Category: statut, Severity: "audit", Action: statut, Signaux: signaux,
-		})
-	}
 }
 
 // capturePlafond borne la fenêtre de capture quel que soit --max-body-inspect

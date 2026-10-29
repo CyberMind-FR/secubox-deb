@@ -298,26 +298,34 @@ func (v *VhostProfiles) doitSupprimer(host, chemin, cat string) bool {
 	return v != nil && v.catSupprimablePour(host, cat) && v.estLegitime(host, chemin)
 }
 
-// estPHP dit si cet hôte fait tourner PHP (#3257) : son service est déclaré
-// dans php_services, OU l'hôte normalisé correspond à un motif de php_hotes
-// (R15 : un alias nextcloud.* ou une box sans liste propre reste couvert).
+// estPHP dit si cet hôte fait tourner PHP (#3257) : voir servicePHP.
 // Récepteur nil → false.
 func (v *VhostProfiles) estPHP(host string) bool {
+	_, ok := v.servicePHP(host)
+	return ok
+}
+
+// servicePHP dit si cet hôte fait tourner PHP et sous quel service (#3273) :
+// son service est déclaré dans php_services (service = ce nom), OU l'hôte
+// normalisé correspond à un motif de php_hotes (R15 : un alias nextcloud.* ou
+// une box sans liste propre reste couvert ; service = "", et toutes les
+// familles de signatures s'appliquent). Récepteur nil → ("", false).
+func (v *VhostProfiles) servicePHP(host string) (service string, php bool) {
 	if v == nil {
-		return false
+		return "", false
 	}
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	h := normaliserHote(host)
 	if service, ok := v.hoteService[h]; ok && v.phpServices[service] {
-		return true
+		return service, true
 	}
 	for _, re := range v.phpHotes {
 		if re.MatchString(h) {
-			return true
+			return "", true
 		}
 	}
-	return false
+	return "", false
 }
 
 // armementPHP rend le nombre de vhosts PHP explicites (vhost dont le service
