@@ -33,8 +33,9 @@ NoNewPrivileges=no
 AmbientCapabilities=
 # Borne de ce que sudo et le ctl root peuvent obtenir DANS cette unité : sudo (setuid, setgroups, audit noyau) ;
 # le ctl écrit /var/log/secubox/audit.log (secubox, 0640 ; le crée au compte secubox sur une box neuve : CAP_CHOWN)
-# et lit /etc/secubox/modules.d.
-CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_AUDIT_WRITE CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_CHOWN
+# et lit /etc/secubox/modules.d ; `ancre-verifier` lit `wg show <interface> allowed-ips`, que le noyau réserve à
+# CAP_NET_ADMIN même pour root (lecture seule : le ctl n'a aucun verbe qui modifie une interface).
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_AUDIT_WRITE CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_CHOWN CAP_NET_ADMIN
 ProtectSystem=strict
 ReadOnlyPaths=/
 # Le ctl root lancé par sudo hérite de cet espace de montage : il n'y écrit que son état (arbre root 0700, tmpfiles.d

@@ -7,6 +7,12 @@
 // interrogation longue vers le maître, par le tunnel WireGuard. L'agent
 // n'écoute sur aucun port ; tout ce qui vient du réseau est borné et validé
 // (taille, nombre, forme) avant usage.
+//
+// Ancre (D1, #3126 L2) : quand Config.Ancre est posée, rien ne part vers le
+// maître (bonjour, sondage, réponses, notifications) et aucun Operate n'est
+// traité tant qu'elle n'a pas rendu vrai ; elle est rappelée au démarrage puis
+// toutes les PeriodeAncre (1 h). Un échec coupe le canal ; la reconnexion
+// suivante qui réussit notifie la coupure au maître (X_SECUBOX_AnchorFailed).
 package canal
 
 import (
@@ -38,6 +44,7 @@ const (
 	ReculMinDefaut  = 5 * time.Second
 	ReculMaxDefaut  = 300 * time.Second
 	TailleMaxDefaut = 256 << 10
+	PeriodeAncreDef = time.Hour
 
 	portCanal      = "8472"
 	prefixe        = "/canal/v1"
@@ -62,6 +69,7 @@ const msgRefus = "commande refusée (L1 : lecture seule)"
 var (
 	reMsgID   = regexp.MustCompile(`^[0-9a-f]{16}$`)
 	errTaille = errors.New("réponse du maître trop volumineuse")
+	errAncre  = errors.New("ancre du maître non vérifiée : canal coupé")
 )
 
 // Config règle le client. Les champs à zéro prennent leur valeur par défaut.
@@ -74,6 +82,10 @@ type Config struct {
 	TailleMax int           // taille maximale d'un message de réponse (256 Kio)
 	Version   string        // version de l'agent annoncée à /bonjour
 	BootID    string        // identifiant de démarrage de la box annoncé à /bonjour
+	// Ancre vérifie que le pair WireGuard du maître porte la clé ancrée (le ctl
+	// root, `ancre-verifier`) ; nil : aucune vérification (tests du canal).
+	Ancre        func(ctx context.Context) bool
+	PeriodeAncre time.Duration // intervalle des revérifications de l'ancre (1 h)
 }
 
 // Client interroge le maître et lui répond.
@@ -88,6 +100,11 @@ type Client struct {
 	suivi   sync.WaitGroup                                   // relevés en tâche de fond, attendus par Tourner
 	releve  atomic.Bool                                      // un relevé est en cours
 	errCfg  error                                            // configuration invalide : aucune connexion
+	horloge func() time.Time                                 // injectable pour les tests
+	ancreOK atomic.Bool                                      // ancre vérifiée : seul état où quelque chose part
+	// Lus et écrits par la seule goroutine de Tourner :
+	ancreVue time.Time // dernière vérification réussie
+	coupure  int64     // instant (Unix) de la coupure à notifier ; 0 : rien à notifier
 }
 
 // NouveauClient prépare le client ; rien n'est envoyé avant Tourner.
@@ -106,6 +123,9 @@ func NouveauClient(c Config, m *modele.Modele, operer func(ctx context.Context, 
 	}
 	if c.TailleMax <= 0 {
 		c.TailleMax = TailleMaxDefaut
+	}
+	if c.PeriodeAncre <= 0 {
+		c.PeriodeAncre = PeriodeAncreDef
 	}
 	d := &net.Dialer{Timeout: delaiConnexion}
 	var errCfg error
@@ -135,7 +155,8 @@ func NouveauClient(c Config, m *modele.Modele, operer func(ctx context.Context, 
 	if !strings.Contains(hote, ":") || strings.HasSuffix(hote, "]") {
 		hote = net.JoinHostPort(strings.Trim(hote, "[]"), portCanal)
 	}
-	return &Client{cfg: c, m: m, operer: operer, http: cl, base: "http://" + hote + prefixe, dormir: dormirReel, reprise: time.NewTimer, errCfg: errCfg}
+	return &Client{cfg: c, m: m, operer: operer, http: cl, base: "http://" + hote + prefixe, dormir: dormirReel, reprise: time.NewTimer, errCfg: errCfg,
+		horloge: time.Now}
 }
 
 // ipSource accepte une adresse seule ou sa forme CIDR (« 10.10.0.5/24 »).
@@ -177,11 +198,27 @@ func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error 
 	defer c.suivi.Wait() // relevés en tâche de fond
 
 	recul := c.cfg.ReculMin
+	reculAncre := c.cfg.ReculMin
 	bonjour := false
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if !c.ancreAJour(ctx, &bonjour) {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			// Chaque échec est audité par le ctl : le recul monte jusqu'à la période (24 lignes par jour au plus).
+			log.Printf("canal : %v, aucun Operate (nouvelle vérification dans %s)", errAncre, reculAncre)
+			if e := c.dormir(ctx, reculAncre); e != nil {
+				return e
+			}
+			if reculAncre *= 2; reculAncre > c.cfg.PeriodeAncre {
+				reculAncre = c.cfg.PeriodeAncre
+			}
+			continue
+		}
+		reculAncre = c.cfg.ReculMin
 		debut := time.Now()
 		actif, err := c.cycle(ctx, &bonjour)
 		if err == nil {
@@ -208,6 +245,37 @@ func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error 
 	}
 }
 
+// ancreAJour rend vrai si l'ancre est vérifiée depuis moins de PeriodeAncre,
+// sinon la revérifie. Un échec coupe le canal : plus rien ne part (sonder et
+// poster refusent), les connexions inactives sont fermées, le bonjour sera
+// refait, et la coupure est retenue pour être notifiée à la reconnexion.
+func (c *Client) ancreAJour(ctx context.Context, bonjour *bool) bool {
+	if c.cfg.Ancre == nil {
+		return true
+	}
+	maintenant := c.horloge()
+	if c.ancreOK.Load() && maintenant.Sub(c.ancreVue) < c.cfg.PeriodeAncre {
+		return true
+	}
+	if c.cfg.Ancre(ctx) {
+		c.ancreOK.Store(true)
+		c.ancreVue = maintenant
+		return true
+	}
+	c.ancreOK.Store(false)
+	if c.coupure == 0 {
+		c.coupure = maintenant.Unix()
+	}
+	*bonjour = false
+	c.http.CloseIdleConnections()
+	return false
+}
+
+// coupe rend vrai si le canal est coupé faute d'ancre vérifiée.
+func (c *Client) coupe() bool {
+	return c.cfg.Ancre != nil && !c.ancreOK.Load()
+}
+
 // cycle fait un tour : bonjour (une fois), sondage, traitement, réponses.
 // Il rend vrai si le maître a demandé quelque chose de valable.
 func (c *Client) cycle(ctx context.Context, bonjour *bool) (bool, error) {
@@ -224,6 +292,17 @@ func (c *Client) cycle(ctx context.Context, bonjour *bool) (bool, error) {
 			return false, fmt.Errorf("bonjour : %w", err)
 		}
 		*bonjour = true
+	}
+	if c.coupure != 0 {
+		// Reconnexion après une coupure faute d'ancre : le maître en est informé
+		// (value = instant de la coupure). Non remise : retentée au cycle suivant.
+		ev := notifs.Evenement{Type: notifs.TypeAncre, Valeur: c.coupure, Instant: c.horloge().Unix()}
+		lot := []map[string]any{{"type": "NOTIFY", "body": map[string]any{"event": ev}}}
+		if err := c.poster(ctx, "/notifs", lot); err != nil {
+			log.Printf("canal : notification de coupure (ancre) non remise : %v", err)
+		} else {
+			c.coupure = 0
+		}
 	}
 	brut, err := c.sonder(ctx)
 	if err != nil {
@@ -275,6 +354,9 @@ func lotsReponses(reps []reponse, max int) [][]byte {
 
 // sonder attend une liste de requêtes (200) ou rien (204).
 func (c *Client) sonder(ctx context.Context) ([]byte, error) {
+	if c.coupe() {
+		return nil, errAncre
+	}
 	ctx, cancel := context.WithTimeout(ctx, c.cfg.Attente+15*time.Second)
 	defer cancel()
 	url := fmt.Sprintf("%s/requetes?attente=%d", c.base, int(c.cfg.Attente/time.Second))
@@ -307,6 +389,9 @@ func (c *Client) sonder(ctx context.Context) ([]byte, error) {
 
 // poster envoie un corps JSON ; tout statut hors 2xx est une erreur.
 func (c *Client) poster(ctx context.Context, chemin string, corps any) error {
+	if c.coupe() {
+		return errAncre // rien ne part vers un pair qui n'est peut-être pas le maître
+	}
 	b, err := json.Marshal(corps)
 	if err != nil {
 		return err
@@ -449,6 +534,10 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 			continue
 		}
 		if rq.Type == "OPERATE" {
+			if c.coupe() {
+				reps = append(reps, erreur(rq.MsgID, errAncre.Error()))
+				continue
+			}
 			rep, run := c.operate(rq)
 			if run == nil {
 				reps = append(reps, c.borner(rep))

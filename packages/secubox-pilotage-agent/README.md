@@ -17,6 +17,7 @@ Binaire Go unique `/usr/sbin/sbx-pilotage-agent`, bibliothèque standard seule, 
 - Répond à Get et GetSupportedDM (modèle TR-181 : système, services systemd, paquets, exposition, maillage,
   pilotage), notifie les événements (boucle de relances, mémoire basse, swap, démarrage) et réalise
   l'Operate `Device.X_SECUBOX_Releve.Mesurer()` (10 à 300 s, un seul à la fois).
+- Rien ne part vers le maître tant que son ancre n'est pas vérifiée (voir « Ancre du maître »).
 - Toute autre commande est refusée par l'agent tant que les Operate de L2 ne sont pas câblés (tâche 3). Jamais la ligne
   de commande d'un processus (`comm`).
 - Le maître est choisi ainsi : `PILOTAGE_MAITRE` s'il est posé ; sinon `wg-mesh` en `10.10.0.0/24`, puis
@@ -67,7 +68,8 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 | `maj-paquets` | `apt-get update` puis `upgrade` (jamais `dist-upgrade` ni `autoremove`), opération longue |
 | `service <demarrer\|arreter\|redemarrer> <unité>` | unité `^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`, jamais celle de l'agent (`secubox-pilotage-agent.*`, `@…` compris), ni une unité du ctl (`secubox-pilotage-op-*`), ni une unité inconnue de systemd, ni une unité protégée (`protected = true` dans `/etc/secubox/modules.d/*.toml`, ou socle : auth, aggregator, core, nginx, firewall, profiles, vault, autoload-agent) |
 | `renouveler-secrets` | `secubox-renouvelle-secrets --tout --oui`, opération longue |
-| `renommer <nom>`, `support <ouvrir\|fermer> <id>`, `ancre-verifier` | argv validé ; `{"ok": false, "refus": "non disponible"}` jusqu'aux tâches 5, 4 et 2 |
+| `renommer <nom>`, `support <ouvrir\|fermer> <id>` | argv validé ; `{"ok": false, "refus": "non disponible"}` jusqu'aux tâches 5 et 4 |
+| `ancre-verifier` | lecture, permise depuis l'agent : `{"ok": true}` si le pair WireGuard qui porte l'adresse du maître a la clé de l'ancre, sinon `{"ok": false, "refus": "ancre absente"\|"ancre différente"}` (code 0, refus audité) ; voir « Ancre du maître » |
 | `consentement <accepter\|refuser> <id>` | **local seulement** : décision du détenteur sur un consentement en attente |
 | `mains-liees <on\|off>` | **local seulement** : lie ou délie les mains du maître |
 | `_fin <job>` | **interne, local seulement** : `ExecStopPost` de chaque unité transitoire ; audite la fin (`succes`/`echec`, code de sortie numérique) et libère l'opération exclusive |
@@ -97,6 +99,33 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 - `SBX_RACINE` (tests seulement) n'est honorée que si l'appelant est le processus lui-même ; jamais sous sudo depuis un
   autre compte.
 
+## Ancre du maître (D1)
+
+L'agent ne parle qu'au vrai maître : **au démarrage, puis toutes les heures**, il appelle
+`sudo -n /usr/sbin/secubox-pilotagectl ancre-verifier`. Seule la sortie exacte `{"ok": true}` vaut vérification ;
+toute autre sortie, une erreur ou un code non nul vaut échec (fermé par défaut).
+
+- **Tant que l'ancre n'est pas vérifiée, le canal est coupé** : ni bonjour, ni sondage, ni réponse, ni notification
+  vers le maître, et aucun Operate n'est traité. L'agent revérifie avec un recul doublé de 5 s jusqu'à 1 h (chaque échec
+  écrit une ligne d'audit). Une revérification horaire qui échoue coupe le canal en cours de route.
+- À la reconnexion suivante qui réussit, l'agent notifie la coupure au maître : événement `X_SECUBOX_AnchorFailed`
+  (`value` = instant Unix de la coupure).
+- Ce que vérifie le ctl (root), sur l'interface choisie comme pour la politique (R-L2-9) :
+  - **box du propriétaire** (interface `wg-mesh` présente) : le pair de `wg-mesh` qui porte `10.10.0.1` doit avoir la
+    clé `cle_publique` de `/etc/secubox/p2p/ancre-maitre.json` (ancre posée au flash ou à la jonction, #3100) ;
+  - **box cliente** (sans `wg-mesh`) : le pair de `wg-autoload` qui porte `10.64.0.1` doit avoir la clé du hub reçue à
+    l'enrôlement Auto-Load (le `hub.pub` du hub, rendu par HTTPS épinglé et écrit par `secubox-autoload-agent` dans
+    `PublicKey` de `/etc/wireguard/wg-autoload.conf`, root 0600, un seul `[Peer]`).
+  - Le pair retenu est celui que WireGuard choisit pour l'adresse du maître (`wg show <interface> allowed-ips`, préfixe
+    le plus long) : un pair qui s'approprie `10.10.0.1/32` l'emporte sur le `/24` du maître et la vérification échoue.
+  - Comparaison en temps constant (`hmac.compare_digest`). `/usr/bin/wg` est lancé par chemin absolu, sans shell.
+  - Toute lecture manquée (ancre absente, JSON invalide, clé mal formée, lien symbolique, `wg` en échec, aucun pair pour
+    le maître, configuration `wg-autoload` absente ou non root) rend `"ancre absente"` ; une autre clé,
+    `"ancre différente"`. Jamais `ok: true` par défaut. Aucune clé n'est recopiée dans l'audit ; une réussite n'est pas
+    auditée (lecture horaire).
+- **Limite** : une box du propriétaire jointe au maillage sans ancre (ni flash par le maître ni premier pas) n'a pas
+  d'`ancre-maitre.json` : son canal reste coupé tant qu'aucune ancre n'est posée.
+
 ## Durcissement
 
 Utilisateur `secubox-pilotage-agent`, `ProtectSystem=strict`, `ReadOnlyPaths=/`, aucune capacité ambiante,
@@ -106,7 +135,8 @@ des interfaces ; ni `inet6` ni écoute ; `/usr/bin/sudo Ux` seul passage privil�
 
 Exception écrite (`.claude/RULES-CODE.md`) : `NoNewPrivileges=no`, seulement pour sudo vers `secubox-pilotagectl` ; les
 options qui imposent NoNewPrivileges par seccomp sont absentes de l'unité ; `CapabilityBoundingSet` borné à ce que sudo
-et le ctl demandent (dont `CAP_CHOWN` : création d'`audit.log` au compte `secubox`) ; le ctl root hérite de l'espace de montage, d'où `ReadWritePaths=/var/log/secubox
+et le ctl demandent (dont `CAP_CHOWN` : création d'`audit.log` au compte `secubox` ; `CAP_NET_ADMIN` : le noyau
+l'exige pour `wg show`, lecture de `ancre-verifier`) ; le ctl root hérite de l'espace de montage, d'où `ReadWritePaths=/var/log/secubox
 -/var/lib/secubox-pilotagectl`.
 
 ## Développement

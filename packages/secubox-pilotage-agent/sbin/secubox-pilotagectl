@@ -24,7 +24,8 @@ Verbes (liste fermée) :
   renouveler-secrets                       secubox-renouvelle-secrets --tout --oui, opération longue
   renommer <nom>                           libellé DNS ; « non disponible » jusqu'à la tâche 5
   support <ouvrir|fermer> <id>             « non disponible » jusqu'à la tâche 4
-  ancre-verifier                           « non disponible » jusqu'à la tâche 2
+  ancre-verifier                           {"ok": true|false} : le pair WireGuard qui porte l'adresse du maître a-t-il
+                                           la clé de l'ancre ? (lecture, permise depuis l'agent ; échec audité)
   consentement <accepter|refuser> <id>     LOCAL SEULEMENT (refusé quand l'agent l'appelle par sudo)
   mains-liees <on|off>                     LOCAL SEULEMENT
   politique <action>                       {"autorise", "consentement", "raison"} ; actions : releve, reboot,
@@ -54,12 +55,23 @@ la progression se lit dans le journal de l'unité ; sa fin est auditée par `Exe
 ligne JSON par demande, refus, consentement et résultat dans /var/log/secubox/audit.log (ouvert sans suivre de lien) ;
 identifiants seulement, jamais une valeur secrète, jamais l'argv d'une demande refusée.
 
-SBX_RACINE (tests) : racine substituée, avec systemd-run et systemctl cherchés dans le PATH, honorée SEULEMENT si elle est
-non vide et que l'appelant est le processus lui-même (root lancé par root, ou test sans privilège) ; jamais quand sudo
-a élevé un autre compte (SUDO_UID différent de l'uid effectif) : elle est alors ignorée et nommée sur stderr.
+Ancre (D1, tâche 2) : box du propriétaire (wg-mesh) → le pair de wg-mesh qui porte 10.10.0.1 doit avoir la clé
+`cle_publique` de /etc/secubox/p2p/ancre-maitre.json (posée au flash ou à la jonction) ; box cliente (sans wg-mesh,
+R-L2-9) → le pair de wg-autoload qui porte 10.64.0.1 doit avoir la clé du hub posée à l'enrôlement par
+secubox-autoload-agent (`PublicKey` de /etc/wireguard/wg-autoload.conf, root 0600 : c'est le hub.pub d'Auto-Load
+reçu par HTTPS épinglé). Le pair retenu est celui que WireGuard choisit (préfixe le plus long qui contient l'adresse).
+Comparaison en temps constant. Toute lecture manquée (ancre absente ou illisible, wg en échec, aucun pair) rend
+{"ok": false, "refus": "ancre absente"} ; une autre clé, {"ok": false, "refus": "ancre différente"} ; code 0, refus
+audité, aucune clé recopiée. Une réussite n'est pas auditée (lecture, appelée toutes les heures par l'agent).
+
+SBX_RACINE (tests) : racine substituée, avec systemd-run, systemctl et wg cherchés dans le PATH, honorée SEULEMENT si
+elle est non vide et que l'appelant est le processus lui-même (root lancé par root, ou test sans privilège) ; jamais
+quand sudo a élevé un autre compte (SUDO_UID différent de l'uid effectif) : elle est alors ignorée et nommée sur stderr.
 """
 import datetime
 import fcntl
+import hmac
+import ipaddress
 import json
 import os
 import pwd
@@ -83,6 +95,9 @@ RE_SUPPORT = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 RE_ID = re.compile(r"[0-9a-f]{16}")
 RE_ACTEUR = re.compile(r"[a-z_][a-z0-9_.-]{0,63}")
 RE_RC = re.compile(r"[0-9]{1,3}")
+RE_CLE_WG = re.compile(r"[A-Za-z0-9+/]{43}=")
+# Interface du tunnel vers le maître et adresse du maître dans ce tunnel (miroir de canauxMaitre de l'agent).
+MAILLAGES = {"wg-mesh": ipaddress.ip_address("10.10.0.1"), "wg-autoload": ipaddress.ip_address("10.64.0.1")}
 PREFIXE_OP = "secubox-pilotage-op-"
 CTL = "/usr/sbin/secubox-pilotagectl"
 SERVICE = {"demarrer": "start", "arreter": "stop", "redemarrer": "restart"}
@@ -155,10 +170,12 @@ class Ctx:
             # Tests : outils cherchés dans le PATH, environnement transmis (faux systemd-run et systemctl).
             self.systemd_run = shutil.which("systemd-run") or "systemd-run"
             self.systemctl = shutil.which("systemctl") or "systemctl"
+            self.wg = shutil.which("wg") or "wg"
             self.env = dict(os.environ)
         else:
             # Vraie box : l'environnement ne choisit jamais une commande lancée en root.
             self.systemd_run, self.systemctl = "/usr/bin/systemd-run", "/usr/bin/systemctl"
+            self.wg = "/usr/bin/wg"
             self.env = {"PATH": PATH_SUR, "LC_ALL": "C"}
         sudo_user = os.environ.get("SUDO_USER", "")
         try:
@@ -181,6 +198,8 @@ class Ctx:
         self.etc_secubox = f"{self.r}/etc/secubox"
         self.modules = f"{self.r}/etc/secubox/modules.d"
         self.net = f"{self.r}/sys/class/net"
+        self.ancre = f"{self.r}/etc/secubox/p2p/ancre-maitre.json"
+        self.conf_autoload = f"{self.r}/etc/wireguard/wg-autoload.conf"
 
 
 # --- Audit -------------------------------------------------------------------------------------------------------
@@ -404,6 +423,112 @@ def unites_protegees(ctx):
     return proteges
 
 
+# --- Ancre du maître (D1) -----------------------------------------------------------------------------------------
+
+def lire_borne(chemin, root_seulement=False):
+    """Contenu d'un petit fichier ordinaire, sans suivre de lien ; None s'il manque ou n'est pas fiable.
+    root_seulement : propriétaire = uid effectif et aucune écriture groupe/autres (configuration WireGuard)."""
+    try:
+        f = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    try:
+        st = os.fstat(f)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > 65536:
+            return None
+        if root_seulement and (st.st_uid != os.geteuid() or st.st_mode & 0o022):
+            return None
+        return os.read(f, 65537).decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    finally:
+        os.close(f)
+
+
+def ancre_attendue(ctx, interface, maitre):
+    """Clé publique attendue pour le maître, ou None (absente, illisible, mal formée)."""
+    if interface == "wg-mesh":
+        brut = lire_borne(ctx.ancre)
+        try:
+            d = json.loads(brut) if brut is not None else None
+        except ValueError:
+            return None
+        cle_pub = d.get("cle_publique") if isinstance(d, dict) else None
+        return cle_pub if isinstance(cle_pub, str) and RE_CLE_WG.fullmatch(cle_pub) else None
+    # Box cliente : la clé du hub reçue à l'enrôlement (réponse HTTPS épinglée, validée par secubox-autoload-agent),
+    # seul [Peer] de la configuration, celui dont AllowedIPs contient l'adresse du hub.
+    brut = lire_borne(ctx.conf_autoload, root_seulement=True)
+    if brut is None:
+        return None
+    pairs, courant = [], None
+    for ligne in brut.splitlines():
+        ligne = ligne.strip()
+        if ligne.startswith("["):
+            courant = {} if ligne == "[Peer]" else None
+            if courant is not None:
+                pairs.append(courant)
+        elif courant is not None and "=" in ligne:
+            k, v = ligne.split("=", 1)
+            courant[k.strip()] = v.strip()
+    if len(pairs) != 1:
+        return None
+    cle_pub, prefixes = pairs[0].get("PublicKey", ""), pairs[0].get("AllowedIPs", "")
+    try:
+        porte = any(maitre in ipaddress.ip_network(x.strip(), strict=False) for x in prefixes.split(",") if x.strip())
+    except ValueError:
+        return None
+    return cle_pub if porte and RE_CLE_WG.fullmatch(cle_pub) else None
+
+
+def pair_du_maitre(ctx, interface, maitre):
+    """Clé du pair auquel WireGuard enverrait un paquet pour le maître (préfixe le plus long), « » si aucun pair ne
+    porte son adresse, None si la lecture échoue ou si deux pairs se la disputent au même préfixe."""
+    try:
+        r = subprocess.run([ctx.wg, "show", interface, "allowed-ips"], env=ctx.env, stdin=subprocess.DEVNULL,
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    meilleur, retenu, ex_aequo = -1, "", False
+    for ligne in r.stdout.splitlines():
+        if not ligne.strip():
+            continue
+        cle_pub, _, reste = ligne.partition("\t")
+        if not RE_CLE_WG.fullmatch(cle_pub):
+            return None
+        for x in reste.split():
+            if x == "(none)":
+                continue
+            try:
+                reseau = ipaddress.ip_network(x, strict=False)
+            except ValueError:
+                return None
+            if maitre in reseau:
+                if reseau.prefixlen > meilleur:
+                    meilleur, retenu, ex_aequo = reseau.prefixlen, cle_pub, False
+                elif reseau.prefixlen == meilleur and cle_pub != retenu:
+                    ex_aequo = True
+    return None if ex_aequo else retenu
+
+
+def verifier_ancre(ctx):
+    """{"ok": true} seulement si le pair qui porte l'adresse du maître a la clé de l'ancre ; chaque échec est audité."""
+    interface = "wg-mesh" if proprietaire(ctx) else "wg-autoload"     # R-L2-9 : sans wg-mesh, box cliente
+    maitre = MAILLAGES[interface]
+    attendue = ancre_attendue(ctx, interface, maitre)
+    vue = pair_du_maitre(ctx, interface, maitre) if attendue is not None else None
+    if attendue is None or not vue:
+        motif = "ancre absente"
+    elif hmac.compare_digest(vue.encode("ascii"), attendue.encode("ascii")):
+        return {"ok": True}
+    else:
+        motif = "ancre différente"
+    err(f"{motif} ({interface})")
+    auditer(ctx, "pilotage_refus", verbe="ancre-verifier", refus=motif)
+    return {"ok": False, "refus": motif}
+
+
 # --- Analyse de l'argv ------------------------------------------------------------------------------------------------
 
 def separer_acteur(argv):
@@ -570,6 +695,9 @@ def executer(ctx, verbe, p):
     if verbe == "_fin":
         return finir(ctx, p["job"])
 
+    if verbe == "ancre-verifier":
+        return verifier_ancre(ctx)              # lecture : seul un échec est audité
+
     action = action_de(verbe, p)
     unite = p.get("unite")
     auditer(ctx, "pilotage_demande", verbe=verbe, action=action, unite=unite)
@@ -615,8 +743,8 @@ def traiter(ctx, verbe, p, action, unite):
 
     if verbe in ("consentement", "mains-liees") and ctx.origine == "maitre":
         return refus("local seulement")
-    if verbe in ("ancre-verifier", "support", "renommer"):
-        return refus("non disponible")              # R-L2-1 : comportement livré par les tâches 2, 4 et 5
+    if verbe in ("support", "renommer"):
+        return refus("non disponible")              # R-L2-1 : comportement livré par les tâches 4 et 5
 
     fd = ouvrir_etat(ctx, creer=True)
     try:

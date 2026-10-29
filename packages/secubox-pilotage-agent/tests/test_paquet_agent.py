@@ -55,8 +55,9 @@ def test_unite_permet_sudo_vers_le_ctl_seulement():
     cap = re.search(r"^CapabilityBoundingSet=(.*)$", u, re.M).group(1).split()
     # sudo (setuid, setgroups, journal d'audit noyau) ; le ctl écrit audit.log (secubox, 0640) et lit modules.d
     # CAP_CHOWN (M3) : le ctl crée audit.log au compte secubox sur une box neuve
+    # CAP_NET_ADMIN (tâche 2) : `wg show <interface> allowed-ips` (ancre-verifier) l'exige du noyau, même pour root
     assert set(cap) == {"CAP_SETUID", "CAP_SETGID", "CAP_AUDIT_WRITE", "CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH",
-                        "CAP_CHOWN"}
+                        "CAP_CHOWN", "CAP_NET_ADMIN"}
     rw = re.search(r"^ReadWritePaths=(.*)$", u, re.M).group(1).split()
     assert set(rw) == {"/var/log/secubox", "-/var/lib/secubox-pilotagectl"}
     brut = lire("systemd/secubox-pilotage-agent.service")
@@ -152,6 +153,8 @@ def test_paquet_coherent():
     assert "Architecture: any" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
     assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.2.0-1~trixie1) trixie;")
+    # ancre-verifier lit `wg show` par chemin absolu (/usr/bin/wg)
+    assert "wireguard-tools" in re.search(r"^Depends:(.*)$", c, re.M).group(1)
     pi = lire("debian/postinst")
     for m in ("adduser --system --no-create-home --group secubox-pilotage-agent",
               "apparmor_parser", "systemctl enable --now secubox-pilotage-agent"):

@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -36,6 +37,7 @@ type fauxMaitre struct {
 	reponses [][]byte
 	notifs   [][]byte
 	bonjour  [][]byte
+	sondages int // GET /requetes reçus
 	recu     chan struct{}
 
 	echecsNotifs int // nombre de POST /notifs à refuser en 503 avant d'accepter
@@ -51,6 +53,7 @@ func (f *fauxMaitre) handler() http.Handler {
 	})
 	mux.HandleFunc("/canal/v1/requetes", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
+		f.sondages++
 		var corps string
 		if len(f.requetes) > 0 {
 			corps, f.requetes = f.requetes[0], f.requetes[1:]
@@ -832,5 +835,105 @@ func TestErreurTronqueSansCouperUnCaractere(t *testing.T) {
 		if !utf8.ValidString(s) || len(s) > 200 || len(s) < 197 {
 			t.Fatalf("message mal coupé : %d octets, valide=%v", len(s), utf8.ValidString(s))
 		}
+	}
+}
+
+// TestAgentSansAncreNeFaitRien (tâche 2, D1) : tant que la vérification de l'ancre (le ctl, remplacé ici par un faux)
+// échoue, l'agent ne contacte pas le maître et ne traite aucun Operate ; elle réussit → il se connecte et notifie la
+// coupure ; une revérification horaire qui échoue coupe de nouveau le canal.
+func TestAgentSansAncreNeFaitRien(t *testing.T) {
+	var ancreOK atomic.Bool
+	var verifs, operes atomic.Int32
+	var decalage atomic.Int64 // horloge du client : temps réel + décalage
+	operer := func(context.Context, string, map[string]any) (any, error) {
+		operes.Add(1)
+		return map[string]any{"ok": true}, nil
+	}
+	mesure := `[{"msg_id":"%016x","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Releve.Mesurer()","args":{"duree_s":10}}}]`
+	f := &fauxMaitre{requetes: []string{fmt.Sprintf(mesure, 1)}}
+	stop := demarrerAvec(t, f, modeleTest(nil), operer, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) bool { verifs.Add(1); return ancreOK.Load() }
+		c.dormir = func(ctx context.Context, d time.Duration) error { return dormirReel(ctx, 2*time.Millisecond) }
+		c.horloge = func() time.Time { return time.Now().Add(time.Duration(decalage.Load())) }
+	})
+	defer stop()
+
+	attendreQue := func(quoi string, cond func() bool) {
+		t.Helper()
+		for fin := time.Now().Add(3 * time.Second); time.Now().Before(fin); time.Sleep(5 * time.Millisecond) {
+			if cond() {
+				return
+			}
+		}
+		t.Fatalf("délai dépassé : %s", quoi)
+	}
+	etat := func() (bonjour, sondages, reponses, notifs int) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.bonjour), f.sondages, len(f.reponses), len(f.notifs)
+	}
+
+	// 1. ancre non vérifiée : vérifications répétées, rien vers le maître, aucun Operate
+	attendreQue("vérifications répétées", func() bool { return verifs.Load() >= 3 })
+	time.Sleep(50 * time.Millisecond)
+	if b, s, r, n := etat(); b+s+r+n != 0 || operes.Load() != 0 {
+		t.Fatalf("sans ancre, rien ne doit partir : bonjour=%d sondages=%d réponses=%d notifs=%d operes=%d", b, s, r, n, operes.Load())
+	}
+
+	// 2. ancre vérifiée : bonjour, notification de la coupure, Operate traité
+	ancreOK.Store(true)
+	attendreQue("connexion, notification et relevé", func() bool {
+		b, _, r, n := etat()
+		return b == 1 && r >= 1 && n >= 1
+	})
+	f.mu.Lock()
+	notif := string(f.notifs[0])
+	f.mu.Unlock()
+	if !strings.Contains(notif, `"type":"`+notifs.TypeAncre+`"`) || operes.Load() != 1 {
+		t.Fatalf("notification de coupure attendue (%s), Operate traité une fois (%d)", notif, operes.Load())
+	}
+
+	// 3. une heure plus tard, la revérification échoue : le canal est coupé ; un Operate mis en file ensuite n'est
+	// ni sondé ni traité
+	n0 := verifs.Load()
+	ancreOK.Store(false)
+	decalage.Store(int64(61 * time.Minute))
+	attendreQue("revérification horaire", func() bool { return verifs.Load() > n0 })
+	time.Sleep(50 * time.Millisecond) // un sondage déjà en vol se termine
+	_, s1, _, _ := etat()
+	f.mu.Lock()
+	f.requetes = append(f.requetes, fmt.Sprintf(mesure, 2))
+	f.mu.Unlock()
+	time.Sleep(150 * time.Millisecond)
+	_, s2, _, _ := etat()
+	f.mu.Lock()
+	restantes := len(f.requetes)
+	f.mu.Unlock()
+	if s2 != s1 || restantes != 1 || operes.Load() != 1 {
+		t.Fatalf("canal non coupé : sondages %d → %d, requêtes en file %d, operes=%d", s1, s2, restantes, operes.Load())
+	}
+}
+
+// TestClientAncreVerifieeChaqueHeure : une ancre vérifiée n'est pas redemandée avant PeriodeAncre (1 h par défaut).
+func TestClientAncreVerifieeChaqueHeure(t *testing.T) {
+	var verifs atomic.Int32
+	var decalage atomic.Int64
+	f := &fauxMaitre{}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) bool { verifs.Add(1); return true }
+		c.horloge = func() time.Time { return time.Now().Add(time.Duration(decalage.Load())) }
+	})
+	defer stop()
+	for fin := time.Now().Add(3 * time.Second); verifs.Load() == 0 && time.Now().Before(fin); time.Sleep(5 * time.Millisecond) {
+	}
+	time.Sleep(150 * time.Millisecond)
+	if v := verifs.Load(); v != 1 {
+		t.Fatalf("une seule vérification attendue au démarrage, %d", v)
+	}
+	decalage.Store(int64(time.Hour))
+	for fin := time.Now().Add(3 * time.Second); verifs.Load() < 2 && time.Now().Before(fin); time.Sleep(5 * time.Millisecond) {
+	}
+	if v := verifs.Load(); v != 2 {
+		t.Fatalf("revérification attendue après une heure, %d", v)
 	}
 }

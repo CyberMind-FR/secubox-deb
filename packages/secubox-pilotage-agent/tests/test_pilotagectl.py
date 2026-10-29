@@ -51,6 +51,16 @@ exit 0
 """
 
 
+FAUX_WG = """#!/bin/sh
+# faux wg : « show <interface> allowed-ips » → note l'argv, rend $FAUX_WG_SORTIE (échoue si $FAUX_WG_ECHEC)
+printf '%s\\n' "$*" >> "$FAUX_WG_APPELS"
+[ -z "$FAUX_WG_ECHEC" ] || exit 1
+[ "$1" = show ] && [ "$3" = allowed-ips ] || exit 2
+cat "$FAUX_WG_SORTIE" 2>/dev/null
+exit 0
+"""
+
+
 class Banc:
     def __init__(self, tmp_path: Path):
         self.r = tmp_path / "racine"
@@ -62,20 +72,47 @@ class Banc:
         (self.r / "sys/class/net/wg-mesh").mkdir()
         faux = tmp_path / "faux"
         faux.mkdir()
-        for nom, corps in (("systemd-run", FAUX_SYSTEMD_RUN), ("systemctl", FAUX_SYSTEMCTL)):
+        for nom, corps in (("systemd-run", FAUX_SYSTEMD_RUN), ("systemctl", FAUX_SYSTEMCTL), ("wg", FAUX_WG)):
             (faux / nom).write_text(corps)
             (faux / nom).chmod(0o755)
         self.lances = tmp_path / "lances"
         self.actifs = tmp_path / "actifs"
         self.absentes = tmp_path / "absentes"
+        self.wg_sortie = tmp_path / "wg-sortie"
+        self.wg_appels = tmp_path / "wg-appels"
         self.env = {k: v for k, v in os.environ.items() if not k.startswith(("SUDO_", "SBX_"))}
         self.env.update(PATH=f"{faux}:/usr/bin:/bin", SBX_RACINE=str(self.r),
                         FAUX_LANCES=str(self.lances), FAUX_ACTIFS=str(self.actifs),
-                        FAUX_ABSENTES=str(self.absentes))
+                        FAUX_ABSENTES=str(self.absentes), FAUX_WG_SORTIE=str(self.wg_sortie),
+                        FAUX_WG_APPELS=str(self.wg_appels))
 
     def cliente(self):
         (self.r / "sys/class/net/wg-mesh").rmdir()
         (self.r / "sys/class/net/wg-autoload").mkdir()
+
+    def ancre(self, cle=None, brut=None):
+        """Ancre du maître d'une box du propriétaire (/etc/secubox/p2p/ancre-maitre.json, posée au flash)."""
+        f = self.r / "etc/secubox/p2p/ancre-maitre.json"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(brut if brut is not None else json.dumps(
+            {"cle_publique": cle, "adresse": "192.168.1.1", "nom": "gk2", "empreinte": "0123456789abcdef"}))
+
+    def tunnel_autoload(self, cle_hub):
+        """Configuration wg-autoload posée à l'enrôlement par secubox-autoload-agent (clé du hub = hub.pub)."""
+        f = self.r / "etc/wireguard/wg-autoload.conf"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("# GÉNÉRÉ par secubox-autoload-agent — ne pas éditer (#2189).\n[Interface]\nAddress = 10.64.0.9/32\n"
+                     "PostUp = wg set %i private-key /etc/secubox/secrets/autoload-wg.key\n\n[Peer]\n"
+                     f"PublicKey = {cle_hub}\nEndpoint = admin.gk2.secubox.in:51820\nAllowedIPs = 10.64.0.1/32\n"
+                     "PersistentKeepalive = 25\n")
+        f.chmod(0o600)
+
+    def pairs(self, *lignes):
+        """Sortie de `wg show <interface> allowed-ips` : « clé<TAB>préfixes »."""
+        self.wg_sortie.write_text("".join(f"{c}\t{p}\n" for c, p in lignes))
+
+    def appels_wg(self):
+        return self.wg_appels.read_text().splitlines() if self.wg_appels.exists() else []
 
     def run(self, *args, agent=False, env=None):
         e = dict(self.env)
@@ -163,8 +200,11 @@ def test_argv_invalide_rend_2(banc):
 
 
 def test_verbes_valides_acceptes_ou_non_disponibles(banc):
-    """R-L2-1 : argv validé pour toute la liste fermée ; ancre-verifier, support, renommer « non disponible » (code 0)."""
-    for argv in (["ancre-verifier"], ["support", "ouvrir", "s-01"], ["support", "fermer", "s-01"], ["renommer", "box-2"]):
+    """R-L2-1 : argv validé pour toute la liste fermée ; support, renommer « non disponible » (code 0) ; ancre-verifier
+    est livré (tâche 2) : sans ancre, il rend ok faux."""
+    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
+    assert rc == 0 and sortie["ok"] is False
+    for argv in (["support", "ouvrir", "s-01"], ["support", "fermer", "s-01"], ["renommer", "box-2"]):
         rc, sortie, _ = banc.run(*argv, agent=True)
         assert rc == 0 and sortie == {"ok": False, "refus": "non disponible"}, argv
     assert banc.lancements() == []
@@ -476,3 +516,100 @@ def test_acteur_du_maitre_audite(banc):
     demandes = [e for e in banc.audit() if e["evenement"] == "pilotage_demande"]
     assert [e["acteur"] for e in demandes] == ["gk2admin", "gk2admin", AGENT]
     assert all(e["origine"] == "maitre" for e in demandes)
+
+
+# --- Tâche 2 : vérification de l'ancre (D1) -------------------------------------------------------------------------
+
+CLE_MAITRE = "mAiTrE" + "A" * 37 + "="          # 44 caractères : forme d'une clé publique WireGuard
+CLE_AUTRE = "aUtRe" + "B" * 38 + "="
+CLE_PAIR = "pAiR" + "C" * 39 + "="
+
+
+def refus_ancre(banc):
+    return [e for e in banc.audit() if e["evenement"] == "pilotage_refus" and e.get("verbe") == "ancre-verifier"]
+
+
+def test_ancre_conforme(banc):
+    """Box du propriétaire : le pair de wg-mesh qui porte 10.10.0.1 a la clé de ancre-maitre.json → ok vrai, depuis
+    l'agent (lecture permise), sans refus audité. Box cliente : wg-autoload, clé du hub posée à l'enrôlement."""
+    banc.ancre(CLE_MAITRE)
+    banc.pairs((CLE_PAIR, "10.10.0.7/32"), (CLE_MAITRE, "10.10.0.0/24 192.168.50.0/24"))
+    rc, sortie, p = banc.run("ancre-verifier", agent=True)
+    assert rc == 0 and sortie == {"ok": True}, p.stderr
+    assert banc.appels_wg() == ["show wg-mesh allowed-ips"]
+    assert refus_ancre(banc) == []
+    banc.cliente()
+    banc.tunnel_autoload(CLE_MAITRE)
+    banc.pairs((CLE_MAITRE, "10.64.0.1/32"))
+    rc, sortie, p = banc.run("ancre-verifier", agent=True)
+    assert rc == 0 and sortie == {"ok": True}, p.stderr
+    assert banc.appels_wg()[-1] == "show wg-autoload allowed-ips"
+    assert refus_ancre(banc) == [] and banc.lancements() == []
+
+
+def test_ancre_differente_refuse(banc):
+    """Le pair qui porte l'adresse du maître n'a pas la clé de l'ancre → ok faux, refus « ancre différente » audité.
+    Le pair retenu est celui que WireGuard choisirait : le préfixe le plus long qui contient l'adresse du maître."""
+    banc.ancre(CLE_MAITRE)
+    banc.pairs((CLE_AUTRE, "10.10.0.0/24"))
+    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
+    assert rc == 0 and sortie["ok"] is False and sortie["refus"] == "ancre différente"
+    # un pair qui s'approprie 10.10.0.1/32 l'emporte sur le /24 légitime : refusé
+    banc.pairs((CLE_MAITRE, "10.10.0.0/24"), (CLE_AUTRE, "10.10.0.1/32"))
+    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
+    assert rc == 0 and sortie["ok"] is False and sortie["refus"] == "ancre différente"
+    refus = refus_ancre(banc)
+    assert [e["refus"] for e in refus] == ["ancre différente", "ancre différente"]
+    assert all(e["origine"] == "maitre" for e in refus)
+    # aucune clé recopiée dans l'audit
+    texte = (banc.r / "var/log/secubox/audit.log").read_text()
+    assert "mAiTrE" not in texte and "aUtRe" not in texte
+    # box cliente : le hub vu dans wg-autoload n'est pas celui posé à l'enrôlement
+    banc.cliente()
+    banc.tunnel_autoload(CLE_MAITRE)
+    banc.pairs((CLE_AUTRE, "10.64.0.1/32"))
+    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
+    assert rc == 0 and sortie["ok"] is False and sortie["refus"] == "ancre différente"
+
+
+def test_ancre_illisible_jamais_vraie(banc):
+    """Toute erreur de lecture (ancre absente, JSON invalide, clé mal formée, lien, wg en échec, aucun pair pour le
+    maître, interface absente) rend ok faux, code 0, avec un refus audité ; jamais ok vrai."""
+    banc.pairs((CLE_MAITRE, "10.10.0.0/24"))
+    resultats = []
+    # rejoue chaque état et relève le verdict
+    f = banc.r / "etc/secubox/p2p/ancre-maitre.json"
+    etats = [None, "{pas du json", json.dumps({"cle_publique": "courte"}), json.dumps(["x"]),
+             json.dumps({"adresse": "10.0.0.1"}), json.dumps({"cle_publique": CLE_MAITRE + "\n"})]
+    for brut in etats:
+        if brut is None:
+            f.unlink(missing_ok=True)
+        else:
+            banc.ancre(brut=brut)
+        rc, sortie, _ = banc.run("ancre-verifier", agent=True)
+        resultats.append((rc, sortie["ok"], sortie.get("refus")))
+    # ancre par lien symbolique (le dossier /etc/secubox appartient au compte partagé secubox) : jamais suivie
+    vraie = banc.r / "ancre-ailleurs.json"
+    vraie.write_text(json.dumps({"cle_publique": CLE_MAITRE}))
+    f.unlink()
+    f.symlink_to(vraie)
+    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
+    resultats.append((rc, sortie["ok"], sortie.get("refus")))
+    f.unlink()
+    banc.ancre(CLE_MAITRE)
+    # wg en échec
+    rc, sortie, _ = banc.run("ancre-verifier", agent=True, env={"FAUX_WG_ECHEC": "1"})
+    resultats.append((rc, sortie["ok"], sortie.get("refus")))
+    # aucun pair ne porte l'adresse du maître ; sortie de wg illisible
+    for lignes in (((CLE_MAITRE, "10.10.1.0/24"),), ((CLE_MAITRE, "(none)"),), (("pas-une-cle", "10.10.0.0/24"),)):
+        banc.pairs(*lignes)
+        rc, sortie, _ = banc.run("ancre-verifier", agent=True)
+        resultats.append((rc, sortie["ok"], sortie.get("refus")))
+    # box cliente sans configuration wg-autoload
+    banc.cliente()
+    banc.pairs((CLE_MAITRE, "10.64.0.1/32"))
+    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
+    resultats.append((rc, sortie["ok"], sortie.get("refus")))
+    assert all(r == (0, False, "ancre absente") for r in resultats), resultats
+    assert len(refus_ancre(banc)) == len(resultats)
+    assert banc.lancements() == []

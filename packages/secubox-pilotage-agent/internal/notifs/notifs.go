@@ -22,7 +22,8 @@ const (
 	TypeMemoire    = "X_SECUBOX_MemoryLow"
 	TypeSwap       = "X_SECUBOX_SwapHigh"
 	TypeDemarrage  = "X_SECUBOX_Boot"
-	seuilDemarrage = 600 // secondes d'UpTime sous lesquelles la box vient de démarrer
+	TypeAncre      = "X_SECUBOX_AnchorFailed" // émis par le canal : coupure faute d'ancre vérifiée (value = instant)
+	seuilDemarrage = 600                      // secondes d'UpTime sous lesquelles la box vient de démarrer
 )
 
 // Seuils règle les détections.

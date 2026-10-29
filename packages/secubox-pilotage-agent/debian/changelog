@@ -26,6 +26,17 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
     - R-L2-13 : sur une box cliente, une unité gabarit (« @ ») exige l'accord, même pour démarrer.
     - R-L2-14 : `--acteur <login>` en tête de l'argv, audité dans le champ acteur.
     - Unité : CAP_CHOWN ajouté (création d'audit.log au compte secubox).
+  * L2 « Agir », tâche 2 (ref #3126) : vérification de l'ancre du maître (D1).
+    - `secubox-pilotagectl ancre-verifier` (lecture, permise depuis l'agent) : le pair WireGuard qui porte l'adresse
+      du maître (`wg show <interface> allowed-ips`, /usr/bin/wg sans shell, préfixe le plus long) doit avoir la clé de
+      l'ancre, comparée en temps constant : wg-mesh/10.10.0.1 et /etc/secubox/p2p/ancre-maitre.json (box du
+      propriétaire), wg-autoload/10.64.0.1 et la clé du hub posée à l'enrôlement dans /etc/wireguard/wg-autoload.conf
+      (box cliente, R-L2-9). Rend {"ok": true|false}, code 0 ; toute lecture manquée vaut faux ; chaque échec est
+      audité (refus « ancre absente » ou « ancre différente »), sans clé recopiée.
+    - Agent : vérification au démarrage puis toutes les heures par `sudo -n /usr/sbin/secubox-pilotagectl
+      ancre-verifier` ; échec → canal coupé (rien ne part, aucun Operate traité), revérifié avec recul jusqu'à 1 h ;
+      la reconnexion suivante qui réussit notifie X_SECUBOX_AnchorFailed.
+    - Unité : CAP_NET_ADMIN ajouté à la borne (le noyau l'exige pour `wg show`). Dépend de wireguard-tools.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
 
