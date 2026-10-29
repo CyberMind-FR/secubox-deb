@@ -14,7 +14,8 @@ dpkg n'y touche pas, et chaque correction de règle passait donc par une éditio
 catégories `generated: true` (product_absent_probes…) sont tenues à chaud par
 wafgen et n'existent que là.
 
-Règle : les catégories LIVRÉES remplacent celles de la box ; les catégories
+Règle : `_meta` (version, date, changelog) est celui de la copie livrée ; les
+catégories LIVRÉES remplacent celles de la box ; les catégories
 GÉNÉRÉES de la box sont gardées telles quelles (et celle du paquet n'est posée que
 si la box n'en a aucune). Une sauvegarde `.avant-<version>` précède toute
 écriture ; un JSON invalide n'écrit rien.
@@ -36,6 +37,8 @@ def fusionne(livre: dict, vivant: dict) -> dict:
     """Règles de la box après mise à jour : livrées d'abord, générées conservées."""
     out = {k: v for k, v in vivant.items() if k != "categories"}
     out.update({k: v for k, v in livre.items() if k not in ("categories",) and k not in out})
+    if "_meta" in livre:
+        out["_meta"] = livre["_meta"]        # la version des règles suit la copie livrée (#3257)
     cats_v = vivant.get("categories", {})
     cats = {}
     for nom, cat in livre.get("categories", {}).items():

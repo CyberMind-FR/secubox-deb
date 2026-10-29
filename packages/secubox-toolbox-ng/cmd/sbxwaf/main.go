@@ -196,7 +196,7 @@ type Server struct {
 	// N'APPRENAIT RIEN, et nulle part ailleurs.
 	//
 	// CE N'EST PAS UN CONTOURNEMENT DU WAF. La requete traverse toujours
-	// sbxwaf : routage, reveil a la demande, journal des menaces, CrowdSec.
+	// sbxwaf : routage, reveil a la demande, journal des menaces.
 	// Seule la lecture d'octets opaques est levee. Un `waf_bypass` HAProxy,
 	// lui, ferait sortir la requete de la chaine entiere.
 	skipBodyHosts map[string]struct{}

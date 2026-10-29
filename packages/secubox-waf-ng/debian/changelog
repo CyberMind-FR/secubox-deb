@@ -1,3 +1,19 @@
+secubox-waf-ng (1.31.0-1~trixie1) trixie; urgency=medium
+
+  * PHP2Shell (CVE-2026-109618, CVE-2026-109619), chantier #3257, tâches 1 à 5 :
+    analyseur multipart borné, signatures structurelles en mode detect
+    (php2shell-001 à -004), php_services et vhost webmail (roundcube) dans
+    vhost_profiles, capture en flux sur les vhosts PHP (statuts multipart-tronque,
+    -malforme, -limite, -concurrence ; fenêtre = --max-body-inspect, au pire 16 fois
+    la fenêtre en mémoire), correctif A2 du chemin texte.
+  * sevToInt("audit") vaut 10 au lieu de 40.
+  * Corpus livré : catégorie php2shell, _meta 1.6.0 ; waf-rules-sync propage
+    désormais _meta de la copie livrée.
+  * Retour arrière : "enabled": false sur la catégorie php2shell de
+    /etc/secubox/waf/waf-rules.json (à chaud), ou paquet précédent (1.30.7).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 12:00:00 +0100
+
 secubox-waf-ng (1.30.7-1~trixie1) trixie; urgency=medium
 
   * logrotate : le registre des cookies de sbxwaf (/var/log/secubox/cookie-audit/server.jsonl) tourne de nouveau

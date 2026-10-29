@@ -51,3 +51,21 @@ def test_ecriture_avec_sauvegarde_et_idempotence(tmp_path, monkeypatch):
     assert (tmp_path / "vivant.json.avant-9").is_file()
     assert json.loads(vivant.read_text())["categories"]["a"] == cat("a1")
     assert sync.main() == 0                      # deuxième passage : rien à faire
+
+
+def test_sync_propage_meta():
+    """_meta de la copie livrée remplace celui de la box (#3257)."""
+    livre = {"_meta": {"version": "1.6.0"}, "categories": cat("a")}
+    vivant = {"_meta": {"version": "1.5.2"}, "categories": cat("a")}
+    neuf = sync.fusionne(livre, vivant)
+    assert neuf["_meta"]["version"] == "1.6.0"
+
+
+def test_sync_garde_generees():
+    """Le remplacement de _meta ne touche pas aux catégories générées."""
+    gen = {"generated": True, "patterns": [{"id": "g-1"}]}
+    livre = {"_meta": {"version": "1.6.0"}, "categories": {"x": {"patterns": []}}}
+    vivant = {"_meta": {"version": "1.5.2"}, "categories": {"x": {"patterns": []}, "gen": gen}}
+    neuf = sync.fusionne(livre, vivant)
+    assert neuf["categories"]["gen"] == gen
+    assert neuf["_meta"]["version"] == "1.6.0"
