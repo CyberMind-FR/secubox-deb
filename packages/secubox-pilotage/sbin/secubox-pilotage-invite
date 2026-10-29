@@ -1,0 +1,55 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-pilotage-invite — code de jonction pour le retour au maillage d'une box renommée (#3126 L2 tâche 6, R-L2-35).
+
+Lancé par secubox-pilotage-invite@.service (activation par socket, Accept=yes : une instance par connexion, entrée et sortie
+= la connexion), sous le compte `secubox` : celui des jetons de secubox-p2p (tokens.json), que sbx-mesh-invite écrit.
+Seul le service du maître joint la socket (0600, secubox-pilotage). Il ne peut rien choisir d'autre que le NOM :
+
+  entrée  : une ligne, un libellé DNS (^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$), 80 octets au plus
+  argv    : /usr/bin/sbx-mesh-invite --code --nom <nom> --json   (fixe : jamais --flash, --ttl ni --adresse)
+  sortie  : la sortie JSON de sbx-mesh-invite ({"code", "nom", "expire"}), ou RIEN en cas d'échec
+
+Le code porte un jeton : il n'est écrit que sur la connexion, jamais dans le journal (stderr ne reçoit que le code de sortie).
+"""
+import re
+import subprocess
+import sys
+
+INVITE = "/usr/bin/sbx-mesh-invite"
+RE_NOM = re.compile(rb"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")
+ENTREE_MAX = 80
+SORTIE_MAX = 4096
+DELAI_S = 30
+
+
+def main(entree, sortie, lanceur=subprocess.run) -> int:
+    ligne = entree.readline(ENTREE_MAX + 1)
+    if not ligne.endswith(b"\n") or len(ligne) > ENTREE_MAX:
+        print("secubox-pilotage-invite : entrée refusée", file=sys.stderr)
+        return 2
+    nom = ligne[:-1]
+    if not RE_NOM.fullmatch(nom):
+        print("secubox-pilotage-invite : nom refusé", file=sys.stderr)
+        return 2
+    try:
+        r = lanceur([INVITE, "--code", "--nom", nom.decode("ascii"), "--json"], capture_output=True, text=True,
+                    stdin=subprocess.DEVNULL, timeout=DELAI_S)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"secubox-pilotage-invite : sbx-mesh-invite indisponible ({e.__class__.__name__})", file=sys.stderr)
+        return 1
+    rc = getattr(r, "returncode", 1)
+    out = (getattr(r, "stdout", "") or "").encode("utf-8")
+    if rc != 0 or not out or len(out) > SORTIE_MAX:
+        print(f"secubox-pilotage-invite : sbx-mesh-invite en échec (code {rc})", file=sys.stderr)
+        return 1
+    sortie.write(out)
+    sortie.flush()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.stdin.buffer, sys.stdout.buffer))

@@ -8,7 +8,7 @@ SecuBox-Deb :: pilotage :: API d'administration (#3126)
 
 Servie sur `/run/secubox/pilotage.sock` (l'agrégateur relaie /api/v1/pilotage/… en retirant le préfixe). TOUTES les routes sont gardées
 par `require_jwt` (administrateur réel) : aucune n'est publique. Une box se désigne par sa clé `<reseau>:<nom>` ou par son nom s'il est
-unique parmi les box connues (ambigu → 409). Lecture seule, hormis la demande de relevé de performance (Operate `Mesurer()`).
+unique parmi les box connues (ambigu → 409).
 
   GET  /boxes                       liste résumée (une ligne par box)
   GET  /boxes/{x}                   inventaire complet de la box
@@ -16,12 +16,22 @@ unique parmi les box connues (ambigu → 409). Lecture seule, hormis la demande 
   POST /boxes/{x}/releve {duree_s}  demande un relevé (10..300 s) ; 202, audit pilotage_releve_demande
   GET  /boxes/{x}/releve            dernier relevé reçu et état
   GET  /evenements?nom=&depuis=&limite=
+L2 « Agir » (tâche 6) :
+  POST   /boxes/{x}/actions/{action} {args, confirmation?, support?}   action du catalogue (pilotage/operations.py) ; confirmation
+                                    forte (= nom exact de la box) pour reboot, service-arreter, renouveler, renommer sur une box du
+                                    propriétaire (400 sinon) ; OPERATE_RESP renvoyé tel quel (accepte, consentement, refuse) ;
+                                    audit pilotage_action (demande, puis réponse avec le job)
+  GET    /operations?nom=&limite=   journal des opérations (fin, progression, résultat succes|echec|inconnu)
+  POST   /boxes/{x}/support {duree_min}   demande d'une session de support (1..240 min, 30 par défaut) ; audit pilotage_support
+  GET    /boxes/{x}/support         sessions de la box (une session ouverte passée sa fin est « expire », R-L2-33)
+  DELETE /boxes/{x}/support/{id}    fermeture (effective sur le maître tout de suite, puis envoyée à la box) ; audit pilotage_support_fermeture
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 import re
+import secrets
 import time
 from contextlib import asynccontextmanager
 from typing import Callable, Optional
@@ -35,9 +45,14 @@ from secubox_core.auth import require_jwt
 
 from pilotage.files import COMMANDE_MESURE, DUREE_DEFAUT_S, DUREE_MAX_S, DUREE_MIN_S, FileDeBoxPleine, Files
 from pilotage.inventaire import Inventaire, box_de_ligne
-from pilotage.stockage import HORS_LIGNE_S, StockageSqlite
+from pilotage.operations import (CATALOGUE, COMMANDE_SUPPORT_FERMER, COMMANDE_SUPPORT_OUVRIR, RE_IDENT, Suivi, arguments,
+                                 corps_operate)
+from pilotage.stockage import HORS_LIGNE_S, SUPPORT_DUREE_MAX_MIN, StockageSqlite
 
 DELAI_LECTURE_S = 15.0
+DELAI_ACTION_S = 30.0          # OPERATE_RESP d'une action : immédiat sur la box (le ctl lance, ne fait pas) ; sudo + ctl + marge
+SUPPORT_DUREE_DEFAUT_MIN = 30
+ETATS_REPONSE = ("accepte", "consentement", "refuse")
 CHEMIN_MAX = 256
 _CHEMIN = re.compile(r"Device\.[A-Za-z0-9_.\-]*")
 IDENT_MAX = 128
@@ -51,12 +66,30 @@ class ReleveIn(BaseModel):
     duree_s: StrictInt = Field(DUREE_DEFAUT_S, ge=DUREE_MIN_S, le=DUREE_MAX_S)  # entier strict : 60.0, "60", true et NaN sont refusés
 
 
+class ActionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    args: dict = Field(default_factory=dict)
+    confirmation: Optional[str] = Field(None, max_length=IDENT_MAX)
+    support: Optional[str] = Field(None, pattern="^(?:" + RE_IDENT.pattern + ")$", max_length=64)  # action demandée dans une session de support
+
+
+class SupportIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    duree_min: StrictInt = Field(SUPPORT_DUREE_DEFAUT_MIN, ge=1, le=SUPPORT_DUREE_MAX_MIN)
+
+
 def _borne(v, n: int = ERREUR_MAX) -> str:
     return "".join(c for c in str(v)[:n] if c.isprintable())
 
 
 def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventaire, audit: Callable[[str, dict], None], *,
-                    horloge: Callable[[], float] = time.time, delai_lecture_s: float = DELAI_LECTURE_S) -> FastAPI:
+                    horloge: Callable[[], float] = time.time, delai_lecture_s: float = DELAI_LECTURE_S,
+                    suivi: Optional[Suivi] = None, noms_pris: Callable[[], set] = set,
+                    delai_action_s: float = DELAI_ACTION_S) -> FastAPI:
+    """`suivi` : fin des opérations (partagé avec le canal) ; `noms_pris()` : noms portés au maillage hors table des box (pairs
+    de peers.json, nom du maître), appelée hors boucle."""
+    suivi = suivi or Suivi(stockage, files, audit)
+
     @asynccontextmanager
     async def vie(app):
         try:
@@ -66,6 +99,7 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
             for t in list(taches):
                 t.cancel()
             await asyncio.gather(*list(taches), return_exceptions=True)
+            await suivi.arreter()
 
     app = FastAPI(title="SecuBox Pilotage", docs_url=None, redoc_url=None, openapi_url=None, lifespan=vie)
 
@@ -179,6 +213,126 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
     async def dernier_releve(ident: str):
         b = await trouver(ident)
         return {"cle": b["cle"], "en_cours": b["cle"] in releves_en_cours, "releve": await asyncio.to_thread(stockage.releve_lire, b["cle"])}
+
+    # --- L2 « Agir » : actions, journal des opérations, support (tâche 6) ---
+
+    async def auditer_ou_503(evenement: str, champs: dict) -> None:
+        try:
+            await asyncio.to_thread(audit, evenement, champs)
+        except Exception:
+            log.exception("audit %s impossible : demande refusée", evenement)
+            raise HTTPException(503, "audit indisponible") from None
+
+    async def auditer(evenement: str, champs: dict) -> None:
+        """Après coup (la demande est partie) : un échec d'audit est journalisé, la réponse de la box est rendue quand même."""
+        try:
+            await asyncio.to_thread(audit, evenement, champs)
+        except Exception:
+            log.exception("audit %s impossible", evenement)
+
+    async def operer(cle: str, corps: dict) -> Optional[dict]:
+        """Dépose l'Operate et attend l'OPERATE_RESP ; None au délai (la requête est retirée de la file si elle n'a pas été servie).
+        Rend {etat, job, raison} : la réponse de l'agent telle quelle, ou un refus pour une ERROR (agent de L1, sans exécuteur)."""
+        try:
+            futur = files.deposer(cle, {"type": "OPERATE", "body": corps})
+        except FileDeBoxPleine:
+            raise HTTPException(429, "trop de requêtes en attente pour cette box") from None
+        try:
+            rep = await asyncio.wait_for(futur, delai_action_s)
+        except asyncio.TimeoutError:
+            return None
+        c = rep.get("body") if isinstance(rep.get("body"), dict) else {}
+        if rep.get("type") == "OPERATE_RESP" and c.get("etat") in ETATS_REPONSE:
+            job = c.get("job") if isinstance(c.get("job"), str) and RE_IDENT.fullmatch(c.get("job") or "") else ""
+            return {"etat": c["etat"], "job": job, "raison": _borne(c.get("raison") or "")}
+        return {"etat": "refuse", "job": "", "raison": _borne(c.get("err") or c.get("raison") or "réponse inattendue de la box")}
+
+    def acteur_de(jwt: dict) -> str:
+        return _borne(jwt.get("sub", "?"), 64)
+
+    @app.post("/boxes/{ident}/actions/{action}")
+    async def agir(ident: str, action: str, corps: ActionIn = ActionIn(), jwt: dict = Depends(require_jwt)):
+        a = CATALOGUE.get(action)
+        if a is None:
+            raise HTTPException(404, "action inconnue")
+        args = arguments(a, corps.args)
+        if args is None:
+            raise HTTPException(422, {"erreur": "paramètres invalides", "attendus": list(a.parametres)})
+        b = await trouver(ident)
+        if not en_ligne(b):
+            raise HTTPException(409, "box hors ligne")
+        # confirmation forte (box du propriétaire) : retaper EXACTEMENT le nom de la box ; une confirmation fausse est refusée partout
+        if (a.forte and b["reseau"] == "maillage") or corps.confirmation is not None:
+            if corps.confirmation != b["nom"]:
+                raise HTTPException(400, "confirmation : retapez exactement le nom de la box")
+        if corps.support is not None and await asyncio.to_thread(stockage.support_ouvert, b["cle"], corps.support) is None:
+            raise HTTPException(409, "session de support non ouverte ou échue")
+        if action == "renommer":
+            pris = await asyncio.to_thread(lambda: {x["nom"] for x in stockage.boites()} | set(noms_pris()))
+            if args["nom"] in pris:
+                raise HTTPException(409, "nom déjà porté par une box ou un pair connu")
+        acteur = acteur_de(jwt)
+        champs = {"box": b["nom"], "cle": b["cle"], "action": action, "acteur": acteur}
+        if corps.support is not None:
+            champs["support"] = corps.support
+        await auditer_ou_503("pilotage_action", {**champs, "job": None, "etat": "demande"})   # pas d'audit, pas d'action
+        op = await asyncio.to_thread(stockage.operation_demander, b["cle"], action, args, acteur, corps.support)
+        rep = await operer(b["cle"], corps_operate(a.commande, args, jwt.get("sub")))
+        if rep is None:
+            await asyncio.to_thread(stockage.operation_sans_reponse, op)
+            await auditer("pilotage_action", {**champs, "job": None, "etat": "sans_reponse", "operation": op})
+            raise HTTPException(504, "la box n'a pas répondu à temps")
+        ligne = await asyncio.to_thread(stockage.operation_reponse, op, rep["etat"], rep["job"] or None, rep["raison"])
+        await auditer("pilotage_action", {**champs, "job": rep["job"] or None, "etat": rep["etat"], "operation": op})
+        if ligne is not None and ligne["etat"] == "termine":   # la fin est arrivée avant cette réponse : la suite part maintenant
+            await suivi.suite(box_de_ligne(b), ligne)
+        return {"operation": op, "box": b["nom"], "cle": b["cle"], "action": action, **rep,
+                "operation_etat": ligne["etat"] if ligne else rep["etat"]}
+
+    @app.get("/operations", dependencies=garde)
+    async def operations(nom: Optional[str] = Query(None, max_length=IDENT_MAX), limite: int = Query(200, ge=1, le=1000)):
+        cle = (await trouver(nom))["cle"] if nom else None
+        return await asyncio.to_thread(stockage.operations, cle, limite)
+
+    @app.post("/boxes/{ident}/support")
+    async def support_ouvrir(ident: str, corps: SupportIn = SupportIn(), jwt: dict = Depends(require_jwt)):
+        b = await trouver(ident)
+        if not en_ligne(b):
+            raise HTTPException(409, "box hors ligne")
+        sid, acteur = secrets.token_hex(8), acteur_de(jwt)
+        champs = {"box": b["nom"], "cle": b["cle"], "acteur": acteur, "id": sid, "duree_min": corps.duree_min}
+        await auditer_ou_503("pilotage_support", {**champs, "etat": "demande"})
+        await asyncio.to_thread(stockage.support_demander, b["cle"], sid, corps.duree_min, acteur)
+        rep = await operer(b["cle"], corps_operate(COMMANDE_SUPPORT_OUVRIR, {"id": sid, "duree_min": corps.duree_min}, jwt.get("sub")))
+        if rep is None:
+            await auditer("pilotage_support", {**champs, "etat": "sans_reponse"})
+            raise HTTPException(504, "la box n'a pas répondu à temps")
+        if rep["etat"] == "refuse":
+            await asyncio.to_thread(stockage.support_noter, b["cle"], sid, "refuse", None)
+        await auditer("pilotage_support", {**champs, "etat": rep["etat"]})
+        return {"id": sid, "box": b["nom"], "cle": b["cle"], "duree_min": corps.duree_min, **rep}
+
+    @app.get("/boxes/{ident}/support", dependencies=garde)
+    async def support_lire(ident: str):
+        b = await trouver(ident)
+        return await asyncio.to_thread(stockage.supports, b["cle"])
+
+    @app.delete("/boxes/{ident}/support/{sid}")
+    async def support_fermer(ident: str, sid: str, jwt: dict = Depends(require_jwt)):
+        if not RE_IDENT.fullmatch(sid):
+            raise HTTPException(422, "identifiant de session invalide")
+        b = await trouver(ident)
+        if not any(s["id"] == sid for s in await asyncio.to_thread(stockage.supports, b["cle"])):
+            raise HTTPException(404, "session inconnue")
+        acteur = acteur_de(jwt)
+        await auditer_ou_503("pilotage_support_fermeture", {"box": b["nom"], "cle": b["cle"], "acteur": acteur, "id": sid})
+        await asyncio.to_thread(stockage.support_fermer_local, b["cle"], sid)   # révocable côté maître, box jointe ou non
+        if not en_ligne(b):
+            return {"id": sid, "box": b["nom"], "etat": "hors_ligne", "job": "", "raison": "fermée sur le maître ; la box l'apprendra à son retour"}
+        rep = await operer(b["cle"], corps_operate(COMMANDE_SUPPORT_FERMER, {"id": sid}, jwt.get("sub")))
+        if rep is None:
+            return {"id": sid, "box": b["nom"], "etat": "sans_reponse", "job": "", "raison": "fermée sur le maître"}
+        return {"id": sid, "box": b["nom"], **rep}
 
     @app.get("/evenements", dependencies=garde)
     async def evenements(nom: Optional[str] = Query(None, max_length=IDENT_MAX), depuis: Optional[int] = Query(None, ge=0, le=1 << 40),

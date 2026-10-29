@@ -229,3 +229,53 @@ def test_la_doc_du_marqueur_dit_ce_qu_il_protege_et_ce_qu_il_ne_protege_pas():
         assert "processus local du groupe www-data) ne choisit pas" not in texte
         assert "processus local qui joindrait la socket ne choisit plus" not in texte
         assert "ne protège pas" in texte and "0660" in texte and "relais" in texte
+
+
+# --- L2 tâche 6 (R-L2-35) : assistant d'émission du code de jonction ---
+
+def test_assistant_invite_active_par_socket_au_seul_service():
+    s = lire("systemd/secubox-pilotage-invite.socket")
+    for ligne in ("ListenStream=/run/secubox-pilotage/invite.sock", "Accept=yes", "SocketUser=secubox-pilotage",
+                  "SocketGroup=secubox-pilotage", "SocketMode=0600", "DirectoryMode=0755", "RemoveOnStop=yes", "WantedBy=sockets.target"):
+        assert ligne in s, ligne
+    assert re.search(r"^MaxConnections=[1-4]$", s, re.M)
+
+
+def test_assistant_invite_unite_sous_le_compte_des_jetons_et_durcie():
+    u = code("systemd/secubox-pilotage-invite@.service")
+    for ligne in ("User=secubox", "Group=secubox", "ExecStart=/usr/sbin/secubox-pilotage-invite", "StandardInput=socket",
+                  "StandardOutput=socket", "StandardError=journal", "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes",
+                  "PrivateTmp=yes", "PrivateDevices=yes", "ProtectKernelTunables=yes", "ProtectControlGroups=yes", "RestrictSUIDSGID=yes",
+                  "LockPersonality=yes", "UMask=0027", "CapabilityBoundingSet=", "RestrictAddressFamilies=AF_UNIX AF_NETLINK",
+                  "IPAddressDeny=any"):
+        assert re.search(rf"^{re.escape(ligne)}$", u, re.M), ligne
+    assert re.search(r"^RuntimeMaxSec=\d+$", u, re.M)
+    rw = [x for ligne in u.splitlines() if ligne.startswith("ReadWritePaths=") for x in ligne.split("=", 1)[1].split()]
+    assert set(rw) == {"/var/lib/secubox/p2p/master-link", "/var/log/secubox"}
+    assert "sudo" not in u
+
+
+def test_assistant_invite_installe_active_et_arrete():
+    r = lire("debian/rules")
+    assert "sbin/secubox-pilotage-invite" in r and "secubox-pilotage-invite.socket" in r and "secubox-pilotage-invite@.service" in r
+    assert "enable --now secubox-pilotage-invite.socket" in code("debian/postinst")
+    assert "secubox-pilotage-invite.socket" in code("debian/prerm")
+    assert "secubox-p2p" in lire("debian/control")
+
+
+def test_profil_api_joint_la_socket_de_l_assistant_seulement():
+    p = code("apparmor/secubox-pilotage-api")
+    assert "/run/secubox-pilotage/invite.sock rw," in p
+    assert "sbx-mesh-invite" not in p and "/usr/bin/sudo" not in p   # le service n'exécute rien
+
+
+def test_service_maitre_toujours_sans_sudo_ni_reseau_ip():
+    u = code("systemd/secubox-pilotage.service")
+    assert "NoNewPrivileges=yes" in u and "RestrictAddressFamilies=AF_UNIX" in u and "sudo" not in u
+
+
+def test_exception_assistant_invite_ecrite():
+    regles = lire(".claude/RULES-CODE.md", DEPOT)
+    lignes = [x for x in regles.splitlines() if "secubox-pilotage-invite@.service" in x]
+    assert len(lignes) == 1 and "User=secubox" in lignes[0]
+    assert "packages/secubox-pilotage/tests/test_paquet.py::test_assistant_invite_unite_sous_le_compte_des_jetons_et_durcie" in lignes[0]

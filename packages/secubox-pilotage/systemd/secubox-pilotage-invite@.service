@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Assistant d'émission du code de jonction (#3126 L2 tâche 6, R-L2-35) : une instance par connexion à
+# secubox-pilotage-invite.socket. Lit un nom, lance /usr/bin/sbx-mesh-invite --code --nom <nom> --json (argv fixe), rend sa
+# sortie sur la connexion. Compte `secubox` : celui des jetons de secubox-p2p (tokens.json, que sbx-mesh-invite écrit et que
+# l'API p2p relit) ; c'est l'exception de RULES-CODE § 10. Ainsi le service du maître garde NoNewPrivileges et n'a ni sudo ni
+# le compte des jetons. Le code n'est jamais écrit au journal (stderr = code de sortie seulement).
+[Unit]
+Description=SecuBox Pilotage — assistant de jonction (code sbx-mesh-invite) (#3126)
+
+[Service]
+User=secubox
+Group=secubox
+ExecStart=/usr/sbin/secubox-pilotage-invite
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+RuntimeMaxSec=60
+UMask=0027
+LimitCORE=0
+
+# Durcissement : seuls les jetons de jonction (master-link) et l'audit commun sont écrits ; « ip » (adresse LAN annoncée dans
+# le code) lit les adresses et routes par netlink ; aucun réseau IP.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/secubox/p2p/master-link /var/log/secubox
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+IPAddressDeny=any
+CapabilityBoundingSet=
+AmbientCapabilities=

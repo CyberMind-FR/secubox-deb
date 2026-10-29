@@ -15,9 +15,10 @@ secubox-automesh, et la jonction sous le nouveau nom renomme le pair (#3213).
 Le code porte un jeton de jonction : il ne transite QUE par la file de la box (servie dans le tunnel). Jamais dans un
 journal, l'audit (seuls box, nouveau nom et msg_id), un message d'erreur ou une exception.
 
-Câblage (tâche 6) : la table des opérations du contrôleur sait quelle action portait un job ; à la réception d'un
-X_SECUBOX_OperationDone, elle appelle `envoyer_rejoindre(files, box, operation, fin)`. sbx-mesh-invite écrit les jetons
-de secubox-p2p (root) : le droit de l'appeler depuis le service du maître (sans sudo aujourd'hui) est à poser là aussi.
+Câblage (tâche 6) : la table des opérations du contrôleur sait quelle action portait un job ; à la première
+X_SECUBOX_OperationDone, `pilotage.operations.Suivi` appelle `envoyer_rejoindre(files, box, operation, fin)`.
+sbx-mesh-invite écrit les jetons de secubox-p2p au compte `secubox` : le service du maître (sans sudo, NoNewPrivileges)
+l'obtient par `lanceur_assistant`, qui passe le seul nom à l'assistant `secubox-pilotage-invite` activé par socket.
 """
 from __future__ import annotations
 
@@ -27,7 +28,9 @@ import hmac
 import json
 import logging
 import re
+import socket
 import subprocess
+from pathlib import Path
 from typing import Callable, Optional
 
 from .identite import Box
@@ -40,6 +43,7 @@ DELAI_INVITE = 30
 RE_NOM = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")            # libellé DNS, le motif du ctl de la box
 RE_CODE = re.compile(r"sbxmesh1\.[A-Za-z0-9_-]{8,590}\.[0-9a-f]{4}")
 SORTIE_MAX = 4096
+SOCKET_ASSISTANT = Path("/run/secubox-pilotage/invite.sock")   # secubox-pilotage-invite.socket (Accept=yes, 0600 au service)
 
 
 class ErreurRejoindre(Exception):
@@ -74,6 +78,40 @@ def emettre_code(nom: str, lanceur: Callable = subprocess.run) -> str:
     if doc.get("nom") != nom:
         raise ErreurRejoindre("code émis pour un autre nom")
     return code
+
+
+class _Sortie:
+    __slots__ = ("returncode", "stdout")
+
+    def __init__(self, returncode: int, stdout: str = "") -> None:
+        self.returncode, self.stdout = returncode, stdout
+
+
+def lanceur_assistant(chemin: Path = SOCKET_ASSISTANT) -> Callable:
+    """Lanceur pour emettre_code : au lieu d'exécuter sbx-mesh-invite (le service du maître n'a ni sudo ni le compte des jetons),
+    passe le NOM à l'assistant secubox-pilotage-invite par sa socket ; l'assistant (compte secubox) fixe lui-même l'argv
+    `sbx-mesh-invite --code --nom <nom> --json` et rend sa sortie, ou rien en cas d'échec. Seul cet argv est accepté ici."""
+    def run(argv, timeout: float = DELAI_INVITE, **_):
+        if (not isinstance(argv, (list, tuple)) or len(argv) != 5 or list(argv[:3]) != [INVITE, "--code", "--nom"] or argv[4] != "--json"
+                or not isinstance(argv[3], str) or not RE_NOM.fullmatch(argv[3])):
+            return _Sortie(2)
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:   # OSError (absente, refus, délai) : « indisponible »
+            s.settimeout(timeout)
+            s.connect(str(chemin))
+            s.sendall(argv[3].encode("ascii") + b"\n")
+            s.shutdown(socket.SHUT_WR)
+            morceaux, total = [], 0
+            while total <= SORTIE_MAX:
+                m = s.recv(SORTIE_MAX + 1 - total)
+                if not m:
+                    break
+                morceaux.append(m)
+                total += len(m)
+        brut = b"".join(morceaux)
+        if not brut or len(brut) > SORTIE_MAX:
+            return _Sortie(1)
+        return _Sortie(0, brut.decode("utf-8", "replace"))
+    return run
 
 
 def emettre_code_par(lanceur: Callable) -> Callable[[str], str]:

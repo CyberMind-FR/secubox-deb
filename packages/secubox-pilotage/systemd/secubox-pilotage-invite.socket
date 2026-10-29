@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Socket de l'assistant d'émission du code de jonction (#3126 L2 tâche 6, R-L2-35). Seul secubox-pilotage.service la joint
+# (0600, propriétaire secubox-pilotage) : il y écrit un NOM, l'assistant rend le code de sbx-mesh-invite pour ce nom.
+# Hors de /run/secubox (partagé, relayé par l'agrégateur par nom de socket) : dossier propre, créé par systemd.
+[Unit]
+Description=SecuBox Pilotage — socket de l'assistant de jonction (#3126)
+
+[Socket]
+ListenStream=/run/secubox-pilotage/invite.sock
+DirectoryMode=0755
+SocketMode=0600
+SocketUser=secubox-pilotage
+SocketGroup=secubox-pilotage
+Accept=yes
+MaxConnections=2
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target
