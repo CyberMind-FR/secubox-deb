@@ -57,6 +57,13 @@ async def _rejouer(fx: dict, tmp_path: Path):
             r = await c.post(fx["route"], content=json.dumps(fx["envoi"]))
             assert r.status_code == 200 and r.json() == {"ignore": 0}, r.text
             assert [ev for _, ev in memoire.notifications] == [n["body"]["event"] for n in fx["envoi"]]
+            # N5 : rangées aussi par le VRAI stockage (types, unité, valeur, instant de la box)
+            stock = StockageSqlite(tmp_path / "pilotage")
+            stock.vu(GK5, {})
+            for _, ev in memoire.notifications:
+                stock.notification(GK5, ev)
+            ranges = [(e["type"], e["unite"], e["valeur"], e["survenu_le"]) for e in reversed(stock.evenements(GK5.cle))]
+            assert ranges == [(e["type"], e.get("unit"), e.get("value"), e["ts"]) for e in (n["body"]["event"] for n in fx["envoi"])]
             return None
         # réponse : le maître dépose la requête, la box la reçoit, puis poste l'enveloppe émise par le client Go (msg_id du dépôt)
         futur = files.deposer(GK5.cle, fx["requete"])
