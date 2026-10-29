@@ -104,7 +104,8 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
         inv = await asyncio.to_thread(stockage.inventaire, b["cle"])
         return {"cle": b["cle"], "nom": b["nom"], "reseau": b["reseau"], "client": b["client"], "adresse": b["adresse"],
                 "agent_version": b["agent_version"] or None, "vu_le": b["vu_le"], "en_ligne": en_ligne(b),
-                "inventaire_le": inv["releve_le"], "inventaire_partiel": inv["partiel"], "inventaire": inv["valeurs"]}
+                "inventaire_le": inv["releve_le"], "inventaire_partiel": inv["partiel"], "inventaire_tronques": inv["tronques"],
+                "inventaire": inv["valeurs"]}
 
     @app.get("/boxes/{ident}/lire", dependencies=garde)
     async def lire(ident: str, chemin: str = Query("", max_length=1024)):

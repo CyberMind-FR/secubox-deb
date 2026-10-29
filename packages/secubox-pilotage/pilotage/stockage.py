@@ -12,6 +12,7 @@ et de forme vérifiée quand elles arrivent ici. Les méthodes sont synchrones :
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 import time
@@ -28,9 +29,10 @@ BOUCLES_FENETRE_S = 24 * 3600
 PARAMS_MAX = 5000            # paramètres retenus par réponse (l'agent borne le corps à 256 Kio : TailleMax)
 LIGNES_MAX = 2 * PARAMS_MAX  # lignes d'inventaire gardées par box : au-delà, les plus anciennes (releve_le) partent
 EVENEMENTS_MAX = 5000        # événements gardés par box : au-delà, les plus anciens partent
-VALEUR_MAX = 4096            # caractères d'une valeur sérialisée
+VALEUR_MAX = 64 << 10       # caractères d'une valeur sérialisée ; au-delà elle est TRONQUÉE et marquée, jamais jetée (R38)
 CHEMIN_MAX = 256
 SORTIE_MAX = 256 << 10
+REFUS_JOURNAL_S = 3600       # paramètres refusés : une ligne de journal par box et par heure au plus
 
 C_MEM = "Device.DeviceInfo.MemoryStatus.X_SECUBOX_Available"
 C_SWAP_TOTAL = "Device.DeviceInfo.MemoryStatus.X_SECUBOX_SwapTotal"
@@ -40,6 +42,8 @@ C_ECHECS = "Device.X_SECUBOX_Services.FailedNumberOfEntries"
 C_MAINS = "Device.X_SECUBOX_Pilotage.MainsLiees"
 TYPE_BOUCLE = "X_SECUBOX_ServiceLoop"
 _RESUME = (C_MEM, C_SWAP_TOTAL, C_SWAP_USED, C_CPU, C_ECHECS, C_MAINS)
+
+log = logging.getLogger("pilotage.stockage")
 
 
 class StockageCanal(Protocol):
@@ -80,7 +84,8 @@ CREATE TABLE IF NOT EXISTS boites(
     inventaire_le INTEGER, inventaire_partiel INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS boites_nom ON boites(nom);
 CREATE TABLE IF NOT EXISTS inventaire(
-    cle TEXT NOT NULL, chemin TEXT NOT NULL, valeur_json TEXT NOT NULL, releve_le INTEGER NOT NULL, PRIMARY KEY(cle, chemin));
+    cle TEXT NOT NULL, chemin TEXT NOT NULL, valeur_json TEXT NOT NULL, releve_le INTEGER NOT NULL, tronque INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(cle, chemin));
 CREATE TABLE IF NOT EXISTS evenements(
     id INTEGER PRIMARY KEY AUTOINCREMENT, cle TEXT NOT NULL, type TEXT NOT NULL, unite TEXT, valeur INTEGER,
     survenu_le INTEGER NOT NULL, recu_le INTEGER NOT NULL);
@@ -90,6 +95,34 @@ CREATE INDEX IF NOT EXISTS evenements_cle_id ON evenements(cle, id);
 CREATE TABLE IF NOT EXISTS releves(
     cle TEXT PRIMARY KEY, recu_le INTEGER NOT NULL, duree_s INTEGER NOT NULL, statut TEXT NOT NULL, sortie_json TEXT NOT NULL);
 """
+
+
+def _json(v) -> str:
+    return json.dumps(v, ensure_ascii=False, allow_nan=False)
+
+
+def _tronquer(v, maxi: int) -> Optional[str]:
+    """Le JSON d'une valeur trop longue, ramené sous `maxi` caractères en gardant son début et son type : premiers éléments d'une liste, premières
+    entrées d'un objet, premiers caractères d'une chaîne. None pour un autre type (un nombre ne dépasse jamais 64 Kio)."""
+    if isinstance(v, (list, dict)):
+        elements = list(v.items()) if isinstance(v, dict) else v
+        taille, k = 2, 0                                     # crochets ou accolades ; séparateur « , » entre deux éléments
+        for e in elements:
+            t = len(_json(e[0])) + 2 + len(_json(e[1])) if isinstance(v, dict) else len(_json(e))
+            if taille + t + (2 if k else 0) > maxi:
+                break
+            taille += t + (2 if k else 0)
+            k += 1
+        brut = _json(dict(elements[:k]) if isinstance(v, dict) else elements[:k])
+    elif isinstance(v, str):
+        n = maxi - 2
+        brut = _json(v[:n])
+        while len(brut) > maxi and n > 0:                    # échappements : une chaîne JSON est plus longue que son texte
+            n -= max(1, len(brut) - maxi)
+            brut = _json(v[:n])
+    else:
+        return None
+    return brut if len(brut) <= maxi else None
 
 
 def _nombre(v):
@@ -118,10 +151,13 @@ class StockageSqlite:
         with self._cx() as cx:
             cx.execute("PRAGMA journal_mode=WAL")
             cx.executescript(_SCHEMA)
+            if "tronque" not in {r["name"] for r in cx.execute("PRAGMA table_info(inventaire)")}:   # base d'avant R38
+                cx.execute("ALTER TABLE inventaire ADD COLUMN tronque INTEGER NOT NULL DEFAULT 0")
         # connexion de garde, jamais utilisée : tant qu'elle reste ouverte, la fermeture d'une connexion courte ne déclenche ni
         # point de contrôle ni suppression du journal WAL (c'était une synchronisation disque par appel)
         self._garde = sqlite3.connect(self.db, check_same_thread=False)
         self._garde.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()  # la connexion rejoint réellement le journal WAL
+        self._refus_journal: dict = {}  # Box.cle -> instant de la dernière ligne « paramètres refusés » ; borné
 
     def fermer(self) -> None:
         self._garde.close()
@@ -178,13 +214,17 @@ class StockageSqlite:
     # --- inventaire ---
 
     def inventaire_enregistrer(self, box: Box, corps: dict) -> bool:
-        """Range une GET_RESP `{results:[{path,params,err?}], tronque?}`. Complète → l'inventaire de la box est remplacé ; tronquée,
-        en erreur ou partiellement illisible → les valeurs reçues sont ajoutées et rien n'est effacé (#3011). Faux si rien d'exploitable."""
+        """Range une GET_RESP `{results:[{path,params,err?,failed?}], tronque?}`. Complète → l'inventaire de la box est remplacé ; tronquée,
+        en erreur, source en échec ou plafond de paramètres atteint → les valeurs reçues sont ajoutées et rien n'est effacé (#3011).
+        Un paramètre refusé seul (chemin hors `Device.`, valeur non JSON) n'en fait pas une passe dégradée : il n'entre simplement pas (R38) ;
+        une valeur de plus de VALEUR_MAX caractères est tronquée et marquée (`tronques`), jamais jetée. Seules les lignes CHANGÉES sont
+        écrites (M4) : une relève identique n'écrit que `inventaire_le`. Faux si rien d'exploitable."""
         resultats = corps.get("results") if isinstance(corps, dict) else None
         if not isinstance(resultats, list):
             return False
         degrade = corps.get("tronque") is True
-        valeurs: dict = {}
+        valeurs: dict = {}   # chemin -> (valeur_json, tronque)
+        refuses = 0
         for r in resultats:
             if not isinstance(r, dict) or not isinstance(r.get("params"), dict):
                 degrade = True
@@ -192,40 +232,67 @@ class StockageSqlite:
             if r.get("err") or r.get("failed"):  # source en échec ou erreur : les paramètres reçus restent bons, mais le relevé n'est pas complet
                 degrade = True
             for chemin, v in r["params"].items():
-                if not isinstance(chemin, str) or not chemin.startswith("Device.") or len(chemin) > CHEMIN_MAX or len(valeurs) >= PARAMS_MAX:
+                if len(valeurs) >= PARAMS_MAX:
                     degrade = True
+                    break
+                if not isinstance(chemin, str) or not chemin.startswith("Device.") or len(chemin) > CHEMIN_MAX:
+                    refuses += 1
                     continue
                 try:
-                    brut = json.dumps(v, ensure_ascii=False, allow_nan=False)
+                    brut = _json(v)
                 except (TypeError, ValueError):
-                    degrade = True
+                    refuses += 1
                     continue
+                tronque = 0
                 if len(brut) > VALEUR_MAX:
-                    degrade = True
-                    continue
-                valeurs[chemin] = brut
+                    brut, tronque = _tronquer(v, VALEUR_MAX), 1
+                    if brut is None:
+                        refuses += 1
+                        continue
+                valeurs[chemin] = (brut, tronque)
+        if refuses:
+            self._journaliser_refus(box, refuses)
         if not valeurs:
             return False
         maintenant = self._maintenant()
         with self._tx() as cx:
+            # upsert différentiel : une ligne identique n'est pas réécrite (ni page modifiée, ni journal WAL)
+            cx.executemany(
+                "INSERT INTO inventaire(cle,chemin,valeur_json,releve_le,tronque) VALUES(?,?,?,?,?) ON CONFLICT(cle,chemin) DO UPDATE SET "
+                "valeur_json=excluded.valeur_json, releve_le=excluded.releve_le, tronque=excluded.tronque "
+                "WHERE inventaire.valeur_json IS NOT excluded.valeur_json OR inventaire.tronque IS NOT excluded.tronque",
+                [(box.cle, k, v, maintenant, t) for k, (v, t) in valeurs.items()])
+            presents = [r["chemin"] for r in cx.execute("SELECT chemin FROM inventaire WHERE cle=?", (box.cle,))]
             if not degrade:
-                cx.execute("DELETE FROM inventaire WHERE cle=?", (box.cle,))
-            cx.executemany("INSERT OR REPLACE INTO inventaire(cle,chemin,valeur_json,releve_le) VALUES(?,?,?,?)",
-                           [(box.cle, k, v, maintenant) for k, v in valeurs.items()])
-            if degrade:
-                cx.execute("UPDATE boites SET inventaire_partiel=1 WHERE cle=?", (box.cle,))
-            else:
+                cx.executemany("DELETE FROM inventaire WHERE cle=? AND chemin=?", [(box.cle, k) for k in presents if k not in valeurs])
                 cx.execute("UPDATE boites SET inventaire_partiel=0, inventaire_le=? WHERE cle=?", (maintenant, box.cle))
-            cx.execute("DELETE FROM inventaire WHERE cle=? AND rowid IN "
-                       "(SELECT rowid FROM inventaire WHERE cle=? ORDER BY releve_le DESC, rowid DESC LIMIT -1 OFFSET ?)",
-                       (box.cle, box.cle, self.lignes_max))
+            else:
+                cx.execute("UPDATE boites SET inventaire_partiel=1 WHERE cle=?", (box.cle,))
+                if len(presents) > self.lignes_max:
+                    # plafond par box : les lignes les plus anciennes PARMI celles absentes de cette passe partent (une ligne inchangée
+                    # n'est plus redatée : ce qui vient d'être reçu n'est jamais purgé)
+                    vieilles = [r["chemin"] for r in cx.execute(
+                        "SELECT chemin FROM inventaire WHERE cle=? ORDER BY releve_le, rowid", (box.cle,)) if r["chemin"] not in valeurs]
+                    cx.executemany("DELETE FROM inventaire WHERE cle=? AND chemin=?",
+                                   [(box.cle, k) for k in vieilles[:len(presents) - self.lignes_max]])
         return True
 
+    def _journaliser_refus(self, box: Box, n: int) -> None:
+        maintenant = self.horloge()
+        if maintenant - self._refus_journal.get(box.cle, -1e18) < REFUS_JOURNAL_S:
+            return
+        if len(self._refus_journal) >= 1024:
+            self._refus_journal.pop(next(iter(self._refus_journal)))
+        self._refus_journal[box.cle] = maintenant
+        log.warning("inventaire de %s : %d paramètre(s) refusé(s) (chemin hors Device. ou valeur non JSON) ; une ligne par heure au plus", box.cle, n)
+
     def inventaire(self, cle: str) -> dict:
+        """`tronques` : chemins dont la valeur rangée est le début tronqué de la valeur reçue (R38)."""
         with self._cx() as cx:
             b = cx.execute("SELECT inventaire_le, inventaire_partiel FROM boites WHERE cle=?", (cle,)).fetchone()
-            lignes = cx.execute("SELECT chemin, valeur_json FROM inventaire WHERE cle=? ORDER BY chemin", (cle,)).fetchall()
+            lignes = cx.execute("SELECT chemin, valeur_json, tronque FROM inventaire WHERE cle=? ORDER BY chemin", (cle,)).fetchall()
         return {"valeurs": {r["chemin"]: json.loads(r["valeur_json"]) for r in lignes},
+                "tronques": [r["chemin"] for r in lignes if r["tronque"]],
                 "partiel": bool(b and b["inventaire_partiel"]), "releve_le": b["inventaire_le"] if b else None}
 
     # --- lecture des box ---

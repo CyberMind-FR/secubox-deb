@@ -3,13 +3,14 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 
+import json
 import os
 import sqlite3
 import threading
 
 import pytest
 
-from pilotage.stockage import EVENEMENTS_MAX, LIGNES_MAX, PARAMS_MAX, StockageSqlite
+from pilotage.stockage import EVENEMENTS_MAX, LIGNES_MAX, PARAMS_MAX, VALEUR_MAX, StockageSqlite
 from outils import GK2, GK5, GK5_AUTOLOAD, Horloge, P, releve_gk5
 
 JOUR = 86400
@@ -82,10 +83,11 @@ def test_reponse_vide_ou_mal_formee_n_efface_rien(tmp_path):
     for corps in ({"results": []}, {"results": "x"}, {}, {"results": [{"path": P, "params": {"Autre.chose": 1}}]}):
         assert s.inventaire_enregistrer(GK5, corps) is False
     assert s.inventaire(GK5.cle) == avant
-    # une valeur valide au milieu de chemins invalides est gardée, le relevé est partiel
-    assert s.inventaire_enregistrer(GK5, {"results": [{"path": P, "params": {"Autre.chose": 1, P + "ok": [1]}}]})
+    # R38 : un paramètre refusé (chemin hors Device., valeur NaN) ne rend plus la relève partielle s'il est seul en cause :
+    # la passe est complète, elle remplace l'inventaire ; le paramètre refusé n'y entre simplement pas
+    assert s.inventaire_enregistrer(GK5, {"results": [{"path": P, "params": {"Autre.chose": 1, P + "nan": float("nan"), P + "ok": [1]}}]})
     apres = s.inventaire(GK5.cle)
-    assert apres["partiel"] is True and set(apres["valeurs"]) == set(avant["valeurs"]) | {P + "ok"}
+    assert apres["partiel"] is False and set(apres["valeurs"]) == {P + "ok"}
 
 
 def test_source_en_echec_signalee_par_l_agent_est_une_passe_degradee(tmp_path):
@@ -272,3 +274,118 @@ def test_releve_stocke_et_relu(tmp_path):
     s.releve_enregistrer(GK5.cle, 60, "ok", {"processus": [{"comm": "x"}]})
     r = s.releve_lire(GK5.cle)
     assert r["statut"] == "ok" and r["duree_s"] == 60 and r["sortie"] == {"processus": [{"comm": "x"}]} and r["recu_le"] == int(h.t)
+
+
+NOMS = P + "X_SECUBOX_Exposure.Names"
+
+
+def _releve_avec(**params):
+    r = releve_gk5()
+    r["results"][0]["params"].update(params)
+    return r
+
+
+def test_exposure_names_de_200_noms_rangee_et_releve_complet(tmp_path):
+    """I4/R38 : ~200 server_name (plus de 4 096 caractères) ne rendent plus chaque relève partielle à jamais ; les entrées {i}
+    disparues sont purgées et inventaire_le avance."""
+    s, h = neuf(tmp_path)
+    s.vu(GK5, {})
+    noms = [f"service-{i:03d}.client-exemple.secubox.in" for i in range(200)]
+    assert len(json.dumps(noms)) > 4096
+    s.inventaire_enregistrer(GK5, _releve_avec(**{P + "X_SECUBOX_Services.2.Name": "fantome.service", NOMS: noms}))
+    h.avance(60)
+    assert s.inventaire_enregistrer(GK5, _releve_avec(**{NOMS: noms}))
+    inv = s.inventaire(GK5.cle)
+    assert inv["partiel"] is False and inv["releve_le"] == int(h.t) and inv["tronques"] == []
+    assert inv["valeurs"][NOMS] == noms
+    assert P + "X_SECUBOX_Services.2.Name" not in inv["valeurs"]
+
+
+def test_valeur_au_dela_de_64_kio_tronquee_avec_marque_jamais_jetee(tmp_path):
+    s, _ = neuf(tmp_path)
+    s.vu(GK5, {})
+    assert VALEUR_MAX == 64 << 10
+    noms = [f"n{i:05d}.exemple.secubox.in" for i in range(5000)]          # ~150 Kio de JSON
+    texte = "é" * (100 << 10)
+    assert s.inventaire_enregistrer(GK5, _releve_avec(**{NOMS: noms, P + "Long": texte, P + "Objet": {f"k{i}": "v" * 50 for i in range(3000)}}))
+    inv = s.inventaire(GK5.cle)
+    assert inv["partiel"] is False                                           # tronquée, pas rejetée : la passe reste complète
+    assert inv["tronques"] == sorted([NOMS, P + "Long", P + "Objet"])
+    garde = inv["valeurs"][NOMS]
+    assert isinstance(garde, list) and 0 < len(garde) < len(noms) and garde == noms[:len(garde)]
+    assert len(json.dumps(garde, ensure_ascii=False)) <= VALEUR_MAX < len(json.dumps(garde + [noms[len(garde)]], ensure_ascii=False))
+    assert isinstance(inv["valeurs"][P + "Long"], str) and texte.startswith(inv["valeurs"][P + "Long"])
+    assert len(json.dumps(inv["valeurs"][P + "Long"], ensure_ascii=False)) <= VALEUR_MAX
+    assert isinstance(inv["valeurs"][P + "Objet"], dict) and 0 < len(inv["valeurs"][P + "Objet"]) < 3000
+    # la valeur redevient courte : la marque tombe
+    s.inventaire_enregistrer(GK5, _releve_avec(**{NOMS: noms[:3], P + "Long": "court", P + "Objet": {}}))
+    inv = s.inventaire(GK5.cle)
+    assert inv["tronques"] == [] and inv["valeurs"][NOMS] == noms[:3]
+
+
+def _compteur_d_ecritures(tmp_path):
+    db = sqlite3.connect(tmp_path / "pilotage" / "pilotage.db")
+    db.executescript("""
+        CREATE TABLE compte(n INTEGER); INSERT INTO compte VALUES(0);
+        CREATE TRIGGER c_ins AFTER INSERT ON inventaire BEGIN UPDATE compte SET n=n+1; END;
+        CREATE TRIGGER c_maj AFTER UPDATE ON inventaire BEGIN UPDATE compte SET n=n+1; END;
+        CREATE TRIGGER c_sup AFTER DELETE ON inventaire BEGIN UPDATE compte SET n=n+1; END;""")
+    db.commit()
+
+    def lire():
+        return db.execute("SELECT n FROM compte").fetchone()[0]
+
+    def zero():
+        db.execute("UPDATE compte SET n=0")
+        db.commit()
+    return lire, zero
+
+
+def test_releve_identique_n_ecrit_aucune_ligne_d_inventaire(tmp_path):
+    """M4 : l'inventaire n'écrit que les lignes changées (plus de DELETE puis réinsertion complète à chaque relève)."""
+    s, h = neuf(tmp_path)
+    s.vu(GK5, {})
+    s.inventaire_enregistrer(GK5, releve_gk5(swap_used=660))
+    lire, zero = _compteur_d_ecritures(tmp_path)
+    zero()
+    h.avance(60)
+    assert s.inventaire_enregistrer(GK5, releve_gk5(swap_used=660))
+    assert lire() == 0
+    assert s.inventaire(GK5.cle)["releve_le"] == int(h.t)                  # la relève complète est datée quand même
+    h.avance(60)
+    s.inventaire_enregistrer(GK5, releve_gk5(swap_used=700))                # une valeur change : une ligne écrite
+    assert lire() == 1 and s.inventaire(GK5.cle)["valeurs"][P + "DeviceInfo.MemoryStatus.X_SECUBOX_SwapUsed"] == 700
+    zero()
+    r = releve_gk5(swap_used=700)
+    del r["results"][0]["params"][P + "X_SECUBOX_Services.1.Name"]          # un chemin disparu : une suppression
+    s.inventaire_enregistrer(GK5, r)
+    assert lire() == 1
+
+
+def test_plafond_de_lignes_garde_la_passe_courante(tmp_path):
+    """Les lignes non modifiées ne sont plus redatées : au-delà du plafond, ce qui vient d'être reçu n'est jamais purgé."""
+    s, h = neuf(tmp_path, None)
+    s.lignes_max = 10
+    s.vu(GK5, {})
+    s.inventaire_enregistrer(GK5, {"results": [{"path": P, "params": {f"{P}Stable.{j}": j for j in range(5)}}]})
+    for i in range(4):  # passes dégradées : les 5 valeurs stables, inchangées, et 3 chemins neufs à chaque fois
+        h.avance(60)
+        params = {f"{P}Stable.{j}": j for j in range(5)}
+        params.update({f"{P}Neuf.{i}.{j}": j for j in range(3)})
+        s.inventaire_enregistrer(GK5, {"results": [{"path": P, "params": params}], "tronque": True})
+    v = s.inventaire(GK5.cle)["valeurs"]
+    assert len(v) <= 10 and all(f"{P}Stable.{j}" in v for j in range(5)) and all(f"{P}Neuf.3.{j}" in v for j in range(3))
+
+
+def test_base_d_avant_r38_gagne_la_colonne_tronque(tmp_path):
+    d = tmp_path / "pilotage"
+    d.mkdir()
+    ancienne = sqlite3.connect(d / "pilotage.db")
+    ancienne.executescript("CREATE TABLE inventaire(cle TEXT NOT NULL, chemin TEXT NOT NULL, valeur_json TEXT NOT NULL, "
+                           "releve_le INTEGER NOT NULL, PRIMARY KEY(cle, chemin));"
+                           "INSERT INTO inventaire VALUES('maillage:gk5','Device.X','1',1);")
+    ancienne.close()
+    s, _ = neuf(tmp_path)
+    assert s.inventaire(GK5.cle)["valeurs"] == {"Device.X": 1} and s.inventaire(GK5.cle)["tronques"] == []
+    s.vu(GK5, {})
+    assert s.inventaire_enregistrer(GK5, releve_gk5())

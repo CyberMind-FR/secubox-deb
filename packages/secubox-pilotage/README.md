@@ -37,5 +37,13 @@ Il pose, dans la chaîne `input` de `inet filter` (base unifiée de secubox-hard
 Aucune table connue : le script le dit sur stderr et ne pose rien. `secubox-pilotage-ecoute --retirer` (appelé par le prerm) retire fichier nginx
 et règles. Déclencheurs : `secubox-pilotage-ecoute.path` (changement de `wg_mesh.json` ou de `pairs-publics.json`) et `.timer` (5 min).
 
+## Inventaire
+Toutes les 60 s, un GET `Device.` par box en ligne. Une passe complète remplace l'inventaire de la box (chemins disparus purgés) ; une passe
+tronquée, en erreur, avec une source en échec (`failed`) ou au-delà de 5 000 paramètres ajoute sans rien effacer (`inventaire_partiel`).
+Un paramètre refusé seul (chemin hors `Device.` ou de plus de 256 caractères, valeur non JSON) n'entre pas, sans rendre la passe partielle.
+Une valeur de plus de 64 Kio de JSON est **tronquée**, jamais jetée (début d'une liste, d'un objet ou d'une chaîne) ; son chemin figure dans
+`inventaire_tronques` de `GET /boxes/{x}`. Seules les lignes changées sont écrites (une relève identique n'écrit que `inventaire_le`).
+Au plus 10 000 lignes par box : au-delà, les plus anciennes parmi celles absentes de la passe courante partent.
+
 ## Tests
 `cd packages/secubox-pilotage && python3 -m pytest -q`

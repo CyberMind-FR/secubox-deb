@@ -63,6 +63,7 @@ def test_boxes_resume_l_inventaire(m):
     assert b["memoire_dispo_mo"] == 512 and b["agent_version"] == "0.1.0"
     d = TestClient(m.app).get("/boxes/gk5").json()
     assert d["inventaire"][P + "X_SECUBOX_Services.1.Name"] == "secubox-hub.service" and d["inventaire_partiel"] is False
+    assert d["inventaire_tronques"] == []                                                       # R38 : chemins dont la valeur a été tronquée
 
 
 def test_hors_ligne_apres_90_s(m):

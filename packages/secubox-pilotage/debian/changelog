@@ -1,3 +1,16 @@
+secubox-pilotage (0.1.1-1~trixie1) trixie; urgency=medium
+
+  * Relecture finale L1 (ref #3126) :
+    - I4/R38 : une valeur de plus de 4 096 caractères (`Exposure.Names` d'une box à ~150 noms) rendait chaque relève
+      « partielle » à jamais (fantômes jamais purgés, `inventaire_le` figé). Plafond par valeur porté à 64 Kio ; au-delà
+      la valeur est tronquée (début de la liste, de l'objet ou de la chaîne) et marquée (`inventaire_tronques` de
+      `GET /boxes/{x}`), jamais jetée. Un paramètre refusé seul ne rend plus la relève partielle (une ligne de journal
+      par box et par heure). Plafond de 10 000 lignes par box inchangé.
+    - M4 : l'inventaire n'écrit que les lignes changées (upsert différentiel, suppression des seuls chemins disparus) ;
+      au-delà du plafond, ce qui vient d'être reçu n'est jamais purgé. Colonne `tronque` ajoutée aux bases existantes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 12:00:00 +0100
+
 secubox-pilotage (0.1.0-1~trixie1) trixie; urgency=medium
 
   * Première version (ref #3126, L1 « Voir ») : maître du pilotage distant. Service secubox-pilotage-api (un processus, une boucle,
