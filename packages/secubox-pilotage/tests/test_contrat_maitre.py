@@ -23,6 +23,7 @@ import base64
 import hashlib
 import json
 import os
+import types
 from pathlib import Path
 
 import httpx
@@ -44,6 +45,11 @@ AGENT_L2 = CONTRAT / "agent-l2"
 MAJ = os.environ.get("SECUBOX_CONTRAT_MAJ") == "1"
 SUPPORT_ID = "5e55105000000001"   # identifiant de session de support figé (le maître le tire au hasard : secrets.token_hex(8))
 JOB_RENOMMER = "0000000000000a06"
+
+
+def figer_support(monkeypatch) -> None:
+    """Identifiant de session de support figé, pour api.main seulement : les msg_id des files restent tirés au hasard."""
+    monkeypatch.setattr(api_main, "secrets", types.SimpleNamespace(token_hex=lambda n=8: SUPPORT_ID))
 
 
 def code_factice(nom: str = "gk9") -> str:
@@ -104,7 +110,7 @@ async def _appel(m: Maitre, methode: str, url: str, corps=None):
 
 async def produire(tmp_path: Path, monkeypatch) -> dict:
     """{nom: {type, body}} : ce que le VRAI maître dépose dans la file de la box, pour chaque producteur."""
-    monkeypatch.setattr(api_main.secrets, "token_hex", lambda n=8: SUPPORT_ID)
+    figer_support(monkeypatch)
     m = Maitre(tmp_path)
     out: dict = {}
 
@@ -221,7 +227,7 @@ async def rejouer_agent_l2(tmp_path: Path, fx: dict, monkeypatch) -> list:
     vérifie ce que le maître en retient. AssertionError si une émission n'est pas comprise. Rend les lignes d'audit."""
     from api.asgi import assembler
 
-    monkeypatch.setattr(api_main.secrets, "token_hex", lambda n=8: SUPPORT_ID)
+    figer_support(monkeypatch)
     h = Horloge(1_793_000_000.0)                     # l'instant des fixtures de l'agent (fin de support à +30 min)
     s = StockageSqlite(tmp_path / "p", horloge=h)
     f = Files()
