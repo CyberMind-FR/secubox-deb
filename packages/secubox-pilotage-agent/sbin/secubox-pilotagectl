@@ -23,7 +23,11 @@ Verbes (liste fermée) :
                                            protégée (modules.d `protected = true`, ou socle) ; unité inconnue refusée
   renouveler-secrets                       secubox-renouvelle-secrets --tout --oui, opération longue
   renommer <nom>                           libellé DNS ; « non disponible » jusqu'à la tâche 5
-  support <ouvrir|fermer> <id>             « non disponible » jusqu'à la tâche 4
+  support ouvrir <id> [<duree_min>]        demande d'ouverture (maître, ou local) : crée un support EN ATTENTE, rend
+                                           {"ok": false, "refus": "consentement requis", "support": id} ; durée entière
+                                           de 1 à 240 min (^[1-9][0-9]{0,2}$), 30 par défaut ; une session à la fois
+  support <accepter|refuser> <id>          LOCAL SEULEMENT : le détenteur ouvre (pour la durée demandée) ou refuse
+  support fermer <id>                      permis des deux côtés (maître et détenteur), en attente ou ouvert
   ancre-verifier <wg-mesh|wg-autoload>     {"ok": true} | {"ok": false, "raison": absente|differente|illisible} : le
                                            pair WireGuard de l'interface du canal de l'agent qui porte l'adresse du
                                            maître a-t-il la clé de l'ancre ? (lecture, permise depuis l'agent ; échec
@@ -33,6 +37,10 @@ Verbes (liste fermée) :
   politique <action>                       {"autorise", "consentement", "raison"} ; actions : releve, reboot,
                                            maj-paquets, service-demarrer, service-arreter, service-redemarrer, renommer,
                                            renouveler-secrets, support-ouvrir, support-fermer
+  etat                                     lecture, permise depuis l'agent, NON auditée (sondée chaque minute) :
+                                           {"ok", "box", "mains_liees", "canal", "consentements", "support"}, plus
+                                           "agent" (ActiveState de l'unité de l'agent) en local ; les expirations
+                                           qu'elle constate (consentement à 24 h, support) sont écrites et auditées
   etat-operation <job>                     lecture, permise depuis l'agent, auditée (pilotage_lecture) : {"ok": true, "job",
                                            "etat": en_cours|termine|inconnu} et, terminée, "verbe", "resultat"
                                            (succes|echec), "rc" (entier ou null) ; la fin est enregistrée par _fin
@@ -59,6 +67,14 @@ Politique, pour une demande du maître (origine « maitre » = appel par sudo de
     l'accord une fois. Poser les mains liées annule les consentements en attente ou acceptés non consommés.
   - une seule opération longue à la fois (maj-paquets, renouveler-secrets, et le reboot pendant ses 5 s de délai).
 Une demande locale (root sur la box, hors de l'agent) n'est soumise ni aux mains liées ni au consentement.
+
+Support (tâche 4) : ouvert depuis le maître, accepté sur la box en local (`secubox-pilotage support accepter <id>`),
+durée bornée (30 min par défaut, 240 au plus) comptée à partir de l'accord, révocable des deux côtés, audité
+(support_demande, support_ouvert, support_refuse, support_ferme, support_annule, support_expire). Une seule session
+(état root support.json) ; une demande non décidée expire à 24 h, une session ouverte à sa fin, constatée à la lecture
+suivante (l'agent lit `etat` chaque minute). Il ne lance rien sur la box (jamais de shell) : il dit au maître que le
+détenteur a ouvert la porte au catalogue d'actions et à la vue en direct, et chaque action reste soumise à la
+politique ci-dessus. Mains liées : aucune ouverture (même locale), une session ouverte est fermée, une demande annulée.
 
 Opérations : `systemd-run --collect --unit=secubox-pilotage-op-<job>`, sans délai imposé (jamais de timeout sur apt) ;
 la progression se lit dans le journal de l'unité ; sa fin est auditée par `ExecStopPost=… _fin <job>`. Audit : une
@@ -108,6 +124,7 @@ RE_SUPPORT = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 RE_ID = re.compile(r"[0-9a-f]{16}")
 RE_ACTEUR = re.compile(r"[a-z_][a-z0-9_.-]{0,63}")
 RE_RC = re.compile(r"[0-9]{1,3}")
+RE_DUREE = re.compile(r"[1-9][0-9]{0,2}")
 RE_CLE_WG = re.compile(r"[A-Za-z0-9+/]{43}=")
 # Interface du tunnel vers le maître et adresse du maître dans ce tunnel (miroir de canauxMaitre de l'agent).
 MAILLAGES = {"wg-mesh": ipaddress.ip_address("10.10.0.1"), "wg-autoload": ipaddress.ip_address("10.64.0.1")}
@@ -117,7 +134,11 @@ SERVICE = {"demarrer": "start", "arreter": "stop", "redemarrer": "restart"}
 ACTIONS = ("releve", "reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
            "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer")
 VERBES = ("reboot", "maj-paquets", "service", "renommer", "renouveler-secrets", "support", "consentement",
-          "mains-liees", "ancre-verifier", "politique", "etat-operation", "_fin")
+          "mains-liees", "ancre-verifier", "politique", "etat", "etat-operation", "_fin")
+OPS_SUPPORT = ("ouvrir", "fermer", "accepter", "refuser")
+ETATS_SUPPORT = frozenset({"en_attente", "ouvert", "refuse", "ferme", "annule", "expire"})
+DUREE_SUPPORT = 30                                       # minutes, défaut d'une session de support
+DUREE_SUPPORT_MAX = 240
 CONSENTEMENT_CLIENTE = frozenset({"reboot", "maj-paquets", "service-arreter", "service-redemarrer", "renommer",
                                   "renouveler-secrets"})
 # Opérations exclusives, enregistrées dans operation.json : un reboot pendant apt laisserait dpkg à moitié configuré,
@@ -666,9 +687,22 @@ def analyser(argv):
             raise ArgvInvalide
         return verbe, {"nom": a[0]}
     if verbe == "support":
-        if len(a) != 2 or a[0] not in ("ouvrir", "fermer") or not RE_SUPPORT.fullmatch(a[1]):
+        if len(a) not in (2, 3) or a[0] not in OPS_SUPPORT or not RE_SUPPORT.fullmatch(a[1]):
             raise ArgvInvalide
-        return verbe, {"op": a[0], "id": a[1]}
+        if a[0] != "ouvrir":
+            if len(a) != 2:
+                raise ArgvInvalide
+            return verbe, {"op": a[0], "id": a[1]}
+        duree = DUREE_SUPPORT
+        if len(a) == 3:
+            if not RE_DUREE.fullmatch(a[2]) or int(a[2]) > DUREE_SUPPORT_MAX:
+                raise ArgvInvalide
+            duree = int(a[2])
+        return verbe, {"op": a[0], "id": a[1], "duree_min": duree}
+    if verbe == "etat":
+        if a:
+            raise ArgvInvalide
+        return verbe, {}
     if verbe == "consentement":
         if len(a) != 2 or a[0] not in ("accepter", "refuser") or not RE_ID.fullmatch(a[1]):
             raise ArgvInvalide
@@ -808,12 +842,16 @@ def executer(ctx, verbe, p):
     if verbe == "etat-operation":
         return etat_operation(ctx, p["job"])
 
+    if verbe == "etat":
+        return lire_etat(ctx)                       # lecture sondée par l'agent : non auditée (ses expirations le sont)
+
     if verbe == "ancre-verifier":
         return verifier_ancre(ctx, p["interface"])  # lecture : seul un échec est audité
 
     action = action_de(verbe, p)
     unite = p.get("unite")
-    auditer(ctx, "pilotage_demande", verbe=verbe, action=action, unite=unite)
+    auditer(ctx, "pilotage_demande", verbe=verbe, action=action, unite=unite,
+            support=p["id"] if verbe == "support" else None)
     try:
         return traiter(ctx, verbe, p, action, unite)
     except Erreur as e:
@@ -926,10 +964,12 @@ def traiter(ctx, verbe, p, action, unite):
         auditer(ctx, "pilotage_refus", verbe=verbe, action=action, unite=unite, refus=motif, **extra)
         return {"ok": False, "refus": motif, **extra}
 
-    if verbe in ("consentement", "mains-liees") and ctx.origine == "maitre":
+    local_seulement = verbe in ("consentement", "mains-liees") or (verbe == "support" and p["op"] in ("accepter",
+                                                                                                      "refuser"))
+    if local_seulement and ctx.origine == "maitre":
         return refus("local seulement")
-    if verbe in ("support", "renommer"):
-        return refus("non disponible")              # R-L2-1 : comportement livré par les tâches 4 et 5
+    if verbe == "renommer":
+        return refus("non disponible")              # R-L2-1 : comportement livré par la tâche 5
 
     fd = ouvrir_etat(ctx, creer=True)
     try:
@@ -939,6 +979,8 @@ def traiter(ctx, verbe, p, action, unite):
             return basculer_mains(ctx, fd, p["op"] == "on", maintenant)
         if verbe == "consentement":
             return decider(ctx, fd, p, maintenant, refus)
+        if verbe == "support":
+            return gerer_support(ctx, fd, p, maintenant, refus)
         return agir(ctx, fd, verbe, p, action, unite, maintenant, refus)
     finally:
         os.close(fd)
@@ -953,6 +995,15 @@ def basculer_mains(ctx, fd, liees, maintenant):
                 c["etat"] = "annule"
                 auditer(ctx, "consentement_annule", consentement=c["id"], action=c.get("action"), unite=c.get("unite"))
         ecrire_json(fd, "consentements.json", consentements)
+        # Aucune session de support sous mains liées : la demande en attente est annulée, la session ouverte fermée.
+        sup = charger_support(ctx, fd, maintenant)
+        if sup is not None and sup["etat"] in ("en_attente", "ouvert"):
+            ouvert = sup["etat"] == "ouvert"
+            sup["etat"] = "ferme" if ouvert else "annule"
+            if ouvert:
+                sup["ferme"] = maintenant
+            ecrire_json(fd, "support.json", sup)
+            auditer(ctx, "support_ferme" if ouvert else "support_annule", support=sup["id"])
     else:
         retirer(fd, "mains-liees")
     projection = poser_projection(ctx, liees)
@@ -982,6 +1033,115 @@ def decider(ctx, fd, p, maintenant, refus):
     ecrire_json(fd, "consentements.json", consentements)
     auditer(ctx, "consentement", consentement=c["id"], action=c.get("action"), unite=c.get("unite"), decision=decision)
     return {"ok": True, "consentement": c["id"], "decision": decision}
+
+
+# --- Support et état -------------------------------------------------------------------------------------------------
+
+def entier(v):
+    return v if isinstance(v, int) and not isinstance(v, bool) else None
+
+
+def charger_support(ctx, fd, maintenant):
+    """Session de support (une seule), ou None. Une demande non décidée à son échéance (24 h) ou une session ouverte
+    arrivée à sa fin passe à « expire » : écrit aussitôt et audité une seule fois. Forme inattendue → Erreur."""
+    sup = lire_json(fd, "support.json", None)
+    if sup is None:
+        return None
+    if (not isinstance(sup, dict) or not isinstance(sup.get("id"), str) or not RE_SUPPORT.fullmatch(sup["id"])
+            or sup.get("etat") not in ETATS_SUPPORT or entier(sup.get("duree_min")) is None
+            or not 1 <= sup["duree_min"] <= DUREE_SUPPORT_MAX or entier(sup.get("expire")) is None):
+        raise Erreur("état non fiable")
+    if sup["etat"] == "ouvert" and entier(sup.get("fin")) is None:
+        raise Erreur("état non fiable")
+    if ((sup["etat"] == "en_attente" and sup["expire"] < maintenant)
+            or (sup["etat"] == "ouvert" and sup["fin"] <= maintenant)):
+        sup["etat"] = "expire"
+        ecrire_json(fd, "support.json", sup)
+        auditer(ctx, "support_expire", support=sup["id"])
+    return sup
+
+
+def gerer_support(ctx, fd, p, maintenant, refus):
+    """ouvrir (en attente), accepter|refuser (local, vérifié par traiter), fermer (des deux côtés). Rien n'est lancé."""
+    op, ident = p["op"], p["id"]
+    du_maitre = ctx.origine == "maitre"
+    if du_maitre and canal_verifie(fd, maintenant) is None:
+        return refus("ancre non vérifiée")         # R-L2-21, comme pour agir
+    if mains_liees(ctx, fd) and (du_maitre or op in ("ouvrir", "accepter")):
+        return refus("mains liées")                 # aucune ouverture, même locale
+    sup = charger_support(ctx, fd, maintenant)
+    en_cours = sup is not None and sup["etat"] in ("en_attente", "ouvert")
+    if op == "ouvrir":
+        if en_cours and sup["id"] != ident:
+            return refus("support déjà en cours", support=sup["id"])
+        if en_cours and sup["etat"] == "ouvert":
+            return refus("support déjà ouvert", support=ident)
+        if not en_cours:
+            sup = {"id": ident, "etat": "en_attente", "duree_min": p["duree_min"], "cree": maintenant,
+                   "expire": maintenant + VALIDITE}
+            ecrire_json(fd, "support.json", sup)
+            auditer(ctx, "support_demande", support=ident, duree_min=p["duree_min"])
+        return refus("consentement requis", support=ident)
+    if sup is None or sup["id"] != ident:
+        return refus("support inconnu", support=ident)
+    if op == "fermer":
+        if not en_cours:
+            return refus("support déjà fermé", support=ident)
+        sup["etat"], sup["ferme"] = "ferme", maintenant
+        ecrire_json(fd, "support.json", sup)
+        auditer(ctx, "support_ferme", support=ident)
+        return {"ok": True, "support": ident, "etat": "ferme"}
+    if sup["etat"] != "en_attente":
+        motif = {"annule": "support annulé", "expire": "support expiré"}.get(sup["etat"], "support déjà décidé")
+        return refus(motif, support=ident)
+    if op == "accepter":
+        fin = maintenant + sup["duree_min"] * 60     # la durée court à partir de l'accord
+        sup.update(etat="ouvert", ouvert=maintenant, fin=fin)
+        ecrire_json(fd, "support.json", sup)
+        auditer(ctx, "support_ouvert", support=ident, duree_min=sup["duree_min"], fin=fin)
+        return {"ok": True, "support": ident, "etat": "ouvert", "fin": fin}
+    sup.update(etat="refuse", decide=maintenant)
+    ecrire_json(fd, "support.json", sup)
+    auditer(ctx, "support_refuse", support=ident)
+    return {"ok": True, "support": ident, "etat": "refuse"}
+
+
+CHAMPS_CONSENTEMENT = ("id", "action", "unite", "etat", "cree", "expire", "decide")
+CHAMPS_SUPPORT = ("id", "etat", "duree_min", "cree", "expire", "ouvert", "fin")
+
+
+def etat_agent(ctx):
+    """ActiveState de l'unité de l'agent (affichage local) ; « inconnu » si systemd ne répond pas."""
+    try:
+        r = subprocess.run([ctx.systemctl, "show", "-p", "ActiveState", "--value", f"{AGENT}.service"], env=ctx.env,
+                           capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return "inconnu"
+    return (propre(r.stdout.strip()) or "inconnu") if r.returncode == 0 else "inconnu"
+
+
+def lire_etat(ctx):
+    """Lecture de l'agent (sondage) et de la commande locale : identifiants et états seulement, jamais une valeur
+    secrète. Sans arbre d'état (box neuve), rien n'est créé."""
+    res = {"ok": True, "box": ctx.box, "mains_liees": False, "canal": None, "consentements": [], "support": None}
+    fd = ouvrir_etat(ctx, creer=False)
+    if fd is None:
+        res["mains_liees"] = projection_presente(ctx)
+    else:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)          # les expirations constatées sont écrites
+            maintenant = int(time.time())
+            res["mains_liees"] = mains_liees(ctx, fd)
+            res["canal"] = canal_verifie(fd, maintenant)
+            res["consentements"] = [{k: c[k] for k in CHAMPS_CONSENTEMENT if k in c}
+                                    for c in charger_consentements(ctx, fd, maintenant)]
+            sup = charger_support(ctx, fd, maintenant)
+            res["support"] = None if sup is None else {k: sup[k] for k in CHAMPS_SUPPORT if k in sup}
+        finally:
+            os.close(fd)
+    if ctx.origine == "local":
+        res["agent"] = etat_agent(ctx)
+    return res
 
 
 def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):

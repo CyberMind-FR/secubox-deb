@@ -228,6 +228,18 @@ def test_argv_invalide_rend_2(banc):
         ["_fin"],
         ["_fin", "../x"],
         ["_fin", "0123456789abcdef", "en-trop"],
+        # tâche 4 : support (durée entière de 1 à 240, sans zéro de tête), etat sans argument
+        ["support", "ouvrir", "s1", "0"],
+        ["support", "ouvrir", "s1", "241"],
+        ["support", "ouvrir", "s1", "030"],
+        ["support", "ouvrir", "s1", "30.5"],
+        ["support", "ouvrir", "s1", "-5"],
+        ["support", "ouvrir", "s1", "30", "en-trop"],
+        ["support", "fermer", "s1", "30"],
+        ["support", "accepter"],
+        ["support", "accepter", "s1", "30"],
+        ["support", "refuser", "../s1"],
+        ["etat", "en-trop"],
     ]
     for argv in invalides:
         rc, sortie, p = banc.run(*argv, agent=True)
@@ -242,14 +254,17 @@ def test_argv_invalide_rend_2(banc):
 
 
 def test_verbes_valides_acceptes_ou_non_disponibles(banc_nu):
-    """R-L2-1 : argv validé pour toute la liste fermée ; support, renommer « non disponible » (code 0) ; ancre-verifier
-    est livré (tâche 2) : sans ancre, il rend ok faux, raison « absente »."""
+    """R-L2-1 : argv validé pour toute la liste fermée ; renommer « non disponible » (code 0) ; ancre-verifier est livré
+    (tâche 2) : sans ancre, il rend ok faux, raison « absente » ; support (tâche 4) : sans ancre, refusé au maître."""
     banc = banc_nu
     rc, sortie, _ = banc.ancre_verifier()
     assert rc == 0 and sortie == {"ok": False, "raison": "absente"}
-    for argv in (["support", "ouvrir", "s-01"], ["support", "fermer", "s-01"], ["renommer", "box-2"]):
+    for argv in (["renommer", "box-2"],):
         rc, sortie, _ = banc.run(*argv, agent=True)
         assert rc == 0 and sortie == {"ok": False, "refus": "non disponible"}, argv
+    for argv in (["support", "ouvrir", "s-01"], ["support", "ouvrir", "s-01", "240"], ["support", "fermer", "s-01"]):
+        rc, sortie, _ = banc.run(*argv, agent=True)
+        assert rc == 0 and sortie == {"ok": False, "refus": "ancre non vérifiée"}, argv
     assert banc.lancements() == []
     for action in ACTIONS:
         rc, sortie, _ = banc.run("politique", action, agent=True)
@@ -876,3 +891,210 @@ def test_ecriture_avant_lancement_refuse_toujours(banc):
     rc, sortie, _ = banc.run("reboot", agent=True)
     assert rc != 0 and sortie["ok"] is False
     assert banc.lancements() == []
+
+
+# --- Tâche 4 : support, état lu par l'agent et par la commande locale ------------------------------------------------
+
+PERMIS_AUDIT = {"ts", "module", "evenement", "box", "verbe", "action", "unite", "acteur", "origine", "job", "resultat",
+                "refus", "consentement", "decision", "etat", "rc", "support", "duree_min", "fin"}
+
+
+def lire_support(banc):
+    return json.loads((banc.r / "var/lib/secubox-pilotagectl/support.json").read_text())
+
+
+def ecrire_support(banc, sup):
+    (banc.r / "var/lib/secubox-pilotagectl/support.json").write_text(json.dumps(sup))
+
+
+def test_support_ouvert_apres_accord_local(banc):
+    """Le maître demande, la box accepte en local : le support s'ouvre pour la durée demandée (bornée à 240 min)."""
+    rc, sortie, _ = banc.run("--acteur", "gk2admin", "support", "ouvrir", "s-01", "45", agent=True)
+    assert rc == 0 and sortie == {"ok": False, "refus": "consentement requis", "support": "s-01"}
+    # redemandé : même réponse, pas de seconde demande auditée
+    _, encore, _ = banc.run("support", "ouvrir", "s-01", "45", agent=True)
+    assert encore == sortie
+    # l'agent n'accepte pas à la place du détenteur
+    rc, sortie, _ = banc.run("support", "accepter", "s-01", agent=True)
+    assert rc == 0 and sortie == {"ok": False, "refus": "local seulement"}
+    rc, sortie, _ = banc.run("support", "refuser", "s-01", agent=True)
+    assert sortie == {"ok": False, "refus": "local seulement"}
+    avant = int(__import__("time").time())
+    rc, sortie, _ = banc.run("support", "accepter", "s-01")
+    assert rc == 0 and sortie["ok"] is True and sortie["support"] == "s-01" and sortie["etat"] == "ouvert"
+    assert avant + 45 * 60 <= sortie["fin"] <= avant + 45 * 60 + 60
+    sup = lire_support(banc)
+    assert sup["id"] == "s-01" and sup["etat"] == "ouvert" and sup["duree_min"] == 45
+    # déjà ouvert : ni seconde ouverture ni seconde décision
+    _, sortie, _ = banc.run("support", "ouvrir", "s-01", agent=True)
+    assert sortie == {"ok": False, "refus": "support déjà ouvert", "support": "s-01"}
+    _, sortie, _ = banc.run("support", "accepter", "s-01")
+    assert sortie == {"ok": False, "refus": "support déjà décidé", "support": "s-01"}
+    assert banc.lancements() == []                                  # jamais de shell ni d'unité lancée
+    evts = banc.audit()
+    assert all(set(e) <= PERMIS_AUDIT for e in evts), [set(e) - PERMIS_AUDIT for e in evts]
+    demandes = [e for e in evts if e["evenement"] == "support_demande"]
+    assert len(demandes) == 1 and demandes[0]["support"] == "s-01" and demandes[0]["duree_min"] == 45
+    assert demandes[0]["acteur"] == "gk2admin" and demandes[0]["origine"] == "maitre"
+    ouverts = [e for e in evts if e["evenement"] == "support_ouvert"]
+    assert len(ouverts) == 1 and ouverts[0]["origine"] == "local" and ouverts[0]["fin"] == sortie_fin(banc)
+
+
+def sortie_fin(banc):
+    return lire_support(banc)["fin"]
+
+
+def test_support_duree_par_defaut_et_maximum(banc):
+    """30 min par défaut, 240 au plus (241 : argv invalide, voir test_argv_invalide_rend_2)."""
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    assert lire_support(banc)["duree_min"] == 30
+    banc.run("support", "refuser", "s-01")
+    banc.run("support", "ouvrir", "s-02", "240", agent=True)
+    _, sortie, _ = banc.run("support", "accepter", "s-02")
+    sup = lire_support(banc)
+    assert sup["duree_min"] == 240 and sup["fin"] - sup["ouvert"] == 240 * 60
+
+
+def test_support_refuse_par_le_detenteur(banc):
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    rc, sortie, _ = banc.run("support", "refuser", "s-01")
+    assert rc == 0 and sortie == {"ok": True, "support": "s-01", "etat": "refuse"}
+    _, sortie, _ = banc.run("support", "accepter", "s-01")
+    assert sortie == {"ok": False, "refus": "support déjà décidé", "support": "s-01"}
+    assert [e["evenement"] for e in banc.audit() if e["evenement"].startswith("support_")] == [
+        "support_demande", "support_refuse"]
+
+
+def test_support_une_session_a_la_fois(banc):
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    _, sortie, _ = banc.run("support", "ouvrir", "s-02", agent=True)
+    assert sortie == {"ok": False, "refus": "support déjà en cours", "support": "s-01"}
+    _, sortie, _ = banc.run("support", "accepter", "s-02")
+    assert sortie == {"ok": False, "refus": "support inconnu", "support": "s-02"}
+    banc.run("support", "accepter", "s-01")
+    _, sortie, _ = banc.run("support", "ouvrir", "s-02", agent=True)
+    assert sortie == {"ok": False, "refus": "support déjà en cours", "support": "s-01"}
+    # fermé : une nouvelle demande remplace l'ancienne session
+    banc.run("support", "fermer", "s-01")
+    _, sortie, _ = banc.run("support", "ouvrir", "s-02", agent=True)
+    assert sortie == {"ok": False, "refus": "consentement requis", "support": "s-02"}
+
+
+def test_support_ferme_des_deux_cotes(banc):
+    """Révocable des deux côtés : par le maître (agent) comme par le détenteur (local), audité avec l'origine."""
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    banc.run("support", "accepter", "s-01")
+    rc, sortie, _ = banc.run("--acteur", "gk2admin", "support", "fermer", "s-01", agent=True)
+    assert rc == 0 and sortie == {"ok": True, "support": "s-01", "etat": "ferme"}
+    _, sortie, _ = banc.run("support", "fermer", "s-01")
+    assert sortie == {"ok": False, "refus": "support déjà fermé", "support": "s-01"}
+    banc.run("support", "ouvrir", "s-02", agent=True)
+    banc.run("support", "accepter", "s-02")
+    rc, sortie, _ = banc.run("support", "fermer", "s-02")
+    assert rc == 0 and sortie == {"ok": True, "support": "s-02", "etat": "ferme"}
+    # une demande encore en attente se ferme aussi (le maître la retire)
+    banc.run("support", "ouvrir", "s-03", agent=True)
+    _, sortie, _ = banc.run("support", "fermer", "s-03", agent=True)
+    assert sortie["ok"] is True and lire_support(banc)["etat"] == "ferme"
+    _, sortie, _ = banc.run("support", "fermer", "s-09", agent=True)
+    assert sortie == {"ok": False, "refus": "support inconnu", "support": "s-09"}
+    fermes = [(e["support"], e["origine"]) for e in banc.audit() if e["evenement"] == "support_ferme"]
+    assert fermes == [("s-01", "maitre"), ("s-02", "local"), ("s-03", "maitre")]
+
+
+def test_support_expire_seul(banc):
+    """La session ouverte expire à sa fin (et une demande non décidée en 24 h) : auditée une seule fois, à la première
+    lecture qui suit (l'agent lit l'état à chaque sondage)."""
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    banc.run("support", "accepter", "s-01")
+    sup = lire_support(banc)
+    sup["fin"] = int(__import__("time").time()) - 1
+    ecrire_support(banc, sup)
+    for _ in range(2):
+        rc, etat, _ = banc.run("etat", agent=True)
+        assert rc == 0 and etat["support"]["etat"] == "expire"
+    _, sortie, _ = banc.run("support", "fermer", "s-01", agent=True)
+    assert sortie == {"ok": False, "refus": "support déjà fermé", "support": "s-01"}
+    # demande en attente depuis plus de 24 h
+    banc.run("support", "ouvrir", "s-02", agent=True)
+    sup = lire_support(banc)
+    sup["expire"] = 1
+    ecrire_support(banc, sup)
+    _, sortie, _ = banc.run("support", "accepter", "s-02")
+    assert sortie == {"ok": False, "refus": "support expiré", "support": "s-02"}
+    expires = [e["support"] for e in banc.audit() if e["evenement"] == "support_expire"]
+    assert expires == ["s-01", "s-02"]
+
+
+def test_mains_liees_interdisent_et_ferment_le_support(banc):
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    banc.run("support", "accepter", "s-01")
+    banc.run("mains-liees", "on")
+    assert lire_support(banc)["etat"] == "ferme"
+    _, sortie, _ = banc.run("support", "ouvrir", "s-02", agent=True)
+    assert sortie == {"ok": False, "refus": "mains liées"}
+    # même en local, aucune ouverture sous mains liées
+    _, sortie, _ = banc.run("support", "ouvrir", "s-02")
+    assert sortie == {"ok": False, "refus": "mains liées"}
+    banc.run("mains-liees", "off")
+    banc.run("support", "ouvrir", "s-03", agent=True)
+    banc.run("mains-liees", "on")
+    assert lire_support(banc)["etat"] == "annule"
+    _, sortie, _ = banc.run("support", "accepter", "s-03")
+    assert sortie == {"ok": False, "refus": "mains liées"}
+    banc.run("mains-liees", "off")
+    _, sortie, _ = banc.run("support", "accepter", "s-03")          # annulée : les mains déliées ne la rouvrent pas
+    assert sortie == {"ok": False, "refus": "support annulé", "support": "s-03"}
+    fermes = [(e["evenement"], e["support"]) for e in banc.audit() if e["evenement"] in ("support_ferme", "support_annule")]
+    assert fermes == [("support_ferme", "s-01"), ("support_annule", "s-03")]
+
+
+def test_etat_lu_par_l_agent_sans_audit(banc):
+    """Verbe de lecture `etat` (agent et local) : mains liées, canal vérifié, consentements, support. Non audité
+    (sondé par l'agent) ; seuls les changements qu'il constate (expirations) le sont."""
+    rc, etat, _ = banc.run("etat", agent=True)
+    assert rc == 0 and etat["ok"] is True
+    assert etat["mains_liees"] is False and etat["canal"] == "wg-mesh" and etat["support"] is None
+    assert etat["consentements"] == [] and etat["box"]
+    assert "agent" not in etat                                      # l'état de l'unité : seulement en local
+    banc.cliente()
+    _, s, _ = banc.run("reboot", agent=True)
+    banc.run("support", "ouvrir", "s-01", "60", agent=True)
+    banc.run("mains-liees", "on")
+    n = len(banc.audit())
+    rc, etat, _ = banc.run("etat", agent=True)
+    assert rc == 0 and etat["mains_liees"] is True and etat["canal"] == "wg-autoload"
+    assert [(c["id"], c["action"], c["etat"]) for c in etat["consentements"]] == [(s["consentement"], "reboot", "annule")]
+    assert set(etat["consentements"][0]) <= {"id", "action", "unite", "etat", "cree", "expire", "decide"}
+    assert etat["support"] == {"id": "s-01", "etat": "annule", "duree_min": 60, "cree": etat["support"]["cree"],
+                               "expire": etat["support"]["expire"]}
+    assert len(banc.audit()) == n                                   # lecture : aucune ligne d'audit
+    # en local : l'état de l'unité de l'agent en plus (faux systemctl : inactive)
+    rc, etat, _ = banc.run("etat")
+    assert rc == 0 and etat["agent"] == "inactive"
+
+
+def test_etat_expire_les_consentements_a_24_h(banc):
+    """Un consentement en attente expire à 24 h : la lecture le marque « expire », audité une seule fois."""
+    banc.cliente()
+    _, s, _ = banc.run("reboot", agent=True)
+    _, etat, _ = banc.run("etat")
+    c = etat["consentements"][0]
+    assert c["etat"] == "en_attente" and c["expire"] - c["cree"] == 24 * 3600
+    f = banc.r / "var/lib/secubox-pilotagectl/consentements.json"
+    liste = json.loads(f.read_text())
+    liste[0]["expire"] = int(__import__("time").time()) - 1
+    f.write_text(json.dumps(liste))
+    for _ in range(2):
+        _, etat, _ = banc.run("etat", agent=True)
+        assert etat["consentements"][0]["etat"] == "expire"
+    assert [e["consentement"] for e in banc.audit() if e["evenement"] == "consentement_expire"] == [s["consentement"]]
+    _, sortie, _ = banc.run("consentement", "accepter", s["consentement"])
+    assert sortie == {"ok": False, "refus": "consentement expiré", "consentement": s["consentement"]}
+
+
+def test_etat_sans_arbre_d_etat(banc_nu):
+    """Box neuve (aucun état root encore) : etat répond sans rien créer."""
+    rc, etat, _ = banc_nu.run("etat", agent=True)
+    assert rc == 0 and etat["ok"] is True and etat["canal"] is None and etat["consentements"] == []
+    assert not (banc_nu.r / "var/lib/secubox-pilotagectl").exists()
