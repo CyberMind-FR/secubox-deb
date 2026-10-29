@@ -51,3 +51,31 @@ func TestGetSourceEnErreurNeCacheRien(t *testing.T) {
 		t.Fatalf("résultats inattendus : %+v", r)
 	}
 }
+
+func TestGetPrefixeSignaleLesSourcesEnEchec(t *testing.T) {
+	m := NouveauModele(
+		fausse{nom: "ok", params: map[string]any{"D.a": 1}},
+		fausse{nom: "systemd", err: errors.New("délai")},
+		fausse{nom: "mem", err: errors.New("boum")},
+	)
+	r := m.Get(context.Background(), []string{"D.", "D.a", "Z."})
+	if r[0].Params["D.a"] != 1 || len(r[0].Echecs) != 2 || r[0].Echecs[0] != "mem" || r[0].Echecs[1] != "systemd" {
+		t.Fatalf("préfixe : échecs non signalés ou triés : %+v", r[0])
+	}
+	if len(r[1].Echecs) != 0 {
+		t.Fatalf("chemin exact trouvé : pas d'échec à signaler : %+v", r[1])
+	}
+	if r[2].Erreur == "" || len(r[2].Echecs) != 0 {
+		t.Fatalf("rien trouvé : err seul : %+v", r[2])
+	}
+	if plat := Aplatir(r); plat["D.a"] != 1 {
+		t.Fatalf("aplatir inchangé : %v", plat)
+	}
+}
+
+func TestGetSansEchecNeSignaleRien(t *testing.T) {
+	m := NouveauModele(fausse{nom: "ok", params: map[string]any{"D.a": 1}})
+	if r := m.Get(context.Background(), []string{"D."}); r[0].Echecs != nil {
+		t.Fatalf("échecs inattendus : %+v", r[0])
+	}
+}

@@ -31,6 +31,9 @@ type Resultat struct {
 	Chemin string         `json:"path"`
 	Params map[string]any `json:"params,omitempty"`
 	Erreur string         `json:"err,omitempty"`
+	// Echecs : noms (triés) des sources en échec quand une requête par préfixe a quand même trouvé des valeurs ;
+	// le maître y voit un relevé dégradé (il n'efface rien).
+	Echecs []string `json:"failed,omitempty"`
 }
 
 // Modele assemble les sources.
@@ -66,6 +69,10 @@ func (m *Modele) Get(ctx context.Context, chemins []string) []Resultat {
 			if k == c || (strings.HasSuffix(c, ".") && strings.HasPrefix(k, c)) {
 				r.Params[k] = v
 			}
+		}
+		if len(r.Params) > 0 && len(echecs) > 0 && strings.HasSuffix(c, ".") {
+			r.Echecs = append([]string(nil), echecs...)
+			sort.Strings(r.Echecs)
 		}
 		if len(r.Params) == 0 {
 			r.Params = nil
