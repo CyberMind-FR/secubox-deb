@@ -73,6 +73,40 @@ D4 actions, support et temps réel, D6, L2). **Prérequis :** plan L1 livré
 
 ---
 
+### Task 0 : reprise des reports de L1 — identité et Auto-Load (R40, avant toute action)
+
+L2 ouvre des actions par le canal : la défense en profondeur de l'identité passe avant. Constats d'origine :
+`docs/superpowers/plans/2026-10-28-pilotage-l1-voir-arbitrages.md` (R40) et la relecture finale de L1 (M6, N2 à N4).
+
+**Files :** Modify le gabarit nginx du canal et `secubox-proxy.conf` (paquet `secubox-pilotage`),
+`packages/secubox-pilotage/api/canal.py`, le relais générique de `packages/secubox-aggregator/` (vers
+`main.py:522-566`), `packages/secubox-autoload/` (`autoloadctl` vers les lignes 134-137, minuterie horaire de R37),
+tests des trois paquets.
+
+**Interfaces :**
+- Produces : en-tête marqueur `X-SecuBox-Pilotage-Tunnel: 1` posé par le SEUL gabarit nginx du canal (écoute
+  10.10.0.1 / 10.64.0.1:8472), effacé par `secubox-proxy.conf` partout ailleurs. Le canal refuse (403, audité) toute
+  requête sans ce marqueur, en plus de la garde actuelle. Même précédent que `X-SecuBox-Maillage` (#1530).
+  `X-SecuBox-*` est déjà effacé à l'entrée publique HAProxy depuis #3258.
+- L'agrégateur ne relaie jamais vers `pilotage-canal` (liste d'exclusion explicite, 404).
+- Auto-Load :
+  - `tunnel-sync` et la révocation sont sérialisés par un verrou (`flock` sur `/run/secubox/autoload-sync.lock`) ;
+  - l'export de la projection publique se fait même si WireGuard échoue ;
+  - la minuterie horaire ne relance pas un `wg-autoload` que l'opérateur a arrêté (unité désactivée ⇒ pas de
+    relance, seulement l'export).
+
+- [ ] **Step 1 : tests qui échouent**
+```python
+def test_canal_refuse_sans_marqueur_tunnel(): ...         # X-Real-IP valide, sans X-SecuBox-Pilotage-Tunnel → 403 + audit
+def test_gabarit_canal_pose_le_marqueur(): ...             # nginx généré : set ; secubox-proxy.conf : vidé
+def test_agregateur_ne_relaie_pas_pilotage_canal(): ...    # /api/v1/pilotage-canal/... → 404, socket jamais ouverte
+def test_revocation_et_sync_serialisees(): ...             # révocation pendant un sync horaire → le pair ne revient jamais
+def test_export_meme_si_wireguard_echoue(): ...            # wg en échec → projection publiée quand même
+def test_minuterie_ne_relance_pas_wg_desactive(): ...      # wg-autoload désactivé → aucun start, export fait
+```
+- [ ] **Step 2 :** FAIL. **Step 3 :** implémenter. **Step 4 :** PASS (suites pilotage, agrégateur, autoload).
+  **Step 5 :** commit, versions montées (`secubox-pilotage`, `secubox-aggregator`, `secubox-autoload`).
+
 ### Task 1 : ctl root de la box et politique
 
 **Files :** Create `packages/secubox-pilotage-agent/sbin/secubox-pilotagectl`, `sudoers.d/secubox-pilotage-agent`,
@@ -206,7 +240,41 @@ servies par `secubox-pilotagectl` ; les routes de session d'assist rendent 410 a
 
 - [ ] Tests : routes d'assist → 410 ; plus d'import de `catalog.py` côté démon. FAIL → impl → PASS → commit.
 
+### Task 11 : reprise des reports de L1 — agent, maître et contrat (R40, avant la relecture finale)
+
+S'exécute après la Task 9 et avant la relecture finale de L2 (la Task 10 est reportée, voir plus bas).
+
+**Files :** `packages/secubox-pilotage-agent/` (`cmd/sbx-pilotage-agent/main.go`, unité systemd, tests Go),
+`packages/secubox-pilotage/` (`pilotage/stockage.py`, `api/canal.py`, `sbin/secubox-pilotage-api`, `debian/postrm`,
+`pytest.ini`, tests).
+
+**Interfaces / changements (un test par point) :**
+- M2 : l'opérateur de relevé reçoit la racine `"/"` en production (`operateur("/", nil)`), test sur la valeur de
+  production.
+- M7 : les décomptes de refus d'identité en attente sont écrits à chaque tour d'inventaire (et à l'éviction), jamais
+  perdus.
+- M12 :
+  - le `postrm` du maître retire l'ACL `u:secubox-pilotage` de `audit.log` et décharge son profil AppArmor ;
+  - une box sans contact depuis 30 jours est oubliée (inventaire, événements, ligne `boites`), avec audit.
+- M13 : `Environment=GOMEMLIMIT=24MiB` dans l'unité de l'agent (`MemoryMax=32M`).
+- M15 : en-tête SPDX dans `packages/secubox-pilotage/pytest.ini` ; `PRAGMA temp_store=MEMORY` à l'ouverture SQLite.
+- R39 (mineurs) :
+  - le plafond par box compte des OCTETS : `length(CAST(valeur_json AS BLOB))` ;
+  - commentaire de `OCTETS_MAX` exact (le maître borne aussi le corps).
+- Lanceur : le code de sortie d'un `SystemExit` d'uvicorn est journalisé.
+- N5 / M14 : contrat maître → agent par fixtures produites par le VRAI maître :
+  - requêtes Get, GetSupportedDM et les Operate de L2, émises par le contrôleur Python et rejouées contre le vrai
+    client Go ;
+  - réponse de la mesure de performance émise par le vrai agent et rejouée contre le vrai consommateur du maître ;
+  - une fixture altérée fait échouer les deux côtés.
+
+- [ ] Tests nommés d'après chaque point, FAIL → impl → PASS (go test -race, pytest), versions montées, commit.
+
 ### Task 10 : banc et déploiement
+
+> **Reportée (R33, décision du propriétaire du 2026-10-29) :** aucun test d'agent sur box avant que L2 ET L5
+> soient finies, interfaces comprises. Cette tâche n'est PAS exécutée avec L2 : elle rejoint le banc unique après
+> L5 (gk5, lgm-ebin, MOCHAbin n°2, RPi4).
 
 - [ ] gk5 (propriétaire) : redémarrage depuis la page, retour en ligne notifié ; `service redemarrer` d'un module ;
   mise à niveau suivie en direct ; renommage aller-retour (gk5 → gk5b → gk5) avec mise à jour du maillage ;
