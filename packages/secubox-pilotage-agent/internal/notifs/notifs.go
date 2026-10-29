@@ -81,6 +81,7 @@ type Evenement struct {
 	ID       string `json:"id,omitempty"`
 	Etat     string `json:"etat,omitempty"`
 	Decision string `json:"decision,omitempty"`
+	Fin      string `json:"fin,omitempty"`
 }
 
 type echantillon struct {

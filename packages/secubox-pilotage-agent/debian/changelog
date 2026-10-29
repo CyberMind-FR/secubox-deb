@@ -87,6 +87,16 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
     - Agent : lit `etat` chaque minute (aucun droit nouveau, le sudoers existant) et notifie
       X_SECUBOX_HandsTied {etat}, X_SECUBOX_Consent {id, decision}, X_SECUBOX_Support {id, etat} ;
       Support.Ouvrir transmet duree_min au ctl ; Support.Fermer réussi rend « accepte » sans job (aucun suivi).
+  * Relecture de la tâche 4, tour 1 (R-L2-30 à R-L2-33) :
+    - I1 : X_SECUBOX_Support porte « fin » (RFC 3339) dès l'ouverture, le maître expire la session lui-même ; au
+      premier état lu après le démarrage de l'agent, mains liées et session en cours sont notifiées.
+    - I2 : mains-liees on avec consentements.json illisible : drapeau, projection et audit posés, consentements
+      intouchés (même rattrapage que support.json).
+    - R-L2-30 : l'agent lit l'état toutes les 5 min (au lieu d'une) et juste après chaque Operate traité.
+    - M1 : etat minimal pour le maître (mains liées, {id, etat} des consentements en cours ou décidés depuis moins
+      d'une heure, {id, etat, fin} du support). M2 : mains_liees toujours rendu, section illisible marquée
+      « illisible », HandsTied notifié quand même. M4 : secubox-pilotage attend le ctl 60 s au plus. M5 : « op »
+      audité pour un support. M3 : double notification documentée (le maître dédoublonne).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
 

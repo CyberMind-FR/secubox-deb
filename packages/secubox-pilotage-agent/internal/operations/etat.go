@@ -24,17 +24,16 @@ var (
 // consentements et support aux identifiants et états de la liste fermée. Toute autre forme est une erreur (fermé par
 // défaut : aucune notification plutôt qu'une notification inventée).
 func LireEtat(b []byte) (notifs.EtatLocal, error) {
+	type support struct {
+		ID   string `json:"id"`
+		Etat string `json:"etat"`
+		Fin  *int64 `json:"fin"`
+	}
 	var r struct {
-		OK            *bool `json:"ok"`
-		MainsLiees    *bool `json:"mains_liees"`
-		Consentements []struct {
-			ID   string `json:"id"`
-			Etat string `json:"etat"`
-		} `json:"consentements"`
-		Support *struct {
-			ID   string `json:"id"`
-			Etat string `json:"etat"`
-		} `json:"support"`
+		OK            *bool           `json:"ok"`
+		MainsLiees    *bool           `json:"mains_liees"`
+		Consentements json.RawMessage `json:"consentements"`
+		Support       json.RawMessage `json:"support"`
 	}
 	incoherent := fmt.Errorf("état du ctl incohérent")
 	dec := json.NewDecoder(bytes.NewReader(b))
@@ -42,18 +41,40 @@ func LireEtat(b []byte) (notifs.EtatLocal, error) {
 		r.Consentements == nil {
 		return notifs.EtatLocal{}, incoherent
 	}
-	e := notifs.EtatLocal{MainsLiees: *r.MainsLiees, Consentements: make([]notifs.Consentement, 0, len(r.Consentements))}
-	for _, c := range r.Consentements {
-		if !reJob.MatchString(c.ID) || !etatsConsentement[c.Etat] {
+	e := notifs.EtatLocal{MainsLiees: *r.MainsLiees}
+	// M2 : une section que le ctl n'a pu lire est marquée « illisible » ; mains_liees reste lu.
+	if string(r.Consentements) == `"illisible"` {
+		e.ConsentementsIllisibles = true
+	} else {
+		var liste []struct {
+			ID   string `json:"id"`
+			Etat string `json:"etat"`
+		}
+		if json.Unmarshal(r.Consentements, &liste) != nil || liste == nil {
 			return notifs.EtatLocal{}, incoherent
 		}
-		e.Consentements = append(e.Consentements, notifs.Consentement{ID: c.ID, Etat: c.Etat})
+		e.Consentements = make([]notifs.Consentement, 0, len(liste))
+		for _, c := range liste {
+			if !reJob.MatchString(c.ID) || !etatsConsentement[c.Etat] {
+				return notifs.EtatLocal{}, incoherent
+			}
+			e.Consentements = append(e.Consentements, notifs.Consentement{ID: c.ID, Etat: c.Etat})
+		}
 	}
-	if r.Support != nil {
-		if !reSupport.MatchString(r.Support.ID) || !etatsSupport[r.Support.Etat] {
+	switch string(r.Support) {
+	case `"illisible"`:
+		e.SupportIllisible = true
+	case "", "null":
+	default:
+		var s support
+		if json.Unmarshal(r.Support, &s) != nil || !reSupport.MatchString(s.ID) || !etatsSupport[s.Etat] ||
+			(s.Fin != nil && *s.Fin <= 0) {
 			return notifs.EtatLocal{}, incoherent
 		}
-		e.Support = &notifs.Support{ID: r.Support.ID, Etat: r.Support.Etat}
+		e.Support = &notifs.Support{ID: s.ID, Etat: s.Etat}
+		if s.Fin != nil {
+			e.Support.Fin = *s.Fin
+		}
 	}
 	return e, nil
 }

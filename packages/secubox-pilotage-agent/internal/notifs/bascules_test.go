@@ -24,11 +24,43 @@ func resume(ev []Evenement) [][3]string {
 	return r
 }
 
-// TestBasculesPremierEtatSansNotification : le premier état lu sert de référence (le maître lit l'état par Get).
-func TestBasculesPremierEtatSansNotification(t *testing.T) {
+// TestBasculesPremierEtatRenotifie (I1, R-L2-33 b) : au premier état lu après le démarrage de l'agent, l'état des
+// mains liées et la session de support en cours (avec sa fin) sont notifiés : un agent qui redémarre pendant une
+// session ouverte la renotifie. Les consentements et une session terminée ne le sont pas.
+func TestBasculesPremierEtatRenotifie(t *testing.T) {
 	b := NouvellesBascules(func() time.Time { return time.Unix(1_800_000_000, 0) })
-	if ev := b.Observer(etatLocal(true, &Support{ID: "s-01", Etat: "ouvert"}, Consentement{"0123456789abcdef", "accepte"})); len(ev) != 0 {
-		t.Fatalf("premier état : %+v", ev)
+	ev := b.Observer(etatLocal(true, &Support{ID: "s-01", Etat: "ouvert", Fin: 1_800_001_800}, Consentement{"0123456789abcdef", "accepte"}))
+	want := [][3]string{{TypeMainsLiees, "", "on"}, {TypeSupport, "s-01", "ouvert"}}
+	if got := resume(ev); !reflect.DeepEqual(got, want) {
+		t.Fatalf("premier état : %v, attendu %v", got, want)
+	}
+	if ev[1].Fin != "2027-01-15T08:30:00Z" {
+		t.Fatalf("fin %q", ev[1].Fin)
+	}
+	for _, sup := range []*Support{nil, {ID: "s-01", Etat: "ferme"}, {ID: "s-01", Etat: "expire"}} {
+		b := NouvellesBascules(nil)
+		if got := resume(b.Observer(etatLocal(false, sup))); !reflect.DeepEqual(got, [][3]string{{TypeMainsLiees, "", "off"}}) {
+			t.Fatalf("support %+v : %v", sup, got)
+		}
+	}
+	b = NouvellesBascules(nil)
+	if got := resume(b.Observer(etatLocal(false, &Support{ID: "s-02", Etat: "en_attente"}))); len(got) != 2 || got[1][2] != "en_attente" {
+		t.Fatalf("demande en attente : %v", got)
+	}
+}
+
+// TestBasculesSectionsIllisibles (M2) : HandsTied part même quand consentements et support sont illisibles ; une
+// section illisible ne produit rien et garde la mémoire précédente (pas de fausse décision à son retour).
+func TestBasculesSectionsIllisibles(t *testing.T) {
+	b := NouvellesBascules(nil)
+	c1 := "0123456789abcdef"
+	b.Observer(etatLocal(false, &Support{ID: "s-01", Etat: "ouvert", Fin: 9}, Consentement{c1, "accepte"}))
+	ev := b.Observer(EtatLocal{MainsLiees: true, ConsentementsIllisibles: true, SupportIllisible: true})
+	if got := resume(ev); !reflect.DeepEqual(got, [][3]string{{TypeMainsLiees, "", "on"}}) {
+		t.Fatalf("événements %v", got)
+	}
+	if ev := b.Observer(etatLocal(true, &Support{ID: "s-01", Etat: "ouvert", Fin: 9}, Consentement{c1, "accepte"})); len(ev) != 0 {
+		t.Fatalf("retour à l'identique : %+v", ev)
 	}
 }
 
@@ -55,12 +87,16 @@ func TestBasculesNotifiees(t *testing.T) {
 	if ev := b.Observer(etatLocal(true, &Support{ID: "s-01", Etat: "en_attente"}, Consentement{c1, "accepte"}, Consentement{c2, "refuse"})); len(ev) != 0 {
 		t.Fatalf("état inchangé : %+v", ev)
 	}
-	ev = b.Observer(etatLocal(true, &Support{ID: "s-01", Etat: "ouvert"}, Consentement{c1, "utilise"}, Consentement{c2, "refuse"}))
+	ev = b.Observer(etatLocal(true, &Support{ID: "s-01", Etat: "ouvert", Fin: 1_800_002_700}, Consentement{c1, "utilise"}, Consentement{c2, "refuse"}))
 	if got := resume(ev); !reflect.DeepEqual(got, [][3]string{{TypeSupport, "s-01", "ouvert"}}) {
 		t.Fatalf("événements %v", got)
 	}
+	// I1 (R-L2-33 a) : l'ouverture porte la fin (RFC 3339) : le maître expire la session lui-même
+	if ev[0].Fin != "2027-01-15T08:45:00Z" {
+		t.Fatalf("fin %q", ev[0].Fin)
+	}
 	c3 := "00000000000000aa"
-	b.Observer(etatLocal(true, &Support{ID: "s-01", Etat: "ouvert"}, Consentement{c3, "en_attente"}))
+	b.Observer(etatLocal(true, &Support{ID: "s-01", Etat: "ouvert", Fin: 1_800_002_700}, Consentement{c3, "en_attente"}))
 	ev = b.Observer(etatLocal(false, &Support{ID: "s-01", Etat: "expire"}, Consentement{c3, "expire"}))
 	want = [][3]string{{TypeMainsLiees, "", "off"}, {TypeConsentement, c3, "expire"}, {TypeSupport, "s-01", "expire"}}
 	if got := resume(ev); !reflect.DeepEqual(got, want) {
@@ -85,7 +121,8 @@ func TestBasculesFormeJSON(t *testing.T) {
 		{Evenement{Type: TypeMainsLiees, Etat: "off", Instant: 7}, `{"type":"X_SECUBOX_HandsTied","ts":7,"etat":"off"}`},
 		{Evenement{Type: TypeConsentement, ID: "0123456789abcdef", Decision: "refuse", Instant: 7},
 			`{"type":"X_SECUBOX_Consent","ts":7,"id":"0123456789abcdef","decision":"refuse"}`},
-		{Evenement{Type: TypeSupport, ID: "s-01", Etat: "ouvert", Instant: 7}, `{"type":"X_SECUBOX_Support","ts":7,"id":"s-01","etat":"ouvert"}`},
+		{Evenement{Type: TypeSupport, ID: "s-01", Etat: "ouvert", Fin: "2027-01-15T08:30:00Z", Instant: 7},
+			`{"type":"X_SECUBOX_Support","ts":7,"id":"s-01","etat":"ouvert","fin":"2027-01-15T08:30:00Z"}`},
 	} {
 		b, err := json.Marshal(c.e)
 		if err != nil || string(b) != c.want {

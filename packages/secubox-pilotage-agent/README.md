@@ -73,7 +73,7 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 | `support ouvrir <id> [<duree_min>]` | demande d'ouverture (maître) : support **en attente** de l'accord du détenteur, `{"ok": false, "refus": "consentement requis", "support": "<id>"}` ; `duree_min` entier de 1 à 240 (`^[1-9][0-9]{0,2}$`), 30 par défaut ; voir « Support » |
 | `support <accepter\|refuser> <id>` | **local seulement** : le détenteur ouvre la session (pour la durée demandée, comptée à partir de l'accord) ou la refuse |
 | `support fermer <id>` | permis **des deux côtés** (maître et détenteur) : ferme la session ouverte ou retire la demande en attente |
-| `etat` | lecture, permise depuis l'agent, **non auditée** (sondée chaque minute) : `{"ok": true, "box", "mains_liees", "canal", "consentements": [{id, action, unite, etat, cree, expire, decide}], "support": {id, etat, duree_min, cree, expire, ouvert, fin}\|null}`, plus `agent` (état de l'unité de l'agent) en local. Les expirations qu'elle constate sont écrites et auditées |
+| `etat` | lecture, permise depuis l'agent, **non auditée** (sondée toutes les 5 min et après chaque Operate). En local : `{"ok": true, "box", "mains_liees", "canal", "consentements": [{id, action, unite, etat, cree, expire, decide}], "support": {id, etat, duree_min, cree, expire, ouvert, fin}\|null, "agent"}`. Depuis l'agent, le minimum (M1) : `{"ok", "mains_liees", "consentements": [{id, etat}], "support": {id, etat, fin}\|null}`, consentements en cours (`en_attente`, `accepte`) ou décidés depuis moins d'une heure (`decide`, posé aussi à l'expiration, l'annulation et l'utilisation). `mains_liees` est **toujours** rendu (état root illisible : `true`, par prudence) ; une section illisible vaut `"illisible"` sans faire échouer l'état (M2). Les expirations qu'elle constate sont écrites et auditées |
 | `ancre-verifier <wg-mesh\|wg-autoload>` | lecture, permise depuis l'agent : `{"ok": true}` si le pair WireGuard de l'interface du canal de l'agent qui porte l'adresse du maître a la clé de l'ancre, sinon `{"ok": false, "raison": "absente"\|"differente"\|"illisible"}` (code 0, refus audité) ; voir « Ancre du maître » |
 | `consentement <accepter\|refuser> <id>` | **local seulement** : décision du détenteur sur un consentement en attente |
 | `mains-liees <on\|off>` | **local seulement** : lie ou délie les mains du maître |
@@ -91,7 +91,8 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
   (`support_demande`), le détenteur l'accepte (`support_ouvert`, avec `fin`) ou la refuse (`support_refuse`) par
   `secubox-pilotage support accepter|refuser <id>` ; chacun la ferme (`support_ferme`, avec l'origine). Une demande
   non décidée expire à 24 h, une session ouverte à sa fin (`support_expire`, une fois), constatée à la lecture
-  suivante (l'agent lit `etat` chaque minute ; `secubox-pilotage etat` aussi). Le support **ne lance rien** sur la
+  suivante (l'agent lit `etat` toutes les 5 min et après chaque Operate ; `secubox-pilotage etat` aussi). Le maître
+  n'attend pas cette lecture : la notification d'ouverture porte `fin` et il expire la session lui-même. Le support **ne lance rien** sur la
   box (jamais de shell) : il dit au maître que le détenteur ouvre l'accès au catalogue d'actions et à la vue en
   direct ; chaque action reste soumise à la politique (mains liées, ancre, consentement d'une box cliente). Refus
   possibles : `support déjà en cours` (autre session), `support déjà ouvert`, `support inconnu`,
@@ -189,13 +190,21 @@ sudo de l'humain est passé au ctl (`--acteur`) et audité ; jamais le compte de
 Codes : 0 fait ; 1 refus du ctl (motif affiché), erreur, ou hors root ; 2 usage.
 
 **Comment le maître l'apprend** (notifications des bascules locales). La commande tourne en root, l'agent non ; il
-ne reçoit **aucun droit nouveau** : chaque minute, il lit l'état par le verbe de lecture `etat` du ctl, avec le sudo
-qu'il a déjà (`secubox-pilotagectl *`), et compare au précédent. Il notifie alors `X_SECUBOX_HandsTied {etat: on|off}`,
-`X_SECUBOX_Consent {id, decision: accepte|refuse|expire|annule}` et `X_SECUBOX_Support {id, etat}` (en_attente,
-ouvert, refuse, ferme, annule, expire). Le premier état lu après le démarrage de l'agent sert de référence (rien
-n'est notifié ; le maître lit l'état courant par Get) ; une bascule faite puis défaite entre deux lectures n'est pas
-vue (l'audit local la garde). Une sortie du ctl inattendue ne produit aucune notification (journalisée une fois).
-Cette lecture fait aussi expirer, côté ctl, les consentements à 24 h et le support à sa fin.
+ne reçoit **aucun droit nouveau** : toutes les **5 minutes**, et juste après chaque Operate traité (R-L2-30 : une
+ligne sudo par lecture dans `auth.log`), il lit l'état par le verbe de lecture `etat` du ctl, avec le sudo qu'il a
+déjà (`secubox-pilotagectl *`), et compare au précédent. Il notifie alors `X_SECUBOX_HandsTied {etat: on|off}`,
+`X_SECUBOX_Consent {id, decision: accepte|refuse|expire|annule}` et `X_SECUBOX_Support {id, etat, fin}` (en_attente,
+ouvert, refuse, ferme, annule, expire ; `fin` en RFC 3339 UTC dès l'ouverture, pour que le maître expire la session
+lui-même à sa borne, R-L2-33). Au **premier état lu** après le démarrage de l'agent, il notifie l'état des mains liées
+et la session de support en cours (en attente ou ouverte) : un agent qui redémarre pendant une session la renotifie.
+Une bascule faite puis défaite entre deux lectures n'est pas vue (l'audit local la garde). Une section illisible
+(`"illisible"`) ne produit rien et garde la mémoire précédente ; HandsTied part quand même. Une sortie du ctl
+inattendue ne produit aucune notification (journalisée une fois). Cette lecture fait aussi expirer, côté ctl, les
+consentements à 24 h et le support à sa fin.
+
+**Double notification (M3), sans conséquence.** Le même état peut être notifié deux fois : à chaque démarrage de
+l'agent (mains liées et session en cours renotifiées), ou quand une notification est retentée après un échec de
+remise. Le maître dédoublonne par `(type, id, etat|decision)` : une renotification identique ne change rien à sa vue.
 
 ## Ancre du maître (D1)
 

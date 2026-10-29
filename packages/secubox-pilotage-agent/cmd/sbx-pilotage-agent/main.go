@@ -60,11 +60,13 @@ func main() {
 
 	// L2 : Operate d'action par le ctl root (sudo), opérations suivies par systemctl, fins gardées jusqu'à leur remise.
 	ex, resultats := executeur(lanceurSystemctl(cheminSudo, delaiCtl), lanceurSystemctl(cheminSystemctl, delaiSystemctl), ev)
-	// L2, tâche 4 : bascules locales (mains liées, consentements, support) lues au ctl et notifiées au maître.
+	// L2, tâche 4 : bascules locales (mains liées, consentements, support) lues au ctl et notifiées au maître, toutes
+	// les 5 min et juste après chaque Operate traité (R-L2-30).
+	relire := make(chan struct{}, 1)
 	suivi.Add(1)
 	go func() {
 		defer suivi.Done()
-		veiller(ctx, lanceurSystemctl(cheminSudo, delaiCtl), pasVeille, ev)
+		veiller(ctx, lanceurSystemctl(cheminSudo, delaiCtl), pasVeille, relire, ev)
 	}()
 	cl := canal.NouveauClient(canal.Config{
 		Maitre:   maitre,
@@ -73,7 +75,7 @@ func main() {
 		BootID:   bootID(),
 		// D1 : au démarrage puis toutes les heures, par le ctl root ; échec → canal coupé.
 		Ancre:     verifieurAncre(lanceurSystemctl(cheminSudo, delaiCtl), maitre),
-		Agir:      ex.Operer,
+		Agir:      apresOperate(ex.Operer, relire),
 		Resultats: resultats,
 	}, m, operateur("", nil))
 	if err := cl.Tourner(ctx, ev); err != nil && ctx.Err() == nil {

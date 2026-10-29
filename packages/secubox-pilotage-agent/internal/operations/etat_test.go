@@ -23,7 +23,7 @@ func TestLireEtat(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := notifs.EtatLocal{MainsLiees: true, Consentements: []notifs.Consentement{{ID: "0123456789abcdef", Etat: "accepte"}},
-		Support: &notifs.Support{ID: "s-01", Etat: "ouvert"}}
+		Support: &notifs.Support{ID: "s-01", Etat: "ouvert", Fin: 4}}
 	if !reflect.DeepEqual(e, want) {
 		t.Fatalf("%+v, attendu %+v", e, want)
 	}
@@ -31,7 +31,15 @@ func TestLireEtat(t *testing.T) {
 		e.Support != nil || e.MainsLiees {
 		t.Fatalf("%+v %v", e, err)
 	}
+	// M2 : sections illisibles marquées par le ctl ; mains_liees reste lu
+	e, err = LireEtat([]byte(`{"ok": true, "mains_liees": true, "consentements": "illisible", "support": "illisible"}`))
+	if err != nil || !e.MainsLiees || !e.ConsentementsIllisibles || !e.SupportIllisible || e.Support != nil {
+		t.Fatalf("%+v %v", e, err)
+	}
 	for _, mauvais := range []string{
+		`{"ok": true, "mains_liees": true, "consentements": "autre", "support": null}`,
+		`{"ok": true, "mains_liees": true, "consentements": [], "support": "autre"}`,
+		`{"ok": true, "mains_liees": false, "consentements": [], "support": {"id": "s-1", "etat": "ouvert", "fin": "demain"}}`,
 		``,
 		`{"ok": false, "erreur": "état non fiable"}`,
 		`{"ok": true}`,
