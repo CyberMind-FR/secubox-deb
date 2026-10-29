@@ -34,3 +34,8 @@ Description: SecuBox ISP — protection + operateur + publication
  (metablogizer). Les plugins du Hall (billets, actualites, messagerie,
  Nextcloud, BBS) sont dans secubox-full ; Matrix, Gitea et mesh s'installent
  depuis l'App Store.
+ .
+ Ce que le paquet installe n'est pas ce qui tourne : le profil d'activation isp
+ (secubox-profiles, decision du 2026-10-29, #3258) est un FAI local : lite + nDPI,
+ nDPId, NetFlow et la cabine numerique (toolbox, intercepteur) ; l'hebergement
+ installe ici est arrete par secubox-profilectl apply --profile isp.

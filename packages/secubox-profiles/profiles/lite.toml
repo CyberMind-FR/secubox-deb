@@ -14,7 +14,9 @@ label = "Lite — daily-driver optimisé"
 # ou Media Flow, ni « Boxes à préparer » (panneau du maître, premier-pas-maitre) dans lite ; leurs entrées de menu sont masquées.
 menu_off = ["zkp", "assist", "ksm", "centers", "premier-pas-maitre", "dpi", "ndpid", "mediaflow", "toolbox"]
 # #3218 : le DPI quitte lite ; s'il reste installé (box mise à jour), ses minuteries s'arrêtent avec lui.
-minuteurs_off = ["dpi-resume", "yt-dlp-refresh"]
+# #3258 : streamlit-idle (Requires=secubox-streamlit.service) est dans l'union depuis isp ; non nommée ici, l'apply la
+# RALLUMERAIT et elle relancerait Streamlit, que lite arrête, sur une box qui a installé secubox-isp.
+minuteurs_off = ["dpi-resume", "yt-dlp-refresh", "streamlit-idle"]
 on = [
   "ad-guard", "admin", "aggregator", "annuaire", "auth", "backup",
   "cdn", "certs", "core", "cs-bridge", "dns",

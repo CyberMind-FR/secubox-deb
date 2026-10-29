@@ -467,6 +467,31 @@ def _cfg():
 ONION_IN_PORT_DEFAUT = 9180
 ONION_CLIENT_MARQUEUR = "192.0.2.80"
 
+# En-têtes de VERDICT effacés en tête de http-in et https-in (#3258, audit R10) : posés par un composant interne en
+# aval de l'entrée, lus comme une affirmation (LAN, onion, console, statut amont, lot netboot, pair et marque du
+# maillage posés par nginx sur wg-mesh, relais et second facteur posés par l'agrégateur). Même liste, dans le
+# même ordre, que ENTETES_VERDICT de haproxyctl generate (qui fait foi et porte l'inventaire complet). Jamais
+# d'effacement en bloc : les en-têtes de protocole (X-SecuBox-Signature…) doivent passer.
+ENTETES_VERDICT = (
+    "X-SecuBox-LAN",
+    "X-SecuBox-Onion",
+    "X-SecuBox-Console",
+    "X-SecuBox-Console-Hote",
+    "X-SecuBox-Console-Paire",
+    "X-SecuBox-Origin-Status",
+    "X-SecuBox-Netboot-Lot",
+    "X-SecuBox-Adresse-Serveur",
+    "X-SecuBox-Pair",
+    "X-SecuBox-Maillage",
+    "X-SecuBox-Relais",
+    "X-SecuBox-Second-Facteur",
+)
+
+
+def lignes_effacer_verdicts() -> list:
+    """Lignes `http-request del-header` des verdicts, à placer en tête d'un frontal public."""
+    return [f"    http-request del-header {nom}" for nom in ENTETES_VERDICT]
+
 
 def frontal_onion_in(backend: str, port: Optional[int] = None) -> list:
     """Lignes du frontal `onion-in` : refuse tout Host non .onion, efface ce que le client dit de son adresse,
@@ -1533,6 +1558,7 @@ async def generate_config():
         "frontend http-in",
         f"    bind *:{cfg['http_port']}",
         "    mode http",
+        *lignes_effacer_verdicts(),
     ])
 
     # WebUI Obfuscation (issue #44) — strict regex ACL at top of frontend
@@ -1582,6 +1608,7 @@ async def generate_config():
         "frontend https-in",
         f"    bind *:{cfg['https_port']} ssl crt /etc/haproxy/certs/",
         "    mode http",
+        *lignes_effacer_verdicts(),
     ])
 
     # WebUI Obfuscation (issue #44) — strict regex ACL at top of frontend

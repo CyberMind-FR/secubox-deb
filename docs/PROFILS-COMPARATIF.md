@@ -24,6 +24,8 @@ Deux notions se croisent et se confondent facilement :
 
 Les profils s'emboîtent : **isp = lite + opérateur + hébergement**, **full = isp + tout le contenu du Hall**. Un module n'est que dans UN profil (test `scripts/tests/test_profils_composition.py`).
 
+Ce tableau dit ce que les méta-paquets INSTALLENT. Ce qui TOURNE est fixé par le profil d'activation (`secubox-profiles`, `secubox-profilectl apply`). Décision du propriétaire du 2026-10-29 (#3258) : le profil d'activation isp est un **FAI local : lite + nDPI, nDPId, NetFlow, cabine numérique** (Media Flow, toolbox, intercepteur) ; l'hébergement que `secubox-isp` installe (courrier, publication, métriques…) est arrêté par l'apply.
+
 | | **secubox-lite** 1.5.0 | **secubox-isp** 1.3.1 | **secubox-full** 1.5.0 |
 |---|---|---|---|
 | Rôle | Tous les modules de protection | lite + réseau d'opérateur + tous les modules d'hébergement | isp + tout le contenu du Hall |
@@ -95,10 +97,10 @@ QUATRE CARTES DE PROFIL, côte à côte, chacune avec la mémoire conseillée :
   consentement, filtrage par catégories, contrôle parental par profils,
   journalisation et alertes, tableau de bord DNS Guard (compteurs par appareil).
   Usage : maison, derrière une box.
-- ISP (4 Go) — "Protégé, avec hébergement simple et limité". Toutes les
-  protections de LITE + routeur/passerelle, VPN WireGuard, hébergement web simple
-  (blog, site vitrine, publication de sites), gestion des domaines et
-  certificats, supervision. Usage : association, petite structure.
+- ISP (4 Go) — "FAI local : lite + nDPI, nDPId, NetFlow, cabine numérique". Toutes
+  les protections de LITE + inspection des paquets (nDPI, nDPId), NetFlow (flux
+  par appareil) et la cabine numérique (accès invité filtré). Usage : fournisseur
+  d'accès local, association, tiers-lieu.
 - FULL (8 Go et plus) — "Protections + services hébergés". Toutes les protections
   + Nextcloud (fichiers, agenda), courrier et webmail, médias (PhotoPrism,
   PeerTube, Jellyfin, radio), domotique Zigbee, Gitea, messagerie et blog.
@@ -125,8 +127,8 @@ Contexte : SecuBox est un boîtier de sécurité réseau libre qui protège un
 réseau local (maison, petite structure). Il existe en trois niveaux selon la
 mémoire de la machine (lite 2 Go, standard 4 à 8 Go, pro 8 Go et plus) et
 en trois ensembles installables qui s'emboîtent : "lite" (les protections
-uniquement : pare-feu, WAF, analyse du trafic, filtrage), "isp" (lite plus un
-hébergement simple et limité, par exemple un blog) et "full" (tout le parc :
+uniquement : pare-feu, WAF, analyse du trafic, filtrage), "isp" (un FAI local :
+lite plus nDPI, nDPId, NetFlow et la cabine numérique) et "full" (tout le parc :
 Nextcloud, Jellyfin, courrier, radio, etc.).
 Deux modules touchent au DNS : "ad-guard" (retire publicités et traceurs sur
 les téléviseurs et appareils) et "webfilter" (contrôle parental et blocage de

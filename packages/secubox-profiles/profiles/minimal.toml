@@ -25,6 +25,8 @@ minuteurs_off = [
   "dpi-resume", "yt-dlp-refresh",
   "courbes-serie", "metrics-publish", "netstats", "network-anomaly-collecte", "profiles-releve",
   "cache-warm@jitsi", "cache-warm@metacatalog",
+  # #3258 : Requires=secubox-streamlit.service ; rallumée par l'union, elle relancerait Streamlit, que minimal arrête.
+  "streamlit-idle",
 ]
 # L'API du panneau /profiles/ (41 Mo) est coupée : `secubox-profilectl` (CLI root) reste le moyen de changer de profil.
 proteges_off = ["profiles"]

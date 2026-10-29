@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 import platform
 from secubox_core.auth import require_lecture
+from secubox_core import unites
 
 app = FastAPI(title="secubox-system", version="1.2.0", root_path="/api/v1/system")
 
@@ -615,15 +616,25 @@ UNITE_SYSTEME = {
 }
 
 
-def _lance_unite(cle: str) -> None:
-    """Demarre l'unite root ; leve HTTPException(502/504) avec la raison reelle si elle echoue."""
+def _lance_unite(cle: str, user=None) -> None:
+    """Demarre l'unite root ; leve HTTPException(502/504) avec la raison reelle si elle echoue.
+    Chaque lancement est audite (#3258, tour 3), par la fonction d'audit de secubox_core.unites, jamais avec la sortie."""
     unite = UNITE_SYSTEME[cle]
+    acteur = str((user or {}).get("sub") or "")
     try:
-        r = subprocess.run(["systemctl", "start", unite], capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["systemctl", "start", unite], capture_output=True, text=True, timeout=30, check=True)
+    except subprocess.CalledProcessError as e:
+        r = e
     except subprocess.TimeoutExpired:
+        unites.journaliser("system", acteur, "start", unite, "echec", 504, "délai dépassé")
         raise HTTPException(504, f"Délai dépassé en attendant {unite}")
+    except OSError as e:
+        unites.journaliser("system", acteur, "start", unite, "echec", 503, f"erreur système : {e.__class__.__name__}")
+        raise HTTPException(503, f"systemctl indisponible ({e.__class__.__name__})") from e
     if r.returncode == 0:
+        unites.journaliser("system", acteur, "start", unite, "ok", 200)
         return
+    unites.journaliser("system", acteur, "start", unite, "echec", 502)
     raison = (r.stderr or r.stdout or "").strip()
     if not raison:
         try:
@@ -644,21 +655,21 @@ def restart_services(user=Depends(require_jwt)):
 @router.post("/reload_firewall")
 def reload_firewall(user=Depends(require_jwt)):
     """Verifie /etc/nftables.conf (nft -c). Pas de rechargement : il viderait les ensembles dynamiques (bannissements)."""
-    _lance_unite("pare_feu")
+    _lance_unite("pare_feu", user)
     return {"success": True, "message": "Configuration du pare-feu vérifiée : valide. Non rechargé (un rechargement viderait les bannissements en cours)."}
 
 
 @router.post("/sync_time")
 def sync_time(user=Depends(require_jwt)):
     """Sync system time with NTP."""
-    _lance_unite("heure")
+    _lance_unite("heure", user)
     return {"success": True, "message": "Synchronisation NTP activée."}
 
 
 @router.post("/clear_cache")
 def clear_cache(user=Depends(require_jwt)):
     """Clear system caches."""
-    _lance_unite("caches")
+    _lance_unite("caches", user)
     return {"success": True, "message": "Caches vidés."}
 
 
@@ -739,7 +750,7 @@ def maj_status(user=Depends(require_jwt)):
 def shutdown(user=Depends(require_jwt)):
     """Shutdown the system."""
     log.warning("Shutdown requested by user")
-    _lance_unite("eteindre")
+    _lance_unite("eteindre", user)
     return {"success": True, "message": "Extinction programmée dans 1 minute."}
 
 
@@ -893,18 +904,16 @@ class ServiceAction(BaseModel):
     service: str
     action: str  # start|stop|restart|reload
 
+
+# #3258 (audit R1, revue I2) : validation, unités protégées, « -- » et audit vivent dans secubox_core.unites, le SEUL
+# contrôle partagé avec /admin/service/<nom>/<action> (root) ; aucune route ne garde sa propre copie.
+
+
 @router.post("/service_control")
 async def service_control(req: ServiceAction, user=Depends(require_jwt)):
-    if req.action not in ("start","stop","restart","reload"):
-        raise HTTPException(400, "action invalide")
-    r = subprocess.run(
-        ["systemctl", req.action, req.service],
-        capture_output=True, text=True, timeout=30
-    )
-    log.info("service_control: %s %s → %s", req.action, req.service,
-             "OK" if r.returncode==0 else "FAIL")
-    return {"success": r.returncode==0, "service": req.service, "action": req.action,
-            "output": (r.stdout+r.stderr).strip()[:300]}
+    acteur = str((user or {}).get("sub") or "")
+    r = await asyncio.to_thread(unites.piloter, "system", acteur, req.action, req.service)
+    return {k: r[k] for k in ("success", "service", "action", "output")}
 
 @router.post("/backup")
 async def backup(user=Depends(require_jwt)):
@@ -976,10 +985,13 @@ async def list_services(user=Depends(require_jwt)):
     return await services_list(user)
 
 
-@router.get("/service_action")
-async def service_action_get(service: str, action: str, user=Depends(require_jwt)):
-    """GET version of service control."""
-    return await service_control(ServiceAction(service=service, action=action), user)
+# Revue #3258 (I3) : ce GET EXÉCUTAIT l'action. Le cookie de session (SameSite=None sous TLS) part avec une balise <img>
+# d'un site tiers, require_jwt l'accepte et la garde d'origine ne contrôle jamais un GET : une image pouvait éteindre
+# la box. POST seulement (FastAPI rend 405 à un GET, sans rien exécuter), mêmes contrôles que service_control.
+@router.post("/service_action")
+async def service_action(req: ServiceAction, user=Depends(require_jwt)):
+    """Alias POST de service_control (vue LuCI system-hub)."""
+    return await service_control(req, user)
 
 
 @router.get("/get_logs")
@@ -1009,7 +1021,7 @@ async def get_denoise_stats(user=Depends(require_jwt)):
 def reboot(user=Depends(require_jwt)):
     """Redémarrer le système."""
     log.warning("Reboot requested by user")
-    _lance_unite("redemarrer")
+    _lance_unite("redemarrer", user)
     return {"success": True, "message": "Redémarrage programmé dans 1 minute."}
 
 

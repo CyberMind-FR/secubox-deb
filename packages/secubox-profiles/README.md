@@ -42,6 +42,7 @@ Après avoir modifié un profil de référence : `python3 scripts/gen-empreintes
 |---|---|
 | `full` | tous les modules |
 | `lite` | protections (pendant du méta-paquet `secubox-lite`) ; ni KSM, ni Centres, ni DPI/nDPId (#3218) |
+| `isp` | `lite` + DPI (nDPI, nDPId), NetFlow (Media Flow) et cabine numérique (toolbox, intercepteur) ; décision du 2026-10-29 (#3258) : le reste de `secubox-isp` (courrier, publication, métriques…) est arrêté par l'apply |
 | `minimal` | carte de 1 Go sans tête (pendant de `secubox-minimal`) : garde DNS, ad-guard, webfilter, NAC, Freebox, WireGuard, socle et maillage (#3218) ; le sleeper n'y est pas (livré désactivé) |
 | `secure-gateway` | passerelle durcie (firewall/WAF/IDS, pas de media) |
 | `media-lab` | modules media (peertube, lyrion, photoprism…) en plus du socle |
