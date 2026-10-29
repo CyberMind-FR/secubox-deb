@@ -394,7 +394,7 @@ def test_base_d_avant_r38_gagne_la_colonne_tronque(tmp_path):
 def _somme_octets(tmp_path, cle):
     cx = sqlite3.connect(tmp_path / "pilotage" / "pilotage.db")
     try:
-        return cx.execute("SELECT COALESCE(SUM(length(valeur_json)),0) FROM inventaire WHERE cle=?", (cle,)).fetchone()[0]
+        return cx.execute("SELECT COALESCE(SUM(length(CAST(valeur_json AS BLOB))),0) FROM inventaire WHERE cle=?", (cle,)).fetchone()[0]
     finally:
         cx.close()
 
@@ -453,3 +453,24 @@ def test_tri_temporaire_en_memoire_m15(tmp_path):
         assert cx.execute("PRAGMA temp_store").fetchone()[0] == 2   # 2 = MEMORY
     with s._tx() as cx:
         assert cx.execute("PRAGMA temp_store").fetchone()[0] == 2
+
+
+def _somme_vrais_octets(tmp_path, cle):
+    cx = sqlite3.connect(tmp_path / "pilotage" / "pilotage.db")
+    try:
+        return cx.execute("SELECT COALESCE(SUM(length(CAST(valeur_json AS BLOB))),0) FROM inventaire WHERE cle=?", (cle,)).fetchone()[0]
+    finally:
+        cx.close()
+
+
+def test_plafond_compte_des_octets_pas_des_caracteres_r39(tmp_path):
+    """R39 (mineur) : `é` vaut deux octets en UTF-8 ; le plafond borne le disque, il compte donc des OCTETS."""
+    s, h = neuf(tmp_path)
+    s.octets_max = 300_000
+    s.vu(GK5, {})
+    for i in range(6):
+        h.avance(60)
+        params = {f"{P}Gros.{i}.{j}": "é" * 60000 for j in range(2)}   # 2 × 120 002 octets, 2 × 60 002 caractères
+        s.inventaire_enregistrer(GK5, {"results": [{"path": P, "params": params}], "tronque": True})
+        assert _somme_vrais_octets(tmp_path, GK5.cle) <= s.octets_max, i
+        assert all(k in s.inventaire(GK5.cle)["valeurs"] for k in params)

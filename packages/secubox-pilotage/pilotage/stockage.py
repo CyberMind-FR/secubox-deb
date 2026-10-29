@@ -28,7 +28,8 @@ EVENEMENTS_JOURS = 30        # durée de garde des événements
 BOUCLES_FENETRE_S = 24 * 3600
 PARAMS_MAX = 5000            # paramètres retenus par réponse (l'agent borne le corps à 256 Kio : TailleMax)
 LIGNES_MAX = 2 * PARAMS_MAX  # lignes d'inventaire gardées par box : au-delà, les plus anciennes (releve_le) partent
-OCTETS_MAX = 1 << 20         # octets d'inventaire gardés par box : somme de length(valeur_json) ; 2 × 256 Kio (corps borné par l'agent) + marge (R39)
+OCTETS_MAX = 1 << 20         # OCTETS d'inventaire gardés par box : somme de length(CAST(valeur_json AS BLOB)), UTF-8 ; 2 × 256 Kio (corps
+                             # borné à 256 Kio par l'agent, TailleMax, et par le maître, canal.TAILLE_MAX) + marge (R39)
 EVENEMENTS_MAX = 5000        # événements gardés par box : au-delà, les plus anciens partent
 VALEUR_MAX = 64 << 10       # caractères d'une valeur sérialisée ; au-delà elle est TRONQUÉE et marquée, jamais jetée (R38)
 CHEMIN_MAX = 256
@@ -321,9 +322,10 @@ class StockageSqlite:
                     cx.executemany("DELETE FROM inventaire WHERE cle=? AND chemin=?",
                                    [(box.cle, k) for k in vieilles[:len(presents) - self.lignes_max]])
                 # plafond d'octets par box (R39), dans la même transaction : mêmes critères d'ancienneté et même exclusion de la passe courante
-                total = cx.execute("SELECT COALESCE(SUM(length(valeur_json)),0) FROM inventaire WHERE cle=?", (box.cle,)).fetchone()[0]
+                total = cx.execute("SELECT COALESCE(SUM(length(CAST(valeur_json AS BLOB))),0) FROM inventaire WHERE cle=?", (box.cle,)).fetchone()[0]
                 if total > self.octets_max:
-                    for r in cx.execute("SELECT chemin, length(valeur_json) AS n FROM inventaire WHERE cle=? ORDER BY releve_le, rowid",
+                    for r in cx.execute("SELECT chemin, length(CAST(valeur_json AS BLOB)) AS n FROM inventaire WHERE cle=? "
+                                        "ORDER BY releve_le, rowid",
                                         (box.cle,)).fetchall():
                         if total <= self.octets_max:
                             break
