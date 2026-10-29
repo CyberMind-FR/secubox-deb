@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+from secubox_core import unites
 
 app = FastAPI(title="secubox-admin", version="1.0.0", root_path="/api/v1/admin")
 
@@ -457,46 +458,32 @@ async def get_service(name: str, user=Depends(require_jwt)):
     return _get_service_status(name)
 
 
+# #3258 (revue I2) : cette API tourne en ROOT (secubox-admin.service), donc sans polkit. Elle arrêtait n'importe quelle
+# unité, protégées comprises, sans motif ni « -- », et contournait le 403 de /system/service_control. Elle passe
+# désormais par le MÊME contrôle (secubox_core.unites : motif secubox-*.service, unités protégées, « -- », audit).
+# Les unités Debian (nginx, nftables…) ne se pilotent plus d'ici. `stderr` : la raison d'un échec, que la page affiche.
+async def _piloter(name: str, action: str, user, delai: int = 30) -> Dict[str, Any]:
+    acteur = str((user or {}).get("sub") or "")
+    r = await asyncio.to_thread(unites.piloter, "admin", acteur, action, name, delai=delai)
+    return {**r, "stderr": "" if r["success"] else r["output"]}
+
+
 @router.post("/service/{name}/start")
 async def start_service(name: str, user=Depends(require_jwt)):
-    """Start a systemd service."""
-    unit = name if name.endswith('.service') else f"{name}.service"
-
-    _audit_log(user.get("sub", "unknown"), "service_start", f"unit={unit}")
-    log.info("service start requested: %s by %s", unit, user.get("sub"))
-
-    result = _run_cmd(["systemctl", "start", unit], timeout=30)
-    result["unit"] = unit
-    result["action"] = "start"
-    return result
+    """Start a secubox-*.service unit (secubox_core.unites)."""
+    return await _piloter(name, "start", user)
 
 
 @router.post("/service/{name}/stop")
 async def stop_service(name: str, user=Depends(require_jwt)):
-    """Stop a systemd service."""
-    unit = name if name.endswith('.service') else f"{name}.service"
-
-    _audit_log(user.get("sub", "unknown"), "service_stop", f"unit={unit}")
-    log.info("service stop requested: %s by %s", unit, user.get("sub"))
-
-    result = _run_cmd(["systemctl", "stop", unit], timeout=30)
-    result["unit"] = unit
-    result["action"] = "stop"
-    return result
+    """Stop a secubox-*.service unit, never a protected one (secubox_core.unites)."""
+    return await _piloter(name, "stop", user)
 
 
 @router.post("/service/{name}/restart")
 async def restart_service(name: str, user=Depends(require_jwt)):
-    """Restart a systemd service."""
-    unit = name if name.endswith('.service') else f"{name}.service"
-
-    _audit_log(user.get("sub", "unknown"), "service_restart", f"unit={unit}")
-    log.info("service restart requested: %s by %s", unit, user.get("sub"))
-
-    result = _run_cmd(["systemctl", "restart", unit], timeout=60)
-    result["unit"] = unit
-    result["action"] = "restart"
-    return result
+    """Restart a secubox-*.service unit (secubox_core.unites)."""
+    return await _piloter(name, "restart", user, delai=60)
 
 
 @router.get("/logs")

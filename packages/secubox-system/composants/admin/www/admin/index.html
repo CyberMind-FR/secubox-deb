@@ -221,6 +221,8 @@
         function retour(ok, msg) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; toast(msg); }
         function detail(res) {
             if (res.demo) return 'Démonstration : action inerte.';
+            // 403 qui dit pourquoi (« unité protégée : arrêt refusé », #3258) : on l'affiche ; sinon c'est la session.
+            if (res.statut === 403 && res.data && typeof res.data.detail === 'string' && res.data.detail.startsWith('unité protégée')) return res.data.detail;
             if (res.statut === 401 || res.statut === 403) return 'session requise (HTTP ' + res.statut + ')';
             const d = res.data || {};
             const t = d.stderr || d.error || (typeof d.detail === 'string' ? d.detail : '');

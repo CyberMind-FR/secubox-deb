@@ -23,6 +23,8 @@ PAQUETS = Path(__file__).resolve().parents[2]
 SYSTEM = PAQUETS / "secubox-system"
 sys.path.insert(0, str(PAQUETS.parent / "common"))
 
+from secubox_core import unites  # noqa: E402  — le contrôle partagé (revue #3258, I2)
+
 SORTIE_SECRETE = "SORTIE-DE-SYSTEMCTL-A-NE-PAS-AUDITER"
 
 
@@ -54,8 +56,8 @@ def banc(api, monkeypatch, tmp_path):
             raise subprocess.CalledProcessError(etat["rc"], argv, output="", stderr=SORTIE_SECRETE)
         return Res(SORTIE_SECRETE, 0, "")
 
-    monkeypatch.setattr(api.subprocess, "run", run)
-    monkeypatch.setattr(api, "AUDIT_LOG", etat["audit"], raising=False)
+    monkeypatch.setattr(unites.subprocess, "run", run)
+    monkeypatch.setattr(unites, "AUDIT_LOG", etat["audit"])
     return etat
 
 
@@ -155,7 +157,7 @@ def test_delai_depasse_audite_en_echec(api, banc, monkeypatch):
     def lent(argv, *a, **k):
         banc["appels"].append(list(argv))
         raise subprocess.TimeoutExpired(argv, 30)
-    monkeypatch.setattr(api.subprocess, "run", lent)
+    monkeypatch.setattr(unites.subprocess, "run", lent)
     r = appelle(api, "secubox-dpi.service", "restart")
     assert r["success"] is False
     a = lignes_audit(banc)
@@ -170,23 +172,23 @@ def test_la_route_get_passe_par_les_memes_gardes(api, banc):
 
 # ---------- constantes ----------
 
-def test_motif_identique_a_la_regle_polkit(api):
+def test_motif_identique_a_la_regle_polkit():
     regle = (SYSTEM / "polkit" / "50-secubox-system.rules").read_text()
     motif = re.search(r"/(\^secubox-[^/]+)/\.test", regle).group(1)
-    assert api.MOTIF_UNITE.pattern == motif
+    assert unites.MOTIF_UNITE.pattern == motif
 
 
-def test_les_unites_protegees_existent_dans_le_depot(api):
+def test_les_unites_protegees_existent_dans_le_depot():
     """Une unité protégée qui n'existe pas serait une protection décorative : chacune doit être livrée par un paquet."""
     livrees = {p.name for p in PAQUETS.glob("secubox-*/debian/*.service")} | {p.name for p in PAQUETS.glob("secubox-*/systemd/*.service")}
-    assert isinstance(api.UNITES_PROTEGEES, frozenset)
-    assert api.UNITES_PROTEGEES <= livrees, sorted(api.UNITES_PROTEGEES - livrees)
+    assert isinstance(unites.UNITES_PROTEGEES, frozenset)
+    assert unites.UNITES_PROTEGEES <= livrees, sorted(unites.UNITES_PROTEGEES - livrees)
     for u in ("secubox-auth.service", "secubox-aggregator.service", "secubox-core.service", "secubox-waf-ng.service",
               "secubox-system.service", "secubox-haproxy.service", "secubox-hub.service", "secubox-dns-guard.service"):
-        assert u in api.UNITES_PROTEGEES, u
+        assert u in unites.UNITES_PROTEGEES, u
 
 
-def test_les_ids_proteges_du_moteur_de_profils_sont_couverts(api):
+def test_les_ids_proteges_du_moteur_de_profils_sont_couverts():
     """PROTECTED_IDS (secubox-profiles/api/manifest.py) et UNITES_PROTEGEES restent synchrones : tout id protégé
     dont l'unité `secubox-<id>.service` est livrée doit être protégé ici aussi."""
     src = (PAQUETS / "secubox-profiles" / "api" / "manifest.py").read_text()
@@ -195,4 +197,4 @@ def test_les_ids_proteges_du_moteur_de_profils_sont_couverts(api):
     for i in re.findall(r'"([^"]+)"', ids):
         unite = f"secubox-{i}.service"
         if unite in livrees:
-            assert unite in api.UNITES_PROTEGEES, unite
+            assert unite in unites.UNITES_PROTEGEES, unite
