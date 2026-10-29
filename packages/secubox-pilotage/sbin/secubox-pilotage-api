@@ -66,8 +66,8 @@ def serveurs(admin, canal, fd_admin: int, fd_canal: int):
 async def _serve(srv) -> None:
     try:
         await srv.serve()
-    except SystemExit:  # uvicorn >= 0.5x lève SystemExit(3) au démarrage manqué : traité comme l'échec du lifespan (started reste faux)
-        pass
+    except SystemExit as e:  # uvicorn >= 0.5x lève SystemExit(3) au démarrage manqué : traité comme l'échec du lifespan (started reste faux)
+        print(f"pilotage: uvicorn a quitté (SystemExit, code {e.code!r})", file=sys.stderr)
 
 
 async def servir(admin, canal, fd_admin: int, fd_canal: int, rendre=None) -> bool:
