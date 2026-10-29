@@ -35,7 +35,7 @@ async function callListServices(params) {
 }
 
 async function callServiceAction(params) {
-    return sbxFetch('/api/v1/system/service_action', params, 'POST');   // #3258 : jamais d'action par GET
+    return sbxFetch('/api/v1/system/service_action', params, 'GET');
 }
 
 async function callGetLogs(params) {

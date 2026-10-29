@@ -202,10 +202,14 @@ def test_post_service_action_garde_la_protection(client, banc):
     assert r.status_code == 403 and banc["appels"] == []
 
 
-def test_la_vue_luci_system_hub_appelle_en_post():
+def test_le_js_porte_de_luci_reste_intact():
+    """AGENTS.md : le JS porté de LuCI ne se modifie pas. `system-hub/api.js` appelle encore service_action en GET, qui
+    rend désormais 405 ; cette vue n'est pas servie comme page : le fichier est installé sous /usr/share/secubox/www
+    (téléchargeable par /luci-static/), mais aucune page ne le charge (aucune entrée de menu, aucun HTML qui charge
+    view/system-hub ni un runtime LuCI, et `sbxFetch` n'y est pas défini). Rien ne casse donc pour un utilisateur."""
     js = (SYSTEM / "www" / "luci-static" / "resources" / "system-hub" / "api.js").read_text(encoding="utf-8")
-    assert "sbxFetch('/api/v1/system/service_action', params, 'POST')" in js
-    assert "sbxFetch('/api/v1/system/service_action', params, 'GET')" not in js
+    assert "    return sbxFetch('/api/v1/system/service_action', params, 'GET');\n" in js
+    assert "#3258" not in js
 
 
 # ---------- constantes ----------
