@@ -19,7 +19,7 @@ du catalogue fermé, le journal des opérations et les sessions de support (voir
 | Processus | une seule boucle asyncio, les deux applis en `lifespan="on"` (les files sont en mémoire, la relève est partagée) ; code de sortie 1 si l'une ne démarre pas |
 | Données | `/var/lib/secubox/pilotage/` (0750 `secubox-pilotage`), préparé par le postinst par descripteur (`init_donnees.py`) : systemd-tmpfiles refuse ce chemin |
 | Audit | `/var/log/secubox/audit.log` (propriétaire et droits inchangés) ; AppArmor en ajout seul ; ACL `u:secubox-pilotage:rw-` posée par `secubox-pilotage-audit-acl` (reposée après chaque rotation par l'unité de l'écouteur) |
-| AppArmor | `secubox-pilotage-api`, enforce |
+| AppArmor | `secubox-pilotage-api` et `secubox-pilotage-invite` (assistant de jonction), enforce |
 | Menu | aucune entrée propre : le panneau « Pilotage » est dans la page Flotte de secubox-annuaire ; paquet `hors-arbre` des méta-paquets (installé à la demande) |
 
 ## Écouteurs de tunnel
@@ -86,10 +86,13 @@ Catalogue fermé (`pilotage/operations.py`) :
   l'administrateur ne porte pas ce champ. La fin d'une session est la plus proche de la `fin` annoncée par la box
   (`X_SECUBOX_Support`, RFC 3339) et de la réception de `ouvert` plus la durée demandée (240 min pour une session que le maître
   n'a pas demandée) : passée cette fin, la session devient `expire` sans attendre de notification (R-L2-33). Un état terminal
-  (`refuse`, `ferme`, `annule`, `expire`) ne se rouvre pas.
-- **Audit maître** (`/var/log/secubox/audit.log`, jamais une valeur secrète) : `pilotage_action {box, cle, action, acteur, job,
-  etat, operation?, support?}` à la demande (`etat: demande`, `job: null`) puis à la réponse ; `pilotage_action_resultat {box, cle,
-  action, job, rc, resultat}` à la première fin ; `pilotage_support {box, cle, acteur, id, duree_min, etat}` ;
+  (`refuse`, `ferme`, `annule`, `expire`) ne se rouvre pas. `ouvert` n'est accepté que pour une session demandée par le maître,
+  à l'état `demande` ou `en_attente` : une session inconnue du maître est rangée `inconnu` et ne s'ouvre jamais. Pas de réponse
+  à `POST …/support` (504) : `sans_reponse`.
+- **Audit maître** (`/var/log/secubox/audit.log`, jamais une valeur secrète) : `pilotage_action {box, cle, action, acteur, args,
+  job, etat, operation?, support?}` (`args` : les paramètres validés, en JSON) à la demande (`etat: demande`, `job: null`) puis à la
+  réponse ; `pilotage_action_resultat {box, cle, action, job, rc, resultat}` à la première fin d'une opération **rattachée** à une
+  demande (une fin arrivée avant l'`OPERATE_RESP` est auditée à la fusion, avec son action, une seule fois) ; `pilotage_support {box, cle, acteur, id, duree_min, etat}` ;
   `pilotage_support_fermeture {box, cle, acteur, id}` ; `pilotage_rejoindre_envoye`, `pilotage_rejoindre_resultat`,
   `pilotage_rejoindre_echec {…, raison}`.
 
@@ -99,7 +102,10 @@ etape, pct}` et `X_SECUBOX_OperationDone {job, rc, resume}` arrivent « au moins
 inconnu : une ligne orpheline (`action: null`) est créée puis fusionnée dans la demande à la réponse ; seule la **première** fin
 compte (une renotification ne réaudite rien et ne relance aucune suite) ; une progression ne recule jamais. `resultat` :
 `succes` (`rc` 0), `echec`, `inconnu` (`rc` -1 ou absent : fin introuvable sur la box, `fins.json` évincé ou bus injoignable).
-États : `demande`, `accepte`, `consentement`, `refuse`, `sans_reponse`, `en_cours`, `termine`. 1 000 opérations gardées par box.
+États : `demande`, `accepte`, `consentement`, `refuse`, `sans_reponse`, `en_cours`, `termine`. 1 000 demandes gardées par box ;
+les orphelines (jobs inconnus) ont leur propre plafond de **100** par box et n'évincent jamais une demande. Une fin non rattachée
+n'est **pas auditée** (une box qui inventerait des jobs ne gonfle pas l'audit) : au plus une ligne de journal agrégée par box et
+par minute.
 Les fins ont leur propre fenêtre dans le plafond de 60 notifications par minute (l'agent retire une fin de sa boîte au 2xx).
 Les autres notifications de L2 (`X_SECUBOX_HandsTied`, `X_SECUBOX_Consent`, `X_SECUBOX_Support`) vont dans `GET /evenements`
 (colonnes `ident`, `etat`), dédoublonnées par `(type, id, état)`.
@@ -118,9 +124,13 @@ suite en base (une seule fois, que la fin arrive avant ou après l'`OPERATE_RESP
 des jetons (`secubox`, propriétaire de `master-link/tokens.json`) : il écrit le seul **nom** sur
 `/run/secubox-pilotage/invite.sock` (0600, `secubox-pilotage`) ; `secubox-pilotage-invite.socket` (`Accept=yes`) lance
 `secubox-pilotage-invite@.service` au compte `secubox`, qui valide le nom et exécute l'argv fixe
-`/usr/bin/sbx-mesh-invite --code --nom <nom> --json` (jamais `--flash`, `--ttl`, `--adresse`), puis rend sa sortie sur la seule
-connexion (rien en cas d'échec ; le journal n'a que le code de sortie). Unité durcie (socle § 10, `ReadWritePaths` = `master-link`
-et `/var/log/secubox`, `AF_UNIX AF_NETLINK`, `IPAddressDeny=any`, 60 s au plus) : exception écrite dans RULES-CODE.
+`/usr/bin/sbx-mesh-invite --code --nom <nom> --ttl 600 --json` (jamais `--flash` ni `--adresse` ; code valable 10 min), au plus
+**20 fois par heure** (compteur `master-link/pilotage-emissions.json`, 0600, sous verrou ; illisible ou lien : refus), puis rend
+sa sortie sur la seule connexion (rien en cas d'échec ; le journal n'a que le code de sortie). L'assistant audite lui-même
+`pilotage_code_emis {nom, ttl}` (ajout sans création ; audit impossible : rien n'est rendu). Unité durcie (socle § 10,
+`ReadWritePaths=-/var/lib/secubox/p2p/master-link /var/log/secubox`, `AF_UNIX AF_NETLINK`, `IPAddressDeny=any`, 60 s au plus) et
+profil AppArmor **enforce** `secubox-pilotage-invite` (`AppArmorProfile=`, chargé par le postinst) : python3, `sbx-mesh-invite` et
+`ip` en `ix`, arbre p2p en lecture, `master-link` en écriture, audit en ajout seul, netlink, aucun shell ni réseau IP.
 Échec d'émission : `pilotage_rejoindre_echec` (sans le code). Le pair est renommé côté p2p par la jonction sous le nouveau nom
 (#3213) ; la box réapparaît alors sous sa nouvelle clé `maillage:<nouveau>`, l'ancienne passe hors ligne avec son historique.
 
