@@ -650,3 +650,25 @@ def test_sync_true_de_la_box_suit_le_livre_sur_nextcloud(): ...
 12. **Requête non relayée** (403 d'une règle regex, ban, cache média) : aucune ligne des nouvelles signatures, comme pour #3257 — la ligne regex fait foi.
 13. **Étiquettes d'outil** : « aggravante » = trait `outil:<étiquette>` envoyé à actord et champ `tool` si vide ; jamais de hausse de gravité (contrainte « gravité réelle »).
 14. **C2** : chaque ligne non vide du bloc d'en-têtes d'une partie compte, continuations comprises ; **C4** : chaînes de requête et corps comptés séparément, comme PHP (`$_GET`, `$_POST`).
+
+### Tâche 9 : interface du WAF — les filtres PHP visibles dans la page (demande du propriétaire, 29/10/2026)
+
+Le propriétaire a cherché les nouveaux filtres dans `https://admin.gk2.secubox.in/waf/#vue` : #3257 n'a livré que le moteur. La catégorie `php2shell` de `waf-rules.json` apparaît dans l'onglet « Menaces », mais l'analyse structurelle (multipart et entrée PHP) n'a ni carte ni compteur.
+
+**Fichiers :**
+- Modifier : `packages/secubox-waf-ng/composants/waf/api/main.py` (`/detections`, nouvelle route `/php/signaux`)
+- Modifier : `packages/secubox-waf-ng/composants/waf/www/waf/menaces.html` (carte des détections) et `www/waf/attaquants.html` (signature PHP par adresse)
+- Test : `packages/secubox-waf-ng/composants/waf/tests/test_detection_php_3273.py`
+
+**Interfaces :**
+- Consomme : les lignes du journal des menaces écrites par `ThreatLog.Record` (`packages/secubox-toolbox-ng/cmd/sbxwaf/threatlog.go`, champ `category` et le nom de règle des tâches 2 à 7) ; `vhost_profiles.json` (vhosts PHP explicites et motifs, `federation_vhosts` de la tâche 4).
+- Produit :
+  - dans `/detections`, une entrée `{"id": "analyse_php", "nom": "Analyse des requêtes PHP", "mode": "detect", "classes": [vhosts armés], "actif": <mesuré>, "detail": "<n> signaux en 24 h"}` ;
+  - `GET /php/signaux` (`require_lecture`) → `{"fenetre_h": 24, "familles": {"php2shell": n, "roundcube": n, "nextcloud": n, "php_requete": n, "outil": n}, "regles": {"<règle>": n}, "vhosts": {"<hôte>": n}}`, calculé en tâche de fond avec un cache fichier (`.claude/reference/PERF-CACHE.md`), jamais en lisant le journal à chaque requête.
+- Aucune adresse privée n'est rendue (R12 : elles sont déjà journalisées « local »), aucun corps ni aucune valeur de paramètre.
+
+- [ ] **Étape 1 : tests qui échouent** — `test_detections_contient_analyse_php` (entrée présente, `mode == "detect"`, vhosts armés lus dans un `vhost_profiles.json` de test) ; `test_php_signaux_compte_par_famille_sur_24h` (journal de test : 3 lignes php2shell, 2 roundcube dont une de plus de 24 h → `php2shell == 3`, `roundcube == 1`) ; `test_php_signaux_exige_une_session` (sans jeton → 401) ; `test_php_signaux_lit_le_cache` (le journal n'est pas relu à chaque appel).
+- [ ] **Étape 2 :** lancer, constater l'échec sur une assertion.
+- [ ] **Étape 3 :** implémenter l'API, puis la carte de `menaces.html` et la colonne de `attaquants.html`, dans le style des pages refondues (`.claude/AURORA-REFERENCE.md`, `.claude/WEBUI-PANEL-GUIDELINES.md`) ; données réelles seulement, état « inconnu » si le cache manque.
+- [ ] **Étape 4 :** `…/.venv/bin/python -m pytest packages/secubox-waf-ng/composants/waf/tests -q` → tout vert.
+- [ ] **Étape 5 :** commit `feat(waf): filtres PHP visibles dans la page du WAF (ref #3273)` ; l'entrée de changelog 1.32.0 de la tâche 8 mentionne l'interface.
