@@ -601,6 +601,9 @@ func TestCompteurFenetreHeuresCroisees(t *testing.T) {
 // journalisée, donc aussi dans la ligne capture-concurrence.
 func TestNextcloudCaptureConcurrenceCheminMasque(t *testing.T) {
 	b := bancNextcloud(t, "")
+	// Un contrôle multipart actif (php2shell) : sans lui, le multipart n'est
+	// pas capturé, donc le sémaphore jamais sollicité (passe finale M4).
+	b.s.rules = LoadRules(ecrisRegles(t, corpusMultipartTest))
 	b.s.capturesMultipart = make(chan struct{}, 1)
 	b.s.capturesMultipart <- struct{}{}
 	corps := corpsExploit()

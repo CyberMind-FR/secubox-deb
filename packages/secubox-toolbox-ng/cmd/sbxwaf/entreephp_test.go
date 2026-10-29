@@ -203,8 +203,20 @@ func bancJeton(t *testing.T) (*bancMultipart, *[2]int) {
 	return b, &pris
 }
 
+// corpusUrlencodedTest : le corpus multipart plus un contrôle qui lit le corps
+// urlencoded (variables_nombre, seuil jamais atteint). Sans lui, aucun
+// contrôle actif ne lit l'urlencoded, qui n'est donc pas capturé (passe
+// finale M4).
+const corpusUrlencodedTest = `{"categories": {
+  "php2shell": {"name": "P", "severity": "high", "mode": "detect", "structural": [
+    {"id": "php2shell-001", "check": "upload_progress_fichiers", "params": {"fichiers_apres_min": 2}}]},
+  "php_requete": {"name": "Q", "severity": "medium", "mode": "detect", "structural": [
+    {"id": "php-006", "check": "variables_nombre", "params": {"variables_min": 1000000}}]}
+}}`
+
 func TestRequetePHPUrlencodedRelayeIntact(t *testing.T) {
 	b, pris := bancJeton(t)
+	b.s.rules = LoadRules(ecrisRegles(t, corpusUrlencodedTest))
 	corps := []byte("_task=mail&_action=send&_message=" + contenuTexte(2<<20))
 	for i := 0; i < 2; i++ {
 		b.mu.Lock()
@@ -314,6 +326,7 @@ func TestCaptureUrlencodedSatureeMultipartCapture(t *testing.T) {
 		t.Fatalf("capacités %d/%d, attendu 8 (urlencoded) et 16 (multipart)", capturesUrlencodedMax, capturesMultipartMax)
 	}
 	b := nouveauBancMultipart(t, nil)
+	b.s.rules = LoadRules(ecrisRegles(t, corpusUrlencodedTest))
 	b.s.capturesMultipart = make(chan struct{}, capturesMultipartMax)
 	b.s.capturesUrlencoded = make(chan struct{}, capturesUrlencodedMax)
 	for i := 0; i < capturesUrlencodedMax; i++ {

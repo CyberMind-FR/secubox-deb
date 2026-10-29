@@ -168,11 +168,15 @@ var (
 // raster (R-IMG2) : au plus 64 octets, SANS jeton (R-W2, point 10) : la
 // mémoire est bornée par la requête elle-même, et un PUT ne doit jamais
 // priver le multipart PHP2Shell de ses jetons.
+//
+// Seul un genre lu par un contrôle ACTIF est capturé (passe finale M4) : une
+// catégorie désactivée n'est pas chargée, donc ne fait plus capturer le
+// prologue XML, le début d'un PUT ni le corps urlencoded qu'elle seule lisait.
 func (s *Server) corpsACapturer(r *http.Request, e *EntreePHP, ind *indicateursPHP) (genre genreCorps, plafond int, jeton bool) {
 	if r.Body == nil || r.Body == http.NoBody {
 		return corpsAucun, 0, false
 	}
-	if e.PutRaster {
+	if e.PutRaster && ind.litCorps(corpsDebut) {
 		plafond = magiqueOctets
 		if f := s.fenetreCapture(); f < plafond {
 			plafond = f
@@ -182,8 +186,14 @@ func (s *Server) corpsACapturer(r *http.Request, e *EntreePHP, ind *indicateursP
 	ct := r.Header.Get("Content-Type")
 	switch {
 	case estMultipartPHP(ct):
+		if !ind.litCorps(corpsMultipart) {
+			return corpsAucun, 0, false
+		}
 		return corpsMultipart, s.fenetreCapture(), true
 	case estXMLPHP(r.Method, ct):
+		if !ind.litCorps(corpsXML) {
+			return corpsAucun, 0, false
+		}
 		// R-PHP2 : le prologue seul (4 096 octets au plus), SANS jeton (R-W2,
 		// point 10) : la mémoire est bornée, et semaphoreCapture prendrait par
 		// défaut le sémaphore multipart.
@@ -193,6 +203,9 @@ func (s *Server) corpsACapturer(r *http.Request, e *EntreePHP, ind *indicateursP
 		}
 		return corpsXML, plafond, false
 	case estUrlencodedPHP(ct):
+		if !ind.litCorps(corpsUrlencoded) {
+			return corpsAucun, 0, false
+		}
 		return corpsUrlencoded, s.fenetreCapture(), true
 	}
 	return corpsAucun, 0, false

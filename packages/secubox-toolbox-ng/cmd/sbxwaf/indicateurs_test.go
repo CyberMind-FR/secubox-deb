@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -129,3 +130,39 @@ func TestIndicateursCalculesAuChargement(t *testing.T) {
 // indicateursTous : tous les genres de corps lus (tests unitaires de
 // corpsACapturer, qui ne chargent pas de règles).
 var indicateursTous = &indicateursPHP{structurelles: true, litRequete: true, corps: 0xFF}
+
+// M4 : une catégorie désactivée ne fait plus capturer le corps qu'elle seule
+// lit. php_requete désactivée : un PROPFIND n'est pas capturé ; nc_put_non_raster
+// absente : pas de début de PUT ; aucun contrôle urlencoded actif : pas de
+// capture urlencoded (ni jeton). Le multipart, lu par php2shell, reste capturé.
+func TestCorpsACapturerSuitLesControlesActifs(t *testing.T) {
+	regles := LoadRules(ecrisRegles(t, `{"categories": {
+	  "php2shell": {"mode": "detect", "structural": [
+	    {"id": "php2shell-001", "check": "upload_progress_fichiers", "params": {"fichiers_apres_min": 2}}]},
+	  "php_requete": {"mode": "detect", "enabled": false, "structural": [
+	    {"id": "php-002", "check": "xml_dtd_prologue"}]},
+	  "nextcloud": {"mode": "detect", "enabled": false, "structural": [
+	    {"id": "nc-005", "check": "nc_put_non_raster"}]},
+	  "roundcube": {"mode": "detect", "enabled": false, "structural": [
+	    {"id": "rc-003", "check": "rc_crlf_envoi"}]}
+	}}`))
+	ind := regles.indicateurs()
+	s := &Server{}
+	cas := []struct {
+		nom, methode, chemin, ct string
+		genre                    genreCorps
+	}{
+		{"PROPFIND", "PROPFIND", "/remote.php/dav/files/alice/", "application/xml", corpsAucun},
+		{"PUT raster", http.MethodPut, "/remote.php/dav/files/alice/a.png", "image/png", corpsAucun},
+		{"urlencoded", http.MethodPost, "/index.php", "application/x-www-form-urlencoded", corpsAucun},
+		{"multipart", http.MethodPost, "/upload", ctTest, corpsMultipart},
+	}
+	for _, c := range cas {
+		r := httptest.NewRequest(c.methode, "http://nc.example"+c.chemin, strings.NewReader("<?xml version=\"1.0\"?><!DOCTYPE x>"))
+		r.Header.Set("Content-Type", c.ct)
+		e := s.nouvelleEntreePHP(r, "nextcloud")
+		if g, _, _ := s.corpsACapturer(r, e, ind); g != c.genre {
+			t.Errorf("%s : genre %v, attendu %v", c.nom, g, c.genre)
+		}
+	}
+}
