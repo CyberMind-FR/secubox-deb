@@ -593,6 +593,28 @@ func (r *Rules) Integrite() (declares, charges int, rejetes []string) {
 	return cur.declares, charges, append([]string(nil), cur.rejetes...)
 }
 
+// aDesStructurelles dit si au moins une signature structurelle est chargée dans
+// une catégorie active (relecture finale I2a). Sans elle, la capture multipart
+// n'est pas posée : `"enabled": false` arrête aussi la capture et les lignes
+// multipart-*, au démarrage comme après un rechargement à chaud. Nil-safe.
+func (r *Rules) aDesStructurelles() bool {
+	if r == nil {
+		return false
+	}
+	r.mu.RLock()
+	cur := r.current
+	r.mu.RUnlock()
+	if cur == nil {
+		return false
+	}
+	for _, c := range cur.cats {
+		if len(c.data.structurelles) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // EvaluerStructurel rend toutes les signatures structurelles qui declenchent
 // sur res : categories activees dans l'ordre du fichier, puis signatures dans
 // l'ordre. Pur et sans effet de bord ; ne bloque rien (mode detect seulement).

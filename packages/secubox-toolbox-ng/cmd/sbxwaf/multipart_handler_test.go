@@ -260,18 +260,8 @@ func TestMultipartNonPHPPasAnalyse(t *testing.T) {
 	}
 }
 
-func TestMultipartLANExempte(t *testing.T) {
-	b := nouveauBancMultipart(t, nil)
-	corps := corpsExploit()
-	rec := b.envoyer("nc.example", "/upload", "192.168.1.10", ctTest, bytes.NewReader(corps))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("statut %d, attendu 200", rec.Code)
-	}
-	b.verifierRecu(t, corps)
-	if ls := b.lignes(t); len(ls) != 0 {
-		t.Fatalf("adresse du LAN : aucune ligne attendue, eu %v", ls)
-	}
-}
+// R12 : le réseau local n'est plus exempté ; voir TestCaptureLANAnalyseeEnLocal
+// (capture_cablage_test.go), qui remplace TestMultipartLANExempte.
 
 // PHP analyse le corps AVANT d'exécuter le script : les contournements de
 // l'inspection regex (ncBypass, chemin « statique », hôte de confiance) ne

@@ -19,8 +19,8 @@
 // ne peut pas retenir figer(), donc la fin de la réponse.
 //
 // LA MÉMOIRE. Au plus capturesMultipartMax captures à la fois, chacune bornée
-// à la fenêtre d'inspection (1 Mio par défaut) : 16 Mio au pire sur une carte
-// de 1 Go. Au-delà, pas de capture, une ligne « multipart-concurrence », et
+// à min(--max-body-inspect, 1 Mio) (fenetreCapture) : 16 Mio au pire sur une
+// carte de 1 Go, même si l'inspection texte est relevée. Au-delà, pas de capture, une ligne « multipart-concurrence », et
 // la requête suit son cours.
 //
 // SEUL UN CORPS RELAYÉ EST ANALYSÉ. Une requête bloquée (403, ban, réponse du
@@ -129,8 +129,10 @@ func (c *captureCorps) figer() (prefixe []byte, lus int64, complet bool) {
 }
 
 // requeteMultipart : ce que le journal retient de la requête. Ni requête
-// (query), ni corps.
-type requeteMultipart struct{ ip, host, method, path, ua, contentType string }
+// (query), ni corps. ja4 et tool (relecture finale M3) : les mêmes que sur une
+// ligne detect des regex, pour que la détection PHP2Shell arrive chez actord
+// avec l'empreinte qui relie l'acteur.
+type requeteMultipart struct{ ip, host, method, path, ua, contentType, ja4, tool string }
 
 // prendreCapture prend un jeton sans jamais attendre. nil = pas de limite.
 func (s *Server) prendreCapture() bool {
@@ -157,6 +159,7 @@ func (s *Server) journaliserMultipart(rm requeteMultipart, rec ThreatRecord) {
 		return
 	}
 	rec.ClientIP, rec.Host, rec.Method, rec.Path, rec.UA = rm.ip, rm.host, rm.method, rm.path, rm.ua
+	rec.JA4, rec.Tool = rm.ja4, rm.tool
 	s.threatLog.Record(rec)
 }
 
@@ -219,4 +222,18 @@ func (s *Server) analyserCaptureMultipart(capt *captureCorps, rm requeteMultipar
 			Category: statut, Severity: "audit", Action: statut, Signaux: signaux,
 		})
 	}
+}
+
+// capturePlafond borne la fenêtre de capture quel que soit --max-body-inspect
+// (relecture finale M2) : les indicateurs PHP2Shell tiennent dans 1 Mio
+// (spécification § 6.4) ; une inspection texte relevée à 8 Mio ne doit pas
+// porter la mémoire des captures à 16 × 8 = 128 Mio sur une carte de 1 Go.
+const capturePlafond = 1 << 20
+
+// fenetreCapture vaut min(--max-body-inspect, 1 Mio).
+func (s *Server) fenetreCapture() int {
+	if f := s.fenetreCorps(); f < capturePlafond {
+		return int(f)
+	}
+	return capturePlafond
 }

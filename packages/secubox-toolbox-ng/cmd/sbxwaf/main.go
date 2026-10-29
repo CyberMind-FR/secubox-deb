@@ -526,16 +526,24 @@ func (s *Server) handler() http.Handler {
 			// Placée AVANT la liste de contournement, et c'est délibéré : PHP
 			// analyse le corps avant d'exécuter le script, donc ncBypass, les
 			// chemins « statiques » et les hôtes de confiance ne protègent de
-			// rien ici (spécification § 8, point 3). Seul le LAN reste exempté.
+			// rien ici (spécification § 8, point 3). TOUS les clients sont
+			// analysés, réseau local et 127.0.0.1 compris (ruling R12) : en
+			// detect l'exemption ne protégeait de rien (une adresse privée est
+			// journalisée « local » et n'est jamais émise vers actord), et elle
+			// aveuglait les vhosts .onion (Tor arrive en 127.0.0.1). Sans
+			// signature structurelle chargée et active, aucune capture (I2a) :
+			// `"enabled": false` est un vrai retour arrière à chaud.
 			// Aucun octet n'est retenu avant le relais : le proxy lit le corps,
 			// la capture en copie le début, l'analyse tombe dans le defer, après
 			// la réponse. Le corps reste « binaire » pour les regex.
 			if r.Body != nil && r.Body != http.NoBody && estMultipartPHP(r.Header.Get("Content-Type")) &&
-				!privateCIDR(ip) && s.vhostProfiles.estPHP(r.Host) {
+				s.vhostProfiles.estPHP(r.Host) && s.rules.aDesStructurelles() {
+				ua := r.Header.Get("User-Agent")
 				rm := requeteMultipart{ip: ip, host: r.Host, method: r.Method, path: rawPath,
-					ua: r.Header.Get("User-Agent"), contentType: r.Header.Get("Content-Type")}
+					ua: ua, contentType: r.Header.Get("Content-Type"),
+					ja4: s.lireJA4(r), tool: étiquetteOutil(ua, rawPath)}
 				if s.prendreCapture() {
-					capt := nouvelleCapture(r.Body, int(s.fenetreCorps()), r.ContentLength)
+					capt := nouvelleCapture(r.Body, s.fenetreCapture(), r.ContentLength)
 					r.Body = capt
 					// L'analyse n'a lieu que si le corps a été confié au proxy
 					// (relaye, posé juste avant les deux proxy.ServeHTTP). Une
@@ -973,8 +981,8 @@ func (s *Server) lireJA4(r *http.Request) string {
 }
 
 // fenetreCorps est la fenêtre d'inspection du corps (--max-body-inspect), ou
-// defaultMaxBodyInspect si elle n'est pas posée. Le chemin texte et la capture
-// multipart (#3257) partagent la même.
+// defaultMaxBodyInspect si elle n'est pas posée. La capture multipart (#3257)
+// en prend le minimum avec 1 Mio (fenetreCapture).
 func (s *Server) fenetreCorps() int64 {
 	if s.maxBodyInspect > 0 {
 		return s.maxBodyInspect
