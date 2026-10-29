@@ -196,7 +196,7 @@ def test_canal_rejoue_l_echange_du_client_go():
         fut_op = files.deposer(GK5.cle, {"type": "OPERATE", "body": {"command": "Device.X_SECUBOX_Releve.Mesurer()", "args": {"duree_s": 60}}})
         async with client(app) as c:
             r = await c.post("/canal/v1/bonjour", json={
-                "agent_version": "0.1.0", "boot_id": "b00t-1234", "modele": ["Device.DeviceInfo.", "Device.X_SECUBOX_Boot."]})
+                "agent_version": "0.1.0", "boot_id": "0b00b000-1234-4000-8000-000000000001", "modele": ["Device.DeviceInfo.", "Device.X_SECUBOX_Boot."]})
             assert r.status_code == 200
             r = await c.get("/canal/v1/requetes?attente=25")
             assert r.status_code == 200
@@ -225,7 +225,7 @@ def test_canal_rejoue_l_echange_du_client_go():
         assert (await fut_dm)["type"] == "GET_SUPPORTED_DM_RESP"
         assert (await fut_op)["body"]["output"] == {"duree_s": 60}
         assert (await fut_err)["type"] == "ERROR"
-        assert stock.vus[0][1]["agent_version"] == "0.1.0" and stock.vus[0][1]["boot_id"] == "b00t-1234"
+        assert stock.vus[0][1]["agent_version"] == "0.1.0" and stock.vus[0][1]["boot_id"] == "0b00b000-1234-4000-8000-000000000001"
         assert stock.vus[0][1]["modele"] == ["Device.DeviceInfo.", "Device.X_SECUBOX_Boot."]
         assert len(stock.notifications) == 16 and stock.notifications[0][0] == GK5
         assert stock.notifications[0][1] == {"type": "X_SECUBOX_Boot", "ts": 1730000000}
@@ -307,7 +307,7 @@ def test_canal_bonjour_filtre_les_caracteres_de_controle():
         async with client(app) as c:
             await c.post("/canal/v1/bonjour", json={"agent_version": "1.0\x1b[31m\n", "boot_id": "a\x00b", "modele": ["Device.\x07X."]})
         infos = stock.vus[0][1]
-        assert infos["agent_version"] == "1.0[31m" and infos["boot_id"] == "ab" and infos["modele"] == ["Device.X."]
+        assert infos["agent_version"] == "1.0[31m" and infos["boot_id"] == "" and infos["modele"] == ["Device.X."]
     run(cas())
 
 

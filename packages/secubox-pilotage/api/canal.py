@@ -64,6 +64,8 @@ RESUME_MAX = 200
 # decision, fin (mains liées, consentement, support). Une valeur hors forme rend tout l'événement invalide, comme unit et value.
 _IDENT = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 _MOT = re.compile(r"[a-z_]{1,32}")
+# /proc/sys/kernel/random/boot_id : un UUID en minuscules ; toute autre forme est ignorée (ne clôt aucun reboot).
+_BOOT_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 _RFC3339 = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})")
 
 log = logging.getLogger("pilotage.canal")
@@ -259,7 +261,9 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             raise HTTPException(400, "objet attendu")
         modele = doc.get("modele")
         modele = [chaine(p, 256) for p in modele[:_MODELE_MAX] if isinstance(p, str)] if isinstance(modele, list) else []
-        infos = {"agent_version": chaine(doc.get("agent_version")), "boot_id": chaine(doc.get("boot_id")), "modele": modele}
+        boot_id = doc.get("boot_id")
+        boot_id = boot_id if isinstance(boot_id, str) and _BOOT_ID.fullmatch(boot_id) else ""
+        infos = {"agent_version": chaine(doc.get("agent_version")), "boot_id": boot_id, "modele": modele}
         closes = await asyncio.to_thread(stockage.vu, box, infos)
         # I4 (R-L2-47) : un nouveau boot_id clôt les reboot en cours de la box ; chacun est remis au suivi (audit), une fois
         for op in closes or ():

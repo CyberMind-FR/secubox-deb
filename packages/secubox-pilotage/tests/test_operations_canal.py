@@ -110,3 +110,24 @@ def test_bonjour_d_un_nouveau_boot_clot_le_reboot_et_le_remet_au_suivi(tmp_path)
             assert (await c.post("/canal/v1/bonjour", json=nouveau)).status_code == 200
         assert fins == [(GK5.cle, "jobr", 0, "succes")]
     asyncio.run(cas())
+
+
+def test_bonjour_au_boot_id_mal_forme_ne_clot_rien(tmp_path):
+    """Relecture de la passe finale : seul un boot_id au format UUID compte ; une valeur quelconque ne clôt aucun reboot."""
+    async def cas():
+        s = StockageSqlite(tmp_path / "p", horloge=Horloge())
+        fins = []
+
+        async def apres_fin(box, op):
+            fins.append(op["job"])
+
+        app = creer_app_canal(Files(), CONNUES.get, s, lambda e, c: None, vu_intervalle_s=0, audit_intervalle_s=0, apres_fin=apres_fin)
+        bonjour = {"agent_version": "0.2.0", "boot_id": "11111111-0000-4000-8000-000000000000", "modele": []}
+        async with client(app) as c:
+            assert (await c.post("/canal/v1/bonjour", json=bonjour)).status_code == 200
+            op = s.operation_demander(GK5.cle, "reboot", {}, "alice", None)
+            s.operation_reponse(op, "accepte", "jobr", "")
+            for forge in ("x", "boot-2", "11111111-0000-4000-8000-00000000000Z", "../etc"):
+                assert (await c.post("/canal/v1/bonjour", json={**bonjour, "boot_id": forge})).status_code == 200
+        assert fins == []
+    asyncio.run(cas())
