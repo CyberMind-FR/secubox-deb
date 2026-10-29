@@ -58,7 +58,7 @@ from pilotage.operations import (CATALOGUE, COMMANDE_SUPPORT_FERMER, COMMANDE_SU
 from pilotage.stockage import HORS_LIGNE_S, SUPPORT_DUREE_MAX_MIN, StockageSqlite
 
 DELAI_LECTURE_S = 15.0
-DELAI_ACTION_S = 30.0          # OPERATE_RESP d'une action : immédiat sur la box (le ctl lance, ne fait pas) ; sudo + ctl + marge
+DELAI_ACTION_S = 90.0          # OPERATE_RESP d'une action : plus que l'agent n'attend le ctl (60 s, delaiCtl), moins que la file (120 s)
 SUPPORT_DUREE_DEFAUT_MIN = 30
 ETATS_REPONSE = ("accepte", "consentement", "refuse")
 CHEMIN_MAX = 256

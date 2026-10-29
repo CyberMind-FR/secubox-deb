@@ -438,3 +438,20 @@ async def test_support_sans_reponse_apres_504(m):
     assert r.status_code == 504
     (s,) = m.s.supports(GK5.cle)
     assert s["etat"] == "sans_reponse"
+
+
+def test_le_maitre_attend_l_agent_plus_longtemps_que_l_agent_n_attend_le_ctl():
+    """Mineur de la relecture finale (R-L2-47) : le maître (90 s) attend l'OPERATE_RESP plus longtemps que l'agent n'attend le
+    ctl (60 s, sbx-pilotage-agent : delaiCtl), sinon une action lancée sur la box serait rendue « sans réponse » au maître. La
+    réponse servie reste attendue par la file plus longtemps encore."""
+    import re
+    from pathlib import Path
+
+    import api.main as api_main
+    from pilotage.files import EXPIRATION_REPONSE_S
+
+    go = (Path(__file__).resolve().parents[2] / "secubox-pilotage-agent" / "cmd" / "sbx-pilotage-agent" / "ancre.go").read_text()
+    (agent_s,) = [int(x) for x in re.findall(r"delaiCtl\s*=\s*(\d+)\s*\*\s*time\.Second", go)]
+    assert agent_s == 60
+    assert api_main.DELAI_ACTION_S == 90.0
+    assert agent_s < api_main.DELAI_ACTION_S < EXPIRATION_REPONSE_S

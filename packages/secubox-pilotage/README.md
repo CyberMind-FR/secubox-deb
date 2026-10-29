@@ -117,7 +117,7 @@ Catalogue fermé (`pilotage/operations.py`) :
   `consentement`, renvoyée telle quelle ; l'identifiant du consentement n'est pas transmis). Une confirmation fausse est refusée partout.
 - **Acteur** : le login de l'administrateur (`sub` du JWT) part dans le champ `acteur` de l'Operate s'il a la forme
   `^[a-z_][a-z0-9_.-]{0,63}$` (R-L2-14) ; il est audité sur le maître dans tous les cas.
-- **Délais et erreurs** : box hors ligne → 409 ; audit impossible → 503 (rien n'est envoyé) ; pas d'`OPERATE_RESP` en 30 s → 504,
+- **Délais et erreurs** : box hors ligne → 409 ; audit impossible → 503 (rien n'est envoyé) ; pas d'`OPERATE_RESP` en 90 s (plus que les 60 s que l'agent accorde au ctl) → 504,
   opération `sans_reponse` (si la box l'a exécutée quand même, son suivi la rattache par son job) ; `ERROR` de l'agent → `refuse`.
 - **Support (R-L2-31)** : une action demandée **dans le cadre d'une session de support** porte `"support": "<id>"` ; le maître la
   refuse (409) tant que cette session n'est pas `ouvert` sur cette box, ou dès qu'elle a passé sa fin. Une action ordinaire de
