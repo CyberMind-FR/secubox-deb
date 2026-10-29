@@ -1,3 +1,15 @@
+secubox-autoload (0.7.3-1~trixie1) trixie; urgency=medium
+
+  * Relecture finale du pilotage L1 (#3126, I2/R37) : un changement d'abonnement par l'API
+    (`POST /clients/{client}/abonnement`) relance `tunnel-sync` (argv sudo exact), donc l'export de la projection
+    publique : un client `revoque` ou `suspendu` n'est plus piloté indéfiniment. Les révocations (jeton, lot) le
+    relancent toujours, même sans pair à retirer. Les trois routes rendent `tunnel_applique`.
+  * Minuterie horaire dans le service (aucune unité de plus, aucune unité root) : `tunnel-sync` une minute après le
+    démarrage puis toutes les heures ; un abonnement dont l'échéance passe devient `echu` dans la projection.
+  * Commentaires périmés corrigés (« par fichier », « unité root séparée ») : l'application passe par sudo à argv exact.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 11:45:00 +0100
+
 secubox-autoload (0.7.2-1~trixie1) trixie; urgency=medium
 
   * Projection publique des pairs (#3126) : une base verrouillée (« database is locked ») ou corrompue ne remplace plus

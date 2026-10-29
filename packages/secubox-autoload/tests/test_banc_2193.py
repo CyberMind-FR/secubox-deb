@@ -219,7 +219,7 @@ def test_A_parcours_complet_zero_touch(banc):
     # côté infrastructure : un pair, la box « terminée » à 100 %, un pré-rapport reçu, l'audit complet et sans valeur de jeton
     b = banc.etat_box()[0]
     assert (b["statut"], b["progression"], b["client"], b["profil"]) == ("terminé", 100, "client-042", "lite")
-    assert len(banc.pairs.actifs()) == 1 and banc.syncs == 1
+    assert len(banc.pairs.actifs()) == 1 and banc.syncs == 2      # l'abonnement posé par emet() (R37, #3126 : republie la projection), puis l'enrôlement
     assert banc.admin.get("/prerapports").json()[0]["paquets"] == 3
     audit = (banc.tmp / "infra" / "audit.log").read_text()
     assert {"jeton-emis", "jeton-reclame", "prerapport-recu"} <= {json.loads(l)["action"] for l in audit.splitlines()}

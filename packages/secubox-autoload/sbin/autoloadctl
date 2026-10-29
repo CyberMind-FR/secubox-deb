@@ -145,7 +145,7 @@ def main(argv=None):
                 print(f"exporter-pairs : {err}", file=sys.stderr)
                 return 1
         elif a.cmd == "abonnement":
-            print(f"{reg.fixer_abonnement(a.client, a.statut)} jeton(s) du client")
+            print(f"{reg.fixer_abonnement(a.client, a.statut)} jeton(s) du client (projection du pilotage : au prochain tunnel-sync, au plus tard dans l'heure)")
     except T.TunnelErreur as err:
         print(f"tunnel : {err}", file=sys.stderr)
         return 1
