@@ -398,8 +398,19 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
         fin_support = session["fin"] if session else None
         exp = jwt.get("exp") if isinstance(jwt.get("exp"), (int, float)) and not isinstance(jwt.get("exp"), bool) else None
 
-        async def corps():
+        async def controles(session: bool = True) -> Optional[dict]:
+            """None si tout va bien, sinon le contenu de l'événement de coupure : jeton (fil) puis session de support."""
             nonlocal fin_support
+            if session and not await asyncio.to_thread(session_toujours_admin, jwt):
+                return {"session": "expiree"}
+            if cliente:
+                s = await asyncio.to_thread(stockage.support_ouvert, b["cle"])
+                if s is None:
+                    return {"support": "termine"}
+                fin_support = s["fin"]
+            return None
+
+        async def corps():
             try:
                 yield formater("etat", {"box": b["nom"], "cle": b["cle"], "connecte": True, "en_ligne": en_ligne(b),
                                         "support": session["id"] if session else None})
@@ -415,29 +426,24 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
                     e = await ab.suivant(max(0.0, prochaine - loop.time()))
                     if e is FIN:
                         return
+                    if e is None or loop.time() >= prochaine:
+                        # échéance atteinte : contrôles AVANT de servir quoi que ce soit (les événements déjà en file attendent derrière)
+                        coupure = await controles()
+                        if coupure is not None:
+                            yield formater("etat", {"box": b["nom"], "cle": b["cle"], **coupure})
+                            return
+                        if loop.time() >= echeance:
+                            echeance = loop.time() + battement_s
+                            if e is None:
+                                yield ": battement\n\n"
                     if e is not None:
                         yield formater(*e)
                         if cliente and e[1].get("type") == "X_SECUBOX_Support":
                             # un changement de session de support : relu AVANT tout autre événement (M2), la fermeture coupe tout de suite
-                            s = await asyncio.to_thread(stockage.support_ouvert, b["cle"])
-                            if s is None:
-                                yield formater("etat", {"box": b["nom"], "cle": b["cle"], "support": "termine"})
+                            coupure = await controles(session=False)
+                            if coupure is not None:
+                                yield formater("etat", {"box": b["nom"], "cle": b["cle"], **coupure})
                                 return
-                            fin_support = s["fin"]
-                        continue
-                    # délai écoulé sans événement : vérifier le jeton (fil), puis la session de support, puis battre
-                    if not await asyncio.to_thread(session_toujours_admin, jwt):
-                        yield formater("etat", {"box": b["nom"], "cle": b["cle"], "session": "expiree"})
-                        return
-                    if cliente:
-                        s = await asyncio.to_thread(stockage.support_ouvert, b["cle"])
-                        if s is None:
-                            yield formater("etat", {"box": b["nom"], "cle": b["cle"], "support": "termine"})
-                            return
-                        fin_support = s["fin"]
-                    if loop.time() >= echeance:
-                        echeance = loop.time() + battement_s
-                        yield ": battement\n\n"
             finally:
                 diffusion.liberer(ab)
 

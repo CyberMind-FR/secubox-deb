@@ -93,8 +93,8 @@ class Flux:
 
 
 class Monde:
-    def __init__(self, tmp_path, mp, battement_s=15.0, **diff):
-        self.h = Horloge()
+    def __init__(self, tmp_path, mp, battement_s=15.0, horloge=None, **diff):
+        self.h = horloge or Horloge()
         self.s = StockageSqlite(tmp_path / "p", horloge=self.h)
         self.f = Files()
         self.lignes = []
@@ -547,3 +547,42 @@ def test_plafond_global_par_defaut_32():
         d.abonner(f"u{i}", "k")
     with pytest.raises(LimiteAtteinte):
         d.abonner("autre", "k")
+
+
+# --- tour 2 : l'échéance est testée AVANT de servir chaque événement en file ---
+
+@pytest.mark.asyncio
+async def test_exp_passe_aucun_notify_en_file_n_est_servi(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch, battement_s=30.0)
+    w.s.vu(GK5_CANAL, {})
+    w.exp = time.time() + 0.3
+    f = w.ouvrir()
+    await f.evenements(1)
+    for i in range(5):
+        w.diffusion.publier("maillage:gk5", "notify", {"type": "X_SECUBOX_ServiceLoop", "i": i})
+    time.sleep(0.5)                                  # la boucle est bloquée : l'échéance passe avec 5 événements déjà en file
+    await asyncio.wait_for(f.t, 3)
+    ev = analyser(f.corps)
+    assert [n for n, _ in ev] == ["etat", "etat"] and ev[-1][1]["session"] == "expiree"
+    assert w.diffusion.total() == 0
+    await f.fermer()
+
+
+@pytest.mark.asyncio
+async def test_fin_du_support_passee_aucun_notify_en_file_n_est_servi(tmp_path, monkeypatch):
+    w = Monde(tmp_path, monkeypatch, battement_s=30.0, horloge=time.time)
+    w.s.vu(LGM, {})
+    w.s.support_demander(LGM.cle, "s1", 30, "alice")
+    w.s.support_noter(LGM.cle, "s1", "ouvert", None)
+    with w.s._tx() as cx:
+        cx.execute("UPDATE supports SET fin=? WHERE cle=? AND id=?", (int(time.time()) + 1, LGM.cle, "s1"))
+    f = w.ouvrir(LGM.cle)
+    await f.evenements(1)
+    for i in range(5):
+        w.diffusion.publier(LGM.cle, "notify", {"type": "X_SECUBOX_ServiceLoop", "i": i})
+    time.sleep(2.2)                                  # la fin (au plus 1 s) passe avec 5 événements déjà en file
+    await asyncio.wait_for(f.t, 3)
+    ev = analyser(f.corps)
+    assert [n for n, _ in ev] == ["etat", "etat"] and ev[-1][1]["support"] == "termine"
+    assert w.diffusion.total() == 0
+    await f.fermer()
