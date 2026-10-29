@@ -1,3 +1,19 @@
+secubox-mail (2.16.8-1~trixie1) trixie; urgency=high
+
+  * Conteneurs mail et roundcube créés en trixie (#3274) : Roundcube 1.6.20+dfsg-0+deb13u1
+    corrige CVE-2026-113386, -114720, -114724, -114725 et -114727, que bookworm
+    (1.6.5 deb12u12) ne corrige pas.
+  * PHP sans version en dur : paquets php-* et libapache2-mod-php, drop-in
+    99-secubox-attach.ini et a2enmod suivant la version de PHP du conteneur (8.4 en trixie) ;
+    php-imap retiré (absent de trixie, inutile à Roundcube). mailctl relance la PHP-FPM
+    présente ('php*-fpm') et installe php-zip.
+  * Leçons de la migration de gk2 (29/10/2026) : drop-ins ImportCredential= pour
+    systemd-journald, -sysctl, -tmpfiles-setup et -tmpfiles-clean (systemd 257 en LXC
+    non privilégié : 243/CREDENTIALS) ; gpg au lieu de gnupg au debootstrap (gnupg tire
+    gpg-wks-server, donc exim4, un MTA de trop dans le conteneur).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:40:00 +0100
+
 secubox-mail (2.16.7-1~trixie1) trixie; urgency=medium
 
   * Minuteries autocrypt-sync et imap-sync (ref #3185) : un conteneur mail jamais provisionné les fait

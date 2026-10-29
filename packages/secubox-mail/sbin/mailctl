@@ -313,9 +313,9 @@ cmd_webmail_greffons() {
     # desactive tout seul a son chargement et le bouton « telecharger en zip »
     # n apparait jamais. Il manquait depuis l origine sur cette board.
     if ! lxc-attach -n "$CONTAINER" -- php -r 'exit(class_exists("ZipArchive")?0:1);' 2>/dev/null; then
-        echo "  installation de php8.2-zip (requis par zipjointes et zipdownload)"
+        echo "  installation de php-zip (requis par zipjointes et zipdownload)"
         lxc-attach -n "$CONTAINER" -- sh -c \
-            "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq php8.2-zip" >/dev/null 2>&1 || true
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq php-zip" >/dev/null 2>&1 || true
     fi
 
     ( cd "$src" && tar czf - . ) | lxc-attach -n "$CONTAINER" -- sh -c \
@@ -344,7 +344,7 @@ cmd_webmail_greffons() {
         lxc-attach -n "$CONTAINER" -- cp "$conf.avant-zipjointes" "$conf" 2>/dev/null
         return 1
     }
-    lxc-attach -n "$CONTAINER" -- systemctl restart php8.2-fpm >/dev/null 2>&1 || true
+    lxc-attach -n "$CONTAINER" -- systemctl restart 'php*-fpm' >/dev/null 2>&1 || true
     echo "greffons webmail poses"
 }
 
@@ -418,7 +418,7 @@ cmd_webmail_openpgp() {
         fi
         php -l \$f >/dev/null 2>&1 || { cp \$f.avant-openpgp \$f; exit 2; }
     " || { error "configuration refusée (php -l) — restaurée"; return 1; }
-    lxc_attach "$wc" systemctl restart php8.2-fpm >/dev/null 2>&1 || true
+    lxc_attach "$wc" systemctl restart 'php*-fpm' >/dev/null 2>&1 || true
     echo "webmail : OpenPGP par Mailvelope (trousseau principal) — enigma absent"
 }
 
@@ -455,7 +455,7 @@ cmd_webmail_pgp() {
         php -l \$f >/dev/null 2>&1 || { cp \$f.avant-secubox-pgp \$f; exit 2; }
         php -l /usr/share/roundcube/plugins/secubox_pgp/secubox_pgp.php >/dev/null 2>&1 || { cp \$f.avant-secubox-pgp \$f; exit 3; }
     " || { error "greffon secubox_pgp refusé (php -l) — configuration restaurée"; return 1; }
-    lxc_attach "$wc" systemctl restart php8.2-fpm >/dev/null 2>&1 || true
+    lxc_attach "$wc" systemctl restart 'php*-fpm' >/dev/null 2>&1 || true
     echo "webmail : OpenPGP par la page du Coffre (https://$dom) — enigma absent"
 }
 
