@@ -10,6 +10,12 @@ Servie sur `/run/secubox/pilotage-canal.sock` derrière nginx (10.10.0.1:8472 et
 dans le tunnel, lue UNIQUEMENT dans `X-Real-IP` (posé par nginx) : jamais l'adresse du pair de la socket (c'est nginx). En-tête absent,
 multiple ou adresse inconnue → 403 et une ligne d'audit `pilotage_identite_refusee` (adresse seule).
 
+Avant même l'identité, la requête doit porter UNE fois `X-SecuBox-Pilotage-Tunnel: 1` (L2 T0, M6) : seul le gabarit nginx du canal (écouteur
+de tunnel) le pose ; `secubox-proxy.conf` le vide sur tout autre proxy, HAProxy efface `X-SecuBox-*` à l'entrée publique (#3258) et
+l'agrégateur ne relaie jamais vers cette socket. Absent, en double ou différent de « 1 » → 403, audité (`motif: hors_tunnel`), sans recherche
+d'identité : un chemin qui atteindrait la socket sans passer par l'écouteur (relais, processus local du groupe www-data) ne choisit pas son
+`X-Real-IP`.
+
 Protocole (le client Go `sbx-pilotage-agent` fait foi) :
   POST /canal/v1/bonjour     {agent_version, boot_id, modele[]}                        → 200 {"ok": true} ; 429 si < 10 s depuis le précédent
   GET  /canal/v1/requetes    ?attente=N (borné à 25 s)                                 → 200 [{msg_id,type,body}] | 204
@@ -46,6 +52,7 @@ AUDIT_INTERVALLE_S = 60.0
 AUDIT_ADRESSES_MAX = 1024
 NOTIFS_PAR_MINUTE = 60
 NOTIFS_FENETRE_S = 60.0
+MARQUEUR_TUNNEL = "x-secubox-pilotage-tunnel"   # posé par le seul gabarit nginx du canal (pilotage-canal.conf.tpl), valeur « 1 »
 
 log = logging.getLogger("pilotage.canal")
 
@@ -92,22 +99,25 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
     """`identifier(adresse)` rend la Box ou None (appelée hors boucle) ; `audit(evenement, champs)` écrit une ligne dans l'audit."""
     app = FastAPI(title="SecuBox Pilotage — canal", docs_url=None, redoc_url=None, openapi_url=None)
 
-    refus: dict = {}  # adresse -> [instant de la dernière ligne, refus tus depuis] ; bornée à AUDIT_ADRESSES_MAX
+    refus: dict = {}  # (motif, adresse) -> [instant de la dernière ligne, refus tus depuis] ; bornée à AUDIT_ADRESSES_MAX
 
-    async def auditer_refus(adresse: str) -> None:
-        """Une ligne d'audit par adresse et par audit_intervalle_s ; les refus tus sont comptés dans la ligne suivante."""
+    async def auditer_refus(adresse: str, motif: Optional[str] = None) -> None:
+        """Une ligne d'audit par adresse (et motif) et par audit_intervalle_s ; les refus tus sont comptés dans la ligne suivante."""
         maintenant = time.monotonic()
-        etat = refus.get(adresse)
+        cle = (motif, adresse)
+        etat = refus.get(cle)
         if etat is not None and maintenant - etat[0] < audit_intervalle_s:
             etat[1] += 1
             return
         champs = {"adresse": adresse}
+        if motif:
+            champs["motif"] = motif
         if etat is not None and etat[1]:
             champs["tus"] = etat[1]
-        refus.pop(adresse, None)
+        refus.pop(cle, None)
         if len(refus) >= AUDIT_ADRESSES_MAX:
             refus.pop(next(iter(refus)))
-        refus[adresse] = [maintenant, 0]
+        refus[cle] = [maintenant, 0]
         try:
             await asyncio.to_thread(audit, "pilotage_identite_refusee", champs)
         except Exception:
@@ -116,6 +126,10 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
     async def box_de(request: Request) -> Box:
         valeurs = request.headers.getlist("x-real-ip")
         brut = valeurs[0] if len(valeurs) == 1 else ""
+        if request.headers.getlist(MARQUEUR_TUNNEL) != ["1"]:
+            # pas passée par l'écouteur nginx du tunnel (M6) : l'identité n'est pas cherchée, le refus a la même forme
+            await auditer_refus(_adresse_pour_audit(brut or "-"), "hors_tunnel")
+            raise HTTPException(403, "box inconnue")
         box = None
         if brut:
             try:

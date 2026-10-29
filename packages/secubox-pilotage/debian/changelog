@@ -1,3 +1,13 @@
+secubox-pilotage (0.1.2-1~trixie1) trixie; urgency=medium
+
+  * Identité du canal (ref #3126, L2 « Agir », tâche 0, M6) : le gabarit nginx de l'écouteur de tunnel pose
+    `X-SecuBox-Pilotage-Tunnel: 1`, et lui seul (secubox-proxy.conf le vide partout ailleurs, l'agrégateur ne relaie plus
+    vers pilotage-canal). Le canal refuse (403, audité `motif: hors_tunnel`) toute requête sans ce marqueur exactement
+    une fois, avant toute recherche d'identité : un relais ou un processus local qui joindrait la socket ne choisit plus
+    son `X-Real-IP`. Le postinst rend le nouveau gabarit (et recharge nginx) avant de redémarrer le service.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:30:00 +0100
+
 secubox-pilotage (0.1.1-1~trixie1) trixie; urgency=medium
 
   * Relecture finale L1 (ref #3126) :

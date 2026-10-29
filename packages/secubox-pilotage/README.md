@@ -28,6 +28,11 @@ L'identité d'une box est `X-Real-IP` = l'adresse du pair TCP (`$realip_remote_a
 est neutralisé dans le `server` (sinon un `X-Forwarded-For` forgé usurperait n'importe quelle box). Fichier retiré si `nginx -t` échoue
 (sans rechargement) ; nginx rechargé seulement si le rendu change. `net.ipv4.ip_nonlocal_bind=1` est livré par le paquet.
 
+Le gabarit pose aussi `X-SecuBox-Pilotage-Tunnel: 1`, et il est le seul : `secubox-proxy.conf` (secubox-core) le vide sur tout autre proxy, et
+l'agrégateur ne relaie jamais `/api/v1/pilotage-canal/…`. Le canal refuse (403, audit `pilotage_identite_refusee`, `motif: hors_tunnel`) toute
+requête qui ne le porte pas exactement une fois, avant de chercher l'identité : un chemin qui joindrait la socket sans passer par l'écouteur ne
+choisit pas son `X-Real-IP` (L2, M6).
+
 Il pose, dans la chaîne `input` de `inet filter` (base unifiée de secubox-hardening) ET de `inet secubox_filter`, juste avant la règle `drop`
 (donc après les règles de ban), à chaud (`nft insert ... handle`) et dans `/etc/nftables.conf` :
 

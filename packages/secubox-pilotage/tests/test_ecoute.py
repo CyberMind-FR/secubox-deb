@@ -171,6 +171,20 @@ def test_ecouteur_seulement_sur_les_ip_de_tunnel(banc):
     assert "pilotage.sock" not in rendu.replace("pilotage-canal.sock", "")   # la socket d'administration n'est jamais exposée
 
 
+def test_gabarit_canal_pose_le_marqueur(banc):
+    """M6 (L2 T0) : le marqueur X-SecuBox-Pilotage-Tunnel est posé par le SEUL gabarit du canal (un par server rendu, valeur 1) ; le snippet
+    commun secubox-proxy.conf le vide sur tout autre proxy, dont l'administration du pilotage (même précédent que X-SecuBox-Maillage, #1530)."""
+    assert banc.lancer().returncode == 0
+    rendu = banc.conf.read_text()
+    reel = "\n".join(x for x in rendu.splitlines() if not x.lstrip().startswith("#"))
+    assert len(re.findall(r"^\s*proxy_set_header\s+X-SecuBox-Pilotage-Tunnel\s+1;\s*$", reel, re.M)) == 2
+    assert reel.count("X-SecuBox-Pilotage-Tunnel") == 2
+    commun = (ICI.parents[1] / "common" / "nginx" / "secubox-proxy.conf").read_text()
+    assert re.search(r'^proxy_set_header\s+X-SecuBox-Pilotage-Tunnel\s+"";\s*$', commun, re.M)
+    admin = (ICI / "nginx" / "pilotage.conf").read_text()
+    assert "include /etc/nginx/snippets/secubox-proxy.conf;" in admin and "X-SecuBox-Pilotage-Tunnel" not in admin
+
+
 def test_un_seul_tunnel_present(banc):
     r = banc.lancer(BANC_AUTOLOAD=None)
     assert r.returncode == 0, r.stderr

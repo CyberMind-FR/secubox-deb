@@ -45,7 +45,7 @@ async def _rejouer(fx: dict, tmp_path: Path):
     files, memoire = Files(), StockageMemoire()
     app = creer_app_canal(files, {GK5.adresse: GK5}.get, memoire, lambda *a: None, attente_max=0.05, vu_intervalle_s=0, audit_intervalle_s=0)
     tr = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=tr, base_url="http://m", headers={"X-Real-IP": GK5.adresse}) as c:
+    async with httpx.AsyncClient(transport=tr, base_url="http://m", headers={"X-Real-IP": GK5.adresse, "X-SecuBox-Pilotage-Tunnel": "1"}) as c:
         if fx["route"] == "/canal/v1/bonjour":
             r = await c.post(fx["route"], content=json.dumps(fx["envoi"]))
             assert r.status_code == 200, r.text

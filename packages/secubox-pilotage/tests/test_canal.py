@@ -30,8 +30,14 @@ def monter(**kw):
     return app, files, stock, audits
 
 
-def client(app, ip="10.10.0.10", **kw):
+# Marqueur posé par le SEUL écouteur nginx du tunnel (pilotage-canal.conf.tpl) : une vraie box passe par lui, donc le porte (L2 T0, M6).
+MARQUEUR = "X-SecuBox-Pilotage-Tunnel"
+
+
+def client(app, ip="10.10.0.10", tunnel=True, **kw):
     h = {"X-Real-IP": ip} if ip else {}
+    if tunnel:
+        h[MARQUEUR] = "1"
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://m", headers=h, **kw)
 
 
@@ -70,6 +76,35 @@ def test_canal_identite_seulement_par_x_real_ip():
         assert all(ev == "pilotage_identite_refusee" for ev, _ in audits)
         assert all(len(ch.get("adresse", "")) <= 64 for _, ch in audits)
         assert set(audits[0][1]) == {"adresse"}
+    run(cas())
+
+
+def test_canal_refuse_sans_marqueur_tunnel():
+    """M6 (L2 T0) : une requête qui n'est pas passée par l'écouteur nginx du tunnel (relais générique de l'agrégateur, processus local du
+    groupe www-data) peut porter un X-Real-IP valide, jamais le marqueur que pose le seul gabarit du canal : 403, auditée, et l'identité n'est
+    même pas cherchée."""
+    async def cas():
+        cherchees = []
+
+        def identifier(adresse):
+            cherchees.append(adresse)
+            return CONNUES.get(adresse)
+        app, _, stock, audits = monter(identifier=identifier)
+        async with client(app, "10.10.0.10", tunnel=False) as c:
+            assert (await c.get("/canal/v1/requetes?attente=0")).status_code == 403
+            assert (await c.post("/canal/v1/bonjour", json={"agent_version": "0.1.0", "boot_id": "b", "modele": []})).status_code == 403
+            for mauvais in ("0", "", "1, 1", "true", " 1"):
+                assert (await c.get("/canal/v1/requetes?attente=0", headers={MARQUEUR: mauvais})).status_code == 403, mauvais
+            # en double, même à « 1 » : nginx n'en pose qu'un
+            h = [(MARQUEUR, "1"), (MARQUEUR, "1")]
+            assert (await c.get("/canal/v1/requetes?attente=0", headers=h)).status_code == 403
+        assert cherchees == [] and stock.vus == []
+        assert len(audits) == 8
+        assert all(ev == "pilotage_identite_refusee" and ch == {"adresse": "10.10.0.10", "motif": "hors_tunnel"} for ev, ch in audits)
+        # la même box, par le tunnel (marqueur posé par nginx), passe
+        async with client(app, "10.10.0.10") as c:
+            assert (await c.get("/canal/v1/requetes?attente=0")).status_code == 204
+        assert cherchees == ["10.10.0.10"]
     run(cas())
 
 
@@ -361,7 +396,7 @@ def test_canal_deconnexion_pendant_la_lecture_sans_trace():
             envoyes.append(m)
         scope = {"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "POST", "path": "/canal/v1/notifs",
                  "raw_path": b"/canal/v1/notifs", "query_string": b"", "root_path": "", "scheme": "http",
-                 "headers": [(b"x-real-ip", b"10.10.0.10")], "client": None, "server": None}
+                 "headers": [(b"x-real-ip", b"10.10.0.10"), (b"x-secubox-pilotage-tunnel", b"1")], "client": None, "server": None}
         await app(scope, receive, send)  # ne lève rien
     run(cas())
 

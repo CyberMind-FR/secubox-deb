@@ -270,7 +270,7 @@ async def test_la_boucle_ne_s_arrete_qu_avec_les_deux_applis(tmp_path):
 @pytest.mark.asyncio
 async def test_admin_et_canal_partagent_la_meme_file(tmp_path):
     s, f, inv, admin, canal, lignes = assembler(tmp_path)
-    ent = {"X-Real-IP": GK5.adresse}
+    ent = {"X-Real-IP": GK5.adresse, "X-SecuBox-Pilotage-Tunnel": "1"}   # comme le pose l'écouteur nginx du tunnel
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=admin), base_url="http://a") as a, \
             httpx.AsyncClient(transport=httpx.ASGITransport(app=canal), base_url="http://c", headers=ent) as c:
         assert (await c.post("/canal/v1/bonjour", json={"agent_version": "0.1.0", "boot_id": "b", "modele": []})).status_code == 200
