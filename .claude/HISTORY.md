@@ -9,6 +9,31 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-29 — Retrait de reality et socialrelay, kiosque, couture en frontal léger, pilotage L1 étapes 1-10 (ref #3256, ref #3254, ref #3126)
+
+- **Retrait reality / socialrelay (#3256, décision du propriétaire)** : gk3 et gk4 purgés (paquets actifs), gk1 et gk2
+  nettoyés (restes, routes WAF `socialrelay.gk{2,3,4}`, vhosts `socialrelay_gk3/gk4` retirés, `generate --allow-shrink`
+  après contrôle : seuls ces domaines disparaissent) ; données DÉPLACÉES, pas effacées, dans
+  `/var/backups/retrait-reality-socialrelay-20261029/` (29 Go sur gk3) ; secubox-profiles 0.24 → 0.25.2 sur gk1/gk2,
+  copies `media-lab`/`secure-gateway` de gk2 remises à la référence ; `secubox-socialrelay` retiré du dépôt apt
+  (trixie, bookworm), index re-signés. Reste : gk3 (route `gitea.gk2` posée à la main le 14/10, hors haproxy.toml :
+  régénération non forcée, règle socialrelay inerte), gk5 et lgm-ebin non vérifiés. Script audité `module: retrait-3256`.
+- **Kiosque (#3254, PR #3255 ouverte)** : gk4 (lite) n'avait pas `secubox-kiosk` (installé à la main) → secubox-lite
+  1.9.1 le recommande, secubox-core 1.8.8 message clair ; gk2 : « Interactive authentication required » car `system`
+  était monté dans l'agrégateur alors que polkit ne l'accorde qu'à secubox-system.service → `system` dans
+  `DEDICATED_MODULES` (secubox-aggregator 0.5.1, qui ajoute aussi `socialrelay` aux `RETIRED_MODULES`). Déploiement :
+  redémarrage de l'agrégateur de gk2 à grouper.
+- **couture.gk2.secubox.in** (appli du propriétaire, hors dépôt) : servi par le frontal FastAPI + HTML/JS
+  (`atelier-partage-web.service` dans le conteneur streamlit, 10.100.0.50:8601) au lieu de Streamlit (arrêté,
+  autostart off) ; un créneau = une carte (4 prochains), page 1,4 Ko en 93 ms, statiques gzip et cache un an ;
+  `/root/atelier-mdp.sh` relance désormais ce service. Source : `atelier-partage-3.zip`.
+- **RPi4 + écran officiel 7"** : carte microSD Eye Square sauvegardée (`~/sauvegardes-sd/…img.zst`, vérifiée), image lite
+  alpha.19 écrite et vérifiée, overlay `vc4-kms-dsi-7inch` repris de Raspberry Pi OS (essai : noyau Debian sans overlay DSI).
+- **Pilotage distant L1 (#3126)** : étapes 1 à 10 faites et relues dans le worktree 3126 (agent Go, paquet durci, canal,
+  projection Auto-Load, identité/files cloisonnées, stockage et API, paquet maître avec écouteurs de tunnel, sockets
+  systemd, nft `inet filter`). Failles corrigées en relecture : usurpation de box par X-Forwarded-For (realip hérité),
+  files partagées entre box homonymes. Issues ouvertes : #3253 (projection publique p2p, avant L2).
+
 ## 2026-10-29 — Streamlit : réveil, port et publication automatiques, déployé sur gk2 (closes #3247)
 
 - **Livré** (PR #3249 → `6c5074058`, secubox-streamlit 1.7.0, secubox-haproxy 1.12.7) : le conteneur endormi est

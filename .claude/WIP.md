@@ -176,9 +176,14 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 000000000. **Sécurité et pilotage distant (2026-10-28)** : #3243 — 1.8.8, nettoyage des images + firstboot
   `--absents`, images alpha.19 à reconstruire, redémarrer gk5 (machine-id). Pilotage distant TR-369 (forme USP, agent
   Go, #3126) : conception approuvée, plans L1/L2/L5 écrits ; **L1 « Voir » en cours** par sous-agents dans le worktree
-  3126 (ledger `.superpowers/sdd/2026-10-28-pilotage-l1-voir/progress.md` : tâches 1-6 faites, 7 en relecture, puis
-  8-11 maître/page Flotte, 12 déploiement gk2/gk5/lgm-ebin par le contrôleur) ; ensuite L2 Agir → L5 headless care-safe
-  (mains liées) ; box clientes Auto-Load dans le périmètre. Streamlit #3247 livré et déployé (suites #3252). Profils
+  3126 (ledger `.superpowers/sdd/2026-10-28-pilotage-l1-voir/progress.md` : tâches 1-10 faites et relues, puis
+  11 page Flotte, relecture finale de la branche, 12 déploiement gk2/gk5/lgm-ebin par le contrôleur avec la liste
+  « banc T12 » du ledger) ; ensuite L2 Agir (préalable #3253) → L5 headless care-safe (mains liées) ; box clientes
+  Auto-Load dans le périmètre. Streamlit #3247 livré et déployé (suites #3252). **PR #3255** (kiosque + `system`
+  dédié + socialrelay retiré) : CI puis fusion, publier secubox-lite 1.9.1 / core 1.8.8 / aggregator 0.5.1, un
+  redémarrage groupé de l'agrégateur de gk2. **#3256** : gk3 (déclarer `gitea.gk2` dans haproxy.toml puis régénérer),
+  gk5 et lgm-ebin à vérifier, purge des données déplacées sur décision du propriétaire. **RPi4** : carte prête, en
+  attente du premier démarrage par le propriétaire (écran 7" DSI à vérifier). Profils
   minimal ET lite sans nDPId, DPI, mediaflow, ksm, centres, « box à préparer » ; haproxy hors image minimal (#3218).
   gk1 = visio seule (profil à écrire).
 00000000. **Consommation (#3191, ordre arbitré par le propriétaire le 2026-10-27)** : objectif 2 Go (minimal) et 4 Go
