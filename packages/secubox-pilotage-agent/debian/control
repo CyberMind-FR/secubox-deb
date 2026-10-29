@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-pilotage-agent
 Architecture: any
-Depends: ${misc:Depends}, systemd, adduser, sudo, python3 (>= 3.11), wireguard-tools
+Depends: ${misc:Depends}, systemd, adduser, sudo, python3 (>= 3.11), wireguard-tools, secubox-core (>= 1.8.10~)
 Recommends: apparmor
 Description: SecuBox — agent de pilotage distant (TR-369/USP)
  Agent Go de la box pour le pilotage distant du maillage (TR-369/USP) :

@@ -50,6 +50,7 @@ if [ "$1" = show ]; then
   exit 0
 fi
 printf '%s\\n' "$*" >> "$FAUX_LANCES"
+[ -z "$FAUX_SYSTEMCTL_ECHEC" ] || exit 1
 exit 0
 """
 
@@ -146,12 +147,12 @@ class Banc:
     def appels_wg(self):
         return self.wg_appels.read_text().splitlines() if self.wg_appels.exists() else []
 
-    def run(self, *args, agent=False, env=None):
+    def run(self, *args, agent=False, env=None, entree=""):
         e = dict(self.env)
         if agent:
             e["SUDO_USER"] = AGENT
         e.update(env or {})
-        p = subprocess.run([str(CTL), *args], env=e, capture_output=True, text=True, timeout=DELAI)
+        p = subprocess.run([str(CTL), *args], env=e, capture_output=True, text=True, timeout=DELAI, input=entree)
         lignes = p.stdout.strip().splitlines()
         assert len(lignes) <= 1, p.stdout
         sortie = json.loads(lignes[0]) if lignes else None
@@ -182,7 +183,7 @@ def banc_nu(tmp_path):
 
 
 ACTIONS = ("releve", "reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
-           "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer")
+           "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer", "maillage-rejoindre")
 
 
 def test_argv_invalide_rend_2(banc):
@@ -240,6 +241,10 @@ def test_argv_invalide_rend_2(banc):
         ["support", "accepter", "s1", "30"],
         ["support", "refuser", "../s1"],
         ["etat", "en-trop"],
+        # tâche 5 : le code de maillage-rejoindre passe par l'entrée standard, jamais par l'argv
+        ["maillage-rejoindre", "sbxmesh1.SECRET-ARGV.abcd"],
+        ["_rejoindre"],
+        ["_rejoindre", "../x"],
     ]
     for argv in invalides:
         rc, sortie, p = banc.run(*argv, agent=True)
@@ -254,15 +259,12 @@ def test_argv_invalide_rend_2(banc):
 
 
 def test_verbes_valides_acceptes_ou_non_disponibles(banc_nu):
-    """R-L2-1 : argv validé pour toute la liste fermée ; renommer « non disponible » (code 0) ; ancre-verifier est livré
+    """R-L2-1 : argv validé pour toute la liste fermée ; renommer livré (tâche 5) ; ancre-verifier est livré
     (tâche 2) : sans ancre, il rend ok faux, raison « absente » ; support (tâche 4) : sans ancre, refusé au maître."""
     banc = banc_nu
     rc, sortie, _ = banc.ancre_verifier()
     assert rc == 0 and sortie == {"ok": False, "raison": "absente"}
-    for argv in (["renommer", "box-2"],):
-        rc, sortie, _ = banc.run(*argv, agent=True)
-        assert rc == 0 and sortie == {"ok": False, "refus": "non disponible"}, argv
-    for argv in (["support", "ouvrir", "s-01"], ["support", "ouvrir", "s-01", "240"], ["support", "fermer", "s-01"]):
+    for argv in (["support", "ouvrir", "s-01"], ["renommer", "box-2"], ["maillage-rejoindre"], ["support", "ouvrir", "s-01", "240"], ["support", "fermer", "s-01"]):
         rc, sortie, _ = banc.run(*argv, agent=True)
         assert rc == 0 and sortie == {"ok": False, "refus": "ancre non vérifiée"}, argv
     assert banc.lancements() == []
@@ -1184,3 +1186,122 @@ def test_audit_du_support_porte_l_operation(banc_nu):
         ("pilotage_demande", "ouvrir", None), ("pilotage_refus", "ouvrir", "consentement requis"),
         ("pilotage_demande", "accepter", None), ("pilotage_refus", "accepter", "local seulement")]
     assert all(set(e) <= PERMIS_AUDIT | {"op"} for e in banc.audit())
+
+
+# ── Tâche 5 : renommer (D3) et maillage-rejoindre (R-L2-2) ─────────────────────────────────────────────────────────────
+
+import base64  # noqa: E402
+import hashlib  # noqa: E402
+
+
+def code_maillage(jeton="ab" * 32, adresse="192.168.1.1"):
+    """Un vrai code sbxmesh1 (format de secubox-p2p api/automesh.encoder : base64url du JSON, somme sha256[:4])."""
+    charge = base64.urlsafe_b64encode(json.dumps({"a": adresse, "t": jeton}, separators=(",", ":")).encode()).decode()
+    charge = charge.rstrip("=")
+    return f"sbxmesh1.{charge}.{hashlib.sha256(charge.encode()).hexdigest()[:4]}"
+
+
+def test_renommer_lance_secubox_renommer_borne(banc):
+    """Box du propriétaire : le ctl lance /usr/sbin/secubox-renommer (chemin absolu) dans une unité transitoire à durée
+    bornée (RuntimeMaxSec), hors de l'espace de montage de l'agent ; la fin est auditée par _fin comme toute opération."""
+    rc, sortie, p = banc.run("--acteur", "gk2admin", "renommer", "gk5", agent=True)
+    assert rc == 0 and sortie["ok"] is True and len(sortie["job"]) == 16, p.stderr
+    lance = banc.lancements()[-1]
+    assert "--property=RuntimeMaxSec=120" in lance
+    assert f"--unit=secubox-pilotage-op-{sortie['job']}" in lance
+    assert lance.endswith("-- /usr/sbin/secubox-renommer --acteur gk2admin gk5")
+    assert [e["evenement"] for e in banc.audit() if e.get("verbe") == "renommer"] == ["pilotage_demande",
+                                                                                       "pilotage_resultat"]
+    # sans --acteur : le compte de l'agent ; un nom invalide n'atteint jamais l'outil
+    rc, sortie, _ = banc.run("renommer", "gk6", agent=True)
+    assert banc.lancements()[-1].endswith("-- /usr/sbin/secubox-renommer --acteur secubox-pilotage-agent gk6")
+    assert banc.run("renommer", "GK6", agent=True)[0] == 2
+    # l'outil vient de secubox-core 1.8.10
+    assert "secubox-core (>= 1.8.10~)" in (CTL.parents[1] / "debian" / "control").read_text()
+
+
+def test_renommer_box_cliente_exige_l_accord(banc):
+    banc.cliente()
+    rc, sortie, _ = banc.run("renommer", "gk5", agent=True)
+    assert rc == 0 and sortie["refus"] == "consentement requis"
+    assert banc.lancements() == []
+    banc.run("consentement", "accepter", sortie["consentement"])
+    rc, sortie, _ = banc.run("renommer", "gk5", agent=True)
+    assert rc == 0 and sortie["ok"] is True
+    assert banc.lancements()[-1].endswith("/usr/sbin/secubox-renommer --acteur secubox-pilotage-agent gk5")
+
+
+def test_maillage_rejoindre_lit_le_code_sur_l_entree_standard(banc):
+    code = code_maillage()
+    rc, sortie, p = banc.run("--acteur", "gk2admin", "maillage-rejoindre", agent=True, entree=code + "\n")
+    assert rc == 0 and sortie["ok"] is True, p.stderr
+    job = sortie["job"]
+    lance = banc.lancements()[-1]
+    assert lance.endswith(f"-- /usr/sbin/secubox-pilotagectl _rejoindre {job}") and "RuntimeMaxSec=300" in lance
+    depot = banc.r / f"var/lib/secubox-pilotagectl/rejoindre-{job}.code"
+    assert depot.read_text() == code and depot.stat().st_mode & 0o777 == 0o600
+    # puis l'unité transitoire (PID 1, root, locale) dépose le code pour secubox-automesh et le lance
+    (banc.r / "var/lib/secubox/p2p").mkdir(parents=True)
+    (banc.r / "var/lib/secubox/p2p/automesh.json").write_text('{"statut": "approuve", "debut": 1}')
+    rc, sortie, p = banc.run("_rejoindre", job)
+    assert rc == 0 and sortie == {"ok": True, "job": job}, p.stderr
+    automesh = banc.r / "var/lib/secubox/p2p/automesh.code"
+    assert automesh.read_text() == code and automesh.stat().st_mode & 0o777 == 0o600
+    assert not depot.exists()                                       # usage unique
+    assert not (banc.r / "var/lib/secubox/p2p/automesh.json").exists()   # un ancien « debut » expirerait le code neuf
+    assert banc.lancements()[-1] == "start secubox-automesh.service"
+    assert [e["resultat"] for e in banc.audit() if e["evenement"] == "maillage_rejoindre"] == ["succes"]
+    # rejouer le même job : plus de code
+    rc, sortie, _ = banc.run("_rejoindre", job)
+    assert rc == 1 and sortie["ok"] is False
+
+
+def test_maillage_rejoindre_refus(banc):
+    for entree in ("", "pas-un-code", "sbxmesh1.abc.0000", code_maillage() + "x", "sbxmesh1." + "a" * 700 + ".abcd"):
+        rc, sortie, _ = banc.run("maillage-rejoindre", agent=True, entree=entree)
+        assert rc == 0 and sortie == {"ok": False, "refus": "code invalide"}, entree
+    assert banc.lancements() == []
+    # jonction en échec : la transitoire échoue (code 1), sa fin sera auditée « echec » par _fin
+    rc, sortie, _ = banc.run("maillage-rejoindre", agent=True, entree=code_maillage())
+    (banc.r / "var/lib/secubox/p2p").mkdir(parents=True)
+    rc, s2, _ = banc.run("_rejoindre", sortie["job"], env={"FAUX_SYSTEMCTL_ECHEC": "1"})
+    assert rc == 1 and s2["ok"] is False
+    assert [e["resultat"] for e in banc.audit() if e["evenement"] == "maillage_rejoindre"] == ["echec"]
+    # _rejoindre est interne : refusé depuis l'agent
+    rc, s3, _ = banc.run("_rejoindre", "0123456789abcdef", agent=True)
+    assert rc == 0 and s3 == {"ok": False, "refus": "local seulement"}
+    # box cliente (canal wg-autoload) : hors maillage, refusé sans consentement
+    banc.cliente()
+    rc, s4, _ = banc.run("maillage-rejoindre", agent=True, entree=code_maillage())
+    assert rc == 0 and s4 == {"ok": False, "refus": "box cliente : hors maillage"}
+    _, pol, _ = banc.run("politique", "maillage-rejoindre", agent=True)
+    assert pol["autorise"] is False
+
+
+def test_maillage_rejoindre_sous_mains_liees(banc):
+    banc.run("mains-liees", "on")
+    rc, sortie, _ = banc.run("maillage-rejoindre", agent=True, entree=code_maillage())
+    assert rc == 0 and sortie == {"ok": False, "refus": "mains liées"}
+    assert banc.lancements() == [] and not list((banc.r / "var/lib/secubox-pilotagectl").glob("rejoindre-*"))
+
+
+def test_code_jamais_journalise(banc):
+    """R-L2-2 : le code (il porte le jeton de jonction) ne figure ni dans l'argv capturé (systemd-run, systemctl), ni dans
+    l'audit, ni dans les journaux (stderr du ctl = journal de l'unité), ni dans les sorties ; il n'existe que dans l'état
+    root 0600 du ctl, puis dans automesh.code (root 0600)."""
+    jeton = "f00dcafe" * 8
+    code = code_maillage(jeton)
+    sorties = []
+    rc, sortie, p = banc.run("--acteur", "gk2admin", "maillage-rejoindre", agent=True, entree=code)
+    sorties += [p.stdout, p.stderr]
+    (banc.r / "var/lib/secubox/p2p").mkdir(parents=True)
+    banc.run("maillage-rejoindre", agent=True, entree=code)          # un second dépôt, jamais repris
+    _, s, p = banc.run("_rejoindre", sortie["job"], env={"FAUX_SYSTEMCTL_ECHEC": "1"})
+    sorties += [p.stdout, p.stderr]
+    banc.run("_fin", sortie["job"], env={"SERVICE_RESULT": "exit-code", "EXIT_STATUS": "1"})
+    _, _, p = banc.run("maillage-rejoindre", agent=True, entree=code + "corrompu")
+    sorties += [p.stdout, p.stderr]
+    traces = "\n".join(sorties + banc.lancements()) + (banc.r / "var/log/secubox/audit.log").read_text()
+    for morceau in (code, jeton, code.split(".")[1][:24]):
+        assert morceau not in traces
+    assert all(set(e) <= PERMIS_AUDIT for e in banc.audit())
