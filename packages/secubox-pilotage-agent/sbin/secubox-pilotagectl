@@ -879,12 +879,14 @@ def charger_consentements(ctx, fd, maintenant):
             c["etat"], c["decide"] = "expire", maintenant
         ecrire_json(fd, "consentements.json", liste)
         for c in expires:
-            auditer(ctx, "consentement_expire", consentement=c["id"], action=c.get("action"), unite=c.get("unite"))
+            auditer(ctx, "consentement_expire", consentement=c["id"], action=c.get("action"), unite=c.get("unite"),
+                    nom=c.get("nom"))
     return liste
 
 
 def cle(c):
-    return c.get("action"), c.get("unite")
+    """Ce qu'un accord autorise : l'action, l'unité d'un service, le nom d'un renommage (I2, R-L2-47)."""
+    return c.get("action"), c.get("unite"), c.get("nom")
 
 
 # --- Verbes -----------------------------------------------------------------------------------------------------------
@@ -1086,7 +1088,7 @@ def basculer_mains(ctx, fd, liees, maintenant):
                 if c.get("etat") in ("en_attente", "accepte"):
                     c["etat"], c["decide"] = "annule", maintenant
                     auditer(ctx, "consentement_annule", consentement=c["id"], action=c.get("action"),
-                            unite=c.get("unite"))
+                            unite=c.get("unite"), nom=c.get("nom"))
             ecrire_json(fd, "consentements.json", consentements)
         # Aucune session de support sous mains liées : la demande en attente est annulée, la session ouverte fermée.
         try:
@@ -1132,7 +1134,8 @@ def decider(ctx, fd, p, maintenant, refus):
     c["etat"] = decision
     c["decide"] = maintenant
     ecrire_json(fd, "consentements.json", consentements)
-    auditer(ctx, "consentement", consentement=c["id"], action=c.get("action"), unite=c.get("unite"), decision=decision)
+    auditer(ctx, "consentement", consentement=c["id"], action=c.get("action"), unite=c.get("unite"), nom=c.get("nom"),
+            decision=decision)
     return {"ok": True, "consentement": c["id"], "decision": decision}
 
 
@@ -1207,7 +1210,7 @@ def gerer_support(ctx, fd, p, maintenant, refus):
     return {"ok": True, "support": ident, "etat": "refuse"}
 
 
-CHAMPS_CONSENTEMENT = ("id", "action", "unite", "etat", "cree", "expire", "decide")
+CHAMPS_CONSENTEMENT = ("id", "action", "unite", "nom", "etat", "cree", "expire", "decide")
 CHAMPS_SUPPORT = ("id", "etat", "duree_min", "cree", "expire", "ouvert", "fin")
 
 
@@ -1318,20 +1321,23 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
             return refus("opération en cours", job=job)
     accord, consentements = None, None
     # R-L2-13, élargi par R-L2-46 : sur une box cliente, toute action de service (gabarit ou non, même démarrer) exige l'accord.
+    nom = p.get("nom")                              # I2 (R-L2-47) : un accord de renommage vaut pour CE nom
     if du_maitre and politique(action, False, du_proprietaire)[1]:
         consentements = charger_consentements(ctx, fd, maintenant)
-        accord = next((c for c in consentements if c.get("etat") == "accepte" and cle(c) == (action, unite)), None)
+        voulu = (action, unite, nom)
+        accord = next((c for c in consentements if c.get("etat") == "accepte" and cle(c) == voulu), None)
         if accord is None:
-            attente = next((c for c in consentements if c.get("etat") == "en_attente" and cle(c) == (action, unite)),
-                           None)
+            attente = next((c for c in consentements if c.get("etat") == "en_attente" and cle(c) == voulu), None)
             if attente is None:
                 attente = {"id": secrets.token_hex(8), "action": action, "etat": "en_attente", "cree": maintenant,
                            "expire": maintenant + VALIDITE}
                 if unite is not None:
                     attente["unite"] = unite
+                if nom is not None:
+                    attente["nom"] = nom
                 consentements.append(attente)
                 ecrire_json(fd, "consentements.json", consentements)
-                auditer(ctx, "consentement_demande", consentement=attente["id"], action=action, unite=unite)
+                auditer(ctx, "consentement_demande", consentement=attente["id"], action=action, unite=unite, nom=nom)
             else:
                 ecrire_json(fd, "consentements.json", consentements)
             return refus("consentement requis", consentement=attente["id"])
@@ -1350,10 +1356,11 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
     if accord is not None:
         accord["etat"], accord["decide"] = "utilise", maintenant
         if ecrire_apres(fd, "consentements.json", consentements):
-            auditer(ctx, "consentement_utilise", consentement=accord["id"], action=action, unite=unite, job=job)
+            auditer(ctx, "consentement_utilise", consentement=accord["id"], action=action, unite=unite, nom=nom, job=job)
         else:
             # L'accord n'est pas marqué utilisé et pourrait resservir : anomalie auditée, pas de nouvel essai.
-            auditer(ctx, "consentement_non_consomme", consentement=accord["id"], action=action, unite=unite, job=job)
+            auditer(ctx, "consentement_non_consomme", consentement=accord["id"], action=action, unite=unite, nom=nom,
+                    job=job)
     if verbe in EXCLUSIVES:
         ecrire_apres(fd, "operation.json", {"job": job, "verbe": verbe, "debut": maintenant})
     fins.append({"job": job, "verbe": verbe, "resultat": "lance", "quand": maintenant})

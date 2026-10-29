@@ -117,7 +117,7 @@ def heure(ts):
 
 
 def ligne_consentement(c, maintenant):
-    quoi = c.get("action", "?") + (f" {c['unite']}" if c.get("unite") else "")
+    quoi = c.get("action", "?") + (f" {c['unite']}" if c.get("unite") else "") + (f" en {c['nom']}" if c.get("nom") else "")
     etat = ETATS_CONSENTEMENT.get(c.get("etat"), str(c.get("etat")))
     fin = ""
     if c.get("etat") == "en_attente" and isinstance(c.get("expire"), int):

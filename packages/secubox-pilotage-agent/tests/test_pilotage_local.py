@@ -100,6 +100,14 @@ def test_accepter_et_refuser_un_consentement(banc):
     assert rc == 1 and "déjà décidé" in err
 
 
+def test_renommage_affiche_le_nom(banc):
+    """I2 (R-L2-47) : le détenteur voit le nom qu'il accorde."""
+    banc.cliente()
+    _, s, _ = banc.run("renommer", "atelier-2", agent=True)
+    rc, out, _ = local(banc, "consentements")
+    assert rc == 0 and s["consentement"] in out and "renommer en atelier-2" in out, out
+
+
 def test_expiration_a_24_h_affichee(banc):
     banc.cliente()
     _, s, _ = banc.run("reboot", agent=True)

@@ -1344,6 +1344,28 @@ def test_renommer_box_cliente_exige_l_accord(banc):
     assert banc.lancements()[-1].endswith("/usr/sbin/secubox-renommer --acteur secubox-pilotage-agent gk5")
 
 
+def test_accord_de_renommage_fixe_le_nom(banc):
+    """I2 (R-L2-47) : le nom demandé entre dans le consentement et dans sa clé : un accord donné pour gk5 ne vaut pas pour
+    gk6 ; chacun a sa demande, son audit (avec le nom) et son accord."""
+    banc.cliente()
+    _, a, _ = banc.run("renommer", "gk5", agent=True)
+    assert a["refus"] == "consentement requis"
+    banc.run("consentement", "accepter", a["consentement"])
+    rc, b, _ = banc.run("renommer", "gk6", agent=True)
+    assert rc == 0 and b["ok"] is False and b["refus"] == "consentement requis" and b["consentement"] != a["consentement"]
+    assert banc.lancements() == []
+    demandes = [e for e in banc.audit() if e["evenement"] == "consentement_demande"]
+    assert [(e["consentement"], e.get("nom")) for e in demandes] == [(a["consentement"], "gk5"), (b["consentement"], "gk6")]
+    liste = json.loads((banc.r / "var/lib/secubox-pilotagectl/consentements.json").read_text())
+    assert {c["id"]: c.get("nom") for c in liste} == {a["consentement"]: "gk5", b["consentement"]: "gk6"}
+    # l'accord de gk5 sert à gk5, une fois
+    rc, sortie, _ = banc.run("renommer", "gk5", agent=True)
+    assert rc == 0 and sortie["ok"] is True
+    assert banc.lancements()[-1].endswith("/usr/sbin/secubox-renommer --acteur secubox-pilotage-agent gk5")
+    utilise = [e for e in banc.audit() if e["evenement"] == "consentement_utilise"]
+    assert len(utilise) == 1 and utilise[0]["nom"] == "gk5"
+
+
 def test_maillage_rejoindre_lit_le_code_sur_l_entree_standard(banc):
     code = code_maillage()
     rc, sortie, p = banc.run("--acteur", "gk2admin", "maillage-rejoindre", agent=True, entree=code + "\n")
