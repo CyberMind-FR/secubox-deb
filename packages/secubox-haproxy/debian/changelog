@@ -1,3 +1,13 @@
+secubox-haproxy (1.12.7-1~trixie1) trixie; urgency=medium
+
+  * Délais longs pour le dépôt et la publication Streamlit (ref #3247) : POST /api/v1/streamlit/deploy
+    (extraction et dépendances pip dans le conteneur) et /api/v1/streamlit/app/<appli>/publish|rename
+    (nginx -t, génération HAProxy) dépassaient 30 s ; le client voyait 504 pendant que le serveur
+    finissait. `set-timeout server 10m` sur ces chemins EXACTS (path_reg), dans sbxwaf_inspector ET
+    webui_direct (admin.<box> par l'expression stricte) ; le reste garde les 30 s.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 18:00:00 +0100
+
 secubox-haproxy (1.12.6-1~trixie1) trixie; urgency=high
 
   * Sécurité : l'onion du webui passe par un frontal HAProxy dédié et n'est jamais LAN (ref #3112). Le service onion

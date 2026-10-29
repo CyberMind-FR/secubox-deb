@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Streamlit — démarre le conteneur au boot si une appli publiée doit rester active [#3247]
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3247
+# Les conteneurs vivent sur le grand volume ; le réseau du pont doit exister avant le démarrage.
+After=data-lxc.mount network-online.target lxc-net.service
+Wants=network-online.target
+ConditionPathExists=/etc/secubox/streamlit.toml
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Le conteneur arrêté après un redémarrage rendait toute appli publiée injoignable (gk2, 2026-10-28). `boot` ne le
+# démarre QUE si une appli publiée doit rester active (autostart_publication dans streamlit.toml) ; sinon no-op :
+# le parc dort par conception (#982). Root (lxc-start) : exception § 10 « unités qui pilotent LXC », même
+# confinement mesuré que secubox-voicestudio-demarrage (RestrictSUIDSGID exclu).
+ExecStart=/usr/sbin/streamlitctl boot
+TimeoutStartSec=300
+UMask=0027
+ProtectHome=true
+PrivateTmp=true
+LockPersonality=true
+ProtectKernelModules=true
+
+[Install]
+WantedBy=multi-user.target

@@ -53,6 +53,16 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
+# Données de l'appli HORS de son dossier (#3247) : un nouveau dépôt efface
+# /srv/streamlit/apps/<appli>, jamais /var/lib/streamlit-apps/<appli> (créé
+# par systemd, dans le conteneur). L'appli le trouve dans STREAMLIT_DATA_DIR.
+StateDirectory=streamlit-apps/%i
+StateDirectoryMode=0750
+Environment=STREAMLIT_DATA_DIR=/var/lib/streamlit-apps/%i
+# Variables propres à l'appli (#3247) : fichier root 0600 du conteneur, posé
+# par `streamlitctl app env <appli> set` (valeurs par l'entrée standard, jamais
+# en argument), hors des applis, jamais servi. Facultatif (« - »).
+EnvironmentFile=-/etc/streamlit/env/%i.env
 ExecStart=/usr/local/bin/streamlit-launch %i
 Restart=no
 
