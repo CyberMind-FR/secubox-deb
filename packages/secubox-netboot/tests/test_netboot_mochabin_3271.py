@@ -115,34 +115,35 @@ if [ -n "$o" ]; then echo "fichier $url -> $o" >> "$j"; cp "$f" "$o"; else echo 
     _stub(bin_, "blockdev", "echo 7818182656\n")
     _stub(bin_, "id", "echo 0\n")
     _stub(bin_, "pv", "cat\n")
+    _stub(bin_, "sleep", "exit 0\n")
     _stub(bin_, "systemctl", f'echo "systemctl $*" >> "{journal}"\n')
     _stub(bin_, "secubox-flash-emmc", f'echo "flash $*" >> "{journal}"; cat > "{tmp_path}/emmc"\n')
     return {"tmp": tmp_path, "bin": bin_, "travail": travail, "journal": journal, "brut": brut, "gz": gz,
             "pub": tmp_path / "cle.pub"}
 
 
-def _netflash_main(l, *args):
+def _netflash_main(live, *args):
     import os
     script = ('SBX_NETFLASH_SOURCE=1 source "$0"; PUB="$1"; TRAVAIL="$2"; JOURNAL=/dev/null; shift 2; main "$@"')
-    return subprocess.run(["bash", "-c", script, str(NETFLASH), str(l["pub"]), str(l["travail"]), *args],
+    return subprocess.run(["bash", "-c", script, str(NETFLASH), str(live["pub"]), str(live["travail"]), *args],
                           capture_output=True, text=True, timeout=60,
-                          env={**os.environ, "PATH": f"{l['bin']}:{os.environ['PATH']}", "SBX_EMMC": "/dev/null"})
+                          env={**os.environ, "PATH": f"{live['bin']}:{os.environ['PATH']}", "SBX_EMMC": "/dev/null"})
 
 
 def test_le_live_ecrit_l_image_en_flux_meme_quand_la_ram_semble_suffire(live_simule):
     """MOCHAbin 8 Go : l'image partait dans un tmpfs à sa taille et le live manquait de mémoire (#3271)."""
-    l = live_simule
-    r = _netflash_main(l, "--srv", "192.0.2.10:8099", "--image", "minimal.img.gz", "--auto", "--no-reboot")
-    journal = l["journal"].read_text()
+    live = live_simule
+    r = _netflash_main(live, "--srv", "192.0.2.10:8099", "--image", "minimal.img.gz", "--auto", "--no-reboot")
+    journal = live["journal"].read_text()
     assert "tmpfs" not in journal, "aucun système de fichiers en mémoire pour l'image"
     assert "fichier http://192.0.2.10:8099/mochabin-live/minimal.img.gz " not in journal, "l'image ne doit jamais aller dans un fichier"
     assert "flux http://192.0.2.10:8099/mochabin-live/minimal.img.gz" in journal
     assert r.returncode == 0, r.stdout + r.stderr
     flash = next(x for x in journal.splitlines() if x.startswith("flash "))
-    assert "--stdin gz" in flash and f"--sha256 {__import__('hashlib').sha256(l['gz']).hexdigest()}" in flash
-    assert (l["tmp"] / "emmc").read_bytes() == l["gz"]               # flux compressé intact jusqu'à l'outil
+    assert "--stdin gz" in flash and f"--sha256 {__import__('hashlib').sha256(live['gz']).hexdigest()}" in flash
+    assert (live["tmp"] / "emmc").read_bytes() == live["gz"]               # flux compressé intact jusqu'à l'outil
     # rien de la taille de l'image n'est resté dans l'espace de travail du live (/run, tmpfs)
-    gros = [p for p in l["travail"].rglob("*") if p.is_file() and p.stat().st_size >= 1048576]
+    gros = [p for p in live["travail"].rglob("*") if p.is_file() and p.stat().st_size >= 1048576]
     assert gros == []
 
 
@@ -150,3 +151,102 @@ def test_le_mode_ram_a_disparu_du_live():
     s = NETFLASH.read_text()
     assert "mount -t tmpfs" not in s and "mode_ecriture" not in s
     assert 'telecharge "$BASE/$image" ' not in s                      # jamais l'image entière vers un fichier
+
+
+# ── 3. bootcmd vers l'eMMC après installation ────────────────────────────────────────────────────────────────────
+FIX = RACINE / "board" / "mochabin" / "fix-bootcmd.cmd"
+FIX_SCR = RACINE / "board" / "mochabin" / "fix-bootcmd.scr"
+LIGNE_FIX = "fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}"
+BOOTCMD = "setenv ethact mvpp2-2; dhcp; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr; source ${loadaddr}"
+ADRESSES_3091 = {"kernel_addr_r": 0x08000000, "fdt_addr_r": 0x0c000000, "ramdisk_addr_r": 0x0c100000}
+RESERVE = (0x04000000, 0x05400000)          # PSCI + TEE vus dans les traces du noyau (0x04000000-0x053fffff)
+
+
+def _instructions():
+    return [x.strip() for x in FIX.read_text().splitlines() if x.strip() and not x.lstrip().startswith("#")]
+
+
+def test_fix_bootcmd_garde_l_ancien_bootcmd_avant_de_le_remplacer():
+    texte = FIX.read_text()
+    assert 'setenv bootcmd_avant "${bootcmd}"' in texte and "setenv bootcmd '" in texte
+    assert texte.index('setenv bootcmd_avant "${bootcmd}"') < texte.index("setenv bootcmd '")
+    assert texte.count("bootcmd_avant") >= 3, "sauvegarde, rappel et mode d'emploi du retour en arrière"
+
+
+def test_fix_bootcmd_pose_le_bootcmd_eMMC_valide_a_la_main():
+    lignes = [x for x in _instructions() if x.startswith("setenv bootcmd '")]
+    assert lignes == [f"setenv bootcmd '{BOOTCMD}'"]
+
+
+def test_fix_bootcmd_active_le_port_wan_avant_de_charger_le_systeme():
+    """Démarré de l'eMMC sans que U-Boot ait touché le port WAN cuivre, Linux n'a pas de réseau."""
+    ins = _instructions()
+    assert "setenv ethact mvpp2-2" in ins and "setenv autoload no" in ins       # dhcp sans tentative TFTP
+    assert BOOTCMD.index("setenv ethact mvpp2-2") < BOOTCMD.index("dhcp;") < BOOTCMD.index("fatload mmc 0:1")
+    assert "dhcp;" in BOOTCMD and "dhcp &&" not in BOOTCMD                      # un DHCP raté n'arrête pas le démarrage
+
+
+@pytest.mark.parametrize("cle,valeur", ADRESSES_3091.items())
+def test_fix_bootcmd_pose_les_adresses_3091_pour_les_anciennes_images(cle, valeur):
+    # un boot.scr d'avant #3091 ne pose pas ses adresses : avec ramdisk_addr_r=- de l'usine, l'initrd n'est pas chargé
+    lignes = [x for x in _instructions() if x.startswith(f"setenv {cle} ")]
+    assert lignes == [f"setenv {cle} 0x{valeur:08x}"]
+    assert valeur >= RESERVE[1]
+
+
+def test_fix_bootcmd_enregistre_tout_apres_l_avoir_pose():
+    ins = _instructions()
+    assert ins.count("saveenv") == 1
+    dernier_setenv = max(i for i, x in enumerate(ins) if x.startswith("setenv "))
+    assert ins.index("saveenv") > dernier_setenv
+
+
+def test_fix_bootcmd_scr_compile_et_synchrone_avec_le_source():
+    import struct
+    import zlib
+    scr = FIX_SCR.read_bytes()
+    assert len(scr) > 64, "fix-bootcmd.scr non compilé"
+    magic, hcrc, _, taille, _, _, dcrc, os_, arch, type_, comp = struct.unpack(">IIIIIIIBBBB", scr[:32])
+    assert (magic, os_, arch, type_, comp) == (0x27051956, 5, 0x16, 6, 0)       # script U-Boot arm64 non compressé
+    assert zlib.crc32(scr[:4] + b"\0\0\0\0" + scr[8:64]) == hcrc
+    donnees = scr[64:64 + taille]
+    assert zlib.crc32(donnees) == dcrc
+    longueur = struct.unpack(">I", donnees[:4])[0]
+    assert donnees[8:8 + longueur] == FIX.read_bytes()
+
+
+def test_l_image_mochabin_recoit_fix_bootcmd():
+    bloc = (RACINE / "image" / "build-image.sh").read_text().split("# fix-bootcmd (#2826)", 1)[1].split("# Démonter", 1)[0]
+    assert '"${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr"' in bloc and '"${MNT}/boot/fix-bootcmd.scr"' in bloc
+
+
+def test_le_live_mochabin_dit_comment_poser_le_bootcmd_apres_l_installation(live_simule):
+    live = live_simule
+    r = _netflash_main(live, "--srv", "192.0.2.10:8099", "--image", "minimal.img.gz", "--auto", "--no-reboot")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert LIGNE_FIX in r.stdout
+    assert "setenv ethact mvpp2-2" in r.stdout and "U-Boot" in r.stdout
+    assert "port" in r.stdout and "initialis" in r.stdout                     # la cause : port touché par U-Boot
+
+
+def test_le_live_espressobin_ne_donne_pas_la_ligne_de_la_mochabin(live_simule):
+    live = live_simule
+    r = _netflash_main(live, "--srv", "192.0.2.10:8099", "--dir", "espressobin-live", "--image", "minimal.img.gz",
+                       "--auto", "--no-reboot")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert LIGNE_FIX not in r.stdout
+
+
+def test_le_live_redemarre_apres_le_message_et_jamais_dans_l_outil_de_flash(live_simule):
+    live = live_simule
+    r = _netflash_main(live, "--srv", "192.0.2.10:8099", "--image", "minimal.img.gz", "--auto")
+    journal = live["journal"].read_text()
+    flash = next(x for x in journal.splitlines() if x.startswith("flash "))
+    assert "--no-reboot" in flash                                             # sinon il redémarre avant le message
+    assert "systemctl reboot" in journal and LIGNE_FIX in r.stdout
+
+
+def test_la_page_netboot_donne_la_ligne_fix_bootcmd_et_la_cause():
+    s = (ICI / "www" / "netboot" / "index.html").read_text()
+    assert LIGNE_FIX in s
+    assert "setenv ethact mvpp2-2" in s and "n’est initialisé que si U-Boot" in s

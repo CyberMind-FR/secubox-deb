@@ -123,7 +123,7 @@ def test_netflash_format_d_apres_le_nom():
 
 def test_le_flux_passe_par_les_gardes_de_secubox_flash_emmc():
     s = NETFLASH.read_text()
-    assert 'opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto)' in s
+    assert 'opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto --no-reboot)' in s
     assert 'telecharge_flux "$BASE/$image" | secubox-flash-emmc "${opts[@]}"' in s
     fonction = s[s.index("telecharge_flux()"):].split("\n}")[0]
     corps = next(x for x in fonction.split("\n") if "curl -fsS " in x)  # pas de reprise : un flux recommencé serait corrompu

@@ -24,7 +24,7 @@ set -euo pipefail
 PUB=/etc/secubox/netboot-image.pub
 TRAVAIL=/run/sbx-netflash
 JOURNAL=/var/log/sbx-netflash.log
-srv="" dir="" image="" auto=0 liste=0 reboot_opt=() nom="" reboot_demande=1
+srv="" dir="" image="" auto=0 liste=0 nom="" reboot_demande=1
 
 usage() {
     cat <<EOF
@@ -183,7 +183,7 @@ while [ $# -gt 0 ]; do case "$1" in
     --nom) nom="$2"; shift 2 ;;
     --auto) auto=1; shift ;;
     --list) liste=1; shift ;;
-    --no-reboot) reboot_opt=(--no-reboot); reboot_demande=0; shift ;;
+    --no-reboot) reboot_demande=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;
 esac; done
@@ -287,8 +287,8 @@ fi || fail "image injoignable : $BASE/$image — rien n'a été écrit"
 if [ "$auto" -eq 0 ]; then
     confirme_flash "$image" "${dev_emmc:-?}" "$BASE" "$sha" || fail "flash annulé — rien n'a été écrit"
 fi
-opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto)
-if [ -n "$nom" ]; then opts+=(--no-reboot); else opts+=("${reboot_opt[@]}"); fi
+# --no-reboot toujours : le redémarrage (s'il est demandé) suit le message de fin, que l'opérateur doit lire (#3271)
+opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto --no-reboot)
 log "téléchargement et écriture en flux de $BASE/$image…"
 set +e
 if command -v pv >/dev/null 2>&1; then      # progression sur la console (le maître la suit aussi, page NetBoot)
@@ -301,8 +301,36 @@ fi
 set -e
 [ "${st[1]}" -eq 0 ] || fail "écriture en flux refusée ou interrompue (téléchargement=${st[0]}, flash=${st[1]}) : eMMC invalidée si elle avait été entamée"
 rm -f "$TRAVAIL/$image.sig"
-[ -n "$nom" ] || exit 0
+[ -n "$nom" ] || termine
 depose_lot_et_termine
+}
+
+# Après l'installation (#3271) : le U-Boot d'usine de la MOCHAbin garde son bootcmd TFTP/NFS. Le script
+# fix-bootcmd.scr de l'image (p1) pose le bootcmd eMMC, l'activation du port WAN et les adresses #3091.
+message_fin() {
+    case "$dir" in
+        mochabin*)
+            cat <<'FIN'
+======================================================================================
+ Installation terminée. Dernière étape, UNE FOIS, au U-Boot d'usine (console série 115200) :
+   interrompre le compte à rebours au redémarrage, puis taper
+     fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}
+   puis : reset
+ Ce script pose le bootcmd (port WAN mvpp2-2 + DHCP, puis boot.scr de l'eMMC), les adresses
+ de chargement (#3091) et fait saveenv ; l'ancien bootcmd reste dans bootcmd_avant.
+ Réseau : le port WAN cuivre n'est initialisé pour Linux que si U-Boot l'a touché
+ (setenv ethact mvpp2-2 puis dhcp ; mvpp2-0 est la cage SFP+). Le bootcmd posé le fait
+ à chaque démarrage ; sans lui, le système démarré de l'eMMC n'a pas de réseau.
+======================================================================================
+FIN
+            ;;
+    esac
+}
+
+termine() { # message de fin, puis redémarrage si demandé
+    message_fin
+    if [ "$reboot_demande" -eq 1 ]; then log "redémarrage dans 15 s…"; sleep 15; systemctl reboot || reboot; fi
+    exit 0
 }
 
 # Après l'écriture en flux avec --nom : code de jonction, ancre et profil sur l'eMMC DÉTECTÉE (mmcblk1 quand une
@@ -311,12 +339,13 @@ depose_lot_et_termine() {
     [ -n "$dev_emmc" ] || fail "eMMC introuvable (aucun mmcblk avec boot0) : image écrite, lot NON déposé"
     partprobe "$dev_emmc" 2>/dev/null || true
     udevadm settle --timeout=30 2>/dev/null || true
-    [ -b "${dev_emmc}p2" ] && [ -b "${dev_emmc}p1" ] || fail "partitions de $dev_emmc absentes après l'écriture : lot NON déposé"
+    if ! { [ -b "${dev_emmc}p2" ] && [ -b "${dev_emmc}p1" ]; }; then
+        fail "partitions de $dev_emmc absentes après l'écriture : lot NON déposé"
+    fi
     depose_sur_emmc "${dev_emmc}p2" "${dev_emmc}p1" "$lot" "$profil" || fail "dépôt du lot KO (image écrite, ni code ni profil déposés)"
     rm -rf "$TRAVAIL/lot"
     log "code de jonction, ancre et profil déposés pour $nom."
-    if [ "$reboot_demande" -eq 1 ]; then log "redémarrage…"; sleep 2; systemctl reboot || reboot; fi
-    exit 0
+    termine
 }
 
 # Chargeable sans exécuter (tests) : SBX_NETFLASH_SOURCE=1.

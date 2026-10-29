@@ -8,6 +8,14 @@ secubox-netboot (0.8.3-1~trixie1) trixie; urgency=medium
     sa taille (mode « ram ») et le live, qui garde sa pile complète, manquait de mémoire. Mode « ram » retiré :
     téléchargement → décompression → secubox-flash-emmc --stdin (signature et SHA-256 vérifiées au passage, eMMC
     invalidée en cas d'échec). La pile du live n'est plus arrêtée que sous 256 Mo libres.
+  * Après l'installation (ref #3271) : board/mochabin/fix-bootcmd.cmd/.scr, livré sur la partition 1 de l'image
+    comme l'ESPRESSObin (#2826). Il garde l'ancien bootcmd (bootcmd_avant), pose ethact=mvpp2-2, autoload=no, les
+    adresses #3091 (kernel_addr_r 0x08000000, fdt_addr_r 0x0c000000, ramdisk_addr_r 0x0c100000 : un boot.scr d'avant
+    #3091 ne les pose pas) et bootcmd='setenv ethact mvpp2-2; dhcp; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr;
+    source ${loadaddr}' (le port WAN cuivre n'est initialisé pour Linux que si U-Boot l'a touché), puis saveenv.
+    sbx-netflash (live MOCHAbin) et la page netboot donnent la ligne à taper au U-Boot :
+    fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}. sbx-netflash redémarre lui-même après ce
+    message (secubox-flash-emmc toujours en --no-reboot).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 10:00:00 +0100
 

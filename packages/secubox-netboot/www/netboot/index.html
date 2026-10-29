@@ -479,6 +479,12 @@
                 z.appendChild(el('p', 'note', '2. Dans le live (NOM = nom préparé ci-dessous : la box rejoindra seule le maillage) :'));
                 z.appendChild(blocCopie('sbx-netflash --list\nsbx-netflash --image ' + (imgs.length ? imgs[0].nom : 'IMAGE') + ' --nom NOM', 'Commandes du live'));
                 z.appendChild(el('p', 'note', 'L’image s’écrit en flux sur toutes les cartes (téléchargement, décompression, écriture), jamais copiée en mémoire : signature et empreinte vérifiées pendant l’écriture, eMMC invalidée en cas d’échec.'));
+                if (/^mochabin/.test(lv.nom || '')) {
+                    // #3271 : le U-Boot d'usine garde son bootcmd TFTP/NFS ; fix-bootcmd.scr (partition 1 de l'image) le remplace.
+                    z.appendChild(el('p', 'note', '3. Après l’installation, une fois, au U-Boot d’usine (compte à rebours interrompu) : pose le bootcmd eMMC (port WAN mvpp2-2 + DHCP, puis boot.scr de l’eMMC), les adresses de chargement (#3091) et enregistre (saveenv) ; l’ancien bootcmd reste dans bootcmd_avant.'));
+                    z.appendChild(blocCopie('fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}\nreset', 'Commande U-Boot : bootcmd eMMC'));
+                    z.appendChild(el('p', 'note', 'Réseau : le port WAN cuivre n’est initialisé que si U-Boot l’a touché (setenv ethact mvpp2-2 puis dhcp ; mvpp2-0 est la cage SFP+). En netboot, c’est la première commande ci-dessus ; après l’installation, le bootcmd posé le fait à chaque démarrage, sinon le système démarré de l’eMMC n’a pas de réseau.'));
+                }
                 if (lv.usb) {
                     const p = el('p', 'note', 'Ou par la clé USB finale (le système lui-même, à écrire sur une clé) : ');
                     if (lv.http_base) { const a = el('a', 'mono', lv.usb.nom + ' · ' + Go(lv.usb.taille)); a.href = lv.http_base + '/' + lv.usb.nom; a.style.color = 'var(--cyan)'; p.appendChild(a); }

@@ -32,7 +32,7 @@ def test_le_live_recupere_son_rootfs_en_http_et_garde_la_cle_privee_sur_le_serve
 def test_le_flash_verifie_la_signature_avant_d_ecrire():
     # #3271 : la signature est vérifiée EN FLUX par secubox-flash-emmc ; un échec invalide l'eMMC
     s = FLASH.read_text()
-    assert 'opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto)' in s
+    assert 'opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto --no-reboot)' in s
     f = (ICI.parents[1] / "image" / "sbin" / "secubox-flash-emmc").read_text()
     assert 'openssl dgst -sha256 -verify "$pub" -signature "$sig"' in f
 

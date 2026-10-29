@@ -201,6 +201,9 @@ def test_3100_netbooter_et_preparer_un_flash(navigateur):
     p.wait_for_selector("#lives pre", state="attached")
     texte = p.inner_text("#lives")
     assert "tftpboot ${loadaddr} mochabin-live/boot.scr" in texte
+    # #3271 : après l'installation, la ligne qui pose le bootcmd eMMC, et pourquoi le port WAN doit être touché
+    assert "fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}" in texte
+    assert "n’est initialisé que si U-Boot l’a touché" in texte
     # #3233 : sans --image, sbx-netflash ne fait que lister — la page donne la commande complète
     assert "sbx-netflash --image secubox-isp-mochabin-trixie.img.gz --nom NOM" in texte
     assert "secubox-isp-mochabin-trixie.img.gz" in texte and "2,67 Go" in texte and "signée" in texte
