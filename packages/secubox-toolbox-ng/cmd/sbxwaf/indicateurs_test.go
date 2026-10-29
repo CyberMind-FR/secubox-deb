@@ -9,10 +9,12 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -164,5 +166,35 @@ func TestCorpsACapturerSuitLesControlesActifs(t *testing.T) {
 		if g, _, _ := s.corpsACapturer(r, e, ind); g != c.genre {
 			t.Errorf("%s : genre %v, attendu %v", c.nom, g, c.genre)
 		}
+	}
+}
+
+// M3 : les signaux (compteurs du multipart, variables, from_bang) ne sont
+// construits que pour une ligne : une détection, ou un multipart dont le
+// statut n'est pas « analyse ». Un envoi ordinaire n'en paie pas le coût.
+func TestSignauxConstruitsPourUneLigneSeulement(t *testing.T) {
+	n := new(atomic.Int64)
+	orig := signauxEntreePHP
+	signauxEntreePHP = func(e *EntreePHP) map[string]int { n.Add(1); return orig(e) }
+	t.Cleanup(func() { signauxEntreePHP = orig })
+	b := nouveauBancMultipart(t, nil)
+	ordinaire := fabriquerMultipart("BND", []partieTest{
+		{nom: "titre", contenu: "vacances"},
+		{nom: "f1", filename: "photo.jpg", fichier: true, contenu: "y"},
+	}, false)
+	b.envoyer("nc.example", "/upload", ipPublique, ctTest, bytes.NewReader(ordinaire))
+	b.verifierRecu(t, ordinaire)
+	if ls := b.lignes(t); len(ls) != 0 {
+		t.Fatalf("aucune ligne attendue, eu %v", ls)
+	}
+	if v := n.Load(); v != 0 {
+		t.Errorf("signaux construits %d fois sans ligne, attendu 0", v)
+	}
+	b.envoyer("nc.example", "/upload", ipPublique, ctTest, bytes.NewReader(corpsExploit()))
+	if d := lignesDe(b.lignes(t), "php2shell"); len(d) != 1 {
+		t.Fatalf("une détection php2shell attendue, eu %v", b.lignes(t))
+	}
+	if v := n.Load(); v != 1 {
+		t.Errorf("signaux construits %d fois pour une détection, attendu 1", v)
 	}
 }

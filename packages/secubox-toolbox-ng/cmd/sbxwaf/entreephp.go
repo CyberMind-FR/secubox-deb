@@ -161,6 +161,7 @@ var (
 	etiquetteOutilPHP    = étiquetteOutil
 	lireRequetePHP       = lireParametresPHP
 	cookieFauxPrefixePHP = cookieFauxPrefixe
+	signauxEntreePHP     = (*EntreePHP).Signaux
 )
 
 // corpsACapturer choisit le corps à capturer, son plafond, et s'il prend un
@@ -368,8 +369,14 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 	if e.PartageFedereAnonyme && s.appelsFederes != nil {
 		e.AppelsFederes = s.appelsFederes.noter(rm.ip, time.Now())
 	}
-	signaux := e.Signaux()
 	detections := s.rules.EvaluerPHP(e)
+	// Les signaux ne servent qu'à une ligne (passe finale M3) : une
+	// détection, ou un multipart dont le statut n'est pas « analyse ».
+	statutMultipart := e.Multipart != nil && e.Multipart.Statut != MultipartAnalyse
+	var signaux map[string]int
+	if len(detections) > 0 || statutMultipart {
+		signaux = signauxEntreePHP(e)
+	}
 	var traits []string
 	if len(detections) > 0 && e.requete != nil {
 		// Étiquettes d'outil : calculées une fois, à l'écriture de la première
@@ -393,7 +400,7 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 		log.Printf("sbxwaf: DETECT %s rule=%s host=%s path=%s ip=%s",
 			d.Categorie, d.RuleID, rm.host, rm.path, rm.ip)
 	}
-	if e.Multipart != nil && e.Multipart.Statut != MultipartAnalyse {
+	if statutMultipart {
 		statut := "multipart-" + string(e.Multipart.Statut)
 		s.journaliserMultipart(rmp, ThreatRecord{
 			Category: statut, Severity: "audit", Action: statut, Signaux: signaux,
