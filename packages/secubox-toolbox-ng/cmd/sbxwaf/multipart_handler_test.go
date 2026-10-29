@@ -598,3 +598,22 @@ func TestCorpsTexteErreurLectureJournalisee(t *testing.T) {
 		t.Fatalf("lecture en erreur après 10 octets : %d ligne(s) body-inspect-truncated, attendu 1", n)
 	}
 }
+
+// Sonde P3 de la relecture finale (I1), au niveau du gestionnaire : frontières
+// suivantes précédées d'un LF nu. mime/multipart n'y voyait qu'une partie et
+// rien n'était journalisé ; PHP, lui, lit l'exploit (rfc1867.c, find_boundary).
+func TestMultipartSondeP3LFNuJournalisee(t *testing.T) {
+	b := nouveauBancMultipart(t, nil)
+	corps := []byte(corpsSondeP3())
+	if rec := b.envoyer("nc.example", "/upload", ipPublique, ctTest, bytes.NewReader(corps)); rec.Code != http.StatusOK {
+		t.Fatalf("statut %d, attendu 200", rec.Code)
+	}
+	b.verifierRecu(t, corps)
+	ls := lignesDe(b.lignes(t), "php2shell")
+	if len(ls) != 1 || ls[0]["rule_id"] != "php2shell-001" {
+		t.Fatalf("une ligne php2shell-001 attendue, eu %v", b.lignes(t))
+	}
+	if f := signalLigne(t, ls[0], "fichiers_apres_progress"); f != 60 {
+		t.Errorf("signals.fichiers_apres_progress = %d, attendu 60", f)
+	}
+}

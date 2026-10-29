@@ -81,7 +81,10 @@ func TestBoundaryPHP(t *testing.T) {
 		{`multipart/form-data; boundary=abc,def`, "abc", true},
 		{`multipart/form-data; boundary="abc`, "", false},
 		{`multipart/form-data`, "", false},
-		{`multipart/form-data; boundary=`, "", false},
+		// rfc1867.c:767-789 : une frontière VIDE est acceptée par PHP (adapté, R13 ;
+		// l'ancien attendu « échec » laissait un corps lu par PHP sans analyse).
+		{`multipart/form-data; boundary=`, "", true},
+		{`multipart/form-data; boundary=;x`, "", true},
 	}
 	for _, c := range cas {
 		got, ok := boundaryPHP(c.ct)
@@ -196,8 +199,10 @@ func TestAnalyserMultipartDispositionLaxiste(t *testing.T) {
 	if r.PartiesFichier != 1 {
 		t.Errorf("filename vide : %+v", r)
 	}
+	// Adapté (R13, M6) : PHP compare la clé à « filename » par strcasecmp ;
+	// `FileName*` n'est pas un filename, la partie reste un champ ordinaire.
 	r = analyserMultipart(brut(`form-data; NAME="a\"b[c]"; FileName*="z"`), ctTest, false, LimitesMultipart{})
-	if r.PartiesFichier != 1 || r.LongueurNomMax != len(`a"b[c]`) || r.ProfondeurMax != 1 {
+	if r.PartiesFichier != 0 || r.LongueurNomMax != len(`a"b[c]`) || r.ProfondeurMax != 1 {
 		t.Errorf("échappements : %+v", r)
 	}
 }
@@ -211,27 +216,33 @@ func TestAnalyserMultipartFilenamePointVirgule(t *testing.T) {
 	}
 }
 
-// Plusieurs filename dans une disposition : aucun ne masque les autres.
+// Plusieurs filename dans une disposition : PHP garde le DERNIER (rfc1867.c:888,
+// efree puis réaffectation). Adapté (R13) : l'ancien attendu « aucun ne masque
+// les autres » supposait qu'on ignorait lequel PHP retient ; la source le dit.
+// `filename*` n'est jamais retenu.
 func TestAnalyserMultipartPlusieursFilename(t *testing.T) {
-	for _, disp := range []string{
-		`form-data; name="f"; filename="<?php"; filename="a"`,
-		`form-data; name="f"; filename*="<?php"; filename="a"`,
-	} {
+	cas := map[string]bool{
+		`form-data; name="f"; filename="a"; filename="<?php"`:  true,
+		`form-data; name="f"; filename="<?php"; filename="a"`:  false,
+		`form-data; name="f"; filename*="<?php"; filename="a"`: false,
+		`form-data; name="f"; filename="a"; filename*="<?php"`: false,
+	}
+	for disp, want := range cas {
 		corps := []byte("--BND\r\nContent-Disposition: " + disp + "\r\n\r\nv\r\n--BND--\r\n")
-		if r := analyserMultipart(corps, ctTest, false, LimitesMultipart{}); !r.FilenamePHP || r.PartiesFichier != 1 {
-			t.Errorf("%s : %+v", disp, r)
+		if r := analyserMultipart(corps, ctTest, false, LimitesMultipart{}); r.FilenamePHP != want || r.PartiesFichier != 1 {
+			t.Errorf("%s : %+v, FilenamePHP attendu %v", disp, r, want)
 		}
 	}
-	corps := []byte("--BND\r\nContent-Disposition: form-data; name=\"f\"; filename=\"a|O:1\"; filename=\"b\"\r\n\r\nv\r\n--BND--\r\n")
+	corps := []byte("--BND\r\nContent-Disposition: form-data; name=\"f\"; filename=\"b\"; filename=\"a|O:1\"\r\n\r\nv\r\n--BND--\r\n")
 	if r := analyserMultipart(corps, ctTest, false, LimitesMultipart{}); !r.FilenameObjet {
-		t.Errorf("|O: masqué : %+v", r)
+		t.Errorf("|O: du filename retenu : %+v", r)
 	}
 }
 
-// R5 : un io.EOF nu ne prouve pas un corps complet (coupure en plein en-tête).
+// R5 : une coupure en plein en-tête n'est jamais un corps complet (sans
+// fermeture vue : « tronque » si le préfixe est coupé, « malforme » sinon).
 func TestAnalyserMultipartCoupureEnPleinEntete(t *testing.T) {
-	// Les deux coupures : la seconde (valeur de nom entamée) fait rendre par Go
-	// un io.EOF NU ; c'est elle qui prouve la condition sur la frontière finale.
+	// Deux coupures : avant le « : », et dans une valeur de nom entamée.
 	for _, c := range []string{"--BND\r\nContent-Disp", "--BND\r\nContent-Disposition: form-data; name=\"fi"} {
 		coupe := []byte(c)
 		testerCoupure(t, coupe)
@@ -258,14 +269,21 @@ func TestAnalyserMultipartCoupureApresUnePartie(t *testing.T) {
 	}
 }
 
-// Corps complet : EOF après la frontière finale, avec ou sans fin de ligne.
+// Corps complet : la dernière recherche de frontière a vu « --b-- », avec ou
+// sans fin de ligne → analyse. Adapté (R13) : avec un préfixe TRONQUÉ, le statut
+// reste « tronque » même après « --b-- », car find_boundary (rfc1867.c:383)
+// continue de chercher « --b » dans l'épilogue : PHP lirait des parties au-delà
+// du préfixe (voir TestPHPPartiesApresLaFermeture).
 func TestAnalyserMultipartFrontiereFinale(t *testing.T) {
 	for _, corps := range []string{
 		"--BND\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\nx\r\n--BND--\r\n",
 		"--BND\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\nx\r\n--BND--",
 	} {
-		if r := analyserMultipart([]byte(corps), ctTest, true, LimitesMultipart{}); r.Statut != MultipartAnalyse || r.Parties != 1 {
-			t.Errorf("%q : %+v", corps, r)
+		if r := analyserMultipart([]byte(corps), ctTest, false, LimitesMultipart{}); r.Statut != MultipartAnalyse || r.Parties != 1 {
+			t.Errorf("complet %q : %+v", corps, r)
+		}
+		if r := analyserMultipart([]byte(corps), ctTest, true, LimitesMultipart{}); r.Statut != MultipartTronque || r.Parties != 1 {
+			t.Errorf("tronqué %q : %+v", corps, r)
 		}
 	}
 }
@@ -285,15 +303,29 @@ func TestAnalyserMultipartEnvoiLegitime(t *testing.T) {
 	}
 }
 
+// Invariants : jamais de panique ; statut connu ; compteurs cohérents ; aucune
+// lecture hors du préfixe (même résultat sur une tranche bornée par sa capacité
+// et sur une tranche suivie d'octets empoisonnés) ; préfixe jamais modifié.
 func FuzzAnalyserMultipart(f *testing.F) {
 	f.Add(corpsImbrique()[:400], ctTest, true, 50)
 	f.Add([]byte("--BND\r\nContent-Disposition: form-data; name=\"a\"; filename=\n\r\n\r\n--BND--"), ctTest, false, 0)
 	f.Add([]byte(""), "multipart/form-data; boundary=\"", false, 1)
+	f.Add([]byte(corpsSondeP3()), ctTest, false, 0)
+	f.Add([]byte(corpsMaxFileSize("MAX_FILE_SIZE")), ctTest, false, 0)
+	f.Add([]byte("--\r\nContent-Disposition: form-data; name='a;b' x; filename=\"\\\"\"\r\n z\r\n\r\nv\n----"), "multipart/form-data; boundary=", true, 0)
 	f.Fuzz(func(t *testing.T, corps []byte, ct string, tronque bool, max int) {
 		if max < 0 || max > 5000 {
 			max = 0
 		}
-		r := analyserMultipart(corps, ct, tronque, LimitesMultipart{PartiesMax: max})
+		copie := append([]byte(nil), corps...)
+		poison := append(append([]byte(nil), corps...), []byte(corpsSondeP3())...)
+		r := analyserMultipart(corps[:len(corps):len(corps)], ct, tronque, LimitesMultipart{PartiesMax: max})
+		if r2 := analyserMultipart(poison[:len(corps)], ct, tronque, LimitesMultipart{PartiesMax: max}); r2 != r {
+			t.Fatalf("lecture hors du préfixe : %+v / %+v", r, r2)
+		}
+		if string(copie) != string(corps) {
+			t.Fatal("préfixe modifié")
+		}
 		plafond := max
 		if plafond == 0 {
 			plafond = partiesMaxDefaut
@@ -314,6 +346,9 @@ func FuzzAnalyserMultipart(f *testing.F) {
 		}
 		if !r.Progress && r.FichiersApresProgress != 0 {
 			t.Fatalf("fichiers après progress sans progress : %+v", r)
+		}
+		if r.LongueurNomMax > len(corps) || r.ProfondeurMax > len(corps) {
+			t.Fatalf("mesures plus grandes que le préfixe : %+v", r)
 		}
 		_ = r.Signaux()
 	})
