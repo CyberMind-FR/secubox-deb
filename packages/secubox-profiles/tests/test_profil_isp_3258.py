@@ -14,6 +14,8 @@ import importlib.util
 import re
 from pathlib import Path
 
+import pytest
+
 from api.manifest import PROTECTED_IDS
 from api.state import load_profile
 
@@ -181,3 +183,50 @@ def test_la_documentation_distingue_le_meta_paquet_du_profil_isp():
     assert DECISION in alpha10
     controle = " ".join((PAQUETS / "secubox-isp" / "debian" / "control").read_text(encoding="utf-8").split())
     assert "profil d'activation isp" in controle and "nDPI, nDPId, NetFlow" in controle
+
+
+# ---------- tour 3 : le test I1 étendu à TOUS les profils livrés ----------
+# `minuteurs_off` est géré en UNION (api/minuteurs.py) : une minuterie nommée par UN profil est RALLUMÉE par tous les
+# autres. Ajouter streamlit-idle à isp l'a fait rallumer par lite, minimal et secure-gateway, qui arrêtent Streamlit.
+PROFILS_LIVRES = sorted(PROFILS.glob("*.toml"))
+
+# Minuteries laissées actives par le PAQUET (hors union, donc hors du moteur de profils) qui relancent un service que le
+# profil arrête : préexistantes, signalées au rapport de l'étape 0 de #3258, à traiter à part. Toute NOUVELLE fait échouer.
+CONNUES_HORS_UNION = {
+    ("full", "jellyfin-playback-policy"): "Wants=secubox-jellyfin.service ; jellyfin est exclu de tous les profils",
+    ("minimal", "pins-apply"): "Wants=secubox-profiles.service ; minimal coupe l'API du panneau (proteges_off)",
+}
+
+
+def _arretes(prof, unites_):
+    a = _allegement()
+    durables = {mid for mid, textes in unites_.items() if not all(a._oneshot_de_minuterie(t) for t in textes)}
+    return durables - prof.on - (PROTECTED_IDS - prof.proteges_off)
+
+
+@pytest.mark.parametrize("chemin", PROFILS_LIVRES, ids=lambda p: p.stem)
+def test_aucune_minuterie_rallumee_par_un_profil_ne_relance_un_service_qu_il_arrete(chemin):
+    """Toute box (un paquet de n'importe quel profil peut y être installé) : chaque minuterie de l'union que ce profil
+    RALLUME ne doit démarrer aucun service absent de son `on`."""
+    a = _allegement()
+    prof = load_profile(chemin)
+    union = set().union(*(load_profile(p).minuteurs_off for p in PROFILS_LIVRES))
+    tous = set(a.INDEX)
+    arretes = _arretes(prof, a._unites(tous))
+    minuteries = _minuteries_et_leurs_cibles(tous)
+    fautives = {tid: sorted(c & arretes) for tid, c in minuteries.items()
+                if tid in union and tid not in prof.minuteurs_off and c & arretes}
+    assert not fautives, fautives
+
+
+@pytest.mark.parametrize("nom", ["minimal", "lite", "isp", "full"])
+def test_aucune_minuterie_du_meta_paquet_ne_relance_un_service_arrete(nom):
+    """Fermeture du méta-paquet secubox-<profil> : toute minuterie que le profil laisse active (union ou défaut du
+    paquet) ne démarre aucun service qu'il arrête, hors des cas préexistants nommés."""
+    a = _allegement()
+    prof = load_profile(PROFILS / f"{nom}.toml")
+    paquets = a._fermeture(f"secubox-{nom}")
+    arretes = _arretes(prof, a._unites(paquets))
+    fautives = {tid: sorted(c & arretes) for tid, c in _minuteries_et_leurs_cibles(paquets).items()
+                if tid not in prof.minuteurs_off and c & arretes and (nom, tid) not in CONNUES_HORS_UNION}
+    assert not fautives, fautives
