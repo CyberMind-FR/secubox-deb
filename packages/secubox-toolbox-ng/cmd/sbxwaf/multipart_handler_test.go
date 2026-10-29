@@ -385,10 +385,12 @@ func TestMultipartConcurrenceLimite(t *testing.T) {
 	b.verifierRecu(t, corps)
 	ls := b.lignes(t)
 	if len(ls) != 1 {
-		t.Fatalf("une seule ligne multipart-limite attendue, eu %v", ls)
+		t.Fatalf("une seule ligne multipart-concurrence attendue, eu %v", ls)
 	}
 	l := ls[0]
-	if l["category"] != "multipart-limite" || l["action"] != "multipart-limite" || l["severity"] != "audit" {
+	// Ruling R10 : le sémaphore plein a sa propre catégorie ; multipart-limite
+	// reste réservé au plafond de parties de l'analyseur.
+	if l["category"] != "multipart-concurrence" || l["action"] != "multipart-concurrence" || l["severity"] != "audit" {
 		t.Errorf("ligne inattendue : %v", l)
 	}
 	if c := signalLigne(t, l, "concurrence"); c != 1 {
@@ -438,6 +440,64 @@ func TestMultipartContentTypeVirguleLuParLeCheminTexte(t *testing.T) {
 	}
 }
 
+// Un corps BLOQUÉ n'a jamais atteint le backend : il ne doit pas être analysé.
+// Avec la virgule, le chemin texte lit la fenêtre au travers de la capture
+// (lus > 0), puis la règle sqli bloque : la sortie 403 ne doit produire aucune
+// ligne php2shell (gravité high vers actord pour un corps jamais relayé).
+func TestMultipartBloqueNonRelayePasAnalyse(t *testing.T) {
+	b := nouveauBancMultipart(t, nil)
+	b.s.capturesMultipart = make(chan struct{}, 1)
+	corps := corpsMultipart("BND", []partieTest{
+		{nom: nomProgressPHP, contenu: "x union select 1,2 x"},
+		{nom: "f1", filename: "a", fichier: true, contenu: "y"},
+		{nom: "f2", filename: "b", fichier: true, contenu: "z"},
+	}, false)
+
+	rec := b.envoyer("nc.example", "/upload", ipPublique, "multipart/form-data, boundary=BND", bytes.NewReader(corps))
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("statut %d, attendu 403 (règle sqli bloquante)", rec.Code)
+	}
+	b.mu.Lock()
+	appels := b.appels
+	b.mu.Unlock()
+	if appels != 0 {
+		t.Fatalf("%d appel(s) au backend, attendu 0", appels)
+	}
+	ls := b.lignes(t)
+	if n := len(lignesDe(ls, "php2shell")) + len(lignesDe(ls, "multipart-")); n != 0 {
+		t.Fatalf("corps jamais relayé : aucune ligne php2shell ni multipart-* attendue, eu %v", ls)
+	}
+	if len(lignesDe(ls, "sqli")) != 1 {
+		t.Errorf("la ligne du blocage sqli manque : %v", ls)
+	}
+	if n := len(b.s.capturesMultipart); n != 0 {
+		t.Errorf("jeton de capture non rendu (%d pris)", n)
+	}
+}
+
+// Le second site de relais : un GET passe par le cache média, et un défaut
+// (miss) relaie par proxy.ServeHTTP(cw, r). relaye doit y être posé aussi.
+func TestMultipartCacheMediaMissAnalyse(t *testing.T) {
+	b := nouveauBancMultipart(t, nil)
+	b.s.mediaCache = NewMediaCache(t.TempDir())
+	corps := corpsExploit()
+	req := httptest.NewRequest(http.MethodGet, "http://nc.example/upload", bytes.NewReader(corps))
+	req.Host = "nc.example"
+	req.RemoteAddr = ipPublique + ":40000"
+	req.Header.Set("Content-Type", ctTest)
+	rec := httptest.NewRecorder()
+	b.s.handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK || rec.Header().Get("X-SecuBox-Cache") != "miss" {
+		t.Fatalf("statut %d, cache %q : attendu 200 par le chemin miss du cache média", rec.Code, rec.Header().Get("X-SecuBox-Cache"))
+	}
+	b.verifierRecu(t, corps)
+	if ls := lignesDe(b.lignes(t), "php2shell"); len(ls) != 1 {
+		t.Fatalf("une ligne php2shell attendue, eu %v", b.lignes(t))
+	}
+}
+
 func TestSevToIntAudit(t *testing.T) {
 	for sev, want := range map[string]int{"audit": 10, "critical": 90, "high": 75, "medium": 50, "low": 25, "inconnu": 40, "": 40} {
 		if got := sevToInt(sev); got != want {
@@ -462,8 +522,12 @@ func TestThreatLogModeEtSignaux(t *testing.T) {
 		t.Fatalf("2 lignes attendues, eu %q", brut)
 	}
 	var avec, sans map[string]any
-	_ = json.Unmarshal([]byte(ls[0]), &avec)
-	_ = json.Unmarshal([]byte(ls[1]), &sans)
+	if err := json.Unmarshal([]byte(ls[0]), &avec); err != nil {
+		t.Fatalf("ligne 1 illisible : %v", err)
+	}
+	if err := json.Unmarshal([]byte(ls[1]), &sans); err != nil {
+		t.Fatalf("ligne 2 illisible : %v", err)
+	}
 	if avec["mode"] != "detect" {
 		t.Errorf("mode = %v, attendu detect", avec["mode"])
 	}

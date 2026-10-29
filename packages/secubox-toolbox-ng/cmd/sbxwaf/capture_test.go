@@ -12,6 +12,10 @@ import (
 	"crypto/sha256"
 	"errors"
 	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -32,7 +36,7 @@ type lecteurSansWriterTo struct{ io.Reader }
 
 func TestCaptureRelaieIntactEtBorne(t *testing.T) {
 	src := octetsTest(3 << 20)
-	capt := nouvelleCapture(io.NopCloser(lecteurSansWriterTo{bytes.NewReader(src)}), 1<<20)
+	capt := nouvelleCapture(io.NopCloser(lecteurSansWriterTo{bytes.NewReader(src)}), 1<<20, -1)
 
 	h := sha256.New()
 	n, err := io.Copy(h, capt)
@@ -59,7 +63,7 @@ func TestCaptureRelaieIntactEtBorne(t *testing.T) {
 
 func TestCaptureComplete(t *testing.T) {
 	src := octetsTest(10_000)
-	capt := nouvelleCapture(io.NopCloser(bytes.NewReader(src)), 1<<20)
+	capt := nouvelleCapture(io.NopCloser(bytes.NewReader(src)), 1<<20, -1)
 	if _, err := io.Copy(io.Discard, lecteurSansWriterTo{capt}); err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +76,7 @@ func TestCaptureComplete(t *testing.T) {
 // Un corps d'exactement le plafond, lu jusqu'à io.EOF, est complet.
 func TestCaptureExactementLePlafondComplete(t *testing.T) {
 	src := octetsTest(4096)
-	capt := nouvelleCapture(io.NopCloser(bytes.NewReader(src)), 4096)
+	capt := nouvelleCapture(io.NopCloser(bytes.NewReader(src)), 4096, -1)
 	_, _ = io.Copy(io.Discard, lecteurSansWriterTo{capt})
 	if prefixe, _, complet := capt.figer(); !complet || len(prefixe) != 4096 {
 		t.Fatalf("complet=%v len=%d, attendu true/4096", complet, len(prefixe))
@@ -82,7 +86,7 @@ func TestCaptureExactementLePlafondComplete(t *testing.T) {
 // Une erreur de lecture (client coupé) n'est jamais un corps complet.
 func TestCaptureErreurPasComplete(t *testing.T) {
 	coupe := io.MultiReader(bytes.NewReader(octetsTest(100)), iotestErr{})
-	capt := nouvelleCapture(io.NopCloser(coupe), 1<<20)
+	capt := nouvelleCapture(io.NopCloser(coupe), 1<<20, -1)
 	if _, err := io.Copy(io.Discard, lecteurSansWriterTo{capt}); err == nil {
 		t.Fatal("l'erreur de la source doit être relayée telle quelle")
 	}
@@ -99,7 +103,7 @@ func TestCaptureFigeeIgnoreLaSuite(t *testing.T) {
 	src := octetsTest(64 << 10)
 
 	t.Run("sequentiel", func(t *testing.T) {
-		capt := nouvelleCapture(io.NopCloser(bytes.NewReader(src)), 1<<20)
+		capt := nouvelleCapture(io.NopCloser(bytes.NewReader(src)), 1<<20, -1)
 		debut := make([]byte, 1000)
 		if _, err := io.ReadFull(capt, debut); err != nil {
 			t.Fatal(err)
@@ -119,8 +123,10 @@ func TestCaptureFigeeIgnoreLaSuite(t *testing.T) {
 		if !bytes.Equal(prefixe, copie) {
 			t.Fatal("le préfixe figé a été modifié par les lectures suivantes")
 		}
-		if p2, l2, _ := capt.figer(); len(p2) != 1000 || l2 != 1000 {
-			t.Fatalf("un second figer() doit rendre le même état, eu %d/%d", len(p2), l2)
+		// La capture ne retient plus le préfixe : la goroutine du Transport,
+		// qui garde une référence à la capture, ne le fait pas survivre.
+		if p2, l2, _ := capt.figer(); p2 != nil || l2 != 1000 {
+			t.Fatalf("second figer() : préfixe retenu (%d octets) ou lus=%d au lieu de 1000", len(p2), l2)
 		}
 	})
 
@@ -128,7 +134,7 @@ func TestCaptureFigeeIgnoreLaSuite(t *testing.T) {
 	// fige : aucune course (go test -race), relais intact, préfixe stable.
 	t.Run("concurrent", func(t *testing.T) {
 		for i := 0; i < 50; i++ {
-			capt := nouvelleCapture(io.NopCloser(bytes.NewReader(src)), 1<<20)
+			capt := nouvelleCapture(io.NopCloser(bytes.NewReader(src)), 1<<20, -1)
 			var relaye []byte
 			var wg sync.WaitGroup
 			wg.Add(1)
@@ -159,10 +165,90 @@ func TestCaptureFigeeIgnoreLaSuite(t *testing.T) {
 	})
 }
 
+// Content-Length connu : une seule allocation de min(plafond, taille) ; inconnu
+// (-1, chunked) : croissance par doublement, jamais au-delà du plafond.
+func TestCapturePrealloueContentLength(t *testing.T) {
+	cas := []struct {
+		nom            string
+		n, plafond     int
+		taille         int64
+		capMin, capMax int
+	}{
+		{"petit corps", 10_000, 1 << 20, 10_000, 10_000, 10_000},
+		{"gros corps", 3 << 20, 1 << 20, 3 << 20, 1 << 20, 1 << 20},
+		{"taille inconnue", 10_000, 1 << 20, -1, 10_000, 1 << 20},
+	}
+	for _, c := range cas {
+		t.Run(c.nom, func(t *testing.T) {
+			src := octetsTest(c.n)
+			capt := nouvelleCapture(io.NopCloser(bytes.NewReader(src)), c.plafond, c.taille)
+			if c.taille > 0 {
+				if got := cap(capt.buf); got != c.capMin {
+					t.Fatalf("capacité préallouée %d, attendu %d", got, c.capMin)
+				}
+			}
+			_, _ = io.Copy(io.Discard, lecteurSansWriterTo{capt})
+			prefixe, _, _ := capt.figer()
+			if got := cap(prefixe); got < c.capMin || got > c.capMax {
+				t.Fatalf("capacité finale %d, attendu dans [%d, %d]", got, c.capMin, c.capMax)
+			}
+			if want := min(c.n, c.plafond); !bytes.Equal(prefixe, src[:want]) {
+				t.Fatalf("préfixe de %d octets, attendu les %d premiers", len(prefixe), want)
+			}
+		})
+	}
+}
+
+// Une panique pendant l'analyse est rattrapée, journalisée avec sa pile, et le
+// jeton est rendu quand même (son defer est posé avant figer()).
+func TestAnalyseCapturePaniqueRattrapee(t *testing.T) {
+	var sortie bytes.Buffer
+	log.SetOutput(&sortie)
+	defer log.SetOutput(os.Stderr)
+	s := &Server{capturesMultipart: make(chan struct{}, 1)}
+	s.capturesMultipart <- struct{}{}
+
+	s.analyserCaptureMultipart(nil, requeteMultipart{host: "nc.example"}, true) // figer() sur nil : panique
+
+	if n := len(s.capturesMultipart); n != 0 {
+		t.Fatalf("jeton non rendu après une panique (%d pris)", n)
+	}
+	if !strings.Contains(sortie.String(), "ERREUR analyse multipart") || !strings.Contains(sortie.String(), "goroutine ") {
+		t.Fatalf("panique non journalisée avec sa pile : %q", sortie.String())
+	}
+}
+
+// Non relayé : figée, jeton rendu, aucune analyse ni ligne.
+func TestAnalyseCaptureNonRelayeeMuette(t *testing.T) {
+	journal := filepath.Join(t.TempDir(), "menaces.jsonl")
+	s := &Server{
+		capturesMultipart: make(chan struct{}, 1),
+		rules:             LoadRules(ecrisRegles(t, corpusMultipartTest)),
+		threatLog:         NewThreatLog(journal),
+	}
+	s.capturesMultipart <- struct{}{}
+	corps := corpsExploit()
+	capt := nouvelleCapture(io.NopCloser(bytes.NewReader(corps)), 1<<20, int64(len(corps)))
+	_, _ = io.Copy(io.Discard, lecteurSansWriterTo{capt}) // lu par le chemin texte, par exemple
+
+	s.analyserCaptureMultipart(capt, requeteMultipart{ip: ipPublique, host: "nc.example", contentType: ctTest}, false)
+
+	if n := len(s.capturesMultipart); n != 0 {
+		t.Fatalf("jeton non rendu (%d pris)", n)
+	}
+	if _, err := os.Stat(journal); !os.IsNotExist(err) {
+		brut, _ := os.ReadFile(journal)
+		t.Fatalf("corps jamais relayé : aucune ligne attendue, eu %s", brut)
+	}
+	if _, _, complet := capt.figer(); complet {
+		t.Error("la capture n'a pas été figée (préfixe encore retenu)")
+	}
+}
+
 // Close est relayé à la source (le ReverseProxy ferme le corps).
 func TestCaptureCloseRelaie(t *testing.T) {
 	f := &fermetureTest{}
-	if err := nouvelleCapture(f, 10).Close(); err != nil || !f.ferme {
+	if err := nouvelleCapture(f, 10, -1).Close(); err != nil || !f.ferme {
 		t.Fatalf("Close non relayé : err=%v ferme=%v", err, f.ferme)
 	}
 }

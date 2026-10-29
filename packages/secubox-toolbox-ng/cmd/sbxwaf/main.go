@@ -171,7 +171,7 @@ type Server struct {
 	// capturesMultipart borne les captures multipart simultanées (#3257) : un
 	// jeton par capture, pris sans attendre, rendu après l'analyse. main()
 	// pose capturesMultipartMax ; nil = pas de limite (tests). Plein : pas de
-	// capture, une ligne « multipart-limite », la requête suit son cours.
+	// capture, une ligne « multipart-concurrence », la requête suit son cours.
 	capturesMultipart chan struct{}
 
 	// trustedHosts is the set of hostnames that bypass WAF inspection entirely.
@@ -308,6 +308,9 @@ func (s *Server) handler() http.Handler {
 		// visit" than the 403/421 it stands in for — it must not be tallied
 		// into the visit-stats aggregator.
 		var viaWaker bool
+		// relaye : le corps a été confié au proxy (#3257). Posé juste avant les
+		// deux proxy.ServeHTTP ; la capture multipart n'analyse que dans ce cas.
+		var relaye bool
 		if s.visits != nil {
 			sr := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			w = sr
@@ -532,12 +535,17 @@ func (s *Server) handler() http.Handler {
 				rm := requeteMultipart{ip: ip, host: r.Host, method: r.Method, path: rawPath,
 					ua: r.Header.Get("User-Agent"), contentType: r.Header.Get("Content-Type")}
 				if s.prendreCapture() {
-					capt := nouvelleCapture(r.Body, int(s.fenetreCorps()))
+					capt := nouvelleCapture(r.Body, int(s.fenetreCorps()), r.ContentLength)
 					r.Body = capt
-					// Couvre les deux proxy.ServeHTTP et le cache média, et
-					// aussi les sorties anticipées (403, ban) : le corps n'y est
-					// jamais lu, donc lus == 0 et rien n'est analysé.
-					defer s.analyserCaptureMultipart(capt, rm)
+					// L'analyse n'a lieu que si le corps a été confié au proxy
+					// (relaye, posé juste avant les deux proxy.ServeHTTP). Une
+					// sortie anticipée (403, ban par escalade, réponse du cache
+					// média) fige la capture et rend le jeton, sans analyse ni
+					// ligne : avec un Content-Type que corpsBinaire tient pour du
+					// texte, le chemin texte a pu en lire la fenêtre (lus > 0)
+					// alors que le backend n'a jamais rien reçu. La fermeture lit
+					// relaye au retour du gestionnaire, pas ici.
+					defer func() { s.analyserCaptureMultipart(capt, rm, relaye) }()
 				} else {
 					s.limiteCaptureAtteinte(rm)
 				}
@@ -926,6 +934,7 @@ func (s *Server) handler() http.Handler {
 			// Simplest correct approach: let the real proxy handle the response
 			// (including its own ModifyResponse for WAF headers), then store
 			// whatever cw captured.
+			relaye = true // #3257 : le corps part au backend (capture multipart)
 			proxy.ServeHTTP(cw, r)
 
 			// After proxying: if the response was cacheable and we captured enough
@@ -946,6 +955,7 @@ func (s *Server) handler() http.Handler {
 			return
 		}
 
+		relaye = true // #3257 : le corps part au backend (capture multipart)
 		proxy.ServeHTTP(w, r)
 	})
 }

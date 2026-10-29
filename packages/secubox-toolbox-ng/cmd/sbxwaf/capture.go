@@ -20,14 +20,19 @@
 //
 // LA MÉMOIRE. Au plus capturesMultipartMax captures à la fois, chacune bornée
 // à la fenêtre d'inspection (1 Mio par défaut) : 16 Mio au pire sur une carte
-// de 1 Go. Au-delà, pas de capture, une ligne « multipart-limite », et la
-// requête suit son cours.
+// de 1 Go. Au-delà, pas de capture, une ligne « multipart-concurrence », et
+// la requête suit son cours.
+//
+// SEUL UN CORPS RELAYÉ EST ANALYSÉ. Une requête bloquée (403, ban, réponse du
+// cache média) n'a jamais atteint le backend : même si un chemin texte en a lu
+// la fenêtre au travers de la capture, rien n'est journalisé pour elle.
 
 package main
 
 import (
 	"io"
 	"log"
+	"runtime/debug"
 	"sync"
 )
 
@@ -48,8 +53,19 @@ type captureCorps struct {
 	err  error // première erreur autre que io.EOF
 }
 
-func nouvelleCapture(src io.ReadCloser, plafond int) *captureCorps {
-	return &captureCorps{src: src, max: plafond}
+// nouvelleCapture borne la copie à plafond octets. taille est le
+// Content-Length (-1 s'il est inconnu) : connu, le préfixe est réservé d'un
+// coup à min(plafond, taille) ; inconnu, il grandit par doublement.
+func nouvelleCapture(src io.ReadCloser, plafond int, taille int64) *captureCorps {
+	c := &captureCorps{src: src, max: plafond}
+	if taille > 0 && plafond > 0 {
+		reserve := int64(plafond)
+		if taille < reserve {
+			reserve = taille
+		}
+		c.buf = make([]byte, 0, reserve)
+	}
+	return c
 }
 
 // Read relaie la source sans rien changer (octets ni erreur) et, tant que la
@@ -101,12 +117,15 @@ func (c *captureCorps) Close() error { return c.src.Close() }
 
 // figer arrête la copie et rend le préfixe, qui ne sera plus jamais modifié.
 // complet : la source a rendu io.EOF sans erreur, et tout ce qui a été lu tient
-// dans le préfixe.
+// dans le préfixe. La capture lâche le préfixe : la goroutine du Transport, qui
+// peut garder une référence à la capture après le gestionnaire, ne le fait pas
+// survivre à l'analyse.
 func (c *captureCorps) figer() (prefixe []byte, lus int64, complet bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.fige = true
-	return c.buf, c.lus, c.eof && c.err == nil && c.lus == int64(len(c.buf))
+	prefixe, c.buf = c.buf, nil
+	return prefixe, c.lus, c.eof && c.err == nil && c.lus == int64(len(prefixe))
 }
 
 // requeteMultipart : ce que le journal retient de la requête. Ni requête
@@ -142,16 +161,19 @@ func (s *Server) journaliserMultipart(rm requeteMultipart, rec ThreatRecord) {
 }
 
 // limiteCaptureAtteinte : plus de jeton libre, donc pas de capture. La ligne
-// porte la capacité réelle du sémaphore (16 en production).
+// porte la capacité réelle du sémaphore (16 en production). Sa catégorie n'est
+// pas multipart-limite, réservé au plafond de parties de l'analyseur (R10).
 func (s *Server) limiteCaptureAtteinte(rm requeteMultipart) {
 	s.journaliserMultipart(rm, ThreatRecord{
-		Category: "multipart-limite", Severity: "audit", Action: "multipart-limite",
+		Category: "multipart-concurrence", Severity: "audit", Action: "multipart-concurrence",
 		Signaux: map[string]int{"concurrence": cap(s.capturesMultipart)},
 	})
 }
 
 // analyserCaptureMultipart fige la capture, l'analyse et journalise. Appelée
-// par defer dans le gestionnaire, donc après le relais et la réponse.
+// par defer dans le gestionnaire, donc après le relais et la réponse. relaye
+// dit que le corps a été confié au proxy : faux (403, ban, cache média), la
+// capture est figée et le jeton rendu, sans analyse ni ligne.
 //
 // MODE DETECT SEULEMENT : aucun appel au ban, à nft ni à l'escalade. La
 // gravité journalisée est celle de la signature ; elle part vers actord comme
@@ -159,9 +181,9 @@ func (s *Server) limiteCaptureAtteinte(rm requeteMultipart) {
 // d'une gravité « audit », qui ne compte pas comme hostile.
 //
 // Le jeton est rendu APRÈS l'analyse : le préfixe vit jusque-là, et la borne
-// mémoire couvre aussi les allocations de l'analyseur.
-func (s *Server) analyserCaptureMultipart(capt *captureCorps, rm requeteMultipart) {
-	prefixe, lus, complet := capt.figer()
+// mémoire couvre aussi les allocations de l'analyseur. Son defer est posé
+// avant tout le reste : il est rendu quoi qu'il arrive.
+func (s *Server) analyserCaptureMultipart(capt *captureCorps, rm requeteMultipart, relaye bool) {
 	defer s.rendreCapture()
 	// Une panique de l'analyseur ne doit pas casser une réponse déjà relayée :
 	// en detect, l'analyse n'a pas le droit d'empêcher quoi que ce soit. Ce
@@ -170,11 +192,16 @@ func (s *Server) analyserCaptureMultipart(capt *captureCorps, rm requeteMultipar
 	// traverserait ce defer.
 	defer func() {
 		if e := recover(); e != nil {
-			log.Printf("sbxwaf: ERREUR analyse multipart host=%s path=%s ip=%s : %v", rm.host, rm.path, rm.ip, e)
+			log.Printf("sbxwaf: ERREUR analyse multipart host=%s path=%s ip=%s : %v\n%s",
+				rm.host, rm.path, rm.ip, e, debug.Stack())
 		}
 	}()
-	if lus == 0 || s.rules == nil {
-		return // corps jamais lu (requête bloquée avant le relais, backend muet)
+	prefixe, lus, complet := capt.figer()
+	// Non relayé : un chemin texte a pu lire la fenêtre au travers de la
+	// capture avant un 403 ; ce corps n'a jamais atteint le backend. lus == 0 :
+	// le proxy n'a rien lu (backend muet, erreur de connexion).
+	if !relaye || lus == 0 || s.rules == nil {
+		return
 	}
 	res := analyserMultipart(prefixe, rm.contentType, !complet, LimitesMultipart{})
 	signaux := res.Signaux()
