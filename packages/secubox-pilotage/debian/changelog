@@ -1,0 +1,37 @@
+secubox-pilotage (0.1.1-1~trixie1) trixie; urgency=medium
+
+  * Relecture finale L1 (ref #3126) :
+    - Compatibilité uvicorn 0.54 : un SystemExit(3) levé par `serve` au démarrage manqué est traité comme un échec de
+      démarrage (arrêt de l'autre serveur, code de sortie 1), au lieu de sortir du lanceur sans nettoyage.
+    - I4/R38 : une valeur de plus de 4 096 caractères (`Exposure.Names` d'une box à ~150 noms) rendait chaque relève
+      « partielle » à jamais (fantômes jamais purgés, `inventaire_le` figé). Plafond par valeur porté à 64 Kio ; au-delà
+      la valeur est tronquée (début de la liste, de l'objet ou de la chaîne) et marquée (`inventaire_tronques` de
+      `GET /boxes/{x}`), jamais jetée. Un paramètre refusé seul ne rend plus la relève partielle (une ligne de journal
+      par box et par heure). Plafond de 10 000 lignes par box inchangé.
+    - M4 : l'inventaire n'écrit que les lignes changées (upsert différentiel, suppression des seuls chemins disparus) ;
+      au-delà du plafond, ce qui vient d'être reçu n'est jamais purgé. Colonne `tronque` ajoutée aux bases existantes.
+    - M5 : `POST /canal/v1/bonjour` plafonné à un par box et par 10 s (chaque appel est une écriture SQLite) ; le surplus
+      reçoit 429 avant la lecture du corps, l'agent recule puis se réannonce.
+    - M14 : `tests/test_contrat_go.py` rejoue contre le vrai canal (et range par le vrai stockage) les enveloppes figées
+      par le client Go de l'agent : une dérive de format côté Go casse ce test.
+    - N1/R39 : l'inventaire d'une box est aussi plafonné en octets (1 Mio de valeurs sérialisées, `OCTETS_MAX`) : une relève
+      dégradée qui dépasse le plafond purge, dans la même transaction, les plus anciennes lignes absentes de la passe
+      courante (jamais celles de la passe). L'unité `secubox-pilotage.service` reçoit `MemoryHigh=96M` et `MemoryMax=128M`.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 11:45:10 +0100
+
+secubox-pilotage (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Première version (ref #3126, L1 « Voir ») : maître du pilotage distant. Service secubox-pilotage-api (un processus, une boucle,
+    lifespan actif pour les deux applications, sortie en erreur si l'une ne démarre pas). Sockets créées par systemd (secubox-pilotage.socket :
+    /run/secubox/pilotage.sock, 0660, groupe secubox ; secubox-pilotage-canal.socket : pilotage-canal.sock, 0660, groupe www-data), utilisateur dédié secubox-pilotage, unité durcie, profil AppArmor enforce.
+  * secubox-pilotage-ecoute (root) : un écouteur nginx par IP de tunnel présente (10.10.0.1 et 10.64.0.1, port 8472, X-Real-IP posé par
+    nginx, 256 Kio, 60 s), retiré si nginx -t échoue, rechargement seulement si le rendu change ; règles nft insérées à chaud avant le
+    drop de inet secubox_filter, jamais nft -f du fichier entier. Déclencheurs .path et .timer.
+  * Route d'administration /api/v1/pilotage/ (aucune entrée de menu : la page Flotte de l'annuaire porte le panneau). Journal d'audit commun
+    en ajout seul (AppArmor `a`), ACL nominative posée par secubox-pilotage-audit-acl (fichier ordinaire, un seul lien, propriétaire secubox).
+  * Écouteur de tunnel : realip hérité neutralisé (X-Real-IP = $realip_remote_addr), 4 connexions par adresse, règles nft dans `inet filter` ET
+    `inet secubox_filter` juste avant le drop, retirées au prerm ; sysctl ip_nonlocal_bind propre au paquet ; dossier de données préparé par
+    descripteur (init_donnees.py).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 10:00:00 +0100

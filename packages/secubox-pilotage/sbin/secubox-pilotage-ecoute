@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# SecuBox-Deb :: secubox-pilotage-ecoute — écouteurs nginx du canal de pilotage sur les IP de tunnel (#3126)
+#
+# Usage : secubox-pilotage-ecoute            pose écouteurs et règles
+#         secubox-pilotage-ecoute --retirer  retire le fichier nginx et les deux règles (fichier et vif) ; appelé par le prerm
+#
+# Rend /etc/nginx/conf.d/secubox-pilotage-canal.conf : un « server » par IP de tunnel PRÉSENTE sur cet hôte
+# (10.10.0.1 sur wg-mesh, 10.64.0.1 sur wg-autoload), jamais 0.0.0.0. Pose aussi les deux règles nft qui ouvrent tcp/8472 sur ces
+# interfaces, AVANT la règle drop de la chaîne input de `inet filter` (base unifiée de secubox-hardening >= 1.5.1, gk2) OU de
+# `inet secubox_filter` (anciennes bases), en fichier ET à chaud (jamais `nft -f` du fichier entier : il commence par
+# `flush ruleset` et efface bans, ensembles NAC, sortie tor — #1721, #1769).
+#
+# Appelé par le postinst et par secubox-pilotage-ecoute.{path,timer} (apparition ou changement des interfaces). Idempotent :
+# nginx n'est rechargé que si le rendu change.
+set -euo pipefail
+
+# PILOTAGE_ECOUTE_RACINE : préfixe des fichiers (essais seulement). Sans lui, il faut être root.
+R="${PILOTAGE_ECOUTE_RACINE:-}"
+[[ $EUID -eq 0 || -n "$R" ]] || { echo "doit tourner en root" >&2; exit 1; }
+
+TPL="$R/usr/share/secubox/pilotage/pilotage-canal.conf.tpl"
+CONF_DIR="$R/etc/nginx/conf.d"
+CONF="$CONF_DIR/secubox-pilotage-canal.conf"
+NFT_CONF="$R/etc/nftables.conf"
+PORT=8472
+TABLES=(filter secubox_filter)   # tables « inet » portant la chaîne input du pare-feu de la box
+
+# interface:adresse du maître:réseau autorisé
+TUNNELS=("wg-mesh:10.10.0.1:10.10.0.0/24" "wg-autoload:10.64.0.1:10.64.0.0/16")
+
+# nginx -t HORS du bac à sable de l'unité (R30) : il crée de vraies sockets AF_INET, lie :80/:443 et écrit /run/nginx.pid, ce que
+# RestrictAddressFamilies, ProtectSystem=strict et l'absence de CAP_NET_BIND_SERVICE lui refusent (il échouerait TOUJOURS, et le fichier serait
+# retiré à chaque passage). systemd-run le lance dans le contexte de PID 1 (même patron que secubox-netmodes) ; --pipe rend sa sortie.
+# Sans systemd en marche (chroot d'image) : nginx -t direct.
+nginx_t() {
+    if [ -d "$R/run/systemd/system" ] && command -v systemd-run >/dev/null 2>&1; then
+        systemd-run --wait --pipe --collect --quiet /usr/sbin/nginx -t >/dev/null 2>&1
+    else
+        nginx -t >/dev/null 2>&1
+    fi
+}
+
+present() {  # interface adresse -> 0 si l'interface porte exactement cette adresse IPv4
+    ip -4 -o addr show dev "$1" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep -qxF -- "$2"
+}
+
+REGLES_TOUTES=('iifname "wg-mesh" ip saddr 10.10.0.0/24 tcp dport 8472 accept' 'iifname "wg-autoload" ip saddr 10.64.0.0/16 tcp dport 8472 accept')
+
+# --- 0. --retirer ------------------------------------------------------------------------------------------------------------------
+if [ "${1:-}" = "--retirer" ]; then
+    rm -f "$CONF"
+    for regle in "${REGLES_TOUTES[@]}"; do
+        if [ -f "$NFT_CONF" ] && grep -qF -- "$regle" "$NFT_CONF"; then
+            nouveau=$(mktemp "$NFT_CONF.sbxtmp.XXXXXX")
+            grep -vF -- "$regle" "$NFT_CONF" > "$nouveau" || true
+            chmod --reference="$NFT_CONF" "$nouveau" 2>/dev/null || true
+            mv -f "$nouveau" "$NFT_CONF"
+        fi
+        for table in "${TABLES[@]}"; do
+            nft list chain inet "$table" input >/dev/null 2>&1 || continue
+            while read -r h; do
+                if [ -n "$h" ]; then nft delete rule inet "$table" input handle "$h" >/dev/null 2>&1 || true; fi
+            done < <(nft -a list chain inet "$table" input 2>/dev/null | grep -F -- "$regle" | sed -n 's/.*# handle \([0-9][0-9]*\)$/\1/p')
+        done
+    done
+    if command -v nginx >/dev/null 2>&1 && nginx_t; then systemctl reload nginx 2>/dev/null || true; fi
+    exit 0
+fi
+
+# --- 1. Rendu nginx --------------------------------------------------------------------------------------------------------------
+actifs=()
+rendu="# Rendu par secubox-pilotage-ecoute (secubox-pilotage) — ne pas éditer à la main."$'\n'
+rendu+="limit_conn_zone \$binary_remote_addr zone=pilotage_canal:1m;"$'\n'
+if [ -f "$TPL" ]; then
+    for t in "${TUNNELS[@]}"; do
+        IFS=: read -r iface ip src <<<"$t"
+        if present "$iface" "$ip"; then
+            actifs+=("$iface:$ip:$src")
+            bloc=$(sed -e '/^#/d' -e "s|__IP__|$ip|g" -e "s|__SOURCE__|$src|g" "$TPL")
+            rendu+="${bloc}"$'\n'
+        fi
+    done
+fi
+
+avant=$(cat "$CONF" 2>/dev/null || true)
+refuse=0
+if [ "${#actifs[@]}" -gt 0 ]; then
+    # Écriture atomique : fichier temporaire créé en O_EXCL dans le même dossier (nom sans .conf : nginx ne l'inclut pas), puis rename.
+    tmp=$(mktemp "$CONF_DIR/.secubox-pilotage-canal.XXXXXX")
+    trap 'rm -f "$tmp"' EXIT
+    printf '%s' "$rendu" > "$tmp"
+    chmod 0644 "$tmp"
+    mv -f "$tmp" "$CONF"
+    trap - EXIT
+    # Un rendu cassé ne doit JAMAIS rester : le prochain nginx -t échouerait pour toute la box.
+    if command -v nginx >/dev/null 2>&1 && ! nginx_t; then
+        rm -f "$CONF"
+        refuse=1
+        echo "[pilotage] écouteur :$PORT refusé par nginx -t — retiré" >&2
+    fi
+else
+    rm -f "$CONF"
+fi
+apres=$(cat "$CONF" 2>/dev/null || true)
+# Un rendu refusé ne se recharge pas : le nginx vivant garde sa configuration, et un rechargement n'a rien de bon à appliquer.
+if [ "$avant" != "$apres" ] && [ "$refuse" = 0 ]; then
+    systemctl reload nginx 2>/dev/null || true
+    if [ -f "$CONF" ]; then
+        echo "[pilotage] écouteur :$PORT sur $(printf '%s ' "${actifs[@]%%:*}")"
+    else
+        echo "[pilotage] écouteur :$PORT retiré"
+    fi
+fi
+
+# --- 2. Règles nft ---------------------------------------------------------------------------------------------------------------
+# À chaud : `nft insert rule ... handle N` place la règle JUSTE AVANT la règle drop (handle N), donc après les règles de ban que les autres
+# paquets insèrent en tête, jamais devant elles. Sans règle drop explicite (policy drop seule), `nft add` ajoute en fin de chaîne.
+# Jamais `nft -f` du fichier entier. Idempotent, et répare une règle vive perdue alors que le fichier l'avait déjà.
+_a_chaud() {  # table règle
+    local table="$1" regle="$2" h
+    nft list chain inet "$table" input >/dev/null 2>&1 || return 1
+    nft list chain inet "$table" input 2>/dev/null | grep -qF -- "$regle" && return 0
+    h=$(nft -a list chain inet "$table" input 2>/dev/null | sed -n 's/^[[:space:]]*drop[[:space:]]*# handle \([0-9][0-9]*\)$/\1/p' | head -n1)
+    if [ -n "$h" ]; then
+        # shellcheck disable=SC2086  # la règle est une liste de mots nft
+        nft insert rule inet "$table" input handle "$h" $regle >/dev/null 2>&1 || true
+    else
+        # shellcheck disable=SC2086
+        nft add rule inet "$table" input $regle >/dev/null 2>&1 || true
+    fi
+    return 0
+}
+
+# Règle durable : dans le bloc « chain input » de la table, avant son premier drop seul sur sa ligne (ou en fin de chaîne s'il n'y en a pas) ;
+# jamais dans forward. Le fichier nouveau est validé à blanc (`nft -c -f`) avant de remplacer l'ancien. Rend 0 si la table existe dans le fichier.
+_au_fichier() {  # table règle
+    local table="$1" regle="$2" nouveau
+    [ -f "$NFT_CONF" ] || return 1
+    grep -Eq "^[[:space:]]*table[[:space:]]+inet[[:space:]]+${table}[[:space:]]*\{" "$NFT_CONF" || return 1
+    nouveau=$(mktemp "$NFT_CONF.sbxtmp.XXXXXX")
+    awk -v table="$table" -v regle="$regle" '
+        # dans_t / dans_c repartent de zéro à chaque table et à chaque chaîne ; « déjà là » ne compte que la table visée.
+        /^[ \t]*table[ \t]/ { dans_t = ($0 ~ "^[ \t]*table[ \t]+inet[ \t]+" table "[ \t]*\\{"); dans_c = 0 }
+        /^[ \t]*chain[ \t]/ { dans_c = (dans_t && $0 ~ /^[ \t]*chain[ \t]+input[ \t]*\{/) }
+        dans_t && index($0, regle) { deja = 1 }
+        dans_c && !fait && /^[ \t]*drop[ \t]*$/ { print "        " regle; fait = 1 }
+        dans_c && !fait && /^[ \t]*\}[ \t]*$/ { print "        " regle; fait = 1 }
+        { print }
+        dans_c && /^[ \t]*\}[ \t]*$/ { dans_c = 0 }
+        END { exit deja ? 3 : 0 }
+    ' "$NFT_CONF" > "$nouveau"
+    case $? in
+        3) rm -f "$nouveau"; return 0 ;;     # déjà là
+        0) ;;
+        *) rm -f "$nouveau"; return 0 ;;
+    esac
+    if [ -s "$nouveau" ] && grep -qF -- "$regle" "$nouveau" && nft -c -f "$nouveau" >/dev/null 2>&1; then
+        chmod --reference="$NFT_CONF" "$nouveau" 2>/dev/null || true
+        mv -f "$nouveau" "$NFT_CONF"
+        echo "[pilotage] :$PORT ouvert dans $NFT_CONF (table inet $table)"
+    else
+        rm -f "$nouveau"
+        echo "[pilotage] nft -c a refusé le nouveau $NFT_CONF (table inet $table) : fichier laissé intact, règle non écrite" >&2
+    fi
+    return 0
+}
+
+if [ "${#actifs[@]}" -gt 0 ]; then
+    pose=0
+    for t in "${actifs[@]}"; do
+        IFS=: read -r iface _ src <<<"$t"
+        regle="iifname \"$iface\" ip saddr $src tcp dport $PORT accept"
+        for table in "${TABLES[@]}"; do
+            _au_fichier "$table" "$regle" && pose=1
+            _a_chaud "$table" "$regle" && pose=1
+        done
+    done
+    if [ "$pose" = 0 ]; then
+        echo "[pilotage] aucune table « inet filter » ni « inet secubox_filter » (chaîne input) trouvée, dans $NFT_CONF comme en vif : aucune règle posée, tcp/$PORT reste fermé par le pare-feu" >&2
+    fi
+fi
+exit 0

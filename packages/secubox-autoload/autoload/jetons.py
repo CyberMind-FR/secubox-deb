@@ -131,6 +131,13 @@ def _nom(champ: str, valeur: Optional[str], facultatif: bool = False) -> Optiona
     return valeur
 
 
+def etat_abonnement(abonnement: str, expire_le: Optional[int], maintenant: float) -> str:
+    """L'état d'abonnement CALCULÉ : un abonnement `actif` dont l'échéance est passée est `echu` (actif | suspendu | revoque | echu)."""
+    if abonnement == "actif" and expire_le is not None and expire_le <= maintenant:
+        return "echu"
+    return abonnement
+
+
 class Registre:
     def __init__(self, db: Path = DB_DEFAUT, audit: Optional[Path] = AUDIT_DEFAUT, horloge: Callable[[], float] = time.time):
         self.db, self.audit_chemin, self._horloge = Path(db), (Path(audit) if audit else None), horloge
@@ -344,8 +351,7 @@ class Registre:
                 "FROM jetons j LEFT JOIN clients c ON c.client=j.client WHERE " + " AND ".join(w) + " ORDER BY j.id", a)]
         now = self._maintenant()
         for x in lignes:
-            if x["abonnement"] == "actif" and x["abonnement_expire_le"] is not None and x["abonnement_expire_le"] <= now:
-                x["abonnement"] = "echu"
+            x["abonnement"] = etat_abonnement(x["abonnement"], x["abonnement_expire_le"], now)
         return lignes
 
     # ── suivi des box (#2190) ────────────────────────────────────────────────────────────────────────────────

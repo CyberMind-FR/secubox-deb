@@ -1,0 +1,3 @@
+server {
+    server_name admin.gk5.secubox.in;
+}

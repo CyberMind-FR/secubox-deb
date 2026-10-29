@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de sbx-pilotage-agent (#3126, L1 lecture seule).
+# Posé dans /etc/apparmor.d/usr.sbin.sbx-pilotage-agent, chargé par le postinst.
+# Tout ce qui n'est pas listé est refusé. Aucune écriture de fichier, aucune
+# capacité, aucune écoute : la connexion au maître est sortante seulement.
+
+#include <tunables/global>
+
+/usr/sbin/sbx-pilotage-agent {
+  #include <abstractions/base>
+
+  # --- Réseau : sortie vers le maître, jamais d'écoute (ni listen, ni accept).
+  # bind : liaison de l'adresse de SORTIE du tunnel (IPSource), port éphémère.
+  network (create, bind, connect, shutdown, getattr, setattr, getopt, setopt, send, receive) inet stream,
+  # systemctl parle à systemd par la socket D-Bus ; netlink : adresses des interfaces (lecture).
+  network (create, connect, shutdown, getattr, setattr, getopt, setopt, send, receive) unix stream,
+  network netlink raw,
+
+  # --- Le binaire lui-même et le seul programme lancé : systemctl (même profil).
+  /usr/sbin/sbx-pilotage-agent mr,
+  /usr/bin/systemctl rix,
+  /usr/lib/systemd/** r,
+  /etc/systemd/** r,
+  /run/systemd/ r,
+  /run/systemd/** r,
+  /run/dbus/system_bus_socket rw,
+  /sys/fs/cgroup/ r,
+  # D-Bus système, limité au gestionnaire de systemd en lecture (précédent : secubox-profiles-releve).
+  dbus send bus=system path=/org/freedesktop/DBus interface=org.freedesktop.DBus
+       member={Hello,AddMatch,RemoveMatch,GetNameOwner,NameHasOwner,GetConnectionUnixUser} peer=(name=org.freedesktop.DBus),
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface={org.freedesktop.DBus.Properties,org.freedesktop.systemd1.Manager}
+       member={Get,GetAll,GetUnit,LoadUnit,ListUnitsByNames,ListUnitsByPatterns} peer=(name=org.freedesktop.systemd1),
+  dbus receive bus=system peer=(name=org.freedesktop.systemd1),
+  dbus receive bus=system peer=(name=org.freedesktop.DBus),
+  /etc/localtime r,
+  /etc/passwd r,
+  /etc/nsswitch.conf r,
+
+  # --- Sources de lecture : /proc (système, processus par comm, réseau, boot_id), /sys (réseau, carte).
+  @{PROC}/ r,
+  @{PROC}/** r,
+  /sys/class/net/ r,
+  /sys/class/net/** r,
+  # Les liens de /sys/class/net/<if>/ se résolvent sous /sys/devices/**/net/<if>/ (adresse MAC).
+  /sys/devices/**/net/** r,
+  # /sys/class/dmi/id est un lien vers /sys/devices/virtual/dmi/id/ (x86 : modèle et fabricant).
+  /sys/devices/virtual/dmi/id/{product_name,sys_vendor} r,
+  # /proc/device-tree est un lien : AppArmor contrôle le chemin résolu (modèle de carte).
+  /sys/firmware/devicetree/base/model r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+
+  # --- Paquets, exposition, état du pilotage : fichiers nommés, lecture seule.
+  /var/lib/dpkg/status r,
+  /etc/nginx/sites-enabled/ r,
+  /etc/nginx/sites-enabled/* r,
+  /etc/nginx/sites-available/* r,
+  # Réglages et drapeau : ouverts par descripteur, sans suivre de lien, root:root exigé (R36).
+  /etc/secubox/pilotage-agent.env r,
+  /etc/secubox/pilotage/mains-liees r,
+  /var/lib/secubox/profiles/actif r,
+
+  # Les secrets restent interdits, quoi qu'une règle large ajoute un jour.
+  deny /etc/secubox/secrets/** r,
+  deny /etc/shadow r,
+  # Jamais la ligne de commande ni l'environnement d'un processus (secrets possibles) : seulement comm/stat/statm.
+  deny @{PROC}/[0-9]*/{cmdline,environ} r,
+  deny /root/** rwx,
+}

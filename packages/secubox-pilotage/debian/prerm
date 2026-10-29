@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+case "$1" in
+  remove|deconfigure)
+    systemctl stop secubox-pilotage-ecoute.timer secubox-pilotage-ecoute.path >/dev/null 2>&1 || true
+    systemctl stop secubox-pilotage.service || true
+    systemctl stop secubox-pilotage.socket secubox-pilotage-canal.socket >/dev/null 2>&1 || true
+    # Règles nft du canal (fichier et vif) et écouteur nginx : retirés avec le service (l'assistant est encore là à ce stade).
+    if [ -x /usr/sbin/secubox-pilotage-ecoute ]; then /usr/sbin/secubox-pilotage-ecoute --retirer || true; fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

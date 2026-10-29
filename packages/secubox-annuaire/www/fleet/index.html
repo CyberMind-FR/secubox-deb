@@ -131,6 +131,9 @@
         <div class="pan" id="al-pan" hidden><h3>Box Auto-Load <i><span id="al-n">0</span> enrôlée(s), tunnel wg-autoload, sans annuaire</i></h3>
             <div class="tw"><table class="matrix"><thead><tr><th>Client</th><th>Profil</th><th>Statut</th><th>Progression</th><th>Étape</th><th>Dernière activité</th></tr></thead><tbody id="al-body"></tbody></table></div>
         </div>
+        <div class="pan" id="pil-pan" hidden><h3>Pilotage <i><span id="pil-n">0</span> box relevée(s) par le maître, lecture seule</i></h3>
+            <div class="tw"><table class="matrix"><thead><tr><th>Box</th><th>Réseau</th><th>En ligne</th><th>Mém. dispo</th><th>Swap</th><th>CPU</th><th>Services en échec</th><th>Boucles 24 h</th><th>Mains liées</th></tr></thead><tbody id="pil-body"></tbody></table></div>
+        </div><!-- fin pil-pan -->
         <div class="pan detail" id="detail" hidden><h3>Détail <i id="detTitre"></i></h3><div class="kv" id="detKv"></div></div>
     </div></div></main>
 
@@ -278,6 +281,45 @@
             hauteur();
         }
 
+        // ===== pilotage =====
+        // Inventaire des box relevé par le maître (GET /api/v1/pilotage/boxes), L1 : lecture seule, aucune action. Module absent (404), session refusée (401), erreur ou liste vide : panneau masqué.
+        // Une valeur null s'affiche « — » (jamais 0 inventé) ; mains_liees null = « inconnu ». Rafraîchi toutes les 30 s, suspendu onglet masqué,
+        // et aussitôt au retour sur l'onglet.
+        const PIL_MS = 30000;
+        const pilNum = (v, suffixe) => (v == null || !isFinite(+v)) ? '—' : fmt(v) + (suffixe || '');
+        function pilReseau(b) { return b.reseau === 'maillage' ? 'maillage' : (b.client ? 'client ' + b.client : (b.reseau || '—')); }
+        // vu_le illisible (texte, infini, négatif) : « jamais », jamais un RangeError d'Invalid Date hors du try
+        function pilVu(v) { const s = typeof v === 'number' || typeof v === 'string' ? Number(v) : NaN; return Number.isFinite(s) && s > 0 && s < 1e11 ? ago(new Date(s * 1000).toISOString()) : 'jamais'; }
+        async function chargerPilotage() {
+            let liste = [];
+            try {
+                if (DEMO) liste = [{ nom: 'box-exemple', reseau: 'maillage', client: null, en_ligne: true, vu_le: Math.floor(Date.now() / 1000) - 20, memoire_dispo_mo: 812, swap_utilise_pct: 12, cpu_pct: 3.4, services_en_echec: 0, boucles_24h: 2, mains_liees: true },
+                    { nom: 'client-exemple', reseau: 'autoload', client: 'lgm', en_ligne: false, vu_le: Math.floor(Date.now() / 1000) - 7200, memoire_dispo_mo: null, swap_utilise_pct: null, cpu_pct: null, services_en_echec: null, boucles_24h: 0, mains_liees: null }];
+                else {
+                    const h = {}, t = token(); if (t) h.Authorization = 'Bearer ' + t;
+                    const r = await fetch('/api/v1/pilotage/boxes', { headers: h, credentials: 'same-origin', cache: 'no-store' });
+                    if (r.ok) { const d = await r.json(); if (Array.isArray(d)) liste = d; }
+                }
+            } catch (e) { liste = []; }
+            const body = $('pil-body'); clear(body);
+            $('pil-pan').hidden = !liste.length; $('pil-n').textContent = String(liste.length);
+            liste.forEach(b => {
+                const on = b.en_ligne === true, tr = el('tr', on ? null : 'is-stale');   // sans classe de ligne cliquable (curseur main) : aucun clic ici
+                const st = el('td'), dot = el('span', 'dot ' + (on ? 'ok' : 'stale'));
+                st.append(dot, el('span', null, on ? 'en ligne' : 'vu ' + pilVu(b.vu_le)));
+                const ml = el('td'), pm = b.mains_liees === true ? ['up', 'oui'] : b.mains_liees === false ? ['down', 'non'] : ['', 'inconnu'];
+                ml.append(el('span', 'pill ' + pm[0], pm[1]));
+                tr.append(el('td', 'hostname-col', b.nom || b.cle || '—'), el('td', null, pilReseau(b)), st,
+                    el('td', null, pilNum(b.memoire_dispo_mo, ' Mo')), el('td', null, pilNum(b.swap_utilise_pct, ' %')), el('td', null, pilNum(b.cpu_pct, ' %')),
+                    el('td', null, pilNum(b.services_en_echec)), el('td', null, pilNum(b.boucles_24h)), ml);
+                body.append(tr);
+            });
+            hauteur();
+        }
+        setInterval(() => { if (document.visibilityState !== 'hidden') chargerPilotage(); }, PIL_MS);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') chargerPilotage(); });   // retour sur l'onglet
+        // ===== fin pilotage =====
+
         async function loadFleet() {
             chargerAutoload(); chargerP2p();
             try {
@@ -294,7 +336,7 @@
         }
         window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
         if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
-        $('btn-refresh').addEventListener('click', loadFleet);
+        $('btn-refresh').addEventListener('click', () => { loadFleet(); chargerPilotage(); });
 
         function demo() {
             const t = new Date(Date.now() - 20000).toISOString(), vieux = new Date(Date.now() - 3600 * 1000 * 5).toISOString();
@@ -304,7 +346,7 @@
                 { node_did: 'did:plc:' + 'c'.repeat(32), hostname: '<img src=x onerror=alert(1)>', cpu_pct: null, mem_pct: 40, disk_pct: 95, load1: null, uptime_s: null, counters: {}, modules_down: ['<b>x</b>'], health: 'down', stale: true, ts: vieux }] };
         }
         if (DEMO) $('demo').hidden = false;
-        loadFleet();
+        loadFleet(); chargerPilotage();
         setInterval(loadFleet, REFRESH_MS);
     </script>
 </body>

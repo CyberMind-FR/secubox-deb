@@ -1,0 +1,46 @@
+{
+ "route": "/canal/v1/reponses",
+ "requete": {
+  "body": {
+   "paths": [
+    "Device.DeviceInfo.",
+    "Device.X_SECUBOX_Services.",
+    "Device.X_SECUBOX_Exposure.Names"
+   ]
+  },
+  "type": "GET"
+ },
+ "envoi": {
+  "msg_id": "00000000000000a1",
+  "type": "GET_RESP",
+  "body": {
+   "results": [
+    {
+     "path": "Device.DeviceInfo.",
+     "params": {
+      "Device.DeviceInfo.MemoryStatus.X_SECUBOX_Available": 262144,
+      "Device.DeviceInfo.ModelName": "Globalscale Marvell ESPRESSOBin Board V7",
+      "Device.DeviceInfo.ProcessStatus.CPUUsage": 12.5,
+      "Device.DeviceInfo.UpTime": 2036
+     },
+     "failed": [
+      "systemd"
+     ]
+    },
+    {
+     "path": "Device.X_SECUBOX_Services.",
+     "err": "source indisponible : systemd"
+    },
+    {
+     "path": "Device.X_SECUBOX_Exposure.Names",
+     "params": {
+      "Device.X_SECUBOX_Exposure.Names": [
+       "admin.gk5.secubox.in",
+       "hub.gk5.secubox.in"
+      ]
+     }
+    }
+   ]
+  }
+ }
+}
