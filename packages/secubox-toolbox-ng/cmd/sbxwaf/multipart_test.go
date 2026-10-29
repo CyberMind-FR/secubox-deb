@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -20,9 +21,9 @@ type partieTest struct {
 	contenu       string
 }
 
-// corpsMultipart fabrique un corps multipart/form-data. Une partie « fichier »
+// fabriquerMultipart fabrique un corps multipart/form-data. Une partie « fichier »
 // porte toujours un paramètre filename, même vide. lf = fins de ligne LF seules.
-func corpsMultipart(boundary string, parties []partieTest, lf bool) []byte {
+func fabriquerMultipart(boundary string, parties []partieTest, lf bool) []byte {
 	nl := "\r\n"
 	if lf {
 		nl = "\n"
@@ -47,7 +48,7 @@ func corpsImbrique() []byte {
 	for i := 0; i < 900; i++ {
 		ps = append(ps, partieTest{nom: fmt.Sprintf("files[R%05d][a][a][a]", i), filename: "f.txt", fichier: true, contenu: "y"})
 	}
-	return corpsMultipart("BND", ps, false)
+	return fabriquerMultipart("BND", ps, false)
 }
 
 func TestEstMultipartPHP(t *testing.T) {
@@ -95,7 +96,7 @@ func TestBoundaryPHP(t *testing.T) {
 }
 
 func TestAnalyserMultipartExploitProgress(t *testing.T) {
-	corps := corpsMultipart("BND", []partieTest{
+	corps := fabriquerMultipart("BND", []partieTest{
 		{nom: nomProgressPHP, contenu: "x"},
 		{nom: "a", filename: "1", fichier: true},
 		{nom: "b", filename: "2", fichier: true},
@@ -108,7 +109,7 @@ func TestAnalyserMultipartExploitProgress(t *testing.T) {
 }
 
 func TestAnalyserMultipartProgressApresFichiers(t *testing.T) {
-	corps := corpsMultipart("BND", []partieTest{
+	corps := fabriquerMultipart("BND", []partieTest{
 		{nom: "a", filename: "1", fichier: true},
 		{nom: "b", filename: "2", fichier: true},
 		{nom: nomProgressPHP, contenu: "x"},
@@ -165,16 +166,16 @@ func TestAnalyserMultipartLF(t *testing.T) {
 		{nom: "a[b]", filename: "1", fichier: true},
 		{nom: "c", filename: "2", fichier: true},
 	}
-	crlf := analyserMultipart(corpsMultipart("BND", ps, false), ctTest, false, LimitesMultipart{})
-	lf := analyserMultipart(corpsMultipart("BND", ps, true), ctTest, false, LimitesMultipart{})
-	if lf.Statut != MultipartAnalyse || lf != crlf {
+	crlf := analyserMultipart(fabriquerMultipart("BND", ps, false), ctTest, false, LimitesMultipart{})
+	lf := analyserMultipart(fabriquerMultipart("BND", ps, true), ctTest, false, LimitesMultipart{})
+	if lf.Statut != MultipartAnalyse || !reflect.DeepEqual(lf, crlf) {
 		t.Fatalf("LF %+v, CRLF %+v", lf, crlf)
 	}
 }
 
 func TestAnalyserMultipartFilename(t *testing.T) {
 	un := func(p partieTest) ResultatMultipart {
-		return analyserMultipart(corpsMultipart("BND", []partieTest{p}, false), ctTest, false, LimitesMultipart{})
+		return analyserMultipart(fabriquerMultipart("BND", []partieTest{p}, false), ctTest, false, LimitesMultipart{})
 	}
 	if r := un(partieTest{nom: "f", filename: "<?PHP x", fichier: true}); !r.FilenamePHP || r.FilenameObjet {
 		t.Errorf("<?PHP : %+v", r)
@@ -289,7 +290,7 @@ func TestAnalyserMultipartFrontiereFinale(t *testing.T) {
 }
 
 func TestAnalyserMultipartEnvoiLegitime(t *testing.T) {
-	corps := corpsMultipart("BND", []partieTest{
+	corps := fabriquerMultipart("BND", []partieTest{
 		{nom: "titre", contenu: "bonjour"},
 		{nom: "photo", filename: "p.jpg", fichier: true, contenu: "binaire"},
 	}, false)
@@ -320,7 +321,7 @@ func FuzzAnalyserMultipart(f *testing.F) {
 		copie := append([]byte(nil), corps...)
 		poison := append(append([]byte(nil), corps...), []byte(corpsSondeP3())...)
 		r := analyserMultipart(corps[:len(corps):len(corps)], ct, tronque, LimitesMultipart{PartiesMax: max})
-		if r2 := analyserMultipart(poison[:len(corps)], ct, tronque, LimitesMultipart{PartiesMax: max}); r2 != r {
+		if r2 := analyserMultipart(poison[:len(corps)], ct, tronque, LimitesMultipart{PartiesMax: max}); !reflect.DeepEqual(r2, r) {
 			t.Fatalf("lecture hors du préfixe : %+v / %+v", r, r2)
 		}
 		if string(copie) != string(corps) {

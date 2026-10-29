@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "version": "1.6.0",
+    "version": "1.7.0",
     "updated": "2026-10-29",
-    "changelog": "1.6.0 : catégorie php2shell (CVE-2026-109618/109619), signatures structurelles en mode detect sur les corps multipart des vhosts PHP, seuils de profondeur et de parties provisoires. 1.5.0 : motifs tires du journal de menaces de gk2 (5152 requetes externes). WordPress (422 req.), prefixes /wordpress|/wp (273), Livewire (4), et l'evasion par encodage %2e/%2f (23). Zero faux positif mesure sur les chemins legitimes du parc. Le contournement par encodage appelle une NORMALISATION du chemin avant comparaison — ces motifs bouchent le trou visible, ils ne ferment pas la famille (double encodage, UTF-8 sur-long).",
+    "changelog": "1.7.0 : catégories roundcube, nextcloud et php_requete (signatures structurelles équivalentes à PHP2Shell, #3273) et compléments php2shell-005 à php2shell-008, tout en mode detect, seuils provisoires étiquetés. 1.6.0 : catégorie php2shell (CVE-2026-109618/109619), signatures structurelles en mode detect sur les corps multipart des vhosts PHP, seuils de profondeur et de parties provisoires. 1.5.0 : motifs tires du journal de menaces de gk2 (5152 requetes externes). WordPress (422 req.), prefixes /wordpress|/wp (273), Livewire (4), et l'evasion par encodage %2e/%2f (23). Zero faux positif mesure sur les chemins legitimes du parc. Le contournement par encodage appelle une NORMALISATION du chemin avant comparaison — ces motifs bouchent le trou visible, ils ne ferment pas la famille (double encodage, UTF-8 sur-long).",
     "sources": [
       "OWASP Top 10",
       "CERT advisories",
@@ -973,6 +973,291 @@
       ],
       "_note": "graine ; maintenu à chaud par wafgen (secubox-cve-triage)"
     },
+    "roundcube": {
+      "name": "Roundcube (CVE-2025-49113 et suivantes)",
+      "severity": "high",
+      "mode": "detect",
+      "enabled": true,
+      "patterns": [],
+      "structural": [
+        {
+          "id": "rc-001",
+          "check": "rc_from_invalide",
+          "severity": "critical",
+          "services": [
+            "roundcube"
+          ],
+          "cve": "CVE-2025-49113, CVE-2026-114724",
+          "confidence": "haute",
+          "desc": "Paramètre _from hors du jeu de caractères que le correctif de Roundcube accepte (clé de session piégée)",
+          "source": [
+            "https://roundcube.net/news/2025/06/01/security-updates-1.6.11-and-1.5.10",
+            "https://github.com/roundcube/roundcubemail/commit/c069be58979a",
+            "https://fearsoff.org/research/roundcube"
+          ]
+        },
+        {
+          "id": "rc-002",
+          "check": "filename_session",
+          "severity": "high",
+          "services": [
+            "roundcube"
+          ],
+          "cve": "CVE-2025-49113, CVE-2026-114724",
+          "confidence": "haute",
+          "desc": "Nom de fichier multipart qui porte des marqueurs de sérialisation de session PHP",
+          "source": [
+            "https://roundcube.net/news/2025/06/01/security-updates-1.6.11-and-1.5.10",
+            "https://github.com/fearsoff-org/CVE-2025-49113",
+            "https://github.com/roundcube/roundcubemail/commit/833770d3d3c35cfde74cc2614d368f25a75b6f99"
+          ]
+        },
+        {
+          "id": "rc-003",
+          "check": "rc_crlf_imap",
+          "severity": "high",
+          "services": [
+            "roundcube"
+          ],
+          "cve": "CVE-2026-113386, CVE-2026-114720, CVE-2026-75002, CVE-2026-35538",
+          "confidence": "haute",
+          "desc": "CR, LF ou NUL dans un paramètre mono-ligne transmis à IMAP, ou drapeau _flag invalide",
+          "source": [
+            "https://roundcube.net/news/2026/10/19/security-updates-1.6.20-and-1.7.5",
+            "https://github.com/roundcube/roundcubemail/commit/f62879defc0330ae240c72b83b2d00a8ab337447",
+            "https://github.com/roundcube/roundcubemail/commit/242c6d6a150c850bd96d20d400261e71f8d11f9b",
+            "https://github.com/roundcube/roundcubemail/commit/73233abe581b",
+            "https://github.com/roundcube/roundcubemail/commit/b18a8fa8e815"
+          ]
+        },
+        {
+          "id": "rc-004",
+          "check": "rc_crlf_envoi",
+          "severity": "medium",
+          "services": [
+            "roundcube"
+          ],
+          "cve": "CVE-2026-114725",
+          "confidence": "moyenne",
+          "desc": "CR, LF ou NUL dans un champ d'en-tête de courrier à l'envoi (_subject, _from, _replyto, _followupto, _charset)",
+          "source": [
+            "https://roundcube.net/news/2026/10/19/security-updates-1.6.20-and-1.7.5",
+            "https://github.com/roundcube/roundcubemail/commit/79adcfc0c48012bbbe930278471425027fd7331c"
+          ]
+        },
+        {
+          "id": "rc-005",
+          "check": "rc_markasjunk_uid_requete",
+          "severity": "low",
+          "services": [
+            "roundcube"
+          ],
+          "cve": "CVE-2026-114719",
+          "confidence": "faible",
+          "desc": "POST du greffon markasjunk dont _uid est passé dans la chaîne de requête (contournement CSRF)",
+          "source": [
+            "https://roundcube.net/news/2026/10/19/security-updates-1.6.20-and-1.7.5"
+          ]
+        },
+        {
+          "id": "rc-006",
+          "check": "rc_image_non_raster",
+          "severity": "high",
+          "services": [
+            "roundcube"
+          ],
+          "cve": "CVE-2026-114727",
+          "confidence": "moyenne",
+          "desc": "Image envoyée comme photo de contact ou réglage dont les premiers octets sont un format non raster (SVG, EPS, PS, PDF, MVG)",
+          "source": [
+            "https://roundcube.net/news/2026/10/19/security-updates-1.6.20-and-1.7.5",
+            "https://github.com/roundcube/roundcubemail/commit/895d88af37720d2b46e4553f524013b2e1cb7665"
+          ]
+        }
+      ]
+    },
+    "nextcloud": {
+      "name": "Nextcloud (CVE-2026-77167 et suivantes)",
+      "severity": "medium",
+      "mode": "detect",
+      "enabled": true,
+      "patterns": [],
+      "structural": [
+        {
+          "id": "nc-001",
+          "check": "nc_partage_federe",
+          "severity": "medium",
+          "services": [
+            "nextcloud"
+          ],
+          "cve": "CVE-2026-77167",
+          "confidence": "moyenne",
+          "desc": "POST anonyme sur un chemin de partage fédéré alors que la fédération n'est pas utilisée",
+          "source": [
+            "https://github.com/nextcloud/security-advisories/security/advisories/GHSA-5572-968j-v7g5",
+            "https://github.com/nextcloud/server/pull/62091"
+          ]
+        },
+        {
+          "id": "nc-002",
+          "check": "nc_partage_federe_rafale",
+          "params": {
+            "appels_min": 6
+          },
+          "severity": "high",
+          "services": [
+            "nextcloud"
+          ],
+          "cve": "CVE-2026-77167",
+          "confidence": "moyenne",
+          "desc": "Plus de 5 appels anonymes de partage fédéré en 1 200 s depuis la même IP (limite du correctif)",
+          "source": [
+            "https://github.com/nextcloud/security-advisories/security/advisories/GHSA-5572-968j-v7g5",
+            "https://github.com/nextcloud/server/pull/62091"
+          ]
+        },
+        {
+          "id": "nc-003",
+          "check": "nc_proxy_agenda",
+          "severity": "medium",
+          "services": [
+            "nextcloud"
+          ],
+          "cve": "CVE-2026-45281",
+          "confidence": "moyenne",
+          "desc": "PROPPATCH sur un principal calendar-proxy-read ou calendar-proxy-write",
+          "source": [
+            "https://github.com/nextcloud/security-advisories/security/advisories/GHSA-hrrv-mp25-26vv"
+          ]
+        },
+        {
+          "id": "nc-004",
+          "check": "nc_proxy_agenda_autrui",
+          "severity": "high",
+          "services": [
+            "nextcloud"
+          ],
+          "cve": "CVE-2026-45281",
+          "confidence": "moyenne",
+          "desc": "PROPPATCH calendar-proxy dont l'uid du chemin diffère de l'utilisateur authentifié",
+          "source": [
+            "https://github.com/nextcloud/security-advisories/security/advisories/GHSA-hrrv-mp25-26vv"
+          ]
+        },
+        {
+          "id": "nc-005",
+          "check": "nc_put_non_raster",
+          "severity": "medium",
+          "services": [
+            "nextcloud"
+          ],
+          "cve": "CVE-2026-104190",
+          "confidence": "moyenne",
+          "desc": "PUT WebDAV d'un nom raster dont les premiers octets sont d'un format non raster",
+          "source": [
+            "https://github.com/nextcloud/security-advisories/security/advisories/GHSA-7hwf-8pcj-33h4"
+          ]
+        }
+      ]
+    },
+    "php_requete": {
+      "name": "PHP générique (CVE-2023-0662, CVE-2023-3823, CVE-2024-2756, CVE-2024-8925, CVE-2024-4577, CVE-2026-115560)",
+      "severity": "medium",
+      "mode": "detect",
+      "enabled": true,
+      "patterns": [],
+      "structural": [
+        {
+          "id": "php-001",
+          "check": "parties_nombre",
+          "params": {
+            "parties_min": 1021
+          },
+          "severity": "high",
+          "cve": "CVE-2023-0662",
+          "confidence": "haute",
+          "desc": "Plus de parties multipart que max_input_vars + max_file_uploads (1 020 par défaut)",
+          "source": [
+            "https://github.com/php/php-src/security/advisories/GHSA-54hq-v5wp-fqgv",
+            "https://github.com/php/php-src/blob/PHP-8.2/php.ini-production"
+          ]
+        },
+        {
+          "id": "php-002",
+          "check": "xml_dtd_prologue",
+          "severity": "high",
+          "cve": "CVE-2023-3823",
+          "confidence": "haute",
+          "desc": "DOCTYPE ou ENTITY dans le prologue d'une requête XML (PoC PROPFIND de Nextcloud)",
+          "source": [
+            "https://github.com/php/php-src/security/advisories/GHSA-3qrf-m4j2-pcrr"
+          ]
+        },
+        {
+          "id": "php-003",
+          "check": "cookie_prefixe_normalise",
+          "severity": "medium",
+          "cve": "CVE-2024-2756",
+          "confidence": "haute",
+          "desc": "Nom de cookie qui devient __Host- ou __Secure- après la normalisation de PHP",
+          "source": [
+            "https://github.com/php/php-src/security/advisories/GHSA-wpj3-hf5j-x4v4",
+            "https://github.com/php/php-src/blob/PHP-8.2/main/php_variables.c"
+          ]
+        },
+        {
+          "id": "php-004",
+          "check": "frontiere_longueur",
+          "params": {
+            "longueur_min": 71
+          },
+          "severity": "medium",
+          "cve": "CVE-2024-8925",
+          "confidence": "haute",
+          "desc": "Frontière multipart de plus de 70 caractères (RFC 2046)",
+          "source": [
+            "https://github.com/php/php-src/security/advisories/GHSA-9pqp-7h25-4f32",
+            "https://www.rfc-editor.org/rfc/rfc2046#section-5.1.1"
+          ]
+        },
+        {
+          "id": "php-005",
+          "check": "frontiere_longueur",
+          "params": {
+            "longueur_min": 5121
+          },
+          "severity": "high",
+          "cve": "CVE-2024-8925",
+          "confidence": "haute",
+          "desc": "Frontière multipart de plus de 5 Kio",
+          "source": [
+            "https://github.com/php/php-src/security/advisories/GHSA-9pqp-7h25-4f32"
+          ]
+        },
+        {
+          "id": "php-006",
+          "check": "upload_progress_present",
+          "severity": "medium",
+          "cve": "CVE-2026-115560",
+          "confidence": "moyenne",
+          "desc": "PHP_SESSION_UPLOAD_PROGRESS présent dans un envoi multipart",
+          "source": [
+            "https://www.php.net/archive/2026.php#2026-10-23-1"
+          ]
+        },
+        {
+          "id": "php-007",
+          "check": "sonde_php_cgi",
+          "severity": "medium",
+          "cve": "CVE-2024-4577",
+          "confidence": "moyenne",
+          "desc": "Requête qui passe des options -d à PHP-CGI (allow_url_include, auto_prepend_file)",
+          "source": [
+            "https://github.com/php/php-src/security/advisories/GHSA-3qgc-jrrr-25jv"
+          ]
+        }
+      ]
+    },
     "php2shell": {
       "name": "PHP2Shell (CVE-2026-109618, CVE-2026-109619)",
       "severity": "critical",
@@ -1046,6 +1331,65 @@
             "https://www.akamai.com/blog/security-research/understanding-php2shell-everything-you-need-to-know",
             "https://research.splunk.com/web/e50cc2d0-7c71-4a2f-83dc-5ee6d4bb76a7/",
             "https://security-tracker.debian.org/tracker/CVE-2026-109618"
+          ]
+        },
+        {
+          "id": "php2shell-005",
+          "check": "corps_sans_longueur",
+          "severity": "high",
+          "cve": "CVE-2026-109618",
+          "confidence": "moyenne",
+          "desc": "POST multipart ou urlencoded sans Content-Length utilisable (flux ou chunked)",
+          "source": [
+            "https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w",
+            "https://www.php.net/archive/2026.php#2026-10-21-5"
+          ]
+        },
+        {
+          "id": "php2shell-006",
+          "check": "entetes_partie",
+          "params": {
+            "entetes_min": 9
+          },
+          "severity": "high",
+          "cve": "CVE-2026-109618",
+          "confidence": "moyenne",
+          "seuil": "provisoire, non sourcé (2026-10-29)",
+          "desc": "Partie multipart portant un nombre anormal d'en-têtes",
+          "source": [
+            "https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w",
+            "https://www.php.net/archive/2026.php#2026-10-21-5"
+          ]
+        },
+        {
+          "id": "php2shell-007",
+          "check": "fichiers_vides",
+          "params": {
+            "vides_min": 21
+          },
+          "severity": "high",
+          "cve": "CVE-2026-109618",
+          "confidence": "moyenne",
+          "seuil": "provisoire, non sourcé (2026-10-29)",
+          "desc": "Nombre anormal de champs fichier vides (non comptés dans max_file_uploads)",
+          "source": [
+            "https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w",
+            "https://www.php.net/archive/2026.php#2026-10-21-5"
+          ]
+        },
+        {
+          "id": "php2shell-008",
+          "check": "variables_nombre",
+          "params": {
+            "variables_min": 1001
+          },
+          "severity": "medium",
+          "cve": "CVE-2026-109618",
+          "confidence": "moyenne",
+          "desc": "Plus de variables urlencoded que max_input_vars (1 000), en requête ou en corps",
+          "source": [
+            "https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w",
+            "https://www.php.net/archive/2026.php#2026-10-21-5"
           ]
         }
       ]

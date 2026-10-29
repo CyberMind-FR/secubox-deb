@@ -12,6 +12,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -266,7 +267,7 @@ func TestPHPPrefixeNiDepasseNiModifie(t *testing.T) {
 		copie := append([]byte(nil), plein[:n]...)
 		borne := analyserMultipart(plein[:n:n], ctTest, true, LimitesMultipart{})
 		large := analyserMultipart(plein[:n], ctTest, true, LimitesMultipart{})
-		if borne != large {
+		if !reflect.DeepEqual(borne, large) {
 			t.Errorf("n=%d : lecture au-delà du préfixe : %+v / %+v", n, borne, large)
 		}
 		if string(copie) != string(plein[:n]) {

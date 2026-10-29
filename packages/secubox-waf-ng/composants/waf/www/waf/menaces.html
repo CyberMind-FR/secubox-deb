@@ -8,7 +8,8 @@
   SecuBox — « SBXWAF », le pare-feu applicatif : onglet Menaces. Une seule page, deux mises en page :
     · CARTE du Hall / page embarquée (?embed=1) : compacte, une colonne ;
     · TABLEAU DE BORD complet (largeur ≥ 900 px).
-  DONNÉES RÉELLES UNIQUEMENT (API du WAF, lues en session : /stats, /status, /alerts?aggregate=true, /bans, /categories, /detections).
+  DONNÉES RÉELLES UNIQUEMENT (API du WAF, lues en session : /stats, /status, /alerts?aggregate=true, /bans, /categories, /detections, /php/signaux).
+  Carte « Analyse PHP » (#3273) : compteurs 24 h par famille, lus dans le relevé de fond de l’API ; relevé absent = « inconnu », jamais 0 ; relevé de plus de 10 min = « périmé ».
   LECTURE SEULE : aucune action (ban, levée de ban, bascule de catégorie) n'est proposée ici.
   Une mesure absente s'affiche « — », jamais 0. Chaque tuile porte sa définition en infobulle.
   `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
@@ -112,6 +113,10 @@
     <div class="pan"><h3>🧠 Détections comportementales <i>celles qui ne tiennent pas dans un fichier de motifs</i></h3><div class="dets" id="dets"></div></div>
     <div class="pan"><h3>📁 Catégories de protection <i id="catNote"></i></h3><div class="cats" id="cats"></div></div>
   </div>
+  <div class="grille gB">
+    <div class="pan"><h3>🐘 Analyse des requêtes PHP <i id="phpNote">signaux des 24 dernières heures, en détection seule</i></h3><div class="cats" id="phpFam"></div><div class="note" id="phpEtat"></div></div>
+    <div class="pan"><h3>Règles et sites touchés <i>24 h</i></h3><div id="phpRegles"></div><div id="phpVhosts" style="margin-top:8px"></div></div>
+  </div>
   <div class="note">Page en lecture seule · aucun blocage sur un seul signal · chaque décision est écrite dans le journal d’audit.</div>
 </div></div>
 <script>
@@ -123,6 +128,8 @@
   function has(x){return x!=null&&x!==''&&isFinite(Number(x));}
   function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
   function N(v){return has(v)?fmt(v):'—';}
+  // Texte d’état de la carte « Analyse PHP » (#3273) : relevé à jour, périmé (tâche de fond arrêtée), inconnu.
+  function etatPhp(ph){if(!ph)return 'Session requise.';if(!ph.familles)return 'Relevé indisponible : état inconnu.';var q=ph.calcule_a?new Date(ph.calcule_a*1000).toLocaleString('fr-FR',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'}):'à une heure inconnue';return ph.etat==='perime'?'Relevé périmé : la tâche de fond ne l’a pas recalculé depuis plus de 10 minutes (dernier calcul '+q+'). Signaux seulement : aucune requête n’est bloquée sur cette analyse.':'Signaux seulement : aucune requête n’est bloquée sur cette analyse. Relevé calculé '+q+'.';}
   var q=new URLSearchParams(location.search);
   if(q.get('embed')) document.body.classList.add('emb');
   var PAL=['#29b6f6','#a78bfa','#3b82f6','#ff9f1c','#2ecc71','#ff4d5e','#ffd23f'];
@@ -226,6 +233,15 @@
     var dl=d.detections&&d.detections.detections||null;
     el('dets').innerHTML=dl&&dl.length?dl.map(function(x){var cs=x.classes||[];
       return '<div class="det'+(x.actif?' on':'')+'"><b>'+esc(x.emoji||'')+' '+esc(x.nom)+'</b><span class="et">'+(x.actif?'ON':'inactif')+'</span><div class="r">'+esc(x.resume||'')+'</div><div>'+cs.slice(0,6).map(function(c){return '<span class="puce">'+esc(c)+'</span>';}).join('')+(cs.length>6?'<span class="x">+'+(cs.length-6)+'</span>':'')+'</div>'+(x.detail?'<div class="d">'+esc(x.detail)+'</div>':'')+'</div>';}).join(''):'<div class="vide">'+(dl?'Aucune détection déclarée.':'Session requise.')+'</div>';
+    // Analyse PHP (#3273) : relevé de fond de l’API ; absent = inconnu
+    var ph=d.php||null,FAM=[['php2shell','PHP2Shell','Envois multipart piégés (webshell déguisée en image) et variantes.'],['roundcube','Roundcube','Abus du webmail : CVE connues, injection de paramètres.'],['nextcloud','Nextcloud','Abus de WebDAV, de la fédération et des sessions.'],['php_requete','Entrée PHP','Requêtes qui exploitent la lecture des variables par PHP.'],['outil','Outils d’attaque','Lignes déjà signalées dont l’outil est reconnu (comptées aussi dans leur famille).']];
+    el('phpFam').innerHTML=FAM.map(function(f){var v=ph&&ph.familles?ph.familles[f[0]]:null;return '<div class="cat" title="'+esc(f[2])+'"><div style="min-width:0"><span style="display:block">'+esc(f[1])+'</span><small>'+(has(v)?(ph.etat==='perime'?'périmé':'24 h'):'inconnu')+'</small></div><em class="'+(has(v)&&v>0?'off':'on')+'" style="font-style:normal">'+N(v)+'</em></div>';}).join('');
+    el('phpEtat').textContent=etatPhp(ph);
+    function plusGros(o,n){return o?Object.keys(o).map(function(k){return [k,num(o[k])];}).sort(function(x,y){return y[1]-x[1];}).slice(0,n):null;}
+    function lignesPhp(t,vide){var m=t&&t.length?t[0][1]||1:1;return t&&t.length?t.map(function(c,i){return '<div class="ligne"><span class="n" title="'+esc(c[0])+'">'+esc(c[0])+'</span><span>'+fmt(c[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*c[1]/m)+'%;background:'+PAL[i%7]+'"></i></div></div>';}).join(''):'<div class="vide">'+vide+'</div>';}
+    var tr=plusGros(ph&&ph.regles,5),tvh=plusGros(ph&&ph.vhosts,5);
+    el('phpRegles').innerHTML=lignesPhp(tr,ph&&ph.familles?'Aucune règle déclenchée sur 24 h.':'Inconnu.');
+    el('phpVhosts').innerHTML=lignesPhp(tvh,ph&&ph.familles?'Aucun site touché sur 24 h.':'');
     // Catégories de protection (lecture)
     var cs2=cl?cl.map(function(k){return [k,cats[k]];}).sort(function(x,y){return num(y[1].rules_count)-num(x[1].rules_count);}):null;
     el('catNote').textContent=cs2?'état en lecture seule':'';
@@ -247,6 +263,7 @@
       {timestamp:iso(48),client_ip:'192.0.2.9',country:'FR',categories:['robots'],max_severity:'low',count:2}],
     bans:[{value:'203.0.113.17',country:'US',scenario:'sql.injection',created_at:iso(2),duration:'4h'},{value:'198.51.100.3',country:'DE',scenario:'scan-ports',created_at:iso(5),duration:'24h'},{value:'203.0.113.200',country:'RU',scenario:'campagne corrélée',created_at:iso(95),duration:'7j'}],
     categories:{categories:{sqli:{name:'Injection SQL',enabled:true,rules_count:64},xss:{name:'XSS',enabled:true,rules_count:58},rce:{name:'Exécution de code',enabled:true,rules_count:47},lfi:{name:'Traversée de répertoires',enabled:true,rules_count:39},scanners:{name:'Scanners',enabled:true,rules_count:31},bots:{name:'Bots malveillants',enabled:false,rules_count:22}}},
+    php:{etat:'ok',calcule_a:Date.now()/1000,familles:{php2shell:12,roundcube:3,nextcloud:5,php_requete:21,outil:9},regles:{'php2shell-001':12,'php-002':14,'nc-003':5,'php-001':7,'rc-001':3},vhosts:{'cloud.gk2.secubox.in':26,'mail.secubox.in':15}},
     detections:{detections:[{emoji:'🧭',nom:'Hôtes non routés',actif:true,resume:'Un nom d’hôte que la box ne sert pas est une sonde.',classes:['host-anomaly','unrouted'],detail:'Juge le comportement : nom demandé absent des vhosts.'},
       {emoji:'🤖',nom:'Anti-robots',actif:true,resume:'Un robot qui s’annonce est identifié, pas banni sur ce seul signal.',classes:['robots','crawler','scanner'],detail:'Reconnaissance par signature publique.'},
       {emoji:'🕳️',nom:'Leurres de service',actif:true,resume:'Une connexion à un service inexistant n’a aucune raison légitime.',classes:['honeypot','ssh','smtp'],detail:'Contacts comptés par service.'}]}};
@@ -260,8 +277,8 @@
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
   function charge(){
     var b='/api/v1/waf/';
-    Promise.all([jget(b+'stats'),jget(b+'status'),jget(b+'alerts?limit=20&aggregate=true'),jget(b+'bans'),jget(b+'categories'),jget(b+'detections')]).then(function(r){
-      rend({stats:r[0],status:r[1],alerts:r[2]&&r[2].alerts||null,bans:r[3]&&r[3].bans||null,banTotal:r[3]&&r[3].total,categories:r[4],detections:r[5]});
+    Promise.all([jget(b+'stats'),jget(b+'status'),jget(b+'alerts?limit=20&aggregate=true'),jget(b+'bans'),jget(b+'categories'),jget(b+'detections'),jget(b+'php/signaux')]).then(function(r){
+      rend({stats:r[0],status:r[1],alerts:r[2]&&r[2].alerts||null,bans:r[3]&&r[3].bans||null,banTotal:r[3]&&r[3].total,categories:r[4],detections:r[5],php:r[6]});
     });
   }
   el('rafraichir').addEventListener('click',charge);

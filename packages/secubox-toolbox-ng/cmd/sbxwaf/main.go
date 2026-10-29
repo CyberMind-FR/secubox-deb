@@ -171,8 +171,17 @@ type Server struct {
 	// capturesMultipart borne les captures multipart simultanées (#3257) : un
 	// jeton par capture, pris sans attendre, rendu après l'analyse. main()
 	// pose capturesMultipartMax ; nil = pas de limite (tests). Plein : pas de
-	// capture, une ligne « multipart-concurrence », la requête suit son cours.
+	// capture, une ligne « capture-concurrence », la requête suit son cours.
 	capturesMultipart chan struct{}
+	// capturesUrlencoded : idem pour les corps urlencoded des vhosts PHP
+	// (#3273, R-W7), sémaphore à part de capturesUrlencodedMax jetons.
+	capturesUrlencoded chan struct{}
+	// concurrence limite le débit des lignes capture-concurrence (passe
+	// finale M1) : une par seconde et par genre, suppressions comptées.
+	concurrence limiteurConcurrence
+	// appelsFederes compte, par IP, les partages fédérés anonymes (#3273,
+	// R-NC1). nil = EntreePHP.AppelsFederes reste 0 (tests).
+	appelsFederes *compteurFenetre
 
 	// trustedHosts is the set of hostnames that bypass WAF inspection entirely.
 	// Mirrors Python check_request whitelist (secubox_waf.py:761-763):
@@ -522,29 +531,54 @@ func (s *Server) handler() http.Handler {
 				}
 			}
 
-			// PHP2SHELL (#3257) : capture EN FLUX du multipart d'un vhost PHP.
-			// Placée AVANT la liste de contournement, et c'est délibéré : PHP
-			// analyse le corps avant d'exécuter le script, donc ncBypass, les
-			// chemins « statiques » et les hôtes de confiance ne protègent de
-			// rien ici (spécification § 8, point 3). TOUS les clients sont
-			// analysés, réseau local et 127.0.0.1 compris (ruling R12) : en
-			// detect l'exemption ne protégeait de rien (une adresse privée est
+			// PHP2SHELL (#3257, #3273) : entrée PHP d'un vhost PHP, et capture
+			// EN FLUX de son corps multipart ou urlencoded. Placée AVANT la
+			// liste de contournement, et c'est délibéré : PHP analyse le corps
+			// avant d'exécuter le script, donc ncBypass, les chemins
+			// « statiques » et les hôtes de confiance ne protègent de rien ici
+			// (spécification § 8, point 3). TOUS les clients sont analysés,
+			// réseau local et 127.0.0.1 compris (ruling R12) : en detect
+			// l'exemption ne protégeait de rien (une adresse privée est
 			// journalisée « local » et n'est jamais émise vers actord), et elle
 			// aveuglait les vhosts .onion (Tor arrive en 127.0.0.1). Sans
-			// signature structurelle chargée et active, aucune capture (I2a) :
-			// `"enabled": false` est un vrai retour arrière à chaud.
+			// signature structurelle chargée et active, ni entrée ni capture
+			// (I2a) : `"enabled": false` est un vrai retour arrière à chaud.
 			// Aucun octet n'est retenu avant le relais : le proxy lit le corps,
 			// la capture en copie le début, l'analyse tombe dans le defer, après
-			// la réponse. Le corps reste « binaire » pour les regex.
-			if r.Body != nil && r.Body != http.NoBody && estMultipartPHP(r.Header.Get("Content-Type")) &&
-				s.vhostProfiles.estPHP(r.Host) && s.rules.aDesStructurelles() {
-				ua := r.Header.Get("User-Agent")
-				rm := requeteMultipart{ip: ip, host: r.Host, method: r.Method, path: rawPath,
-					ua: ua, contentType: r.Header.Get("Content-Type"),
-					ja4: s.lireJA4(r), tool: étiquetteOutil(ua, rawPath)}
-				if s.prendreCapture() {
-					capt := nouvelleCapture(r.Body, s.fenetreCapture(), r.ContentLength)
-					r.Body = capt
+			// la réponse. Le multipart reste « binaire » pour les regex.
+			// Coût sur chaque requête de chaque vhost (passe finale I1) : un
+			// RLock pour les indicateurs calculés au chargement des règles,
+			// puis le verdict PHP de l'hôte, mémorisé (aucune regex au-delà
+			// du premier passage d'un hôte).
+			if ind := s.rules.indicateurs(); ind.structurelles {
+				if service, php := s.vhostProfiles.servicePHP(r.Host); php {
+					// ja4 et tool : calculés à l'écriture d'une ligne seulement.
+					rm := requeteMultipart{ip: ip, host: r.Host, method: r.Method, path: rawPath,
+						ua: r.Header.Get("User-Agent"), contentType: r.Header.Get("Content-Type"),
+						entetes: r.Header}
+					// Chemin WebDAV masqué dès ici (R-W9, R-W11 M5) : ni uid ni
+					// nom de fichier dans aucune ligne (capture-concurrence
+					// comprise) ni dans le message de panique de l'analyse.
+					if masque, ok := cheminJournalNextcloud(r.URL.Path); ok {
+						rm.path = masque
+					}
+					e := s.nouvelleEntreePHP(r, service)
+					genre, plafond, jeton := s.corpsACapturer(r, e, ind)
+					sature := corpsAucun
+					if jeton && !s.prendreCapture(genre) {
+						// Sémaphore plein : pas de capture ; les contrôles
+						// sans corps restent évalués. La ligne d'état est
+						// écrite par l'analyse, APRÈS la réponse et sous son
+						// recover, débit limité (passe finale M1) : rien
+						// n'est calculé ici, en saturation donc sous attaque.
+						sature = genre
+						genre, jeton = corpsAucun, false
+					}
+					var capt *captureCorps
+					if genre != corpsAucun {
+						capt = nouvelleCapture(r.Body, plafond, r.ContentLength)
+						r.Body = capt
+					}
 					// L'analyse n'a lieu que si le corps a été confié au proxy
 					// (relaye, posé juste avant les deux proxy.ServeHTTP). Une
 					// sortie anticipée (403, ban par escalade, réponse du cache
@@ -553,9 +587,7 @@ func (s *Server) handler() http.Handler {
 					// texte, le chemin texte a pu en lire la fenêtre (lus > 0)
 					// alors que le backend n'a jamais rien reçu. La fermeture lit
 					// relaye au retour du gestionnaire, pas ici.
-					defer func() { s.analyserCaptureMultipart(capt, rm, relaye) }()
-				} else {
-					s.limiteCaptureAtteinte(rm)
+					defer func() { s.analyserRequetePHP(capt, genre, e, rm, relaye, jeton, sature) }()
 				}
 			}
 
@@ -1457,7 +1489,10 @@ func main() {
 		// Body inspection cap (--max-body-inspect).
 		maxBodyInspect: *maxBodyInspectFlag,
 		// #3257 : au plus 16 captures multipart simultanées (16 fenêtres).
-		capturesMultipart: make(chan struct{}, capturesMultipartMax),
+		capturesMultipart:  make(chan struct{}, capturesMultipartMax),
+		capturesUrlencoded: make(chan struct{}, capturesUrlencodedMax),
+		// #3273, R-NC1 : 5 appels par 1 200 s (nextcloud/server#62091), mémoire bornée.
+		appelsFederes: nouveauCompteurFenetre(federationPeriode, federationGarde, federationIPMax),
 		// Trusted-host skip (--waf-skip-hosts): mirrors Python whitelist.
 		trustedHosts: parseTrustedHosts(*wafSkipHosts),
 		// Meme analyseur : un hote est un hote, et deux facons de les lire

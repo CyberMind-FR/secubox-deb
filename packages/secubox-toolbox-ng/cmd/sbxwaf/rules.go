@@ -64,6 +64,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"regexp"
 
@@ -115,6 +116,9 @@ type compiledCategory struct {
 type signatureStructurelle struct {
 	id, check, severity, cve, confidence string
 	params                               map[string]int
+	// services (#3273) : services PHP visés ; vide = tous. Un hôte PHP reconnu
+	// par motif (service "") est toujours visé.
+	services []string
 }
 
 // DetectionStructurelle est le constat d'une signature structurelle. Severity
@@ -133,7 +137,50 @@ var parametreRequis = map[string]string{
 	"parties_nombre":           "parties_min",
 	"noms_profondeur":          "profondeur_min",
 	"filename_charge":          "",
+	// #3273, Roundcube (tâche 3) : tous sans paramètre.
+	"rc_from_invalide":          "",
+	"filename_session":          "",
+	"rc_crlf_imap":              "",
+	"rc_crlf_envoi":             "",
+	"rc_markasjunk_uid_requete": "",
+	"rc_image_non_raster":       "",
+	// #3273, Nextcloud (tâche 4) : appels_min seul paramètre (R-NC1 en rafale).
+	"nc_partage_federe":        "",
+	"nc_partage_federe_rafale": "appels_min",
+	"nc_proxy_agenda":          "",
+	"nc_proxy_agenda_autrui":   "",
+	"nc_put_non_raster":        "",
+	// #3273, PHP générique (tâche 5) : R-PHP1 réutilise parties_nombre.
+	"xml_dtd_prologue":         "",
+	"cookie_prefixe_normalise": "",
+	"frontiere_longueur":       "longueur_min",
+	// #3273, compléments C1 à C5 (tâche 6).
+	"corps_sans_longueur":     "",
+	"entetes_partie":          "entetes_min",
+	"fichiers_vides":          "vides_min",
+	"variables_nombre":        "variables_min",
+	"upload_progress_present": "",
+	// #3273, étiquettes d'outil (tâche 7) : la seule qui vaut un signal.
+	"sonde_php_cgi": "",
 }
+
+// controlesRequete : contrôles qui lisent EntreePHP.Requete (#3273, relecture
+// I2). Sans signature chargée de ces contrôles, la requête n'est jamais lue.
+// Les tâches 3 à 7 y inscrivent leurs contrôles.
+var controlesRequete = map[string]bool{
+	"rc_from_invalide":          true,
+	"rc_crlf_imap":              true,
+	"rc_crlf_envoi":             true,
+	"rc_markasjunk_uid_requete": true,
+	"rc_image_non_raster":       true, // _task et _action peuvent venir de la requête
+	"variables_nombre":          true, // C4 : max_input_vars compte aussi la requête
+	"sonde_php_cgi":             true, // tâche 7 : « -d allow_url_include » dans la chaîne de requête
+}
+
+// servicesPHPConnus : services que "services" peut nommer (#3273, R-W8 M1).
+// Un autre nom n'empêche pas le chargement (la signature ne vise alors que
+// les hôtes PHP par motif) mais est signalé : journal et Integrite().
+var servicesPHPConnus = map[string]bool{"nextcloud": true, "roundcube": true}
 
 // structurelJSON : champs inconnus ignores ; "source" (liste d'URL, ou tout
 // autre type) n'est volontairement pas declare, pour qu'un type inattendu ne
@@ -145,6 +192,7 @@ type structurelJSON struct {
 	Severity   string                     `json:"severity"`
 	CVE        string                     `json:"cve"`
 	Confidence string                     `json:"confidence"`
+	Services   []string                   `json:"services"`
 }
 
 // compileStructurel valide une entree "structural". Une erreur rend un motif
@@ -152,7 +200,9 @@ type structurelJSON struct {
 func compileStructurel(brut json.RawMessage, mode string) (signatureStructurelle, string, error) {
 	var sj structurelJSON
 	if err := json.Unmarshal(brut, &sj); err != nil {
-		return signatureStructurelle{}, "", err
+		// Un champ mal typé ("services": "roundcube") n'arrête pas le
+		// décodage des autres (encoding/json) : l'id lu nomme le rejet.
+		return signatureStructurelle{}, sj.ID, err
 	}
 	if sj.ID == "" {
 		return signatureStructurelle{}, "", errStructurel("id vide")
@@ -172,6 +222,16 @@ func compileStructurel(brut json.RawMessage, mode string) (signatureStructurelle
 		}
 		params[nom] = n
 	}
+	vus := make(map[string]bool, len(sj.Services))
+	for _, sv := range sj.Services {
+		if sv == "" {
+			return signatureStructurelle{}, sj.ID, errStructurel("service vide dans services")
+		}
+		if vus[sv] {
+			return signatureStructurelle{}, sj.ID, errStructurel("service " + strconv.Quote(sv) + " en double dans services")
+		}
+		vus[sv] = true
+	}
 	if requis != "" {
 		if n, ok := params[requis]; !ok || n < 1 {
 			return signatureStructurelle{}, sj.ID, errStructurel("parametre " + requis + " absent ou < 1")
@@ -179,7 +239,7 @@ func compileStructurel(brut json.RawMessage, mode string) (signatureStructurelle
 	}
 	return signatureStructurelle{
 		id: sj.ID, check: sj.Check, severity: sj.Severity, cve: sj.CVE,
-		confidence: sj.Confidence, params: params,
+		confidence: sj.Confidence, params: params, services: sj.Services,
 	}, sj.ID, nil
 }
 
@@ -187,8 +247,108 @@ type errStructurel string
 
 func (e errStructurel) Error() string { return string(e) }
 
-// declenche applique le controle au resultat de l'analyseur (seuils a >=).
-func (s signatureStructurelle) declenche(res ResultatMultipart) bool {
+// declenche applique le controle a l'entree PHP (seuils a >=). Les controles
+// multipart sont faux sans corps multipart analyse.
+func (s signatureStructurelle) declenche(e *EntreePHP) bool {
+	switch s.check {
+	case "rc_from_invalide":
+		for _, v := range e.valeursRequete("_from") {
+			if inv, _ := fromInvalideRoundcube(v); inv {
+				return true
+			}
+		}
+		return false
+	case "filename_session":
+		return e.Multipart != nil && e.Multipart.FilenameSession
+	case "rc_crlf_imap":
+		for _, n := range nomsIMAPRoundcube {
+			for _, v := range e.valeurs(n) {
+				if crlfDans(v) {
+					return true
+				}
+			}
+		}
+		for _, v := range e.valeurs("_flag") {
+			if drapeauInvalideRoundcube(v) {
+				return true
+			}
+		}
+		return false
+	case "rc_crlf_envoi":
+		for _, n := range nomsEnvoiRoundcube {
+			for _, v := range e.valeurs(n) {
+				if crlfDans(v) {
+					return true
+				}
+			}
+		}
+		return false
+	case "rc_markasjunk_uid_requete":
+		if !strings.EqualFold(e.Methode, "POST") || len(e.valeursRequete("_uid")) == 0 {
+			return false
+		}
+		for _, v := range e.valeurs("_action") {
+			if strings.HasPrefix(v, "plugin.markasjunk") {
+				return true
+			}
+		}
+		return false
+	// Nextcloud (tâche 4) : drapeaux posés par nouvelleEntreePHP et
+	// analyserRequetePHP. R-NC2 : les deux contrôles s'excluent (une ligne).
+	case "nc_partage_federe":
+		return e.PartageFedereAnonyme && !e.Federation
+	case "nc_partage_federe_rafale":
+		return e.PartageFedereAnonyme && e.Federation && e.AppelsFederes >= s.params["appels_min"]
+	case "nc_proxy_agenda":
+		return e.ProxyAgenda && !e.ProxyAgendaAutrui
+	case "nc_proxy_agenda_autrui":
+		return e.ProxyAgendaAutrui
+	case "nc_put_non_raster":
+		return e.PutRaster && e.MagiqueDebut != ""
+	case "xml_dtd_prologue":
+		return e.DTDXML
+	case "cookie_prefixe_normalise":
+		return e.CookieFauxPrefixe
+	case "frontiere_longueur":
+		return e.Multipart != nil && e.Multipart.LongueurFrontiere >= s.params["longueur_min"]
+	// Compléments C1 à C5 (tâche 6).
+	case "corps_sans_longueur":
+		return e.SansLongueur
+	case "entetes_partie":
+		return e.Multipart != nil && e.Multipart.EntetesPartieMax >= s.params["entetes_min"]
+	case "fichiers_vides":
+		return e.Multipart != nil && e.Multipart.FichiersVides >= s.params["vides_min"]
+	case "variables_nombre":
+		return e.variablesMax() >= s.params["variables_min"]
+	case "upload_progress_present":
+		return e.Multipart != nil && e.Multipart.Progress
+	// Étiquettes d'outil (tâche 7) : la sonde PHP-CGI seule vaut un signal.
+	case "sonde_php_cgi":
+		return e.SondePHPCGI
+	case "rc_image_non_raster":
+		if e.Multipart == nil || !e.Multipart.NonRaster {
+			return false
+		}
+		taches := e.valeurs("_task")
+		for _, a := range e.valeurs("_action") {
+			if a == "upload-photo" {
+				return true
+			}
+			if a == "upload" {
+				for _, t := range taches {
+					if t == "settings" {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+	// Contrôles multipart de #3257 : faux sans corps multipart analysé.
+	if e.Multipart == nil {
+		return false
+	}
+	res := *e.Multipart
 	switch s.check {
 	case "upload_progress_fichiers":
 		return res.Progress && res.FichiersApresProgress >= s.params["fichiers_apres_min"]
@@ -226,6 +386,75 @@ type rulesData struct {
 	// au prochain.
 	declares int
 	rejetes  []string
+	// avertis (#3273, R-W8 M1) : signatures chargées qui nomment un service
+	// inconnu, sous la forme <categorie>/<id>:<service>.
+	avertis []string
+
+	// ind : indicateurs lus sur le chemin de chaque requête, calculés une
+	// fois par calculerIndicateurs à la fin du chargement (passe finale I1).
+	ind indicateursPHP
+}
+
+// indicateursPHP : ce que le chemin de CHAQUE requête demande aux règles,
+// calculé UNE fois au chargement et rangé avec les données courantes (passe
+// finale de #3273, I1). Lire un indicateur ne parcourt plus les catégories :
+// un vhost qui n'est pas PHP ne paie que le RLock de indicateurs(). Une
+// catégorie désactivée n'est pas chargée, donc ne compte dans aucun
+// indicateur (M4) : `"enabled": false` coupe aussi la capture du corps
+// qu'elle seule lisait. Immuable après calcul.
+type indicateursPHP struct {
+	structurelles bool            // au moins une signature structurelle active
+	litRequete    bool            // un contrôle actif lit la chaîne de requête (controlesRequete)
+	controles     map[string]bool // contrôles actifs
+	corps         uint8           // bit 1<<genre : genres de corps lus par un contrôle actif (corpsLusParControle)
+}
+
+// indicateursVides : règles absentes ou vides.
+var indicateursVides = &indicateursPHP{}
+
+func (i *indicateursPHP) aControle(check string) bool { return i.controles[check] }
+
+// litCorps dit si un contrôle actif lit ce genre de corps.
+func (i *indicateursPHP) litCorps(g genreCorps) bool { return i.corps&(1<<uint(g)) != 0 }
+
+// corpsLusParControle : genres de corps que lit chaque contrôle (bits
+// 1<<genreCorps). Un contrôle absent ne lit aucun corps (méthode, chemin,
+// requête ou en-têtes seulement). Les contrôles Roundcube qui passent par
+// EntreePHP.valeurs lisent le corps urlencoded ET les champs multipart.
+var corpsLusParControle = map[string]uint8{
+	"upload_progress_fichiers":  1 << corpsMultipart,
+	"parties_nombre":            1 << corpsMultipart,
+	"noms_profondeur":           1 << corpsMultipart,
+	"filename_charge":           1 << corpsMultipart,
+	"filename_session":          1 << corpsMultipart,
+	"rc_crlf_imap":              1<<corpsMultipart | 1<<corpsUrlencoded,
+	"rc_crlf_envoi":             1<<corpsMultipart | 1<<corpsUrlencoded,
+	"rc_markasjunk_uid_requete": 1<<corpsMultipart | 1<<corpsUrlencoded,
+	"rc_image_non_raster":       1 << corpsMultipart,
+	"nc_put_non_raster":         1 << corpsDebut,
+	"xml_dtd_prologue":          1 << corpsXML,
+	"frontiere_longueur":        1 << corpsMultipart,
+	"entetes_partie":            1 << corpsMultipart,
+	"fichiers_vides":            1 << corpsMultipart,
+	"variables_nombre":          1 << corpsUrlencoded,
+	"upload_progress_present":   1 << corpsMultipart,
+}
+
+// calculerIndicateurs parcourt les catégories chargées, une fois.
+func calculerIndicateurs(d *rulesData) indicateursPHP {
+	parcoursRegles.Add(1)
+	ind := indicateursPHP{controles: map[string]bool{}}
+	for _, c := range d.cats {
+		for _, s := range c.data.structurelles {
+			ind.structurelles = true
+			ind.controles[s.check] = true
+			if controlesRequete[s.check] {
+				ind.litRequete = true
+			}
+			ind.corps |= corpsLusParControle[s.check]
+		}
+	}
+	return ind
 }
 
 // Rules is a hot-reloadable, RW-locked WAF rule set.
@@ -403,6 +632,13 @@ func loadRulesJSON(path string) *rulesData {
 				if sig.severity == "" {
 					sig.severity = sev
 				}
+				for _, sv := range sig.services {
+					if !servicesPHPConnus[sv] {
+						nom := catID + "/" + sig.id + ":" + sv
+						log.Printf("sbxwaf/rules: AVERTISSEMENT structural %s/%s : service inconnu %q dans services", catID, sig.id, sv)
+						data.avertis = append(data.avertis, nom)
+					}
+				}
 				cc.structurelles = append(cc.structurelles, sig)
 			}
 		}
@@ -413,6 +649,7 @@ func loadRulesJSON(path string) *rulesData {
 		}{id: catID, data: cc})
 	}
 
+	data.ind = calculerIndicateurs(data)
 	log.Printf("sbxwaf/rules: loaded %d patterns in %d categories from %s", total, len(data.cats), path)
 	if len(data.rejetes) > 0 {
 		// « ALERTE » et non « info » : des motifs ecrits et livres ne
@@ -579,46 +816,78 @@ func (r *Rules) MatchDetail(method, rawPath, rawQuery, body, ua string, includeB
 // interroge a tout moment — par /healthz, par la carlette WAF, par un test.
 //
 // `rejetes` porte les identifiants et pas seulement le compte : savoir qu'il
-// manque cinq motifs sans savoir lesquels ne permet pas d'agir.
-func (r *Rules) Integrite() (declares, charges int, rejetes []string) {
+// manque cinq motifs sans savoir lesquels ne permet pas d'agir. `avertis`
+// (#3273) : signatures chargées qui nomment un service inconnu.
+func (r *Rules) Integrite() (declares, charges int, rejetes, avertis []string) {
 	r.mu.RLock()
 	cur := r.current
 	r.mu.RUnlock()
 	if cur == nil {
-		return 0, 0, nil
+		return 0, 0, nil, nil
 	}
 	for _, c := range cur.cats {
 		charges += len(c.data.patterns) + len(c.data.structurelles)
 	}
-	return cur.declares, charges, append([]string(nil), cur.rejetes...)
+	return cur.declares, charges, append([]string(nil), cur.rejetes...), append([]string(nil), cur.avertis...)
+}
+
+// parcoursRegles compte les parcours des catégories (crochet de test) : un
+// par chargement, aucun par requête.
+var parcoursRegles atomic.Int64
+
+// indicateurs rend les indicateurs des règles courantes : un RLock, aucun
+// parcours. Nil-safe (règles nil ou vides : tout faux).
+func (r *Rules) indicateurs() *indicateursPHP {
+	if r == nil {
+		return indicateursVides
+	}
+	r.mu.RLock()
+	cur := r.current
+	r.mu.RUnlock()
+	if cur == nil {
+		return indicateursVides
+	}
+	return &cur.ind
 }
 
 // aDesStructurelles dit si au moins une signature structurelle est chargée dans
 // une catégorie active (relecture finale I2a). Sans elle, la capture multipart
 // n'est pas posée : `"enabled": false` arrête aussi la capture et les lignes
 // multipart-*, au démarrage comme après un rechargement à chaud. Nil-safe.
-func (r *Rules) aDesStructurelles() bool {
-	if r == nil {
-		return false
+func (r *Rules) aDesStructurelles() bool { return r.indicateurs().structurelles }
+
+// visePHP dit si la signature s'applique au service de l'entree : liste
+// vide = tous les services ; service "" (hote PHP par motif) = toujours.
+func (s signatureStructurelle) visePHP(service string) bool {
+	if len(s.services) == 0 || service == "" {
+		return true
 	}
-	r.mu.RLock()
-	cur := r.current
-	r.mu.RUnlock()
-	if cur == nil {
-		return false
-	}
-	for _, c := range cur.cats {
-		if len(c.data.structurelles) > 0 {
+	for _, v := range s.services {
+		if v == service {
 			return true
 		}
 	}
 	return false
 }
 
-// EvaluerStructurel rend toutes les signatures structurelles qui declenchent
-// sur res : categories activees dans l'ordre du fichier, puis signatures dans
-// l'ordre. Pur et sans effet de bord ; ne bloque rien (mode detect seulement).
+// litLaRequete dit si une signature structurelle chargee lit la chaine de
+// requete (controlesRequete). Indicateur calculé au chargement. Nil-safe.
+func (r *Rules) litLaRequete() bool { return r.indicateurs().litRequete }
+
+// aControle dit si une signature structurelle chargee porte ce controle
+// (indicateur calculé au chargement). Nil-safe.
+func (r *Rules) aControle(check string) bool { return r.indicateurs().aControle(check) }
+
+// EvaluerStructurel evalue un seul resultat multipart, sans service (#3257).
 func (r *Rules) EvaluerStructurel(res ResultatMultipart) []DetectionStructurelle {
+	return r.EvaluerPHP(&EntreePHP{Multipart: &res})
+}
+
+// EvaluerPHP rend toutes les signatures structurelles qui declenchent sur
+// l'entree : categories activees dans l'ordre du fichier, puis signatures dans
+// l'ordre, filtrees par service. Pur et sans effet de bord ; ne bloque rien
+// (mode detect seulement).
+func (r *Rules) EvaluerPHP(e *EntreePHP) []DetectionStructurelle {
 	r.mu.RLock()
 	cur := r.current
 	r.mu.RUnlock()
@@ -628,7 +897,7 @@ func (r *Rules) EvaluerStructurel(res ResultatMultipart) []DetectionStructurelle
 	var out []DetectionStructurelle
 	for _, c := range cur.cats {
 		for _, s := range c.data.structurelles {
-			if s.declenche(res) {
+			if s.visePHP(e.Service) && s.declenche(e) {
 				out = append(out, DetectionStructurelle{
 					Categorie: c.id, RuleID: s.id, Severity: s.severity, CVE: s.cve,
 				})
