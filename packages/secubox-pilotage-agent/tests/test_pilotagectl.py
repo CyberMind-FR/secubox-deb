@@ -24,9 +24,9 @@ FAUX_SYSTEMD_RUN = """#!/bin/sh
 # faux systemd-run : note l'argv (une ligne), puis « démarre » l'unité nommée par --unit= (échoue si $FAUX_RUN_ECHEC)
 [ -z "$FAUX_RUN_ECHEC" ] || exit 1
 printf '%s\\n' "$*" >> "$FAUX_LANCES"
-# $FAUX_FINS_CASSE : fins.json devient un dossier non vide pendant le lancement (l'écriture qui suit échoue, comme
-# sur un disque plein)
-if [ -n "$FAUX_FINS_CASSE" ]; then rm -f "$FAUX_FINS_CASSE"; mkdir -p "$FAUX_FINS_CASSE/x"; fi
+# $FAUX_CASSE : ce fichier d'état devient un dossier non vide pendant le lancement (l'écriture qui suit échoue,
+# comme sur un disque plein)
+if [ -n "$FAUX_CASSE" ]; then rm -f "$FAUX_CASSE"; mkdir -p "$FAUX_CASSE/x"; fi
 # avec --on-active=, comme le vrai : seule la minuterie est active pendant le délai, le service ne l'est pas encore
 suffixe=service
 for a in "$@"; do case "$a" in --on-active=*) suffixe=timer ;; esac; done
@@ -827,10 +827,52 @@ def test_ecriture_des_fins_manquee_apres_lancement(banc):
     réponse : {"ok": true, "job"}, « lance » audité, écriture manquée journalisée."""
     fins = banc.r / "var/lib/secubox-pilotagectl/fins.json"
     rc, sortie, p = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True,
-                             env={"FAUX_FINS_CASSE": str(fins)})
+                             env={"FAUX_CASSE": str(fins)})
     assert rc == 0 and sortie["ok"] is True and len(sortie["job"]) == 16, (sortie, p.stderr)
     assert "fins.json" in p.stderr
     lances = [e for e in banc.audit() if e["evenement"] == "pilotage_resultat" and e.get("resultat") == "lance"]
     assert len(lances) == 1 and lances[0]["job"] == sortie["job"]
     assert len(banc.lancements()) == 1
     assert not [n for n in os.listdir(fins.parent) if n.startswith(".")]   # aucun temporaire laissé
+
+
+def test_ecriture_de_l_operation_manquee_apres_lancement(banc):
+    """R-L2-29 : operation.json qui ne s'écrit pas APRÈS un lancement réussi → réponse ok, « lance » audité,
+    écriture manquée journalisée, aucun temporaire laissé."""
+    etat = banc.r / "var/lib/secubox-pilotagectl"
+    rc, sortie, p = banc.run("maj-paquets", agent=True, env={"FAUX_CASSE": str(etat / "operation.json")})
+    assert rc == 0 and sortie["ok"] is True and len(sortie["job"]) == 16, (sortie, p.stderr)
+    assert "operation.json" in p.stderr
+    lances = [e for e in banc.audit() if e["evenement"] == "pilotage_resultat" and e.get("resultat") == "lance"]
+    assert len(lances) == 1 and lances[0]["job"] == sortie["job"]
+    assert not [n for n in os.listdir(etat) if n.startswith(".")]
+
+
+def test_consentement_non_consomme_apres_lancement(banc):
+    """R-L2-29 : l'accord est trouvé, l'action part, mais consentements.json ne s'écrit pas : réponse ok, « lance »
+    audité, et l'anomalie (accord qui pourrait resservir) journalisée et auditée, sans nouvel essai."""
+    banc.cliente()
+    _, s, _ = banc.run("reboot", agent=True)
+    ident = s["consentement"]
+    banc.run("consentement", "accepter", ident)
+    etat = banc.r / "var/lib/secubox-pilotagectl"
+    rc, sortie, p = banc.run("reboot", agent=True, env={"FAUX_CASSE": str(etat / "consentements.json")})
+    assert rc == 0 and sortie["ok"] is True and len(sortie["job"]) == 16, (sortie, p.stderr)
+    assert "consentements.json" in p.stderr
+    evts = banc.audit()
+    anomalie = [e for e in evts if e["evenement"] == "consentement_non_consomme"]
+    assert len(anomalie) == 1 and anomalie[0]["consentement"] == ident and anomalie[0]["job"] == sortie["job"]
+    assert not any(e["evenement"] == "consentement_utilise" for e in evts)
+    lances = [e for e in evts if e["evenement"] == "pilotage_resultat" and e.get("resultat") == "lance"]
+    assert len(lances) == 1 and lances[0]["job"] == sortie["job"]
+
+
+def test_ecriture_avant_lancement_refuse_toujours(banc):
+    """R-L2-29 : une écriture d'état AVANT le lancement qui échoue refuse : rien ne part (consentement en attente)."""
+    banc.cliente()
+    etat = banc.r / "var/lib/secubox-pilotagectl"
+    (etat / "consentements.json").mkdir()
+    (etat / "consentements.json" / "x").mkdir()
+    rc, sortie, _ = banc.run("reboot", agent=True)
+    assert rc != 0 and sortie["ok"] is False
+    assert banc.lancements() == []

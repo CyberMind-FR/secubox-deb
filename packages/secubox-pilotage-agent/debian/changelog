@@ -70,6 +70,9 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
     - M3 : refus « ancre non vérifiée » du ctl alors que l'agent est ancré → revérification forcée (une par minute).
     - M4 : 12 erreurs consécutives de systemctl show → « résultat inconnu », emplacement de suivi libéré.
     - M5 : Agir sans Ancre → configuration refusée, aucune connexion. README : suivi maintenu pendant une coupure.
+    - R-L2-29 : toute écriture d'état APRÈS un lancement réussi (fins.json, operation.json, consommation d'un
+      consentement) est rattrapée et journalisée ; réponse {"ok": true, "job"}, « lance » audité. Un accord non
+      consommé est audité (consentement_non_consomme), sans nouvel essai. Avant le lancement, l'échec refuse toujours.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
 

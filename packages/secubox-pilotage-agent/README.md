@@ -104,6 +104,10 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 - État root `0700` `/var/lib/secubox-pilotagectl` (tmpfiles.d du paquet) : consentements, mains liées, opération en
   cours, canal vérifié (`ancre.json`), opérations lancées et finies (`fins.json`). Non fiable (propriétaire, droits,
   lien) : tout est refusé.
+  Une écriture d'état qui échoue **avant** le lancement refuse (rien ne part) ; **après** un lancement réussi
+  (`fins.json`, `operation.json`, consommation d'un consentement), elle est journalisée et la réponse reste
+  `{"ok": true, "job"}` (R-L2-29). Un accord qui n'a pu être marqué utilisé est audité `consentement_non_consomme`
+  (il pourrait resservir) ; une opération exclusive qui n'a pu être enregistrée n'empêche alors pas une seconde opération longue.
 - `SBX_RACINE` (tests seulement) n'est honorée que si l'appelant est le processus lui-même ; jamais sous sudo depuis un
   autre compte.
 

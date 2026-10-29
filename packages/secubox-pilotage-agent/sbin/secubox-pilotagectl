@@ -871,6 +871,16 @@ def charger_fins(fd):
     return fins
 
 
+def ecrire_apres(fd, nom, valeur):
+    """Écriture d'état APRÈS un lancement réussi (R-L2-29) : un échec est journalisé et rend False, jamais propagé."""
+    try:
+        ecrire_json(fd, nom, valeur)
+        return True
+    except OSError as e:
+        err(f"{nom} non écrit après le lancement ({e.__class__.__name__})")
+        return False
+
+
 def ecrire_fins(fd, fins):
     """Écrit fins.json (les FINS_MAX dernières) ; un échec (disque plein, fichier remplacé) est journalisé, jamais
     propagé : l'opération est déjà lancée ou finie, et son audit fait foi (M1, M2)."""
@@ -1020,12 +1030,17 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
     if not lancer(ctx, verbe, p, job):
         auditer(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="echec")
         raise Erreur("lancement impossible")
+    # R-L2-29 : l'opération est partie ; une écriture d'état manquée désormais est journalisée, jamais propagée
+    # (la réponse reste {"ok": true, "job"} et « lance » est audité). Avant le lancement, elle refuse toujours.
     if accord is not None:
         accord["etat"] = "utilise"
-        ecrire_json(fd, "consentements.json", consentements)
-        auditer(ctx, "consentement_utilise", consentement=accord["id"], action=action, unite=unite, job=job)
+        if ecrire_apres(fd, "consentements.json", consentements):
+            auditer(ctx, "consentement_utilise", consentement=accord["id"], action=action, unite=unite, job=job)
+        else:
+            # L'accord n'est pas marqué utilisé et pourrait resservir : anomalie auditée, pas de nouvel essai.
+            auditer(ctx, "consentement_non_consomme", consentement=accord["id"], action=action, unite=unite, job=job)
     if verbe in EXCLUSIVES:
-        ecrire_json(fd, "operation.json", {"job": job, "verbe": verbe, "debut": maintenant})
+        ecrire_apres(fd, "operation.json", {"job": job, "verbe": verbe, "debut": maintenant})
     fins.append({"job": job, "verbe": verbe, "resultat": "lance", "quand": maintenant})
     ecrire_fins(fd, fins)                           # M2 : après le lancement, un échec d'écriture ne change pas la réponse
     auditer(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="lance")
