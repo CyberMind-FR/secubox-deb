@@ -167,7 +167,7 @@ def test_lignes_d_etat_comptees_a_part_3257(tmp_path, monkeypatch):
           {"action": "banned", "category": "sqli", "severity": "critical",
            "timestamp": today + "T10:00:00", "client_ip": "203.0.113.1"},
           etat("multipart-tronque"), etat("multipart-malforme"), etat("multipart-limite"),
-          etat("multipart-concurrence"), etat("body-inspect-truncated"),
+          etat("capture-concurrence"), etat("body-inspect-truncated"),
           etat("body-inspect-skipped"),
           {"action": "autre", "category": "x", "severity": "audit",
            "timestamp": today + "T11:00:01", "client_ip": usager},

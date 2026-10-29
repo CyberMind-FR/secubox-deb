@@ -1205,7 +1205,12 @@ async def get_php_signaux():
     if releve is None:
         return {"fenetre_h": _php_signaux.FENETRE_H, "etat": "inconnu", "calcule_a": None,
                 "familles": None, "regles": None, "vhosts": None, "adresses": None}
-    return releve
+    return _php_signaux.appliquer_fraicheur(releve, _maintenant())
+
+
+def _maintenant() -> float:
+    """Horloge de l'API (remplaçable par les tests)."""
+    return time.time()
 
 
 def _unite_active(unite: str) -> bool:

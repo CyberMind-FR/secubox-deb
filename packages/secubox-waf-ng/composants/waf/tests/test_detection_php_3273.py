@@ -55,6 +55,7 @@ def _client(monkeypatch, tmp_path, surcharger_garde=True):
     monkeypatch.setattr(waf, "PHP_SIGNAUX_CACHE", tmp_path / "php-signaux.json")
     monkeypatch.setattr(waf, "VHOST_PROFILES", tmp_path / "vhost_profiles.json")
     monkeypatch.setattr(waf, "_unite_active", lambda u: True)
+    monkeypatch.setattr(waf, "_maintenant", lambda: MAINTENANT.timestamp())
     monkeypatch.setattr(waf, "_ports_leurres", lambda: [])
     waf.app.dependency_overrides.clear()
     if surcharger_garde:
@@ -157,3 +158,43 @@ def test_php_signaux_inconnu_sans_cache(monkeypatch, tmp_path):
     client, _ = _client(monkeypatch, tmp_path)
     j = client.get("/php/signaux").json()
     assert j["etat"] == "inconnu" and j["familles"] is None
+
+
+def _cache(tmp_path, il_y_a_s):
+    cache = {"fenetre_h": 24, "calcule_a": MAINTENANT.timestamp() - il_y_a_s, "etat": "ok",
+             "familles": {"php2shell": 7, "roundcube": 0, "nextcloud": 0, "php_requete": 0, "outil": 2},
+             "regles": {"php2shell-001": 7}, "vhosts": {"nc.example": 7}, "adresses": {}}
+    (tmp_path / "php-signaux.json").write_text(json.dumps(cache))
+
+
+def test_php_signaux_perime_au_dela_de_10_minutes(monkeypatch, tmp_path):
+    """Si la tâche de fond s'arrête, le relevé reste lisible mais il est déclaré périmé."""
+    client, _ = _client(monkeypatch, tmp_path)
+    _cache(tmp_path, 601)
+    j = client.get("/php/signaux").json()
+    assert j["etat"] == "perime"
+    assert j["familles"]["php2shell"] == 7        # les compteurs restent rendus
+    _cache(tmp_path, 599)
+    assert client.get("/php/signaux").json()["etat"] == "ok"
+
+
+def test_php_signaux_sans_date_de_calcul_est_perime(monkeypatch, tmp_path):
+    client, _ = _client(monkeypatch, tmp_path)
+    _cache(tmp_path, 0)
+    brut = json.loads((tmp_path / "php-signaux.json").read_text())
+    brut["calcule_a"] = "hier"
+    (tmp_path / "php-signaux.json").write_text(json.dumps(brut))
+    assert client.get("/php/signaux").json()["etat"] == "perime"
+
+
+def test_php_signaux_exclut_toute_adresse_non_publique(monkeypatch, tmp_path):
+    """CGNAT (100.64/10), documentation, comparaison de performance : ni privées ni globales, donc exclues."""
+    client, waf = _client(monkeypatch, tmp_path)
+    ips = ["100.64.0.1", "198.18.0.1", "192.0.2.1", "10.0.0.1", "169.254.1.1", "::1", "fd00::1", "8.8.4.4",
+           "2606:4700:4700::1111"]
+    journal = _journal(tmp_path, [_ligne("php2shell", ip=ip) for ip in ips])
+    monkeypatch.setattr(waf, "THREATS_LOG", str(journal))
+    waf._rafraichir_php_signaux(MAINTENANT.timestamp())
+    j = client.get("/php/signaux").json()
+    assert sorted(j["adresses"]) == ["2606:4700:4700::1111", "8.8.4.4"]
+    assert j["familles"]["php2shell"] == 9        # les lignes comptent, seules les adresses sont tues

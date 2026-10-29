@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
 FENETRE_H = 24
+# Au-delà, le relevé du cache n'est plus celui de la tâche de fond (arrêtée ou bloquée) : état « perime ».
+AGE_MAX_S = 600
 FAMILLES = ("php2shell", "roundcube", "nextcloud", "php_requete")
 # Gravité des lignes d'état (multipart-*, capture-concurrence) : un fait sur le moteur, pas un signal d'attaque.
 GRAVITE_ETAT = "audit"
@@ -45,7 +47,9 @@ def _adresse_publique(ip: Any) -> Optional[str]:
         a = ipaddress.ip_address(str(ip))
     except ValueError:
         return None
-    if a.is_private or a.is_loopback or a.is_link_local or a.is_unspecified or a.is_reserved:
+    # is_global et non is_private : le CGNAT (100.64.0.0/10) et la plage de test 198.18.0.0/15 ne sont
+    # pas « privés » pour ipaddress, mais ce ne sont pas des adresses publiques non plus.
+    if not a.is_global:
         return None
     return str(a)
 
@@ -132,6 +136,15 @@ def ecrire_cache(chemin: Path, etat: Dict[str, Any]) -> None:
     tmp = chemin.with_name(chemin.name + ".tmp")
     tmp.write_text(json.dumps(etat, separators=(",", ":")))
     tmp.replace(chemin)
+
+
+def appliquer_fraicheur(releve: Dict[str, Any], maintenant: float) -> Dict[str, Any]:
+    """Le relevé, avec `etat: "perime"` si `calcule_a` a plus de AGE_MAX_S secondes (ou n'est pas une date).
+    Les compteurs restent rendus : un relevé vieux vaut mieux que rien, tant qu'on dit qu'il est vieux."""
+    calcule = releve.get("calcule_a")
+    if isinstance(calcule, bool) or not isinstance(calcule, (int, float)) or maintenant - calcule > AGE_MAX_S:
+        return {**releve, "etat": "perime"}
+    return releve
 
 
 def lire_cache(chemin: Path) -> Optional[Dict[str, Any]]:
