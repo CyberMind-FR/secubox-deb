@@ -9,6 +9,25 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-29 — Streamlit : réveil, port et publication automatiques, déployé sur gk2 (closes #3247)
+
+- **Livré** (PR #3249 → `6c5074058`, secubox-streamlit 1.7.0, secubox-haproxy 1.12.7) : le conteneur endormi est
+  réveillé avant un dépôt ou un démarrage (plus de 500 vide) ; erreurs lisibles ; port automatique persistant ;
+  publication déclarative (`[publication] auto`, `ip_conteneur`) et nom public modifiable ; `app depublier-anciennes` ;
+  délai HAProxy de 10 min sur les seuls chemins dépôt/publication. Trois relectures (4 constats, puis 3 mineurs).
+- **Déployé sur gk2** : paquets publiés puis installés par apt, `haproxyctl generate` + reload, un seul redémarrage
+  de l'agrégateur (health en 46 s, module streamlit monté en 42 s de plus) ; `[publication] auto = true`,
+  `ip_conteneur = "10.100.0.50"` (décision du propriétaire, audité). 25 publications cassées retirées (elles
+  servaient la page « Wrong Domain ») : 6 d'un coup, 19 après `haproxyctl generate --allow-shrink` (garde-fou de
+  dérive : 38 ACL = 19 vhosts × 2, exactement la baisse attendue), puis second passage. 7 entrées gardées, dont
+  `couture`. Suites : **#3252** (adresse de l'hôte sur le pont, délai nginx `/deploy`, sudoers, isolation par appli,
+  réveil par vhost, `--allow-shrink` borné pendant la dépublication).
+- **couture.gk2.secubox.in** (appli du propriétaire, hors dépôt) : heures d'ouverture liées au jour de la semaine
+  (lundi Soir 17h–20h, jeudi Matin 9h–12h et Après-midi 14h–17h), exceptions par date, 4 prochains créneaux au
+  public ; source rendue en `atelier-partage-2.zip`.
+- Livrés et déployés la veille, marqués ici : nDPIsrvd sans boucle sur une box sans toolbox (ndpid-engine 1.7.3,
+  closes #3240) ; flowcap sans relance en boucle quand l'interface manque (secubox-dpi 1.14.5, gk1, closes #3245).
+
 ## 2026-10-28 — Sécurité : secrets de construction dans les images publiées, rotation de la flotte (ref #3243)
 
 - **Constat** (banc gk5) : les images de CI (dépôt public) embarquaient des secrets générés dans le chroot — clés
