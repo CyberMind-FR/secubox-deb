@@ -973,11 +973,15 @@ cmd_cert_sync() {
 #   V X-SecuBox-Origin-Status    nginx $upstream_status (secubox-waking.conf) -> waker
 #   V X-SecuBox-Netboot-Lot      nginx :8099 -> secubox-netboot /lot-flash
 #   V X-SecuBox-Adresse-Serveur  nginx :8099 $server_addr -> secubox-netboot /lot-flash
+#   V X-SecuBox-Pair             nginx :7331 (wg-mesh) jeton $p2p_pair_cle, p2p-masterlink.conf -> secubox-p2p (master-link)
+#   V X-SecuBox-Maillage         nginx :8799 (wg-mesh) « 1 », annuaire-mesh.conf.tpl -> secubox-annuaire, openpgp (boite/depot)
+#   V X-SecuBox-Relais           agregateur, relais web vers vault (copie du client retiree) -> vault (routes hors relais)
+#   V X-SecuBox-Second-Facteur   agregateur apres TOTP verifie (copie du client retiree) -> vault /ouvrir hors LAN
+#   Le maillage entre box passe par les ecoutes nginx :7331 et :8799 du tunnel wg-mesh, jamais par http-in ni https-in.
 # Jamais effaces ici :
 #   P X-SecuBox-Signature        HMAC pose par l'emetteur d'un webhook, verifie par le recepteur
 #   P X-SecuBox-Healthcheck      pose par le JS des pages d'erreur (navigateur), lu par personne
-#   ? X-SecuBox-Pair, -Maillage, -Relais, -Second-Facteur : poses en interne (nginx :7331, :8799, agregateur) et deja
-#     neutralises en aval (vides par nginx, retires par l'agregateur) ; laisses a l'arbitrage (rapport #3258).
+#   - X-SecuBox-Droplet          en-tete de COURRIEL (alerte droplet), jamais HTTP
 #   R reponses seulement : -WAF, -Cache, -Cache-Age, -Cache-TTL, -Robot, -Ng, -Sentinel, -Media, -NetBoot, -Bundle.
 # Un effacement EN BLOC (-m beg, comme onion-in) emporterait les en-tetes de protocole : liste nominative.
 # Meme liste dans api/main.py (ENTETES_VERDICT), pour POST /haproxy/generate ; tests/test_entetes_verdict_3258.py.
@@ -990,6 +994,10 @@ ENTETES_VERDICT=(
     X-SecuBox-Origin-Status
     X-SecuBox-Netboot-Lot
     X-SecuBox-Adresse-Serveur
+    X-SecuBox-Pair
+    X-SecuBox-Maillage
+    X-SecuBox-Relais
+    X-SecuBox-Second-Facteur
 )
 
 # Lignes « http-request del-header » des verdicts, a placer en tete d'un frontal public.
