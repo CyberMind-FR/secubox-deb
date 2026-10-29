@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
 )
@@ -67,7 +68,7 @@ func TestSystemeNeDonneJamaisLaLigneDeCommande(t *testing.T) {
 	}
 }
 
-func TestSystemeCPUUsageMoyenneDepuisLaLecturePrecedente(t *testing.T) {
+func TestSystemeCPUUsageMoyenneDeLaDerniereFenetreEchantillonnee(t *testing.T) {
 	racine := t.TempDir()
 	ecrire := func(rel, contenu string) {
 		f := filepath.Join(racine, rel)
@@ -80,16 +81,35 @@ func TestSystemeCPUUsageMoyenneDepuisLaLecturePrecedente(t *testing.T) {
 	ecrire("proc/uptime", "1.0 1.0\n")
 	ecrire("proc/stat", "cpu  100 0 0 900 0 0 0 0 0 0\n")
 	s := NouvelleSourceSysteme(racine)
-	if _, err := s.Lire(context.Background()); err != nil {
-		t.Fatal(err)
+	cpu := s.(EchantillonCPU)
+	cpu.EchantillonnerCPU() // début de fenêtre (surveillance)
+	usage := func() any {
+		t.Helper()
+		p, err := s.Lire(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p["Device.DeviceInfo.ProcessStatus.CPUUsage"]
+	}
+	if got := usage(); got != 0.0 {
+		t.Fatalf("aucune fenêtre complète : CPUUsage = %v, attendu 0", got)
 	}
 	ecrire("proc/stat", "cpu  200 0 0 1000 0 0 0 0 0 0\n") // +100 actifs sur +200 au total
-	p, err := s.Lire(context.Background())
-	if err != nil {
-		t.Fatal(err)
+	cpu.EchantillonnerCPU()                                // fin de la fenêtre de 30 s
+	// M1 : deux Get du maître à 1 ms d'intervalle, alors que /proc/stat bouge (100 % entre eux) : la même valeur,
+	// celle de la fenêtre de la surveillance, et la base de la fenêtre suivante n'est pas déplacée.
+	ecrire("proc/stat", "cpu  300 0 0 1000 0 0 0 0 0 0\n")
+	a := usage()
+	time.Sleep(time.Millisecond)
+	ecrire("proc/stat", "cpu  301 0 0 1000 0 0 0 0 0 0\n")
+	b := usage()
+	if a != 50.0 || b != 50.0 {
+		t.Fatalf("lectures du maître : %v puis %v, attendu 50 et 50", a, b)
 	}
-	if got := p["Device.DeviceInfo.ProcessStatus.CPUUsage"]; got != 50.0 {
-		t.Errorf("CPUUsage = %v, attendu 50", got)
+	ecrire("proc/stat", "cpu  400 0 0 1100 0 0 0 0 0 0\n") // depuis la fin de fenêtre précédente : +200 actifs sur +300
+	cpu.EchantillonnerCPU()
+	if got := usage(); got != 200.0*100/300 {
+		t.Fatalf("fenêtre suivante = %v, attendu %v (la base ne bouge qu'à l'échantillon)", got, 200.0*100/300)
 	}
 }
 

@@ -35,6 +35,16 @@ type systeme struct {
 	dernierTotal uint64
 	dernierActif uint64
 	deja         bool
+	usage        float64 // moyenne de la dernière fenêtre complète
+}
+
+// EchantillonCPU : la source système mesure l'activité CPU par fenêtres
+// complètes, que seul l'échantillonneur fait avancer (la surveillance de
+// l'agent, à intervalle fixe). Une lecture (Get du maître, quelle que soit sa
+// fréquence) rend la moyenne de la dernière fenêtre complète sans la déplacer :
+// deux Get à 1 ms d'intervalle ne rendent plus 0 ou 100 % (M1).
+type EchantillonCPU interface {
+	EchantillonnerCPU()
 }
 
 // NouvelleSourceSysteme lit /proc et /sys sous racine (vide en production).
@@ -108,8 +118,10 @@ func (s *systeme) Lire(ctx context.Context) (map[string]any, error) {
 		p[racineDevice+"SerialNumber"] = sn
 	}
 
-	// CPU.
-	p[racineDevice+"ProcessStatus.CPUUsage"] = s.usageCPU()
+	// CPU : dernière fenêtre complète (EchantillonnerCPU).
+	s.mu.Lock()
+	p[racineDevice+"ProcessStatus.CPUUsage"] = s.usage
+	s.mu.Unlock()
 
 	// Processus.
 	s.processus(ctx, p)
@@ -179,23 +191,24 @@ func (s *systeme) numeroSerie() string {
 	return ""
 }
 
-// usageCPU rend le pourcentage d'activité depuis la lecture précédente
-// (0 à la première lecture).
-func (s *systeme) usageCPU() float64 {
+// EchantillonnerCPU clôt la fenêtre en cours : la moyenne d'activité depuis
+// l'échantillon précédent devient la valeur lue (0 tant qu'il n'y a pas eu deux
+// échantillons). /proc/stat illisible : la fenêtre n'avance pas.
+func (s *systeme) EchantillonnerCPU() {
 	txt, err := s.lire("proc/stat")
 	if err != nil {
-		return 0
+		return
 	}
 	ligne, _, _ := strings.Cut(txt, "\n")
 	f := strings.Fields(ligne)
 	if len(f) < 5 || f[0] != "cpu" {
-		return 0
+		return
 	}
 	var total, inactif uint64
 	for i, c := range f[1:] {
 		v, err := strconv.ParseUint(c, 10, 64)
 		if err != nil {
-			return 0
+			return
 		}
 		total += v
 		if i == 3 || i == 4 { // idle, iowait
@@ -205,12 +218,10 @@ func (s *systeme) usageCPU() float64 {
 	actif := total - inactif
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	usage := 0.0
 	if s.deja && total > s.dernierTotal {
-		usage = float64(actif-s.dernierActif) * 100 / float64(total-s.dernierTotal)
+		s.usage = float64(actif-s.dernierActif) * 100 / float64(total-s.dernierTotal)
 	}
 	s.dernierTotal, s.dernierActif, s.deja = total, actif, true
-	return usage
 }
 
 type proc struct {

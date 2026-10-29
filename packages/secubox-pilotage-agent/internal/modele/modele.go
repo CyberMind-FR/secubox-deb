@@ -46,13 +46,17 @@ func NouveauModele(sources ...Source) *Modele {
 	return &Modele{sources: sources}
 }
 
-// Get lit chaque source une seule fois puis répond à chaque chemin. Une source
-// en échec n'empêche pas les autres ; si un chemin ne trouve rien alors qu'une
-// source a échoué, l'erreur mentionne cette source plutôt que « chemin inconnu ».
+// Get lit une seule fois chaque source concernée par la demande (voir
+// concernee), puis répond à chaque chemin. Une source en échec n'empêche pas
+// les autres ; si un chemin ne trouve rien alors qu'une source a échoué,
+// l'erreur mentionne cette source plutôt que « chemin inconnu ».
 func (m *Modele) Get(ctx context.Context, chemins []string) []Resultat {
 	tout := map[string]any{}
 	var echecs []string
 	for _, s := range m.sources {
+		if !concernee(s, chemins) {
+			continue // systemctl, dpkg/status, /proc/net/tcp* : pas relus pour un chemin qu'ils ne portent pas
+		}
 		p, err := s.Lire(ctx)
 		if err != nil {
 			echecs = append(echecs, s.Nom())
@@ -85,6 +89,44 @@ func (m *Modele) Get(ctx context.Context, chemins []string) []Resultat {
 		res = append(res, r)
 	}
 	return res
+}
+
+// concernee dit si la source peut porter un paramètre demandé : une source qui
+// n'annonce pas ses chemins (pas de Declarant) est toujours lue ; sinon l'un de
+// ses chemins annoncés doit répondre à l'une des demandes (cheminRepond).
+func concernee(s Source, chemins []string) bool {
+	d, ok := s.(Declarant)
+	if !ok {
+		return true
+	}
+	for _, g := range d.Chemins() {
+		for _, c := range chemins {
+			if cheminRepond(c, g) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// cheminRepond : le gabarit g (chemin complet, « {i} » pour un indice de liste)
+// peut-il produire un paramètre que la demande c retient ? Demande exacte : même
+// nombre de segments. Demande par préfixe (terminée par « . ») : g est plus long
+// et commence par c. « {i} » vaut n'importe quel segment non vide : au pire une
+// lecture de trop, jamais un paramètre manqué.
+func cheminRepond(c, g string) bool {
+	prefixe := strings.HasSuffix(c, ".")
+	cs := strings.Split(strings.TrimSuffix(c, "."), ".")
+	gs := strings.Split(g, ".")
+	if prefixe && len(cs) >= len(gs) || !prefixe && len(cs) != len(gs) {
+		return false
+	}
+	for i, seg := range cs {
+		if seg != gs[i] && !(gs[i] == "{i}" && seg != "") {
+			return false
+		}
+	}
+	return true
 }
 
 // Supportes rend la liste triée des chemins connus (GetSupportedDM).

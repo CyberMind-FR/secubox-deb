@@ -41,7 +41,7 @@ func main() {
 	ctx, arret := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer arret()
 
-	m := construireModele(lanceurSystemctl(cheminSystemctl, delaiSystemctl))
+	m, cpu := construireModele(lanceurSystemctl(cheminSystemctl, delaiSystemctl))
 
 	maitre, ipSource := attendreMaitre(ctx, os.Getenv("PILOTAGE_MAITRE"), lireInterfaces, reverifMaitre)
 	if ctx.Err() != nil {
@@ -55,7 +55,7 @@ func main() {
 	suivi.Add(1)
 	go func() {
 		defer suivi.Done()
-		surveiller(ctx, m, intervalleReleve(os.Getenv("PILOTAGE_RELEVE_INTERVALLE_S")), ev)
+		surveiller(ctx, m, cpu, intervalleReleve(os.Getenv("PILOTAGE_RELEVE_INTERVALLE_S")), ev)
 	}()
 
 	cl := canal.NouveauClient(canal.Config{
@@ -72,16 +72,18 @@ func main() {
 	log.Print("arrêt propre")
 }
 
-// construireModele assemble les six sources, lues sous la racine « / ».
-func construireModele(lanceur func(ctx context.Context, args ...string) ([]byte, error)) *modele.Modele {
+// construireModele assemble les six sources, lues sous la racine « / », et
+// rend aussi l'échantillonneur CPU de la source système (fenêtre de la surveillance).
+func construireModele(lanceur func(ctx context.Context, args ...string) ([]byte, error)) (*modele.Modele, collecte.EchantillonCPU) {
+	sys := collecte.NouvelleSourceSysteme("/")
 	return modele.NouveauModele(
-		collecte.NouvelleSourceSysteme("/"),
+		sys,
 		collecte.NouvelleSourceSystemd(lanceur),
 		collecte.NouvelleSourcePaquets("/"),
 		collecte.NouvelleSourceExposition("/"),
 		collecte.NouvelleSourceMaillage(func() ([]net.Interface, error) { return net.Interfaces() }),
 		collecte.NouvelleSourcePilotage("/", version),
-	)
+	), sys.(collecte.EchantillonCPU)
 }
 
 // attendreMaitre applique la règle de découverte, puis revérifie à chaque pause
@@ -115,12 +117,16 @@ func attendreMaitre(ctx context.Context, env string, interfaces func() []ifaceAd
 
 // surveiller échantillonne le modèle à intervalle fixe et pousse les événements
 // du détecteur ; si le canal est plein, l'événement est abandonné (jamais bloquant).
-func surveiller(ctx context.Context, m *modele.Modele, intervalle time.Duration, ev chan<- notifs.Evenement) {
+// Elle ne lit que les chemins du détecteur (M3) et fait avancer, seule, la
+// fenêtre CPU que lisent les Get du maître (M1).
+func surveiller(ctx context.Context, m *modele.Modele, cpu collecte.EchantillonCPU, intervalle time.Duration, ev chan<- notifs.Evenement) {
 	det := notifs.NouveauDetecteur(notifs.SeuilsDepuisEnv(), nil)
 	t := time.NewTicker(intervalle)
 	defer t.Stop()
+	chemins := notifs.Chemins()
 	for {
-		plat := modele.Aplatir(m.Get(ctx, []string{"Device."}))
+		cpu.EchantillonnerCPU()
+		plat := modele.Aplatir(m.Get(ctx, chemins))
 		for _, e := range det.Observer(plat) {
 			select {
 			case ev <- e:

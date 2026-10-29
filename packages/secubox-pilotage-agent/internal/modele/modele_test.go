@@ -79,3 +79,72 @@ func TestGetSansEchecNeSignaleRien(t *testing.T) {
 		t.Fatalf("échecs inattendus : %+v", r[0])
 	}
 }
+
+// comptee : source déclarante qui compte ses lectures.
+type comptee struct {
+	nom      string
+	chemins  []string
+	params   map[string]any
+	lectures *int
+}
+
+func (c comptee) Nom() string       { return c.nom }
+func (c comptee) Chemins() []string { return c.chemins }
+func (c comptee) Lire(context.Context) (map[string]any, error) {
+	*c.lectures++
+	return c.params, nil
+}
+
+// M3 : un Get ne lit que les sources dont les chemins annoncés recoupent la demande (systemctl, dpkg/status et
+// /proc/net/tcp* ne sont plus relus pour un UpTime) ; une source qui n'annonce rien est toujours lue.
+func TestGetNeLitQueLesSourcesConcernees(t *testing.T) {
+	var nSys, nSvc, nNue int
+	sys := comptee{"systeme", []string{"Device.DeviceInfo.UpTime", "Device.DeviceInfo.ProcessStatus.Process.{i}.PID"},
+		map[string]any{"Device.DeviceInfo.UpTime": 5, "Device.DeviceInfo.ProcessStatus.Process.1.PID": 1}, &nSys}
+	svc := comptee{"systemd", []string{"Device.X_SECUBOX_Services.FailedNumberOfEntries", "Device.X_SECUBOX_Services.{i}.Name"},
+		map[string]any{"Device.X_SECUBOX_Services.FailedNumberOfEntries": 0, "Device.X_SECUBOX_Services.3.Name": "a"}, &nSvc}
+	nue := fausse{nom: "nue", params: map[string]any{"Device.Nu": 1}}
+	compteNue := &nNue
+	m := NouveauModele(sys, svc, compteurSansChemins{nue, compteNue})
+	for _, c := range []struct {
+		chemins       []string
+		sys, svc, nue int
+	}{
+		{[]string{"Device.DeviceInfo.UpTime"}, 1, 0, 1},
+		{[]string{"Device.X_SECUBOX_Services.3.Name"}, 0, 1, 1},
+		{[]string{"Device.X_SECUBOX_Services.3."}, 0, 1, 1},
+		{[]string{"Device.X_SECUBOX_Services."}, 0, 1, 1},
+		{[]string{"Device.DeviceInfo.ProcessStatus.Process.2."}, 1, 0, 1},
+		{[]string{"Device.DeviceInfo.UpTime."}, 0, 0, 1}, // préfixe sous une feuille : rien à lire
+		{[]string{"Device.Rien"}, 0, 0, 1},
+		{[]string{"Device."}, 1, 1, 1},
+		{[]string{"Device.DeviceInfo.UpTime", "Device.X_SECUBOX_Services.FailedNumberOfEntries"}, 1, 1, 1},
+	} {
+		nSys, nSvc, nNue = 0, 0, 0
+		res := m.Get(context.Background(), c.chemins)
+		if nSys != c.sys || nSvc != c.svc || nNue != c.nue {
+			t.Errorf("%v : lectures systeme=%d systemd=%d nue=%d, attendu %d %d %d", c.chemins, nSys, nSvc, nNue, c.sys, c.svc, c.nue)
+		}
+		if len(res) != len(c.chemins) {
+			t.Errorf("%v : %d résultats", c.chemins, len(res))
+		}
+	}
+	if r := m.Get(context.Background(), []string{"Device.X_SECUBOX_Services.3.Name"}); r[0].Params["Device.X_SECUBOX_Services.3.Name"] != "a" {
+		t.Errorf("valeur perdue : %+v", r)
+	}
+	if r := m.Get(context.Background(), []string{"Device.Rien"}); r[0].Erreur != "chemin inconnu" {
+		t.Errorf("chemin inconnu : %+v", r)
+	}
+}
+
+// compteurSansChemins : source sans Declarant (toujours lue), qui compte ses lectures.
+type compteurSansChemins struct {
+	f fausse
+	n *int
+}
+
+func (c compteurSansChemins) Nom() string { return c.f.nom }
+func (c compteurSansChemins) Lire(ctx context.Context) (map[string]any, error) {
+	*c.n++
+	return c.f.Lire(ctx)
+}

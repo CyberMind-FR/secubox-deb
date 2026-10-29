@@ -127,6 +127,10 @@ const (
 	cUnites = "Device.X_SECUBOX_Services."
 )
 
+// Chemins : ce qu'Observer examine ; la surveillance ne demande que cela au
+// modèle (paquets, exposition, maillage ne sont pas relus toutes les 30 s).
+func Chemins() []string { return []string{cUptime, cMem, cUnites} }
+
 // Observer examine un relevé complet et rend les nouveaux événements.
 func (d *Detecteur) Observer(params map[string]any) []Evenement {
 	now := d.horloge()

@@ -8,14 +8,19 @@ package main
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
 )
 
 func TestModeleAssemble(t *testing.T) {
-	m := construireModele(func(context.Context, ...string) ([]byte, error) { return nil, nil })
+	m, cpu := construireModele(func(context.Context, ...string) ([]byte, error) { return nil, nil })
+	if cpu == nil {
+		t.Fatal("pas d'échantillonneur CPU")
+	}
 	sup := strings.Join(m.Supportes(), "\n")
 	for _, r := range []string{
 		"Device.DeviceInfo.", "Device.X_SECUBOX_Services.", "Device.X_SECUBOX_Packages.",
@@ -28,10 +33,10 @@ func TestModeleAssemble(t *testing.T) {
 }
 
 func TestSurveillerArreteAvecLeContexte(t *testing.T) {
-	m := construireModele(func(context.Context, ...string) ([]byte, error) { return nil, nil })
+	m, cpu := construireModele(func(context.Context, ...string) ([]byte, error) { return nil, nil })
 	ctx, annule := context.WithCancel(context.Background())
 	fini := make(chan struct{})
-	go func() { surveiller(ctx, m, time.Hour, make(chan notifs.Evenement, 4)); close(fini) }()
+	go func() { surveiller(ctx, m, cpu, time.Hour, make(chan notifs.Evenement, 4)); close(fini) }()
 	time.Sleep(50 * time.Millisecond)
 	annule()
 	select {
@@ -126,5 +131,50 @@ func TestAgentSurLeMaitreAttendSansContacterLeCanal(t *testing.T) {
 				t.Errorf("%d ligne(s) de journal, attendu 1 : %q", n, j.String())
 			}
 		})
+	}
+}
+
+type lue struct {
+	nom     string
+	chemins []string
+	n       *atomic.Int32
+}
+
+func (l lue) Nom() string       { return l.nom }
+func (l lue) Chemins() []string { return l.chemins }
+func (l lue) Lire(context.Context) (map[string]any, error) {
+	l.n.Add(1)
+	return map[string]any{}, nil
+}
+
+type compteCPU struct{ n atomic.Int32 }
+
+func (c *compteCPU) EchantillonnerCPU() { c.n.Add(1) }
+
+// M3 + M1 : la surveillance ne lit que les sources dont le détecteur a besoin (mémoire, UpTime, services) et
+// fait avancer, seule, la fenêtre CPU (un échantillon par tour).
+func TestSurveillerNeLitQueLesSourcesDuDetecteur(t *testing.T) {
+	var sys, svc, pkg, expo atomic.Int32
+	m := modele.NouveauModele(
+		lue{"systeme", []string{"Device.DeviceInfo.UpTime", "Device.DeviceInfo.MemoryStatus.X_SECUBOX_Available"}, &sys},
+		lue{"systemd", []string{"Device.X_SECUBOX_Services.{i}.NRestarts"}, &svc},
+		lue{"paquets", []string{"Device.DeviceInfo.SoftwareVersion", "Device.X_SECUBOX_Packages.{i}.Name"}, &pkg},
+		lue{"exposition", []string{"Device.X_SECUBOX_Exposure.Names"}, &expo},
+	)
+	cpu := &compteCPU{}
+	ctx, annule := context.WithCancel(context.Background())
+	fini := make(chan struct{})
+	go func() { surveiller(ctx, m, cpu, 20*time.Millisecond, make(chan notifs.Evenement, 4)); close(fini) }()
+	time.Sleep(110 * time.Millisecond)
+	annule()
+	<-fini
+	if sys.Load() == 0 || svc.Load() == 0 {
+		t.Fatalf("sources du détecteur non lues : systeme=%d systemd=%d", sys.Load(), svc.Load())
+	}
+	if pkg.Load() != 0 || expo.Load() != 0 {
+		t.Fatalf("sources inutiles au détecteur lues : paquets=%d exposition=%d", pkg.Load(), expo.Load())
+	}
+	if n := cpu.n.Load(); n != sys.Load() {
+		t.Fatalf("%d échantillons CPU pour %d tours", n, sys.Load())
 	}
 }
