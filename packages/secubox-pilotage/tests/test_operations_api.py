@@ -101,8 +101,8 @@ async def test_action_acceptee_auditee_et_rangee(m):
     assert r.status_code == 200 and j["etat"] == "accepte" and j["job"] == "a1b2c3d4e5f60718" and j["action"] == "reboot"
     assert [(e, c.get("etat"), c.get("job")) for e, c in m.lignes] == [("pilotage_action", "demande", None),
                                                                        ("pilotage_action", "accepte", "a1b2c3d4e5f60718")]
-    assert m.lignes[1][1] == {"box": "gk5", "cle": "maillage:gk5", "action": "reboot", "acteur": "alice", "job": "a1b2c3d4e5f60718",
-                              "etat": "accepte", "operation": j["operation"]}
+    assert m.lignes[1][1] == {"box": "gk5", "cle": "maillage:gk5", "action": "reboot", "acteur": "alice", "args": "{}",
+                              "job": "a1b2c3d4e5f60718", "etat": "accepte", "operation": j["operation"]}
     (o,) = TestClient(m.app).get("/operations", params={"nom": "gk5"}).json()
     assert o["id"] == j["operation"] and o["etat"] == "accepte" and o["acteur"] == "alice" and o["nom"] == "gk5"
 
@@ -131,6 +131,8 @@ async def test_service_et_maj_sans_confirmation(m):
         assert (await t).status_code == 200
         assert rq["body"]["command"] == "Device.X_SECUBOX_Services.Agir()"
         assert rq["body"]["args"] == {"unite": "secubox-hub.service", "action": "redemarrer"}
+        # M3 : les paramètres validés (jamais secrets) sont audités
+        assert json.loads(m.lignes[0][1]["args"]) == {"unite": "secubox-hub.service", "action": "redemarrer"}
         t = asyncio.create_task(c.post("/boxes/gk5/actions/maj-paquets", json={}))
         rq = await m.repondre(GK5, {**ACCEPTE, "job": "b1"})
         assert (await t).status_code == 200 and rq["body"]["command"] == "Device.X_SECUBOX_Packages.MettreAJour()"
@@ -325,6 +327,9 @@ async def test_fin_avant_la_reponse_rejoindre_quand_meme(m):
         rj = await m.repondre(GK5, {"etat": "accepte", "job": "", "raison": ""})
         await m.suivi.attendre()
     assert j["etat"] == "accepte" and j["operation_etat"] == "termine" and m.emis == ["gk9"] and rj["body"]["command"] == "Device.X_SECUBOX_Maillage.Rejoindre()"
+    # I1 : la fin orpheline n'est pas auditée à sa réception (action inconnue), mais une fois, à la fusion, avec son action
+    res = [c for e, c in m.lignes if e == "pilotage_action_resultat"]
+    assert res == [{"box": "gk5", "cle": "maillage:gk5", "action": "renommer", "job": "j1", "rc": 0, "resultat": "succes"}]
     (o,) = m.s.operations(GK5.cle)
     assert o["action"] == "renommer" and o["resultat"] == "succes"
 
@@ -379,3 +384,30 @@ async def test_file_pleine_429_et_operation_jamais_laissee_en_demande(m):
     (o,) = m.s.operations(GK5.cle)
     assert o["etat"] == "refuse" and o["raison"] == "file de la box pleine"
     assert m.lignes[-1][1]["etat"] == "refuse"
+
+
+
+@pytest.mark.asyncio
+async def test_mille_fins_inventees_ni_audit_ni_eviction(m, caplog):
+    """I1 : une box qui invente des jobs ne gonfle pas l'audit du maître et n'évince pas l'historique réel."""
+    caplog.set_level(logging.INFO, logger="pilotage.operations")
+    vraie = m.s.operation_demander(GK5.cle, "maj-paquets", {}, "alice", None)
+    m.s.operation_reponse(vraie, "accepte", "vrai", "")
+    for i in range(1000):
+        op = m.s.notification(GK5, {"type": "X_SECUBOX_OperationDone", "job": f"x{i}", "rc": 0, "ts": 1})
+        if op is not None:
+            await m.suivi.apres_fin(GK5, op)
+    assert [e for e, _ in m.lignes if e == "pilotage_action_resultat"] == []
+    ops = m.s.operations(GK5.cle, 1000)
+    assert vraie in [o["id"] for o in ops] and len([o for o in ops if o["action"] is None]) <= 100
+    lignes = [r for r in caplog.records if "non rattachée" in r.getMessage()]
+    assert len(lignes) <= 1                                   # une ligne agrégée par box et par minute au plus
+
+
+@pytest.mark.asyncio
+async def test_support_sans_reponse_apres_504(m):
+    async with m.client() as c:
+        r = await c.post("/boxes/gk5/support", json={})
+    assert r.status_code == 504
+    (s,) = m.s.supports(GK5.cle)
+    assert s["etat"] == "sans_reponse"

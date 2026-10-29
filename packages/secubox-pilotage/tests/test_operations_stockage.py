@@ -189,14 +189,37 @@ def test_support_fin_de_la_box_plus_courte_et_fermeture(tmp_path):
     assert s.support_ouvert(GK5.cle, "s2") is None
 
 
-def test_support_ouvert_sans_fin_et_id_inconnu(tmp_path):
-    h = Horloge()
-    s = stockage(tmp_path, h)
-    # session inconnue du maître (jamais demandée par lui) : notée, mais bornée à 4 h au plus, jamais ouverte sans fin
-    s.notification(GK5, {"type": "X_SECUBOX_Support", "id": "zz", "etat": "ouvert", "ts": 1})
-    assert s.support_ouvert(GK5.cle, "zz")["fin"] == int(h.t) + 240 * 60
-    s.support_fermer_local(GK5.cle, "zz")
-    assert s.supports(GK5.cle)[0]["etat"] == "ferme"
+def test_support_inconnu_du_maitre_jamais_ouvert(tmp_path):
+    """M2 : une box ne peut pas ouvrir seule une session que le maître n'a pas demandée : rangée « inconnu », sans ouverture."""
+    s = stockage(tmp_path)
+    s.notification(GK5, {"type": "X_SECUBOX_Support", "id": "zz", "etat": "ouvert", "fin": "1970-01-12T14:46:40Z", "ts": 1})
+    assert s.support_ouvert(GK5.cle, "zz") is None and s.support_ouvert(GK5.cle) is None
+    assert s.supports(GK5.cle)[0]["etat"] == "inconnu"
+    s.notification(GK5, {"type": "X_SECUBOX_Support", "id": "zz", "etat": "en_attente", "ts": 2})
+    s.notification(GK5, {"type": "X_SECUBOX_Support", "id": "zz", "etat": "ouvert", "ts": 3})
+    assert s.support_ouvert(GK5.cle, "zz") is None and s.supports(GK5.cle)[0]["etat"] == "inconnu"
+
+
+def test_support_ouvert_seulement_depuis_demande_ou_en_attente(tmp_path):
+    s = stockage(tmp_path)
+    s.support_demander(GK5.cle, "s1", 30, "alice")
+    s.support_sans_reponse(GK5.cle, "s1")                                  # 504 du POST /support
+    assert s.supports(GK5.cle)[0]["etat"] == "sans_reponse"
+    s.notification(GK5, {"type": "X_SECUBOX_Support", "id": "s1", "etat": "ouvert", "ts": 1})
+    assert s.support_ouvert(GK5.cle, "s1") is None                        # ni demandée ni en attente : pas d'ouverture
+    s.notification(GK5, {"type": "X_SECUBOX_Support", "id": "s1", "etat": "en_attente", "ts": 2})
+    s.notification(GK5, {"type": "X_SECUBOX_Support", "id": "s1", "etat": "ouvert", "ts": 3})
+    assert s.support_ouvert(GK5.cle, "s1") is not None
+
+
+def test_orphelines_plafonnees_a_part_sans_evincer_les_demandes(tmp_path):
+    s = StockageSqlite(tmp_path / "p", horloge=Horloge(), operations_max=3, orphelines_max=4)
+    a = s.operation_demander(GK5.cle, "reboot", {}, "alice", None)
+    for i in range(10):
+        s.operation_fin(GK5.cle, f"x{i}", 0, "")
+    ops = s.operations(GK5.cle)
+    assert a in [o["id"] for o in ops]
+    assert sorted(o["job"] for o in ops if o["action"] is None) == ["x6", "x7", "x8", "x9"]
 
 
 def test_job_deja_porte_par_une_autre_demande_jamais_fusionne(tmp_path):

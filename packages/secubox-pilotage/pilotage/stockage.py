@@ -34,7 +34,8 @@ VALEUR_MAX = 64 << 10       # caractères d'une valeur sérialisée ; au-delà e
 CHEMIN_MAX = 256
 SORTIE_MAX = 256 << 10
 REFUS_JOURNAL_S = 3600       # paramètres refusés : une ligne de journal par box et par heure au plus
-OPERATIONS_MAX = 1000        # opérations gardées par box (L2) : au-delà, les plus anciennes partent
+OPERATIONS_MAX = 1000        # demandes gardées par box (L2) : au-delà, les plus anciennes partent
+ORPHELINES_MAX = 100         # suivis de jobs inconnus gardés par box, plafond À PART : une box qui invente des jobs n'évince aucune demande
 SUPPORTS_MAX = 100           # sessions de support gardées par box
 SUPPORT_DUREE_MAX_MIN = 240  # borne d'une session de support (4 h), aussi celle d'une session que le maître n'a pas demandée
 SUPPORT_TERMINAUX = ("refuse", "ferme", "annule", "expire")
@@ -158,11 +159,11 @@ class StockageSqlite:
 
     def __init__(self, dossier: Path = DOSSIER_DEFAUT, horloge: Callable[[], float] = time.time, *,
                  lignes_max: int = LIGNES_MAX, octets_max: int = OCTETS_MAX, evenements_max: int = EVENEMENTS_MAX,
-                 operations_max: int = OPERATIONS_MAX) -> None:
+                 operations_max: int = OPERATIONS_MAX, orphelines_max: int = ORPHELINES_MAX) -> None:
         self.dossier = Path(dossier)
         self.horloge = horloge
         self.lignes_max, self.octets_max, self.evenements_max = lignes_max, octets_max, evenements_max
-        self.operations_max = operations_max
+        self.operations_max, self.orphelines_max = operations_max, orphelines_max
         self.dossier.mkdir(parents=True, exist_ok=True, mode=0o750)
         self.db = self.dossier / "pilotage.db"
         fd = os.open(self.db, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)  # jamais un lien ; droits posés avant tout contenu
@@ -460,8 +461,8 @@ class StockageSqlite:
         with self._tx() as cx:
             ident = cx.execute("INSERT INTO operations(cle,action,args_json,acteur,support,etat,demande_le,maj_le) VALUES(?,?,?,?,?,?,?,?)",
                                (cle, action, _json(args or {}), acteur, support, "demande", maintenant, maintenant)).lastrowid
-            cx.execute("DELETE FROM operations WHERE cle=? AND id<=(SELECT id FROM operations WHERE cle=? ORDER BY id DESC LIMIT 1 OFFSET ?)",
-                       (cle, cle, self.operations_max))
+            cx.execute("DELETE FROM operations WHERE cle=? AND action IS NOT NULL AND id<=(SELECT id FROM operations WHERE cle=? "
+                       "AND action IS NOT NULL ORDER BY id DESC LIMIT 1 OFFSET ?)", (cle, cle, self.operations_max))
         return ident
 
     def operation_reponse(self, ident: int, etat: str, job: Optional[str], raison: Optional[str]) -> Optional[dict]:
@@ -500,8 +501,8 @@ class StockageSqlite:
         maintenant = self._maintenant()
         ident = cx.execute("INSERT INTO operations(cle,job,etat,demande_le,maj_le) VALUES(?,?,?,?,?)",
                            (cle, job, "en_cours", maintenant, maintenant)).lastrowid
-        cx.execute("DELETE FROM operations WHERE cle=? AND id<=(SELECT id FROM operations WHERE cle=? ORDER BY id DESC LIMIT 1 OFFSET ?)",
-                   (cle, cle, self.operations_max))
+        cx.execute("DELETE FROM operations WHERE cle=? AND action IS NULL AND id<=(SELECT id FROM operations WHERE cle=? "
+                   "AND action IS NULL ORDER BY id DESC LIMIT 1 OFFSET ?)", (cle, cle, self.orphelines_max))
         return cx.execute("SELECT * FROM operations WHERE id=?", (ident,)).fetchone(), True
 
     def operation_progression(self, cle: str, job: str, etape: Optional[str], pct: Optional[int]) -> bool:
@@ -560,7 +561,9 @@ class StockageSqlite:
                        (cle, cle, SUPPORTS_MAX))
 
     def support_noter(self, cle: str, ident: str, etat: Optional[str], fin_rfc3339: Optional[str]) -> bool:
-        """État notifié par la box ; vrai s'il change la vue du maître. Un état terminal ne se rouvre pas."""
+        """État notifié par la box ; vrai s'il change la vue du maître. Un état terminal ne se rouvre pas. Une session que le maître
+        n'a pas demandée est rangée « inconnu » et n'en sort jamais ; « ouvert » n'est accepté que depuis « demande » ou
+        « en_attente » (M2) : une box ne peut pas ouvrir seule une session."""
         if not isinstance(etat, str) or not etat:
             return False
         maintenant = self._maintenant()
@@ -569,8 +572,10 @@ class StockageSqlite:
             if r is None:
                 cx.execute("INSERT INTO supports(cle,id,etat,duree_min,acteur,fin,demande_le,maj_le) VALUES(?,?,?,?,?,?,?,?)",
                            (cle, ident, "inconnu", SUPPORT_DUREE_MAX_MIN, None, None, maintenant, maintenant))
-                r = cx.execute("SELECT * FROM supports WHERE cle=? AND id=?", (cle, ident)).fetchone()
-            if r["etat"] in SUPPORT_TERMINAUX or r["etat"] == etat:
+                return True
+            if r["etat"] in SUPPORT_TERMINAUX or r["etat"] in ("inconnu", etat):
+                return False
+            if etat == "ouvert" and r["etat"] not in ("demande", "en_attente"):
                 return False
             fin = r["fin"]
             if etat == "ouvert":
@@ -579,6 +584,12 @@ class StockageSqlite:
                 fin = min(borne, annoncee) if annoncee is not None else borne
             cx.execute("UPDATE supports SET etat=?, fin=?, maj_le=? WHERE cle=? AND id=?", (etat, fin, maintenant, cle, ident))
             return True
+
+    def support_sans_reponse(self, cle: str, ident: str) -> None:
+        """Pas de réponse de la box à la demande (504) : la session n'est pas « demande » pour toujours."""
+        with self._tx() as cx:
+            cx.execute("UPDATE supports SET etat='sans_reponse', maj_le=? WHERE cle=? AND id=? AND etat='demande'",
+                       (self._maintenant(), cle, ident))
 
     def support_fermer_local(self, cle: str, ident: str) -> bool:
         """Fermeture décidée sur le maître (révocable des deux côtés) : effective ici tout de suite, box jointe ou non."""

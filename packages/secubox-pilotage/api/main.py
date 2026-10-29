@@ -29,6 +29,7 @@ L2 « Agir » (tâche 6) :
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import secrets
@@ -272,7 +273,9 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
             if args["nom"] in pris:
                 raise HTTPException(409, "nom déjà porté par une box ou un pair connu")
         acteur = acteur_de(jwt)
-        champs = {"box": b["nom"], "cle": b["cle"], "action": action, "acteur": acteur}
+        # M3 : les paramètres, déjà validés par motif (unité, nom), ne sont jamais secrets : audités
+        champs = {"box": b["nom"], "cle": b["cle"], "action": action, "acteur": acteur,
+                  "args": json.dumps(args, ensure_ascii=False, sort_keys=True)}
         if corps.support is not None:
             champs["support"] = corps.support
         await auditer_ou_503("pilotage_action", {**champs, "job": None, "etat": "demande"})   # pas d'audit, pas d'action
@@ -289,8 +292,10 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
             raise HTTPException(504, "la box n'a pas répondu à temps")
         ligne = await asyncio.to_thread(stockage.operation_reponse, op, rep["etat"], rep["job"] or None, rep["raison"])
         await auditer("pilotage_action", {**champs, "job": rep["job"] or None, "etat": rep["etat"], "operation": op})
-        if ligne is not None and ligne["etat"] == "termine":   # la fin est arrivée avant cette réponse : la suite part maintenant
-            await suivi.suite(box_de_ligne(b), ligne)
+        if ligne is not None and ligne["etat"] == "termine":
+            # la fin est arrivée avant cette réponse (orpheline fusionnée) : son résultat est audité MAINTENANT, avec l'action
+            # désormais connue, une seule fois (I1), puis la suite part
+            await suivi.apres_fin(box_de_ligne(b), ligne)
         return {"operation": op, "box": b["nom"], "cle": b["cle"], "action": action, **rep,
                 "operation_etat": ligne["etat"] if ligne else rep["etat"]}
 
@@ -315,6 +320,7 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
             await auditer("pilotage_support", {**champs, "etat": "refuse"})
             raise
         if rep is None:
+            await asyncio.to_thread(stockage.support_sans_reponse, b["cle"], sid)
             await auditer("pilotage_support", {**champs, "etat": "sans_reponse"})
             raise HTTPException(504, "la box n'a pas répondu à temps")
         if rep["etat"] == "refuse":

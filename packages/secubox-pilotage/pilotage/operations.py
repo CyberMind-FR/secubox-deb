@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import Callable, Optional
 
@@ -33,6 +34,7 @@ RE_NOM = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")                      
 RE_IDENT = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")                                   # identifiant de session de support
 RE_ACTEUR = re.compile(r"[a-z_][a-z0-9_.-]{0,63}")                                  # R-L2-14 : motif exigé par l'agent
 DELAI_REJOINDRE_S = 120.0
+JOURNAL_ORPHELINES_S = 60.0   # fins de jobs inconnus : une ligne de journal agrégée par box et par minute au plus, jamais d'audit
 
 
 @dataclass(frozen=True)
@@ -82,11 +84,13 @@ class Suivi:
     canal (même processus, mêmes files)."""
 
     def __init__(self, stockage, files, audit: Callable[[str, dict], None], emettre: Optional[Callable[[str], str]] = None,
-                 delai_rejoindre_s: float = DELAI_REJOINDRE_S) -> None:
+                 delai_rejoindre_s: float = DELAI_REJOINDRE_S, horloge: Callable[[], float] = time.monotonic) -> None:
         self.stockage, self.files, self.audit = stockage, files, audit
         self.emettre = emettre
         self.delai_rejoindre_s = delai_rejoindre_s
+        self.horloge = horloge
         self.taches: set = set()
+        self._orphelines: dict = {}   # Box.cle -> [instant de la dernière ligne, fins tues depuis] ; borné
 
     async def _auditer(self, evenement: str, champs: dict) -> None:
         try:
@@ -95,10 +99,28 @@ class Suivi:
             log.exception("audit %s impossible", evenement)
 
     async def apres_fin(self, box: Box, op: dict) -> None:
-        """Appelée par le canal à la première fin d'un job."""
+        """Première fin d'un job (canal), ou fin d'une orpheline au moment de sa fusion avec la demande (API). N'audite que si l'action
+        est connue (I1) : une box qui invente des jobs ne gonfle pas l'audit ; ses fins non rattachées font au plus une ligne de
+        journal agrégée par box et par minute."""
+        if op.get("action") is None:
+            self._journaliser_orpheline(box)
+            return
         await self._auditer("pilotage_action_resultat", {"box": box.nom, "cle": box.cle, "action": op.get("action"), "job": op.get("job"),
                                                          "rc": op.get("rc"), "resultat": op.get("resultat")})
         await self.suite(box, op)
+
+    def _journaliser_orpheline(self, box: Box) -> None:
+        maintenant = self.horloge()
+        etat = self._orphelines.get(box.cle)
+        if etat is not None and maintenant - etat[0] < JOURNAL_ORPHELINES_S:
+            etat[1] += 1
+            return
+        tues = etat[1] if etat is not None else 0
+        if etat is None and len(self._orphelines) >= 1024:
+            self._orphelines.pop(next(iter(self._orphelines)))
+        self._orphelines[box.cle] = [maintenant, 0]
+        log.warning("%s : fin d'opération non rattachée à une demande (job inconnu du maître) ; %d autre(s) tue(s) depuis la ligne "
+                    "précédente", box.cle, tues)
 
     async def suite(self, box: Box, op: dict) -> None:
         """Suite d'une opération terminée, une seule fois (réclamée en base) : Rejoindre après un renommage réussi."""
