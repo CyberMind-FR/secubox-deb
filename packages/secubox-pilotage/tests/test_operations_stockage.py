@@ -231,3 +231,66 @@ def test_job_deja_porte_par_une_autre_demande_jamais_fusionne(tmp_path):
     assert o["job"] is None
     ops = {x["id"]: x for x in s.operations(GK5.cle)}
     assert set(ops) == {a, b} and ops[a]["job"] == "job1" and ops[a]["acteur"] == "alice"
+
+
+# --- Passe finale, I4 (R-L2-47, révision de R-L2-27) : opérations interrompues par un redémarrage ----------------------
+
+def _acceptee(s, action, job, box=GK5):
+    op = s.operation_demander(box.cle, action, {}, "alice", None)
+    s.operation_reponse(op, "accepte", job, "")
+    return op
+
+
+def test_boot_id_change_clot_les_reboot_en_cours(tmp_path):
+    """Le bonjour porte le boot_id de la box ; quand il change, tout reboot de cette box encore en cours, demandé avant, est
+    clos « succès (redémarrée) » : la fin enregistrée sur la box peut ne jamais arriver (unité tuée par l'arrêt)."""
+    from outils import GK2
+    h = Horloge()
+    s = stockage(tmp_path, h)
+    assert s.vu(GK5, {"agent_version": "0.2.0", "boot_id": "boot-a", "modele": []}) == []     # premier boot_id : rien à comparer
+    r1 = _acceptee(s, "reboot", "jreboot1")
+    r2 = _acceptee(s, "reboot", "jreboot2")
+    s.operation_progression(GK5.cle, "jreboot2", "en_cours", 50)
+    maj = _acceptee(s, "maj-paquets", "jmaj")
+    attente = s.operation_demander(GK5.cle, "reboot", {}, "alice", None)
+    s.operation_reponse(attente, "consentement", None, "consentement requis")
+    autre = _acceptee(s, "reboot", "jgk2", box=GK2)
+    assert s.vu(GK5, {}) == [] and s.vu(GK5, {"boot_id": "boot-a"}) == [] and s.vu(GK5, {"boot_id": ""}) == []
+    h.avance(120)
+    closes = s.vu(GK5, {"agent_version": "0.2.0", "boot_id": "boot-b", "modele": []})
+    assert sorted(o["id"] for o in closes) == sorted([r1, r2])
+    ops = {o["id"]: o for o in s.operations()}
+    for i in (r1, r2):
+        assert (ops[i]["etat"], ops[i]["resultat"], ops[i]["rc"], ops[i]["resume"]) == ("termine", "succes", 0,
+                                                                                        "reboot : succès (redémarrée)"), ops[i]
+    assert ops[maj]["etat"] == "accepte" and ops[attente]["etat"] == "consentement" and ops[autre]["etat"] == "accepte"
+    # la fin enregistrée par la box arrive ensuite (fins récentes) : déjà close, rien de nouveau
+    assert s.operation_fin(GK5.cle, "jreboot1", 0, "reboot : succès") is None
+    # un reboot demandé APRÈS le changement n'est pas clos par le même boot_id
+    r3 = _acceptee(s, "reboot", "jreboot3")
+    assert s.vu(GK5, {"boot_id": "boot-b"}) == [] and s.operations(GK5.cle)[0]["id"] == r3
+    assert s.operations(GK5.cle)[0]["etat"] == "accepte"
+
+
+def test_operation_sans_nouvelles_depuis_6_h_passe_a_inconnu(tmp_path):
+    """Échéance côté maître : une opération encore en cours 6 h après sa demande passe à « inconnu », une seule fois ; seules
+    celles dont l'action est connue sont rendues (pour l'audit) ; une fin réelle tardive l'emporte encore."""
+    h = Horloge()
+    s = stockage(tmp_path, h)
+    s.vu(GK5, {})
+    a = _acceptee(s, "maj-paquets", "j1")
+    b = _acceptee(s, "service-redemarrer", "j2")
+    s.operation_fin(GK5.cle, "j2", 0, "service : succès")
+    s.operation_progression(GK5.cle, "j9", "en_cours", 50)                    # job inventé par la box (orpheline)
+    h.avance(6 * 3600 - 1)
+    assert s.operations_echues() == []
+    h.avance(1)
+    echues = s.operations_echues()
+    assert [(o["id"], o["action"], o["job"], o["nom"]) for o in echues] == [(a, "maj-paquets", "j1", "gk5")]
+    ops = {o["job"]: o for o in s.operations(GK5.cle)}
+    assert (ops["j1"]["etat"], ops["j1"]["resultat"]) == ("inconnu", "inconnu")
+    assert ops["j9"]["etat"] == "inconnu" and ops["j2"]["etat"] == "termine" and ops["j2"]["id"] == b
+    h.avance(3600)
+    assert s.operations_echues() == []                                         # une seule fois
+    fin = s.operation_fin(GK5.cle, "j1", 0, "maj-paquets : succès")
+    assert fin is not None and fin["etat"] == "termine" and fin["resultat"] == "succes"

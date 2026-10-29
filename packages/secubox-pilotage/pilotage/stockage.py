@@ -41,6 +41,9 @@ ORPHELINES_MAX = 100         # suivis de jobs inconnus gardés par box, plafond 
 SUPPORTS_MAX = 100           # sessions de support gardées par box
 SUPPORT_DUREE_MAX_MIN = 240  # borne d'une session de support (4 h), aussi celle d'une session que le maître n'a pas demandée
 SUPPORT_TERMINAUX = ("refuse", "ferme", "annule", "expire")
+ECHEANCE_OPERATION_H = 6     # I4 (R-L2-47) : une opération encore en cours 6 h après sa demande passe à « inconnu »
+EN_COURS = ("demande", "accepte", "en_cours")
+RESUME_REDEMARREE = "reboot : succès (redémarrée)"
 TYPE_PROGRESSION = "X_SECUBOX_OperationProgress"
 TYPE_FIN = "X_SECUBOX_OperationDone"
 TYPE_SUPPORT = "X_SECUBOX_Support"
@@ -59,8 +62,9 @@ log = logging.getLogger("pilotage.stockage")
 
 
 class StockageCanal(Protocol):
-    def vu(self, box: Box, infos: dict) -> None:
-        """Signe de vie : bonjour (infos = agent_version, boot_id, modele) ou sondage (infos = {})."""
+    def vu(self, box: Box, infos: dict) -> Optional[list]:
+        """Signe de vie : bonjour (infos = agent_version, boot_id, modele) ou sondage (infos = {}). Rend les opérations closes par
+        un changement de boot_id (I4), à remettre au suivi."""
 
     def notification(self, box: Box, evenement: dict) -> Optional[dict]:
         """Un événement NOTIFY remis par la box (le contenu de `body.event`). Rend l'opération qu'un X_SECUBOX_OperationDone
@@ -95,7 +99,7 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS boites(
     cle TEXT PRIMARY KEY, nom TEXT NOT NULL, adresse TEXT NOT NULL, reseau TEXT NOT NULL, client TEXT, abonnement TEXT,
     agent_version TEXT NOT NULL DEFAULT '', vu_le INTEGER NOT NULL,
-    inventaire_le INTEGER, inventaire_partiel INTEGER NOT NULL DEFAULT 0);
+    inventaire_le INTEGER, inventaire_partiel INTEGER NOT NULL DEFAULT 0, boot_id TEXT NOT NULL DEFAULT '');
 CREATE INDEX IF NOT EXISTS boites_nom ON boites(nom);
 CREATE TABLE IF NOT EXISTS inventaire(
     cle TEXT NOT NULL, chemin TEXT NOT NULL, valeur_json TEXT NOT NULL, releve_le INTEGER NOT NULL, tronque INTEGER NOT NULL DEFAULT 0,
@@ -186,6 +190,8 @@ class StockageSqlite:
             cx.executescript(_SCHEMA)
             if "tronque" not in {r["name"] for r in cx.execute("PRAGMA table_info(inventaire)")}:   # base d'avant R38
                 cx.execute("ALTER TABLE inventaire ADD COLUMN tronque INTEGER NOT NULL DEFAULT 0")
+            if "boot_id" not in {r["name"] for r in cx.execute("PRAGMA table_info(boites)")}:            # base d'avant I4
+                cx.execute("ALTER TABLE boites ADD COLUMN boot_id TEXT NOT NULL DEFAULT ''")
             colonnes = {r["name"] for r in cx.execute("PRAGMA table_info(evenements)")}
             for col in ("ident", "etat"):                                                          # base de L1 (L2 tâche 6)
                 if col not in colonnes:
@@ -227,16 +233,35 @@ class StockageSqlite:
 
     # --- protocole du canal ---
 
-    def vu(self, box: Box, infos: dict) -> None:
+    def vu(self, box: Box, infos: dict) -> list:
+        """I4 (R-L2-47, révision de R-L2-27) : le bonjour porte le boot_id de la box, gardé par box. Quand il CHANGE (un boot_id déjà
+        connu, puis un autre), tout reboot de cette box encore en cours (accepté ou en cours, sans fin), donc demandé avant le
+        changement, est clos « succès (redémarrée) » : la fin enregistrée sur la box peut ne jamais arriver. Rend ces opérations
+        (première fin : la fin envoyée ensuite par la box ne change plus rien). Un sondage (sans boot_id) ne change rien."""
         version = infos.get("agent_version") if isinstance(infos, dict) else None
+        boot = infos.get("boot_id") if isinstance(infos, dict) else None
+        boot = boot if isinstance(boot, str) else ""
+        maintenant = self._maintenant()
+        closes = []
         with self._tx() as cx:
+            avant = cx.execute("SELECT boot_id FROM boites WHERE cle=?", (box.cle,)).fetchone()
             cx.execute(
-                "INSERT INTO boites(cle,nom,adresse,reseau,client,abonnement,agent_version,vu_le) VALUES(?,?,?,?,?,?,?,?) "
+                "INSERT INTO boites(cle,nom,adresse,reseau,client,abonnement,agent_version,vu_le,boot_id) VALUES(?,?,?,?,?,?,?,?,?) "
                 "ON CONFLICT(cle) DO UPDATE SET nom=excluded.nom, adresse=excluded.adresse, reseau=excluded.reseau, "
                 "client=excluded.client, abonnement=excluded.abonnement, vu_le=excluded.vu_le, "
-                "agent_version=CASE WHEN excluded.agent_version<>'' THEN excluded.agent_version ELSE agent_version END",
+                "agent_version=CASE WHEN excluded.agent_version<>'' THEN excluded.agent_version ELSE agent_version END, "
+                "boot_id=CASE WHEN excluded.boot_id<>'' THEN excluded.boot_id ELSE boot_id END",
                 (box.cle, box.nom, box.adresse, box.reseau, box.client, box.abonnement,
-                 version if isinstance(version, str) else "", self._maintenant()))
+                 version if isinstance(version, str) else "", maintenant, boot))
+            if boot and avant is not None and avant["boot_id"] and avant["boot_id"] != boot:
+                ids = [r["id"] for r in cx.execute(
+                    "SELECT id FROM operations WHERE cle=? AND action='reboot' AND etat IN ('accepte','en_cours') AND fin_le IS NULL "
+                    "AND demande_le<=? ORDER BY id", (box.cle, maintenant))]
+                for ident in ids:
+                    cx.execute("UPDATE operations SET etat='termine', rc=0, resume=?, pct=100, etape='terminee', fin_le=?, maj_le=? "
+                               "WHERE id=?", (RESUME_REDEMARREE, maintenant, maintenant, ident))
+                    closes.append(self._op(cx, ident))
+        return closes
 
     def notification(self, box: Box, evenement: dict) -> Optional[dict]:
         typ = evenement["type"]
@@ -574,6 +599,20 @@ class StockageSqlite:
             return cx.execute("UPDATE operations SET suite_faite=1 WHERE id=? AND suite_faite=0 AND fin_le IS NOT NULL AND action IS NOT NULL",
                               (ident,)).rowcount == 1
 
+    def operations_echues(self, heures: int = ECHEANCE_OPERATION_H) -> list:
+        """I4 (R-L2-47) : les opérations encore en cours (demandée, acceptée, en cours, sans fin) `heures` heures après leur demande
+        passent à « inconnu », une seule fois (l'état change). Rend celles dont l'action est connue, avec le nom de la box, pour
+        l'audit ; une orpheline (job inventé par une box) passe à « inconnu » sans être rendue. Une fin réelle qui arrive ensuite
+        l'emporte encore (fin_le reste vide)."""
+        maintenant = self._maintenant()
+        with self._tx() as cx:
+            lignes = cx.execute(
+                "SELECT o.*, b.nom FROM operations o LEFT JOIN boites b ON b.cle=o.cle WHERE o.etat IN (?,?,?) AND o.fin_le IS NULL "
+                "AND o.demande_le<=? ORDER BY o.id", (*EN_COURS, maintenant - int(heures) * 3600)).fetchall()
+            for r in lignes:
+                cx.execute("UPDATE operations SET etat='inconnu', maj_le=? WHERE id=?", (maintenant, r["id"]))
+        return [{**_operation(r), "etat": "inconnu", "resultat": "inconnu"} for r in lignes if r["action"] is not None]
+
     def operations(self, cle: Optional[str] = None, limite: int = 200) -> list:
         sql, args = "SELECT o.*, b.nom FROM operations o LEFT JOIN boites b ON b.cle=o.cle", []
         if cle is not None:
@@ -675,7 +714,9 @@ def _operation(r) -> dict:
         d["args"] = {}
     d.pop("suite_faite", None)
     rc = d.get("rc")
-    if d["etat"] != "termine":
+    if d["etat"] == "inconnu":            # I4 : sans nouvelles 6 h après la demande
+        d["resultat"] = "inconnu"
+    elif d["etat"] != "termine":
         d["resultat"] = None
     elif rc == 0:
         d["resultat"] = "succes"

@@ -18,7 +18,8 @@ entrée nginx) ne fait plus choisir au client son `X-Real-IP`. Ce qu'il ne prot�
 le marqueur comme l'adresse ; contre lui, la seule barrière est la socket elle-même (0660, groupe www-data, nginx seul).
 
 Protocole (le client Go `sbx-pilotage-agent` fait foi) :
-  POST /canal/v1/bonjour     {agent_version, boot_id, modele[]}                        → 200 {"ok": true} ; 429 si < 10 s depuis le précédent
+  POST /canal/v1/bonjour     {agent_version, boot_id, modele[]}                        → 200 {"ok": true} ; 429 si < 10 s depuis le précédent ;
+     un boot_id qui change clôt les reboot en cours de la box (« succès (redémarrée) »), remis à `apres_fin` (I4)
   GET  /canal/v1/requetes    ?attente=N (borné à 25 s)                                 → 200 [{msg_id,type,body}] | 204
   POST /canal/v1/reponses    [{msg_id,type,body}]  (≤ 64)                              → 200 {"ignore": n}
   POST /canal/v1/notifs      [{"type":"NOTIFY","body":{"event":{…}}}]  (≤ 16)          → 200 {"ignore": n}
@@ -259,7 +260,14 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
         modele = doc.get("modele")
         modele = [chaine(p, 256) for p in modele[:_MODELE_MAX] if isinstance(p, str)] if isinstance(modele, list) else []
         infos = {"agent_version": chaine(doc.get("agent_version")), "boot_id": chaine(doc.get("boot_id")), "modele": modele}
-        await asyncio.to_thread(stockage.vu, box, infos)
+        closes = await asyncio.to_thread(stockage.vu, box, infos)
+        # I4 (R-L2-47) : un nouveau boot_id clôt les reboot en cours de la box ; chacun est remis au suivi (audit), une fois
+        for op in closes or ():
+            if apres_fin is not None:
+                try:
+                    await apres_fin(box, op)
+                except Exception:
+                    log.exception("suivi du reboot clos (job %s) impossible", op.get("job"))
         return {"ok": True}
 
     @app.get("/canal/v1/requetes")

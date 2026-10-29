@@ -45,6 +45,7 @@ AGENT_L2 = CONTRAT / "agent-l2"
 MAJ = os.environ.get("SECUBOX_CONTRAT_MAJ") == "1"
 SUPPORT_ID = "5e55105000000001"   # identifiant de session de support figé (le maître le tire au hasard : secrets.token_hex(8))
 JOB_RENOMMER = "0000000000000a06"
+JOB_RATTRAPE = "00000000f1500001"   # fin enregistrée par le ctl, renvoyée par l'agent à son démarrage (fins-recentes, I4)
 
 
 def figer_support(monkeypatch) -> None:
@@ -214,7 +215,8 @@ async def test_rejoindre_ne_porte_qu_un_code_factice(tmp_path, monkeypatch):
 # --- second volet : ce que l'agent émet pour L2 (fixtures agent-l2/, figées par le test Go), rejoué contre le vrai maître ---
 
 AGENT_L2_ATTENDUES = sorted([*(f"reponse_{n}" for n in ATTENDUES if n.startswith("operate_")),
-                             "notify_operation_progress", "notify_operation_done", "notify_hands_tied", "notify_consent", "notify_support"])
+                             "notify_operation_progress", "notify_operation_done", "notify_operation_done_rattrapee", "notify_hands_tied",
+                             "notify_consent", "notify_support"])
 GK5_IP = {"X-Real-IP": GK5.adresse, "X-SecuBox-Pilotage-Tunnel": "1"}
 
 
@@ -297,6 +299,14 @@ async def rejouer_agent_l2(tmp_path: Path, fx: dict, monkeypatch) -> list:
     ops = {o["job"]: o for o in s.operations(GK5.cle)}
     for nom, jb in jobs.items():
         assert ops[jb]["etat"] == "termine" and ops[jb]["rc"] == fins[jb] == 0, (nom, ops[jb])
+    # I4 (R-L2-47) : un reboot demandé avant le redémarrage de la box, dont l'agent n'a jamais remis la fin ; l'agent redémarré la
+    # relit au ctl (fins-recentes) et la renvoie : le maître clôt l'opération
+    rattrape = s.operation_demander(GK5.cle, "reboot", {}, "alice", None)
+    s.operation_reponse(rattrape, "accepte", JOB_RATTRAPE, "")
+    await notifier("notify_operation_done_rattrapee")
+    (r,) = [o for o in s.operations(GK5.cle) if o["id"] == rattrape]
+    (ev_r,) = [n["body"]["event"] for n in fx["notify_operation_done_rattrapee"]["envoi"]]
+    assert ev_r["job"] == JOB_RATTRAPE and (r["etat"], r["resultat"], r["rc"]) == ("termine", "succes", 0), r
     await servir("reponse_operate_rejoindre")
     for _ in range(200):
         if any(ev == "pilotage_rejoindre_resultat" for ev, _ in lignes):
@@ -348,6 +358,7 @@ def _alterer(fx: dict, nom: str, chemin: tuple, valeur=None, renommer: str = Non
     ("reponse_operate_releve", ("envoi", "type"), "OPERATE_RESPONSE", None),                     # type inconnu : ignoré
     ("notify_support", ("envoi", 0, "body", "event", "fin"), "2026-10-26 08:03:20", None),      # fin hors RFC 3339
     ("notify_operation_done", ("envoi", 0, "body", "event", "rc"), None, "code"),               # rc perdu
+    ("notify_operation_done_rattrapee", ("envoi", 0, "body", "event", "job"), "00000000f15000ff", None),   # autre job : rien de clos
     ("notify_consent", ("envoi", 0, "body", "event", "decision"), "Accepté", None),              # hors liste fermée
 ])
 async def test_une_emission_de_l_agent_alteree_echoue(tmp_path, monkeypatch, nom, chemin, valeur, renommer):

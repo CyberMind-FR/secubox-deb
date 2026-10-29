@@ -99,3 +99,39 @@ def test_failed_et_tronque_donnent_une_releve_partielle(tmp_path):
     for nom in ("get_resp_failed", "get_resp_tronque"):
         rep = asyncio.run(_rejouer(_lire(CONTRAT / f"{nom}.json"), tmp_path / nom))
         assert rep["type"] == "GET_RESP"
+
+
+async def _reboot_clos_par_le_bonjour(bonjour: dict, tmp_path: Path) -> list:
+    """Le bonjour émis par le client Go (bonjour.json), rejoué deux fois contre le vrai canal et le vrai stockage : la seconde fois
+    avec un autre boot_id (la box a redémarré). Rend les fins remises au suivi."""
+    s = StockageSqlite(tmp_path / "pilotage")
+    fins = []
+
+    async def apres_fin(box, op):
+        fins.append((op["job"], op["resultat"], op["resume"]))
+
+    app = creer_app_canal(Files(), {GK5.adresse: GK5}.get, s, lambda *a: None, vu_intervalle_s=0, audit_intervalle_s=0,
+                          apres_fin=apres_fin)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://m",
+                                 headers={"X-Real-IP": GK5.adresse, "X-SecuBox-Pilotage-Tunnel": "1"}) as c:
+        assert (await c.post("/canal/v1/bonjour", content=json.dumps(bonjour))).status_code == 200
+        op = s.operation_demander(GK5.cle, "reboot", {}, "alice", None)
+        s.operation_reponse(op, "accepte", "00000000000000b0", "")
+        autre = {**bonjour, "boot_id": "ffffffff-0000-4000-8000-000000000000"} if "boot_id" in bonjour else bonjour
+        assert (await c.post("/canal/v1/bonjour", content=json.dumps(autre))).status_code == 200
+    return fins
+
+
+def test_le_boot_id_du_bonjour_emis_clot_le_reboot(tmp_path):
+    """I4 (R-L2-47) : le boot_id que le vrai client Go met dans son bonjour suffit au maître pour clore un reboot interrompu."""
+    fx = _lire(CONTRAT / "bonjour.json")
+    assert fx["envoi"]["boot_id"]
+    fins = asyncio.run(_reboot_clos_par_le_bonjour(fx["envoi"], tmp_path))
+    assert fins == [("00000000000000b0", "succes", "reboot : succès (redémarrée)")]
+
+
+def test_un_bonjour_sans_boot_id_ne_clot_rien(tmp_path):
+    """Fixture altérée (boot_id retiré) : le maître ne peut rien conclure, le reboot reste en cours."""
+    fx = _lire(CONTRAT / "bonjour.json")
+    sans = {k: v for k, v in fx["envoi"].items() if k != "boot_id"}
+    assert asyncio.run(_reboot_clos_par_le_bonjour(sans, tmp_path)) == []

@@ -155,3 +155,29 @@ async def test_oubli_suspendu_audite_une_fois_par_heure_r_l2_45(tmp_path):
     h.avance(3600)
     await inv.tour()
     assert [ev for ev, _ in lignes] == ["pilotage_oubli_suspendu"] * 2 and len(s.boites()) == 5
+
+
+@pytest.mark.asyncio
+async def test_tour_audite_une_fois_les_operations_sans_nouvelles_depuis_6_h(tmp_path):
+    """I4 (R-L2-47) : à la passe horaire, une opération encore en cours 6 h après sa demande passe à « inconnu », auditée une
+    seule fois (pilotage_action_echue) ; une orpheline (job inventé par la box) passe à « inconnu » sans audit."""
+    h = Horloge()
+    s = StockageSqlite(tmp_path / "p", horloge=h)
+    lignes = []
+    inv = Inventaire(Files(), s, horloge=h, audit=lambda ev, ch: lignes.append((ev, ch)))
+    s.vu(GK5, {})
+    op = s.operation_demander(GK5.cle, "maj-paquets", {}, "alice", None)
+    s.operation_reponse(op, "accepte", "j1", "")
+    s.operation_progression(GK5.cle, "j9", "en_cours", 50)
+    demande_le = int(h.t)
+    await inv.tour()
+    assert lignes == []
+    h.avance(6 * 3600)
+    s.vu(GK5, {})
+    await inv.tour()
+    assert lignes == [("pilotage_action_echue", {"box": "gk5", "cle": GK5.cle, "action": "maj-paquets", "job": "j1", "operation": op,
+                                                 "demande_le": demande_le, "resultat": "inconnu", "heures": 6})]
+    h.avance(3600)
+    s.vu(GK5, {})
+    await inv.tour()
+    assert len(lignes) == 1

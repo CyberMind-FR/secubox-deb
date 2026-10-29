@@ -9,7 +9,8 @@ SecuBox-Deb :: pilotage :: relève périodique de l'inventaire (#3126)
 Toutes les 60 s, pour chaque box vue depuis moins de 90 s, un GET `["Device."]` est déposé dans sa file ; la réponse est rangée par
 `StockageSqlite.inventaire_enregistrer` (un relevé tronqué ou en erreur n'efface jamais un relevé complet). Une box n'a jamais deux GET
 d'inventaire en vol : tant que le précédent n'a ni reçu de réponse ni expiré, elle est sautée. Les événements de plus de 30 jours sont
-purgés au plus une fois par heure ; au même rythme, les box sans contact depuis 30 jours sont oubliées et l'oubli est audité (M12).
+purgés au plus une fois par heure ; au même rythme, les box sans contact depuis 30 jours sont oubliées et l'oubli est audité (M12), et
+les opérations sans nouvelles 6 h après leur demande passent à « inconnu », auditées une fois (I4, R-L2-47).
 Chaque tour attend aussi ses crochets (`a_chaque_tour`) : le canal y écrit les décomptes de refus
 d'identité en attente (M7). L'horloge et l'attente sont injectables (les tests n'attendent pas 60 s).
 """
@@ -23,7 +24,7 @@ from typing import Awaitable, Callable, Optional
 
 from .files import FileDeBoxPleine, Files
 from .identite import Box
-from .stockage import HORS_LIGNE_S, OUBLI_JOURS, StockageSqlite
+from .stockage import ECHEANCE_OPERATION_H, HORS_LIGNE_S, OUBLI_JOURS, StockageSqlite
 
 INTERVALLE_S = 60.0
 PURGE_INTERVALLE_S = 3600.0
@@ -86,7 +87,28 @@ class Inventaire:
             except Exception:
                 log.exception("purge des événements impossible")
             await self._oublier()
+            await self._echeances()
         return lances
+
+    async def _echeances(self) -> None:
+        """I4 (R-L2-47) : les opérations sans nouvelles 6 h après leur demande passent à « inconnu » ; chacune est auditée une fois
+        (pilotage_action_echue), les orphelines (jobs inventés par une box) ne le sont pas."""
+        try:
+            echues = await asyncio.to_thread(self.stockage.operations_echues, ECHEANCE_OPERATION_H)
+        except Exception:
+            log.exception("échéance des opérations impossible")
+            return
+        for o in echues:
+            log.warning("opération %s (%s) de %s sans nouvelles depuis %d h : résultat inconnu", o["id"], o["action"], o["cle"],
+                        ECHEANCE_OPERATION_H)
+            if self.audit is None:
+                continue
+            try:
+                await asyncio.to_thread(self.audit, "pilotage_action_echue", {
+                    "box": o.get("nom"), "cle": o["cle"], "action": o["action"], "job": o["job"], "operation": o["id"],
+                    "demande_le": o["demande_le"], "resultat": "inconnu", "heures": ECHEANCE_OPERATION_H})
+            except Exception:
+                log.exception("audit de l'échéance de l'opération %s impossible", o["id"])
 
     async def _oublier(self) -> None:
         """M12 : box sans contact depuis OUBLI_JOURS jours oubliées par le stockage ; chaque oubli est audité (décision sur l'état de la

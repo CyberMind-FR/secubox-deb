@@ -85,3 +85,28 @@ def test_crochet_en_erreur_ne_casse_pas_la_remise(tmp_path, caplog):
             r = await c.post("/canal/v1/notifs", json=[notif(type="X_SECUBOX_OperationDone", job="job1", rc=0)])
             assert r.status_code == 200 and r.json() == {"ignore": 0}
     asyncio.run(cas())
+
+
+def test_bonjour_d_un_nouveau_boot_clot_le_reboot_et_le_remet_au_suivi(tmp_path):
+    """I4 (R-L2-47) : le boot_id du bonjour a changé, le reboot en cours est clos « succès (redémarrée) » et remis au suivi
+    (audit du résultat), une seule fois."""
+    async def cas():
+        s = StockageSqlite(tmp_path / "p", horloge=Horloge())
+        fins = []
+
+        async def apres_fin(box, op):
+            fins.append((box.cle, op["job"], op["rc"], op["resultat"]))
+
+        app = creer_app_canal(Files(), CONNUES.get, s, lambda e, c: None, vu_intervalle_s=0, audit_intervalle_s=0, apres_fin=apres_fin)
+        bonjour = {"agent_version": "0.2.0", "boot_id": "11111111-0000-4000-8000-000000000000", "modele": []}
+        async with client(app) as c:
+            assert (await c.post("/canal/v1/bonjour", json=bonjour)).status_code == 200
+            op = s.operation_demander(GK5.cle, "reboot", {}, "alice", None)
+            s.operation_reponse(op, "accepte", "jobr", "")
+            assert (await c.post("/canal/v1/bonjour", json=bonjour)).status_code == 200
+            assert fins == []
+            nouveau = {**bonjour, "boot_id": "22222222-0000-4000-8000-000000000000"}
+            assert (await c.post("/canal/v1/bonjour", json=nouveau)).status_code == 200
+            assert (await c.post("/canal/v1/bonjour", json=nouveau)).status_code == 200
+        assert fins == [(GK5.cle, "jobr", 0, "succes")]
+    asyncio.run(cas())
