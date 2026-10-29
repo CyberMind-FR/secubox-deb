@@ -35,6 +35,7 @@ CTL = "/usr/sbin/secubox-pilotagectl"
 AGENT = "secubox-pilotage-agent"
 RE_LOGIN = re.compile(r"[a-z_][a-z0-9_.-]{0,63}")            # motif --acteur du ctl (R-L2-14)
 PATH_SUR = "/usr/sbin:/usr/bin:/sbin:/bin"
+DELAI_CTL = 60                                          # secondes : le ctl ne lance rien de long lui-même
 
 USAGE = """usage : secubox-pilotage etat
        secubox-pilotage consentements
@@ -86,7 +87,7 @@ def ctl(*args):
         argv += ["--acteur", login]
     argv += list(args)
     try:
-        p = subprocess.run(argv, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300)
+        p = subprocess.run(argv, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=DELAI_CTL)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise Refus(f"secubox-pilotagectl injoignable ({e.__class__.__name__})") from None
     try:
@@ -125,6 +126,8 @@ def ligne_consentement(c, maintenant):
 
 
 def texte_support(sup, maintenant):
+    if sup == "illisible":
+        return "illisible (état root non fiable : aucune session ne peut s'ouvrir)"
     if not sup:
         return "aucun"
     ident, etat = sup.get("id", "?"), sup.get("etat")
@@ -141,7 +144,10 @@ def afficher_etat(e):
     maintenant = int(time.time())
     agent = e.get("agent", "inconnu")
     canal = e.get("canal")
-    attente = sum(1 for c in e.get("consentements", []) if c.get("etat") == "en_attente")
+    if canal == "illisible":
+        canal = None
+    liste = e.get("consentements", [])
+    attente = sum(1 for c in liste if c.get("etat") == "en_attente") if isinstance(liste, list) else None
     if canal:
         nature = "box du propriétaire" if canal == "wg-mesh" else "box cliente : accord du détenteur exigé"
         maitre = f"ancre vérifiée sur {canal} ({nature})"
@@ -152,13 +158,18 @@ def afficher_etat(e):
     dire(f"  Agent          : {'en marche' if agent == 'active' else f'arrêté ({agent})'}")
     dire(f"  Maître         : {maitre}")
     dire(f"  Mains liées    : {liees}")
-    dire(f"  Consentements  : {attente} en attente" + (" — secubox-pilotage consentements" if attente else ""))
+    if attente is None:
+        dire("  Consentements  : illisible (état root non fiable : aucun ne peut être décidé)")
+    else:
+        dire(f"  Consentements  : {attente} en attente" + (" — secubox-pilotage consentements" if attente else ""))
     dire(f"  Support        : {texte_support(e.get('support'), maintenant)}")
 
 
 def afficher_consentements(e):
     maintenant = int(time.time())
     liste = e.get("consentements", [])
+    if not isinstance(liste, list):
+        raise Refus("consentements illisibles (état root non fiable)")
     if not liste:
         dire("Aucun consentement.")
         return
@@ -204,7 +215,8 @@ def executer(argv):
     elif argv[:2] == ["support", "fermer"] and len(argv) in (2, 3):
         ident = argv[2] if len(argv) == 3 else None
         if ident is None:
-            sup = ctl("etat").get("support") or {}
+            sup = ctl("etat").get("support")
+            sup = sup if isinstance(sup, dict) else {}
             if sup.get("etat") not in ("en_attente", "ouvert"):
                 raise Refus("aucun support ouvert ni demandé")
             ident = sup.get("id", "")

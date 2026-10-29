@@ -157,3 +157,20 @@ def test_jamais_d_appel_sous_l_identite_de_l_agent(banc):
     assert rc == 0, err
     decision = next(e for e in banc.audit() if e["evenement"] == "consentement")
     assert decision["origine"] == "local" and decision["acteur"] != AGENT
+
+
+def test_delai_du_ctl_60_s():
+    """M4 : la commande n'attend pas le ctl plus de 60 s."""
+    source = CMD.read_text()
+    assert "timeout=DELAI_CTL" in source and "DELAI_CTL = 60" in source
+
+
+def test_etat_affiche_les_sections_illisibles(banc):
+    """M2 : une section illisible est dite, le reste s'affiche."""
+    banc.run("mains-liees", "on")
+    (banc.r / "var/lib/secubox-pilotagectl/consentements.json").write_text("{pas du json")
+    (banc.r / "var/lib/secubox-pilotagectl/support.json").write_text("[]")
+    rc, out, err = local(banc, "etat")
+    assert rc == 0 and ": oui" in out and out.count("illisible") == 2, (out, err)
+    rc, out, err = local(banc, "consentements")
+    assert rc == 1 and "illisible" in err

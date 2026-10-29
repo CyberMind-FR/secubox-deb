@@ -896,7 +896,7 @@ def test_ecriture_avant_lancement_refuse_toujours(banc):
 # --- Tâche 4 : support, état lu par l'agent et par la commande locale ------------------------------------------------
 
 PERMIS_AUDIT = {"ts", "module", "evenement", "box", "verbe", "action", "unite", "acteur", "origine", "job", "resultat",
-                "refus", "consentement", "decision", "etat", "rc", "support", "duree_min", "fin"}
+                "refus", "consentement", "decision", "etat", "rc", "support", "duree_min", "fin", "op"}
 
 
 def lire_support(banc):
@@ -1053,17 +1053,20 @@ def test_etat_lu_par_l_agent_sans_audit(banc):
     """Verbe de lecture `etat` (agent et local) : mains liées, canal vérifié, consentements, support. Non audité
     (sondé par l'agent) ; seuls les changements qu'il constate (expirations) le sont."""
     rc, etat, _ = banc.run("etat", agent=True)
-    assert rc == 0 and etat["ok"] is True
-    assert etat["mains_liees"] is False and etat["canal"] == "wg-mesh" and etat["support"] is None
-    assert etat["consentements"] == [] and etat["box"]
-    assert "agent" not in etat                                      # l'état de l'unité : seulement en local
+    assert rc == 0 and etat == {"ok": True, "mains_liees": False, "consentements": [], "support": None}
+    _, etat, _ = banc.run("etat")                                   # en local : canal, box et unité de l'agent
+    assert etat["canal"] == "wg-mesh" and etat["box"] and "agent" in etat
     banc.cliente()
     _, s, _ = banc.run("reboot", agent=True)
     banc.run("support", "ouvrir", "s-01", "60", agent=True)
     banc.run("mains-liees", "on")
     n = len(banc.audit())
     rc, etat, _ = banc.run("etat", agent=True)
-    assert rc == 0 and etat["mains_liees"] is True and etat["canal"] == "wg-autoload"
+    assert rc == 0 and etat["mains_liees"] is True
+    assert etat["consentements"] == [{"id": s["consentement"], "etat": "annule"}]
+    assert etat["support"] == {"id": "s-01", "etat": "annule"}
+    rc, etat, _ = banc.run("etat")
+    assert etat["canal"] == "wg-autoload"
     assert [(c["id"], c["action"], c["etat"]) for c in etat["consentements"]] == [(s["consentement"], "reboot", "annule")]
     assert set(etat["consentements"][0]) <= {"id", "action", "unite", "etat", "cree", "expire", "decide"}
     assert etat["support"] == {"id": "s-01", "etat": "annule", "duree_min": 60, "cree": etat["support"]["cree"],
@@ -1096,7 +1099,9 @@ def test_etat_expire_les_consentements_a_24_h(banc):
 def test_etat_sans_arbre_d_etat(banc_nu):
     """Box neuve (aucun état root encore) : etat répond sans rien créer."""
     rc, etat, _ = banc_nu.run("etat", agent=True)
-    assert rc == 0 and etat["ok"] is True and etat["canal"] is None and etat["consentements"] == []
+    assert rc == 0 and etat["ok"] is True and etat["consentements"] == [] and etat["support"] is None
+    rc, etat, _ = banc_nu.run("etat")
+    assert rc == 0 and etat["canal"] is None
     assert not (banc_nu.r / "var/lib/secubox-pilotagectl").exists()
 
 
@@ -1111,3 +1116,71 @@ def test_mains_liees_posees_malgre_un_support_illisible(banc):
     banc.run("mains-liees", "off")
     rc, sortie, _ = banc.run("support", "ouvrir", "s-01", agent=True)
     assert rc == 1 and sortie == {"ok": False, "erreur": "état non fiable"}
+
+
+# --- Tâche 4, relecture tour 1 ---------------------------------------------------------------------------------------
+
+def test_mains_liees_posees_malgre_des_consentements_illisibles(banc):
+    """I2 : miroir de test_mains_liees_posees_malgre_un_support_illisible pour consentements.json : drapeau, projection
+    et audit `mains_liees on`, sans toucher aux consentements."""
+    f = banc.r / "var/lib/secubox-pilotagectl/consentements.json"
+    f.write_text("{pas du json")
+    rc, sortie, p = banc.run("mains-liees", "on")
+    assert rc == 0 and sortie == {"ok": True, "mains_liees": True}, p.stderr
+    assert "consentements" in p.stderr
+    assert (banc.r / "etc/secubox/pilotage/mains-liees").is_file()
+    evts = banc.audit()
+    assert [e["etat"] for e in evts if e["evenement"] == "mains_liees"] == ["on"]
+    assert not any(e["evenement"] == "pilotage_refus" for e in evts)
+    assert f.read_text() == "{pas du json"
+
+
+def test_etat_minimal_pour_le_maitre(banc):
+    """M1 : depuis l'agent, `etat` ne rend que le nécessaire : mains liées, {id, etat} des consentements non terminaux
+    ou décidés depuis moins d'une heure, {id, etat, fin} du support."""
+    banc.cliente()
+    _, s1, _ = banc.run("reboot", agent=True)
+    _, s2, _ = banc.run("maj-paquets", agent=True)
+    _, s3, _ = banc.run("service", "redemarrer", "secubox-lyrion.service", agent=True)
+    banc.run("consentement", "refuser", s2["consentement"])
+    banc.run("consentement", "refuser", s3["consentement"])
+    f = banc.r / "var/lib/secubox-pilotagectl/consentements.json"
+    liste = json.loads(f.read_text())
+    next(c for c in liste if c["id"] == s3["consentement"])["decide"] = int(__import__("time").time()) - 7200
+    f.write_text(json.dumps(liste))
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    banc.run("support", "accepter", "s-01")
+    rc, etat, _ = banc.run("etat", agent=True)
+    assert rc == 0 and set(etat) == {"ok", "mains_liees", "consentements", "support"}
+    assert etat["consentements"] == [{"id": s1["consentement"], "etat": "en_attente"},
+                                     {"id": s2["consentement"], "etat": "refuse"}]
+    assert set(etat["support"]) == {"id", "etat", "fin"} and etat["support"]["etat"] == "ouvert"
+    # en local : tout (affichage du détenteur)
+    _, local, _ = banc.run("etat")
+    assert {"box", "canal", "agent"} <= set(local) and len(local["consentements"]) == 3
+
+
+def test_etat_rend_toujours_les_mains_liees(banc):
+    """M2 : une section illisible est marquée « illisible », mains_liees est toujours rendu."""
+    banc.run("mains-liees", "on")
+    (banc.r / "var/lib/secubox-pilotagectl/consentements.json").write_text("{pas du json")
+    (banc.r / "var/lib/secubox-pilotagectl/support.json").write_text("[]")
+    for agent in (True, False):
+        rc, etat, _ = banc.run("etat", agent=agent)
+        assert rc == 0 and etat["ok"] is True and etat["mains_liees"] is True, etat
+        assert etat["consentements"] == "illisible" and etat["support"] == "illisible"
+
+
+def test_audit_du_support_porte_l_operation(banc_nu):
+    """M5 : `op` dans l'audit d'un support (demande et refus), y compris « ancre non vérifiée »."""
+    banc = banc_nu
+    banc.run("support", "fermer", "s-01", agent=True)
+    banc.ancrer()
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    banc.run("support", "accepter", "s-01", agent=True)
+    lignes = [e for e in banc.audit() if e.get("verbe") == "support"]
+    assert [(e["evenement"], e.get("op"), e.get("refus")) for e in lignes] == [
+        ("pilotage_demande", "fermer", None), ("pilotage_refus", "fermer", "ancre non vérifiée"),
+        ("pilotage_demande", "ouvrir", None), ("pilotage_refus", "ouvrir", "consentement requis"),
+        ("pilotage_demande", "accepter", None), ("pilotage_refus", "accepter", "local seulement")]
+    assert all(set(e) <= PERMIS_AUDIT | {"op"} for e in banc.audit())

@@ -802,7 +802,7 @@ def charger_consentements(ctx, fd, maintenant):
     if expires:
         # Écrit tout de suite : l'expiration n'est auditée qu'une fois, quel que soit le chemin qui suit.
         for c in expires:
-            c["etat"] = "expire"
+            c["etat"], c["decide"] = "expire", maintenant
         ecrire_json(fd, "consentements.json", liste)
         for c in expires:
             auditer(ctx, "consentement_expire", consentement=c["id"], action=c.get("action"), unite=c.get("unite"))
@@ -850,7 +850,8 @@ def executer(ctx, verbe, p):
 
     action = action_de(verbe, p)
     unite = p.get("unite")
-    auditer(ctx, "pilotage_demande", verbe=verbe, action=action, unite=unite,
+    op = p["op"] if verbe == "support" else None
+    auditer(ctx, "pilotage_demande", verbe=verbe, action=action, unite=unite, op=op,
             support=p["id"] if verbe == "support" else None)
     try:
         return traiter(ctx, verbe, p, action, unite)
@@ -858,7 +859,7 @@ def executer(ctx, verbe, p):
         # M5 : un refus faute d'état fiable (ou de systemd) est audité comme les autres ; le lancement manqué l'est déjà.
         if str(e) not in ("audit impossible", "lancement impossible"):
             try:
-                auditer(ctx, "pilotage_refus", verbe=verbe, action=action, unite=unite, refus=str(e))
+                auditer(ctx, "pilotage_refus", verbe=verbe, action=action, unite=unite, op=op, refus=str(e))
             except Erreur:
                 pass
         raise
@@ -960,8 +961,10 @@ def etat_operation(ctx, job):
 
 def traiter(ctx, verbe, p, action, unite):
 
+    op = p["op"] if verbe == "support" else None    # M5 : opération d'un support, auditée (jamais renvoyée)
+
     def refus(motif, **extra):
-        auditer(ctx, "pilotage_refus", verbe=verbe, action=action, unite=unite, refus=motif, **extra)
+        auditer(ctx, "pilotage_refus", verbe=verbe, action=action, unite=unite, op=op, refus=motif, **extra)
         return {"ok": False, "refus": motif, **extra}
 
     local_seulement = verbe in ("consentement", "mains-liees") or (verbe == "support" and p["op"] in ("accepter",
@@ -989,12 +992,22 @@ def traiter(ctx, verbe, p, action, unite):
 def basculer_mains(ctx, fd, liees, maintenant):
     if liees:
         ecrire(fd, "mains-liees", b"")
-        consentements = charger_consentements(ctx, fd, maintenant)
-        for c in consentements:
-            if c.get("etat") in ("en_attente", "accepte"):
-                c["etat"] = "annule"
-                auditer(ctx, "consentement_annule", consentement=c["id"], action=c.get("action"), unite=c.get("unite"))
-        ecrire_json(fd, "consentements.json", consentements)
+        try:
+            consentements = charger_consentements(ctx, fd, maintenant)
+        except Erreur as e:
+            # I2 : comme pour support.json, les mains se lient quand même (projection, audit) ; sur un état non fiable,
+            # aucun consentement ne peut être décidé ni consommé (decider et agir échouent de même).
+            if str(e) == "audit impossible":
+                raise
+            err("consentements.json non fiable : mains liées posées sans toucher aux consentements")
+            consentements = None
+        if consentements is not None:
+            for c in consentements:
+                if c.get("etat") in ("en_attente", "accepte"):
+                    c["etat"], c["decide"] = "annule", maintenant
+                    auditer(ctx, "consentement_annule", consentement=c["id"], action=c.get("action"),
+                            unite=c.get("unite"))
+            ecrire_json(fd, "consentements.json", consentements)
         # Aucune session de support sous mains liées : la demande en attente est annulée, la session ouverte fermée.
         try:
             sup = charger_support(ctx, fd, maintenant)
@@ -1128,27 +1141,59 @@ def etat_agent(ctx):
     return (propre(r.stdout.strip()) or "inconnu") if r.returncode == 0 else "inconnu"
 
 
+RECENT = 3600                                            # décisions rendues au maître pendant une heure (M1)
+
+
+def section(fn):
+    """M2 : une section illisible est marquée « illisible » au lieu de faire échouer tout l'état (sauf audit
+    impossible : une expiration constatée doit être auditée)."""
+    try:
+        return fn()
+    except Erreur as e:
+        if str(e) == "audit impossible":
+            raise
+        return "illisible"
+
+
 def lire_etat(ctx):
     """Lecture de l'agent (sondage) et de la commande locale : identifiants et états seulement, jamais une valeur
-    secrète. Sans arbre d'état (box neuve), rien n'est créé."""
+    secrète. Sans arbre d'état (box neuve), rien n'est créé. `mains_liees` est toujours rendu (M2) : un état root
+    illisible vaut mains liées (prudence), comme pour agir qui refuse alors tout. Pour le maître (M1), le minimum :
+    {id, etat} des consentements en cours ou décidés depuis moins d'une heure, {id, etat, fin} du support."""
+    maitre = ctx.origine == "maitre"
     res = {"ok": True, "box": ctx.box, "mains_liees": False, "canal": None, "consentements": [], "support": None}
-    fd = ouvrir_etat(ctx, creer=False)
+    try:
+        fd = ouvrir_etat(ctx, creer=False)
+    except Erreur:
+        fd = False
     if fd is None:
         res["mains_liees"] = projection_presente(ctx)
+    elif fd is False:
+        res.update(mains_liees=True, canal="illisible", consentements="illisible", support="illisible")
     else:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX)          # les expirations constatées sont écrites
             maintenant = int(time.time())
-            res["mains_liees"] = mains_liees(ctx, fd)
-            res["canal"] = canal_verifie(fd, maintenant)
-            res["consentements"] = [{k: c[k] for k in CHAMPS_CONSENTEMENT if k in c}
-                                    for c in charger_consentements(ctx, fd, maintenant)]
-            sup = charger_support(ctx, fd, maintenant)
-            res["support"] = None if sup is None else {k: sup[k] for k in CHAMPS_SUPPORT if k in sup}
+            liees = section(lambda: mains_liees(ctx, fd))
+            res["mains_liees"] = True if liees == "illisible" else liees
+            res["canal"] = section(lambda: canal_verifie(fd, maintenant))
+            liste = section(lambda: charger_consentements(ctx, fd, maintenant))
+            sup = section(lambda: charger_support(ctx, fd, maintenant))
         finally:
             os.close(fd)
-    if ctx.origine == "local":
-        res["agent"] = etat_agent(ctx)
+        if isinstance(liste, list):
+            if maitre:
+                liste = [c for c in liste if c.get("etat") in ("en_attente", "accepte")
+                         or (entier(c.get("decide")) or 0) >= maintenant - RECENT]
+            champs = ("id", "etat") if maitre else CHAMPS_CONSENTEMENT
+            liste = [{k: c[k] for k in champs if k in c} for c in liste]
+        res["consentements"] = liste
+        if isinstance(sup, dict):
+            sup = {k: sup[k] for k in (("id", "etat", "fin") if maitre else CHAMPS_SUPPORT) if k in sup}
+        res["support"] = sup
+    if maitre:
+        return {k: res[k] for k in ("ok", "mains_liees", "consentements", "support")}
+    res["agent"] = etat_agent(ctx)
     return res
 
 
@@ -1201,7 +1246,7 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
     # R-L2-29 : l'opération est partie ; une écriture d'état manquée désormais est journalisée, jamais propagée
     # (la réponse reste {"ok": true, "job"} et « lance » est audité). Avant le lancement, elle refuse toujours.
     if accord is not None:
-        accord["etat"] = "utilise"
+        accord["etat"], accord["decide"] = "utilise", maintenant
         if ecrire_apres(fd, "consentements.json", consentements):
             auditer(ctx, "consentement_utilise", consentement=accord["id"], action=action, unite=unite, job=job)
         else:
