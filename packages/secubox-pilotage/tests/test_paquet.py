@@ -3,9 +3,12 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """Task 10 (#3126) : le paquet secubox-pilotage — unité durcie, AppArmor, postinst, nginx, menu, agrégateur, CI."""
+import os
 import re
 import subprocess
 from pathlib import Path
+
+import pytest
 
 ICI = Path(__file__).resolve().parents[1]
 DEPOT = ICI.parents[1]
@@ -310,3 +313,50 @@ def test_profils_apparmor_se_compilent():
     for nom in ("secubox-pilotage-api", "secubox-pilotage-invite"):
         r = subprocess.run(["apparmor_parser", "-Q", "-K", str(ICI / "apparmor" / nom)], capture_output=True, text=True)
         assert r.returncode == 0, r.stderr
+
+
+def _postrm(tmp_path, action, lien=False):
+    """postrm avec setfacl, apparmor_parser, nginx et systemctl simulés (journal des appels), chemins redirigés sous tmp_path."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    for nom, rc in (("setfacl", 1), ("apparmor_parser", 1), ("nginx", 1), ("systemctl", 1)):
+        (bin_ / nom).write_text(f'#!/bin/sh\necho "{nom} $*" >> "{tmp_path}/appels"\nexit {rc}\n')
+        (bin_ / nom).chmod(0o755)
+    journaux, aa, aa_sys = tmp_path / "log", tmp_path / "apparmor.d", tmp_path / "sys-apparmor"
+    for d in (journaux, aa, aa_sys):
+        d.mkdir()
+    (journaux / "audit.log.1").write_text("ancienne\n")
+    if lien:
+        (tmp_path / "cible").write_text("")
+        (journaux / "audit.log").symlink_to(tmp_path / "cible")
+    else:
+        (journaux / "audit.log").write_text("ligne\n")
+    env = dict(os.environ, PATH=f"{bin_}{os.pathsep}{os.environ['PATH']}", SECUBOX_PILOTAGE_JOURNAUX=str(journaux),
+               SECUBOX_PILOTAGE_APPARMOR_D=str(aa), SECUBOX_PILOTAGE_APPARMOR_SYS=str(aa_sys),
+               SECUBOX_PILOTAGE_CANAL_CONF=str(tmp_path / "canal.conf"))
+    r = subprocess.run(["sh", str(ICI / "debian" / "postrm"), action], env=env, capture_output=True, text=True, timeout=30)
+    appels = (tmp_path / "appels").read_text().splitlines() if (tmp_path / "appels").exists() else []
+    return r, appels, journaux, aa
+
+
+@pytest.mark.parametrize("action", ["remove", "purge"])
+def test_postrm_retire_l_acl_et_decharge_les_profils_m12(tmp_path, action):
+    r, appels, journaux, aa = _postrm(tmp_path, action)
+    assert r.returncode == 0, r.stderr                         # outils en échec : jamais d'échec du postrm
+    assert f"setfacl -P -x u:secubox-pilotage {journaux}/audit.log" in appels
+    assert f"setfacl -P -x u:secubox-pilotage {journaux}/audit.log.1" in appels   # journal tourné : même inode, même ACL
+    for profil in ("secubox-pilotage-api", "secubox-pilotage-invite"):
+        assert f"apparmor_parser -R {aa}/{profil}" in appels
+
+
+@pytest.mark.parametrize("action", ["upgrade", "failed-upgrade", "abort-install", "abort-upgrade", "disappear"])
+def test_postrm_hors_remove_et_purge_ne_touche_a_rien_m12(tmp_path, action):
+    r, appels, _, _ = _postrm(tmp_path, action)
+    assert r.returncode == 0, r.stderr
+    assert not [a for a in appels if a.startswith(("setfacl", "apparmor_parser"))], appels
+
+
+def test_postrm_ne_suit_jamais_un_lien_a_la_place_du_journal_m12(tmp_path):
+    r, appels, journaux, _ = _postrm(tmp_path, "purge", lien=True)
+    assert r.returncode == 0, r.stderr
+    assert not [a for a in appels if a.endswith(f"{journaux}/audit.log")], appels

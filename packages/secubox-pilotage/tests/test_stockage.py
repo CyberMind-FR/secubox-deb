@@ -474,3 +474,59 @@ def test_plafond_compte_des_octets_pas_des_caracteres_r39(tmp_path):
         s.inventaire_enregistrer(GK5, {"results": [{"path": P, "params": params}], "tronque": True})
         assert _somme_vrais_octets(tmp_path, GK5.cle) <= s.octets_max, i
         assert all(k in s.inventaire(GK5.cle)["valeurs"] for k in params)
+
+
+def _traces(tmp_path, cle):
+    cx = sqlite3.connect(tmp_path / "pilotage" / "pilotage.db")
+    try:
+        return {t: cx.execute(f"SELECT COUNT(*) FROM {t} WHERE cle=?", (cle,)).fetchone()[0]
+                for t in ("boites", "inventaire", "evenements", "releves")}
+    finally:
+        cx.close()
+
+
+def test_box_sans_contact_depuis_30_jours_oubliee_m12(tmp_path):
+    """M12 : une box (révoquée, renommée) sans contact depuis 30 jours est oubliée : ligne `boites`, inventaire, événements, relevé."""
+    s, h = neuf(tmp_path)
+    s.vu(GK5_AUTOLOAD, {})
+    s.inventaire_enregistrer(GK5_AUTOLOAD, releve_gk5())
+    s.notification(GK5_AUTOLOAD, {"type": "X_SECUBOX_Boot", "value": 3, "ts": int(h.t)})
+    s.releve_enregistrer(GK5_AUTOLOAD.cle, 10, "ok", {"cpu_pct": 1})
+    t0 = h.t
+    h.avance(30 * JOUR)
+    s.vu(GK5, {})                                   # une autre box, en ligne
+    assert s.oublier() == []                        # 30 jours pile : pas encore
+    h.avance(1)
+    (o,) = s.oublier()
+    assert o == {"cle": GK5_AUTOLOAD.cle, "nom": "gk5", "reseau": "autoload", "dernier_contact": int(t0)}
+    assert _traces(tmp_path, GK5_AUTOLOAD.cle) == {"boites": 0, "inventaire": 0, "evenements": 0, "releves": 0}
+    assert s.boite(GK5.cle) is not None and s.oublier() == []
+
+
+def test_oubli_ne_touche_jamais_une_box_en_ligne_m12(tmp_path):
+    """Une box qui sonde (vu_le rafraîchi à chaque contact) n'est jamais oubliée, quel que soit l'âge de sa première venue."""
+    s, h = neuf(tmp_path)
+    s.vu(GK5, {})
+    s.inventaire_enregistrer(GK5, releve_gk5())
+    for _ in range(40):
+        h.avance(JOUR)
+        s.vu(GK5, {})                               # sondage : dernier contact réel
+        assert s.oublier() == []
+    assert s.boite(GK5.cle)["en_ligne"] and _traces(tmp_path, GK5.cle)["inventaire"] > 0
+
+
+def test_oubli_compte_depuis_le_dernier_contact_reel_m12(tmp_path):
+    """Le seuil part du DERNIER contact (sondage, relève rangée, notification reçue), pas de la première venue ni d'une autre trace."""
+    s, h = neuf(tmp_path)
+    s.vu(GK5, {})
+    h.avance(25 * JOUR)
+    s.notification(GK5, {"type": "X_SECUBOX_Boot", "value": 3, "ts": 1})   # reçue du canal : un contact
+    h.avance(6 * JOUR)                                                     # 31 j depuis vu_le, 6 j depuis la notification
+    assert s.oublier() == []
+    h.avance(24 * JOUR + 1)
+    assert [o["cle"] for o in s.oublier()] == [GK5.cle]
+    s.vu(GK5, {})
+    h.avance(29 * JOUR)
+    s.inventaire_enregistrer(GK5, releve_gk5())                            # relève rangée : un contact
+    h.avance(2 * JOUR)
+    assert s.oublier() == []

@@ -116,3 +116,20 @@ async def test_boucle_unique_et_arret_propre(monde):
     assert appels == [60.0] and f.en_attente(GK5.cle) == 1  # un seul tour, un seul GET
     await inv.arreter()
     assert inv._boucle is None and not inv._taches and f.en_attente(GK5.cle) == 0
+
+
+@pytest.mark.asyncio
+async def test_tour_oublie_les_box_sans_contact_et_l_audite_m12(tmp_path):
+    h = Horloge()
+    s = StockageSqlite(tmp_path / "p", horloge=h)
+    f = Files()
+    lignes = []
+    inv = Inventaire(f, s, horloge=h, audit=lambda ev, ch: lignes.append((ev, ch)))
+    s.vu(GK2, {})
+    vu_gk2 = int(h.t)
+    h.avance(31 * 86400)
+    s.vu(GK5, {})
+    await inv.tour()
+    assert [b["cle"] for b in s.boites()] == [GK5.cle]
+    assert lignes == [("pilotage_box_oubliee", {"box": "gk2", "cle": GK2.cle, "reseau": "maillage", "dernier_contact": vu_gk2,
+                                                "jours": 30})]

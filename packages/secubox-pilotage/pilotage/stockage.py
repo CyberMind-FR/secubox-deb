@@ -25,6 +25,7 @@ from .identite import Box
 DOSSIER_DEFAUT = Path("/var/lib/secubox/pilotage")
 HORS_LIGNE_S = 90            # une box non vue depuis ce délai passe « hors ligne »
 EVENEMENTS_JOURS = 30        # durée de garde des événements
+OUBLI_JOURS = 30             # une box sans aucun contact depuis ce délai est oubliée (M12)
 BOUCLES_FENETRE_S = 24 * 3600
 PARAMS_MAX = 5000            # paramètres retenus par réponse (l'agent borne le corps à 256 Kio : TailleMax)
 LIGNES_MAX = 2 * PARAMS_MAX  # lignes d'inventaire gardées par box : au-delà, les plus anciennes (releve_le) partent
@@ -431,6 +432,26 @@ class StockageSqlite:
         """Supprime les événements reçus il y a plus de 30 jours (l'horloge de la box n'entre pas en compte)."""
         with self._tx() as cx:
             return cx.execute("DELETE FROM evenements WHERE recu_le<?", (self._maintenant() - EVENEMENTS_JOURS * 86400,)).rowcount
+
+    def oublier(self, jours: int = OUBLI_JOURS) -> list:
+        """M12 : oublie les box sans AUCUN contact depuis `jours` jours (révoquées, renommées : « hors ligne » à vie sinon). Le dernier
+        contact réel est le plus récent de : sondage ou bonjour (`vu_le`), relève rangée (`inventaire_le`), notification reçue
+        (`evenements.recu_le`) ; jamais une date fournie par la box. Une box vue depuis moins de `jours` jours, donc toute box en ligne,
+        n'est jamais touchée : le critère est relu dans la transaction qui efface (un sondage concurrent la garde). Partent : la ligne
+        `boites`, l'inventaire, les événements et le relevé ; le journal des opérations et des supports reste (historique borné).
+        Rend [{cle, nom, reseau, dernier_contact}] des box oubliées, à auditer par l'appelant."""
+        seuil = self._maintenant() - int(jours) * 86400
+        with self._tx() as cx:
+            lignes = cx.execute(
+                "SELECT b.cle, b.nom, b.reseau, MAX(b.vu_le, COALESCE(b.inventaire_le, 0), "
+                "COALESCE((SELECT MAX(e.recu_le) FROM evenements e WHERE e.cle=b.cle), 0)) AS dernier "
+                "FROM boites b WHERE b.vu_le<? ORDER BY b.cle", (seuil,)).fetchall()
+            oubliees = [{"cle": r["cle"], "nom": r["nom"], "reseau": r["reseau"], "dernier_contact": r["dernier"]}
+                        for r in lignes if r["dernier"] < seuil]
+            for o in oubliees:
+                for table in ("inventaire", "evenements", "releves", "boites"):
+                    cx.execute(f"DELETE FROM {table} WHERE cle=?", (o["cle"],))
+        return oubliees
 
     # --- relevé de performance à la demande ---
 

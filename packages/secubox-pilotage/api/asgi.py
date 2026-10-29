@@ -50,5 +50,5 @@ def construire() -> "tuple[FastAPI, FastAPI]":
     stockage = StockageSqlite(Path(os.environ.get("SECUBOX_PILOTAGE_DOSSIER", DOSSIER_DEFAUT)))
     audit = A.journal(Path(os.environ.get("SECUBOX_PILOTAGE_AUDIT", A.AUDIT_DEFAUT)))
     files = Files()
-    return assembler(stockage, files, Inventaire(files, stockage), audit, box_par_adresse,
+    return assembler(stockage, files, Inventaire(files, stockage, audit=audit), audit, box_par_adresse,
                      emettre=emettre_code_par(lanceur_assistant()))

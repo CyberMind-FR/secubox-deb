@@ -9,7 +9,8 @@ SecuBox-Deb :: pilotage :: relève périodique de l'inventaire (#3126)
 Toutes les 60 s, pour chaque box vue depuis moins de 90 s, un GET `["Device."]` est déposé dans sa file ; la réponse est rangée par
 `StockageSqlite.inventaire_enregistrer` (un relevé tronqué ou en erreur n'efface jamais un relevé complet). Une box n'a jamais deux GET
 d'inventaire en vol : tant que le précédent n'a ni reçu de réponse ni expiré, elle est sautée. Les événements de plus de 30 jours sont
-purgés au plus une fois par heure. Chaque tour attend aussi ses crochets (`a_chaque_tour`) : le canal y écrit les décomptes de refus
+purgés au plus une fois par heure ; au même rythme, les box sans contact depuis 30 jours sont oubliées et l'oubli est audité (M12).
+Chaque tour attend aussi ses crochets (`a_chaque_tour`) : le canal y écrit les décomptes de refus
 d'identité en attente (M7). L'horloge et l'attente sont injectables (les tests n'attendent pas 60 s).
 """
 from __future__ import annotations
@@ -22,7 +23,7 @@ from typing import Awaitable, Callable, Optional
 
 from .files import FileDeBoxPleine, Files
 from .identite import Box
-from .stockage import HORS_LIGNE_S, StockageSqlite
+from .stockage import HORS_LIGNE_S, OUBLI_JOURS, StockageSqlite
 
 INTERVALLE_S = 60.0
 PURGE_INTERVALLE_S = 3600.0
@@ -36,9 +37,11 @@ def box_de_ligne(b: dict) -> Box:
 
 class Inventaire:
     def __init__(self, files: Files, stockage: StockageSqlite, *, horloge: Callable[[], float] = time.time,
-                 intervalle_s: float = INTERVALLE_S, attente: Callable[[float], Awaitable] = asyncio.sleep) -> None:
+                 intervalle_s: float = INTERVALLE_S, attente: Callable[[float], Awaitable] = asyncio.sleep,
+                 audit: Optional[Callable[[str, dict], None]] = None) -> None:
         self.files, self.stockage, self.horloge = files, stockage, horloge
         self.intervalle_s, self._attente = intervalle_s, attente
+        self.audit = audit               # oubli d'une box (M12) ; None : journalisé seulement (tests anciens)
         self._en_vol: set = set()        # Box.cle ayant un GET d'inventaire en vol
         self._taches: set = set()
         self._boucle: Optional[asyncio.Task] = None
@@ -81,7 +84,26 @@ class Inventaire:
                 await asyncio.to_thread(self.stockage.purger)
             except Exception:
                 log.exception("purge des événements impossible")
+            await self._oublier()
         return lances
+
+    async def _oublier(self) -> None:
+        """M12 : box sans contact depuis OUBLI_JOURS jours oubliées par le stockage ; chaque oubli est audité (décision sur l'état de la
+        flotte), après l'effacement : l'audit ne dit jamais oubliée une box qu'un sondage concurrent a gardée."""
+        try:
+            oubliees = await asyncio.to_thread(self.stockage.oublier, OUBLI_JOURS)
+        except Exception:
+            log.exception("oubli des box sans contact impossible")
+            return
+        for o in oubliees:
+            log.info("box %s oubliée : aucun contact depuis %d jours", o["cle"], OUBLI_JOURS)
+            if self.audit is None:
+                continue
+            try:
+                await asyncio.to_thread(self.audit, "pilotage_box_oubliee", {"box": o["nom"], "cle": o["cle"], "reseau": o["reseau"],
+                                                                            "dernier_contact": o["dernier_contact"], "jours": OUBLI_JOURS})
+            except Exception:
+                log.exception("audit de l'oubli de %s impossible", o["cle"])
 
     async def _attendre(self, box: Box, futur: asyncio.Future) -> None:
         try:
