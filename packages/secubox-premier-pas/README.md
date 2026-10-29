@@ -3,7 +3,9 @@
 
 SecuBox Premier Pas — first-boot wizard engine and silent profile.
 
-One engine, one profile (profil.toml), four faces: kiosk, console, master panel and silent. premier-pasctl validates a profile step by step (name, clock, admin, network and domain, services, mesh, updates), shows the exact plan, and applies it by driving the existing SecuBox tools (hostnamectl, timedatectl, secubox-users engine, secubox-net-detect, secubox-profilectl, sbx-mesh-join). An incomplete profile is never half-applied: the wizard resumes at the missing step. Never stores a plaintext password.
+One engine, one profile (profil.toml), four faces: kiosk, console, master panel and silent. premier-pasctl validates a profile step by step (name, clock, admin, network and domain, services, mesh, updates), shows the exact plan, and applies it by driving the existing SecuBox tools (secubox-renommer, timedatectl, secubox-users engine, secubox-net-detect, secubox-profilectl, sbx-mesh-join). An incomplete profile is never half-applied: the wizard resumes at the missing step. Never stores a plaintext password.
+
+Renommage (0.8.1, #3126 D3, #3242) : l'étape « nom » appelle `/usr/sbin/secubox-renommer <nom>` (secubox-core >= 1.8.10) — ligne 127.0.1.1 de /etc/hosts, `[global] hostname` de secubox.conf, hostnamectl, relance d'Avahi et audit `box_renommee`, défaits ensemble à tout échec. premier-pas n'a plus sa propre copie (`_renomme`, `_avahi_nouveau_nom` retirés).
 
 Also ships secubox-majauto: nightly unattended upgrade of the SecuBox packages only, from the signed apt.secubox.in repository.
 

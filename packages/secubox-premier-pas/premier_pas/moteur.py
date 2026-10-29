@@ -10,7 +10,7 @@ CyberMind — https://cybermind.fr
 Le moteur n'invente rien : chaque étape pilote un outil qui existe déjà dans
 secubox-deb (relevé par l'audit du 2026-09-27, tableau de la maquette) :
 
-    nom       hostnamectl                    (comme POST /system/settings)
+    nom       secubox-renommer               (comme POST /system/settings, #3242)
     horloge   timedatectl + timesyncd        (#1497)
     admin     moteur de secubox-users        (empreinte argon2 seulement)
     reseau    secubox-net-detect apply ; domaine → secubox.conf
@@ -112,33 +112,9 @@ def cherche_profil(cmdline: Optional[str] = None) -> Optional[Path]:
 
 # ── Plan ───────────────────────────────────────────────────────────────────
 
-HOSTS = Path("/etc/hosts")
-
-
-def _avahi_nouveau_nom() -> None:
-    subprocess.run(["systemctl", "try-restart", "avahi-daemon.service"], capture_output=True)
-
-
-def _renomme(nouveau: str, ancien: Optional[str] = None) -> None:
-    """hostnamectl ne touche ni /etc/hosts ni secubox.conf. Sur gk3, l'ancien
-    nom resté dans /etc/hosts faisait échouer toute résolution du nouveau
-    (« sudo: unable to resolve host gk3 »), et secubox.conf annonçait
-    toujours « secubox-live » (#1544)."""
-    import socket  # noqa: PLC0415
-    ancien = ancien if ancien is not None else socket.gethostname()
-    if HOSTS.exists():
-        lignes = HOSTS.read_text().splitlines()
-        if ancien and ancien != nouveau:
-            lignes = [re.sub(rf"(?<![\w.-]){re.escape(ancien)}(?![\w.-])", nouveau, l)
-                      if not l.lstrip().startswith("#") else l for l in lignes]
-        if not any(re.match(rf"^\s*127\.0\.1\.1\s.*(?<![\w.-]){re.escape(nouveau)}(?![\w.-])", l) for l in lignes):
-            lignes = [l for l in lignes if not re.match(r"^\s*127\.0\.1\.1\s", l)] + [f"127.0.1.1\t{nouveau}"]
-        HOSTS.write_text("\n".join(lignes) + "\n")
-    if SECUBOX_CONF.exists():
-        t = SECUBOX_CONF.read_text()
-        t2 = re.sub(r'(?m)^(hostname\s*=\s*)"[^"]*"', rf'\g<1>"{nouveau}"', t, count=1)
-        if t2 != t:
-            SECUBOX_CONF.write_text(t2)
+# Renommage (#3126 D3, #3242) : un seul outil, celui de secubox-core — ligne 127.0.1.1 de /etc/hosts, [global] hostname
+# de secubox.conf, hostnamectl, relance d'Avahi (#1544, #1556), audit box_renommee, état précédent rétabli à tout échec.
+RENOMMER = "/usr/sbin/secubox-renommer"
 
 
 def _ecrit_conf(domaine: Optional[str]) -> None:
@@ -226,12 +202,8 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
     admin, m, apt = profil.get("admin") or {}, profil.get("maillage") or {}, profil.get("apt") or {}
     nom = str(box["nom"]).strip().lower()
     out: List[Action] = [
-        # /etc/hosts AVANT hostnamectl : l'ancien nom s'y lit encore (gethostname).
-        Action("nom", "/etc/hosts et secubox.conf", fn=lambda: _renomme(nom)),
-        Action("nom", f"nommer la box « {nom} »", ["hostnamectl", "set-hostname", nom]),
-        # Avahi garde le nom qu'il avait au démarrage : sans ceci, gk3 s'annonçait
-        # encore « secubox-live.local » (#1556). Absent d'Avahi : rien à faire.
-        Action("nom", "Bonjour : annoncer le nouveau nom", fn=_avahi_nouveau_nom),
+        # Un seul pas : hosts, secubox.conf, hostnamectl, Avahi et audit, défaits ensemble si l'un échoue (#3242).
+        Action("nom", f"nommer la box « {nom} »", [RENOMMER, nom]),
         Action("horloge", f"fuseau {box['fuseau']}", ["timedatectl", "set-timezone", str(box["fuseau"])]),
         # Souple (#2495) : sans systemd-timesyncd (« NTP not supported ») l'assistant s'arrêtait ICI et la box restait inutilisable. Le défaut est dit à l'écran et au journal,
         # l'installation continue ; l'horloge se règle ensuite (Tor et TLS en dépendent) dès qu'un client NTP est présent.
