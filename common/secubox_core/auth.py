@@ -400,6 +400,24 @@ def est_admin_reel(payload: Dict[str, Any]) -> bool:
         return False
 
 
+def session_toujours_admin(payload: Dict[str, Any]) -> bool:
+    """Un administrateur dont on a déjà accepté le jeton l'est-il TOUJOURS ? (#3126, connexions longues : flux SSE)
+
+    Regroupe ce que `require_jwt` a vérifié à l'ouverture et qui peut changer ensuite : le jeton n'est pas échu (`exp`), sa session
+    est vivante (`jti`, déconnexion ou révocation), le porteur est encore un administrateur réel et actif (`est_admin_reel`).
+    Bloquante (lectures de registres) : à appeler hors de la boucle. Ne lève jamais ; dans le doute, faux."""
+    try:
+        exp = (payload or {}).get("exp")
+        if isinstance(exp, bool) or not isinstance(exp, (int, float)) or not exp > time.time():   # NaN : faux
+            return False
+        jti = payload.get("jti")
+        if not jti or not _session_validator(jti):
+            return False
+        return bool(est_admin_reel(payload))
+    except Exception:  # noqa: BLE001 — dans le doute, on coupe
+        return False
+
+
 def est_personne(payload: Dict[str, Any]) -> bool:
     """Ce porteur est-il une PERSONNE admise, de profil `user` ou plus (#1607) ?
 

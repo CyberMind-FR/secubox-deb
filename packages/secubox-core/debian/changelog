@@ -1,5 +1,8 @@
 secubox-core (1.8.10-1~trixie1) trixie; urgency=medium
 
+  * secubox_core.auth.session_toujours_admin(payload) (ref #3126, L2 tâche 7) : revérifie pour une connexion longue
+    (flux SSE de secubox-pilotage) l'échéance du jeton (exp), la session (jti) et le statut d'administrateur réel ;
+    ne lève jamais, faux dans le doute.
   * snippets/secubox-proxy.conf : l'en-tête X-SecuBox-Pilotage-Tunnel est vidé sur tout
     proxy ; seul l'écouteur de tunnel du pilotage (10.10.0.1 / 10.64.0.1:8472) le pose, un
     client ne peut pas le forger (ref #3126).
