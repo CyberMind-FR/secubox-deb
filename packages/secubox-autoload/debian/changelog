@@ -1,3 +1,14 @@
+secubox-autoload (0.7.1-1~trixie1) trixie; urgency=medium
+
+  * Projection publique des pairs (#3126) : le fichier passe dans `/var/lib/secubox/autoload-public/pairs-publics.json`
+    (dossier root:root 0755 créé par `autoloadctl` par descripteur, racine et dossier ouverts sans suivre de lien,
+    refus si propriétaire autre que root ou droits d'écriture groupe/autres). Le service autoload n'a plus aucune prise
+    sur le fichier, et le maître le lit sans accès à `/var/lib/secubox/autoload/` (0750, base des jetons).
+  * L'abonnement projeté est l'état calculé de `lister` (actif | suspendu | revoque | echu), logique partagée
+    (`jetons.etat_abonnement`).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 09:00:00 +0200
+
 secubox-autoload (0.7.0-1~trixie1) trixie; urgency=medium
 
   * Pilotage distant, lot L1 « Voir » (#3126) : `autoloadctl exporter-pairs` publie la projection publique des pairs

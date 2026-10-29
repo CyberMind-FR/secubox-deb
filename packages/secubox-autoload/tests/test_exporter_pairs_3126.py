@@ -16,6 +16,7 @@ ICI = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ICI))
 from autoload import jetons as J, tunnel as T  # noqa: E402
 
+T0_PASSE = 1_000_000_000
 CLE_A, CLE_B, CLE_C = "A" * 43 + "=", "B" * 43 + "=", "C" * 43 + "="
 
 
@@ -40,7 +41,7 @@ def base(tmp_path, monkeypatch):
     reg.reclamer(e.valeur, CLE_A)
     adresse = pairs.attribuer(CLE_A)
     assert adresse == "10.64.0.2"
-    return {"var": var, "db": db, "reg": reg, "pairs": pairs, "jeton": e.valeur, "sortie": var / "pairs-publics.json"}
+    return {"var": var, "db": db, "reg": reg, "pairs": pairs, "jeton": e.valeur, "public": tmp_path / "autoload-public", "sortie": tmp_path / "autoload-public" / "pairs-publics.json"}
 
 
 def _lire(b):
@@ -90,7 +91,7 @@ def test_base_absente_projection_vide_et_base_non_creee(tmp_path, monkeypatch):
     var.mkdir(mode=0o750)
     monkeypatch.setenv("SECUBOX_AUTOLOAD_DB", str(var / "jetons.db"))
     assert _charger_ctl().main(["exporter-pairs"]) == 0
-    assert json.loads((var / "pairs-publics.json").read_text()) == {"version": 1, "pairs": []}
+    assert json.loads((tmp_path / "autoload-public" / "pairs-publics.json").read_text()) == {"version": 1, "pairs": []}
     assert not (var / "jetons.db").exists()
 
 
@@ -104,30 +105,54 @@ def test_tunnel_sync_exporte(base, monkeypatch):
 def test_echec_export_ne_fait_pas_echouer_tunnel_sync_mais_exporter_pairs_oui(base, monkeypatch, capsys):
     ctl = _charger_ctl()
     monkeypatch.setattr(ctl.T, "synchroniser", lambda *a, **k: 1)
-    base["var"].chmod(0o770)                                    # inscriptible par le groupe : refusé
+    base["public"].mkdir(mode=0o755)
+    base["public"].chmod(0o777)                                 # inscriptible par tous : refusé
     assert ctl.main(["tunnel-sync"]) == 0
     assert "exporter-pairs" in capsys.readouterr().err and not base["sortie"].exists()
     assert ctl.main(["exporter-pairs"]) != 0
 
 
-def test_dossier_remplace_par_un_lien_est_refuse(base, tmp_path, monkeypatch):
+def test_le_dossier_public_est_cree_en_0755(base):
+    assert not base["public"].exists()
+    assert _charger_ctl().main(["exporter-pairs"]) == 0
+    assert stat.S_IMODE(base["public"].stat().st_mode) == 0o755 and base["sortie"].exists()
+    assert not (base["var"] / "pairs-publics.json").exists()    # plus rien dans le dossier du service
+
+
+def test_dossier_public_lien_est_refuse(base, tmp_path):
     cible = tmp_path / "ailleurs"
-    cible.mkdir(mode=0o750)
-    reel = tmp_path / "var-reel"
-    base["var"].rename(reel)
-    base["var"].symlink_to(cible)
-    monkeypatch.setenv("SECUBOX_AUTOLOAD_DB", str(reel / "jetons.db"))   # la base se lit ailleurs ; seul le dossier de sortie est un lien
+    cible.mkdir(mode=0o755)
+    base["public"].symlink_to(cible)
     from autoload import projection as P
     with pytest.raises(P.ProjectionErreur):
-        P.exporter(reel / "jetons.db", base["var"])
+        P.exporter(base["db"], base["public"])
+    assert list(cible.iterdir()) == []
+
+
+def test_racine_lien_est_refusee(base, tmp_path):
+    cible = tmp_path / "ailleurs"
+    cible.mkdir(mode=0o755)
+    lien = tmp_path / "lien"
+    lien.symlink_to(cible)
+    from autoload import projection as P
+    with pytest.raises(P.ProjectionErreur):
+        P.exporter(base["db"], lien / "autoload-public")
     assert list(cible.iterdir()) == []
 
 
 def test_un_fichier_de_sortie_lien_est_remplace_pas_suivi(base, tmp_path):
+    base["public"].mkdir(mode=0o755)
     victime = tmp_path / "victime"
     victime.write_text("intact")
     base["sortie"].symlink_to(victime)
     assert _charger_ctl().main(["exporter-pairs"]) == 0
     assert victime.read_text() == "intact" and not base["sortie"].is_symlink()
     assert _lire(base)["version"] == 1
-    assert [p.name for p in base["var"].iterdir() if p.name.startswith(".")] == []
+    assert [p.name for p in base["public"].iterdir() if p.name.startswith(".")] == []
+
+
+def test_abonnement_echu_est_projete_comme_lister(base):
+    base["reg"].fixer_abonnement("lgm", "actif", expire_le=T0_PASSE)
+    _charger_ctl().main(["exporter-pairs"])
+    assert _lire(base)["pairs"][0]["abonnement"] == "echu"
+    assert base["reg"].lister()[0]["abonnement"] == "echu"

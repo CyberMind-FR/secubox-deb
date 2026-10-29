@@ -12,7 +12,7 @@
   autoloadctl abonnement --client C --statut actif|suspendu|revoque
   autoloadctl tunnel-init                  crée la clé du hub (0600) et affiche sa clé publique
   autoloadctl tunnel-sync                  régénère wg-autoload.conf depuis les pairs actifs et l'applique (wg syncconf), puis exporte-pairs
-  autoloadctl exporter-pairs               publie /var/lib/secubox/autoload/pairs-publics.json (0644, sans secret) pour le pilotage (#3126)
+  autoloadctl exporter-pairs               publie /var/lib/secubox/autoload-public/pairs-publics.json (root, 0644, sans secret) pour le pilotage (#3126)
 """
 import argparse
 import json
@@ -134,12 +134,12 @@ def main(argv=None):
             n = T.synchroniser(pairs_root, Path(os.environ.get("SECUBOX_AUTOLOAD_CONF_WG", T.CONF_DEFAUT)), Path(os.environ.get("SECUBOX_AUTOLOAD_CLE_HUB", T.CLE_HUB_DEFAUT)))
             print(f"{n} pair(s) appliqué(s)")
             try:                                                                                    # le tunnel passe avant : un échec de l'export ne change pas le code de retour
-                P.exporter(db, db.parent)
+                P.exporter(db, P.dossier_public(db))
             except (P.ProjectionErreur, OSError, ValueError) as err:
                 print(f"exporter-pairs : {err}", file=sys.stderr)
         elif a.cmd == "exporter-pairs":
             try:
-                print(f"{len(P.lire_pairs(db))} pair(s) publié(s) dans {P.exporter(db, db.parent)}")
+                print(f"{len(P.lire_pairs(db))} pair(s) publié(s) dans {P.exporter(db, P.dossier_public(db))}")
             except (P.ProjectionErreur, OSError, ValueError) as err:
                 print(f"exporter-pairs : {err}", file=sys.stderr)
                 return 1

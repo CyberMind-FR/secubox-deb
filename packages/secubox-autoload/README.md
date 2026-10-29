@@ -71,11 +71,11 @@ Chaque émission, réclamation, refus (avec la raison), révocation et changemen
     autoloadctl tunnel-sync      # applique les pairs actifs (wg syncconf), puis exporte la projection publique
     autoloadctl exporter-pairs   # (re)publie pairs-publics.json (code non nul en cas d'échec)
 
-**Projection publique des pairs (#3126).** `exporter-pairs` écrit `/var/lib/secubox/autoload/pairs-publics.json` (root, 0644, renommage atomique par descripteur ; le dossier ne doit être ni un lien ni inscriptible par d'autres que root ou le service) pour que le maître de pilotage sache à quel client appartient l'adresse d'une box :
+**Projection publique des pairs (#3126).** `exporter-pairs` écrit `/var/lib/secubox/autoload-public/pairs-publics.json` (root, 0644, renommage atomique par descripteur ; dossier root:root 0755 créé par `autoloadctl` s'il manque, refusé s'il est un lien, n'appartient pas à root ou est inscriptible par le groupe ou les autres ; hors du dossier 0750 du service, qui n'y a aucune prise) pour que le maître de pilotage sache à quel client appartient l'adresse d'une box :
 
     {"version": 1, "pairs": [{"adresse": "10.64.0.9", "client": "lgm", "lot": null, "serie": null, "profil": "lite", "abonnement": "actif"}]}
 
-Seuls figurent les pairs non retirés dont le jeton est réclamé ; `lot` et `serie` valent `null` s'ils sont absents ; aucune clé, empreinte ni valeur de jeton. Base absente : `{"version":1,"pairs":[]}`. `tunnel-sync` l'appelle en dernier ; son échec est journalisé sur stderr sans faire échouer `tunnel-sync`.
+Seuls figurent les pairs non retirés dont le jeton est réclamé ; `abonnement` est l'état calculé de `lister` (`actif`, `suspendu`, `revoque` ou `echu`) ; `lot` et `serie` valent `null` s'ils sont absents ; aucune clé, empreinte ni valeur de jeton. Base absente : `{"version":1,"pairs":[]}`. `tunnel-sync` l'appelle en dernier ; son échec est journalisé sur stderr sans faire échouer `tunnel-sync`.
 
 Données : `/var/lib/secubox/autoload/jetons.db` (0600, dossier 0750). Variables : `SECUBOX_AUTOLOAD_DB`, `SECUBOX_AUTOLOAD_AUDIT` (tests).
 
