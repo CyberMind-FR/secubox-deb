@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Déclencheur (#3126) : wg-mesh monte ou se resynchronise (secubox-p2p écrit wg_mesh.json), wg-autoload est appliqué (autoloadctl
+# tunnel-sync publie la projection des pairs). Le passage est idempotent.
+[Unit]
+Description=SecuBox Pilotage — surveille l'apparition des tunnels (#3126)
+
+[Path]
+PathChanged=/var/lib/secubox/p2p/wg_mesh.json
+PathChanged=/var/lib/secubox/autoload-public/pairs-publics.json
+Unit=secubox-pilotage-ecoute.service
+
+[Install]
+WantedBy=paths.target

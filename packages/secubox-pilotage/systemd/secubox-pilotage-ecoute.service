@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Écouteurs nginx du canal de pilotage sur les IP de tunnel, et règles nft associées (#3126). Root par nécessité (nginx, nft) ; unité
+# oneshot appelée par le postinst, par secubox-pilotage-ecoute.path (wg-mesh / wg-autoload qui changent) et par la minuterie. Pas de
+# ProtectSystem : nginx -t, le rechargement et la réécriture de /etc/nftables.conf touchent trop de chemins pour un bac à sable sans banc.
+[Unit]
+Description=SecuBox Pilotage — écouteurs du canal sur les tunnels (nginx, nft) (#3126)
+After=network.target nginx.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-pilotage-ecoute
+# La rotation du journal d'audit (create 0640 secubox secubox) recrée le fichier sans l'ACL du service : on la repose à chaque passage,
+# sans toucher au propriétaire ni aux droits du journal.
+ExecStartPost=-/bin/sh -c 'if [ -f /var/log/secubox/audit.log ] && command -v setfacl >/dev/null 2>&1; then setfacl -m u:secubox-pilotage:rw- /var/log/secubox/audit.log; fi'
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictRealtime=yes

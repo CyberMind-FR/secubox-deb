@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Filet (#3126) : une interface qui monte sans toucher aux fichiers surveillés, ou une règle vive perdue (rechargement nft), est reprise
+# au passage suivant. Le passage ne recharge nginx que si le rendu change.
+[Unit]
+Description=SecuBox Pilotage — reprise périodique des écouteurs de tunnel (#3126)
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+AccuracySec=30s
+Unit=secubox-pilotage-ecoute.service
+
+[Install]
+WantedBy=timers.target

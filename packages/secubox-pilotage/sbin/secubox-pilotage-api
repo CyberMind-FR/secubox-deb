@@ -1,0 +1,75 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-pilotage-api — le service Pilotage (#3126) : deux applications, deux sockets Unix, UN processus, UNE boucle asyncio.
+
+  /run/secubox/pilotage.sock         administration (derrière nginx / l'agrégateur), 0660, groupe secubox
+  /run/secubox/pilotage-canal.sock   canal des box (derrière l'écouteur nginx des IP de tunnel), 0660, groupe www-data
+
+Les files de requêtes sont en mémoire et la boucle de relève est partagée : les deux applications DOIVENT vivre dans le même processus (R22)
+et sont servies avec lifespan="on" (la boucle démarre au premier lifespan, s'arrête au dernier). Les groupes des sockets sont posés par
+l'unité (ExecStartPost, en root) : le service n'est membre ni de secubox ni de www-data. Les sockets sont créées avec un umask 0007 et
+chmod 0660 : uvicorn ne les rouvre jamais en 0666 (#2026).
+"""
+import asyncio
+import os
+import socket
+import sys
+
+sys.path.insert(0, "/usr/lib/secubox/pilotage")
+import uvicorn  # noqa: E402
+
+SOCK_ADMIN = "/run/secubox/pilotage.sock"
+SOCK_CANAL = "/run/secubox/pilotage-canal.sock"
+
+
+def socket_unix(chemin: str):
+    """Socket d'écoute 0660. Une socket périmée (reste d'un arrêt brutal) est retirée ; si /run/secubox (collant) en refuse la suppression
+    parce qu'un autre compte la possède, l'unité l'a déjà retirée en root (ExecStartPre=+) et le bind échoue franchement."""
+    os.umask(0o007)
+    try:
+        os.unlink(chemin)
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        print(f"pilotage: socket périmée {chemin} non retirée : {e}", file=sys.stderr)
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.bind(chemin)
+    os.chmod(chemin, 0o660)
+    s.listen(128)
+    s.setblocking(False)
+    return s
+
+
+def serveurs(admin, canal, s_admin, s_canal):
+    options = dict(access_log=False, log_level="warning", lifespan="on")
+    return uvicorn.Server(uvicorn.Config(admin, **options)), uvicorn.Server(uvicorn.Config(canal, **options))
+
+
+async def servir(admin, canal, s_admin, s_canal, rendre=None) -> None:
+    """Sert les deux applications dans la boucle courante. Dès que l'un des serveurs s'arrête (signal, échec du lifespan), l'autre est arrêté
+    proprement : jamais un service à moitié vivant."""
+    srv_admin, srv_canal = serveurs(admin, canal, s_admin, s_canal)
+    if rendre is not None:
+        rendre((srv_admin, srv_canal))
+    taches = [asyncio.create_task(srv_admin.serve(sockets=[s_admin])), asyncio.create_task(srv_canal.serve(sockets=[s_canal]))]
+    try:
+        await asyncio.wait(taches, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        srv_admin.should_exit = srv_canal.should_exit = True
+        resultats = await asyncio.gather(*taches, return_exceptions=True)
+    for r in resultats:
+        if isinstance(r, BaseException) and not isinstance(r, asyncio.CancelledError):
+            raise r
+
+
+async def main() -> None:
+    from api.asgi import construire
+    admin, canal = construire()
+    await servir(admin, canal, socket_unix(SOCK_ADMIN), socket_unix(SOCK_CANAL))
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

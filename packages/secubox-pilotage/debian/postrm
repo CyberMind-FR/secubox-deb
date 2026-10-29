@@ -1,0 +1,18 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+case "$1" in
+  remove|purge)
+    # Écouteur rendu par le script (pas un conffile) : retiré avec le paquet. Les règles nft restent (sans service derrière, elles ne
+    # donnent accès à rien) ; les données de /var/lib/secubox/pilotage ne sont jamais supprimées.
+    rm -f /etc/nginx/conf.d/secubox-pilotage-canal.conf
+    if systemctl is-active --quiet nginx 2>/dev/null; then
+      if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

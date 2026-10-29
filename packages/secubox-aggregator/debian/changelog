@@ -1,3 +1,11 @@
+secubox-aggregator (0.5.1-1~trixie1) trixie; urgency=medium
+
+  * pilotage à socket dédiée (ref #3126). Le maître du pilotage distant tient la file des requêtes des box en mémoire, sert deux sockets
+    (/run/secubox/pilotage.sock, pilotage-canal.sock) dans un seul processus et ne peut pas être monté ici : il rejoint
+    DEDICATED_MODULES et la liste d'exclusion de secubox-aggregator-migrate.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 10:00:00 +0100
+
 secubox-aggregator (0.5.0-1~trixie1) trixie; urgency=medium
 
   * Démarrage non bloquant, montage progressif des modules (ref #3216, ref #3191). La socket écoute en quelques
