@@ -18,6 +18,12 @@
 // ou AncreIllisible coupent le canal : rien ne part vers le maître (bonjour,
 // sondage, réponses, notifications) ; la reconnexion suivante qui réussit
 // notifie la coupure au maître (X_SECUBOX_AnchorFailed).
+//
+// Actions (L2, tâche 3) : avec l'ancre vérifiée, un Operate d'action passe à Config.Agir (l'exécuteur du paquet
+// operations, qui appelle le ctl root) et reçoit tout de suite un OPERATE_RESP {etat, job, raison}. Les fins
+// d'opération (X_SECUBOX_OperationDone) attendent dans Config.Resultats : une goroutine les remet par /notifs et
+// les retire seulement après un 2xx ; un envoi manqué est retenté avec recul, et chaque bonjour (reconnexion) le
+// relance tout de suite.
 package canal
 
 import (
@@ -41,6 +47,7 @@ import (
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/operations"
 )
 
 // Valeurs par défaut et bornes.
@@ -107,6 +114,10 @@ type Config struct {
 	// (tests du canal).
 	Ancre        func(ctx context.Context) Verdict
 	PeriodeAncre time.Duration // intervalle des revérifications de l'ancre (1 h)
+	// Agir traite un Operate d'action (L2) ; nil : toute commande autre que le relevé est refusée (L1).
+	Agir func(ctx context.Context, cmd string, args map[string]any, acteur string) operations.Reponse
+	// Resultats : fins d'opération à remettre au maître, renvoyées à la reconnexion ; nil : aucune.
+	Resultats *operations.Boite
 }
 
 // Client interroge le maître et lui répond.
@@ -215,6 +226,13 @@ func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error 
 		go func() {
 			defer wg.Done()
 			c.notifier(ctx, ev)
+		}()
+	}
+	if c.cfg.Resultats != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.remettre(ctx)
 		}()
 	}
 	defer wg.Wait()
@@ -342,6 +360,9 @@ func (c *Client) cycle(ctx context.Context, bonjour *bool) (bool, error) {
 			return false, fmt.Errorf("bonjour : %w", err)
 		}
 		*bonjour = true
+		if c.cfg.Resultats != nil {
+			c.cfg.Resultats.Reveiller() // (re)connexion : les résultats non remis partent tout de suite
+		}
 	}
 	if c.coupure != 0 {
 		// Reconnexion après une coupure faute d'ancre : le maître en est informé
@@ -546,6 +567,67 @@ func (c *Client) vider(ctx context.Context, att *[]notifs.Evenement) bool {
 	return true
 }
 
+// remettre envoie les fins d'opération de Config.Resultats (lots de 16) ; seule cette goroutine les envoie, et un
+// résultat n'est retiré qu'une fois remis (2xx). Échec : nouvel essai par minuteur à recul doublé (ReculMin à
+// ReculMax), ou dès le prochain dépôt ou bonjour.
+func (c *Client) remettre(ctx context.Context) {
+	b := c.cfg.Resultats
+	var minuteur *time.Timer
+	var reprise <-chan time.Time
+	recul := c.cfg.ReculMin
+	defer func() {
+		if minuteur != nil {
+			minuteur.Stop()
+		}
+	}()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-b.Signal():
+		case <-reprise:
+			reprise = nil
+		}
+		if c.viderResultats(ctx) {
+			recul = c.cfg.ReculMin
+			continue
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		if minuteur != nil {
+			minuteur.Stop()
+		}
+		minuteur = c.reprise(recul)
+		reprise = minuteur.C
+		if recul *= 2; recul > c.cfg.ReculMax {
+			recul = c.cfg.ReculMax
+		}
+	}
+}
+
+// viderResultats remet les résultats en attente ; faux au premier échec (ils restent dans la boîte).
+func (c *Client) viderResultats(ctx context.Context) bool {
+	b := c.cfg.Resultats
+	for {
+		evs, seq := b.Prendre(maxLotNotifs)
+		if len(evs) == 0 {
+			return true
+		}
+		lot := make([]map[string]any, len(evs))
+		for i, e := range evs {
+			lot[i] = map[string]any{"type": "NOTIFY", "body": map[string]any{"event": e}}
+		}
+		if err := c.poster(ctx, "/notifs", lot); err != nil {
+			if ctx.Err() == nil {
+				log.Printf("canal : %d résultat(s) d'opération non remis, gardés (%v)", b.Taille(), err)
+			}
+			return false
+		}
+		b.Remis(seq)
+	}
+}
+
 // requete est un message du maître, tel que décodé.
 type requete struct {
 	MsgID string          `json:"msg_id"`
@@ -603,7 +685,7 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 				}
 				continue
 			}
-			rep, run := c.operate(rq)
+			rep, run := c.operate(ctx, rq)
 			if run == nil {
 				reps = append(reps, c.borner(rep))
 			} else if c.lancerReleve(ctx, rq.MsgID, run) {
@@ -707,14 +789,20 @@ func validerChemins(l []any) ([]string, error) {
 }
 
 // operate valide un OPERATE. Rend soit une réponse immédiate (refus, argument
-// invalide) avec run nul, soit la fonction qui fera le relevé.
-func (c *Client) operate(rq requete) (reponse, func(context.Context) reponse) {
+// invalide, OPERATE_RESP d'une action) avec run nul, soit la fonction qui fera le relevé.
+func (c *Client) operate(ctx context.Context, rq requete) (reponse, func(context.Context) reponse) {
 	var b struct {
 		Command string         `json:"command"`
 		Args    map[string]any `json:"args"`
+		Acteur  any            `json:"acteur"` // login de l'administrateur du maître (R-L2-14), validé par l'exécuteur
 	}
 	if err := json.Unmarshal(rq.Body, &b); err != nil {
 		return erreur(rq.MsgID, "corps OPERATE invalide"), nil
+	}
+	if b.Command != commandeMesure && c.cfg.Agir != nil {
+		acteur, _ := b.Acteur.(string)
+		r := c.cfg.Agir(ctx, b.Command, b.Args, acteur)
+		return reponse{MsgID: rq.MsgID, Type: "OPERATE_RESP", Body: operations.Corps(r)}, nil
 	}
 	if b.Command != commandeMesure || c.operer == nil {
 		return erreur(rq.MsgID, msgRefus), nil

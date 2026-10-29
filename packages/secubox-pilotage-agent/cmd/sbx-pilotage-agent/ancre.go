@@ -14,13 +14,14 @@ import (
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/canal"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/operations"
 )
 
 // Vérification de l'ancre du maître (D1, #3126 L2) : la seule voie est le ctl
 // root, par l'argv exact que le sudoers accorde. L'agent ne lit ni wg ni l'ancre.
 const (
 	cheminSudo = "/usr/bin/sudo"
-	cheminCtl  = "/usr/sbin/secubox-pilotagectl"
+	cheminCtl  = operations.CheminCtl
 	delaiCtl   = 60 * time.Second
 )
 

@@ -4,8 +4,8 @@
 // See LICENCE-CMSD-1.0.md for terms.
 
 // Commande sbx-pilotage-agent : agent de pilotage distant d'une box SecuBox
-// (L1 « Voir », lecture seule). Connexion sortante vers le maître par le tunnel
-// WireGuard ; l'agent n'ouvre aucun port d'écoute.
+// (L1 « Voir » ; L2 « Agir » par le ctl root, via sudo). Connexion sortante vers
+// le maître par le tunnel WireGuard ; l'agent n'ouvre aucun port d'écoute.
 package main
 
 import (
@@ -58,18 +58,23 @@ func main() {
 		surveiller(ctx, m, cpu, intervalleReleve(os.Getenv("PILOTAGE_RELEVE_INTERVALLE_S")), ev)
 	}()
 
+	// L2 : Operate d'action par le ctl root (sudo), opérations suivies par systemctl, fins gardées jusqu'à leur remise.
+	ex, resultats := executeur(lanceurSystemctl(cheminSudo, delaiCtl), lanceurSystemctl(cheminSystemctl, delaiSystemctl), ev)
 	cl := canal.NouveauClient(canal.Config{
 		Maitre:   maitre,
 		IPSource: ipSource,
 		Version:  version,
 		BootID:   bootID(),
 		// D1 : au démarrage puis toutes les heures, par le ctl root ; échec → canal coupé.
-		Ancre: verifieurAncre(lanceurSystemctl(cheminSudo, delaiCtl), maitre),
+		Ancre:     verifieurAncre(lanceurSystemctl(cheminSudo, delaiCtl), maitre),
+		Agir:      ex.Operer,
+		Resultats: resultats,
 	}, m, operateur("", nil))
 	if err := cl.Tourner(ctx, ev); err != nil && ctx.Err() == nil {
 		log.Fatalf("canal : %v", err)
 	}
 	arret()
+	ex.Attendre()
 	suivi.Wait()
 	log.Print("arrêt propre")
 }

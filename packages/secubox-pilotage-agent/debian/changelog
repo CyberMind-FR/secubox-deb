@@ -50,6 +50,20 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
     - I2 / R-L2-24 : ancre absente, au plus une revérification (une ligne d'audit) par lot d'Operate refusés et par
       minute ; les autres refus sont comptés dans le journal de l'agent, sans appel au ctl.
     - M1 : une ancre absente après une vérification réussie vaut « illisible » (coupure, puis X_SECUBOX_AnchorFailed).
+  * L2 « Agir », tâche 3 (ref #3126) : Operate asynchrones dans l'agent.
+    - Liste fermée : Device.Reboot(), X_SECUBOX_Packages.MettreAJour(), X_SECUBOX_Services.Agir() {unite, action},
+      X_SECUBOX_Nom.Renommer() {nom}, X_SECUBOX_Secrets.Renouveler(), X_SECUBOX_Support.Ouvrir() {id, duree_min}
+      et .Fermer() {id}, plus le relevé de L1. Paramètres validés par l'agent avant tout appel au ctl (inconnu, mal
+      typé ou hors motif : refus) ; actions start/stop/restart traduites en demarrer/arreter/redemarrer ;
+      « --acteur <login> » transmis quand le maître le fournit sous une forme valable (R-L2-14).
+    - OPERATE_RESP immédiat {etat: accepte|consentement|refuse, job, raison} (R-L2-1) ; suivi par systemctl show sans
+      sudo, NOTIFY X_SECUBOX_OperationProgress {job, etape, pct} puis X_SECUBOX_OperationDone {job, rc, resume}.
+    - Fins non remises gardées en mémoire (au plus 50, le plus ancien évincé et journalisé), renvoyées à la
+      reconnexion, une seule fois chacune.
+    - Ctl : verbe de lecture etat-operation <job> (audité) ; _fin enregistre la fin de chaque opération (fins.json).
+      R-L2-21 : agir et politique refusent toute demande du maître sans ancre vérifiée (« ancre non vérifiée »,
+      audité avec le verbe). R-L2-26 : ancre-verifier enregistre le canal vérifié (ancre.json, atomique, 2 h) ; la
+      nature de la box (propriétaire ou cliente) se lit dans ce canal, plus dans la présence de wg-mesh.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
 

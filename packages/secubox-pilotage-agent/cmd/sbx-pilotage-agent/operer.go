@@ -8,8 +8,11 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/operations"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/releve"
 )
 
@@ -72,4 +75,24 @@ func operateur(racine string, attendre func(context.Context, time.Duration) erro
 		}
 		return s, nil
 	}
+}
+
+// executeur relie les Operate d'action (L2) au ctl root : ctl lance `sudo -n /usr/sbin/secubox-pilotagectl …`,
+// systemctl lit l'état de l'unité de l'opération sans sudo. La progression part dans la file des notifications sans
+// jamais bloquer (perdue si la file est pleine) ; les fins vont dans la boîte des résultats (au plus 50, renvoyés
+// à la reconnexion).
+func executeur(ctl, systemctl operations.Lanceur, ev chan<- notifs.Evenement) (*operations.Executeur, *operations.Boite) {
+	boite := operations.NouvelleBoite(operations.MaxResultats)
+	return operations.Nouveau(operations.Config{
+		Ctl:       ctl,
+		Systemctl: systemctl,
+		Resultats: boite,
+		Progression: func(e notifs.Evenement) {
+			select {
+			case ev <- e:
+			default:
+				log.Printf("progression de %s abandonnée (file pleine)", e.Job)
+			}
+		},
+	}), boite
 }

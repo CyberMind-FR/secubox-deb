@@ -11,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/operations"
 )
 
 const racineTest = "../../internal/collecte/testdata/gk5"
@@ -75,5 +78,40 @@ func TestOperateRespecteLeContexte(t *testing.T) {
 	}
 	if d := time.Since(debut); d > 2*time.Second {
 		t.Fatalf("relevé non interrompu : %v", d)
+	}
+}
+
+// TestExecuteurDeLAgent (tâche 3) : l'exécuteur passe par sudo vers le ctl (argv exact du sudoers) et lit l'unité
+// par systemctl sans sudo ; une progression ne bloque jamais quand la file des notifications est pleine.
+func TestExecuteurDeLAgent(t *testing.T) {
+	var vusCtl, vusSystemctl []string
+	ctl := func(_ context.Context, args ...string) ([]byte, error) {
+		vusCtl = append(vusCtl, strings.Join(args, " "))
+		return []byte(`{"ok": true, "job": "0123456789abcdef"}`), nil
+	}
+	sysctl := func(_ context.Context, args ...string) ([]byte, error) {
+		vusSystemctl = append(vusSystemctl, strings.Join(args, " "))
+		return []byte("active\n"), nil
+	}
+	ev := make(chan notifs.Evenement) // jamais lue : pleine d'emblée
+	ex, boite := executeur(ctl, sysctl, ev)
+	if boite == nil {
+		t.Fatal("boîte des résultats attendue")
+	}
+	ctx, annule := context.WithCancel(context.Background())
+	fini := make(chan operations.Reponse, 1)
+	go func() { fini <- ex.Operer(ctx, operations.CmdReboot, nil, "gk2admin") }()
+	select {
+	case r := <-fini:
+		if r.Etat != operations.Accepte {
+			t.Fatalf("accepte attendu : %+v", r)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Operer bloqué par la file des notifications")
+	}
+	annule()
+	ex.Attendre()
+	if len(vusCtl) != 1 || vusCtl[0] != "-n /usr/sbin/secubox-pilotagectl --acteur gk2admin reboot" {
+		t.Fatalf("argv du ctl inattendu : %v", vusCtl)
 	}
 }

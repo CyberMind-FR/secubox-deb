@@ -18,8 +18,9 @@ Binaire Go unique `/usr/sbin/sbx-pilotage-agent`, bibliothèque standard seule, 
   pilotage), notifie les événements (boucle de relances, mémoire basse, swap, démarrage) et réalise
   l'Operate `Device.X_SECUBOX_Releve.Mesurer()` (10 à 300 s, un seul à la fois).
 - Rien ne part vers le maître tant que son ancre n'est pas vérifiée (voir « Ancre du maître »).
-- Toute autre commande est refusée par l'agent tant que les Operate de L2 ne sont pas câblés (tâche 3). Jamais la ligne
-  de commande d'un processus (`comm`).
+- Les Operate d'action de L2 (redémarrer, mettre à niveau, piloter un service, renommer, renouveler les secrets,
+  support) passent par le ctl root : voir « Operate d'action (L2) ». Jamais la ligne de commande d'un processus
+  (`comm`).
 - Le maître est choisi ainsi : `PILOTAGE_MAITRE` s'il est posé ; sinon `wg-mesh` en `10.10.0.0/24`, puis
   `wg-autoload` en `10.64.0.0/16` ; sinon l'agent attend et revérifie toutes les 300 s. L'adresse de sortie
   est celle de l'interface du maillage dont la plage contient le maître.
@@ -72,6 +73,7 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 | `ancre-verifier <wg-mesh\|wg-autoload>` | lecture, permise depuis l'agent : `{"ok": true}` si le pair WireGuard de l'interface du canal de l'agent qui porte l'adresse du maître a la clé de l'ancre, sinon `{"ok": false, "raison": "absente"\|"differente"\|"illisible"}` (code 0, refus audité) ; voir « Ancre du maître » |
 | `consentement <accepter\|refuser> <id>` | **local seulement** : décision du détenteur sur un consentement en attente |
 | `mains-liees <on\|off>` | **local seulement** : lie ou délie les mains du maître |
+| `etat-operation <job>` | lecture, permise depuis l'agent, **auditée** (`pilotage_lecture`) : `{"ok": true, "job", "etat": "en_cours"\|"termine"\|"inconnu"}`, avec `verbe`, `resultat` (`succes`/`echec`) et `rc` (entier, ou `null` pour un signal) une fois terminée. L'unité `--collect` est ramassée dès sa fin : `_fin` enregistre la fin dans l'état root (`fins.json`, 100 dernières) et ce verbe la relit |
 | `_fin <job>` | **interne, local seulement** : `ExecStopPost` de chaque unité transitoire ; audite la fin (`succes`/`echec`, code de sortie numérique) et libère l'opération exclusive |
 | `politique <action>` | `{"autorise", "consentement", "raison"}` ; actions `releve`, `reboot`, `maj-paquets`, `service-demarrer`, `service-arreter`, `service-redemarrer`, `renommer`, `renouveler-secrets`, `support-ouvrir`, `support-fermer` |
 
@@ -80,7 +82,12 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 - **Mains liées** : tout est refusé au maître sauf le relevé. État root `/var/lib/secubox-pilotagectl/mains-liees`,
   projection `/etc/secubox/pilotage/mains-liees` (root, 0644, posée par descripteur) ; l'un OU l'autre lie les mains.
   Les poser annule les consentements en attente ou acceptés non consommés.
-- **Box cliente** (pas d'interface `wg-mesh` : reliée par `wg-autoload`, ou sans maillage) : `reboot`, `maj-paquets`,
+- **Ancre vérifiée exigée** (R-L2-21) : toute demande du maître (actions et `politique`) est refusée tant
+  qu'aucune ancre n'est vérifiée (`{"ok": false, "refus": "ancre non vérifiée"}`, ou `"raison"` pour `politique`),
+  refus audité avec le verbe. Chaque `ancre-verifier` réussi enregistre le canal vérifié (`ancre.json` dans l'état
+  root, écriture atomique, valable 2 h ; l'agent revérifie toutes les heures) ; un échec le retire (R-L2-26).
+- **Box cliente** (canal vérifié `wg-autoload` ; `wg-mesh` = box du propriétaire ; la nature se lit dans le canal
+  enregistré, jamais dans la seule présence d'une interface, R-L2-26) : `reboot`, `maj-paquets`,
   `service arreter|redemarrer`, `renommer`, `renouveler-secrets`, et toute action sur une unité gabarit (`@`), même
   `demarrer`, exigent l'accord du détenteur. La demande crée un
   consentement en attente, valable 24 h (`{"ok": false, "refus": "consentement requis", "consentement": "<id>"}`) ;
@@ -93,11 +100,50 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
   --property=ExecStopPost=/usr/sbin/secubox-pilotagectl _fin <job>`, sans délai imposé ; la progression se lit dans le
   journal de l'unité, la fin est auditée (`pilotage_resultat`, `succes`/`echec`).
 - **Audit** : une ligne JSON par demande, refus, consentement et résultat dans `/var/log/secubox/audit.log` (ouvert sans
-  suivre de lien ; identifiants seulement, jamais une valeur secrète ni l'argv refusé). `politique` n'est pas auditée.
+  suivre de lien ; identifiants seulement, jamais une valeur secrète ni l'argv refusé). `politique` n'est pas auditée, sauf son refus faute d'ancre vérifiée ; `etat-operation` l'est (`pilotage_lecture`).
 - État root `0700` `/var/lib/secubox-pilotagectl` (tmpfiles.d du paquet) : consentements, mains liées, opération en
-  cours. Non fiable (propriétaire, droits, lien) : tout est refusé.
+  cours, canal vérifié (`ancre.json`), opérations lancées et finies (`fins.json`). Non fiable (propriétaire, droits,
+  lien) : tout est refusé.
 - `SBX_RACINE` (tests seulement) n'est honorée que si l'appelant est le processus lui-même ; jamais sous sudo depuis un
   autre compte.
+
+## Operate d'action (L2)
+
+Avec l'ancre vérifiée, l'agent accepte cette **liste fermée** de commandes ; il valide les paramètres **avant** tout
+appel au ctl (paramètre manquant, inconnu, mal typé ou hors motif : refus, le ctl n'est pas appelé) :
+
+| Commande | Paramètres | Verbe du ctl |
+|---|---|---|
+| `Device.Reboot()` | aucun | `reboot` |
+| `Device.X_SECUBOX_Packages.MettreAJour()` | aucun | `maj-paquets` |
+| `Device.X_SECUBOX_Services.Agir()` | `unite` (`^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`), `action` (`demarrer`/`start`, `arreter`/`stop`, `redemarrer`/`restart`) | `service <demarrer\|arreter\|redemarrer> <unite>` |
+| `Device.X_SECUBOX_Nom.Renommer()` | `nom` (libellé DNS) | `renommer <nom>` |
+| `Device.X_SECUBOX_Secrets.Renouveler()` | aucun | `renouveler-secrets` |
+| `Device.X_SECUBOX_Support.Ouvrir()` | `id` (`^[a-z0-9][a-z0-9-]{0,63}$`), `duree_min` facultatif (entier 1 à 240, défaut 30) | `support ouvrir <id>` |
+| `Device.X_SECUBOX_Support.Fermer()` | `id` | `support fermer <id>` |
+| `Device.X_SECUBOX_Releve.Mesurer()` | `duree_s` (10 à 300) | aucun : relevé de L1, fait par l'agent |
+
+- Le corps de l'Operate peut porter `"acteur": "<login de l'admin du maître>"` (R-L2-14) : l'agent le passe au ctl en
+  tête (`--acteur <login>`) s'il a la forme `^[a-z_][a-z0-9_.-]{0,63}$` ; invalide ou absent, il n'est pas transmis
+  (l'acteur audité est alors le compte de l'agent) et la demande n'est pas refusée pour autant.
+- **`OPERATE_RESP` immédiat** : `{"etat": "accepte"|"consentement"|"refuse", "job": "<id>"|"", "raison": "…"|""}`.
+  `accepte` : le ctl a lancé l'opération `job`. `consentement` : le ctl a répondu « consentement requis » (box
+  cliente, accord du détenteur à donner en local ; la demande identique suivante consomme l'accord, R-L2-10). `refuse` :
+  refus de l'agent (commande inconnue, argument invalide) ou du ctl (`raison` = son refus : mains liées, ancre non
+  vérifiée, unité protégée, opération en cours avec son `job`…) ; erreur ou sortie incohérente du ctl : `refuse`.
+  Sans exécuteur (tests de L1), une commande autre que le relevé reçoit encore `ERROR` (« lecture seule »).
+- **Suivi** d'une opération acceptée, en tâche de fond : `systemctl show -p ActiveState` du service et de la minuterie
+  `secubox-pilotage-op-<job>` toutes les 5 s, **sans sudo** (lecture sur le bus système). NOTIFY
+  `X_SECUBOX_OperationProgress {job, etape, pct}` : `lancee` (0), `en_cours` (50), `terminee` (100), une fois chacune.
+  L'unité finie, l'agent demande le code au ctl (`etat-operation <job>`, une ligne d'audit par lecture), puis
+  NOTIFY `X_SECUBOX_OperationDone {job, rc, resume}` : `resume` est court (« maj-paquets : succès »,
+  « … : échec (code 100) », « … : échec (interrompu) »), jamais une sortie d'apt ni un secret ; `rc` vaut -1 quand le
+  code n'est pas un nombre ou que la fin reste introuvable après 3 lectures (« résultat inconnu »). Au plus 32
+  opérations suivies en même temps. L'arrêt de l'agent (ou le reboot de la box) interrompt le suivi sans résultat.
+- **Résultats non remis** : les `X_SECUBOX_OperationDone` sont gardés en mémoire (au plus **50** ; au-delà, le plus
+  ancien est évincé et journalisé) jusqu'à un POST `/notifs` réussi (2xx), puis retirés : renvoyés à la reconnexion
+  (chaque bonjour relance l'envoi), une seule fois chacun. La progression, elle, suit la file ordinaire des
+  notifications (64, les plus anciennes tombent).
 
 ## Ancre du maître (D1)
 

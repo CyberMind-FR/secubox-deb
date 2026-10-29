@@ -22,6 +22,7 @@ import (
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/operations"
 )
 
 type source struct{ params map[string]any }
@@ -41,6 +42,10 @@ type fauxMaitre struct {
 	recu     chan struct{}
 
 	echecsNotifs int // nombre de POST /notifs à refuser en 503 avant d'accepter
+
+	enPanne       atomic.Bool  // maître injoignable : toute requête reçoit 503
+	refuses       atomic.Int32 // requêtes refusées pendant la panne
+	sondagesRefus atomic.Int32 // dont GET /requetes (le canal a vu la panne)
 }
 
 func (f *fauxMaitre) handler() http.Handler {
@@ -86,7 +91,18 @@ func (f *fauxMaitre) handler() http.Handler {
 		f.mu.Unlock()
 		f.signal()
 	})
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if f.enPanne.Load() {
+			f.refuses.Add(1)
+			if r.URL.Path == "/canal/v1/requetes" {
+				f.sondagesRefus.Add(1)
+			}
+			io.Copy(io.Discard, r.Body)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func (f *fauxMaitre) signal() {
@@ -1073,4 +1089,133 @@ func TestAgentAncreDisparueApresOkCoupe(t *testing.T) {
 		defer f.mu.Unlock()
 		return len(f.notifs) >= 1 && strings.Contains(string(f.notifs[0]), notifs.TypeAncre)
 	})
+}
+
+// --- Tâche 3 : Operate d'action (L2) ---------------------------------------------------------------------------
+
+// TestClientOperateActionRepondEtat : avec l'exécuteur câblé (Config.Agir), un Operate d'action reçoit tout de suite
+// un OPERATE_RESP {etat, job, raison} ; l'acteur du maître (champ « acteur » du corps) est transmis tel quel, sa
+// validation revenant à l'exécuteur ; le relevé reste traité par le canal.
+func TestClientOperateActionRepondEtat(t *testing.T) {
+	var mu sync.Mutex
+	var vus []string
+	agir := func(_ context.Context, cmd string, args map[string]any, acteur string) operations.Reponse {
+		mu.Lock()
+		vus = append(vus, fmt.Sprintf("%s|%v|%s", cmd, args["unite"], acteur))
+		mu.Unlock()
+		if cmd == operations.CmdReboot {
+			return operations.Reponse{Etat: operations.Consentement, Raison: "consentement requis"}
+		}
+		return operations.Reponse{Etat: operations.Accepte, Job: "0123456789abcdef"}
+	}
+	f := &fauxMaitre{requetes: []string{`[` +
+		`{"msg_id":"0000000000000001","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Services.Agir()","args":{"unite":"secubox-lyrion.service","action":"restart"},"acteur":"gk2admin"}},` +
+		`{"msg_id":"0000000000000002","type":"OPERATE","body":{"command":"Device.Reboot()","args":{},"acteur":42}}]`}}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, nil, func(c *Client) { c.cfg.Agir = agir })
+	defer stop()
+	attendre(t, f)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	l := decoder(t, f.reponses[0])
+	if len(l) != 2 {
+		t.Fatalf("deux réponses attendues : %s", f.reponses[0])
+	}
+	b0, b1 := l[0]["body"].(map[string]any), l[1]["body"].(map[string]any)
+	if l[0]["type"] != "OPERATE_RESP" || b0["etat"] != "accepte" || b0["job"] != "0123456789abcdef" || b0["raison"] != "" {
+		t.Fatalf("OPERATE_RESP accepte attendu : %v", l[0])
+	}
+	if l[1]["type"] != "OPERATE_RESP" || b1["etat"] != "consentement" || b1["job"] != "" || b1["raison"] != "consentement requis" {
+		t.Fatalf("OPERATE_RESP consentement attendu : %v", l[1])
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if strings.Join(vus, " ; ") != "Device.X_SECUBOX_Services.Agir()|secubox-lyrion.service|gk2admin ; Device.Reboot()|<nil>|" {
+		t.Fatalf("appels inattendus : %v", vus)
+	}
+}
+
+// TestAgentRenvoieLeResultatApresReconnexion : le canal tombe pendant une mise à niveau ; l'opération continue
+// (systemd-run), sa fin est gardée en mémoire et renvoyée au maître à la reconnexion, une seule fois.
+func TestAgentRenvoieLeResultatApresReconnexion(t *testing.T) {
+	var finie atomic.Bool
+	ctl := func(_ context.Context, args ...string) ([]byte, error) {
+		if args[len(args)-2] == "etat-operation" {
+			return []byte(`{"ok": true, "job": "0123456789abcdef", "etat": "termine", "verbe": "maj-paquets", "resultat": "succes", "rc": 0}`), nil
+		}
+		return []byte(`{"ok": true, "job": "0123456789abcdef"}`), nil
+	}
+	systemctl := func(context.Context, ...string) ([]byte, error) {
+		if finie.Load() {
+			return []byte("inactive\ninactive\n"), nil
+		}
+		return []byte("active\ninactive\n"), nil
+	}
+	boite := operations.NouvelleBoite(0)
+	ev := make(chan notifs.Evenement, 8)
+	ex := operations.Nouveau(operations.Config{Ctl: ctl, Systemctl: systemctl, Resultats: boite, Pas: 5 * time.Millisecond,
+		Progression: func(e notifs.Evenement) {
+			select {
+			case ev <- e:
+			default:
+			}
+		}})
+	f := &fauxMaitre{requetes: []string{
+		`[{"msg_id":"0000000000000001","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Packages.MettreAJour()","args":{},"acteur":"gk2admin"}}]`}}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, ev, func(c *Client) {
+		c.cfg.Agir = ex.Operer
+		c.cfg.Resultats = boite
+		c.dormir = func(ctx context.Context, d time.Duration) error { return dormirReel(ctx, 2*time.Millisecond) }
+	})
+	defer func() { stop(); ex.Attendre() }()
+	fins := func() int {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		n := 0
+		for _, b := range f.notifs {
+			n += strings.Count(string(b), `"type":"`+notifs.TypeOperationDone+`"`)
+		}
+		return n
+	}
+	// 1. l'opération est acceptée
+	attendreQue(t, "OPERATE_RESP accepte", func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.reponses) == 1 && strings.Contains(string(f.reponses[0]), `"etat":"accepte"`)
+	})
+	// 2. le maître tombe ; l'opération finit pendant la panne : sa fin reste dans la boîte
+	f.mu.Lock()
+	bonjours := len(f.bonjour)
+	f.mu.Unlock()
+	f.enPanne.Store(true)
+	attendreQue(t, "sondage refusé : le canal voit la panne", func() bool { return f.sondagesRefus.Load() >= 1 })
+	finie.Store(true)
+	attendreQue(t, "fin gardée, son envoi refusé", func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return boite.Taille() == 1 && f.refuses.Load() > f.sondagesRefus.Load()+1
+	})
+	if fins() != 0 {
+		t.Fatal("aucune fin ne doit être comptée remise pendant la panne")
+	}
+	// 3. le maître revient : bonjour, puis la fin, une seule fois
+	f.enPanne.Store(false)
+	attendreQue(t, "fin remise après la reconnexion", func() bool { return fins() >= 1 })
+	time.Sleep(100 * time.Millisecond)
+	f.mu.Lock()
+	reannonce := len(f.bonjour) > bonjours
+	var corps string
+	for _, b := range f.notifs {
+		if strings.Contains(string(b), notifs.TypeOperationDone) {
+			corps = string(b)
+		}
+	}
+	f.mu.Unlock()
+	if n := fins(); n != 1 || boite.Taille() != 0 || !reannonce {
+		t.Fatalf("une seule remise attendue après le bonjour : remises=%d boîte=%d réannonce=%v", n, boite.Taille(), reannonce)
+	}
+	for _, sous := range []string{`"job":"0123456789abcdef"`, `"rc":0`, `"resume":"maj-paquets : succès"`} {
+		if !strings.Contains(corps, sous) {
+			t.Fatalf("fin incomplète, %s absent : %s", sous, corps)
+		}
+	}
 }

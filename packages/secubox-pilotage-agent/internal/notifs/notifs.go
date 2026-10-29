@@ -18,12 +18,15 @@ import (
 
 // Types d'événements émis.
 const (
-	TypeBoucle     = "X_SECUBOX_ServiceLoop"
-	TypeMemoire    = "X_SECUBOX_MemoryLow"
-	TypeSwap       = "X_SECUBOX_SwapHigh"
-	TypeDemarrage  = "X_SECUBOX_Boot"
-	TypeAncre      = "X_SECUBOX_AnchorFailed" // émis par le canal : coupure faute d'ancre vérifiée (value = instant)
-	seuilDemarrage = 600                      // secondes d'UpTime sous lesquelles la box vient de démarrer
+	TypeBoucle    = "X_SECUBOX_ServiceLoop"
+	TypeMemoire   = "X_SECUBOX_MemoryLow"
+	TypeSwap      = "X_SECUBOX_SwapHigh"
+	TypeDemarrage = "X_SECUBOX_Boot"
+	TypeAncre     = "X_SECUBOX_AnchorFailed" // émis par le canal : coupure faute d'ancre vérifiée (value = instant)
+	// L2 : suivi d'une opération lancée par un Operate (job, étape, pourcentage), puis sa fin (job, rc, résumé).
+	TypeOperationProgress = "X_SECUBOX_OperationProgress"
+	TypeOperationDone     = "X_SECUBOX_OperationDone"
+	seuilDemarrage        = 600 // secondes d'UpTime sous lesquelles la box vient de démarrer
 )
 
 // Seuils règle les détections.
@@ -62,12 +65,19 @@ func SeuilsDepuisEnv() Seuils {
 	return s
 }
 
-// Evenement est une notification à transmettre au maître.
+// Evenement est une notification à transmettre au maître. Les champs d'opération (L2) ne servent qu'à
+// X_SECUBOX_OperationProgress {job, etape, pct} et X_SECUBOX_OperationDone {job, rc, resume} ; pct et rc sont des
+// pointeurs pour que 0 parte quand même.
 type Evenement struct {
 	Type    string `json:"type"`
 	Unite   string `json:"unit,omitempty"`
 	Valeur  int64  `json:"value,omitempty"`
 	Instant int64  `json:"ts"`
+	Job     string `json:"job,omitempty"`
+	Etape   string `json:"etape,omitempty"`
+	Pct     *int   `json:"pct,omitempty"`
+	RC      *int   `json:"rc,omitempty"`
+	Resume  string `json:"resume,omitempty"`
 }
 
 type echantillon struct {
