@@ -13,7 +13,7 @@ secubox-pilotage (0.1.1-1~trixie1) trixie; urgency=medium
     - M14 : `tests/test_contrat_go.py` rejoue contre le vrai canal (et range par le vrai stockage) les enveloppes figées
       par le client Go de l'agent : une dérive de format côté Go casse ce test.
 
- -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 12:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 11:45:10 +0100
 
 secubox-pilotage (0.1.0-1~trixie1) trixie; urgency=medium
 

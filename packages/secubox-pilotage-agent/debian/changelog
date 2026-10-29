@@ -24,7 +24,7 @@ secubox-pilotage-agent (0.1.1-1~trixie1) trixie; urgency=medium
   * Compte propre `secubox-pilotage-agent` (ref #3126) : le maître secubox-pilotage et l'agent sont installés ensemble sur gk2 ;
     ils ne partagent plus un compte (unité, postinst, README). Les fichiers du compte secubox-pilotage restent au maître.
 
- -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 09:00:00 +0100
 
 secubox-pilotage-agent (0.1.0-1~trixie1) trixie; urgency=medium
 

@@ -18,7 +18,7 @@ secubox-autoload (0.7.2-1~trixie1) trixie; urgency=medium
   * Descripteur fermé si `fchmod` échoue ; une seule lecture de la base ; dossier public existant trop fermé
     (0700/0750) remis en 0755 (root le possède).
 
- -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 09:00:00 +0200
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 09:00:00 +0100
 
 secubox-autoload (0.7.1-1~trixie1) trixie; urgency=medium
 
@@ -29,7 +29,7 @@ secubox-autoload (0.7.1-1~trixie1) trixie; urgency=medium
   * L'abonnement projeté est l'état calculé de `lister` (actif | suspendu | revoque | echu), logique partagée
     (`jetons.etat_abonnement`).
 
- -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 09:00:00 +0200
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 08:00:00 +0100
 
 secubox-autoload (0.7.0-1~trixie1) trixie; urgency=medium
 
@@ -40,7 +40,7 @@ secubox-autoload (0.7.0-1~trixie1) trixie; urgency=medium
     renommage atomique, fsync) ; base lue en lecture seule, jamais créée ; base absente = projection vide.
   * `tunnel-sync` appelle l'export en dernier ; un échec de l'export est journalisé sur stderr sans changer son code de retour.
 
- -- Gérald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 12:00:00 +0200
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 11:00:00 +0100
 
 secubox-autoload (0.6.1-1~bookworm1) bookworm; urgency=medium
 
