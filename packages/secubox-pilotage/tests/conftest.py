@@ -7,3 +7,4 @@ from pathlib import Path
 
 ICI = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ICI))
+sys.path.insert(0, str(ICI.parents[1] / "common"))  # secubox_core (le pytest.ini local écarte le conftest racine)
