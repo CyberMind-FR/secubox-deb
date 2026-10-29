@@ -5,5 +5,4 @@ www/assist/*            usr/share/secubox/www/assist/
 menu.d/*.json           usr/share/secubox/menu.d/
 nginx/assist.conf       etc/nginx/secubox.d/
 systemd/*.service       lib/systemd/system/
-sudoers/secubox-assist  etc/sudoers.d/
 nft/secubox-assist.nft etc/nftables.d/

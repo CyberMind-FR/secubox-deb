@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Règle sudoers de l'ancien catalogue d'actions (#3126 L2, R-L2-4) : retirée à la mise à niveau seulement.
+rm_conffile /etc/sudoers.d/secubox-assist 0.3.2-1~bookworm1
