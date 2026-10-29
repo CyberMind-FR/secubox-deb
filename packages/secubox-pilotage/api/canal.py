@@ -13,8 +13,9 @@ multiple ou adresse inconnue → 403 et une ligne d'audit `pilotage_identite_ref
 Avant même l'identité, la requête doit porter UNE fois `X-SecuBox-Pilotage-Tunnel: 1` (L2 T0, M6) : seul le gabarit nginx du canal (écouteur
 de tunnel) le pose ; `secubox-proxy.conf` le vide sur tout autre proxy, HAProxy efface `X-SecuBox-*` à l'entrée publique (#3258) et
 l'agrégateur ne relaie jamais vers cette socket. Absent, en double ou différent de « 1 » → 403, audité (`motif: hors_tunnel`), sans recherche
-d'identité : un chemin qui atteindrait la socket sans passer par l'écouteur (relais, processus local du groupe www-data) ne choisit pas son
-`X-Real-IP`.
+d'identité. Ce que le marqueur protège : un RELAIS qui transmettrait les en-têtes du client (relais générique de l'agrégateur, toute autre
+entrée nginx) ne fait plus choisir au client son `X-Real-IP`. Ce qu'il ne protège pas : un processus qui joint DIRECTEMENT la socket forge
+le marqueur comme l'adresse ; contre lui, la seule barrière est la socket elle-même (0660, groupe www-data, nginx seul).
 
 Protocole (le client Go `sbx-pilotage-agent` fait foi) :
   POST /canal/v1/bonjour     {agent_version, boot_id, modele[]}                        → 200 {"ok": true} ; 429 si < 10 s depuis le précédent

@@ -217,3 +217,15 @@ def test_plan_compte_de_l_agent():
     plan = lire("docs/superpowers/plans/2026-10-28-pilotage-l1-voir.md", DEPOT)
     assert "utilisateur dédié `secubox-pilotage` (jamais root)" not in plan
     assert "utilisateur dédié `secubox-pilotage-agent` (jamais root)" in plan
+
+
+def test_la_doc_du_marqueur_dit_ce_qu_il_protege_et_ce_qu_il_ne_protege_pas():
+    """Relecture de la tâche 0 (L2), Minor 1 : le marqueur arrête un RELAIS qui transmet les en-têtes du client (agrégateur, autre entrée
+    nginx), PAS un processus qui joint directement la socket : celui-là forge aussi le marqueur. Contre lui, la barrière est la socket
+    (0660, groupe www-data). Aucun texte ne doit promettre le contraire."""
+    import api.canal as canal
+    entree = lire("debian/changelog").split("\n -- ", 1)[0]
+    for texte in (canal.__doc__, entree, lire("README.md")):
+        assert "processus local du groupe www-data) ne choisit pas" not in texte
+        assert "processus local qui joindrait la socket ne choisit plus" not in texte
+        assert "ne protège pas" in texte and "0660" in texte and "relais" in texte

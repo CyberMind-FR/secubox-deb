@@ -30,8 +30,9 @@ est neutralisé dans le `server` (sinon un `X-Forwarded-For` forgé usurperait n
 
 Le gabarit pose aussi `X-SecuBox-Pilotage-Tunnel: 1`, et il est le seul : `secubox-proxy.conf` (secubox-core) le vide sur tout autre proxy, et
 l'agrégateur ne relaie jamais `/api/v1/pilotage-canal/…`. Le canal refuse (403, audit `pilotage_identite_refusee`, `motif: hors_tunnel`) toute
-requête qui ne le porte pas exactement une fois, avant de chercher l'identité : un chemin qui joindrait la socket sans passer par l'écouteur ne
-choisit pas son `X-Real-IP` (L2, M6).
+requête qui ne le porte pas exactement une fois, avant de chercher l'identité (L2, M6). Il arrête un relais qui transmettrait les en-têtes du
+client (agrégateur, toute autre entrée nginx) ; il ne protège pas contre un processus qui joint directement la socket, qui forge le marqueur
+comme l'adresse : contre lui, la barrière reste la socket (0660, groupe `www-data`, nginx seul).
 
 Il pose, dans la chaîne `input` de `inet filter` (base unifiée de secubox-hardening) ET de `inet secubox_filter`, juste avant la règle `drop`
 (donc après les règles de ban), à chaud (`nft insert ... handle`) et dans `/etc/nftables.conf` :

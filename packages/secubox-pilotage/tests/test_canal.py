@@ -80,8 +80,8 @@ def test_canal_identite_seulement_par_x_real_ip():
 
 
 def test_canal_refuse_sans_marqueur_tunnel():
-    """M6 (L2 T0) : une requête qui n'est pas passée par l'écouteur nginx du tunnel (relais générique de l'agrégateur, processus local du
-    groupe www-data) peut porter un X-Real-IP valide, jamais le marqueur que pose le seul gabarit du canal : 403, auditée, et l'identité n'est
+    """M6 (L2 T0) : une requête relayée sans passer par l'écouteur nginx du tunnel (relais générique de l'agrégateur, autre entrée nginx)
+    peut porter un X-Real-IP valide, jamais le marqueur que pose le seul gabarit du canal : 403, auditée, et l'identité n'est
     même pas cherchée."""
     async def cas():
         cherchees = []
