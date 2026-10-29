@@ -198,3 +198,21 @@ def test_php_signaux_exclut_toute_adresse_non_publique(monkeypatch, tmp_path):
     j = client.get("/php/signaux").json()
     assert sorted(j["adresses"]) == ["2606:4700:4700::1111", "8.8.4.4"]
     assert j["familles"]["php2shell"] == 9        # les lignes comptent, seules les adresses sont tues
+
+
+# ── Passe de correction finale (M6, M7) ─────────────────────────────────────
+
+def test_calculer_ne_decode_que_les_lignes_des_familles_php(monkeypatch):
+    """M6 : un filtre par sous-chaîne écarte, avant json.loads, les lignes sans catégorie PHP (l'essentiel du
+    journal) ; seules les lignes qui nomment une famille sont décodées."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
+    from api import php_signaux
+    decodees = []
+    vrai = json.loads
+    monkeypatch.setattr(php_signaux.json, "loads", lambda s, *a, **k: decodees.append(s) or vrai(s, *a, **k))
+    lignes = [_ligne("sqli"), _ligne("robots"), _ligne("capture-concurrence", severity="audit"),
+              _ligne("php2shell"), _ligne("roundcube"), _ligne("nextcloud"), _ligne("php_requete")]
+    r = php_signaux.calculer(lignes, MAINTENANT)
+    assert len(decodees) == 4
+    assert r["familles"] == {"php2shell": 1, "roundcube": 1, "nextcloud": 1, "php_requete": 1, "outil": 0}
+

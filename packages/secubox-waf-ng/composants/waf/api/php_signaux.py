@@ -19,6 +19,9 @@ FENETRE_H = 24
 # Au-delà, le relevé du cache n'est plus celui de la tâche de fond (arrêtée ou bloquée) : état « perime ».
 AGE_MAX_S = 600
 FAMILLES = ("php2shell", "roundcube", "nextcloud", "php_requete")
+# Filtre préalable (passe finale M6) : une ligne qui ne nomme aucune famille entre guillemets n'est pas décodée.
+# L'essentiel du journal (sqli, robots, lignes d'état…) est ainsi écarté sans json.loads.
+_MARQUES = tuple(f'"{f}"' for f in FAMILLES)
 # Gravité des lignes d'état (multipart-*, capture-concurrence) : un fait sur le moteur, pas un signal d'attaque.
 GRAVITE_ETAT = "audit"
 PREFIXE_OUTIL = "outil:"
@@ -76,7 +79,7 @@ def calculer(lignes: Iterable[str], maintenant: datetime) -> Dict[str, Any]:
     adresses: Dict[str, Dict[str, int]] = {}
     for brut in lignes:
         brut = brut.strip()
-        if not brut:
+        if not brut or not any(m in brut for m in _MARQUES):
             continue
         try:
             e = json.loads(brut)
