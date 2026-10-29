@@ -103,12 +103,18 @@ def _profils_connus() -> List[str]:
         return []
 
 
+# Noms refusés par secubox-renommer (code 3) : refusés dès le profil, pas au milieu de l'assistant (R-L2-36, M10).
+NOMS_RESERVES = frozenset({"admin", "www", "secubox", "localhost"})
+
+
 def _verifie_nom(p) -> Optional[str]:
     nom = str((p.get("box") or {}).get("nom", "")).strip().lower()
     if not nom:
         return None
     if not _NOM.match(nom):
         raise ProfilInvalide("nom : lettres minuscules, chiffres et tirets (1 à 63)")
+    if nom in NOMS_RESERVES:
+        raise ProfilInvalide(f"nom : « {nom} » est réservé (admin, www, secubox, localhost)")
     return nom
 
 

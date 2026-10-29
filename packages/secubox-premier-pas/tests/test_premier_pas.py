@@ -251,3 +251,13 @@ def test_un_echec_non_souple_arrete_toujours(complet, isole):
 def test_seule_l_etape_ntp_est_souple(complet):
     souples = [a.quoi for a in M.plan(complet) if a.souple]
     assert souples == ["synchronisation NTP"]                                    # tout le reste reste bloquant : on ne masque pas un vrai défaut
+
+
+@pytest.mark.parametrize("nom", ["admin", "www", "secubox", "localhost", "SECUBOX"])
+def test_nom_reserve_refuse_des_le_profil(complet, nom):
+    """M10 (R-L2-36) : secubox-renommer refuse ces noms (code 3) ; le profil les refuse avant toute application, à
+    l'étape « nom », au lieu d'un échec au milieu de l'assistant."""
+    complet["box"]["nom"] = nom
+    ex = P.examine(complet, CONNUS)
+    assert "nom" in ex.erreurs and "réservé" in ex.erreurs["nom"] and not ex.complet
+    assert P.NOMS_RESERVES == frozenset({"admin", "www", "secubox", "localhost"})
