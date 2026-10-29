@@ -42,7 +42,7 @@ hors-arbre:
   - secubox-full              # anciens métapaquets d'image, conservés tels quels
   - secubox-lite
   - secubox-isp
-  - secubox-minimal           # profil minimal : DPI, dns-guard, ad-guard, NAC, Freebox (#2816)
+  - secubox-minimal           # profil minimal : dns-guard, ad-guard, NAC, Freebox, maillage (#2816, #3260)
   - secubox-profil-socle
   - secubox-profil-defense
   - secubox-profil-reseau

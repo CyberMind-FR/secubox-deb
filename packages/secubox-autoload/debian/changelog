@@ -1,3 +1,11 @@
+secubox-autoload (0.6.2-1~trixie1) trixie; urgency=medium
+
+  * Libellés des profils de l'atelier à jour : « Minimal — dns-guard, ad-guard, NAC,
+    Freebox, maillage » (ni DPI ni toolbox depuis #3218/#3260) et « ISP — protection +
+    DPI, NetFlow, cabine numérique » (décision du 2026-10-29, profil isp) (ref #3258).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:05:00 +0100
+
 secubox-autoload (0.6.1-1~bookworm1) bookworm; urgency=medium
 
   * Profil `minimal` au choix dans l'atelier et dans le rapport du client (#2838).
