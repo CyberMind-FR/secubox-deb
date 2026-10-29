@@ -44,9 +44,9 @@ Deux applications dans un processus (`/usr/sbin/secubox-autoload-api`), utilisat
 | `GET /health` | sonde | `{ok}` |
 | `GET /boxes`, `/jetons`, `/prerapports`, `/prerapports/{empreinte}` | `require_jwt` (même la lecture : identité des clients) | suivi : statut (en attente, préparation, en cours, terminé, révoqué) et progression en %, jamais la valeur d'un jeton |
 | `POST /jetons` | `require_jwt` | `{client, profil, lot?, serie?, duree_jours}` → la valeur `gk2_…`, montrée **une seule fois** |
-| `POST /jetons/{id}/revoquer` | `require_jwt` | révoque, retire le pair du tunnel et l'applique |
-| `POST /clients/{client}/abonnement` | `require_jwt` | `{statut, mois?, formule?}` (échéance calendaire) |
-| `POST /lots/{lot}/revoquer` | `require_jwt` | révoque tout un lot (jetons non réclamés et box déjà réclamées, dont les pairs sont retirés) |
+| `POST /jetons/{id}/revoquer` | `require_jwt` | révoque, retire le pair du tunnel et relance `tunnel-sync` (même sans pair) ; rend `tunnel_applique` |
+| `POST /clients/{client}/abonnement` | `require_jwt` | `{statut, mois?, formule?}` (échéance calendaire) ; relance `tunnel-sync`, qui republie la projection (#3126) ; rend `tunnel_applique` |
+| `POST /lots/{lot}/revoquer` | `require_jwt` | révoque tout un lot (jetons non réclamés et box déjà réclamées, dont les pairs sont retirés) ; relance `tunnel-sync` |
 | `POST /series` | `require_jwt` | préenregistre un numéro de série |
 | `POST /prerapports/{empreinte}/refuser` | `require_jwt` | refuse un pré-rapport pendant le délai de grâce |
 
@@ -68,7 +68,16 @@ Chaque émission, réclamation, refus (avec la raison), révocation et changemen
     autoloadctl revoquer (--id N | --lot L) --motif "…"
     autoloadctl abonnement --client client-042 --statut suspendu
     autoloadctl tunnel-init      # clé du hub (0600) ; affiche sa clé publique
-    autoloadctl tunnel-sync      # applique les pairs actifs (wg syncconf)
+    autoloadctl tunnel-sync      # applique les pairs actifs (wg syncconf), puis exporte la projection publique
+    autoloadctl exporter-pairs   # (re)publie pairs-publics.json (code non nul en cas d'échec)
+
+**Projection publique des pairs (#3126).** `exporter-pairs` écrit `/var/lib/secubox/autoload-public/pairs-publics.json` (root, 0644, renommage atomique par descripteur ; dossier root:root 0755 créé par `autoloadctl` s'il manque, refusé s'il est un lien, n'appartient pas à root ou est inscriptible par le groupe ou les autres ; hors du dossier 0750 du service, qui n'y a aucune prise) pour que le maître de pilotage sache à quel client appartient l'adresse d'une box :
+
+    {"version": 1, "pairs": [{"adresse": "10.64.0.9", "client": "lgm", "lot": null, "serie": null, "profil": "lite", "abonnement": "actif"}]}
+
+Seuls figurent les pairs non retirés dont le jeton est réclamé ; `abonnement` est l'état calculé de `lister` (`actif`, `suspendu`, `revoque` ou `echu`) ; `lot` et `serie` valent `null` s'ils sont absents ; aucune clé, empreinte ni valeur de jeton. Base absente : `{"version":1,"pairs":[]}`. `tunnel-sync` l'appelle en dernier ; son échec est journalisé sur stderr sans faire échouer `tunnel-sync`.
+
+**Fraîcheur (#3126, R37).** Toute révocation ou tout changement d'abonnement par l'API relance `tunnel-sync`, donc l'export : une box `revoque` ou `suspendu` n'est plus pilotée. Le service relance aussi `tunnel-sync` une minute après son démarrage puis toutes les heures (minuterie interne, pas d'unité de plus) : un abonnement dont l'échéance passe devient `echu` dans l'heure. Un `tunnel_applique: false` signifie que le changement est enregistré et sera publié au passage suivant. En ligne de commande (`autoloadctl abonnement`, `revoquer`), la projection suit au prochain `tunnel-sync`, au plus tard dans l'heure.
 
 Données : `/var/lib/secubox/autoload/jetons.db` (0600, dossier 0750). Variables : `SECUBOX_AUTOLOAD_DB`, `SECUBOX_AUTOLOAD_AUDIT` (tests).
 

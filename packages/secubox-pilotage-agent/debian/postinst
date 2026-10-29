@@ -1,0 +1,30 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+case "$1" in
+  configure)
+    if ! getent passwd secubox-pilotage-agent >/dev/null; then
+      adduser --system --no-create-home --group secubox-pilotage-agent
+    fi
+    # Rien n'est créé ni modifié sous /etc/secubox (compte partagé secubox : un install -d de root y suivrait un lien, I1/R36).
+    # Profil AppArmor (enforce) chargé AVANT le démarrage du service.
+    if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1; then
+      apparmor_parser -r /etc/apparmor.d/usr.sbin.sbx-pilotage-agent \
+        || echo "secubox-pilotage-agent : profil AppArmor non chargé (voir journalctl -k)" >&2
+    fi
+    # Chroot d'image (pas de systemd en marche) : rien à activer ici.
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload || true
+      systemctl enable --now secubox-pilotage-agent.service || true
+      # mise à jour : le nouveau binaire doit être relancé
+      if [ -n "$2" ]; then
+        systemctl restart secubox-pilotage-agent.service || true
+      fi
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

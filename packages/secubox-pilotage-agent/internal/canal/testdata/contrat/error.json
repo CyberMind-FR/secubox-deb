@@ -1,0 +1,17 @@
+{
+ "route": "/canal/v1/reponses",
+ "requete": {
+  "body": {
+   "command": "Device.Reboot()",
+   "args": {}
+  },
+  "type": "OPERATE"
+ },
+ "envoi": {
+  "msg_id": "00000000000000a5",
+  "type": "ERROR",
+  "body": {
+   "err": "commande refusée (L1 : lecture seule)"
+  }
+ }
+}

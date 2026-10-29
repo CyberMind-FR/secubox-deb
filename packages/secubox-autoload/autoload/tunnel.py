@@ -14,11 +14,13 @@ Une adresse retirée n'est jamais réattribuée ; une clé retirée ne revient p
 """
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import os
 import re
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -186,3 +188,22 @@ def appliquer_par_sudo(executeur=subprocess.run, timeout: int = 30) -> None:
         raise TunnelErreur(f"synchronisation impossible ({type(e).__name__})") from e
     if r.returncode != 0:
         raise TunnelErreur("synchronisation refusée : " + (r.stderr or r.stdout or "").strip()[:200])
+
+
+REPUBLICATION_S = 3600            # R37 (#3126) : la projection publique est recalculée au moins une fois par heure
+REPUBLICATION_DELAI_S = 60        # premier passage peu après le démarrage du service (projection fraîche après un arrêt)
+
+
+async def republier_periodiquement(appliquer: Callable[[], None], intervalle_s: float = REPUBLICATION_S,
+                                   premier_delai_s: float = REPUBLICATION_DELAI_S, attente=asyncio.sleep) -> None:
+    """Minuterie horaire DU SERVICE (aucune unité de plus, aucune unité root, #2190) : relance `autoloadctl tunnel-sync` par l'argv sudo exact, qui
+    réexporte la projection publique des pairs lue par le maître de pilotage. Un abonnement dont l'échéance vient de passer y devient `echu` sans
+    aucune action d'administration (#3126, R37). Un passage en échec est journalisé, le suivant réessaie ; s'arrête à l'annulation."""
+    await attente(premier_delai_s)
+    while True:
+        try:
+            await asyncio.to_thread(appliquer)
+        except Exception as e:  # noqa: BLE001 — sudo, wg, base : la minuterie ne s'arrête jamais sur un passage raté
+            print(f"autoload : republication horaire impossible ({type(e).__name__} : {str(e)[:200]}) ; nouvel essai dans {int(intervalle_s)} s",
+                  file=sys.stderr)
+        await attente(intervalle_s)

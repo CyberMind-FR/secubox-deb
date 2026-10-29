@@ -1,0 +1,18 @@
+{
+ "route": "/canal/v1/bonjour",
+ "envoi": {
+  "agent_version": "0.0.0-contrat",
+  "boot_id": "00000000-0000-4000-8000-000000000000",
+  "modele": [
+   "Device.DeviceInfo.MemoryStatus.X_SECUBOX_Available",
+   "Device.DeviceInfo.ModelName",
+   "Device.DeviceInfo.ProcessStatus.CPUUsage",
+   "Device.DeviceInfo.UpTime",
+   "Device.X_SECUBOX_Exposure.Names",
+   "Device.X_SECUBOX_Packages.{i}.Name",
+   "Device.X_SECUBOX_Packages.{i}.Version",
+   "Device.X_SECUBOX_Services.FailedNumberOfEntries",
+   "Device.X_SECUBOX_Services.{i}.Name"
+  ]
+ }
+}

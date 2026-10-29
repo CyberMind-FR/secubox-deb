@@ -1,3 +1,13 @@
+secubox-annuaire (0.16.2-1~trixie1) trixie; urgency=medium
+
+  * Page Flotte : panneau « Pilotage » (GET /api/v1/pilotage/boxes, #3126 L1 « Voir ») : une ligne par box (réseau,
+    en ligne, mémoire, swap, CPU, services en échec, boucles 24 h, mains liées), lecture seule, valeurs absentes en « — »,
+    box hors ligne grisée, panneau masqué si le module est absent ou la liste vide, rafraîchi toutes les 30 s (ref #3126).
+  * Relecture finale (ref #3126) : `vu_le` illisible affiché « vu jamais » sans erreur (plus d'Invalid Date hors du
+    `try`), rafraîchissement au retour sur l'onglet, lignes du panneau sans la classe des lignes cliquables.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 10:00:00 +0100
+
 secubox-annuaire (0.16.1-1~trixie1) trixie; urgency=medium
 
   * secubox-annuaire-offres.service : ConditionPathExists=/etc/secubox/secrets/annuaire/node.key (#3245). Au premier démarrage la minuterie la lançait avant annuairectl init et l unité échouait (« no node key ») ; elle est maintenant sautée proprement.

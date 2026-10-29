@@ -1,0 +1,54 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Pose l'ACL nominative qui permet au service d'AJOUTER des lignes au journal d'audit commun (#3126, R25) :
+`secubox-pilotage-audit-acl [--fichier F] [--proprietaire NOM] [--pour NOM]`. Root. Ni propriétaire ni mode du journal ne changent.
+
+/var/log/secubox est écrit par le groupe secubox : un lien planté à la place du journal ferait accorder rw sur une cible choisie. Le fichier est
+donc ouvert O_NOFOLLOW, vérifié sur le descripteur (fichier ordinaire, un seul lien dur, propriétaire attendu) et l'ACL est posée sur
+/proc/self/fd/N : celle du fichier vérifié, jamais celle d'un chemin qui aurait pu changer. Journal absent : rien à faire (secubox-core le crée).
+La rotation (create 0640 secubox) recrée le fichier sans ACL : l'unité de l'écouteur relance cet assistant à chaque passage.
+"""
+import argparse
+import os
+import pwd
+import stat
+import subprocess
+import sys
+
+AUDIT = "/var/log/secubox/audit.log"
+
+
+def main(argv) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--fichier", default=AUDIT)
+    ap.add_argument("--proprietaire", default="secubox")
+    ap.add_argument("--pour", default="secubox-pilotage")
+    a = ap.parse_args(argv)
+    try:
+        uid = pwd.getpwnam(a.proprietaire).pw_uid
+        fd = os.open(a.fichier, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return 0
+    except (KeyError, OSError) as e:
+        print(f"pilotage: ACL du journal non posée : {e}", file=sys.stderr)
+        return 1
+    try:
+        etat = os.fstat(fd)
+        if not stat.S_ISREG(etat.st_mode) or etat.st_nlink != 1 or etat.st_uid != uid:
+            print(f"pilotage: ACL du journal refusée : {a.fichier} n'est pas un fichier ordinaire à un seul lien appartenant à {a.proprietaire}",
+                  file=sys.stderr)
+            return 1
+        r = subprocess.run(["setfacl", "-m", f"u:{a.pour}:rw-", f"/proc/self/fd/{fd}"], pass_fds=(fd,), capture_output=True, text=True)
+        if r.returncode != 0:
+            print(f"pilotage: setfacl a échoué : {r.stderr.strip()}", file=sys.stderr)
+            return 1
+        return 0
+    finally:
+        os.close(fd)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

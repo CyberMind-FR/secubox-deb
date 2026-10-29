@@ -1,0 +1,678 @@
+// SPDX-License-Identifier: LicenseRef-CMSD-1.0
+// Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+// Source-Disclosed License — All rights reserved except as expressly granted.
+// See LICENCE-CMSD-1.0.md for terms.
+
+// Package canal est le seul code réseau de l'agent : un client HTTP sortant en
+// interrogation longue vers le maître, par le tunnel WireGuard. L'agent
+// n'écoute sur aucun port ; tout ce qui vient du réseau est borné et validé
+// (taille, nombre, forme) avant usage.
+package canal
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+	"unicode/utf8"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
+)
+
+// Valeurs par défaut et bornes.
+const (
+	AttenteDefaut   = 25 * time.Second
+	ReculMinDefaut  = 5 * time.Second
+	ReculMaxDefaut  = 300 * time.Second
+	TailleMaxDefaut = 256 << 10
+
+	portCanal      = "8472"
+	prefixe        = "/canal/v1"
+	maxRequetes    = 32 // requêtes traitées par sondage
+	maxChemins     = 64 // chemins par GET
+	maxCheminLong  = 256
+	maxLotNotifs   = 16
+	maxNotifsAtt   = 64 // notifications gardées si le maître est injoignable
+	maxErreurLong  = 200
+	delaiPost      = 15 * time.Second
+	delaiConnexion = 5 * time.Second
+	commandeMesure = "Device.X_SECUBOX_Releve.Mesurer()"
+	dureeDefautS   = 60
+	dureeMinS      = 10
+	dureeMaxS      = 300
+	planchCycle    = time.Second // un cycle sans requête revenu plus vite est suivi de cette pause
+	maxEntetes     = 16 << 10
+)
+
+const msgRefus = "commande refusée (L1 : lecture seule)"
+
+var (
+	reMsgID   = regexp.MustCompile(`^[0-9a-f]{16}$`)
+	errTaille = errors.New("réponse du maître trop volumineuse")
+)
+
+// Config règle le client. Les champs à zéro prennent leur valeur par défaut.
+type Config struct {
+	Maitre    string        // adresse du maître dans le tunnel : « hôte » ou « hôte:port » (8472 par défaut)
+	IPSource  string        // adresse du tunnel liée en sortie (LocalAddr) ; vide = aucune liaison
+	Attente   time.Duration // durée d'attente d'un sondage (25 s)
+	ReculMin  time.Duration // premier recul après erreur (5 s)
+	ReculMax  time.Duration // plafond du recul (300 s)
+	TailleMax int           // taille maximale d'un message de réponse (256 Kio)
+	Version   string        // version de l'agent annoncée à /bonjour
+	BootID    string        // identifiant de démarrage de la box annoncé à /bonjour
+}
+
+// Client interroge le maître et lui répond.
+type Client struct {
+	cfg     Config
+	m       *modele.Modele
+	operer  func(ctx context.Context, cmd string, args map[string]any) (any, error)
+	http    *http.Client
+	base    string
+	dormir  func(ctx context.Context, d time.Duration) error // injectable pour les tests
+	reprise func(d time.Duration) *time.Timer                // minuteur de reprise des notifications, injectable
+	suivi   sync.WaitGroup                                   // relevés en tâche de fond, attendus par Tourner
+	releve  atomic.Bool                                      // un relevé est en cours
+	errCfg  error                                            // configuration invalide : aucune connexion
+}
+
+// NouveauClient prépare le client ; rien n'est envoyé avant Tourner.
+func NouveauClient(c Config, m *modele.Modele, operer func(ctx context.Context, cmd string, args map[string]any) (any, error)) *Client {
+	if c.Attente <= 0 {
+		c.Attente = AttenteDefaut
+	}
+	if c.ReculMin <= 0 {
+		c.ReculMin = ReculMinDefaut
+	}
+	if c.ReculMax < c.ReculMin {
+		c.ReculMax = ReculMaxDefaut
+		if c.ReculMax < c.ReculMin {
+			c.ReculMax = c.ReculMin
+		}
+	}
+	if c.TailleMax <= 0 {
+		c.TailleMax = TailleMaxDefaut
+	}
+	d := &net.Dialer{Timeout: delaiConnexion}
+	var errCfg error
+	if c.IPSource != "" {
+		ip, err := ipSource(c.IPSource)
+		if err != nil {
+			errCfg = err
+		} else {
+			d.LocalAddr = &net.TCPAddr{IP: ip}
+		}
+	}
+	tr := &http.Transport{
+		Proxy:                  nil, // jamais de proxy d'environnement
+		DialContext:            d.DialContext,
+		ResponseHeaderTimeout:  c.Attente + 10*time.Second,
+		MaxResponseHeaderBytes: maxEntetes,
+		MaxIdleConns:           2,
+		IdleConnTimeout:        90 * time.Second,
+	}
+	cl := &http.Client{
+		Transport: tr,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return errors.New("redirection refusée")
+		},
+	}
+	hote := strings.TrimPrefix(c.Maitre, "http://")
+	if !strings.Contains(hote, ":") || strings.HasSuffix(hote, "]") {
+		hote = net.JoinHostPort(strings.Trim(hote, "[]"), portCanal)
+	}
+	return &Client{cfg: c, m: m, operer: operer, http: cl, base: "http://" + hote + prefixe, dormir: dormirReel, reprise: time.NewTimer, errCfg: errCfg}
+}
+
+// ipSource accepte une adresse seule ou sa forme CIDR (« 10.10.0.5/24 »).
+func ipSource(s string) (net.IP, error) {
+	if ip := net.ParseIP(s); ip != nil {
+		return ip, nil
+	}
+	if ip, _, err := net.ParseCIDR(s); err == nil {
+		return ip, nil
+	}
+	return nil, fmt.Errorf("ip_source %q invalide : adresse IP ou CIDR attendue, aucune connexion", s)
+}
+
+func dormirReel(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// Tourner sonde le maître jusqu'à l'annulation de ctx, seul motif de retour.
+// Les erreurs réseau, 5xx et délais déclenchent un recul doublé de ReculMin à
+// ReculMax, remis à zéro après un sondage réussi. Les notifications reçues sur
+// ev partent par lots, sans jamais bloquer le sondage.
+func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error {
+	var wg sync.WaitGroup
+	if ev != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.notifier(ctx, ev)
+		}()
+	}
+	defer wg.Wait()
+	defer c.suivi.Wait() // relevés en tâche de fond
+
+	recul := c.cfg.ReculMin
+	bonjour := false
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		debut := time.Now()
+		actif, err := c.cycle(ctx, &bonjour)
+		if err == nil {
+			recul = c.cfg.ReculMin
+			if !actif && time.Since(debut) < planchCycle {
+				// le maître répond tout de suite sans rien demander : pas de rafale
+				if e := c.dormir(ctx, planchCycle); e != nil {
+					return e
+				}
+			}
+			continue
+		}
+		bonjour = false // le maître a pu redémarrer : on se réannonce
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		log.Printf("canal : %v (nouvel essai dans %s)", err, recul)
+		if e := c.dormir(ctx, recul); e != nil {
+			return e
+		}
+		if recul *= 2; recul > c.cfg.ReculMax {
+			recul = c.cfg.ReculMax
+		}
+	}
+}
+
+// cycle fait un tour : bonjour (une fois), sondage, traitement, réponses.
+// Il rend vrai si le maître a demandé quelque chose de valable.
+func (c *Client) cycle(ctx context.Context, bonjour *bool) (bool, error) {
+	if c.errCfg != nil {
+		return false, c.errCfg
+	}
+	if !*bonjour {
+		corps := map[string]any{
+			"agent_version": c.cfg.Version,
+			"boot_id":       c.cfg.BootID,
+			"modele":        c.m.Supportes(),
+		}
+		if err := c.poster(ctx, "/bonjour", corps); err != nil {
+			return false, fmt.Errorf("bonjour : %w", err)
+		}
+		*bonjour = true
+	}
+	brut, err := c.sonder(ctx)
+	if err != nil {
+		return false, fmt.Errorf("sondage : %w", err)
+	}
+	if len(brut) == 0 {
+		return false, nil
+	}
+	reps, lances, err := c.traiter(ctx, brut)
+	if err != nil {
+		return false, err
+	}
+	actif := len(reps)+lances > 0
+	if len(reps) == 0 {
+		return actif, nil
+	}
+	for _, lot := range lotsReponses(reps, c.cfg.TailleMax) {
+		if e := c.poster(ctx, "/reponses", json.RawMessage(lot)); e != nil && err == nil {
+			err = fmt.Errorf("réponses : %w", e)
+		}
+	}
+	return actif, err
+}
+
+// lotsReponses range les réponses en listes JSON dont chacune, crochets
+// compris, tient dans max octets (un POST par lot).
+func lotsReponses(reps []reponse, max int) [][]byte {
+	var lots [][]byte
+	cur := []byte{'['}
+	for _, r := range reps {
+		b, err := json.Marshal(r)
+		if err != nil {
+			continue
+		}
+		if len(cur) > 1 && len(cur)+1+len(b)+1 > max {
+			lots = append(lots, append(cur, ']'))
+			cur = []byte{'['}
+		}
+		if len(cur) > 1 {
+			cur = append(cur, ',')
+		}
+		cur = append(cur, b...)
+	}
+	if len(cur) > 1 {
+		lots = append(lots, append(cur, ']'))
+	}
+	return lots
+}
+
+// sonder attend une liste de requêtes (200) ou rien (204).
+func (c *Client) sonder(ctx context.Context) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.cfg.Attente+15*time.Second)
+	defer cancel()
+	url := fmt.Sprintf("%s/requetes?attente=%d", c.base, int(c.cfg.Attente/time.Second))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusNoContent:
+		return nil, nil
+	case http.StatusOK:
+		b, err := io.ReadAll(io.LimitReader(resp.Body, int64(c.cfg.TailleMax)+1))
+		if err != nil {
+			return nil, err
+		}
+		if len(b) > c.cfg.TailleMax {
+			return nil, errTaille
+		}
+		return b, nil
+	default:
+		io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("statut HTTP %d", resp.StatusCode)
+	}
+}
+
+// poster envoie un corps JSON ; tout statut hors 2xx est une erreur.
+func (c *Client) poster(ctx context.Context, chemin string, corps any) error {
+	b, err := json.Marshal(corps)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, delaiPost)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+chemin, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("statut HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// notifier regroupe les événements (16 par POST) ; en cas d'échec ils sont
+// gardés (64 au plus, les plus anciens tombent) et retentés par un minuteur à
+// recul doublé de ReculMin à ReculMax, sans attendre l'événement suivant.
+func (c *Client) notifier(ctx context.Context, ev <-chan notifs.Evenement) {
+	var att []notifs.Evenement
+	var minuteur *time.Timer
+	var reprise <-chan time.Time
+	recul := c.cfg.ReculMin
+	defer func() {
+		if minuteur != nil {
+			minuteur.Stop()
+		}
+	}()
+	ajouter := func(e notifs.Evenement) {
+		att = append(att, e)
+		if len(att) > maxNotifsAtt {
+			att = att[len(att)-maxNotifsAtt:]
+		}
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case e, ok := <-ev:
+			if !ok {
+				return
+			}
+			ajouter(e)
+		case <-reprise:
+			reprise = nil
+		}
+		for ouvert := true; ouvert; {
+			select {
+			case e, ok := <-ev:
+				if !ok {
+					ouvert = false
+					break
+				}
+				ajouter(e)
+			default:
+				ouvert = false
+			}
+		}
+		if c.vider(ctx, &att) {
+			recul = c.cfg.ReculMin
+			continue
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		if minuteur != nil {
+			minuteur.Stop()
+		}
+		minuteur = c.reprise(recul)
+		reprise = minuteur.C
+		if recul *= 2; recul > c.cfg.ReculMax {
+			recul = c.cfg.ReculMax
+		}
+	}
+}
+
+// vider envoie les notifications en attente par lots ; faux au premier échec,
+// les lots non remis restant dans att.
+func (c *Client) vider(ctx context.Context, att *[]notifs.Evenement) bool {
+	for len(*att) > 0 {
+		n := min(len(*att), maxLotNotifs)
+		lot := make([]map[string]any, n)
+		for i, e := range (*att)[:n] {
+			lot[i] = map[string]any{"type": "NOTIFY", "body": map[string]any{"event": e}}
+		}
+		if err := c.poster(ctx, "/notifs", lot); err != nil {
+			if ctx.Err() == nil {
+				log.Printf("canal : notifications non remises : %v", err)
+			}
+			return false
+		}
+		*att = (*att)[n:]
+	}
+	return true
+}
+
+// requete est un message du maître, tel que décodé.
+type requete struct {
+	MsgID string          `json:"msg_id"`
+	Type  string          `json:"type"`
+	Body  json.RawMessage `json:"body"`
+}
+
+type reponse struct {
+	MsgID string         `json:"msg_id"`
+	Type  string         `json:"type"`
+	Body  map[string]any `json:"body"`
+}
+
+// traiter décode la liste brute et répond à chaque requête valable. Une liste
+// illisible est une erreur (recul) ; une requête sans msg_id correct est
+// journalisée puis ignorée. Les relevés partent en tâche de fond : lances les
+// compte, leur réponse part seule, plus tard.
+func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, error) {
+	var liste []json.RawMessage
+	if err := json.Unmarshal(brut, &liste); err != nil {
+		return nil, 0, errors.New("liste de requêtes illisible")
+	}
+	if len(liste) > maxRequetes {
+		log.Printf("canal : %d requêtes reçues, %d traitées", len(liste), maxRequetes)
+		liste = liste[:maxRequetes]
+	}
+	var reps []reponse
+	lances := 0
+	for _, r := range liste {
+		if ctx.Err() != nil {
+			break
+		}
+		var rq requete
+		if err := json.Unmarshal(r, &rq); err != nil || !reMsgID.MatchString(rq.MsgID) {
+			log.Printf("canal : requête malformée ignorée")
+			continue
+		}
+		if rq.Type == "OPERATE" {
+			rep, run := c.operate(rq)
+			if run == nil {
+				reps = append(reps, c.borner(rep))
+			} else if c.lancerReleve(ctx, rq.MsgID, run) {
+				lances++
+			} else {
+				reps = append(reps, erreur(rq.MsgID, "relevé déjà en cours"))
+			}
+			continue
+		}
+		reps = append(reps, c.repondre(ctx, rq))
+	}
+	return reps, lances, nil
+}
+
+// lancerReleve exécute run en tâche de fond, suivie par Tourner, et poste sa
+// réponse seule. Faux si un relevé est déjà en cours.
+func (c *Client) lancerReleve(ctx context.Context, id string, run func(context.Context) reponse) bool {
+	if !c.releve.CompareAndSwap(false, true) {
+		return false
+	}
+	c.suivi.Add(1)
+	go func() {
+		defer c.suivi.Done()
+		defer c.releve.Store(false)
+		rep := c.borner(run(ctx))
+		if ctx.Err() != nil {
+			return
+		}
+		for _, lot := range lotsReponses([]reponse{rep}, c.cfg.TailleMax) {
+			if err := c.poster(ctx, "/reponses", json.RawMessage(lot)); err != nil && ctx.Err() == nil {
+				log.Printf("canal : réponse du relevé non remise : %v", err)
+			}
+		}
+	}()
+	return true
+}
+
+// borner remplace une réponse qui, mise en liste, dépasserait TailleMax.
+func (c *Client) borner(rep reponse) reponse {
+	if b, err := json.Marshal(rep); err != nil || len(b)+2 > c.cfg.TailleMax {
+		return erreur(rep.MsgID, "réponse trop volumineuse")
+	}
+	return rep
+}
+
+func erreur(id, msg string) reponse {
+	if len(msg) > maxErreurLong {
+		n := maxErreurLong
+		for n > 0 && !utf8.RuneStart(msg[n]) {
+			n--
+		}
+		msg = msg[:n]
+	}
+	return reponse{MsgID: id, Type: "ERROR", Body: map[string]any{"err": msg}}
+}
+
+// repondre traite les requêtes à réponse immédiate ; OPERATE passe par traiter.
+func (c *Client) repondre(ctx context.Context, rq requete) reponse {
+	var rep reponse
+	switch rq.Type {
+	case "GET":
+		var b struct {
+			Paths []any `json:"paths"`
+		}
+		if err := json.Unmarshal(rq.Body, &b); err != nil {
+			return erreur(rq.MsgID, "corps GET invalide")
+		}
+		chemins, err := validerChemins(b.Paths)
+		if err != nil {
+			return erreur(rq.MsgID, err.Error())
+		}
+		rep = c.tronquer(rq.MsgID, c.m.Get(ctx, chemins))
+	case "GET_SUPPORTED_DM":
+		rep = reponse{MsgID: rq.MsgID, Type: "GET_SUPPORTED_DM_RESP", Body: map[string]any{"paths": c.m.Supportes()}}
+	default:
+		return erreur(rq.MsgID, "type de requête inconnu")
+	}
+	return c.borner(rep)
+}
+
+func validerChemins(l []any) ([]string, error) {
+	if len(l) == 0 || len(l) > maxChemins {
+		return nil, fmt.Errorf("nombre de chemins invalide (1 à %d)", maxChemins)
+	}
+	out := make([]string, 0, len(l))
+	vus := make(map[string]bool, len(l))
+	for _, v := range l {
+		s, ok := v.(string)
+		if !ok || len(s) > maxCheminLong || !strings.HasPrefix(s, "Device.") {
+			return nil, errors.New("chemin invalide")
+		}
+		if !vus[s] {
+			vus[s] = true
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+// operate valide un OPERATE. Rend soit une réponse immédiate (refus, argument
+// invalide) avec run nul, soit la fonction qui fera le relevé.
+func (c *Client) operate(rq requete) (reponse, func(context.Context) reponse) {
+	var b struct {
+		Command string         `json:"command"`
+		Args    map[string]any `json:"args"`
+	}
+	if err := json.Unmarshal(rq.Body, &b); err != nil {
+		return erreur(rq.MsgID, "corps OPERATE invalide"), nil
+	}
+	if b.Command != commandeMesure || c.operer == nil {
+		return erreur(rq.MsgID, msgRefus), nil
+	}
+	duree := dureeDefautS
+	for k, v := range b.Args {
+		f, ok := v.(float64)
+		if k != "duree_s" || !ok || f != float64(int(f)) || f < dureeMinS || f > dureeMaxS {
+			return erreur(rq.MsgID, fmt.Sprintf("argument invalide (duree_s : entier de %d à %d)", dureeMinS, dureeMaxS)), nil
+		}
+		duree = int(f)
+	}
+	return reponse{}, func(ctx context.Context) reponse {
+		sortie, err := c.operer(ctx, b.Command, map[string]any{"duree_s": duree})
+		if err != nil {
+			return erreur(rq.MsgID, err.Error())
+		}
+		return reponse{MsgID: rq.MsgID, Type: "OPERATE_RESP", Body: map[string]any{"output": sortie}}
+	}
+}
+
+// tronquer construit la GET_RESP ; au-delà de TailleMax, les entrées de listes
+// « {i} » partent, indices les plus hauts d'abord, et « tronque » passe à vrai.
+func (c *Client) tronquer(id string, res []modele.Resultat) reponse {
+	fait := func(r []modele.Resultat, tronque bool) reponse {
+		corps := map[string]any{"results": r}
+		if tronque {
+			corps["tronque"] = true
+		}
+		return reponse{MsgID: id, Type: "GET_RESP", Body: corps}
+	}
+	taille := func(r reponse) int {
+		b, err := json.Marshal(r)
+		if err != nil {
+			return c.cfg.TailleMax + 1
+		}
+		return len(b) + 2 // crochets de la liste du POST
+	}
+	if rep := fait(res, false); taille(rep) <= c.cfg.TailleMax {
+		return rep
+	}
+	type entree struct {
+		idx  int
+		res  int
+		cle  string
+		pref string
+	}
+	var groupes []entree
+	vus := map[string]bool{}
+	for i, r := range res {
+		for k := range r.Params {
+			if idx, pref, ok := indiceListe(k); ok {
+				g := strconv.Itoa(i) + "|" + pref
+				if !vus[g] {
+					vus[g] = true
+					groupes = append(groupes, entree{idx, i, k, pref})
+				}
+			}
+		}
+	}
+	sort.Slice(groupes, func(a, b int) bool {
+		if groupes[a].idx != groupes[b].idx {
+			return groupes[a].idx > groupes[b].idx
+		}
+		return groupes[a].pref < groupes[b].pref
+	})
+	sans := func(n int) []modele.Resultat {
+		coupes := map[string]bool{}
+		for _, g := range groupes[:n] {
+			coupes[strconv.Itoa(g.res)+"|"+g.pref] = true
+		}
+		out := make([]modele.Resultat, len(res))
+		for i, r := range res {
+			out[i] = r
+			if len(r.Params) == 0 {
+				continue
+			}
+			p := make(map[string]any, len(r.Params))
+			for k, v := range r.Params {
+				if _, pref, ok := indiceListe(k); ok && coupes[strconv.Itoa(i)+"|"+pref] {
+					continue
+				}
+				p[k] = v
+			}
+			out[i].Params = p
+		}
+		return out
+	}
+	// plus petit nombre de groupes à couper pour tenir dans la taille
+	lo, hi := 1, len(groupes)
+	if hi == 0 || taille(fait(sans(hi), true)) > c.cfg.TailleMax {
+		return erreur(id, "réponse trop volumineuse")
+	}
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if taille(fait(sans(mid), true)) <= c.cfg.TailleMax {
+			hi = mid
+		} else {
+			lo = mid + 1
+		}
+	}
+	return fait(sans(lo), true)
+}
+
+// indiceListe repère le premier segment numérique d'un chemin : son indice et
+// le préfixe de liste qui le précède, avec l'indice.
+func indiceListe(k string) (int, string, bool) {
+	segs := strings.Split(k, ".")
+	for i, s := range segs {
+		if s == "" || len(s) > 9 {
+			continue
+		}
+		if n, err := strconv.Atoi(s); err == nil && n >= 0 && s[0] != '+' && s[0] != '-' {
+			return n, strings.Join(segs[:i+1], "."), true
+		}
+	}
+	return 0, "", false
+}

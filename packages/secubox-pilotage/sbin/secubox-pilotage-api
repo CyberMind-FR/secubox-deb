@@ -1,0 +1,92 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-pilotage-api — le service Pilotage (#3126) : deux applications, deux sockets Unix, UN processus, UNE boucle asyncio.
+
+  secubox-pilotage.socket         -> /run/secubox/pilotage.sock         administration, 0660, groupe secubox      (descripteur « admin »)
+  secubox-pilotage-canal.socket   -> /run/secubox/pilotage-canal.sock   canal des box, 0660, groupe www-data      (descripteur « canal »)
+
+Les sockets sont créées par systemd (propriétaire, groupe et mode des unités .socket, R26) : le lanceur ne crée, ne délie et ne chmod rien
+dans /run/secubox (dossier partagé et collant). Il reçoit les descripteurs (LISTEN_FDS, LISTEN_FDNAMES) et donne chacun à son serveur uvicorn.
+
+Les files de requêtes sont en mémoire et la boucle de relève est partagée : les deux applications DOIVENT vivre dans le même processus (R22) et
+sont servies avec lifespan="on" (la boucle démarre au premier lifespan, s'arrête au dernier). Si l'une ne démarre pas, le service sort en erreur
+(code 1) pour que Restart=on-failure le relance.
+"""
+import asyncio
+import os
+import sys
+
+sys.path.insert(0, "/usr/lib/secubox/pilotage")
+import uvicorn  # noqa: E402
+
+SD_LISTEN_FDS_START = 3
+
+
+class SansSocket(Exception):
+    """systemd n'a pas passé les deux sockets attendues."""
+
+
+def descripteurs(env, pid: int) -> "tuple[int, int]":
+    """(fd administration, fd canal) d'après LISTEN_PID / LISTEN_FDS / LISTEN_FDNAMES ; tout écart est un échec."""
+    try:
+        if int(env.get("LISTEN_PID", "")) != pid or int(env.get("LISTEN_FDS", "")) != 2:
+            raise SansSocket("LISTEN_PID ou LISTEN_FDS inattendu")
+    except ValueError:
+        raise SansSocket("LISTEN_PID ou LISTEN_FDS illisible") from None
+    noms = env.get("LISTEN_FDNAMES", "").split(":")
+    if sorted(noms) != ["admin", "canal"]:
+        raise SansSocket(f"LISTEN_FDNAMES inattendu : {env.get('LISTEN_FDNAMES')!r}")
+    return SD_LISTEN_FDS_START + noms.index("admin"), SD_LISTEN_FDS_START + noms.index("canal")
+
+
+def serveurs(admin, canal, fd_admin: int, fd_canal: int):
+    options = dict(access_log=False, log_level="warning", lifespan="on")
+    return uvicorn.Server(uvicorn.Config(admin, fd=fd_admin, **options)), uvicorn.Server(uvicorn.Config(canal, fd=fd_canal, **options))
+
+
+async def _serve(srv) -> None:
+    try:
+        await srv.serve()
+    except SystemExit:  # uvicorn >= 0.5x lève SystemExit(3) au démarrage manqué : traité comme l'échec du lifespan (started reste faux)
+        pass
+
+
+async def servir(admin, canal, fd_admin: int, fd_canal: int, rendre=None) -> bool:
+    """Sert les deux applications dans la boucle courante. Dès que l'un des serveurs s'arrête (signal, échec du lifespan), l'autre est arrêté
+    proprement. Rend vrai seulement si LES DEUX ont démarré : un lifespan en échec fait revenir uvicorn sans exception."""
+    srv_admin, srv_canal = serveurs(admin, canal, fd_admin, fd_canal)
+    if rendre is not None:
+        rendre((srv_admin, srv_canal))
+    taches = [asyncio.create_task(_serve(srv_admin)), asyncio.create_task(_serve(srv_canal))]
+    try:
+        await asyncio.wait(taches, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        srv_admin.should_exit = srv_canal.should_exit = True
+        resultats = await asyncio.gather(*taches, return_exceptions=True)
+    for r in resultats:
+        if isinstance(r, BaseException) and not isinstance(r, asyncio.CancelledError):
+            raise r
+    return bool(srv_admin.started and srv_canal.started)
+
+
+async def main(env=None, construire=None) -> int:
+    env = os.environ if env is None else env
+    try:
+        fd_admin, fd_canal = descripteurs(env, os.getpid())
+    except SansSocket as e:
+        print(f"pilotage: {e} (le service se lance par secubox-pilotage.socket)", file=sys.stderr)
+        return 1
+    if construire is None:
+        from api.asgi import construire
+    admin, canal = construire()
+    if not await servir(admin, canal, fd_admin, fd_canal):
+        print("pilotage: une application n'a pas démarré (lifespan en échec)", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(asyncio.run(main()))

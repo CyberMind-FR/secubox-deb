@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+case "$1" in
+  remove|purge)
+    # Le profil n'est plus attaché à rien : on le décharge du noyau.
+    if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1; then
+      apparmor_parser -R /etc/apparmor.d/usr.sbin.sbx-pilotage-agent 2>/dev/null || true
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

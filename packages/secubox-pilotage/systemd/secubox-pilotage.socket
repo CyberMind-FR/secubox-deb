@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Socket d'administration (derrière nginx) du service Pilotage (#3126, R26). Créée par systemd : propriétaire, groupe et mode ci-dessous, sans rm, chgrp ni umask dans
+# /run/secubox (partagé et collant). Le lanceur reçoit le descripteur (nom « admin »).
+[Unit]
+Description=SecuBox Pilotage — socket admin (#3126)
+
+[Socket]
+ListenStream=/run/secubox/pilotage.sock
+SocketMode=0660
+SocketUser=secubox-pilotage
+SocketGroup=secubox
+FileDescriptorName=admin
+Service=secubox-pilotage.service
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

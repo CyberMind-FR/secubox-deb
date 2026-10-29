@@ -1,0 +1,24 @@
+{
+ "route": "/canal/v1/reponses",
+ "requete": {
+  "body": {},
+  "type": "GET_SUPPORTED_DM"
+ },
+ "envoi": {
+  "msg_id": "00000000000000a3",
+  "type": "GET_SUPPORTED_DM_RESP",
+  "body": {
+   "paths": [
+    "Device.DeviceInfo.MemoryStatus.X_SECUBOX_Available",
+    "Device.DeviceInfo.ModelName",
+    "Device.DeviceInfo.ProcessStatus.CPUUsage",
+    "Device.DeviceInfo.UpTime",
+    "Device.X_SECUBOX_Exposure.Names",
+    "Device.X_SECUBOX_Packages.{i}.Name",
+    "Device.X_SECUBOX_Packages.{i}.Version",
+    "Device.X_SECUBOX_Services.FailedNumberOfEntries",
+    "Device.X_SECUBOX_Services.{i}.Name"
+   ]
+  }
+ }
+}

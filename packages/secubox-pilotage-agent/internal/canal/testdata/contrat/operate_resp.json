@@ -1,0 +1,38 @@
+{
+ "route": "/canal/v1/reponses",
+ "requete": {
+  "body": {
+   "command": "Device.X_SECUBOX_Releve.Mesurer()",
+   "args": {
+    "duree_s": 10
+   }
+  },
+  "type": "OPERATE"
+ },
+ "envoi": {
+  "msg_id": "00000000000000a4",
+  "type": "OPERATE_RESP",
+  "body": {
+   "output": {
+    "cpu_pct": 37,
+    "ctxt_par_s": 5120,
+    "duree_s": 10,
+    "ecritures_ko_s": 48,
+    "mem_dispo_mo": 256,
+    "swap_mo": 23,
+    "top": [
+     {
+      "cpu_pct": 21.5,
+      "nom": "uvicorn",
+      "pss_mo": 98
+     },
+     {
+      "cpu_pct": 4.25,
+      "nom": "nginx",
+      "pss_mo": 12
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,10 +1,54 @@
-secubox-autoload (0.6.2-1~trixie1) trixie; urgency=medium
+secubox-autoload (0.7.4-1~trixie1) trixie; urgency=medium
 
   * Libellés des profils de l'atelier à jour : « Minimal — dns-guard, ad-guard, NAC,
     Freebox, maillage » (ni DPI ni toolbox depuis #3218/#3260) et « ISP — protection +
     DPI, NetFlow, cabine numérique » (décision du 2026-10-29, profil isp) (ref #3258).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:05:00 +0100
+
+secubox-autoload (0.7.3-1~trixie1) trixie; urgency=medium
+
+  * Relecture finale du pilotage L1 (#3126, I2/R37) : un changement d'abonnement par l'API
+    (`POST /clients/{client}/abonnement`) relance `tunnel-sync` (argv sudo exact), donc l'export de la projection
+    publique : un client `revoque` ou `suspendu` n'est plus piloté indéfiniment. Les révocations (jeton, lot) le
+    relancent toujours, même sans pair à retirer. Les trois routes rendent `tunnel_applique`.
+  * Minuterie horaire dans le service (aucune unité de plus, aucune unité root) : `tunnel-sync` une minute après le
+    démarrage puis toutes les heures ; un abonnement dont l'échéance passe devient `echu` dans la projection.
+  * Commentaires périmés corrigés (« par fichier », « unité root séparée ») : l'application passe par sudo à argv exact.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 11:45:00 +0100
+
+secubox-autoload (0.7.2-1~trixie1) trixie; urgency=medium
+
+  * Projection publique des pairs (#3126) : une base verrouillée (« database is locked ») ou corrompue ne remplace plus
+    la projection par une liste vide (motif « passe dégradée », #3011) : seule l'absence de table donne une projection
+    vide ; toute autre erreur SQLite est journalisée, `exporter-pairs` rend 1, `tunnel-sync` garde son code de retour.
+  * Descripteur fermé si `fchmod` échoue ; une seule lecture de la base ; dossier public existant trop fermé
+    (0700/0750) remis en 0755 (root le possède).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 09:00:00 +0100
+
+secubox-autoload (0.7.1-1~trixie1) trixie; urgency=medium
+
+  * Projection publique des pairs (#3126) : le fichier passe dans `/var/lib/secubox/autoload-public/pairs-publics.json`
+    (dossier root:root 0755 créé par `autoloadctl` par descripteur, racine et dossier ouverts sans suivre de lien,
+    refus si propriétaire autre que root ou droits d'écriture groupe/autres). Le service autoload n'a plus aucune prise
+    sur le fichier, et le maître le lit sans accès à `/var/lib/secubox/autoload/` (0750, base des jetons).
+  * L'abonnement projeté est l'état calculé de `lister` (actif | suspendu | revoque | echu), logique partagée
+    (`jetons.etat_abonnement`).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 08:00:00 +0100
+
+secubox-autoload (0.7.0-1~trixie1) trixie; urgency=medium
+
+  * Pilotage distant, lot L1 « Voir » (#3126) : `autoloadctl exporter-pairs` publie la projection publique des pairs
+    (`/var/lib/secubox/autoload/pairs-publics.json`, 0644) : adresse du tunnel, client, lot, série, profil, abonnement,
+    pour les seuls pairs non retirés dont le jeton est réclamé. Aucune clé, empreinte ni valeur de jeton.
+  * Écriture par descripteur (dossier ouvert sans suivre de lien et vérifié, fichier temporaire `O_EXCL|O_NOFOLLOW`,
+    renommage atomique, fsync) ; base lue en lecture seule, jamais créée ; base absente = projection vide.
+  * `tunnel-sync` appelle l'export en dernier ; un échec de l'export est journalisé sur stderr sans changer son code de retour.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 11:00:00 +0100
 
 secubox-autoload (0.6.1-1~bookworm1) bookworm; urgency=medium
 

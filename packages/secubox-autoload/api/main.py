@@ -18,7 +18,9 @@ Deux applications, trois preuves :
     (AllowedIPs), donc elle ne se falsifie pas et aucun en-tête n'est cru. Une adresse hors plage, inconnue ou retirée n'a aucun droit.
     Les routes de box n'existent PAS dans l'application publique (404) : un en-tête forgé de l'extérieur n'ouvre rien.
 
-Le service n'est pas root : il écrit le pair, puis demande à l'unité root `autoloadctl tunnel-sync` (par fichier) de l'appliquer, et attend son accusé.
+Le service n'est pas root : il écrit le pair, puis demande `autoloadctl tunnel-sync` par sudo à argv exact (sudoers du paquet) et attend son code
+de retour. tunnel-sync applique les pairs puis réexporte la projection publique lue par le maître de pilotage (#3126) : TOUT changement d'abonnement
+ou révocation le relance (R37), et une minuterie horaire du service le relance aussi (échéance passée → `echu`).
 """
 from __future__ import annotations
 
@@ -255,19 +257,23 @@ def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Call
             raise HTTPException(409, "série déjà préenregistrée") from err
         return {"ok": True}
 
+    def publier() -> bool:
+        """tunnel-sync (argv sudo exact) : applique les pairs ET réexporte la projection publique lue par le maître de pilotage (#3126, R37).
+        Faux si le système refuse : le changement reste enregistré, la minuterie horaire du service republiera."""
+        try:
+            appliquer()
+            return True
+        except T.TunnelErreur:
+            return False
+
     @r.post("/jetons/{ident}/revoquer", dependencies=[Depends(require_jwt)])
     def revoquer(ident: int, corps: MotifIn):
         try:
             cle = reg.revoquer(ident, corps.motif)
         except ValueError:
             raise HTTPException(404, "jeton inconnu") from None
-        applique = True
-        if pairs.retirer(cle):
-            try:
-                appliquer()
-            except T.TunnelErreur:
-                applique = False
-        return {"revoque": True, "tunnel_applique": applique}
+        pairs.retirer(cle)
+        return {"revoque": True, "tunnel_applique": publier()}                                  # toujours : la projection change même sans pair
 
     @r.post("/lots/{lot}/revoquer", dependencies=[Depends(require_jwt)])
     def revoquer_lot(lot: str, corps: MotifIn):
@@ -276,13 +282,7 @@ def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Call
         except ValueError as err:
             raise HTTPException(422, str(err)) from None
         retires = sum(1 for c in cles if pairs.retirer(c))
-        applique = True
-        if retires:
-            try:
-                appliquer()
-            except T.TunnelErreur:
-                applique = False
-        return {"revoque": True, "pairs_retires": retires, "tunnel_applique": applique}
+        return {"revoque": True, "pairs_retires": retires, "tunnel_applique": publier()}
 
     @r.post("/clients/{client}/abonnement", dependencies=[Depends(require_jwt)])
     def abonnement(client: str, corps: AbonnementIn):
@@ -291,7 +291,7 @@ def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Call
             n = reg.fixer_abonnement(client, corps.statut, expire_le=expire, formule=corps.formule)
         except ValueError as err:
             raise HTTPException(422, str(err)) from None
-        return {"jetons": n, "expire_le": expire}
+        return {"jetons": n, "expire_le": expire, "tunnel_applique": publier()}                # suspendu/revoque/echu atteint le maître (R37)
 
     @r.get("/rapports", dependencies=[Depends(require_jwt)])
     def rapports():
