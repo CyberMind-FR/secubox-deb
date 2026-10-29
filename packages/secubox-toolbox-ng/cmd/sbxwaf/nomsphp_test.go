@@ -9,6 +9,7 @@ package main
 
 import (
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -151,4 +152,68 @@ func FuzzLireParametresPHP(f *testing.F) {
 			}
 		}
 	})
+}
+
+// octetsAlloues mesure les octets alloués par f (TotalAlloc), sur un seul appel.
+func octetsAlloues(f func()) uint64 {
+	var avant, apres runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&avant)
+	f()
+	runtime.ReadMemStats(&apres)
+	return apres.TotalAlloc - avant.TotalAlloc
+}
+
+// I1 (relecture de la tâche 2) : un corps de 1 Mio fait de séparateurs ne
+// doit pas allouer une tranche par segment (strings.Split : ~16 Mo).
+func TestLireParametresPHPAllocationsBornees(t *testing.T) {
+	cas := map[string]string{
+		"& x 1 Mi":    strings.Repeat("&", 1<<20),
+		"a& x 512 Ki": strings.Repeat("a&", 512<<10),
+	}
+	for nom, brut := range cas {
+		if n := testing.AllocsPerRun(5, func() { lireParametresPHP(brut) }); n != 0 {
+			t.Errorf("%s : %v allocation(s) par appel, attendu 0", nom, n)
+		}
+		if o := octetsAlloues(func() { lireParametresPHP(brut) }); o > 64<<10 {
+			t.Errorf("%s : %d octets alloués, attendu au plus 64 Kio", nom, o)
+		}
+	}
+}
+
+// I1 : ni urldecodePHP ni nomPHP n'allouent quand il n'y a rien à changer, et
+// nomPHP ne copie qu'une fois quand il change le nom.
+func TestNomPHPAllocations(t *testing.T) {
+	cas := []struct {
+		nom    string
+		f      func()
+		maxAll float64
+	}{
+		{"urldecode sans % ni +", func() { urldecodePHP("_from") }, 0},
+		{"nomPHP inchangé", func() { nomPHP("_from") }, 0},
+		{"nomPHP index", func() { nomPHP("_from[x]") }, 0},
+		{"nomPHP point", func() { nomPHP(".from") }, 1},
+		{"nomPHP crochet orphelin", func() { nomPHP("a[b.c") }, 1},
+	}
+	for _, c := range cas {
+		if n := testing.AllocsPerRun(20, c.f); n > c.maxAll {
+			t.Errorf("%s : %v allocation(s), attendu au plus %v", c.nom, n, c.maxAll)
+		}
+	}
+}
+
+// I1 : la normalisation travaille octet par octet, comme PHP : un octet non
+// UTF-8 n'est jamais réécrit (strings.Map le remplacerait par U+FFFD).
+func TestNomPHPOctetsNonUTF8(t *testing.T) {
+	cas := map[string]string{
+		"a\xff.b":    "a\xff_b",
+		"\xfe[x]":    "\xfe",
+		"a\xff[b.c":  "a\xff_b_c",
+		"\xc3\xa9.x": "\xc3\xa9_x",
+	}
+	for brut, attendu := range cas {
+		if nom, ok := nomPHP(brut); !ok || nom != attendu {
+			t.Errorf("nomPHP(%q) = (%q, %v), attendu (%q, true)", brut, nom, ok, attendu)
+		}
+	}
 }

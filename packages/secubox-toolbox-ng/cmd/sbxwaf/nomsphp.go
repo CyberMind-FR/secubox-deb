@@ -53,40 +53,49 @@ func nomPHP(brut string) (nom string, ok bool) {
 	brut = brut[i:]
 
 	// l. 145-155 : « ' ' » et « . » deviennent « _ » ; le premier « [ » arrête.
-	b := []byte(brut)
-	crochet := -1
-	for p := 0; p < len(b); p++ {
-		if b[p] == ' ' || b[p] == '.' {
-			b[p] = '_'
-		} else if b[p] == '[' {
-			crochet = p
-			break
-		}
-	}
+	// La recherche se fait dans brut lui-même : aucune copie tant que rien ne
+	// change (relecture I1), une seule copie sinon (souligner).
+	crochet := strings.IndexByte(brut, '[')
 	// l. 156-162 : base vide (y compris « [ » initial, R-W2) : variable ignorée.
-	base := len(b)
-	if crochet >= 0 {
-		base = crochet
-	}
-	if base == 0 {
+	if len(brut) == 0 || crochet == 0 {
 		return "", false
 	}
 	if crochet < 0 {
-		return string(b), true
+		return souligner(brut, false), true
 	}
 	// l. 226-232 : « ] » plus loin (le seul caractère blanc sauté n'est pas « ] »).
-	if strings.IndexByte(string(b[crochet+1:]), ']') >= 0 {
-		return string(b[:base]), true
+	if strings.IndexByte(brut[crochet+1:], ']') >= 0 {
+		return souligner(brut[:crochet], false), true
 	}
 	// l. 233-249 : pas un index ; le « [ » devient « _ » et, dans la suite,
-	// « ' ' », « . » et « [ » aussi (l. 236-240).
-	b[crochet] = '_'
-	for p := crochet + 1; p < len(b); p++ {
-		if b[p] == ' ' || b[p] == '.' || b[p] == '[' {
-			b[p] = '_'
+	// « ' ' », « . » et « [ » aussi (l. 236-240). Avant le premier « [ », il
+	// n'y a pas d'autre « [ » : une seule passe suffit.
+	return souligner(brut, true), true
+}
+
+// souligner remplace par « _ » les « ' ' » et « . » (et les « [ » si crochet),
+// OCTET PAR OCTET comme PHP : un octet non UTF-8 reste tel quel. Rien à
+// changer : s est rendu sans allocation ; sinon une seule copie.
+func souligner(s string, crochet bool) string {
+	vise := func(c byte) bool { return c == ' ' || c == '.' || (crochet && c == '[') }
+	i := 0
+	for i < len(s) && !vise(s[i]) {
+		i++
+	}
+	if i == len(s) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	b.WriteString(s[:i])
+	for ; i < len(s); i++ {
+		if vise(s[i]) {
+			b.WriteByte('_')
+		} else {
+			b.WriteByte(s[i])
 		}
 	}
-	return string(b), true
+	return b.String()
 }
 
 func hexVal(c byte) (byte, bool) {
@@ -143,7 +152,11 @@ type ParametresPHP struct {
 // segment sans « = » : valeur vide ; valeur décodée seulement si le nom est retenu.
 func lireParametresPHP(brut string) ParametresPHP {
 	var p ParametresPHP
-	for _, seg := range strings.Split(brut, "&") {
+	// Boucle sur strings.Cut, sans tranche intermédiaire (relecture I1 :
+	// strings.Split allouait ~16 Mo pour 1 Mio de « & »).
+	for reste, encore := brut, true; encore; {
+		var seg string
+		seg, reste, encore = strings.Cut(reste, "&")
 		// Chaîne C : un octet nul termine le segment.
 		if i := strings.IndexByte(seg, 0); i >= 0 {
 			seg = seg[:i]
@@ -187,7 +200,9 @@ func parcourirCookiesPHP(lignes []string, f func(brut, nom string)) {
 		if i := strings.IndexByte(ligne, 0); i >= 0 {
 			ligne = ligne[:i]
 		}
-		for _, seg := range strings.Split(ligne, ";") {
+		for reste, encore := ligne, true; encore; {
+			var seg string
+			seg, reste, encore = strings.Cut(reste, ";")
 			seg = strings.TrimLeft(seg, " \t\n\v\f\r")
 			if seg == "" {
 				continue
