@@ -121,7 +121,10 @@ Catalogue fermé (`pilotage/operations.py`) :
   opération `sans_reponse` (si la box l'a exécutée quand même, son suivi la rattache par son job) ; `ERROR` de l'agent → `refuse`.
 - **Support (R-L2-31)** : une action demandée **dans le cadre d'une session de support** porte `"support": "<id>"` ; le maître la
   refuse (409) tant que cette session n'est pas `ouvert` sur cette box, ou dès qu'elle a passé sa fin. Une action ordinaire de
-  l'administrateur ne porte pas ce champ. La fin d'une session est la plus proche de la `fin` annoncée par la box
+  l'administrateur sur une box du propriétaire ne porte pas ce champ. **Box cliente** (réseau autre que `maillage`, I3, R-L2-47) :
+  le catalogue n'est servi que pendant une session de support ouverte et non échue de cette box ; sans `support`, ou avec une
+  session qui n'est pas la sienne, pas ouverte ou échue, 409, rien d'audité ni d'envoyé (la garde est côté serveur, pas
+  seulement dans la page). La fin d'une session est la plus proche de la `fin` annoncée par la box
   (`X_SECUBOX_Support`, RFC 3339) et de la réception de `ouvert` plus la durée demandée (240 min pour une session que le maître
   n'a pas demandée) : passée cette fin, la session devient `expire` sans attendre de notification (R-L2-33). Un état terminal
   (`refuse`, `ferme`, `annule`, `expire`) ne se rouvre pas. `ouvert` n'est accepté que pour une session demandée par le maître,
@@ -132,7 +135,8 @@ Catalogue fermé (`pilotage/operations.py`) :
   réponse ; `pilotage_action_resultat {box, cle, action, job, rc, resultat}` à la première fin d'une opération **rattachée** à une
   demande (une fin arrivée avant l'`OPERATE_RESP` est auditée à la fusion, avec son action, une seule fois) ; `pilotage_support {box, cle, acteur, id, duree_min, etat}` ;
   `pilotage_support_fermeture {box, cle, acteur, id}` ; `pilotage_rejoindre_envoye`, `pilotage_rejoindre_resultat`,
-  `pilotage_rejoindre_echec {…, raison}`.
+  `pilotage_rejoindre_echec {…, raison}` ; `pilotage_action_echue {box, cle, action, job, operation, demande_le, resultat:
+  "inconnu", heures: 6}` (I4, une fois par opération).
 
 ### Table `operations` et suivi
 Une ligne par demande (`id`), reliée au `job` de la box par l'`OPERATE_RESP`. Les notifications `X_SECUBOX_OperationProgress {job,
@@ -140,11 +144,22 @@ etape, pct}` et `X_SECUBOX_OperationDone {job, rc, resume}` arrivent « au moins
 inconnu : une ligne orpheline (`action: null`) est créée puis fusionnée dans la demande à la réponse ; seule la **première** fin
 compte (une renotification ne réaudite rien et ne relance aucune suite) ; une progression ne recule jamais. `resultat` :
 `succes` (`rc` 0), `echec`, `inconnu` (`rc` -1 ou absent : fin introuvable sur la box, `fins.json` évincé ou bus injoignable).
-États : `demande`, `accepte`, `consentement`, `refuse`, `sans_reponse`, `en_cours`, `termine`. 1 000 demandes gardées par box ;
+États : `demande`, `accepte`, `consentement`, `refuse`, `sans_reponse`, `en_cours`, `inconnu`, `termine`. 1 000 demandes gardées par box ;
 les orphelines (jobs inconnus) ont leur propre plafond de **100** par box et n'évincent jamais une demande. Une fin non rattachée
 n'est **pas auditée** (une box qui inventerait des jobs ne gonfle pas l'audit) : au plus une ligne de journal agrégée par box et
 par minute.
 Les fins ont leur propre fenêtre dans le plafond de 60 notifications par minute (l'agent retire une fin de sa boîte au 2xx).
+
+**Clôture des opérations interrompues** (I4, R-L2-47, révision de R-L2-27). Une opération ne reste jamais « en cours » à vie :
+1. **Fins récentes** : l'agent, à son démarrage (ancre vérifiée), relit au ctl les 20 dernières fins enregistrées sur la box
+   (`fins-recentes`) et renvoie une `X_SECUBOX_OperationDone` pour chacune ; le maître dédoublonne par job (la première fin fait foi).
+2. **boot_id** : le bonjour porte le `boot_id` de la box, gardé par box (`boites.boot_id`, migration au démarrage). Quand il change
+   (un boot_id déjà connu, puis un autre), chaque `reboot` de la box encore `accepte` ou `en_cours` est clos `termine`, `rc` 0,
+   « reboot : succès (redémarrée) », remis au suivi (audit `pilotage_action_resultat`) une fois ; un sondage sans boot_id ne change
+   rien.
+3. **Échéance** : à la passe horaire de l'inventaire, une opération encore `demande`, `accepte` ou `en_cours` **6 h** après sa
+   demande passe à l'état `inconnu` (`resultat: inconnu`), auditée une fois (`pilotage_action_echue`) ; une orpheline y passe sans
+   audit. Une fin réelle qui arrive ensuite l'emporte encore (`termine`).
 Les autres notifications de L2 (`X_SECUBOX_HandsTied`, `X_SECUBOX_Consent`, `X_SECUBOX_Support`) vont dans `GET /evenements`
 (colonnes `ident`, `etat`), dédoublonnées par `(type, id, état)`.
 

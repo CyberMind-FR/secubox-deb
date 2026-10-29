@@ -73,6 +73,18 @@ secubox-pilotage (0.1.2-1~trixie1) trixie; urgency=medium
       pilotage.files.requete_modele —, relevé, actions de L2, support, Rejoindre au code factice) et rejouées
       contre le vrai agent ; réponses, relevé et notifications de L2 du vrai agent rejoués contre le vrai maître.
 
+  * Relecture finale de L2 (ref #3126, R-L2-47) :
+    - I3 : POST /boxes/{x}/actions/{action} sur une box cliente (réseau autre que maillage) exige `support`, une
+      session ouverte et non échue de cette box (409 sinon, rien d'audité ni d'envoyé) : la garde n'est plus
+      seulement dans la page.
+    - I4 (révision de R-L2-27) : le maître garde le boot_id du bonjour par box (colonne boites.boot_id, migration) ;
+      quand il change, tout reboot de la box encore accepté ou en cours est clos « succès (redémarrée) » et remis au
+      suivi (audit pilotage_action_resultat), une fois. À la passe horaire de l'inventaire, une opération encore en
+      cours 6 h après sa demande passe à l'état « inconnu », auditée une fois (pilotage_action_echue) ; une fin
+      réelle tardive l'emporte encore ; une orpheline passe à « inconnu » sans audit. La fin rattrapée par l'agent
+      à son démarrage et le bonjour du vrai client Go sont rejoués contre le vrai canal (contrat).
+    - Délais : le maître attend l'OPERATE_RESP 90 s (au lieu de 30), plus que les 60 s que l'agent accorde au ctl.
+
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 20:00:00 +0100
 
 secubox-pilotage (0.1.1-1~trixie1) trixie; urgency=medium

@@ -123,6 +123,25 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
       le vrai opérateur ; les OPERATE_RESP de L2, la réponse du relevé et les notifications OperationProgress,
       OperationDone, HandsTied, Consent et Support sont figées dans testdata/contrat/agent-l2/.
 
+  * Relecture finale de L2 (ref #3126, R-L2-46, R-L2-47) :
+    - C1 : `service demarrer|arreter|redemarrer` ne pilote qu'un SERVICE DURABLE. Le ctl lit `systemctl show -p Id
+      -p Type -p Names -p LoadState -- <unité>` (chemin absolu, sans shell, 20 s au plus) : Type=oneshot ou
+      minuterie refusés (« unité ponctuelle : passez par l'action dédiée » : secubox-systeme-redemarrer,
+      secubox-majauto, secubox-firstboot… ne sont plus démarrables par ce chemin), unité introuvable refusée,
+      l'Id résolu d'un alias et tous ses noms contrôlés contre les unités protégées, celle de l'agent et
+      secubox-pilotage-op-* (R-L2-15 refermé), Id hors secubox-* « hors périmètre ». Box cliente : `demarrer`
+      exige l'accord du détenteur, comme arrêter et redémarrer (R-L2-13 englobé).
+    - I2 : le nom d'un renommage entre dans le consentement et dans sa clé (un accord pour un nom ne vaut pas pour
+      un autre), dans l'audit des consentements, et `secubox-pilotage consentements` affiche « renommer en <nom> ».
+    - I4 : verbe de lecture `fins-recentes` (audité pilotage_lecture) : les 20 dernières fins enregistrées par
+      _fin, {job, verbe, resultat, rc} seulement. À la première ancre vérifiée (une fois par démarrage, avant le
+      premier bonjour), l'agent les lit et renvoie une X_SECUBOX_OperationDone pour chacune ; le maître
+      dédoublonne par job. Le boot_id part dans le bonjour. Contrat : fixture
+      agent-l2/notify_operation_done_rattrapee émise par le vrai exécuteur.
+    - I5 : après un lancement réussi, un audit « lance », consentement_utilise ou consentement_non_consomme manqué
+      est rattrapé (anomalie sur stderr) : la réponse reste {"ok": true, "job"} ; avant le lancement, un audit
+      manqué refuse toujours.
+
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 20:00:00 +0100
 
 secubox-pilotage-agent (0.1.2-1~trixie1) trixie; urgency=medium

@@ -67,7 +67,7 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 |---|---|
 | `reboot` | redémarrage, différé de 5 s (la réponse part d'abord) |
 | `maj-paquets` | `apt-get update` puis `upgrade` (jamais `dist-upgrade` ni `autoremove`), opération longue |
-| `service <demarrer\|arreter\|redemarrer> <unité>` | unité `^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`, jamais celle de l'agent (`secubox-pilotage-agent.*`, `@…` compris), ni une unité du ctl (`secubox-pilotage-op-*`), ni une unité inconnue de systemd, ni une unité protégée (`protected = true` dans `/etc/secubox/modules.d/*.toml`, ou socle : auth, aggregator, core, nginx, firewall, profiles, vault, autoload-agent) |
+| `service <demarrer\|arreter\|redemarrer> <unité>` | unité `^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`, jamais celle de l'agent (`secubox-pilotage-agent.*`, `@…` compris), ni une unité du ctl (`secubox-pilotage-op-*`), ni une unité inconnue de systemd, ni une unité protégée (`protected = true` dans `/etc/secubox/modules.d/*.toml`, ou socle : auth, aggregator, core, nginx, firewall, profiles, vault, autoload-agent). **Service durable seulement** (R-L2-46) : voir « Services durables » |
 | `renouveler-secrets` | `secubox-renouvelle-secrets --tout --oui`, opération longue |
 | `renommer <nom>` | (tâche 5, D3) libellé DNS ; `/usr/sbin/secubox-renommer --acteur <acteur> <nom>` (secubox-core >= 1.8.10 : hosts, secubox.conf, hostnamectl, Avahi, audit `box_renommee`, retour arrière ; nom réservé ou pris au maillage refusé) dans une unité transitoire de PID 1 bornée (`RuntimeMaxSec=120`) et en bac à sable (`NoNewPrivileges`, `ProtectSystem=strict` sauf `/etc`, `/run`, `/var/log/secubox`, `ProtectHome`, `PrivateTmp`) : l'espace de montage de l'agent garde `/etc` en lecture seule. Box cliente : accord du détenteur |
 | `maillage-rejoindre` | (tâche 5, R-L2-2) **le code `sbxmesh1.…` est lu sur l'entrée standard**, jamais dans l'argv (un argv sudo apparaît dans `auth.log` et `ps`), forme et somme vérifiées, après l'ancre, les mains liées et la politique (`code invalide` sinon) ; box du propriétaire seulement (`box cliente : hors maillage`) ; le code attend dans l'état root (`rejoindre-<job>.code`, 0600), puis l'opération (`RuntimeMaxSec=300`) lance `_rejoindre <job>`. Jamais dans l'audit, les journaux, les sorties ni les notifications |
@@ -79,6 +79,7 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 | `ancre-verifier <wg-mesh\|wg-autoload>` | lecture, permise depuis l'agent : `{"ok": true}` si le pair WireGuard de l'interface du canal de l'agent qui porte l'adresse du maître a la clé de l'ancre, sinon `{"ok": false, "raison": "absente"\|"differente"\|"illisible"}` (code 0, refus audité) ; voir « Ancre du maître » |
 | `consentement <accepter\|refuser> <id>` | **local seulement** : décision du détenteur sur un consentement en attente |
 | `mains-liees <on\|off>` | **local seulement** : lie ou délie les mains du maître |
+| `fins-recentes` | lecture, permise depuis l'agent, **auditée** (`pilotage_lecture`) : `{"ok": true, "fins": [{job, verbe, resultat, rc}]}`, les 20 dernières fins enregistrées par `_fin` (`succes`/`echec` seulement, de la plus ancienne à la plus récente), rien d'autre ; lue une fois au démarrage de l'agent (I4, voir « Clôture des opérations ») |
 | `etat-operation <job>` | lecture, permise depuis l'agent, **auditée** (`pilotage_lecture`) : `{"ok": true, "job", "etat": "en_cours"\|"termine"\|"inconnu"}`, avec `verbe`, `resultat` (`succes`/`echec`) et `rc` (entier, ou `null` pour un signal) une fois terminée. L'unité `--collect` est ramassée dès sa fin : `_fin` enregistre la fin dans l'état root (`fins.json`, 100 dernières) et ce verbe la relit |
 | `_fin <job>` | **interne, local seulement** : `ExecStopPost` de chaque unité transitoire ; audite la fin (`succes`/`echec`, code de sortie numérique) et libère l'opération exclusive |
 | `politique <action>` | `{"autorise", "consentement", "raison"}` ; actions `releve`, `reboot`, `maj-paquets`, `service-demarrer`, `service-arreter`, `service-redemarrer`, `renommer`, `renouveler-secrets`, `support-ouvrir`, `support-fermer`, `maillage-rejoindre` |
@@ -105,10 +106,25 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
   root, écriture atomique, valable 2 h ; l'agent revérifie toutes les heures) ; un échec le retire (R-L2-26).
 - **Box cliente** (canal vérifié `wg-autoload` ; `wg-mesh` = box du propriétaire ; la nature se lit dans le canal
   enregistré, jamais dans la seule présence d'une interface, R-L2-26) : `reboot`, `maj-paquets`,
-  `service arreter|redemarrer`, `renommer`, `renouveler-secrets`, et toute action sur une unité gabarit (`@`), même
-  `demarrer`, exigent l'accord du détenteur. La demande crée un
+  `service demarrer|arreter|redemarrer` (R-L2-46 : démarrer aussi, gabarit ou non), `renommer`, `renouveler-secrets`
+  exigent l'accord du détenteur. La demande crée un
   consentement en attente, valable 24 h (`{"ok": false, "refus": "consentement requis", "consentement": "<id>"}`) ;
-  le détenteur l'accepte ou le refuse en local ; la demande suivante identique consomme l'accord, une fois.
+  le détenteur l'accepte ou le refuse en local ; la demande suivante **identique** consomme l'accord, une fois.
+  L'accord porte sur l'action, l'unité d'un service et le **nom** d'un renommage (I2, R-L2-47) : un accord donné pour
+  `renommer gk5` ne vaut pas pour `renommer gk6` ; `secubox-pilotage consentements` affiche « renommer en gk5 ».
+- **Services durables** (R-L2-46) : `service demarrer|arreter|redemarrer` ne s'applique qu'à un service durable, sur
+  les deux natures de box et même en local. Avant toute action, le ctl lit
+  `/usr/bin/systemctl show -p Id -p Type -p Names -p LoadState -- <unité>` (sans shell, 20 s au plus ; lignes
+  `clé=valeur`, l'ordre de `--value` n'étant pas celui des `-p`) :
+  - unité introuvable (`LoadState=not-found`) : « unité inconnue » ;
+  - l'`Id` **résolu** (un alias pointe vers son unité réelle) et chacun des `Names` passent les mêmes contrôles que
+    le nom demandé : unité de l'agent, `secubox-pilotage-op-*`, unité protégée (R-L2-15 refermé : gabarits et
+    alias) ; un `Id` hors `secubox-*` est « unité hors périmètre » ;
+  - `Type=oneshot`, ou une minuterie (sans `Type` : l'armer lance une action ponctuelle) : « unité ponctuelle :
+    passez par l'action dédiée ». `secubox-systeme-redemarrer`, `secubox-systeme-eteindre`, `secubox-majauto*`,
+    `secubox-premier-pas*`, `secubox-firstboot`, `secubox-eth2-*`… sont des actions root : les démarrer par ce
+    chemin contournerait l'accord du détenteur, la confirmation forte du maître et « une opération longue à la
+    fois ». Le reboot et la mise à jour ont leurs verbes.
 - **Une seule opération longue à la fois** (`maj-paquets`, `renouveler-secrets`, et `reboot` pendant ses 5 s de
   délai), libérée par `_fin` ou quand l'unité a disparu : sinon
   `{"ok": false, "refus": "opération en cours", "job": "<id>"}`.
@@ -125,6 +141,9 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
   (`fins.json`, `operation.json`, consommation d'un consentement), elle est journalisée et la réponse reste
   `{"ok": true, "job"}` (R-L2-29). Un accord qui n'a pu être marqué utilisé est audité `consentement_non_consomme`
   (il pourrait resservir) ; une opération exclusive qui n'a pu être enregistrée n'empêche alors pas une seconde opération longue.
+  De même pour l'audit (I5, R-L2-47) : après un lancement réussi, un audit `lance`, `consentement_utilise` ou
+  `consentement_non_consomme` manqué est rattrapé, l'anomalie écrite sur stderr (journal de l'agent), et la réponse
+  reste `{"ok": true, "job"}` ; avant le lancement, un audit manqué refuse toujours (`audit impossible`, rien ne part).
 - `SBX_RACINE` (tests seulement) n'est honorée que si l'appelant est le processus lui-même ; jamais sous sudo depuis un
   autre compte.
 
@@ -163,7 +182,18 @@ appel au ctl (paramètre manquant, inconnu, mal typé ou hors motif : refus, le 
   code n'est pas un nombre ou que la fin reste introuvable après 3 lectures (« résultat inconnu »). Au plus 32
   opérations suivies en même temps ; 12 lectures `systemctl show` en échec de suite (bus injoignable) donnent aussi
   « résultat inconnu » et libèrent l'emplacement. L'arrêt de l'agent (ou le reboot de la box) interrompt le suivi
-  sans résultat.
+  sans résultat ; la fin est rattrapée au démarrage suivant (ci-dessous).
+- **Clôture des opérations interrompues** (I4, R-L2-47, révision de R-L2-27) : trois mécanismes, pour qu'aucune
+  opération ne reste « en cours » à vie côté maître.
+  1. **Fins récentes au démarrage** : à la première vérification réussie de l'ancre (une fois par démarrage, avant
+     le premier bonjour ; `Config.ApresAncre` du canal), l'agent lit au ctl `fins-recentes` (20 dernières fins
+     enregistrées par `_fin`, qui tourne en `ExecStopPost` même si l'agent est arrêté) et dépose une
+     `X_SECUBOX_OperationDone` pour chacune dans la boîte des résultats. Le maître dédoublonne par job : une fin déjà
+     remise ne change rien.
+  2. **boot_id dans le bonjour** (`/proc/sys/kernel/random/boot_id`) : quand il change, le maître clôt chaque reboot
+     de la box encore en cours « succès (redémarrée) » (la fin d'un reboot peut ne jamais être enregistrée).
+  3. **Échéance côté maître** : une opération encore en cours 6 h après sa demande passe à « inconnu », auditée une
+     fois.
 - **Coupure du canal pendant une opération** (voulu par le brief) : l'opération continue sur la box (`systemd-run`),
   et son suivi aussi, maître joignable ou non ; la progression émise pendant la coupure suit la file ordinaire des
   notifications, la fin attend dans la boîte des résultats et est remise à la reconnexion.
@@ -287,7 +317,7 @@ Maillage.Rejoindre avec un code factice), figées par `packages/secubox-pilotage
 `cmd/sbx-pilotage-agent/contrat_test.go` (`TestContratRequetesDuMaitre`) les sert au vrai client, avec le vrai exécuteur (ctl simulé :
 l'argv reçu, `--acteur` compris, et l'entrée standard de Rejoindre sont vérifiés), le vrai opérateur du relevé et les vraies bascules, puis fige
 dans `testdata/contrat/agent-l2/` ce que l'agent émet pour L2 (OPERATE_RESP, réponse du relevé, OperationProgress, OperationDone,
-HandsTied, Consent, Support), que le maître rejoue à son tour. Une fixture altérée échoue des deux côtés
+OperationDone rattrapée au démarrage par `fins-recentes` (I4), HandsTied, Consent, Support), que le maître rejoue à son tour. Une fixture altérée échoue des deux côtés
 (`TestContratRequeteAltereeEchoue`, et `test_une_…_alteree_echoue` côté maître). Régénération : d'abord le maître
 (`SECUBOX_CONTRAT_MAJ=1 python3 -m pytest tests/test_contrat_maitre.py -k figees`), puis
 `SECUBOX_CONTRAT_MAJ=1 go test ./cmd/sbx-pilotage-agent -run TestContratRequetesDuMaitre`, puis les deux suites.
