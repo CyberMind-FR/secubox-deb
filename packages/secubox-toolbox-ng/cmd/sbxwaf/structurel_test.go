@@ -46,7 +46,7 @@ func evalIDs(ds []DetectionStructurelle) []string {
 
 func TestStructurelChargeEtCompte(t *testing.T) {
 	r := LoadRules(ecrisRegles(t, corpusStructurel))
-	d, c, rej := r.Integrite()
+	d, c, rej, _ := r.Integrite()
 	// 2 motifs regex + 4 structurelles valides ; 6 structurelles declarees.
 	if d != 2+6 || c != 2+4 {
 		t.Errorf("declares=%d charges=%d, attendu 8/6", d, c)
@@ -69,7 +69,7 @@ func TestStructurelHorsDetectRejete(t *testing.T) {
 		    {"id": "h-1", "check": "parties_nombre", "params": {"parties_min": 1}},
 		    {"id": "h-2", "check": "filename_charge"}]}}}`
 		r := LoadRules(ecrisRegles(t, corpus))
-		d, c, rej := r.Integrite()
+		d, c, rej, _ := r.Integrite()
 		if d != 3 || c != 1 {
 			t.Errorf("mode %q : declares=%d charges=%d, attendu 3/1", mode, d, c)
 		}
@@ -92,7 +92,7 @@ func TestStructurelParamsInvalidesEtIdVide(t *testing.T) {
 	  "pas un objet",
 	  {"id": "ok", "check": "parties_nombre", "params": {"parties_min": 3}}]}}}`
 	r := LoadRules(ecrisRegles(t, corpus))
-	d, c, rej := r.Integrite()
+	d, c, rej, _ := r.Integrite()
 	if d != 6 || c != 1 || len(rej) != 5 {
 		t.Errorf("declares=%d charges=%d rejetes=%v, attendu 6/1/5", d, c, rej)
 	}
@@ -106,7 +106,7 @@ func TestStructurelStructuralMalForme(t *testing.T) {
 	corpus := `{"categories": {"php2shell": {"mode": "detect",
 	  "patterns": [{"id": "p-1", "pattern": "abc"}], "structural": {"id": "x"}}}}`
 	r := LoadRules(ecrisRegles(t, corpus))
-	_, c, rej := r.Integrite()
+	_, c, rej, _ := r.Integrite()
 	if c != 1 || len(rej) != 1 {
 		t.Errorf("charges=%d rejetes=%v, attendu 1 et 1 rejet", c, rej)
 	}
@@ -157,7 +157,7 @@ func TestEvaluerStructurelCategorieDesactivee(t *testing.T) {
 	if got := r.EvaluerStructurel(ResultatMultipart{Parties: 9}); got != nil {
 		t.Errorf("attendu nil, recu %v", got)
 	}
-	if d, c, rej := r.Integrite(); d != 0 || c != 0 || len(rej) != 0 {
+	if d, c, rej, _ := r.Integrite(); d != 0 || c != 0 || len(rej) != 0 {
 		t.Errorf("categorie desactivee comptee : %d/%d %v", d, c, rej)
 	}
 }

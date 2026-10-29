@@ -143,6 +143,11 @@ var parametreRequis = map[string]string{
 // Les tâches 3 à 7 y inscrivent leurs contrôles.
 var controlesRequete = map[string]bool{}
 
+// servicesPHPConnus : services que "services" peut nommer (#3273, R-W8 M1).
+// Un autre nom n'empêche pas le chargement (la signature ne vise alors que
+// les hôtes PHP par motif) mais est signalé : journal et Integrite().
+var servicesPHPConnus = map[string]bool{"nextcloud": true, "roundcube": true}
+
 // structurelJSON : champs inconnus ignores ; "source" (liste d'URL, ou tout
 // autre type) n'est volontairement pas declare, pour qu'un type inattendu ne
 // fasse jamais echouer le chargement.
@@ -182,6 +187,16 @@ func compileStructurel(brut json.RawMessage, mode string) (signatureStructurelle
 			return signatureStructurelle{}, sj.ID, errStructurel("parametre " + nom + " non entier")
 		}
 		params[nom] = n
+	}
+	vus := make(map[string]bool, len(sj.Services))
+	for _, sv := range sj.Services {
+		if sv == "" {
+			return signatureStructurelle{}, sj.ID, errStructurel("service vide dans services")
+		}
+		if vus[sv] {
+			return signatureStructurelle{}, sj.ID, errStructurel("service " + strconv.Quote(sv) + " en double dans services")
+		}
+		vus[sv] = true
 	}
 	if requis != "" {
 		if n, ok := params[requis]; !ok || n < 1 {
@@ -242,6 +257,9 @@ type rulesData struct {
 	// au prochain.
 	declares int
 	rejetes  []string
+	// avertis (#3273, R-W8 M1) : signatures chargées qui nomment un service
+	// inconnu, sous la forme <categorie>/<id>:<service>.
+	avertis []string
 }
 
 // Rules is a hot-reloadable, RW-locked WAF rule set.
@@ -419,6 +437,13 @@ func loadRulesJSON(path string) *rulesData {
 				if sig.severity == "" {
 					sig.severity = sev
 				}
+				for _, sv := range sig.services {
+					if !servicesPHPConnus[sv] {
+						nom := catID + "/" + sig.id + ":" + sv
+						log.Printf("sbxwaf/rules: AVERTISSEMENT structural %s/%s : service inconnu %q dans services", catID, sig.id, sv)
+						data.avertis = append(data.avertis, nom)
+					}
+				}
 				cc.structurelles = append(cc.structurelles, sig)
 			}
 		}
@@ -595,18 +620,19 @@ func (r *Rules) MatchDetail(method, rawPath, rawQuery, body, ua string, includeB
 // interroge a tout moment — par /healthz, par la carlette WAF, par un test.
 //
 // `rejetes` porte les identifiants et pas seulement le compte : savoir qu'il
-// manque cinq motifs sans savoir lesquels ne permet pas d'agir.
-func (r *Rules) Integrite() (declares, charges int, rejetes []string) {
+// manque cinq motifs sans savoir lesquels ne permet pas d'agir. `avertis`
+// (#3273) : signatures chargées qui nomment un service inconnu.
+func (r *Rules) Integrite() (declares, charges int, rejetes, avertis []string) {
 	r.mu.RLock()
 	cur := r.current
 	r.mu.RUnlock()
 	if cur == nil {
-		return 0, 0, nil
+		return 0, 0, nil, nil
 	}
 	for _, c := range cur.cats {
 		charges += len(c.data.patterns) + len(c.data.structurelles)
 	}
-	return cur.declares, charges, append([]string(nil), cur.rejetes...)
+	return cur.declares, charges, append([]string(nil), cur.rejetes...), append([]string(nil), cur.avertis...)
 }
 
 // aDesStructurelles dit si au moins une signature structurelle est chargée dans

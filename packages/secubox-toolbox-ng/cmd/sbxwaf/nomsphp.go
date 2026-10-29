@@ -144,6 +144,7 @@ type ParametrePHP struct{ Nom, Valeur string }
 type ParametresPHP struct {
 	Retenus   []ParametrePHP // seulement les noms de nomsRetenusPHP, au plus parametresRetenusMax, dans l'ordre
 	Variables int            // segments non vides séparés par « & » (max_input_vars, C4)
+	Tronque   bool           // corps coupé par la fenêtre de capture (posé par completerCorps, R-W8 M2)
 }
 
 // lireParametresPHP lit une chaîne de requête ou un corps urlencoded comme

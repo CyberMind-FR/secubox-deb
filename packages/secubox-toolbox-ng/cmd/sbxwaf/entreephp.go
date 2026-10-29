@@ -116,6 +116,8 @@ func completerCorps(e *EntreePHP, genre genreCorps, prefixe []byte, contentType 
 		e.Multipart = &res
 	case corpsUrlencoded:
 		p := lireParametresPHP(string(prefixe))
+		// La fenêtre a coupé le corps : le dernier segment peut être partiel.
+		p.Tronque = !complet
 		e.Corps = &p
 	}
 }

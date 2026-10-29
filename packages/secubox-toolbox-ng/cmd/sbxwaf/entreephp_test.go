@@ -12,8 +12,10 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -149,7 +151,7 @@ func TestCompleterCorpsMultipart(t *testing.T) {
 func TestEvaluerPHPFiltreServices(t *testing.T) {
 	r := LoadRules(ecrisRegles(t, `{"categories": {"php2shell": {"severity": "high", "mode": "detect",
 	  "structural": [{"id": "rc-1", "check": "filename_charge", "services": ["roundcube"]}]}}}`))
-	if _, c, rej := r.Integrite(); c != 1 || len(rej) != 0 {
+	if _, c, rej, _ := r.Integrite(); c != 1 || len(rej) != 0 {
 		t.Fatalf("charges=%d rejetes=%v, attendu 1 et aucun rejet", c, rej)
 	}
 	cas := map[string]int{"nextcloud": 0, "roundcube": 1, "": 1}
@@ -169,7 +171,7 @@ func TestStructurelServicesMalTypeRejete(t *testing.T) {
 	r := LoadRules(ecrisRegles(t, `{"categories": {"php2shell": {"mode": "detect",
 	  "structural": [{"id": "rc-chaine", "check": "filename_charge", "services": "roundcube"},
 	                 {"id": "ok", "check": "filename_charge", "services": ["roundcube"]}]}}}`))
-	_, c, rej := r.Integrite()
+	_, c, rej, _ := r.Integrite()
 	if c != 1 || len(rej) != 1 || !strings.Contains(rej[0], "rc-chaine") {
 		t.Errorf("charges=%d rejetes=%v, attendu 1 et le rejet nommé rc-chaine", c, rej)
 	}
@@ -345,4 +347,54 @@ func TestCaptureUrlencodedSatureeMultipartCapture(t *testing.T) {
 		t.Errorf("jetons après coup : %d multipart, %d urlencoded ; attendu 0 et %d (ceux des autres)", n, u, capturesUrlencodedMax)
 	}
 	b.verifierSansSanction(t, ipPublique)
+}
+
+// R-W8 M1 : un service inconnu dans "services" n'empêche pas le chargement
+// mais est signalé (journal et Integrite) ; "" et un doublon rejettent la
+// signature, nommément.
+func TestStructurelServicesInconnuAverti(t *testing.T) {
+	var sortie bytes.Buffer
+	log.SetOutput(&sortie)
+	defer log.SetOutput(os.Stderr)
+	r := LoadRules(ecrisRegles(t, `{"categories": {"php2shell": {"mode": "detect",
+	  "structural": [{"id": "s-1", "check": "filename_charge", "services": ["nextcloud", "fantome"]}]}}}`))
+	_, c, rej, avertis := r.Integrite()
+	if c != 1 || len(rej) != 0 {
+		t.Errorf("charges=%d rejetes=%v, attendu 1 et aucun rejet", c, rej)
+	}
+	if len(avertis) != 1 || !strings.Contains(avertis[0], "s-1") || !strings.Contains(avertis[0], "fantome") {
+		t.Errorf("avertis=%v, attendu un avertissement nommant s-1 et fantome", avertis)
+	}
+	if !strings.Contains(sortie.String(), "fantome") {
+		t.Errorf("aucun avertissement au chargement : %q", sortie.String())
+	}
+}
+
+func TestStructurelServicesVideOuDoublonRejete(t *testing.T) {
+	r := LoadRules(ecrisRegles(t, `{"categories": {"php2shell": {"mode": "detect",
+	  "structural": [{"id": "vide", "check": "filename_charge", "services": [""]},
+	                 {"id": "doublon", "check": "filename_charge", "services": ["roundcube", "roundcube"]},
+	                 {"id": "ok", "check": "filename_charge", "services": ["roundcube", "nextcloud"]}]}}}`))
+	_, c, rej, avertis := r.Integrite()
+	j := strings.Join(rej, "|")
+	if c != 1 || len(rej) != 2 || !strings.Contains(j, "php2shell/vide") || !strings.Contains(j, "php2shell/doublon") {
+		t.Errorf("charges=%d rejetes=%v, attendu 1 chargée et vide, doublon rejetées", c, rej)
+	}
+	if len(avertis) != 0 {
+		t.Errorf("avertis=%v, attendu aucun", avertis)
+	}
+}
+
+// R-W8 M2 : un corps urlencoded coupé par la fenêtre est dit tronqué.
+func TestCompleterCorpsUrlencodedTronque(t *testing.T) {
+	for _, complet := range []bool{true, false} {
+		e := &EntreePHP{}
+		completerCorps(e, corpsUrlencoded, []byte("_uid=1&a=b"), "application/x-www-form-urlencoded", complet)
+		if e.Corps == nil || e.Corps.Tronque == complet {
+			t.Errorf("complet=%v : Corps=%+v, attendu Tronque=%v", complet, e.Corps, !complet)
+		}
+	}
+	if p := lireParametresPHP("a=b"); p.Tronque {
+		t.Error("lireParametresPHP seule ne dit jamais tronqué")
+	}
 }

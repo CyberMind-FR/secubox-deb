@@ -18,7 +18,7 @@ const corpusLivre = "../../../secubox-waf-ng/composants/waf/config/waf-rules.jso
 
 func TestCorpusLivreSansRejet(t *testing.T) {
 	r := LoadRules(corpusLivre)
-	_, _, rej := r.Integrite()
+	_, _, rej, _ := r.Integrite()
 	if len(rej) != 0 {
 		t.Fatalf("rejetes=%v, attendu aucun", rej)
 	}
