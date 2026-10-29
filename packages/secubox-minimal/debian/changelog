@@ -1,3 +1,9 @@
+secubox-minimal (0.10.1-1~trixie1) trixie; urgency=medium
+
+  * secubox-toolbox-ng (moteur d'interception) rejoint les Conflicts, comme le dit déjà la description (ref #3259).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 10:40:21 +0100
+
 secubox-minimal (0.10.0-1~trixie1) trixie; urgency=medium
 
   * Allegement mesure sur l'ESPRESSObin de 1 Go gk5 (ref #3218) : secubox-dpi, secubox-ndpid-engine, secubox-courbes et

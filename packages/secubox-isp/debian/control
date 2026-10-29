@@ -12,6 +12,10 @@ Architecture: all
 Depends: ${misc:Depends},
  secubox-lite (>= 1.5.0),
 # DPI et nDPId (#3218) : sortis de lite (cartes de 1 Go), ils restent dans isp et full.
+# Toolbox, moteur d'interception et intercepteur (#3259) : sortis de lite, ils restent dans isp et full.
+ secubox-toolbox-ng,
+ secubox-toolbox (>= 1.0),
+ secubox-interceptor,
  secubox-dpi (>= 1.7.0),
  secubox-ndpid-engine (>= 1.7.2),
  secubox-modem (>= 1.0),

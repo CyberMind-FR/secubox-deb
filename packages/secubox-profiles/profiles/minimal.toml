@@ -18,7 +18,7 @@ label = "Minimal — garde DNS, ad-guard, webfilter, NAC, Freebox, WireGuard"
 # exclus (DPI, Courbes, netdiag) ; « Boxes à préparer » (premier-pas-maitre) est le panneau du maître, pas d'une box de 1 Go.
 menu_off = [
   "zkp", "assist", "ksm", "premier-pas-maitre", "centers",
-  "dpi", "ndpid", "mediaflow", "admin", "profiles", "network-anomaly", "netdiag", "grafana", "glances",
+  "dpi", "ndpid", "mediaflow", "admin", "profiles", "network-anomaly", "netdiag", "grafana", "glances", "toolbox",
 ]
 # Minuteries arrêtées et désactivées par ce profil (#3218, banc gk5) ; les autres profils les rétablissent.
 minuteurs_off = [

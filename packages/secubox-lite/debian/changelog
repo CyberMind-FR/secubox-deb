@@ -1,3 +1,12 @@
+secubox-lite (1.10.0-1~trixie1) trixie; urgency=medium
+
+  * Sans toolbox (cabine numérique Gondwana), moteur d'interception ni intercepteur (ref #3259, décision du
+    propriétaire du 2026-10-29) : secubox-toolbox, secubox-toolbox-ng et secubox-interceptor passent dans
+    secubox-isp, dont full hérite. Pas de Conflicts : isp et full dépendent de lite. Sur une box lite déjà
+    installée, les paquets restent mais le profil lite n'en démarre plus les unités.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 10:40:21 +0100
+
 secubox-lite (1.9.1-1~trixie1) trixie; urgency=medium
 
   * Recommande secubox-kiosk (ref #3254) : le profil lite active le kiosque, mais le script qui le

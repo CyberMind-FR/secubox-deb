@@ -14,14 +14,19 @@ RACINE = Path(__file__).resolve().parents[1]
 
 
 def _depends(paquet: str) -> set:
+    # Les commentaires en colonne 0 (« # … », permis dans debian/control) ne ferment pas le champ : avant #3259, le
+    # commentaire DPI de #3248 coupait Depends d'isp à « secubox-lite » et ce test échouait.
     texte = (RACINE / "packages" / paquet / "debian" / "control").read_text()
-    bloc = texte.split(f"Package: {paquet}", 1)[1]
-    dep = re.search(r"^Depends:(.*?)(?=^\S)", bloc, re.M | re.S).group(1)
+    bloc = [ligne for ligne in texte.split(f"Package: {paquet}", 1)[1].splitlines() if not ligne.startswith("#")]
+    dep = re.search(r"^Depends:(.*?)(?=^\S|\Z)", "\n".join(bloc), re.M | re.S).group(1)
     return {re.sub(r"\s*\(.*", "", d).strip() for d in dep.split(",") if d.strip() and "${" not in d}
 
 
 ISP = {"secubox-lite", "secubox-modem", "secubox-cdn", "secubox-saas-relay", "secubox-p2p", "secubox-federation",
-       "secubox-metrics", "secubox-mail", "secubox-metablogizer"}
+       "secubox-metrics", "secubox-mail", "secubox-metablogizer",
+       # #3218 : DPI et nDPId quittent lite pour isp ; #3259 : la toolbox et l'intercepteur aussi
+       "secubox-dpi", "secubox-ndpid-engine",
+       "secubox-toolbox", "secubox-toolbox-ng", "secubox-interceptor"}
 PLUGINS_DU_HALL = {"secubox-billets", "secubox-metanews", "secubox-messagerie", "secubox-nextcloud", "secubox-bbs"}
 APP_STORE_SEULEMENT = {"secubox-matrix", "secubox-gitea", "secubox-mesh"}
 RETIRES = {"secubox-socialrelay", "secubox-reality", "secubox-ai-insights", "secubox-zkp"}
