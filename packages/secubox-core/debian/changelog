@@ -3,6 +3,11 @@ secubox-core (1.8.10-1~trixie1) trixie; urgency=medium
   * snippets/secubox-proxy.conf : l'en-tête X-SecuBox-Pilotage-Tunnel est vidé sur tout
     proxy ; seul l'écouteur de tunnel du pilotage (10.10.0.1 / 10.64.0.1:8472) le pose, un
     client ne peut pas le forger (ref #3126).
+  * secubox-renommer (ref #3126 L2 tâche 5, ref #3242) : le seul renommage d'une box — ligne 127.0.1.1
+    de /etc/hosts, [global] hostname de secubox.conf, hostnamectl, audit box_renommee, Avahi ;
+    état précédent rétabli à tout échec (y compris audit impossible) ; refus d'un nom invalide,
+    réservé (admin, www, secubox, localhost) ou porté par un pair enrôlé du maillage ; écritures
+    atomiques sans suivre de lien ; aucun shell ; idempotent.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:30:00 +0100
 
