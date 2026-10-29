@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -140,4 +141,24 @@ func codeValidePourTest() string {
 	charge := "eyJhIjoiMTkyLjE2OC4xLjEiLCJ0IjoiYWIifQ"
 	s := sha256.Sum256([]byte(charge))
 	return "sbxmesh1." + charge + "." + hex.EncodeToString(s[:])[:4]
+}
+
+// M2 : en production, le relevé lit la racine absolue « / » (jamais des chemins relatifs au répertoire courant) ; le test
+// tourne depuis le dossier du paquet, où « proc/stat » n'existe pas.
+func TestOperateurDeProductionLitLaRacineAbsolue(t *testing.T) {
+	op := operateurBox(func(context.Context, time.Duration) error { return nil })
+	sortie, err := op(context.Background(), "Device.X_SECUBOX_Releve.Mesurer()", map[string]any{"duree_s": 10})
+	if err != nil {
+		t.Fatalf("relevé de production en erreur (chemins relatifs ?) : %v", err)
+	}
+	if s, ok := sortie.(sortieReleve); !ok || s.DureeS != 10 || s.MemDispoMo <= 0 {
+		t.Fatalf("relevé de production inattendu : %+v", sortie)
+	}
+	src, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), "operateurBox(nil))") || strings.Contains(string(src), "operateur(\"\"") {
+		t.Fatal("main.go doit passer operateurBox(nil) au canal")
+	}
 }

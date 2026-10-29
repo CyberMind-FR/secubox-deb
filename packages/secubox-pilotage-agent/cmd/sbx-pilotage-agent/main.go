@@ -78,7 +78,7 @@ func main() {
 		Ancre:     verifieurAncre(lanceurSystemctl(cheminSudo, delaiCtl), maitre),
 		Agir:      apresOperate(ex.Operer, relire),
 		Resultats: resultats,
-	}, m, operateur("", nil))
+	}, m, operateurBox(nil))
 	if err := cl.Tourner(ctx, ev); err != nil && ctx.Err() == nil {
 		log.Fatalf("canal : %v", err)
 	}

@@ -77,6 +77,12 @@ func operateur(racine string, attendre func(context.Context, time.Duration) erro
 	}
 }
 
+// operateurBox est l'opérateur de production : relevé lu sous la racine absolue « / » (M2), comme le modèle ; jamais
+// des chemins relatifs, qui ne marcheraient que parce que systemd place le répertoire courant à « / ».
+func operateurBox(attendre func(context.Context, time.Duration) error) func(ctx context.Context, cmd string, args map[string]any) (any, error) {
+	return operateur("/", attendre)
+}
+
 // executeur relie les Operate d'action (L2) au ctl root : ctl lance `sudo -n /usr/sbin/secubox-pilotagectl …`
 // (ctlEntree de même, avec une entrée standard : le code de Rejoindre, R-L2-2),
 // systemctl lit l'état de l'unité de l'opération sans sudo. La progression part dans la file des notifications sans
