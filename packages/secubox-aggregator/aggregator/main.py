@@ -31,7 +31,6 @@ postinst can manage the migration set without code edits.
 from __future__ import annotations
 
 import asyncio
-import importlib
 import logging
 import os
 import sys
@@ -78,6 +77,14 @@ RUN_DIR = "/run/secubox"
 # son API vérifie elle-même le jeton, ce relais la ferme d'abord à tout autre
 # qu'un administrateur réel.
 _SOCKETS_ADMIN = frozenset({"actor", "radio", "vault"})
+
+# ── Sockets JAMAIS relayées (#3126, L2 « Agir », tâche 0, M6) ────────────────
+# pilotage-canal : le canal des box n'est joint QUE par l'écouteur nginx du
+# tunnel (10.10.0.1 / 10.64.0.1:8472), qui pose l'identité (X-Real-IP) et le
+# marqueur X-SecuBox-Pilotage-Tunnel ; relayé ici, un client choisirait l'un et
+# l'autre. 404 avant toute garde et toute recherche de socket : la socket n'est
+# jamais ouverte (avant, seul son groupe www-data fermait ce chemin).
+_SOCKETS_JAMAIS_RELAYEES = frozenset({"pilotage-canal"})
 
 # L'en-tête de vue est une décision de la ROUTE, pas du visiteur : celui que le
 # client envoie n'est jamais recopié, vers aucun module.
@@ -238,7 +245,7 @@ def _load_config() -> dict:
                 data = tomllib.load(f)
             # Les sockets réservées (#3216, relecture) : montées ici, elles échapperaient à la garde et aux marques du relais
             # (Coffre : compte/*, personne/*, second facteur) — jamais, même citées à la main dans le TOML.
-            ecartes = RETIRED_MODULES | DEDICATED_MODULES | _SOCKETS_ADMIN
+            ecartes = RETIRED_MODULES | DEDICATED_MODULES | _SOCKETS_ADMIN | _SOCKETS_JAMAIS_RELAYEES
             cfg["modules"] = [m for m in data.get("modules", []) if m not in ecartes]
             ignores = [m for m in data.get("modules", []) if m in ecartes]
             if ignores:
@@ -524,7 +531,7 @@ def _build_app() -> FastAPI:
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     )
     async def _dedicated_socket_proxy(name: str, path: str, request: Request) -> Response:
-        if name in _MOUNTED:
+        if name in _MOUNTED or name in _SOCKETS_JAMAIS_RELAYEES:
             return Response(status_code=404)
         if name == "vault" and path.split("/", 1)[0] in ("compte", "personne"):
             return Response(status_code=404)
