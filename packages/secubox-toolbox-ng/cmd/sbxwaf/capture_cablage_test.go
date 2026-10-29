@@ -42,7 +42,7 @@ func reecrire(t *testing.T, f, contenu string) {
 }
 
 func grosEnvoi() []byte {
-	return corpsMultipart("BND", []partieTest{{nom: "f", filename: "gros.bin", fichier: true, contenu: contenuTexte(3 << 20)}}, false)
+	return fabriquerMultipart("BND", []partieTest{{nom: "f", filename: "gros.bin", fichier: true, contenu: contenuTexte(3 << 20)}}, false)
 }
 
 // I2a : sans signature structurelle chargée et active, aucune capture n'est
@@ -173,7 +173,7 @@ func TestFenetreCapturePlafonnee(t *testing.T) {
 func TestCaptureFenetrePlafonneeMemeAvecInspectionLarge(t *testing.T) {
 	b := nouveauBancMultipart(t, nil)
 	b.s.maxBodyInspect = 8 << 20
-	corps := corpsMultipart("BND", []partieTest{
+	corps := fabriquerMultipart("BND", []partieTest{
 		{nom: "f", filename: "gros.bin", fichier: true, contenu: contenuTexte(2 << 20)},
 		{nom: nomProgressPHP, contenu: "x"},
 		{nom: "f1", filename: "a", fichier: true, contenu: "y"},
