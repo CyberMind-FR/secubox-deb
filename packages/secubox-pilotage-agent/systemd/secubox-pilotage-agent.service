@@ -10,8 +10,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=secubox-pilotage
-Group=secubox-pilotage
+User=secubox-pilotage-agent
+Group=secubox-pilotage-agent
 EnvironmentFile=-/etc/secubox/pilotage-agent.env
 AppArmorProfile=/usr/sbin/sbx-pilotage-agent
 UMask=0027

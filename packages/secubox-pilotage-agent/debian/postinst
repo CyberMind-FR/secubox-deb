@@ -6,8 +6,8 @@
 set -e
 case "$1" in
   configure)
-    if ! getent passwd secubox-pilotage >/dev/null; then
-      adduser --system --no-create-home --group secubox-pilotage
+    if ! getent passwd secubox-pilotage-agent >/dev/null; then
+      adduser --system --no-create-home --group secubox-pilotage-agent
     fi
     install -d -m 0755 /etc/secubox/pilotage
     # Profil AppArmor (enforce) chargé AVANT le démarrage du service.

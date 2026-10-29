@@ -14,13 +14,13 @@ def lire(rel):
 
 
 def sans_commentaires(txt):
-    return "\n".join(l for l in txt.splitlines() if not l.lstrip().startswith("#"))
+    return "\n".join(ligne for ligne in txt.splitlines() if not ligne.lstrip().startswith("#"))
 
 
 def test_unite_durcie():
     u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
     for d in (
-        "User=secubox-pilotage", "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes",
+        "User=secubox-pilotage-agent", "Group=secubox-pilotage-agent", "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes",
         "PrivateTmp=yes", "IPAddressDeny=any", "IPAddressAllow=10.10.0.1 10.64.0.1 localhost",
         "MemoryMax=32M", "Restart=on-failure", "RestartSec=10", "ReadOnlyPaths=/",
         "EnvironmentFile=-/etc/secubox/pilotage-agent.env", "ExecStart=/usr/sbin/sbx-pilotage-agent",
@@ -56,8 +56,8 @@ def test_apparmor_enforce_sans_reseau_entrant():
     assert "complain" not in code and "flags=" not in code  # enforce
     assert not re.search(r"\blisten\b|\baccept\b", code)
     # chaque règle inet est qualifiée (jamais « network inet stream, » nu, qui autoriserait listen)
-    inet = [l for l in code.splitlines() if l.strip().startswith("network") and "inet" in l]
-    assert inet and all("(" in l and "connect" in l for l in inet)
+    inet = [ligne for ligne in code.splitlines() if ligne.strip().startswith("network") and "inet" in ligne]
+    assert inet and all("(" in ligne and "connect" in ligne for ligne in inet)
     assert "deny /etc/secubox/secrets/** r" in code
     assert "/usr/bin/systemctl rix," in code
     assert "capability" not in code
@@ -67,9 +67,9 @@ def test_paquet_coherent():
     c = lire("debian/control")
     assert "Architecture: any" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
-    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.1.0-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.1.1-1~trixie1) trixie;")
     pi = lire("debian/postinst")
-    for m in ("adduser --system --no-create-home --group secubox-pilotage", "install -d -m 0755 /etc/secubox/pilotage",
+    for m in ("adduser --system --no-create-home --group secubox-pilotage-agent", "install -d -m 0755 /etc/secubox/pilotage",
               "apparmor_parser", "systemctl enable --now secubox-pilotage-agent"):
         assert m in pi, m
     assert "systemctl stop secubox-pilotage-agent" in lire("debian/prerm")
@@ -132,3 +132,11 @@ def test_apparmor_dmi_x86_par_le_chemin_resolu():
     # /sys/class/dmi/id est un lien vers /sys/devices/virtual/dmi/id/
     code = sans_commentaires(lire("apparmor/usr.sbin.sbx-pilotage-agent"))
     assert "/sys/devices/virtual/dmi/id/{product_name,sys_vendor} r," in code
+
+
+def test_compte_propre_distinct_du_maitre():
+    """R27 : le maître (secubox-pilotage) et l'agent coexistent sur gk2 : deux comptes, jamais partagés."""
+    u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
+    assert "User=secubox-pilotage\n" not in u + "\n" and "Group=secubox-pilotage\n" not in u + "\n"
+    p = sans_commentaires(lire("debian/postinst"))
+    assert "getent passwd secubox-pilotage-agent" in p and "getent passwd secubox-pilotage >" not in p

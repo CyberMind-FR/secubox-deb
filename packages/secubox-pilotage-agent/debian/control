@@ -19,5 +19,5 @@ Description: SecuBox — agent de pilotage distant (L1 « Voir », lecture seule
  réalise un relevé de charge à la demande.
  .
  Lecture seule : aucune commande de modification. L'agent n'ouvre aucun port
- d'écoute, tourne sous l'utilisateur dédié secubox-pilotage, sous AppArmor
+ d'écoute, tourne sous l'utilisateur dédié secubox-pilotage-agent, sous AppArmor
  enforce et sous une unité systemd durcie (32 Mo).

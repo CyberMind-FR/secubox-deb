@@ -34,7 +34,7 @@ Voir `conf/pilotage-agent.env` (installé en exemple sous `/usr/share/doc/secubo
 
 ## Durcissement
 
-Utilisateur `secubox-pilotage`, `NoNewPrivileges`, `ProtectSystem=strict`, `ReadOnlyPaths=/`, aucune capacité,
+Utilisateur `secubox-pilotage-agent`, `NoNewPrivileges`, `ProtectSystem=strict`, `ReadOnlyPaths=/`, aucune capacité,
 `IPAddressDeny=any` (sauf `10.10.0.1`, `10.64.0.1`, localhost), `MemoryMax=32M`, profil AppArmor enforce
 (`apparmor/usr.sbin.sbx-pilotage-agent`). `AF_NETLINK` est autorisé en plus d'`AF_INET AF_UNIX` : le runtime
 Go lit les adresses des interfaces par netlink.
