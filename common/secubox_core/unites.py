@@ -107,7 +107,14 @@ def piloter(module: str, acteur: str, action: str, nom: str, *, delai: int = 30,
     if action == "stop" and (debian or unite in UNITES_PROTEGEES):
         journaliser(module, acteur, action, unite, "refuse", 403, "unité Debian protégée" if debian else "unité protégée")
         raise HTTPException(403, "unité protégée : arrêt refusé")
-    ok, sortie = _systemctl(action, unite, delai)
+    try:
+        ok, sortie = _systemctl(action, unite, delai)
+    except OSError as e:
+        # systemctl absent, fork impossible… (#3258, tour 3) : jamais un 500 brut sans ligne d'audit. La classe seule
+        # dans l'audit et la réponse : le message système peut porter un chemin.
+        journaliser(module, acteur, action, unite, "echec", 503, f"erreur système : {e.__class__.__name__}")
+        log.warning("%s : %s %s impossible (%s)", module, action, unite, e)
+        raise HTTPException(503, f"systemctl indisponible ({e.__class__.__name__})") from e
     journaliser(module, acteur, action, unite, "ok" if ok else "echec", 200)
     log.info("%s : %s %s → %s", module, action, unite, "OK" if ok else "ÉCHEC")
     return {"success": ok, "service": unite, "unit": unite, "action": action, "output": sortie[:300]}

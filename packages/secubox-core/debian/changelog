@@ -10,6 +10,8 @@ secubox-core (1.8.9-1~trixie1) trixie; urgency=medium
   * Retrait de secubox_core.system.service_control (nom passé tel quel à systemctl, sans
     motif, sans « -- », sans unité protégée ni audit) : aucun appelant dans le dépôt ;
     secubox_core.unites.piloter est le seul chemin (#3258).
+  * unites.piloter : une OSError de systemctl (absent, fork impossible) est auditée et rendue
+    en 503 « systemctl indisponible », au lieu d'un 500 brut sans audit (#3258, tour 3).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 14:10:00 +0100
 
