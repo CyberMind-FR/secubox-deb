@@ -17,6 +17,11 @@ polkit.addRule(function (action, subject) {
     var unite = action.lookup("unit") || "";
     var verbe = action.lookup("verb") || "";
     if (!/^secubox-[A-Za-z0-9@._-]+\.service$/.test(unite)) return polkit.Result.NOT_HANDLED;
+    // #3242 (R-L2-36, M3) : le renommage root, seulement démarré, seulement pour une instance au motif DNS du nom de box.
+    if (unite.indexOf("secubox-systeme-renommer@") === 0) {
+        if (verbe === "start" && /^secubox-systeme-renommer@[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.service$/.test(unite)) return polkit.Result.YES;
+        return polkit.Result.NO;
+    }
     if (["start", "stop", "restart", "reload"].indexOf(verbe) < 0) return polkit.Result.NOT_HANDLED;
     return polkit.Result.YES;
 });

@@ -160,3 +160,35 @@ def test_polkit_fuseau_borne_a_l_unite_de_l_api():
     bloc = regle[regle.index("org.freedesktop.timedate1.set-timezone") - 200:]
     assert 'subject.system_unit !== "secubox-system.service"' in bloc
     assert "timedate1.set-time\"" not in regle and "set-ntp" not in regle         # le fuseau seulement
+
+
+# ── Relecture de la tâche 5, tour 1 (R-L2-36) ─────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("actuel,envoye", [("secubox", "secubox"), ("SECUBOX", "secubox"), ("Secubox_Live", "Secubox_Live"),
+                                           ("gk5", "GK5")])
+def test_fuseau_seul_sur_une_box_au_nom_reserve_ou_hors_motif(api, audits, monkeypatch, actuel, envoye):
+    """I2 : la page renvoie le nom actuel ; le nom par défaut « secubox » est réservé, un nom d'image peut être hors
+    libellé DNS. Ce n'est pas un renommage : aucun 400, aucune unité, le fuseau est appliqué."""
+    appels = []
+    monkeypatch.setattr(api.subprocess, "run", faux(appels))
+    monkeypatch.setattr(api.socket, "gethostname", lambda: actuel)
+    r = api.settings({"hostname": envoye, "timezone": "Europe/Paris"}, user={"sub": "gk2admin"})
+    assert r["success"] is True and r["timezone"] == "Europe/Paris" and "hostname" not in r
+    assert appels == [["timedatectl", "set-timezone", "--", "Europe/Paris"]] and audits == []
+
+
+def test_page_n_envoie_le_nom_que_s_il_a_change():
+    page = (SYSTEM / "www" / "system" / "index.html").read_text(encoding="utf-8")
+    assert "{ hostname: $('newHost').value, timezone: $('newTz').value }" not in page
+    assert "NOM_CHARGE" in page and "if (nom && nom !== NOM_CHARGE) corps.hostname = nom;" in page
+
+
+def test_polkit_renommer_start_seulement_instance_dns():
+    """M3 : une branche dédiée borne secubox-systeme-renommer@ au verbe start et à une instance au motif DNS ; la règle
+    générale reste pour les autres unités."""
+    regle = (SYSTEM / "polkit" / "50-secubox-system.rules").read_text()
+    assert "secubox-systeme-renommer@" in regle
+    bloc = regle[regle.index("secubox-systeme-renommer@") - 400:regle.index("secubox-systeme-renommer@") + 600]
+    assert 'verbe === "start"' in bloc and "[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?" in bloc
+    assert "polkit.Result.NO" in bloc
+    assert '["start", "stop", "restart", "reload"]' in regle                  # règle générale gardée

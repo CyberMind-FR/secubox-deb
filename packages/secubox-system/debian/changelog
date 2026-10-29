@@ -7,6 +7,10 @@ secubox-system (1.11.5-1~trixie1) trixie; urgency=medium
     lancement (libellé DNS, noms réservés). Fuseau : code de retour de timedatectl lu et rendu,
     autorisé par une règle polkit bornée au même sujet. Fini le {"success": true} muet.
   * Depends secubox-core (>= 1.8.10~).
+  * Relecture (R-L2-36) : le nom actuel renvoyé par la page n'est pas un renommage (un simple
+    changement de fuseau passait en 400 sur une box nommée « secubox » ou hors libellé DNS) ; la
+    page n'envoie le nom que s'il a changé ; règle polkit : secubox-systeme-renommer@ seulement
+    démarrée, seulement pour une instance au motif DNS (refus explicite sinon).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:00:00 +0100
 

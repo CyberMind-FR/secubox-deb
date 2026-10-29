@@ -805,6 +805,10 @@ def settings(data: dict, user=Depends(require_jwt)):
     res = {"success": True}
     nom = str(data.get("hostname") or "").strip().lower()
     fuseau = str(data.get("timezone") or "").strip()
+    if nom and nom == socket.gethostname().strip().lower():
+        # I2 (R-L2-36) : la page renvoie le nom actuel ; ce n'est pas un renommage. Sans ceci, une box au nom par défaut
+        # « secubox » (réservé) ou hors libellé DNS refusait en 400 un simple changement de fuseau.
+        nom = ""
     if nom and not RE_NOM_BOX.fullmatch(nom):
         raise HTTPException(400, "nom invalide : lettres minuscules, chiffres et tirets (63 au plus, ni tiret en tête ni en fin)")
     if nom in NOMS_RESERVES:

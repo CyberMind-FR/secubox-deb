@@ -48,6 +48,10 @@ Configuration file: `/etc/secubox/system.toml`
   503 systemctl absent ; chaque démarrage audité (`service_control`). Fuseau : `timedatectl set-timezone`, permis par
   la règle polkit au seul sujet `secubox-system.service` ; échec rendu en 502 (#3242). Jamais de `{"success": true}`
   muet.
+  Le nom actuel (comparé à `gethostname()`, sans casse) n'est pas un renommage : un fuseau seul passe même sur une box
+  nommée `secubox` (réservé). La page n'envoie `hostname` que s'il a changé. Règle polkit : l'unité
+  `secubox-systeme-renommer@<nom>` n'est que démarrée (`start`), pour une instance au motif DNS seulement.
+  Reportés de la relecture de la tâche 5 (R-L2-36) : M5, M7, M8, M11 (non corrigés dans ce tour).
 
 ## License
 
