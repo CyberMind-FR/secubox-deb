@@ -35,8 +35,9 @@ import "strings"
 const occurrencesParNomMax = 2
 
 // parametresRetenusMax : plafond de paramètres conservés par requête, déduit
-// du plafond par nom : la mémoire reste bornée par noms retenus × 2.
-var parametresRetenusMax = occurrencesParNomMax * len(nomsRetenusPHP)
+// du plafond par nom : première, dernière, et au plus une occurrence suspecte
+// du milieu (retenirPHP), soit noms retenus × 3.
+var parametresRetenusMax = (occurrencesParNomMax + 1) * len(nomsRetenusPHP)
 
 // nomsRetenusPHP : les seuls noms (déjà normalisés) dont on conserve la valeur.
 var nomsRetenusPHP = map[string]bool{
@@ -192,6 +193,11 @@ func lireParametresPHP(brut string) ParametresPHP {
 // position (passe finale M2) : au-delà de occurrencesParNomMax, la dernière
 // gardée est remplacée. L'ordre relatif des valeurs d'un nom est conservé
 // (première, puis dernière). Au plus parametresRetenusMax entrées.
+//
+// Une occurrence du milieu qu'on allait écraser est GARDÉE si elle est suspecte
+// (valeurSuspectePHP) : PHP garde tous les éléments d'un tableau (_uid[]), et
+// R-RC3 doit voir un CR/LF placé entre deux valeurs saines. Au plus une occurrence
+// suspecte de plus par nom : la mémoire reste bornée (noms retenus × 3).
 func retenirPHP(retenus []ParametrePHP, nom, valeur string) []ParametrePHP {
 	vus, dernier := 0, -1
 	for i := range retenus {
@@ -203,9 +209,16 @@ func retenirPHP(retenus []ParametrePHP, nom, valeur string) []ParametrePHP {
 	if vus < occurrencesParNomMax {
 		return append(retenus, ParametrePHP{Nom: nom, Valeur: valeur})
 	}
+	if vus == occurrencesParNomMax && valeurSuspectePHP(retenus[dernier].Valeur) {
+		return append(retenus, ParametrePHP{Nom: nom, Valeur: valeur})
+	}
 	retenus[dernier].Valeur = valeur
 	return retenus
 }
+
+// valeurSuspectePHP : une valeur qu'un contrôle de requête pourrait signaler
+// (R-RC3 : CR, LF, NUL, ou caractère interdit dans un drapeau IMAP).
+func valeurSuspectePHP(v string) bool { return crlfDans(v) || drapeauInvalideRoundcube(v) }
 
 // Valeurs rend toutes les occurrences du nom normalisé, dans l'ordre (nil si aucune).
 func (p ParametresPHP) Valeurs(nom string) []string {

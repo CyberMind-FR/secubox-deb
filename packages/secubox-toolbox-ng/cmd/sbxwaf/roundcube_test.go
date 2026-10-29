@@ -214,6 +214,10 @@ func TestRoundcubeSignatures(t *testing.T) {
 		{"uid crlf corps", entreeRC("roundcube", "POST", "", urlenc, []byte("_uid=1%0d%0aA001+LOGOUT")), []string{"rc-003"}},
 		{"uid crlf requête", entreeRC("roundcube", "GET", "_uid=1%0aX", "", nil), []string{"rc-003"}},
 		{"flag", entreeRC("roundcube", "POST", "", urlenc, []byte("_flag=read)")), []string{"rc-003"}},
+		// Relecture de la passe finale : PHP garde TOUS les éléments d'un tableau
+		// _uid[] ; l'occurrence suspecte du milieu ne doit pas disparaître.
+		{"uid crlf au milieu d'un tableau corps", entreeRC("roundcube", "POST", "", urlenc, []byte("_uid[]=1&_uid[]=a%0d%0aB&_uid[]=2")), []string{"rc-003"}},
+		{"uid crlf au milieu d'un tableau requête", entreeRC("roundcube", "GET", "_uid[]=1&_uid[]=a%0aB&_uid[]=2&_uid[]=3", "", nil), []string{"rc-003"}},
 		{"flag légitime", entreeRC("roundcube", "POST", "", urlenc, []byte("_flag=read&_uid=1:*")), []string{}},
 		{"subject", entreeRC("roundcube", "POST", "", urlenc, []byte("_subject=a%0db")), []string{"rc-004"}},
 		{"destinataires exclus", entreeRC("roundcube", "POST", "", urlenc, []byte("_to=a%0Ab&_cc=c%0Ad&_message=l1%0Al2")), []string{}},
