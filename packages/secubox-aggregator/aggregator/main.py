@@ -198,6 +198,7 @@ RETIRED_MODULES = frozenset({
     "hexo", "ollama", "gotosocial", "redroid", "simplex", "newsbin", "voip", "frigate",
     "reality", "ai-insights",   # #3017 : façades sans données, retirées
     "zkp",                      # #3019 : tableau de bord ZKP hors arbre, retiré
+    "socialrelay",              # #3052, #3256 : décommissionné, retiré de toutes les box
 })
 
 # Modules À SOCKET DÉDIÉE, jamais montés en processus même si un aggregator.toml les cite (#3013) :
