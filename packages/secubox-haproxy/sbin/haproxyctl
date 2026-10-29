@@ -959,6 +959,48 @@ cmd_cert_sync() {
 # CONFIG GENERATION
 # ─────────────────────────────────────────────────────────────────────
 
+# EN-TETES DE VERDICT EFFACES A L'ENTREE PUBLIQUE (#3258, audit R10).
+#
+# Seul onion-in effacait X-SecuBox-* (#3112). Par http-in et https-in, un client d'Internet pouvait envoyer
+# « X-SecuBox-LAN: 1 » a travers sbxwaf jusqu'au waker (wakerproxy.go recopie les en-tetes du client) ou jusqu'a
+# tout amont qui croit cette marque. On efface donc, en tete des deux frontaux, chaque en-tete de VERDICT : pose
+# par un composant interne EN AVAL de l'entree et lu comme une affirmation. Inventaire du depot (qui pose -> qui lit) :
+#   V X-SecuBox-LAN              nginx $lan_client -> secubox_core.auth, premier-pas, webos, waker
+#   V X-SecuBox-Onion            onion-in (ci-dessous) -> marque « client onion »
+#   V X-SecuBox-Console          nginx :9078 (secret du port console) -> secubox-auth /console/jeton
+#   V X-SecuBox-Console-Hote     nginx :9078 $host -> secubox-auth /console/jeton
+#   V X-SecuBox-Console-Paire    nginx :9078 adresse:port reels -> secubox-auth /console/jeton
+#   V X-SecuBox-Origin-Status    nginx $upstream_status (secubox-waking.conf) -> waker
+#   V X-SecuBox-Netboot-Lot      nginx :8099 -> secubox-netboot /lot-flash
+#   V X-SecuBox-Adresse-Serveur  nginx :8099 $server_addr -> secubox-netboot /lot-flash
+# Jamais effaces ici :
+#   P X-SecuBox-Signature        HMAC pose par l'emetteur d'un webhook, verifie par le recepteur
+#   P X-SecuBox-Healthcheck      pose par le JS des pages d'erreur (navigateur), lu par personne
+#   ? X-SecuBox-Pair, -Maillage, -Relais, -Second-Facteur : poses en interne (nginx :7331, :8799, agregateur) et deja
+#     neutralises en aval (vides par nginx, retires par l'agregateur) ; laisses a l'arbitrage (rapport #3258).
+#   R reponses seulement : -WAF, -Cache, -Cache-Age, -Cache-TTL, -Robot, -Ng, -Sentinel, -Media, -NetBoot, -Bundle.
+# Un effacement EN BLOC (-m beg, comme onion-in) emporterait les en-tetes de protocole : liste nominative.
+# Meme liste dans api/main.py (ENTETES_VERDICT), pour POST /haproxy/generate ; tests/test_entetes_verdict_3258.py.
+ENTETES_VERDICT=(
+    X-SecuBox-LAN
+    X-SecuBox-Onion
+    X-SecuBox-Console
+    X-SecuBox-Console-Hote
+    X-SecuBox-Console-Paire
+    X-SecuBox-Origin-Status
+    X-SecuBox-Netboot-Lot
+    X-SecuBox-Adresse-Serveur
+)
+
+# Lignes « http-request del-header » des verdicts, a placer en tete d'un frontal public.
+_lignes_effacer_verdicts() {
+    local nom
+    printf '    # Verdicts internes : jamais ceux du client (#3258). Avant tout set-header et tout routage.\n'
+    for nom in "${ENTETES_VERDICT[@]}"; do
+        printf '    http-request del-header %s\n' "$nom"
+    done
+}
+
 cmd_generate() {
     log "Generating HAProxy configuration..."
 
@@ -984,6 +1026,9 @@ cmd_generate() {
     # la main sur la board avant que ce routage ne soit généré.
     local acme_port=$(grep -E '^acme_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
     [ -n "$acme_port" ] || acme_port=8880
+    # En tete de http-in et https-in (#3258) : voir ENTETES_VERDICT.
+    local effacer_verdicts
+    effacer_verdicts=$(_lignes_effacer_verdicts)
 
     mkdir -p "$CONFIG_DIR" /run/haproxy "$EXTRA_CFG_DIR"
 
@@ -1033,6 +1078,7 @@ frontend http-in
     bind *:${http_port}
 ${bind_v6_http}
     mode http
+${effacer_verdicts}
     # Pendant du frontend TLS : ici la connexion EST en clair, et le dire
     # explicitement empeche un client de pretendre le contraire.
     http-request set-header X-Forwarded-Proto http
@@ -1150,6 +1196,7 @@ frontend https-in
     bind *:${https_port} ssl crt $CERTS_DIR/
 ${bind_v6_https}
     mode http
+${effacer_verdicts}
     # X-FORWARDED-PROTO, ET IL N'ETAIT POSE NULLE PART (#1269).
     #
     # HAProxy termine le TLS ; nginx ecoute en clair sur 9080 et transmettait

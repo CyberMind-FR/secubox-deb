@@ -1,3 +1,13 @@
+secubox-haproxy (1.12.8-1~trixie1) trixie; urgency=medium
+
+  * Entrée publique (audit R10) : http-in et https-in effacent en tête, avant tout
+    set-header et tout routage, les huit en-têtes de verdict X-SecuBox-* (LAN, Onion,
+    Console, Console-Hote, Console-Paire, Origin-Status, Netboot-Lot, Adresse-Serveur) ;
+    jamais les en-têtes de protocole (Signature…). Liste nominative, identique dans
+    haproxyctl generate et POST /haproxy/generate (ref #3258).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 12:40:00 +0100
+
 secubox-haproxy (1.12.7-1~trixie1) trixie; urgency=medium
 
   * Délais longs pour le dépôt et la publication Streamlit (ref #3247) : POST /api/v1/streamlit/deploy
