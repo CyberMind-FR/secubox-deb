@@ -8,6 +8,11 @@ secubox-pilotage (0.1.2-1~trixie1) trixie; urgency=medium
     directement la socket (il le forge aussi) : la barrière reste la socket, 0660 groupe www-data. Le postinst rend le
     nouveau gabarit (et recharge nginx) avant de redémarrer le service.
 
+  * Retour au maillage après un renommage (ref #3126 L2 tâche 5, ref #3242) : pilotage/renommage.py —
+    après l'OperationDone réussi d'un Renommer (box du maillage), code `sbx-mesh-invite --code --nom
+    <nouveau>` vérifié (forme, somme, nom) et envoyé par Device.X_SECUBOX_Maillage.Rejoindre() {"code"}
+    dans la file de la box ; le code n'apparaît dans aucun journal, audit ni message d'erreur. Câblage
+    dans l'API (table des opérations) : tâche 6.
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:30:00 +0100
 
 secubox-pilotage (0.1.1-1~trixie1) trixie; urgency=medium

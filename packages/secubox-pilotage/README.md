@@ -51,6 +51,17 @@ Une valeur de plus de 64 Kio de JSON est **tronquée**, jamais jetée (début d'
 `inventaire_tronques` de `GET /boxes/{x}`. Seules les lignes changées sont écrites (une relève identique n'écrit que `inventaire_le`).
 Au plus 10 000 lignes et 1 Mio de valeurs sérialisées par box : au-delà, les plus anciennes parmi celles absentes de la passe courante partent (R39).
 
+## Retour au maillage après un renommage (L2, tâche 5)
+`pilotage/renommage.py` : après le `X_SECUBOX_OperationDone` **réussi** (`rc` 0) d'un `Renommer` sur une box du maillage,
+`envoyer_rejoindre(files, box, operation, fin)` émet un code lié au nouveau nom (`/usr/bin/sbx-mesh-invite --code --nom
+<nouveau> --json`, borné à 30 s, sortie vérifiée : forme, somme, nom) et le dépose dans la file de la box :
+`OPERATE Device.X_SECUBOX_Maillage.Rejoindre() {"code"}`. La box le passe à son ctl sur l'entrée standard (R-L2-2) puis à
+`secubox-automesh` ; la jonction sous le nouveau nom renomme le pair (#3213). Box cliente (Auto-Load), échec ou autre
+action : rien n'est envoyé. Le code ne transite que par la file (le tunnel) : jamais dans un journal, l'audit
+(`pilotage_rejoindre_envoye {box, nouveau, msg_id}`) ni une erreur (`ErreurRejoindre`). **Câblage à la tâche 6** : la
+table des opérations relie le job à son action et appelle `envoyer_rejoindre` ; le droit d'appeler `sbx-mesh-invite`
+(root, jetons de secubox-p2p) depuis le service du maître y est à poser.
+
 ## Tests
 `cd packages/secubox-pilotage && python3 -m pytest -q`. `tests/test_contrat_go.py` rejoue contre le vrai canal les enveloppes figées par le
 client Go (`packages/secubox-pilotage-agent/internal/canal/testdata/contrat/`, régénérées par son test `TestContratEnveloppesEmises`).
