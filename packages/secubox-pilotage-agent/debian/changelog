@@ -1,3 +1,25 @@
+secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * L2 « Agir », tâche 1 (ref #3126) : ctl root de la box `secubox-pilotagectl` et sa politique.
+    - Liste fermée de verbes, argv validé en entier par le ctl (code 2 sinon) : reboot, maj-paquets,
+      service <demarrer|arreter|redemarrer> <unité secubox-*.service|timer>, renouveler-secrets, renommer <nom>,
+      support <ouvrir|fermer> <id>, ancre-verifier (ces trois : « non disponible » jusqu'aux tâches 2, 4, 5),
+      consentement <accepter|refuser> <id> et mains-liees <on|off> (local seulement : refusés depuis l'agent),
+      politique <action>. Sortie : une ligne JSON.
+    - Politique décidée sur la box : mains liées (tout refusé sauf le relevé ; état root
+      /var/lib/secubox-pilotagectl/mains-liees, projection /etc/secubox/pilotage/mains-liees pour l'agent) ;
+      box cliente (sans wg-mesh) : accord du détenteur (consentement en attente 24 h, consommé une fois) ;
+      poser les mains liées annule les consentements en attente ; jamais l'unité de l'agent ni une unité protégée.
+    - Opérations par `systemd-run --collect --unit=secubox-pilotage-op-<job>`, sans délai imposé ; une seule
+      opération longue à la fois (maj-paquets, renouveler-secrets ; un reboot attend aussi).
+    - Audit JSON de chaque demande, refus, consentement et résultat dans /var/log/secubox/audit.log (sans suivre de
+      lien, jamais une valeur secrète ni l'argv refusé). SBX_RACINE (tests) ignorée quand sudo a élevé un autre compte.
+  * sudoers.d/secubox-pilotage-agent : `secubox-pilotagectl *` seulement. Unité de l'agent : NoNewPrivileges=no pour
+    ce sudo (options seccomp retirées, capacités bornées, ReadWritePaths du ctl) ; profil AppArmor : `/usr/bin/sudo Ux`.
+    Arbre d'état root par tmpfiles.d. Dépend de sudo et python3 (>= 3.11). Exception écrite dans RULES-CODE.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
+
 secubox-pilotage-agent (0.1.2-1~trixie1) trixie; urgency=medium
 
   * Relecture finale L1 (ref #3126) :

@@ -6,8 +6,9 @@ See LICENCE-CMSD-1.0.md for terms.
 -->
 # secubox-pilotage-agent
 
-Agent de pilotage distant d'une box SecuBox (#3126, livraison L1 « Voir », lecture seule). Binaire Go unique
-`/usr/sbin/sbx-pilotage-agent`, bibliothèque standard seule, `CGO_ENABLED=0`.
+Agent de pilotage distant d'une box SecuBox (#3126 : livraison L1 « Voir », lecture seule ; L2 « Agir » en cours).
+Binaire Go unique `/usr/sbin/sbx-pilotage-agent`, bibliothèque standard seule, `CGO_ENABLED=0`, et ctl root
+`/usr/sbin/secubox-pilotagectl` (Python 3), seule voie d'action de l'agent.
 
 ## Fonctionnement
 
@@ -16,7 +17,8 @@ Agent de pilotage distant d'une box SecuBox (#3126, livraison L1 « Voir », lec
 - Répond à Get et GetSupportedDM (modèle TR-181 : système, services systemd, paquets, exposition, maillage,
   pilotage), notifie les événements (boucle de relances, mémoire basse, swap, démarrage) et réalise
   l'Operate `Device.X_SECUBOX_Releve.Mesurer()` (10 à 300 s, un seul à la fois).
-- Toute autre commande est refusée (L1 : lecture seule). Jamais la ligne de commande d'un processus (`comm`).
+- Toute autre commande est refusée par l'agent tant que les Operate de L2 ne sont pas câblés (tâche 3). Jamais la ligne
+  de commande d'un processus (`comm`).
 - Le maître est choisi ainsi : `PILOTAGE_MAITRE` s'il est posé ; sinon `wg-mesh` en `10.10.0.0/24`, puis
   `wg-autoload` en `10.64.0.0/16` ; sinon l'agent attend et revérifie toutes les 300 s. L'adresse de sortie
   est celle de l'interface du maillage dont la plage contient le maître.
@@ -42,21 +44,67 @@ pas par systemd (pas d'`EnvironmentFile=`), par descripteur et sans suivre aucun
 `root:root`, sans droit d'écriture pour le groupe ni les autres (`0644`), à un seul lien physique ; sinon il est ignoré en
 entier, avec une ligne de journal. Même règle pour le drapeau « mains liées » `/etc/secubox/pilotage/mains-liees` : non
 fiable, il vaut « non » (ligne de journal à chaque refus nouveau). Le paquet ne crée rien sous `/etc/secubox`.
-Limite connue, pour L2 : le compte `secubox` peut encore renommer, dans `/etc/secubox`, un autre fichier `root:root` à
-la place de ceux-ci ; l'état « mains liées » de L2 devra vivre hors d'un dossier inscriptible par `secubox`.
+Le compte `secubox` peut encore renommer, dans `/etc/secubox`, un autre fichier `root:root` à la place de ceux-ci : en L2,
+l'état « mains liées » qui fait foi vit donc hors de `/etc/secubox` (`/var/lib/secubox-pilotagectl`, voir ci-dessous) ;
+`/etc/secubox/pilotage/mains-liees` n'en est que la projection lue par l'agent.
+
+## Actions (L2) : `secubox-pilotagectl`
+
+L'agent ne devient jamais root : sa seule voie d'action est `sudo -n /usr/sbin/secubox-pilotagectl <verbe> …`
+(`/etc/sudoers.d/secubox-pilotage-agent` : `secubox-pilotage-agent ALL=(root) NOPASSWD: /usr/sbin/secubox-pilotagectl *`,
+rien d'autre). Toute la validation vit dans le ctl (patron `secubox-appstorectl`) ; la politique est décidée sur la box.
+Sortie : une ligne JSON ; code 0 pour une réussite (`{"ok": true, "job": "<id>"}`) ou un refus
+(`{"ok": false, "refus": "…"}`), 2 pour un argv invalide, 1 pour une erreur (état non fiable, audit impossible).
+
+| Verbe | Effet |
+|---|---|
+| `reboot` | redémarrage, différé de 5 s (la réponse part d'abord) |
+| `maj-paquets` | `apt-get update` puis `upgrade` (jamais `dist-upgrade` ni `autoremove`), opération longue |
+| `service <demarrer\|arreter\|redemarrer> <unité>` | unité `^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`, jamais celle de l'agent ni une unité protégée (`protected = true` dans `/etc/secubox/modules.d/*.toml`, ou socle : auth, aggregator, core, nginx, firewall, profiles, vault, autoload-agent) |
+| `renouveler-secrets` | `secubox-renouvelle-secrets --tout --oui`, opération longue |
+| `renommer <nom>`, `support <ouvrir\|fermer> <id>`, `ancre-verifier` | argv validé ; `{"ok": false, "refus": "non disponible"}` jusqu'aux tâches 5, 4 et 2 |
+| `consentement <accepter\|refuser> <id>` | **local seulement** : décision du détenteur sur un consentement en attente |
+| `mains-liees <on\|off>` | **local seulement** : lie ou délie les mains du maître |
+| `politique <action>` | `{"autorise", "consentement", "raison"}` ; actions `releve`, `reboot`, `maj-paquets`, `service-demarrer`, `service-arreter`, `service-redemarrer`, `renommer`, `renouveler-secrets`, `support-ouvrir`, `support-fermer` |
+
+« Local seulement » : refusé (et audité) quand l'appel vient du compte de l'agent par sudo (`SUDO_USER`/`SUDO_UID`).
+
+- **Mains liées** : tout est refusé au maître sauf le relevé. État root `/var/lib/secubox-pilotagectl/mains-liees`,
+  projection `/etc/secubox/pilotage/mains-liees` (root, 0644, posée par descripteur) ; l'un OU l'autre lie les mains.
+  Les poser annule les consentements en attente ou acceptés non consommés.
+- **Box cliente** (pas d'interface `wg-mesh` : reliée par `wg-autoload`, ou sans maillage) : `reboot`, `maj-paquets`,
+  `service arreter|redemarrer`, `renommer`, `renouveler-secrets` exigent l'accord du détenteur. La demande crée un
+  consentement en attente, valable 24 h (`{"ok": false, "refus": "consentement requis", "consentement": "<id>"}`) ;
+  le détenteur l'accepte ou le refuse en local ; la demande suivante identique consomme l'accord, une fois.
+- **Une seule opération longue à la fois** (`maj-paquets`, `renouveler-secrets` ; un `reboot` attend aussi) : sinon
+  `{"ok": false, "refus": "opération en cours", "job": "<id>"}`.
+- Une demande locale (root sur la box, hors de l'agent) n'est soumise ni aux mains liées ni au consentement.
+- Chaque action part par `systemd-run --collect --unit=secubox-pilotage-op-<job>`, sans délai imposé ; la progression
+  se lit dans le journal de l'unité.
+- **Audit** : une ligne JSON par demande, refus, consentement et résultat dans `/var/log/secubox/audit.log` (ouvert sans
+  suivre de lien ; identifiants seulement, jamais une valeur secrète ni l'argv refusé). `politique` n'est pas auditée.
+- État root `0700` `/var/lib/secubox-pilotagectl` (tmpfiles.d du paquet) : consentements, mains liées, opération en
+  cours. Non fiable (propriétaire, droits, lien) : tout est refusé.
+- `SBX_RACINE` (tests seulement) n'est honorée que si l'appelant est le processus lui-même ; jamais sous sudo depuis un
+  autre compte.
 
 ## Durcissement
 
-Utilisateur `secubox-pilotage-agent`, `NoNewPrivileges`, `ProtectSystem=strict`, `ReadOnlyPaths=/`, aucune capacité,
+Utilisateur `secubox-pilotage-agent`, `ProtectSystem=strict`, `ReadOnlyPaths=/`, aucune capacité ambiante,
 `IPAddressDeny=any` (sauf `10.10.0.1`, `10.64.0.1`, localhost), `MemoryMax=32M`, profil AppArmor enforce
-(`apparmor/usr.sbin.sbx-pilotage-agent`). `AF_NETLINK` est autorisé en plus d'`AF_INET AF_UNIX` : le runtime
-Go lit les adresses des interfaces par netlink.
+(`apparmor/usr.sbin.sbx-pilotage-agent` : réseau `inet stream` qualifié, `unix stream`, `netlink raw` pour les adresses
+des interfaces ; ni `inet6` ni écoute ; `/usr/bin/sudo Ux` seul passage privilégié).
+
+Exception écrite (`.claude/RULES-CODE.md`) : `NoNewPrivileges=no`, seulement pour sudo vers `secubox-pilotagectl` ; les
+options qui imposent NoNewPrivileges par seccomp sont absentes de l'unité ; `CapabilityBoundingSet` borné à ce que sudo
+et le ctl demandent ; le ctl root hérite de l'espace de montage, d'où `ReadWritePaths=/var/log/secubox
+-/var/lib/secubox-pilotagectl`.
 
 ## Développement
 
 ```
 go vet ./... && go test -race ./...
-pytest -q tests
+pytest -q tests          # dont tests/test_pilotagectl.py : le vrai ctl sous SBX_RACINE, faux systemd-run/systemctl
 dpkg-buildpackage -b -us -uc     # natif ; arm64 sur une box (pas de -a croisé : dh_strip)
 ```
 

@@ -1,0 +1,664 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-pilotagectl — ctl root de la box pour le pilotage distant (#3126, L2 « Agir »).
+
+CE SCRIPT EST LA FRONTIÈRE DE SÉCURITÉ. L'agent (compte secubox-pilotage-agent, jamais root) n'agit que par
+`sudo -n /usr/sbin/secubox-pilotagectl <verbe> …` ; le sudoers accorde `secubox-pilotagectl *` : TOUTE la validation
+vit ici (patron secubox-appstorectl), et la politique (mains liées, box cliente, consentement) est décidée ICI, sur la
+box, jamais seulement par le maître.
+
+Verbes (liste fermée) :
+  reboot                                   redémarrage (différé de 5 s : la réponse au maître part d'abord)
+  maj-paquets                              apt-get update + upgrade (jamais dist-upgrade ni autoremove), opération longue
+  service <demarrer|arreter|redemarrer> <unité>
+                                           unité ^secubox-[a-z0-9][a-z0-9@.-]{0,62}\\.(service|timer)$, jamais celle de
+                                           l'agent ni une unité protégée (modules.d `protected = true`, ou socle)
+  renouveler-secrets                       secubox-renouvelle-secrets --tout --oui, opération longue
+  renommer <nom>                           libellé DNS ; « non disponible » jusqu'à la tâche 5
+  support <ouvrir|fermer> <id>             « non disponible » jusqu'à la tâche 4
+  ancre-verifier                           « non disponible » jusqu'à la tâche 2
+  consentement <accepter|refuser> <id>     LOCAL SEULEMENT (refusé quand l'agent l'appelle par sudo)
+  mains-liees <on|off>                     LOCAL SEULEMENT
+  politique <action>                       {"autorise", "consentement", "raison"} ; actions : releve, reboot,
+                                           maj-paquets, service-demarrer, service-arreter, service-redemarrer, renommer,
+                                           renouveler-secrets, support-ouvrir, support-fermer
+
+Sortie : une ligne JSON. Code 0 : réussite (`{"ok": true, "job": "<id>"}`) ou refus (`{"ok": false, "refus": "…"}`) ;
+2 : argv invalide (ou lancé hors root) ; 1 : erreur (état non fiable, audit impossible, lancement impossible).
+
+Politique, pour une demande du maître (origine « maitre » = appel par sudo depuis le compte de l'agent) :
+  - mains liées : tout est refusé sauf le relevé. État root dans /var/lib/secubox-pilotagectl/mains-liees ; projection
+    pour l'agent (L1) dans /etc/secubox/pilotage/mains-liees. L'une OU l'autre lie les mains : le compte partagé
+    secubox, propriétaire de /etc/secubox, ne délie donc rien en retirant la projection.
+  - box cliente (pas d'interface wg-mesh : agent relié par wg-autoload, ou aucun maillage) : reboot, maj-paquets,
+    service arreter|redemarrer, renommer, renouveler-secrets exigent l'accord du détenteur. La demande crée un
+    consentement en attente (valable 24 h), accepté ou refusé en local ; la demande suivante identique consomme
+    l'accord une fois. Poser les mains liées annule les consentements en attente ou acceptés non consommés.
+  - une seule opération longue à la fois (maj-paquets, renouveler-secrets ; un reboot attend aussi qu'elle finisse).
+Une demande locale (root sur la box, hors de l'agent) n'est soumise ni aux mains liées ni au consentement.
+
+Opérations : `systemd-run --collect --unit=secubox-pilotage-op-<job>`, sans délai imposé (jamais de timeout sur apt) ;
+la progression se lit dans le journal de l'unité. Audit : une ligne JSON par demande, refus, consentement et résultat
+dans /var/log/secubox/audit.log (ouvert sans suivre de lien) ; identifiants seulement, jamais une valeur secrète, jamais
+l'argv d'une demande refusée.
+
+SBX_RACINE (tests) : racine substituée, avec systemd-run et systemctl cherchés dans le PATH, honorée SEULEMENT si elle est
+non vide et que l'appelant est le processus lui-même (root lancé par root, ou test sans privilège) ; jamais quand sudo
+a élevé un autre compte (SUDO_UID différent de l'uid effectif) : elle est alors ignorée et nommée sur stderr.
+"""
+import datetime
+import fcntl
+import json
+import os
+import pwd
+import re
+import secrets
+import shutil
+import socket
+import stat
+import subprocess
+import sys
+import time
+import tomllib
+
+AGENT = "secubox-pilotage-agent"
+# Socle protégé quoi que disent les manifestes (miroir de PROTECTED_IDS de secubox-profiles, api/manifest.py) :
+# /etc/secubox/modules.d appartient au compte partagé secubox, un manifeste retiré ne déprotège pas le cœur.
+SOCLE = frozenset({"auth", "aggregator", "core", "nginx", "firewall", "profiles", "vault", "autoload-agent"})
+RE_UNITE = re.compile(r"secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service|timer)")
+RE_NOM = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")
+RE_SUPPORT = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
+RE_ID = re.compile(r"[0-9a-f]{16}")
+SERVICE = {"demarrer": "start", "arreter": "stop", "redemarrer": "restart"}
+ACTIONS = ("releve", "reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
+           "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer")
+VERBES = ("reboot", "maj-paquets", "service", "renommer", "renouveler-secrets", "support", "consentement",
+          "mains-liees", "ancre-verifier", "politique")
+CONSENTEMENT_CLIENTE = frozenset({"reboot", "maj-paquets", "service-arreter", "service-redemarrer", "renommer",
+                                  "renouveler-secrets"})
+LONGUES = frozenset({"maj-paquets", "renouveler-secrets"})
+EXCLUSIVES = LONGUES | {"reboot"}                        # un reboot pendant apt laisserait dpkg à moitié configuré
+ACTIFS = frozenset({"active", "activating", "deactivating", "reloading", "refreshing"})
+VALIDITE = 24 * 3600
+GARDE = 7 * 24 * 3600                                    # consentements décidés gardés une semaine (au plus 200)
+TAILLE_MAX = 1 << 20
+PATH_SUR = "/usr/sbin:/usr/bin:/sbin:/bin"
+
+
+class ArgvInvalide(Exception):
+    pass
+
+
+class Usage(Exception):
+    pass
+
+
+class Erreur(Exception):
+    pass
+
+
+def err(msg):
+    try:
+        print(f"[pilotagectl] {msg}", file=sys.stderr)
+    except OSError:
+        pass
+
+
+def sortie(obj):
+    sys.stdout.buffer.write((json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8"))
+    sys.stdout.flush()
+
+
+def propre(txt, motif=r"[^a-z0-9_.-]"):
+    return re.sub(motif, "", txt.lower())[:64]
+
+
+class Ctx:
+    """Racine, outils, origine et acteur de l'appel."""
+
+    def __init__(self):
+        racine = os.environ.get("SBX_RACINE", "")
+        sudo_uid = os.environ.get("SUDO_UID", "")
+        try:
+            appelant = int(sudo_uid) if sudo_uid else os.getuid()
+        except ValueError:
+            appelant = -1
+        if racine and appelant != os.geteuid():
+            err("SBX_RACINE ignorée : l'appelant n'est pas le compte effectif (élévation par sudo)")
+            racine = ""
+        if not racine:
+            ignorees = sorted(k for k in os.environ if k.startswith("SBX_") and k != "SBX_RACINE")
+            if ignorees:
+                err(f"surcharges ignorées sans SBX_RACINE : {' '.join(ignorees)}")
+            if os.geteuid() != 0:
+                raise Usage("à lancer en root (par sudo pour l'agent)")
+        self.r = racine.rstrip("/")
+        self.substitue = bool(racine)
+        if self.substitue:
+            # Tests : outils cherchés dans le PATH, environnement transmis (faux systemd-run et systemctl).
+            self.systemd_run = shutil.which("systemd-run") or "systemd-run"
+            self.systemctl = shutil.which("systemctl") or "systemctl"
+            self.env = dict(os.environ)
+        else:
+            # Vraie box : l'environnement ne choisit jamais une commande lancée en root.
+            self.systemd_run, self.systemctl = "/usr/bin/systemd-run", "/usr/bin/systemctl"
+            self.env = {"PATH": PATH_SUR, "LC_ALL": "C"}
+        sudo_user = os.environ.get("SUDO_USER", "")
+        try:
+            uid_agent = pwd.getpwnam(AGENT).pw_uid
+        except KeyError:
+            uid_agent = None
+        self.origine = "maitre" if sudo_user == AGENT or (uid_agent is not None and appelant == uid_agent) else "local"
+        if sudo_user:
+            self.acteur = propre(sudo_user) or "inconnu"
+        else:
+            try:
+                self.acteur = propre(pwd.getpwuid(appelant).pw_name) or str(appelant)
+            except (KeyError, OverflowError):
+                self.acteur = str(appelant)
+        self.box = propre(socket.gethostname(), r"[^a-z0-9.-]") or "inconnue"
+        self.etat = f"{self.r}/var/lib/secubox-pilotagectl"
+        self.journaux = f"{self.r}/var/log/secubox"
+        self.etc_secubox = f"{self.r}/etc/secubox"
+        self.modules = f"{self.r}/etc/secubox/modules.d"
+        self.net = f"{self.r}/sys/class/net"
+
+
+# --- Audit -------------------------------------------------------------------------------------------------------
+
+def auditer(ctx, evenement, **champs):
+    """Une ligne JSON, identifiants seulement. Échec → Erreur (« audit impossible ») : l'action n'a pas lieu."""
+    ligne = {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "module": "pilotage",
+             "evenement": evenement, "box": ctx.box, "acteur": ctx.acteur, "origine": ctx.origine}
+    ligne.update({k: v for k, v in champs.items() if v is not None})
+    donnees = (json.dumps(ligne, ensure_ascii=False) + "\n").encode("utf-8")
+    try:
+        # /var/log/secubox appartient au compte partagé secubox : ni le dossier ni le journal ne sont suivis s'ils
+        # sont des liens ; un tube nommé ou un fichier à plusieurs liens physiques est refusé.
+        dfd = os.open(ctx.journaux, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            try:
+                fd = os.open("audit.log", os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+            except FileNotFoundError:
+                fd = os.open("audit.log", os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640,
+                             dir_fd=dfd)
+                if not ctx.substitue:
+                    try:
+                        pw = pwd.getpwnam("secubox")
+                        os.fchown(fd, pw.pw_uid, pw.pw_gid)
+                    except (KeyError, OSError):
+                        os.close(fd)
+                        os.unlink("audit.log", dir_fd=dfd)
+                        raise OSError("journal d'audit non attribuable au compte secubox") from None
+            try:
+                st = os.fstat(fd)
+                if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+                    raise OSError("journal d'audit qui n'est pas un fichier ordinaire")
+                os.write(fd, donnees)
+            finally:
+                os.close(fd)
+        finally:
+            os.close(dfd)
+    except OSError as e:
+        err(f"audit impossible : {e.__class__.__name__}")
+        raise Erreur("audit impossible") from None
+
+
+# --- État root (consentements, mains liées, opération en cours) --------------------------------------------------
+
+def ouvrir_etat(ctx, creer):
+    """Descripteur du dossier d'état, root 0700, sans lien. Absent et creer=False → None."""
+    try:
+        parent = os.open(os.path.dirname(ctx.etat), os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:
+        raise Erreur("état non fiable") from None
+    nom = os.path.basename(ctx.etat)
+    try:
+        try:
+            fd = os.open(nom, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+        except FileNotFoundError:
+            if not creer:
+                return None
+            os.mkdir(nom, 0o700, dir_fd=parent)
+            fd = os.open(nom, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+    except OSError:
+        raise Erreur("état non fiable") from None
+    finally:
+        os.close(parent)
+    st = os.fstat(fd)
+    if st.st_uid != os.geteuid() or st.st_mode & 0o077:
+        os.close(fd)
+        raise Erreur("état non fiable")
+    return fd
+
+
+def existe(fd, nom):
+    try:
+        st = os.stat(nom, dir_fd=fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return False
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid():
+        raise Erreur("état non fiable")
+    return True
+
+
+def lire_json(fd, nom, defaut):
+    try:
+        f = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+    except FileNotFoundError:
+        return defaut
+    except OSError:
+        raise Erreur("état non fiable") from None
+    try:
+        st = os.fstat(f)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid() or st.st_size > TAILLE_MAX:
+            raise Erreur("état non fiable")
+        brut = os.read(f, TAILLE_MAX + 1)
+    finally:
+        os.close(f)
+    try:
+        return json.loads(brut.decode("utf-8"))
+    except ValueError:
+        raise Erreur("état non fiable") from None
+
+
+def ecrire(fd, nom, donnees, mode=0o600):
+    """Écriture atomique dans le dossier ouvert : temporaire exclusif, fsync, renommage."""
+    tmp = f".{nom}.{secrets.token_hex(4)}"
+    f = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=fd)
+    try:
+        os.fchmod(f, mode)
+        os.write(f, donnees)
+        os.fsync(f)
+    finally:
+        os.close(f)
+    os.replace(tmp, nom, src_dir_fd=fd, dst_dir_fd=fd)
+
+
+def ecrire_json(fd, nom, valeur):
+    ecrire(fd, nom, json.dumps(valeur, ensure_ascii=False).encode("utf-8"))
+
+
+def retirer(fd, nom):
+    try:
+        os.unlink(nom, dir_fd=fd)
+    except FileNotFoundError:
+        pass
+
+
+# --- Mains liées ----------------------------------------------------------------------------------------------------
+
+def projection_presente(ctx):
+    """Drapeau /etc/secubox/pilotage/mains-liees posé par root (lu par l'agent en L1). Non fiable → absent."""
+    try:
+        sec = os.open(ctx.etc_secubox, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            d = os.open("pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=sec)
+            try:
+                st = os.stat("mains-liees", dir_fd=d, follow_symlinks=False)
+            finally:
+                os.close(d)
+        finally:
+            os.close(sec)
+    except OSError:
+        return False
+    return stat.S_ISREG(st.st_mode) and st.st_uid == os.geteuid() and not st.st_mode & 0o022
+
+
+def poser_projection(ctx, liees):
+    """Pose ou retire la projection, par descripteur : /etc/secubox appartient au compte partagé secubox."""
+    try:
+        sec = os.open(ctx.etc_secubox, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            try:
+                d = os.open("pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=sec)
+            except FileNotFoundError:
+                if not liees:
+                    return True
+                os.mkdir("pilotage", 0o755, dir_fd=sec)
+                d = os.open("pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=sec)
+            try:
+                st = os.fstat(d)
+                if st.st_uid != os.geteuid() or st.st_mode & 0o022:
+                    return False
+                os.fchmod(d, 0o755)
+                if liees:
+                    ecrire(d, "mains-liees", b"", 0o644)
+                else:
+                    retirer(d, "mains-liees")
+            finally:
+                os.close(d)
+        finally:
+            os.close(sec)
+    except OSError:
+        return False
+    return True
+
+
+def mains_liees(ctx, fd):
+    return (fd is not None and existe(fd, "mains-liees")) or projection_presente(ctx)
+
+
+# --- Politique ------------------------------------------------------------------------------------------------------
+
+def proprietaire(ctx):
+    """Box du propriétaire = reliée au maillage wg-mesh. Sinon (wg-autoload, ou rien) : cliente, par prudence."""
+    return os.path.exists(f"{ctx.net}/wg-mesh")
+
+
+def politique(action, liees, du_proprietaire):
+    if action == "releve":
+        return True, False, "relevé libre"
+    if liees:
+        return False, False, "mains liées"
+    if action == "support-ouvrir":
+        return True, True, "accord de la box"
+    if not du_proprietaire and action in CONSENTEMENT_CLIENTE:
+        return True, True, "box cliente : accord du détenteur"
+    return True, False, "box du propriétaire" if du_proprietaire else "box cliente"
+
+
+def unites_protegees(ctx):
+    proteges = {f"secubox-{i}.service" for i in SOCLE}
+    try:
+        noms = sorted(n for n in os.listdir(ctx.modules) if n.endswith(".toml"))
+    except OSError:
+        noms = []
+    for nom in noms:
+        try:
+            f = os.open(f"{ctx.modules}/{nom}", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                if not stat.S_ISREG(os.fstat(f).st_mode):
+                    continue
+                d = tomllib.loads(os.read(f, TAILLE_MAX).decode("utf-8"))
+            finally:
+                os.close(f)
+        except (OSError, ValueError):
+            err(f"manifeste illisible ignoré : {propre(nom)}")
+            continue
+        ident = d.get("id")
+        unites = d.get("units")
+        if not isinstance(unites, list):
+            continue
+        if d.get("protected") is True or ident in SOCLE or nom[:-5] in SOCLE:
+            proteges.update(u for u in unites if isinstance(u, str))
+    return proteges
+
+
+# --- Analyse de l'argv ------------------------------------------------------------------------------------------------
+
+def analyser(argv):
+    if not argv:
+        raise ArgvInvalide
+    verbe, a = argv[0], argv[1:]
+    if verbe in ("reboot", "maj-paquets", "renouveler-secrets", "ancre-verifier"):
+        if a:
+            raise ArgvInvalide
+        return verbe, {}
+    if verbe == "service":
+        if len(a) != 2 or a[0] not in SERVICE or not RE_UNITE.fullmatch(a[1]):
+            raise ArgvInvalide
+        return verbe, {"op": a[0], "unite": a[1]}
+    if verbe == "renommer":
+        if len(a) != 1 or not RE_NOM.fullmatch(a[0]):
+            raise ArgvInvalide
+        return verbe, {"nom": a[0]}
+    if verbe == "support":
+        if len(a) != 2 or a[0] not in ("ouvrir", "fermer") or not RE_SUPPORT.fullmatch(a[1]):
+            raise ArgvInvalide
+        return verbe, {"op": a[0], "id": a[1]}
+    if verbe == "consentement":
+        if len(a) != 2 or a[0] not in ("accepter", "refuser") or not RE_ID.fullmatch(a[1]):
+            raise ArgvInvalide
+        return verbe, {"op": a[0], "id": a[1]}
+    if verbe == "mains-liees":
+        if len(a) != 1 or a[0] not in ("on", "off"):
+            raise ArgvInvalide
+        return verbe, {"op": a[0]}
+    if verbe == "politique":
+        if len(a) != 1 or a[0] not in ACTIONS:
+            raise ArgvInvalide
+        return verbe, {"action": a[0]}
+    raise ArgvInvalide
+
+
+def action_de(verbe, p):
+    if verbe == "service":
+        return f"service-{p['op']}"
+    if verbe == "support":
+        return f"support-{p['op']}"
+    return verbe if verbe in ACTIONS else None
+
+
+# --- Opérations -------------------------------------------------------------------------------------------------------
+
+def operation_en_cours(ctx, fd):
+    """Job de l'opération longue encore active, ou None. Un état illisible de systemd compte comme « en cours »."""
+    op = lire_json(fd, "operation.json", None)
+    if op is None:
+        return None
+    job = op.get("job") if isinstance(op, dict) else None
+    if not isinstance(job, str) or not RE_ID.fullmatch(job):
+        raise Erreur("état non fiable")
+    try:
+        p = subprocess.run([ctx.systemctl, "show", "-p", "ActiveState", "--value", f"secubox-pilotage-op-{job}.service"],
+                           env=ctx.env, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return job
+    if p.returncode != 0 or p.stdout.strip() in ACTIFS:
+        return job
+    retirer(fd, "operation.json")
+    return None
+
+
+def commande(ctx, verbe, p):
+    """Options de systemd-run et commande de l'unité transitoire (chemins absolus : PID 1 l'exécute)."""
+    if verbe == "reboot":
+        # Différé de 5 s : l'OPERATE_RESP de l'agent doit partir avant l'arrêt. Aucune limite de durée.
+        return ["--on-active=5"], ["/usr/bin/systemctl", "reboot"]
+    if verbe == "maj-paquets":
+        return (["--setenv=DEBIAN_FRONTEND=noninteractive"],
+                ["/bin/sh", "-c", "/usr/bin/apt-get update && /usr/bin/apt-get -y -o Dpkg::Options::=--force-confold "
+                                  "-o Dpkg::Options::=--force-confdef upgrade"])
+    if verbe == "renouveler-secrets":
+        return [f"--setenv=SUDO_USER={ctx.acteur}"], ["/usr/sbin/secubox-renouvelle-secrets", "--tout", "--oui"]
+    if verbe == "service":
+        return [], ["/usr/bin/systemctl", SERVICE[p["op"]], p["unite"]]
+    raise Erreur("verbe sans commande")
+
+
+def lancer(ctx, verbe, p, job):
+    options, cmd = commande(ctx, verbe, p)
+    argv = [ctx.systemd_run, "--collect", "--quiet", "--no-ask-password", f"--unit=secubox-pilotage-op-{job}",
+            f"--description=SecuBox pilotage : {verbe} ({job})", *options, "--", *cmd]
+    try:
+        r = subprocess.run(argv, env=ctx.env, stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    except OSError:
+        return False
+    return r.returncode == 0
+
+
+# --- Consentements ----------------------------------------------------------------------------------------------------
+
+def charger_consentements(ctx, fd, maintenant):
+    liste = lire_json(fd, "consentements.json", [])
+    if not isinstance(liste, list) or not all(isinstance(c, dict) and RE_ID.fullmatch(str(c.get("id", "")))
+                                             for c in liste):
+        raise Erreur("état non fiable")
+    for c in liste:
+        if c.get("etat") in ("en_attente", "accepte") and c.get("expire", 0) < maintenant:
+            c["etat"] = "expire"
+            auditer(ctx, "consentement_expire", consentement=c["id"], action=c.get("action"), unite=c.get("unite"))
+    return [c for c in liste if c.get("cree", 0) >= maintenant - GARDE][-200:]
+
+
+def cle(c):
+    return c.get("action"), c.get("unite")
+
+
+# --- Verbes -----------------------------------------------------------------------------------------------------------
+
+def executer(ctx, verbe, p):
+    if verbe == "politique":
+        try:
+            fd = ouvrir_etat(ctx, creer=False)
+            try:
+                if fd is not None:
+                    fcntl.flock(fd, fcntl.LOCK_SH)
+                liees = mains_liees(ctx, fd)
+            finally:
+                if fd is not None:
+                    os.close(fd)
+        except Erreur as e:
+            return {"autorise": False, "consentement": False, "raison": str(e)}
+        autorise, consentement, raison = politique(p["action"], liees, proprietaire(ctx))
+        return {"autorise": autorise, "consentement": consentement, "raison": raison}
+
+    action = action_de(verbe, p)
+    unite = p.get("unite")
+    auditer(ctx, "pilotage_demande", verbe=verbe, action=action, unite=unite)
+
+    def refus(motif, **extra):
+        auditer(ctx, "pilotage_refus", verbe=verbe, action=action, unite=unite, refus=motif, **extra)
+        return {"ok": False, "refus": motif, **extra}
+
+    if verbe in ("consentement", "mains-liees") and ctx.origine == "maitre":
+        return refus("local seulement")
+    if verbe in ("ancre-verifier", "support", "renommer"):
+        return refus("non disponible")              # R-L2-1 : comportement livré par les tâches 2, 4 et 5
+
+    fd = ouvrir_etat(ctx, creer=True)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)              # une décision à la fois : consentements et opération en cours
+        maintenant = int(time.time())
+        if verbe == "mains-liees":
+            return basculer_mains(ctx, fd, p["op"] == "on", maintenant)
+        if verbe == "consentement":
+            return decider(ctx, fd, p, maintenant, refus)
+        return agir(ctx, fd, verbe, p, action, unite, maintenant, refus)
+    finally:
+        os.close(fd)
+
+
+def basculer_mains(ctx, fd, liees, maintenant):
+    if liees:
+        ecrire(fd, "mains-liees", b"")
+        consentements = charger_consentements(ctx, fd, maintenant)
+        for c in consentements:
+            if c.get("etat") in ("en_attente", "accepte"):
+                c["etat"] = "annule"
+                auditer(ctx, "consentement_annule", consentement=c["id"], action=c.get("action"), unite=c.get("unite"))
+        ecrire_json(fd, "consentements.json", consentements)
+    else:
+        retirer(fd, "mains-liees")
+    projection = poser_projection(ctx, liees)
+    auditer(ctx, "mains_liees", etat="on" if liees else "off")
+    res = {"ok": True, "mains_liees": liees}
+    if not projection:
+        err("projection /etc/secubox/pilotage/mains-liees non posée (dossier non fiable) ; l'état root fait foi")
+        res["projection"] = False
+    return res
+
+
+def decider(ctx, fd, p, maintenant, refus):
+    consentements = charger_consentements(ctx, fd, maintenant)
+    c = next((c for c in consentements if c["id"] == p["id"]), None)
+    ecrire_json(fd, "consentements.json", consentements)
+    if c is None:
+        return refus("consentement inconnu", consentement=p["id"])
+    if c.get("etat") == "annule":
+        return refus("consentement annulé", consentement=p["id"])
+    if c.get("etat") == "expire":
+        return refus("consentement expiré", consentement=p["id"])
+    if c.get("etat") != "en_attente":
+        return refus("consentement déjà décidé", consentement=p["id"])
+    decision = "accepte" if p["op"] == "accepter" else "refuse"
+    c["etat"] = decision
+    c["decide"] = maintenant
+    ecrire_json(fd, "consentements.json", consentements)
+    auditer(ctx, "consentement", consentement=c["id"], action=c.get("action"), unite=c.get("unite"), decision=decision)
+    return {"ok": True, "consentement": c["id"], "decision": decision}
+
+
+def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
+    du_maitre = ctx.origine == "maitre"
+    if du_maitre and mains_liees(ctx, fd):
+        return refus("mains liées")
+    if unite is not None:
+        if unite.split("@", 1)[0].rsplit(".", 1)[0] == AGENT:
+            return refus("unité de l'agent")         # l'agent ne se coupe pas lui-même
+        if unite in unites_protegees(ctx):
+            return refus("unité protégée")
+    if verbe in EXCLUSIVES:
+        job = operation_en_cours(ctx, fd)
+        if job is not None:
+            return refus("opération en cours", job=job)
+    accord, consentements = None, None
+    if du_maitre and politique(action, False, proprietaire(ctx))[1]:
+        consentements = charger_consentements(ctx, fd, maintenant)
+        accord = next((c for c in consentements if c.get("etat") == "accepte" and cle(c) == (action, unite)), None)
+        if accord is None:
+            attente = next((c for c in consentements if c.get("etat") == "en_attente" and cle(c) == (action, unite)),
+                           None)
+            if attente is None:
+                attente = {"id": secrets.token_hex(8), "action": action, "etat": "en_attente", "cree": maintenant,
+                           "expire": maintenant + VALIDITE}
+                if unite is not None:
+                    attente["unite"] = unite
+                consentements.append(attente)
+                ecrire_json(fd, "consentements.json", consentements)
+                auditer(ctx, "consentement_demande", consentement=attente["id"], action=action, unite=unite)
+            else:
+                ecrire_json(fd, "consentements.json", consentements)
+            return refus("consentement requis", consentement=attente["id"])
+    job = secrets.token_hex(8)
+    if not lancer(ctx, verbe, p, job):
+        auditer(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="echec")
+        raise Erreur("lancement impossible")
+    if accord is not None:
+        accord["etat"] = "utilise"
+        ecrire_json(fd, "consentements.json", consentements)
+        auditer(ctx, "consentement_utilise", consentement=accord["id"], action=action, unite=unite, job=job)
+    if verbe in LONGUES:
+        ecrire_json(fd, "operation.json", {"job": job, "verbe": verbe, "debut": maintenant})
+    auditer(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="lance")
+    return {"ok": True, "job": job}
+
+
+def main(argv):
+    os.umask(0o077)
+    try:
+        ctx = Ctx()
+    except Usage as e:
+        err(str(e))
+        sortie({"ok": False, "erreur": str(e)})
+        return 2
+    try:
+        verbe, p = analyser(argv)
+    except ArgvInvalide:
+        err("argv invalide")
+        try:
+            auditer(ctx, "pilotage_refus", verbe=argv[0] if argv and argv[0] in VERBES else None,
+                    refus="argv invalide")
+        except Erreur:
+            pass
+        sortie({"ok": False, "refus": "argv invalide"})
+        return 2
+    try:
+        sortie(executer(ctx, verbe, p))
+        return 0
+    except Erreur as e:
+        err(str(e))
+        sortie({"ok": False, "erreur": str(e)})
+        return 1
+    except Exception as e:  # noqa: BLE001 — jamais de trace (chemins, valeurs) vers l'agent
+        err(f"erreur interne : {e.__class__.__name__}")
+        sortie({"ok": False, "erreur": "erreur interne"})
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

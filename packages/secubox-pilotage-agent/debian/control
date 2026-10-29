@@ -9,15 +9,19 @@ Rules-Requires-Root: no
 
 Package: secubox-pilotage-agent
 Architecture: any
-Depends: ${misc:Depends}, systemd, adduser
+Depends: ${misc:Depends}, systemd, adduser, sudo, python3 (>= 3.11)
 Recommends: apparmor
-Description: SecuBox — agent de pilotage distant (L1 « Voir », lecture seule)
+Description: SecuBox — agent de pilotage distant (TR-369/USP)
  Agent Go de la box pour le pilotage distant du maillage (TR-369/USP) :
  il se connecte en sortie au maître par le tunnel WireGuard (wg-mesh ou
  wg-autoload), répond aux lectures du modèle de données (Get, GetSupportedDM),
  notifie les événements utiles (boucle de relances, mémoire basse, swap) et
  réalise un relevé de charge à la demande.
  .
- Lecture seule : aucune commande de modification. L'agent n'ouvre aucun port
- d'écoute, tourne sous l'utilisateur dédié secubox-pilotage-agent, sous AppArmor
- enforce et sous une unité systemd durcie (32 Mo).
+ Actions (L2) : l'agent ne devient jamais root ; il passe par le ctl root
+ secubox-pilotagectl (sudo à argv borné, liste fermée de verbes), qui décide
+ sur la box de la politique (mains liées, accord du détenteur d'une box
+ cliente), audite chaque demande et lance les opérations longues sous
+ systemd-run. L'agent n'ouvre aucun port d'écoute, tourne sous l'utilisateur
+ dédié secubox-pilotage-agent, sous AppArmor enforce et sous une unité systemd
+ durcie (32 Mo).
