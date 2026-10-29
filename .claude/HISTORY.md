@@ -9,6 +9,30 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-29 — WAF : PHP2Shell et signatures équivalentes en mode detect, déployés sur gk2 (closes #3257, closes #3273)
+
+- **#3257 (PR #3272, secubox-waf-ng 1.31.0)** : analyseur multipart borné calqué sur `rfc1867.c` (PHP 8.2), signatures
+  structurelles PHP2Shell (CVE-2026-109618/109619), capture en flux, vhosts PHP armés. Mode detect.
+- **#3273 (PR #3276, secubox-waf-ng 1.32.0, catalogue 1.7.0)** : signatures équivalentes, pour repérer les attaquants même
+  quand l'attaque ne passe plus — normalisation des noms comme PHP ; Roundcube (`_from` CVE-2025-49113 KEV, `filename` de
+  session, CR/LF IMAP et envoi, markasjunk, photo non raster) ; Nextcloud (partage fédéré anonyme CVE-2026-77167,
+  `calendar-proxy`, type ≠ octets magiques sur PUT WebDAV) ; PHP générique (parties > 1 020, DOCTYPE DAV, faux `__Host-`,
+  boundary > 70) ; compléments C1-C5 ; étiquettes d'outil ; interface (carte « Analyse des requêtes PHP », `/php/signaux`).
+  Rien de calculé avant le relais ; un vhost non PHP ne paie rien de nouveau ; R12 inchangé.
+- **Déploiement gk2** (18:28) : publiée par `apt-publier.sh` (arm64 ; l'index amd64 reste en 1.30.7), installée par apt ;
+  22 catégories chargées, aucun redémarrage, sites publics en 200, sbxwaf ≈ 24 % d'un cœur (pas de mesure 1.31.0 pour comparer).
+- **Leçon** : seul gk2 est exposé à Internet ; la première « mise en canari » sur gk1 ne voyait aucun trafic.
+- **Reste** : étalonner les seuils provisoires sur le trafic réel de gk2 ; construire l'amd64 ; observer C1 (php2shell-005)
+  avec les clients HTTP/2 en flux.
+
+## 2026-10-29 — Conteneurs mail vers trixie : roundcube fait, mail revenu à bookworm (ref #3274)
+
+- `roundcube` : trixie 13.7, Roundcube 1.6.20+dfsg-0+deb13u1, PHP 8.4.27 (corrige 5 CVE non corrigées dans bookworm).
+- `mail` : échec (transition `libssl3t64`, puis Dovecot 2.4 qui refuse la configuration 2.3) → retour à `snap1` ; état trixie
+  gardé en `snap2` pour préparer la configuration Dovecot 2.4 à froid. Boîtes sur volume lié, rien perdu.
+- Source : PR #3275 (secubox-mail 2.16.8 : conteneurs créés en trixie, PHP sans version en dur, drop-ins `ImportCredential=`,
+  `gpg` au lieu de `gnupg`).
+
 ## 2026-10-29 — Retrait de reality et socialrelay, kiosque, couture en frontal léger, pilotage L1 étapes 1-10 (ref #3256, ref #3254, ref #3126)
 
 - **Retrait reality / socialrelay (#3256, décision du propriétaire)** : gk3 et gk4 purgés (paquets actifs), gk1 et gk2
