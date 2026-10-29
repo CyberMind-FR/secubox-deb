@@ -274,3 +274,39 @@ func TestPHPPrefixeNiDepasseNiModifie(t *testing.T) {
 		}
 	}
 }
+
+// R16 (re-relecture, S1/S2) : skip_upload est COLLANT chez PHP (déclaré
+// rfc1867.c:717, jamais remis à 0). Après un fichier sauté pour crochets
+// invalides, tous les fichiers suivants sont sautés, donc parcourus ligne à
+// ligne : « --b » aligné sur un morceau de 5120 octets y est une frontière.
+func corpsS1() string {
+	return "--BND\r\nContent-Disposition: form-data; name=\"bad]\"; filename=\"a\"\r\n\r\ny\r\n" +
+		"--BND\r\nContent-Disposition: form-data; name=\"ok\"; filename=\"a\"\r\n\r\n" +
+		strings.Repeat("A", 5120) +
+		"--BND\r\nContent-Disposition: form-data; name=\"t[a][a][a][a][a][a][a][a][a][a][a][a][a]\"\r\n\r\nv\r\n--BND--\r\n"
+}
+
+func corpsS2() string {
+	var b strings.Builder
+	b.WriteString("--BND\r\nContent-Disposition: form-data; name=\"bad]\"; filename=\"a\"\r\n\r\ny\r\n")
+	b.WriteString("--BND\r\nContent-Disposition: form-data; name=\"ok\"; filename=\"a\"\r\n\r\n")
+	for i := 0; i < 60; i++ {
+		b.WriteString(strings.Repeat("A", 5120))
+		fmt.Fprintf(&b, "--BND\r\nContent-Disposition: form-data; name=\"files[R%05d][a][a][a][a][a][a][a][a][a][a][a]\"; filename=\"f\"\r\n\r\n", i)
+	}
+	b.WriteString(strings.Repeat("A", 5120))
+	b.WriteString("--BND\r\nContent-Disposition: form-data; name=\"t[a][a][a][a][a][a][a][a][a][a][a][a][a]\"\r\n\r\nv\r\n--BND--\r\n")
+	return b.String()
+}
+
+func TestPHPSondeS1SkipUploadCollant(t *testing.T) {
+	if r := analyser(corpsS1()); r.Parties != 3 || r.ProfondeurMax != 13 {
+		t.Fatalf("S1 : PHP voit 3 parties, profondeur 13 : %+v", r)
+	}
+}
+
+func TestPHPSondeS2SkipUploadCollantEnChaine(t *testing.T) {
+	if r := analyser(corpsS2()); r.Parties != 63 || r.ProfondeurMax != 13 || r.PartiesFichier != 62 {
+		t.Fatalf("S2 : PHP voit 63 parties (62 fichiers), profondeur 13 : %+v", r)
+	}
+}

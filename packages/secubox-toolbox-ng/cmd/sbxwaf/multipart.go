@@ -620,6 +620,11 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 	uploadCnt := maxFileUploadsPHP
 	var maxFileSize int64
 	anonyme := 0
+	// skipCollant : skip_upload de PHP, déclaré au niveau de la fonction
+	// (rfc1867.c:717) et JAMAIS remis à 0. Après un premier fichier sauté,
+	// tous les fichiers suivants le sont : PHP parcourt leur corps ligne à
+	// ligne (R16, sondes S1 et S2 de la re-relecture).
+	skipCollant := false
 	for !m.epuise() {
 		cd, aCD, trouve := m.entetes()
 		if !trouve {
@@ -653,7 +658,7 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 		}
 
 		// Partie fichier. upload_cnt épuisé : fichier sauté (rfc1867.c:1027-1036).
-		saute := false
+		saute := skipCollant
 		if uploadCnt <= 0 {
 			saute = true
 			if uploadCnt == 0 {
@@ -672,6 +677,7 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 		if !saute && !crochetsValidesPHP(nom) {
 			saute = true
 		}
+		skipCollant = saute
 		r.PartiesFichier++
 		if r.Progress {
 			r.FichiersApresProgress++
