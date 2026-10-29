@@ -22,6 +22,8 @@ Protocole (le client Go `sbx-pilotage-agent` fait foi) :
   GET  /canal/v1/requetes    ?attente=N (borné à 25 s)                                 → 200 [{msg_id,type,body}] | 204
   POST /canal/v1/reponses    [{msg_id,type,body}]  (≤ 64)                              → 200 {"ignore": n}
   POST /canal/v1/notifs      [{"type":"NOTIFY","body":{"event":{…}}}]  (≤ 16)          → 200 {"ignore": n}
+     événement : {type, ts, unit?, value?} et, en L2, job/etape/pct/rc/resume (suivi d'une opération), id/etat/decision/fin
+     (mains liées, consentement, support) ; la première X_SECUBOX_OperationDone d'un job est remise à `apres_fin`.
 Corps limité à 256 Kio (413, refusé dès l'en-tête ou en cours de lecture, jamais lu en entier avant). Une réponse inconnue, expirée ou
 d'une autre box est comptée dans « ignore » : jamais une erreur.
 """
@@ -30,8 +32,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
-from typing import Callable, Optional
+from typing import Awaitable, Callable, Optional
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from starlette.requests import ClientDisconnect
@@ -54,6 +57,13 @@ AUDIT_ADRESSES_MAX = 1024
 NOTIFS_PAR_MINUTE = 60
 NOTIFS_FENETRE_S = 60.0
 MARQUEUR_TUNNEL = "x-secubox-pilotage-tunnel"   # posé par le seul gabarit nginx du canal (pilotage-canal.conf.tpl), valeur « 1 »
+TYPE_FIN = "X_SECUBOX_OperationDone"
+RESUME_MAX = 200
+# Champs des notifications de L2 (agent : notifs.Evenement) : job, etape, pct, rc, resume (suivi d'une opération) ; id, etat,
+# decision, fin (mains liées, consentement, support). Une valeur hors forme rend tout l'événement invalide, comme unit et value.
+_IDENT = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
+_MOT = re.compile(r"[a-z_]{1,32}")
+_RFC3339 = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})")
 
 log = logging.getLogger("pilotage.canal")
 
@@ -84,6 +94,26 @@ def _evenement(n):
         if isinstance(v, bool) or not isinstance(v, int) or abs(v) >= 1 << 62:
             return None
         out["value"] = v
+    for champ, motif in (("job", _IDENT), ("id", _IDENT), ("etape", _MOT), ("etat", _MOT), ("decision", _MOT), ("fin", _RFC3339)):
+        if champ in ev:
+            v = ev[champ]
+            if not isinstance(v, str) or len(v) > 64 or not motif.fullmatch(v):
+                return None
+            out[champ] = v
+    if "pct" in ev:
+        v = ev["pct"]
+        if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 100:
+            return None
+        out["pct"] = v
+    if "rc" in ev:
+        v = ev["rc"]
+        if isinstance(v, bool) or not isinstance(v, int) or abs(v) >= 1 << 31:
+            return None
+        out["rc"] = v
+    if "resume" in ev:
+        if not isinstance(ev["resume"], str):
+            return None
+        out["resume"] = _imprimable(ev["resume"], RESUME_MAX)   # texte d'affichage court (« maj-paquets : succès »), jamais une sortie
     return out
 
 
@@ -96,8 +126,10 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
                     audit: Callable[[str, dict], None], *, attente_max: float = ATTENTE_MAX_S,
                     taille_max: int = TAILLE_MAX, vu_intervalle_s: float = VU_INTERVALLE_S,
                     audit_intervalle_s: float = AUDIT_INTERVALLE_S, horloge: Callable[[], float] = time.monotonic,
-                    notifs_par_minute: int = NOTIFS_PAR_MINUTE) -> FastAPI:
-    """`identifier(adresse)` rend la Box ou None (appelée hors boucle) ; `audit(evenement, champs)` écrit une ligne dans l'audit."""
+                    notifs_par_minute: int = NOTIFS_PAR_MINUTE,
+                    apres_fin: Optional[Callable[[Box, dict], Awaitable[None]]] = None) -> FastAPI:
+    """`identifier(adresse)` rend la Box ou None (appelée hors boucle) ; `audit(evenement, champs)` écrit une ligne dans l'audit.
+    `apres_fin(box, operation)` : appelée une fois par opération terminée (première X_SECUBOX_OperationDone de son job)."""
     app = FastAPI(title="SecuBox Pilotage — canal", docs_url=None, redoc_url=None, openapi_url=None)
 
     refus: dict = {}  # (motif, adresse) -> [instant de la dernière ligne, refus tus depuis] ; bornée à AUDIT_ADRESSES_MAX
@@ -242,14 +274,17 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
 
     fenetres: dict = {}  # Box.cle -> [début de la fenêtre, acceptées, ignorées depuis la dernière ligne, instant de la dernière ligne] ; bornée
 
-    def admis(box: Box) -> bool:
-        """Au plus `notifs_par_minute` événements par box et par fenêtre de 60 s ; le surplus est ignoré, compté, et journalisé au plus une fois par minute."""
+    def admis(box: Box, categorie: str = "") -> bool:
+        """Au plus `notifs_par_minute` événements par box, par catégorie et par fenêtre de 60 s ; le surplus est ignoré, compté, et
+        journalisé au plus une fois par minute. Les fins d'opération ont leur propre fenêtre (catégorie « fin ») : l'agent les
+        retire de sa boîte au 2xx, une fin écartée par un flot d'autres événements serait perdue."""
         maintenant = horloge()
-        f = fenetres.get(box.cle)
+        cle = (box.cle, categorie)
+        f = fenetres.get(cle)
         if f is None:
             if len(fenetres) >= AUDIT_ADRESSES_MAX:
                 fenetres.pop(next(iter(fenetres)))
-            f = fenetres[box.cle] = [maintenant, 0, 0, -1e18]
+            f = fenetres[cle] = [maintenant, 0, 0, -1e18]
         elif maintenant - f[0] >= NOTIFS_FENETRE_S:
             f[0], f[1] = maintenant, 0
         if f[1] < notifs_par_minute:
@@ -275,13 +310,19 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             if ev is None:
                 ignore += 1
                 continue
-            if not admis(box):
+            if not admis(box, "fin" if ev["type"] == TYPE_FIN else ""):
                 ignore += 1
                 continue
             try:
-                await asyncio.to_thread(stockage.notification, box, ev)
+                termine = await asyncio.to_thread(stockage.notification, box, ev)
             except Exception:
                 log.exception("stockage de la notification impossible")
+                continue
+            if termine is not None and apres_fin is not None:
+                try:
+                    await apres_fin(box, termine)
+                except Exception:
+                    log.exception("suivi de la fin du job %s impossible", ev.get("job"))
         return {"ignore": ignore}
 
     return app
