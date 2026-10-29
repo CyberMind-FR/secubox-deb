@@ -9,6 +9,7 @@ annonçait encore l'ancien nom (#1556). La page Système, premier-pas et le pilo
 cet outil root. L'outil réel est lancé sans root sous une racine substituée (SBX_RACINE, R-L2-8) ; hostnamectl et
 systemctl sont des faux placés en tête du PATH (honoré seulement sous SBX_RACINE)."""
 import json
+import re
 import os
 import subprocess
 from pathlib import Path
@@ -221,3 +222,50 @@ def test_renommer_sans_shell_et_installe():
     assert "/usr/bin/hostnamectl" in src and "/usr/bin/systemctl" in src
     regles = (PKG / "debian" / "rules").read_text()
     assert "install -D -m 0755 sbin/secubox-renommer debian/secubox-core/usr/sbin/secubox-renommer" in regles
+
+
+# ── Relecture de la tâche 5, tour 1 (R-L2-36) ─────────────────────────────────────────────────────────────────────────
+
+def test_nom_actuel_reserve_rend_inchange(banc):
+    """I2 : la page renvoie le nom actuel ; « secubox » (nom par défaut de l'installeur) est réservé mais déjà porté :
+    « inchange » d'abord, aucun refus, rien d'écrit ni d'audité."""
+    (banc.r / "etc/hostname").write_text("secubox\n")
+    avant = banc.etat()
+    rc, sortie, p = banc.run("secubox")
+    assert rc == 0, p.stderr
+    assert sortie == {"ok": True, "ancien": "secubox", "nouveau": "secubox", "inchange": True}
+    assert banc.etat() == avant and banc.appels() == [] and banc.audit() == []
+    # un AUTRE nom réservé reste refusé
+    assert banc.run("admin")[0] == 3
+
+
+def test_retour_arriere_vers_un_nom_hors_motif(banc):
+    """M6 : un ancien nom hors libellé DNS (image, saisie à la main) est quand même rétabli en cas d'échec."""
+    (banc.r / "etc/hostname").write_text("Secubox_Live\n")
+    a = banc.r / "var/log/secubox/audit.log"
+    a.unlink()
+    a.mkdir()
+    rc, _, _ = banc.run("gk5")
+    assert rc == 1
+    assert banc.appels()[:2] == ["set-hostname gk5", "set-hostname Secubox_Live"]
+
+
+def test_verrou_borne(banc):
+    """M9 : un renommage déjà en cours n'est pas attendu indéfiniment (TimeoutStartSec couperait un retour arrière) :
+    attente bornée, puis refus net ; rien n'est touché."""
+    import fcntl
+    import time
+    src = OUTIL.read_text()
+    attente = float(re.search(r"^ATTENTE_VERROU = ([0-9.]+)", src, re.M).group(1))
+    assert attente < 20 and "LOCK_NB" in src
+    fd = os.open(banc.r / "run/secubox-renommer.lock", os.O_WRONLY | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    try:
+        avant = banc.etat()
+        debut = time.monotonic()
+        rc, sortie, _ = banc.run("gk5", env={"SBX_ATTENTE_VERROU": "0.5"})
+        assert time.monotonic() - debut < 10
+        assert rc == 1 and sortie == {"ok": False, "erreur": "renommage déjà en cours", "code": 1}
+        assert banc.etat() == avant and banc.appels() == []
+    finally:
+        os.close(fd)

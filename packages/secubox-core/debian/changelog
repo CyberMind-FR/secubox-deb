@@ -8,6 +8,9 @@ secubox-core (1.8.10-1~trixie1) trixie; urgency=medium
     état précédent rétabli à tout échec (y compris audit impossible) ; refus d'un nom invalide,
     réservé (admin, www, secubox, localhost) ou porté par un pair enrôlé du maillage ; écritures
     atomiques sans suivre de lien ; aucun shell ; idempotent.
+  * secubox-renommer, relecture (R-L2-36) : le nom déjà porté rend « inchange » avant tout refus
+    « réservé » (« secubox » de l'installeur) ; un ancien nom hors motif est rétabli tel quel au
+    retour arrière ; verrou attendu 15 s au plus (LOCK_NB), puis « renommage déjà en cours ».
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:30:00 +0100
 

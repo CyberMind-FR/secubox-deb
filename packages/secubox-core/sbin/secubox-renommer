@@ -20,7 +20,9 @@ restait sur la ligne 127.0.1.1 de /etc/hosts (« sudo: unable to resolve host gk
   4. audit box_renommee {ancien, nouveau, acteur} dans /var/log/secubox/audit.log — une décision non auditée n'a pas
      lieu : audit impossible ⇒ tout est rétabli ;
   5. systemctl try-restart avahi-daemon.service (Avahi absent ou en échec : dit sur stderr, sans bloquer).
-Idempotent : un nom déjà posé partout ne change rien (« inchange ») et n'est pas audité.
+Idempotent : un nom déjà posé partout ne change rien (« inchange ») et n'est pas audité ; le nom actuel est
+« inchange » même s'il est réservé (« secubox » de l'installeur, R-L2-36). Un renommage à la fois : verrou attendu
+15 s au plus, puis refus (code 1, « renommage déjà en cours »).
 
 Refus : nom hors libellé DNS ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ (le motif du ctl) ; nom réservé (admin, www,
 secubox, localhost) ; nom déjà pris au maillage (pair ENRÔLÉ de /var/lib/secubox/p2p/peers.json, s'il existe :
@@ -50,6 +52,7 @@ import socket
 import stat
 import subprocess
 import sys
+import time
 
 RE_NOM = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")
 RE_ACTEUR = re.compile(r"[a-z_][a-z0-9_.-]{0,63}")
@@ -58,6 +61,10 @@ PATH_SUR = "/usr/sbin:/usr/bin:/sbin:/bin"
 TAILLE_MAX = 1 << 20
 DELAI_HOSTNAMECTL = 30
 DELAI_AVAHI = 30
+# M9 : attente du verrou bornée (LOCK_NB + réessai) ; 15 + 30 (hostnamectl) + 30 (retour arrière) < 90 s
+# (TimeoutStartSec de secubox-systeme-renommer@.service) : l'unité ne coupe jamais un retour arrière.
+ATTENTE_VERROU = 15.0
+RE_BRUT = re.compile(r"[!-~]{1,253}")                     # nom actuel hors motif, rétabli tel quel (M6)
 
 MESSAGES = {
     2: "argv invalide",
@@ -238,6 +245,7 @@ def conf_renomme(texte, nouveau):
 
 
 def nom_actuel(ctx):
+    """(nom validé ou "", nom brut pour le retour arrière ou "")."""
     try:
         fd = ouvrir_dossier(ctx, "etc")
         try:
@@ -253,7 +261,8 @@ def nom_actuel(ctx):
         nom = ""
     if not nom and not ctx.substitue:
         nom = socket.gethostname()
-    return nom if RE_NOM.fullmatch(nom or "") else ""
+    brut = nom if RE_BRUT.fullmatch(nom or "") else ""
+    return (nom if RE_NOM.fullmatch(nom or "") else ""), brut
 
 
 def noms_pris(ctx):
@@ -340,17 +349,35 @@ def verrou(ctx):
         fd = os.open("secubox-renommer.lock", os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=dfd)
     finally:
         os.close(dfd)
-    fcntl.flock(fd, fcntl.LOCK_EX)                                 # un renommage à la fois (borné par l'appelant)
-    return fd
+    attente = ATTENTE_VERROU
+    if ctx.substitue:                                                # tests seulement (sous SBX_RACINE)
+        try:
+            attente = min(float(os.environ.get("SBX_ATTENTE_VERROU", attente)), ATTENTE_VERROU)
+        except ValueError:
+            pass
+    fin = time.monotonic() + attente
+    while True:                                                      # un renommage à la fois, attente bornée (M9)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fd
+        except BlockingIOError:
+            if time.monotonic() >= fin:
+                os.close(fd)
+                raise Echec(1, "renommage déjà en cours") from None
+            time.sleep(0.2)
 
 
 # --- Renommage -----------------------------------------------------------------------------------------------------
 
 def renommer(ctx, nouveau):
+    ancien, ancien_brut = nom_actuel(ctx)
     if nouveau in RESERVES:
+        if nouveau == ancien:
+            # I2 (R-L2-36) : le nom déjà porté (« secubox » de l'installeur) n'est pas un renommage : rien à faire,
+            # ni à refuser ; la page renvoie le nom actuel avec un simple changement de fuseau.
+            return {"ok": True, "ancien": ancien, "nouveau": nouveau, "inchange": True}
         auditer_refus(ctx, nouveau, MESSAGES[3])
         raise Echec(3)
-    ancien = nom_actuel(ctx)
     if nouveau != ancien and nouveau in noms_pris(ctx):
         auditer_refus(ctx, nouveau, MESSAGES[4])
         raise Echec(4)
@@ -393,7 +420,7 @@ def renommer(ctx, nouveau):
             auditer(ctx, "box_renommee", ancien=ancien or None, nouveau=nouveau)
         except OSError as e:
             err(f"audit impossible ({e.__class__.__name__}) : état précédent rétabli")
-            retablir(ctx, ecrits, ancien)
+            retablir(ctx, ecrits, ancien_brut)          # M6 : même un ancien nom hors motif est rétabli
             raise Echec(1, "audit impossible (état précédent rétabli)") from None
     finally:
         for f in fichiers:

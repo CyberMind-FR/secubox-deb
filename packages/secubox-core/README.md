@@ -48,7 +48,9 @@ Shared Python modules for all SecuBox services:
 ligne `127.0.1.1` de `/etc/hosts` (les autres lignes intactes), `hostname` de la section `[global]` de
 `/etc/secubox/secubox.conf`, `hostnamectl set-hostname`, audit `box_renommee {ancien, nouveau, acteur}` (audit
 impossible ⇒ tout est rétabli), puis `systemctl try-restart avahi-daemon.service` (échec dit, non bloquant).
-Idempotent (`"inchange": true`, non audité). Refus : nom hors libellé DNS (code 2), réservé `admin`, `www`, `secubox`,
+Idempotent (`"inchange": true`, non audité), y compris pour un nom actuel réservé (`secubox` de l'installeur).
+Un renommage à la fois : verrou attendu 15 s au plus, puis code 1 « renommage déjà en cours ». Un ancien nom hors motif
+est rétabli tel quel au retour arrière. Refus : nom hors libellé DNS (code 2), réservé `admin`, `www`, `secubox`,
 `localhost` (3), déjà porté par un pair **enrôlé** de `/var/lib/secubox/p2p/peers.json` (4) ; écriture impossible (5)
 ou `hostnamectl` en échec (6) : état précédent rétabli. Refus de fond audités `box_renommage_refuse`. Écritures
 atomiques sans suivre de lien, droits d'origine gardés, aucun shell. Sortie : une ligne JSON. `SBX_RACINE` (tests)
