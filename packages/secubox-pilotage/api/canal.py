@@ -22,9 +22,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import time
 from typing import Callable, Optional
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from starlette.requests import ClientDisconnect
 
 from pilotage.files import Files
 from pilotage.identite import Box
@@ -37,18 +40,74 @@ MAX_NOTIFS = 16
 TYPES_REPONSE = ("GET_RESP", "GET_SUPPORTED_DM_RESP", "OPERATE_RESP", "ERROR")
 _MODELE_MAX = 4096
 _CHAINE_MAX = 128
+VU_INTERVALLE_S = 10.0
+AUDIT_INTERVALLE_S = 60.0
+AUDIT_ADRESSES_MAX = 1024
+
+log = logging.getLogger("pilotage.canal")
+
+
+def _imprimable(v, n: int = _CHAINE_MAX) -> str:
+    """Chaîne tronquée sans caractère de contrôle (journaux, terminaux, affichages) ; vide si ce n'est pas une chaîne."""
+    return "".join(c for c in v[:n] if c.isprintable()) if isinstance(v, str) else ""
+
+
+def _evenement(n):
+    """Forme Go de notifs.Evenement : {type, unit?, value?, ts}. Rend l'événement épuré ou None."""
+    ev = n.get("body", {}).get("event") if isinstance(n, dict) and n.get("type") == "NOTIFY" and isinstance(n.get("body"), dict) else None
+    if not isinstance(ev, dict):
+        return None
+    typ, ts = ev.get("type"), ev.get("ts")
+    if not isinstance(typ, str) or not typ or len(typ) > 64 or _imprimable(typ, 64) != typ:
+        return None
+    if isinstance(ts, bool) or not isinstance(ts, int) or not 0 <= ts < 1 << 62:
+        return None
+    out = {"type": typ, "ts": ts}
+    if "unit" in ev:
+        u = ev["unit"]
+        if not isinstance(u, str) or len(u) > _CHAINE_MAX or _imprimable(u) != u:
+            return None
+        out["unit"] = u
+    if "value" in ev:
+        v = ev["value"]
+        if isinstance(v, bool) or not isinstance(v, int) or abs(v) >= 1 << 62:
+            return None
+        out["value"] = v
+    return out
 
 
 def _adresse_pour_audit(valeur: str) -> str:
     """L'adresse reçue, bornée et imprimable : c'est tout ce que l'audit garde d'un refus."""
-    return "".join(c for c in valeur[:64] if c.isprintable())
+    return _imprimable(valeur, 64)
 
 
 def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], stockage: StockageCanal,
                     audit: Callable[[str, dict], None], *, attente_max: float = ATTENTE_MAX_S,
-                    taille_max: int = TAILLE_MAX) -> FastAPI:
+                    taille_max: int = TAILLE_MAX, vu_intervalle_s: float = VU_INTERVALLE_S,
+                    audit_intervalle_s: float = AUDIT_INTERVALLE_S) -> FastAPI:
     """`identifier(adresse)` rend la Box ou None (appelée hors boucle) ; `audit(evenement, champs)` écrit une ligne dans l'audit."""
     app = FastAPI(title="SecuBox Pilotage — canal", docs_url=None, redoc_url=None, openapi_url=None)
+
+    refus: dict = {}  # adresse -> [instant de la dernière ligne, refus tus depuis] ; bornée à AUDIT_ADRESSES_MAX
+
+    async def auditer_refus(adresse: str) -> None:
+        """Une ligne d'audit par adresse et par audit_intervalle_s ; les refus tus sont comptés dans la ligne suivante."""
+        maintenant = time.monotonic()
+        etat = refus.get(adresse)
+        if etat is not None and maintenant - etat[0] < audit_intervalle_s:
+            etat[1] += 1
+            return
+        champs = {"adresse": adresse}
+        if etat is not None and etat[1]:
+            champs["tus"] = etat[1]
+        refus.pop(adresse, None)
+        if len(refus) >= AUDIT_ADRESSES_MAX:
+            refus.pop(next(iter(refus)))
+        refus[adresse] = [maintenant, 0]
+        try:
+            await asyncio.to_thread(audit, "pilotage_identite_refusee", champs)
+        except Exception:
+            log.exception("audit du refus d'identité impossible")
 
     async def box_de(request: Request) -> Box:
         valeurs = request.headers.getlist("x-real-ip")
@@ -60,7 +119,7 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             except Exception:  # identité indéterminée = personne
                 box = None
         if box is None:
-            audit("pilotage_identite_refusee", {"adresse": _adresse_pour_audit(brut or "-")})
+            await auditer_refus(_adresse_pour_audit(brut or "-"))
             raise HTTPException(403, "box inconnue")
         return box
 
@@ -73,18 +132,27 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             except ValueError:
                 raise HTTPException(400, "Content-Length invalide")
         morceaux, total = [], 0
-        async for m in request.stream():
-            total += len(m)
-            if total > taille_max:
-                raise HTTPException(413, "corps trop gros")
-            morceaux.append(m)
+        try:
+            async for m in request.stream():
+                total += len(m)
+                if total > taille_max:
+                    raise HTTPException(413, "corps trop gros")
+                morceaux.append(m)
+        except ClientDisconnect:
+            raise HTTPException(400, "client déconnecté")
         try:
             return json.loads(b"".join(morceaux))
         except (ValueError, RecursionError):
             raise HTTPException(400, "JSON invalide")
 
-    def chaine(v, n=_CHAINE_MAX) -> str:
-        return v[:n] if isinstance(v, str) else ""
+    chaine = _imprimable
+    vu_le: dict = {}  # Box.cle -> instant de la dernière écriture de « vu » d'un sondage
+
+    async def signe_de_vie(box: Box) -> None:
+        maintenant = time.monotonic()
+        if maintenant - vu_le.get(box.cle, -1e18) >= vu_intervalle_s:
+            vu_le[box.cle] = maintenant
+            await asyncio.to_thread(stockage.vu, box, {})
 
     @app.post("/canal/v1/bonjour")
     async def bonjour(request: Request):
@@ -108,8 +176,18 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
         if attente != attente:  # NaN
             attente = 0.0
         attente = min(max(attente, 0.0), attente_max)
-        await asyncio.to_thread(stockage.vu, box, {})
-        lot = await files.attendre_requetes(box.cle, attente)
+        await signe_de_vie(box)
+
+        async def valide() -> bool:
+            if await request.is_disconnected():
+                return False
+            try:  # la box a pu être révoquée ou renommée pendant l'attente
+                actuelle = await asyncio.to_thread(identifier, box.adresse)
+            except Exception:
+                return False
+            return actuelle is not None and actuelle.cle == box.cle
+
+        lot = await files.attendre_requetes(box.cle, attente, valide)
         if not lot:
             return Response(status_code=204)
         return lot
@@ -127,7 +205,10 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             ok = (isinstance(r, dict) and isinstance(r.get("msg_id"), str) and r.get("type") in TYPES_REPONSE
                   and isinstance(r.get("body"), dict))
             if ok and files.livrer_reponse(box.cle, r):
-                await asyncio.to_thread(stockage.resultat, box, r["msg_id"], r)
+                try:
+                    await asyncio.to_thread(stockage.resultat, box, r["msg_id"], r)
+                except Exception:
+                    log.exception("stockage de la réponse %s impossible", r["msg_id"])
             else:
                 ignore += 1
         return {"ignore": ignore}
@@ -142,11 +223,14 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             raise HTTPException(413, "trop de notifications")
         ignore = 0
         for n in doc:
-            ev = n.get("body", {}).get("event") if isinstance(n, dict) and n.get("type") == "NOTIFY" and isinstance(n.get("body"), dict) else None
-            if isinstance(ev, dict):
-                await asyncio.to_thread(stockage.notification, box, ev)
-            else:
+            ev = _evenement(n)
+            if ev is None:
                 ignore += 1
+                continue
+            try:
+                await asyncio.to_thread(stockage.notification, box, ev)
+            except Exception:
+                log.exception("stockage de la notification impossible")
         return {"ignore": ignore}
 
     return app

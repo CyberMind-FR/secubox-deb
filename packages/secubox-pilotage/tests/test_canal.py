@@ -23,7 +23,10 @@ def monter(**kw):
     audits = []
     files = kw.pop("files", None) or Files()
     stock = StockageMemoire()
-    app = creer_app_canal(files, CONNUES.get, stock, lambda ev, champs: audits.append((ev, champs)), **kw)
+    kw.setdefault("vu_intervalle_s", 0)
+    kw.setdefault("audit_intervalle_s", 0)
+    ident = kw.pop("identifier", CONNUES.get)
+    app = creer_app_canal(files, ident, stock, lambda ev, champs: audits.append((ev, champs)), **kw)
     return app, files, stock, audits
 
 
@@ -114,7 +117,8 @@ def test_canal_attente_longue_rend_204():
             t0 = asyncio.get_running_loop().time()
             r = await c.get("/canal/v1/requetes?attente=3600")  # borné à attente_max
             assert r.status_code == 204 and r.content == b""
-            assert asyncio.get_running_loop().time() - t0 < 2
+            ecoule = asyncio.get_running_loop().time() - t0
+            assert 0.08 <= ecoule < 2
             assert (await c.get("/canal/v1/requetes?attente=abc")).status_code == 204
             assert (await c.get("/canal/v1/requetes?attente=-5")).status_code == 204
         assert len(stock.vus) == 3  # chaque sondage est un signe de vie
@@ -167,7 +171,7 @@ def test_canal_rejoue_l_echange_du_client_go():
             # corps de réponse tels que l'agent les produit (client.go)
             reps = [
                 {"msg_id": ids[0], "type": "GET_RESP", "body": {"results": [
-                    {"path": "Device.DeviceInfo.", "params": {"Device.DeviceInfo.SoftwareVersion": "1.2.3"}, "err": ""}], "tronque": True}},
+                    {"path": "Device.DeviceInfo.", "params": {"Device.DeviceInfo.SoftwareVersion": "1.2.3"}}], "tronque": True}},
                 {"msg_id": ids[1], "type": "GET_SUPPORTED_DM_RESP", "body": {"paths": ["Device.DeviceInfo."]}},
                 {"msg_id": ids[2], "type": "OPERATE_RESP", "body": {"output": {"duree_s": 60}}},
             ]
@@ -178,7 +182,8 @@ def test_canal_rejoue_l_echange_du_client_go():
             [q] = (await c.get("/canal/v1/requetes?attente=1")).json()
             r = await c.post("/canal/v1/reponses", json=[{"msg_id": q["msg_id"], "type": "ERROR", "body": {"err": "chemin invalide"}}])
             assert r.json() == {"ignore": 0}
-            lot = [{"type": "NOTIFY", "body": {"event": {"path": "Device.X_SECUBOX_Boot.", "boot_id": "b00t-1234"}}}] * 16
+            lot = [{"type": "NOTIFY", "body": {"event": {"type": "X_SECUBOX_Boot", "ts": 1730000000}}}] * 15 + [
+                {"type": "NOTIFY", "body": {"event": {"type": "X_SECUBOX_ServiceLoop", "unit": "nginx.service", "value": 3, "ts": 1730000001}}}]
             r = await c.post("/canal/v1/notifs", json=lot)
             assert r.status_code == 200 and r.json() == {"ignore": 0}
         assert (await fut_get)["body"]["tronque"] is True
@@ -188,7 +193,8 @@ def test_canal_rejoue_l_echange_du_client_go():
         assert stock.vus[0][1]["agent_version"] == "0.1.0" and stock.vus[0][1]["boot_id"] == "b00t-1234"
         assert stock.vus[0][1]["modele"] == ["Device.DeviceInfo.", "Device.X_SECUBOX_Boot."]
         assert len(stock.notifications) == 16 and stock.notifications[0][0] == GK5
-        assert stock.notifications[0][1] == {"path": "Device.X_SECUBOX_Boot.", "boot_id": "b00t-1234"}
+        assert stock.notifications[0][1] == {"type": "X_SECUBOX_Boot", "ts": 1730000000}
+        assert stock.notifications[-1][1] == {"type": "X_SECUBOX_ServiceLoop", "unit": "nginx.service", "value": 3, "ts": 1730000001}
     run(cas())
 
 
@@ -196,10 +202,15 @@ def test_canal_notifs_bornees_et_filtrees():
     async def cas():
         app, _, stock, _ = monter()
         async with client(app) as c:
-            ev = {"type": "NOTIFY", "body": {"event": {"a": 1}}}
+            ev = {"type": "NOTIFY", "body": {"event": {"type": "X_SECUBOX_Boot", "ts": 1}}}
             assert (await c.post("/canal/v1/notifs", json=[ev] * 17)).status_code == 413
-            r = await c.post("/canal/v1/notifs", json=[ev, {"type": "AUTRE"}, 7, {"type": "NOTIFY", "body": {"event": "x"}}])
-            assert r.status_code == 200 and r.json() == {"ignore": 3}
+            r = await c.post("/canal/v1/notifs", json=[ev, {"type": "AUTRE"}, 7, {"type": "NOTIFY", "body": {"event": "x"}},
+                {"type": "NOTIFY", "body": {"event": {"a": 1}}},                                   # sans type ni ts
+                {"type": "NOTIFY", "body": {"event": {"type": "T", "ts": "1"}}},                   # ts non entier
+                {"type": "NOTIFY", "body": {"event": {"type": "T", "ts": 1, "value": True}}},      # booléen n'est pas un entier
+                {"type": "NOTIFY", "body": {"event": {"type": "T", "ts": 1, "unit": 5}}},
+                {"type": "NOTIFY", "body": {"event": {"type": "T\n", "ts": 1}}}])
+            assert r.status_code == 200 and r.json() == {"ignore": 8}
             assert (await c.post("/canal/v1/notifs", json={"type": "NOTIFY"})).status_code == 400
         assert len(stock.notifications) == 1
     run(cas())
@@ -252,4 +263,104 @@ def test_canal_meme_nom_sur_deux_reseaux_ne_partage_rien():
             assert not fut.done() and stock.par_cle == {}
             assert (await mesh.post("/canal/v1/reponses", json=rep)).json() == {"ignore": 0}
         assert fut.done() and list(stock.par_cle) == ["maillage:gk5"]
+    run(cas())
+
+
+def test_canal_bonjour_filtre_les_caracteres_de_controle():
+    async def cas():
+        app, _, stock, _ = monter()
+        async with client(app) as c:
+            await c.post("/canal/v1/bonjour", json={"agent_version": "1.0\x1b[31m\n", "boot_id": "a\x00b", "modele": ["Device.\x07X."]})
+        infos = stock.vus[0][1]
+        assert infos["agent_version"] == "1.0[31m" and infos["boot_id"] == "ab" and infos["modele"] == ["Device.X."]
+    run(cas())
+
+
+def test_canal_un_seul_sondage_actif_et_vu_limite():
+    async def cas():
+        app, files, stock, _ = monter(attente_max=5, vu_intervalle_s=10)
+        async with client(app) as c:
+            ts = [asyncio.create_task(c.get("/canal/v1/requetes?attente=5")) for _ in range(200)]
+            await asyncio.sleep(0.3)
+            files.deposer(GK5.cle, {"type": "GET", "body": {}})
+            rs = await asyncio.wait_for(asyncio.gather(*ts), 5)
+        codes = sorted(r.status_code for r in rs)
+        assert codes.count(200) == 1 and codes.count(204) == 199
+        assert len(stock.vus) == 1  # une écriture toutes les 10 s par box
+    run(cas())
+
+
+def test_canal_box_revoquee_pendant_l_attente_ne_recoit_rien():
+    async def cas():
+        etat = {"ok": True}
+        app, files, _, _ = monter(attente_max=5, identifier=lambda a: CONNUES.get(a) if etat["ok"] else None)
+        async with client(app) as c:
+            t = asyncio.create_task(c.get("/canal/v1/requetes?attente=5"))
+            await asyncio.sleep(0.1)
+            etat["ok"] = False
+            files.deposer(GK5.cle, {"type": "GET", "body": {}})
+            r = await asyncio.wait_for(t, 2)
+        assert r.status_code == 204 and files.en_attente(GK5.cle) == 1
+    run(cas())
+
+
+def test_canal_audit_plafonne_par_adresse():
+    async def cas():
+        app, _, _, audits = monter(audit_intervalle_s=60)
+        async with client(app, "10.10.0.200") as c:
+            for _ in range(100):
+                assert (await c.get("/canal/v1/requetes?attente=0")).status_code == 403
+        assert len(audits) <= 2 and audits[0][1] == {"adresse": "10.10.0.200"}
+        async with client(app, "10.10.0.201") as c:
+            await c.get("/canal/v1/requetes?attente=0")
+        assert len(audits) == 2  # une autre adresse a sa propre ligne
+    run(cas())
+
+
+def test_canal_audit_table_bornee():
+    async def cas():
+        from api import canal
+        app, _, _, audits = monter(audit_intervalle_s=60)
+        for i in range(canal.AUDIT_ADRESSES_MAX + 50):
+            async with client(app, f"10.77.{i // 250}.{i % 250}") as c:
+                await c.get("/canal/v1/requetes?attente=0")
+        assert len(audits) == canal.AUDIT_ADRESSES_MAX + 50
+    run(cas())
+
+
+def test_canal_exception_du_stockage_n_arrete_pas_le_lot():
+    async def cas():
+        app, files, stock, _ = monter()
+        appels = []
+        orig = stock.resultat
+
+        def resultat(box, msg_id, rep):
+            appels.append(msg_id)
+            if len(appels) == 1:
+                raise RuntimeError("base verrouillée")
+            orig(box, msg_id, rep)
+        stock.resultat = resultat
+        files.deposer(GK5.cle, {"type": "GET", "body": {}})
+        files.deposer(GK5.cle, {"type": "GET", "body": {}})
+        async with client(app) as c:
+            lus = (await c.get("/canal/v1/requetes?attente=1")).json()
+            r = await c.post("/canal/v1/reponses", json=[{"msg_id": q["msg_id"], "type": "GET_RESP", "body": {}} for q in lus])
+        assert r.status_code == 200 and len(appels) == 2 and len(stock.resultats) == 1
+    run(cas())
+
+
+def test_canal_deconnexion_pendant_la_lecture_sans_trace():
+    async def cas():
+        app, _, _, _ = monter()
+        envoyes = []
+
+        async def receive():
+            return {"type": "http.disconnect"}
+
+        async def send(m):
+            envoyes.append(m)
+        scope = {"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "POST", "path": "/canal/v1/notifs",
+                 "raw_path": b"/canal/v1/notifs", "query_string": b"", "root_path": "", "scheme": "http",
+                 "headers": [(b"x-real-ip", b"10.10.0.10")], "client": None, "server": None}
+        await app(scope, receive, send)  # ne lève rien
     run(cas())

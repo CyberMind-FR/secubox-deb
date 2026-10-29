@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import logging
 import os
 import stat
 from dataclasses import dataclass
@@ -27,10 +28,12 @@ RESEAU_MAILLAGE = ipaddress.ip_network("10.10.0.0/24")
 RESEAU_AUTOLOAD = ipaddress.ip_network("10.64.0.0/16")
 TAILLE_MAX = 1 << 20  # 1 Mio : au-delà, le fichier est refusé sans être lu
 NOM_MAX = 64
+ABONNEMENTS = ("actif", "suspendu", "echu", "revoque")
 
 PEERS_DEFAUT = Path("/var/lib/secubox/p2p/peers.json")
 PAIRS_AUTOLOAD_DEFAUT = Path("/var/lib/secubox/autoload-public/pairs-publics.json")
 
+log = logging.getLogger("pilotage.identite")
 _cache: dict = {}  # chemin -> (signature, {adresse: Box})
 
 
@@ -48,56 +51,71 @@ class Box:
         return f"{self.reseau}:{self.nom}"
 
 
-def _lire_json(chemin: Path):
-    """JSON du fichier, ou None (absent, lien, non régulier, trop gros, illisible). Bornée : jamais plus de TAILLE_MAX + 1 octets lus."""
-    try:
-        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except OSError:
+def _json_borne(fd: int, taille: int):
+    """JSON du descripteur, ou None (trop gros, illisible). Jamais plus de TAILLE_MAX + 1 octets lus."""
+    if taille > TAILLE_MAX:
         return None
-    try:
-        st = os.fstat(fd)
-        if not stat.S_ISREG(st.st_mode) or st.st_size > TAILLE_MAX:
-            return None
-        brut = os.read(fd, TAILLE_MAX + 1)
-    except OSError:
-        return None
-    finally:
-        os.close(fd)
+    brut = os.read(fd, TAILLE_MAX + 1)
     if len(brut) > TAILLE_MAX:
         return None
     try:
-        return st, json.loads(brut)
+        return json.loads(brut)
     except (ValueError, RecursionError):
         return None
 
 
-def _signature(chemin: Path):
-    try:
-        st = os.stat(chemin)
-    except OSError:
-        return None
-    return (st.st_mtime_ns, st.st_size, st.st_ino)
-
-
 def _table(chemin: Path, construire) -> dict:
-    """Tableau adresse → Box du fichier, rechargé au changement ; {} (personne) si le fichier est inutilisable."""
+    """Tableau adresse → Box du fichier, rechargé au changement ; {} (personne) si le fichier est inutilisable.
+    La signature du cache vient du descripteur effectivement lu (fstat) ; lien et fichier non régulier sont refusés."""
     chemin = Path(chemin)
-    sig = _signature(chemin)
-    if sig is None:
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
         _cache.pop(chemin, None)
         return {}
-    vu = _cache.get(chemin)
-    if vu and vu[0] == sig:
-        return vu[1]
-    lu = _lire_json(chemin)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            _cache.pop(chemin, None)
+            return {}
+        sig = (st.st_mtime_ns, st.st_size, st.st_ino)
+        vu = _cache.get(chemin)
+        if vu and vu[0] == sig:
+            return vu[1]
+        doc = _json_borne(fd, st.st_size)
+    except OSError:
+        _cache.pop(chemin, None)
+        return {}
+    finally:
+        os.close(fd)
     table = {}
-    if lu is not None:
+    if doc is not None:
         try:
-            table = construire(lu[1])
+            table = _sans_ambiguite(construire(doc), chemin)
         except (TypeError, ValueError, AttributeError):
             table = {}
     _cache[chemin] = (sig, table)
     return table
+
+
+def _sans_ambiguite(entrees: list, chemin: Path) -> dict:
+    """R18, fermé par défaut : une adresse portée par des entrées divergentes, ou une clé de box portée par plusieurs adresses, est écartée
+    (ces box ne sont pas identifiées). Les entrées révoquées ne sont jamais servies mais bloquent leur adresse. Une ligne de journal par rechargement."""
+    par_adresse: dict = {}
+    for ip, box in entrees:
+        par_adresse.setdefault(ip, []).append(box)
+    ecartees = {ip for ip, liste in par_adresse.items() if len(set(liste)) > 1}
+    par_cle: dict = {}
+    for ip, liste in par_adresse.items():
+        if ip not in ecartees and liste[0].abonnement != "revoque":
+            par_cle.setdefault(liste[0].cle, set()).add(ip)
+    for ips in par_cle.values():
+        if len(ips) > 1:
+            ecartees |= ips
+    if ecartees:
+        log.warning("%s : %d adresse(s) écartée(s) (entrées divergentes ou nom en double) : %s",
+                    chemin, len(ecartees), ", ".join(sorted(ecartees)[:20]))
+    return {ip: liste[0] for ip, liste in par_adresse.items() if ip not in ecartees and liste[0].abonnement != "revoque"}
 
 
 def _adresse_canonique(adresse) -> Optional[ipaddress.IPv4Address]:
@@ -120,38 +138,46 @@ def _nom_valide(nom) -> Optional[str]:
     return nom
 
 
-def _table_maillage(doc) -> dict:
+def _hote(ip, reseau) -> bool:
+    """Adresse d'une box : dans le réseau, ni réseau, ni diffusion, ni première adresse (le maître)."""
+    return ip in reseau and ip not in (reseau.network_address, reseau.broadcast_address, reseau.network_address + 1)
+
+
+def _table_maillage(doc) -> list:
+    """Entrées enrôlées seulement : peers.json reçoit aussi des découvertes mDNS non authentifiées (sans fingerprint ni joined_via)."""
     liste = doc.get("peers") if isinstance(doc, dict) else doc
     if not isinstance(liste, list):
-        return {}
-    out = {}
+        return []
+    out = []
     for p in liste:
         if not isinstance(p, dict):
             continue
         ip, nom = _adresse_canonique(p.get("mesh_ip")), _nom_valide(p.get("name"))
-        if ip is None or nom is None or ip not in RESEAU_MAILLAGE:
+        if ip is None or nom is None or not _hote(ip, RESEAU_MAILLAGE):
             continue
-        out[str(ip)] = Box(nom, str(ip), "maillage", None, None)
+        if not all(isinstance(p.get(c), str) and p.get(c).strip() for c in ("fingerprint", "joined_via")):
+            continue
+        out.append((str(ip), Box(nom, str(ip), "maillage", None, None)))
     return out
 
 
-def _table_autoload(doc) -> dict:
+def _table_autoload(doc) -> list:
     liste = doc.get("pairs") if isinstance(doc, dict) else None
     if not isinstance(liste, list):
-        return {}
-    out = {}
+        return []
+    out = []
     for p in liste:
         if not isinstance(p, dict):
             continue
         ip = _adresse_canonique(p.get("adresse"))
         client = _nom_valide(p.get("client"))
+        if ip is None or client is None or not _hote(ip, RESEAU_AUTOLOAD):
+            continue
         abonnement = p.get("abonnement")
-        if ip is None or client is None or ip not in RESEAU_AUTOLOAD or not isinstance(abonnement, str):
-            continue
-        if abonnement == "revoque":
-            continue
+        if abonnement not in ABONNEMENTS:  # inconnu : traité comme révoqué (bloque l'adresse)
+            abonnement = "revoque"
         serie = _nom_valide(p.get("serie"))
-        out[str(ip)] = Box(serie or f"{client}-{ip}", str(ip), "autoload", client, abonnement)
+        out.append((str(ip), Box(serie or f"{client}-{ip}", str(ip), "autoload", client, abonnement)))
     return out
 
 
