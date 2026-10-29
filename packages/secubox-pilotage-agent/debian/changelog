@@ -113,7 +113,17 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
       la fin du renommage n'était pas auditée) ; une OSError au retrait de rejoindre-<job>.code n'empêche plus
       l'audit de la fin. M4 — _rejoindre retire automesh.json avant d'écrire le code (rien n'est déposé s'il
       reste).
- -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
+
+  * Reports de L1 (tâche 11 de L2, ref #3126) :
+    - M2 : le relevé de performance de production lit la racine absolue « / » (operateurBox), plus des chemins
+      relatifs au répertoire courant.
+    - M13 : Environment=GOMEMLIMIT=24MiB sous MemoryMax=32M (le ramasse-miettes travaille avant le cgroup).
+    - N5/M14 : contrat maître → agent (cmd/sbx-pilotage-agent/contrat_test.go) : les requêtes figées par le vrai
+      maître (internal/canal/testdata/contrat/maitre/) sont rejouées contre le vrai client, le vrai exécuteur et
+      le vrai opérateur ; les OPERATE_RESP de L2, la réponse du relevé et les notifications OperationProgress,
+      OperationDone, HandsTied, Consent et Support sont figées dans testdata/contrat/agent-l2/.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 20:00:00 +0100
 
 secubox-pilotage-agent (0.1.2-1~trixie1) trixie; urgency=medium
 

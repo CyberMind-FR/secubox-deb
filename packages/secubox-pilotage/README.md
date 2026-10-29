@@ -16,10 +16,10 @@ du catalogue fermé, le journal des opérations et les sessions de support (voir
 | Service | `secubox-pilotage.service`, utilisateur `secubox-pilotage`, `/usr/sbin/secubox-pilotage-api` (lance par `secubox-pilotage.socket` et `secubox-pilotage-canal.socket`) |
 | Administration | `/run/secubox/pilotage.sock` (0660, groupe `secubox`, créée par systemd) ; nginx `/api/v1/pilotage/` (`secubox-routes.d/pilotage.conf`), toutes les routes `require_jwt` ; module dédié de l'agrégateur (`DEDICATED_MODULES`) |
 | Canal | `/run/secubox/pilotage-canal.sock` (0660, groupe `www-data`, créée par systemd), jamais exposée hors de l'écouteur nginx ; `/canal/v1/bonjour` : un par box et par 10 s (429 au-delà) |
-| Processus | une seule boucle asyncio, les deux applis en `lifespan="on"` (les files sont en mémoire, la relève est partagée) ; code de sortie 1 si l'une ne démarre pas |
-| Données | `/var/lib/secubox/pilotage/` (0750 `secubox-pilotage`), préparé par le postinst par descripteur (`init_donnees.py`) : systemd-tmpfiles refuse ce chemin |
-| Audit | `/var/log/secubox/audit.log` (propriétaire et droits inchangés) ; AppArmor en ajout seul ; ACL `u:secubox-pilotage:rw-` posée par `secubox-pilotage-audit-acl` (reposée après chaque rotation par l'unité de l'écouteur) |
-| AppArmor | `secubox-pilotage-api` et `secubox-pilotage-invite` (assistant de jonction), enforce |
+| Processus | une seule boucle asyncio, les deux applis en `lifespan="on"` (les files sont en mémoire, la relève est partagée) ; code de sortie 1 si l'une ne démarre pas (le code d'un `SystemExit` d'uvicorn est journalisé) |
+| Données | `/var/lib/secubox/pilotage/` (0750 `secubox-pilotage`), préparé par le postinst par descripteur (`init_donnees.py`) : systemd-tmpfiles refuse ce chemin ; SQLite en `temp_store=MEMORY` (le profil ne donne pas `/tmp`) |
+| Audit | `/var/log/secubox/audit.log` (propriétaire et droits inchangés) ; AppArmor en ajout seul ; ACL `u:secubox-pilotage:rw-` posée par `secubox-pilotage-audit-acl` (reposée après chaque rotation par l'unité de l'écouteur), retirée par le postrm au `remove` et au `purge` (journal courant et journaux tournés, jamais à travers un lien ; rien à l'`upgrade`) |
+| AppArmor | `secubox-pilotage-api` et `secubox-pilotage-invite` (assistant de jonction), enforce ; déchargés par le postrm au `remove` |
 | Menu | aucune entrée propre : le panneau « Pilotage » est dans la page Flotte de secubox-annuaire ; paquet `hors-arbre` des méta-paquets (installé à la demande) |
 
 ## Écouteurs de tunnel
@@ -50,7 +50,17 @@ tronquée, en erreur, avec une source en échec (`failed`) ou au-delà de 5 000 
 Un paramètre refusé seul (chemin hors `Device.` ou de plus de 256 caractères, valeur non JSON) n'entre pas, sans rendre la passe partielle.
 Une valeur de plus de 64 Kio de JSON est **tronquée**, jamais jetée (début d'une liste, d'un objet ou d'une chaîne) ; son chemin figure dans
 `inventaire_tronques` de `GET /boxes/{x}`. Seules les lignes changées sont écrites (une relève identique n'écrit que `inventaire_le`).
-Au plus 10 000 lignes et 1 Mio de valeurs sérialisées par box : au-delà, les plus anciennes parmi celles absentes de la passe courante partent (R39).
+Au plus 10 000 lignes et 1 Mio de valeurs sérialisées (en octets UTF-8) par box : au-delà, les plus anciennes parmi celles absentes de la passe
+courante partent (R39).
+
+Une box sans aucun contact depuis 30 jours (dernier sondage ou bonjour, dernière relève rangée, dernière notification reçue : le plus récent)
+est **oubliée** une fois par heure (M12) : sa ligne `boites`, son inventaire, ses événements et son relevé partent ; le journal des opérations et
+des supports reste (borné par box). Audit `pilotage_box_oubliee` {box, cle, reseau, dernier_contact, jours}. Une box en ligne n'est jamais
+touchée ; si elle revient, elle réapparaît comme une box neuve.
+
+Refus d'identité du canal (`pilotage_identite_refusee`) : une ligne par adresse et par minute ; les refus tus entre deux lignes sont écrits
+à chaque tour d'inventaire et à l'éviction d'une adresse de la table bornée (1 024), en ligne de décompte seul `{tus, vidage: tour|eviction}`
+(M7) : aucun décompte n'est perdu.
 
 ## Actions (L2, tâche 6)
 Toutes les routes portent `require_jwt` (administrateur réel), aucune route d'usager. Une box se désigne comme en L1 (clé ou nom unique).
@@ -161,5 +171,20 @@ profil AppArmor **enforce** `secubox-pilotage-invite` (`AppArmorProfile=`, charg
 (#3213) ; la box réapparaît alors sous sa nouvelle clé `maillage:<nouveau>`, l'ancienne passe hors ligne avec son historique.
 
 ## Tests
-`cd packages/secubox-pilotage && python3 -m pytest -q`. `tests/test_contrat_go.py` rejoue contre le vrai canal les enveloppes figées par le
-client Go (`packages/secubox-pilotage-agent/internal/canal/testdata/contrat/`, régénérées par son test `TestContratEnveloppesEmises`).
+`cd packages/secubox-pilotage && python3 -m pytest -q`. `tests/test_contrat_go.py` rejoue contre le vrai canal (et le vrai stockage) les
+enveloppes figées par le client Go (`packages/secubox-pilotage-agent/internal/canal/testdata/contrat/`, régénérées par son test
+`TestContratEnveloppesEmises`).
+
+Contrat maître → agent (N5/M14), `tests/test_contrat_maitre.py`, dans les deux sens :
+
+- le VRAI contrôleur (tour d'inventaire, `GET /boxes/{x}/lire`, `POST …/releve`, les sept actions, ouverture et fermeture du support, Rejoindre
+  après un renommage réussi, avec un code **factice** au bon format) produit chaque requête déposée pour la box ; elle doit être octet pour
+  octet la fixture de `…/testdata/contrat/maitre/`, que le test Go `TestContratRequetesDuMaitre` (cmd/sbx-pilotage-agent) rejoue contre le
+  vrai client et le vrai exécuteur de l'agent. GetSupportedDM a pour producteur `pilotage.files.requete_modele()` : le maître ne l'émet pas
+  encore en production (le bonjour porte le modèle) ;
+- ce que le vrai agent émet en retour pour L2 (`…/contrat/agent-l2/` : OPERATE_RESP des actions, réponse du relevé de performance,
+  OperationProgress, OperationDone, HandsTied, Consent, Support) est rejoué contre le vrai canal, le vrai stockage, le suivi et les routes ;
+- une fixture altérée échoue des deux côtés (tests `…alteree_echoue`).
+
+Régénération après un changement voulu : `SECUBOX_CONTRAT_MAJ=1 python3 -m pytest tests/test_contrat_maitre.py -k figees`, puis
+`SECUBOX_CONTRAT_MAJ=1 go test ./cmd/sbx-pilotage-agent -run TestContratRequetesDuMaitre` dans l'agent, puis les deux suites.

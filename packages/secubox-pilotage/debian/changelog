@@ -57,8 +57,22 @@ secubox-pilotage (0.1.2-1~trixie1) trixie; urgency=medium
     une session demandée par le maître (demande ou en_attente). pilotage_action audite les paramètres validés.
   * R-L2-40 : plafond horaire atteint = cause distincte « plafond », auditée par le maître
     (pilotage_rejoindre_echec) ; exception RULES-CODE réduite au seul compte partagé secubox de l'assistant.
+  * Reports de L1 (tâche 11 de L2) :
+    - M7 : les décomptes de refus d'identité tus sont écrits à chaque tour d'inventaire et à l'éviction d'une
+      adresse (pilotage_identite_refusee {tus, vidage: tour|eviction}), jamais perdus.
+    - M12 : une box sans aucun contact depuis 30 jours (sondage, relève rangée ou notification reçue) est oubliée
+      (ligne boites, inventaire, événements, relevé ; le journal des opérations reste), audit pilotage_box_oubliee ;
+      une box en ligne n'est jamais touchée. postrm (remove, purge ; jamais upgrade) : retire l'ACL
+      u:secubox-pilotage d'audit.log et des journaux tournés (jamais à travers un lien), décharge les profils
+      AppArmor secubox-pilotage-api et secubox-pilotage-invite.
+    - M15 : en-tête SPDX de pytest.ini ; PRAGMA temp_store=MEMORY (le profil AppArmor ne donne pas /tmp).
+    - R39 : le plafond d'inventaire par box compte des octets UTF-8 (length(CAST(valeur_json AS BLOB))).
+    - Lanceur : le code d'un SystemExit d'uvicorn est journalisé.
+    - N5/M14 : contrat maître → agent par fixtures, produites par le vrai contrôleur (Get, GetSupportedDM —
+      pilotage.files.requete_modele —, relevé, actions de L2, support, Rejoindre au code factice) et rejouées
+      contre le vrai agent ; réponses, relevé et notifications de L2 du vrai agent rejoués contre le vrai maître.
 
- -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 18:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 20:00:00 +0100
 
 secubox-pilotage (0.1.1-1~trixie1) trixie; urgency=medium
 

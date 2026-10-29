@@ -16,7 +16,7 @@ Binaire Go unique `/usr/sbin/sbx-pilotage-agent`, bibliothèque standard seule, 
   sur `wg-autoload`), interrogation longue. L'agent n'ouvre **aucun port d'écoute**.
 - Répond à Get et GetSupportedDM (modèle TR-181 : système, services systemd, paquets, exposition, maillage,
   pilotage), notifie les événements (boucle de relances, mémoire basse, swap, démarrage) et réalise
-  l'Operate `Device.X_SECUBOX_Releve.Mesurer()` (10 à 300 s, un seul à la fois).
+  l'Operate `Device.X_SECUBOX_Releve.Mesurer()` (10 à 300 s, un seul à la fois ; lu sous la racine absolue `/`, M2).
 - Rien ne part vers le maître tant que son ancre n'est pas vérifiée (voir « Ancre du maître »).
 - Les Operate d'action de L2 (redémarrer, mettre à niveau, piloter un service, renommer, renouveler les secrets,
   support) passent par le ctl root : voir « Operate d'action (L2) ». Jamais la ligne de commande d'un processus
@@ -257,7 +257,8 @@ Côté agent, toute autre sortie, une erreur ou un code non nul vaut `illisible`
 ## Durcissement
 
 Utilisateur `secubox-pilotage-agent`, `ProtectSystem=strict`, `ReadOnlyPaths=/`, aucune capacité ambiante,
-`IPAddressDeny=any` (sauf `10.10.0.1`, `10.64.0.1`, localhost), `MemoryMax=32M`, profil AppArmor enforce
+`IPAddressDeny=any` (sauf `10.10.0.1`, `10.64.0.1`, localhost), `MemoryMax=32M` avec `GOMEMLIMIT=24MiB` (le ramasse-miettes
+travaille avant le tueur du cgroup, M13), profil AppArmor enforce
 (`apparmor/usr.sbin.sbx-pilotage-agent` : réseau `inet stream` qualifié, `unix stream`, `netlink raw` pour les adresses
 des interfaces ; ni `inet6` ni écoute ; `/usr/bin/sudo Ux` seul passage privilégié).
 
@@ -279,3 +280,14 @@ dpkg-buildpackage -b -us -uc     # natif ; arm64 sur une box (pas de -a croisé 
 GET_RESP avec `failed` et avec `tronque`, GET_SUPPORTED_DM_RESP, OPERATE_RESP, ERROR, NOTIFY) ; le maître les rejoue contre son vrai canal
 (`packages/secubox-pilotage/tests/test_contrat_go.py`). Un changement de format fait échouer `TestContratEnveloppesEmises` ; après
 vérification : `SECUBOX_CONTRAT_MAJ=1 go test ./internal/canal -run TestContratEnveloppesEmises`, puis les tests du maître.
+
+**Contrat maître → agent (N5/M14).** `internal/canal/testdata/contrat/maitre/*.json` : les requêtes que le VRAI maître dépose (Get de la
+relève et de la lecture, GetSupportedDM, relevé, Reboot, MettreAJour, Services.Agir ×3, Renommer, Renouveler, Support.Ouvrir/Fermer,
+Maillage.Rejoindre avec un code factice), figées par `packages/secubox-pilotage/tests/test_contrat_maitre.py`.
+`cmd/sbx-pilotage-agent/contrat_test.go` (`TestContratRequetesDuMaitre`) les sert au vrai client, avec le vrai exécuteur (ctl simulé :
+l'argv reçu, `--acteur` compris, et l'entrée standard de Rejoindre sont vérifiés), le vrai opérateur du relevé et les vraies bascules, puis fige
+dans `testdata/contrat/agent-l2/` ce que l'agent émet pour L2 (OPERATE_RESP, réponse du relevé, OperationProgress, OperationDone,
+HandsTied, Consent, Support), que le maître rejoue à son tour. Une fixture altérée échoue des deux côtés
+(`TestContratRequeteAltereeEchoue`, et `test_une_…_alteree_echoue` côté maître). Régénération : d'abord le maître
+(`SECUBOX_CONTRAT_MAJ=1 python3 -m pytest tests/test_contrat_maitre.py -k figees`), puis
+`SECUBOX_CONTRAT_MAJ=1 go test ./cmd/sbx-pilotage-agent -run TestContratRequetesDuMaitre`, puis les deux suites.
