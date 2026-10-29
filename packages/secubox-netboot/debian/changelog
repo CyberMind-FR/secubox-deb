@@ -4,6 +4,10 @@ secubox-netboot (0.8.3-1~trixie1) trixie; urgency=medium
     loadaddr=0x6000000, kernel_addr_r=0x7000000, fdt_addr_r=0x6f00000, ramdisk_addr_r=-). board/mochabin/live.env
     charge boot.scr à ${loadaddr}, comme l'ESPRESSObin ; page netboot alignée. Le boot.scr du live pose lui-même
     ses adresses de noyau, de DTB et d'initrd (aucune variable absente de l'usine).
+  * sbx-netflash écrit TOUJOURS en flux (ref #3271) : sur une MOCHAbin de 8 Go, l'image partait dans un tmpfs à
+    sa taille (mode « ram ») et le live, qui garde sa pile complète, manquait de mémoire. Mode « ram » retiré :
+    téléchargement → décompression → secubox-flash-emmc --stdin (signature et SHA-256 vérifiées au passage, eMMC
+    invalidée en cas d'échec). La pile du live n'est plus arrêtée que sous 256 Mo libres.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 10:00:00 +0100
 

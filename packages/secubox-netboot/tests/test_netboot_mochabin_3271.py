@@ -77,3 +77,76 @@ def test_les_adresses_du_live_ne_recouvrent_pas_le_script_charge_a_loadaddr():
         for k in ("kernel_addr_r", "fdt_addr_r", "ramdisk_addr_r"):
             a = int(re.search(rf"^setenv {k} (0x[0-9a-f]+)$", texte, re.M).group(1), 16)
             assert not a <= int(ENV_USINE["loadaddr"], 16) < a + 0x100000, (carte, k)
+
+
+# ── 2. Flashage en flux dans le live ─────────────────────────────────────────────────────────────────────────────
+NETFLASH = ICI / "installer" / "sbx-netflash"
+
+
+def _stub(d, nom, corps):
+    f = d / nom
+    f.write_text("#!/usr/bin/env bash\n" + corps)
+    f.chmod(0o755)
+
+
+@pytest.fixture
+def live_simule(tmp_path):
+    """Un live simulé : serveur (curl), mount, blockdev, id et secubox-flash-emmc remplacés ; chaque appel est noté."""
+    import gzip
+    import hashlib
+    import os
+    srv, bin_, travail, journal = tmp_path / "srv", tmp_path / "bin", tmp_path / "travail", tmp_path / "journal"
+    for d in (srv, bin_, travail):
+        d.mkdir()
+    brut = os.urandom(2 * 1048576)
+    gz = gzip.compress(brut)
+    (srv / "minimal.img.gz").write_bytes(gz)
+    (srv / "minimal.img.gz.sig").write_bytes(b"signature")
+    (srv / "images.txt").write_text(f"minimal.img.gz {len(gz)} {hashlib.sha256(gz).hexdigest()} {len(brut)}\n")
+    (tmp_path / "cle.pub").write_text("cle publique\n")
+    _stub(bin_, "curl", f'''j="{journal}"; o=""; tete=0; url=""
+while [ $# -gt 0 ]; do case "$1" in -o) o="$2"; shift 2 ;; -fsSI|-I) tete=1; shift ;; http://*) url="$1"; shift ;; *) shift ;; esac; done
+f="{srv}/${{url##*/}}"; [ -f "$f" ] || exit 22
+if [ "$tete" = 1 ]; then echo "tete $url" >> "$j"; exit 0; fi
+if [ -n "$o" ]; then echo "fichier $url -> $o" >> "$j"; cp "$f" "$o"; else echo "flux $url" >> "$j"; cat "$f"; fi
+''')
+    _stub(bin_, "mount", f'echo "mount $*" >> "{journal}"; exit 0\n')
+    _stub(bin_, "mountpoint", "exit 1\n")
+    _stub(bin_, "blockdev", "echo 7818182656\n")
+    _stub(bin_, "id", "echo 0\n")
+    _stub(bin_, "pv", "cat\n")
+    _stub(bin_, "systemctl", f'echo "systemctl $*" >> "{journal}"\n')
+    _stub(bin_, "secubox-flash-emmc", f'echo "flash $*" >> "{journal}"; cat > "{tmp_path}/emmc"\n')
+    return {"tmp": tmp_path, "bin": bin_, "travail": travail, "journal": journal, "brut": brut, "gz": gz,
+            "pub": tmp_path / "cle.pub"}
+
+
+def _netflash_main(l, *args):
+    import os
+    script = ('SBX_NETFLASH_SOURCE=1 source "$0"; PUB="$1"; TRAVAIL="$2"; JOURNAL=/dev/null; shift 2; main "$@"')
+    return subprocess.run(["bash", "-c", script, str(NETFLASH), str(l["pub"]), str(l["travail"]), *args],
+                          capture_output=True, text=True, timeout=60,
+                          env={**os.environ, "PATH": f"{l['bin']}:{os.environ['PATH']}", "SBX_EMMC": "/dev/null"})
+
+
+def test_le_live_ecrit_l_image_en_flux_meme_quand_la_ram_semble_suffire(live_simule):
+    """MOCHAbin 8 Go : l'image partait dans un tmpfs à sa taille et le live manquait de mémoire (#3271)."""
+    l = live_simule
+    r = _netflash_main(l, "--srv", "192.0.2.10:8099", "--image", "minimal.img.gz", "--auto", "--no-reboot")
+    journal = l["journal"].read_text()
+    assert "tmpfs" not in journal, "aucun système de fichiers en mémoire pour l'image"
+    assert "fichier http://192.0.2.10:8099/mochabin-live/minimal.img.gz " not in journal, "l'image ne doit jamais aller dans un fichier"
+    assert "flux http://192.0.2.10:8099/mochabin-live/minimal.img.gz" in journal
+    assert r.returncode == 0, r.stdout + r.stderr
+    flash = next(x for x in journal.splitlines() if x.startswith("flash "))
+    assert "--stdin gz" in flash and f"--sha256 {__import__('hashlib').sha256(l['gz']).hexdigest()}" in flash
+    assert (l["tmp"] / "emmc").read_bytes() == l["gz"]               # flux compressé intact jusqu'à l'outil
+    # rien de la taille de l'image n'est resté dans l'espace de travail du live (/run, tmpfs)
+    gros = [p for p in l["travail"].rglob("*") if p.is_file() and p.stat().st_size >= 1048576]
+    assert gros == []
+
+
+def test_le_mode_ram_a_disparu_du_live():
+    s = NETFLASH.read_text()
+    assert "mount -t tmpfs" not in s and "mode_ecriture" not in s
+    assert 'telecharge "$BASE/$image" ' not in s                      # jamais l'image entière vers un fichier

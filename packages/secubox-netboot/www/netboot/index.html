@@ -478,7 +478,7 @@
                 const imgs = lv.images || [];
                 z.appendChild(el('p', 'note', '2. Dans le live (NOM = nom préparé ci-dessous : la box rejoindra seule le maillage) :'));
                 z.appendChild(blocCopie('sbx-netflash --list\nsbx-netflash --image ' + (imgs.length ? imgs[0].nom : 'IMAGE') + ' --nom NOM', 'Commandes du live'));
-                z.appendChild(el('p', 'note', 'Sur une carte à petite mémoire (ESPRESSObin, 1 Go), l’image s’écrit en flux : signature et empreinte vérifiées pendant l’écriture, eMMC invalidée en cas d’échec.'));
+                z.appendChild(el('p', 'note', 'L’image s’écrit en flux sur toutes les cartes (téléchargement, décompression, écriture), jamais copiée en mémoire : signature et empreinte vérifiées pendant l’écriture, eMMC invalidée en cas d’échec.'));
                 if (lv.usb) {
                     const p = el('p', 'note', 'Ou par la clé USB finale (le système lui-même, à écrire sur une clé) : ');
                     if (lv.http_base) { const a = el('a', 'mono', lv.usb.nom + ' · ' + Go(lv.usb.taille)); a.href = lv.http_base + '/' + lv.usb.nom; a.style.color = 'var(--cyan)'; p.appendChild(a); }

@@ -109,10 +109,10 @@ def _netflash(expr):
                           capture_output=True, text=True, timeout=60)
 
 
-def test_netflash_passe_en_flux_quand_la_ram_manque():
-    mo = 1048576
-    assert _netflash(f"mode_ecriture {800 * mo} {700 * mo}").stdout.strip() == "flux"     # ESPRESSObin, 1 Go
-    assert _netflash(f"mode_ecriture {800 * mo} {6000 * mo}").stdout.strip() == "ram"     # MOCHAbin, 8 Go
+def test_netflash_ecrit_toujours_en_flux():
+    # #3271 : plus de mode « ram » (tmpfs à la taille de l'image), même sur une MOCHAbin de 8 Go
+    s = NETFLASH.read_text()
+    assert "mode_ecriture" not in s and "mount -t tmpfs" not in s
 
 
 def test_netflash_format_d_apres_le_nom():

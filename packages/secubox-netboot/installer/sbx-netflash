@@ -6,14 +6,14 @@
 
 # SecuBox-Deb :: sbx-netflash (#3079) — DANS LE LIVE netbooté, écrit une image eMMC servie par le serveur de boot.
 #
-# Le live tourne en RAM (rootfs squashfs récupéré en HTTP) : l'eMMC est libre. Flux :
-#   liste des images (images.txt) → contrôle de la mémoire libre → téléchargement de l'image .img.gz et de sa
-#   signature détachée dans /run (tmpfs) → VÉRIFICATION de la signature avec la clé publique EMBARQUÉE dans le
-#   live (/etc/secubox/netboot-image.pub) → secubox-flash-emmc (refuse si l'on a démarré de l'eMMC, demande
-#   « FLASH » sauf --auto). Signature invalide = rien n'est écrit, le fichier est supprimé.
-# #3233 (ESPRESSObin, 1 Go) : quand l'image ne tient pas en RAM, elle s'écrit EN FLUX (curl | secubox-flash-emmc
-#   --stdin) ; signature et empreinte sont vérifiées pendant l'écriture et un échec invalide l'eMMC. Formats .img.gz et
-#   .img.xz. Une image dont la taille décompressée (4e colonne d'images.txt) dépasse l'eMMC est refusée avant d'écrire.
+# Le live tourne en RAM (rootfs squashfs récupéré en HTTP) : l'eMMC est libre. L'image s'écrit TOUJOURS EN FLUX
+#   (#3233, #3271) : téléchargement → décompression → écriture de l'eMMC (curl | secubox-flash-emmc --stdin), sans
+#   jamais de copie de l'image en RAM ni dans un tmpfs (/run, /tmp ; seule la tête de 2 Mo y attend la validation). La signature (clé publique EMBARQUÉE dans le live,
+#   /etc/secubox/netboot-image.pub) et l'empreinte SHA-256 d'images.txt sont calculées au passage ; un échec invalide
+#   l'eMMC. secubox-flash-emmc refuse si l'on a démarré de l'eMMC ; « FLASH » est demandé ici sauf --auto. Formats
+#   .img.gz et .img.xz. Une image dont la taille décompressée (4e colonne d'images.txt) dépasse l'eMMC est refusée.
+# #3271 : une MOCHAbin de 8 Go copiait l'image dans un tmpfs à sa taille (la mémoire « semblait » suffire) et le live,
+#   qui garde sa pile complète, manquait de mémoire ; le flux, lui, ne tient que quelques Mo.
 #
 # Serveur : --srv HOTE[:PORT], sinon l'hôte de `fetch=` (ou `sbx_srv=`) de la ligne de commande du noyau.
 # Avec --nom (#3100) : le maître sert un lot signé (GET http://SRV/lot-flash?nom=NOM, même clé que les images) ;
@@ -46,10 +46,6 @@ fail() { log "ERREUR : $*"; exit 1; }
 # telle que a[$(cmd)] serait sinon EXÉCUTÉE par l'arithmétique de bash, en root, avant la vérification de signature.
 champs_valides() { # TAILLE SHA256 [TAILLE_DECOMPRESSEE]
     [[ "$1" =~ ^[0-9]{1,15}$ ]] && [[ "$2" =~ ^[0-9a-f]{64}$ ]] && { [ -z "${3:-}" ] || [[ "$3" =~ ^[0-9]{1,15}$ ]]; }
-}
-
-mode_ecriture() { # TAILLE DISPO → « ram » si l'image tient en tmpfs avec 768 Mo de marge, sinon « flux »
-    if [ "$2" -gt $(( $1 + 768 * 1048576 )) ]; then echo ram; else echo flux; fi
 }
 
 format_image() { # NOM → gz | xz
@@ -269,87 +265,47 @@ if [ -n "$brut" ] && [ -n "$dev_emmc" ] && [ -b "$dev_emmc" ]; then
     fi
 fi
 
-# L'image transite par la RAM (tmpfs) : il faut sa taille + 768 Mo pour le reste du système.
-# Le live garde toute la pile SecuBox (6,9 Go sur 8 sur DUT) : on ne la stoppe que si la mémoire manque.
-# Si elle manque encore (ESPRESSObin, 1 Go, #3233), l'image s'écrit en flux.
+# Le flux ne tient que quelques Mo (tampons de curl, de gzip/xz et de dd en écriture directe) : la pile SecuBox du live
+# reste en place (#3079) ; on ne l'arrête que si la mémoire est vraiment au plus bas.
 libere_memoire() {
-    log "mémoire insuffisante : arrêt de la pile SecuBox du live (le live redevient complet au prochain démarrage)…"
+    log "mémoire au plus bas : arrêt de la pile SecuBox du live (le live redevient complet au prochain démarrage)…"
     systemctl stop 'secubox-*' 'tor@*' tor haproxy nginx 2>/dev/null || true
     for p in nDPId tor haproxy secubox-groupd uvicorn python3; do pkill -x "$p" 2>/dev/null || true; done
     sleep 3
 }
 dispo="$(awk '/^MemAvailable:/{print $2*1024}' /proc/meminfo)"
-besoin=$(( taille + 768 * 1048576 ))
-if [ "$dispo" -le "$besoin" ]; then
-    libere_memoire
-    dispo="$(awk '/^MemAvailable:/{print $2*1024}' /proc/meminfo)"
-fi
+if [ "${dispo:-0}" -le $(( 256 * 1048576 )) ]; then libere_memoire; fi
 
-if [ "$(mode_ecriture "$taille" "$dispo")" = flux ]; then
-    log "$((dispo/1048576)) Mo libres pour une image de $((taille/1048576)) Mo : écriture EN FLUX, signature et empreinte vérifiées pendant l'écriture"
-    telecharge "$BASE/$image.sig" "$TRAVAIL/$image.sig" || fail "téléchargement de la signature KO"
-    # l'image doit être joignable AVANT la confirmation : l'écriture commence par effacer la tête de l'eMMC
-    if command -v curl >/dev/null 2>&1; then
-        curl -fsSI --connect-timeout 20 --max-time 30 "$BASE/$image" >/dev/null
-    else
-        wget -q --spider --timeout=30 --tries=1 "$BASE/$image"
-    fi || fail "image injoignable : $BASE/$image — rien n'a été écrit"
-    if [ "$auto" -eq 0 ]; then
-        confirme_flash "$image" "${dev_emmc:-?}" "$BASE" "$sha" || fail "flash annulé — rien n'a été écrit"
-    fi
-    opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto)
-    if [ -n "$nom" ]; then opts+=(--no-reboot); else opts+=("${reboot_opt[@]}"); fi
-    log "téléchargement et écriture en flux de $BASE/$image…"
-    set +e
-    if command -v pv >/dev/null 2>&1; then      # progression sur la console (le maître la suit aussi, page NetBoot)
-        telecharge_flux "$BASE/$image" | pv -f -s "$taille" | secubox-flash-emmc "${opts[@]}"
-        st=("${PIPESTATUS[0]}" "${PIPESTATUS[2]}")
-    else
-        telecharge_flux "$BASE/$image" | secubox-flash-emmc "${opts[@]}"
-        st=("${PIPESTATUS[@]}")
-    fi
-    set -e
-    [ "${st[1]}" -eq 0 ] || fail "écriture en flux refusée ou interrompue (téléchargement=${st[0]}, flash=${st[1]}) : eMMC invalidée si elle avait été entamée"
-    rm -f "$TRAVAIL/$image.sig"
-    [ -n "$nom" ] || exit 0
-    depose_lot_et_termine
-fi
-
-# /run est un tmpfs plafonné à 10 % de la RAM (792 Mo sur 8 Go) : l'image a son propre tmpfs, à sa taille.
-mkdir -p "$TRAVAIL/image"
-mountpoint -q "$TRAVAIL/image" && umount "$TRAVAIL/image"
-mount -t tmpfs -o "size=$(( taille + 64 * 1048576 )),mode=0700" sbx-netflash "$TRAVAIL/image" \
-    || fail "espace de travail en mémoire impossible à monter"
-dest="$TRAVAIL/image/$image"
-log "téléchargement $BASE/$image ($((taille/1048576)) Mo)…"
-telecharge "$BASE/$image" "$dest" || { rm -f "$dest"; fail "téléchargement de l'image KO"; }
-telecharge "$BASE/$image.sig" "$dest.sig" || { rm -f "$dest" "$dest.sig"; fail "téléchargement de la signature KO"; }
-
-log "vérification de la signature (clé embarquée)…"
-if ! openssl dgst -sha256 -verify "$PUB" -signature "$dest.sig" "$dest" >/dev/null 2>&1; then
-    rm -f "$dest" "$dest.sig"
-    fail "SIGNATURE INVALIDE — rien n'a été écrit, fichier supprimé"
-fi
-log "signature VALIDE."
-# secubox-flash-emmc relit une empreinte locale : celle de la liste, vérifiée contre le fichier reçu.
-echo "$sha  $dest" > "${dest}.sha256"
-echo "$sha  $dest" | sha256sum -c --status || { rm -f "$dest" "$dest.sig" "${dest}.sha256"; fail "empreinte différente de la liste du serveur"; }
-
-if [ -n "$nom" ]; then      # le dépôt suit l'écriture : pas de redémarrage avant lui
-    opts=(--image "$dest" --no-reboot)
+log "image de $((taille/1048576)) Mo écrite EN FLUX : signature et empreinte vérifiées pendant l'écriture"
+telecharge "$BASE/$image.sig" "$TRAVAIL/$image.sig" || fail "téléchargement de la signature KO"
+# l'image doit être joignable AVANT la confirmation : l'écriture commence par effacer la tête de l'eMMC
+if command -v curl >/dev/null 2>&1; then
+    curl -fsSI --connect-timeout 20 --max-time 30 "$BASE/$image" >/dev/null
 else
-    opts=(--image "$dest" "${reboot_opt[@]}")
+    wget -q --spider --timeout=30 --tries=1 "$BASE/$image"
+fi || fail "image injoignable : $BASE/$image — rien n'a été écrit"
+if [ "$auto" -eq 0 ]; then
+    confirme_flash "$image" "${dev_emmc:-?}" "$BASE" "$sha" || fail "flash annulé — rien n'a été écrit"
 fi
-[ "$auto" -eq 1 ] && opts+=(--auto)
-log "écriture par secubox-flash-emmc ${opts[*]}"
-if [ -z "$nom" ]; then
-    exec secubox-flash-emmc "${opts[@]}"
+opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto)
+if [ -n "$nom" ]; then opts+=(--no-reboot); else opts+=("${reboot_opt[@]}"); fi
+log "téléchargement et écriture en flux de $BASE/$image…"
+set +e
+if command -v pv >/dev/null 2>&1; then      # progression sur la console (le maître la suit aussi, page NetBoot)
+    telecharge_flux "$BASE/$image" | pv -f -s "$taille" | secubox-flash-emmc "${opts[@]}"
+    st=("${PIPESTATUS[0]}" "${PIPESTATUS[2]}")
+else
+    telecharge_flux "$BASE/$image" | secubox-flash-emmc "${opts[@]}"
+    st=("${PIPESTATUS[@]}")
 fi
-secubox-flash-emmc "${opts[@]}" || fail "écriture de l'eMMC KO — rien n'a été déposé"
+set -e
+[ "${st[1]}" -eq 0 ] || fail "écriture en flux refusée ou interrompue (téléchargement=${st[0]}, flash=${st[1]}) : eMMC invalidée si elle avait été entamée"
+rm -f "$TRAVAIL/$image.sig"
+[ -n "$nom" ] || exit 0
 depose_lot_et_termine
 }
 
-# Après l'écriture (RAM ou flux) avec --nom : code de jonction, ancre et profil sur l'eMMC DÉTECTÉE (mmcblk1 quand une
+# Après l'écriture en flux avec --nom : code de jonction, ancre et profil sur l'eMMC DÉTECTÉE (mmcblk1 quand une
 # carte SD occupe mmcblk0), puis redémarrage si demandé.
 depose_lot_et_termine() {
     [ -n "$dev_emmc" ] || fail "eMMC introuvable (aucun mmcblk avec boot0) : image écrite, lot NON déposé"
