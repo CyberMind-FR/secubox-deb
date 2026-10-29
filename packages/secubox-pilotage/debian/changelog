@@ -62,7 +62,8 @@ secubox-pilotage (0.1.2-1~trixie1) trixie; urgency=medium
       adresse (pilotage_identite_refusee {tus, vidage: tour|eviction}), jamais perdus.
     - M12 : une box sans aucun contact depuis 30 jours (sondage, relève rangée ou notification reçue) est oubliée
       (ligne boites, inventaire, événements, relevé ; le journal des opérations reste), audit pilotage_box_oubliee ;
-      une box en ligne n'est jamais touchée. postrm (remove, purge ; jamais upgrade) : retire l'ACL
+      une box en ligne n'est jamais touchée ; passage suspendu s'il emporterait plus de la moitié des box (au moins 2 :
+      saut d'horloge du maître), audit pilotage_oubli_suspendu une fois par heure au plus (R-L2-45). postrm (remove, purge ; jamais upgrade) : retire l'ACL
       u:secubox-pilotage d'audit.log et des journaux tournés (jamais à travers un lien), décharge les profils
       AppArmor secubox-pilotage-api et secubox-pilotage-invite.
     - M15 : en-tête SPDX de pytest.ini ; PRAGMA temp_store=MEMORY (le profil AppArmor ne donne pas /tmp).

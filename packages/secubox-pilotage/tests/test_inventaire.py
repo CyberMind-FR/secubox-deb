@@ -133,3 +133,25 @@ async def test_tour_oublie_les_box_sans_contact_et_l_audite_m12(tmp_path):
     assert [b["cle"] for b in s.boites()] == [GK5.cle]
     assert lignes == [("pilotage_box_oubliee", {"box": "gk2", "cle": GK2.cle, "reseau": "maillage", "dernier_contact": vu_gk2,
                                                 "jours": 30})]
+
+
+@pytest.mark.asyncio
+async def test_oubli_suspendu_audite_une_fois_par_heure_r_l2_45(tmp_path):
+    """Saut d'horloge de 40 jours, 5 box : aucune oubliée, anomalie auditée ; réévaluée ensuite, une ligne par heure au plus."""
+    from pilotage.identite import Box
+    h = Horloge()
+    s = StockageSqlite(tmp_path / "p", horloge=h)
+    lignes = []
+    inv = Inventaire(Files(), s, horloge=h, audit=lambda ev, ch: lignes.append((ev, ch)))
+    for i in range(5):
+        s.vu(Box(f"gk{i}", f"10.10.0.{10 + i}", "maillage", None, None), {})
+    h.avance(40 * 86400)
+    await inv.tour()
+    assert len(s.boites()) == 5
+    assert lignes == [("pilotage_oubli_suspendu", {"candidates": 5, "total": 5})]
+    for _ in range(3):                                # réévalué à chaque passage, sans nouvelle ligne dans l'heure
+        await inv._oublier()
+    assert len(lignes) == 1
+    h.avance(3600)
+    await inv.tour()
+    assert [ev for ev, _ in lignes] == ["pilotage_oubli_suspendu"] * 2 and len(s.boites()) == 5

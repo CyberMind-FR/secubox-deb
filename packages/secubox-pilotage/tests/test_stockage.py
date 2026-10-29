@@ -10,6 +10,7 @@ import threading
 
 import pytest
 
+from pilotage.identite import Box
 from pilotage.stockage import EVENEMENTS_MAX, LIGNES_MAX, PARAMS_MAX, VALEUR_MAX, StockageSqlite
 from outils import GK2, GK5, GK5_AUTOLOAD, Horloge, P, releve_gk5
 
@@ -530,3 +531,45 @@ def test_oubli_compte_depuis_le_dernier_contact_reel_m12(tmp_path):
     s.inventaire_enregistrer(GK5, releve_gk5())                            # relève rangée : un contact
     h.avance(2 * JOUR)
     assert s.oublier() == []
+
+
+def _flotte(s, n):
+    boites = [Box(f"gk{i}", f"10.10.0.{10 + i}", "maillage", None, None) for i in range(n)]
+    for b in boites:
+        s.vu(b, {})
+    return boites
+
+
+def test_saut_d_horloge_n_oublie_aucune_box_r_l2_45(tmp_path):
+    """R-L2-45 : un saut de 40 jours de l'horloge du maître rend toute la flotte « muette » : rien n'est oublié, l'oubli est suspendu."""
+    s, h = neuf(tmp_path)
+    boites = _flotte(s, 5)
+    h.avance(40 * JOUR)
+    r = s.oublier()
+    assert r == [] and r.suspendu == {"candidates": 5, "total": 5}
+    assert all(s.boite(b.cle) is not None for b in boites)
+
+
+def test_une_box_muette_sur_cinq_reste_oubliee_r_l2_45(tmp_path):
+    s, h = neuf(tmp_path)
+    muette, *autres = _flotte(s, 5)
+    h.avance(31 * JOUR)
+    for b in autres:
+        s.vu(b, {})
+    r = s.oublier()
+    assert [o["cle"] for o in r] == [muette.cle] and r.suspendu is None
+
+
+def test_plus_de_la_moitie_suspend_la_moitie_non_r_l2_45(tmp_path):
+    s, h = neuf(tmp_path)
+    boites = _flotte(s, 4)
+    h.avance(31 * JOUR)
+    for b in boites[2:]:
+        s.vu(b, {})
+    assert len(s.oublier()) == 2                      # 2 sur 4 : la moitié, pas plus → oubliées
+    s2, h2 = neuf(tmp_path / "b")
+    boites = _flotte(s2, 4)
+    h2.avance(31 * JOUR)
+    s2.vu(boites[0], {})
+    r = s2.oublier()
+    assert r == [] and r.suspendu == {"candidates": 3, "total": 4}

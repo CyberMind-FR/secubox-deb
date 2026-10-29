@@ -47,6 +47,7 @@ class Inventaire:
         self._boucle: Optional[asyncio.Task] = None
         self._derniere_purge: Optional[float] = None
         self._usagers = 0
+        self._suspendu_le: Optional[float] = None   # dernière ligne « oubli suspendu » (R-L2-45) : une par heure au plus
         self._crochets: list = []        # coroutines appelées à chaque tour (vidage des refus tus du canal, M7)
 
     def a_chaque_tour(self, crochet: Callable[[], Awaitable]) -> None:
@@ -94,6 +95,21 @@ class Inventaire:
             oubliees = await asyncio.to_thread(self.stockage.oublier, OUBLI_JOURS)
         except Exception:
             log.exception("oubli des box sans contact impossible")
+            return
+        if getattr(oubliees, "suspendu", None):
+            # R-L2-45 : plus de la moitié de la flotte muette d'un coup = horloge du maître suspecte ; rien n'est oublié, réévalué
+            # au passage suivant ; une ligne de journal et d'audit par heure au plus
+            maintenant = self.horloge()
+            if self._suspendu_le is None or maintenant - self._suspendu_le >= PURGE_INTERVALLE_S:
+                self._suspendu_le = maintenant
+                n = oubliees.suspendu
+                log.warning("oubli suspendu : %d box sur %d sans contact depuis %d jours (horloge du maître ?)", n["candidates"], n["total"],
+                            OUBLI_JOURS)
+                if self.audit is not None:
+                    try:
+                        await asyncio.to_thread(self.audit, "pilotage_oubli_suspendu", dict(n))
+                    except Exception:
+                        log.exception("audit de l'oubli suspendu impossible")
             return
         for o in oubliees:
             log.info("box %s oubliée : aucun contact depuis %d jours", o["cle"], OUBLI_JOURS)

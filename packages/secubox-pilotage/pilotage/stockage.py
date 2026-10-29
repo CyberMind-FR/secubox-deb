@@ -155,6 +155,14 @@ def _nombre(v):
     return v
 
 
+class Oubli(list):
+    """Box oubliées par `StockageSqlite.oublier` ; `suspendu` = {candidates, total} quand le passage a été suspendu (R-L2-45)."""
+
+    def __init__(self, oubliees=(), suspendu: Optional[dict] = None) -> None:
+        super().__init__(oubliees)
+        self.suspendu = suspendu
+
+
 class StockageSqlite:
     """SQLite `pilotage.db` (0640, WAL). Méthodes synchrones : une connexion courte par appel, transactions courtes ; à appeler
     hors de la boucle asyncio (to_thread). Les tables sont indexées par `Box.cle`, jamais par le nom seul (R15)."""
@@ -439,7 +447,9 @@ class StockageSqlite:
         (`evenements.recu_le`) ; jamais une date fournie par la box. Une box vue depuis moins de `jours` jours, donc toute box en ligne,
         n'est jamais touchée : le critère est relu dans la transaction qui efface (un sondage concurrent la garde). Partent : la ligne
         `boites`, l'inventaire, les événements et le relevé ; le journal des opérations et des supports reste (historique borné).
-        Rend [{cle, nom, reseau, dernier_contact}] des box oubliées, à auditer par l'appelant."""
+        Garde contre un saut de l'horloge du maître (R-L2-45) : si le passage emporterait PLUS de la moitié des box connues (au moins 2),
+        il n'oublie rien et rend `suspendu = {candidates, total}` ; une box seule vraiment muette reste oubliée.
+        Rend un `Oubli` : [{cle, nom, reseau, dernier_contact}] des box oubliées, à auditer par l'appelant."""
         seuil = self._maintenant() - int(jours) * 86400
         with self._tx() as cx:
             lignes = cx.execute(
@@ -448,10 +458,13 @@ class StockageSqlite:
                 "FROM boites b WHERE b.vu_le<? ORDER BY b.cle", (seuil,)).fetchall()
             oubliees = [{"cle": r["cle"], "nom": r["nom"], "reseau": r["reseau"], "dernier_contact": r["dernier"]}
                         for r in lignes if r["dernier"] < seuil]
+            total = cx.execute("SELECT COUNT(*) FROM boites").fetchone()[0]
+            if total >= 2 and 2 * len(oubliees) > total:
+                return Oubli(suspendu={"candidates": len(oubliees), "total": total})
             for o in oubliees:
                 for table in ("inventaire", "evenements", "releves", "boites"):
                     cx.execute(f"DELETE FROM {table} WHERE cle=?", (o["cle"],))
-        return oubliees
+        return Oubli(oubliees)
 
     # --- relevé de performance à la demande ---
 

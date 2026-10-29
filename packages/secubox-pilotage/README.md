@@ -57,6 +57,9 @@ Une box sans aucun contact depuis 30 jours (dernier sondage ou bonjour, dernièr
 est **oubliée** une fois par heure (M12) : sa ligne `boites`, son inventaire, ses événements et son relevé partent ; le journal des opérations et
 des supports reste (borné par box). Audit `pilotage_box_oubliee` {box, cle, reseau, dernier_contact, jours}. Une box en ligne n'est jamais
 touchée ; si elle revient, elle réapparaît comme une box neuve.
+Garde contre un saut de l'horloge du maître (R-L2-45) : si un passage emporterait plus de la moitié des box connues (au moins 2), il
+n'oublie rien, journalise et audite `pilotage_oubli_suspendu {candidates, total}` (une ligne par heure au plus) ; il est réévalué au passage
+suivant. Une box seule vraiment muette depuis 30 jours reste oubliée normalement.
 
 Refus d'identité du canal (`pilotage_identite_refusee`) : une ligne par adresse et par minute ; les refus tus entre deux lignes sont écrits
 à chaque tour d'inventaire et à l'éviction d'une adresse de la table bornée (1 024), en ligne de décompte seul `{tus, vidage: tour|eviction}`
