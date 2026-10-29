@@ -94,8 +94,6 @@ func (s *Server) nouvelleEntreePHP(r *http.Request, service string) *EntreePHP {
 		Chemin:       r.URL.Path,
 		requeteBrute: r.URL.RawQuery,
 	}
-	// R-PHP3 : en-têtes seulement, parcours linéaire, rien de stocké.
-	e.CookieFauxPrefixe = cookieFauxPrefixe(r.Header.Values("Cookie"))
 	// R-NC1 : sans Authorization. Ces quatre chemins sont appelés de serveur
 	// à serveur : un cookie de session (forgeable, sans valeur ici) n'exempte
 	// pas (R-W11, M3). Federation ne sert qu'à ce cas : l'hôte n'est cherché
@@ -128,8 +126,9 @@ func (e *EntreePHP) lireRequete() { e.Requete = lireRequetePHP(e.requeteBrute) }
 // Crochets de test (relecture I2) : les tests les remplacent par des
 // compteurs pour prouver qu'un GET sans ligne ne les appelle pas.
 var (
-	etiquetteOutilPHP = étiquetteOutil
-	lireRequetePHP    = lireParametresPHP
+	etiquetteOutilPHP    = étiquetteOutil
+	lireRequetePHP       = lireParametresPHP
+	cookieFauxPrefixePHP = cookieFauxPrefixe
 )
 
 // corpsACapturer choisit le corps à capturer, son plafond, et s'il prend un
@@ -282,6 +281,12 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 	}
 	if s.rules.litLaRequete() {
 		e.lireRequete()
+	}
+	// R-PHP3 (relecture I1) : les cookies ne sont parcourus qu'ici, après la
+	// réponse et sous le recover, et seulement si cookie_prefixe_normalise est
+	// chargée. Rien n'est calculé avant le relais.
+	if s.rules.aControle("cookie_prefixe_normalise") {
+		e.CookieFauxPrefixe = cookieFauxPrefixePHP(rm.entetes.Values("Cookie"))
 	}
 	// lus == 0 : le proxy n'a rien lu (backend muet, erreur de connexion) ;
 	// les contrôles sans corps restent évalués.

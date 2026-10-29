@@ -797,6 +797,28 @@ func (r *Rules) litLaRequete() bool {
 	return false
 }
 
+// aControle dit si une signature structurelle chargee porte ce controle
+// (indicateur calcule sur les regles courantes, comme litLaRequete). Nil-safe.
+func (r *Rules) aControle(check string) bool {
+	if r == nil {
+		return false
+	}
+	r.mu.RLock()
+	cur := r.current
+	r.mu.RUnlock()
+	if cur == nil {
+		return false
+	}
+	for _, c := range cur.cats {
+		for _, s := range c.data.structurelles {
+			if s.check == check {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // EvaluerStructurel evalue un seul resultat multipart, sans service (#3257).
 func (r *Rules) EvaluerStructurel(res ResultatMultipart) []DetectionStructurelle {
 	return r.EvaluerPHP(&EntreePHP{Multipart: &res})

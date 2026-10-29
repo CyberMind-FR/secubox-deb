@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"unicode/utf16"
@@ -78,6 +79,8 @@ func TestPrologueAvecDTD(t *testing.T) {
 		{"racine factice dans un commentaire", []byte(`<!-- <a --><!DOCTYPE x><r/>`), true},
 		{"racine factice dans une PI", []byte(`<?p <a ?><!DOCTYPE x><r/>`), true},
 		{"commentaire non fermé", []byte(`<!-- <!DOCTYPE x>`), false},
+		{"commentaires imbriqués", []byte(`<!-- <!-- --> <!DOCTYPE x>`), true},
+		{"PI non terminée", []byte(`<?p <!DOCTYPE x>`), false},
 		{"entity seule", []byte(`<?xml version="1.0"?><!entity a "b"><r/>`), true},
 		{"UTF-16LE", utf16Avec(pocDTD, true), true},
 		{"UTF-16BE", utf16Avec(pocDTD, false), true},
@@ -331,5 +334,54 @@ func TestPHPGeneriqueFrontiereLongueJournalise(t *testing.T) {
 	}
 	if strings.Contains(b.journalBrut(t), strings.Repeat("B", 71)) {
 		t.Error("la frontière ne doit pas figurer au journal")
+	}
+}
+
+// I1 : cookieFauxPrefixe n'est jamais appelé sans signature cookie_prefixe_normalise
+// chargée, ni avant le relais ; chargée, il l'est une fois, après la réponse.
+func TestCookieFauxPrefixeSeulementSiChargee(t *testing.T) {
+	appels := 0
+	avant := cookieFauxPrefixePHP
+	cookieFauxPrefixePHP = func(l []string) bool { appels++; return avant(l) }
+	t.Cleanup(func() { cookieFauxPrefixePHP = avant })
+	entetes := http.Header{"Cookie": {"_[Host-x=y"}}
+
+	// Corpus sans la signature : aucun appel.
+	b := nouveauBancMultipart(t, nil)
+	b.requeteNC(http.MethodGet, "/index.php/apps/files", ipPublique, entetes, nil)
+	if appels != 0 {
+		t.Errorf("sans signature chargée : %d appel(s), attendu 0", appels)
+	}
+	// Avec la signature : un appel, et pas avant le relais.
+	appels = 0
+	e := b.s.nouvelleEntreePHP(httptest.NewRequest(http.MethodGet, "http://nc.example/", nil), "")
+	if appels != 0 || e.CookieFauxPrefixe {
+		t.Errorf("nouvelleEntreePHP ne doit pas examiner les cookies (appels=%d)", appels)
+	}
+	appels = 0
+	b = bancPHPGenerique(t)
+	b.requeteNC(http.MethodGet, "/index.php/apps/files", ipPublique, entetes, nil)
+	if appels != 1 {
+		t.Errorf("signature chargée : %d appel(s), attendu 1", appels)
+	}
+}
+
+// R12 : une IP privée est analysée et journalisée « local ».
+func TestPHPGeneriqueIPPriveeLocal(t *testing.T) {
+	b := bancPHPGenerique(t)
+	corps := append([]byte(pocDTD), bytes.Repeat([]byte(" "), 1024)...)
+	b.requeteNC("PROPFIND", "/remote.php/dav/files/alice/", "192.168.1.10",
+		http.Header{"Content-Type": {"application/xml"}, "Cookie": {"_[Host-x=y"}}, bytes.NewReader(corps))
+	ls := lignesDe(b.lignes(t), "php_requete")
+	if len(ls) != 2 {
+		t.Fatalf("deux lignes (php-002, php-003) attendues, eu %v", b.lignes(t))
+	}
+	for _, l := range ls {
+		if l["client_ip"] != "local" {
+			t.Errorf("client_ip = %v, attendu local", l["client_ip"])
+		}
+	}
+	if strings.Contains(b.journalBrut(t), "192.168.1.10") {
+		t.Error("l'adresse privée ne doit pas figurer au journal")
 	}
 }
