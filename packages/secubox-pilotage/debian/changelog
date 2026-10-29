@@ -11,9 +11,26 @@ secubox-pilotage (0.1.2-1~trixie1) trixie; urgency=medium
   * Retour au maillage après un renommage (ref #3126 L2 tâche 5, ref #3242) : pilotage/renommage.py —
     après l'OperationDone réussi d'un Renommer (box du maillage), code `sbx-mesh-invite --code --nom
     <nouveau>` vérifié (forme, somme, nom) et envoyé par Device.X_SECUBOX_Maillage.Rejoindre() {"code"}
-    dans la file de la box ; le code n'apparaît dans aucun journal, audit ni message d'erreur. Câblage
-    dans l'API (table des opérations) : tâche 6.
- -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:30:00 +0100
+    dans la file de la box ; le code n'apparaît dans aucun journal, audit ni message d'erreur.
+
+  * Actions sur le contrôleur (ref #3126 L2 tâche 6) : POST /boxes/{x}/actions/{action} (catalogue fermé :
+    reboot, maj-paquets, service-demarrer|arreter|redemarrer, renommer, renouveler ; require_jwt), confirmation
+    forte vérifiée par l'API (nom exact de la box) pour reboot, service-arreter, renouveler et renommer sur une
+    box du propriétaire (400 sinon) ; OPERATE_RESP renvoyé tel quel (« consentement » d'une box cliente) ; login
+    de l'administrateur transmis dans « acteur » (R-L2-14) ; renommage vers un nom porté au maillage refusé (409).
+    Table SQLite `operations` (migration depuis la base de L1) : job inconnu et progression avant la réponse
+    acceptés, fins dédoublonnées par job (remise « au moins une fois »), résultat inconnu (rc -1) affiché.
+    GET /operations ; POST|GET /boxes/{x}/support (1 à 240 min, 30 par défaut), DELETE …/support/{id} ; une action
+    portant « support » exige une session ouverte et non échue, que le maître expire seul à sa fin (R-L2-31,
+    R-L2-33). Audit maître : pilotage_action, pilotage_action_resultat, pilotage_support, pilotage_support_fermeture.
+  * Le canal garde les champs des notifications de L2 (job, etape, pct, rc, resume, id, etat, decision, fin) ;
+    les fins d'opération ont leur propre fenêtre de plafond (une fin écartée serait perdue pour l'agent).
+  * Rejoindre câblé (R-L2-35) : à la première fin réussie d'un renommage d'une box du maillage, le code est obtenu
+    de l'assistant secubox-pilotage-invite (socket /run/secubox-pilotage/invite.sock, 0600 au service ; unité
+    secubox-pilotage-invite@.service au compte secubox, argv fixe sbx-mesh-invite --code --nom <nom> --json) puis
+    envoyé une fois, même si la fin précède la réponse. Le service du maître garde NoNewPrivileges, sans sudo.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 18:00:00 +0100
 
 secubox-pilotage (0.1.1-1~trixie1) trixie; urgency=medium
 
