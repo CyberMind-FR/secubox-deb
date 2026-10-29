@@ -303,7 +303,10 @@ func (e *EntreePHP) Signaux() map[string]int {
 // journalise. Appelée par defer dans le gestionnaire, donc après le relais et
 // la réponse. relaye dit que le corps a été confié au proxy : faux (403, ban,
 // cache média), la capture est figée et le jeton rendu, sans analyse ni ligne.
-// jeton : un jeton du sémaphore a été pris pour cette requête.
+// jeton : un jeton du sémaphore a été pris pour cette requête. sature : le
+// sémaphore de ce genre était plein (corpsAucun sinon) ; la ligne
+// capture-concurrence est écrite ici, après la réponse (passe finale M1),
+// même pour une requête non relayée, comme avant.
 //
 // MODE DETECT SEULEMENT : aucun appel au ban, à nft ni à l'escalade. La
 // gravité journalisée est celle de la signature ; elle part vers actord comme
@@ -314,7 +317,7 @@ func (e *EntreePHP) Signaux() map[string]int {
 // Le jeton est rendu APRÈS l'analyse : le préfixe vit jusque-là, et la borne
 // mémoire couvre aussi les allocations de l'analyseur. Son defer est posé
 // avant tout le reste : il est rendu quoi qu'il arrive.
-func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *EntreePHP, rm requeteMultipart, relaye, jeton bool) {
+func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *EntreePHP, rm requeteMultipart, relaye, jeton bool, sature genreCorps) {
 	rmp := &rm
 	if jeton {
 		defer s.rendreCapture(genre)
@@ -330,6 +333,9 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 				rm.host, rm.path, rm.ip, p, debug.Stack())
 		}
 	}()
+	if sature != corpsAucun {
+		s.limiteCaptureAtteinte(rmp, sature)
+	}
 	var (
 		prefixe []byte
 		lus     int64

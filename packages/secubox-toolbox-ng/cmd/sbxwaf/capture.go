@@ -34,6 +34,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 )
 
 // capturesMultipartMax borne les captures simultanées (spécification § 8).
@@ -206,11 +207,54 @@ func (s *Server) journaliserMultipart(rm *requeteMultipart, rec ThreatRecord) {
 // valeurs de genreCorps). Catégorie capture-concurrence (R-W7) : elle couvre
 // les deux sémaphores ; multipart-limite reste réservé au plafond de parties
 // de l'analyseur (R10).
+//
+// Appelée par analyserRequetePHP, après la réponse (passe finale M1). Au plus
+// une ligne par seconde et par genre : une saturation, c'est une attaque, et
+// chaque ligne coûte JA4, étiquette d'outil, JSON et écriture. La ligne suivante
+// porte le nombre de lignes supprimées entre-temps (signal supprimees).
 func (s *Server) limiteCaptureAtteinte(rm *requeteMultipart, genre genreCorps) {
+	ok, supprimees := s.concurrence.autoriser(genre, horlogeConcurrence())
+	if !ok {
+		return
+	}
+	signaux := map[string]int{"concurrence": cap(s.semaphoreCapture(genre)), "genre": int(genre)}
+	if supprimees > 0 {
+		signaux["supprimees"] = supprimees
+	}
 	s.journaliserMultipart(rm, ThreatRecord{
 		Category: "capture-concurrence", Severity: "audit", Action: "capture-concurrence",
-		Signaux: map[string]int{"concurrence": cap(s.semaphoreCapture(genre)), "genre": int(genre)},
+		Signaux: signaux,
 	})
+}
+
+// concurrenceIntervalle : au plus une ligne capture-concurrence par genre dans
+// cet intervalle. Seuil provisoire, non sourcé (2026-10-29).
+const concurrenceIntervalle = time.Second
+
+// limiteurConcurrence : débit des lignes capture-concurrence, par genre de
+// corps. Valeur zéro prête à l'emploi. Mémoire fixe (un créneau par genre).
+type limiteurConcurrence struct {
+	mu         sync.Mutex
+	derniere   [corpsDebut + 1]time.Time
+	supprimees [corpsDebut + 1]int
+}
+
+// autoriser dit si une ligne de ce genre peut être écrite à t ; sinon la
+// suppression est comptée. ok : supprimees est le compte depuis la dernière
+// ligne écrite, remis à zéro.
+func (l *limiteurConcurrence) autoriser(g genreCorps, t time.Time) (ok bool, supprimees int) {
+	if g < 0 || int(g) >= len(l.derniere) {
+		return false, 0
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if d := l.derniere[g]; !d.IsZero() && t.Sub(d) < concurrenceIntervalle {
+		l.supprimees[g]++
+		return false, 0
+	}
+	l.derniere[g] = t
+	supprimees, l.supprimees[g] = l.supprimees[g], 0
+	return true, supprimees
 }
 
 // capturePlafond borne la fenêtre de capture quel que soit --max-body-inspect
@@ -226,3 +270,6 @@ func (s *Server) fenetreCapture() int {
 	}
 	return capturePlafond
 }
+
+// horlogeConcurrence : horloge du débit des lignes capture-concurrence (crochet de test).
+var horlogeConcurrence = time.Now

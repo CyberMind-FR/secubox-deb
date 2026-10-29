@@ -209,7 +209,7 @@ func TestAnalyseCapturePaniqueRattrapee(t *testing.T) {
 	s := &Server{capturesMultipart: make(chan struct{}, 1), rules: LoadRules(ecrisRegles(t, corpusMultipartTest))}
 	s.capturesMultipart <- struct{}{}
 
-	s.analyserRequetePHP(nil, corpsMultipart, nil, requeteMultipart{host: "nc.example"}, true, true) // entrée nil : panique
+	s.analyserRequetePHP(nil, corpsMultipart, nil, requeteMultipart{host: "nc.example"}, true, true, corpsAucun) // entrée nil : panique
 
 	if n := len(s.capturesMultipart); n != 0 {
 		t.Fatalf("jeton non rendu après une panique (%d pris)", n)
@@ -232,7 +232,7 @@ func TestAnalyseCaptureNonRelayeeMuette(t *testing.T) {
 	capt := nouvelleCapture(io.NopCloser(bytes.NewReader(corps)), 1<<20, int64(len(corps)))
 	_, _ = io.Copy(io.Discard, lecteurSansWriterTo{capt}) // lu par le chemin texte, par exemple
 
-	s.analyserRequetePHP(capt, corpsMultipart, &EntreePHP{}, requeteMultipart{ip: ipPublique, host: "nc.example", contentType: ctTest}, false, true)
+	s.analyserRequetePHP(capt, corpsMultipart, &EntreePHP{}, requeteMultipart{ip: ipPublique, host: "nc.example", contentType: ctTest}, false, true, corpsAucun)
 
 	if n := len(s.capturesMultipart); n != 0 {
 		t.Fatalf("jeton non rendu (%d pris)", n)

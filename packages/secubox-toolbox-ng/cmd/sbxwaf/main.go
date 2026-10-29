@@ -176,6 +176,9 @@ type Server struct {
 	// capturesUrlencoded : idem pour les corps urlencoded des vhosts PHP
 	// (#3273, R-W7), sémaphore à part de capturesUrlencodedMax jetons.
 	capturesUrlencoded chan struct{}
+	// concurrence limite le débit des lignes capture-concurrence (passe
+	// finale M1) : une par seconde et par genre, suppressions comptées.
+	concurrence limiteurConcurrence
 	// appelsFederes compte, par IP, les partages fédérés anonymes (#3273,
 	// R-NC1). nil = EntreePHP.AppelsFederes reste 0 (tests).
 	appelsFederes *compteurFenetre
@@ -561,10 +564,14 @@ func (s *Server) handler() http.Handler {
 					}
 					e := s.nouvelleEntreePHP(r, service)
 					genre, plafond, jeton := s.corpsACapturer(r, e, ind)
+					sature := corpsAucun
 					if jeton && !s.prendreCapture(genre) {
-						// Sémaphore plein : pas de capture, une ligne d'état ;
-						// les contrôles sans corps restent évalués.
-						s.limiteCaptureAtteinte(&rm, genre)
+						// Sémaphore plein : pas de capture ; les contrôles
+						// sans corps restent évalués. La ligne d'état est
+						// écrite par l'analyse, APRÈS la réponse et sous son
+						// recover, débit limité (passe finale M1) : rien
+						// n'est calculé ici, en saturation donc sous attaque.
+						sature = genre
 						genre, jeton = corpsAucun, false
 					}
 					var capt *captureCorps
@@ -580,7 +587,7 @@ func (s *Server) handler() http.Handler {
 					// texte, le chemin texte a pu en lire la fenêtre (lus > 0)
 					// alors que le backend n'a jamais rien reçu. La fermeture lit
 					// relaye au retour du gestionnaire, pas ici.
-					defer func() { s.analyserRequetePHP(capt, genre, e, rm, relaye, jeton) }()
+					defer func() { s.analyserRequetePHP(capt, genre, e, rm, relaye, jeton, sature) }()
 				}
 			}
 
