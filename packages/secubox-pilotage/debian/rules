@@ -21,6 +21,7 @@ override_dh_auto_install:
 	install -D -m 644 nginx/pilotage-canal.conf.tpl $(P)/usr/share/secubox/pilotage/pilotage-canal.conf.tpl
 	install -D -m 644 nginx/pilotage.conf $(P)/etc/nginx/secubox-routes.d/pilotage.conf
 	install -D -m 644 apparmor/secubox-pilotage-api $(P)/etc/apparmor.d/secubox-pilotage-api
+	install -D -m 644 apparmor/secubox-pilotage-invite $(P)/etc/apparmor.d/secubox-pilotage-invite
 	install -d $(P)/lib/systemd/system
 	install -m 644 systemd/secubox-pilotage.service systemd/secubox-pilotage.socket systemd/secubox-pilotage-canal.socket systemd/secubox-pilotage-ecoute.service \
 	  systemd/secubox-pilotage-ecoute.path systemd/secubox-pilotage-ecoute.timer systemd/secubox-pilotage-invite.socket \

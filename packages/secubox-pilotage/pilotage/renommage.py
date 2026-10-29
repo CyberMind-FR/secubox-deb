@@ -90,7 +90,8 @@ class _Sortie:
 def lanceur_assistant(chemin: Path = SOCKET_ASSISTANT) -> Callable:
     """Lanceur pour emettre_code : au lieu d'exécuter sbx-mesh-invite (le service du maître n'a ni sudo ni le compte des jetons),
     passe le NOM à l'assistant secubox-pilotage-invite par sa socket ; l'assistant (compte secubox) fixe lui-même l'argv
-    `sbx-mesh-invite --code --nom <nom> --json` et rend sa sortie, ou rien en cas d'échec. Seul cet argv est accepté ici."""
+    `sbx-mesh-invite --code --nom <nom> --ttl 600 --json` (20 codes par heure au plus) et rend sa sortie, ou rien en cas d'échec.
+    Seul l'argv d'emettre_code est accepté ici ; la durée et le plafond sont fixés par l'assistant, pas par le maître."""
     def run(argv, timeout: float = DELAI_INVITE, **_):
         if (not isinstance(argv, (list, tuple)) or len(argv) != 5 or list(argv[:3]) != [INVITE, "--code", "--nom"] or argv[4] != "--json"
                 or not isinstance(argv[3], str) or not RE_NOM.fullmatch(argv[3])):

@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de l'assistant de jonction secubox-pilotage-invite (#3126 L2 tâche 6, R-L2-39), lancé par
+# secubox-pilotage-invite@.service (AppArmorProfile=). Il exécute sbx-mesh-invite (secubox-p2p) et, par lui, `ip` (adresse LAN
+# annoncée dans le code : api.main.get_lan_ip, `ip -4 -o addr show` et `ip -4 route get`, par netlink). Il écrit les seuls
+# jetons de master-link et ajoute à l'audit commun. Aucun shell, aucun réseau IP, aucune capacité.
+
+#include <tunables/global>
+
+profile secubox-pilotage-invite /usr/sbin/secubox-pilotage-invite {
+  #include <abstractions/base>
+  #include <abstractions/python>
+
+  /usr/sbin/secubox-pilotage-invite r,
+  /usr/bin/python3* rix,
+  /usr/bin/sbx-mesh-invite rix,
+  /usr/lib/secubox/ r,
+  /usr/lib/secubox/p2p/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # sbx-mesh-invite importe l'API p2p (adresse LAN) et secubox_core : configuration en lecture, jamais les secrets.
+  /etc/secubox/ r,
+  /etc/secubox/*.conf r,
+  /etc/secubox/*.toml r,
+  /etc/secubox/*.json r,
+  deny /etc/secubox/secrets/** r,
+
+  # État p2p en lecture ; jetons de jonction (tokens.json, écriture atomique par fichier temporaire) et compteur d'émissions.
+  /var/lib/secubox/p2p/ r,
+  /var/lib/secubox/p2p/*.json r,
+  /var/lib/secubox/p2p/master-link/ r,
+  /var/lib/secubox/p2p/master-link/** rwk,
+
+  # Audit commun en ajout seul (jamais créé ni tronqué).
+  /var/log/secubox/audit.log a,
+
+  # `ip` (iproute2) : adresses et routes par netlink.
+  /{,usr/}{,s}bin/ip rix,
+  /etc/iproute2/** r,
+  /usr/share/iproute2/** r,
+  network netlink raw,
+
+  network unix stream,
+}

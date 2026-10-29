@@ -251,8 +251,9 @@ def test_assistant_invite_unite_sous_le_compte_des_jetons_et_durcie():
         assert re.search(rf"^{re.escape(ligne)}$", u, re.M), ligne
     assert re.search(r"^RuntimeMaxSec=\d+$", u, re.M)
     rw = [x for ligne in u.splitlines() if ligne.startswith("ReadWritePaths=") for x in ligne.split("=", 1)[1].split()]
-    assert set(rw) == {"/var/lib/secubox/p2p/master-link", "/var/log/secubox"}
+    assert set(rw) == {"-/var/lib/secubox/p2p/master-link", "/var/log/secubox"}     # M5 : absent (p2p non installé) = pas d'échec
     assert "sudo" not in u
+    assert re.search(r"^AppArmorProfile=secubox-pilotage-invite$", u, re.M)
 
 
 def test_assistant_invite_installe_active_et_arrete():
@@ -274,8 +275,29 @@ def test_service_maitre_toujours_sans_sudo_ni_reseau_ip():
     assert "NoNewPrivileges=yes" in u and "RestrictAddressFamilies=AF_UNIX" in u and "sudo" not in u
 
 
-def test_exception_assistant_invite_ecrite():
-    regles = lire(".claude/RULES-CODE.md", DEPOT)
-    lignes = [x for x in regles.splitlines() if "secubox-pilotage-invite@.service" in x]
-    assert len(lignes) == 1 and "User=secubox" in lignes[0]
-    assert "packages/secubox-pilotage/tests/test_paquet.py::test_assistant_invite_unite_sous_le_compte_des_jetons_et_durcie" in lignes[0]
+def test_assistant_invite_profil_apparmor_enforce():
+    """I2 (R-L2-39) : pas d'exception, un profil enforce comme pour chaque service (AGENTS.md)."""
+    p = lire("apparmor/secubox-pilotage-invite")
+    c = code("apparmor/secubox-pilotage-invite")
+    assert "profile secubox-pilotage-invite /usr/sbin/secubox-pilotage-invite" in c and "complain" not in c
+    for regle in ("/usr/sbin/secubox-pilotage-invite r,", "/usr/bin/python3* rix,", "/usr/bin/sbx-mesh-invite rix,",
+                  "/usr/lib/secubox/p2p/** r,", "/var/lib/secubox/p2p/master-link/ r,", "/var/lib/secubox/p2p/master-link/** rwk,",
+                  "/var/log/secubox/audit.log a,", "/{,usr/}{,s}bin/ip rix,", "network netlink raw,", "deny /etc/secubox/secrets/** r,"):
+        assert regle in c, regle
+    for interdit in ("/bin/sh", "/bin/bash", "/usr/bin/sudo", "/bin/dash", "capability", "network inet", " ux,", " Ux,", " px,", " Px,"):
+        assert interdit not in c, interdit
+    assert p.rstrip().endswith("}")
+    r = lire("debian/rules")
+    assert "apparmor/secubox-pilotage-invite $(P)/etc/apparmor.d/secubox-pilotage-invite" in r
+    assert "apparmor_parser -r /etc/apparmor.d/secubox-pilotage-invite" in code("debian/postinst")
+    assert "secubox-pilotage-invite@.service" not in lire(".claude/RULES-CODE.md", DEPOT)   # l'exception est retirée
+
+
+def test_profils_apparmor_se_compilent():
+    import shutil
+    if shutil.which("apparmor_parser") is None:
+        import pytest
+        pytest.skip("apparmor_parser absent")
+    for nom in ("secubox-pilotage-api", "secubox-pilotage-invite"):
+        r = subprocess.run(["apparmor_parser", "-Q", "-K", str(ICI / "apparmor" / nom)], capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr

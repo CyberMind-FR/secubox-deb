@@ -29,6 +29,8 @@ case "$1" in
     if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1; then
       apparmor_parser -r /etc/apparmor.d/secubox-pilotage-api >/dev/null 2>&1 \
         || echo "secubox-pilotage : profil AppArmor non chargé (voir journalctl -k)" >&2
+      apparmor_parser -r /etc/apparmor.d/secubox-pilotage-invite >/dev/null 2>&1 \
+        || echo "secubox-pilotage : profil AppArmor de l'assistant de jonction non chargé (voir journalctl -k)" >&2
     fi
 
     # Écouteurs de tunnel et règles nft (seulement pour les interfaces présentes).
