@@ -10,7 +10,7 @@ from api.state import load_profile
 
 PROFILES_DIR = Path(__file__).resolve().parent.parent / "profiles"
 PROFILE_FILES = sorted(PROFILES_DIR.glob("*.toml"))
-EXPECTED = {"full", "lite", "secure-gateway", "media-lab", "minimal"}
+EXPECTED = {"full", "lite", "secure-gateway", "media-lab", "minimal", "isp"}   # isp : #3258 (audit R3)
 
 
 def test_all_profiles_ship():

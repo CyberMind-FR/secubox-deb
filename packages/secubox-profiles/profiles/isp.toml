@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Profil d'activation « isp » (#3258, audit R3) : ce que `secubox-profilectl apply --profile isp` laisse allumé. Sans lui, une
+# box Auto-Load « isp » installait secubox-isp puis échouait à l'étape « application » (« profil inconnu »).
+# Décision du propriétaire du 2026-10-29 : isp = lite + DPI (nDPI, nDPId), NetFlow (Media Flow, porté par secubox-dpi) et la
+# cabine numérique (toolbox, ce que #3259 a retiré de lite, intercepteur) ; ni « standard » ni « custom ».
+# Un profil est EXHAUSTIF : un service livré par secubox-isp et absent d'ici est ARRÊTÉ par l'apply (liste nommée dans
+# tests/test_profil_isp_3258.py). N'y figurent que des services durables ou des oneshot RemainAfterExit.
+name  = "isp"
+label = "ISP — protection + DPI, NetFlow, cabine numérique"
+# Ceux de lite, moins le DPI, nDPId, Media Flow et la toolbox, que ce profil rallume.
+menu_off = ["zkp", "assist", "ksm", "centers", "premier-pas-maitre"]
+# Ceux de lite, moins dpi-resume (DPI) et yt-dlp-refresh (Media Flow) : ce profil les rétablit.
+minuteurs_off = []
+on = [
+  # ── lite (lite.toml), à garder identique ──
+  "ad-guard", "admin", "aggregator", "annuaire", "auth", "backup",
+  "cdn", "certs", "core", "cs-bridge", "dns",
+  "dns-guard", "dns-provider", "exposure", "haproxy", "hardening", "health-doctor",
+  "hub", "ipblock", "led-trigger", "leds", "mesh",
+  "network-ready", "p2p", "portal", "routes", "runtime", "system",
+  "users", "vhost", "vortex-firewall", "waf", "waf-ng", "waf-ratelimit",
+  "watchdog", "wireguard",
+  "console", "kiosk",
+  "autoload-agent", "firstboot", "groupe-declares", "meshname", "net-fallback", "openpgp", "premier-pas", "waker",
+  "freebox", "nac", "ipv6guard", "webfilter", "webfilter-feed", "network-anomaly", "netmodes", "netdiag",
+  "qos", "traffic", "nettweak", "tor", "proxypac",
+  "security-posture", "antirootkit", "cve-triage", "threats", "threatmesh", "cookies", "soc", "actord", "cyberfeed",
+  "vault", "depot-deverrouille", "eth2-flowctl-off",
+  "appstore", "metacatalog", "config-advisor", "cloner", "health-prober", "module-prober",
+  # ── DPI (#3218 : sorti de lite) : nDPI et sa capture de flux, nDPId et ses moteurs ──
+  "dpi", "dpi-flowcap", "ndpid", "ndpid-engine", "ndpisrvd",
+  # ── NetFlow : Media Flow (composant de secubox-dpi) ──
+  "mediaflow",
+  # ── cabine numérique (#3259 : sortie de lite) ──
+  "toolbox", "toolbox-wg-restore", "authwatch", "toolbox-egress-proxy", "interceptor",
+]
