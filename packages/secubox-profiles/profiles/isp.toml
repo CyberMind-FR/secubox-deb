@@ -14,7 +14,9 @@ label = "ISP — protection + DPI, NetFlow, cabine numérique"
 # Ceux de lite, moins le DPI, nDPId, Media Flow et la toolbox, que ce profil rallume.
 menu_off = ["zkp", "assist", "ksm", "centers", "premier-pas-maitre"]
 # Ceux de lite, moins dpi-resume (DPI) et yt-dlp-refresh (Media Flow) : ce profil les rétablit.
-minuteurs_off = []
+# + streamlit-idle (revue #3258, I1) : son service porte Requires=secubox-streamlit.service ; laissée active, elle
+# relancerait toutes les 5 min le Streamlit que ce profil arrête (l'apply désactive sans masquer).
+minuteurs_off = ["streamlit-idle"]
 on = [
   # ── lite (lite.toml), à garder identique ──
   "ad-guard", "admin", "aggregator", "annuaire", "auth", "backup",

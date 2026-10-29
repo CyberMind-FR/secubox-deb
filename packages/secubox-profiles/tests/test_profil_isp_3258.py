@@ -11,6 +11,7 @@ DÉCISION DU PROPRIÉTAIRE (2026-10-29) : isp = lite + DPI (nDPI, nDPId), NetFlo
 from __future__ import annotations
 
 import importlib.util
+import re
 from pathlib import Path
 
 from api.manifest import PROTECTED_IDS
@@ -83,7 +84,57 @@ def test_les_menus_du_dpi_de_netflow_et_de_la_toolbox_sont_visibles():
 def test_les_minuteries_du_dpi_et_de_media_flow_sont_retablies():
     isp = _isp()
     assert not MINUTEURS_RENDUS & isp.minuteurs_off
-    assert isp.minuteurs_off == LITE.minuteurs_off - MINUTEURS_RENDUS
+    assert isp.minuteurs_off == (LITE.minuteurs_off - MINUTEURS_RENDUS) | MINUTEURS_RELANCEURS
+
+
+# Revue #3258 (I1) : secubox-streamlit-idle.timer (toutes les 5 min) lance secubox-streamlit-idle.service, qui porte
+# Requires=secubox-streamlit.service. L'apply désactive et arrête streamlit sans le masquer : la minuterie le relançait.
+MINUTEURS_RELANCEURS = {"streamlit-idle"}
+DEPENDANCES = re.compile(r"^(?:Requires|BindsTo|Wants|Requisite|PartOf)=(.*)$", re.M)
+
+
+def _nom_unite(f: Path) -> str:
+    """`<paquet>.<unité>` (unité installée par dh_installsystemd) → `<unité>` ; sinon le nom du fichier."""
+    return f.name.split(".", 1)[1] if f.name.count(".") >= 2 else f.name
+
+
+def _minuteries_et_leurs_cibles(paquets) -> dict[str, set[str]]:
+    """id de minuterie (`secubox-<id>.timer`) → ids des services `secubox-<id>.service` qu'elle peut démarrer : son
+    service et ce que ce service tire par Requires=, BindsTo=, Wants=, Requisite= ou PartOf=."""
+    a = _allegement()
+    out: dict[str, set[str]] = {}
+    for p in sorted(paquets):
+        racine = a.INDEX[p][0]
+        services = {_nom_unite(f): f for f in racine.rglob("*.service") if "/tests/" not in f.as_posix()}
+        for f in racine.rglob("*.timer"):
+            nom = _nom_unite(f)
+            if "/tests/" in f.as_posix() or not nom.startswith("secubox-"):
+                continue
+            tid = nom[len("secubox-"):-len(".timer")]
+            m = re.search(r"^Unit=(\S+)", f.read_text(errors="replace"), re.M)
+            service = m.group(1) if m else nom[:-len(".timer")] + ".service"
+            cibles = {service}
+            if service in services:
+                for ligne in DEPENDANCES.findall(services[service].read_text(errors="replace")):
+                    cibles |= set(ligne.split())
+            out[tid] = {c[len("secubox-"):-len(".service")] for c in cibles
+                        if c.startswith("secubox-") and c.endswith(".service")}
+    return out
+
+
+def test_aucune_minuterie_active_dans_isp_ne_relance_un_service_arrete():
+    """Une minuterie que le profil laisse active ne doit démarrer aucun service durable que l'apply arrête."""
+    a = _allegement()
+    isp = _isp()
+    paquets = a._fermeture("secubox-isp")
+    unites = a._unites(paquets)
+    durables = {mid for mid, textes in unites.items() if not all(a._oneshot_de_minuterie(t) for t in textes)}
+    arretes = durables - isp.on - PROTECTED_IDS
+    minuteries = _minuteries_et_leurs_cibles(paquets)
+    assert "streamlit-idle" in minuteries and "streamlit" in minuteries["streamlit-idle"], "le relevé ne voit plus streamlit-idle"
+    fautives = {tid: sorted(c & arretes) for tid, c in minuteries.items() if c & arretes and tid not in isp.minuteurs_off}
+    assert not fautives, fautives
+    assert MINUTEURS_RELANCEURS <= isp.minuteurs_off
 
 
 def test_ni_standard_ni_custom():
@@ -92,7 +143,6 @@ def test_ni_standard_ni_custom():
 
 def test_chaque_profil_auto_load_a_son_profil_d_activation():
     """R3 : l'agent Auto-Load installe le méta-paquet puis `secubox-profilectl apply --profile <profil>`."""
-    import re
     src = (PAQUETS / "secubox-autoload-agent" / "autoload_agent" / "moteur.py").read_text(encoding="utf-8")
     bloc = re.search(r"^PROFILS_PAQUET = \{(.*?)\}", src, re.M).group(1)
     for nom in re.findall(r'"([a-z-]+)":', bloc):
