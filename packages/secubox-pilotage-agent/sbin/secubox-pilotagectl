@@ -1099,7 +1099,7 @@ def gerer_support(ctx, fd, p, maintenant, refus):
         sup.update(etat="ouvert", ouvert=maintenant, fin=fin)
         ecrire_json(fd, "support.json", sup)
         auditer(ctx, "support_ouvert", support=ident, duree_min=sup["duree_min"], fin=fin)
-        return {"ok": True, "support": ident, "etat": "ouvert", "fin": fin}
+        return {"ok": True, "support": ident, "etat": "ouvert", "duree_min": sup["duree_min"], "fin": fin}
     sup.update(etat="refuse", decide=maintenant)
     ecrire_json(fd, "support.json", sup)
     auditer(ctx, "support_refuse", support=ident)

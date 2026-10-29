@@ -84,9 +84,18 @@ def test_sudoers_argv_borne_au_ctl():
 
 
 def test_ctl_python_isole_et_executable():
-    ctl = RACINE / "sbin/secubox-pilotagectl"
-    assert ctl.read_text().startswith("#!/usr/bin/python3 -I\n")       # ni PYTHON*, ni dossier courant, ni site
-    assert ctl.stat().st_mode & 0o111
+    for nom in ("secubox-pilotagectl", "secubox-pilotage"):
+        ctl = RACINE / "sbin" / nom
+        assert ctl.read_text().startswith("#!/usr/bin/python3 -I\n"), nom  # ni PYTHON*, ni dossier courant, ni site
+        assert ctl.stat().st_mode & 0o111, nom
+
+
+def test_regles_installent_la_commande_locale():
+    """Tâche 4 : commande du détenteur, 0755 (un compte non root reçoit son message « à lancer en root » ; le ctl
+    refuse de toute façon hors root), jamais dans le sudoers de l'agent."""
+    assert "install -D -m 0755 sbin/secubox-pilotage $(P)/usr/sbin/secubox-pilotage" in lire("debian/rules")
+    assert "secubox-pilotage " not in sans_commentaires(lire("sudoers.d/secubox-pilotage-agent")).replace(
+        "secubox-pilotage-agent ", "")
 
 
 def test_regles_installent_ctl_sudoers_et_tmpfiles():
@@ -166,7 +175,7 @@ def test_entetes_spdx():
     fichiers = ["debian/rules", "debian/postinst", "debian/prerm", "debian/postrm", "README.md",
                 "systemd/secubox-pilotage-agent.service", "apparmor/usr.sbin.sbx-pilotage-agent",
                 "conf/pilotage-agent.env", "tests/test_paquet_agent.py", "tests/test_pilotagectl.py",
-                "sbin/secubox-pilotagectl", "sudoers.d/secubox-pilotage-agent", "tmpfiles.d/secubox-pilotagectl.conf"]
+                "tests/test_pilotage_local.py", "sbin/secubox-pilotage", "sbin/secubox-pilotagectl", "sudoers.d/secubox-pilotage-agent", "tmpfiles.d/secubox-pilotagectl.conf"]
     fichiers += [str(f.relative_to(RACINE)) for f in (RACINE / "cmd").rglob("*.go")]
     for rel in fichiers:
         assert "LicenseRef-CMSD-1.0" in lire(rel), rel

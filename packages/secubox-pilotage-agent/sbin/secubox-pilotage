@@ -1,0 +1,233 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-pilotage — commande locale du détenteur de la box (#3126, L2 « Agir », tâche 4).
+
+Lancée en root sur la box par un humain (console, SSH local). Elle n'est qu'un affichage en français au-dessus de
+`/usr/sbin/secubox-pilotagectl` : toute la politique (mains liées, consentements, support, audit) est décidée par le
+ctl. Lancée en root hors de l'agent, elle est « locale » pour le ctl, seule origine qui peut consentir, ouvrir un
+support ou lier les mains. Le maître l'apprend par l'agent, qui lit `secubox-pilotagectl etat` à chaque sondage.
+
+Usage :
+  secubox-pilotage etat                         connexion au maître, mains liées, consentements, support
+  secubox-pilotage consentements                consentements (en attente, puis les décisions récentes)
+  secubox-pilotage accepter <id>                accepter un consentement (consommé par la demande suivante identique)
+  secubox-pilotage refuser <id>                 refuser un consentement
+  secubox-pilotage mains-liees on|off           lier les mains (le maître ne peut plus que voir) ou les délier
+  secubox-pilotage support accepter <id>        ouvrir la session de support demandée par le maître
+  secubox-pilotage support refuser <id>         refuser la demande de support
+  secubox-pilotage support fermer [<id>]        fermer la session (en cours par défaut)
+
+Codes : 0 fait ; 1 refusé (motif du ctl), erreur, ou lancé hors root ; 2 usage.
+SBX_RACINE (tests) : honorée comme par le ctl, seulement si l'appelant n'a pas été élevé par sudo ; le ctl voisin
+est alors appelé avec l'environnement reçu. Sinon : /usr/sbin/secubox-pilotagectl, environnement minimal.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+CTL = "/usr/sbin/secubox-pilotagectl"
+AGENT = "secubox-pilotage-agent"
+RE_LOGIN = re.compile(r"[a-z_][a-z0-9_.-]{0,63}")            # motif --acteur du ctl (R-L2-14)
+PATH_SUR = "/usr/sbin:/usr/bin:/sbin:/bin"
+
+USAGE = """usage : secubox-pilotage etat
+       secubox-pilotage consentements
+       secubox-pilotage accepter|refuser <id>
+       secubox-pilotage mains-liees on|off
+       secubox-pilotage support accepter|refuser <id>
+       secubox-pilotage support fermer [<id>]"""
+
+ETATS_CONSENTEMENT = {"en_attente": "en attente", "accepte": "accepté", "refuse": "refusé", "utilise": "utilisé",
+                      "expire": "expiré", "annule": "annulé"}
+ETATS_SUPPORT = {"refuse": "refusé", "ferme": "fermé", "annule": "annulé (mains liées)", "expire": "expiré"}
+
+
+class Usage(Exception):
+    pass
+
+
+class Refus(Exception):
+    pass
+
+
+def dire(msg, flux=sys.stdout):
+    print(msg, file=flux)
+
+
+def substitution():
+    """Racine de test honorée seulement si l'appelant est le processus lui-même (même règle que le ctl)."""
+    racine = os.environ.get("SBX_RACINE", "")
+    sudo_uid = os.environ.get("SUDO_UID", "")
+    if not racine:
+        return False
+    try:
+        return (int(sudo_uid) if sudo_uid else os.getuid()) == os.geteuid()
+    except ValueError:
+        return False
+
+
+def ctl(*args):
+    """Appelle le ctl (argv en liste, sans shell) ; rend son objet JSON. Refus → Refus ; erreur → Refus aussi."""
+    if substitution():
+        chemin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "secubox-pilotagectl")
+        env = {k: v for k, v in os.environ.items() if not k.startswith("SUDO_")}
+    else:
+        chemin, env = CTL, {"PATH": PATH_SUR, "LC_ALL": "C"}
+    # Acteur audité : le login de l'humain qui a lancé sudo (jamais le compte de l'agent) ; sinon le ctl met root.
+    login = os.environ.get("SUDO_USER", "")
+    argv = [chemin]
+    if RE_LOGIN.fullmatch(login) and login not in (AGENT, "root"):
+        argv += ["--acteur", login]
+    argv += list(args)
+    try:
+        p = subprocess.run(argv, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise Refus(f"secubox-pilotagectl injoignable ({e.__class__.__name__})") from None
+    try:
+        res = json.loads(p.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise Refus("réponse illisible de secubox-pilotagectl") from None
+    if p.returncode == 2:
+        raise Usage(res.get("erreur") or res.get("refus") or "argument invalide")
+    if not isinstance(res, dict):
+        raise Refus("réponse illisible de secubox-pilotagectl")
+    if res.get("ok") is False:
+        motif = res.get("refus") or res.get("erreur") or "refusé"
+        raise Refus(f"refusé : {motif}" if "refus" in res else f"erreur : {motif}")
+    return res
+
+
+# --- Affichage -------------------------------------------------------------------------------------------------------
+
+def duree(s):
+    s = max(0, int(s))
+    h, m = divmod(s // 60, 60)
+    return f"{h} h {m:02d} min" if h else f"{m} min"
+
+
+def heure(ts):
+    return time.strftime("%H:%M", time.localtime(ts))
+
+
+def ligne_consentement(c, maintenant):
+    quoi = c.get("action", "?") + (f" {c['unite']}" if c.get("unite") else "")
+    etat = ETATS_CONSENTEMENT.get(c.get("etat"), str(c.get("etat")))
+    fin = ""
+    if c.get("etat") == "en_attente" and isinstance(c.get("expire"), int):
+        fin = f"expire dans {duree(c['expire'] - maintenant)}"
+    return f"  {c.get('id', '?'):<16}  {etat:<10}  {quoi:<40}  {fin}".rstrip()
+
+
+def texte_support(sup, maintenant):
+    if not sup:
+        return "aucun"
+    ident, etat = sup.get("id", "?"), sup.get("etat")
+    if etat == "en_attente":
+        return (f"{ident} attend votre accord ({sup.get('duree_min')} min) — "
+                f"secubox-pilotage support accepter {ident}")
+    if etat == "ouvert":
+        fin = sup.get("fin", maintenant)
+        return f"{ident} ouvert jusqu'à {heure(fin)} (reste {duree(fin - maintenant)}) — secubox-pilotage support fermer"
+    return f"aucun (dernier : {ident}, {ETATS_SUPPORT.get(etat, etat)})"
+
+
+def afficher_etat(e):
+    maintenant = int(time.time())
+    agent = e.get("agent", "inconnu")
+    canal = e.get("canal")
+    attente = sum(1 for c in e.get("consentements", []) if c.get("etat") == "en_attente")
+    if canal:
+        nature = "box du propriétaire" if canal == "wg-mesh" else "box cliente : accord du détenteur exigé"
+        maitre = f"ancre vérifiée sur {canal} ({nature})"
+    else:
+        maitre = "aucune ancre vérifiée : le maître peut lire, il ne peut pas agir"
+    liees = "oui — le maître ne peut que voir (lecture, relevés)" if e.get("mains_liees") else "non"
+    dire(f"Pilotage distant de {e.get('box', '?')}")
+    dire(f"  Agent          : {'en marche' if agent == 'active' else f'arrêté ({agent})'}")
+    dire(f"  Maître         : {maitre}")
+    dire(f"  Mains liées    : {liees}")
+    dire(f"  Consentements  : {attente} en attente" + (" — secubox-pilotage consentements" if attente else ""))
+    dire(f"  Support        : {texte_support(e.get('support'), maintenant)}")
+
+
+def afficher_consentements(e):
+    maintenant = int(time.time())
+    liste = e.get("consentements", [])
+    if not liste:
+        dire("Aucun consentement.")
+        return
+    attente = [c for c in liste if c.get("etat") == "en_attente"]
+    autres = sorted((c for c in liste if c.get("etat") != "en_attente"), key=lambda c: c.get("cree", 0), reverse=True)
+    dire("Consentements (une demande non décidée expire à 24 h ; un accord sert une fois) :")
+    for c in attente + autres[:20]:
+        dire(ligne_consentement(c, maintenant))
+    if attente:
+        dire("Décider : secubox-pilotage accepter <id>  |  secubox-pilotage refuser <id>")
+
+
+# --- Commandes -------------------------------------------------------------------------------------------------------
+
+def executer(argv):
+    if argv == ["etat"]:
+        afficher_etat(ctl("etat"))
+    elif argv == ["consentements"]:
+        afficher_consentements(ctl("etat"))
+    elif len(argv) == 2 and argv[0] in ("accepter", "refuser"):
+        r = ctl("consentement", argv[0], argv[1])
+        if r.get("decision") == "accepte":
+            dire(f"Consentement {r['consentement']} accepté : la prochaine demande identique du maître sera exécutée,"
+                 " une seule fois.")
+        else:
+            dire(f"Consentement {r.get('consentement')} refusé.")
+    elif len(argv) == 2 and argv[0] == "mains-liees" and argv[1] in ("on", "off"):
+        r = ctl("mains-liees", argv[1])
+        if r.get("mains_liees"):
+            dire("Mains liées posées : le maître ne peut plus que voir (lecture, relevés) ; consentements et support "
+                 "en cours annulés.")
+        else:
+            dire("Mains liées levées : le maître agit de nouveau selon la politique de la box.")
+        if r.get("projection") is False:
+            dire("attention : drapeau /etc/secubox/pilotage/mains-liees non posé ; l'état root fait foi", sys.stderr)
+    elif len(argv) == 3 and argv[:2] in (["support", "accepter"], ["support", "refuser"]):
+        r = ctl("support", argv[1], argv[2])
+        if r.get("etat") == "ouvert":
+            dire(f"Support {r['support']} ouvert jusqu'à {heure(r['fin'])} ({r.get('duree_min')} min). "
+                 "Fermer : secubox-pilotage support fermer")
+        else:
+            dire(f"Support {r.get('support')} refusé.")
+    elif argv[:2] == ["support", "fermer"] and len(argv) in (2, 3):
+        ident = argv[2] if len(argv) == 3 else None
+        if ident is None:
+            sup = ctl("etat").get("support") or {}
+            if sup.get("etat") not in ("en_attente", "ouvert"):
+                raise Refus("aucun support ouvert ni demandé")
+            ident = sup.get("id", "")
+        r = ctl("support", "fermer", ident)
+        dire(f"Support {r.get('support')} fermé.")
+    else:
+        raise Usage("commande inconnue")
+
+
+def main(argv):
+    if os.geteuid() != 0 and not substitution():
+        dire("secubox-pilotage : à lancer en root sur la box (par exemple : sudo secubox-pilotage etat).", sys.stderr)
+        return 1
+    try:
+        executer(argv)
+        return 0
+    except Usage as e:
+        dire(f"secubox-pilotage : {e}\n{USAGE}", sys.stderr)
+        return 2
+    except Refus as e:
+        dire(f"secubox-pilotage : {e}", sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
