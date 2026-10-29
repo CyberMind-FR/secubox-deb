@@ -126,7 +126,8 @@ des jetons (`secubox`, propriétaire de `master-link/tokens.json`) : il écrit l
 `secubox-pilotage-invite@.service` au compte `secubox`, qui valide le nom et exécute l'argv fixe
 `/usr/bin/sbx-mesh-invite --code --nom <nom> --ttl 600 --json` (jamais `--flash` ni `--adresse` ; code valable 10 min), au plus
 **20 fois par heure** (compteur `master-link/pilotage-emissions.json`, 0600, sous verrou ; illisible ou lien : refus), puis rend
-sa sortie sur la seule connexion (rien en cas d'échec ; le journal n'a que le code de sortie). L'assistant audite lui-même
+sa sortie sur la seule connexion (`{"erreur": "plafond"}` au-delà du plafond, audité par le maître en
+`pilotage_rejoindre_echec {raison: "plafond"}` ; rien en cas d'autre échec ; le journal n'a que le code de sortie). L'assistant audite lui-même
 `pilotage_code_emis {nom, ttl}` (ajout sans création ; audit impossible : rien n'est rendu). Unité durcie (socle § 10,
 `ReadWritePaths=-/var/lib/secubox/p2p/master-link /var/log/secubox`, `AF_UNIX AF_NETLINK`, `IPAddressDeny=any`, 60 s au plus) et
 profil AppArmor **enforce** `secubox-pilotage-invite` (`AppArmorProfile=`, chargé par le postinst) : python3, `sbx-mesh-invite` et

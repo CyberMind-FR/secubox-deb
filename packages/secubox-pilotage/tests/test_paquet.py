@@ -290,7 +290,16 @@ def test_assistant_invite_profil_apparmor_enforce():
     r = lire("debian/rules")
     assert "apparmor/secubox-pilotage-invite $(P)/etc/apparmor.d/secubox-pilotage-invite" in r
     assert "apparmor_parser -r /etc/apparmor.d/secubox-pilotage-invite" in code("debian/postinst")
-    assert "secubox-pilotage-invite@.service" not in lire(".claude/RULES-CODE.md", DEPOT)   # l'exception est retirée
+
+
+
+def test_exception_reduite_au_compte_partage():
+    """R-L2-40 : seule exception, le compte partagé `secubox` (propriétaire de tokens.json et master-link de secubox-p2p)."""
+    lignes = [x for x in lire(".claude/RULES-CODE.md", DEPOT).splitlines() if "secubox-pilotage-invite@.service" in x]
+    assert len(lignes) == 1
+    for mot in ("User=secubox", "#3126", "tokens.json", "master-link", "enforce", "0600", "argv fixe",
+                "packages/secubox-pilotage/tests/test_paquet.py::test_exception_reduite_au_compte_partage"):
+        assert mot in lignes[0], mot
 
 
 def test_profils_apparmor_se_compilent():

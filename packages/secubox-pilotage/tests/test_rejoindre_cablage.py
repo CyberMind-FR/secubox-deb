@@ -171,7 +171,7 @@ def test_assistant_plafonne_les_emissions_par_heure(tmp_path):
         assert a.main(io.BytesIO(b"gk9\n"), io.BytesIO(), lanceur=lanceur, dossier=tmp_path, horloge=lambda: t[0]) == 0
     sortie = io.BytesIO()
     assert a.main(io.BytesIO(b"gk9\n"), sortie, lanceur=lanceur, dossier=tmp_path, horloge=lambda: t[0]) != 0
-    assert len(appels) == 20 and sortie.getvalue() == b""
+    assert len(appels) == 20 and json.loads(sortie.getvalue()) == {"erreur": "plafond"}   # R-L2-40 : cause distincte, sans secret
     t[0] += 3601                                                      # une heure plus tard : de nouveau permis
     assert a.main(io.BytesIO(b"gk9\n"), io.BytesIO(), lanceur=lanceur, dossier=tmp_path, horloge=lambda: t[0]) == 0
     compteur = tmp_path / "pilotage-emissions.json"
@@ -205,3 +205,28 @@ def test_assistant_audite_l_emission_sans_le_code(tmp_path):
     sortie = io.BytesIO()
     assert a.main(io.BytesIO(b"gk9\n"), sortie, lanceur=lanceur, dossier=tmp_path, audit=tmp_path / "absent.log") != 0
     assert sortie.getvalue() == b"" and not (tmp_path / "absent.log").exists()
+
+
+
+def test_plafond_remonte_au_maitre_et_audite(tmp_path):
+    """R-L2-40 : la cause « plafond » rendue par l'assistant devient ErreurRejoindre("plafond"), auditée telle quelle."""
+    serveur(tmp_path / "i.sock", b'{"erreur": "plafond"}\n', [])
+    with pytest.raises(R.ErreurRejoindre) as e:
+        R.emettre_code_par(R.lanceur_assistant(tmp_path / "i.sock"))("gk9")
+    assert str(e.value) == "plafond"
+
+
+@pytest.mark.asyncio
+async def test_plafond_audite_pilotage_rejoindre_echec(tmp_path):
+    from pilotage.files import Files
+    from pilotage.operations import Suivi
+    from pilotage.stockage import StockageSqlite
+    serveur(tmp_path / "i.sock", b'{"erreur": "plafond"}\n', [])
+    s, f, lignes = StockageSqlite(tmp_path / "p", horloge=Horloge()), Files(), []
+    suivi = Suivi(s, f, lambda ev, ch: lignes.append((ev, ch)), emettre=R.emettre_code_par(R.lanceur_assistant(tmp_path / "i.sock")))
+    op = s.operation_demander(GK5.cle, "renommer", {"nom": "gk9"}, "alice", None)
+    s.operation_reponse(op, "accepte", "j1", "")
+    await suivi.apres_fin(GK5, s.operation_fin(GK5.cle, "j1", 0, ""))
+    await suivi.attendre()
+    (e,) = [c for ev, c in lignes if ev == "pilotage_rejoindre_echec"]
+    assert e["raison"] == "plafond" and f.en_attente(GK5.cle) == 0

@@ -14,7 +14,8 @@ Seul le service du maître joint la socket (0600, secubox-pilotage). Il ne peut 
             la box le consomme dans la minute qui suit l'envoi)
   plafond : 20 émissions par heure, compteur `pilotage-emissions.json` (0600) dans master-link, sous verrou ; au-delà, refus
             sans lancer sbx-mesh-invite. Compteur illisible, lien ou fichier non ordinaire : refus (fermé par défaut).
-  sortie  : la sortie JSON de sbx-mesh-invite ({"code", "nom", "expire"}), ou RIEN en cas d'échec
+  sortie  : la sortie JSON de sbx-mesh-invite ({"code", "nom", "expire"}), {"erreur": "plafond"} au-delà du plafond, ou RIEN
+            en cas d'autre échec
 
 Le code porte un jeton : il n'est écrit que sur la connexion, jamais dans le journal (stderr ne reçoit que le code de sortie).
 Audit : `pilotage_code_emis {nom, ttl}` dans /var/log/secubox/audit.log, ouvert en ajout SANS création (le profil AppArmor
@@ -98,6 +99,8 @@ def main(entree, sortie, lanceur=subprocess.run, dossier: Path = DOSSIER, horlog
         return 2
     if not reserver(dossier, horloge()):
         print(f"secubox-pilotage-invite : plafond de {EMISSIONS_PAR_HEURE} codes par heure atteint, ou compteur inutilisable", file=sys.stderr)
+        sortie.write(b'{"erreur": "plafond"}\n')   # cause distincte, sans secret (R-L2-40) ; le maître l'audite
+        sortie.flush()
         return 3
     try:
         r = lanceur([INVITE, "--code", "--nom", nom.decode("ascii"), "--ttl", str(TTL_S), "--json"], capture_output=True, text=True,

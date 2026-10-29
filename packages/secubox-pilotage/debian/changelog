@@ -36,6 +36,8 @@ secubox-pilotage (0.1.2-1~trixie1) trixie; urgency=medium
     figé, 20 codes par heure au plus (compteur dans master-link), audit pilotage_code_emis écrit par lui-même ;
     ReadWritePaths « - » sur master-link. Support : sans_reponse après un 504, « ouvert » accepté seulement pour
     une session demandée par le maître (demande ou en_attente). pilotage_action audite les paramètres validés.
+  * R-L2-40 : plafond horaire atteint = cause distincte « plafond », auditée par le maître
+    (pilotage_rejoindre_echec) ; exception RULES-CODE réduite au seul compte partagé secubox de l'assistant.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 18:00:00 +0100
 

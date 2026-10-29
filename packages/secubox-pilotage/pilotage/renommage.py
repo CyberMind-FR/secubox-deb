@@ -111,6 +111,8 @@ def lanceur_assistant(chemin: Path = SOCKET_ASSISTANT) -> Callable:
         brut = b"".join(morceaux)
         if not brut or len(brut) > SORTIE_MAX:
             return _Sortie(1)
+        if brut.strip() == b'{"erreur": "plafond"}':   # plafond horaire de l'assistant : cause distincte, auditée (R-L2-40)
+            raise ErreurRejoindre("plafond")
         return _Sortie(0, brut.decode("utf-8", "replace"))
     return run
 
