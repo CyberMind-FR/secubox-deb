@@ -193,7 +193,7 @@ func (b *bancMultipart) verifierSansSanction(t *testing.T, ip string) {
 // noms de fichier et contenus sont des marqueurs : ils ne doivent JAMAIS
 // apparaître dans le journal.
 func corpsExploit() []byte {
-	return corpsMultipart("BND", []partieTest{
+	return fabriquerMultipart("BND", []partieTest{
 		{nom: nomProgressPHP, contenu: "VALEUR-SECRETE"},
 		{nom: "f1", filename: "charge-secrete.php", fichier: true, contenu: "CONTENU-SECRET"},
 		{nom: "f2", filename: "b.txt", fichier: true, contenu: "y"},
@@ -296,7 +296,7 @@ func TestMultipartNcBypassAnalyse(t *testing.T) {
 
 func TestMultipartGrosEnvoiTronque(t *testing.T) {
 	b := nouveauBancMultipart(t, nil)
-	corps := corpsMultipart("BND", []partieTest{
+	corps := fabriquerMultipart("BND", []partieTest{
 		{nom: "f", filename: "gros.bin", fichier: true, contenu: contenuTexte(3 << 20)},
 	}, false)
 	rec := b.envoyer("nc.example", "/upload", ipPublique, ctTest, bytes.NewReader(corps))
@@ -334,7 +334,7 @@ func TestMultipartBackendNeLitPas(t *testing.T) {
 		w.WriteHeader(http.StatusRequestEntityTooLarge)
 	})
 	b.s.capturesMultipart = make(chan struct{}, 1)
-	corps := corpsMultipart("BND", []partieTest{
+	corps := fabriquerMultipart("BND", []partieTest{
 		{nom: nomProgressPHP, contenu: "x"},
 		{nom: "f1", filename: "a", fichier: true, contenu: contenuTexte(3 << 20)},
 		{nom: "f2", filename: "b", fichier: true, contenu: "y"},
@@ -375,16 +375,21 @@ func TestMultipartConcurrenceLimite(t *testing.T) {
 	b.verifierRecu(t, corps)
 	ls := b.lignes(t)
 	if len(ls) != 1 {
-		t.Fatalf("une seule ligne multipart-concurrence attendue, eu %v", ls)
+		t.Fatalf("une seule ligne capture-concurrence attendue, eu %v", ls)
 	}
 	l := ls[0]
 	// Ruling R10 : le sémaphore plein a sa propre catégorie ; multipart-limite
 	// reste réservé au plafond de parties de l'analyseur.
-	if l["category"] != "multipart-concurrence" || l["action"] != "multipart-concurrence" || l["severity"] != "audit" {
+	// R-W7 (#3273) : la catégorie couvre les deux sémaphores ; signals.genre
+	// dit lequel est plein (1 = multipart, 2 = urlencoded).
+	if l["category"] != "capture-concurrence" || l["action"] != "capture-concurrence" || l["severity"] != "audit" {
 		t.Errorf("ligne inattendue : %v", l)
 	}
 	if c := signalLigne(t, l, "concurrence"); c != 1 {
 		t.Errorf("signals.concurrence = %d, attendu la capacité réelle 1", c)
+	}
+	if g := signalLigne(t, l, "genre"); g != int(corpsMultipart) {
+		t.Errorf("signals.genre = %d, attendu %d (multipart)", g, corpsMultipart)
 	}
 	if n := len(b.s.capturesMultipart); n != 1 {
 		t.Errorf("le jeton de l'autre capture a été touché (%d pris, attendu 1)", n)
@@ -396,7 +401,7 @@ func TestMultipartConcurrenceLimite(t *testing.T) {
 // MatchDetail, même capturé. Témoin : le même texte en urlencoded est bloqué.
 func TestMultipartRegexInchangee(t *testing.T) {
 	b := nouveauBancMultipart(t, nil)
-	corps := corpsMultipart("BND", []partieTest{{nom: "q", contenu: "x union select 1,2 x"}}, false)
+	corps := fabriquerMultipart("BND", []partieTest{{nom: "q", contenu: "x union select 1,2 x"}}, false)
 	if rec := b.envoyer("nc.example", "/upload", ipPublique, ctTest, bytes.NewReader(corps)); rec.Code == http.StatusForbidden {
 		t.Fatal("multipart sur vhost PHP : 403, le corps a été passé aux regex")
 	}
@@ -437,7 +442,7 @@ func TestMultipartContentTypeVirguleLuParLeCheminTexte(t *testing.T) {
 func TestMultipartBloqueNonRelayePasAnalyse(t *testing.T) {
 	b := nouveauBancMultipart(t, nil)
 	b.s.capturesMultipart = make(chan struct{}, 1)
-	corps := corpsMultipart("BND", []partieTest{
+	corps := fabriquerMultipart("BND", []partieTest{
 		{nom: nomProgressPHP, contenu: "x union select 1,2 x"},
 		{nom: "f1", filename: "a", fichier: true, contenu: "y"},
 		{nom: "f2", filename: "b", fichier: true, contenu: "z"},

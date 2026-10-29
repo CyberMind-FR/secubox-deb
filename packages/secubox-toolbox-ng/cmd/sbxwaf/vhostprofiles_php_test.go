@@ -7,6 +7,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"os"
 	"strings"
@@ -78,6 +79,26 @@ func TestVhostProfilesLivreChargeAvecPHP(t *testing.T) {
 	}
 	if vp.estPHP("gitea.gk2.secubox.in") {
 		t.Error("gitea n'est pas PHP")
+	}
+	// R-NC1 (#3273) : fédération non utilisée par défaut ; le service se déduit de l'hôte.
+	if vp.federationUtilisee("nc.gk2.secubox.in") {
+		t.Error("federation_vhosts livré doit être vide : fédération inutilisée")
+	}
+	if sv, ok := vp.servicePHP("webmail.gk2.secubox.in"); sv != "roundcube" || !ok {
+		t.Errorf("servicePHP(webmail) = (%q, %v), attendu (roundcube, true)", sv, ok)
+	}
+	brut, err := os.ReadFile(fichierLivreWafNg(t, "vhost_profiles.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cles map[string]json.RawMessage
+	if err := json.Unmarshal(brut, &cles); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"federation_vhosts", "_comment_federation_vhosts"} {
+		if _, ok := cles[k]; !ok {
+			t.Errorf("clé %s absente du fichier livré", k)
+		}
 	}
 }
 
@@ -165,5 +186,36 @@ func TestVhostProfilesLivreMotifsPHP(t *testing.T) {
 	}
 	if _, m := vp.armementPHP(); m != 2 {
 		t.Errorf("motifs livrés armés : %d, attendu 2", m)
+	}
+}
+
+// R-NC1 (#3273) : federation_vhosts dit quels vhosts Nextcloud utilisent la
+// fédération. Hôte normalisé (casse, port) ; clé absente ou récepteur nil :
+// aucun.
+func TestVhostProfilesFederation(t *testing.T) {
+	vp, err := chargerVhostProfilesDepuis([]byte(`{
+		"services": {"nextcloud": {"legit_paths": []}},
+		"vhosts": {"nc.example": "nextcloud", "nc2.example": "nextcloud"},
+		"php_services": ["nextcloud"],
+		"federation_vhosts": ["NC.example"]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !vp.federationUtilisee("nc.example:443") {
+		t.Error("nc.example:443 : fédération attendue")
+	}
+	if vp.federationUtilisee("nc2.example") {
+		t.Error("nc2.example : pas de fédération attendue")
+	}
+	sans, err := chargerVhostProfilesDepuis([]byte(profilsPHPTest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sans.federationUtilisee("nc.example") {
+		t.Error("clé absente : aucune fédération")
+	}
+	if (*VhostProfiles)(nil).federationUtilisee("nc.example") {
+		t.Error("récepteur nil : false attendu")
 	}
 }

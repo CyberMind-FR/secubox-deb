@@ -205,15 +205,16 @@ func TestAnalyseCapturePaniqueRattrapee(t *testing.T) {
 	var sortie bytes.Buffer
 	log.SetOutput(&sortie)
 	defer log.SetOutput(os.Stderr)
-	s := &Server{capturesMultipart: make(chan struct{}, 1)}
+	// Une signature chargée : l'évaluation lit l'entrée, nil ici, donc panique.
+	s := &Server{capturesMultipart: make(chan struct{}, 1), rules: LoadRules(ecrisRegles(t, corpusMultipartTest))}
 	s.capturesMultipart <- struct{}{}
 
-	s.analyserCaptureMultipart(nil, requeteMultipart{host: "nc.example"}, true) // figer() sur nil : panique
+	s.analyserRequetePHP(nil, corpsMultipart, nil, requeteMultipart{host: "nc.example"}, true, true, corpsAucun) // entrée nil : panique
 
 	if n := len(s.capturesMultipart); n != 0 {
 		t.Fatalf("jeton non rendu après une panique (%d pris)", n)
 	}
-	if !strings.Contains(sortie.String(), "ERREUR analyse multipart") || !strings.Contains(sortie.String(), "goroutine ") {
+	if !strings.Contains(sortie.String(), "ERREUR analyse PHP") || !strings.Contains(sortie.String(), "goroutine ") {
 		t.Fatalf("panique non journalisée avec sa pile : %q", sortie.String())
 	}
 }
@@ -231,7 +232,7 @@ func TestAnalyseCaptureNonRelayeeMuette(t *testing.T) {
 	capt := nouvelleCapture(io.NopCloser(bytes.NewReader(corps)), 1<<20, int64(len(corps)))
 	_, _ = io.Copy(io.Discard, lecteurSansWriterTo{capt}) // lu par le chemin texte, par exemple
 
-	s.analyserCaptureMultipart(capt, requeteMultipart{ip: ipPublique, host: "nc.example", contentType: ctTest}, false)
+	s.analyserRequetePHP(capt, corpsMultipart, &EntreePHP{}, requeteMultipart{ip: ipPublique, host: "nc.example", contentType: ctTest}, false, true, corpsAucun)
 
 	if n := len(s.capturesMultipart); n != 0 {
 		t.Fatalf("jeton non rendu (%d pris)", n)

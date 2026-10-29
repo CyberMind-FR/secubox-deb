@@ -59,7 +59,7 @@ const unMotifCasse = `{
 
 func TestIntegriteToutChargeQuandToutCompile(t *testing.T) {
 	r := LoadRules(ecrisRegles(t, toutCompile))
-	d, c, rej := r.Integrite()
+	d, c, rej, _ := r.Integrite()
 	if d != 2 || c != 2 {
 		t.Errorf("declares=%d charges=%d, attendu 2/2", d, c)
 	}
@@ -72,7 +72,7 @@ func TestIntegriteRevelLEcart(t *testing.T) {
 	// LE test. Sans lui, trois motifs declares et deux charges se lisent
 	// exactement comme deux motifs declares et deux charges.
 	r := LoadRules(ecrisRegles(t, unMotifCasse))
-	d, c, _ := r.Integrite()
+	d, c, _, _ := r.Integrite()
 	if d != 3 {
 		t.Errorf("declares=%d, attendu 3", d)
 	}
@@ -87,7 +87,7 @@ func TestIntegriteRevelLEcart(t *testing.T) {
 func TestIntegriteNommeLesMotifsRejetes(t *testing.T) {
 	// Savoir qu'il en manque un sans savoir lequel ne permet pas d'agir.
 	r := LoadRules(ecrisRegles(t, unMotifCasse))
-	_, _, rej := r.Integrite()
+	_, _, rej, _ := r.Integrite()
 	if len(rej) != 1 {
 		t.Fatalf("rejets=%v, attendu 1", rej)
 	}
@@ -105,7 +105,7 @@ func TestIntegriteSurvitAuRechargementAChaud(t *testing.T) {
 	// rechargement — et les regles se rechargent a chaud.
 	f := ecrisRegles(t, unMotifCasse)
 	r := LoadRules(f)
-	if d, c, _ := r.Integrite(); d == c {
+	if d, c, _, _ := r.Integrite(); d == c {
 		t.Fatal("ecart absent avant rechargement")
 	}
 
@@ -119,7 +119,7 @@ func TestIntegriteSurvitAuRechargementAChaud(t *testing.T) {
 	}
 	r.Maybe()
 
-	d, c, rej := r.Integrite()
+	d, c, rej, _ := r.Integrite()
 	if d != c || len(rej) != 0 {
 		t.Errorf("apres correction du fichier : declares=%d charges=%d rejets=%v", d, c, rej)
 	}
@@ -129,7 +129,7 @@ func TestIntegriteReglesAbsentesNePaniquePas(t *testing.T) {
 	// Fichier absent : le moteur se tait, il ne tombe pas. C'est l'etat
 	// normal avant que l'exploitant n'ensemence /etc.
 	r := LoadRules(filepath.Join(t.TempDir(), "rien.json"))
-	d, c, rej := r.Integrite()
+	d, c, rej, _ := r.Integrite()
 	if d != 0 || c != 0 || len(rej) != 0 {
 		t.Errorf("regles absentes : %d/%d %v", d, c, rej)
 	}

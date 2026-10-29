@@ -35,9 +35,14 @@
 // dont PHP SAUTE le corps d'un fichier (lu, ou parcouru ligne à ligne), donc
 // seulement l'alignement des lignes de plus de 5120 octets.
 //
-// CE QUI EST VOLONTAIREMENT ÉVITÉ : toute copie du contenu d'une partie ; le
-// résultat ne porte que des entiers et des booléens. Seuls sont copiés la
-// valeur du Content-Disposition (en-tête, bornée par le préfixe) et les noms
+// CE QUI EST VOLONTAIREMENT ÉVITÉ : toute copie du contenu d'un FICHIER ; le
+// résultat ne porte que des entiers et des booléens, sauf Champs (#3273) : la
+// valeur d'un champ ordinaire n'est copiée que si son nom normalisé est l'un
+// des noms retenus (nomsRetenusPHP), première et dernière occurrence de chacun (retenirPHP), et elle
+// n'est JAMAIS journalisée (seuls des booléens et des compteurs sortent).
+// Pour un fichier lu, 64 octets au plus sont examinés (magiqueNonRaster), sur
+// place, sans copie conservée. Seuls sont copiés la valeur du
+// Content-Disposition (en-tête, bornée par le préfixe) et les noms
 // déséchappés, le temps de les mesurer. Le préfixe n'est jamais modifié (PHP
 // écrit des NUL dans SON tampon ; ici on ne fait que découper).
 
@@ -89,6 +94,14 @@ type ResultatMultipart struct {
 	FichiersApresProgress int  // parties fichier vues APRÈS ce champ
 	FilenamePHP           bool // le filename retenu par PHP contient "<?php" (insensible à la casse)
 	FilenameObjet         bool // le filename retenu par PHP contient "|O:"
+	FilenameSession       bool // le filename retenu contient '|' ET un jeton de sérialisation PHP [abdisNO]:[0-9;] (R-RC2)
+	NonRaster             bool // un fichier LU commence par un format non raster (R-IMG1, 64 octets)
+	LongueurFrontiere     int  // len de la frontière rendue par boundaryPHP, posée avant tout retour (R-PHP4)
+	EntetesPartieMax      int  // maximum, sur les parties, du nombre de lignes non vides du bloc d'en-têtes, continuations comprises (C2)
+	FichiersVides         int  // parties avec un paramètre filename vide, sautées ou non (C3)
+	// Champs : champs ordinaires dont le nom normalisé est retenu
+	// (nomsRetenusPHP), valeur copiée, première et dernière occurrence de chaque nom. Jamais journalisés.
+	Champs []ParametrePHP
 }
 
 // minusculesASCII ne touche que A-Z : la longueur en octets reste identique.
@@ -189,6 +202,7 @@ func egalSansCasse(a []byte, b string) bool {
 
 type tamponPHP struct {
 	data      []byte // le préfixe capturé, jamais modifié
+	lignesEnt int    // lignes non vides du dernier bloc d'en-têtes lu par entetes() (C2)
 	pos       int    // buf_begin
 	dispo     int    // bytes_in_buffer
 	taille    int    // bufsize
@@ -318,6 +332,7 @@ func (m *tamponPHP) entetes() (cd []byte, aCD bool, ok bool) {
 	)
 	cle, enCours, vuCT := aucune, false, false
 	m.valeur, m.cd = m.valeur[:0], m.cd[:0]
+	m.lignesEnt = 0
 	vider := func() {
 		if enCours && cle != aucune {
 			if cle == cleCD {
@@ -335,6 +350,7 @@ func (m *tamponPHP) entetes() (cd []byte, aCD bool, ok bool) {
 		if !lu || len(l) == 0 {
 			break
 		}
+		m.lignesEnt++ // C2 : toute ligne lue non vide, continuations comprises
 		dp := -1
 		if !isspaceC(l[0]) {
 			dp = bytes.IndexByte(l, ':')
@@ -594,7 +610,11 @@ func strtollPHP(v []byte) int64 {
 func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim LimitesMultipart) ResultatMultipart {
 	r := ResultatMultipart{Statut: MultipartMalforme}
 	boundary, ok := boundaryPHP(contentType)
-	if !ok || len(boundary) > frontiereMaxPHP {
+	if !ok {
+		return r
+	}
+	r.LongueurFrontiere = len(boundary)
+	if len(boundary) > frontiereMaxPHP {
 		return r
 	}
 	plafond := lim.PartiesMax
@@ -606,6 +626,11 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 		r.Statut = defaut
 		if tronque && m.bord {
 			r.Statut = MultipartTronque
+		}
+		// R-PHP4 : au-delà de 70 caractères (RFC 2046 §5.1.1) l'envoi est
+		// malformé ; les compteurs restent ceux que PHP calculerait.
+		if r.Statut == MultipartAnalyse && r.LongueurFrontiere > frontiereRFC2046 {
+			r.Statut = MultipartMalforme
 		}
 		return r
 	}
@@ -630,6 +655,9 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 		if !trouve {
 			break
 		}
+		if m.lignesEnt > r.EntetesPartieMax {
+			r.EntetesPartieMax = m.lignesEnt
+		}
 		if !aCD {
 			// Partie sans disposition (rfc1867.c:848) : ni comptée, ni lue ; la
 			// recherche de frontière suivante la parcourt ligne à ligne.
@@ -653,6 +681,11 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 			}
 			if egalSansCasse(nom, "MAX_FILE_SIZE") {
 				maxFileSize = strtollPHP(valeur)
+			}
+			// Champ retenu (#3273) : nom normalisé comme PHP (php_register_variable_ex).
+			// Première et dernière occurrence de chaque nom (passe finale M2).
+			if n, ok := nomPHP(string(nom)); ok && nomsRetenusPHP[n] {
+				r.Champs = retenirPHP(r.Champs, n, string(valeur))
 			}
 			continue
 		}
@@ -679,11 +712,15 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 		}
 		skipCollant = saute
 		r.PartiesFichier++
+		if aFilename && len(filename) == 0 {
+			r.FichiersVides++ // C3 : filename vide, que la partie soit sautée ou non
+		}
 		if r.Progress {
 			r.FichiersApresProgress++
 		}
 		r.FilenamePHP = r.FilenamePHP || strings.Contains(minusculesASCII(string(filename)), "<?php")
 		r.FilenameObjet = r.FilenameObjet || bytes.Contains(filename, []byte("|O:"))
+		r.FilenameSession = r.FilenameSession || filenameSessionPHP(filename)
 
 		// Sauté (rfc1867.c:1098) ou filename vide (UPLOAD_ERROR_D, rfc1867.c:1104) :
 		// corps non lu, la recherche de frontière suivante le parcourt ligne à ligne.
@@ -692,7 +729,16 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 		}
 		// Lecture du fichier (rfc1867.c:1114-1188). MAX_FILE_SIZE dépassé : la
 		// boucle s'arrête après une lecture de plus, au milieu du corps.
+		pos0 := m.pos
 		blen := m.lire(fillUnitPHP)
+		// R-IMG1 : 64 octets au plus, dans la première lecture (déjà faite par PHP).
+		if !r.NonRaster && blen > 0 {
+			n := blen
+			if n > magiqueOctets {
+				n = magiqueOctets
+			}
+			r.NonRaster = magiqueNonRaster(m.data[pos0:pos0+n]) != ""
+		}
 		uploadCnt--
 		var total int64
 		annule := false
@@ -719,5 +765,7 @@ func (r ResultatMultipart) Signaux() map[string]int {
 		"profondeur":              r.ProfondeurMax,
 		"nom_max":                 r.LongueurNomMax,
 		"fichiers_apres_progress": r.FichiersApresProgress,
+		"entetes_partie_max":      r.EntetesPartieMax,
+		"fichiers_vides":          r.FichiersVides,
 	}
 }
