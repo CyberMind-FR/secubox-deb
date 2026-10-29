@@ -11,14 +11,18 @@ secubox-waf-ng (1.31.0-1~trixie1) trixie; urgency=medium
   * Relecture finale : l'analyseur lit le corps comme PHP 8.2 (main/rfc1867.c
     transcrit, en remplacement de mime/multipart) : fins de ligne mélangées,
     apostrophes, valeur nue coupée au blanc, ligne d'en-tête sans « : »,
-    parties après la frontière finale, frontière vide, filename* ignoré.
+    parties après la frontière finale, frontière vide, filename* ignoré,
+    skip_upload collant. Lecture confrontée à un oracle C bâti sur
+    rfc1867.c (sondes, 300 000 corps aléatoires, fuzz différentiel) : aucune
+    divergence.
   * Capture : posée seulement si une signature structurelle est chargée et
     active ; tous les clients analysés, réseau local journalisé « local » et
     jamais émis vers actord ; fenêtre = min(--max-body-inspect, 1 Mio) ; JA4
     et outil sur les lignes multipart.
   * php_hotes : motifs d'hôte PHP (^(nc|nextcloud|cloud)\. et
     ^(webmail|roundcube)\.), ligne « vhosts PHP armés » au démarrage.
-  * waf-rules-sync garde le « enabled » de la box (audité s'il diffère) ;
+  * waf-rules-sync garde le « enabled: false » de la box (audité quand la
+    copie livrée active la catégorie) ; un « true » suit la copie livrée ;
     waf-profils-fusion ne remet jamais un nom de php_services ou php_hotes
     retiré par l'opérateur (php_services_proposes, php_hotes_proposes).
   * Panneau : lignes d'état (multipart-*, body-inspect-*, gravité audit)

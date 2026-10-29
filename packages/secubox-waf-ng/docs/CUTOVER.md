@@ -223,8 +223,13 @@ et `^(webmail|roundcube)\.` ; un motif invalide est rejeté seul, journalisé).
 La catégorie `php2shell` du corpus livré (`_meta` 1.6.0) est en mode `detect` :
 les détections sont journalisées, **jamais bloquées** ni bannies. Le corps
 relayé au backend n'est pas modifié. Le corps est lu comme PHP 8.2 le lit
-(`main/rfc1867.c` transcrit) : fins de ligne mélangées, apostrophes, en-têtes
-tolérés et parties placées après `--frontière--` sont vus.
+(`main/rfc1867.c` transcrit, `skip_upload` collant compris) : fins de ligne
+mélangées, apostrophes, en-têtes tolérés et parties placées après
+`--frontière--` sont vus. La lecture a été confrontée à un oracle C bâti sur
+`rfc1867.c` (sondes de relecture, 300 000 corps aléatoires, fuzz
+différentiel) sans divergence. Réglages PHP supposés : valeurs par défaut
+(`max_file_uploads=20`, `file_uploads=On`, `upload_max_filesize` ≥ 1 Mio,
+pas de traduction d'encodage mbstring).
 
 - **Tous les clients** sont analysés, réseau local et 127.0.0.1 compris (Tor
   arrive en 127.0.0.1) : une adresse privée est journalisée `local` et n'est
@@ -249,8 +254,9 @@ tolérés et parties placées après `--frontière--` sont vus.
   dans `/etc/secubox/waf/waf-rules.json` (rechargement à chaud) : sans
   signature structurelle active, aucune capture n'est posée et aucune ligne
   `multipart-*` n'est écrite. Ce choix survit aux mises à jour : `waf-rules-sync`
-  garde la valeur `enabled` de la box (ligne d'audit si elle diffère de la
-  valeur livrée), et `waf-profils-fusion` ne remet jamais un nom de
+  garde le `"enabled": false` de la box (ligne d'audit quand la copie livrée
+  active la catégorie) ; un `true` suit la copie livrée, pour qu'un paquet
+  puisse encore désactiver une catégorie. `waf-profils-fusion` ne remet jamais un nom de
   `php_services` ou de `php_hotes` retiré par l'opérateur. Ou réinstaller le
   paquet précédent (1.30.7).
 
