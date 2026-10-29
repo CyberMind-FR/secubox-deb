@@ -543,7 +543,11 @@ func (s *Server) handler() http.Handler {
 			// Aucun octet n'est retenu avant le relais : le proxy lit le corps,
 			// la capture en copie le début, l'analyse tombe dans le defer, après
 			// la réponse. Le multipart reste « binaire » pour les regex.
-			if s.rules.aDesStructurelles() {
+			// Coût sur chaque requête de chaque vhost (passe finale I1) : un
+			// RLock pour les indicateurs calculés au chargement des règles,
+			// puis le verdict PHP de l'hôte, mémorisé (aucune regex au-delà
+			// du premier passage d'un hôte).
+			if ind := s.rules.indicateurs(); ind.structurelles {
 				if service, php := s.vhostProfiles.servicePHP(r.Host); php {
 					// ja4 et tool : calculés à l'écriture d'une ligne seulement.
 					rm := requeteMultipart{ip: ip, host: r.Host, method: r.Method, path: rawPath,
@@ -556,7 +560,7 @@ func (s *Server) handler() http.Handler {
 						rm.path = masque
 					}
 					e := s.nouvelleEntreePHP(r, service)
-					genre, plafond, jeton := s.corpsACapturer(r, e)
+					genre, plafond, jeton := s.corpsACapturer(r, e, ind)
 					if jeton && !s.prendreCapture(genre) {
 						// Sémaphore plein : pas de capture, une ligne d'état ;
 						// les contrôles sans corps restent évalués.

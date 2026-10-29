@@ -108,7 +108,7 @@ func TestCorpsACapturer(t *testing.T) {
 			r.Header.Set("Content-Type", c.ct)
 		}
 		e := s.nouvelleEntreePHP(r, "nextcloud")
-		g, p, j := s.corpsACapturer(r, e)
+		g, p, j := s.corpsACapturer(r, e, indicateursTous)
 		if g != c.genre || p != c.plafond || j != c.jeton {
 			t.Errorf("%s : (%v, %d, %v), attendu (%v, %d, %v)", c.nom, g, p, j, c.genre, c.plafond, c.jeton)
 		}

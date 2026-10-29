@@ -515,7 +515,7 @@ func TestEntreeNextcloud(t *testing.T) {
 	if !e.PutRaster {
 		t.Fatalf("PUT a.PNG : PutRaster attendu vrai")
 	}
-	g, p, j := s.corpsACapturer(r, e)
+	g, p, j := s.corpsACapturer(r, e, indicateursTous)
 	if g != corpsDebut || p != magiqueOctets || j {
 		t.Errorf("corpsACapturer = (%v, %d, %v), attendu (corpsDebut, 64, false)", g, p, j)
 	}
@@ -527,13 +527,13 @@ func TestEntreeNextcloud(t *testing.T) {
 	if e = s.nouvelleEntreePHP(r, "nextcloud"); e.PutRaster {
 		t.Errorf("PUT a.pdf : PutRaster attendu faux")
 	}
-	if g, _, _ := s.corpsACapturer(r, e); g != corpsAucun {
+	if g, _, _ := s.corpsACapturer(r, e, indicateursTous); g != corpsAucun {
 		t.Errorf("PUT a.pdf : genre %v, attendu corpsAucun", g)
 	}
 	// Fenêtre plus petite que 64 : le plafond la suit.
 	s.maxBodyInspect = 16
 	r = httptest.NewRequest(http.MethodPut, "http://nc.example/remote.php/dav/files/alice/a.gif", strings.NewReader("x"))
-	if _, p, _ := s.corpsACapturer(r, s.nouvelleEntreePHP(r, "nextcloud")); p != 16 {
+	if _, p, _ := s.corpsACapturer(r, s.nouvelleEntreePHP(r, "nextcloud"), indicateursTous); p != 16 {
 		t.Errorf("plafond %d, attendu 16 (fenêtre)", p)
 	}
 }

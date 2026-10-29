@@ -64,6 +64,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"regexp"
 
@@ -388,6 +389,72 @@ type rulesData struct {
 	// avertis (#3273, R-W8 M1) : signatures chargées qui nomment un service
 	// inconnu, sous la forme <categorie>/<id>:<service>.
 	avertis []string
+
+	// ind : indicateurs lus sur le chemin de chaque requête, calculés une
+	// fois par calculerIndicateurs à la fin du chargement (passe finale I1).
+	ind indicateursPHP
+}
+
+// indicateursPHP : ce que le chemin de CHAQUE requête demande aux règles,
+// calculé UNE fois au chargement et rangé avec les données courantes (passe
+// finale de #3273, I1). Lire un indicateur ne parcourt plus les catégories :
+// un vhost qui n'est pas PHP ne paie que le RLock de indicateurs(). Une
+// catégorie désactivée n'est pas chargée, donc ne compte dans aucun
+// indicateur (M4) : `"enabled": false` coupe aussi la capture du corps
+// qu'elle seule lisait. Immuable après calcul.
+type indicateursPHP struct {
+	structurelles bool            // au moins une signature structurelle active
+	litRequete    bool            // un contrôle actif lit la chaîne de requête (controlesRequete)
+	controles     map[string]bool // contrôles actifs
+	corps         uint8           // bit 1<<genre : genres de corps lus par un contrôle actif (corpsLusParControle)
+}
+
+// indicateursVides : règles absentes ou vides.
+var indicateursVides = &indicateursPHP{}
+
+func (i *indicateursPHP) aControle(check string) bool { return i.controles[check] }
+
+// litCorps dit si un contrôle actif lit ce genre de corps.
+func (i *indicateursPHP) litCorps(g genreCorps) bool { return i.corps&(1<<uint(g)) != 0 }
+
+// corpsLusParControle : genres de corps que lit chaque contrôle (bits
+// 1<<genreCorps). Un contrôle absent ne lit aucun corps (méthode, chemin,
+// requête ou en-têtes seulement). Les contrôles Roundcube qui passent par
+// EntreePHP.valeurs lisent le corps urlencoded ET les champs multipart.
+var corpsLusParControle = map[string]uint8{
+	"upload_progress_fichiers":  1 << corpsMultipart,
+	"parties_nombre":            1 << corpsMultipart,
+	"noms_profondeur":           1 << corpsMultipart,
+	"filename_charge":           1 << corpsMultipart,
+	"filename_session":          1 << corpsMultipart,
+	"rc_crlf_imap":              1<<corpsMultipart | 1<<corpsUrlencoded,
+	"rc_crlf_envoi":             1<<corpsMultipart | 1<<corpsUrlencoded,
+	"rc_markasjunk_uid_requete": 1<<corpsMultipart | 1<<corpsUrlencoded,
+	"rc_image_non_raster":       1 << corpsMultipart,
+	"nc_put_non_raster":         1 << corpsDebut,
+	"xml_dtd_prologue":          1 << corpsXML,
+	"frontiere_longueur":        1 << corpsMultipart,
+	"entetes_partie":            1 << corpsMultipart,
+	"fichiers_vides":            1 << corpsMultipart,
+	"variables_nombre":          1 << corpsUrlencoded,
+	"upload_progress_present":   1 << corpsMultipart,
+}
+
+// calculerIndicateurs parcourt les catégories chargées, une fois.
+func calculerIndicateurs(d *rulesData) indicateursPHP {
+	parcoursRegles.Add(1)
+	ind := indicateursPHP{controles: map[string]bool{}}
+	for _, c := range d.cats {
+		for _, s := range c.data.structurelles {
+			ind.structurelles = true
+			ind.controles[s.check] = true
+			if controlesRequete[s.check] {
+				ind.litRequete = true
+			}
+			ind.corps |= corpsLusParControle[s.check]
+		}
+	}
+	return ind
 }
 
 // Rules is a hot-reloadable, RW-locked WAF rule set.
@@ -582,6 +649,7 @@ func loadRulesJSON(path string) *rulesData {
 		}{id: catID, data: cc})
 	}
 
+	data.ind = calculerIndicateurs(data)
 	log.Printf("sbxwaf/rules: loaded %d patterns in %d categories from %s", total, len(data.cats), path)
 	if len(data.rejetes) > 0 {
 		// « ALERTE » et non « info » : des motifs ecrits et livres ne
@@ -763,27 +831,30 @@ func (r *Rules) Integrite() (declares, charges int, rejetes, avertis []string) {
 	return cur.declares, charges, append([]string(nil), cur.rejetes...), append([]string(nil), cur.avertis...)
 }
 
-// aDesStructurelles dit si au moins une signature structurelle est chargée dans
-// une catégorie active (relecture finale I2a). Sans elle, la capture multipart
-// n'est pas posée : `"enabled": false` arrête aussi la capture et les lignes
-// multipart-*, au démarrage comme après un rechargement à chaud. Nil-safe.
-func (r *Rules) aDesStructurelles() bool {
+// parcoursRegles compte les parcours des catégories (crochet de test) : un
+// par chargement, aucun par requête.
+var parcoursRegles atomic.Int64
+
+// indicateurs rend les indicateurs des règles courantes : un RLock, aucun
+// parcours. Nil-safe (règles nil ou vides : tout faux).
+func (r *Rules) indicateurs() *indicateursPHP {
 	if r == nil {
-		return false
+		return indicateursVides
 	}
 	r.mu.RLock()
 	cur := r.current
 	r.mu.RUnlock()
 	if cur == nil {
-		return false
+		return indicateursVides
 	}
-	for _, c := range cur.cats {
-		if len(c.data.structurelles) > 0 {
-			return true
-		}
-	}
-	return false
+	return &cur.ind
 }
+
+// aDesStructurelles dit si au moins une signature structurelle est chargée dans
+// une catégorie active (relecture finale I2a). Sans elle, la capture multipart
+// n'est pas posée : `"enabled": false` arrête aussi la capture et les lignes
+// multipart-*, au démarrage comme après un rechargement à chaud. Nil-safe.
+func (r *Rules) aDesStructurelles() bool { return r.indicateurs().structurelles }
 
 // visePHP dit si la signature s'applique au service de l'entree : liste
 // vide = tous les services ; service "" (hote PHP par motif) = toujours.
@@ -800,48 +871,12 @@ func (s signatureStructurelle) visePHP(service string) bool {
 }
 
 // litLaRequete dit si une signature structurelle chargee lit la chaine de
-// requete (controlesRequete). Nil-safe.
-func (r *Rules) litLaRequete() bool {
-	if r == nil {
-		return false
-	}
-	r.mu.RLock()
-	cur := r.current
-	r.mu.RUnlock()
-	if cur == nil {
-		return false
-	}
-	for _, c := range cur.cats {
-		for _, s := range c.data.structurelles {
-			if controlesRequete[s.check] {
-				return true
-			}
-		}
-	}
-	return false
-}
+// requete (controlesRequete). Indicateur calculé au chargement. Nil-safe.
+func (r *Rules) litLaRequete() bool { return r.indicateurs().litRequete }
 
 // aControle dit si une signature structurelle chargee porte ce controle
-// (indicateur calcule sur les regles courantes, comme litLaRequete). Nil-safe.
-func (r *Rules) aControle(check string) bool {
-	if r == nil {
-		return false
-	}
-	r.mu.RLock()
-	cur := r.current
-	r.mu.RUnlock()
-	if cur == nil {
-		return false
-	}
-	for _, c := range cur.cats {
-		for _, s := range c.data.structurelles {
-			if s.check == check {
-				return true
-			}
-		}
-	}
-	return false
-}
+// (indicateur calculé au chargement). Nil-safe.
+func (r *Rules) aControle(check string) bool { return r.indicateurs().aControle(check) }
 
 // EvaluerStructurel evalue un seul resultat multipart, sans service (#3257).
 func (r *Rules) EvaluerStructurel(res ResultatMultipart) []DetectionStructurelle {

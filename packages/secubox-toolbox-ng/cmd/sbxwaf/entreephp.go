@@ -168,7 +168,7 @@ var (
 // raster (R-IMG2) : au plus 64 octets, SANS jeton (R-W2, point 10) : la
 // mémoire est bornée par la requête elle-même, et un PUT ne doit jamais
 // priver le multipart PHP2Shell de ses jetons.
-func (s *Server) corpsACapturer(r *http.Request, e *EntreePHP) (genre genreCorps, plafond int, jeton bool) {
+func (s *Server) corpsACapturer(r *http.Request, e *EntreePHP, ind *indicateursPHP) (genre genreCorps, plafond int, jeton bool) {
 	if r.Body == nil || r.Body == http.NoBody {
 		return corpsAucun, 0, false
 	}
@@ -329,18 +329,21 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 	if !relaye || s.rules == nil {
 		return
 	}
-	if s.rules.litLaRequete() {
+	// Indicateurs calculés au chargement (passe finale I1) : un RLock, aucun
+	// parcours des catégories.
+	ind := s.rules.indicateurs()
+	if ind.litRequete {
 		e.lireRequete()
 	}
 	// Sonde PHP-CGI (tâche 7) : lit la chaîne de requête brute, seulement si
 	// la signature est chargée. Aucune autre étiquette n'est calculée ici.
-	if e.requete != nil && s.rules.aControle("sonde_php_cgi") {
+	if e.requete != nil && ind.aControle("sonde_php_cgi") {
 		e.SondePHPCGI = sondePHPCGI(e.requeteBrute)
 	}
 	// R-PHP3 (relecture I1) : les cookies ne sont parcourus qu'ici, après la
 	// réponse et sous le recover, et seulement si cookie_prefixe_normalise est
 	// chargée. Rien n'est calculé avant le relais.
-	if s.rules.aControle("cookie_prefixe_normalise") {
+	if ind.aControle("cookie_prefixe_normalise") {
 		e.CookieFauxPrefixe = cookieFauxPrefixePHP(rm.entetes.Values("Cookie"))
 	}
 	// lus == 0 : le proxy n'a rien lu (backend muet, erreur de connexion) ;
