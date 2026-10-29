@@ -923,8 +923,9 @@ func TestAgentSansAncreNeFaitRien(t *testing.T) { scenarioCoupure(t, AncreIllisi
 func TestAgentAncreDifferenteCoupe(t *testing.T) { scenarioCoupure(t, AncreDifferente) }
 
 // TestAgentAncreAbsenteLitMaisNAgitPas (R-L2-19) : sans ancre posée sur la box, le canal reste ouvert en lecture
-// (comme en L1) ; tout Operate est refusé, chaque refus redemande la vérification au ctl, qui l'audite
-// (« ancre absente »). Aucune notification de coupure : le canal n'a pas été coupé.
+// (comme en L1) ; tout Operate est refusé ; un lot de refus redemande la vérification au ctl, qui l'audite
+// (« ancre absente »), au plus une fois par lot et par minute (R-L2-24). Aucune notification de coupure : le canal
+// n'a pas été coupé.
 func TestAgentAncreAbsenteLitMaisNAgitPas(t *testing.T) {
 	var verifs, operes atomic.Int32
 	operer := func(context.Context, string, map[string]any) (any, error) {
@@ -967,9 +968,9 @@ func TestAgentAncreAbsenteLitMaisNAgitPas(t *testing.T) {
 	if operes.Load() != 0 {
 		t.Fatalf("aucun Operate ne doit être exécuté (%d)", operes.Load())
 	}
-	// démarrage + un appel au ctl par Operate refusé (audit « ancre absente » côté ctl)
-	if v := verifs.Load(); v != 3 {
-		t.Fatalf("vérifications attendues : 1 au démarrage + 2 refus audités, %d", v)
+	// démarrage + une revérification pour le lot refusé (audit « ancre absente » côté ctl, R-L2-24)
+	if v := verifs.Load(); v != 2 {
+		t.Fatalf("vérifications attendues : 1 au démarrage + 1 pour le lot, %d", v)
 	}
 }
 
@@ -995,4 +996,81 @@ func TestClientAncreVerifieeChaqueHeure(t *testing.T) {
 	if v := verifs.Load(); v != 2 {
 		t.Fatalf("revérification attendue après une heure, %d", v)
 	}
+}
+
+// TestAgentAncreAbsenteUnSeulAppelParLot (I2, R-L2-24) : un pair non vérifié n'inonde pas l'audit. 32 OPERATE dans
+// un lot → au plus un appel au ctl ; un second lot dans la minute → aucun ; tous refusés, aucun exécuté.
+func TestAgentAncreAbsenteUnSeulAppelParLot(t *testing.T) {
+	var verifs, operes atomic.Int32
+	operer := func(context.Context, string, map[string]any) (any, error) { operes.Add(1); return nil, nil }
+	lot := func(base int) string {
+		l := make([]string, 32)
+		for i := range l {
+			l[i] = fmt.Sprintf(`{"msg_id":"%016x","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Releve.Mesurer()","args":{}}}`, base+i)
+		}
+		return "[" + strings.Join(l, ",") + "]"
+	}
+	f := &fauxMaitre{requetes: []string{lot(1), lot(100)}}
+	stop := demarrerAvec(t, f, modeleTest(nil), operer, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) Verdict { verifs.Add(1); return AncreAbsente }
+	})
+	defer stop()
+	refuses := func() int {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		n := 0
+		for _, b := range f.reponses {
+			for _, r := range decoder(t, b) {
+				if r["type"] == "ERROR" && strings.Contains(r["body"].(map[string]any)["err"].(string), "ancre absente") {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	attendreQue(t, "64 refus", func() bool { return refuses() == 64 })
+	if v := verifs.Load(); v > 2 {
+		t.Fatalf("au plus 1 appel au démarrage + 1 pour les deux lots de la même minute, %d", v)
+	}
+	if operes.Load() != 0 {
+		t.Fatalf("aucun Operate exécuté attendu, %d", operes.Load())
+	}
+}
+
+// TestAgentAncreDisparueApresOkCoupe (M1) : une ancre vue « ok » puis « absente » n'est pas une box sans ancre :
+// c'est traité comme illisible — coupure, puis notification X_SECUBOX_AnchorFailed à la reconnexion.
+func TestAgentAncreDisparueApresOkCoupe(t *testing.T) {
+	var verdict atomic.Value
+	verdict.Store(AncreOK)
+	var verifs atomic.Int32
+	var decalage atomic.Int64
+	f := &fauxMaitre{}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) Verdict { verifs.Add(1); return verdict.Load().(Verdict) }
+		c.dormir = func(ctx context.Context, d time.Duration) error { return dormirReel(ctx, 2*time.Millisecond) }
+		c.horloge = func() time.Time { return time.Now().Add(time.Duration(decalage.Load())) }
+	})
+	defer stop()
+	sondages := func() int {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return f.sondages
+	}
+	attendreQue(t, "canal ouvert", func() bool { return sondages() >= 1 })
+	n0 := verifs.Load()
+	verdict.Store(AncreAbsente)
+	decalage.Store(int64(61 * time.Minute))
+	attendreQue(t, "revérification", func() bool { return verifs.Load() > n0 })
+	time.Sleep(50 * time.Millisecond)
+	s1 := sondages()
+	time.Sleep(150 * time.Millisecond)
+	if s2 := sondages(); s2 != s1 {
+		t.Fatalf("ancre disparue après ok : canal à couper, sondages %d → %d", s1, s2)
+	}
+	verdict.Store(AncreOK)
+	attendreQue(t, "notification de coupure", func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.notifs) >= 1 && strings.Contains(string(f.notifs[0]), notifs.TypeAncre)
+	})
 }

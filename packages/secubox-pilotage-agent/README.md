@@ -111,7 +111,7 @@ appeler le ctl : le canal reste coupé. Le ctl rend toujours le code 0 et l'un d
 | Sortie du ctl | Cas | Comportement de l'agent |
 |---|---|---|
 | `{"ok": true}` | le pair du maître a la clé de l'ancre | canal ouvert, Operate traités |
-| `{"ok": false, "raison": "absente"}` | aucune ancre posée : pas d'`ancre-maitre.json` sur une box du propriétaire, pas de configuration `wg-autoload` sur une box cliente | **canal ouvert en lecture** (comme en L1) ; **tout Operate est refusé** (`ancre absente : action refusée`), et chaque refus redemande la vérification au ctl, qui l'audite « ancre absente » (R-L2-19) |
+| `{"ok": false, "raison": "absente"}` | aucune ancre posée : pas d'`ancre-maitre.json` sur une box du propriétaire, pas de configuration `wg-autoload` sur une box cliente | **canal ouvert en lecture** (comme en L1) ; **tout Operate est refusé** (`ancre absente : action refusée`) ; un lot de refus redemande la vérification au ctl, qui l'audite « ancre absente » (R-L2-19), **au plus une fois par lot et par minute** : les autres refus sont seulement comptés dans le journal de l'agent (R-L2-24). Une ancre absente **après** une vérification réussie vaut `illisible` (coupure, M1) |
 | `{"ok": false, "raison": "differente"}` | le pair qui porte l'adresse du maître a une autre clé, ou aucun pair ne la porte | **canal coupé** |
 | `{"ok": false, "raison": "illisible"}` | ancre en JSON invalide, clé mal formée, lien, droits ; `wg` en échec ou sortie illisible (non ASCII comprise) ; canal incohérent (seule l'ancre de l'autre canal est posée) ; toute erreur imprévue du ctl | **canal coupé** |
 
@@ -140,7 +140,8 @@ Côté agent, toute autre sortie, une erreur ou un code non nul vaut `illisible`
     pair injecté à chaud ou un préfixe qui détourne `10.64.0.1`, pas une réécriture du fichier, qui exige root sur la
     box. Un `hub.pub` séparé posé par `secubox-autoload-agent` est une amélioration hors L2 ;
   - box sans ancre (R-L2-19) : la lecture reste servie au pair du maillage sans vérification de sa clé, comme en L1 ;
-    les actions attendent qu'une ancre soit posée ;
+    les actions attendent qu'une ancre soit posée. Les refus d'Operate entre deux revérifications (une par minute au
+    plus) ne sont pas dans l'audit du ctl, seulement dans le journal de l'agent (R-L2-24) ;
   - une coupure en cours n'est pas notifiée si l'agent redémarre entre-temps (l'audit du ctl garde chaque échec).
 
 ## Durcissement

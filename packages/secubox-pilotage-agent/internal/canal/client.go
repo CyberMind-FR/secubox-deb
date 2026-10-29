@@ -11,8 +11,10 @@
 // Ancre (D1, #3126 L2) : quand Config.Ancre est posée, elle est rappelée au
 // démarrage puis toutes les PeriodeAncre (1 h). Aucun Operate n'est traité
 // tant qu'elle n'a pas rendu AncreOK. AncreAbsente (aucune ancre posée sur la
-// box, R-L2-19) garde le canal en lecture comme en L1, et chaque Operate refusé
-// redemande la vérification au ctl, qui audite « ancre absente ». AncreDifferente
+// box, R-L2-19) garde le canal en lecture comme en L1 ; un lot d'Operate refusés
+// redemande la vérification au ctl, qui audite « ancre absente », au plus une
+// fois par lot et par minute (R-L2-24). Une ancre absente après une
+// vérification réussie vaut AncreIllisible (M1). AncreDifferente
 // ou AncreIllisible coupent le canal : rien ne part vers le maître (bonjour,
 // sondage, réponses, notifications) ; la reconnexion suivante qui réussit
 // notifie la coupure au maître (X_SECUBOX_AnchorFailed).
@@ -48,6 +50,7 @@ const (
 	ReculMaxDefaut  = 300 * time.Second
 	TailleMaxDefaut = 256 << 10
 	PeriodeAncreDef = time.Hour
+	reverifRefus    = time.Minute // au plus une revérification (ligne d'audit) par lot de refus et par minute
 
 	portCanal      = "8472"
 	prefixe        = "/canal/v1"
@@ -123,6 +126,8 @@ type Client struct {
 	// Lus et écrits par la seule goroutine de Tourner :
 	ancreVue time.Time // dernière vérification réussie
 	coupure  int64     // instant (Unix) de la coupure à notifier ; 0 : rien à notifier
+	dejaOK   bool      // l'ancre a été vérifiée au moins une fois (M1)
+	reverif  time.Time // dernière revérification demandée par un refus d'Operate (R-L2-24)
 }
 
 // NouveauClient prépare le client ; rien n'est envoyé avant Tourner.
@@ -276,6 +281,14 @@ func (c *Client) verifierAncre(ctx context.Context) Verdict {
 	v := c.cfg.Ancre(ctx)
 	if !ouvert(v) && v != AncreDifferente {
 		v = AncreIllisible // valeur inconnue : fermé par défaut
+	}
+	if v == AncreAbsente && c.dejaOK {
+		// M1 : une ancre vue puis disparue n'est pas une box sans ancre (on l'a retirée) : coupure.
+		log.Print("ancre : disparue après une vérification réussie, traitée comme illisible")
+		v = AncreIllisible
+	}
+	if v == AncreOK {
+		c.dejaOK = true
 	}
 	c.verdict.Store(v)
 	if ouvert(v) {
@@ -561,6 +574,7 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 	}
 	var reps []reponse
 	lances := 0
+	reverifie, sansAppel := false, 0
 	for _, r := range liste {
 		if ctx.Err() != nil {
 			break
@@ -575,8 +589,14 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 				if v == AncreAbsente {
 					// R-L2-19 : lecture seule ; le refus est audité par le ctl (« ancre absente »), à qui la
 					// vérification est redemandée : une ancre posée depuis rend la main aux actions suivantes.
-					log.Printf("canal : Operate refusé, ancre absente")
-					c.verifierAncre(ctx)
+					// R-L2-24 : au plus une fois par lot et par minute (un pair non vérifié n'inonde pas l'audit) ;
+					// les autres refus sont seulement comptés dans le journal de l'agent.
+					if maintenant := c.horloge(); !reverifie && (c.reverif.IsZero() || maintenant.Sub(c.reverif) >= reverifRefus) {
+						reverifie, c.reverif = true, maintenant
+						c.verifierAncre(ctx)
+					} else {
+						sansAppel++
+					}
 					reps = append(reps, erreur(rq.MsgID, msgAncreAbsente))
 				} else {
 					reps = append(reps, erreur(rq.MsgID, errAncre.Error()))
@@ -594,6 +614,9 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 			continue
 		}
 		reps = append(reps, c.repondre(ctx, rq))
+	}
+	if sansAppel > 0 {
+		log.Printf("canal : %d Operate refusés (ancre absente) sans revérification auprès du ctl", sansAppel)
 	}
 	return reps, lances, nil
 }

@@ -47,6 +47,9 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
       illisible).
     - M2 : sortie de wg décodée en ASCII ; une sortie non décodable, ou toute exception imprévue de la
       vérification, rend « illisible » et l'échec est audité.
+    - I2 / R-L2-24 : ancre absente, au plus une revérification (une ligne d'audit) par lot d'Operate refusés et par
+      minute ; les autres refus sont comptés dans le journal de l'agent, sans appel au ctl.
+    - M1 : une ancre absente après une vérification réussie vaut « illisible » (coupure, puis X_SECUBOX_AnchorFailed).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
 
