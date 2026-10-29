@@ -1,3 +1,10 @@
+secubox-profiles (0.25.3-1~trixie1) trixie; urgency=medium
+
+  * Profil lite sans unités toolbox (toolbox, toolbox-wg-restore, authwatch, toolbox-egress-proxy) ; menu toolbox
+    masqué dans lite et minimal (ref #3259).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 10:40:21 +0100
+
 secubox-profiles (0.25.2-1~trixie1) trixie; urgency=medium
 
   * Seconde relecture de la PR #3248 (ref #3218). Le postinst ne cree plus par `install -d -o ... -m ...` les
