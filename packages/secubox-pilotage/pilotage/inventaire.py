@@ -9,7 +9,8 @@ SecuBox-Deb :: pilotage :: relève périodique de l'inventaire (#3126)
 Toutes les 60 s, pour chaque box vue depuis moins de 90 s, un GET `["Device."]` est déposé dans sa file ; la réponse est rangée par
 `StockageSqlite.inventaire_enregistrer` (un relevé tronqué ou en erreur n'efface jamais un relevé complet). Une box n'a jamais deux GET
 d'inventaire en vol : tant que le précédent n'a ni reçu de réponse ni expiré, elle est sautée. Les événements de plus de 30 jours sont
-purgés au plus une fois par heure. L'horloge et l'attente sont injectables (les tests n'attendent pas 60 s).
+purgés au plus une fois par heure. Chaque tour attend aussi ses crochets (`a_chaque_tour`) : le canal y écrit les décomptes de refus
+d'identité en attente (M7). L'horloge et l'attente sont injectables (les tests n'attendent pas 60 s).
 """
 from __future__ import annotations
 
@@ -43,6 +44,11 @@ class Inventaire:
         self._boucle: Optional[asyncio.Task] = None
         self._derniere_purge: Optional[float] = None
         self._usagers = 0
+        self._crochets: list = []        # coroutines appelées à chaque tour (vidage des refus tus du canal, M7)
+
+    def a_chaque_tour(self, crochet: Callable[[], Awaitable]) -> None:
+        """`crochet()` est attendu à chaque tour, après le dépôt des GET ; une exception est journalisée, jamais propagée."""
+        self._crochets.append(crochet)
 
     # --- un tour ---
 
@@ -63,6 +69,11 @@ class Inventaire:
             self._taches.add(t)
             t.add_done_callback(self._taches.discard)
             lances += 1
+        for crochet in self._crochets:
+            try:
+                await crochet()
+            except Exception:
+                log.exception("crochet du tour d'inventaire en échec")
         maintenant = self.horloge()
         if self._derniere_purge is None or maintenant - self._derniere_purge >= PURGE_INTERVALLE_S:
             self._derniere_purge = maintenant

@@ -35,6 +35,7 @@ def assembler(stockage, files, inventaire, audit, identifier, horloge=time.time,
     canal = creer_app_canal(files, identifier, stockage, audit, apres_fin=suivi.apres_fin, diffuser=diffusion.diffuser_notification)
 
     admin.state.diffusion = diffusion   # le lanceur la ferme au signal d'arrêt
+    inventaire.a_chaque_tour(canal.state.vider_refus)   # M7 : décomptes de refus tus écrits à chaque tour, jamais perdus
 
     @asynccontextmanager
     async def vie_canal(app):

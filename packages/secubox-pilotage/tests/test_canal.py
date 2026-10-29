@@ -453,3 +453,39 @@ def test_canal_bonjour_plafonne_par_box():
         assert [(b.cle, i["agent_version"]) for b, i in stock.vus] == [("maillage:gk5", "0.1.2"), ("autoload:lgm-10.64.0.9", "0.1.2"),
                                                                        ("maillage:gk5", "0.1.3")]
     run(cas())
+
+
+def test_canal_refus_tus_ecrits_au_vidage_m7():
+    """M7 : les refus tus (fenêtre d'audit par adresse) sont écrits au vidage (chaque tour d'inventaire), même sans refus suivant."""
+    async def cas():
+        app, _, _, audits = monter(audit_intervalle_s=60)
+        async with client(app, "10.10.0.200") as c:
+            for _ in range(5):
+                assert (await c.get("/canal/v1/requetes?attente=0")).status_code == 403
+        assert audits == [("pilotage_identite_refusee", {"adresse": "10.10.0.200"})]
+        await app.state.vider_refus()
+        assert audits[1] == ("pilotage_identite_refusee", {"adresse": "10.10.0.200", "tus": 4, "vidage": "tour"})
+        await app.state.vider_refus()
+        assert len(audits) == 2                     # rien de nouveau : aucune ligne
+        async with client(app, "10.10.0.200", tunnel=False) as c:
+            await c.get("/canal/v1/requetes?attente=0")
+            await c.get("/canal/v1/requetes?attente=0")
+        await app.state.vider_refus()
+        assert audits[2:] == [("pilotage_identite_refusee", {"adresse": "10.10.0.200", "motif": "hors_tunnel"}),
+                              ("pilotage_identite_refusee", {"adresse": "10.10.0.200", "motif": "hors_tunnel", "tus": 1, "vidage": "tour"})]
+    run(cas())
+
+
+def test_canal_refus_tus_ecrits_a_l_eviction_m7(monkeypatch):
+    """M7 : une adresse évincée de la table bornée emporte son décompte dans une ligne d'audit, jamais en silence."""
+    async def cas():
+        from api import canal
+        monkeypatch.setattr(canal, "AUDIT_ADRESSES_MAX", 2)
+        app, _, _, audits = monter(audit_intervalle_s=60)
+        for ip, n in (("10.77.0.1", 3), ("10.77.0.2", 1), ("10.77.0.3", 1)):
+            async with client(app, ip) as c:
+                for _ in range(n):
+                    await c.get("/canal/v1/requetes?attente=0")
+        assert ("pilotage_identite_refusee", {"adresse": "10.77.0.1", "tus": 2, "vidage": "eviction"}) in audits
+        assert [ch["adresse"] for _, ch in audits if "tus" not in ch] == ["10.77.0.1", "10.77.0.2", "10.77.0.3"]
+    run(cas())

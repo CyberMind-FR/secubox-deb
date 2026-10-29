@@ -136,8 +136,24 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
 
     refus: dict = {}  # (motif, adresse) -> [instant de la dernière ligne, refus tus depuis] ; bornée à AUDIT_ADRESSES_MAX
 
+    async def ecrire_refus(champs: dict) -> None:
+        try:
+            await asyncio.to_thread(audit, "pilotage_identite_refusee", champs)
+        except Exception:
+            log.exception("audit du refus d'identité impossible")
+
+    def champs_tus(cle, tus: int, vidage: str) -> dict:
+        """Ligne de décompte seul (M7) : `tus` refus de cette adresse sont arrivés depuis sa dernière ligne et n'ont pas eu la leur."""
+        motif, adresse = cle
+        champs = {"adresse": adresse}
+        if motif:
+            champs["motif"] = motif
+        champs.update(tus=tus, vidage=vidage)
+        return champs
+
     async def auditer_refus(adresse: str, motif: Optional[str] = None) -> None:
-        """Une ligne d'audit par adresse (et motif) et par audit_intervalle_s ; les refus tus sont comptés dans la ligne suivante."""
+        """Une ligne d'audit par adresse (et motif) et par audit_intervalle_s ; les refus tus sont comptés dans la ligne suivante, ou
+        écrits seuls au vidage (chaque tour d'inventaire) et à l'éviction de l'adresse : jamais perdus (M7)."""
         maintenant = time.monotonic()
         cle = (motif, adresse)
         etat = refus.get(cle)
@@ -150,13 +166,32 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
         if etat is not None and etat[1]:
             champs["tus"] = etat[1]
         refus.pop(cle, None)
+        evincee = None
         if len(refus) >= AUDIT_ADRESSES_MAX:
-            refus.pop(next(iter(refus)))
+            ancienne = next(iter(refus))
+            tus = refus.pop(ancienne)[1]
+            if tus:
+                evincee = champs_tus(ancienne, tus, "eviction")
         refus[cle] = [maintenant, 0]
-        try:
-            await asyncio.to_thread(audit, "pilotage_identite_refusee", champs)
-        except Exception:
-            log.exception("audit du refus d'identité impossible")
+        if evincee is not None:
+            await ecrire_refus(evincee)
+        await ecrire_refus(champs)
+
+    async def vider_refus() -> None:
+        """Écrit les décomptes de refus tus en attente (M7) ; appelé à chaque tour d'inventaire. Les entrées dont la fenêtre est close et
+        qui n'ont plus rien à écrire sont retirées (la table se vide d'elle-même entre deux rafales)."""
+        maintenant = time.monotonic()
+        a_ecrire = []
+        for cle, etat in list(refus.items()):
+            if etat[1]:
+                a_ecrire.append(champs_tus(cle, etat[1], "tour"))
+                etat[1] = 0
+            elif maintenant - etat[0] >= audit_intervalle_s:
+                del refus[cle]
+        for champs in a_ecrire:
+            await ecrire_refus(champs)
+
+    app.state.vider_refus = vider_refus
 
     async def box_de(request: Request) -> Box:
         valeurs = request.headers.getlist("x-real-ip")
