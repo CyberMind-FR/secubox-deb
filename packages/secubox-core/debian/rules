@@ -73,6 +73,9 @@ override_dh_auto_install:
 	install -D -m 0644 etc/default/secubox debian/secubox-core/etc/default/secubox
 	install -D -m 0755 sbin/secubox-defaults-aligner debian/secubox-core/usr/sbin/secubox-defaults-aligner
 
+	# Secrets generes SUR la box (#3243) : constat, creation au premier demarrage, renouvellement d'une box issue d'une image publiee.
+	install -D -m 0755 sbin/secubox-renouvelle-secrets debian/secubox-core/usr/sbin/secubox-renouvelle-secrets
+
 	# Listes DNS compilees par etiquettes (#3205) : commande, unites (service, path, timer) et profil AppArmor.
 	install -D -m 0755 sbin/secubox-dns-listes debian/secubox-core/usr/sbin/secubox-dns-listes
 	install -D -m 0644 systemd/secubox-dns-listes.service debian/secubox-core/usr/lib/systemd/system/secubox-dns-listes.service

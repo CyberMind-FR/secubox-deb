@@ -384,7 +384,11 @@ def test_dossier_du_releve_et_profil_apparmor_livres():
     postinst = (racine / "debian" / "postinst").read_text()
     assert "secubox-profiles" in postinst and "adduser --system --ingroup secubox" in postinst
     # setgid : les fichiers du relevé restent au groupe secubox (lecteurs : API et sbx-fleetctl), 0640 par UMask=0027
-    assert "install -d -o secubox-profiles -g secubox -m 2750 /var/lib/secubox/profiles/validation" in postinst
+    # #3218 (relecture de #3248) : plus d'`install -d` sous /var/lib/secubox (compte secubox, il suivrait un lien) ; même
+    # propriétaire et même mode, posés par descripteur par maj-references.py --dossiers.
+    assert "maj-references.py --dossiers" in postinst
+    script = (racine / "scripts" / "maj-references.py").read_text()
+    assert '("varlib", "profiles/validation", "secubox-profiles", "secubox", 0o2750, True)' in script
     assert "apparmor_parser -r /etc/apparmor.d/secubox-profiles-releve" in postinst
     profil = (racine / "apparmor" / "secubox-profiles-releve").read_text()
     assert "profile secubox-profiles-releve" in profil and "deny /etc/secubox/secrets/** r," in profil

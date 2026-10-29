@@ -4,6 +4,7 @@ case "$1" in
   remove|deconfigure)
     rm -f /etc/nginx/secubox.d/streamlit.conf
     systemctl reload nginx 2>/dev/null || true
+    systemctl disable secubox-streamlit-demarrage.service 2>/dev/null || true
     ;;
   upgrade)
     # Don't remove nginx config on upgrade

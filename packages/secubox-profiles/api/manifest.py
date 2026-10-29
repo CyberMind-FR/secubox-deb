@@ -54,6 +54,12 @@ DEFAULT_WAKE_CLASS = "normal"
 # « état non atteint (timeout) » annulait TOUT l'apply (rolled_back). On ne protège que ce qui est un service durable.
 PROTECTED_IDS = frozenset({"auth", "aggregator", "core", "nginx", "firewall", "profiles", "vault", "autoload-agent"})
 
+# Protégés qu'un profil peut couper quand même, par sa clé `proteges_off` (#3218) — et eux seuls : un profil qui
+# nommerait auth ou l'agrégateur est REFUSÉ au chargement (state.load_profile). « profiles » est l'API du panneau
+# /profiles/ : la coupure ne retire pas le moyen de revenir, car `secubox-profilectl` (CLI root, celle qu'appellent
+# premier-pas et l'agent Auto-Load) ne passe pas par elle. Le profil minimal (carte de 1 Go) la coupe : 41 Mo mesurés.
+PROTEGES_COUPABLES = frozenset({"profiles"})
+
 
 # Modules que le moteur de profils ne GÈRE PAS du tout : ni stop, ni start (#2329). Vide depuis #2332 : le kiosque (interface locale) et la console (sa partie headless) sont dans tous
 # les profils, et leurs unités ne démarrent que si leur condition est remplie (sentinelle .kiosk-enabled) — un démarrage « ignoré » compte comme réussi, il n'annule plus l'apply (#2315).

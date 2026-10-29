@@ -3,10 +3,18 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 
+# Profil d'activation « lite » : ce que `secubox-profilectl apply --profile lite` laisse allumé, pendant du méta-paquet secubox-lite
+# (tous les modules de protection). Un profil est EXHAUSTIF : un service livré par le méta-paquet et absent d'ici serait ARRÊTÉ et
+# désactivé par l'apply. #3218 l'a recalé sur le méta-paquet : socle (maillage, sommeil, réveil, connexion) et protections manquaient.
+# N'y figurent que des services durables ou des oneshot RemainAfterExit : un oneshot de minuterie listé serait démarré par l'apply,
+# ne deviendrait jamais « actif » et annulerait tout l'apply.
 name  = "lite"
 label = "Lite — daily-driver optimisé"
-# #2909 : zkp et assistance ne font partie d'aucun profil ; leurs entrees de menu sont masquees.
-menu_off = ["zkp", "assist"]
+# #2909 : zkp et assistance ne font partie d'aucun profil. #3218 (décision du 2026-10-28) : ni KSM, ni Centres, ni DPI, nDPId
+# ou Media Flow, ni « Boxes à préparer » (panneau du maître, premier-pas-maitre) dans lite ; leurs entrées de menu sont masquées.
+menu_off = ["zkp", "assist", "ksm", "centers", "premier-pas-maitre", "dpi", "ndpid", "mediaflow"]
+# #3218 : le DPI quitte lite ; s'il reste installé (box mise à jour), ses minuteries s'arrêtent avec lui.
+minuteurs_off = ["dpi-resume", "yt-dlp-refresh"]
 on = [
   "ad-guard", "admin", "aggregator", "annuaire", "auth", "backup",
   "cdn", "certs", "core", "cs-bridge", "dns",
@@ -16,4 +24,15 @@ on = [
   "users", "vhost", "vortex-firewall", "waf", "waf-ng", "waf-ratelimit",
   "watchdog", "wireguard",
   "console", "kiosk",
+  # #3218 — socle absent du profil (l'apply l'aurait arrêté) : maillage, sommeil et réveil, connexion, premier démarrage.
+  # Pas le sleeper (relecture #3248) : livré désactivé, choix de l'opérateur. Absent de `on`, l'apply l'ARRÊTE s'il tourne :
+  # pour le garder, l'épingler, `sleeper = "on"` dans pins.toml.
+  "autoload-agent", "firstboot", "groupe-declares", "meshname", "net-fallback", "openpgp", "premier-pas", "waker",
+  # #3218 — protections du méta-paquet secubox-lite absentes du profil.
+  "freebox", "nac", "ipv6guard", "webfilter", "webfilter-feed", "network-anomaly", "netmodes", "netdiag",
+  "qos", "traffic", "nettweak", "tor", "proxypac",
+  "toolbox", "toolbox-wg-restore", "authwatch", "toolbox-egress-proxy",
+  "security-posture", "antirootkit", "cve-triage", "threats", "threatmesh", "cookies", "soc", "actord", "cyberfeed",
+  "vault", "depot-deverrouille", "eth2-flowctl-off",
+  "appstore", "metacatalog", "config-advisor", "cloner", "health-prober", "module-prober",
 ]

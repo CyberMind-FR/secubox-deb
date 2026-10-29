@@ -186,8 +186,10 @@
                 <div class="pan"><h3>Déployer une appli <i>POST /deploy</i></h3>
                     <form class="saisie" id="fDeploy" onsubmit="return false">
                         <label>Nom de l’appli<input id="dNom" placeholder="mon-appli" autocomplete="off"></label>
-                        <label>Port<input id="dPort" type="number" value="8501" placeholder="8501"></label>
+                        <label>Port<input id="dPort" type="number" min="1024" max="65535" placeholder="auto"></label>
+                        <label>Nom public<input id="dPublic" placeholder="facultatif" autocomplete="off" spellcheck="false"></label>
                     </form>
+                    <p class="note">Port vide : un port libre est choisi. Nom public (minuscules, chiffres, tirets) : l’appli est publiée sous <span class="mono" id="dDomaine">nom.domaine</span> — HAProxy, WAF, nginx — et reste démarrée. Vide : publication à la demande (« Publier »).</p>
                     <div class="depot" id="depot"><button class="btn prim" id="dChoisir" type="button">Choisir un fichier ZIP</button><div class="note">ou déposez-le ici — il doit contenir app.py ou main.py</div></div>
                     <input type="file" id="dFichier" accept=".zip" aria-label="Fichier ZIP de l’appli">
                     <div id="rDeploy" class="retour" hidden></div>
@@ -203,7 +205,8 @@
             </div>
             <div class="pan"><h3>Applications <i id="nApps"></i></h3>
                 <div id="rApps" class="retour" hidden></div>
-                <div class="defile"><table><thead><tr><th>Nom</th><th>Point d’entrée</th><th>Port</th><th>État</th><th>Actions</th></tr></thead><tbody id="bApps"></tbody></table></div>
+                <div class="defile"><table><thead><tr><th>Nom</th><th>Point d’entrée</th><th>Port</th><th>Nom public</th><th>État</th><th>Actions</th></tr></thead><tbody id="bApps"></tbody></table></div>
+                <p class="note">Une appli publiée passe par HAProxy, le WAF puis nginx ; elle reste démarrée tant qu’elle est publiée. Renommer pose le nouveau nom et retire l’ancien ; chaque changement est journalisé.</p>
             </div>
         </section>
 
@@ -273,6 +276,9 @@
                 { name: 'carte-reseau', main: 'main.py', port: 8502, running: true },
                 { name: 'rapports-mensuels', main: 'app.py', running: false },
                 { name: 'analyse-journaux', main: 'main.py', running: false }] },
+            '/publications': { auto: false, domaine: 'example.org', apps: {
+                'tableau-capteurs': [{ nom_public: 'capteurs', domaine: 'capteurs.example.org', port: 8501, enabled: true }],
+                'rapports-mensuels': [{ nom_public: 'rapports', domaine: 'rapports.example.org', port: 8503, enabled: true }] } },
             '/instances': { instances: [
                 { id: 'capteurs-sud', app: 'tableau-capteurs', port: 8511, running: true },
                 { id: 'capteurs-nord', app: 'tableau-capteurs', port: 8512, running: false }] }
@@ -607,12 +613,19 @@
 
         // ───── Applis ─────
         let DEMARRE = null, SUPPR = null;   // appli dont le démarrage (port) ou la suppression attend confirmation, dans la ligne
-        let DOMAINES = new Map();
+        let PUBLIE = null;                  // { name, mode: 'publier' | 'renommer' | 'retirer' } : saisie ou confirmation dans la ligne
+        let DOMAINES = new Map(), PUBS = new Map(), DOMAINE_BOX = '';
         function vide(tb, n, txt) { const tr = el('tr'), td = el('td', 'vide', txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
         const bouton = (txt, cls, fn) => { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; };
+        // Même dérivation que le serveur (api/publication.py, label_par_defaut) : une proposition, le serveur tranche.
+        const nomParDefaut = n => String(n || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63).replace(/-+$/, '');
+        const lien = (domaine, txt) => { const a = el('a', '', txt || domaine); a.href = 'https://' + domaine + '/'; a.target = '_blank'; a.rel = 'noopener'; return a; };
         async function chargerApplis() {
-            const [d] = await Promise.all([api('/apps'), ensureAudit()]);
+            const [d, p] = await Promise.all([api('/apps'), api('/publications'), ensureAudit()]);
             DOMAINES = new Map((((auditData && auditData.apps) || []).map(x => [x.name, x.domain || ''])));
+            PUBS = new Map(ko(p) ? [] : Object.entries(p.apps || {}).map(([n, l]) => [n, (l || [])[0] || null]));
+            DOMAINE_BOX = ko(p) ? '' : (p.domaine || '');
+            $('dDomaine').textContent = 'nom.' + (DOMAINE_BOX || 'domaine');
             LISTE_APPS = ko(d) ? null : (d.apps || []);
             rendreApplis();
         }
@@ -620,37 +633,88 @@
         function rendreApplis() {
             const tb = $('bApps'); tb.replaceChildren();
             $('nApps').textContent = LISTE_APPS && LISTE_APPS.length ? LISTE_APPS.length + ' appli' + (LISTE_APPS.length > 1 ? 's' : '') : '';
-            if (!LISTE_APPS) { vide(tb, 5, '—'); return; }
-            if (!LISTE_APPS.length) { vide(tb, 5, 'Aucune appli déployée'); return; }
+            if (!LISTE_APPS) { vide(tb, 6, '—'); return; }
+            if (!LISTE_APPS.length) { vide(tb, 6, 'Aucune appli déployée'); return; }
             LISTE_APPS.forEach(a => {
-                const tr = el('tr'), domain = DOMAINES.get(a.name) || '';
+                const pub = PUBS.get(a.name) || null;
+                const tr = el('tr'), domain = (pub && pub.domaine) || DOMAINES.get(a.name) || '';
                 const n = el('td'); n.appendChild(el('strong', '', tiret(a.name))); tr.appendChild(n);
                 tr.appendChild(el('td', 'mono', tiret(a.main))); tr.appendChild(el('td', '', tiret(a.port)));
+                const np = el('td');
+                if (domain) np.appendChild(lien(domain)); else np.appendChild(el('span', 'nonpub', 'non publiée'));
+                tr.appendChild(np);
                 const e = el('td'); e.appendChild(el('span', 'pill ' + (a.running ? 'ok' : ''), a.running ? 'En ligne' : 'Arrêtée')); tr.appendChild(e);
                 const act = el('td', 'act');
                 if (DEMARRE === a.name) {
-                    const p = el('input'); p.type = 'number'; p.value = 8501; p.setAttribute('aria-label', 'Port de ' + a.name); p.id = 'portDemarre';
+                    const p = el('input'); p.type = 'number'; p.min = 1024; p.max = 65535; p.placeholder = 'auto'; p.setAttribute('aria-label', 'Port de ' + a.name + ' (vide : automatique)'); p.id = 'portDemarre';
                     act.append(p, bouton('Confirmer', 'ok', () => demarrer(a.name, p.value)), bouton('Annuler', '', () => { DEMARRE = null; rendreApplis(); }));
                 } else if (SUPPR === a.name) {
                     act.append(el('span', 'note', 'Supprimer « ' + a.name + ' » ?'), bouton('Confirmer', 'danger', () => supprimerApp(a.name)), bouton('Annuler', '', () => { SUPPR = null; rendreApplis(); }));
+                } else if (PUBLIE && PUBLIE.name === a.name && PUBLIE.mode === 'retirer') {
+                    act.append(el('span', 'note', 'Retirer la publication de « ' + a.name + ' » ?'), bouton('Confirmer', 'danger', () => retirerPublication(a.name)), bouton('Annuler', '', () => { PUBLIE = null; rendreApplis(); }));
+                } else if (PUBLIE && PUBLIE.name === a.name) {
+                    const s = el('input'); s.id = 'nomPublic'; s.autocomplete = 'off'; s.spellcheck = false; s.maxLength = 63;
+                    s.value = PUBLIE.mode === 'renommer' ? ((pub && pub.nom_public) || '') : nomParDefaut(a.name);
+                    s.setAttribute('aria-label', 'Nom public de ' + a.name);
+                    const valider = () => (PUBLIE.mode === 'renommer' ? renommer : publier)(a.name, s.value.trim());
+                    s.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); valider(); } });
+                    act.append(s, el('span', 'note', '.' + (DOMAINE_BOX || 'domaine')), bouton('Confirmer', 'ok', valider), bouton('Annuler', '', () => { PUBLIE = null; rendreApplis(); }));
                 } else {
                     if (a.running) {
                         act.appendChild(bouton('Arrêter', 'danger', () => arreter(a.name)));
-                        if (domain) { const o = el('a', 'btn sm', 'Ouvrir'); o.href = 'https://' + domain + '/'; o.target = '_blank'; o.rel = 'noopener'; act.appendChild(o); }
-                        else act.appendChild(el('span', 'nonpub', 'non publiée'));
-                    } else act.appendChild(bouton('Démarrer', 'ok', () => { DEMARRE = a.name; rendreApplis(); }));
+                        if (domain) { const o = lien(domain, 'Ouvrir'); o.className = 'btn sm'; act.appendChild(o); }
+                    } else act.appendChild(bouton('Démarrer', 'ok', () => { DEMARRE = a.name; PUBLIE = null; rendreApplis(); }));
+                    if (pub) {
+                        act.appendChild(bouton('Renommer', '', () => { PUBLIE = { name: a.name, mode: 'renommer' }; DEMARRE = null; rendreApplis(); }));
+                        act.appendChild(bouton('Retirer', '', () => { PUBLIE = { name: a.name, mode: 'retirer' }; DEMARRE = null; rendreApplis(); }));
+                    } else act.appendChild(bouton('Publier', 'ok', () => { PUBLIE = { name: a.name, mode: 'publier' }; DEMARRE = null; rendreApplis(); }));
                     act.appendChild(bouton('Supprimer', 'danger', () => { SUPPR = a.name; rendreApplis(); }));
                 }
                 tr.appendChild(act); tb.appendChild(tr);
             });
+            if (PUBLIE && $('nomPublic')) $('nomPublic').focus();
             annoncer();
         }
+        // Ce que le serveur dit de la publication, en une phrase (jamais un message vide).
+        function phrasePublication(p) {
+            if (!p) return '';
+            if (p.publiee && p.domaine) return ' Publiée : https://' + p.domaine + '/.';
+            if (p.erreur) return ' Publication refusée : ' + p.erreur;
+            return p.publiee ? '' : ' Non publiée (à la demande : « Publier »).';
+        }
+        const echec = (r, quoi) => quoi + ' : ' + (r.detail || (r.erreur ? 'HTTP ' + r.erreur : 'serveur injoignable'));
         async function demarrer(name, port) {
             if (DEMO) { DEMARRE = null; rendreApplis(); inerte(); return; }
-            const r = await api('/app/' + encodeURIComponent(name) + '/start?port=' + encodeURIComponent(port), { method: 'POST' });
+            // Port vide : le serveur choisit un port libre (plus jamais 8501 imposé par la page).
+            const r = port ? await api('/app/' + encodeURIComponent(name) + '/start?port=' + encodeURIComponent(port), { method: 'POST' })
+                : await api('/app/' + encodeURIComponent(name) + '/start', { method: 'POST' });
             DEMARRE = null;
-            if (ko(r)) retour('rApps', false, 'Démarrage impossible : ' + (r.detail || (r.erreur ? 'HTTP ' + r.erreur : 'serveur injoignable'))); else retour('rApps', true, 'Démarrage de « ' + name + ' » demandé.');
+            if (ko(r)) retour('rApps', false, echec(r, 'Démarrage impossible'));
+            else retour('rApps', true, 'Démarrage de « ' + name + ' » demandé' + (r.port ? ' (port ' + r.port + ')' : '') + '.' + (r.conteneur_reveille ? ' Conteneur réveillé.' : '') + phrasePublication(r.publication));
             setTimeout(rafraichir, 1000); rendreApplis();
+        }
+        async function publier(name, nom) {
+            if (DEMO) { PUBLIE = null; rendreApplis(); inerte(); return; }
+            const r = await api('/app/' + encodeURIComponent(name) + '/publish', { method: 'POST', body: JSON.stringify({ public_name: nom }) });
+            PUBLIE = null;
+            if (ko(r)) retour('rApps', false, echec(r, 'Publication impossible'));
+            else retour('rApps', true, '« ' + name + ' » publiée : https://' + r.domaine + '/' + ((r.avertissements || []).length ? ' — ' + r.avertissements.join(' ; ') : ''));
+            rafraichir();
+        }
+        async function renommer(name, nom) {
+            if (DEMO) { PUBLIE = null; rendreApplis(); inerte(); return; }
+            const r = await api('/app/' + encodeURIComponent(name) + '/rename', { method: 'POST', body: JSON.stringify({ public_name: nom }) });
+            PUBLIE = null;
+            if (ko(r)) retour('rApps', false, echec(r, 'Renommage impossible'));
+            else retour('rApps', true, '« ' + name + ' » publiée sous https://' + r.domaine + '/' + (r.ancien && r.ancien.domaine ? ' (ancien nom ' + r.ancien.domaine + ' retiré)' : '') + ((r.avertissements || []).length ? ' — ' + r.avertissements.join(' ; ') : ''));
+            rafraichir();
+        }
+        async function retirerPublication(name) {
+            if (DEMO) { PUBLIE = null; rendreApplis(); inerte(); return; }
+            const r = await api('/app/' + encodeURIComponent(name) + '/unpublish', { method: 'POST' });
+            PUBLIE = null;
+            if (ko(r)) retour('rApps', false, echec(r, 'Retrait impossible')); else retour('rApps', true, 'Publication de « ' + name + ' » retirée.');
+            rafraichir();
         }
         async function arreter(name) {
             if (DEMO) { inerte(); return; }
@@ -673,12 +737,17 @@
             if (DEMO) { input.value = ''; retour('rDeploy', true, 'Démonstration : action inerte.'); return; }
             retour('rDeploy', true, 'Déploiement en cours…');
             const form = new FormData(); form.append('file', input.files[0]);
-            const name = $('dNom').value, port = $('dPort').value;
+            const name = $('dNom').value, port = $('dPort').value, nomPublic = $('dPublic').value.trim();
             if (name) form.append('name', name); if (port) form.append('port', port);
+            if (nomPublic) form.append('public_name', nomPublic);
             try {
                 const res = await fetch(API + '/deploy', { method: 'POST', headers: jeton() ? { 'Authorization': 'Bearer ' + jeton() } : {}, body: form });
                 let d = {}; try { d = await res.json(); } catch (e) { d = {}; }
-                if (d.success) retour('rDeploy', true, 'Déployée.');
+                if (d.success) {
+                    const p = d.publication || {};
+                    retour('rDeploy', !p.erreur, 'Déployée' + (d.port ? ' sur le port ' + d.port : '') + '.' + (d.conteneur_reveille ? ' Conteneur réveillé.' : '') + phrasePublication(p) + (d.demarrage && d.demarrage.erreur ? ' Démarrage : ' + d.demarrage.erreur : ''));
+                    $('dPublic').value = '';
+                }
                 else retour('rDeploy', false, 'Échec : ' + (d.error || d.detail || ('HTTP ' + res.status)));
             } catch (e) { retour('rDeploy', false, 'Échec : serveur injoignable'); }
             input.value = ''; rafraichir();
@@ -752,10 +821,10 @@
         setTimeout(() => { CHARGE = true; rendreEtat(); bandeaux(); }, 1500);
         // Pas d'actualisation onglet masqué, ni pendant une saisie ou une confirmation ouverte, ni en démonstration.
         setInterval(() => {
-            if (document.hidden || DEMO || DEMARRE || SUPPR || wakingApps.size) return;
+            if (document.hidden || DEMO || DEMARRE || SUPPR || PUBLIE || wakingApps.size) return;
             const a = document.activeElement;
             if (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT')) return;
-            if ($('dNom').value || $('gNom').value || $('gDepot').value) return;
+            if ($('dNom').value || $('dPublic').value || $('gNom').value || $('gDepot').value) return;
             rafraichir();
         }, 60000);
     </script>

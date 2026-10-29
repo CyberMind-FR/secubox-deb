@@ -39,19 +39,33 @@ def _deps(pkg):
     c = P / f"secubox-{pkg}/debian/control"
     if not c.is_file():            # composant livré par un autre paquet (ex. ndpid, agrégé dans dpi)
         return set()
-    t = c.read_text(encoding="utf-8")
+    t = "\n".join(ligne for ligne in c.read_text(encoding="utf-8").splitlines() if not ligne.lstrip().startswith("#"))
     m = re.search(r"^Depends:(.*?)(?=^[A-Z][A-Za-z-]*:|\Z)", t, re.S | re.M)
     return set(re.findall(r"secubox-([a-z0-9-]+)", m.group(1))) if m else set()
 
 
-def test_le_lite_embarque_les_vues_du_soc_avec_leurs_dependances():
-    """Une vue du SOC dont le paquet est absent est un onglet vide : la fermeture des Depends du lite doit les contenir."""
-    vu, pile = set(), ["lite"]
+def _fermeture(racine):
+    vu, pile = set(), [racine]
     while pile:
         x = pile.pop()
         if x in vu:
             continue
         vu.add(x)
         pile += list(_deps(x))
-    for requis in ("soc", "waf-ng", "dpi", "webos", "ndpid-engine"):
+    return vu
+
+
+def test_le_lite_embarque_les_vues_du_soc_avec_leurs_dependances():
+    """Une vue du SOC dont le paquet est absent est un onglet vide : la fermeture des Depends du lite doit les contenir."""
+    vu = _fermeture("lite")
+    for requis in ("soc", "waf-ng", "webos"):
         assert requis in vu, requis
+
+
+def test_le_dpi_quitte_lite_et_reste_dans_isp_3218():
+    """#3218 : DPI et nDPId sortent du profil lite (décision du 2026-10-28) ; le SOC ne le tire plus (Suggests), isp le porte."""
+    assert not {"dpi", "ndpid-engine"} & _fermeture("lite")
+    assert {"dpi", "ndpid-engine"} <= _fermeture("isp")
+    ctl = (P / "secubox-soc/debian/control").read_text(encoding="utf-8")
+    assert re.search(r"^Suggests:.*secubox-dpi", ctl, re.M)
+    assert not re.search(r"^Recommends:.*secubox-dpi", ctl, re.M)

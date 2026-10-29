@@ -9,13 +9,15 @@ import re
 import json
 import subprocess
 import shutil
+import tempfile
 import zipfile
 import asyncio
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, BackgroundTasks
 from fastapi.responses import FileResponse
 from secubox_core.auth import require_lecture
 from secubox_core.auth import domaine_box, hote_box
@@ -30,6 +32,9 @@ from secubox_core.logger import get_logger
 # qui garantit qu'un chromium enlisé ne peut jamais affecter la boucle
 # d'événements partagée par l'agrégateur (#958).
 from secubox_core import screenshots as _screenshots
+# Validation des noms publics et lecture des publications (#3247) : le MÊME module que streamlitctl exécute en root
+# pour écrire — une seule règle, appliquée avant sudo ici, et de nouveau par le ctl.
+from . import publication as _pub
 
 app = FastAPI(title="secubox-streamlit", version="1.0.0", root_path="/api/v1/streamlit")
 
@@ -111,6 +116,16 @@ log = get_logger("streamlit")
 APPS_DIR = "/srv/streamlit/apps"
 LXC_NAME = "streamlit"
 CTL = "/usr/sbin/streamlitctl"
+# Réglages du module (#3247 : [publication], [ports]) et déclarations ([apps.*], [instances.*]). Lisible par le
+# compte secubox (root:secubox 0640) ; seul streamlitctl (root) l'écrit.
+STREAMLIT_CONF = Path(os.environ.get("SECUBOX_STREAMLIT_CONF", "/etc/secubox/streamlit.toml"))
+# Réveil implicite du conteneur (dépôt, démarrage, publication) : `streamlitctl start` borné. HAProxy coupe une
+# requête à 30 s ; le reste de la requête (port, démarrage, publication) doit tenir dans la marge.
+CONTENEUR_REVEIL_DELAI_S = 20
+# Publication : nginx -t + rechargement, route sbxwaf, génération HAProxy (le plus long).
+PUBLICATION_DELAI_S = 90
+# Dépôt : extraction + installation des dépendances (pip, 240 s au plus côté ctl), sous les 300 s de nginx.
+DEPOT_DELAI_S = 290
 
 # Vignettes capturées (#958) — répertoire de cache DÉDIÉ, jamais à
 # l'intérieur de APPS_PATH : la moitié du parc est constituée de scripts
@@ -174,23 +189,94 @@ def _cfg():
     }
 
 
-def _run_ctl(*args, timeout: int = 30) -> dict:
-    """Run streamlitctl and return parsed JSON or error.
+# Horodatage et préfixe que `log`/`error` de streamlitctl ajoutent à chaque ligne : retirés du message rendu.
+_PREFIXE_JOURNAL = re.compile(r"^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*(?:ERROR:\s*)?")
+# Ce qui ressemble à un secret n'atteint jamais une réponse HTTP : identifiants dans une URL, clé=valeur sensible.
+_SECRET_URL = re.compile(r"(://)[^/@\s:]+:[^/@\s]+@")
+_SECRET_CLE = re.compile(r"(?i)\b(token|password|passwd|secret|mot_de_passe|api_key|apikey)\b(\s*[=:]\s*)\S+")
 
-    Uses sudo -n for non-interactive sudo (requires sudoers config).
-    """
+
+def _message_ctl(stdout: str, stderr: str, code) -> str:
+    """La cause réelle d'un échec du ctl, JAMAIS vide (#3247 : « Deploy failed: » puis un 500 sans message).
+
+    stderr d'abord (c'est là qu'`error` écrit), sinon la fin de stdout, sinon le code ; trois lignes au plus,
+    horodatage retiré, secrets masqués."""
+    for flux in (stderr, stdout):
+        lignes = [_PREFIXE_JOURNAL.sub("", x).strip() for x in (flux or "").splitlines()]
+        lignes = [x for x in lignes if x]
+        uniques = list(dict.fromkeys(lignes[-6:]))[-3:]
+        if uniques:
+            msg = " ; ".join(uniques)
+            msg = _SECRET_CLE.sub(r"\1\2***", _SECRET_URL.sub(r"\1***@", msg))
+            return msg[:400]
+    return f"streamlitctl a échoué (code {code}) sans message"
+
+
+def _json_de_sortie(stdout: str) -> Optional[dict]:
+    """Le JSON rendu par le ctl : toute la sortie, ou sa DERNIÈRE ligne JSON. `log` écrit sur stdout AVANT le JSON
+    (`app deploy`) : lire seulement une sortie qui commence par « { » faisait d'un dépôt réussi un échec."""
+    brut = (stdout or "").strip()
+    if brut.startswith("{"):
+        try:
+            d = json.loads(brut)
+            return d if isinstance(d, dict) else None
+        except ValueError:
+            pass
+    for ligne in reversed(brut.splitlines()):
+        ligne = ligne.strip()
+        if ligne.startswith("{") and ligne.endswith("}"):
+            try:
+                d = json.loads(ligne)
+            except ValueError:
+                continue
+            if isinstance(d, dict):
+                return d
+    return None
+
+
+def _run_ctl(*args, timeout: int = 30, entree: Optional[str] = None, brut: bool = False) -> dict:
+    """Lance `sudo -n streamlitctl <args>` ; rend son JSON (ou {"output": …}) avec "code", et "error" — jamais vide —
+    dès que le code n'est pas 0. `entree` passe par l'entrée standard (valeurs d'environnement : jamais en argv).
+    `brut` : sortie rendue telle quelle (journaux d'une appli, dont une ligne peut être du JSON)."""
+    argv = ["sudo", "-n", CTL, *args]
     try:
-        result = subprocess.run(
-            ["sudo", "-n", CTL, *args],
-            capture_output=True, text=True, timeout=timeout
-        )
-        if result.stdout.strip().startswith("{"):
-            return json.loads(result.stdout)
-        return {"output": result.stdout, "error": result.stderr, "code": result.returncode}
+        if entree is None:
+            p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=True,
+                               stdin=subprocess.DEVNULL)
+        else:
+            p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=True, input=entree)
+        code, stdout, stderr = 0, p.stdout, p.stderr
+    except subprocess.CalledProcessError as e:
+        code, stdout, stderr = e.returncode, e.stdout or "", e.stderr or ""
     except subprocess.TimeoutExpired:
-        return {"error": "timeout", "success": False}
-    except Exception as e:
-        return {"error": str(e), "success": False}
+        return {"error": f"streamlitctl {' '.join(args[:2])} : délai de {timeout} s dépassé", "success": False,
+                "timeout": True, "code": None}
+    except OSError as e:
+        return {"error": f"streamlitctl injoignable : {e.strerror or e}", "success": False, "code": None}
+    donnees = None if brut else _json_de_sortie(stdout)
+    res = dict(donnees) if donnees is not None else {"output": stdout}
+    res["code"] = code
+    if code != 0 and not res.get("error"):
+        res["error"] = _message_ctl(stdout, stderr, code)
+    elif code != 0:
+        res["error"] = _SECRET_CLE.sub(r"\1\2***", _SECRET_URL.sub(r"\1***@", str(res["error"])))[:400]
+    return res
+
+
+# Codes de streamlitctl (et d'api/publication.py) → statut HTTP. Un échec non classé reste un 500, mais lisible.
+_STATUTS_CTL = {2: 404, 3: 409, 4: 409, 5: 409, 6: 422, 64: 400, 75: 503}
+
+
+def _ctl_ok(*args, timeout: int = 30, entree: Optional[str] = None) -> dict:
+    """`_run_ctl` qui lève l'HTTPException adaptée (cause réelle en détail) au lieu de rendre l'échec."""
+    r = _run_ctl(*args, timeout=timeout, entree=entree)
+    if r.get("timeout"):
+        raise HTTPException(504, r["error"])
+    code = r.get("code")
+    if code == 0:
+        return r
+    raise HTTPException(_STATUTS_CTL.get(code, 500) if code is not None else 502,
+                        r.get("error") or f"streamlitctl a échoué (code {code})")
 
 
 def _spawn_shotter(name: str, *, force: bool) -> None:
@@ -221,12 +307,17 @@ def _spawn_shotter(name: str, *, force: bool) -> None:
 def _lxc_running() -> bool:
     """Check if LXC container is running.
 
-    Uses sudo -n for non-interactive sudo (requires sudoers config).
+    Uses sudo -n for non-interactive sudo (requires sudoers config). Borné (#3247) : un lxc-info qui ne répond
+    pas vaut « arrêté » plutôt qu'une requête suspendue.
     """
-    result = subprocess.run(
-        ["sudo", "-n", "/usr/sbin/secubox-lxcctl", "lxc-info", "-n", LXC_NAME, "-s"],
-        capture_output=True, text=True
-    )
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", "/usr/sbin/secubox-lxcctl", "lxc-info", "-n", LXC_NAME, "-s"],
+            capture_output=True, text=True, timeout=15, check=True,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+        log.warning("lxc-info %s : %s", LXC_NAME, exc)
+        return False
     return "RUNNING" in result.stdout
 
 
@@ -753,79 +844,345 @@ async def get_app(name: str, user=Depends(require_jwt)):
     raise HTTPException(404, f"App not found: {name}")
 
 
+# ── DÉPÔT, PORT, PUBLICATION (#3247) ──────────────────────────────────
+# Constaté sur gk2 le 2026-10-28 : dépôt et démarrage en 500 SANS MESSAGE quand le conteneur dormait, port 8501
+# imposé, aucune publication, nom public figé. Chaque route ci-dessous : réveille le conteneur s'il dort (même chemin
+# que /power/wake), demande le port au ctl (seul à voir ce qui écoute dans le conteneur), publie par le chemin
+# déclaratif (api/publication.py, exécuté en root par streamlitctl), et rend la cause réelle d'un échec.
+
+ZIP_MAX_ENTREES = 10000
+ZIP_MAX_OCTETS = 1 << 30          # 1 Gio une fois décompressée
+
+
+class NomPublic(BaseModel):
+    public_name: str = ""
+
+
+class EnvAppli(BaseModel):
+    vars: Dict[str, str] = {}
+    unset: List[str] = []
+
+
+def _exiger_port(port: int) -> int:
+    """0 = port automatique ; sinon 1024..65535 (l'appli tourne sans privilège dans le conteneur)."""
+    if port == 0:
+        return 0
+    if not 1024 <= port <= 65535:
+        raise HTTPException(400, f"port {port} hors limites : 1024 à 65535, ou vide pour un port automatique")
+    return port
+
+
+def _exiger_label(label: str) -> str:
+    """Nom public : libellé DNS strict (400), jamais un nom de service de la box (409). Avant tout sudo."""
+    err = _pub.erreur_label(label)
+    if err:
+        raise HTTPException(400, err)
+    if _pub.label_reserve(label):
+        raise HTTPException(409, f"nom public « {label} » réservé aux services de la box")
+    return label
+
+
+def _acteur(user) -> str:
+    sub = str((user or {}).get("sub") or "")
+    return sub if _pub.ACTEUR_RE.fullmatch(sub) else "inconnu"
+
+
+def _conf_texte() -> str:
+    try:
+        return STREAMLIT_CONF.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ""
+    except (OSError, UnicodeDecodeError) as exc:
+        log.warning("streamlit.toml illisible : %s", exc)
+        return ""
+
+
+def _publications_de(name: str, texte: Optional[str] = None) -> List[dict]:
+    return _pub.publications(_conf_texte() if texte is None else texte, "").get(name, [])
+
+
+def _verifier_nom_libre(label: str, name: str) -> None:
+    """Réponse rapide AVANT tout geste (rien n'est déposé si le nom est pris) ; le ctl revérifie en root."""
+    dom = domaine_box()
+    if not dom:
+        raise HTTPException(409, "domaine de la box inconnu ([global] domain dans secubox.conf) : publication "
+                                 "impossible")
+    texte = _conf_texte()
+    if any(p["nom_public"] == label for p in _publications_de(name, texte)):
+        return
+    conflit = _pub.conflit_nom(label, f"{label}.{dom}", name, texte, _pub.routes_lisibles())
+    if conflit:
+        raise HTTPException(409, conflit)
+
+
+def _verifier_zip(chemin: Path) -> None:
+    """Refuse une archive dont une entrée sortirait du dossier de l'appli (chemin absolu, « .. »), un lien
+    symbolique, ou une archive démesurée — avant que le ctl root ne l'extraie (RULES-CODE § 1)."""
+    try:
+        with zipfile.ZipFile(chemin) as z:
+            infos = z.infolist()
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise HTTPException(400, f"archive ZIP illisible ({exc})")
+    if len(infos) > ZIP_MAX_ENTREES:
+        raise HTTPException(400, f"archive refusée : plus de {ZIP_MAX_ENTREES} entrées")
+    total = 0
+    for info in infos:
+        nom = info.filename.replace("\\", "/")
+        if nom.startswith("/") or re.match(r"^[A-Za-z]:", nom) or ".." in nom.split("/"):
+            raise HTTPException(400, f"archive refusée : chemin hors du dossier de l'appli ({nom[:120]})")
+        if (info.external_attr >> 16) & 0o170000 == 0o120000:
+            raise HTTPException(400, f"archive refusée : lien symbolique ({nom[:120]})")
+        total += info.file_size
+        if total > ZIP_MAX_OCTETS:
+            raise HTTPException(400, "archive refusée : plus de 1 Gio une fois décompressée")
+
+
+def _attribuer_port(name: str, port: int) -> dict:
+    """Port libre choisi PAR LE CTL : lui seul voit ce qui écoute dans le conteneur (lxc-attach, root), et il
+    tient les déclarations ; persisté et appli déclarée ([apps.<name>]) avec --apply."""
+    args = ["app", "port", name] + ([str(port)] if port else []) + ["--apply"]
+    return _ctl_ok(*args, timeout=WAKE_CHECK_TIMEOUT_S)
+
+
+def _publication_apres(name: str, user, nom_public: str = "") -> dict:
+    """Publication après un dépôt ou un démarrage. Nom public fourni → publié sous ce nom ; déjà publiée → la
+    chaîne suit le port ; sinon publiée sous un nom dérivé du dossier SEULEMENT si `[publication] auto = true`.
+    Jamais d'exception : un refus (nom pris…) est rapporté, le dépôt ou le démarrage reste acquis."""
+    texte = _conf_texte()
+    actuelles = _publications_de(name, texte)
+    if nom_public:
+        args = ["app", "publish", name, nom_public]
+    elif len(actuelles) == 1 and actuelles[0].get("geree"):
+        args = ["app", "publish", name]
+    elif len(actuelles) == 1:
+        return {"publiee": True, "synchronisee": False, "domaine": actuelles[0].get("domaine"),
+                "raison": "publication posée hors de streamlitctl : laissée telle quelle ; « Renommer » sous le même "
+                          "nom la reprend dans la chaîne gérée"}
+    elif actuelles:
+        return {"publiee": True, "synchronisee": False,
+                "raison": "plusieurs instances publient cette appli : rien n'est resynchronisé"}
+    elif _pub.reglages(texte)["auto"]:
+        label = _pub.label_par_defaut(name)
+        if not label or _pub.label_reserve(label):
+            return {"publiee": False, "erreur": "aucun nom public utilisable dérivé du dossier : publiez-la "
+                                                "avec un nom"}
+        args = ["app", "publish", name, label]
+    else:
+        return {"publiee": False,
+                "raison": "publication sur demande ([publication] auto = false) : action « Publier »"}
+    r = _run_ctl(*args, "--par", _acteur(user), "--apply", timeout=PUBLICATION_DELAI_S)
+    if r.get("code") != 0:
+        return {"publiee": bool(actuelles), "erreur": r.get("error") or "publication impossible"}
+    return {"publiee": True, "nom_public": r.get("nom_public"), "domaine": r.get("domaine"),
+            "evenement": r.get("evenement"), "avertissements": r.get("avertissements") or []}
+
+
 @router.post("/deploy")
-async def deploy(
+def deploy(
     file: UploadFile = File(...),
-    name: str = "",
-    port: int = 0,
+    name: str = Form(""),
+    port: str = Form(""),
+    public_name: str = Form(""),
+    name_q: str = Query("", alias="name"),
+    port_q: int = Query(0, alias="port"),
+    public_q: str = Query("", alias="public_name"),
     user=Depends(require_jwt),
 ):
-    """Deploy a Streamlit app from ZIP."""
+    """Déploie une appli depuis un ZIP (#3247).
+
+    Champs de formulaire (ceux qu'envoie la page ; les anciens paramètres de requête restent admis) : `name`
+    (nom du dossier), `port` (vide = automatique), `public_name` (nom public : publie l'appli sous
+    `<nom>.<domaine de la box>`). Réveille le conteneur s'il dort ; attribue et persiste le port ; déclare
+    l'appli ; publie si un nom public est donné (ou si `[publication] auto = true`), puis la démarre.
+    `def` : servie dans le pool de fils, jamais sur la boucle partagée de l'agrégateur."""
+    name = (name or name_q).strip()
     if not name:
         if not file.filename:
             raise HTTPException(400, "Filename required")
-        name = file.filename.replace(".zip", "").replace(" ", "_").lower()
-    # Le nom finit dans un chemin de /tmp ET dans l'argv de streamlitctl.
+        name = Path(file.filename).name.replace(".zip", "").replace(" ", "_").lower()
+    # Le nom finit dans l'argv de streamlitctl.
     _exiger_nom_appli(name)
+    port_txt = (port or "").strip()
+    if port_txt and not port_txt.isdigit():
+        raise HTTPException(400, "port invalide : un nombre, ou vide pour un port automatique")
+    port_n = _exiger_port(int(port_txt) if port_txt else port_q)
+    nom_public = (public_name or public_q).strip()
+    if nom_public:
+        _exiger_label(nom_public)
+        _verifier_nom_libre(nom_public, name)
 
-    # Save uploaded file
-    tmp_path = f"/tmp/streamlit_upload_{name}.zip"
-    content = await file.read()
-    Path(tmp_path).write_bytes(content)
-
-    # Deploy via streamlitctl
-    result = _run_ctl("app", "deploy", tmp_path, name, timeout=120)
-
-    # Cleanup
-    Path(tmp_path).unlink(missing_ok=True)
-
-    if result.get("success"):
-        log.info("Deployed app: %s", name)
-        return result
-    else:
-        log.error("Deploy failed: %s", result.get("error", "unknown"))
-        raise HTTPException(500, result.get("error", "Deploy failed"))
+    # Fichier temporaire NON prévisible (l'ancien /tmp/streamlit_upload_<nom>.zip l'était), lu par le ctl root.
+    fd, tmp = tempfile.mkstemp(prefix="streamlit-depot-", suffix=".zip")
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            shutil.copyfileobj(file.file, fh)
+        _verifier_zip(Path(tmp))
+        reveille = _reveiller_conteneur(f"le dépôt de « {name} »")
+        # Extraction par root + pip DANS le conteneur (240 s au plus) : réponse avant les 300 s de nginx.
+        result = _ctl_ok("app", "deploy", tmp, name, timeout=DEPOT_DELAI_S)
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+    attrib = _attribuer_port(name, port_n)
+    publication = _publication_apres(name, user, nom_public)
+    demarrage = None
+    if publication.get("publiee") and publication.get("synchronisee") is not False:
+        # Publiée = servie : (re)démarrée sur le nouveau code.
+        r = _run_ctl("app", "restart", name, timeout=60)
+        demarrage = {"ok": r.get("code") == 0, **({"erreur": r["error"]} if r.get("code") else {})}
+    log.info("Deployed app: %s (port %s, publication %s)", name, attrib.get("port"), publication)
+    reponse = {k: v for k, v in result.items() if k not in ("code", "output")}
+    reponse.update({"success": True, "name": name, "port": attrib.get("port"),
+                    "port_source": attrib.get("source"), "conteneur_reveille": reveille,
+                    "publication": publication, "demarrage": demarrage})
+    return reponse
 
 
 @router.post("/app/{name}/start")
-async def start_app(name: str, port: int = 0, user=Depends(require_jwt)):
-    """Start an app."""
+def start_app(name: str, port: int = 0, user=Depends(require_jwt)):
+    """Démarre une appli. Sans port : le sien, sinon un port libre (plus jamais `default_port`). Réveille le
+    conteneur s'il dort ; une appli publiée voit sa chaîne suivre le port. `def` : hors de la boucle partagée."""
     _exiger_nom_appli(name)
-    cfg = _cfg()
-    port = port or cfg["default_port"]
-
-    result = _run_ctl("app", "start", name, str(port))
-
-    if "error" not in result or result.get("code", 0) == 0:
-        log.info("Started app: %s on port %d", name, port)
-        return {"success": True, "name": name, "port": port}
-    else:
-        raise HTTPException(500, result.get("error", "Failed to start"))
+    _exiger_port(port)
+    reveille = _reveiller_conteneur(f"le démarrage de « {name} »")
+    attrib = _attribuer_port(name, port)
+    p = int(attrib["port"])
+    _ctl_ok("app", "start", name, str(p), timeout=30)
+    log.info("Started app: %s on port %d", name, p)
+    return {"success": True, "name": name, "port": p, "port_source": attrib.get("source"),
+            "conteneur_reveille": reveille, "publication": _publication_apres(name, user)}
 
 
 @router.post("/app/{name}/stop")
-async def stop_app(name: str, user=Depends(require_jwt)):
-    """Stop an app."""
+def stop_app(name: str, user=Depends(require_jwt)):
+    """Stop an app (l'échec du ctl est rendu, plus masqué)."""
     _exiger_nom_appli(name)
-    result = _run_ctl("app", "stop", name)
+    _ctl_ok("app", "stop", name)
     log.info("Stopped app: %s", name)
     return {"success": True, "name": name}
 
 
 @router.delete("/app/{name}")
-async def delete_app(name: str, user=Depends(require_jwt)):
-    """Delete an app."""
+def delete_app(name: str, user=Depends(require_jwt)):
+    """Supprime une appli — après avoir retiré sa publication : jamais un vhost qui pointerait vers une appli
+    absente (ou, plus tard, vers celle qui récupérerait son port). Retrait impossible = suppression annulée."""
     _exiger_nom_appli(name)
-    result = _run_ctl("app", "remove", name)
+    retrait = _run_ctl("app", "unpublish", name, "--par", _acteur(user), "--apply", timeout=PUBLICATION_DELAI_S)
+    if retrait.get("code") != 0:
+        raise HTTPException(_STATUTS_CTL.get(retrait.get("code"), 500),
+                            f"suppression annulée, la publication n'a pas pu être retirée : {retrait.get('error')}")
+    if retrait.get("partiel"):
+        raise HTTPException(409, "suppression annulée : publication retirée en partie seulement (reliquat : "
+                                 f"{', '.join(retrait.get('reliquat') or [])}) — voir /var/log/secubox/audit.log, "
+                                 "puis « Retirer » de nouveau")
+    _ctl_ok("app", "remove", name)
     log.info("Removed app: %s", name)
-    return {"success": True, "name": name}
+    return {"success": True, "name": name, "publication_retiree": retrait.get("retires", [])}
+
+
+@router.get("/publications", dependencies=[Depends(require_lecture)])
+def publications_liste():
+    """Noms publics et domaines de chaque appli (déclarations `[instances.*]`), et les réglages de publication.
+    Lecture gardée comme /apps/vitrine (les domaines publiés y figurent déjà)."""
+    texte = _conf_texte()
+    dom = domaine_box()
+    r = _pub.reglages(texte)
+    return {"auto": r["auto"], "autostart": r["autostart"], "domaine": dom,
+            "ports": [r["port_min"], r["port_max"]], "apps": _pub.publications(texte, dom)}
+
+
+@router.post("/app/{name}/publish")
+def publish_app(name: str, req: Optional[NomPublic] = None, user=Depends(require_jwt)):
+    """Publie l'appli sous `<nom public>.<domaine de la box>` (nom dérivé du dossier si absent), par la chaîne
+    déclarative : vhost nginx :9080, route sbxwaf (secubox-waf-route), vhost HAProxy, `[instances.<nom>]`.
+    Jamais de contournement du WAF. Réveille le conteneur, attribue un port s'il en faut un, puis la démarre."""
+    _exiger_nom_appli(name)
+    nom = ((req.public_name if req else "") or "").strip()
+    actuelles = _publications_de(name)
+    if not nom and not actuelles:
+        nom = _pub.label_par_defaut(name)
+        if not nom:
+            raise HTTPException(400, "nom public requis : le nom du dossier n'en donne aucun de valide")
+    if nom:
+        _exiger_label(nom)
+        if not any(p["nom_public"] == nom for p in actuelles):
+            _verifier_nom_libre(nom, name)
+    reveille = _reveiller_conteneur(f"la publication de « {name} »")
+    attrib = _attribuer_port(name, 0)
+    args = ["app", "publish", name] + ([nom] if nom else []) + ["--par", _acteur(user), "--apply"]
+    r = _ctl_ok(*args, timeout=PUBLICATION_DELAI_S)
+    d = _run_ctl("app", "start", name, str(attrib["port"]), timeout=30)
+    return {"success": True, "name": name, "nom_public": r.get("nom_public"), "domaine": r.get("domaine"),
+            "evenement": r.get("evenement"), "port": attrib.get("port"), "conteneur_reveille": reveille,
+            "avertissements": r.get("avertissements") or [],
+            "demarrage": {"ok": d.get("code") == 0, **({"erreur": d["error"]} if d.get("code") else {})}}
+
+
+@router.post("/app/{name}/rename")
+def rename_app(name: str, req: NomPublic, user=Depends(require_jwt)):
+    """Change le nom public : le nouveau est posé et l'ancien retiré par le même chemin (nginx, route sbxwaf,
+    HAProxy, TOML), chaque changement audité dans /var/log/secubox/audit.log par le ctl."""
+    _exiger_nom_appli(name)
+    nom = (req.public_name or "").strip()
+    _exiger_label(nom)
+    actuelles = _publications_de(name)
+    if not actuelles:
+        raise HTTPException(409, f"« {name} » n'est pas publiée : publiez-la d'abord (action « Publier »)")
+    if len(actuelles) > 1:
+        raise HTTPException(409, "plusieurs instances publient cette appli : retirez la publication puis "
+                                 "republiez-la sous un seul nom")
+    if actuelles[0]["nom_public"] != nom:
+        _verifier_nom_libre(nom, name)
+    reveille = _reveiller_conteneur(f"le renommage de « {name} »")
+    r = _ctl_ok("app", "publish", name, nom, "--par", _acteur(user), "--apply", timeout=PUBLICATION_DELAI_S)
+    return {"success": True, "name": name, "nom_public": r.get("nom_public"), "domaine": r.get("domaine"),
+            "evenement": r.get("evenement"), "ancien": r.get("ancien"), "conteneur_reveille": reveille,
+            "avertissements": r.get("avertissements") or []}
+
+
+@router.post("/app/{name}/unpublish")
+def unpublish_app(name: str, user=Depends(require_jwt)):
+    """Retire la publication (les quatre maillons) ; l'appli reste déposée et retrouve la mise en veille."""
+    _exiger_nom_appli(name)
+    r = _ctl_ok("app", "unpublish", name, "--par", _acteur(user), "--apply", timeout=PUBLICATION_DELAI_S)
+    return {"success": True, "name": name, "retires": r.get("retires", []), "partiel": bool(r.get("partiel")),
+            "reliquat": r.get("reliquat") or [], "avertissements": r.get("avertissements") or []}
+
+
+@router.get("/app/{name}/env")
+def get_env(name: str, user=Depends(require_jwt)):
+    """Les NOMS des variables de l'appli — jamais leurs valeurs."""
+    _exiger_nom_appli(name)
+    _reveiller_conteneur(f"la lecture de l'environnement de « {name} »")
+    r = _ctl_ok("app", "env", name, "list")
+    return {"name": name, "cles": r.get("cles", []), "fichier": r.get("fichier")}
+
+
+@router.put("/app/{name}/env")
+def put_env(name: str, req: EnvAppli, user=Depends(require_jwt)):
+    """Définit (`vars`) ou retire (`unset`) des variables de l'appli : fichier root 0600 dans le conteneur, lu par
+    son unité au prochain démarrage. Les valeurs passent par l'entrée standard du ctl, jamais par son argv."""
+    _exiger_nom_appli(name)
+    for cle, valeur in req.vars.items():
+        err = _pub.erreur_cle_env(cle) or _pub.erreur_valeur_env(valeur)
+        if err:
+            raise HTTPException(400, err)
+    for cle in req.unset:
+        err = _pub.erreur_cle_env(cle)
+        if err:
+            raise HTTPException(400, err)
+    _reveiller_conteneur(f"la modification de l'environnement de « {name} »")
+    args = (["app", "env", name, "set"] + [x for cle in req.unset for x in ("--unset", cle)]
+            + ["--par", _acteur(user), "--apply"])
+    r = _ctl_ok(*args, entree="".join(f"{k}={v}\n" for k, v in req.vars.items()))
+    return {"success": True, "name": name, "cles": r.get("cles", []),
+            "redemarrage_requis": bool(r.get("redemarrage_requis"))}
 
 
 @router.get("/app/{name}/logs")
-async def get_logs(name: str, lines: int = 100, user=Depends(require_jwt)):
+def get_logs(name: str, lines: int = 100, user=Depends(require_jwt)):
     """Get app logs."""
     _exiger_nom_appli(name)
-    result = _run_ctl("app", "logs", name, str(lines))
+    result = _run_ctl("app", "logs", name, str(lines), brut=True)
     return {"logs": result.get("output", "").splitlines()}
 
 
@@ -948,6 +1305,12 @@ def _do_wake_in_background(name: str) -> None:
         elif result.returncode == 2:
             log.warning("wake: %s unknown to streamlitctl (rc=2)", name)
             _wake_noter_echec(name, 404, f"app not found: {name}")
+        elif result.returncode == 75:
+            # Conteneur endormi que `app wake` n'a pas pu lever (#3247) : un 503 qui dit pourquoi.
+            cause = _message_ctl((result.stdout or b"").decode(errors="replace"),
+                                 (result.stderr or b"").decode(errors="replace"), 75)
+            log.warning("wake: %s — conteneur indisponible : %s", name, cause)
+            _wake_noter_echec(name, 503, f"conteneur streamlit indisponible : {cause}")
         else:
             stderr_snippet = (result.stderr or b"").decode(errors="replace")[:200]
             log.warning("wake: %s failed rc=%d stderr=%s", name, result.returncode, stderr_snippet)
@@ -1061,18 +1424,19 @@ async def list_instances(user=Depends(require_jwt)):
 
 
 @router.post("/instance/{id}/start")
-async def start_instance(id: str, user=Depends(require_jwt)):
-    """Start an instance."""
+def start_instance(id: str, user=Depends(require_jwt)):
+    """Start an instance — réveille le conteneur s'il dort (#3247) ; l'échec du ctl est rendu, plus masqué."""
     _exiger_nom_appli(id)
-    result = _run_ctl("instance", "start", id)
+    _reveiller_conteneur(f"le démarrage de l'instance « {id} »")
+    _ctl_ok("instance", "start", id)
     return {"success": True, "id": id}
 
 
 @router.post("/instance/{id}/stop")
-async def stop_instance(id: str, user=Depends(require_jwt)):
-    """Stop an instance."""
+def stop_instance(id: str, user=Depends(require_jwt)):
+    """Stop an instance (l'échec du ctl est rendu, plus masqué)."""
     _exiger_nom_appli(id)
-    result = _run_ctl("instance", "stop", id)
+    _ctl_ok("instance", "stop", id)
     return {"success": True, "id": id}
 
 
@@ -1121,9 +1485,6 @@ async def container_stop(user=Depends(require_jwt)):
 # POWER MANAGEMENT (Sleep/Wake)
 # ═══════════════════════════════════════════════════════════════════════
 
-import time
-from datetime import datetime
-
 POWER_STATE_FILE = Path("/var/lib/secubox/streamlit-power.json")
 _last_activity: float = time.time()
 
@@ -1132,8 +1493,8 @@ def _load_power_state() -> dict:
     if POWER_STATE_FILE.exists():
         try:
             return json.loads(POWER_STATE_FILE.read_text())
-        except:
-            pass
+        except (OSError, ValueError) as exc:
+            log.warning("état d'alimentation illisible (%s) : valeurs par défaut", exc)
     return {"state": "running", "paused_at": None, "last_activity": time.time()}
 
 def _save_power_state(state: dict):
@@ -1178,7 +1539,7 @@ def _emit_presence_event(event: str, details: Optional[Dict[str, Any]] = None):
 
 def _load_streamlit_config() -> dict:
     """Load streamlit config from TOML file."""
-    config_path = Path("/etc/secubox/streamlit.toml")
+    config_path = STREAMLIT_CONF
     if config_path.exists():
         try:
             import tomllib
@@ -1270,43 +1631,74 @@ async def power_pause(user=Depends(require_jwt)):
     log.info("Streamlit container paused (sleep mode)")
     return {"success": True, "state": "paused"}
 
+def _noter_reveil() -> None:
+    """Effets de bord d'un réveil : état d'alimentation + évènement de présence. Ne lève jamais : un fichier
+    d'état non inscriptible ne doit pas faire échouer un réveil réussi."""
+    try:
+        state = _load_power_state()
+        paused_duration = None
+        if state.get("paused_at"):
+            try:
+                paused_at = datetime.fromisoformat(state["paused_at"])
+                maintenant = datetime.now(paused_at.tzinfo or timezone.utc)
+                if paused_at.tzinfo is None:
+                    maintenant = maintenant.replace(tzinfo=None)
+                paused_duration = int((maintenant - paused_at).total_seconds())
+            except (TypeError, ValueError):
+                paused_duration = None
+        state["state"] = "running"
+        state["paused_at"] = None
+        _update_activity()
+        _save_power_state(state)
+        _emit_presence_event("wake", {"paused_duration": paused_duration})
+    except OSError as exc:
+        log.warning("réveil : état d'alimentation non enregistré (%s)", exc)
+
+
+def _reveiller_conteneur(motif: str) -> bool:
+    """Réveille le conteneur s'il dort — MÊME CHEMIN que POST /power/wake (`streamlitctl start`), borné à
+    CONTENEUR_REVEIL_DELAI_S (#3247). Rend True s'il dormait.
+
+    Le dépôt et le démarrage d'une appli échouaient en 500 SANS MESSAGE quand le conteneur était arrêté (gk2,
+    2026-10-28 : arrêté après un redémarrage). Désormais : réveil, et s'il échoue, 503 avec la cause réelle ;
+    409 si le conteneur n'est même pas installé. Le balayage des instances `autostart` de /power/wake n'est PAS
+    rejoué ici : un dépôt ne démarre pas tout le parc (#982)."""
+    if not _cfg()["use_lxc"]:
+        return False
+    if _lxc_running():
+        return False
+    if not _lxc_exists():
+        raise HTTPException(409, f"Conteneur streamlit non installé : installez-le (onglet État → Installer) "
+                                 f"avant {motif}.")
+    r = _run_ctl("start", timeout=CONTENEUR_REVEIL_DELAI_S)
+    if not _lxc_running():
+        cause = r.get("error") or "le conteneur ne passe pas en état RUNNING"
+        raise HTTPException(503, f"Conteneur streamlit endormi : réveil impossible avant {motif} ({cause}).")
+    _noter_reveil()
+    log.info("conteneur streamlit réveillé (%s)", motif)
+    return True
+
+
+def _power_wake_sync() -> dict:
+    if _lxc_running():
+        _update_activity()
+        return {"success": True, "message": "Already running"}
+    _reveiller_conteneur("le réveil demandé")
+    # Start autostart instances (réveil EXPLICITE du module : les instances déclarées `autostart` reviennent).
+    autostarted = _start_autostart_instances()
+    log.info("Streamlit container woken from sleep, autostarted %d instances", len(autostarted))
+    return {"success": True, "state": "running", "autostarted": autostarted}
+
+
 @router.post("/power/wake")
 async def power_wake(user=Depends(require_jwt)):
     """Wake (resume) the Streamlit container from sleep.
 
-    Restarts the container and all previously running apps.
+    Restarts the container and all previously running apps. Même chemin que le réveil implicite du dépôt et du
+    démarrage (`_reveiller_conteneur`) ; 503 avec la cause si le conteneur ne se lève pas (avant : un 500 vide,
+    toujours, la sortie non-JSON de `streamlitctl start` portant une clé "error").
     """
-    if _lxc_running():
-        _update_activity()
-        return {"success": True, "message": "Already running"}
-
-    # Start the container
-    result = _run_ctl("start", timeout=60)
-    if "error" in result:
-        raise HTTPException(500, f"Failed to wake: {result.get('error')}")
-
-    # Update state
-    state = _load_power_state()
-    paused_duration = None
-    if state.get("paused_at"):
-        try:
-            paused_at = datetime.fromisoformat(state["paused_at"])
-            paused_duration = int((datetime.now() - paused_at).total_seconds())
-        except:
-            pass
-    state["state"] = "running"
-    state["paused_at"] = None
-    _update_activity()
-    _save_power_state(state)
-
-    # Emit presence event for banner injection
-    _emit_presence_event("wake", {"paused_duration": paused_duration})
-
-    # Start autostart instances
-    autostarted = _start_autostart_instances()
-
-    log.info("Streamlit container woken from sleep, autostarted %d instances", len(autostarted))
-    return {"success": True, "state": "running", "autostarted": autostarted}
+    return await asyncio.to_thread(_power_wake_sync)
 
 @router.post("/power/toggle")
 async def power_toggle(user=Depends(require_jwt)):
@@ -1344,11 +1736,9 @@ async def list_autostart():
 
 
 @router.post("/autostart/run")
-async def run_autostart(user=Depends(require_jwt)):
-    """Manually trigger autostart for all configured instances."""
-    if not _lxc_running():
-        raise HTTPException(400, "Container not running. Wake it first.")
-
+def run_autostart(user=Depends(require_jwt)):
+    """Manually trigger autostart for all configured instances (réveille le conteneur s'il dort, #3247)."""
+    _reveiller_conteneur("le démarrage des instances autostart")
     started = _start_autostart_instances()
     return {
         "success": True,

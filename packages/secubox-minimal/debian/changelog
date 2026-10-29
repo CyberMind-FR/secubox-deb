@@ -1,3 +1,13 @@
+secubox-minimal (0.10.0-1~trixie1) trixie; urgency=medium
+
+  * Allegement mesure sur l'ESPRESSObin de 1 Go gk5 (ref #3218) : secubox-dpi, secubox-ndpid-engine, secubox-courbes et
+    secubox-routes (netdiag) quittent les Depends et passent en Conflicts (nDPId prenait tout le CPU, le DPI sans lui
+    n'affiche rien, Courbes et netdiag sont des surplus). apt les retire a la mise a jour du meta-paquet.
+  * secubox-portal reste (il livre login.html) ; son service est arrete par le profil minimal, comme admin, ksm,
+    profiles et network-anomaly, composants de paquets du socle que le meta-paquet ne peut pas exclure.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 14:00:00 +0100
+
 secubox-minimal (0.9.0-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-routes (>= 1.5.0) : /netdiag/ fait partie du profil minimal (ref #2899).

@@ -9,6 +9,74 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-29 — Retrait de reality et socialrelay, kiosque, couture en frontal léger, pilotage L1 étapes 1-10 (ref #3256, ref #3254, ref #3126)
+
+- **Retrait reality / socialrelay (#3256, décision du propriétaire)** : gk3 et gk4 purgés (paquets actifs), gk1 et gk2
+  nettoyés (restes, routes WAF `socialrelay.gk{2,3,4}`, vhosts `socialrelay_gk3/gk4` retirés, `generate --allow-shrink`
+  après contrôle : seuls ces domaines disparaissent) ; données DÉPLACÉES, pas effacées, dans
+  `/var/backups/retrait-reality-socialrelay-20261029/` (29 Go sur gk3) ; secubox-profiles 0.24 → 0.25.2 sur gk1/gk2,
+  copies `media-lab`/`secure-gateway` de gk2 remises à la référence ; `secubox-socialrelay` retiré du dépôt apt
+  (trixie, bookworm), index re-signés. Reste : gk3 (route `gitea.gk2` posée à la main le 14/10, hors haproxy.toml :
+  régénération non forcée, règle socialrelay inerte), gk5 et lgm-ebin non vérifiés. Script audité `module: retrait-3256`.
+- **Kiosque (#3254, PR #3255 ouverte)** : gk4 (lite) n'avait pas `secubox-kiosk` (installé à la main) → secubox-lite
+  1.9.1 le recommande, secubox-core 1.8.8 message clair ; gk2 : « Interactive authentication required » car `system`
+  était monté dans l'agrégateur alors que polkit ne l'accorde qu'à secubox-system.service → `system` dans
+  `DEDICATED_MODULES` (secubox-aggregator 0.5.1, qui ajoute aussi `socialrelay` aux `RETIRED_MODULES`). Déploiement :
+  redémarrage de l'agrégateur de gk2 à grouper.
+- **couture.gk2.secubox.in** (appli du propriétaire, hors dépôt) : servi par le frontal FastAPI + HTML/JS
+  (`atelier-partage-web.service` dans le conteneur streamlit, 10.100.0.50:8601) au lieu de Streamlit (arrêté,
+  autostart off) ; un créneau = une carte (4 prochains), page 1,4 Ko en 93 ms, statiques gzip et cache un an ;
+  `/root/atelier-mdp.sh` relance désormais ce service. Source : `atelier-partage-3.zip`.
+- **RPi4 + écran officiel 7"** : carte microSD Eye Square sauvegardée (`~/sauvegardes-sd/…img.zst`, vérifiée), image lite
+  alpha.19 écrite et vérifiée, overlay `vc4-kms-dsi-7inch` repris de Raspberry Pi OS (essai : noyau Debian sans overlay DSI).
+- **Pilotage distant L1 (#3126)** : étapes 1 à 10 faites et relues dans le worktree 3126 (agent Go, paquet durci, canal,
+  projection Auto-Load, identité/files cloisonnées, stockage et API, paquet maître avec écouteurs de tunnel, sockets
+  systemd, nft `inet filter`). Failles corrigées en relecture : usurpation de box par X-Forwarded-For (realip hérité),
+  files partagées entre box homonymes. Issues ouvertes : #3253 (projection publique p2p, avant L2).
+
+## 2026-10-29 — Streamlit : réveil, port et publication automatiques, déployé sur gk2 (closes #3247)
+
+- **Livré** (PR #3249 → `6c5074058`, secubox-streamlit 1.7.0, secubox-haproxy 1.12.7) : le conteneur endormi est
+  réveillé avant un dépôt ou un démarrage (plus de 500 vide) ; erreurs lisibles ; port automatique persistant ;
+  publication déclarative (`[publication] auto`, `ip_conteneur`) et nom public modifiable ; `app depublier-anciennes` ;
+  délai HAProxy de 10 min sur les seuls chemins dépôt/publication. Trois relectures (4 constats, puis 3 mineurs).
+- **Déployé sur gk2** : paquets publiés puis installés par apt, `haproxyctl generate` + reload, un seul redémarrage
+  de l'agrégateur (health en 46 s, module streamlit monté en 42 s de plus) ; `[publication] auto = true`,
+  `ip_conteneur = "10.100.0.50"` (décision du propriétaire, audité). 25 publications cassées retirées (elles
+  servaient la page « Wrong Domain ») : 6 d'un coup, 19 après `haproxyctl generate --allow-shrink` (garde-fou de
+  dérive : 38 ACL = 19 vhosts × 2, exactement la baisse attendue), puis second passage. 7 entrées gardées, dont
+  `couture`. Suites : **#3252** (adresse de l'hôte sur le pont, délai nginx `/deploy`, sudoers, isolation par appli,
+  réveil par vhost, `--allow-shrink` borné pendant la dépublication).
+- **couture.gk2.secubox.in** (appli du propriétaire, hors dépôt) : heures d'ouverture liées au jour de la semaine
+  (lundi Soir 17h–20h, jeudi Matin 9h–12h et Après-midi 14h–17h), exceptions par date, 4 prochains créneaux au
+  public ; source rendue en `atelier-partage-2.zip`.
+- Livrés et déployés la veille, marqués ici : nDPIsrvd sans boucle sur une box sans toolbox (ndpid-engine 1.7.3,
+  closes #3240) ; flowcap sans relance en boucle quand l'interface manque (secubox-dpi 1.14.5, gk1, closes #3245).
+
+## 2026-10-28 — Sécurité : secrets de construction dans les images publiées, rotation de la flotte (ref #3243)
+
+- **Constat** (banc gk5) : les images de CI (dépôt public) embarquaient des secrets générés dans le chroot — clés
+  d'hôte SSH (`root@runnervm…`), clé de signature OIDC, clé TLS, clé WireGuard p2p éphémère, `pair.token`,
+  `machine-id` — et un admin `runnervm…` sans mot de passe (seed `admin + $(hostname)` de secubox-users). gk1, gk3,
+  gk4 et gk5 en portaient ; gk2 (construit hors CI) non. Issue publique complète (choix du propriétaire).
+- **Livré** : `secubox-renouvelle-secrets` (secubox-core 1.8.5 → 1.8.7, PR #3244) — constat, `--absents`,
+  `--tout --oui [--machine-id] [--desactiver NOM]`, chaque secret par le générateur de son paquet, posé par
+  renommage depuis un dossier root 0700, ancien remis sur échec, TLS par descripteur, journal root
+  `/var/log/secubox-renouvelle-secrets.log`, copies HAProxy de l'ancienne clé remplacées, audit sans valeur.
+  Trois relectures de sécurité (1.8.5 : 2 bloquants ; 1.8.6 : 2 bloquants ; 1.8.7 : 0) ; 50 tests.
+- **Rotation faite** (1.8.5, puis résidus à la main) : gk1, gk3, gk4, gk5 — empreintes vérifiées depuis gk2,
+  known_hosts de gk2 mis à jour ; HAProxy de gk3 servait encore l'ancien certificat par défaut (remplacé) ;
+  `machine-id` de gk5 recopié depuis dbus par `systemd-machine-id-setup` (refait ; redémarrage de gk5 à prévoir) ;
+  `/etc/secubox/tls` remis en 0750. Validation réelle de la 1.8.7 en `--tout` sur gk5 (code 0, 23 Mo). 1.8.7
+  installée partout ; constat propre.
+- **Reste** (#3243) : 1.8.8 (deux points mineurs de la 3ᵉ relecture), nettoyage des images à la construction
+  (`image/nettoie-secrets.sh` prêt hors dépôt ; jeton p2p aussi dans `/etc/nginx/secubox-p2p-pair.conf` ; image RPi
+  sans premier démarrage), firstboot qui appelle `--absents`, reconstruction des images alpha.19, `/etc/secubox`
+  détenu par `secubox` (#468, problème de fond).
+- Même journée : nDPIsrvd en boucle sans toolbox (#3240, PR #3241, ndpid-engine 1.7.3) ; renommage de la page
+  Système cassé (#3242) ; gk5 maillée et relayée (`admin.gk5.secubox.in`) ; banc d'allègement gk5 (#3218) ; DPI
+  coupé sur gk1 (visio seule).
+
 ## 2026-10-28 — Agrégateur : démarrage non bloquant, montage progressif (closes #3216, ref #3191)
 
 - **Livré** (PR #3231, secubox-aggregator 0.5.0) : la socket écoute avant tout montage ; une tâche de démarrage monte

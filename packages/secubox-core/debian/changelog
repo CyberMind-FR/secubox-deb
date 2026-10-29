@@ -1,3 +1,57 @@
+secubox-core (1.8.8-1~trixie1) trixie; urgency=medium
+
+  * Kiosque (ref #3254) : quand secubox-kiosk n'est pas installe, l'activation et la desactivation
+    rendent un message en francais qui dit quoi installer, au lieu de « Kiosk setup script not installed ».
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 05:30:30 +0100
+
+secubox-core (1.8.7-1~trixie1) trixie; urgency=high
+
+  * secubox-renouvelle-secrets (#3243), seconde relecture de securite (2 bloquants, 3 mineurs, 2 remarques) :
+    - journal du postinst p2p deplace sous /var/log (root) : /var/log/secubox-renouvelle-secrets.log, ouvert par un
+      helper Python en O_NOFOLLOW|O_NONBLOCK|O_CREAT|O_APPEND (0600), refuse s'il n'est pas un fichier ordinaire a root,
+      mode remis par descripteur ; ouvert AVANT de retirer jeton et cle (un lien ou une FIFO ne mene ni ne bloque root) ;
+    - TLS : mise de cote, pose et remise PAR DESCRIPTEUR de dossier (O_DIRECTORY|O_NOFOLLOW, proprietaire verifie,
+      linkat/renameat depuis le dossier de travail root 0700) : un /etc/secubox/tls remplace par un lien entre les deux
+      poses n'est jamais suivi, ni a la pose ni a la remise ; un dossier TLS qui n'en est pas un : rien n'est pose ;
+    - HAProxy : le dossier crt ET chacun de ses ancetres (chemin ecrit et resolu) doivent etre a root, non inscriptibles ;
+    - p2p remis apres un controle en echec : secubox-p2pctl iface-up remet l'ancienne cle dans wg-ephemeral ;
+    - un echec cite toujours un journal qui survit a l'outil ;
+    - aide et README : systemd-run -E SUDO_USER, codes de retour de --absents pour firstboot ; ssh demarre en
+      --no-block au premier demarrage. 50 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 12:47:49 +0100
+
+secubox-core (1.8.6-1~trixie1) trixie; urgency=high
+
+  * secubox-renouvelle-secrets (#3243), relecture de securite (2 bloquants, 7 importants, 9 mineurs) :
+    - cles d'hote SSH generees a part (dossier root 0700), relues (ssh-keygen -y), validees par sshd -t, puis posees
+      paire par paire par renommage, anciennes gardees et remises si sshd -t ou le rechargement refuse : jamais de box
+      sans cle d'hote ; SIGHUP ignore (session SSH coupee), aide : systemd-run --wait --pipe --collect ;
+    - TLS genere et mis aux droits hors de /etc/secubox/tls (au compte secubox), pose par mv -T sans suivre de lien ;
+      cle puis certificat, le premier defait si le second echoue ; mode d'un dossier existant inchange ;
+    - copie HAProxy de l'ancienne cle TLS (crt de /etc/haproxy : haproxy.cfg, *.cfg, conf.d, cfg.d ; ex.
+      /srv/haproxy/certs/000-defaut.pem) remplacee, memes droits, haproxy -c puis reload, sinon remise ; audit
+      secret_renouvele haproxy-defaut ;
+    - comptes desactives en premier, users.json illisible = refus bruyant ; d'office seulement runnervm* et le compte au
+      nom de la machine de la cle jamais servi ; --desactiver NOM pour le reste ;
+    - OIDC et p2p : ancien secret garde et remis si le generateur echoue ; p2p controle (fichiers neufs non vides,
+      wg-ephemeral porte la cle du fichier) avant l'audit ; postinst sous umask 022, refuse si apt ou dpkg tourne, sortie
+      au journal root 0600 /var/log/secubox/renouvelle-secrets.log ;
+    - machine-id par systemd-id128 new et renommage (jamais absent), lien dbus repose avant ;
+    - audit : dossier jamais cree, fichier cree 0640 secubox, date UTC, champ acteur ; nginx -t en echec signale ;
+      erreur inattendue nommee par sa ligne ; commentaire de cle filtre ; nom d'hote en minuscules ; surcharges SBX_*
+      ignorees sans SBX_RACINE ; ssh-keygen verifie avant tout (Recommends: openssh-client). Code 1 et secret nomme si
+      l'un n'a pas pu etre renouvele. 39 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 12:15:03 +0100
+
+secubox-core (1.8.5-1~trixie1) trixie; urgency=high
+
+  * secubox-renouvelle-secrets (#3243) : les images publiees embarquaient des secrets generes dans le chroot de CI (cles d'hote SSH, cle de signature OIDC, cle TLS, cle WireGuard du p2p ephemere, jeton d'appairage, machine-id) et un compte admin au nom du runner. Constat par defaut (rien ne change) ; --absents cree ceux qui manquent ; --tout --oui les regenere tous par le generateur de chaque paquet (ssh-keygen -A, secubox-oidcctl init, postinst de secubox-p2p, openssl comme l'etape 9 de secubox-firstboot) et desactive le compte de construction sans mot de passe ; --machine-id en option. Audit : noms des secrets, jamais leur valeur. 7 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 28 Oct 2026 11:29:34 +0100
+
 secubox-core (1.8.4-1~trixie1) trixie; urgency=medium
 
   * secubox-dns-listes (#3205), constaté sur gk2 en production : une zone des listes AUSSI présente dans une vue TV

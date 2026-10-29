@@ -173,6 +173,19 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
+000000000. **Sécurité et pilotage distant (2026-10-28)** : #3243 — 1.8.8, nettoyage des images + firstboot
+  `--absents`, images alpha.19 à reconstruire, redémarrer gk5 (machine-id). Pilotage distant TR-369 (forme USP, agent
+  Go, #3126) : conception approuvée, plans L1/L2/L5 écrits ; **L1 « Voir » en cours** par sous-agents dans le worktree
+  3126 (ledger `.superpowers/sdd/2026-10-28-pilotage-l1-voir/progress.md` : tâches 1-10 faites et relues, puis
+  11 page Flotte, relecture finale de la branche, 12 déploiement gk2/gk5/lgm-ebin par le contrôleur avec la liste
+  « banc T12 » du ledger) ; ensuite L2 Agir (préalable #3253) → L5 headless care-safe (mains liées) ; box clientes
+  Auto-Load dans le périmètre. Streamlit #3247 livré et déployé (suites #3252). **PR #3255** (kiosque + `system`
+  dédié + socialrelay retiré) : CI puis fusion, publier secubox-lite 1.9.1 / core 1.8.8 / aggregator 0.5.1, un
+  redémarrage groupé de l'agrégateur de gk2. **#3256** : gk3 (déclarer `gitea.gk2` dans haproxy.toml puis régénérer),
+  gk5 et lgm-ebin à vérifier, purge des données déplacées sur décision du propriétaire. **RPi4** : carte prête, en
+  attente du premier démarrage par le propriétaire (écran 7" DSI à vérifier). Profils
+  minimal ET lite sans nDPId, DPI, mediaflow, ksm, centres, « box à préparer » ; haproxy hors image minimal (#3218).
+  gk1 = visio seule (profil à écrire).
 00000000. **Consommation (#3191, ordre arbitré par le propriétaire le 2026-10-27)** : objectif 2 Go (minimal) et 4 Go
   (référence), mesurer avant/après avec le comparateur (#3212, livré). FAITS : metrics (#3217), listes d'Unbound
   (#3205, redémarré le 28 : 367 Mo), agrégateur non bloquant (#3216, 0.5.0 gk1+gk2). **Suite** : (a) **#3229** 36
@@ -355,3 +368,9 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - Endpoints: 1919
 - Migration: 66%
 - Commits: 7245
+
+## CI Sync 2026-10-29
+- Packages: 113
+- Endpoints: 1927
+- Migration: 66%
+- Commits: 7255

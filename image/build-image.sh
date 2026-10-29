@@ -710,7 +710,16 @@ log "Installing security services and optional components..."
 # installateur connaisse la nouvelle suite, et son échec était masqué par un
 # `|| true`.
 chroot "${ROOTFS}" apt-get update -q 2>/dev/null
-if [[ "${SECUBOX_LITE:-0}" != "1" ]]; then
+# PAS DE HAPROXY DANS MINIMAL (#2849, #3218). Le profil n'a ni WAF ni frontal TLS, et aucun de ses paquets
+# n'exige haproxy ; c'est CETTE ligne qui l'installait (« installé manuellement » sur gk5, 2 processus, 41 Mo,
+# aucun port d'écoute : nginx tient 80 et 443). qrencode reste (QR d'appairage). La branche minimal passe AVANT celle
+# des cartes non lite : elle retire donc aussi glances, mosquitto et coturn qu'une image minimal sur une carte non lite
+# (VM, MOCHAbin) recevait ; aucun paquet du profil ne s'en sert.
+if [[ "${PROFILE_TAG}" == "minimal" ]]; then
+  log "  Installing minimal services (no haproxy, glances, mosquitto, coturn)..."
+  chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    qrencode 2>/dev/null" || warn "Some services not installed"
+elif [[ "${SECUBOX_LITE:-0}" != "1" ]]; then
   chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     glances haproxy qrencode mosquitto coturn 2>/dev/null" || warn "Some services not installed"
 else
@@ -1011,6 +1020,16 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
   else
     warn "Slipstream: pas de secubox-*.deb dans output/ ou output/debs/"
   fi
+fi
+
+# ── MINIMAL : HAPROXY JAMAIS ACTIVÉ (#3218) ─────────────────────────────────
+# Il n'est plus préinstallé (plus haut). S'il arrivait quand même (une dépendance future), son paquet Debian
+# l'active, et secubox-core le rattache à network-online.target : on défait les deux, sans le désinstaller.
+if [[ "${PROFILE_TAG}" == "minimal" ]] \
+   && [[ -e "${ROOTFS}/lib/systemd/system/haproxy.service" || -e "${ROOTFS}/usr/lib/systemd/system/haproxy.service" ]]; then
+  warn "haproxy présent dans une image minimal : désactivé (aucun frontal TLS dans ce profil)"
+  chroot "${ROOTFS}" systemctl disable haproxy.service 2>/dev/null || true
+  rm -f "${ROOTFS}/etc/systemd/system/network-online.target.wants/haproxy.service"
 fi
 
 # ── LE PROFIL EST-IL VRAIMENT LÀ ? (#1361) ─────────────────────────────────

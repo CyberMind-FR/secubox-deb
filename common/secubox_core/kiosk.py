@@ -31,6 +31,8 @@ KIOSK_ENABLED_MARKER = Path("/var/lib/secubox/.kiosk-enabled")
 CONSOLE_ENABLED_MARKER = Path("/var/lib/secubox/.console-enabled")
 KIOSK_MODE_FILE = Path("/var/lib/secubox/.kiosk-mode")
 KIOSK_SETUP_SCRIPT = Path("/usr/sbin/secubox-kiosk-setup")
+# Le script vient du paquet secubox-kiosk, que seuls certains méta-paquets installent (#3254).
+KIOSK_ABSENT = "Le paquet secubox-kiosk n'est pas installé : apt install secubox-kiosk"
 # Sortie de l'unite root secubox-kiosk-setup@<action>.service (voir _lance_setup).
 KIOSK_SETUP_LOG = Path("/run/secubox/kiosk-setup.log")
 
@@ -177,7 +179,7 @@ def kiosk_enable(mode: Literal["x11", "wayland"] = "x11") -> dict:
         return {"success": False, "error": f"Invalid mode: {mode}", "mode": mode}
 
     if not KIOSK_SETUP_SCRIPT.exists():
-        return {"success": False, "error": "Kiosk setup script not installed", "mode": mode}
+        return {"success": False, "error": KIOSK_ABSENT, "mode": mode}
 
     try:
         code, error = _lance_setup(f"enable-{mode}", ["enable", f"--{mode}"], 120)
@@ -200,7 +202,7 @@ def kiosk_disable() -> dict:
         {"success": bool, "error": str | None}
     """
     if not KIOSK_SETUP_SCRIPT.exists():
-        return {"success": False, "error": "Kiosk setup script not installed"}
+        return {"success": False, "error": KIOSK_ABSENT}
 
     try:
         code, error = _lance_setup("disable", ["disable"], 60)
