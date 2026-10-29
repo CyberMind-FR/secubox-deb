@@ -46,4 +46,5 @@ Une valeur de plus de 64 Kio de JSON est **tronquée**, jamais jetée (début d'
 Au plus 10 000 lignes par box : au-delà, les plus anciennes parmi celles absentes de la passe courante partent.
 
 ## Tests
-`cd packages/secubox-pilotage && python3 -m pytest -q`
+`cd packages/secubox-pilotage && python3 -m pytest -q`. `tests/test_contrat_go.py` rejoue contre le vrai canal les enveloppes figées par le
+client Go (`packages/secubox-pilotage-agent/internal/canal/testdata/contrat/`, régénérées par son test `TestContratEnveloppesEmises`).

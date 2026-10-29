@@ -1,0 +1,35 @@
+{
+ "route": "/canal/v1/notifs",
+ "envoi": [
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_Boot",
+     "value": 120,
+     "ts": 1793000000
+    }
+   },
+   "type": "NOTIFY"
+  },
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_ServiceLoop",
+     "unit": "nginx.service",
+     "value": 3,
+     "ts": 1793000060
+    }
+   },
+   "type": "NOTIFY"
+  },
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_MemoryLow",
+     "ts": 1793000120
+    }
+   },
+   "type": "NOTIFY"
+  }
+ ]
+}

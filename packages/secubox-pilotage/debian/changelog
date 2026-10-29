@@ -10,6 +10,8 @@ secubox-pilotage (0.1.1-1~trixie1) trixie; urgency=medium
       au-delà du plafond, ce qui vient d'être reçu n'est jamais purgé. Colonne `tronque` ajoutée aux bases existantes.
     - M5 : `POST /canal/v1/bonjour` plafonné à un par box et par 10 s (chaque appel est une écriture SQLite) ; le surplus
       reçoit 429 avant la lecture du corps, l'agent recule puis se réannonce.
+    - M14 : `tests/test_contrat_go.py` rejoue contre le vrai canal (et range par le vrai stockage) les enveloppes figées
+      par le client Go de l'agent : une dérive de format côté Go casse ce test.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 12:00:00 +0100
 

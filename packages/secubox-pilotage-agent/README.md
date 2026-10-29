@@ -59,3 +59,8 @@ go vet ./... && go test -race ./...
 pytest -q tests
 dpkg-buildpackage -b -us -uc     # natif ; arm64 sur une box (pas de -a croisé : dh_strip)
 ```
+
+**Contrat avec le maître.** `internal/canal/testdata/contrat/*.json` fige les enveloppes que le client émet réellement (bonjour,
+GET_RESP avec `failed` et avec `tronque`, GET_SUPPORTED_DM_RESP, OPERATE_RESP, ERROR, NOTIFY) ; le maître les rejoue contre son vrai canal
+(`packages/secubox-pilotage/tests/test_contrat_go.py`). Un changement de format fait échouer `TestContratEnveloppesEmises` ; après
+vérification : `SECUBOX_CONTRAT_MAJ=1 go test ./internal/canal -run TestContratEnveloppesEmises`, puis les tests du maître.
