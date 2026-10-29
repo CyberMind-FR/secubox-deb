@@ -3,7 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 #
-# Profil AppArmor ENFORCE de secubox-pilotage-api (#3126) : deux sockets Unix, la base SQLite du module, l'audit, la lecture des tables
+# Profil AppArmor ENFORCE de secubox-pilotage-api (#3126) : deux sockets Unix reçues de systemd, la base SQLite du module, l'audit, la lecture des tables
 # d'identité des box. Tout ce qui n'est pas listé est refusé. Posé dans /etc/apparmor.d/secubox-pilotage-api, chargé par le postinst
 # AVANT le (re)démarrage de l'unité.
 
@@ -12,7 +12,6 @@
 /usr/sbin/secubox-pilotage-api {
   #include <abstractions/base>
   #include <abstractions/python>
-  #include <abstractions/nameservice>
 
   /usr/sbin/secubox-pilotage-api r,
   /usr/bin/python3* rix,
@@ -31,8 +30,9 @@
   deny /etc/secubox/secrets/** r,
   # Registre des sessions : sans lui, toute garde d'API voit un registre vide et refuse (401 partout, #942).
   /var/lib/secubox/auth/ r,
-  /var/lib/secubox/auth/** r,
-  /var/log/secubox/delegation.log w,
+  /var/lib/secubox/auth/sessions.json r,
+  # Journaux communs : AJOUT SEUL (a). Un w pourrait tronquer le journal d'audit, dont la valeur probante tient à l'ajout seul.
+  /var/log/secubox/delegation.log a,
 
   # Identité des box : table du maillage et projection publique des pairs Auto-Load, en lecture seule.
   /var/lib/secubox/p2p/ r,
@@ -44,12 +44,8 @@
   /var/lib/secubox/pilotage/ r,
   /var/lib/secubox/pilotage/** rwkm,
 
-  # Journal d'audit commun (ajout seul côté code ; le fichier appartient à secubox, ACL au compte du service).
-  /var/log/secubox/audit.log w,
-
-  /run/secubox/ r,
-  /run/secubox/pilotage.sock rwk,
-  /run/secubox/pilotage-canal.sock rwk,
+  # Journal d'audit commun (le fichier appartient à secubox ; ACL au compte du service, ajout seul ici).
+  /var/log/secubox/audit.log a,
 
   network unix,
 }

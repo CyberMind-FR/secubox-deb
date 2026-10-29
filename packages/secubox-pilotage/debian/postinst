@@ -4,34 +4,26 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 set -e
-DONNEES=/var/lib/secubox/pilotage
-AUDIT=/var/log/secubox/audit.log
-
 case "$1" in
   configure)
     getent group secubox >/dev/null 2>&1 || addgroup --system secubox >/dev/null
     getent passwd secubox-pilotage >/dev/null || \
       adduser --system --no-create-home --home /nonexistent --group --shell /usr/sbin/nologin secubox-pilotage >/dev/null
     # Parents PARTAGÉS : créés seulement s'ils manquent, jamais resserrés ni réattribués.
-    [ -d /run/secubox ] || install -d -o root -g root -m 1777 /run/secubox
+    [ -d /var/lib/secubox ] || install -d -m 0755 /var/lib/secubox
     [ -d /var/log/secubox ] || install -d -m 0755 /var/log/secubox
-    install -d -m 0755 /etc/secubox/pilotage
 
-    # Dossier de données, sans systemd-tmpfiles (il refuse /var/lib/secubox/<module>/ : « unsafe path transition ») et sans suivre de lien :
-    # un lien à cet emplacement est retiré (le lien seul, jamais sa cible), le dossier est créé neuf, puis réattribué par chown -h.
-    [ -L /var/lib/secubox/pilotage ] && rm -f /var/lib/secubox/pilotage
-    install -d -o secubox-pilotage -g secubox-pilotage -m 0750 /var/lib/secubox/pilotage
-    chown -h secubox-pilotage:secubox-pilotage "$DONNEES"
-    chmod 0750 "$DONNEES"
+    # Dossier de données (0750, secubox-pilotage), par descripteur : sans systemd-tmpfiles (il refuse /var/lib/secubox/<module>/ : « unsafe path
+    # transition ») et sans suivre de lien (le compte partagé secubox écrit dans le parent). Échec franc : le paquet ne se configure pas à moitié.
+    python3 -I /usr/lib/secubox/pilotage/init_donnees.py /var/lib/secubox pilotage secubox-pilotage 750
 
-    # Journal d'audit commun : créé comme le fait secubox-core s'il manque (secubox:secubox 0640). Ni propriétaire ni droits ne changent ;
-    # le service y ajoute des lignes par une ACL nominative (l'unité de l'écouteur la repose après chaque rotation).
-    [ -e "$AUDIT" ] || install -m 0640 -o secubox -g secubox /dev/null "$AUDIT"
-    if command -v setfacl >/dev/null 2>&1; then
-      setfacl -m u:secubox-pilotage:rw- "$AUDIT" || echo "secubox-pilotage : ACL du journal d'audit non posée : l'audit des relevés échouera" >&2
-    else
-      echo "secubox-pilotage : setfacl absent : l'audit des relevés échouera (paquet acl)" >&2
-    fi
+    # Journal d'audit commun : créé comme le fait secubox-core s'il manque (secubox:secubox 0640). Ni propriétaire ni droits ne changent ; le
+    # service y AJOUTE des lignes par une ACL nominative, posée par un assistant qui vérifie le fichier (pas un lien, un seul lien dur, propriétaire).
+    [ -e /var/log/secubox/audit.log ] || install -m 0640 -o secubox -g secubox /dev/null /var/log/secubox/audit.log
+    /usr/sbin/secubox-pilotage-audit-acl || echo "secubox-pilotage : ACL du journal d'audit non posée : l'audit des relevés échouera" >&2
+
+    # nginx lie l'adresse des tunnels avant leur montée : ip_nonlocal_bind (même valeur que secubox-annuaire, qui n'est qu'un Recommends).
+    sysctl -p /etc/sysctl.d/31-secubox-pilotage-nonlocal-bind.conf >/dev/null 2>&1 || true
 
     # AppArmor : profil ENFORCE chargé AVANT le démarrage, seulement si le noyau le permet.
     if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1; then
@@ -46,6 +38,8 @@ case "$1" in
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload || true
       if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+      # Les sockets d'abord (systemd les crée avec le bon propriétaire, groupe et mode), puis le service.
+      systemctl enable --now secubox-pilotage.socket secubox-pilotage-canal.socket || true
       systemctl enable --now secubox-pilotage.service || true
       systemctl enable --now secubox-pilotage-ecoute.path secubox-pilotage-ecoute.timer || true
       # mise à jour : le nouveau code et le nouveau profil doivent être pris

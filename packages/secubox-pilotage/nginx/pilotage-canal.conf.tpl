@@ -12,14 +12,26 @@
 #   * une seule famille de routes, /canal/v1/, vers la socket du canal ; la socket d'administration n'est JAMAIS atteignable ici ;
 #   * X-Real-IP = adresse source de la connexion, posée par nginx : tout en-tête envoyé par le client est écrasé (R16). C'est l'identité
 #     de la box (WireGuard ne laisse passer d'un pair que sa propre adresse) ; l'application ne la lit que sur cette socket Unix.
+#   * le module realip HÉRITÉ est neutralisé (C1) : secubox-hub règle au niveau http « real_ip_header X-Forwarded-For; real_ip_recursive on; »
+#     et secubox-realip fait confiance à 10.10.0.1 et 10.64.0.1 (nos propres adresses) ; un processus local joignant l'écouteur avec un
+#     X-Forwarded-For forgé verrait sinon $remote_addr réécrit, donc l'identité de n'importe quelle box usurpée. D'où set_real_ip_from
+#     255.255.255.255 (adresse impossible : la liste héritée est remplacée, rien n'est de confiance ici) et $realip_remote_addr, qui est
+#     toujours l'adresse du pair TCP.
+#   * 4 connexions simultanées par adresse (limit_conn ; la zone est déclarée une fois en tête du fichier rendu).
 #
 # __IP__ et __SOURCE__ sont substitués par secubox-pilotage-ecoute.
 server {
     listen __IP__:8472;
     server_name _;
 
+    set_real_ip_from 255.255.255.255;
+    real_ip_recursive off;
+
     allow __SOURCE__;
     deny all;
+
+    limit_conn pilotage_canal 4;
+    limit_conn_status 429;
 
     client_max_body_size 256k;
 
@@ -28,8 +40,8 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Connection "";
         proxy_set_header Host localhost;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Real-IP $realip_remote_addr;
+        proxy_set_header X-Forwarded-For $realip_remote_addr;
         client_max_body_size 256k;
         # Le sondage long de l'agent attend jusqu'à 25 s : 60 s laissent de la marge sans retenir une connexion morte.
         proxy_read_timeout 60s;

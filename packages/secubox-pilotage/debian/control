@@ -21,4 +21,4 @@ Description: SecuBox — maître du pilotage distant du maillage (L1 « Voir »,
  Lecture seule : Get, GetSupportedDM, Notify et un relevé de charge à la demande.
  Deux sockets Unix servies par un seul processus, utilisateur dédié, unité durcie,
  AppArmor enforce. Les écouteurs de tunnel sont ceux de nginx (secubox-pilotage-ecoute),
- ouverts par une règle nft à chaud sur les seules interfaces de tunnel.
+ ouverts par une règle nft à chaud (inet filter ou inet secubox_filter, avant le drop) sur les seules interfaces de tunnel.

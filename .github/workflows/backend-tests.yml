@@ -262,6 +262,7 @@ jobs:
           # Agent de pilotage distant (#3126) : bibliothèque standard seule, sans vendor/.
           - suite: secubox-pilotage-agent
             module: packages/secubox-pilotage-agent
+            cache: 'false'
     defaults:
       run:
         working-directory: ${{ matrix.module }}
@@ -275,6 +276,8 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: ${{ matrix.module }}/go.mod
+          # 'false' pour un module sans go.sum (agent de pilotage : bibliothèque standard seule)
+          cache: ${{ matrix.cache != 'false' }}
           cache-dependency-path: ${{ matrix.module }}/go.sum
 
       - name: go test ./...

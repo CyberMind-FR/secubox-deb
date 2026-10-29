@@ -1,11 +1,15 @@
 secubox-pilotage (0.1.0-1~trixie1) trixie; urgency=medium
 
   * Première version (ref #3126, L1 « Voir ») : maître du pilotage distant. Service secubox-pilotage-api (un processus, une boucle,
-    deux sockets Unix : /run/secubox/pilotage.sock en 0660 groupe secubox, /run/secubox/pilotage-canal.sock en 0660 groupe www-data,
-    lifespan actif pour les deux applications), utilisateur dédié secubox-pilotage, unité durcie, profil AppArmor enforce.
+    lifespan actif pour les deux applications, sortie en erreur si l'une ne démarre pas). Sockets créées par systemd (secubox-pilotage.socket :
+    /run/secubox/pilotage.sock, 0660, groupe secubox ; secubox-pilotage-canal.socket : pilotage-canal.sock, 0660, groupe www-data), utilisateur dédié secubox-pilotage, unité durcie, profil AppArmor enforce.
   * secubox-pilotage-ecoute (root) : un écouteur nginx par IP de tunnel présente (10.10.0.1 et 10.64.0.1, port 8472, X-Real-IP posé par
     nginx, 256 Kio, 60 s), retiré si nginx -t échoue, rechargement seulement si le rendu change ; règles nft insérées à chaud avant le
     drop de inet secubox_filter, jamais nft -f du fichier entier. Déclencheurs .path et .timer.
-  * Route d'administration /api/v1/pilotage/, entrée de menu, journal d'audit commun inscriptible par ACL au compte du service.
+  * Route d'administration /api/v1/pilotage/ (aucune entrée de menu : la page Flotte de l'annuaire porte le panneau). Journal d'audit commun
+    en ajout seul (AppArmor `a`), ACL nominative posée par secubox-pilotage-audit-acl (fichier ordinaire, un seul lien, propriétaire secubox).
+  * Écouteur de tunnel : realip hérité neutralisé (X-Real-IP = $realip_remote_addr), 4 connexions par adresse, règles nft dans `inet filter` ET
+    `inet secubox_filter` juste avant le drop, retirées au prerm ; sysctl ip_nonlocal_bind propre au paquet ; dossier de données préparé par
+    descripteur (init_donnees.py).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 10:00:00 +0100

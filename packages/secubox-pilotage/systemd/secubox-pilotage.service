@@ -10,21 +10,21 @@
 Description=SecuBox Pilotage — maître du pilotage distant (#3126)
 After=network.target secubox-core.service
 Wants=secubox-core.service
+Requires=secubox-pilotage.socket secubox-pilotage-canal.socket
+After=secubox-pilotage.socket secubox-pilotage-canal.socket
 
 [Service]
 Type=simple
+Sockets=secubox-pilotage.socket secubox-pilotage-canal.socket
 User=secubox-pilotage
 Group=secubox-pilotage
 SupplementaryGroups=secubox
 WorkingDirectory=/usr/lib/secubox/pilotage
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
-# /run/secubox est PARTAGÉ et collant (1777) : une socket périmée d'un autre propriétaire ne se retire qu'en root (« + »).
-ExecStartPre=+/bin/rm -f /run/secubox/pilotage.sock /run/secubox/pilotage-canal.sock
+# Les deux sockets sont créées par systemd (secubox-pilotage.socket, secubox-pilotage-canal.socket) : propriétaire, groupe et mode y sont posés,
+# le lanceur reçoit les descripteurs. Aucune écriture dans /run/secubox.
 ExecStart=/usr/sbin/secubox-pilotage-api
-# Groupes des sockets (le service n'est membre ni de www-data ni de l'écouteur) : l'administration est lue par nginx et l'agrégateur
-# (groupe secubox), le canal par nginx seul (groupe www-data). 0660 posé par le lanceur ; jamais 0666. « + » : en root, hors du profil AppArmor.
-ExecStartPost=+/bin/sh -c 'for i in $(seq 1 100); do [ -S /run/secubox/pilotage.sock ] && [ -S /run/secubox/pilotage-canal.sock ] && break; sleep 0.1; done; chgrp secubox /run/secubox/pilotage.sock; chgrp www-data /run/secubox/pilotage-canal.sock'
 Restart=on-failure
 RestartSec=5
 UMask=0027
@@ -50,8 +50,8 @@ SystemCallArchitectures=native
 RestrictAddressFamilies=AF_UNIX
 CapabilityBoundingSet=
 AmbientCapabilities=
-# Données du module, journal d'audit commun (le dossier : logrotate remplace le fichier par renommage) et sockets.
-ReadWritePaths=/var/lib/secubox/pilotage /var/log/secubox /run/secubox
+# Données du module et journal d'audit commun (le dossier : logrotate remplace le fichier par renommage ; AppArmor borne l'écriture à l'ajout).
+ReadWritePaths=/var/lib/secubox/pilotage /var/log/secubox
 # Le dossier de données est créé par le postinst (systemd-tmpfiles refuse ces chemins : « unsafe path transition »).
 
 [Install]

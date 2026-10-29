@@ -4,8 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # Écouteurs nginx du canal de pilotage sur les IP de tunnel, et règles nft associées (#3126). Root par nécessité (nginx, nft) ; unité
-# oneshot appelée par le postinst, par secubox-pilotage-ecoute.path (wg-mesh / wg-autoload qui changent) et par la minuterie. Pas de
-# ProtectSystem : nginx -t, le rechargement et la réécriture de /etc/nftables.conf touchent trop de chemins pour un bac à sable sans banc.
+# oneshot appelée par le postinst, par secubox-pilotage-ecoute.path (wg-mesh / wg-autoload qui changent) et par la minuterie.
 [Unit]
 Description=SecuBox Pilotage — écouteurs du canal sur les tunnels (nginx, nft) (#3126)
 After=network.target nginx.service
@@ -13,13 +12,30 @@ After=network.target nginx.service
 [Service]
 Type=oneshot
 ExecStart=/usr/sbin/secubox-pilotage-ecoute
-# La rotation du journal d'audit (create 0640 secubox secubox) recrée le fichier sans l'ACL du service : on la repose à chaque passage,
-# sans toucher au propriétaire ni aux droits du journal.
-ExecStartPost=-/bin/sh -c 'if [ -f /var/log/secubox/audit.log ] && command -v setfacl >/dev/null 2>&1; then setfacl -m u:secubox-pilotage:rw- /var/log/secubox/audit.log; fi'
+# L'ACL du service sur le journal d'audit commun : la rotation (create 0640 secubox secubox) recrée le fichier sans elle. ExecStopPost tourne aussi
+# quand ExecStart échoue (nginx -t refusé, nft absent) : l'audit du service ne dépend pas de la réussite de l'écouteur. L'assistant vérifie le
+# fichier (ordinaire, un seul lien, propriétaire secubox) et pose l'ACL sur le descripteur : jamais de lien suivi.
+ExecStopPost=-/usr/sbin/secubox-pilotage-audit-acl
+UMask=0027
+# Socle § 10 sauf User= (nginx -t, nft et la réécriture de /etc/nftables.conf exigent root) ; exception écrite dans RULES-CODE.
 NoNewPrivileges=yes
+ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
 ProtectKernelModules=yes
+ProtectKernelLogs=yes
 ProtectControlGroups=yes
-LockPersonality=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
 RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+# AF_NETLINK : nft et ip. Aucun socket IP (nginx -t ne lie rien ; le rechargement passe par D-Bus, AF_UNIX).
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+# NET_ADMIN : nft ; DAC_READ_SEARCH : nginx -t lit clés et certificats ; DAC_OVERRIDE et FOWNER : fichiers d'autres comptes (journal d'audit, ACL).
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER
+# /etc : conf.d de nginx et /etc/nftables.conf (fichier temporaire puis rename dans le même dossier) ; nginx : journal d'erreurs et temporaires
+# de nginx -t ; /var/log/secubox : ACL du journal.
+ReadWritePaths=/etc /var/log/nginx /var/lib/nginx /var/log/secubox

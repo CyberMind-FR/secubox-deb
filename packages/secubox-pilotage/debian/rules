@@ -14,13 +14,14 @@ override_dh_auto_install:
 	install -m 644 pilotage/*.py $(P)/usr/lib/secubox/pilotage/pilotage/
 	install -D -m 755 sbin/secubox-pilotage-api $(P)/usr/sbin/secubox-pilotage-api
 	install -D -m 755 sbin/secubox-pilotage-ecoute $(P)/usr/sbin/secubox-pilotage-ecoute
+	install -D -m 755 sbin/secubox-pilotage-audit-acl $(P)/usr/sbin/secubox-pilotage-audit-acl
+	install -D -m 644 init_donnees.py $(P)/usr/lib/secubox/pilotage/init_donnees.py
+	install -D -m 644 sysctl/31-secubox-pilotage-nonlocal-bind.conf $(P)/etc/sysctl.d/31-secubox-pilotage-nonlocal-bind.conf
 	install -D -m 644 nginx/pilotage-canal.conf.tpl $(P)/usr/share/secubox/pilotage/pilotage-canal.conf.tpl
 	install -D -m 644 nginx/pilotage.conf $(P)/etc/nginx/secubox-routes.d/pilotage.conf
 	install -D -m 644 apparmor/secubox-pilotage-api $(P)/etc/apparmor.d/secubox-pilotage-api
-	install -d $(P)/usr/share/secubox/menu.d
-	install -m 644 menu.d/*.json $(P)/usr/share/secubox/menu.d/
 	install -d $(P)/lib/systemd/system
-	install -m 644 systemd/secubox-pilotage.service systemd/secubox-pilotage-ecoute.service \
+	install -m 644 systemd/secubox-pilotage.service systemd/secubox-pilotage.socket systemd/secubox-pilotage-canal.socket systemd/secubox-pilotage-ecoute.service \
 	  systemd/secubox-pilotage-ecoute.path systemd/secubox-pilotage-ecoute.timer $(P)/lib/systemd/system/
 
 override_dh_auto_test:
@@ -29,6 +30,7 @@ override_dh_auto_test:
 # Activation faite par le postinst (profil AppArmor chargé avant le démarrage).
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-pilotage --no-enable --no-start
+	dh_installsystemd --name=secubox-pilotage-canal --no-enable --no-start
 	dh_installsystemd --name=secubox-pilotage-ecoute --no-enable --no-start
 	dh_installsystemd --name=secubox-pilotage-ecoute.path --no-enable --no-start
 	dh_installsystemd --name=secubox-pilotage-ecoute.timer --no-enable --no-start
