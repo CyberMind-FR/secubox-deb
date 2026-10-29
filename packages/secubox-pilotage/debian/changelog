@@ -1,6 +1,8 @@
 secubox-pilotage (0.1.1-1~trixie1) trixie; urgency=medium
 
   * Relecture finale L1 (ref #3126) :
+    - Compatibilité uvicorn 0.54 : un SystemExit(3) levé par `serve` au démarrage manqué est traité comme un échec de
+      démarrage (arrêt de l'autre serveur, code de sortie 1), au lieu de sortir du lanceur sans nettoyage.
     - I4/R38 : une valeur de plus de 4 096 caractères (`Exposure.Names` d'une box à ~150 noms) rendait chaque relève
       « partielle » à jamais (fantômes jamais purgés, `inventaire_le` figé). Plafond par valeur porté à 64 Kio ; au-delà
       la valeur est tronquée (début de la liste, de l'objet ou de la chaîne) et marquée (`inventaire_tronques` de

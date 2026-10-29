@@ -47,13 +47,20 @@ def serveurs(admin, canal, fd_admin: int, fd_canal: int):
     return uvicorn.Server(uvicorn.Config(admin, fd=fd_admin, **options)), uvicorn.Server(uvicorn.Config(canal, fd=fd_canal, **options))
 
 
+async def _serve(srv) -> None:
+    try:
+        await srv.serve()
+    except SystemExit:  # uvicorn >= 0.5x lève SystemExit(3) au démarrage manqué : traité comme l'échec du lifespan (started reste faux)
+        pass
+
+
 async def servir(admin, canal, fd_admin: int, fd_canal: int, rendre=None) -> bool:
     """Sert les deux applications dans la boucle courante. Dès que l'un des serveurs s'arrête (signal, échec du lifespan), l'autre est arrêté
     proprement. Rend vrai seulement si LES DEUX ont démarré : un lifespan en échec fait revenir uvicorn sans exception."""
     srv_admin, srv_canal = serveurs(admin, canal, fd_admin, fd_canal)
     if rendre is not None:
         rendre((srv_admin, srv_canal))
-    taches = [asyncio.create_task(srv_admin.serve()), asyncio.create_task(srv_canal.serve())]
+    taches = [asyncio.create_task(_serve(srv_admin)), asyncio.create_task(_serve(srv_canal))]
     try:
         await asyncio.wait(taches, return_when=asyncio.FIRST_COMPLETED)
     finally:

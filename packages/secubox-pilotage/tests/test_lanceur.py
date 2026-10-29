@@ -147,6 +147,39 @@ def test_main_code_de_sortie(lanceur, tmp_path, monkeypatch):
                 pass
 
 
+def test_systemexit_au_demarrage_est_un_echec(lanceur, tmp_path, monkeypatch):
+    """uvicorn >= 0.5x lève SystemExit(3) depuis serve() quand le démarrage échoue : même chemin que l'échec ancien (False, puis 1)."""
+    import uvicorn
+
+    vivants = []
+
+    async def faux_serve(self, sockets=None):
+        if self.config.app is cassee:
+            raise SystemExit(3)
+        vivants.append(self)
+        while not self.should_exit:
+            await asyncio.sleep(0.01)
+        vivants.remove(self)
+
+    cassee = FastAPI()
+    monkeypatch.setattr(uvicorn.Server, "serve", faux_serve)
+
+    async def essai():
+        s_admin, s_canal = _ecoute(tmp_path / "a.sock"), _ecoute(tmp_path / "c.sock")
+        try:
+            assert await asyncio.wait_for(lanceur.servir(FastAPI(), cassee, s_admin.fileno(), s_canal.fileno()), 20) is False
+            assert vivants == []
+            assert [t for t in asyncio.all_tasks() if t is not asyncio.current_task()] == []
+            monkeypatch.setattr(lanceur, "descripteurs", lambda env, pid: (s_admin.fileno(), s_canal.fileno()))
+            assert await lanceur.main({}, lambda: (FastAPI(), cassee)) == 1
+            assert vivants == []
+        finally:
+            s_admin.close()
+            s_canal.close()
+
+    asyncio.run(essai())
+
+
 def test_lanceur_en_tete_et_sain():
     texte = LANCEUR.read_text()
     assert texte.startswith("#!/usr/bin/python3\n") and "LicenseRef-CMSD-1.0" in texte
