@@ -97,6 +97,8 @@ type ResultatMultipart struct {
 	FilenameSession       bool // le filename retenu contient '|' ET un jeton de sérialisation PHP [abdisNO]:[0-9;] (R-RC2)
 	NonRaster             bool // un fichier LU commence par un format non raster (R-IMG1, 64 octets)
 	LongueurFrontiere     int  // len de la frontière rendue par boundaryPHP, posée avant tout retour (R-PHP4)
+	EntetesPartieMax      int  // maximum, sur les parties, du nombre de lignes non vides du bloc d'en-têtes, continuations comprises (C2)
+	FichiersVides         int  // parties avec un paramètre filename vide, sautées ou non (C3)
 	// Champs : champs ordinaires dont le nom normalisé est retenu
 	// (nomsRetenusPHP), valeur copiée, au plus parametresRetenusMax. Jamais journalisés.
 	Champs []ParametrePHP
@@ -200,6 +202,7 @@ func egalSansCasse(a []byte, b string) bool {
 
 type tamponPHP struct {
 	data      []byte // le préfixe capturé, jamais modifié
+	lignesEnt int    // lignes non vides du dernier bloc d'en-têtes lu par entetes() (C2)
 	pos       int    // buf_begin
 	dispo     int    // bytes_in_buffer
 	taille    int    // bufsize
@@ -329,6 +332,7 @@ func (m *tamponPHP) entetes() (cd []byte, aCD bool, ok bool) {
 	)
 	cle, enCours, vuCT := aucune, false, false
 	m.valeur, m.cd = m.valeur[:0], m.cd[:0]
+	m.lignesEnt = 0
 	vider := func() {
 		if enCours && cle != aucune {
 			if cle == cleCD {
@@ -346,6 +350,7 @@ func (m *tamponPHP) entetes() (cd []byte, aCD bool, ok bool) {
 		if !lu || len(l) == 0 {
 			break
 		}
+		m.lignesEnt++ // C2 : toute ligne lue non vide, continuations comprises
 		dp := -1
 		if !isspaceC(l[0]) {
 			dp = bytes.IndexByte(l, ':')
@@ -650,6 +655,9 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 		if !trouve {
 			break
 		}
+		if m.lignesEnt > r.EntetesPartieMax {
+			r.EntetesPartieMax = m.lignesEnt
+		}
 		if !aCD {
 			// Partie sans disposition (rfc1867.c:848) : ni comptée, ni lue ; la
 			// recherche de frontière suivante la parcourt ligne à ligne.
@@ -705,6 +713,9 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 		}
 		skipCollant = saute
 		r.PartiesFichier++
+		if aFilename && len(filename) == 0 {
+			r.FichiersVides++ // C3 : filename vide, que la partie soit sautée ou non
+		}
 		if r.Progress {
 			r.FichiersApresProgress++
 		}
@@ -755,5 +766,7 @@ func (r ResultatMultipart) Signaux() map[string]int {
 		"profondeur":              r.ProfondeurMax,
 		"nom_max":                 r.LongueurNomMax,
 		"fichiers_apres_progress": r.FichiersApresProgress,
+		"entetes_partie_max":      r.EntetesPartieMax,
+		"fichiers_vides":          r.FichiersVides,
 	}
 }

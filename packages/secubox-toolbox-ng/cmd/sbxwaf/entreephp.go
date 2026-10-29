@@ -67,6 +67,8 @@ type EntreePHP struct {
 	// PHP générique (tâche 5). Des booléens seulement.
 	DTDXML            bool // R-PHP2 : DOCTYPE ou ENTITY dans le prologue XML
 	CookieFauxPrefixe bool // R-PHP3 : nom de cookie normalisé en __Host-/__Secure- sans l'être à l'origine
+	// Compléments C1 à C5 (tâche 6).
+	SansLongueur bool // C1 : POST multipart ou urlencoded sans Content-Length, ou chunked
 	// les tâches 3 à 7 ajoutent leurs champs ici
 }
 
@@ -81,6 +83,29 @@ func estUrlencodedPHP(contentType string) bool {
 	return ct == "application/x-www-form-urlencoded"
 }
 
+// corpsSansLongueur (C1) : POST (sans casse) multipart ou urlencoded dont la
+// longueur est inconnue (ContentLength < 0) ou annoncée « chunked ». Lit la
+// méthode et trois en-têtes seulement ; aucun corps. Les avis primaires des
+// variantes OOM de PHP2Shell décrivent un envoi en flux sans longueur.
+func corpsSansLongueur(r *http.Request) bool {
+	if !strings.EqualFold(r.Method, "POST") {
+		return false
+	}
+	ct := r.Header.Get("Content-Type")
+	if !estMultipartPHP(ct) && !estUrlencodedPHP(ct) {
+		return false
+	}
+	if r.ContentLength < 0 {
+		return true
+	}
+	for _, te := range r.TransferEncoding {
+		if strings.EqualFold(te, "chunked") {
+			return true
+		}
+	}
+	return false
+}
+
 // nouvelleEntreePHP retient ce qui ne demande pas le corps : méthode, chemin
 // et chaîne de requête BRUTE. La requête n'est pas lue ici, avant le relais
 // (relecture I2) : sa lecture a lieu dans analyserRequetePHP, après la réponse.
@@ -93,6 +118,7 @@ func (s *Server) nouvelleEntreePHP(r *http.Request, service string) *EntreePHP {
 		Methode:      r.Method,
 		Chemin:       r.URL.Path,
 		requeteBrute: r.URL.RawQuery,
+		SansLongueur: corpsSansLongueur(r),
 	}
 	// R-NC1 : sans Authorization. Ces quatre chemins sont appelés de serveur
 	// à serveur : un cookie de session (forgeable, sans valeur ici) n'exempte
@@ -206,6 +232,17 @@ func (e *EntreePHP) valeurs(nom string) []string {
 // (PHP lit _from en GET seulement, spécification § 3.1).
 func (e *EntreePHP) valeursRequete(nom string) []string { return e.Requete.Valeurs(nom) }
 
+// variablesMax : max de Requete.Variables et Corps.Variables (C4). PHP compte
+// la requête et le corps séparément contre max_input_vars. Un corps tronqué
+// par la fenêtre ne compte que ce qui a été vu.
+func (e *EntreePHP) variablesMax() int {
+	n := e.Requete.Variables
+	if e.Corps != nil && e.Corps.Variables > n {
+		n = e.Corps.Variables
+	}
+	return n
+}
+
 // Signaux : les compteurs journalisés avec chaque détection (jamais une valeur).
 // from_bang vaut 1 si un _from de la requête est invalide et commence par « ! »
 // (R-RC1) : un booléen, jamais la valeur.
@@ -216,6 +253,13 @@ func (e *EntreePHP) Signaux() map[string]int {
 		if e.Multipart.LongueurFrontiere > 0 {
 			m["frontiere"] = e.Multipart.LongueurFrontiere // R-PHP4 : un compteur, jamais la frontière
 		}
+	}
+	// C4 : le plus grand des deux compteurs bruts (requête, corps), un nombre.
+	if n := e.variablesMax(); n > 0 {
+		if m == nil {
+			m = map[string]int{}
+		}
+		m["variables"] = n
 	}
 	for _, v := range e.valeursRequete("_from") {
 		if inv, bang := fromInvalideRoundcube(v); inv && bang {

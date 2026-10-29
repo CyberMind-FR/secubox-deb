@@ -153,6 +153,12 @@ var parametreRequis = map[string]string{
 	"xml_dtd_prologue":         "",
 	"cookie_prefixe_normalise": "",
 	"frontiere_longueur":       "longueur_min",
+	// #3273, compléments C1 à C5 (tâche 6).
+	"corps_sans_longueur":     "",
+	"entetes_partie":          "entetes_min",
+	"fichiers_vides":          "vides_min",
+	"variables_nombre":        "variables_min",
+	"upload_progress_present": "",
 }
 
 // controlesRequete : contrôles qui lisent EntreePHP.Requete (#3273, relecture
@@ -164,6 +170,7 @@ var controlesRequete = map[string]bool{
 	"rc_crlf_envoi":             true,
 	"rc_markasjunk_uid_requete": true,
 	"rc_image_non_raster":       true, // _task et _action peuvent venir de la requête
+	"variables_nombre":          true, // C4 : max_input_vars compte aussi la requête
 }
 
 // servicesPHPConnus : services que "services" peut nommer (#3273, R-W8 M1).
@@ -300,6 +307,17 @@ func (s signatureStructurelle) declenche(e *EntreePHP) bool {
 		return e.CookieFauxPrefixe
 	case "frontiere_longueur":
 		return e.Multipart != nil && e.Multipart.LongueurFrontiere >= s.params["longueur_min"]
+	// Compléments C1 à C5 (tâche 6).
+	case "corps_sans_longueur":
+		return e.SansLongueur
+	case "entetes_partie":
+		return e.Multipart != nil && e.Multipart.EntetesPartieMax >= s.params["entetes_min"]
+	case "fichiers_vides":
+		return e.Multipart != nil && e.Multipart.FichiersVides >= s.params["vides_min"]
+	case "variables_nombre":
+		return e.variablesMax() >= s.params["variables_min"]
+	case "upload_progress_present":
+		return e.Multipart != nil && e.Multipart.Progress
 	case "rc_image_non_raster":
 		if e.Multipart == nil || !e.Multipart.NonRaster {
 			return false
