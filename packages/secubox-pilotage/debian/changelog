@@ -12,6 +12,9 @@ secubox-pilotage (0.1.1-1~trixie1) trixie; urgency=medium
       reçoit 429 avant la lecture du corps, l'agent recule puis se réannonce.
     - M14 : `tests/test_contrat_go.py` rejoue contre le vrai canal (et range par le vrai stockage) les enveloppes figées
       par le client Go de l'agent : une dérive de format côté Go casse ce test.
+    - N1/R39 : l'inventaire d'une box est aussi plafonné en octets (1 Mio de valeurs sérialisées, `OCTETS_MAX`) : une relève
+      dégradée qui dépasse le plafond purge, dans la même transaction, les plus anciennes lignes absentes de la passe
+      courante (jamais celles de la passe). L'unité `secubox-pilotage.service` reçoit `MemoryHigh=96M` et `MemoryMax=128M`.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 11:45:10 +0100
 

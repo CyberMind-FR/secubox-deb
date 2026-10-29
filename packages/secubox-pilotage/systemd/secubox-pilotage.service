@@ -29,6 +29,9 @@ Restart=on-failure
 RestartSec=5
 UMask=0027
 LimitCORE=0
+# Mémoire bornée (R39) : l'inventaire est plafonné en octets par box, l'unité l'est aussi.
+MemoryHigh=96M
+MemoryMax=128M
 
 # Durcissement.
 NoNewPrivileges=yes

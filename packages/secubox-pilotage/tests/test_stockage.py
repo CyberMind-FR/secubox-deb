@@ -389,3 +389,58 @@ def test_base_d_avant_r38_gagne_la_colonne_tronque(tmp_path):
     assert s.inventaire(GK5.cle)["valeurs"] == {"Device.X": 1} and s.inventaire(GK5.cle)["tronques"] == []
     s.vu(GK5, {})
     assert s.inventaire_enregistrer(GK5, releve_gk5())
+
+
+def _somme_octets(tmp_path, cle):
+    cx = sqlite3.connect(tmp_path / "pilotage" / "pilotage.db")
+    try:
+        return cx.execute("SELECT COALESCE(SUM(length(valeur_json)),0) FROM inventaire WHERE cle=?", (cle,)).fetchone()[0]
+    finally:
+        cx.close()
+
+
+def _passe_degradee(s, h, box, tag, n=4, taille=60000):
+    h.avance(60)
+    params = {f"{P}Gros.{tag}.{j}": "x" * taille for j in range(n)}
+    s.inventaire_enregistrer(box, {"results": [{"path": P, "params": params}], "tronque": True})
+    return params
+
+
+def test_octets_par_box_plafonnes(tmp_path):
+    """R39 : l'inventaire d'une box est plafonné en octets ; les plus anciennes lignes absentes de la passe courante partent."""
+    s, h = neuf(tmp_path)
+    s.octets_max = 300_000
+    s.vu(GK5, {})
+    for i in range(10):
+        _passe_degradee(s, h, GK5, i)
+        assert _somme_octets(tmp_path, GK5.cle) <= s.octets_max
+        v = s.inventaire(GK5.cle)["valeurs"]
+        assert all(f"{P}Gros.{i}.{j}" in v for j in range(4))
+    assert not any(k.startswith(f"{P}Gros.0.") for k in v)
+
+
+def test_octets_passe_courante_jamais_purgee(tmp_path):
+    s, h = neuf(tmp_path)
+    s.octets_max = 300_000
+    s.vu(GK5, {})
+    _passe_degradee(s, h, GK5, "a", n=3)
+    _passe_degradee(s, h, GK5, "b", n=4)  # 240 Kio seuls : approche le plafond, les anciennes partent
+    v = s.inventaire(GK5.cle)["valeurs"]
+    assert all(f"{P}Gros.b.{j}" in v for j in range(4)) and not any(".a." in k for k in v)
+    h.avance(60)  # passe à elle seule au-dessus du plafond : elle reste entière
+    gros = {f"{P}Gros.c.{j}": "y" * 60000 for j in range(6)}
+    s.inventaire_enregistrer(GK5, {"results": [{"path": P, "params": gros}], "tronque": True})
+    v = s.inventaire(GK5.cle)["valeurs"]
+    assert all(k in v for k in gros) and not any(".b." in k for k in v)
+
+
+def test_octets_autre_box_intacte(tmp_path):
+    s, h = neuf(tmp_path)
+    s.octets_max = 300_000
+    s.vu(GK5, {})
+    s.vu(GK5_AUTOLOAD, {})
+    _passe_degradee(s, h, GK5_AUTOLOAD, "z", n=4)
+    avant = s.inventaire(GK5_AUTOLOAD.cle)["valeurs"]
+    for i in range(6):
+        _passe_degradee(s, h, GK5, i)
+    assert s.inventaire(GK5_AUTOLOAD.cle)["valeurs"] == avant
