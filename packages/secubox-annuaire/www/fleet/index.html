@@ -6,7 +6,7 @@
   See LICENCE-CMSD-1.0.md for terms.
 
   SecuBox — Flotte (instantanés signés des nœuds du maillage), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
-  DONNÉES RÉELLES, LECTURE SEULE : GET /api/v1/annuaire/fleet. Panneau XSS-strict : les valeurs de l'API sont posées par createElement/textContent/dataset, jamais en HTML ;
+  DONNÉES RÉELLES : GET /api/v1/annuaire/fleet (lecture seule) ; panneau Pilotage : page de la box (actions, support, journal, flux) via /api/v1/pilotage. Panneau XSS-strict : les valeurs de l'API sont posées par createElement/textContent/dataset, jamais en HTML ;
   aucune action n'est portée par un attribut d'événement en ligne (une délégation unique lit dataset). Flotte illisible = dite, jamais « aucun nœud ».
   ?embed=1 : sans menu ; ?demo=1 : données fictives.
 -->
@@ -57,6 +57,16 @@
         .iface-head{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;cursor:pointer}
         .iface-emoji{font-size:1.3rem} .iface-id .name{font-weight:700;overflow-wrap:anywhere} .iface-id .role{color:var(--faible);font-size:.72rem}
         .iface-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end} .m{text-align:right} .mv{font-weight:700;font-variant-numeric:tabular-nums;font-size:.82rem} .ml{color:var(--faible);font-size:.64rem;text-transform:uppercase}
+        tr.pil-row{cursor:pointer} tr.pil-row:hover{background:rgba(41,182,246,.06)} tr.pil-row.sel{background:rgba(41,182,246,.12)} tr.pil-row:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
+        #pb-pan h4{margin:12px 0 6px;font-size:.78rem;color:var(--doux)} #pb-pan h3 .btn{margin-left:8px;vertical-align:middle}
+        .pb-etat{color:var(--doux);font-size:.78rem;line-height:1.4} .pb-msg{margin:6px 0;font-size:.8rem;min-height:1em;overflow-wrap:anywhere} .pb-msg.grave{color:#ffd9de}
+        .pb-act{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 0;border-top:1px solid rgba(86,150,255,.12)} .pb-lib{flex:1 1 170px;font-size:.8rem}
+        .pb-act input{flex:1 1 150px;max-width:260px} .pb-vide{color:var(--faible);font-size:.78rem}
+        .pb-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:.78rem} .pb-bar input[type=number]{width:80px}
+        input[type=number]{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px}
+        .pb-pre{margin:6px 0 0;max-height:200px;overflow:auto;font-size:.7rem;color:var(--doux);white-space:pre-wrap;overflow-wrap:anywhere}
+        .pb-live{list-style:none;margin:6px 0 0;padding:0;max-height:220px;overflow:auto;font-size:.76rem;color:var(--doux)} .pb-live li{padding:3px 0;border-top:1px solid rgba(86,150,255,.1);overflow-wrap:anywhere}
+        #pb-ops .pb-args,#pb-ops .pb-detail{white-space:normal;overflow-wrap:anywhere;max-width:260px}
         .pill{border:1px solid;border-radius:999px;padding:1px 10px;font-size:.68rem;font-weight:700} .pill.up{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)} .pill.down{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
         .chev{color:var(--faible);transition:transform .15s} .iface.open .chev{transform:rotate(90deg)}
         .iface-body{display:none;padding:6px 10px 10px;border-top:1px solid rgba(86,150,255,.12)} .iface.open .iface-body{display:block}
@@ -131,9 +141,21 @@
         <div class="pan" id="al-pan" hidden><h3>Box Auto-Load <i><span id="al-n">0</span> enrôlée(s), tunnel wg-autoload, sans annuaire</i></h3>
             <div class="tw"><table class="matrix"><thead><tr><th>Client</th><th>Profil</th><th>Statut</th><th>Progression</th><th>Étape</th><th>Dernière activité</th></tr></thead><tbody id="al-body"></tbody></table></div>
         </div>
-        <div class="pan" id="pil-pan" hidden><h3>Pilotage <i><span id="pil-n">0</span> box relevée(s) par le maître, lecture seule</i></h3>
+        <div class="pan" id="pil-pan" hidden><h3>Pilotage <i><span id="pil-n">0</span> box relevée(s) par le maître, cliquer une ligne pour ouvrir la box</i></h3>
             <div class="tw"><table class="matrix"><thead><tr><th>Box</th><th>Réseau</th><th>En ligne</th><th>Mém. dispo</th><th>Swap</th><th>CPU</th><th>Services en échec</th><th>Boucles 24 h</th><th>Mains liées</th></tr></thead><tbody id="pil-body"></tbody></table></div>
         </div><!-- fin pil-pan -->
+        <div class="pan" id="pb-pan" hidden><h3>Box <span id="pb-titre"></span> <i id="pb-sous"></i> <button type="button" class="btn sm" id="pb-fermer">Fermer</button></h3>
+            <div class="pb-etat" id="pb-etat" role="status"></div>
+            <div class="pb-msg" id="pb-msg" role="status" aria-live="polite"></div>
+            <h4>Actions</h4><div id="pb-actions"></div>
+            <h4>Relevé</h4><div class="pb-bar"><button type="button" class="btn sm primary" id="pb-releve">Demander un relevé</button></div><pre class="pb-pre" id="pb-releve-sortie"></pre>
+            <div id="pb-support" hidden><h4>Support</h4>
+                <div class="pb-bar"><label for="pb-sup-duree">Durée (min, 1 à 240)</label><input type="number" id="pb-sup-duree" min="1" max="240" value="30">
+                    <button type="button" class="btn sm primary" id="pb-sup-demander">Demander un support</button><button type="button" class="btn sm danger" id="pb-sup-fermer" hidden>Fermer le support</button></div></div>
+            <div id="pb-live-wrap" hidden><h4>Vue en direct</h4><div class="pb-etat" id="pb-live-etat"></div><ul class="pb-live" id="pb-live"></ul></div>
+            <h4>Journal des opérations</h4>
+            <div class="tw"><table class="matrix"><thead><tr><th>Demandée</th><th>Action</th><th>Paramètres</th><th>Acteur</th><th>État</th><th>Progression</th><th>Détail</th></tr></thead><tbody id="pb-ops"></tbody></table></div>
+        </div><!-- fin pb-pan -->
         <div class="pan detail" id="detail" hidden><h3>Détail <i id="detTitre"></i></h3><div class="kv" id="detKv"></div></div>
     </div></div></main>
 
@@ -282,7 +304,7 @@
         }
 
         // ===== pilotage =====
-        // Inventaire des box relevé par le maître (GET /api/v1/pilotage/boxes), L1 : lecture seule, aucune action. Module absent (404), session refusée (401), erreur ou liste vide : panneau masqué.
+        // Inventaire des box relevé par le maître (GET /api/v1/pilotage/boxes), L1 : lecture des box ; une ligne ouvre la page de la box (bloc pilotage-box). Module absent (404), session refusée (401), erreur ou liste vide : panneau masqué.
         // Une valeur null s'affiche « — » (jamais 0 inventé) ; mains_liees null = « inconnu ». Rafraîchi toutes les 30 s, suspendu onglet masqué,
         // et aussitôt au retour sur l'onglet.
         const PIL_MS = 30000;
@@ -304,7 +326,7 @@
             const body = $('pil-body'); clear(body);
             $('pil-pan').hidden = !liste.length; $('pil-n').textContent = String(liste.length);
             liste.forEach(b => {
-                const on = b.en_ligne === true, tr = el('tr', on ? null : 'is-stale');   // sans classe de ligne cliquable (curseur main) : aucun clic ici
+                const on = b.en_ligne === true, tr = el('tr', 'pil-row' + (on ? '' : ' is-stale'));   // pil-row : ouvre la page de la box (délégation du bloc pilotage-box)
                 const st = el('td'), dot = el('span', 'dot ' + (on ? 'ok' : 'stale'));
                 st.append(dot, el('span', null, on ? 'en ligne' : 'vu ' + pilVu(b.vu_le)));
                 const ml = el('td'), pm = b.mains_liees === true ? ['up', 'oui'] : b.mains_liees === false ? ['down', 'non'] : ['', 'inconnu'];
@@ -312,13 +334,378 @@
                 tr.append(el('td', 'hostname-col', b.nom || b.cle || '—'), el('td', null, pilReseau(b)), st,
                     el('td', null, pilNum(b.memoire_dispo_mo, ' Mo')), el('td', null, pilNum(b.swap_utilise_pct, ' %')), el('td', null, pilNum(b.cpu_pct, ' %')),
                     el('td', null, pilNum(b.services_en_echec)), el('td', null, pilNum(b.boucles_24h)), ml);
+                tr.dataset.cle = pbId(b); tr.tabIndex = 0;
                 body.append(tr);
             });
-            hauteur();
+            pilBoites = liste; pbApresListe(); hauteur();
         }
         setInterval(() => { if (document.visibilityState !== 'hidden') chargerPilotage(); }, PIL_MS);
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') chargerPilotage(); });   // retour sur l'onglet
         // ===== fin pilotage =====
+
+        // ===== pilotage-box =====
+        // Page d'une box du panneau Pilotage (#3126 L2 « Agir ») : actions du catalogue fermé, confirmation forte, support, journal des opérations,
+        // vue en direct (flux SSE lu par fetch + ReadableStream avec l’en-tête Authorization, pas l’API native d’événements serveur).
+        // XSS-strict : tout ce qui vient de la box ou de l'administrateur (résumé, raison, args, nom, acteur, messages d'erreur) passe par textContent.
+        // R-L2-31/38 : une box cliente n'a ni catalogue ni vue en direct hors session de support ouverte ; mains liées ou inconnues : boutons désactivés.
+        const PB_ACTIONS = [
+            { id: 'reboot', lib: 'Redémarrer la box', forte: true },
+            { id: 'maj-paquets', lib: 'Mettre à jour les paquets' },
+            { id: 'service-demarrer', lib: 'Démarrer un service', arg: 'unite' },
+            { id: 'service-redemarrer', lib: 'Redémarrer un service', arg: 'unite' },
+            { id: 'service-arreter', lib: 'Arrêter un service', arg: 'unite', forte: true },
+            { id: 'renommer', lib: 'Renommer la box', arg: 'nom', forte: true },
+            { id: 'renouveler', lib: 'Renouveler les secrets', forte: true }];
+        const PB_RE = { unite: /^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service|timer)$/, nom: /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/ };
+        const PB_ACTIF = ['demande', 'en_attente', 'ouvert'];
+        const PB_LIVE_MAX = 100, PB_TAMPON_MAX = 1 << 20;
+        let pilBoites = [], pbBoite = null, pbSupports = [], pbSig = '', pbFlux = null, pbNote = '', pbOpsTimer = null;
+        const pbVus = new Set();      // dédoublonnage par (type, id, état) : remise « au moins une fois »
+        const pbJobs = new Map();     // dédoublonnage par job : une ligne par job, progression jamais en arrière, première fin seule retenue
+
+        const pbId = b => b.cle || b.nom || '';
+        const pbUrl = (b, suffixe) => '/api/v1/pilotage/boxes/' + encodeURIComponent(pbId(b)) + suffixe;
+        const pbCliente = b => b.reseau !== 'maillage';
+        function pbLogin() { if (!DEMO) location.href = '/login.html'; }
+        function pbEntetes(extra) { const h = Object.assign({}, extra || {}), t = token(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function pbFetch(chemin, opts) {
+            if (DEMO) throw new Error('démonstration : aucune requête envoyée');
+            const o = Object.assign({ credentials: 'same-origin', cache: 'no-store' }, opts || {});
+            o.headers = pbEntetes(o.headers);
+            const r = await fetch(chemin, o);
+            if (r.status === 401) pbLogin();
+            return r;
+        }
+        // détail d'une erreur de l'API (chaîne, objet ou liste de validation) : borné, rendu en texte
+        async function pbErreur(r) {
+            let d = '';
+            try { const c = await r.json(); const x = c && c.detail != null ? c.detail : c; d = typeof x === 'string' ? x : (x && x.erreur ? String(x.erreur) : JSON.stringify(x)); } catch (e) { d = ''; }
+            return 'HTTP ' + r.status + (d ? ' : ' + String(d).slice(0, 300) : '');
+        }
+        function pbRaison(r) {
+            if (r == null || r === '') return '';
+            return r === 'plafond' ? 'plafond atteint : trop de codes de jonction émis (20 par heure)' : String(r).slice(0, 300);
+        }
+        function pbQuand(v) { const s = typeof v === 'number' || typeof v === 'string' ? Number(v) : NaN; return Number.isFinite(s) && s > 0 && s < 1e11 ? ago(new Date(s * 1000).toISOString()) : '—'; }
+        function pbMessage(texte, grave) { const m = $('pb-msg'); m.textContent = texte; m.className = 'pb-msg' + (grave ? ' grave' : ''); }
+
+        // sessions de support : « ouvert » seulement s'il n'est pas échu (fin en secondes Unix, annoncée par le maître)
+        function pbSessionOuverte() { return pbSupports.find(s => s.etat === 'ouvert' && Number(s.fin) > Date.now() / 1000) || null; }
+        function pbSessionActive() { return pbSessionOuverte() || pbSupports.find(s => s.etat === 'demande' || s.etat === 'en_attente') || null; }
+
+        // droits d'agir : le catalogue n'est proposé que si la box est en ligne, les mains libres, et (box cliente) pendant un support ouvert
+        function pbDroits() {
+            const b = pbBoite, sup = pbSessionOuverte(), att = pbSessionActive();
+            let raison = '', ok = true;
+            if (b.en_ligne !== true) { ok = false; raison = 'Box hors ligne : aucune action possible.'; }
+            else if (b.mains_liees === true) { ok = false; raison = 'Mains liées : la box refuse toute action, sauf le relevé.'; }
+            else if (b.mains_liees == null) { ok = false; raison = 'Mains liées : état inconnu, actions désactivées par prudence (seul le relevé reste possible).'; }
+            let visible = !pbCliente(b) || !!sup;
+            if (pbCliente(b)) {
+                if (sup) raison = (raison ? raison + ' ' : '') + 'Session de support ouverte' + (Number(sup.fin) > 0 ? ' jusqu’à ' + new Date(Number(sup.fin) * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '') + '.';
+                else if (att) raison = (raison ? raison + ' ' : '') + 'Support demandé, en attente de l’accord du détenteur sur la box : le catalogue n’est proposé qu’une fois la session ouverte.';
+                else raison = (raison ? raison + ' ' : '') + 'Box cliente : le catalogue d’actions et la vue en direct ne sont proposés que pendant une session de support. Demandez un support.';
+            } else if (ok) raison = 'Box du propriétaire : catalogue complet. Les actions fortes exigent de retaper le nom de la box.';
+            return { ok, visible, raison, support: sup ? sup.id : null };
+        }
+
+        function pbArgValide(sorte, v) { return PB_RE[sorte].test(String(v)) && String(v) !== 'secubox-pilotage-agent.service'; }
+
+        function pbLigneAction(a, d) {
+            const b = pbBoite, ligne = el('div', 'pb-act'); ligne.dataset.action = a.id;
+            ligne.append(el('span', 'pb-lib', a.lib));
+            let arg = null, conf = null;
+            if (a.arg) {
+                arg = el('input', 'pb-arg'); arg.type = 'text'; arg.maxLength = 80; arg.autocomplete = 'off';
+                arg.placeholder = a.arg === 'unite' ? 'secubox-….service' : 'nouveau nom (a-z, 0-9, -)'; arg.setAttribute('aria-label', a.lib + ' : ' + (a.arg === 'unite' ? 'unité' : 'nouveau nom'));
+                ligne.append(arg);
+            }
+            if (a.forte && !pbCliente(b)) {
+                conf = el('input', 'pb-conf'); conf.type = 'text'; conf.autocomplete = 'off'; conf.placeholder = 'retapez le nom de la box';
+                conf.setAttribute('aria-label', a.lib + ' : retapez le nom de la box pour confirmer'); ligne.append(conf);
+            }
+            const go = el('button', 'btn sm pb-go ' + (a.forte ? 'danger' : 'primary'), 'Lancer'); go.type = 'button'; go.dataset.action = a.id; ligne.append(go);
+            const maj = () => { go.disabled = !(d.ok && (!arg || pbArgValide(a.arg, arg.value)) && (!conf || conf.value === b.nom)); };
+            if (arg) arg.addEventListener('input', maj);
+            if (conf) conf.addEventListener('input', maj);
+            go.addEventListener('click', () => pbLancer(a, arg ? arg.value : null, conf ? conf.value : null, d.support, go, maj));
+            maj();
+            return ligne;
+        }
+
+        function pbRendreActions(d) {
+            const zone = $('pb-actions'); clear(zone);
+            if (!d.visible) { zone.append(el('div', 'pb-vide', 'Aucune action proposée.')); return; }
+            PB_ACTIONS.forEach(a => zone.append(pbLigneAction(a, d)));
+        }
+
+        // rendu complet seulement si la signature change : une saisie en cours n'est jamais effacée par un rafraîchissement
+        function pbMaj(force) {
+            const b = pbBoite; if (!b) return;
+            const d = pbDroits(), att = pbSessionActive();
+            const sig = [pbId(b), b.nom, b.en_ligne, b.mains_liees, d.visible, d.ok, d.support, att ? att.id + att.etat : ''].join('|');
+            $('pb-titre').textContent = b.nom || b.cle || '—';
+            $('pb-sous').textContent = pilReseau(b) + ' · ' + (b.en_ligne === true ? 'en ligne' : 'vu ' + pilVu(b.vu_le)) + ' · mains liées : ' + (b.mains_liees === true ? 'oui' : b.mains_liees === false ? 'non' : 'inconnu');
+            $('pb-etat').textContent = (pbNote ? pbNote + ' ' : '') + d.raison;
+            if (force || sig !== pbSig) { pbSig = sig; pbRendreActions(d); }
+            $('pb-releve').disabled = b.en_ligne !== true;
+            const cl = pbCliente(b);
+            $('pb-support').hidden = !cl;
+            if (cl) {
+                $('pb-sup-demander').disabled = !(b.en_ligne === true && b.mains_liees === false && !att);
+                $('pb-sup-fermer').hidden = !att;
+            }
+            const eligible = !cl || !!pbSessionOuverte();
+            $('pb-live-wrap').hidden = !eligible;
+            if (eligible && !pbFlux) pbOuvrirFlux(b);      // un flux arrêté (403, fin de support) reste en place jusqu'au changement d'éligibilité ou de box
+            if (!eligible) pbFermerFlux();
+        }
+
+        async function pbLancer(a, valeur, confirmation, support, go, maj) {
+            const b = pbBoite, corps = { args: {} };
+            if (a.arg) corps.args[a.arg] = valeur;
+            if (confirmation != null) corps.confirmation = confirmation;
+            if (support) corps.support = support;
+            go.disabled = true; pbMessage('Envoi de « ' + a.lib + ' »…', false);
+            try {
+                const r = await pbFetch(pbUrl(b, '/actions/' + a.id), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) });
+                if (!r.ok) { pbMessage('Action refusée (' + await pbErreur(r) + ')', true); }
+                else {
+                    const rep = await r.json();
+                    if (rep.etat === 'consentement') pbMessage('« ' + a.lib + ' » : action en attente de l’accord du détenteur, à donner sur la box.', false);
+                    else if (rep.etat === 'accepte') pbMessage('« ' + a.lib + ' » acceptée par la box' + (rep.job ? ' (job ' + rep.job + ')' : '') + '.', false);
+                    else pbMessage('« ' + a.lib + ' » refusée par la box : ' + (pbRaison(rep.raison) || 'sans motif') + '.', true);
+                }
+            } catch (e) { pbMessage('Action non envoyée : ' + String(e && e.message || e).slice(0, 200), true); }
+            maj(); pbOperations();
+        }
+
+        // ---- journal des opérations (GET /operations, source de vérité : le flux ne fait que le rafraîchir) ----
+        function pbEtatOp(o) {
+            switch (o.etat) {
+                case 'termine': return o.resultat === 'succes' ? 'terminé : succès' : o.resultat === 'echec' ? 'terminé : échec (code ' + (o.rc == null ? '?' : o.rc) + ')' : 'résultat inconnu : la box ne retrouve pas la fin de l’opération';
+                case 'sans_reponse': return 'sans réponse (504) : la box a peut-être exécuté l’action';
+                case 'consentement': return 'en attente de l’accord du détenteur';
+                case 'refuse': return 'refusée';
+                case 'accepte': return 'acceptée';
+                case 'en_cours': return 'en cours';
+                case 'demande': return 'demandée';
+                default: return o.etat ? String(o.etat) : 'inconnu';
+            }
+        }
+        function pbLibAction(id) { const a = PB_ACTIONS.find(x => x.id === id); return a ? a.lib : String(id); }
+        function pbRendreOps(ops, erreur) {
+            const body = $('pb-ops'); clear(body);
+            if (erreur) { const tr = el('tr'), td = el('td', 'empty', 'Journal illisible (' + erreur + ').'); td.colSpan = 7; tr.append(td); body.append(tr); return; }
+            if (!ops.length) { const tr = el('tr'), td = el('td', 'empty', 'Aucune opération.'); td.colSpan = 7; tr.append(td); body.append(tr); return; }
+            ops.forEach(o => {
+                const tr = el('tr'), pc = el('td'); pc.append(pctCell(o.pct));
+                const args = o.args && typeof o.args === 'object' && Object.keys(o.args).length ? JSON.stringify(o.args) : '—';
+                const detail = [o.etape && o.etat !== 'termine' ? o.etape : '', pbRaison(o.raison), o.resume ? pbRaison(o.resume) : ''].filter(Boolean).join(' · ');
+                tr.append(el('td', null, pbQuand(o.demande_le)), el('td', null, o.action ? pbLibAction(o.action) : '(opération non rattachée à une demande connue)'),
+                    el('td', 'pb-args', args), el('td', null, o.acteur || '—'), el('td', null, pbEtatOp(o)), pc, el('td', 'pb-detail', detail || '—'));
+                body.append(tr);
+            });
+        }
+        async function pbOperations() {
+            const b = pbBoite; if (!b) return;
+            try {
+                const r = await pbFetch('/api/v1/pilotage/operations?limite=50&nom=' + encodeURIComponent(pbId(b)));
+                if (pbBoite !== b) return;
+                if (!r.ok) { pbRendreOps([], 'HTTP ' + r.status); return; }
+                const d = await r.json(); pbRendreOps(Array.isArray(d) ? d : [], null);
+            } catch (e) { if (pbBoite === b) pbRendreOps([], DEMO ? 'démonstration' : 'réseau'); }
+        }
+        function pbOperationsBientot() { clearTimeout(pbOpsTimer); pbOpsTimer = setTimeout(pbOperations, 600); }
+
+        async function pbSupportsLire() {
+            const b = pbBoite; if (!b || !pbCliente(b)) { pbSupports = []; return; }
+            try {
+                const r = await pbFetch(pbUrl(b, '/support'));
+                if (pbBoite === b && r.ok) { const d = await r.json(); pbSupports = Array.isArray(d) ? d : []; }
+            } catch (e) { /* on garde l'état connu : sans session ouverte, pas de catalogue */ }
+        }
+
+        // ---- support : demande, fermeture, relevé ----
+        async function pbSupportDemander() {
+            const b = pbBoite, n = parseInt($('pb-sup-duree').value, 10);
+            if (!(n >= 1 && n <= 240)) { pbMessage('Durée du support : de 1 à 240 minutes.', true); return; }
+            $('pb-sup-demander').disabled = true; pbNote = '';
+            try {
+                const r = await pbFetch(pbUrl(b, '/support'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ duree_min: n }) });
+                if (!r.ok) pbMessage('Support non demandé (' + await pbErreur(r) + ')', true);
+                else {
+                    const rep = await r.json();
+                    pbMessage(rep.etat === 'consentement' ? 'Support demandé : en attente de l’accord du détenteur, à donner sur la box.' : rep.etat === 'refuse' ? 'Support refusé par la box : ' + (pbRaison(rep.raison) || 'sans motif') + '.' : 'Support demandé (' + String(rep.etat) + ').', rep.etat === 'refuse');
+                }
+            } catch (e) { pbMessage('Support non demandé : ' + String(e && e.message || e).slice(0, 200), true); }
+            await pbSupportsLire(); pbMaj(true);
+        }
+        async function pbSupportFermer() {
+            const b = pbBoite, s = pbSessionActive(); if (!s) return;
+            $('pb-sup-fermer').disabled = true;
+            try {
+                const r = await pbFetch(pbUrl(b, '/support/' + encodeURIComponent(s.id)), { method: 'DELETE' });
+                pbMessage(r.ok ? 'Support fermé.' : 'Support non fermé (' + await pbErreur(r) + ')', !r.ok);
+            } catch (e) { pbMessage('Support non fermé : ' + String(e && e.message || e).slice(0, 200), true); }
+            $('pb-sup-fermer').disabled = false;
+            await pbSupportsLire(); pbMaj(true);
+        }
+        async function pbReleve() {
+            const b = pbBoite, sortie = $('pb-releve-sortie'); sortie.textContent = '';
+            $('pb-releve').disabled = true;
+            try {
+                const r = await pbFetch(pbUrl(b, '/releve'), { method: 'POST' });
+                if (!r.ok) { pbMessage('Relevé non demandé (' + await pbErreur(r) + ')', true); }
+                else {
+                    pbMessage('Relevé demandé : lecture en cours sur la box.', false);
+                    for (let i = 0; i < 8 && pbBoite === b; i++) {
+                        await new Promise(res => setTimeout(res, 2500));
+                        const g = await pbFetch(pbUrl(b, '/releve'));
+                        if (!g.ok) break;
+                        const d = await g.json();
+                        if (!d.en_cours && d.releve != null) { sortie.textContent = JSON.stringify(d.releve, null, 1).slice(0, 4000); pbMessage('Relevé reçu.', false); break; }
+                    }
+                }
+            } catch (e) { pbMessage('Relevé non demandé : ' + String(e && e.message || e).slice(0, 200), true); }
+            if (pbBoite === b) $('pb-releve').disabled = b.en_ligne !== true;
+        }
+
+        // ---- vue en direct : flux SSE par fetch + ReadableStream ----
+        function pbEtatFlux(t) { $('pb-live-etat').textContent = t; }
+        function pbLigneLive(cle, texte) {
+            const ul = $('pb-live');
+            let li = ul.querySelector('li[data-cle="' + CSS.escape(cle) + '"]');
+            if (!li) { li = el('li'); li.dataset.cle = cle; ul.prepend(li); while (ul.children.length > PB_LIVE_MAX) ul.removeChild(ul.lastChild); }
+            li.textContent = texte;
+        }
+        function pbEvJob(d) {
+            const job = typeof d.job === 'string' ? d.job : '';
+            if (!job) return;
+            const e = pbJobs.get(job) || { pct: 0, etape: '', fini: false, rc: null, resume: '', action: '' };
+            if (d.action) e.action = String(d.action);
+            if (d.type === 'X_SECUBOX_OperationDone') {
+                if (e.fini) return;                       // remise « au moins une fois » : la première fin seule compte
+                e.fini = true; e.rc = d.rc; e.resume = d.resume == null ? '' : String(d.resume); e.pct = 100;
+            } else if (!e.fini) {
+                const p = Number(d.pct); if (Number.isFinite(p)) e.pct = Math.max(e.pct, Math.min(100, p));      // jamais en arrière
+                if (d.etape) e.etape = String(d.etape);
+            }
+            if (pbJobs.size > 500) pbJobs.clear();
+            pbJobs.set(job, e);
+            const etat = e.fini ? (e.rc === 0 ? 'terminée : succès' : e.rc == null || e.rc === -1 ? 'terminée : résultat inconnu' : 'terminée : échec (code ' + e.rc + ')') : (e.etape || 'en cours');
+            pbLigneLive('job:' + job, 'job ' + job + (e.action ? ' (' + pbLibAction(e.action) + ')' : '') + ' · ' + etat + ' · ' + Math.round(e.pct) + ' %' + (e.resume ? ' · ' + pbRaison(e.resume) : ''));
+            if (e.fini) pbOperationsBientot();
+        }
+        function pbEvEtat(d) {
+            if (d.perte != null) { pbLigneLive('perte', 'Événements perdus (' + Number(d.perte) + ') : journal relu.'); pbOperations(); return; }
+            if (d.session === 'expiree') { pbFermerFlux(); pbLogin(); return; }
+            if (d.support === 'termine') {
+                pbNote = 'Session de support terminée.';
+                pbSupports = pbSupports.map(s => PB_ACTIF.indexOf(s.etat) >= 0 ? Object.assign({}, s, { etat: 'ferme' }) : s);
+                if (pbFlux) pbFlux.stop = true;
+                pbEtatFlux('Vue en direct fermée : session de support terminée.');
+                pbMaj(true); return;
+            }
+            const t = d.type;
+            if (pbVus.size > 2000) pbVus.clear();       // borne la mémoire d'un flux très long
+            if (t === 'X_SECUBOX_HandsTied') {
+                const cle = t + '|' + d.etat;
+                if (d.etat === 'on' || d.etat === 'off') { if (pbBoite) pbBoite.mains_liees = d.etat === 'on'; pbMaj(); }
+                pbLigneLive(cle, 'Mains liées : ' + (d.etat === 'on' ? 'activées' : d.etat === 'off' ? 'levées' : String(d.etat)));
+            } else if (t === 'X_SECUBOX_Consent' || t === 'X_SECUBOX_Support') {
+                const k = t + '|' + (d.id == null ? '' : d.id) + '|' + (d.etat == null ? '' : d.etat);
+                if (pbVus.has(k)) return;
+                pbVus.add(k);
+                pbLigneLive(k, (t === 'X_SECUBOX_Consent' ? 'consentement ' : 'support ') + String(d.id == null ? '' : d.id) + ' : ' + String(d.etat == null ? '—' : d.etat));
+                if (t === 'X_SECUBOX_Support') pbSupportsLire().then(() => pbMaj());
+            } else if (d.connecte === true) pbEtatFlux('Vue en direct connectée.');
+        }
+        function pbEvenement(nom, d) {
+            if (nom === 'etat') { pbEvEtat(d); return; }
+            if (nom === 'operation' || (d.type === 'X_SECUBOX_OperationProgress' || d.type === 'X_SECUBOX_OperationDone')) { pbEvJob(d); if (nom === 'operation') pbOperationsBientot(); return; }
+            if (nom === 'notify') {
+                const k = 'notify|' + String(d.type) + '|' + String(d.id == null ? d.ts : d.id) + '|' + String(d.value);
+                if (pbVus.has(k)) return;
+                pbVus.add(k);
+                pbLigneLive(k, String(d.type || 'notification') + (d.unit ? ' · ' + d.unit : '') + (d.value != null ? ' · ' + String(d.value).slice(0, 200) : ''));
+            }
+        }
+        function pbBloc(bloc) {
+            let nom = 'message', data = [];
+            bloc.split('\n').forEach(l => {
+                if (!l || l[0] === ':') return;           // battement ou commentaire
+                const i = l.indexOf(':'), champ = i < 0 ? l : l.slice(0, i), val = i < 0 ? '' : l.slice(i + 1).replace(/^ /, '');
+                if (champ === 'event') nom = val; else if (champ === 'data') data.push(val);
+            });
+            if (!data.length || ['notify', 'operation', 'etat'].indexOf(nom) < 0) return;
+            let d; try { d = JSON.parse(data.join('\n')); } catch (e) { return; }
+            if (d && typeof d === 'object' && !Array.isArray(d)) pbEvenement(nom, d);
+        }
+        function pbFermerFlux() { if (pbFlux) { pbFlux.stop = true; try { pbFlux.ctl.abort(); } catch (e) { /* déjà clos */ } } pbFlux = null; }
+        async function pbOuvrirFlux(b) {
+            pbFermerFlux();
+            const cur = { ctl: new AbortController(), cle: pbId(b), stop: false }; pbFlux = cur;
+            if (DEMO) { cur.stop = true; pbEtatFlux('Démonstration : pas de flux.'); return; }
+            let delai = 3000;
+            while (!cur.stop) {
+                try {
+                    const r = await fetch(pbUrl(b, '/flux'), { headers: pbEntetes({ Accept: 'text/event-stream' }), credentials: 'same-origin', cache: 'no-store', signal: cur.ctl.signal });
+                    if (r.status === 401) { cur.stop = true; pbLogin(); return; }
+                    if (r.status === 403 || r.status === 404) { cur.stop = true; pbEtatFlux('Vue en direct indisponible (HTTP ' + r.status + ').'); return; }
+                    if (!r.ok || !r.body) throw new Error('HTTP ' + r.status);
+                    pbEtatFlux('Vue en direct connectée.'); delai = 3000;
+                    pbOperations();                          // relecture après chaque (re)connexion : rien n'est supposé reçu
+                    const rd = r.body.getReader(), dec = new TextDecoder('utf-8'); let tampon = '';
+                    for (;;) {
+                        const lu = await rd.read();
+                        if (lu.done) break;
+                        tampon = (tampon + dec.decode(lu.value, { stream: true })).replace(/\r\n?/g, '\n');
+                        if (tampon.length > PB_TAMPON_MAX) throw new Error('flux trop volumineux');
+                        let i;
+                        while ((i = tampon.indexOf('\n\n')) >= 0) { const bloc = tampon.slice(0, i); tampon = tampon.slice(i + 2); pbBloc(bloc); if (cur.stop) break; }
+                        if (cur.stop) { try { await rd.cancel(); } catch (e) { /* clos */ } break; }
+                    }
+                } catch (e) { if (cur.stop || cur.ctl.signal.aborted) return; }
+                if (cur.stop) return;
+                pbEtatFlux('Vue en direct interrompue, reconnexion…');
+                await new Promise(res => setTimeout(res, delai)); delai = Math.min(delai * 2, 30000);
+            }
+        }
+
+        // ---- ouverture / fermeture de la page de la box ----
+        async function pbOuvrir(b) {
+            pbFermerFlux(); pbJobs.clear(); pbVus.clear(); pbNote = ''; pbSig = ''; pbSupports = [];
+            clear($('pb-live')); $('pb-releve-sortie').textContent = ''; pbMessage('', false); pbEtatFlux('');
+            pbBoite = b; $('pb-pan').hidden = false; pbMarquer();
+            await pbSupportsLire();
+            if (pbBoite !== b) return;
+            pbMaj(true); pbOperations(); hauteur();
+        }
+        function pbFermer() { pbFermerFlux(); pbBoite = null; $('pb-pan').hidden = true; pbMarquer(); hauteur(); }
+        function pbMarquer() { document.querySelectorAll('#pil-body tr').forEach(tr => tr.classList.toggle('sel', !!pbBoite && tr.dataset.cle === pbId(pbBoite))); }
+        // rafraîchissement du tableau : la box ouverte est relue (mains liées, en ligne) sans toucher aux saisies
+        function pbApresListe() {
+            pbMarquer();
+            if (!pbBoite) return;
+            const n = pilBoites.find(x => pbId(x) === pbId(pbBoite));
+            if (!n) { pbFermer(); return; }
+            pbBoite = n;
+            pbSupportsLire().then(() => pbMaj());
+        }
+        $('pil-body').addEventListener('click', e => {
+            const tr = e.target.closest('[data-cle]'); if (!tr) return;
+            const b = pilBoites.find(x => pbId(x) === tr.dataset.cle); if (!b) return;
+            if (pbBoite && pbId(pbBoite) === pbId(b)) pbFermer(); else pbOuvrir(b);
+        });
+        $('pil-body').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { const tr = e.target.closest('[data-cle]'); if (tr) { e.preventDefault(); tr.click(); } } });
+        $('pb-fermer').addEventListener('click', pbFermer);
+        $('pb-releve').addEventListener('click', pbReleve);
+        $('pb-sup-demander').addEventListener('click', pbSupportDemander);
+        $('pb-sup-fermer').addEventListener('click', pbSupportFermer);
+        window.addEventListener('pagehide', pbFermerFlux);
+        setInterval(() => { if (pbBoite) pbMaj(); }, 15000);      // fin d'une session de support annoncée : le catalogue disparaît sans attendre
+        // ===== fin pilotage-box =====
 
         async function loadFleet() {
             chargerAutoload(); chargerP2p();
