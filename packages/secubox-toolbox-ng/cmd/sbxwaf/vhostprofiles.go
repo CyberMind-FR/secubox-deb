@@ -44,6 +44,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -72,6 +73,7 @@ type VhostProfiles struct {
 	services     map[string]serviceProfile // nom de service -> profil
 	supprimables map[string]bool           // id de catégorie -> supprimable
 	antirobots   map[string]bool           // hôte -> refuser les robots (#1216)
+	phpServices  map[string]bool           // nom de service -> fait tourner PHP (#3257)
 }
 
 // fichierProfils est la forme JSON sur disque de vhost_profiles.json.
@@ -89,6 +91,10 @@ type fichierProfils struct {
 	// Clé ABSENTE = liste vide = personne n'est filtré : la case est
 	// opt-in, un fichier d'avant la fonctionnalité reste valide tel quel.
 	AntiRobots []string `json:"anti_robots"`
+	// PHPServices (#3257) : services dont les vhosts font tourner PHP ; seuls
+	// ces hôtes voient leurs envois multipart analysés (PHP2Shell). Clé absente
+	// = aucun vhost PHP.
+	PHPServices []string `json:"php_services"`
 }
 
 // chargerVhostProfiles lit et compile le fichier déclaratif. Une erreur de
@@ -112,6 +118,7 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 		services:     make(map[string]serviceProfile, len(f.Services)),
 		supprimables: make(map[string]bool, len(f.SuppressCategories)),
 		antirobots:   make(map[string]bool, len(f.AntiRobots)),
+		phpServices:  make(map[string]bool, len(f.PHPServices)),
 	}
 	for _, cat := range f.SuppressCategories {
 		vp.supprimables[cat] = true
@@ -151,6 +158,14 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 	// légitimes. On normalise seulement, sans exiger d'appartenance.
 	for _, hote := range f.AntiRobots {
 		vp.antirobots[normaliserHote(hote)] = true
+	}
+	// Un service PHP inconnu est ignoré, pas fatal : le fichier reste valide.
+	for _, nom := range f.PHPServices {
+		if _, ok := vp.services[nom]; !ok {
+			log.Printf("vhost_profiles : php_services nomme le service inconnu %q, ignoré", nom)
+			continue
+		}
+		vp.phpServices[nom] = true
 	}
 	return vp, nil
 }
@@ -262,4 +277,16 @@ func (v *VhostProfiles) antiRobots(host string) bool {
 // (opt-in).
 func (v *VhostProfiles) doitSupprimer(host, chemin, cat string) bool {
 	return v != nil && v.catSupprimablePour(host, cat) && v.estLegitime(host, chemin)
+}
+
+// estPHP dit si cet hôte fait tourner un service déclaré PHP (#3257). Hôte
+// normalisé comme ailleurs ; hôte inconnu, clé absente ou récepteur nil → false.
+func (v *VhostProfiles) estPHP(host string) bool {
+	if v == nil {
+		return false
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	service, ok := v.hoteService[normaliserHote(host)]
+	return ok && v.phpServices[service]
 }
