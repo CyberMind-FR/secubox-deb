@@ -1343,6 +1343,8 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
         d = decrire_unite(ctx, unite)
         if d["LoadState"] == "not-found":
             return refus("unité inconnue")           # M10 : ni consentement ni lancement pour une unité absente
+        if d["LoadState"] != "loaded":
+            return refus("unité non chargée")        # masquée, en erreur… : son Type par défaut ne prouve rien
         # R-L2-46 (R-L2-15 refermé) : l'unité RÉELLE (un alias pointe vers elle) et chacun de ses noms sont contrôlés.
         for nom in (d["Id"], *d["Names"]):
             motif = refus_unite(nom, protegees)

@@ -56,6 +56,7 @@ if [ "$1" = show ] && [ "$3" = Id ]; then
   fi
   etat=loaded
   if grep -qx "$unite" "$FAUX_ABSENTES" 2>/dev/null; then etat=not-found; fi
+  if grep -qx "$unite" "$FAUX_MASQUEES" 2>/dev/null; then etat=masked; fi
   echo "Id=$id"
   echo "Names=$noms"
   [ "$type" = - ] || echo "Type=$type"
@@ -108,6 +109,7 @@ class Banc:
         self.lances = tmp_path / "lances"
         self.actifs = tmp_path / "actifs"
         self.absentes = tmp_path / "absentes"
+        self.masquees = tmp_path / "masquees"
         self.wg_sortie = tmp_path / "wg-sortie"
         self.wg_appels = tmp_path / "wg-appels"
         self.unites = tmp_path / "unites"
@@ -117,7 +119,7 @@ class Banc:
                         FAUX_LANCES=str(self.lances), FAUX_ACTIFS=str(self.actifs),
                         FAUX_ABSENTES=str(self.absentes), FAUX_WG_SORTIE=str(self.wg_sortie),
                         FAUX_WG_APPELS=str(self.wg_appels), FAUX_UNITES=str(self.unites),
-                        FAUX_DESCRIPTIONS=str(self.descriptions))
+                        FAUX_DESCRIPTIONS=str(self.descriptions), FAUX_MASQUEES=str(self.masquees))
         self.ancree = ancree
         if ancree:
             self.ancrer()
@@ -670,6 +672,16 @@ def test_unite_introuvable_refusee(banc):
     for verbe in ("demarrer", "arreter", "redemarrer"):
         rc, sortie, _ = banc.run("service", verbe, "secubox-fantome.service", agent=True)
         assert rc == 0 and sortie == {"ok": False, "refus": "unité inconnue"}, verbe
+    assert banc.lancements() == []
+
+
+def test_unite_non_chargee_refusee(banc):
+    """Relecture de la passe finale : seule une unité LoadState=loaded est pilotable ; une unité masquée (Type par défaut
+    « simple ») ne doit pas passer pour un service durable, même pour un arrêt."""
+    banc.masquees.write_text("secubox-lyrion.service\n")
+    for verbe in ("demarrer", "arreter", "redemarrer"):
+        rc, sortie, _ = banc.run("service", verbe, "secubox-lyrion.service", agent=True)
+        assert rc == 0 and sortie == {"ok": False, "refus": "unité non chargée"}, verbe
     assert banc.lancements() == []
 
 
