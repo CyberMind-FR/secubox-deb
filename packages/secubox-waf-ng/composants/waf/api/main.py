@@ -58,6 +58,10 @@ try:
 except ImportError:  # standalone (WorkingDirectory=…/waf)
     from historique import agreger_historique as _agreger_historique, bucket_ip
 try:
+    from api import php_signaux as _php_signaux
+except ImportError:  # standalone
+    import php_signaux as _php_signaux
+try:
     from api.application import application as _application, lire_etat as _lire_etat_nft
 except ImportError:  # standalone
     from application import application as _application, lire_etat as _lire_etat_nft
@@ -73,6 +77,10 @@ NFT_ETAT = Path("/var/cache/secubox/waf/nft-etat.json")
 _nft_table_absente = False
 
 HISTORY_CACHE = "/var/lib/secubox/waf/waf-history.json"
+# Profils de vhost déclaratifs (lus aussi par sbxwaf) et relevé des signaux PHP (#3273), calculé en tâche de fond.
+VHOST_PROFILES = Path("/etc/secubox/waf/vhost_profiles.json")
+PHP_SIGNAUX_CACHE = Path("/var/lib/secubox/waf/php-signaux.json")
+PHP_SIGNAUX_PERIODE = 60  # s : le balayage du journal est rare, jamais par requête
 _history_lock = threading.Lock()
 
 
@@ -974,18 +982,32 @@ def _refresh_warm_caches() -> dict:
     }
 
 
+def _rafraichir_php_signaux(maintenant: Optional[float] = None) -> None:
+    """Balaie le journal des menaces et écrit le relevé des signaux PHP (#3273). Appelé par la tâche de fond seulement."""
+    quand = datetime.fromtimestamp(maintenant if maintenant is not None else time.time(), tz=timezone.utc)
+    etat = _php_signaux.calculer(_php_signaux.lignes_du_journal(Path(THREATS_LOG)), quand)
+    _php_signaux.ecrire_cache(PHP_SIGNAUX_CACHE, etat)
+
+
 async def _warm_loop():
     """Background refresher. Survives individual failures so a single
     bad log line can't kill the loop."""
     # Stagger the very first refresh by 1 s so uvicorn finishes binding
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
+    dernier_php = 0.0
     while True:
         try:
             await asyncio.to_thread(_refresh_warm_caches)
         except Exception:
             # Swallow — next tick will retry. Logging would spam.
             pass
+        if time.time() - dernier_php >= PHP_SIGNAUX_PERIODE:
+            try:
+                await asyncio.to_thread(_rafraichir_php_signaux)
+                dernier_php = time.time()
+            except Exception:
+                pass  # le relevé précédent reste servi ; la route annonce son âge
         await asyncio.sleep(WAF_WARM_INTERVAL)
 
 
@@ -1096,7 +1118,7 @@ async def get_detections():
     # ── Anti-robots par vhost ─────────────────────────────────────────────
     coches = []
     try:
-        profils = json.loads(Path("/etc/secubox/waf/vhost_profiles.json").read_text())
+        profils = json.loads(VHOST_PROFILES.read_text())
         coches = [str(v) for v in (profils.get("anti_robots") or [])]
     except (OSError, ValueError, AttributeError):
         coches = []
@@ -1137,7 +1159,53 @@ async def get_detections():
                    if ports else "aucun leurre en écoute"),
     })
 
+    # ── Analyse des requêtes PHP (#3273) ──────────────────────────────────
+    armes = _vhosts_php_armes()
+    releve = _php_signaux.lire_cache(PHP_SIGNAUX_CACHE)
+    if releve:
+        n = sum(int(releve["familles"].get(f, 0)) for f in _php_signaux.FAMILLES)
+        detail = f"{n} signaux en {int(releve.get('fenetre_h', 24))} h"
+    else:
+        detail = "signaux en 24 h : inconnu (relevé absent)"
+    detections.append({
+        "id": "analyse_php",
+        "nom": "Analyse des requêtes PHP",
+        "emoji": "🐘",
+        "resume": "PHP2Shell, Roundcube, Nextcloud et entrées PHP hostiles : signalés, jamais bloqués",
+        "mode": "detect",
+        "classes": armes,
+        "actif": bool(armes) and _unite_active("secubox-waf-ng"),
+        "detail": detail,
+    })
+
     return {"detections": detections, "count": len(detections)}
+
+
+def _vhosts_php_armes() -> List[str]:
+    """Vhosts dont les envois sont analysés comme du PHP : ceux dont le service est déclaré PHP, plus les motifs
+    d'hôte (`php_hotes`, rendus tels quels). Fichier absent ou illisible : aucun (rien n'est supposé armé)."""
+    try:
+        profils = json.loads(VHOST_PROFILES.read_text())
+        services = {str(x) for x in (profils.get("php_services") or [])}
+        vhosts = profils.get("vhosts") or {}
+        hotes = sorted(str(h) for h, svc in vhosts.items() if str(svc) in services)
+        motifs = [m for m in (profils.get("php_hotes") or []) if isinstance(m, str)]
+    except (OSError, ValueError, AttributeError):
+        return []
+    return hotes + motifs
+
+
+@app.get("/php/signaux", dependencies=[Depends(require_lecture)])
+async def get_php_signaux():
+    """Signaux de l'analyse PHP sur 24 h, par famille, règle, vhost et adresse publique (#3273).
+
+    Lit le relevé écrit par la tâche de fond : le journal n'est jamais relu ici. Sans relevé, l'état est « inconnu »
+    et les compteurs sont nuls (null), jamais zéro."""
+    releve = _php_signaux.lire_cache(PHP_SIGNAUX_CACHE)
+    if releve is None:
+        return {"fenetre_h": _php_signaux.FENETRE_H, "etat": "inconnu", "calcule_a": None,
+                "familles": None, "regles": None, "vhosts": None, "adresses": None}
+    return releve
 
 
 def _unite_active(unite: str) -> bool:
