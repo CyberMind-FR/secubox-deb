@@ -399,3 +399,22 @@ def test_canal_notifs_plafonnees_par_minute_et_par_box(caplog):
         run(cas())
     lignes = [r.getMessage() for r in caplog.records if "plafond" in r.getMessage()]
     assert len(lignes) == 1 and "autoload" not in lignes[0] and "maillage:gk5" in lignes[0]
+
+
+def test_canal_bonjour_plafonne_par_box():
+    """M5 : chaque /bonjour est une transaction d'écriture ; au plus un par box et par vu_intervalle_s (10 s), le surplus reçoit 429 avant
+    toute lecture du corps (le client Go recule puis se réannonce) ; une autre box n'est pas touchée."""
+    async def cas():
+        t = [1000.0]
+        app, _, stock, _ = monter(vu_intervalle_s=10, horloge=lambda: t[0])
+        corps = {"agent_version": "0.1.2", "boot_id": "b", "modele": []}
+        async with client(app) as gk5, client(app, "10.64.0.9") as lgm:
+            assert (await gk5.post("/canal/v1/bonjour", json=corps)).status_code == 200
+            assert (await gk5.post("/canal/v1/bonjour", json=corps)).status_code == 429
+            assert (await gk5.post("/canal/v1/bonjour", content=b"x" * (300 << 10))).status_code == 429   # corps jamais lu
+            assert (await lgm.post("/canal/v1/bonjour", json=corps)).status_code == 200
+            t[0] += 10
+            assert (await gk5.post("/canal/v1/bonjour", json={**corps, "agent_version": "0.1.3"})).status_code == 200
+        assert [(b.cle, i["agent_version"]) for b, i in stock.vus] == [("maillage:gk5", "0.1.2"), ("autoload:lgm-10.64.0.9", "0.1.2"),
+                                                                       ("maillage:gk5", "0.1.3")]
+    run(cas())

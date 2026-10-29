@@ -11,7 +11,7 @@ dans le tunnel, lue UNIQUEMENT dans `X-Real-IP` (posé par nginx) : jamais l'adr
 multiple ou adresse inconnue → 403 et une ligne d'audit `pilotage_identite_refusee` (adresse seule).
 
 Protocole (le client Go `sbx-pilotage-agent` fait foi) :
-  POST /canal/v1/bonjour     {agent_version, boot_id, modele[]}                        → 200 {"ok": true}
+  POST /canal/v1/bonjour     {agent_version, boot_id, modele[]}                        → 200 {"ok": true} ; 429 si < 10 s depuis le précédent
   GET  /canal/v1/requetes    ?attente=N (borné à 25 s)                                 → 200 [{msg_id,type,body}] | 204
   POST /canal/v1/reponses    [{msg_id,type,body}]  (≤ 64)                              → 200 {"ignore": n}
   POST /canal/v1/notifs      [{"type":"NOTIFY","body":{"event":{…}}}]  (≤ 16)          → 200 {"ignore": n}
@@ -158,9 +158,17 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             vu_le[box.cle] = maintenant
             await asyncio.to_thread(stockage.vu, box, {})
 
+    bonjour_le: dict = {}  # Box.cle -> instant du dernier bonjour accepté (clés de box identifiées seulement : bornée par la flotte)
+
     @app.post("/canal/v1/bonjour")
     async def bonjour(request: Request):
         box = await box_de(request)
+        maintenant = horloge()
+        if maintenant - bonjour_le.get(box.cle, -1e18) < vu_intervalle_s:
+            # chaque bonjour est une écriture SQLite : au plus un par box et par vu_intervalle_s ; 429 avant toute lecture du corps,
+            # le client Go recule puis se réannonce (M5)
+            raise HTTPException(429, "bonjour trop fréquent")
+        bonjour_le[box.cle] = maintenant
         doc = await corps_json(request)
         if not isinstance(doc, dict):
             raise HTTPException(400, "objet attendu")
