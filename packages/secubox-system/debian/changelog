@@ -13,6 +13,11 @@ secubox-system (1.11.4-1~trixie1) trixie; urgency=medium
     pouvait éteindre la box (cookie SameSite=None, garde d'origine muette sur GET). POST
     seulement, alias de service_control. Le JS porté de LuCI (system-hub/api.js) reste
     intact : aucune page ne le charge (revue #3258, I3).
+  * /admin/reboot et /admin/shutdown : motif validé (texte simple, 200 caractères au plus,
+    sans tiret en tête) et « -- » avant les arguments libres de shutdown : un motif « -P »
+    changeait un redémarrage en extinction. Chaque lancement d'une unité
+    secubox-systeme-* (pare-feu, heure, caches, extinction, redémarrage) est audité par
+    secubox_core.unites (#3258, tour 3).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 12:27:00 +0100
 

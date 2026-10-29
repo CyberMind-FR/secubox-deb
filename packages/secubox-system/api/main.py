@@ -616,15 +616,25 @@ UNITE_SYSTEME = {
 }
 
 
-def _lance_unite(cle: str) -> None:
-    """Demarre l'unite root ; leve HTTPException(502/504) avec la raison reelle si elle echoue."""
+def _lance_unite(cle: str, user=None) -> None:
+    """Demarre l'unite root ; leve HTTPException(502/504) avec la raison reelle si elle echoue.
+    Chaque lancement est audite (#3258, tour 3), par la fonction d'audit de secubox_core.unites, jamais avec la sortie."""
     unite = UNITE_SYSTEME[cle]
+    acteur = str((user or {}).get("sub") or "")
     try:
-        r = subprocess.run(["systemctl", "start", unite], capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["systemctl", "start", unite], capture_output=True, text=True, timeout=30, check=True)
+    except subprocess.CalledProcessError as e:
+        r = e
     except subprocess.TimeoutExpired:
+        unites.journaliser("system", acteur, "start", unite, "echec", 504, "délai dépassé")
         raise HTTPException(504, f"Délai dépassé en attendant {unite}")
+    except OSError as e:
+        unites.journaliser("system", acteur, "start", unite, "echec", 503, f"erreur système : {e.__class__.__name__}")
+        raise HTTPException(503, f"systemctl indisponible ({e.__class__.__name__})") from e
     if r.returncode == 0:
+        unites.journaliser("system", acteur, "start", unite, "ok", 200)
         return
+    unites.journaliser("system", acteur, "start", unite, "echec", 502)
     raison = (r.stderr or r.stdout or "").strip()
     if not raison:
         try:
@@ -645,21 +655,21 @@ def restart_services(user=Depends(require_jwt)):
 @router.post("/reload_firewall")
 def reload_firewall(user=Depends(require_jwt)):
     """Verifie /etc/nftables.conf (nft -c). Pas de rechargement : il viderait les ensembles dynamiques (bannissements)."""
-    _lance_unite("pare_feu")
+    _lance_unite("pare_feu", user)
     return {"success": True, "message": "Configuration du pare-feu vérifiée : valide. Non rechargé (un rechargement viderait les bannissements en cours)."}
 
 
 @router.post("/sync_time")
 def sync_time(user=Depends(require_jwt)):
     """Sync system time with NTP."""
-    _lance_unite("heure")
+    _lance_unite("heure", user)
     return {"success": True, "message": "Synchronisation NTP activée."}
 
 
 @router.post("/clear_cache")
 def clear_cache(user=Depends(require_jwt)):
     """Clear system caches."""
-    _lance_unite("caches")
+    _lance_unite("caches", user)
     return {"success": True, "message": "Caches vidés."}
 
 
@@ -740,7 +750,7 @@ def maj_status(user=Depends(require_jwt)):
 def shutdown(user=Depends(require_jwt)):
     """Shutdown the system."""
     log.warning("Shutdown requested by user")
-    _lance_unite("eteindre")
+    _lance_unite("eteindre", user)
     return {"success": True, "message": "Extinction programmée dans 1 minute."}
 
 
@@ -1011,7 +1021,7 @@ async def get_denoise_stats(user=Depends(require_jwt)):
 def reboot(user=Depends(require_jwt)):
     """Redémarrer le système."""
     log.warning("Reboot requested by user")
-    _lance_unite("redemarrer")
+    _lance_unite("redemarrer", user)
     return {"success": True, "message": "Redémarrage programmé dans 1 minute."}
 
 

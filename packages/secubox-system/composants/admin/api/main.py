@@ -514,17 +514,32 @@ async def get_processes(
     return _get_processes(sort, limit)
 
 
+# Motif d'un redémarrage ou d'une extinction (#3258, tour 3). Il partait tel quel à `shutdown -r +0 <motif>` : getopt
+# réordonne les arguments, un motif « -P » devenait une OPTION et changeait le redémarrage en extinction (API root).
+# Texte simple (lettres, chiffres, ponctuation courante), 200 caractères au plus, jamais un tiret en tête ; et « -- »
+# avant les arguments libres.
+MOTIF_ARRET = re.compile(r"[\w .,;:!?'’\"()/@+&%#=—–-]{1,200}")
+
+
+def _motif_arret(reason: str, defaut: str) -> str:
+    motif = (reason or "").strip() or defaut
+    if motif.startswith("-") or not MOTIF_ARRET.fullmatch(motif):
+        raise HTTPException(status_code=400, detail="Motif invalide : texte simple, 200 caractères au plus, sans tiret en tête")
+    return motif
+
+
 @router.post("/reboot")
 def reboot_system(request: SystemActionRequest, user=Depends(require_jwt)):
     """Reboot the system (requires confirmation)."""
     if not request.confirm:
         raise HTTPException(status_code=400, detail="Confirmation required for reboot")
+    motif = _motif_arret(request.reason, "Admin requested reboot")
 
-    _audit_log(user.get("sub", "unknown"), "system_reboot", f"reason={request.reason}")
-    log.warning("SYSTEM REBOOT requested by %s, reason: %s", user.get("sub"), request.reason)
+    _audit_log(user.get("sub", "unknown"), "system_reboot", f"reason={motif}")
+    log.warning("SYSTEM REBOOT requested by %s, reason: %s", user.get("sub"), motif)
 
     # Schedule reboot in 5 seconds
-    subprocess.Popen(["shutdown", "-r", "+0", request.reason or "Admin requested reboot"])
+    subprocess.Popen(["shutdown", "-r", "--", "+0", motif])
 
     return {
         "success": True,
@@ -538,12 +553,13 @@ def shutdown_system(request: SystemActionRequest, user=Depends(require_jwt)):
     """Shutdown the system (requires confirmation)."""
     if not request.confirm:
         raise HTTPException(status_code=400, detail="Confirmation required for shutdown")
+    motif = _motif_arret(request.reason, "Admin requested shutdown")
 
-    _audit_log(user.get("sub", "unknown"), "system_shutdown", f"reason={request.reason}")
-    log.warning("SYSTEM SHUTDOWN requested by %s, reason: %s", user.get("sub"), request.reason)
+    _audit_log(user.get("sub", "unknown"), "system_shutdown", f"reason={motif}")
+    log.warning("SYSTEM SHUTDOWN requested by %s, reason: %s", user.get("sub"), motif)
 
     # Schedule shutdown in 5 seconds
-    subprocess.Popen(["shutdown", "-h", "+0", request.reason or "Admin requested shutdown"])
+    subprocess.Popen(["shutdown", "-h", "--", "+0", motif])
 
     return {
         "success": True,

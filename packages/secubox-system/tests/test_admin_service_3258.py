@@ -177,3 +177,48 @@ def test_sans_l_option_aucune_unite_debian(banc):
 
 def test_la_liste_debian_est_courte_et_nommee():
     assert unites.UNITES_DEBIAN_ADMIN == frozenset({"nginx.service", "haproxy.service", "unbound.service", "ssh.service"})
+
+
+# ---------- tour 3 : le motif de /admin/reboot et /admin/shutdown ----------
+# `shutdown -r +0 <motif>` sans « -- » : getopt réordonne les arguments, un motif « -P » devenait une OPTION et changeait
+# le redémarrage en extinction (API root). Motif validé (texte simple, borné, sans tiret de tête) et « -- » avant les
+# arguments libres.
+
+@pytest.fixture
+def lance(admin, monkeypatch):
+    appels = []
+    monkeypatch.setattr(admin.subprocess, "Popen", lambda argv, *a, **k: appels.append(list(argv)))
+    monkeypatch.setattr(admin, "_audit_log", lambda *a, **k: None)
+    return appels
+
+
+def _puissance(admin, route, motif):
+    return getattr(admin, route)(admin.SystemActionRequest(confirm=True, reason=motif), user={"sub": "admin"})
+
+
+@pytest.mark.parametrize("route", ["reboot_system", "shutdown_system"])
+@pytest.mark.parametrize("motif", ["-P", "-H", "--poweroff", "-r now", "a\nb", "x" * 201, "\x07bip"])
+def test_un_motif_option_ou_hors_texte_est_refuse_sans_rien_lancer(admin, lance, route, motif):
+    with pytest.raises(HTTPException) as e:
+        _puissance(admin, route, motif)
+    assert e.value.status_code == 400 and lance == []
+
+
+def test_un_motif_moins_p_n_eteint_pas_la_box(admin, lance):
+    """Le cas de la revue : « -P » sur un redémarrage ne doit JAMAIS produire `shutdown … -P`."""
+    with pytest.raises(HTTPException):
+        _puissance(admin, "reboot_system", "-P")
+    assert not [a for a in lance if "-P" in a or "-h" in a]
+
+
+@pytest.mark.parametrize("route, option", [("reboot_system", "-r"), ("shutdown_system", "-h")])
+def test_le_motif_part_apres_le_double_tiret(admin, lance, route, option):
+    r = _puissance(admin, route, "maintenance du noyau — étape 2 (prévue)")
+    assert r["success"] is True
+    assert lance == [["shutdown", option, "--", "+0", "maintenance du noyau — étape 2 (prévue)"]]
+
+
+@pytest.mark.parametrize("route, option", [("reboot_system", "-r"), ("shutdown_system", "-h")])
+def test_sans_motif_le_message_par_defaut_part_apres_le_double_tiret(admin, lance, route, option):
+    _puissance(admin, route, "")
+    assert lance[0][:4] == ["shutdown", option, "--", "+0"] and not lance[0][4].startswith("-")

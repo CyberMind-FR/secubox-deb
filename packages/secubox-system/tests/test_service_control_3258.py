@@ -240,3 +240,29 @@ def test_les_ids_proteges_du_moteur_de_profils_sont_couverts():
         unite = f"secubox-{i}.service"
         if unite in livrees:
             assert unite in unites.UNITES_PROTEGEES, unite
+
+
+# ---------- tour 3 : chaque lancement d'une unité root secubox-systeme-* est audité ----------
+# _lance_unite (pare-feu, heure, caches, /shutdown, /reboot) ne laissait aucune trace dans audit.log.
+
+@pytest.mark.parametrize("route, unite", [
+    ("reboot", "secubox-systeme-redemarrer.service"), ("shutdown", "secubox-systeme-eteindre.service"),
+    ("sync_time", "secubox-systeme-heure.service"), ("clear_cache", "secubox-systeme-caches.service"),
+    ("reload_firewall", "secubox-systeme-pare-feu-verif.service"),
+])
+def test_chaque_lancement_d_unite_systeme_est_audite(api, banc, route, unite):
+    getattr(api, route)(user={"sub": "admin"})
+    a = lignes_audit(banc)
+    assert len(a) == 1, a
+    assert a[0]["module"] == "system" and a[0]["acteur"] == "admin" and a[0]["action"] == "start"
+    assert a[0]["unite"] == unite and a[0]["resultat"] == "ok"
+
+
+def test_un_lancement_en_echec_est_audite(api, banc):
+    banc["rc"] = 1
+    with pytest.raises(HTTPException) as e:
+        api.reboot(user={"sub": "admin"})
+    assert e.value.status_code == 502
+    a = lignes_audit(banc)
+    assert len(a) == 1 and a[0]["resultat"] == "echec" and a[0]["unite"] == "secubox-systeme-redemarrer.service"
+    assert SORTIE_SECRETE not in banc["audit"].read_text(encoding="utf-8")
