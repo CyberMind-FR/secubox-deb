@@ -167,3 +167,15 @@ def test_identite_lien_et_fifo_refuses(tmp_path):
     fifo = tmp_path / "fifo.json"
     os.mkfifo(fifo)
     assert box_par_adresse("10.10.0.10", fifo, auto) is None
+
+
+def test_identite_revoque_au_client_invalide_bloque_quand_meme(tmp_path):
+    peers, auto = _fichiers(tmp_path)
+    p = {"lot": "L", "profil": "lite", "serie": "SB-1"}
+    _ecrire(auto, {"version": 1, "pairs": [
+        {**p, "adresse": "10.64.0.9", "client": "lgm", "abonnement": "actif"},
+        {**p, "adresse": "10.64.0.9", "client": 42, "abonnement": "revoque"},
+        {**p, "adresse": "10.64.0.10", "client": "", "abonnement": "revoque"},
+        {**p, "adresse": "10.64.0.10", "client": "ok", "serie": "SB-2", "abonnement": "actif"}]})
+    assert box_par_adresse("10.64.0.9", peers, auto) is None
+    assert box_par_adresse("10.64.0.10", peers, auto) is None

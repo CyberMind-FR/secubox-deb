@@ -364,3 +364,18 @@ def test_canal_deconnexion_pendant_la_lecture_sans_trace():
                  "headers": [(b"x-real-ip", b"10.10.0.10")], "client": None, "server": None}
         await app(scope, receive, send)  # ne lève rien
     run(cas())
+
+
+def test_canal_notification_d_unite_au_nom_long():
+    async def cas():
+        app, _, stock, _ = monter()
+        unite = "u" * 251 + ".service"  # 259 > 255 : trop long ; 255 passe
+        async with client(app) as c:
+            ok = {"type": "X_SECUBOX_ServiceLoop", "unit": ("u" * 247) + ".service", "value": 3, "ts": 1}
+            assert len(ok["unit"]) == 255
+            r = await c.post("/canal/v1/notifs", json=[{"type": "NOTIFY", "body": {"event": ok}}])
+            assert r.json() == {"ignore": 0}
+            r = await c.post("/canal/v1/notifs", json=[{"type": "NOTIFY", "body": {"event": {**ok, "unit": unite + "x" * 10}}}])
+            assert r.json() == {"ignore": 1}
+        assert stock.notifications[0][1]["unit"] == ok["unit"]
+    run(cas())

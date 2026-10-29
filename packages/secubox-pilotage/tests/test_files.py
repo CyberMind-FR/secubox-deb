@@ -175,3 +175,10 @@ def test_reponse_non_servie_refusee():
         [e] = list(f._entrees.values())
         assert not f.livrer_reponse("gk5", {"msg_id": e.requete["msg_id"], "type": "GET_RESP", "body": {}})
     run(cas())
+
+
+def test_duree_non_finie_donne_le_delai_par_defaut():
+    from pilotage.files import delai_reponse_pour
+    for d in (float("nan"), float("inf"), float("-inf"), "60", None, [60]):
+        op = {"type": "OPERATE", "body": {"command": "Device.X_SECUBOX_Releve.Mesurer()", "args": {"duree_s": d}}}
+        assert delai_reponse_pour(op, 120) == 90, d

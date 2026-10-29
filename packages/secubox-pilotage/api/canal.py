@@ -40,6 +40,7 @@ MAX_NOTIFS = 16
 TYPES_REPONSE = ("GET_RESP", "GET_SUPPORTED_DM_RESP", "OPERATE_RESP", "ERROR")
 _MODELE_MAX = 4096
 _CHAINE_MAX = 128
+UNITE_MAX = 256  # un nom d'unité systemd va jusqu'à 255 caractères
 VU_INTERVALLE_S = 10.0
 AUDIT_INTERVALLE_S = 60.0
 AUDIT_ADRESSES_MAX = 1024
@@ -65,7 +66,7 @@ def _evenement(n):
     out = {"type": typ, "ts": ts}
     if "unit" in ev:
         u = ev["unit"]
-        if not isinstance(u, str) or len(u) > _CHAINE_MAX or _imprimable(u) != u:
+        if not isinstance(u, str) or len(u) > UNITE_MAX or _imprimable(u, UNITE_MAX) != u:
             return None
         out["unit"] = u
     if "value" in ev:

@@ -171,7 +171,10 @@ def _table_autoload(doc) -> list:
             continue
         ip = _adresse_canonique(p.get("adresse"))
         client = _nom_valide(p.get("client"))
-        if ip is None or client is None or not _hote(ip, RESEAU_AUTOLOAD):
+        if ip is None or not _hote(ip, RESEAU_AUTOLOAD):
+            continue
+        if client is None:  # client illisible : jamais servie, mais l'adresse reste bloquée (une révocation ne se perd pas)
+            out.append((str(ip), Box(f"?-{ip}", str(ip), "autoload", None, "revoque")))
             continue
         abonnement = p.get("abonnement")
         if abonnement not in ABONNEMENTS:  # inconnu : traité comme révoqué (bloque l'adresse)

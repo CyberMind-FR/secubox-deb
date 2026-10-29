@@ -13,6 +13,7 @@ une requête non servie expire à 30 s, une requête servie sans réponse à `ex
 from __future__ import annotations
 
 import asyncio
+import math
 import secrets
 from collections import deque
 from typing import Awaitable, Callable, Optional
@@ -32,7 +33,7 @@ def delai_reponse_pour(requete: dict, defaut: float) -> float:
     if requete.get("type") == "OPERATE" and isinstance(corps, dict) and corps.get("command") == COMMANDE_MESURE:
         args = corps.get("args")
         duree = args.get("duree_s", DUREE_DEFAUT_S) if isinstance(args, dict) else DUREE_DEFAUT_S
-        if isinstance(duree, bool) or not isinstance(duree, (int, float)):
+        if isinstance(duree, bool) or not isinstance(duree, (int, float)) or not math.isfinite(duree):
             duree = DUREE_DEFAUT_S
         return min(max(duree, DUREE_MIN_S), DUREE_MAX_S) + MARGE_MESURE_S
     return defaut
