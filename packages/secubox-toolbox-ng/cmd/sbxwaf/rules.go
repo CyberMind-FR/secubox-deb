@@ -149,6 +149,10 @@ var parametreRequis = map[string]string{
 	"nc_proxy_agenda":          "",
 	"nc_proxy_agenda_autrui":   "",
 	"nc_put_non_raster":        "",
+	// #3273, PHP générique (tâche 5) : R-PHP1 réutilise parties_nombre.
+	"xml_dtd_prologue":         "",
+	"cookie_prefixe_normalise": "",
+	"frontiere_longueur":       "longueur_min",
 }
 
 // controlesRequete : contrôles qui lisent EntreePHP.Requete (#3273, relecture
@@ -290,6 +294,12 @@ func (s signatureStructurelle) declenche(e *EntreePHP) bool {
 		return e.ProxyAgendaAutrui
 	case "nc_put_non_raster":
 		return e.PutRaster && e.MagiqueDebut != ""
+	case "xml_dtd_prologue":
+		return e.DTDXML
+	case "cookie_prefixe_normalise":
+		return e.CookieFauxPrefixe
+	case "frontiere_longueur":
+		return e.Multipart != nil && e.Multipart.LongueurFrontiere >= s.params["longueur_min"]
 	case "rc_image_non_raster":
 		if e.Multipart == nil || !e.Multipart.NonRaster {
 			return false

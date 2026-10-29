@@ -96,6 +96,7 @@ type ResultatMultipart struct {
 	FilenameObjet         bool // le filename retenu par PHP contient "|O:"
 	FilenameSession       bool // le filename retenu contient '|' ET un jeton de sérialisation PHP [abdisNO]:[0-9;] (R-RC2)
 	NonRaster             bool // un fichier LU commence par un format non raster (R-IMG1, 64 octets)
+	LongueurFrontiere     int  // len de la frontière rendue par boundaryPHP, posée avant tout retour (R-PHP4)
 	// Champs : champs ordinaires dont le nom normalisé est retenu
 	// (nomsRetenusPHP), valeur copiée, au plus parametresRetenusMax. Jamais journalisés.
 	Champs []ParametrePHP
@@ -604,7 +605,11 @@ func strtollPHP(v []byte) int64 {
 func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim LimitesMultipart) ResultatMultipart {
 	r := ResultatMultipart{Statut: MultipartMalforme}
 	boundary, ok := boundaryPHP(contentType)
-	if !ok || len(boundary) > frontiereMaxPHP {
+	if !ok {
+		return r
+	}
+	r.LongueurFrontiere = len(boundary)
+	if len(boundary) > frontiereMaxPHP {
 		return r
 	}
 	plafond := lim.PartiesMax
@@ -616,6 +621,11 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 		r.Statut = defaut
 		if tronque && m.bord {
 			r.Statut = MultipartTronque
+		}
+		// R-PHP4 : au-delà de 70 caractères (RFC 2046 §5.1.1) l'envoi est
+		// malformé ; les compteurs restent ceux que PHP calculerait.
+		if r.Statut == MultipartAnalyse && r.LongueurFrontiere > frontiereRFC2046 {
+			r.Statut = MultipartMalforme
 		}
 		return r
 	}

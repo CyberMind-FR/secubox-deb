@@ -39,7 +39,7 @@ const (
 	corpsAucun      genreCorps = iota
 	corpsMultipart             // multipart/form-data : analyserMultipart (#3257)
 	corpsUrlencoded            // application/x-www-form-urlencoded : lireParametresPHP
-	corpsXML                   // branche ajoutée par la tâche 5
+	corpsXML                   // prologue XML d'une requête DAV (R-PHP2), sans jeton
 	corpsDebut                 // 64 premiers octets d'un PUT WebDAV raster (R-IMG2), sans jeton
 )
 
@@ -63,6 +63,10 @@ type EntreePHP struct {
 	ProxyAgendaAutrui    bool   // R-NC2 : utilisateur Basic présent et différent de l'uid
 	PutRaster            bool   // R-IMG2 : PUT WebDAV d'un nom raster (premier segment)
 	MagiqueDebut         string // R-IMG2 : magiqueNonRaster des 64 premiers octets ("" = rien)
+
+	// PHP générique (tâche 5). Des booléens seulement.
+	DTDXML            bool // R-PHP2 : DOCTYPE ou ENTITY dans le prologue XML
+	CookieFauxPrefixe bool // R-PHP3 : nom de cookie normalisé en __Host-/__Secure- sans l'être à l'origine
 	// les tâches 3 à 7 ajoutent leurs champs ici
 }
 
@@ -90,6 +94,8 @@ func (s *Server) nouvelleEntreePHP(r *http.Request, service string) *EntreePHP {
 		Chemin:       r.URL.Path,
 		requeteBrute: r.URL.RawQuery,
 	}
+	// R-PHP3 : en-têtes seulement, parcours linéaire, rien de stocké.
+	e.CookieFauxPrefixe = cookieFauxPrefixe(r.Header.Values("Cookie"))
 	// R-NC1 : sans Authorization. Ces quatre chemins sont appelés de serveur
 	// à serveur : un cookie de session (forgeable, sans valeur ici) n'exempte
 	// pas (R-W11, M3). Federation ne sert qu'à ce cas : l'hôte n'est cherché
@@ -146,6 +152,15 @@ func (s *Server) corpsACapturer(r *http.Request, e *EntreePHP) (genre genreCorps
 	switch {
 	case estMultipartPHP(ct):
 		return corpsMultipart, s.fenetreCapture(), true
+	case estXMLPHP(r.Method, ct):
+		// R-PHP2 : le prologue seul (4 096 octets au plus), SANS jeton (R-W2,
+		// point 10) : la mémoire est bornée, et semaphoreCapture prendrait par
+		// défaut le sémaphore multipart.
+		plafond = prologueXMLMax
+		if f := s.fenetreCapture(); f < plafond {
+			plafond = f
+		}
+		return corpsXML, plafond, false
 	case estUrlencodedPHP(ct):
 		return corpsUrlencoded, s.fenetreCapture(), true
 	}
@@ -164,6 +179,8 @@ func completerCorps(e *EntreePHP, genre genreCorps, prefixe []byte, contentType 
 		// La fenêtre a coupé le corps : le dernier segment peut être partiel.
 		p.Tronque = !complet
 		e.Corps = &p
+	case corpsXML:
+		e.DTDXML = prologueAvecDTD(prefixe)
 	case corpsDebut:
 		e.MagiqueDebut = magiqueNonRaster(prefixe)
 	}
@@ -197,6 +214,9 @@ func (e *EntreePHP) Signaux() map[string]int {
 	var m map[string]int
 	if e.Multipart != nil {
 		m = e.Multipart.Signaux()
+		if e.Multipart.LongueurFrontiere > 0 {
+			m["frontiere"] = e.Multipart.LongueurFrontiere // R-PHP4 : un compteur, jamais la frontière
+		}
 	}
 	for _, v := range e.valeursRequete("_from") {
 		if inv, bang := fromInvalideRoundcube(v); inv && bang {
