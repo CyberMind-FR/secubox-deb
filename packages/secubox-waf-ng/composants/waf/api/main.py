@@ -538,6 +538,7 @@ def _get_threat_stats() -> dict:
         state["today_iso"] = today
         state["threats_today"] = 0
         state["observed_today"] = 0   # detect-mode matches seen today (not blocked)
+        state["etats_today"] = 0      # lignes d'état (#3257), ni menace ni observation
 
     counters = state.get("counters", {})
     by_category = defaultdict(int, counters.get("by_category", {}))
@@ -578,6 +579,12 @@ def _get_threat_stats() -> dict:
     # only count the newest lines.
     observed_threats = counters.get("observed_threats", 0)
     observed_today = state.get("observed_today", 0)
+    # LIGNES D'ÉTAT (#3257, relecture finale M1) : multipart-*, body-inspect-*
+    # et toute gravité « audit » disent ce que le WAF a pu lire, pas qu'on
+    # l'attaque. Chaque pièce jointe de plus de 1 Mio écrit multipart-tronque :
+    # comptée en menace, elle gonflait le total et mettait l'usager en tête.
+    etats = counters.get("etats", 0)
+    etats_today = state.get("etats_today", 0)
     ip_countries: Dict[str, str] = dict(state.get("ip_countries", {}))
 
     log_path = Path(THREATS_LOG)
@@ -588,7 +595,7 @@ def _get_threat_stats() -> dict:
             top_ips, top_countries, top_vhosts, ip_countries,
             observed_threats, observed_today, noms_non_routes,
             par_origine, par_type, comptes_vises, leurres_touches, efficacite,
-        ), **_fenetre_24h(par_heure)}
+        ), "etats": etats, "etats_today": etats_today, **_fenetre_24h(par_heure)}
 
     geoip_reader = _get_geoip_reader()
     try:
@@ -604,7 +611,8 @@ def _get_threat_stats() -> dict:
         if ("noms_non_routes" not in counters or "par_origine" not in counters
                 or "comptes_vises" not in counters
                 or "efficacite" not in counters
-                or "par_heure" not in counters):
+                or "par_heure" not in counters
+                or "etats" not in counters):
             by_category.clear(); by_severity.clear(); top_ips.clear()
             top_countries.clear(); top_vhosts.clear(); noms_non_routes.clear()
             par_origine.clear(); par_type.clear()
@@ -620,6 +628,8 @@ def _get_threat_stats() -> dict:
             # cumule bien inferieur — un chiffre qui se contredisait lui-meme.
             threats_today = 0
             observed_today = 0
+            etats = 0
+            etats_today = 0
             byte_position = 0
 
         # Log rotation / truncation : the file shrank since last read.
@@ -631,6 +641,8 @@ def _get_threat_stats() -> dict:
             threats_today = 0
             observed_threats = 0
             observed_today = 0
+            etats = 0
+            etats_today = 0
             byte_position = 0
             ip_countries.clear()
 
@@ -640,6 +652,12 @@ def _get_threat_stats() -> dict:
                 for line in f:
                     try:
                         entry = json.loads(line.strip())
+
+                        if _est_ligne_d_etat(entry):
+                            etats += 1
+                            if entry.get("timestamp", "").startswith(today):
+                                etats_today += 1
+                            continue
 
                         # A "detect" record was MATCHED but let through — the
                         # request was NOT blocked. Counting it as a block would
@@ -716,10 +734,12 @@ def _get_threat_stats() -> dict:
         "today_iso": today,
         "threats_today": threats_today,
         "observed_today": observed_today,
+        "etats_today": etats_today,
         "byte_position": byte_position,
         "counters": {
             "total_threats": total_threats,
             "observed_threats": observed_threats,
+            "etats": etats,
             "by_category": dict(by_category),
             "by_severity": dict(by_severity),
             "top_ips": dict(top_ips),
@@ -742,7 +762,15 @@ def _get_threat_stats() -> dict:
         top_ips, top_countries, top_vhosts, ip_countries,
         observed_threats, observed_today, noms_non_routes,
         par_origine, par_type, comptes_vises, leurres_touches, efficacite,
-    ), **_fenetre_24h(par_heure)}
+    ), "etats": etats, "etats_today": etats_today, **_fenetre_24h(par_heure)}
+
+
+def _est_ligne_d_etat(entry: dict) -> bool:
+    """Ligne d'état du WAF (#3257) : multipart-*, body-inspect-*, ou gravité
+    « audit ». Comptée à part, jamais en menace ni en observation."""
+    cat = str(entry.get("category") or "")
+    return (cat.startswith(("multipart-", "body-inspect-"))
+            or str(entry.get("severity") or "") == "audit")
 
 
 def _finalize_stats(

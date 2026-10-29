@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "version": "1.5.2",
-    "updated": "2026-09-20",
-    "changelog": "1.5.0 : motifs tires du journal de menaces de gk2 (5152 requetes externes). WordPress (422 req.), prefixes /wordpress|/wp (273), Livewire (4), et l'evasion par encodage %2e/%2f (23). Zero faux positif mesure sur les chemins legitimes du parc. Le contournement par encodage appelle une NORMALISATION du chemin avant comparaison — ces motifs bouchent le trou visible, ils ne ferment pas la famille (double encodage, UTF-8 sur-long).",
+    "version": "1.6.0",
+    "updated": "2026-10-29",
+    "changelog": "1.6.0 : catégorie php2shell (CVE-2026-109618/109619), signatures structurelles en mode detect sur les corps multipart des vhosts PHP, seuils de profondeur et de parties provisoires. 1.5.0 : motifs tires du journal de menaces de gk2 (5152 requetes externes). WordPress (422 req.), prefixes /wordpress|/wp (273), Livewire (4), et l'evasion par encodage %2e/%2f (23). Zero faux positif mesure sur les chemins legitimes du parc. Le contournement par encodage appelle une NORMALISATION du chemin avant comparaison — ces motifs bouchent le trou visible, ils ne ferment pas la famille (double encodage, UTF-8 sur-long).",
     "sources": [
       "OWASP Top 10",
       "CERT advisories",
@@ -972,6 +972,83 @@
         }
       ],
       "_note": "graine ; maintenu à chaud par wafgen (secubox-cve-triage)"
+    },
+    "php2shell": {
+      "name": "PHP2Shell (CVE-2026-109618, CVE-2026-109619)",
+      "severity": "critical",
+      "mode": "detect",
+      "enabled": true,
+      "patterns": [],
+      "structural": [
+        {
+          "id": "php2shell-001",
+          "check": "upload_progress_fichiers",
+          "params": {
+            "fichiers_apres_min": 2
+          },
+          "severity": "critical",
+          "cve": "CVE-2026-109619",
+          "confidence": "haute",
+          "desc": "PHP_SESSION_UPLOAD_PROGRESS suivi d'au moins deux parties fichier (la seconde déclenche l'use-after-free)",
+          "source": [
+            "https://securitylabs.datadoghq.com/articles/php2shell-critical-vulnerabilities-in-php/",
+            "https://www.akamai.com/blog/security-research/understanding-php2shell-everything-you-need-to-know",
+            "https://research.splunk.com/web/e50cc2d0-7c71-4a2f-83dc-5ee6d4bb76a7/",
+            "https://security-tracker.debian.org/tracker/CVE-2026-109618"
+          ]
+        },
+        {
+          "id": "php2shell-002",
+          "check": "parties_nombre",
+          "params": {
+            "parties_min": 50
+          },
+          "severity": "high",
+          "cve": "CVE-2026-109618",
+          "confidence": "moyenne",
+          "seuil": "provisoire, non sourcé (2026-10-29)",
+          "desc": "Nombre anormal de parties (sources : 149 parties t[], ~900 parties en moins de 1 Mo)",
+          "source": [
+            "https://securitylabs.datadoghq.com/articles/php2shell-critical-vulnerabilities-in-php/",
+            "https://www.akamai.com/blog/security-research/understanding-php2shell-everything-you-need-to-know",
+            "https://research.splunk.com/web/e50cc2d0-7c71-4a2f-83dc-5ee6d4bb76a7/",
+            "https://security-tracker.debian.org/tracker/CVE-2026-109618"
+          ]
+        },
+        {
+          "id": "php2shell-003",
+          "check": "noms_profondeur",
+          "params": {
+            "profondeur_min": 12
+          },
+          "severity": "high",
+          "cve": "CVE-2026-109618",
+          "confidence": "moyenne",
+          "seuil": "provisoire, non sourcé (2026-10-29)",
+          "desc": "Noms de champ imbriqués profondément (files[R00001][a][a][a]…)",
+          "source": [
+            "https://securitylabs.datadoghq.com/articles/php2shell-critical-vulnerabilities-in-php/",
+            "https://www.akamai.com/blog/security-research/understanding-php2shell-everything-you-need-to-know",
+            "https://research.splunk.com/web/e50cc2d0-7c71-4a2f-83dc-5ee6d4bb76a7/",
+            "https://security-tracker.debian.org/tracker/CVE-2026-109618"
+          ]
+        },
+        {
+          "id": "php2shell-004",
+          "check": "filename_charge",
+          "params": {},
+          "severity": "critical",
+          "cve": "CVE-2026-109618, CVE-2026-109619",
+          "confidence": "haute",
+          "desc": "Nom de fichier contenant <?php ou |O: (Splunk)",
+          "source": [
+            "https://securitylabs.datadoghq.com/articles/php2shell-critical-vulnerabilities-in-php/",
+            "https://www.akamai.com/blog/security-research/understanding-php2shell-everything-you-need-to-know",
+            "https://research.splunk.com/web/e50cc2d0-7c71-4a2f-83dc-5ee6d4bb76a7/",
+            "https://security-tracker.debian.org/tracker/CVE-2026-109618"
+          ]
+        }
+      ]
     }
   }
 }

@@ -168,6 +168,12 @@ type Server struct {
 	// "body-inspect-truncated") so truncation events are operator-visible.
 	maxBodyInspect int64
 
+	// capturesMultipart borne les captures multipart simultanées (#3257) : un
+	// jeton par capture, pris sans attendre, rendu après l'analyse. main()
+	// pose capturesMultipartMax ; nil = pas de limite (tests). Plein : pas de
+	// capture, une ligne « multipart-concurrence », la requête suit son cours.
+	capturesMultipart chan struct{}
+
 	// trustedHosts is the set of hostnames that bypass WAF inspection entirely.
 	// Mirrors Python check_request whitelist (secubox_waf.py:761-763):
 	// git.gk2.secubox.in, git.secubox.in, admin.gk2.secubox.in, 10.100.0.1:9080.
@@ -190,7 +196,7 @@ type Server struct {
 	// N'APPRENAIT RIEN, et nulle part ailleurs.
 	//
 	// CE N'EST PAS UN CONTOURNEMENT DU WAF. La requete traverse toujours
-	// sbxwaf : routage, reveil a la demande, journal des menaces, CrowdSec.
+	// sbxwaf : routage, reveil a la demande, journal des menaces.
 	// Seule la lecture d'octets opaques est levee. Un `waf_bypass` HAProxy,
 	// lui, ferait sortir la requete de la chaine entiere.
 	skipBodyHosts map[string]struct{}
@@ -302,6 +308,9 @@ func (s *Server) handler() http.Handler {
 		// visit" than the 403/421 it stands in for — it must not be tallied
 		// into the visit-stats aggregator.
 		var viaWaker bool
+		// relaye : le corps a été confié au proxy (#3257). Posé juste avant les
+		// deux proxy.ServeHTTP ; la capture multipart n'analyse que dans ce cas.
+		var relaye bool
 		if s.visits != nil {
 			sr := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			w = sr
@@ -513,6 +522,43 @@ func (s *Server) handler() http.Handler {
 				}
 			}
 
+			// PHP2SHELL (#3257) : capture EN FLUX du multipart d'un vhost PHP.
+			// Placée AVANT la liste de contournement, et c'est délibéré : PHP
+			// analyse le corps avant d'exécuter le script, donc ncBypass, les
+			// chemins « statiques » et les hôtes de confiance ne protègent de
+			// rien ici (spécification § 8, point 3). TOUS les clients sont
+			// analysés, réseau local et 127.0.0.1 compris (ruling R12) : en
+			// detect l'exemption ne protégeait de rien (une adresse privée est
+			// journalisée « local » et n'est jamais émise vers actord), et elle
+			// aveuglait les vhosts .onion (Tor arrive en 127.0.0.1). Sans
+			// signature structurelle chargée et active, aucune capture (I2a) :
+			// `"enabled": false` est un vrai retour arrière à chaud.
+			// Aucun octet n'est retenu avant le relais : le proxy lit le corps,
+			// la capture en copie le début, l'analyse tombe dans le defer, après
+			// la réponse. Le corps reste « binaire » pour les regex.
+			if r.Body != nil && r.Body != http.NoBody && estMultipartPHP(r.Header.Get("Content-Type")) &&
+				s.vhostProfiles.estPHP(r.Host) && s.rules.aDesStructurelles() {
+				ua := r.Header.Get("User-Agent")
+				rm := requeteMultipart{ip: ip, host: r.Host, method: r.Method, path: rawPath,
+					ua: ua, contentType: r.Header.Get("Content-Type"),
+					ja4: s.lireJA4(r), tool: étiquetteOutil(ua, rawPath)}
+				if s.prendreCapture() {
+					capt := nouvelleCapture(r.Body, s.fenetreCapture(), r.ContentLength)
+					r.Body = capt
+					// L'analyse n'a lieu que si le corps a été confié au proxy
+					// (relaye, posé juste avant les deux proxy.ServeHTTP). Une
+					// sortie anticipée (403, ban par escalade, réponse du cache
+					// média) fige la capture et rend le jeton, sans analyse ni
+					// ligne : avec un Content-Type que corpsBinaire tient pour du
+					// texte, le chemin texte a pu en lire la fenêtre (lus > 0)
+					// alors que le backend n'a jamais rien reçu. La fermeture lit
+					// relaye au retour du gestionnaire, pas ici.
+					defer func() { s.analyserCaptureMultipart(capt, rm, relaye) }()
+				} else {
+					s.limiteCaptureAtteinte(rm)
+				}
+			}
+
 			// Static-asset PATHS are NOT fully skipped: a scanner probing a
 			// static-extension path (e.g. /global-protect/.../bootstrap.min.css on
 			// a box with no PAN-OS) must still be fingerprinted. On a static asset
@@ -572,16 +618,24 @@ func (s *Server) handler() http.Handler {
 					// upstream proxy receives every byte intact. PARITY GAP: only
 					// the first maxBodyInspect bytes are inspected; a payload
 					// appended after that offset is NOT detected (see docs/CUTOVER.md).
-					cap := s.maxBodyInspect
-					if cap <= 0 {
-						cap = defaultMaxBodyInspect
-					}
+					//
+					// UNE FENÊTRE PLUS UN OCTET (#3257, A2). Lire exactement la
+					// fenêtre ne distingue pas un corps qui la remplit pile d'un
+					// corps plus long : le premier était déclaré tronqué. L'octet
+					// de plus tranche. MatchDetail ne reçoit que la fenêtre ; le
+					// backend reçoit tout (ce qui a été lu, puis le reste).
+					// L'ERREUR DE LECTURE N'EST PLUS IGNORÉE : un client coupé
+					// donnait un préfixe partiel jugé complet, sans trace.
+					fenetre := s.fenetreCorps()
 					if r.Body != nil {
-						prefix, _ := io.ReadAll(io.LimitReader(r.Body, cap))
-						bodyBytes = prefix
-						r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(prefix), r.Body))
+						lu, errLecture := io.ReadAll(io.LimitReader(r.Body, fenetre+1))
+						r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(lu), r.Body))
+						bodyBytes = lu
+						if int64(len(bodyBytes)) > fenetre {
+							bodyBytes = bodyBytes[:fenetre]
+						}
 
-						if int64(len(prefix)) == cap {
+						if int64(len(lu)) > fenetre || errLecture != nil {
 							if s.threatLog != nil {
 								s.threatLog.Record(ThreatRecord{
 									ClientIP: ip,
@@ -594,8 +648,12 @@ func (s *Server) handler() http.Handler {
 									UA:       r.Header.Get("User-Agent"),
 								})
 							}
-							log.Printf("sbxwaf: AUDIT body-inspect-truncated host=%s path=%s ip=%s cap=%d",
-								r.Host, rawPath, ip, cap)
+							suite := ""
+							if errLecture != nil {
+								suite = " err=" + errLecture.Error()
+							}
+							log.Printf("sbxwaf: AUDIT body-inspect-truncated host=%s path=%s ip=%s cap=%d%s",
+								r.Host, rawPath, ip, fenetre, suite)
 						}
 					}
 				}
@@ -884,6 +942,7 @@ func (s *Server) handler() http.Handler {
 			// Simplest correct approach: let the real proxy handle the response
 			// (including its own ModifyResponse for WAF headers), then store
 			// whatever cw captured.
+			relaye = true // #3257 : le corps part au backend (capture multipart)
 			proxy.ServeHTTP(cw, r)
 
 			// After proxying: if the response was cacheable and we captured enough
@@ -904,6 +963,7 @@ func (s *Server) handler() http.Handler {
 			return
 		}
 
+		relaye = true // #3257 : le corps part au backend (capture multipart)
 		proxy.ServeHTTP(w, r)
 	})
 }
@@ -918,6 +978,16 @@ func (s *Server) lireJA4(r *http.Request) string {
 		return ""
 	}
 	return r.Header.Get(s.ja4Header)
+}
+
+// fenetreCorps est la fenêtre d'inspection du corps (--max-body-inspect), ou
+// defaultMaxBodyInspect si elle n'est pas posée. La capture multipart (#3257)
+// en prend le minimum avec 1 Mio (fenetreCapture).
+func (s *Server) fenetreCorps() int64 {
+	if s.maxBodyInspect > 0 {
+		return s.maxBodyInspect
+	}
+	return defaultMaxBodyInspect
 }
 
 // appliquerBan sanctionne une IP via le drop nft natif (#1070, phase B). Le WAF
@@ -1327,13 +1397,15 @@ func main() {
 	var profils *VhostProfiles
 	if *vhostProfiles != "" {
 		if p, err := chargerVhostProfiles(*vhostProfiles); err != nil {
-			log.Printf("sbxwaf: vhost-profiles ILLISIBLE (%s) — phase G désactivée : %v",
+			log.Printf("sbxwaf: vhost-profiles ILLISIBLE (%s) — phase G et capture PHP2Shell désactivées : %v",
 				*vhostProfiles, err)
 		} else {
 			profils = p
 			log.Printf("sbxwaf: vhost-profiles chargé → %s (phase G active)", *vhostProfiles)
 		}
 	}
+	// #3257 (I3) : ce que couvre la capture PHP2Shell, dit une fois au démarrage.
+	log.Print(ligneArmementPHP(profils))
 
 	// #1240 : le journal de menaces émet aussi (fire-and-forget) vers sbx-actord.
 	// Émission désactivable (--actor-socket ""); si actord est absent, les
@@ -1384,6 +1456,8 @@ func main() {
 		bannerOrigin:  strings.TrimSpace(*bannerOrigin),
 		// Body inspection cap (--max-body-inspect).
 		maxBodyInspect: *maxBodyInspectFlag,
+		// #3257 : au plus 16 captures multipart simultanées (16 fenêtres).
+		capturesMultipart: make(chan struct{}, capturesMultipartMax),
 		// Trusted-host skip (--waf-skip-hosts): mirrors Python whitelist.
 		trustedHosts: parseTrustedHosts(*wafSkipHosts),
 		// Meme analyseur : un hote est un hote, et deux facons de les lire
