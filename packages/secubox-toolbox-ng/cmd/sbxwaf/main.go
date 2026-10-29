@@ -539,16 +539,16 @@ func (s *Server) handler() http.Handler {
 			// la réponse. Le multipart reste « binaire » pour les regex.
 			if s.rules.aDesStructurelles() {
 				if service, php := s.vhostProfiles.servicePHP(r.Host); php {
-					ua := r.Header.Get("User-Agent")
+					// ja4 et tool : calculés à l'écriture d'une ligne seulement.
 					rm := requeteMultipart{ip: ip, host: r.Host, method: r.Method, path: rawPath,
-						ua: ua, contentType: r.Header.Get("Content-Type"),
-						ja4: s.lireJA4(r), tool: étiquetteOutil(ua, rawPath)}
+						ua: r.Header.Get("User-Agent"), contentType: r.Header.Get("Content-Type"),
+						entetes: r.Header}
 					e := s.nouvelleEntreePHP(r, service)
 					genre, plafond, jeton := s.corpsACapturer(r, e)
 					if jeton && !s.prendreCapture() {
 						// Sémaphore plein : pas de capture, une ligne d'état ;
 						// les contrôles sans corps restent évalués.
-						s.limiteCaptureAtteinte(rm)
+						s.limiteCaptureAtteinte(&rm)
 						genre, jeton = corpsAucun, false
 					}
 					var capt *captureCorps

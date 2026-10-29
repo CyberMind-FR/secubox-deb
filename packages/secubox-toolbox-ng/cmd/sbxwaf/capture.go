@@ -31,6 +31,7 @@ package main
 
 import (
 	"io"
+	"net/http"
 	"sync"
 )
 
@@ -129,8 +130,15 @@ func (c *captureCorps) figer() (prefixe []byte, lus int64, complet bool) {
 // requeteMultipart : ce que le journal retient de la requête. Ni requête
 // (query), ni corps. ja4 et tool (relecture finale M3) : les mêmes que sur une
 // ligne detect des regex, pour que la détection PHP2Shell arrive chez actord
-// avec l'empreinte qui relie l'acteur.
-type requeteMultipart struct{ ip, host, method, path, ua, contentType, ja4, tool string }
+// avec l'empreinte qui relie l'acteur. Ils ne sont calculés qu'à l'écriture
+// de la première ligne (relecture I2 de #3273), depuis ua et entetes : une
+// requête sans ligne ne paie ni les regex d'outil ni la lecture du JA4.
+type requeteMultipart struct {
+	ip, host, method, path, ua, contentType string
+	entetes                                 http.Header // en-têtes de la requête (lecture seule)
+	ja4, tool                               string
+	etiquetee                               bool // ja4 et tool calculés
+}
 
 // prendreCapture prend un jeton sans jamais attendre. nil = pas de limite.
 func (s *Server) prendreCapture() bool {
@@ -152,9 +160,17 @@ func (s *Server) rendreCapture() {
 }
 
 // journaliserMultipart complète rec avec la requête et l'écrit (nil-safe).
-func (s *Server) journaliserMultipart(rm requeteMultipart, rec ThreatRecord) {
+// ja4 et tool sont calculés ici, une fois par requête.
+func (s *Server) journaliserMultipart(rm *requeteMultipart, rec ThreatRecord) {
 	if s.threatLog == nil {
 		return
+	}
+	if !rm.etiquetee {
+		rm.etiquetee = true
+		if s.ja4Header != "" && rm.entetes != nil {
+			rm.ja4 = rm.entetes.Get(s.ja4Header)
+		}
+		rm.tool = etiquetteOutilPHP(rm.ua, rm.path)
 	}
 	rec.ClientIP, rec.Host, rec.Method, rec.Path, rec.UA = rm.ip, rm.host, rm.method, rm.path, rm.ua
 	rec.JA4, rec.Tool = rm.ja4, rm.tool
@@ -164,7 +180,7 @@ func (s *Server) journaliserMultipart(rm requeteMultipart, rec ThreatRecord) {
 // limiteCaptureAtteinte : plus de jeton libre, donc pas de capture. La ligne
 // porte la capacité réelle du sémaphore (16 en production). Sa catégorie n'est
 // pas multipart-limite, réservé au plafond de parties de l'analyseur (R10).
-func (s *Server) limiteCaptureAtteinte(rm requeteMultipart) {
+func (s *Server) limiteCaptureAtteinte(rm *requeteMultipart) {
 	s.journaliserMultipart(rm, ThreatRecord{
 		Category: "multipart-concurrence", Severity: "audit", Action: "multipart-concurrence",
 		Signaux: map[string]int{"concurrence": cap(s.capturesMultipart)},

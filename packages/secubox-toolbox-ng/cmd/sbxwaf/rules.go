@@ -138,6 +138,11 @@ var parametreRequis = map[string]string{
 	"filename_charge":          "",
 }
 
+// controlesRequete : contrôles qui lisent EntreePHP.Requete (#3273, relecture
+// I2). Sans signature chargée de ces contrôles, la requête n'est jamais lue.
+// Les tâches 3 à 7 y inscrivent leurs contrôles.
+var controlesRequete = map[string]bool{}
+
 // structurelJSON : champs inconnus ignores ; "source" (liste d'URL, ou tout
 // autre type) n'est volontairement pas declare, pour qu'un type inattendu ne
 // fasse jamais echouer le chargement.
@@ -635,6 +640,28 @@ func (s signatureStructurelle) visePHP(service string) bool {
 	for _, v := range s.services {
 		if v == service {
 			return true
+		}
+	}
+	return false
+}
+
+// litLaRequete dit si une signature structurelle chargee lit la chaine de
+// requete (controlesRequete). Nil-safe.
+func (r *Rules) litLaRequete() bool {
+	if r == nil {
+		return false
+	}
+	r.mu.RLock()
+	cur := r.current
+	r.mu.RUnlock()
+	if cur == nil {
+		return false
+	}
+	for _, c := range cur.cats {
+		for _, s := range c.data.structurelles {
+			if controlesRequete[s.check] {
+				return true
+			}
 		}
 	}
 	return false

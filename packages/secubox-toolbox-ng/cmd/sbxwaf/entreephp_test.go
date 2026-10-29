@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -70,6 +71,11 @@ func TestNouvelleEntreePHP(t *testing.T) {
 	if e.Service != "roundcube" || e.Methode != "GET" || e.Chemin != "/" {
 		t.Errorf("entrée : %+v", e)
 	}
+	// I2 : la requête est gardée brute avant le relais, lue après la réponse.
+	if e.requeteBrute != "_task=mail&.from=x" || e.Requete.Variables != 0 {
+		t.Errorf("avant le relais : requeteBrute=%q Variables=%d, attendu brute et non lue", e.requeteBrute, e.Requete.Variables)
+	}
+	e.lireRequete()
 	if v := e.Requete.Valeurs("_from"); len(v) != 1 || v[0] != "x" {
 		t.Errorf("Requete.Valeurs(_from) = %v, attendu [x]", v)
 	}
@@ -236,5 +242,62 @@ func TestRequetePHPJetonRenduSansCorps(t *testing.T) {
 	}
 	if ls := b.lignes(t); len(ls) != 0 {
 		t.Errorf("aucune ligne attendue, eu %v", ls)
+	}
+}
+
+// compterCrochets remplace les crochets d'étiquette d'outil et de lecture de
+// la requête par des compteurs, rétablis en fin de test.
+func compterCrochets(t *testing.T) (outil, requete *atomic.Int64) {
+	t.Helper()
+	outil, requete = new(atomic.Int64), new(atomic.Int64)
+	o, q := etiquetteOutilPHP, lireRequetePHP
+	etiquetteOutilPHP = func(ua, chemin string) string { outil.Add(1); return o(ua, chemin) }
+	lireRequetePHP = func(brut string) ParametresPHP { requete.Add(1); return q(brut) }
+	t.Cleanup(func() { etiquetteOutilPHP, lireRequetePHP = o, q })
+	return outil, requete
+}
+
+// I2 : un GET de vhost PHP sans corps ni ligne ne calcule ni l'étiquette
+// d'outil (21 regex) ni la lecture de la requête : aucune signature chargée
+// ne lit la requête, et aucune ligne n'est écrite.
+func TestRequetePHPGetSansLigneParesseux(t *testing.T) {
+	outil, requete := compterCrochets(t)
+	b, _ := bancJeton(t)
+	req := httptest.NewRequest(http.MethodGet, "http://nc.example/index.php?_task=mail&_from=x", nil)
+	req.Host = "nc.example"
+	req.RemoteAddr = ipPublique + ":40000"
+	req.Header.Set("User-Agent", "sqlmap/1.7.2#stable (https://sqlmap.org)")
+	rec := httptest.NewRecorder()
+	b.s.handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("statut %d, attendu 200", rec.Code)
+	}
+	if ls := lignesDe(b.lignes(t), ""); len(ls) != 0 {
+		t.Fatalf("aucune ligne attendue, eu %v", ls)
+	}
+	if n := outil.Load(); n != 0 {
+		t.Errorf("étiquetteOutil appelée %d fois, attendu 0", n)
+	}
+	if n := requete.Load(); n != 0 {
+		t.Errorf("requête lue %d fois, attendu 0", n)
+	}
+}
+
+// I2 : quand une signature chargée lit la requête, la lecture a lieu, une
+// fois, dans l'analyse (après la réponse).
+func TestRequetePHPRequeteLueApresSiUtile(t *testing.T) {
+	parametreRequis["test_requete"] = ""
+	controlesRequete["test_requete"] = true
+	t.Cleanup(func() { delete(parametreRequis, "test_requete"); delete(controlesRequete, "test_requete") })
+	_, requete := compterCrochets(t)
+	b, _ := bancJeton(t)
+	b.s.rules = LoadRules(ecrisRegles(t, `{"categories": {"t": {"mode": "detect",
+	  "structural": [{"id": "t-1", "check": "test_requete"}]}}}`))
+	req := httptest.NewRequest(http.MethodGet, "http://nc.example/index.php?_task=mail", nil)
+	req.Host = "nc.example"
+	req.RemoteAddr = ipPublique + ":40000"
+	b.s.handler().ServeHTTP(httptest.NewRecorder(), req)
+	if n := requete.Load(); n != 1 {
+		t.Errorf("requête lue %d fois, attendu 1", n)
 	}
 }

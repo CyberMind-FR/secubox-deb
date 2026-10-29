@@ -47,9 +47,11 @@ type EntreePHP struct {
 	Service   string             // servicePHP ; "" = hôte par motif : toutes les familles s'appliquent
 	Methode   string             // r.Method tel quel
 	Chemin    string             // r.URL.Path (décodé)
-	Requete   ParametresPHP      // r.URL.RawQuery
+	Requete   ParametresPHP      // r.URL.RawQuery, lue dans analyserRequetePHP
 	Corps     *ParametresPHP     // corps urlencoded capturé, sinon nil
 	Multipart *ResultatMultipart // corps multipart analysé, sinon nil
+
+	requeteBrute string // r.URL.RawQuery, lue par lireRequete après la réponse
 	// les tâches 3 à 7 ajoutent leurs champs ici
 }
 
@@ -64,16 +66,30 @@ func estUrlencodedPHP(contentType string) bool {
 	return ct == "application/x-www-form-urlencoded"
 }
 
-// nouvelleEntreePHP lit ce qui ne demande pas le corps : méthode, chemin et
-// chaîne de requête (au plus parametresRetenusMax paramètres retenus).
+// nouvelleEntreePHP retient ce qui ne demande pas le corps : méthode, chemin
+// et chaîne de requête BRUTE. Rien n'est lu ici, avant le relais (relecture
+// I2) : la lecture a lieu dans analyserRequetePHP, après la réponse.
 func (s *Server) nouvelleEntreePHP(r *http.Request, service string) *EntreePHP {
 	return &EntreePHP{
-		Service: service,
-		Methode: r.Method,
-		Chemin:  r.URL.Path,
-		Requete: lireParametresPHP(r.URL.RawQuery),
+		Service:      service,
+		Methode:      r.Method,
+		Chemin:       r.URL.Path,
+		requeteBrute: r.URL.RawQuery,
 	}
 }
+
+// lireRequete lit la chaîne de requête gardée brute (au plus
+// parametresRetenusMax paramètres retenus). Appelée par analyserRequetePHP,
+// sous son recover, après la réponse, et seulement si une signature chargée
+// lit la requête (relecture I2).
+func (e *EntreePHP) lireRequete() { e.Requete = lireRequetePHP(e.requeteBrute) }
+
+// Crochets de test (relecture I2) : les tests les remplacent par des
+// compteurs pour prouver qu'un GET sans ligne ne les appelle pas.
+var (
+	etiquetteOutilPHP = étiquetteOutil
+	lireRequetePHP    = lireParametresPHP
+)
 
 // corpsACapturer choisit le corps à capturer, son plafond, et s'il prend un
 // jeton du sémaphore. Sans corps : rien, et aucun jeton.
@@ -128,6 +144,7 @@ func (e *EntreePHP) Signaux() map[string]int {
 // mémoire couvre aussi les allocations de l'analyseur. Son defer est posé
 // avant tout le reste : il est rendu quoi qu'il arrive.
 func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *EntreePHP, rm requeteMultipart, relaye, jeton bool) {
+	rmp := &rm
 	if jeton {
 		defer s.rendreCapture()
 	}
@@ -155,6 +172,9 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 	if !relaye || s.rules == nil {
 		return
 	}
+	if s.rules.litLaRequete() {
+		e.lireRequete()
+	}
 	// lus == 0 : le proxy n'a rien lu (backend muet, erreur de connexion) ;
 	// les contrôles sans corps restent évalués.
 	if capt != nil && lus > 0 {
@@ -162,7 +182,7 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 	}
 	signaux := e.Signaux()
 	for _, d := range s.rules.EvaluerPHP(e) {
-		s.journaliserMultipart(rm, ThreatRecord{
+		s.journaliserMultipart(rmp, ThreatRecord{
 			Category: d.Categorie, Severity: d.Severity, RuleID: d.RuleID,
 			Action: "detect", Mode: modeDetect, Signaux: signaux,
 		})
@@ -171,7 +191,7 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 	}
 	if e.Multipart != nil && e.Multipart.Statut != MultipartAnalyse {
 		statut := "multipart-" + string(e.Multipart.Statut)
-		s.journaliserMultipart(rm, ThreatRecord{
+		s.journaliserMultipart(rmp, ThreatRecord{
 			Category: statut, Severity: "audit", Action: statut, Signaux: signaux,
 		})
 	}
