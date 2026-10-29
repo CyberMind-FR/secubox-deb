@@ -7,6 +7,7 @@
 
   /run/secubox/autoload.sock   public + administration (derrière nginx), 0660, groupe secubox
   10.64.0.1:8470 (TCP)         routes de box, UNIQUEMENT dans le tunnel WireGuard ; IP_FREEBIND : l'écoute démarre même si wg-autoload n'est pas encore monté
+Et une minuterie horaire : tunnel-sync (sudo, argv exact) réexporte la projection publique des pairs pour le pilotage (#3126, R37).
 
 La socket Unix est créée avec un umask 0007 : uvicorn ne la chmod donc jamais en 0666 (#2026).
 """
@@ -20,6 +21,7 @@ sys.path.insert(0, "/usr/lib/secubox/autoload")
 import uvicorn  # noqa: E402
 
 from api.asgi import construire  # noqa: E402
+from autoload import tunnel as T  # noqa: E402
 
 SOCK = "/run/secubox/autoload.sock"
 HUB = ("10.64.0.1", 8470)
@@ -55,7 +57,12 @@ async def main() -> None:
     options = dict(access_log=False, log_level="warning", lifespan="off")
     srv_pub = uvicorn.Server(uvicorn.Config(publique, **options))
     srv_tun = uvicorn.Server(uvicorn.Config(tunnel, **options))
-    await asyncio.gather(srv_pub.serve(sockets=[socket_unix()]), srv_tun.serve(sockets=[socket_tunnel()]))
+    # Minuterie horaire (#3126, R37) : tunnel-sync réexporte la projection publique (échéance passée → « echu »). Dans le service, pas d'unité de plus.
+    minuterie = asyncio.create_task(T.republier_periodiquement(T.appliquer_par_sudo))
+    try:
+        await asyncio.gather(srv_pub.serve(sockets=[socket_unix()]), srv_tun.serve(sockets=[socket_tunnel()]))
+    finally:
+        minuterie.cancel()
 
 
 if __name__ == "__main__":

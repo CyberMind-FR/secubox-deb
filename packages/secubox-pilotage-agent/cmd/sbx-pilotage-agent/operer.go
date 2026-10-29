@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: LicenseRef-CMSD-1.0
+// Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+// Source-Disclosed License — All rights reserved except as expressly granted.
+// See LICENCE-CMSD-1.0.md for terms.
+
+package main
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/releve"
+)
+
+const commandeMesurer = "Device.X_SECUBOX_Releve.Mesurer()"
+
+// sortieProc et sortieReleve : forme JSON du relevé (snake_case), la même pour
+// tous les champs ; releve.Releve ne porte pas de balises.
+type sortieProc struct {
+	Nom    string  `json:"nom"`
+	CPUPct float64 `json:"cpu_pct"`
+	PSSMo  int     `json:"pss_mo"`
+}
+
+type sortieReleve struct {
+	DureeS       int          `json:"duree_s"`
+	CPUPct       int          `json:"cpu_pct"`
+	CtxtParS     int64        `json:"ctxt_par_s"`
+	EcrituresKoS int64        `json:"ecritures_ko_s"`
+	MemDispoMo   int          `json:"mem_dispo_mo"`
+	SwapMo       int          `json:"swap_mo"`
+	Top          []sortieProc `json:"top"`
+}
+
+// attendreReel attend d ou l'annulation de ctx : un relevé de 300 s s'arrête
+// dès SIGTERM.
+func attendreReel(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// operateur relie l'OPERATE du canal à releve.Mesurer. attendre nil = attente réelle.
+func operateur(racine string, attendre func(context.Context, time.Duration) error) func(ctx context.Context, cmd string, args map[string]any) (any, error) {
+	if attendre == nil {
+		attendre = attendreReel
+	}
+	return func(ctx context.Context, cmd string, args map[string]any) (any, error) {
+		if cmd != commandeMesurer {
+			return nil, errors.New("commande refusée (L1 : lecture seule)")
+		}
+		duree := 60
+		switch v := args["duree_s"].(type) {
+		case int:
+			duree = v
+		case float64:
+			duree = int(v)
+		}
+		r, err := releve.Mesurer(ctx, racine, time.Duration(duree)*time.Second, attendre)
+		if err != nil {
+			return nil, err
+		}
+		s := sortieReleve{r.DureeS, r.CPUPct, r.CtxtParS, r.EcrituresKoS, r.MemDispoMo, r.SwapMo, make([]sortieProc, 0, len(r.Top))}
+		for _, p := range r.Top {
+			s.Top = append(s.Top, sortieProc{p.Nom, p.CPUPct, p.PSSMo})
+		}
+		return s, nil
+	}
+}

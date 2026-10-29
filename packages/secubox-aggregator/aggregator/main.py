@@ -216,7 +216,7 @@ RETIRED_MODULES = frozenset({
 # #3254 : system démarre des unités root (kiosque…) par polkit, accordé au seul secubox-system.service ; monté ici, l'appel venait de
 # secubox-aggregator.service et systemd répondait « Interactive authentication required » (gk2).
 DEDICATED_MODULES = frozenset({"lyrion", "exposure", "nettweak", "traffic", "qos",
-                               "admin", "cloner", "netdiag", "certs", "cookies", "mail", "nac", "netmodes", "system"})
+                               "admin", "cloner", "netdiag", "certs", "cookies", "mail", "nac", "netmodes", "system", "pilotage"})
 
 # Délai du relais vers une socket dédiée : DELAI_RELAIS, sauf pour un module dont une action dure davantage.
 # #3189 : netmodes — une application du mode routeur (Unbound, nginx -t, networkd, DHCP vérifié actif) peut prendre

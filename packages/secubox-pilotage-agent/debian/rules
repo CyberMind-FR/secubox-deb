@@ -1,0 +1,51 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# secubox-pilotage-agent : Go, bibliothèque standard seule, hors ligne, sans CGO.
+# L'architecture Go suit la cible Debian. Construire en natif (un -a croisé
+# buterait sur dh_strip).
+
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+GOARCH_amd64 = amd64
+GOARCH_arm64 = arm64
+GOARCH_armhf = arm
+GOARCH_i386 = 386
+export GOARCH = $(or $(GOARCH_$(DEB_HOST_ARCH)),$(DEB_HOST_ARCH))
+export GOARM = 7
+export GOOS = linux
+export CGO_ENABLED = 0
+export GOFLAGS = -trimpath
+export GOPROXY = off
+export GOTOOLCHAIN = local
+export GOCACHE = $(CURDIR)/_gocache
+export GOPATH  = $(CURDIR)/_gopath
+VERSION := $(shell dpkg-parsechangelog -S Version | cut -d- -f1)
+P = debian/secubox-pilotage-agent
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	go vet ./...
+	go build -ldflags "-s -w -X main.version=$(VERSION)" -o debian/sbx-pilotage-agent ./cmd/sbx-pilotage-agent
+
+override_dh_auto_test:
+	if [ "$(GOARCH)" = "$$(go env GOHOSTARCH)" ]; then go test ./...; else \
+	  echo "tests ignorés : construction croisée vers $(GOARCH)"; fi
+
+override_dh_auto_clean:
+	chmod -R u+w _gocache _gopath 2>/dev/null || true
+	rm -rf _gocache _gopath debian/sbx-pilotage-agent
+
+override_dh_auto_install:
+	install -D -m 0755 debian/sbx-pilotage-agent $(P)/usr/sbin/sbx-pilotage-agent
+	install -D -m 0644 systemd/secubox-pilotage-agent.service $(P)/lib/systemd/system/secubox-pilotage-agent.service
+	install -D -m 0644 apparmor/usr.sbin.sbx-pilotage-agent $(P)/etc/apparmor.d/usr.sbin.sbx-pilotage-agent
+	install -D -m 0644 conf/pilotage-agent.env $(P)/usr/share/doc/secubox-pilotage-agent/pilotage-agent.env.example
+
+# Activation faite par le postinst (profil AppArmor chargé avant le démarrage).
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-pilotage-agent --no-enable --no-start
