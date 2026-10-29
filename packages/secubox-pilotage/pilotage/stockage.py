@@ -34,6 +34,7 @@ class StockageMemoire:
         self.vus: list = []
         self.notifications: list = []
         self.resultats: list = []
+        self.par_cle: dict = {}  # Box.cle -> [(msg_id, reponse)]
 
     def vu(self, box: Box, infos: dict) -> None:
         self.vus.append((box, dict(infos)))
@@ -43,3 +44,4 @@ class StockageMemoire:
 
     def resultat(self, box: Box, msg_id: str, reponse: dict) -> None:
         self.resultats.append((box, msg_id, reponse))
+        self.par_cle.setdefault(box.cle, []).append((msg_id, reponse))

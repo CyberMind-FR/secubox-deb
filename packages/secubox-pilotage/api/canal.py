@@ -109,7 +109,7 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             attente = 0.0
         attente = min(max(attente, 0.0), attente_max)
         await asyncio.to_thread(stockage.vu, box, {})
-        lot = await files.attendre_requetes(box.nom, attente)
+        lot = await files.attendre_requetes(box.cle, attente)
         if not lot:
             return Response(status_code=204)
         return lot
@@ -126,7 +126,7 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
         for r in doc:
             ok = (isinstance(r, dict) and isinstance(r.get("msg_id"), str) and r.get("type") in TYPES_REPONSE
                   and isinstance(r.get("body"), dict))
-            if ok and files.livrer_reponse(box.nom, r):
+            if ok and files.livrer_reponse(box.cle, r):
                 await asyncio.to_thread(stockage.resultat, box, r["msg_id"], r)
             else:
                 ignore += 1

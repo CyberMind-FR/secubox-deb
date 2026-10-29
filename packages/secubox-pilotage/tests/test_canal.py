@@ -73,7 +73,7 @@ def test_canal_identite_seulement_par_x_real_ip():
 def test_canal_cloisonne_les_files():
     async def cas():
         app, files, stock, _ = monter(attente_max=0.05)
-        fut = files.deposer("gk5", {"type": "GET", "body": {"paths": ["Device."]}})
+        fut = files.deposer(GK5.cle, {"type": "GET", "body": {"paths": ["Device."]}})
         async with client(app, "10.64.0.9") as lgm, client(app, "10.10.0.10") as gk5:
             assert (await lgm.get("/canal/v1/requetes?attente=1")).status_code == 204
             r = await gk5.get("/canal/v1/requetes?attente=1")
@@ -152,9 +152,9 @@ def test_canal_refuse_un_corps_trop_gros():
 def test_canal_rejoue_l_echange_du_client_go():
     async def cas():
         app, files, stock, _ = monter(attente_max=0.05)
-        fut_get = files.deposer("gk5", {"type": "GET", "body": {"paths": ["Device.DeviceInfo."]}})
-        fut_dm = files.deposer("gk5", {"type": "GET_SUPPORTED_DM", "body": {}})
-        fut_op = files.deposer("gk5", {"type": "OPERATE", "body": {"command": "Device.X_SECUBOX_Releve.Mesurer()", "args": {"duree_s": 60}}})
+        fut_get = files.deposer(GK5.cle, {"type": "GET", "body": {"paths": ["Device.DeviceInfo."]}})
+        fut_dm = files.deposer(GK5.cle, {"type": "GET_SUPPORTED_DM", "body": {}})
+        fut_op = files.deposer(GK5.cle, {"type": "OPERATE", "body": {"command": "Device.X_SECUBOX_Releve.Mesurer()", "args": {"duree_s": 60}}})
         async with client(app) as c:
             r = await c.post("/canal/v1/bonjour", json={
                 "agent_version": "0.1.0", "boot_id": "b00t-1234", "modele": ["Device.DeviceInfo.", "Device.X_SECUBOX_Boot."]})
@@ -174,7 +174,7 @@ def test_canal_rejoue_l_echange_du_client_go():
             r = await c.post("/canal/v1/reponses", content=json.dumps(reps, separators=(",", ":")))
             assert r.status_code == 200 and r.json() == {"ignore": 0}
             # un ERROR clôt aussi la requête
-            fut_err = files.deposer("gk5", {"type": "GET", "body": {"paths": ["x"]}})
+            fut_err = files.deposer(GK5.cle, {"type": "GET", "body": {"paths": ["x"]}})
             [q] = (await c.get("/canal/v1/requetes?attente=1")).json()
             r = await c.post("/canal/v1/reponses", json=[{"msg_id": q["msg_id"], "type": "ERROR", "body": {"err": "chemin invalide"}}])
             assert r.json() == {"ignore": 0}
@@ -218,10 +218,10 @@ def test_canal_file_pleine_refus_propre_cote_depot():
     async def cas():
         files = Files(max_par_box=1)
         monter(files=files)
-        files.deposer("gk5", {"type": "GET", "body": {}})
+        files.deposer(GK5.cle, {"type": "GET", "body": {}})
         from pilotage.files import FileDeBoxPleine
         with pytest.raises(FileDeBoxPleine):
-            files.deposer("gk5", {"type": "GET", "body": {}})
+            files.deposer(GK5.cle, {"type": "GET", "body": {}})
     run(cas())
 
 
@@ -233,4 +233,23 @@ def test_canal_ne_prend_jamais_l_adresse_du_pair_socket():
         async with httpx.AsyncClient(transport=tr, base_url="http://m") as c:
             assert (await c.get("/canal/v1/requetes?attente=0")).status_code == 403
         assert audits
+    run(cas())
+
+
+def test_canal_meme_nom_sur_deux_reseaux_ne_partage_rien():
+    async def cas():
+        gk5_auto = Box("gk5", "10.64.0.20", "autoload", "lgm", "actif")
+        assert gk5_auto.cle == "autoload:gk5" and GK5.cle == "maillage:gk5"
+        connues = {**CONNUES, gk5_auto.adresse: gk5_auto}
+        files, stock = Files(), StockageMemoire()
+        app = creer_app_canal(files, connues.get, stock, lambda *a: None, attente_max=0.05)
+        fut = files.deposer(GK5.cle, {"type": "GET", "body": {"paths": ["Device."]}})
+        async with client(app, "10.64.0.20") as auto, client(app, "10.10.0.10") as mesh:
+            assert (await auto.get("/canal/v1/requetes?attente=1")).status_code == 204
+            [rq] = (await mesh.get("/canal/v1/requetes?attente=1")).json()
+            rep = [{"msg_id": rq["msg_id"], "type": "GET_RESP", "body": {}}]
+            assert (await auto.post("/canal/v1/reponses", json=rep)).json() == {"ignore": 1}
+            assert not fut.done() and stock.par_cle == {}
+            assert (await mesh.post("/canal/v1/reponses", json=rep)).json() == {"ignore": 0}
+        assert fut.done() and list(stock.par_cle) == ["maillage:gk5"]
     run(cas())

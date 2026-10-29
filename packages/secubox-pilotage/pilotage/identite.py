@@ -42,6 +42,11 @@ class Box:
     client: Optional[str]
     abonnement: Optional[str]
 
+    @property
+    def cle(self) -> str:
+        """Clé unique d'une box : files et tables internes sont indexées par elle, jamais par le nom seul."""
+        return f"{self.reseau}:{self.nom}"
+
 
 def _lire_json(chemin: Path):
     """JSON du fichier, ou None (absent, lien, non régulier, trop gros, illisible). Bornée : jamais plus de TAILLE_MAX + 1 octets lus."""
