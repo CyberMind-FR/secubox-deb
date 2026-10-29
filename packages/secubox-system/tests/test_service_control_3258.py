@@ -164,10 +164,48 @@ def test_delai_depasse_audite_en_echec(api, banc, monkeypatch):
     assert len(a) == 1 and a[0]["resultat"] == "echec"
 
 
-def test_la_route_get_passe_par_les_memes_gardes(api, banc):
-    with pytest.raises(HTTPException) as e:
-        asyncio.run(api.service_action_get(service="secubox-auth.service", action="stop", user={"sub": "admin"}))
-    assert e.value.status_code == 403 and banc["appels"] == []
+# ---------- revue I3 : plus d'action par GET ----------
+# GET /system/service_action EXÉCUTAIT l'action : le cookie de session (SameSite=None sous TLS) part avec une balise
+# <img> d'un site tiers, require_jwt l'accepte et la garde d'origine ne contrôle jamais un GET. Une image pouvait
+# démarrer secubox-systeme-eteindre.service.
+
+@pytest.fixture
+def client(api):
+    from fastapi.testclient import TestClient
+    api.app.dependency_overrides[api.require_jwt] = lambda: {"sub": "admin"}
+    yield TestClient(api.app)
+    api.app.dependency_overrides.clear()
+
+
+def test_get_service_action_rend_405_sans_rien_executer(client, banc):
+    r = client.get("/service_action", params={"service": "secubox-systeme-eteindre", "action": "start"})
+    assert r.status_code == 405
+    assert banc["appels"] == [] and lignes_audit(banc) == []
+
+
+def test_aucune_route_get_n_execute_une_action_de_service(api):
+    for route in api.app.routes:
+        if getattr(route, "path", "") in ("/service_action", "/service_control"):
+            assert "GET" not in route.methods, route.path
+
+
+def test_post_service_action_execute_et_audite(client, banc):
+    r = client.post("/service_action", json={"service": "secubox-dpi", "action": "restart"})
+    assert r.status_code == 200 and r.json()["success"] is True
+    assert banc["appels"] == [["systemctl", "restart", "--", "secubox-dpi.service"]]
+    a = lignes_audit(banc)
+    assert len(a) == 1 and a[0]["resultat"] == "ok" and a[0]["module"] == "system" and a[0]["acteur"] == "admin"
+
+
+def test_post_service_action_garde_la_protection(client, banc):
+    r = client.post("/service_action", json={"service": "secubox-auth", "action": "stop"})
+    assert r.status_code == 403 and banc["appels"] == []
+
+
+def test_la_vue_luci_system_hub_appelle_en_post():
+    js = (SYSTEM / "www" / "luci-static" / "resources" / "system-hub" / "api.js").read_text(encoding="utf-8")
+    assert "sbxFetch('/api/v1/system/service_action', params, 'POST')" in js
+    assert "sbxFetch('/api/v1/system/service_action', params, 'GET')" not in js
 
 
 # ---------- constantes ----------

@@ -8,6 +8,10 @@ secubox-system (1.11.4-1~trixie1) trixie; urgency=medium
     helper, secubox_core.unites, partagé avec service_control ; les unités Debian ne se
     pilotent plus depuis /admin/ ; la page affiche le refus d'une unité protégée. Dépend de
     secubox-core (>= 1.8.9~) (revue #3258, I2).
+  * /system/service_action n'exécute plus rien par GET (405) : un <img> d'un site tiers
+    pouvait éteindre la box (cookie SameSite=None, garde d'origine muette sur GET). POST
+    seulement, alias de service_control ; la vue LuCI system-hub appelle en POST
+    (revue #3258, I3).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 12:27:00 +0100
 

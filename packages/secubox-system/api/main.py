@@ -975,10 +975,13 @@ async def list_services(user=Depends(require_jwt)):
     return await services_list(user)
 
 
-@router.get("/service_action")
-async def service_action_get(service: str, action: str, user=Depends(require_jwt)):
-    """GET version of service control."""
-    return await service_control(ServiceAction(service=service, action=action), user)
+# Revue #3258 (I3) : ce GET EXÉCUTAIT l'action. Le cookie de session (SameSite=None sous TLS) part avec une balise <img>
+# d'un site tiers, require_jwt l'accepte et la garde d'origine ne contrôle jamais un GET : une image pouvait éteindre
+# la box. POST seulement (FastAPI rend 405 à un GET, sans rien exécuter), mêmes contrôles que service_control.
+@router.post("/service_action")
+async def service_action(req: ServiceAction, user=Depends(require_jwt)):
+    """Alias POST de service_control (vue LuCI system-hub)."""
+    return await service_control(req, user)
 
 
 @router.get("/get_logs")
