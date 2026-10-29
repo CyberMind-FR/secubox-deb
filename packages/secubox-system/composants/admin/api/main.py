@@ -218,9 +218,9 @@ def _get_service_status(name: str) -> Dict[str, Any]:
     try:
         unit = name if name.endswith('.service') else f"{name}.service"
 
-        # Get status
+        # Get status. « -- » (#3258, tour 3) : API root sur un GET, un nom « -H… » ou « --… » ne doit pas devenir une option.
         status_result = subprocess.run(
-            ["systemctl", "show", unit, "--property=LoadState,ActiveState,SubState,Description,MainPID,MemoryCurrent"],
+            ["systemctl", "show", "--property=LoadState,ActiveState,SubState,Description,MainPID,MemoryCurrent", "--", unit],
             capture_output=True,
             text=True,
             timeout=10

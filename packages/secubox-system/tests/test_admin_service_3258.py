@@ -222,3 +222,22 @@ def test_le_motif_part_apres_le_double_tiret(admin, lance, route, option):
 def test_sans_motif_le_message_par_defaut_part_apres_le_double_tiret(admin, lance, route, option):
     _puissance(admin, route, "")
     assert lance[0][:4] == ["shutdown", option, "--", "+0"] and not lance[0][4].startswith("-")
+
+
+# ---------- tour 3 : `systemctl show` de GET /admin/service/<nom> ----------
+# API root, sur un GET : `systemctl show <nom>` sans « -- » laissait un nom « -H… » ou « --… » devenir une option.
+
+@pytest.mark.parametrize("nom", ["--host=root@ailleurs", "-H root@ailleurs", "secubox-dpi"])
+def test_systemctl_show_place_le_nom_apres_le_double_tiret(admin, monkeypatch, nom):
+    appels = []
+
+    def run(argv, *a, **k):
+        appels.append(list(argv))
+        return subprocess.CompletedProcess(argv, 0, "LoadState=loaded\nActiveState=active\n", "")
+
+    monkeypatch.setattr(admin.subprocess, "run", run)
+    admin._get_service_status(nom)
+    show = [a for a in appels if a[:2] == ["systemctl", "show"]]
+    assert len(show) == 1
+    argv = show[0]
+    assert "--" in argv and argv[-1].startswith(nom) and argv.index("--") == len(argv) - 2, argv
