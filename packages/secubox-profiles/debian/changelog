@@ -1,3 +1,20 @@
+secubox-profiles (0.25.4-1~trixie1) trixie; urgency=medium
+
+  * Profil d'activation isp (audit R3) : une box Auto-Load « isp » échouait à l'étape
+    « application », faute de isp.toml. Décision du propriétaire du 2026-10-29 : isp =
+    lite + DPI (dpi, dpi-flowcap, ndpid et ses moteurs), Media Flow et la cabine numérique
+    (toolbox, toolbox-wg-restore, authwatch, toolbox-egress-proxy, interceptor) ; menus et
+    minuteries du DPI, de Media Flow et de la toolbox rétablis (ref #3258).
+  * isp coupe la minuterie streamlit-idle : son service porte Requires=secubox-streamlit
+    et relançait en 5 min le Streamlit que l'apply arrête ; un test vérifie qu'aucune
+    minuterie laissée active ne démarre un service arrêté (revue #3258, I1).
+  * streamlit-idle entre dans l'union des minuteries gérées : lite, minimal et
+    secure-gateway la coupent aussi (sinon l'apply la rallumait et Streamlit repartait) ;
+    secure-gateway coupe aussi metrics-publish (Wants=secubox-annuaire, qu'il arrête).
+    Test étendu à tous les profils livrés (tour 3 de #3258).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 12:55:00 +0100
+
 secubox-profiles (0.25.3-1~trixie1) trixie; urgency=medium
 
   * Profil lite sans unités toolbox (toolbox, toolbox-wg-restore, authwatch, toolbox-egress-proxy) ; menu toolbox

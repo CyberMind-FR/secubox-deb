@@ -41,6 +41,10 @@
         "^/status\\.php"
       ]
     },
+    "roundcube": {
+      "_note": "#3257 — webmail Roundcube (PHP, conteneur mail de gk2). Aucun chemin legitime declare : le service n'existe ici que pour figurer dans php_services.",
+      "legit_paths": []
+    },
     "livekit": {
       "_note": "#3193 — signalisation LiveKit de la Visio (secubox-meet). Le client ouvre /rtc/v1?access_token=<JWT> (WebSocket) puis /rtc/v1/validate?access_token=<JWT> : le jeton dans l'URL est le protocole LiveKit, pas une fuite. credential_harvest (cred-003) y est supprime sur CES SEULS chemins (le chemin est compare sans la requete) ; partout ailleurs, et sur tout autre vhost, un jeton dans l'URL reste une alerte. Ne jamais ajouter credential_harvest a la liste globale.",
       "legit_paths": [
@@ -56,6 +60,7 @@
     "git.gk2.secubox.in": "gitea",
     "peertube.gk2.secubox.in": "peertube",
     "nc.gk2.secubox.in": "nextcloud",
+    "webmail.gk2.secubox.in": "roundcube",
     "livekit.gk1.secubox.in": "livekit",
     "livekit.gk2.secubox.in": "livekit",
     "livekit.gk3.secubox.in": "livekit"
@@ -64,6 +69,25 @@
     "scanners",
     "recon_crawler",
     "product_absent_probes"
+  ],
+  "_comment_php_services": "#3257 — services dont les vhosts font tourner PHP. Seuls ces vhosts voient leurs envois multipart analyses pour PHP2Shell (mode detect : on journalise, on ne bloque pas). Les noms designent des entrees de 'services' ; un nom inconnu est ignore. Clef absente ou liste vide = aucun vhost PHP. Ajouter un vhost PHP = le rattacher a un service liste ici.",
+  "php_services": [
+    "nextcloud",
+    "roundcube"
+  ],
+  "_comment_php_hotes": "#3257 (R15) — motifs d'hote PHP : expressions regulieres (RE2) sur le nom d'hote normalise (minuscules, sans port). Un hote qui correspond est analyse comme un vhost PHP meme s'il n'est nomme dans 'vhosts' : alias nextcloud.*, box sans liste propre. Un motif invalide est rejete seul (journalise), le fichier reste valide. Relu au demarrage seulement : apres edition, 'systemctl restart secubox-waf-ng' puis verifier la ligne 'vhosts PHP armes'.",
+  "php_hotes": [
+    "^(nc|nextcloud|cloud)\\.",
+    "^(webmail|roundcube)\\."
+  ],
+  "_comment_proposes": "#3257 (R14) — tenu par waf-profils-fusion : noms et motifs DEJA proposes par le paquet. Un nom retire de php_services ou php_hotes par l'operateur et present ici n'est jamais remis. Ne pas editer a la main.",
+  "php_services_proposes": [
+    "nextcloud",
+    "roundcube"
+  ],
+  "php_hotes_proposes": [
+    "^(nc|nextcloud|cloud)\\.",
+    "^(webmail|roundcube)\\."
   ],
   "_comment_anti_robots": "#1216 — vhosts qui refusent les robots d'indexation (case a cocher dans le panneau Vhost). Ce n'est PAS de la detection de menace : aucun bannissement, aucun signalement, journalise a part sous action:robot. Motif : un robot parcourant les pages couteuses d'un service (les /compare de gitea reconstruisent un diff sur tout l'historique) le fait deborder de son plafond memoire. /robots.txt reste toujours servi, c'est par la qu'un robot conforme apprend a s'arreter. Liste vide ou clef absente = personne n'est filtre.",
   "anti_robots": [

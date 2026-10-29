@@ -1,10 +1,27 @@
-secubox-core (1.8.9-1~trixie1) trixie; urgency=medium
+secubox-core (1.8.10-1~trixie1) trixie; urgency=medium
 
   * snippets/secubox-proxy.conf : l'en-tête X-SecuBox-Pilotage-Tunnel est vidé sur tout
     proxy ; seul l'écouteur de tunnel du pilotage (10.10.0.1 / 10.64.0.1:8472) le pose, un
     client ne peut pas le forger (ref #3126).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:30:00 +0100
+
+secubox-core (1.8.9-1~trixie1) trixie; urgency=medium
+
+  * secubox_core.unites (revue #3258, I2) : LE contrôle partagé des routes qui pilotent une
+    unité (motif secubox-*.service de la règle polkit, unités protégées dont l'arrêt est
+    refusé, « systemctl <action> -- <unité> », une ligne JSON dans audit.log sans la sortie
+    de systemctl). Utilisé par /system/service_control et /admin/service/<nom>/<action>.
+  * Option avec_unites_debian, activée par /admin/ seulement : nginx, haproxy, unbound et
+    ssh restent démarrables, relançables et rechargeables, jamais arrêtées (403) ; toute
+    autre unité hors secubox-* reste refusée (ruling R2, #3258).
+  * Retrait de secubox_core.system.service_control (nom passé tel quel à systemctl, sans
+    motif, sans « -- », sans unité protégée ni audit) : aucun appelant dans le dépôt ;
+    secubox_core.unites.piloter est le seul chemin (#3258).
+  * unites.piloter : une OSError de systemctl (absent, fork impossible) est auditée et rendue
+    en 503 « systemctl indisponible », au lieu d'un 500 brut sans audit (#3258, tour 3).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 14:10:00 +0100
 
 secubox-core (1.8.8-1~trixie1) trixie; urgency=medium
 

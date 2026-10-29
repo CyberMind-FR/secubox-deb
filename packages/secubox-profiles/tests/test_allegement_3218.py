@@ -40,7 +40,8 @@ MENUS_HORS_DES_DEUX = {"ksm", "centers", "premier-pas-maitre", "dpi", "ndpid", "
 # Hors de minimal en plus (surplus mesurés), et le service portal (sans tête).
 HORS_MINIMAL = {"admin", "profiles", "routes", "netdiag", "network-anomaly", "premier-pas-console", "portal", "courbes"}
 MINUTEURS_MINIMAL = {"dpi-resume", "yt-dlp-refresh", "courbes-serie", "metrics-publish", "netstats",
-                     "network-anomaly-collecte", "profiles-releve", "cache-warm@jitsi", "cache-warm@metacatalog"}
+                     "network-anomaly-collecte", "profiles-releve", "cache-warm@jitsi", "cache-warm@metacatalog",
+                     "streamlit-idle"}   # #3258 : relancerait Streamlit (union des minuteurs_off)
 # Le socle que `profilectl diff --profile minimal` voulait ARRÊTER sur gk5, et ce qui reste.
 # Le sleeper en est sorti par la relecture (#3248) : livré désactivé, hors profil (test_relecture_3218).
 SOCLE = {"p2p", "annuaire", "users", "waker", "meshname", "net-fallback", "groupe-declares"}

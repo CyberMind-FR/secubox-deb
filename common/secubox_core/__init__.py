@@ -14,7 +14,7 @@ from .auth   import require_jwt, require_session, require_personne, require_lect
 from .config import get_config, get_board_info, reload_config
 from .logger import get_logger
 from .system import (
-    board_info, uptime, service_status, service_control,
+    board_info, uptime, service_status,
     disk_usage, load_average,
 )
 from .kiosk import (
@@ -38,7 +38,7 @@ __all__ = [
     # Logger
     "get_logger",
     # System
-    "board_info", "uptime", "service_status", "service_control",
+    "board_info", "uptime", "service_status",
     "disk_usage", "load_average",
     # Kiosk & Board Detection
     "kiosk_status", "kiosk_enable", "kiosk_disable",

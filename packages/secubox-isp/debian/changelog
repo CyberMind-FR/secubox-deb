@@ -1,3 +1,11 @@
+secubox-isp (1.7.1-1~trixie1) trixie; urgency=medium
+
+  * Description : distingue ce que le méta-paquet installe du profil d'activation isp
+    (décision du 2026-10-29 : FAI local, lite + nDPI, nDPId, NetFlow, cabine numérique ;
+    l'hébergement installé est arrêté par l'apply) (revue #3258, M10).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 14:30:00 +0100
+
 secubox-isp (1.7.0-1~trixie1) trixie; urgency=medium
 
   * Reprend secubox-toolbox, secubox-toolbox-ng et secubox-interceptor, sortis de lite (ref #3259) : isp porte
