@@ -18,10 +18,11 @@
 // Le verrou n'est JAMAIS tenu pendant la lecture de la source : un client lent
 // ne peut pas retenir figer(), donc la fin de la réponse.
 //
-// LA MÉMOIRE. Au plus capturesMultipartMax captures à la fois, chacune bornée
-// à min(--max-body-inspect, 1 Mio) (fenetreCapture) : 16 Mio au pire sur une
-// carte de 1 Go, même si l'inspection texte est relevée. Au-delà, pas de capture, une ligne « multipart-concurrence », et
-// la requête suit son cours.
+// LA MÉMOIRE. Au plus capturesMultipartMax captures multipart à la fois, et
+// capturesUrlencodedMax urlencoded (#3273, R-W7), chacune bornée à
+// min(--max-body-inspect, 1 Mio) (fenetreCapture) : 24 Mio au pire sur une
+// carte de 1 Go, même si l'inspection texte est relevée. Au-delà, pas de
+// capture, une ligne « capture-concurrence », et la requête suit son cours.
 //
 // SEUL UN CORPS RELAYÉ EST ANALYSÉ. Une requête bloquée (403, ban, réponse du
 // cache média) n'a jamais atteint le backend : même si un chemin texte en a lu
@@ -37,6 +38,12 @@ import (
 
 // capturesMultipartMax borne les captures simultanées (spécification § 8).
 const capturesMultipartMax = 16
+
+// capturesUrlencodedMax borne les captures urlencoded simultanées (#3273,
+// arbitrage R-W7) : un sémaphore À PART, pour qu'une rafale de POST de
+// formulaire (Roundcube, Nextcloud) ne prive jamais le multipart PHP2Shell de
+// ses 16 jetons. Au pire 8 Mio de plus. Seuil provisoire, non sourcé (2026-10-29).
+const capturesUrlencodedMax = 8
 
 // captureCorps relaie un corps de requête tel quel et en copie le début.
 // Il n'implémente volontairement pas io.WriterTo : io.Copy passerait alors à
@@ -140,22 +147,32 @@ type requeteMultipart struct {
 	etiquetee                               bool // ja4 et tool calculés
 }
 
-// prendreCapture prend un jeton sans jamais attendre. nil = pas de limite.
-func (s *Server) prendreCapture() bool {
-	if s.capturesMultipart == nil {
+// semaphoreCapture rend le sémaphore du genre de corps : urlencoded a le
+// sien (R-W7), tout autre genre à jeton prend celui du multipart.
+func (s *Server) semaphoreCapture(genre genreCorps) chan struct{} {
+	if genre == corpsUrlencoded {
+		return s.capturesUrlencoded
+	}
+	return s.capturesMultipart
+}
+
+// prendreCapture prend un jeton du genre sans jamais attendre. nil = pas de limite.
+func (s *Server) prendreCapture(genre genreCorps) bool {
+	sem := s.semaphoreCapture(genre)
+	if sem == nil {
 		return true
 	}
 	select {
-	case s.capturesMultipart <- struct{}{}:
+	case sem <- struct{}{}:
 		return true
 	default:
 		return false
 	}
 }
 
-func (s *Server) rendreCapture() {
-	if s.capturesMultipart != nil {
-		<-s.capturesMultipart
+func (s *Server) rendreCapture(genre genreCorps) {
+	if sem := s.semaphoreCapture(genre); sem != nil {
+		<-sem
 	}
 }
 
@@ -178,12 +195,15 @@ func (s *Server) journaliserMultipart(rm *requeteMultipart, rec ThreatRecord) {
 }
 
 // limiteCaptureAtteinte : plus de jeton libre, donc pas de capture. La ligne
-// porte la capacité réelle du sémaphore (16 en production). Sa catégorie n'est
-// pas multipart-limite, réservé au plafond de parties de l'analyseur (R10).
-func (s *Server) limiteCaptureAtteinte(rm *requeteMultipart) {
+// porte la capacité réelle du sémaphore plein (16 multipart, 8 urlencoded en
+// production) et son genre (signal genre : 1 = multipart, 2 = urlencoded,
+// valeurs de genreCorps). Catégorie capture-concurrence (R-W7) : elle couvre
+// les deux sémaphores ; multipart-limite reste réservé au plafond de parties
+// de l'analyseur (R10).
+func (s *Server) limiteCaptureAtteinte(rm *requeteMultipart, genre genreCorps) {
 	s.journaliserMultipart(rm, ThreatRecord{
-		Category: "multipart-concurrence", Severity: "audit", Action: "multipart-concurrence",
-		Signaux: map[string]int{"concurrence": cap(s.capturesMultipart)},
+		Category: "capture-concurrence", Severity: "audit", Action: "capture-concurrence",
+		Signaux: map[string]int{"concurrence": cap(s.semaphoreCapture(genre)), "genre": int(genre)},
 	})
 }
 

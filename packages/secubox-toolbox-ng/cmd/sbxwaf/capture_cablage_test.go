@@ -46,7 +46,7 @@ func grosEnvoi() []byte {
 }
 
 // I2a : sans signature structurelle chargée et active, aucune capture n'est
-// posée (le sémaphore plein le prouve : pas de ligne multipart-concurrence) et
+// posée (le sémaphore plein le prouve : pas de ligne capture-concurrence) et
 // aucune ligne multipart-* n'est écrite. Vrai au démarrage et après rechargement.
 func TestCaptureCategorieDesactiveeAucuneCapture(t *testing.T) {
 	for nom, corpus := range map[string]string{"desactivee": corpusPHPDesactive, "sans structurelle": corpusSansStructurelle} {
@@ -57,8 +57,9 @@ func TestCaptureCategorieDesactiveeAucuneCapture(t *testing.T) {
 			b.s.capturesMultipart = make(chan struct{}, 1)
 			b.s.capturesMultipart <- struct{}{}
 			b.envoyer("nc.example", "/upload", ipPublique, ctTest, bytes.NewReader(corpsExploit()))
-			if ls := lignesDe(b.lignes(t), "multipart-"); len(ls) != 0 {
-				t.Fatalf("aucune ligne multipart-* attendue, eu %v", ls)
+			ls := b.lignes(t)
+			if ls := append(lignesDe(ls, "multipart-"), lignesDe(ls, "capture-")...); len(ls) != 0 {
+				t.Fatalf("aucune ligne multipart-* ni capture-* attendue, eu %v", ls)
 			}
 		})
 	}
@@ -208,13 +209,13 @@ func TestCaptureLignesPortentJA4EtOutil(t *testing.T) {
 	envoyer(corpsExploit())
 	ls := b.lignes(t)
 	vues := map[string]bool{}
-	for _, l := range append(lignesDe(ls, "php2shell"), lignesDe(ls, "multipart-")...) {
+	for _, l := range append(append(lignesDe(ls, "php2shell"), lignesDe(ls, "multipart-")...), lignesDe(ls, "capture-")...) {
 		vues[l["category"].(string)] = true
 		if l["ja4"] != "t13d1516h2_8daaf6152771_02713d6af862" || l["tool"] != "sqlmap" {
 			t.Errorf("ligne sans JA4 ou sans outil : %v", l)
 		}
 	}
-	for _, c := range []string{"php2shell", "multipart-tronque", "multipart-concurrence"} {
+	for _, c := range []string{"php2shell", "multipart-tronque", "capture-concurrence"} {
 		if !vues[c] {
 			t.Errorf("ligne %s absente : %v", c, ls)
 		}

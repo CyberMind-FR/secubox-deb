@@ -240,8 +240,9 @@ pas de traduction d'encodage mbstring).
 - **Statuts de journal** (compteurs et booléens seulement, jamais le corps ni un
   nom de fichier ; `ja4` et `tool` comme une ligne detect) :
   `multipart-tronque` (fenêtre atteinte), `multipart-malforme`,
-  `multipart-limite` (plafond de 2000 parties) et `multipart-concurrence`
-  (sémaphore de 16 captures plein : l'envoi n'est pas analysé).
+  `multipart-limite` (plafond de 2000 parties) et `capture-concurrence`
+  (#3273 : sémaphore plein, 16 captures multipart ou 8 urlencoded, signal
+  `genre` 1 ou 2 : le corps n'est pas analysé).
 - **Gravité `audit`** : ces statuts portent la gravité `audit`, de valeur 10 (au
   lieu de 40) : ce sont des observations, pas des attaques. Le panneau les
   compte à part, en « états » (`etats`, `etats_today`), hors menaces.

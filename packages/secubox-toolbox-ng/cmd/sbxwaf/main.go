@@ -171,8 +171,11 @@ type Server struct {
 	// capturesMultipart borne les captures multipart simultanées (#3257) : un
 	// jeton par capture, pris sans attendre, rendu après l'analyse. main()
 	// pose capturesMultipartMax ; nil = pas de limite (tests). Plein : pas de
-	// capture, une ligne « multipart-concurrence », la requête suit son cours.
+	// capture, une ligne « capture-concurrence », la requête suit son cours.
 	capturesMultipart chan struct{}
+	// capturesUrlencoded : idem pour les corps urlencoded des vhosts PHP
+	// (#3273, R-W7), sémaphore à part de capturesUrlencodedMax jetons.
+	capturesUrlencoded chan struct{}
 
 	// trustedHosts is the set of hostnames that bypass WAF inspection entirely.
 	// Mirrors Python check_request whitelist (secubox_waf.py:761-763):
@@ -545,10 +548,10 @@ func (s *Server) handler() http.Handler {
 						entetes: r.Header}
 					e := s.nouvelleEntreePHP(r, service)
 					genre, plafond, jeton := s.corpsACapturer(r, e)
-					if jeton && !s.prendreCapture() {
+					if jeton && !s.prendreCapture(genre) {
 						// Sémaphore plein : pas de capture, une ligne d'état ;
 						// les contrôles sans corps restent évalués.
-						s.limiteCaptureAtteinte(&rm)
+						s.limiteCaptureAtteinte(&rm, genre)
 						genre, jeton = corpsAucun, false
 					}
 					var capt *captureCorps
@@ -1466,7 +1469,8 @@ func main() {
 		// Body inspection cap (--max-body-inspect).
 		maxBodyInspect: *maxBodyInspectFlag,
 		// #3257 : au plus 16 captures multipart simultanées (16 fenêtres).
-		capturesMultipart: make(chan struct{}, capturesMultipartMax),
+		capturesMultipart:  make(chan struct{}, capturesMultipartMax),
+		capturesUrlencoded: make(chan struct{}, capturesUrlencodedMax),
 		// Trusted-host skip (--waf-skip-hosts): mirrors Python whitelist.
 		trustedHosts: parseTrustedHosts(*wafSkipHosts),
 		// Meme analyseur : un hote est un hote, et deux facons de les lire

@@ -146,7 +146,7 @@ func (e *EntreePHP) Signaux() map[string]int {
 func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *EntreePHP, rm requeteMultipart, relaye, jeton bool) {
 	rmp := &rm
 	if jeton {
-		defer s.rendreCapture()
+		defer s.rendreCapture(genre)
 	}
 	// Une panique de l'analyse ne doit pas casser une réponse déjà relayée :
 	// en detect, l'analyse n'a pas le droit d'empêcher quoi que ce soit. Ce

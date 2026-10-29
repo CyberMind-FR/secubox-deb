@@ -176,12 +176,13 @@ func TestStructurelServicesMalTypeRejete(t *testing.T) {
 }
 
 // bancJeton : banc multipart dont le backend relève aussi le nombre de jetons
-// du sémaphore pris PENDANT le relais.
-func bancJeton(t *testing.T) (*bancMultipart, *int) {
+// pris PENDANT le relais, dans les deux sémaphores (multipart + urlencoded).
+// Capacités : 1 chacun.
+func bancJeton(t *testing.T) (*bancMultipart, *[2]int) {
 	t.Helper()
 	var b *bancMultipart
 	var mu sync.Mutex
-	pris := -1
+	pris := [2]int{-1, -1}
 	b = nouveauBancMultipart(t, func(w http.ResponseWriter, r *http.Request) {
 		h := sha256.New()
 		n, _ := io.Copy(h, r.Body)
@@ -191,11 +192,12 @@ func bancJeton(t *testing.T) (*bancMultipart, *int) {
 		b.appels++
 		b.mu.Unlock()
 		mu.Lock()
-		pris = len(b.s.capturesMultipart)
+		pris = [2]int{len(b.s.capturesMultipart), len(b.s.capturesUrlencoded)}
 		mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 	})
 	b.s.capturesMultipart = make(chan struct{}, 1)
+	b.s.capturesUrlencoded = make(chan struct{}, 1)
 	return b, &pris
 }
 
@@ -211,15 +213,15 @@ func TestRequetePHPUrlencodedRelayeIntact(t *testing.T) {
 			t.Fatalf("envoi %d : statut %d, attendu 200", i, rec.Code)
 		}
 		b.verifierRecu(t, corps)
-		if *pris != 1 {
-			t.Errorf("envoi %d : %d jeton(s) pris pendant le relais, attendu 1 (capture urlencoded)", i, *pris)
+		if *pris != [2]int{0, 1} {
+			t.Errorf("envoi %d : jetons pris pendant le relais (multipart, urlencoded) = %v, attendu [0 1]", i, *pris)
 		}
-		if n := len(b.s.capturesMultipart); n != 0 {
-			t.Fatalf("envoi %d : jeton non rendu (%d pris)", i, n)
+		if n, u := len(b.s.capturesMultipart), len(b.s.capturesUrlencoded); n+u != 0 {
+			t.Fatalf("envoi %d : jeton non rendu (%d multipart, %d urlencoded)", i, n, u)
 		}
 	}
-	if ls := lignesDe(b.lignes(t), "multipart-concurrence"); len(ls) != 0 {
-		t.Errorf("lignes multipart-concurrence inattendues : %v", ls)
+	if ls := lignesDe(b.lignes(t), "capture-concurrence"); len(ls) != 0 {
+		t.Errorf("lignes capture-concurrence inattendues : %v", ls)
 	}
 	b.verifierSansSanction(t, ipPublique)
 }
@@ -234,11 +236,11 @@ func TestRequetePHPJetonRenduSansCorps(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("statut %d, attendu 200", rec.Code)
 	}
-	if *pris != 0 {
-		t.Errorf("%d jeton(s) pris pendant le relais d'un GET, attendu 0", *pris)
+	if *pris != [2]int{0, 0} {
+		t.Errorf("jetons pris pendant le relais d'un GET : %v, attendu [0 0]", *pris)
 	}
-	if n := len(b.s.capturesMultipart); n != 0 {
-		t.Errorf("jeton pris après un GET (%d)", n)
+	if n, u := len(b.s.capturesMultipart), len(b.s.capturesUrlencoded); n+u != 0 {
+		t.Errorf("jeton pris après un GET (%d multipart, %d urlencoded)", n, u)
 	}
 	if ls := b.lignes(t); len(ls) != 0 {
 		t.Errorf("aucune ligne attendue, eu %v", ls)
@@ -300,4 +302,47 @@ func TestRequetePHPRequeteLueApresSiUtile(t *testing.T) {
 	if n := requete.Load(); n != 1 {
 		t.Errorf("requête lue %d fois, attendu 1", n)
 	}
+}
+
+// R-W7 : l'urlencoded a son propre sémaphore de 8 jetons. Saturé, il écrit une
+// ligne capture-concurrence de genre urlencoded, et un envoi PHP2Shell est
+// toujours capturé et détecté sur le sémaphore multipart.
+func TestCaptureUrlencodedSatureeMultipartCapture(t *testing.T) {
+	if capturesUrlencodedMax != 8 || capturesMultipartMax != 16 {
+		t.Fatalf("capacités %d/%d, attendu 8 (urlencoded) et 16 (multipart)", capturesUrlencodedMax, capturesMultipartMax)
+	}
+	b := nouveauBancMultipart(t, nil)
+	b.s.capturesMultipart = make(chan struct{}, capturesMultipartMax)
+	b.s.capturesUrlencoded = make(chan struct{}, capturesUrlencodedMax)
+	for i := 0; i < capturesUrlencodedMax; i++ {
+		b.s.capturesUrlencoded <- struct{}{} // huit envois urlencoded en cours
+	}
+	corpsU := []byte("_task=mail&_action=send")
+	b.envoyer("nc.example", "/index.php", ipPublique, "application/x-www-form-urlencoded", bytes.NewReader(corpsU))
+	b.verifierRecu(t, corpsU)
+	b.mu.Lock()
+	b.appels = 0
+	b.mu.Unlock()
+	corps := corpsExploit()
+	b.envoyer("nc.example", "/upload", ipPublique, ctTest, bytes.NewReader(corps))
+	b.verifierRecu(t, corps)
+
+	ls := b.lignes(t)
+	conc := lignesDe(ls, "capture-concurrence")
+	if len(conc) != 1 {
+		t.Fatalf("une ligne capture-concurrence attendue, eu %v", ls)
+	}
+	if g := signalLigne(t, conc[0], "genre"); g != int(corpsUrlencoded) {
+		t.Errorf("signals.genre = %d, attendu %d (urlencoded)", g, corpsUrlencoded)
+	}
+	if c := signalLigne(t, conc[0], "concurrence"); c != capturesUrlencodedMax {
+		t.Errorf("signals.concurrence = %d, attendu %d", c, capturesUrlencodedMax)
+	}
+	if d := lignesDe(ls, "php2shell"); len(d) != 1 {
+		t.Errorf("le multipart PHP2Shell n'a pas été capturé : %v", ls)
+	}
+	if n, u := len(b.s.capturesMultipart), len(b.s.capturesUrlencoded); n != 0 || u != capturesUrlencodedMax {
+		t.Errorf("jetons après coup : %d multipart, %d urlencoded ; attendu 0 et %d (ceux des autres)", n, u, capturesUrlencodedMax)
+	}
+	b.verifierSansSanction(t, ipPublique)
 }
