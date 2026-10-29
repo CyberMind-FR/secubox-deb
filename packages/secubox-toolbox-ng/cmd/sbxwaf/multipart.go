@@ -126,8 +126,10 @@ func boundaryPHP(contentType string) (string, bool) {
 // dispositionLaxiste lit name et filename d'un Content-Disposition. Le
 // découpage se fait sur `;` hors guillemets (un `;` entre guillemets reste dans
 // la valeur : sinon « filename="a;<?php" » échapperait à la détection).
-// `filename*` compte comme `filename`. aFilename vaut vrai même pour une valeur vide.
-func dispositionLaxiste(disp string) (nom string, filename string, aFilename bool) {
+// `filename*` compte comme `filename`. Tous les filename sont rendus (PHP n'en
+// retient qu'un, on ne sait pas lequel : le dernier ne doit pas masquer les autres) ;
+// la partie est un fichier dès que la liste n'est pas vide, même pour une valeur vide.
+func dispositionLaxiste(disp string) (nom string, filenames []string) {
 	for _, morceau := range decouperHorsGuillemets(disp) {
 		eq := strings.IndexByte(morceau, '=')
 		if eq < 0 {
@@ -142,10 +144,10 @@ func dispositionLaxiste(disp string) (nom string, filename string, aFilename boo
 		if cle == "name" {
 			nom = val
 		} else {
-			filename, aFilename = val, true
+			filenames = append(filenames, val)
 		}
 	}
-	return nom, filename, aFilename
+	return nom, filenames
 }
 
 // decouperHorsGuillemets coupe sur `;` sans tenir compte de ceux qui sont
@@ -198,9 +200,9 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 	if !ok {
 		return r
 	}
-	max := lim.PartiesMax
-	if max <= 0 {
-		max = partiesMaxDefaut
+	plafond := lim.PartiesMax
+	if plafond <= 0 {
+		plafond = partiesMaxDefaut
 	}
 	lecteur := multipart.NewReader(bytes.NewReader(prefixe), boundary)
 	for {
@@ -217,28 +219,30 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 			}
 			return r
 		}
-		if r.Parties >= max {
+		if r.Parties >= plafond {
 			r.Statut = MultipartLimite
 			return r
 		}
 		r.Parties++
-		nom, filename, fichier := dispositionLaxiste(p.Header.Get("Content-Disposition"))
+		nom, filenames := dispositionLaxiste(p.Header.Get("Content-Disposition"))
 		if n := len(nom); n > r.LongueurNomMax {
 			r.LongueurNomMax = n
 		}
 		if d := strings.Count(nom, "["); d > r.ProfondeurMax {
 			r.ProfondeurMax = d
 		}
-		if fichier {
+		if len(filenames) > 0 {
 			r.PartiesFichier++
 			if r.Progress {
 				r.FichiersApresProgress++
 			}
-			if strings.Contains(minusculesASCII(filename), "<?php") {
-				r.FilenamePHP = true
-			}
-			if strings.Contains(filename, "|O:") {
-				r.FilenameObjet = true
+			for _, filename := range filenames {
+				if strings.Contains(minusculesASCII(filename), "<?php") {
+					r.FilenamePHP = true
+				}
+				if strings.Contains(filename, "|O:") {
+					r.FilenameObjet = true
+				}
 			}
 		}
 		if nom == nomProgressPHP {
@@ -247,7 +251,12 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 	}
 }
 
-// frontiereFinaleVue cherche « --boundary-- » en début de ligne.
+// frontiereFinaleVue cherche « --boundary-- » en début de ligne. C'est une
+// recherche TEXTUELLE sur tout le préfixe, pas un suivi d'état du lecteur : elle
+// peut donc correspondre dans le contenu d'une partie ou dans un en-tête coupé.
+// C'est acceptable en mode detect : le pire effet est un statut « analyse » au
+// lieu de « tronque » sur un corps forgé, sans blocage ni ban ; les signatures
+// s'évaluent sur les compteurs quel que soit le statut.
 func frontiereFinaleVue(prefixe []byte, boundary string) bool {
 	fin := []byte("--" + boundary + "--")
 	return bytes.HasPrefix(prefixe, fin) || bytes.Contains(prefixe, append([]byte("\n"), fin...))

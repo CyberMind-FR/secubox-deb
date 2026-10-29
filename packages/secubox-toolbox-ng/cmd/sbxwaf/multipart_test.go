@@ -202,6 +202,74 @@ func TestAnalyserMultipartDispositionLaxiste(t *testing.T) {
 	}
 }
 
+// R6 : un `;` entre guillemets ne coupe pas la valeur.
+func TestAnalyserMultipartFilenamePointVirgule(t *testing.T) {
+	corps := []byte("--BND\r\nContent-Disposition: form-data; name=\"f\"; filename=\"a;<?php\"\r\n\r\nv\r\n--BND--\r\n")
+	r := analyserMultipart(corps, ctTest, false, LimitesMultipart{})
+	if !r.FilenamePHP {
+		t.Fatalf("filename avec ; non détecté : %+v", r)
+	}
+}
+
+// Plusieurs filename dans une disposition : aucun ne masque les autres.
+func TestAnalyserMultipartPlusieursFilename(t *testing.T) {
+	for _, disp := range []string{
+		`form-data; name="f"; filename="<?php"; filename="a"`,
+		`form-data; name="f"; filename*="<?php"; filename="a"`,
+	} {
+		corps := []byte("--BND\r\nContent-Disposition: " + disp + "\r\n\r\nv\r\n--BND--\r\n")
+		if r := analyserMultipart(corps, ctTest, false, LimitesMultipart{}); !r.FilenamePHP || r.PartiesFichier != 1 {
+			t.Errorf("%s : %+v", disp, r)
+		}
+	}
+	corps := []byte("--BND\r\nContent-Disposition: form-data; name=\"f\"; filename=\"a|O:1\"; filename=\"b\"\r\n\r\nv\r\n--BND--\r\n")
+	if r := analyserMultipart(corps, ctTest, false, LimitesMultipart{}); !r.FilenameObjet {
+		t.Errorf("|O: masqué : %+v", r)
+	}
+}
+
+// R5 : un io.EOF nu ne prouve pas un corps complet (coupure en plein en-tête).
+func TestAnalyserMultipartCoupureEnPleinEntete(t *testing.T) {
+	// Les deux coupures : la seconde (valeur de nom entamée) fait rendre par Go
+	// un io.EOF NU ; c'est elle qui prouve la condition sur la frontière finale.
+	for _, c := range []string{"--BND\r\nContent-Disp", "--BND\r\nContent-Disposition: form-data; name=\"fi"} {
+		coupe := []byte(c)
+		testerCoupure(t, coupe)
+	}
+}
+
+func testerCoupure(t *testing.T, coupe []byte) {
+	t.Helper()
+	if r := analyserMultipart(coupe, ctTest, true, LimitesMultipart{}); r.Statut != MultipartTronque {
+		t.Errorf("tronque=true : %+v", r)
+	}
+	if r := analyserMultipart(coupe, ctTest, false, LimitesMultipart{}); r.Statut != MultipartMalforme {
+		t.Errorf("tronque=false : %+v", r)
+	}
+}
+
+func TestAnalyserMultipartCoupureApresUnePartie(t *testing.T) {
+	deux := []byte("--BND\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\nx\r\n--BND\r\nContent-Disposition: form-data; name=\"b")
+	if r := analyserMultipart(deux, ctTest, true, LimitesMultipart{}); r.Statut != MultipartTronque || r.Parties != 1 {
+		t.Errorf("tronque : %+v", r)
+	}
+	if r := analyserMultipart(deux, ctTest, false, LimitesMultipart{}); r.Statut != MultipartMalforme {
+		t.Errorf("sans tronque : %+v", r)
+	}
+}
+
+// Corps complet : EOF après la frontière finale, avec ou sans fin de ligne.
+func TestAnalyserMultipartFrontiereFinale(t *testing.T) {
+	for _, corps := range []string{
+		"--BND\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\nx\r\n--BND--\r\n",
+		"--BND\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\nx\r\n--BND--",
+	} {
+		if r := analyserMultipart([]byte(corps), ctTest, true, LimitesMultipart{}); r.Statut != MultipartAnalyse || r.Parties != 1 {
+			t.Errorf("%q : %+v", corps, r)
+		}
+	}
+}
+
 func TestAnalyserMultipartEnvoiLegitime(t *testing.T) {
 	corps := corpsMultipart("BND", []partieTest{
 		{nom: "titre", contenu: "bonjour"},
@@ -237,6 +305,15 @@ func FuzzAnalyserMultipart(f *testing.F) {
 		case MultipartAnalyse, MultipartTronque, MultipartMalforme, MultipartLimite:
 		default:
 			t.Fatalf("statut inconnu %q", r.Statut)
+		}
+		if r.Statut == MultipartLimite && r.Parties != plafond {
+			t.Fatalf("limite : Parties %d != plafond %d", r.Parties, plafond)
+		}
+		if r.PartiesFichier > r.Parties || r.FichiersApresProgress > r.PartiesFichier {
+			t.Fatalf("compteurs incohérents : %+v", r)
+		}
+		if !r.Progress && r.FichiersApresProgress != 0 {
+			t.Fatalf("fichiers après progress sans progress : %+v", r)
 		}
 		_ = r.Signaux()
 	})
