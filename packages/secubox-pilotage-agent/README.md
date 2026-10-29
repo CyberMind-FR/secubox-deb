@@ -69,7 +69,9 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 | `maj-paquets` | `apt-get update` puis `upgrade` (jamais `dist-upgrade` ni `autoremove`), opération longue |
 | `service <demarrer\|arreter\|redemarrer> <unité>` | unité `^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`, jamais celle de l'agent (`secubox-pilotage-agent.*`, `@…` compris), ni une unité du ctl (`secubox-pilotage-op-*`), ni une unité inconnue de systemd, ni une unité protégée (`protected = true` dans `/etc/secubox/modules.d/*.toml`, ou socle : auth, aggregator, core, nginx, firewall, profiles, vault, autoload-agent) |
 | `renouveler-secrets` | `secubox-renouvelle-secrets --tout --oui`, opération longue |
-| `renommer <nom>` | argv validé ; `{"ok": false, "refus": "non disponible"}` jusqu'à la tâche 5 |
+| `renommer <nom>` | (tâche 5, D3) libellé DNS ; `/usr/sbin/secubox-renommer --acteur <acteur> <nom>` (secubox-core >= 1.8.10 : hosts, secubox.conf, hostnamectl, Avahi, audit `box_renommee`, retour arrière ; nom réservé ou pris au maillage refusé) dans une unité transitoire de PID 1 bornée (`RuntimeMaxSec=120`) : l'espace de montage de l'agent garde `/etc` en lecture seule. Box cliente : accord du détenteur |
+| `maillage-rejoindre` | (tâche 5, R-L2-2) **le code `sbxmesh1.…` est lu sur l'entrée standard**, jamais dans l'argv (un argv sudo apparaît dans `auth.log` et `ps`), forme et somme vérifiées, après l'ancre, les mains liées et la politique (`code invalide` sinon) ; box du propriétaire seulement (`box cliente : hors maillage`) ; le code attend dans l'état root (`rejoindre-<job>.code`, 0600), puis l'opération (`RuntimeMaxSec=300`) lance `_rejoindre <job>`. Jamais dans l'audit, les journaux, les sorties ni les notifications |
+| `_rejoindre <job>` | **interne, local seulement** (unité transitoire) : code repris une fois (retiré aussitôt, et par `_fin`), déposé dans `/var/lib/secubox/p2p/automesh.code` (root 0600, par descripteur, sans lien ; l'ancien `automesh.json` est retiré, son `debut` ferait expirer le code neuf), puis `systemctl start secubox-automesh.service` (secubox-p2p : `sbx-mesh-join`, jeton par l'environnement) ; audit `maillage_rejoindre {job, resultat}` ; échec ⇒ code 1, fin `echec` |
 | `support ouvrir <id> [<duree_min>]` | demande d'ouverture (maître) : support **en attente** de l'accord du détenteur, `{"ok": false, "refus": "consentement requis", "support": "<id>"}` ; `duree_min` entier de 1 à 240 (`^[1-9][0-9]{0,2}$`), 30 par défaut ; voir « Support » |
 | `support <accepter\|refuser> <id>` | **local seulement** : le détenteur ouvre la session (pour la durée demandée, comptée à partir de l'accord) ou la refuse |
 | `support fermer <id>` | permis **des deux côtés** (maître et détenteur) : ferme la session ouverte ou retire la demande en attente |
@@ -79,7 +81,7 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
 | `mains-liees <on\|off>` | **local seulement** : lie ou délie les mains du maître |
 | `etat-operation <job>` | lecture, permise depuis l'agent, **auditée** (`pilotage_lecture`) : `{"ok": true, "job", "etat": "en_cours"\|"termine"\|"inconnu"}`, avec `verbe`, `resultat` (`succes`/`echec`) et `rc` (entier, ou `null` pour un signal) une fois terminée. L'unité `--collect` est ramassée dès sa fin : `_fin` enregistre la fin dans l'état root (`fins.json`, 100 dernières) et ce verbe la relit |
 | `_fin <job>` | **interne, local seulement** : `ExecStopPost` de chaque unité transitoire ; audite la fin (`succes`/`echec`, code de sortie numérique) et libère l'opération exclusive |
-| `politique <action>` | `{"autorise", "consentement", "raison"}` ; actions `releve`, `reboot`, `maj-paquets`, `service-demarrer`, `service-arreter`, `service-redemarrer`, `renommer`, `renouveler-secrets`, `support-ouvrir`, `support-fermer` |
+| `politique <action>` | `{"autorise", "consentement", "raison"}` ; actions `releve`, `reboot`, `maj-paquets`, `service-demarrer`, `service-arreter`, `service-redemarrer`, `renommer`, `renouveler-secrets`, `support-ouvrir`, `support-fermer`, `maillage-rejoindre` |
 
 « Local seulement » : refusé (et audité) quand l'appel vient du compte de l'agent par sudo (`SUDO_USER`/`SUDO_UID`).
 
@@ -137,6 +139,7 @@ appel au ctl (paramètre manquant, inconnu, mal typé ou hors motif : refus, le 
 | `Device.X_SECUBOX_Packages.MettreAJour()` | aucun | `maj-paquets` |
 | `Device.X_SECUBOX_Services.Agir()` | `unite` (`^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`), `action` (`demarrer`/`start`, `arreter`/`stop`, `redemarrer`/`restart`) | `service <demarrer\|arreter\|redemarrer> <unite>` |
 | `Device.X_SECUBOX_Nom.Renommer()` | `nom` (libellé DNS) | `renommer <nom>` |
+| `Device.X_SECUBOX_Maillage.Rejoindre()` | `code` (`sbxmesh1.…`, forme et somme vérifiées ; jamais recopié dans un refus) | `maillage-rejoindre`, le code sur l'**entrée standard** du ctl (`sudo -n` avec une entrée, R-L2-2) ; sans lanceur à entrée, refus net |
 | `Device.X_SECUBOX_Secrets.Renouveler()` | aucun | `renouveler-secrets` |
 | `Device.X_SECUBOX_Support.Ouvrir()` | `id` (`^[a-z0-9][a-z0-9-]{0,63}$`), `duree_min` facultatif (entier 1 à 240, défaut 30) | `support ouvrir <id> <duree_min>` (rend `consentement` : accord du détenteur à donner en local) |
 | `Device.X_SECUBOX_Support.Fermer()` | `id` | `support fermer <id>` (rend `accepte` sans `job` : rien n'est suivi) |

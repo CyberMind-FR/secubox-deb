@@ -6,6 +6,8 @@
 // Package operations traite les Operate d'action de L2 (#3126) : liste fermée de commandes, paramètres validés
 // par l'agent AVANT tout appel, traduits en un argv du ctl root (`sudo -n /usr/sbin/secubox-pilotagectl …`), qui
 // reste la frontière de sécurité et décide de la politique (mains liées, box cliente, consentement, ancre).
+// Seul secret transmis : le code de Device.X_SECUBOX_Maillage.Rejoindre(), passé au ctl sur l'entrée standard
+// (Config.CtlEntree), jamais dans l'argv, un journal, une notification ou un refus (R-L2-2).
 //
 // La réponse est immédiate (OPERATE_RESP {etat, job, raison}) ; une opération acceptée est ensuite suivie par
 // `systemctl show` sans sudo (progression : lancée, en cours, terminée) puis, l'unité finie, par le verbe de
@@ -17,6 +19,9 @@ package operations
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -41,6 +46,7 @@ const (
 	CmdRenouveler    = "Device.X_SECUBOX_Secrets.Renouveler()"
 	CmdSupportOuvrir = "Device.X_SECUBOX_Support.Ouvrir()"
 	CmdSupportFermer = "Device.X_SECUBOX_Support.Fermer()"
+	CmdRejoindre     = "Device.X_SECUBOX_Maillage.Rejoindre()"
 )
 
 // RaisonAncre est le refus du ctl quand aucune ancre n'est vérifiée de son côté (R-L2-21) : le canal force alors
@@ -68,6 +74,8 @@ var (
 	reSupport = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 	reJob     = regexp.MustCompile(`^[0-9a-f]{16}$`)
 	reActeur  = regexp.MustCompile(`^[a-z_][a-z0-9_.-]{0,63}$`) // même motif que le ctl (R-L2-14)
+	// Code d'invitation du maillage (secubox-p2p api/automesh) : « sbxmesh1.<base64url>.<sha256[:4]> », 600 au plus.
+	reCode = regexp.MustCompile(`^sbxmesh1\.[A-Za-z0-9_-]{8,590}\.[0-9a-f]{4}$`)
 	// Le maître peut envoyer l'action en anglais (vocabulaire systemd) ou en français (verbes du ctl).
 	actionsService = map[string]string{"demarrer": "demarrer", "arreter": "arreter", "redemarrer": "redemarrer",
 		"start": "demarrer", "stop": "arreter", "restart": "redemarrer"}
@@ -94,9 +102,13 @@ type Reponse struct {
 // Lanceur exécute un programme fixé (sudo, systemctl) avec ces arguments et rend sa sortie standard.
 type Lanceur func(ctx context.Context, args ...string) ([]byte, error)
 
+// LanceurEntree est un Lanceur qui écrit entree sur l'entrée standard du programme.
+type LanceurEntree func(ctx context.Context, entree []byte, args ...string) ([]byte, error)
+
 // Config règle l'exécuteur.
 type Config struct {
 	Ctl         Lanceur                // sudo : reçoit "-n", CheminCtl, … (argv exact du sudoers)
+	CtlEntree   LanceurEntree          // sudo, avec une entrée standard (code de maillage-rejoindre, R-L2-2)
 	Systemctl   Lanceur                // systemctl sans sudo : lecture de l'état de l'unité (bus système)
 	Progression func(notifs.Evenement) // progression (non bloquante ; perdue si la file est pleine)
 	Resultats   *Boite                 // fins d'opération, gardées jusqu'à leur remise
@@ -151,7 +163,17 @@ func (e *Executeur) Operer(ctx context.Context, cmd string, args map[string]any,
 		argv = append(argv, "--acteur", acteur)
 	}
 	argv = append(argv, verbe...)
-	sortie, err := e.cfg.Ctl(ctx, argv...)
+	var sortie []byte
+	if entree := entreeDe(cmd, args); entree != nil {
+		// R-L2-2 : le code passe par l'entrée standard du ctl, jamais par l'argv (auth.log, ps) ; sans lanceur à
+		// entrée standard, refus net (aucun repli par l'argv).
+		if e.cfg.CtlEntree == nil {
+			return refus("action impossible (entrée standard indisponible)")
+		}
+		sortie, err = e.cfg.CtlEntree(ctx, entree, argv...)
+	} else {
+		sortie, err = e.cfg.Ctl(ctx, argv...)
+	}
 	if err != nil {
 		log.Printf("operations : %s : ctl en erreur (%v)", verbe[0], err)
 		return refus("action impossible (ctl en erreur)")
@@ -226,6 +248,14 @@ func Traduire(cmd string, args map[string]any) ([]string, error) {
 			return nil, err
 		}
 		return []string{"renommer", nom}, nil
+	case CmdRejoindre:
+		if err := cles([]string{"code"}); err != nil {
+			return nil, err
+		}
+		if c, _ := args["code"].(string); !codeValide(c) {
+			return nil, fmt.Errorf("argument invalide : code") // jamais recopié
+		}
+		return []string{"maillage-rejoindre"}, nil
 	case CmdSupportOuvrir, CmdSupportFermer:
 		op := "fermer"
 		var facultatives []string
@@ -254,6 +284,27 @@ func Traduire(cmd string, args map[string]any) ([]string, error) {
 		return []string{"support", op, id, strconv.Itoa(duree)}, nil
 	}
 	return nil, fmt.Errorf("commande inconnue")
+}
+
+// codeValide vérifie la forme et la somme de contrôle d'un code sbxmesh1 (le ctl les revérifie ; secubox-automesh
+// relit le JSON et le jeton).
+func codeValide(c string) bool {
+	if len(c) > 600 || !reCode.MatchString(c) {
+		return false
+	}
+	i := strings.LastIndexByte(c, '.')
+	charge, somme := c[len("sbxmesh1."):i], c[i+1:]
+	s := sha256.Sum256([]byte(charge))
+	return subtle.ConstantTimeCompare([]byte(hex.EncodeToString(s[:])[:4]), []byte(somme)) == 1
+}
+
+// entreeDe rend l'entrée standard du ctl pour une commande validée par Traduire (le code de Rejoindre), ou nil.
+func entreeDe(cmd string, args map[string]any) []byte {
+	if cmd != CmdRejoindre {
+		return nil
+	}
+	c, _ := args["code"].(string)
+	return []byte(c + "\n")
 }
 
 // lireReponse interprète la sortie du ctl : un seul objet JSON. {"ok": true, "job"} → accepte ;

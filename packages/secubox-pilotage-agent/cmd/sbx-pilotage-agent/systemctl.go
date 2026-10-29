@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/operations"
 )
 
 const (
@@ -41,10 +43,17 @@ func (p *plafond) Write(b []byte) (int, error) {
 }
 
 // lanceurSystemctl lance l'exécutable donné (systemctl, ou sudo vers le ctl pour l'ancre) avec les
-// arguments reçus. Au délai ou à l'annulation, tout le groupe du processus est
+// arguments reçus, entrée standard vide. Au délai ou à l'annulation, tout le groupe du processus est
 // tué (SIGKILL) : ni processus ni goroutine ne s'accumule. Environnement vide.
 func lanceurSystemctl(chemin string, delai time.Duration) func(ctx context.Context, args ...string) ([]byte, error) {
-	return func(ctx context.Context, args ...string) ([]byte, error) {
+	l := lanceurEntree(chemin, delai)
+	return func(ctx context.Context, args ...string) ([]byte, error) { return l(ctx, nil, args...) }
+}
+
+// lanceurEntree : même lanceur, entree écrite sur l'entrée standard du programme (R-L2-2 : le code de
+// maillage-rejoindre, jamais dans l'argv). L'entrée n'est ni journalisée ni recopiée dans une erreur.
+func lanceurEntree(chemin string, delai time.Duration) operations.LanceurEntree {
+	return func(ctx context.Context, entree []byte, args ...string) ([]byte, error) {
 		ctx, annule := context.WithTimeout(ctx, delai)
 		defer annule()
 		cmd := exec.CommandContext(ctx, chemin, args...)
@@ -57,6 +66,9 @@ func lanceurSystemctl(chemin string, delai time.Duration) func(ctx context.Conte
 			return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		}
 		cmd.WaitDelay = attenteFermeture
+		if entree != nil {
+			cmd.Stdin = bytes.NewReader(entree)
+		}
 		sortie := &plafond{max: maxSortieSystemctl}
 		cmd.Stdout = sortie
 		if err := cmd.Run(); err != nil {

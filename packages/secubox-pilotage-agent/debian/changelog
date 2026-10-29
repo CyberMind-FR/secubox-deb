@@ -98,6 +98,16 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
       « illisible », HandsTied notifié quand même. M4 : secubox-pilotage attend le ctl 60 s au plus. M5 : « op »
       audité pour un support. M3 : double notification documentée (le maître dédoublonne).
 
+  * L2 « Agir », tâche 5 (ref #3126, ref #3242) : renommage unique (D3) et retour au maillage (R-L2-2).
+    - ctl : `renommer <nom>` livré (R-L2-1 levé) — /usr/sbin/secubox-renommer --acteur <acteur> <nom> dans une
+      unité transitoire bornée (RuntimeMaxSec=120) ; box cliente : accord du détenteur. Depends secubox-core
+      (>= 1.8.10~).
+    - ctl : `maillage-rejoindre` (code sbxmesh1 lu sur l'entrée standard, jamais dans l'argv ; box du propriétaire
+      seulement) et `_rejoindre <job>` (interne : code déposé pour secubox-automesh, usage unique, audit
+      maillage_rejoindre sans le code). `politique maillage-rejoindre`.
+    - agent : Device.X_SECUBOX_Maillage.Rejoindre() {"code"} validé (forme, somme), passé au ctl par l'entrée
+      standard (lanceur à entrée, même délai et même mise à mort du groupe) ; le code ne figure ni dans un argv, ni
+      dans le journal, ni dans une notification, ni dans un refus.
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
 
 secubox-pilotage-agent (0.1.2-1~trixie1) trixie; urgency=medium

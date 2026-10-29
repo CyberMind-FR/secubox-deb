@@ -7,6 +7,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -93,8 +95,13 @@ func TestExecuteurDeLAgent(t *testing.T) {
 		vusSystemctl = append(vusSystemctl, strings.Join(args, " "))
 		return []byte("active\n"), nil
 	}
+	var vusEntree []string
+	ctlEntree := func(_ context.Context, entree []byte, args ...string) ([]byte, error) {
+		vusEntree = append(vusEntree, strings.Join(args, " ")+" <"+string(entree))
+		return []byte(`{"ok": false, "refus": "mains liées"}`), nil
+	}
 	ev := make(chan notifs.Evenement) // jamais lue : pleine d'emblée
-	ex, boite := executeur(ctl, sysctl, ev)
+	ex, boite := executeur(ctl, ctlEntree, sysctl, ev)
 	if boite == nil {
 		t.Fatal("boîte des résultats attendue")
 	}
@@ -113,5 +120,24 @@ func TestExecuteurDeLAgent(t *testing.T) {
 	ex.Attendre()
 	if len(vusCtl) != 1 || vusCtl[0] != "-n /usr/sbin/secubox-pilotagectl --acteur gk2admin reboot" {
 		t.Fatalf("argv du ctl inattendu : %v", vusCtl)
+	} // R-L2-2 : Rejoindre passe par le lanceur à entrée standard (le code), jamais par l'argv.
+	code := "sbxmesh1.eyJhIjoiMTkyLjE2OC4xLjEiLCJ0IjoiYWIifQ." + "0000"
+	ex.Operer(context.Background(), operations.CmdRejoindre, map[string]any{"code": code}, "")
+	if len(vusEntree) != 0 {
+		t.Fatalf("un code à somme fausse est refusé par l'agent : %v", vusEntree)
 	}
+	code = codeValidePourTest()
+	if r := ex.Operer(context.Background(), operations.CmdRejoindre, map[string]any{"code": code}, ""); r.Raison != "mains liées" {
+		t.Fatalf("refus du ctl attendu : %+v", r)
+	}
+	if len(vusEntree) != 1 || vusEntree[0] != "-n /usr/sbin/secubox-pilotagectl maillage-rejoindre <"+code+"\n" || len(vusCtl) != 1 {
+		t.Fatalf("appels inattendus : %v %v", vusEntree, vusCtl)
+	}
+}
+
+// codeValidePourTest : un code sbxmesh1 à somme juste (format de secubox-p2p api/automesh).
+func codeValidePourTest() string {
+	charge := "eyJhIjoiMTkyLjE2OC4xLjEiLCJ0IjoiYWIifQ"
+	s := sha256.Sum256([]byte(charge))
+	return "sbxmesh1." + charge + "." + hex.EncodeToString(s[:])[:4]
 }
