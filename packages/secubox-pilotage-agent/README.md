@@ -50,21 +50,27 @@ l'état « mains liées » qui fait foi vit donc hors de `/etc/secubox` (`/var/l
 
 ## Actions (L2) : `secubox-pilotagectl`
 
-L'agent ne devient jamais root : sa seule voie d'action est `sudo -n /usr/sbin/secubox-pilotagectl <verbe> …`
+L'agent ne devient jamais root : sa seule voie d'action est
+`sudo -n /usr/sbin/secubox-pilotagectl [--acteur <login>] <verbe> …`
 (`/etc/sudoers.d/secubox-pilotage-agent` : `secubox-pilotage-agent ALL=(root) NOPASSWD: /usr/sbin/secubox-pilotagectl *`,
 rien d'autre). Toute la validation vit dans le ctl (patron `secubox-appstorectl`) ; la politique est décidée sur la box.
 Sortie : une ligne JSON ; code 0 pour une réussite (`{"ok": true, "job": "<id>"}`) ou un refus
 (`{"ok": false, "refus": "…"}`), 2 pour un argv invalide, 1 pour une erreur (état non fiable, audit impossible).
 
+`--acteur <login>` (facultatif, seulement en tête, `^[a-z_][a-z0-9_.-]{0,63}$`) : l'administrateur du maître à
+l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un appel de l'agent est
+`secubox-pilotage-agent`.
+
 | Verbe | Effet |
 |---|---|
 | `reboot` | redémarrage, différé de 5 s (la réponse part d'abord) |
 | `maj-paquets` | `apt-get update` puis `upgrade` (jamais `dist-upgrade` ni `autoremove`), opération longue |
-| `service <demarrer\|arreter\|redemarrer> <unité>` | unité `^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`, jamais celle de l'agent ni une unité protégée (`protected = true` dans `/etc/secubox/modules.d/*.toml`, ou socle : auth, aggregator, core, nginx, firewall, profiles, vault, autoload-agent) |
+| `service <demarrer\|arreter\|redemarrer> <unité>` | unité `^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`, jamais celle de l'agent (`secubox-pilotage-agent.*`, `@…` compris), ni une unité du ctl (`secubox-pilotage-op-*`), ni une unité inconnue de systemd, ni une unité protégée (`protected = true` dans `/etc/secubox/modules.d/*.toml`, ou socle : auth, aggregator, core, nginx, firewall, profiles, vault, autoload-agent) |
 | `renouveler-secrets` | `secubox-renouvelle-secrets --tout --oui`, opération longue |
 | `renommer <nom>`, `support <ouvrir\|fermer> <id>`, `ancre-verifier` | argv validé ; `{"ok": false, "refus": "non disponible"}` jusqu'aux tâches 5, 4 et 2 |
 | `consentement <accepter\|refuser> <id>` | **local seulement** : décision du détenteur sur un consentement en attente |
 | `mains-liees <on\|off>` | **local seulement** : lie ou délie les mains du maître |
+| `_fin <job>` | **interne, local seulement** : `ExecStopPost` de chaque unité transitoire ; audite la fin (`succes`/`echec`, code de sortie numérique) et libère l'opération exclusive |
 | `politique <action>` | `{"autorise", "consentement", "raison"}` ; actions `releve`, `reboot`, `maj-paquets`, `service-demarrer`, `service-arreter`, `service-redemarrer`, `renommer`, `renouveler-secrets`, `support-ouvrir`, `support-fermer` |
 
 « Local seulement » : refusé (et audité) quand l'appel vient du compte de l'agent par sudo (`SUDO_USER`/`SUDO_UID`).
@@ -73,14 +79,17 @@ Sortie : une ligne JSON ; code 0 pour une réussite (`{"ok": true, "job": "<id>"
   projection `/etc/secubox/pilotage/mains-liees` (root, 0644, posée par descripteur) ; l'un OU l'autre lie les mains.
   Les poser annule les consentements en attente ou acceptés non consommés.
 - **Box cliente** (pas d'interface `wg-mesh` : reliée par `wg-autoload`, ou sans maillage) : `reboot`, `maj-paquets`,
-  `service arreter|redemarrer`, `renommer`, `renouveler-secrets` exigent l'accord du détenteur. La demande crée un
+  `service arreter|redemarrer`, `renommer`, `renouveler-secrets`, et toute action sur une unité gabarit (`@`), même
+  `demarrer`, exigent l'accord du détenteur. La demande crée un
   consentement en attente, valable 24 h (`{"ok": false, "refus": "consentement requis", "consentement": "<id>"}`) ;
   le détenteur l'accepte ou le refuse en local ; la demande suivante identique consomme l'accord, une fois.
-- **Une seule opération longue à la fois** (`maj-paquets`, `renouveler-secrets` ; un `reboot` attend aussi) : sinon
+- **Une seule opération longue à la fois** (`maj-paquets`, `renouveler-secrets`, et `reboot` pendant ses 5 s de
+  délai), libérée par `_fin` ou quand l'unité a disparu : sinon
   `{"ok": false, "refus": "opération en cours", "job": "<id>"}`.
 - Une demande locale (root sur la box, hors de l'agent) n'est soumise ni aux mains liées ni au consentement.
-- Chaque action part par `systemd-run --collect --unit=secubox-pilotage-op-<job>`, sans délai imposé ; la progression
-  se lit dans le journal de l'unité.
+- Chaque action part par `systemd-run --collect --unit=secubox-pilotage-op-<job>
+  --property=ExecStopPost=/usr/sbin/secubox-pilotagectl _fin <job>`, sans délai imposé ; la progression se lit dans le
+  journal de l'unité, la fin est auditée (`pilotage_resultat`, `succes`/`echec`).
 - **Audit** : une ligne JSON par demande, refus, consentement et résultat dans `/var/log/secubox/audit.log` (ouvert sans
   suivre de lien ; identifiants seulement, jamais une valeur secrète ni l'argv refusé). `politique` n'est pas auditée.
 - État root `0700` `/var/lib/secubox-pilotagectl` (tmpfiles.d du paquet) : consentements, mains liées, opération en
@@ -97,7 +106,7 @@ des interfaces ; ni `inet6` ni écoute ; `/usr/bin/sudo Ux` seul passage privil�
 
 Exception écrite (`.claude/RULES-CODE.md`) : `NoNewPrivileges=no`, seulement pour sudo vers `secubox-pilotagectl` ; les
 options qui imposent NoNewPrivileges par seccomp sont absentes de l'unité ; `CapabilityBoundingSet` borné à ce que sudo
-et le ctl demandent ; le ctl root hérite de l'espace de montage, d'où `ReadWritePaths=/var/log/secubox
+et le ctl demandent (dont `CAP_CHOWN` : création d'`audit.log` au compte `secubox`) ; le ctl root hérite de l'espace de montage, d'où `ReadWritePaths=/var/log/secubox
 -/var/lib/secubox-pilotagectl`.
 
 ## Développement

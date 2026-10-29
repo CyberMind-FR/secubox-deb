@@ -21,18 +21,27 @@ AGENT = "secubox-pilotage-agent"
 DELAI = 60
 
 FAUX_SYSTEMD_RUN = """#!/bin/sh
-# faux systemd-run : note l'argv (une ligne), puis « démarre » l'unité nommée par --unit=
+# faux systemd-run : note l'argv (une ligne), puis « démarre » l'unité nommée par --unit= (échoue si $FAUX_RUN_ECHEC)
+[ -z "$FAUX_RUN_ECHEC" ] || exit 1
 printf '%s\\n' "$*" >> "$FAUX_LANCES"
+# avec --on-active=, comme le vrai : seule la minuterie est active pendant le délai, le service ne l'est pas encore
+suffixe=service
+for a in "$@"; do case "$a" in --on-active=*) suffixe=timer ;; esac; done
 for a in "$@"; do
-  case "$a" in --unit=*) printf '%s.service\\n' "${a#--unit=}" >> "$FAUX_ACTIFS" ;; esac
+  case "$a" in --unit=*) printf '%s.%s\\n' "${a#--unit=}" "$suffixe" >> "$FAUX_ACTIFS" ;; esac
 done
 exit 0
 """
 
 FAUX_SYSTEMCTL = """#!/bin/sh
-# faux systemctl : « show -p ActiveState --value <unité> » → active si l'unité figure dans $FAUX_ACTIFS
+# faux systemctl : « show -p ActiveState --value <unité> » → active si l'unité figure dans $FAUX_ACTIFS ;
+# « show -p LoadState --value -- <unité> » → not-found si elle figure dans $FAUX_ABSENTES, sinon loaded
 unite=""
 for a in "$@"; do unite="$a"; done
+if [ "$1" = show ] && [ "$3" = LoadState ]; then
+  if grep -qx "$unite" "$FAUX_ABSENTES" 2>/dev/null; then echo not-found; else echo loaded; fi
+  exit 0
+fi
 if [ "$1" = show ]; then
   if grep -qx "$unite" "$FAUX_ACTIFS" 2>/dev/null; then echo active; else echo inactive; fi
   exit 0
@@ -58,9 +67,11 @@ class Banc:
             (faux / nom).chmod(0o755)
         self.lances = tmp_path / "lances"
         self.actifs = tmp_path / "actifs"
+        self.absentes = tmp_path / "absentes"
         self.env = {k: v for k, v in os.environ.items() if not k.startswith(("SUDO_", "SBX_"))}
         self.env.update(PATH=f"{faux}:/usr/bin:/bin", SBX_RACINE=str(self.r),
-                        FAUX_LANCES=str(self.lances), FAUX_ACTIFS=str(self.actifs))
+                        FAUX_LANCES=str(self.lances), FAUX_ACTIFS=str(self.actifs),
+                        FAUX_ABSENTES=str(self.absentes))
 
     def cliente(self):
         (self.r / "sys/class/net/wg-mesh").rmdir()
@@ -128,6 +139,16 @@ def test_argv_invalide_rend_2(banc):
         ["politique"],
         ["politique", "tout-casser"],
         ["renouveler-secrets", "--machine-id"],
+        ["--acteur"],
+        ["--acteur", "gk2admin"],
+        ["--acteur", "Admin", "reboot"],
+        ["--acteur", "9admin", "reboot"],
+        ["--acteur", "a" * 65, "reboot"],
+        ["--acteur", "x", "--acteur", "y", "reboot"],
+        ["reboot", "--acteur", "x"],
+        ["_fin"],
+        ["_fin", "../x"],
+        ["_fin", "0123456789abcdef", "en-trop"],
     ]
     for argv in invalides:
         rc, sortie, p = banc.run(*argv, agent=True)
@@ -168,10 +189,25 @@ def test_unite_protegee_refusee(banc):
 
 
 def test_agent_ne_se_coupe_pas(banc):
-    for verbe in ("arreter", "redemarrer", "demarrer"):
-        rc, sortie, _ = banc.run("service", verbe, "secubox-pilotage-agent.service", agent=True)
-        assert rc == 0 and sortie == {"ok": False, "refus": "unité de l'agent"}, verbe
+    for unite in ("secubox-pilotage-agent.service", "secubox-pilotage-agent.timer", "secubox-pilotage-agent@x.service"):
+        for verbe in ("arreter", "redemarrer", "demarrer"):
+            rc, sortie, _ = banc.run("service", verbe, unite, agent=True)
+            assert rc == 0 and sortie == {"ok": False, "refus": "unité de l'agent"}, (verbe, unite)
     assert banc.lancements() == []
+
+
+def test_unites_du_ctl_refusees(banc):
+    """I2 : jamais une unité secubox-pilotage-op-* (couper l'unité d'un apt en cours laisserait dpkg à moitié configuré)."""
+    rc, s, _ = banc.run("maj-paquets", agent=True)
+    job = s["job"]
+    for unite in (f"secubox-pilotage-op-{job}.service", "secubox-pilotage-op-x.timer", "secubox-pilotage-op-a@b.service",
+                  "secubox-pilotage-op-.service"):
+        for verbe in ("arreter", "redemarrer", "demarrer"):
+            rc, sortie, _ = banc.run("service", verbe, unite, agent=True)
+            assert rc == 0 and sortie == {"ok": False, "refus": "unité du ctl"}, (verbe, unite)
+            rc, sortie, _ = banc.run("service", verbe, unite)          # même en local
+            assert sortie == {"ok": False, "refus": "unité du ctl"}, (verbe, unite)
+    assert len(banc.lancements()) == 1
 
 
 def test_mains_liees_refuse_tout_sauf_releve(banc):
@@ -231,6 +267,8 @@ def test_cliente_exige_un_consentement(banc):
     rc, sortie, _ = banc.run("reboot", agent=True)
     assert rc == 0 and sortie["ok"] is True
     assert len(banc.lancements()) == 1 and "systemctl reboot" in banc.lancements()[0]
+    # M6 : le reboot est une opération exclusive ; sa fin (ExecStopPost) la libère
+    _fin(banc, sortie["job"], "success", "exited", "0")
     _, apres, _ = banc.run("reboot", agent=True)
     assert apres["refus"] == "consentement requis" and apres["consentement"] != ident
     # le détenteur refuse : rien ne part
@@ -299,7 +337,7 @@ def test_audit_sans_valeur_secrete(banc):
     assert "SECRET" not in texte and "9902" not in texte and "0451" not in texte
     lignes = banc.audit()
     permis = {"ts", "module", "evenement", "box", "verbe", "action", "unite", "acteur", "origine", "job", "resultat",
-              "refus", "consentement", "decision", "etat"}
+              "refus", "consentement", "decision", "etat", "rc"}
     assert lignes and all(set(e) <= permis for e in lignes), [set(e) - permis for e in lignes]
     assert all(e["module"] == "pilotage" for e in lignes)
     # demande, refus, consentement et résultat : chacun sa ligne
@@ -330,6 +368,111 @@ def test_etat_root_non_fiable_refuse_tout(banc):
     etat.chmod(0o777)
     rc, sortie, _ = banc.run("reboot", agent=True)
     assert rc == 1 and sortie == {"ok": False, "erreur": "état non fiable"}
+    # M5 : le refus est audité après la demande
+    evts = [(e["evenement"], e.get("refus")) for e in banc.audit()]
+    assert evts == [("pilotage_demande", None), ("pilotage_refus", "état non fiable")]
     _, pol, _ = banc.run("politique", "releve", agent=True)
     assert pol["autorise"] is False
     assert banc.lancements() == []
+
+
+def _fin(banc, job, service_result, exit_code, exit_status, **kw):
+    env = {"SERVICE_RESULT": service_result, "EXIT_CODE": exit_code, "EXIT_STATUS": exit_status}
+    return banc.run("_fin", job, env=env, **kw)
+
+
+def test_fin_d_operation_auditee(banc):
+    """R-L2-11 : chaque unité transitoire porte ExecStopPost=… _fin <job> ; _fin audite succès ou échec et libère
+    l'opération longue. Interne : refusé depuis l'agent."""
+    rc, s1, _ = banc.run("maj-paquets", agent=True)
+    job = s1["job"]
+    assert f"--property=ExecStopPost=/usr/sbin/secubox-pilotagectl _fin {job}" in banc.lancements()[0]
+    rc, s2, _ = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True)
+    assert f"--property=ExecStopPost=/usr/sbin/secubox-pilotagectl _fin {s2['job']}" in banc.lancements()[1]
+    # l'agent ne clôt pas une opération à la place de systemd
+    rc, sortie, _ = _fin(banc, job, "success", "exited", "0", agent=True)
+    assert rc == 0 and sortie == {"ok": False, "refus": "local seulement"}
+    rc, sortie, _ = banc.run("maj-paquets", agent=True)
+    assert sortie["refus"] == "opération en cours"
+    # fin réelle (PID 1, root, sans SUDO_*) : succès audité, opération libérée même si l'unité n'est pas encore ramassée
+    rc, sortie, _ = _fin(banc, job, "success", "exited", "0")
+    assert rc == 0 and sortie == {"ok": True, "job": job, "resultat": "succes"}
+    fins = [e for e in banc.audit() if e["evenement"] == "pilotage_resultat" and e.get("resultat") in ("succes", "echec")]
+    assert len(fins) == 1 and fins[0]["job"] == job and fins[0]["rc"] == "0" and fins[0]["verbe"] == "maj-paquets"
+    rc, s3, _ = banc.run("renouveler-secrets", agent=True)
+    assert s3["ok"] is True
+    # échec : code de sortie gardé (nombre seulement)
+    rc, sortie, _ = _fin(banc, s3["job"], "exit-code", "exited", "100")
+    assert sortie["resultat"] == "echec"
+    rc, sortie, _ = _fin(banc, s2["job"], "signal", "killed", "TERM; rm -rf /")
+    assert sortie["resultat"] == "echec"
+    fins = [e for e in banc.audit() if e["evenement"] == "pilotage_resultat" and e.get("resultat") == "echec"]
+    assert [e.get("rc") for e in fins] == ["100", None]
+    assert "rm -rf" not in (banc.r / "var/log/secubox/audit.log").read_text()
+    # une fin d'un autre job ne libère pas l'opération en cours
+    rc, s4, _ = banc.run("maj-paquets", agent=True)
+    _fin(banc, "0123456789abcdef", "success", "exited", "0")
+    rc, sortie, _ = banc.run("maj-paquets", agent=True)
+    assert sortie == {"ok": False, "refus": "opération en cours", "job": s4["job"]}
+
+
+def test_reboot_bloque_les_operations_longues(banc):
+    """M6 : le reboot (différé de 5 s) est enregistré comme opération : rien de long ne démarre pendant ce délai."""
+    rc, s, _ = banc.run("reboot", agent=True)
+    assert s["ok"] is True
+    rc, sortie, _ = banc.run("maj-paquets", agent=True)
+    assert sortie == {"ok": False, "refus": "opération en cours", "job": s["job"]}
+
+
+def test_consentement_seulement_pour_une_unite_existante(banc):
+    """M10 : pas de consentement en attente pour une unité inconnue de systemd."""
+    banc.cliente()
+    banc.absentes.write_text("secubox-fantome.service\n")
+    rc, sortie, _ = banc.run("service", "redemarrer", "secubox-fantome.service", agent=True)
+    assert rc == 0 and sortie == {"ok": False, "refus": "unité inconnue"}
+    assert not any(e["evenement"] == "consentement_demande" for e in banc.audit())
+    assert banc.lancements() == []
+
+
+def test_expiration_auditee_une_seule_fois(banc):
+    """M10 : un consentement expiré est audité une fois, pas à chaque appel (même sur un chemin qui n'écrit rien)."""
+    banc.cliente()
+    _, s, _ = banc.run("reboot", agent=True)
+    _, s2, _ = banc.run("maj-paquets", agent=True)
+    banc.run("consentement", "accepter", s2["consentement"])
+    f = banc.r / "var/lib/secubox-pilotagectl/consentements.json"
+    liste = json.loads(f.read_text())
+    next(c for c in liste if c["id"] == s["consentement"])["expire"] = 1
+    f.write_text(json.dumps(liste))
+    # l'accord de maj-paquets est trouvé, mais le lancement échoue : avant correction, rien n'était réécrit
+    for _ in range(2):
+        rc, sortie, _ = banc.run("maj-paquets", agent=True, env={"FAUX_RUN_ECHEC": "1"})
+        assert rc == 1 and sortie == {"ok": False, "erreur": "lancement impossible"}
+    banc.run("consentement", "accepter", s["consentement"])
+    assert [e["evenement"] for e in banc.audit()].count("consentement_expire") == 1
+
+
+def test_gabarit_exige_le_consentement_sur_cliente(banc):
+    """R-L2-13 : sur une box cliente, une unité gabarit (« @ ») exige l'accord, même pour démarrer."""
+    rc, sortie, _ = banc.run("service", "demarrer", "secubox-foo@bar.service", agent=True)
+    assert sortie["ok"] is True                                     # box du propriétaire : libre
+    banc.cliente()
+    rc, sortie, _ = banc.run("service", "demarrer", "secubox-foo@bar.service", agent=True)
+    assert sortie["refus"] == "consentement requis"
+    rc, sortie, _ = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True)
+    assert sortie["ok"] is True
+
+
+def test_acteur_du_maitre_audite(banc):
+    """R-L2-14 : --acteur <login> en tête de l'argv ; absent, l'acteur d'un appel de l'agent vaut son compte."""
+    rc, sortie, _ = banc.run("--acteur", "gk2admin", "service", "demarrer", "secubox-lyrion.service", agent=True)
+    assert rc == 0 and sortie["ok"] is True
+    rc, sortie, _ = banc.run("--acteur", "_ops.x-1", "politique", "reboot", agent=True)
+    assert rc == 0 and sortie["autorise"] is True
+    banc.run("--acteur", "gk2admin", "renouveler-secrets", agent=True)
+    assert "--setenv=SUDO_USER=gk2admin" in banc.lancements()[-1]
+    _fin(banc, banc.lancements()[-1].split("--unit=secubox-pilotage-op-")[1][:16], "success", "exited", "0")
+    banc.run("reboot", agent=True)
+    demandes = [e for e in banc.audit() if e["evenement"] == "pilotage_demande"]
+    assert [e["acteur"] for e in demandes] == ["gk2admin", "gk2admin", AGENT]
+    assert all(e["origine"] == "maitre" for e in demandes)

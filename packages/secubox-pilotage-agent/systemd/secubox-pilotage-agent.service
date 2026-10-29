@@ -32,8 +32,9 @@ MemoryMax=32M
 NoNewPrivileges=no
 AmbientCapabilities=
 # Borne de ce que sudo et le ctl root peuvent obtenir DANS cette unité : sudo (setuid, setgroups, audit noyau) ;
-# le ctl écrit /var/log/secubox/audit.log (secubox, 0640) et lit /etc/secubox/modules.d.
-CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_AUDIT_WRITE CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH
+# le ctl écrit /var/log/secubox/audit.log (secubox, 0640 ; le crée au compte secubox sur une box neuve : CAP_CHOWN)
+# et lit /etc/secubox/modules.d.
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_AUDIT_WRITE CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_CHOWN
 ProtectSystem=strict
 ReadOnlyPaths=/
 # Le ctl root lancé par sudo hérite de cet espace de montage : il n'y écrit que son état (arbre root 0700, tmpfiles.d

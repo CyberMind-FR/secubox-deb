@@ -54,7 +54,9 @@ def test_unite_permet_sudo_vers_le_ctl_seulement():
         assert cle not in cles(u), cle
     cap = re.search(r"^CapabilityBoundingSet=(.*)$", u, re.M).group(1).split()
     # sudo (setuid, setgroups, journal d'audit noyau) ; le ctl écrit audit.log (secubox, 0640) et lit modules.d
-    assert set(cap) == {"CAP_SETUID", "CAP_SETGID", "CAP_AUDIT_WRITE", "CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH"}
+    # CAP_CHOWN (M3) : le ctl crée audit.log au compte secubox sur une box neuve
+    assert set(cap) == {"CAP_SETUID", "CAP_SETGID", "CAP_AUDIT_WRITE", "CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH",
+                        "CAP_CHOWN"}
     rw = re.search(r"^ReadWritePaths=(.*)$", u, re.M).group(1).split()
     assert set(rw) == {"/var/log/secubox", "-/var/lib/secubox-pilotagectl"}
     brut = lire("systemd/secubox-pilotage-agent.service")

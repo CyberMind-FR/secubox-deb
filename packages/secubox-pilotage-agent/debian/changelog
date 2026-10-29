@@ -17,6 +17,15 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
   * sudoers.d/secubox-pilotage-agent : `secubox-pilotagectl *` seulement. Unité de l'agent : NoNewPrivileges=no pour
     ce sudo (options seccomp retirées, capacités bornées, ReadWritePaths du ctl) ; profil AppArmor : `/usr/bin/sudo Ux`.
     Arbre d'état root par tmpfiles.d. Dépend de sudo et python3 (>= 3.11). Exception écrite dans RULES-CODE.
+  * Relecture de la tâche 1, tour 1 :
+    - R-L2-11 : fin de chaque opération auditée (`ExecStopPost=secubox-pilotagectl _fin <job>`, verbe interne, local
+      seulement : `pilotage_resultat` succes|echec, code de sortie numérique), opération exclusive libérée.
+    - Jamais une unité `secubox-pilotage-op-*` (« unité du ctl ») ; unité inconnue de systemd refusée, sans
+      consentement créé ; expiration d'un consentement auditée une seule fois.
+    - Le reboot est une opération exclusive (rien de long pendant ses 5 s) ; refus « état non fiable » audités.
+    - R-L2-13 : sur une box cliente, une unité gabarit (« @ ») exige l'accord, même pour démarrer.
+    - R-L2-14 : `--acteur <login>` en tête de l'argv, audité dans le champ acteur.
+    - Unité : CAP_CHOWN ajouté (création d'audit.log au compte secubox).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
 
