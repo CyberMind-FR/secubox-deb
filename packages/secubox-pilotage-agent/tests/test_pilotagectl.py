@@ -1005,6 +1005,41 @@ def test_ecriture_avant_lancement_refuse_toujours(banc):
     assert banc.lancements() == []
 
 
+def test_audit_manque_apres_lancement_rend_quand_meme_le_job(banc):
+    """I5 (R-L2-47) : l'action est partie ; un audit « lance » qui échoue ensuite (journal remplacé pendant le lancement) ne
+    la rend pas « refusée » : réponse {"ok": true, "job"}, anomalie sur stderr, fins.json écrit."""
+    journal = banc.r / "var/log/secubox/audit.log"
+    rc, sortie, p = banc.run("maj-paquets", agent=True, env={"FAUX_CASSE": str(journal)})
+    assert rc == 0 and sortie["ok"] is True and len(sortie["job"]) == 16, (sortie, p.stderr)
+    assert "audit" in p.stderr and sortie["job"] in p.stderr
+    assert len(banc.lancements()) == 1
+    fins = json.loads((banc.r / "var/lib/secubox-pilotagectl/fins.json").read_text())
+    assert [f["job"] for f in fins] == [sortie["job"]]
+
+
+def test_audit_du_consentement_utilise_manque_apres_lancement(banc):
+    """I5 : même chose pour l'audit `consentement_utilise` (box cliente, accord consommé) : l'accord est bien marqué utilisé."""
+    banc.cliente()
+    _, s, _ = banc.run("reboot", agent=True)
+    banc.run("consentement", "accepter", s["consentement"])
+    journal = banc.r / "var/log/secubox/audit.log"
+    rc, sortie, p = banc.run("reboot", agent=True, env={"FAUX_CASSE": str(journal)})
+    assert rc == 0 and sortie["ok"] is True and len(sortie["job"]) == 16, (sortie, p.stderr)
+    assert "consentement_utilise" in p.stderr
+    liste = json.loads((banc.r / "var/lib/secubox-pilotagectl/consentements.json").read_text())
+    assert [c["etat"] for c in liste if c["id"] == s["consentement"]] == ["utilise"]
+
+
+def test_audit_manque_avant_lancement_refuse_toujours(banc):
+    """I5 : un audit qui échoue AVANT le lancement refuse toujours : rien ne part."""
+    journal = banc.r / "var/log/secubox/audit.log"
+    journal.unlink()
+    (journal / "x").mkdir(parents=True)
+    rc, sortie, _ = banc.run("maj-paquets", agent=True)
+    assert rc == 1 and sortie == {"ok": False, "erreur": "audit impossible"}
+    assert banc.lancements() == []
+
+
 # --- Tâche 4 : support, état lu par l'agent et par la commande locale ------------------------------------------------
 
 PERMIS_AUDIT = {"ts", "module", "evenement", "box", "verbe", "action", "unite", "acteur", "origine", "job", "resultat",

@@ -1004,6 +1004,18 @@ def ecrire_apres(fd, nom, valeur):
         return False
 
 
+def auditer_apres(ctx, evenement, **champs):
+    """Audit APRÈS un lancement réussi (I5, R-L2-47, comme ecrire_apres) : l'opération est partie, un audit manqué ne la
+    rend pas « refusée ». L'anomalie est écrite sur stderr (journal de l'agent, ou du terminal en local) ; rend False."""
+    try:
+        auditer(ctx, evenement, **champs)
+        return True
+    except Erreur:
+        err(f"anomalie : {evenement} non audité après le lancement du job {champs.get('job')} (journal d'audit "
+            "indisponible) ; l'opération est partie")
+        return False
+
+
 def ecrire_fins(fd, fins):
     """Écrit fins.json (les FINS_MAX dernières) ; un échec (disque plein, fichier remplacé) est journalisé, jamais
     propagé : l'opération est déjà lancée ou finie, et son audit fait foi (M1, M2)."""
@@ -1353,19 +1365,21 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
         raise Erreur("lancement impossible")
     # R-L2-29 : l'opération est partie ; une écriture d'état manquée désormais est journalisée, jamais propagée
     # (la réponse reste {"ok": true, "job"} et « lance » est audité). Avant le lancement, elle refuse toujours.
+    # I5 (R-L2-47) : de même pour un audit manqué (auditer_apres) ; avant le lancement, un audit manqué refuse.
     if accord is not None:
         accord["etat"], accord["decide"] = "utilise", maintenant
         if ecrire_apres(fd, "consentements.json", consentements):
-            auditer(ctx, "consentement_utilise", consentement=accord["id"], action=action, unite=unite, nom=nom, job=job)
+            auditer_apres(ctx, "consentement_utilise", consentement=accord["id"], action=action, unite=unite, nom=nom,
+                          job=job)
         else:
             # L'accord n'est pas marqué utilisé et pourrait resservir : anomalie auditée, pas de nouvel essai.
-            auditer(ctx, "consentement_non_consomme", consentement=accord["id"], action=action, unite=unite, nom=nom,
-                    job=job)
+            auditer_apres(ctx, "consentement_non_consomme", consentement=accord["id"], action=action, unite=unite,
+                          nom=nom, job=job)
     if verbe in EXCLUSIVES:
         ecrire_apres(fd, "operation.json", {"job": job, "verbe": verbe, "debut": maintenant})
     fins.append({"job": job, "verbe": verbe, "resultat": "lance", "quand": maintenant})
     ecrire_fins(fd, fins)                           # M2 : après le lancement, un échec d'écriture ne change pas la réponse
-    auditer(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="lance")
+    auditer_apres(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="lance")
     return {"ok": True, "job": job}
 
 
