@@ -167,3 +167,34 @@ func TestVhostProfilesLivreMotifsPHP(t *testing.T) {
 		t.Errorf("motifs livrés armés : %d, attendu 2", m)
 	}
 }
+
+// R-NC1 (#3273) : federation_vhosts dit quels vhosts Nextcloud utilisent la
+// fédération. Hôte normalisé (casse, port) ; clé absente ou récepteur nil :
+// aucun.
+func TestVhostProfilesFederation(t *testing.T) {
+	vp, err := chargerVhostProfilesDepuis([]byte(`{
+		"services": {"nextcloud": {"legit_paths": []}},
+		"vhosts": {"nc.example": "nextcloud", "nc2.example": "nextcloud"},
+		"php_services": ["nextcloud"],
+		"federation_vhosts": ["NC.example"]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !vp.federationUtilisee("nc.example:443") {
+		t.Error("nc.example:443 : fédération attendue")
+	}
+	if vp.federationUtilisee("nc2.example") {
+		t.Error("nc2.example : pas de fédération attendue")
+	}
+	sans, err := chargerVhostProfilesDepuis([]byte(profilsPHPTest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sans.federationUtilisee("nc.example") {
+		t.Error("clé absente : aucune fédération")
+	}
+	if (*VhostProfiles)(nil).federationUtilisee("nc.example") {
+		t.Error("récepteur nil : false attendu")
+	}
+}

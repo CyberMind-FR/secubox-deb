@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"time"
 )
 
 // genreCorps dit quel corps la capture retient pour l'entrée PHP.
@@ -39,7 +40,7 @@ const (
 	corpsMultipart             // multipart/form-data : analyserMultipart (#3257)
 	corpsUrlencoded            // application/x-www-form-urlencoded : lireParametresPHP
 	corpsXML                   // branche ajoutée par la tâche 5
-	corpsDebut                 // branche ajoutée par la tâche 4 (64 premiers octets d'un PUT)
+	corpsDebut                 // 64 premiers octets d'un PUT WebDAV raster (R-IMG2), sans jeton
 )
 
 // EntreePHP : ce que les signatures structurelles lisent d'une requête PHP.
@@ -52,6 +53,16 @@ type EntreePHP struct {
 	Multipart *ResultatMultipart // corps multipart analysé, sinon nil
 
 	requeteBrute string // r.URL.RawQuery, lue par lireRequete après la réponse
+
+	// Nextcloud (tâche 4). Booléens et compteurs seulement : ni uid, ni
+	// identifiant Basic, ni nom de fichier ne sont gardés.
+	Federation           bool   // l'hôte utilise la fédération (lu si PartageFedereAnonyme)
+	PartageFedereAnonyme bool   // R-NC1 : POST anonyme sur un chemin de partage fédéré
+	AppelsFederes        int    // R-NC1 : appels de l'IP dans la fenêtre, posé dans analyserRequetePHP
+	ProxyAgenda          bool   // R-NC2 : PROPPATCH sur calendar-proxy-read|write
+	ProxyAgendaAutrui    bool   // R-NC2 : utilisateur Basic présent et différent de l'uid
+	PutRaster            bool   // R-IMG2 : PUT WebDAV d'un nom raster (premier segment)
+	MagiqueDebut         string // R-IMG2 : magiqueNonRaster des 64 premiers octets ("" = rien)
 	// les tâches 3 à 7 ajoutent leurs champs ici
 }
 
@@ -67,15 +78,37 @@ func estUrlencodedPHP(contentType string) bool {
 }
 
 // nouvelleEntreePHP retient ce qui ne demande pas le corps : méthode, chemin
-// et chaîne de requête BRUTE. Rien n'est lu ici, avant le relais (relecture
-// I2) : la lecture a lieu dans analyserRequetePHP, après la réponse.
+// et chaîne de requête BRUTE. La requête n'est pas lue ici, avant le relais
+// (relecture I2) : sa lecture a lieu dans analyserRequetePHP, après la réponse.
+// Les drapeaux Nextcloud ne lisent que la méthode, le chemin et des en-têtes,
+// en court-circuit : un GET ordinaire ne paie que des comparaisons de chaînes.
+// PutRaster doit être connu avant le relais (il décide de la capture).
 func (s *Server) nouvelleEntreePHP(r *http.Request, service string) *EntreePHP {
-	return &EntreePHP{
+	e := &EntreePHP{
 		Service:      service,
 		Methode:      r.Method,
 		Chemin:       r.URL.Path,
 		requeteBrute: r.URL.RawQuery,
 	}
+	// R-NC1 : ni Authorization ni session Nextcloud. Federation ne sert qu'à
+	// ce cas : l'hôte n'est cherché que pour lui.
+	if strings.EqualFold(r.Method, "POST") && cheminPartageFedere(e.Chemin) &&
+		r.Header.Get("Authorization") == "" && !sessionNextcloud(r.Header.Values("Cookie")) {
+		e.PartageFedereAnonyme = true
+		e.Federation = s.vhostProfiles.federationUtilisee(r.Host)
+	}
+	// R-NC2 : uid lu dans le chemin décodé, comparé sans casse, puis oublié.
+	if uid, ok := proxyAgenda(r.Method, e.Chemin); ok {
+		e.ProxyAgenda = true
+		if u, basic := utilisateurBasic(r.Header.Get("Authorization")); basic && !strings.EqualFold(u, uid) {
+			e.ProxyAgendaAutrui = true
+		}
+	}
+	// R-IMG2 : nom cible raster (dernier segment, ou Destination d'un premier morceau).
+	if nom, ok := putWebDAVPremierSegment(r.Method, e.Chemin, r.Header.Get("Destination")); ok && extensionRaster(nom) {
+		e.PutRaster = true
+	}
+	return e
 }
 
 // lireRequete lit la chaîne de requête gardée brute (au plus
@@ -92,10 +125,20 @@ var (
 )
 
 // corpsACapturer choisit le corps à capturer, son plafond, et s'il prend un
-// jeton du sémaphore. Sans corps : rien, et aucun jeton.
+// jeton du sémaphore. Sans corps : rien, et aucun jeton. Le début d'un PUT
+// raster (R-IMG2) : au plus 64 octets, SANS jeton (R-W2, point 10) : la
+// mémoire est bornée par la requête elle-même, et un PUT ne doit jamais
+// priver le multipart PHP2Shell de ses jetons.
 func (s *Server) corpsACapturer(r *http.Request, e *EntreePHP) (genre genreCorps, plafond int, jeton bool) {
 	if r.Body == nil || r.Body == http.NoBody {
 		return corpsAucun, 0, false
+	}
+	if e.PutRaster {
+		plafond = magiqueOctets
+		if f := s.fenetreCapture(); f < plafond {
+			plafond = f
+		}
+		return corpsDebut, plafond, false
 	}
 	ct := r.Header.Get("Content-Type")
 	switch {
@@ -119,6 +162,8 @@ func completerCorps(e *EntreePHP, genre genreCorps, prefixe []byte, contentType 
 		// La fenêtre a coupé le corps : le dernier segment peut être partiel.
 		p.Tronque = !complet
 		e.Corps = &p
+	case corpsDebut:
+		e.MagiqueDebut = magiqueNonRaster(prefixe)
 	}
 }
 
@@ -159,6 +204,12 @@ func (e *EntreePHP) Signaux() map[string]int {
 			m["from_bang"] = 1
 			break
 		}
+	}
+	if e.AppelsFederes > 0 {
+		if m == nil {
+			m = map[string]int{}
+		}
+		m["appels_federes"] = e.AppelsFederes
 	}
 	return m
 }
@@ -207,6 +258,12 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 	if !relaye || s.rules == nil {
 		return
 	}
+	// Chemin WebDAV : uid et nom de fichier masqués dans toute ligne et tout
+	// message de cette requête (le journal ne porte ni nom de fichier ni uid).
+	// Après les defer et figer() : une panique ici rend le jeton, capture figée.
+	if masque, ok := cheminJournalNextcloud(e.Chemin); ok {
+		rm.path = masque
+	}
 	if s.rules.litLaRequete() {
 		e.lireRequete()
 	}
@@ -214,6 +271,10 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 	// les contrôles sans corps restent évalués.
 	if capt != nil && lus > 0 {
 		completerCorps(e, genre, prefixe, rm.contentType, complet)
+	}
+	// R-NC1 : l'appel est compté (requête relayée seulement) avant l'évaluation.
+	if e.PartageFedereAnonyme && s.appelsFederes != nil {
+		e.AppelsFederes = s.appelsFederes.noter(rm.ip, time.Now())
 	}
 	signaux := e.Signaux()
 	for _, d := range s.rules.EvaluerPHP(e) {

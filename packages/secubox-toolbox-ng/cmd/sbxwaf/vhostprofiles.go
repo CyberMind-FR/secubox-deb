@@ -75,6 +75,7 @@ type VhostProfiles struct {
 	antirobots   map[string]bool           // hôte -> refuser les robots (#1216)
 	phpServices  map[string]bool           // nom de service -> fait tourner PHP (#3257)
 	phpHotes     []*regexp.Regexp          // motifs d'hôte PHP (#3257, R15)
+	federation   map[string]bool           // hôte -> fédération Nextcloud utilisée (#3273, R-NC1)
 }
 
 // fichierProfils est la forme JSON sur disque de vhost_profiles.json.
@@ -101,6 +102,11 @@ type fichierProfils struct {
 	// une à une : un motif invalide (ou qui n'est pas une chaîne) est rejeté
 	// seul, journalisé, sans refuser le fichier.
 	PHPHotes []json.RawMessage `json:"php_hotes"`
+	// FederationVhosts (#3273, R-NC1) : vhosts Nextcloud qui utilisent la
+	// fédération (partages entre serveurs). Sur eux, un partage fédéré anonyme
+	// n'est signalé qu'en rafale ; ailleurs, à chaque appel. Clé absente =
+	// aucun (une box unique ne fédère pas).
+	FederationVhosts []string `json:"federation_vhosts"`
 }
 
 // chargerVhostProfiles lit et compile le fichier déclaratif. Une erreur de
@@ -125,6 +131,7 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 		supprimables: make(map[string]bool, len(f.SuppressCategories)),
 		antirobots:   make(map[string]bool, len(f.AntiRobots)),
 		phpServices:  make(map[string]bool, len(f.PHPServices)),
+		federation:   make(map[string]bool, len(f.FederationVhosts)),
 	}
 	for _, cat := range f.SuppressCategories {
 		vp.supprimables[cat] = true
@@ -172,6 +179,10 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 			continue
 		}
 		vp.phpServices[nom] = true
+	}
+	// Comme anti_robots : normalisé, sans exiger un vhost déclaré.
+	for _, hote := range f.FederationVhosts {
+		vp.federation[normaliserHote(hote)] = true
 	}
 	for i, brutMotif := range f.PHPHotes {
 		var motif string
@@ -326,6 +337,17 @@ func (v *VhostProfiles) servicePHP(host string) (service string, php bool) {
 		}
 	}
 	return "", false
+}
+
+// federationUtilisee dit si cet hôte (normalisé) utilise la fédération
+// Nextcloud (federation_vhosts, #3273 R-NC1). Récepteur nil → false.
+func (v *VhostProfiles) federationUtilisee(host string) bool {
+	if v == nil {
+		return false
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.federation[normaliserHote(host)]
 }
 
 // armementPHP rend le nombre de vhosts PHP explicites (vhost dont le service

@@ -143,6 +143,12 @@ var parametreRequis = map[string]string{
 	"rc_crlf_envoi":             "",
 	"rc_markasjunk_uid_requete": "",
 	"rc_image_non_raster":       "",
+	// #3273, Nextcloud (tâche 4) : appels_min seul paramètre (R-NC1 en rafale).
+	"nc_partage_federe":        "",
+	"nc_partage_federe_rafale": "appels_min",
+	"nc_proxy_agenda":          "",
+	"nc_proxy_agenda_autrui":   "",
+	"nc_put_non_raster":        "",
 }
 
 // controlesRequete : contrôles qui lisent EntreePHP.Requete (#3273, relecture
@@ -272,6 +278,18 @@ func (s signatureStructurelle) declenche(e *EntreePHP) bool {
 			}
 		}
 		return false
+	// Nextcloud (tâche 4) : drapeaux posés par nouvelleEntreePHP et
+	// analyserRequetePHP. R-NC2 : les deux contrôles s'excluent (une ligne).
+	case "nc_partage_federe":
+		return e.PartageFedereAnonyme && !e.Federation
+	case "nc_partage_federe_rafale":
+		return e.PartageFedereAnonyme && e.Federation && e.AppelsFederes >= s.params["appels_min"]
+	case "nc_proxy_agenda":
+		return e.ProxyAgenda && !e.ProxyAgendaAutrui
+	case "nc_proxy_agenda_autrui":
+		return e.ProxyAgendaAutrui
+	case "nc_put_non_raster":
+		return e.PutRaster && e.MagiqueDebut != ""
 	case "rc_image_non_raster":
 		if e.Multipart == nil || !e.Multipart.NonRaster {
 			return false

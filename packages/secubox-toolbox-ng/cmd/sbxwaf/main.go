@@ -176,6 +176,9 @@ type Server struct {
 	// capturesUrlencoded : idem pour les corps urlencoded des vhosts PHP
 	// (#3273, R-W7), sémaphore à part de capturesUrlencodedMax jetons.
 	capturesUrlencoded chan struct{}
+	// appelsFederes compte, par IP, les partages fédérés anonymes (#3273,
+	// R-NC1). nil = EntreePHP.AppelsFederes reste 0 (tests).
+	appelsFederes *compteurFenetre
 
 	// trustedHosts is the set of hostnames that bypass WAF inspection entirely.
 	// Mirrors Python check_request whitelist (secubox_waf.py:761-763):
@@ -1471,6 +1474,8 @@ func main() {
 		// #3257 : au plus 16 captures multipart simultanées (16 fenêtres).
 		capturesMultipart:  make(chan struct{}, capturesMultipartMax),
 		capturesUrlencoded: make(chan struct{}, capturesUrlencodedMax),
+		// #3273, R-NC1 : 5 appels par 1 200 s (nextcloud/server#62091), mémoire bornée.
+		appelsFederes: nouveauCompteurFenetre(federationPeriode, federationGarde, federationIPMax),
 		// Trusted-host skip (--waf-skip-hosts): mirrors Python whitelist.
 		trustedHosts: parseTrustedHosts(*wafSkipHosts),
 		// Meme analyseur : un hote est un hote, et deux facons de les lire
