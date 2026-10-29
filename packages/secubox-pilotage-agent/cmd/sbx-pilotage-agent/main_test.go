@@ -85,3 +85,46 @@ func TestMaitreAbsentRevérifie(t *testing.T) {
 		t.Fatalf("%q %q %d", m, ip, appels)
 	}
 }
+
+// R35 : sur le maître (wg-mesh en 10.10.0.1, wg-autoload en 10.64.0.1), l'agent journalise une fois et attend l'arrêt,
+// sans jamais rendre de maître (donc sans contacter le canal, qui le refuserait à vie et remplirait l'audit).
+func TestAgentSurLeMaitreAttendSansContacterLeCanal(t *testing.T) {
+	for nom, adrs := range map[string][]ifaceAdr{
+		"wg-mesh":     {ia("wg-mesh", "10.10.0.1/24"), ia("wg-autoload", "10.64.0.1/16")},
+		"wg-autoload": {ia("wg-autoload", "10.64.0.1/16")},
+	} {
+		t.Run(nom, func(t *testing.T) {
+			j := journal(t)
+			appels := 0
+			lister := func() []ifaceAdr { appels++; return adrs }
+			ctx, annule := context.WithCancel(context.Background())
+			type res struct{ m, ip string }
+			ch := make(chan res, 1)
+			go func() {
+				m, ip := attendreMaitre(ctx, "", lister, 10*time.Millisecond)
+				ch <- res{m, ip}
+			}()
+			time.Sleep(200 * time.Millisecond)
+			select {
+			case r := <-ch:
+				t.Fatalf("maître %q rendu sur le maître lui-même", r.m)
+			default:
+			}
+			annule()
+			select {
+			case r := <-ch:
+				if r.m != "" || r.ip != "" {
+					t.Fatalf("rendu (%q, %q) à l'arrêt", r.m, r.ip)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("pas de retour à l'annulation")
+			}
+			if appels != 1 {
+				t.Errorf("%d lectures d'interfaces : le maître ne revérifie pas", appels)
+			}
+			if n := strings.Count(j.String(), "adresse du maître"); n != 1 {
+				t.Errorf("%d ligne(s) de journal, attendu 1 : %q", n, j.String())
+			}
+		})
+	}
+}

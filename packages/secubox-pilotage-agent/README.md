@@ -20,6 +20,9 @@ Agent de pilotage distant d'une box SecuBox (#3126, livraison L1 « Voir », lec
 - Le maître est choisi ainsi : `PILOTAGE_MAITRE` s'il est posé ; sinon `wg-mesh` en `10.10.0.0/24`, puis
   `wg-autoload` en `10.64.0.0/16` ; sinon l'agent attend et revérifie toutes les 300 s. L'adresse de sortie
   est celle de l'interface du maillage dont la plage contient le maître.
+- **Sur le maître lui-même** (gk2 : `wg-mesh` en `10.10.0.1`, `wg-autoload` en `10.64.0.1`), l'agent ne se pilote pas
+  par son propre canal en L1 (R35) : il journalise une fois « cette box porte l'adresse du maître », puis attend l'arrêt
+  sans jamais contacter le canal (qui refuserait `.1` et écrirait une ligne d'audit à chaque essai).
   `PILOTAGE_MAITRE` n'accepte qu'une IP littérale parmi `10.10.0.1`, `10.64.0.1`, `127.0.0.1`, `::1` (pas de nom
   d'hôte : pas de DNS sous le profil) ; sinon message au journal et nouvel essai toutes les 300 s.
 - **Limite connue** : le maître est choisi au démarrage seulement. Si l'adresse du tunnel change ou disparaît

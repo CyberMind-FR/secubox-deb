@@ -155,3 +155,23 @@ func intervalleReleve(env string) time.Duration {
 	}
 	return intervalleMin
 }
+
+// estLeMaitre : la box porte elle-même l'adresse du maître sur l'interface du
+// tunnel retenue (gk2 : wg-mesh en 10.10.0.1). En L1 le maître ne se pilote pas
+// par son propre canal (R35) : le canal refuse .1 (identite._hote) et chaque
+// essai écrirait une ligne d'audit.
+func estLeMaitre(maitre, ipSource string) bool {
+	if ipSource == "" {
+		return false
+	}
+	src, err := netip.ParsePrefix(ipSource)
+	if err != nil {
+		return false
+	}
+	hote := maitre
+	if h, _, err := net.SplitHostPort(maitre); err == nil {
+		hote = h
+	}
+	ip, err := netip.ParseAddr(strings.Trim(hote, "[]"))
+	return err == nil && ip == src.Addr()
+}

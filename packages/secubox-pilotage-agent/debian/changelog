@@ -5,6 +5,8 @@ secubox-pilotage-agent (0.1.2-1~trixie1) trixie; urgency=medium
       compte partagé `secubox`). `/etc/secubox/pilotage-agent.env` est lu par l'agent lui-même (plus d'`EnvironmentFile=`),
       par descripteur, sans suivre aucun lien, `root:root` et sans écriture groupe/autres exigés, sinon ignoré avec une
       ligne de journal ; seules les clés `PILOTAGE_*` connues sont posées. Même contrôle pour le drapeau « mains liées ».
+    - I3/R35 : sur le maître (adresse de sortie = adresse du maître, 10.10.0.1 ou 10.64.0.1), l'agent journalise une
+      fois et attend l'arrêt sans contacter le canal (refus à vie et ~288 lignes d'audit par jour sinon).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 11:30:00 +0100
 

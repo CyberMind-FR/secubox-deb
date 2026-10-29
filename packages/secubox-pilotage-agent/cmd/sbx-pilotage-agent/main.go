@@ -86,7 +86,8 @@ func construireModele(lanceur func(ctx context.Context, args ...string) ([]byte,
 
 // attendreMaitre applique la règle de découverte, puis revérifie à chaque pause
 // tant qu'aucune interface du maillage n'est utilisable ; rend la main à
-// l'annulation de ctx (maître vide). Une valeur PILOTAGE_MAITRE refusée ne
+// l'annulation de ctx (maître vide). Sur le maître lui-même (adresse de sortie
+// = adresse du maître), il journalise une fois et attend l'arrêt (R35). Une valeur PILOTAGE_MAITRE refusée ne
 // change qu'au redémarrage de l'unité : elle est journalisée une fois, puis
 // l'agent attend l'arrêt (sortir en erreur ferait boucler Restart=on-failure).
 func attendreMaitre(ctx context.Context, env string, interfaces func() []ifaceAdr, pause time.Duration) (maitre, ipSource string) {
@@ -97,6 +98,12 @@ func attendreMaitre(ctx context.Context, env string, interfaces func() []ifaceAd
 	}
 	for {
 		if mt, ip, ok := choisirMaitre(env, interfaces()); ok {
+			if estLeMaitre(mt, ip) {
+				log.Printf("cette box porte l'adresse du maître (%s) : pas de pilotage par son propre canal en L1 (R35) ; "+
+					"l'agent reste en attente, sans contacter le canal", ip)
+				<-ctx.Done()
+				return "", ""
+			}
 			return mt, ip
 		}
 		log.Printf("aucune interface du maillage : nouvel essai dans %v", pause)

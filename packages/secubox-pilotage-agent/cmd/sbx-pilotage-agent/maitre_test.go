@@ -74,3 +74,23 @@ func TestValiderMaitre(t *testing.T) {
 		}
 	}
 }
+
+func TestEstLeMaitre(t *testing.T) {
+	for _, c := range []struct {
+		maitre, source string
+		attendu        bool
+	}{
+		{"10.10.0.1:8472", "10.10.0.1/24", true},
+		{"10.64.0.1:8472", "10.64.0.1/16", true},
+		{"10.10.0.1:9000", "10.10.0.1/24", true}, // explicite, même hôte
+		{"10.10.0.1", "10.10.0.1/24", true},
+		{"10.10.0.1:8472", "10.10.0.7/24", false},
+		{"10.64.0.1:8472", "10.64.3.9/16", false},
+		{"127.0.0.1:8472", "", false},
+		{"10.10.0.1:8472", "", false},
+	} {
+		if got := estLeMaitre(c.maitre, c.source); got != c.attendu {
+			t.Errorf("estLeMaitre(%q, %q) = %v", c.maitre, c.source, got)
+		}
+	}
+}
