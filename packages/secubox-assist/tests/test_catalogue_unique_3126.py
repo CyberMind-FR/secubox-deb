@@ -120,8 +120,8 @@ def test_maintscript_retire_la_regle_sudoers_pour_les_deux_estampilles(installee
     import subprocess
     if shutil.which("dpkg") is None:
         pytest.skip("dpkg absent")
-    ligne = next(l.split() for l in (ROOT / "debian" / "maintscript").read_text().splitlines()
-                 if l.startswith("rm_conffile"))
+    ligne = next(ln.split() for ln in (ROOT / "debian" / "maintscript").read_text().splitlines()
+                 if ln.startswith("rm_conffile"))
     assert ligne[1] == "/etc/sudoers.d/secubox-assist"
     # même test que dpkg-maintscript-helper : version installée <= version indiquée
     r = subprocess.run(["dpkg", "--compare-versions", installee, "le-nl", ligne[2]])
