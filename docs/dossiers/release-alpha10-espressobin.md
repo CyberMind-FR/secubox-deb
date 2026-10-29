@@ -9,6 +9,8 @@ Ce document prépare la release ; il ne la publie pas (le tag déclenche CI, ima
 - **Profils** : lite = tous les modules de protection (+ routage, QoS, Freebox, certificats, Tor) ; isp = lite + opérateur + tout l'hébergement ; full = isp + le Hall
   et son contenu. Un module n'est que dans un profil. `secubox-lite` 1.5.0, `secubox-isp` 1.3.1, `secubox-full` 1.5.0 ; `secubox-full` s'installe sur amd64.
   Détail : `docs/PROFILS-COMPARATIF.md`.
+  *Mise à jour du 2026-10-29 (#3258)* : le profil d'activation isp est désormais un **FAI local : lite + nDPI, nDPId, NetFlow, cabine numérique** ;
+  l'hébergement reste installé par le méta-paquet `secubox-isp` mais l'apply du profil l'arrête.
 - **Matrice des images** (`.github/scripts/matrice-images.py`) : l'ESPRESSObin ne bâtit plus que **lite**. `isp` porte l'hébergement (≈ 8 Go) et n'est plus le « socle de comparaison » des petites cartes.
 - **Corrections livrées depuis alpha.9** : Hall (registre non vidé si `menu.json` manque, carte Actor sans double slicer, carte du monde sans bande à -15°), `sbx-actord`
   (`/stats` et `/overview` en double tampon), watchdog Lyrion sans relance en boucle, réveil ClamAV sans boucle, services onion dans `torrc.d`, historique mémoire (`secubox-metrics` 1.17),

@@ -165,3 +165,19 @@ def test_aucun_oneshot_de_minuterie_dans_isp():
     unites = a._unites(a._fermeture("secubox-isp"))
     fautifs = sorted(mid for mid in _isp().on if any(a._oneshot_de_minuterie(t) for t in unites.get(mid, [])))
     assert not fautifs, fautifs
+
+
+# Revue #3258 (M10) : la documentation décrivait encore isp avec l'hébergement. Vrai du MÉTA-PAQUET secubox-isp, faux
+# du PROFIL D'ACTIVATION depuis la décision du 2026-10-29.
+DECISION = "FAI local : lite + nDPI, nDPId, NetFlow, cabine numérique"
+
+
+def test_la_documentation_distingue_le_meta_paquet_du_profil_isp():
+    depot = PAQUETS.parent
+    comparatif = (depot / "docs" / "PROFILS-COMPARATIF.md").read_text(encoding="utf-8")
+    assert DECISION in comparatif
+    assert "hébergement simple et limité" not in comparatif, "la carte ISP de l'infographie promet encore l'hébergement"
+    alpha10 = (depot / "docs" / "dossiers" / "release-alpha10-espressobin.md").read_text(encoding="utf-8")
+    assert DECISION in alpha10
+    controle = " ".join((PAQUETS / "secubox-isp" / "debian" / "control").read_text(encoding="utf-8").split())
+    assert "profil d'activation isp" in controle and "nDPI, nDPId, NetFlow" in controle
