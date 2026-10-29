@@ -1,0 +1,16 @@
+{
+ "route": "/canal/v1/notifs",
+ "envoi": [
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_Consent",
+     "ts": 1793000000,
+     "id": "00000000000000c1",
+     "decision": "accepte"
+    }
+   },
+   "type": "NOTIFY"
+  }
+ ]
+}

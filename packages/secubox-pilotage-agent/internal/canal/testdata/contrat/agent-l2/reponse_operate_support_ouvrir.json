@@ -1,0 +1,23 @@
+{
+ "route": "/canal/v1/reponses",
+ "requete": {
+  "body": {
+   "acteur": "alice",
+   "args": {
+    "duree_min": 30,
+    "id": "5e55105000000001"
+   },
+   "command": "Device.X_SECUBOX_Support.Ouvrir()"
+  },
+  "type": "OPERATE"
+ },
+ "envoi": {
+  "msg_id": "00000000000000dd",
+  "type": "OPERATE_RESP",
+  "body": {
+   "etat": "consentement",
+   "job": "",
+   "raison": "consentement requis"
+  }
+ }
+}

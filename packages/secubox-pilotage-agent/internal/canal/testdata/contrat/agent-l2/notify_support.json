@@ -1,0 +1,17 @@
+{
+ "route": "/canal/v1/notifs",
+ "envoi": [
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_Support",
+     "ts": 1793000000,
+     "id": "5e55105000000001",
+     "etat": "ouvert",
+     "fin": "2026-10-26T08:03:20Z"
+    }
+   },
+   "type": "NOTIFY"
+  }
+ ]
+}

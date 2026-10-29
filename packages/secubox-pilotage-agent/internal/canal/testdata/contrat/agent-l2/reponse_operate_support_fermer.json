@@ -1,0 +1,22 @@
+{
+ "route": "/canal/v1/reponses",
+ "requete": {
+  "body": {
+   "acteur": "alice",
+   "args": {
+    "id": "5e55105000000001"
+   },
+   "command": "Device.X_SECUBOX_Support.Fermer()"
+  },
+  "type": "OPERATE"
+ },
+ "envoi": {
+  "msg_id": "00000000000000dc",
+  "type": "OPERATE_RESP",
+  "body": {
+   "etat": "accepte",
+   "job": "",
+   "raison": ""
+  }
+ }
+}

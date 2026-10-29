@@ -1,0 +1,101 @@
+{
+ "route": "/canal/v1/notifs",
+ "envoi": [
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_OperationDone",
+     "ts": 1793000000,
+     "job": "00000000c0de00e6",
+     "rc": 0,
+     "resume": "renommer : succès"
+    }
+   },
+   "type": "NOTIFY"
+  },
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_OperationDone",
+     "ts": 1793000000,
+     "job": "00000000c0de15d5",
+     "rc": 0,
+     "resume": "reboot : succès"
+    }
+   },
+   "type": "NOTIFY"
+  },
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_OperationDone",
+     "ts": 1793000000,
+     "job": "00000000c0de2c08",
+     "rc": 0,
+     "resume": "maj-paquets : succès"
+    }
+   },
+   "type": "NOTIFY"
+  },
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_OperationDone",
+     "ts": 1793000000,
+     "job": "00000000c0de4e0f",
+     "rc": 0,
+     "resume": "renouveler-secrets : succès"
+    }
+   },
+   "type": "NOTIFY"
+  },
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_OperationDone",
+     "ts": 1793000000,
+     "job": "00000000c0de73d7",
+     "rc": 0,
+     "resume": "maillage-rejoindre : succès"
+    }
+   },
+   "type": "NOTIFY"
+  },
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_OperationDone",
+     "ts": 1793000000,
+     "job": "00000000c0de86b8",
+     "rc": 0,
+     "resume": "service : succès"
+    }
+   },
+   "type": "NOTIFY"
+  },
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_OperationDone",
+     "ts": 1793000000,
+     "job": "00000000c0de88c6",
+     "rc": 0,
+     "resume": "service : succès"
+    }
+   },
+   "type": "NOTIFY"
+  },
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_OperationDone",
+     "ts": 1793000000,
+     "job": "00000000c0def7d3",
+     "rc": 0,
+     "resume": "service : succès"
+    }
+   },
+   "type": "NOTIFY"
+  }
+ ]
+}
