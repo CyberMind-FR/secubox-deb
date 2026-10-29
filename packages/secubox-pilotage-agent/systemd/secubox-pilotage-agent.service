@@ -20,6 +20,8 @@ ExecStart=/usr/sbin/sbx-pilotage-agent
 Restart=on-failure
 RestartSec=10
 MemoryMax=32M
+# M13 : borne souple du runtime Go, sous MemoryMax : le ramasse-miettes travaille avant le tueur du cgroup.
+Environment=GOMEMLIMIT=24MiB
 
 # Durcissement : connexion sortante vers le maître seulement ; l'agent lui-même n'a aucune capacité.
 # NoNewPrivileges=no : seulement pour sudo. La seule action privilégiée de l'agent (L2, #3126) est

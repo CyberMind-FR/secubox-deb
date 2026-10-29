@@ -256,3 +256,17 @@ def test_reglages_lus_par_l_agent_jamais_par_systemd():
     assert "/etc/secubox/pilotage-agent.env r," in code
     main = lire("cmd/sbx-pilotage-agent/main.go")
     assert 'chargerReglages("/", lecture.Root, os.Setenv)' in main
+
+
+def _octets(valeur):
+    n, unite = re.fullmatch(r"(\d+)(MiB|M|KiB|K)", valeur).groups()
+    return int(n) << (20 if unite.startswith("M") else 10)
+
+
+def test_gomemlimit_sous_memorymax_m13():
+    """M13 : le runtime Go connaît sa borne (GOMEMLIMIT) et collecte AVANT le tueur du cgroup (MemoryMax)."""
+    u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
+    env = re.findall(r"^Environment=GOMEMLIMIT=(\S+)$", u, re.M)
+    (maxi,) = re.findall(r"^MemoryMax=(\S+)$", u, re.M)
+    assert env == ["24MiB"], env
+    assert _octets(env[0]) < _octets(maxi) == 32 << 20
