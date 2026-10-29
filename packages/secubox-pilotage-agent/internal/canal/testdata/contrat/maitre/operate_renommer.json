@@ -1,0 +1,13 @@
+{
+ "requete": {
+  "body": {
+   "acteur": "alice",
+   "args": {
+    "nom": "gk9"
+   },
+   "command": "Device.X_SECUBOX_Nom.Renommer()"
+  },
+  "type": "OPERATE"
+ },
+ "route": "/canal/v1/requetes"
+}

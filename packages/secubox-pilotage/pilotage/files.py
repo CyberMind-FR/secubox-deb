@@ -27,6 +27,12 @@ DUREE_DEFAUT_S, DUREE_MIN_S, DUREE_MAX_S = 60, 10, 300
 MARGE_MESURE_S = 30
 
 
+def requete_modele() -> dict:
+    """GetSupportedDM : la requête que le maître dépose pour lire le modèle de données déclaré par la box. Le maître ne l'émet pas
+    encore en production (le bonjour porte déjà le modèle) ; sa forme est figée par le contrat maître → agent (N5)."""
+    return {"type": "GET_SUPPORTED_DM", "body": {}}
+
+
 def delai_reponse_pour(requete: dict, defaut: float) -> float:
     """Délai d'attente de la réponse : celui du relevé (duree_s + 30 s) pour Mesurer(), sinon le défaut."""
     corps = requete.get("body")

@@ -1,0 +1,12 @@
+{
+ "requete": {
+  "body": {
+   "args": {
+    "duree_s": 10
+   },
+   "command": "Device.X_SECUBOX_Releve.Mesurer()"
+  },
+  "type": "OPERATE"
+ },
+ "route": "/canal/v1/requetes"
+}

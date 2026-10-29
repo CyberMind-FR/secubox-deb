@@ -1,0 +1,11 @@
+{
+ "requete": {
+  "body": {
+   "paths": [
+    "Device."
+   ]
+  },
+  "type": "GET"
+ },
+ "route": "/canal/v1/requetes"
+}
