@@ -39,7 +39,7 @@ def test_panneau_sans_innerhtml_pour_les_donnees():
 def test_panneau_masque_si_module_absent():
     js = _js()
     assert "r.ok" in js and ".hidden" in js and "!liste.length" in js
-    assert "30000" in js and "visibilityState" in js or "document.hidden" in js
+    assert "30000" in js and ("visibilityState" in js or "document.hidden" in js)
 
 
 def test_aucun_bouton_d_action_dans_le_bloc_pilotage():
@@ -87,3 +87,44 @@ def test_panneau_masque_sur_404_401_ou_liste_vide(statut, corps):
         return pg.is_hidden("#pil-pan")
     (cache, erreurs, natifs) = _nav(sc, api=_api(statut, corps))
     assert cache is True and erreurs == [] and natifs == []
+
+
+def test_lignes_sans_clic_sans_classe_node_row():
+    """node-row porte le curseur « main » des lignes cliquables de la flotte ; les lignes du pilotage n'ont pas de clic."""
+    assert "node-row" not in _js()
+
+    def sc(pg):
+        pg.wait_for_selector("#pil-body tr")
+        return pg.locator("#pil-body tr.node-row").count(), pg.locator("#pil-body tr.is-stale").count()
+    (rangees, grises), erreurs, _ = _nav(sc, api=_api())
+    assert rangees == 0 and grises == 1 and erreurs == []
+
+
+@pytest.mark.parametrize("vu", ["abc", "1e400", {"x": 1}, -5])
+def test_vu_le_non_numerique_sans_erreur(vu):
+    """Un vu_le illisible ne lève pas de RangeError (Invalid Date.toISOString) hors du try : la ligne s'affiche « vu jamais »."""
+    boites = [dict(BOITES[1], vu_le=vu)]
+
+    def sc(pg):
+        pg.wait_for_selector("#pil-body tr")
+        return pg.inner_text("#pil-body tr:nth-child(1)")
+    texte, erreurs, natifs = _nav(sc, api=_api(boites=boites))
+    assert erreurs == [] and natifs == [] and "vu jamais" in texte
+
+
+def test_rafraichi_au_retour_sur_l_onglet():
+    appels = []
+
+    def api(r):
+        if "/pilotage/boxes" in r.request.url:
+            appels.append(1)
+        return _api()(r)
+
+    def sc(pg):
+        pg.wait_for_selector("#pil-body tr")
+        avant = len(appels)
+        pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))")   # page visible : l'onglet revient au premier plan
+        pg.wait_for_timeout(300)
+        return avant, len(appels)
+    (avant, apres), erreurs, _ = _nav(sc, api=api)
+    assert erreurs == [] and apres == avant + 1

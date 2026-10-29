@@ -283,10 +283,13 @@
 
         // ===== pilotage =====
         // Inventaire des box relevé par le maître (GET /api/v1/pilotage/boxes), L1 : lecture seule, aucune action. Module absent (404), session refusée (401), erreur ou liste vide : panneau masqué.
-        // Une valeur null s'affiche « — » (jamais 0 inventé) ; mains_liees null = « inconnu ». Rafraîchi toutes les 30 s, suspendu onglet masqué.
+        // Une valeur null s'affiche « — » (jamais 0 inventé) ; mains_liees null = « inconnu ». Rafraîchi toutes les 30 s, suspendu onglet masqué,
+        // et aussitôt au retour sur l'onglet.
         const PIL_MS = 30000;
         const pilNum = (v, suffixe) => (v == null || !isFinite(+v)) ? '—' : fmt(v) + (suffixe || '');
         function pilReseau(b) { return b.reseau === 'maillage' ? 'maillage' : (b.client ? 'client ' + b.client : (b.reseau || '—')); }
+        // vu_le illisible (texte, infini, négatif) : « jamais », jamais un RangeError d'Invalid Date hors du try
+        function pilVu(v) { const s = typeof v === 'number' || typeof v === 'string' ? Number(v) : NaN; return Number.isFinite(s) && s > 0 && s < 1e11 ? ago(new Date(s * 1000).toISOString()) : 'jamais'; }
         async function chargerPilotage() {
             let liste = [];
             try {
@@ -301,9 +304,9 @@
             const body = $('pil-body'); clear(body);
             $('pil-pan').hidden = !liste.length; $('pil-n').textContent = String(liste.length);
             liste.forEach(b => {
-                const on = b.en_ligne === true, tr = el('tr', 'node-row' + (on ? '' : ' is-stale'));
+                const on = b.en_ligne === true, tr = el('tr', on ? null : 'is-stale');   // sans classe de ligne cliquable (curseur main) : aucun clic ici
                 const st = el('td'), dot = el('span', 'dot ' + (on ? 'ok' : 'stale'));
-                st.append(dot, el('span', null, on ? 'en ligne' : 'vu ' + (b.vu_le ? ago(new Date(Number(b.vu_le) * 1000).toISOString()) : 'jamais')));
+                st.append(dot, el('span', null, on ? 'en ligne' : 'vu ' + pilVu(b.vu_le)));
                 const ml = el('td'), pm = b.mains_liees === true ? ['up', 'oui'] : b.mains_liees === false ? ['down', 'non'] : ['', 'inconnu'];
                 ml.append(el('span', 'pill ' + pm[0], pm[1]));
                 tr.append(el('td', 'hostname-col', b.nom || b.cle || '—'), el('td', null, pilReseau(b)), st,
@@ -314,6 +317,7 @@
             hauteur();
         }
         setInterval(() => { if (document.visibilityState !== 'hidden') chargerPilotage(); }, PIL_MS);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') chargerPilotage(); });   // retour sur l'onglet
         // ===== fin pilotage =====
 
         async function loadFleet() {
