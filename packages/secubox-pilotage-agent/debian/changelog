@@ -31,11 +31,13 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
       du maître (`wg show <interface> allowed-ips`, /usr/bin/wg sans shell, préfixe le plus long) doit avoir la clé de
       l'ancre, comparée en temps constant : wg-mesh/10.10.0.1 et /etc/secubox/p2p/ancre-maitre.json (box du
       propriétaire), wg-autoload/10.64.0.1 et la clé du hub posée à l'enrôlement dans /etc/wireguard/wg-autoload.conf
-      (box cliente, R-L2-9). Rend {"ok": true|false}, code 0 ; toute lecture manquée vaut faux ; chaque échec est
-      audité (refus « ancre absente » ou « ancre différente »), sans clé recopiée.
+      (box cliente, R-L2-9, R-L2-17). Rend, code 0, {"ok": true} ou {"ok": false, "raison": absente|differente|
+      illisible} (R-L2-19) ; jamais vrai par défaut ; chaque échec est audité (« ancre absente|différente|
+      illisible »), sans clé recopiée. Ancre à root ou secubox, sans écriture groupe/autres (R-L2-20).
     - Agent : vérification au démarrage puis toutes les heures par `sudo -n /usr/sbin/secubox-pilotagectl
-      ancre-verifier` ; échec → canal coupé (rien ne part, aucun Operate traité), revérifié avec recul jusqu'à 1 h ;
-      la reconnexion suivante qui réussit notifie X_SECUBOX_AnchorFailed.
+      ancre-verifier`. Ancre absente : canal gardé en lecture (L1), tout Operate refusé, chaque refus audité par le
+      ctl. Ancre différente ou illisible : canal coupé (rien ne part, aucun Operate traité), revérifié avec recul
+      jusqu'à 1 h ; la reconnexion suivante qui réussit notifie X_SECUBOX_AnchorFailed.
     - Unité : CAP_NET_ADMIN ajouté à la borne (le noyau l'exige pour `wg show`). Dépend de wireguard-tools.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100

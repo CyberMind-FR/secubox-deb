@@ -96,6 +96,7 @@ class Banc:
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(brut if brut is not None else json.dumps(
             {"cle_publique": cle, "adresse": "192.168.1.1", "nom": "gk2", "empreinte": "0123456789abcdef"}))
+        f.chmod(0o644)                                   # comme ancre.ecrire (secubox-p2p) et sbx-netflash
 
     def tunnel_autoload(self, cle_hub):
         """Configuration wg-autoload posée à l'enrôlement par secubox-autoload-agent (clé du hub = hub.pub)."""
@@ -201,9 +202,9 @@ def test_argv_invalide_rend_2(banc):
 
 def test_verbes_valides_acceptes_ou_non_disponibles(banc):
     """R-L2-1 : argv validé pour toute la liste fermée ; support, renommer « non disponible » (code 0) ; ancre-verifier
-    est livré (tâche 2) : sans ancre, il rend ok faux."""
+    est livré (tâche 2) : sans ancre, il rend ok faux, raison « absente »."""
     rc, sortie, _ = banc.run("ancre-verifier", agent=True)
-    assert rc == 0 and sortie["ok"] is False
+    assert rc == 0 and sortie == {"ok": False, "raison": "absente"}
     for argv in (["support", "ouvrir", "s-01"], ["support", "fermer", "s-01"], ["renommer", "box-2"]):
         rc, sortie, _ = banc.run(*argv, agent=True)
         assert rc == 0 and sortie == {"ok": False, "refus": "non disponible"}, argv
@@ -548,18 +549,21 @@ def test_ancre_conforme(banc):
 
 
 def test_ancre_differente_refuse(banc):
-    """Le pair qui porte l'adresse du maître n'a pas la clé de l'ancre → ok faux, refus « ancre différente » audité.
-    Le pair retenu est celui que WireGuard choisirait : le préfixe le plus long qui contient l'adresse du maître."""
+    """Le pair qui porte l'adresse du maître n'a pas la clé de l'ancre → ok faux, raison « differente », refus
+    « ancre différente » audité. Le pair retenu est celui que WireGuard choisirait : le préfixe le plus long qui
+    contient l'adresse du maître ; aucun pair ne la porte → différente aussi (le maître ancré n'est pas joignable)."""
     banc.ancre(CLE_MAITRE)
+    differente = {"ok": False, "raison": "differente"}
     banc.pairs((CLE_AUTRE, "10.10.0.0/24"))
-    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
-    assert rc == 0 and sortie["ok"] is False and sortie["refus"] == "ancre différente"
+    assert banc.run("ancre-verifier", agent=True)[:2] == (0, differente)
     # un pair qui s'approprie 10.10.0.1/32 l'emporte sur le /24 légitime : refusé
     banc.pairs((CLE_MAITRE, "10.10.0.0/24"), (CLE_AUTRE, "10.10.0.1/32"))
-    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
-    assert rc == 0 and sortie["ok"] is False and sortie["refus"] == "ancre différente"
+    assert banc.run("ancre-verifier", agent=True)[:2] == (0, differente)
+    for lignes in (((CLE_MAITRE, "10.10.1.0/24"),), ((CLE_MAITRE, "(none)"),)):
+        banc.pairs(*lignes)
+        assert banc.run("ancre-verifier", agent=True)[:2] == (0, differente), lignes
     refus = refus_ancre(banc)
-    assert [e["refus"] for e in refus] == ["ancre différente", "ancre différente"]
+    assert [e["refus"] for e in refus] == ["ancre différente"] * 4
     assert all(e["origine"] == "maitre" for e in refus)
     # aucune clé recopiée dans l'audit
     texte = (banc.r / "var/log/secubox/audit.log").read_text()
@@ -568,48 +572,68 @@ def test_ancre_differente_refuse(banc):
     banc.cliente()
     banc.tunnel_autoload(CLE_MAITRE)
     banc.pairs((CLE_AUTRE, "10.64.0.1/32"))
+    assert banc.run("ancre-verifier", agent=True)[:2] == (0, differente)
+
+
+def test_ancre_absente_rend_absente(banc):
+    """R-L2-19 : aucune ancre posée (box du propriétaire jointe à la main, sans ancre-maitre.json ; box cliente sans
+    configuration wg-autoload) → ok faux, raison « absente », code 0, refus « ancre absente » audité ; wg n'est pas
+    interrogé (rien à comparer). L'agent garde alors le canal en lecture et refuse toute action."""
+    banc.pairs((CLE_MAITRE, "10.10.0.0/24 10.64.0.1/32"))
     rc, sortie, _ = banc.run("ancre-verifier", agent=True)
-    assert rc == 0 and sortie["ok"] is False and sortie["refus"] == "ancre différente"
+    assert rc == 0 and sortie == {"ok": False, "raison": "absente"}
+    banc.cliente()
+    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
+    assert rc == 0 and sortie == {"ok": False, "raison": "absente"}
+    assert banc.appels_wg() == []
+    assert [e["refus"] for e in refus_ancre(banc)] == ["ancre absente", "ancre absente"]
+    assert banc.lancements() == []
 
 
 def test_ancre_illisible_jamais_vraie(banc):
-    """Toute erreur de lecture (ancre absente, JSON invalide, clé mal formée, lien, wg en échec, aucun pair pour le
-    maître, interface absente) rend ok faux, code 0, avec un refus audité ; jamais ok vrai."""
+    """Toute erreur de lecture (JSON invalide, clé mal formée, lien, droits d'écriture du groupe ou des autres
+    (R-L2-20), wg en échec, sortie de wg illisible, configuration wg-autoload non root) rend ok faux, raison
+    « illisible », code 0, avec un refus « ancre illisible » audité ; jamais ok vrai."""
     banc.pairs((CLE_MAITRE, "10.10.0.0/24"))
     resultats = []
-    # rejoue chaque état et relève le verdict
+
+    def verdict(env=None):
+        rc, sortie, _ = banc.run("ancre-verifier", agent=True, env=env)
+        resultats.append((rc, sortie))
+
     f = banc.r / "etc/secubox/p2p/ancre-maitre.json"
-    etats = [None, "{pas du json", json.dumps({"cle_publique": "courte"}), json.dumps(["x"]),
-             json.dumps({"adresse": "10.0.0.1"}), json.dumps({"cle_publique": CLE_MAITRE + "\n"})]
-    for brut in etats:
-        if brut is None:
-            f.unlink(missing_ok=True)
-        else:
-            banc.ancre(brut=brut)
-        rc, sortie, _ = banc.run("ancre-verifier", agent=True)
-        resultats.append((rc, sortie["ok"], sortie.get("refus")))
+    for brut in ("{pas du json", json.dumps({"cle_publique": "courte"}), json.dumps(["x"]),
+                 json.dumps({"adresse": "10.0.0.1"}), json.dumps({"cle_publique": CLE_MAITRE + "\n"})):
+        banc.ancre(brut=brut)
+        verdict()
+    # ancre inscriptible par le groupe ou les autres (R-L2-20 : root ou secubox, sans écriture groupe/autres)
+    banc.ancre(CLE_MAITRE)
+    for mode in (0o664, 0o646):
+        f.chmod(mode)
+        verdict()
+    f.chmod(0o644)
     # ancre par lien symbolique (le dossier /etc/secubox appartient au compte partagé secubox) : jamais suivie
     vraie = banc.r / "ancre-ailleurs.json"
     vraie.write_text(json.dumps({"cle_publique": CLE_MAITRE}))
     f.unlink()
     f.symlink_to(vraie)
-    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
-    resultats.append((rc, sortie["ok"], sortie.get("refus")))
+    verdict()
     f.unlink()
     banc.ancre(CLE_MAITRE)
-    # wg en échec
-    rc, sortie, _ = banc.run("ancre-verifier", agent=True, env={"FAUX_WG_ECHEC": "1"})
-    resultats.append((rc, sortie["ok"], sortie.get("refus")))
-    # aucun pair ne porte l'adresse du maître ; sortie de wg illisible
-    for lignes in (((CLE_MAITRE, "10.10.1.0/24"),), ((CLE_MAITRE, "(none)"),), (("pas-une-cle", "10.10.0.0/24"),)):
-        banc.pairs(*lignes)
-        rc, sortie, _ = banc.run("ancre-verifier", agent=True)
-        resultats.append((rc, sortie["ok"], sortie.get("refus")))
-    # box cliente sans configuration wg-autoload
+    verdict(env={"FAUX_WG_ECHEC": "1"})                  # wg en échec
+    banc.pairs(("pas-une-cle", "10.10.0.0/24"))           # sortie de wg illisible
+    verdict()
+    banc.pairs((CLE_MAITRE, "10.10.0.0/33"))
+    verdict()
+    # box cliente : configuration wg-autoload inscriptible par d'autres, ou sans pair
     banc.cliente()
     banc.pairs((CLE_MAITRE, "10.64.0.1/32"))
-    rc, sortie, _ = banc.run("ancre-verifier", agent=True)
-    resultats.append((rc, sortie["ok"], sortie.get("refus")))
-    assert all(r == (0, False, "ancre absente") for r in resultats), resultats
-    assert len(refus_ancre(banc)) == len(resultats)
+    banc.tunnel_autoload(CLE_MAITRE)
+    (banc.r / "etc/wireguard/wg-autoload.conf").chmod(0o622)
+    verdict()
+    (banc.r / "etc/wireguard/wg-autoload.conf").write_text("[Interface]\nAddress = 10.64.0.9/32\n")
+    (banc.r / "etc/wireguard/wg-autoload.conf").chmod(0o600)
+    verdict()
+    assert all(r == (0, {"ok": False, "raison": "illisible"}) for r in resultats), resultats
+    assert [e["refus"] for e in refus_ancre(banc)] == ["ancre illisible"] * len(resultats)
     assert banc.lancements() == []

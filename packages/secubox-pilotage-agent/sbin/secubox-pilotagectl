@@ -24,8 +24,9 @@ Verbes (liste fermée) :
   renouveler-secrets                       secubox-renouvelle-secrets --tout --oui, opération longue
   renommer <nom>                           libellé DNS ; « non disponible » jusqu'à la tâche 5
   support <ouvrir|fermer> <id>             « non disponible » jusqu'à la tâche 4
-  ancre-verifier                           {"ok": true|false} : le pair WireGuard qui porte l'adresse du maître a-t-il
-                                           la clé de l'ancre ? (lecture, permise depuis l'agent ; échec audité)
+  ancre-verifier                           {"ok": true} | {"ok": false, "raison": absente|differente|illisible} : le
+                                           pair WireGuard qui porte l'adresse du maître a-t-il la clé de l'ancre ?
+                                           (lecture, permise depuis l'agent ; échec audité)
   consentement <accepter|refuser> <id>     LOCAL SEULEMENT (refusé quand l'agent l'appelle par sudo)
   mains-liees <on|off>                     LOCAL SEULEMENT
   politique <action>                       {"autorise", "consentement", "raison"} ; actions : releve, reboot,
@@ -60,9 +61,12 @@ Ancre (D1, tâche 2) : box du propriétaire (wg-mesh) → le pair de wg-mesh qui
 R-L2-9) → le pair de wg-autoload qui porte 10.64.0.1 doit avoir la clé du hub posée à l'enrôlement par
 secubox-autoload-agent (`PublicKey` de /etc/wireguard/wg-autoload.conf, root 0600 : c'est le hub.pub d'Auto-Load
 reçu par HTTPS épinglé). Le pair retenu est celui que WireGuard choisit (préfixe le plus long qui contient l'adresse).
-Comparaison en temps constant. Toute lecture manquée (ancre absente ou illisible, wg en échec, aucun pair) rend
-{"ok": false, "refus": "ancre absente"} ; une autre clé, {"ok": false, "refus": "ancre différente"} ; code 0, refus
-audité, aucune clé recopiée. Une réussite n'est pas auditée (lecture, appelée toutes les heures par l'agent).
+Comparaison en temps constant. Sortie, code 0 : {"ok": true}, ou {"ok": false, "raison": r} avec r = « absente »
+(aucune ancre posée : l'agent garde la lecture mais refuse toute action, R-L2-19), « differente » (autre clé, ou aucun
+pair ne porte l'adresse du maître) ou « illisible » (JSON invalide, clé mal formée, lien, droits, wg en échec) ; ces
+deux-là coupent le canal. L'ancre appartient à root ou à secubox, sans écriture groupe/autres (R-L2-20). Refus
+audité (« ancre absente|différente|illisible »), aucune clé recopiée. Une réussite n'est pas auditée (lecture,
+appelée toutes les heures par l'agent).
 
 SBX_RACINE (tests) : racine substituée, avec systemd-run, systemctl et wg cherchés dans le PATH, honorée SEULEMENT si
 elle est non vide et que l'appelant est le processus lui-même (root lancé par root, ou test sans privilège) ; jamais
@@ -425,18 +429,23 @@ def unites_protegees(ctx):
 
 # --- Ancre du maître (D1) -----------------------------------------------------------------------------------------
 
-def lire_borne(chemin, root_seulement=False):
-    """Contenu d'un petit fichier ordinaire, sans suivre de lien ; None s'il manque ou n'est pas fiable.
-    root_seulement : propriétaire = uid effectif et aucune écriture groupe/autres (configuration WireGuard)."""
+ABSENT = object()                                       # fichier inexistant : aucune ancre posée (R-L2-19)
+
+
+def lire_borne(chemin, proprietaires):
+    """Contenu d'un petit fichier ordinaire, sans suivre de lien, appartenant à l'un des uid donnés et sans écriture
+    pour le groupe ni les autres. ABSENT s'il n'existe pas ; None s'il n'est pas fiable ou illisible."""
     try:
         f = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return ABSENT
     except OSError:
-        return None
+        return None                                     # lien (ELOOP), droits, etc. : illisible
     try:
         st = os.fstat(f)
         if not stat.S_ISREG(st.st_mode) or st.st_size > 65536:
             return None
-        if root_seulement and (st.st_uid != os.geteuid() or st.st_mode & 0o022):
+        if st.st_uid not in proprietaires or st.st_mode & 0o022:
             return None
         return os.read(f, 65537).decode("utf-8")
     except (OSError, UnicodeDecodeError):
@@ -446,20 +455,28 @@ def lire_borne(chemin, root_seulement=False):
 
 
 def ancre_attendue(ctx, interface, maitre):
-    """Clé publique attendue pour le maître, ou None (absente, illisible, mal formée)."""
+    """Clé publique attendue pour le maître ; ABSENT si aucune ancre n'est posée ; None si elle est illisible."""
     if interface == "wg-mesh":
-        brut = lire_borne(ctx.ancre)
+        # R-L2-20 : root, ou le compte secubox (premier-pas l'écrit sous ce compte), sans écriture groupe/autres.
+        proprietaires = {os.geteuid()}
         try:
-            d = json.loads(brut) if brut is not None else None
+            proprietaires.add(pwd.getpwnam("secubox").pw_uid)
+        except KeyError:
+            pass
+        brut = lire_borne(ctx.ancre, proprietaires)
+        if brut is ABSENT or brut is None:
+            return brut
+        try:
+            d = json.loads(brut)
         except ValueError:
             return None
         cle_pub = d.get("cle_publique") if isinstance(d, dict) else None
         return cle_pub if isinstance(cle_pub, str) and RE_CLE_WG.fullmatch(cle_pub) else None
     # Box cliente : la clé du hub reçue à l'enrôlement (réponse HTTPS épinglée, validée par secubox-autoload-agent),
-    # seul [Peer] de la configuration, celui dont AllowedIPs contient l'adresse du hub.
-    brut = lire_borne(ctx.conf_autoload, root_seulement=True)
-    if brut is None:
-        return None
+    # seul [Peer] de la configuration (root, 0600), celui dont AllowedIPs contient l'adresse du hub (R-L2-17).
+    brut = lire_borne(ctx.conf_autoload, {os.geteuid()})
+    if brut is ABSENT or brut is None:
+        return brut
     pairs, courant = [], None
     for ligne in brut.splitlines():
         ligne = ligne.strip()
@@ -512,21 +529,31 @@ def pair_du_maitre(ctx, interface, maitre):
     return None if ex_aequo else retenu
 
 
+RAISONS = {"absente": "ancre absente", "differente": "ancre différente", "illisible": "ancre illisible"}
+
+
 def verifier_ancre(ctx):
-    """{"ok": true} seulement si le pair qui porte l'adresse du maître a la clé de l'ancre ; chaque échec est audité."""
+    """{"ok": true} seulement si le pair qui porte l'adresse du maître a la clé de l'ancre. Sinon {"ok": false,
+    "raison": absente|differente|illisible} (R-L2-19 : l'agent garde la lecture sur « absente », coupe sinon) ;
+    chaque échec est audité."""
     interface = "wg-mesh" if proprietaire(ctx) else "wg-autoload"     # R-L2-9 : sans wg-mesh, box cliente
     maitre = MAILLAGES[interface]
     attendue = ancre_attendue(ctx, interface, maitre)
-    vue = pair_du_maitre(ctx, interface, maitre) if attendue is not None else None
-    if attendue is None or not vue:
-        motif = "ancre absente"
-    elif hmac.compare_digest(vue.encode("ascii"), attendue.encode("ascii")):
-        return {"ok": True}
+    if attendue is ABSENT:
+        raison = "absente"                              # rien à comparer : wg n'est pas interrogé
+    elif attendue is None:
+        raison = "illisible"
     else:
-        motif = "ancre différente"
-    err(f"{motif} ({interface})")
-    auditer(ctx, "pilotage_refus", verbe="ancre-verifier", refus=motif)
-    return {"ok": False, "refus": motif}
+        vue = pair_du_maitre(ctx, interface, maitre)
+        if vue is None:
+            raison = "illisible"
+        elif vue and hmac.compare_digest(vue.encode("ascii"), attendue.encode("ascii")):
+            return {"ok": True}
+        else:
+            raison = "differente"                       # autre clé, ou aucun pair ne porte l'adresse du maître
+    err(f"{RAISONS[raison]} ({interface})")
+    auditer(ctx, "pilotage_refus", verbe="ancre-verifier", refus=RAISONS[raison])
+    return {"ok": False, "raison": raison}
 
 
 # --- Analyse de l'argv ------------------------------------------------------------------------------------------------

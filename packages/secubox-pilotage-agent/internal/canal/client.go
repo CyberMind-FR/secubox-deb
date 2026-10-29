@@ -8,11 +8,14 @@
 // n'écoute sur aucun port ; tout ce qui vient du réseau est borné et validé
 // (taille, nombre, forme) avant usage.
 //
-// Ancre (D1, #3126 L2) : quand Config.Ancre est posée, rien ne part vers le
-// maître (bonjour, sondage, réponses, notifications) et aucun Operate n'est
-// traité tant qu'elle n'a pas rendu vrai ; elle est rappelée au démarrage puis
-// toutes les PeriodeAncre (1 h). Un échec coupe le canal ; la reconnexion
-// suivante qui réussit notifie la coupure au maître (X_SECUBOX_AnchorFailed).
+// Ancre (D1, #3126 L2) : quand Config.Ancre est posée, elle est rappelée au
+// démarrage puis toutes les PeriodeAncre (1 h). Aucun Operate n'est traité
+// tant qu'elle n'a pas rendu AncreOK. AncreAbsente (aucune ancre posée sur la
+// box, R-L2-19) garde le canal en lecture comme en L1, et chaque Operate refusé
+// redemande la vérification au ctl, qui audite « ancre absente ». AncreDifferente
+// ou AncreIllisible coupent le canal : rien ne part vers le maître (bonjour,
+// sondage, réponses, notifications) ; la reconnexion suivante qui réussit
+// notifie la coupure au maître (X_SECUBOX_AnchorFailed).
 package canal
 
 import (
@@ -64,12 +67,26 @@ const (
 	maxEntetes     = 16 << 10
 )
 
-const msgRefus = "commande refusée (L1 : lecture seule)"
+const (
+	msgRefus        = "commande refusée (L1 : lecture seule)"
+	msgAncreAbsente = "ancre absente : action refusée (lecture seule)"
+)
 
 var (
 	reMsgID   = regexp.MustCompile(`^[0-9a-f]{16}$`)
 	errTaille = errors.New("réponse du maître trop volumineuse")
 	errAncre  = errors.New("ancre du maître non vérifiée : canal coupé")
+)
+
+// Verdict est le résultat de la vérification de l'ancre (sortie du ctl).
+type Verdict string
+
+// Verdicts possibles ; tout ce qui n'est pas AncreOK ou AncreAbsente coupe le canal.
+const (
+	AncreOK         Verdict = "ok"         // le pair du maître a la clé de l'ancre
+	AncreAbsente    Verdict = "absente"    // aucune ancre posée : lecture seule, aucune action
+	AncreDifferente Verdict = "differente" // autre clé : canal coupé
+	AncreIllisible  Verdict = "illisible"  // ancre, wg ou ctl illisible : canal coupé
 )
 
 // Config règle le client. Les champs à zéro prennent leur valeur par défaut.
@@ -83,8 +100,9 @@ type Config struct {
 	Version   string        // version de l'agent annoncée à /bonjour
 	BootID    string        // identifiant de démarrage de la box annoncé à /bonjour
 	// Ancre vérifie que le pair WireGuard du maître porte la clé ancrée (le ctl
-	// root, `ancre-verifier`) ; nil : aucune vérification (tests du canal).
-	Ancre        func(ctx context.Context) bool
+	// root, `ancre-verifier`) et rend son verdict ; nil : aucune vérification
+	// (tests du canal).
+	Ancre        func(ctx context.Context) Verdict
 	PeriodeAncre time.Duration // intervalle des revérifications de l'ancre (1 h)
 }
 
@@ -101,7 +119,7 @@ type Client struct {
 	releve  atomic.Bool                                      // un relevé est en cours
 	errCfg  error                                            // configuration invalide : aucune connexion
 	horloge func() time.Time                                 // injectable pour les tests
-	ancreOK atomic.Bool                                      // ancre vérifiée : seul état où quelque chose part
+	verdict atomic.Value                                     // Verdict courant ; vide : pas encore vérifiée
 	// Lus et écrits par la seule goroutine de Tourner :
 	ancreVue time.Time // dernière vérification réussie
 	coupure  int64     // instant (Unix) de la coupure à notifier ; 0 : rien à notifier
@@ -209,7 +227,7 @@ func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error 
 				return ctx.Err()
 			}
 			// Chaque échec est audité par le ctl : le recul monte jusqu'à la période (24 lignes par jour au plus).
-			log.Printf("canal : %v, aucun Operate (nouvelle vérification dans %s)", errAncre, reculAncre)
+			log.Printf("canal : %v (%s), aucun Operate (nouvelle vérification dans %s)", errAncre, c.etatAncre(), reculAncre)
 			if e := c.dormir(ctx, reculAncre); e != nil {
 				return e
 			}
@@ -245,35 +263,54 @@ func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error 
 	}
 }
 
-// ancreAJour rend vrai si l'ancre est vérifiée depuis moins de PeriodeAncre,
-// sinon la revérifie. Un échec coupe le canal : plus rien ne part (sonder et
-// poster refusent), les connexions inactives sont fermées, le bonjour sera
-// refait, et la coupure est retenue pour être notifiée à la reconnexion.
+func (c *Client) etatAncre() Verdict {
+	v, _ := c.verdict.Load().(Verdict)
+	return v
+}
+
+func ouvert(v Verdict) bool { return v == AncreOK || v == AncreAbsente }
+
+// verifierAncre appelle le ctl et retient son verdict (seule la goroutine de
+// Tourner l'appelle). Rend le verdict.
+func (c *Client) verifierAncre(ctx context.Context) Verdict {
+	v := c.cfg.Ancre(ctx)
+	if !ouvert(v) && v != AncreDifferente {
+		v = AncreIllisible // valeur inconnue : fermé par défaut
+	}
+	c.verdict.Store(v)
+	if ouvert(v) {
+		c.ancreVue = c.horloge()
+	}
+	return v
+}
+
+// ancreAJour rend vrai si le canal peut servir (ancre vérifiée, ou absente :
+// lecture seule) depuis moins de PeriodeAncre, sinon la revérifie. Un verdict
+// différente ou illisible coupe le canal : plus rien ne part (sonder et poster
+// refusent), les connexions inactives sont fermées, le bonjour sera refait, et
+// la coupure est retenue pour être notifiée à la reconnexion.
 func (c *Client) ancreAJour(ctx context.Context, bonjour *bool) bool {
 	if c.cfg.Ancre == nil {
 		return true
 	}
-	maintenant := c.horloge()
-	if c.ancreOK.Load() && maintenant.Sub(c.ancreVue) < c.cfg.PeriodeAncre {
+	if ouvert(c.etatAncre()) && c.horloge().Sub(c.ancreVue) < c.cfg.PeriodeAncre {
 		return true
 	}
-	if c.cfg.Ancre(ctx) {
-		c.ancreOK.Store(true)
-		c.ancreVue = maintenant
+	if ouvert(c.verifierAncre(ctx)) {
 		return true
 	}
-	c.ancreOK.Store(false)
 	if c.coupure == 0 {
-		c.coupure = maintenant.Unix()
+		c.coupure = c.horloge().Unix()
 	}
 	*bonjour = false
 	c.http.CloseIdleConnections()
 	return false
 }
 
-// coupe rend vrai si le canal est coupé faute d'ancre vérifiée.
+// coupe rend vrai si le canal est coupé (ancre différente, illisible, ou pas
+// encore vérifiée).
 func (c *Client) coupe() bool {
-	return c.cfg.Ancre != nil && !c.ancreOK.Load()
+	return c.cfg.Ancre != nil && !ouvert(c.etatAncre())
 }
 
 // cycle fait un tour : bonjour (une fois), sondage, traitement, réponses.
@@ -534,8 +571,16 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 			continue
 		}
 		if rq.Type == "OPERATE" {
-			if c.coupe() {
-				reps = append(reps, erreur(rq.MsgID, errAncre.Error()))
+			if v := c.etatAncre(); c.cfg.Ancre != nil && v != AncreOK {
+				if v == AncreAbsente {
+					// R-L2-19 : lecture seule ; le refus est audité par le ctl (« ancre absente »), à qui la
+					// vérification est redemandée : une ancre posée depuis rend la main aux actions suivantes.
+					log.Printf("canal : Operate refusé, ancre absente")
+					c.verifierAncre(ctx)
+					reps = append(reps, erreur(rq.MsgID, msgAncreAbsente))
+				} else {
+					reps = append(reps, erreur(rq.MsgID, errAncre.Error()))
+				}
 				continue
 			}
 			rep, run := c.operate(rq)

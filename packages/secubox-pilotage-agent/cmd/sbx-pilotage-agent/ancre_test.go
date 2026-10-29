@@ -10,28 +10,36 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/canal"
 )
 
-// TestVerifierAncreParLeCtl : seule la sortie exacte {"ok": true} du ctl vaut ancre vérifiée ; toute autre sortie,
-// une erreur ou un code non nul vaut échec. L'argv est celui que le sudoers accorde.
+// TestVerifierAncreParLeCtl : seule la sortie exacte {"ok": true} du ctl vaut ancre vérifiée ; « raison » absente ou
+// differente est reprise (R-L2-19) ; toute autre sortie, une erreur ou un code non nul vaut illisible (canal coupé).
+// L'argv est celui que le sudoers accorde.
 func TestVerifierAncreParLeCtl(t *testing.T) {
 	cas := []struct {
 		sortie string
 		err    error
-		ok     bool
+		v      canal.Verdict
 	}{
-		{`{"ok": true}` + "\n", nil, true},
-		{`{"ok":true}`, nil, true},
-		{`{"ok": false, "refus": "ancre différente"}` + "\n", nil, false},
-		{`{"ok": false, "refus": "ancre absente"}`, nil, false},
-		{`{"ok": "true"}`, nil, false},
-		{`{"ok": 1}`, nil, false},
-		{`{}`, nil, false},
-		{`{"ok": true} {"ok": true}`, nil, false},
-		{`{"ok": true}` + "\nencore", nil, false},
-		{``, nil, false},
-		{`{"ok": true}`, errors.New("code 1"), false},
-		{`{"ok": false, "erreur": "audit impossible"}`, nil, false},
+		{`{"ok": true}` + "\n", nil, canal.AncreOK},
+		{`{"ok":true}`, nil, canal.AncreOK},
+		{`{"ok": false, "raison": "differente"}` + "\n", nil, canal.AncreDifferente},
+		{`{"ok": false, "raison": "absente"}`, nil, canal.AncreAbsente},
+		{`{"ok": false, "raison": "illisible"}`, nil, canal.AncreIllisible},
+		{`{"ok": false, "raison": "autre"}`, nil, canal.AncreIllisible},
+		{`{"ok": false}`, nil, canal.AncreIllisible},
+		{`{"ok": true, "raison": "absente"}`, nil, canal.AncreIllisible},
+		{`{"ok": "true"}`, nil, canal.AncreIllisible},
+		{`{"ok": 1}`, nil, canal.AncreIllisible},
+		{`{}`, nil, canal.AncreIllisible},
+		{`{"ok": true} {"ok": true}`, nil, canal.AncreIllisible},
+		{`{"ok": true}` + "\nencore", nil, canal.AncreIllisible},
+		{``, nil, canal.AncreIllisible},
+		{`{"ok": true}`, errors.New("code 1"), canal.AncreIllisible},
+		{`{"ok": false, "raison": "absente"}`, errors.New("code 1"), canal.AncreIllisible},
+		{`{"ok": false, "erreur": "audit impossible"}`, nil, canal.AncreIllisible},
 	}
 	for _, c := range cas {
 		var vu []string
@@ -39,8 +47,8 @@ func TestVerifierAncreParLeCtl(t *testing.T) {
 			vu = args
 			return []byte(c.sortie), c.err
 		}
-		if got := verifieurAncre(lancer)(context.Background()); got != c.ok {
-			t.Errorf("sortie %q, err %v : %v, attendu %v", c.sortie, c.err, got, c.ok)
+		if got := verifieurAncre(lancer)(context.Background()); got != c.v {
+			t.Errorf("sortie %q, err %v : %q, attendu %q", c.sortie, c.err, got, c.v)
 		}
 		if want := []string{"-n", "/usr/sbin/secubox-pilotagectl", "ancre-verifier"}; !reflect.DeepEqual(vu, want) {
 			t.Fatalf("argv %v, attendu %v", vu, want)
