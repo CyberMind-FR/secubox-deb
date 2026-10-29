@@ -16,5 +16,6 @@ sys.path.insert(0, str(ICI.parent / "secubox-premier-pas"))
 
 @pytest.fixture(autouse=True)
 def _verrou_de_synchronisation(tmp_path, monkeypatch):
-    """Le verrou de tunnel-sync et d'exporter-pairs (/run/secubox/autoload-sync.lock en production, #3126) vit dans le dossier de l'essai."""
-    monkeypatch.setenv("SECUBOX_AUTOLOAD_VERROU", str(tmp_path / "autoload-sync.lock"))
+    """Le verrou de tunnel-sync et d'exporter-pairs (/run/secubox-autoload/autoload-sync.lock en production, dossier à root seul, #3126 R-L2-6)
+    vit dans le dossier de l'essai ; son dossier est créé au premier usage."""
+    monkeypatch.setenv("SECUBOX_AUTOLOAD_VERROU", str(tmp_path / "run-secubox-autoload" / "autoload-sync.lock"))

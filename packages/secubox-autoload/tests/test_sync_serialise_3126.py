@@ -13,6 +13,7 @@ import importlib.machinery
 import importlib.util
 import json
 import os
+import stat
 import subprocess
 import threading
 from pathlib import Path
@@ -84,7 +85,7 @@ def base(tmp_path, monkeypatch):
     reg.reclamer(e.valeur, CLE_A)
     assert pairs.attribuer(CLE_A) == "10.64.0.2"
     return {"db": db, "reg": reg, "pairs": pairs, "id": e.id, "sortie": tmp_path / "autoload-public" / "pairs-publics.json",
-            "verrou": tmp_path / "autoload-sync.lock"}
+            "verrou": Path(os.environ["SECUBOX_AUTOLOAD_VERROU"])}
 
 
 def _clients(b):
@@ -172,18 +173,69 @@ def test_exporter_pairs_attend_le_verrou(base):
     assert fini.wait(5) and _clients(base) == {"lgm": "actif"}
 
 
-@pytest.mark.parametrize("piege", ["lien", "fifo"])
-def test_verrou_piege_remplace_jamais_suivi(base, tmp_path, piege):
-    """/run/secubox est 1777 : un autre compte peut y poser le nom du verrou avant root. Un lien n'est jamais suivi, une FIFO jamais gardée."""
+@pytest.mark.parametrize("piege", ["dossier", "lien"])
+def test_un_objet_plante_a_l_ancien_emplacement_ne_bloque_plus(base, tmp_path, monkeypatch, piege):
+    """R-L2-6 : l'ancien verrou vivait dans /run/secubox (1777) ; un `mkdir` de n'importe quel compte à sa place faisait échouer TOUS les
+    tunnel-sync et exporter-pairs (« Is a directory ») : plus aucune révocation n'atteignait WireGuard ni la projection. L'emplacement de
+    production est reproduit sous un faux /run : le piège posé dans le dossier partagé ne change plus rien."""
+    run = tmp_path / "run"
+    partage = run / "secubox"
+    partage.mkdir(parents=True)
+    partage.chmod(0o1777)
+    if piege == "dossier":
+        (partage / "autoload-sync.lock").mkdir()
+        (partage / "autoload-sync.lock" / "rempli").write_text("x")
+    else:
+        (partage / "autoload-sync.lock").symlink_to(tmp_path / "ailleurs")
+    monkeypatch.setenv("SECUBOX_AUTOLOAD_VERROU", str(run / T.VERROU_DEFAUT.relative_to("/run")))
+    ctl = _charger_ctl()
+    monkeypatch.setattr(ctl.T, "synchroniser", lambda *a, **k: 1)
+    assert ctl.main(["tunnel-sync"]) == 0 and ctl.main(["exporter-pairs"]) == 0
+    assert _clients(base) == {"lgm": "actif"}
+
+
+def test_verrou_dans_un_dossier_a_root_seul():
+    """Le dossier du verrou n'est inscriptible que par root (0700 root:root) : aucun autre compte ne peut y poser quoi que ce soit."""
+    assert T.VERROU_DEFAUT == Path("/run/secubox-autoload/autoload-sync.lock")
+    lignes = [x.split() for x in (ICI / "tmpfiles.d" / "secubox-autoload.conf").read_text().splitlines() if x.strip() and not x.startswith("#")]
+    assert lignes == [["d", "/run/secubox-autoload", "0700", "root", "root", "-"]]
+    regles = (ICI / "debian" / "rules").read_text()
+    assert "tmpfiles.d/secubox-autoload.conf" in regles and "usr/lib/tmpfiles.d" in regles
+    unite = (ICI / "systemd" / "secubox-autoload.service").read_text().splitlines()
+    chemins = [c for x in unite if x.startswith("ReadWritePaths=") for c in x.split("=", 1)[1].split()]
+    assert "-/run/secubox-autoload" in chemins                  # l'assistant root (sudo) hérite du bac à sable du service
+    post = (ICI / "debian" / "postinst").read_text()
+    creation = post.index("systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-autoload.conf")
+    assert creation < post.index("/usr/sbin/autoloadctl exporter-pairs") < post.index("systemctl enable secubox-autoload.service")
+
+
+def test_dossier_du_verrou_cree_en_0700_puis_resserre(base):
+    dossier = base["verrou"].parent
+    assert not dossier.exists()
+    assert _charger_ctl().main(["exporter-pairs"]) == 0
+    st = dossier.stat()
+    assert stat.S_IMODE(st.st_mode) == 0o700 and st.st_uid == os.geteuid()
+    dossier.chmod(0o1777)                                       # mauvais réglage : resserré au passage suivant
+    assert _charger_ctl().main(["exporter-pairs"]) == 0
+    assert stat.S_IMODE(dossier.stat().st_mode) == 0o700
+
+
+@pytest.mark.parametrize("piege", ["lien", "fifo", "dossier"])
+def test_verrou_qui_n_est_pas_un_fichier_ordinaire_refuse(base, tmp_path, piege, capsys):
+    """Dans le dossier de root, seul root aurait pu poser autre chose qu'un fichier : O_NOFOLLOW, puis fstat (fichier ordinaire du compte),
+    sinon refus net — jamais suivi, jamais retiré."""
     victime = tmp_path / "victime"
     victime.write_text("intact")
+    base["verrou"].parent.mkdir(mode=0o700)
     if piege == "lien":
         base["verrou"].symlink_to(victime)
-    else:
+    elif piege == "fifo":
         os.mkfifo(base["verrou"])
-    assert _charger_ctl().main(["exporter-pairs"]) == 0
-    assert victime.read_text() == "intact"
-    assert base["verrou"].is_file() and not base["verrou"].is_symlink()
+    else:
+        base["verrou"].mkdir()
+    assert _charger_ctl().main(["exporter-pairs"]) == 1
+    assert "verrou" in capsys.readouterr().err
+    assert victime.read_text() == "intact" and not base["sortie"].exists()
 
 
 # ── N4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -230,7 +282,7 @@ def test_l_export_lance_par_le_service_peut_ecrire():
     unite = (ICI / "systemd" / "secubox-autoload.service").read_text().splitlines()
     chemins = [c for x in unite if x.startswith("ReadWritePaths=") for c in x.split("=", 1)[1].split()]
     assert "-/var/lib/secubox/autoload-public" in chemins
-    assert {"/run/secubox", "/etc/wireguard"} <= set(chemins)                                 # le verrou et la configuration du tunnel
+    assert {"/run/secubox-autoload", "/etc/wireguard"} <= {c.lstrip("-") for c in chemins}   # le verrou et la configuration du tunnel
     post = (ICI / "debian" / "postinst").read_text()
     assert "/usr/sbin/autoloadctl exporter-pairs" in post
     assert post.index("/usr/sbin/autoloadctl exporter-pairs") < post.index("systemctl enable secubox-autoload.service")

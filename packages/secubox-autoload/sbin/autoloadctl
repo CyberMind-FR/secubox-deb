@@ -16,7 +16,7 @@
                                            service) ne relance pas un wg-autoload dont l'unité est désactivée
   autoloadctl exporter-pairs               publie /var/lib/secubox/autoload-public/pairs-publics.json (root, 0644, sans secret) pour le pilotage (#3126)
 
-tunnel-sync et exporter-pairs passent un par un (flock sur /run/secubox/autoload-sync.lock) : un passage qui a lu les pairs avant une
+tunnel-sync et exporter-pairs passent un par un (flock sur /run/secubox-autoload/autoload-sync.lock, dossier à root seul) : un passage qui a lu les pairs avant une
 révocation ne repose jamais le pair révoqué après la synchronisation de la révocation (#3126).
 """
 import argparse

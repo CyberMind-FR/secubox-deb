@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import errno
 import fcntl
 import ipaddress
 import os
@@ -38,7 +37,7 @@ INFRA = "admin.gk2.secubox.in"
 CLE_HUB_DEFAUT = Path("/etc/secubox/secrets/autoload-hub.key")
 CONF_DEFAUT = Path("/etc/wireguard/wg-autoload.conf")
 UNITE = f"wg-quick@{INTERFACE}.service"
-VERROU_DEFAUT = Path("/run/secubox/autoload-sync.lock")
+VERROU_DEFAUT = Path("/run/secubox-autoload/autoload-sync.lock")   # dossier À ROOT SEUL (0700, tmpfiles.d du paquet), jamais /run/secubox (1777)
 TIMEOUT_S = 30
 
 _CLE_WG = re.compile(r"^[A-Za-z0-9+/]{43}=$")
@@ -154,41 +153,49 @@ def _avec_cle(strip: str, cle_hub: Path) -> str:
 
 
 def _ouvrir_verrou(chemin: Path) -> int:
-    """Le descripteur du verrou : un fichier ORDINAIRE du compte courant (root en production), jamais suivi s'il est un lien.
+    """Le descripteur du verrou (#3126, R-L2-6).
 
-    Il vit dans /run/secubox (1777, sticky) : un autre compte peut y avoir posé ce nom avant root (lien, FIFO, fichier à lui, que root ne peut
-    d'ailleurs pas ouvrir : protected_regular, et l'assistant n'a pas CAP_DAC_OVERRIDE). Ce nom est alors retiré (root possède le dossier, le
-    bit sticky le lui permet) puis recréé en O_EXCL. Un fichier à root n'est JAMAIS retiré : c'est le verrou d'un autre passage."""
-    drapeaux = os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
-    for _ in range(3):
+    Il vit dans un dossier À ROOT SEUL (`/run/secubox-autoload`, 0700 root:root, posé par le tmpfiles.d du paquet et créé ici au premier usage),
+    JAMAIS dans /run/secubox : ce dossier est 1777, et un `mkdir` de n'importe quel compte à la place du verrou y faisait échouer tous les
+    tunnel-sync et exporter-pairs, donc toute révocation. Seul root prend ce verrou (tunnel-sync et exporter-pairs, par sudo ou à la main) ;
+    le service n'y touche jamais. Le dossier est ouvert sans suivre de lien, doit appartenir au compte courant (root en production) et est
+    remis en 0700 ; le fichier est ouvert en O_NOFOLLOW et doit être un fichier ordinaire du compte courant. Autre chose (lien, FIFO,
+    dossier) n'a pu être posé que par root : refus net, jamais suivi ni retiré."""
+    chemin = Path(chemin)
+    uid = os.geteuid()
+    try:
+        os.mkdir(chemin.parent, 0o700)
+    except FileExistsError:
+        pass
+    except OSError as e:
+        raise TunnelErreur(f"dossier du verrou {chemin.parent} : {e.strerror}") from None
+    try:
+        dfd = os.open(chemin.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError as e:
+        raise TunnelErreur(f"dossier du verrou {chemin.parent} : {e.strerror}") from None
+    try:
+        st = os.fstat(dfd)
+        if st.st_uid != uid:
+            raise TunnelErreur(f"dossier du verrou {chemin.parent} : propriétaire {st.st_uid}, attendu {uid}")
+        if stat.S_IMODE(st.st_mode) != 0o700:
+            os.fchmod(dfd, 0o700)
         try:
-            fd = os.open(chemin, drapeaux | os.O_CREAT, 0o600)
-        except OSError as e:
-            if e.errno not in (errno.ELOOP, errno.EACCES, errno.EPERM, errno.ENXIO):
-                raise TunnelErreur(f"verrou {chemin} : {e.strerror}") from None
-        else:
-            st = os.fstat(fd)
-            if stat.S_ISREG(st.st_mode) and st.st_uid == os.geteuid():
-                return fd
-            os.close(fd)
-        try:
-            os.unlink(chemin)
-        except FileNotFoundError:
-            pass
-        except OSError as e:
-            raise TunnelErreur(f"verrou {chemin} piégé et non retirable : {e.strerror}") from None
-        try:
-            return os.open(chemin, drapeaux | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:
-            continue
+            fd = os.open(chemin.name, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, 0o600, dir_fd=dfd)
         except OSError as e:
             raise TunnelErreur(f"verrou {chemin} : {e.strerror}") from None
-    raise TunnelErreur(f"verrou {chemin} disputé")
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != uid:
+            os.close(fd)
+            raise TunnelErreur(f"verrou {chemin} : pas un fichier ordinaire du compte {uid}")
+        return fd
+    finally:
+        os.close(dfd)
 
 
 @contextlib.contextmanager
 def verrou_sync(chemin: Path = VERROU_DEFAUT) -> Iterator[None]:
     """tunnel-sync et exporter-pairs passent UN PAR UN, quel que soit l'appelant (enrôlement, révocation, abonnement, minuterie) (#3126, N3).
+    Verrou dans un dossier à root seul (R-L2-6, voir `_ouvrir_verrou`).
 
     Sans lui, un passage qui avait lu les pairs AVANT une révocation reposait le pair révoqué APRÈS la synchronisation de la révocation, pour
     une heure ; un export lent pouvait de même écraser une projection plus fraîche. Chaque passage lit la base sous le verrou, et toute

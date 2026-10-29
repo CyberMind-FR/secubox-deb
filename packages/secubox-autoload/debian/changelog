@@ -4,10 +4,12 @@ secubox-autoload (0.7.4-1~trixie1) trixie; urgency=medium
     les révocations.
     - N2 : `tunnel-sync` exporte la projection même si WireGuard échoue (erreur du tunnel, délai dépassé, E/S, base) ;
       le code de retour reste 1 pour dire l'échec du tunnel.
-    - N3 : `tunnel-sync` et `exporter-pairs` passent un par un (`flock` sur `/run/secubox/autoload-sync.lock`, fichier
-      ordinaire de root, ouvert sans suivre de lien ; un nom posé par un autre compte dans ce dossier 1777 est retiré puis
-      recréé en O_EXCL). Un passage horaire qui avait lu les pairs avant une révocation reposait le pair révoqué pour une
-      heure après la synchronisation de la révocation.
+    - N3 : `tunnel-sync` et `exporter-pairs` passent un par un (`flock` sur `/run/secubox-autoload/autoload-sync.lock`).
+      Le dossier est à root seul (0700 root:root, `tmpfiles.d/secubox-autoload.conf`, créé aussi au premier usage et par
+      le postinst, dans `ReadWritePaths` du service), jamais `/run/secubox` (1777) où un `mkdir` de n'importe quel compte
+      bloquait toute synchronisation (R-L2-6). Fichier ouvert en O_NOFOLLOW, refusé s'il n'est pas un fichier ordinaire
+      de root. Un passage horaire qui avait lu les pairs avant une révocation reposait le pair révoqué pour une heure
+      après la synchronisation de la révocation.
     - N4 : la minuterie passe par `autoloadctl tunnel-sync --horaire` (second argv exact du sudoers) : un `wg-autoload`
       dont l'exploitant a désactivé l'unité n'est plus relancé chaque heure ; la configuration est posée et la projection
       publiée. Une unité activée mais tombée est relancée ; l'enrôlement monte toujours l'interface (première box).
