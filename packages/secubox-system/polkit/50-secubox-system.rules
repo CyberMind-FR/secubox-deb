@@ -20,3 +20,11 @@ polkit.addRule(function (action, subject) {
     if (["start", "stop", "restart", "reload"].indexOf(verbe) < 0) return polkit.Result.NOT_HANDLED;
     return polkit.Result.YES;
 });
+
+// #3242 : le fuseau horaire de la page Système (timedatectl set-timezone). Même borne : le seul sujet secubox-system.service
+// sous le compte secubox ; ni l'heure (set-time) ni NTP (géré par l'unité root secubox-systeme-heure.service).
+polkit.addRule(function (action, subject) {
+    if (action.id !== "org.freedesktop.timedate1.set-timezone") return polkit.Result.NOT_HANDLED;
+    if (subject.user !== "secubox" || subject.system_unit !== "secubox-system.service") return polkit.Result.NOT_HANDLED;
+    return polkit.Result.YES;
+});

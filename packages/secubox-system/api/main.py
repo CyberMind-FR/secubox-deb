@@ -754,14 +754,77 @@ def shutdown(user=Depends(require_jwt)):
     return {"success": True, "message": "Extinction programmée dans 1 minute."}
 
 
+# #3242 (et #3126 L2 tâche 5) : le renommage échouait en silence (hostnamectl sous User=secubox refusé par polkit, code
+# de retour non lu, hosts et secubox.conf oubliés). L'API (NoNewPrivileges : sudo neutralisé) démarre l'unité ROOT
+# secubox-systeme-renommer@<nom>.service — règle polkit bornée au sujet secubox-system.service — qui lance
+# /usr/sbin/secubox-renommer (secubox-core) ; son code de sortie (ExecMainStatus) est lu et rendu avec son message.
+RE_NOM_BOX = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")      # le motif de secubox-renommer et du ctl
+NOMS_RESERVES = frozenset({"admin", "www", "secubox", "localhost"})
+RE_FUSEAU = re.compile(r"[A-Za-z0-9_+-]{1,32}(/[A-Za-z0-9_+-]{1,32}){0,2}")
+DELAI_RENOMMER = 120                                                   # l'unité borne à 90 s (TimeoutStartSec)
+# Codes de sortie de secubox-renommer → (statut HTTP, message).
+ERREURS_RENOMMER = {
+    1: (500, "audit impossible ou erreur système (état précédent rétabli)"),
+    2: (400, "nom invalide"),
+    3: (400, "nom réservé"),
+    4: (409, "nom déjà pris au maillage"),
+    5: (500, "écriture impossible (état précédent rétabli)"),
+    6: (502, "hostnamectl en échec (état précédent rétabli)"),
+}
+
+
+def _renommer(nom: str, user=None) -> None:
+    """Démarre secubox-systeme-renommer@<nom>.service et attend sa fin ; HTTPException avec le code réel sinon."""
+    unite = f"secubox-systeme-renommer@{nom}.service"
+    acteur = str((user or {}).get("sub") or "")
+    try:
+        r = subprocess.run(["systemctl", "start", "--", unite], capture_output=True, text=True, timeout=DELAI_RENOMMER)
+    except subprocess.TimeoutExpired:
+        unites.journaliser("system", acteur, "start", unite, "echec", 504, "délai dépassé")
+        raise HTTPException(504, f"Renommage : délai dépassé ({DELAI_RENOMMER} s) en attendant {unite}")
+    except OSError as e:
+        unites.journaliser("system", acteur, "start", unite, "echec", 503, f"erreur système : {e.__class__.__name__}")
+        raise HTTPException(503, f"systemctl indisponible ({e.__class__.__name__})") from e
+    if r.returncode == 0:
+        unites.journaliser("system", acteur, "start", unite, "ok", 200)
+        return
+    try:
+        s = subprocess.run(["systemctl", "show", "-p", "ExecMainStatus", "--value", "--", unite],
+                           capture_output=True, text=True, timeout=10)
+        code = int((s.stdout or "").strip())
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        code = None
+    statut, message = ERREURS_RENOMMER.get(code, (502, "renommage en échec"))
+    unites.journaliser("system", acteur, "start", unite, "echec", statut, message)
+    raise HTTPException(statut, f"Renommage en « {nom} » refusé : {message} (code {code if code is not None else '?'})")
+
+
 @router.post("/settings")
 def settings(data: dict, user=Depends(require_jwt)):
-    """Save system settings."""
-    if "hostname" in data and data["hostname"]:
-        subprocess.run(["hostnamectl", "set-hostname", data["hostname"]], timeout=10)
-    if "timezone" in data and data["timezone"]:
-        subprocess.run(["timedatectl", "set-timezone", data["timezone"]], timeout=10)
-    return {"success": True}
+    """Nom de la box (secubox-renommer, par l'unité root) et fuseau horaire ; chaque échec est rendu, jamais un succès muet."""
+    res = {"success": True}
+    nom = str(data.get("hostname") or "").strip().lower()
+    fuseau = str(data.get("timezone") or "").strip()
+    if nom and not RE_NOM_BOX.fullmatch(nom):
+        raise HTTPException(400, "nom invalide : lettres minuscules, chiffres et tirets (63 au plus, ni tiret en tête ni en fin)")
+    if nom in NOMS_RESERVES:
+        raise HTTPException(400, f"nom réservé : « {nom} »")
+    if fuseau and (not RE_FUSEAU.fullmatch(fuseau) or ".." in fuseau):
+        raise HTTPException(400, "fuseau horaire invalide")
+    if nom:
+        _renommer(nom, user)
+        res["hostname"] = nom
+    if fuseau:
+        # Permis par la règle polkit (org.freedesktop.timedate1.set-timezone, sujet secubox-system.service seulement).
+        try:
+            r = subprocess.run(["timedatectl", "set-timezone", "--", fuseau], capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            raise HTTPException(503, f"timedatectl indisponible ({e.__class__.__name__})") from e
+        if r.returncode != 0:
+            raison = (r.stderr or r.stdout or "").strip()[:300] or f"code {r.returncode}"
+            raise HTTPException(502, f"Fuseau « {fuseau} » non appliqué : {raison}")
+        res["timezone"] = fuseau
+    return res
 
 @router.get("/health_score")
 async def health_score(user=Depends(require_jwt)):
