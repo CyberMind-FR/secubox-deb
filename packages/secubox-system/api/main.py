@@ -893,18 +893,83 @@ class ServiceAction(BaseModel):
     service: str
     action: str  # start|stop|restart|reload
 
+
+# #3258 (audit R1) — le nom d'unité passait tel quel à systemctl (un « -H… » ou « --… » devenait une option),
+# n'importe quel secubox-*.service, cœur compris, pouvait être arrêté, et rien n'était audité.
+# Même motif que la règle polkit (polkit/50-secubox-system.rules) : ce que l'API accepte est ce que polkit autorise.
+MOTIF_UNITE = re.compile(r"^secubox-[A-Za-z0-9@._-]+\.service$")
+ACTIONS_SERVICE = ("start", "stop", "restart", "reload")
+
+# Unités qu'on ne peut pas ARRÊTER d'ici (start, restart et reload restent permis : ils servent à réparer).
+# À GARDER SYNCHRONE avec PROTECTED_IDS de packages/secubox-profiles/api/manifest.py (audit #3258 R1/R8), qui en est
+# le sous-ensemble côté moteur de profils ; ici s'ajoutent les briques dont l'arrêt coupe l'entrée, le maillage ou
+# la défense (WAF, hub, HAProxy, p2p, WireGuard, durcissement, dns-guard) et cette API elle-même.
+# Seules les unités livrées par un paquet du dépôt y figurent (« firewall » de PROTECTED_IDS n'a pas d'unité
+# secubox-firewall.service) : test_service_control_3258.py le vérifie.
+UNITES_PROTEGEES = frozenset({
+    "secubox-auth.service", "secubox-aggregator.service", "secubox-core.service",
+    "secubox-profiles.service", "secubox-vault.service", "secubox-autoload-agent.service",
+    "secubox-waf-ng.service", "secubox-hub.service", "secubox-system.service", "secubox-haproxy.service",
+    "secubox-p2p.service", "secubox-wireguard.service", "secubox-hardening.service", "secubox-dns-guard.service",
+})
+
+# Journal d'audit central, en ajout seul (patron de secubox-freebox, _journal_fichier : une ligne JSON par décision,
+# « module » = l'émetteur). Jamais la sortie de systemctl : seulement qui, quoi, sur quoi, et le résultat.
+AUDIT_LOG = Path("/var/log/secubox/audit.log")
+
+
+def _audit_service(acteur: str, action: str, unite: str, resultat: str, code: int, motif: str = "") -> None:
+    entree = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "system",
+              "evenement": "service_control", "acteur": acteur, "action": action, "unite": unite,
+              "resultat": resultat, "code": code}
+    if motif:
+        entree["motif"] = motif
+    ligne = json.dumps(entree, ensure_ascii=False)
+    try:
+        with open(AUDIT_LOG, "a", encoding="utf-8") as f:
+            f.write(ligne + "\n")
+    except OSError as e:
+        # Un audit qui ne s'écrit pas ne doit pas passer en silence (audit #3258 R13) : il reste au journal du service.
+        log.warning("audit.log non écrit (%s) : %s", e.__class__.__name__, ligne)
+
+
+def _unite_normalisee(nom: str) -> str:
+    """La page /system/ envoie le nom nu (« secubox-dpi ») : systemctl le complétait en « .service ».
+    On le complète ICI, avant de valider et de contrôler la protection, et c'est ce nom-là qui part à systemctl.
+    Un nom qui porte déjà un point garde son suffixe (« secubox-hub.timer » reste refusé)."""
+    return nom if "." in nom else nom + ".service"
+
+
+def _systemctl(action: str, unite: str) -> tuple[bool, str]:
+    """`systemctl <action> -- <unité>` : le « -- » interdit qu'un nom soit lu comme une option."""
+    try:
+        r = subprocess.run(["systemctl", action, "--", unite],
+                           capture_output=True, text=True, timeout=30, check=True)
+        return True, ((r.stdout or "") + (r.stderr or "")).strip()
+    except subprocess.CalledProcessError as e:
+        return False, ((e.stdout or "") + (e.stderr or "")).strip()
+    except subprocess.TimeoutExpired:
+        return False, f"Délai dépassé en attendant {unite}"
+
+
 @router.post("/service_control")
 async def service_control(req: ServiceAction, user=Depends(require_jwt)):
-    if req.action not in ("start","stop","restart","reload"):
+    acteur = str((user or {}).get("sub") or "")
+    action = req.action
+    unite = _unite_normalisee(req.service)
+    if action not in ACTIONS_SERVICE:
+        _audit_service(acteur, action[:32], unite[:128], "refuse", 400, "action invalide")
         raise HTTPException(400, "action invalide")
-    r = subprocess.run(
-        ["systemctl", req.action, req.service],
-        capture_output=True, text=True, timeout=30
-    )
-    log.info("service_control: %s %s → %s", req.action, req.service,
-             "OK" if r.returncode==0 else "FAIL")
-    return {"success": r.returncode==0, "service": req.service, "action": req.action,
-            "output": (r.stdout+r.stderr).strip()[:300]}
+    if not MOTIF_UNITE.fullmatch(unite):
+        _audit_service(acteur, action, unite[:128], "refuse", 400, "nom d'unité invalide")
+        raise HTTPException(400, "nom d'unité invalide : secubox-<nom>.service attendu")
+    if action == "stop" and unite in UNITES_PROTEGEES:
+        _audit_service(acteur, action, unite, "refuse", 403, "unité protégée")
+        raise HTTPException(403, "unité protégée : arrêt refusé")
+    ok, sortie = await asyncio.to_thread(_systemctl, action, unite)
+    _audit_service(acteur, action, unite, "ok" if ok else "echec", 200)
+    log.info("service_control: %s %s → %s", action, unite, "OK" if ok else "FAIL")
+    return {"success": ok, "service": unite, "action": action, "output": sortie[:300]}
 
 @router.post("/backup")
 async def backup(user=Depends(require_jwt)):

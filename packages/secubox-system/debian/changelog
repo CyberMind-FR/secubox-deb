@@ -1,3 +1,12 @@
+secubox-system (1.11.4-1~trixie1) trixie; urgency=medium
+
+  * service_control (audit R1) : nom d'unité validé par le motif de la règle polkit
+    (400 sinon), « systemctl <action> -- <unité> », arrêt d'une unité protégée refusé
+    (403, UNITES_PROTEGEES synchrone avec PROTECTED_IDS de secubox-profiles), une ligne
+    dans /var/log/secubox/audit.log par appel, sans la sortie de systemctl (ref #3258).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 12:27:00 +0100
+
 secubox-system (1.11.3-1~trixie1) trixie; urgency=medium
 
   * Relevé des modules : l'anneau MIND suit secubox-ai-gateway, ai-insights étant retiré (ref #3017).
