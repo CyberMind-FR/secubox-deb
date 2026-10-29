@@ -61,8 +61,13 @@ exit 0
 """
 
 
+CLE_MAITRE = "mAiTrE" + "A" * 37 + "="          # 44 caractères : forme d'une clé publique WireGuard
+CLE_AUTRE = "aUtRe" + "B" * 38 + "="
+CLE_PAIR = "pAiR" + "C" * 39 + "="
+
+
 class Banc:
-    def __init__(self, tmp_path: Path):
+    def __init__(self, tmp_path: Path, ancree=True):
         self.r = tmp_path / "racine"
         for d in ("etc/secubox/modules.d", "etc/secubox/secrets/p2p", "var/log/secubox", "var/lib", "sys/class/net"):
             (self.r / d).mkdir(parents=True)
@@ -85,6 +90,22 @@ class Banc:
                         FAUX_LANCES=str(self.lances), FAUX_ACTIFS=str(self.actifs),
                         FAUX_ABSENTES=str(self.absentes), FAUX_WG_SORTIE=str(self.wg_sortie),
                         FAUX_WG_APPELS=str(self.wg_appels))
+        self.ancree = ancree
+        if ancree:
+            self.ancrer()
+
+    def ancrer(self):
+        """R-L2-21/26 : une ancre vérifiée par le ctl (canal enregistré) est le préalable de toute demande du maître.
+        Pose l'ancre du canal courant (wg-mesh, ou wg-autoload sur une box cliente) et la fait vérifier, comme l'agent."""
+        if (self.r / "sys/class/net/wg-autoload").exists():
+            self.tunnel_autoload(CLE_MAITRE)
+            self.pairs((CLE_MAITRE, "10.64.0.1/32"))
+        else:
+            self.ancre(CLE_MAITRE)
+            self.pairs((CLE_MAITRE, "10.10.0.0/24"))
+        rc, sortie, p = self.ancre_verifier()
+        assert (rc, sortie) == (0, {"ok": True}), p.stderr
+        self.wg_appels.unlink(missing_ok=True)
 
     def ancre_verifier(self, env=None):
         """`ancre-verifier <interface>` comme l'agent l'appelle : l'interface de son canal (R-L2-23)."""
@@ -94,6 +115,8 @@ class Banc:
     def cliente(self):
         (self.r / "sys/class/net/wg-mesh").rmdir()
         (self.r / "sys/class/net/wg-autoload").mkdir()
+        if self.ancree:
+            self.ancrer()                                # le canal vérifié devient wg-autoload : box cliente
 
     def ancre(self, cle=None, brut=None):
         """Ancre du maître d'une box du propriétaire (/etc/secubox/p2p/ancre-maitre.json, posée au flash)."""
@@ -147,6 +170,12 @@ class Banc:
 @pytest.fixture
 def banc(tmp_path):
     return Banc(tmp_path)
+
+
+@pytest.fixture
+def banc_nu(tmp_path):
+    """Sans ancre vérifiée (tâche 2 et R-L2-21)."""
+    return Banc(tmp_path, ancree=False)
 
 
 ACTIONS = ("releve", "reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
@@ -209,9 +238,10 @@ def test_argv_invalide_rend_2(banc):
     assert not any("../" in json.dumps(e) for e in banc.audit())
 
 
-def test_verbes_valides_acceptes_ou_non_disponibles(banc):
+def test_verbes_valides_acceptes_ou_non_disponibles(banc_nu):
     """R-L2-1 : argv validé pour toute la liste fermée ; support, renommer « non disponible » (code 0) ; ancre-verifier
     est livré (tâche 2) : sans ancre, il rend ok faux, raison « absente »."""
+    banc = banc_nu
     rc, sortie, _ = banc.ancre_verifier()
     assert rc == 0 and sortie == {"ok": False, "raison": "absente"}
     for argv in (["support", "ouvrir", "s-01"], ["support", "fermer", "s-01"], ["renommer", "box-2"]):
@@ -414,7 +444,7 @@ def test_racine_ignoree_hors_appelant_de_meme_identite(banc):
 def test_etat_root_non_fiable_refuse_tout(banc):
     """L'arbre d'état du ctl (consentements, mains liées, opération) est root 0700 : sinon tout est refusé."""
     etat = banc.r / "var/lib/secubox-pilotagectl"
-    etat.mkdir(mode=0o777)
+    etat.mkdir(mode=0o777, exist_ok=True)                # déjà créé par la vérification de l'ancre
     etat.chmod(0o777)
     rc, sortie, _ = banc.run("reboot", agent=True)
     assert rc == 1 and sortie == {"ok": False, "erreur": "état non fiable"}
@@ -530,18 +560,14 @@ def test_acteur_du_maitre_audite(banc):
 
 # --- Tâche 2 : vérification de l'ancre (D1) -------------------------------------------------------------------------
 
-CLE_MAITRE = "mAiTrE" + "A" * 37 + "="          # 44 caractères : forme d'une clé publique WireGuard
-CLE_AUTRE = "aUtRe" + "B" * 38 + "="
-CLE_PAIR = "pAiR" + "C" * 39 + "="
-
-
 def refus_ancre(banc):
     return [e for e in banc.audit() if e["evenement"] == "pilotage_refus" and e.get("verbe") == "ancre-verifier"]
 
 
-def test_ancre_conforme(banc):
+def test_ancre_conforme(banc_nu):
     """Box du propriétaire : le pair de wg-mesh qui porte 10.10.0.1 a la clé de ancre-maitre.json → ok vrai, depuis
     l'agent (lecture permise), sans refus audité. Box cliente : wg-autoload, clé du hub posée à l'enrôlement."""
+    banc = banc_nu
     banc.ancre(CLE_MAITRE)
     banc.pairs((CLE_PAIR, "10.10.0.7/32"), (CLE_MAITRE, "10.10.0.0/24 192.168.50.0/24"))
     rc, sortie, p = banc.ancre_verifier()
@@ -557,10 +583,11 @@ def test_ancre_conforme(banc):
     assert refus_ancre(banc) == [] and banc.lancements() == []
 
 
-def test_ancre_differente_refuse(banc):
+def test_ancre_differente_refuse(banc_nu):
     """Le pair qui porte l'adresse du maître n'a pas la clé de l'ancre → ok faux, raison « differente », refus
     « ancre différente » audité. Le pair retenu est celui que WireGuard choisirait : le préfixe le plus long qui
     contient l'adresse du maître ; aucun pair ne la porte → différente aussi (le maître ancré n'est pas joignable)."""
+    banc = banc_nu
     banc.ancre(CLE_MAITRE)
     differente = {"ok": False, "raison": "differente"}
     banc.pairs((CLE_AUTRE, "10.10.0.0/24"))
@@ -584,10 +611,11 @@ def test_ancre_differente_refuse(banc):
     assert banc.ancre_verifier()[:2] == (0, differente)
 
 
-def test_ancre_absente_rend_absente(banc):
+def test_ancre_absente_rend_absente(banc_nu):
     """R-L2-19 : aucune ancre posée (box du propriétaire jointe à la main, sans ancre-maitre.json ; box cliente sans
     configuration wg-autoload) → ok faux, raison « absente », code 0, refus « ancre absente » audité ; wg n'est pas
     interrogé (rien à comparer). L'agent garde alors le canal en lecture et refuse toute action."""
+    banc = banc_nu
     banc.pairs((CLE_MAITRE, "10.10.0.0/24 10.64.0.1/32"))
     rc, sortie, _ = banc.ancre_verifier()
     assert rc == 0 and sortie == {"ok": False, "raison": "absente"}
@@ -599,10 +627,11 @@ def test_ancre_absente_rend_absente(banc):
     assert banc.lancements() == []
 
 
-def test_ancre_illisible_jamais_vraie(banc):
+def test_ancre_illisible_jamais_vraie(banc_nu):
     """Toute erreur de lecture (JSON invalide, clé mal formée, lien, droits d'écriture du groupe ou des autres
     (R-L2-20), wg en échec, sortie de wg illisible, configuration wg-autoload non root) rend ok faux, raison
     « illisible », code 0, avec un refus « ancre illisible » audité ; jamais ok vrai."""
+    banc = banc_nu
     banc.pairs((CLE_MAITRE, "10.10.0.0/24"))
     resultats = []
 
@@ -648,10 +677,11 @@ def test_ancre_illisible_jamais_vraie(banc):
     assert banc.lancements() == []
 
 
-def test_ancre_canal_incoherent_illisible(banc):
+def test_ancre_canal_incoherent_illisible(banc_nu):
     """R-L2-23 : le ctl vérifie l'interface du canal que l'agent utilise (argument fermé) ; wg-mesh suppose
     ancre-maitre.json, wg-autoload la configuration cliente. L'ancre de l'autre canal présente seule → « illisible »
     (jamais « absente », qui garderait la lecture) ; wg-mesh présente mais sans adresse ne trompe plus le choix."""
+    banc = banc_nu
     banc.pairs((CLE_MAITRE, "10.10.0.0/24 10.64.0.1/32"))
     banc.ancre(CLE_MAITRE)                                  # box du propriétaire, ancre posée
     rc, sortie, _ = banc.run("ancre-verifier", "wg-autoload", agent=True)
@@ -668,11 +698,105 @@ def test_ancre_canal_incoherent_illisible(banc):
     assert [e["refus"] for e in refus_ancre(banc)] == ["ancre illisible", "ancre illisible"]
 
 
-def test_ancre_sortie_wg_non_utf8_auditee(banc):
+def test_ancre_sortie_wg_non_utf8_auditee(banc_nu):
     """M2 : une sortie de wg non décodable (ou toute exception imprévue) rend « illisible », code 0, et l'échec est
     audité — jamais une « erreur interne » muette."""
+    banc = banc_nu
     banc.ancre(CLE_MAITRE)
     banc.wg_sortie.write_bytes(CLE_MAITRE.encode() + b"\t10.10.0.0/24 \xff\xfe\n")
     rc, sortie, _ = banc.ancre_verifier()
     assert rc == 0 and sortie == {"ok": False, "raison": "illisible"}
     assert [e["refus"] for e in refus_ancre(banc)] == ["ancre illisible"]
+
+
+# --- Tâche 3 : défense en profondeur (R-L2-21, R-L2-26) et lecture de la fin d'une opération --------------------------
+
+def test_agir_refuse_sans_ancre_verifiee(banc_nu):
+    """R-L2-21 : tant qu'aucune ancre n'est vérifiée, le ctl refuse lui-même toute demande d'origine maître (agir et
+    politique), et l'audit du refus nomme le verbe. Une demande locale n'est pas concernée."""
+    banc = banc_nu
+    for argv in (["reboot"], ["maj-paquets"], ["renouveler-secrets"], ["service", "demarrer", "secubox-lyrion.service"]):
+        rc, sortie, _ = banc.run("--acteur", "gk2admin", *argv, agent=True)
+        assert rc == 0 and sortie == {"ok": False, "refus": "ancre non vérifiée"}, argv
+    rc, pol, _ = banc.run("politique", "reboot", agent=True)
+    assert rc == 0 and pol == {"autorise": False, "consentement": False, "raison": "ancre non vérifiée"}
+    assert banc.lancements() == []
+    refus = [e for e in banc.audit() if e["evenement"] == "pilotage_refus" and e.get("refus") == "ancre non vérifiée"]
+    assert [e["verbe"] for e in refus] == ["reboot", "maj-paquets", "renouveler-secrets", "service", "politique"]
+    assert all(e["origine"] == "maitre" for e in refus) and refus[0]["acteur"] == "gk2admin"
+    # en local, le détenteur agit sans ancre
+    rc, sortie, _ = banc.run("service", "demarrer", "secubox-lyrion.service")
+    assert rc == 0 and sortie["ok"] is True
+    # ancre vérifiée : l'action part ; une vérification qui échoue ensuite retire le canal enregistré
+    banc.ancrer()
+    rc, sortie, _ = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True)
+    assert sortie["ok"] is True
+    banc.pairs((CLE_AUTRE, "10.10.0.0/24"))
+    assert banc.ancre_verifier()[1] == {"ok": False, "raison": "differente"}
+    rc, sortie, _ = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True)
+    assert sortie == {"ok": False, "refus": "ancre non vérifiée"}
+
+
+def test_canal_verifie_enregistre_par_le_ctl(banc_nu):
+    """R-L2-26 : après chaque ancre-verifier réussi, le canal vérifié est écrit (état root, écriture atomique)."""
+    banc = banc_nu
+    banc.ancrer()
+    f = banc.r / "var/lib/secubox-pilotagectl/ancre.json"
+    etat = json.loads(f.read_text())
+    assert etat["canal"] == "wg-mesh" and isinstance(etat["verifie"], int)
+    assert (f.stat().st_mode & 0o077) == 0
+    assert not [n for n in os.listdir(f.parent) if n.startswith(".")]     # aucun temporaire laissé
+    # ancre absente ensuite : canal retiré
+    (banc.r / "etc/secubox/p2p/ancre-maitre.json").unlink()
+    assert banc.ancre_verifier()[1] == {"ok": False, "raison": "absente"}
+    assert not f.exists()
+
+
+def test_nature_lue_dans_le_canal_verifie(banc):
+    """R-L2-26 : la nature de la box se lit dans le canal enregistré (wg-autoload = cliente), jamais dans la seule
+    présence de wg-mesh : une box qui porte wg-mesh mais dont l'agent parle par wg-autoload est cliente."""
+    (banc.r / "sys/class/net/wg-autoload").mkdir()            # wg-mesh ET wg-autoload présentes
+    banc.ancrer()                                             # l'agent a vérifié wg-autoload
+    assert (banc.r / "sys/class/net/wg-mesh").exists()
+    _, pol, _ = banc.run("politique", "reboot", agent=True)
+    assert pol == {"autorise": True, "consentement": True, "raison": "box cliente : accord du détenteur"}
+    rc, sortie, _ = banc.run("reboot", agent=True)
+    assert sortie["refus"] == "consentement requis"
+    # canal enregistré périmé (plus de 2 h sans revérification) : plus d'action du maître
+    f = banc.r / "var/lib/secubox-pilotagectl/ancre.json"
+    f.write_text(json.dumps({"canal": "wg-mesh", "verifie": 1}))
+    rc, sortie, _ = banc.run("reboot", agent=True)
+    assert sortie == {"ok": False, "refus": "ancre non vérifiée"}
+    # canal enregistré illisible : jamais propriétaire par défaut
+    f.write_text(json.dumps({"canal": "eth0", "verifie": 2**40}))
+    rc, sortie, _ = banc.run("reboot", agent=True)
+    assert sortie == {"ok": False, "refus": "ancre non vérifiée"}
+
+
+def test_etat_operation_lu_par_l_agent(banc):
+    """Lecture de la fin d'une opération (l'unité --collect est ramassée : son code n'est plus lisible par systemctl) :
+    `etat-operation <job>`, permis depuis l'agent, en lecture seule, audité (pilotage_lecture)."""
+    rc, s, _ = banc.run("maj-paquets", agent=True)
+    job = s["job"]
+    rc, sortie, _ = banc.run("etat-operation", job, agent=True)
+    assert rc == 0 and sortie == {"ok": True, "job": job, "etat": "en_cours"}
+    banc.actifs.write_text("")
+    _fin(banc, job, "exit-code", "exited", "100")
+    rc, sortie, _ = banc.run("etat-operation", job, agent=True)
+    assert rc == 0 and sortie == {"ok": True, "job": job, "etat": "termine", "verbe": "maj-paquets", "resultat": "echec",
+                                  "rc": 100}
+    rc, s2, _ = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True)
+    _fin(banc, s2["job"], "signal", "killed", "TERM")
+    rc, sortie, _ = banc.run("etat-operation", s2["job"], agent=True)
+    assert sortie == {"ok": True, "job": s2["job"], "etat": "termine", "verbe": "service", "resultat": "echec",
+                      "rc": None}
+    rc, sortie, _ = banc.run("etat-operation", "0123456789abcdef", agent=True)
+    assert rc == 0 and sortie == {"ok": True, "job": "0123456789abcdef", "etat": "inconnu"}
+    lectures = [e for e in banc.audit() if e["evenement"] == "pilotage_lecture"]
+    assert [e["job"] for e in lectures] == [job, job, s2["job"], "0123456789abcdef"]
+    assert all(e["verbe"] == "etat-operation" and e["origine"] == "maitre" for e in lectures)
+    # lecture seule : rien de lancé, l'opération n'est ni libérée ni touchée
+    assert len(banc.lancements()) == 2
+    for argv in (["etat-operation"], ["etat-operation", "../x"], ["etat-operation", job, "en-trop"]):
+        rc, sortie, _ = banc.run(*argv, agent=True)
+        assert rc == 2 and sortie == {"ok": False, "refus": "argv invalide"}, argv

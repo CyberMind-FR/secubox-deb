@@ -33,6 +33,10 @@ Verbes (liste fermée) :
   politique <action>                       {"autorise", "consentement", "raison"} ; actions : releve, reboot,
                                            maj-paquets, service-demarrer, service-arreter, service-redemarrer, renommer,
                                            renouveler-secrets, support-ouvrir, support-fermer
+  etat-operation <job>                     lecture, permise depuis l'agent, auditée (pilotage_lecture) : {"ok": true, "job",
+                                           "etat": en_cours|termine|inconnu} et, terminée, "verbe", "resultat"
+                                           (succes|echec), "rc" (entier ou null) ; la fin est enregistrée par _fin
+                                           (l'unité --collect ramassée, systemctl ne la connaît plus)
   _fin <job>                               INTERNE, local seulement : ExecStopPost de chaque unité transitoire ; audite
                                            la fin (succes|echec, d'après SERVICE_RESULT et EXIT_STATUS) et libère
                                            l'opération longue
@@ -44,7 +48,11 @@ Politique, pour une demande du maître (origine « maitre » = appel par sudo de
   - mains liées : tout est refusé sauf le relevé. État root dans /var/lib/secubox-pilotagectl/mains-liees ; projection
     pour l'agent (L1) dans /etc/secubox/pilotage/mains-liees. L'une OU l'autre lie les mains : le compte partagé
     secubox, propriétaire de /etc/secubox, ne délie donc rien en retirant la projection.
-  - box cliente (pas d'interface wg-mesh : agent relié par wg-autoload, ou aucun maillage) : reboot, maj-paquets,
+  - ancre (R-L2-21, R-L2-26) : toute demande du maître (agir, politique) est refusée tant qu'aucune ancre n'est vérifiée
+    (« ancre non vérifiée », refus audité avec le verbe). Chaque ancre-verifier réussi enregistre le canal vérifié
+    (état root ancre.json, écriture atomique, valable 2 h) ; un échec le retire.
+  - box cliente (canal vérifié wg-autoload ; wg-mesh = box du propriétaire ; jamais déduit de la seule présence d'une
+    interface ; sans canal vérifié, une demande locale voit une box cliente) : reboot, maj-paquets,
     service arreter|redemarrer, renommer, renouveler-secrets, et toute action sur une unité gabarit (« @ »), même
     demarrer, exigent l'accord du détenteur. La demande crée un
     consentement en attente (valable 24 h), accepté ou refusé en local ; la demande suivante identique consomme
@@ -109,7 +117,7 @@ SERVICE = {"demarrer": "start", "arreter": "stop", "redemarrer": "restart"}
 ACTIONS = ("releve", "reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
            "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer")
 VERBES = ("reboot", "maj-paquets", "service", "renommer", "renouveler-secrets", "support", "consentement",
-          "mains-liees", "ancre-verifier", "politique", "_fin")
+          "mains-liees", "ancre-verifier", "politique", "etat-operation", "_fin")
 CONSENTEMENT_CLIENTE = frozenset({"reboot", "maj-paquets", "service-arreter", "service-redemarrer", "renommer",
                                   "renouveler-secrets"})
 # Opérations exclusives, enregistrées dans operation.json : un reboot pendant apt laisserait dpkg à moitié configuré,
@@ -117,6 +125,8 @@ CONSENTEMENT_CLIENTE = frozenset({"reboot", "maj-paquets", "service-arreter", "s
 EXCLUSIVES = frozenset({"maj-paquets", "renouveler-secrets", "reboot"})
 ACTIFS = frozenset({"active", "activating", "deactivating", "reloading", "refreshing"})
 VALIDITE = 24 * 3600
+VALIDITE_ANCRE = 2 * 3600                                # canal vérifié : l'agent revérifie toutes les heures
+FINS_MAX = 100                                           # fins d'opération gardées pour etat-operation
 GARDE = 7 * 24 * 3600                                    # consentements décidés gardés une semaine (au plus 200)
 TAILLE_MAX = 1 << 20
 PATH_SUR = "/usr/sbin:/usr/bin:/sbin:/bin"
@@ -384,9 +394,24 @@ def mains_liees(ctx, fd):
 
 # --- Politique ------------------------------------------------------------------------------------------------------
 
-def proprietaire(ctx):
-    """Box du propriétaire = reliée au maillage wg-mesh. Sinon (wg-autoload, ou rien) : cliente, par prudence."""
-    return os.path.exists(f"{ctx.net}/wg-mesh")
+def canal_verifie(fd, maintenant):
+    """Canal de la dernière ancre-verifier réussie (R-L2-26), s'il date de moins de VALIDITE_ANCRE ; sinon None.
+    Illisible, de forme inattendue ou daté du futur : None (jamais « propriétaire » par défaut)."""
+    if fd is None:
+        return None
+    etat = lire_json(fd, "ancre.json", None)
+    if not isinstance(etat, dict):
+        return None
+    canal, quand = etat.get("canal"), etat.get("verifie")
+    if canal not in MAILLAGES or isinstance(quand, bool) or not isinstance(quand, int):
+        return None
+    return canal if 0 <= maintenant - quand <= VALIDITE_ANCRE else None
+
+
+def proprietaire(canal):
+    """Box du propriétaire = canal vérifié wg-mesh. Sinon (wg-autoload, ou aucun canal vérifié) : cliente, par
+    prudence (R-L2-9, R-L2-26)."""
+    return canal == "wg-mesh"
 
 
 def politique(action, liees, du_proprietaire):
@@ -551,11 +576,26 @@ def verifier_ancre(ctx, interface):
     except Exception as e:  # noqa: BLE001 — fermé par défaut, et audité
         err(f"vérification de l'ancre interrompue : {e.__class__.__name__}")
         raison = "illisible"
+    enregistrer_canal(ctx, interface if raison is None else None)
     if raison is None:
         return {"ok": True}
     err(f"{RAISONS[raison]} ({interface})")
     auditer(ctx, "pilotage_refus", verbe="ancre-verifier", refus=RAISONS[raison])
     return {"ok": False, "raison": raison}
+
+
+def enregistrer_canal(ctx, canal):
+    """R-L2-26 : canal vérifié écrit dans l'état root (atomique), ou retiré après un échec. État non fiable → Erreur :
+    l'agent lit alors une ancre illisible et coupe le canal."""
+    fd = ouvrir_etat(ctx, creer=True)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        if canal is None:
+            retirer(fd, "ancre.json")
+        else:
+            ecrire_json(fd, "ancre.json", {"canal": canal, "verifie": int(time.time())})
+    finally:
+        os.close(fd)
 
 
 def raison_ancre(ctx, interface):
@@ -605,6 +645,10 @@ def analyser(argv):
         if len(a) != 1 or a[0] not in MAILLAGES:
             raise ArgvInvalide
         return verbe, {"interface": a[0]}
+    if verbe == "etat-operation":
+        if len(a) != 1 or not RE_ID.fullmatch(a[0]):
+            raise ArgvInvalide
+        return verbe, {"job": a[0]}
     if verbe in ("reboot", "maj-paquets", "renouveler-secrets"):
         if a:
             raise ArgvInvalide
@@ -741,16 +785,24 @@ def executer(ctx, verbe, p):
                 if fd is not None:
                     fcntl.flock(fd, fcntl.LOCK_SH)
                 liees = mains_liees(ctx, fd)
+                canal = canal_verifie(fd, int(time.time()))
             finally:
                 if fd is not None:
                     os.close(fd)
         except Erreur as e:
             return {"autorise": False, "consentement": False, "raison": str(e)}
-        autorise, consentement, raison = politique(p["action"], liees, proprietaire(ctx))
+        if ctx.origine == "maitre" and canal is None:
+            # R-L2-21 : la politique n'est pas auditée (lecture), mais son refus faute d'ancre l'est, avec le verbe.
+            auditer(ctx, "pilotage_refus", verbe=verbe, action=p["action"], refus="ancre non vérifiée")
+            return {"autorise": False, "consentement": False, "raison": "ancre non vérifiée"}
+        autorise, consentement, raison = politique(p["action"], liees, proprietaire(canal))
         return {"autorise": autorise, "consentement": consentement, "raison": raison}
 
     if verbe == "_fin":
         return finir(ctx, p["job"])
+
+    if verbe == "etat-operation":
+        return etat_operation(ctx, p["job"])
 
     if verbe == "ancre-verifier":
         return verifier_ancre(ctx, p["interface"])  # lecture : seul un échec est audité
@@ -786,10 +838,58 @@ def finir(ctx, job):
         if isinstance(op, dict) and op.get("job") == job:
             verbe = op.get("verbe") if op.get("verbe") in VERBES else None
             retirer(fd, "operation.json")
+        fins = charger_fins(fd)
+        lance = next((f for f in fins if f.get("job") == job and f.get("resultat") == "lance"), None)
+        if verbe is None and lance is not None:
+            verbe = lance.get("verbe") if lance.get("verbe") in VERBES else None
+        # Fin enregistrée pour etat-operation (l'unité --collect est ramassée aussitôt) : remplace l'entrée « lancé ».
+        fins = [f for f in fins if f.get("job") != job]
+        fins.append({"job": job, "verbe": verbe, "resultat": "succes" if succes else "echec",
+                     "rc": int(rc) if rc is not None else None, "quand": int(time.time())})
+        ecrire_json(fd, "fins.json", fins[-FINS_MAX:])
         auditer(ctx, "pilotage_resultat", verbe=verbe, job=job, resultat="succes" if succes else "echec", rc=rc)
     finally:
         os.close(fd)
     return {"ok": True, "job": job, "resultat": "succes" if succes else "echec"}
+
+
+def charger_fins(fd):
+    """Opérations lancées et fins enregistrées par _fin (au plus FINS_MAX). Forme inattendue → Erreur."""
+    fins = lire_json(fd, "fins.json", [])
+    if not isinstance(fins, list) or not all(isinstance(f, dict) and RE_ID.fullmatch(str(f.get("job", "")))
+                                             for f in fins):
+        raise Erreur("état non fiable")
+    return fins
+
+
+def etat_operation(ctx, job):
+    """Lecture seule, auditée : où en est l'opération `job` ? Terminée (fin enregistrée par _fin), en cours (service
+    ou minuterie active), sinon inconnue."""
+    auditer(ctx, "pilotage_lecture", verbe="etat-operation", job=job)
+    fd = ouvrir_etat(ctx, creer=False)
+    fin = None
+    if fd is not None:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH)
+            fin = next((f for f in charger_fins(fd) if f.get("job") == job and f.get("resultat") in ("succes", "echec")),
+                       None)
+        finally:
+            os.close(fd)
+    if fin is not None:
+        rc = fin.get("rc")
+        return {"ok": True, "job": job, "etat": "termine", "verbe": fin.get("verbe") if fin.get("verbe") in VERBES else None,
+                "resultat": fin["resultat"], "rc": rc if isinstance(rc, int) and not isinstance(rc, bool) else None}
+    for suffixe in ("service", "timer"):
+        try:
+            r = subprocess.run([ctx.systemctl, "show", "-p", "ActiveState", "--value", f"{PREFIXE_OP}{job}.{suffixe}"],
+                               env=ctx.env, capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired):
+            raise Erreur("systemd injoignable") from None
+        if r.returncode != 0:
+            raise Erreur("systemd injoignable")
+        if r.stdout.strip() in ACTIFS:
+            return {"ok": True, "job": job, "etat": "en_cours"}
+    return {"ok": True, "job": job, "etat": "inconnu"}
 
 
 def traiter(ctx, verbe, p, action, unite):
@@ -858,6 +958,9 @@ def decider(ctx, fd, p, maintenant, refus):
 
 def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
     du_maitre = ctx.origine == "maitre"
+    canal = canal_verifie(fd, maintenant)
+    if du_maitre and canal is None:
+        return refus("ancre non vérifiée")         # R-L2-21 : défense en profondeur, l'agent l'a déjà refusé
     if du_maitre and mains_liees(ctx, fd):
         return refus("mains liées")
     if unite is not None:
@@ -874,7 +977,7 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
         if job is not None:
             return refus("opération en cours", job=job)
     accord, consentements = None, None
-    du_proprietaire = proprietaire(ctx)
+    du_proprietaire = proprietaire(canal)
     # R-L2-13 : sur une box cliente, une unité gabarit (« @ ») est une action arbitraire : accord exigé, même pour démarrer.
     gabarit = unite is not None and "@" in unite
     if du_maitre and (politique(action, False, du_proprietaire)[1] or (gabarit and not du_proprietaire)):
@@ -894,6 +997,7 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
             else:
                 ecrire_json(fd, "consentements.json", consentements)
             return refus("consentement requis", consentement=attente["id"])
+    fins = charger_fins(fd)                         # lu AVANT le lancement : un état illisible ne lance rien
     job = secrets.token_hex(8)
     if not lancer(ctx, verbe, p, job):
         auditer(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="echec")
@@ -904,6 +1008,8 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
         auditer(ctx, "consentement_utilise", consentement=accord["id"], action=action, unite=unite, job=job)
     if verbe in EXCLUSIVES:
         ecrire_json(fd, "operation.json", {"job": job, "verbe": verbe, "debut": maintenant})
+    fins.append({"job": job, "verbe": verbe, "resultat": "lance", "quand": maintenant})
+    ecrire_json(fd, "fins.json", fins[-FINS_MAX:])
     auditer(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="lance")
     return {"ok": True, "job": job}
 
