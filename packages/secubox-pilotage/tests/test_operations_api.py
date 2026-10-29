@@ -368,3 +368,14 @@ def test_resultat_inconnu_affiche(m):
     (o,) = TestClient(m.app).get("/operations").json()
     assert o["resultat"] == "inconnu" and o["resume"] == "maj-paquets : résultat inconnu"
     assert TestClient(m.app).get("/operations", params={"nom": "inconnue"}).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_file_pleine_429_et_operation_jamais_laissee_en_demande(m):
+    for _ in range(m.f.max_par_box):
+        m.f.deposer(GK5.cle, {"type": "GET", "body": {"paths": ["Device."]}})
+    async with m.client() as c:
+        assert (await c.post("/boxes/gk5/actions/maj-paquets", json={})).status_code == 429
+    (o,) = m.s.operations(GK5.cle)
+    assert o["etat"] == "refuse" and o["raison"] == "file de la box pleine"
+    assert m.lignes[-1][1]["etat"] == "refuse"

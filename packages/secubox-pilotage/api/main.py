@@ -277,7 +277,12 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
             champs["support"] = corps.support
         await auditer_ou_503("pilotage_action", {**champs, "job": None, "etat": "demande"})   # pas d'audit, pas d'action
         op = await asyncio.to_thread(stockage.operation_demander, b["cle"], action, args, acteur, corps.support)
-        rep = await operer(b["cle"], corps_operate(a.commande, args, jwt.get("sub")))
+        try:
+            rep = await operer(b["cle"], corps_operate(a.commande, args, jwt.get("sub")))
+        except HTTPException as e:   # file pleine : rien n'est parti, la demande ne reste pas « demande »
+            await asyncio.to_thread(stockage.operation_reponse, op, "refuse", None, "file de la box pleine")
+            await auditer("pilotage_action", {**champs, "job": None, "etat": "refuse", "operation": op})
+            raise e
         if rep is None:
             await asyncio.to_thread(stockage.operation_sans_reponse, op)
             await auditer("pilotage_action", {**champs, "job": None, "etat": "sans_reponse", "operation": op})
@@ -303,7 +308,12 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
         champs = {"box": b["nom"], "cle": b["cle"], "acteur": acteur, "id": sid, "duree_min": corps.duree_min}
         await auditer_ou_503("pilotage_support", {**champs, "etat": "demande"})
         await asyncio.to_thread(stockage.support_demander, b["cle"], sid, corps.duree_min, acteur)
-        rep = await operer(b["cle"], corps_operate(COMMANDE_SUPPORT_OUVRIR, {"id": sid, "duree_min": corps.duree_min}, jwt.get("sub")))
+        try:
+            rep = await operer(b["cle"], corps_operate(COMMANDE_SUPPORT_OUVRIR, {"id": sid, "duree_min": corps.duree_min}, jwt.get("sub")))
+        except HTTPException:
+            await asyncio.to_thread(stockage.support_noter, b["cle"], sid, "refuse", None)
+            await auditer("pilotage_support", {**champs, "etat": "refuse"})
+            raise
         if rep is None:
             await auditer("pilotage_support", {**champs, "etat": "sans_reponse"})
             raise HTTPException(504, "la box n'a pas répondu à temps")
