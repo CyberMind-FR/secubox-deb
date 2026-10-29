@@ -45,7 +45,8 @@ bootstrap_debian() {
     echo "[install] running debootstrap (a few minutes)..."
     # systemd, systemd-sysv, dbus : le conteneur démarre sur /sbin/init
     # (comme nextcloud) ; minbase ne les apporte pas (#1729).
-    debootstrap --variant=minbase --include=systemd,systemd-sysv,dbus,ca-certificates,curl,gnupg,locales \
+    # gpg et non gnupg : en trixie, gnupg tire gpg-wks-server, donc un MTA (exim4) (#3274).
+    debootstrap --variant=minbase --include=systemd,systemd-sysv,dbus,ca-certificates,curl,gpg,locales \
         trixie "$lxc_path/rootfs" http://deb.debian.org/debian
 
     echo "$container" > "$lxc_path/rootfs/etc/hostname"
@@ -53,6 +54,15 @@ bootstrap_debian() {
 nameserver 8.8.8.8
 nameserver 1.1.1.1
 EOF
+
+    # systemd 257 (trixie) : ImportCredential= échoue dans un LXC non privilégié
+    # (243/CREDENTIALS) et laisse journald, sysctl et tmpfiles en échec (#3274).
+    local unite
+    for unite in systemd-journald systemd-sysctl systemd-tmpfiles-setup systemd-tmpfiles-clean; do
+        mkdir -p "$lxc_path/rootfs/etc/systemd/system/$unite.service.d"
+        printf '# SecuBox #3274 : LXC non privilégié, pas de credentials systemd\n[Service]\nImportCredential=\n' \
+            > "$lxc_path/rootfs/etc/systemd/system/$unite.service.d/secubox-lxc.conf"
+    done
     echo "[install] Debian base system installed"
 }
 

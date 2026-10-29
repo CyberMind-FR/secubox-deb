@@ -41,3 +41,17 @@ def test_ini_et_module_suivent_la_version_du_conteneur():
 
 def test_mailctl_relance_la_fpm_presente():
     assert "'php*-fpm'" in MAILCTL
+
+
+def test_unites_systemd_257_sans_credentials_dans_le_lxc():
+    # systemd 257 (trixie) : ImportCredential= échoue en LXC non privilégié (243/CREDENTIALS),
+    # journald, sysctl et tmpfiles restent en échec. Constaté sur gk2 le 29/10/2026.
+    for unite in ("systemd-journald", "systemd-sysctl", "systemd-tmpfiles-setup", "systemd-tmpfiles-clean"):
+        assert unite in INSTALL, unite
+    assert "ImportCredential=" in INSTALL
+
+
+def test_pas_de_gnupg_qui_tire_un_mta():
+    # gnupg (trixie) dépend de gpg-wks-server, qui tire exim4 : un MTA de trop dans le conteneur.
+    assert not re.search(r"--include=[^\s]*\bgnupg\b", INSTALL)
+    assert re.search(r"--include=[^\s]*\bgpg\b", INSTALL)
