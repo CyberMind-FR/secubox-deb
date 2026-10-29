@@ -25,7 +25,9 @@ DOSSIER_DEFAUT = Path("/var/lib/secubox/pilotage")
 HORS_LIGNE_S = 90            # une box non vue depuis ce délai passe « hors ligne »
 EVENEMENTS_JOURS = 30        # durée de garde des événements
 BOUCLES_FENETRE_S = 24 * 3600
-PARAMS_MAX = 5000            # paramètres retenus par réponse (le canal borne déjà le corps à 256 Kio)
+PARAMS_MAX = 5000            # paramètres retenus par réponse (l'agent borne le corps à 256 Kio : TailleMax)
+LIGNES_MAX = 2 * PARAMS_MAX  # lignes d'inventaire gardées par box : au-delà, les plus anciennes (releve_le) partent
+EVENEMENTS_MAX = 5000        # événements gardés par box : au-delà, les plus anciens partent
 VALEUR_MAX = 4096            # caractères d'une valeur sérialisée
 CHEMIN_MAX = 256
 SORTIE_MAX = 256 << 10
@@ -74,7 +76,7 @@ class StockageMemoire:
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS boites(
     cle TEXT PRIMARY KEY, nom TEXT NOT NULL, adresse TEXT NOT NULL, reseau TEXT NOT NULL, client TEXT, abonnement TEXT,
-    agent_version TEXT NOT NULL DEFAULT '', mains_liees INTEGER NOT NULL DEFAULT 0, vu_le INTEGER NOT NULL,
+    agent_version TEXT NOT NULL DEFAULT '', vu_le INTEGER NOT NULL,
     inventaire_le INTEGER, inventaire_partiel INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS boites_nom ON boites(nom);
 CREATE TABLE IF NOT EXISTS inventaire(
@@ -84,6 +86,7 @@ CREATE TABLE IF NOT EXISTS evenements(
     survenu_le INTEGER NOT NULL, recu_le INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS evenements_recu ON evenements(recu_le);
 CREATE INDEX IF NOT EXISTS evenements_cle ON evenements(cle, recu_le);
+CREATE INDEX IF NOT EXISTS evenements_cle_id ON evenements(cle, id);
 CREATE TABLE IF NOT EXISTS releves(
     cle TEXT PRIMARY KEY, recu_le INTEGER NOT NULL, duree_s INTEGER NOT NULL, statut TEXT NOT NULL, sortie_json TEXT NOT NULL);
 """
@@ -100,15 +103,28 @@ class StockageSqlite:
     """SQLite `pilotage.db` (0640, WAL). Méthodes synchrones : une connexion courte par appel, transactions courtes ; à appeler
     hors de la boucle asyncio (to_thread). Les tables sont indexées par `Box.cle`, jamais par le nom seul (R15)."""
 
-    def __init__(self, dossier: Path = DOSSIER_DEFAUT, horloge: Callable[[], float] = time.time) -> None:
+    def __init__(self, dossier: Path = DOSSIER_DEFAUT, horloge: Callable[[], float] = time.time, *,
+                 lignes_max: int = LIGNES_MAX, evenements_max: int = EVENEMENTS_MAX) -> None:
         self.dossier = Path(dossier)
         self.horloge = horloge
+        self.lignes_max, self.evenements_max = lignes_max, evenements_max
         self.dossier.mkdir(parents=True, exist_ok=True, mode=0o750)
         self.db = self.dossier / "pilotage.db"
-        os.close(os.open(self.db, os.O_CREAT | os.O_RDWR, 0o640))  # les droits sont posés à la création, avant tout contenu
+        fd = os.open(self.db, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)  # jamais un lien ; droits posés avant tout contenu
+        try:
+            os.fchmod(fd, 0o640)  # une base préexistante est ramenée à 0640
+        finally:
+            os.close(fd)
         with self._cx() as cx:
             cx.execute("PRAGMA journal_mode=WAL")
             cx.executescript(_SCHEMA)
+        # connexion de garde, jamais utilisée : tant qu'elle reste ouverte, la fermeture d'une connexion courte ne déclenche ni
+        # point de contrôle ni suppression du journal WAL (c'était une synchronisation disque par appel)
+        self._garde = sqlite3.connect(self.db, check_same_thread=False)
+        self._garde.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()  # la connexion rejoint réellement le journal WAL
+
+    def fermer(self) -> None:
+        self._garde.close()
 
     def _maintenant(self) -> int:
         return int(self.horloge())
@@ -153,6 +169,8 @@ class StockageSqlite:
             cx.execute("INSERT INTO evenements(cle,type,unite,valeur,survenu_le,recu_le) VALUES(?,?,?,?,?,?)",
                        (box.cle, evenement["type"], evenement.get("unit"), evenement.get("value"),
                         evenement["ts"], self._maintenant()))
+            cx.execute("DELETE FROM evenements WHERE cle=? AND id<=(SELECT id FROM evenements WHERE cle=? ORDER BY id DESC LIMIT 1 OFFSET ?)",
+                       (box.cle, box.cle, self.evenements_max))
 
     def resultat(self, box: Box, msg_id: str, reponse: dict) -> None:
         """Rien à garder ici : chaque réponse est consommée par celui qui l'a demandée (relève, lecture, relevé), qui sait la ranger."""
@@ -168,9 +186,11 @@ class StockageSqlite:
         degrade = corps.get("tronque") is True
         valeurs: dict = {}
         for r in resultats:
-            if not isinstance(r, dict) or r.get("err") or not isinstance(r.get("params"), dict):
+            if not isinstance(r, dict) or not isinstance(r.get("params"), dict):
                 degrade = True
                 continue
+            if r.get("err") or r.get("failed"):  # source en échec ou erreur : les paramètres reçus restent bons, mais le relevé n'est pas complet
+                degrade = True
             for chemin, v in r["params"].items():
                 if not isinstance(chemin, str) or not chemin.startswith("Device.") or len(chemin) > CHEMIN_MAX or len(valeurs) >= PARAMS_MAX:
                     degrade = True
@@ -196,8 +216,9 @@ class StockageSqlite:
                 cx.execute("UPDATE boites SET inventaire_partiel=1 WHERE cle=?", (box.cle,))
             else:
                 cx.execute("UPDATE boites SET inventaire_partiel=0, inventaire_le=? WHERE cle=?", (maintenant, box.cle))
-            if C_MAINS in valeurs:
-                cx.execute("UPDATE boites SET mains_liees=? WHERE cle=?", (1 if json.loads(valeurs[C_MAINS]) is True else 0, box.cle))
+            cx.execute("DELETE FROM inventaire WHERE cle=? AND rowid IN "
+                       "(SELECT rowid FROM inventaire WHERE cle=? ORDER BY releve_le DESC, rowid DESC LIMIT -1 OFFSET ?)",
+                       (box.cle, box.cle, self.lignes_max))
         return True
 
     def inventaire(self, cle: str) -> dict:
@@ -239,8 +260,9 @@ class StockageSqlite:
             boites = cx.execute("SELECT * FROM boites ORDER BY nom, reseau").fetchall()
             inv: dict = {}
             marques = ",".join("?" * len(_RESUME))
-            for r in cx.execute(f"SELECT cle, chemin, valeur_json FROM inventaire WHERE chemin IN ({marques})", _RESUME):
-                inv.setdefault(r["cle"], {})[r["chemin"]] = json.loads(r["valeur_json"])
+            for b in boites:  # par la clé primaire (cle, chemin), pas par un parcours de toute la table
+                for r in cx.execute(f"SELECT chemin, valeur_json FROM inventaire WHERE cle=? AND chemin IN ({marques})", (b["cle"], *_RESUME)):
+                    inv.setdefault(b["cle"], {})[r["chemin"]] = json.loads(r["valeur_json"])
             boucles = {r["cle"]: r["n"] for r in cx.execute(
                 "SELECT cle, COUNT(*) AS n FROM evenements WHERE type=? AND recu_le>=? GROUP BY cle", (TYPE_BOUCLE, maintenant - BOUCLES_FENETRE_S))}
         out = []
@@ -251,10 +273,10 @@ class StockageSqlite:
             out.append({
                 "cle": b["cle"], "nom": b["nom"], "reseau": b["reseau"], "client": b["client"], "adresse": b["adresse"],
                 "en_ligne": maintenant - b["vu_le"] < HORS_LIGNE_S, "vu_le": b["vu_le"], "agent_version": b["agent_version"] or None,
-                "mains_liees": v.get(C_MAINS) is True,
+                "mains_liees": v[C_MAINS] if isinstance(v.get(C_MAINS), bool) else None,  # inconnu = null (fermé par défaut côté L2)
                 "memoire_dispo_mo": int(kio // 1024) if kio is not None else None,
                 "swap_utilise_pct": round(util * 100 / tot) if tot and util is not None else None,
-                "cpu_pct": _nombre(v.get(C_CPU)),
+                "cpu_pct": round(_nombre(v.get(C_CPU)), 1) if _nombre(v.get(C_CPU)) is not None else None,
                 "services_en_echec": int(echecs) if echecs is not None else None,
                 "boucles_24h": boucles.get(b["cle"], 0),
                 "inventaire_le": b["inventaire_le"], "inventaire_partiel": bool(b["inventaire_partiel"]),
@@ -287,7 +309,10 @@ class StockageSqlite:
     # --- relevé de performance à la demande ---
 
     def releve_enregistrer(self, cle: str, duree_s: int, statut: str, sortie) -> None:
-        brut = json.dumps(sortie, ensure_ascii=False, allow_nan=False)
+        try:
+            brut = json.dumps(sortie, ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError):
+            statut, brut = "erreur", json.dumps({"err": "sortie illisible"})
         if len(brut) > SORTIE_MAX:
             statut, brut = "erreur", json.dumps({"err": "sortie trop grosse"})
         with self._tx() as cx:

@@ -32,7 +32,7 @@ async def test_tour_depose_un_get_device_et_range_la_reponse(monde):
     h, s, f, inv = monde
     s.vu(GK5, {})
     assert await inv.tour() == 1
-    rq = await servir(f, GK5, releve_gk5()["results"] and releve_gk5())
+    rq = await servir(f, GK5, releve_gk5())
     assert rq["type"] == "GET" and rq["body"] == {"paths": ["Device."]}
     await inv.attendre_fin()
     assert s.resumes()[0]["swap_utilise_pct"] == 66

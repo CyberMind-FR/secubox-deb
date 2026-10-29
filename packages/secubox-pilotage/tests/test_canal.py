@@ -379,3 +379,23 @@ def test_canal_notification_d_unite_au_nom_long():
             assert r.json() == {"ignore": 1}
         assert stock.notifications[0][1]["unit"] == ok["unit"]
     run(cas())
+
+
+def test_canal_notifs_plafonnees_par_minute_et_par_box(caplog):
+    async def cas():
+        t = [1000.0]
+        app, _, stock, _ = monter(horloge=lambda: t[0])
+        ev = {"type": "NOTIFY", "body": {"event": {"type": "X_SECUBOX_Boot", "value": 1, "ts": 5}}}
+        async with client(app, "10.10.0.10") as gk5, client(app, "10.64.0.9") as lgm:
+            ignores = 0
+            for _ in range(5):  # 5 x 16 = 80 > 60
+                ignores += (await gk5.post("/canal/v1/notifs", json=[ev] * 16)).json()["ignore"]
+            assert ignores == 20 and len([n for b, n in stock.notifications if b == GK5]) == 60
+            # une autre box n'est pas touchée
+            assert (await lgm.post("/canal/v1/notifs", json=[ev] * 16)).json()["ignore"] == 0
+            t[0] += 61  # fenêtre suivante
+            assert (await gk5.post("/canal/v1/notifs", json=[ev] * 16)).json()["ignore"] == 0
+    with caplog.at_level("WARNING", logger="pilotage.canal"):
+        run(cas())
+    lignes = [r.getMessage() for r in caplog.records if "plafond" in r.getMessage()]
+    assert len(lignes) == 1 and "autoload" not in lignes[0] and "maillage:gk5" in lignes[0]

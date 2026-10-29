@@ -56,7 +56,7 @@ def test_boxes_exige_un_jwt(tmp_path):
 
 def test_boxes_resume_l_inventaire(m):
     m.s.vu(GK5, {"agent_version": "0.1.0"})
-    m.s.inventaire_enregistrer(GK5, releve_gk5())
+    m.s.inventaire_enregistrer(GK5, releve_gk5(mains=False))
     (b,) = TestClient(m.app).get("/boxes").json()
     assert b["nom"] == "gk5" and b["cle"] == "maillage:gk5" and b["en_ligne"] is True
     assert b["swap_utilise_pct"] == 66 and b["services_en_echec"] == 0 and b["mains_liees"] is False
@@ -215,3 +215,73 @@ def test_audit_journal_append_only(tmp_path):
     lignes = [json.loads(x) for x in (tmp_path / "audit.log").read_text().splitlines()]
     assert [x["cle"] for x in lignes] == ["maillage:gk5", "maillage:gk2"] and lignes[1]["action"] == "pilotage_releve_demande"
     assert lignes[0]["module"] == "pilotage"
+
+
+def test_422_borne_le_nom_de_champ_renvoye(m):
+    m.s.vu(GK5, {})
+    r = TestClient(m.app).post("/boxes/gk5/releve", json={"x" * 500: 1})
+    assert r.status_code == 422
+    assert all(len(str(e["loc"])) < 200 for e in r.json()["detail"])
+    assert all(len(x) <= 64 for e in r.json()["detail"] for x in e["loc"] if isinstance(x, str))
+
+
+def assembler(tmp_path, h=None, **kw):
+    from api.asgi import assembler as asm
+    h = h or Horloge()
+    s = StockageSqlite(tmp_path / "p", horloge=h)
+    f = Files()
+    lignes = []
+    inv = Inventaire(f, s, horloge=h, **kw)
+    admin, canal = asm(s, f, inv, lambda ev, ch: lignes.append((ev, ch)), lambda a: GK5 if a == GK5.adresse else None, h)
+    admin.dependency_overrides[auth.require_jwt] = lambda: {"sub": "alice"}
+    return s, f, inv, admin, canal, lignes
+
+
+def test_le_lifespan_du_canal_seul_demarre_la_boucle(tmp_path):
+    s, f, inv, admin, canal, _ = assembler(tmp_path)
+    s.vu(GK5, {})
+    with TestClient(canal):
+        for _ in range(100):
+            if f.en_attente(GK5.cle):
+                break
+            time.sleep(0.02)
+        assert f.en_attente(GK5.cle) == 1
+    assert inv._boucle is None
+
+
+@pytest.mark.asyncio
+async def test_la_boucle_ne_s_arrete_qu_avec_les_deux_applis(tmp_path):
+    s, f, inv, admin, canal, _ = assembler(tmp_path)
+    async with admin.router.lifespan_context(admin):
+        async with canal.router.lifespan_context(canal):
+            assert inv._boucle is not None and not inv._boucle.done()
+        assert inv._boucle is not None and not inv._boucle.done()   # le canal s'arrête, l'admin tourne encore
+    assert inv._boucle is None
+    # et dans l'autre sens
+    async with canal.router.lifespan_context(canal):
+        async with admin.router.lifespan_context(admin):
+            pass
+        assert inv._boucle is not None and not inv._boucle.done()
+    assert inv._boucle is None
+
+
+@pytest.mark.asyncio
+async def test_admin_et_canal_partagent_la_meme_file(tmp_path):
+    s, f, inv, admin, canal, lignes = assembler(tmp_path)
+    ent = {"X-Real-IP": GK5.adresse}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=admin), base_url="http://a") as a, \
+            httpx.AsyncClient(transport=httpx.ASGITransport(app=canal), base_url="http://c", headers=ent) as c:
+        assert (await c.post("/canal/v1/bonjour", json={"agent_version": "0.1.0", "boot_id": "b", "modele": []})).status_code == 200
+        assert (await a.post("/boxes/gk5/releve", json={"duree_s": 20})).status_code == 202
+        r = await c.get("/canal/v1/requetes", params={"attente": 1})
+        (rq,) = r.json()
+        assert rq["type"] == "OPERATE" and rq["body"]["args"] == {"duree_s": 20}
+        rep = await c.post("/canal/v1/reponses", json=[{"msg_id": rq["msg_id"], "type": "OPERATE_RESP", "body": {"output": {"ok": 1}}}])
+        assert rep.json() == {"ignore": 0}
+        for _ in range(100):
+            j = (await a.get("/boxes/gk5/releve")).json()
+            if j["releve"]:
+                break
+            await asyncio.sleep(0.02)
+    assert j["releve"]["statut"] == "ok" and j["releve"]["sortie"] == {"ok": 1}
+    assert lignes[0][0] == "pilotage_releve_demande"

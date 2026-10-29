@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from contextlib import asynccontextmanager
 from typing import Awaitable, Callable, Optional
 
 from .files import FileDeBoxPleine, Files
@@ -41,6 +42,7 @@ class Inventaire:
         self._taches: set = set()
         self._boucle: Optional[asyncio.Task] = None
         self._derniere_purge: Optional[float] = None
+        self._usagers = 0
 
     # --- un tour ---
 
@@ -106,6 +108,20 @@ class Inventaire:
         """Lance l'unique boucle (sans effet si elle tourne déjà). À appeler dans la boucle asyncio."""
         if self._boucle is None or self._boucle.done():
             self._boucle = asyncio.create_task(self._tourner())
+
+    @asynccontextmanager
+    async def utiliser(self):
+        """Cycle de vie partagé par les applications qui servent la même instance : la boucle démarre avec la première et ne
+        s'arrête que quand la dernière s'arrête (compteur)."""
+        self._usagers += 1
+        self.demarrer()
+        try:
+            yield
+        finally:
+            self._usagers -= 1
+            if self._usagers <= 0:
+                self._usagers = 0
+                await self.arreter()
 
     async def arreter(self) -> None:
         tout = [t for t in [self._boucle, *self._taches] if t is not None]

@@ -5,8 +5,9 @@
 
 """Construit les deux applications du service Pilotage (#3126) : l'administration (/run/secubox/pilotage.sock) et le canal des box
 (/run/secubox/pilotage-canal.sock). Les files (`Files`) sont en mémoire : les deux applications DOIVENT tourner dans le même processus.
-La boucle de relève démarre avec la première des deux applications lancée (démarrage idempotent) et s'arrête avec elle."""
+La boucle de relève démarre avec le premier lifespan et ne s'arrête que quand les DEUX applications se sont arrêtées : les servir avec lifespan=on."""
 import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -21,21 +22,22 @@ from pilotage.inventaire import Inventaire
 from pilotage.stockage import DOSSIER_DEFAUT, StockageSqlite
 
 
+def assembler(stockage, files, inventaire, audit, identifier, horloge=time.time) -> "tuple[FastAPI, FastAPI]":
+    """Les deux applications sur les mêmes files, le même stockage et la même boucle de relève (cycle de vie partagé, par compteur)."""
+    admin = creer_app_admin(stockage, files, inventaire, audit, horloge=horloge)
+    canal = creer_app_canal(files, identifier, stockage, audit)
+
+    @asynccontextmanager
+    async def vie_canal(app):
+        async with inventaire.utiliser():
+            yield
+
+    canal.router.lifespan_context = vie_canal
+    return admin, canal
+
+
 def construire() -> "tuple[FastAPI, FastAPI]":
     stockage = StockageSqlite(Path(os.environ.get("SECUBOX_PILOTAGE_DOSSIER", DOSSIER_DEFAUT)))
     audit = A.journal(Path(os.environ.get("SECUBOX_PILOTAGE_AUDIT", A.AUDIT_DEFAUT)))
     files = Files()
-    inventaire = Inventaire(files, stockage)
-    admin = creer_app_admin(stockage, files, inventaire, audit)
-    canal = creer_app_canal(files, box_par_adresse, stockage, audit)
-
-    @asynccontextmanager
-    async def vie_canal(app):
-        inventaire.demarrer()
-        try:
-            yield
-        finally:
-            await inventaire.arreter()
-
-    canal.router.lifespan_context = vie_canal
-    return admin, canal
+    return assembler(stockage, files, Inventaire(files, stockage), audit, box_par_adresse)

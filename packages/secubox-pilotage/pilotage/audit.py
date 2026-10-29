@@ -28,7 +28,7 @@ def journal(chemin: Path = AUDIT_DEFAUT) -> Callable[[str, dict], None]:
         ligne = {k: (v if isinstance(v, (int, bool)) or v is None else str(v)[:300]) for k, v in champs.items() if k not in _RESERVES}
         ligne.update(ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), module="pilotage", action=evenement)
         octets = (json.dumps(ligne, ensure_ascii=False) + "\n").encode("utf-8")
-        fd = os.open(chemin, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o640)
+        fd = os.open(chemin, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
         try:
             os.write(fd, octets)
         finally:

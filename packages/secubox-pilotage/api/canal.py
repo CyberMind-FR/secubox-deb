@@ -44,6 +44,8 @@ UNITE_MAX = 256  # un nom d'unité systemd va jusqu'à 255 caractères
 VU_INTERVALLE_S = 10.0
 AUDIT_INTERVALLE_S = 60.0
 AUDIT_ADRESSES_MAX = 1024
+NOTIFS_PAR_MINUTE = 60
+NOTIFS_FENETRE_S = 60.0
 
 log = logging.getLogger("pilotage.canal")
 
@@ -85,7 +87,8 @@ def _adresse_pour_audit(valeur: str) -> str:
 def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], stockage: StockageCanal,
                     audit: Callable[[str, dict], None], *, attente_max: float = ATTENTE_MAX_S,
                     taille_max: int = TAILLE_MAX, vu_intervalle_s: float = VU_INTERVALLE_S,
-                    audit_intervalle_s: float = AUDIT_INTERVALLE_S) -> FastAPI:
+                    audit_intervalle_s: float = AUDIT_INTERVALLE_S, horloge: Callable[[], float] = time.monotonic,
+                    notifs_par_minute: int = NOTIFS_PAR_MINUTE) -> FastAPI:
     """`identifier(adresse)` rend la Box ou None (appelée hors boucle) ; `audit(evenement, champs)` écrit une ligne dans l'audit."""
     app = FastAPI(title="SecuBox Pilotage — canal", docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -214,6 +217,27 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
                 ignore += 1
         return {"ignore": ignore}
 
+    fenetres: dict = {}  # Box.cle -> [début de la fenêtre, acceptées, ignorées depuis la dernière ligne, instant de la dernière ligne] ; bornée
+
+    def admis(box: Box) -> bool:
+        """Au plus `notifs_par_minute` événements par box et par fenêtre de 60 s ; le surplus est ignoré, compté, et journalisé au plus une fois par minute."""
+        maintenant = horloge()
+        f = fenetres.get(box.cle)
+        if f is None:
+            if len(fenetres) >= AUDIT_ADRESSES_MAX:
+                fenetres.pop(next(iter(fenetres)))
+            f = fenetres[box.cle] = [maintenant, 0, 0, -1e18]
+        elif maintenant - f[0] >= NOTIFS_FENETRE_S:
+            f[0], f[1] = maintenant, 0
+        if f[1] < notifs_par_minute:
+            f[1] += 1
+            return True
+        f[2] += 1
+        if maintenant - f[3] >= NOTIFS_FENETRE_S:
+            log.warning("notifications de %s au-delà du plafond de %d/min : %d ignorée(s)", box.cle, notifs_par_minute, f[2])
+            f[2], f[3] = 0, maintenant
+        return False
+
     @app.post("/canal/v1/notifs")
     async def notifs(request: Request):
         box = await box_de(request)
@@ -226,6 +250,9 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
         for n in doc:
             ev = _evenement(n)
             if ev is None:
+                ignore += 1
+                continue
+            if not admis(box):
                 ignore += 1
                 continue
             try:

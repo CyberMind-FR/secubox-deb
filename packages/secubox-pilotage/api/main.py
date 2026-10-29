@@ -56,26 +56,23 @@ def _borne(v, n: int = ERREUR_MAX) -> str:
 
 
 def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventaire, audit: Callable[[str, dict], None], *,
-                    horloge: Callable[[], float] = time.time, delai_lecture_s: float = DELAI_LECTURE_S,
-                    lifespan_inventaire: bool = True) -> FastAPI:
+                    horloge: Callable[[], float] = time.time, delai_lecture_s: float = DELAI_LECTURE_S) -> FastAPI:
     @asynccontextmanager
     async def vie(app):
-        if lifespan_inventaire:
-            inventaire.demarrer()
         try:
-            yield
+            async with inventaire.utiliser():
+                yield
         finally:
             for t in list(taches):
                 t.cancel()
             await asyncio.gather(*list(taches), return_exceptions=True)
-            await inventaire.arreter()
 
     app = FastAPI(title="SecuBox Pilotage", docs_url=None, redoc_url=None, openapi_url=None, lifespan=vie)
 
     @app.exception_handler(RequestValidationError)
     async def _invalide(request: Request, exc: RequestValidationError):
         """422 sans l'écho de la valeur reçue (un NaN dans le corps fait échouer la sérialisation de l'erreur par défaut : 500)."""
-        return JSONResponse({"detail": [{"loc": list(e.get("loc", [])), "msg": str(e.get("msg", ""))[:200]} for e in exc.errors()]}, status_code=422)
+        return JSONResponse({"detail": [{"loc": [_borne(x, 64) for x in e.get("loc", [])], "msg": str(e.get("msg", ""))[:200]} for e in exc.errors()]}, status_code=422)
 
     garde = [Depends(require_jwt)]
     taches: set = set()
