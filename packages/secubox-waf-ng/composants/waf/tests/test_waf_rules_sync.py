@@ -85,10 +85,12 @@ def test_sync_garde_enabled_false_de_la_box():
     assert neuf["patterns"] == cat("p-2")["patterns"]
 
 
-def test_sync_garde_enabled_true_de_la_box_meme_si_livree_false():
+def test_sync_true_de_la_box_suit_la_copie_livree():
+    """R16 (N1) : seul le « false » de l'opérateur est gardé ; un paquet doit
+    pouvoir désactiver une catégorie, même si la box porte « true »."""
     livre = {"categories": {"x": cat("a", enabled=False)}}
     vivant = {"categories": {"x": cat("a", enabled=True)}}
-    assert sync.fusionne(livre, vivant)["categories"]["x"]["enabled"] is True
+    assert sync.fusionne(livre, vivant)["categories"]["x"]["enabled"] is False
 
 
 def test_sync_sans_enabled_sur_la_box_prend_la_valeur_livree():
@@ -100,9 +102,21 @@ def test_sync_sans_enabled_sur_la_box_prend_la_valeur_livree():
 
 
 def test_sync_ecarts_enabled():
-    livre = {"categories": {"a": cat("1"), "b": cat("2", enabled=True), "c": cat("3", enabled=False)}}
-    vivant = {"categories": {"a": cat("1", enabled=False), "b": cat("2", enabled=True), "c": cat("3")}}
+    """Seul un « false » de la box face à une catégorie livrée active est un écart gardé."""
+    livre = {"categories": {"a": cat("1"), "b": cat("2", enabled=True), "c": cat("3", enabled=False),
+                            "d": cat("4", enabled=False)}}
+    vivant = {"categories": {"a": cat("1", enabled=False), "b": cat("2", enabled=True), "c": cat("3"),
+                             "d": cat("4", enabled=True)}}
     assert sync.ecarts_enabled(livre, vivant) == [("a", False, True)]
+
+
+def test_sync_false_livre_et_false_box_rien_a_auditer(tmp_path, monkeypatch):
+    livre, vivant, audit = tmp_path / "livre.json", tmp_path / "vivant.json", tmp_path / "audit.log"
+    livre.write_text(json.dumps({"categories": {"x": cat("a1", enabled=False)}}))
+    vivant.write_text(json.dumps({"categories": {"x": cat("a0", enabled=True)}}))
+    assert _lancer_sync(monkeypatch, livre, vivant, audit) == 10
+    assert json.loads(vivant.read_text())["categories"]["x"]["enabled"] is False
+    assert not audit.exists()
 
 
 def _lancer_sync(monkeypatch, livre, vivant, audit, *extra):
