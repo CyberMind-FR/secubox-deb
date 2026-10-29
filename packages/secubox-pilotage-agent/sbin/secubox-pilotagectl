@@ -320,12 +320,16 @@ def ecrire(fd, nom, donnees, mode=0o600):
     tmp = f".{nom}.{secrets.token_hex(4)}"
     f = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=fd)
     try:
-        os.fchmod(f, mode)
-        os.write(f, donnees)
-        os.fsync(f)
-    finally:
-        os.close(f)
-    os.replace(tmp, nom, src_dir_fd=fd, dst_dir_fd=fd)
+        try:
+            os.fchmod(f, mode)
+            os.write(f, donnees)
+            os.fsync(f)
+        finally:
+            os.close(f)
+        os.replace(tmp, nom, src_dir_fd=fd, dst_dir_fd=fd)
+    except OSError:
+        retirer(fd, tmp)                            # aucun temporaire laissé (disque plein, cible remplacée)
+        raise
 
 
 def ecrire_json(fd, nom, valeur):
@@ -838,16 +842,21 @@ def finir(ctx, job):
         if isinstance(op, dict) and op.get("job") == job:
             verbe = op.get("verbe") if op.get("verbe") in VERBES else None
             retirer(fd, "operation.json")
-        fins = charger_fins(fd)
+        try:
+            fins = charger_fins(fd)
+        except Erreur:
+            # M1 : la fin est auditée quoi qu'il arrive à fins.json ; la liste repart de zéro.
+            err("fins.json illisible : liste des opérations repartie de zéro")
+            fins = []
         lance = next((f for f in fins if f.get("job") == job and f.get("resultat") == "lance"), None)
         if verbe is None and lance is not None:
             verbe = lance.get("verbe") if lance.get("verbe") in VERBES else None
+        auditer(ctx, "pilotage_resultat", verbe=verbe, job=job, resultat="succes" if succes else "echec", rc=rc)
         # Fin enregistrée pour etat-operation (l'unité --collect est ramassée aussitôt) : remplace l'entrée « lancé ».
         fins = [f for f in fins if f.get("job") != job]
         fins.append({"job": job, "verbe": verbe, "resultat": "succes" if succes else "echec",
                      "rc": int(rc) if rc is not None else None, "quand": int(time.time())})
-        ecrire_json(fd, "fins.json", fins[-FINS_MAX:])
-        auditer(ctx, "pilotage_resultat", verbe=verbe, job=job, resultat="succes" if succes else "echec", rc=rc)
+        ecrire_fins(fd, fins)
     finally:
         os.close(fd)
     return {"ok": True, "job": job, "resultat": "succes" if succes else "echec"}
@@ -860,6 +869,15 @@ def charger_fins(fd):
                                              for f in fins):
         raise Erreur("état non fiable")
     return fins
+
+
+def ecrire_fins(fd, fins):
+    """Écrit fins.json (les FINS_MAX dernières) ; un échec (disque plein, fichier remplacé) est journalisé, jamais
+    propagé : l'opération est déjà lancée ou finie, et son audit fait foi (M1, M2)."""
+    try:
+        ecrire_json(fd, "fins.json", fins[-FINS_MAX:])
+    except OSError as e:
+        err(f"fins.json non écrit ({e.__class__.__name__}) : etat-operation ne connaîtra pas cette opération")
 
 
 def etat_operation(ctx, job):
@@ -1009,7 +1027,7 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
     if verbe in EXCLUSIVES:
         ecrire_json(fd, "operation.json", {"job": job, "verbe": verbe, "debut": maintenant})
     fins.append({"job": job, "verbe": verbe, "resultat": "lance", "quand": maintenant})
-    ecrire_json(fd, "fins.json", fins[-FINS_MAX:])
+    ecrire_fins(fd, fins)                           # M2 : après le lancement, un échec d'écriture ne change pas la réponse
     auditer(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="lance")
     return {"ok": True, "job": job}
 

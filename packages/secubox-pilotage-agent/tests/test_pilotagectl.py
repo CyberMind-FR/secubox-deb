@@ -24,6 +24,9 @@ FAUX_SYSTEMD_RUN = """#!/bin/sh
 # faux systemd-run : note l'argv (une ligne), puis « démarre » l'unité nommée par --unit= (échoue si $FAUX_RUN_ECHEC)
 [ -z "$FAUX_RUN_ECHEC" ] || exit 1
 printf '%s\\n' "$*" >> "$FAUX_LANCES"
+# $FAUX_FINS_CASSE : fins.json devient un dossier non vide pendant le lancement (l'écriture qui suit échoue, comme
+# sur un disque plein)
+if [ -n "$FAUX_FINS_CASSE" ]; then rm -f "$FAUX_FINS_CASSE"; mkdir -p "$FAUX_FINS_CASSE/x"; fi
 # avec --on-active=, comme le vrai : seule la minuterie est active pendant le délai, le service ne l'est pas encore
 suffixe=service
 for a in "$@"; do case "$a" in --on-active=*) suffixe=timer ;; esac; done
@@ -800,3 +803,34 @@ def test_etat_operation_lu_par_l_agent(banc):
     for argv in (["etat-operation"], ["etat-operation", "../x"], ["etat-operation", job, "en-trop"]):
         rc, sortie, _ = banc.run(*argv, agent=True)
         assert rc == 2 and sortie == {"ok": False, "refus": "argv invalide"}, argv
+
+
+# --- Tâche 3, tour de correction (R-L2-28) --------------------------------------------------------------------------
+
+def test_fin_auditee_meme_si_fins_illisible(banc):
+    """M1 : un fins.json illisible n'empêche jamais l'audit de la fin d'une opération (repartir d'une liste vide)."""
+    rc, s, _ = banc.run("maj-paquets", agent=True)
+    fins = banc.r / "var/lib/secubox-pilotagectl/fins.json"
+    fins.write_text("{pas du json")
+    rc, sortie, p = _fin(banc, s["job"], "success", "exited", "0")
+    assert rc == 0 and sortie == {"ok": True, "job": s["job"], "resultat": "succes"}, p.stderr
+    assert "fins.json" in p.stderr                                  # anomalie journalisée
+    fin = [e for e in banc.audit() if e["evenement"] == "pilotage_resultat" and e.get("resultat") == "succes"]
+    assert len(fin) == 1 and fin[0]["job"] == s["job"] and fin[0]["verbe"] == "maj-paquets"
+    # l'opération exclusive est libérée, et la fin est relue par etat-operation
+    rc, sortie, _ = banc.run("etat-operation", s["job"], agent=True)
+    assert sortie["etat"] == "termine" and sortie["resultat"] == "succes"
+
+
+def test_ecriture_des_fins_manquee_apres_lancement(banc):
+    """M2 : l'opération est partie ; une écriture de fins.json qui échoue ensuite (disque plein) ne change pas la
+    réponse : {"ok": true, "job"}, « lance » audité, écriture manquée journalisée."""
+    fins = banc.r / "var/lib/secubox-pilotagectl/fins.json"
+    rc, sortie, p = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True,
+                             env={"FAUX_FINS_CASSE": str(fins)})
+    assert rc == 0 and sortie["ok"] is True and len(sortie["job"]) == 16, (sortie, p.stderr)
+    assert "fins.json" in p.stderr
+    lances = [e for e in banc.audit() if e["evenement"] == "pilotage_resultat" and e.get("resultat") == "lance"]
+    assert len(lances) == 1 and lances[0]["job"] == sortie["job"]
+    assert len(banc.lancements()) == 1
+    assert not [n for n in os.listdir(fins.parent) if n.startswith(".")]   # aucun temporaire laissé
