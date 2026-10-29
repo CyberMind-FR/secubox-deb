@@ -1,3 +1,32 @@
+secubox-waf-ng (1.32.0-1~trixie1) trixie; urgency=medium
+
+  * Signatures équivalentes à PHP2Shell, chantier #3273. Tout en mode detect :
+    journalisées avec leur gravité réelle, jamais bloquées ni bannies.
+  * Catalogue 1.7.0 : catégories roundcube (rc-001 à -006), nextcloud
+    (nc-001 à -005) et php_requete (php-001 à -007), insérées avant php2shell
+    qui reste dernière ; compléments php2shell-005 à -008. Chaque signature
+    porte cve, confidence, desc et source.
+  * Seuils provisoires étiquetés « provisoire, non sourcé (2026-10-29) » :
+    php2shell-002, -003, -006 (9 en-têtes) et -007 (21 champs vides), à
+    étalonner sur le trafic réel.
+  * sbxwaf : noms de paramètres et de cookies normalisés comme PHP, entrée PHP
+    paresseuse, capture urlencoded (jeton à part, 8 au plus) et captures sans
+    jeton (prologue XML 4096 octets, début de PUT 64 octets), étiquettes
+    d'outil aggravantes (outil:*) sans hausse de gravité, sonde PHP-CGI.
+    Mémoire de capture au pire 24 Mio (16 multipart + 8 urlencoded).
+  * Interface : /php/signaux (décompte sur 24 h par famille, règle, vhost et
+    adresse publique, relevé en cache, état « perime » après 10 minutes,
+    adresses non globales exclues, CGNAT compris) et carte « Analyse des
+    requêtes PHP » dans les détections et la page du WAF.
+  * vhost_profiles.json : federation_vhosts (vide : la fédération Nextcloud
+    n'est pas utilisée, chaque partage fédéré anonyme est un signal moyen).
+  * Retrait de sessionNextcloud, plus appelée en production.
+  * Retour arrière : "enabled": false sur la catégorie voulue de
+    /etc/secubox/waf/waf-rules.json (rechargement à chaud) ; waf-rules-sync
+    garde ce false. Sans catégorie structurelle active, aucune capture.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 18:00:00 +0100
+
 secubox-waf-ng (1.31.0-1~trixie1) trixie; urgency=medium
 
   * PHP2Shell (CVE-2026-109618, CVE-2026-109619), chantier #3257, tâches 1 à 5 :

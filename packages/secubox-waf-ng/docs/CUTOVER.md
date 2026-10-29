@@ -220,7 +220,7 @@ CVE-2026-109619). Un vhost est PHP si son service figure dans `php_services`
 (`vhost_profiles.json` : `nextcloud`, `roundcube`) **ou** si son nom d'hôte
 normalisé correspond à un motif de `php_hotes` (livrés : `^(nc|nextcloud|cloud)\.`
 et `^(webmail|roundcube)\.` ; un motif invalide est rejeté seul, journalisé).
-La catégorie `php2shell` du corpus livré (`_meta` 1.6.0) est en mode `detect` :
+Les catégories `php2shell`, `roundcube`, `nextcloud` et `php_requete` du corpus livré (`_meta` 1.7.0, #3273) sont en mode `detect` :
 les détections sont journalisées, **jamais bloquées** ni bannies. Le corps
 relayé au backend n'est pas modifié. Le corps est lu comme PHP 8.2 le lit
 (`main/rfc1867.c` transcrit, `skip_upload` collant compris) : fins de ligne
@@ -236,7 +236,10 @@ pas de traduction d'encodage mbstring).
   jamais émise vers actord.
 - **Mémoire** : la fenêtre de capture vaut **min(`--max-body-inspect`, 1 Mio)**.
   Relever l'inspection texte (option A ci-dessus, 8 Mio) ne la relève pas.
-  Jusqu'à 16 captures simultanées : au pire **16 Mio** en mémoire.
+  Jusqu'à 16 captures multipart et 8 urlencoded simultanées : au pire
+  **24 Mio** en mémoire (16 multipart + 8 urlencoded). Deux captures courtes
+  sans jeton s'y ajoutent, bornées par connexion : le prologue XML (4096 octets)
+  et le début d'un `PUT` WebDAV (64 octets).
 - **Statuts de journal** (compteurs et booléens seulement, jamais le corps ni un
   nom de fichier ; `ja4` et `tool` comme une ligne detect) :
   `multipart-tronque` (fenêtre atteinte), `multipart-malforme`,
@@ -252,7 +255,7 @@ pas de traduction d'encodage mbstring).
   ligne `sbxwaf: vhosts PHP armés : N explicites, M motifs`. Avec 0 et 0, la
   box est aveugle : zéro ligne `php2shell` ne prouve alors rien.
 - **Retour arrière** : passer `"enabled": false` sur la catégorie `php2shell`
-  dans `/etc/secubox/waf/waf-rules.json` (rechargement à chaud) : sans
+  (ou `roundcube`, `nextcloud`, `php_requete`, une par une) dans `/etc/secubox/waf/waf-rules.json` (rechargement à chaud) : sans
   signature structurelle active, aucune capture n'est posée et aucune ligne
   `multipart-*` n'est écrite. Ce choix survit aux mises à jour : `waf-rules-sync`
   garde le `"enabled": false` de la box (ligne d'audit quand la copie livrée
