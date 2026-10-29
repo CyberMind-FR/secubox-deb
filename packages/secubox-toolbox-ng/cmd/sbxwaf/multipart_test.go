@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -167,7 +168,7 @@ func TestAnalyserMultipartLF(t *testing.T) {
 	}
 	crlf := analyserMultipart(fabriquerMultipart("BND", ps, false), ctTest, false, LimitesMultipart{})
 	lf := analyserMultipart(fabriquerMultipart("BND", ps, true), ctTest, false, LimitesMultipart{})
-	if lf.Statut != MultipartAnalyse || lf != crlf {
+	if lf.Statut != MultipartAnalyse || !reflect.DeepEqual(lf, crlf) {
 		t.Fatalf("LF %+v, CRLF %+v", lf, crlf)
 	}
 }
@@ -320,7 +321,7 @@ func FuzzAnalyserMultipart(f *testing.F) {
 		copie := append([]byte(nil), corps...)
 		poison := append(append([]byte(nil), corps...), []byte(corpsSondeP3())...)
 		r := analyserMultipart(corps[:len(corps):len(corps)], ct, tronque, LimitesMultipart{PartiesMax: max})
-		if r2 := analyserMultipart(poison[:len(corps)], ct, tronque, LimitesMultipart{PartiesMax: max}); r2 != r {
+		if r2 := analyserMultipart(poison[:len(corps)], ct, tronque, LimitesMultipart{PartiesMax: max}); !reflect.DeepEqual(r2, r) {
 			t.Fatalf("lecture hors du préfixe : %+v / %+v", r, r2)
 		}
 		if string(copie) != string(corps) {

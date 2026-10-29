@@ -35,9 +35,14 @@
 // dont PHP SAUTE le corps d'un fichier (lu, ou parcouru ligne à ligne), donc
 // seulement l'alignement des lignes de plus de 5120 octets.
 //
-// CE QUI EST VOLONTAIREMENT ÉVITÉ : toute copie du contenu d'une partie ; le
-// résultat ne porte que des entiers et des booléens. Seuls sont copiés la
-// valeur du Content-Disposition (en-tête, bornée par le préfixe) et les noms
+// CE QUI EST VOLONTAIREMENT ÉVITÉ : toute copie du contenu d'un FICHIER ; le
+// résultat ne porte que des entiers et des booléens, sauf Champs (#3273) : la
+// valeur d'un champ ordinaire n'est copiée que si son nom normalisé est l'un
+// des noms retenus (nomsRetenusPHP), au plus parametresRetenusMax, et elle
+// n'est JAMAIS journalisée (seuls des booléens et des compteurs sortent).
+// Pour un fichier lu, 64 octets au plus sont examinés (magiqueNonRaster), sur
+// place, sans copie conservée. Seuls sont copiés la valeur du
+// Content-Disposition (en-tête, bornée par le préfixe) et les noms
 // déséchappés, le temps de les mesurer. Le préfixe n'est jamais modifié (PHP
 // écrit des NUL dans SON tampon ; ici on ne fait que découper).
 
@@ -89,6 +94,11 @@ type ResultatMultipart struct {
 	FichiersApresProgress int  // parties fichier vues APRÈS ce champ
 	FilenamePHP           bool // le filename retenu par PHP contient "<?php" (insensible à la casse)
 	FilenameObjet         bool // le filename retenu par PHP contient "|O:"
+	FilenameSession       bool // le filename retenu contient '|' ET un jeton de sérialisation PHP [abdisNO]:[0-9;] (R-RC2)
+	NonRaster             bool // un fichier LU commence par un format non raster (R-IMG1, 64 octets)
+	// Champs : champs ordinaires dont le nom normalisé est retenu
+	// (nomsRetenusPHP), valeur copiée, au plus parametresRetenusMax. Jamais journalisés.
+	Champs []ParametrePHP
 }
 
 // minusculesASCII ne touche que A-Z : la longueur en octets reste identique.
@@ -654,6 +664,12 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 			if egalSansCasse(nom, "MAX_FILE_SIZE") {
 				maxFileSize = strtollPHP(valeur)
 			}
+			// Champ retenu (#3273) : nom normalisé comme PHP (php_register_variable_ex).
+			if len(r.Champs) < parametresRetenusMax {
+				if n, ok := nomPHP(string(nom)); ok && nomsRetenusPHP[n] {
+					r.Champs = append(r.Champs, ParametrePHP{Nom: n, Valeur: string(valeur)})
+				}
+			}
 			continue
 		}
 
@@ -684,6 +700,7 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 		}
 		r.FilenamePHP = r.FilenamePHP || strings.Contains(minusculesASCII(string(filename)), "<?php")
 		r.FilenameObjet = r.FilenameObjet || bytes.Contains(filename, []byte("|O:"))
+		r.FilenameSession = r.FilenameSession || filenameSessionPHP(filename)
 
 		// Sauté (rfc1867.c:1098) ou filename vide (UPLOAD_ERROR_D, rfc1867.c:1104) :
 		// corps non lu, la recherche de frontière suivante le parcourt ligne à ligne.
@@ -692,7 +709,16 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 		}
 		// Lecture du fichier (rfc1867.c:1114-1188). MAX_FILE_SIZE dépassé : la
 		// boucle s'arrête après une lecture de plus, au milieu du corps.
+		pos0 := m.pos
 		blen := m.lire(fillUnitPHP)
+		// R-IMG1 : 64 octets au plus, dans la première lecture (déjà faite par PHP).
+		if !r.NonRaster && blen > 0 {
+			n := blen
+			if n > magiqueOctets {
+				n = magiqueOctets
+			}
+			r.NonRaster = magiqueNonRaster(m.data[pos0:pos0+n]) != ""
+		}
 		uploadCnt--
 		var total int64
 		annule := false

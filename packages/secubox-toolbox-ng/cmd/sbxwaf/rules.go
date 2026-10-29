@@ -136,12 +136,25 @@ var parametreRequis = map[string]string{
 	"parties_nombre":           "parties_min",
 	"noms_profondeur":          "profondeur_min",
 	"filename_charge":          "",
+	// #3273, Roundcube (tâche 3) : tous sans paramètre.
+	"rc_from_invalide":          "",
+	"filename_session":          "",
+	"rc_crlf_imap":              "",
+	"rc_crlf_envoi":             "",
+	"rc_markasjunk_uid_requete": "",
+	"rc_image_non_raster":       "",
 }
 
 // controlesRequete : contrôles qui lisent EntreePHP.Requete (#3273, relecture
 // I2). Sans signature chargée de ces contrôles, la requête n'est jamais lue.
 // Les tâches 3 à 7 y inscrivent leurs contrôles.
-var controlesRequete = map[string]bool{}
+var controlesRequete = map[string]bool{
+	"rc_from_invalide":          true,
+	"rc_crlf_imap":              true,
+	"rc_crlf_envoi":             true,
+	"rc_markasjunk_uid_requete": true,
+	"rc_image_non_raster":       true, // _task et _action peuvent venir de la requête
+}
 
 // servicesPHPConnus : services que "services" peut nommer (#3273, R-W8 M1).
 // Un autre nom n'empêche pas le chargement (la signature ne vise alors que
@@ -216,6 +229,69 @@ func (e errStructurel) Error() string { return string(e) }
 // declenche applique le controle a l'entree PHP (seuils a >=). Les controles
 // multipart sont faux sans corps multipart analyse.
 func (s signatureStructurelle) declenche(e *EntreePHP) bool {
+	switch s.check {
+	case "rc_from_invalide":
+		for _, v := range e.valeursRequete("_from") {
+			if inv, _ := fromInvalideRoundcube(v); inv {
+				return true
+			}
+		}
+		return false
+	case "filename_session":
+		return e.Multipart != nil && e.Multipart.FilenameSession
+	case "rc_crlf_imap":
+		for _, n := range nomsIMAPRoundcube {
+			for _, v := range e.valeurs(n) {
+				if crlfDans(v) {
+					return true
+				}
+			}
+		}
+		for _, v := range e.valeurs("_flag") {
+			if drapeauInvalideRoundcube(v) {
+				return true
+			}
+		}
+		return false
+	case "rc_crlf_envoi":
+		for _, n := range nomsEnvoiRoundcube {
+			for _, v := range e.valeurs(n) {
+				if crlfDans(v) {
+					return true
+				}
+			}
+		}
+		return false
+	case "rc_markasjunk_uid_requete":
+		if !strings.EqualFold(e.Methode, "POST") || len(e.valeursRequete("_uid")) == 0 {
+			return false
+		}
+		for _, v := range e.valeurs("_action") {
+			if strings.HasPrefix(v, "plugin.markasjunk") {
+				return true
+			}
+		}
+		return false
+	case "rc_image_non_raster":
+		if e.Multipart == nil || !e.Multipart.NonRaster {
+			return false
+		}
+		taches := e.valeurs("_task")
+		for _, a := range e.valeurs("_action") {
+			if a == "upload-photo" {
+				return true
+			}
+			if a == "upload" {
+				for _, t := range taches {
+					if t == "settings" {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+	// Contrôles multipart de #3257 : faux sans corps multipart analysé.
 	if e.Multipart == nil {
 		return false
 	}

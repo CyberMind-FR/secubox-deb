@@ -122,12 +122,45 @@ func completerCorps(e *EntreePHP, genre genreCorps, prefixe []byte, contentType 
 	}
 }
 
-// Signaux : les compteurs journalisés avec chaque détection (jamais une valeur).
-func (e *EntreePHP) Signaux() map[string]int {
-	if e.Multipart != nil {
-		return e.Multipart.Signaux()
+// valeurs rend toutes les valeurs retenues du nom normalisé : la requête,
+// puis le corps urlencoded, puis les champs multipart. Rien n'est lu de plus.
+func (e *EntreePHP) valeurs(nom string) []string {
+	r := e.Requete.Valeurs(nom)
+	if e.Corps != nil {
+		r = append(r, e.Corps.Valeurs(nom)...)
 	}
-	return nil
+	if e.Multipart != nil {
+		for _, c := range e.Multipart.Champs {
+			if c.Nom == nom {
+				r = append(r, c.Valeur)
+			}
+		}
+	}
+	return r
+}
+
+// valeursRequete rend les valeurs du nom dans la chaîne de requête seulement
+// (PHP lit _from en GET seulement, spécification § 3.1).
+func (e *EntreePHP) valeursRequete(nom string) []string { return e.Requete.Valeurs(nom) }
+
+// Signaux : les compteurs journalisés avec chaque détection (jamais une valeur).
+// from_bang vaut 1 si un _from de la requête est invalide et commence par « ! »
+// (R-RC1) : un booléen, jamais la valeur.
+func (e *EntreePHP) Signaux() map[string]int {
+	var m map[string]int
+	if e.Multipart != nil {
+		m = e.Multipart.Signaux()
+	}
+	for _, v := range e.valeursRequete("_from") {
+		if inv, bang := fromInvalideRoundcube(v); inv && bang {
+			if m == nil {
+				m = map[string]int{}
+			}
+			m["from_bang"] = 1
+			break
+		}
+	}
+	return m
 }
 
 // analyserRequetePHP fige la capture, complète l'entrée, l'évalue et
