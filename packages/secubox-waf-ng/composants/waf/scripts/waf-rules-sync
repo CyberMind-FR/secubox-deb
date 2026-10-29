@@ -20,17 +20,47 @@ GÉNÉRÉES de la box sont gardées telles quelles (et celle du paquet n'est pos
 si la box n'en a aucune). Une sauvegarde `.avant-<version>` précède toute
 écriture ; un JSON invalide n'écrit rien.
 
-Usage : waf-rules-sync [--dry-run] [--version V] [--livre FICHIER] [--vivant FICHIER]
+LE CHOIX DE L'OPÉRATEUR TIENT (#3257, R14). Pour une catégorie livrée, la valeur
+booléenne `enabled` posée sur la box est gardée : un `"enabled": false` posé
+après un faux positif ne revient pas à la mise à jour suivante. Quand elle
+diffère de la valeur livrée, une ligne va au journal d'audit.
+
+Usage : waf-rules-sync [--dry-run] [--version V] [--livre FICHIER] [--vivant FICHIER] [--audit FICHIER]
 Code de sortie : 0 rien à faire ou fait, 10 modifié (le moteur doit redémarrer).
 """
 import argparse
 import json
+import os
 import shutil
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 LIVRE = Path("/usr/share/secubox/waf/waf-rules.json")
 VIVANT = Path("/etc/secubox/waf/waf-rules.json")
+AUDIT = Path("/var/log/secubox/audit.log")
+
+
+def _enabled_box(cat):
+    """La valeur `enabled` posée sur la box, si c'est un booléen ; sinon None."""
+    if isinstance(cat, dict) and isinstance(cat.get("enabled"), bool):
+        return cat["enabled"]
+    return None
+
+
+def ecarts_enabled(livre: dict, vivant: dict) -> list:
+    """Catégories livrées (non générées) dont la box a posé un `enabled` qui
+    diffère de la valeur livrée (absente = true) : [(nom, box, livré)]."""
+    cats_v = vivant.get("categories", {})
+    out = []
+    for nom, cat in livre.get("categories", {}).items():
+        if not isinstance(cat, dict) or cat.get("generated"):
+            continue
+        box = _enabled_box(cats_v.get(nom))
+        livre_v = cat.get("enabled", True)
+        if box is not None and box != livre_v:
+            out.append((nom, box, livre_v))
+    return out
 
 
 def fusionne(livre: dict, vivant: dict) -> dict:
@@ -44,6 +74,8 @@ def fusionne(livre: dict, vivant: dict) -> dict:
     for nom, cat in livre.get("categories", {}).items():
         if isinstance(cat, dict) and cat.get("generated") and nom in cats_v:
             cats[nom] = cats_v[nom]          # tenue à chaud par wafgen
+        elif isinstance(cat, dict) and _enabled_box(cats_v.get(nom)) is not None:
+            cats[nom] = {**cat, "enabled": _enabled_box(cats_v[nom])}   # choix de l'opérateur (R14)
         else:
             cats[nom] = cat
     for nom, cat in cats_v.items():
@@ -53,12 +85,33 @@ def fusionne(livre: dict, vivant: dict) -> dict:
     return out
 
 
+def _auditer(chemin: Path, detail: str) -> None:
+    """Une ligne JSON append-only, jamais à travers un lien symbolique. Un
+    journal inaccessible n'arrête pas la mise à jour : on le dit."""
+    ligne = json.dumps({
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "module": "waf",
+        "action": "rules-sync-enabled",
+        "acteur": "root",
+        "detail": detail,
+    }, ensure_ascii=False) + "\n"
+    try:
+        fd = os.open(chemin, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
+        try:
+            os.write(fd, ligne.encode("utf-8"))
+        finally:
+            os.close(fd)
+    except OSError as exc:
+        print(f"waf-rules-sync: journal d'audit inaccessible ({chemin}) : {exc}", file=sys.stderr)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--version", default="maj")
     ap.add_argument("--livre", type=Path, default=LIVRE)
     ap.add_argument("--vivant", type=Path, default=VIVANT)
+    ap.add_argument("--audit", type=Path, default=AUDIT)
     a = ap.parse_args()
 
     if not a.livre.is_file():
@@ -73,6 +126,12 @@ def main() -> int:
         return 10
     vivant = json.loads(a.vivant.read_text(encoding="utf-8"))
     neuf = fusionne(livre, vivant)
+    for nom, box, livre_v in ecarts_enabled(livre, vivant):
+        detail = (f"catégorie {nom} : enabled={json.dumps(box)} de la box gardé "
+                  f"(livré : {json.dumps(livre_v)}) dans {a.vivant}")
+        print(f"waf-rules-sync: {detail}")
+        if not a.dry_run:
+            _auditer(a.audit, detail)
 
     def ids(d):
         return {p["id"] for c in d.get("categories", {}).values() if isinstance(c, dict)

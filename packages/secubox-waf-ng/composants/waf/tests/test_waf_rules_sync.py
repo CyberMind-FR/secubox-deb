@@ -71,3 +71,62 @@ def test_sync_garde_generees():
     neuf = sync.fusionne(livre, vivant)
     assert neuf["categories"]["product_absent_probes"] == gen
     assert neuf["_meta"]["version"] == "1.6.0"
+
+
+# ── R14 (#3257, relecture finale I2b) : le choix « enabled » de la box tient ──
+
+def test_sync_garde_enabled_false_de_la_box():
+    """Une catégorie désactivée sur la box (faux positif) le reste à la mise à
+    jour, mais ses motifs suivent la copie livrée."""
+    livre = {"categories": {"php2shell": cat("p-2", enabled=True, mode="detect")}}
+    vivant = {"categories": {"php2shell": cat("p-1", enabled=False, mode="detect")}}
+    neuf = sync.fusionne(livre, vivant)["categories"]["php2shell"]
+    assert neuf["enabled"] is False
+    assert neuf["patterns"] == cat("p-2")["patterns"]
+
+
+def test_sync_garde_enabled_true_de_la_box_meme_si_livree_false():
+    livre = {"categories": {"x": cat("a", enabled=False)}}
+    vivant = {"categories": {"x": cat("a", enabled=True)}}
+    assert sync.fusionne(livre, vivant)["categories"]["x"]["enabled"] is True
+
+
+def test_sync_sans_enabled_sur_la_box_prend_la_valeur_livree():
+    livre = {"categories": {"x": cat("a", enabled=False), "y": cat("b")}}
+    vivant = {"categories": {"x": cat("a"), "y": cat("b", enabled="oui")}}
+    neuf = sync.fusionne(livre, vivant)["categories"]
+    assert neuf["x"]["enabled"] is False          # clé absente sur la box
+    assert "enabled" not in neuf["y"]             # valeur non booléenne : ignorée
+
+
+def test_sync_ecarts_enabled():
+    livre = {"categories": {"a": cat("1"), "b": cat("2", enabled=True), "c": cat("3", enabled=False)}}
+    vivant = {"categories": {"a": cat("1", enabled=False), "b": cat("2", enabled=True), "c": cat("3")}}
+    assert sync.ecarts_enabled(livre, vivant) == [("a", False, True)]
+
+
+def _lancer_sync(monkeypatch, livre, vivant, audit, *extra):
+    monkeypatch.setattr("sys.argv", ["x", "--livre", str(livre), "--vivant", str(vivant),
+                                     "--version", "9", "--audit", str(audit), *extra])
+    return sync.main()
+
+
+def test_sync_audite_un_enabled_garde_qui_differe(tmp_path, monkeypatch):
+    livre, vivant, audit = tmp_path / "livre.json", tmp_path / "vivant.json", tmp_path / "audit.log"
+    livre.write_text(json.dumps({"categories": {"php2shell": cat("p-2", enabled=True)}}))
+    vivant.write_text(json.dumps({"categories": {"php2shell": cat("p-1", enabled=False)}}))
+    assert _lancer_sync(monkeypatch, livre, vivant, audit, "--dry-run") == 10
+    assert not audit.exists()                                  # essai à blanc : rien
+    assert _lancer_sync(monkeypatch, livre, vivant, audit) == 10
+    assert json.loads(vivant.read_text())["categories"]["php2shell"]["enabled"] is False
+    lignes = [json.loads(x) for x in audit.read_text().splitlines()]
+    assert len(lignes) == 1 and lignes[0]["action"] == "rules-sync-enabled"
+    assert "php2shell" in lignes[0]["detail"] and "false" in lignes[0]["detail"]
+
+
+def test_sync_n_audite_rien_sans_ecart(tmp_path, monkeypatch):
+    livre, vivant, audit = tmp_path / "livre.json", tmp_path / "vivant.json", tmp_path / "audit.log"
+    livre.write_text(json.dumps({"categories": {"a": cat("a1", enabled=True)}}))
+    vivant.write_text(json.dumps({"categories": {"a": cat("a0", enabled=True)}}))
+    assert _lancer_sync(monkeypatch, livre, vivant, audit) == 10
+    assert not audit.exists()

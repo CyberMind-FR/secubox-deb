@@ -17,8 +17,15 @@ ajoutés par l'opérateur). dpkg le voit donc « modifié localement » et, avec
 Règle : on AJOUTE les services et les vhosts de la copie livrée
 (/usr/share/secubox/waf/vhost_profiles.json) ABSENTS de la box. On ne remplace
 jamais une clé existante, on ne touche ni à `suppress_categories`, ni à
-`anti_robots`, ni aux commentaires. `php_services` (#3257) : les noms livrés absents
-sont ajoutés à la fin, si leur service existe ; aucun nom n'est retiré. Un vhost livré déjà présent sous une autre
+`anti_robots`, ni aux commentaires.
+
+`php_services` et `php_hotes` (#3257, ruling R14) : un nom livré n'est proposé
+QU'UNE FOIS. Les noms déjà proposés sont consignés dans la box
+(`php_services_proposes`, `php_hotes_proposes`) ; seuls les noms jamais
+proposés sont ajoutés, à la fin et dans l'ordre livré (pour php_services, si
+leur service existe). Un nom retiré par l'opérateur reste donc retiré. Une box
+d'avant le suivi : ce qu'elle a déjà ET que le paquet livre compte comme
+proposé. Aucun nom n'est jamais retiré. Un vhost livré déjà présent sous une autre
 casse (sbxwaf normalise) n'est pas ajouté ; un vhost livré dont le service
 n'existe pas n'est pas ajouté (sbxwaf refuserait tout le fichier).
 
@@ -79,13 +86,49 @@ def _liste_noms(doc: dict, cle: str, origine: str) -> list:
     return val
 
 
-def fusionne(livre: dict, vivant: dict) -> tuple[dict, list[str], list[str], list[str]]:
+def _proposer(neuf: dict, livre: dict, cle: str, admis) -> list[str]:
+    """R14 : ajoute à neuf[cle] les noms livrés JAMAIS proposés, et consigne dans
+    neuf[cle + "_proposes"] tout nom livré déjà proposé ou présent. `admis(nom)`
+    faux : nom ignoré (dit sur stderr), ni ajouté ni consigné. Rend les ajouts."""
+    livres = [n for n in _liste_noms(livre, cle, "copie livrée") if isinstance(n, str)]
+    presents_l = _liste_noms(neuf, cle, "copie de la box")
+    cle_p = cle + "_proposes"
+    deja = neuf.get(cle_p)
+    if deja is None:
+        # Box d'avant le suivi : ce qu'elle a déjà ET que le paquet livre.
+        proposes = [n for n in presents_l if isinstance(n, str) and n in livres]
+    elif isinstance(deja, list):
+        proposes = [n for n in deja if isinstance(n, str)]
+    else:
+        raise Refus(f"copie de la box : « {cle_p} » n'est pas une liste JSON")
+    presents = {n for n in presents_l if isinstance(n, str)}
+    vus = set(proposes)
+    ajoutes = []
+    for nom in livres:
+        if nom in vus:
+            continue                     # déjà proposé : un retrait de l'opérateur tient
+        if nom not in presents:
+            if not admis(nom):
+                continue
+            neuf.setdefault(cle, []).append(nom)
+            presents.add(nom)
+            ajoutes.append(nom)
+        proposes.append(nom)
+        vus.add(nom)
+    if proposes != deja and (deja is not None or proposes):
+        neuf[cle_p] = proposes
+    return ajoutes
+
+
+def fusionne(livre: dict, vivant: dict) -> tuple[dict, list[str], list[str], list[str], list[str]]:
     """Copie de la box + services et vhosts livrés absents. Rien d'existant ne change.
 
-    `php_services` (#3257) : les noms livrés absents, dont le service existe après
-    fusion, sont ajoutés à la fin et dans l'ordre livré ; aucun nom n'est retiré.
+    `php_services` et `php_hotes` (#3257, R14) : seuls les noms livrés jamais
+    proposés sont ajoutés (voir _proposer) ; un php_services dont le service
+    n'existe pas après fusion est ignoré.
 
-    Rend (nouvelle copie, services ajoutés, vhosts ajoutés, php_services ajoutés)."""
+    Rend (nouvelle copie, services ajoutés, vhosts ajoutés, php_services
+    ajoutés, php_hotes ajoutés)."""
     if not isinstance(livre, dict):
         raise Refus("copie livrée : pas un objet JSON")
     if not isinstance(vivant, dict):
@@ -94,8 +137,9 @@ def fusionne(livre: dict, vivant: dict) -> tuple[dict, list[str], list[str], lis
     vhosts_l = _objet(livre, "vhosts", "copie livrée")
     _objet(vivant, "services", "copie de la box")
     _objet(vivant, "vhosts", "copie de la box")
-    php_l = _liste_noms(livre, "php_services", "copie livrée")
-    _liste_noms(vivant, "php_services", "copie de la box")
+    for cle in ("php_services", "php_hotes"):
+        _liste_noms(livre, cle, "copie livrée")
+        _liste_noms(vivant, cle, "copie de la box")
 
     neuf = copy.deepcopy(vivant)
     services = neuf.setdefault("services", {})
@@ -122,19 +166,16 @@ def fusionne(livre: dict, vivant: dict) -> tuple[dict, list[str], list[str], lis
         connus.add(normaliser_hote(hote))
         vhosts_ajoutes.append(hote)
 
-    php_ajoutes = []
-    presents = {n for n in neuf.get("php_services", []) if isinstance(n, str)}
-    for nom in php_l:
-        if not isinstance(nom, str) or nom in presents:
-            continue
-        if nom not in services:
-            print(f"waf-profils-fusion: php_services livré {nom} ignoré, service introuvable",
-                  file=sys.stderr)
-            continue
-        neuf.setdefault("php_services", []).append(nom)
-        presents.add(nom)
-        php_ajoutes.append(nom)
-    return neuf, services_ajoutes, vhosts_ajoutes, php_ajoutes
+    def service_connu(nom):
+        if nom in services:
+            return True
+        print(f"waf-profils-fusion: php_services livré {nom} ignoré, service introuvable",
+              file=sys.stderr)
+        return False
+
+    php_ajoutes = _proposer(neuf, livre, "php_services", service_connu)
+    hotes_ajoutes = _proposer(neuf, livre, "php_hotes", lambda _nom: True)
+    return neuf, services_ajoutes, vhosts_ajoutes, php_ajoutes, hotes_ajoutes
 
 
 def _lire_livre(chemin: Path):
@@ -243,14 +284,15 @@ def executer(livre_p: Path, vivant_p: Path, audit_p: Path, essai: bool) -> int:
             print(f"waf-profils-fusion: {vivant_p} absent — rien à faire")
             return 0
         vivant, _, st = lu
-        neuf, services, vhosts, php = fusionne(livre, vivant)
-        if not services and not vhosts and not php:
+        neuf, services, vhosts, php, hotes = fusionne(livre, vivant)
+        if neuf == vivant:
             print("waf-profils-fusion: profils à jour")
             return 0
         detail = (f"services ajoutés : {', '.join(services) or 'aucun'} ; "
                   f"vhosts ajoutés : {', '.join(vhosts) or 'aucun'} ; "
-                  f"php_services ajoutés : {', '.join(php) or 'aucun'} "
-                  f"(depuis {livre_p}, dans {vivant_p})")
+                  f"php_services ajoutés : {', '.join(php) or 'aucun'} ; "
+                  f"php_hotes ajoutés : {', '.join(hotes) or 'aucun'} "
+                  f"(depuis {livre_p}, dans {vivant_p} ; noms proposés consignés)")
         print(f"waf-profils-fusion: {detail}")
         if essai:
             return MODIFIE
