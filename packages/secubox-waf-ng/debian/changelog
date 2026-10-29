@@ -21,6 +21,15 @@ secubox-waf-ng (1.32.0-1~trixie1) trixie; urgency=medium
   * vhost_profiles.json : federation_vhosts (vide : la fédération Nextcloud
     n'est pas utilisée, chaque partage fédéré anonyme est un signal moyen).
   * Retrait de sessionNextcloud, plus appelée en production.
+  * Passe de correction finale : indicateurs des règles calculés au
+    chargement et verdict PHP mémorisé par hôte (table bornée à 4096), plus
+    de coût par requête sur un vhost non PHP ; ligne capture-concurrence
+    écrite après la réponse, une par seconde et par genre (signal
+    supprimees) ; première et dernière occurrence de chaque paramètre
+    retenu, sans plafond global contournable (rc-001) ; une catégorie
+    désactivée ne fait plus capturer le corps qu'elle seule lit ; relevé PHP
+    filtré avant décodage ; carte « périmé » et /detections sans erreur sur
+    un relevé altéré.
   * Retour arrière : "enabled": false sur la catégorie voulue de
     /etc/secubox/waf/waf-rules.json (rechargement à chaud) ; waf-rules-sync
     garde ce false. Sans catégorie structurelle active, aucune capture.
