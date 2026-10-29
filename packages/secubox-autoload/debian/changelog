@@ -10,9 +10,10 @@ secubox-autoload (0.7.4-1~trixie1) trixie; urgency=medium
       bloquait toute synchronisation (R-L2-6). Fichier ouvert en O_NOFOLLOW, refusé s'il n'est pas un fichier ordinaire
       de root. Un passage horaire qui avait lu les pairs avant une révocation reposait le pair révoqué pour une heure
       après la synchronisation de la révocation.
-    - N4 : la minuterie passe par `autoloadctl tunnel-sync --horaire` (second argv exact du sudoers) : un `wg-autoload`
-      dont l'exploitant a désactivé l'unité n'est plus relancé chaque heure ; la configuration est posée et la projection
-      publiée. Une unité activée mais tombée est relancée ; l'enrôlement monte toujours l'interface (première box).
+    - N4 : la minuterie, les révocations et les changements d'abonnement par l'API passent par `autoloadctl tunnel-sync
+      --sans-reactiver` (second argv exact du sudoers) : un `wg-autoload` dont l'exploitant a désactivé l'unité n'est plus
+      relancé (ni chaque heure, ni par une révocation pendant un incident) ; la configuration est posée et la projection
+      publiée. Une unité activée mais tombée est relancée ; seul l'enrôlement monte toujours l'interface (première box).
     - L'assistant root lancé par sudo hérite de l'espace de montage du service (ProtectSystem=strict) : le dossier de la
       projection (`/var/lib/secubox/autoload-public`) rejoint `ReadWritePaths`, et le postinst l'exporte (donc le crée)
       avant de démarrer le service. Sans cela, la minuterie et les révocations par l'API n'exportaient rien (lecture seule).

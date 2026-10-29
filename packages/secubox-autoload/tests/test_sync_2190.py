@@ -29,11 +29,11 @@ def test_l_argv_est_exact_avec_delai():
 
 
 def test_le_sudoers_accorde_exactement_ces_argv_et_rien_d_autre():
-    """Deux argv exacts : tunnel-sync (enrôlement, révocation, abonnement) et tunnel-sync --horaire (minuterie, #3126 N4)."""
+    """Deux argv exacts : tunnel-sync (enrôlement) et tunnel-sync --sans-reactiver (minuterie, révocations, abonnement, #3126 N4)."""
     lignes = [x for x in (ICI / "sudoers.d" / "secubox-autoload").read_text().splitlines() if x and not x.startswith("#")]
     assert lignes == ["secubox-autoload ALL=(root) NOPASSWD: /usr/sbin/autoloadctl tunnel-sync",
-                      "secubox-autoload ALL=(root) NOPASSWD: /usr/sbin/autoloadctl tunnel-sync --horaire"]
-    assert lignes[0].endswith(" " + " ".join(T.SUDO_SYNC[2:])) and lignes[1].endswith(" " + " ".join(T.SUDO_SYNC_HORAIRE[2:]))
+                      "secubox-autoload ALL=(root) NOPASSWD: /usr/sbin/autoloadctl tunnel-sync --sans-reactiver"]
+    assert lignes[0].endswith(" " + " ".join(T.SUDO_SYNC[2:])) and lignes[1].endswith(" " + " ".join(T.SUDO_SYNC_PUBLIER[2:]))
 
 
 @pytest.mark.parametrize("exc", [OSError("introuvable"), subprocess.TimeoutExpired("sudo", 30)])

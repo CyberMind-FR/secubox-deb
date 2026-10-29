@@ -223,7 +223,7 @@ def synchroniser(pairs: Pairs, conf: Path = CONF_DEFAUT, cle_hub: Path = CLE_HUB
     """Valide la configuration (wg-quick strip), la pose atomiquement, puis `wg syncconf` : aucun pair existant n'est coupé.
 
     Interface absente : `activer` (enrôlement, révocation, abonnement) la monte (`enable --now`), même jamais activée (première box).
-    `activer=False` (minuterie horaire, #3126 N4) : seulement si son unité est activée ; désactivée, l'exploitant l'a arrêtée, elle n'est pas
+    `activer=False` (publication : minuterie, révocations, abonnement, #3126 N4) : seulement si son unité est activée ; désactivée, l'exploitant l'a arrêtée, elle n'est pas
     relancée — la configuration est posée pour le jour où il la relancera."""
     conf = Path(conf)
     if not Path(cle_hub).is_file():
@@ -256,7 +256,7 @@ def synchroniser(pairs: Pairs, conf: Path = CONF_DEFAUT, cle_hub: Path = CLE_HUB
 
 DOSSIER_DEFAUT = Path("/var/lib/secubox/autoload")
 SUDO_SYNC = ["sudo", "-n", "/usr/sbin/autoloadctl", "tunnel-sync"]       # argv exacts : c'est ce que le sudoers du paquet accorde, rien d'autre
-SUDO_SYNC_HORAIRE = SUDO_SYNC + ["--horaire"]                              # minuterie : ne relance pas une interface désactivée (#3126, N4)
+SUDO_SYNC_PUBLIER = SUDO_SYNC + ["--sans-reactiver"]   # minuterie, révocations, abonnement : ne réactive pas une interface désactivée (#3126)
 
 
 def appliquer_par_sudo(executeur=subprocess.run, timeout: int = 30, argv: Optional[List[str]] = None) -> None:
@@ -270,10 +270,11 @@ def appliquer_par_sudo(executeur=subprocess.run, timeout: int = 30, argv: Option
         raise TunnelErreur("synchronisation refusée : " + (r.stderr or r.stdout or "").strip()[:200])
 
 
-def appliquer_horaire_par_sudo(executeur=subprocess.run, timeout: int = 30) -> None:
-    """Le passage de la minuterie : `autoloadctl tunnel-sync --horaire` (argv exact du sudoers) réexporte la projection et resynchronise les
-    pairs, mais ne relance jamais un wg-autoload dont l'unité est désactivée (#3126, N4)."""
-    appliquer_par_sudo(executeur, timeout, SUDO_SYNC_HORAIRE)
+def publier_par_sudo(executeur=subprocess.run, timeout: int = 30) -> None:
+    """Publication (minuterie, révocations, abonnement) : `autoloadctl tunnel-sync --sans-reactiver` (argv exact du sudoers) resynchronise les
+    pairs et réexporte la projection, mais ne relance jamais un wg-autoload dont l'unité est désactivée (#3126, N4 et relecture Minor 3).
+    Seul l'enrôlement (`appliquer_par_sudo`) monte l'interface : il en a besoin pour répondre à la box."""
+    appliquer_par_sudo(executeur, timeout, SUDO_SYNC_PUBLIER)
 
 
 REPUBLICATION_S = 3600            # R37 (#3126) : la projection publique est recalculée au moins une fois par heure

@@ -7,7 +7,8 @@
   N2  tunnel-sync exporte la projection même si WireGuard échoue (le code de retour dit l'échec du tunnel) ;
   N3  tunnel-sync et exporter-pairs passent un par un (flock) : un passage horaire qui a lu les pairs AVANT une révocation ne repose plus le
       pair révoqué APRÈS la synchronisation de la révocation ;
-  N4  la minuterie horaire (`tunnel-sync --horaire`) ne relance pas un wg-autoload dont l'exploitant a DÉSACTIVÉ l'unité : seulement l'export.
+  N4  la minuterie, les révocations et l'abonnement (`tunnel-sync --sans-reactiver`) ne relancent pas un wg-autoload dont l'exploitant a
+      DÉSACTIVÉ l'unité : seulement l'export.
 """
 import importlib.machinery
 import importlib.util
@@ -121,7 +122,7 @@ def test_export_meme_si_wireguard_echoue(base, monkeypatch, capsys, panne):
 
 
 # ── N3 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-@pytest.mark.parametrize("passage", [("tunnel-sync", "--horaire"), ("tunnel-sync",)], ids=["minuterie", "enrolement"])
+@pytest.mark.parametrize("passage", [("tunnel-sync", "--sans-reactiver"), ("tunnel-sync",)], ids=["minuterie", "enrolement"])
 def test_revocation_et_sync_serialisees(base, monkeypatch, passage):
     """Le passage horaire (ou un enrôlement) lit les pairs (lgm encore actif) puis traîne ; la révocation arrive par l'API, qui relance
     tunnel-sync. Sans verrou, la synchronisation de la révocation passait d'abord, puis le passage lent reposait sa liste périmée : lgm revenait
@@ -242,7 +243,7 @@ def test_verrou_qui_n_est_pas_un_fichier_ordinaire_refuse(base, tmp_path, piege,
 def test_minuterie_ne_relance_pas_wg_desactive(base, monkeypatch, tmp_path, capsys):
     ctl = _charger_ctl()
     systeme = _brancher(ctl, monkeypatch, tmp_path, unite_activee=False)
-    assert _ctl(ctl, "tunnel-sync", "--horaire") == 0
+    assert _ctl(ctl, "tunnel-sync", "--sans-reactiver") == 0
     assert systeme.demarrages() == []                        # ni enable, ni start : l'exploitant l'a arrêtée
     assert (tmp_path / "wg" / "wg-autoload.conf").is_file()  # la configuration est posée pour le jour où il la relance
     assert _clients(base) == {"lgm": "actif"}                # et la projection est publiée
@@ -252,25 +253,25 @@ def test_minuterie_ne_relance_pas_wg_desactive(base, monkeypatch, tmp_path, caps
 def test_minuterie_relance_un_wg_active_tombe(base, monkeypatch, tmp_path):
     ctl = _charger_ctl()
     systeme = _brancher(ctl, monkeypatch, tmp_path, unite_activee=True)
-    assert _ctl(ctl, "tunnel-sync", "--horaire") == 0
+    assert _ctl(ctl, "tunnel-sync", "--sans-reactiver") == 0
     assert systeme.demarrages() == [["systemctl", "enable", "--now", UNITE]]
     assert _clients(base) == {"lgm": "actif"}
 
 
 def test_enrolement_monte_toujours_le_tunnel(base, monkeypatch, tmp_path):
-    """Sans --horaire (enrôlement, révocation, abonnement) : inchangé, l'interface est montée même jamais activée (première box)."""
+    """Sans --sans-reactiver (enrôlement seulement) : inchangé, l'interface est montée même jamais activée (première box)."""
     ctl = _charger_ctl()
     systeme = _brancher(ctl, monkeypatch, tmp_path, unite_activee=False)
     assert _ctl(ctl, "tunnel-sync") == 0
     assert systeme.demarrages() == [["systemctl", "enable", "--now", UNITE]]
 
 
-def test_la_minuterie_passe_par_l_argv_horaire():
+def test_la_minuterie_passe_par_l_argv_sans_reactiver():
     vus = []
-    T.appliquer_horaire_par_sudo(lambda argv, **kw: (vus.append(argv), R())[1])
-    assert vus == [["sudo", "-n", "/usr/sbin/autoloadctl", "tunnel-sync", "--horaire"]]
+    T.publier_par_sudo(lambda argv, **kw: (vus.append(argv), R())[1])
+    assert vus == [["sudo", "-n", "/usr/sbin/autoloadctl", "tunnel-sync", "--sans-reactiver"]]
     lanceur = (ICI / "sbin" / "secubox-autoload-api").read_text()
-    assert "T.republier_periodiquement(T.appliquer_horaire_par_sudo)" in lanceur
+    assert "T.republier_periodiquement(T.publier_par_sudo)" in lanceur
     sudoers = [x for x in (ICI / "sudoers.d" / "secubox-autoload").read_text().splitlines() if x and not x.startswith("#")]
     assert "secubox-autoload ALL=(root) NOPASSWD: /usr/sbin/autoloadctl " + " ".join(vus[0][3:]) in sudoers
 
@@ -286,3 +287,30 @@ def test_l_export_lance_par_le_service_peut_ecrire():
     post = (ICI / "debian" / "postinst").read_text()
     assert "/usr/sbin/autoloadctl exporter-pairs" in post
     assert post.index("/usr/sbin/autoloadctl exporter-pairs") < post.index("systemctl enable secubox-autoload.service")
+
+
+def test_revocation_et_abonnement_par_l_api_ne_reactivent_pas_wg_desactive(tmp_path, monkeypatch):
+    """Relecture de la tâche 0, Minor 3 : même règle que la minuterie (N4). Révocations et abonnement passent par `tunnel-sync
+    --sans-reactiver` : une unité wg-autoload désactivée n'est pas relancée, la projection est seulement exportée. Seul l'enrôlement
+    monte l'interface. Essai sur le câblage de production (api.asgi.construire)."""
+    from api import asgi
+    dossier = tmp_path / "autoload"
+    dossier.mkdir()
+    (dossier / "hub.pub").write_text(HUB + "\n")
+    monkeypatch.setenv("SECUBOX_AUTOLOAD_DOSSIER", str(dossier))
+    monkeypatch.setenv("SECUBOX_AUTOLOAD_AUDIT", str(tmp_path / "audit.log"))
+    argvs = []
+    monkeypatch.setattr(T, "appliquer_par_sudo", lambda executeur=None, timeout=30, argv=None: argvs.append(argv or T.SUDO_SYNC))
+    publique, _ = asgi.construire()
+    publique.dependency_overrides[auth.require_jwt] = lambda: {"sub": "admin"}
+    c = TestClient(publique)
+    reg = J.Registre(dossier / "jetons.db", tmp_path / "audit.log")
+    e = reg.emettre("lgm", "lite", lot="lot-1")
+    r = c.post("/enrol", json={"jeton": e.valeur, "cle_pub": CLE_A}, headers={"X-Forwarded-For": "203.0.113.5"})
+    assert r.status_code == 200
+    assert argvs == [["sudo", "-n", "/usr/sbin/autoloadctl", "tunnel-sync"]]           # l'enrôlement monte l'interface
+    sans = ["sudo", "-n", "/usr/sbin/autoloadctl", "tunnel-sync", "--sans-reactiver"]
+    assert c.post("/clients/lgm/abonnement", json={"statut": "suspendu"}).json()["tunnel_applique"] is True
+    assert c.post(f"/jetons/{e.id}/revoquer", json={"motif": "box volée"}).json()["tunnel_applique"] is True
+    assert c.post("/lots/lot-1/revoquer", json={"motif": "lot"}).json()["tunnel_applique"] is True
+    assert argvs[1:] == [sans, sans, sans]

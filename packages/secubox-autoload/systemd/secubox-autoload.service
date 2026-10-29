@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # SecuBox-Deb :: secubox-autoload (#2190) — enrôlement et panel du provisionnement Auto-Load.
-# Un utilisateur À LUI : il ne lit que ses propres jetons ; le tunnel est appliqué par sudo à argv exacts (autoloadctl tunnel-sync [--horaire]), aucune unité root.
+# Un utilisateur À LUI : il ne lit que ses propres jetons ; le tunnel est appliqué par sudo à argv exacts (autoloadctl tunnel-sync [--sans-reactiver]), aucune unité root.
 [Unit]
 Description=SecuBox Auto-Load — enrôlement et panel (#2190)
 After=network.target secubox-core.service
@@ -20,7 +20,7 @@ Restart=on-failure
 RestartSec=3
 UMask=0027
 LimitCORE=0
-# NoNewPrivileges=no est requis ICI : le sudoers du module accorde à secubox-autoload DEUX argv exacts (autoloadctl tunnel-sync [--horaire], qui applique les pairs
+# NoNewPrivileges=no est requis ICI : le sudoers du module accorde à secubox-autoload DEUX argv exacts (autoloadctl tunnel-sync [--sans-reactiver], qui applique les pairs
 # WireGuard en root) ; avec NoNewPrivileges=yes sudo serait neutralisé. ATTENTION — NE PAS AJOUTER ProtectKernelTunables, ProtectKernelModules,
 # ProtectKernelLogs, RestrictSUIDSGID, LockPersonality, RestrictNamespaces, RestrictAddressFamilies, PrivateDevices, SystemCallFilter ni
 # MemoryDenyWriteExecute : chacun impose implicitement NoNewPrivileges=yes via seccomp et ferme la porte du helper (précédent voicestudio, #1917).

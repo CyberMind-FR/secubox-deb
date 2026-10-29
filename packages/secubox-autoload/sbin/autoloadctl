@@ -11,9 +11,10 @@
   autoloadctl revoquer (--id N | --lot L) --motif M
   autoloadctl abonnement --client C --statut actif|suspendu|revoque
   autoloadctl tunnel-init                  crée la clé du hub (0600) et affiche sa clé publique
-  autoloadctl tunnel-sync [--horaire]      régénère wg-autoload.conf depuis les pairs actifs et l'applique (wg syncconf), puis exporte-pairs
-                                           (même si WireGuard échoue : le code de retour dit alors l'échec du tunnel) ; --horaire (minuterie du
-                                           service) ne relance pas un wg-autoload dont l'unité est désactivée
+  autoloadctl tunnel-sync [--sans-reactiver]
+                                           régénère wg-autoload.conf depuis les pairs actifs et l'applique (wg syncconf), puis exporte-pairs
+                                           (même si WireGuard échoue : le code de retour dit alors l'échec du tunnel) ; --sans-reactiver
+                                           (minuterie, révocations, abonnement) ne relance pas un wg-autoload dont l'unité est désactivée
   autoloadctl exporter-pairs               publie /var/lib/secubox/autoload-public/pairs-publics.json (root, 0644, sans secret) pour le pilotage (#3126)
 
 tunnel-sync et exporter-pairs passent un par un (flock sur /run/secubox-autoload/autoload-sync.lock, dossier à root seul) : un passage qui a lu les pairs avant une
@@ -88,7 +89,7 @@ def main(argv=None):
     ab.add_argument("--statut", required=True)
     sub.add_parser("tunnel-init")
     ts = sub.add_parser("tunnel-sync")
-    ts.add_argument("--horaire", action="store_true", help="passage de la minuterie : ne relance pas une interface dont l'unité est désactivée")
+    ts.add_argument("--sans-reactiver", action="store_true", help="publication (minuterie, révocations, abonnement) : ne réactive pas une interface dont l'unité est désactivée")
     sub.add_parser("exporter-pairs")
     a = ap.parse_args(argv)
 
@@ -143,7 +144,7 @@ def main(argv=None):
                 try:
                     pairs_root = T.Pairs(db, lecture_seule=True) if db.exists() else _PairsVides()  # root ne CRÉE jamais la base : elle appartient au service
                     n = T.synchroniser(pairs_root, Path(os.environ.get("SECUBOX_AUTOLOAD_CONF_WG", T.CONF_DEFAUT)),
-                                       Path(os.environ.get("SECUBOX_AUTOLOAD_CLE_HUB", T.CLE_HUB_DEFAUT)), activer=not a.horaire)
+                                       Path(os.environ.get("SECUBOX_AUTOLOAD_CLE_HUB", T.CLE_HUB_DEFAUT)), activer=not a.sans_reactiver)
                     print(f"{n} pair(s) appliqué(s)")
                 except (T.TunnelErreur, OSError, ValueError, subprocess.SubprocessError, sqlite3.Error) as err:
                     echec = err                                                                     # N2 : l'export passe quand même
