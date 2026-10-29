@@ -46,6 +46,12 @@ UNITES_PROTEGEES = frozenset({
     "secubox-p2p.service", "secubox-wireguard.service", "secubox-hardening.service", "secubox-dns-guard.service",
 })
 
+# Ruling R2 du contrôleur (#3258) : /admin/ (root) liste TOUS les services systemd. Quatre unités Debian y restent
+# réparables (start, restart, reload), JAMAIS arrêtables : sans elles, plus d'entrée web, de résolution DNS ni de
+# shell distant. Option explicite `avec_unites_debian`, que seules les routes /admin/ activent ; service_control
+# (secubox-system, polkit) reste sur secubox-*. Toute autre unité hors secubox-* : 400.
+UNITES_DEBIAN_ADMIN = frozenset({"nginx.service", "haproxy.service", "unbound.service", "ssh.service"})
+
 # Journal d'audit central, en ajout seul (patron de secubox-freebox, _journal_fichier : une ligne JSON par décision,
 # « module » = l'émetteur). Jamais la sortie de systemctl : seulement qui, quoi, sur quoi, et le résultat.
 AUDIT_LOG = Path("/var/log/secubox/audit.log")
@@ -85,18 +91,21 @@ def _systemctl(action: str, unite: str, delai: int) -> tuple[bool, str]:
         return False, f"Délai dépassé en attendant {unite}"
 
 
-def piloter(module: str, acteur: str, action: str, nom: str, *, delai: int = 30) -> dict:
+def piloter(module: str, acteur: str, action: str, nom: str, *, delai: int = 30,
+            avec_unites_debian: bool = False) -> dict:
     """Valide, protège, exécute et audite. 400 : action ou nom invalide ; 403 : arrêt d'une unité protégée.
+    `avec_unites_debian` (routes /admin/ seulement) : UNITES_DEBIAN_ADMIN acceptées, sauf pour un arrêt.
     Un échec de systemctl n'est pas une exception : `success` faux, la raison dans `output` (jamais dans l'audit)."""
     unite = normaliser(nom)
     if action not in ACTIONS:
         journaliser(module, acteur, action[:32], unite[:128], "refuse", 400, "action invalide")
         raise HTTPException(400, "action invalide")
-    if not MOTIF_UNITE.fullmatch(unite):
+    debian = avec_unites_debian and unite in UNITES_DEBIAN_ADMIN
+    if not debian and not MOTIF_UNITE.fullmatch(unite):
         journaliser(module, acteur, action, unite[:128], "refuse", 400, "nom d'unité invalide")
         raise HTTPException(400, "nom d'unité invalide : secubox-<nom>.service attendu")
-    if action == "stop" and unite in UNITES_PROTEGEES:
-        journaliser(module, acteur, action, unite, "refuse", 403, "unité protégée")
+    if action == "stop" and (debian or unite in UNITES_PROTEGEES):
+        journaliser(module, acteur, action, unite, "refuse", 403, "unité Debian protégée" if debian else "unité protégée")
         raise HTTPException(403, "unité protégée : arrêt refusé")
     ok, sortie = _systemctl(action, unite, delai)
     journaliser(module, acteur, action, unite, "ok" if ok else "echec", 200)

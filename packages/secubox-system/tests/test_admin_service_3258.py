@@ -80,7 +80,7 @@ def test_l_admin_n_arrete_plus_une_unite_protegee(admin, banc):
     assert a[0]["unite"] == "secubox-auth.service" and a[0]["acteur"] == "admin"
 
 
-@pytest.mark.parametrize("nom", ["nftables", "nginx.service", "-H root@ailleurs", "--now", "secubox-hub.timer"])
+@pytest.mark.parametrize("nom", ["nftables", "-H root@ailleurs", "--now", "secubox-hub.timer", "systemd-networkd"])
 def test_l_admin_refuse_un_nom_hors_motif(admin, banc, nom):
     with pytest.raises(HTTPException) as e:
         _appelle(admin, "stop", nom)
@@ -123,3 +123,57 @@ def test_un_seul_helper_partage_par_system_et_admin(admin):
     for route in ROUTES.values():
         corps = src.split(f"async def {route}(", 1)[1].split("\n@", 1)[0]
         assert "_piloter(name, " in corps and "systemctl" not in corps and "_run_cmd" not in corps, route
+
+
+# ---------- tour 2, ruling R2 : quatre unités Debian réparables depuis /admin/, jamais arrêtées ----------
+# /admin/ liste TOUS les services systemd. nginx, haproxy, unbound et ssh gardent start, restart (et reload, permis
+# par le contrôle partagé) ; stop est refusé (403) ; toute autre unité hors secubox-* reste refusée (400).
+DEBIAN = ["nginx", "haproxy", "unbound", "ssh"]
+
+
+@pytest.mark.parametrize("nom", DEBIAN)
+@pytest.mark.parametrize("action", ["start", "restart"])
+def test_l_admin_repare_une_unite_debian_de_la_liste(admin, banc, nom, action):
+    r = _appelle(admin, action, nom)
+    assert r["success"] is True and r["unit"] == f"{nom}.service"
+    assert banc["appels"] == [["systemctl", action, "--", f"{nom}.service"]]
+    a = _audit(banc)
+    assert len(a) == 1 and a[0]["module"] == "admin" and a[0]["resultat"] == "ok" and a[0]["unite"] == f"{nom}.service"
+
+
+@pytest.mark.parametrize("nom", DEBIAN + ["nginx.service"])
+def test_l_admin_n_arrete_jamais_une_unite_debian_de_la_liste(admin, banc, nom):
+    with pytest.raises(HTTPException) as e:
+        _appelle(admin, "stop", nom)
+    assert e.value.status_code == 403 and "arrêt refusé" in e.value.detail
+    assert banc["appels"] == []
+    a = _audit(banc)
+    assert len(a) == 1 and a[0]["resultat"] == "refuse" and a[0]["code"] == 403
+
+
+@pytest.mark.parametrize("nom", ["nftables", "nftables.service", "systemd-networkd", "apache2", "unbound-resolvconf"])
+def test_l_admin_refuse_une_unite_debian_hors_liste(admin, banc, nom):
+    with pytest.raises(HTTPException) as e:
+        _appelle(admin, "restart", nom)
+    assert e.value.status_code == 400 and banc["appels"] == []
+    a = _audit(banc)
+    assert len(a) == 1 and a[0]["resultat"] == "refuse" and a[0]["code"] == 400
+
+
+def test_le_rechargement_d_une_unite_debian_est_permis_par_l_option(banc):
+    r = unites.piloter("admin", "admin", "reload", "nginx", avec_unites_debian=True)
+    assert r["success"] is True and banc["appels"] == [["systemctl", "reload", "--", "nginx.service"]]
+
+
+def test_sans_l_option_aucune_unite_debian(banc):
+    """service_control (secubox-system) n'active jamais l'option : secubox-* seulement."""
+    with pytest.raises(HTTPException) as e:
+        unites.piloter("system", "admin", "restart", "nginx")
+    assert e.value.status_code == 400 and banc["appels"] == []
+    systeme = (SYSTEM / "api" / "main.py").read_text(encoding="utf-8")
+    assert "avec_unites_debian" not in systeme
+    assert "avec_unites_debian=True" in ADMIN.read_text(encoding="utf-8")
+
+
+def test_la_liste_debian_est_courte_et_nommee():
+    assert unites.UNITES_DEBIAN_ADMIN == frozenset({"nginx.service", "haproxy.service", "unbound.service", "ssh.service"})

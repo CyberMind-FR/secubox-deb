@@ -5,8 +5,9 @@ secubox-system (1.11.4-1~trixie1) trixie; urgency=medium
     (403, UNITES_PROTEGEES synchrone avec PROTECTED_IDS de secubox-profiles), une ligne
     dans /var/log/secubox/audit.log par appel, sans la sortie de systemctl (ref #3258).
   * /admin/service/<nom>/<action> (root, sans polkit) passe par le même contrôle : un seul
-    helper, secubox_core.unites, partagé avec service_control ; les unités Debian ne se
-    pilotent plus depuis /admin/ ; la page affiche le refus d'une unité protégée. Dépend de
+    helper, secubox_core.unites, partagé avec service_control ; depuis /admin/, seules
+    nginx, haproxy, unbound et ssh restent pilotables parmi les unités Debian, jamais
+    arrêtées (ruling R2) ; la page affiche le refus d'une unité protégée. Dépend de
     secubox-core (>= 1.8.9~) (revue #3258, I2).
   * /system/service_action n'exécute plus rien par GET (405) : un <img> d'un site tiers
     pouvait éteindre la box (cookie SameSite=None, garde d'origine muette sur GET). POST

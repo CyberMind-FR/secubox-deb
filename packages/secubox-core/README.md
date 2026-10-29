@@ -20,7 +20,7 @@ Shared Python modules for all SecuBox services:
 - `logger.py` - Unified logging
 - `system.py` - System utilities
 - `kiosk.py` - Kiosk mode helpers
-- `unites.py` - LE contrôle partagé pour piloter une unité `secubox-*.service` depuis une API : motif, unités protégées (arrêt refusé), `systemctl <action> -- <unité>`, audit JSON (#3258)
+- `unites.py` - LE contrôle partagé pour piloter une unité `secubox-*.service` depuis une API : motif, unités protégées (arrêt refusé), `systemctl <action> -- <unité>`, audit JSON (#3258) ; option `avec_unites_debian` (routes `/admin/` seulement) : nginx, haproxy, unbound, ssh réparables, jamais arrêtées
 
 ### Services
 

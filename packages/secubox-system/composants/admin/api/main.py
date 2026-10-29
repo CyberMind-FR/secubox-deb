@@ -461,10 +461,11 @@ async def get_service(name: str, user=Depends(require_jwt)):
 # #3258 (revue I2) : cette API tourne en ROOT (secubox-admin.service), donc sans polkit. Elle arrêtait n'importe quelle
 # unité, protégées comprises, sans motif ni « -- », et contournait le 403 de /system/service_control. Elle passe
 # désormais par le MÊME contrôle (secubox_core.unites : motif secubox-*.service, unités protégées, « -- », audit).
-# Les unités Debian (nginx, nftables…) ne se pilotent plus d'ici. `stderr` : la raison d'un échec, que la page affiche.
+# Unités Debian : seules nginx, haproxy, unbound et ssh (unites.UNITES_DEBIAN_ADMIN), jamais arrêtées (ruling R2) ;
+# toute autre unité hors secubox-* : 400. `stderr` : la raison d'un échec, que la page affiche.
 async def _piloter(name: str, action: str, user, delai: int = 30) -> Dict[str, Any]:
     acteur = str((user or {}).get("sub") or "")
-    r = await asyncio.to_thread(unites.piloter, "admin", acteur, action, name, delai=delai)
+    r = await asyncio.to_thread(unites.piloter, "admin", acteur, action, name, delai=delai, avec_unites_debian=True)
     return {**r, "stderr": "" if r["success"] else r["output"]}
 
 
