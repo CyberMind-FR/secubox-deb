@@ -36,7 +36,7 @@ E2, E4, E6, livraison L1).
 - Agent : Go 1.22, **bibliothèque standard seule** (aucun module tiers, donc pas de `vendor/`), binaire unique
   `/usr/sbin/sbx-pilotage-agent`, construit comme `packages/sbxos-audio-mood/debian/rules` (`GOARCH` par
   `DEB_HOST_ARCH`, `CGO_ENABLED=0`, `GOFLAGS=-trimpath`).
-- Agent : **n'ouvre aucun port d'écoute** ; utilisateur dédié `secubox-pilotage` (jamais root) ; AppArmor `enforce` ;
+- Agent : **n'ouvre aucun port d'écoute** ; utilisateur dédié `secubox-pilotage-agent` (jamais root) ; AppArmor `enforce` ;
   mémoire propre (PSS + swap) **≤ 20 Mo** mesurée sur gk5 (spec, choix « utilisable en production ») ;
   `MemoryMax=32M`.
 - Maître : FastAPI sur sockets Unix `/run/secubox/pilotage.sock` (administration) et

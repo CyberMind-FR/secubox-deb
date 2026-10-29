@@ -65,8 +65,9 @@ def test_profil_apparmor_enforce_et_borne():
     assert "network inet" not in p                         # pas de réseau IP
     # R25 : ajout seul sur les journaux communs (jamais w : un w pourrait tronquer le journal d'audit CSPN)
     assert re.search(r"^\s*/var/log/secubox/audit\.log a,$", p, re.M)
-    assert re.search(r"^\s*/var/log/secubox/delegation\.log a,$", p, re.M)
-    assert not re.search(r"audit\.log\s+\S*w", p) and not re.search(r"delegation\.log\s+\S*w", p)
+    # delegation.log : secubox_core/auth.py l'ouvre en "a" avec création, comme dans les autres modules -> w
+    assert re.search(r"^\s*/var/log/secubox/delegation\.log w,$", p, re.M)
+    assert not re.search(r"audit\.log\s+\S*w", p)
     # M4 : pas de résolution de noms, et la seule pièce d'authentification lue sous auth/ est le registre des sessions
     assert "nameservice" not in p
     assert "/var/lib/secubox/auth/**" not in p and "/var/lib/secubox/auth/sessions.json r," in p
@@ -104,6 +105,7 @@ def test_exception_rules_code_ecrite():
     regles = lire(".claude/RULES-CODE.md", DEPOT)
     lignes = [x for x in regles.splitlines() if "secubox-pilotage-ecoute.service" in x]
     assert len(lignes) == 1 and "secubox-pilotage-canal.socket" in lignes[0] and "www-data" in lignes[0]
+    assert "systemd-run" in lignes[0] and "nginx -t" in lignes[0] and "AppArmor" in lignes[0] and "netmodes" in lignes[0]   # R30
     assert "packages/secubox-pilotage/tests/test_paquet.py::test_unite_ecoute_durcie_et_acl_reposee_meme_en_echec" in lignes[0]
 
 
@@ -203,3 +205,15 @@ def test_pilotage_dans_la_matrice_ci():
     assert re.search(r"- suite: secubox-pilotage-agent\n\s+module: packages/secubox-pilotage-agent\n\s+cache: 'false'", y)   # pas de go.sum
     assert "cache: ${{ matrix.cache != 'false' }}" in y
     assert "'packages/secubox-pilotage/**'" in y and "'packages/secubox-pilotage-agent/**'" in y
+
+
+def test_unite_ecoute_commentaire_juste():
+    s = lire("systemd/secubox-pilotage-ecoute.service")
+    assert "nginx -t ne lie rien" not in s
+    assert "systemd-run" in s            # le commentaire dit où tourne nginx -t
+
+
+def test_plan_compte_de_l_agent():
+    plan = lire("docs/superpowers/plans/2026-10-28-pilotage-l1-voir.md", DEPOT)
+    assert "utilisateur dédié `secubox-pilotage` (jamais root)" not in plan
+    assert "utilisateur dédié `secubox-pilotage-agent` (jamais root)" in plan

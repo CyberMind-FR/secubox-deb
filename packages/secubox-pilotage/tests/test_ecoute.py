@@ -46,7 +46,7 @@ chemin = etat + "/tables.json"
 tables = json.load(open(chemin)) if os.path.exists(chemin) else {}
 a = sys.argv[1:]
 if a[:1] == ["-c"]:
-    sys.exit(0)
+    sys.exit(1 if os.environ.get("BANC_NFT_C_REFUSE") else 0)
 avec_handles = a[:1] == ["-a"]
 if avec_handles:
     a = a[1:]
@@ -128,6 +128,9 @@ def banc(tmp_path):
                        'case "$i" in wg-mesh) [ -n "$BANC_MESH" ] && echo "7: wg-mesh    inet $BANC_MESH/24 scope global wg-mesh";;\n'
                        'wg-autoload) [ -n "$BANC_AUTOLOAD" ] && echo "8: wg-autoload    inet $BANC_AUTOLOAD/16 scope global wg-autoload";; esac\nexit 0\n')
     _faux(bin_ / "nginx", 'echo nginx "$@" >> "$BANC_ETAT/appels"\n[ -z "$BANC_NGINX_REFUSE" ]\n')
+    # systemd-run : le vrai lance la commande dans le contexte de PID 1 ; le faux la note et rend le verdict du banc
+    _faux(bin_ / "systemd-run", 'echo systemd-run "$@" >> "$BANC_ETAT/appels"\n[ -z "$BANC_NGINX_REFUSE" ]\n')
+    (racine / "run/systemd/system").mkdir(parents=True)
     _faux(bin_ / "systemctl", 'echo systemctl "$@" >> "$BANC_ETAT/appels"\n')
     (bin_ / "nft").write_text(FAUX_NFT)
     (bin_ / "nft").chmod(0o755)
@@ -296,3 +299,51 @@ def test_retirer_enleve_les_regles_du_fichier_et_du_vif(banc):
 def test_script_sain():
     r = subprocess.run(["bash", "-n", str(SCRIPT)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_nginx_t_hors_du_bac_a_sable_par_systemd_run(banc):
+    """R30 : `nginx -t` crée de vraies sockets AF_INET, lie :80/:443 et écrit /run/nginx.pid : dans le bac à sable de l'unité il échouerait
+    toujours (et le script retirerait le fichier à chaque passage). Il passe par systemd-run, dans le contexte de PID 1."""
+    assert banc.lancer().returncode == 0
+    appels = banc.appels().splitlines()
+    assert "systemd-run --wait --pipe --collect --quiet /usr/sbin/nginx -t" in appels
+    assert not [x for x in appels if x.startswith("nginx ")]            # jamais nginx -t lancé directement
+
+
+def test_nginx_t_direct_sans_systemd_en_marche(banc):
+    """Chroot d'image : pas de PID 1 systemd, donc pas de systemd-run ; nginx -t direct."""
+    (banc.racine / "run/systemd/system").rmdir()
+    assert banc.lancer().returncode == 0
+    appels = banc.appels().splitlines()
+    assert any(x.startswith("nginx -t") for x in appels) and not [x for x in appels if x.startswith("systemd-run")]
+
+
+def test_refus_de_nginx_t_par_systemd_run_retire_le_fichier(banc):
+    banc.lancer()
+    assert banc.conf.exists()
+    r = banc.lancer(BANC_NGINX_REFUSE="1", BANC_AUTOLOAD=None)
+    assert not banc.conf.exists() and "refusé par nginx -t" in r.stderr
+
+
+def test_deja_la_limite_a_la_table_visee(banc):
+    """Une règle déjà présente dans UNE table ne dispense pas de la poser dans l'autre."""
+    deux = NFT_SECUBOX + NFT_UNIFIE
+    banc.nft.write_text(deux.replace('        iifname "lo" accept\n        drop', f'        iifname "lo" accept\n        {REGLE_MESH}\n        drop', 1))
+    (banc.etat / "tables.json").write_text(json.dumps({"filter": [{"h": 1, "r": "drop"}], "secubox_filter": [{"h": 1, "r": "drop"}]}))
+    assert banc.lancer().returncode == 0
+    fichier = banc.nft.read_text()
+    assert fichier.count(REGLE_MESH) == 2 and fichier.count(REGLE_AUTOLOAD) == 2          # une fois par table
+
+
+def test_table_suivante_non_touchee(banc):
+    """dans_t / dans_c repartent de zéro à chaque table : la chaîne input d'une AUTRE table n'est pas modifiée."""
+    banc.nft.write_text(NFT_SECUBOX + "table inet autre {\n    chain input {\n        drop\n    }\n}\n")
+    banc.lancer()
+    assert banc.nft.read_text().endswith("table inet autre {\n    chain input {\n        drop\n    }\n}\n")
+
+
+def test_refus_de_nft_c_journalise(banc):
+    r = banc.lancer(BANC_NFT_C_REFUSE="1")
+    assert r.returncode == 0
+    assert banc.nft.read_text() == NFTABLES                                  # fichier intact
+    assert "nft -c" in r.stderr and "refus" in r.stderr

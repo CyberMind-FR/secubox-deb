@@ -209,6 +209,7 @@ def test_construire_assemble_deux_applications(tmp_path, monkeypatch):
 
 def test_audit_journal_append_only(tmp_path):
     from pilotage.audit import journal
+    (tmp_path / "audit.log").write_text("")      # le journal existe (secubox-core / postinst) : l'audit ne le crée pas
     a = journal(tmp_path / "audit.log")
     a("pilotage_releve_demande", {"cle": "maillage:gk5", "acteur": "alice"})
     a("pilotage_releve_demande", {"cle": "maillage:gk2", "acteur": "bob", "action": "usurpe"})

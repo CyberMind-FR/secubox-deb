@@ -132,14 +132,15 @@ def test_main_code_de_sortie(lanceur, tmp_path, monkeypatch):
     assert asyncio.run(lanceur.main({}, lambda: (FastAPI(), FastAPI()))) == 1
     s_admin, s_canal = _ecoute(tmp_path / "a.sock"), _ecoute(tmp_path / "c.sock")
     try:
-        # les descripteurs 3 et 4 sont ceux que systemd passe ; on les place pour l'essai
-        os.dup2(s_admin.fileno(), 3)
-        os.dup2(s_canal.fileno(), 4)
+        # descripteurs « de systemd » placés haut (3 et 4 appartiennent à pytest) : le départ est une constante du lanceur
+        monkeypatch.setattr(lanceur, "SD_LISTEN_FDS_START", 200)
+        os.dup2(s_admin.fileno(), 200)
+        os.dup2(s_canal.fileno(), 201)
         assert asyncio.run(lanceur.main(_env(None), lambda: (FastAPI(), FastAPI(lifespan=casse)))) == 1
     finally:
         s_admin.close()
         s_canal.close()
-        for fd in (3, 4):
+        for fd in (200, 201):
             try:
                 os.close(fd)
             except OSError:

@@ -32,6 +32,18 @@ TABLES=(filter secubox_filter)   # tables « inet » portant la chaîne input du
 # interface:adresse du maître:réseau autorisé
 TUNNELS=("wg-mesh:10.10.0.1:10.10.0.0/24" "wg-autoload:10.64.0.1:10.64.0.0/16")
 
+# nginx -t HORS du bac à sable de l'unité (R30) : il crée de vraies sockets AF_INET, lie :80/:443 et écrit /run/nginx.pid, ce que
+# RestrictAddressFamilies, ProtectSystem=strict et l'absence de CAP_NET_BIND_SERVICE lui refusent (il échouerait TOUJOURS, et le fichier serait
+# retiré à chaque passage). systemd-run le lance dans le contexte de PID 1 (même patron que secubox-netmodes) ; --pipe rend sa sortie.
+# Sans systemd en marche (chroot d'image) : nginx -t direct.
+nginx_t() {
+    if [ -d "$R/run/systemd/system" ] && command -v systemd-run >/dev/null 2>&1; then
+        systemd-run --wait --pipe --collect --quiet /usr/sbin/nginx -t >/dev/null 2>&1
+    else
+        nginx -t >/dev/null 2>&1
+    fi
+}
+
 present() {  # interface adresse -> 0 si l'interface porte exactement cette adresse IPv4
     ip -4 -o addr show dev "$1" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep -qxF -- "$2"
 }
@@ -55,7 +67,7 @@ if [ "${1:-}" = "--retirer" ]; then
             done < <(nft -a list chain inet "$table" input 2>/dev/null | grep -F -- "$regle" | sed -n 's/.*# handle \([0-9][0-9]*\)$/\1/p')
         done
     done
-    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+    if command -v nginx >/dev/null 2>&1 && nginx_t; then systemctl reload nginx 2>/dev/null || true; fi
     exit 0
 fi
 
@@ -85,7 +97,7 @@ if [ "${#actifs[@]}" -gt 0 ]; then
     mv -f "$tmp" "$CONF"
     trap - EXIT
     # Un rendu cassé ne doit JAMAIS rester : le prochain nginx -t échouerait pour toute la box.
-    if command -v nginx >/dev/null 2>&1 && ! nginx -t >/dev/null 2>&1; then
+    if command -v nginx >/dev/null 2>&1 && ! nginx_t; then
         rm -f "$CONF"
         refuse=1
         echo "[pilotage] écouteur :$PORT refusé par nginx -t — retiré" >&2
@@ -131,13 +143,14 @@ _au_fichier() {  # table règle
     grep -Eq "^[[:space:]]*table[[:space:]]+inet[[:space:]]+${table}[[:space:]]*\{" "$NFT_CONF" || return 1
     nouveau=$(mktemp "$NFT_CONF.sbxtmp.XXXXXX")
     awk -v table="$table" -v regle="$regle" '
-        $0 ~ "^[ \t]*table[ \t]+inet[ \t]+" table "[ \t]*\\{" { dans_t = 1 }
-        dans_t && /^[ \t]*chain[ \t]+input[ \t]*\{/ { dans_c = 1 }
-        index($0, regle) { deja = 1 }
+        # dans_t / dans_c repartent de zéro à chaque table et à chaque chaîne ; « déjà là » ne compte que la table visée.
+        /^[ \t]*table[ \t]/ { dans_t = ($0 ~ "^[ \t]*table[ \t]+inet[ \t]+" table "[ \t]*\\{"); dans_c = 0 }
+        /^[ \t]*chain[ \t]/ { dans_c = (dans_t && $0 ~ /^[ \t]*chain[ \t]+input[ \t]*\{/) }
+        dans_t && index($0, regle) { deja = 1 }
         dans_c && !fait && /^[ \t]*drop[ \t]*$/ { print "        " regle; fait = 1 }
         dans_c && !fait && /^[ \t]*\}[ \t]*$/ { print "        " regle; fait = 1 }
         { print }
-        dans_c && /^[ \t]*\}[ \t]*$/ { dans_c = 0; dans_t = 0 }
+        dans_c && /^[ \t]*\}[ \t]*$/ { dans_c = 0 }
         END { exit deja ? 3 : 0 }
     ' "$NFT_CONF" > "$nouveau"
     case $? in
@@ -151,6 +164,7 @@ _au_fichier() {  # table règle
         echo "[pilotage] :$PORT ouvert dans $NFT_CONF (table inet $table)"
     else
         rm -f "$nouveau"
+        echo "[pilotage] nft -c a refusé le nouveau $NFT_CONF (table inet $table) : fichier laissé intact, règle non écrite" >&2
     fi
     return 0
 }

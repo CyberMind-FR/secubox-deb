@@ -32,7 +32,8 @@ RestrictNamespaces=yes
 RestrictRealtime=yes
 LockPersonality=yes
 SystemCallArchitectures=native
-# AF_NETLINK : nft et ip. Aucun socket IP (nginx -t ne lie rien ; le rechargement passe par D-Bus, AF_UNIX).
+# AF_NETLINK : nft et ip. Aucun socket IP dans l'unité : `nginx -t` (vraies sockets AF_INET, :80/:443, /run/nginx.pid) est lancé HORS de ce bac à
+# sable par systemd-run (R30) ; le rechargement de nginx passe par D-Bus (AF_UNIX).
 RestrictAddressFamilies=AF_UNIX AF_NETLINK
 # NET_ADMIN : nft ; DAC_READ_SEARCH : nginx -t lit clés et certificats ; DAC_OVERRIDE et FOWNER : fichiers d'autres comptes (journal d'audit, ACL).
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER

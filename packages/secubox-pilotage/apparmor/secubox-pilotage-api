@@ -31,8 +31,9 @@
   # Registre des sessions : sans lui, toute garde d'API voit un registre vide et refuse (401 partout, #942).
   /var/lib/secubox/auth/ r,
   /var/lib/secubox/auth/sessions.json r,
-  # Journaux communs : AJOUT SEUL (a). Un w pourrait tronquer le journal d'audit, dont la valeur probante tient à l'ajout seul.
-  /var/log/secubox/delegation.log a,
+  # Trace de délégation : secubox_core/auth.py l'ouvre en ajout AVEC création (w, comme les autres modules). Le journal d'audit, lui, est en
+  # ajout seul plus bas.
+  /var/log/secubox/delegation.log w,
 
   # Identité des box : table du maillage et projection publique des pairs Auto-Load, en lecture seule.
   /var/lib/secubox/p2p/ r,
@@ -44,7 +45,7 @@
   /var/lib/secubox/pilotage/ r,
   /var/lib/secubox/pilotage/** rwkm,
 
-  # Journal d'audit commun (le fichier appartient à secubox ; ACL au compte du service, ajout seul ici).
+  # Journal d'audit commun (le fichier appartient à secubox ; ACL au compte du service ; ajout seul `a`, donc jamais ouvert avec O_CREAT ni tronqué).
   /var/log/secubox/audit.log a,
 
   network unix,

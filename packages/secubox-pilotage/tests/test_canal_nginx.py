@@ -94,10 +94,10 @@ http {{
                 break
             except OSError:
                 time.sleep(0.1)
-        req = urllib.request.Request(f"http://127.0.0.1:{port}/canal/v1/requetes", headers={"X-Forwarded-For": "10.10.0.7", "X-Real-IP": "10.10.0.9"})
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/canal/v1/requetes", headers={"X-Forwarded-For": "127.0.0.5", "X-Real-IP": "127.0.0.9"})
         corps = urllib.request.urlopen(req, timeout=5).read().decode()
-        assert corps == "real=127.0.0.1;xff=127.0.0.1", corps            # le vrai pair, jamais 10.10.0.7 ni 10.10.0.9
-        # hors source autorisée : 403 (le deny all garde la main)
+        assert corps == "real=127.0.0.1;xff=127.0.0.1", corps            # le vrai pair, jamais l'adresse forgée (127.0.0.5 est DANS la plage autorisée : sans le correctif la requête passe, usurpée)
+        # une autre route du canal passe (200) ; tout ce qui n'est pas /canal/v1/ est refusé (403)
         assert urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/canal/v1/x"), timeout=5).status == 200
         with pytest.raises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(f"http://127.0.0.1:{port}/autre", timeout=5)

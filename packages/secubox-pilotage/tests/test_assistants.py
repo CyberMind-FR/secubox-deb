@@ -53,6 +53,18 @@ def test_lien_plante_cible_intacte(tmp_path):
     assert stat.S_IMODE(cible.stat().st_mode) == 0o755 and (cible / "secret").read_text() == "s"   # la cible n'a pas bougé
 
 
+def test_dossier_existant_d_un_autre_compte_refuse(tmp_path):
+    """Pas d'adoption silencieuse : un dossier déjà là, ni à root ni au compte visé, est refusé et reste intact."""
+    if os.getuid() == 0:
+        pytest.skip("root possède tout")
+    d = tmp_path / "pilotage"
+    d.mkdir(mode=0o777)
+    d.chmod(0o777)
+    r = subprocess.run([sys.executable, "-I", str(INIT), str(tmp_path), "pilotage", "nobody"], capture_output=True, text=True)
+    assert r.returncode != 0 and "appartient" in r.stderr
+    assert stat.S_IMODE(d.stat().st_mode) == 0o777 and d.stat().st_uid == os.getuid()
+
+
 def test_parent_lien_refuse(tmp_path):
     reel = tmp_path / "reel"
     reel.mkdir()

@@ -6,7 +6,7 @@
 (`python3 -I`). Remplace `install -d` et `chown` par chemin, qui suivent les liens : /var/lib/secubox appartient au compte partagé
 secubox, qui pourrait y planter un lien entre deux commandes. Ici tout passe par descripteur : parent ouvert O_NOFOLLOW|O_DIRECTORY, enfant
 créé (mkdirat) ou ouvert O_NOFOLLOW|O_DIRECTORY relatif au parent, puis fchown/fchmod sur le descripteur. Un lien à la place du dossier est
-remplacé par un vrai dossier (le lien seul est délié, jamais sa cible) ; un fichier ordinaire est refusé. systemd-tmpfiles n'est pas utilisé :
+remplacé par un vrai dossier (le lien seul est délié, jamais sa cible) ; un fichier ordinaire est refusé, de même qu'un dossier existant qui appartient à un autre compte que root ou l'utilisateur visé. systemd-tmpfiles n'est pas utilisé :
 il refuse ces chemins (« unsafe path transition »).
 """
 import errno
@@ -31,6 +31,7 @@ def preparer(parent: str, nom: str, utilisateur: str, mode: int = 0o750) -> None
         if etat is not None and stat.S_ISLNK(etat.st_mode):
             os.unlink(nom, dir_fd=fd_parent)
             etat = None
+        existait = etat is not None
         if etat is None:
             os.mkdir(nom, 0o700, dir_fd=fd_parent)
         try:
@@ -40,8 +41,11 @@ def preparer(parent: str, nom: str, utilisateur: str, mode: int = 0o750) -> None
                 raise OSError(e.errno, f"{nom} n'est pas un dossier (ou un lien a été planté pendant l'opération)") from None
             raise
         try:
-            if not stat.S_ISDIR(os.fstat(fd).st_mode):
+            vu = os.fstat(fd)
+            if not stat.S_ISDIR(vu.st_mode):
                 raise OSError(errno.ENOTDIR, f"{nom} n'est pas un dossier")
+            if existait and vu.st_uid not in (0, compte.pw_uid):
+                raise OSError(errno.EPERM, f"{nom} appartient à l'uid {vu.st_uid}, ni root ni {utilisateur} : refus (pas d'adoption silencieuse)")
             os.fchown(fd, compte.pw_uid, compte.pw_gid)
             os.fchmod(fd, mode)
         finally:
