@@ -94,16 +94,22 @@ func TestLireParametresPHP(t *testing.T) {
 	}
 
 	// Le nom est décodé puis normalisé : %5Ffrom, %2Efrom, _from[] et « %5B » orphelin.
+	// Passe finale M2 : première et dernière occurrence seulement.
 	p = lireParametresPHP("%5Ffrom=a&%2Efrom=b&_from%5B%5D=c")
-	if got := p.Valeurs("_from"); !reflect.DeepEqual(got, []string{"a", "b", "c"}) {
+	if got := p.Valeurs("_from"); !reflect.DeepEqual(got, []string{"a", "c"}) {
+		t.Errorf("Valeurs(_from) = %q", got)
+	}
+	p = lireParametresPHP("%2Efrom=b")
+	if got := p.Valeurs("_from"); !reflect.DeepEqual(got, []string{"b"}) {
 		t.Errorf("Valeurs(_from) = %q", got)
 	}
 }
 
 func TestLireParametresPHPPlafond(t *testing.T) {
-	p := lireParametresPHP(strings.Repeat("_uid=1&", 99) + "_uid=1")
-	if len(p.Retenus) != 64 || p.Variables != 100 {
-		t.Errorf("Retenus=%d Variables=%d, attendu 64 et 100", len(p.Retenus), p.Variables)
+	// Passe finale M2 : le plafond est par nom (première et dernière), pas global.
+	p := lireParametresPHP(strings.Repeat("_uid=1&", 99) + "_uid=2")
+	if got := p.Valeurs("_uid"); !reflect.DeepEqual(got, []string{"1", "2"}) || p.Variables != 100 {
+		t.Errorf("Valeurs(_uid)=%q Variables=%d, attendu [1 2] et 100", got, p.Variables)
 	}
 }
 

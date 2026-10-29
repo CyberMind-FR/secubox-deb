@@ -140,9 +140,11 @@ func TestAnalyserMultipartChamps(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		ps = append(ps, partieTest{nom: "_uid", contenu: "1"})
 	}
+	ps[len(ps)-1].contenu = "dernier"
 	r = analyserMultipart(fabriquerMultipart("BND", ps, false), ctTest, false, LimitesMultipart{})
-	if len(r.Champs) != parametresRetenusMax {
-		t.Errorf("len(Champs) = %d, attendu %d", len(r.Champs), parametresRetenusMax)
+	// Passe finale M2 : première et dernière occurrence du nom, pas 64.
+	if want := []ParametrePHP{{"_uid", "1"}, {"_uid", "dernier"}}; !reflect.DeepEqual(r.Champs, want) {
+		t.Errorf("Champs = %v, attendu %v", r.Champs, want)
 	}
 	// Un fichier n'est pas un champ.
 	r = analyserMultipart(fabriquerMultipart("BND", []partieTest{{nom: "_action", filename: "a", fichier: true, contenu: "z"}}, false), ctTest, false, LimitesMultipart{})
@@ -396,4 +398,39 @@ func toutTexte(m map[string]any) string {
 		b.WriteString(";")
 	}
 	return b.String()
+}
+
+// Passe finale M2 : le plafond de paramètres retenus n'est plus global. Pour
+// chaque nom retenu, la première ET la dernière occurrence sont gardées (PHP
+// garde la dernière valeur d'un nom en double) : 64 paramètres de remplissage
+// ne font plus sortir _from, ni un champ multipart.
+func TestRoundcubePlafondNonContournable(t *testing.T) {
+	r := LoadRules(ecrisRegles(t, corpusRoundcubeTest))
+	remplissage := strings.Repeat("_uid=1&", 64)
+	var champs []partieTest
+	for i := 0; i < 64; i++ {
+		champs = append(champs, partieTest{nom: "_uid", contenu: "1"})
+	}
+	svg := partieTest{nom: "_photo", filename: "a.png", fichier: true, contenu: "<svg onload=1>"}
+	cas := []struct {
+		nom     string
+		e       *EntreePHP
+		attendu string
+	}{
+		{"64 remplissages puis _from", entreeRC("roundcube", "GET", remplissage+"_from=!x", "", nil), "rc-001"},
+		{"_from en double, dernière invalide", entreeRC("roundcube", "GET", "_from=edit-identity&"+remplissage+"_from=edit-!x", "", nil), "rc-001"},
+		{"70 _from valides puis un invalide", entreeRC("roundcube", "GET", strings.Repeat("_from=ok&", 70)+"_from=!x", "", nil), "rc-001"},
+		{"64 champs puis _action", entreeRC("roundcube", "POST", "", ctTest,
+			fabriquerMultipart("BND", append(append(champs, partieTest{nom: "_action", contenu: "upload-photo"}), svg), false)), "rc-006"},
+	}
+	for _, c := range cas {
+		if got := idsDe(r, c.e); !reflect.DeepEqual(got, []string{c.attendu}) {
+			t.Errorf("%s : %v, attendu [%s]", c.nom, got, c.attendu)
+		}
+	}
+	// Mémoire bornée par le nombre de noms retenus × 2.
+	p := lireParametresPHP(strings.Repeat("_uid=1&_from=a&_q=b&", 500))
+	if len(p.Retenus) != 6 {
+		t.Errorf("retenus : %d, attendu 6 (3 noms × première et dernière)", len(p.Retenus))
+	}
 }

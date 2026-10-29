@@ -38,7 +38,7 @@
 // CE QUI EST VOLONTAIREMENT ÉVITÉ : toute copie du contenu d'un FICHIER ; le
 // résultat ne porte que des entiers et des booléens, sauf Champs (#3273) : la
 // valeur d'un champ ordinaire n'est copiée que si son nom normalisé est l'un
-// des noms retenus (nomsRetenusPHP), au plus parametresRetenusMax, et elle
+// des noms retenus (nomsRetenusPHP), première et dernière occurrence de chacun (retenirPHP), et elle
 // n'est JAMAIS journalisée (seuls des booléens et des compteurs sortent).
 // Pour un fichier lu, 64 octets au plus sont examinés (magiqueNonRaster), sur
 // place, sans copie conservée. Seuls sont copiés la valeur du
@@ -100,7 +100,7 @@ type ResultatMultipart struct {
 	EntetesPartieMax      int  // maximum, sur les parties, du nombre de lignes non vides du bloc d'en-têtes, continuations comprises (C2)
 	FichiersVides         int  // parties avec un paramètre filename vide, sautées ou non (C3)
 	// Champs : champs ordinaires dont le nom normalisé est retenu
-	// (nomsRetenusPHP), valeur copiée, au plus parametresRetenusMax. Jamais journalisés.
+	// (nomsRetenusPHP), valeur copiée, première et dernière occurrence de chaque nom. Jamais journalisés.
 	Champs []ParametrePHP
 }
 
@@ -683,10 +683,9 @@ func analyserMultipart(prefixe []byte, contentType string, tronque bool, lim Lim
 				maxFileSize = strtollPHP(valeur)
 			}
 			// Champ retenu (#3273) : nom normalisé comme PHP (php_register_variable_ex).
-			if len(r.Champs) < parametresRetenusMax {
-				if n, ok := nomPHP(string(nom)); ok && nomsRetenusPHP[n] {
-					r.Champs = append(r.Champs, ParametrePHP{Nom: n, Valeur: string(valeur)})
-				}
+			// Première et dernière occurrence de chaque nom (passe finale M2).
+			if n, ok := nomPHP(string(nom)); ok && nomsRetenusPHP[n] {
+				r.Champs = retenirPHP(r.Champs, n, string(valeur))
 			}
 			continue
 		}

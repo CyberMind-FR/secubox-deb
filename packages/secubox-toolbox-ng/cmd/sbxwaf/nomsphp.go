@@ -26,9 +26,17 @@ package main
 
 import "strings"
 
-// parametresRetenusMax : plafond de paramètres conservés par requête.
-// Seuil provisoire, non sourcé (2026-10-29).
-const parametresRetenusMax = 64
+// occurrencesParNomMax : occurrences gardées par nom retenu, la PREMIÈRE et la
+// DERNIÈRE (passe finale M2). PHP garde la dernière valeur d'un nom en double
+// (php_register_variable_ex, php_variables.c:107-262, zend_symtable_update) ;
+// la première reste gardée pour les noms en tableau (`_from[]`). Un plafond
+// global (64 jusqu'ici) se contournait : 64 paramètres de remplissage faisaient
+// sortir _from, donc rc-001.
+const occurrencesParNomMax = 2
+
+// parametresRetenusMax : plafond de paramètres conservés par requête, déduit
+// du plafond par nom : la mémoire reste bornée par noms retenus × 2.
+var parametresRetenusMax = occurrencesParNomMax * len(nomsRetenusPHP)
 
 // nomsRetenusPHP : les seuls noms (déjà normalisés) dont on conserve la valeur.
 var nomsRetenusPHP = map[string]bool{
@@ -142,7 +150,7 @@ type ParametrePHP struct{ Nom, Valeur string }
 
 // ParametresPHP : résultat de lireParametresPHP.
 type ParametresPHP struct {
-	Retenus   []ParametrePHP // seulement les noms de nomsRetenusPHP, au plus parametresRetenusMax, dans l'ordre
+	Retenus   []ParametrePHP // noms de nomsRetenusPHP seulement, première et dernière occurrence de chacun (retenirPHP)
 	Variables int            // segments non vides séparés par « & » (max_input_vars, C4)
 	Tronque   bool           // corps coupé par la fenêtre de capture (posé par completerCorps, R-W8 M2)
 }
@@ -171,12 +179,32 @@ func lireParametresPHP(brut string) ParametresPHP {
 			nom, val = seg[:i], seg[i+1:]
 		}
 		n, ok := nomPHP(urldecodePHP(nom))
-		if !ok || !nomsRetenusPHP[n] || len(p.Retenus) >= parametresRetenusMax {
+		if !ok || !nomsRetenusPHP[n] {
 			continue
 		}
-		p.Retenus = append(p.Retenus, ParametrePHP{Nom: n, Valeur: urldecodePHP(val)})
+		p.Retenus = retenirPHP(p.Retenus, n, urldecodePHP(val))
 	}
 	return p
+}
+
+// retenirPHP ajoute (nom, valeur) aux paramètres retenus en gardant, pour
+// chaque nom, sa première et sa dernière occurrence, quelle que soit leur
+// position (passe finale M2) : au-delà de occurrencesParNomMax, la dernière
+// gardée est remplacée. L'ordre relatif des valeurs d'un nom est conservé
+// (première, puis dernière). Au plus parametresRetenusMax entrées.
+func retenirPHP(retenus []ParametrePHP, nom, valeur string) []ParametrePHP {
+	vus, dernier := 0, -1
+	for i := range retenus {
+		if retenus[i].Nom == nom {
+			vus++
+			dernier = i
+		}
+	}
+	if vus < occurrencesParNomMax {
+		return append(retenus, ParametrePHP{Nom: nom, Valeur: valeur})
+	}
+	retenus[dernier].Valeur = valeur
+	return retenus
 }
 
 // Valeurs rend toutes les occurrences du nom normalisé, dans l'ordre (nil si aucune).
