@@ -486,9 +486,9 @@ def test_fin_d_operation_auditee(banc):
     l'opération longue. Interne : refusé depuis l'agent."""
     rc, s1, _ = banc.run("maj-paquets", agent=True)
     job = s1["job"]
-    assert f"--property=ExecStopPost=/usr/sbin/secubox-pilotagectl _fin {job}" in banc.lancements()[0]
+    assert f"--property=ExecStopPost=+/usr/sbin/secubox-pilotagectl _fin {job}" in banc.lancements()[0]
     rc, s2, _ = banc.run("service", "demarrer", "secubox-lyrion.service", agent=True)
-    assert f"--property=ExecStopPost=/usr/sbin/secubox-pilotagectl _fin {s2['job']}" in banc.lancements()[1]
+    assert f"--property=ExecStopPost=+/usr/sbin/secubox-pilotagectl _fin {s2['job']}" in banc.lancements()[1]
     # l'agent ne clôt pas une opération à la place de systemd
     rc, sortie, _ = _fin(banc, job, "success", "exited", "0", agent=True)
     assert rc == 0 and sortie == {"ok": False, "refus": "local seulement"}
@@ -1308,3 +1308,61 @@ def test_code_jamais_journalise(banc):
     for morceau in (code, jeton, code.split(".")[1][:24]):
         assert morceau not in traces
     assert all(set(e) <= PERMIS_AUDIT for e in banc.audit())
+
+
+# ── Tâche 5, tour 1 (R-L2-36) ─────────────────────────────────────────────────────────────────────────────────────────
+
+def test_fin_hors_bac_a_sable_pour_toute_unite_transitoire(banc):
+    """C1 : ExecStopPost s'exécute dans l'espace de montage de l'unité ; sous ProtectSystem=strict (renommage), l'état
+    du ctl y est en lecture seule et _fin n'auditait rien. Chaque ExecStopPost du ctl porte « + » (hors bac à sable),
+    ou alors le bac à sable de l'unité laisse l'état du ctl en écriture."""
+    banc.module("lyrion", ["secubox-lyrion.service"], False)
+    demandes = [("reboot",), ("service", "redemarrer", "secubox-lyrion.service"), ("renommer", "gk5")]
+    for d in demandes:
+        rc, s, _ = banc.run(*d, agent=True)
+        assert rc == 0 and s["ok"] is True, d
+        banc.actifs.write_text("")
+    rc, s, _ = banc.run("maillage-rejoindre", agent=True, entree=code_maillage())
+    assert s["ok"] is True
+    banc.actifs.write_text("")
+    for argv in (("maj-paquets",), ("renouveler-secrets",)):
+        rc, s, _ = banc.run(*argv, agent=True)
+        assert s["ok"] is True, argv
+        banc.actifs.write_text("")
+    lances = [x for x in banc.lancements() if "--unit=secubox-pilotage-op-" in x]
+    assert len(lances) == 6
+    for lance in lances:
+        stop = [a for a in lance.split(" --") if a.startswith("property=ExecStopPost=")]
+        assert len(stop) == 1, lance
+        sacre = stop[0].startswith("property=ExecStopPost=+/usr/sbin/secubox-pilotagectl _fin ")
+        etat_ecrivable = "ProtectSystem=strict" not in lance or "/var/lib/secubox-pilotagectl" in lance
+        assert sacre or etat_ecrivable, lance
+        assert sacre, lance                          # R-L2-36 : « + » partout, bac à sable ou non
+
+
+def test_fin_auditee_meme_si_le_code_ne_peut_etre_retire(banc):
+    """C1 (robustesse) : une OSError au retrait de rejoindre-<job>.code (EROFS, EISDIR…) est journalisée, jamais avant
+    l'audit de la fin."""
+    rc, s, _ = banc.run("reboot", agent=True)
+    job = s["job"]
+    bloque = banc.r / f"var/lib/secubox-pilotagectl/rejoindre-{job}.code"
+    bloque.mkdir()
+    (bloque / "x").write_text("")                    # unlink → IsADirectoryError / EPERM : pas FileNotFoundError
+    rc, sortie, p = banc.run("_fin", job, env={"SERVICE_RESULT": "success", "EXIT_STATUS": "0"})
+    assert rc == 0 and sortie == {"ok": True, "job": job, "resultat": "succes"}, p.stderr
+    assert [e["resultat"] for e in banc.audit() if e["evenement"] == "pilotage_resultat" and e.get("job") == job][-1] \
+        == "succes"
+    assert "rejoindre" in p.stderr
+
+
+def test_rejoindre_retire_l_ancien_etat_avant_d_ecrire_le_code(banc):
+    """M4 : automesh.json d'abord retiré ; s'il ne peut l'être, aucun code n'est déposé (sinon secubox-automesh lirait
+    le code neuf avec l'ancien « debut » et le ferait expirer)."""
+    rc, s, _ = banc.run("maillage-rejoindre", agent=True, entree=code_maillage())
+    p2p = banc.r / "var/lib/secubox/p2p"
+    (p2p / "automesh.json").mkdir(parents=True)
+    (p2p / "automesh.json" / "x").write_text("")
+    rc, sortie, _ = banc.run("_rejoindre", s["job"])
+    assert rc == 1 and sortie["ok"] is False
+    assert not (p2p / "automesh.code").exists()
+    assert banc.lancements()[-1] != "start secubox-automesh.service"

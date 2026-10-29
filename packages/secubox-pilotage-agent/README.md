@@ -114,7 +114,7 @@ l'origine de la demande, audité dans le champ `acteur` ; absent, l'acteur d'un 
   `{"ok": false, "refus": "opération en cours", "job": "<id>"}`.
 - Une demande locale (root sur la box, hors de l'agent) n'est soumise ni aux mains liées ni au consentement.
 - Chaque action part par `systemd-run --collect --unit=secubox-pilotage-op-<job>
-  --property=ExecStopPost=/usr/sbin/secubox-pilotagectl _fin <job>`, sans délai imposé ; la progression se lit dans le
+  --property=ExecStopPost=+/usr/sbin/secubox-pilotagectl _fin <job>` (« + » : hors du bac à sable de l'unité, R-L2-36), sans délai imposé ; la progression se lit dans le
   journal de l'unité, la fin est auditée (`pilotage_resultat`, `succes`/`echec`).
 - **Audit** : une ligne JSON par demande, refus, consentement et résultat dans `/var/log/secubox/audit.log` (ouvert sans
   suivre de lien ; identifiants seulement, jamais une valeur secrète ni l'argv refusé). `politique` n'est pas auditée, sauf son refus faute d'ancre vérifiée ; `etat-operation` l'est (`pilotage_lecture`) ; `etat` ne l'est pas (lecture sondée), mais les expirations qu'elle constate le sont.

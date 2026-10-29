@@ -89,7 +89,7 @@ détenteur a ouvert la porte au catalogue d'actions et à la vue en direct, et c
 politique ci-dessus. Mains liées : aucune ouverture (même locale), une session ouverte est fermée, une demande annulée.
 
 Opérations : `systemd-run --collect --unit=secubox-pilotage-op-<job>`, sans délai imposé (jamais de timeout sur apt) ;
-la progression se lit dans le journal de l'unité ; sa fin est auditée par `ExecStopPost=… _fin <job>`. Audit : une
+la progression se lit dans le journal de l'unité ; sa fin est auditée par `ExecStopPost=+… _fin <job>` (hors bac à sable). Audit : une
 ligne JSON par demande, refus, consentement et résultat dans /var/log/secubox/audit.log (ouvert sans suivre de lien) ;
 identifiants seulement, jamais une valeur secrète, jamais l'argv d'une demande refusée.
 
@@ -823,7 +823,9 @@ def lancer(ctx, verbe, p, job):
     argv = [ctx.systemd_run, "--collect", "--quiet", "--no-ask-password", f"--unit=secubox-pilotage-op-{job}",
             f"--description=SecuBox pilotage : {verbe} ({job})",
             # R-L2-11 : la fin (succès ou échec) est auditée par le ctl lui-même, lancé par PID 1 en root.
-            f"--property=ExecStopPost={CTL} _fin {job}", *options, "--", *cmd]
+            # R-L2-36 (C1) : « + » = hors du bac à sable de l'unité (ProtectSystem=strict du renommage laissait l'état du
+            # ctl en lecture seule : _fin n'auditait rien). _fin est déjà root et ne lit rien de l'unité.
+            f"--property=ExecStopPost=+{CTL} _fin {job}", *options, "--", *cmd]
     try:
         r = subprocess.run(argv, env=ctx.env, stdin=subprocess.DEVNULL, capture_output=True, text=True)
     except OSError:
@@ -925,7 +927,11 @@ def finir(ctx, job):
         if isinstance(op, dict) and op.get("job") == job:
             verbe = op.get("verbe") if op.get("verbe") in VERBES else None
             retirer(fd, "operation.json")
-        retirer(fd, f"rejoindre-{job}.code")        # un code jamais repris (unité tuée avant _rejoindre) ne traîne pas
+        try:
+            retirer(fd, f"rejoindre-{job}.code")    # un code jamais repris (unité tuée avant _rejoindre) ne traîne pas
+        except OSError as e:
+            # R-L2-36 : jamais avant l'audit de la fin (EROFS, EISDIR…) ; journalisé, la fin reste auditée.
+            err(f"rejoindre-{job}.code non retiré ({e.__class__.__name__})")
         try:
             fins = charger_fins(fd)
         except Erreur:
@@ -1402,8 +1408,9 @@ def rejoindre(ctx, job):
         # /var/lib/secubox/p2p appartient au compte partagé secubox : écrit par descripteur, sans lien, root 0600.
         dfd = ouvrir_chemin(ctx, "var/lib/secubox/p2p")
         try:
+            # M4 : l'ancien état d'abord ; son « debut » ferait expirer le code neuf (24 h). S'il reste, rien n'est déposé.
+            retirer(dfd, "automesh.json")
             ecrire(dfd, "automesh.code", code.encode("ascii"), 0o600)
-            retirer(dfd, "automesh.json")           # son « debut » d'un ancien code ferait expirer le nouveau (24 h)
         finally:
             os.close(dfd)
     except OSError as e:

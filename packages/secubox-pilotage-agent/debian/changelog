@@ -108,6 +108,11 @@ secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
     - agent : Device.X_SECUBOX_Maillage.Rejoindre() {"code"} validé (forme, somme), passé au ctl par l'entrée
       standard (lanceur à entrée, même délai et même mise à mort du groupe) ; le code ne figure ni dans un argv, ni
       dans le journal, ni dans une notification, ni dans un refus.
+    - Relecture de la tâche 5, tour 1 (R-L2-36) : C1 — ExecStopPost=+…/secubox-pilotagectl _fin <job> sur toute
+      unité transitoire (hors du bac à sable : sous ProtectSystem=strict, l'état du ctl était en lecture seule et
+      la fin du renommage n'était pas auditée) ; une OSError au retrait de rejoindre-<job>.code n'empêche plus
+      l'audit de la fin. M4 — _rejoindre retire automesh.json avant d'écrire le code (rien n'est déposé s'il
+      reste).
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:30:00 +0100
 
 secubox-pilotage-agent (0.1.2-1~trixie1) trixie; urgency=medium
