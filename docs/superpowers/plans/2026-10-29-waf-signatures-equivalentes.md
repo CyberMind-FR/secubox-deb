@@ -45,7 +45,7 @@
 - **Seuils non sourcés** : toute constante Go ou tout paramètre JSON sans source primaire porte le commentaire ou le champ `"seuil": "provisoire, non sourcé (2026-10-29)"` (même convention que `php2shell-002` et `-003`). Sourcés : 1 020 parties (`max_multipart_body_parts`), 1 000 variables (`max_input_vars`), 70 caractères (RFC 2046 §5.1.1), 5 appels par 1 200 s (nextcloud/server#62091), 64 octets de R-IMG1 (spécification § 3.3).
 - Le journal ne contient jamais un corps, un nom de fichier ni la valeur d'un paramètre : des compteurs (`signals`), des booléens et des étiquettes seulement.
 - Version : `secubox-waf-ng` passe de `1.31.0-1~trixie1` à **`1.32.0-1~trixie1`**, une seule fois (tâche 8), entrée datée `Thu, 29 Oct 2026 HH:MM:SS +0100`. Vérifier d'abord `head -1 NG/debian/changelog`.
-- Jamais de mention de CrowdSec ; jamais de bypass WAF (aucune entrée `waf_bypass`, aucune route hors sbxwaf).
+- Aucun moteur tiers nommé dans le code ni la doc ; jamais de bypass WAF (aucune entrée `waf_bypass`, aucune route hors sbxwaf).
 - En-tête SPDX CMSD-1.0 sur tout fichier créé (modèle : `SBX/multipart.go:1-4`). Commentaires et messages en français, comme le code voisin. Chaque fonction qui transcrit PHP cite le fichier et la ligne qu'elle reproduit, comme `SBX/multipart.go`.
 - Commits : `type(portée): message (ref #3273)`, terminés par `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Jamais de push ni de connexion à une box.
 
@@ -623,7 +623,7 @@ def test_sync_true_de_la_box_suit_le_livre_sur_nextcloud(): ...
 - [ ] **Étape 3 : écrire** le corpus et `vhost_profiles.json`, puis `python3 -m json.tool` sur les deux fichiers.
 - [ ] **Étape 4 : documenter.** README (paragraphe PHP2Shell) : les trois catégories et leurs contrôles en une ligne chacun, `services`, `federation_vhosts`, ce qui est lu par contrôle (tableau des contraintes globales), étiquettes d'outil aggravantes (`behavior_traits` `outil:*`), retour arrière par `"enabled": false` par catégorie (rechargement à chaud ; sans aucune catégorie structurelle active, aucune capture). `CUTOVER.md` : capture urlencoded (jeton), XML (4096 octets) et début de `PUT` (64 octets, sans jeton).
 - [ ] **Étape 5 : changelog.** Entrée `secubox-waf-ng (1.32.0-1~trixie1) trixie; urgency=medium`, signée `-- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 <heure> +0100`, postérieure à 12:00:00 : une puce par tâche, les seuils provisoires, le retour arrière.
-- [ ] **Étape 6 : relancer** les deux suites complètes (Go `go test -count=1 -race ./...` depuis `packages/secubox-toolbox-ng`, Python), `go vet ./cmd/sbxwaf/`, `grep -rni crowdsec` sur les fichiers touchés. Attendu : tout passe, aucune occurrence.
+- [ ] **Étape 6 : relancer** les deux suites complètes (Go `go test -count=1 -race ./...` depuis `packages/secubox-toolbox-ng`, Python), `go vet ./cmd/sbxwaf/`, la recherche des noms de moteurs tiers proscrits sur les fichiers touchés. Attendu : tout passe, aucune occurrence.
 - [ ] **Étape 7 : commit.** `feat(waf): catalogue roundcube, nextcloud, php_requete 1.7.0, secubox-waf-ng 1.32.0 (ref #3273)`
 
 ---
