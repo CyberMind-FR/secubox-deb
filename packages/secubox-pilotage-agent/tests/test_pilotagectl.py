@@ -1208,6 +1208,9 @@ def test_renommer_lance_secubox_renommer_borne(banc):
     assert rc == 0 and sortie["ok"] is True and len(sortie["job"]) == 16, p.stderr
     lance = banc.lancements()[-1]
     assert "--property=RuntimeMaxSec=120" in lance
+    for prop in ("NoNewPrivileges=yes", "ProtectSystem=strict", "ReadWritePaths=/etc /run /var/log/secubox",
+                 "ProtectHome=yes", "PrivateTmp=yes"):
+        assert f"--property={prop}" in lance, prop
     assert f"--unit=secubox-pilotage-op-{sortie['job']}" in lance
     assert lance.endswith("-- /usr/sbin/secubox-renommer --acteur gk2admin gk5")
     assert [e["evenement"] for e in banc.audit() if e.get("verbe") == "renommer"] == ["pilotage_demande",

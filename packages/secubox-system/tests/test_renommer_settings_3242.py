@@ -139,6 +139,11 @@ def test_unite_renommer_livree_root_et_bornee():
     assert "Type=oneshot" in actives and not any(x.startswith("User=") for x in actives)
     assert "ExecStart=/usr/sbin/secubox-renommer %i\n" in u          # %i : instance brute, jamais %I (« - » → « / »)
     assert re.search(r"^TimeoutStartSec=\d+$", u, re.M)
+    # bac à sable : système en lecture seule sauf ce que l'outil écrit (/etc/hosts et /etc/secubox par renommage
+    # atomique dans leur dossier, verrou dans /run, audit)
+    for ligne in ("NoNewPrivileges=yes", "ProtectSystem=strict", "ReadWritePaths=/etc /run /var/log/secubox",
+                  "ProtectHome=yes", "PrivateTmp=yes"):
+        assert ligne in actives, ligne
     regles = (SYSTEM / "debian" / "rules").read_text()
     assert "systemd/secubox-systeme-renommer@.service" in regles
     assert "renommer" not in regles.split("override_dh_installsystemd:")[1]     # jamais démarrée à l'installation

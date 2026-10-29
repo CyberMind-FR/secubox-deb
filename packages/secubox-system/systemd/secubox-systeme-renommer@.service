@@ -15,3 +15,10 @@ Description=SecuBox systeme : renommer la box en %i (#3242)
 Type=oneshot
 ExecStart=/usr/sbin/secubox-renommer %i
 TimeoutStartSec=90
+# Bac à sable : système en lecture seule sauf /etc (hosts et secubox/secubox.conf, remplacés atomiquement dans leur
+# dossier), /run (verrou) et /var/log/secubox (audit). hostnamectl et systemctl passent par D-Bus.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/etc /run /var/log/secubox
+ProtectHome=yes
+PrivateTmp=yes

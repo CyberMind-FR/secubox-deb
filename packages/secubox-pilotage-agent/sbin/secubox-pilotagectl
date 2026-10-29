@@ -152,6 +152,10 @@ VERBES = ("reboot", "maj-paquets", "service", "renommer", "renouveler-secrets", 
 RENOMMER = "/usr/sbin/secubox-renommer"
 DELAI_RENOMMER = 120                                     # s, durée maximale de l'unité transitoire du renommage
 DELAI_REJOINDRE = 300                                    # s ; secubox-automesh.service est borné à 240 s
+# Bac à sable du renommage (même que secubox-systeme-renommer@.service) : /etc, /run (verrou), /var/log/secubox (audit).
+BAC_RENOMMER = ("--property=NoNewPrivileges=yes", "--property=ProtectSystem=strict",
+                "--property=ReadWritePaths=/etc /run /var/log/secubox", "--property=ProtectHome=yes",
+                "--property=PrivateTmp=yes")
 # Code d'invitation du maillage (secubox-p2p api/automesh) : « sbxmesh1.<base64url>.<sha256[:4]> », 600 car. au plus.
 RE_CODE = re.compile(r"sbxmesh1\.[A-Za-z0-9_-]{8,590}\.[0-9a-f]{4}")
 CODE_MAX = 600
@@ -808,7 +812,7 @@ def commande(ctx, verbe, p):
         # Hors de l'espace de montage de l'agent (ProtectSystem=strict) : /etc/hosts et secubox.conf y sont en lecture
         # seule ; l'unité transitoire de PID 1 les écrit. Durée bornée ; l'outil a ses propres délais (hostnamectl).
         acteur = ["--acteur", ctx.acteur] if RE_ACTEUR.fullmatch(ctx.acteur) else []
-        return [f"--property=RuntimeMaxSec={DELAI_RENOMMER}"], [RENOMMER, *acteur, p["nom"]]
+        return ([f"--property=RuntimeMaxSec={DELAI_RENOMMER}", *BAC_RENOMMER], [RENOMMER, *acteur, p["nom"]])
     if verbe == "maillage-rejoindre":
         return [f"--property=RuntimeMaxSec={DELAI_REJOINDRE}"], [CTL, "_rejoindre", p["job"]]
     raise Erreur("verbe sans commande")
