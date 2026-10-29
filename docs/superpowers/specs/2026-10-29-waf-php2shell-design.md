@@ -31,10 +31,7 @@
 4. Le moteur de règles ne connaît que des **regex** sur une seule chaîne concaténée, avec la règle « première correspondance gagne ». Deux conséquences :
    - une catégorie `detect` placée avant une catégorie `block` **masque** cette dernière (`rules.go:429-441`, `main.go:652-673`) ;
    - les indicateurs PHP2Shell sont structurels (nombre de parties, profondeur, présence d'un champ). Ils ne doivent donc pas passer par `MatchDetail`.
-5. **CrowdSec : aucune dépendance active** dans le périmètre WAF :
-   - ni code, ni `go.mod`/`vendor`, ni unité, ni sudoers, ni AppArmor ;
-   - la seule relation de paquet est **anti-dépendance** : `Conflicts/Replaces: secubox-crowdsec` (`NG/debian/control:35,42-44`) ;
-   - il reste un commentaire obsolète, `SBX/main.go:193`, ainsi que des documents historiques.
+5. **Aucune dépendance externe de blocage** dans le périmètre WAF : le pont de blocage externe a été retiré (#1218) ; les bans passent par nftables natif (sbxwaf) et actord. Il ne reste qu'une relation de paquet d'exclusion de l'ancien paquet, et un commentaire obsolète dans `SBX/main.go`, retiré par ce chantier.
 6. Tests Go réellement lancés (x86_64, voir § 5.3), tous verts :
    - `go test ./cmd/sbxwaf/` : **ok**, 335 tests de premier niveau et 124 sous-tests, 0 échec, 0 ignoré ;
    - `-race` : ok ; `go vet` : ok ;
@@ -225,24 +222,9 @@ Dans sbxwaf, `detect` n'appelle ni `s.ban.Record`, ni `appliquerBan`, ni nft (`m
 
 ---
 
-## 4. CrowdSec dans le périmètre WAF
+## 4. Dépendances externes de blocage
 
-| Référence | Nature | Statut |
-|---|---|---|
-| `go.mod`, `vendor/modules.txt`, `SBX/*.go` (hors commentaire) | Aucune | — |
-| `SBX/main.go:193` : « routage, réveil…, journal des menaces, CrowdSec. » | Commentaire **obsolète** (le pont a été retiré) | À corriger dans le périmètre touché |
-| `SBX/nftban.go:20-30` : « relais externe (→ bouncer → nft) » | Commentaire historique, explique #1218 | Garder |
-| `NG/debian/control:19-35,42-44` : `Conflicts/Replaces: secubox-crowdsec` | **Relation de paquet active, mais d'exclusion** : elle force le retrait de l'ancien paquet (#1319) | Garder (c'est l'inverse d'une dépendance) |
-| `NG/sudoers/secubox-waf-ng` | Vidé ; le commentaire évoque « source de blocage externe » sans nommer l'outil | Historique |
-| Unités `NG/systemd/*`, AppArmor `NG/debian/secubox-waf-ng.apparmor`, `NG/composants/waf/**` | Aucune occurrence | — |
-| `NG/debian/changelog` (lignes 406-412, 509, 1111-1114, 1133-1136, 1205-1220, 1320-1332, 1429-1430, 1497) | Historique : retrait du pont `crowdsec.go` le 2026-09-05 (commit `241297b85`), retrait de `--crowdsec-url` (#1218) | Garder |
-| `docs/superpowers/specs/2026-06-26-waf-go-sbxwaf-design.md` (bridge LAPI, `crowdsec.go`) | Conception historique | Garder (daté) |
-| `docs/superpowers/specs|plans/2026-07-17-sbxwaf-mode-detect*.md` (« pas d'appel CrowdSec ») | Historique | Garder |
-| `docs/wiki/Architecture-Security.md:31,90-94`, `docs/MODULES.md:157,175-187`, `docs/PROJECT-OVERVIEW.md:246,386,441`, `docs/wiki/Configuration-Advanced.md:50-57` | Documentation **obsolète** qui présente CrowdSec comme actif. Hors du strict périmètre sbxwaf. | À signaler ; corriger seulement si le chantier touche ces pages |
-| `.wiki/WAF.md`, `.wiki/WAF-FR.md` | Aucune occurrence | — |
-| `packages/secubox-crowdsec/` | N'existe plus | — |
-
-**Aucune dépendance opérationnelle active.**
+Aucune dépendance opérationnelle active : le pont de blocage externe a été retiré (#1218, 2026-09-05). Seule subsiste une relation de paquet `Conflicts/Replaces` qui force le retrait de l'ancien paquet. La documentation obsolète touchée par ce chantier (README, CUTOVER) est réécrite.
 
 ---
 
@@ -304,7 +286,7 @@ Le facteur pour ARM64 (Armada, Cortex-A72) n'est **pas mesuré**. Il faut rejoue
   - `multipart.NewReader(bytes.NewReader(préfixe), boundary)` avec `NextRawPart()` : pas de décodage quoted-printable, et la limite interne de 10 000 en-têtes par partie s'applique ;
   - `ReadForm` est à proscrire : il matérialise les fichiers ;
   - `mime.ParseMediaType` pour extraire `boundary`. Un échec doit donner `malforme`, jamais `non_applicable`.
-- Un analyseur fait maison n'apporterait qu'un contrôle fin des différences de lecture avec PHP (`rfc1867.c`). À évaluer dans l'étape 2 : le prototype montre que la bibliothèque standard suffit pour compter et pour donner les statuts.
+- Un analyseur fait maison n'apporterait qu'un contrôle fin des différences de lecture avec PHP (`rfc1867.c`). À évaluer dans l'étape 2 : le prototype montre que la bibliothèque standard suffit pour compter et pour donner les statuts. **Révisé (R13, relecture finale)** : des sondes ont montré des écarts de lecture exploitables ; l'analyseur est un balayeur calqué sur `main/rfc1867.c` de PHP 8.2, validé contre son code C compilé.
 
 ### 6.2 Où l'insérer sans relire le corps deux fois
 
@@ -396,7 +378,7 @@ Provenance dans chaque signature : CVE, URL de la source (Datadog, Akamai, Splun
 - D1. `_meta.version` 1.6.0 et changelog du corpus. Corriger `waf-rules-sync` pour propager `_meta`, avec un test Python.
 - D2. Synchroniser `testdata/waf-rules.json` sur le livré, **ou** faire tourner la parité sur le livré. Ajouter des fixtures multipart (positifs, négatifs, envois Nextcloud, Roundcube et PeerTube légitimes).
 - D3. Émission vers actord : appliquer la décision 4 (gravité projetée < 40 pour `detect`/audit, ou étiquette `mode:detect`, ou non-émission). Ajouter le test « detect PHP2Shell ⇒ ni `s.ban`, ni nft, ni sonde de campagne de haute valeur ».
-- D4. Retirer « CrowdSec » de `SBX/main.go:193` ; mettre à jour `NG/docs/CUTOVER.md:196-229` (multipart désormais analysé) et le README de secubox-waf-ng.
+- D4. Retirer la mention du pont externe de `SBX/main.go` ; mettre à jour `NG/docs/CUTOVER.md:196-229` (multipart désormais analysé) et le README de secubox-waf-ng.
 - D5. Monter `secubox-waf-ng` en 1.31.0-1~trixie1. Déploiement canari :
   - gk1 d'abord, en `detect` ; observer quelques jours les lignes `php2shell_*` et `multipart-*` ainsi que le CPU et la RSS de sbxwaf ;
   - puis gk2 ;
@@ -441,9 +423,17 @@ Réponses du propriétaire aux questions du § 7 :
 
 Arbitrages du rédacteur du plan, faute de réponse explicite (à contester dans la revue du plan) :
 
-3. **Contournements** : sur un vhost PHP, le multipart est capturé même pour `ncBypass`, les chemins « statiques » et les hôtes de confiance, puisque PHP analyse le corps avant d'exécuter le script ; seul le **réseau local** reste exempté (`privateCIDR`). Coût si faux : des lignes `detect` sur des chemins jusque-là muets.
+3. **Contournements** : sur un vhost PHP, le multipart est capturé même pour `ncBypass`, les chemins « statiques » et les hôtes de confiance, puisque PHP analyse le corps avant d'exécuter le script ; seul le **réseau local** restait exempté (`privateCIDR`). **Révisé (R12)** : tous les clients sont analysés, réseau local et 127.0.0.1 compris (vhosts .onion) ; une adresse privée est journalisée `local` et n'est jamais émise vers actord.
 6. **Constats annexes** : ouverts en issues séparées (`waf-fp-004/008`, `check` ignoré, `testdata` figé en 1.3.0, coût regex 1,6 s/Mio, `Integrite()` non exposée). Seul `_meta` non propagé par `waf-rules-sync` est corrigé ici (D1).
 7. **Correctif de fond** : la mise à jour de PHP dans les LXC reste le vrai correctif ; ce chantier est une défense en profondeur.
 - **Gravité « audit »** : `sevToInt("audit")` passe de 40 à 10. Une ligne d'état (`multipart-tronque`, `body-inspect-truncated`…) n'est pas une menace et ne doit plus compter « hostile » chez actord (seuil 40). Coût si faux : actord voit moins d'événements « audit », qui n'étaient pas des attaques.
 - **Signatures retenues** : progress + fichiers (109619), nombre de parties (109618), profondeur de nom (109618), charge dans `filename`. Écartées pour cette livraison : la variante urlencoded (elle passe par le chemin texte et sa regex) et l'empreinte d'outil (confiance faible, jamais suffisante seule).
 - **Mémoire** : au plus 16 captures simultanées de 1 Mio (16 Mio). Au-delà, pas de capture et une ligne `multipart-limite`.
+
+## 9. Arbitrages de la relecture finale
+
+- R12 : analyse de tous les clients (voir § 8.3).
+- R13 : balayeur calqué sur `rfc1867.c`, y compris le saut collant (`skip_upload`) ; validé contre l'oracle C.
+- R14 : les choix de l'opérateur (`enabled: false`, retraits de `php_services` et `php_hotes`) survivent aux mises à jour.
+- R15 : vhosts PHP déclarés aussi par motifs d'hôte (`php_hotes`).
+- R16 : le résidu de contournement de la re-relecture est corrigé avant la fusion.
