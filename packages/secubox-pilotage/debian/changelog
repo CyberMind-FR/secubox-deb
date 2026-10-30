@@ -1,3 +1,12 @@
+secubox-pilotage (0.4.5-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 5, correction 5/5 (R-L5-31, ref #3126) : un retour à relais-maillage en échec garde l'entrée du registre
+    (etat retour_en_attente, route_avant) ; synchroniser le reprend d'abord à la passe suivante et propage l'échec dans
+    son bilan ; verrou commun pris sans blocage jusqu'à une échéance (300 s, SECUBOX_PILOTAGE_VERROU_S) puis sortie
+    « relais occupé » sans rien modifier, auditée (pilotage_vhost_occupe). Recommends secubox-p2p >= 1.19.6.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 03:10:00 +0100
+
 secubox-pilotage (0.4.4-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 5, correction 4/5 (R-L5-30, ref #3126) : admin.<box> n'est repris au relais que si sa route vise l'IP du

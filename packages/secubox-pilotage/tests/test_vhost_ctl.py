@@ -707,3 +707,56 @@ def test_retour_arriere_registre_illisible_leve_quand_meme_l_exclusion(relais):
     assert "nginx" in json.loads(r.stdout)["erreur"]
     assert exclusions(banc) == []
     assert json.loads(banc.routes.read_text())[DOM] == [IP_PAIR, 9080]
+
+
+# --- R-L5-31 : retour en attente repris à la passe suivante, verrou commun à échéance ---------------------------------
+
+def test_retour_en_echec_reste_en_attente_puis_repris(relais):
+    banc = relais
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 0
+    (banc.r / "var/lib/secubox/pilotage/vhosts.json").write_text(json.dumps({"boxes": []}))
+    (banc.r / "ECHEC_RELAIS_relayer").touch()
+    t = time.time()
+    r = banc.ctl("synchroniser", env={"SBX_MAINTENANT": str(t)})
+    bilan = json.loads(r.stdout)
+    assert r.returncode == 1 and bilan["ok"] is False and "gk5" not in bilan["retires"]
+    assert any(e["box"] == "gk5" for e in bilan["erreurs"])
+    e = registre(banc)["domaines"][DOM]
+    assert e["etat"] == "retour_en_attente" and e["route_avant"] == [IP_PAIR, 9080]
+    assert [x for x in banc.audit() if x["evenement"] == "pilotage_vhost_retirer"][-1]["resultat"] == "echec"
+    (banc.r / "ECHEC_RELAIS_relayer").unlink()
+    r = banc.ctl("synchroniser", env={"SBX_MAINTENANT": str(t + 120)})
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "gk5" in json.loads(r.stdout)["retires"]
+    assert DOM not in registre(banc)["domaines"]
+    assert json.loads(banc.routes.read_text())[DOM] == [IP_PAIR, 9080] and exclusions(banc) == []
+
+
+def test_retirer_cli_en_echec_garde_l_entree(relais):
+    banc = relais
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 0
+    (banc.r / "ECHEC_RELAIS_relayer").touch()
+    assert banc.ctl("retirer", "gk5").returncode == 1
+    assert registre(banc)["domaines"][DOM]["etat"] == "retour_en_attente"
+    (banc.r / "ECHEC_RELAIS_relayer").unlink()
+    assert banc.ctl("retirer", "gk5").returncode == 0
+    assert DOM not in registre(banc)["domaines"]
+    assert json.loads(banc.routes.read_text())[DOM] == [IP_PAIR, 9080]
+
+
+def test_verrou_occupe_sortie_propre_dans_l_echeance(relais):
+    banc = relais
+    import fcntl
+    avant = (banc.routes.read_text(), banc.toml.read_text())
+    fd = os.open(banc.r / VERROU, os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    try:
+        t0 = time.time()
+        r = banc.ctl("poser", "gk5", entree=PAGES, env={"SECUBOX_PILOTAGE_VERROU_S": "1"})
+        assert time.time() - t0 < 10
+    finally:
+        os.close(fd)
+    assert r.returncode == 1 and "occupé" in json.loads(r.stdout)["erreur"]
+    assert (banc.routes.read_text(), banc.toml.read_text()) == avant and exclusions(banc) == []
+    assert not any(x.startswith("secubox-relais-maillage") for x in banc.appels())
+    assert any(x["evenement"] == "pilotage_vhost_occupe" for x in banc.audit())

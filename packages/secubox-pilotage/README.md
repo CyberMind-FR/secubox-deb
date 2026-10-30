@@ -310,7 +310,10 @@ HAProxy TLS 1.3 → sbxwaf → nginx.
   posé, exclusion levée, `secubox-relais-maillage relayer --sans-sonde <dom> <ip> <port>` — rétablissement direct, même pair muet —,
   marque ôtée ; chaque étape indépendante, erreur d'origine rendue). `retirer` d'un nom repris : retrait du vhost pilotage puis
   même retour ; s'il échoue, `retirer` échoue (`ok: false`, audit `resultat=echec`). Verrou commun avec relais-maillage
-  (`verrou-relais.lock`, flock) tenu pendant tout le verbe, avant celui de conf.d ; relais-maillage le tient pendant toute sa passe. Audit
+  (`verrou-relais.lock`, flock) tenu pendant tout le verbe, avant celui de conf.d ; relais-maillage le tient pendant toute sa passe.
+  Verrou pris sans blocage jusqu'à 300 s (`SECUBOX_PILOTAGE_VERROU_S`), sinon sortie `{"ok": false, "occupe": true}` sans
+  rien modifier (audit `pilotage_vhost_occupe`). Retour en échec : entrée gardée avec `etat = retour_en_attente`, reprise en tête
+  de la passe suivante de `synchroniser`. Audit
   `pilotage_vhost_basculer` (`sens` distante|locale, `resultat`, `route`). Un nom porté par autre chose (vhost manuel, autre
   module, route vers une autre adresse) reste refusé (C2). Les autres noms de la box (hall, acces, waf…) ne sont jamais touchés.
 - **Contrat pour T7 (panneau « Flotte » du maître, point d'entrée unique)** : box distante ⇒ ouvrir

@@ -53,10 +53,15 @@ BACKEND_WAF = "sbxwaf_inspector"
 WEBROOT_ACME = "/usr/share/secubox/www"
 PREFIXE_CONF = "secubox-pilotage-admin-"
 CERTBOT_REPOS_S = 6 * 3600     # I4 : pas de nouvel essai certbot pour un même domaine avant 6 h (quota Let's Encrypt)
+VERROU_ECHEANCE_S = 300        # R-L5-31 I2 : attente maximale du verrou commun (SECUBOX_PILOTAGE_VERROU_S), puis « relais occupé »
 PASSE_MIN_S = 60               # I4 : délai minimal entre deux synchronisations
 
 
 class Usage(Exception):
+    pass
+
+
+class Occupe(Exception):
     pass
 
 
@@ -719,8 +724,22 @@ def verrou_commun(ctx):
     if not stat.S_ISREG(st.st_mode) or st.st_uid != ctx.uid or st.st_nlink != 1:
         os.close(fd)
         raise Erreur("verrou commun avec relais-maillage non sûr (propriétaire ou liens)")
-    fcntl.flock(fd, fcntl.LOCK_EX)
-    return fd
+    # R-L5-31 I2 : jamais d'attente sans fin (l'unité a un délai) : essais non bloquants jusqu'à l'échéance, puis « occupé »
+    try:
+        echeance = float(os.environ.get("SECUBOX_PILOTAGE_VERROU_S") or VERROU_ECHEANCE_S)
+    except ValueError:
+        echeance = VERROU_ECHEANCE_S
+    fin = time.monotonic() + max(0.0, min(echeance, 600.0))
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fd
+        except BlockingIOError:
+            if time.monotonic() >= fin:
+                os.close(fd)
+                raise Occupe("relais occupé : une passe de secubox-relais-maillage tient le verrou commun ; rien n'est "
+                             "modifié, la passe suivante reprendra") from None
+            time.sleep(0.5)
 
 
 def poser(ctx, box, pages):
@@ -812,35 +831,40 @@ def poser(ctx, box, pages):
 
 
 def retirer(ctx, box):
+    """Retrait du vhost du pilotage. Nom repris au relais : l'entrée du registre (et sa route_avant) n'est ôtée qu'APRÈS un
+    retour réussi ; sinon elle reste avec etat=retour_en_attente, reprise par la passe suivante (R-L5-31 I1) — jamais un nom
+    exclu sans propriétaire."""
     dom = V.domaine(box)
     try:
         reg = lire_registre(ctx)
         if dom not in reg["domaines"]:
             raise Erreur(f"{dom} n'a pas été créé par le pilotage : rien n'est retiré")
+        entree = reg["domaines"][dom] if isinstance(reg["domaines"][dom], dict) else {}
         if os.path.lexists(conf_de(ctx, box)):
             nginx_echanger(ctx, conf_de(ctx, box), None)
-        routes_retirer(ctx, dom)
-        nom = vhost_haproxy(ctx, dom)
-        if nom is not None:
-            if ctx.lancer("haproxyctl", "vhost", "remove", nom).returncode != 0:
-                raise Erreur("haproxyctl vhost remove en échec : le nom reste servi")
-            if ctx.lancer("haproxyctl", "generate", "--allow-shrink").returncode != 0 or \
-                    ctx.lancer("haproxyctl", "reload").returncode != 0:
-                raise Erreur("HAProxy n'a pas rechargé : le nom peut rester servi jusqu'au prochain « haproxyctl generate »")
-        entree = reg["domaines"].pop(dom, None) or {}
+        if entree.get("etat") != "retour_en_attente":   # en attente : vhost et route éventuels sont ceux du relais
+            routes_retirer(ctx, dom)
+            nom = vhost_haproxy(ctx, dom)
+            if nom is not None:
+                if ctx.lancer("haproxyctl", "vhost", "remove", nom).returncode != 0:
+                    raise Erreur("haproxyctl vhost remove en échec : le nom reste servi")
+                if ctx.lancer("haproxyctl", "generate", "--allow-shrink").returncode != 0 or \
+                        ctx.lancer("haproxyctl", "reload").returncode != 0:
+                    raise Erreur("HAProxy n'a pas rechargé : le nom peut rester servi jusqu'au prochain « haproxyctl generate »")
+        avant = entree.get("route_avant")
+        if entree.get("repris_de") == "relais-maillage" and isinstance(avant, list) and len(avant) == 2:
+            entree["etat"] = "retour_en_attente"          # noté AVANT le retour : un arrêt brutal le laisse repris
+            reg["domaines"][dom] = entree
+            ecrire_registre(ctx, reg)
+            if not vers_locale(ctx, box, dom, str(avant[0]), int(avant[1])):
+                raise Erreur(f"retour à relais-maillage en échec : {dom} reste en attente de retour (repris à la passe "
+                             f"suivante ; à la main : secubox-relais-maillage relayer --sans-sonde {dom} {avant[0]} {avant[1]})")
+            reg = lire_registre(ctx)
+        reg["domaines"].pop(dom, None)
         ecrire_registre(ctx, reg)
     except Erreur as e:
         auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="echec", motif=str(e))
         raise
-    avant = entree.get("route_avant")
-    if entree.get("repris_de") == "relais-maillage" and isinstance(avant, list) and len(avant) == 2:
-        # distante → locale (R-L5-27) : le nom revient à relais-maillage par rétablissement direct ; un échec est propagé
-        # (I3) : le pilotage ne sert plus le nom, et le relais ne l'a pas repris
-        if not vers_locale(ctx, box, dom, str(avant[0]), int(avant[1])):
-            motif = f"retour à relais-maillage en échec : {dom} n'est plus servi (secubox-relais-maillage relayer --sans-sonde " \
-                    f"{dom} {avant[0]} {avant[1]})"
-            auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="echec", motif=motif)
-            return {"ok": False, "box": box, "domaine": dom, "erreur": motif}
     auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="ok")
     return {"ok": True, "box": box, "domaine": dom}
 
@@ -866,7 +890,18 @@ def synchroniser(ctx):
     reg["derniere_passe"] = ctx.maintenant
     ecrire_registre(ctx, reg)
     en_usage = []
+    # retours en attente (R-L5-31 I1) : repris D'ABORD, même si la box est revenue au plan (sa reprise attend la passe suivante)
+    en_attente = sorted({e.get("box") for e in reg["domaines"].values()
+                         if isinstance(e, dict) and e.get("etat") == "retour_en_attente" and isinstance(e.get("box"), str)})
+    for box in en_attente:
+        try:
+            retirer(ctx, box)
+            bilan["retires"].append(box)
+        except Erreur as e:
+            bilan["erreurs"].append({"box": box, "erreur": str(e)})
     for box, pages in plan:
+        if box in en_attente:
+            continue
         for paquet, version in pages:
             p = ctx.lancer("secubox-pilotage-www", "extraire", "--acteur", "pilotage", paquet, version)
             if p.returncode != 0:
@@ -879,7 +914,7 @@ def synchroniser(ctx):
             bilan["erreurs"].append({"box": box, "erreur": str(e)})
     dans_plan = {b for b, _ in plan}
     for box in poses(ctx):
-        if box not in dans_plan:
+        if box not in dans_plan and box not in en_attente:
             try:
                 retirer(ctx, box)
                 bilan["retires"].append(box)
@@ -955,6 +990,13 @@ def main(argv):
                 os.close(fdc)
         sortie(res)
         return 0 if res.get("ok") else 1
+    except Occupe as e:
+        try:
+            auditer(ctx, "pilotage_vhost_occupe", verbe=verbe, box=box, resultat="echec", motif=str(e))
+        except Exception:
+            pass
+        sortie({"ok": False, "occupe": True, "erreur": str(e)})
+        return 1
     except Usage as e:
         err(str(e))
         sortie({"ok": False, "erreur": str(e)})
