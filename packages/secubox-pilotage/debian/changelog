@@ -1,3 +1,18 @@
+secubox-pilotage (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 3 (ref #3126) : message HTTP vers l'agent d'une box. `pilotage.files.demander_http` (réutilisée par le service
+    qui servira les pages) valide la demande (motifs acteur/maître du vérificateur, chemin /api/v1/<module>/…, corps ≤ 4 Mio,
+    en-têtes réduits à ceux que le relais transmet), refuse un agent hors ligne (aucun sondage récent), audite chaque
+    écriture avant l'envoi, dépose `HTTP` et attend `HTTP_RESP` (file par msg_id, délai 40 s, requête retirée au délai ou
+    si l'appelant part). `portee_permise` : la portée de la session réduite par ce que le contrôleur sait (mains liées ou
+    inconnues, box cliente sans support ouvert) ; l'agent la recalcule encore et ne la croit jamais.
+  * Canal : POST /canal/v1/http (une HTTP_RESP, 6 Mio ; location nginx imbriquée, en-têtes hérités dont le marqueur du
+    tunnel) ; HTTP_RESP admise aussi dans /reponses (refus courts) ; une HTTP_RESP ne répond qu'à un message HTTP et
+    inversement ; jamais rangée en base. Un sondage ne porte pas plus de 5,8 Mo. Rappel : le marqueur du tunnel arrête un
+    relais qui transmettrait les en-têtes du client, il ne protège pas contre un processus qui joint la socket (0660).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 21:00:00 +0100
+
 secubox-pilotage (0.1.2-1~trixie1) trixie; urgency=medium
 
   * Identité du canal (ref #3126, L2 « Agir », tâche 0, M6) : le gabarit nginx de l'écouteur de tunnel pose

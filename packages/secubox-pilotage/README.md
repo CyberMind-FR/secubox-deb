@@ -188,6 +188,22 @@ profil AppArmor **enforce** `secubox-pilotage-invite` (`AppArmorProfile=`, charg
 Échec d'émission : `pilotage_rejoindre_echec` (sans le code). Le pair est renommé côté p2p par la jonction sous le nouveau nom
 (#3213) ; la box réapparaît alors sous sa nouvelle clé `maillage:<nouveau>`, l'ancienne passe hors ligne avec son historique.
 
+## Pilotage HTTP des box légères (L5, tâche 3)
+
+`pilotage.files.demander_http(files, box_cle, methode=, chemin=, acteur=, maitre=, portee=, entetes=, corps=, version_page=,
+delai=40, audit=)` envoie un message `HTTP` à l'agent de la box et rend `{statut, entetes, corps}` (octets). Le corps du message
+est l'entrée du relais local de la box (`methode`, `chemin` `/api/v1/<module>/…`, `entetes`, `corps_b64`, `acteur`, `maitre`,
+`portee`, `version_page`) ; la réponse `HTTP_RESP` arrive par `POST /canal/v1/http` (6 Mio) ou, courte, par `/reponses`.
+
+- Refus avant tout envoi : `DemandeHTTPInvalide` (400 forme, 413 corps > 4 Mio), `AgentHorsLigne` (aucun sondage depuis 10 s),
+  `FileDeBoxPleine`, `AuditIndisponible` (une écriture non auditée n'est pas envoyée).
+- Ensuite : `DelaiHTTPDepasse` (504 ; requête retirée), `ReponseHTTPInvalide` (502 : ERROR d'un agent sans HTTP, forme bancale).
+- **Portée** : `portee_permise(reseau, mains_liees, support_ouvert, demandee)` — `demandee` est ce que la session du maître
+  autorise ; mains liées (ou inconnues) ⇒ `lecture` ; box cliente ⇒ `admin` seulement pendant un support ouvert. L'agent la
+  recalcule (mains liées, ctl root) et ne peut que la réduire encore.
+- Audit : chaque écriture (POST/PUT/PATCH/DELETE) `pilotage_http` avant l'envoi (`etat: demande`) et à la réponse
+  (`etat: rendu`, `statut`) ; jamais le corps ni la requête `?…`. Le corps d'une page n'est jamais rangé en base.
+
 ## Tests
 `cd packages/secubox-pilotage && python3 -m pytest -q`. `tests/test_contrat_go.py` rejoue contre le vrai canal (et le vrai stockage) les
 enveloppes figées par le client Go (`packages/secubox-pilotage-agent/internal/canal/testdata/contrat/`, régénérées par son test
