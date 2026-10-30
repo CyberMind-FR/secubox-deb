@@ -1,0 +1,13 @@
+{
+ "requete": {
+  "body": {
+   "acteur": "alice",
+   "args": {
+    "id": "5e55105000000001"
+   },
+   "command": "Device.X_SECUBOX_Support.Fermer()"
+  },
+  "type": "OPERATE"
+ },
+ "route": "/canal/v1/requetes"
+}

@@ -270,7 +270,7 @@ async def test_la_boucle_ne_s_arrete_qu_avec_les_deux_applis(tmp_path):
 @pytest.mark.asyncio
 async def test_admin_et_canal_partagent_la_meme_file(tmp_path):
     s, f, inv, admin, canal, lignes = assembler(tmp_path)
-    ent = {"X-Real-IP": GK5.adresse}
+    ent = {"X-Real-IP": GK5.adresse, "X-SecuBox-Pilotage-Tunnel": "1"}   # comme le pose l'écouteur nginx du tunnel
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=admin), base_url="http://a") as a, \
             httpx.AsyncClient(transport=httpx.ASGITransport(app=canal), base_url="http://c", headers=ent) as c:
         assert (await c.post("/canal/v1/bonjour", json={"agent_version": "0.1.0", "boot_id": "b", "modele": []})).status_code == 200
@@ -287,3 +287,15 @@ async def test_admin_et_canal_partagent_la_meme_file(tmp_path):
             await asyncio.sleep(0.02)
     assert j["releve"]["statut"] == "ok" and j["releve"]["sortie"] == {"ok": 1}
     assert lignes[0][0] == "pilotage_releve_demande"
+
+
+@pytest.mark.asyncio
+async def test_chaque_tour_d_inventaire_vide_les_refus_tus_du_canal_m7(tmp_path):
+    s, f, inv, admin, canal, lignes = assembler(tmp_path)
+    ent = {"X-Real-IP": "10.10.0.250", "X-SecuBox-Pilotage-Tunnel": "1"}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=canal), base_url="http://c", headers=ent) as c:
+        for _ in range(3):
+            assert (await c.get("/canal/v1/requetes", params={"attente": 0})).status_code == 403
+    assert [ch.get("tus") for ev, ch in lignes if ev == "pilotage_identite_refusee"] == [None]
+    await inv.tour()
+    assert ("pilotage_identite_refusee", {"adresse": "10.10.0.250", "tus": 2, "vidage": "tour"}) in lignes

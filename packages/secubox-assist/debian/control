@@ -18,5 +18,4 @@ Description: SecuBox assistance request — real-time help sessions
  deliberately absent — a hard Depends would then block dpkg install. apt
  still pulls it on a normal install; dpkg -i does not enforce it.
  Consent-gated, audited, revocable live assistance sessions between a box and
- a federated center, over the wg-mesh, with a bounded action catalog and
- double-consent console escalation.
+ a federated center, over the wg-mesh, with double-consent console escalation.

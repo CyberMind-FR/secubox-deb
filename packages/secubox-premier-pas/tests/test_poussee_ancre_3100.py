@@ -92,8 +92,6 @@ def _isole(tmp_path, monkeypatch):
     monkeypatch.setattr(M.time, "sleep", lambda s: None)
     monkeypatch.setattr(M, "_pose_empreinte_admin", lambda e: None)
     monkeypatch.setattr(M, "_ecrit_conf", lambda d: None)
-    monkeypatch.setattr(M, "_renomme", lambda n: None)
-    monkeypatch.setattr(M, "_avahi_nouveau_nom", lambda: None)
     monkeypatch.setattr(M, "_majauto", lambda a, h: None)
     monkeypatch.setattr(M, "_reseau_existant_conserve", lambda *a: None)
     monkeypatch.setattr(M, "ANCRE_CHEMIN", tmp_path / "ancre-maitre.json")

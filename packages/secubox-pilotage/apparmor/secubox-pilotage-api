@@ -45,6 +45,9 @@
   /var/lib/secubox/pilotage/ r,
   /var/lib/secubox/pilotage/** rwkm,
 
+  # Assistant de jonction (L2 tâche 6, R-L2-35) : le service y écrit un nom et lit le code ; il n'exécute rien lui-même.
+  /run/secubox-pilotage/invite.sock rw,
+
   # Journal d'audit commun (le fichier appartient à secubox ; ACL au compte du service ; ajout seul `a`, donc jamais ouvert avec O_CREAT ni tronqué).
   /var/log/secubox/audit.log a,
 

@@ -1,3 +1,23 @@
+secubox-annuaire (0.16.3-1~trixie1) trixie; urgency=medium
+
+  * Page Flotte : page de la box (#3126 L2 « Agir », tâche 8). Une ligne du panneau « Pilotage » ouvre la box : catalogue
+    fermé d'actions (reboot, maj-paquets, service démarrer/redémarrer/arrêter, renommer, renouveler), confirmation forte
+    (retaper exactement le nom de la box, bouton désactivé tant que ce n'est pas le cas) pour reboot, arrêt de service,
+    renouvellement et renommage d'une box du propriétaire, relevé, journal des opérations (résultat inconnu, réponse
+    arrivée après un 504, plafond de jonction), ouverture et fermeture du support, vue en direct (flux SSE lu par fetch et
+    ReadableStream avec l'en-tête Authorization, dédoublonné par job et par id, relecture du journal après reconnexion ou
+    perte, retour à la connexion sur session expirée, arrêt sur fin de support).
+  * Mains liées ou inconnues, box hors ligne : boutons d'action désactivés avec le motif, seul le relevé reste. Box
+    cliente : ni catalogue ni vue en direct hors session de support ouverte (« en attente de l'accord du détenteur »).
+    Toute donnée venue de la box ou de l'administrateur est posée en textContent (ref #3126).
+  * Relecture de la tâche 8 (ref #3126, R-L2-42) : le « mains liées » reçu en direct n'est plus écrasé par un inventaire plus
+    ancien (resynchronisé à la reconnexion du flux) ; confirmation forte et argument vidés après l'envoi ; nom de box vide :
+    bouton désactivé ; CR final d'un morceau de flux mémorisé avant la normalisation des CRLF ; délai de reconnexion remis à
+    3 s seulement après un événement reçu ; test anti-injection élargi (href/src/srcdoc, setAttribute, DOMParser, eval,
+    innerHTML en clé, on*= du HTML statique). Sous mains liées, les boutons sont désactivés avec le motif.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 14:00:00 +0100
+
 secubox-annuaire (0.16.2-1~trixie1) trixie; urgency=medium
 
   * Page Flotte : panneau « Pilotage » (GET /api/v1/pilotage/boxes, #3126 L1 « Voir ») : une ligne par box (réseau,

@@ -1,3 +1,149 @@
+secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * L2 « Agir », tâche 1 (ref #3126) : ctl root de la box `secubox-pilotagectl` et sa politique.
+    - Liste fermée de verbes, argv validé en entier par le ctl (code 2 sinon) : reboot, maj-paquets,
+      service <demarrer|arreter|redemarrer> <unité secubox-*.service|timer>, renouveler-secrets, renommer <nom>,
+      support <ouvrir|fermer> <id>, ancre-verifier (ces trois : « non disponible » jusqu'aux tâches 2, 4, 5),
+      consentement <accepter|refuser> <id> et mains-liees <on|off> (local seulement : refusés depuis l'agent),
+      politique <action>. Sortie : une ligne JSON.
+    - Politique décidée sur la box : mains liées (tout refusé sauf le relevé ; état root
+      /var/lib/secubox-pilotagectl/mains-liees, projection /etc/secubox/pilotage/mains-liees pour l'agent) ;
+      box cliente (sans wg-mesh) : accord du détenteur (consentement en attente 24 h, consommé une fois) ;
+      poser les mains liées annule les consentements en attente ; jamais l'unité de l'agent ni une unité protégée.
+    - Opérations par `systemd-run --collect --unit=secubox-pilotage-op-<job>`, sans délai imposé ; une seule
+      opération longue à la fois (maj-paquets, renouveler-secrets ; un reboot attend aussi).
+    - Audit JSON de chaque demande, refus, consentement et résultat dans /var/log/secubox/audit.log (sans suivre de
+      lien, jamais une valeur secrète ni l'argv refusé). SBX_RACINE (tests) ignorée quand sudo a élevé un autre compte.
+  * sudoers.d/secubox-pilotage-agent : `secubox-pilotagectl *` seulement. Unité de l'agent : NoNewPrivileges=no pour
+    ce sudo (options seccomp retirées, capacités bornées, ReadWritePaths du ctl) ; profil AppArmor : `/usr/bin/sudo Ux`.
+    Arbre d'état root par tmpfiles.d. Dépend de sudo et python3 (>= 3.11). Exception écrite dans RULES-CODE.
+  * Relecture de la tâche 1, tour 1 :
+    - R-L2-11 : fin de chaque opération auditée (`ExecStopPost=secubox-pilotagectl _fin <job>`, verbe interne, local
+      seulement : `pilotage_resultat` succes|echec, code de sortie numérique), opération exclusive libérée.
+    - Jamais une unité `secubox-pilotage-op-*` (« unité du ctl ») ; unité inconnue de systemd refusée, sans
+      consentement créé ; expiration d'un consentement auditée une seule fois.
+    - Le reboot est une opération exclusive (rien de long pendant ses 5 s) ; refus « état non fiable » audités.
+    - R-L2-13 : sur une box cliente, une unité gabarit (« @ ») exige l'accord, même pour démarrer.
+    - R-L2-14 : `--acteur <login>` en tête de l'argv, audité dans le champ acteur.
+    - Unité : CAP_CHOWN ajouté (création d'audit.log au compte secubox).
+  * L2 « Agir », tâche 2 (ref #3126) : vérification de l'ancre du maître (D1).
+    - `secubox-pilotagectl ancre-verifier` (lecture, permise depuis l'agent) : le pair WireGuard qui porte l'adresse
+      du maître (`wg show <interface> allowed-ips`, /usr/bin/wg sans shell, préfixe le plus long) doit avoir la clé de
+      l'ancre, comparée en temps constant : wg-mesh/10.10.0.1 et /etc/secubox/p2p/ancre-maitre.json (box du
+      propriétaire), wg-autoload/10.64.0.1 et la clé du hub posée à l'enrôlement dans /etc/wireguard/wg-autoload.conf
+      (box cliente, R-L2-9, R-L2-17). Rend, code 0, {"ok": true} ou {"ok": false, "raison": absente|differente|
+      illisible} (R-L2-19) ; jamais vrai par défaut ; chaque échec est audité (« ancre absente|différente|
+      illisible »), sans clé recopiée. Ancre à root ou secubox, sans écriture groupe/autres (R-L2-20).
+    - Agent : vérification au démarrage puis toutes les heures par `sudo -n /usr/sbin/secubox-pilotagectl
+      ancre-verifier`. Ancre absente : canal gardé en lecture (L1), tout Operate refusé, chaque refus audité par le
+      ctl. Ancre différente ou illisible : canal coupé (rien ne part, aucun Operate traité), revérifié avec recul
+      jusqu'à 1 h ; la reconnexion suivante qui réussit notifie X_SECUBOX_AnchorFailed.
+    - Unité : CAP_NET_ADMIN ajouté à la borne (le noyau l'exige pour `wg show`). Dépend de wireguard-tools.
+  * Relecture de la tâche 2, tour 1 :
+    - I1 / R-L2-23 : `ancre-verifier <wg-mesh|wg-autoload>`, argument obligatoire (liste fermée). L'agent passe
+      l'interface du canal du maître retenu (10.10.0.1 → wg-mesh, 10.64.0.1 → wg-autoload ; autre maître :
+      illisible sans appeler le ctl), plus la présence de /sys/class/net/wg-mesh. Le ctl exige la cohérence
+      (wg-mesh ⇒ ancre-maitre.json, wg-autoload ⇒ configuration cliente ; l'ancre de l'autre canal seule ⇒
+      illisible).
+    - M2 : sortie de wg décodée en ASCII ; une sortie non décodable, ou toute exception imprévue de la
+      vérification, rend « illisible » et l'échec est audité.
+    - I2 / R-L2-24 : ancre absente, au plus une revérification (une ligne d'audit) par lot d'Operate refusés et par
+      minute ; les autres refus sont comptés dans le journal de l'agent, sans appel au ctl.
+    - M1 : une ancre absente après une vérification réussie vaut « illisible » (coupure, puis X_SECUBOX_AnchorFailed).
+  * L2 « Agir », tâche 3 (ref #3126) : Operate asynchrones dans l'agent.
+    - Liste fermée : Device.Reboot(), X_SECUBOX_Packages.MettreAJour(), X_SECUBOX_Services.Agir() {unite, action},
+      X_SECUBOX_Nom.Renommer() {nom}, X_SECUBOX_Secrets.Renouveler(), X_SECUBOX_Support.Ouvrir() {id, duree_min}
+      et .Fermer() {id}, plus le relevé de L1. Paramètres validés par l'agent avant tout appel au ctl (inconnu, mal
+      typé ou hors motif : refus) ; actions start/stop/restart traduites en demarrer/arreter/redemarrer ;
+      « --acteur <login> » transmis quand le maître le fournit sous une forme valable (R-L2-14).
+    - OPERATE_RESP immédiat {etat: accepte|consentement|refuse, job, raison} (R-L2-1) ; suivi par systemctl show sans
+      sudo, NOTIFY X_SECUBOX_OperationProgress {job, etape, pct} puis X_SECUBOX_OperationDone {job, rc, resume}.
+    - Fins non remises gardées en mémoire (au plus 50, le plus ancien évincé et journalisé), renvoyées à la
+      reconnexion, une seule fois chacune.
+    - Ctl : verbe de lecture etat-operation <job> (audité) ; _fin enregistre la fin de chaque opération (fins.json).
+      R-L2-21 : agir et politique refusent toute demande du maître sans ancre vérifiée (« ancre non vérifiée »,
+      audité avec le verbe). R-L2-26 : ancre-verifier enregistre le canal vérifié (ancre.json, atomique, 2 h) ; la
+      nature de la box (propriétaire ou cliente) se lit dans ce canal, plus dans la présence de wg-mesh.
+  * Relecture de la tâche 3, tour 1 (R-L2-28) :
+    - M1 : _fin audite la fin avant d'écrire fins.json ; un fins.json illisible repart d'une liste vide (journalisé).
+    - M2 : une écriture de fins.json manquée après le lancement est journalisée ; la réponse reste {"ok": true, "job"}.
+    - M3 : refus « ancre non vérifiée » du ctl alors que l'agent est ancré → revérification forcée (une par minute).
+    - M4 : 12 erreurs consécutives de systemctl show → « résultat inconnu », emplacement de suivi libéré.
+    - M5 : Agir sans Ancre → configuration refusée, aucune connexion. README : suivi maintenu pendant une coupure.
+    - R-L2-29 : toute écriture d'état APRÈS un lancement réussi (fins.json, operation.json, consommation d'un
+      consentement) est rattrapée et journalisée ; réponse {"ok": true, "job"}, « lance » audité. Un accord non
+      consommé est audité (consentement_non_consomme), sans nouvel essai. Avant le lancement, l'échec refuse toujours.
+  * L2 « Agir », tâche 4 (ref #3126) : consentement, mains liées et support, côté local.
+    - Nouvelle commande `secubox-pilotage` (root, texte en français) : etat, consentements, accepter|refuser <id>,
+      mains-liees on|off, support accepter|refuser <id>, support fermer [<id>]. Simple affichage au-dessus du ctl
+      (argv en liste, sans shell) ; refuse de tourner hors root ; login sudo de l'humain audité comme acteur.
+    - Ctl : `support ouvrir <id> [<duree_min>]` (1 à 240, 30 par défaut) crée une session EN ATTENTE
+      (« consentement requis ») ; `support accepter|refuser <id>` local seulement ; `support fermer <id>` des deux
+      côtés ; une session à la fois, expirée à sa fin ou à 24 h sans décision ; mains liées : aucune ouverture
+      (même locale), session ouverte fermée, demande annulée ; tout audité (support_demande, support_ouvert,
+      support_refuse, support_ferme, support_annule, support_expire). Le support ne lance rien (jamais de shell).
+    - Ctl : verbe de lecture `etat` (agent et local, non audité ; ses expirations le sont) : mains liées, canal
+      vérifié, consentements, support, et l'unité de l'agent en local.
+    - Agent : lit `etat` chaque minute (aucun droit nouveau, le sudoers existant) et notifie
+      X_SECUBOX_HandsTied {etat}, X_SECUBOX_Consent {id, decision}, X_SECUBOX_Support {id, etat} ;
+      Support.Ouvrir transmet duree_min au ctl ; Support.Fermer réussi rend « accepte » sans job (aucun suivi).
+  * Relecture de la tâche 4, tour 1 (R-L2-30 à R-L2-33) :
+    - I1 : X_SECUBOX_Support porte « fin » (RFC 3339) dès l'ouverture, le maître expire la session lui-même ; au
+      premier état lu après le démarrage de l'agent, mains liées et session en cours sont notifiées.
+    - I2 : mains-liees on avec consentements.json illisible : drapeau, projection et audit posés, consentements
+      intouchés (même rattrapage que support.json).
+    - R-L2-30 : l'agent lit l'état toutes les 5 min (au lieu d'une) et juste après chaque Operate traité.
+    - M1 : etat minimal pour le maître (mains liées, {id, etat} des consentements en cours ou décidés depuis moins
+      d'une heure, {id, etat, fin} du support). M2 : mains_liees toujours rendu, section illisible marquée
+      « illisible », HandsTied notifié quand même. M4 : secubox-pilotage attend le ctl 60 s au plus. M5 : « op »
+      audité pour un support. M3 : double notification documentée (le maître dédoublonne).
+
+  * L2 « Agir », tâche 5 (ref #3126, ref #3242) : renommage unique (D3) et retour au maillage (R-L2-2).
+    - ctl : `renommer <nom>` livré (R-L2-1 levé) — /usr/sbin/secubox-renommer --acteur <acteur> <nom> dans une
+      unité transitoire bornée (RuntimeMaxSec=120) ; box cliente : accord du détenteur. Depends secubox-core
+      (>= 1.8.10~).
+    - ctl : `maillage-rejoindre` (code sbxmesh1 lu sur l'entrée standard, jamais dans l'argv ; box du propriétaire
+      seulement) et `_rejoindre <job>` (interne : code déposé pour secubox-automesh, usage unique, audit
+      maillage_rejoindre sans le code). `politique maillage-rejoindre`.
+    - agent : Device.X_SECUBOX_Maillage.Rejoindre() {"code"} validé (forme, somme), passé au ctl par l'entrée
+      standard (lanceur à entrée, même délai et même mise à mort du groupe) ; le code ne figure ni dans un argv, ni
+      dans le journal, ni dans une notification, ni dans un refus.
+    - Relecture de la tâche 5, tour 1 (R-L2-36) : C1 — ExecStopPost=+…/secubox-pilotagectl _fin <job> sur toute
+      unité transitoire (hors du bac à sable : sous ProtectSystem=strict, l'état du ctl était en lecture seule et
+      la fin du renommage n'était pas auditée) ; une OSError au retrait de rejoindre-<job>.code n'empêche plus
+      l'audit de la fin. M4 — _rejoindre retire automesh.json avant d'écrire le code (rien n'est déposé s'il
+      reste).
+
+  * Reports de L1 (tâche 11 de L2, ref #3126) :
+    - M2 : le relevé de performance de production lit la racine absolue « / » (operateurBox), plus des chemins
+      relatifs au répertoire courant.
+    - M13 : Environment=GOMEMLIMIT=24MiB sous MemoryMax=32M (le ramasse-miettes travaille avant le cgroup).
+    - N5/M14 : contrat maître → agent (cmd/sbx-pilotage-agent/contrat_test.go) : les requêtes figées par le vrai
+      maître (internal/canal/testdata/contrat/maitre/) sont rejouées contre le vrai client, le vrai exécuteur et
+      le vrai opérateur ; les OPERATE_RESP de L2, la réponse du relevé et les notifications OperationProgress,
+      OperationDone, HandsTied, Consent et Support sont figées dans testdata/contrat/agent-l2/.
+
+  * Relecture finale de L2 (ref #3126, R-L2-46, R-L2-47) :
+    - C1 : `service demarrer|arreter|redemarrer` ne pilote qu'un SERVICE DURABLE. Le ctl lit `systemctl show -p Id
+      -p Type -p Names -p LoadState -- <unité>` (chemin absolu, sans shell, 20 s au plus) : Type=oneshot ou
+      minuterie refusés (« unité ponctuelle : passez par l'action dédiée » : secubox-systeme-redemarrer,
+      secubox-majauto, secubox-firstboot… ne sont plus démarrables par ce chemin), unité introuvable refusée,
+      l'Id résolu d'un alias et tous ses noms contrôlés contre les unités protégées, celle de l'agent et
+      secubox-pilotage-op-* (R-L2-15 refermé), Id hors secubox-* « hors périmètre ». Box cliente : `demarrer`
+      exige l'accord du détenteur, comme arrêter et redémarrer (R-L2-13 englobé).
+    - I2 : le nom d'un renommage entre dans le consentement et dans sa clé (un accord pour un nom ne vaut pas pour
+      un autre), dans l'audit des consentements, et `secubox-pilotage consentements` affiche « renommer en <nom> ».
+    - I4 : verbe de lecture `fins-recentes` (audité pilotage_lecture) : les 20 dernières fins enregistrées par
+      _fin, {job, verbe, resultat, rc} seulement. À la première ancre vérifiée (une fois par démarrage, avant le
+      premier bonjour), l'agent les lit et renvoie une X_SECUBOX_OperationDone pour chacune ; le maître
+      dédoublonne par job. Le boot_id part dans le bonjour. Contrat : fixture
+      agent-l2/notify_operation_done_rattrapee émise par le vrai exécuteur.
+    - I5 : après un lancement réussi, un audit « lance », consentement_utilise ou consentement_non_consomme manqué
+      est rattrapé (anomalie sur stderr) : la réponse reste {"ok": true, "job"} ; avant le lancement, un audit
+      manqué refuse toujours.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 20:00:00 +0100
+
 secubox-pilotage-agent (0.1.2-1~trixie1) trixie; urgency=medium
 
   * Relecture finale L1 (ref #3126) :

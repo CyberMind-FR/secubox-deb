@@ -45,6 +45,12 @@ override_dh_auto_install:
 	install -D -m 0644 systemd/secubox-pilotage-agent.service $(P)/lib/systemd/system/secubox-pilotage-agent.service
 	install -D -m 0644 apparmor/usr.sbin.sbx-pilotage-agent $(P)/etc/apparmor.d/usr.sbin.sbx-pilotage-agent
 	install -D -m 0644 conf/pilotage-agent.env $(P)/usr/share/doc/secubox-pilotage-agent/pilotage-agent.env.example
+	# L2 : ctl root (seule voie d'action, par sudo à argv borné) et son arbre d'état root 0700.
+	install -D -m 0755 sbin/secubox-pilotagectl $(P)/usr/sbin/secubox-pilotagectl
+	# Tâche 4 : commande locale du détenteur (root, texte en français), simple affichage au-dessus du ctl.
+	install -D -m 0755 sbin/secubox-pilotage $(P)/usr/sbin/secubox-pilotage
+	install -D -m 0440 sudoers.d/secubox-pilotage-agent $(P)/etc/sudoers.d/secubox-pilotage-agent
+	install -D -m 0644 tmpfiles.d/secubox-pilotagectl.conf $(P)/usr/lib/tmpfiles.d/secubox-pilotagectl.conf
 
 # Activation faite par le postinst (profil AppArmor chargé avant le démarrage).
 override_dh_installsystemd:

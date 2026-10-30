@@ -1,0 +1,14 @@
+{
+ "requete": {
+  "body": {
+   "acteur": "alice",
+   "args": {
+    "duree_min": 30,
+    "id": "5e55105000000001"
+   },
+   "command": "Device.X_SECUBOX_Support.Ouvrir()"
+  },
+  "type": "OPERATE"
+ },
+ "route": "/canal/v1/requetes"
+}

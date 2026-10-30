@@ -35,38 +35,16 @@ def test_nft_dropin_installed_at_boot_loaded_path():
     assert "etc/secubox/nft.d" not in install
 
 
-def test_sudoers_is_scoped_to_assistctl():
-    s = (ROOT / "sudoers" / "secubox-assist").read_text()
-    assert "/usr/sbin/secubox-assistctl" in s
-    assert "ALL=(ALL) NOPASSWD: ALL" not in s
-
-
-def test_sudoers_principal_is_ws_daemon_user():
-    # catalog.py's service.*/config.* actions run `sudo -n
-    # /usr/sbin/secubox-assistctl ...` from wsserver.dispatch, which is
-    # invoked from assist.daemon.handler under secubox-assist.service's
-    # User= (see systemd/secubox-assist.service) — NOT the
-    # secubox-assist-api.service/webui user. The sudoers principal must
-    # match that user or every privileged action is silently denied.
-    s = (ROOT / "sudoers" / "secubox-assist").read_text()
-    assert "secubox-assist ALL=(root) NOPASSWD: /usr/sbin/secubox-assistctl" in s
-
-
 def test_units_run_as_non_root():
     svc = (ROOT / "systemd" / "secubox-assist.service").read_text()
     assert "User=secubox-assist" in svc
     assert "NoNewPrivileges=" in svc
 
 
-def test_ws_daemon_unit_allows_scoped_sudo_catalog_exec():
-    # catalog.resolve() returns `sudo -n /usr/sbin/secubox-assistctl ...` for
-    # service/config actions, run by THIS unit (secubox-assist.service, see
-    # test_sudoers_principal_is_ws_daemon_user). NoNewPrivileges=true blocks
-    # sudo's setuid transition outright, so every privileged catalog action
-    # silently fails end-to-end. This unit needs NNP=false; other hardening
-    # (ProtectSystem=strict, empty AmbientCapabilities=) stays intact.
+def test_ws_daemon_unit_a_retrouve_no_new_privileges():
+    # Plus aucun sudo (#3126 L2) : le démon n'exécute plus d'action. Le reste du durcissement est inchangé.
     svc = (ROOT / "systemd" / "secubox-assist.service").read_text()
-    assert "NoNewPrivileges=false" in svc
+    assert "NoNewPrivileges=true" in svc
     assert "ProtectSystem=strict" in svc
     assert "AmbientCapabilities=" in svc
 

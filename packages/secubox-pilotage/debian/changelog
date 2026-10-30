@@ -1,3 +1,92 @@
+secubox-pilotage (0.1.2-1~trixie1) trixie; urgency=medium
+
+  * Identité du canal (ref #3126, L2 « Agir », tâche 0, M6) : le gabarit nginx de l'écouteur de tunnel pose
+    `X-SecuBox-Pilotage-Tunnel: 1`, et lui seul (secubox-proxy.conf le vide partout ailleurs, l'agrégateur ne relaie plus
+    vers pilotage-canal). Le canal refuse (403, audité `motif: hors_tunnel`) toute requête sans ce marqueur exactement
+    une fois, avant toute recherche d'identité : un relais qui transmettrait les en-têtes du client (agrégateur, toute
+    autre entrée nginx) ne lui fait plus choisir son `X-Real-IP`. Le marqueur ne protège pas contre un processus qui joint
+    directement la socket (il le forge aussi) : la barrière reste la socket, 0660 groupe www-data. Le postinst rend le
+    nouveau gabarit (et recharge nginx) avant de redémarrer le service.
+
+  * Temps réel vers la page (ref #3126 L2 tâche 7) : GET /boxes/{x}/flux (require_jwt), réponse text/event-stream
+    (`X-Accel-Buffering: no`, `Cache-Control: no-cache`), événements `notify` (toute notification de la box),
+    `operation` (progression, fin, demande d'action) et `etat` (mains liées, consentement, support, connexion, perte) ;
+    battement `: battement` toutes les 15 s ; une ligne `data:` de JSON par événement (un saut de ligne dans `resume`,
+    `raison`, `args` ou `nom` ne peut pas couper le format). 4 flux au plus par login (le 5e reçoit 429) ; abonnement
+    libéré à la fin du flux, y compris déconnexion brutale ou écriture en échec ; files bornées à 64 événements, les
+    plus vieux abandonnés (`etat {perte: n}`), `publier` ne bloque jamais. Box cliente : vue en direct seulement pendant
+    une session de support ouverte et non échue (403 sinon, flux clos à la fin de la session, revérifié à chaque
+    battement) ; box du propriétaire : toujours. Aucun secret : seules les clés épurées du canal passent. Module
+    pilotage/diffusion.py ; le canal publie après le rangement de chaque notification.
+
+  * Temps réel, corrections de relecture (ref #3126 L2 tâche 7, R-L2-41) : le flux revérifie à chaque battement et à l'échéance de
+    exp (dans un thread) secubox_core.auth.session_toujours_admin (jeton échu, session révoquée, administrateur rétrogradé ou
+    désactivé) et se ferme sur `etat {session: "expiree"}` ; box cliente : la fin annoncée de la session arme l'échéance et tout
+    événement X_SECUBOX_Support fait relire la session avant de servir le suivant (`etat {support: "termine"}`) ; le lanceur ferme
+    la diffusion au signal d'arrêt (sous-classe d'uvicorn.Server, timeout_graceful_shutdown=5) : un flux ouvert ne bloque plus
+    l'arrêt ; `box` et `cle` ne sont plus écrasables par une notification ; plafond global de 32 flux (429). Exige secubox-core
+    >= 1.8.10 (session_toujours_admin).
+
+  * Retour au maillage après un renommage (ref #3126 L2 tâche 5, ref #3242) : pilotage/renommage.py —
+    après l'OperationDone réussi d'un Renommer (box du maillage), code `sbx-mesh-invite --code --nom
+    <nouveau>` vérifié (forme, somme, nom) et envoyé par Device.X_SECUBOX_Maillage.Rejoindre() {"code"}
+    dans la file de la box ; le code n'apparaît dans aucun journal, audit ni message d'erreur.
+
+  * Actions sur le contrôleur (ref #3126 L2 tâche 6) : POST /boxes/{x}/actions/{action} (catalogue fermé :
+    reboot, maj-paquets, service-demarrer|arreter|redemarrer, renommer, renouveler ; require_jwt), confirmation
+    forte vérifiée par l'API (nom exact de la box) pour reboot, service-arreter, renouveler et renommer sur une
+    box du propriétaire (400 sinon) ; OPERATE_RESP renvoyé tel quel (« consentement » d'une box cliente) ; login
+    de l'administrateur transmis dans « acteur » (R-L2-14) ; renommage vers un nom porté au maillage refusé (409).
+    Table SQLite `operations` (migration depuis la base de L1) : job inconnu et progression avant la réponse
+    acceptés, fins dédoublonnées par job (remise « au moins une fois »), résultat inconnu (rc -1) affiché.
+    GET /operations ; POST|GET /boxes/{x}/support (1 à 240 min, 30 par défaut), DELETE …/support/{id} ; une action
+    portant « support » exige une session ouverte et non échue, que le maître expire seul à sa fin (R-L2-31,
+    R-L2-33). Audit maître : pilotage_action, pilotage_action_resultat, pilotage_support, pilotage_support_fermeture.
+  * Le canal garde les champs des notifications de L2 (job, etape, pct, rc, resume, id, etat, decision, fin) ;
+    les fins d'opération ont leur propre fenêtre de plafond (une fin écartée serait perdue pour l'agent).
+  * Rejoindre câblé (R-L2-35) : à la première fin réussie d'un renommage d'une box du maillage, le code est obtenu
+    de l'assistant secubox-pilotage-invite (socket /run/secubox-pilotage/invite.sock, 0600 au service ; unité
+    secubox-pilotage-invite@.service au compte secubox, argv fixe sbx-mesh-invite --code --nom <nom> --json) puis
+    envoyé une fois, même si la fin précède la réponse. Le service du maître garde NoNewPrivileges, sans sudo.
+  * Relecture de la tâche 6 (R-L2-39) : une fin de job inconnu n'est plus auditée (le résultat d'une orpheline
+    l'est à sa fusion, avec son action ; journal agrégé à une ligne par box et par minute) et les orphelines ont
+    leur propre plafond (100 par box), sans évincer les demandes. Profil AppArmor enforce secubox-pilotage-invite
+    (AppArmorProfile= de l'unité, chargé par le postinst), plus d'exception RULES-CODE. Assistant : --ttl 600
+    figé, 20 codes par heure au plus (compteur dans master-link), audit pilotage_code_emis écrit par lui-même ;
+    ReadWritePaths « - » sur master-link. Support : sans_reponse après un 504, « ouvert » accepté seulement pour
+    une session demandée par le maître (demande ou en_attente). pilotage_action audite les paramètres validés.
+  * R-L2-40 : plafond horaire atteint = cause distincte « plafond », auditée par le maître
+    (pilotage_rejoindre_echec) ; exception RULES-CODE réduite au seul compte partagé secubox de l'assistant.
+  * Reports de L1 (tâche 11 de L2) :
+    - M7 : les décomptes de refus d'identité tus sont écrits à chaque tour d'inventaire et à l'éviction d'une
+      adresse (pilotage_identite_refusee {tus, vidage: tour|eviction}), jamais perdus.
+    - M12 : une box sans aucun contact depuis 30 jours (sondage, relève rangée ou notification reçue) est oubliée
+      (ligne boites, inventaire, événements, relevé ; le journal des opérations reste), audit pilotage_box_oubliee ;
+      une box en ligne n'est jamais touchée ; passage suspendu s'il emporterait plus de la moitié des box (au moins 2 :
+      saut d'horloge du maître), audit pilotage_oubli_suspendu une fois par heure au plus (R-L2-45). postrm (remove, purge ; jamais upgrade) : retire l'ACL
+      u:secubox-pilotage d'audit.log et des journaux tournés (jamais à travers un lien), décharge les profils
+      AppArmor secubox-pilotage-api et secubox-pilotage-invite.
+    - M15 : en-tête SPDX de pytest.ini ; PRAGMA temp_store=MEMORY (le profil AppArmor ne donne pas /tmp).
+    - R39 : le plafond d'inventaire par box compte des octets UTF-8 (length(CAST(valeur_json AS BLOB))).
+    - Lanceur : le code d'un SystemExit d'uvicorn est journalisé.
+    - N5/M14 : contrat maître → agent par fixtures, produites par le vrai contrôleur (Get, GetSupportedDM —
+      pilotage.files.requete_modele —, relevé, actions de L2, support, Rejoindre au code factice) et rejouées
+      contre le vrai agent ; réponses, relevé et notifications de L2 du vrai agent rejoués contre le vrai maître.
+
+  * Relecture finale de L2 (ref #3126, R-L2-47) :
+    - I3 : POST /boxes/{x}/actions/{action} sur une box cliente (réseau autre que maillage) exige `support`, une
+      session ouverte et non échue de cette box (409 sinon, rien d'audité ni d'envoyé) : la garde n'est plus
+      seulement dans la page.
+    - I4 (révision de R-L2-27) : le maître garde le boot_id du bonjour par box (colonne boites.boot_id, migration) ;
+      quand il change, tout reboot de la box encore accepté ou en cours est clos « succès (redémarrée) » et remis au
+      suivi (audit pilotage_action_resultat), une fois. À la passe horaire de l'inventaire, une opération encore en
+      cours 6 h après sa demande passe à l'état « inconnu », auditée une fois (pilotage_action_echue) ; une fin
+      réelle tardive l'emporte encore ; une orpheline passe à « inconnu » sans audit. La fin rattrapée par l'agent
+      à son démarrage et le bonjour du vrai client Go sont rejoués contre le vrai canal (contrat).
+    - Délais : le maître attend l'OPERATE_RESP 90 s (au lieu de 30), plus que les 60 s que l'agent accorde au ctl.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 20:00:00 +0100
+
 secubox-pilotage (0.1.1-1~trixie1) trixie; urgency=medium
 
   * Relecture finale L1 (ref #3126) :

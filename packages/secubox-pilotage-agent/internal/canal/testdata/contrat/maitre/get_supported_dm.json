@@ -1,0 +1,7 @@
+{
+ "requete": {
+  "body": {},
+  "type": "GET_SUPPORTED_DM"
+ },
+ "route": "/canal/v1/requetes"
+}

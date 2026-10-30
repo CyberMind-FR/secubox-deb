@@ -4,8 +4,8 @@
 // See LICENCE-CMSD-1.0.md for terms.
 
 // Commande sbx-pilotage-agent : agent de pilotage distant d'une box SecuBox
-// (L1 « Voir », lecture seule). Connexion sortante vers le maître par le tunnel
-// WireGuard ; l'agent n'ouvre aucun port d'écoute.
+// (L1 « Voir » ; L2 « Agir » par le ctl root, via sudo). Connexion sortante vers
+// le maître par le tunnel WireGuard ; l'agent n'ouvre aucun port d'écoute.
 package main
 
 import (
@@ -58,16 +58,34 @@ func main() {
 		surveiller(ctx, m, cpu, intervalleReleve(os.Getenv("PILOTAGE_RELEVE_INTERVALLE_S")), ev)
 	}()
 
+	// L2 : Operate d'action par le ctl root (sudo), opérations suivies par systemctl, fins gardées jusqu'à leur remise.
+	ex, resultats := executeur(lanceurSystemctl(cheminSudo, delaiCtl), lanceurEntree(cheminSudo, delaiCtl),
+		lanceurSystemctl(cheminSystemctl, delaiSystemctl), ev)
+	// L2, tâche 4 : bascules locales (mains liées, consentements, support) lues au ctl et notifiées au maître, toutes
+	// les 5 min et juste après chaque Operate traité (R-L2-30).
+	relire := make(chan struct{}, 1)
+	suivi.Add(1)
+	go func() {
+		defer suivi.Done()
+		veiller(ctx, lanceurSystemctl(cheminSudo, delaiCtl), pasVeille, relire, ev)
+	}()
 	cl := canal.NouveauClient(canal.Config{
 		Maitre:   maitre,
 		IPSource: ipSource,
 		Version:  version,
 		BootID:   bootID(),
-	}, m, operateur("", nil))
+		// D1 : au démarrage puis toutes les heures, par le ctl root ; échec → canal coupé.
+		Ancre:     verifieurAncre(lanceurSystemctl(cheminSudo, delaiCtl), maitre),
+		Agir:      apresOperate(ex.Operer, relire),
+		Resultats: resultats,
+		// I4 (R-L2-47) : à la première ancre vérifiée, les fins enregistrées par le ctl repartent vers le maître.
+		ApresAncre: func(ctx context.Context) { ex.Rattraper(ctx) },
+	}, m, operateurBox(nil))
 	if err := cl.Tourner(ctx, ev); err != nil && ctx.Err() == nil {
 		log.Fatalf("canal : %v", err)
 	}
 	arret()
+	ex.Attendre()
 	suivi.Wait()
 	log.Print("arrêt propre")
 }

@@ -28,10 +28,12 @@ def test_l_argv_est_exact_avec_delai():
     assert vus[0][0] == ["sudo", "-n", "/usr/sbin/autoloadctl", "tunnel-sync"] and vus[0][1].get("timeout")
 
 
-def test_le_sudoers_accorde_exactement_cet_argv_et_rien_d_autre():
-    lignes = [l for l in (ICI / "sudoers.d" / "secubox-autoload").read_text().splitlines() if l and not l.startswith("#")]
-    assert lignes == ["secubox-autoload ALL=(root) NOPASSWD: /usr/sbin/autoloadctl tunnel-sync"]
-    assert " ".join(T.SUDO_SYNC[2:]) in lignes[0]
+def test_le_sudoers_accorde_exactement_ces_argv_et_rien_d_autre():
+    """Deux argv exacts : tunnel-sync (enrôlement) et tunnel-sync --sans-reactiver (minuterie, révocations, abonnement, #3126 N4)."""
+    lignes = [x for x in (ICI / "sudoers.d" / "secubox-autoload").read_text().splitlines() if x and not x.startswith("#")]
+    assert lignes == ["secubox-autoload ALL=(root) NOPASSWD: /usr/sbin/autoloadctl tunnel-sync",
+                      "secubox-autoload ALL=(root) NOPASSWD: /usr/sbin/autoloadctl tunnel-sync --sans-reactiver"]
+    assert lignes[0].endswith(" " + " ".join(T.SUDO_SYNC[2:])) and lignes[1].endswith(" " + " ".join(T.SUDO_SYNC_PUBLIER[2:]))
 
 
 @pytest.mark.parametrize("exc", [OSError("introuvable"), subprocess.TimeoutExpired("sudo", 30)])
@@ -50,10 +52,10 @@ def test_un_refus_de_sudo_est_signale():
 def test_l_unite_garde_sudo_possible_sans_root():
     """NoNewPrivileges=no est requis (sinon sudo est neutralisé) ; les options qui l'imposent par seccomp en sont ABSENTES (précédent voicestudio, #1917)."""
     u = (ICI / "systemd" / "secubox-autoload.service").read_text()
-    reel = [l for l in u.splitlines() if l and not l.startswith("#")]
+    reel = [x for x in u.splitlines() if x and not x.startswith("#")]
     assert "NoNewPrivileges=no" in reel and "User=secubox-autoload" in reel
     for interdit in ("ProtectKernelTunables", "RestrictSUIDSGID", "LockPersonality", "RestrictNamespaces", "SystemCallFilter", "MemoryDenyWriteExecute",
                      "RestrictAddressFamilies", "ProtectKernelModules", "ProtectKernelLogs", "PrivateDevices"):
-        assert not any(l.startswith(interdit + "=") for l in reel), interdit
-    assert not any(l.startswith("User=root") for l in reel)
+        assert not any(x.startswith(interdit + "=") for x in reel), interdit
+    assert not any(x.startswith("User=root") for x in reel)
     assert not (ICI / "systemd" / "secubox-autoload-sync.service").exists()                   # aucune nouvelle unité root

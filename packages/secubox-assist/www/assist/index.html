@@ -97,6 +97,8 @@
   <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, aucune écriture</div>
   <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
 
+  <div class="info" id="avis-pilotage">L'assistance à distance (sessions de support et actions) passe désormais par le pilotage : ouvrez la session depuis la <a href="/fleet/" style="color:var(--cyan)">Flotte</a>, sur la page de la box. Les sessions d'assistance de cette page sont retirées ; le marché d'offres et de demandes reste disponible.</div>
+
   <section class="tuiles" aria-label="Indicateurs">
     <div class="tuile cy" title="Demandes d'aide ouvertes, publiées dans le journal du maillage par ce nœud ou par d'autres (GET /requests/open)."><span class="l">Demandes ouvertes</span><span class="v" id="tReq">—</span><span class="s">dans le maillage</span></div>
     <div class="tuile cy" title="Offres d'aide ouvertes, de ce nœud ou des autres (GET /offers)."><span class="l">Offres ouvertes</span><span class="v" id="tOff">—</span><span class="s">dans le maillage</span></div>
@@ -494,6 +496,12 @@ async function refresh() {
   refreshEnCours();
   const r = await lire('/sessions');
   AUTH_SES = !(r.status === 401 || r.status === 403);
+  if (r.status === 410) {   // sessions retirées (#3126) : le support passe par le pilotage, ce n'est pas un défaut d'authentification
+    $('active').textContent = 'Retirée : le support passe par le pilotage (Flotte).';
+    tuile('tSes', '—', 'tuile neutre');
+    document.querySelectorAll('#active-card [data-act]').forEach(b => { b.disabled = true; b.title = "Sessions retirées : utiliser le support du pilotage."; });
+    rendreEtat(); return;
+  }
   if (!r.ok) { $('active').textContent = 'auth requise'; tuile('tSes', '—', 'tuile neutre'); rendreEtat(); return; }
   const d = await r.json();
   rendreSession(d.active_session);

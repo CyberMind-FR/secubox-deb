@@ -52,7 +52,7 @@ Deux applications dans un processus (`/usr/sbin/secubox-autoload-api`), utilisat
 
 **Tunnel** (TCP `10.64.0.1:8470`, uniquement dans WireGuard, `IP_FREEBIND`) : `POST /progression`, `POST /prerapport`, `GET /prerapport/{empreinte}/refus`. L'identité de la box est l'**adresse source de la connexion** (WireGuard ne laisse passer d'un pair que sa propre adresse) ; aucun en-tête n'est cru, et ces routes n'existent pas dans l'application publique.
 
-Le service n'est pas root, et aucune nouvelle unité root n'existe : il applique le tunnel par **un argv exact** (`sudo -n /usr/sbin/autoloadctl tunnel-sync`, `sudoers.d/secubox-autoload`). `NoNewPrivileges=no` est requis pour cela (exception notée dans `.claude/RULES-CODE.md`) ; le profil AppArmor reste en enforce.
+Le service n'est pas root, et aucune nouvelle unité root n'existe : il applique le tunnel par **deux argv exacts** (`sudo -n /usr/sbin/autoloadctl tunnel-sync` pour l'enrôlement, qui monte l'interface ; `… tunnel-sync --sans-reactiver` pour la minuterie, les révocations et l'abonnement ; `sudoers.d/secubox-autoload`). `NoNewPrivileges=no` est requis pour cela (exception notée dans `.claude/RULES-CODE.md`) ; le profil AppArmor reste en enforce.
 
 Pare-feu : `udp/51830` en entrée et `tcp/8470` depuis `wg-autoload` seulement (`/etc/nftables.d/zz-secubox-autoload.nft`). La **redirection udp/51830 de la Freebox vers gk2** est à faire à la main. Journal d'audit : `/var/log/secubox/autoload/audit.log`.
 
@@ -68,18 +68,21 @@ Chaque émission, réclamation, refus (avec la raison), révocation et changemen
     autoloadctl revoquer (--id N | --lot L) --motif "…"
     autoloadctl abonnement --client client-042 --statut suspendu
     autoloadctl tunnel-init      # clé du hub (0600) ; affiche sa clé publique
-    autoloadctl tunnel-sync      # applique les pairs actifs (wg syncconf), puis exporte la projection publique
+    autoloadctl tunnel-sync      # applique les pairs actifs (wg syncconf), puis exporte la projection publique (même si WireGuard échoue)
+    autoloadctl tunnel-sync --sans-reactiver   # idem, sans relancer un wg-autoload dont l'unité est désactivée (minuterie, révocations, abonnement)
     autoloadctl exporter-pairs   # (re)publie pairs-publics.json (code non nul en cas d'échec)
 
 **Projection publique des pairs (#3126).** `exporter-pairs` écrit `/var/lib/secubox/autoload-public/pairs-publics.json` (root, 0644, renommage atomique par descripteur ; dossier root:root 0755 créé par `autoloadctl` s'il manque, refusé s'il est un lien, n'appartient pas à root ou est inscriptible par le groupe ou les autres ; hors du dossier 0750 du service, qui n'y a aucune prise) pour que le maître de pilotage sache à quel client appartient l'adresse d'une box :
 
     {"version": 1, "pairs": [{"adresse": "10.64.0.9", "client": "lgm", "lot": null, "serie": null, "profil": "lite", "abonnement": "actif"}]}
 
-Seuls figurent les pairs non retirés dont le jeton est réclamé ; `abonnement` est l'état calculé de `lister` (`actif`, `suspendu`, `revoque` ou `echu`) ; `lot` et `serie` valent `null` s'ils sont absents ; aucune clé, empreinte ni valeur de jeton. Base absente : `{"version":1,"pairs":[]}`. `tunnel-sync` l'appelle en dernier ; son échec est journalisé sur stderr sans faire échouer `tunnel-sync`.
+Seuls figurent les pairs non retirés dont le jeton est réclamé ; `abonnement` est l'état calculé de `lister` (`actif`, `suspendu`, `revoque` ou `echu`) ; `lot` et `serie` valent `null` s'ils sont absents ; aucune clé, empreinte ni valeur de jeton. Base absente : `{"version":1,"pairs":[]}`. `tunnel-sync` l'appelle en dernier, **même si WireGuard a échoué** (une révocation atteint toujours la projection ; le code de retour dit l'échec du tunnel) ; l'échec de l'export est journalisé sur stderr sans faire échouer `tunnel-sync`.
 
-**Fraîcheur (#3126, R37).** Toute révocation ou tout changement d'abonnement par l'API relance `tunnel-sync`, donc l'export : une box `revoque` ou `suspendu` n'est plus pilotée. Le service relance aussi `tunnel-sync` une minute après son démarrage puis toutes les heures (minuterie interne, pas d'unité de plus) : un abonnement dont l'échéance passe devient `echu` dans l'heure. Un `tunnel_applique: false` signifie que le changement est enregistré et sera publié au passage suivant. En ligne de commande (`autoloadctl abonnement`, `revoquer`), la projection suit au prochain `tunnel-sync`, au plus tard dans l'heure.
+**Un passage à la fois (#3126, L2).** `tunnel-sync` et `exporter-pairs` prennent un verrou (`flock` sur `/run/secubox-autoload/autoload-sync.lock` ; dossier à root seul, 0700, posé par `tmpfiles.d/secubox-autoload.conf` et créé au premier usage, jamais dans `/run/secubox` (1777) où n'importe quel compte pouvait bloquer toute révocation ; fichier ouvert sans suivre de lien, refusé s'il n'est pas un fichier ordinaire de root) : un passage horaire qui a lu les pairs avant une révocation ne repose plus le pair révoqué après la synchronisation de la révocation. Toute écriture du registre (enrôlement, révocation, abonnement) par l'API est suivie d'un `tunnel-sync` : le dernier passage voit toujours le dernier état.
 
-Données : `/var/lib/secubox/autoload/jetons.db` (0600, dossier 0750). Variables : `SECUBOX_AUTOLOAD_DB`, `SECUBOX_AUTOLOAD_AUDIT` (tests).
+**Fraîcheur (#3126, R37).** Toute révocation ou tout changement d'abonnement par l'API relance `tunnel-sync --sans-reactiver`, donc l'export : une box `revoque` ou `suspendu` n'est plus pilotée. Le service relance aussi `tunnel-sync --sans-reactiver` une minute après son démarrage puis toutes les heures (minuterie interne, pas d'unité de plus) : un abonnement dont l'échéance passe devient `echu` dans l'heure. Ces passages (minuterie, révocations, abonnement) ne relancent jamais `wg-quick@wg-autoload` si l'exploitant a **désactivé** l'unité (`systemctl disable --now`) : il pose la configuration et publie la projection ; une unité activée mais tombée est relancée. Un `tunnel_applique: false` signifie que le changement est enregistré et sera publié au passage suivant. En ligne de commande (`autoloadctl abonnement`, `revoquer`), la projection suit au prochain `tunnel-sync`, au plus tard dans l'heure.
+
+Données : `/var/lib/secubox/autoload/jetons.db` (0600, dossier 0750). Variables : `SECUBOX_AUTOLOAD_DB`, `SECUBOX_AUTOLOAD_AUDIT`, `SECUBOX_AUTOLOAD_VERROU` (tests ; sudo les efface).
 
 ## Banc de bout en bout sans matériel (#2193)
 

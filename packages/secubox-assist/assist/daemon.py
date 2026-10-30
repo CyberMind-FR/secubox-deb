@@ -59,13 +59,6 @@ def _read_entries():
     return list(Journal(_journal_path()).iter_entries())
 
 
-def _dispatch_blocking(session, action, arg, entries, self_did, now_ts):
-    """Run wsserver.dispatch (sync subprocess.run under an `async def`
-    signature we must not change) to completion on its own event loop, so
-    asyncio.to_thread can offload it to a worker thread."""
-    return asyncio.run(wsserver.dispatch(session, action, arg, entries, self_did, now_ts))
-
-
 async def handler(ws):
     entries = await asyncio.to_thread(_read_entries)
     tok = await ws.recv()
@@ -85,12 +78,10 @@ async def handler(ws):
         active = wsserver._assist.active_session(fresh, SELF_DID, _now())
         if active is None or active.get("session_id") != session["session_id"]:
             await ws.send(json.dumps({"ok": False, "error": "session-ended"})); break
-        # wsserver.dispatch does sync subprocess.run (up to 60s) and
-        # diag.collect chains many sequential sync subprocess calls — off the
-        # single asyncio loop via to_thread so one session can't stall every
-        # other connection (the podcaster/peertube loop-block bug class).
-        out = await asyncio.to_thread(_dispatch_blocking, session, req.get("action"),
-                                      req.get("arg"), fresh, SELF_DID, _now())
+        # dispatch ne lance plus rien (#3126, R-L2-4) : il audite le refus et renvoie vers
+        # le support du pilotage ; plus de sous-processus, donc plus de to_thread.
+        out = await wsserver.dispatch(session, req.get("action"), req.get("arg"),
+                                      fresh, SELF_DID, _now())
         await ws.send(json.dumps(out))
 
 

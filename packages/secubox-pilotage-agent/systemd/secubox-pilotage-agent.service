@@ -3,7 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 [Unit]
-Description=SecuBox — agent de pilotage distant (L1, lecture seule)
+Description=SecuBox — agent de pilotage distant (TR-369/USP)
 Documentation=https://secubox.in
 After=network-online.target wg-quick@wg-mesh.service wg-quick@wg-autoload.service
 Wants=network-online.target
@@ -20,27 +20,33 @@ ExecStart=/usr/sbin/sbx-pilotage-agent
 Restart=on-failure
 RestartSec=10
 MemoryMax=32M
+# M13 : borne souple du runtime Go, sous MemoryMax : le ramasse-miettes travaille avant le tueur du cgroup.
+Environment=GOMEMLIMIT=24MiB
 
-# Durcissement : connexion sortante vers le maître seulement, aucune capacité.
-NoNewPrivileges=yes
-CapabilityBoundingSet=
+# Durcissement : connexion sortante vers le maître seulement ; l'agent lui-même n'a aucune capacité.
+# NoNewPrivileges=no : seulement pour sudo. La seule action privilégiée de l'agent (L2, #3126) est
+# `sudo -n /usr/sbin/secubox-pilotagectl <verbe> …` (sudoers.d/secubox-pilotage-agent ; argv validé en entier par le ctl).
+# Avec NoNewPrivileges=yes, sudo serait neutralisé. ATTENTION — NE PAS AJOUTER ProtectKernelTunables, ProtectKernelModules,
+# ProtectKernelLogs, RestrictSUIDSGID, LockPersonality, RestrictNamespaces, RestrictAddressFamilies, RestrictRealtime,
+# PrivateDevices, SystemCallFilter, SystemCallArchitectures ni MemoryDenyWriteExecute : sous User= non root, chacun impose
+# NoNewPrivileges par seccomp (précédents secubox-autoload, secubox-netmodes). Les familles réseau de l'agent restent
+# bornées par son profil AppArmor enforce (inet stream qualifié, unix stream, netlink raw ; ni inet6 ni écoute).
+NoNewPrivileges=no
 AmbientCapabilities=
+# Borne de ce que sudo et le ctl root peuvent obtenir DANS cette unité : sudo (setuid, setgroups, audit noyau) ;
+# le ctl écrit /var/log/secubox/audit.log (secubox, 0640 ; le crée au compte secubox sur une box neuve : CAP_CHOWN)
+# et lit /etc/secubox/modules.d ; `ancre-verifier` lit `wg show <interface> allowed-ips`, que le noyau réserve à
+# CAP_NET_ADMIN même pour root (lecture seule : le ctl n'a aucun verbe qui modifie une interface).
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_AUDIT_WRITE CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_CHOWN CAP_NET_ADMIN
 ProtectSystem=strict
 ReadOnlyPaths=/
+# Le ctl root lancé par sudo hérite de cet espace de montage : il n'y écrit que son état (arbre root 0700, tmpfiles.d
+# du paquet ; « - » : absent, ignoré au lieu d'empêcher le démarrage) et le journal d'audit. Les opérations elles-mêmes
+# passent par systemd-run (PID 1), hors de cette unité.
+ReadWritePaths=/var/log/secubox -/var/lib/secubox-pilotagectl
 ProtectHome=yes
 PrivateTmp=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
 ProtectControlGroups=yes
-RestrictNamespaces=yes
-RestrictRealtime=yes
-LockPersonality=yes
-RestrictSUIDSGID=yes
-MemoryDenyWriteExecute=yes
-SystemCallArchitectures=native
-# AF_NETLINK : le runtime Go lit les adresses des interfaces par netlink (lecture seule, sans capacité).
-RestrictAddressFamilies=AF_INET AF_UNIX AF_NETLINK
 IPAddressDeny=any
 IPAddressAllow=10.10.0.1 10.64.0.1 localhost
 

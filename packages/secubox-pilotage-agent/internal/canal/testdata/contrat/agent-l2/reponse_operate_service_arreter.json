@@ -1,0 +1,23 @@
+{
+ "route": "/canal/v1/reponses",
+ "requete": {
+  "body": {
+   "acteur": "alice",
+   "args": {
+    "action": "arreter",
+    "unite": "secubox-hub.service"
+   },
+   "command": "Device.X_SECUBOX_Services.Agir()"
+  },
+  "type": "OPERATE"
+ },
+ "envoi": {
+  "msg_id": "00000000000000d9",
+  "type": "OPERATE_RESP",
+  "body": {
+   "etat": "accepte",
+   "job": "00000000c0de86b8",
+   "raison": ""
+  }
+ }
+}

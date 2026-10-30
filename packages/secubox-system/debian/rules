@@ -7,6 +7,8 @@ override_dh_auto_install:
 	install -m 0644 systemd/secubox-systeme-pare-feu-verif.service systemd/secubox-systeme-heure.service systemd/secubox-systeme-caches.service systemd/secubox-systeme-redemarrer.service systemd/secubox-systeme-eteindre.service debian/secubox-system/usr/lib/systemd/system/
 	# #3002 — mises a jour apt par une unite root declenchee par un dossier de demandes (.path)
 	install -m 0644 systemd/secubox-maj.path systemd/secubox-maj.service debian/secubox-system/usr/lib/systemd/system/
+	# #3242 — renommage par une unite root a instance (secubox-renommer, secubox-core), jamais demarree a l'installation
+	install -m 0644 systemd/secubox-systeme-renommer@.service debian/secubox-system/usr/lib/systemd/system/
 	install -D -m 0755 sbin/secubox-majctl debian/secubox-system/usr/sbin/secubox-majctl
 	install -D -m 0644 tmpfiles.d/secubox-system.conf debian/secubox-system/usr/lib/tmpfiles.d/secubox-system.conf
 	install -D -m 0644 polkit/50-secubox-system.rules debian/secubox-system/usr/share/polkit-1/rules.d/50-secubox-system.rules

@@ -10,6 +10,10 @@ case "$1" in
     if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1; then
       apparmor_parser -R /etc/apparmor.d/usr.sbin.sbx-pilotage-agent 2>/dev/null || true
     fi
+    # Purge : l'état du ctl (consentements, mains liées) part avec le paquet.
+    if [ "$1" = purge ]; then
+      rm -rf /var/lib/secubox-pilotagectl
+    fi
     ;;
 esac
 #DEBHELPER#

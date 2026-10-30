@@ -155,5 +155,6 @@ async def test_recheck_allows_the_same_session_to_keep_running(monkeypatch, tmp_
     await daemon.handler(ws)
 
     assert ws.sent[0]["ok"] is True and ws.sent[0]["session_id"] == "s1"
-    assert ws.sent[-1]["ok"] is True
-    assert "output" in ws.sent[-1]
+    # La session reste servie, mais plus aucune action n'est exécutée (#3126, R-L2-4).
+    assert ws.sent[-1]["ok"] is False and ws.sent[-1]["gone"] is True
+    assert ws.sent[-1]["remplace_par"] == "/api/v1/pilotage/boxes/<nom>/support"

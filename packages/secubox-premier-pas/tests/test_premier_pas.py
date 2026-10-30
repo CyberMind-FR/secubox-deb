@@ -29,10 +29,8 @@ def isole(tmp_path, monkeypatch):
     monkeypatch.setattr(M, "ETAT", tmp_path / "etat.json")
     monkeypatch.setattr(M, "JOURNAL", tmp_path / "pp.log")
     monkeypatch.setattr(M, "SECUBOX_CONF", tmp_path / "secubox.conf")
-    monkeypatch.setattr(M, "HOSTS", tmp_path / "hosts")
     monkeypatch.setattr(M, "MAJAUTO_DROPIN", tmp_path / "heure.conf")
     monkeypatch.setattr(M, "_pose_empreinte_admin", lambda e: None)
-    monkeypatch.setattr(M, "_avahi_nouveau_nom", lambda: None)
     return tmp_path
 
 
@@ -83,7 +81,7 @@ def test_profil_vide_reprend_au_nom():
 
 def test_plan_pilote_les_outils_existants(complet):
     argvs = [a.argv for a in M.plan(complet) if a.argv]
-    assert ["hostnamectl", "set-hostname", "gk3"] in argvs
+    assert ["/usr/sbin/secubox-renommer", "gk3"] in argvs
     assert ["secubox-net-detect", "apply", "router"] in argvs
     assert ["secubox-profilectl", "apply", "--profile", "full", "--yes"] in argvs
     assert ["sbx-mesh-join", "192.168.1.200", "e70e1f79f9b9cd4179950117ce5f78c2"] in argvs
@@ -173,8 +171,6 @@ def test_maillage_reessaie_le_temps_que_le_reseau_revienne(complet, tmp_path, mo
     monkeypatch.setattr(M.time, "sleep", lambda s: None)
     monkeypatch.setattr(M, "_pose_empreinte_admin", lambda e: None)
     monkeypatch.setattr(M, "_ecrit_conf", lambda d: None)
-    monkeypatch.setattr(M, "_renomme", lambda n: None)
-    monkeypatch.setattr(M, "_avahi_nouveau_nom", lambda: None)
     monkeypatch.setattr(M, "_majauto", lambda a, h: None)
     p = complet
     p["maillage"] = {"mode": "rejoindre", "rejoindre": "192.168.1.200", "jeton": "ab" * 32}
@@ -189,21 +185,16 @@ def test_maillage_reessaie_le_temps_que_le_reseau_revienne(complet, tmp_path, mo
     assert appels.count("sbx-mesh-join") == 3
 
 
-def test_renommer_met_a_jour_hosts_et_secubox_conf(tmp_path, monkeypatch):
-    # hostnamectl seul laissait « secubox-live » dans /etc/hosts : gk3 ne se résolvait plus (#1544).
-    hosts, conf = tmp_path / "hosts", tmp_path / "secubox.conf"
-    hosts.write_text("127.0.0.1  localhost secubox-live secubox secubox.local\n# secubox-live commentaire\n::1 localhost\n")
-    conf.write_text('[global]\nhostname  = "secubox-live"\n\n[api]\nsocket_dir = "/run/secubox"\n')
-    monkeypatch.setattr(M, "HOSTS", hosts)
-    monkeypatch.setattr(M, "SECUBOX_CONF", conf)
-    M._renomme("gk3", ancien="secubox-live")
-    h = hosts.read_text()
-    assert "127.0.0.1  localhost gk3 secubox secubox.local" in h
-    assert "# secubox-live commentaire" in h           # les commentaires ne bougent pas
-    assert "127.0.1.1\tgk3" in h
-    assert 'hostname  = "gk3"' in conf.read_text()
-    M._renomme("gk3", ancien="gk3")                     # idempotent
-    assert hosts.read_text().count("127.0.1.1") == 1
+def test_premier_pas_utilise_secubox_renommer(complet):
+    """#3126 D3, #3242 : un seul renommage, celui de secubox-core (hosts 127.0.1.1, secubox.conf, hostnamectl, Avahi,
+    audit, retour arrière) ; premier-pas ne garde ni sa copie (_renomme) ni hostnamectl ni la relance d'Avahi."""
+    nom = [a for a in M.plan(complet) if a.etape == "nom"]
+    assert len(nom) == 1 and nom[0].argv == ["/usr/sbin/secubox-renommer", "gk3"] and nom[0].fn is None
+    assert not nom[0].souple
+    assert not any(a.argv and a.argv[0] == "hostnamectl" for a in M.plan(complet))
+    assert not hasattr(M, "_renomme") and not hasattr(M, "_avahi_nouveau_nom") and not hasattr(M, "HOSTS")
+    controle = (Path(__file__).resolve().parents[1] / "debian" / "control").read_text()
+    assert "secubox-core (>= 1.8.10~)" in controle
 
 
 # ── #2306 : l'étape réseau sans `secubox-net-detect` ─────────────────────────────────────────────
@@ -253,10 +244,20 @@ def test_ntp_absent_est_un_avertissement_et_l_assistant_continue(complet, isole)
 
 
 def test_un_echec_non_souple_arrete_toujours(complet, isole):
-    r = M.appliquer(complet, lambda a: (1, "boom") if a[0] == "hostnamectl" else (0, ""), CONNUS, isole / "fait")
+    r = M.appliquer(complet, lambda a: (1, "boom") if a[0] == "/usr/sbin/secubox-renommer" else (0, ""), CONNUS, isole / "fait")
     assert not r.ok and r.echec == "nom" and not (isole / "fait").exists() and r.avertissements == []
 
 
 def test_seule_l_etape_ntp_est_souple(complet):
     souples = [a.quoi for a in M.plan(complet) if a.souple]
     assert souples == ["synchronisation NTP"]                                    # tout le reste reste bloquant : on ne masque pas un vrai défaut
+
+
+@pytest.mark.parametrize("nom", ["admin", "www", "secubox", "localhost", "SECUBOX"])
+def test_nom_reserve_refuse_des_le_profil(complet, nom):
+    """M10 (R-L2-36) : secubox-renommer refuse ces noms (code 3) ; le profil les refuse avant toute application, à
+    l'étape « nom », au lieu d'un échec au milieu de l'assistant."""
+    complet["box"]["nom"] = nom
+    ex = P.examine(complet, CONNUS)
+    assert "nom" in ex.erreurs and "réservé" in ex.erreurs["nom"] and not ex.complet
+    assert P.NOMS_RESERVES == frozenset({"admin", "www", "secubox", "localhost"})

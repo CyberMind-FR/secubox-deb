@@ -1,0 +1,21 @@
+{
+ "route": "/canal/v1/reponses",
+ "requete": {
+  "body": {
+   "args": {
+    "code": "sbxmesh1.eyJhIjoiMTAuMTAuMC4xIiwibiI6ImdrOSIsInQiOiJmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhIn0.2db6"
+   },
+   "command": "Device.X_SECUBOX_Maillage.Rejoindre()"
+  },
+  "type": "OPERATE"
+ },
+ "envoi": {
+  "msg_id": "00000000000000d5",
+  "type": "OPERATE_RESP",
+  "body": {
+   "etat": "accepte",
+   "job": "00000000c0de73d7",
+   "raison": ""
+  }
+ }
+}

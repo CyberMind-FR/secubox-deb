@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # SecuBox-Deb :: secubox-autoload (#2190) — enrôlement et panel du provisionnement Auto-Load.
-# Un utilisateur À LUI : il ne lit que ses propres jetons ; le tunnel est appliqué par sudo à argv exact (autoloadctl tunnel-sync), aucune unité root.
+# Un utilisateur À LUI : il ne lit que ses propres jetons ; le tunnel est appliqué par sudo à argv exacts (autoloadctl tunnel-sync [--sans-reactiver]), aucune unité root.
 [Unit]
 Description=SecuBox Auto-Load — enrôlement et panel (#2190)
 After=network.target secubox-core.service
@@ -20,7 +20,7 @@ Restart=on-failure
 RestartSec=3
 UMask=0027
 LimitCORE=0
-# NoNewPrivileges=no est requis ICI : le sudoers du module accorde à secubox-autoload UN argv exact (autoloadctl tunnel-sync, qui applique les pairs
+# NoNewPrivileges=no est requis ICI : le sudoers du module accorde à secubox-autoload DEUX argv exacts (autoloadctl tunnel-sync [--sans-reactiver], qui applique les pairs
 # WireGuard en root) ; avec NoNewPrivileges=yes sudo serait neutralisé. ATTENTION — NE PAS AJOUTER ProtectKernelTunables, ProtectKernelModules,
 # ProtectKernelLogs, RestrictSUIDSGID, LockPersonality, RestrictNamespaces, RestrictAddressFamilies, PrivateDevices, SystemCallFilter ni
 # MemoryDenyWriteExecute : chacun impose implicitement NoNewPrivileges=yes via seccomp et ferme la porte du helper (précédent voicestudio, #1917).
@@ -31,7 +31,10 @@ ProtectHome=yes
 PrivateTmp=yes
 ProtectControlGroups=yes
 CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_NET_ADMIN CAP_AUDIT_WRITE CAP_DAC_READ_SEARCH
-ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload /run/secubox /etc/wireguard
+# L'assistant root (sudo) hérite de CET espace de montage : il écrit la configuration du tunnel (/etc/wireguard), son verrou (/run/secubox-autoload,
+# root 0700, tmpfiles.d du paquet) et la projection publique des pairs (#3126). Ces deux dossiers sont créés par le postinst avant le démarrage ;
+# « - » : absent, un dossier est ignoré au lieu d'empêcher le service de démarrer (l'écriture échoue alors jusqu'au prochain démarrage).
+ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload /run/secubox /etc/wireguard -/run/secubox-autoload -/var/lib/secubox/autoload-public
 
 [Install]
 WantedBy=multi-user.target

@@ -30,8 +30,14 @@ def monter(**kw):
     return app, files, stock, audits
 
 
-def client(app, ip="10.10.0.10", **kw):
+# Marqueur posé par le SEUL écouteur nginx du tunnel (pilotage-canal.conf.tpl) : une vraie box passe par lui, donc le porte (L2 T0, M6).
+MARQUEUR = "X-SecuBox-Pilotage-Tunnel"
+
+
+def client(app, ip="10.10.0.10", tunnel=True, **kw):
     h = {"X-Real-IP": ip} if ip else {}
+    if tunnel:
+        h[MARQUEUR] = "1"
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://m", headers=h, **kw)
 
 
@@ -70,6 +76,35 @@ def test_canal_identite_seulement_par_x_real_ip():
         assert all(ev == "pilotage_identite_refusee" for ev, _ in audits)
         assert all(len(ch.get("adresse", "")) <= 64 for _, ch in audits)
         assert set(audits[0][1]) == {"adresse"}
+    run(cas())
+
+
+def test_canal_refuse_sans_marqueur_tunnel():
+    """M6 (L2 T0) : une requête relayée sans passer par l'écouteur nginx du tunnel (relais générique de l'agrégateur, autre entrée nginx)
+    peut porter un X-Real-IP valide, jamais le marqueur que pose le seul gabarit du canal : 403, auditée, et l'identité n'est
+    même pas cherchée."""
+    async def cas():
+        cherchees = []
+
+        def identifier(adresse):
+            cherchees.append(adresse)
+            return CONNUES.get(adresse)
+        app, _, stock, audits = monter(identifier=identifier)
+        async with client(app, "10.10.0.10", tunnel=False) as c:
+            assert (await c.get("/canal/v1/requetes?attente=0")).status_code == 403
+            assert (await c.post("/canal/v1/bonjour", json={"agent_version": "0.1.0", "boot_id": "b", "modele": []})).status_code == 403
+            for mauvais in ("0", "", "1, 1", "true", " 1"):
+                assert (await c.get("/canal/v1/requetes?attente=0", headers={MARQUEUR: mauvais})).status_code == 403, mauvais
+            # en double, même à « 1 » : nginx n'en pose qu'un
+            h = [(MARQUEUR, "1"), (MARQUEUR, "1")]
+            assert (await c.get("/canal/v1/requetes?attente=0", headers=h)).status_code == 403
+        assert cherchees == [] and stock.vus == []
+        assert len(audits) == 8
+        assert all(ev == "pilotage_identite_refusee" and ch == {"adresse": "10.10.0.10", "motif": "hors_tunnel"} for ev, ch in audits)
+        # la même box, par le tunnel (marqueur posé par nginx), passe
+        async with client(app, "10.10.0.10") as c:
+            assert (await c.get("/canal/v1/requetes?attente=0")).status_code == 204
+        assert cherchees == ["10.10.0.10"]
     run(cas())
 
 
@@ -161,7 +196,7 @@ def test_canal_rejoue_l_echange_du_client_go():
         fut_op = files.deposer(GK5.cle, {"type": "OPERATE", "body": {"command": "Device.X_SECUBOX_Releve.Mesurer()", "args": {"duree_s": 60}}})
         async with client(app) as c:
             r = await c.post("/canal/v1/bonjour", json={
-                "agent_version": "0.1.0", "boot_id": "b00t-1234", "modele": ["Device.DeviceInfo.", "Device.X_SECUBOX_Boot."]})
+                "agent_version": "0.1.0", "boot_id": "0b00b000-1234-4000-8000-000000000001", "modele": ["Device.DeviceInfo.", "Device.X_SECUBOX_Boot."]})
             assert r.status_code == 200
             r = await c.get("/canal/v1/requetes?attente=25")
             assert r.status_code == 200
@@ -190,7 +225,7 @@ def test_canal_rejoue_l_echange_du_client_go():
         assert (await fut_dm)["type"] == "GET_SUPPORTED_DM_RESP"
         assert (await fut_op)["body"]["output"] == {"duree_s": 60}
         assert (await fut_err)["type"] == "ERROR"
-        assert stock.vus[0][1]["agent_version"] == "0.1.0" and stock.vus[0][1]["boot_id"] == "b00t-1234"
+        assert stock.vus[0][1]["agent_version"] == "0.1.0" and stock.vus[0][1]["boot_id"] == "0b00b000-1234-4000-8000-000000000001"
         assert stock.vus[0][1]["modele"] == ["Device.DeviceInfo.", "Device.X_SECUBOX_Boot."]
         assert len(stock.notifications) == 16 and stock.notifications[0][0] == GK5
         assert stock.notifications[0][1] == {"type": "X_SECUBOX_Boot", "ts": 1730000000}
@@ -272,7 +307,7 @@ def test_canal_bonjour_filtre_les_caracteres_de_controle():
         async with client(app) as c:
             await c.post("/canal/v1/bonjour", json={"agent_version": "1.0\x1b[31m\n", "boot_id": "a\x00b", "modele": ["Device.\x07X."]})
         infos = stock.vus[0][1]
-        assert infos["agent_version"] == "1.0[31m" and infos["boot_id"] == "ab" and infos["modele"] == ["Device.X."]
+        assert infos["agent_version"] == "1.0[31m" and infos["boot_id"] == "" and infos["modele"] == ["Device.X."]
     run(cas())
 
 
@@ -361,7 +396,7 @@ def test_canal_deconnexion_pendant_la_lecture_sans_trace():
             envoyes.append(m)
         scope = {"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "POST", "path": "/canal/v1/notifs",
                  "raw_path": b"/canal/v1/notifs", "query_string": b"", "root_path": "", "scheme": "http",
-                 "headers": [(b"x-real-ip", b"10.10.0.10")], "client": None, "server": None}
+                 "headers": [(b"x-real-ip", b"10.10.0.10"), (b"x-secubox-pilotage-tunnel", b"1")], "client": None, "server": None}
         await app(scope, receive, send)  # ne lève rien
     run(cas())
 
@@ -417,4 +452,40 @@ def test_canal_bonjour_plafonne_par_box():
             assert (await gk5.post("/canal/v1/bonjour", json={**corps, "agent_version": "0.1.3"})).status_code == 200
         assert [(b.cle, i["agent_version"]) for b, i in stock.vus] == [("maillage:gk5", "0.1.2"), ("autoload:lgm-10.64.0.9", "0.1.2"),
                                                                        ("maillage:gk5", "0.1.3")]
+    run(cas())
+
+
+def test_canal_refus_tus_ecrits_au_vidage_m7():
+    """M7 : les refus tus (fenêtre d'audit par adresse) sont écrits au vidage (chaque tour d'inventaire), même sans refus suivant."""
+    async def cas():
+        app, _, _, audits = monter(audit_intervalle_s=60)
+        async with client(app, "10.10.0.200") as c:
+            for _ in range(5):
+                assert (await c.get("/canal/v1/requetes?attente=0")).status_code == 403
+        assert audits == [("pilotage_identite_refusee", {"adresse": "10.10.0.200"})]
+        await app.state.vider_refus()
+        assert audits[1] == ("pilotage_identite_refusee", {"adresse": "10.10.0.200", "tus": 4, "vidage": "tour"})
+        await app.state.vider_refus()
+        assert len(audits) == 2                     # rien de nouveau : aucune ligne
+        async with client(app, "10.10.0.200", tunnel=False) as c:
+            await c.get("/canal/v1/requetes?attente=0")
+            await c.get("/canal/v1/requetes?attente=0")
+        await app.state.vider_refus()
+        assert audits[2:] == [("pilotage_identite_refusee", {"adresse": "10.10.0.200", "motif": "hors_tunnel"}),
+                              ("pilotage_identite_refusee", {"adresse": "10.10.0.200", "motif": "hors_tunnel", "tus": 1, "vidage": "tour"})]
+    run(cas())
+
+
+def test_canal_refus_tus_ecrits_a_l_eviction_m7(monkeypatch):
+    """M7 : une adresse évincée de la table bornée emporte son décompte dans une ligne d'audit, jamais en silence."""
+    async def cas():
+        from api import canal
+        monkeypatch.setattr(canal, "AUDIT_ADRESSES_MAX", 2)
+        app, _, _, audits = monter(audit_intervalle_s=60)
+        for ip, n in (("10.77.0.1", 3), ("10.77.0.2", 1), ("10.77.0.3", 1)):
+            async with client(app, ip) as c:
+                for _ in range(n):
+                    await c.get("/canal/v1/requetes?attente=0")
+        assert ("pilotage_identite_refusee", {"adresse": "10.77.0.1", "tus": 2, "vidage": "eviction"}) in audits
+        assert [ch["adresse"] for _, ch in audits if "tus" not in ch] == ["10.77.0.1", "10.77.0.2", "10.77.0.3"]
     run(cas())

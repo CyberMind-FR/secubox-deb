@@ -100,3 +100,17 @@ func TestLanceurSortieBornee(t *testing.T) {
 		t.Fatalf("len=%d err=%v", len(b), err)
 	}
 }
+
+// TestLanceurEntree (R-L2-2) : l'entrée standard est écrite au programme (le code de maillage-rejoindre), l'argv
+// reste celui reçu ; sans entrée, le programme lit une entrée vide (jamais celle de l'agent).
+func TestLanceurEntree(t *testing.T) {
+	p := faux(t, "printf 'args=%s;' \"$*\"; cat\n")
+	b, err := lanceurEntree(p, 2*time.Second)(context.Background(), []byte("sbxmesh1.x.abcd\n"), "-n", "verbe")
+	if err != nil || string(b) != "args=-n verbe;sbxmesh1.x.abcd\n" {
+		t.Fatalf("%q %v", b, err)
+	}
+	b, err = lanceurSystemctl(p, 2*time.Second)(context.Background(), "show")
+	if err != nil || string(b) != "args=show;" {
+		t.Fatalf("%q %v", b, err)
+	}
+}

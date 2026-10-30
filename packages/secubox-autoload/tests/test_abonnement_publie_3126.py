@@ -143,5 +143,5 @@ def test_minuterie_survit_a_un_echec_et_reessaie(capsys):
 
 def test_le_lanceur_sert_la_minuterie_sans_nouvelle_unite():
     lanceur = (ICI / "sbin" / "secubox-autoload-api").read_text()
-    assert "republier_periodiquement" in lanceur and "appliquer_par_sudo" in lanceur
+    assert "republier_periodiquement" in lanceur and "publier_par_sudo" in lanceur     # N4 : la minuterie passe par tunnel-sync --sans-reactiver
     assert not list((ICI / "systemd").glob("*.timer")) and not (ICI / "systemd" / "secubox-autoload-sync.service").exists()

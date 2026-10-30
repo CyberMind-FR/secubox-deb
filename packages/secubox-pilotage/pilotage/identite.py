@@ -19,10 +19,11 @@ import ipaddress
 import json
 import logging
 import os
+import socket
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
 
 RESEAU_MAILLAGE = ipaddress.ip_network("10.10.0.0/24")
 RESEAU_AUTOLOAD = ipaddress.ip_network("10.64.0.0/16")
@@ -194,3 +195,30 @@ def box_par_adresse(adresse: str, peers: Path = PEERS_DEFAUT, pairs_autoload: Pa
     if ip in RESEAU_AUTOLOAD:
         return _table(pairs_autoload, _table_autoload).get(str(ip))
     return None
+
+
+def noms_du_maillage(peers: Path = PEERS_DEFAUT, hote: Callable[[], str] = socket.gethostname) -> set:
+    """Noms portés au maillage, pour refuser un renommage vers un nom pris (L2 tâche 6) : pairs ENRÔLÉS de peers.json (même ceux que
+    l'identité écarte pour ambiguïté : leur nom reste pris ; jamais une découverte mDNS non authentifiée, qui bloquerait un nom à
+    distance) et le nom du maître. Fichier inutilisable → le nom du maître seul. Bloquante : hors de la boucle (to_thread)."""
+    noms = set()
+    try:
+        fd = os.open(Path(peers), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        fd = None
+    if fd is not None:
+        try:
+            st = os.fstat(fd)
+            doc = _json_borne(fd, st.st_size) if stat.S_ISREG(st.st_mode) else None
+        except OSError:
+            doc = None
+        finally:
+            os.close(fd)
+        try:
+            noms = {b.nom for _, b in _table_maillage(doc)} if doc is not None else set()
+        except (TypeError, ValueError, AttributeError):
+            noms = set()
+    h = (hote() or "").split(".")[0].strip().lower()
+    if h:
+        noms.add(h)
+    return noms

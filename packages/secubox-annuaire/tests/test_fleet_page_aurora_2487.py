@@ -111,7 +111,12 @@ def test_aucune_boite_native_et_pas_d_innerhtml():
     code = re.sub(r"//[^\n]*", "", re.sub(r"<!--.*?-->", "", src, flags=re.S)).replace("onerror=alert(1)", "")
     for f in ("confirm", "alert", "prompt"):
         assert not re.search(r"(?<![A-Za-z.])" + f + r"\(", code), f
-    assert "innerHTML" not in code and "POST" not in src
+    assert "innerHTML" not in code
+    # lecture seule hors page de la box (#3126 L2 tâche 8) : seul le bloc pilotage-box écrit, et seulement vers /api/v1/pilotage
+    hors = re.sub(r"// ===== pilotage-box =====.*?// ===== fin pilotage-box =====", "", src, flags=re.S)
+    assert not re.search(r"POST|DELETE|PUT|PATCH", hors)
+    bloc = re.search(r"// ===== pilotage-box =====(.*?)// ===== fin pilotage-box =====", src, re.S)
+    assert bloc and "/api/v1/pilotage/" in bloc.group(1) and "/api/v1/annuaire" not in bloc.group(1)
 
 
 def test_get_fleet_signale_l_echec_au_lieu_de_rendre_une_flotte_vide(monkeypatch):
