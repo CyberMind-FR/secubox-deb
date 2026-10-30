@@ -378,7 +378,7 @@ par son empreinte (`etat.EmpreinteStyle`, recopiée dans le gabarit nginx `etat`
 atomique (fichier de travail `.etat.html.tmp` ouvert sans suivre de lien, puis renommé) ; seules écritures permises
 par AppArmor. La page est servie sur le LAN par le gabarit nginx `etat` du profil léger `distante` (secubox-profiles).
 
-`Device.X_SECUBOX_Pilotage.Interface` vaut `distante` quand le profil actif est `distante` (le maître sert alors
+`Device.X_SECUBOX_Pilotage.Interface` vaut `distante` quand le marqueur root `/var/lib/secubox-profiles/allegement/actif` (allègement du profil `distante` réussi, R-L5-34) est présent et de confiance (le maître sert alors
 `admin.<box>.secubox.in`, R-L5-27), `locale` sinon.
 
 ## Durcissement

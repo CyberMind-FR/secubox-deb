@@ -170,17 +170,25 @@ func TestPilotageMainsLieesNonFiablesIgnorees(t *testing.T) {
 	}
 }
 
-// L5 tâche 7 : le profil léger « distante » déclare son interface au maître (Device.X_SECUBOX_Pilotage.Interface),
-// qui sert alors admin.<box> lui-même ; tout autre profil (ou aucun) vaut « locale ».
-func TestPilotageInterfaceSelonLeProfil(t *testing.T) {
-	for profil, attendu := range map[string]string{"distante\n": "distante", "minimal": "locale", "": "locale"} {
-		p := pilotageAvecProfil(t, func(c string) {
-			if profil != "" {
-				os.WriteFile(c, []byte(profil), 0o644)
-			}
-		})
-		if p["Device.X_SECUBOX_Pilotage.Interface"] != attendu {
-			t.Errorf("profil %q : Interface = %v, attendu %s", profil, p["Device.X_SECUBOX_Pilotage.Interface"], attendu)
-		}
+// L5 tâche 7, R-L5-34 : « distante » seulement quand l'allègement a RÉUSSI (marqueur root posé par secubox-profilectl
+// après nginx -t, ôté au retour) ; le nom du profil seul ne suffit pas (un allègement défait garde l'admin locale).
+func TestPilotageInterfaceSelonLAllegement(t *testing.T) {
+	r := t.TempDir()
+	s := sourcePilotageDe(r, "0.1.0")
+	p, _ := s.Lire(context.Background())
+	if p["Device.X_SECUBOX_Pilotage.Interface"] != "locale" {
+		t.Errorf("sans marqueur : %v", p["Device.X_SECUBOX_Pilotage.Interface"])
+	}
+	d := filepath.Join(r, "var/lib/secubox-profiles/allegement")
+	os.MkdirAll(d, 0o755)
+	os.WriteFile(filepath.Join(d, "actif"), nil, 0o644)
+	p, _ = s.Lire(context.Background())
+	if p["Device.X_SECUBOX_Pilotage.Interface"] != "distante" {
+		t.Errorf("avec marqueur : %v", p["Device.X_SECUBOX_Pilotage.Interface"])
+	}
+	os.Chmod(filepath.Join(d, "actif"), 0o666) // inscriptible par tous : non fiable
+	p, _ = s.Lire(context.Background())
+	if p["Device.X_SECUBOX_Pilotage.Interface"] != "locale" {
+		t.Errorf("marqueur non fiable accepté")
 	}
 }

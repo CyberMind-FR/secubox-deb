@@ -148,3 +148,14 @@ func TestHashStyle(t *testing.T) {
 		t.Errorf("style absent ou altéré")
 	}
 }
+
+// R-L5-34 M6 : échappement réel du rendu, même si un nom hostile passait le filtre de Depuis.
+func TestRenduEchappeNomEtServices(t *testing.T) {
+	page := string(Rendre(Etat{Nom: "<script>alert(1)</script>", Echecs: []string{"<script>x</script>.service", `"onx=1`}}))
+	if strings.Contains(page, "<script>") || strings.Contains(page, `"onx=1`) {
+		t.Errorf("valeurs non échappées : %s", page)
+	}
+	if !strings.Contains(page, "&lt;script&gt;alert(1)&lt;/script&gt;") || !strings.Contains(page, "&lt;script&gt;x&lt;/script&gt;.service") {
+		t.Errorf("forme échappée absente")
+	}
+}

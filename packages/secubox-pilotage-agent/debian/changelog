@@ -1,3 +1,12 @@
+secubox-pilotage-agent (0.5.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 7, correction 1/5 (R-L5-34, ref #3126) : Interface = « distante » seulement si le marqueur root
+    /var/lib/secubox-profiles/allegement/actif est présent et de confiance (posé par secubox-profilectl APRÈS un
+    allègement réussi, nginx -t passé ; ôté au retour) ; le nom du profil seul ne suffit plus (le pointeur
+    /var/lib/secubox/profiles/actif n'est écrit par aucun composant). AppArmor : lecture de ce seul marqueur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 14:00:00 +0100
+
 secubox-pilotage-agent (0.5.0-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 7 (box légère « distante », ref #3126) :

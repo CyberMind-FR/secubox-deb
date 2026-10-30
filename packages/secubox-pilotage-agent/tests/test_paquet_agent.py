@@ -161,7 +161,7 @@ def test_paquet_coherent():
     c = lire("debian/control")
     assert "Architecture: any" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
-    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.4.2-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.5.1-1~trixie1) trixie;")
     # ancre-verifier lit `wg show` par chemin absolu (/usr/bin/wg)
     assert "wireguard-tools" in re.search(r"^Depends:(.*)$", c, re.M).group(1)
     pi = lire("debian/postinst")
@@ -326,3 +326,12 @@ def test_l5_page_etat_seule_ecriture_de_l_agent():
     go = lire("cmd/sbx-pilotage-agent/etat.go")
     assert 'cheminEtat = "/run/secubox/pilotage/etat.html"' in go
     assert 'temporaire = ".etat.html.tmp"' in lire("internal/etat/etat.go")
+
+
+def test_l5_marqueur_d_allegement_lu():
+    """R-L5-34 : Interface = distante d'après le marqueur root de l'allègement réussi (lecture seule)."""
+    code = sans_commentaires(lire("apparmor/usr.sbin.sbx-pilotage-agent"))
+    for r in ("/var/lib/secubox-profiles/ r,", "/var/lib/secubox-profiles/allegement/ r,",
+              "/var/lib/secubox-profiles/allegement/actif r,"):
+        assert r in code, r
+    assert "/var/lib/secubox-profiles/allegement/** " not in code

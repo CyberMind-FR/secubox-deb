@@ -78,6 +78,10 @@
   # vérifié par le relais). Aucune socket de module : le relais seul les appelle, avec son jeton.
   /run/secubox/pilotage-relais.sock rw,
   /var/lib/secubox/profiles/actif r,
+  # R-L5-34 : marqueur root de l'allègement réussi du profil « distante » (Interface = distante), lu sans suivre de lien.
+  /var/lib/secubox-profiles/ r,
+  /var/lib/secubox-profiles/allegement/ r,
+  /var/lib/secubox-profiles/allegement/actif r,
 
   # L5 tâche 7 : page d'état locale (statique, sans secret), régénérée toutes les 60 s. Dossier = RuntimeDirectory de
   # l'unité ; écriture atomique : fichier de travail ouvert sans suivre de lien, puis renommé sur la page.
