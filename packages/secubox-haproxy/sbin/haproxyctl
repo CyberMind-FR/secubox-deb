@@ -977,6 +977,8 @@ cmd_cert_sync() {
 #   V X-SecuBox-Maillage         nginx :8799 (wg-mesh) « 1 », annuaire-mesh.conf.tpl -> secubox-annuaire, openpgp (boite/depot)
 #   V X-SecuBox-Relais           agregateur, relais web vers vault (copie du client retiree) -> vault (routes hors relais)
 #   V X-SecuBox-Second-Facteur   agregateur apres TOTP verifie (copie du client retiree) -> vault /ouvrir hors LAN
+#   V X-SecuBox-Pilotage-Tunnel  nginx :8472 (tunnel du pilotage), pilotage-canal.conf.tpl -> secubox-pilotage (canal des box)
+#   V X-SecuBox-Pilotage-Relais  sbx-pilotage-relais, sur la socket d'un module (#3126 L5) -> secubox_core.auth (jeton delegue)
 #   Le maillage entre box passe par les ecoutes nginx :7331 et :8799 du tunnel wg-mesh, jamais par http-in ni https-in.
 # Jamais effaces ici :
 #   P X-SecuBox-Signature        HMAC pose par l'emetteur d'un webhook, verifie par le recepteur
@@ -998,6 +1000,8 @@ ENTETES_VERDICT=(
     X-SecuBox-Maillage
     X-SecuBox-Relais
     X-SecuBox-Second-Facteur
+    X-SecuBox-Pilotage-Tunnel
+    X-SecuBox-Pilotage-Relais
 )
 
 # Lignes « http-request del-header » des verdicts, a placer en tete d'un frontal public.
