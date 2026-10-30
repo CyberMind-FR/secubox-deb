@@ -9,6 +9,18 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-30 — couture.gk2 : 502 après redémarrage corrigée, frontal permanent (closes #3294) ; metrics (ref #3295)
+
+- Cause : le frontal FastAPI d'Atelier Partagé vit dans le conteneur `streamlit` (`start.auto=0`) ; `streamlitctl boot`
+  ne le relançait que pour une appli Streamlit publiée ; vhost nginx posé à la main sans pages d'erreur (502 brute).
+- **PR #3296 + #3299** (`secubox-streamlit` 1.7.4) : `streamlitctl frontal set|list|remove` (frontaux web permanents,
+  cible limitée à l'adresse du conteneur, noms réservés refusés, attente bornée du systemd du conteneur au boot),
+  vhost généré avec `secubox-errorpages`, `--reprendre-publication` (HAProxy et route sbxwaf gardés).
+- gk2 : couture déclaré (`streamlit-frontal-couture.conf`, ancienne instance Streamlit désactivée, appli et code gardés,
+  sauvegardes `*.avant-frontal-20261030T105429Z`) ; `boot` voit le frontal ; public 200. Zip du code en production remis.
+- **PR #3297** (`secubox-metrics` 1.29.9, gk2) : cache WAF/connexions rafraîchi en fond toutes les 60 s, redémarrage
+  de prudence de 6 h par minuterie (plus de faux « timeout »). Reste : gk1 et les autres box (mise à jour auto).
+
 ## 2026-10-30 — LEDs RGB MOCHAbin : pilote IS31FL3199 en DKMS, déployé gk1 + gk6 (ref #3290)
 
 - Cause : le noyau Debian n'a pas `CONFIG_LEDS_IS31FL319X` ; la puce (i2c-1, 0x64) et l'arbre de périphériques étaient
