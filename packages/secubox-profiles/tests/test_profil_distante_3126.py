@@ -194,7 +194,6 @@ def _apply(tmp_path, monkeypatch, statut, profil_toml):
     import api.apply as ap
     import api.cli as cli
     from api.apply import ApplyReport
-    from api.observe import Actual
     monkeypatch.setattr(cli, "_running_as_root", lambda: True)
     root = tmp_path / "etc"
     (root / "modules.d").mkdir(parents=True)
