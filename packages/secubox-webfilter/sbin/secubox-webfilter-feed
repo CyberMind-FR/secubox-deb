@@ -17,7 +17,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/webfilter", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from webfilter import catalogue, feed, magasin, voisins  # noqa: E402
+from webfilter import catalogue, feed, magasin, remanence, voisins  # noqa: E402
 
 RETENTION_JOURS = 30
 
@@ -39,7 +39,18 @@ def main() -> int:
     indexes = lambda: feed.charger_indexes(Path(a.etat) / "listes", cats)  # noqa: E731
     etat = Path(a.etat)
     carte = lambda: feed.lire_carte(etat / "carte.json")  # noqa: E731
-    connus = lambda vus: feed.publier_connus(etat / "connus.json", voisins.depuis_systeme(), vus)  # noqa: E731
+
+    def connus(vus):
+        """Toutes les 5 minutes : appareils vus (connus.json) puis adresses rémanentes et, si une adresse d'un appareil assigné manque à la
+        carte, demande d'application amortie (#3005). Réglages relus à chaque passe : un changement du TOML ne demande pas de redémarrage."""
+        table = voisins.depuis_systeme()
+        feed.publier_connus(etat / "connus.json", table, vus)
+        try:
+            retention_j, amorti_min = catalogue.appareils(a.catalogue)
+        except catalogue.ErreurCatalogue as e:
+            print(f"secubox-webfilter : [appareils] ignorée, valeurs par défaut : {e}", file=sys.stderr)
+            retention_j, amorti_min = catalogue.RETENTION_JOURS_DEFAUT, catalogue.REAPPLICATION_MIN_DEFAUT
+        remanence.passe(etat, table, vus, feed.lire_carte(etat / "carte.json"), retention_j * 86400, amorti_min * 60)
     if a.stdin:
         feed.suivre(sys.stdin, mag, indexes, exclus, retention_jours=RETENTION_JOURS, carte_fn=carte)
         return 0

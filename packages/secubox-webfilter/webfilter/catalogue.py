@@ -38,6 +38,8 @@ class Config:
     categories: list
     reseaux: list
     zones_max: int
+    retention_jours: int = 14
+    reapplication_min: int = 30
 
 
 ZONES_MAX_DEFAUT = 1_500_000
@@ -98,12 +100,38 @@ def _zones_max(brut: dict) -> int:
     return v
 
 
+RETENTION_JOURS_DEFAUT, RETENTION_JOURS_BORNES = 14, (0, 90)            # 0 : aucune adresse rémanente (comportement d'avant #3005)
+REAPPLICATION_MIN_DEFAUT, REAPPLICATION_MIN_BORNES = 30, (5, 1440)
+
+
+def _borne(v, bornes, quoi: str) -> int:
+    if not isinstance(v, int) or isinstance(v, bool) or not bornes[0] <= v <= bornes[1]:
+        raise ErreurCatalogue(f"[appareils] {quoi} : entier entre {bornes[0]} et {bornes[1]}")
+    return v
+
+
+def _appareils(brut: dict) -> tuple:
+    """(retention_jours, reapplication_min) de la section [appareils] (#3005), valeurs par défaut si elle est absente."""
+    s = brut.get("appareils")
+    if s is None:
+        return RETENTION_JOURS_DEFAUT, REAPPLICATION_MIN_DEFAUT
+    if not isinstance(s, dict) or set(s) - {"retention_jours", "reapplication_min"}:
+        raise ErreurCatalogue("[appareils] : seules les clés « retention_jours » et « reapplication_min » existent")
+    return (_borne(s.get("retention_jours", RETENTION_JOURS_DEFAUT), RETENTION_JOURS_BORNES, "retention_jours"),
+            _borne(s.get("reapplication_min", REAPPLICATION_MIN_DEFAUT), REAPPLICATION_MIN_BORNES, "reapplication_min"))
+
+
+def appareils(chemin) -> tuple:
+    """Pour le démon d'alimentation : la seule section [appareils], sans revalider tout le catalogue."""
+    return _appareils(_lire(chemin))
+
+
 def charger_config(chemin) -> Config:
     brut = _lire(chemin)
-    inconnu = set(brut) - {"categorie", "reseau", "limites"}
+    inconnu = set(brut) - {"categorie", "reseau", "limites", "appareils"}
     if inconnu:
         raise ErreurCatalogue(f"section inconnue {sorted(inconnu)}")
-    return Config(_categories(brut), _reseaux(brut), _zones_max(brut))
+    return Config(_categories(brut), _reseaux(brut), _zones_max(brut), *_appareils(brut))
 
 
 def _categories(brut: dict) -> list:
