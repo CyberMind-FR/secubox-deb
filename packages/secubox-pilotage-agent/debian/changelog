@@ -1,3 +1,14 @@
+secubox-pilotage-agent (0.4.2-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 3, correction 2/5 (R-L5-22, ref #3126) :
+    - I1 : projection des drapeaux de portée sous un verrou EXCLUSIF dédié (/etc/secubox-pilotage/.projection.lock),
+      tenu de la lecture de l'état jusqu'à l'écriture ; ordre : projection puis état, jamais l'inverse. Un `etat`
+      concurrent d'une fermeture ne fait plus réapparaître `support-ouvert`.
+    - M6 : fsync du dossier après chaque renommage atomique du ctl.
+    - M3 : RSS réel mesuré (34,5 Mio VmHWM, échanges parallèles) ; MemoryMax 48M, GOMEMLIMIT 32MiB.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 01:00:00 +0100
+
 secubox-pilotage-agent (0.4.1-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 3, relecture de sécurité, correction 1/5 (R-L5-21, ref #3126) :

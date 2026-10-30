@@ -36,7 +36,7 @@ def test_unite_durcie():
     for d in (
         "User=secubox-pilotage-agent", "Group=secubox-pilotage-agent", "ProtectSystem=strict", "ProtectHome=yes",
         "PrivateTmp=yes", "IPAddressDeny=any", "IPAddressAllow=10.10.0.1 10.64.0.1 localhost",
-        "MemoryMax=40M", "Restart=on-failure", "RestartSec=10", "ReadOnlyPaths=/", "ProtectControlGroups=yes",
+        "MemoryMax=48M", "Restart=on-failure", "RestartSec=10", "ReadOnlyPaths=/", "ProtectControlGroups=yes",
         "ExecStart=/usr/sbin/sbx-pilotage-agent",
     ):
         assert d in u, d
@@ -161,7 +161,7 @@ def test_paquet_coherent():
     c = lire("debian/control")
     assert "Architecture: any" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
-    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.4.1-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.4.2-1~trixie1) trixie;")
     # ancre-verifier lit `wg show` par chemin absolu (/usr/bin/wg)
     assert "wireguard-tools" in re.search(r"^Depends:(.*)$", c, re.M).group(1)
     pi = lire("debian/postinst")
@@ -275,7 +275,7 @@ def test_gomemlimit_sous_memorymax_m13():
     env = re.findall(r"^Environment=GOMEMLIMIT=(\S+)$", u, re.M)
     (maxi,) = re.findall(r"^MemoryMax=(\S+)$", u, re.M)
     assert env == ["32MiB"], env
-    assert _octets(env[0]) < _octets(maxi) == 40 << 20
+    assert _octets(env[0]) < _octets(maxi) == 48 << 20
 
 
 def test_l5_agent_joint_le_relais_seulement():
@@ -295,10 +295,17 @@ def test_l5_agent_joint_le_relais_seulement():
     after = re.search(r"^After=(.*)$", u, re.M).group(1).split()
     assert "secubox-pilotage-relais.socket" in after
     assert "Requires=secubox-pilotage-relais.socket" not in u          # l'agent vit sans relais (L1/L2)
-    assert "MemoryMax=40M" in u and "Environment=GOMEMLIMIT=32MiB" in u
+    assert "MemoryMax=48M" in u and "Environment=GOMEMLIMIT=32MiB" in u
 
 
 def test_acl_en_dependance():
     """R-L5-20 M1 : setfacl (paquet acl) pose l'ACL d'audit du relais."""
     c = lire("debian/control")
     assert re.search(r"^Depends:.*\bacl\b", c, re.M)
+
+
+def test_mesure_rss_alignee_sur_l_unite():
+    """R-L5-22 M3 : le test de RSS de l'agent se mesure avec le GOMEMLIMIT de l'unité."""
+    u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
+    (env,) = re.findall(r"^Environment=GOMEMLIMIT=(\S+)$", u, re.M)
+    assert f'const GOMEMLIMITUnite = "{env}"' in lire("internal/canal/memoire_test.go")

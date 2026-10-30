@@ -92,6 +92,101 @@ func TestAgentMemoireEchangeMaximal(t *testing.T) {
 	}
 }
 
+// RSSAgentMax : plafond du RSS réel (VmHWM) de l'agent, GOGC par défaut, trois échanges de 200 Kio en parallèle d'un
+// échange de 4 Mio aller et retour (R-L5-22 M3). L'unité : GOMEMLIMIT et MemoryMax au-dessus, marge documentée au README.
+const RSSAgentMax = 40 << 20
+
+// GOMEMLIMITUnite : la valeur de systemd/secubox-pilotage-agent.service (tests/test_paquet_agent.py la vérifie).
+const GOMEMLIMITUnite = "32MiB"
+
+func TestAgentRSSEchangesParalleles(t *testing.T) {
+	gros := base64.StdEncoding.EncodeToString(make([]byte, relais.CorpsMax))
+	petit := base64.StdEncoding.EncodeToString(make([]byte, 200<<10))
+	f := demarrerFauxRelais(t, func(d relais.Demande) string {
+		time.Sleep(100 * time.Millisecond) // les quatre échanges se chevauchent
+		c := petit
+		if d.Chemin == "/api/v1/demo/gros" {
+			c = gros
+		}
+		return `{"statut":200,"entetes":{},"corps_b64":"` + c + `"}`
+	})
+	var servi atomic.Bool
+	recus := make(chan int, 8)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/canal/v1/requetes":
+			if servi.CompareAndSwap(false, true) {
+				l := []string{`{"msg_id":"00000000000000a0","type":"HTTP","body":{"methode":"POST","chemin":"/api/v1/demo/gros",` +
+					`"acteur":"admin","maitre":"gk2","portee":"admin","corps_b64":"` + gros + `"}}`}
+				for i := 1; i <= 3; i++ {
+					l = append(l, fmt.Sprintf(`{"msg_id":"00000000000000a%d","type":"HTTP","body":{"methode":"GET",`+
+						`"chemin":"/api/v1/demo/p%d","acteur":"admin","maitre":"gk2","portee":"lecture"}}`, i, i))
+				}
+				io.WriteString(w, "["+strings.Join(l, ",")+"]")
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+			w.WriteHeader(http.StatusNoContent)
+		case "/canal/v1/http":
+			b, _ := io.ReadAll(r.Body)
+			recus <- len(b)
+		default:
+			io.Copy(io.Discard, r.Body)
+		}
+	}))
+	defer srv.Close()
+	enfant := exec.Command(os.Args[0], "-test.run=^TestAideAgentEnfant$")
+	env := []string{}
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GOGC=") && !strings.HasPrefix(e, "GOMEMLIMIT=") {
+			env = append(env, e)
+		}
+	}
+	enfant.Env = append(env, "SBX_AGENT_ENFANT="+strings.TrimPrefix(srv.URL, "http://"), "SBX_AGENT_RELAIS="+f.chemin,
+		"GOMEMLIMIT="+GOMEMLIMITUnite) // comme l'unité systemd ; GOGC par défaut
+	entree, _ := enfant.StdinPipe()
+	var sortie bytes.Buffer
+	enfant.Stdout = &sortie
+	if err := enfant.Start(); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 4; i++ {
+		select {
+		case <-recus:
+		case <-time.After(20 * time.Second):
+			t.Fatalf("%d HTTP_RESP reçues sur 4", i)
+		}
+	}
+	entree.Close()
+	if err := enfant.Wait(); err != nil {
+		t.Fatalf("enfant : %v\n%s", err, sortie.String())
+	}
+	var hwm uint64
+	s := sortie.String()
+	i := strings.Index(s, "VMHWM=")
+	if i < 0 {
+		t.Fatalf("sortie de l'enfant : %q", s)
+	}
+	fmt.Sscanf(s[i+6:], "%d", &hwm)
+	t.Logf("RSS maximal (VmHWM) de l'agent seul : %.1f Mio", float64(hwm)/(1<<20))
+	if hwm > RSSAgentMax {
+		t.Fatalf("VmHWM %.1f Mio > %d Mio", float64(hwm)/(1<<20), RSSAgentMax>>20)
+	}
+}
+
+// vmHWM : pic du RSS du processus (/proc/self/status, Kio → octets).
+func vmHWM() uint64 {
+	b, _ := os.ReadFile("/proc/self/status")
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(l, "VmHWM:") {
+			var k uint64
+			fmt.Sscanf(strings.TrimSpace(strings.TrimPrefix(l, "VmHWM:")), "%d", &k)
+			return k << 10
+		}
+	}
+	return 0
+}
+
 // TestAideAgentEnfant : l'agent seul, pour TestAgentMemoireEchangeMaximal (sans effet hors de ce test).
 func TestAideAgentEnfant(t *testing.T) {
 	maitre := os.Getenv("SBX_AGENT_ENFANT")
@@ -126,5 +221,5 @@ func TestAideAgentEnfant(t *testing.T) {
 	close(arret)
 	fin()
 	g.Wait()
-	fmt.Printf("PIC=%d\n", pic.Load())
+	fmt.Printf("PIC=%d VMHWM=%d\n", pic.Load(), vmHWM())
 }

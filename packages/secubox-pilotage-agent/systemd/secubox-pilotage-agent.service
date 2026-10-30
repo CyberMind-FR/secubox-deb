@@ -20,10 +20,10 @@ UMask=0027
 ExecStart=/usr/sbin/sbx-pilotage-agent
 Restart=on-failure
 RestartSec=10
-# L5 tâche 3 (R-L5-21 M6) : 40M (au lieu de 32M) — pic de tas MESURÉ à 23,3 Mio pour un échange de taille maximale
-# (4 Mio à l'aller et au retour ; TestAgentMemoireEchangeMaximal, plafond 28 Mio) ; un seul échange de plus de 256 Kio
-# à la fois.
-MemoryMax=40M
+# L5 tâche 3 (R-L5-22 M3) : 48M (au lieu de 32M). RSS réel MESURÉ (VmHWM, GOGC par défaut, GOMEMLIMIT=32MiB) à
+# 34,5 Mio pour un échange de 4 Mio aller et retour en parallèle de trois de 200 Kio (TestAgentRSSEchangesParalleles,
+# plafond 40 Mio ; binaire de test, un peu plus lourd que l'agent) : ~13 Mio de marge. Tas : 23,3 Mio.
+MemoryMax=48M
 # M13 : borne souple du runtime Go, sous MemoryMax : le ramasse-miettes travaille avant le tueur du cgroup.
 Environment=GOMEMLIMIT=32MiB
 

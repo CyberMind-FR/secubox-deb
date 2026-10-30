@@ -369,7 +369,7 @@ demandée/retenue, statut) ; une lecture réussie seulement avec `JournalDebug` 
 ## Durcissement
 
 Utilisateur `secubox-pilotage-agent`, `ProtectSystem=strict`, `ReadOnlyPaths=/`, aucune capacité ambiante,
-`IPAddressDeny=any` (sauf `10.10.0.1`, `10.64.0.1`, localhost), `MemoryMax=40M` avec `GOMEMLIMIT=32MiB` (32M/24MiB avant L5 ; pic de tas mesuré à 23,3 Mio pour un échange HTTP de 4 Mio aller et retour, `TestAgentMemoireEchangeMaximal`) (le ramasse-miettes
+`IPAddressDeny=any` (sauf `10.10.0.1`, `10.64.0.1`, localhost), `MemoryMax=48M` avec `GOMEMLIMIT=32MiB` (32M/24MiB avant L5 ; RSS réel mesuré à 34,5 Mio — VmHWM, GOGC par défaut — pour un échange HTTP de 4 Mio aller et retour en parallèle de trois de 200 Kio, `TestAgentRSSEchangesParalleles` ; tas 23,3 Mio ; marge ~13 Mio) (le ramasse-miettes
 travaille avant le tueur du cgroup, M13), profil AppArmor enforce
 (`apparmor/usr.sbin.sbx-pilotage-agent` : réseau `inet stream` qualifié, `unix stream`, `netlink raw` pour les adresses
 des interfaces ; ni `inet6` ni écoute ; `/usr/bin/sudo Ux` seul passage privilégié).
