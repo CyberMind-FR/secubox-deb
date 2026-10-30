@@ -75,6 +75,55 @@ Public name: one strict DNS label (`[a-z0-9]`, hyphens inside, 1–63), never a 
 (`admin`, `hall`, `www`, `api`, `mail`, `git`, `waf`, …), never a name already routed, served by nginx,
 declared in `haproxy.toml` or published for another app.
 
+## Frontaux web permanents (#3294)
+
+A *frontal* is a web service hosted in the `streamlit` container that is **not** a Streamlit app (example:
+`couture.gk2.secubox.in`, the FastAPI + HTML/JS front-end of Atelier Partagé, `atelier-partage-web.service`
+on `10.100.0.50:8601`). It is declared in `/etc/secubox/streamlit.toml`:
+
+```toml
+[frontaux.couture]
+domain = "couture.gk2.secubox.in"   # one label under the box domain
+cible = "10.100.0.50:8601"          # ONLY the streamlit container address (lxc.net.N.ipv4.address), port 1024..65535
+unite = "atelier-partage-web.service"  # systemd unit INSIDE the container
+sante = "/healthz"                  # health path of the frontal (informative, optional)
+enabled = true                      # false: kept declared, not started at boot
+```
+
+- `streamlitctl boot` (unit `secubox-streamlit-demarrage`) starts the container when at least one frontal is
+  enabled (as for a published app with autostart), then starts each frontal unit in the container if it is not
+  active. Without any enabled frontal or autostart app, nothing is started.
+- `streamlitctl frontal set <nom> --domaine D --cible IP:PORT --unite U.service [--sante /chemin]
+  [--reprendre fichier.conf] [--inactif] [--par who] [--apply]` validates strictly (name `^[a-z0-9-]{1,40}$`,
+  domain in the box zone, unit `^[a-z0-9@._-]{1,64}\.service$`), writes the declaration (double buffer,
+  `.avant-publication` copy) and generates `/etc/nginx/sites-available/streamlit-frontal-<nom>.conf` (+ link):
+  `include snippets/secubox-errorpages.conf` (SecuBox page instead of a raw 502), `X-Real-IP`,
+  `X-Forwarded-*`, `client_max_body_size 1m`. `nginx -t` failing restores everything. Dry-run without `--apply`.
+- `--reprendre <fichier>` takes over a hand-made vhost serving the same domain: timestamped backup
+  `sites-available/<fichier>.avant-frontal-<UTC>`, file removed, generated file installed, ONE `nginx -t` +
+  reload. Without it, another file serving the domain is a conflict.
+- Refused: a reserved box service name (same list as publication: `admin`, `hall`, `www`, `api`, `mail`…), a
+  domain whose sbxwaf route targets anything but the local nginx :9080, a domain HAProxy sends to a backend other
+  than `nginx_vhosts`, a target other than the container's own address (never the bridge/host or another LXC), and
+  a takeover of a file with more than one `server` block or `server_name`. Options given twice are refused.
+- `boot` waits for the container's systemd (`is-system-running`, 30 × 2 s at most), starts the unit, checks
+  `is-active`; the outcome (`actif`, `deja-actif`, `echec`, `conteneur-indisponible`) is logged and audited
+  (`frontal-boot`), never blocking.
+- The sbxwaf route and the HAProxy vhost of the domain are never touched (warning if the route is missing).
+- `frontal remove` does NOT restore a taken-over file: put back `sites-available/<file>.avant-frontal-<UTC>` by
+  hand (and its sites-enabled link) if needed.
+- Known debt: sudoers grants `secubox` `/usr/sbin/streamlitctl` with ANY arguments; only the argument guard of
+  `streamlitctl` (and `publication.py` revalidation) filters them. To be narrowed in a dedicated issue.
+- `frontal list` (JSON, vhost state), `frontal remove <nom> [--apply]`. Every change goes to
+  `/var/log/secubox/audit.log`.
+
+Couture on gk2 (once):
+
+```
+streamlitctl frontal set couture --domaine couture.gk2.secubox.in --cible 10.100.0.50:8601 \
+  --unite atelier-partage-web.service --sante /healthz --reprendre atelier-couture.conf --par gk2 --apply
+```
+
 ## Sécurité : ce que le conteneur isole, et ce qu'il n'isole pas (#3247)
 
 - **Toutes les applis tournent en root** dans le conteneur `streamlit`. Ce conteneur est **privilégié quand il est

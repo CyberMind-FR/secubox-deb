@@ -1,3 +1,24 @@
+secubox-streamlit (1.7.3-1~trixie1) trixie; urgency=medium
+
+  * Frontaux, relecture de sécurité (ref #3294) : cible limitée à l'adresse du conteneur streamlit ;
+    noms réservés, route sbxwaf ou backend HAProxy vers autre chose refusés ; reprise d'un fichier à
+    un seul bloc server et un seul nom ; options en double refusées ; échec nginx -t audité.
+  * `boot` attend systemd du conteneur (borné), démarre puis vérifie l'unité du frontal, audite le
+    résultat sans bloquer.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 15:00:00 +0100
+
+secubox-streamlit (1.7.2-1~trixie1) trixie; urgency=medium
+
+  * Frontaux web permanents (ref #3294) : [frontaux.<nom>] dans streamlit.toml ; `streamlitctl boot`
+    démarre le conteneur s'il y en a un d'actif, puis son unité dans le conteneur (couture.gk2 en 502
+    après le redémarrage de gk2). Verbes `streamlitctl frontal list|set|remove`, validation stricte, audit.
+  * Vhost nginx :9080 du frontal produit par le paquet, avec les pages d'erreur SecuBox ; reprise d'un
+    vhost posé à la main (--reprendre : sauvegarde horodatée, un seul rechargement, retour arrière sur
+    nginx -t en échec). Route sbxwaf et HAProxy jamais touchées.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 14:00:00 +0100
+
 secubox-streamlit (1.7.1-1~trixie1) trixie; urgency=medium
 
   * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte
