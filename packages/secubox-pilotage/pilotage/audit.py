@@ -8,8 +8,9 @@ SecuBox-Deb :: pilotage :: journal d'audit append-only (#3126)
 
 Une ligne JSON par décision, ajoutée à `/var/log/secubox/audit.log` (O_APPEND, jamais réécrite). Les champs sont bornés et ne portent
 jamais de valeur lue sur une box. Synchrone : à appeler par asyncio.to_thread. Lève OSError si la ligne ne peut pas être écrite.
-Le journal n'est JAMAIS créé ici (aucune création à l'ouverture : le profil AppArmor n'accorde que l'ajout `a`, et le noyau exige la permission de
-création dès qu'elle est demandée, même sur un fichier existant) : secubox-core et le postinst le garantissent ; absent, l'audit échoue franchement et l'action est refusée.
+Le journal n'est JAMAIS créé ni tronqué ici (ouverture sans création ni troncature : l'ajout seul est tenu par ce code) : secubox-core et le postinst le
+garantissent ; absent, l'audit échoue franchement et l'action est refusée. Le profil AppArmor accorde `w` et non `a` (banc gk2, #3126) :
+avec `a` seul, l'ouverture O_WRONLY|O_APPEND passe (médiée en ajout) mais chaque write() est revérifié en MAY_WRITE et refusé (EACCES).
 """
 from __future__ import annotations
 

@@ -31,13 +31,13 @@
   # Registre des sessions : sans lui, toute garde d'API voit un registre vide et refuse (401 partout, #942).
   /var/lib/secubox/auth/ r,
   /var/lib/secubox/auth/sessions.json r,
-  # Trace de délégation : secubox_core/auth.py l'ouvre en ajout AVEC création (w, comme les autres modules). Le journal d'audit, lui, est en
-  # ajout seul plus bas.
+  # Trace de délégation : secubox_core/auth.py l'ouvre en ajout AVEC création (w, comme les autres modules). Le journal d'audit : plus bas.
   /var/log/secubox/delegation.log w,
 
-  # Identité des box : table du maillage et projection publique des pairs Auto-Load, en lecture seule.
-  /var/lib/secubox/p2p/ r,
-  /var/lib/secubox/p2p/peers.json r,
+  # Identité des box : projections publiques des pairs enrôlés du maillage (secubox-p2p) et des pairs Auto-Load, en lecture seule.
+  # Jamais /var/lib/secubox/p2p/ (0700 secubox : jetons de jonction ; défaut du banc gk2, #3126).
+  /var/lib/secubox/p2p-public/ r,
+  /var/lib/secubox/p2p-public/pairs-enroles.json r,
   /var/lib/secubox/autoload-public/ r,
   /var/lib/secubox/autoload-public/pairs-publics.json r,
 
@@ -53,8 +53,10 @@
   /var/lib/secubox-pilotage-pages/www/*/ r,
   /var/lib/secubox-pilotage-pages/www/*/*/ r,
 
-  # Journal d'audit commun (le fichier appartient à secubox ; ACL au compte du service ; ajout seul `a`, donc jamais ouvert avec O_CREAT ni tronqué).
-  /var/log/secubox/audit.log a,
+  # Journal d'audit commun (le fichier appartient à secubox ; ACL au compte du service). `w` et non `a` (#3126, banc gk2) : l'ouverture
+  # O_WRONLY|O_APPEND est médiée en ajout, mais chaque write() repasse par security_file_permission(MAY_WRITE), que `a` seul refuse
+  # (EACCES à l'écriture, ouverture réussie). Patron du dépôt (relais Go, dns-listes, webfilter). Le code n'ouvre jamais avec O_CREAT ni O_TRUNC.
+  /var/log/secubox/audit.log w,
 
   network unix,
 }

@@ -2,8 +2,8 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""R31 : le profil AppArmor n'accorde que `a` (ajout seul) sur audit.log ; le noyau exige la permission de création dès O_CREAT, même sur un
-fichier existant : l'audit ne doit donc pas ouvrir avec O_CREAT (le journal est garanti par secubox-core et le postinst)."""
+"""R31 : l'audit ouvre audit.log en ajout (O_APPEND), sans O_CREAT ni O_TRUNC : le journal est garanti par secubox-core et le postinst.
+Le profil accorde `w` (pas `a` seul, qui refuse write() sur ce descripteur : banc gk2, #3126) ; l'ajout seul est tenu ici."""
 import inspect
 import json
 
@@ -14,7 +14,7 @@ from pilotage import audit as A
 
 def test_audit_n_utilise_pas_o_creat():
     code = "\n".join(x.split("#")[0] for x in inspect.getsource(A).splitlines())
-    assert "O_CREAT" not in code and "O_APPEND" in code and "O_NOFOLLOW" in code
+    assert "O_CREAT" not in code and "O_TRUNC" not in code and "O_APPEND" in code and "O_NOFOLLOW" in code
 
 
 def test_audit_ajoute_a_un_journal_existant(tmp_path):

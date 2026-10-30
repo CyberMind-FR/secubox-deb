@@ -66,11 +66,12 @@ def test_profil_apparmor_enforce_et_borne():
     assert "deny /etc/secubox/secrets/** r," in p
     assert "/var/lib/secubox/pilotage/** rwkm," in p
     assert "network inet" not in p                         # pas de réseau IP
-    # R25 : ajout seul sur les journaux communs (jamais w : un w pourrait tronquer le journal d'audit CSPN)
-    assert re.search(r"^\s*/var/log/secubox/audit\.log a,$", p, re.M)
+    # R25 révisée au banc gk2 (#3126) : `a` seul refuse write() sur un descripteur O_APPEND ; `w` comme le reste du dépôt, et
+    # l'ajout seul est tenu par le code (O_APPEND, jamais O_CREAT ni O_TRUNC : test_droits_reels_3126).
+    assert re.search(r"^\s*/var/log/secubox/audit\.log w,$", p, re.M)
     # delegation.log : secubox_core/auth.py l'ouvre en "a" avec création, comme dans les autres modules -> w
     assert re.search(r"^\s*/var/log/secubox/delegation\.log w,$", p, re.M)
-    assert not re.search(r"audit\.log\s+\S*w", p)
+    assert not re.search(r"audit\.log\s+\S*[ra]\S*,", p)
     # M4 : pas de résolution de noms, et la seule pièce d'authentification lue sous auth/ est le registre des sessions
     assert "nameservice" not in p
     assert "/var/lib/secubox/auth/**" not in p and "/var/lib/secubox/auth/sessions.json r," in p
@@ -141,8 +142,8 @@ def test_controle_debian():
     assert "Package: secubox-pilotage\n" in c and "Architecture: all" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
     ch = lire("debian/changelog").splitlines()[0]
-    assert ch.startswith("secubox-pilotage (0.5.3-1~trixie1) trixie;")
-    assert "Recommends: apparmor, secubox-p2p (>= 1.20.1~)" in c          # Final : relais-maillage R-L5-33
+    assert ch.startswith("secubox-pilotage (0.5.4-1~trixie1) trixie;")
+    assert "Recommends: apparmor, secubox-p2p (>= 1.20.2~)" in c          # banc gk2 : projection p2p-public des pairs enrôlés
     depends = re.search(r"^Depends:(.*)$", c, re.M).group(1)
     assert "sudo" not in depends                                          # Final : plus aucune règle sudoers
 
@@ -296,7 +297,7 @@ def test_assistant_invite_profil_apparmor_enforce():
     assert "profile secubox-pilotage-invite /usr/sbin/secubox-pilotage-invite" in c and "complain" not in c
     for regle in ("/usr/sbin/secubox-pilotage-invite r,", "/usr/bin/python3* rix,", "/usr/bin/sbx-mesh-invite rix,",
                   "/usr/lib/secubox/p2p/** r,", "/var/lib/secubox/p2p/master-link/ r,", "/var/lib/secubox/p2p/master-link/** rwk,",
-                  "/var/log/secubox/audit.log a,", "/{,usr/}{,s}bin/ip rix,", "network netlink raw,", "deny /etc/secubox/secrets/** r,"):
+                  "/var/log/secubox/audit.log w,", "/{,usr/}{,s}bin/ip rix,", "network netlink raw,", "deny /etc/secubox/secrets/** r,"):
         assert regle in c, regle
     for interdit in ("/bin/sh", "/bin/bash", "/usr/bin/sudo", "/bin/dash", "capability", "network inet", " ux,", " Ux,", " px,", " Px,"):
         assert interdit not in c, interdit

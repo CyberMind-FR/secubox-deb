@@ -7,10 +7,12 @@
 SecuBox-Deb :: pilotage :: identité d'une box par son adresse dans le tunnel (#3126)
 
 Une box n'a aucun secret à présenter : son identité EST son adresse source dans le tunnel WireGuard (nginx la transmet en `X-Real-IP`).
-  - 10.10.0.0/24 (wg-mesh)     → `peers.json` du maillage, `mesh_ip` exacte ;
+  - 10.10.0.0/24 (wg-mesh)     → projection publique des pairs ENRÔLÉS publiée par secubox-p2p (`p2p-public/pairs-enroles.json`), `mesh_ip`
+                                 exacte ; jamais `p2p/peers.json` (dossier 0700 secubox, illisible par ce compte : défaut du banc gk2, #3126) ;
   - 10.64.0.0/16 (wg-autoload) → projection publique des pairs d'Auto-Load (abonnement `revoque` = inconnue) ;
   - toute autre adresse        → personne.
-Fermé par défaut : fichier absent, trop gros, illisible ou de mauvaise forme → aucune box n'est identifiée.
+Fermé par défaut : fichier absent, trop gros, illisible ou de mauvaise forme → aucune box n'est identifiée, et une ligne de journal
+(une par changement d'état, pas une par requête) le dit.
 Les fichiers sont relus seulement quand leur date, leur taille ou leur inode change (le résultat est mis en cache, tableau adresse → box).
 """
 from __future__ import annotations
@@ -31,11 +33,23 @@ TAILLE_MAX = 1 << 20  # 1 Mio : au-delà, le fichier est refusé sans être lu
 NOM_MAX = 64
 ABONNEMENTS = ("actif", "suspendu", "echu", "revoque")
 
-PEERS_DEFAUT = Path("/var/lib/secubox/p2p/peers.json")
+PEERS_DEFAUT = Path("/var/lib/secubox/p2p-public/pairs-enroles.json")
 PAIRS_AUTOLOAD_DEFAUT = Path("/var/lib/secubox/autoload-public/pairs-publics.json")
 
 log = logging.getLogger("pilotage.identite")
 _cache: dict = {}  # chemin -> (signature, {adresse: Box})
+_etat_signale: dict = {}  # chemin -> dernière cause journalisée (une ligne par changement d'état)
+
+
+def _signaler(chemin: Path, cause: Optional[str]) -> None:
+    """Journalise qu'un fichier d'identité est inutilisable (cause) ou de nouveau lu (None), seulement quand l'état change."""
+    if _etat_signale.get(chemin) == cause:
+        return
+    _etat_signale[chemin] = cause
+    if cause is None:
+        log.info("%s : de nouveau lisible", chemin)
+    else:
+        log.warning("%s : %s ; aucune box de ce réseau n'est identifiée (refus)", chemin, cause)
 
 
 @dataclass(frozen=True)
@@ -71,25 +85,29 @@ def _table(chemin: Path, construire) -> dict:
     chemin = Path(chemin)
     try:
         fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except OSError:
+    except OSError as e:
         _cache.pop(chemin, None)
+        _signaler(chemin, "absent" if isinstance(e, FileNotFoundError) else f"illisible ({e.strerror or type(e).__name__})")
         return {}
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode):
             _cache.pop(chemin, None)
+            _signaler(chemin, "pas un fichier ordinaire")
             return {}
         sig = (st.st_mtime_ns, st.st_size, st.st_ino)
         vu = _cache.get(chemin)
         if vu and vu[0] == sig:
             return vu[1]
         doc = _json_borne(fd, st.st_size)
-    except OSError:
+    except OSError as e:
         _cache.pop(chemin, None)
+        _signaler(chemin, f"illisible ({e.strerror or type(e).__name__})")
         return {}
     finally:
         os.close(fd)
     table = {}
+    _signaler(chemin, None if doc is not None else "trop gros ou JSON invalide")
     if doc is not None:
         try:
             table = _sans_ambiguite(construire(doc), chemin)
@@ -145,8 +163,9 @@ def _hote(ip, reseau) -> bool:
 
 
 def _table_maillage(doc) -> list:
-    """Entrées enrôlées seulement : peers.json reçoit aussi des découvertes mDNS non authentifiées (sans fingerprint ni joined_via)."""
-    liste = doc.get("peers") if isinstance(doc, dict) else doc
+    """Entrées enrôlées seulement (la projection de p2p ne porte qu'elles ; le filtre reste, fermé par défaut : une découverte mDNS
+    non authentifiée n'a ni fingerprint ni joined_via). Clé `pairs` de la projection ; `peers` et liste nue acceptés (forme de peers.json)."""
+    liste = (doc.get("pairs", doc.get("peers")) if isinstance(doc, dict) else doc)
     if not isinstance(liste, list):
         return []
     out = []
@@ -198,7 +217,7 @@ def box_par_adresse(adresse: str, peers: Path = PEERS_DEFAUT, pairs_autoload: Pa
 
 
 def noms_du_maillage(peers: Path = PEERS_DEFAUT, hote: Callable[[], str] = socket.gethostname) -> set:
-    """Noms portés au maillage, pour refuser un renommage vers un nom pris (L2 tâche 6) : pairs ENRÔLÉS de peers.json (même ceux que
+    """Noms portés au maillage, pour refuser un renommage vers un nom pris (L2 tâche 6) : pairs ENRÔLÉS de la projection p2p (même ceux que
     l'identité écarte pour ambiguïté : leur nom reste pris ; jamais une découverte mDNS non authentifiée, qui bloquerait un nom à
     distance) et le nom du maître. Fichier inutilisable → le nom du maître seul. Bloquante : hors de la boucle (to_thread)."""
     noms = set()

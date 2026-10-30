@@ -120,7 +120,7 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
                     maitre: Optional[str] = None, debit=None, plan_vhosts: Optional[Path] = None,
                     racine_pages: Optional[Path] = None, plan_exposition: Optional[Path] = None) -> FastAPI:
     """`suivi` : fin des opérations (partagé avec le canal) ; `noms_pris()` : noms portés au maillage hors table des box (pairs
-    de peers.json, nom du maître), appelée hors boucle. L5 tâche 5 : routes du vhost admin.<box> (api/vhost.py) ; `plan_vhosts` :
+    enrôlés de la projection p2p-public/pairs-enroles.json, nom du maître), appelée hors boucle. L5 tâche 5 : routes du vhost admin.<box> (api/vhost.py) ; `plan_vhosts` :
     fichier relu par le ctl root secubox-pilotage-vhost, réécrit à chaque tour d'inventaire s'il change."""
     suivi = suivi or Suivi(stockage, files, audit)
     diffusion = diffusion if diffusion is not None else Diffusion()
