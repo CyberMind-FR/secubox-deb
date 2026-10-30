@@ -10,6 +10,7 @@ import threading
 
 import pytest
 
+from pilotage.identite import Box
 from pilotage.stockage import EVENEMENTS_MAX, LIGNES_MAX, PARAMS_MAX, VALEUR_MAX, StockageSqlite
 from outils import GK2, GK5, GK5_AUTOLOAD, Horloge, P, releve_gk5
 
@@ -394,7 +395,7 @@ def test_base_d_avant_r38_gagne_la_colonne_tronque(tmp_path):
 def _somme_octets(tmp_path, cle):
     cx = sqlite3.connect(tmp_path / "pilotage" / "pilotage.db")
     try:
-        return cx.execute("SELECT COALESCE(SUM(length(valeur_json)),0) FROM inventaire WHERE cle=?", (cle,)).fetchone()[0]
+        return cx.execute("SELECT COALESCE(SUM(length(CAST(valeur_json AS BLOB))),0) FROM inventaire WHERE cle=?", (cle,)).fetchone()[0]
     finally:
         cx.close()
 
@@ -444,3 +445,131 @@ def test_octets_autre_box_intacte(tmp_path):
     for i in range(6):
         _passe_degradee(s, h, GK5, i)
     assert s.inventaire(GK5_AUTOLOAD.cle)["valeurs"] == avant
+
+
+def test_tri_temporaire_en_memoire_m15(tmp_path):
+    """M15 : SQLite sous AppArmor n'a pas accès à /tmp ; ses fichiers temporaires (tri, index transitoire) restent en mémoire."""
+    s, _ = neuf(tmp_path)
+    with s._cx() as cx:
+        assert cx.execute("PRAGMA temp_store").fetchone()[0] == 2   # 2 = MEMORY
+    with s._tx() as cx:
+        assert cx.execute("PRAGMA temp_store").fetchone()[0] == 2
+
+
+def _somme_vrais_octets(tmp_path, cle):
+    cx = sqlite3.connect(tmp_path / "pilotage" / "pilotage.db")
+    try:
+        return cx.execute("SELECT COALESCE(SUM(length(CAST(valeur_json AS BLOB))),0) FROM inventaire WHERE cle=?", (cle,)).fetchone()[0]
+    finally:
+        cx.close()
+
+
+def test_plafond_compte_des_octets_pas_des_caracteres_r39(tmp_path):
+    """R39 (mineur) : `é` vaut deux octets en UTF-8 ; le plafond borne le disque, il compte donc des OCTETS."""
+    s, h = neuf(tmp_path)
+    s.octets_max = 300_000
+    s.vu(GK5, {})
+    for i in range(6):
+        h.avance(60)
+        params = {f"{P}Gros.{i}.{j}": "é" * 60000 for j in range(2)}   # 2 × 120 002 octets, 2 × 60 002 caractères
+        s.inventaire_enregistrer(GK5, {"results": [{"path": P, "params": params}], "tronque": True})
+        assert _somme_vrais_octets(tmp_path, GK5.cle) <= s.octets_max, i
+        assert all(k in s.inventaire(GK5.cle)["valeurs"] for k in params)
+
+
+def _traces(tmp_path, cle):
+    cx = sqlite3.connect(tmp_path / "pilotage" / "pilotage.db")
+    try:
+        return {t: cx.execute(f"SELECT COUNT(*) FROM {t} WHERE cle=?", (cle,)).fetchone()[0]
+                for t in ("boites", "inventaire", "evenements", "releves")}
+    finally:
+        cx.close()
+
+
+def test_box_sans_contact_depuis_30_jours_oubliee_m12(tmp_path):
+    """M12 : une box (révoquée, renommée) sans contact depuis 30 jours est oubliée : ligne `boites`, inventaire, événements, relevé."""
+    s, h = neuf(tmp_path)
+    s.vu(GK5_AUTOLOAD, {})
+    s.inventaire_enregistrer(GK5_AUTOLOAD, releve_gk5())
+    s.notification(GK5_AUTOLOAD, {"type": "X_SECUBOX_Boot", "value": 3, "ts": int(h.t)})
+    s.releve_enregistrer(GK5_AUTOLOAD.cle, 10, "ok", {"cpu_pct": 1})
+    t0 = h.t
+    h.avance(30 * JOUR)
+    s.vu(GK5, {})                                   # une autre box, en ligne
+    assert s.oublier() == []                        # 30 jours pile : pas encore
+    h.avance(1)
+    (o,) = s.oublier()
+    assert o == {"cle": GK5_AUTOLOAD.cle, "nom": "gk5", "reseau": "autoload", "dernier_contact": int(t0)}
+    assert _traces(tmp_path, GK5_AUTOLOAD.cle) == {"boites": 0, "inventaire": 0, "evenements": 0, "releves": 0}
+    assert s.boite(GK5.cle) is not None and s.oublier() == []
+
+
+def test_oubli_ne_touche_jamais_une_box_en_ligne_m12(tmp_path):
+    """Une box qui sonde (vu_le rafraîchi à chaque contact) n'est jamais oubliée, quel que soit l'âge de sa première venue."""
+    s, h = neuf(tmp_path)
+    s.vu(GK5, {})
+    s.inventaire_enregistrer(GK5, releve_gk5())
+    for _ in range(40):
+        h.avance(JOUR)
+        s.vu(GK5, {})                               # sondage : dernier contact réel
+        assert s.oublier() == []
+    assert s.boite(GK5.cle)["en_ligne"] and _traces(tmp_path, GK5.cle)["inventaire"] > 0
+
+
+def test_oubli_compte_depuis_le_dernier_contact_reel_m12(tmp_path):
+    """Le seuil part du DERNIER contact (sondage, relève rangée, notification reçue), pas de la première venue ni d'une autre trace."""
+    s, h = neuf(tmp_path)
+    s.vu(GK5, {})
+    h.avance(25 * JOUR)
+    s.notification(GK5, {"type": "X_SECUBOX_Boot", "value": 3, "ts": 1})   # reçue du canal : un contact
+    h.avance(6 * JOUR)                                                     # 31 j depuis vu_le, 6 j depuis la notification
+    assert s.oublier() == []
+    h.avance(24 * JOUR + 1)
+    assert [o["cle"] for o in s.oublier()] == [GK5.cle]
+    s.vu(GK5, {})
+    h.avance(29 * JOUR)
+    s.inventaire_enregistrer(GK5, releve_gk5())                            # relève rangée : un contact
+    h.avance(2 * JOUR)
+    assert s.oublier() == []
+
+
+def _flotte(s, n):
+    boites = [Box(f"gk{i}", f"10.10.0.{10 + i}", "maillage", None, None) for i in range(n)]
+    for b in boites:
+        s.vu(b, {})
+    return boites
+
+
+def test_saut_d_horloge_n_oublie_aucune_box_r_l2_45(tmp_path):
+    """R-L2-45 : un saut de 40 jours de l'horloge du maître rend toute la flotte « muette » : rien n'est oublié, l'oubli est suspendu."""
+    s, h = neuf(tmp_path)
+    boites = _flotte(s, 5)
+    h.avance(40 * JOUR)
+    r = s.oublier()
+    assert r == [] and r.suspendu == {"candidates": 5, "total": 5}
+    assert all(s.boite(b.cle) is not None for b in boites)
+
+
+def test_une_box_muette_sur_cinq_reste_oubliee_r_l2_45(tmp_path):
+    s, h = neuf(tmp_path)
+    muette, *autres = _flotte(s, 5)
+    h.avance(31 * JOUR)
+    for b in autres:
+        s.vu(b, {})
+    r = s.oublier()
+    assert [o["cle"] for o in r] == [muette.cle] and r.suspendu is None
+
+
+def test_plus_de_la_moitie_suspend_la_moitie_non_r_l2_45(tmp_path):
+    s, h = neuf(tmp_path)
+    boites = _flotte(s, 4)
+    h.avance(31 * JOUR)
+    for b in boites[2:]:
+        s.vu(b, {})
+    assert len(s.oublier()) == 2                      # 2 sur 4 : la moitié, pas plus → oubliées
+    s2, h2 = neuf(tmp_path / "b")
+    boites = _flotte(s2, 4)
+    h2.avance(31 * JOUR)
+    s2.vu(boites[0], {})
+    r = s2.oublier()
+    assert r == [] and r.suspendu == {"candidates": 3, "total": 4}

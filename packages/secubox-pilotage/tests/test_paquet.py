@@ -3,9 +3,12 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """Task 10 (#3126) : le paquet secubox-pilotage — unité durcie, AppArmor, postinst, nginx, menu, agrégateur, CI."""
+import os
 import re
 import subprocess
 from pathlib import Path
+
+import pytest
 
 ICI = Path(__file__).resolve().parents[1]
 DEPOT = ICI.parents[1]
@@ -138,7 +141,7 @@ def test_controle_debian():
     assert "Package: secubox-pilotage\n" in c and "Architecture: all" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
     ch = lire("debian/changelog").splitlines()[0]
-    assert ch.startswith("secubox-pilotage (0.1.1-1~trixie1) trixie;")
+    assert ch.startswith("secubox-pilotage (0.1.2-1~trixie1) trixie;")
 
 
 def test_postinst_et_prerm():
@@ -179,7 +182,7 @@ def test_spdx_partout():
     assert suivis
     for rel in suivis:
         chemin = ICI / rel
-        if not chemin.exists() or chemin.suffix in (".pyc", ".json") or chemin.name in ("compat", "pytest.ini", "control", "changelog", "format"):
+        if not chemin.exists() or chemin.suffix in (".pyc", ".json") or chemin.name in ("compat", "control", "changelog", "format"):
             continue
         assert "LicenseRef-CMSD-1.0" in chemin.read_text(encoding="utf-8")[:600], chemin
         assert chemin.name == "test_paquet.py" or "SA" + "SU" not in chemin.read_text(encoding="utf-8"), chemin
@@ -217,3 +220,143 @@ def test_plan_compte_de_l_agent():
     plan = lire("docs/superpowers/plans/2026-10-28-pilotage-l1-voir.md", DEPOT)
     assert "utilisateur dédié `secubox-pilotage` (jamais root)" not in plan
     assert "utilisateur dédié `secubox-pilotage-agent` (jamais root)" in plan
+
+
+def test_la_doc_du_marqueur_dit_ce_qu_il_protege_et_ce_qu_il_ne_protege_pas():
+    """Relecture de la tâche 0 (L2), Minor 1 : le marqueur arrête un RELAIS qui transmet les en-têtes du client (agrégateur, autre entrée
+    nginx), PAS un processus qui joint directement la socket : celui-là forge aussi le marqueur. Contre lui, la barrière est la socket
+    (0660, groupe www-data). Aucun texte ne doit promettre le contraire."""
+    import api.canal as canal
+    entree = lire("debian/changelog").split("\n -- ", 1)[0]
+    for texte in (canal.__doc__, entree, lire("README.md")):
+        assert "processus local du groupe www-data) ne choisit pas" not in texte
+        assert "processus local qui joindrait la socket ne choisit plus" not in texte
+        assert "ne protège pas" in texte and "0660" in texte and "relais" in texte
+
+
+# --- L2 tâche 6 (R-L2-35) : assistant d'émission du code de jonction ---
+
+def test_assistant_invite_active_par_socket_au_seul_service():
+    s = lire("systemd/secubox-pilotage-invite.socket")
+    for ligne in ("ListenStream=/run/secubox-pilotage/invite.sock", "Accept=yes", "SocketUser=secubox-pilotage",
+                  "SocketGroup=secubox-pilotage", "SocketMode=0600", "DirectoryMode=0755", "RemoveOnStop=yes", "WantedBy=sockets.target"):
+        assert ligne in s, ligne
+    assert re.search(r"^MaxConnections=[1-4]$", s, re.M)
+
+
+def test_assistant_invite_unite_sous_le_compte_des_jetons_et_durcie():
+    u = code("systemd/secubox-pilotage-invite@.service")
+    for ligne in ("User=secubox", "Group=secubox", "ExecStart=/usr/sbin/secubox-pilotage-invite", "StandardInput=socket",
+                  "StandardOutput=socket", "StandardError=journal", "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes",
+                  "PrivateTmp=yes", "PrivateDevices=yes", "ProtectKernelTunables=yes", "ProtectControlGroups=yes", "RestrictSUIDSGID=yes",
+                  "LockPersonality=yes", "UMask=0027", "CapabilityBoundingSet=", "RestrictAddressFamilies=AF_UNIX AF_NETLINK",
+                  "IPAddressDeny=any"):
+        assert re.search(rf"^{re.escape(ligne)}$", u, re.M), ligne
+    assert re.search(r"^RuntimeMaxSec=\d+$", u, re.M)
+    rw = [x for ligne in u.splitlines() if ligne.startswith("ReadWritePaths=") for x in ligne.split("=", 1)[1].split()]
+    assert set(rw) == {"-/var/lib/secubox/p2p/master-link", "/var/log/secubox"}     # M5 : absent (p2p non installé) = pas d'échec
+    assert "sudo" not in u
+    assert re.search(r"^AppArmorProfile=secubox-pilotage-invite$", u, re.M)
+
+
+def test_assistant_invite_installe_active_et_arrete():
+    r = lire("debian/rules")
+    assert "sbin/secubox-pilotage-invite" in r and "secubox-pilotage-invite.socket" in r and "secubox-pilotage-invite@.service" in r
+    assert "enable --now secubox-pilotage-invite.socket" in code("debian/postinst")
+    assert "secubox-pilotage-invite.socket" in code("debian/prerm")
+    assert "secubox-p2p" in lire("debian/control")
+
+
+def test_profil_api_joint_la_socket_de_l_assistant_seulement():
+    p = code("apparmor/secubox-pilotage-api")
+    assert "/run/secubox-pilotage/invite.sock rw," in p
+    assert "sbx-mesh-invite" not in p and "/usr/bin/sudo" not in p   # le service n'exécute rien
+
+
+def test_service_maitre_toujours_sans_sudo_ni_reseau_ip():
+    u = code("systemd/secubox-pilotage.service")
+    assert "NoNewPrivileges=yes" in u and "RestrictAddressFamilies=AF_UNIX" in u and "sudo" not in u
+
+
+def test_assistant_invite_profil_apparmor_enforce():
+    """I2 (R-L2-39) : pas d'exception, un profil enforce comme pour chaque service (AGENTS.md)."""
+    p = lire("apparmor/secubox-pilotage-invite")
+    c = code("apparmor/secubox-pilotage-invite")
+    assert "profile secubox-pilotage-invite /usr/sbin/secubox-pilotage-invite" in c and "complain" not in c
+    for regle in ("/usr/sbin/secubox-pilotage-invite r,", "/usr/bin/python3* rix,", "/usr/bin/sbx-mesh-invite rix,",
+                  "/usr/lib/secubox/p2p/** r,", "/var/lib/secubox/p2p/master-link/ r,", "/var/lib/secubox/p2p/master-link/** rwk,",
+                  "/var/log/secubox/audit.log a,", "/{,usr/}{,s}bin/ip rix,", "network netlink raw,", "deny /etc/secubox/secrets/** r,"):
+        assert regle in c, regle
+    for interdit in ("/bin/sh", "/bin/bash", "/usr/bin/sudo", "/bin/dash", "capability", "network inet", " ux,", " Ux,", " px,", " Px,"):
+        assert interdit not in c, interdit
+    assert p.rstrip().endswith("}")
+    r = lire("debian/rules")
+    assert "apparmor/secubox-pilotage-invite $(P)/etc/apparmor.d/secubox-pilotage-invite" in r
+    assert "apparmor_parser -r /etc/apparmor.d/secubox-pilotage-invite" in code("debian/postinst")
+
+
+
+def test_exception_reduite_au_compte_partage():
+    """R-L2-40 : seule exception, le compte partagé `secubox` (propriétaire de tokens.json et master-link de secubox-p2p)."""
+    lignes = [x for x in lire(".claude/RULES-CODE.md", DEPOT).splitlines() if "secubox-pilotage-invite@.service" in x]
+    assert len(lignes) == 1
+    for mot in ("User=secubox", "#3126", "tokens.json", "master-link", "enforce", "0600", "argv fixe",
+                "packages/secubox-pilotage/tests/test_paquet.py::test_exception_reduite_au_compte_partage"):
+        assert mot in lignes[0], mot
+
+
+def test_profils_apparmor_se_compilent():
+    import shutil
+    if shutil.which("apparmor_parser") is None:
+        import pytest
+        pytest.skip("apparmor_parser absent")
+    for nom in ("secubox-pilotage-api", "secubox-pilotage-invite"):
+        r = subprocess.run(["apparmor_parser", "-Q", "-K", str(ICI / "apparmor" / nom)], capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+
+
+def _postrm(tmp_path, action, lien=False):
+    """postrm avec setfacl, apparmor_parser, nginx et systemctl simulés (journal des appels), chemins redirigés sous tmp_path."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    for nom, rc in (("setfacl", 1), ("apparmor_parser", 1), ("nginx", 1), ("systemctl", 1)):
+        (bin_ / nom).write_text(f'#!/bin/sh\necho "{nom} $*" >> "{tmp_path}/appels"\nexit {rc}\n')
+        (bin_ / nom).chmod(0o755)
+    journaux, aa, aa_sys = tmp_path / "log", tmp_path / "apparmor.d", tmp_path / "sys-apparmor"
+    for d in (journaux, aa, aa_sys):
+        d.mkdir()
+    (journaux / "audit.log.1").write_text("ancienne\n")
+    if lien:
+        (tmp_path / "cible").write_text("")
+        (journaux / "audit.log").symlink_to(tmp_path / "cible")
+    else:
+        (journaux / "audit.log").write_text("ligne\n")
+    env = dict(os.environ, PATH=f"{bin_}{os.pathsep}{os.environ['PATH']}", SECUBOX_PILOTAGE_JOURNAUX=str(journaux),
+               SECUBOX_PILOTAGE_APPARMOR_D=str(aa), SECUBOX_PILOTAGE_APPARMOR_SYS=str(aa_sys),
+               SECUBOX_PILOTAGE_CANAL_CONF=str(tmp_path / "canal.conf"))
+    r = subprocess.run(["sh", str(ICI / "debian" / "postrm"), action], env=env, capture_output=True, text=True, timeout=30)
+    appels = (tmp_path / "appels").read_text().splitlines() if (tmp_path / "appels").exists() else []
+    return r, appels, journaux, aa
+
+
+@pytest.mark.parametrize("action", ["remove", "purge"])
+def test_postrm_retire_l_acl_et_decharge_les_profils_m12(tmp_path, action):
+    r, appels, journaux, aa = _postrm(tmp_path, action)
+    assert r.returncode == 0, r.stderr                         # outils en échec : jamais d'échec du postrm
+    assert f"setfacl -P -x u:secubox-pilotage {journaux}/audit.log" in appels
+    assert f"setfacl -P -x u:secubox-pilotage {journaux}/audit.log.1" in appels   # journal tourné : même inode, même ACL
+    for profil in ("secubox-pilotage-api", "secubox-pilotage-invite"):
+        assert f"apparmor_parser -R {aa}/{profil}" in appels
+
+
+@pytest.mark.parametrize("action", ["upgrade", "failed-upgrade", "abort-install", "abort-upgrade", "disappear"])
+def test_postrm_hors_remove_et_purge_ne_touche_a_rien_m12(tmp_path, action):
+    r, appels, _, _ = _postrm(tmp_path, action)
+    assert r.returncode == 0, r.stderr
+    assert not [a for a in appels if a.startswith(("setfacl", "apparmor_parser"))], appels
+
+
+def test_postrm_ne_suit_jamais_un_lien_a_la_place_du_journal_m12(tmp_path):
+    r, appels, journaux, _ = _postrm(tmp_path, "purge", lien=True)
+    assert r.returncode == 0, r.stderr
+    assert not [a for a in appels if a.endswith(f"{journaux}/audit.log")], appels

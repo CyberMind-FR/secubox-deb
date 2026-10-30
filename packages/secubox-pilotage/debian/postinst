@@ -29,6 +29,8 @@ case "$1" in
     if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1; then
       apparmor_parser -r /etc/apparmor.d/secubox-pilotage-api >/dev/null 2>&1 \
         || echo "secubox-pilotage : profil AppArmor non chargé (voir journalctl -k)" >&2
+      apparmor_parser -r /etc/apparmor.d/secubox-pilotage-invite >/dev/null 2>&1 \
+        || echo "secubox-pilotage : profil AppArmor de l'assistant de jonction non chargé (voir journalctl -k)" >&2
     fi
 
     # Écouteurs de tunnel et règles nft (seulement pour les interfaces présentes).
@@ -40,6 +42,8 @@ case "$1" in
       if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
       # Les sockets d'abord (systemd les crée avec le bon propriétaire, groupe et mode), puis le service.
       systemctl enable --now secubox-pilotage.socket secubox-pilotage-canal.socket || true
+      # Assistant de jonction (Rejoindre après un renommage, R-L2-35) : activé par socket, une instance par demande.
+      systemctl enable --now secubox-pilotage-invite.socket || true
       systemctl enable --now secubox-pilotage.service || true
       systemctl enable --now secubox-pilotage-ecoute.path secubox-pilotage-ecoute.timer || true
       # mise à jour : le nouveau code et le nouveau profil doivent être pris

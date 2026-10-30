@@ -1,0 +1,11 @@
+{
+ "requete": {
+  "body": {
+   "acteur": "alice",
+   "args": {},
+   "command": "Device.Reboot()"
+  },
+  "type": "OPERATE"
+ },
+ "route": "/canal/v1/requetes"
+}

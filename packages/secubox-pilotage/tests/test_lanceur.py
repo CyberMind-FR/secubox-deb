@@ -184,3 +184,15 @@ def test_lanceur_en_tete_et_sain():
     texte = LANCEUR.read_text()
     assert texte.startswith("#!/usr/bin/python3\n") and "LicenseRef-CMSD-1.0" in texte
     assert 'lifespan="off"' not in texte
+
+
+def test_systemexit_d_uvicorn_journalise_avec_son_code(lanceur, capsys):
+    """uvicorn lève SystemExit(3) quand il ne démarre pas : le lanceur continue (l'autre serveur est arrêté proprement) mais le
+    code de sortie est journalisé, sans quoi la cause d'un redémarrage en boucle reste invisible."""
+    class Sortant:
+        async def serve(self):
+            raise SystemExit(3)
+
+    asyncio.run(lanceur._serve(Sortant()))
+    err = capsys.readouterr().err
+    assert "SystemExit" in err and "3" in err, err

@@ -18,6 +18,8 @@
 #     255.255.255.255 (adresse impossible : la liste héritée est remplacée, rien n'est de confiance ici) et $realip_remote_addr, qui est
 #     toujours l'adresse du pair TCP.
 #   * 4 connexions simultanées par adresse (limit_conn ; la zone est déclarée une fois en tête du fichier rendu).
+#   * X-SecuBox-Pilotage-Tunnel: 1 (L2, M6) : posé ICI SEULEMENT, il dit « passée par l'écouteur du tunnel » ; secubox-proxy.conf le vide sur tout
+#     autre proxy et l'agrégateur ne relaie jamais vers la socket du canal. Le canal refuse (403, audité) une requête qui ne le porte pas.
 #
 # __IP__ et __SOURCE__ sont substitués par secubox-pilotage-ecoute.
 server {
@@ -42,6 +44,7 @@ server {
         proxy_set_header Host localhost;
         proxy_set_header X-Real-IP $realip_remote_addr;
         proxy_set_header X-Forwarded-For $realip_remote_addr;
+        proxy_set_header X-SecuBox-Pilotage-Tunnel 1;
         client_max_body_size 256k;
         # Le sondage long de l'agent attend jusqu'à 25 s : 60 s laissent de la marge sans retenir une connexion morte.
         proxy_read_timeout 60s;

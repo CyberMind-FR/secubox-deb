@@ -4,6 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """#3126 L1 : contrôles statiques du paquet secubox-pilotage-agent (unité, règles, go.mod, AppArmor)."""
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[1]
@@ -17,21 +19,109 @@ def sans_commentaires(txt):
     return "\n".join(ligne for ligne in txt.splitlines() if not ligne.lstrip().startswith("#"))
 
 
+# Options qui posent un filtre seccomp : sous User= non root, systemd impose alors NoNewPrivileges et sudo répond
+# « no new privileges flag is set » (précédents netmodes, autoload, voicestudio).
+SECCOMP = ("ProtectKernelTunables", "LockPersonality", "RestrictSUIDSGID", "SystemCallFilter", "SystemCallArchitectures",
+           "RestrictNamespaces", "RestrictAddressFamilies", "MemoryDenyWriteExecute", "PrivateDevices",
+           "ProtectKernelModules", "ProtectKernelLogs", "ProtectClock", "ProtectHostname", "RestrictRealtime",
+           "RestrictFileSystems", "DynamicUser")
+
+
+def cles(u):
+    return {ligne.split("=", 1)[0].strip() for ligne in u.splitlines() if "=" in ligne}
+
+
 def test_unite_durcie():
     u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
     for d in (
-        "User=secubox-pilotage-agent", "Group=secubox-pilotage-agent", "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes",
+        "User=secubox-pilotage-agent", "Group=secubox-pilotage-agent", "ProtectSystem=strict", "ProtectHome=yes",
         "PrivateTmp=yes", "IPAddressDeny=any", "IPAddressAllow=10.10.0.1 10.64.0.1 localhost",
-        "MemoryMax=32M", "Restart=on-failure", "RestartSec=10", "ReadOnlyPaths=/",
+        "MemoryMax=32M", "Restart=on-failure", "RestartSec=10", "ReadOnlyPaths=/", "ProtectControlGroups=yes",
         "ExecStart=/usr/sbin/sbx-pilotage-agent",
     ):
         assert d in u, d
-    fam = re.search(r"^RestrictAddressFamilies=(.*)$", u, re.M).group(1).split()
-    # AF_NETLINK : net.Interfaces() de Go lit les adresses par netlink (lecture seule sans capacité)
-    assert set(fam) == {"AF_INET", "AF_UNIX", "AF_NETLINK"}
-    assert "Listen" not in u and "CAP_" not in u
-    assert re.search(r"^CapabilityBoundingSet=\s*$", u, re.M)  # aucune capacité
+    assert "Listen" not in u
     assert "User=root" not in u
+    assert re.search(r"^AmbientCapabilities=\s*$", u, re.M)  # l'agent lui-même n'a aucune capacité
+
+
+def test_unite_permet_sudo_vers_le_ctl_seulement():
+    """L2 (R-L2-3) : NoNewPrivileges=no, SEULEMENT pour `sudo -n secubox-pilotagectl` ; rien qui l'impose par seccomp ;
+    le ctl root hérite de l'espace de montage de l'unité : ses dossiers d'écriture y sont ouverts, et eux seuls."""
+    u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
+    assert "NoNewPrivileges=no" in u and "NoNewPrivileges=yes" not in u
+    for cle in SECCOMP:
+        assert cle not in cles(u), cle
+    cap = re.search(r"^CapabilityBoundingSet=(.*)$", u, re.M).group(1).split()
+    # sudo (setuid, setgroups, journal d'audit noyau) ; le ctl écrit audit.log (secubox, 0640) et lit modules.d
+    # CAP_CHOWN (M3) : le ctl crée audit.log au compte secubox sur une box neuve
+    # CAP_NET_ADMIN (tâche 2) : `wg show <interface> allowed-ips` (ancre-verifier) l'exige du noyau, même pour root
+    assert set(cap) == {"CAP_SETUID", "CAP_SETGID", "CAP_AUDIT_WRITE", "CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH",
+                        "CAP_CHOWN", "CAP_NET_ADMIN"}
+    rw = re.search(r"^ReadWritePaths=(.*)$", u, re.M).group(1).split()
+    assert set(rw) == {"/var/log/secubox", "-/var/lib/secubox-pilotagectl"}
+    brut = lire("systemd/secubox-pilotage-agent.service")
+    assert "seulement pour sudo" in brut and "secubox-pilotagectl" in brut
+
+
+def test_unite_couvre_chaque_ecriture_du_ctl():
+    """Croisé avec le ctl : l'état root et le journal d'audit, seuls endroits écrits sous sudo depuis l'agent
+    (/etc/secubox/pilotage n'est écrit que par `mains-liees`, local seulement, hors de l'unité)."""
+    ctl = lire("sbin/secubox-pilotagectl")
+    assert 'self.etat = f"{self.r}/var/lib/secubox-pilotagectl"' in ctl
+    assert 'self.journaux = f"{self.r}/var/log/secubox"' in ctl
+
+
+def test_sudoers_argv_borne_au_ctl():
+    s = lire("sudoers.d/secubox-pilotage-agent")
+    regles = [ligne for ligne in sans_commentaires(s).splitlines() if ligne.strip()]
+    assert regles == ["secubox-pilotage-agent ALL=(root) NOPASSWD: /usr/sbin/secubox-pilotagectl *"]
+    visudo = shutil.which("visudo") or ("/usr/sbin/visudo" if Path("/usr/sbin/visudo").exists() else None)
+    if visudo:
+        p = subprocess.run([visudo, "-cf", str(RACINE / "sudoers.d/secubox-pilotage-agent")],
+                           capture_output=True, text=True)
+        assert p.returncode == 0, p.stdout + p.stderr
+
+
+def test_ctl_python_isole_et_executable():
+    for nom in ("secubox-pilotagectl", "secubox-pilotage"):
+        ctl = RACINE / "sbin" / nom
+        assert ctl.read_text().startswith("#!/usr/bin/python3 -I\n"), nom  # ni PYTHON*, ni dossier courant, ni site
+        assert ctl.stat().st_mode & 0o111, nom
+
+
+def test_regles_installent_la_commande_locale():
+    """Tâche 4 : commande du détenteur, 0755 (un compte non root reçoit son message « à lancer en root » ; le ctl
+    refuse de toute façon hors root), jamais dans le sudoers de l'agent."""
+    assert "install -D -m 0755 sbin/secubox-pilotage $(P)/usr/sbin/secubox-pilotage" in lire("debian/rules")
+    assert "secubox-pilotage " not in sans_commentaires(lire("sudoers.d/secubox-pilotage-agent")).replace(
+        "secubox-pilotage-agent ", "")
+
+
+def test_regles_installent_ctl_sudoers_et_tmpfiles():
+    r = lire("debian/rules")
+    assert "install -D -m 0755 sbin/secubox-pilotagectl $(P)/usr/sbin/secubox-pilotagectl" in r
+    assert "install -D -m 0440 sudoers.d/secubox-pilotage-agent $(P)/etc/sudoers.d/secubox-pilotage-agent" in r
+    assert ("install -D -m 0644 tmpfiles.d/secubox-pilotagectl.conf $(P)/usr/lib/tmpfiles.d/secubox-pilotagectl.conf"
+            in r)
+    t = [ligne for ligne in sans_commentaires(lire("tmpfiles.d/secubox-pilotagectl.conf")).splitlines() if ligne.strip()]
+    assert t == ["d /var/lib/secubox-pilotagectl 0700 root root -"]
+    pi = sans_commentaires(lire("debian/postinst"))
+    assert "systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-pilotagectl.conf" in pi
+    assert pi.index("systemd-tmpfiles --create") < pi.index("systemctl enable --now")
+    c = lire("debian/control")
+    assert re.search(r"^Depends:.*\bsudo\b", c, re.M) and re.search(r"^Depends:.*\bpython3 \(>= 3\.11\)", c, re.M)
+    assert "rm -rf /var/lib/secubox-pilotagectl" in lire("debian/postrm")
+
+
+def test_exception_ecrite_dans_rules_code():
+    regles = (RACINE.parents[1] / ".claude/RULES-CODE.md").read_text(encoding="utf-8")
+    lignes = [ligne for ligne in regles.splitlines()
+              if ligne.startswith("| § 10 durcissement | `secubox-pilotage-agent.service`")]
+    assert len(lignes) == 1
+    for mot in ("NoNewPrivileges=no", "secubox-pilotagectl", "ReadWritePaths", "AppArmor",
+                "tests/test_paquet_agent.py::test_unite_permet_sudo_vers_le_ctl_seulement"):
+        assert mot in lignes[0], mot
 
 
 def test_regles_construisent_sans_cgo():
@@ -61,13 +151,19 @@ def test_apparmor_enforce_sans_reseau_entrant():
     assert "deny /etc/secubox/secrets/** r" in code
     assert "/usr/bin/systemctl rix," in code
     assert "capability" not in code
+    # L2 : le seul passage privilégié, sudo, hors du profil (Ux) ; ce qu'il permet est borné par le sudoers et le ctl
+    assert "/usr/bin/sudo Ux," in code
+    execs = [ligne.strip() for ligne in code.splitlines() if re.search(r"\s[a-zA-Z]*[uUpPcCi]x,\s*$", ligne)]
+    assert execs == ["/usr/bin/systemctl rix,", "/usr/bin/sudo Ux,"], execs
 
 
 def test_paquet_coherent():
     c = lire("debian/control")
     assert "Architecture: any" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
-    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.1.2-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.2.0-1~trixie1) trixie;")
+    # ancre-verifier lit `wg show` par chemin absolu (/usr/bin/wg)
+    assert "wireguard-tools" in re.search(r"^Depends:(.*)$", c, re.M).group(1)
     pi = lire("debian/postinst")
     for m in ("adduser --system --no-create-home --group secubox-pilotage-agent",
               "apparmor_parser", "systemctl enable --now secubox-pilotage-agent"):
@@ -78,7 +174,8 @@ def test_paquet_coherent():
 def test_entetes_spdx():
     fichiers = ["debian/rules", "debian/postinst", "debian/prerm", "debian/postrm", "README.md",
                 "systemd/secubox-pilotage-agent.service", "apparmor/usr.sbin.sbx-pilotage-agent",
-                "conf/pilotage-agent.env", "tests/test_paquet_agent.py"]
+                "conf/pilotage-agent.env", "tests/test_paquet_agent.py", "tests/test_pilotagectl.py",
+                "tests/test_pilotage_local.py", "sbin/secubox-pilotage", "sbin/secubox-pilotagectl", "sudoers.d/secubox-pilotage-agent", "tmpfiles.d/secubox-pilotagectl.conf"]
     fichiers += [str(f.relative_to(RACINE)) for f in (RACINE / "cmd").rglob("*.go")]
     for rel in fichiers:
         assert "LicenseRef-CMSD-1.0" in lire(rel), rel
@@ -111,7 +208,7 @@ def test_apparmor_resserre():
 
 def test_unite_confinee_et_ordonnee():
     u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
-    for d in ("AppArmorProfile=/usr/sbin/sbx-pilotage-agent", "RestrictSUIDSGID=yes", "UMask=0027",
+    for d in ("AppArmorProfile=/usr/sbin/sbx-pilotage-agent", "UMask=0027",
               "Wants=network-online.target"):
         assert d in u, d
     after = re.search(r"^After=(.*)$", u, re.M).group(1).split()
@@ -159,3 +256,17 @@ def test_reglages_lus_par_l_agent_jamais_par_systemd():
     assert "/etc/secubox/pilotage-agent.env r," in code
     main = lire("cmd/sbx-pilotage-agent/main.go")
     assert 'chargerReglages("/", lecture.Root, os.Setenv)' in main
+
+
+def _octets(valeur):
+    n, unite = re.fullmatch(r"(\d+)(MiB|M|KiB|K)", valeur).groups()
+    return int(n) << (20 if unite.startswith("M") else 10)
+
+
+def test_gomemlimit_sous_memorymax_m13():
+    """M13 : le runtime Go connaît sa borne (GOMEMLIMIT) et collecte AVANT le tueur du cgroup (MemoryMax)."""
+    u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
+    env = re.findall(r"^Environment=GOMEMLIMIT=(\S+)$", u, re.M)
+    (maxi,) = re.findall(r"^MemoryMax=(\S+)$", u, re.M)
+    assert env == ["24MiB"], env
+    assert _octets(env[0]) < _octets(maxi) == 32 << 20

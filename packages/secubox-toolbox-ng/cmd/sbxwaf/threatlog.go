@@ -22,6 +22,9 @@
 //	rule_id    — matched rule ID (empty string when Match() did not return one)
 //	action     — "detect" | "warning" | "banned"
 //	user_agent — User-Agent header
+//	mode       — "detect" pour une détection structurelle (#3257), absent sinon
+//	signals    — compteurs de l'analyse multipart (#3257), absents sinon :
+//	             jamais de nom, de valeur ni de contenu
 package main
 
 import (
@@ -64,6 +67,11 @@ type ThreatRecord struct {
 	Leurre        string   // famille servie par le leurre, si semis il y a eu
 	Filigrane     string   // aléa de la marque semée — retrouvable dans le journal
 	MarqueRevenue []string // UNE DE NOS MARQUES EST REVENUE : signal le plus fort
+
+	// #3257 — détections structurelles (PHP2Shell). Mode dit que la ligne est
+	// une observation (« detect ») ; Signaux porte des COMPTEURS seulement.
+	Mode    string
+	Signaux map[string]int
 }
 
 // ThreatLog appends JSON threat records to a file, one per line.
@@ -93,8 +101,13 @@ func (l *ThreatLog) SetEmitter(e *emit.Emitter) { l.emitter = e }
 func (l *ThreatLog) SetGeo(g *Geo) { l.geo = g }
 
 // sevToInt projette la sévérité WAF (low/medium/high/critical) sur 0..100.
+// « audit » vaut 10 (#3257) : une ligne d'état (body-inspect-truncated,
+// multipart-tronque…) n'est pas une menace, et actord compte « hostile » tout
+// événement de gravité >= 40. Une valeur inconnue reste à 40.
 func sevToInt(s string) int {
 	switch s {
+	case "audit":
+		return 10
 	case "critical":
 		return 90
 	case "high":
@@ -189,6 +202,9 @@ type logEntry struct {
 	Leurre        string   `json:"leurre,omitempty"`
 	Filigrane     string   `json:"filigrane,omitempty"`
 	MarqueRevenue []string `json:"marque_revenue,omitempty"`
+	// #3257 — absents des lignes qui ne les portent pas.
+	Mode    string         `json:"mode,omitempty"`
+	Signals map[string]int `json:"signals,omitempty"`
 }
 
 // Record appends one JSON line to the threat log for the given ThreatRecord.
@@ -246,6 +262,8 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 		Leurre:        rec.Leurre,
 		Filigrane:     rec.Filigrane,
 		MarqueRevenue: rec.MarqueRevenue,
+		Mode:          rec.Mode,
+		Signals:       rec.Signaux,
 	}
 
 	if estAutoTest(rec.ClientIP, rec.UA) {

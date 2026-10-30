@@ -11,13 +11,20 @@
   autoloadctl revoquer (--id N | --lot L) --motif M
   autoloadctl abonnement --client C --statut actif|suspendu|revoque
   autoloadctl tunnel-init                  crée la clé du hub (0600) et affiche sa clé publique
-  autoloadctl tunnel-sync                  régénère wg-autoload.conf depuis les pairs actifs et l'applique (wg syncconf), puis exporte-pairs
+  autoloadctl tunnel-sync [--sans-reactiver]
+                                           régénère wg-autoload.conf depuis les pairs actifs et l'applique (wg syncconf), puis exporte-pairs
+                                           (même si WireGuard échoue : le code de retour dit alors l'échec du tunnel) ; --sans-reactiver
+                                           (minuterie, révocations, abonnement) ne relance pas un wg-autoload dont l'unité est désactivée
   autoloadctl exporter-pairs               publie /var/lib/secubox/autoload-public/pairs-publics.json (root, 0644, sans secret) pour le pilotage (#3126)
+
+tunnel-sync et exporter-pairs passent un par un (flock sur /run/secubox-autoload/autoload-sync.lock, dossier à root seul) : un passage qui a lu les pairs avant une
+révocation ne repose jamais le pair révoqué après la synchronisation de la révocation (#3126).
 """
 import argparse
 import json
 import os
 import pwd
+import sqlite3
 import subprocess
 import sys
 import time
@@ -81,11 +88,13 @@ def main(argv=None):
     ab.add_argument("--client", required=True)
     ab.add_argument("--statut", required=True)
     sub.add_parser("tunnel-init")
-    sub.add_parser("tunnel-sync")
+    ts = sub.add_parser("tunnel-sync")
+    ts.add_argument("--sans-reactiver", action="store_true", help="publication (minuterie, révocations, abonnement) : ne réactive pas une interface dont l'unité est désactivée")
     sub.add_parser("exporter-pairs")
     a = ap.parse_args(argv)
 
     db = Path(os.environ.get("SECUBOX_AUTOLOAD_DB", J.DB_DEFAUT))
+    verrou = Path(os.environ.get("SECUBOX_AUTOLOAD_VERROU", T.VERROU_DEFAUT))
     if a.cmd not in ("tunnel-init", "tunnel-sync", "exporter-pairs"):
         _abaisser_privileges()
         reg = J.Registre(db, Path(os.environ.get("SECUBOX_AUTOLOAD_AUDIT", J.AUDIT_DEFAUT)))
@@ -130,20 +139,29 @@ def main(argv=None):
             os.chmod(db.parent / "hub.pub", 0o644)
             print(pub_cle)
         elif a.cmd == "tunnel-sync":
-            pairs_root = T.Pairs(db, lecture_seule=True) if db.exists() else _PairsVides()          # root ne CRÉE jamais la base : elle appartient au service
-            n = T.synchroniser(pairs_root, Path(os.environ.get("SECUBOX_AUTOLOAD_CONF_WG", T.CONF_DEFAUT)), Path(os.environ.get("SECUBOX_AUTOLOAD_CLE_HUB", T.CLE_HUB_DEFAUT)))
-            print(f"{n} pair(s) appliqué(s)")
-            try:                                                                                    # le tunnel passe avant : un échec de l'export ne change pas le code de retour
-                P.exporter(db, P.dossier_public(db))
-            except (P.ProjectionErreur, OSError, ValueError) as err:
-                print(f"exporter-pairs : {err}", file=sys.stderr)
+            with T.verrou_sync(verrou):
+                echec = None
+                try:
+                    pairs_root = T.Pairs(db, lecture_seule=True) if db.exists() else _PairsVides()  # root ne CRÉE jamais la base : elle appartient au service
+                    n = T.synchroniser(pairs_root, Path(os.environ.get("SECUBOX_AUTOLOAD_CONF_WG", T.CONF_DEFAUT)),
+                                       Path(os.environ.get("SECUBOX_AUTOLOAD_CLE_HUB", T.CLE_HUB_DEFAUT)), activer=not a.sans_reactiver)
+                    print(f"{n} pair(s) appliqué(s)")
+                except (T.TunnelErreur, OSError, ValueError, subprocess.SubprocessError, sqlite3.Error) as err:
+                    echec = err                                                                     # N2 : l'export passe quand même
+                try:                                                                                # un échec de l'export ne change pas le code de retour
+                    P.exporter(db, P.dossier_public(db))
+                except (P.ProjectionErreur, OSError, ValueError) as err:
+                    print(f"exporter-pairs : {err}", file=sys.stderr)
+                if echec is not None:
+                    raise echec if isinstance(echec, T.TunnelErreur) else T.TunnelErreur(f"{type(echec).__name__} : {str(echec)[:200]}")
         elif a.cmd == "exporter-pairs":
-            try:
-                chemin, n = P.exporter(db, P.dossier_public(db))
-                print(f"{n} pair(s) publié(s) dans {chemin}")
-            except (P.ProjectionErreur, OSError, ValueError) as err:
-                print(f"exporter-pairs : {err}", file=sys.stderr)
-                return 1
+            with T.verrou_sync(verrou):
+                try:
+                    chemin, n = P.exporter(db, P.dossier_public(db))
+                    print(f"{n} pair(s) publié(s) dans {chemin}")
+                except (P.ProjectionErreur, OSError, ValueError) as err:
+                    print(f"exporter-pairs : {err}", file=sys.stderr)
+                    return 1
         elif a.cmd == "abonnement":
             print(f"{reg.fixer_abonnement(a.client, a.statut)} jeton(s) du client (projection du pilotage : au prochain tunnel-sync, au plus tard dans l'heure)")
     except T.TunnelErreur as err:

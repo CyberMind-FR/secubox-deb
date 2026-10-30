@@ -1,3 +1,12 @@
+secubox-premier-pas (0.8.1-1~trixie1) trixie; urgency=medium
+
+  * Étape « nom » (ref #3126 L2 tâche 5, ref #3242) : un seul pas, /usr/sbin/secubox-renommer <nom>
+    (secubox-core >= 1.8.10) — hosts, secubox.conf, hostnamectl, Avahi et audit, état précédent
+    rétabli à tout échec. _renomme, hostnamectl et la relance d'Avahi propres à premier-pas retirés.
+  * Profil (R-L2-36, M10) : noms réservés (admin, www, secubox, localhost) refusés dès l'étape « nom ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:00:00 +0100
+
 secubox-premier-pas (0.8.0-1~trixie1) trixie; urgency=medium
 
   * Le panneau maitre pousse l'ancre avec l'etape maillage (ref #3100) : cle publique du maillage, adresse, nom et empreinte du maitre (rien si le maitre n'a pas de cle de maillage). La box neuve l'ecrit (ecraser=False) AVANT sbx-mesh-join ; une ancre deja posee pour une autre cle arrete l'etape (la box appartient a un autre maitre), de meme qu'un module ancre de secubox-p2p absent. Cles ancre_* acceptees dans [maillage] seulement.

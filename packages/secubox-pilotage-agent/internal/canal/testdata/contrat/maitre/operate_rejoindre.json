@@ -1,0 +1,12 @@
+{
+ "requete": {
+  "body": {
+   "args": {
+    "code": "sbxmesh1.eyJhIjoiMTAuMTAuMC4xIiwibiI6ImdrOSIsInQiOiJmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhZmFmYWZhIn0.2db6"
+   },
+   "command": "Device.X_SECUBOX_Maillage.Rejoindre()"
+  },
+  "type": "OPERATE"
+ },
+ "route": "/canal/v1/requetes"
+}

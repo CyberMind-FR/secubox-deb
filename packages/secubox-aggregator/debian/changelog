@@ -1,3 +1,14 @@
+secubox-aggregator (0.5.3-1~trixie1) trixie; urgency=medium
+
+  * Le relais générique ne joint jamais le canal des box (ref #3126, L2 « Agir », tâche 0, M6) :
+    `/api/v1/pilotage-canal/…` rend 404 avant toute garde et toute recherche de socket
+    (`_SOCKETS_JAMAIS_RELAYEES`), et `pilotage-canal` n'est jamais monté même cité dans
+    aggregator.toml. Seul l'écouteur nginx du tunnel pose l'identité d'une box et le marqueur
+    X-SecuBox-Pilotage-Tunnel ; relayée, la socket les aurait reçus du client (seul son groupe
+    www-data fermait ce chemin).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:35:00 +0100
+
 secubox-aggregator (0.5.2-1~trixie1) trixie; urgency=medium
 
   * pilotage à socket dédiée (ref #3126). Le maître du pilotage distant tient la file des requêtes des box en mémoire, sert deux sockets

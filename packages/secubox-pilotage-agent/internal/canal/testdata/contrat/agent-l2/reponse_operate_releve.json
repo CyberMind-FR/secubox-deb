@@ -1,0 +1,27 @@
+{
+ "route": "/canal/v1/reponses",
+ "requete": {
+  "body": {
+   "args": {
+    "duree_s": 10
+   },
+   "command": "Device.X_SECUBOX_Releve.Mesurer()"
+  },
+  "type": "OPERATE"
+ },
+ "envoi": {
+  "msg_id": "00000000000000d6",
+  "type": "OPERATE_RESP",
+  "body": {
+   "output": {
+    "duree_s": 10,
+    "cpu_pct": 0,
+    "ctxt_par_s": 0,
+    "ecritures_ko_s": 0,
+    "mem_dispo_mo": 256,
+    "swap_mo": 23,
+    "top": []
+   }
+  }
+ }
+}

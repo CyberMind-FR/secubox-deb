@@ -9,16 +9,18 @@ Rules-Requires-Root: no
 
 Package: secubox-pilotage
 Architecture: all
-Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core, nginx, nftables, iproute2, acl, adduser
-Recommends: apparmor
+Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core (>= 1.8.10~), nginx, nftables, iproute2, acl, adduser
+Recommends: apparmor, secubox-p2p
 Suggests: secubox-pilotage-agent
-Description: SecuBox — maître du pilotage distant du maillage (L1 « Voir », lecture seule)
+Description: SecuBox — maître du pilotage distant du maillage (L1 « Voir », L2 « Agir »)
  Service maître du pilotage distant (TR-369/USP) : reçoit des agents des box, par
  les tunnels WireGuard wg-mesh (10.10.0.1:8472) et wg-autoload (10.64.0.1:8472),
  leurs relevés et notifications, tient l'inventaire par box (SQLite) et l'expose à
  l'administrateur sous /api/v1/pilotage/ (garde require_jwt, audit append-only).
  .
- Lecture seule : Get, GetSupportedDM, Notify et un relevé de charge à la demande.
+ Get, GetSupportedDM, Notify et un relevé de charge à la demande ; en L2, actions du
+ catalogue fermé (confirmation forte, accord du détenteur sur une box cliente), journal
+ des opérations et sessions de support bornées.
  Deux sockets Unix servies par un seul processus, utilisateur dédié, unité durcie,
  AppArmor enforce. Les écouteurs de tunnel sont ceux de nginx (secubox-pilotage-ecoute),
  ouverts par une règle nft à chaud (inet filter ou inet secubox_filter, avant le drop) sur les seules interfaces de tunnel.

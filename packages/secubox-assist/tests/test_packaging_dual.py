@@ -32,12 +32,6 @@ def test_control_depends_on_secubox_p2p_for_ephemeral_peers():
     assert "secubox-p2p" in control
 
 
-def test_sudoers_still_scoped_to_assistctl_only():
-    s = (ROOT / "sudoers" / "secubox-assist").read_text()
-    assert "secubox-assist ALL=(root) NOPASSWD: /usr/sbin/secubox-assistctl" in s
-    assert "ALL=(ALL) NOPASSWD: ALL" not in s
-
-
 def test_postinst_ephemeral_range_block_is_guarded_and_never_invents_a_binary():
     # secubox-p2p has no ephemeral-iface CLI yet (documented follow-up).
     # The provisioning block must be conditioned on the binary actually

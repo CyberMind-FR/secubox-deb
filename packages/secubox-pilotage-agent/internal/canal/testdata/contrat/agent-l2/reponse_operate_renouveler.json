@@ -1,0 +1,20 @@
+{
+ "route": "/canal/v1/reponses",
+ "requete": {
+  "body": {
+   "acteur": "alice",
+   "args": {},
+   "command": "Device.X_SECUBOX_Secrets.Renouveler()"
+  },
+  "type": "OPERATE"
+ },
+ "envoi": {
+  "msg_id": "00000000000000d8",
+  "type": "OPERATE_RESP",
+  "body": {
+   "etat": "accepte",
+   "job": "00000000c0de4e0f",
+   "raison": ""
+  }
+ }
+}

@@ -10,11 +10,21 @@ Servie sur `/run/secubox/pilotage-canal.sock` derrière nginx (10.10.0.1:8472 et
 dans le tunnel, lue UNIQUEMENT dans `X-Real-IP` (posé par nginx) : jamais l'adresse du pair de la socket (c'est nginx). En-tête absent,
 multiple ou adresse inconnue → 403 et une ligne d'audit `pilotage_identite_refusee` (adresse seule).
 
+Avant même l'identité, la requête doit porter UNE fois `X-SecuBox-Pilotage-Tunnel: 1` (L2 T0, M6) : seul le gabarit nginx du canal (écouteur
+de tunnel) le pose ; `secubox-proxy.conf` le vide sur tout autre proxy, HAProxy efface `X-SecuBox-*` à l'entrée publique (#3258) et
+l'agrégateur ne relaie jamais vers cette socket. Absent, en double ou différent de « 1 » → 403, audité (`motif: hors_tunnel`), sans recherche
+d'identité. Ce que le marqueur protège : un RELAIS qui transmettrait les en-têtes du client (relais générique de l'agrégateur, toute autre
+entrée nginx) ne fait plus choisir au client son `X-Real-IP`. Ce qu'il ne protège pas : un processus qui joint DIRECTEMENT la socket forge
+le marqueur comme l'adresse ; contre lui, la seule barrière est la socket elle-même (0660, groupe www-data, nginx seul).
+
 Protocole (le client Go `sbx-pilotage-agent` fait foi) :
-  POST /canal/v1/bonjour     {agent_version, boot_id, modele[]}                        → 200 {"ok": true} ; 429 si < 10 s depuis le précédent
+  POST /canal/v1/bonjour     {agent_version, boot_id, modele[]}                        → 200 {"ok": true} ; 429 si < 10 s depuis le précédent ;
+     un boot_id qui change clôt les reboot en cours de la box (« succès (redémarrée) »), remis à `apres_fin` (I4)
   GET  /canal/v1/requetes    ?attente=N (borné à 25 s)                                 → 200 [{msg_id,type,body}] | 204
   POST /canal/v1/reponses    [{msg_id,type,body}]  (≤ 64)                              → 200 {"ignore": n}
   POST /canal/v1/notifs      [{"type":"NOTIFY","body":{"event":{…}}}]  (≤ 16)          → 200 {"ignore": n}
+     événement : {type, ts, unit?, value?} et, en L2, job/etape/pct/rc/resume (suivi d'une opération), id/etat/decision/fin
+     (mains liées, consentement, support) ; la première X_SECUBOX_OperationDone d'un job est remise à `apres_fin`.
 Corps limité à 256 Kio (413, refusé dès l'en-tête ou en cours de lecture, jamais lu en entier avant). Une réponse inconnue, expirée ou
 d'une autre box est comptée dans « ignore » : jamais une erreur.
 """
@@ -23,8 +33,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
-from typing import Callable, Optional
+from typing import Awaitable, Callable, Optional
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from starlette.requests import ClientDisconnect
@@ -46,6 +57,16 @@ AUDIT_INTERVALLE_S = 60.0
 AUDIT_ADRESSES_MAX = 1024
 NOTIFS_PAR_MINUTE = 60
 NOTIFS_FENETRE_S = 60.0
+MARQUEUR_TUNNEL = "x-secubox-pilotage-tunnel"   # posé par le seul gabarit nginx du canal (pilotage-canal.conf.tpl), valeur « 1 »
+TYPE_FIN = "X_SECUBOX_OperationDone"
+RESUME_MAX = 200
+# Champs des notifications de L2 (agent : notifs.Evenement) : job, etape, pct, rc, resume (suivi d'une opération) ; id, etat,
+# decision, fin (mains liées, consentement, support). Une valeur hors forme rend tout l'événement invalide, comme unit et value.
+_IDENT = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
+_MOT = re.compile(r"[a-z_]{1,32}")
+# /proc/sys/kernel/random/boot_id : un UUID en minuscules ; toute autre forme est ignorée (ne clôt aucun reboot).
+_BOOT_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+_RFC3339 = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})")
 
 log = logging.getLogger("pilotage.canal")
 
@@ -76,6 +97,26 @@ def _evenement(n):
         if isinstance(v, bool) or not isinstance(v, int) or abs(v) >= 1 << 62:
             return None
         out["value"] = v
+    for champ, motif in (("job", _IDENT), ("id", _IDENT), ("etape", _MOT), ("etat", _MOT), ("decision", _MOT), ("fin", _RFC3339)):
+        if champ in ev:
+            v = ev[champ]
+            if not isinstance(v, str) or len(v) > 64 or not motif.fullmatch(v):
+                return None
+            out[champ] = v
+    if "pct" in ev:
+        v = ev["pct"]
+        if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 100:
+            return None
+        out["pct"] = v
+    if "rc" in ev:
+        v = ev["rc"]
+        if isinstance(v, bool) or not isinstance(v, int) or abs(v) >= 1 << 31:
+            return None
+        out["rc"] = v
+    if "resume" in ev:
+        if not isinstance(ev["resume"], str):
+            return None
+        out["resume"] = _imprimable(ev["resume"], RESUME_MAX)   # texte d'affichage court (« maj-paquets : succès »), jamais une sortie
     return out
 
 
@@ -88,34 +129,80 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
                     audit: Callable[[str, dict], None], *, attente_max: float = ATTENTE_MAX_S,
                     taille_max: int = TAILLE_MAX, vu_intervalle_s: float = VU_INTERVALLE_S,
                     audit_intervalle_s: float = AUDIT_INTERVALLE_S, horloge: Callable[[], float] = time.monotonic,
-                    notifs_par_minute: int = NOTIFS_PAR_MINUTE) -> FastAPI:
-    """`identifier(adresse)` rend la Box ou None (appelée hors boucle) ; `audit(evenement, champs)` écrit une ligne dans l'audit."""
+                    notifs_par_minute: int = NOTIFS_PAR_MINUTE,
+                    apres_fin: Optional[Callable[[Box, dict], Awaitable[None]]] = None,
+                    diffuser: Optional[Callable[[Box, dict], None]] = None) -> FastAPI:
+    """`identifier(adresse)` rend la Box ou None (appelée hors boucle) ; `audit(evenement, champs)` écrit une ligne dans l'audit.
+    `apres_fin(box, operation)` : appelée une fois par opération terminée (première X_SECUBOX_OperationDone de son job).
+    `diffuser(box, evenement)` : chaque notification rangée (épurée), pour le temps réel vers la page."""
     app = FastAPI(title="SecuBox Pilotage — canal", docs_url=None, redoc_url=None, openapi_url=None)
 
-    refus: dict = {}  # adresse -> [instant de la dernière ligne, refus tus depuis] ; bornée à AUDIT_ADRESSES_MAX
+    refus: dict = {}  # (motif, adresse) -> [instant de la dernière ligne, refus tus depuis] ; bornée à AUDIT_ADRESSES_MAX
 
-    async def auditer_refus(adresse: str) -> None:
-        """Une ligne d'audit par adresse et par audit_intervalle_s ; les refus tus sont comptés dans la ligne suivante."""
-        maintenant = time.monotonic()
-        etat = refus.get(adresse)
-        if etat is not None and maintenant - etat[0] < audit_intervalle_s:
-            etat[1] += 1
-            return
-        champs = {"adresse": adresse}
-        if etat is not None and etat[1]:
-            champs["tus"] = etat[1]
-        refus.pop(adresse, None)
-        if len(refus) >= AUDIT_ADRESSES_MAX:
-            refus.pop(next(iter(refus)))
-        refus[adresse] = [maintenant, 0]
+    async def ecrire_refus(champs: dict) -> None:
         try:
             await asyncio.to_thread(audit, "pilotage_identite_refusee", champs)
         except Exception:
             log.exception("audit du refus d'identité impossible")
 
+    def champs_tus(cle, tus: int, vidage: str) -> dict:
+        """Ligne de décompte seul (M7) : `tus` refus de cette adresse sont arrivés depuis sa dernière ligne et n'ont pas eu la leur."""
+        motif, adresse = cle
+        champs = {"adresse": adresse}
+        if motif:
+            champs["motif"] = motif
+        champs.update(tus=tus, vidage=vidage)
+        return champs
+
+    async def auditer_refus(adresse: str, motif: Optional[str] = None) -> None:
+        """Une ligne d'audit par adresse (et motif) et par audit_intervalle_s ; les refus tus sont comptés dans la ligne suivante, ou
+        écrits seuls au vidage (chaque tour d'inventaire) et à l'éviction de l'adresse : jamais perdus (M7)."""
+        maintenant = time.monotonic()
+        cle = (motif, adresse)
+        etat = refus.get(cle)
+        if etat is not None and maintenant - etat[0] < audit_intervalle_s:
+            etat[1] += 1
+            return
+        champs = {"adresse": adresse}
+        if motif:
+            champs["motif"] = motif
+        if etat is not None and etat[1]:
+            champs["tus"] = etat[1]
+        refus.pop(cle, None)
+        evincee = None
+        if len(refus) >= AUDIT_ADRESSES_MAX:
+            ancienne = next(iter(refus))
+            tus = refus.pop(ancienne)[1]
+            if tus:
+                evincee = champs_tus(ancienne, tus, "eviction")
+        refus[cle] = [maintenant, 0]
+        if evincee is not None:
+            await ecrire_refus(evincee)
+        await ecrire_refus(champs)
+
+    async def vider_refus() -> None:
+        """Écrit les décomptes de refus tus en attente (M7) ; appelé à chaque tour d'inventaire. Les entrées dont la fenêtre est close et
+        qui n'ont plus rien à écrire sont retirées (la table se vide d'elle-même entre deux rafales)."""
+        maintenant = time.monotonic()
+        a_ecrire = []
+        for cle, etat in list(refus.items()):
+            if etat[1]:
+                a_ecrire.append(champs_tus(cle, etat[1], "tour"))
+                etat[1] = 0
+            elif maintenant - etat[0] >= audit_intervalle_s:
+                del refus[cle]
+        for champs in a_ecrire:
+            await ecrire_refus(champs)
+
+    app.state.vider_refus = vider_refus
+
     async def box_de(request: Request) -> Box:
         valeurs = request.headers.getlist("x-real-ip")
         brut = valeurs[0] if len(valeurs) == 1 else ""
+        if request.headers.getlist(MARQUEUR_TUNNEL) != ["1"]:
+            # pas passée par l'écouteur nginx du tunnel (M6) : l'identité n'est pas cherchée, le refus a la même forme
+            await auditer_refus(_adresse_pour_audit(brut or "-"), "hors_tunnel")
+            raise HTTPException(403, "box inconnue")
         box = None
         if brut:
             try:
@@ -174,8 +261,17 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             raise HTTPException(400, "objet attendu")
         modele = doc.get("modele")
         modele = [chaine(p, 256) for p in modele[:_MODELE_MAX] if isinstance(p, str)] if isinstance(modele, list) else []
-        infos = {"agent_version": chaine(doc.get("agent_version")), "boot_id": chaine(doc.get("boot_id")), "modele": modele}
-        await asyncio.to_thread(stockage.vu, box, infos)
+        boot_id = doc.get("boot_id")
+        boot_id = boot_id if isinstance(boot_id, str) and _BOOT_ID.fullmatch(boot_id) else ""
+        infos = {"agent_version": chaine(doc.get("agent_version")), "boot_id": boot_id, "modele": modele}
+        closes = await asyncio.to_thread(stockage.vu, box, infos)
+        # I4 (R-L2-47) : un nouveau boot_id clôt les reboot en cours de la box ; chacun est remis au suivi (audit), une fois
+        for op in closes or ():
+            if apres_fin is not None:
+                try:
+                    await apres_fin(box, op)
+                except Exception:
+                    log.exception("suivi du reboot clos (job %s) impossible", op.get("job"))
         return {"ok": True}
 
     @app.get("/canal/v1/requetes")
@@ -227,14 +323,17 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
 
     fenetres: dict = {}  # Box.cle -> [début de la fenêtre, acceptées, ignorées depuis la dernière ligne, instant de la dernière ligne] ; bornée
 
-    def admis(box: Box) -> bool:
-        """Au plus `notifs_par_minute` événements par box et par fenêtre de 60 s ; le surplus est ignoré, compté, et journalisé au plus une fois par minute."""
+    def admis(box: Box, categorie: str = "") -> bool:
+        """Au plus `notifs_par_minute` événements par box, par catégorie et par fenêtre de 60 s ; le surplus est ignoré, compté, et
+        journalisé au plus une fois par minute. Les fins d'opération ont leur propre fenêtre (catégorie « fin ») : l'agent les
+        retire de sa boîte au 2xx, une fin écartée par un flot d'autres événements serait perdue."""
         maintenant = horloge()
-        f = fenetres.get(box.cle)
+        cle = (box.cle, categorie)
+        f = fenetres.get(cle)
         if f is None:
             if len(fenetres) >= AUDIT_ADRESSES_MAX:
                 fenetres.pop(next(iter(fenetres)))
-            f = fenetres[box.cle] = [maintenant, 0, 0, -1e18]
+            f = fenetres[cle] = [maintenant, 0, 0, -1e18]
         elif maintenant - f[0] >= NOTIFS_FENETRE_S:
             f[0], f[1] = maintenant, 0
         if f[1] < notifs_par_minute:
@@ -260,13 +359,24 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             if ev is None:
                 ignore += 1
                 continue
-            if not admis(box):
+            if not admis(box, "fin" if ev["type"] == TYPE_FIN else ""):
                 ignore += 1
                 continue
             try:
-                await asyncio.to_thread(stockage.notification, box, ev)
+                termine = await asyncio.to_thread(stockage.notification, box, ev)
             except Exception:
                 log.exception("stockage de la notification impossible")
+                continue
+            if diffuser is not None:
+                try:
+                    diffuser(box, ev)   # temps réel vers la page (tâche 7) : synchrone, ne bloque jamais
+                except Exception:
+                    log.exception("diffusion de la notification impossible")
+            if termine is not None and apres_fin is not None:
+                try:
+                    await apres_fin(box, termine)
+                except Exception:
+                    log.exception("suivi de la fin du job %s impossible", ev.get("job"))
         return {"ignore": ignore}
 
     return app

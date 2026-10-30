@@ -58,6 +58,10 @@ try:
 except ImportError:  # standalone (WorkingDirectory=…/waf)
     from historique import agreger_historique as _agreger_historique, bucket_ip
 try:
+    from api import php_signaux as _php_signaux
+except ImportError:  # standalone
+    import php_signaux as _php_signaux
+try:
     from api.application import application as _application, lire_etat as _lire_etat_nft
 except ImportError:  # standalone
     from application import application as _application, lire_etat as _lire_etat_nft
@@ -73,6 +77,10 @@ NFT_ETAT = Path("/var/cache/secubox/waf/nft-etat.json")
 _nft_table_absente = False
 
 HISTORY_CACHE = "/var/lib/secubox/waf/waf-history.json"
+# Profils de vhost déclaratifs (lus aussi par sbxwaf) et relevé des signaux PHP (#3273), calculé en tâche de fond.
+VHOST_PROFILES = Path("/etc/secubox/waf/vhost_profiles.json")
+PHP_SIGNAUX_CACHE = Path("/var/lib/secubox/waf/php-signaux.json")
+PHP_SIGNAUX_PERIODE = 60  # s : le balayage du journal est rare, jamais par requête
 _history_lock = threading.Lock()
 
 
@@ -538,6 +546,7 @@ def _get_threat_stats() -> dict:
         state["today_iso"] = today
         state["threats_today"] = 0
         state["observed_today"] = 0   # detect-mode matches seen today (not blocked)
+        state["etats_today"] = 0      # lignes d'état (#3257), ni menace ni observation
 
     counters = state.get("counters", {})
     by_category = defaultdict(int, counters.get("by_category", {}))
@@ -578,6 +587,12 @@ def _get_threat_stats() -> dict:
     # only count the newest lines.
     observed_threats = counters.get("observed_threats", 0)
     observed_today = state.get("observed_today", 0)
+    # LIGNES D'ÉTAT (#3257, relecture finale M1) : multipart-*, body-inspect-*
+    # et toute gravité « audit » disent ce que le WAF a pu lire, pas qu'on
+    # l'attaque. Chaque pièce jointe de plus de 1 Mio écrit multipart-tronque :
+    # comptée en menace, elle gonflait le total et mettait l'usager en tête.
+    etats = counters.get("etats", 0)
+    etats_today = state.get("etats_today", 0)
     ip_countries: Dict[str, str] = dict(state.get("ip_countries", {}))
 
     log_path = Path(THREATS_LOG)
@@ -588,7 +603,7 @@ def _get_threat_stats() -> dict:
             top_ips, top_countries, top_vhosts, ip_countries,
             observed_threats, observed_today, noms_non_routes,
             par_origine, par_type, comptes_vises, leurres_touches, efficacite,
-        ), **_fenetre_24h(par_heure)}
+        ), "etats": etats, "etats_today": etats_today, **_fenetre_24h(par_heure)}
 
     geoip_reader = _get_geoip_reader()
     try:
@@ -604,7 +619,8 @@ def _get_threat_stats() -> dict:
         if ("noms_non_routes" not in counters or "par_origine" not in counters
                 or "comptes_vises" not in counters
                 or "efficacite" not in counters
-                or "par_heure" not in counters):
+                or "par_heure" not in counters
+                or "etats" not in counters):
             by_category.clear(); by_severity.clear(); top_ips.clear()
             top_countries.clear(); top_vhosts.clear(); noms_non_routes.clear()
             par_origine.clear(); par_type.clear()
@@ -620,6 +636,8 @@ def _get_threat_stats() -> dict:
             # cumule bien inferieur — un chiffre qui se contredisait lui-meme.
             threats_today = 0
             observed_today = 0
+            etats = 0
+            etats_today = 0
             byte_position = 0
 
         # Log rotation / truncation : the file shrank since last read.
@@ -631,6 +649,8 @@ def _get_threat_stats() -> dict:
             threats_today = 0
             observed_threats = 0
             observed_today = 0
+            etats = 0
+            etats_today = 0
             byte_position = 0
             ip_countries.clear()
 
@@ -640,6 +660,12 @@ def _get_threat_stats() -> dict:
                 for line in f:
                     try:
                         entry = json.loads(line.strip())
+
+                        if _est_ligne_d_etat(entry):
+                            etats += 1
+                            if entry.get("timestamp", "").startswith(today):
+                                etats_today += 1
+                            continue
 
                         # A "detect" record was MATCHED but let through — the
                         # request was NOT blocked. Counting it as a block would
@@ -716,10 +742,12 @@ def _get_threat_stats() -> dict:
         "today_iso": today,
         "threats_today": threats_today,
         "observed_today": observed_today,
+        "etats_today": etats_today,
         "byte_position": byte_position,
         "counters": {
             "total_threats": total_threats,
             "observed_threats": observed_threats,
+            "etats": etats,
             "by_category": dict(by_category),
             "by_severity": dict(by_severity),
             "top_ips": dict(top_ips),
@@ -742,7 +770,15 @@ def _get_threat_stats() -> dict:
         top_ips, top_countries, top_vhosts, ip_countries,
         observed_threats, observed_today, noms_non_routes,
         par_origine, par_type, comptes_vises, leurres_touches, efficacite,
-    ), **_fenetre_24h(par_heure)}
+    ), "etats": etats, "etats_today": etats_today, **_fenetre_24h(par_heure)}
+
+
+def _est_ligne_d_etat(entry: dict) -> bool:
+    """Ligne d'état du WAF (#3257) : multipart-*, body-inspect-*, ou gravité
+    « audit ». Comptée à part, jamais en menace ni en observation."""
+    cat = str(entry.get("category") or "")
+    return (cat.startswith(("multipart-", "body-inspect-"))
+            or str(entry.get("severity") or "") == "audit")
 
 
 def _finalize_stats(
@@ -946,18 +982,32 @@ def _refresh_warm_caches() -> dict:
     }
 
 
+def _rafraichir_php_signaux(maintenant: Optional[float] = None) -> None:
+    """Balaie le journal des menaces et écrit le relevé des signaux PHP (#3273). Appelé par la tâche de fond seulement."""
+    quand = datetime.fromtimestamp(maintenant if maintenant is not None else time.time(), tz=timezone.utc)
+    etat = _php_signaux.calculer(_php_signaux.lignes_du_journal(Path(THREATS_LOG)), quand)
+    _php_signaux.ecrire_cache(PHP_SIGNAUX_CACHE, etat)
+
+
 async def _warm_loop():
     """Background refresher. Survives individual failures so a single
     bad log line can't kill the loop."""
     # Stagger the very first refresh by 1 s so uvicorn finishes binding
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
+    dernier_php = 0.0
     while True:
         try:
             await asyncio.to_thread(_refresh_warm_caches)
         except Exception:
             # Swallow — next tick will retry. Logging would spam.
             pass
+        if time.time() - dernier_php >= PHP_SIGNAUX_PERIODE:
+            try:
+                await asyncio.to_thread(_rafraichir_php_signaux)
+                dernier_php = time.time()
+            except Exception:
+                pass  # le relevé précédent reste servi ; la route annonce son âge
         await asyncio.sleep(WAF_WARM_INTERVAL)
 
 
@@ -1068,7 +1118,7 @@ async def get_detections():
     # ── Anti-robots par vhost ─────────────────────────────────────────────
     coches = []
     try:
-        profils = json.loads(Path("/etc/secubox/waf/vhost_profiles.json").read_text())
+        profils = json.loads(VHOST_PROFILES.read_text())
         coches = [str(v) for v in (profils.get("anti_robots") or [])]
     except (OSError, ValueError, AttributeError):
         coches = []
@@ -1109,7 +1159,61 @@ async def get_detections():
                    if ports else "aucun leurre en écoute"),
     })
 
+    # ── Analyse des requêtes PHP (#3273) ──────────────────────────────────
+    armes = _vhosts_php_armes()
+    releve = _php_signaux.lire_cache(PHP_SIGNAUX_CACHE)
+    detail = "signaux en 24 h : inconnu (relevé absent)"
+    if releve:
+        # Un relevé altéré (compteur ou fenêtre non entiers) rend « inconnu », jamais une erreur 500.
+        try:
+            n = sum(int(releve["familles"].get(f, 0)) for f in _php_signaux.FAMILLES)
+            detail = f"{n} signaux en {int(releve.get('fenetre_h', 24))} h"
+        except (TypeError, ValueError, OverflowError):
+            detail = "signaux en 24 h : inconnu (relevé illisible)"
+    detections.append({
+        "id": "analyse_php",
+        "nom": "Analyse des requêtes PHP",
+        "emoji": "🐘",
+        "resume": "PHP2Shell, Roundcube, Nextcloud et entrées PHP hostiles : signalés, jamais bloqués",
+        "mode": "detect",
+        "classes": armes,
+        "actif": bool(armes) and _unite_active("secubox-waf-ng"),
+        "detail": detail,
+    })
+
     return {"detections": detections, "count": len(detections)}
+
+
+def _vhosts_php_armes() -> List[str]:
+    """Vhosts dont les envois sont analysés comme du PHP : ceux dont le service est déclaré PHP, plus les motifs
+    d'hôte (`php_hotes`, rendus tels quels). Fichier absent ou illisible : aucun (rien n'est supposé armé)."""
+    try:
+        profils = json.loads(VHOST_PROFILES.read_text())
+        services = {str(x) for x in (profils.get("php_services") or [])}
+        vhosts = profils.get("vhosts") or {}
+        hotes = sorted(str(h) for h, svc in vhosts.items() if str(svc) in services)
+        motifs = [m for m in (profils.get("php_hotes") or []) if isinstance(m, str)]
+    except (OSError, ValueError, AttributeError):
+        return []
+    return hotes + motifs
+
+
+@app.get("/php/signaux", dependencies=[Depends(require_lecture)])
+async def get_php_signaux():
+    """Signaux de l'analyse PHP sur 24 h, par famille, règle, vhost et adresse publique (#3273).
+
+    Lit le relevé écrit par la tâche de fond : le journal n'est jamais relu ici. Sans relevé, l'état est « inconnu »
+    et les compteurs sont nuls (null), jamais zéro."""
+    releve = _php_signaux.lire_cache(PHP_SIGNAUX_CACHE)
+    if releve is None:
+        return {"fenetre_h": _php_signaux.FENETRE_H, "etat": "inconnu", "calcule_a": None,
+                "familles": None, "regles": None, "vhosts": None, "adresses": None}
+    return _php_signaux.appliquer_fraicheur(releve, _maintenant())
+
+
+def _maintenant() -> float:
+    """Horloge de l'API (remplaçable par les tests)."""
+    return time.time()
 
 
 def _unite_active(unite: str) -> bool:

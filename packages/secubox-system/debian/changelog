@@ -1,3 +1,44 @@
+secubox-system (1.11.5-1~trixie1) trixie; urgency=medium
+
+  * POST /settings (ref #3242, ref #3126 L2 tâche 5) : le renommage passe par l'unité root
+    secubox-systeme-renommer@<nom>.service (règle polkit existante, sujet secubox-system.service)
+    qui lance /usr/sbin/secubox-renommer ; code de sortie relu (ExecMainStatus) et rendu avec son
+    message (400, 409, 500, 502), délai borné (504), démarrage audité. Nom validé avant tout
+    lancement (libellé DNS, noms réservés). Fuseau : code de retour de timedatectl lu et rendu,
+    autorisé par une règle polkit bornée au même sujet. Fini le {"success": true} muet.
+  * Depends secubox-core (>= 1.8.10~).
+  * Relecture (R-L2-36) : le nom actuel renvoyé par la page n'est pas un renommage (un simple
+    changement de fuseau passait en 400 sur une box nommée « secubox » ou hors libellé DNS) ; la
+    page n'envoie le nom que s'il a changé ; règle polkit : secubox-systeme-renommer@ seulement
+    démarrée, seulement pour une instance au motif DNS (refus explicite sinon).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 16:00:00 +0100
+
+secubox-system (1.11.4-1~trixie1) trixie; urgency=medium
+
+  * service_control (audit R1) : nom d'unité validé par le motif de la règle polkit
+    (400 sinon), « systemctl <action> -- <unité> », arrêt d'une unité protégée refusé
+    (403, UNITES_PROTEGEES synchrone avec PROTECTED_IDS de secubox-profiles), une ligne
+    dans /var/log/secubox/audit.log par appel, sans la sortie de systemctl (ref #3258).
+  * /admin/service/<nom>/<action> (root, sans polkit) passe par le même contrôle : un seul
+    helper, secubox_core.unites, partagé avec service_control ; depuis /admin/, seules
+    nginx, haproxy, unbound et ssh restent pilotables parmi les unités Debian, jamais
+    arrêtées (ruling R2) ; la page affiche le refus d'une unité protégée. Dépend de
+    secubox-core (>= 1.8.9~) (revue #3258, I2).
+  * /system/service_action n'exécute plus rien par GET (405) : un <img> d'un site tiers
+    pouvait éteindre la box (cookie SameSite=None, garde d'origine muette sur GET). POST
+    seulement, alias de service_control. Le JS porté de LuCI (system-hub/api.js) reste
+    intact : aucune page ne le charge (revue #3258, I3).
+  * /admin/reboot et /admin/shutdown : motif validé (texte simple, 200 caractères au plus,
+    sans tiret en tête) et « -- » avant les arguments libres de shutdown : un motif « -P »
+    changeait un redémarrage en extinction. Chaque lancement d'une unité
+    secubox-systeme-* (pare-feu, heure, caches, extinction, redémarrage) est audité par
+    secubox_core.unites (#3258, tour 3).
+  * GET /admin/service/<nom> : « systemctl show … -- <unité> », le nom ne devient jamais une
+    option (API root) (#3258, tour 3).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 12:27:00 +0100
+
 secubox-system (1.11.3-1~trixie1) trixie; urgency=medium
 
   * Relevé des modules : l'anneau MIND suit secubox-ai-gateway, ai-insights étant retiré (ref #3017).

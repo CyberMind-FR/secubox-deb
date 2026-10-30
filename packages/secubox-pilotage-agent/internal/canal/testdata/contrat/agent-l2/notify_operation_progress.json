@@ -1,0 +1,29 @@
+{
+ "route": "/canal/v1/notifs",
+ "envoi": [
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_OperationProgress",
+     "ts": 1793000000,
+     "job": "00000000c0de15d5",
+     "etape": "lancee",
+     "pct": 0
+    }
+   },
+   "type": "NOTIFY"
+  },
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_OperationProgress",
+     "ts": 1793000000,
+     "job": "00000000c0de15d5",
+     "etape": "terminee",
+     "pct": 100
+    }
+   },
+   "type": "NOTIFY"
+  }
+ ]
+}

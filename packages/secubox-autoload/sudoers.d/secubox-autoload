@@ -1,3 +1,6 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
-# secubox-autoload (#2190) : le service d'enrôlement (secubox-autoload) applique le tunnel par UN argv exact, rien d'autre.
+# secubox-autoload (#2190) : le service d'enrôlement (secubox-autoload) applique le tunnel par DEUX argv exacts, rien d'autre :
+# tunnel-sync (enrôlement : monte l'interface) et tunnel-sync --sans-reactiver (minuterie, révocations, abonnement : ne réactive pas une
+# interface désactivée, #3126).
 secubox-autoload ALL=(root) NOPASSWD: /usr/sbin/autoloadctl tunnel-sync
+secubox-autoload ALL=(root) NOPASSWD: /usr/sbin/autoloadctl tunnel-sync --sans-reactiver

@@ -20,6 +20,7 @@ Shared Python modules for all SecuBox services:
 - `logger.py` - Unified logging
 - `system.py` - System utilities
 - `kiosk.py` - Kiosk mode helpers
+- `unites.py` - LE contrôle partagé pour piloter une unité `secubox-*.service` depuis une API : motif, unités protégées (arrêt refusé), `systemctl <action> -- <unité>`, audit JSON (#3258) ; option `avec_unites_debian` (routes `/admin/` seulement) : nginx, haproxy, unbound, ssh réparables, jamais arrêtées
 
 ### Services
 
@@ -37,6 +38,23 @@ Shared Python modules for all SecuBox services:
 - `/usr/sbin/secubox-led-heartbeat` - LED heartbeat daemon
 - `/usr/sbin/secubox-dns-listes` - `appliquer` (default), `etat`, `compiler FICHIER` (#3205)
 - `/usr/sbin/secubox-renouvelle-secrets` - secrets generated on the box itself (#3243)
+- `/usr/sbin/secubox-renommer` - the single way to rename a box (#3126 L2, #3242)
+
+## Renommer une box (`secubox-renommer`, 1.8.10, #3126 L2 tâche 5, #3242)
+
+`secubox-renommer [--acteur <login>] <nom>` (root) est le **seul** chemin de renommage : page Système (unité root
+`secubox-systeme-renommer@<nom>.service` de secubox-system), premier-pas, pilotage distant
+(`secubox-pilotagectl renommer`). Dans l'ordre, chaque étape défaite si une suivante échoue :
+ligne `127.0.1.1` de `/etc/hosts` (les autres lignes intactes), `hostname` de la section `[global]` de
+`/etc/secubox/secubox.conf`, `hostnamectl set-hostname`, audit `box_renommee {ancien, nouveau, acteur}` (audit
+impossible ⇒ tout est rétabli), puis `systemctl try-restart avahi-daemon.service` (échec dit, non bloquant).
+Idempotent (`"inchange": true`, non audité), y compris pour un nom actuel réservé (`secubox` de l'installeur).
+Un renommage à la fois : verrou attendu 15 s au plus, puis code 1 « renommage déjà en cours ». Un ancien nom hors motif
+est rétabli tel quel au retour arrière. Refus : nom hors libellé DNS (code 2), réservé `admin`, `www`, `secubox`,
+`localhost` (3), déjà porté par un pair **enrôlé** de `/var/lib/secubox/p2p/peers.json` (4) ; écriture impossible (5)
+ou `hostnamectl` en échec (6) : état précédent rétabli. Refus de fond audités `box_renommage_refuse`. Écritures
+atomiques sans suivre de lien, droits d'origine gardés, aucun shell. Sortie : une ligne JSON. `SBX_RACINE` (tests)
+honorée seulement sans élévation par sudo.
 
 ## Secrets propres à la box (`secubox-renouvelle-secrets`, 1.8.5–1.8.7, #3243)
 

@@ -9,6 +9,44 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-30 — Pilotage distant TR-369 : L2 « Agir » fusionné, non déployé (ref #3126, ref #3242)
+
+- **PR #3278** : ctl root `secubox-pilotagectl` à liste fermée (sudo borné), ancre du maître vérifiée sur le canal réel,
+  services durables seulement (unité ponctuelle, minuterie, non chargée, alias protégé refusés), accord du détenteur sur une
+  box cliente (nom compris), mains liées, support borné sans shell, opérations longues par `systemd-run` avec fin auditée et
+  rattrapée après redémarrage (`fins-recentes`, `boot_id`) ; maître : actions `require_jwt` + confirmation forte, garde
+  serveur « box cliente = support ouvert », flux SSE (jeton revérifié), `Rejoindre` par assistant socket + AppArmor ;
+  `secubox-renommer` (corrige #3242), page de la box dans la Flotte, assist réduit au catalogue unique.
+- Versions (non publiées) : core 1.8.10, pilotage 0.1.2, pilotage-agent 0.2.0, system 1.11.5, premier-pas 0.8.1,
+  annuaire 0.16.3, assist 0.4.0, autoload 0.7.5, aggregator 0.5.3.
+- Revue : SDD tâche par tâche, relecture finale de branche (1 critique : « démarrer » une unité oneshot root contournait
+  l'accord du détenteur ; 4 importants), corrigés, relecture ciblée « prêt à fusionner ».
+- **R33 maintenue** (propriétaire, 2026-10-30) : aucun déploiement ni publication apt avant L5 ; banc T10/T12 ensuite.
+
+## 2026-10-29 — WAF : PHP2Shell et signatures équivalentes en mode detect, déployés sur gk2 (closes #3257, closes #3273)
+
+- **#3257 (PR #3272, secubox-waf-ng 1.31.0)** : analyseur multipart borné calqué sur `rfc1867.c` (PHP 8.2), signatures
+  structurelles PHP2Shell (CVE-2026-109618/109619), capture en flux, vhosts PHP armés. Mode detect.
+- **#3273 (PR #3276, secubox-waf-ng 1.32.0, catalogue 1.7.0)** : signatures équivalentes, pour repérer les attaquants même
+  quand l'attaque ne passe plus — normalisation des noms comme PHP ; Roundcube (`_from` CVE-2025-49113 KEV, `filename` de
+  session, CR/LF IMAP et envoi, markasjunk, photo non raster) ; Nextcloud (partage fédéré anonyme CVE-2026-77167,
+  `calendar-proxy`, type ≠ octets magiques sur PUT WebDAV) ; PHP générique (parties > 1 020, DOCTYPE DAV, faux `__Host-`,
+  boundary > 70) ; compléments C1-C5 ; étiquettes d'outil ; interface (carte « Analyse des requêtes PHP », `/php/signaux`).
+  Rien de calculé avant le relais ; un vhost non PHP ne paie rien de nouveau ; R12 inchangé.
+- **Déploiement gk2** (18:28) : publiée par `apt-publier.sh` (arm64 ; l'index amd64 reste en 1.30.7), installée par apt ;
+  22 catégories chargées, aucun redémarrage, sites publics en 200, sbxwaf ≈ 24 % d'un cœur (pas de mesure 1.31.0 pour comparer).
+- **Leçon** : seul gk2 est exposé à Internet ; la première « mise en canari » sur gk1 ne voyait aucun trafic.
+- **Reste** : étalonner les seuils provisoires sur le trafic réel de gk2 ; construire l'amd64 ; observer C1 (php2shell-005)
+  avec les clients HTTP/2 en flux.
+
+## 2026-10-29 — Conteneurs mail vers trixie : roundcube fait, mail revenu à bookworm (ref #3274)
+
+- `roundcube` : trixie 13.7, Roundcube 1.6.20+dfsg-0+deb13u1, PHP 8.4.27 (corrige 5 CVE non corrigées dans bookworm).
+- `mail` : échec (transition `libssl3t64`, puis Dovecot 2.4 qui refuse la configuration 2.3) → retour à `snap1` ; état trixie
+  gardé en `snap2` pour préparer la configuration Dovecot 2.4 à froid. Boîtes sur volume lié, rien perdu.
+- Source : PR #3275 (secubox-mail 2.16.8 : conteneurs créés en trixie, PHP sans version en dur, drop-ins `ImportCredential=`,
+  `gpg` au lieu de `gnupg`).
+
 ## 2026-10-29 — Retrait de reality et socialrelay, kiosque, couture en frontal léger, pilotage L1 étapes 1-10 (ref #3256, ref #3254, ref #3126)
 
 - **Retrait reality / socialrelay (#3256, décision du propriétaire)** : gk3 et gk4 purgés (paquets actifs), gk1 et gk2

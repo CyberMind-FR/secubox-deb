@@ -26,7 +26,7 @@ def test_page_autonome_sans_dialogue_natif():
 def test_routes_d_ecriture_a_l_identique():
     ecritures = [
         "'/service_control', { service: nom, action }", "'/restart_services'", "'/reload_firewall'", "'/sync_time'", "'/clear_cache'",
-        "'/backup'", "'/reboot'", "'/shutdown'", "'/apply_updates'", "'/settings', { hostname:", "'/kiosk/enable?mode='", "'/kiosk/disable'",
+        "'/backup'", "'/reboot'", "'/shutdown'", "'/apply_updates'", "'/settings', corps)", "'/kiosk/enable?mode='", "'/kiosk/disable'",
         "'/board/detect'", "'DELETE', '/sessions/'", "'/sessions/revoke-all'",
     ]
     for r in ecritures:

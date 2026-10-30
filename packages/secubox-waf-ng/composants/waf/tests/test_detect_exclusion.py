@@ -151,3 +151,48 @@ def test_blocked_24h_lit_la_fenetre_et_non_le_journal_3176(monkeypatch):
     monkeypatch.setattr(waf_main, "_cfg", lambda: {"enabled": True})
     s = waf_main._decorate_dashboard_stats({"total_threats": 1263, "threats_today": 1263, "menaces_24h": 2104})
     assert s["blocked_24h"] == 2104 and s["blocked_today"] == 1263
+
+
+# #3257 (relecture finale M1) : une ligne d'ÉTAT n'est pas une menace. Chaque
+# pièce jointe de plus de 1 Mio écrit multipart-tronque ; elle gonflait
+# total_threats et threats_today et plaçait l'usager dans top_ips.
+def test_lignes_d_etat_comptees_a_part_3257(tmp_path, monkeypatch):
+    today = time.strftime("%Y-%m-%d")
+    usager = "203.0.113.50"
+
+    def etat(cat, sev="audit"):
+        return {"action": cat, "category": cat, "severity": sev,
+                "timestamp": today + "T11:00:00", "client_ip": usager}
+    _banc(tmp_path, monkeypatch,
+          {"action": "banned", "category": "sqli", "severity": "critical",
+           "timestamp": today + "T10:00:00", "client_ip": "203.0.113.1"},
+          etat("multipart-tronque"), etat("multipart-malforme"), etat("multipart-limite"),
+          etat("capture-concurrence"), etat("body-inspect-truncated"),
+          etat("body-inspect-skipped"),
+          {"action": "autre", "category": "x", "severity": "audit",
+           "timestamp": today + "T11:00:01", "client_ip": usager},
+          {"action": "detect", "category": "php2shell", "severity": "critical", "mode": "detect",
+           "timestamp": today + "T11:00:02", "client_ip": "203.0.113.9"})
+    s = waf_main._get_threat_stats()
+    assert s["total_threats"] == 1 and s["threats_today"] == 1
+    assert s["observed_threats"] == 1
+    assert s["etats"] == 7 and s["etats_today"] == 7
+    assert usager not in s["top_ips"]
+    assert not any(c.startswith(("multipart-", "body-inspect-")) for c in s["by_category"])
+    assert s["menaces_24h"] == 1
+
+
+def test_cache_d_avant_les_etats_relu_une_fois_3257(tmp_path, monkeypatch):
+    import json as _json
+    today = time.strftime("%Y-%m-%d")
+    _banc(tmp_path, monkeypatch,
+          {"action": "multipart-tronque", "category": "multipart-tronque", "severity": "audit",
+           "timestamp": today + "T11:00:00", "client_ip": "203.0.113.50"})
+    waf_main._get_threat_stats()
+    cache = tmp_path / "cache.json"
+    etat = _json.loads(cache.read_text())
+    del etat["counters"]["etats"]                     # cache d'avant M1 : reprise complète
+    etat["counters"]["total_threats"] = 1             # l'ancienne lecture la comptait en menace
+    cache.write_text(_json.dumps(etat))
+    s = waf_main._get_threat_stats()
+    assert s["total_threats"] == 0 and s["etats"] == 1

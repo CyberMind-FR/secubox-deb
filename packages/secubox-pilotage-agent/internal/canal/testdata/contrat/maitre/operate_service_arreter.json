@@ -1,0 +1,14 @@
+{
+ "requete": {
+  "body": {
+   "acteur": "alice",
+   "args": {
+    "action": "arreter",
+    "unite": "secubox-hub.service"
+   },
+   "command": "Device.X_SECUBOX_Services.Agir()"
+  },
+  "type": "OPERATE"
+ },
+ "route": "/canal/v1/requetes"
+}

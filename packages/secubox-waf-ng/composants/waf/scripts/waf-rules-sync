@@ -14,33 +14,65 @@ dpkg n'y touche pas, et chaque correction de règle passait donc par une éditio
 catégories `generated: true` (product_absent_probes…) sont tenues à chaud par
 wafgen et n'existent que là.
 
-Règle : les catégories LIVRÉES remplacent celles de la box ; les catégories
+Règle : `_meta` (version, date, changelog) est celui de la copie livrée ; les
+catégories LIVRÉES remplacent celles de la box ; les catégories
 GÉNÉRÉES de la box sont gardées telles quelles (et celle du paquet n'est posée que
 si la box n'en a aucune). Une sauvegarde `.avant-<version>` précède toute
 écriture ; un JSON invalide n'écrit rien.
 
-Usage : waf-rules-sync [--dry-run] [--version V] [--livre FICHIER] [--vivant FICHIER]
+LE CHOIX DE L'OPÉRATEUR TIENT (#3257, R14, R16). Pour une catégorie livrée, un
+`"enabled": false` posé sur la box (après un faux positif) est gardé à la mise à
+jour suivante, et une ligne va au journal d'audit quand la copie livrée l'active.
+Un `true`, posé ou hérité, suit la copie livrée : un paquet doit pouvoir
+désactiver une catégorie.
+
+Usage : waf-rules-sync [--dry-run] [--version V] [--livre FICHIER] [--vivant FICHIER] [--audit FICHIER]
 Code de sortie : 0 rien à faire ou fait, 10 modifié (le moteur doit redémarrer).
 """
 import argparse
 import json
+import os
 import shutil
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 LIVRE = Path("/usr/share/secubox/waf/waf-rules.json")
 VIVANT = Path("/etc/secubox/waf/waf-rules.json")
+AUDIT = Path("/var/log/secubox/audit.log")
+
+
+def _desactivee_box(cat) -> bool:
+    """La box a posé `"enabled": false` (le seul choix de l'opérateur gardé, R16)."""
+    return isinstance(cat, dict) and cat.get("enabled") is False
+
+
+def ecarts_enabled(livre: dict, vivant: dict) -> list:
+    """Catégories livrées (non générées), actives dans la copie livrée, que la
+    box a désactivées : le « false » gardé, à auditer. [(nom, False, True)]."""
+    cats_v = vivant.get("categories", {})
+    out = []
+    for nom, cat in livre.get("categories", {}).items():
+        if not isinstance(cat, dict) or cat.get("generated"):
+            continue
+        if _desactivee_box(cats_v.get(nom)) and cat.get("enabled", True) is not False:
+            out.append((nom, False, True))
+    return out
 
 
 def fusionne(livre: dict, vivant: dict) -> dict:
     """Règles de la box après mise à jour : livrées d'abord, générées conservées."""
     out = {k: v for k, v in vivant.items() if k != "categories"}
     out.update({k: v for k, v in livre.items() if k not in ("categories",) and k not in out})
+    if "_meta" in livre:
+        out["_meta"] = livre["_meta"]        # la version des règles suit la copie livrée (#3257)
     cats_v = vivant.get("categories", {})
     cats = {}
     for nom, cat in livre.get("categories", {}).items():
         if isinstance(cat, dict) and cat.get("generated") and nom in cats_v:
             cats[nom] = cats_v[nom]          # tenue à chaud par wafgen
+        elif isinstance(cat, dict) and _desactivee_box(cats_v.get(nom)):
+            cats[nom] = {**cat, "enabled": False}    # désactivée par l'opérateur (R14, R16)
         else:
             cats[nom] = cat
     for nom, cat in cats_v.items():
@@ -50,12 +82,33 @@ def fusionne(livre: dict, vivant: dict) -> dict:
     return out
 
 
+def _auditer(chemin: Path, detail: str) -> None:
+    """Une ligne JSON append-only, jamais à travers un lien symbolique. Un
+    journal inaccessible n'arrête pas la mise à jour : on le dit."""
+    ligne = json.dumps({
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "module": "waf",
+        "action": "rules-sync-enabled",
+        "acteur": "root",
+        "detail": detail,
+    }, ensure_ascii=False) + "\n"
+    try:
+        fd = os.open(chemin, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
+        try:
+            os.write(fd, ligne.encode("utf-8"))
+        finally:
+            os.close(fd)
+    except OSError as exc:
+        print(f"waf-rules-sync: journal d'audit inaccessible ({chemin}) : {exc}", file=sys.stderr)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--version", default="maj")
     ap.add_argument("--livre", type=Path, default=LIVRE)
     ap.add_argument("--vivant", type=Path, default=VIVANT)
+    ap.add_argument("--audit", type=Path, default=AUDIT)
     a = ap.parse_args()
 
     if not a.livre.is_file():
@@ -70,6 +123,12 @@ def main() -> int:
         return 10
     vivant = json.loads(a.vivant.read_text(encoding="utf-8"))
     neuf = fusionne(livre, vivant)
+    for nom, box, livre_v in ecarts_enabled(livre, vivant):
+        detail = (f"catégorie {nom} : enabled={json.dumps(box)} de la box gardé "
+                  f"(livré : {json.dumps(livre_v)}) dans {a.vivant}")
+        print(f"waf-rules-sync: {detail}")
+        if not a.dry_run:
+            _auditer(a.audit, detail)
 
     def ids(d):
         return {p["id"] for c in d.get("categories", {}).values() if isinstance(c, dict)

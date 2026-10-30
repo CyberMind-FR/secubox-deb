@@ -1,0 +1,22 @@
+{
+ "route": "/canal/v1/reponses",
+ "requete": {
+  "body": {
+   "acteur": "alice",
+   "args": {
+    "nom": "gk9"
+   },
+   "command": "Device.X_SECUBOX_Nom.Renommer()"
+  },
+  "type": "OPERATE"
+ },
+ "envoi": {
+  "msg_id": "00000000000000d7",
+  "type": "OPERATE_RESP",
+  "body": {
+   "etat": "accepte",
+   "job": "00000000c0de00e6",
+   "raison": ""
+  }
+ }
+}

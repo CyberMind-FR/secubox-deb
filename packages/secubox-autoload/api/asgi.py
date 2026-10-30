@@ -28,7 +28,8 @@ def construire():
     reg = J.Registre(dossier / "jetons.db", Path(os.environ.get("SECUBOX_AUTOLOAD_AUDIT", J.AUDIT_DEFAUT)))
     pairs = T.Pairs(dossier / "jetons.db")
 
-    appliquer = T.appliquer_par_sudo
+    appliquer = T.appliquer_par_sudo          # enrôlement : monte l'interface
+    publier = T.publier_par_sudo              # révocations, abonnement : ne réactive jamais une unité désactivée (#3126)
     courrier = _courrier()
-    return (creer_app(reg, pairs, cle_hub_pub, appliquer, portee="public", courrier=courrier),
-            creer_app(reg, pairs, cle_hub_pub, appliquer, portee="tunnel", courrier=courrier))
+    return (creer_app(reg, pairs, cle_hub_pub, appliquer, portee="public", courrier=courrier, publier_tunnel=publier),
+            creer_app(reg, pairs, cle_hub_pub, appliquer, portee="tunnel", courrier=courrier, publier_tunnel=publier))

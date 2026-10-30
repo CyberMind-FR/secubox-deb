@@ -9,6 +9,7 @@ case "$1" in
     systemctl stop secubox-pilotage-ecoute.timer secubox-pilotage-ecoute.path >/dev/null 2>&1 || true
     systemctl stop secubox-pilotage.service || true
     systemctl stop secubox-pilotage.socket secubox-pilotage-canal.socket >/dev/null 2>&1 || true
+    systemctl stop secubox-pilotage-invite.socket >/dev/null 2>&1 || true
     # Règles nft du canal (fichier et vif) et écouteur nginx : retirés avec le service (l'assistant est encore là à ce stade).
     if [ -x /usr/sbin/secubox-pilotage-ecoute ]; then /usr/sbin/secubox-pilotage-ecoute --retirer || true; fi
     ;;

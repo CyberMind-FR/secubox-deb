@@ -8,7 +8,7 @@
   SecuBox — « SBXWAF », attaquants suivis : les adresses écartées du réseau et toujours profilées sur 24 h. Une seule page, deux mises en page :
     · CARTE du Hall / page embarquée (?embed=1) : compacte, une colonne ;
     · TABLEAU DE BORD complet (largeur ≥ 900 px).
-  DONNÉES RÉELLES UNIQUEMENT : GET /api/v1/waf/bans/history?hours=24 (lue en session). L'API ne fournit ni pays ni série horaire par adresse :
+  DONNÉES RÉELLES UNIQUEMENT : GET /api/v1/waf/bans/history?hours=24 et GET /api/v1/waf/php/signaux (signature PHP par adresse, #3273), lues en session. L'API ne fournit ni pays ni série horaire par adresse :
   la page n'invente rien (pas de drapeau) ; la frise montre, pour chaque adresse, l'intervalle réel première vue → dernière vue.
   Une mesure absente s'affiche « — », jamais 0. Chaque tuile porte sa définition en infobulle. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
 -->
@@ -157,7 +157,11 @@
     if(s<86400) return 'il y a '+Math.floor(s/3600)+' h';return 'il y a '+Math.floor(s/86400)+' j';
   }
   function plein(t){return t==null?'':new Date(t).toLocaleString('fr-FR',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
-  var DONNEES=null,ETAT={n:40},MAINTENANT=Date.now();
+  var DONNEES=null,PHP=null,ETAT={n:40},MAINTENANT=Date.now();
+  // Signature PHP par adresse (#3273) : relevé de fond de l’API. Absent = aucune pastille (jamais un zéro inventé) ; l’adresse « local » n’y figure pas.
+  var FAMPHP={php2shell:'PHP2Shell',roundcube:'Roundcube',nextcloud:'Nextcloud',php_requete:'Entrée PHP',outil:'Outil'};
+  function sigPhp(ip){var a=PHP&&PHP.adresses&&PHP.adresses[ip];if(!a)return '';
+    return Object.keys(FAMPHP).filter(function(k){return num(a[k])>0;}).map(function(k){return '<span class="pil" title="Signal PHP en détection seule : '+esc(FAMPHP[k])+' · '+fmt(a[k])+' sur 24 h">🐘 '+esc(FAMPHP[k])+' · '+fmt(a[k])+'</span>';}).join('');}
   function lignes(d){
     return (d&&d.tracked||[]).map(function(r){
       return {ip:String(r.ip||'—'),n:num(r.count),sev:String(r.severity_max||'low').toLowerCase(),cats:r.top_categories||[],
@@ -194,7 +198,7 @@
     return '<div class="att"><div class="id"><span class="nat" title="'+esc(nt[1])+'">'+nt[0]+'</span><div style="min-width:0"><code title="'+esc(r.ip)+'">'+esc(r.ip)+'</code><div class="intent">'+esc(nt[1])+'</div></div></div>'
       +'<div class="tags"><span class="grav" style="background:'+g[1]+'33;color:'+g[1]+'">'+esc(g[0])+'</span><span class="etat '+(r.ban?'ban':'suivi')+'" title="'+(r.ban?'Écarté : un blocage réseau est actif en ce moment.':'Le blocage a expiré, le profil reste suivi.')+'">'+(r.ban?'BANNI':'SUIVI')+'</span></div>'
       +'<div class="jauge" title="'+fmt(r.n)+' sondes sur 24 h"><div class="barre"><i style="width:'+Math.max(3,100*r.n/max)+'%;background:'+g[1]+'"></i></div><b>'+fmt(r.n)+' <small>sondes</small></b></div>'
-      +(cats?'<div class="cats">'+cats+'</div>':'')
+      +(cats||sigPhp(r.ip)?'<div class="cats">'+cats+sigPhp(r.ip)+'</div>':'')
       +'<div class="pas"><span title="'+esc(plein(r.a))+'">Première vue : '+esc(rel(r.a))+'</span><span title="'+esc(plein(r.b))+'">Dernière vue : '+esc(rel(r.b))+'</span></div></div>';
   }
   function liste(){
@@ -206,7 +210,7 @@
     var reste=R.length-ETAT.n;el('plus').hidden=reste<=0;if(reste>0)el('plus').textContent='Afficher '+fmt(Math.min(reste,40))+' de plus ('+fmt(reste)+' restantes)';
   }
   function rend(d){
-    DONNEES=d.data;MAINTENANT=Date.now();
+    DONNEES=d.data;PHP=d.php||null;MAINTENANT=Date.now();
     el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||d.data);
     var L=lignes(d.data),ok=!!d.data,a=el('actif');
     a.textContent=ok?(L.length?fmt(L.length)+' ADRESSES SUIVIES':'AUCUN ATTAQUANT'):'SESSION REQUISE';a.className='actif'+(ok?'':' neutre')+(ok&&L.length&&L.some(function(r){return r.sev==='critical';})?' hors':'');
@@ -229,7 +233,7 @@
   }
   var DEMO=(function(){
     var n=Date.now(),h=function(x){return new Date(n-x*3600e3).toISOString();};
-    return {demo:true,data:{window_hours:24,total_ips:9,tracked:[
+    return {demo:true,php:{adresses:{'57.141.0.17':{php2shell:6,outil:4},'91.92.241.10':{php_requete:3,nextcloud:2}}},data:{window_hours:24,total_ips:9,tracked:[
       {ip:'57.141.0.17',count:254,first_seen:h(22),last_seen:h(0.1),severity_max:'critical',currently_banned:true,top_categories:[{category:'sql.injection',count:140},{category:'traversal',count:80},{category:'rce',count:34}]},
       {ip:'185.220.101.3',count:187,first_seen:h(20),last_seen:h(1.4),severity_max:'high',currently_banned:true,top_categories:[{category:'scan-ports',count:120},{category:'recon',count:67}]},
       {ip:'45.155.205.233',count:96,first_seen:h(13),last_seen:h(3),severity_max:'high',currently_banned:false,top_categories:[{category:'brute-force-login',count:70},{category:'auth',count:26}]},
@@ -252,8 +256,9 @@
   function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
   function charge(){
-    jget('/api/v1/waf/bans/history?hours=24&limit=500').then(function(r){
-      rend({data:r&&Array.isArray(r.tracked)?r:null});
+    Promise.all([jget('/api/v1/waf/bans/history?hours=24&limit=500'),jget('/api/v1/waf/php/signaux')]).then(function(x){
+      var r=x[0];
+      rend({data:r&&Array.isArray(r.tracked)?r:null,php:x[1]&&x[1].adresses?x[1]:null});
       el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
       hauteur();
     });

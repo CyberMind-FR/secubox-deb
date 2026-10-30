@@ -3,9 +3,9 @@
 
 SecuBox assistance request — real-time help sessions.
 
-python3-websockets is a Recommends, not a Depends: the WS daemon needs the websockets library, but on boards where a newer websockets is provided out of band (pip, to satisfy a uvicorn version skew) the apt package is deliberately absent — a hard Depends would then block dpkg install. apt still pulls it on a normal install; dpkg -i does not enforce it. Consent-gated, audited, revocable live assistance sessions between a box and a federated center, over the wg-mesh, with a bounded action catalog and double-consent console escalation.
+python3-websockets is a Recommends, not a Depends: the WS daemon needs the websockets library, but on boards where a newer websockets is provided out of band (pip, to satisfy a uvicorn version skew) the apt package is deliberately absent — a hard Depends would then block dpkg install. apt still pulls it on a normal install; dpkg -i does not enforce it. Consent-gated, audited, revocable live assistance sessions between a box and a federated center, over the wg-mesh, with double-consent console escalation. Depuis 0.4.0 le catalogue d'actions propre à l'assistance n'existe plus : voir « Un seul catalogue d'actions ».
 
-Paquet Debian : version `0.2.11-1~bookworm1`, architecture `all`.
+Paquet Debian : version `0.4.0-1~trixie1`, architecture `all`.
 
 ## Contenu
 
@@ -15,7 +15,6 @@ Paquet Debian : version `0.2.11-1~bookworm1`, architecture `all`.
 - `nft/` : fichiers du module
 - `nginx/` : route nginx
 - `sbin/` : exécutables
-- `sudoers/` : fichiers du module
 - `systemd/` : unités systemd
 - `tests/` : tests
 - `www/` : interface web
@@ -32,12 +31,12 @@ Socket Unix : `/run/secubox/assist.sock`.
 |---|---|---|
 | `GET` | `/status` | require_lecture |
 | `GET` | `/health` | aucune |
-| `GET` | `/sessions` | require_jwt |
-| `POST` | `/request` | require_jwt |
-| `POST` | `/open` | require_jwt |
-| `POST` | `/close` | require_jwt |
-| `POST` | `/console/grant` | require_jwt |
-| `POST` | `/console/revoke` | require_jwt |
+| `GET` | `/sessions` | require_jwt, rend 410 |
+| `POST` | `/request` | require_jwt, rend 410 |
+| `POST` | `/open` | require_jwt, rend 410 |
+| `POST` | `/close` | require_jwt, rend 410 |
+| `POST` | `/console/grant` | require_jwt, rend 410 |
+| `POST` | `/console/revoke` | require_jwt, rend 410 |
 | `GET` | `/offers` | require_jwt |
 | `GET` | `/requests/open` | require_jwt |
 | `GET` | `/delegations` | require_jwt |
@@ -52,10 +51,39 @@ Socket Unix : `/run/secubox/assist.sock`.
 
 Routes relevées dans le code source, relatives au montage du module. « aucune » : pas de garde déclarée à cet endroit de la route.
 
+## Un seul catalogue d'actions (#3126 L2, R-L2-4)
+
+Le support passe par le **pilotage** : le maître ouvre une session de support (`POST /api/v1/pilotage/boxes/<nom>/support`),
+le détenteur l'accepte en local sur la box, et les actions sont celles du ctl fermé `secubox-pilotagectl` (liste de verbes
+fixe, voir `secubox-pilotage-agent`). `assist/catalog.py` est supprimé et le démon WebSocket n'exécute plus aucune action.
+
+Les routes de session rendent **410 Gone** : `{"detail": "...", "remplace_par": "/api/v1/pilotage/boxes/<nom>/support"}`.
+La garde `require_jwt` passe avant : sans authentification la réponse reste 401. Le marché (offres, demandes, appariements,
+`/joinlink`) et les délégations web (`/delegations`, `/delegation/assertion`) ne changent pas, mais le marché (`/match/accept`) n'ouvre plus de session : l'ouverture passe par le support du pilotage
+(R-L2-44).
+
+| Action d'assist | Verbe du ctl |
+|---|---|
+| `service.restart secubox-dns` | `service redemarrer secubox-dns.service` |
+| `service.toggle secubox-dns:on` | `service demarrer secubox-dns.service` |
+| `service.toggle secubox-dns:off` | `service arreter secubox-dns.service` |
+
+Le ctl vise des **unités** (`secubox-dns.service`, `.timer`), non des modules. Sur une box cliente, `arreter` et `redemarrer`
+exigent l'accord du détenteur (consentement local, 24 h) ; `demarrer` n'en exige pas.
+
+Retirées, sans équivalent (le ctl reste une liste fermée) : `status.all`, `diag.collect`, `logs.tail`, `config.reload`,
+`config.rollback`. L'état se lit par le relevé du pilotage (`Get`, `Device.X_SECUBOX_Releve.Mesurer()`). Un équivalent éventuel
+serait un nouveau verbe du ctl, à décider là-bas. Les unités du ctl suivent sa propre règle (`secubox-<nom>.service|timer`,
+hors unités protégées), non la liste `MODULE_ALLOW` de l'ancien catalogue.
+
+La mise à niveau ne supprime aucune donnée d'assistance (journal, audits `/var/log/secubox/audit.log`). Elle retire seulement
+la règle sudoers `/etc/sudoers.d/secubox-assist` (`debian/maintscript`, `rm_conffile`), qui n'avait pour utilisateur que
+l'ancien dispatcher du démon ; l'unité du démon retrouve `NoNewPrivileges=true`.
+
 ## Dépendances SecuBox
 
 `secubox-annuaire`, `secubox-core`, `secubox-p2p`.
 
 ## Tests
 
-20 fichier(s) de test. Lancer : `python3 -m pytest packages/secubox-assist`.
+25 fichier(s) de test. Lancer : `python3 -m pytest packages/secubox-assist`.

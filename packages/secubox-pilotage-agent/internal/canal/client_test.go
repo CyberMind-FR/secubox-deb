@@ -15,12 +15,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode/utf8"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/operations"
 )
 
 type source struct{ params map[string]any }
@@ -36,9 +38,14 @@ type fauxMaitre struct {
 	reponses [][]byte
 	notifs   [][]byte
 	bonjour  [][]byte
+	sondages int // GET /requetes reçus
 	recu     chan struct{}
 
 	echecsNotifs int // nombre de POST /notifs à refuser en 503 avant d'accepter
+
+	enPanne       atomic.Bool  // maître injoignable : toute requête reçoit 503
+	refuses       atomic.Int32 // requêtes refusées pendant la panne
+	sondagesRefus atomic.Int32 // dont GET /requetes (le canal a vu la panne)
 }
 
 func (f *fauxMaitre) handler() http.Handler {
@@ -51,6 +58,7 @@ func (f *fauxMaitre) handler() http.Handler {
 	})
 	mux.HandleFunc("/canal/v1/requetes", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
+		f.sondages++
 		var corps string
 		if len(f.requetes) > 0 {
 			corps, f.requetes = f.requetes[0], f.requetes[1:]
@@ -83,7 +91,18 @@ func (f *fauxMaitre) handler() http.Handler {
 		f.mu.Unlock()
 		f.signal()
 	})
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if f.enPanne.Load() {
+			f.refuses.Add(1)
+			if r.URL.Path == "/canal/v1/requetes" {
+				f.sondagesRefus.Add(1)
+			}
+			io.Copy(io.Discard, r.Body)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func (f *fauxMaitre) signal() {
@@ -832,5 +851,477 @@ func TestErreurTronqueSansCouperUnCaractere(t *testing.T) {
 		if !utf8.ValidString(s) || len(s) > 200 || len(s) < 197 {
 			t.Fatalf("message mal coupé : %d octets, valide=%v", len(s), utf8.ValidString(s))
 		}
+	}
+}
+
+// scenarioCoupure (tâche 2, D1, R-L2-19) : tant que la vérification de l'ancre (le ctl, remplacé ici par un faux)
+// rend `echec` (ancre différente ou illisible), l'agent ne contacte pas le maître et ne traite aucun Operate ; elle
+// réussit → il se connecte et notifie la coupure ; une revérification horaire qui échoue coupe de nouveau le canal.
+func scenarioCoupure(t *testing.T, echec Verdict) {
+	var verdict atomic.Value
+	verdict.Store(echec)
+	var verifs, operes atomic.Int32
+	var decalage atomic.Int64 // horloge du client : temps réel + décalage
+	operer := func(context.Context, string, map[string]any) (any, error) {
+		operes.Add(1)
+		return map[string]any{"ok": true}, nil
+	}
+	mesure := `[{"msg_id":"%016x","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Releve.Mesurer()","args":{"duree_s":10}}}]`
+	f := &fauxMaitre{requetes: []string{fmt.Sprintf(mesure, 1)}}
+	stop := demarrerAvec(t, f, modeleTest(nil), operer, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) Verdict { verifs.Add(1); return verdict.Load().(Verdict) }
+		c.dormir = func(ctx context.Context, d time.Duration) error { return dormirReel(ctx, 2*time.Millisecond) }
+		c.horloge = func() time.Time { return time.Now().Add(time.Duration(decalage.Load())) }
+	})
+	defer stop()
+
+	etat := func() (bonjour, sondages, reponses, notifs int) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.bonjour), f.sondages, len(f.reponses), len(f.notifs)
+	}
+
+	// 1. ancre non vérifiée : vérifications répétées, rien vers le maître, aucun Operate
+	attendreQue(t, "vérifications répétées", func() bool { return verifs.Load() >= 3 })
+	time.Sleep(50 * time.Millisecond)
+	if b, s, r, n := etat(); b+s+r+n != 0 || operes.Load() != 0 {
+		t.Fatalf("sans ancre, rien ne doit partir : bonjour=%d sondages=%d réponses=%d notifs=%d operes=%d", b, s, r, n, operes.Load())
+	}
+
+	// 2. ancre vérifiée : bonjour, notification de la coupure, Operate traité
+	verdict.Store(AncreOK)
+	attendreQue(t, "connexion, notification et relevé", func() bool {
+		b, _, r, n := etat()
+		return b == 1 && r >= 1 && n >= 1
+	})
+	f.mu.Lock()
+	notif := string(f.notifs[0])
+	f.mu.Unlock()
+	if !strings.Contains(notif, `"type":"`+notifs.TypeAncre+`"`) || operes.Load() != 1 {
+		t.Fatalf("notification de coupure attendue (%s), Operate traité une fois (%d)", notif, operes.Load())
+	}
+
+	// 3. une heure plus tard, la revérification échoue : le canal est coupé ; un Operate mis en file ensuite n'est
+	// ni sondé ni traité
+	n0 := verifs.Load()
+	verdict.Store(echec)
+	decalage.Store(int64(61 * time.Minute))
+	attendreQue(t, "revérification horaire", func() bool { return verifs.Load() > n0 })
+	time.Sleep(50 * time.Millisecond) // un sondage déjà en vol se termine
+	_, s1, _, _ := etat()
+	f.mu.Lock()
+	f.requetes = append(f.requetes, fmt.Sprintf(mesure, 2))
+	f.mu.Unlock()
+	time.Sleep(150 * time.Millisecond)
+	_, s2, _, _ := etat()
+	f.mu.Lock()
+	restantes := len(f.requetes)
+	f.mu.Unlock()
+	if s2 != s1 || restantes != 1 || operes.Load() != 1 {
+		t.Fatalf("canal non coupé : sondages %d → %d, requêtes en file %d, operes=%d", s1, s2, restantes, operes.Load())
+	}
+}
+
+func attendreQue(t *testing.T, quoi string, cond func() bool) {
+	t.Helper()
+	for fin := time.Now().Add(3 * time.Second); time.Now().Before(fin); time.Sleep(5 * time.Millisecond) {
+		if cond() {
+			return
+		}
+	}
+	t.Fatalf("délai dépassé : %s", quoi)
+}
+
+// TestAgentSansAncreNeFaitRien : ancre illisible (ou ctl en échec) → canal coupé.
+func TestAgentSansAncreNeFaitRien(t *testing.T) { scenarioCoupure(t, AncreIllisible) }
+
+// TestAgentAncreDifferenteCoupe : le pair du maître n'a pas la clé de l'ancre → canal coupé (brief, R-L2-19).
+func TestAgentAncreDifferenteCoupe(t *testing.T) { scenarioCoupure(t, AncreDifferente) }
+
+// TestAgentAncreAbsenteLitMaisNAgitPas (R-L2-19) : sans ancre posée sur la box, le canal reste ouvert en lecture
+// (comme en L1) ; tout Operate est refusé ; un lot de refus redemande la vérification au ctl, qui l'audite
+// (« ancre absente »), au plus une fois par lot et par minute (R-L2-24). Aucune notification de coupure : le canal
+// n'a pas été coupé.
+func TestAgentAncreAbsenteLitMaisNAgitPas(t *testing.T) {
+	var verifs, operes atomic.Int32
+	operer := func(context.Context, string, map[string]any) (any, error) {
+		operes.Add(1)
+		return map[string]any{"ok": true}, nil
+	}
+	f := &fauxMaitre{requetes: []string{
+		`[{"msg_id":"0000000000000001","type":"GET","body":{"paths":["Device.Test."]}}]`,
+		`[{"msg_id":"0000000000000002","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Releve.Mesurer()","args":{}}},` +
+			`{"msg_id":"0000000000000003","type":"OPERATE","body":{"command":"Device.Reboot()","args":{}}}]`,
+	}}
+	stop := demarrerAvec(t, f, modeleTest(map[string]any{"Device.Test.a": 1}), operer, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) Verdict { verifs.Add(1); return AncreAbsente }
+	})
+	defer stop()
+	attendreQue(t, "lecture et refus", func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.reponses) >= 2
+	})
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.bonjour) != 1 || len(f.notifs) != 0 {
+		t.Fatalf("canal ouvert sans notification de coupure attendu : bonjour=%d notifs=%d", len(f.bonjour), len(f.notifs))
+	}
+	get := decoder(t, f.reponses[0])
+	if get[0]["type"] != "GET_RESP" {
+		t.Fatalf("lecture servie attendue : %v", get[0])
+	}
+	refus := decoder(t, f.reponses[1])
+	if len(refus) != 2 {
+		t.Fatalf("deux refus attendus : %v", refus)
+	}
+	for _, r := range refus {
+		body := r["body"].(map[string]any)
+		if r["type"] != "ERROR" || !strings.Contains(body["err"].(string), "ancre absente") {
+			t.Fatalf("refus « ancre absente » attendu : %v", r)
+		}
+	}
+	if operes.Load() != 0 {
+		t.Fatalf("aucun Operate ne doit être exécuté (%d)", operes.Load())
+	}
+	// démarrage + une revérification pour le lot refusé (audit « ancre absente » côté ctl, R-L2-24)
+	if v := verifs.Load(); v != 2 {
+		t.Fatalf("vérifications attendues : 1 au démarrage + 1 pour le lot, %d", v)
+	}
+}
+
+// TestClientAncreVerifieeChaqueHeure : une ancre vérifiée n'est pas redemandée avant PeriodeAncre (1 h par défaut).
+func TestClientAncreVerifieeChaqueHeure(t *testing.T) {
+	var verifs atomic.Int32
+	var decalage atomic.Int64
+	f := &fauxMaitre{}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) Verdict { verifs.Add(1); return AncreOK }
+		c.horloge = func() time.Time { return time.Now().Add(time.Duration(decalage.Load())) }
+	})
+	defer stop()
+	for fin := time.Now().Add(3 * time.Second); verifs.Load() == 0 && time.Now().Before(fin); time.Sleep(5 * time.Millisecond) {
+	}
+	time.Sleep(150 * time.Millisecond)
+	if v := verifs.Load(); v != 1 {
+		t.Fatalf("une seule vérification attendue au démarrage, %d", v)
+	}
+	decalage.Store(int64(time.Hour))
+	for fin := time.Now().Add(3 * time.Second); verifs.Load() < 2 && time.Now().Before(fin); time.Sleep(5 * time.Millisecond) {
+	}
+	if v := verifs.Load(); v != 2 {
+		t.Fatalf("revérification attendue après une heure, %d", v)
+	}
+}
+
+// TestClientApresAncreUneFois (I4, R-L2-47) : le crochet ApresAncre (lecture des fins récentes) est appelé une fois,
+// à la première vérification réussie de l'ancre, avant le premier bonjour ; jamais rappelé aux revérifications, jamais
+// appelé sur une ancre absente (lecture seule : aucune action, donc aucune fin à rattraper).
+func TestClientApresAncreUneFois(t *testing.T) {
+	var verifs, appels atomic.Int32
+	var bonjoursAvant atomic.Int32
+	var decalage atomic.Int64
+	f := &fauxMaitre{}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) Verdict { verifs.Add(1); return AncreOK }
+		c.cfg.ApresAncre = func(context.Context) {
+			appels.Add(1)
+			f.mu.Lock()
+			bonjoursAvant.Store(int32(len(f.bonjour)))
+			f.mu.Unlock()
+		}
+		c.horloge = func() time.Time { return time.Now().Add(time.Duration(decalage.Load())) }
+	})
+	defer stop()
+	attendreQue(t, "premier sondage", func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.sondages >= 1 })
+	if a := appels.Load(); a != 1 || bonjoursAvant.Load() != 0 {
+		t.Fatalf("ApresAncre : %d appel(s), %d bonjour(s) avant ; 1 appel avant le premier bonjour attendu", a, bonjoursAvant.Load())
+	}
+	decalage.Store(int64(time.Hour))
+	attendreQue(t, "revérification", func() bool { return verifs.Load() >= 2 })
+	time.Sleep(50 * time.Millisecond)
+	if a := appels.Load(); a != 1 {
+		t.Fatalf("ApresAncre rappelé à la revérification : %d appels", a)
+	}
+
+	var absente atomic.Int32
+	g := &fauxMaitre{}
+	stop2 := demarrerAvec(t, g, modeleTest(nil), nil, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) Verdict { return AncreAbsente }
+		c.cfg.ApresAncre = func(context.Context) { absente.Add(1) }
+	})
+	defer stop2()
+	attendreQue(t, "sondage en lecture seule", func() bool { g.mu.Lock(); defer g.mu.Unlock(); return g.sondages >= 1 })
+	if absente.Load() != 0 {
+		t.Fatal("ApresAncre appelé sur une ancre absente")
+	}
+}
+
+// TestAgentAncreAbsenteUnSeulAppelParLot (I2, R-L2-24) : un pair non vérifié n'inonde pas l'audit. 32 OPERATE dans
+// un lot → au plus un appel au ctl ; un second lot dans la minute → aucun ; tous refusés, aucun exécuté.
+func TestAgentAncreAbsenteUnSeulAppelParLot(t *testing.T) {
+	var verifs, operes atomic.Int32
+	operer := func(context.Context, string, map[string]any) (any, error) { operes.Add(1); return nil, nil }
+	lot := func(base int) string {
+		l := make([]string, 32)
+		for i := range l {
+			l[i] = fmt.Sprintf(`{"msg_id":"%016x","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Releve.Mesurer()","args":{}}}`, base+i)
+		}
+		return "[" + strings.Join(l, ",") + "]"
+	}
+	f := &fauxMaitre{requetes: []string{lot(1), lot(100)}}
+	stop := demarrerAvec(t, f, modeleTest(nil), operer, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) Verdict { verifs.Add(1); return AncreAbsente }
+	})
+	defer stop()
+	refuses := func() int {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		n := 0
+		for _, b := range f.reponses {
+			for _, r := range decoder(t, b) {
+				if r["type"] == "ERROR" && strings.Contains(r["body"].(map[string]any)["err"].(string), "ancre absente") {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	attendreQue(t, "64 refus", func() bool { return refuses() == 64 })
+	if v := verifs.Load(); v > 2 {
+		t.Fatalf("au plus 1 appel au démarrage + 1 pour les deux lots de la même minute, %d", v)
+	}
+	if operes.Load() != 0 {
+		t.Fatalf("aucun Operate exécuté attendu, %d", operes.Load())
+	}
+}
+
+// TestAgentAncreDisparueApresOkCoupe (M1) : une ancre vue « ok » puis « absente » n'est pas une box sans ancre :
+// c'est traité comme illisible — coupure, puis notification X_SECUBOX_AnchorFailed à la reconnexion.
+func TestAgentAncreDisparueApresOkCoupe(t *testing.T) {
+	var verdict atomic.Value
+	verdict.Store(AncreOK)
+	var verifs atomic.Int32
+	var decalage atomic.Int64
+	f := &fauxMaitre{}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, nil, func(c *Client) {
+		c.cfg.Ancre = func(context.Context) Verdict { verifs.Add(1); return verdict.Load().(Verdict) }
+		c.dormir = func(ctx context.Context, d time.Duration) error { return dormirReel(ctx, 2*time.Millisecond) }
+		c.horloge = func() time.Time { return time.Now().Add(time.Duration(decalage.Load())) }
+	})
+	defer stop()
+	sondages := func() int {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return f.sondages
+	}
+	attendreQue(t, "canal ouvert", func() bool { return sondages() >= 1 })
+	n0 := verifs.Load()
+	verdict.Store(AncreAbsente)
+	decalage.Store(int64(61 * time.Minute))
+	attendreQue(t, "revérification", func() bool { return verifs.Load() > n0 })
+	time.Sleep(50 * time.Millisecond)
+	s1 := sondages()
+	time.Sleep(150 * time.Millisecond)
+	if s2 := sondages(); s2 != s1 {
+		t.Fatalf("ancre disparue après ok : canal à couper, sondages %d → %d", s1, s2)
+	}
+	verdict.Store(AncreOK)
+	attendreQue(t, "notification de coupure", func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.notifs) >= 1 && strings.Contains(string(f.notifs[0]), notifs.TypeAncre)
+	})
+}
+
+// --- Tâche 3 : Operate d'action (L2) ---------------------------------------------------------------------------
+
+// TestClientOperateActionRepondEtat : avec l'exécuteur câblé (Config.Agir), un Operate d'action reçoit tout de suite
+// un OPERATE_RESP {etat, job, raison} ; l'acteur du maître (champ « acteur » du corps) est transmis tel quel, sa
+// validation revenant à l'exécuteur ; le relevé reste traité par le canal.
+func TestClientOperateActionRepondEtat(t *testing.T) {
+	var mu sync.Mutex
+	var vus []string
+	agir := func(_ context.Context, cmd string, args map[string]any, acteur string) operations.Reponse {
+		mu.Lock()
+		vus = append(vus, fmt.Sprintf("%s|%v|%s", cmd, args["unite"], acteur))
+		mu.Unlock()
+		if cmd == operations.CmdReboot {
+			return operations.Reponse{Etat: operations.Consentement, Raison: "consentement requis"}
+		}
+		return operations.Reponse{Etat: operations.Accepte, Job: "0123456789abcdef"}
+	}
+	f := &fauxMaitre{requetes: []string{`[` +
+		`{"msg_id":"0000000000000001","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Services.Agir()","args":{"unite":"secubox-lyrion.service","action":"restart"},"acteur":"gk2admin"}},` +
+		`{"msg_id":"0000000000000002","type":"OPERATE","body":{"command":"Device.Reboot()","args":{},"acteur":42}}]`}}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, nil, func(c *Client) {
+		c.cfg.Agir = agir
+		c.cfg.Ancre = func(context.Context) Verdict { return AncreOK } // M5 : jamais d'actions sans ancre
+	})
+	defer stop()
+	attendre(t, f)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	l := decoder(t, f.reponses[0])
+	if len(l) != 2 {
+		t.Fatalf("deux réponses attendues : %s", f.reponses[0])
+	}
+	b0, b1 := l[0]["body"].(map[string]any), l[1]["body"].(map[string]any)
+	if l[0]["type"] != "OPERATE_RESP" || b0["etat"] != "accepte" || b0["job"] != "0123456789abcdef" || b0["raison"] != "" {
+		t.Fatalf("OPERATE_RESP accepte attendu : %v", l[0])
+	}
+	if l[1]["type"] != "OPERATE_RESP" || b1["etat"] != "consentement" || b1["job"] != "" || b1["raison"] != "consentement requis" {
+		t.Fatalf("OPERATE_RESP consentement attendu : %v", l[1])
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if strings.Join(vus, " ; ") != "Device.X_SECUBOX_Services.Agir()|secubox-lyrion.service|gk2admin ; Device.Reboot()|<nil>|" {
+		t.Fatalf("appels inattendus : %v", vus)
+	}
+}
+
+// TestAgentRenvoieLeResultatApresReconnexion : le canal tombe pendant une mise à niveau ; l'opération continue
+// (systemd-run), sa fin est gardée en mémoire et renvoyée au maître à la reconnexion, une seule fois.
+func TestAgentRenvoieLeResultatApresReconnexion(t *testing.T) {
+	var finie atomic.Bool
+	ctl := func(_ context.Context, args ...string) ([]byte, error) {
+		if args[len(args)-2] == "etat-operation" {
+			return []byte(`{"ok": true, "job": "0123456789abcdef", "etat": "termine", "verbe": "maj-paquets", "resultat": "succes", "rc": 0}`), nil
+		}
+		return []byte(`{"ok": true, "job": "0123456789abcdef"}`), nil
+	}
+	systemctl := func(context.Context, ...string) ([]byte, error) {
+		if finie.Load() {
+			return []byte("inactive\ninactive\n"), nil
+		}
+		return []byte("active\ninactive\n"), nil
+	}
+	boite := operations.NouvelleBoite(0)
+	ev := make(chan notifs.Evenement, 8)
+	ex := operations.Nouveau(operations.Config{Ctl: ctl, Systemctl: systemctl, Resultats: boite, Pas: 5 * time.Millisecond,
+		Progression: func(e notifs.Evenement) {
+			select {
+			case ev <- e:
+			default:
+			}
+		}})
+	f := &fauxMaitre{requetes: []string{
+		`[{"msg_id":"0000000000000001","type":"OPERATE","body":{"command":"Device.X_SECUBOX_Packages.MettreAJour()","args":{},"acteur":"gk2admin"}}]`}}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, ev, func(c *Client) {
+		c.cfg.Agir = ex.Operer
+		c.cfg.Ancre = func(context.Context) Verdict { return AncreOK }
+		c.cfg.Resultats = boite
+		c.dormir = func(ctx context.Context, d time.Duration) error { return dormirReel(ctx, 2*time.Millisecond) }
+	})
+	defer func() { stop(); ex.Attendre() }()
+	fins := func() int {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		n := 0
+		for _, b := range f.notifs {
+			n += strings.Count(string(b), `"type":"`+notifs.TypeOperationDone+`"`)
+		}
+		return n
+	}
+	// 1. l'opération est acceptée
+	attendreQue(t, "OPERATE_RESP accepte", func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.reponses) == 1 && strings.Contains(string(f.reponses[0]), `"etat":"accepte"`)
+	})
+	// 2. le maître tombe ; l'opération finit pendant la panne : sa fin reste dans la boîte
+	f.mu.Lock()
+	bonjours := len(f.bonjour)
+	f.mu.Unlock()
+	f.enPanne.Store(true)
+	attendreQue(t, "sondage refusé : le canal voit la panne", func() bool { return f.sondagesRefus.Load() >= 1 })
+	finie.Store(true)
+	attendreQue(t, "fin gardée, son envoi refusé", func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return boite.Taille() == 1 && f.refuses.Load() > f.sondagesRefus.Load()+1
+	})
+	if fins() != 0 {
+		t.Fatal("aucune fin ne doit être comptée remise pendant la panne")
+	}
+	// 3. le maître revient : bonjour, puis la fin, une seule fois
+	f.enPanne.Store(false)
+	attendreQue(t, "fin remise après la reconnexion", func() bool { return fins() >= 1 })
+	time.Sleep(100 * time.Millisecond)
+	f.mu.Lock()
+	reannonce := len(f.bonjour) > bonjours
+	var corps string
+	for _, b := range f.notifs {
+		if strings.Contains(string(b), notifs.TypeOperationDone) {
+			corps = string(b)
+		}
+	}
+	f.mu.Unlock()
+	if n := fins(); n != 1 || boite.Taille() != 0 || !reannonce {
+		t.Fatalf("une seule remise attendue après le bonjour : remises=%d boîte=%d réannonce=%v", n, boite.Taille(), reannonce)
+	}
+	for _, sous := range []string{`"job":"0123456789abcdef"`, `"rc":0`, `"resume":"maj-paquets : succès"`} {
+		if !strings.Contains(corps, sous) {
+			t.Fatalf("fin incomplète, %s absent : %s", sous, corps)
+		}
+	}
+}
+
+// TestAgentReverifieSiLeCtlRefuseFauteDAncre (M3, R-L2-28) : l'agent se croit ancré (AncreOK) mais le ctl répond
+// « ancre non vérifiée » (canal enregistré périmé ou retiré) : l'agent force une revérification, au plus une par
+// lot et par minute (même limiteur que R-L2-24).
+func TestAgentReverifieSiLeCtlRefuseFauteDAncre(t *testing.T) {
+	var verifs atomic.Int32
+	var decalage atomic.Int64
+	agir := func(context.Context, string, map[string]any, string) operations.Reponse {
+		return operations.Reponse{Etat: operations.Refuse, Raison: "ancre non vérifiée"}
+	}
+	lot := func(base int) string {
+		l := make([]string, 3)
+		for i := range l {
+			l[i] = fmt.Sprintf(`{"msg_id":"%016x","type":"OPERATE","body":{"command":"Device.Reboot()","args":{}}}`, base+i)
+		}
+		return "[" + strings.Join(l, ",") + "]"
+	}
+	f := &fauxMaitre{requetes: []string{lot(1), lot(10)}}
+	stop := demarrerAvec(t, f, modeleTest(nil), nil, nil, func(c *Client) {
+		c.cfg.Agir = agir
+		c.cfg.Ancre = func(context.Context) Verdict { verifs.Add(1); return AncreOK }
+		c.horloge = func() time.Time { return time.Now().Add(time.Duration(decalage.Load())) }
+	})
+	defer stop()
+	nbReponses := func() int {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.reponses)
+	}
+	attendreQue(t, "deux lots refusés", func() bool { return nbReponses() == 2 })
+	if v := verifs.Load(); v != 2 {
+		t.Fatalf("1 vérification au démarrage + 1 forcée pour les deux lots de la même minute, %d", v)
+	}
+	decalage.Store(int64(61 * time.Second))
+	f.mu.Lock()
+	f.requetes = append(f.requetes, lot(20))
+	f.mu.Unlock()
+	attendreQue(t, "troisième lot", func() bool { return nbReponses() == 3 })
+	if v := verifs.Load(); v != 3 {
+		t.Fatalf("une minute plus tard, une nouvelle revérification forcée attendue, %d", v)
+	}
+}
+
+// TestClientAgirSansAncreRefuse (M5, R-L2-28) : des actions sans vérification d'ancre sont une configuration
+// invalide : aucune connexion.
+func TestClientAgirSansAncreRefuse(t *testing.T) {
+	agir := func(context.Context, string, map[string]any, string) operations.Reponse { return operations.Reponse{} }
+	c := NouveauClient(Config{Maitre: "127.0.0.1", Agir: agir}, modeleTest(nil), nil)
+	if c.errCfg == nil {
+		t.Fatal("Agir sans Ancre : errCfg attendu")
+	}
+	if _, err := c.cycle(context.Background(), new(bool)); err == nil || err != c.errCfg {
+		t.Fatalf("aucune connexion attendue : %v", err)
+	}
+	c = NouveauClient(Config{Maitre: "127.0.0.1", Agir: agir, Ancre: func(context.Context) Verdict { return AncreOK }}, modeleTest(nil), nil)
+	if c.errCfg != nil {
+		t.Fatalf("Agir avec Ancre : configuration valable, %v", c.errCfg)
 	}
 }

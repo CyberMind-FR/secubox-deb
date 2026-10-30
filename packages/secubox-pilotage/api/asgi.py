@@ -16,16 +16,26 @@ from fastapi import FastAPI
 from api.canal import creer_app_canal
 from api.main import creer_app_admin
 from pilotage import audit as A
+from pilotage.diffusion import Diffusion
 from pilotage.files import Files
-from pilotage.identite import box_par_adresse
+from pilotage.identite import box_par_adresse, noms_du_maillage
 from pilotage.inventaire import Inventaire
+from pilotage.operations import Suivi
+from pilotage.renommage import emettre_code_par, lanceur_assistant
 from pilotage.stockage import DOSSIER_DEFAUT, StockageSqlite
 
 
-def assembler(stockage, files, inventaire, audit, identifier, horloge=time.time) -> "tuple[FastAPI, FastAPI]":
-    """Les deux applications sur les mêmes files, le même stockage et la même boucle de relève (cycle de vie partagé, par compteur)."""
-    admin = creer_app_admin(stockage, files, inventaire, audit, horloge=horloge)
-    canal = creer_app_canal(files, identifier, stockage, audit)
+def assembler(stockage, files, inventaire, audit, identifier, horloge=time.time, *, emettre=None,
+              noms_pris=noms_du_maillage) -> "tuple[FastAPI, FastAPI]":
+    """Les deux applications sur les mêmes files, le même stockage et la même boucle de relève (cycle de vie partagé, par compteur).
+    Le suivi des opérations est partagé : le canal lui remet chaque fin, l'API chaque réponse arrivée après la fin."""
+    suivi = Suivi(stockage, files, audit, emettre=emettre)
+    diffusion = Diffusion()   # temps réel vers la page : le canal publie, l'API sert les flux (même processus, même boucle)
+    admin = creer_app_admin(stockage, files, inventaire, audit, horloge=horloge, suivi=suivi, noms_pris=noms_pris, diffusion=diffusion)
+    canal = creer_app_canal(files, identifier, stockage, audit, apres_fin=suivi.apres_fin, diffuser=diffusion.diffuser_notification)
+
+    admin.state.diffusion = diffusion   # le lanceur la ferme au signal d'arrêt
+    inventaire.a_chaque_tour(canal.state.vider_refus)   # M7 : décomptes de refus tus écrits à chaque tour, jamais perdus
 
     @asynccontextmanager
     async def vie_canal(app):
@@ -40,4 +50,5 @@ def construire() -> "tuple[FastAPI, FastAPI]":
     stockage = StockageSqlite(Path(os.environ.get("SECUBOX_PILOTAGE_DOSSIER", DOSSIER_DEFAUT)))
     audit = A.journal(Path(os.environ.get("SECUBOX_PILOTAGE_AUDIT", A.AUDIT_DEFAUT)))
     files = Files()
-    return assembler(stockage, files, Inventaire(files, stockage), audit, box_par_adresse)
+    return assembler(stockage, files, Inventaire(files, stockage, audit=audit), audit, box_par_adresse,
+                     emettre=emettre_code_par(lanceur_assistant()))

@@ -12,6 +12,7 @@ import sys
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from secubox_core.auth import require_lecture
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
@@ -77,63 +78,51 @@ async def health():
     return {"status": "ok", "module": "assist"}
 
 
+# --------------------------------------------------------------------------- #
+# Sessions d'assistance : retirées (#3126 L2, tâche 9, R-L2-4). Le support passe
+# par le pilotage (sessions de support du maître, acceptées en local sur la box,
+# actions du ctl fermé `secubox-pilotagectl`). La garde reste en place : un appelant
+# sans authentification reçoit 401 comme avant, jamais un 410 qui révélerait la route.
+# --------------------------------------------------------------------------- #
+REMPLACE_PAR = "/api/v1/pilotage/boxes/<nom>/support"
+
+
+def _retiree() -> JSONResponse:
+    return JSONResponse(status_code=410, content={
+        "detail": "Les sessions d'assistance de ce module sont retirées : le support passe "
+                  "désormais par le pilotage (session de support ouverte depuis le maître, "
+                  "acceptée sur la box).",
+        "remplace_par": REMPLACE_PAR})
+
+
 @app.get("/sessions", dependencies=[Depends(require_jwt)])
 async def sessions():
-    sid = _self_did()
-    entries = _entries()
-    return {"pending": assist.pending_requests(entries, sid) if sid else [],
-            "active_session": (assist.active_session(entries, sid, _now())
-                               if sid else None)}
-
-
-class RequestBody(BaseModel):
-    center_did: str
-    mode: str
-    scope: str
-    duration_s: int
-    reason: str
+    return _retiree()
 
 
 @app.post("/request", dependencies=[Depends(require_jwt)])
-async def make_request(b: RequestBody):
-    return _ctl("request", b.center_did, "--mode", b.mode, "--scope", b.scope,
-                "--duration", str(b.duration_s), "--reason", b.reason)
-
-
-class OpenBody(BaseModel):
-    req_id: str
-    center_did: str
-    duration_s: int
+async def make_request():
+    return _retiree()
 
 
 @app.post("/open", dependencies=[Depends(require_jwt)])
-async def open_session(b: OpenBody):
-    return _ctl("open", b.req_id, "--center", b.center_did, "--duration", str(b.duration_s))
-
-
-class SessionRef(BaseModel):
-    session_id: str
-    reason: str | None = None
+async def open_session():
+    return _retiree()
 
 
 @app.post("/close", dependencies=[Depends(require_jwt)])
-async def close_session(b: SessionRef):
-    return _ctl("close", b.session_id, *(["--reason", b.reason] if b.reason else []))
-
-
-class ConsoleBody(BaseModel):
-    session_id: str
-    duration_s: int = 900
+async def close_session():
+    return _retiree()
 
 
 @app.post("/console/grant", dependencies=[Depends(require_jwt)])
-async def console_grant(b: ConsoleBody):
-    return _ctl("console-grant", b.session_id, "--duration", str(b.duration_s))
+async def console_grant():
+    return _retiree()
 
 
 @app.post("/console/revoke", dependencies=[Depends(require_jwt)])
-async def console_revoke(b: SessionRef):
-    return _ctl("console-revoke", b.session_id)
+async def console_revoke():
+    return _retiree()
 
 
 # --------------------------------------------------------------------------- #

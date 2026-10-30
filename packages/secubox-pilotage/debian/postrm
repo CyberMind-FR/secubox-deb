@@ -4,12 +4,31 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 set -e
+# Chemins redirigeables pour les tests du paquet seulement (le script tourne en root : l'environnement est celui de dpkg).
+_journaux="${SECUBOX_PILOTAGE_JOURNAUX:-/var/log/secubox}"
+_aa_d="${SECUBOX_PILOTAGE_APPARMOR_D:-/etc/apparmor.d}"
+_aa_sys="${SECUBOX_PILOTAGE_APPARMOR_SYS:-/sys/kernel/security/apparmor}"
+_canal="${SECUBOX_PILOTAGE_CANAL_CONF:-/etc/nginx/conf.d/secubox-pilotage-canal.conf}"
 case "$1" in
   remove|purge)
     # Écouteur rendu par le script (pas un conffile) : retiré avec le paquet. Les règles nft sont retirées par le prerm ; les données de /var/lib/secubox/pilotage ne sont jamais supprimées.
-    rm -f /etc/nginx/conf.d/secubox-pilotage-canal.conf
+    rm -f "$_canal"
     if systemctl is-active --quiet nginx 2>/dev/null; then
       if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+    fi
+    # M12 : l'ACL nominative du journal d'audit commun part avec le paquet (journal courant et journaux tournés, même inode) ; ni
+    # propriétaire ni mode ne changent. Jamais un lien (-P et test -L) : le dossier est inscriptible par le groupe secubox.
+    for _f in "$_journaux"/audit.log "$_journaux"/audit.log.*; do
+      if [ -f "$_f" ] && [ ! -L "$_f" ]; then
+        setfacl -P -x u:secubox-pilotage "$_f" 2>/dev/null || true
+      fi
+    done
+    # M12 : les profils ne sont plus attachés à rien : déchargés du noyau (comme l'agent ; au purge, dpkg a déjà retiré les
+    # conffiles et le remove qui précède les a déchargés : l'échec est sans conséquence).
+    if [ -d "$_aa_sys" ] && command -v apparmor_parser >/dev/null 2>&1; then
+      for _p in secubox-pilotage-api secubox-pilotage-invite; do
+        apparmor_parser -R "$_aa_d/$_p" >/dev/null 2>&1 || true
+      done
     fi
     ;;
 esac

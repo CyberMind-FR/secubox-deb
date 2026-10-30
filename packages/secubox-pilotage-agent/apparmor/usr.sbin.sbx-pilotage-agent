@@ -3,10 +3,11 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 #
-# Profil AppArmor ENFORCE de sbx-pilotage-agent (#3126, L1 lecture seule).
+# Profil AppArmor ENFORCE de sbx-pilotage-agent (#3126 ; L1 lecture, L2 actions par sudo).
 # Posé dans /etc/apparmor.d/usr.sbin.sbx-pilotage-agent, chargé par le postinst.
 # Tout ce qui n'est pas listé est refusé. Aucune écriture de fichier, aucune
 # capacité, aucune écoute : la connexion au maître est sortante seulement.
+# Seul passage privilégié : sudo -> secubox-pilotagectl (sudoers à argv borné, validé par le ctl).
 
 #include <tunables/global>
 
@@ -23,6 +24,9 @@
   # --- Le binaire lui-même et le seul programme lancé : systemctl (même profil).
   /usr/sbin/sbx-pilotage-agent mr,
   /usr/bin/systemctl rix,
+  # L2 : le SEUL passage privilégié, sudo -> /usr/sbin/secubox-pilotagectl (sudoers.d/secubox-pilotage-agent), hors de
+  # ce profil (Ux, comme secubox-netmodes et secubox-autoload) ; ce qu'il permet est borné par le sudoers et par le ctl.
+  /usr/bin/sudo Ux,
   /usr/lib/systemd/** r,
   /etc/systemd/** r,
   /run/systemd/ r,

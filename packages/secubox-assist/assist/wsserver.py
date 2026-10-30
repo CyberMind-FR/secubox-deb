@@ -7,8 +7,8 @@ SecuBox-Deb :: assist.wsserver — per-session WebSocket data-plane.
 
 Binds the wg-mesh interface IP ONLY (never 0.0.0.0). Authenticates the center
 with the single-use session token (hash matched against the journal's
-AssistSession). Dispatches ONLY catalog actions; console escalation (a live
-pty channel) is handled by the separate console module, not gated here.
+AssistSession). Executes NO action any more (#3126 L2): the old catalog is gone and support
+runs through the pilotage; console escalation is handled by the console module.
 Every action is audited. Fail-closed: no wg-mesh ⇒ BindError ⇒ the daemon
 does not serve.
 """
@@ -17,11 +17,9 @@ from __future__ import annotations
 import fcntl
 import socket
 import struct
-import subprocess
 from typing import Optional
 
-from . import audit, diag
-from .catalog import CatalogError, resolve
+from . import audit
 from .token import verify_token
 
 try:  # annuaire is a runtime dependency (prod: /usr/lib/secubox/annuaire on path)
@@ -63,23 +61,15 @@ async def authorize(tok: str, entries, self_did: str, now_ts: str) -> dict:
     raise AuthError("no active session for token")
 
 
+REMPLACE_PAR = "/api/v1/pilotage/boxes/<nom>/support"
+
+
 async def dispatch(session: dict, action: str, arg: Optional[str], entries,
                    self_did: str, now_ts: str) -> dict:
-    """Run one catalog action; console escalation is handled by the separate
-    console module, not by this dispatcher."""
-    sid = session["session_id"]
-    center = session.get("center_did", "?")
-    try:
-        argv = resolve(action, arg)
-    except CatalogError as exc:
-        audit.record("action.reject", sid, center, {"action": action, "why": str(exc)})
-        return {"ok": False, "error": str(exc)}
-    audit.record("action.run", sid, center, {"action": action, "arg": arg})
-    if action == "diag.collect":
-        return {"ok": True, "output": diag.collect(now_ts)}
-    try:
-        r = subprocess.run(argv, capture_output=True, text=True, timeout=60)
-        return {"ok": r.returncode == 0, "output": r.stdout, "error": r.stderr}
-    except Exception as exc:  # noqa: BLE001
-        audit.record("action.error", sid, center, {"action": action, "err": str(exc)})
-        return {"ok": False, "error": str(exc)}
+    """Plus aucune action (#3126 L2, R-L2-4) : l'ancien catalogue est retiré, les
+    actions passent par le ctl fermé `secubox-pilotagectl` dans une session de
+    support du pilotage. Le refus est audité ; rien n'est exécuté."""
+    audit.record("action.reject", session["session_id"], session.get("center_did", "?"),
+                 {"action": action, "why": "catalogue-retire"})
+    return {"ok": False, "gone": True, "remplace_par": REMPLACE_PAR,
+            "error": "catalogue d'actions d'assistance retiré : utiliser le support du pilotage"}

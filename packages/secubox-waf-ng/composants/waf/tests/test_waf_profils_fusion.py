@@ -19,6 +19,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 RACINE = Path(__file__).resolve().parents[1]
 CHEMIN = RACINE / "scripts" / "waf-profils-fusion"
 _loader = importlib.machinery.SourceFileLoader("waf_profils_fusion", str(CHEMIN))
@@ -92,7 +94,7 @@ def lancer(monkeypatch, pl, pv, audit, *extra):
 # ── fusionne() : la règle, sans disque ──────────────────────────────────────
 
 def test_ajoute_service_et_vhosts_absents():
-    neuf, services, vhosts = fusion.fusionne(livre_minimal(), box_gk2())
+    neuf, services, vhosts, _, _ = fusion.fusionne(livre_minimal(), box_gk2())
     assert services == ["livekit"]
     assert vhosts == ["livekit.gk1.secubox.in", "livekit.gk2.secubox.in"]
     assert neuf["services"]["livekit"] == LIVEKIT
@@ -101,7 +103,7 @@ def test_ajoute_service_et_vhosts_absents():
 
 def test_preserve_les_ajouts_locaux_et_les_valeurs_de_l_operateur():
     box = box_gk2()
-    neuf, _, _ = fusion.fusionne(livre_minimal(), box)
+    neuf, _, _, _, _ = fusion.fusionne(livre_minimal(), box)
     assert neuf["services"]["gitea"] == box["services"]["gitea"]      # jamais écrasé
     assert neuf["vhosts"]["git.maegia.tv"] == "gitea"
     assert neuf["anti_robots"] == ["git.maegia.tv"]                    # jamais touché
@@ -122,7 +124,7 @@ def test_n_ecrase_jamais_un_vhost_existant_meme_ecrit_autrement():
     box = box_gk2()
     box["services"]["visio-locale"] = {"legit_paths": ["^/x$"]}
     box["vhosts"]["LiveKit.GK1.secubox.in"] = "visio-locale"   # sbxwaf normalise la casse
-    neuf, _, vhosts = fusion.fusionne(livre_minimal(), box)
+    neuf, _, vhosts, _, _ = fusion.fusionne(livre_minimal(), box)
     assert "livekit.gk1.secubox.in" not in neuf["vhosts"]
     assert neuf["vhosts"]["LiveKit.GK1.secubox.in"] == "visio-locale"
     assert vhosts == ["livekit.gk2.secubox.in"]
@@ -133,7 +135,7 @@ def test_vhost_livre_vers_un_service_introuvable_n_est_pas_ajoute():
     # (phase G entière désactivée) : la fusion ne doit jamais l'introduire.
     livre = livre_minimal()
     livre["vhosts"]["orphelin.example"] = "inexistant"
-    neuf, _, vhosts = fusion.fusionne(livre, box_gk2())
+    neuf, _, vhosts, _, _ = fusion.fusionne(livre, box_gk2())
     assert "orphelin.example" not in neuf["vhosts"] and "orphelin.example" not in vhosts
 
 
@@ -141,10 +143,162 @@ def test_rien_a_ajouter_rend_la_copie_identique():
     box = box_gk2()
     box["services"]["livekit"] = {"legit_paths": ["^/rtc$"]}   # version locale, différente
     box["vhosts"].update({"livekit.gk1.secubox.in": "livekit", "livekit.gk2.secubox.in": "livekit"})
-    neuf, services, vhosts = fusion.fusionne(livre_minimal(), box)
+    neuf, services, vhosts, _, _ = fusion.fusionne(livre_minimal(), box)
     assert (services, vhosts) == ([], [])
     assert neuf == box
     assert neuf["services"]["livekit"] == {"legit_paths": ["^/rtc$"]}
+
+
+# ── php_services (#3257) ────────────────────────────────────────────────────
+
+def livre_php():
+    livre = livre_minimal()
+    livre["services"]["nextcloud"] = {"legit_paths": []}
+    livre["services"]["roundcube"] = {"legit_paths": []}
+    livre["php_services"] = ["nextcloud", "roundcube"]
+    return livre
+
+
+def test_fusion_ajoute_php_services(tmp_path, monkeypatch):
+    pl, pv, audit = poser(tmp_path, livre_php(), box_gk2())
+    assert lancer(monkeypatch, pl, pv, audit) == 10
+    neuf = json.loads(pv.read_text(encoding="utf-8"))
+    assert neuf["php_services"] == ["nextcloud", "roundcube"]
+    assert "php_services ajoutés : nextcloud, roundcube" in audit.read_text(encoding="utf-8")
+
+
+def test_fusion_garde_php_services_de_la_box():
+    box = box_gk2()
+    box["php_services"] = ["nextcloud", "perso"]
+    neuf, _, _, php, _ = fusion.fusionne(livre_php(), box)
+    assert neuf["php_services"] == ["nextcloud", "perso", "roundcube"]
+    assert php == ["roundcube"]
+
+
+def test_fusion_php_service_inconnu_ignore():
+    livre = livre_minimal()
+    livre["php_services"] = ["fantome"]
+    neuf, _, _, php, _ = fusion.fusionne(livre, box_gk2())
+    assert php == [] and "php_services" not in neuf
+
+
+def test_fusion_rien_a_faire_php(tmp_path, monkeypatch):
+    box = box_gk2()
+    box["services"].update({"livekit": LIVEKIT, "nextcloud": {"legit_paths": []},
+                            "roundcube": {"legit_paths": []}})
+    box["vhosts"].update({"livekit.gk1.secubox.in": "livekit", "livekit.gk2.secubox.in": "livekit"})
+    box["php_services"] = ["nextcloud", "roundcube"]
+    box["php_services_proposes"] = ["nextcloud", "roundcube"]     # suivi R14 (#3257)
+    pl, pv, audit = poser(tmp_path, livre_php(), box)
+    octets, ino = pv.read_bytes(), pv.stat().st_ino
+    assert lancer(monkeypatch, pl, pv, audit) == 0
+    assert pv.read_bytes() == octets and pv.stat().st_ino == ino and not audit.exists()
+
+
+def test_fusion_php_liste_malformee_refusee():
+    box = box_gk2()
+    box["php_services"] = "nextcloud"
+    with pytest.raises(fusion.Refus):
+        fusion.fusionne(livre_php(), box)
+
+
+# ── R14 (#3257, relecture finale I2b) : un retrait par l'opérateur est acquis ─
+
+HOTES = ["^(nc|nextcloud|cloud)\\.", "^(webmail|roundcube)\\."]
+
+
+def livre_php_hotes():
+    livre = livre_php()
+    livre["php_hotes"] = list(HOTES)
+    return livre
+
+
+def test_fusion_consigne_les_noms_proposes():
+    neuf, _, _, php, hotes = fusion.fusionne(livre_php_hotes(), box_gk2())
+    assert php == ["nextcloud", "roundcube"] and hotes == HOTES
+    assert neuf["php_services_proposes"] == ["nextcloud", "roundcube"]
+    assert neuf["php_hotes"] == HOTES and neuf["php_hotes_proposes"] == HOTES
+
+
+def test_fusion_ne_remet_pas_un_nom_retire_par_l_operateur():
+    box = box_gk2()
+    box["services"].update({"nextcloud": {"legit_paths": []}, "roundcube": {"legit_paths": []}})
+    box["php_services"] = ["nextcloud"]                          # roundcube retiré
+    box["php_services_proposes"] = ["nextcloud", "roundcube"]
+    box["php_hotes"] = []                                        # motifs vidés exprès
+    box["php_hotes_proposes"] = list(HOTES)
+    neuf, _, _, php, hotes = fusion.fusionne(livre_php_hotes(), box)
+    assert neuf["php_services"] == ["nextcloud"] and php == []
+    assert neuf["php_hotes"] == [] and hotes == []
+
+
+def test_fusion_propose_une_seule_fois_un_nom_nouveau():
+    box = box_gk2()
+    box["services"].update({"nextcloud": {"legit_paths": []}, "roundcube": {"legit_paths": []}})
+    box["php_services"] = []
+    box["php_services_proposes"] = ["nextcloud", "roundcube"]
+    livre = livre_php()
+    livre["services"]["wordpress"] = {"legit_paths": []}
+    livre["php_services"].append("wordpress")
+    neuf, services, _, php, _ = fusion.fusionne(livre, box)
+    assert services == ["livekit", "wordpress"] and php == ["wordpress"]
+    assert neuf["php_services"] == ["wordpress"]
+    assert neuf["php_services_proposes"] == ["nextcloud", "roundcube", "wordpress"]
+    neuf["php_services"] = []                                    # l'opérateur le retire aussi
+    neuf2, _, _, php2, _ = fusion.fusionne(livre, neuf)
+    assert neuf2["php_services"] == [] and php2 == []
+
+
+def test_fusion_box_d_avant_le_suivi_garde_ce_qu_elle_a_et_consigne():
+    """Box sans clé *_proposes : ce qui est présent ET livré compte comme déjà
+    proposé ; un ajout de l'opérateur n'y entre pas."""
+    box = box_gk2()
+    box["services"].update({"nextcloud": {"legit_paths": []}, "perso": {"legit_paths": []}})
+    box["php_services"] = ["nextcloud", "perso"]
+    neuf, _, _, php, _ = fusion.fusionne(livre_php(), box)
+    assert php == ["roundcube"]
+    assert neuf["php_services"] == ["nextcloud", "perso", "roundcube"]
+    assert neuf["php_services_proposes"] == ["nextcloud", "roundcube"]
+
+
+def test_fusion_suivi_seul_ecrit_une_fois(tmp_path, monkeypatch):
+    """Box d'avant, déjà complète : le suivi est consigné une fois, puis plus rien."""
+    box = box_gk2()
+    box["services"].update({"livekit": LIVEKIT, "nextcloud": {"legit_paths": []},
+                            "roundcube": {"legit_paths": []}})
+    box["vhosts"].update({"livekit.gk1.secubox.in": "livekit", "livekit.gk2.secubox.in": "livekit"})
+    box["php_services"] = ["nextcloud", "roundcube"]
+    pl, pv, audit = poser(tmp_path, livre_php(), box)
+    assert lancer(monkeypatch, pl, pv, audit) == 10
+    assert json.loads(pv.read_text(encoding="utf-8"))["php_services_proposes"] == ["nextcloud", "roundcube"]
+    assert lancer(monkeypatch, pl, pv, audit) == 0
+
+
+def test_fusion_ajoute_php_hotes_et_audite(tmp_path, monkeypatch):
+    pl, pv, audit = poser(tmp_path, livre_php_hotes(), box_gk2())
+    assert lancer(monkeypatch, pl, pv, audit) == 10
+    assert json.loads(pv.read_text(encoding="utf-8"))["php_hotes"] == HOTES
+    detail = json.loads(audit.read_text(encoding="utf-8").splitlines()[0])["detail"]
+    assert "php_hotes ajoutés : " + ", ".join(HOTES) in detail
+
+
+def test_fusion_php_hotes_malforme_refuse():
+    box = box_gk2()
+    box["php_hotes"] = "^nc\\."
+    with pytest.raises(fusion.Refus):
+        fusion.fusionne(livre_php_hotes(), box)
+    box = box_gk2()
+    box["php_hotes_proposes"] = {"x": 1}
+    with pytest.raises(fusion.Refus):
+        fusion.fusionne(livre_php_hotes(), box)
+
+
+def test_livre_reel_porte_les_motifs_et_le_suivi():
+    livre = json.loads(LIVRE_REEL.read_text(encoding="utf-8"))
+    assert livre["php_hotes"] == HOTES and livre["php_hotes_proposes"] == HOTES
+    assert livre["php_services_proposes"] == livre["php_services"]
+    for motif in livre["php_hotes"]:
+        re.compile(motif)
 
 
 # ── main() : disque, atomicité, audit ───────────────────────────────────────

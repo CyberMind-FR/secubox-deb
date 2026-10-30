@@ -1,0 +1,127 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-pilotage-invite — code de jonction pour le retour au maillage d'une box renommée (#3126 L2 tâche 6, R-L2-35).
+
+Lancé par secubox-pilotage-invite@.service (activation par socket, Accept=yes : une instance par connexion, entrée et sortie
+= la connexion), sous le compte `secubox` : celui des jetons de secubox-p2p (tokens.json), que sbx-mesh-invite écrit.
+Seul le service du maître joint la socket (0600, secubox-pilotage). Il ne peut rien choisir d'autre que le NOM :
+
+  entrée  : une ligne, un libellé DNS (^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$), 80 octets au plus
+  argv    : /usr/bin/sbx-mesh-invite --code --nom <nom> --ttl 600 --json   (fixe : jamais --flash ni --adresse ; 10 min,
+            la box le consomme dans la minute qui suit l'envoi)
+  plafond : 20 émissions par heure, compteur `pilotage-emissions.json` (0600) dans master-link, sous verrou ; au-delà, refus
+            sans lancer sbx-mesh-invite. Compteur illisible, lien ou fichier non ordinaire : refus (fermé par défaut).
+  sortie  : la sortie JSON de sbx-mesh-invite ({"code", "nom", "expire"}), {"erreur": "plafond"} au-delà du plafond, ou RIEN
+            en cas d'autre échec
+
+Le code porte un jeton : il n'est écrit que sur la connexion, jamais dans le journal (stderr ne reçoit que le code de sortie).
+Audit : `pilotage_code_emis {nom, ttl}` dans /var/log/secubox/audit.log, ouvert en ajout SANS création (le profil AppArmor
+n'accorde que `a` ; l'audit propre de sbx-mesh-invite, ouvert avec création, y est refusé). Audit impossible : rien n'est rendu.
+"""
+import fcntl
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+INVITE = "/usr/bin/sbx-mesh-invite"
+TTL_S = 600
+DOSSIER = Path("/var/lib/secubox/p2p/master-link")
+COMPTEUR = "pilotage-emissions.json"
+EMISSIONS_PAR_HEURE = 20
+RE_NOM = re.compile(rb"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")
+ENTREE_MAX = 80
+SORTIE_MAX = 4096
+COMPTEUR_MAX = 64 << 10
+DELAI_S = 30
+AUDIT = Path("/var/log/secubox/audit.log")
+
+
+def auditer(chemin: Path, nom: str) -> None:
+    ligne = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "pilotage", "action": "pilotage_code_emis",
+             "nom": nom, "ttl": TTL_S}
+    fd = os.open(chemin, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        os.write(fd, (json.dumps(ligne, ensure_ascii=False) + "\n").encode("utf-8"))
+    finally:
+        os.close(fd)
+
+
+def reserver(dossier: Path, maintenant: float) -> bool:
+    """Compte une émission si le plafond horaire le permet ; faux sinon, ou si le compteur est inutilisable."""
+    try:
+        fd = os.open(Path(dossier) / COMPTEUR, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    except OSError:
+        return False
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+            return False
+        os.fchmod(fd, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        brut = os.read(fd, COMPTEUR_MAX + 1)
+        try:
+            liste = json.loads(brut) if brut else []
+        except ValueError:
+            return False
+        if not isinstance(liste, list) or len(brut) > COMPTEUR_MAX:
+            return False
+        recents = [x for x in liste if isinstance(x, (int, float)) and not isinstance(x, bool) and maintenant - 3600 < x <= maintenant]
+        if len(recents) >= EMISSIONS_PAR_HEURE:
+            return False
+        recents.append(maintenant)
+        neuf = json.dumps(recents).encode()
+        os.lseek(fd, 0, os.SEEK_SET)
+        os.ftruncate(fd, 0)
+        os.write(fd, neuf)
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
+
+
+def main(entree, sortie, lanceur=subprocess.run, dossier: Path = DOSSIER, horloge=time.time, audit=None) -> int:
+    ligne = entree.readline(ENTREE_MAX + 1)
+    if not ligne.endswith(b"\n") or len(ligne) > ENTREE_MAX:
+        print("secubox-pilotage-invite : entrée refusée", file=sys.stderr)
+        return 2
+    nom = ligne[:-1]
+    if not RE_NOM.fullmatch(nom):
+        print("secubox-pilotage-invite : nom refusé", file=sys.stderr)
+        return 2
+    if not reserver(dossier, horloge()):
+        print(f"secubox-pilotage-invite : plafond de {EMISSIONS_PAR_HEURE} codes par heure atteint, ou compteur inutilisable", file=sys.stderr)
+        sortie.write(b'{"erreur": "plafond"}\n')   # cause distincte, sans secret (R-L2-40) ; le maître l'audite
+        sortie.flush()
+        return 3
+    try:
+        r = lanceur([INVITE, "--code", "--nom", nom.decode("ascii"), "--ttl", str(TTL_S), "--json"], capture_output=True, text=True,
+                    stdin=subprocess.DEVNULL, timeout=DELAI_S)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"secubox-pilotage-invite : sbx-mesh-invite indisponible ({e.__class__.__name__})", file=sys.stderr)
+        return 1
+    rc = getattr(r, "returncode", 1)
+    out = (getattr(r, "stdout", "") or "").encode("utf-8")
+    if rc != 0 or not out or len(out) > SORTIE_MAX:
+        print(f"secubox-pilotage-invite : sbx-mesh-invite en échec (code {rc})", file=sys.stderr)
+        return 1
+    try:
+        auditer(audit if audit is not None else AUDIT, nom.decode("ascii"))
+    except OSError as e:
+        print(f"secubox-pilotage-invite : audit impossible ({e.__class__.__name__}), code non rendu", file=sys.stderr)
+        return 1
+    sortie.write(out)
+    sortie.flush()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.stdin.buffer, sys.stdout.buffer))

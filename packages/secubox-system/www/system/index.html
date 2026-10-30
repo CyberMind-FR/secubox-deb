@@ -209,7 +209,7 @@
         const nb = v => (typeof v === 'number' && isFinite(v)) ? v : null;
 
         let INFO = null, RES = null, SERV = null, NET = null, SEC = null, PKG = null, BOARD = null, KIOSK = null, SESS = null, SUMM = null, JOUR = null;
-        let SESSION_OK = true, CONFIRM = null, REGLAGES_INIT = false;
+        let SESSION_OK = true, CONFIRM = null, REGLAGES_INIT = false, NOM_CHARGE = '';
 
         // Jeton : sbx_token, puis les anciennes clés de cette page (secubox_token, token).
         function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || localStorage.getItem('token') || ''; } catch (e) { return ''; } }
@@ -309,7 +309,7 @@
             const i = INFO || {};
             $('kHote').textContent = tiret(i.hostname); $('kCarte').textContent = tiret(i.board); $('kArch').textContent = tiret(i.arch); $('kNoyau').textContent = tiret(i.kernel);
             $('kUp').textContent = tiret(i.uptime_formatted); $('kHeure').textContent = tiret(i.local_time);
-            if (!REGLAGES_INIT && i.hostname && !$('newHost').value) { $('newHost').value = i.hostname; REGLAGES_INIT = true; }
+            if (!REGLAGES_INIT && i.hostname && !$('newHost').value) { $('newHost').value = i.hostname; NOM_CHARGE = i.hostname; REGLAGES_INIT = true; }
             // Ressources
             $('rCpu').textContent = pct(nb(r.cpu_percent)); barre('bCpu', r.cpu_percent);
             $('rMem').textContent = nb(r.memory_percent) === null ? '—' : octets(r.memory_used) + ' / ' + octets(r.memory_total) + ' · ' + pct(r.memory_percent); barre('bMem', r.memory_percent);
@@ -476,8 +476,11 @@
 
         $('fReglages').addEventListener('submit', async ev => {
             ev.preventDefault();
-            const r = await ecrire('POST', '/settings', { hostname: $('newHost').value, timezone: $('newTz').value });
-            if (reussi(r)) { retour('rReglages', true, 'Réglages enregistrés.'); charger(); } else retour('rReglages', false, 'Échec : ' + detail(r));
+            // #3242 (R-L2-36) : le nom n'est envoyé que s'il a changé (un simple changement de fuseau n'est pas un renommage).
+            const corps = { timezone: $('newTz').value }, nom = $('newHost').value.trim();
+            if (nom && nom !== NOM_CHARGE) corps.hostname = nom;
+            const r = await ecrire('POST', '/settings', corps);
+            if (reussi(r)) { if (corps.hostname) NOM_CHARGE = corps.hostname; retour('rReglages', true, 'Réglages enregistrés.'); charger(); } else retour('rReglages', false, 'Échec : ' + detail(r));
         });
 
         async function kiosque(methode, chemin, ok) {

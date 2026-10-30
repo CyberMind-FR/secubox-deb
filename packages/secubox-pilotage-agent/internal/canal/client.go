@@ -7,6 +7,23 @@
 // interrogation longue vers le maître, par le tunnel WireGuard. L'agent
 // n'écoute sur aucun port ; tout ce qui vient du réseau est borné et validé
 // (taille, nombre, forme) avant usage.
+//
+// Ancre (D1, #3126 L2) : quand Config.Ancre est posée, elle est rappelée au
+// démarrage puis toutes les PeriodeAncre (1 h). Aucun Operate n'est traité
+// tant qu'elle n'a pas rendu AncreOK. AncreAbsente (aucune ancre posée sur la
+// box, R-L2-19) garde le canal en lecture comme en L1 ; un lot d'Operate refusés
+// redemande la vérification au ctl, qui audite « ancre absente », au plus une
+// fois par lot et par minute (R-L2-24). Une ancre absente après une
+// vérification réussie vaut AncreIllisible (M1). AncreDifferente
+// ou AncreIllisible coupent le canal : rien ne part vers le maître (bonjour,
+// sondage, réponses, notifications) ; la reconnexion suivante qui réussit
+// notifie la coupure au maître (X_SECUBOX_AnchorFailed).
+//
+// Actions (L2, tâche 3) : avec l'ancre vérifiée, un Operate d'action passe à Config.Agir (l'exécuteur du paquet
+// operations, qui appelle le ctl root) et reçoit tout de suite un OPERATE_RESP {etat, job, raison}. Les fins
+// d'opération (X_SECUBOX_OperationDone) attendent dans Config.Resultats : une goroutine les remet par /notifs et
+// les retire seulement après un 2xx ; un envoi manqué est retenté avec recul, et chaque bonjour (reconnexion) le
+// relance tout de suite.
 package canal
 
 import (
@@ -30,6 +47,7 @@ import (
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/operations"
 )
 
 // Valeurs par défaut et bornes.
@@ -38,6 +56,8 @@ const (
 	ReculMinDefaut  = 5 * time.Second
 	ReculMaxDefaut  = 300 * time.Second
 	TailleMaxDefaut = 256 << 10
+	PeriodeAncreDef = time.Hour
+	reverifRefus    = time.Minute // au plus une revérification (ligne d'audit) par lot de refus et par minute
 
 	portCanal      = "8472"
 	prefixe        = "/canal/v1"
@@ -57,11 +77,26 @@ const (
 	maxEntetes     = 16 << 10
 )
 
-const msgRefus = "commande refusée (L1 : lecture seule)"
+const (
+	msgRefus        = "commande refusée (L1 : lecture seule)"
+	msgAncreAbsente = "ancre absente : action refusée (lecture seule)"
+)
 
 var (
 	reMsgID   = regexp.MustCompile(`^[0-9a-f]{16}$`)
 	errTaille = errors.New("réponse du maître trop volumineuse")
+	errAncre  = errors.New("ancre du maître non vérifiée : canal coupé")
+)
+
+// Verdict est le résultat de la vérification de l'ancre (sortie du ctl).
+type Verdict string
+
+// Verdicts possibles ; tout ce qui n'est pas AncreOK ou AncreAbsente coupe le canal.
+const (
+	AncreOK         Verdict = "ok"         // le pair du maître a la clé de l'ancre
+	AncreAbsente    Verdict = "absente"    // aucune ancre posée : lecture seule, aucune action
+	AncreDifferente Verdict = "differente" // autre clé : canal coupé
+	AncreIllisible  Verdict = "illisible"  // ancre, wg ou ctl illisible : canal coupé
 )
 
 // Config règle le client. Les champs à zéro prennent leur valeur par défaut.
@@ -74,6 +109,18 @@ type Config struct {
 	TailleMax int           // taille maximale d'un message de réponse (256 Kio)
 	Version   string        // version de l'agent annoncée à /bonjour
 	BootID    string        // identifiant de démarrage de la box annoncé à /bonjour
+	// Ancre vérifie que le pair WireGuard du maître porte la clé ancrée (le ctl
+	// root, `ancre-verifier`) et rend son verdict ; nil : aucune vérification
+	// (tests du canal).
+	Ancre        func(ctx context.Context) Verdict
+	PeriodeAncre time.Duration // intervalle des revérifications de l'ancre (1 h)
+	// Agir traite un Operate d'action (L2) ; nil : toute commande autre que le relevé est refusée (L1).
+	Agir func(ctx context.Context, cmd string, args map[string]any, acteur string) operations.Reponse
+	// Resultats : fins d'opération à remettre au maître, renvoyées à la reconnexion ; nil : aucune.
+	Resultats *operations.Boite
+	// ApresAncre est appelée une fois, à la première vérification réussie de l'ancre (avant le premier bonjour) :
+	// l'agent y renvoie les fins récentes enregistrées par le ctl (I4, R-L2-47) ; nil : rien.
+	ApresAncre func(ctx context.Context)
 }
 
 // Client interroge le maître et lui répond.
@@ -88,6 +135,13 @@ type Client struct {
 	suivi   sync.WaitGroup                                   // relevés en tâche de fond, attendus par Tourner
 	releve  atomic.Bool                                      // un relevé est en cours
 	errCfg  error                                            // configuration invalide : aucune connexion
+	horloge func() time.Time                                 // injectable pour les tests
+	verdict atomic.Value                                     // Verdict courant ; vide : pas encore vérifiée
+	// Lus et écrits par la seule goroutine de Tourner :
+	ancreVue time.Time // dernière vérification réussie
+	coupure  int64     // instant (Unix) de la coupure à notifier ; 0 : rien à notifier
+	dejaOK   bool      // l'ancre a été vérifiée au moins une fois (M1)
+	reverif  time.Time // dernière revérification demandée par un refus d'Operate (R-L2-24)
 }
 
 // NouveauClient prépare le client ; rien n'est envoyé avant Tourner.
@@ -106,6 +160,9 @@ func NouveauClient(c Config, m *modele.Modele, operer func(ctx context.Context, 
 	}
 	if c.TailleMax <= 0 {
 		c.TailleMax = TailleMaxDefaut
+	}
+	if c.PeriodeAncre <= 0 {
+		c.PeriodeAncre = PeriodeAncreDef
 	}
 	d := &net.Dialer{Timeout: delaiConnexion}
 	var errCfg error
@@ -131,11 +188,16 @@ func NouveauClient(c Config, m *modele.Modele, operer func(ctx context.Context, 
 			return errors.New("redirection refusée")
 		},
 	}
+	if c.Agir != nil && c.Ancre == nil && errCfg == nil {
+		// M5 : des actions sans vérification de l'ancre du maître ne sont jamais servies.
+		errCfg = errors.New("actions (Agir) sans vérification d'ancre (Ancre) : configuration refusée, aucune connexion")
+	}
 	hote := strings.TrimPrefix(c.Maitre, "http://")
 	if !strings.Contains(hote, ":") || strings.HasSuffix(hote, "]") {
 		hote = net.JoinHostPort(strings.Trim(hote, "[]"), portCanal)
 	}
-	return &Client{cfg: c, m: m, operer: operer, http: cl, base: "http://" + hote + prefixe, dormir: dormirReel, reprise: time.NewTimer, errCfg: errCfg}
+	return &Client{cfg: c, m: m, operer: operer, http: cl, base: "http://" + hote + prefixe, dormir: dormirReel, reprise: time.NewTimer, errCfg: errCfg,
+		horloge: time.Now}
 }
 
 // ipSource accepte une adresse seule ou sa forme CIDR (« 10.10.0.5/24 »).
@@ -173,15 +235,38 @@ func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error 
 			c.notifier(ctx, ev)
 		}()
 	}
+	if c.cfg.Resultats != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.remettre(ctx)
+		}()
+	}
 	defer wg.Wait()
 	defer c.suivi.Wait() // relevés en tâche de fond
 
 	recul := c.cfg.ReculMin
+	reculAncre := c.cfg.ReculMin
 	bonjour := false
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if !c.ancreAJour(ctx, &bonjour) {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			// Chaque échec est audité par le ctl : le recul monte jusqu'à la période (24 lignes par jour au plus).
+			log.Printf("canal : %v (%s), aucun Operate (nouvelle vérification dans %s)", errAncre, c.etatAncre(), reculAncre)
+			if e := c.dormir(ctx, reculAncre); e != nil {
+				return e
+			}
+			if reculAncre *= 2; reculAncre > c.cfg.PeriodeAncre {
+				reculAncre = c.cfg.PeriodeAncre
+			}
+			continue
+		}
+		reculAncre = c.cfg.ReculMin
 		debut := time.Now()
 		actif, err := c.cycle(ctx, &bonjour)
 		if err == nil {
@@ -208,6 +293,69 @@ func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error 
 	}
 }
 
+func (c *Client) etatAncre() Verdict {
+	v, _ := c.verdict.Load().(Verdict)
+	return v
+}
+
+func ouvert(v Verdict) bool { return v == AncreOK || v == AncreAbsente }
+
+// verifierAncre appelle le ctl et retient son verdict (seule la goroutine de
+// Tourner l'appelle). Rend le verdict.
+func (c *Client) verifierAncre(ctx context.Context) Verdict {
+	v := c.cfg.Ancre(ctx)
+	if !ouvert(v) && v != AncreDifferente {
+		v = AncreIllisible // valeur inconnue : fermé par défaut
+	}
+	if v == AncreAbsente && c.dejaOK {
+		// M1 : une ancre vue puis disparue n'est pas une box sans ancre (on l'a retirée) : coupure.
+		log.Print("ancre : disparue après une vérification réussie, traitée comme illisible")
+		v = AncreIllisible
+	}
+	premiere := v == AncreOK && !c.dejaOK
+	if v == AncreOK {
+		c.dejaOK = true
+	}
+	c.verdict.Store(v)
+	if ouvert(v) {
+		c.ancreVue = c.horloge()
+	}
+	if premiere && c.cfg.ApresAncre != nil {
+		// I4 : une fois par démarrage, le canal ouvert (les fins déposées partent dès le bonjour)
+		c.cfg.ApresAncre(ctx)
+	}
+	return v
+}
+
+// ancreAJour rend vrai si le canal peut servir (ancre vérifiée, ou absente :
+// lecture seule) depuis moins de PeriodeAncre, sinon la revérifie. Un verdict
+// différente ou illisible coupe le canal : plus rien ne part (sonder et poster
+// refusent), les connexions inactives sont fermées, le bonjour sera refait, et
+// la coupure est retenue pour être notifiée à la reconnexion.
+func (c *Client) ancreAJour(ctx context.Context, bonjour *bool) bool {
+	if c.cfg.Ancre == nil {
+		return true
+	}
+	if ouvert(c.etatAncre()) && c.horloge().Sub(c.ancreVue) < c.cfg.PeriodeAncre {
+		return true
+	}
+	if ouvert(c.verifierAncre(ctx)) {
+		return true
+	}
+	if c.coupure == 0 {
+		c.coupure = c.horloge().Unix()
+	}
+	*bonjour = false
+	c.http.CloseIdleConnections()
+	return false
+}
+
+// coupe rend vrai si le canal est coupé (ancre différente, illisible, ou pas
+// encore vérifiée).
+func (c *Client) coupe() bool {
+	return c.cfg.Ancre != nil && !ouvert(c.etatAncre())
+}
+
 // cycle fait un tour : bonjour (une fois), sondage, traitement, réponses.
 // Il rend vrai si le maître a demandé quelque chose de valable.
 func (c *Client) cycle(ctx context.Context, bonjour *bool) (bool, error) {
@@ -224,6 +372,20 @@ func (c *Client) cycle(ctx context.Context, bonjour *bool) (bool, error) {
 			return false, fmt.Errorf("bonjour : %w", err)
 		}
 		*bonjour = true
+		if c.cfg.Resultats != nil {
+			c.cfg.Resultats.Reveiller() // (re)connexion : les résultats non remis partent tout de suite
+		}
+	}
+	if c.coupure != 0 {
+		// Reconnexion après une coupure faute d'ancre : le maître en est informé
+		// (value = instant de la coupure). Non remise : retentée au cycle suivant.
+		ev := notifs.Evenement{Type: notifs.TypeAncre, Valeur: c.coupure, Instant: c.horloge().Unix()}
+		lot := []map[string]any{{"type": "NOTIFY", "body": map[string]any{"event": ev}}}
+		if err := c.poster(ctx, "/notifs", lot); err != nil {
+			log.Printf("canal : notification de coupure (ancre) non remise : %v", err)
+		} else {
+			c.coupure = 0
+		}
 	}
 	brut, err := c.sonder(ctx)
 	if err != nil {
@@ -275,6 +437,9 @@ func lotsReponses(reps []reponse, max int) [][]byte {
 
 // sonder attend une liste de requêtes (200) ou rien (204).
 func (c *Client) sonder(ctx context.Context) ([]byte, error) {
+	if c.coupe() {
+		return nil, errAncre
+	}
 	ctx, cancel := context.WithTimeout(ctx, c.cfg.Attente+15*time.Second)
 	defer cancel()
 	url := fmt.Sprintf("%s/requetes?attente=%d", c.base, int(c.cfg.Attente/time.Second))
@@ -307,6 +472,9 @@ func (c *Client) sonder(ctx context.Context) ([]byte, error) {
 
 // poster envoie un corps JSON ; tout statut hors 2xx est une erreur.
 func (c *Client) poster(ctx context.Context, chemin string, corps any) error {
+	if c.coupe() {
+		return errAncre // rien ne part vers un pair qui n'est peut-être pas le maître
+	}
 	b, err := json.Marshal(corps)
 	if err != nil {
 		return err
@@ -411,6 +579,67 @@ func (c *Client) vider(ctx context.Context, att *[]notifs.Evenement) bool {
 	return true
 }
 
+// remettre envoie les fins d'opération de Config.Resultats (lots de 16) ; seule cette goroutine les envoie, et un
+// résultat n'est retiré qu'une fois remis (2xx). Échec : nouvel essai par minuteur à recul doublé (ReculMin à
+// ReculMax), ou dès le prochain dépôt ou bonjour.
+func (c *Client) remettre(ctx context.Context) {
+	b := c.cfg.Resultats
+	var minuteur *time.Timer
+	var reprise <-chan time.Time
+	recul := c.cfg.ReculMin
+	defer func() {
+		if minuteur != nil {
+			minuteur.Stop()
+		}
+	}()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-b.Signal():
+		case <-reprise:
+			reprise = nil
+		}
+		if c.viderResultats(ctx) {
+			recul = c.cfg.ReculMin
+			continue
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		if minuteur != nil {
+			minuteur.Stop()
+		}
+		minuteur = c.reprise(recul)
+		reprise = minuteur.C
+		if recul *= 2; recul > c.cfg.ReculMax {
+			recul = c.cfg.ReculMax
+		}
+	}
+}
+
+// viderResultats remet les résultats en attente ; faux au premier échec (ils restent dans la boîte).
+func (c *Client) viderResultats(ctx context.Context) bool {
+	b := c.cfg.Resultats
+	for {
+		evs, seq := b.Prendre(maxLotNotifs)
+		if len(evs) == 0 {
+			return true
+		}
+		lot := make([]map[string]any, len(evs))
+		for i, e := range evs {
+			lot[i] = map[string]any{"type": "NOTIFY", "body": map[string]any{"event": e}}
+		}
+		if err := c.poster(ctx, "/notifs", lot); err != nil {
+			if ctx.Err() == nil {
+				log.Printf("canal : %d résultat(s) d'opération non remis, gardés (%v)", b.Taille(), err)
+			}
+			return false
+		}
+		b.Remis(seq)
+	}
+}
+
 // requete est un message du maître, tel que décodé.
 type requete struct {
 	MsgID string          `json:"msg_id"`
@@ -439,6 +668,7 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 	}
 	var reps []reponse
 	lances := 0
+	reverifie, sansAppel := false, 0
 	for _, r := range liste {
 		if ctx.Err() != nil {
 			break
@@ -449,7 +679,30 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 			continue
 		}
 		if rq.Type == "OPERATE" {
-			rep, run := c.operate(rq)
+			if v := c.etatAncre(); c.cfg.Ancre != nil && v != AncreOK {
+				if v == AncreAbsente {
+					// R-L2-19 : lecture seule ; le refus est audité par le ctl (« ancre absente »), à qui la
+					// vérification est redemandée : une ancre posée depuis rend la main aux actions suivantes.
+					// R-L2-24 : au plus une fois par lot et par minute (un pair non vérifié n'inonde pas l'audit) ;
+					// les autres refus sont seulement comptés dans le journal de l'agent.
+					if c.peutReverifier(&reverifie) {
+						c.verifierAncre(ctx)
+					} else {
+						sansAppel++
+					}
+					reps = append(reps, erreur(rq.MsgID, msgAncreAbsente))
+				} else {
+					reps = append(reps, erreur(rq.MsgID, errAncre.Error()))
+				}
+				continue
+			}
+			rep, run := c.operate(ctx, rq)
+			if refusSansAncre(rep) && c.peutReverifier(&reverifie) {
+				// M3 : le ctl ne voit pas d'ancre vérifiée alors que l'agent se croit ancré (canal enregistré périmé
+				// ou retiré) : revérification forcée, au plus une par lot et par minute (limiteur de R-L2-24).
+				log.Print("canal : le ctl refuse faute d'ancre vérifiée, revérification forcée")
+				c.verifierAncre(ctx)
+			}
 			if run == nil {
 				reps = append(reps, c.borner(rep))
 			} else if c.lancerReleve(ctx, rq.MsgID, run) {
@@ -461,7 +714,26 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 		}
 		reps = append(reps, c.repondre(ctx, rq))
 	}
+	if sansAppel > 0 {
+		log.Printf("canal : %d Operate refusés (ancre absente) sans revérification auprès du ctl", sansAppel)
+	}
 	return reps, lances, nil
+}
+
+// peutReverifier applique le limiteur des revérifications demandées par un Operate (R-L2-24, M3) : une par lot et
+// par minute au plus. Vrai : la revérification est permise et comptée.
+func (c *Client) peutReverifier(reverifie *bool) bool {
+	maintenant := c.horloge()
+	if *reverifie || (!c.reverif.IsZero() && maintenant.Sub(c.reverif) < reverifRefus) {
+		return false
+	}
+	*reverifie, c.reverif = true, maintenant
+	return true
+}
+
+// refusSansAncre : OPERATE_RESP « refuse » du ctl faute d'ancre vérifiée de son côté.
+func refusSansAncre(rep reponse) bool {
+	return rep.Type == "OPERATE_RESP" && rep.Body["etat"] == string(operations.Refuse) && rep.Body["raison"] == operations.RaisonAncre
 }
 
 // lancerReleve exécute run en tâche de fond, suivie par Tourner, et poste sa
@@ -550,14 +822,20 @@ func validerChemins(l []any) ([]string, error) {
 }
 
 // operate valide un OPERATE. Rend soit une réponse immédiate (refus, argument
-// invalide) avec run nul, soit la fonction qui fera le relevé.
-func (c *Client) operate(rq requete) (reponse, func(context.Context) reponse) {
+// invalide, OPERATE_RESP d'une action) avec run nul, soit la fonction qui fera le relevé.
+func (c *Client) operate(ctx context.Context, rq requete) (reponse, func(context.Context) reponse) {
 	var b struct {
 		Command string         `json:"command"`
 		Args    map[string]any `json:"args"`
+		Acteur  any            `json:"acteur"` // login de l'administrateur du maître (R-L2-14), validé par l'exécuteur
 	}
 	if err := json.Unmarshal(rq.Body, &b); err != nil {
 		return erreur(rq.MsgID, "corps OPERATE invalide"), nil
+	}
+	if b.Command != commandeMesure && c.cfg.Agir != nil {
+		acteur, _ := b.Acteur.(string)
+		r := c.cfg.Agir(ctx, b.Command, b.Args, acteur)
+		return reponse{MsgID: rq.MsgID, Type: "OPERATE_RESP", Body: operations.Corps(r)}, nil
 	}
 	if b.Command != commandeMesure || c.operer == nil {
 		return erreur(rq.MsgID, msgRefus), nil

@@ -1,0 +1,15 @@
+{
+ "route": "/canal/v1/notifs",
+ "envoi": [
+  {
+   "body": {
+    "event": {
+     "type": "X_SECUBOX_HandsTied",
+     "ts": 1793000000,
+     "etat": "on"
+    }
+   },
+   "type": "NOTIFY"
+  }
+ ]
+}

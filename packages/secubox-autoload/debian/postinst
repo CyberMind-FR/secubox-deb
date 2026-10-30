@@ -33,6 +33,14 @@ if [ "$1" = "configure" ]; then
         nft list chain inet filter input 2>/dev/null | grep -q "secubox autoload hub" || nft -f /etc/nftables.d/zz-secubox-autoload.nft 2>/dev/null || true
     fi
 
+    # Dossier du verrou de tunnel-sync (#3126, R-L2-6) : à root seul (0700), jamais dans /run/secubox (1777). Créé avant le démarrage du service
+    # pour que ReadWritePaths le monte en écriture (au démarrage de la machine, systemd-tmpfiles-setup le crée).
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-autoload.conf >/dev/null 2>&1 || install -d -m 0700 -o root -g root /run/secubox-autoload || true
+
+    # Projection publique des pairs (#3126) : root la publie ici, HORS du bac à sable du service. Son dossier doit exister avant le démarrage
+    # pour que ReadWritePaths le monte en écriture : sans lui, tunnel-sync lancé par le service (minuterie, révocations) n'exporte rien.
+    /usr/sbin/autoloadctl exporter-pairs >/dev/null 2>&1 || echo "secubox-autoload : projection publique des pairs non exportée" >&2
+
     systemctl daemon-reload >/dev/null 2>&1 || true
     if [ -f /var/lib/secubox/autoload/hub.pub ]; then
         systemctl enable secubox-autoload.service >/dev/null 2>&1 || true

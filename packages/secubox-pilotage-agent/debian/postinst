@@ -15,6 +15,9 @@ case "$1" in
       apparmor_parser -r /etc/apparmor.d/usr.sbin.sbx-pilotage-agent \
         || echo "secubox-pilotage-agent : profil AppArmor non chargé (voir journalctl -k)" >&2
     fi
+    # Arbre d'état root 0700 du ctl (consentements, mains liées) : avant le démarrage, l'unité l'ouvre en écriture.
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-pilotagectl.conf \
+      || echo "secubox-pilotage-agent : /var/lib/secubox-pilotagectl non créé (systemd-tmpfiles)" >&2
     # Chroot d'image (pas de systemd en marche) : rien à activer ici.
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload || true

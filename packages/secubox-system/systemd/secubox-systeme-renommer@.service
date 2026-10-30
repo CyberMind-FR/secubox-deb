@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# #3242 (et #3126 L2 tâche 5) : renommer la box depuis la page Système. Démarrée par l'API (User=secubox,
+# NoNewPrivileges) grâce à la règle polkit bornée au sujet secubox-system.service ; root, car secubox-renommer écrit
+# /etc/hosts et secubox.conf puis lance hostnamectl. L'instance est le nom demandé, passé brut (%i, jamais %I qui
+# changerait « - » en « / ») ; secubox-renommer le revalide (libellé DNS, noms réservés, nom pris au maillage).
+# Le code de sortie (ExecMainStatus) est relu par l'API et rendu à la page.
+[Unit]
+Description=SecuBox systeme : renommer la box en %i (#3242)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-renommer %i
+TimeoutStartSec=90
+# Bac à sable : système en lecture seule sauf /etc (hosts et secubox/secubox.conf, remplacés atomiquement dans leur
+# dossier), /run (verrou) et /var/log/secubox (audit). hostnamectl et systemctl passent par D-Bus.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/etc /run /var/log/secubox
+ProtectHome=yes
+PrivateTmp=yes

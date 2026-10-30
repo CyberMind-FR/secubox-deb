@@ -1,0 +1,11 @@
+{
+ "requete": {
+  "body": {
+   "acteur": "alice",
+   "args": {},
+   "command": "Device.X_SECUBOX_Secrets.Renouveler()"
+  },
+  "type": "OPERATE"
+ },
+ "route": "/canal/v1/requetes"
+}

@@ -9,13 +9,13 @@ secubox_core.system — Helpers système pour SecuBox
 - board_info()       → Infos hardware/board
 - uptime()           → Uptime du système
 - service_status()   → État des services systemd
+  (piloter une unité : secubox_core.unites.piloter, le seul contrôle — #3258)
 - disk_usage()       → Usage disque
 """
 from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
-from typing import Literal
 
 from .logger import get_logger
 
@@ -121,41 +121,6 @@ def service_status(service: str) -> dict:
         log.warning("systemctl is-enabled %s: %s", service, e)
 
     return result
-
-
-def service_control(
-    service: str,
-    action: Literal["start", "stop", "restart", "reload"],
-) -> dict:
-    """
-    Contrôle un service systemd.
-
-    Args:
-        service: Nom du service
-        action: start, stop, restart, ou reload
-
-    Returns:
-        {"success": bool, "output": str, "returncode": int}
-    """
-    if action not in ("start", "stop", "restart", "reload"):
-        return {"success": False, "output": f"Action invalide: {action}", "returncode": -1}
-
-    try:
-        r = subprocess.run(
-            ["systemctl", action, service],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return {
-            "success": r.returncode == 0,
-            "output": r.stderr.strip() or r.stdout.strip(),
-            "returncode": r.returncode,
-        }
-    except subprocess.TimeoutExpired:
-        return {"success": False, "output": "Timeout", "returncode": -1}
-    except Exception as e:
-        return {"success": False, "output": str(e), "returncode": -1}
 
 
 def disk_usage(path: str = "/") -> dict:

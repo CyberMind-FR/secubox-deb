@@ -44,10 +44,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // serviceProfile est un service connu et l'ensemble de ses chemins légitimes,
@@ -72,7 +74,28 @@ type VhostProfiles struct {
 	services     map[string]serviceProfile // nom de service -> profil
 	supprimables map[string]bool           // id de catégorie -> supprimable
 	antirobots   map[string]bool           // hôte -> refuser les robots (#1216)
+	phpServices  map[string]bool           // nom de service -> fait tourner PHP (#3257)
+	phpHotes     []*regexp.Regexp          // motifs d'hôte PHP (#3257, R15)
+	federation   map[string]bool           // hôte -> fédération Nextcloud utilisée (#3273, R-NC1)
+
+	// memoPHP : verdict de servicePHP par hôte normalisé (passe finale I1).
+	// Bornée à servicePHPMemoMax entrées : au-delà, rien n'est plus retenu,
+	// pour qu'une rafale d'en-têtes Host forgés ne la fasse pas grossir sans
+	// fin. Les profils ne sont jamais modifiés en place : un rechargement
+	// construit un nouveau VhostProfiles, donc une table vide.
+	memoMu  sync.RWMutex
+	memoPHP map[string]verdictPHP
 }
+
+// verdictPHP : résultat mémorisé de servicePHP pour un hôte.
+type verdictPHP struct {
+	service string
+	php     bool
+}
+
+// servicePHPMemoMax borne la table des verdicts. Seuil provisoire, non sourcé
+// (2026-10-29) : bien au-delà du nombre de vhosts d'une box.
+const servicePHPMemoMax = 4096
 
 // fichierProfils est la forme JSON sur disque de vhost_profiles.json.
 type fichierProfils struct {
@@ -89,6 +112,20 @@ type fichierProfils struct {
 	// Clé ABSENTE = liste vide = personne n'est filtré : la case est
 	// opt-in, un fichier d'avant la fonctionnalité reste valide tel quel.
 	AntiRobots []string `json:"anti_robots"`
+	// PHPServices (#3257) : services dont les vhosts font tourner PHP ; seuls
+	// ces hôtes voient leurs envois multipart analysés (PHP2Shell). Clé absente
+	// = aucun vhost PHP.
+	PHPServices []string `json:"php_services"`
+	// PHPHotes (#3257, R15) : expressions régulières sur le nom d'hôte
+	// normalisé ; un hôte qui correspond est PHP même sans vhost déclaré. Lues
+	// une à une : un motif invalide (ou qui n'est pas une chaîne) est rejeté
+	// seul, journalisé, sans refuser le fichier.
+	PHPHotes []json.RawMessage `json:"php_hotes"`
+	// FederationVhosts (#3273, R-NC1) : vhosts Nextcloud qui utilisent la
+	// fédération (partages entre serveurs). Sur eux, un partage fédéré anonyme
+	// n'est signalé qu'en rafale ; ailleurs, à chaque appel. Clé absente =
+	// aucun (une box unique ne fédère pas).
+	FederationVhosts []string `json:"federation_vhosts"`
 }
 
 // chargerVhostProfiles lit et compile le fichier déclaratif. Une erreur de
@@ -112,6 +149,8 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 		services:     make(map[string]serviceProfile, len(f.Services)),
 		supprimables: make(map[string]bool, len(f.SuppressCategories)),
 		antirobots:   make(map[string]bool, len(f.AntiRobots)),
+		phpServices:  make(map[string]bool, len(f.PHPServices)),
+		federation:   make(map[string]bool, len(f.FederationVhosts)),
 	}
 	for _, cat := range f.SuppressCategories {
 		vp.supprimables[cat] = true
@@ -151,6 +190,31 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 	// légitimes. On normalise seulement, sans exiger d'appartenance.
 	for _, hote := range f.AntiRobots {
 		vp.antirobots[normaliserHote(hote)] = true
+	}
+	// Un service PHP inconnu est ignoré, pas fatal : le fichier reste valide.
+	for _, nom := range f.PHPServices {
+		if _, ok := vp.services[nom]; !ok {
+			log.Printf("vhost_profiles : php_services nomme le service inconnu %q, ignoré", nom)
+			continue
+		}
+		vp.phpServices[nom] = true
+	}
+	// Comme anti_robots : normalisé, sans exiger un vhost déclaré.
+	for _, hote := range f.FederationVhosts {
+		vp.federation[normaliserHote(hote)] = true
+	}
+	for i, brutMotif := range f.PHPHotes {
+		var motif string
+		if err := json.Unmarshal(brutMotif, &motif); err != nil {
+			log.Printf("vhost_profiles : php_hotes #%d n'est pas une chaîne, rejeté : %v", i, err)
+			continue
+		}
+		re, err := regexp.Compile(motif)
+		if err != nil {
+			log.Printf("vhost_profiles : php_hotes %q invalide, rejeté : %v", motif, err)
+			continue
+		}
+		vp.phpHotes = append(vp.phpHotes, re)
 	}
 	return vp, nil
 }
@@ -262,4 +326,111 @@ func (v *VhostProfiles) antiRobots(host string) bool {
 // (opt-in).
 func (v *VhostProfiles) doitSupprimer(host, chemin, cat string) bool {
 	return v != nil && v.catSupprimablePour(host, cat) && v.estLegitime(host, chemin)
+}
+
+// estPHP dit si cet hôte fait tourner PHP (#3257) : voir servicePHP.
+// Récepteur nil → false.
+func (v *VhostProfiles) estPHP(host string) bool {
+	_, ok := v.servicePHP(host)
+	return ok
+}
+
+// motifsPHPEvalues compte les évaluations des motifs php_hotes (crochet de
+// test) : une au plus par hôte tant que la table des verdicts n'est pas pleine.
+var motifsPHPEvalues atomic.Int64
+
+// servicePHP dit si cet hôte fait tourner PHP et sous quel service (#3273) :
+// son service est déclaré dans php_services (service = ce nom), OU l'hôte
+// normalisé correspond à un motif de php_hotes (R15 : un alias nextcloud.* ou
+// une box sans liste propre reste couvert ; service = "", et toutes les
+// familles de signatures s'appliquent). Récepteur nil → ("", false).
+//
+// Appelée sur chaque requête dès qu'une signature structurelle est chargée :
+// le verdict est mémorisé par hôte normalisé (passe finale I1), les regex ne
+// tournent qu'au premier passage d'un hôte.
+func (v *VhostProfiles) servicePHP(host string) (service string, php bool) {
+	if v == nil {
+		return "", false
+	}
+	h := normaliserHote(host)
+	v.memoMu.RLock()
+	vd, ok := v.memoPHP[h]
+	v.memoMu.RUnlock()
+	if ok {
+		return vd.service, vd.php
+	}
+	service, php = v.calculerServicePHP(h)
+	v.memoMu.Lock()
+	if v.memoPHP == nil {
+		v.memoPHP = make(map[string]verdictPHP)
+	}
+	if len(v.memoPHP) < servicePHPMemoMax {
+		v.memoPHP[h] = verdictPHP{service: service, php: php}
+	}
+	v.memoMu.Unlock()
+	return service, php
+}
+
+// calculerServicePHP : le verdict sans la table, sur l'hôte déjà normalisé.
+func (v *VhostProfiles) calculerServicePHP(h string) (service string, php bool) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	if service, ok := v.hoteService[h]; ok && v.phpServices[service] {
+		return service, true
+	}
+	if len(v.phpHotes) > 0 {
+		motifsPHPEvalues.Add(1)
+	}
+	for _, re := range v.phpHotes {
+		if re.MatchString(h) {
+			return "", true
+		}
+	}
+	return "", false
+}
+
+// tailleMemoPHP : nombre de verdicts mémorisés (tests).
+func (v *VhostProfiles) tailleMemoPHP() int {
+	v.memoMu.RLock()
+	defer v.memoMu.RUnlock()
+	return len(v.memoPHP)
+}
+
+// federationUtilisee dit si cet hôte (normalisé) utilise la fédération
+// Nextcloud (federation_vhosts, #3273 R-NC1). Récepteur nil → false.
+func (v *VhostProfiles) federationUtilisee(host string) bool {
+	if v == nil {
+		return false
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.federation[normaliserHote(host)]
+}
+
+// armementPHP rend le nombre de vhosts PHP explicites (vhost dont le service
+// est déclaré PHP) et de motifs d'hôte PHP armés. Nil-safe.
+func (v *VhostProfiles) armementPHP() (explicites, motifs int) {
+	if v == nil {
+		return 0, 0
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	for _, service := range v.hoteService {
+		if v.phpServices[service] {
+			explicites++
+		}
+	}
+	return explicites, len(v.phpHotes)
+}
+
+// ligneArmementPHP est la ligne de démarrage qui dit ce que la capture PHP2Shell
+// couvre (relecture finale I3) : une box où rien n'est armé se voit au journal,
+// au lieu de passer pour une box sans faux positif.
+func ligneArmementPHP(v *VhostProfiles) string {
+	n, m := v.armementPHP()
+	l := fmt.Sprintf("sbxwaf: vhosts PHP armés : %d explicites, %d motifs", n, m)
+	if v == nil {
+		l += " (vhost-profiles absent ou illisible : capture PHP2Shell coupée)"
+	}
+	return l
 }

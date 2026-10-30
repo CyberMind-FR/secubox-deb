@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import ipaddress
 import time
-from typing import Callable, Dict, List, Literal, Optional
+from typing import Callable, Dict, Literal, Optional
 
 from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -170,7 +170,8 @@ def _routes_box(r: APIRouter, reg: J.Registre, garde_tunnel, courrier: Optional[
 
 
 def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Callable[[], None], horloge: Callable[[], float] = time.time,
-              portee: Literal["public", "tunnel"] = "public", courrier: Optional[Callable[[Dict, str], None]] = None) -> FastAPI:
+              portee: Literal["public", "tunnel"] = "public", courrier: Optional[Callable[[Dict, str], None]] = None,
+              publier_tunnel: Optional[Callable[[], None]] = None) -> FastAPI:
     app = FastAPI(title="secubox-autoload", docs_url=None, redoc_url=None, openapi_url=None)
     r = APIRouter(prefix=PREFIXE)
     limiteur = Limiteur(horloge)
@@ -257,11 +258,14 @@ def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Call
             raise HTTPException(409, "série déjà préenregistrée") from err
         return {"ok": True}
 
+    republier = publier_tunnel or appliquer
+
     def publier() -> bool:
-        """tunnel-sync (argv sudo exact) : applique les pairs ET réexporte la projection publique lue par le maître de pilotage (#3126, R37).
-        Faux si le système refuse : le changement reste enregistré, la minuterie horaire du service republiera."""
+        """tunnel-sync --sans-reactiver (argv sudo exact) : applique les pairs ET réexporte la projection publique lue par le maître de pilotage
+        (#3126, R37), sans jamais relancer un wg-autoload dont l'exploitant a désactivé l'unité (relecture de la tâche 0, Minor 3 ; seul
+        l'enrôlement monte l'interface). Faux si le système refuse : le changement reste enregistré, la minuterie horaire du service republiera."""
         try:
-            appliquer()
+            republier()
             return True
         except T.TunnelErreur:
             return False

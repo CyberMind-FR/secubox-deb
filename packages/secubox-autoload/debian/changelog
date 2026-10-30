@@ -1,3 +1,33 @@
+secubox-autoload (0.7.5-1~trixie1) trixie; urgency=medium
+
+  * Reprise des reports de L1 pour L2 « Agir » (ref #3126, tâche 0) : la projection publique des pairs suit toujours
+    les révocations.
+    - N2 : `tunnel-sync` exporte la projection même si WireGuard échoue (erreur du tunnel, délai dépassé, E/S, base) ;
+      le code de retour reste 1 pour dire l'échec du tunnel.
+    - N3 : `tunnel-sync` et `exporter-pairs` passent un par un (`flock` sur `/run/secubox-autoload/autoload-sync.lock`).
+      Le dossier est à root seul (0700 root:root, `tmpfiles.d/secubox-autoload.conf`, créé aussi au premier usage et par
+      le postinst, dans `ReadWritePaths` du service), jamais `/run/secubox` (1777) où un `mkdir` de n'importe quel compte
+      bloquait toute synchronisation (R-L2-6). Fichier ouvert en O_NOFOLLOW, refusé s'il n'est pas un fichier ordinaire
+      de root. Un passage horaire qui avait lu les pairs avant une révocation reposait le pair révoqué pour une heure
+      après la synchronisation de la révocation.
+    - N4 : la minuterie, les révocations et les changements d'abonnement par l'API passent par `autoloadctl tunnel-sync
+      --sans-reactiver` (second argv exact du sudoers) : un `wg-autoload` dont l'exploitant a désactivé l'unité n'est plus
+      relancé (ni chaque heure, ni par une révocation pendant un incident) ; la configuration est posée et la projection
+      publiée. Une unité activée mais tombée est relancée ; seul l'enrôlement monte toujours l'interface (première box).
+    - L'assistant root lancé par sudo hérite de l'espace de montage du service (ProtectSystem=strict) : le dossier de la
+      projection (`/var/lib/secubox/autoload-public`) rejoint `ReadWritePaths`, et le postinst l'exporte (donc le crée)
+      avant de démarrer le service. Sans cela, la minuterie et les révocations par l'API n'exportaient rien (lecture seule).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:40:00 +0100
+
+secubox-autoload (0.7.4-1~trixie1) trixie; urgency=medium
+
+  * Libellés des profils de l'atelier à jour : « Minimal — dns-guard, ad-guard, NAC,
+    Freebox, maillage » (ni DPI ni toolbox depuis #3218/#3260) et « ISP — protection +
+    DPI, NetFlow, cabine numérique » (décision du 2026-10-29, profil isp) (ref #3258).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 13:05:00 +0100
+
 secubox-autoload (0.7.3-1~trixie1) trixie; urgency=medium
 
   * Relecture finale du pilotage L1 (#3126, I2/R37) : un changement d'abonnement par l'API
