@@ -26,13 +26,13 @@ from pilotage.stockage import DOSSIER_DEFAUT, StockageSqlite
 
 
 def assembler(stockage, files, inventaire, audit, identifier, horloge=time.time, *, emettre=None,
-              noms_pris=noms_du_maillage, plan_vhosts=None) -> "tuple[FastAPI, FastAPI]":
+              noms_pris=noms_du_maillage, plan_vhosts=None, plan_exposition=None) -> "tuple[FastAPI, FastAPI]":
     """Les deux applications sur les mêmes files, le même stockage et la même boucle de relève (cycle de vie partagé, par compteur).
     Le suivi des opérations est partagé : le canal lui remet chaque fin, l'API chaque réponse arrivée après la fin."""
     suivi = Suivi(stockage, files, audit, emettre=emettre)
     diffusion = Diffusion()   # temps réel vers la page : le canal publie, l'API sert les flux (même processus, même boucle)
     admin = creer_app_admin(stockage, files, inventaire, audit, horloge=horloge, suivi=suivi, noms_pris=noms_pris, diffusion=diffusion,
-                            plan_vhosts=plan_vhosts)
+                            plan_vhosts=plan_vhosts, plan_exposition=plan_exposition)
     canal = creer_app_canal(files, identifier, stockage, audit, apres_fin=suivi.apres_fin, diffuser=diffusion.diffuser_notification)
 
     admin.state.diffusion = diffusion   # le lanceur la ferme au signal d'arrêt
@@ -53,4 +53,5 @@ def construire() -> "tuple[FastAPI, FastAPI]":
     audit = A.journal(Path(os.environ.get("SECUBOX_PILOTAGE_AUDIT", A.AUDIT_DEFAUT)))
     files = Files()
     return assembler(stockage, files, Inventaire(files, stockage, audit=audit), audit, box_par_adresse,
-                     emettre=emettre_code_par(lanceur_assistant()), plan_vhosts=dossier / "vhosts.json")
+                     emettre=emettre_code_par(lanceur_assistant()), plan_vhosts=dossier / "vhosts.json",
+                     plan_exposition=dossier / "exposition.json")

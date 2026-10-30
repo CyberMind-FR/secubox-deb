@@ -260,6 +260,7 @@ Une box légère (inventaire : `Device.X_SECUBOX_Pilotage.Interface = "distante"
 d'administration : le maître la sert sous une **origine à elle**, jamais celle de son admin, par la chaîne normale
 HAProxy TLS 1.3 → sbxwaf → nginx.
 
+- **Plan d'exposition** (L5 tâche 6, E4) : à chaque tour d'inventaire, le service écrit aussi `/var/lib/secubox/pilotage/exposition.json` (0640, atomique, seulement s'il change) : `{"version": 1, "boxes": [{adresse, box, distante, noms, ports, releve_le}]}` pour les box du maillage au nom et à l'adresse uniques, depuis `Device.X_SECUBOX_Exposure.Names|Ports` (noms `<svc>.<box>.secubox.in` seulement, 64 au plus ; ports entiers 1..65535, 256 au plus ; valeur tronquée : box absente). Relu par `secubox-relais-maillage` (root) ; aucune route sans jeton.
 - **Plan** : à chaque tour d'inventaire, le service écrit `/var/lib/secubox/pilotage/vhosts.json` (0640, atomique, seulement s'il change) :
   box « distante » de nom unique et valide (`^[a-z0-9-]{1,40}$`), versions déclarées (`Device.X_SECUBOX_Packages.{i}.Name/Version` ;
   un paquet déclaré avec deux versions n'est pas servi). 64 box et 256 paquets par box au plus.

@@ -1,3 +1,10 @@
+secubox-pilotage (0.5.0-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 6 (E4, ref #3126) : plan d'exposition exposition.json (noms et ports déclarés par les agents,
+    Device.X_SECUBOX_Exposure), écrit à chaque tour d'inventaire pour secubox-relais-maillage ; aucune route sans jeton.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 04:00:00 +0100
+
 secubox-pilotage (0.4.5-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 5, correction 5/5 (R-L5-31, ref #3126) : un retour à relais-maillage en échec garde l'entrée du registre

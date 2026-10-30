@@ -141,7 +141,7 @@ def test_controle_debian():
     assert "Package: secubox-pilotage\n" in c and "Architecture: all" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
     ch = lire("debian/changelog").splitlines()[0]
-    assert ch.startswith("secubox-pilotage (0.4.5-1~trixie1) trixie;")
+    assert ch.startswith("secubox-pilotage (0.5.0-1~trixie1) trixie;")
 
 
 def test_postinst_et_prerm():

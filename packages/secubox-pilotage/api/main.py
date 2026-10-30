@@ -52,6 +52,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt
 from secubox_core.auth import require_jwt, session_toujours_admin
 
 from api.vhost import ajouter_routes_vhost
+from pilotage import exposition as EXPO
 from pilotage import vhosts as V
 
 from pilotage.diffusion import FIN, Diffusion, LimiteAtteinte, formater
@@ -117,7 +118,7 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
                     suivi: Optional[Suivi] = None, noms_pris: Callable[[], set] = set,
                     delai_action_s: float = DELAI_ACTION_S, diffusion=None, battement_s: float = 15.0,
                     maitre: Optional[str] = None, debit=None, plan_vhosts: Optional[Path] = None,
-                    racine_pages: Optional[Path] = None) -> FastAPI:
+                    racine_pages: Optional[Path] = None, plan_exposition: Optional[Path] = None) -> FastAPI:
     """`suivi` : fin des opérations (partagé avec le canal) ; `noms_pris()` : noms portés au maillage hors table des box (pairs
     de peers.json, nom du maître), appelée hors boucle. L5 tâche 5 : routes du vhost admin.<box> (api/vhost.py) ; `plan_vhosts` :
     fichier relu par le ctl root secubox-pilotage-vhost, réécrit à chaque tour d'inventaire s'il change."""
@@ -480,5 +481,16 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
             await asyncio.to_thread(ecrire_plan)
 
         inventaire.a_chaque_tour(crochet_plan)
+    # --- L5 tâche 6 (E4) : noms et ports déclarés par les agents, relus par secubox-relais-maillage (root) ---
+    if plan_exposition is not None:
+        def ecrire_exposition() -> None:
+            lignes = [{**b, "inventaire": stockage.inventaire(b["cle"])} for b in stockage.boites()]
+            if EXPO.ecrire_plan(plan_exposition, EXPO.plan(lignes)):
+                log.info("plan d'exposition réécrit")
+
+        async def crochet_exposition() -> None:
+            await asyncio.to_thread(ecrire_exposition)
+
+        inventaire.a_chaque_tour(crochet_exposition)
 
     return app
