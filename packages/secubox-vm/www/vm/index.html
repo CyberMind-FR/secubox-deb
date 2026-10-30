@@ -167,7 +167,7 @@
         let CONFIRM = null;   // { cle } : confirmation en cours dans la ligne, jamais de dialogue natif
         // Modèles de repli si /templates est indisponible (mêmes valeurs que l'ancienne page).
         let MODELES = [
-            { name: 'debian', releases: ['bookworm', 'bullseye', 'buster'] },
+            { name: 'debian', releases: ['trixie', 'bookworm', 'bullseye'] },   // repli seulement : /templates donne la suite de l'hôte (#3285)
             { name: 'ubuntu', releases: ['noble', 'jammy', 'focal'] },
             { name: 'alpine', releases: ['3.19', '3.18', 'edge'] },
             { name: 'fedora', releases: ['39', '38'] }];
