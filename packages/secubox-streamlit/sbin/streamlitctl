@@ -3139,7 +3139,7 @@ cmd_boot() {
 }
 
 # frontal list | set <nom> --domaine D --cible IP:PORT --unite U [--sante /chemin]
-#   [--reprendre fichier.conf] [--inactif] [--par qui] [--apply] | remove <nom> [--par qui] [--apply]
+#   [--reprendre fichier.conf] [--reprendre-publication appli] [--inactif] [--par qui] [--apply] | remove <nom> [--par qui] [--apply]
 # Frontaux web permanents hébergés dans le conteneur (#3294) : déclaration TOML, vhost
 # nginx :9080 généré avec les pages d'erreur SecuBox ; route sbxwaf jamais touchée. À blanc
 # sans --apply ; audité.
@@ -3150,7 +3150,7 @@ cmd_frontal() {
         set)    _publication frontal-poser "$@" --lxc-config "$LXC_PATH/config" ;;
         remove) _publication frontal-retirer "$@" ;;
         *)
-            error "Usage: streamlitctl frontal list | set <nom> --domaine D --cible IP:PORT --unite U [--sante /chemin] [--reprendre fichier.conf] [--inactif] [--par qui] [--apply] | remove <nom> [--par qui] [--apply]"
+            error "Usage: streamlitctl frontal list | set <nom> --domaine D --cible IP:PORT --unite U [--sante /chemin] [--reprendre fichier.conf] [--reprendre-publication appli] [--inactif] [--par qui] [--apply] | remove <nom> [--par qui] [--apply]"
             return 64 ;;
     esac
 }
@@ -3264,6 +3264,7 @@ case "${1:-}:${2:-}" in
                     unite) [[ "$_a" =~ ^[a-z0-9@._-]{1,64}\.service$ && "$_a" != -* ]] || _refuser "$_a" ;;
                     sante) [[ "$_a" =~ ^(/[A-Za-z0-9._~/-]{0,127})?$ ]] || _refuser "$_a" ;;
                     reprendre) [[ "$_a" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}\.conf$ ]] || _refuser "$_a" ;;
+                    reprendre-publication) _nom_admis "$_a" || _refuser "$_a" ;;
                 esac
                 _attendu=""
                 continue
@@ -3274,7 +3275,7 @@ case "${1:-}:${2:-}" in
             case "$2:$_a" in
                 set:--apply|remove:--apply|set:--inactif) ;;
                 set:--par|remove:--par) _attendu=par ;;
-                set:--domaine|set:--cible|set:--unite|set:--sante|set:--reprendre) _attendu="${_a#--}" ;;
+                set:--domaine|set:--cible|set:--unite|set:--sante|set:--reprendre|set:--reprendre-publication) _attendu="${_a#--}" ;;
                 *) _refuser "$_a" ;;
             esac
         done
@@ -3379,7 +3380,7 @@ Container:
 Frontaux web permanents (#3294) :
   frontal list                                   Declared frontals and vhost state (JSON)
   frontal set <nom> --domaine D --cible IP:PORT --unite U.service [--sante /chemin]
-              [--reprendre fichier.conf] [--inactif] [--par who] [--apply]
+              [--reprendre fichier.conf] [--reprendre-publication appli] [--inactif] [--par who] [--apply]
                                                  Declare + generate nginx :9080 vhost (error pages); dry-run by default
   frontal remove <nom> [--par who] [--apply]     Remove declaration and generated vhost
 

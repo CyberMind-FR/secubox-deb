@@ -1907,12 +1907,13 @@ server {{
 """
 
 
-def _reprise(fichier: str | None, domaine: str, label: str) -> list[Path]:
+def _reprise(fichier: str | None, domaine: str, label: str, sauf: set | None = None) -> list[Path]:
     """Fichiers nginx à reprendre (posés à la main) ; sans --reprendre, un autre fichier qui sert déjà le domaine
     est un conflit nommé."""
     nom_gere = f"streamlit-{label}.conf"
+    sauf = set(sauf or ())
     if fichier is None:
-        if (ailleurs := nginx_sert_ailleurs(domaine, {nom_gere})):
+        if (ailleurs := nginx_sert_ailleurs(domaine, {nom_gere} | sauf)):
             raise Refus(CONFLIT, f"{domaine} est déjà servi par nginx ({ailleurs}) : relancez avec "
                                  f"--reprendre {ailleurs} pour le remplacer (sauvegarde horodatée)")
         return []
@@ -1933,7 +1934,7 @@ def _reprise(fichier: str | None, domaine: str, label: str) -> list[Path]:
         noms = [n for ligne in re.findall(r"^\s*server_name\s+([^;]*);", t, re.M) for n in ligne.split()]
         if len(re.findall(r"^\s*server\s*\{", t, re.M)) != 1 or noms != [domaine]:
             raise Refus(ETAT, f"{fichier} porte plus d'un bloc server ou d'un nom — reprise refusée, rien n'est modifié")
-    if (ailleurs := nginx_sert_ailleurs(domaine, {nom_gere, fichier})):
+    if (ailleurs := nginx_sert_ailleurs(domaine, {nom_gere, fichier} | sauf)):
         raise Refus(CONFLIT, f"{domaine} est aussi servi par {ailleurs} : un seul fichier peut être repris")
     return fichiers
 
@@ -1945,10 +1946,15 @@ def _poser_frontal_nginx(label: str, contenu: str, repris: list[Path], horodatag
     cibles = [dispo, actif, *repris]
     avant = [(f, _instantane(f)) for f in cibles]
     sauvegarde = None
-    texte_repris = next((t for f in repris if (t := _lire(f)) is not None), None)
-    if texte_repris is not None:
-        sauvegarde = dossier_nginx() / "sites-available" / f"{repris[0].name}.avant-frontal-{horodatage}"
-        ecrire_atomique(sauvegarde, texte_repris, 0o644)
+    vus = set()
+    for f in repris:                    # une sauvegarde horodatée par fichier repris (lien suivi une seule fois)
+        texte_repris = _lire(f)
+        if texte_repris is None or f.name in vus:
+            continue
+        vus.add(f.name)
+        s = dossier_nginx() / "sites-available" / f"{f.name}.avant-frontal-{horodatage}"
+        ecrire_atomique(s, texte_repris, 0o644)
+        sauvegarde = sauvegarde or s
     try:
         for f in repris:
             with contextlib.suppress(FileNotFoundError):
@@ -2009,9 +2015,28 @@ def verbe_frontal_poser(a, conf: Path, apps: Path) -> dict:
         for autre in frontaux(texte).values():
             if autre["nom"] != a.nom and autre["domaine"] == a.domaine:
                 raise Refus(CONFLIT, f"{a.domaine} est déjà déclaré par le frontal « {autre['nom']} »")
-        for inst in instances(texte):
-            if inst["enabled"] and inst["domain"] == a.domaine:
-                raise Refus(CONFLIT, f"{a.domaine} est publié par l'appli « {inst['app']} » : dépubliez-la d'abord")
+        reprises = [i for i in instances(texte) if i["enabled"] and i["domain"] == a.domaine]
+        if a.reprendre_publication is None:
+            if reprises:
+                raise Refus(CONFLIT, f"{a.domaine} est publié par l'appli « {reprises[0]['app']} » : relancez avec "
+                                     f"--reprendre-publication {reprises[0]['app']} (HAProxy et sbxwaf gardés)")
+        else:
+            # Reprise d'une publication Streamlit pour le MÊME domaine : la chaîne HAProxy → sbxwaf → nginx :9080
+            # est gardée telle quelle ; seuls le vhost nginx et la déclaration changent.
+            if not NOM_APPLI_RE.fullmatch(a.reprendre_publication):
+                raise Refus(ARGUMENT, "nom d'appli invalide pour --reprendre-publication")
+            if not reprises:
+                vise = [i["domain"] for i in instances(texte) if i["enabled"] and i["app"] == a.reprendre_publication]
+                raise Refus(ETAT, f"l'appli « {a.reprendre_publication} » ne publie pas {a.domaine}"
+                            + (f" (elle publie : {', '.join(vise)})" if vise else ""))
+            if any(i["app"] != a.reprendre_publication for i in reprises):
+                raise Refus(CONFLIT, f"{a.domaine} est publié par une autre appli que « {a.reprendre_publication} »")
+            r0 = lire_routes().get(a.domaine)
+            if not (isinstance(r0, list) and len(r0) == 2 and r0[1] == PORT_NGINX):
+                raise Refus(CONFLIT, f"route sbxwaf de {a.domaine} absente ou hors nginx :{PORT_NGINX} ({r0}) — refusé")
+            ha0 = haproxy_table(a.domaine)
+            if ha0 is None or ha0[1] != "nginx_vhosts":
+                raise Refus(CONFLIT, f"HAProxy ne sert pas {a.domaine} par nginx_vhosts ({ha0}) — refusé")
         if nginx_etat(label, a.domaine, "") == "autre":
             raise Refus(CONFLIT, f"sites-enabled/streamlit-{label}.conf sert un autre nom")
         routes = lire_routes()
@@ -2022,11 +2047,27 @@ def verbe_frontal_poser(a, conf: Path, apps: Path) -> dict:
         ha = haproxy_table(a.domaine)
         if ha is not None and ha[1] not in BACKENDS_NGINX:
             raise Refus(CONFLIT, f"{a.domaine} est servi par HAProxy vers le backend « {ha[1]} » — refusé")
-        repris = _reprise(a.reprendre, a.domaine, label)
+        sauf = set()
+        for i in reprises if a.reprendre_publication else []:
+            if NOM_APPLI_RE.fullmatch(i["id"]):
+                sauf.add(f"streamlit-{i['id']}.conf")
+        repris = _reprise(a.reprendre, a.domaine, label, sauf)
+        for nom_pub in sorted(sauf):                       # vhost généré de la publication reprise
+            for d in ("sites-enabled", "sites-available"):
+                f = dossier_nginx() / d / nom_pub
+                if (f.exists() or f.is_symlink()) and f not in repris:
+                    repris.append(f)
         contenu = vhost_frontal(a.nom, a.domaine, a.cible)
         champs = {"domain": a.domaine, "cible": a.cible, "unite": a.unite, "sante": a.sante or "",
                   "enabled": not a.inactif}
         nouveau = poser_cles(texte, f"frontaux.{a.nom}", champs)
+        for i in reprises if a.reprendre_publication else []:
+            # La publication s'efface pour ce domaine ; l'appli et son code restent.
+            nouveau = retirer_cles(nouveau, f"instances.{i['id']}", {"domain"})
+            nouveau = poser_cles(nouveau, f"instances.{i['id']}", {"enabled": False, "autostart": False})
+            if applis_declarees(nouveau).get(i["app"], {}).get("autostart_publication") is True:
+                nouveau = retirer_cles(nouveau, f"apps.{i['app']}", {"autostart_publication"})
+                nouveau = poser_cles(nouveau, f"apps.{i['app']}", {"autostart": False})
         etat_nginx = nginx_etat(label, a.domaine, contenu)
         avert = []
         if route is None:
@@ -2059,7 +2100,10 @@ def verbe_frontal_poser(a, conf: Path, apps: Path) -> dict:
                 raise
             journal.ecrire(evenement="frontal-pose", frontal=a.nom, domaine=a.domaine, cible=a.cible,
                            unite=a.unite, enabled=not a.inactif, repris=a.reprendre,
-                           sauvegarde=sauvegarde.name if sauvegarde else None, resultat="applique")
+                           sauvegarde=sauvegarde.name if sauvegarde else None,
+                           publication_reprise=a.reprendre_publication,
+                           instances_reprises=[i["id"] for i in reprises] if a.reprendre_publication else None,
+                           resultat="applique")
         finally:
             journal.fermer()
         sortie["applique"] = True
@@ -2178,6 +2222,7 @@ def _parseur() -> _Parseur:
     s.add_argument("--unite", required=True)
     s.add_argument("--sante", default="")
     s.add_argument("--reprendre")
+    s.add_argument("--reprendre-publication", dest="reprendre_publication")
     s.add_argument("--inactif", action="store_true")
     s.add_argument("--lxc-config", dest="lxc_config")
     s.add_argument("--par", type=_type_acteur, default="inconnu")
