@@ -28,8 +28,9 @@ import json
 import logging
 import math
 import os
+import pwd
 import signal
-import subprocess
+import stat
 import sys
 import time
 from pathlib import Path
@@ -66,6 +67,16 @@ DEFAUT_PAS = 0.1
 DEFAUT_REPERE = 1.2
 DEFAUT_MESURE = 5.0
 DEFAUT_DUREE = 8.0
+DEBIT_MAX_BORNE = 50
+ESPACEMENT_MIN = 0.01           # 10 ms au moins entre deux écritures I2C
+TAILLE_MAX_JSON = 1 << 20       # 1 Mio
+CODE_REPRISE = 75               # sortie après erreurs I2C : OnFailure=secubox-led-reprise
+# Comptes autorisés à posséder un fichier d'état lu : root et les producteurs
+# (secubox-metrics et le SOC tournent sous « secubox » ; comptes dédiés à venir).
+PROPRIETAIRES_DEFAUT = ["root", "secubox", "secubox-metrics", "secubox-soc"]
+CLES_HORODATAGE = ("timestamp_epoch", "last_updated", "updated_at", "maj")
+ERREURS_SOURCE = (OSError, ValueError, TypeError, KeyError, IndexError, ZeroDivisionError,
+                  RecursionError, OverflowError, AttributeError, MemoryError)
 DEFAUT_PERIODE = {"fixe": 1.0, "respiration": 6.0, "pulsation": 3.0, "eclats": 3.0}
 
 SOURCES_DEFAUT = {
@@ -78,9 +89,12 @@ SOURCES_DEFAUT = {
     # Même cache : connexions HTTPS établies (instantané, pas de journal relu).
     "visites": {"type": "jauge_json", "chemin": "/var/cache/secubox/metrics-cache.json",
                 "cle": "connections.https", "seuils": [1, 20, 100], "fraicheur_max": 300},
-    # Alertes du SOC non acquittées ; une critique non vue = niveau 3.
+    # Alertes du SOC non acquittées ; une critique non vue = niveau 3. Le SOC
+    # n'écrit ce fichier qu'au changement : fraîcheur d'un jour, et SOC arrêté
+    # (socket absente) = inconnu.
     "alertes": {"type": "alertes_json", "chemin": "/var/lib/secubox/soc/alerts.json",
-                "seuils": [1, 3, 10], "fraicheur_max": 0},
+                "seuils": [1, 3, 10], "fraicheur_max": 86400,
+                "vivant": "/run/secubox/soc.sock"},
 }
 COUCHES_DEFAUT = [
     {"nom": "systeme", "sources": ["cpu", "memoire", "es"], "forme": "par_led",
@@ -113,29 +127,71 @@ class Source:
     def __init__(self, nom: str, opts: dict):
         self.nom = nom
         defaut = SOURCES_DEFAUT.get(nom, {})
-        self.chemin = Path(opts.get("chemin") or defaut.get("chemin") or "/nonexistent")
+        self.chemin = Path(str(opts.get("chemin") or defaut.get("chemin") or "/nonexistent"))
         self.seuils = opts.get("seuils", defaut.get("seuils", [1, 2, 3]))
         self.cle = opts.get("cle", defaut.get("cle", ""))
         self.fraicheur_max = opts.get("fraicheur_max", defaut.get("fraicheur_max", 0))
+        self.vivant = opts.get("vivant", defaut.get("vivant", ""))
+        self.proprietaires = opts.get("proprietaires", PROPRIETAIRES_DEFAUT)
 
     def lire(self, maintenant: float):
         try:
-            return self._lire(maintenant)
-        except (OSError, ValueError, TypeError, KeyError, IndexError, ZeroDivisionError):
+            v = self._lire(maintenant)
+        except ERREURS_SOURCE:
             return None
+        return v if isinstance(v, int) else None
 
     def _lire(self, maintenant):  # pragma: no cover - abstrait
         raise NotImplementedError
 
+    def _uids(self):
+        uids = set()
+        for nom in self.proprietaires:
+            try:
+                uids.add(pwd.getpwnam(nom).pw_uid)
+            except KeyError:
+                pass
+        return uids
+
     def _json(self):
-        if self.fraicheur_max and time.time() - self.chemin.stat().st_mtime > self.fraicheur_max:
+        """Lecture sûre d'un fichier d'état écrit par un autre compte : sans
+        suivre de lien, sans bloquer (FIFO), fichier régulier, propriétaire
+        attendu, non inscriptible par tous, au plus TAILLE_MAX_JSON octets."""
+        if self.vivant and not os.path.exists(self.vivant):
             return None
-        return json.loads(self.chemin.read_text())
+        fd = os.open(self.chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        try:
+            st = os.fstat(fd)
+            if (not stat.S_ISREG(st.st_mode) or st.st_size > TAILLE_MAX_JSON
+                    or st.st_mode & stat.S_IWOTH or st.st_uid not in self._uids()):
+                return None
+            brut = os.read(fd, TAILLE_MAX_JSON + 1)
+        finally:
+            os.close(fd)
+        if len(brut) > TAILLE_MAX_JSON:
+            return None
+        d = json.loads(brut)
+        if self.fraicheur_max:
+            quand = st.st_mtime
+            if isinstance(d, dict):
+                for k in CLES_HORODATAGE:
+                    v = d.get(k)
+                    if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
+                        quand = v
+                        break
+            if time.time() - quand > self.fraicheur_max:
+                return None
+        return d
 
     def _cle(self, donnees):
         for morceau in self.cle.split("."):
             donnees = donnees[morceau]
-        return float(donnees)
+        if isinstance(donnees, bool) or not isinstance(donnees, (int, float)):
+            raise TypeError("valeur non numérique")
+        v = float(donnees)
+        if not math.isfinite(v):
+            raise ValueError("valeur non finie")
+        return v
 
 
 class _SourceStat(Source):
@@ -228,6 +284,8 @@ class SourceAlertes(Source):
             return None
         if isinstance(d, dict):
             d = d.get("alerts", d.get("alertes", []))
+        if not isinstance(d, list):
+            return None
         ouvertes = [a for a in d if isinstance(a, dict) and not a.get("acknowledged")]
         if any(a.get("severity") == "critical" for a in ouvertes):
             return 3
@@ -280,7 +338,11 @@ def eclats_repere(rang: int) -> int:
 class Couche:
     def __init__(self, d: dict, cfg: "Config"):
         self.cfg = cfg
-        self.nom = str(d.get("nom") or "couche")
+        nom = d.get("nom")
+        if nom is not None and not isinstance(nom, str):
+            log.warning("couche : nom %r invalide -> « couche »", nom)
+            nom = None
+        self.nom = nom or "couche"
         src = d.get("sources")
         if isinstance(src, str):
             src = [src]
@@ -386,11 +448,56 @@ class Config:
         return tuple(max(1, int(round(c * self.luminosite))) for c in INCONNU)
 
 
-def charger_config(chemin) -> Config:
+def _config_sure(chemin) -> bool:
+    """Le démon root refuse un leds.toml qui n'appartient pas à root ou
+    qu'un autre compte peut modifier."""
+    try:
+        st = os.stat(chemin)
+    except OSError:
+        return True                               # absent : défauts, sans alarme
+    if st.st_uid != 0 or st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        log.warning("%s : propriétaire non root ou inscriptible par d'autres "
+                    "(attendu root:root 0644) : configuration par défaut", chemin)
+        return False
+    return True
+
+
+def _table(brut, cle):
+    v = brut.get(cle, {})
+    if not isinstance(v, dict):
+        log.warning("[%s] n'est pas une table (%r) : ignorée", cle, type(v).__name__)
+        return {}
+    return v
+
+
+def _options_source(nom, opts):
+    """Types des options d'une source ; une option mal typée est retirée."""
+    propre = {}
+    for k, v in opts.items():
+        ok = {
+            "type": isinstance(v, str),
+            "chemin": isinstance(v, str) and v.startswith("/"),
+            "cle": isinstance(v, str),
+            "vivant": isinstance(v, str),
+            "seuils": True,                       # validé plus loin
+            "fraicheur_max": isinstance(v, (int, float)) and not isinstance(v, bool)
+                              and 0 <= v <= 7 * 86400,
+            "proprietaires": isinstance(v, list) and all(isinstance(x, str) for x in v),
+        }.get(k, False)
+        if ok:
+            propre[k] = v
+        else:
+            log.warning("sources.%s.%s = %r invalide : ignorée", nom, k, v)
+    return propre
+
+
+def charger_config(chemin, exiger_root=False) -> Config:
     """leds.toml -> Config ; toute valeur invalide est remplacée par son défaut
     avec un avertissement, un fichier illisible donne la configuration livrée."""
     cfg = Config()
     brut = {}
+    if chemin is not None and exiger_root and not _config_sure(chemin):
+        chemin = None
     if chemin is not None:
         try:
             with open(chemin, "rb") as f:
@@ -398,8 +505,8 @@ def charger_config(chemin) -> Config:
         except (OSError, ValueError, AttributeError) as e:
             log.warning("%s illisible (%s) : configuration par défaut", chemin, e)
             brut = {}
-    m = brut.get("moteur", {}) if isinstance(brut.get("moteur"), dict) else {}
-    cfg.debit_max = _nombre(m.get("debit_max", DEFAUT_DEBIT), 1, 100, DEFAUT_DEBIT,
+    m = _table(brut, "moteur")
+    cfg.debit_max = _nombre(m.get("debit_max", DEFAUT_DEBIT), 1, DEBIT_MAX_BORNE, DEFAUT_DEBIT,
                             "moteur.debit_max")
     cfg.luminosite = _nombre(m.get("luminosite", DEFAUT_LUMINOSITE), 0.05, 1.0,
                              DEFAUT_LUMINOSITE, "moteur.luminosite")
@@ -410,7 +517,7 @@ def charger_config(chemin) -> Config:
                                  DEFAUT_MESURE, "moteur.periode_mesure")
     cfg.reprise_auto = bool(m.get("reprise_auto", True))
 
-    for nom, rgb in (brut.get("couleurs") or {}).items():
+    for nom, rgb in _table(brut, "couleurs").items():
         if (isinstance(rgb, list) and len(rgb) == 3
                 and all(isinstance(c, int) and 0 <= c <= 255 for c in rgb)):
             cfg.palette[nom] = tuple(rgb)
@@ -418,14 +525,14 @@ def charger_config(chemin) -> Config:
             log.warning("couleurs.%s = %r invalide, ignorée", nom, rgb)
 
     defs = {k: dict(v) for k, v in SOURCES_DEFAUT.items()}
-    for nom, opts in (brut.get("sources") or {}).items():
+    for nom, opts in _table(brut, "sources").items():
         if not isinstance(opts, dict):
             log.warning("sources.%s invalide, ignorée", nom)
             continue
-        defs[nom] = {**defs.get(nom, {}), **opts}
+        defs[nom] = {**defs.get(nom, {}), **_options_source(nom, opts)}
     for nom, opts in defs.items():
         typ = opts.get("type")
-        if typ not in TYPES_SOURCE:
+        if not isinstance(typ, str) or typ not in TYPES_SOURCE:
             log.warning("sources.%s : type %r inconnu, ignorée", nom, typ)
             continue
         if not _seuils_valides(opts.get("seuils")):
@@ -435,16 +542,20 @@ def charger_config(chemin) -> Config:
         cfg.sources[nom] = TYPES_SOURCE[typ](nom, opts)
 
     couches = brut.get("couche")
-    if not isinstance(couches, list) or not couches:
+    if couches is not None and not isinstance(couches, list):
+        log.warning("couche doit être une liste de tables [[couche]] : couches par défaut")
+        couches = None
+    if not couches:
         couches = COUCHES_DEFAUT
     for d in couches:
-        if isinstance(d, dict):
-            c = Couche(d, cfg)
-            for s in c.sources:
-                if s not in cfg.sources:
-                    log.warning("couche %s : source %r inconnue (affichée « inconnu »)",
-                                c.nom, s)
-            cfg.couches.append(c)
+        if not isinstance(d, dict):
+            log.warning("couche %r n'est pas une table : ignorée", d)
+            continue
+        c = Couche(d, cfg)
+        for s in c.sources:
+            if s not in cfg.sources:
+                log.warning("couche %s : source %r inconnue (affichée « inconnu »)", c.nom, s)
+        cfg.couches.append(c)
     if not cfg.couches:
         cfg.couches = [Couche(d, cfg) for d in COUCHES_DEFAUT]
     return cfg
@@ -567,6 +678,7 @@ class Rendu:
         self.seuil_reprise = seuil_reprise
         self.reprise = reprise
         self.pause = pause
+        self._ecrit = False
         self.canaux = [f"{c}:led{i + 1}" for i in range(NB_LEDS) for c in COULEURS]
 
     def _recharger(self):
@@ -585,6 +697,9 @@ class Rendu:
             canal = self.canaux[(self.curseur + k) % n]
             if self.etat.get(canal) == voulu[canal]:
                 continue
+            if self._ecrit:
+                self.pause(ESPACEMENT_MIN)
+            self._ecrit = True
             self.jetons -= 1
             try:
                 self.ecrivain.ecrire(canal, voulu[canal])
@@ -602,6 +717,7 @@ class Rendu:
             self.erreurs = 0
             self.etat[canal] = voulu[canal]
         self.curseur = (self.curseur + 1) % n
+        self._ecrit = False
 
     def eteindre(self):
         """Arrêt propre : les 9 canaux à 0, espacés de 50 ms."""
@@ -615,18 +731,6 @@ class Rendu:
 
 
 # ---------------------------------------------------------------- démon et démo
-
-def _reprise_i2c():
-    """Relance secubox-led-reset hors de notre unité (il arrête secubox-led-pulse)."""
-    if not hasattr(_reprise_i2c, "dernier"):
-        _reprise_i2c.dernier = -math.inf
-    if time.monotonic() - _reprise_i2c.dernier < 600:
-        return
-    _reprise_i2c.dernier = time.monotonic()
-    log.error("erreurs I2C répétées : secubox-led-reset lancé")
-    subprocess.run(["systemd-run", "--no-block", "--collect", "--unit=secubox-led-reprise",
-                    "/usr/sbin/secubox-led-reset"], check=False)
-
 
 def boucle(cfg, ordo, rendu, horloge, attendre, duree=None, arret=lambda: False,
            niveaux_fixes=None):
@@ -648,15 +752,24 @@ def boucle(cfg, ordo, rendu, horloge, attendre, duree=None, arret=lambda: False,
 
 
 def servir(cfg):
-    arret = {"demande": False}
+    """Démon. Après erreurs I2C répétées, sort en CODE_REPRISE : l'unité
+    (RestartPreventExitStatus=75) passe en échec et OnFailure= lance
+    secubox-led-reprise.service (secubox-led-reset, au plus 1 fois / 10 min).
+    Aucun lancement de commande ni polkit : le démon n'a aucune capacité."""
+    arret = {"demande": False, "reprise": False}
 
     def _stop(*_):
         arret["demande"] = True
+
+    def _reprise():
+        log.error("erreurs I2C répétées : sortie %d pour secubox-led-reprise", CODE_REPRISE)
+        arret["reprise"] = arret["demande"] = True
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
+    signal.signal(signal.SIGHUP, _stop)
     ecr = EcrivainSysfs(cfg.base)
     ecr.liberer_declencheurs()
-    rendu = Rendu(ecr, cfg.debit_max, reprise=_reprise_i2c if cfg.reprise_auto else None)
+    rendu = Rendu(ecr, cfg.debit_max, reprise=_reprise if cfg.reprise_auto else None)
     ordo = Ordonnanceur(cfg.couches, cfg)
     log.info("couches : %s ; débit max %s écritures/s",
              ", ".join(c.nom for c in cfg.couches), cfg.debit_max)
@@ -664,7 +777,7 @@ def servir(cfg):
         boucle(cfg, ordo, rendu, time.monotonic, time.sleep, arret=lambda: arret["demande"])
     finally:
         rendu.eteindre()
-    return 0
+    return CODE_REPRISE if arret["reprise"] else 0
 
 
 def _couche_demo(forme, cfg, rythme=None):
@@ -702,6 +815,11 @@ def demo(args, cfg):
                   f"{', '.join(c.nom for c in cfg.couches)} ; toutes)", file=sys.stderr)
             return 2
     ordo = Ordonnanceur(couches, cfg)
+
+    def _interrompre(*_):
+        raise KeyboardInterrupt
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, _interrompre)
     if args.simule:
         h = {"t": 0.0}
         horloge = lambda: h["t"]  # noqa: E731
@@ -740,7 +858,7 @@ def main(argv=None):
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
     chemin = Path(args.config)
-    cfg = charger_config(chemin if chemin.exists() else None)
+    cfg = charger_config(chemin if chemin.exists() else None, exiger_root=os.geteuid() == 0)
     if args.cmd == "demo":
         return demo(args, cfg)
     if args.cmd == "verifier":
