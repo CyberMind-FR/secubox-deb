@@ -74,7 +74,7 @@ async function callSetPolicy(params) {
 }
 
 async function callSyncZones(params) {
-    return sbxFetch('/api/v1/nac/sync_zones', params, 'GET');
+    return sbxFetch('/api/v1/nac/sync_zones', params, 'POST');
 }
 
 function formatMac(mac) {

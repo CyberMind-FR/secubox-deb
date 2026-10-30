@@ -1491,9 +1491,9 @@ async def set_parental_rule_compat(req: ParentalRule, user=Depends(require_jwt))
     return await set_parental_rule(req, user)
 
 
-@router.get("/sync_zones")
+@router.post("/sync_zones")
 def sync_zones(user=Depends(require_jwt)):
-    """Redemande l'application : réécrit l'état voulu, le service root le recharge (#1766)."""
+    """Redemande l'application : réécrit l'état voulu, le service root le recharge (#1766). POST : une action (#3126)."""
     _nft_desired.resync()
     return {"success": True, "zones": list(ZONES.keys()), "applique": _nft_applique()}
 

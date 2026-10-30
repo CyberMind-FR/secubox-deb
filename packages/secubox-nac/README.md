@@ -114,3 +114,12 @@ n'isole qu'une fois.
 
 Jamais la box, un routeur, un équipement OpenWrt/SecuBox, ni un appareil absent depuis plus de 3 h. `GET /api/v1/nac/quarantaine/auto` rend le mode et les candidats ; chaque
 isolement laisse une ligne `quarantine_auto` dans l'historique de l'appareil et un événement `client_quarantined_auto`.
+
+## Pilotage distant (#3126, L5)
+
+`pilotage/routes-ouvertes.d/nac.toml`, installé dans `/usr/share/secubox/pilotage/routes-ouvertes.d/` (root, 0644),
+déclare les seules écritures que le porteur délégué du pilotage (portée `admin`) peut faire sur ce module : celles
+qu'appellent ses pages. Toute autre écriture déléguée est refusée par `secubox_core.auth` (403) ; les lectures
+restent soumises à la liste de refus (secrets). Voir le README de secubox-core.
+
+`POST /api/v1/nac/sync_zones` (GET avant 3.9.6) réapplique les zones.
