@@ -1,3 +1,15 @@
+secubox-pilotage (0.4.0-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 5 (ref #3126) : vhost admin.<box>.secubox.in d'une box légère. Plan écrit par le service à chaque tour
+    d'inventaire ; ctl root secubox-pilotage-vhost (poser, retirer, synchroniser, lister ; nginx par double tampon,
+    haproxyctl vers sbxwaf_inspector, secubox-waf-route, audit) lancé par secubox-pilotage-vhost.path et .timer ;
+    connexion avec les identifiants du maître échangés contre un jeton à portée du vhost ; relais /relais/<box>/… vers
+    l'agent (acteur et portée pris dans la session, version de page comparée, 413, 429, 501). Pages extraites sous
+    /var/lib/secubox-pilotage-pages (parents root) ; secubox-pilotage-www : verification dans l'audit, Suite/Codename du
+    Release contrôlés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 19:00:00 +0100
+
 secubox-pilotage (0.3.1-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 4, correction 1/5 (R-L5-23, ref #3126) : secubox-pilotage-www vérifie InRelease par gpgv (trousseau

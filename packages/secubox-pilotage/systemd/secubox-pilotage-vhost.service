@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox Pilotage — vhost admin.<box>.secubox.in des box légères (#3126, L5 tâche 5). Root, oneshot : lit le plan écrit par le
+# service (/var/lib/secubox/pilotage/vhosts.json, chemin fixe, validé en entier), extrait les pages, pose ou retire les vhosts
+# (nginx par double tampon, haproxyctl, secubox-waf-route). Le service lui-même n'a ni sudo ni capacité (NoNewPrivileges).
+# Pas de ProtectSystem : haproxyctl, certbot et nginx écrivent sous /etc, /data, /var/lib et /usr/share/secubox/www/.well-known.
+[Unit]
+Description=SecuBox Pilotage — vhosts des box légères (#3126)
+After=network-online.target nginx.service secubox-pilotage.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-pilotage-vhost synchroniser
+UMask=0022
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+TimeoutStartSec=15min

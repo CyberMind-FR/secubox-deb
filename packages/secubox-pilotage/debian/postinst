@@ -17,6 +17,11 @@ case "$1" in
     # transition ») et sans suivre de lien (le compte partagé secubox écrit dans le parent). Échec franc : le paquet ne se configure pas à moitié.
     python3 -I /usr/lib/secubox/pilotage/init_donnees.py /var/lib/secubox pilotage secubox-pilotage 750
 
+    # Pages servies aux box légères (L5 tâche 5, I5) : arbre root 0755 HORS du dossier du service, lu par nginx (www-data) ; écrit
+    # seulement par les ctl root secubox-pilotage-www et secubox-pilotage-vhost, qui le revérifient (propriétaire, sans lien).
+    [ -L /var/lib/secubox-pilotage-pages ] && rm -f /var/lib/secubox-pilotage-pages
+    install -d -m 0755 -o root -g root /var/lib/secubox-pilotage-pages
+
     # Journal d'audit commun : créé comme le fait secubox-core s'il manque (secubox:secubox 0640). Ni propriétaire ni droits ne changent ; le
     # service y AJOUTE des lignes par une ACL nominative, posée par un assistant qui vérifie le fichier (pas un lien, un seul lien dur, propriétaire).
     [ -e /var/log/secubox/audit.log ] || install -m 0640 -o secubox -g secubox /dev/null /var/log/secubox/audit.log
@@ -46,6 +51,8 @@ case "$1" in
       systemctl enable --now secubox-pilotage-invite.socket || true
       systemctl enable --now secubox-pilotage.service || true
       systemctl enable --now secubox-pilotage-ecoute.path secubox-pilotage-ecoute.timer || true
+      # vhosts admin.<box> des box légères : posés par le ctl root quand le plan du service change, repris toutes les heures
+      systemctl enable --now secubox-pilotage-vhost.path secubox-pilotage-vhost.timer || true
       # mise à jour : le nouveau code et le nouveau profil doivent être pris
       if [ -n "$2" ]; then
         systemctl restart secubox-pilotage.service || true

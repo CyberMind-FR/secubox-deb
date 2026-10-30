@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Filet : une extraction ou un certificat en échec est repris au passage suivant ; un passage sans changement ne recharge rien.
+[Unit]
+Description=SecuBox Pilotage — reprise périodique des vhosts des box légères (#3126)
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=1h
+AccuracySec=1min
+Unit=secubox-pilotage-vhost.service
+
+[Install]
+WantedBy=timers.target

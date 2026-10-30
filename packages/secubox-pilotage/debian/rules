@@ -17,6 +17,7 @@ override_dh_auto_install:
 	install -D -m 755 sbin/secubox-pilotage-audit-acl $(P)/usr/sbin/secubox-pilotage-audit-acl
 	install -D -m 755 sbin/secubox-pilotage-invite $(P)/usr/sbin/secubox-pilotage-invite
 	install -D -m 755 sbin/secubox-pilotage-www $(P)/usr/sbin/secubox-pilotage-www
+	install -D -m 755 sbin/secubox-pilotage-vhost $(P)/usr/sbin/secubox-pilotage-vhost
 	install -D -m 0440 sudoers.d/secubox-pilotage-www $(P)/etc/sudoers.d/secubox-pilotage-www
 	install -D -m 644 init_donnees.py $(P)/usr/lib/secubox/pilotage/init_donnees.py
 	install -D -m 644 sysctl/31-secubox-pilotage-nonlocal-bind.conf $(P)/etc/sysctl.d/31-secubox-pilotage-nonlocal-bind.conf
@@ -27,7 +28,8 @@ override_dh_auto_install:
 	install -d $(P)/lib/systemd/system
 	install -m 644 systemd/secubox-pilotage.service systemd/secubox-pilotage.socket systemd/secubox-pilotage-canal.socket systemd/secubox-pilotage-ecoute.service \
 	  systemd/secubox-pilotage-ecoute.path systemd/secubox-pilotage-ecoute.timer systemd/secubox-pilotage-invite.socket \
-	  'systemd/secubox-pilotage-invite@.service' $(P)/lib/systemd/system/
+	  'systemd/secubox-pilotage-invite@.service' systemd/secubox-pilotage-vhost.service systemd/secubox-pilotage-vhost.path \
+	  systemd/secubox-pilotage-vhost.timer $(P)/lib/systemd/system/
 
 override_dh_auto_test:
 	true
@@ -40,3 +42,6 @@ override_dh_installsystemd:
 	dh_installsystemd --name=secubox-pilotage-ecoute.path --no-enable --no-start
 	dh_installsystemd --name=secubox-pilotage-ecoute.timer --no-enable --no-start
 	dh_installsystemd --name=secubox-pilotage-invite --no-enable --no-start
+	dh_installsystemd --name=secubox-pilotage-vhost --no-enable --no-start
+	dh_installsystemd --name=secubox-pilotage-vhost.path --no-enable --no-start
+	dh_installsystemd --name=secubox-pilotage-vhost.timer --no-enable --no-start

@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+[Unit]
+Description=SecuBox Pilotage — plan des vhosts des box légères (#3126)
+
+[Path]
+PathChanged=/var/lib/secubox/pilotage/vhosts.json
+Unit=secubox-pilotage-vhost.service
+
+[Install]
+WantedBy=paths.target

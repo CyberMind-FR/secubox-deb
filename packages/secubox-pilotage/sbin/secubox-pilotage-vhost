@@ -1,0 +1,534 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-pilotage-vhost (#3126, L5 tâche 5) : vhost `admin.<box>.secubox.in` d'une box légère, servi par le maître.
+Root, verbes fermés :
+
+  poser [--acteur A] <box>      stdin = {"pages": [{"paquet", "version"}, …]} (≤ 1 Mio) : versions déclarées par la box.
+                                Server nginx /etc/nginx/conf.d/secubox-pilotage-admin-<box>.conf rendu par
+                                pilotage/vhosts.py sur les seules versions DÉJÀ extraites (modules listés ici, par
+                                descripteur), par double tampon : tampon → `nginx -t` du tampon seul → échange atomique →
+                                `nginx -t` complet → sinon retour à l'ancien fichier (ou retrait) ; puis certificat (exact ou
+                                joker *.<box>.secubox.in, sinon certbot webroot), vhost HAProxy vers sbxwaf_inspector
+                                (`haproxyctl vhost add`, jamais de waf_bypass), route sbxwaf (`secubox-waf-route <dom> 9080`),
+                                `haproxyctl generate` + reload. Idempotent. Audité (pilotage_vhost_poser).
+  retirer [--acteur A] <box>    retrait du server nginx (même garde nginx -t), de la route sbxwaf et du vhost HAProxy
+                                (`generate --allow-shrink`). Certificat et DNS inchangés. Audité (pilotage_vhost_retirer).
+  synchroniser                  lit le plan du service /var/lib/secubox/pilotage/vhosts.json (chemin FIXE, sans lien, ≤ 1 Mio,
+                                validé en entier) : extrait les pages (secubox-pilotage-www), pose chaque vhost, retire ceux
+                                des box sorties du plan, purge les versions plus déclarées. Lancé par secubox-pilotage-vhost.path
+                                (et son minuteur), jamais par le service : celui-ci tourne sans sudo (NoNewPrivileges).
+  lister                        vhosts posés. Non audité.
+
+Nom de box : ^[a-z0-9-]{1,40}$ (sinon code 2, rien touché). Sortie : une ligne JSON. Codes : 0 ; 1 erreur ou refus ; 2 argv,
+entrée ou plan invalides. SBX_RACINE (tests) honorée seulement si l'appelant est le compte effectif ; SBX_BIN et SBX_LIB ne
+valent que sous SBX_RACINE.
+"""
+import datetime
+import fcntl
+import json
+import os
+import pwd
+import re
+import stat
+import subprocess
+import sys
+import tempfile
+import tomllib
+
+LIB = "/usr/lib/secubox/pilotage"
+COMMANDES = {"nginx": "/usr/sbin/nginx", "systemctl": "/usr/bin/systemctl", "haproxyctl": "/usr/sbin/haproxyctl",
+             "secubox-waf-route": "/usr/sbin/secubox-waf-route", "certbot": "/usr/bin/certbot",
+             "secubox-pilotage-www": "/usr/sbin/secubox-pilotage-www"}
+RE_ACTEUR = re.compile(r"[a-z_][a-z0-9_.@-]{0,63}")
+ENTREE_MAX = 1 << 20
+BACKEND_WAF = "sbxwaf_inspector"
+WEBROOT_ACME = "/usr/share/secubox/www"
+PREFIXE_CONF = "secubox-pilotage-admin-"
+
+
+class Usage(Exception):
+    pass
+
+
+class Erreur(Exception):
+    pass
+
+
+def err(msg):
+    try:
+        print(f"[pilotage-vhost] {msg}", file=sys.stderr)
+    except OSError:
+        pass
+
+
+def sortie(obj):
+    sys.stdout.buffer.write((json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8"))
+    sys.stdout.flush()
+
+
+class Ctx:
+    def __init__(self, acteur):
+        racine = os.environ.get("SBX_RACINE", "")
+        try:
+            appelant = int(os.environ["SUDO_UID"]) if os.environ.get("SUDO_UID") else os.getuid()
+        except ValueError:
+            appelant = -1
+        if racine and appelant != os.geteuid():
+            err("SBX_RACINE ignorée : l'appelant n'est pas le compte effectif")
+            racine = ""
+        if not racine and os.geteuid() != 0:
+            raise Usage("à lancer en root")
+        self.r = racine.rstrip("/")
+        self.substitue = bool(racine)
+        self.uid = os.geteuid() if self.substitue else 0
+        su = os.environ.get("SUDO_USER", "")
+        self.appelant = su if RE_ACTEUR.fullmatch(su) else ("root" if not su and os.getuid() == 0 else "inconnu")
+        if acteur is None:
+            try:
+                acteur = su or pwd.getpwuid(appelant).pw_name
+            except (KeyError, OverflowError):
+                acteur = "inconnu"
+        self.acteur = acteur if RE_ACTEUR.fullmatch(acteur) else "inconnu"
+        self.bin = os.environ.get("SBX_BIN", "") if self.substitue else ""
+        lib = os.environ.get("SBX_LIB", "") if self.substitue else ""
+        sys.path.insert(0, lib or LIB)
+        global V
+        from pilotage import vhosts as V  # noqa: E402 — module root du paquet (/usr/lib/secubox/pilotage, root 0644)
+        self.confd = f"{self.r}/etc/nginx/conf.d"
+        self.certs = f"{self.r}/data/haproxy/certs"
+        self.toml = f"{self.r}/etc/secubox/haproxy.toml"
+        self.routes = f"{self.r}/etc/secubox/waf/haproxy-routes.json"
+        self.journaux = f"{self.r}/var/log/secubox"
+        self.pages_base = f"{self.r}/var/lib"
+        self.plan = f"{self.r}/var/lib/secubox/pilotage"
+
+    def cmd(self, nom):
+        return os.path.join(self.bin, nom) if self.bin else COMMANDES[nom]
+
+    def lancer(self, nom, *args, entree=None, delai=300):
+        env = dict(os.environ) if self.substitue else {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
+        try:
+            return subprocess.run([self.cmd(nom), *args], input=entree, capture_output=True, env=env, timeout=delai)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            err(f"{nom} : {e.__class__.__name__}")
+            return subprocess.CompletedProcess([nom], 127, b"", b"")
+
+
+# --- Audit (patron secubox-pilotage-www) ----------------------------------------------------------------------------
+
+def auditer(ctx, evenement, **champs):
+    ligne = {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "module": "pilotage",
+             "evenement": evenement, "acteur": ctx.acteur, "appelant": ctx.appelant}
+    ligne.update({k: v for k, v in champs.items() if v is not None})
+    donnees = (json.dumps(ligne, ensure_ascii=False) + "\n").encode("utf-8")
+    try:
+        dfd = os.open(ctx.journaux, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            try:
+                fd = os.open("audit.log", os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+            except FileNotFoundError:
+                fd = os.open("audit.log", os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640, dir_fd=dfd)
+                if not ctx.substitue:
+                    try:
+                        pw = pwd.getpwnam("secubox")
+                        os.fchown(fd, pw.pw_uid, pw.pw_gid)
+                    except (KeyError, OSError):
+                        os.close(fd)
+                        os.unlink("audit.log", dir_fd=dfd)
+                        raise OSError("journal d'audit non attribuable au compte secubox") from None
+            try:
+                st = os.fstat(fd)
+                if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+                    raise OSError("journal d'audit qui n'est pas un fichier ordinaire")
+                os.write(fd, donnees)
+            finally:
+                os.close(fd)
+        finally:
+            os.close(dfd)
+    except OSError as e:
+        err(f"audit impossible : {e.__class__.__name__}")
+        raise Erreur("audit impossible") from None
+
+
+# --- Entrées ----------------------------------------------------------------------------------------------------------
+
+def valider_pages(pages):
+    if not isinstance(pages, list) or len(pages) > V.PAGES_MAX:
+        raise Usage("pages invalides")
+    vus, res = set(), []
+    for p in pages:
+        if not isinstance(p, dict) or set(p) != {"paquet", "version"}:
+            raise Usage("page invalide (clés paquet, version)")
+        paquet, version = p["paquet"], p["version"]
+        if not (isinstance(paquet, str) and V.RE_PAQUET.fullmatch(paquet) and isinstance(version, str)
+                and V.RE_VERSION.fullmatch(version)) or paquet in vus:
+            raise Usage("page invalide")
+        vus.add(paquet)
+        res.append((paquet, version))
+    return res
+
+
+def lire_json_borne(fd):
+    morceaux, lu = [], 0
+    while bloc := os.read(fd, 65536):
+        lu += len(bloc)
+        if lu > ENTREE_MAX:
+            raise Usage("entrée trop longue")
+        morceaux.append(bloc)
+    try:
+        return json.loads(b"".join(morceaux).decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise Usage("entrée JSON invalide") from None
+
+
+def lire_entree_poser():
+    d = lire_json_borne(sys.stdin.fileno())
+    if not isinstance(d, dict) or set(d) != {"pages"}:
+        raise Usage("entrée invalide (clé pages)")
+    return valider_pages(d["pages"])
+
+
+def lire_plan(ctx):
+    """Plan écrit par le service (compte non root) à un chemin FIXE : ouvert sans suivre de lien, fichier ordinaire, borné, validé
+    en entier avant tout effet. Absent : plan vide."""
+    try:
+        dfd = os.open(ctx.plan, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        raise Erreur("dossier du plan absent ou non sûr") from None
+    try:
+        try:
+            fd = os.open("vhosts.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+        except FileNotFoundError:
+            return []
+        except OSError:
+            raise Erreur("plan non sûr (lien ou type inattendu)") from None
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise Erreur("plan qui n'est pas un fichier ordinaire")
+            d = lire_json_borne(fd)
+        finally:
+            os.close(fd)
+    finally:
+        os.close(dfd)
+    if not isinstance(d, dict) or set(d) != {"boxes"} or not isinstance(d["boxes"], list) or len(d["boxes"]) > V.BOXES_MAX:
+        raise Usage("plan invalide")
+    res, vus = [], set()
+    for b in d["boxes"]:
+        if not isinstance(b, dict) or set(b) != {"box", "pages"} or not isinstance(b["box"], str) \
+                or not V.RE_BOX.fullmatch(b["box"]) or b["box"] in vus:
+            raise Usage("plan invalide (box)")
+        vus.add(b["box"])
+        res.append((b["box"], valider_pages(b["pages"])))
+    return res
+
+
+# --- Pages extraites ------------------------------------------------------------------------------------------------
+
+def ouvrir_root(dir_fd, nom, ctx):
+    fd = os.open(nom, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
+    st = os.fstat(fd)
+    if st.st_uid != ctx.uid or st.st_mode & 0o022:
+        os.close(fd)
+        raise Erreur("arbre des pages non sûr")
+    return fd
+
+
+def modules_de(ctx, paquet, version):
+    """Modules (dossiers de premier niveau) de www/<paquet>/<version>/, par descripteur et sans lien ; None si non extraite."""
+    try:
+        fd = os.open(ctx.pages_base, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        raise Erreur("arbre des pages absent") from None
+    try:
+        for nom in ("secubox-pilotage-pages", "www", paquet, version):
+            try:
+                nfd = ouvrir_root(fd, nom, ctx)
+            except (FileNotFoundError, NotADirectoryError):
+                return None
+            except OSError:
+                raise Erreur("arbre des pages non sûr") from None
+            os.close(fd)
+            fd = nfd
+        mods = []
+        for n in sorted(os.listdir(fd)):
+            st = os.stat(n, dir_fd=fd, follow_symlinks=False)
+            if stat.S_ISDIR(st.st_mode) and V.RE_MODULE.fullmatch(n) and n not in ("api", "auth"):
+                mods.append(n)
+        return mods
+    finally:
+        os.close(fd)
+
+
+# --- nginx : double tampon ------------------------------------------------------------------------------------------
+
+def conf_de(ctx, box):
+    return os.path.join(ctx.confd, f"{PREFIXE_CONF}{box}.conf")
+
+
+def ecrire_atomique(chemin, donnees, mode=0o644):
+    d = os.path.dirname(chemin)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".", suffix=".sbxtmp")
+    try:
+        os.fchmod(fd, mode)
+        os.write(fd, donnees)
+        os.fsync(fd)
+        os.close(fd)
+        fd = -1
+        os.replace(tmp, chemin)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def lire_ou_none(chemin):
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        raise Erreur("configuration nginx non sûre (lien)") from None
+    try:
+        return lire_tout(fd)
+    finally:
+        os.close(fd)
+
+
+def lire_tout(fd):
+    morceaux = []
+    while bloc := os.read(fd, 65536):
+        morceaux.append(bloc)
+    return b"".join(morceaux)
+
+
+def nginx_echanger(ctx, chemin, nouveau):
+    """Rend vrai si le fichier a changé. nouveau=None : retrait. Tampon validé seul (si pose), échange atomique, `nginx -t`
+    complet, sinon l'ancien contenu est rétabli (ou le fichier retiré) et Erreur ; succès : reload."""
+    ancien = lire_ou_none(chemin)
+    if ancien == nouveau:
+        return False
+    if nouveau is not None:
+        with tempfile.TemporaryDirectory() as t:
+            tampon = os.path.join(t, "vhost.conf")
+            with open(tampon, "wb") as f:
+                f.write(nouveau)
+            env_ = os.path.join(t, "nginx.conf")
+            with open(env_, "w") as f:
+                f.write(f"pid {t}/nginx.pid;\nerror_log {t}/error.log;\nevents {{}}\n"
+                        f"http {{\n    access_log off;\n    include {tampon};\n}}\n")
+            if ctx.lancer("nginx", "-t", "-c", env_, "-q").returncode != 0:
+                raise Erreur("configuration nginx refusée (tampon validé seul)")
+        ecrire_atomique(chemin, nouveau)
+    else:
+        os.unlink(chemin)
+    if ctx.lancer("nginx", "-t", "-q").returncode != 0:
+        if ancien is None:
+            os.unlink(chemin)
+        else:
+            ecrire_atomique(chemin, ancien)
+        raise Erreur("nginx -t en échec : configuration précédente rétablie")
+    if ctx.lancer("systemctl", "reload", "nginx").returncode != 0:
+        err("rechargement de nginx en échec (configuration valide, prise au prochain rechargement)")
+    return True
+
+
+# --- HAProxy, certificat, route sbxwaf ------------------------------------------------------------------------------
+
+def vhost_present(ctx, dom):
+    try:
+        with open(ctx.toml, "rb") as f:
+            d = tomllib.load(f)
+    except FileNotFoundError:
+        return False
+    except (OSError, tomllib.TOMLDecodeError):
+        raise Erreur("haproxy.toml illisible") from None
+    v = d.get("vhosts") or {}
+    it = v.values() if isinstance(v, dict) else v
+    return any(isinstance(x, dict) and x.get("domain") == dom for x in it)
+
+
+def certificat(ctx, box, dom):
+    noms = (f"{dom}.pem", f"*.{box}.{V.ZONE}.pem")
+    if any(os.path.isfile(os.path.join(ctx.certs, n)) and os.path.getsize(os.path.join(ctx.certs, n)) > 0 for n in noms):
+        return
+    p = ctx.lancer("certbot", "certonly", "--webroot", "-w", WEBROOT_ACME, "-d", dom, "--non-interactive", "--agree-tos",
+                   "--keep-until-expiring", "--register-unsafely-without-email")
+    if p.returncode != 0:
+        raise Erreur(f"certificat de {dom} impossible (DNS public vers ce maître ?)")
+    ctx.lancer("haproxyctl", "cert", "sync")
+    if not os.path.isfile(os.path.join(ctx.certs, noms[0])):
+        raise Erreur("certificat émis mais absent du dossier de HAProxy")
+
+
+def routes_retirer(ctx, dom):
+    try:
+        with open(ctx.routes) as f:
+            table = json.load(f)
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError):
+        raise Erreur("table des routes sbxwaf illisible : rien réécrit") from None
+    if not isinstance(table, dict):
+        raise Erreur("table des routes sbxwaf illisible : rien réécrit")
+    if dom not in table:
+        return False
+    del table[dom]
+    mode = stat.S_IMODE(os.stat(ctx.routes).st_mode)
+    ecrire_atomique(ctx.routes, (json.dumps(table, indent=2, sort_keys=True) + "\n").encode(), mode)
+    return True
+
+
+# --- Verbes ---------------------------------------------------------------------------------------------------------
+
+def verrou(ctx):
+    fd = os.open(ctx.confd, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
+
+
+def poser(ctx, box, pages):
+    dom = V.domaine(box)
+    try:
+        composees, absentes = [], []
+        for paquet, version in pages:
+            mods = modules_de(ctx, paquet, version)
+            if mods is None:
+                absentes.append(f"{paquet}={version}")
+            elif mods:
+                composees.append({"paquet": paquet, "version": version, "modules": mods})
+        try:
+            texte = V.rendre_nginx(box, composees).encode("utf-8")
+        except ValueError as e:
+            raise Erreur(f"pages refusées : {e}") from None
+        change = nginx_echanger(ctx, conf_de(ctx, box), texte)
+        certificat(ctx, box, dom)
+        regen = False
+        if not vhost_present(ctx, dom):
+            if ctx.lancer("haproxyctl", "vhost", "add", dom, BACKEND_WAF, "true").returncode != 0:
+                raise Erreur("haproxyctl vhost add en échec")
+            regen = True
+        route = ctx.lancer("secubox-waf-route", dom, str(V.PORT_NGINX))
+        if route.returncode != 0:
+            raise Erreur("secubox-waf-route en échec")
+        if regen:
+            if ctx.lancer("haproxyctl", "generate").returncode != 0 or ctx.lancer("haproxyctl", "reload").returncode != 0:
+                raise Erreur("HAProxy n'a pas rechargé")
+    except Erreur as e:
+        auditer(ctx, "pilotage_vhost_poser", box=box, domaine=dom, resultat="erreur", motif=str(e))
+        raise
+    deja = not change and not regen and not route.stdout.strip()
+    auditer(ctx, "pilotage_vhost_poser", box=box, domaine=dom, resultat="deja" if deja else "ok",
+            pages=len(composees), absentes=absentes or None)
+    return {"ok": True, "box": box, "domaine": dom, "deja": deja, "pages": len(composees), "absentes": absentes}
+
+
+def retirer(ctx, box):
+    dom = V.domaine(box)
+    try:
+        if os.path.lexists(conf_de(ctx, box)):
+            nginx_echanger(ctx, conf_de(ctx, box), None)
+        routes_retirer(ctx, dom)
+        if vhost_present(ctx, dom):
+            ctx.lancer("haproxyctl", "vhost", "remove", re.sub(r"[.-]", "_", dom))
+            if ctx.lancer("haproxyctl", "generate", "--allow-shrink").returncode != 0 or \
+                    ctx.lancer("haproxyctl", "reload").returncode != 0:
+                raise Erreur("HAProxy n'a pas rechargé : le nom peut rester servi jusqu'au prochain « haproxyctl generate »")
+    except Erreur as e:
+        auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="erreur", motif=str(e))
+        raise
+    auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="ok")
+    return {"ok": True, "box": box, "domaine": dom}
+
+
+def poses(ctx):
+    res = []
+    for n in sorted(os.listdir(ctx.confd)):
+        m = re.fullmatch(re.escape(PREFIXE_CONF) + r"([a-z0-9-]{1,40})\.conf", n)
+        if m:
+            res.append(m.group(1))
+    return res
+
+
+def synchroniser(ctx):
+    plan = lire_plan(ctx)
+    bilan = {"ok": True, "poses": [], "retires": [], "erreurs": []}
+    en_usage = []
+    for box, pages in plan:
+        for paquet, version in pages:
+            p = ctx.lancer("secubox-pilotage-www", "extraire", "--acteur", "pilotage", paquet, version)
+            if p.returncode != 0:
+                err(f"extraction {paquet} {version} en échec")
+            en_usage.append({"paquet": paquet, "version": version})
+        try:
+            poser(ctx, box, pages)
+            bilan["poses"].append(box)
+        except Erreur as e:
+            bilan["erreurs"].append({"box": box, "erreur": str(e)})
+    dans_plan = {b for b, _ in plan}
+    for box in poses(ctx):
+        if box not in dans_plan:
+            try:
+                retirer(ctx, box)
+                bilan["retires"].append(box)
+            except Erreur as e:
+                bilan["erreurs"].append({"box": box, "erreur": str(e)})
+    uniques = sorted({(x["paquet"], x["version"]) for x in en_usage})
+    entree = json.dumps({"en_usage": [{"paquet": p, "version": v} for p, v in uniques]}).encode()
+    if ctx.lancer("secubox-pilotage-www", "purger", "--acteur", "pilotage", entree=entree).returncode != 0:
+        err("purge des pages en échec")
+    bilan["ok"] = not bilan["erreurs"]
+    return bilan
+
+
+def analyser(argv):
+    if not argv or argv[0] not in ("poser", "retirer", "synchroniser", "lister"):
+        raise Usage("usage : secubox-pilotage-vhost poser|retirer [--acteur A] <box> | synchroniser | lister")
+    verbe, reste, acteur = argv[0], list(argv[1:]), None
+    if verbe in ("poser", "retirer") and len(reste) >= 2 and reste[0] == "--acteur":
+        if not RE_ACTEUR.fullmatch(reste[1]):
+            raise Usage("acteur invalide")
+        acteur, reste = reste[1], reste[2:]
+    if verbe in ("poser", "retirer"):
+        if len(reste) != 1 or not re.fullmatch(r"[a-z0-9-]{1,40}", reste[0]) or reste[0].startswith("-"):
+            raise Usage("nom de box invalide (^[a-z0-9-]{1,40}$)")
+        return verbe, acteur, reste[0]
+    if reste:
+        raise Usage("argument en trop")
+    return verbe, "pilotage" if verbe == "synchroniser" else None, None
+
+
+def main(argv):
+    try:
+        verbe, acteur, box = analyser(argv)
+        ctx = Ctx(acteur)
+        if verbe == "poser":
+            pages = lire_entree_poser()
+        fd = verrou(ctx)
+        try:
+            if verbe == "poser":
+                res = poser(ctx, box, pages)
+            elif verbe == "retirer":
+                res = retirer(ctx, box)
+            elif verbe == "synchroniser":
+                res = synchroniser(ctx)
+            else:
+                res = {"ok": True, "vhosts": [{"box": b, "domaine": V.domaine(b)} for b in poses(ctx)]}
+        finally:
+            os.close(fd)
+        sortie(res)
+        return 0 if res.get("ok") else 1
+    except Usage as e:
+        err(str(e))
+        sortie({"ok": False, "erreur": str(e)})
+        return 2
+    except Erreur as e:
+        sortie({"ok": False, "erreur": str(e)})
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
