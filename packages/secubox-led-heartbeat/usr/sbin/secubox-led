@@ -92,17 +92,32 @@ EOF
 case "${1:-}" in
     demo)
         shift
-        [ $# -ge 1 ] || { /usr/sbin/secubox-led-pulse demo --help; exit 1; }
+        PULSE=/usr/sbin/secubox-led-pulse
+        if [ "${SECUBOX_TEST:-}" = 1 ] && [ "$(id -u)" -ne 0 ]; then
+            PULSE="${SECUBOX_LED_PULSE:-$PULSE}"
+        fi
+        [ $# -ge 1 ] || { "$PULSE" demo --help; exit 1; }
         relancer=0
         if systemctl is-active --quiet secubox-led-pulse.service 2>/dev/null; then
-            systemctl stop secubox-led-pulse.service
             relancer=1
         fi
-        rc=0
-        /usr/sbin/secubox-led-pulse demo "$@" || rc=$?
-        if [ "$relancer" -eq 1 ]; then
-            systemctl start secubox-led-pulse.service
+        # Quoi qu'il arrive (fin, erreur, HUP a la fermeture SSH, INT, TERM) :
+        # le demon est relance s'il tournait. La demo eteint elle-meme les LED
+        # (SIGTERM/SIGHUP -> extinction propre cote Python).
+        fin() {
+            trap - EXIT HUP INT TERM
+            if [ "$relancer" -eq 1 ]; then
+                systemctl start secubox-led-pulse.service || true
+            fi
+        }
+        trap fin EXIT
+        trap 'exit 130' HUP INT TERM
+        if [ "$relancer" -eq 1 ] && ! systemctl stop secubox-led-pulse.service; then
+            echo "secubox-led : arret de secubox-led-pulse impossible, demo annulee (un seul ecrivain sur la puce)" >&2
+            exit 1
         fi
+        rc=0
+        "$PULSE" demo "$@" || rc=$?
         exit "$rc"
         ;;
     verifier)

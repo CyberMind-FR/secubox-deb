@@ -3,14 +3,18 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 #
-# Moteur d'affichage en couches (#3290 tranche 2) : seul écrivain des LED.
-# Root : /sys/class/leds/*/brightness est root:root 0664 (udev) ; aucune
-# écriture hors sysfs, lecture seule de /proc et des caches d'état.
+# Moteur d'affichage en couches (#3290) : seul écrivain des LED.
+# Root, exception écrite dans .claude/RULES-CODE.md § 10 : /sys/class/leds/*/
+# brightness est root:root et ProtectKernelTunables rendrait /sys en lecture
+# seule. Confiné par le profil AppArmor secubox-led-pulse (enforce) et aucune
+# capacité. Après erreurs I2C répétées le démon sort en 75 : l'unité échoue et
+# OnFailure= lance secubox-led-reprise (secubox-led-reset), sans systemd-run.
 [Unit]
 Description=SecuBox LED - moteur d'affichage en couches
 After=secubox-leds.service
 Wants=secubox-leds.service
 Conflicts=secubox-healthbump.timer secubox-led-trigger.service secubox-led-heartbeat.service
+OnFailure=secubox-led-reprise.service
 
 [Service]
 Type=simple
@@ -18,20 +22,29 @@ ExecCondition=/usr/sbin/secubox-led-board
 ExecStart=/usr/sbin/secubox-led-pulse servir
 Restart=always
 RestartSec=5
+RestartPreventExitStatus=75
 TimeoutStopSec=10
+AppArmorProfile=-secubox-led-pulse
+UMask=0027
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
+# /dev seulement : /sys/class/leds n'est pas touché par PrivateDevices.
+PrivateDevices=yes
 PrivateNetwork=yes
 RestrictAddressFamilies=AF_UNIX
 ProtectKernelModules=yes
+ProtectKernelLogs=yes
 ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 RestrictRealtime=yes
 SystemCallArchitectures=native
 CapabilityBoundingSet=
+MemoryMax=64M
 
 [Install]
 WantedBy=multi-user.target

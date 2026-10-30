@@ -98,6 +98,17 @@ case "$1" in
                 echo "secubox-led-heartbeat: $u desactive (remplace par secubox-led-pulse)."
             fi
         done
+        # leds.toml : conffile root:root 0644 ; le démon root refuse sinon (#3290).
+        if [ -f /etc/secubox/leds.toml ]; then
+            chown root:root /etc/secubox/leds.toml
+            chmod 0644 /etc/secubox/leds.toml
+        fi
+        # Profil AppArmor du moteur (enforce), charge avant le (re)demarrage.
+        if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1 \
+           && [ -f /etc/apparmor.d/secubox-led-pulse ]; then
+            apparmor_parser -r /etc/apparmor.d/secubox-led-pulse \
+              || echo "secubox-led-heartbeat : profil AppArmor non charge (apparmor_parser -r /etc/apparmor.d/secubox-led-pulse)" >&2
+        fi
         systemctl enable secubox-led-pulse.service 2>/dev/null || true
         if [ -e /sys/class/leds/red:led1/brightness ]; then
             systemctl restart secubox-led-pulse.service 2>/dev/null || true

@@ -9,7 +9,7 @@ Displays system health, security status, and resource usage via the IS31FL3199 I
 
 Depuis 2.3.0, l'affichage est un moteur en couches (`secubox-led-pulse`), voir plus bas.
 
-Paquet Debian : version `2.3.0-1~trixie1`, architecture `all`.
+Paquet Debian : version `2.3.1-1~trixie1`, architecture `all`.
 
 ## Contenu
 
@@ -112,18 +112,29 @@ rose ; pulsations ; 8 s).
 | `alertes` | `alertes_json` | `/var/lib/secubox/soc/alerts.json` (non acquittées ; une critique = 3) | 1 / 3 / 10 |
 
 Le cache `metrics-cache.json` est rafraîchi par `secubox-metrics` (30 s) ; au-delà de
-`fraicheur_max` (300 s) la source passe à « inconnu ». Aucun journal n'est relu.
+`fraicheur_max` (300 s) la source passe à « inconnu » (horodatage interne `timestamp_epoch`
+prioritaire sur la date du fichier). Les alertes : fraîcheur d'un jour (le SOC n'écrit qu'au
+changement) et socket `/run/secubox/soc.sock` absente (SOC arrêté) = inconnu. Aucun journal relu.
+
+Fichiers d'état lus par le démon root : sans suivre de lien ni bloquer (`O_NOFOLLOW|O_NONBLOCK`),
+fichier régulier, propriétaire dans `proprietaires` (défaut : `root`, `secubox` — compte de
+secubox-metrics et du SOC —, `secubox-metrics`, `secubox-soc`), non inscriptible par tous,
+1 Mio au plus. JSON piégé (NaN, Inf, profondeur, types) = inconnu. Le profil AppArmor
+`secubox-led-pulse` (enforce) n'autorise que les chemins par défaut : une source ajoutée
+ailleurs reste « inconnue » tant que le profil n'est pas complété.
 
 ### Réglages (`[moteur]`)
 
-`debit_max` (écritures I²C/s, tous canaux, défaut 20), `luminosite` (0.05..1, défaut 0.6),
+`debit_max` (écritures I²C/s, tous canaux, défaut 20, 50 au plus ; 10 ms minimum entre deux), `luminosite` (0.05..1, défaut 0.6),
 `pas` (image, 0.1 s), `repere_duree` (1.2 s), `periode_mesure` (5 s), `reprise_auto`.
 `[couleurs]` surcharge ou ajoute des couleurs (palette validée : orange 255/80/0, jaune
 255/200/0, violet 150/0/255, rose 255/20/120, cyan 0/220/255, turquoise 0/255/90, blanc chaud
 255/150/60, blanc, rouge, vert, bleu). `[sources.<nom>]` : `type`, `chemin`, `cle`, `seuils`,
 `fraicheur_max`. `[[couche]]` : `nom`, `sources`, `forme`, `palette`, `rythme`, `periode`,
-`duree`, `leds`. Toute valeur invalide est remplacée par son défaut avec un avertissement
+`duree`, `leds`. Toute valeur invalide (bornes ou type) est remplacée par son défaut avec un avertissement
 dans le journal ; un fichier illisible ou sans couche donne la configuration livrée.
+`leds.toml` doit être root:root non inscriptible par d'autres (le postinst le fixe en 0644),
+sinon le démon l'ignore.
 
 ### Bus I²C
 
@@ -133,8 +144,9 @@ jetons de `debit_max` écritures/s, en tourniquet (aucun canal affamé). Le pilo
 logicielle, à 3 paliers (mesuré en simulation : 3 à 9 écritures/s selon la forme).
 Au démarrage, les déclencheurs noyau (`heartbeat`, `timer`) des 9 canaux sont retirés.
 À l'arrêt (SIGTERM), les 9 canaux sont mis à 0, à 50 ms d'intervalle. Après 3 erreurs
-d'écriture consécutives, `secubox-led-reset` est lancé hors de l'unité (`systemd-run`, au plus
-une fois par 10 min), qui recharge le module et relance le moteur.
+d'écriture consécutives, le démon sort en 75 : `OnFailure=` lance `secubox-led-reprise.service`
+(`secubox-led-reset`, au plus une fois par 10 min), qui recharge le module et relance le moteur.
+Unité sans capacité, profil AppArmor enforce ; exception root écrite dans `RULES-CODE.md` § 10.
 
 ### Démonstration et vérification
 
@@ -146,4 +158,5 @@ secubox-led demo systeme|trafic|toutes       # couches réelles de leds.toml
 secubox-led-pulse demo rotatif --simule      # sans matériel : écritures sur la sortie
 ```
 
-La démo arrête `secubox-led-pulse` le temps de l'affichage puis le relance (un seul écrivain).
+La démo arrête `secubox-led-pulse` le temps de l'affichage puis le relance, y compris si elle
+est interrompue (fermeture SSH, Ctrl-C) ; si l'arrêt échoue, la démo est annulée (un seul écrivain).

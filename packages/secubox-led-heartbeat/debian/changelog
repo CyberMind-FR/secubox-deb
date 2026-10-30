@@ -1,3 +1,15 @@
+secubox-led-heartbeat (2.3.1-1~trixie1) trixie; urgency=medium
+
+  * Relecture de securite du moteur en couches (#3290) : fichiers d'etat lus sans suivre de lien ni bloquer (O_NOFOLLOW|O_NONBLOCK), fichier regulier, proprietaire root ou producteur (secubox, secubox-metrics, secubox-soc), non inscriptible par tous, 1 Mio au plus.
+  * JSON piege (profondeur, grands entiers, NaN, Inf, types inattendus) => source inconnue, jamais de plantage ni de vert ; horodatage interne prioritaire sur la date du fichier.
+  * Alertes : fraicheur d'un jour et SOC arrete (socket absente) => inconnu.
+  * Configuration validee par types ; debit_max borne a 50 ; 10 ms au moins entre deux ecritures I2C ; leds.toml refuse s'il n'est pas root:root non inscriptible par d'autres (postinst : root:root 0644).
+  * Reprise I2C : sortie 75 puis OnFailure=secubox-led-reprise.service (secubox-led-reset, 1 fois / 10 min), plus de systemd-run.
+  * Unite durcie (UMask, RestrictSUIDSGID, ProtectKernelLogs, RestrictNamespaces, PrivateDevices, MemoryMax=64M), profil AppArmor secubox-led-pulse en enforce, exception root ecrite dans RULES-CODE.
+  * secubox-led demo : trap qui relance le demon sur EXIT/HUP/INT/TERM ; demo annulee si l'arret du demon echoue.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 20:00:00 +0100
+
 secubox-led-heartbeat (2.3.0-1~trixie1) trixie; urgency=medium
 
   * Moteur d'affichage en couches (#3290 tranche 2) : secubox-led-pulse devient le seul ecrivain des LED (Python, /usr/lib/secubox-led-heartbeat/ledcouches.py), pilote par /etc/secubox/leds.toml.

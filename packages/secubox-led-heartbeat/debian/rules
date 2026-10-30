@@ -18,7 +18,11 @@ override_dh_auto_install:
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-k2000
 	install -D -m 755 usr/sbin/secubox-led-pulse \
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-pulse
-	# Moteur d'affichage en couches (#3290 tranche 2)
+	# Moteur d'affichage en couches (#3290 tranche 2) : reprise I2C et AppArmor
+	install -D -m 644 systemd/secubox-led-reprise.service \
+		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-led-reprise.service
+	install -D -m 644 apparmor/secubox-led-pulse \
+		debian/secubox-led-heartbeat/etc/apparmor.d/secubox-led-pulse
 	install -D -m 644 usr/lib/secubox-led-heartbeat/ledcouches.py \
 		debian/secubox-led-heartbeat/usr/lib/secubox-led-heartbeat/ledcouches.py
 	install -D -m 755 usr/sbin/secubox-led-trigger \

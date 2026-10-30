@@ -16,7 +16,7 @@ Depends: ${misc:Depends},
          i2c-tools
 Breaks: secubox-core (<< 1.5.5)
 Replaces: secubox-core (<< 1.5.5)
-Recommends: secubox-heartbeat
+Recommends: secubox-heartbeat, apparmor
 Suggests: dkms,
           linux-headers-arm64
 Description: SecuBox LED heartbeat status indicator
