@@ -20,6 +20,7 @@ import subprocess
 import json
 import os
 import shutil
+import re
 import secrets
 import time
 
@@ -297,6 +298,31 @@ async def status(user=Depends(require_jwt)):
     }
 
 
+# SUITE DEBIAN DU CONTENEUR (#3285) : la dernière stable, c'est-à-dire celle de
+# l'hôte (une box est installée sur la stable courante) ; repli trixie si l'hôte
+# n'est pas une Debian lisible. Surcharge : SECUBOX_DEBIAN_SUITE.
+SUITE_DEBIAN_REPLI = "trixie"
+
+
+def suite_debian_hote(os_release: str = "/etc/os-release") -> str:
+    impose = os.environ.get("SECUBOX_DEBIAN_SUITE", "")
+    if re.fullmatch(r"[a-z]+", impose):
+        return impose
+    champs = {}
+    try:
+        with open(os_release, encoding="utf-8") as f:
+            for ligne in f:
+                cle, sep, valeur = ligne.strip().partition("=")
+                if sep:
+                    champs[cle] = valeur.strip().strip('"').strip("'")
+    except OSError:
+        return SUITE_DEBIAN_REPLI
+    code = champs.get("VERSION_CODENAME", "")
+    if champs.get("ID") == "debian" and re.fullmatch(r"[a-z]+", code):
+        return code
+    return SUITE_DEBIAN_REPLI
+
+
 # ══════════════════════════════════════════════════════════════════
 # Lifecycle Endpoints
 # ══════════════════════════════════════════════════════════════════
@@ -321,7 +347,7 @@ def install(
         "-t", "download",
         "--",
         "-d", "debian",
-        "-r", "bookworm",
+        "-r", suite_debian_hote(),
         "-a", "amd64"
     ], capture_output=True, text=True, timeout=600)
 
@@ -351,13 +377,25 @@ def install(
 #!/bin/bash
 set -e
 
+# systemd >= 257 (trixie) en LXC non privilégié : ImportCredential= échoue
+# (243/CREDENTIALS) ; vidé par drop-in pour journald, sysctl, tmpfiles (#3274, #3285).
+v=$(systemctl --version 2>/dev/null | awk 'NR==1{{print $2}}')
+if [ -n "$v" ] && [ "$v" -ge 257 ] 2>/dev/null; then
+    for u in systemd-journald systemd-sysctl systemd-tmpfiles-setup systemd-tmpfiles-clean; do
+        mkdir -p "/etc/systemd/system/$u.service.d"
+        printf '%s\\n' '[Service]' 'ImportCredential=' > "/etc/systemd/system/$u.service.d/secubox-lxc.conf"
+    done
+    systemctl daemon-reload
+    systemctl restart systemd-journald systemd-sysctl systemd-tmpfiles-setup || true
+fi
+
 # Update and install dependencies
 apt-get update
-apt-get install -y wget gnupg apt-transport-https
+apt-get install -y wget gpg apt-transport-https
 
 # Add Matrix repo
 wget -qO /usr/share/keyrings/matrix-org-archive-keyring.gpg https://packages.matrix.org/debian/matrix-org-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/matrix-org-archive-keyring.gpg] https://packages.matrix.org/debian/ bookworm main" > /etc/apt/sources.list.d/matrix-org.list
+echo "deb [signed-by=/usr/share/keyrings/matrix-org-archive-keyring.gpg] https://packages.matrix.org/debian/ $(. /etc/os-release && echo "$VERSION_CODENAME") main" > /etc/apt/sources.list.d/matrix-org.list
 
 # Install Synapse
 apt-get update
