@@ -1,3 +1,13 @@
+secubox-streamlit (1.7.3-1~trixie1) trixie; urgency=medium
+
+  * Frontaux, relecture de sécurité (ref #3294) : cible limitée à l'adresse du conteneur streamlit ;
+    noms réservés, route sbxwaf ou backend HAProxy vers autre chose refusés ; reprise d'un fichier à
+    un seul bloc server et un seul nom ; options en double refusées ; échec nginx -t audité.
+  * `boot` attend systemd du conteneur (borné), démarre puis vérifie l'unité du frontal, audite le
+    résultat sans bloquer.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 15:00:00 +0100
+
 secubox-streamlit (1.7.2-1~trixie1) trixie; urgency=medium
 
   * Frontaux web permanents (ref #3294) : [frontaux.<nom>] dans streamlit.toml ; `streamlitctl boot`

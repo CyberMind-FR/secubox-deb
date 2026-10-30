@@ -84,9 +84,9 @@ on `10.100.0.50:8601`). It is declared in `/etc/secubox/streamlit.toml`:
 ```toml
 [frontaux.couture]
 domain = "couture.gk2.secubox.in"   # one label under the box domain
-cible = "10.100.0.50:8601"          # IPv4:port in the container bridge subnet, port 1024..65535
+cible = "10.100.0.50:8601"          # ONLY the streamlit container address (lxc.net.N.ipv4.address), port 1024..65535
 unite = "atelier-partage-web.service"  # systemd unit INSIDE the container
-sante = "/sante"                    # health path of the frontal (informative, optional)
+sante = "/healthz"                  # health path of the frontal (informative, optional)
 enabled = true                      # false: kept declared, not started at boot
 ```
 
@@ -102,7 +102,18 @@ enabled = true                      # false: kept declared, not started at boot
 - `--reprendre <fichier>` takes over a hand-made vhost serving the same domain: timestamped backup
   `sites-available/<fichier>.avant-frontal-<UTC>`, file removed, generated file installed, ONE `nginx -t` +
   reload. Without it, another file serving the domain is a conflict.
+- Refused: a reserved box service name (same list as publication: `admin`, `hall`, `www`, `api`, `mail`…), a
+  domain whose sbxwaf route targets anything but the local nginx :9080, a domain HAProxy sends to a backend other
+  than `nginx_vhosts`, a target other than the container's own address (never the bridge/host or another LXC), and
+  a takeover of a file with more than one `server` block or `server_name`. Options given twice are refused.
+- `boot` waits for the container's systemd (`is-system-running`, 30 × 2 s at most), starts the unit, checks
+  `is-active`; the outcome (`actif`, `deja-actif`, `echec`, `conteneur-indisponible`) is logged and audited
+  (`frontal-boot`), never blocking.
 - The sbxwaf route and the HAProxy vhost of the domain are never touched (warning if the route is missing).
+- `frontal remove` does NOT restore a taken-over file: put back `sites-available/<file>.avant-frontal-<UTC>` by
+  hand (and its sites-enabled link) if needed.
+- Known debt: sudoers grants `secubox` `/usr/sbin/streamlitctl` with ANY arguments; only the argument guard of
+  `streamlitctl` (and `publication.py` revalidation) filters them. To be narrowed in a dedicated issue.
 - `frontal list` (JSON, vhost state), `frontal remove <nom> [--apply]`. Every change goes to
   `/var/log/secubox/audit.log`.
 
@@ -110,7 +121,7 @@ Couture on gk2 (once):
 
 ```
 streamlitctl frontal set couture --domaine couture.gk2.secubox.in --cible 10.100.0.50:8601 \
-  --unite atelier-partage-web.service --sante /sante --reprendre atelier-couture.conf --par gk2 --apply
+  --unite atelier-partage-web.service --sante /healthz --reprendre atelier-couture.conf --par gk2 --apply
 ```
 
 ## Sécurité : ce que le conteneur isole, et ce qu'il n'isole pas (#3247)

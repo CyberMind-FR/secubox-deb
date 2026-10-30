@@ -1819,13 +1819,27 @@ def _deposer(a, apps: Path) -> dict:
 # puis son unité ; son vhost nginx :9080 est produit ici, avec les pages d'erreur SecuBox. La route sbxwaf et le
 # vhost HAProxy du domaine ne sont JAMAIS touchés : le frontal se branche derrière la chaîne existante.
 
-NOM_FRONTAL_RE = re.compile(r"[a-z0-9-]{1,40}")
-UNITE_RE = re.compile(r"[a-z0-9@._-]{1,64}\.service")
-SANTE_RE = re.compile(r"/[A-Za-z0-9._~/-]{0,127}")
-FICHIER_NGINX_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}\.conf")
+NOM_FRONTAL_RE = re.compile(r"[a-z0-9-]{1,40}", re.ASCII)
+UNITE_RE = re.compile(r"[a-z0-9@._-]{1,64}\.service", re.ASCII)
+SANTE_RE = re.compile(r"/[A-Za-z0-9._~/-]{0,127}", re.ASCII)
+FICHIER_NGINX_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}\.conf", re.ASCII)
+BACKENDS_NGINX = frozenset({"nginx_vhosts", ""})   # backends HAProxy qui mènent à sbxwaf → nginx :9080
 
 
-def erreur_frontal(nom, domaine, cible, unite, sante, dom_box: str, reseaux) -> str | None:
+def ip_du_conteneur(lxc_config: str | None) -> str | None:
+    """L'adresse déclarée du conteneur streamlit (première lxc.net.N.ipv4.address de SA config) : seule cible
+    admise d'un frontal — ni le pont (l'hôte), ni un autre conteneur, ni le réseau ou la diffusion."""
+    for ligne in (_lire(Path(lxc_config)) or "").splitlines() if lxc_config else []:
+        m = re.match(r"^\s*lxc\.net\.[0-9]+\.ipv4\.address\s*=\s*([0-9.]+)/([0-9]{1,2})\s*$", ligne, re.ASCII)
+        if m:
+            with contextlib.suppress(ValueError):
+                itf = ipaddress.IPv4Interface(f"{m.group(1)}/{m.group(2)}")
+                if itf.ip not in (itf.network.network_address, itf.network.broadcast_address):
+                    return str(itf.ip)
+    return None
+
+
+def erreur_frontal(nom, domaine, cible, unite, sante, dom_box: str, ip_ct: str | None) -> str | None:
     """Validation stricte d'une déclaration ; rend la cause d'un refus (partagée par `set` et par `boot`)."""
     if not isinstance(nom, str) or not NOM_FRONTAL_RE.fullmatch(nom):
         return "nom de frontal invalide (^[a-z0-9-]{1,40}$)"
@@ -1833,13 +1847,15 @@ def erreur_frontal(nom, domaine, cible, unite, sante, dom_box: str, reseaux) -> 
         return f"domaine invalide : « {str(domaine)[:80]} »"
     if not dom_box or not domaine.endswith("." + dom_box) or "." in domaine[:-len(dom_box) - 1]:
         return f"domaine hors de la zone de la box ({dom_box or 'inconnue'}) : {domaine}"
-    m = re.fullmatch(r"(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})", cible or "") if isinstance(cible, str) else None
+    if label_reserve(domaine.split(".", 1)[0]):
+        return f"nom réservé à un service de la box : {domaine}"
+    m = re.fullmatch(r"([0-9]{1,3}(?:\.[0-9]{1,3}){3}):([0-9]{1,5})", cible, re.ASCII) if isinstance(cible, str) else None
     if not m or not _ipv4(m.group(1)) or _ipv4(m.group(1)) != m.group(1):
         return f"cible invalide (attendu : adresse IPv4:port) : « {str(cible)[:80]} »"
     if not 1024 <= int(m.group(2)) <= 65535:
         return f"port hors de 1024..65535 : {m.group(2)}"
-    if reseaux is not None and not _dans_le_pont(m.group(1), reseaux):
-        return f"adresse {m.group(1)} hors du sous-réseau du pont du conteneur"
+    if not ip_ct or m.group(1) != ip_ct:
+        return f"cible {m.group(1)} refusée : seule l'adresse du conteneur streamlit ({ip_ct or 'inconnue'}) est admise"
     if not isinstance(unite, str) or not UNITE_RE.fullmatch(unite) or unite.startswith(("-", ".")):
         return "unité invalide (^[a-z0-9@._-]{1,64}\\.service$)"
     if sante is not None and sante != "" and (not isinstance(sante, str) or not SANTE_RE.fullmatch(sante)
@@ -1914,6 +1930,9 @@ def _reprise(fichier: str | None, domaine: str, label: str) -> list[Path]:
             raise Refus(ETAT, f"{fichier} ne sert pas {domaine} — refusé, rien n'est modifié")
         if t.startswith(MARQUE_NGINX):
             raise Refus(ETAT, f"{fichier} est un vhost généré par streamlitctl — pas une reprise")
+        noms = [n for ligne in re.findall(r"^\s*server_name\s+([^;]*);", t, re.M) for n in ligne.split()]
+        if len(re.findall(r"^\s*server\s*\{", t, re.M)) != 1 or noms != [domaine]:
+            raise Refus(ETAT, f"{fichier} porte plus d'un bloc server ou d'un nom — reprise refusée, rien n'est modifié")
     if (ailleurs := nginx_sert_ailleurs(domaine, {nom_gere, fichier})):
         raise Refus(CONFLIT, f"{domaine} est aussi servi par {ailleurs} : un seul fichier peut être repris")
     return fichiers
@@ -1982,8 +2001,7 @@ def frontal_unites(conf: Path) -> list[str]:
 
 def verbe_frontal_poser(a, conf: Path, apps: Path) -> dict:
     dom_box = domaine_box()
-    reseaux = reseaux_pont(a.lxc_config)
-    if (err := erreur_frontal(a.nom, a.domaine, a.cible, a.unite, a.sante, dom_box, reseaux)):
+    if (err := erreur_frontal(a.nom, a.domaine, a.cible, a.unite, a.sante, dom_box, ip_du_conteneur(a.lxc_config))):
         raise Refus(ARGUMENT, err)
     with verrou():
         texte = _lire_conf(conf)
@@ -1996,6 +2014,14 @@ def verbe_frontal_poser(a, conf: Path, apps: Path) -> dict:
                 raise Refus(CONFLIT, f"{a.domaine} est publié par l'appli « {inst['app']} » : dépubliez-la d'abord")
         if nginx_etat(label, a.domaine, "") == "autre":
             raise Refus(CONFLIT, f"sites-enabled/streamlit-{label}.conf sert un autre nom")
+        routes = lire_routes()
+        route = routes.get(a.domaine)
+        if route is not None and not (isinstance(route, list) and len(route) == 2 and route[1] == PORT_NGINX):
+            raise Refus(CONFLIT, f"{a.domaine} a une route sbxwaf vers autre chose que le nginx local :{PORT_NGINX} "
+                                 f"({route}) — refusé")
+        ha = haproxy_table(a.domaine)
+        if ha is not None and ha[1] not in BACKENDS_NGINX:
+            raise Refus(CONFLIT, f"{a.domaine} est servi par HAProxy vers le backend « {ha[1]} » — refusé")
         repris = _reprise(a.reprendre, a.domaine, label)
         contenu = vhost_frontal(a.nom, a.domaine, a.cible)
         champs = {"domain": a.domaine, "cible": a.cible, "unite": a.unite, "sante": a.sante or "",
@@ -2003,7 +2029,7 @@ def verbe_frontal_poser(a, conf: Path, apps: Path) -> dict:
         nouveau = poser_cles(texte, f"frontaux.{a.nom}", champs)
         etat_nginx = nginx_etat(label, a.domaine, contenu)
         avert = []
-        if a.domaine not in lire_routes():
+        if route is None:
             avert.append(f"aucune route sbxwaf pour {a.domaine} : déclarez-la avec secubox-waf-route (non modifiée ici)")
         a_faire = nouveau != texte or etat_nginx != "conforme" or bool(repris)
         sortie = {"ok": True, "frontal": a.nom, "domaine": a.domaine, "cible": a.cible, "unite": a.unite,
@@ -2016,8 +2042,13 @@ def verbe_frontal_poser(a, conf: Path, apps: Path) -> dict:
         try:
             avant, sauvegarde = (None, None)
             if etat_nginx != "conforme" or repris:
-                avant, sauvegarde = _poser_frontal_nginx(label, contenu, repris,
-                                                         datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
+                try:
+                    avant, sauvegarde = _poser_frontal_nginx(label, contenu, repris,
+                                                             datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
+                except Refus as e:
+                    journal.ecrire(evenement="frontal-pose", frontal=a.nom, domaine=a.domaine,
+                                   resultat="echec-nginx", erreur=e.message[:300])
+                    raise
             try:
                 _ecrire_conf(conf, texte, nouveau)
             except (Refus, OSError) as e:
@@ -2034,6 +2065,18 @@ def verbe_frontal_poser(a, conf: Path, apps: Path) -> dict:
         sortie["applique"] = True
         sortie["sauvegarde"] = str(sauvegarde) if sauvegarde else None
         return sortie
+
+
+def verbe_frontal_boot(a, conf: Path, apps: Path) -> dict:
+    """Trace d'audit d'un démarrage de frontal par `boot` (le résultat vient du ctl, l'unité est revalidée)."""
+    if a.unite not in frontal_unites(conf):
+        raise Refus(ARGUMENT, "unité non déclarée")
+    journal = Journal("boot")
+    try:
+        journal.ecrire(evenement="frontal-boot", unite=a.unite, resultat=a.resultat)
+    finally:
+        journal.fermer()
+    return {"ok": True}
 
 
 def verbe_frontal_retirer(a, conf: Path, apps: Path) -> dict:
@@ -2139,6 +2182,9 @@ def _parseur() -> _Parseur:
     s.add_argument("--lxc-config", dest="lxc_config")
     s.add_argument("--par", type=_type_acteur, default="inconnu")
     s.add_argument("--apply", action="store_true")
+    s = sub.add_parser("frontal-boot")
+    s.add_argument("--unite", required=True)
+    s.add_argument("--resultat", required=True, choices=["actif", "deja-actif", "echec", "conteneur-indisponible"])
     s = sub.add_parser("frontal-retirer")
     s.add_argument("nom")
     s.add_argument("--par", type=_type_acteur, default="inconnu")
@@ -2171,6 +2217,8 @@ def main(argv: list[str] | None = None, entree: str | None = None) -> int:
             r = verbe_frontal_lister(a, conf, apps)
         elif a.verbe == "frontal-poser":
             r = verbe_frontal_poser(a, conf, apps)
+        elif a.verbe == "frontal-boot":
+            r = verbe_frontal_boot(a, conf, apps)
         elif a.verbe == "frontal-retirer":
             r = verbe_frontal_retirer(a, conf, apps)
         elif a.verbe == "depublier-anciennes":

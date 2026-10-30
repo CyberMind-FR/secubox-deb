@@ -16,7 +16,7 @@ from . import test_ctl_publication_3247 as _base
 box = _base.box  # fixture réutilisée (#3247)
 
 COUTURE = ["couture", "--domaine", "couture.gk2.secubox.in", "--cible", "10.100.0.50:8601",
-           "--unite", "atelier-partage-web.service", "--sante", "/sante"]
+           "--unite", "atelier-partage-web.service", "--sante", "/healthz"]
 
 
 def _exe(chemin, texte):
@@ -32,6 +32,7 @@ def _attach_unites(box):
 [ -f "{box.eveil}" ] || exit 1
 shift 2; shift
 echo "attach $*" >> "{box.journal}"
+if [ "$1" = systemctl ] && [ "$2" = is-system-running ]; then echo running; exit 0; fi
 if [ "$1" = systemctl ] && [ "$2" = is-active ]; then [ -f "{actif}" ] && exit 0; exit 3; fi
 if [ "$1" = systemctl ] && [ "$2" = start ]; then touch "{actif}"; exit 0; fi
 exit 0
@@ -47,7 +48,7 @@ def _sortie(r):
 def test_boot_avec_frontal_demarre_conteneur_puis_unite(box):
     _attach_unites(box)
     box.conf.write_text(box.conf.read_text() + '\n[frontaux.couture]\ndomain = "couture.gk2.secubox.in"\n'
-                        'cible = "10.100.0.50:8601"\nunite = "atelier-partage-web.service"\nsante = "/sante"\n'
+                        'cible = "10.100.0.50:8601"\nunite = "atelier-partage-web.service"\nsante = "/healthz"\n'
                         "enabled = true\n")
     r = box.ctl("boot")
     assert r.returncode == 0, r.stderr
@@ -124,7 +125,7 @@ def test_list_rend_les_frontaux(box):
     assert r.returncode == 0, r.stderr
     f = _sortie(r)["frontaux"]
     assert f == [{"nom": "couture", "domaine": "couture.gk2.secubox.in", "cible": "10.100.0.50:8601",
-                  "unite": "atelier-partage-web.service", "sante": "/sante", "enabled": True,
+                  "unite": "atelier-partage-web.service", "sante": "/healthz", "enabled": True,
                   "vhost": "conforme"}]
 
 
@@ -228,3 +229,133 @@ def test_nginx_t_en_echec_retour_arriere(box):
     assert not (box.nginx / "sites-enabled" / "streamlit-frontal-couture.conf").exists()
     assert not (box.nginx / "sites-available" / "streamlit-frontal-couture.conf").exists()
     assert "frontaux" not in box.conf.read_text()
+
+
+# ─── Relecture de sécurité (I1, I2, I3 et mineurs) ───────────────────────
+
+def test_i1_seule_l_adresse_du_conteneur_est_une_cible(box):
+    for ip in ("10.100.0.1", "10.100.0.51", "10.100.0.0", "10.100.0.255", "10.100.0.120"):
+        r = box.ctl("frontal", "set", *_remplace("--cible", f"{ip}:8601"), "--apply")
+        assert r.returncode != 0, ip
+    assert "frontaux" not in box.conf.read_text()
+
+
+def test_i2_domaine_reserve_refuse_meme_avec_reprise(box):
+    adm = box.nginx / "sites-available" / "admin.conf"
+    adm.write_text(MAIN.replace("couture", "admin"))
+    (box.nginx / "sites-enabled" / "admin.conf").symlink_to(adm)
+    r = box.ctl("frontal", "set", *_remplace("--domaine", "admin.gk2.secubox.in"), "--reprendre", "admin.conf",
+                "--apply")
+    assert r.returncode != 0
+    assert adm.read_text() == MAIN.replace("couture", "admin")
+    assert (box.nginx / "sites-enabled" / "admin.conf").is_symlink()
+    assert not box.audit.exists() or "frontal-pose" not in box.audit.read_text()
+
+
+def test_i2_domaine_route_ailleurs_refuse(box):
+    box.routes.write_text(json.dumps({"couture.gk2.secubox.in": ["10.100.0.120", 9000]}))
+    r = box.ctl("frontal", "set", *COUTURE, "--apply")
+    assert r.returncode != 0 and "frontaux" not in box.conf.read_text()
+
+
+def test_i2_domaine_haproxy_vers_autre_backend_refuse(box):
+    (box.journal.parent / "haproxy.toml").write_text(
+        '[vhosts.couture_gk2_secubox_in]\ndomain = "couture.gk2.secubox.in"\nbackend = "mail_backend"\n')
+    r = box.ctl("frontal", "set", *COUTURE, "--apply")
+    assert r.returncode != 0 and "frontaux" not in box.conf.read_text()
+
+
+def test_i2_cas_couture_legitime_accepte(box):
+    """couture.gk2 est déjà dans haproxy.toml (nginx_vhosts) et routé vers le nginx local :9080 : accepté."""
+    box.routes.write_text(json.dumps({"couture.gk2.secubox.in": ["192.168.1.200", 9080]}))
+    (box.journal.parent / "haproxy.toml").write_text(
+        '[vhosts.couture_gk2_secubox_in]\ndomain = "couture.gk2.secubox.in"\nbackend = "nginx_vhosts"\n')
+    _pose_main(box)
+    r = box.ctl("frontal", "set", *COUTURE, "--reprendre", "atelier-couture.conf", "--apply")
+    assert r.returncode == 0, r.stderr + r.stdout
+
+
+def _attach_lent(box, pas_prets=3, unite_ok=True):
+    bin_ = box.env["PATH"].split(":")[0]
+    cpt = box.journal.parent / "essais"
+    actif = box.journal.parent / "unite.active"
+    _exe(Path(bin_) / "lxc-attach", f"""#!/bin/bash
+[ -f "{box.eveil}" ] || exit 1
+shift 2; shift
+echo "attach $*" >> "{box.journal}"
+if [ "$1" = systemctl ] && [ "$2" = is-system-running ]; then
+  n=$(cat "{cpt}" 2>/dev/null || echo 0); echo $((n+1)) > "{cpt}"
+  [ "$n" -ge {pas_prets} ] && {{ echo running; exit 0; }}
+  exit 1
+fi
+if [ "$1" = systemctl ] && [ "$2" = is-active ]; then [ -f "{actif}" ] && exit 0; exit 3; fi
+if [ "$1" = systemctl ] && [ "$2" = start ]; then {"touch " + chr(34) + str(actif) + chr(34) if unite_ok else "true"}; exit 0; fi
+exit 0
+""")
+
+
+def _decl(box):
+    box.conf.write_text(box.conf.read_text() + '\n[frontaux.couture]\ndomain = "couture.gk2.secubox.in"\n'
+                        'cible = "10.100.0.50:8601"\nunite = "atelier-partage-web.service"\nenabled = true\n')
+
+
+def test_i3_boot_attend_systemd_du_conteneur_puis_audite(box):
+    box.env["SECUBOX_STREAMLIT_BOOT_PAUSE"] = "0"
+    _attach_lent(box, pas_prets=3)
+    _decl(box)
+    r = box.ctl("boot")
+    assert r.returncode == 0, r.stderr
+    j = box.journal.read_text()
+    assert j.count("is-system-running") >= 4
+    assert j.index("is-system-running") < j.index("systemctl start atelier-partage-web.service")
+    a = [json.loads(x) for x in box.audit.read_text().splitlines()]
+    assert a[-1]["evenement"] == "frontal-boot" and a[-1]["resultat"] == "actif"
+
+
+def test_i3_unite_qui_ne_demarre_pas_auditee_sans_bloquer(box):
+    box.env["SECUBOX_STREAMLIT_BOOT_PAUSE"] = "0"
+    _attach_lent(box, pas_prets=0, unite_ok=False)
+    _decl(box)
+    r = box.ctl("boot")
+    assert r.returncode == 0, r.stderr
+    a = [json.loads(x) for x in box.audit.read_text().splitlines()]
+    assert a[-1]["evenement"] == "frontal-boot" and a[-1]["resultat"] == "echec"
+
+
+def test_reprise_d_un_fichier_a_plusieurs_noms_refusee(box):
+    dispo = box.nginx / "sites-available" / "atelier-couture.conf"
+    dispo.write_text(MAIN.replace("server_name couture.gk2.secubox.in;",
+                                  "server_name couture.gk2.secubox.in autre.gk2.secubox.in;"))
+    (box.nginx / "sites-enabled" / "atelier-couture.conf").symlink_to(dispo)
+    r = box.ctl("frontal", "set", *COUTURE, "--reprendre", "atelier-couture.conf", "--apply")
+    assert r.returncode != 0 and dispo.exists()
+
+
+def test_reprise_d_un_fichier_a_deux_blocs_server_refusee(box):
+    dispo = box.nginx / "sites-available" / "atelier-couture.conf"
+    dispo.write_text(MAIN + MAIN.replace("couture", "autre"))
+    (box.nginx / "sites-enabled" / "atelier-couture.conf").symlink_to(dispo)
+    r = box.ctl("frontal", "set", *COUTURE, "--reprendre", "atelier-couture.conf", "--apply")
+    assert r.returncode != 0 and dispo.exists()
+
+
+def test_chiffres_unicode_refuses_par_le_module():
+    from api import publication as p
+    assert p.erreur_frontal("couture", "couture.gk2.secubox.in", "10.100.0.50:٨٦٠١", "a.service", "",
+                            "gk2.secubox.in", "10.100.0.50") is not None
+
+
+def test_nginx_t_en_echec_est_audite(box):
+    bin_ = box.env["PATH"].split(":")[0]
+    _exe(Path(bin_) / "nginx", '#!/bin/bash\necho "nginx: [emerg] faux" >&2; exit 1\n')
+    r = box.ctl("frontal", "set", *COUTURE, "--apply")
+    assert r.returncode != 0
+    a = json.loads(box.audit.read_text().splitlines()[-1])
+    assert a["evenement"] == "frontal-pose" and a["resultat"] == "echec-nginx"
+
+
+def test_garde_fou_bash(box):
+    for extra in (["--reprendre", "../x.conf"], ["--lxc-config", "/tmp/x"], ["--domaine", "x.gk2.secubox.in"],
+                  ["--par"]):
+        r = box.ctl("frontal", "set", *COUTURE, *extra)
+        assert r.returncode == 64, extra
