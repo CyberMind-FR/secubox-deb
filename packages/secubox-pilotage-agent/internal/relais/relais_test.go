@@ -11,13 +11,19 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -99,11 +105,15 @@ func nouveauBanc(t *testing.T, uid uint32) *banc {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Mkdir(filepath.Join(d, "etc-secubox-pilotage"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	r := &Relais{
 		Cle:               cle,
 		UIDAgent:          uid,
 		DossierSockets:    d,
-		DrapeauMainsLiees: filepath.Join(d, "mains-liees"),
+		DossierMainsLiees: filepath.Join(d, "etc-secubox-pilotage"),
+		UIDRoot:           uid0Test,
 		CheminAudit:       filepath.Join(d, "audit.log"),
 		NomBox:            func() string { return "gk5" },
 		Delai:             DelaiDefaut,
@@ -124,6 +134,9 @@ func nouveauBanc(t *testing.T, uid uint32) *banc {
 }
 
 func uidCourant() uint32 { return uint32(os.Getuid()) }
+
+// uid0Test : en test, le « root » attendu du drapeau des mains liées est le compte qui lance les tests.
+var uid0Test = uint32(os.Getuid())
 
 // appeler envoie une demande au relais et rend la réponse brute (vide si le relais a fermé sans répondre).
 func (b *banc) appelerBrut(t *testing.T, demande any) []byte {
@@ -373,7 +386,7 @@ func TestRelaisMainsLieesEnCours(t *testing.T) {
 		t.Fatalf("portée frappée %v", charge["pilotage"])
 	}
 	// Drapeau des mains liées posé sur la box : même une portée admin est ramenée à la lecture.
-	if err := os.WriteFile(b.r.DrapeauMainsLiees, nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(b.r.DossierMainsLiees, "mains-liees"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if rep := b.appeler(t, demande("POST", "/api/v1/demo/regler")); rep.Statut != 423 {
@@ -490,7 +503,7 @@ func TestRelaisRefuseUnCheminHorsAPI(t *testing.T) {
 		"/api/v1/demo/a\\b", "/api/v1/demo/a\nb", "/api/v1/demo/./status", "/api/v1/demo//status",
 		"/api/v1/demo/a b", "/api/v1/demo/%00", "/api/v1/demo/x#frag", "/api/v1//demo/status",
 		"/api/v1/de.mo/status", "/api/v1/demo/" + strings.Repeat("a", 5000), "//api/v1/demo/status",
-		"/api/v1/demo/%zz",
+		"/api/v1/demo/%zz", "/api/v1/demo/x?a=%00", "/api/v1/demo/x?%00=1", "/api/v1/demo/x?a=b%0Ac",
 	} {
 		if rep := b.appeler(t, demande("GET", chemin)); rep.Statut != 400 {
 			t.Fatalf("chemin %q : statut %d", chemin, rep.Statut)
@@ -586,4 +599,223 @@ func TestNomDeBox(t *testing.T) {
 			t.Fatalf("nomDeBox(%q) = %q, attendu %q", entree, n, attendu)
 		}
 	}
+}
+
+func TestRelaisCorpsMaxQuatreMio(t *testing.T) {
+	// R-L5-19 (I2) : 4 Mio au lieu des 8 du brief — deux appels simultanés tiennent sous MemoryMax=64M.
+	if CorpsMax != 4<<20 {
+		t.Fatalf("CorpsMax = %d", CorpsMax)
+	}
+}
+
+func TestRelaisLectureAvecCorpsRefusee(t *testing.T) {
+	b := nouveauBanc(t, uidCourant())
+	m := demarrerModule(t, b.dossier, "demo")
+	for _, methode := range []string{"GET", "HEAD"} {
+		d := demande(methode, "/api/v1/demo/status")
+		d["corps_b64"] = base64.StdEncoding.EncodeToString([]byte("x"))
+		if rep := b.appeler(t, d); rep.Statut != 400 {
+			t.Fatalf("%s avec corps : statut %d", methode, rep.Statut)
+		}
+	}
+	if m.appels() != 0 {
+		t.Fatal("module appelé")
+	}
+}
+
+func TestRelaisUidIllisibleAudite(t *testing.T) {
+	b := nouveauBanc(t, uidCourant())
+	a, c := net.Pipe() // pas une socket Unix : SO_PEERCRED impossible
+	defer c.Close()
+	b.r.traiter(a)
+	audit, _ := os.ReadFile(b.r.CheminAudit)
+	if !strings.Contains(string(audit), `"detail":"uid=?"`) {
+		t.Fatalf("audit : %s", audit)
+	}
+}
+
+// drapeau : (re)pose l'état du dossier root des mains liées pour un cas.
+func TestRelaisDrapeauMainsLieesDeConfiance(t *testing.T) {
+	cas := []struct {
+		nom   string
+		poser func(t *testing.T, dossier string, r *Relais)
+		liees bool
+	}{
+		{"absent", func(t *testing.T, d string, r *Relais) {}, false},
+		{"valide", func(t *testing.T, d string, r *Relais) {
+			_ = os.WriteFile(filepath.Join(d, "mains-liees"), nil, 0o644)
+		}, true},
+		{"non root", func(t *testing.T, d string, r *Relais) {
+			_ = os.WriteFile(filepath.Join(d, "mains-liees"), nil, 0o644)
+			r.UIDRoot = uid0Test + 1
+		}, true},
+		{"dossier non root, drapeau absent", func(t *testing.T, d string, r *Relais) { r.UIDRoot = uid0Test + 1 }, true},
+		{"lien symbolique", func(t *testing.T, d string, r *Relais) {
+			cible := filepath.Join(filepath.Dir(d), "ailleurs")
+			_ = os.WriteFile(cible, nil, 0o644)
+			_ = os.Symlink(cible, filepath.Join(d, "mains-liees"))
+		}, true},
+		{"droits larges", func(t *testing.T, d string, r *Relais) {
+			f := filepath.Join(d, "mains-liees")
+			_ = os.WriteFile(f, nil, 0o644)
+			_ = os.Chmod(f, 0o666)
+		}, true},
+		{"dossier inscriptible par tous", func(t *testing.T, d string, r *Relais) { _ = os.Chmod(d, 0o777) }, true},
+		{"dossier absent", func(t *testing.T, d string, r *Relais) { _ = os.Remove(d) }, true},
+		{"dossier lien symbolique", func(t *testing.T, d string, r *Relais) {
+			vrai := d + "-vrai"
+			_ = os.Mkdir(vrai, 0o755)
+			_ = os.Remove(d)
+			_ = os.Symlink(vrai, d)
+		}, true},
+		{"pas un fichier régulier", func(t *testing.T, d string, r *Relais) {
+			_ = os.Mkdir(filepath.Join(d, "mains-liees"), 0o755)
+		}, true},
+	}
+	for _, c := range cas {
+		t.Run(c.nom, func(t *testing.T) {
+			b := nouveauBanc(t, uidCourant())
+			m := demarrerModule(t, b.dossier, "demo")
+			c.poser(t, b.r.DossierMainsLiees, b.r)
+			rep := b.appeler(t, demande("POST", "/api/v1/demo/regler"))
+			if c.liees && rep.Statut != 423 {
+				t.Fatalf("mains liées attendues : statut %d", rep.Statut)
+			}
+			if !c.liees && (rep.Statut != 200 || m.appels() != 1) {
+				t.Fatalf("mains libres attendues : statut %d", rep.Statut)
+			}
+		})
+	}
+}
+
+func TestRelaisConnexionsEnAttenteBornees(t *testing.T) {
+	if connexionsMax != 8 {
+		t.Fatalf("connexionsMax = %d", connexionsMax)
+	}
+	b := nouveauBanc(t, uidCourant())
+	b.r.DelaiLecture = 400 * time.Millisecond
+	demarrerModule(t, b.dossier, "demo")
+	var oisives []net.Conn
+	for i := 0; i < connexionsMax; i++ {
+		c, err := net.Dial("unix", b.socket)
+		if err != nil {
+			t.Fatal(err)
+		}
+		oisives = append(oisives, c)
+	}
+	defer func() {
+		for _, c := range oisives {
+			c.Close()
+		}
+	}()
+	time.Sleep(50 * time.Millisecond)
+	debut := time.Now()
+	rep := b.appeler(t, demande("GET", "/api/v1/demo/status"))
+	if rep.Statut != 200 {
+		t.Fatalf("statut %d", rep.Statut)
+	}
+	// Servie seulement quand les connexions oisives ont expiré (DelaiLecture) : la neuvième a attendu.
+	if attente := time.Since(debut); attente < 300*time.Millisecond {
+		t.Fatalf("neuvième connexion servie en %v : aucune borne", attente)
+	}
+}
+
+// TestRelaisMemoireBornee : deux appels simultanés de taille maximale (4 Mio à l'aller ET au retour).
+// Mesure : le relais tourne SEUL dans un processus enfant (ce binaire de test relancé), avec GOGC=10 pour
+// que le tas alloué suive de près le tas vivant ; runtime.MemStats.HeapAlloc y est échantillonné toutes
+// les 200 µs. Le client et le module factice restent dans le parent : leurs tampons ne sont pas comptés.
+// Plafond 40 Mio : sous GOMEMLIMIT=48MiB / MemoryMax=64M de l'unité.
+func TestRelaisMemoireBornee(t *testing.T) {
+	d := court(t)
+	m := demarrerModule(t, d, "demo")
+	retour := make([]byte, CorpsMax)
+	m.reponse = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(retour)))
+		_, _ = w.Write(retour)
+	}
+	sock := filepath.Join(d, "pilotage-relais.sock")
+	enfant := exec.Command(os.Args[0], "-test.run=^TestAideRelaisEnfant$")
+	enfant.Env = append(os.Environ(), "SBX_RELAIS_ENFANT="+d, "GOGC=10")
+	entree, err := enfant.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sortie bytes.Buffer
+	enfant.Stdout = &sortie
+	if err := enfant.Start(); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 500; i++ {
+		if _, err := os.Stat(sock); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	b := &banc{socket: sock}
+	corps := base64.StdEncoding.EncodeToString(make([]byte, CorpsMax))
+	var g sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		g.Add(1)
+		go func() {
+			defer g.Done()
+			dm := demande("POST", "/api/v1/demo/regler")
+			dm["corps_b64"] = corps
+			if rep := b.appeler(t, dm); rep.Statut != 200 || len(rep.CorpsB64) != len(corps) {
+				t.Errorf("statut %d, corps %d", rep.Statut, len(rep.CorpsB64))
+			}
+		}()
+	}
+	g.Wait()
+	entree.Close()
+	if err := enfant.Wait(); err != nil {
+		t.Fatalf("enfant : %v\n%s", err, sortie.String())
+	}
+	var pic uint64
+	if _, err := fmt.Sscanf(sortie.String()[strings.Index(sortie.String(), "PIC=")+4:], "%d", &pic); err != nil {
+		t.Fatalf("sortie de l'enfant : %q", sortie.String())
+	}
+	t.Logf("pic de tas du relais seul : %.1f Mio", float64(pic)/(1<<20))
+	if pic > 40<<20 {
+		t.Fatalf("pic de tas %.1f Mio > 40 Mio", float64(pic)/(1<<20))
+	}
+}
+
+// TestAideRelaisEnfant : le relais seul, pour TestRelaisMemoireBornee (sans effet hors de ce test).
+func TestAideRelaisEnfant(t *testing.T) {
+	d := os.Getenv("SBX_RELAIS_ENFANT")
+	if d == "" {
+		t.Skip("processus enfant de TestRelaisMemoireBornee seulement")
+	}
+	_, cle, _ := ed25519.GenerateKey(nil)
+	dossierMains := filepath.Join(d, "etc-secubox-pilotage")
+	_ = os.Mkdir(dossierMains, 0o755)
+	r := &Relais{Cle: cle, UIDAgent: uidCourant(), DossierSockets: d, DossierMainsLiees: dossierMains,
+		UIDRoot: uid0Test, NomBox: func() string { return "gk5" }, Journal: log.New(io.Discard, "", 0)}
+	ln, err := net.Listen("unix", filepath.Join(d, "pilotage-relais.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, fin := context.WithCancel(context.Background())
+	go func() { _ = r.Servir(ctx, ln) }()
+	var pic atomic.Uint64
+	arret := make(chan struct{})
+	go func() {
+		var ms runtime.MemStats
+		for {
+			select {
+			case <-arret:
+				return
+			default:
+			}
+			runtime.ReadMemStats(&ms)
+			if ms.HeapAlloc > pic.Load() {
+				pic.Store(ms.HeapAlloc)
+			}
+			time.Sleep(200 * time.Microsecond)
+		}
+	}()
+	_, _ = io.Copy(io.Discard, os.Stdin) // le parent ferme l'entrée quand les appels sont finis
+	close(arret)
+	fin()
+	fmt.Printf("PIC=%d\n", pic.Load())
 }

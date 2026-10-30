@@ -6,6 +6,7 @@
 package relais
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/ed25519"
@@ -28,17 +29,25 @@ import (
 )
 
 const (
-	// CorpsMax : 8 Mio dans les deux sens (413 au-delà).
-	CorpsMax = 8 << 20
+	// CorpsMax : 4 Mio dans les deux sens (413 au-delà). ÉCART AU BRIEF (8 Mio), R-L5-19 : deux appels
+	// simultanés de taille maximale doivent tenir sous MemoryMax=64M (GOMEMLIMIT=48MiB) ; mesuré par
+	// TestRelaisMemoireBornee.
+	CorpsMax = 4 << 20
 	// DelaiDefaut : délai d'un appel au module.
 	DelaiDefaut = 30 * time.Second
 	// tailleDemandeMax : le JSON d'une demande (corps en base64 + champs).
 	tailleDemandeMax = (CorpsMax+2)/3*4 + 64<<10
-	// appelsSimultanes : deux appels à la fois au plus (mémoire d'une box légère : ~40 Mio par appel au pire).
-	appelsSimultanes  = 2
-	longueurCheminMax = 4096
-	nombreEntetesMax  = 64
-	longueurEnteteMax = 8192
+	// appelsSimultanes : deux appels à la fois au plus (mémoire d'une box légère).
+	appelsSimultanes = 2
+	// connexionsMax : connexions acceptées à la fois (en cours ou en attente) ; au-delà, elles restent dans la
+	// file du noyau, Accept n'est plus appelé.
+	connexionsMax = 8
+	// DelaiLectureDefaut : une demande doit arriver en entier dans ce délai (une connexion oisive ne garde pas
+	// sa place).
+	DelaiLectureDefaut = 10 * time.Second
+	longueurCheminMax  = 4096
+	nombreEntetesMax   = 64
+	longueurEnteteMax  = 8192
 	// EnteteRelais : posé par le relais seulement ; nginx, HAProxy et l'agrégateur l'effacent.
 	EnteteRelais = "X-SecuBox-Pilotage-Relais"
 	valeurRelais = "sbx-pilotage-relais"
@@ -57,27 +66,54 @@ type Demande struct {
 	VersionPage string            `json:"version_page"`
 }
 
-// Reponse : ce que le relais rend à l'agent, puis ferme la connexion.
+// Reponse : ce que le relais rend à l'agent, puis ferme la connexion. Écrite par ecrireReponse, le corps
+// encodé en base64 AU FIL de l'écriture (jamais une seconde copie en mémoire).
 type Reponse struct {
 	Statut   int               `json:"statut"`
 	Entetes  map[string]string `json:"entetes"`
 	CorpsB64 string            `json:"corps_b64"`
+
+	corps []byte
+}
+
+// ecrireReponse : {"statut":…,"entetes":{…},"corps_b64":"…"} puis saut de ligne.
+func ecrireReponse(w io.Writer, rep Reponse) error {
+	bw := bufio.NewWriterSize(w, 64<<10)
+	entetes, err := json.Marshal(rep.Entetes)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(bw, `{"statut":%d,"entetes":%s,"corps_b64":"`, rep.Statut, entetes)
+	enc := base64.NewEncoder(base64.StdEncoding, bw)
+	if _, err := enc.Write(rep.corps); err != nil {
+		return err
+	}
+	if err := enc.Close(); err != nil {
+		return err
+	}
+	bw.WriteString("\"}\n")
+	return bw.Flush()
 }
 
 // Relais : réglages du service (voir cmd/sbx-pilotage-relais pour les valeurs de production).
 type Relais struct {
-	Cle               ed25519.PrivateKey
-	UIDAgent          uint32 // seul compte admis (SO_PEERCRED) : secubox-pilotage-agent
-	DossierSockets    string // /run/secubox
-	DrapeauMainsLiees string // /etc/secubox/pilotage/mains-liees (projection du ctl root)
+	Cle            ed25519.PrivateKey
+	UIDAgent       uint32 // seul compte admis (SO_PEERCRED) : secubox-pilotage-agent
+	DossierSockets string // /run/secubox
+	// DossierMainsLiees : /etc/secubox-pilotage (root:root 0755, postinst) ; le ctl root y projette
+	// `mains-liees`. JAMAIS /etc/secubox/pilotage (compte partagé secubox, R-L5-19).
+	DossierMainsLiees string
+	UIDRoot           uint32 // propriétaire exigé du dossier et du drapeau (0 en production)
+	DelaiLecture      time.Duration
 	CheminAudit       string // /var/log/secubox/audit.log (ajout seul, jamais créé ici)
 	NomBox            func() string
 	Maintenant        func() time.Time
 	Delai             time.Duration
 	Journal           *log.Logger
 
-	once sync.Once
-	sem  chan struct{}
+	once       sync.Once
+	sem        chan struct{}
+	connexions chan struct{}
 }
 
 // methodesPermises : ni OPTIONS, ni TRACE, ni CONNECT ; la casse est exacte.
@@ -115,6 +151,10 @@ func refuser(statut int, motif string) *refus { return &refus{statut: statut, mo
 func (r *Relais) init() {
 	r.once.Do(func() {
 		r.sem = make(chan struct{}, appelsSimultanes)
+		r.connexions = make(chan struct{}, connexionsMax)
+		if r.DelaiLecture <= 0 {
+			r.DelaiLecture = DelaiLectureDefaut
+		}
 		if r.Journal == nil {
 			r.Journal = log.New(os.Stderr, "", 0)
 		}
@@ -138,8 +178,15 @@ func (r *Relais) Servir(ctx context.Context, ln net.Listener) error {
 		ln.Close()
 	}()
 	for {
+		// Borne des connexions : la place est prise AVANT Accept, rendue à la fermeture.
+		select {
+		case r.connexions <- struct{}{}:
+		case <-ctx.Done():
+			return nil
+		}
 		c, err := ln.Accept()
 		if err != nil {
+			<-r.connexions
 			if ctx.Err() != nil {
 				return nil
 			}
@@ -149,7 +196,10 @@ func (r *Relais) Servir(ctx context.Context, ln net.Listener) error {
 			}
 			return err
 		}
-		go r.traiter(c)
+		go func() {
+			defer func() { <-r.connexions }()
+			r.traiter(c)
+		}()
 	}
 }
 
@@ -178,18 +228,23 @@ func uidPair(c net.Conn) (uint32, error) {
 
 func (r *Relais) traiter(c net.Conn) {
 	defer c.Close()
+	r.init()
 	uid, err := uidPair(c)
 	if err != nil || uid != r.UIDAgent {
 		// Fermeture sans un octet de réponse.
-		r.auditer(nil, &refus{motif: "compte du pair refuse"}, fmt.Sprintf("uid=%d", uid))
+		detail := "uid=?"
+		if err == nil {
+			detail = fmt.Sprintf("uid=%d", uid)
+		}
+		r.auditer(nil, &refus{motif: "compte du pair refuse"}, detail)
 		return
 	}
-	_ = c.SetDeadline(time.Now().Add(r.Delai + 30*time.Second))
 	r.sem <- struct{}{}
 	defer func() { <-r.sem }()
-	_ = c.SetDeadline(time.Now().Add(r.Delai + 30*time.Second))
+	_ = c.SetReadDeadline(time.Now().Add(r.DelaiLecture))
+	_ = c.SetWriteDeadline(time.Now().Add(r.DelaiLecture + r.Delai + 30*time.Second))
 	rep := r.executer(c)
-	_ = json.NewEncoder(c).Encode(rep)
+	_ = ecrireReponse(c, rep)
 }
 
 // lecteurCompte : compte les octets lus, pour distinguer « trop long » (413) de « mal formé » (400).
@@ -206,8 +261,7 @@ func (l *lecteurCompte) Read(p []byte) (int, error) {
 
 func reponseRefus(rf *refus) Reponse {
 	corps, _ := json.Marshal(map[string]string{"detail": rf.motif})
-	return Reponse{Statut: rf.statut, Entetes: map[string]string{"Content-Type": "application/json"},
-		CorpsB64: base64.StdEncoding.EncodeToString(corps)}
+	return Reponse{Statut: rf.statut, Entetes: map[string]string{"Content-Type": "application/json"}, corps: corps}
 }
 
 func (r *Relais) executer(c io.Reader) Reponse {
@@ -258,8 +312,17 @@ func analyserChemin(chemin string) (module, reste, requete string, rf *refus) {
 	}
 	p, requete, _ := strings.Cut(chemin, "?")
 	if requete != "" {
-		if _, err := url.ParseQuery(requete); err != nil {
+		valeurs, err := url.ParseQuery(requete)
+		if err != nil {
 			return "", "", "", invalide
+		}
+		// %00 et tout caractère de contrôle, même encodés, refusés dans la requête aussi.
+		for k, vs := range valeurs {
+			for _, v := range append(vs, k) {
+				if strings.IndexFunc(v, func(c rune) bool { return c < 0x20 || c == 0x7f }) >= 0 {
+					return "", "", "", invalide
+				}
+			}
 		}
 	}
 	module, reste, ok := strings.Cut(strings.TrimPrefix(p, prefixeAPI), "/")
@@ -284,11 +347,34 @@ func analyserChemin(chemin string) (module, reste, requete string, rf *refus) {
 	return module, "/" + reste, requete, nil
 }
 
-// mainsLiees : le drapeau du ctl root est présent. Dans le doute (illisible), mains liées : le
-// défaut sûr ne fait que retirer l'écriture.
+// mainsLiees : drapeau `mains-liees` projeté par le ctl root dans DossierMainsLiees. Dossier ouvert
+// O_DIRECTORY|O_NOFOLLOW, drapeau par dir_fd O_NOFOLLOW ; l'un et l'autre au compte UIDRoot, sans
+// écriture pour le groupe ni les autres, drapeau régulier. Mains LIBRES seulement si le dossier est de
+// confiance et le drapeau absent ; tout le reste (dossier absent ou douteux, drapeau douteux) vaut
+// « mains liées » : le défaut sûr ne fait que retirer l'écriture (R-L5-19).
 func (r *Relais) mainsLiees() bool {
-	_, err := os.Lstat(r.DrapeauMainsLiees)
-	return !errors.Is(err, fs.ErrNotExist)
+	dir, err := syscall.Open(r.DossierMainsLiees, syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		return true
+	}
+	defer syscall.Close(dir)
+	var st syscall.Stat_t
+	if syscall.Fstat(dir, &st) != nil || st.Uid != r.UIDRoot || st.Mode&0o022 != 0 {
+		return true
+	}
+	fd, err := syscall.Openat(dir, "mains-liees", syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
+	if errors.Is(err, syscall.ENOENT) {
+		return false
+	}
+	if err != nil {
+		return true
+	}
+	defer syscall.Close(fd)
+	// Présent : mains liées, quel que soit son état ; les contrôles ne servent qu'à le dire au journal.
+	if syscall.Fstat(fd, &st) != nil || st.Mode&syscall.S_IFMT != syscall.S_IFREG || st.Uid != r.UIDRoot || st.Mode&0o022 != 0 {
+		r.Journal.Printf("drapeau des mains liées douteux dans %s : traité comme posé", r.DossierMainsLiees)
+	}
+	return true
 }
 
 // socketModule : le chemin de la socket du module si c'en est une (Lstat : jamais un lien).
@@ -335,8 +421,12 @@ func (r *Relais) relayer(d *Demande) (Reponse, *refus) {
 		return Reponse{}, refuser(http.StatusRequestEntityTooLarge, "corps trop long")
 	}
 	corps, err := base64.StdEncoding.DecodeString(d.CorpsB64)
+	d.CorpsB64 = "" // la forme base64 n'est plus retenue pendant l'appel
 	if err != nil {
 		return Reponse{}, refuser(http.StatusBadRequest, "corps_b64 invalide")
+	}
+	if len(corps) > 0 && (d.Methode == "GET" || d.Methode == "HEAD") {
+		return Reponse{}, refuser(http.StatusBadRequest, "corps refuse pour une lecture")
 	}
 	if len(corps) > CorpsMax {
 		return Reponse{}, refuser(http.StatusRequestEntityTooLarge, "corps trop long")
@@ -425,7 +515,14 @@ func (r *Relais) appeler(sock, methode, reste, requete string, entetes http.Head
 		return Reponse{}, refuser(http.StatusBadGateway, "module injoignable")
 	}
 	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, CorpsMax+1))
+	// Tampon dimensionné d'après Content-Length quand il est connu (pas de doublement en fin de lecture).
+	capacite := int64(64 << 10)
+	if resp.ContentLength >= 0 && resp.ContentLength <= CorpsMax {
+		capacite = resp.ContentLength + bytes.MinRead + 1
+	}
+	tampon := bytes.NewBuffer(make([]byte, 0, capacite))
+	_, err = tampon.ReadFrom(io.LimitReader(resp.Body, CorpsMax+1))
+	b := tampon.Bytes()
 	if err != nil {
 		var ne net.Error
 		if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()) {
@@ -442,7 +539,7 @@ func (r *Relais) appeler(sock, methode, reste, requete string, entetes http.Head
 			out[k] = strings.Join(v, ", ")
 		}
 	}
-	return Reponse{Statut: resp.StatusCode, Entetes: out, CorpsB64: base64.StdEncoding.EncodeToString(b)}, nil
+	return Reponse{Statut: resp.StatusCode, Entetes: out, corps: b}, nil
 }
 
 // ascii : texte venu du client, rendu sûr pour une ligne de journal (ASCII imprimable, borné).

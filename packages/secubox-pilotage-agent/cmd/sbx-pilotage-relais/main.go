@@ -35,7 +35,7 @@ const (
 	cheminPublique  = "/etc/secubox-pilotage/relais.pub"
 	compteAgent     = "secubox-pilotage-agent"
 	dossierSockets  = "/run/secubox"
-	drapeauMains    = "/etc/secubox/pilotage/mains-liees"
+	dossierMains    = "/etc/secubox-pilotage" // mains-liees projeté par le ctl root (R-L5-19)
 	cheminAudit     = "/var/log/secubox/audit.log"
 	premierFdSystem = 3
 )
@@ -73,7 +73,7 @@ func main() {
 	ctx, arret := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer arret()
 	r := &relais.Relais{
-		Cle: cle, UIDAgent: uid, DossierSockets: dossierSockets, DrapeauMainsLiees: drapeauMains,
+		Cle: cle, UIDAgent: uid, DossierSockets: dossierSockets, DossierMainsLiees: dossierMains, UIDRoot: 0,
 		CheminAudit: cheminAudit, NomBox: relais.NomBoxLocale, Delai: relais.DelaiDefaut,
 	}
 	log.Printf("relais %s : prêt (box %q, agent uid %d)", version, relais.NomBoxLocale(), uid)
