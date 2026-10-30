@@ -13,9 +13,10 @@ nginx (vhost déclaré par `haproxyctl`, route par `secubox-waf-route` ; jamais 
   /                 pages `www/` des versions que la box déclare (Device.X_SECUBOX_Packages), extraites par
                     secubox-pilotage-www sous /var/lib/secubox-pilotage-pages/www/<paquet>/<version>/<module>/ ;
                     CSP stricte, nosniff, X-Frame-Options, fichiers en point refusés, liens seulement de même propriétaire
-  /api/v1/auth/     connexion avec les identifiants DU MAÎTRE, par le contrôleur (`/vhost/auth/…`) : le jeton du maître ne
-                    quitte jamais le contrôleur ; la page reçoit un jeton À PORTÉE (`scope = pilotage-vhost`,
-                    `pilotage_vhost = <box>`), refusé par toutes les gardes du maître (`_is_scope_token`), reconnu ici seul
+  /pilotage-connexion/   page statique du paquet (aucun champ d'identifiants) : reçoit en fragment un CODE à usage unique émis
+                    par l'administration du MAÎTRE (où l'administrateur s'est authentifié, 2FA comprise) et l'échange
+  /api/v1/auth/echanger  code (≤ 60 s, lié à la box, à l'administrateur et à sa session) → jeton À PORTÉE du vhost (clé dérivée,
+                    `aud = admin.<box>`, `iss` propre), refusé par toutes les gardes du maître (R-L5-25 C1c, M7)
   /api/v1/<module>/ → /run/secubox/pilotage.sock `/relais/<box>/api/v1/<module>/…`, avec `X-SecuBox-Version-Page:
                     <paquet>=<version>` posé par nginx (409 si la box a changé de version depuis)
 
@@ -24,9 +25,12 @@ Ce module est PUR (aucune E/S hors `ecrire_plan`) : il est importé par le servi
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import re
+import secrets
 import tempfile
 import time
 from pathlib import Path
@@ -49,13 +53,25 @@ ENTETE_VERSION = "X-SecuBox-Version-Page"
 ENTETE_BOX = "X-SecuBox-Pilotage-Box"
 SCOPE = "pilotage-vhost"
 RECLAMATION = "pilotage_vhost"
+EMETTEUR = "secubox-pilotage-vhost"
+CODE_TTL_S = 60
+CODES_MAX = 1024
+RACINE_CONNEXION = "/usr/share/secubox/pilotage/vhost-www/pilotage-connexion/"
+RE_RETOUR = re.compile(r"/[a-z0-9][a-z0-9_-]{0,63}/")
+CSP_API = "sandbox; default-src 'none'"
 SESSION_MAX_S = 4 * 3600              # le jeton à portée vit au plus 4 h (et jamais plus que la session du maître)
 CORPS_MAX = 4 << 20                   # comme le relais et le canal (R-L5-19)
 DEBIT_PAR_MINUTE = 300                # requêtes relayées par (administrateur, box) et par minute
 
-# CSP : rien d'autre que l'origine du vhost (les pages portées sont en fichiers .js/.css, sans script en ligne).
-CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; "
-       "manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+
+
+def csp_pages(box: str, modules: Iterable[str]) -> str:
+    """CSP des pages (R-L5-25 C1b) : scripts et styles limités aux chemins des pages servies (`/<module>/`, `/pilotage-connexion/`),
+    jamais `/api/` (une réponse de la box ne peut pas devenir un script de cette origine)."""
+    base = f"https://{domaine(box)}"
+    srcs = " ".join(f"{base}/{m}/" for m in [*sorted(modules), "pilotage-connexion"])
+    return (f"default-src 'none'; script-src {srcs}; style-src {srcs}; img-src 'self' data:; font-src 'self'; connect-src 'self'; "
+            "manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 
 
 def domaine(box: str) -> str:
@@ -180,7 +196,7 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
         # tout lien absolu ou contenant « .. »
         "    disable_symlinks if_not_owner from=$document_root;",
         "    autoindex off;",
-        f"    add_header Content-Security-Policy {_q_csp()} always;",
+        f"    add_header Content-Security-Policy \"{csp_pages(box, vus)}\" always;",
         "    add_header X-Content-Type-Options \"nosniff\" always;",
         "    add_header X-Frame-Options \"DENY\" always;",
         "    add_header Referrer-Policy \"no-referrer\" always;",
@@ -189,9 +205,14 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
         "    # Fichiers et dossiers en point (manifestes .<version>.json, .vu.json, résidus .tmp-/.old-) : jamais servis.",
         "    location ~ /\\. { return 404; }",
         "",
-        "    # Connexion : identifiants du maître, jeton à portée de CE vhost rendu par le contrôleur.",
-        "    location ^~ /api/v1/auth/ {",
-        f"        proxy_pass http://unix:{socket}:/vhost/auth/;",
+        "    # Connexion : AUCUNE saisie d'identifiants ici ; un code émis par l'administration du maître est échangé (R-L5-25 C1c).",
+        "    location ^~ /pilotage-connexion/ {",
+        f"        alias {RACINE_CONNEXION};",
+        "        index index.html;",
+        "        location ~ /\\. { return 404; }",
+        "    }",
+        "    location = /api/v1/auth/echanger {",
+        f"        proxy_pass http://unix:{socket}:/vhost/auth/echanger;",
     ]
     L += _entetes_proxy(box, None)
     L += ["    }", ""]
@@ -213,17 +234,13 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
     return "\n".join(L)
 
 
-def _q_csp() -> str:
-    return '"' + CSP + '"'
-
-
 def _entetes_proxy(box: str, version_page: Optional[str]) -> list:
     """Pas le snippet secubox-proxy.conf : il ajoute `Access-Control-Allow-Origin *`. En-têtes du client effacés : cookie (le
     maître n'en lit aucun ici), marques X-SecuBox-* (LAN, relais, tunnel), puis les nôtres posés."""
     L = ["        proxy_http_version 1.1;",
          "        proxy_set_header Host $host;",
          "        proxy_set_header X-Real-IP $remote_addr;",
-         "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;",
+         "        proxy_set_header X-Forwarded-For $remote_addr;",   # I3 : jamais la chaîne fournie par le client
          "        proxy_set_header X-Forwarded-Proto https;",
          "        proxy_set_header Connection \"\";",
          "        proxy_set_header Cookie \"\";",
@@ -234,6 +251,13 @@ def _entetes_proxy(box: str, version_page: Optional[str]) -> list:
          f"        proxy_set_header {ENTETE_BOX} {_q(box)};",
          f"        proxy_set_header {ENTETE_VERSION} {_q(version_page) if version_page else chr(34) * 2};",
          "        proxy_hide_header Set-Cookie;",
+         "        proxy_hide_header Content-Disposition;",
+         # C1a : sous /api/, rien n'est jamais exécutable ni affichable comme document de cette origine
+         f"        add_header Content-Security-Policy \"{CSP_API}\" always;",
+         "        add_header X-Content-Type-Options \"nosniff\" always;",
+         "        add_header X-Frame-Options \"DENY\" always;",
+         "        add_header Referrer-Policy \"no-referrer\" always;",
+         "        add_header Cache-Control \"no-store\" always;",
          "        proxy_buffering off;",
          "        proxy_read_timeout 60s;"]
     return L
@@ -241,29 +265,61 @@ def _entetes_proxy(box: str, version_page: Optional[str]) -> list:
 
 # --- jeton à portée du vhost ----------------------------------------------------------------------------------------
 
+def cle_vhost(secret: str) -> str:
+    """Clé PROPRE aux jetons des vhosts (M7), dérivée de la clé du maître : un jeton du vhost n'est jamais une signature valide pour
+    les gardes du maître, et inversement."""
+    return hmac.new(secret.encode("utf-8"), b"secubox-pilotage/vhost/v1", hashlib.sha256).hexdigest()
+
+
 def frapper_jeton(payload_maitre: dict, box: str, secret: str, horloge: Callable[[], float] = time.time) -> tuple:
     """Jeton de la page de `box`, tiré d'une session du maître DÉJÀ VÉRIFIÉE : même `sub`, même `jti` (la déconnexion ou la
-    révocation de la session du maître le tue aussi), `exp` ≤ celle du maître et ≤ 4 h. `scope` le rend inutilisable par
-    toutes les gardes du maître (`_is_scope_token`). Rend (jeton, expires_in)."""
+    révocation de la session du maître le tue aussi), `exp` ≤ celle du maître et ≤ 4 h ; clé dérivée, `aud = admin.<box>`,
+    `iss` propre, `scope` en plus. Rend (jeton, expires_in)."""
     import jwt
-    domaine(box)
+    dom = domaine(box)
     maintenant = int(horloge())
     exp = min(int(payload_maitre["exp"]), maintenant + SESSION_MAX_S)
     corps = {"sub": payload_maitre["sub"], "jti": payload_maitre["jti"], "iat": maintenant, "exp": exp, "scope": SCOPE,
-             RECLAMATION: box}
-    return jwt.encode(corps, secret, algorithm="HS256"), max(0, exp - maintenant)
+             RECLAMATION: box, "aud": dom, "iss": EMETTEUR}
+    return jwt.encode(corps, cle_vhost(secret), algorithm="HS256"), max(0, exp - maintenant)
 
 
 def lire_jeton(jeton: str, box: str, secret: str) -> Optional[dict]:
-    """Signature, échéance, portée et box ; None sinon. La session (`jti`) et le rôle sont vérifiés par l'appelant."""
+    """Signature (clé dérivée), échéance, audience, émetteur, portée et box ; None sinon. La session (`jti`) et le rôle sont
+    vérifiés par l'appelant."""
     import jwt
     try:
-        p = jwt.decode(jeton, secret, algorithms=["HS256"], options={"require": ["exp", "sub", "jti"]})
+        p = jwt.decode(jeton, cle_vhost(secret), algorithms=["HS256"], audience=domaine(box), issuer=EMETTEUR,
+                       options={"require": ["exp", "sub", "jti", "aud", "iss"]})
     except Exception:  # noqa: BLE001 — tout échec de décodage : pas de session
         return None
     if p.get("scope") != SCOPE or p.get(RECLAMATION) != box or not isinstance(p.get("sub"), str):
         return None
     return p
+
+
+class Codes:
+    """Codes à usage unique de connexion au vhost (R-L5-25 C1c), en mémoire du contrôleur : ≤ 60 s, liés à la box, à
+    l'administrateur et à sa session (`jti`), consommés à la PREMIÈRE présentation (même refusée)."""
+
+    def __init__(self, horloge: Callable[[], float] = time.time, ttl_s: float = CODE_TTL_S) -> None:
+        self.horloge, self.ttl_s = horloge, ttl_s
+        self._codes: dict = {}
+
+    def emettre(self, box: str, session: dict) -> str:
+        t = self.horloge()
+        self._codes = {k: v for k, v in self._codes.items() if t - v["cree"] < self.ttl_s}
+        if len(self._codes) >= CODES_MAX:
+            raise OverflowError("trop de codes en attente")
+        code = secrets.token_urlsafe(32)
+        self._codes[code] = {"box": box, "sub": session["sub"], "jti": session["jti"], "exp": session["exp"], "cree": t}
+        return code
+
+    def consommer(self, code, box: str) -> Optional[dict]:
+        e = self._codes.pop(code, None) if isinstance(code, str) else None
+        if e is None or e["box"] != box or self.horloge() - e["cree"] >= self.ttl_s:
+            return None
+        return e
 
 
 class Debit:

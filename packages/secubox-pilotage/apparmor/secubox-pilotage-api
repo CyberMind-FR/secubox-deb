@@ -48,8 +48,10 @@
   # Assistant de jonction (L2 tâche 6, R-L2-35) : le service y écrit un nom et lit le code ; il n'exécute rien lui-même.
   /run/secubox-pilotage/invite.sock rw,
 
-  # L5 tâche 5 : connexion au vhost d'une box légère avec les identifiants du maître, relayée à secubox-auth (sa socket seule).
-  /run/secubox/auth.sock rw,
+  # L5 tâche 5 (I6) : modules d'une version de paquet servie aux box légères (arbre root), lecture des dossiers seule.
+  /var/lib/secubox-pilotage-pages/www/ r,
+  /var/lib/secubox-pilotage-pages/www/*/ r,
+  /var/lib/secubox-pilotage-pages/www/*/*/ r,
 
   # Journal d'audit commun (le fichier appartient à secubox ; ACL au compte du service ; ajout seul `a`, donc jamais ouvert avec O_CREAT ni tronqué).
   /var/log/secubox/audit.log a,

@@ -48,7 +48,7 @@ def ranger(s, box, vals, agent="0.4.2"):
 
 
 class Monde:
-    def __init__(self, tmp_path, monkeypatch, sub="alice", admin=True, auth_rep=None):
+    def __init__(self, tmp_path, monkeypatch, sub="alice", admin=True):
         monkeypatch.setenv("SECUBOX_JWT_SECRET", SECRET)
         monkeypatch.setattr(auth, "_secret", lambda: SECRET)
         self.sessions = {"j1"}
@@ -62,11 +62,17 @@ class Monde:
         self.lignes = []
         self.audit_ko = False
         self.inv = Inventaire(self.f, self.s, horloge=self.h)
-        self.appels_auth = []
-        self.auth_rep = auth_rep or (200, {"access_token": self.jeton_maitre(sub), "token_type": "bearer", "expires_in": 86400})
-        self.app = creer_app_admin(self.s, self.f, self.inv, self.audit, horloge=self.h, appeler_auth=self.appeler_auth,
-                                   maitre="gk2", debit=V.Debit(par_minute=5))
+        # pages extraites (arbre lu par le contrôleur pour I6 : modules d'un paquet servi)
+        self.pages = tmp_path / "pages"
+        for paquet, version, mods in (("secubox-system", "1.4.0-1~trixie1", ("system",)),
+                                      ("secubox-dns", "2.0.0-1~trixie1", ("dns", "dns-provider"))):
+            for m in mods:
+                (self.pages / paquet / version / m).mkdir(parents=True)
+        self.app = creer_app_admin(self.s, self.f, self.inv, self.audit, horloge=self.h, maitre="gk2", debit=V.Debit(par_minute=5),
+                                   racine_pages=self.pages)
         self.sub = sub
+        self.session = {"sub": sub, "jti": "j1", "exp": int(time.time()) + 86400}
+        self.app.dependency_overrides[auth.require_jwt] = lambda: self.session
 
     def jeton_maitre(self, sub, jti="j1", **kw):
         return pyjwt.encode({"sub": sub, "jti": jti, "iat": int(time.time()), "exp": int(time.time()) + 86400, **kw}, SECRET,
@@ -74,10 +80,6 @@ class Monde:
 
     def jeton_vhost(self, box="gk5", sub=None):
         return V.frapper_jeton({"sub": sub or self.sub, "jti": "j1", "exp": int(time.time()) + 86400}, box, SECRET)[0]
-
-    async def appeler_auth(self, etape, corps, entetes):
-        self.appels_auth.append((etape, corps, dict(entetes)))
-        return self.auth_rep
 
     def audit(self, evenement, champs):
         if self.audit_ko:
@@ -94,9 +96,12 @@ class Monde:
                 if rq["type"] != "HTTP":
                     continue
                 recus.append(rq["body"])
-                st, corps = reponses.pop(0) if reponses else (200, b'{"ok":true}')
+                st, corps, *ct = reponses.pop(0) if reponses else (200, b'{"ok":true}')
+                entetes = {"Content-Type": ct[0] if ct else "application/json", "Set-Cookie": "piege=1"}
+                if len(ct) > 1:
+                    entetes["Content-Disposition"] = ct[1]
                 self.f.livrer_reponse(box.cle, {"msg_id": rq["msg_id"], "type": "HTTP_RESP", "body": {
-                    "statut": st, "entetes": {"Content-Type": "application/json", "Set-Cookie": "piege=1"},
+                    "statut": st, "entetes": entetes,
                     "corps_b64": base64.b64encode(corps).decode()}})
 
 
@@ -160,7 +165,7 @@ def test_plan_ecrit_seulement_s_il_change(tmp_path):
 def test_csp_et_entetes_de_securite():
     conf = V.rendre_nginx("gk5", [{"paquet": "secubox-system", "version": "1.0", "modules": ["system"]}])
     csp = re.search(r'add_header Content-Security-Policy "([^"]+)" always;', conf).group(1)
-    for d in ("default-src 'none'", "script-src 'self'", "style-src 'self'", "connect-src 'self'", "frame-ancestors 'none'"):
+    for d in ("default-src 'none'", "connect-src 'self'", "frame-ancestors 'none'", "form-action 'none'"):
         assert d in csp
     assert "unsafe-inline" not in csp and "unsafe-eval" not in csp
     assert 'add_header X-Content-Type-Options "nosniff" always;' in conf
@@ -202,98 +207,110 @@ def test_pages_declarees_sans_deviner():
     assert V.pages_declarees(v) == {}
 
 
-# --- connexion avec les identifiants du maître ------------------------------------------------------------------------
+# --- connexion : identifiants saisis sur le maître seul, code à usage unique échangé sur le vhost (R-L5-25 C1c) -------------
+
+async def code_du_maitre(w, box="gk5", retour=None):
+    async with w.client() as c:
+        r = await c.get(f"/boxes/{box}/connexion-vhost" + (f"?retour={retour}" if retour else ""))
+    return r
+
+
+def code_de(r):
+    loc = r.headers["location"]
+    return loc, re.search(r"#code=([A-Za-z0-9_-]+)", loc).group(1)
+
+
+async def echanger(w, code, box="gk5"):
+    async with w.client() as c:
+        return await c.post("/vhost/auth/echanger", json={"code": code}, headers={V.ENTETE_BOX: box, "X-Real-IP": "203.0.113.7"})
+
 
 def test_auth_du_maitre_sur_le_vhost(w):
-    """Les identifiants du maître ouvrent la page ; le jeton rendu est À PORTÉE du vhost : refusé par les gardes du maître,
-    jamais le jeton du maître lui-même ; aucun cookie posé."""
+    """L'administrateur est authentifié par le MAÎTRE (require_jwt, 2FA du maître) ; le vhost ne reçoit qu'un code à usage unique,
+    échangé contre un jeton à portée : clé dérivée, aud = admin.<box>, iss distinct, refusé par les gardes du maître."""
     async def cas():
-        async with w.client() as c:
-            r = await c.post("/vhost/auth/login", json={"username": "alice", "password": "p"}, headers={V.ENTETE_BOX: "gk5"})
+        r = await code_du_maitre(w, retour="/system/")
+        assert r.status_code == 303
+        loc, code = code_de(r)
+        assert loc.startswith("https://admin.gk5.secubox.in/pilotage-connexion/#") and "retour=/system/" in loc
+        r = await echanger(w, code)
         assert r.status_code == 200, r.text
         assert "set-cookie" not in r.headers
         tok = r.json()["access_token"]
-        assert tok != w.auth_rep[1]["access_token"]
-        p = pyjwt.decode(tok, SECRET, algorithms=["HS256"])
-        assert p["scope"] == V.SCOPE and p[V.RECLAMATION] == "gk5" and p["sub"] == "alice" and p["jti"] == "j1"
+        with pytest.raises(pyjwt.PyJWTError):
+            pyjwt.decode(tok, SECRET, algorithms=["HS256"], options={"verify_aud": False})   # jamais la clé brute du maître
+        p = pyjwt.decode(tok, V.cle_vhost(SECRET), algorithms=["HS256"], audience="admin.gk5.secubox.in")
+        assert p["iss"] == V.EMETTEUR and p["scope"] == V.SCOPE and p["sub"] == "alice" and p["jti"] == "j1"
         assert p["exp"] - p["iat"] <= V.SESSION_MAX_S
-        assert auth._validate_token(tok) is None           # inutilisable sur l'administration du maître
-        assert w.appels_auth[0][0] == "login"
-        assert ("pilotage_vhost_session", {"box": "gk5", "acteur": "alice", "etat": "ouverte"}) in w.lignes
+        assert auth._validate_token(tok) is None
+        ev = [e for e, _ in w.lignes]
+        assert "pilotage_vhost_code" in ev and "pilotage_vhost_session" in ev
     asyncio.run(cas())
 
 
-def test_auth_etapes_hors_connexion_refusees(w):
-    async def cas():
-        async with w.client() as c:
-            for etape in ("set-password", "totp/enroll", "delegation/entrer", "console/jeton"):
-                r = await c.post(f"/vhost/auth/{etape}", json={}, headers={V.ENTETE_BOX: "gk5"})
-                assert r.status_code == 404, etape
-        assert w.appels_auth == []
-    asyncio.run(cas())
-
-
-def test_auth_premiere_configuration_et_enrolement_renvoyes_au_maitre(tmp_path, monkeypatch):
-    for corps in ({"setup_required": True, "setup_token": "jeton-intention"},
-                  {"enrollment_required": True, "enrollment_token": "jeton-intention"}):
-        w = Monde(tmp_path / str(len(corps)), monkeypatch, auth_rep=(200, corps))
-        ranger(w.s, GK5, valeurs())
-
-        async def cas():
-            async with w.client() as c:
-                r = await c.post("/vhost/auth/login", json={"username": "alice", "password": "p"}, headers={V.ENTETE_BOX: "gk5"})
-            assert r.status_code == 403 and "jeton-intention" not in r.text
-        asyncio.run(cas())
-
-
-def test_auth_mfa_relaye_puis_echange(tmp_path, monkeypatch):
-    w = Monde(tmp_path, monkeypatch, auth_rep=(200, {"mfa_required": True, "mfa_token": "defi"}))
-    ranger(w.s, GK5, valeurs())
+def test_code_a_usage_unique_lie_a_la_box_et_borne(w):
+    ranger(w.s, GK6, valeurs())
 
     async def cas():
-        async with w.client() as c:
-            r = await c.post("/vhost/auth/login", json={"username": "alice", "password": "p"}, headers={V.ENTETE_BOX: "gk5"})
-            assert r.json() == {"mfa_required": True, "mfa_token": "defi"}
-            w.auth_rep = (200, {"access_token": w.jeton_maitre("alice"), "token_type": "bearer"})
-            r = await c.post("/vhost/auth/login/mfa", json={"mfa_token": "defi", "code": "123456"}, headers={V.ENTETE_BOX: "gk5"})
-            assert r.status_code == 200 and pyjwt.decode(r.json()["access_token"], SECRET, algorithms=["HS256"])["scope"] == V.SCOPE
-        assert [a[0] for a in w.appels_auth] == ["login", "login/mfa"]
+        _, code = code_de(await code_du_maitre(w))
+        assert (await echanger(w, code)).status_code == 200
+        assert (await echanger(w, code)).status_code == 401            # réutilisé
+        _, code = code_de(await code_du_maitre(w))
+        assert (await echanger(w, code, box="gk6")).status_code == 401  # autre box : refusé ET consommé
+        assert (await echanger(w, code)).status_code == 401
+        _, code = code_de(await code_du_maitre(w))
+        w.h.avance(61)
+        assert (await echanger(w, code)).status_code == 401            # expiré (60 s)
+        _, code = code_de(await code_du_maitre(w))
+        w.sessions.clear()                                              # session du maître révoquée entre-temps
+        assert (await echanger(w, code)).status_code == 401
+        assert (await echanger(w, "inconnu")).status_code == 401
     asyncio.run(cas())
 
 
-def test_auth_administrateur_sans_droit_refuse(tmp_path, monkeypatch):
+def test_code_refuse_retour_hors_module(w):
+    async def cas():
+        for retour in ("https://evil.example/", "//evil.example/", "/api/v1/x/", "/../x/"):
+            r = await code_du_maitre(w, retour=retour)
+            assert r.status_code == 422, retour
+    asyncio.run(cas())
+
+
+def test_pas_de_saisie_de_mot_de_passe_sur_le_vhost(w):
+    """Plus aucune route ni page de saisie d'identifiants sur l'origine de la box."""
+    from pathlib import Path
+    async def cas():
+        async with w.client() as c:
+            for etape in ("login", "login/mfa", "set-password", "totp/enroll"):
+                r = await c.post(f"/vhost/auth/{etape}", json={"username": "a", "password": "p"}, headers={V.ENTETE_BOX: "gk5"})
+                assert r.status_code in (404, 405), etape
+    asyncio.run(cas())
+    conf = V.rendre_nginx("gk5", [{"paquet": "secubox-system", "version": "1.0", "modules": ["system"]}])
+    assert "location = /api/v1/auth/echanger" in conf and "location ^~ /api/v1/auth/" not in conf
+    page = Path(__file__).resolve().parents[1] / "www-vhost/pilotage-connexion"
+    for f in page.iterdir():
+        t = f.read_text().lower()
+        assert "password" not in t and "mot de passe" not in t, f
+
+
+def test_code_administrateur_sans_droit_ou_box_non_declaree(tmp_path, monkeypatch):
     w = Monde(tmp_path, monkeypatch, admin=False)
     ranger(w.s, GK5, valeurs())
-
-    async def cas():
-        async with w.client() as c:
-            r = await c.post("/vhost/auth/login", json={"username": "alice", "password": "p"}, headers={V.ENTETE_BOX: "gk5"})
-        assert r.status_code == 403 and "access_token" not in r.text
-    asyncio.run(cas())
-
-
-def test_auth_box_non_declaree_404(w):
     ranger(w.s, GK6, valeurs(interface=None))
 
     async def cas():
-        async with w.client() as c:
-            for box in ("gk6", "inconnue", "GK5", ""):
-                r = await c.post("/vhost/auth/login", json={"username": "a", "password": "p"}, headers={V.ENTETE_BOX: box})
-                assert r.status_code == 404, box
-            r = await c.post("/vhost/auth/login", json={"username": "a", "password": "p"})   # sans l'en-tête posé par nginx
-            assert r.status_code == 404
-        assert w.appels_auth == []
+        _, code = code_de(await code_du_maitre(w))   # require_jwt (surchargé) : le refus vient de l'échange (admin réel)
+        assert (await echanger(w, code)).status_code == 403
+        w.admins.add("alice")
+        assert (await code_du_maitre(w, box="gk6")).status_code == 404
+        assert (await code_du_maitre(w, box="inconnue")).status_code == 404
     asyncio.run(cas())
 
 
-def test_auth_echec_du_maitre_relaye_sans_jeton(tmp_path, monkeypatch):
-    w = Monde(tmp_path, monkeypatch, auth_rep=(401, {"detail": "Identifiants incorrects"}))
-    ranger(w.s, GK5, valeurs())
-
+def test_debit_de_l_echange_de_code(w):
     async def cas():
-        async with w.client() as c:
-            r = await c.post("/vhost/auth/login", json={"username": "a", "password": "p"}, headers={V.ENTETE_BOX: "gk5"})
-        assert r.status_code == 401
+        codes = [(await echanger(w, f"faux{i}")).status_code for i in range(12)]
+        assert codes[:10] == [401] * 10 and codes[-1] == 429
     asyncio.run(cas())
 
 
@@ -463,3 +480,67 @@ def test_plan_ecrit_a_chaque_tour_d_inventaire(tmp_path, monkeypatch):
     ranger(w.s, GK6, valeurs(interface=None))
     asyncio.run(w.inv.tour())
     assert json.loads(f.read_text()) == V.plan([("gk5", valeurs())])
+
+
+# --- R-L5-25 : réponses /api/ jamais exécutables, CSP sans /api/, module du paquet, variante encodée ----------------------
+
+@pytest.mark.parametrize("ctype", ["application/javascript", "text/html; charset=utf-8", "text/javascript", "image/svg+xml",
+                                   "text/plain"])
+def test_reponse_de_box_sous_api_jamais_executable(w, ctype):
+    async def cas():
+        r, _ = await relayer(w, GK5, entetes=entetes_vhost(jeton=w.jeton_vhost()),
+                             reponses=[(200, b"alert(1)", ctype, "inline")])
+        assert r.status_code == 200
+        assert r.headers["content-type"] == "application/octet-stream"
+        assert r.headers["content-disposition"] == "attachment"
+        assert r.headers["content-security-policy"] == "sandbox; default-src 'none'"
+        assert r.headers["x-content-type-options"] == "nosniff"
+    asyncio.run(cas())
+
+
+def test_reponse_json_forcee(w):
+    async def cas():
+        r, _ = await relayer(w, GK5, entetes=entetes_vhost(jeton=w.jeton_vhost()),
+                             reponses=[(200, b'{"a":1}', "application/problem+json; charset=utf-8")])
+        assert r.headers["content-type"] == "application/json" and r.headers["x-content-type-options"] == "nosniff"
+        assert "content-disposition" not in r.headers
+    asyncio.run(cas())
+
+
+def test_csp_des_pages_sans_api():
+    conf = V.rendre_nginx("gk5", [{"paquet": "secubox-system", "version": "1.0", "modules": ["system"]}])
+    csp = re.search(r'add_header Content-Security-Policy "([^"]+)" always;', conf).group(1)
+    script = re.search(r"script-src ([^;]+);", csp).group(1).split()
+    style = re.search(r"style-src ([^;]+);", csp).group(1).split()
+    for src in (script, style):
+        assert "'self'" not in src and all("/api" not in x for x in src)
+        assert "https://admin.gk5.secubox.in/system/" in src
+    # sous /api/, nginx impose ses propres en-têtes (always) en plus du contrôleur
+    bloc = conf.split("location ^~ /api/v1/system/ {", 1)[1].split("\n    }", 1)[0]
+    assert "add_header Content-Security-Policy \"sandbox; default-src 'none'\" always;" in bloc
+    assert 'add_header X-Content-Type-Options "nosniff" always;' in bloc
+    assert "X-Forwarded-For $remote_addr;" in conf and "$proxy_add_x_forwarded_for" not in conf
+
+
+def test_module_hors_du_paquet_annonce_refuse(w):
+    """I6 : la version de page du paquet system ne vaut pas pour un appel vers dns."""
+    async def cas():
+        r, recus = await relayer(w, GK5, chemin="/relais/gk5/api/v1/dns/zones", entetes=entetes_vhost(jeton=w.jeton_vhost()))
+        assert r.status_code == 409 and recus == []
+        r, recus = await relayer(w, GK5, chemin="/relais/gk5/api/v1/dns/zones",
+                                 entetes=entetes_vhost(version="secubox-dns=2.0.0-1~trixie1", jeton=w.jeton_vhost()))
+        assert r.status_code == 200 and recus[0]["chemin"] == "/api/v1/dns/zones"
+    asyncio.run(cas())
+
+
+def test_variante_encodee_du_relais(w):
+    """M9 : /%72elais/… ne contourne aucune garde (en-tête de box du vhost et jeton à portée exigés)."""
+    async def cas():
+        async with w.client() as c:
+            r = await c.get("/%72elais/gk5/api/v1/system/status")
+            assert r.status_code in (401, 404)
+            r = await c.get("/%72elais/gk5/api/v1/system/status", headers={V.ENTETE_BOX: "gk5"})
+            assert r.status_code == 401
+            r = await c.get("/relais/gk5/api/v1/%2e%2e/auth/x", headers=entetes_vhost(jeton=w.jeton_vhost()))
+            assert r.status_code in (400, 404, 409)
+    asyncio.run(cas())

@@ -6,30 +6,36 @@
 """
 SecuBox-Deb :: pilotage :: routes du vhost admin.<box>.secubox.in (#3126, L5 tâche 5)
 
-Servies sur /run/secubox/pilotage.sock, jointes UNIQUEMENT par le server nginx généré pour la box (pilotage/vhosts.py), qui pose
-`X-SecuBox-Pilotage-Box` ; sur l'administration du maître, /api/v1/pilotage/relais/ et /vhost/ rendent 404 (nginx/pilotage.conf).
+Servies sur /run/secubox/pilotage.sock. Les routes /vhost/ et /relais/ ne sont jointes QUE par le server nginx généré pour la box
+(pilotage/vhosts.py), qui pose `X-SecuBox-Pilotage-Box` ; sur l'administration du maître, /api/v1/pilotage/relais/ et /vhost/ rendent 404.
 
-  POST /vhost/auth/login, /vhost/auth/login/mfa
-        identifiants DU MAÎTRE relayés à secubox-auth (/run/secubox/auth.sock). Un `access_token` reçu est vérifié (session vivante,
-        administrateur réel) puis ÉCHANGÉ contre un jeton à portée du vhost (vhosts.frapper_jeton) : le jeton du maître ne sort jamais
-        du contrôleur, aucun cookie n'est posé (la page garde son jeton dans le localStorage de SON origine). Première configuration
-        et enrôlement TOTP : refusés ici (403), ils se font sur l'administration du maître. Toute autre étape : 404.
-  GET|HEAD|POST|PUT|PATCH|DELETE /relais/{box}/api/v1/{…}
+  GET  /boxes/{box}/connexion-vhost?retour=/<module>/      (administration DU MAÎTRE, require_jwt)
+        les identifiants du maître ne sont saisis QUE sur l'origine du maître (R-L5-25 C1c) : un code à usage unique (≤ 60 s, lié à la
+        box, à l'administrateur et à sa session) est émis puis 303 vers https://admin.<box>.secubox.in/pilotage-connexion/#code=…
+  POST /vhost/auth/echanger {code}                          (vhost de la box)
+        code consommé à la première présentation → jeton à portée du vhost (clé dérivée, aud admin.<box>, iss propre). Aucune
+        saisie d'identifiants, aucun cookie sur l'origine de la box. Débit propre par adresse (I3).
+  GET|HEAD|POST|PUT|PATCH|DELETE /relais/{box}/api/v1/{module}/…
         jeton à portée de CETTE box (Bearer seul) ; acteur = `sub` de cette session, portée demandée = admin (administrateur réel),
         réduite par portee_permise (mains liées, box cliente sans support) puis par l'agent ; jamais un champ du client.
         404 box inconnue, ambiguë ou non « distante » ; 403 non administrateur, box cliente sans session de support ouverte ;
-        409 `X-SecuBox-Version-Page` ≠ version déclarée ; 413 corps > 4 Mio ; 429 débit (administrateur, box) ; 501 agent < 0.4.0.
+        409 `X-SecuBox-Version-Page` ≠ version déclarée, ou module hors du paquet annoncé (I6) ; 413 corps > 4 Mio ;
+        429 débit (administrateur, box) ; 501 agent < 0.4.0. Réponse jamais exécutable (C1a) : JSON annoncé ⇒ application/json,
+        sinon application/octet-stream + attachment + CSP sandbox ; nosniff partout.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
+import os
+import stat
 import time
-from typing import Awaitable, Callable, Optional
+from pathlib import Path
+from typing import Callable, Optional
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse, Response
 
 from secubox_core import auth
 
@@ -38,42 +44,52 @@ from pilotage.files import (CORPS_HTTP_MAX, RE_ACTEUR, AgentHorsLigne, AgentTrop
                             DemandeHTTPInvalide, FileDeBoxPleine, ReponseHTTPInvalide, agent_sait_http, demander_http,
                             portee_permise)
 
-AUTH_SOCK = "/run/secubox/auth.sock"
-ETAPES_AUTH = ("login", "login/mfa")
-CORPS_AUTH_MAX = 16 << 10
-ENTETES_REPONSE = ("content-type", "etag", "last-modified", "content-disposition")
+ENTETES_REPONSE = ("etag", "last-modified")
+ECHANGES_PAR_MINUTE = 10
 
 log = logging.getLogger("pilotage.vhost")
 
 
-async def appeler_auth_socket(etape: str, corps: bytes, entetes: dict, chemin_socket: str = AUTH_SOCK,
-                              delai: float = 15.0) -> tuple:
-    """POST /<etape> sur la socket de secubox-auth (HTTP/1.1 minimal, réponse bornée à 64 Kio) ; rend (statut, JSON)."""
-    async def echange():
-        r, w = await asyncio.open_unix_connection(chemin_socket)
+def entetes_surs(entetes_box: dict) -> tuple:
+    """(media, en-têtes) d'une réponse relayée (R-L5-25 C1a) : seul du JSON est rendu comme tel ; tout le reste part en pièce
+    jointe opaque, bac à sable, jamais text/html ni JavaScript de cette origine."""
+    ct = next((v for k, v in entetes_box.items() if k.lower() == "content-type"), "")
+    base = ct.split(";", 1)[0].strip().lower()
+    h = {k: v for k, v in entetes_box.items() if k.lower() in ENTETES_REPONSE}
+    h.update({"X-Content-Type-Options": "nosniff", "Content-Security-Policy": V.CSP_API, "Cache-Control": "no-store"})
+    if base == "application/json" or (base.startswith("application/") and base.endswith("+json")):
+        return "application/json", h
+    h["Content-Disposition"] = "attachment"
+    return "application/octet-stream", h
+
+
+def modules_servis(racine: Path, paquet: str, version: str) -> set:
+    """Modules (dossiers) de www/<paquet>/<version>/ (arbre root lisible, I6) ; vide si absent ou douteux. Jamais de lien suivi."""
+    if not (V.RE_PAQUET.fullmatch(paquet) and V.RE_VERSION.fullmatch(version)):
+        return set()
+    d = racine / paquet / version
+    try:
+        noms = os.listdir(d)
+    except OSError:
+        return set()
+    res = set()
+    for n in noms:
         try:
-            tete = [f"POST /{etape} HTTP/1.1", "Host: localhost", "Content-Type: application/json",
-                    f"Content-Length: {len(corps)}", "Connection: close"]
-            for k in ("X-Forwarded-For", "User-Agent"):
-                v = entetes.get(k.lower())
-                if v and v.isprintable() and len(v) < 512:
-                    tete.append(f"{k}: {v}")
-            w.write(("\r\n".join(tete) + "\r\n\r\n").encode("latin-1") + corps)
-            await w.drain()
-            brut = await r.read(64 << 10)
-        finally:
-            w.close()
-        tete_rep, _, contenu = brut.partition(b"\r\n\r\n")
-        statut = int(tete_rep.split(b" ", 2)[1])
-        return statut, json.loads(contenu or b"{}")
-    return await asyncio.wait_for(echange(), delai)
+            st = os.stat(d / n, follow_symlinks=False)
+        except OSError:
+            continue
+        if stat.S_ISDIR(st.st_mode) and V.RE_MODULE.fullmatch(n):
+            res.add(n)
+    return res
 
 
 def ajouter_routes_vhost(app: FastAPI, stockage, files, audit: Callable[[str, dict], None], *, horloge: Callable[[], float] = time.time,
-                         maitre: Optional[str] = None, appeler_auth: Optional[Callable[..., Awaitable[tuple]]] = None,
-                         debit: Optional[V.Debit] = None) -> None:
-    appeler_auth = appeler_auth or appeler_auth_socket
+                         maitre: Optional[str] = None, debit: Optional[V.Debit] = None, racine_pages: Optional[Path] = None,
+                         codes: Optional[V.Codes] = None) -> None:
     debit = debit or V.Debit()
+    debit_echange = V.Debit(par_minute=ECHANGES_PAR_MINUTE, horloge=horloge)
+    codes = codes or V.Codes(horloge=horloge)
+    racine_pages = Path(racine_pages or V.RACINE_PAGES)
 
     def nom_maitre() -> str:
         return maitre if maitre is not None else auth.nom_box_locale()
@@ -104,47 +120,50 @@ def ajouter_routes_vhost(app: FastAPI, stockage, files, audit: Callable[[str, di
             raise HTTPException(404, "box inconnue")
         return nom
 
-    # --- connexion ---
+    # --- connexion : code émis par l'administration du maître ---
 
-    async def connexion(etape: str, request: Request):
+    @app.get("/boxes/{box}/connexion-vhost")
+    async def connexion_vhost(box: str, retour: Optional[str] = Query(None, max_length=80), jwt: dict = Depends(auth.require_jwt)):
+        if retour is not None and not V.RE_RETOUR.fullmatch(retour):
+            raise HTTPException(422, "retour : /<module>/ seulement")
+        await box_distante(box)
+        if not all(isinstance(jwt.get(k), t) for k, t in (("sub", str), ("jti", str))) or isinstance(jwt.get("exp"), bool) \
+                or not isinstance(jwt.get("exp"), (int, float)):
+            raise HTTPException(401, "session du maître sans identifiant")
+        if not debit_echange.autoriser(("code", jwt["sub"])):
+            raise HTTPException(429, "trop de demandes de connexion")
+        try:
+            code = codes.emettre(box, jwt)
+        except OverflowError:
+            raise HTTPException(429, "trop de connexions en attente") from None
+        await auditer_ou_503("pilotage_vhost_code", {"box": box, "acteur": str(jwt["sub"])[:64]})
+        frag = f"code={code}" + (f"&retour={retour}" if retour else "")
+        return RedirectResponse(f"https://{V.domaine(box)}/pilotage-connexion/#{frag}", status_code=303,
+                                headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+
+    @app.post("/vhost/auth/echanger")
+    async def vhost_echanger(request: Request):
         nom = box_de_l_entete(request)
-        await box_distante(nom)
-        corps = await request.body()
-        if len(corps) > CORPS_AUTH_MAX:
+        if not debit_echange.autoriser(("echange", request.headers.get("x-real-ip", "?"))):
+            raise HTTPException(429, "trop d'essais")
+        brut = await request.body()
+        if len(brut) > 1024:
             raise HTTPException(413, "corps trop long")
         try:
-            statut, rep = await appeler_auth(etape, corps, dict(request.headers))
-        except Exception:
-            log.exception("secubox-auth injoignable")
-            raise HTTPException(502, "authentification du maître injoignable") from None
-        if not isinstance(rep, dict):
-            raise HTTPException(502, "réponse de l'authentification illisible")
-        if statut != 200:
-            return JSONResponse({"detail": str(rep.get("detail", "refusé"))[:200]}, status_code=statut if 400 <= statut < 600 else 502)
-        if rep.get("setup_required") or rep.get("enrollment_required"):
-            raise HTTPException(403, "première configuration ou enrôlement du second facteur : à faire sur l'administration du maître")
-        if "access_token" not in rep:
-            if rep.get("mfa_required") and isinstance(rep.get("mfa_token"), str):
-                return {"mfa_required": True, "mfa_token": rep["mfa_token"]}
-            raise HTTPException(502, "réponse de l'authentification inattendue")
-        payload = auth._validate_token(rep["access_token"]) if isinstance(rep["access_token"], str) else None
-        if payload is None:
-            raise HTTPException(502, "jeton du maître invalide")
-        if not auth.est_admin_reel(payload):
-            log.warning("vhost %s : connexion refusée à %s (pas administrateur réel)", nom, payload.get("sub"))
+            code = json.loads(brut).get("code")
+        except (ValueError, AttributeError):
+            code = None
+        e = codes.consommer(code, nom)
+        if e is None:
+            raise HTTPException(401, "code de connexion invalide, déjà utilisé ou expiré")
+        await box_distante(nom)
+        if not auth._session_validator(e["jti"]) or not auth.porteur_reconnu(e["sub"]):
+            raise HTTPException(401, "session du maître close")
+        if not auth.est_admin_reel({"sub": e["sub"], "jti": e["jti"]}):
             raise HTTPException(403, "réservé aux administrateurs du maître")
-        acteur = str(payload["sub"])[:64]
-        await auditer_ou_503("pilotage_vhost_session", {"box": nom, "acteur": acteur, "etat": "ouverte"})
-        jeton, duree = V.frapper_jeton(payload, nom, auth._secret(), horloge=time.time)
+        await auditer_ou_503("pilotage_vhost_session", {"box": nom, "acteur": str(e["sub"])[:64], "etat": "ouverte"})
+        jeton, duree = V.frapper_jeton(e, nom, auth._secret(), horloge=horloge)
         return {"access_token": jeton, "token_type": "bearer", "expires_in": duree}
-
-    @app.post("/vhost/auth/login")
-    async def vhost_login(request: Request):
-        return await connexion("login", request)
-
-    @app.post("/vhost/auth/login/mfa")
-    async def vhost_login_mfa(request: Request):
-        return await connexion("login/mfa", request)
 
     # --- relais ---
 
@@ -189,6 +208,10 @@ def ajouter_routes_vhost(app: FastAPI, stockage, files, audit: Callable[[str, di
         declaree = V.pages_declarees(valeurs).get(paquet)
         if not version or declaree != version:
             raise HTTPException(409, "la box a changé de version : rechargez la page")
+        module = reste.split("/", 1)[0]
+        if module not in await asyncio.to_thread(modules_servis, racine_pages, paquet, version):
+            # I6 : la version annoncée ne vaut que pour les modules de CE paquet
+            raise HTTPException(409, "module hors du paquet de la page")
         if not agent_sait_http(b.get("agent_version")):
             raise HTTPException(501, "agent de la box trop ancien : 0.4.0 au moins pour servir ses pages")
         corps = await lire_corps(request)
@@ -216,5 +239,5 @@ def ajouter_routes_vhost(app: FastAPI, stockage, files, audit: Callable[[str, di
             raise HTTPException(504, "la box n'a pas répondu à temps") from None
         except ReponseHTTPInvalide as e:
             raise HTTPException(502, str(e)[:200]) from None
-        entetes = {k: v for k, v in rep["entetes"].items() if k.lower() in ENTETES_REPONSE}
-        return Response(content=rep["corps"], status_code=rep["statut"], headers=entetes)
+        media, entetes = entetes_surs(rep["entetes"])
+        return Response(content=rep["corps"], status_code=rep["statut"], headers=entetes, media_type=media)

@@ -1,0 +1,4 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0 — Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> */
+body { font-family: system-ui, sans-serif; background: #0f1419; color: #e6e6e6; margin: 0; }
+main { max-width: 32rem; margin: 15vh auto; padding: 0 1rem; }
+.aide { color: #9aa4ad; font-size: .9rem; }
