@@ -10,20 +10,29 @@ Rules-Requires-Root: no
 Package: secubox-led-heartbeat
 Architecture: all
 Depends: ${misc:Depends},
-         python3,
+         python3 (>= 3.11),
          secubox-core,
          device-tree-compiler,
          i2c-tools
 Breaks: secubox-core (<< 1.5.5)
 Replaces: secubox-core (<< 1.5.5)
-Recommends: secubox-heartbeat
+Recommends: secubox-heartbeat, apparmor
+Suggests: dkms,
+          linux-headers-arm64
 Description: SecuBox LED heartbeat status indicator
  Visual system health indicator using MOCHAbin RGB LEDs.
  .
  Displays system health, security status, and resource usage
  via the IS31FL3199 I2C LED controller (3 RGB LEDs).
  .
- LED mapping:
-  - LED 1: Health status (pulsing green/yellow/red)
-  - LED 2: Security status (steady, flashing on threat)
-  - LED 3: Capacity (CPU/memory load)
+ The leds-is31fl319x driver, missing from the Debian stock kernel, is built
+ by DKMS on MOCHAbin only. dkms and linux-headers-arm64 are only suggested
+ (installed by the MOCHAbin provisioning or by hand), so other boards and a
+ MOCHAbin without I2C bus pull no kernel headers.
+ .
+ Display engine (secubox-led-pulse): ordered layers from
+ /etc/secubox/leds.toml, by default a system layer (CPU, memory, I/O;
+ green/yellow/orange/red, breathing) then a traffic layer (attacks,
+ visits, alerts; cyan/blue/violet/pink, pulses). Shapes: par_led, jauge,
+ mono, double, triple, etale, rotatif. Writes only changed channels,
+ rate-bounded (20 writes/s by default).

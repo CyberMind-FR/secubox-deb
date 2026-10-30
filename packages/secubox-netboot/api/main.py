@@ -552,6 +552,21 @@ def _cle_usb(d: Path) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, str]]]:
     return cle, cmds
 
 
+_RE_PREPARATION = re.compile(r"^(reseau|installe)\t([ -~]{1,200})$")
+
+
+def _preparation(d: Path) -> List[Dict[str, str]]:
+    """preparation.txt du live (#3271, généré par scripts/uboot-env.py) : « rôle<TAB>commande » pour lancer
+    secubox-uboot-env.scr depuis le netboot ou la partition installée. Rôle inconnu, commande qui ne charge pas
+    secubox-uboot-env.scr, ligne trop longue ou non imprimable : écartés."""
+    out: List[Dict[str, str]] = []
+    for ligne in (_lire_court(d / "preparation.txt") or "").splitlines():
+        m = _RE_PREPARATION.fullmatch(ligne)
+        if m and m.group(2).endswith("secubox-uboot-env.scr; source ${loadaddr}") and len(out) < 2:
+            out.append({"role": m.group(1), "commande": m.group(2)})
+    return out
+
+
 def live_infos() -> List[Dict[str, Any]]:
     """Un live = un dossier TFTP qui porte un boot.cmd. Les commandes U-Boot à taper sont celles que le
     boot.cmd généré documente en tête (« #   … ») : la page dit exactement ce que la box exécutera."""
@@ -579,6 +594,7 @@ def live_infos() -> List[Dict[str, Any]]:
             "serveur": serveur.group(1) if serveur else None,
             "http_base": fetch.group(1) if fetch else None,
             "commandes": re.findall(r"^#   (\S.*?)\s*$", texte, re.M),
+            "commandes_preparation": _preparation(d),
             "squashfs": (HTTP_ROOT / d.name / "filesystem.squashfs").is_file(),
             "images": _images_live(HTTP_ROOT / d.name),
         })

@@ -58,6 +58,14 @@ case "$1" in
         # Compile and install Device Tree overlay
         compile_overlay || true
 
+        # Pilote leds-is31fl319x par DKMS (#3290) : no-op hors MOCHAbin ou
+        # si le bus I2C est neutralise (gk2) ; ne fait jamais echouer dpkg.
+        DKMS_VER="$(dpkg-query -W -f='${Version}' secubox-led-heartbeat 2>/dev/null || true)"
+        DKMS_VER="${DKMS_VER#*:}"; DKMS_VER="${DKMS_VER%-*}"
+        if [ -n "$DKMS_VER" ]; then
+            /usr/sbin/secubox-led-dkms install "$DKMS_VER" || true
+        fi
+
         # Load kernel module if available
         if modprobe leds-is31fl319x 2>/dev/null; then
             echo "Loaded IS31FL3199 LED kernel module"
@@ -80,25 +88,33 @@ case "$1" in
         systemctl daemon-reload
 
         # Only start if LEDs are available
-        if [[ -d /sys/class/leds ]] && ls /sys/class/leds/ | grep -qE "(led[0-9]|:led)"; then
-            echo "LEDs detected, enabling HealthBump 3-tier system..."
-            # Enable LED trigger setup (runs at boot)
-            systemctl enable secubox-led-trigger.service 2>/dev/null || true
-            systemctl start secubox-led-trigger.service 2>/dev/null || true
-            # Enable HealthBump timer (runs every 30s)
-            systemctl enable secubox-healthbump.timer 2>/dev/null || true
-            systemctl start secubox-healthbump.timer 2>/dev/null || true
-            # Enable LED pulse daemon
-            systemctl enable secubox-led-pulse.service 2>/dev/null || true
-            systemctl start secubox-led-pulse.service 2>/dev/null || true
-            echo "HealthBump system started."
+        # Depuis 2.3.0 (#3290 tranche 2) le moteur en couches secubox-led-pulse
+        # est le SEUL ecrivain de la puce : healthbump (minuteur 30 s) et
+        # led-trigger (declencheurs noyau timer) ecrivaient les memes canaux.
+        # Desactives proprement ; leurs fichiers restent pour un retour arriere.
+        for u in secubox-healthbump.timer secubox-led-trigger.service secubox-led-heartbeat.service; do
+            if systemctl is-enabled --quiet "$u" 2>/dev/null || systemctl is-active --quiet "$u" 2>/dev/null; then
+                systemctl disable --now "$u" 2>/dev/null || true
+                echo "secubox-led-heartbeat: $u desactive (remplace par secubox-led-pulse)."
+            fi
+        done
+        # leds.toml : conffile root:root 0644 ; le démon root refuse sinon (#3290).
+        if [ -f /etc/secubox/leds.toml ]; then
+            chown root:root /etc/secubox/leds.toml
+            chmod 0644 /etc/secubox/leds.toml
+        fi
+        # Profil AppArmor du moteur (enforce), charge avant le (re)demarrage.
+        if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1 \
+           && [ -f /etc/apparmor.d/secubox-led-pulse ]; then
+            apparmor_parser -r /etc/apparmor.d/secubox-led-pulse \
+              || echo "secubox-led-heartbeat : profil AppArmor non charge (apparmor_parser -r /etc/apparmor.d/secubox-led-pulse)" >&2
+        fi
+        systemctl enable secubox-led-pulse.service 2>/dev/null || true
+        if [ -e /sys/class/leds/red:led1/brightness ]; then
+            systemctl restart secubox-led-pulse.service 2>/dev/null || true
+            echo "secubox-led-pulse (couches) demarre."
         else
-            echo "Note: No LEDs detected. Services enabled but not started."
-            echo "      Reboot with Device Tree overlay to enable LEDs."
-            # Still enable for next boot
-            systemctl enable secubox-led-trigger.service 2>/dev/null || true
-            systemctl enable secubox-healthbump.timer 2>/dev/null || true
-            systemctl enable secubox-led-pulse.service 2>/dev/null || true
+            echo "Note: LED absentes ; secubox-led-pulse active pour le prochain demarrage."
         fi
 
         # Neutralize a legacy unit deployed by hand on some boards

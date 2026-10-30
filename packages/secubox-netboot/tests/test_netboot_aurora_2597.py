@@ -192,7 +192,11 @@ def test_telephone_sans_debordement(navigateur):
 
 LIVES = {"lives": [{"nom": "mochabin-live", "serveur": "192.0.2.10", "http_base": "http://192.0.2.10:8099/mochabin-live",
                     "squashfs": True, "commandes": ["setenv ethact mvpp2-2; setenv serverip 192.0.2.10",
-                                                    "tftpboot ${scriptaddr} mochabin-live/boot.scr; source ${scriptaddr}"],
+                                                    "tftpboot ${loadaddr} mochabin-live/boot.scr; source ${loadaddr}"],
+                    "commandes_preparation": [   # #3271 : preparation.txt du live, généré par uboot-env.py
+                        {"role": "reseau", "commande": "setenv ethact mvpp2-2; setenv autoload no; dhcp; setenv serverip 192.0.2.10; "
+                                                       "tftpboot ${loadaddr} mochabin-live/secubox-uboot-env.scr; source ${loadaddr}"},
+                        {"role": "installe", "commande": "mmc dev 0; fatload mmc 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}"}],
                     "images": [{"nom": "secubox-isp-mochabin-trixie.img.gz", "taille": 2669000177, "sha256": "a" * 64, "signee": True}]}]}
 
 
@@ -200,7 +204,12 @@ def test_3100_netbooter_et_preparer_un_flash(navigateur):
     ctx, p, err, appels = ouvre(navigateur, "http://sbx.test/netboot/", {**API, "/live": (200, LIVES)})
     p.wait_for_selector("#lives pre", state="attached")
     texte = p.inner_text("#lives")
-    assert "tftpboot ${scriptaddr} mochabin-live/boot.scr" in texte
+    assert "tftpboot ${loadaddr} mochabin-live/boot.scr" in texte
+    # #3271 : après l'installation, les lignes qui préparent l'environnement U-Boot, et pourquoi le port WAN doit être touché
+    assert "mmc dev 0; fatload mmc 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}\nreset" in texte
+    assert "mochabin-live/secubox-uboot-env.scr; source ${loadaddr}\nreset" in texte
+    assert "depuis le netboot" in texte and "bootcmd_avant" in texte
+    assert "n’est initialisé que si U-Boot l’a touché" in texte
     # #3233 : sans --image, sbx-netflash ne fait que lister — la page donne la commande complète
     assert "sbx-netflash --image secubox-isp-mochabin-trixie.img.gz --nom NOM" in texte
     assert "secubox-isp-mochabin-trixie.img.gz" in texte and "2,67 Go" in texte and "signée" in texte

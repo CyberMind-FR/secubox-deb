@@ -1,3 +1,12 @@
+secubox-clamav (0.1.4-1~trixie1) trixie; urgency=medium
+
+  * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte
+    (/etc/os-release, repli trixie), surcharge par SECUBOX_DEBIAN_SUITE ; plus de bookworm en dur.
+  * systemd >= 257 (trixie) en LXC non privilégié : ImportCredential= vidé par drop-in pour
+    journald, sysctl et tmpfiles, seulement si le conteneur a ce systemd (#3274).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
+
 secubox-clamav (0.1.3-1~bookworm1) bookworm; urgency=medium
 
   * Le bloc reseau lxc.net.0 etait AJOUTE a celui du modele de creation : deux lxc.net.0.type, lxc-start finissait ABORTING et chaque connexion a 3310 (rspamd) relancait « clamavctl wake » — 37 echecs en 3 minutes sur gk2, avec apparmor_parser et lxc-start a chaque fois, sur une box deja en swap. L'installation remplace desormais le bloc ; « wake » repare une config deja en double (dernier bloc gagnant, idempotent) et ne retente pas un demarrage echoue avant 60 s (#2146).

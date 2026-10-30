@@ -125,22 +125,64 @@ lxc_attach() {
 # Debian Bootstrap
 # ============================================================================
 
+# SUITE DEBIAN DU CONTENEUR (#3285) : la dernière stable, c'est-à-dire celle de
+# l'hôte (une box est installée sur la stable courante) ; repli trixie si l'hôte
+# n'est pas une Debian lisible. Surcharge : SECUBOX_DEBIAN_SUITE.
+suite_debian_hote() {
+    local f="${SECUBOX_OS_RELEASE:-/etc/os-release}" id="" code=""
+    if [ -r "$f" ]; then
+        # shellcheck source=/dev/null
+        id="$(. "$f" && printf '%s' "${ID:-}")"
+        # shellcheck source=/dev/null
+        code="$(. "$f" && printf '%s' "${VERSION_CODENAME:-}")"
+    fi
+    case "$code" in ""|*[!a-z]*) code="" ;; esac
+    if [ "$id" = debian ] && [ -n "$code" ]; then
+        printf '%s\n' "$code"
+    else
+        printf 'trixie\n'
+    fi
+}
+
+# SYSTEMD >= 257 (trixie) DANS UN LXC NON PRIVILÉGIÉ : ImportCredential= y échoue
+# (243/CREDENTIALS) et laisse journald, sysctl et tmpfiles en échec. Vidé par
+# drop-in, seulement si le conteneur a ce systemd (#3274, #3285). Idempotent.
+# lxc_sans_credentials <nom> <chemin-lxc>
+lxc_sans_credentials() {
+    # shellcheck disable=SC2016  # expansion voulue DANS le conteneur
+    lxc-attach -n "$1" -P "$2" -- sh -c '
+        v=$(systemctl --version 2>/dev/null | awk "NR==1{print \$2}")
+        case "$v" in ""|*[!0-9]*) exit 0 ;; esac
+        [ "$v" -ge 257 ] || exit 0
+        for u in systemd-journald systemd-sysctl systemd-tmpfiles-setup systemd-tmpfiles-clean; do
+            mkdir -p "/etc/systemd/system/$u.service.d"
+            printf "%s\n" "# SecuBox #3274 : LXC non privilégié, pas de credentials systemd" \
+                "[Service]" "ImportCredential=" > "/etc/systemd/system/$u.service.d/secubox-lxc.conf"
+        done
+        systemctl daemon-reload
+        systemctl restart systemd-journald.service systemd-sysctl.service \
+            systemd-tmpfiles-setup.service 2>/dev/null || true
+    '
+}
+
 bootstrap_debian() {
     require_root
-    log "Bootstrapping Debian bookworm..."
+    local suite="${SECUBOX_DEBIAN_SUITE:-$(suite_debian_hote)}"
+    log "Bootstrapping Debian $suite..."
 
     mkdir -p "$LXC_PATH/$CONTAINER/rootfs"
 
     if [ ! -f "$LXC_PATH/$CONTAINER/rootfs/bin/bash" ]; then
-        debootstrap --variant=minbase --include=systemd,systemd-sysv,dbus,ca-certificates,curl,gnupg \
-            bookworm "$LXC_PATH/$CONTAINER/rootfs" http://deb.debian.org/debian
+        # gpg et non gnupg : en trixie, gnupg peut tirer un MTA (exim4) (#3274).
+        debootstrap --variant=minbase --include=systemd,systemd-sysv,dbus,ca-certificates,curl,gpg \
+            "$suite" "$LXC_PATH/$CONTAINER/rootfs" http://deb.debian.org/debian
     fi
 
     # Configure apt sources
-    cat > "$LXC_PATH/$CONTAINER/rootfs/etc/apt/sources.list" << 'EOF'
-deb http://deb.debian.org/debian bookworm main contrib
-deb http://deb.debian.org/debian bookworm-updates main contrib
-deb http://security.debian.org/debian-security bookworm-security main contrib
+    cat > "$LXC_PATH/$CONTAINER/rootfs/etc/apt/sources.list" << EOF
+deb http://deb.debian.org/debian $suite main contrib
+deb http://deb.debian.org/debian $suite-updates main contrib
+deb http://security.debian.org/debian-security $suite-security main contrib
 EOF
 
     # Set hostname
@@ -283,15 +325,30 @@ REDISUNIT"
 
     # Enable and start services
     lxc_attach "systemctl daemon-reload"
-    lxc_attach "systemctl enable nginx php8.2-fpm redis-server"
-    lxc_attach "systemctl start nginx php8.2-fpm redis-server"
+    local php; php="$(php_version_lxc)" || { error "PHP-FPM introuvable dans le conteneur"; return 1; }
+    lxc_attach "systemctl enable nginx php${php}-fpm redis-server"
+    lxc_attach "systemctl start nginx php${php}-fpm redis-server"
 
     log "Nextcloud installed successfully!"
 }
 
+# Version de PHP du conteneur (8.2 en bookworm, 8.4 en trixie), jamais en dur
+# (#3274, #3285) : lue dans le rootfs, où apt a posé /etc/php/<version>/fpm.
+php_version_lxc() {
+    local d v=""
+    for d in "$LXC_PATH/$CONTAINER/rootfs/etc/php"/*/fpm; do
+        [ -d "$d" ] || continue
+        d="${d%/fpm}"
+        v="${d##*/}"
+    done
+    [ -n "$v" ] || return 1
+    printf '%s\n' "$v"
+}
+
 configure_php() {
     log "Configuring PHP..."
-    lxc_attach "cat > /etc/php/8.2/fpm/pool.d/nextcloud.conf << 'PHPCONF'
+    local php; php="$(php_version_lxc)" || { error "PHP-FPM introuvable dans le conteneur"; return 1; }
+    lxc_attach "cat > /etc/php/${php}/fpm/pool.d/nextcloud.conf << 'PHPCONF'
 [nextcloud]
 user = www-data
 group = www-data
@@ -320,7 +377,7 @@ php_admin_value[output_buffering] = 0
 PHPCONF"
 
     # PHP settings
-    lxc_attach "cat > /etc/php/8.2/fpm/conf.d/99-nextcloud.ini << 'PHPINI'
+    lxc_attach "cat > /etc/php/${php}/fpm/conf.d/99-nextcloud.ini << 'PHPINI'
 opcache.enable=1
 opcache.interned_strings_buffer=16
 opcache.max_accelerated_files=10000
@@ -895,6 +952,7 @@ cmd_install() {
     sleep 10  # Wait for systemd to initialize
 
     if lxc_running; then
+        lxc_sans_credentials "$CONTAINER" "$LXC_PATH"
         install_nextcloud
         log "Nextcloud installed!"
         log "Run 'nextcloudctl setup' to complete configuration"

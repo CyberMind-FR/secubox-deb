@@ -6,10 +6,11 @@
 """SecuBox VM API - Virtualization management."""
 from fastapi import FastAPI, HTTPException, Depends
 from secubox_core.auth import require_jwt
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import subprocess
 import json
 import os
+import re
 import xml.etree.ElementTree as ET
 from typing import Optional
 
@@ -43,10 +44,35 @@ class VMCreate(BaseModel):
     os_type: str = "linux"
 
 
+# SUITE DEBIAN DU CONTENEUR (#3285) : la dernière stable, c'est-à-dire celle de
+# l'hôte (une box est installée sur la stable courante) ; repli trixie si l'hôte
+# n'est pas une Debian lisible. Surcharge : SECUBOX_DEBIAN_SUITE.
+SUITE_DEBIAN_REPLI = "trixie"
+
+
+def suite_debian_hote(os_release: str = "/etc/os-release") -> str:
+    impose = os.environ.get("SECUBOX_DEBIAN_SUITE", "")
+    if re.fullmatch(r"[a-z]+", impose):
+        return impose
+    champs = {}
+    try:
+        with open(os_release, encoding="utf-8") as f:
+            for ligne in f:
+                cle, sep, valeur = ligne.strip().partition("=")
+                if sep:
+                    champs[cle] = valeur.strip().strip('"').strip("'")
+    except OSError:
+        return SUITE_DEBIAN_REPLI
+    code = champs.get("VERSION_CODENAME", "")
+    if champs.get("ID") == "debian" and re.fullmatch(r"[a-z]+", code):
+        return code
+    return SUITE_DEBIAN_REPLI
+
+
 class LXCCreate(BaseModel):
     name: str
     template: str = "debian"
-    release: str = "bookworm"
+    release: str = Field(default_factory=suite_debian_hote)
     arch: str = "amd64"
 
 
@@ -579,7 +605,9 @@ def list_iso_images():
 def list_lxc_templates():
     """List available LXC templates."""
     templates = [
-        {"name": "debian", "releases": ["bookworm", "bullseye", "buster"]},
+        # La suite de l'hôte (dernière stable) en tête et par défaut (#3285) ;
+        # les anciennes restent proposées pour un usage choisi.
+        {"name": "debian", "releases": list(dict.fromkeys([suite_debian_hote(), "bookworm", "bullseye", "buster"]))},
         {"name": "ubuntu", "releases": ["jammy", "focal", "noble"]},
         {"name": "alpine", "releases": ["3.19", "3.18", "edge"]},
         {"name": "archlinux", "releases": ["current"]},

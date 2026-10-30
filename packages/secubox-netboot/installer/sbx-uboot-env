@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: sbx-uboot-env (#3271) — DANS LE LIVE : préparer l'environnement U-Boot de la carte. DIAGNOSTIC SEUL.
+
+R-3271-1 : rien n'est écrit depuis Linux. Sous le noyau Debian 6.12 de ces cartes (sans spi-orion), /proc/mtd est
+vide : la SPI n'est pas exposée. Et une MOCHAbin du banc a une SPI instable. L'environnement se pose donc depuis
+U-Boot, par le script secubox-uboot-env.scr (partition de démarrage de l'image, ou dossier netboot de la carte).
+
+  sbx-uboot-env --commandes   les deux commandes U-Boot de la carte (netboot, partition installée) — fin du flash
+  sbx-uboot-env [--afficher]  les commandes, le script de référence (.cmd) et l'état de la SPI vue de Linux ;
+                              code 5 si le mtd attendu n'est pas listé dans /proc/mtd
+Configuration : /etc/secubox/uboot-env.json, générée par scripts/uboot-env.py live-conf à la construction du live.
+"""
+import argparse
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+CONF = "/etc/secubox/uboot-env.json"
+TITRES = {"reseau": "depuis le netboot", "installe": "depuis la partition installée"}
+
+
+def mtds() -> list:
+    """Noms des mtd listés dans /proc/mtd (vide si le fichier manque)."""
+    try:
+        texte = Path(os.environ.get("SBX_UBOOT_ENV_PROC_MTD", "/proc/mtd")).read_text()
+    except OSError:
+        return []
+    return re.findall(r'^mtd[0-9]{1,2}: [0-9a-f]{8} [0-9a-f]{8} "([^"]{0,64})"$', texte, re.M)
+
+
+def commandes(c: dict) -> None:
+    print(f" Préparer l'environnement U-Boot ({c['titre']}) : une fois, à la console U-Boot (compte à rebours")
+    print(" interrompu), au choix :")
+    for role, cmd in c["commandes"]:
+        print(f"   {TITRES.get(role, role)} :")
+        print(f"     {cmd}")
+        print("     reset")
+
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(prog="sbx-uboot-env")
+    p.add_argument("--conf", default=CONF)
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--commandes", action="store_true", help="les commandes U-Boot seulement")
+    g.add_argument("--afficher", action="store_true", help="commandes, script de référence, état de la SPI (défaut)")
+    a = p.parse_args(argv)
+    try:
+        c = json.loads(Path(a.conf).read_text())
+        _ = (c["titre"], c["commandes"], c["cmd"], c["env"]["mtd"], c["env"]["spi"], c["env"]["source"])
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        print(f"[sbx-uboot-env] configuration illisible ou incomplète ({a.conf}) : {e!r}")
+        return 2
+    print("=" * 86)
+    commandes(c)
+    if a.commandes:
+        print("=" * 86)
+        return 0
+    print("-" * 86)
+    print(" Script de référence (secubox-uboot-env.cmd) :")
+    sys.stdout.write(c["cmd"])
+    print("-" * 86)
+    e = c["env"]
+    liste = mtds()
+    present = len(liste) == 1 if e["mtd"] == "*" else e["mtd"] in liste
+    if not present:
+        print(" la SPI n'est pas exposée sous ce noyau : utilisez secubox-uboot-env.scr depuis U-Boot")
+        print("=" * 86)
+        return 5
+    nom = "flash entière" if e["mtd"] == "*" else f"mtd « {e['mtd']} »"
+    print(f" SPI vue de Linux : {nom} présent ; environnement attendu à {e['spi']} ({e['source']}).")
+    print(" Diagnostic seulement : l'environnement se pose depuis U-Boot (commandes ci-dessus).")
+    print("=" * 86)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

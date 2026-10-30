@@ -2027,11 +2027,22 @@ BOOTCMD_END
     ok "boot-usb.scr installé (démarrage USB en une ligne)"
   fi
 
-  # fix-bootcmd (#2826) : regle le bootcmd de la carte (eMMC puis USB) en gardant l'ancien. Livre compile, sans mkimage.
-  if [[ -f "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr" ]]; then
-    cp "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr" "${MNT}/boot/fix-bootcmd.scr"
-    [[ -f "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.cmd" ]] && cp "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.cmd" "${MNT}/boot/fix-bootcmd.cmd"
-    ok "fix-bootcmd.scr installé"
+  # secubox-uboot-env (#3271, ex-fix-bootcmd #2826) : pose l'environnement U-Boot de base (adresses sûres, ethact,
+  # autoload, bootcmd vers ce support, bootcmd_avant), puis saveenv. Généré par packages/secubox-netboot/scripts/
+  # uboot-env.py, livré compilé (sans mkimage) à la racine de la partition de démarrage :
+  #   mmc dev N; fatload mmc N:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}
+  # fix-bootcmd.scr : alias le temps d'une version (procédures #2826 déjà publiées). Si la carte garde son ancien
+  # fix-bootcmd (ESPRESSObin : bootcmd_avant et bootcmd seulement, ses adresses n'étant pas validées au banc), c'est
+  # lui ; sinon (MOCHAbin), une copie complète de secubox-uboot-env.scr.
+  if [[ -f "${SCRIPT_DIR}/../board/${BOARD}/secubox-uboot-env.scr" ]]; then
+    cp "${SCRIPT_DIR}/../board/${BOARD}/secubox-uboot-env.scr" "${MNT}/boot/secubox-uboot-env.scr"
+    cp "${SCRIPT_DIR}/../board/${BOARD}/secubox-uboot-env.cmd" "${MNT}/boot/secubox-uboot-env.cmd"
+    if [[ -f "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr" ]]; then
+      cp "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr" "${MNT}/boot/fix-bootcmd.scr"
+    else
+      cp "${MNT}/boot/secubox-uboot-env.scr" "${MNT}/boot/fix-bootcmd.scr"
+    fi
+    ok "secubox-uboot-env.scr installé (alias fix-bootcmd.scr)"
   fi
 
   # Compiler le bootscript si mkimage est disponible

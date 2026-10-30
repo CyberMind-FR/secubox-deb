@@ -1,3 +1,14 @@
+secubox-matrix (1.4.1-1~trixie1) trixie; urgency=medium
+
+  * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte
+    (/etc/os-release, repli trixie), surcharge par SECUBOX_DEBIAN_SUITE ; plus de bookworm en dur.
+  * systemd >= 257 (trixie) en LXC non privilégié : ImportCredential= vidé par drop-in pour
+    journald, sysctl et tmpfiles, seulement si le conteneur a ce systemd (#3274).
+  * Dépôt packages.matrix.org : suite lue dans le conteneur (publie trixie, vérifié le 2026-10-30) ;
+    gpg au lieu de gnupg.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
+
 secubox-matrix (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /jabber/ refaite au profil Aurora (#2649) : page autonome, tuiles (service, utilisateurs, domaines, ports C2S et S2S),

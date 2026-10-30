@@ -57,3 +57,83 @@ startup = "cascade"
 # K2000 mode (Knight Rider sweep) - for status display
 k2000_enabled = false
 k2000_speed = 0.1
+
+# =====================================================================
+# Moteur d'affichage en couches (secubox-led-pulse, #3290 tranche 2)
+# Les sections ci-dessus servent aux anciens démons (heartbeat, healthbump),
+# désactivés par défaut depuis 2.3.0. Toute valeur invalide est remplacée
+# par son défaut avec un avertissement dans le journal.
+# Vérifier : secubox-led verifier ; montrer : secubox-led demo <forme|couche>.
+# =====================================================================
+
+[moteur]
+debit_max = 20         # écritures I2C par seconde au plus, tous canaux (1..100)
+luminosite = 0.6       # échelle appliquée à la palette (0.05..1.0)
+pas = 0.1              # période de calcul d'une image (s)
+repere_duree = 1.2     # repère avant chaque couche : N éclats blancs sur la LED 2
+periode_mesure = 5     # relevé des sources (s)
+reprise_auto = true    # erreurs I2C répétées -> secubox-led-reset (au plus 1 / 10 min)
+
+# Palette validée par le propriétaire (R, G, B). Ajouter ou surcharger ici.
+[couleurs]
+orange = [255, 80, 0]
+jaune = [255, 200, 0]
+violet = [150, 0, 255]
+rose = [255, 20, 120]
+cyan = [0, 220, 255]
+turquoise = [0, 255, 90]
+blanc_chaud = [255, 150, 60]
+blanc = [255, 255, 255]
+
+# Sources : niveau 0..3 par seuils croissants [n1, n2, n3].
+# Absente, illisible ou plus vieille que fraicheur_max (s) => « inconnu ».
+[sources.cpu]
+type = "cpu"                 # occupation CPU, /proc/stat (%)
+seuils = [50, 75, 90]
+
+[sources.memoire]
+type = "memoire"             # 100 - MemAvailable/MemTotal (%)
+seuils = [60, 80, 92]
+
+[sources.es]
+type = "iowait"              # attente d'E/S, /proc/stat (%)
+seuils = [5, 15, 30]
+
+[sources.attaques]
+type = "compteur_json"       # blocages WAF par minute (cache secubox-metrics)
+chemin = "/var/cache/secubox/metrics-cache.json"
+cle = "waf.waf_blocked"
+seuils = [1, 10, 60]
+fraicheur_max = 300
+
+[sources.visites]
+type = "jauge_json"          # connexions HTTPS établies (cache secubox-metrics)
+chemin = "/var/cache/secubox/metrics-cache.json"
+cle = "connections.https"
+seuils = [1, 20, 100]
+fraicheur_max = 300
+
+[sources.alertes]
+type = "alertes_json"        # alertes SOC non acquittées ; critique => niveau 3
+chemin = "/var/lib/secubox/soc/alerts.json"
+seuils = [1, 3, 10]
+
+# Couches, affichées dans l'ordre, sans limite de nombre.
+# forme : par_led | jauge | mono | double | triple | etale | rotatif
+# rythme : fixe | respiration | pulsation | eclats ; palette : 4 couleurs, niveau 0..3
+# Des couches « mono » consécutives tournent par fenêtre de trois LEDs.
+[[couche]]
+nom = "systeme"
+sources = ["cpu", "memoire", "es"]
+forme = "par_led"
+palette = ["vert", "jaune", "orange", "rouge"]
+rythme = "respiration"
+duree = 8
+
+[[couche]]
+nom = "trafic"
+sources = ["attaques", "visites", "alertes"]
+forme = "par_led"
+palette = ["cyan", "bleu", "violet", "rose"]
+rythme = "pulsation"
+duree = 8

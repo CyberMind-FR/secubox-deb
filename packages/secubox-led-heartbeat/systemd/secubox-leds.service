@@ -17,6 +17,8 @@ Type=oneshot
 RemainAfterExit=yes
 ExecCondition=/usr/sbin/secubox-led-board
 ExecStart=/sbin/modprobe i2c-dev
+# Avertit dans le journal si la puce est la sans module pour ce noyau (#3290)
+ExecStart=-/usr/sbin/secubox-led-dkms check
 ExecStart=/bin/sh -c 'for i in 1 2 3 4 5; do test -e /sys/class/leds/green:led1/trigger && break; echo 1-0064 > /sys/bus/i2c/drivers/leds-is31fl319x/unbind 2>/dev/null; echo 1-0064 > /sys/bus/i2c/drivers/leds-is31fl319x/bind 2>/dev/null; sleep 2; done'
 ExecStart=/bin/sh -c 'echo heartbeat > /sys/class/leds/green:led1/trigger 2>/dev/null || true'
 ExecStart=/bin/sh -c 'echo 0 > /sys/class/leds/red:led1/brightness 2>/dev/null || true'

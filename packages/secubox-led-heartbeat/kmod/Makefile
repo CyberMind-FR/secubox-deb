@@ -1,25 +1,24 @@
-# Out-of-tree build for IS31FL319X LED driver
-# Cross-compile for ARM64: make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Construction hors arbre du pilote leds-is31fl319x (IS31FL3199 du MOCHAbin).
+# Appelé par DKMS (dkms.conf : KVER/KDIR fournis) ou à la main sur la cible :
+#   make                       # noyau courant
+#   make KVER=6.12.107+deb13-arm64
+# Construction croisée : make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KDIR=...
+# (ARCH/CROSS_COMPILE ne sont plus forcés : DKMS construit nativement sur la box).
 
 obj-m := leds-is31fl319x.o
 
-# Default kernel source location
-KDIR ?= /lib/modules/$(shell uname -r)/build
-
-# For cross-compilation
-ARCH ?= arm64
-CROSS_COMPILE ?= aarch64-linux-gnu-
+KVER ?= $(shell uname -r)
+KDIR ?= /lib/modules/$(KVER)/build
 
 all:
-	$(MAKE) -C $(KDIR) M=$(PWD) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules
+	$(MAKE) -C $(KDIR) M=$(CURDIR) modules
 
 clean:
-	$(MAKE) -C $(KDIR) M=$(PWD) clean
+	$(MAKE) -C $(KDIR) M=$(CURDIR) clean
 
-install:
-	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
-
-# Deploy to target
-deploy:
-	scp leds-is31fl319x.ko root@192.168.1.200:/lib/modules/`ssh root@192.168.1.200 uname -r`/kernel/drivers/leds/
-	ssh root@192.168.1.200 "depmod -a && modprobe leds-is31fl319x"
+.PHONY: all clean

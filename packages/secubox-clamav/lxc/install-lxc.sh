@@ -6,11 +6,31 @@
 
 # SecuBox-Deb :: secubox-clamav :: install-lxc.sh (#1912)
 #
-# Crée (idempotent) le LXC `clamav` : Debian bookworm non privilégié, IP fixe sur br-lxc,
+# Crée (idempotent) le LXC `clamav` : Debian (dernière stable) non privilégié, IP fixe sur br-lxc,
 # clamd en TCP sur cette IP SEULEMENT, base téléchargée une première fois. Le conteneur ne
 # démarre PAS au boot (lxc.start.auto = 0) : clamavctl le réveille à la demande.
 # Modèle : packages/secubox-ytsas/lxc/install-lxc.sh.
 set -euo pipefail
+# SUITE DEBIAN DU CONTENEUR (#3285) : la dernière stable, c'est-à-dire celle de
+# l'hôte (une box est installée sur la stable courante) ; repli trixie si l'hôte
+# n'est pas une Debian lisible. Surcharge : SECUBOX_DEBIAN_SUITE.
+suite_debian_hote() {
+    local f="${SECUBOX_OS_RELEASE:-/etc/os-release}" id="" code=""
+    if [ -r "$f" ]; then
+        # shellcheck source=/dev/null
+        id="$(. "$f" && printf '%s' "${ID:-}")"
+        # shellcheck source=/dev/null
+        code="$(. "$f" && printf '%s' "${VERSION_CODENAME:-}")"
+    fi
+    case "$code" in ""|*[!a-z]*) code="" ;; esac
+    if [ "$id" = debian ] && [ -n "$code" ]; then
+        printf '%s\n' "$code"
+    else
+        printf 'trixie\n'
+    fi
+}
+
+readonly DEBIAN_SUITE="${SECUBOX_DEBIAN_SUITE:-$(suite_debian_hote)}"
 readonly LXC_NAME="${SECUBOX_CLAMAV_NOM:-clamav}"
 readonly LXC_IP="${SECUBOX_CLAMAV_IP:-10.100.0.220}"
 readonly LXC_PATH="${SECUBOX_CLAMAV_PATH:-/data/lxc}"
@@ -24,10 +44,31 @@ readonly SENTINEL="$STATE_DIR/.lxc-provisioned"
 log() { printf '[clamav-install] %s\n' "$*"; }
 la()  { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- "$@"; }
 
+# SYSTEMD >= 257 (trixie) DANS UN LXC NON PRIVILÉGIÉ : ImportCredential= y échoue
+# (243/CREDENTIALS) et laisse journald, sysctl et tmpfiles en échec. Vidé par
+# drop-in, seulement si le conteneur a ce systemd (#3274, #3285). Idempotent.
+# lxc_sans_credentials <nom> <chemin-lxc>
+lxc_sans_credentials() {
+    # shellcheck disable=SC2016  # expansion voulue DANS le conteneur
+    lxc-attach -n "$1" -P "$2" -- sh -c '
+        v=$(systemctl --version 2>/dev/null | awk "NR==1{print \$2}")
+        case "$v" in ""|*[!0-9]*) exit 0 ;; esac
+        [ "$v" -ge 257 ] || exit 0
+        for u in systemd-journald systemd-sysctl systemd-tmpfiles-setup systemd-tmpfiles-clean; do
+            mkdir -p "/etc/systemd/system/$u.service.d"
+            printf "%s\n" "# SecuBox #3274 : LXC non privilégié, pas de credentials systemd" \
+                "[Service]" "ImportCredential=" > "/etc/systemd/system/$u.service.d/secubox-lxc.conf"
+        done
+        systemctl daemon-reload
+        systemctl restart systemd-journald.service systemd-sysctl.service \
+            systemd-tmpfiles-setup.service 2>/dev/null || true
+    '
+}
+
 mkdir -p "$STATE_DIR"
 if [ ! -f "$SENTINEL" ]; then
   lxc-create -n "$LXC_NAME" -t download -P "$LXC_PATH" -- \
-    --dist debian --release bookworm --arch "$(dpkg --print-architecture)"
+    --dist debian --release "$DEBIAN_SUITE" --arch "$(dpkg --print-architecture)"
   if ! grep -q '^lxc.idmap' "$LXC_PATH/$LXC_NAME/config"; then
     printf 'lxc.idmap = u 0 %s 65536\nlxc.idmap = g 0 %s 65536\n' "$LXC_ROOT_UID" "$LXC_ROOT_UID" \
       >> "$LXC_PATH/$LXC_NAME/config"
@@ -58,6 +99,7 @@ CFG
   fi
   lxc-start -n "$LXC_NAME" -P "$LXC_PATH" -d
   sleep 6
+  lxc_sans_credentials "$LXC_NAME" "$LXC_PATH"
   la sh -c 'rm -f /etc/resolv.conf; printf "nameserver 1.1.1.1\nnameserver 9.9.9.9\n" > /etc/resolv.conf'
   la apt-get update
   la env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \

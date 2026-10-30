@@ -25,7 +25,7 @@ def charge(carte):
 def test_chaque_carte_declare_son_live():
     for carte in ("mochabin", "espressobin-v7"):
         e = charge(carte)
-        for k in ("LIVE_NOM", "LIVE_DTB", "LIVE_PILOTE", "LIVE_CONSOLE", "LIVE_ETHACT", "LIVE_SCRIPT_ADDR",
+        for k in ("LIVE_NOM", "LIVE_DTB", "LIVE_PILOTE", "LIVE_CONSOLE", "LIVE_ETHACT",
                   "LIVE_KERNEL_ADDR", "LIVE_FDT_ADDR", "LIVE_RAMDISK_ADDR", "LIVE_BOOTARGS"):
             assert k in e, (carte, k)
 
@@ -49,7 +49,7 @@ def test_l_espressobin_a_son_dtb_eMMC_son_pilote_et_sa_console():
 
 def test_les_adresses_de_l_espressobin_tiennent_dans_1_go_hors_zone_reservee():
     e = charge("espressobin-v7")
-    assert e["LIVE_SCRIPT_ADDR"] == "${loadaddr}"                     # adresse usine des procédures validées de l'image
+    assert "LIVE_SCRIPT_ADDR" not in e                                # #3271 : ${loadaddr} écrit en dur, plus de variable
     fdt, noyau, initrd = (int(e[k], 16) for k in ("LIVE_FDT_ADDR", "LIVE_KERNEL_ADDR", "LIVE_RAMDISK_ADDR"))
     for a in (fdt, noyau, initrd):
         assert not PSCI[0] <= a < PSCI[1]
@@ -184,7 +184,7 @@ import pytest  # noqa: E402
 @pytest.mark.parametrize("cle,valeur", [
     ("LIVE_DTB", "x.dtb; reset"), ("LIVE_BOOTARGS", '"a; reset"'), ("LIVE_KERNEL_ADDR", "0x07000000;reset"),
     ("LIVE_CONSOLE", "ttyMV0,115200 init=/bin/sh;"), ("LIVE_NOM", "../x"), ("LIVE_ETHACT", "neta@30000;reset"),
-    ("LIVE_BOOTARGS", '"$(id)"'), ("LIVE_SCRIPT_ADDR", "'${a;b}'"),
+    ("LIVE_BOOTARGS", '"$(id)"'), ("LIVE_FDT_ADDR", "'${a;b}'"),
 ])
 def test_une_valeur_douteuse_du_live_env_est_refusee(tmp_path, cle, valeur):
     base = (ICI / "board" / "espressobin-v7" / "live.env").read_text()

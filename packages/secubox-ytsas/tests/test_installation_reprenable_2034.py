@@ -10,6 +10,7 @@ déployée (Médiathèque en erreur). Si le conteneur existe, on ne le recrée p
 bloc lxc.net.0 à sa config : on le démarre et on poursuit. On exécute ici la section de création du script
 avec de faux lxc-* ; rien n'est touché sur la machine."""
 import os
+import re
 import stat
 import subprocess
 from pathlib import Path
@@ -21,7 +22,9 @@ def _section():
     texte = SCRIPT.read_text()
     debut = texte.index('mkdir -p "$STATE_DIR" "$DATA_DIR"')
     fin = texte.index('log "python version')
-    return texte[debut:fin]
+    # Helper défini plus haut dans le script (#3285), appelé par la section.
+    aide = re.search(r"^lxc_sans_credentials\(\) \{\n.*?^\}\n", texte, re.M | re.S).group(0)
+    return aide + texte[debut:fin]
 
 
 def _lancer(tmp_path, conteneur_existe):
@@ -43,7 +46,7 @@ def _lancer(tmp_path, conteneur_existe):
                                          f'printf "lxc.net.0.type = veth\\nlxc.idmap = u 0 100000 65536\\n" > "{config}"\nexit 0\n')
         (bin_ / "lxc-create").chmod(0o755)
     entete = f'''set -euo pipefail
-LXC_NAME=ytsas; LXC_PATH="{lxc}"; LXC_BRIDGE=br-lxc; LXC_GW=10.100.0.1; LXC_IP=10.100.0.180; LXC_VETH=veth-ytsas0
+DEBIAN_SUITE=trixie; LXC_NAME=ytsas; LXC_PATH="{lxc}"; LXC_BRIDGE=br-lxc; LXC_GW=10.100.0.1; LXC_IP=10.100.0.180; LXC_VETH=veth-ytsas0
 DATA_DIR="{tmp_path / "data"}"; STATE_DIR="{tmp_path / "etat"}"; SENTINEL="$STATE_DIR/.lxc-provisioned"; LXC_ROOT_UID=100000
 log() {{ :; }}
 la() {{ lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- "$@"; }}
@@ -69,6 +72,7 @@ def test_conteneur_absent_est_cree_comme_avant(tmp_path):
     r, appels, config = _lancer(tmp_path, conteneur_existe=False)
     assert r.returncode == 0, r.stderr
     assert "lxc-create" in appels and "lxc-start" in appels
+    assert "--release trixie" in appels                  # suite choisie, jamais bookworm en dur (#3285)
     assert "10.100.0.180/24" in config                   # le bloc réseau statique est bien ajouté
 
 

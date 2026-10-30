@@ -18,12 +18,31 @@
 
 set -euo pipefail
 
+# SUITE DEBIAN DU CONTENEUR (#3285) : la dernière stable, c'est-à-dire celle de
+# l'hôte (une box est installée sur la stable courante) ; repli trixie si l'hôte
+# n'est pas une Debian lisible. Surcharge : SECUBOX_DEBIAN_SUITE.
+suite_debian_hote() {
+    local f="${SECUBOX_OS_RELEASE:-/etc/os-release}" id="" code=""
+    if [ -r "$f" ]; then
+        # shellcheck source=/dev/null
+        id="$(. "$f" && printf '%s' "${ID:-}")"
+        # shellcheck source=/dev/null
+        code="$(. "$f" && printf '%s' "${VERSION_CODENAME:-}")"
+    fi
+    case "$code" in ""|*[!a-z]*) code="" ;; esac
+    if [ "$id" = debian ] && [ -n "$code" ]; then
+        printf '%s\n' "$code"
+    else
+        printf 'trixie\n'
+    fi
+}
+
 readonly LXC_NAME="${SECUBOX_LXC_NAME:-peertube}"
 readonly LXC_IP="${SECUBOX_LXC_IP:-10.100.0.120}"
 readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
 readonly LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
 readonly LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
-readonly DEBIAN_SUITE="${SECUBOX_DEBIAN_SUITE:-bookworm}"
+readonly DEBIAN_SUITE="${SECUBOX_DEBIAN_SUITE:-$(suite_debian_hote)}"
 readonly DATA_DIR="${SECUBOX_DATA_DIR:-/data/peertube}"
 readonly STATE_DIR="${SECUBOX_STATE_DIR:-/var/lib/secubox/peertube}"
 readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
@@ -113,6 +132,27 @@ ensure_masquerade() {
 lxc_state() {
     lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
         | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
+}
+
+# SYSTEMD >= 257 (trixie) DANS UN LXC NON PRIVILÉGIÉ : ImportCredential= y échoue
+# (243/CREDENTIALS) et laisse journald, sysctl et tmpfiles en échec. Vidé par
+# drop-in, seulement si le conteneur a ce systemd (#3274, #3285). Idempotent.
+# lxc_sans_credentials <nom> <chemin-lxc>
+lxc_sans_credentials() {
+    # shellcheck disable=SC2016  # expansion voulue DANS le conteneur
+    lxc-attach -n "$1" -P "$2" -- sh -c '
+        v=$(systemctl --version 2>/dev/null | awk "NR==1{print \$2}")
+        case "$v" in ""|*[!0-9]*) exit 0 ;; esac
+        [ "$v" -ge 257 ] || exit 0
+        for u in systemd-journald systemd-sysctl systemd-tmpfiles-setup systemd-tmpfiles-clean; do
+            mkdir -p "/etc/systemd/system/$u.service.d"
+            printf "%s\n" "# SecuBox #3274 : LXC non privilégié, pas de credentials systemd" \
+                "[Service]" "ImportCredential=" > "/etc/systemd/system/$u.service.d/secubox-lxc.conf"
+        done
+        systemctl daemon-reload
+        systemctl restart systemd-journald.service systemd-sysctl.service \
+            systemd-tmpfiles-setup.service 2>/dev/null || true
+    '
 }
 
 create_lxc() {
@@ -241,7 +281,7 @@ set -euo pipefail
 echo '[1/8] apt prereqs'
 apt-get update -q
 apt-get install -y -q --no-install-recommends \
-    curl sudo unzip ca-certificates gnupg ffmpeg postgresql postgresql-contrib \
+    curl sudo unzip ca-certificates gpg ffmpeg postgresql postgresql-contrib \
     openssl g++ make redis-server git python3 python3-pip python-is-python3 cron wget
 
 echo '[2/8] Node 22 (NodeSource, signed apt repo — no curl|bash)'
@@ -470,6 +510,7 @@ main() {
     start_lxc
     wait_for_network
     ensure_resolv
+    lxc_sans_credentials "$LXC_NAME" "$LXC_PATH"
     install_peertube_in_lxc
     verify
     capture_admin

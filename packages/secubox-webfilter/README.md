@@ -81,6 +81,24 @@ domaines) ne fait qu'ajouter un faux classement en mode observe. Le parking n'a 
   précédent** au moindre échec ; son état se lit dans `/var/lib/secubox-dns-listes/etat.json`. Un rendu identique n'est **pas redéposé** (rien n'est
   recompilé). Le contrôleur ne touche plus Unbound : ni `unbound-checkconf`, ni `unbound-control`, ni accès réseau.
 - **Nuit** : `secubox-webfilter-apply.timer` applique les changements en attente à 04:00. La synchronisation des listes ne recharge jamais Unbound.
+- **Adresses rémanentes (0.5.3, #3005)** : la carte d'un appareil assigné ne dépend plus de la seule table de voisinage au moment de l'application
+  (`ip -j neigh` à 04:00 : un portable passé sur un autre réseau la nuit perdait son adresse Wi-Fi du jour et retombait dans `wf-defaut`). Le démon
+  `secubox-webfilter-feed` tient `remanence.json` (dossier d'état, compte du service, `0640`, écriture atomique) : pour chaque adresse vue dans le journal
+  d'Unbound **et** rattachée à un MAC par la table de voisinage, le dernier MAC et la date. Clé = adresse : jamais deux MAC pour une adresse ; un bail
+  réattribué passe au dernier vu. Le contrôleur fusionne cet historique (non expiré) avec la table du moment, qui l'emporte. Les appareils non assignés
+  n'entrent pas dans la carte, comme avant ; leurs adresses sont retenues pour trancher les conflits. `connus.json` reste la liste des appareils vus
+  dans les 5 dernières minutes (panneau).
+- **Ré-application amortie** : quand une adresse d'un appareil assigné manque à la carte appliquée (ou qu'une adresse de la carte sert un autre MAC),
+  le démon dépose `appliquer.demande` (création exclusive), au plus une fois par fenêtre d'amortissement, jamais pendant une application (marqueur
+  `application.en-cours` posé par le contrôleur, ignoré au-delà de 30 min) ni pendant une compilation de `secubox-dns-listes` (`etat.json` « en-cours »).
+  Une adresse signalée ne l'est plus tant qu'elle ne change pas de MAC.
+
+| Clé (`[appareils]` de `/etc/secubox/webfilter.toml`) | Défaut | Bornes | Rôle |
+|---|---|---|---|
+| `retention_jours` | 14 | 0 à 90 | durée pendant laquelle une adresse vue reste dans la carte de son appareil ; 0 = table de voisinage seule (comportement d'avant 0.5.3) |
+| `reapplication_min` | 30 | 5 à 1440 | au plus une demande d'application automatique par fenêtre |
+
+Section absente : valeurs par défaut. Le démon relit la section toutes les 5 minutes ; le contrôleur à chaque application.
 - **Audit** : chaque changement effectif (profil, mode d'une catégorie, appareil, application, refus, échec) est écrit dans `/var/log/secubox/audit.log`
   par le contrôleur root (module `webfilter-ctl`).
 - **Comptage** : « bloqué » et « aurait bloqué » sont comptés à part d'après `carte.json` (adresse → profil et modes), publiée par le contrôleur.
@@ -101,7 +119,10 @@ appartient à root, le contrôleur le lui rend au début de chaque application (
 
 - **Le décompte « bloqué » peut subir une surestimation** : il ne tient pas compte des autorisations par domaine ni des adresses exclues (ad-guard, adresse en
   double) qui se trouvent dans le réseau par défaut. Jamais l'inverse : un blocage n'est jamais compté s'il n'a pas eu lieu pour la catégorie du profil.
-- **Une adresse inconnue du dernier `apply`** (appareil éteint, adresse IPv6 temporaire qui change) repasse au profil `defaut` jusqu'au prochain `apply`.
+- **Une adresse jamais vue** pendant la rétention (appareil neuf, adresse IPv6 temporaire nouvelle) reste au profil `defaut` jusqu'à l'application que le
+  démon demande (au plus une par `reapplication_min`, suivie de la compilation de `secubox-dns-listes`, quelques minutes). Les adresses IPv6 temporaires
+  changent chaque jour : chacune peut déclencher une application, bornée par l'amortissement.
+- **Une adresse réattribuée** garde la vue de l'ancien appareil jusqu'à l'application que le démon demande en voyant le nouveau MAC.
 - **L'usurpation d'une adresse MAC** sur le réseau local fait hériter du profil de l'appareil usurpé : un filtre DNS n'est pas un contrôle d'accès.
 - **AppArmor** n'existe pas dans le noyau de gk2 : les profils livrés ne protègent rien sur cette box.
 - Sans `config.json`, le contrôleur ne fait rien (« inchangé ») ; sans catégorie en `block`, il n'écrit aucun drop-in et retire celui qui existe.

@@ -1,0 +1,458 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Correction 1 de la relecture de sécurité du moteur en couches (ref #3290)."""
+import json
+import logging
+import os
+import pwd
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import pytest
+
+PKG = Path(__file__).resolve().parents[1]
+REPO = PKG.parents[1]
+sys.path.insert(0, str(PKG / "usr" / "lib" / "secubox-led-heartbeat"))
+
+import ledcouches as lc  # noqa: E402
+
+MOI = pwd.getpwuid(os.getuid()).pw_name
+
+
+def jauge(p, **kw):
+    return lc.SourceJaugeJson("v", {"chemin": str(p), "cle": "a", "seuils": [1, 2, 3],
+                                     "fraicheur_max": 0, "proprietaires": [MOI], **kw})
+
+
+# ---------- 1. ouverture sûre ----------
+
+def test_json_lien_symbolique_refuse(tmp_path):
+    vrai = tmp_path / "vrai.json"
+    vrai.write_text(json.dumps({"a": 5}))
+    lien = tmp_path / "lien.json"
+    lien.symlink_to(vrai)
+    assert jauge(vrai).lire(0) == 3
+    assert jauge(lien).lire(0) is None
+
+
+def test_json_fifo_ne_bloque_pas(tmp_path):
+    f = tmp_path / "fifo"
+    os.mkfifo(f)
+    t = time.monotonic()
+    assert jauge(f).lire(0) is None
+    assert time.monotonic() - t < 1
+
+
+def test_json_enorme_refuse(tmp_path):
+    p = tmp_path / "gros.json"
+    p.write_text('{"a": 5, "b": "' + "x" * (lc.TAILLE_MAX_JSON + 10) + '"}')
+    assert jauge(p).lire(0) is None
+
+
+def test_json_proprietaire_inattendu_refuse(tmp_path):
+    if os.getuid() == 0:
+        pytest.skip("propriétaire root")
+    p = tmp_path / "m.json"
+    p.write_text(json.dumps({"a": 5}))
+    assert jauge(p, proprietaires=["root"]).lire(0) is None
+
+
+def test_json_inscriptible_par_tous_refuse(tmp_path):
+    p = tmp_path / "m.json"
+    p.write_text(json.dumps({"a": 5}))
+    os.chmod(p, 0o666)
+    assert jauge(p).lire(0) is None
+
+
+# ---------- 2 et 3. JSON piégé : jamais de plantage, jamais vert ----------
+
+@pytest.mark.parametrize("contenu", [
+    "[" * 100000 + "]" * 100000,                 # RecursionError
+    '{"a": ' + "9" * 400 + "}",                   # OverflowError au float()
+    '{"a": NaN}', '{"a": Infinity}', '{"a": -Infinity}', '{"a": 1e400}',
+    '{"a": "texte"}', '{"a": [1]}', '{"a": null}', "[1, 2]", '"nu"',
+])
+def test_json_piege_inconnu(tmp_path, contenu):
+    p = tmp_path / "m.json"
+    p.write_text(contenu)
+    assert jauge(p).lire(0) is None
+    c = lc.SourceCompteurJson("c", {"chemin": str(p), "cle": "a", "seuils": [1, 2, 3],
+                                    "fraicheur_max": 0, "proprietaires": [MOI]})
+    assert c.lire(0) is None and c.lire(60) is None
+
+
+def test_cle_non_texte_inconnu(tmp_path):
+    p = tmp_path / "m.json"
+    p.write_text(json.dumps({"a": 5}))
+    assert jauge(p, cle=5).lire(0) is None
+
+
+def test_alertes_pieges(tmp_path):
+    p = tmp_path / "alerts.json"
+    for contenu in ["[" * 100000 + "]" * 100000, '{"alerts": 5}', '"x"', "[1, null]"]:
+        p.write_text(contenu)
+        s = lc.SourceAlertes("alertes", {"chemin": str(p), "seuils": [1, 3, 10],
+                                         "fraicheur_max": 0, "vivant": "",
+                                         "proprietaires": [MOI]})
+        r = s.lire(0)
+        assert r is None or r == 0
+
+
+# ---------- 4. alertes : fraîcheur et SOC vivant ----------
+
+def test_alertes_fraicheur_par_defaut():
+    assert lc.SOURCES_DEFAUT["alertes"]["fraicheur_max"] > 0
+    assert lc.SOURCES_DEFAUT["alertes"]["vivant"]
+
+
+def test_alertes_soc_mort_inconnu(tmp_path):
+    p = tmp_path / "alerts.json"
+    p.write_text("[]")
+    vivant = tmp_path / "soc.sock"
+    s = lc.SourceAlertes("alertes", {"chemin": str(p), "seuils": [1, 3, 10],
+                                     "vivant": str(vivant), "proprietaires": [MOI]})
+    assert s.lire(0) is None
+    vivant.write_text("")
+    assert s.lire(1) == 0
+
+
+def test_alertes_perimees_inconnu(tmp_path):
+    p = tmp_path / "alerts.json"
+    p.write_text("[]")
+    os.utime(p, (1, 1))
+    s = lc.SourceAlertes("alertes", {"chemin": str(p), "seuils": [1, 3, 10],
+                                     "fraicheur_max": 3600, "vivant": "",
+                                     "proprietaires": [MOI]})
+    assert s.lire(0) is None
+
+
+def test_horodatage_interne_prime_sur_mtime(tmp_path):
+    p = tmp_path / "m.json"
+    p.write_text(json.dumps({"a": 5, "timestamp_epoch": int(time.time())}))
+    os.utime(p, (1, 1))
+    assert jauge(p, fraicheur_max=300).lire(0) == 3
+    p.write_text(json.dumps({"a": 5, "timestamp_epoch": 1}))
+    assert jauge(p, fraicheur_max=300).lire(0) is None
+
+
+# ---------- 5. validation de config par types ----------
+
+@pytest.mark.parametrize("toml", [
+    'couleurs = 5\n',
+    'sources = "x"\n',
+    '[sources.cpu]\ntype = ["cpu"]\n',
+    '[sources.cpu]\ntype = { a = 1 }\n',
+    '[sources.attaques]\nchemin = 5\n',
+    '[sources.attaques]\ncle = ["waf"]\n',
+    '[sources.attaques]\nfraicheur_max = "x"\n',
+    '[sources.attaques]\nproprietaires = "root"\n',
+    'moteur = 3\n',
+    'couche = 3\n',
+    'couche = [1, "x"]\n',
+    '[[couche]]\nnom = ["x"]\nsources = ["cpu"]\nleds = "1"\n',
+])
+def test_config_types_invalides_defauts(tmp_path, caplog, toml):
+    caplog.set_level(logging.WARNING)
+    p = tmp_path / "leds.toml"
+    p.write_text(toml)
+    cfg = lc.charger_config(p)
+    assert cfg.couches
+    assert cfg.debit_max == lc.DEFAUT_DEBIT
+    for s in cfg.sources.values():
+        assert isinstance(s.chemin, Path) and isinstance(s.cle, str)
+    assert [r for r in caplog.records if r.name == "secubox-led"]
+
+
+def test_debit_max_borne_a_50(tmp_path):
+    p = tmp_path / "leds.toml"
+    p.write_text("[moteur]\ndebit_max = 80\n")
+    assert lc.charger_config(p).debit_max == lc.DEFAUT_DEBIT
+    p.write_text("[moteur]\ndebit_max = 50\n")
+    assert lc.charger_config(p).debit_max == 50
+
+
+def test_config_inscriptible_par_autrui_refusee(tmp_path, caplog):
+    caplog.set_level(logging.WARNING)
+    p = tmp_path / "leds.toml"
+    p.write_text("[moteur]\ndebit_max = 7\n")
+    os.chmod(p, 0o666)
+    cfg = lc.charger_config(p, exiger_root=True)
+    assert cfg.debit_max == lc.DEFAUT_DEBIT
+    assert any("inscriptible" in r.getMessage() or "propriétaire" in r.getMessage()
+               for r in caplog.records)
+
+
+# ---------- minor : espacement minimal ----------
+
+def test_espacement_minimal_entre_ecritures():
+    pauses, ecr = [], []
+
+    class E:
+        def ecrire(self, c, v):
+            ecr.append(c)
+    r = lc.Rendu(E(), debit_max=50, horloge=lambda: 0.0, pause=pauses.append)
+    r.afficher([(1, 2, 3)] * 3)
+    assert len(ecr) == 9
+    assert len([p for p in pauses if p >= 0.01]) >= 8
+
+
+# ---------- 7. reprise sans systemd-run ----------
+
+def test_reprise_par_code_de_sortie_et_on_failure():
+    src = (PKG / "usr/lib/secubox-led-heartbeat/ledcouches.py").read_text()
+    assert "systemd-run" not in src and "subprocess" not in src
+    assert lc.CODE_REPRISE == 75
+    unite = (PKG / "systemd/secubox-led-pulse.service").read_text()
+    assert "OnFailure=secubox-led-reprise.service" in unite
+    assert "RestartPreventExitStatus=75" in unite
+    rep = (PKG / "systemd/secubox-led-reprise.service").read_text()
+    assert "ExecStart=/usr/sbin/secubox-led-reset" in rep
+    assert "StartLimitBurst=1" in rep and "StartLimitIntervalSec=600" in rep
+    rules = (PKG / "debian/rules").read_text()
+    assert "secubox-led-reprise.service" in rules
+    reset = (PKG / "usr/sbin/secubox-led-reset").read_text()
+    assert "reset-failed secubox-led-pulse" in reset
+
+
+def test_servir_sort_en_75_apres_erreurs(tmp_path, monkeypatch):
+    base = tmp_path / "leds"
+    for i in (1, 2, 3):
+        for c in lc.COULEURS:
+            d = base / f"{c}:led{i}"
+            d.mkdir(parents=True)
+            (d / "brightness").mkdir()           # écriture impossible : IsADirectoryError
+            (d / "trigger").write_text("")
+    cfg = lc.charger_config(None)
+    cfg.base = str(base)
+    monkeypatch.setattr(lc.time, "sleep", lambda d: None)
+    assert lc.servir(cfg) == lc.CODE_REPRISE
+
+
+# ---------- 6. unité et AppArmor ----------
+
+def test_unite_durcie():
+    u = (PKG / "systemd/secubox-led-pulse.service").read_text()
+    for opt in ("UMask=0027", "RestrictSUIDSGID=yes", "ProtectKernelLogs=yes",
+                "RestrictNamespaces=yes", "PrivateDevices=yes", "NoNewPrivileges=yes",
+                "ProtectSystem=strict", "ProtectHome=yes", "PrivateTmp=yes",
+                "ProtectControlGroups=yes", "LockPersonality=yes", "AppArmorProfile="):
+        assert opt in u, opt
+    assert re.search(r"^MemoryMax=\d+M$", u, re.M)
+
+
+def test_exception_root_ecrite_dans_rules_code():
+    regles = (REPO / ".claude/RULES-CODE.md").read_text()
+    lignes = [li for li in regles.splitlines() if "secubox-led-pulse.service" in li]
+    assert lignes and "ProtectKernelTunables" in lignes[0] and "test_couches_correction1_3290" in lignes[0]
+
+
+def test_profil_apparmor():
+    prof = (PKG / "apparmor/secubox-led-pulse").read_text()
+    assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in prof
+    assert "/usr/sbin/secubox-led-pulse" in prof
+    assert re.search(r"/sys/devices/\S*leds/\S*brightness\S* r?w,", prof)
+    assert "deny /etc/secubox/secrets/** r," in prof
+    assert " ux," not in prof and " px," not in prof   # aucun exécutable hors profil
+    assert "/var/cache/secubox/metrics-cache.json r," in prof
+    rules = (PKG / "debian/rules").read_text()
+    assert "etc/apparmor.d/secubox-led-pulse" in rules
+    post = (PKG / "debian/postinst").read_text()
+    assert "apparmor_parser -r /etc/apparmor.d/secubox-led-pulse" in post
+    assert "chown root:root /etc/secubox/leds.toml" in post and "chmod 0644 /etc/secubox/leds.toml" in post
+
+
+# ---------- 8. demo : trap ----------
+
+def _faux_env(tmp_path, stop_rc=0, pulse_corps="exit 0", actif=True):
+    b = tmp_path / "bin"
+    b.mkdir()
+    journal = tmp_path / "journal"
+    (b / "systemctl").write_text(
+        f'#!/bin/sh\necho "systemctl $*" >> {journal}\n'
+        f'case "$*" in *is-active*) exit {0 if actif else 3};; stop*) exit {stop_rc};; esac\nexit 0\n')
+    (b / "pulse").write_text(f'#!/bin/sh\necho "pulse $*" >> {journal}\n{pulse_corps}\n')
+    for f in b.iterdir():
+        f.chmod(0o755)
+    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", SECUBOX_TEST="1",
+               SECUBOX_LED_PULSE=str(b / "pulse"))
+    return env, journal
+
+
+SCRIPT = str(PKG / "usr/sbin/secubox-led")
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="variables de test refusées en root")
+def test_demo_relance_le_service(tmp_path):
+    env, j = _faux_env(tmp_path)
+    r = subprocess.run(["bash", SCRIPT, "demo", "mono"], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    log = j.read_text()
+    assert "systemctl stop secubox-led-pulse.service" in log
+    assert log.strip().endswith("systemctl start secubox-led-pulse.service")
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="variables de test refusées en root")
+def test_demo_tuee_relance_quand_meme(tmp_path):
+    env, j = _faux_env(tmp_path, pulse_corps="kill -TERM $PPID; sleep 5")
+    subprocess.run(["bash", SCRIPT, "demo", "mono"], env=env, capture_output=True, timeout=10)
+    assert j.read_text().strip().endswith("systemctl start secubox-led-pulse.service")
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="variables de test refusées en root")
+def test_demo_stop_echoue_pas_de_second_ecrivain(tmp_path):
+    env, j = _faux_env(tmp_path, stop_rc=1)
+    r = subprocess.run(["bash", SCRIPT, "demo", "mono"], env=env, capture_output=True, text=True)
+    assert r.returncode != 0
+    log = j.read_text()
+    assert "pulse demo" not in log
+    assert log.strip().endswith("systemctl start secubox-led-pulse.service")
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="variables de test refusées en root")
+def test_demo_service_inactif_non_relance(tmp_path):
+    env, j = _faux_env(tmp_path, actif=False)
+    subprocess.run(["bash", SCRIPT, "demo", "mono"], env=env, capture_output=True)
+    assert "systemctl start" not in j.read_text()
+
+
+def test_demo_python_eteint_sur_sigterm():
+    src = (PKG / "usr/lib/secubox-led-heartbeat/ledcouches.py").read_text()
+    assert "signal.SIGHUP" in src
+
+
+# ---------- correction 2 : le profil couvre aussi ExecCondition (gk6, rc=126) ----------
+
+def test_profil_couvre_tout_ce_que_l_unite_execute_et_lit():
+    prof = (PKG / "apparmor/secubox-led-pulse").read_text()
+    unite = (PKG / "systemd/secubox-led-pulse.service").read_text()
+    # ExecCondition=/usr/sbin/secubox-led-board : script bash via /usr/bin/env, tr, grep
+    assert "ExecCondition=/usr/sbin/secubox-led-board" in unite
+    board = (PKG / "usr/sbin/secubox-led-board").read_text()
+    assert board.startswith("#!/usr/bin/env bash")
+    for exe in ("/usr/sbin/secubox-led-board", "/usr/bin/env", "/{,usr/}bin/bash",
+                "/{,usr/}bin/tr", "/{,usr/}bin/grep", "/usr/bin/python3*"):
+        assert re.search(re.escape(exe) + r" r?ix,", prof), exe
+    for lecture in ("@{PROC}/device-tree/** r,", "@{PROC}/stat r,", "@{PROC}/meminfo r,",
+                    "@{PROC}/diskstats r,", "/sys/class/leds/ r,",
+                    "/var/cache/secubox/metrics-cache.json r,",
+                    "/var/lib/secubox/soc/alerts.json r,", "/etc/secubox/leds.toml r,",
+                    "/usr/lib/python3/** r,", "/usr/lib/secubox-led-heartbeat/** r,",
+                    "/sys/devices/**/leds/{red,green,blue}:led[123]/brightness rw,",
+                    "/sys/devices/**/name r,"):
+        assert lecture in prof, lecture
+    # le module Python n'exécute rien (pas de subprocess, pas d'os.exec*)
+    src = (PKG / "usr/lib/secubox-led-heartbeat/ledcouches.py").read_text()
+    assert "subprocess" not in src and "os.exec" not in src and "os.system" not in src
+    # la reprise ne partage pas le profil (modprobe/rmmod/systemctl)
+    assert "AppArmorProfile" not in (PKG / "systemd/secubox-led-reprise.service").read_text()
+
+
+# ---------- correction 3 : reprise sur gk6 (status=120 en boucle) ----------
+
+def _arbre_leds(base):
+    for i in (1, 2, 3):
+        for c in lc.COULEURS:
+            d = base / f"{c}:led{i}"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "brightness").write_text("0")
+            (d / "trigger").write_text("none")
+
+
+def _retirer_leds(base):
+    import shutil
+    shutil.rmtree(base)
+    base.mkdir()
+
+
+def test_leds_absentes_puis_presentes(tmp_path):
+    base = tmp_path / "leds"
+    base.mkdir()
+    appels = []
+
+    def pause(d):
+        appels.append(d)
+        if len(appels) == 3:
+            _arbre_leds(base)                 # modprobe fini
+    assert lc.attendre_leds(str(base), delai=60, pause=pause) is True
+    assert len(appels) == 3
+
+
+def test_leds_toujours_absentes_sortie_75(tmp_path, monkeypatch):
+    base = tmp_path / "leds"
+    base.mkdir()
+    monkeypatch.setattr(lc, "BASE_LEDS", str(base))
+    monkeypatch.setattr(lc.time, "sleep", lambda d: None)
+    monkeypatch.delenv("SECUBOX_TEST", raising=False)
+    assert lc.main(["--config", str(tmp_path / "absent.toml"), "servir"]) == lc.CODE_REPRISE
+
+
+def test_erreur_ecriture_puis_module_recharge(tmp_path, monkeypatch):
+    import signal as sig
+    base = tmp_path / "leds"
+    _arbre_leds(base)
+    cfg = lc.charger_config(None)
+    cfg.base = str(base)
+    n = {"k": 0}
+
+    def rmmod_au_milieu(d):
+        n["k"] += 1
+        if n["k"] == 30:
+            _retirer_leds(base)               # rmmod pendant le service
+    monkeypatch.setattr(lc.time, "sleep", rmmod_au_milieu)
+    assert lc.servir(cfg) == lc.CODE_REPRISE
+    _arbre_leds(base)                         # secubox-led-reset : modprobe
+    n["k"] = 0
+
+    def puis_arret(d):
+        n["k"] += 1
+        if n["k"] == 40:
+            os.kill(os.getpid(), sig.SIGTERM)
+    monkeypatch.setattr(lc.time, "sleep", puis_arret)
+    assert lc.servir(cfg) == 0
+    assert all((base / f"{c}:led{i}" / "brightness").read_text() == "0"
+               for i in (1, 2, 3) for c in lc.COULEURS)   # éteint à l'arrêt
+
+
+def test_exception_inattendue_sortie_75(tmp_path, monkeypatch):
+    base = tmp_path / "leds"
+    _arbre_leds(base)
+    cfg = lc.charger_config(None)
+    cfg.base = str(base)
+    monkeypatch.setattr(lc.time, "sleep", lambda d: None)
+
+    def boum(*a, **k):
+        raise RuntimeError("inattendu")
+    monkeypatch.setattr(lc, "boucle", boum)
+    assert lc.servir(cfg) == lc.CODE_REPRISE
+
+
+def test_ecriture_sysfs_sans_tampon(tmp_path):
+    d = tmp_path / "red:led1"
+    d.mkdir()
+    (d / "brightness").symlink_to("/dev/full")
+    with pytest.raises(OSError):
+        lc.EcrivainSysfs(str(tmp_path)).ecrire("red:led1", 5)
+    src = (PKG / "usr/lib/secubox-led-heartbeat/ledcouches.py").read_text()
+    ecr = src[src.index("class EcrivainSysfs"):src.index("class EcrivainTexte")]
+    assert "os.write" in ecr and "open(" not in ecr.replace("os.open(", "")
+
+
+def test_sortie_sans_vidage_python_ni_120():
+    lanceur = (PKG / "usr/sbin/secubox-led-pulse").read_text()
+    assert "os._exit" in lanceur
+
+
+def test_unite_reprise_sans_boucle():
+    u = (PKG / "systemd/secubox-led-pulse.service").read_text()
+    assert "RestartMode=direct" in u            # OnFailure seulement sur vrai échec
+    reset = (PKG / "usr/sbin/secubox-led-reset").read_text()
+    debut = reset.index("systemctl start --no-block secubox-led-pulse.service")
+    assert debut > reset.index("modprobe")       # relancé seulement à la fin
+    entre = [li for li in reset[reset.index("modprobe"):debut].splitlines()
+             if li.strip().startswith("systemctl") and "secubox-led-pulse" in li]
+    assert entre == ["systemctl reset-failed secubox-led-pulse.service 2>/dev/null || true"]

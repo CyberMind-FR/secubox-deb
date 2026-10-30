@@ -1813,6 +1813,299 @@ def _deposer(a, apps: Path) -> dict:
     return sortie
 
 
+# ─── Frontaux web permanents (#3294) ──────────────────────────────────────
+# Un « frontal » est un service web hébergé dans le conteneur qui n'est PAS une appli Streamlit (couture.gk2 :
+# frontal FastAPI d'Atelier Partagé). Déclaré dans [frontaux.<nom>] de streamlit.toml : `boot` démarre le conteneur
+# puis son unité ; son vhost nginx :9080 est produit ici, avec les pages d'erreur SecuBox. La route sbxwaf et le
+# vhost HAProxy du domaine ne sont JAMAIS touchés : le frontal se branche derrière la chaîne existante.
+
+NOM_FRONTAL_RE = re.compile(r"[a-z0-9-]{1,40}", re.ASCII)
+UNITE_RE = re.compile(r"[a-z0-9@._-]{1,64}\.service", re.ASCII)
+SANTE_RE = re.compile(r"/[A-Za-z0-9._~/-]{0,127}", re.ASCII)
+FICHIER_NGINX_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}\.conf", re.ASCII)
+BACKENDS_NGINX = frozenset({"nginx_vhosts", ""})   # backends HAProxy qui mènent à sbxwaf → nginx :9080
+
+
+def ip_du_conteneur(lxc_config: str | None) -> str | None:
+    """L'adresse déclarée du conteneur streamlit (première lxc.net.N.ipv4.address de SA config) : seule cible
+    admise d'un frontal — ni le pont (l'hôte), ni un autre conteneur, ni le réseau ou la diffusion."""
+    for ligne in (_lire(Path(lxc_config)) or "").splitlines() if lxc_config else []:
+        m = re.match(r"^\s*lxc\.net\.[0-9]+\.ipv4\.address\s*=\s*([0-9.]+)/([0-9]{1,2})\s*$", ligne, re.ASCII)
+        if m:
+            with contextlib.suppress(ValueError):
+                itf = ipaddress.IPv4Interface(f"{m.group(1)}/{m.group(2)}")
+                if itf.ip not in (itf.network.network_address, itf.network.broadcast_address):
+                    return str(itf.ip)
+    return None
+
+
+def erreur_frontal(nom, domaine, cible, unite, sante, dom_box: str, ip_ct: str | None) -> str | None:
+    """Validation stricte d'une déclaration ; rend la cause d'un refus (partagée par `set` et par `boot`)."""
+    if not isinstance(nom, str) or not NOM_FRONTAL_RE.fullmatch(nom):
+        return "nom de frontal invalide (^[a-z0-9-]{1,40}$)"
+    if not isinstance(domaine, str) or not DOMAINE_RE.fullmatch(domaine):
+        return f"domaine invalide : « {str(domaine)[:80]} »"
+    if not dom_box or not domaine.endswith("." + dom_box) or "." in domaine[:-len(dom_box) - 1]:
+        return f"domaine hors de la zone de la box ({dom_box or 'inconnue'}) : {domaine}"
+    if label_reserve(domaine.split(".", 1)[0]):
+        return f"nom réservé à un service de la box : {domaine}"
+    m = re.fullmatch(r"([0-9]{1,3}(?:\.[0-9]{1,3}){3}):([0-9]{1,5})", cible, re.ASCII) if isinstance(cible, str) else None
+    if not m or not _ipv4(m.group(1)) or _ipv4(m.group(1)) != m.group(1):
+        return f"cible invalide (attendu : adresse IPv4:port) : « {str(cible)[:80]} »"
+    if not 1024 <= int(m.group(2)) <= 65535:
+        return f"port hors de 1024..65535 : {m.group(2)}"
+    if not ip_ct or m.group(1) != ip_ct:
+        return f"cible {m.group(1)} refusée : seule l'adresse du conteneur streamlit ({ip_ct or 'inconnue'}) est admise"
+    if not isinstance(unite, str) or not UNITE_RE.fullmatch(unite) or unite.startswith(("-", ".")):
+        return "unité invalide (^[a-z0-9@._-]{1,64}\\.service$)"
+    if sante is not None and sante != "" and (not isinstance(sante, str) or not SANTE_RE.fullmatch(sante)
+                                              or ".." in sante or "//" in sante):
+        return "chemin de santé invalide (absolu, sans « .. »)"
+    return None
+
+
+def frontaux(texte: str) -> dict[str, dict]:
+    out = {}
+    for e, _d, _f, v in sections(texte):
+        if e.startswith("frontaux.") and len(e) > len("frontaux."):
+            nom = e[len("frontaux."):]
+            out[nom] = {"nom": nom, "domaine": str(v.get("domain") or ""), "cible": str(v.get("cible") or ""),
+                        "unite": str(v.get("unite") or ""), "sante": str(v.get("sante") or ""),
+                        "enabled": v.get("enabled", True) is not False}
+    return out
+
+
+def _label_frontal(nom: str) -> str:
+    return f"frontal-{nom}"
+
+
+def vhost_frontal(nom: str, domaine: str, cible: str) -> str:
+    return f"""{MARQUE_NGINX} frontal={nom}
+# Généré par streamlitctl (frontal set, #3294) — NE PAS ÉDITER : réécrit à chaque déclaration.
+# Chaîne : HAProxy → sbxwaf → nginx :{PORT_NGINX} (ici) → frontal {nom} dans le conteneur Streamlit ({cible}).
+server {{
+    # Frontal arrêté ou conteneur endormi : page SecuBox, jamais la 502 brute de nginx.
+    include snippets/secubox-errorpages.conf;
+    listen {PORT_NGINX};
+    server_name {domaine};
+
+    # Frontal léger (formulaires) : aucun téléversement volumineux attendu.
+    client_max_body_size 1m;
+
+    location / {{
+        proxy_pass http://{cible};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+    }}
+}}
+"""
+
+
+def _reprise(fichier: str | None, domaine: str, label: str) -> list[Path]:
+    """Fichiers nginx à reprendre (posés à la main) ; sans --reprendre, un autre fichier qui sert déjà le domaine
+    est un conflit nommé."""
+    nom_gere = f"streamlit-{label}.conf"
+    if fichier is None:
+        if (ailleurs := nginx_sert_ailleurs(domaine, {nom_gere})):
+            raise Refus(CONFLIT, f"{domaine} est déjà servi par nginx ({ailleurs}) : relancez avec "
+                                 f"--reprendre {ailleurs} pour le remplacer (sauvegarde horodatée)")
+        return []
+    if not FICHIER_NGINX_RE.fullmatch(fichier) or fichier == nom_gere:
+        raise Refus(ARGUMENT, f"fichier à reprendre invalide : « {fichier[:80]} »")
+    fichiers = [dossier_nginx() / d / fichier for d in ("sites-enabled", "sites-available")]
+    presents = [f for f in fichiers if f.exists() or f.is_symlink()]
+    if not presents:
+        raise Refus(INCONNUE, f"fichier à reprendre introuvable : {fichier}")
+    for f in presents:
+        if f.is_symlink() and f.parent.name == "sites-available":
+            raise Refus(ETAT, f"{f} : lien symbolique — refusé")
+        t = _lire(f)
+        if not _sert(t, domaine):
+            raise Refus(ETAT, f"{fichier} ne sert pas {domaine} — refusé, rien n'est modifié")
+        if t.startswith(MARQUE_NGINX):
+            raise Refus(ETAT, f"{fichier} est un vhost généré par streamlitctl — pas une reprise")
+        noms = [n for ligne in re.findall(r"^\s*server_name\s+([^;]*);", t, re.M) for n in ligne.split()]
+        if len(re.findall(r"^\s*server\s*\{", t, re.M)) != 1 or noms != [domaine]:
+            raise Refus(ETAT, f"{fichier} porte plus d'un bloc server ou d'un nom — reprise refusée, rien n'est modifié")
+    if (ailleurs := nginx_sert_ailleurs(domaine, {nom_gere, fichier})):
+        raise Refus(CONFLIT, f"{domaine} est aussi servi par {ailleurs} : un seul fichier peut être repris")
+    return fichiers
+
+
+def _poser_frontal_nginx(label: str, contenu: str, repris: list[Path], horodatage: str) -> tuple:
+    """Remplacement en UN rechargement : la sauvegarde horodatée est écrite, le fichier repris retiré et le nôtre
+    posé, puis nginx -t + reload. Échec : tout revient (fichier repris compris) et nginx est rechargé."""
+    dispo, actif = _fichiers_nginx(label)
+    cibles = [dispo, actif, *repris]
+    avant = [(f, _instantane(f)) for f in cibles]
+    sauvegarde = None
+    texte_repris = next((t for f in repris if (t := _lire(f)) is not None), None)
+    if texte_repris is not None:
+        sauvegarde = dossier_nginx() / "sites-available" / f"{repris[0].name}.avant-frontal-{horodatage}"
+        ecrire_atomique(sauvegarde, texte_repris, 0o644)
+    try:
+        for f in repris:
+            with contextlib.suppress(FileNotFoundError):
+                f.unlink()
+        ecrire_atomique(dispo, contenu)
+        tmp = actif.with_name(f".{actif.name}.lien")
+        with contextlib.suppress(FileNotFoundError):
+            tmp.unlink()
+        os.symlink(str(dispo), tmp)
+        os.replace(tmp, actif)
+        erreur = _nginx_tester_recharger()
+    except OSError as e:
+        erreur = f"{e.filename or ''} : {e.strerror or e}"
+    if erreur:
+        echec = _restaurer_frontal_nginx(avant)
+        raise Refus(ECHEC, f"{erreur} — état d'avant rétabli, rien n'est déclaré"
+                    + (f" — retour arrière incomplet : {echec}" if echec else ""))
+    return avant, sauvegarde
+
+
+def _restaurer_frontal_nginx(avant: list) -> str | None:
+    try:
+        for f, etat in avant:
+            _restaurer(f, etat)
+    except OSError as e:
+        return f"nginx : {e.filename or ''} non restauré ({e.strerror})"
+    erreur = _nginx_tester_recharger()
+    return f"nginx après restauration : {erreur}" if erreur else None
+
+
+def verbe_frontal_lister(a, conf: Path, apps: Path) -> dict:
+    res = []
+    for f in frontaux(_lire_conf(conf)).values():
+        etat = "invalide"
+        if NOM_FRONTAL_RE.fullmatch(f["nom"]) and DOMAINE_RE.fullmatch(f["domaine"]):
+            etat = nginx_etat(_label_frontal(f["nom"]), f["domaine"], vhost_frontal(f["nom"], f["domaine"], f["cible"]))
+        res.append({**f, "vhost": etat})
+    return {"ok": True, "frontaux": res}
+
+
+def frontal_unites(conf: Path) -> list[str]:
+    """Unités à démarrer au boot : frontaux actifs et bien formés seulement (le TOML n'est pas une commande)."""
+    out = []
+    for f in frontaux(_lire_conf(conf)).values():
+        if f["enabled"] and NOM_FRONTAL_RE.fullmatch(f["nom"]) and UNITE_RE.fullmatch(f["unite"]) \
+                and not f["unite"].startswith(("-", ".")):
+            out.append(f["unite"])
+    return sorted(set(out))
+
+
+def verbe_frontal_poser(a, conf: Path, apps: Path) -> dict:
+    dom_box = domaine_box()
+    if (err := erreur_frontal(a.nom, a.domaine, a.cible, a.unite, a.sante, dom_box, ip_du_conteneur(a.lxc_config))):
+        raise Refus(ARGUMENT, err)
+    with verrou():
+        texte = _lire_conf(conf)
+        label = _label_frontal(a.nom)
+        for autre in frontaux(texte).values():
+            if autre["nom"] != a.nom and autre["domaine"] == a.domaine:
+                raise Refus(CONFLIT, f"{a.domaine} est déjà déclaré par le frontal « {autre['nom']} »")
+        for inst in instances(texte):
+            if inst["enabled"] and inst["domain"] == a.domaine:
+                raise Refus(CONFLIT, f"{a.domaine} est publié par l'appli « {inst['app']} » : dépubliez-la d'abord")
+        if nginx_etat(label, a.domaine, "") == "autre":
+            raise Refus(CONFLIT, f"sites-enabled/streamlit-{label}.conf sert un autre nom")
+        routes = lire_routes()
+        route = routes.get(a.domaine)
+        if route is not None and not (isinstance(route, list) and len(route) == 2 and route[1] == PORT_NGINX):
+            raise Refus(CONFLIT, f"{a.domaine} a une route sbxwaf vers autre chose que le nginx local :{PORT_NGINX} "
+                                 f"({route}) — refusé")
+        ha = haproxy_table(a.domaine)
+        if ha is not None and ha[1] not in BACKENDS_NGINX:
+            raise Refus(CONFLIT, f"{a.domaine} est servi par HAProxy vers le backend « {ha[1]} » — refusé")
+        repris = _reprise(a.reprendre, a.domaine, label)
+        contenu = vhost_frontal(a.nom, a.domaine, a.cible)
+        champs = {"domain": a.domaine, "cible": a.cible, "unite": a.unite, "sante": a.sante or "",
+                  "enabled": not a.inactif}
+        nouveau = poser_cles(texte, f"frontaux.{a.nom}", champs)
+        etat_nginx = nginx_etat(label, a.domaine, contenu)
+        avert = []
+        if route is None:
+            avert.append(f"aucune route sbxwaf pour {a.domaine} : déclarez-la avec secubox-waf-route (non modifiée ici)")
+        a_faire = nouveau != texte or etat_nginx != "conforme" or bool(repris)
+        sortie = {"ok": True, "frontal": a.nom, "domaine": a.domaine, "cible": a.cible, "unite": a.unite,
+                  "evenement": "frontal-pose" if a_faire else "inchange", "applique": False,
+                  "reprise": a.reprendre, "avertissements": avert}
+        if not a.apply or not a_faire:
+            return sortie
+        _valider_toml(texte, nouveau)
+        journal = Journal(a.par)
+        try:
+            avant, sauvegarde = (None, None)
+            if etat_nginx != "conforme" or repris:
+                try:
+                    avant, sauvegarde = _poser_frontal_nginx(label, contenu, repris,
+                                                             datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
+                except Refus as e:
+                    journal.ecrire(evenement="frontal-pose", frontal=a.nom, domaine=a.domaine,
+                                   resultat="echec-nginx", erreur=e.message[:300])
+                    raise
+            try:
+                _ecrire_conf(conf, texte, nouveau)
+            except (Refus, OSError) as e:
+                echec = _restaurer_frontal_nginx(avant) if avant is not None else None
+                cause = e.message if isinstance(e, Refus) else (e.strerror or str(e))
+                journal.ecrire(evenement="frontal-pose", frontal=a.nom, resultat="echec-declaration",
+                               erreur=(cause + (f" ; {echec}" if echec else ""))[:300])
+                raise
+            journal.ecrire(evenement="frontal-pose", frontal=a.nom, domaine=a.domaine, cible=a.cible,
+                           unite=a.unite, enabled=not a.inactif, repris=a.reprendre,
+                           sauvegarde=sauvegarde.name if sauvegarde else None, resultat="applique")
+        finally:
+            journal.fermer()
+        sortie["applique"] = True
+        sortie["sauvegarde"] = str(sauvegarde) if sauvegarde else None
+        return sortie
+
+
+def verbe_frontal_boot(a, conf: Path, apps: Path) -> dict:
+    """Trace d'audit d'un démarrage de frontal par `boot` (le résultat vient du ctl, l'unité est revalidée)."""
+    if a.unite not in frontal_unites(conf):
+        raise Refus(ARGUMENT, "unité non déclarée")
+    journal = Journal("boot")
+    try:
+        journal.ecrire(evenement="frontal-boot", unite=a.unite, resultat=a.resultat)
+    finally:
+        journal.fermer()
+    return {"ok": True}
+
+
+def verbe_frontal_retirer(a, conf: Path, apps: Path) -> dict:
+    if not NOM_FRONTAL_RE.fullmatch(a.nom or ""):
+        raise Refus(ARGUMENT, "nom de frontal invalide (^[a-z0-9-]{1,40}$)")
+    with verrou():
+        texte = _lire_conf(conf)
+        f = frontaux(texte).get(a.nom)
+        if f is None:
+            raise Refus(INCONNUE, f"frontal inconnu : {a.nom}")
+        nouveau = retirer_section(texte, f"frontaux.{a.nom}")
+        sortie = {"ok": True, "frontal": a.nom, "domaine": f["domaine"], "evenement": "frontal-retire",
+                  "applique": False, "avertissements": []}
+        if not a.apply:
+            return sortie
+        _valider_toml(texte, nouveau)
+        journal = Journal(a.par)
+        try:
+            etat = nginx_retirer(_label_frontal(a.nom), f["domaine"], sortie["avertissements"]) \
+                if DOMAINE_RE.fullmatch(f["domaine"]) else "laisse"
+            _ecrire_declaration(journal, conf, texte, nouveau, a.nom, "frontal-retire")
+            journal.ecrire(evenement="frontal-retire", frontal=a.nom, domaine=f["domaine"], nginx=etat,
+                           resultat="applique")
+        finally:
+            journal.fermer()
+        sortie["applique"] = True
+        return sortie
+
+
 # ─── Ligne de commande ────────────────────────────────────────────────────
 
 class _Parseur(argparse.ArgumentParser):
@@ -1876,6 +2169,26 @@ def _parseur() -> _Parseur:
     s.add_argument("--retirer", action="append")
     s.add_argument("--par", type=_type_acteur, default="inconnu")
     s.add_argument("--apply", action="store_true")
+    s = sub.add_parser("frontal-lister")
+    s = sub.add_parser("frontal-unites")
+    s = sub.add_parser("frontal-poser")
+    s.add_argument("nom")
+    s.add_argument("--domaine", required=True)
+    s.add_argument("--cible", required=True)
+    s.add_argument("--unite", required=True)
+    s.add_argument("--sante", default="")
+    s.add_argument("--reprendre")
+    s.add_argument("--inactif", action="store_true")
+    s.add_argument("--lxc-config", dest="lxc_config")
+    s.add_argument("--par", type=_type_acteur, default="inconnu")
+    s.add_argument("--apply", action="store_true")
+    s = sub.add_parser("frontal-boot")
+    s.add_argument("--unite", required=True)
+    s.add_argument("--resultat", required=True, choices=["actif", "deja-actif", "echec", "conteneur-indisponible"])
+    s = sub.add_parser("frontal-retirer")
+    s.add_argument("nom")
+    s.add_argument("--par", type=_type_acteur, default="inconnu")
+    s.add_argument("--apply", action="store_true")
     return p
 
 
@@ -1895,6 +2208,19 @@ def main(argv: list[str] | None = None, entree: str | None = None) -> int:
             r = verbe_ecrire_port(a, conf, apps)
         elif a.verbe == "deposer":
             r = verbe_deposer(a, conf, apps)
+        elif a.verbe == "frontal-unites":
+            # Une unité par ligne (lue par `streamlitctl boot`), déjà validée : jamais du JSON à découper en shell.
+            for u in frontal_unites(conf):
+                print(u)
+            return OK
+        elif a.verbe == "frontal-lister":
+            r = verbe_frontal_lister(a, conf, apps)
+        elif a.verbe == "frontal-poser":
+            r = verbe_frontal_poser(a, conf, apps)
+        elif a.verbe == "frontal-boot":
+            r = verbe_frontal_boot(a, conf, apps)
+        elif a.verbe == "frontal-retirer":
+            r = verbe_frontal_retirer(a, conf, apps)
         elif a.verbe == "depublier-anciennes":
             r = verbe_depublier_anciennes(a, conf, apps)
         else:

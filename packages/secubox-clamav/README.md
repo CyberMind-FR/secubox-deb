@@ -20,7 +20,7 @@ Rspamd (conteneur mail)
 
 | | |
 |---|---|
-| Conteneur | `clamav`, Debian bookworm non privilégié, `10.100.0.220`, `lxc.start.auto = 0` |
+| Conteneur | `clamav`, Debian (suite de l'hôte, dernière stable — #3285) non privilégié, `10.100.0.220`, `lxc.start.auto = 0` |
 | Mémoire | `memory.high` 1,4 Go / `memory.max` 1,8 Go, **alloués seulement éveillé** (≈ 1 Go mesuré) |
 | Écoute | clamd sur `10.100.0.220:3310` seulement (unité `clamav-daemon.socket`) ; l'hôte sur `10.100.0.1:3310` (pont des conteneurs) ; rien sur la LAN |
 | Base | `freshclam` quand le LXC est éveillé + minuterie hebdomadaire (`secubox-clamav-update.timer`, dimanche 04:30) |

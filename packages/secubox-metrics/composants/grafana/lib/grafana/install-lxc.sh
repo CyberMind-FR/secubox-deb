@@ -8,12 +8,31 @@
 
 set -euo pipefail
 
+# SUITE DEBIAN DU CONTENEUR (#3285) : la dernière stable, c'est-à-dire celle de
+# l'hôte (une box est installée sur la stable courante) ; repli trixie si l'hôte
+# n'est pas une Debian lisible. Surcharge : SECUBOX_DEBIAN_SUITE.
+suite_debian_hote() {
+    local f="${SECUBOX_OS_RELEASE:-/etc/os-release}" id="" code=""
+    if [ -r "$f" ]; then
+        # shellcheck source=/dev/null
+        id="$(. "$f" && printf '%s' "${ID:-}")"
+        # shellcheck source=/dev/null
+        code="$(. "$f" && printf '%s' "${VERSION_CODENAME:-}")"
+    fi
+    case "$code" in ""|*[!a-z]*) code="" ;; esac
+    if [ "$id" = debian ] && [ -n "$code" ]; then
+        printf '%s\n' "$code"
+    else
+        printf 'trixie\n'
+    fi
+}
+
 readonly LXC_NAME="${SECUBOX_LXC_NAME:-grafana}"
 readonly LXC_IP="${SECUBOX_LXC_IP:-10.100.0.70}"
 readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
 readonly LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
 readonly LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
-readonly DEBIAN_SUITE="${SECUBOX_DEBIAN_SUITE:-bookworm}"
+readonly DEBIAN_SUITE="${SECUBOX_DEBIAN_SUITE:-$(suite_debian_hote)}"
 readonly PROVISION_DIR="${SECUBOX_PROVISION_DIR:-/usr/share/secubox/lib/grafana/provision}"
 readonly STATE_DIR="${SECUBOX_STATE_DIR:-/var/lib/secubox/grafana}"
 readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
@@ -84,6 +103,27 @@ lxc_state() {
         | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
 }
 
+# SYSTEMD >= 257 (trixie) DANS UN LXC NON PRIVILÉGIÉ : ImportCredential= y échoue
+# (243/CREDENTIALS) et laisse journald, sysctl et tmpfiles en échec. Vidé par
+# drop-in, seulement si le conteneur a ce systemd (#3274, #3285). Idempotent.
+# lxc_sans_credentials <nom> <chemin-lxc>
+lxc_sans_credentials() {
+    # shellcheck disable=SC2016  # expansion voulue DANS le conteneur
+    lxc-attach -n "$1" -P "$2" -- sh -c '
+        v=$(systemctl --version 2>/dev/null | awk "NR==1{print \$2}")
+        case "$v" in ""|*[!0-9]*) exit 0 ;; esac
+        [ "$v" -ge 257 ] || exit 0
+        for u in systemd-journald systemd-sysctl systemd-tmpfiles-setup systemd-tmpfiles-clean; do
+            mkdir -p "/etc/systemd/system/$u.service.d"
+            printf "%s\n" "# SecuBox #3274 : LXC non privilégié, pas de credentials systemd" \
+                "[Service]" "ImportCredential=" > "/etc/systemd/system/$u.service.d/secubox-lxc.conf"
+        done
+        systemctl daemon-reload
+        systemctl restart systemd-journald.service systemd-sysctl.service \
+            systemd-tmpfiles-setup.service 2>/dev/null || true
+    '
+}
+
 create_lxc() {
     if [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; then
         log "LXC '$LXC_NAME' already exists at $LXC_PATH — skipping debootstrap"
@@ -151,7 +191,7 @@ install_grafana_in_lxc() {
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -q
         apt-get install -y --no-install-recommends \
-            apt-transport-https software-properties-common ca-certificates curl gnupg wget
+            apt-transport-https ca-certificates curl gpg wget
 
         if [ ! -f /etc/apt/sources.list.d/grafana.list ]; then
             install -d /etc/apt/keyrings
@@ -246,6 +286,7 @@ main() {
     start_lxc
     wait_for_network
     ensure_resolv
+    lxc_sans_credentials "$LXC_NAME" "$LXC_PATH"
     install_grafana_in_lxc
     generate_secrets
     provision_grafana

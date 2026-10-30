@@ -18,6 +18,7 @@ import os
 import re
 import subprocess
 import time
+import tomllib
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -120,7 +121,23 @@ def amorcer_collecte() -> None:
     global _collecte
     if _collecte is None or _collecte.done():
         _collecte = asyncio.create_task(vhost_stats_agg.run_forever())
+    _amorcer_cache_leger()
     _prechauffer_rapport()
+
+
+# #3295 — rafraichissement de fond de la partie LEGERE du cache (waf, connexions).
+# Sans lui le cache n'etait reconstruit qu'a la requete suivante une fois perime
+# (TTL 30 s) : le bandeau de sante lisait un fichier vieux de plusieurs minutes.
+# L'`overview` (lxc-info, systemctl : lourd) est conserve tel quel. Module monte
+# dans l'agregateur : le lifespan ne s'execute pas, la boucle s'amorce alors a la
+# premiere requete qui appelle amorcer_collecte() (meme repli que la collecte).
+_tache_cache_leger: Optional[asyncio.Task] = None
+
+
+def _amorcer_cache_leger() -> None:
+    global _tache_cache_leger
+    if _tache_cache_leger is None or _tache_cache_leger.done():
+        _tache_cache_leger = asyncio.create_task(_boucle_cache_leger())
 
 
 # ── FUITE RSS NATIVE (glibc) — cause racine confirmee par tracemalloc ─────────
@@ -164,6 +181,7 @@ async def lifespan(_app):
     amorcer_collecte()
     tasks = [
         asyncio.create_task(_prechauffer_cache()),
+        asyncio.create_task(_boucle_cache_leger()),
         asyncio.create_task(visitor_origin_agg.run_forever()),
         asyncio.create_task(live_hosts_agg.run_forever()),
         asyncio.create_task(cert_status_agg.run_forever()),
@@ -256,6 +274,62 @@ def write_cache(data: dict):
             json.dump(data, f)
     except Exception:
         pass
+
+
+CONF = Path("/etc/secubox/metrics.toml")
+INTERVALLE_LEGER_DEFAUT = 60
+INTERVALLE_LEGER_MIN, INTERVALLE_LEGER_MAX = 15, 3600
+
+
+def intervalle_cache_leger() -> float:
+    """Periode (s) du rafraichissement leger : [cache] intervalle_leger, borne 15..3600."""
+    try:
+        with CONF.open("rb") as f:
+            v = tomllib.load(f).get("cache", {}).get("intervalle_leger", INTERVALLE_LEGER_DEFAUT)
+    except (OSError, ValueError):
+        return INTERVALLE_LEGER_DEFAUT
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return INTERVALLE_LEGER_DEFAUT
+    return max(INTERVALLE_LEGER_MIN, min(INTERVALLE_LEGER_MAX, v))
+
+
+def rafraichir_cache_leger() -> None:
+    """Remet a jour waf + connexions + horodatage ; garde l'overview du fichier.
+
+    build_waf_stats lit deux petits fichiers (pgrep seulement si sbxwaf est
+    arrete) et build_connections lance 4 `ss` : bon marche, d'ou leur place ici.
+    Sans fichier existant on ne fabrique pas d'overview (build_cache s'en charge).
+    Ecriture atomique : temporaire dans le meme repertoire, puis rename.
+    """
+    actuel = read_cache()
+    if not isinstance(actuel, dict) or "overview" not in actuel:
+        return
+    actuel["waf"] = build_waf_stats()
+    actuel["connections"] = build_connections()
+    actuel["timestamp"] = datetime.now().isoformat()
+    actuel["timestamp_epoch"] = int(time.time())
+    tmp = CACHE_FILE.with_name(CACHE_FILE.name + f".{os.getpid()}.tmp")
+    try:
+        with open(tmp, "w") as f:
+            json.dump(actuel, f)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, CACHE_FILE)
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+
+
+async def _boucle_cache_leger() -> None:
+    while True:
+        try:
+            await asyncio.to_thread(rafraichir_cache_leger)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            log.warning("rafraichissement leger du cache echoue : %s", e)
+        await asyncio.sleep(intervalle_cache_leger())
 
 def _cpu_pct() -> float:
     """Charge CPU depuis /proc/stat (ligne `cpu` : (total - idle) / total).

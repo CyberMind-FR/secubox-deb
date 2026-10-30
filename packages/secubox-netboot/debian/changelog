@@ -1,3 +1,43 @@
+secubox-netboot (0.8.3-1~trixie1) trixie; urgency=medium
+
+  * Netboot MOCHAbin depuis le U-Boot d'usine Marvell (ref #3271) : il n'a pas de scriptaddr (env relevé :
+    loadaddr=0x6000000, kernel_addr_r=0x7000000, fdt_addr_r=0x6f00000, ramdisk_addr_r=-). board/mochabin/live.env
+    charge boot.scr à ${loadaddr}, comme l'ESPRESSObin ; page netboot alignée. Le boot.scr du live pose lui-même
+    ses adresses de noyau, de DTB et d'initrd (aucune variable absente de l'usine).
+  * sbx-netflash écrit TOUJOURS en flux (ref #3271) : sur une MOCHAbin de 8 Go, l'image partait dans un tmpfs à
+    sa taille (mode « ram ») et le live, qui garde sa pile complète, manquait de mémoire. Mode « ram » retiré :
+    téléchargement → décompression → secubox-flash-emmc --stdin (signature et SHA-256 vérifiées au passage, eMMC
+    invalidée en cas d'échec). La pile du live n'est plus arrêtée que sous 256 Mo libres.
+  * Environnement U-Boot de base par script, même forme pour la MOCHAbin et l'ESPRESSObin v7 (ref #3271) :
+    secubox-uboot-env.cmd/.scr (ex-fix-bootcmd, alias fix-bootcmd.scr dans l'image pendant une version), généré
+    par scripts/uboot-env.py depuis board/<carte>/live.env et uboot-env.env (données). Il pose les adresses sûres
+    (MOCHAbin 0x08000000/0x0c000000/0x0c100000 #3091, ESPRESSObin 0x07000000/0x06f00000/0x0b000000), ethact
+    (mvpp2-2 / neta@30000), autoload=no, le bootcmd du support installé (MOCHAbin : séquence validée au banc,
+    enchaînée par « ; » ; ESPRESSObin : eMMC puis clé, #2826), bootcmd_netboot (secours, jamais lancé seul),
+    bootcmd_avant seulement s'il n'existe pas (l'ESPRESSObin l'écrasait), puis saveenv. Déposé à la racine de la
+    partition de démarrage de l'image (image/build-image.sh), dans le dossier netboot de la carte à côté de
+    boot.scr (TFTP et HTTP) et sur la clé du live léger. Le .cmd est la référence, le .scr sa compilation (testé).
+  * Écriture de l'environnement depuis Linux abandonnée (R-3271-1) : sous le noyau Debian 6.12 de ces cartes, sans
+    spi-orion, /proc/mtd est vide (SPI non exposée), et une MOCHAbin du banc a une SPI instable. sbx-uboot-env
+    n'est plus qu'un diagnostic (--commandes, --afficher ; « la SPI n'est pas exposée sous ce noyau : utilisez
+    secubox-uboot-env.scr depuis U-Boot », code 5). Le code d'écriture SPI de la relecture (fw_setenv, qui
+    attend d'ailleurs « nom=valeur » et non « nom valeur », sauvegarde, détection de version) est retiré.
+  * Fin du flash : sbx-netflash affiche les commandes U-Boot de la carte (depuis le netboot, depuis la partition
+    installée). Une coupure pendant l'écriture en flux le dit : « eMMC non amorçable, relancer sbx-netflash ».
+  * Blocs U-Boot exacts et complets (ref #3271) : l'en-tête du boot.cmd du live (affiché par la page) vient du
+    générateur : ethact, autoload no, adresses, dhcp puis serverip, tftpboot ${loadaddr}, source. preparation.txt
+    publié à côté du live, rendu par GET /live (commandes_preparation) et la page (étape 3, toutes cartes). README
+    corrigé (0x06d00000, flux), procédure en trois lignes par carte ; blocs de la page et des README comparés au
+    générateur. LIVE_SCRIPT_ADDR retiré (${loadaddr} écrit en dur). board/mochabin/etc/fw_env.config corrigé
+    (/dev/mtd2 0x0 : il visait au-delà de mtd0).
+  * Relecture ciblée (ref #3271) : bootcmd_avant gardé par « if test -n … else … fi » (forme du boot.cmd
+    ESPRESSObin validé sur carte) ; ESPRESSObin à valider au banc avant tout usage (en-tête, README), l'alias
+    fix-bootcmd.scr de l'image y reste l'ancien script #2826 (bootcmd seulement) ; --serveur accepte un nom
+    d'hôte ; le live léger (clé USB) n'affiche pas la commande « réseau ». R-3271-2 : l'overlay #737 garde des
+    chemins fw_setenv inopérants sans MTD, suivis par #3281 ; phrase périmée du README corrigée.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
+
 secubox-netboot (0.8.2-1~trixie1) trixie; urgency=medium
 
   * Suivre un flash depuis la page (ref #3233, demande du propriétaire) : route /flashs — octets acquittés par la

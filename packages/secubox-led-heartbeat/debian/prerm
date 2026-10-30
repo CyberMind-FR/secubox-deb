@@ -9,12 +9,23 @@ case "$1" in
         systemctl stop secubox-led-trigger.service 2>/dev/null || true
         # Stop legacy service
         systemctl stop secubox-led-heartbeat.service 2>/dev/null || true
-        # Turn off LEDs
+        # Turn off LEDs (espace : bus I2C fragile, #3290)
         for led in /sys/class/leds/*:led*/brightness; do
             echo 0 > "$led" 2>/dev/null || true
+            sleep 0.05
         done
         ;;
 esac
+
+# Retire le pilote DKMS (#3290) seulement a la desinstallation : une mise a
+# jour garde le module construit ; sans effet s'il n'a jamais ete ajoute.
+if [ "$1" = remove ]; then
+    DKMS_VER="$(dpkg-query -W -f='${Version}' secubox-led-heartbeat 2>/dev/null || true)"
+    DKMS_VER="${DKMS_VER#*:}"; DKMS_VER="${DKMS_VER%-*}"
+    if [ -n "$DKMS_VER" ] && [ -x /usr/sbin/secubox-led-dkms ]; then
+        /usr/sbin/secubox-led-dkms remove "$DKMS_VER" || true
+    fi
+fi
 
 #DEBHELPER#
 

@@ -109,10 +109,10 @@ def _netflash(expr):
                           capture_output=True, text=True, timeout=60)
 
 
-def test_netflash_passe_en_flux_quand_la_ram_manque():
-    mo = 1048576
-    assert _netflash(f"mode_ecriture {800 * mo} {700 * mo}").stdout.strip() == "flux"     # ESPRESSObin, 1 Go
-    assert _netflash(f"mode_ecriture {800 * mo} {6000 * mo}").stdout.strip() == "ram"     # MOCHAbin, 8 Go
+def test_netflash_ecrit_toujours_en_flux():
+    # #3271 : plus de mode « ram » (tmpfs à la taille de l'image), même sur une MOCHAbin de 8 Go
+    s = NETFLASH.read_text()
+    assert "mode_ecriture" not in s and "mount -t tmpfs" not in s
 
 
 def test_netflash_format_d_apres_le_nom():
@@ -123,7 +123,7 @@ def test_netflash_format_d_apres_le_nom():
 
 def test_le_flux_passe_par_les_gardes_de_secubox_flash_emmc():
     s = NETFLASH.read_text()
-    assert 'opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto)' in s
+    assert 'opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto --no-reboot)' in s
     assert 'telecharge_flux "$BASE/$image" | secubox-flash-emmc "${opts[@]}"' in s
     fonction = s[s.index("telecharge_flux()"):].split("\n}")[0]
     corps = next(x for x in fonction.split("\n") if "curl -fsS " in x)  # pas de reprise : un flux recommencé serait corrompu

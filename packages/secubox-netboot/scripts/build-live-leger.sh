@@ -158,6 +158,11 @@ install -m0755 "$HERE/installer/sbx-netflash-profil" "$w/root/usr/local/sbin/sbx
 install -m0755 "$FLASHER" "$w/root/usr/local/sbin/secubox-flash-emmc"
 install -d "$w/root/etc/secubox"
 install -m0644 "$pub" "$w/root/etc/secubox/netboot-image.pub"
+# Après le flash (#3271) : sbx-uboot-env affiche les commandes U-Boot qui lancent secubox-uboot-env.scr (diagnostic
+# seulement : rien n'est écrit en SPI depuis Linux, R-3271-1).
+install -m0755 "$HERE/installer/sbx-uboot-env" "$w/root/usr/local/sbin/sbx-uboot-env"
+python3 "$HERE/scripts/uboot-env.py" live-conf "$carte" --serveur "${srv%%:*}" --sans-reseau > "$w/root/etc/secubox/uboot-env.json" \
+    || die "préparation U-Boot de $carte non générée (board/$carte/uboot-env.env)"
 cat > "$w/root/etc/motd" <<EOF
 
   SecuBox — live léger $LIVE_TITRE (#3233)
@@ -190,7 +195,7 @@ dtb="$(find "$w/root/usr/lib" -name "$LIVE_DTB" 2>/dev/null | sort -V | tail -n1
 cp "$dtb" "$w/boot/dtbs/$LIVE_DTB"
 cat > "$w/boot/boot.cmd" <<EOF
 # SecuBox $LIVE_TITRE — live léger sur clé USB (#3233). Depuis le U-Boot usine (console série) :
-#   usb start; fatload usb 0:1 $LIVE_SCRIPT_ADDR boot.scr; source $LIVE_SCRIPT_ADDR
+#   usb start; fatload usb 0:1 \${loadaddr} boot.scr; source \${loadaddr}
 setenv kernel_addr_r $LIVE_KERNEL_ADDR
 setenv fdt_addr_r $LIVE_FDT_ADDR
 setenv ramdisk_addr_r $LIVE_RAMDISK_ADDR
@@ -202,6 +207,9 @@ setenv bootargs \${bootargs} $LIVE_BOOTARGS
 booti \${kernel_addr_r} \${ramdisk_addr_r}:\${filesize} \${fdt_addr_r}
 EOF
 mkimage -A arm64 -O linux -T script -C none -n "SecuBox live leger USB" -d "$w/boot/boot.cmd" "$w/boot/boot.scr" >/dev/null
+# Environnement U-Boot sur la clé (#3271) : usb start; load usb 0:1 ${loadaddr} secubox-uboot-env.scr; …
+prep="$(uboot_env_scr_de "$carte" "$HERE")" || die "script secubox-uboot-env de $carte refusé"
+cp "$prep" "$w/boot/secubox-uboot-env.scr"
 
 # ── 4. image : p1 FAT 256 Mo + p2 ext4 à la taille de la racine (+ 30 %) ─────
 racine_mo=$(( $(du -sm "$w/root" | awk '{print $1}') * 13 / 10 + 64 ))

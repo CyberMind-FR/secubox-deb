@@ -99,7 +99,7 @@ def test_depot_ecrit_code_ancre_profil_avec_droits(lot):
 
 def test_sans_nom_comportement_inchange():
     src = FLASH.read_text()
-    assert "exec secubox-flash-emmc" in src            # chemin sans --nom : exec direct, avec reboot
+    assert '[ -n "$nom" ] || termine' in src            # sans --nom : message de fin puis redémarrage après le flux
     r = subprocess.run(["bash", "-n", str(FLASH)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     r = subprocess.run(["bash", str(FLASH), "--help"], capture_output=True, text=True)
