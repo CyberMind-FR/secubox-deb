@@ -361,3 +361,22 @@ def test_postrm_ne_suit_jamais_un_lien_a_la_place_du_journal_m12(tmp_path):
     r, appels, journaux, _ = _postrm(tmp_path, "purge", lien=True)
     assert r.returncode == 0, r.stderr
     assert not [a for a in appels if a.endswith(f"{journaux}/audit.log")], appels
+
+
+def test_unite_vhost_root_bornee_et_exception_ecrite():
+    """Final I2 : le ctl root des vhosts figure dans les Exceptions de RULES-CODE ; capacités bornées, écritures limitées aux
+    fichiers et dossiers réellement écrits (jamais tout /etc/secubox)."""
+    u = lire("systemd/secubox-pilotage-vhost.service")
+    caps = re.search(r"^CapabilityBoundingSet=(.*)$", u, re.M).group(1).split()
+    assert sorted(caps) == ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH", "CAP_FOWNER"]
+    assert re.search(r"^AmbientCapabilities=$", u, re.M)
+    rw = [d.lstrip("-") for li in u.splitlines() if li.startswith("ReadWritePaths=") for d in li.split("=", 1)[1].split()]
+    assert "/etc/secubox" not in rw and "/etc" not in rw
+    assert {"/etc/secubox/haproxy.toml", "/etc/secubox/waf", "/etc/nginx/conf.d", "/var/lib/secubox-pilotage-pages",
+            "/var/log/secubox", "/data/haproxy", "/etc/letsencrypt"} <= set(rw)
+    regles = lire(".claude/RULES-CODE.md", DEPOT)
+    lignes = [x for x in regles.splitlines() if "secubox-pilotage-vhost.service" in x]
+    assert len(lignes) == 1
+    for mot in ("haproxyctl", "secubox-waf-route", "certbot", "nginx", "systemd-run", "CAP_CHOWN",
+                "packages/secubox-pilotage/tests/test_paquet.py::test_unite_vhost_root_bornee_et_exception_ecrite"):
+        assert mot in lignes[0], mot

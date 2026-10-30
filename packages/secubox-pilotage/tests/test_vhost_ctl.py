@@ -71,6 +71,8 @@ if [ "$1" = "-t" ]; then [ -e {self.r}/ECHEC_T ] && exit 1; exit 0; fi
 exit 0
 """)
         script(self.bin / "systemctl", log + "exit 0\n")
+        # Final I3 : comme PID 1, lance la commande hors du bac à sable de l'unité
+        script(self.bin / "systemd-run", log + 'while [ "${1#--}" != "$1" ]; do shift; done; exec "$@"\n')
         script(self.bin / "certbot", log + "exit 1\n")
         script(self.bin / "mkdir", 'a=(); for x in "$@"; do [ "$x" = /run/haproxy ] || a+=("$x"); done; exec /bin/mkdir "${a[@]}"\n')
         script(self.bin / "haproxy", "exit 0\n")
@@ -138,6 +140,8 @@ def test_poser_le_vhost(banc):
     a = [x for x in banc.audit() if x["evenement"] == "pilotage_vhost_poser"][-1]
     assert a["box"] == "gk5" and a["acteur"] == "alice" and a["resultat"] == "ok" and a["domaine"] == DOM
     assert "systemctl reload nginx" in banc.appels()
+    # Final I3 : `nginx -t` complet hors du bac à sable (ProtectSystem=strict, /run non inscriptible), par PID 1
+    assert f"systemd-run --wait --pipe --collect --quiet {banc.bin}/nginx -t -q" in banc.appels()
 
 
 def test_pas_de_bypass_waf(banc):
@@ -290,7 +294,7 @@ def test_unites_et_paquet():
     # M10 : durcissement du ctl root
     assert "ProtectSystem=strict" in u and "PrivateTmp=yes" in u and "NoNewPrivileges=yes" in u
     rw = " ".join(li.split("=", 1)[1] for li in u.splitlines() if li.startswith("ReadWritePaths="))
-    for d in ("/etc/nginx/conf.d", "/var/lib/secubox-pilotage-pages", "/var/log/secubox", "/etc/secubox"):
+    for d in ("/etc/nginx/conf.d", "/var/lib/secubox-pilotage-pages", "/var/log/secubox", "/etc/secubox/haproxy.toml"):
         assert d in rw.split(), d
     assert "/etc " not in rw + " " and "/var/lib " not in rw + " " and "/usr/share/secubox/www " not in rw + " "
 

@@ -46,7 +46,7 @@ import tomllib
 LIB = "/usr/lib/secubox/pilotage"
 COMMANDES = {"secubox-relais-maillage": "/usr/sbin/secubox-relais-maillage", "nginx": "/usr/sbin/nginx", "systemctl": "/usr/bin/systemctl", "haproxyctl": "/usr/sbin/haproxyctl",
              "secubox-waf-route": "/usr/sbin/secubox-waf-route", "certbot": "/usr/bin/certbot",
-             "secubox-pilotage-www": "/usr/sbin/secubox-pilotage-www"}
+             "secubox-pilotage-www": "/usr/sbin/secubox-pilotage-www", "systemd-run": "/usr/bin/systemd-run"}
 RE_ACTEUR = re.compile(r"[a-z_][a-z0-9_.@-]{0,63}")
 ENTREE_MAX = 1 << 20
 BACKEND_WAF = "sbxwaf_inspector"
@@ -370,7 +370,9 @@ def nginx_echanger(ctx, chemin, nouveau):
         ecrire_atomique(chemin, nouveau)
     else:
         os.unlink(chemin)
-    if ctx.lancer("nginx", "-t", "-q").returncode != 0:
+    # Final I3 : la configuration complète est testée par PID 1 (systemd-run, patron de l'écouteur et de netmodes) : dans le bac à
+    # sable de l'unité (ProtectSystem=strict, /run en lecture seule) `nginx -t` échouerait toujours (pid, sockets).
+    if ctx.lancer("systemd-run", "--wait", "--pipe", "--collect", "--quiet", ctx.cmd("nginx"), "-t", "-q").returncode != 0:
         if ancien is None:
             os.unlink(chemin)
         else:
@@ -471,7 +473,10 @@ def migrer_registre(ctx):
     if isinstance(d, dict):
         ecrire_registre(ctx, {"domaines": dict(d.get("domaines") or {}), "certbot_echecs": dict(d.get("certbot_echecs") or {}),
                               "derniere_passe": float(d.get("derniere_passe") or 0)})
-        os.unlink(ctx.ancien_registre)
+        try:
+            os.unlink(ctx.ancien_registre)
+        except OSError:   # Final I2 : /etc/secubox hors ReadWritePaths ; le nouveau registre fait foi, l'ancien n'est plus relu
+            err("ancien registre repris mais non retiré (/etc/secubox en lecture seule pour l'unité)")
 
 
 # --- HAProxy, certificat, route sbxwaf ------------------------------------------------------------------------------
