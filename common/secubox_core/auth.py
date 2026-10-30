@@ -18,9 +18,11 @@ import json
 import os
 import re
 import secrets
+import socket
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
+from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -227,24 +229,38 @@ DELEGATION = "delegation"
 TRACE_DELEGATION_DEFAUT = "/var/log/secubox/delegation.log"
 
 
-def _trace_delegation(request: Request, payload: Dict[str, Any]) -> None:
+def _trace_delegation(request: Request, payload: Dict[str, Any], verdict: str = "accepte", motif: str = "") -> None:
     """Une ligne par appel fait sous délégation (#1720) — jamais bloquant (une
     trace impossible ne doit pas couper l'assistance), JAMAIS SILENCIEUX : si
     le fichier est inaccessible — unité durcie (ProtectSystem=strict), compte
     hors du groupe secubox —, la ligne part au journal système (LOG_AUTH).
-    Vécu : en fichier seul, les appels servis par un module durci se perdaient."""
-    d = (payload or {}).get(DELEGATION)
-    if not isinstance(d, dict):
+    Vécu : en fichier seul, les appels servis par un module durci se perdaient.
+
+    Deux délégations : la session d'assistance d'un autre nœud (#1720, réclamation `delegation`) et le porteur
+    délégué du pilotage (#3126 L5, réclamation `pilotage`) — pour lui, l'acteur, le maître, la portée, et le verdict
+    (`accepte`, ou `refuse` avec son motif). JAMAIS le jeton."""
+    p = payload or {}
+    d = p.get(DELEGATION)
+    r = p.get(PILOTAGE)
+    if not isinstance(d, dict) and not (isinstance(r, dict) and str(p.get("sub") or "").startswith(PREFIXE_PILOTAGE)):
         return
     ligne = ""
     try:
-        ligne = json.dumps({
-            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "compte": payload.get("sub"), "centre": d.get("centre"),
-            "noeud": d.get("noeud"), "aidant": d.get("compte"),
-            "session": d.get("session"),
-            "methode": request.method, "chemin": request.url.path,
-        }, ensure_ascii=False)
+        if isinstance(d, dict):
+            champs = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                      "compte": p.get("sub"), "centre": d.get("centre"),
+                      "noeud": d.get("noeud"), "aidant": d.get("compte"),
+                      "session": d.get("session"),
+                      "methode": request.method, "chemin": request.url.path}
+        else:
+            champs = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "type": "pilotage",
+                      "compte": str(p.get("sub"))[:200], "acteur": str(r.get("acteur"))[:128],
+                      "maitre": str(r.get("maitre"))[:128], "portee": str(r.get("portee"))[:16],
+                      "verdict": verdict, "methode": _methode(request), "chemin": _chemin_requete(request)[:512],
+                      "module": _module_de_la_socket(request)}
+            if motif:
+                champs["motif"] = motif
+        ligne = json.dumps(champs, ensure_ascii=False)
         chemin = Path(os.environ.get("SECUBOX_TRACE_DELEGATION", TRACE_DELEGATION_DEFAUT))
         with open(chemin, "a", encoding="utf-8") as f:
             f.write(ligne + "\n")
@@ -257,6 +273,227 @@ def _trace_delegation(request: Request, payload: Dict[str, Any]) -> None:
         syslog.syslog(syslog.LOG_NOTICE, ligne or "trace de délégation illisible")
     except Exception:  # noqa: BLE001 — même le journal système refuse : rien de plus à faire
         pass
+
+
+# Porteur délégué du pilotage (#3126, L5 « Box légère ») ─────────────────
+#
+# Les pages d'administration d'une box légère sont servies par le MAÎTRE. Leurs
+# appels `/api/v1/…` arrivent par le canal agent ↔ contrôleur, puis le relais
+# local `sbx-pilotage-relais` frappe un jeton DÉLÉGUÉ et appelle la socket du
+# module en posant `X-SecuBox-Pilotage-Relais`. Ce jeton :
+#   - HS256, signé avec le `jwt_secret` de CETTE box, durée ≤ 60 s ;
+#   - `aud` = nom de la box (nom court de l'hôte), `sub` = `pilotage:<admin>@<maître>` ;
+#   - réclamation `pilotage = {acteur, maitre, portee}`, portée `lecture` ou `admin`.
+#
+# CE N'EST PAS UNE SESSION : aucun `jti` du registre, jamais dans la liste des
+# sessions ; il est reconnu par sa FORME, et SEULEMENT quand la requête arrive
+# par la socket Unix d'un module (`/run/secubox/<m>.sock`, jamais TCP) avec
+# l'en-tête du relais — que nginx (secubox-proxy.conf), HAProxy (verdicts
+# effacés à l'entrée) et l'agrégateur (intermédiaire ASGI) effacent. Il n'est
+# lu qu'en Bearer, jamais dans le cookie. Il n'ouvre JAMAIS une route qui crée
+# ou modifie des comptes, des secrets ou des sessions (listes ci-dessous).
+ENTETE_PILOTAGE_RELAIS = "X-SecuBox-Pilotage-Relais"
+PILOTAGE = "pilotage"
+PREFIXE_PILOTAGE = "pilotage:"
+DUREE_MAX_PILOTAGE_S = 60
+#: Avance d'horloge tolérée sur `iat` : le relais frappe sur la même machine.
+DERIVE_PILOTAGE_S = 5
+PORTEES_PILOTAGE = ("lecture", "admin")
+METHODES_LECTURE = ("GET", "HEAD")
+DOSSIER_SOCKETS = "/run/secubox"
+#: Modules dont la socket ne reconnaît JAMAIS le porteur délégué : comptes,
+#: sessions, secrets, assistance (sessions déléguées), premier pas (création du
+#: premier administrateur), le pilotage lui-même (consentement, mains liées,
+#: support : une délégation ne s'élargit pas elle-même) et l'agrégateur (qui
+#: efface l'en-tête : le recevoir là est une anomalie). Tout module `pilotage*`
+#: l'est aussi, par préfixe.
+MODULES_EXCLUS_PILOTAGE = frozenset({
+    "auth", "vault", "portal", "assist", "premier-pas", "users", "aggregator",
+    "pilotage", "pilotage-agent", "pilotage-canal", "pilotage-relais",
+})
+#: Segments de chemin qui désignent des comptes, des sessions ou des secrets,
+#: dans N'IMPORTE QUEL module : le porteur délégué y est refusé (403), quelle
+#: que soit la méthode. Comparés en minuscules, après décodage-%.
+SEGMENTS_EXCLUS_PILOTAGE = frozenset({
+    "auth", "login", "logout", "users", "user", "utilisateurs", "utilisateur",
+    "comptes", "compte", "accounts", "account", "sessions", "session",
+    "secrets", "secret", "password", "passwords", "passwd", "mot-de-passe",
+    "mots-de-passe", "totp", "mfa", "2fa", "otp", "second-facteur",
+    "jeton", "jetons", "token", "tokens", "api-key", "api-keys", "apikeys",
+    "cle", "cles", "key", "keys", "passkey", "passkeys", "webauthn",
+    "vault", "coffre", "delegation", "delegations", "sudoers",
+})
+_RE_NOM_BOX = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")
+_RE_MODULE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+
+
+def nom_box_locale() -> str:
+    """Le nom de cette box, tel que le maître le connaît : le nom COURT de
+    l'hôte, en minuscules (même règle que `noms_du_maillage` du pilotage, et
+    que `secubox-renommer`, qui change l'hôte). "" si illisible ou invalide :
+    aucun jeton délégué n'est alors reconnu."""
+    try:
+        nom = (socket.gethostname() or "").split(".")[0].strip().lower()
+    except OSError:
+        return ""
+    return nom if _RE_NOM_BOX.fullmatch(nom) else ""
+
+
+def _methode(request) -> str:
+    try:
+        return str(request.scope.get("method") or request.method).upper()
+    except Exception:  # noqa: BLE001 — requête incomplète : méthode inconnue
+        return ""
+
+
+def _chemin_requete(request) -> str:
+    try:
+        return str(request.scope.get("path") or "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _module_de_la_socket(request) -> str:
+    """Le module dont la SOCKET UNIX a reçu la requête : `<m>` pour
+    `/run/secubox/<m>.sock`, "" sinon (TCP, socket ailleurs, nom invalide).
+
+    uvicorn sur `--uds` rend `scope["server"] = (chemin, None)` ; sur TCP,
+    `(hôte, port)`. `server` vient de `getsockname()` : le client ne le choisit
+    pas (à la différence de `client`, que `--proxy-headers` peut réécrire)."""
+    try:
+        serveur = request.scope.get("server")
+    except Exception:  # noqa: BLE001
+        return ""
+    if not isinstance(serveur, (tuple, list)) or len(serveur) != 2 or serveur[1] is not None:
+        return ""
+    chemin = serveur[0]
+    if isinstance(chemin, bytes):
+        chemin = chemin.decode("utf-8", "replace")
+    if not isinstance(chemin, str):
+        return ""
+    dossier, _, fichier = chemin.rpartition("/")
+    if dossier != DOSSIER_SOCKETS.rstrip("/") or not fichier.endswith(".sock"):
+        return ""
+    nom = fichier[: -len(".sock")]
+    return nom if _RE_MODULE.fullmatch(nom) else ""
+
+
+def _module_exclu(nom: str) -> bool:
+    return nom in MODULES_EXCLUS_PILOTAGE or nom.startswith("pilotage")
+
+
+def route_exclue_du_pilotage(request) -> bool:
+    """Le porteur délégué est-il INTERDIT sur cette route ? Vrai pour un module
+    exclu (par sa socket, ou par le préfixe `/api/v1/<m>/` du chemin), pour un
+    chemin qui contient un segment de comptes, sessions ou secrets, et dans le
+    doute (requête illisible)."""
+    module = _module_de_la_socket(request)
+    if not module or _module_exclu(module):
+        return True
+    chemin = _chemin_requete(request)
+    for _ in range(3):   # `%2575sers` → `%75sers` → `users`
+        decode = unquote(chemin)
+        if decode == chemin:
+            break
+        chemin = decode
+    segments = [s for s in chemin.lower().split("/") if s]
+    if len(segments) >= 3 and segments[0] == "api" and segments[1] == "v1" and _module_exclu(segments[2]):
+        return True
+    return any(s in SEGMENTS_EXCLUS_PILOTAGE or s.split(".")[0] in SEGMENTS_EXCLUS_PILOTAGE for s in segments)
+
+
+def _forme_pilotage(payload: Any) -> Optional[Dict[str, Any]]:
+    """La réclamation `pilotage` si `payload` a la forme d'un jeton délégué
+    valide MAINTENANT pour cette box ; None sinon. Ne lit ni le registre des
+    sessions ni celui des comptes. Ne lève jamais."""
+    try:
+        p = payload if isinstance(payload, dict) else {}
+        sub = p.get("sub")
+        if not isinstance(sub, str) or not sub.startswith(PREFIXE_PILOTAGE) or len(sub) <= len(PREFIXE_PILOTAGE):
+            return None
+        box = nom_box_locale()
+        if not box or p.get("aud") != box:
+            return None
+        iat, exp = p.get("iat"), p.get("exp")
+        if not all(isinstance(v, int) and not isinstance(v, bool) for v in (iat, exp)):
+            return None
+        maintenant = time.time()
+        if not (iat < exp <= iat + DUREE_MAX_PILOTAGE_S) or exp <= maintenant or iat > maintenant + DERIVE_PILOTAGE_S:
+            return None
+        # Un jeton délégué ne porte rien d'autre : ni intention, ni plafond, ni session d'assistance.
+        if p.get("scope") or PLAFOND in p or DELEGATION in p:
+            return None
+        r = p.get(PILOTAGE)
+        if not isinstance(r, dict):
+            return None
+        acteur, maitre, portee = r.get("acteur"), r.get("maitre"), r.get("portee")
+        for v in (acteur, maitre):
+            if not isinstance(v, str) or not v.strip() or len(v) > 128:
+                return None
+        if not isinstance(portee, str) or portee not in PORTEES_PILOTAGE:
+            return None
+        return r
+    except Exception:  # noqa: BLE001 — dans le doute, pas un porteur délégué
+        return None
+
+
+def _est_porteur_pilotage(payload: Any) -> bool:
+    """Le `sub` dit « jeton délégué » : un tel payload ne passe JAMAIS par le chemin des sessions ou des comptes."""
+    return isinstance(payload, dict) and str(payload.get("sub") or "").startswith(PREFIXE_PILOTAGE)
+
+
+def jeton_pilotage_valide(payload: Dict[str, Any], request: Request) -> bool:
+    """Vrai SEULEMENT si : l'en-tête du relais est présent et non vide ; la
+    requête est arrivée par la socket Unix d'un module ; le payload a la forme
+    du jeton délégué (`aud` = cette box, `exp - iat ≤ 60`, non échu, `sub`
+    `pilotage:…`, réclamation complète) ; la route n'est pas exclue. La portée
+    (lecture : GET/HEAD seulement) est appliquée par les gardes."""
+    try:
+        if not (request.headers.get(ENTETE_PILOTAGE_RELAIS) or "").strip():
+            return False
+        if not _module_de_la_socket(request):
+            return False
+        if _forme_pilotage(payload) is None:
+            return False
+        return not route_exclue_du_pilotage(request)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _porteur_pilotage(request: Request, token: str) -> Optional[Dict[str, Any]]:
+    """Le payload du porteur délégué, ou None (pas un porteur délégué
+    recevable ici : la garde continue, puis 401). Lève 403, tracé, quand le
+    jeton délégué est valide mais que la route est exclue, ou qu'une portée
+    `lecture` tente une autre méthode que GET/HEAD."""
+    try:
+        if not (request.headers.get(ENTETE_PILOTAGE_RELAIS) or "").strip():
+            return None
+    except Exception:  # noqa: BLE001 — requête sans en-têtes lisibles
+        return None
+    if not _module_de_la_socket(request):
+        return None
+    box = nom_box_locale()
+    if not box or not token:
+        return None
+    try:
+        payload = jwt.decode(token, _secret(), algorithms=["HS256"], audience=box,
+                             options={"require": ["exp", "iat", "aud", "sub"]})
+    except (JWTError, RuntimeError, ValueError, TypeError):
+        return None
+    if _forme_pilotage(payload) is None:
+        return None
+    if route_exclue_du_pilotage(request):
+        _trace_delegation(request, payload, verdict="refuse", motif="route exclue du pilotage")
+        log.warning("pilotage : route exclue %s pour %s", _chemin_requete(request), payload.get("sub"))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Route exclue du pilotage délégué (comptes, sessions, secrets)")
+    if payload[PILOTAGE]["portee"] != "admin" and _methode(request) not in METHODES_LECTURE:
+        _trace_delegation(request, payload, verdict="refuse", motif="portee lecture")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Pilotage en lecture seule : écriture refusée")
+    if not jeton_pilotage_valide(payload, request):   # le prédicat public fait foi
+        return None
+    return payload
 
 
 #: Profils d'une PERSONNE : ce que `require_personne` admet.
@@ -298,6 +535,9 @@ def _decode_token(token: str) -> Dict[str, Any]:
         payload = jwt.decode(token, _secret(), algorithms=["HS256"])
         if not payload.get("sub"):
             raise ValueError("missing sub")
+        if _est_porteur_pilotage(payload):
+            # Le porteur délégué (#3126 L5) n'est pas une session : jamais par `/verify` (auth_request de nginx).
+            raise ValueError("porteur délégué du pilotage")
         return payload
     except (JWTError, ValueError) as exc:
         log.warning("JWT invalide: %s", exc)
@@ -351,6 +591,10 @@ def _validate_token(token: str) -> Optional[Dict[str, Any]]:
         return None
     if not payload.get("sub"):
         return None
+    if _est_porteur_pilotage(payload):
+        # Le porteur délégué (#3126 L5) n'est JAMAIS une session : reconnu par sa forme, au seul chemin du relais
+        # (`_porteur_pilotage`). PyJWT le refuse déjà ici (réclamation `aud` sans audience attendue) ; on le dit.
+        return None
     if _is_scope_token(payload):
         log.warning(
             "rejected scope token (scope=%s, sub=%s) presented as an access token",
@@ -388,6 +632,11 @@ def est_admin_reel(payload: Dict[str, Any]) -> bool:
     l'admission : un appareil entre en signant, sans mot de passe ni second
     facteur — ce n'est pas une preuve suffisante pour administrer la box."""
     sub = str((payload or {}).get("sub") or "")
+    if sub.startswith(PREFIXE_PILOTAGE):
+        # PORTEUR DÉLÉGUÉ DU PILOTAGE (#3126 L5) : administrateur de la box, sous les exclusions de la route, tant
+        # que son jeton est valide et que sa portée est `admin`. En `lecture`, jamais (GET/HEAD par `require_jwt`).
+        r = _forme_pilotage(payload)
+        return r is not None and r.get("portee") == "admin"
     if not sub or sub.startswith(appareils.PREFIXE):
         return False
     # Un plafond borne tout : sous `admin`, pas d'administration (#1607).
@@ -410,6 +659,9 @@ def session_toujours_admin(payload: Dict[str, Any]) -> bool:
         exp = (payload or {}).get("exp")
         if isinstance(exp, bool) or not isinstance(exp, (int, float)) or not exp > time.time():   # NaN : faux
             return False
+        if _est_porteur_pilotage(payload):
+            # Pas de session derrière un porteur délégué (#3126 L5) : sa forme et son échéance (≤ 60 s) font foi.
+            return bool(est_admin_reel(payload))
         jti = payload.get("jti")
         if not jti or not _session_validator(jti):
             return False
@@ -432,7 +684,8 @@ def est_personne(payload: Dict[str, Any]) -> bool:
       - toute erreur de lecture des registres — dans le doute, non."""
     p = payload or {}
     sub = str(p.get("sub") or "")
-    if not sub or _is_scope_token(p):
+    if not sub or _is_scope_token(p) or sub.startswith(PREFIXE_PILOTAGE):
+        # Le porteur délégué du pilotage (#3126 L5) administre ; il n'agit pas en personne sous son nom.
         return False
     if PLAFOND in p and p.get(PLAFOND) not in PROFILS_PERSONNE:
         return False
@@ -542,6 +795,10 @@ async def require_session(
         )
     for source, token in candidates:
         payload = _validate_token(token)
+        if payload is None and source == "porteur":
+            # PORTEUR DÉLÉGUÉ DU PILOTAGE (#3126 L5) : Bearer seulement, socket du module + en-tête du relais.
+            # 403 (tracé) sur une route exclue ou une écriture en portée `lecture`.
+            payload = _porteur_pilotage(request, token)
         if payload is not None:
             if source == "cookie":
                 garde_origine(request, payload)
@@ -564,6 +821,14 @@ async def require_jwt(
     deviennent toutes réservées aux administrateurs d'un seul geste. Une route
     qu'un usager doit pouvoir appeler le dit en passant à `require_session`."""
     payload = await require_session(request, creds)
+    if _est_porteur_pilotage(payload):
+        # Porteur délégué (#3126 L5), déjà borné par `require_session` (socket, en-tête, forme, exclusions). Portée
+        # `admin` : administrateur ; portée `lecture` : GET et HEAD seulement — revérifié ici, l'écriture est l'enjeu.
+        r = _forme_pilotage(payload)
+        if r is None or (r.get("portee") != "admin" and _methode(request) not in METHODES_LECTURE):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail="Pilotage en lecture seule : écriture refusée")
+        return payload
     if not est_admin_reel(payload):
         log.warning("administration refusée à %s (ni compte, ni rôle admin)", payload.get("sub"))
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
@@ -697,14 +962,20 @@ async def require_lecture(
     """
     candidats = []
     if creds is not None and creds.credentials:
-        candidats.append(creds.credentials)
+        candidats.append(("porteur", creds.credentials))
     cookie_tok = request.cookies.get(SESSION_COOKIE)
     if cookie_tok:
-        candidats.append(cookie_tok)
-    for token in candidats:
+        candidats.append(("cookie", cookie_tok))
+    for source, token in candidats:
         payload = _validate_token(token)
         if payload is not None:
             return payload
+        if source == "porteur":
+            # Porteur délégué du pilotage (#3126 L5) : mêmes conditions que dans `require_session`, tracé.
+            payload = _porteur_pilotage(request, token)
+            if payload is not None:
+                _trace_delegation(request, payload)
+                return payload
 
     if mode_tableau_de_bord_actif() and _requete_lan(request):
         return {"sub": None, "tableau_de_bord": True}

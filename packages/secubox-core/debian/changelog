@@ -1,3 +1,22 @@
+secubox-core (1.8.11-1~trixie1) trixie; urgency=medium
+
+  * secubox_core.auth : porteur délégué du pilotage (ref #3126, L5 « Box légère », tâche 1).
+    jeton_pilotage_valide(payload, request) : le jeton frappé par sbx-pilotage-relais (HS256,
+    secret de la box, exp - iat <= 60 s, non échu, iat sans avance > 5 s, aud = nom court de
+    l'hôte, sub pilotage:<admin>@<maître>, réclamation pilotage {acteur, maitre, portee}
+    complète) n'est reconnu qu'en Bearer, sur la socket Unix d'un module (/run/secubox/<m>.sock,
+    jamais TCP) et avec l'en-tête X-SecuBox-Pilotage-Relais. Ce n'est pas une session : jamais
+    dans le registre, refusé par _validate_token et par /verify. Portée lecture : GET/HEAD
+    seulement (403) ; portée admin : administrateur réel (est_admin_reel et
+    session_toujours_admin cohérents, jamais est_personne). Refusé (403) sur les modules qui
+    gèrent comptes, sessions et secrets (auth, vault, portal, assist, premier-pas, users,
+    aggregator, pilotage*) et sur tout chemin à segment de comptes, sessions, secrets, jetons
+    ou clés. Chaque usage, accepté ou refusé, tracé (_trace_delegation : acteur, maître,
+    portée, méthode, chemin, module ; jamais le jeton). Aucun changement pour un jeton ordinaire.
+  * snippets/secubox-proxy.conf : X-SecuBox-Pilotage-Relais vidé sur tout proxy (ref #3126).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
+
 secubox-core (1.8.10-1~trixie1) trixie; urgency=medium
 
   * secubox_core.auth.session_toujours_admin(payload) (ref #3126, L2 tâche 7) : revérifie pour une connexion longue

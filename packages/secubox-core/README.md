@@ -15,7 +15,15 @@ Core package for SecuBox-Deb platform. Provides shared libraries, utilities, and
 
 Shared Python modules for all SecuBox services:
 
-- `auth.py` - JWT authentication helpers
+- `auth.py` - JWT authentication helpers ; porteur délégué du pilotage (#3126, L5) : `jeton_pilotage_valide(payload, request)`.
+  Le jeton frappé par `sbx-pilotage-relais` (HS256, secret de la box, `exp - iat ≤ 60`, `aud` = nom court de l'hôte,
+  `sub` = `pilotage:<admin>@<maître>`, réclamation `pilotage = {acteur, maitre, portee}`) n'est reconnu qu'en Bearer, sur
+  la socket Unix d'un module (`/run/secubox/<m>.sock`, jamais TCP) et avec l'en-tête `X-SecuBox-Pilotage-Relais` (vidé
+  par `secubox-proxy.conf`, l'agrégateur et l'entrée HAProxy). Ce n'est pas une session. Portée `lecture` : GET/HEAD
+  seulement (403 sinon) ; portée `admin` : administrateur réel. Refusé (403) sur les modules `MODULES_EXCLUS_PILOTAGE`
+  (auth, vault, portal, assist, premier-pas, users, aggregator, pilotage*) et sur tout chemin contenant un segment de
+  `SEGMENTS_EXCLUS_PILOTAGE` (comptes, sessions, secrets, jetons, clés). Chaque usage, accepté ou refusé, est tracé dans
+  `/var/log/secubox/delegation.log` (acteur, maître, portée, méthode, chemin ; jamais le jeton).
 - `config.py` - TOML configuration loader
 - `logger.py` - Unified logging
 - `system.py` - System utilities
