@@ -824,3 +824,42 @@ def test_module_courant_en_cache(monkeypatch):
     assert auth.module_courant(req) == "cachetest"
     n = len(appels)
     assert auth.module_courant(req) == "cachetest" and len(appels) == n
+
+
+# ── R-L5-15 : les verbes du ctl L2 (Operate) ne sont JAMAIS ouverts au jeton délégué ───────────────────────────────
+#: Routes d'API qui recouvrent un verbe de `secubox-pilotagectl` (reboot, maj-paquets, service
+#: demarrer|arreter|redemarrer, renommer, renouveler-secrets) : elles passent par les actions du pilotage (accord du
+#: détenteur, confirmation forte, une opération longue à la fois), jamais par une page relayée.
+ROUTES_OPERATE_L2 = {
+    "system": ["/reboot", "/shutdown", "/apply_updates", "/settings", "/save_settings", "/service_control",
+               "/service_action", "/restart_services"],
+    "nac": [],
+    "ad-guard": ["/maintenance/reload"],
+    "freebox": ["/autoriser", "/revoquer"],
+}
+_VERBES_L2 = ("reboot", "shutdown", "poweroff", "halt", "apply_updates", "upgrade", "maj", "renommer", "rename",
+              "hostname", "renouveler", "rotate", "service_control", "service_action", "restart_services")
+
+
+@pytest.mark.parametrize("module", sorted(ROUTES_OPERATE_L2))
+def test_aucune_declaration_n_ouvre_un_verbe_du_ctl_l2(module):
+    decl = REPO / "packages" / f"secubox-{module}" / "pilotage" / "routes-ouvertes.d" / f"{module}.toml"
+    routes = auth.valider_routes_ouvertes(decl.read_text(encoding="utf-8"))
+    for methodes, motifs in routes:
+        for motif in motifs:
+            for chemin in ROUTES_OPERATE_L2[module]:
+                assert not motif.fullmatch(chemin), (module, motif.pattern, chemin)
+            for verbe in _VERBES_L2:
+                assert verbe not in motif.pattern.lower(), (module, motif.pattern, verbe)
+
+
+def test_page_systeme_appelle_ces_routes_le_relais_les_refusera(tmp_path, monkeypatch):
+    """Les routes Operate restent appelées par la page système : avec le jeton délégué, 403 (la page doit renvoyer
+    vers les actions du pilotage, tâche 7)."""
+    routes = tmp_path / "routes-ouvertes.d"
+    (routes / "system.toml").write_bytes((REPO / "packages" / "secubox-system" / "pilotage" / "routes-ouvertes.d"
+                                          / "system.toml").read_bytes())
+    os.chmod(routes / "system.toml", 0o644)
+    for chemin in ROUTES_OPERATE_L2["system"]:
+        assert garde("require_jwt", requete("POST", chemin, module="system"), frappe(cible="system"))[0] == 403, chemin
+    assert garde("require_jwt", requete("POST", "/clear_cache", module="system"), frappe(cible="system"))[0] == 200

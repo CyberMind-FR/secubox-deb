@@ -75,3 +75,6 @@ qu'appellent ses pages. Toute autre écriture déléguée est refusée par `secu
 restent soumises à la liste de refus (secrets). Voir le README de secubox-core.
 
 `download_diagnostic` et `delete_diagnostic` n'acceptent qu'un nom `<nom>.json` du dossier des diagnostics (1.11.6).
+
+`/reboot`, `/shutdown`, `/apply_updates`, `/settings`, `/service_control`, `/service_action` et `/restart_services` ne sont
+PAS ouvertes au jeton délégué (R-L5-15) : elles passent par les actions du pilotage (L2).

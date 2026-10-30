@@ -4,6 +4,11 @@ secubox-system (1.11.6-1~trixie1) trixie; urgency=medium
     /usr/share/secubox/pilotage/routes-ouvertes.d/system.toml (root, 0644), seulement les
     routes d'écriture que les pages du module appellent ; secubox_core.auth refuse toute
     autre écriture déléguée.
+    Fermées au jeton délégué (R-L5-15) : reboot, shutdown, apply_updates, settings, et
+    service_control, service_action, restart_services. Elles recouvrent les verbes du ctl
+    L2 (reboot, maj-paquets, renommer, service, renouveler-secrets) et passent par les
+    actions du pilotage (accord du détenteur, confirmation forte, une opération longue à
+    la fois) ; appelées depuis une page relayée, elles reçoivent 403.
   * download_diagnostic et delete_diagnostic : remontée de chemin corrigée (ref #3126,
     relecture de sécurité de L5, R-L5-14). `name=../../…` lisait ou SUPPRIMAIT tout fichier
     accessible au service ; le nom suit désormais un motif strict (`<nom>.json`, sans

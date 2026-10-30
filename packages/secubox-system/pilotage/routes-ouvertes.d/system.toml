@@ -8,20 +8,20 @@
 # les pages du module appellent : www/system/index.html (actions rapides, paquets, réglages, kiosque, carte) et
 # la vue portée system-hub (diagnostics, planification des sauvegardes). Les sessions restent refusées par la
 # liste de refus de secubox_core.auth ; restore_config n'est pas ouverte.
+#
+# FERMÉES au jeton délégué (R-L5-15) : reboot, shutdown, apply_updates, settings (renommage), service_control,
+# service_action, restart_services. Elles recouvrent les verbes du ctl L2 (reboot, maj-paquets, renommer, service
+# arrêter/redémarrer, renouveler-secrets) et passent par les actions du pilotage : accord du détenteur, confirmation
+# forte, une opération longue à la fois. Appelées par la page, elles reçoivent 403 (« passez par les actions du
+# pilotage », tâche 7).
 
 [[routes]]
 methodes = ["POST"]
 chemins = [
-    "^/service_control$",
-    "^/restart_services$",
     "^/reload_firewall$",
     "^/sync_time$",
     "^/clear_cache$",
     "^/backup$",
-    "^/reboot$",
-    "^/shutdown$",
-    "^/apply_updates$",
-    "^/settings$",
     "^/kiosk/(enable|disable)$",
     "^/board/detect$",
     "^/delete_diagnostic$",
