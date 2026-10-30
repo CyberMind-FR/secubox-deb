@@ -6,7 +6,7 @@
 
 # SecuBox-Deb :: secubox-voicestudio :: install-lxc.sh (#1917, ex-#1649)
 #
-# Crée (idempotent) le LXC `voicestudio` : Debian bookworm non privilégié, IP fixe
+# Crée (idempotent) le LXC `voicestudio` : Debian non privilégié (bookworm, voir DEBIAN_SUITE), IP fixe
 # sur br-lxc, moteur VoiceStudio installé dans un venv Python (torch CPU), sources
 # amont ÉPINGLÉES par commit et vérifiées par empreinte sha256.
 #
@@ -31,6 +31,12 @@ readonly LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
 readonly LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
 readonly LXC_ROOT_UID="${SECUBOX_LXC_ROOT_UID:-100000}"
 readonly PORT=3900
+# EXCEPTION À #3285 (tous les LXC en dernière Debian stable) : ce conteneur reste
+# en bookworm. Le venv est figé par conf/contraintes.txt, relevé sur Python 3.11 ;
+# trixie apporte Python 3.13, pour lequel ctranslate2==4.4.0 (faster-whisper)
+# n'a AUCUNE roue publiée sur PyPI (vérifié le 2026-10-30) : l'installation
+# échouerait. À lever en même temps qu'un nouveau relevé des contraintes.
+readonly DEBIAN_SUITE="${SECUBOX_DEBIAN_SUITE:-bookworm}"
 log() { printf '[voicestudio-install] %s\n' "$*"; }
 
 cfg() {  # cfg <section> <clé> [défaut] — le TOML de la box, puis les défauts du paquet (une box d'avant une section n'en a pas)
@@ -95,7 +101,7 @@ chmod 0750 "$DONNEES"
 
 creer_conteneur() {
   lxc-create -n "$LXC_NAME" -t download -P "$LXC_PATH" -- \
-    --dist debian --release bookworm --arch "$(dpkg --print-architecture)"
+    --dist debian --release "$DEBIAN_SUITE" --arch "$(dpkg --print-architecture)"
   if ! grep -q '^lxc.idmap' "$LXC_PATH/$LXC_NAME/config"; then
     printf 'lxc.idmap = u 0 %s 65536\nlxc.idmap = g 0 %s 65536\n' "$LXC_ROOT_UID" "$LXC_ROOT_UID" \
       >> "$LXC_PATH/$LXC_NAME/config"
