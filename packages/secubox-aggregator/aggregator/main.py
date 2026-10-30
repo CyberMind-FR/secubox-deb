@@ -98,10 +98,32 @@ _ENTETE_SECOND_FACTEUR = "X-SecuBox-Second-Facteur"
 # secubox-auth, par la socket. Le relais web ne le sert JAMAIS, et marque ce
 # qu'il porte au Coffre pour qu'il puisse le refuser lui-même.
 _ENTETE_RELAIS = "X-SecuBox-Relais"
+# LE MARQUEUR DU RELAIS LOCAL DU PILOTAGE (#3126, L5) : seul `sbx-pilotage-relais`
+# le pose, sur la socket d'un module ; avec lui, secubox_core.auth reconnaît le
+# jeton délégué. Ce qui passe par l'agrégateur ne vient JAMAIS du relais : il est
+# effacé de la requête avant tout module, monté ou relayé (intermédiaire ASGI).
+_ENTETES_EFFACES = frozenset({b"x-secubox-pilotage-relais"})
 _ECHECS_OTP_MAX = 5
 _ECHECS_OTP_FENETRE_S = 3600
 _echecs_otp: Dict[str, List[float]] = {}
 _VUE_COMPLETE = "complete"
+
+
+class _EffaceEntetesInternes:
+    """Intermédiaire ASGI : retire de la portée de la requête les en-têtes de `_ENTETES_EFFACES`, quelle que soit leur
+    casse ou leur nombre, AVANT le routage. Les modules montés reçoivent la portée telle quelle ; le relais vers une
+    socket dédiée recopie `request.headers` : les deux chemins sont couverts au même point."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") in ("http", "websocket"):
+            entetes = scope.get("headers") or []
+            if any(k.lower() in _ENTETES_EFFACES for k, _ in entetes):
+                scope = dict(scope)
+                scope["headers"] = [(k, v) for k, v in entetes if k.lower() not in _ENTETES_EFFACES]
+        await self.app(scope, receive, send)
 
 
 def _garde_administration(personnelle: bool = False):
@@ -440,6 +462,7 @@ def _build_app() -> FastAPI:
         docs_url=None,
         redoc_url=None,
     )
+    app.add_middleware(_EffaceEntetesInternes)
 
     # LE CHEMIN PYTHON DU SERVEUR NE DOIT PAS DÉPENDRE DES MODULES (#1680).
     # Huit modules font `sys.path.insert(0, "/usr/lib/python3/dist-packages")`

@@ -1,3 +1,16 @@
+secubox-cdn (1.5.2-1~trixie1) trixie; urgency=medium
+
+  * /restart (rechargement de nginx) passe de GET à POST, et la page Maintenance l'appelle
+    en POST : une action n'est jamais une lecture — un porteur délégué du pilotage en
+    portée lecture (GET/HEAD) ou un lien suivi ne doit pas la déclencher (ref #3126,
+    relecture de sécurité de L5).
+  * /preload_url passe de GET à POST (le serveur va chercher l'URL fournie : SSRF en GET),
+    corps {"url": …} ou chaîne JSON ; seules les URL http(s) sont acceptées ; les pages
+    portées l'appellent en POST, comme le classe scripts/rewrite-xhr.py (ref #3126, R-L5-14).
+  * /clear_stats passe de GET à POST, page Maintenance comprise (ref #3126, R-L5-16).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 11:00:00 +0100
+
 secubox-cdn (1.5.1-1~bookworm1) bookworm; urgency=low
 
   * Le total du dépôt APT est dit pour ce qu'il est : des entrées de paquets sur toutes les

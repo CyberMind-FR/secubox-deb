@@ -11,6 +11,8 @@ menu_off = ["zkp", "assist"]
 # arrête : streamlit-idle (Requires=secubox-streamlit.service), metrics-publish (Wants=secubox-annuaire.service).
 minuteurs_off = ["streamlit-idle", "metrics-publish"]
 on = [
+  # Pilotage distant (#3126, R-L5-34) : toute box reste télé-administrable par son maître.
+  "pilotage-agent",
   "aggregator", "auth", "certs", "core", "dns",
   "dns-guard", "dns-provider", "exposure", "haproxy", "hardening", "ipblock",
   "users", "vortex-firewall", "waf", "waf-ng", "waf-ratelimit",

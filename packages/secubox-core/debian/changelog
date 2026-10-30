@@ -1,3 +1,58 @@
+secubox-core (1.8.11-1~trixie1) trixie; urgency=medium
+
+  * secubox_core.auth : porteur délégué du pilotage (ref #3126, L5 « Box légère », tâche 1).
+    jeton_pilotage_valide(payload, request) : le jeton frappé par sbx-pilotage-relais (HS256,
+    secret de la box, exp - iat <= 60 s, non échu, iat sans avance > 5 s, aud = nom court de
+    l'hôte, sub pilotage:<admin>@<maître>, réclamation pilotage {acteur, maitre, portee}
+    complète) n'est reconnu qu'en Bearer, sur la socket Unix d'un module (/run/secubox/<m>.sock,
+    jamais TCP) et avec l'en-tête X-SecuBox-Pilotage-Relais. Ce n'est pas une session : jamais
+    dans le registre, refusé par _validate_token et par /verify. Portée lecture : GET/HEAD
+    seulement (403) ; portée admin : administrateur réel (est_admin_reel et
+    session_toujours_admin cohérents, jamais est_personne). Refusé (403) sur les modules qui
+    gèrent comptes, sessions et secrets (auth, vault, portal, assist, premier-pas, users,
+    aggregator, pilotage*) et sur tout chemin à segment de comptes, sessions, secrets, jetons
+    ou clés. Chaque usage, accepté ou refusé, tracé (_trace_delegation : acteur, maître,
+    portée, méthode, chemin, module ; jamais le jeton). Aucun changement pour un jeton ordinaire.
+  * snippets/secubox-proxy.conf : X-SecuBox-Pilotage-Relais vidé sur tout proxy (ref #3126).
+  * Relecture de sécurité (ref #3126, R-L5-9, R-L5-10) :
+    - DÉROGATION aux Global Constraints du plan L5 (HS256 + jwt_secret) : le jeton délégué
+      est signé en Ed25519 (EdDSA) par la clé privée du seul relais ; les modules le
+      vérifient avec la clé publique /etc/secubox/pilotage/relais.pub (PEM, root:root 0644 ;
+      clé privée relais.key 0600 au compte du relais, créée par la tâche 2). Clé absente ou
+      invalide : aucun jeton délégué. Un jeton HS256 signé avec jwt_secret (module
+      compromis) est refusé.
+    - Réclamation obligatoire `cible`, comparée à l'identité du module courant : le fichier
+      source de la route sous /usr/lib/secubox/<module>/ (module_courant), pas la socket.
+      scope["server"] devient un contrôle de plus : TCP refusé, socket fournie = celle du
+      module, absent (uvicorn 0.32) accepté.
+    - Exclusions durcies : segments découpés sur tout caractère hors [a-z0-9], mots
+      credential(s), identifiants, private, privkey, psk, restore, reset-password,
+      set-password, api_key ; routes WireGuard /peer/<nom>/config|qr et /export/… exclues.
+    - sub, acteur, maitre sous motif strict ; journaux en ASCII et valeurs du client en %r ;
+      jeton invalide présenté avec l'en-tête tracé comme refus (motif, jamais le jeton) ;
+      refus aussi dans /var/log/secubox/audit.log ; est_admin_reel n'accepte que le payload
+      marqué par la garde (request.state.pilotage).
+  * Seconde relecture de sécurité (ref #3126, R-L5-12, R-L5-13, R-L5-14) :
+    - Écriture FERMÉE par défaut pour le porteur délégué : en portée admin, une écriture
+      n'est permise que sur une route déclarée par le paquet du module
+      (/usr/share/secubox/pilotage/routes-ouvertes.d/<module>.toml, root, sans écriture
+      groupe/autres) ; valider_routes_ouvertes() refuse tout motif non ancré ou ouvert ; un
+      fichier invalide ou douteux n'ouvre rien. La liste de refus reste devant (lecture
+      comprise). Réalise #3279 en version minimale.
+    - Clé publique déplacée dans /etc/secubox-pilotage/relais.pub (arbre root, hors de
+      /etc/secubox) : dossier O_DIRECTORY|O_NOFOLLOW, fichier par dir_fd O_NOFOLLOW, root
+      et sans écriture groupe/autres exigés, sinon aucun jeton délégué.
+    - Seuls les refus d'un jeton à signature vérifiée sont audités ; les jetons non
+      vérifiés sont comptés, journalisés au plus une fois par minute ; avertissements
+      motivés une fois par empreinte au lieu d'exceptions tues ; module_courant en cache ;
+      acteur normalisé en minuscules par le relais (documenté).
+  * Troisième relecture de sécurité (ref #3126, R-L5-16) : le validateur des déclarations
+    compile chaque classe de caractères et refuse celle qui accepte « / » ([!-~], [.-0]),
+    et exige un premier segment littéral (^/[^/]+$ refusé) ; compteur des jetons non
+    vérifiés sous verrou (gardes servies dans le pool de threads).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
+
 secubox-core (1.8.10-1~trixie1) trixie; urgency=medium
 
   * secubox_core.auth.session_toujours_admin(payload) (ref #3126, L2 tâche 7) : revérifie pour une connexion longue

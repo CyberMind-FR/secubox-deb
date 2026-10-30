@@ -41,6 +41,7 @@ import re
 import secrets
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Callable, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -49,6 +50,10 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from secubox_core.auth import require_jwt, session_toujours_admin
+
+from api.vhost import ajouter_routes_vhost
+from pilotage import exposition as EXPO
+from pilotage import vhosts as V
 
 from pilotage.diffusion import FIN, Diffusion, LimiteAtteinte, formater
 from pilotage.files import COMMANDE_MESURE, DUREE_DEFAUT_S, DUREE_MAX_S, DUREE_MIN_S, FileDeBoxPleine, Files
@@ -111,9 +116,12 @@ def _borne(v, n: int = ERREUR_MAX) -> str:
 def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventaire, audit: Callable[[str, dict], None], *,
                     horloge: Callable[[], float] = time.time, delai_lecture_s: float = DELAI_LECTURE_S,
                     suivi: Optional[Suivi] = None, noms_pris: Callable[[], set] = set,
-                    delai_action_s: float = DELAI_ACTION_S, diffusion=None, battement_s: float = 15.0) -> FastAPI:
+                    delai_action_s: float = DELAI_ACTION_S, diffusion=None, battement_s: float = 15.0,
+                    maitre: Optional[str] = None, debit=None, plan_vhosts: Optional[Path] = None,
+                    racine_pages: Optional[Path] = None, plan_exposition: Optional[Path] = None) -> FastAPI:
     """`suivi` : fin des opérations (partagé avec le canal) ; `noms_pris()` : noms portés au maillage hors table des box (pairs
-    de peers.json, nom du maître), appelée hors boucle."""
+    de peers.json, nom du maître), appelée hors boucle. L5 tâche 5 : routes du vhost admin.<box> (api/vhost.py) ; `plan_vhosts` :
+    fichier relu par le ctl root secubox-pilotage-vhost, réécrit à chaque tour d'inventaire s'il change."""
     suivi = suivi or Suivi(stockage, files, audit)
     diffusion = diffusion if diffusion is not None else Diffusion()
 
@@ -460,5 +468,29 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
                          limite: int = Query(200, ge=1, le=1000)):
         cle = (await trouver(nom))["cle"] if nom else None
         return await asyncio.to_thread(stockage.evenements, cle, depuis, limite)
+
+    # --- L5 tâche 5 : vhost admin.<box> d'une box légère ---
+    ajouter_routes_vhost(app, stockage, files, audit, horloge=horloge, maitre=maitre, debit=debit, racine_pages=racine_pages)
+    if plan_vhosts is not None:
+        def ecrire_plan() -> None:
+            boites = [(b["nom"], stockage.inventaire(b["cle"])["valeurs"]) for b in stockage.boites()]
+            if V.ecrire_plan(plan_vhosts, V.plan(boites)):
+                log.info("plan des vhosts de box légère réécrit")
+
+        async def crochet_plan() -> None:
+            await asyncio.to_thread(ecrire_plan)
+
+        inventaire.a_chaque_tour(crochet_plan)
+    # --- L5 tâche 6 (E4) : noms et ports déclarés par les agents, relus par secubox-relais-maillage (root) ---
+    if plan_exposition is not None:
+        def ecrire_exposition() -> None:
+            lignes = [{**b, "inventaire": stockage.inventaire(b["cle"])} for b in stockage.boites()]
+            if EXPO.ecrire_plan(plan_exposition, EXPO.plan(lignes)):
+                log.info("plan d'exposition réécrit")
+
+        async def crochet_exposition() -> None:
+            await asyncio.to_thread(ecrire_exposition)
+
+        inventaire.a_chaque_tour(crochet_exposition)
 
     return app

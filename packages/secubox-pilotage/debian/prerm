@@ -7,11 +7,18 @@ set -e
 case "$1" in
   remove|deconfigure)
     systemctl stop secubox-pilotage-ecoute.timer secubox-pilotage-ecoute.path >/dev/null 2>&1 || true
+    systemctl stop secubox-pilotage-vhost.timer secubox-pilotage-vhost.path secubox-pilotage-vhost.service >/dev/null 2>&1 || true
     systemctl stop secubox-pilotage.service || true
     systemctl stop secubox-pilotage.socket secubox-pilotage-canal.socket >/dev/null 2>&1 || true
     systemctl stop secubox-pilotage-invite.socket >/dev/null 2>&1 || true
     # Règles nft du canal (fichier et vif) et écouteur nginx : retirés avec le service (l'assistant est encore là à ce stade).
     if [ -x /usr/sbin/secubox-pilotage-ecoute ]; then /usr/sbin/secubox-pilotage-ecoute --retirer || true; fi
+    # vhosts des box légères : ils relaient vers la socket du service, retirés avec lui (au retrait seulement, pas à la mise à jour)
+    if [ "$1" = remove ] && [ -x /usr/sbin/secubox-pilotage-vhost ]; then
+      for b in $(/usr/sbin/secubox-pilotage-vhost lister 2>/dev/null | python3 -c 'import json,sys; print(" ".join(v["box"] for v in json.load(sys.stdin).get("vhosts", [])))' 2>/dev/null); do
+        /usr/sbin/secubox-pilotage-vhost retirer --acteur paquet "$b" >/dev/null || true
+      done
+    fi
     ;;
 esac
 #DEBHELPER#

@@ -67,7 +67,7 @@ async function callSetBackupSchedule(params) {
 }
 
 async function callReboot(params) {
-    return sbxFetch('/api/v1/system/reboot', params, 'GET');
+    return sbxFetch('/api/v1/system/reboot', params, 'POST');
 }
 
 async function callGetStorage(params) {
@@ -107,7 +107,7 @@ async function callDeleteDiagnostic(params) {
 }
 
 async function callRunDiagnosticTest(params) {
-    return sbxFetch('/api/v1/system/run_diagnostic_test', params, 'GET');
+    return sbxFetch('/api/v1/system/run_diagnostic_test', params, 'POST');
 }
 
 async function callUploadDiagnostics(params) {

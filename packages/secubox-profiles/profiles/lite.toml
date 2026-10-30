@@ -18,6 +18,8 @@ menu_off = ["zkp", "assist", "ksm", "centers", "premier-pas-maitre", "dpi", "ndp
 # RALLUMERAIT et elle relancerait Streamlit, que lite arrête, sur une box qui a installé secubox-isp.
 minuteurs_off = ["dpi-resume", "yt-dlp-refresh", "streamlit-idle"]
 on = [
+  # Pilotage distant (#3126, R-L5-34) : toute box reste télé-administrable par son maître.
+  "pilotage-agent",
   "ad-guard", "admin", "aggregator", "annuaire", "auth", "backup",
   "cdn", "certs", "core", "cs-bridge", "dns",
   "dns-guard", "dns-provider", "exposure", "haproxy", "hardening", "health-doctor",

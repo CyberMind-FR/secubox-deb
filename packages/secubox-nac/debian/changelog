@@ -1,3 +1,17 @@
+secubox-nac (3.9.6-1~trixie1) trixie; urgency=medium
+
+  * Déclare les écritures ouvertes au porteur délégué du pilotage (ref #3126, L5, R-L5-12) :
+    /usr/share/secubox/pilotage/routes-ouvertes.d/nac.toml (root, 0644), seulement les
+    routes d'écriture que les pages du module appellent ; secubox_core.auth refuse toute
+    autre écriture déléguée.
+  * /sync_zones passe de GET à POST (réapplique les zones : une action), et les vues portées
+    client-guardian l'appellent en POST, comme le classe scripts/rewrite-xhr.py (ref #3126,
+    R-L5-14).
+  * /send_test_alert passe de GET à POST, vue portée comprise ; déclaration réécrite en
+    motifs à premier segment littéral (ref #3126, R-L5-16).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 15:00:00 +0100
+
 secubox-nac (3.9.5-1~trixie1) trixie; urgency=medium
 
   * Depuis le LAN du mode routeur (br-lan, accepté en entrée par netmodes 1.7.0), les zones IoT et Invités n'ont vers

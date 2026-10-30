@@ -101,11 +101,12 @@ def test_jamais_nft_f_sur_nftables_conf_pour_les_ports():
 def _banc(tmp_path):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    (bin_dir / "id").write_text("#!/bin/sh\necho 0\n")
     (bin_dir / "nft").write_text(f'#!/bin/sh\necho "$*" >> "{tmp_path}/nft-appels"\nexit 0\n')
     for f in bin_dir.iterdir():
         f.chmod(0o755)
-    return {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}",
+    (tmp_path / "racine" / "var" / "lib").mkdir(parents=True)
+    # racine substituée (hors root seulement) : le verrou commun du relais (#3126) y vit, pas dans /var/lib
+    return {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SBX_RELAIS_ESSAI": str(tmp_path / "racine"),
             "SECUBOX_RELAIS_PORTS_ETAT": str(tmp_path / "etat" / "relais-ports.json"),
             "SECUBOX_RELAIS_PORTS_NFT": str(tmp_path / "nftables.d" / "secubox-relais-ports.nft")}
 

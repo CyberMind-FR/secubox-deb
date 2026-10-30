@@ -1,3 +1,116 @@
+secubox-pilotage-agent (0.5.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 7, correction 1/5 (R-L5-34, ref #3126) : Interface = « distante » seulement si le marqueur root
+    /var/lib/secubox-profiles/allegement/actif est présent et de confiance (posé par secubox-profilectl APRÈS un
+    allègement réussi, nginx -t passé ; ôté au retour) ; le nom du profil seul ne suffit plus (le pointeur
+    /var/lib/secubox/profiles/actif n'est écrit par aucun composant). AppArmor : lecture de ce seul marqueur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 14:00:00 +0100
+
+secubox-pilotage-agent (0.5.0-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 7 (box légère « distante », ref #3126) :
+    - page d'état locale internal/etat : HTML statique écrit dès le démarrage, SANS attendre le maître, puis toutes
+      les 60 s, dans /run/secubox/pilotage/etat.html (RuntimeDirectory de l'unité, 0755 ; page 0644) : nom de la
+      machine, maître joignable / injoignable / inconnu, mains liées, mémoire disponible et swap, services en échec.
+      Construite champ par champ : jamais d'adresse, de clé, de jeton, de numéro de série ni de nom d'utilisateur ;
+      valeurs échappées ; aucun script ; feuille de style unique autorisée par son empreinte (CSP du gabarit nginx
+      « etat » de secubox-profiles). Écriture atomique : fichier de travail au nom fixe, ouvert sans suivre de lien,
+      synchronisé, renommé ;
+    - canal : rappel Joignable après chaque tour (page d'état) ;
+    - Device.X_SECUBOX_Pilotage.Interface : « distante » sous le profil léger, « locale » sinon (le maître sert alors
+      admin.<box>, R-L5-27) ;
+    - AppArmor : seules écritures /run/secubox/pilotage/.etat.html.tmp et etat.html. Aucune dépendance Go ajoutée.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 12:00:00 +0100
+
+secubox-pilotage-agent (0.4.2-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 3, correction 2/5 (R-L5-22, ref #3126) :
+    - I1 : projection des drapeaux de portée sous un verrou EXCLUSIF dédié (/etc/secubox-pilotage/.projection.lock),
+      tenu de la lecture de l'état jusqu'à l'écriture ; ordre : projection puis état, jamais l'inverse. Un `etat`
+      concurrent d'une fermeture ne fait plus réapparaître `support-ouvert`.
+    - M6 : fsync du dossier après chaque renommage atomique du ctl.
+    - M3 : RSS réel mesuré (34,5 Mio VmHWM, échanges parallèles) ; MemoryMax 48M, GOMEMLIMIT 32MiB.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 01:00:00 +0100
+
+secubox-pilotage-agent (0.4.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 3, relecture de sécurité, correction 1/5 (R-L5-21, ref #3126) :
+    - I1 : plus de cache de 30 s ni de `sudo … politique` par message. Le ctl root projette dans /etc/secubox-pilotage
+      les drapeaux `proprietaire` (wg-mesh vérifié) et `support-ouvert` (fin de la session), recalculés après chaque
+      verbe (accord, fermeture, refus, expiration, mains liées, ancre-verifier) ; l'agent les relit à CHAQUE message
+      (relais.EcheanceDans, même vérification que MainsLieesDans, factorisée). Le postinst reprojette (`etat` local).
+      L'action `politique pilotage-admin` de 0.4.0 est retirée.
+    - M5 : lecture réussie journalisée seulement en debug ; une ligne par écriture ou refus.
+    - M6 : pic de tas mesuré (23,3 Mio, échange de 4 Mio aller et retour) ; MemoryMax 40M, GOMEMLIMIT 32MiB.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 23:00:00 +0100
+
+secubox-pilotage-agent (0.4.0-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 3 (ref #3126) : message `HTTP` du canal. L'agent appelle le relais local
+    (/run/secubox/pilotage-relais.sock) et rend `HTTP_RESP` par POST /canal/v1/http. Portée RECALCULÉE par
+    l'agent : mains liées (relais.MainsLieesDans, même vérification que le relais) ou box cliente sans support
+    ouvert (ctl root, nouvelle action `politique pilotage-admin`, relue au plus toutes les 30 s) ⇒ lecture ; la
+    portée du maître ne peut que réduire. Acteur/maître aux motifs du vérificateur ; ancre vérifiée exigée ;
+    corps ≤ 4 Mio (413), délai 35 s (504), relais absent 502, 4 messages à la fois (503), un seul gros échange.
+  * Profil AppArmor : la seule socket du relais, le drapeau /etc/secubox-pilotage/mains-liees. Unité : après
+    secubox-pilotage-relais.socket ; MemoryMax 48M, GOMEMLIMIT 40MiB (un échange de 4 Mio en base64).
+  * R-L5-20 : `acl` en dépendance (setfacl de l'ACL d'audit du relais) ; `mains-liees off` crée
+    /etc/secubox-pilotage (root 0755) s'il manque, au lieu de laisser le relais en lecture sans le dire ; test
+    mémoire du relais avec une réponse en chunked.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 21:00:00 +0100
+
+secubox-pilotage-agent (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 2, relecture de sécurité, correction 1/5 (R-L5-19, ref #3126) :
+    - I1 : le relais lit les mains liées UNIQUEMENT dans /etc/secubox-pilotage/mains-liees (arbre root),
+      dossier O_DIRECTORY|O_NOFOLLOW, drapeau par dir_fd O_NOFOLLOW, root et sans écriture groupe/autres ;
+      sinon (dossier absent ou douteux, drapeau douteux) : mains liées. Le ctl root y projette l'état
+      (`mains-liees on|off`, écriture atomique) ; le postinst y reporte l'état root existant.
+    - I2 : corps plafonné à 4 Mio dans les deux sens (413), écart au brief (8 Mio) pour MemoryMax=64M ; corps
+      base64 libéré dès le décodage, réponse encodée en base64 au fil de l'écriture, tampon de réponse dimensionné
+      sur Content-Length ; deux appels simultanés : ~31 Mio de tas mesurés (relais seul).
+    - Connexions bornées à 8 (en cours ou en attente), demande à lire en 10 s ; GET/HEAD avec corps : 400 ;
+      `uid=?` audité quand SO_PEERCRED échoue ; caractères de contrôle (%00…) refusés dans la requête.
+    - Audit : `secubox-pilotage-relais-acl` (root, fichier vérifié par descripteur) pose une ACL d'écriture seule
+      sur audit.log au postinst et à chaque démarrage (ExecStartPre=-+).
+    - Unité : LimitCORE=0, ProtectProc=invisible. Postinst : socket du relais non activée sans clé publique.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 18:00:00 +0100
+
+secubox-pilotage-agent (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * L5 « Box légère », tâche 2 (ref #3126) : relais local `sbx-pilotage-relais`.
+    - Reçoit de l'agent, par /run/secubox/pilotage-relais.sock (socket systemd 0660, propriétaire
+      secubox-pilotage-relais, groupe secubox-pilotage-agent ; SO_PEERCRED = uid de l'agent, sinon fermeture
+      sans réponse, auditée), un appel JSON {methode, chemin, entetes, corps_b64, acteur, maitre, portee,
+      version_page} ; rend {statut, entetes, corps_b64}.
+    - Frappe le jeton délégué attendu par secubox_core.auth (R-L5-9) : EdDSA Ed25519, en-tête fixe sans
+      kid/jku/jwk, aud = nom court de l'hôte (règle de nom_box_locale), sub pilotage:<acteur>@<maître>,
+      cible = module (alias waker → profiles), exp - iat = 30 s, réclamation pilotage {acteur, maitre, portee},
+      rien d'autre. Acteur et maître mis en minuscules ASCII, puis refusés hors motif (400).
+    - Appelle /run/secubox/<module>.sock en retirant le préfixe /api/v1/<module>, comme nginx et l'agrégateur ;
+      chemin hors /api/v1/<module>/, `..`, `%2F`, segment vide, non-ASCII : 400 ; module sans socket : 404 ;
+      modules exclus du porteur délégué (auth, vault, portal, assist, premier-pas, users, aggregator, pilotage*) :
+      403 sans appel. Seuls Content-Type, Accept et If-* passent ; Authorization, Cookie, X-SecuBox-* effacés ;
+      le relais pose Authorization: Bearer et X-SecuBox-Pilotage-Relais. Réponse : jamais Set-Cookie.
+    - Mains liées : portée lecture, ou drapeau /etc/secubox/pilotage/mains-liees présent, → toute méthode autre
+      que GET/HEAD refusée 423 avant tout appel. Corps ≤ 8 Mio dans les deux sens (413), délai 30 s (504).
+    - Refus audités dans /var/log/secubox/audit.log si le compte peut y écrire, sinon au journal du service ;
+      jamais le jeton, le corps, la requête ni les en-têtes.
+    - Clés (R-L5-13, R-L5-18) : compte système dédié secubox-pilotage-relais ; clé privée PKCS#8
+      /var/lib/secubox-pilotage-relais/relais.key 0600, créée par le postinst sous ce compte (runuser,
+      `sbx-pilotage-relais cle-publique`) ; clé publique /etc/secubox-pilotage/relais.pub root:root 0644 posée
+      par root ; concordance vérifiée au démarrage du relais.
+    - Unité durcie (aucune capacité, PrivateNetwork, AF_UNIX seul, MemoryMax 64M), socket systemd, profil
+      AppArmor enforce. Dépend de secubox-core >= 1.8.11 (vérificateur Ed25519).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 16:00:00 +0100
+
 secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
 
   * L2 « Agir », tâche 1 (ref #3126) : ctl root de la box `secubox-pilotagectl` et sa politique.

@@ -141,7 +141,17 @@ def test_controle_debian():
     assert "Package: secubox-pilotage\n" in c and "Architecture: all" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
     ch = lire("debian/changelog").splitlines()[0]
-    assert ch.startswith("secubox-pilotage (0.1.2-1~trixie1) trixie;")
+    assert ch.startswith("secubox-pilotage (0.5.3-1~trixie1) trixie;")
+    assert "Recommends: apparmor, secubox-p2p (>= 1.20.1~)" in c          # Final : relais-maillage R-L5-33
+    depends = re.search(r"^Depends:(.*)$", c, re.M).group(1)
+    assert "sudo" not in depends                                          # Final : plus aucune règle sudoers
+
+
+@pytest.mark.parametrize("paquet", ["secubox-pilotage", "secubox-pilotage-agent", "secubox-p2p", "secubox-profiles",
+                                    "secubox-annuaire"])
+def test_changelogs_jamais_dates_dans_le_futur(paquet):
+    """Final : les entrées de la branche L5 portent la date réelle (30 octobre 2026), jamais le lendemain."""
+    assert "31 Oct 2026" not in lire(f"packages/{paquet}/debian/changelog", DEPOT)
 
 
 def test_postinst_et_prerm():
@@ -227,7 +237,8 @@ def test_la_doc_du_marqueur_dit_ce_qu_il_protege_et_ce_qu_il_ne_protege_pas():
     nginx), PAS un processus qui joint directement la socket : celui-là forge aussi le marqueur. Contre lui, la barrière est la socket
     (0660, groupe www-data). Aucun texte ne doit promettre le contraire."""
     import api.canal as canal
-    entree = lire("debian/changelog").split("\n -- ", 1)[0]
+    # l'entrée qui documente le marqueur (0.2.2), pas forcément la plus récente
+    entree = next(e for e in lire("debian/changelog").split("\n -- ") if "HTTP_INCONNUS_PAR_MINUTE" in e)
     for texte in (canal.__doc__, entree, lire("README.md")):
         assert "processus local du groupe www-data) ne choisit pas" not in texte
         assert "processus local qui joindrait la socket ne choisit plus" not in texte
@@ -360,3 +371,22 @@ def test_postrm_ne_suit_jamais_un_lien_a_la_place_du_journal_m12(tmp_path):
     r, appels, journaux, _ = _postrm(tmp_path, "purge", lien=True)
     assert r.returncode == 0, r.stderr
     assert not [a for a in appels if a.endswith(f"{journaux}/audit.log")], appels
+
+
+def test_unite_vhost_root_bornee_et_exception_ecrite():
+    """Final I2 : le ctl root des vhosts figure dans les Exceptions de RULES-CODE ; capacités bornées, écritures limitées aux
+    fichiers et dossiers réellement écrits (jamais tout /etc/secubox)."""
+    u = lire("systemd/secubox-pilotage-vhost.service")
+    caps = re.search(r"^CapabilityBoundingSet=(.*)$", u, re.M).group(1).split()
+    assert sorted(caps) == ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH", "CAP_FOWNER"]
+    assert re.search(r"^AmbientCapabilities=$", u, re.M)
+    rw = [d.lstrip("-") for li in u.splitlines() if li.startswith("ReadWritePaths=") for d in li.split("=", 1)[1].split()]
+    assert "/etc/secubox" not in rw and "/etc" not in rw
+    assert {"/etc/secubox/haproxy.toml", "/etc/secubox/waf", "/etc/nginx/conf.d", "/var/lib/secubox-pilotage-pages",
+            "/var/log/secubox", "/data/haproxy", "/etc/letsencrypt"} <= set(rw)
+    regles = lire(".claude/RULES-CODE.md", DEPOT)
+    lignes = [x for x in regles.splitlines() if "secubox-pilotage-vhost.service" in x]
+    assert len(lignes) == 1
+    for mot in ("haproxyctl", "secubox-waf-route", "certbot", "nginx", "systemd-run", "CAP_CHOWN",
+                "packages/secubox-pilotage/tests/test_paquet.py::test_unite_vhost_root_bornee_et_exception_ecrite"):
+        assert mot in lignes[0], mot

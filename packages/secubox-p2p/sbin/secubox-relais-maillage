@@ -11,6 +11,8 @@
 #   relayer <nom> <ip-maillée-du-pair> [port]   (port par défaut : 9080)
 #   retirer <nom>
 #   relayer-port <proto/port> <ip-du-pair> <module> | retirer-port <proto/port>   (ports média, #3154)
+#   relayer --sans-sonde <nom> <ip> [port]      rétablissement (retour arrière du pilotage) sans sonder le pair
+#   pair-de <box>                               IP maillée du pair <box> (wg_mesh.json + wg-mesh)
 #   etat
 # Sur le PAIR (le nœud sans WAN, ex. gk3) :
 #   ouvrir <ip-maillée-du-relais> [port]        (port par défaut : 9080)
@@ -37,29 +39,50 @@
 set -euo pipefail
 readonly MODULE="relais-maillage"
 
-ROUTES="${SECUBOX_RELAIS_ROUTES:-/etc/secubox/waf/haproxy-routes.json}"
-CERTS_DIR=/data/haproxy/certs
+# Racine substituée (tests seulement) : honorée HORS root uniquement ; en root, chemins réels et propriétaire attendu uid 0.
+R=""; UID_ROOT=0
+if [ "$(id -u)" -ne 0 ] && [ -n "${SBX_RELAIS_ESSAI:-}" ]; then
+    R="${SBX_RELAIS_ESSAI%/}"; UID_ROOT="$(id -u)"
+fi
+
+ROUTES="${SECUBOX_RELAIS_ROUTES:-$R/etc/secubox/waf/haproxy-routes.json}"
+HAPROXY_TOML="$R/etc/secubox/haproxy.toml"
+CERTS_DIR=$R/data/haproxy/certs
 WEBROOT=/usr/share/secubox/www
-NFT_CONF=/etc/nftables.conf
-NGINX_CONF=/etc/nginx/conf.d/secubox-relais-maillage.conf
+NFT_CONF=$R/etc/nftables.conf
+NGINX_CONF=$R/etc/nginx/conf.d/secubox-relais-maillage.conf
 BACKEND=sbxwaf_inspector
 RESOLVEUR=1.1.1.1
 ACME=/root/.acme.sh
 DNS_JOKER="${SECUBOX_DNS_JOKER:-/usr/sbin/secubox-dns-joker}"   # module DNS d'ici (#3206)
 PAS_DNS=10          # propagation d'un joker créé : relevé toutes les PAS_DNS s…
 ATTENTE_DNS_PAS=12  # … ATTENTE_DNS_PAS fois au plus (2 min), puis la synchronisation suivante reprend
-REGLAGES=/etc/secubox/relais-maillage.toml
-ETAT_PERIMES=/var/lib/secubox/p2p/relais-perimes.json   # candidats au retrait du relevé précédent (#3132)
-AUDIT="${SECUBOX_RELAIS_AUDIT:-/var/log/secubox/audit.log}"
-WG_ETAT=/var/lib/secubox/p2p/wg_mesh.json
+REGLAGES=$R/etc/secubox/relais-maillage.toml
+ETAT_PERIMES=$R/var/lib/secubox/p2p/relais-perimes.json   # candidats au retrait du relevé précédent (#3132)
+# Noms admin.<box> qu'une box « distante » fait servir par le pilotage du maître (#3126 L5, R-L5-27) : fichier root écrit par
+# secubox-pilotage-vhost ; jamais relayés ici tant qu'ils y figurent.
+EXCLUSIONS_PILOTAGE=$R/var/lib/secubox-pilotage-pages/exclusions-relais.json
+# Plan d'exposition du pilotage (#3126 L5 tâche 6, E4) : noms déclarés par l'agent de chaque box (Device.X_SECUBOX_Exposure),
+# écrit par le service secubox-pilotage dans SON dossier ; relu ici sans suivre de lien et revalidé (voir exposition_pilotage).
+DOSSIER_PILOTAGE=$R/var/lib/secubox/pilotage
+AUDIT="${SECUBOX_RELAIS_AUDIT:-$R/var/log/secubox/audit.log}"
+WG_ETAT=$R/var/lib/secubox/p2p/wg_mesh.json
 PORT_PAIR=9080
 # Ports bruts (média d'une visio…) publiés par les pairs, relayés par DNAT vers leur IP maillée (#3154).
-RELAIS_PORTS_ETAT="${SECUBOX_RELAIS_PORTS_ETAT:-/var/lib/secubox/p2p/relais-ports.json}"
-RELAIS_PORTS_NFT="${SECUBOX_RELAIS_PORTS_NFT:-/etc/nftables.d/secubox-relais-ports.nft}"
+RELAIS_PORTS_ETAT="${SECUBOX_RELAIS_PORTS_ETAT:-$R/var/lib/secubox/p2p/relais-ports.json}"
+RELAIS_PORTS_NFT="${SECUBOX_RELAIS_PORTS_NFT:-$R/etc/nftables.d/secubox-relais-ports.nft}"
 # Ports jamais relayés, quoi que publie un pair : ssh, dns, web, API/WAF/agrégateur de la box, WireGuard (le maître
 # écoute 51820 et 51822 : un pair qui les publierait couperait tout le maillage). Même liste dans les Python ci-dessous.
 PORTS_RESERVES=" 22 53 80 443 7331 8085 9080 51820 51822 "
-PORTS_PUBLICS_LOCAL="${SECUBOX_PORTS_PUBLICS_DIR:-/var/lib/secubox/ports-publics.d}"
+PORTS_PUBLICS_LOCAL="${SECUBOX_PORTS_PUBLICS_DIR:-$R/var/lib/secubox/ports-publics.d}"
+
+# VERROU COMMUN avec secubox-pilotage-vhost (#3126, R-L5-30) : flock exclusif sur un fichier root dédié du dossier root des
+# exclusions. Tenu par CE script pendant toute une passe relayer/retirer/synchroniser (lecture des exclusions comprise,
+# jusqu'à la fin des écritures et du `haproxyctl generate`), et par le ctl du pilotage pendant tout un basculement.
+# ORDRE DES VERROUS : verrou commun D'ABORD, verrou de conf.d nginx (ctl du pilotage) ENSUITE ; ce script ne prend que le
+# commun. Quand le ctl l'appelle, il lui transmet SA description de fichier (SECUBOX_VERROU_FD, descripteur hérité) : flock
+# sur la même description est immédiat, aucun interblocage ; un descripteur qui n'est pas ce fichier ne dispense de rien.
+VERROU_COMMUN=$R/var/lib/secubox-pilotage-pages/verrou-relais.lock
 
 log()  { printf '[%s] %s\n' "$MODULE" "$*"; }
 meurt() { printf '[%s] ERREUR : %s\n' "$MODULE" "$*" >&2; exit 1; }
@@ -68,7 +91,29 @@ audit_relais() {   # audit_relais <evenement> <nom> <ip-du-pair>
     printf '{"ts":"%s","module":"p2p","evenement":"%s","nom":"%s","pair":"%s"}\n' \
         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" >> "$AUDIT" 2>/dev/null || true
 }
-[ "$(id -u)" -eq 0 ] || meurt "à lancer en root"
+[ "$(id -u)" -eq 0 ] || [ -n "$R" ] || meurt "à lancer en root"
+
+verrou_commun() {
+    local fd="${SECUBOX_VERROU_FD:-}" d u m
+    if [[ "$fd" =~ ^[0-9]{1,4}$ ]] && [ "$fd" -gt 2 ] && [ ! -L "$VERROU_COMMUN" ] && [ "/proc/self/fd/$fd" -ef "$VERROU_COMMUN" ]; then
+        flock -x "$fd" || meurt "verrou commun hérité inutilisable"
+        return 0
+    fi
+    d="$(dirname "$VERROU_COMMUN")"
+    [ -e "$d" ] || [ -L "$d" ] || mkdir -m 0755 "$d" || meurt "dossier du verrou commun impossible à créer"
+    [ -d "$d" ] && [ ! -L "$d" ] || meurt "dossier du verrou commun non sûr (lien ou absent)"
+    u="$(stat -c %u "$d")"; m="$(stat -c %a "$d")"
+    [ "$u" = "$UID_ROOT" ] && [ $(( 8#$m & 8#22 )) -eq 0 ] || meurt "dossier du verrou commun non sûr (root, sans écriture groupe/autres)"
+    [ ! -L "$VERROU_COMMUN" ] || meurt "verrou commun non sûr (lien)"
+    ( umask 077; exec 9<>"$VERROU_COMMUN" ) || meurt "verrou commun impossible à ouvrir"
+    exec 9<"$VERROU_COMMUN" || meurt "verrou commun impossible à ouvrir"
+    # vérifié APRÈS ouverture, sur le descripteur : le fichier ouvert est bien celui du dossier (aucun lien suivi), ordinaire,
+    # root, un seul lien
+    [ "$(readlink "/proc/$$/fd/9")" = "$(readlink -f "$d")/$(basename "$VERROU_COMMUN")" ] || meurt "verrou commun non sûr (lien)"
+    [ -f "/proc/$$/fd/9" ] && [ "$(stat -L -c '%u %h' "/proc/$$/fd/9")" = "$UID_ROOT 1" ] \
+        || meurt "verrou commun non sûr (propriétaire ou liens)"
+    flock -x 9 || meurt "verrou commun indisponible"
+}
 
 nom_valide()  { [[ "$1" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; }
 ip_valide()   { [[ "$1" =~ ^10\.10\.0\.([0-9]{1,3})$ ]] && [ "${BASH_REMATCH[1]}" -ge 1 ] && [ "${BASH_REMATCH[1]}" -le 254 ]; }
@@ -132,21 +177,86 @@ os.replace(tmp, chemin)
 PY
 }
 
+# 0 si <nom> ne doit PAS être relayé ici parce que le pilotage du maître le sert (box « distante », #3126 R-L5-27/30) :
+#  • seul un nom exact admin.<box>.secubox.in peut l'être (tout autre nom : 1, jamais exclu) ;
+#  • fichier ABSENT (ou son dossier) : 1, rien d'exclu (box sans pilotage) ;
+#  • fichier présent et sûr (ordinaire, root, sans écriture groupe/autres, un seul lien, ≤ 1 Mio, dans un dossier root non
+#    inscriptible, lu sans suivre de lien) : 0 si le nom y figure ;
+#  • fichier présent mais NON SÛR ou illisible (lien, lien dur, droits, JSON cassé) : 0 dans le doute pour tout admin.<box> —
+#    le relais n'en crée aucun (jamais deux vhosts pour un nom) et la synchronisation n'en retire aucun ; dit au journal.
+nom_exclu_pilotage() {   # nom_exclu_pilotage <nom>
+    python3 - "$EXCLUSIONS_PILOTAGE" "$1" "$UID_ROOT" <<'PY'
+import json, os, re, stat, sys
+chemin, nom, uid = sys.argv[1], sys.argv[2], int(sys.argv[3])
+if not re.fullmatch(r"admin\.[a-z0-9-]{1,40}\.secubox\.in", nom):
+    sys.exit(1)
+def douteux(motif):
+    print(f"[relais-maillage] exclusions du pilotage non sûres ({motif}) : {nom} ni créé ni retiré", file=sys.stderr)
+    sys.exit(0)
+try:
+    dfd = os.open(os.path.dirname(chemin), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+except FileNotFoundError:
+    sys.exit(1)
+except OSError:
+    douteux("dossier")
+try:
+    sd = os.fstat(dfd)
+    if sd.st_uid != uid or sd.st_mode & 0o022:
+        douteux("dossier")
+    try:
+        fd = os.open(os.path.basename(chemin), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+    except FileNotFoundError:
+        sys.exit(1)
+    except OSError:
+        douteux("lien")
+finally:
+    os.close(dfd)
+try:
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        if (not stat.S_ISREG(st.st_mode) or st.st_uid != uid or st.st_mode & 0o022 or st.st_nlink != 1
+                or st.st_size > 1 << 20):
+            douteux("propriétaire, droits ou liens")
+        d = json.load(f)
+except (OSError, ValueError):
+    douteux("illisible")
+noms = d.get("noms") if isinstance(d, dict) else None
+if not isinstance(noms, list):
+    douteux("illisible")
+sys.exit(0 if nom in noms else 1)
+PY
+}
+
 vhost_present() {
-    python3 - "$1" <<'PY'
+    python3 - "$1" "$HAPROXY_TOML" <<'PY'
 import sys, tomllib
-d = tomllib.load(open("/etc/secubox/haproxy.toml", "rb"))
+d = tomllib.load(open(sys.argv[2], "rb"))
 v = d.get("vhosts") or {}
 it = v.values() if isinstance(v, dict) else v
 sys.exit(0 if any(x.get("domain") == sys.argv[1] for x in it) else 1)
 PY
 }
 
+# relayer --sans-sonde : RÉTABLISSEMENT d'un relais qui existait (retour arrière du pilotage, #3126 R-L5-30 I3). Mêmes
+# contrôles du nom, de l'exclusion, de l'IP et du port, même certificat, vhost et route ; mais ni sonde du pair (curl), ni
+# DNS public, ni vérification finale : un pair muet au moment du retour retrouve quand même son nom.
 cmd_relayer() {
+    local sonde=1
+    if [ "${1:-}" = "--sans-sonde" ]; then sonde=0; shift; fi
     local nom="${1:-}" ip="${2:-}" port="${3:-9080}"
     nom_valide "$nom" || meurt "nom invalide : « $nom »"
+    ! nom_exclu_pilotage "$nom" || meurt "$nom est servi par le pilotage du maître (box « distante ») : non relayé"
     ip_valide "$ip"   || meurt "IP maillée invalide : « $ip » (attendu 10.10.0.x)"
     port_valide "$port" || meurt "port invalide : « $port »"
+    if [ "$sonde" = 0 ]; then
+        log "rétablissement sans sonde : $nom → $ip:$port"
+        relais_poser "$nom" "$ip" "$port"
+        haproxyctl generate >/dev/null && haproxyctl reload >/dev/null || meurt "HAProxy n'a pas rechargé"
+        systemctl reload secubox-waf-ng 2>/dev/null || true
+        audit_relais relais_retabli "$nom" "$ip"
+        log "relais rétabli : $nom → $ip:$port"
+        return 0
+    fi
 
     log "1/5 pair $ip dans le maillage et joignable…"
     pair_du_maillage "$ip" || meurt "$ip n'est pas un pair de wg-mesh sur ce nœud"
@@ -167,6 +277,23 @@ cmd_relayer() {
     [ "$vu" = "$pub" ] || meurt "$nom résout vers « ${vu:-rien} », pas vers ce relais ($pub) — créer l'enregistrement A chez le registraire (module DNS) puis relancer"
     log "    $nom → $pub"
 
+    relais_poser "$nom" "$ip" "$port"
+    # En lot (synchroniser), le rechargement et la vérification se font une
+    # fois, à la fin.
+    [ -n "${RELAIS_EN_LOT:-}" ] && return 0
+    haproxyctl generate >/dev/null && haproxyctl reload >/dev/null || meurt "HAProxy n'a pas rechargé"
+    systemctl reload secubox-waf-ng 2>/dev/null || true
+    sleep 2
+
+    code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 15 --resolve "$nom:443:127.0.0.1" "https://$nom/" || true)
+    log "vérification : https://$nom/ → HTTP $code"
+    case "$code" in 2??|3??|401|403) log "relais en place : $nom → $ip:$port" ;;
+        *) meurt "la chaîne répond $code — voir journalctl -u secubox-waf-ng" ;; esac
+}
+
+# Étapes 3 à 5 (certificat, vhost HAProxy derrière le WAF, route sbxwaf) : communes au relais et au rétablissement.
+relais_poser() {   # relais_poser <nom> <ip> <port>
+    local nom="$1" ip="$2" port="$3"
     log "3/5 certificat…"
     if [ -s "$CERTS_DIR/$nom.pem" ]; then
         log "    déjà servi par HAProxy"
@@ -193,17 +320,6 @@ cmd_relayer() {
     if [[ "$nom" == hall.* ]] && command -v secubox-halls-parc >/dev/null; then
         secubox-halls-parc ajouter "https://$nom" >/dev/null && log "Halls du parc : https://$nom peut encadrer les services d'ici"
     fi
-    # En lot (synchroniser), le rechargement et la vérification se font une
-    # fois, à la fin.
-    [ -n "${RELAIS_EN_LOT:-}" ] && return 0
-    haproxyctl generate >/dev/null && haproxyctl reload >/dev/null || meurt "HAProxy n'a pas rechargé"
-    systemctl reload secubox-waf-ng 2>/dev/null || true
-    sleep 2
-
-    code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 15 --resolve "$nom:443:127.0.0.1" "https://$nom/" || true)
-    log "vérification : https://$nom/ → HTTP $code"
-    case "$code" in 2??|3??|401|403) log "relais en place : $nom → $ip:$port" ;;
-        *) meurt "la chaîne répond $code — voir journalctl -u secubox-waf-ng" ;; esac
 }
 
 # Joker DNS du pair (#3206) : « *.<domaine-du-pair> A <ip publique> » chez le registraire, par le module DNS d'ici
@@ -368,6 +484,86 @@ except Exception:
 if not isinstance(n, list) or not all(isinstance(x, str) for x in n):
     sys.exit(1)
 print(" ".join(n))'
+}
+
+# Noms d'un pair connu du PILOTAGE du maître (#3126 L5 tâche 6, E4) : une box légère n'a pas de webos, son agent déclare
+# ses noms (Device.X_SECUBOX_Exposure.Names) au contrôleur, qui les écrit dans exposition.json à chaque tour d'inventaire.
+# Pas de route HTTP sans jeton : le contrôleur exige un administrateur (require_jwt) et ce script n'en est pas un ; le plan
+# fichier est le patron déjà suivi par secubox-pilotage-vhost (vhosts.json). Rend « <box>\t<0|1 distante>\t<noms…> », ou
+# échoue (→ ancien chemin webos/public/noms) si le plan est absent, non sûr (lien, pas un fichier, inscriptible par
+# groupe/autres, plusieurs liens), trop gros, illisible, d'une autre version, si l'entrée de <ip> manque ou est en double, si
+# son relevé a plus de 24 h (contrôleur arrêté) ou si son nom de box diffère de celui de wg_mesh.json pour cette IP.
+# Déclarations d'un agent distant : seuls <svc>.<box>.secubox.in (svc ^[a-z0-9-]{1,40}$, sans tiret aux bords) passent,
+# 64 au plus. Les PORTS du plan (tous les ports TCP en écoute, sans protocole ni module) ne sont jamais relayés.
+# Propriétaire (R-L5-33 M2) : dossier ET fichier au compte du service secubox-pilotage ou à root, sans écriture groupe/autres.
+# Racine de test : compte attendu = SBX_RELAIS_UID_PILOTAGE (défaut : l'utilisateur de test), jamais honoré en root.
+exposition_pilotage() {   # exposition_pilotage <ip-du-pair> <zone-du-relais>
+    local uids="0"
+    if [ -n "$R" ]; then
+        uids="${SBX_RELAIS_UID_PILOTAGE:-$UID_ROOT}"
+    else
+        uids="0 $(id -u secubox-pilotage 2>/dev/null || true)"
+    fi
+    python3 -I - "$DOSSIER_PILOTAGE" "$1" "$WG_ETAT" "$2" "$uids" <<'PY'
+import json, os, re, stat, sys, time
+dossier, ip, wg, zone, uids = sys.argv[1:6]
+UIDS = {int(u) for u in uids.split() if u.isdigit()}
+def sur(st):
+    return st.st_uid in UIDS and not st.st_mode & 0o022
+MAX = 1 << 20
+RE_BOX = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?")
+def lire():
+    dfd = os.open(dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        if not sur(os.fstat(dfd)):
+            sys.exit(1)
+        fd = os.open("exposition.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+    finally:
+        os.close(dfd)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or not sur(st) or st.st_nlink != 1 or st.st_size > MAX:
+            sys.exit(1)
+        brut = os.read(fd, MAX + 1)
+    finally:
+        os.close(fd)
+    if len(brut) > MAX:
+        sys.exit(1)
+    return json.loads(brut)
+try:
+    d = lire()
+except (OSError, ValueError):
+    sys.exit(1)
+if not isinstance(d, dict) or d.get("version") != 1 or not isinstance(d.get("boxes"), list) or len(d["boxes"]) > 256:
+    sys.exit(1)
+entrees = [b for b in d["boxes"] if isinstance(b, dict) and b.get("adresse") == ip]
+if len(entrees) != 1:
+    sys.exit(1)
+b = entrees[0]
+box, rel, dist, noms = b.get("box"), b.get("releve_le"), b.get("distante"), b.get("noms")
+if not isinstance(box, str) or not RE_BOX.fullmatch(box) or type(dist) is not bool or not isinstance(noms, list):
+    sys.exit(1)
+if type(rel) not in (int, float) or not (time.time() - 86400 <= rel <= time.time() + 300):
+    sys.exit(1)
+try:
+    with open(wg) as f:
+        pairs = json.load(f).get("peers") or []
+    noms_wg = [p.get("name") for p in pairs if isinstance(p, dict) and p.get("mesh_ip") == ip]
+except (OSError, ValueError, AttributeError):
+    sys.exit(1)
+if noms_wg != [box]:
+    sys.exit(1)
+if not re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", zone):
+    sys.exit(1)
+suffixe = "." + box + "." + zone
+res = []
+for n in noms[:1024]:
+    if isinstance(n, str) and n.endswith(suffixe) and RE_BOX.fullmatch(n[:-len(suffixe)]) and n not in res:
+        res.append(n)
+        if len(res) >= 64:
+            break
+print("%s\t%d\t%s" % (box, 1 if dist else 0, " ".join(res)))
+PY
 }
 
 # Pairs à /32 (côté maître) ; maître du satellite (entrée « master » de l'état).
@@ -675,13 +871,24 @@ cmd_synchroniser() {
     mode="$(reglage services_des_pairs '"tous"')"; mode="${mode//\"/}"
     exclus=" $(reglage exclure '["wpad", "boot"]') "
     labels=" $(labels_exposes "$dom") "
+    local nouveaux_max; nouveaux_max="$(reglage nouveaux_noms_max 3)"
+    [[ "$nouveaux_max" =~ ^[0-9]{1,3}$ ]] || nouveaux_max=3
 
     local ip json dpair nom label ajoutes=0 vus=0 echecs=0 retires=0 publies perime
     for ip in $pairs; do
+        # Source des noms (#3126 L5 tâche 6) : le plan d'exposition du pilotage pour un pair qu'il connaît, sinon webos.
+        # R-L5-33 I1 : webos d'abord ; le plan ne sert qu'à un pair SANS webos joignable, et alors rien n'est jamais retiré
+        # (un plan vide ou faux ne peut qu'empêcher d'ajouter ; les retraits restent à webos ou au basculement T5).
+        local expo source=webos distante=0 bx liste="" nouveaux=0
         json="$(curl -s --max-time 6 -H 'Host: hall.localhost' "http://$ip:$PORT_PAIR/api/v1/webos/public/noms" || true)"
         dpair="$(printf '%s' "$json" | python3 -c 'import json,sys
 try: print(json.load(sys.stdin).get("domaine",""))
 except Exception: pass' 2>/dev/null)"
+        if [ -z "$dpair" ] && expo="$(exposition_pilotage "$ip" "${dom#*.}")"; then
+            IFS=$'\t' read -r bx distante liste <<<"$expo"
+            source=pilotage; dpair="$bx.${dom#*.}"
+            log "pair $ip sans webos : noms déclarés par l'agent au pilotage (box $bx), sans retrait"
+        fi
         [ -n "$dpair" ] && nom_valide "$dpair" || continue
         if [ "$dpair" = "$dom" ] || [[ "$dpair" == *".$dom" ]] || [[ "$dom" == *".$dpair" ]]; then
             log "pair $ip : domaine $dpair refusé (celui du relais)"; continue
@@ -690,8 +897,7 @@ except Exception: pass' 2>/dev/null)"
             log "pair $ip : domaine $dpair déjà relayé vers un autre pair — refusé"
             audit_relais relais_domaine_refuse "$dpair" "$ip"; continue
         fi
-        local liste
-        if ! liste="$(printf '%s' "$json" | noms_du_pair)"; then
+        if [ "$source" = webos ] && ! liste="$(printf '%s' "$json" | noms_du_pair)"; then
             log "pair $ip : liste de noms illisible — rien ajouté ni retiré"; continue
         fi
         # ÉMETTRE UN JOKER PEUT MASQUER LE DNS. Si les noms du pair résolvent
@@ -708,11 +914,18 @@ except Exception: pass' 2>/dev/null)"
             log "pair $ip : $temoin ne résout plus depuis le défi DNS-01 — créer « *.$dpair A $pub » chez le registraire"
         fi
         publies=""
+        [ "$distante" = 1 ] && publies=" admin.$dpair"   # déclaré ou non, admin.<box> d'une box distante n'est jamais retiré ici
         for nom in $liste; do
             [[ "$nom" == *".$dpair" ]] && nom_valide "$nom" || continue
             label="${nom%.$dpair}"
             [[ "$label" =~ ^[a-z0-9-]+$ ]] || continue
             [[ "$exclus" == *" $label "* ]] && continue
+            # box « distante » (#3126) : admin.<box> servi par le pilotage — jamais (re)créé ici, et compté comme publié pour
+            # que la synchronisation ne le retire jamais non plus (c'est le pilotage qui le rend, par relayer --sans-sonde)
+            if nom_exclu_pilotage "$nom"; then publies="$publies $nom"; continue; fi
+            # box déclarée « distante » par son agent (R-L5-27) : admin.<box> est au pilotage — jamais publié ici, jamais retiré non
+            # plus (seul le basculement de secubox-pilotage-vhost déplace ce nom)
+            if [ "$distante" = 1 ] && [ "$label" = admin ]; then publies="$publies $nom"; continue; fi
             if [ "$mode" = "communs" ]; then
                 [[ "$labels" == *" $label "* ]] || continue
             fi
@@ -721,10 +934,15 @@ except Exception: pass' 2>/dev/null)"
             if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d.get(sys.argv[2],[None])[0]==sys.argv[3] else 1)' "$ROUTES" "$nom" "$ip"; then
                 continue
             fi
+            # M3 : quota Let's Encrypt de la zone — au plus nouveaux_noms_max noms NOUVEAUX par passe pour un pair du plan
+            if [ "$source" = pilotage ] && [ "$nouveaux" -ge "$nouveaux_max" ]; then
+                log "pair $ip : $nom à la prochaine passe (au plus $nouveaux_max nouveaux noms par passe)"; continue
+            fi
             if route_etrangere "$nom" "$ip"; then
                 log "non relayé : $nom vise déjà une autre cible — jamais écrasé"
                 audit_relais relais_nom_refuse "$nom" "$ip"; continue
             fi
+            nouveaux=$((nouveaux + 1))
             if ( RELAIS_EN_LOT=1 cmd_relayer "$nom" "$ip" "$PORT_PAIR" ) >/dev/null 2>&1; then
                 ajoutes=$((ajoutes + 1)); log "relayé : $nom → $ip"; audit_relais relaye "$nom" "$ip"
             else
@@ -737,6 +955,7 @@ except Exception: pass' 2>/dev/null)"
         local communs="*" ex_csv mots
         read -ra mots <<<"$exclus"; ex_csv="$(IFS=,; printf '%s' "${mots[*]}")"
         if [ "$mode" = "communs" ]; then read -ra mots <<<"$labels"; communs="$(IFS=,; printf '%s' "${mots[*]}")"; fi
+        [ "$source" = webos ] || continue   # source pilotage : jamais de retrait (R-L5-33 I1)
         # shellcheck disable=SC2086  # publies : liste de noms validés, découpée exprès
         for perime in $(noms_perimes "$ip" "$dpair" "$ex_csv" "$communs" $publies); do
             if ( RELAIS_EN_LOT=1 cmd_retirer "$perime" ) >/dev/null 2>&1; then
@@ -831,6 +1050,29 @@ cmd_retirer() {
         secubox-halls-parc retirer "https://$nom" >/dev/null || true
     fi
     log "relais retiré pour $nom (certificat conservé, DNS inchangé)"
+}
+
+# pair-de <box> : IP maillée du pair nommé <box> dans l'état du maillage (wg_mesh.json), seulement s'il y est UNE fois et que
+# wg-mesh le connaît (pair_du_maillage). Lu par secubox-pilotage-vhost (#3126 R-L5-30 I1) : un admin.<box> n'est « tenu par le
+# relais » que si sa route vise CETTE IP. Lecture seule.
+cmd_pair_de() {
+    local box="${1:-}" ip
+    [[ "$box" =~ ^[a-z0-9-]{1,40}$ ]] && [[ "$box" != -* ]] || meurt "nom de box invalide"
+    ip="$(python3 - "$WG_ETAT" "$box" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        d = json.load(f)
+    ips = [p.get("mesh_ip") for p in d.get("peers") or [] if isinstance(p, dict) and p.get("name") == sys.argv[2]]
+except (OSError, ValueError, AttributeError, TypeError):
+    sys.exit(1)
+if len(ips) != 1 or not isinstance(ips[0], str):
+    sys.exit(1)
+print(ips[0])
+PY
+)" || exit 1
+    ip_valide "$ip" && pair_du_maillage "$ip" || exit 1
+    printf '%s\n' "$ip"
 }
 
 cmd_etat() {
@@ -950,13 +1192,14 @@ cmd_fermer() {
 }
 
 case "${1:-}" in
-    relayer) shift; cmd_relayer "$@" ;;
-    retirer) shift; cmd_retirer "$@" ;;
+    relayer) shift; verrou_commun; cmd_relayer "$@" ;;
+    retirer) shift; verrou_commun; cmd_retirer "$@" ;;
+    pair-de) shift; verrou_commun; cmd_pair_de "$@" ;;   # sous le verrou commun (R-L5-31 M3)
     relayer-port) shift; cmd_relayer_port "$@" ;;
     retirer-port) shift; cmd_retirer_port "$@" ;;
     etat)    cmd_etat ;;
     ouvrir)  shift; cmd_ouvrir "$@" ;;
     fermer)  shift; cmd_fermer "$@" ;;
-    synchroniser) cmd_synchroniser ;;
-    *) sed -n '8,21p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    synchroniser) verrou_commun; cmd_synchroniser ;;
+    *) sed -n '8,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

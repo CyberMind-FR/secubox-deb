@@ -127,7 +127,7 @@
      * @returns {Promise<Object>} {code, url, host, expires_in}
      */
     async function generatePairingQR() {
-        return await apiRequest('/pair/qr');
+        return await apiRequest('/pair/qr', { method: 'POST' });
     }
 
     // === UI Helpers ===

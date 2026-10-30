@@ -1,0 +1,939 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-pilotage-www (#3126, L5 tâche 4) : pages `www/` d'une version de paquet, extraites du dépôt apt local du
+maître pour être servies à une box sans tête (une page ne parle qu'à l'API de SA version, spec D5). Root, verbes fermés :
+
+  extraire [--acteur A] <paquet> <version>   .deb trouvé par dists/<suite>/main/binary-*/Packages (Filename, SHA256,
+                                             Size), recopié dans un fichier privé, vérifié par sa somme (sinon refus,
+                                             rien sur disque), lu comme archive ar + data.tar SANS dpkg (aucun script
+                                             de mainteneur) ; seuls les fichiers sous usr/share/secubox/www/ sont
+                                             copiés vers /var/lib/secubox-pilotage-pages/www/<paquet>/<version>/ (root,
+                                             fichiers 0644, dossiers 0755). Dossier temporaire frère puis renommage ;
+                                             idempotent (version présente et intacte : rien). Audité.
+  purger [--acteur A]                        stdin = {"en_usage": [{"paquet", "version"}, …]} (≤ 1 Mio) : versions
+                                             déclarées par les box. Supprime les versions extraites qu'aucune box ne
+                                             déclare depuis 7 jours (horodatage root www/.vu.json). Audité.
+  lister                                     lecture : versions extraites, taille, date. Non audité.
+
+Refus (toute l'archive) : chemin absolu ou `..`, nom non UTF-8 ou à caractère de contrôle ; sous le chemin des pages :
+lien symbolique absolu ou contenant `..`, lien dur vers un fichier hors des pages (ou pas encore extrait), fichier
+spécial, bit setuid/setgid, entrée en double, plus de `fichiers_max` entrées (20 000) ou de `taille_max_mio` (64 Mio).
+
+Configuration (facultative) : /etc/secubox/pilotage-www.toml, root et non inscriptible par d'autres ; clés `depot_apt`
+(chemin absolu, défaut /data/apt, R-L5-1), `suite` (défaut trixie), `taille_max_mio`, `fichiers_max`, `deb_max_mio`
+(défaut 512). Clé inconnue ou valeur invalide : code 2.
+
+Sortie : une ligne JSON, sans chemin. Codes : 0 ; 1 erreur ou refus ({"ok": false, "erreur"}) ; 2 argv ou config.
+SBX_RACINE (tests) : racine substituée, honorée seulement si l'appelant est le compte effectif (jamais après sudo) ;
+SBX_MAINTENANT (horloge) et SBX_INTERROMPRE (arrêt avant le renommage) ne valent que sous SBX_RACINE.
+"""
+import datetime
+import fcntl
+import hashlib
+import json
+import os
+import pwd
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import tomllib
+
+RE_PAQUET = re.compile(r"secubox-[a-z0-9-]{1,60}")
+RE_VERSION = re.compile(r"[0-9][A-Za-z0-9.+~:-]{0,62}")
+RE_ACTEUR = re.compile(r"[a-z_][a-z0-9_.@-]{0,63}")
+RE_FILENAME = re.compile(r"pool/[A-Za-z0-9._+~:/-]{1,400}\.deb")
+RE_SHA256 = re.compile(r"[0-9a-f]{64}")
+RE_SUITE = re.compile(r"[a-z]{1,32}")
+PREFIXE = "usr/share/secubox/www/"
+GARDE = 7 * 24 * 3600
+ENTREE_MAX = 1 << 20
+DECOMPRESSE_MAX = 4 << 30          # toute l'archive : borne contre une bombe de décompression
+DEFAUTS = {"depot_apt": "/data/apt", "trousseau": "/usr/share/keyrings/secubox.gpg", "suite": "trixie", "taille_max_mio": 64, "fichiers_max": 20000, "deb_max_mio": 512}
+BORNES = {"taille_max_mio": (1, 4096), "fichiers_max": (1, 1_000_000), "deb_max_mio": (1, 8192)}
+
+
+class Usage(Exception):
+    pass
+
+
+class Erreur(Exception):
+    pass
+
+
+class Refus(Erreur):
+    """Contenu refusé (somme, entrée hostile, limite) : audité comme un refus."""
+
+
+def err(msg):
+    try:
+        print(f"[pilotage-www] {msg}", file=sys.stderr)
+    except OSError:
+        pass
+
+
+def sortie(obj):
+    sys.stdout.buffer.write((json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8"))
+    sys.stdout.flush()
+
+
+def propre(txt):
+    return re.sub(r"[^a-z0-9_.@-]", "", txt.lower())[:64]
+
+
+class Ctx:
+    def __init__(self, acteur):
+        racine = os.environ.get("SBX_RACINE", "")
+        try:
+            appelant = int(os.environ["SUDO_UID"]) if os.environ.get("SUDO_UID") else os.getuid()
+        except ValueError:
+            appelant = -1
+        if racine and appelant != os.geteuid():
+            err("SBX_RACINE ignorée : l'appelant n'est pas le compte effectif")
+            racine = ""
+        if not racine and os.geteuid() != 0:
+            raise Usage("à lancer en root")
+        self.r = racine.rstrip("/")
+        self.substitue = bool(racine)
+        self.maintenant = time.time()
+        if self.substitue and os.environ.get("SBX_MAINTENANT"):
+            try:
+                self.maintenant = float(os.environ["SBX_MAINTENANT"])
+            except ValueError:
+                raise Usage("SBX_MAINTENANT invalide") from None
+        self.interrompre = self.substitue and bool(os.environ.get("SBX_INTERROMPRE"))
+        su = os.environ.get("SUDO_USER", "")
+        self.appelant = su if RE_ACTEUR.fullmatch(su) else "inconnu"
+        if acteur is not None:
+            self.acteur = acteur
+        else:
+            nom = os.environ.get("SUDO_USER", "")
+            if not nom:
+                try:
+                    nom = pwd.getpwuid(appelant).pw_name
+                except (KeyError, OverflowError):
+                    nom = str(appelant)
+            self.acteur = propre(nom) or "inconnu"
+        self.journaux = f"{self.r}/var/log/secubox"
+        # T5 (I5, R-L5-23) : hors de /var/lib/secubox/pilotage (compte du service) — nginx lit ces pages, tous leurs parents
+        # sont root (/var, /var/lib, secubox-pilotage-pages)
+        self.donnees_parent = f"{self.r}/var/lib"
+        self.donnees_nom = "secubox-pilotage-pages"
+        self.conf = self.lire_conf(f"{self.r}/etc/secubox/pilotage-www.toml")
+        depot = self.conf["depot_apt"]
+        self.depot = f"{self.r}{depot}" if self.substitue and depot == DEFAUTS["depot_apt"] else depot
+        k = self.conf["trousseau"]
+        self.trousseau = f"{self.r}{k}" if self.substitue and k == DEFAUTS["trousseau"] else k
+        self.uid = 0 if not self.substitue else os.geteuid()
+        self.decompresse_max = DECOMPRESSE_MAX
+        try:
+            if self.substitue and os.environ.get("SBX_UID_ATTENDU"):
+                self.uid = int(os.environ["SBX_UID_ATTENDU"])
+            if self.substitue and os.environ.get("SBX_DECOMPRESSE_MAX"):
+                self.decompresse_max = int(os.environ["SBX_DECOMPRESSE_MAX"])
+        except ValueError:
+            raise Usage("surcharge de test invalide") from None
+
+    def lire_conf(self, chemin):
+        conf = dict(DEFAUTS)
+        try:
+            fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except FileNotFoundError:
+            return conf
+        except OSError:
+            raise Usage("configuration illisible") from None
+        try:
+            st = os.fstat(fd)
+            if not stat.S_ISREG(st.st_mode) or st.st_size > 65536:
+                raise Usage("configuration invalide")
+            if not self.substitue and (st.st_uid != 0 or st.st_mode & 0o022):
+                raise Usage("configuration non sûre (propriétaire root, non inscriptible par d'autres)")
+            with os.fdopen(os.dup(fd), "rb") as f:
+                donnees = tomllib.load(f)
+        except tomllib.TOMLDecodeError:
+            raise Usage("configuration invalide") from None
+        finally:
+            os.close(fd)
+        for cle, val in donnees.items():
+            if cle not in DEFAUTS:
+                raise Usage(f"clé de configuration inconnue : {propre(cle)}")
+            if cle in BORNES:
+                bas, haut = BORNES[cle]
+                if type(val) is not int or not bas <= val <= haut:
+                    raise Usage(f"valeur invalide : {cle}")
+            elif cle in ("depot_apt", "trousseau"):
+                if not isinstance(val, str) or not val.startswith("/") or "\0" in val or "/../" in val + "/":
+                    raise Usage(f"valeur invalide : {cle} (chemin absolu)")
+            elif cle == "suite" and (not isinstance(val, str) or not RE_SUITE.fullmatch(val)):
+                raise Usage("valeur invalide : suite")
+            conf[cle] = val
+        return conf
+
+
+# --- Audit (patron secubox-pilotagectl) ----------------------------------------------------------------------------
+
+def auditer(ctx, evenement, **champs):
+    ligne = {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "module": "pilotage",
+             "evenement": evenement, "acteur": ctx.acteur,
+             "appelant": ctx.appelant}
+    ligne.update({k: v for k, v in champs.items() if v is not None})
+    donnees = (json.dumps(ligne, ensure_ascii=False) + "\n").encode("utf-8")
+    try:
+        dfd = os.open(ctx.journaux, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            try:
+                fd = os.open("audit.log", os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+            except FileNotFoundError:
+                fd = os.open("audit.log", os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640,
+                             dir_fd=dfd)
+                if not ctx.substitue:
+                    try:
+                        pw = pwd.getpwnam("secubox")
+                        os.fchown(fd, pw.pw_uid, pw.pw_gid)
+                    except (KeyError, OSError):
+                        os.close(fd)
+                        os.unlink("audit.log", dir_fd=dfd)
+                        raise OSError("journal d'audit non attribuable au compte secubox") from None
+            try:
+                st = os.fstat(fd)
+                if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+                    raise OSError("journal d'audit qui n'est pas un fichier ordinaire")
+                os.write(fd, donnees)
+            finally:
+                os.close(fd)
+        finally:
+            os.close(dfd)
+    except OSError as e:
+        err(f"audit impossible : {e.__class__.__name__}")
+        raise Erreur("audit impossible") from None
+
+
+# --- Racine des pages : www/, root 0755, verrouillée -----------------------------------------------------------------
+
+def _dossier_root(dir_fd, nom, ctx, creer):
+    """Ouvre (crée au besoin, 0755) dir_fd/nom sans suivre de lien ; propriétaire root (ctx.uid), pas d'écriture g/o."""
+    try:
+        fd = os.open(nom, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
+    except FileNotFoundError:
+        if not creer:
+            return None
+        os.mkdir(nom, 0o755, dir_fd=dir_fd)
+        fd = os.open(nom, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
+        os.fchmod(fd, 0o755)
+    except OSError:
+        raise Erreur("dossier des pages non sûr") from None
+    st = os.fstat(fd)
+    if st.st_uid != ctx.uid or st.st_mode & 0o022:
+        os.close(fd)
+        raise Erreur("dossier des pages non sûr")
+    return fd
+
+
+def ouvrir_www(ctx, creer):
+    """Descripteur de www/, sous /var/lib/secubox-pilotage-pages (root 0755, comme /var/lib : nginx les traverse) : sans
+    lien, propriétaire vérifié, verrou exclusif. Tout ce qui est dessous n'est écrit que par root : on y travaille par
+    /proc/self/fd/N."""
+    try:
+        base = os.open(ctx.donnees_parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        raise Erreur("dossier de données absent ou non sûr") from None
+    try:
+        parent = _dossier_root(base, ctx.donnees_nom, ctx, creer)
+    finally:
+        os.close(base)
+    if parent is None:
+        return None
+    try:
+        try:
+            fd = os.open("www", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+        except FileNotFoundError:
+            if not creer:
+                return None
+            os.mkdir("www", 0o755, dir_fd=parent)
+            fd = os.open("www", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+        except OSError:
+            raise Erreur("dossier des pages non sûr") from None
+    finally:
+        os.close(parent)
+    st = os.fstat(fd)
+    if st.st_uid != ctx.uid or not stat.S_ISDIR(st.st_mode):
+        os.close(fd)
+        raise Erreur("dossier des pages non sûr")
+    if stat.S_IMODE(st.st_mode) != 0o755:
+        os.fchmod(fd, 0o755)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    for nom in os.listdir(f"/proc/self/fd/{fd}"):
+        if nom.startswith(".vu.json.") and nom.endswith(".tmp"):
+            os.unlink(nom, dir_fd=fd)
+    return fd
+
+
+def sous(fd, *noms):
+    return os.path.join(f"/proc/self/fd/{fd}", *noms)
+
+
+def fsync_dossier(chemin):
+    fd = os.open(chemin, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+# --- Dépôt apt -------------------------------------------------------------------------------------------------------
+
+def ouvrir_chemin(base_fd, rel, repli, uid, dossier=False):
+    """Descend rel composant par composant depuis base_fd, sans jamais suivre de lien (O_NOFOLLOW). En repli (pas de
+    trousseau), chaque étape doit appartenir à root et ne pas être inscriptible par le groupe ou les autres."""
+    fd = os.dup(base_fd)
+    parties = rel.split("/")
+    try:
+        for i, nom in enumerate(parties):
+            dernier = i == len(parties) - 1
+            drapeaux = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | (os.O_DIRECTORY if not dernier or dossier else 0)
+            try:
+                nfd = os.open(nom, drapeaux, dir_fd=fd)
+            except FileNotFoundError:
+                raise Erreur("fichier absent du dépôt") from None
+            except OSError:
+                raise Refus("lien ou type inattendu dans le chemin du dépôt") from None
+            os.close(fd)
+            fd = nfd
+            st = os.fstat(fd)
+            if dernier and not dossier and not stat.S_ISREG(st.st_mode):
+                raise Refus("fichier du dépôt qui n'est pas un fichier ordinaire")
+            if repli:
+                verifier_proprietaire(st, uid)
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def verifier_proprietaire(st, uid):
+    if st.st_uid != uid or st.st_mode & 0o022:
+        raise Refus("trousseau absent et dépôt non sûr (tout l'arbre doit appartenir à root, sans écriture groupe/autres)")
+
+
+def lire_fd(fd, maxi):
+    morceaux, lu = [], 0
+    while bloc := os.read(fd, 1 << 20):
+        lu += len(bloc)
+        if lu > maxi:
+            raise Refus("index du dépôt trop grand")
+        morceaux.append(bloc)
+    return b"".join(morceaux)
+
+
+class Depot:
+    """Dépôt apt ouvert par descripteur. Chaîne de confiance (M4, R-L5-24) : le trousseau (clé TOML `trousseau`, défaut
+    /usr/share/keyrings/secubox.gpg, celui des clients apt SecuBox) → `gpgv --keyring <trousseau>` sur
+    dists/<suite>/InRelease (seule la sortie vérifiée est lue ; Suite et Codename doivent valoir la suite configurée) →
+    somme SHA256 et taille de chaque main/binary-*/Packages dans ce Release → SHA256 et Size du .deb dans Packages.
+    Sans trousseau (repli annoncé, jamais silencieux, `verification = proprietaire` dans l'audit) : tout le chemin lu
+    appartient à root, sans écriture groupe/autres."""
+
+    def __init__(self, ctx):
+        self.ctx = ctx
+        self.repli = not os.path.exists(ctx.trousseau)
+        if self.repli:
+            err("trousseau absent : repli sur un dépôt entièrement root (signature non vérifiée)")
+        try:
+            self.fd = os.open(ctx.depot, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except OSError:
+            raise Erreur("dépôt apt introuvable") from None
+        if self.repli:
+            verifier_proprietaire(os.fstat(self.fd), ctx.uid)
+        self.release = None if self.repli else self.verifier_release()
+
+    def fermer(self):
+        os.close(self.fd)
+
+    def ouvrir(self, rel, dossier=False):
+        return ouvrir_chemin(self.fd, rel, self.repli, self.ctx.uid, dossier)
+
+    def verifier_release(self):
+        suite = f"dists/{self.ctx.conf['suite']}"
+        try:
+            fd = self.ouvrir(f"{suite}/InRelease")
+        except Refus:
+            raise
+        except Erreur:
+            raise Refus("signature du dépôt absente (InRelease)") from None
+        try:
+            signe = lire_fd(fd, 16 << 20)
+        finally:
+            os.close(fd)
+        gpgv = (shutil.which("gpgv") or "gpgv") if self.ctx.substitue else "/usr/bin/gpgv"
+        with tempfile.TemporaryDirectory() as t:
+            sortie_v = os.path.join(t, "Release")
+            p = subprocess.run([gpgv, "--quiet", "--keyring", self.ctx.trousseau, "--output", sortie_v, "-"], input=signe,
+                               capture_output=True, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "GNUPGHOME": t})
+            if p.returncode != 0:
+                raise Refus("signature du dépôt invalide (InRelease)")
+            with open(sortie_v, "rb") as f:
+                texte = f.read().decode("utf-8", "replace")
+        # M2 (R-L5-24) : Suite ou Codename = la suite configurée (reprepro peut écrire Suite: stable, Codename: trixie),
+        # sinon refus : un Release signé d'une autre suite, rejoué à cette place, aurait sinon été cru
+        entete = dict(x.split(":", 1) for x in texte.split("\n\n", 1)[0].splitlines() if ":" in x and not x[:1].isspace())
+        if self.ctx.conf["suite"] not in (entete.get("Suite", "").strip(), entete.get("Codename", "").strip()):
+            raise Refus("suite du Release signé inattendue (Suite/Codename)")
+        sommes, dans = {}, False
+        for ligne in texte.splitlines():
+            if not ligne[:1].isspace():
+                dans = ligne.strip() == "SHA256:"
+            elif dans:
+                champs = ligne.split()
+                if len(champs) == 3 and RE_SHA256.fullmatch(champs[0]) and champs[1].isdigit():
+                    sommes[champs[2]] = (champs[0], int(champs[1]))
+        return sommes
+
+    def index(self):
+        """[(nom, contenu)] des Packages de la suite, chacun vérifié contre Release (hors repli)."""
+        suite = f"dists/{self.ctx.conf['suite']}"
+        try:
+            dfd = self.ouvrir(f"{suite}/main", dossier=True)
+        except Refus:
+            raise
+        except Erreur:
+            raise Erreur("dépôt apt introuvable") from None
+        try:
+            noms = sorted(n for n in os.listdir(f"/proc/self/fd/{dfd}") if re.fullmatch(r"binary-[a-z0-9-]{1,32}", n))
+        finally:
+            os.close(dfd)
+        res = []
+        for n in noms:
+            rel = f"main/{n}/Packages"
+            try:
+                fd = self.ouvrir(f"{suite}/{rel}")
+            except Refus:
+                raise
+            except Erreur:
+                continue
+            try:
+                contenu = lire_fd(fd, 256 << 20)
+            finally:
+                os.close(fd)
+            if not self.repli:
+                attendu_ = self.release.get(rel)
+                if attendu_ is None or attendu_ != (hashlib.sha256(contenu).hexdigest(), len(contenu)):
+                    raise Refus("index Packages différent de Release signé")
+            res.append(contenu)
+        if not res:
+            raise Erreur("dépôt apt introuvable")
+        return res
+
+
+def chercher(depot, paquet, version):
+    """(Filename, SHA256, Size) de paquet/version ; plusieurs index qui divergent ⇒ refus."""
+    trouves = set()
+    for contenu in depot.index():
+        champs = {}
+        for ligne in [*contenu.decode("utf-8", "replace").splitlines(), ""]:
+            if not ligne.strip():
+                if champs.get("Package") == paquet and champs.get("Version") == version:
+                    trouves.add(verifier_stanza(champs))
+                champs = {}
+            elif not ligne[0].isspace() and ":" in ligne:
+                cle, _, val = ligne.partition(":")
+                champs[cle] = val.strip()
+    if not trouves:
+        raise Erreur("version absente du dépôt")
+    if len({t[1:] for t in trouves}) > 1:
+        raise Refus("sommes divergentes pour cette version dans les index")
+    return sorted(trouves)[0]
+
+
+def verifier_stanza(champs):
+    nom, somme, taille = champs.get("Filename", ""), champs.get("SHA256", ""), champs.get("Size", "")
+    if not RE_FILENAME.fullmatch(nom) or any(c in ("", ".", "..") for c in nom.split("/")):
+        raise Refus("nom de fichier du dépôt invalide")
+    if not RE_SHA256.fullmatch(somme) or not taille.isdigit():
+        raise Refus("somme ou taille absente de l'index")
+    return nom, somme, int(taille)
+
+
+def copier_verifie(ctx, depot, nom, somme, taille, dossier):
+    """Copie privée du .deb (fichier anonyme dans un dossier root), vérifiée par taille et SHA256 : l'archive lue
+    ensuite est celle dont la somme a été vérifiée, même si le dépôt change entre-temps."""
+    if taille > ctx.conf["deb_max_mio"] << 20:
+        raise Refus("paquet trop gros")
+    src = depot.ouvrir(nom)
+    copie = tempfile.TemporaryFile(dir=dossier)
+    try:
+        h, lu = hashlib.sha256(), 0
+        while bloc := os.read(src, 1 << 20):
+            lu += len(bloc)
+            if lu > taille:
+                break
+            h.update(bloc)
+            copie.write(bloc)
+        if lu != taille or h.hexdigest() != somme:
+            raise Refus("somme SHA256 ou taille différente de l'index")
+        copie.seek(0)
+        return copie
+    except BaseException:
+        copie.close()
+        raise
+    finally:
+        os.close(src)
+
+
+# --- Lecture de l'archive (ar + data.tar), sans dpkg ----------------------------------------------------------------
+
+class Membre:
+    """Lecteur borné d'un membre ar."""
+
+    def __init__(self, f, taille):
+        self.f, self.reste = f, taille
+
+    def read(self, n=-1):
+        if n < 0 or n > self.reste:
+            n = self.reste
+        d = self.f.read(n)
+        self.reste -= len(d)
+        return d
+
+
+def membre_data(f):
+    if f.read(8) != b"!<arch>\n":
+        raise Refus("archive .deb invalide")
+    while True:
+        tete = f.read(60)
+        if len(tete) < 60:
+            raise Refus("data.tar absent du .deb")
+        if tete[58:60] != b"`\n":
+            raise Refus("archive .deb invalide")
+        nom = tete[:16].decode("ascii", "replace").strip().rstrip("/")
+        try:
+            taille = int(tete[48:58].decode("ascii").strip())
+        except ValueError:
+            raise Refus("archive .deb invalide") from None
+        if nom.startswith("data.tar"):
+            return nom[len("data.tar"):], Membre(f, taille)
+        f.seek(taille + (taille & 1), os.SEEK_CUR)
+
+
+def ouvrir_tar(ctx, f, dossier):
+    ext, m = membre_data(f)
+    modes = {"": "r|", ".gz": "r|gz", ".xz": "r|xz", ".bz2": "r|bz2"}
+    if ext in modes:
+        try:
+            return tarfile.open(fileobj=m, mode=modes[ext]), None
+        except (tarfile.TarError, EOFError, OSError):
+            raise Refus("archive illisible") from None
+    if ext == ".zst":
+        brut = tempfile.TemporaryFile(dir=dossier)
+        while d := m.read(1 << 20):
+            brut.write(d)
+        brut.seek(0)
+        zstd = (shutil.which("zstd") or "zstd") if ctx.substitue else "/usr/bin/zstd"
+        p = subprocess.Popen([zstd, "-dcq"], stdin=brut, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"})
+        brut.close()
+        try:
+            return tarfile.open(fileobj=p.stdout, mode="r|"), p
+        except (tarfile.TarError, EOFError, OSError):
+            p.stdout.close()
+            if p.wait() != 0:
+                raise Refus("décompression zstd en échec") from None
+            raise Refus("archive illisible") from None
+    raise Refus("compression du .deb non prise en charge")
+
+
+def nom_sur(nom):
+    try:
+        nom.encode("utf-8")
+    except UnicodeEncodeError:
+        raise Refus("nom non UTF-8 dans l'archive") from None
+    if any(ord(c) < 0x20 or ord(c) == 0x7F for c in nom):
+        raise Refus("caractère de contrôle dans un nom de l'archive")
+    return nom
+
+
+def normaliser(nom):
+    nom = nom_sur(nom)
+    if nom.startswith("/"):
+        raise Refus("chemin absolu dans l'archive")
+    parties = [p for p in nom.split("/") if p not in ("", ".")]
+    if ".." in parties:
+        raise Refus("chemin « .. » dans l'archive")
+    return "/".join(parties)
+
+
+def extraire_dans(ctx, tar, dest):
+    """Copie dans dest les seules entrées sous PREFIXE. Rend {rel: sha256} des fichiers et {rel: cible} des liens."""
+    fichiers, liens, total, nombre, decompresse = {}, {}, 0, 0, 0
+    tmax, nmax = ctx.conf["taille_max_mio"] << 20, ctx.conf["fichiers_max"]
+    racine = PREFIXE.rstrip("/")
+    for m in tar:
+        decompresse += max(m.size, 0)
+        if decompresse > ctx.decompresse_max:
+            raise Refus("archive décompressée trop grande")
+        n = normaliser(m.name)
+        if m.islnk() or m.issym():
+            nom_sur(m.linkname)
+        if n != racine and not n.startswith(PREFIXE):
+            continue
+        rel = n[len(PREFIXE):]
+        if not rel:
+            continue
+        nombre += 1
+        if nombre > nmax:
+            raise Refus("nombre de fichiers des pages supérieur à la limite")
+        if m.mode & 0o6000:
+            raise Refus("bit setuid ou setgid dans les pages")
+        cible = os.path.join(dest, rel)
+        parent = os.path.dirname(rel)
+        if parent and os.path.realpath(os.path.join(dest, parent)) != os.path.join(os.path.realpath(dest), parent):
+            raise Refus("entrée écrite à travers un lien de dossier")
+        if m.isdir():
+            os.makedirs(cible, mode=0o755, exist_ok=True)
+            os.chmod(cible, 0o755)
+            continue
+        os.makedirs(os.path.dirname(cible), mode=0o755, exist_ok=True)
+        if m.isreg():
+            total += m.size
+            if total > tmax:
+                raise Refus("taille des pages supérieure à la limite")
+            src = tar.extractfile(m)
+            fichiers[rel] = ecrire(cible, src)
+        elif m.issym():
+            t = m.linkname
+            if not t or t.startswith("/") or ".." in t.split("/"):
+                raise Refus("lien symbolique sortant des pages")
+            try:
+                os.symlink(t, cible)
+            except FileExistsError:
+                raise Refus("entrée en double dans l'archive") from None
+            liens[rel] = t
+        elif m.islnk():
+            t = normaliser(m.linkname)
+            if not t.startswith(PREFIXE) or t[len(PREFIXE):] not in fichiers:
+                raise Refus("lien dur sortant des pages")
+            with open(os.path.join(dest, t[len(PREFIXE):]), "rb") as src:
+                fichiers[rel] = ecrire(cible, src)
+        else:
+            raise Refus("fichier spécial dans les pages")
+    return fichiers, liens, total
+
+
+def ecrire(cible, src):
+    try:
+        fd = os.open(cible, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    except FileExistsError:
+        raise Refus("entrée en double dans l'archive") from None
+    h = hashlib.sha256()
+    with os.fdopen(fd, "wb") as f:
+        while d := src.read(1 << 20):
+            h.update(d)
+            f.write(d)
+        os.fchmod(f.fileno(), 0o644)
+    return h.hexdigest()
+
+
+# --- Manifeste et état ---------------------------------------------------------------------------------------------
+
+def inventaire(chemin):
+    """{rel: ("f", sha256) | ("l", cible) | ("d", None)} d'un dossier extrait ; None si un mode est inattendu."""
+    vu = {}
+    for base, dossiers, noms in os.walk(chemin):
+        for nom in dossiers + noms:
+            p = os.path.join(base, nom)
+            rel = os.path.relpath(p, chemin)
+            st = os.lstat(p)
+            if stat.S_ISLNK(st.st_mode):
+                vu[rel] = ("l", os.readlink(p))
+            elif stat.S_ISDIR(st.st_mode):
+                if stat.S_IMODE(st.st_mode) != 0o755:
+                    return None
+                vu[rel] = ("d", None)
+            elif stat.S_ISREG(st.st_mode) and stat.S_IMODE(st.st_mode) == 0o644 and st.st_nlink == 1:
+                h = hashlib.sha256()
+                with open(p, "rb") as f:
+                    while d := f.read(1 << 20):
+                        h.update(d)
+                vu[rel] = ("f", h.hexdigest())
+            else:
+                return None
+    return vu
+
+
+def attendu(manifeste):
+    att = {k: ("f", v) for k, v in manifeste["fichiers"].items()}
+    att.update({k: ("l", v) for k, v in manifeste["liens"].items()})
+    for rel in list(att):
+        d = os.path.dirname(rel)
+        while d:
+            att.setdefault(d, ("d", None))
+            d = os.path.dirname(d)
+    att.update({k: ("d", None) for k in manifeste.get("dossiers", [])})
+    return att
+
+
+def lire_json(chemin):
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return None
+    try:
+        with os.fdopen(fd, "rb") as f:
+            return json.loads(f.read(16 << 20))
+    except (OSError, ValueError):
+        return None
+
+
+def ecrire_json(chemin, obj):
+    tmp = f"{chemin}.{os.getpid()}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, sort_keys=True)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, chemin)
+    fsync_dossier(os.path.dirname(chemin))
+
+
+def intacte(dossier_paquet, version, somme):
+    m = lire_json(os.path.join(dossier_paquet, f".{version}.json"))
+    v = os.path.join(dossier_paquet, version)
+    if not isinstance(m, dict) or m.get("sha256") != somme or not os.path.isdir(v) or os.path.islink(v):
+        return False
+    try:
+        return stat.S_IMODE(os.lstat(v).st_mode) == 0o755 and inventaire(v) == attendu(m)
+    except (OSError, KeyError, AttributeError, TypeError):
+        return False
+
+
+def marquer_vu(ctx, wfd, cles):
+    chemin = sous(wfd, ".vu.json")
+    etat = lire_json(chemin)
+    etat = etat if isinstance(etat, dict) else {}
+    for c in cles:
+        etat[c] = ctx.maintenant
+    ecrire_json(chemin, etat)
+
+
+def nettoyer_residus(dossier_paquet):
+    for nom in os.listdir(dossier_paquet):
+        if nom.startswith((".tmp-", ".old-")) or (nom.startswith(".") and nom.endswith(".tmp")):
+            p = os.path.join(dossier_paquet, nom)
+            if os.path.isdir(p) and not os.path.islink(p):
+                shutil.rmtree(p)
+            else:
+                os.unlink(p)
+
+
+# --- Verbes ----------------------------------------------------------------------------------------------------------
+
+def extraire(ctx, paquet, version):
+    try:
+        depot = Depot(ctx)
+        try:
+            nom, somme, taille = chercher(depot, paquet, version)
+        except BaseException:
+            depot.fermer()
+            raise
+        wfd = ouvrir_www(ctx, creer=True)
+    except Erreur as e:
+        auditer(ctx, "pilotage_www_extraire", paquet=paquet, version=version,
+                resultat="refus" if isinstance(e, Refus) else "erreur", motif=str(e))
+        raise
+    verif = "proprietaire" if depot.repli else "signature"   # M3 (R-L5-24) : dans chaque ligne d'audit qui suit
+    try:
+        dp = sous(wfd, paquet)
+        try:
+            os.mkdir(dp, 0o755)
+        except FileExistsError:
+            if os.path.islink(dp) or not os.path.isdir(dp):
+                raise Erreur("dossier du paquet non sûr") from None
+        nettoyer_residus(dp)
+        if intacte(dp, version, somme):
+            marquer_vu(ctx, wfd, [f"{paquet}/{version}"])
+            auditer(ctx, "pilotage_www_extraire", paquet=paquet, version=version, resultat="deja", verification=verif)
+            return {"ok": True, "paquet": paquet, "version": version, "deja": True, "verification": verif}
+        tmp = os.path.join(dp, f".tmp-{version}-{os.getpid()}")
+        try:
+            os.mkdir(tmp, 0o755)
+            with copier_verifie(ctx, depot, nom, somme, taille, sous(wfd)) as deb:
+                tar, proc = ouvrir_tar(ctx, deb, sous(wfd))
+                try:
+                    fichiers, liens, total = extraire_dans(ctx, tar, tmp)
+                except (tarfile.TarError, EOFError, OSError) as e:
+                    if proc and proc.wait() != 0:
+                        raise Refus("décompression zstd en échec") from None
+                    raise Refus(f"archive illisible ({e.__class__.__name__})") from None
+                finally:
+                    tar.close()
+                    if proc:
+                        proc.stdout.close()
+                        if proc.wait() != 0:
+                            raise Refus("décompression zstd en échec")
+            dossiers = sorted(os.path.relpath(os.path.join(b, d), tmp) for b, ds, _ in os.walk(tmp) for d in ds)
+            if ctx.interrompre:
+                raise Erreur("interruption simulée")
+            ancien = os.path.join(dp, version)
+            if os.path.lexists(ancien):
+                os.rename(ancien, os.path.join(dp, f".old-{version}-{os.getpid()}"))
+            os.rename(tmp, ancien)
+            fsync_dossier(dp)
+            ecrire_json(os.path.join(dp, f".{version}.json"),
+                        {"sha256": somme, "fichiers": fichiers, "liens": liens, "dossiers": dossiers, "taille": total})
+            nettoyer_residus(dp)
+        except Erreur as e:
+            auditer(ctx, "pilotage_www_extraire", paquet=paquet, version=version,
+                    resultat="refus" if isinstance(e, Refus) else "erreur", motif=str(e), verification=verif)
+            raise
+        finally:
+            if os.path.lexists(tmp):
+                shutil.rmtree(tmp, ignore_errors=True)
+            try:
+                if not os.listdir(dp) and not os.path.lexists(os.path.join(dp, version)):
+                    os.rmdir(dp)
+            except OSError:
+                pass
+        marquer_vu(ctx, wfd, [f"{paquet}/{version}"])
+        auditer(ctx, "pilotage_www_extraire", paquet=paquet, version=version, resultat="ok",
+                fichiers=len(fichiers), taille=total, verification=verif)
+        return {"ok": True, "paquet": paquet, "version": version, "deja": False, "verification": verif, "fichiers": len(fichiers),
+                "taille": total}
+    finally:
+        os.close(wfd)
+        depot.fermer()
+
+
+def extraites(wfd):
+    for paquet in sorted(os.listdir(sous(wfd))):
+        dp = sous(wfd, paquet)
+        if not RE_PAQUET.fullmatch(paquet) or os.path.islink(dp) or not os.path.isdir(dp):
+            continue
+        for version in sorted(os.listdir(dp)):
+            v = os.path.join(dp, version)
+            if RE_VERSION.fullmatch(version) and os.path.isdir(v) and not os.path.islink(v):
+                yield paquet, version, v
+
+
+def lire_en_usage():
+    brut = sys.stdin.buffer.read(ENTREE_MAX + 1)
+    if len(brut) > ENTREE_MAX:
+        raise Usage("entrée trop grande")
+    try:
+        obj = json.loads(brut.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise Usage("entrée JSON invalide") from None
+    if not isinstance(obj, dict) or set(obj) != {"en_usage"} or not isinstance(obj["en_usage"], list):
+        raise Usage('entrée attendue : {"en_usage": [{"paquet", "version"}, …]}')
+    vus = set()
+    for e in obj["en_usage"]:
+        if (not isinstance(e, dict) or set(e) != {"paquet", "version"} or not isinstance(e["paquet"], str)
+                or not isinstance(e["version"], str) or not RE_PAQUET.fullmatch(e["paquet"])
+                or not RE_VERSION.fullmatch(e["version"])):
+            raise Usage("entrée en_usage invalide")
+        vus.add(f"{e['paquet']}/{e['version']}")
+    return vus
+
+
+def purger(ctx):
+    en_usage = lire_en_usage()
+    wfd = ouvrir_www(ctx, creer=False)
+    if wfd is None:
+        auditer(ctx, "pilotage_www_purger", resultat="ok", purgees=[])
+        return {"ok": True, "purgees": []}
+    try:
+        chemin = sous(wfd, ".vu.json")
+        etat = lire_json(chemin)
+        etat = etat if isinstance(etat, dict) else {}
+        nouvel, purgees = {}, []
+        for paquet, version, v in list(extraites(wfd)):
+            cle = f"{paquet}/{version}"
+            vu = ctx.maintenant if cle in en_usage else etat.get(cle)
+            if not isinstance(vu, (int, float)):
+                vu = ctx.maintenant              # inconnue de l'état : délai de grâce complet
+            if ctx.maintenant - vu >= GARDE:
+                shutil.rmtree(v)
+                m = os.path.join(os.path.dirname(v), f".{version}.json")
+                if os.path.lexists(m):
+                    os.unlink(m)
+                purgees.append({"paquet": paquet, "version": version})
+                fsync_dossier(os.path.dirname(v))
+                try:
+                    os.rmdir(os.path.dirname(v))
+                except OSError:
+                    pass
+            else:
+                nouvel[cle] = vu
+        ecrire_json(chemin, nouvel)
+        auditer(ctx, "pilotage_www_purger", resultat="ok", purgees=purgees, en_usage=len(en_usage))
+        return {"ok": True, "purgees": purgees}
+    finally:
+        os.close(wfd)
+
+
+def lister(ctx):
+    wfd = ouvrir_www(ctx, creer=False)
+    if wfd is None:
+        return {"ok": True, "versions": []}
+    try:
+        res = []
+        for paquet, version, v in extraites(wfd):
+            taille = sum(os.lstat(os.path.join(b, n)).st_size for b, _, ns in os.walk(v) for n in ns
+                         if not os.path.islink(os.path.join(b, n)))
+            date = datetime.datetime.fromtimestamp(os.lstat(v).st_mtime, datetime.timezone.utc)
+            res.append({"paquet": paquet, "version": version, "taille": taille,
+                        "date": date.isoformat(timespec="seconds")})
+        return {"ok": True, "versions": res}
+    finally:
+        os.close(wfd)
+
+
+def analyser(argv):
+    if not argv:
+        raise Usage("verbe attendu : extraire | purger | lister")
+    verbe, reste, acteur = argv[0], list(argv[1:]), None
+    if verbe not in ("extraire", "purger", "lister"):
+        raise Usage("verbe inconnu")
+    if verbe != "lister" and reste[:1] == ["--acteur"]:
+        if len(reste) < 2 or not RE_ACTEUR.fullmatch(reste[1]):
+            raise Usage("acteur invalide")
+        acteur, reste = reste[1], reste[2:]
+    if verbe == "extraire":
+        if len(reste) != 2 or not RE_PAQUET.fullmatch(reste[0]) or not RE_VERSION.fullmatch(reste[1]):
+            raise Usage("usage : extraire [--acteur A] <paquet secubox-…> <version>")
+    elif reste:
+        raise Usage(f"{verbe} ne prend pas d'argument")
+    return verbe, reste, acteur
+
+
+def main(argv):
+    os.umask(0o022)
+    try:
+        verbe, args, acteur = analyser(argv)
+        ctx = Ctx(acteur)
+        if verbe == "extraire":
+            sortie(extraire(ctx, *args))
+        elif verbe == "purger":
+            sortie(purger(ctx))
+        else:
+            sortie(lister(ctx))
+        return 0
+    except Usage as e:
+        sortie({"ok": False, "erreur": str(e)})
+        return 2
+    except Erreur as e:
+        sortie({"ok": False, "erreur": str(e)})
+        return 1
+    except OSError as e:
+        err(f"erreur système : {e.__class__.__name__}")
+        sortie({"ok": False, "erreur": "erreur système"})
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

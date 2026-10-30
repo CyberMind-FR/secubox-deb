@@ -40,6 +40,9 @@ Configuration file: `/etc/secubox/cdn.toml`
 
 - `GET /api/v1/cdn/status` - Module status
 - `GET /api/v1/cdn/health` - Health check
+- `POST /api/v1/cdn/preload_url` - Précharge une URL http(s), corps `{"url": …}` (POST depuis 1.5.2, #3126)
+- `POST /api/v1/cdn/clear_stats` - Remet les statistiques à zéro (POST depuis 1.5.2, #3126)
+- `POST /api/v1/cdn/restart` - Recharge nginx (JWT administrateur). POST depuis 1.5.2 : une action, jamais une lecture (#3126)
 
 ## License
 

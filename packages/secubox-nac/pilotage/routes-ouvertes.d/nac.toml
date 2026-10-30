@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Écritures ouvertes au porteur délégué du pilotage (#3126, L5 ; R-L5-12, #3279 en version minimale).
+# Installé dans /usr/share/secubox/pilotage/routes-ouvertes.d/nac.toml (root, 0644). Seules les écritures que
+# les pages du module appellent : www/nac/index.html (zones, autoriser, bloquer, quarantaine) et les vues portées
+# client-guardian (profils, bannissements, groupes, politique, resynchronisation des zones).
+
+[[routes]]
+methodes = ["POST"]
+chemins = [
+    "^/add_to_zone$",
+    "^/allow/[0-9A-Fa-f:]{17}$",
+    "^/deny/[0-9A-Fa-f:]{17}$",
+    "^/quarantine_client$",
+    "^/unquarantine$",
+    "^/ban_client$",
+    "^/unban_client$",
+    "^/set_policy$",
+    "^/apply_profile$",
+    "^/groups$",
+    "^/sync_zones$",
+]

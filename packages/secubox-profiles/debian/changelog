@@ -1,3 +1,47 @@
+secubox-profiles (0.26.2-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 7, correction 2/5 (R-L5-34, ref #3126) : page d'état sur `listen 80;` (aucune adresse figée : nginx
+    démarre même si l'adresse change ou arrive après lui) + `allow` du seul sous-réseau du LAN (br-lan, sinon première
+    interface privée hors route par défaut — le WAN, même privé derrière une box opérateur —, wg-*, maillage et
+    Auto-Load), boucle locale seule sans LAN ; nftables reste la barrière du port 80 côté WAN. Dossier du marqueur
+    ramené à 0755 même s'il existait ; nginx -t en échec rend tout et ôte le marqueur même sur un allègement existant ;
+    une sauvegarde aggregator.toml gardée n'est jamais écrasée (renommée .avant-<t>).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 16:00:00 +0100
+
+secubox-profiles (0.26.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 7, correction 1/5 (R-L5-34, ref #3126) :
+    - I1 : un allègement défait (nginx -t) fait rendre 2 à apply ; le marqueur /var/lib/secubox-profiles/allegement/actif
+      (seule source de Interface = distante pour l'agent) n'est posé qu'après nginx -t, ôté au retour ; dossier 0755,
+      sites mis de côté 0700, marqueur 0644.
+    - I2 : au retour, rien n'est écrasé : un site dont le nom a réapparu, ou un aggregator.toml modifié entre-temps,
+      reste en place ; la sauvegarde n'est effacée que vide, les restes sont journalisés et rendus (`restes`).
+    - M1 : la page d'état écoute sur l'adresse LAN de la box (secubox-etat-ecoute.conf posé à l'allègement : première
+      IPv4 privée hors maillage et Auto-Load, sinon 127.0.0.1), plus sur toutes les interfaces.
+    - M4 (propriétaire, 2026-10-30) : pilotage-agent protégé et listé dans TOUS les profils (toute box télé-administrable) ;
+      pilotage-relais seulement dans distante. Empreintes des profils livrés complétées.
+    - M6 : tests du vrai nginx (page servie avec ses en-têtes, refus 403 hors des réseaux admis).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 14:00:00 +0100
+
+secubox-profiles (0.26.0-1~trixie1) trixie; urgency=medium
+
+  * Profil léger « distante » (#3126 L5 tâche 7, variante de minimal, #3218) : box de 1 Go sans interface
+    d'administration locale, administrée par le maître. Ni nginx d'administration, ni portal, ni haproxy, ni annuaire,
+    ni assist (R-L5-28) ; agent et relais du pilotage allumés ; hub, hardening, dns-guard, ad-guard et wireguard dans
+    un seul groupe secubox-group@distante (liste sous /usr/share/secubox/profiles/groups/, drop-in --veille 600 pour
+    hub et hardening seulement).
+  * Clés de profil front_web = "etat" et agregateur = "relais" (api/front_web.py) : après un apply réussi, les sites
+    nginx sont mis de côté (/var/lib/secubox-profiles/allegement, jamais effacés), le gabarit nginx « etat » devient
+    le seul site, aggregator.toml passe en relais pur ; nginx -t valide, échec = tout rendu ; tout autre profil rend
+    la configuration d'origine ; audit profiles_front_web.
+  * Gabarit nginx « etat » : page d'état locale de l'agent (/etat), LAN seulement, une page, GET, aucun relais d'API,
+    CSP stricte (style par empreinte), nosniff, X-Frame-Options DENY.
+  * README : profil distante, page d'état, limites connues sans annuaire (bans fédérés, noms .lan/.mesh, config 4R).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 12:00:00 +0100
+
 secubox-profiles (0.25.4-1~trixie1) trixie; urgency=medium
 
   * Profil d'activation isp (audit R3) : une box Auto-Load « isp » échouait à l'étape

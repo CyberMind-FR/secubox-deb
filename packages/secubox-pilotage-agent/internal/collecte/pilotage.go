@@ -44,7 +44,7 @@ func NouvelleSourcePilotage(racine string, version string) modele.Source {
 func (s *pilotage) Nom() string { return "pilotage" }
 
 func (s *pilotage) Chemins() []string {
-	return []string{racinePilotage + "AgentVersion", racinePilotage + "MainsLiees", racinePilotage + "Profil"}
+	return []string{racinePilotage + "AgentVersion", racinePilotage + "MainsLiees", racinePilotage + "Profil", racinePilotage + "Interface"}
 }
 
 func (s *pilotage) Lire(ctx context.Context) (map[string]any, error) {
@@ -61,6 +61,8 @@ func (s *pilotage) Lire(ctx context.Context) (map[string]any, error) {
 		racinePilotage + "AgentVersion": s.version,
 		racinePilotage + "MainsLiees":   liees,
 		racinePilotage + "Profil":       profil,
+		// L5 tâche 7 : le profil léger « distante » n'a pas d'interface locale ; le maître sert admin.<box> (R-L5-27).
+		racinePilotage + "Interface": s.interfaceLocale(),
 	}, nil
 }
 
@@ -82,4 +84,17 @@ func (s *pilotage) mainsLiees() bool {
 		log.Printf("drapeau mains liées ignoré : %s (attendu : fichier régulier root:root, sans droit d'écriture groupe/autres)", refus)
 	}
 	return err == nil
+}
+
+// marqueurAllegement : posé par secubox-profilectl (root) seulement APRÈS un allègement réussi du profil « distante »
+// (nginx réduit à la page d'état, nginx -t passé), ôté au retour à un autre profil (R-L5-34).
+const marqueurAllegement = "var/lib/secubox-profiles/allegement/actif"
+
+// interfaceLocale : « distante » si le marqueur est présent et de confiance (root:root, sans écriture groupe/autres,
+// sans lien), « locale » sinon. Le nom du profil seul ne suffit jamais.
+func (s *pilotage) interfaceLocale() string {
+	if lecture.PresentDeConfiance(s.racine, marqueurAllegement, s.proprio) == nil {
+		return "distante"
+	}
+	return "locale"
 }

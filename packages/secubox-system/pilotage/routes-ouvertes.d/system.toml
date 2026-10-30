@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Écritures ouvertes au porteur délégué du pilotage (#3126, L5 ; R-L5-12, #3279 en version minimale).
+# Installé dans /usr/share/secubox/pilotage/routes-ouvertes.d/system.toml (root, 0644). Seules les écritures que
+# les pages du module appellent : www/system/index.html (actions rapides, paquets, réglages, carte) et
+# la vue portée system-hub (diagnostics). Les sessions restent refusées par la
+# liste de refus de secubox_core.auth ; restore_config n'est pas ouverte.
+#
+# FERMÉES au jeton délégué (R-L5-15) : reboot, shutdown, apply_updates, settings (renommage), service_control,
+# service_action, restart_services. Elles recouvrent les verbes du ctl L2 (reboot, maj-paquets, renommer, service
+# arrêter/redémarrer, renouveler-secrets) et passent par les actions du pilotage : accord du détenteur, confirmation
+# forte, une opération longue à la fois. Appelées par la page, elles reçoivent 403 (« passez par les actions du
+# pilotage », tâche 7).
+#
+# Aussi FERMÉES (R-L5-16) : kiosk/enable|disable (secubox-kiosk-setup crée une connexion root automatique sans mot
+# de passe sur tty2), backup et set_backup_schedule (l'archive contient /etc/wireguard, clés privées, sans rotation
+# ni borne), reload_firewall (verbe reload).
+
+[[routes]]
+methodes = ["POST"]
+chemins = [
+    "^/sync_time$",
+    "^/clear_cache$",
+    "^/board/detect$",
+    "^/delete_diagnostic$",
+]

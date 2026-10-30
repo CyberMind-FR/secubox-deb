@@ -22,6 +22,10 @@ override_dh_auto_install:
 	install -d debian/secubox-profiles/usr/share/secubox/profiles
 	python3 scripts/gen-profils-contenu.py $(CURDIR)/.. $(CURDIR)/../secubox-hub/espaces.json \
 	               debian/secubox-profiles/usr/share/secubox/profiles/contenu-profils.json
+	# #3126 L5 tâche 7 : veille du groupe du profil léger « distante » (secubox-group@distante, gabarit de secubox-aggregator).
+	install -d "debian/secubox-profiles/usr/lib/systemd/system/secubox-group@distante.service.d"
+	install -m 0644 "groups/secubox-group@distante.service.d/distante.conf" \
+	  "debian/secubox-profiles/usr/lib/systemd/system/secubox-group@distante.service.d/distante.conf"
 	install -d debian/secubox-profiles/etc/secubox
 	install -m 0644 etc/secubox/cache-warmers.toml \
 	  debian/secubox-profiles/etc/secubox/cache-warmers.toml

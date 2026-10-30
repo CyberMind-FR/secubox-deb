@@ -284,10 +284,107 @@ Côté agent, toute autre sortie, une erreur ou un code non nul vaut `illisible`
     plus) ne sont pas dans l'audit du ctl, seulement dans le journal de l'agent (R-L2-24) ;
   - une coupure en cours n'est pas notifiée si l'agent redémarre entre-temps (l'audit du ctl garde chaque échec).
 
+## Relais local du pilotage délégué (L5) : `sbx-pilotage-relais`
+
+Sur une box légère, les pages d'administration sont servies par le maître ; leurs appels `/api/v1/…` arrivent à
+l'agent par le canal, qui les remet au relais local. Le relais tourne sous son **propre** compte
+`secubox-pilotage-relais`, seul lecteur de la clé privée : un agent compromis ne frappe pas de jeton lui-même.
+
+- **Socket** `/run/secubox/pilotage-relais.sock` (`secubox-pilotage-relais.socket` : 0660, propriétaire
+  `secubox-pilotage-relais`, groupe `secubox-pilotage-agent`) ; le relais exige en plus `SO_PEERCRED` = uid de
+  `secubox-pilotage-agent`, sinon il ferme sans répondre (refus audité).
+- **Entrée** : un objet JSON par connexion
+  `{"methode", "chemin", "entetes", "corps_b64", "acteur", "maitre", "portee", "version_page"}` ;
+  **sortie** `{"statut", "entetes", "corps_b64"}`, puis fermeture. `version_page` est acceptée et ignorée.
+- **Chemin** : `/api/v1/<module>/<reste>[?requête]` ; le module reçoit `/<reste>[?requête]` sur
+  `/run/secubox/<module>.sock` (préfixe retiré, comme nginx `proxy_pass …:/` et l'agrégateur ; `Host: localhost`).
+  Refusés : hors de ce motif, `..`/`.` (même encodés), `%2F`, `%5C`, segment vide, non-ASCII (400) ; socket absente
+  ou qui n'en est pas une (404) ; modules qui ne reconnaissent jamais le porteur délégué (`auth`, `vault`, `portal`,
+  `assist`, `premier-pas`, `users`, `aggregator`, `pilotage*`) (403).
+- **Jeton** (contrat de `secubox_core.auth`, R-L5-9) : EdDSA Ed25519, en-tête `{"alg":"EdDSA","typ":"JWT"}`,
+  `aud` = nom court de l'hôte en minuscules, `sub` = `pilotage:<acteur>@<maître>`, `cible` = module, `iat`/`exp`
+  entiers, `exp - iat` = 30 s, `pilotage = {acteur, maitre, portee}`, rien d'autre. Acteur et maître sont mis en
+  minuscules ASCII puis refusés (400) hors `[a-z0-9._-]{1,64}` / `[a-z0-9-]{1,63}`.
+- **Cible et alias** : la cible est le nom du dossier d'installation `/usr/lib/secubox/<module>/` (ce que voit
+  `module_courant`). Seul écart relevé dans le dépôt : `waker.sock` est servi par `secubox-profiles` → cible
+  `profiles`. Les modules installés ailleurs (`/usr/share/secubox/…`, paquets Python : picobrew, podcaster,
+  voicestudio, voice, zia, eye-remote, soc-*, security-posture) n'ont pas d'identité de module : le vérificateur
+  y refuse le porteur délégué. Un module seulement monté dans l'agrégateur n'a pas de socket : 404 (R-L5-7).
+- **En-têtes** : seuls `Content-Type`, `Accept`, `If-*` passent ; `Authorization`, `Cookie`, `X-SecuBox-*` et le
+  reste sont effacés ; le relais pose `Authorization: Bearer <jeton>` et `X-SecuBox-Pilotage-Relais`. En retour,
+  jamais `Set-Cookie`.
+- **Mains liées** : portée `lecture`, ou drapeau `/etc/secubox-pilotage/mains-liees` → toute méthode autre que
+  GET/HEAD est refusée **423** avant tout appel. Ce drapeau est la projection du ctl root (`mains-liees on|off`),
+  dans l'arbre root (R-L5-19) : jamais `/etc/secubox/pilotage`, que le compte partagé `secubox` peut modifier.
+  Dossier ou drapeau douteux (absent, pas à root, inscriptible par d'autres, lien) : mains liées.
+- **Bornes** : corps ≤ **4 Mio** dans les deux sens (413) — écart voulu au brief (8 Mio, R-L5-19) : deux appels
+  simultanés de taille maximale tiennent sous `MemoryMax=64M` (~31 Mio de tas mesurés, `TestRelaisMemoireBornee`) ;
+  délai 30 s (504) ; deux appels simultanés, huit connexions au plus (en cours ou en attente), demande lue en 10 s ;
+  GET/HEAD avec corps et caractères de contrôle dans la requête (`%00`…) refusés (400).
+- **Audit** : chaque refus, une ligne JSON ajoutée à `/var/log/secubox/audit.log` (fichier du compte `secubox`,
+  jamais créé par le relais) grâce à l'ACL d'écriture seule posée par `secubox-pilotage-relais-acl` (root, fichier
+  vérifié par descripteur ; postinst et `ExecStartPre=-+` à chaque démarrage, la rotation la retire) ; sans ACL, la
+  même ligne au journal du service. Jamais le
+  jeton, le corps, la requête ni les en-têtes.
+- **Clés** (R-L5-13, R-L5-18) : clé privée PEM PKCS#8 `/var/lib/secubox-pilotage-relais/relais.key` (0600, dossier
+  0700, compte du relais), créée par le postinst **sous le compte du relais** (`runuser … sbx-pilotage-relais
+  cle-publique`, qui rend la clé publique par un tube) ; clé publique PEM SPKI `/etc/secubox-pilotage/relais.pub`
+  (root:root 0644, dossier root 0755) posée par root. Le relais refuse de démarrer si elle ne correspond pas.
+
+## Message HTTP du canal (L5, tâche 3)
+
+Le maître sert les pages d'une box légère ; leurs appels d'API arrivent par le canal :
+
+- requête `{"msg_id", "type": "HTTP", "body": <entrée du relais>}` (`methode`, `chemin` `/api/v1/<module>/…`,
+  `entetes`, `corps_b64`, `acteur`, `maitre`, `portee`, `version_page`) ;
+- l'agent appelle le relais (`/run/secubox/pilotage-relais.sock`, un objet JSON par connexion) et rend
+  `{"msg_id", "type": "HTTP_RESP", "body": <sortie du relais>}` (`statut`, `entetes`, `corps_b64`) par
+  **`POST /canal/v1/http`**, une réponse par POST (jusqu'à ~5,6 Mo : hors du plafond de 256 Kio de `/reponses`).
+  Un sondage peut alors porter jusqu'à ~5,7 Mo (au lieu de 256 Kio) quand le relais est configuré.
+
+**Portée recalculée par l'agent, jamais crue** : la portée du maître ne peut que réduire.
+
+| Situation sur la box | Portée transmise au relais |
+|---|---|
+| maître demande `lecture` | `lecture` |
+| mains liées (`/etc/secubox-pilotage/mains-liees`, vérification du relais réutilisée : `relais.MainsLieesDans`) | `lecture` (le relais refuse alors toute écriture : 423) |
+| box cliente sans support ouvert (drapeau root `support-ouvert` absent, douteux ou échu) | `lecture` |
+| box du propriétaire, ou box cliente pendant un support ouvert, maître demande `admin` | `admin` |
+
+Tout est relu à CHAQUE message, sans sudo ni cache (R-L5-21), dans les drapeaux que le ctl root projette dans
+`/etc/secubox-pilotage/` (mêmes vérifications que le relais : dossier et fichier root, sans lien, sans écriture
+groupe/autres) : `mains-liees` (présence), `proprietaire` (canal wg-mesh vérifié : fin de validité de la
+vérification, 2 h) et `support-ouvert` (fin de la session). Le ctl les recalcule de son état root après CHAQUE
+verbe (accord, fermeture, refus, expiration constatée par `etat`, mains liées, `ancre-verifier` réussi ou non) ;
+l'agent compare lui-même la fin à l'heure. Montée de version ou redémarrage : le postinst rejoue
+`secubox-pilotagectl etat` (local) qui reprojette l'état ; si ce n'est pas fait, une box cliente en support
+ouvert est servie en LECTURE jusqu'au verbe suivant (veille de l'agent : 5 min au plus). Ancre vérifiée exigée (`AncreOK`, sinon 403). `acteur` et `maitre` : motifs du
+vérificateur (`_RE_ACTEUR`, `_RE_MAITRE` de `secubox_core.auth`, par `relais.Normaliser`), sinon 400 ; l'agent ne
+connaît le maître que par son adresse dans le tunnel (ancrée) : il contrôle la forme de ces noms, pas leur vérité.
+Refus rendus sous la forme du relais : corps > 4 Mio → 413 ; relais absent ou muet → 502 ; délai (relais 30 s
++ 5 s) → 504 ; plus de 4 messages HTTP à la fois, ou un second échange de plus de 256 Kio → 503 ; agent sans
+relais → 501. Journal : une ligne par écriture ou refus (méthode, chemin sans requête, acteur, maître, portées
+demandée/retenue, statut) ; une lecture réussie seulement avec `JournalDebug` ; jamais un jeton, un corps ni un en-tête. AppArmor : `/run/secubox/pilotage-relais.sock rw` est la seule socket jointe ; les trois drapeaux en lecture.
+
+## Page d'état locale (L5, tâche 7)
+
+L'agent écrit dès son démarrage, **sans attendre le maître**, puis toutes les 60 s, une page HTML statique
+`/run/secubox/pilotage/etat.html` (dossier `RuntimeDirectory=secubox/pilotage` de l'unité, 0755 ; page 0644) :
+nom de la machine (libellé DNS court), maître `joignable` / `injoignable` / `inconnu` (dernier tour du canal ; ancre
+non vérifiée = injoignable), mains liées, mémoire disponible et swap, noms des unités en échec (32 au plus, noms
+d'unité valides seulement). Rien d'autre : ni adresse, ni clé, ni jeton, ni numéro de série, ni nom d'utilisateur
+(l'état est construit champ par champ, `internal/etat.Depuis`). Aucun script ; la seule feuille de style est autorisée
+par son empreinte (`etat.EmpreinteStyle`, recopiée dans le gabarit nginx `etat` de secubox-profiles). Écriture
+atomique (fichier de travail `.etat.html.tmp` ouvert sans suivre de lien, puis renommé) ; seules écritures permises
+par AppArmor. La page est servie sur le LAN par le gabarit nginx `etat` du profil léger `distante` (secubox-profiles).
+
+`Device.X_SECUBOX_Pilotage.Interface` vaut `distante` quand le marqueur root `/var/lib/secubox-profiles/allegement/actif` (allègement du profil `distante` réussi, R-L5-34) est présent et de confiance (le maître sert alors
+`admin.<box>.secubox.in`, R-L5-27), `locale` sinon.
+
 ## Durcissement
 
 Utilisateur `secubox-pilotage-agent`, `ProtectSystem=strict`, `ReadOnlyPaths=/`, aucune capacité ambiante,
-`IPAddressDeny=any` (sauf `10.10.0.1`, `10.64.0.1`, localhost), `MemoryMax=32M` avec `GOMEMLIMIT=24MiB` (le ramasse-miettes
+`IPAddressDeny=any` (sauf `10.10.0.1`, `10.64.0.1`, localhost), `MemoryMax=48M` avec `GOMEMLIMIT=32MiB` (32M/24MiB avant L5 ; RSS réel mesuré à 34,5 Mio — VmHWM, GOGC par défaut — pour un échange HTTP de 4 Mio aller et retour en parallèle de trois de 200 Kio, `TestAgentRSSEchangesParalleles` ; tas 23,3 Mio ; marge ~13 Mio) (le ramasse-miettes
 travaille avant le tueur du cgroup, M13), profil AppArmor enforce
 (`apparmor/usr.sbin.sbx-pilotage-agent` : réseau `inet stream` qualifié, `unix stream`, `netlink raw` pour les adresses
 des interfaces ; ni `inet6` ni écoute ; `/usr/bin/sudo Ux` seul passage privilégié).

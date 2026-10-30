@@ -25,7 +25,10 @@ Protocole (le client Go `sbx-pilotage-agent` fait foi) :
   POST /canal/v1/notifs      [{"type":"NOTIFY","body":{"event":{…}}}]  (≤ 16)          → 200 {"ignore": n}
      événement : {type, ts, unit?, value?} et, en L2, job/etape/pct/rc/resume (suivi d'une opération), id/etat/decision/fin
      (mains liées, consentement, support) ; la première X_SECUBOX_OperationDone d'un job est remise à `apres_fin`.
-Corps limité à 256 Kio (413, refusé dès l'en-tête ou en cours de lecture, jamais lu en entier avant). Une réponse inconnue, expirée ou
+  POST /canal/v1/http        {msg_id, "type": "HTTP_RESP", body: <sortie du relais>}  (une seule, ≤ 6 Mio)   → 200 {"ignore": 0|1}
+     L5 tâche 3 : réponse à un message HTTP (pilotage.files.demander_http) ; le corps d'une page n'est jamais rangé en base. Une
+     HTTP_RESP courte (refus 503 de l'agent occupé) peut aussi arriver par /reponses.
+Corps limité à 256 Kio (6 Mio pour /http) (413, refusé dès l'en-tête ou en cours de lecture, jamais lu en entier avant). Une réponse inconnue, expirée ou
 d'une autre box est comptée dans « ignore » : jamais une erreur.
 """
 from __future__ import annotations
@@ -48,7 +51,9 @@ ATTENTE_MAX_S = 25.0
 TAILLE_MAX = 256 << 10
 MAX_REPONSES = 64
 MAX_NOTIFS = 16
-TYPES_REPONSE = ("GET_RESP", "GET_SUPPORTED_DM_RESP", "OPERATE_RESP", "ERROR")
+TYPES_REPONSE = ("GET_RESP", "GET_SUPPORTED_DM_RESP", "OPERATE_RESP", "ERROR", "HTTP_RESP")
+TAILLE_HTTP_MAX = 6 << 20   # une HTTP_RESP : 4 Mio de corps en base64 (~5,6 Mo) et ses champs
+HTTP_INCONNUS_PAR_MINUTE = 30   # HTTP_RESP inconnues tolérées par box et par minute (R-L5-21 M7) ; au-delà : 429 sans lire le corps
 _MODELE_MAX = 4096
 _CHAINE_MAX = 128
 UNITE_MAX = 256  # un nom d'unité systemd va jusqu'à 255 caractères
@@ -127,9 +132,9 @@ def _adresse_pour_audit(valeur: str) -> str:
 
 def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], stockage: StockageCanal,
                     audit: Callable[[str, dict], None], *, attente_max: float = ATTENTE_MAX_S,
-                    taille_max: int = TAILLE_MAX, vu_intervalle_s: float = VU_INTERVALLE_S,
+                    taille_max: int = TAILLE_MAX, taille_max_http: int = TAILLE_HTTP_MAX, vu_intervalle_s: float = VU_INTERVALLE_S,
                     audit_intervalle_s: float = AUDIT_INTERVALLE_S, horloge: Callable[[], float] = time.monotonic,
-                    notifs_par_minute: int = NOTIFS_PAR_MINUTE,
+                    notifs_par_minute: int = NOTIFS_PAR_MINUTE, http_inconnus_par_minute: int = HTTP_INCONNUS_PAR_MINUTE,
                     apres_fin: Optional[Callable[[Box, dict], Awaitable[None]]] = None,
                     diffuser: Optional[Callable[[Box, dict], None]] = None) -> FastAPI:
     """`identifier(adresse)` rend la Box ou None (appelée hors boucle) ; `audit(evenement, champs)` écrit une ligne dans l'audit.
@@ -214,7 +219,7 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             raise HTTPException(403, "box inconnue")
         return box
 
-    async def corps_json(request: Request):
+    async def corps_json(request: Request, taille_max: int = taille_max):
         declare = request.headers.get("content-length")
         if declare is not None:
             try:
@@ -313,6 +318,8 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             ok = (isinstance(r, dict) and isinstance(r.get("msg_id"), str) and r.get("type") in TYPES_REPONSE
                   and isinstance(r.get("body"), dict))
             if ok and files.livrer_reponse(box.cle, r):
+                if r["type"] == "HTTP_RESP":
+                    continue        # réponse d'une page : jamais rangée en base (corps, données de la box)
                 try:
                     await asyncio.to_thread(stockage.resultat, box, r["msg_id"], r)
                 except Exception:
@@ -320,6 +327,34 @@ def creer_app_canal(files: Files, identifier: Callable[[str], Optional[Box]], st
             else:
                 ignore += 1
         return {"ignore": ignore}
+
+    inconnues: dict = {}  # Box.cle -> [début de la fenêtre, HTTP_RESP inconnues] ; bornée
+
+    @app.post("/canal/v1/http")
+    async def reponse_http(request: Request):
+        """L5 tâche 3 : UNE HTTP_RESP (jusqu'à 6 Mio), remise au Future de son message HTTP ; inconnue, d'une autre box ou d'un autre
+        type : ignorée (comptée). Jamais rangée en base."""
+        box = await box_de(request)
+        maintenant = horloge()
+        f = inconnues.get(box.cle)
+        if f is not None and maintenant - f[0] >= NOTIFS_FENETRE_S:
+            f = None
+            inconnues.pop(box.cle, None)
+        if f is not None and f[1] >= http_inconnus_par_minute:
+            # 6 Mio par POST : un agent qui envoie des réponses que personne n'attend est arrêté AVANT la lecture
+            raise HTTPException(429, "trop de réponses HTTP inattendues")
+        r = await corps_json(request, taille_max_http)
+        if not isinstance(r, dict):
+            raise HTTPException(400, "objet attendu")
+        ok = isinstance(r.get("msg_id"), str) and r.get("type") == "HTTP_RESP" and isinstance(r.get("body"), dict)
+        if ok and files.livrer_reponse(box.cle, r):
+            return {"ignore": 0}
+        if f is None:
+            if len(inconnues) >= AUDIT_ADRESSES_MAX:
+                inconnues.pop(next(iter(inconnues)))
+            f = inconnues[box.cle] = [maintenant, 0]
+        f[1] += 1
+        return {"ignore": 1}
 
     fenetres: dict = {}  # Box.cle -> [début de la fenêtre, acceptées, ignorées depuis la dernière ligne, instant de la dernière ligne] ; bornée
 

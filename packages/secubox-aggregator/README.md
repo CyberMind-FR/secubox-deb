@@ -7,7 +7,7 @@ Mounts SecuBox module FastAPIs as sub-apps under /api/v1/<module>, eliminating t
 
 Pilot mounts (per /etc/secubox/aggregator.toml) save ~30 MB RAM per migrated module versus a per-module systemd unit. Full migration of the ~100 SecuBox modules would free ~3 GB on a typical install.
 
-Paquet Debian : version `0.5.3-1~trixie1`, architecture `all`.
+Paquet Debian : version `0.5.4-1~trixie1`, architecture `all`.
 
 ## Démarrage (#3216)
 
@@ -19,6 +19,8 @@ répond `503` avec `Retry-After`. Un module en échec, même sur un `sys.exit()`
 `vault`, `actor` et `radio` ne sont jamais montés, même cités dans le TOML : le relais les garde.
 `pilotage-canal` (canal des box du pilotage, #3126) n'est ni monté ni relayé : `/api/v1/pilotage-canal/…` rend `404` sans ouvrir
 la socket, que seul l'écouteur nginx du tunnel joint (il pose l'identité de la box et le marqueur `X-SecuBox-Pilotage-Tunnel`).
+`X-SecuBox-Pilotage-Relais` (#3126, L5) est effacé de toute requête, quelle qu'en soit la casse, avant tout module monté
+ou relayé : seul le relais local du pilotage le pose, directement sur la socket d'un module.
 
 `GET /health` garde ses clés (`status`, `mounted`, `failed`, `total_mounted`, `total_failed`) et ajoute :
 

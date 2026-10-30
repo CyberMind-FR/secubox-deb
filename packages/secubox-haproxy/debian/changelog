@@ -1,3 +1,13 @@
+secubox-haproxy (1.12.9-1~trixie1) trixie; urgency=medium
+
+  * Entrée publique : X-SecuBox-Pilotage-Tunnel (écouteur nginx :8472 du tunnel, L2) et
+    X-SecuBox-Pilotage-Relais (relais local du pilotage, L5) rejoignent les en-têtes de
+    verdict effacés en tête de http-in et https-in, dans haproxyctl generate et
+    POST /haproxy/generate (ref #3126). Le premier, posé par nginx et non classé, faisait
+    échouer test_tout_verdict_pose_par_nginx_est_classe.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
+
 secubox-haproxy (1.12.8-1~trixie1) trixie; urgency=medium
 
   * Entrée publique (audit R10) : http-in et https-in effacent en tête, avant tout

@@ -43,6 +43,10 @@ VERDICTS = [
     "X-SecuBox-Maillage",         # nginx :8799 (wg-mesh) « 1 » → secubox-annuaire, openpgp boite/depot
     "X-SecuBox-Relais",           # agrégateur, relais web vers vault → vault (routes hors relais)
     "X-SecuBox-Second-Facteur",   # agrégateur après TOTP → vault /ouvrir hors LAN
+    # #3126 L2 : posé par le seul écouteur nginx :8472 du tunnel du pilotage → canal des box (secubox-pilotage)
+    "X-SecuBox-Pilotage-Tunnel",
+    # #3126 L5 : posé par le seul relais local du pilotage sur la socket d'un module → secubox_core.auth (jeton délégué)
+    "X-SecuBox-Pilotage-Relais",
 ]
 PROTOCOLE = [
     "X-SecuBox-Signature",        # HMAC posé par l'émetteur du webhook, vérifié par le récepteur

@@ -169,3 +169,49 @@ func TestPilotageMainsLieesNonFiablesIgnorees(t *testing.T) {
 		t.Fatal("la source de production doit exiger root:root")
 	}
 }
+
+// L5 tâche 7, R-L5-34 : « distante » seulement quand l'allègement a RÉUSSI (marqueur root posé par secubox-profilectl
+// après nginx -t, ôté au retour) ; le nom du profil seul ne suffit pas (un allègement défait garde l'admin locale).
+func TestPilotageInterfaceSelonLAllegement(t *testing.T) {
+	r := t.TempDir()
+	s := sourcePilotageDe(r, "0.1.0")
+	p, _ := s.Lire(context.Background())
+	if p["Device.X_SECUBOX_Pilotage.Interface"] != "locale" {
+		t.Errorf("sans marqueur : %v", p["Device.X_SECUBOX_Pilotage.Interface"])
+	}
+	d := filepath.Join(r, "var/lib/secubox-profiles/allegement")
+	os.MkdirAll(d, 0o755)
+	os.WriteFile(filepath.Join(d, "actif"), nil, 0o644)
+	p, _ = s.Lire(context.Background())
+	if p["Device.X_SECUBOX_Pilotage.Interface"] != "distante" {
+		t.Errorf("avec marqueur : %v", p["Device.X_SECUBOX_Pilotage.Interface"])
+	}
+	os.Chmod(filepath.Join(d, "actif"), 0o666) // inscriptible par tous : non fiable
+	p, _ = s.Lire(context.Background())
+	if p["Device.X_SECUBOX_Pilotage.Interface"] != "locale" {
+		t.Errorf("marqueur non fiable accepté")
+	}
+}
+
+// R-L5-34 tour 2 : marqueur en lien symbolique ou d'un autre propriétaire ⇒ « locale ».
+func TestPilotageMarqueurLienOuEtrangerRefuse(t *testing.T) {
+	r := t.TempDir()
+	d := filepath.Join(r, "var/lib/secubox-profiles/allegement")
+	os.MkdirAll(d, 0o755)
+	vrai := filepath.Join(r, "ailleurs")
+	os.WriteFile(vrai, nil, 0o644)
+	os.Symlink(vrai, filepath.Join(d, "actif"))
+	s := sourcePilotageDe(r, "0.1.0")
+	if p, _ := s.Lire(context.Background()); p["Device.X_SECUBOX_Pilotage.Interface"] != "locale" {
+		t.Errorf("marqueur en lien accepté")
+	}
+	os.Remove(filepath.Join(d, "actif"))
+	os.WriteFile(filepath.Join(d, "actif"), nil, 0o644)
+	if p, _ := s.Lire(context.Background()); p["Device.X_SECUBOX_Pilotage.Interface"] != "distante" {
+		t.Fatalf("marqueur valide refusé")
+	}
+	s.proprio = lecture.Proprietaire{UID: uint32(os.Getuid()) + 1, GID: uint32(os.Getgid())}
+	if p, _ := s.Lire(context.Background()); p["Device.X_SECUBOX_Pilotage.Interface"] != "locale" {
+		t.Errorf("marqueur d'un autre propriétaire accepté")
+	}
+}

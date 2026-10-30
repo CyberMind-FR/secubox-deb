@@ -1,0 +1,7 @@
+{
+  "pub_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAa3NKjv8kb+c0s41ARsFI7uXwT+h7OgpCOVWneVbeBms=\n-----END PUBLIC KEY-----\n",
+  "jeton": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwaWxvdGFnZTpnZXJhbGRAZ2syIiwiYXVkIjoiZ2s1IiwiaWF0IjoxODAwMDAwMDAwLCJleHAiOjE4MDAwMDAwMzAsImNpYmxlIjoiZGVtbyIsInBpbG90YWdlIjp7ImFjdGV1ciI6ImdlcmFsZCIsIm1haXRyZSI6ImdrMiIsInBvcnRlZSI6ImFkbWluIn19.gU0KT6NXdmOcQyYpAUIzDsPsiCBnwC6tF1q71-rTWiqn6TpKjHl6mKPg7DxlAoaMur-OQO-_8ZetC6CTOrZzDw",
+  "box": "gk5",
+  "cible": "demo",
+  "iat": 1800000000
+}

@@ -5,3 +5,4 @@ usr/lib/secubox/eye-remote-connected.sh usr/lib/secubox/
 usr/lib/secubox/eye-remote-disconnected.sh usr/lib/secubox/
 usr/lib/secubox/eye-remote-find-usb-serial usr/lib/secubox/
 usr/lib/secubox/eye-remote-leasewatch.sh usr/lib/secubox/
+pilotage/routes-ouvertes.d/system.toml usr/share/secubox/pilotage/routes-ouvertes.d/

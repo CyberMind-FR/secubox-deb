@@ -348,6 +348,10 @@ def test_mains_liees_refuse_tout_sauf_releve(banc):
     assert rc == 0 and sortie == {"ok": True, "mains_liees": True}
     drapeau = banc.r / "etc/secubox/pilotage/mains-liees"
     assert drapeau.is_file() and (drapeau.stat().st_mode & 0o022) == 0      # projection lue par l'agent (L1)
+    # R-L5-19 : projection lue par le relais (L5), dans l'arbre root /etc/secubox-pilotage, posée atomiquement
+    relais = banc.r / "etc/secubox-pilotage/mains-liees"
+    assert relais.is_file() and not relais.is_symlink() and (relais.stat().st_mode & 0o777) == 0o644
+    assert ((banc.r / "etc/secubox-pilotage").stat().st_mode & 0o777) == 0o755
     for action in ACTIONS:
         _, pol, _ = banc.run("politique", action, agent=True)
         if action == "releve":
@@ -368,6 +372,7 @@ def test_mains_liees_refuse_tout_sauf_releve(banc):
     assert pol["autorise"] is False and pol["raison"] == "mains liées"
     rc, sortie, _ = banc.run("mains-liees", "off")
     assert rc == 0 and sortie == {"ok": True, "mains_liees": False}
+    assert not relais.exists()
     _, pol, _ = banc.run("politique", "reboot", agent=True)
     assert pol["autorise"] is True
     bascules = [e["etat"] for e in banc.audit() if e["evenement"] == "mains_liees"]
@@ -1409,8 +1414,8 @@ def test_renommer_lance_secubox_renommer_borne(banc):
     rc, sortie, _ = banc.run("renommer", "gk6", agent=True)
     assert banc.lancements()[-1].endswith("-- /usr/sbin/secubox-renommer --acteur secubox-pilotage-agent gk6")
     assert banc.run("renommer", "GK6", agent=True)[0] == 2
-    # l'outil vient de secubox-core 1.8.10
-    assert "secubox-core (>= 1.8.10~)" in (CTL.parents[1] / "debian" / "control").read_text()
+    # l'outil vient de secubox-core 1.8.10 (dépendance relevée à 1.8.11 par L5 tâche 2 : vérificateur Ed25519)
+    assert "secubox-core (>= 1.8.11~)" in (CTL.parents[1] / "debian" / "control").read_text()
 
 
 def test_renommer_box_cliente_exige_l_accord(banc):
@@ -1578,3 +1583,124 @@ def test_rejoindre_retire_l_ancien_etat_avant_d_ecrire_le_code(banc):
     assert rc == 1 and sortie["ok"] is False
     assert not (p2p / "automesh.code").exists()
     assert banc.lancements()[-1] != "start secubox-automesh.service"
+
+
+# --- L5 tâche 3, R-L5-21 : drapeaux root lus par l'agent (portée admin du pilotage HTTP), sans sudo ----------------
+
+def drapeau(banc, nom):
+    """Échéance (int) du drapeau root /etc/secubox-pilotage/<nom>, ou None s'il est absent ; vérifie sa forme sûre."""
+    f = banc.r / "etc/secubox-pilotage" / nom
+    if not f.exists():
+        return None
+    assert f.is_file() and not f.is_symlink() and (f.stat().st_mode & 0o777) == 0o644
+    return int(f.read_text())
+
+
+def test_drapeau_proprietaire_projete_par_ancre_verifier(banc):
+    """wg-mesh vérifié : `proprietaire` = échéance de la vérification (2 h) ; box cliente ou échec d'ancre : retiré."""
+    maintenant = int(__import__("time").time())
+    fin = drapeau(banc, "proprietaire")
+    assert fin is not None and maintenant + 7000 <= fin <= maintenant + 7300
+    banc.cliente()
+    assert drapeau(banc, "proprietaire") is None
+    banc.pairs(("AUTRE" + CLE_MAITRE[5:], "10.64.0.1/32"))          # révocation : la clé du pair change
+    banc.ancre_verifier()
+    assert drapeau(banc, "proprietaire") is None and drapeau(banc, "support-ouvert") is None
+
+
+def test_drapeau_support_ouvert_suit_chaque_cloture(banc):
+    """`support-ouvert` (fin epoch) posé par l'accord local, retiré par la fermeture (détenteur ou maître), le refus,
+    l'expiration constatée, les mains liées et l'échec d'ancre."""
+    banc.cliente()
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    assert drapeau(banc, "support-ouvert") is None                  # en attente : rien
+    _, s, _ = banc.run("support", "accepter", "s-01")
+    assert drapeau(banc, "support-ouvert") == s["fin"]
+    banc.run("support", "fermer", "s-01")                           # détenteur
+    assert drapeau(banc, "support-ouvert") is None
+    banc.run("support", "ouvrir", "s-02", agent=True)
+    banc.run("support", "accepter", "s-02")
+    banc.run("support", "fermer", "s-02", agent=True)               # maître
+    assert drapeau(banc, "support-ouvert") is None
+    banc.run("support", "ouvrir", "s-03", agent=True)
+    banc.run("support", "accepter", "s-03")
+    sup = lire_support(banc)
+    sup["fin"] = int(__import__("time").time()) - 1
+    ecrire_support(banc, sup)                                       # échu : constaté à la lecture suivante
+    banc.run("etat", agent=True)
+    assert drapeau(banc, "support-ouvert") is None
+    banc.run("support", "ouvrir", "s-04", agent=True)
+    banc.run("support", "accepter", "s-04")
+    assert drapeau(banc, "support-ouvert") is not None
+    banc.run("mains-liees", "on")
+    assert drapeau(banc, "support-ouvert") is None
+    banc.run("mains-liees", "off")
+    banc.run("support", "ouvrir", "s-05", agent=True)
+    banc.run("support", "accepter", "s-05")
+    assert drapeau(banc, "support-ouvert") is not None
+    banc.pairs(("AUTRE" + CLE_MAITRE[5:], "10.64.0.1/32"))
+    banc.ancre_verifier()                                           # ancre révoquée
+    assert drapeau(banc, "support-ouvert") is None
+
+
+def test_drapeaux_reprojetes_par_etat_local(banc):
+    """Montée de version / redémarrage : sans drapeau, une box cliente en support ouvert serait en lecture ; le postinst
+    rejoue `secubox-pilotagectl etat` (local), qui reprojette l'état root courant."""
+    banc.cliente()
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    _, s, _ = banc.run("support", "accepter", "s-01")
+    (banc.r / "etc/secubox-pilotage/support-ouvert").unlink()
+    banc.run("etat")
+    assert drapeau(banc, "support-ouvert") == s["fin"]
+
+
+def test_mains_deliees_dossier_relais_absent_cree(banc):
+    """R-L5-20 M3 : « off » avec /etc/secubox-pilotage absent : le dossier est créé (root 0755) sans drapeau ; sinon le
+    relais, qui lit un dossier absent comme « mains liées », resterait en lecture sans que personne le sache."""
+    d = banc.r / "etc/secubox-pilotage"
+    __import__("shutil").rmtree(d, ignore_errors=True)              # (l'ancre vérifiée du banc l'a déjà créé)
+    rc, sortie, _ = banc.run("mains-liees", "off")
+    assert rc == 0 and sortie == {"ok": True, "mains_liees": False}
+    assert d.is_dir() and not d.is_symlink() and (d.stat().st_mode & 0o777) == 0o755
+    assert not (d / "mains-liees").exists()
+
+
+def test_projection_sans_course_avec_une_fermeture(banc, tmp_path):
+    """R-L5-22 I1 : un `etat` lit « support ouvert » puis est suspendu AVANT d'écrire les drapeaux ; un `support fermer`
+    passe pendant ce temps. Après les deux, `support-ouvert` ne doit jamais réapparaître (verrou de projection tenu de
+    la lecture de l'état jusqu'à l'écriture). Point de synchronisation : SBX_PAUSE_PROJECTION (racine de test seulement)."""
+    import time as _t
+    banc.cliente()
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    banc.run("support", "accepter", "s-01")
+    assert drapeau(banc, "support-ouvert") is not None
+    pause = tmp_path / "pause"
+    e = dict(banc.env, SUDO_USER=AGENT, SBX_PAUSE_PROJECTION=str(pause))
+    lent = subprocess.Popen([str(CTL), "etat"], env=e, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    for _ in range(500):                                     # l'`etat` a lu l'état et attend
+        if (tmp_path / "pause.lu").exists():
+            break
+        _t.sleep(0.01)
+    assert (tmp_path / "pause.lu").exists(), lent.stderr.read() if lent.poll() is not None else "pas de pause"
+    fermer = subprocess.Popen([str(CTL), "support", "fermer", "s-01"], env=banc.env, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, text=True)
+    _t.sleep(0.5)                                            # ancien code : la fermeture finit ici et retire le drapeau
+    pause.write_text("")
+    lent.wait(DELAI)
+    fermer.wait(DELAI)
+    assert lire_support(banc)["etat"] == "ferme"
+    assert drapeau(banc, "support-ouvert") is None
+    banc.run("etat", agent=True)                             # et une projection de plus n'y change rien
+    assert drapeau(banc, "support-ouvert") is None
+
+
+def test_etat_absent_drapeaux_retires(banc):
+    """R-L5-22 M2 : arbre d'état root absent (box remise à neuf, état perdu) ⇒ projection : drapeaux retirés ⇒ lecture."""
+    import shutil
+    banc.cliente()
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    banc.run("support", "accepter", "s-01")
+    banc.r.joinpath("etc/secubox-pilotage/proprietaire").write_text("9999999999\n")
+    shutil.rmtree(banc.r / "var/lib/secubox-pilotagectl")
+    banc.run("etat")
+    assert drapeau(banc, "support-ouvert") is None and drapeau(banc, "proprietaire") is None

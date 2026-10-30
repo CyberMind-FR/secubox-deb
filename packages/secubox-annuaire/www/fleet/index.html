@@ -142,7 +142,7 @@
             <div class="tw"><table class="matrix"><thead><tr><th>Client</th><th>Profil</th><th>Statut</th><th>Progression</th><th>Étape</th><th>Dernière activité</th></tr></thead><tbody id="al-body"></tbody></table></div>
         </div>
         <div class="pan" id="pil-pan" hidden><h3>Pilotage <i><span id="pil-n">0</span> box relevée(s) par le maître, cliquer une ligne pour ouvrir la box</i></h3>
-            <div class="tw"><table class="matrix"><thead><tr><th>Box</th><th>Réseau</th><th>En ligne</th><th>Mém. dispo</th><th>Swap</th><th>CPU</th><th>Services en échec</th><th>Boucles 24 h</th><th>Mains liées</th></tr></thead><tbody id="pil-body"></tbody></table></div>
+            <div class="tw"><table class="matrix"><thead><tr><th>Box</th><th>Réseau</th><th>En ligne</th><th>Mém. dispo</th><th>Swap</th><th>CPU</th><th>Services en échec</th><th>Boucles 24 h</th><th>Mains liées</th><th>Interface</th></tr></thead><tbody id="pil-body"></tbody></table></div>
         </div><!-- fin pil-pan -->
         <div class="pan" id="pb-pan" hidden><h3>Box <span id="pb-titre"></span> <i id="pb-sous"></i> <button type="button" class="btn sm" id="pb-fermer">Fermer</button></h3>
             <div class="pb-etat" id="pb-etat" role="status"></div>
@@ -312,10 +312,24 @@
         function pilReseau(b) { return b.reseau === 'maillage' ? 'maillage' : (b.client ? 'client ' + b.client : (b.reseau || '—')); }
         // vu_le illisible (texte, infini, négatif) : « jamais », jamais un RangeError d'Invalid Date hors du try
         function pilVu(v) { const s = typeof v === 'number' || typeof v === 'string' ? Number(v) : NaN; return Number.isFinite(s) && s > 0 && s < 1e11 ? ago(new Date(s * 1000).toISOString()) : 'jamais'; }
+        // L5 tâche 7 (R-L5-27) : point d'entrée unique. Box « distante » : émission du code à usage unique par le maître
+        // (GET /api/v1/pilotage/boxes/<box>/connexion-vhost, session du maître, puis 303 vers admin.<box>) ; box « locale » (ou
+        // champ absent) : lien direct admin.<box>.secubox.in. Nom hors motif ou box cliente : aucun lien, jamais d'URL forgée.
+        const PIL_NOM = /^[a-z0-9-]{1,40}$/;
+        function pilOuvrir(b) {
+            const td = el('td');
+            if (typeof b.nom !== 'string' || !PIL_NOM.test(b.nom) || b.reseau !== 'maillage') { td.textContent = '—'; return td; }
+            const distante = b.interface === 'distante', a = el('a', 'pil-ouvrir', distante ? 'distante ↗' : 'locale ↗');
+            // URL tenue en data-* (jamais affectée à href, règle de la page) et ouverte par window.open au clic (délégation ci-dessous).
+            a.href = '#'; a.rel = 'noopener noreferrer';
+            a.dataset.ouvrir = distante ? '/api/v1/pilotage/boxes/' + encodeURIComponent(b.nom) + '/connexion-vhost' : 'https://admin.' + b.nom + '.secubox.in/';
+            a.title = distante ? 'Ouvrir l’interface servie par le maître (code de connexion à usage unique)' : 'Ouvrir l’interface de la box';
+            td.append(a); return td;
+        }
         async function chargerPilotage() {
             let liste = [];
             try {
-                if (DEMO) liste = [{ nom: 'box-exemple', reseau: 'maillage', client: null, en_ligne: true, vu_le: Math.floor(Date.now() / 1000) - 20, memoire_dispo_mo: 812, swap_utilise_pct: 12, cpu_pct: 3.4, services_en_echec: 0, boucles_24h: 2, mains_liees: true },
+                if (DEMO) liste = [{ nom: 'box-exemple', reseau: 'maillage', client: null, en_ligne: true, vu_le: Math.floor(Date.now() / 1000) - 20, memoire_dispo_mo: 812, swap_utilise_pct: 12, cpu_pct: 3.4, services_en_echec: 0, boucles_24h: 2, mains_liees: true, interface: 'distante' },
                     { nom: 'client-exemple', reseau: 'autoload', client: 'lgm', en_ligne: false, vu_le: Math.floor(Date.now() / 1000) - 7200, memoire_dispo_mo: null, swap_utilise_pct: null, cpu_pct: null, services_en_echec: null, boucles_24h: 0, mains_liees: null }];
                 else {
                     const h = {}, t = token(); if (t) h.Authorization = 'Bearer ' + t;
@@ -333,7 +347,7 @@
                 ml.append(el('span', 'pill ' + pm[0], pm[1]));
                 tr.append(el('td', 'hostname-col', b.nom || b.cle || '—'), el('td', null, pilReseau(b)), st,
                     el('td', null, pilNum(b.memoire_dispo_mo, ' Mo')), el('td', null, pilNum(b.swap_utilise_pct, ' %')), el('td', null, pilNum(b.cpu_pct, ' %')),
-                    el('td', null, pilNum(b.services_en_echec)), el('td', null, pilNum(b.boucles_24h)), ml);
+                    el('td', null, pilNum(b.services_en_echec)), el('td', null, pilNum(b.boucles_24h)), ml, pilOuvrir(b));
                 tr.dataset.cle = pbId(b); tr.tabIndex = 0;
                 body.append(tr);
             });
@@ -710,11 +724,13 @@
             pbSupportsLire().then(() => pbMaj());
         }
         $('pil-body').addEventListener('click', e => {
+            const lien = e.target.closest('a.pil-ouvrir');   // le lien ouvre l'interface de la box (nouvel onglet), pas sa page ici
+            if (lien) { e.preventDefault(); window.open(lien.dataset.ouvrir, '_blank', 'noopener,noreferrer'); return; }
             const tr = e.target.closest('[data-cle]'); if (!tr) return;
             const b = pilBoites.find(x => pbId(x) === tr.dataset.cle); if (!b) return;
             if (pbBoite && pbId(pbBoite) === pbId(b)) pbFermer(); else pbOuvrir(b);
         });
-        $('pil-body').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { const tr = e.target.closest('[data-cle]'); if (tr) { e.preventDefault(); tr.click(); } } });
+        $('pil-body').addEventListener('keydown', e => { if (e.target.closest('a.pil-ouvrir')) return; /* Entrée sur le lien : clic natif */ if (e.key === 'Enter' || e.key === ' ') { const tr = e.target.closest('[data-cle]'); if (tr) { e.preventDefault(); tr.click(); } } });
         $('pb-fermer').addEventListener('click', pbFermer);
         $('pb-releve').addEventListener('click', pbReleve);
         $('pb-sup-demander').addEventListener('click', pbSupportDemander);

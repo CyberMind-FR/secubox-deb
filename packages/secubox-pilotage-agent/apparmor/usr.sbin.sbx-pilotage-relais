@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de sbx-pilotage-relais (#3126 L5, tâche 2).
+# Posé dans /etc/apparmor.d/usr.sbin.sbx-pilotage-relais, chargé par le postinst AVANT la création de la clé.
+# Tout ce qui n'est pas listé est refusé : aucune capacité, aucun programme lancé, aucun réseau IP.
+
+#include <tunables/global>
+
+/usr/sbin/sbx-pilotage-relais {
+  #include <abstractions/base>
+
+  # --- Réseau : sa socket (reçue de systemd) et les sockets des modules, Unix seulement.
+  network (create, accept, connect, shutdown, getattr, setattr, getopt, setopt, send, receive) unix stream,
+
+  /usr/sbin/sbx-pilotage-relais mr,
+
+  # --- Clé privée (compte du relais, 0600) : lue au démarrage ; créée une fois par `cle-publique` (postinst,
+  # runuser) : brouillon O_EXCL puis lien physique vers le nom final.
+  /var/lib/secubox-pilotage-relais/ r,
+  /var/lib/secubox-pilotage-relais/relais.key rl,
+  /var/lib/secubox-pilotage-relais/.relais.key.* rw,
+
+  # --- Clé publique posée par root : comparée à la clé privée au démarrage.
+  /etc/secubox-pilotage/ r,
+  /etc/secubox-pilotage/relais.pub r,
+
+  # --- Appels : sockets des modules ; drapeau des mains liées (projection du ctl root) ; nom de la box.
+  /run/secubox/ r,
+  /run/secubox/*.sock rw,
+  # Drapeau des mains liées : projection du ctl root dans l'arbre root (R-L5-19), jamais sous /etc/secubox.
+  /etc/secubox-pilotage/mains-liees r,
+  @{PROC}/sys/kernel/hostname r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+
+  # --- Compte de l'agent (SO_PEERCRED) résolu au démarrage.
+  /etc/passwd r,
+  /etc/group r,
+  /etc/nsswitch.conf r,
+  /etc/localtime r,
+
+  # --- Refus audités : ajout seul (fichier existant du compte secubox ; jamais créé ici).
+  /var/log/secubox/audit.log w,
+
+  # Les secrets restent interdits, quoi qu'une règle large ajoute un jour.
+  deny /etc/secubox/secrets/** rwx,
+  deny /etc/shadow r,
+  deny @{PROC}/[0-9]*/{cmdline,environ} r,
+  deny /root/** rwx,
+}

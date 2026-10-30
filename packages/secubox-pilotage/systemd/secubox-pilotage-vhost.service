@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox Pilotage — vhost admin.<box>.secubox.in des box légères (#3126, L5 tâche 5). Root, oneshot : lit le plan écrit par le
+# service (/var/lib/secubox/pilotage/vhosts.json, chemin fixe, validé en entier), extrait les pages, pose ou retire les vhosts
+# (nginx par double tampon, haproxyctl, secubox-waf-route). Le service lui-même n'a ni sudo ni capacité (NoNewPrivileges).
+# M10 (R-L5-25) : ProtectSystem=strict, écritures limitées à ce que haproxyctl, certbot et les deux ctl touchent ;
+# `nginx -t` complet par systemd-run (Final I3). Exception écrite dans RULES-CODE § Exceptions.
+# I4 : relances bornées (un plan qui change sans cesse ne relance pas certbot ni HAProxy en boucle ; le ctl espace aussi ses passes).
+[Unit]
+Description=SecuBox Pilotage — vhosts des box légères (#3126)
+After=network-online.target nginx.service secubox-pilotage.service
+StartLimitIntervalSec=30min
+StartLimitBurst=6
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-pilotage-vhost synchroniser
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+# Final I2 : écritures réelles seulement — haproxy.toml (haproxyctl le réécrit en place), table des routes sbxwaf
+# (secubox-waf-route, relais-maillage : remplacement atomique dans waf/), vhosts nginx, registre et pages du pilotage, audit,
+# journaux et tampons de nginx (pré-validation du tampon) ; jamais tout /etc/secubox.
+ReadWritePaths=/etc/secubox/haproxy.toml /etc/secubox/waf /etc/nginx/conf.d /var/lib/secubox-pilotage-pages /var/log/secubox
+ReadWritePaths=/var/log/nginx /var/lib/nginx
+ReadWritePaths=-/etc/haproxy -/data/haproxy -/srv/haproxy -/run/haproxy -/etc/letsencrypt -/var/lib/letsencrypt -/var/log/letsencrypt
+ReadWritePaths=-/usr/share/secubox/www/.well-known
+# Capacités (root sans le reste) : CAP_DAC_OVERRIDE (audit.log secubox 0640, fichiers d'autres comptes), CAP_DAC_READ_SEARCH
+# (lecture des arbres 0700/0750 : certificats, live/ de certbot), CAP_CHOWN (pem servis en haproxy:secubox, audit.log créé au
+# compte secubox), CAP_FOWNER (chmod/remplacement de fichiers dont root n'est pas propriétaire). Le rechargement de HAProxy et
+# de nginx passe par systemctl (D-Bus), `nginx -t` par systemd-run (PID 1) : ni CAP_KILL ni CAP_NET_BIND_SERVICE.
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_CHOWN CAP_FOWNER
+AmbientCapabilities=
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+TimeoutStartSec=15min

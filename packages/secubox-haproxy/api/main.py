@@ -469,9 +469,10 @@ ONION_CLIENT_MARQUEUR = "192.0.2.80"
 
 # En-têtes de VERDICT effacés en tête de http-in et https-in (#3258, audit R10) : posés par un composant interne en
 # aval de l'entrée, lus comme une affirmation (LAN, onion, console, statut amont, lot netboot, pair et marque du
-# maillage posés par nginx sur wg-mesh, relais et second facteur posés par l'agrégateur). Même liste, dans le
-# même ordre, que ENTETES_VERDICT de haproxyctl generate (qui fait foi et porte l'inventaire complet). Jamais
-# d'effacement en bloc : les en-têtes de protocole (X-SecuBox-Signature…) doivent passer.
+# maillage posés par nginx sur wg-mesh, relais et second facteur posés par l'agrégateur, tunnel et relais local
+# du pilotage #3126). Même liste, dans le même ordre, que ENTETES_VERDICT de haproxyctl generate (qui fait foi
+# et porte l'inventaire complet). Jamais d'effacement en bloc : les en-têtes de protocole (X-SecuBox-Signature…)
+# doivent passer.
 ENTETES_VERDICT = (
     "X-SecuBox-LAN",
     "X-SecuBox-Onion",
@@ -485,6 +486,8 @@ ENTETES_VERDICT = (
     "X-SecuBox-Maillage",
     "X-SecuBox-Relais",
     "X-SecuBox-Second-Facteur",
+    "X-SecuBox-Pilotage-Tunnel",
+    "X-SecuBox-Pilotage-Relais",
 )
 
 

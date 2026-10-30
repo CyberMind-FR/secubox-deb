@@ -18,15 +18,15 @@ async function callPurgeExpired(params) {
 }
 
 async function callPreloadUrl(params) {
-    return sbxFetch('/api/v1/cdn/preload_url', params, 'GET');
+    return sbxFetch('/api/v1/cdn/preload_url', params, 'POST');
 }
 
 async function callClearStats(params) {
-    return sbxFetch('/api/v1/cdn/clear_stats', params, 'GET');
+    return sbxFetch('/api/v1/cdn/clear_stats', params, 'POST');
 }
 
 async function callRestart(params) {
-    return sbxFetch('/api/v1/cdn/restart', params, 'GET');
+    return sbxFetch('/api/v1/cdn/restart', params, 'POST');
 }
 
 async function callLogs(params) {

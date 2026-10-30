@@ -573,3 +573,15 @@ def test_plus_de_la_moitie_suspend_la_moitie_non_r_l2_45(tmp_path):
     s2.vu(boites[0], {})
     r = s2.oublier()
     assert r == [] and r.suspendu == {"candidates": 3, "total": 4}
+
+
+def test_resume_interface_pour_le_panneau_flotte(tmp_path):
+    """L5 tâche 7 : le panneau Flotte du maître ouvre une box « distante » par l'émission du code, une box « locale »
+    par son lien direct ; inconnue (agent < 0.5.0, valeur hors liste) = « locale », le comportement d'avant."""
+    s, _ = neuf(tmp_path)
+    s.vu(GK5, {})
+    assert s.resumes()[0]["interface"] == "locale"
+    s.inventaire_enregistrer(GK5, releve_gk5(interface="distante"))
+    assert s.resumes()[0]["interface"] == "distante"
+    s.inventaire_enregistrer(GK5, releve_gk5(interface="<b>autre</b>"))
+    assert s.resumes()[0]["interface"] == "locale"

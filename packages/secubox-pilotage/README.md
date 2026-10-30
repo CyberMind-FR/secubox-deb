@@ -65,6 +65,14 @@ Refus d'identité du canal (`pilotage_identite_refusee`) : une ligne par adresse
 à chaque tour d'inventaire et à l'éviction d'une adresse de la table bornée (1 024), en ligne de décompte seul `{tus, vidage: tour|eviction}`
 (M7) : aucun décompte n'est perdu.
 
+`GET /boxes` (résumé par box) porte aussi `interface` (L5 tâche 7) : `distante` si l'agent déclare
+`Device.X_SECUBOX_Pilotage.Interface = "distante"` (profil léger de secubox-profiles), `locale` sinon (agent plus ancien,
+valeur absente ou hors liste). Le panneau « Flotte » (secubox-annuaire, `/fleet/`) en tire le lien d'ouverture de la box :
+`distante` ⇒ `/api/v1/pilotage/boxes/<box>/connexion-vhost` sans `retour` (racine ; `retour=/` est refusé, 422 : seul
+`/<module>/` est admis), ouvert dans un nouvel onglet, donc authentifié par le **cookie de session** du maître (GET :
+`require_jwt` l'accepte sans garde d'origine ; test `test_emission_du_code_par_la_seule_session_cookie`) ;
+`locale` ⇒ `https://admin.<box>.secubox.in/`.
+
 ## Actions (L2, tâche 6)
 Toutes les routes portent `require_jwt` (administrateur réel), aucune route d'usager. Une box se désigne comme en L1 (clé ou nom unique).
 
@@ -187,6 +195,186 @@ profil AppArmor **enforce** `secubox-pilotage-invite` (`AppArmorProfile=`, charg
 `ip` en `ix`, arbre p2p en lecture, `master-link` en écriture, audit en ajout seul, netlink, aucun shell ni réseau IP.
 Échec d'émission : `pilotage_rejoindre_echec` (sans le code). Le pair est renommé côté p2p par la jonction sous le nouveau nom
 (#3213) ; la box réapparaît alors sous sa nouvelle clé `maillage:<nouveau>`, l'ancienne passe hors ligne avec son historique.
+
+## Pilotage HTTP des box légères (L5, tâche 3)
+
+`pilotage.files.demander_http(files, box_cle, methode=, chemin=, acteur=, maitre=, portee=, agent_version=, audit=, entetes=,
+corps=, version_page=, delai=40)` (`agent_version` et `audit` obligatoires) envoie un message `HTTP` à l'agent de la box et rend `{statut, entetes, corps}` (octets). Le corps du message
+est l'entrée du relais local de la box (`methode`, `chemin` `/api/v1/<module>/…`, `entetes`, `corps_b64`, `acteur`, `maitre`,
+`portee`, `version_page`) ; la réponse `HTTP_RESP` arrive par `POST /canal/v1/http` (6 Mio) ou, courte, par `/reponses`.
+
+- Refus avant tout envoi : `DemandeHTTPInvalide` (400 forme, 413 corps > 4 Mio), `AgentTropAncien` (agent < 0.4.0 : rien n'est
+  déposé dans sa file), `AgentHorsLigne` (aucun sondage depuis 10 s), `FileDeBoxPleine`, `AuditIndisponible` (écriture sans
+  fonction d'audit, ou ligne d'audit non écrite).
+- `POST /canal/v1/http` : 30 réponses inattendues par box et par minute au plus, puis 429 avant la lecture du corps.
+- Ensuite : `DelaiHTTPDepasse` (504 ; requête retirée), `ReponseHTTPInvalide` (502 : ERROR d'un agent sans HTTP, forme bancale).
+- **Portée** : `portee_permise(reseau, mains_liees, support_ouvert, demandee)` — `demandee` est ce que la session du maître
+  autorise ; mains liées (ou inconnues) ⇒ `lecture` ; box cliente ⇒ `admin` seulement pendant un support ouvert. L'agent la
+  recalcule (mains liées, ctl root) et ne peut que la réduire encore.
+- Audit : chaque écriture (POST/PUT/PATCH/DELETE) `pilotage_http` avant l'envoi (`etat: demande`) et à la réponse
+  (`etat: rendu`, `statut`) ; jamais le corps ni la requête `?…`. Le corps d'une page n'est jamais rangé en base.
+
+## Pages des box sans tête (L5, tâche 4)
+
+`/usr/sbin/secubox-pilotage-www` (root, lancé par le seul ctl root `secubox-pilotage-vhost` ; aucune règle sudoers depuis 0.5.3) prépare,
+pour chaque version de paquet déclarée par une box, les pages de **cette** version (spec D5 : une page ne parle qu'à l'API de
+sa version). Sortie : une ligne JSON sans chemin ; codes 0, 1 (refus/erreur), 2 (argv ou configuration).
+
+- `extraire [--acteur A] <paquet> <version>` : paquet `^secubox-[a-z0-9-]{1,60}$`, version `^[0-9][A-Za-z0-9.+~:-]{0,62}$`.
+  Chaîne de confiance : `dists/<suite>/InRelease` vérifié par `gpgv` avec le trousseau des clients apt SecuBox
+  (`/usr/share/keyrings/secubox.gpg`, clé TOML `trousseau`), chaque `Packages` vérifié par sa somme dans ce Release, puis le
+  `.deb` par la sienne dans `Packages` (index divergents pour une même version : refus). Trousseau absent : **repli annoncé**
+  sur stderr et dans la sortie (`"verification": "proprietaire"`) : tout le chemin lu (racine, dists/, Packages, pool/,
+  .deb) doit appartenir à root sans écriture groupe/autres, sinon refus. Le dépôt est parcouru par descripteur (O_NOFOLLOW) :
+  un lien dans le chemin du pool est refusé.
+  Le `.deb` est trouvé par `dists/<suite>/main/binary-*/Packages` du dépôt local (`Filename` sous `pool/`, `SHA256`, `Size`),
+  recopié dans un fichier privé et vérifié (somme ou taille différente : refus, rien sur disque), puis lu en ar + `data.tar`
+  (xz, gz, bz2, sans compression ; zst par `/usr/bin/zstd`) **sans dpkg** : aucun script de mainteneur. Seul
+  `usr/share/secubox/www/` est copié (chemin des pages vérifié sur secubox-dns, secubox-admin, secubox-ad-guard) vers
+  `/var/lib/secubox-pilotage-pages/www/<paquet>/<version>/` (root, parents tous root 0755 — I5, T5 — fichiers 0644, dossiers 0755 ; manifeste `.<version>.json` à côté).
+  Dossier temporaire frère puis renommage ; version présente et intacte (manifeste, sommes, modes) : `{"deja": true}`.
+- `purger [--acteur A]` : lit sur **stdin** `{"en_usage": [{"paquet": …, "version": …}, …]}` (≤ 1 Mio, motifs entiers ; clé
+  ou champ en trop : code 2) ; supprime les versions extraites qu'aucune box ne déclare depuis **7 jours**. Horodatage « dernière
+  déclaration » tenu par root dans `www/.vu.json` (une version extraite inconnue de l'état reçoit un délai complet).
+- `lister` : `{"versions": [{paquet, version, taille, date}]}`, non audité.
+- Audit (`acteur` déclaré par `--acteur` et `appelant` = SUDO_USER validé, « inconnu » sinon) : `pilotage_www_extraire` (`resultat` ok, deja, refus, erreur ; `motif` ; `verification` signature|proprietaire) et `pilotage_www_purger` (`purgees`) dans
+  `/var/log/secubox/audit.log`, ouvert sans suivre de lien ; audit impossible ⇒ échec.
+- Refus : chemin absolu ou `..`, nom non UTF-8 ou à caractère de contrôle (toute l'archive) ; sous les pages : lien symbolique
+  absolu ou contenant `..`, écriture à travers un lien de dossier, lien dur vers un fichier hors des pages, fichier spécial, setuid/setgid, entrée en double, plus de
+  20 000 entrées ou 64 Mio ; `.deb` > 512 Mio.
+- Configuration facultative `/etc/secubox/pilotage-www.toml` (root, non inscriptible par d'autres) : `depot_apt` (défaut
+  `/data/apt`, R-L5-1), `trousseau`, `suite` (`trixie`), `taille_max_mio`, `fichiers_max`, `deb_max_mio`.
+- `www/` est créé par le ctl lui-même, par descripteur (pas de tmpfiles : « unsafe path transition » sous
+  `/var/lib/secubox/<module>/`), refusé s'il est un lien ou n'appartient pas à root. Pas de profil AppArmor propre au ctl
+  (comme les autres assistants root du paquet).
+
+**Contrat pour T5** (service du maître) : le service appelle `sudo -n /usr/sbin/secubox-pilotage-www extraire --acteur
+<admin de la session require_jwt> <paquet> <version>` pour chaque paquet déclaré dans `Device.X_SECUBOX_Packages`, et, une fois
+par jour au moins, `purger` avec sur stdin l'union des versions déclarées par toutes les box connues. La liste passe par stdin
+(et non par un fichier que root relirait dans un dossier du service) : aucun chemin choisi par un compte non root n'est ouvert
+par root, et l'entrée est validée en entier avant toute suppression. Le service ne peut, au pire, qu'avancer la purge d'une
+version non déclarée (jamais toucher hors de `www/<paquet>/<version>`). `--acteur` est déclaré par l'appelant : l'audit
+porte aussi `appelant` (le compte sudo réel). Accepté (M5, R-L5-23) : un appelant autorisé peut faire extraire n'importe
+quelle version publiée du dépôt (bornée par les limites) ; ce n'est pas une élévation.
+
+Exigences pour T5 (I5, R-L5-23) : les pages sont servies depuis un chemin dont **tous les parents appartiennent à root**
+(pas sous `/var/lib/secubox/pilotage`, possédé par le service : déplacer ou recopier `www/`) ; nginx refuse les fichiers en
+point (`.vu.json`, `.<version>.json`, `.tmp-*`) et ne sert que `www/<paquet>/<version>/` ; CSP stricte ; origine distincte
+de l'admin du maître ; la route qui sert les pages prend acteur et portée dans la session `require_jwt` (exigence M3 de T3).
+
+## Vhost `admin.<box>.secubox.in` d'une box légère (L5 tâche 5)
+
+Une box légère (inventaire : `Device.X_SECUBOX_Pilotage.Interface = "distante"`, posé par le profil léger — T6) n'a pas d'interface
+d'administration : le maître la sert sous une **origine à elle**, jamais celle de son admin, par la chaîne normale
+HAProxy TLS 1.3 → sbxwaf → nginx.
+
+- **Plan d'exposition** (L5 tâche 6, E4) : à chaque tour d'inventaire, le service écrit aussi `/var/lib/secubox/pilotage/exposition.json` (0640, atomique, seulement s'il change) : `{"version": 1, "boxes": [{adresse, box, distante, noms, ports, releve_le}]}` pour les box du maillage au nom et à l'adresse uniques, depuis `Device.X_SECUBOX_Exposure.Names|Ports` (noms `<svc>.<box>.secubox.in` seulement, 64 au plus ; ports entiers 1..65535, 256 au plus ; valeur tronquée : box absente). Relu par `secubox-relais-maillage` (root) ; aucune route sans jeton.
+- **Plan** : à chaque tour d'inventaire, le service écrit `/var/lib/secubox/pilotage/vhosts.json` (0640, atomique, seulement s'il change) :
+  box « distante » de nom unique et valide (`^[a-z0-9-]{1,40}$`), versions déclarées (`Device.X_SECUBOX_Packages.{i}.Name/Version` ;
+  un paquet déclaré avec deux versions n'est pas servi). 64 box et 256 paquets par box au plus.
+- **`secubox-pilotage-vhost`** (root, `python3 -I`, verbes fermés `poser|retirer [--acteur A] <box>`, `synchroniser`, `lister`) :
+  lancé par `secubox-pilotage-vhost.path` (plan changé) et `.timer` (toutes les heures), **jamais par le service** — celui-ci tourne
+  `NoNewPrivileges` sans sudo (le sudoers de `secubox-pilotage-www` livré en T4, qui ne lui servait pas, est retiré en 0.5.3 par `rm_conffile`).
+  `synchroniser` lit le plan à chemin fixe (sans lien, ≤ 1 Mio, validé en entier, sinon code 2 et rien touché), extrait chaque version
+  (`secubox-pilotage-www extraire --acteur pilotage`), pose chaque vhost, retire ceux des box sorties du plan, puis `purger`.
+  `poser` : server nginx `/etc/nginx/conf.d/secubox-pilotage-admin-<box>.conf` rendu par `pilotage/vhosts.py` sur les versions déjà
+  extraites (modules listés par descripteur, arbre root vérifié), **double tampon** : tampon validé seul (`nginx -t -c` d'une enveloppe)
+  → échange atomique → `nginx -t` complet → sinon ancien fichier rétabli (ou retiré) ; certificat exact ou joker `*.<box>.secubox.in`
+  (sinon certbot webroot ; échec ⇒ aucun vhost public) ; `haproxyctl vhost add <dom> sbxwaf_inspector true` (jamais `waf_bypass`) ;
+  `secubox-waf-route <dom> 9080` (adresse des voisins du port des vhosts nginx) ; `haproxyctl generate` + reload. `retirer` : server
+  nginx (même garde), route sbxwaf (table réécrite atomiquement, voisins intacts), vhost HAProxy (`generate --allow-shrink`).
+  Audit `pilotage_vhost_poser` / `pilotage_vhost_retirer` (`resultat` ok|deja|echec, `motif`). **Propriété** (C2) : noms
+  réservés (nom du maître, `www`, `api`, `admin`, `apt`, modules de `/usr/share/secubox/www`) ; un domaine déjà présent dans HAProxy
+  (`haproxyctl vhost list`), la table des routes ou un server nginx étranger est refusé ; ce que le pilotage crée est marqué dans le
+  registre root `/var/lib/secubox-pilotage-pages/registre.json` (0644, dossier root 0755, lu par descripteur sans lien ; R-L5-26) AVANT création ; registre absent alors que des vhosts du pilotage existent : état incohérent signalé, rien fait ; l'ancien `/etc/secubox/pilotage-vhosts.json` est repris s'il est root et non inscriptible, et `retirer` refuse tout domaine non marqué. Nom de table
+  HAProxy lu par `vhost list` (I5), codes retour de `vhost remove` et `cert sync` vérifiés. Échec certbot : pas de nouvel essai avant
+  6 h pour ce domaine ; deux synchronisations espacées d'au moins 60 s ; attente hors verrou ; `.path` sans limite de déclenchement (elle le figerait), service à 6
+  démarrages par 30 min (I4). HAProxy en mode `lxc` : refusé avec un message clair (M5). Joker et regex des `server_name` étrangers,
+  nom public du maître (`[global] domain`) et certificat exact existant comptent comme « déjà servi » (M4). Unité en `ProtectSystem=strict` avec `ReadWritePaths` limités (M10). Au `remove` du paquet, le prerm retire tous les vhosts.
+- **Server nginx** : `listen 0.0.0.0:9080`, `server_name admin.<box>.secubox.in` ; `/<module>/` → `alias
+  /var/lib/secubox-pilotage-pages/www/<paquet>/<version>/<module>/` (jamais `www/` entier) ; CSP `default-src 'none'` + `script-src`,
+  `style-src` limités aux chemins des pages servies (`https://admin.<box>/<module>/`, `/pilotage-connexion/`), jamais `/api/`
+  (C1b) ; `connect-src`, `img-src`, `font-src` à `'self'`, `form-action 'none'`, `frame-ancestors 'none'` ; `nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: no-referrer`, `Cache-Control: no-store` ; fichiers en point → 404 (au niveau du serveur ET dans chaque location de
+  pages : `^~` coupe la recherche des regex) ; `disable_symlinks if_not_owner` ; `/api/v1/<module>/` → socket du service
+  `/relais/<box>/api/v1/<module>/` avec `X-SecuBox-Version-Page: <paquet>=<version>` et `X-SecuBox-Pilotage-Box` posés, `Cookie` et
+  marques `X-SecuBox-*` du client effacés, `Set-Cookie` masqué ; pas le snippet `secubox-proxy.conf` (il ajoute
+  `Access-Control-Allow-Origin *`). Sur l'admin du maître, `/api/v1/pilotage/relais/` et `/vhost/` rendent 404 et ces en-têtes sont vidés.
+- **Connexion** (R-L5-25 C1c) : les identifiants du maître ne sont saisis **que sur l'origine du maître**. L'administration du
+  maître (`GET /api/v1/pilotage/boxes/<box>/connexion-vhost?retour=/<module>/`, `require_jwt`, donc 2FA du maître) émet un code à usage
+  unique (≤ 60 s, en mémoire du contrôleur, lié à la box, à l'administrateur et à sa session `jti`, audit `pilotage_vhost_code`) et
+  répond 303 vers `https://admin.<box>.secubox.in/pilotage-connexion/#code=…` (fragment : jamais envoyé ni journalisé). Cette page
+  statique du paquet (aucun champ d'identifiants) poste le code à `/api/v1/auth/echanger` (seule route d'auth du vhost), qui le
+  consomme à la première présentation (même refusée) et rend un **jeton à portée** : clé dérivée (HMAC de la clé du maître, M7),
+  `aud = admin.<box>.secubox.in`, `iss = secubox-pilotage-vhost`, `scope = pilotage-vhost`, même `sub`/`jti`, `exp` ≤ maître et ≤ 4 h.
+  Aucun cookie. Session du maître close ou administrateur déchu entre-temps : 401/403. Débit : 10 émissions par administrateur et
+  10 échanges par adresse et par minute (429).
+- **Basculement locale ⇄ distante** (R-L5-27) : jamais deux vhosts pour un nom. « Locale » : `secubox-relais-maillage` relaie
+  `admin.<box>` vers le nginx de la box (vhost HAProxy vers sbxwaf_inspector, route sbxwaf vers l'IP maillée du pair `<box>`, celle que rend `secubox-relais-maillage pair-de <box>` : une route vers un autre pair, le maître ou une IP publique n'est pas reprise).
+  « Distante » : le pilotage le sert. Source de vérité : la déclaration `Interface = "distante"` de l'inventaire (plan) + le
+  registre root. `poser` d'un nom non marqué mais EXACTEMENT porté par relais-maillage (et par rien d'autre : aucun server nginx
+  d'ici) : exclusion écrite d'abord (`/var/lib/secubox-pilotage-pages/exclusions-relais.json`, root 0644, que relais-maillage
+  honore pour les seuls noms `admin.<box>.secubox.in`), marque avec `repris_de` et `route_avant`, `secubox-relais-maillage retirer
+  <dom>` (vérifié), puis la pose normale ; échec à n'importe quelle étape ⇒ retour « locale » (retrait de ce que le pilotage a
+  posé, exclusion levée, `secubox-relais-maillage relayer --sans-sonde <dom> <ip> <port>` — rétablissement direct, même pair muet —,
+  marque ôtée ; chaque étape indépendante, erreur d'origine rendue). `retirer` d'un nom repris : retrait du vhost pilotage puis
+  même retour ; s'il échoue, `retirer` échoue (`ok: false`, audit `resultat=echec`). Verrou commun avec relais-maillage
+  (`verrou-relais.lock`, flock) tenu pendant tout le verbe, avant celui de conf.d ; relais-maillage le tient pendant toute sa passe.
+  Verrou pris sans blocage jusqu'à 300 s (`SECUBOX_PILOTAGE_VERROU_S`), sinon sortie `{"ok": false, "occupe": true}` sans
+  rien modifier (audit `pilotage_vhost_occupe`). Retour en échec : entrée gardée avec `etat = retour_en_attente`, reprise en tête
+  de la passe suivante de `synchroniser`. Audit
+  `pilotage_vhost_basculer` (`sens` distante|locale, `resultat`, `route`). Un nom porté par autre chose (vhost manuel, autre
+  module, route vers une autre adresse) reste refusé (C2). Les autres noms de la box (hall, acces, waf…) ne sont jamais touchés.
+- **Contrat pour T7 (panneau « Flotte » du maître, point d'entrée unique)** : box distante ⇒ ouvrir
+  `https://<admin du maître>/api/v1/pilotage/boxes/<box>/connexion-vhost` (`?retour=/<module>/` facultatif ; la Flotte l'omet) ;
+  box locale ⇒ lien direct actuel `https://admin.<box>.secubox.in/`.
+- **Exceptions de garde** (M6, listées aussi dans `tests/publiques-assumees.txt`) : l'émission du code est un GET (lien de navigation
+  porté par la session du maître) qui crée un état éphémère ; `POST /vhost/auth/echanger` n'a pas de garde (amorçage
+  d'authentification) mais n'accepte qu'un code à usage unique ≤ 60 s émis sous `require_jwt`, avec un débit par adresse.
+- **Relais** `GET|HEAD|POST|PUT|PATCH|DELETE /relais/{box}/api/v1/…` : Bearer à portée de CETTE box (401 sinon) ; en-tête de box de nginx
+  = box du chemin (404 sinon) ; box inconnue, ambiguë ou non « distante » : 404 ; administrateur réel (403) ; box cliente : session de
+  support ouverte requise (403, R-L2-31) ; 429 au-delà de 300 requêtes par minute par (administrateur, box) ; 409 si
+  `X-SecuBox-Version-Page` ≠ version déclarée ; 501 agent < 0.4.0 ; 413 corps > 4 Mio (Content-Length ou flux). **Acteur = `sub` de la
+  session, portée demandée = `admin`** réduite par `portee_permise` (mains liées ou inconnues ⇒ lecture) puis par l'agent : tout champ
+  `acteur`/`portee` du client (corps, requête, en-tête) est ignoré. `demander_http` (audit obligatoire des écritures) ; en-têtes vers la
+  box réduits à Content-Type/Accept/If-* (jamais Authorization ni Cookie) ; réponse : Content-Type, ETag, Last-Modified,
+  réponse jamais exécutable (C1a) : JSON annoncé ⇒ `application/json`, tout autre type ⇒ `application/octet-stream` +
+  `Content-Disposition: attachment` + `CSP: sandbox; default-src 'none'` ; `nosniff` partout ; ETag et Last-Modified seuls
+  repris ; nginx pose aussi ces en-têtes (`always`) sur chaque location `/api/`. Le premier segment du chemin doit être un module
+  du paquet annoncé par la version de page (I6, 409 sinon : modules lus dans l'arbre root des pages).
+- **Limites** : la version comparée est celle que le server nginx sert pour le module (posée par nginx) ; une page chargée avant une
+  régénération envoie la nouvelle version (le 409 couvre l'intervalle « box montée, vhost pas encore régénéré »). Une page malveillante
+  d'un paquet signé ne voit jamais d'identifiants (saisis sur le maître seul) mais pourrait lire le jeton du vhost de sa box. Un
+  module seulement monté dans l'agrégateur d'une box légère n'est pas joignable (R-L5-7). Pas de déconnexion côté vhost (jeton jeté
+  par la page ; 4 h au plus). L'agrégateur du maître relaie `/api/v1/pilotage/…` en retirant le préfixe : un client pourrait y forger
+  `X-SecuBox-Pilotage-Box` — sans effet utile : il faut les identifiants d'un administrateur du maître, et le relais exige le jeton à
+  portée de la box.
+- **Reste à T6/T7** : T6 pose `Interface = "distante"` (profil léger) et le DNS public `admin.<box>` (joker du pair) ; T7 : lien vers
+  `https://admin.<box>.secubox.in/` dans la page Flotte, message « passez par les actions du pilotage » (R-L5-15), déconnexion.
+
+## Modèle de confiance : un seul propriétaire
+
+Le maillage a **un seul propriétaire**. Tout administrateur réel du maître (`require_jwt`, 2FA du maître) peut piloter
+**toutes** les box du maillage dont il est propriétaire : il n'y a ni partage par box ni rôle intermédiaire. La portée
+reste bornée sur chaque box (mains liées, routes déclarées dans `routes-ouvertes.d`, verbes fermés du ctl L2, accord du
+détenteur pour les actions fortes). Une **box cliente** (détenue par un tiers) n'est pilotable que pendant une session de
+**support ouverte** par son détenteur et avec son **accord** ; hors support : 403. Un maître compromis obtient donc la
+portée administrateur sur les box du maillage, dans ces bornes.
+
+Le code de connexion au vhost d'une box (`GET /boxes/{box}/connexion-vhost`) n'est émis qu'en `Sec-Fetch-Site`
+`same-origin` ou `none` (403 sinon) ; sans cet en-tête (client non navigateur), la garde `require_jwt` seule s'applique.
+
+## À vérifier au banc (T8)
+
+- `nginx -t` réel dans l'unité `secubox-pilotage-vhost.service` : la configuration complète passe par
+  `systemd-run --wait --pipe --collect --quiet /usr/sbin/nginx -t -q` ; la pré-validation du tampon reste dans le bac à sable.
+- `ReadWritePaths` réels de cette unité (`haproxy.toml`, `waf/`, `conf.d`, dossiers HAProxy et certbot, `.well-known`) et
+  `CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_CHOWN CAP_FOWNER` : `haproxyctl vhost add|generate|reload|cert sync`,
+  `secubox-waf-route`, relais-maillage (le mode HAProxy LXC, `lxc-attach`, n'est pas couvert).
+- certbot HTTP-01 en webroot depuis l'unité (`/usr/share/secubox/www/.well-known`).
+- `/data/apt` lu en root et `gpgv` sur `InRelease` par `secubox-pilotage-www`.
+- Basculement réel d'un nom avec `secubox-relais-maillage` (retrait du relais, pose du vhost, retour arrière).
+- Mémoire du profil distant sur gk5 (box légère sans tête).
 
 ## Tests
 `cd packages/secubox-pilotage && python3 -m pytest -q`. `tests/test_contrat_go.py` rejoue contre le vrai canal (et le vrai stockage) les

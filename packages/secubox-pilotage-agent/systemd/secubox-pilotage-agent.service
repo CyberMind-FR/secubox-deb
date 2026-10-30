@@ -5,7 +5,8 @@
 [Unit]
 Description=SecuBox — agent de pilotage distant (TR-369/USP)
 Documentation=https://secubox.in
-After=network-online.target wg-quick@wg-mesh.service wg-quick@wg-autoload.service
+# L5 : après la socket du relais local (activation systemd), sans en dépendre (l'agent L1/L2 vit sans relais).
+After=network-online.target wg-quick@wg-mesh.service wg-quick@wg-autoload.service secubox-pilotage-relais.socket
 Wants=network-online.target
 
 [Service]
@@ -19,9 +20,12 @@ UMask=0027
 ExecStart=/usr/sbin/sbx-pilotage-agent
 Restart=on-failure
 RestartSec=10
-MemoryMax=32M
+# L5 tâche 3 (R-L5-22 M3) : 48M (au lieu de 32M). RSS réel MESURÉ (VmHWM, GOGC par défaut, GOMEMLIMIT=32MiB) à
+# 34,5 Mio pour un échange de 4 Mio aller et retour en parallèle de trois de 200 Kio (TestAgentRSSEchangesParalleles,
+# plafond 40 Mio ; binaire de test, un peu plus lourd que l'agent) : ~13 Mio de marge. Tas : 23,3 Mio.
+MemoryMax=48M
 # M13 : borne souple du runtime Go, sous MemoryMax : le ramasse-miettes travaille avant le tueur du cgroup.
-Environment=GOMEMLIMIT=24MiB
+Environment=GOMEMLIMIT=32MiB
 
 # Durcissement : connexion sortante vers le maître seulement ; l'agent lui-même n'a aucune capacité.
 # NoNewPrivileges=no : seulement pour sudo. La seule action privilégiée de l'agent (L2, #3126) est
@@ -44,6 +48,10 @@ ReadOnlyPaths=/
 # du paquet ; « - » : absent, ignoré au lieu d'empêcher le démarrage) et le journal d'audit. Les opérations elles-mêmes
 # passent par systemd-run (PID 1), hors de cette unité.
 ReadWritePaths=/var/log/secubox -/var/lib/secubox-pilotagectl
+# L5 tâche 7 : page d'état locale /run/secubox/pilotage/etat.html, lue par nginx (gabarit « etat » du profil léger) :
+# dossier propre à l'unité (vidé à son arrêt ; jamais /run/secubox lui-même, partagé), 0755, page 0644.
+RuntimeDirectory=secubox/pilotage
+RuntimeDirectoryMode=0755
 ProtectHome=yes
 PrivateTmp=yes
 ProtectControlGroups=yes

@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+[Unit]
+Description=SecuBox Pilotage — plan des vhosts des box légères (#3126)
+
+[Path]
+PathChanged=/var/lib/secubox/pilotage/vhosts.json
+# Aucune limite de déclenchement (R-L5-26 I2 : atteinte, elle mettrait ce .path en échec définitif) : le ctl espace lui-même ses passes
+# (60 s au moins, attente hors verrou).
+Unit=secubox-pilotage-vhost.service
+
+[Install]
+WantedBy=paths.target

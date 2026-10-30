@@ -23,7 +23,7 @@ class Horloge:
         self.t += s
 
 
-def releve_gk5(swap_total=1000, swap_used=660, failed=0, mains=None, dispo_kio=524288, cpu=12):
+def releve_gk5(swap_total=1000, swap_used=660, failed=0, mains=None, dispo_kio=524288, cpu=12, interface=None):
     params = {
         P + "DeviceInfo.MemoryStatus.X_SECUBOX_Available": dispo_kio,
         P + "DeviceInfo.MemoryStatus.X_SECUBOX_SwapTotal": swap_total,
@@ -35,4 +35,6 @@ def releve_gk5(swap_total=1000, swap_used=660, failed=0, mains=None, dispo_kio=5
     }
     if mains is not None:
         params[P + "X_SECUBOX_Pilotage.MainsLiees"] = mains
+    if interface is not None:
+        params[P + "X_SECUBOX_Pilotage.Interface"] = interface
     return {"results": [{"path": P, "params": params}]}

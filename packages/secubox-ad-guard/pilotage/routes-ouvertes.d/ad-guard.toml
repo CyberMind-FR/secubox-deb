@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Écritures ouvertes au porteur délégué du pilotage (#3126, L5 ; R-L5-12, #3279 en version minimale).
+# Installé dans /usr/share/secubox/pilotage/routes-ouvertes.d/ad-guard.toml (root, 0644). Seules les écritures
+# que la page www/ad-guard/index.html appelle (blocage, blocage différé, apprentissage, adblock TV). Webhooks,
+# liste blanche, détection et maintenance ne sont pas ouvertes.
+
+[[routes]]
+methodes = ["POST"]
+chemins = [
+    "^/blocklist/(add|update)$",
+    "^/delayed$",
+    "^/delayed/process$",
+    "^/delayed/[^/]+/approve$",
+    "^/learn/(run|thresholds)$",
+    "^/adblock-tv/(etat|mode|clients|custom|sonde)$",
+    "^/adblock-tv/auto/detection/reglage$",
+    "^/adblock-tv/auto/reglage/auto-essai$",
+    "^/adblock-tv/auto/appareils/[^/]+/(puits|ignorer|autoriser|ca-ne-marche-plus)$",
+    "^/adblock-tv/auto/regles/[^/]+/(essayer|rejeter|confirmer|retirer|rouvrir)$",
+    "^/adblock-tv/simple/appareils/[^/]+/protection$",
+    "^/adblock-tv/simple/suspects/legitime$",
+]
+
+[[routes]]
+methodes = ["DELETE"]
+chemins = [
+    "^/blocklist/[^/]+$",
+    "^/adblock-tv/clients/[^/]+$",
+]

@@ -107,7 +107,7 @@ def _get_local_ip() -> str:
         return "127.0.0.1"
 
 
-@router.get("/qr", response_model=PairingQRResponse, dependencies=[Depends(require_lecture)])
+@router.post("/qr", response_model=PairingQRResponse, dependencies=[Depends(require_lecture)])
 async def generate_pairing_qr() -> PairingQRResponse:
     """
     Generate a QR code pairing session.

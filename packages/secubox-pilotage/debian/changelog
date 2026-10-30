@@ -1,3 +1,154 @@
+secubox-pilotage (0.5.3-1~trixie1) trixie; urgency=medium
+
+  * Passe finale L5 (ref #3126) : émission du code de connexion au vhost refusée (403) si `Sec-Fetch-Site` n'est ni
+    `same-origin` ni `none` ; unité root `secubox-pilotage-vhost` bornée (CapabilityBoundingSet, ReadWritePaths exacts,
+    exception RULES-CODE § 10) et `nginx -t` complet par systemd-run ; règle sudoers morte de `secubox-pilotage-www`
+    retirée (rm_conffile), dépendance sudo ôtée ; Recommends secubox-p2p (>= 1.20.1~) ; README : modèle à propriétaire
+    unique et points à vérifier au banc ; dates des entrées remises au 30 octobre 2026.
+  * Relais du vhost : la requête est retirée de raw_path avant d'en tirer le chemin (certains serveurs et clients
+    de test l'y laissent, d'où un « ?x=1?x=1 » en CI).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 18:00:00 +0100
+
+secubox-pilotage (0.5.2-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 7, correction 1/5 (R-L5-34 M3, ref #3126) : README aligné sur la page Flotte (émission du code sans
+    `retour`, `retour=/` refusé) ; test : l'émission du code passe par la seule session cookie du maître (nouvel
+    onglet, sans Bearer), 401 sans session.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 14:00:00 +0100
+
+secubox-pilotage (0.5.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 7 (ref #3126) : le résumé GET /boxes porte `interface` (« distante » si l'agent déclare
+    Device.X_SECUBOX_Pilotage.Interface = "distante", « locale » sinon) pour le panneau Flotte du maître : box
+    distante ouverte par l'émission du code à usage unique, box locale par son lien direct.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 12:00:00 +0100
+
+secubox-pilotage (0.5.0-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 6 (E4, ref #3126) : plan d'exposition exposition.json (noms et ports déclarés par les agents,
+    Device.X_SECUBOX_Exposure), écrit à chaque tour d'inventaire pour secubox-relais-maillage ; aucune route sans jeton.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 04:00:00 +0100
+
+secubox-pilotage (0.4.5-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 5, correction 5/5 (R-L5-31, ref #3126) : un retour à relais-maillage en échec garde l'entrée du registre
+    (etat retour_en_attente, route_avant) ; synchroniser le reprend d'abord à la passe suivante et propage l'échec dans
+    son bilan ; verrou commun pris sans blocage jusqu'à une échéance (300 s, SECUBOX_PILOTAGE_VERROU_S) puis sortie
+    « relais occupé » sans rien modifier, auditée (pilotage_vhost_occupe). Recommends secubox-p2p >= 1.19.6.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 03:10:00 +0100
+
+secubox-pilotage (0.4.4-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 5, correction 4/5 (R-L5-30, ref #3126) : admin.<box> n'est repris au relais que si sa route vise l'IP du
+    pair <box> (secubox-relais-maillage pair-de) ; verrou commun avec relais-maillage tenu pendant tout le basculement
+    (commun d'abord, conf.d ensuite, descripteur transmis) ; retour « locale » par « relayer --sans-sonde » (un pair
+    muet retrouve son nom), échec propagé par retirer (ok: false, audit echec) ; retour arrière de poser par étapes
+    indépendantes, erreur d'origine conservée. Requiert secubox-p2p >= 1.19.5 pour le basculement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 02:10:00 +0100
+
+secubox-pilotage (0.4.3-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 5, correction 3/5 (R-L5-27, ref #3126) : basculement par box locale (secubox-relais-maillage) ⇄ distante
+    (pilotage) pour admin.<box>, jamais deux vhosts pour un nom : exclusion root lue par le relais, retrait par son
+    outil, marque de reprise, retour arrière symétrique en cas d'échec et au retrait, audit pilotage_vhost_basculer ;
+    nom porté par un tiers toujours refusé. Routes du canal des agents déclarées dans tests/publiques-assumees.txt.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 00:30:00 +0100
+
+secubox-pilotage (0.4.2-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 5, correction 2/5 (R-L5-26, ref #3126) : registre de propriété des vhosts dans l'arbre root des pages
+    (/var/lib/secubox-pilotage-pages/registre.json), absent avec des vhosts posés = état incohérent signalé, ancien
+    emplacement repris s'il est sûr ; plus de limite de déclenchement sur le .path ; attente entre passes hors verrou ;
+    Content-Disposition du contrôleur conservé par nginx ; server_name joker/regex, nom public du maître et certificat
+    existant comptés comme déjà servis ; HAProxy en mode lxc refusé clairement ; exceptions de garde documentées.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 23:00:00 +0100
+
+secubox-pilotage (0.4.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 5, correction 1/5 (R-L5-25, ref #3126) : identifiants du maître saisis seulement sur son origine (code à usage
+    unique ≤ 60 s émis par /boxes/<box>/connexion-vhost, échangé sur le vhost, plus de relais de connexion) ; réponses /api/
+    jamais exécutables (JSON forcé ou pièce jointe en bac à sable, nosniff), CSP des pages sans /api/ ; noms réservés et
+    marque de propriété (registre /etc/secubox/pilotage-vhosts.json) : jamais prendre ni retirer un vhost étranger ;
+    X-Forwarded-For = $remote_addr, débit de l'échange ; .path borné, passes espacées, échecs certbot mis en cache 6 h ;
+    codes retour de haproxyctl vérifiés, nom du vhost lu par « vhost list » ; module relayé ∈ paquet de la page ; clé
+    dérivée, aud et iss propres au jeton du vhost ; unité du ctl root en ProtectSystem=strict.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 21:00:00 +0100
+
+secubox-pilotage (0.4.0-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 5 (ref #3126) : vhost admin.<box>.secubox.in d'une box légère. Plan écrit par le service à chaque tour
+    d'inventaire ; ctl root secubox-pilotage-vhost (poser, retirer, synchroniser, lister ; nginx par double tampon,
+    haproxyctl vers sbxwaf_inspector, secubox-waf-route, audit) lancé par secubox-pilotage-vhost.path et .timer ;
+    connexion avec les identifiants du maître échangés contre un jeton à portée du vhost ; relais /relais/<box>/… vers
+    l'agent (acteur et portée pris dans la session, version de page comparée, 413, 429, 501). Pages extraites sous
+    /var/lib/secubox-pilotage-pages (parents root) ; secubox-pilotage-www : verification dans l'audit, Suite/Codename du
+    Release contrôlés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 19:00:00 +0100
+
+secubox-pilotage (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 4, correction 1/5 (R-L5-23, ref #3126) : secubox-pilotage-www vérifie InRelease par gpgv (trousseau
+    secubox.gpg) puis Packages contre Release ; sans trousseau, repli annoncé sur un dépôt entièrement root ; dépôt lu
+    par descripteur sans lien ; index divergents refusés ; appelant (SUDO_USER) audité à côté de l'acteur ; seuls les
+    noms réservés .tmp-*/.old-* nettoyés ; écriture à travers un lien de dossier refusée ; échec zstd signalé ;
+    restes de .vu.json nettoyés. Dépendance gpgv.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 15:00:00 +0100
+
+secubox-pilotage (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 4 (ref #3126) : secubox-pilotage-www, ctl root borné (extraire, purger, lister) : pages www/ d'une version
+    de paquet extraites du dépôt apt local (somme SHA256 de l'index vérifiée, sans dpkg), sous
+    /var/lib/secubox/pilotage/www/<paquet>/<version>/ ; purge des versions non déclarées depuis 7 jours ; audit ;
+    sudoers ; dépendances sudo et zstd.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 12:00:00 +0100
+
+secubox-pilotage (0.2.2-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 3, correction 2/5 (R-L5-22 M4, ref #3126) : commentaire de HTTP_INCONNUS_PAR_MINUTE séparé de celui de
+    TAILLE_HTTP_MAX (aucun changement de comportement). Rappel : le marqueur du tunnel arrête un relais qui transmettrait
+    les en-têtes du client, il ne protège pas contre un processus qui joint la socket (0660).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 01:00:00 +0100
+
+secubox-pilotage (0.2.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 3, relecture de sécurité, correction 1/5 (R-L5-21, ref #3126) :
+    - I2 : `demander_http` exige `audit` ; sans lui, toute écriture est refusée (AuditIndisponible), rien n'est déposé.
+    - M4 : `agent_version` exigé ; un agent < 0.4.0 (ou version illisible) est refusé (AgentTropAncien) avant tout dépôt :
+      aucun message HTTP dans la file d'un ancien agent.
+    - M7 : POST /canal/v1/http borné par box à 30 réponses inattendues par minute ; au-delà, 429 avant la lecture du corps.
+    - Rappel : le marqueur du tunnel arrête un relais qui transmettrait les en-têtes du client, il ne protège pas contre un
+      processus qui joint la socket (0660).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 23:00:00 +0100
+
+secubox-pilotage (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 3 (ref #3126) : message HTTP vers l'agent d'une box. `pilotage.files.demander_http` (réutilisée par le service
+    qui servira les pages) valide la demande (motifs acteur/maître du vérificateur, chemin /api/v1/<module>/…, corps ≤ 4 Mio,
+    en-têtes réduits à ceux que le relais transmet), refuse un agent hors ligne (aucun sondage récent), audite chaque
+    écriture avant l'envoi, dépose `HTTP` et attend `HTTP_RESP` (file par msg_id, délai 40 s, requête retirée au délai ou
+    si l'appelant part). `portee_permise` : la portée de la session réduite par ce que le contrôleur sait (mains liées ou
+    inconnues, box cliente sans support ouvert) ; l'agent la recalcule encore et ne la croit jamais.
+  * Canal : POST /canal/v1/http (une HTTP_RESP, 6 Mio ; location nginx imbriquée, en-têtes hérités dont le marqueur du
+    tunnel) ; HTTP_RESP admise aussi dans /reponses (refus courts) ; une HTTP_RESP ne répond qu'à un message HTTP et
+    inversement ; jamais rangée en base. Un sondage ne porte pas plus de 5,8 Mo. Rappel : le marqueur du tunnel arrête un
+    relais qui transmettrait les en-têtes du client, il ne protège pas contre un processus qui joint la socket (0660).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 21:00:00 +0100
+
 secubox-pilotage (0.1.2-1~trixie1) trixie; urgency=medium
 
   * Identité du canal (ref #3126, L2 « Agir », tâche 0, M6) : le gabarit nginx de l'écouteur de tunnel pose

@@ -5,7 +5,11 @@
 # See LICENCE-CMSD-1.0.md for terms.
 set -e
 case "$1" in
-  remove|deconfigure) systemctl stop secubox-pilotage-agent.service || true ;;
+  remove|deconfigure)
+    systemctl stop secubox-pilotage-agent.service || true
+    systemctl stop secubox-pilotage-relais.socket || true
+    systemctl stop secubox-pilotage-relais.service || true
+    ;;
 esac
 #DEBHELPER#
 exit 0

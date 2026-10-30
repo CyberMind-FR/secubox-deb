@@ -50,6 +50,13 @@ server {
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;
         proxy_buffering off;
+
+        # L5 tâche 3 : une HTTP_RESP porte jusqu'à 4 Mio de corps en base64 (~5,6 Mo). Location IMBRIQUÉE : elle hérite des
+        # proxy_set_header ci-dessus (X-Real-IP, marqueur du tunnel…) ; seul le plafond change, pour cette seule route.
+        location = /canal/v1/http {
+            proxy_pass http://unix:/run/secubox/pilotage-canal.sock;
+            client_max_body_size 6m;
+        }
     }
 
     location / { return 403; }

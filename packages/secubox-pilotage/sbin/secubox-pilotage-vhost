@@ -1,0 +1,1015 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-pilotage-vhost (#3126, L5 tâche 5) : vhost `admin.<box>.secubox.in` d'une box légère, servi par le maître.
+Root, verbes fermés :
+
+  poser [--acteur A] <box>      stdin = {"pages": [{"paquet", "version"}, …]} (≤ 1 Mio) : versions déclarées par la box.
+                                Server nginx /etc/nginx/conf.d/secubox-pilotage-admin-<box>.conf rendu par
+                                pilotage/vhosts.py sur les seules versions DÉJÀ extraites (modules listés ici, par
+                                descripteur), par double tampon : tampon → `nginx -t` du tampon seul → échange atomique →
+                                `nginx -t` complet → sinon retour à l'ancien fichier (ou retrait) ; puis certificat (exact ou
+                                joker *.<box>.secubox.in, sinon certbot webroot), vhost HAProxy vers sbxwaf_inspector
+                                (`haproxyctl vhost add`, jamais de waf_bypass), route sbxwaf (`secubox-waf-route <dom> 9080`),
+                                `haproxyctl generate` + reload. Idempotent. Audité (pilotage_vhost_poser).
+  retirer [--acteur A] <box>    retrait du server nginx (même garde nginx -t), de la route sbxwaf et du vhost HAProxy
+                                (`generate --allow-shrink`). Certificat et DNS inchangés. Audité (pilotage_vhost_retirer).
+  synchroniser                  lit le plan du service /var/lib/secubox/pilotage/vhosts.json (chemin FIXE, sans lien, ≤ 1 Mio,
+                                validé en entier) : extrait les pages (secubox-pilotage-www), pose chaque vhost, retire ceux
+                                des box sorties du plan, purge les versions plus déclarées. Lancé par secubox-pilotage-vhost.path
+                                (et son minuteur), jamais par le service : celui-ci tourne sans sudo (NoNewPrivileges).
+  lister                        vhosts posés. Non audité.
+
+Verrous (R-L5-30) : poser, retirer et synchroniser tiennent D'ABORD le verrou commun avec secubox-relais-maillage
+(/var/lib/secubox-pilotage-pages/verrou-relais.lock, transmis à ses appels), PUIS celui de conf.d nginx.
+
+Nom de box : ^[a-z0-9-]{1,40}$ (sinon code 2, rien touché). Sortie : une ligne JSON. Codes : 0 ; 1 erreur ou refus ; 2 argv,
+entrée ou plan invalides. SBX_RACINE (tests) honorée seulement si l'appelant est le compte effectif ; SBX_BIN et SBX_LIB ne
+valent que sous SBX_RACINE.
+"""
+import datetime
+import fcntl
+import json
+import os
+import pwd
+import re
+import stat
+import subprocess
+import sys
+import socket
+import tempfile
+import time
+import tomllib
+
+LIB = "/usr/lib/secubox/pilotage"
+COMMANDES = {"secubox-relais-maillage": "/usr/sbin/secubox-relais-maillage", "nginx": "/usr/sbin/nginx", "systemctl": "/usr/bin/systemctl", "haproxyctl": "/usr/sbin/haproxyctl",
+             "secubox-waf-route": "/usr/sbin/secubox-waf-route", "certbot": "/usr/bin/certbot",
+             "secubox-pilotage-www": "/usr/sbin/secubox-pilotage-www", "systemd-run": "/usr/bin/systemd-run"}
+RE_ACTEUR = re.compile(r"[a-z_][a-z0-9_.@-]{0,63}")
+ENTREE_MAX = 1 << 20
+BACKEND_WAF = "sbxwaf_inspector"
+WEBROOT_ACME = "/usr/share/secubox/www"
+PREFIXE_CONF = "secubox-pilotage-admin-"
+CERTBOT_REPOS_S = 6 * 3600     # I4 : pas de nouvel essai certbot pour un même domaine avant 6 h (quota Let's Encrypt)
+VERROU_ECHEANCE_S = 300        # R-L5-31 I2 : attente maximale du verrou commun (SECUBOX_PILOTAGE_VERROU_S), puis « relais occupé »
+PASSE_MIN_S = 60               # I4 : délai minimal entre deux synchronisations
+
+
+class Usage(Exception):
+    pass
+
+
+class Occupe(Exception):
+    pass
+
+
+class Erreur(Exception):
+    pass
+
+
+def err(msg):
+    try:
+        print(f"[pilotage-vhost] {msg}", file=sys.stderr)
+    except OSError:
+        pass
+
+
+def sortie(obj):
+    sys.stdout.buffer.write((json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8"))
+    sys.stdout.flush()
+
+
+class Ctx:
+    def __init__(self, acteur):
+        racine = os.environ.get("SBX_RACINE", "")
+        try:
+            appelant = int(os.environ["SUDO_UID"]) if os.environ.get("SUDO_UID") else os.getuid()
+        except ValueError:
+            appelant = -1
+        if racine and appelant != os.geteuid():
+            err("SBX_RACINE ignorée : l'appelant n'est pas le compte effectif")
+            racine = ""
+        if not racine and os.geteuid() != 0:
+            raise Usage("à lancer en root")
+        self.r = racine.rstrip("/")
+        self.substitue = bool(racine)
+        self.uid = os.geteuid() if self.substitue else 0
+        su = os.environ.get("SUDO_USER", "")
+        self.appelant = su if RE_ACTEUR.fullmatch(su) else ("root" if not su and os.getuid() == 0 else "inconnu")
+        if acteur is None:
+            try:
+                acteur = su or pwd.getpwuid(appelant).pw_name
+            except (KeyError, OverflowError):
+                acteur = "inconnu"
+        self.acteur = acteur if RE_ACTEUR.fullmatch(acteur) else "inconnu"
+        self.bin = os.environ.get("SBX_BIN", "") if self.substitue else ""
+        lib = os.environ.get("SBX_LIB", "") if self.substitue else ""
+        sys.path.insert(0, lib or LIB)
+        global V
+        from pilotage import vhosts as V  # noqa: E402 — module root du paquet (/usr/lib/secubox/pilotage, root 0644)
+        self.confd = f"{self.r}/etc/nginx/conf.d"
+        self.certs = f"{self.r}/data/haproxy/certs"
+        self.toml = f"{self.r}/etc/secubox/haproxy.toml"
+        self.routes = f"{self.r}/etc/secubox/waf/haproxy-routes.json"
+        self.journaux = f"{self.r}/var/log/secubox"
+        self.pages_base = f"{self.r}/var/lib"
+        self.plan = f"{self.r}/var/lib/secubox/pilotage"
+        # R-L5-26 I1 : registre dans l'arbre root des pages (0755, jamais inscriptible par le compte secubox)
+        self.registre_dossier = f"{self.r}/var/lib/secubox-pilotage-pages"
+        self.registre = f"{self.registre_dossier}/registre.json"
+        self.verrou_fd = None          # verrou commun avec secubox-relais-maillage, transmis à ses appels
+        self.ancien_registre = f"{self.r}/etc/secubox/pilotage-vhosts.json"
+        if self.substitue and os.environ.get("SBX_UID_ATTENDU"):
+            try:
+                self.uid = int(os.environ["SBX_UID_ATTENDU"])
+            except ValueError:
+                raise Usage("SBX_UID_ATTENDU invalide") from None
+        self.maintenant = time.time()
+        if self.substitue and os.environ.get("SBX_MAINTENANT"):
+            try:
+                self.maintenant = float(os.environ["SBX_MAINTENANT"])
+            except ValueError:
+                raise Usage("SBX_MAINTENANT invalide") from None
+        nom = os.environ.get("SBX_NOM_MAITRE") if self.substitue else None
+        self.nom_maitre = (nom if nom is not None else socket.gethostname().split(".")[0]).lower()
+        self.nom_public = self.lire_nom_public()
+
+    def lire_nom_public(self):
+        """M4 : premier label de `[global] domain` de secubox.conf (gk2.secubox.in → gk2), le nom public du maître."""
+        try:
+            with open(f"{self.r}/etc/secubox/secubox.conf", "rb") as f:
+                dom = str((tomllib.load(f).get("global") or {}).get("domain") or "")
+        except (OSError, tomllib.TOMLDecodeError, AttributeError):
+            return ""
+        return dom.strip().lstrip(".").split(".")[0].lower()
+
+    def cmd(self, nom):
+        return os.path.join(self.bin, nom) if self.bin else COMMANDES[nom]
+
+    def lancer(self, nom, *args, entree=None, delai=300):
+        env = dict(os.environ) if self.substitue else {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
+        fds = ()
+        if nom == "secubox-relais-maillage" and self.verrou_fd is not None:
+            # même description de fichier : relais-maillage reprend le verrou commun déjà tenu ici, sans attendre (R-L5-30 I2)
+            env["SECUBOX_VERROU_FD"], fds = str(self.verrou_fd), (self.verrou_fd,)
+        try:
+            return subprocess.run([self.cmd(nom), *args], input=entree, capture_output=True, env=env, timeout=delai,
+                                  pass_fds=fds)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            err(f"{nom} : {e.__class__.__name__}")
+            return subprocess.CompletedProcess([nom], 127, b"", b"")
+
+
+# --- Audit (patron secubox-pilotage-www) ----------------------------------------------------------------------------
+
+def auditer(ctx, evenement, **champs):
+    ligne = {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "module": "pilotage",
+             "evenement": evenement, "acteur": ctx.acteur, "appelant": ctx.appelant}
+    ligne.update({k: v for k, v in champs.items() if v is not None})
+    donnees = (json.dumps(ligne, ensure_ascii=False) + "\n").encode("utf-8")
+    try:
+        dfd = os.open(ctx.journaux, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            try:
+                fd = os.open("audit.log", os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+            except FileNotFoundError:
+                fd = os.open("audit.log", os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640, dir_fd=dfd)
+                if not ctx.substitue:
+                    try:
+                        pw = pwd.getpwnam("secubox")
+                        os.fchown(fd, pw.pw_uid, pw.pw_gid)
+                    except (KeyError, OSError):
+                        os.close(fd)
+                        os.unlink("audit.log", dir_fd=dfd)
+                        raise OSError("journal d'audit non attribuable au compte secubox") from None
+            try:
+                st = os.fstat(fd)
+                if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+                    raise OSError("journal d'audit qui n'est pas un fichier ordinaire")
+                os.write(fd, donnees)
+            finally:
+                os.close(fd)
+        finally:
+            os.close(dfd)
+    except OSError as e:
+        err(f"audit impossible : {e.__class__.__name__}")
+        raise Erreur("audit impossible") from None
+
+
+# --- Entrées ----------------------------------------------------------------------------------------------------------
+
+def valider_pages(pages):
+    if not isinstance(pages, list) or len(pages) > V.PAGES_MAX:
+        raise Usage("pages invalides")
+    vus, res = set(), []
+    for p in pages:
+        if not isinstance(p, dict) or set(p) != {"paquet", "version"}:
+            raise Usage("page invalide (clés paquet, version)")
+        paquet, version = p["paquet"], p["version"]
+        if not (isinstance(paquet, str) and V.RE_PAQUET.fullmatch(paquet) and isinstance(version, str)
+                and V.RE_VERSION.fullmatch(version)) or paquet in vus:
+            raise Usage("page invalide")
+        vus.add(paquet)
+        res.append((paquet, version))
+    return res
+
+
+def lire_json_borne(fd):
+    morceaux, lu = [], 0
+    while bloc := os.read(fd, 65536):
+        lu += len(bloc)
+        if lu > ENTREE_MAX:
+            raise Usage("entrée trop longue")
+        morceaux.append(bloc)
+    try:
+        return json.loads(b"".join(morceaux).decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise Usage("entrée JSON invalide") from None
+
+
+def lire_entree_poser():
+    d = lire_json_borne(sys.stdin.fileno())
+    if not isinstance(d, dict) or set(d) != {"pages"}:
+        raise Usage("entrée invalide (clé pages)")
+    return valider_pages(d["pages"])
+
+
+def lire_plan(ctx):
+    """Plan écrit par le service (compte non root) à un chemin FIXE : ouvert sans suivre de lien, fichier ordinaire, borné, validé
+    en entier avant tout effet. Absent : plan vide."""
+    try:
+        dfd = os.open(ctx.plan, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        raise Erreur("dossier du plan absent ou non sûr") from None
+    try:
+        try:
+            fd = os.open("vhosts.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+        except FileNotFoundError:
+            return []
+        except OSError:
+            raise Erreur("plan non sûr (lien ou type inattendu)") from None
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise Erreur("plan qui n'est pas un fichier ordinaire")
+            d = lire_json_borne(fd)
+        finally:
+            os.close(fd)
+    finally:
+        os.close(dfd)
+    if not isinstance(d, dict) or set(d) != {"boxes"} or not isinstance(d["boxes"], list) or len(d["boxes"]) > V.BOXES_MAX:
+        raise Usage("plan invalide")
+    res, vus = [], set()
+    for b in d["boxes"]:
+        if not isinstance(b, dict) or set(b) != {"box", "pages"} or not isinstance(b["box"], str) \
+                or not V.RE_BOX.fullmatch(b["box"]) or b["box"] in vus:
+            raise Usage("plan invalide (box)")
+        vus.add(b["box"])
+        res.append((b["box"], valider_pages(b["pages"])))
+    return res
+
+
+# --- Pages extraites ------------------------------------------------------------------------------------------------
+
+def ouvrir_root(dir_fd, nom, ctx):
+    fd = os.open(nom, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
+    st = os.fstat(fd)
+    if st.st_uid != ctx.uid or st.st_mode & 0o022:
+        os.close(fd)
+        raise Erreur("arbre des pages non sûr")
+    return fd
+
+
+def modules_de(ctx, paquet, version):
+    """Modules (dossiers de premier niveau) de www/<paquet>/<version>/, par descripteur et sans lien ; None si non extraite."""
+    try:
+        fd = os.open(ctx.pages_base, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        raise Erreur("arbre des pages absent") from None
+    try:
+        for nom in ("secubox-pilotage-pages", "www", paquet, version):
+            try:
+                nfd = ouvrir_root(fd, nom, ctx)
+            except (FileNotFoundError, NotADirectoryError):
+                return None
+            except OSError:
+                raise Erreur("arbre des pages non sûr") from None
+            os.close(fd)
+            fd = nfd
+        mods = []
+        for n in sorted(os.listdir(fd)):
+            st = os.stat(n, dir_fd=fd, follow_symlinks=False)
+            if stat.S_ISDIR(st.st_mode) and V.RE_MODULE.fullmatch(n) and n not in ("api", "auth"):
+                mods.append(n)
+        return mods
+    finally:
+        os.close(fd)
+
+
+# --- nginx : double tampon ------------------------------------------------------------------------------------------
+
+def conf_de(ctx, box):
+    return os.path.join(ctx.confd, f"{PREFIXE_CONF}{box}.conf")
+
+
+def ecrire_atomique(chemin, donnees, mode=0o644):
+    d = os.path.dirname(chemin)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".", suffix=".sbxtmp")
+    try:
+        os.fchmod(fd, mode)
+        os.write(fd, donnees)
+        os.fsync(fd)
+        os.close(fd)
+        fd = -1
+        os.replace(tmp, chemin)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def lire_ou_none(chemin):
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        raise Erreur("configuration nginx non sûre (lien)") from None
+    try:
+        return lire_tout(fd)
+    finally:
+        os.close(fd)
+
+
+def lire_tout(fd):
+    morceaux = []
+    while bloc := os.read(fd, 65536):
+        morceaux.append(bloc)
+    return b"".join(morceaux)
+
+
+def nginx_echanger(ctx, chemin, nouveau):
+    """Rend vrai si le fichier a changé. nouveau=None : retrait. Tampon validé seul (si pose), échange atomique, `nginx -t`
+    complet, sinon l'ancien contenu est rétabli (ou le fichier retiré) et Erreur ; succès : reload."""
+    ancien = lire_ou_none(chemin)
+    if ancien == nouveau:
+        return False
+    if nouveau is not None:
+        with tempfile.TemporaryDirectory() as t:
+            tampon = os.path.join(t, "vhost.conf")
+            with open(tampon, "wb") as f:
+                f.write(nouveau)
+            env_ = os.path.join(t, "nginx.conf")
+            with open(env_, "w") as f:
+                f.write(f"pid {t}/nginx.pid;\nerror_log {t}/error.log;\nevents {{}}\n"
+                        f"http {{\n    access_log off;\n    include {tampon};\n}}\n")
+            if ctx.lancer("nginx", "-t", "-c", env_, "-q").returncode != 0:
+                raise Erreur("configuration nginx refusée (tampon validé seul)")
+        ecrire_atomique(chemin, nouveau)
+    else:
+        os.unlink(chemin)
+    # Final I3 : la configuration complète est testée par PID 1 (systemd-run, patron de l'écouteur et de netmodes) : dans le bac à
+    # sable de l'unité (ProtectSystem=strict, /run en lecture seule) `nginx -t` échouerait toujours (pid, sockets).
+    if ctx.lancer("systemd-run", "--wait", "--pipe", "--collect", "--quiet", ctx.cmd("nginx"), "-t", "-q").returncode != 0:
+        if ancien is None:
+            os.unlink(chemin)
+        else:
+            ecrire_atomique(chemin, ancien)
+        raise Erreur("nginx -t en échec : configuration précédente rétablie")
+    if ctx.lancer("systemctl", "reload", "nginx").returncode != 0:
+        err("rechargement de nginx en échec (configuration valide, prise au prochain rechargement)")
+    return True
+
+
+# --- Registre root du pilotage : marque de propriété, échecs certbot, dernière passe (R-L5-25 C2, I4) -----------------
+
+def _dossier_registre(ctx, creer=False):
+    try:
+        fd = os.open(ctx.registre_dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        if not creer:
+            return None
+        os.mkdir(ctx.registre_dossier, 0o755)
+        fd = os.open(ctx.registre_dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        raise Erreur("dossier du registre non sûr") from None
+    st = os.fstat(fd)
+    if st.st_uid != ctx.uid or st.st_mode & 0o022:
+        os.close(fd)
+        raise Erreur("dossier du registre non sûr (root, sans écriture groupe/autres)")
+    return fd
+
+
+def _lire_fichier_root(ctx, dfd, nom):
+    try:
+        fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        raise Erreur("registre du pilotage non sûr (lien)") from None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != ctx.uid or st.st_mode & 0o022 or st.st_nlink != 1:
+            raise Erreur("registre du pilotage non sûr (propriétaire ou droits)")
+        return lire_tout(fd)
+    finally:
+        os.close(fd)
+
+
+def lire_registre(ctx):
+    """Registre root : marque de propriété, échecs certbot, dernière passe. Absent alors que des vhosts du pilotage existent :
+    état incohérent signalé (jamais « rien à retirer »)."""
+    dfd = _dossier_registre(ctx)
+    brut = None
+    if dfd is not None:
+        try:
+            brut = _lire_fichier_root(ctx, dfd, "registre.json")
+        finally:
+            os.close(dfd)
+    if brut is None:
+        if poses(ctx):
+            raise Erreur("registre du pilotage absent alors que des vhosts du pilotage existent : état incohérent, "
+                         "rien n'est fait (rétablir le registre ou retirer les vhosts à la main)")
+        return {"domaines": {}, "certbot_echecs": {}, "derniere_passe": 0}
+    try:
+        d = json.loads(brut or b"{}")
+    except ValueError:
+        raise Erreur("registre du pilotage illisible") from None
+    if not isinstance(d, dict):
+        raise Erreur("registre du pilotage illisible")
+    return {"domaines": dict(d.get("domaines") or {}), "certbot_echecs": dict(d.get("certbot_echecs") or {}),
+            "derniere_passe": float(d.get("derniere_passe") or 0)}
+
+
+def ecrire_registre(ctx, reg):
+    dfd = _dossier_registre(ctx, creer=True)
+    os.close(dfd)
+    ecrire_atomique(ctx.registre, (json.dumps(reg, indent=2, sort_keys=True) + "\n").encode(), 0o644)
+
+
+def migrer_registre(ctx):
+    """Ancien emplacement (/etc/secubox, inscriptible par le compte secubox) : repris seulement s'il est root, non inscriptible
+    par d'autres et si le nouveau n'existe pas ; sinon laissé et signalé."""
+    try:
+        st = os.lstat(ctx.ancien_registre)
+    except FileNotFoundError:
+        return
+    if os.path.lexists(ctx.registre):
+        return
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != ctx.uid or st.st_mode & 0o022:
+        err("ancien registre /etc/secubox/pilotage-vhosts.json non sûr : non repris")
+        return
+    try:
+        fd = os.open(ctx.ancien_registre, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            d = json.loads(lire_tout(fd))
+        finally:
+            os.close(fd)
+    except (OSError, ValueError):
+        err("ancien registre illisible : non repris")
+        return
+    if isinstance(d, dict):
+        ecrire_registre(ctx, {"domaines": dict(d.get("domaines") or {}), "certbot_echecs": dict(d.get("certbot_echecs") or {}),
+                              "derniere_passe": float(d.get("derniere_passe") or 0)})
+        try:
+            os.unlink(ctx.ancien_registre)
+        except OSError:   # Final I2 : /etc/secubox hors ReadWritePaths ; le nouveau registre fait foi, l'ancien n'est plus relu
+            err("ancien registre repris mais non retiré (/etc/secubox en lecture seule pour l'unité)")
+
+
+# --- HAProxy, certificat, route sbxwaf ------------------------------------------------------------------------------
+
+def vhost_haproxy(ctx, dom):
+    """Nom de la table du vhost `dom` tel que haproxyctl le connaît (I5 : jamais recalculé), None s'il n'existe pas."""
+    v = vhost_info(ctx, dom)
+    return v["name"] if v else None
+
+
+def vhost_info(ctx, dom):
+    """{name, backend} du vhost `dom` selon `haproxyctl vhost list`, None s'il n'existe pas."""
+    p = ctx.lancer("haproxyctl", "vhost", "list")
+    try:
+        d = json.loads(p.stdout.decode("utf-8")) if p.returncode == 0 else None
+    except (UnicodeDecodeError, ValueError):
+        d = None
+    if not isinstance(d, dict) or not isinstance(d.get("vhosts"), list):
+        raise Erreur("haproxyctl vhost list illisible")
+    vs = [v for v in d["vhosts"] if isinstance(v, dict) and v.get("domain") == dom]
+    if len(vs) > 1:
+        raise Erreur(f"{dom} déclaré plusieurs fois dans HAProxy")
+    if not vs or not isinstance(vs[0].get("name"), str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", vs[0]["name"]):
+        return None
+    return {"name": vs[0]["name"], "backend": str(vs[0].get("backend") or "")}
+
+
+def lire_route(ctx, dom):
+    try:
+        with open(ctx.routes) as f:
+            t = json.load(f)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        raise Erreur("table des routes sbxwaf illisible") from None
+    return t.get(dom) if isinstance(t, dict) else None
+
+
+# --- Basculement locale (relais-maillage) ⇄ distante (pilotage), R-L5-27 -------------------------------------------
+
+RE_IP_MAILLAGE = re.compile(r"10\.10\.0\.([0-9]{1,3})")
+
+
+def tenu_par_relais(ctx, dom, box):
+    """(ip, port) si `admin.<box>` est EXACTEMENT ce que pose secubox-relais-maillage (vhost HAProxy vers sbxwaf_inspector, route
+    sbxwaf vers l'IP maillée DU PAIR <box> — celle que rend `secubox-relais-maillage pair-de <box>` d'après wg_mesh.json et
+    wg-mesh, R-L5-30 I1 —, aucun server nginx d'ici pour ce nom) ; None sinon (tiers, autre pair, maître, IP publique : refus)."""
+    v, route = vhost_info(ctx, dom), lire_route(ctx, dom)
+    if v is None or v["backend"] != BACKEND_WAF or not isinstance(route, list) or len(route) != 2:
+        return None
+    ip, port = route
+    m = RE_IP_MAILLAGE.fullmatch(ip) if isinstance(ip, str) else None
+    if m is None or not 1 <= int(m.group(1)) <= 254 or isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        return None
+    if nginx_etranger(ctx, dom, box):
+        return None
+    p = ctx.lancer("secubox-relais-maillage", "pair-de", box, delai=30)
+    if p.returncode != 0 or p.stdout.decode("utf-8", "replace").strip() != ip:
+        return None
+    return ip, port
+
+
+def lire_exclusions(ctx):
+    dfd = _dossier_registre(ctx)
+    if dfd is None:
+        return []
+    try:
+        brut = _lire_fichier_root(ctx, dfd, "exclusions-relais.json")
+    finally:
+        os.close(dfd)
+    try:
+        d = json.loads(brut) if brut else {}
+    except ValueError:
+        raise Erreur("exclusions du relais illisibles") from None
+    return sorted({n for n in (d.get("noms") or []) if isinstance(n, str)}) if isinstance(d, dict) else []
+
+
+def ecrire_exclusions(ctx, noms):
+    """Liste des noms `admin.<box>` que secubox-relais-maillage ne doit plus relayer (fichier root 0644, même règle que le registre ;
+    relais-maillage n'honore que des noms admin.<box>.secubox.in exacts)."""
+    dfd = _dossier_registre(ctx, creer=True)
+    os.close(dfd)
+    ecrire_atomique(os.path.join(ctx.registre_dossier, "exclusions-relais.json"),
+                    (json.dumps({"noms": sorted(set(noms))}, indent=2) + "\n").encode(), 0o644)
+
+
+def vers_locale(ctx, box, dom, ip, port, acteur_motif=None):
+    """Rend le nom à relais-maillage : retrait de ce que le pilotage a posé (nginx, route, vhost), exclusion levée, relais rétabli
+    par SON outil. Rend vrai si tout est revenu ; audité (pilotage_vhost_basculer, sens=locale)."""
+    ok = True
+    try:
+        if os.path.lexists(conf_de(ctx, box)):
+            nginx_echanger(ctx, conf_de(ctx, box), None)
+    except Erreur:
+        ok = False
+    try:
+        routes_retirer(ctx, dom)
+        nom = vhost_haproxy(ctx, dom)
+        if nom is not None and ctx.lancer("haproxyctl", "vhost", "remove", nom).returncode != 0:
+            ok = False
+    except (Erreur, OSError):
+        ok = False
+    try:     # étape à part : une table illisible n'empêche pas de lever l'exclusion
+        ecrire_exclusions(ctx, [n for n in lire_exclusions(ctx) if n != dom])
+    except (Erreur, OSError):
+        ok = False
+    # I3 : rétablissement DIRECT (vhost et route exactement comme avant), sans sonder le pair — un pair muet au retour garde son nom
+    if ctx.lancer("secubox-relais-maillage", "relayer", "--sans-sonde", dom, ip, str(port)).returncode != 0:
+        ok = False
+    if ctx.lancer("haproxyctl", "generate", "--allow-shrink").returncode != 0 or ctx.lancer("haproxyctl", "reload").returncode != 0:
+        ok = False
+    auditer(ctx, "pilotage_vhost_basculer", box=box, domaine=dom, sens="locale", resultat="ok" if ok else "echec",
+            motif=acteur_motif, route=f"{ip}:{port}")
+    return ok
+
+
+def route_presente(ctx, dom):
+    try:
+        with open(ctx.routes) as f:
+            t = json.load(f)
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError):
+        raise Erreur("table des routes sbxwaf illisible") from None
+    return isinstance(t, dict) and dom in t
+
+
+def nom_couvert(dom, nom):
+    """M4 : `server_name` exact, joker (*.x, .x, x.*) ou regex (~…) couvrant `dom`."""
+    if nom.startswith("~"):
+        try:
+            return re.search(nom[1:], dom) is not None
+        except re.error:
+            return True                     # regex illisible : dans le doute, considérée comme couvrante
+    if nom.startswith("*."):
+        return dom.endswith(nom[1:])
+    if nom.startswith("."):
+        return dom == nom[1:] or dom.endswith(nom)
+    if nom.endswith(".*"):
+        return dom.startswith(nom[:-1])
+    return dom == nom
+
+
+def nginx_etranger(ctx, dom, box):
+    """Un server nginx HORS pilotage couvre-t-il déjà ce nom ? (conf.d et sites-enabled, sans suivre de lien)"""
+    for d in (ctx.confd, f"{ctx.r}/etc/nginx/sites-enabled"):
+        try:
+            noms = os.listdir(d)
+        except OSError:
+            continue
+        for n in noms:
+            if n == f"{PREFIXE_CONF}{box}.conf":
+                continue
+            try:
+                fd = os.open(os.path.join(d, n), os.O_RDONLY | os.O_NONBLOCK)
+            except OSError:
+                continue
+            try:
+                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                    continue
+                texte = lire_tout(fd).decode("utf-8", "replace")
+            finally:
+                os.close(fd)
+            for m in re.finditer(r"server_name\s+([^;]*);", texte):
+                if any(nom_couvert(dom, x.strip('"\'')) for x in m.group(1).split()):
+                    return True
+    return False
+
+
+def mode_haproxy(ctx):
+    try:
+        with open(ctx.toml, "rb") as f:
+            return str(tomllib.load(f).get("mode") or "native")
+    except FileNotFoundError:
+        return "native"
+    except (OSError, tomllib.TOMLDecodeError):
+        raise Erreur("haproxy.toml illisible") from None
+
+
+def noms_reserves(ctx):
+    res = {"www", "api", "admin", "apt", ctx.nom_maitre, ctx.nom_public}
+    try:
+        res |= {n for n in os.listdir(f"{ctx.r}/usr/share/secubox/www") if V.RE_BOX.fullmatch(n)}
+    except OSError:
+        pass
+    return res - {""}
+
+
+def certificat(ctx, box, dom, reg):
+    noms = (f"{dom}.pem", f"*.{box}.{V.ZONE}.pem")
+    if any(os.path.isfile(os.path.join(ctx.certs, n)) and os.path.getsize(os.path.join(ctx.certs, n)) > 0 for n in noms):
+        return
+    dernier = reg["certbot_echecs"].get(dom, 0)
+    if ctx.maintenant - dernier < CERTBOT_REPOS_S:
+        raise Erreur(f"certificat de {dom} : dernier essai en échec il y a moins de {CERTBOT_REPOS_S // 3600} h")
+    p = ctx.lancer("certbot", "certonly", "--webroot", "-w", WEBROOT_ACME, "-d", dom, "--non-interactive", "--agree-tos",
+                   "--keep-until-expiring", "--register-unsafely-without-email")
+    if p.returncode != 0:
+        reg["certbot_echecs"][dom] = ctx.maintenant
+        ecrire_registre(ctx, reg)
+        raise Erreur(f"certificat de {dom} impossible (DNS public vers ce maître ?)")
+    reg["certbot_echecs"].pop(dom, None)
+    if ctx.lancer("haproxyctl", "cert", "sync").returncode != 0:
+        raise Erreur("certificat émis mais haproxyctl cert sync en échec")
+    if not os.path.isfile(os.path.join(ctx.certs, noms[0])):
+        raise Erreur("certificat émis mais absent du dossier de HAProxy")
+
+
+def routes_retirer(ctx, dom):
+    try:
+        with open(ctx.routes) as f:
+            table = json.load(f)
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError):
+        raise Erreur("table des routes sbxwaf illisible : rien réécrit") from None
+    if not isinstance(table, dict):
+        raise Erreur("table des routes sbxwaf illisible : rien réécrit")
+    if dom not in table:
+        return False
+    del table[dom]
+    mode = stat.S_IMODE(os.stat(ctx.routes).st_mode)
+    ecrire_atomique(ctx.routes, (json.dumps(table, indent=2, sort_keys=True) + "\n").encode(), mode)
+    return True
+
+
+# --- Verbes ---------------------------------------------------------------------------------------------------------
+
+def verrou(ctx):
+    fd = os.open(ctx.confd, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
+
+
+def verrou_commun(ctx):
+    """R-L5-30 I2 : flock exclusif partagé avec secubox-relais-maillage (fichier root dédié du dossier root du registre et des
+    exclusions, ouvert sans suivre de lien). Tenu pendant TOUT le verbe (poser, retirer, synchroniser) ; transmis aux appels de
+    relais-maillage (même description de fichier : pas d'attente). ORDRE DES VERROUS : celui-ci D'ABORD, celui de conf.d
+    ENSUITE ; relais-maillage ne prend que celui-ci : aucun interblocage."""
+    dfd = _dossier_registre(ctx, creer=True)
+    try:
+        try:
+            fd = os.open("verrou-relais.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, 0o600,
+                         dir_fd=dfd)
+        except OSError:
+            raise Erreur("verrou commun avec relais-maillage non sûr (lien)") from None
+    finally:
+        os.close(dfd)
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != ctx.uid or st.st_nlink != 1:
+        os.close(fd)
+        raise Erreur("verrou commun avec relais-maillage non sûr (propriétaire ou liens)")
+    # R-L5-31 I2 : jamais d'attente sans fin (l'unité a un délai) : essais non bloquants jusqu'à l'échéance, puis « occupé »
+    try:
+        echeance = float(os.environ.get("SECUBOX_PILOTAGE_VERROU_S") or VERROU_ECHEANCE_S)
+    except ValueError:
+        echeance = VERROU_ECHEANCE_S
+    fin = time.monotonic() + max(0.0, min(echeance, 600.0))
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fd
+        except BlockingIOError:
+            if time.monotonic() >= fin:
+                os.close(fd)
+                raise Occupe("relais occupé : une passe de secubox-relais-maillage tient le verrou commun ; rien n'est "
+                             "modifié, la passe suivante reprendra") from None
+            time.sleep(0.5)
+
+
+def poser(ctx, box, pages):
+    dom = V.domaine(box)
+    if box in noms_reserves(ctx):
+        raise Erreur(f"nom réservé : {box} (maître, www, api, admin, apt ou module)")
+    reprise, bascule = None, False
+    try:
+        reg = lire_registre(ctx)
+        marque = dom in reg["domaines"]
+        if mode_haproxy(ctx) == "lxc":
+            # M5 : HAProxy en conteneur (lxc-attach) n'est pas rechargeable depuis l'unité durcie du ctl (ProtectSystem=strict)
+            raise Erreur("HAProxy en mode lxc : non pris en charge par secubox-pilotage-vhost (mode native requis)")
+        if not marque:
+            # C2 : un domaine déjà servi hors du pilotage n'est jamais pris (ni sa route, ni son vhost, ni son certificat)…
+            if vhost_haproxy(ctx, dom) is not None or route_presente(ctx, dom) or nginx_etranger(ctx, dom, box) \
+                    or os.path.lexists(os.path.join(ctx.certs, f"{dom}.pem")):
+                # … sauf s'il est EXACTEMENT l'exposition relayée de secubox-relais-maillage : basculement (R-L5-27)
+                reprise = tenu_par_relais(ctx, dom, box)
+                if reprise is None:
+                    raise Erreur(f"{dom} est déjà servi hors du pilotage : refus")
+            entree = {"box": box, "depuis": int(ctx.maintenant)}
+            if reprise is not None:
+                entree.update({"repris_de": "relais-maillage", "route_avant": list(reprise)})
+                # exclusion AVANT le retrait : relais-maillage ne recrée pas le nom entre deux étapes
+                ecrire_exclusions(ctx, [*lire_exclusions(ctx), dom])
+            reg["domaines"][dom] = entree
+            ecrire_registre(ctx, reg)   # marque AVANT toute création : un échec plus loin reste retirable
+            if reprise is not None:
+                bascule = True
+                if ctx.lancer("secubox-relais-maillage", "retirer", dom).returncode != 0 or vhost_haproxy(ctx, dom) is not None \
+                        or route_presente(ctx, dom):
+                    raise Erreur("secubox-relais-maillage retirer en échec : nom laissé au relais")
+        composees, absentes = [], []
+        for paquet, version in pages:
+            mods = modules_de(ctx, paquet, version)
+            if mods is None:
+                absentes.append(f"{paquet}={version}")
+            elif mods:
+                composees.append({"paquet": paquet, "version": version, "modules": mods})
+        try:
+            texte = V.rendre_nginx(box, composees).encode("utf-8")
+        except ValueError as e:
+            raise Erreur(f"pages refusées : {e}") from None
+        change = nginx_echanger(ctx, conf_de(ctx, box), texte)
+        certificat(ctx, box, dom, reg)
+        regen = False
+        if vhost_haproxy(ctx, dom) is None:
+            if ctx.lancer("haproxyctl", "vhost", "add", dom, BACKEND_WAF, "true").returncode != 0 or vhost_haproxy(ctx, dom) is None:
+                raise Erreur("haproxyctl vhost add en échec")
+            regen = True
+        route = ctx.lancer("secubox-waf-route", dom, str(V.PORT_NGINX))
+        if route.returncode != 0:
+            raise Erreur("secubox-waf-route en échec")
+        if regen:
+            if ctx.lancer("haproxyctl", "generate").returncode != 0 or ctx.lancer("haproxyctl", "reload").returncode != 0:
+                raise Erreur("HAProxy n'a pas rechargé")
+    except Erreur as e:
+        auditer(ctx, "pilotage_vhost_poser", box=box, domaine=dom, resultat="echec", motif=str(e))
+        if reprise is not None:
+            # échec à n'importe quelle étape du basculement : retour à l'état « locale » (relais-maillage), marque ôtée
+            auditer(ctx, "pilotage_vhost_basculer", box=box, domaine=dom, sens="distante", resultat="echec", motif=str(e))
+            # M1 : chaque étape du retour arrière dans son propre try — l'une qui échoue n'empêche pas les suivantes, et c'est
+            # l'erreur d'origine qui est rendue
+            if bascule:
+                try:
+                    vers_locale(ctx, box, dom, *reprise, acteur_motif="retour après échec")
+                except (Erreur, OSError) as e2:
+                    err(f"retour arrière : relais non rétabli ({e2})")
+            else:
+                try:
+                    ecrire_exclusions(ctx, [n for n in lire_exclusions(ctx) if n != dom])
+                except (Erreur, OSError) as e2:
+                    err(f"retour arrière : exclusion non levée ({e2})")
+            try:
+                reg = lire_registre(ctx)
+                reg["domaines"].pop(dom, None)
+                ecrire_registre(ctx, reg)
+            except (Erreur, OSError) as e2:
+                err(f"retour arrière : marque non ôtée du registre ({e2})")
+        raise
+    if reprise is not None:
+        auditer(ctx, "pilotage_vhost_basculer", box=box, domaine=dom, sens="distante", resultat="ok",
+                route=f"{reprise[0]}:{reprise[1]}")
+    deja = not change and not regen and not route.stdout.strip()
+    auditer(ctx, "pilotage_vhost_poser", box=box, domaine=dom, resultat="deja" if deja else "ok",
+            pages=len(composees), absentes=absentes or None)
+    return {"ok": True, "box": box, "domaine": dom, "deja": deja, "pages": len(composees), "absentes": absentes}
+
+
+def retirer(ctx, box):
+    """Retrait du vhost du pilotage. Nom repris au relais : l'entrée du registre (et sa route_avant) n'est ôtée qu'APRÈS un
+    retour réussi ; sinon elle reste avec etat=retour_en_attente, reprise par la passe suivante (R-L5-31 I1) — jamais un nom
+    exclu sans propriétaire."""
+    dom = V.domaine(box)
+    try:
+        reg = lire_registre(ctx)
+        if dom not in reg["domaines"]:
+            raise Erreur(f"{dom} n'a pas été créé par le pilotage : rien n'est retiré")
+        entree = reg["domaines"][dom] if isinstance(reg["domaines"][dom], dict) else {}
+        if os.path.lexists(conf_de(ctx, box)):
+            nginx_echanger(ctx, conf_de(ctx, box), None)
+        if entree.get("etat") != "retour_en_attente":   # en attente : vhost et route éventuels sont ceux du relais
+            routes_retirer(ctx, dom)
+            nom = vhost_haproxy(ctx, dom)
+            if nom is not None:
+                if ctx.lancer("haproxyctl", "vhost", "remove", nom).returncode != 0:
+                    raise Erreur("haproxyctl vhost remove en échec : le nom reste servi")
+                if ctx.lancer("haproxyctl", "generate", "--allow-shrink").returncode != 0 or \
+                        ctx.lancer("haproxyctl", "reload").returncode != 0:
+                    raise Erreur("HAProxy n'a pas rechargé : le nom peut rester servi jusqu'au prochain « haproxyctl generate »")
+        avant = entree.get("route_avant")
+        if entree.get("repris_de") == "relais-maillage" and isinstance(avant, list) and len(avant) == 2:
+            entree["etat"] = "retour_en_attente"          # noté AVANT le retour : un arrêt brutal le laisse repris
+            reg["domaines"][dom] = entree
+            ecrire_registre(ctx, reg)
+            if not vers_locale(ctx, box, dom, str(avant[0]), int(avant[1])):
+                raise Erreur(f"retour à relais-maillage en échec : {dom} reste en attente de retour (repris à la passe "
+                             f"suivante ; à la main : secubox-relais-maillage relayer --sans-sonde {dom} {avant[0]} {avant[1]})")
+            reg = lire_registre(ctx)
+        reg["domaines"].pop(dom, None)
+        ecrire_registre(ctx, reg)
+    except Erreur as e:
+        auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="echec", motif=str(e))
+        raise
+    auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="ok")
+    return {"ok": True, "box": box, "domaine": dom}
+
+
+def poses(ctx):
+    res = []
+    for n in sorted(os.listdir(ctx.confd)):
+        m = re.fullmatch(re.escape(PREFIXE_CONF) + r"([a-z0-9-]{1,40})\.conf", n)
+        if m:
+            res.append(m.group(1))
+    return res
+
+
+def synchroniser(ctx):
+    plan = lire_plan(ctx)
+    bilan = {"ok": True, "poses": [], "retires": [], "erreurs": []}
+    reg = lire_registre(ctx)
+    attente = PASSE_MIN_S - (ctx.maintenant - reg["derniere_passe"])
+    if attente > 0:
+        # une autre passe a eu lieu pendant l'attente (faite hors verrou, main) : celle-ci s'arrête, la suivante reprendra
+        bilan["attente_s"] = int(attente)
+        return bilan
+    reg["derniere_passe"] = ctx.maintenant
+    ecrire_registre(ctx, reg)
+    en_usage = []
+    # retours en attente (R-L5-31 I1) : repris D'ABORD, même si la box est revenue au plan (sa reprise attend la passe suivante)
+    en_attente = sorted({e.get("box") for e in reg["domaines"].values()
+                         if isinstance(e, dict) and e.get("etat") == "retour_en_attente" and isinstance(e.get("box"), str)})
+    for box in en_attente:
+        try:
+            retirer(ctx, box)
+            bilan["retires"].append(box)
+        except Erreur as e:
+            bilan["erreurs"].append({"box": box, "erreur": str(e)})
+    for box, pages in plan:
+        if box in en_attente:
+            continue
+        for paquet, version in pages:
+            p = ctx.lancer("secubox-pilotage-www", "extraire", "--acteur", "pilotage", paquet, version)
+            if p.returncode != 0:
+                err(f"extraction {paquet} {version} en échec")
+            en_usage.append({"paquet": paquet, "version": version})
+        try:
+            poser(ctx, box, pages)
+            bilan["poses"].append(box)
+        except Erreur as e:
+            bilan["erreurs"].append({"box": box, "erreur": str(e)})
+    dans_plan = {b for b, _ in plan}
+    for box in poses(ctx):
+        if box not in dans_plan and box not in en_attente:
+            try:
+                retirer(ctx, box)
+                bilan["retires"].append(box)
+            except Erreur as e:
+                bilan["erreurs"].append({"box": box, "erreur": str(e)})
+    uniques = sorted({(x["paquet"], x["version"]) for x in en_usage})
+    entree = json.dumps({"en_usage": [{"paquet": p, "version": v} for p, v in uniques]}).encode()
+    if ctx.lancer("secubox-pilotage-www", "purger", "--acteur", "pilotage", entree=entree).returncode != 0:
+        err("purge des pages en échec")
+    bilan["ok"] = not bilan["erreurs"]
+    return bilan
+
+
+def analyser(argv):
+    if not argv or argv[0] not in ("poser", "retirer", "synchroniser", "lister"):
+        raise Usage("usage : secubox-pilotage-vhost poser|retirer [--acteur A] <box> | synchroniser | lister")
+    verbe, reste, acteur = argv[0], list(argv[1:]), None
+    if verbe in ("poser", "retirer") and len(reste) >= 2 and reste[0] == "--acteur":
+        if not RE_ACTEUR.fullmatch(reste[1]):
+            raise Usage("acteur invalide")
+        acteur, reste = reste[1], reste[2:]
+    if verbe in ("poser", "retirer"):
+        if len(reste) != 1 or not re.fullmatch(r"[a-z0-9-]{1,40}", reste[0]) or reste[0].startswith("-"):
+            raise Usage("nom de box invalide (^[a-z0-9-]{1,40}$)")
+        return verbe, acteur, reste[0]
+    if reste:
+        raise Usage("argument en trop")
+    return verbe, "pilotage" if verbe == "synchroniser" else None, None
+
+
+def attendre_passe(ctx):
+    """I4 / M7 : deux passes espacées d'au moins PASSE_MIN_S ; l'attente se fait SANS le verrou (poser, retirer et le prerm ne
+    sont jamais bloqués par elle). Sous SBX_RACINE, on n'attend que si SBX_ATTENDRE est posé."""
+    try:
+        reg = lire_registre(ctx)
+    except Erreur:
+        return
+    attente = PASSE_MIN_S - (ctx.maintenant - reg["derniere_passe"])
+    if attente > 0 and (not ctx.substitue or os.environ.get("SBX_ATTENDRE")):
+        time.sleep(attente)
+        ctx.maintenant = time.time() if not ctx.substitue else ctx.maintenant + attente
+
+
+def main(argv):
+    try:
+        verbe, acteur, box = analyser(argv)
+        ctx = Ctx(acteur)
+        if verbe == "poser":
+            pages = lire_entree_poser()
+        if verbe == "synchroniser":
+            attendre_passe(ctx)
+        fdc = verrou_commun(ctx) if verbe != "lister" else None   # commun d'abord…
+        ctx.verrou_fd = fdc
+        try:
+            fd = verrou(ctx)                                        # … conf.d ensuite
+        except BaseException:
+            if fdc is not None:
+                os.close(fdc)
+            raise
+        migrer_registre(ctx)
+        try:
+            if verbe == "poser":
+                res = poser(ctx, box, pages)
+            elif verbe == "retirer":
+                res = retirer(ctx, box)
+            elif verbe == "synchroniser":
+                res = synchroniser(ctx)
+            else:
+                res = {"ok": True, "vhosts": [{"box": b, "domaine": V.domaine(b)} for b in poses(ctx)]}
+        finally:
+            os.close(fd)
+            if fdc is not None:
+                os.close(fdc)
+        sortie(res)
+        return 0 if res.get("ok") else 1
+    except Occupe as e:
+        try:
+            auditer(ctx, "pilotage_vhost_occupe", verbe=verbe, box=box, resultat="echec", motif=str(e))
+        except Exception:
+            pass
+        sortie({"ok": False, "occupe": True, "erreur": str(e)})
+        return 1
+    except Usage as e:
+        err(str(e))
+        sortie({"ok": False, "erreur": str(e)})
+        return 2
+    except Erreur as e:
+        sortie({"ok": False, "erreur": str(e)})
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

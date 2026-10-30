@@ -269,6 +269,7 @@ class Ctx:
         self.etat = f"{self.r}/var/lib/secubox-pilotagectl"
         self.journaux = f"{self.r}/var/log/secubox"
         self.etc_secubox = f"{self.r}/etc/secubox"
+        self.etc = f"{self.r}/etc"
         self.modules = f"{self.r}/etc/secubox/modules.d"
         self.net = f"{self.r}/sys/class/net"
         self.ancre = f"{self.r}/etc/secubox/p2p/ancre-maitre.json"
@@ -374,7 +375,7 @@ def lire_json(fd, nom, defaut):
 
 
 def ecrire(fd, nom, donnees, mode=0o600):
-    """Écriture atomique dans le dossier ouvert : temporaire exclusif, fsync, renommage."""
+    """Écriture atomique dans le dossier ouvert : temporaire exclusif, fsync, renommage, fsync du dossier."""
     tmp = f".{nom}.{secrets.token_hex(4)}"
     f = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=fd)
     try:
@@ -385,6 +386,7 @@ def ecrire(fd, nom, donnees, mode=0o600):
         finally:
             os.close(f)
         os.replace(tmp, nom, src_dir_fd=fd, dst_dir_fd=fd)
+        os.fsync(fd)                                # R-L5-22 M6 : le renommage lui-même survit à une coupure
     except OSError:
         retirer(fd, tmp)                            # aucun temporaire laissé (disque plein, cible remplacée)
         raise
@@ -450,6 +452,129 @@ def poser_projection(ctx, liees):
     return True
 
 
+def poser_drapeau_relais(ctx, nom, contenu):
+    """R-L5-19/21 : drapeau `nom` de l'arbre ROOT /etc/secubox-pilotage (dossier root 0755, créé ici s'il manque — aussi
+    pour un retrait : le relais et l'agent lisent un dossier absent comme « mains liées »), jamais sous /etc/secubox
+    (compte partagé secubox). `contenu` (octets) : posé atomiquement par descripteur ; None : retiré. Un dossier qui
+    n'est pas à root ou inscriptible par d'autres n'est pas touché (lecteurs : défaut sûr)."""
+    try:
+        etc = os.open(ctx.etc, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            try:
+                d = os.open("secubox-pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=etc)
+            except FileNotFoundError:
+                os.mkdir("secubox-pilotage", 0o755, dir_fd=etc)
+                d = os.open("secubox-pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=etc)
+            try:
+                st = os.fstat(d)
+                if st.st_uid != os.geteuid() or st.st_mode & 0o022:
+                    return False
+                os.fchmod(d, 0o755)
+                if contenu is not None:
+                    ecrire(d, nom, contenu, 0o644)
+                else:
+                    retirer(d, nom)
+            finally:
+                os.close(d)
+        finally:
+            os.close(etc)
+    except OSError:
+        return False
+    return True
+
+
+def poser_projection_relais(ctx, liees):
+    """Projection des mains liées lue par le relais et l'agent (L5)."""
+    return poser_drapeau_relais(ctx, "mains-liees", b"" if liees else None)
+
+
+def pause_de_test():
+    """Point de synchronisation des tests de concurrence (racine de test SEULEMENT : SBX_RACINE posée, sudo l'efface) :
+    signale « état lu » puis attend le fichier de reprise (10 s au plus)."""
+    chemin = os.environ.get("SBX_PAUSE_PROJECTION")
+    if not chemin or not os.environ.get("SBX_RACINE"):
+        return
+    open(chemin + ".lu", "w").close()
+    for _ in range(1000):
+        if os.path.exists(chemin):
+            return
+        time.sleep(0.01)
+
+
+def verrou_projection(ctx):
+    """R-L5-22 : verrou EXCLUSIF des projections, fichier à part `/etc/secubox-pilotage/.projection.lock` (root 0600, sans
+    suivre de lien, dossier root non inscriptible par d'autres). Rend le descripteur (verrou tenu) ou None.
+
+    ORDRE DES VERROUS : verrou de projection D'ABORD, verrou d'état (flock du dossier d'état) ENSUITE. Personne ne
+    demande le verrou de projection en tenant celui d'état (`executer` a rendu le sien avant `projeter_portee`) :
+    aucun interblocage. Un verbe qui change l'état le fait sous le verrou d'état puis projette sous celui-ci, donc
+    la DERNIÈRE projection lit toujours l'état le plus récent : un drapeau périmé ne peut pas réapparaître."""
+    try:
+        etc = os.open(ctx.etc, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            try:
+                d = os.open("secubox-pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=etc)
+            except FileNotFoundError:
+                os.mkdir("secubox-pilotage", 0o755, dir_fd=etc)
+                d = os.open("secubox-pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=etc)
+        finally:
+            os.close(etc)
+        try:
+            st = os.fstat(d)
+            if st.st_uid != os.geteuid() or st.st_mode & 0o022:
+                return None
+            f = os.open(".projection.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=d)
+        finally:
+            os.close(d)
+        st = os.fstat(f)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid():
+            os.close(f)
+            return None
+        fcntl.flock(f, fcntl.LOCK_EX)
+        return f
+    except OSError:
+        return None
+
+
+def projeter_portee(ctx):
+    """R-L5-21 : drapeaux d'échéance lus par l'agent à chaque message HTTP, sans sudo — `proprietaire` (canal wg-mesh
+    vérifié : fin de validité de la vérification) et `support-ouvert` (fin de la session ouverte ; jamais sous mains
+    liées ni sans ancre vérifiée). Recalculés de l'état root APRÈS CHAQUE VERBE (accord, fermeture, refus, expiration
+    constatée par `etat`, mains liées, ancre-verifier réussie ou non), donc aussi par le postinst (`etat` local) au
+    redémarrage. État absent ou illisible : les deux sont retirés (lecture). R-L5-22 : lecture de l'état, calcul et
+    écriture sous le verrou de projection (verrou_projection) ; sans ce verrou, rien n'est POSÉ (retraits seulement)."""
+    verrou = verrou_projection(ctx)
+    try:
+        maintenant = int(time.time())
+        prop = sup = None
+        try:
+            fd = ouvrir_etat(ctx, creer=False)
+        except Erreur:
+            fd = None
+        if fd is not None and verrou is not None:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_SH)
+                canal = canal_verifie(fd, maintenant)
+                if canal == "wg-mesh":
+                    prop = lire_json(fd, "ancre.json", {})["verifie"] + VALIDITE_ANCRE
+                if canal is not None and not mains_liees(ctx, fd) and support_ouvert_lu(fd, maintenant):
+                    sup = lire_json(fd, "support.json", {})["fin"]
+            except (Erreur, OSError, KeyError, TypeError):
+                prop = sup = None
+            finally:
+                os.close(fd)                    # verrou d'état rendu ; celui de projection reste tenu
+        elif fd is not None:
+            os.close(fd)
+        pause_de_test()
+        ok = poser_drapeau_relais(ctx, "proprietaire", None if prop is None else f"{prop}\n".encode())
+        ok = poser_drapeau_relais(ctx, "support-ouvert", None if sup is None else f"{sup}\n".encode()) and ok
+        if not ok or verrou is None:
+            err("drapeaux de portée /etc/secubox-pilotage non posés (dossier ou verrou non fiable) : l'agent reste en lecture")
+    finally:
+        if verrou is not None:
+            os.close(verrou)                    # rend le verrou de projection
+
+
 def mains_liees(ctx, fd):
     return (fd is not None and existe(fd, "mains-liees")) or projection_presente(ctx)
 
@@ -488,6 +613,16 @@ def politique(action, liees, du_proprietaire):
     if not du_proprietaire and action in CONSENTEMENT_CLIENTE:
         return True, True, "box cliente : accord du détenteur"
     return True, False, "box du propriétaire" if du_proprietaire else "box cliente"
+
+
+def support_ouvert_lu(fd, maintenant):
+    """Lecture seule (verrou partagé) : vrai si support.json décrit une session « ouvert » non échue, de forme sûre.
+    Toute autre forme : faux (les expirations, elles, sont écrites par `etat` et par les verbes de support)."""
+    if fd is None:
+        return False
+    sup = lire_json(fd, "support.json", None)
+    return (isinstance(sup, dict) and isinstance(sup.get("id"), str) and RE_SUPPORT.fullmatch(sup["id"]) is not None
+            and sup.get("etat") == "ouvert" and entier(sup.get("fin")) is not None and sup["fin"] > maintenant)
 
 
 def unites_protegees(ctx):
@@ -1147,6 +1282,8 @@ def basculer_mains(ctx, fd, liees, maintenant):
     else:
         retirer(fd, "mains-liees")
     projection = poser_projection(ctx, liees)
+    if not poser_projection_relais(ctx, liees):
+        err("projection /etc/secubox-pilotage/mains-liees non posée (dossier non fiable) ; le relais se tient en lecture")
     auditer(ctx, "mains_liees", etat="on" if liees else "off")
     res = {"ok": True, "mains_liees": liees}
     if not projection:
@@ -1544,7 +1681,13 @@ def main(argv):
         sortie({"ok": False, "refus": "argv invalide"})
         return 2
     try:
-        sortie(executer(ctx, verbe, p))
+        try:
+            sortie(executer(ctx, verbe, p))
+        finally:
+            try:
+                projeter_portee(ctx)            # R-L5-21 : après chaque verbe, quoi qu'il ait fait
+            except Exception as e:  # noqa: BLE001
+                err(f"projection de la portée impossible : {e.__class__.__name__}")
         return 0
     except Erreur as e:
         err(str(e))

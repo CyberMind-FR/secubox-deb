@@ -1491,9 +1491,9 @@ async def set_parental_rule_compat(req: ParentalRule, user=Depends(require_jwt))
     return await set_parental_rule(req, user)
 
 
-@router.get("/sync_zones")
+@router.post("/sync_zones")
 def sync_zones(user=Depends(require_jwt)):
-    """Redemande l'application : réécrit l'état voulu, le service root le recharge (#1766)."""
+    """Redemande l'application : réécrit l'état voulu, le service root le recharge (#1766). POST : une action (#3126)."""
     _nft_desired.resync()
     return {"success": True, "zones": list(ZONES.keys()), "applique": _nft_applique()}
 
@@ -1514,8 +1514,9 @@ async def apply_profile(req: ApplyProfileRequest, user=Depends(require_jwt)):
     return {"success": True, "profile": req.profile_id}
 
 
-@router.get("/send_test_alert")
+@router.post("/send_test_alert")
 async def send_test_alert(user=Depends(require_jwt)):
+    """Envoie une alerte de test aux webhooks. POST : une action (#3126, R-L5-16)."""
     await _notify_webhooks("alert", {"type": "test", "message": "Test alert"})
     return {"success": True, "message": "Test alert sent"}
 

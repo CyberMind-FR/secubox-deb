@@ -1,2 +1,3 @@
 api usr/lib/secubox/nac/
 www usr/share/secubox/
+pilotage/routes-ouvertes.d/nac.toml usr/share/secubox/pilotage/routes-ouvertes.d/

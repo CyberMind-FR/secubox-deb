@@ -1,3 +1,36 @@
+secubox-system (1.11.7-1~trixie1) trixie; urgency=medium
+
+  * Passe finale L5 (ref #3126, R-L5-17) : run_diagnostic_test refuse un `test` qui n'est pas une chaîne (422, plus de 500) ; en-tête de
+    routes-ouvertes.d/system.toml : le kiosque et la planification des sauvegardes ne sont plus cités comme ouverts.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 18:00:00 +0100
+
+secubox-system (1.11.6-1~trixie1) trixie; urgency=medium
+
+  * Déclare les écritures ouvertes au porteur délégué du pilotage (ref #3126, L5, R-L5-12) :
+    /usr/share/secubox/pilotage/routes-ouvertes.d/system.toml (root, 0644), seulement les
+    routes d'écriture que les pages du module appellent ; secubox_core.auth refuse toute
+    autre écriture déléguée.
+    Fermées au jeton délégué (R-L5-15) : reboot, shutdown, apply_updates, settings, et
+    service_control, service_action, restart_services. Elles recouvrent les verbes du ctl
+    L2 (reboot, maj-paquets, renommer, service, renouveler-secrets) et passent par les
+    actions du pilotage (accord du détenteur, confirmation forte, une opération longue à
+    la fois) ; appelées depuis une page relayée, elles reçoivent 403.
+    Fermées aussi (R-L5-16) : kiosk/enable|disable (connexion root automatique sans mot de
+    passe sur tty2), backup et set_backup_schedule (archive avec les clés privées
+    WireGuard, sans rotation ni borne), reload_firewall (verbe reload). Restent ouvertes :
+    sync_time, clear_cache, board/detect, delete_diagnostic.
+  * /check_updates (apt-get update en root) et /run_diagnostic_test (exécute une commande)
+    passent de GET à POST, page système et vue portée comprises ; download_diagnostic et
+    delete_diagnostic en `def`, JSON invalide = 422 (ref #3126, R-L5-16).
+  * download_diagnostic et delete_diagnostic : remontée de chemin corrigée (ref #3126,
+    relecture de sécurité de L5, R-L5-14). `name=../../…` lisait ou SUPPRIMAIT tout fichier
+    accessible au service ; le nom suit désormais un motif strict (`<nom>.json`, sans
+    séparateur) et la résolution est confinée au dossier des diagnostics (lien qui en sort
+    refusé, 400). La vue portée system-hub appelle /reboot en POST (la route l'était déjà).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 15:00:00 +0100
+
 secubox-system (1.11.5-1~trixie1) trixie; urgency=medium
 
   * POST /settings (ref #3242, ref #3126 L2 tâche 5) : le renommage passe par l'unité root

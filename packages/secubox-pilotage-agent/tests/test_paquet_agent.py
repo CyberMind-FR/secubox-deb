@@ -36,7 +36,7 @@ def test_unite_durcie():
     for d in (
         "User=secubox-pilotage-agent", "Group=secubox-pilotage-agent", "ProtectSystem=strict", "ProtectHome=yes",
         "PrivateTmp=yes", "IPAddressDeny=any", "IPAddressAllow=10.10.0.1 10.64.0.1 localhost",
-        "MemoryMax=32M", "Restart=on-failure", "RestartSec=10", "ReadOnlyPaths=/", "ProtectControlGroups=yes",
+        "MemoryMax=48M", "Restart=on-failure", "RestartSec=10", "ReadOnlyPaths=/", "ProtectControlGroups=yes",
         "ExecStart=/usr/sbin/sbx-pilotage-agent",
     ):
         assert d in u, d
@@ -161,7 +161,7 @@ def test_paquet_coherent():
     c = lire("debian/control")
     assert "Architecture: any" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
-    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.2.0-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.5.1-1~trixie1) trixie;")
     # ancre-verifier lit `wg show` par chemin absolu (/usr/bin/wg)
     assert "wireguard-tools" in re.search(r"^Depends:(.*)$", c, re.M).group(1)
     pi = lire("debian/postinst")
@@ -243,8 +243,14 @@ def test_postinst_ne_touche_rien_sous_etc_secubox():
     """I1/R36 : /etc/secubox appartient au compte partagé secubox ; un `install -d -m`, `chmod`, `chown` ou `mkdir` de root y suivrait un lien
     posé par ce compte (root rendrait lisible /etc/secubox/secrets). Le postinst ne crée ni ne modifie rien sous /etc/secubox."""
     code = sans_commentaires(lire("debian/postinst"))
-    assert "/etc/secubox" not in code
-    assert not re.search(r"\b(install\s+-d|mkdir|chmod|chown)\b", code)
+    # L5 tâche 2 (R-L5-13, R-L5-18) : les SEULS arbres touchés sont ceux du relais, hors des arbres partagés —
+    # /etc/secubox-pilotage (root:root 0755) et /var/lib/secubox-pilotage-relais (compte du relais, 0700).
+    arbres_du_relais = ("/etc/secubox-pilotage", "/var/lib/secubox-pilotage-relais")
+    for ligne in code.splitlines():
+        assert not re.search(r"/etc/secubox(?!-pilotage\b)", ligne), ligne
+        if re.search(r"\b(install\s+-d|mkdir|chmod|chown|mktemp|mv)\b", ligne):
+            assert any(a in ligne for a in arbres_du_relais) or re.fullmatch(r'\s*(chown root:root|chmod 0644) "\$tmp"', ligne), ligne
+    assert "mkdir" not in code
 
 
 def test_reglages_lus_par_l_agent_jamais_par_systemd():
@@ -268,5 +274,64 @@ def test_gomemlimit_sous_memorymax_m13():
     u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
     env = re.findall(r"^Environment=GOMEMLIMIT=(\S+)$", u, re.M)
     (maxi,) = re.findall(r"^MemoryMax=(\S+)$", u, re.M)
-    assert env == ["24MiB"], env
-    assert _octets(env[0]) < _octets(maxi) == 32 << 20
+    assert env == ["32MiB"], env
+    assert _octets(env[0]) < _octets(maxi) == 48 << 20
+
+
+def test_l5_agent_joint_le_relais_seulement():
+    """L5 tâche 3 : l'agent connecte la SEULE socket du relais (aucune autre sous /run/secubox) et lit le drapeau des
+    mains liées dans l'arbre root /etc/secubox-pilotage (même vérification que le relais) ; l'unité démarre après
+    la socket du relais ; mémoire relevée pour un échange de 4 Mio (trois copies base64 brèves)."""
+    code = sans_commentaires(lire("apparmor/usr.sbin.sbx-pilotage-agent"))
+    run = [ligne.strip() for ligne in code.splitlines() if "/run/secubox" in ligne and "/run/secubox/pilotage/" not in ligne]
+    assert run == ["/run/secubox/pilotage-relais.sock rw,"], run  # T7 : la page d'état (/run/secubox/pilotage/), test dédié
+    assert "/etc/secubox-pilotage/ r," in code and "/etc/secubox-pilotage/mains-liees r," in code
+    # R-L5-21 : drapeaux d'échéance relus à chaque message, sans sudo
+    assert "/etc/secubox-pilotage/proprietaire r," in code and "/etc/secubox-pilotage/support-ouvert r," in code
+    pi = lire("debian/postinst")
+    assert "/usr/sbin/secubox-pilotagectl etat >/dev/null" in pi       # reprojection de l'état root à chaque configure
+    assert "/etc/secubox-pilotage/relais.pub" not in code and "/var/lib/secubox-pilotage-relais" not in code
+    u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
+    after = re.search(r"^After=(.*)$", u, re.M).group(1).split()
+    assert "secubox-pilotage-relais.socket" in after
+    assert "Requires=secubox-pilotage-relais.socket" not in u          # l'agent vit sans relais (L1/L2)
+    assert "MemoryMax=48M" in u and "Environment=GOMEMLIMIT=32MiB" in u
+
+
+def test_acl_en_dependance():
+    """R-L5-20 M1 : setfacl (paquet acl) pose l'ACL d'audit du relais."""
+    c = lire("debian/control")
+    assert re.search(r"^Depends:.*\bacl\b", c, re.M)
+
+
+def test_mesure_rss_alignee_sur_l_unite():
+    """R-L5-22 M3 : le test de RSS de l'agent se mesure avec le GOMEMLIMIT de l'unité."""
+    u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
+    (env,) = re.findall(r"^Environment=GOMEMLIMIT=(\S+)$", u, re.M)
+    assert f'const GOMEMLIMITUnite = "{env}"' in lire("internal/canal/memoire_test.go")
+
+
+def test_l5_page_etat_seule_ecriture_de_l_agent():
+    """L5 tâche 7 : la page d'état locale est la SEULE écriture de l'agent lui-même : son dossier vient de l'unité
+    (RuntimeDirectory secubox/pilotage, 0755 : nginx la lit), le profil AppArmor n'ouvre que la page et son fichier de
+    travail au nom fixe, rien d'autre sous /run/secubox."""
+    u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
+    assert re.search(r"^RuntimeDirectory=secubox/pilotage$", u, re.M)
+    assert re.search(r"^RuntimeDirectoryMode=0755$", u, re.M)
+    code = sans_commentaires(lire("apparmor/usr.sbin.sbx-pilotage-agent"))
+    ecritures = re.findall(r"^\s*(/run/secubox/pilotage/\S*)\s+(\w+),", code, re.M)
+    assert sorted(ecritures) == [("/run/secubox/pilotage/", "r"), ("/run/secubox/pilotage/.etat.html.tmp", "rw"),
+                                 ("/run/secubox/pilotage/etat.html", "w")]
+    assert "/run/secubox/pilotage/** " not in code and "/run/secubox/** " not in code
+    go = lire("cmd/sbx-pilotage-agent/etat.go")
+    assert 'cheminEtat = "/run/secubox/pilotage/etat.html"' in go
+    assert 'temporaire = ".etat.html.tmp"' in lire("internal/etat/etat.go")
+
+
+def test_l5_marqueur_d_allegement_lu():
+    """R-L5-34 : Interface = distante d'après le marqueur root de l'allègement réussi (lecture seule)."""
+    code = sans_commentaires(lire("apparmor/usr.sbin.sbx-pilotage-agent"))
+    for r in ("/var/lib/secubox-profiles/ r,", "/var/lib/secubox-profiles/allegement/ r,",
+              "/var/lib/secubox-profiles/allegement/actif r,"):
+        assert r in code, r
+    assert "/var/lib/secubox-profiles/allegement/** " not in code

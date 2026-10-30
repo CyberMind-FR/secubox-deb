@@ -22,7 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import apply, export, healthsync, manifest_edit, minuteurs, nginxgen, wafsync
+from . import apply, export, front_web, healthsync, manifest_edit, minuteurs, nginxgen, wafsync
 from .actuate import TIMED_OUT
 from .audit import AUDIT_LOG
 from .diff import (ProtectedViolation, changements_epingles,
@@ -126,6 +126,18 @@ def _cmd_diff(args) -> int:
     return 0
 
 
+def _audit_front_web(res: dict, profile) -> None:
+    """Décision de sécurité (exposition nginx, agrégateur) écrite dans le journal d'audit ; rien quand rien n'a changé."""
+    if res.get("action") == "rien":
+        return
+    from .audit import record
+    record({"ts": _now_iso(), "event": "profiles_front_web", "profil": getattr(profile, "name", None),
+            "action": res.get("action"), "ok": bool(res.get("ok"))}, path=AUDIT_LOG)
+    if not res.get("ok"):
+        print(f"front web : {res.get('action')} en échec, configuration d'origine rendue ({res.get('nginx', '')})",
+              file=sys.stderr)
+
+
 def _now_iso() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -190,13 +202,21 @@ def _cmd_apply(args) -> int:
             for c in plan:
                 print(f"  {'⛔ stop ' if c.action == 'stop' else '▶️  start'} {c.id:<20} ({c.reason})")
         return 0
+    # #3126 L5 tâche 7 : front web réduit du profil léger (page d'état seule, agrégateur en relais pur), ou retour au
+    # front web d'origine pour tout autre profil — seulement après un apply complet, jamais en mode épingles.
+    # R-L5-34 : un allègement défait (nginx -t) rend 2 — le marqueur lu par l'agent (Interface = distante) n'est pas posé.
+    front_ok = True
+    if report.status == "applied" and not getattr(args, "pins_only", False) and not args.only:
+        res_front = front_web.appliquer(profile, run=_run)
+        _audit_front_web(res_front, profile)
+        front_ok = bool(res_front.get("ok"))
     if args.json:
         print(json.dumps({"status": report.status, "changed": report.changed,
                           "failed": report.failed, "rolled_back": report.rolled_back}))
     else:
         print(f"apply: {report.status} — changed={report.changed} "
               f"failed={report.failed} rolled_back={report.rolled_back}")
-    return 0 if report.status == "applied" else 2
+    return 0 if report.status == "applied" and front_ok else 2
 
 
 def _ouvrir_sans_lien(chemin: Path) -> int:

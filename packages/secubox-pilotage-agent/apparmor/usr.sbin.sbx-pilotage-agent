@@ -5,7 +5,8 @@
 #
 # Profil AppArmor ENFORCE de sbx-pilotage-agent (#3126 ; L1 lecture, L2 actions par sudo).
 # Posé dans /etc/apparmor.d/usr.sbin.sbx-pilotage-agent, chargé par le postinst.
-# Tout ce qui n'est pas listé est refusé. Aucune écriture de fichier, aucune
+# Tout ce qui n'est pas listé est refusé. Une seule écriture de fichier (L5 tâche 7) : la page d'état locale
+# /run/secubox/pilotage/etat.html, par un fichier de travail au nom fixe renommé ; aucune
 # capacité, aucune écoute : la connexion au maître est sortante seulement.
 # Seul passage privilégié : sudo -> secubox-pilotagectl (sudoers à argv borné, validé par le ctl).
 
@@ -66,7 +67,27 @@
   # Réglages et drapeau : ouverts par descripteur, sans suivre de lien, root:root exigé (R36).
   /etc/secubox/pilotage-agent.env r,
   /etc/secubox/pilotage/mains-liees r,
+  # L5 tâche 3 : portée du pilotage HTTP recalculée ici ; drapeau root lu comme le relais (dossier puis drapeau,
+  # sans suivre de lien, root exigé).
+  /etc/secubox-pilotage/ r,
+  /etc/secubox-pilotage/mains-liees r,
+  # R-L5-21 : échéances projetées par le ctl root (box du propriétaire, support ouvert), mêmes vérifications.
+  /etc/secubox-pilotage/proprietaire r,
+  /etc/secubox-pilotage/support-ouvert r,
+  # L5 tâche 3 : la SEULE socket jointe, celle du relais local (0660, groupe secubox-pilotage-agent ; SO_PEERCRED
+  # vérifié par le relais). Aucune socket de module : le relais seul les appelle, avec son jeton.
+  /run/secubox/pilotage-relais.sock rw,
   /var/lib/secubox/profiles/actif r,
+  # R-L5-34 : marqueur root de l'allègement réussi du profil « distante » (Interface = distante), lu sans suivre de lien.
+  /var/lib/secubox-profiles/ r,
+  /var/lib/secubox-profiles/allegement/ r,
+  /var/lib/secubox-profiles/allegement/actif r,
+
+  # L5 tâche 7 : page d'état locale (statique, sans secret), régénérée toutes les 60 s. Dossier = RuntimeDirectory de
+  # l'unité ; écriture atomique : fichier de travail ouvert sans suivre de lien, puis renommé sur la page.
+  /run/secubox/pilotage/ r,
+  /run/secubox/pilotage/.etat.html.tmp rw,
+  /run/secubox/pilotage/etat.html w,
 
   # Les secrets restent interdits, quoi qu'une règle large ajoute un jour.
   deny /etc/secubox/secrets/** r,
