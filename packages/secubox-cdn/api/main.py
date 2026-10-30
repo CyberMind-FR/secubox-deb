@@ -281,9 +281,9 @@ async def clear_stats(user=Depends(require_jwt)):
     return {"success": True}
 
 
-@router.get("/restart")
+@router.post("/restart")
 def restart(user=Depends(require_jwt)):
-    """Redémarrer le service cache."""
+    """Redémarrer le service cache. POST : c'est une action, jamais une lecture (#3126, R-L5-10)."""
     r = subprocess.run(["systemctl", "reload", "nginx"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 

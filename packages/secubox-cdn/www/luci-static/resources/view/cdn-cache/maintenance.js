@@ -26,7 +26,7 @@ async function callClearStats(params) {
 }
 
 async function callRestart(params) {
-    return sbxFetch('/api/v1/cdn/restart', params, 'GET');
+    return sbxFetch('/api/v1/cdn/restart', params, 'POST');
 }
 
 async function callLogs(params) {
