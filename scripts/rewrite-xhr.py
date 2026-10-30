@@ -39,7 +39,10 @@ _PREFIXES_ACTION = ("set_", "apply", "ban", "unban", "add_", "remove_", "delete_
                     "create_", "enable_", "disable_", "restart_", "stop_", "start_",
                     "rollback", "confirm", "purge", "generate_", "reload_")
 # Actions nommées sans suffixe : noms exacts (un préfixe « start » prendrait « startup_info »).
-_ACTIONS_EXACTES = frozenset({"restart", "stop", "start", "reload"})
+# #3126 (R-L5-14) : reboot, sync, toggle, reset, flush, et deux actions nommées comme des lectures,
+# preload_url (le serveur va chercher une URL : SSRF en GET) et sync_zones (réapplique les zones NAC).
+_ACTIONS_EXACTES = frozenset({"restart", "stop", "start", "reload", "reboot", "sync", "toggle", "reset", "flush",
+                              "preload_url", "sync_zones"})
 
 
 def methode_http(nom: str) -> str:
