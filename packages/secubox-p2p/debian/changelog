@@ -1,3 +1,12 @@
+secubox-p2p (1.20.2-1~trixie1) trixie; urgency=medium
+
+  * Projection des pairs enrôlés pour le pilotage (ref #3126) : à chaque écriture de peers.json,
+    /var/lib/secubox/p2p-public/pairs-enroles.json (nom, adresse de maillage, empreinte, mode de jonction ;
+    aucun secret, aucune découverte mDNS), 0644, renommage atomique par descripteur ; dossier 0755 créé et
+    projection republiée par le postinst. /var/lib/secubox/p2p reste 0700.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 20:00:00 +0100
+
 secubox-p2p (1.20.1-1~trixie1) trixie; urgency=medium
 
   * Relais du maillage (R-L5-33, ref #3126) : plan d'exposition du pilotage lu seulement pour un pair sans webos, jamais de

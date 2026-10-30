@@ -39,7 +39,7 @@ except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
 
-from . import mesh, registry, annuaire_client, dht, federation, masterlink, automesh, jetons, ancre, pairs_directs
+from . import mesh, registry, annuaire_client, dht, federation, masterlink, automesh, jetons, ancre, pairs_directs, pairs_enroles
 from secubox_core.auth import require_lecture, SESSION_COOKIE, _bearer
 from secubox_core.crypto.empreinte import ident
 
@@ -94,6 +94,8 @@ app.add_middleware(_RelaieJeton)
 # Paths
 P2P_DIR = Path("/var/lib/secubox/p2p")
 PEERS_FILE = P2P_DIR / "peers.json"
+# Projection lisible des pairs enrôlés pour le pilotage (#3126) : P2P_DIR est 0700, secubox-pilotage ne lit que cette projection.
+PAIRS_ENROLES_DIR = pairs_enroles.DOSSIER_DEFAUT
 SERVICES_FILE = P2P_DIR / "services.json"
 PROFILES_FILE = P2P_DIR / "profiles.json"
 THREATS_FILE = P2P_DIR / "threats.json"
@@ -136,6 +138,12 @@ def save_json(path: Path, data: Any):
     init_dirs()
     with open(path, 'w') as f:
         json.dump(data, f, indent=2)
+    if Path(path) == PEERS_FILE:
+        # #3126 : chaque écriture du registre republie la projection du pilotage ; un échec ne bloque jamais le registre.
+        try:
+            pairs_enroles.publier(data, PAIRS_ENROLES_DIR)
+        except (pairs_enroles.ProjectionErreur, OSError) as e:
+            log.warning("projection des pairs enrôlés non publiée : %s", e)
 
 
 def get_node_id() -> str:

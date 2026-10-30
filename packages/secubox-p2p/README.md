@@ -255,6 +255,15 @@ puis toutes les minutes, ±10 s ; charge sur le maître : au plus 32 requêtes p
 - Variables `SBX_PAIRS_*` (dont `SBX_PAIRS_MAITRE_URL`) : réservées aux tests ; ne jamais les poser en production,
   `SBX_PAIRS_MAITRE_URL` remplaçant l'adresse du maître.
 
+## Projection des pairs enrôlés pour le pilotage (#3126)
+
+`/var/lib/secubox/p2p` est 0700 `secubox` : le contrôleur du pilotage (compte `secubox-pilotage`) n'y lit rien. À chaque écriture de
+`peers.json`, l'API publie `/var/lib/secubox/p2p-public/pairs-enroles.json` (dossier 0755 `secubox` créé par le postinst, fichier 0644,
+renommage atomique par descripteur, lien jamais suivi) : `{"version": 1, "pairs": [{"name", "mesh_ip", "fingerprint", "joined_via"}]}`,
+pairs ENRÔLÉS seulement (aucune découverte mDNS, aucune clé, aucun jeton, aucune adresse LAN). Le postinst la republie depuis `peers.json`
+(`runuser -u secubox -- python3 -I /usr/lib/secubox/p2p/api/pairs_enroles.py`). Un échec de publication est journalisé et ne bloque
+jamais l'écriture du registre.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
