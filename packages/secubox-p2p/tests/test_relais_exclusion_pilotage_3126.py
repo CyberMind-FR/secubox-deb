@@ -283,6 +283,23 @@ def test_verrou_commun_lien_refuse(rel, tmp_path):
     assert HALL not in rel.table()
 
 
-def test_sbx_relais_essai_ignoree_en_root():
-    texte = SCRIPT.read_text()
-    assert '[ "$(id -u)" -ne 0 ] && [ -n "${SBX_RELAIS_ESSAI:-}" ]' in texte
+def test_sbx_relais_essai_ignoree_en_root(rel):
+    """`id -u` simulé à 0 : la racine de test n'est PAS honorée — pair-de ne lit pas le wg_mesh.json de la racine et ne pose
+    aucun verrou dedans (il vise les vrais chemins, inaccessibles ici)."""
+    _script(rel.bin / "id", "echo 0\n")
+    r = rel.lancer("pair-de", "gk5")
+    assert r.returncode != 0 and IP5 not in r.stdout
+    assert not rel.verrou.exists()
+
+
+def test_pair_de_lu_sous_le_verrou_commun(rel):
+    fd = _tenir(rel)
+    try:
+        p = rel.popen("pair-de", "gk5")
+        time.sleep(1.5)
+        assert p.poll() is None
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+    out, _ = p.communicate(timeout=30)
+    assert out.strip() == IP5

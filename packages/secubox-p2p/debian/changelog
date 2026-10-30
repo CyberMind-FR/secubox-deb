@@ -1,3 +1,11 @@
+secubox-p2p (1.19.6-1~trixie1) trixie; urgency=medium
+
+  * Relais du maillage (R-L5-31, ref #3126) : « pair-de » lu sous le verrou commun avec le pilotage ; README :
+    « relayer --sans-sonde » réservé à root et au retour arrière ; test comportemental de la racine de test ignorée en
+    root (id -u simulé).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 03:00:00 +0100
+
 secubox-p2p (1.19.5-1~trixie1) trixie; urgency=medium
 
   * Relais du maillage, basculement du pilotage (R-L5-30, ref #3126) : verrou commun root

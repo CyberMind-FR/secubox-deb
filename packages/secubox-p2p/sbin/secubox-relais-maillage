@@ -1091,7 +1091,7 @@ cmd_fermer() {
 case "${1:-}" in
     relayer) shift; verrou_commun; cmd_relayer "$@" ;;
     retirer) shift; verrou_commun; cmd_retirer "$@" ;;
-    pair-de) shift; cmd_pair_de "$@" ;;
+    pair-de) shift; verrou_commun; cmd_pair_de "$@" ;;   # sous le verrou commun (R-L5-31 M3)
     relayer-port) shift; cmd_relayer_port "$@" ;;
     retirer-port) shift; cmd_retirer_port "$@" ;;
     etat)    cmd_etat ;;
