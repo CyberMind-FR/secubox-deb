@@ -14,6 +14,24 @@ secubox-core (1.8.11-1~trixie1) trixie; urgency=medium
     ou clés. Chaque usage, accepté ou refusé, tracé (_trace_delegation : acteur, maître,
     portée, méthode, chemin, module ; jamais le jeton). Aucun changement pour un jeton ordinaire.
   * snippets/secubox-proxy.conf : X-SecuBox-Pilotage-Relais vidé sur tout proxy (ref #3126).
+  * Relecture de sécurité (ref #3126, R-L5-9, R-L5-10) :
+    - DÉROGATION aux Global Constraints du plan L5 (HS256 + jwt_secret) : le jeton délégué
+      est signé en Ed25519 (EdDSA) par la clé privée du seul relais ; les modules le
+      vérifient avec la clé publique /etc/secubox/pilotage/relais.pub (PEM, root:root 0644 ;
+      clé privée relais.key 0600 au compte du relais, créée par la tâche 2). Clé absente ou
+      invalide : aucun jeton délégué. Un jeton HS256 signé avec jwt_secret (module
+      compromis) est refusé.
+    - Réclamation obligatoire `cible`, comparée à l'identité du module courant : le fichier
+      source de la route sous /usr/lib/secubox/<module>/ (module_courant), pas la socket.
+      scope["server"] devient un contrôle de plus : TCP refusé, socket fournie = celle du
+      module, absent (uvicorn 0.32) accepté.
+    - Exclusions durcies : segments découpés sur tout caractère hors [a-z0-9], mots
+      credential(s), identifiants, private, privkey, psk, restore, reset-password,
+      set-password, api_key ; routes WireGuard /peer/<nom>/config|qr et /export/… exclues.
+    - sub, acteur, maitre sous motif strict ; journaux en ASCII et valeurs du client en %r ;
+      jeton invalide présenté avec l'en-tête tracé comme refus (motif, jamais le jeton) ;
+      refus aussi dans /var/log/secubox/audit.log ; est_admin_reel n'accepte que le payload
+      marqué par la garde (request.state.pilotage).
 
  -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
 

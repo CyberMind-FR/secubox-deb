@@ -15,15 +15,35 @@ Core package for SecuBox-Deb platform. Provides shared libraries, utilities, and
 
 Shared Python modules for all SecuBox services:
 
-- `auth.py` - JWT authentication helpers ; porteur délégué du pilotage (#3126, L5) : `jeton_pilotage_valide(payload, request)`.
-  Le jeton frappé par `sbx-pilotage-relais` (HS256, secret de la box, `exp - iat ≤ 60`, `aud` = nom court de l'hôte,
-  `sub` = `pilotage:<admin>@<maître>`, réclamation `pilotage = {acteur, maitre, portee}`) n'est reconnu qu'en Bearer, sur
-  la socket Unix d'un module (`/run/secubox/<m>.sock`, jamais TCP) et avec l'en-tête `X-SecuBox-Pilotage-Relais` (vidé
-  par `secubox-proxy.conf`, l'agrégateur et l'entrée HAProxy). Ce n'est pas une session. Portée `lecture` : GET/HEAD
-  seulement (403 sinon) ; portée `admin` : administrateur réel. Refusé (403) sur les modules `MODULES_EXCLUS_PILOTAGE`
-  (auth, vault, portal, assist, premier-pas, users, aggregator, pilotage*) et sur tout chemin contenant un segment de
-  `SEGMENTS_EXCLUS_PILOTAGE` (comptes, sessions, secrets, jetons, clés). Chaque usage, accepté ou refusé, est tracé dans
-  `/var/log/secubox/delegation.log` (acteur, maître, portée, méthode, chemin ; jamais le jeton).
+- `auth.py` - JWT authentication helpers ; porteur délégué du pilotage (#3126, L5) : `jeton_pilotage_valide(payload, request)`,
+  `module_courant(request)`.
+  - **Signature Ed25519 (EdDSA), pas HS256** (R-L5-9, dérogation aux Global Constraints du plan L5 qui prévoyaient
+    HS256 avec `jwt_secret`) : les sockets de modules sont souvent en 0666 et `jwt_secret` est lu par tous les modules ;
+    un module compromis frapperait un jeton administrateur. Le relais `sbx-pilotage-relais` signe avec sa clé PRIVÉE
+    `/etc/secubox/pilotage/relais.key` (PEM PKCS#8 Ed25519, 0600, compte du relais, créée par la tâche 2) ; les modules
+    vérifient avec la clé PUBLIQUE `/etc/secubox/pilotage/relais.pub` (PEM SubjectPublicKeyInfo Ed25519, root:root
+    0644). Chemin fixe, jamais tiré de la requête (`kid`, `jku`, `jwk` ignorés) ; clé absente ou invalide : aucun jeton
+    délégué accepté.
+  - Réclamations : `aud` = nom court de l'hôte, `exp - iat ≤ 60` (non échu, `iat` sans avance > 5 s),
+    `sub` = `pilotage:<acteur>@<maître>` (`^pilotage:[a-z0-9._-]{1,64}@[a-z0-9-]{1,63}$`, cohérent avec la réclamation),
+    `pilotage = {acteur, maitre, portee}`, et **`cible`** = le module visé.
+  - `cible` est comparée à l'IDENTITÉ du module qui sert la route : le fichier source de la route résolue sous
+    `/usr/lib/secubox/<module>/` (fixé par dpkg, valable dans un processus de groupe, indépendant de la socket). Une
+    route de secubox_core n'appartient à aucun module : refus.
+  - Bearer seulement, avec l'en-tête `X-SecuBox-Pilotage-Relais` (vidé par `secubox-proxy.conf`, l'agrégateur et
+    l'entrée HAProxy). `scope["server"]` est un contrôle de plus : TCP refusé ; socket Unix fournie = celle du module ;
+    absent (uvicorn 0.32 de Debian ne le remplit pas pour une socket Unix) = accepté sur signature et `cible`.
+  - Ce n'est pas une session. Portée `lecture` : GET/HEAD seulement (403 sinon) ; portée `admin` : administrateur réel.
+    `est_admin_reel` n'accepte que le payload RENDU par la garde (marque `_PayloadPilotage`, aussi sur
+    `request.state.pilotage`), jamais un dict décodé ailleurs ou copié ; `est_personne` est toujours faux.
+  - Refusé (403) : modules `MODULES_EXCLUS_PILOTAGE` (auth, vault, portal, assist, premier-pas, users, aggregator,
+    pilotage*) ; routes nommées `ROUTES_EXCLUES_PILOTAGE` (WireGuard `/peer/<nom>/config|qr`, `/export/…`) ; tout chemin
+    dont un segment, ou un morceau de segment découpé sur tout caractère hors `[a-z0-9]`, est dans
+    `SEGMENTS_EXCLUS_PILOTAGE` (comptes, sessions, secrets, jetons, clés, `credential(s)`, `private`, `psk`,
+    `restore`…). Une liste d'ouverture déclarée par module la remplacera (#3279).
+  - Chaque usage est tracé dans `/var/log/secubox/delegation.log` (ASCII ; acteur, maître, portée, verdict, méthode,
+    chemin, module ; jamais le jeton) ; chaque REFUS, y compris d'un jeton invalide présenté avec l'en-tête, aussi dans
+    `/var/log/secubox/audit.log` (`evenement: pilotage_delegue`).
 - `config.py` - TOML configuration loader
 - `logger.py` - Unified logging
 - `system.py` - System utilities
