@@ -17,7 +17,7 @@ import secubox_unbound as _unbound          # D4 (#2050) : écriture atomique et
 from secubox_unbound import depot as _depot
 from secubox_unbound import ecrire_atomique as _ecrire_atomique_commun
 
-from . import catalogue, etatsur, feed, generation, profils, voisins, zones
+from . import catalogue, etatsur, feed, generation, profils, remanence, voisins, zones
 
 ETAT = "/var/lib/secubox/webfilter"
 RACINE = "/var/lib/secubox-webfilter-ctl"
@@ -115,11 +115,37 @@ def appliquer(etat, racine_ctl, source, catalogue_chemin, systeme=None, verrou=N
             s.audit("refuse", str(e)[:200])
             return {"statut": "refuse", "message": str(e)[:300], "zones": 0, "vues": 0, "version": 0, "duree_s": round(maintenant() - t0, 2)}
         try:
-            return _appliquer(s, es, racine_ctl, source, Path(catalogue_chemin), maintenant, t0)
+            _marquer(es, t0)
+            try:
+                return _appliquer(s, es, racine_ctl, source, Path(catalogue_chemin), maintenant, t0)
+            finally:
+                es.supprimer(remanence.MARQUEUR)
         finally:
             es.fermer()
     finally:
         os.close(fd)
+
+
+def _marquer(es, t0) -> None:
+    """#3005 : le démon d'alimentation ne demande pas d'application pendant celle-ci. Un échec n'empêche pas d'appliquer."""
+    try:
+        es.ecrire(remanence.MARQUEUR, str(int(t0)).encode("ascii"), 0o640)
+    except (OSError, etatsur.ErreurEtat) as e:
+        print(f"secubox-webfilter-ctl : marqueur d'application non posé : {e}", file=sys.stderr)
+
+
+def _voisins(s, es, retention_jours: int, maintenant) -> dict:
+    """#3005 : table de voisinage du moment + adresses rémanentes (`remanence.json`, écrit par le démon, relu comme une entrée hostile : sans
+    suivre de lien, plafonné, validé). Historique illisible : la table seule, comme avant."""
+    vivants = s.voisins()
+    if retention_jours <= 0:
+        return vivants
+    try:
+        hist = remanence.lire_octets(es.lire(remanence.FICHIER, remanence.MAX_OCTETS))
+    except etatsur.ErreurEtat as e:
+        print(f"secubox-webfilter-ctl : adresses rémanentes ignorées : {e}", file=sys.stderr)
+        return vivants
+    return remanence.fusionner(vivants, hist, retention_jours * 86400, int(maintenant()))
 
 
 def _ecrire_etat(es, nom: str, objet) -> None:
@@ -185,7 +211,7 @@ def _appliquer(s, es, racine: Path, source: Path, cat_chemin: Path, maintenant, 
             comptes[cat] = len(noms)
             return noms
         try:
-            res = generation.generer(cfg, conf.reseaux, s.voisins(), generation.adresses_adguard(s.adguard_texte()), charger, conf.zones_max,
+            res = generation.generer(cfg, conf.reseaux, _voisins(s, es, conf.retention_jours, maintenant), generation.adresses_adguard(s.adguard_texte()), charger, conf.zones_max,
                                      frozenset(s.adresses_box()))
         except (generation.ErreurGeneration, etatsur.ErreurEtat) as e:
             return _fin(s, es, "refuse", str(e)[:300], t0, maintenant, version=cfg["version"], audit=("refuse", str(e)[:200]))

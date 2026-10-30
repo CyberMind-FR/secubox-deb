@@ -13,6 +13,15 @@ lan = []
 [limites]
 zones_max = 1500000
 
+# Appareils assignés à un profil (#3005). Un appareil garde dans la carte appliquée les adresses où on l'a vu pendant `retention_jours`
+# (0 à 90 ; 0 = seulement la table de voisinage au moment de l'application) : un portable vu la veille en Wi-Fi reste dans sa vue même s'il
+# est ailleurs à 04:00. Une adresse reprise par un autre appareil (bail réattribué) passe au dernier vu. Quand une adresse nouvelle d'un appareil
+# assigné apparaît, le démon demande une application, au plus une fois toutes les `reapplication_min` minutes (5 à 1440), jamais pendant une
+# application ou une compilation de secubox-dns-listes (une application complète coûte plusieurs minutes de charge).
+[appareils]
+retention_jours = 14
+reapplication_min = 30
+
 [[categorie]]
 id = "adulte"
 libelle = "Contenu adulte"
