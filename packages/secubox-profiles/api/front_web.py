@@ -39,18 +39,34 @@ Run = Callable[[list], tuple]
 log = logging.getLogger("secubox.profiles.front_web")
 
 
-def ecoute(adresses: list) -> str:
-    """Directive d'écoute de la page d'état : la première adresse IPv4 privée de la box hors tunnels (LAN) ; à défaut,
-    la boucle locale seule. Jamais toutes les interfaces, jamais une adresse publique (R-L5-34 M1)."""
-    for a in adresses:
+LAN_PREFERE = "br-lan"   # pont LAN des box SecuBox (netmodes)
+
+
+def ecoute(adresses: list, defaut: set) -> str:
+    """Écoute et accès de la page d'état (R-L5-34). `adresses` : [(interface, ip/préfixe)] ; `defaut` : interfaces des routes
+    par défaut (le WAN, même en adresse privée derrière une box opérateur), jamais retenues, pas plus que wg-* ni le maillage
+    ou Auto-Load. LAN = br-lan s'il convient, sinon la première interface privée restante.
+
+    Forme retenue : `listen 80;` (IPv4, toutes adresses) + `allow <sous-réseau du LAN>;` avant le `deny all` du gabarit.
+    Aucune adresse n'est figée dans nginx : un changement d'adresse ou une interface montée après nginx au démarrage ne
+    peut pas faire échouer nginx (« Cannot assign requested address ») ; l'accès est borné par allow/deny au seul
+    sous-réseau du LAN, et nftables (DEFAULT DROP côté WAN) reste la barrière du port 80 côté WAN. Sans LAN : boucle
+    locale seule."""
+    retenues = []
+    for iface, cidr in adresses:
         try:
-            ip = ipaddress.ip_interface(a).ip
+            itf = ipaddress.ip_interface(cidr)
         except ValueError:
             continue
-        if ip.version == 4 and ip.is_private and not ip.is_loopback and not ip.is_link_local \
-                and not any(ip in n for n in _TUNNELS):
-            return f"listen {ip}:80;\n"
-    return "listen 127.0.0.1:80;\n"
+        ip = itf.ip
+        if iface in defaut or iface.startswith("wg") or ip.version != 4 or not ip.is_private or ip.is_loopback \
+                or ip.is_link_local or any(ip in n for n in _TUNNELS):
+            continue
+        retenues.append((iface, itf.network))
+    if not retenues:
+        return "listen 127.0.0.1:80;\n"
+    iface, reseau = next((r for r in retenues if r[0] == LAN_PREFERE), retenues[0])
+    return f"listen 80;\nallow {reseau};\n"
 
 
 def _adresses(run: Run) -> list:
@@ -60,8 +76,18 @@ def _adresses(run: Run) -> list:
     out = []
     for ligne in (sortie or "").splitlines():
         champs = ligne.split()
-        if "inet" in champs and champs.index("inet") + 1 < len(champs):
-            out.append(champs[champs.index("inet") + 1])
+        if len(champs) > 3 and champs[2] == "inet":
+            out.append((champs[1], champs[3]))
+    return out
+
+
+def _defaut(run: Run) -> set:
+    rc, sortie = run(["ip", "-o", "-4", "route", "show", "default"])
+    out = set()
+    for ligne in (sortie or "").splitlines() if rc == 0 else []:
+        champs = ligne.split()
+        if "dev" in champs and champs.index("dev") + 1 < len(champs):
+            out.add(champs[champs.index("dev") + 1])
     return out
 
 
@@ -146,6 +172,8 @@ def appliquer(profile, *, racine: Path = Path("/"), gabarit: Path = GABARIT, run
 
     deja = (c["etat"] / "actif").exists()
     relais = getattr(profile, "agregateur", None) == "relais"
+    if deja:
+        os.chmod(c["etat"], 0o755)   # montée 0.26.0 (dossier 0700) : l'agent doit pouvoir lire le marqueur
     if not deja:
         # Dossier 0755 : l'agent de pilotage y lit le marqueur `actif` ; les sites mis de côté restent en 0700.
         (c["etat"] / "sites-enabled").mkdir(parents=True, exist_ok=True)
@@ -158,11 +186,14 @@ def appliquer(profile, *, racine: Path = Path("/"), gabarit: Path = GABARIT, run
                     dest = dest.with_name(f"{p.name}.avant-{int(time.time())}")
                 shutil.move(str(p), str(dest))
         if relais:
+            sauve = c["etat"] / "aggregator.toml"
+            if sauve.exists():   # sauvegarde gardée d'un retour précédent : jamais écrasée, renommée
+                sauve.rename(c["etat"] / f"aggregator.toml.avant-{int(time.time())}")
             if c["agg"].exists():
-                shutil.copy2(c["agg"], c["etat"] / "aggregator.toml")
+                shutil.copy2(c["agg"], sauve)
             else:
                 (c["etat"] / "aggregator.absent").touch()
-    _ecrire(c["ecoute"], ecoute(_adresses(run)))
+    _ecrire(c["ecoute"], ecoute(_adresses(run), _defaut(run)))
     _ecrire(c["sa"] / SITE, Path(gabarit).read_text(encoding="utf-8"))
     lien = c["se"] / SITE
     if not lien.is_symlink():
@@ -173,8 +204,7 @@ def appliquer(profile, *, racine: Path = Path("/"), gabarit: Path = GABARIT, run
         _ecrire(c["agg"], RELAIS_PUR)
     rc, sortie = run(["nginx", "-t"])
     if rc != 0:
-        if not deja:
-            _rendre(c)
+        _rendre(c)   # deja compris : jamais de marqueur ni de page d'état sur une configuration nginx refusée
         return {"ok": False, "action": "alleger", "nginx": (sortie or "")[-400:]}
     (c["etat"] / "actif").touch()
     os.chmod(c["etat"] / "actif", 0o644)   # marqueur lu par l'agent : posé SEULEMENT après nginx -t (R-L5-34)

@@ -83,8 +83,11 @@ def test_groupe_en_veille():
 def test_gabarit_etat_lan_seulement():
     code = _code(GABARIT)
     allows = re.findall(r"^\s*allow\s+(\S+);", code, re.M)
-    assert set(allows) == {"127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7", "fe80::/10"}
+    # R-L5-34 tour 2 : seule la boucle locale est écrite dans le gabarit ; le sous-réseau du LAN vient de l'inclusion,
+    # placée AVANT deny all.
+    assert set(allows) == {"127.0.0.1", "::1"}
     assert re.search(r"^\s*deny\s+all;", code, re.M)
+    assert code.index("include /etc/nginx/secubox-etat-ecoute.conf;") < code.index("deny all;")
     # Une seule page, aucun relais vers une API.
     for interdit in ("proxy_pass", "fastcgi_pass", "uwsgi_pass", "scgi_pass", "grpc_pass", "/api/", "autoindex on", "ssi on"):
         assert interdit not in code, interdit
@@ -283,14 +286,61 @@ def test_gabarit_n_ecoute_pas_toutes_les_interfaces():
     assert "include /etc/nginx/secubox-etat-ecoute.conf;" in code
 
 
-@pytest.mark.parametrize("adresses,attendu", [
-    (["192.168.1.1/24"], "listen 192.168.1.1:80;\n"),
-    (["10.10.0.5/24", "192.168.10.1/24"], "listen 192.168.10.1:80;\n"),   # 10.10.0.0/24 = maillage, exclu
-    (["82.64.1.2/24"], "listen 127.0.0.1:80;\n"),                          # publique : jamais
-    ([], "listen 127.0.0.1:80;\n"),
+@pytest.mark.parametrize("adresses,defaut,attendu", [
+    # LAN explicite (br-lan) : écoute v4 sur le port (robuste au boot, aucune adresse figée), seul son sous-réseau admis.
+    ([("br-lan", "192.168.1.1/24")], {"eth2"}, "listen 80;\nallow 192.168.1.0/24;\n"),
+    # WAN privé (box derrière une box opérateur) : l'interface de la route par défaut n'est JAMAIS choisie.
+    ([("eth2", "192.168.0.20/24"), ("br-lan", "10.0.5.1/24")], {"eth2"}, "listen 80;\nallow 10.0.5.0/24;\n"),
+    ([("eth2", "192.168.0.20/24")], {"eth2"}, "listen 127.0.0.1:80;\n"),
+    # Maillage, Auto-Load, wg-* : jamais.
+    ([("wg-mesh", "10.10.0.5/24"), ("wg-autoload", "10.64.0.7/16"), ("wg0", "172.20.0.1/24")], set(), "listen 127.0.0.1:80;\n"),
+    # Sans br-lan : première interface privée hors route par défaut et tunnels.
+    ([("eth2", "192.168.0.20/24"), ("lan0", "172.16.3.1/24")], {"eth2"}, "listen 80;\nallow 172.16.3.0/24;\n"),
+    ([("br-lan", "82.64.1.2/24")], set(), "listen 127.0.0.1:80;\n"),          # publique : jamais
+    ([], set(), "listen 127.0.0.1:80;\n"),                                      # aucune IPv4 LAN : boucle locale seule
 ])
-def test_ecoute_lan(adresses, attendu):
-    assert front_web.ecoute(adresses) == attendu
+def test_ecoute_lan(adresses, defaut, attendu):
+    assert front_web.ecoute(adresses, defaut) == attendu
+
+
+def test_lecture_des_interfaces_par_ip():
+    sorties = {
+        ("ip", "-o", "-4", "addr", "show", "scope", "global"):
+            "2: eth2    inet 192.168.0.20/24 brd 192.168.0.255 scope global eth2\n5: br-lan    inet 10.0.5.1/24 scope global br-lan\n",
+        ("ip", "-o", "-4", "route", "show", "default"): "default via 192.168.0.254 dev eth2 proto dhcp\n",
+    }
+    run = lambda argv: (0, sorties.get(tuple(argv), ""))  # noqa: E731
+    assert front_web._adresses(run) == [("eth2", "192.168.0.20/24"), ("br-lan", "10.0.5.1/24")]
+    assert front_web._defaut(run) == {"eth2"}
+
+
+def test_deja_remet_les_modes_et_echec_nginx_ote_le_marqueur(tmp_path):
+    """Montée 0.26.0 → 0.26.1 : dossier du marqueur ramené à 0755 même si l'allègement existait ; deja + nginx -t en
+    échec ⇒ tout est rendu et le marqueur ôté (l'agent repasse en « locale »)."""
+    r, _, run = _box(tmp_path)
+    front_web.appliquer(DISTANTE, racine=r, gabarit=RACINE / "nginx" / "etat.conf", run=run)
+    etat = r / front_web.ETAT_REL
+    etat.chmod(0o700)
+    front_web.appliquer(DISTANTE, racine=r, gabarit=RACINE / "nginx" / "etat.conf", run=run)
+    assert (etat.stat().st_mode & 0o777) == 0o755
+    _, _, ko = _box(tmp_path / "x", nginx_ok=False)
+    res = front_web.appliquer(DISTANTE, racine=r, gabarit=RACINE / "nginx" / "etat.conf", run=ko)
+    assert not res["ok"] and not (etat / "actif").exists()
+    assert sorted(p.name for p in (r / "etc/nginx/sites-enabled").iterdir()) == ["secubox", "webui.conf"]
+
+
+def test_sauvegarde_aggregator_gardee_jamais_ecrasee(tmp_path):
+    """Une sauvegarde aggregator.toml gardée (retour où il avait été modifié) n'est pas écrasée au ré-allègement."""
+    r, _, run = _box(tmp_path)
+    g = RACINE / "nginx" / "etat.conf"
+    front_web.appliquer(DISTANTE, racine=r, gabarit=g, run=run)
+    (r / "etc/secubox/aggregator.toml").write_text('modules = ["main"]\n')
+    front_web.appliquer(MINIMAL, racine=r, gabarit=g, run=run)
+    front_web.appliquer(DISTANTE, racine=r, gabarit=g, run=run)
+    etat = r / front_web.ETAT_REL
+    assert (etat / "aggregator.toml").read_text() == 'modules = ["main"]\n'
+    gardees = [p for p in etat.iterdir() if p.name.startswith("aggregator.toml.avant-")]
+    assert len(gardees) == 1 and gardees[0].read_text() == 'modules = ["hub", "users"]\n'
 
 
 def test_agent_de_pilotage_garde_par_tous_les_profils():

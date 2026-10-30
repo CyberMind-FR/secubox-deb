@@ -114,10 +114,11 @@ maître ouvre la box par l'émission d'un code à usage unique.
 
 Page HTML statique écrite par l'agent de pilotage toutes les 60 s (`/run/secubox/pilotage/etat.html`) : nom, maître
 joignable ou non, mains liées, mémoire, services en échec. Aucun secret ni donnée personnelle (ni adresse, ni clé, ni
-jeton, ni nom d'utilisateur). Gabarit `etat` : port 80 sur l'**adresse LAN** de la box seulement
-(`/etc/nginx/secubox-etat-ecoute.conf`, posé à l'allègement : première IPv4 privée hors maillage 10.10/16 et Auto-Load
-10.64/16, sinon 127.0.0.1 ; nftables DEFAULT DROP reste la barrière de fond côté WAN), **réseaux locaux seulement** (`allow` 127.0.0.1, ::1, 10/8, 172.16/12,
-192.168/16, fc00::/7, fe80::/10 ; `deny all`), une seule page (`/` → 302 `/etat`, tout le reste 404), GET seulement,
+jeton, ni nom d'utilisateur). Gabarit `etat` : `listen 80;` en IPv4 sans adresse figée (nginx démarre même si l'adresse
+change ou arrive après lui) et accès limité par `allow` au **seul sous-réseau du LAN** (`/etc/nginx/secubox-etat-ecoute.conf`,
+posé à l'allègement : br-lan, sinon première interface privée hors route par défaut — le WAN, même en adresse privée
+derrière une box opérateur —, wg-*, maillage 10.10/16 et Auto-Load 10.64/16 ; sans LAN, `listen 127.0.0.1:80` seul),
+plus la boucle locale, puis `deny all`. nftables (DEFAULT DROP) reste la barrière du port 80 côté WAN, une seule page (`/` → 302 `/etat`, tout le reste 404), GET seulement,
 aucun relais vers une API ; CSP `default-src 'none'` + `style-src` limité à l'empreinte de la feuille de style de la
 page, `frame-ancestors 'none'`, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `no-store`.
 

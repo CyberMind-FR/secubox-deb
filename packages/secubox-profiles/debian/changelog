@@ -1,3 +1,14 @@
+secubox-profiles (0.26.2-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 7, correction 2/5 (R-L5-34, ref #3126) : page d'état sur `listen 80;` (aucune adresse figée : nginx
+    démarre même si l'adresse change ou arrive après lui) + `allow` du seul sous-réseau du LAN (br-lan, sinon première
+    interface privée hors route par défaut — le WAN, même privé derrière une box opérateur —, wg-*, maillage et
+    Auto-Load), boucle locale seule sans LAN ; nftables reste la barrière du port 80 côté WAN. Dossier du marqueur
+    ramené à 0755 même s'il existait ; nginx -t en échec rend tout et ôte le marqueur même sur un allègement existant ;
+    une sauvegarde aggregator.toml gardée n'est jamais écrasée (renommée .avant-<t>).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 16:00:00 +0100
+
 secubox-profiles (0.26.1-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 7, correction 1/5 (R-L5-34, ref #3126) :
