@@ -223,13 +223,13 @@ sa version). Sortie : une ligne JSON sans chemin ; codes 0, 1 (refus/erreur), 2 
   recopié dans un fichier privé et vérifié (somme ou taille différente : refus, rien sur disque), puis lu en ar + `data.tar`
   (xz, gz, bz2, sans compression ; zst par `/usr/bin/zstd`) **sans dpkg** : aucun script de mainteneur. Seul
   `usr/share/secubox/www/` est copié (chemin des pages vérifié sur secubox-dns, secubox-admin, secubox-ad-guard) vers
-  `/var/lib/secubox/pilotage/www/<paquet>/<version>/` (root, fichiers 0644, dossiers 0755 ; manifeste `.<version>.json` à côté).
+  `/var/lib/secubox-pilotage-pages/www/<paquet>/<version>/` (root, parents tous root 0755 — I5, T5 — fichiers 0644, dossiers 0755 ; manifeste `.<version>.json` à côté).
   Dossier temporaire frère puis renommage ; version présente et intacte (manifeste, sommes, modes) : `{"deja": true}`.
 - `purger [--acteur A]` : lit sur **stdin** `{"en_usage": [{"paquet": …, "version": …}, …]}` (≤ 1 Mio, motifs entiers ; clé
   ou champ en trop : code 2) ; supprime les versions extraites qu'aucune box ne déclare depuis **7 jours**. Horodatage « dernière
   déclaration » tenu par root dans `www/.vu.json` (une version extraite inconnue de l'état reçoit un délai complet).
 - `lister` : `{"versions": [{paquet, version, taille, date}]}`, non audité.
-- Audit (`acteur` déclaré par `--acteur` et `appelant` = SUDO_USER validé, « inconnu » sinon) : `pilotage_www_extraire` (`resultat` ok, deja, refus, erreur ; `motif`) et `pilotage_www_purger` (`purgees`) dans
+- Audit (`acteur` déclaré par `--acteur` et `appelant` = SUDO_USER validé, « inconnu » sinon) : `pilotage_www_extraire` (`resultat` ok, deja, refus, erreur ; `motif` ; `verification` signature|proprietaire) et `pilotage_www_purger` (`purgees`) dans
   `/var/log/secubox/audit.log`, ouvert sans suivre de lien ; audit impossible ⇒ échec.
 - Refus : chemin absolu ou `..`, nom non UTF-8 ou à caractère de contrôle (toute l'archive) ; sous les pages : lien symbolique
   absolu ou contenant `..`, écriture à travers un lien de dossier, lien dur vers un fichier hors des pages, fichier spécial, setuid/setgid, entrée en double, plus de

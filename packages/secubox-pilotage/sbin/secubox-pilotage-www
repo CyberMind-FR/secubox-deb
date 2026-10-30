@@ -10,7 +10,7 @@ maître pour être servies à une box sans tête (une page ne parle qu'à l'API 
                                              Size), recopié dans un fichier privé, vérifié par sa somme (sinon refus,
                                              rien sur disque), lu comme archive ar + data.tar SANS dpkg (aucun script
                                              de mainteneur) ; seuls les fichiers sous usr/share/secubox/www/ sont
-                                             copiés vers /var/lib/secubox/pilotage/www/<paquet>/<version>/ (root,
+                                             copiés vers /var/lib/secubox-pilotage-pages/www/<paquet>/<version>/ (root,
                                              fichiers 0644, dossiers 0755). Dossier temporaire frère puis renommage ;
                                              idempotent (version présente et intacte : rien). Audité.
   purger [--acteur A]                        stdin = {"en_usage": [{"paquet", "version"}, …]} (≤ 1 Mio) : versions
@@ -122,7 +122,10 @@ class Ctx:
                     nom = str(appelant)
             self.acteur = propre(nom) or "inconnu"
         self.journaux = f"{self.r}/var/log/secubox"
-        self.donnees = f"{self.r}/var/lib/secubox/pilotage"
+        # T5 (I5, R-L5-23) : hors de /var/lib/secubox/pilotage (compte du service) — nginx lit ces pages, tous leurs parents
+        # sont root (/var, /var/lib, secubox-pilotage-pages)
+        self.donnees_parent = f"{self.r}/var/lib"
+        self.donnees_nom = "secubox-pilotage-pages"
         self.conf = self.lire_conf(f"{self.r}/etc/secubox/pilotage-www.toml")
         depot = self.conf["depot_apt"]
         self.depot = f"{self.r}{depot}" if self.substitue and depot == DEFAUTS["depot_apt"] else depot
@@ -214,13 +217,39 @@ def auditer(ctx, evenement, **champs):
 
 # --- Racine des pages : www/, root 0755, verrouillée -----------------------------------------------------------------
 
-def ouvrir_www(ctx, creer):
-    """Descripteur de www/, sous /var/lib/secubox/pilotage (compte du service) : sans lien, propriétaire vérifié,
-    verrou exclusif. Tout ce qui est dessous n'est écrit que par root : on y travaille par /proc/self/fd/N."""
+def _dossier_root(dir_fd, nom, ctx, creer):
+    """Ouvre (crée au besoin, 0755) dir_fd/nom sans suivre de lien ; propriétaire root (ctx.uid), pas d'écriture g/o."""
     try:
-        parent = os.open(ctx.donnees, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        fd = os.open(nom, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
+    except FileNotFoundError:
+        if not creer:
+            return None
+        os.mkdir(nom, 0o755, dir_fd=dir_fd)
+        fd = os.open(nom, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
+        os.fchmod(fd, 0o755)
+    except OSError:
+        raise Erreur("dossier des pages non sûr") from None
+    st = os.fstat(fd)
+    if st.st_uid != ctx.uid or st.st_mode & 0o022:
+        os.close(fd)
+        raise Erreur("dossier des pages non sûr")
+    return fd
+
+
+def ouvrir_www(ctx, creer):
+    """Descripteur de www/, sous /var/lib/secubox-pilotage-pages (root 0755, comme /var/lib : nginx les traverse) : sans
+    lien, propriétaire vérifié, verrou exclusif. Tout ce qui est dessous n'est écrit que par root : on y travaille par
+    /proc/self/fd/N."""
+    try:
+        base = os.open(ctx.donnees_parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except OSError:
         raise Erreur("dossier de données absent ou non sûr") from None
+    try:
+        parent = _dossier_root(base, ctx.donnees_nom, ctx, creer)
+    finally:
+        os.close(base)
+    if parent is None:
+        return None
     try:
         try:
             fd = os.open("www", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
@@ -234,7 +263,7 @@ def ouvrir_www(ctx, creer):
     finally:
         os.close(parent)
     st = os.fstat(fd)
-    if st.st_uid != ctx.uid:
+    if st.st_uid != ctx.uid or not stat.S_ISDIR(st.st_mode):
         os.close(fd)
         raise Erreur("dossier des pages non sûr")
     if stat.S_IMODE(st.st_mode) != 0o755:
@@ -304,8 +333,12 @@ def lire_fd(fd, maxi):
 
 
 class Depot:
-    """Dépôt apt ouvert par descripteur. Avec le trousseau : InRelease vérifié par gpgv, puis chaque Packages par la somme
-    de Release. Sans trousseau (repli annoncé, jamais silencieux) : tout le chemin lu appartient à root."""
+    """Dépôt apt ouvert par descripteur. Chaîne de confiance (M4, R-L5-24) : le trousseau (clé TOML `trousseau`, défaut
+    /usr/share/keyrings/secubox.gpg, celui des clients apt SecuBox) → `gpgv --keyring <trousseau>` sur
+    dists/<suite>/InRelease (seule la sortie vérifiée est lue ; Suite et Codename doivent valoir la suite configurée) →
+    somme SHA256 et taille de chaque main/binary-*/Packages dans ce Release → SHA256 et Size du .deb dans Packages.
+    Sans trousseau (repli annoncé, jamais silencieux, `verification = proprietaire` dans l'audit) : tout le chemin lu
+    appartient à root, sans écriture groupe/autres."""
 
     def __init__(self, ctx):
         self.ctx = ctx
@@ -347,6 +380,11 @@ class Depot:
                 raise Refus("signature du dépôt invalide (InRelease)")
             with open(sortie_v, "rb") as f:
                 texte = f.read().decode("utf-8", "replace")
+        # M2 (R-L5-24) : Suite ou Codename = la suite configurée (reprepro peut écrire Suite: stable, Codename: trixie),
+        # sinon refus : un Release signé d'une autre suite, rejoué à cette place, aurait sinon été cru
+        entete = dict(x.split(":", 1) for x in texte.split("\n\n", 1)[0].splitlines() if ":" in x and not x[:1].isspace())
+        if self.ctx.conf["suite"] not in (entete.get("Suite", "").strip(), entete.get("Codename", "").strip()):
+            raise Refus("suite du Release signé inattendue (Suite/Codename)")
         sommes, dans = {}, False
         for ligne in texte.splitlines():
             if not ligne[:1].isspace():
@@ -708,7 +746,7 @@ def extraire(ctx, paquet, version):
         auditer(ctx, "pilotage_www_extraire", paquet=paquet, version=version,
                 resultat="refus" if isinstance(e, Refus) else "erreur", motif=str(e))
         raise
-    verif = "proprietaire" if depot.repli else "signature"
+    verif = "proprietaire" if depot.repli else "signature"   # M3 (R-L5-24) : dans chaque ligne d'audit qui suit
     try:
         dp = sous(wfd, paquet)
         try:
@@ -719,7 +757,7 @@ def extraire(ctx, paquet, version):
         nettoyer_residus(dp)
         if intacte(dp, version, somme):
             marquer_vu(ctx, wfd, [f"{paquet}/{version}"])
-            auditer(ctx, "pilotage_www_extraire", paquet=paquet, version=version, resultat="deja")
+            auditer(ctx, "pilotage_www_extraire", paquet=paquet, version=version, resultat="deja", verification=verif)
             return {"ok": True, "paquet": paquet, "version": version, "deja": True, "verification": verif}
         tmp = os.path.join(dp, f".tmp-{version}-{os.getpid()}")
         try:
@@ -751,7 +789,7 @@ def extraire(ctx, paquet, version):
             nettoyer_residus(dp)
         except Erreur as e:
             auditer(ctx, "pilotage_www_extraire", paquet=paquet, version=version,
-                    resultat="refus" if isinstance(e, Refus) else "erreur", motif=str(e))
+                    resultat="refus" if isinstance(e, Refus) else "erreur", motif=str(e), verification=verif)
             raise
         finally:
             if os.path.lexists(tmp):
@@ -763,7 +801,7 @@ def extraire(ctx, paquet, version):
                 pass
         marquer_vu(ctx, wfd, [f"{paquet}/{version}"])
         auditer(ctx, "pilotage_www_extraire", paquet=paquet, version=version, resultat="ok",
-                fichiers=len(fichiers), taille=total)
+                fichiers=len(fichiers), taille=total, verification=verif)
         return {"ok": True, "paquet": paquet, "version": version, "deja": False, "verification": verif, "fichiers": len(fichiers),
                 "taille": total}
     finally:

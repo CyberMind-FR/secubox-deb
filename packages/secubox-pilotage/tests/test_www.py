@@ -82,7 +82,10 @@ class Banc:
         (self.r / "var/log/secubox").mkdir(parents=True)
         (self.r / "var/lib/secubox/pilotage").mkdir(parents=True)
         (self.r / "etc/secubox").mkdir(parents=True)
-        self.www = self.r / "var/lib/secubox/pilotage/www"
+        # T5 (I5, R-L5-23) : les pages vivent hors du dossier du service, sous un arbre dont tous les parents sont root
+        self.www = self.r / "var/lib/secubox-pilotage-pages/www"
+        self.www.parent.mkdir(parents=True)
+        os.chmod(self.www.parent, 0o755)
         self.stanzas = {}
 
     def publier(self, paquet, version, deb: bytes, somme=None, arch="arm64"):
@@ -597,3 +600,80 @@ def test_restes_de_l_etat_nettoyes_et_horloge_invalide(banc):
     assert banc.ctl("purger", entree=_en_usage()).returncode == 0
     assert not (banc.www / ".vu.json.4242.tmp").exists()
     assert banc.ctl("lister", maintenant=None, env={"SBX_MAINTENANT": "demain"}).returncode == 2
+
+
+# --- T5 : racine des pages lisible par nginx, minors R-L5-24 ----------------------------------------------------------
+
+def test_pages_hors_du_dossier_du_service(banc):
+    """I5 : nginx (www-data) lit les pages ; aucun parent ne doit appartenir au compte du service."""
+    banc.publier("secubox-dns", "1.0", faire_deb(pages_normales()))
+    assert banc.ctl("extraire", "secubox-dns", "1.0").returncode == 0
+    assert (banc.r / "var/lib/secubox-pilotage-pages/www/secubox-dns/1.0/dns/index.html").exists()
+    assert not (banc.r / "var/lib/secubox/pilotage/www").exists()
+    assert stat.S_IMODE((banc.r / "var/lib/secubox-pilotage-pages").stat().st_mode) == 0o755
+
+
+def test_dossier_des_pages_cree_s_il_manque(banc):
+    banc.www.parent.rmdir()
+    banc.publier("secubox-dns", "1.0", faire_deb(pages_normales()))
+    assert banc.ctl("extraire", "secubox-dns", "1.0").returncode == 0
+    assert stat.S_IMODE(banc.www.parent.stat().st_mode) == 0o755
+
+
+def test_parent_des_pages_inscriptible_refuse(banc):
+    banc.publier("secubox-dns", "1.0", faire_deb(pages_normales()))
+    p = banc.r / "var/lib/secubox-pilotage-pages"
+    os.chmod(p, 0o777)
+    r = banc.ctl("extraire", "secubox-dns", "1.0")
+    assert r.returncode == 1 and "non sûr" in json.loads(r.stdout)["erreur"]
+
+
+def test_verification_dans_l_audit(banc):
+    """M3 (R-L5-24) : l'audit dit comment le dépôt a été cru."""
+    banc.publier("secubox-dns", "1.0", faire_deb(pages_normales()))
+    banc.ctl("extraire", "secubox-dns", "1.0")
+    assert banc.audit()[-1]["verification"] == "signature"
+    (banc.r / "usr/share/keyrings/secubox.gpg").unlink()
+    subprocess.run(["chmod", "-R", "go-w", str(banc.apt)], check=True)
+    banc.publier("secubox-dns", "2.0", faire_deb(pages_normales()))
+    subprocess.run(["chmod", "-R", "go-w", str(banc.apt)], check=True)
+    banc.ctl("extraire", "secubox-dns", "2.0")
+    assert banc.audit()[-1]["verification"] == "proprietaire"
+
+
+def test_packages_modifie_a_taille_egale_refuse(banc):
+    """M5 : la somme, pas seulement la taille, est comparée à Release."""
+    banc.publier("secubox-dns", "1.0", faire_deb(pages_normales()))
+    p = banc.apt / "dists/trixie/main/binary-arm64/Packages"
+    avant = p.read_bytes()
+    apres = avant.replace(b"Architecture: all", b"Architecture: alL")
+    assert len(apres) == len(avant) and apres != avant
+    p.write_bytes(apres)
+    r = banc.ctl("extraire", "secubox-dns", "1.0")
+    assert r.returncode == 1 and "Release" in json.loads(r.stdout)["erreur"]
+
+
+def test_motif_du_refus_inrelease_absent(banc):
+    banc.publier("secubox-dns", "1.0", faire_deb(pages_normales()))
+    (banc.apt / "dists/trixie/InRelease").unlink()
+    r = banc.ctl("extraire", "secubox-dns", "1.0")
+    assert r.returncode == 1 and "InRelease" in json.loads(r.stdout)["erreur"]
+    assert banc.audit()[-1]["motif"].startswith("signature du dépôt absente")
+
+
+@pytest.mark.parametrize("suite,codename,refus", [("bookworm", "bookworm", True), ("stable", "trixie", False),
+                                                  ("trixie", "", False), ("", "", True)])
+def test_suite_ou_codename_inattendus_refuses(banc, suite, codename, refus):
+    """M2 : un Release signé d'une autre suite (rejeu d'un index ancien) est refusé ; Suite OU Codename suffit."""
+    banc.publier("secubox-dns", "1.0", faire_deb(pages_normales()))
+    dists = banc.apt / "dists/trixie"
+    rel = dists / "Release"
+    rel.write_text(rel.read_text().replace("Suite: trixie", f"Suite: {suite}").replace("Codename: trixie", f"Codename: {codename}"))
+    (dists / "InRelease").unlink()
+    subprocess.run(["gpg", "--batch", "--yes", "--clearsign", "-o", str(dists / "InRelease"), str(rel)],
+                   env=banc.cles["bonne"][0], check=True, capture_output=True)
+    r = banc.ctl("extraire", "secubox-dns", "1.0")
+    if refus:
+        assert r.returncode == 1 and "suite" in json.loads(r.stdout)["erreur"].lower()
+    else:
+        assert r.returncode == 0, r.stdout
