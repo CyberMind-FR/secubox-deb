@@ -1,3 +1,11 @@
+secubox-pilotage (0.2.2-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 3, correction 2/5 (R-L5-22 M4, ref #3126) : commentaire de HTTP_INCONNUS_PAR_MINUTE séparé de celui de
+    TAILLE_HTTP_MAX (aucun changement de comportement). Rappel : le marqueur du tunnel arrête un relais qui transmettrait
+    les en-têtes du client, il ne protège pas contre un processus qui joint la socket (0660).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 01:00:00 +0100
+
 secubox-pilotage (0.2.1-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 3, relecture de sécurité, correction 1/5 (R-L5-21, ref #3126) :
