@@ -1,3 +1,15 @@
+secubox-mqtt (2.7.3-1~trixie1) trixie; urgency=medium
+
+  * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte
+    (/etc/os-release, repli trixie), surcharge par SECUBOX_DEBIAN_SUITE ; plus de bookworm en dur.
+    (mosquitto et composant zigbee)
+  * systemd >= 257 (trixie) en LXC non privilégié : ImportCredential= vidé par drop-in pour
+    journald, sysctl et tmpfiles, seulement si le conteneur a ce systemd (#3274).
+  * zigbee : NodeSource « nodistro » indépendant de la suite ; gpg au lieu de gnupg. Clé
+    debian_suite retirée des exemples TOML (jamais lue).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
+
 secubox-mqtt (2.7.2-1~trixie1) trixie; urgency=medium
 
   * Vhost Zigbee livré sans le nom de gk2 (ref #3117) : server_name « zigbee.* » (zigbee.gk2.secubox.in reste

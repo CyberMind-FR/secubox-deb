@@ -27,7 +27,7 @@ navigateur ─► nginx ─► /run/secubox/voicestudio.sock   (API du module : 
 
 | | |
 |---|---|
-| Conteneur | `voicestudio`, Debian bookworm **non privilégié**, `10.100.0.230`, torch **CPU** (aucun GPU requis) |
+| Conteneur | `voicestudio`, Debian bookworm **non privilégié** (exception à #3285 : venv figé sur Python 3.11, voir `lxc/install-lxc.sh`), `10.100.0.230`, torch **CPU** (aucun GPU requis) |
 | Sources | amont `debpalash/VoiceStudio`, **commit ET sha256** épinglés dans le TOML ; l'empreinte est vérifiée AVANT extraction |
 | Python | versions tirées de l'image validée (`conf/contraintes.txt`, sans CUDA) |
 | Disposition | sources dans `/app`, données dans `/app/omnivoice_data` (montage de `/srv/secubox/voicestudio`) — **même chemin que l'image**, la base SQLite garde des chemins absolus |

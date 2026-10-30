@@ -23,7 +23,7 @@ Depends: ${misc:Depends},
  curl,
  jq
 Description: SecuBox Lyrion — Music server (HOSTING layer)
- Hosts Lyrion in a Debian bookworm LXC at 10.100.0.100 on br-lxc.
+ Hosts Lyrion in a Debian stable LXC at 10.100.0.100 on br-lxc.
  File-backend identity provider reading /etc/secubox/users.json (the same
  argon2-hashed user store already managed by secubox-users) so the canonical
  SecuBox identity is the single source of truth for SSO.

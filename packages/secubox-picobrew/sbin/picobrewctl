@@ -101,11 +101,16 @@ cmd_install() {
     [ "$(id -u)" -eq 0 ] || { err "root requis"; return 1; }
     mkdir -p "$LXC_PATH/$CONTAINER" "$STATE_DIR"
 
+    # EXCEPTION À #3285 (tous les LXC en dernière Debian stable) : ce conteneur
+    # reste en bookworm. picobrew_pico épingle eventlet==0.36.1, qui ne prend en
+    # charge Python 3.13 (trixie) qu'à partir de 0.38.0 (NEWS d'eventlet, vérifié
+    # le 2026-10-30). À lever quand l'amont relève ses dépendances.
+    local suite="${SECUBOX_DEBIAN_SUITE:-bookworm}"
     if [ ! -x "$LXC_PATH/$CONTAINER/rootfs/bin/bash" ]; then
-        echo "[picobrew] debootstrap bookworm…"
+        echo "[picobrew] debootstrap $suite…"
         debootstrap --variant=minbase \
             --include=systemd,systemd-sysv,dbus,ca-certificates,iproute2,python3,python3-venv,python3-pip,git,nginx,openssl \
-            bookworm "$LXC_PATH/$CONTAINER/rootfs" http://deb.debian.org/debian \
+            "$suite" "$LXC_PATH/$CONTAINER/rootfs" http://deb.debian.org/debian \
             || { err "debootstrap a échoué"; return 1; }
     fi
 

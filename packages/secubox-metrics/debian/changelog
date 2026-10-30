@@ -1,3 +1,16 @@
+secubox-metrics (1.29.8-1~trixie1) trixie; urgency=medium
+
+  * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte
+    (/etc/os-release, repli trixie), surcharge par SECUBOX_DEBIAN_SUITE ; plus de bookworm en dur.
+    (composant grafana)
+  * systemd >= 257 (trixie) en LXC non privilégié : ImportCredential= vidé par drop-in pour
+    journald, sysctl et tmpfiles, seulement si le conteneur a ce systemd (#3274).
+  * apt.grafana.com « stable » indépendant de la suite ; software-properties-common (absent de
+    trixie, inutile) retiré ; gpg au lieu de gnupg. Clé debian_suite retirée de l'exemple TOML
+    (jamais lue).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
+
 secubox-metrics (1.29.7-1~trixie1) trixie; urgency=medium
 
   * Registre des cookies lu EN FLUX, ligne à ligne (#3217) : la première lecture après chaque démarrage faisait

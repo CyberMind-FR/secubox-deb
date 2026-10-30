@@ -1,3 +1,12 @@
+secubox-streamlit (1.7.1-1~trixie1) trixie; urgency=medium
+
+  * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte
+    (/etc/os-release, repli trixie), surcharge par SECUBOX_DEBIAN_SUITE ; plus de bookworm en dur.
+  * systemd >= 257 (trixie) en LXC non privilégié : ImportCredential= vidé par drop-in pour
+    journald, sysctl et tmpfiles, seulement si le conteneur a ce systemd (#3274).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
+
 secubox-streamlit (1.7.0-1~trixie1) trixie; urgency=medium
 
   * Dépôt et démarrage en 500 quand le conteneur dort (gk2, 2026-10-28, ref #3247) : POST /deploy,
