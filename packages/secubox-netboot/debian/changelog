@@ -30,6 +30,11 @@ secubox-netboot (0.8.3-1~trixie1) trixie; urgency=medium
     corrigé (0x06d00000, flux), procédure en trois lignes par carte ; blocs de la page et des README comparés au
     générateur. LIVE_SCRIPT_ADDR retiré (${loadaddr} écrit en dur). board/mochabin/etc/fw_env.config corrigé
     (/dev/mtd2 0x0 : il visait au-delà de mtd0).
+  * Relecture ciblée (ref #3271) : bootcmd_avant gardé par « if test -n … else … fi » (forme du boot.cmd
+    ESPRESSObin validé sur carte) ; ESPRESSObin à valider au banc avant tout usage (en-tête, README), l'alias
+    fix-bootcmd.scr de l'image y reste l'ancien script #2826 (bootcmd seulement) ; --serveur accepte un nom
+    d'hôte ; le live léger (clé USB) n'affiche pas la commande « réseau ». R-3271-2 : l'overlay #737 garde des
+    chemins fw_setenv inopérants sans MTD, suivis par #3281 ; phrase périmée du README corrigée.
 
  -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
 

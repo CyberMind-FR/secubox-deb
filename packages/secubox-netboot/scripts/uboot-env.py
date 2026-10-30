@@ -38,7 +38,9 @@ NOM_SCR = "SecuBox uboot env"
 _LIGNE = re.compile(r"^((?:LIVE|UBOOT)_[A-Z_]{1,24})=(.*)$")
 _ADRESSE = re.compile(r"0x[0-9a-f]{8}")
 _COMMANDE = re.compile(r"[ -&(-~]{1,240}")                 # ASCII imprimable, sans « ' » : posée entre '…'
-_IP = re.compile(r"(?:[0-9]{1,3}\.){3}[0-9]{1,3}|<IP du maître>")
+# IPv4, ou nom d'hôte en libellés DNS (1 à 63 caractères, ni tiret en bord ni libellé vide), ou l'emplacement réservé
+_LIBELLE = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+_IP = re.compile(rf"(?:[0-9]{{1,3}}\.){{3}}[0-9]{{1,3}}|(?=.{{1,253}}$){_LIBELLE}(?:\.{_LIBELLE})*|<IP du maître>")
 _NOM = re.compile(r"[a-z0-9-]{1,32}")
 
 
@@ -79,6 +81,7 @@ def charge(carte: str, board: Path = BOARD_PAQUET) -> dict:
         "carte": carte, "titre": v.get("LIVE_TITRE", ""), "nom": v.get("LIVE_NOM", ""), "ethact": v.get("LIVE_ETHACT", ""),
         "adresses": {"kernel_addr_r": v.get("LIVE_KERNEL_ADDR", ""), "fdt_addr_r": v.get("LIVE_FDT_ADDR", ""),
                      "ramdisk_addr_r": v.get("LIVE_RAMDISK_ADDR", "")},
+        "valide_banc": v.get("UBOOT_VALIDE_BANC") == "oui",
         "mmc": v.get("UBOOT_MMC", ""), "charge": v.get("UBOOT_CHARGE", ""), "bootcmd": v.get("UBOOT_BOOTCMD", ""),
         # diagnostic seulement (R-3271-1) : rien n'est écrit depuis Linux
         "env": {"mtd": v.get("UBOOT_ENV_MTD", ""), "spi": v.get("UBOOT_ENV_SPI", ""),
@@ -102,7 +105,7 @@ def charge(carte: str, board: Path = BOARD_PAQUET) -> dict:
 def netboot(c: dict, serveur: str, nom: str = "") -> list:
     """Bloc à taper au U-Boot d'usine pour démarrer le live : adresses et autoload AVANT le dhcp ; serverip APRÈS
     (le dhcp le remplacerait par le next-server)."""
-    _exige(_IP.fullmatch(serveur), "--serveur : adresse IPv4 attendue")
+    _exige(_IP.fullmatch(serveur), "--serveur : adresse IPv4 ou nom d'hôte attendu")
     nom = nom or c["nom"]
     _exige(_NOM.fullmatch(nom), "--nom invalide")
     a = c["adresses"]
@@ -115,7 +118,7 @@ def netboot(c: dict, serveur: str, nom: str = "") -> list:
 
 def lancements(c: dict, serveur: str = "<IP du maître>", nom: str = "") -> list:
     """Trois façons de lancer secubox-uboot-env.scr ; le script pose lui-même ses adresses."""
-    _exige(_IP.fullmatch(serveur), "--serveur : adresse IPv4 attendue")
+    _exige(_IP.fullmatch(serveur), "--serveur : adresse IPv4 ou nom d'hôte attendu")
     nom = nom or c["nom"]
     _exige(_NOM.fullmatch(nom), "--nom invalide")
     ch, m = c["charge"], c["mmc"]
@@ -152,6 +155,10 @@ def cmd(c: dict) -> str:
         "# FICHIER GÉNÉRÉ par packages/secubox-netboot/scripts/uboot-env.py depuis",
         f"#   packages/secubox-netboot/board/{c['carte']}/live.env et uboot-env.env : ne pas l'éditer à la main.",
         f'# Compile : mkimage -A arm64 -O linux -T script -C none -n "{NOM_SCR}" -d secubox-uboot-env.cmd secubox-uboot-env.scr',
+        *([] if c["valide_banc"] else [
+            "#",
+            f"# À VALIDER AU BANC avant tout usage : les adresses de {t} sont celles du live, pas encore éprouvées",
+            "# pour le système installé (l'image garde l'ancien fix-bootcmd.scr #2826 comme alias)."]),
         "#",
         "# Pose, puis enregistre (saveenv) :",
         f"#   - adresses sûres : kernel_addr_r {a['kernel_addr_r']}, fdt_addr_r {a['fdt_addr_r']}, "
@@ -176,7 +183,10 @@ def cmd(c: dict) -> str:
         'echo "============================================"',
         'echo "bootcmd actuel : ${bootcmd}"',
         "",
-        'if test -z "${bootcmd_avant}"; then',
+        # forme « test -n … else » : celle du boot.cmd ESPRESSObin validé sur carte (test -z non éprouvé sur ce hush)
+        'if test -n "${bootcmd_avant}"; then',
+        '    echo "bootcmd_avant deja present : garde tel quel"',
+        "else",
         '    setenv bootcmd_avant "${bootcmd}"',
         "fi",
         *(f"setenv {k} '{v}'" if " " in v else f"setenv {k} {v}" for k, v in variables(c)),
@@ -191,10 +201,11 @@ def cmd(c: dict) -> str:
     return "\n".join(entete + corps) + "\n"
 
 
-def live_conf(c: dict, serveur: str, nom: str = "") -> dict:
-    """Pour sbx-uboot-env (diagnostic) : commandes de la carte, script de référence, emplacement attendu."""
-    return {"carte": c["carte"], "titre": c["titre"], "env": c["env"],
-            "commandes": [list(x) for x in preparation(c, serveur, nom)], "cmd": cmd(c)}
+def live_conf(c: dict, serveur: str, nom: str = "", sans_reseau: bool = False) -> dict:
+    """Pour sbx-uboot-env (diagnostic) : commandes de la carte, script de référence, emplacement attendu. Le live
+    léger (clé USB) ne sert pas de netboot : sans_reseau retire la commande « réseau »."""
+    cmds = [list(x) for x in preparation(c, serveur, nom) if not (sans_reseau and x[0] == "reseau")]
+    return {"carte": c["carte"], "titre": c["titre"], "env": c["env"], "commandes": cmds, "cmd": cmd(c)}
 
 
 def generer(mkimage: str, board: Path) -> None:
@@ -226,6 +237,7 @@ def main(argv=None) -> int:
     lc.add_argument("carte")
     lc.add_argument("--serveur", default="<IP du maître>")
     lc.add_argument("--nom", default="")
+    lc.add_argument("--sans-reseau", action="store_true")
     a = p.parse_args(argv)
     try:
         if a.action == "generer":
@@ -239,7 +251,7 @@ def main(argv=None) -> int:
         elif a.action == "preparation":
             print("\n".join(f"{r}\t{x}" for r, x in preparation(c, a.serveur, a.nom)))
         else:
-            print(json.dumps(live_conf(c, a.serveur, a.nom), ensure_ascii=False, indent=1))
+            print(json.dumps(live_conf(c, a.serveur, a.nom, a.sans_reseau), ensure_ascii=False, indent=1))
     except Refus as e:
         print(f"uboot-env.py : {e}", file=sys.stderr)
         return 1

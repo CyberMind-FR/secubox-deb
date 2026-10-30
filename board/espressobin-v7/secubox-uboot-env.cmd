@@ -5,6 +5,9 @@
 #   packages/secubox-netboot/board/espressobin-v7/live.env et uboot-env.env : ne pas l'éditer à la main.
 # Compile : mkimage -A arm64 -O linux -T script -C none -n "SecuBox uboot env" -d secubox-uboot-env.cmd secubox-uboot-env.scr
 #
+# À VALIDER AU BANC avant tout usage : les adresses de ESPRESSObin v7 sont celles du live, pas encore éprouvées
+# pour le système installé (l'image garde l'ancien fix-bootcmd.scr #2826 comme alias).
+#
 # Pose, puis enregistre (saveenv) :
 #   - adresses sûres : kernel_addr_r 0x07000000, fdt_addr_r 0x06f00000, ramdisk_addr_r 0x0b000000 ;
 #   - ethact neta@30000 (port WAN) et autoload no (le dhcp ne charge rien) ;
@@ -24,7 +27,9 @@ echo "SecuBox ESPRESSObin v7 - preparation environnement U-Boot"
 echo "============================================"
 echo "bootcmd actuel : ${bootcmd}"
 
-if test -z "${bootcmd_avant}"; then
+if test -n "${bootcmd_avant}"; then
+    echo "bootcmd_avant deja present : garde tel quel"
+else
     setenv bootcmd_avant "${bootcmd}"
 fi
 setenv kernel_addr_r 0x07000000

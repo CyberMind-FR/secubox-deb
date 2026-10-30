@@ -161,7 +161,7 @@ install -m0644 "$pub" "$w/root/etc/secubox/netboot-image.pub"
 # Après le flash (#3271) : sbx-uboot-env affiche les commandes U-Boot qui lancent secubox-uboot-env.scr (diagnostic
 # seulement : rien n'est écrit en SPI depuis Linux, R-3271-1).
 install -m0755 "$HERE/installer/sbx-uboot-env" "$w/root/usr/local/sbin/sbx-uboot-env"
-python3 "$HERE/scripts/uboot-env.py" live-conf "$carte" --serveur "${srv%%:*}" > "$w/root/etc/secubox/uboot-env.json" \
+python3 "$HERE/scripts/uboot-env.py" live-conf "$carte" --serveur "${srv%%:*}" --sans-reseau > "$w/root/etc/secubox/uboot-env.json" \
     || die "préparation U-Boot de $carte non générée (board/$carte/uboot-env.env)"
 cat > "$w/root/etc/motd" <<EOF
 

@@ -24,7 +24,9 @@ echo "SecuBox MOCHAbin - preparation environnement U-Boot"
 echo "============================================"
 echo "bootcmd actuel : ${bootcmd}"
 
-if test -z "${bootcmd_avant}"; then
+if test -n "${bootcmd_avant}"; then
+    echo "bootcmd_avant deja present : garde tel quel"
+else
     setenv bootcmd_avant "${bootcmd}"
 fi
 setenv kernel_addr_r 0x08000000

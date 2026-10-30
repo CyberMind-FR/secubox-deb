@@ -116,8 +116,11 @@ def test_la_mochabin_pose_adresses_et_autoload_avant_le_dhcp_du_bootcmd():
 @pytest.mark.parametrize("carte", CARTES)
 def test_l_ancien_bootcmd_est_garde_au_premier_passage_seulement(carte):
     lignes = corps(cmd_de(carte))
-    i = lignes.index('if test -z "${bootcmd_avant}"; then')
-    assert lignes[i + 1] == 'setenv bootcmd_avant "${bootcmd}"' and lignes[i + 2] == "fi"
+    # M-1 : forme « test -n … then … else … fi », celle du boot.cmd ESPRESSObin validé sur carte (pas de test -z)
+    i = lignes.index('if test -n "${bootcmd_avant}"; then')
+    assert lignes[i + 1].startswith("echo ") and lignes[i + 2] == "else"
+    assert lignes[i + 3] == 'setenv bootcmd_avant "${bootcmd}"' and lignes[i + 4] == "fi"
+    assert "test -z" not in cmd_de(carte)
     assert i < next(j for j, x in enumerate(lignes) if x.startswith("setenv bootcmd '"))
 
 
@@ -302,7 +305,8 @@ def test_conf_du_live_commandes_et_script(carte, mtd):
     assert c["cmd"] == cmd_de(carte)
 
 
-def test_plus_aucune_ecriture_spi_depuis_linux():
+def test_le_live_et_sbx_uboot_env_n_ecrivent_plus_la_spi():
+    """R-3271-1 vise le live (sbx-netflash, sbx-uboot-env, lives construits) ; l'overlay #737 est suivi par #3281."""
     for f in (OUTIL, ICI / "installer" / "sbx-netflash", GEN, ICI / "scripts" / "build-live-netboot.sh",
               ICI / "scripts" / "build-live-leger.sh"):
         t = f.read_text()
@@ -395,7 +399,10 @@ def test_l_image_porte_secubox_uboot_env_scr_et_l_alias_fix_bootcmd():
     bloc = b.split("# Script USB (#2816, #2824)", 1)[1].split("# Démonter", 1)[0]
     assert 'board/${BOARD}/secubox-uboot-env.scr" "${MNT}/boot/secubox-uboot-env.scr"' in bloc
     assert 'board/${BOARD}/secubox-uboot-env.cmd" "${MNT}/boot/secubox-uboot-env.cmd"' in bloc
-    assert '"${MNT}/boot/secubox-uboot-env.scr" "${MNT}/boot/fix-bootcmd.scr"' in bloc     # alias une version (#2826)
+    # alias une version : l'ancien fix-bootcmd de la carte s'il existe (ESPRESSObin #2826), sinon une copie complète
+    assert 'if [[ -f "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr" ]]; then' in bloc
+    assert 'cp "${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr" "${MNT}/boot/fix-bootcmd.scr"' in bloc
+    assert 'cp "${MNT}/boot/secubox-uboot-env.scr" "${MNT}/boot/fix-bootcmd.scr"' in bloc
     assert bloc.index("secubox-uboot-env.scr") < bloc.index("if command -v mkimage")
 
 
@@ -463,3 +470,47 @@ def test_live_script_addr_retire():
     fichiers = [*(ICI / "board").glob("*/live.env"), *(ICI / "scripts").glob("*.sh")]
     fautifs = [f.name for f in fichiers if "LIVE_SCRIPT_ADDR" in f.read_text()]
     assert fautifs == []
+
+
+# ── Relecture ciblée : I-1, I-2, M-2 ─────────────────────────────────────────────────────────────────────────────
+def test_readme_overlay_737_suivi_par_3281_et_phrase_perimee_corrigee():
+    doc = (ICI / "README.md").read_text()
+    assert "#3281" in doc and "#737" in doc and "inopérants sans MTD" in doc
+    assert "`fw_setenv` calls use `sudo` with a tight sudoers rule" not in doc
+
+
+def test_alias_espressobin_garde_l_ancien_contenu_2826():
+    """I-2 : adresses non validées au banc → l'alias ne pose que bootcmd_avant et bootcmd."""
+    t = (RACINE / "board" / "espressobin-v7" / "fix-bootcmd.cmd").read_text()
+    poses = re.findall(r"^\s*setenv (\w+) ", t, re.M)
+    assert sorted(set(poses)) == ["bootcmd", "bootcmd_avant"], poses
+    assert "ethact" not in poses and not any(p.endswith("_addr_r") for p in poses)
+    scr = (RACINE / "board" / "espressobin-v7" / "fix-bootcmd.scr").read_bytes()
+    assert scr[72:] == t.encode()
+    assert not (RACINE / "board" / "mochabin" / "fix-bootcmd.scr").exists()     # MOCHAbin : copie complète
+
+
+def test_l_espressobin_est_a_valider_au_banc_dans_l_en_tete_et_le_readme():
+    tete = "\n".join(x for x in cmd_de("espressobin-v7").splitlines() if x.startswith("#"))
+    assert "À VALIDER AU BANC avant tout usage" in tete
+    assert "À VALIDER AU BANC" not in cmd_de("mochabin")
+    assert "à valider au banc avant tout usage" in (ICI / "README.md").read_text()
+
+
+@pytest.mark.parametrize("hote", ["boot.gk2.secubox.in", "gk2", "192.168.1.200"])
+def test_serveur_nom_d_hote_accepte(hote):
+    assert f"setenv serverip {hote};" in gen("preparation", "mochabin", "--serveur", hote)
+
+
+@pytest.mark.parametrize("hote", ["a;b", "-x", "a..b", "x" * 64 + ".in", "a b"])
+def test_serveur_douteux_refuse(hote):
+    r = subprocess.run([sys.executable, str(GEN), "preparation", "mochabin", "--serveur", hote],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode != 0
+
+
+def test_live_leger_sans_commande_reseau():
+    c = json.loads(gen("live-conf", "espressobin-v7", "--serveur", "boot.gk2.secubox.in", "--sans-reseau"))
+    assert [r for r, _ in c["commandes"]] == ["installe"]
+    s = (ICI / "scripts" / "build-live-leger.sh").read_text()
+    assert 'live-conf "$carte" --serveur "${srv%%:*}" --sans-reseau' in s

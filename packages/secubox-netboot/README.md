@@ -271,7 +271,8 @@ enregistre (`saveenv`) :
   ESPRESSObin v7 : `boot.scr` de l'eMMC `mmc 1`, puis `boot-usb.scr` de la clé) ;
 - `bootcmd_netboot` : secours netboot, **jamais lancé seul** (un DHCP du WAN ne doit pas pouvoir démarrer la box) ;
   à la console : `setenv serverip <IP du maître>; run bootcmd_netboot` ;
-- l'ancien `bootcmd` dans `bootcmd_avant`, seulement s'il n'existe pas déjà. Retour : `setenv bootcmd "${bootcmd_avant}"; saveenv`.
+- l'ancien `bootcmd` dans `bootcmd_avant`, seulement s'il n'existe pas déjà (forme `if test -n … else … fi`, celle
+  du `boot.cmd` ESPRESSObin validé sur carte). Retour : `setenv bootcmd "${bootcmd_avant}"; saveenv`.
 
 Le `bootcmd` MOCHAbin enchaîne par `;` (`setenv ethact mvpp2-2; dhcp; mmc dev 0; fatload …; source …`) : un `dhcp`
 raté n'empêche pas le démarrage. C'est la séquence validée au banc le 2026-10-29 ; ne pas en changer la forme (`&&`,
@@ -285,8 +286,17 @@ dossier netboot de la carte), est la seule voie. `sbx-uboot-env` (dans le live) 
 « la SPI n'est pas exposée sous ce noyau : utilisez secubox-uboot-env.scr depuis U-Boot », code 5, quand `/proc/mtd` ne
 liste pas le mtd attendu).
 
-**Où est le script.** À la racine de la partition de démarrage (FAT) de l'image (`image/build-image.sh` ; alias
-`fix-bootcmd.scr` le temps d'une version, pour les procédures #2826), et dans le dossier netboot de la carte, à côté de
+R-3271-2 : cette décision vise le live et `sbx-uboot-env`. L'overlay #737 (`secubox-netboot-overlay`,
+`secubox-netboot-confirm-healthy`, `installer/init`) garde des chemins `fw_setenv` antérieurs à cette branche,
+inopérants sans MTD (ils ne font rien sous ces noyaux) ; leur sort est suivi par #3281.
+
+**ESPRESSObin v7 : à valider au banc avant tout usage.** Son `secubox-uboot-env.scr` est livré, mais ses adresses
+(`0x07000000`/`0x06f00000`/`0x0b000000`) sont celles du live, pas encore éprouvées pour le système installé ; son
+en-tête le dit. La MOCHAbin (adresses #3091, `bootcmd` du 2026-10-29) est validée au banc.
+
+**Où est le script.** À la racine de la partition de démarrage (FAT) de l'image (`image/build-image.sh`), avec l'alias
+`fix-bootcmd.scr` le temps d'une version (procédures #2826) : sur l'ESPRESSObin, l'ancien `fix-bootcmd` inchangé
+(`bootcmd_avant` et `bootcmd` seulement) ; sur la MOCHAbin, une copie complète. Il est aussi dans le dossier netboot de la carte, à côté de
 `boot.scr` (TFTP et HTTP, `build-live-netboot.sh`), ainsi que sur la clé du live léger.
 
 **Sources.** `board/<carte>/live.env` et `board/<carte>/uboot-env.env` (données, jamais exécutées). Le générateur
@@ -389,7 +399,8 @@ confirm_required   = true   # all overlay/flash actions need confirm=true
   operator-initiated manual flash (opt-in, requires operator confirmation).
 - Audit log: `/var/log/secubox/netboot/audit.log` (append-only, CSPN).
 - Daemon runs as `secubox-netboot` (dedicated user/group, created in
-  `debian/postinst`); `fw_setenv` calls use `sudo` with a tight sudoers rule.
+  `debian/postinst`). The overlay #737 `fw_setenv` paths are inoperative on
+  kernels without MTD (see « Préparation de l'environnement U-Boot », #3281).
 
 ---
 

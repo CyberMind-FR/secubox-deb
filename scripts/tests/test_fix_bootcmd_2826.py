@@ -10,8 +10,8 @@ from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[2]
 BOARD = RACINE / "board" / "espressobin-v7"
-CMD = (BOARD / "secubox-uboot-env.cmd").read_text()   # renommé #3271 (alias fix-bootcmd.scr dans l'image)
-SCR = (BOARD / "secubox-uboot-env.scr").read_bytes()
+CMD = (BOARD / "fix-bootcmd.cmd").read_text()   # #3271 : gardé tel quel, alias de l'image (I-2)
+SCR = (BOARD / "fix-bootcmd.scr").read_bytes()
 BUILD = (RACINE / "image" / "build-image.sh").read_text()
 
 
