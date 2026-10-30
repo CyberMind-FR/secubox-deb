@@ -220,9 +220,9 @@ def code_de(r):
     return loc, re.search(r"#code=([A-Za-z0-9_-]+)", loc).group(1)
 
 
-async def echanger(w, code, box="gk5"):
+async def echanger(w, code, box="gk5", ip="203.0.113.7"):
     async with w.client() as c:
-        return await c.post("/vhost/auth/echanger", json={"code": code}, headers={V.ENTETE_BOX: box, "X-Real-IP": "203.0.113.7"})
+        return await c.post("/vhost/auth/echanger", json={"code": code}, headers={V.ENTETE_BOX: box, "X-Real-IP": ip})
 
 
 def test_auth_du_maitre_sur_le_vhost(w):
@@ -544,3 +544,25 @@ def test_variante_encodee_du_relais(w):
             r = await c.get("/relais/gk5/api/v1/%2e%2e/auth/x", headers=entetes_vhost(jeton=w.jeton_vhost()))
             assert r.status_code in (400, 404, 409)
     asyncio.run(cas())
+
+
+
+def test_debit_de_l_echange_par_adresse(w):
+    async def cas():
+        for i in range(10):
+            await echanger(w, f"faux{i}", ip="203.0.113.7")
+        assert (await echanger(w, "x", ip="203.0.113.7")).status_code == 429
+        assert (await echanger(w, "x", ip="198.51.100.9")).status_code == 401   # autre adresse : son propre compte
+    asyncio.run(cas())
+
+
+def test_gabarit_content_disposition_et_xff():
+    conf = V.rendre_nginx("gk5", [{"paquet": "secubox-system", "version": "1.0", "modules": ["system"]}])
+    for loc in ("location ^~ /api/v1/system/ {", "location = /api/v1/auth/echanger {"):
+        bloc = conf.split(loc, 1)[1].split("\n    }", 1)[0]
+        lignes = [x.strip() for x in bloc.splitlines()]
+        assert "proxy_set_header X-Forwarded-For $remote_addr;" in lignes
+        assert not any("X-Forwarded-For" in x and "$remote_addr;" not in x for x in lignes)
+    bloc = conf.split("location ^~ /api/v1/system/ {", 1)[1].split("\n    }", 1)[0]
+    # M3 : l'« attachment » du contrôleur n'est plus effacé par nginx
+    assert "proxy_hide_header Content-Disposition;" not in bloc

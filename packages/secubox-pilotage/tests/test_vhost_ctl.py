@@ -285,15 +285,20 @@ def test_unites_et_paquet():
     assert "www-vhost/pilotage-connexion" in rules
     # I4 : relances bornées
     assert "StartLimitIntervalSec=" in u and "StartLimitBurst=" in u
-    assert "TriggerLimitIntervalSec=" in p and "TriggerLimitBurst=" in p
+    # R-L5-26 I2 : pas de TriggerLimit (il mettrait le .path en échec définitif) ; l'espacement est dans le ctl
+    assert "TriggerLimit" not in p
     # M10 : durcissement du ctl root
-    assert "ProtectSystem=strict" in u and "ReadWritePaths=" in u and "PrivateTmp=yes" in u and "NoNewPrivileges=yes" in u
+    assert "ProtectSystem=strict" in u and "PrivateTmp=yes" in u and "NoNewPrivileges=yes" in u
+    rw = " ".join(li.split("=", 1)[1] for li in u.splitlines() if li.startswith("ReadWritePaths="))
+    for d in ("/etc/nginx/conf.d", "/var/lib/secubox-pilotage-pages", "/var/log/secubox", "/etc/secubox"):
+        assert d in rw.split(), d
+    assert "/etc " not in rw + " " and "/var/lib " not in rw + " " and "/usr/share/secubox/www " not in rw + " "
 
 
 # --- R-L5-25 : noms réservés et marque de propriété (C2), codes retour (I5), certbot amorti et passes espacées (I4) ----------
 
 def registre(banc):
-    p = banc.r / "etc/secubox/pilotage-vhosts.json"
+    p = banc.r / "var/lib/secubox-pilotage-pages/registre.json"
     return json.loads(p.read_text()) if p.exists() else None
 
 
@@ -339,7 +344,7 @@ def test_retrait_ne_touche_jamais_un_vhost_non_marque(banc):
 def test_marque_posee_puis_retiree(banc):
     assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 0
     assert DOM in registre(banc)["domaines"]
-    assert stat.S_IMODE((banc.r / "etc/secubox/pilotage-vhosts.json").stat().st_mode) == 0o644
+    assert stat.S_IMODE((banc.r / "var/lib/secubox-pilotage-pages/registre.json").stat().st_mode) == 0o644
     assert banc.ctl("retirer", "gk5").returncode == 0
     assert DOM not in registre(banc)["domaines"]
 
@@ -386,3 +391,101 @@ def test_passes_espacees(banc):
     assert banc.ctl("synchroniser", env={"SBX_MAINTENANT": str(t)}).returncode == 0
     r = banc.ctl("synchroniser", env={"SBX_MAINTENANT": str(t + 5)})
     assert r.returncode == 0 and json.loads(r.stdout).get("attente_s", 0) >= 50
+
+
+# --- R-L5-26 ----------------------------------------------------------------------------------------------------------
+
+REG = "var/lib/secubox-pilotage-pages/registre.json"
+
+
+def test_registre_absent_avec_vhosts_poses_incoherent(banc):
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 0
+    (banc.r / REG).unlink()
+    r = banc.ctl("retirer", "gk5")
+    assert r.returncode == 1 and "incohérent" in json.loads(r.stdout)["erreur"]
+    assert banc.conf().exists()
+    r = banc.ctl("poser", "gk6", entree=PAGES)
+    assert r.returncode == 1 and "incohérent" in json.loads(r.stdout)["erreur"]
+
+
+@pytest.mark.parametrize("cas", ["droits", "proprietaire", "lien"])
+def test_registre_etranger_refuse(banc, tmp_path, cas):
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 0
+    f = banc.r / REG
+    env = {}
+    if cas == "droits":
+        os.chmod(f, 0o666)
+    elif cas == "proprietaire":
+        env = {"SBX_UID_ATTENDU": str(os.getuid() + 1)}
+    else:
+        ailleurs = tmp_path / "faux.json"
+        ailleurs.write_text(f.read_text())
+        f.unlink()
+        f.symlink_to(ailleurs)
+    r = banc.ctl("retirer", "gk5", env=env)
+    assert r.returncode == 1 and "registre" in json.loads(r.stdout)["erreur"]
+    assert banc.conf().exists()
+
+
+def test_dossier_du_registre_inscriptible_refuse(banc):
+    os.chmod(banc.r / "var/lib/secubox-pilotage-pages", 0o777)
+    r = banc.ctl("poser", "gk5", entree=PAGES)
+    assert r.returncode == 1
+
+
+def test_migration_de_l_ancien_registre(banc):
+    ancien = banc.r / "etc/secubox/pilotage-vhosts.json"
+    ancien.write_text(json.dumps({"domaines": {DOM: {"box": "gk5"}}, "certbot_echecs": {}, "derniere_passe": 0}))
+    os.chmod(ancien, 0o644)
+    assert banc.ctl("lister").returncode == 0
+    assert not ancien.exists() and DOM in registre(banc)["domaines"]
+
+
+def test_ancien_registre_inscriptible_non_migre(banc):
+    ancien = banc.r / "etc/secubox/pilotage-vhosts.json"
+    ancien.write_text(json.dumps({"domaines": {DOM: {"box": "gk5"}}}))
+    os.chmod(ancien, 0o666)
+    banc.ctl("lister")
+    assert registre(banc) is None or DOM not in registre(banc)["domaines"]
+
+
+def test_haproxy_en_mode_lxc_refuse(banc):
+    banc.toml.write_text(banc.toml.read_text().replace('mode = "native"', 'mode = "lxc"'))
+    r = banc.ctl("poser", "gk5", entree=PAGES)
+    assert r.returncode == 1 and "lxc" in json.loads(r.stdout)["erreur"]
+    assert not any(x.startswith(("haproxyctl vhost add", "secubox-waf-route")) for x in banc.appels())
+
+
+@pytest.mark.parametrize("server_name", ["*.gk5.secubox.in", ".gk5.secubox.in", "admin.gk5.*", "~^admin\\.gk5\\.", "x.y admin.gk5.secubox.in"])
+def test_server_name_joker_ou_regex_etranger(banc, server_name):
+    (banc.r / "etc/nginx/conf.d/autre.conf").write_text(f"server {{ listen 9080; server_name {server_name}; }}\n")
+    r = banc.ctl("poser", "gk5", entree=PAGES)
+    assert r.returncode == 1 and not banc.conf().exists(), server_name
+
+
+def test_nom_public_du_maitre_lu_dans_la_configuration(banc):
+    (banc.r / "etc/secubox/secubox.conf").write_text('[global]\ndomain = "gk5.secubox.in"\n')
+    r = banc.ctl("poser", "gk5", entree=PAGES, env={"SBX_NOM_MAITRE": "autrehote"})
+    assert r.returncode == 1 and "réservé" in json.loads(r.stdout)["erreur"]
+
+
+def test_certificat_exact_etranger_refuse(banc):
+    (banc.r / f"data/haproxy/certs/{DOM}.pem").write_text("cert d'un autre service")
+    r = banc.ctl("poser", "gk5", entree=PAGES)
+    assert r.returncode == 1 and "déjà" in json.loads(r.stdout)["erreur"]
+
+
+def test_verrou_libre_pendant_l_espacement(banc):
+    """M7 : synchroniser n'attend pas ses 60 s en tenant le verrou (un retrait manuel passe)."""
+    (banc.r / "var/lib/secubox/pilotage/vhosts.json").write_text(json.dumps({"boxes": []}))
+    t = time.time()
+    assert banc.ctl("synchroniser", env={"SBX_MAINTENANT": str(t)}).returncode == 0
+    p = subprocess.Popen([str(CTL), "synchroniser"], env={"PATH": os.environ["PATH"], "SBX_RACINE": str(banc.r),
+                         "SBX_BIN": str(banc.bin), "SBX_LIB": str(PKG), "SBX_MAINTENANT": str(t + 1), "SBX_ATTENDRE": "1"},
+                         stdout=subprocess.PIPE, text=True)
+    time.sleep(0.5)
+    debut = time.time()
+    r = banc.ctl("lister")
+    assert r.returncode == 0 and time.time() - debut < 2
+    p.kill()
+    p.wait()

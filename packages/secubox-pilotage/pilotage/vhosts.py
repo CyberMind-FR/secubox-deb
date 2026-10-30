@@ -251,7 +251,8 @@ def _entetes_proxy(box: str, version_page: Optional[str]) -> list:
          f"        proxy_set_header {ENTETE_BOX} {_q(box)};",
          f"        proxy_set_header {ENTETE_VERSION} {_q(version_page) if version_page else chr(34) * 2};",
          "        proxy_hide_header Set-Cookie;",
-         "        proxy_hide_header Content-Disposition;",
+         # M3 (R-L5-26) : Content-Disposition N'EST PAS masqué : le contrôleur pose « attachment » sur toute réponse non JSON
+         # (celui de la box est déjà filtré par lui)
          # C1a : sous /api/, rien n'est jamais exécutable ni affichable comme document de cette origine
          f"        add_header Content-Security-Policy \"{CSP_API}\" always;",
          "        add_header X-Content-Type-Options \"nosniff\" always;",

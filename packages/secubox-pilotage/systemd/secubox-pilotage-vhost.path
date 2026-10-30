@@ -8,9 +8,8 @@ Description=SecuBox Pilotage — plan des vhosts des box légères (#3126)
 
 [Path]
 PathChanged=/var/lib/secubox/pilotage/vhosts.json
-# I4 : au plus 3 déclenchements par 10 min (le service compromis ne fait pas tourner le ctl root en boucle)
-TriggerLimitIntervalSec=10min
-TriggerLimitBurst=3
+# Aucune limite de déclenchement (R-L5-26 I2 : atteinte, elle mettrait ce .path en échec définitif) : le ctl espace lui-même ses passes
+# (60 s au moins, attente hors verrou).
 Unit=secubox-pilotage-vhost.service
 
 [Install]

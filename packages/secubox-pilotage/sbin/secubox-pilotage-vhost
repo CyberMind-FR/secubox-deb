@@ -38,6 +38,7 @@ import sys
 import socket
 import tempfile
 import time
+import tomllib
 
 LIB = "/usr/lib/secubox/pilotage"
 COMMANDES = {"nginx": "/usr/sbin/nginx", "systemctl": "/usr/bin/systemctl", "haproxyctl": "/usr/sbin/haproxyctl",
@@ -107,7 +108,15 @@ class Ctx:
         self.journaux = f"{self.r}/var/log/secubox"
         self.pages_base = f"{self.r}/var/lib"
         self.plan = f"{self.r}/var/lib/secubox/pilotage"
-        self.registre = f"{self.r}/etc/secubox/pilotage-vhosts.json"
+        # R-L5-26 I1 : registre dans l'arbre root des pages (0755, jamais inscriptible par le compte secubox)
+        self.registre_dossier = f"{self.r}/var/lib/secubox-pilotage-pages"
+        self.registre = f"{self.registre_dossier}/registre.json"
+        self.ancien_registre = f"{self.r}/etc/secubox/pilotage-vhosts.json"
+        if self.substitue and os.environ.get("SBX_UID_ATTENDU"):
+            try:
+                self.uid = int(os.environ["SBX_UID_ATTENDU"])
+            except ValueError:
+                raise Usage("SBX_UID_ATTENDU invalide") from None
         self.maintenant = time.time()
         if self.substitue and os.environ.get("SBX_MAINTENANT"):
             try:
@@ -116,6 +125,16 @@ class Ctx:
                 raise Usage("SBX_MAINTENANT invalide") from None
         nom = os.environ.get("SBX_NOM_MAITRE") if self.substitue else None
         self.nom_maitre = (nom if nom is not None else socket.gethostname().split(".")[0]).lower()
+        self.nom_public = self.lire_nom_public()
+
+    def lire_nom_public(self):
+        """M4 : premier label de `[global] domain` de secubox.conf (gk2.secubox.in → gk2), le nom public du maître."""
+        try:
+            with open(f"{self.r}/etc/secubox/secubox.conf", "rb") as f:
+                dom = str((tomllib.load(f).get("global") or {}).get("domain") or "")
+        except (OSError, tomllib.TOMLDecodeError, AttributeError):
+            return ""
+        return dom.strip().lstrip(".").split(".")[0].lower()
 
     def cmd(self, nom):
         return os.path.join(self.bin, nom) if self.bin else COMMANDES[nom]
@@ -350,22 +369,58 @@ def nginx_echanger(ctx, chemin, nouveau):
 
 # --- Registre root du pilotage : marque de propriété, échecs certbot, dernière passe (R-L5-25 C2, I4) -----------------
 
-def lire_registre(ctx):
+def _dossier_registre(ctx, creer=False):
     try:
-        fd = os.open(ctx.registre, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(ctx.registre_dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except FileNotFoundError:
-        return {"domaines": {}, "certbot_echecs": {}, "derniere_passe": 0}
+        if not creer:
+            return None
+        os.mkdir(ctx.registre_dossier, 0o755)
+        fd = os.open(ctx.registre_dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except OSError:
-        raise Erreur("registre du pilotage non sûr") from None
+        raise Erreur("dossier du registre non sûr") from None
+    st = os.fstat(fd)
+    if st.st_uid != ctx.uid or st.st_mode & 0o022:
+        os.close(fd)
+        raise Erreur("dossier du registre non sûr (root, sans écriture groupe/autres)")
+    return fd
+
+
+def _lire_fichier_root(ctx, dfd, nom):
+    try:
+        fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        raise Erreur("registre du pilotage non sûr (lien)") from None
     try:
         st = os.fstat(fd)
-        if not stat.S_ISREG(st.st_mode) or st.st_uid != ctx.uid or st.st_mode & 0o022:
-            raise Erreur("registre du pilotage non sûr")
-        d = json.loads(lire_tout(fd) or b"{}")
-    except ValueError:
-        raise Erreur("registre du pilotage illisible") from None
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != ctx.uid or st.st_mode & 0o022 or st.st_nlink != 1:
+            raise Erreur("registre du pilotage non sûr (propriétaire ou droits)")
+        return lire_tout(fd)
     finally:
         os.close(fd)
+
+
+def lire_registre(ctx):
+    """Registre root : marque de propriété, échecs certbot, dernière passe. Absent alors que des vhosts du pilotage existent :
+    état incohérent signalé (jamais « rien à retirer »)."""
+    dfd = _dossier_registre(ctx)
+    brut = None
+    if dfd is not None:
+        try:
+            brut = _lire_fichier_root(ctx, dfd, "registre.json")
+        finally:
+            os.close(dfd)
+    if brut is None:
+        if poses(ctx):
+            raise Erreur("registre du pilotage absent alors que des vhosts du pilotage existent : état incohérent, "
+                         "rien n'est fait (rétablir le registre ou retirer les vhosts à la main)")
+        return {"domaines": {}, "certbot_echecs": {}, "derniere_passe": 0}
+    try:
+        d = json.loads(brut or b"{}")
+    except ValueError:
+        raise Erreur("registre du pilotage illisible") from None
     if not isinstance(d, dict):
         raise Erreur("registre du pilotage illisible")
     return {"domaines": dict(d.get("domaines") or {}), "certbot_echecs": dict(d.get("certbot_echecs") or {}),
@@ -373,7 +428,36 @@ def lire_registre(ctx):
 
 
 def ecrire_registre(ctx, reg):
+    dfd = _dossier_registre(ctx, creer=True)
+    os.close(dfd)
     ecrire_atomique(ctx.registre, (json.dumps(reg, indent=2, sort_keys=True) + "\n").encode(), 0o644)
+
+
+def migrer_registre(ctx):
+    """Ancien emplacement (/etc/secubox, inscriptible par le compte secubox) : repris seulement s'il est root, non inscriptible
+    par d'autres et si le nouveau n'existe pas ; sinon laissé et signalé."""
+    try:
+        st = os.lstat(ctx.ancien_registre)
+    except FileNotFoundError:
+        return
+    if os.path.lexists(ctx.registre):
+        return
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != ctx.uid or st.st_mode & 0o022:
+        err("ancien registre /etc/secubox/pilotage-vhosts.json non sûr : non repris")
+        return
+    try:
+        fd = os.open(ctx.ancien_registre, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            d = json.loads(lire_tout(fd))
+        finally:
+            os.close(fd)
+    except (OSError, ValueError):
+        err("ancien registre illisible : non repris")
+        return
+    if isinstance(d, dict):
+        ecrire_registre(ctx, {"domaines": dict(d.get("domaines") or {}), "certbot_echecs": dict(d.get("certbot_echecs") or {}),
+                              "derniere_passe": float(d.get("derniere_passe") or 0)})
+        os.unlink(ctx.ancien_registre)
 
 
 # --- HAProxy, certificat, route sbxwaf ------------------------------------------------------------------------------
@@ -404,9 +488,24 @@ def route_presente(ctx, dom):
     return isinstance(t, dict) and dom in t
 
 
+def nom_couvert(dom, nom):
+    """M4 : `server_name` exact, joker (*.x, .x, x.*) ou regex (~…) couvrant `dom`."""
+    if nom.startswith("~"):
+        try:
+            return re.search(nom[1:], dom) is not None
+        except re.error:
+            return True                     # regex illisible : dans le doute, considérée comme couvrante
+    if nom.startswith("*."):
+        return dom.endswith(nom[1:])
+    if nom.startswith("."):
+        return dom == nom[1:] or dom.endswith(nom)
+    if nom.endswith(".*"):
+        return dom.startswith(nom[:-1])
+    return dom == nom
+
+
 def nginx_etranger(ctx, dom, box):
-    """Un server nginx HORS pilotage porte-t-il déjà ce nom ? (conf.d et sites-enabled, sans suivre de lien)"""
-    motif = re.compile(r"server_name[^;]*\s" + re.escape(dom) + r"[\s;]")
+    """Un server nginx HORS pilotage couvre-t-il déjà ce nom ? (conf.d et sites-enabled, sans suivre de lien)"""
     for d in (ctx.confd, f"{ctx.r}/etc/nginx/sites-enabled"):
         try:
             noms = os.listdir(d)
@@ -420,15 +519,29 @@ def nginx_etranger(ctx, dom, box):
             except OSError:
                 continue
             try:
-                if stat.S_ISREG(os.fstat(fd).st_mode) and motif.search(" " + lire_tout(fd).decode("utf-8", "replace")):
-                    return True
+                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                    continue
+                texte = lire_tout(fd).decode("utf-8", "replace")
             finally:
                 os.close(fd)
+            for m in re.finditer(r"server_name\s+([^;]*);", texte):
+                if any(nom_couvert(dom, x.strip('"\'')) for x in m.group(1).split()):
+                    return True
     return False
 
 
+def mode_haproxy(ctx):
+    try:
+        with open(ctx.toml, "rb") as f:
+            return str(tomllib.load(f).get("mode") or "native")
+    except FileNotFoundError:
+        return "native"
+    except (OSError, tomllib.TOMLDecodeError):
+        raise Erreur("haproxy.toml illisible") from None
+
+
 def noms_reserves(ctx):
-    res = {"www", "api", "admin", "apt", ctx.nom_maitre}
+    res = {"www", "api", "admin", "apt", ctx.nom_maitre, ctx.nom_public}
     try:
         res |= {n for n in os.listdir(f"{ctx.r}/usr/share/secubox/www") if V.RE_BOX.fullmatch(n)}
     except OSError:
@@ -489,9 +602,13 @@ def poser(ctx, box, pages):
     try:
         reg = lire_registre(ctx)
         marque = dom in reg["domaines"]
+        if mode_haproxy(ctx) == "lxc":
+            # M5 : HAProxy en conteneur (lxc-attach) n'est pas rechargeable depuis l'unité durcie du ctl (ProtectSystem=strict)
+            raise Erreur("HAProxy en mode lxc : non pris en charge par secubox-pilotage-vhost (mode native requis)")
         if not marque:
-            # C2 : un domaine déjà servi hors du pilotage n'est jamais pris (ni sa route, ni son vhost)
-            if vhost_haproxy(ctx, dom) is not None or route_presente(ctx, dom) or nginx_etranger(ctx, dom, box):
+            # C2 : un domaine déjà servi hors du pilotage n'est jamais pris (ni sa route, ni son vhost, ni son certificat)
+            if vhost_haproxy(ctx, dom) is not None or route_presente(ctx, dom) or nginx_etranger(ctx, dom, box) \
+                    or os.path.lexists(os.path.join(ctx.certs, f"{dom}.pem")):
                 raise Erreur(f"{dom} est déjà servi hors du pilotage : refus")
             reg["domaines"][dom] = {"box": box, "depuis": int(ctx.maintenant)}
             ecrire_registre(ctx, reg)   # marque AVANT toute création : un échec plus loin reste retirable
@@ -568,13 +685,9 @@ def synchroniser(ctx):
     reg = lire_registre(ctx)
     attente = PASSE_MIN_S - (ctx.maintenant - reg["derniere_passe"])
     if attente > 0:
-        # I4 : un plan qui change sans cesse ne fait pas tourner certbot/HAProxy en boucle (le .path est aussi borné)
+        # une autre passe a eu lieu pendant l'attente (faite hors verrou, main) : celle-ci s'arrête, la suivante reprendra
         bilan["attente_s"] = int(attente)
-        if not ctx.substitue:
-            time.sleep(attente)
-            ctx.maintenant = time.time()
-        else:
-            return bilan
+        return bilan
     reg["derniere_passe"] = ctx.maintenant
     ecrire_registre(ctx, reg)
     en_usage = []
@@ -622,13 +735,29 @@ def analyser(argv):
     return verbe, "pilotage" if verbe == "synchroniser" else None, None
 
 
+def attendre_passe(ctx):
+    """I4 / M7 : deux passes espacées d'au moins PASSE_MIN_S ; l'attente se fait SANS le verrou (poser, retirer et le prerm ne
+    sont jamais bloqués par elle). Sous SBX_RACINE, on n'attend que si SBX_ATTENDRE est posé."""
+    try:
+        reg = lire_registre(ctx)
+    except Erreur:
+        return
+    attente = PASSE_MIN_S - (ctx.maintenant - reg["derniere_passe"])
+    if attente > 0 and (not ctx.substitue or os.environ.get("SBX_ATTENDRE")):
+        time.sleep(attente)
+        ctx.maintenant = time.time() if not ctx.substitue else ctx.maintenant + attente
+
+
 def main(argv):
     try:
         verbe, acteur, box = analyser(argv)
         ctx = Ctx(acteur)
         if verbe == "poser":
             pages = lire_entree_poser()
+        if verbe == "synchroniser":
+            attendre_passe(ctx)
         fd = verrou(ctx)
+        migrer_registre(ctx)
         try:
             if verbe == "poser":
                 res = poser(ctx, box, pages)

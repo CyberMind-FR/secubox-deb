@@ -1,3 +1,13 @@
+secubox-pilotage (0.4.2-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 5, correction 2/5 (R-L5-26, ref #3126) : registre de propriété des vhosts dans l'arbre root des pages
+    (/var/lib/secubox-pilotage-pages/registre.json), absent avec des vhosts posés = état incohérent signalé, ancien
+    emplacement repris s'il est sûr ; plus de limite de déclenchement sur le .path ; attente entre passes hors verrou ;
+    Content-Disposition du contrôleur conservé par nginx ; server_name joker/regex, nom public du maître et certificat
+    existant comptés comme déjà servis ; HAProxy en mode lxc refusé clairement ; exceptions de garde documentées.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 23:00:00 +0100
+
 secubox-pilotage (0.4.1-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 5, correction 1/5 (R-L5-25, ref #3126) : identifiants du maître saisis seulement sur son origine (code à usage
