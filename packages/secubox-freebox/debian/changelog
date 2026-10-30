@@ -1,3 +1,13 @@
+secubox-freebox (0.6.1-1~trixie1) trixie; urgency=medium
+
+  * Déclare les écritures ouvertes au porteur délégué du pilotage (ref #3126, L5, R-L5-12) :
+    /usr/share/secubox/pilotage/routes-ouvertes.d/freebox.toml (root, 0644), seulement les
+    routes d'écriture que les pages du module appellent ; secubox_core.auth refuse toute
+    autre écriture déléguée.
+    /autoriser et /revoquer (jeton d'application Freebox, un secret) n'y sont pas.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 15:00:00 +0100
+
 secubox-freebox (0.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Passerelle DHCP et import des appareils pour secubox-pseudo-routeur (ref #2940) : Freebox.regler_passerelle_dhcp(ip) (meme charpente que regler_pare_feu_ipv6, ne touche que la cle « gateway » de dhcp/config/), Freebox.appareils_non_classes(macs_connues) (suggestions de classement, jamais appliquees seules), route GET /appareils-non-classes (require_jwt), et sbin/freeboxctl (point d'entree CLI minimal, sudo -u secubox-freebox) pour que pseudo-routeurctl puisse basculer la passerelle sans jeton HTTP.

@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Écritures ouvertes au porteur délégué du pilotage (#3126, L5 ; R-L5-12, #3279 en version minimale).
+# Installé dans /usr/share/secubox/pilotage/routes-ouvertes.d/freebox.toml (root, 0644). Seules les écritures
+# que la page www/freebox/index.html appelle. /autoriser et /revoquer (jeton d'application Freebox : un SECRET)
+# ne sont PAS ouvertes : elles restent réservées à un administrateur de la box.
+
+[[routes]]
+methodes = ["POST"]
+chemins = [
+    "^/upnp$",
+    "^/pare-feu/ipv6$",
+    "^/autoconfig$",
+]

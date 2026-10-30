@@ -5,6 +5,8 @@
 override_dh_auto_install:
 	install -d debian/secubox-freebox/usr/lib/secubox/freebox/api
 	install -m 644 api/*.py debian/secubox-freebox/usr/lib/secubox/freebox/api/
+	# Écritures ouvertes au pilotage délégué (#3126, R-L5-12) : root, 0644.
+	install -D -m 644 pilotage/routes-ouvertes.d/freebox.toml debian/secubox-freebox/usr/share/secubox/pilotage/routes-ouvertes.d/freebox.toml
 	install -d debian/secubox-freebox/usr/sbin
 	install -m 755 sbin/freeboxctl debian/secubox-freebox/usr/sbin/freeboxctl
 	install -d debian/secubox-freebox/usr/share/secubox/www
