@@ -16,6 +16,16 @@ case "$1" in
         ;;
 esac
 
+# Retire le pilote DKMS (#3290) seulement a la desinstallation : une mise a
+# jour garde le module construit ; sans effet s'il n'a jamais ete ajoute.
+if [ "$1" = remove ]; then
+    DKMS_VER="$(dpkg-query -W -f='${Version}' secubox-led-heartbeat 2>/dev/null || true)"
+    DKMS_VER="${DKMS_VER#*:}"; DKMS_VER="${DKMS_VER%-*}"
+    if [ -n "$DKMS_VER" ] && [ -x /usr/sbin/secubox-led-dkms ]; then
+        /usr/sbin/secubox-led-dkms remove "$DKMS_VER" || true
+    fi
+fi
+
 #DEBHELPER#
 
 exit 0

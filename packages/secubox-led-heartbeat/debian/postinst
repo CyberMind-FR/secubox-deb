@@ -58,6 +58,14 @@ case "$1" in
         # Compile and install Device Tree overlay
         compile_overlay || true
 
+        # Pilote leds-is31fl319x par DKMS (#3290) : no-op hors MOCHAbin ou
+        # si le bus I2C est neutralise (gk2) ; ne fait jamais echouer dpkg.
+        DKMS_VER="$(dpkg-query -W -f='${Version}' secubox-led-heartbeat 2>/dev/null || true)"
+        DKMS_VER="${DKMS_VER#*:}"; DKMS_VER="${DKMS_VER%-*}"
+        if [ -n "$DKMS_VER" ]; then
+            /usr/sbin/secubox-led-dkms install "$DKMS_VER" || true
+        fi
+
         # Load kernel module if available
         if modprobe leds-is31fl319x 2>/dev/null; then
             echo "Loaded IS31FL3199 LED kernel module"
