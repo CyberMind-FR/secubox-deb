@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-30 — LEDs RGB MOCHAbin : pilote IS31FL3199 en DKMS, déployé gk1 + gk6 (ref #3290)
+
+- Cause : le noyau Debian n'a pas `CONFIG_LEDS_IS31FL319X` ; la puce (i2c-1, 0x64) et l'arbre de périphériques étaient
+  corrects. **PR #3291** : `secubox-led-heartbeat` 2.2.1 livre `kmod/` en DKMS (MOCHAbin seulement, `dkms` et en-têtes en
+  Suggests), garde gk2 (`i2c_mv64xxx` en liste noire depuis le 2026-05-07, 4 dossiers modprobe.d + cmdline), paramètre
+  `write_delay_us` borné 0..100000 (blocages mv64xxx de mai sur 6.12.85), avertissement au démarrage si module absent.
+- Publié sur apt.secubox.in (trixie) ; installé par apt sur gk1 (6.12.113, visio intacte) et gk6 (6.12.107, banc) : 9 canaux,
+  aucune erreur I²C, palette et ordre 1-2-3 validés visuellement par le propriétaire.
+- Reste (#3290) : code d'état et séquences pulsées multi-couches (tranche 2), intégration (tranche 3) ; gk2 après L5
+  (levée du blocage I²C en fenêtre avec console, décidera de l'entrée dans l'alpha.20).
+- Piège publication : « Coffre scellé / secret inconnu » d'`apt-publier.sh` = cache de l'agent expiré →
+  `systemctl restart secubox-depot-deverrouille.service`.
+
 ## 2026-10-30 — Pilotage distant TR-369 : L2 « Agir » fusionné, non déployé (ref #3126, ref #3242)
 
 - **PR #3278** : ctl root `secubox-pilotagectl` à liste fermée (sudo borné), ancre du maître vérifiée sur le canal réel,
