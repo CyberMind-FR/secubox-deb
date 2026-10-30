@@ -1,3 +1,10 @@
+secubox-eye-remote (1.1.1-1~trixie1) trixie; urgency=medium
+
+  * POST /pair/qr (était GET) : la route CRÉE une session d'appairage ; la page la demande
+    en POST (ref #3126, relecture de sécurité de L5, R-L5-14).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 15:00:00 +0100
+
 secubox-eye-remote (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Pages /eye-remote/ (tableau de bord) et /eye-remote/terminal.html

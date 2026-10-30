@@ -39,6 +39,7 @@ Configuration file: `/etc/secubox/eye-remote.toml`
 ## API Endpoints
 
 - `GET /api/v1/eye-remote/status` - Module status
+- `POST /api/v1/eye-remote/pair/qr` - Crée une session d'appairage et son QR (POST depuis 1.1.1, #3126)
 - `GET /api/v1/eye-remote/health` - Health check
 
 ## License
