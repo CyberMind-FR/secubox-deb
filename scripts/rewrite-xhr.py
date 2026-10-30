@@ -34,6 +34,21 @@ import re
 import sys
 from pathlib import Path
 
+# ── Lecture (GET) ou action (POST), d'après le nom de la méthode RPCD ──
+_PREFIXES_ACTION = ("set_", "apply", "ban", "unban", "add_", "remove_", "delete_",
+                    "create_", "enable_", "disable_", "restart_", "stop_", "start_",
+                    "rollback", "confirm", "purge", "generate_", "reload_")
+# Actions nommées sans suffixe : noms exacts (un préfixe « start » prendrait « startup_info »).
+_ACTIONS_EXACTES = frozenset({"restart", "stop", "start", "reload"})
+
+
+def methode_http(nom: str) -> str:
+    """POST pour une action, GET pour une lecture."""
+    if nom in _ACTIONS_EXACTES or any(nom.startswith(p) for p in _PREFIXES_ACTION):
+        return "POST"
+    return "GET"
+
+
 # ── Préfixes luci.X → /api/v1/X ──────────────────────────────────
 MODULE_MAP = {
     "luci.secubox":             "hub",
@@ -168,13 +183,7 @@ def rewrite_file(path: Path, dry_run: bool = False) -> int:
 
         endpoint = f"/api/v1/{api_module}/{method}"
 
-        # Détecter si c'est une action (POST) ou une lecture (GET)
-        http_method = "POST" if any(
-            method.startswith(p) for p in
-            ("set_", "apply", "ban", "unban", "add_", "remove_", "delete_",
-             "create_", "enable_", "disable_", "restart_", "stop_", "start_",
-             "rollback", "confirm", "purge", "generate_")
-        ) else "GET"
+        http_method = methode_http(method)
 
         replacement = (
             f"async function {vname}(params) {{\n"
