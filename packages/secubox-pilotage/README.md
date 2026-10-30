@@ -190,13 +190,15 @@ profil AppArmor **enforce** `secubox-pilotage-invite` (`AppArmorProfile=`, charg
 
 ## Pilotage HTTP des box légères (L5, tâche 3)
 
-`pilotage.files.demander_http(files, box_cle, methode=, chemin=, acteur=, maitre=, portee=, entetes=, corps=, version_page=,
-delai=40, audit=)` envoie un message `HTTP` à l'agent de la box et rend `{statut, entetes, corps}` (octets). Le corps du message
+`pilotage.files.demander_http(files, box_cle, methode=, chemin=, acteur=, maitre=, portee=, agent_version=, audit=, entetes=,
+corps=, version_page=, delai=40)` (`agent_version` et `audit` obligatoires) envoie un message `HTTP` à l'agent de la box et rend `{statut, entetes, corps}` (octets). Le corps du message
 est l'entrée du relais local de la box (`methode`, `chemin` `/api/v1/<module>/…`, `entetes`, `corps_b64`, `acteur`, `maitre`,
 `portee`, `version_page`) ; la réponse `HTTP_RESP` arrive par `POST /canal/v1/http` (6 Mio) ou, courte, par `/reponses`.
 
-- Refus avant tout envoi : `DemandeHTTPInvalide` (400 forme, 413 corps > 4 Mio), `AgentHorsLigne` (aucun sondage depuis 10 s),
-  `FileDeBoxPleine`, `AuditIndisponible` (une écriture non auditée n'est pas envoyée).
+- Refus avant tout envoi : `DemandeHTTPInvalide` (400 forme, 413 corps > 4 Mio), `AgentTropAncien` (agent < 0.4.0 : rien n'est
+  déposé dans sa file), `AgentHorsLigne` (aucun sondage depuis 10 s), `FileDeBoxPleine`, `AuditIndisponible` (écriture sans
+  fonction d'audit, ou ligne d'audit non écrite).
+- `POST /canal/v1/http` : 30 réponses inattendues par box et par minute au plus, puis 429 avant la lecture du corps.
 - Ensuite : `DelaiHTTPDepasse` (504 ; requête retirée), `ReponseHTTPInvalide` (502 : ERROR d'un agent sans HTTP, forme bancale).
 - **Portée** : `portee_permise(reseau, mains_liees, support_ouvert, demandee)` — `demandee` est ce que la session du maître
   autorise ; mains liées (ou inconnues) ⇒ `lecture` ; box cliente ⇒ `admin` seulement pendant un support ouvert. L'agent la

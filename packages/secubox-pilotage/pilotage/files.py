@@ -270,7 +270,21 @@ class ReponseHTTPInvalide(Exception):
 
 
 class AuditIndisponible(Exception):
-    """Une écriture n'est pas envoyée si sa ligne d'audit n'a pu être écrite."""
+    """Une écriture n'est pas envoyée sans audit (fonction absente, R-L5-21 I2) ni si sa ligne n'a pu être écrite."""
+
+
+class AgentTropAncien(Exception):
+    """Agent < 0.4.0 (ou version illisible) : il ne connaît pas le message HTTP et lit ses sondages en 256 Kio ; rien n'est
+    déposé dans sa file (R-L5-21 M4)."""
+
+
+VERSION_AGENT_HTTP = (0, 4, 0)
+_RE_VERSION = re.compile(r"([0-9]{1,6})\.([0-9]{1,6})\.([0-9]{1,6})(?:[-~+.].*)?")
+
+
+def agent_sait_http(version) -> bool:
+    m = _RE_VERSION.fullmatch(version) if isinstance(version, str) else None
+    return m is not None and tuple(int(x) for x in m.groups()) >= VERSION_AGENT_HTTP
 
 
 def portee_permise(reseau: str, mains_liees: Optional[bool], support_ouvert: bool, demandee: str) -> str:
@@ -352,20 +366,25 @@ def lire_reponse_http(rep: dict) -> dict:
 
 
 async def demander_http(files: Files, box: str, *, methode: str, chemin: str, acteur: str, maitre: str, portee: str,
-                        entetes: Optional[dict] = None, corps: bytes = b"", version_page: str = "", delai: float = DELAI_HTTP_S,
-                        audit: Optional[Callable[[str, dict], None]] = None) -> dict:
+                        agent_version: Optional[str], audit: Optional[Callable[[str, dict], None]],
+                        entetes: Optional[dict] = None, corps: bytes = b"", version_page: str = "", delai: float = DELAI_HTTP_S) -> dict:
     """Émet un message HTTP vers l'agent de la box `box` (Box.cle) et rend {statut, entetes, corps}.
 
     `portee` : déjà réduite par l'appelant (portee_permise) ; l'agent la réduit encore. Lève DemandeHTTPInvalide (400/413) avant tout
     envoi, AgentHorsLigne, FileDeBoxPleine, AuditIndisponible (écriture non auditée = non envoyée), DelaiHTTPDepasse (la requête est
-    retirée de la file), ReponseHTTPInvalide. Une annulation de l'appelant (page fermée) retire aussi la requête. `audit(evenement,
+    retirée de la file), ReponseHTTPInvalide, AgentTropAncien (`agent_version` < 0.4.0, avant tout dépôt). `audit` est OBLIGATOIRE :
+    None ⇒ toute écriture est refusée (AuditIndisponible). Une annulation de l'appelant (page fermée) retire aussi la requête. `audit(evenement,
     champs)` : chaque ÉCRITURE (POST/PUT/PATCH/DELETE) est auditée avant l'envoi puis à la réponse — jamais le corps ni la requête `?…`.
     """
     d = demande_http(methode, chemin, acteur, maitre, portee, entetes, corps, version_page)
+    if not agent_sait_http(agent_version):
+        raise AgentTropAncien(box)
+    if methode in ECRITURES_HTTP and audit is None:
+        raise AuditIndisponible("écriture sans audit refusée")
     if not files.agent_en_ligne(box):
         raise AgentHorsLigne(box)
     champs = None
-    if audit is not None and methode in ECRITURES_HTTP:
+    if methode in ECRITURES_HTTP:
         champs = {"box": box, "methode": methode, "chemin": chemin.split("?", 1)[0], "acteur": acteur, "maitre": maitre, "portee": portee}
         try:
             await asyncio.to_thread(audit, "pilotage_http", {**champs, "etat": "demande"})

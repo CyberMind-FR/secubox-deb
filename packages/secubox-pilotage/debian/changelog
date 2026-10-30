@@ -1,3 +1,15 @@
+secubox-pilotage (0.2.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 3, relecture de sécurité, correction 1/5 (R-L5-21, ref #3126) :
+    - I2 : `demander_http` exige `audit` ; sans lui, toute écriture est refusée (AuditIndisponible), rien n'est déposé.
+    - M4 : `agent_version` exigé ; un agent < 0.4.0 (ou version illisible) est refusé (AgentTropAncien) avant tout dépôt :
+      aucun message HTTP dans la file d'un ancien agent.
+    - M7 : POST /canal/v1/http borné par box à 30 réponses inattendues par minute ; au-delà, 429 avant la lecture du corps.
+    - Rappel : le marqueur du tunnel arrête un relais qui transmettrait les en-têtes du client, il ne protège pas contre un
+      processus qui joint la socket (0660).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 23:00:00 +0100
+
 secubox-pilotage (0.2.0-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 3 (ref #3126) : message HTTP vers l'agent d'une box. `pilotage.files.demander_http` (réutilisée par le service

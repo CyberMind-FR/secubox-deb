@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from pilotage.files import (AgentHorsLigne, AuditIndisponible, DelaiHTTPDepasse, DemandeHTTPInvalide, Files,
+from pilotage.files import (AgentHorsLigne, AgentTropAncien, AuditIndisponible, DelaiHTTPDepasse, DemandeHTTPInvalide, Files,
                             ReponseHTTPInvalide, demander_http, portee_permise)
 from tests.test_canal import GK5, LGM, client, monter
 
@@ -35,7 +35,8 @@ async def en_ligne(files, cle):
 
 
 def demande(**kw):
-    d = dict(methode="GET", chemin="/api/v1/system/status?x=1", acteur="admin", maitre="gk2", portee="admin")
+    d = dict(methode="GET", chemin="/api/v1/system/status?x=1", acteur="admin", maitre="gk2", portee="admin",
+             agent_version="0.4.1", audit=lambda ev, ch: None)
     d.update(kw)
     return d
 
@@ -235,8 +236,8 @@ def test_http_audit_des_ecritures():
         lignes = []
         files = Files()
         await en_ligne(files, GK5.cle)
-        t = asyncio.create_task(demander_http(files, GK5.cle, **demande(methode="POST", chemin="/api/v1/system/x?secret=1", corps=b"{}"),
-                                              audit=lambda ev, ch: lignes.append((ev, ch)), delai=1))
+        t = asyncio.create_task(demander_http(files, GK5.cle, **demande(methode="POST", chemin="/api/v1/system/x?secret=1", corps=b"{}",
+                                                                          audit=lambda ev, ch: lignes.append((ev, ch))), delai=1))
         [rq] = await files.attendre_requetes(GK5.cle, 0.5)
         files.livrer_reponse(GK5.cle, {"msg_id": rq["msg_id"], "type": "HTTP_RESP", "body": sortie(423, b"{}")})
         assert (await t)["statut"] == 423
@@ -247,7 +248,7 @@ def test_http_audit_des_ecritures():
         assert "secret" not in json.dumps(lignes)
         # lecture : pas d'audit (une page en fait des dizaines)
         lignes.clear()
-        t = asyncio.create_task(demander_http(files, GK5.cle, **demande(), audit=lambda ev, ch: lignes.append(ev), delai=1))
+        t = asyncio.create_task(demander_http(files, GK5.cle, **demande(audit=lambda ev, ch: lignes.append(ev)), delai=1))
         [rq] = await files.attendre_requetes(GK5.cle, 0.5)
         files.livrer_reponse(GK5.cle, {"msg_id": rq["msg_id"], "type": "HTTP_RESP", "body": sortie()})
         await t
@@ -256,7 +257,7 @@ def test_http_audit_des_ecritures():
         def panne(ev, ch):
             raise OSError("disque plein")
         with pytest.raises(AuditIndisponible):
-            await demander_http(files, GK5.cle, **demande(methode="DELETE"), audit=panne)
+            await demander_http(files, GK5.cle, **demande(methode="DELETE", audit=panne))
         assert files.en_attente(GK5.cle) == 0
     run(cas())
 
@@ -297,3 +298,52 @@ def test_gabarit_nginx_ouvre_6_mio_pour_http_seulement():
     parent = t[t.index("location /canal/v1/ {"):t.index("location = /canal/v1/http {")]
     assert "proxy_set_header X-SecuBox-Pilotage-Tunnel 1;" in parent and "proxy_set_header" not in bloc
     assert t.count("client_max_body_size 6m;") == 1
+
+
+
+def test_http_audit_obligatoire_pour_une_ecriture():
+    """R-L5-21 I2 : jamais une écriture sans audit — audit absent ⇒ refus typé, rien de déposé ; une lecture passe."""
+    async def cas():
+        files = Files()
+        await en_ligne(files, GK5.cle)
+        for m in ("POST", "PUT", "PATCH", "DELETE"):
+            with pytest.raises(AuditIndisponible):
+                await demander_http(files, GK5.cle, **demande(methode=m, audit=None))
+        assert files.en_attente(GK5.cle) == 0
+        t = asyncio.create_task(demander_http(files, GK5.cle, **demande(audit=None), delai=0.05))
+        await asyncio.sleep(0.01)
+        assert files.en_attente(GK5.cle) == 1
+        with pytest.raises(DelaiHTTPDepasse):
+            await t
+    run(cas())
+
+
+def test_http_agent_trop_ancien_refuse_avant_depot():
+    """R-L5-21 M4 : un agent < 0.4.0 (sans HTTP, sondage de 256 Kio) ne reçoit jamais de message HTTP."""
+    async def cas():
+        files = Files()
+        await en_ligne(files, GK5.cle)
+        for v in ("0.3.1", "0.1.2", "", None, "dev", "0.4", "x.4.0"):
+            with pytest.raises(AgentTropAncien):
+                await demander_http(files, GK5.cle, **demande(agent_version=v, methode="POST", corps=b"a" * (4 << 20)))
+        assert files.en_attente(GK5.cle) == 0
+        for v in ("0.4.0", "0.4.1", "0.10.0", "1.0.0~rc1"):
+            t = asyncio.create_task(demander_http(files, GK5.cle, **demande(agent_version=v), delai=0.05))
+            with pytest.raises(DelaiHTTPDepasse):
+                await t
+    run(cas())
+
+
+def test_http_reponses_inconnues_bornees_par_box():
+    """R-L5-21 M7 : au-delà de N HTTP_RESP inconnues par minute, la box reçoit 429 avant toute lecture du corps ;
+    l'autre box n'est pas touchée."""
+    async def cas():
+        app, _, _, _ = monter(http_inconnus_par_minute=3)
+        orpheline = {"msg_id": "0123456789abcdef", "type": "HTTP_RESP", "body": sortie()}
+        async with client(app) as agent, client(app, "10.64.0.9") as autre:
+            for _ in range(3):
+                r = await agent.post("/canal/v1/http", json=orpheline)
+                assert r.status_code == 200 and r.json() == {"ignore": 1}
+            assert (await agent.post("/canal/v1/http", json=orpheline)).status_code == 429
+            assert (await autre.post("/canal/v1/http", json=orpheline)).status_code == 200
+    run(cas())
