@@ -12,13 +12,13 @@ package canal
 // du plafond de 256 Kio de /reponses).
 //
 // La PORTÉE est recalculée ici, jamais crue : `lecture` si les mains sont liées (même vérification que le relais,
-// relais.MainsLieesDans) ou si le ctl root ne permet pas l'admin (box cliente sans support ouvert) ; la portée du
-// maître ne peut que réduire. Acteur et maître : motifs du vérificateur (relais.Normaliser = _RE_ACTEUR et
+// relais.MainsLieesDans) ou hors box du propriétaire sans support ouvert (drapeaux root d'échéance relus à chaque
+// message, relais.EcheanceDans, R-L5-21) ; la portée du maître ne peut que réduire. Acteur et maître : motifs du vérificateur (relais.Normaliser = _RE_ACTEUR et
 // _RE_MAITRE de secubox_core.auth). L'agent ne connaît le maître que par son adresse dans le tunnel, authentifiée
 // par l'ancre : il ne peut pas vérifier ces noms, seulement leur forme ; ils ne servent qu'à l'audit des modules.
 // Ancre vérifiée exigée (R-L5-3, R-L2-21). Corps ≤ 4 Mio (413), délai du relais + 5 s (504), 4 messages HTTP à la
-// fois (503 au-delà), un seul échange de plus de 256 Kio à la fois (mémoire). Journal : méthode, chemin sans
-// requête, portées et statut ; jamais un jeton, un corps ni un en-tête.
+// fois (503 au-delà), un seul échange de plus de 256 Kio à la fois (mémoire). Journal : écritures et refus (lectures
+// réussies en debug), chemin sans requête ; jamais un jeton, un corps ni un en-tête.
 
 import (
 	"bufio"
@@ -32,7 +32,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/relais"
@@ -57,25 +56,18 @@ const (
 	PorteeAdmin   = "admin"
 )
 
-// PorteeLocale assemble la décision « admin permis » de l'agent : mainsLiees est relue à CHAQUE message (drapeau
-// root, aucun appel privilégié) ; politique (le ctl root, `politique pilotage-admin`, une ligne sudo) n'est
-// relue qu'au plus une fois par `cache`. Mains liées ⇒ jamais admin, quoi que dise le cache.
-func PorteeLocale(mainsLiees func() bool, politique func(context.Context) bool, cache time.Duration) func(context.Context) bool {
-	var mu sync.Mutex
-	var jusqua time.Time
-	var permis bool
-	return func(ctx context.Context) bool {
-		if mainsLiees() {
+// PorteeLocale : la portée admin est permise si les mains sont libres ET (box du propriétaire OU support ouvert),
+// lus à CHAQUE message dans les drapeaux root projetés par le ctl dans `dossier` (/etc/secubox-pilotage) :
+// `mains-liees`, `proprietaire` et `support-ouvert` (échéances epoch). Mêmes vérifications que le relais
+// (relais.MainsLieesDans, relais.EcheanceDans) ; aucun cache, aucun sudo (R-L5-21).
+func PorteeLocale(dossier string, uidRoot uint32, horloge func() time.Time) func(context.Context) bool {
+	return func(context.Context) bool {
+		if relais.MainsLieesDans(dossier, uidRoot, nil) {
 			return false
 		}
-		mu.Lock()
-		defer mu.Unlock()
-		if time.Now().Before(jusqua) {
-			return permis
-		}
-		permis = politique(ctx)
-		jusqua = time.Now().Add(cache)
-		return permis
+		maintenant := horloge()
+		return relais.EcheanceDans(dossier, "proprietaire", uidRoot, maintenant) ||
+			relais.EcheanceDans(dossier, "support-ouvert", uidRoot, maintenant)
 	}
 }
 
@@ -140,10 +132,10 @@ func (c *Client) remettreHTTP(ctx context.Context, id string, sortie []byte) {
 // traiterHTTP rend la sortie du relais (ou un refus de même forme) pour le corps d'un message HTTP.
 func (c *Client) traiterHTTP(ctx context.Context, brut json.RawMessage) []byte {
 	if c.cfg.CheminRelais == "" {
-		return sortieRefus(http.StatusNotImplemented, "pilotage HTTP non pris en charge par cet agent")
+		return refusLocal(http.StatusNotImplemented, "pilotage HTTP non pris en charge par cet agent")
 	}
 	if c.cfg.Ancre != nil && c.etatAncre() != AncreOK {
-		return sortieRefus(http.StatusForbidden, "ancre non vérifiée")
+		return refusLocal(http.StatusForbidden, "ancre non vérifiée")
 	}
 	gros := len(brut) > seuilGros
 	if gros {
@@ -151,25 +143,25 @@ func (c *Client) traiterHTTP(ctx context.Context, brut json.RawMessage) []byte {
 		case c.gros <- struct{}{}:
 			defer func() { <-c.gros }()
 		default:
-			return sortieRefus(http.StatusServiceUnavailable, "agent occupé : un gros échange est en cours")
+			return refusLocal(http.StatusServiceUnavailable, "agent occupé : un gros échange est en cours")
 		}
 	}
 	var d relais.Demande
 	dec := json.NewDecoder(bytes.NewReader(brut))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&d); err != nil || dec.More() {
-		return sortieRefus(http.StatusBadRequest, "demande HTTP illisible")
+		return refusLocal(http.StatusBadRequest, "demande HTTP illisible")
 	}
 	brut = nil // la forme JSON n'est plus retenue
 	acteur, maitre, err := relais.Normaliser(d.Acteur, d.Maitre)
 	if err != nil {
-		return sortieRefus(http.StatusBadRequest, err.Error())
+		return refusLocal(http.StatusBadRequest, err.Error())
 	}
 	if d.Portee != PorteeLecture && d.Portee != PorteeAdmin {
-		return sortieRefus(http.StatusBadRequest, "portee invalide")
+		return refusLocal(http.StatusBadRequest, "portee invalide")
 	}
 	if longueurDecodee(d.CorpsB64) > relais.CorpsMax {
-		return sortieRefus(http.StatusRequestEntityTooLarge, "corps trop long (4 Mio au plus)")
+		return refusLocal(http.StatusRequestEntityTooLarge, "corps trop long (4 Mio au plus)")
 	}
 	demandee := d.Portee
 	portee := PorteeLecture
@@ -178,10 +170,20 @@ func (c *Client) traiterHTTP(ctx context.Context, brut json.RawMessage) []byte {
 	}
 	d.Acteur, d.Maitre, d.Portee = acteur, maitre, portee
 	sortie := c.appelerRelais(ctx, &d, gros)
+	statut := statutDe(sortie)
+	if (d.Methode == "GET" || d.Methode == "HEAD") && statut < 400 && !c.cfg.JournalDebug {
+		return sortie // lecture réussie : niveau debug (une page en fait des dizaines)
+	}
 	chemin, _, _ := strings.Cut(d.Chemin, "?")
 	log.Printf("http : %s %s acteur=%s maitre=%s portee=%s/%s statut=%d", imprimableASCII(d.Methode, 8),
-		imprimableASCII(chemin, 200), acteur, maitre, demandee, portee, statutDe(sortie))
+		imprimableASCII(chemin, 200), acteur, maitre, demandee, portee, statut)
 	return sortie
+}
+
+// refusLocal : un refus de l'agent, avant le relais ; une ligne de journal (motif fixe, rien du client).
+func refusLocal(statut int, motif string) []byte {
+	log.Printf("http : refus %d (%s)", statut, motif)
+	return sortieRefus(statut, motif)
 }
 
 func statutDe(sortie []byte) int {

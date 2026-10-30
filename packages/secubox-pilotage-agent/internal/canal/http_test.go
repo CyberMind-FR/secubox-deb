@@ -16,6 +16,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -127,6 +128,25 @@ func clientHTTP(t *testing.T, cheminRelais string, admin func(context.Context) b
 
 func toujours(v bool) func(context.Context) bool { return func(context.Context) bool { return v } }
 
+// arbreRoot : un /etc/secubox-pilotage de test (le « root » attendu est le compte des tests).
+func arbreRoot(t *testing.T) string {
+	t.Helper()
+	d := filepath.Join(dossierCourt(t), "etc-secubox-pilotage")
+	if err := os.Mkdir(d, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+func poser(t *testing.T, d, nom, contenu string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(d, nom), []byte(contenu), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func dans(secondes int64) string { return strconv.FormatInt(time.Now().Unix()+secondes, 10) }
+
 // TestAgentReduitLaPortee : la portée est RECALCULÉE par l'agent ; celle du maître ne peut que réduire.
 func TestAgentReduitLaPortee(t *testing.T) {
 	uid := uint32(os.Getuid())
@@ -150,7 +170,9 @@ func TestAgentReduitLaPortee(t *testing.T) {
 		defer cancel()
 		go r.Servir(ctx, ln)
 		// la politique du ctl dirait « admin » : seules les mains liées (même vérification que le relais) réduisent
-		admin := PorteeLocale(func() bool { return relais.MainsLieesDans(dossierMains, uid, nil) }, toujours(true), time.Second)
+		// box du propriétaire (drapeau root `proprietaire` valide) : seules les mains liées réduisent
+		poser(t, dossierMains, "proprietaire", dans(3600))
+		admin := PorteeLocale(dossierMains, uid, time.Now)
 		c := clientHTTP(t, chemin, admin)
 		s, corps := lireSortie(t, c.traiterHTTP(ctx, demandeHTTP("POST", "/api/v1/nac/sync", "admin", []byte(`{}`))))
 		if s.Statut != 423 {
@@ -164,7 +186,7 @@ func TestAgentReduitLaPortee(t *testing.T) {
 
 	t.Run("box cliente sans support accepté : lecture", func(t *testing.T) {
 		f := demarrerFauxRelais(t, repondreOK)
-		c := clientHTTP(t, f.chemin, PorteeLocale(func() bool { return false }, toujours(false), time.Second))
+		c := clientHTTP(t, f.chemin, PorteeLocale(arbreRoot(t), uid, time.Now)) // ni propriétaire ni support
 		s, _ := lireSortie(t, c.traiterHTTP(context.Background(), demandeHTTP("GET", "/api/v1/system/status", "admin", nil)))
 		if s.Statut != 200 || f.derniere(t).Portee != "lecture" {
 			t.Fatalf("lecture attendue : statut %d, portée %q", s.Statut, f.derniere(t).Portee)
@@ -173,7 +195,9 @@ func TestAgentReduitLaPortee(t *testing.T) {
 
 	t.Run("box du propriétaire, le maître demande lecture : lecture", func(t *testing.T) {
 		f := demarrerFauxRelais(t, repondreOK)
-		c := clientHTTP(t, f.chemin, PorteeLocale(func() bool { return false }, toujours(true), time.Second))
+		d := arbreRoot(t)
+		poser(t, d, "proprietaire", dans(3600))
+		c := clientHTTP(t, f.chemin, PorteeLocale(d, uid, time.Now))
 		lireSortie(t, c.traiterHTTP(context.Background(), demandeHTTP("GET", "/api/v1/system/status", "lecture", nil)))
 		if p := f.derniere(t).Portee; p != "lecture" {
 			t.Fatalf("lecture attendue, reçu %q", p)
@@ -182,7 +206,9 @@ func TestAgentReduitLaPortee(t *testing.T) {
 
 	t.Run("box du propriétaire, admin demandé : admin", func(t *testing.T) {
 		f := demarrerFauxRelais(t, repondreOK)
-		c := clientHTTP(t, f.chemin, PorteeLocale(func() bool { return false }, toujours(true), time.Second))
+		d := arbreRoot(t)
+		poser(t, d, "proprietaire", dans(3600))
+		c := clientHTTP(t, f.chemin, PorteeLocale(d, uid, time.Now))
 		lireSortie(t, c.traiterHTTP(context.Background(), demandeHTTP("POST", "/api/v1/system/x", "admin", []byte("{}"))))
 		if p := f.derniere(t).Portee; p != "admin" {
 			t.Fatalf("admin attendu, reçu %q", p)
@@ -199,22 +225,38 @@ func TestAgentReduitLaPortee(t *testing.T) {
 	})
 }
 
-func TestPorteeLocaleCacheLaPolitique(t *testing.T) {
-	var appels atomic.Int32
-	liees := false
-	p := PorteeLocale(func() bool { return liees }, func(context.Context) bool { appels.Add(1); return true }, time.Hour)
-	for i := 0; i < 5; i++ {
-		if !p(context.Background()) {
-			t.Fatal("admin attendu")
-		}
+// TestPorteeSupportRelueAChaqueMessage (R-L5-21 I1) : box cliente ; le support est lu à CHAQUE message dans le drapeau
+// root `support-ouvert` (aucun cache, aucun sudo) : fermé entre deux messages ⇒ le suivant est en lecture.
+func TestPorteeSupportRelueAChaqueMessage(t *testing.T) {
+	uid := uint32(os.Getuid())
+	f := demarrerFauxRelais(t, repondreOK)
+	d := arbreRoot(t)
+	poser(t, d, "support-ouvert", dans(1800))
+	c := clientHTTP(t, f.chemin, PorteeLocale(d, uid, time.Now))
+	envoyer := func() string {
+		lireSortie(t, c.traiterHTTP(context.Background(), demandeHTTP("POST", "/api/v1/system/x", "admin", []byte("{}"))))
+		return f.derniere(t).Portee
 	}
-	if appels.Load() != 1 {
-		t.Fatalf("une seule lecture de la politique attendue (cache), reçu %d", appels.Load())
+	if p := envoyer(); p != "admin" {
+		t.Fatalf("support ouvert : admin attendu, reçu %q", p)
 	}
-	// les mains liées sont relues à CHAQUE demande, sans attendre le cache
-	liees = true
-	if p(context.Background()) {
-		t.Fatal("mains liées : lecture attendue malgré le cache")
+	os.Remove(filepath.Join(d, "support-ouvert")) // `support fermer` : le ctl retire le drapeau
+	if p := envoyer(); p != "lecture" {
+		t.Fatalf("support fermé : lecture attendue sans délai, reçu %q", p)
+	}
+	poser(t, d, "support-ouvert", dans(-1)) // fin dépassée (le ctl n'a pas encore constaté l'expiration)
+	if p := envoyer(); p != "lecture" {
+		t.Fatalf("fin dépassée : lecture attendue, reçu %q", p)
+	}
+	poser(t, d, "support-ouvert", dans(1800))
+	os.Chmod(filepath.Join(d, "support-ouvert"), 0o666) // douteux
+	if p := envoyer(); p != "lecture" {
+		t.Fatalf("drapeau douteux : lecture attendue, reçu %q", p)
+	}
+	os.Remove(filepath.Join(d, "support-ouvert"))
+	poser(t, d, "proprietaire", dans(-1)) // ancre échue : plus propriétaire
+	if p := envoyer(); p != "lecture" {
+		t.Fatalf("propriétaire échu : lecture attendue, reçu %q", p)
 	}
 }
 
@@ -369,5 +411,46 @@ func TestAgentHTTPAllerRetourParLeCanal(t *testing.T) {
 	}
 	if len(m.reponses) != 0 {
 		t.Fatal("HTTP_RESP ne passe pas par /reponses (256 Kio)")
+	}
+}
+
+// TestAgentHTTPJournal (R-L5-21 M5) : une lecture réussie ne laisse aucune ligne (niveau debug : JournalDebug) ;
+// une écriture ou un refus, une ligne — sans corps ni requête.
+func TestAgentHTTPJournal(t *testing.T) {
+	var tampon strings.Builder
+	log.SetOutput(&tampon)
+	defer log.SetOutput(os.Stderr)
+	f := demarrerFauxRelais(t, repondreOK)
+	c := clientHTTP(t, f.chemin, toujours(true))
+	lireSortie(t, c.traiterHTTP(context.Background(), demandeHTTP("GET", "/api/v1/system/x?jeton=SECRET", "lecture", nil)))
+	if tampon.Len() != 0 {
+		t.Fatalf("lecture réussie journalisée : %q", tampon.String())
+	}
+	lireSortie(t, c.traiterHTTP(context.Background(), demandeHTTP("POST", "/api/v1/system/x?jeton=SECRET", "admin", []byte("CORPS"))))
+	if n := strings.Count(tampon.String(), "\n"); n != 1 || strings.Contains(tampon.String(), "SECRET") || strings.Contains(tampon.String(), "CORPS") {
+		t.Fatalf("écriture : une ligne sans requête ni corps attendue : %q", tampon.String())
+	}
+	tampon.Reset()
+	c2 := clientHTTP(t, filepath.Join(dossierCourt(t), "absent.sock"), toujours(true))
+	lireSortie(t, c2.traiterHTTP(context.Background(), demandeHTTP("GET", "/api/v1/system/x", "lecture", nil)))
+	if strings.Count(tampon.String(), "\n") != 1 {
+		t.Fatalf("refus d'une lecture : une ligne attendue : %q", tampon.String())
+	}
+	tampon.Reset()
+	c.cfg.JournalDebug = true
+	lireSortie(t, c.traiterHTTP(context.Background(), demandeHTTP("GET", "/api/v1/system/x", "lecture", nil)))
+	if strings.Count(tampon.String(), "\n") != 1 {
+		t.Fatalf("debug : la lecture est journalisée : %q", tampon.String())
+	}
+}
+
+func TestAgentHTTPJournalRefusLocal(t *testing.T) {
+	var tampon strings.Builder
+	log.SetOutput(&tampon)
+	defer log.SetOutput(os.Stderr)
+	c := clientHTTP(t, "/inutile.sock", toujours(true))
+	lireSortie(t, c.traiterHTTP(context.Background(), json.RawMessage(`{"methode":"GET","chemin":"/api/v1/x/y?jeton=SECRET","acteur":"a b","maitre":"m","portee":"lecture"}`)))
+	if strings.Count(tampon.String(), "\n") != 1 || strings.Contains(tampon.String(), "SECRET") {
+		t.Fatalf("refus local : une ligne sans requête attendue : %q", tampon.String())
 	}
 }

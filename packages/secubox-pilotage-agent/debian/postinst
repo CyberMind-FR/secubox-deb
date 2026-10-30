@@ -56,6 +56,10 @@ case "$1" in
     else
       rm -f /etc/secubox-pilotage/mains-liees
     fi
+    # R-L5-21 : drapeaux de portée (proprietaire, support-ouvert) reprojetés de l'état root ; sans eux (montée de
+    # version, redémarrage), une box cliente en support ouvert serait servie en lecture seule jusqu'au verbe suivant.
+    /usr/sbin/secubox-pilotagectl etat >/dev/null 2>&1 \
+      || echo "secubox-pilotage-agent : drapeaux de portée non reprojetés (pilotage HTTP en lecture)" >&2
     # Ajout des refus du relais à audit.log (ACL d'écriture seule, fichier vérifié ; reposée à chaque démarrage).
     if command -v setfacl >/dev/null 2>&1; then
       /usr/sbin/secubox-pilotage-relais-acl \

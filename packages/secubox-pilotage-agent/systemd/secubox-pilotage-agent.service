@@ -20,11 +20,12 @@ UMask=0027
 ExecStart=/usr/sbin/sbx-pilotage-agent
 Restart=on-failure
 RestartSec=10
-# L5 tâche 3 : 48M (au lieu de 32M) — un message HTTP de 4 Mio de corps vit brièvement en trois copies base64
-# (~5,6 Mo chacune : sondage, message, demande) ; un seul échange de plus de 256 Kio à la fois.
-MemoryMax=48M
+# L5 tâche 3 (R-L5-21 M6) : 40M (au lieu de 32M) — pic de tas MESURÉ à 23,3 Mio pour un échange de taille maximale
+# (4 Mio à l'aller et au retour ; TestAgentMemoireEchangeMaximal, plafond 28 Mio) ; un seul échange de plus de 256 Kio
+# à la fois.
+MemoryMax=40M
 # M13 : borne souple du runtime Go, sous MemoryMax : le ramasse-miettes travaille avant le tueur du cgroup.
-Environment=GOMEMLIMIT=40MiB
+Environment=GOMEMLIMIT=32MiB
 
 # Durcissement : connexion sortante vers le maître seulement ; l'agent lui-même n'a aucune capacité.
 # NoNewPrivileges=no : seulement pour sudo. La seule action privilégiée de l'agent (L2, #3126) est

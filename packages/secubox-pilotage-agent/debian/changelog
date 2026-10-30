@@ -1,3 +1,16 @@
+secubox-pilotage-agent (0.4.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 3, relecture de sécurité, correction 1/5 (R-L5-21, ref #3126) :
+    - I1 : plus de cache de 30 s ni de `sudo … politique` par message. Le ctl root projette dans /etc/secubox-pilotage
+      les drapeaux `proprietaire` (wg-mesh vérifié) et `support-ouvert` (fin de la session), recalculés après chaque
+      verbe (accord, fermeture, refus, expiration, mains liées, ancre-verifier) ; l'agent les relit à CHAQUE message
+      (relais.EcheanceDans, même vérification que MainsLieesDans, factorisée). Le postinst reprojette (`etat` local).
+      L'action `politique pilotage-admin` de 0.4.0 est retirée.
+    - M5 : lecture réussie journalisée seulement en debug ; une ligne par écriture ou refus.
+    - M6 : pic de tas mesuré (23,3 Mio, échange de 4 Mio aller et retour) ; MemoryMax 40M, GOMEMLIMIT 32MiB.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 23:00:00 +0100
+
 secubox-pilotage-agent (0.4.0-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 3 (ref #3126) : message `HTTP` du canal. L'agent appelle le relais local

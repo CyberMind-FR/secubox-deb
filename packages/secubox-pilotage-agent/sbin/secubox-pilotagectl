@@ -52,9 +52,7 @@ Verbes (liste fermée) :
   mains-liees <on|off>                     LOCAL SEULEMENT
   politique <action>                       {"autorise", "consentement", "raison"} ; actions : releve, reboot,
                                            maj-paquets, service-demarrer, service-arreter, service-redemarrer, renommer,
-                                           renouveler-secrets, support-ouvrir, support-fermer, maillage-rejoindre,
-                                           pilotage-admin (L5 : portée admin du pilotage HTTP — mains libres et box du
-                                           propriétaire, ou box cliente pendant un support ouvert ; lue par l'agent)
+                                           renouveler-secrets, support-ouvrir, support-fermer, maillage-rejoindre
   etat                                     lecture, permise depuis l'agent, NON auditée (sondée chaque minute) :
                                            {"ok", "box", "mains_liees", "canal", "consentements", "support"}, plus
                                            "agent" (ActiveState de l'unité de l'agent) en local ; les expirations
@@ -154,7 +152,7 @@ PREFIXE_OP = "secubox-pilotage-op-"
 CTL = "/usr/sbin/secubox-pilotagectl"
 SERVICE = {"demarrer": "start", "arreter": "stop", "redemarrer": "restart"}
 ACTIONS = ("releve", "reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
-           "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer", "maillage-rejoindre", "pilotage-admin")
+           "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer", "maillage-rejoindre")
 VERBES = ("reboot", "maj-paquets", "service", "renommer", "renouveler-secrets", "support", "consentement",
           "mains-liees", "ancre-verifier", "politique", "etat", "etat-operation", "fins-recentes", "_fin",
           "maillage-rejoindre", "_rejoindre")
@@ -453,18 +451,17 @@ def poser_projection(ctx, liees):
     return True
 
 
-def poser_projection_relais(ctx, liees):
-    """R-L5-19 : projection lue par le relais local (L5), dans l'arbre ROOT /etc/secubox-pilotage (dossier root 0755,
-    créé par le postinst ou ici), jamais sous /etc/secubox (compte partagé secubox). Écriture atomique par
-    descripteur ; un dossier qui n'est pas à root ou inscriptible par d'autres n'est pas touché (le relais le traite
-    alors comme « mains liées »)."""
+def poser_drapeau_relais(ctx, nom, contenu):
+    """R-L5-19/21 : drapeau `nom` de l'arbre ROOT /etc/secubox-pilotage (dossier root 0755, créé ici s'il manque — aussi
+    pour un retrait : le relais et l'agent lisent un dossier absent comme « mains liées »), jamais sous /etc/secubox
+    (compte partagé secubox). `contenu` (octets) : posé atomiquement par descripteur ; None : retiré. Un dossier qui
+    n'est pas à root ou inscriptible par d'autres n'est pas touché (lecteurs : défaut sûr)."""
     try:
         etc = os.open(ctx.etc, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
             try:
                 d = os.open("secubox-pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=etc)
             except FileNotFoundError:
-                # Créé AUSSI pour « off » (R-L5-20 M3) : le relais lit un dossier absent comme « mains liées ».
                 os.mkdir("secubox-pilotage", 0o755, dir_fd=etc)
                 d = os.open("secubox-pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=etc)
             try:
@@ -472,10 +469,10 @@ def poser_projection_relais(ctx, liees):
                 if st.st_uid != os.geteuid() or st.st_mode & 0o022:
                     return False
                 os.fchmod(d, 0o755)
-                if liees:
-                    ecrire(d, "mains-liees", b"", 0o644)
+                if contenu is not None:
+                    ecrire(d, nom, contenu, 0o644)
                 else:
-                    retirer(d, "mains-liees")
+                    retirer(d, nom)
             finally:
                 os.close(d)
         finally:
@@ -483,6 +480,41 @@ def poser_projection_relais(ctx, liees):
     except OSError:
         return False
     return True
+
+
+def poser_projection_relais(ctx, liees):
+    """Projection des mains liées lue par le relais et l'agent (L5)."""
+    return poser_drapeau_relais(ctx, "mains-liees", b"" if liees else None)
+
+
+def projeter_portee(ctx):
+    """R-L5-21 : drapeaux d'échéance lus par l'agent à chaque message HTTP, sans sudo — `proprietaire` (canal wg-mesh
+    vérifié : fin de validité de la vérification) et `support-ouvert` (fin de la session ouverte ; jamais sous mains
+    liées ni sans ancre vérifiée). Recalculés de l'état root APRÈS CHAQUE VERBE (accepter, fermer, refuser, expiration
+    constatée par `etat`, mains liées, ancre-verifier réussie ou non), donc aussi par le postinst (`etat` local) au
+    redémarrage. État illisible : les deux sont retirés (lecture)."""
+    maintenant = int(time.time())
+    prop = sup = None
+    try:
+        fd = ouvrir_etat(ctx, creer=False)
+    except Erreur:
+        fd = None
+    if fd is not None:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH)
+            canal = canal_verifie(fd, maintenant)
+            if canal == "wg-mesh":
+                prop = lire_json(fd, "ancre.json", {})["verifie"] + VALIDITE_ANCRE
+            if canal is not None and not mains_liees(ctx, fd) and support_ouvert_lu(fd, maintenant):
+                sup = lire_json(fd, "support.json", {})["fin"]
+        except (Erreur, OSError, KeyError, TypeError):
+            prop = sup = None
+        finally:
+            os.close(fd)
+    ok = poser_drapeau_relais(ctx, "proprietaire", None if prop is None else f"{prop}\n".encode())
+    ok = poser_drapeau_relais(ctx, "support-ouvert", None if sup is None else f"{sup}\n".encode()) and ok
+    if not ok:
+        err("drapeaux de portée /etc/secubox-pilotage non posés (dossier non fiable) : l'agent reste en lecture")
 
 
 def mains_liees(ctx, fd):
@@ -511,19 +543,11 @@ def proprietaire(canal):
     return canal == "wg-mesh"
 
 
-def politique(action, liees, du_proprietaire, support_ouvert=False):
+def politique(action, liees, du_proprietaire):
     if action == "releve":
         return True, False, "relevé libre"
     if liees:
         return False, False, "mains liées"
-    if action == "pilotage-admin":
-        # L5 (R-L5-3) : portée admin du pilotage HTTP ; box cliente : seulement pendant un support ouvert. Jamais une
-        # action en soi : `politique` seule la lit (l'agent la relit au plus toutes les 30 s).
-        if du_proprietaire:
-            return True, False, "box du propriétaire"
-        if support_ouvert:
-            return True, False, "box cliente : support ouvert"
-        return False, False, "box cliente : support non ouvert"
     if action == "support-ouvrir":
         return True, True, "accord de la box"
     if action == "maillage-rejoindre" and not du_proprietaire:
@@ -956,9 +980,7 @@ def executer(ctx, verbe, p):
                 if fd is not None:
                     fcntl.flock(fd, fcntl.LOCK_SH)
                 liees = mains_liees(ctx, fd)
-                maintenant = int(time.time())
-                canal = canal_verifie(fd, maintenant)
-                ouvert = p["action"] == "pilotage-admin" and support_ouvert_lu(fd, maintenant)
+                canal = canal_verifie(fd, int(time.time()))
             finally:
                 if fd is not None:
                     os.close(fd)
@@ -968,7 +990,7 @@ def executer(ctx, verbe, p):
             # R-L2-21 : la politique n'est pas auditée (lecture), mais son refus faute d'ancre l'est, avec le verbe.
             auditer(ctx, "pilotage_refus", verbe=verbe, action=p["action"], refus="ancre non vérifiée")
             return {"autorise": False, "consentement": False, "raison": "ancre non vérifiée"}
-        autorise, consentement, raison = politique(p["action"], liees, proprietaire(canal), ouvert)
+        autorise, consentement, raison = politique(p["action"], liees, proprietaire(canal))
         return {"autorise": autorise, "consentement": consentement, "raison": raison}
 
     if verbe == "_fin":
@@ -1601,7 +1623,13 @@ def main(argv):
         sortie({"ok": False, "refus": "argv invalide"})
         return 2
     try:
-        sortie(executer(ctx, verbe, p))
+        try:
+            sortie(executer(ctx, verbe, p))
+        finally:
+            try:
+                projeter_portee(ctx)            # R-L5-21 : après chaque verbe, quoi qu'il ait fait
+            except Exception as e:  # noqa: BLE001
+                err(f"projection de la portée impossible : {e.__class__.__name__}")
         return 0
     except Erreur as e:
         err(str(e))

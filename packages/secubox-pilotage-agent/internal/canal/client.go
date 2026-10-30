@@ -133,6 +133,8 @@ type Config struct {
 	DelaiHTTP   time.Duration // délai d'un appel au relais (DelaiHTTPDefaut)
 	// HTTPSimultanes : messages HTTP traités à la fois (HTTPSimultanesDefaut) ; au-delà, 503 tout de suite.
 	HTTPSimultanes int
+	// JournalDebug : journalise aussi chaque lecture HTTP réussie (sinon : écritures et refus seulement, R-L5-21 M5).
+	JournalDebug bool
 }
 
 // Client interroge le maître et lui répond.

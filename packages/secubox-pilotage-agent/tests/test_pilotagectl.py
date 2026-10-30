@@ -1585,45 +1585,80 @@ def test_rejoindre_retire_l_ancien_etat_avant_d_ecrire_le_code(banc):
     assert banc.lancements()[-1] != "start secubox-automesh.service"
 
 
-# --- L5 tâche 3 : portée admin du pilotage HTTP (politique pilotage-admin) ------------------------------------------
+# --- L5 tâche 3, R-L5-21 : drapeaux root lus par l'agent (portée admin du pilotage HTTP), sans sudo ----------------
 
-def test_politique_pilotage_admin(banc):
-    """Admin seulement : mains libres ET (box du propriétaire OU box cliente pendant un support OUVERT et non échu)."""
-    _, pol, _ = banc.run("politique", "pilotage-admin", agent=True)
-    assert pol == {"autorise": True, "consentement": False, "raison": "box du propriétaire"}
-    banc.run("mains-liees", "on")
-    _, pol, _ = banc.run("politique", "pilotage-admin", agent=True)
-    assert pol == {"autorise": False, "consentement": False, "raison": "mains liées"}
-    banc.run("mains-liees", "off")
+def drapeau(banc, nom):
+    """Échéance (int) du drapeau root /etc/secubox-pilotage/<nom>, ou None s'il est absent ; vérifie sa forme sûre."""
+    f = banc.r / "etc/secubox-pilotage" / nom
+    if not f.exists():
+        return None
+    assert f.is_file() and not f.is_symlink() and (f.stat().st_mode & 0o777) == 0o644
+    return int(f.read_text())
+
+
+def test_drapeau_proprietaire_projete_par_ancre_verifier(banc):
+    """wg-mesh vérifié : `proprietaire` = échéance de la vérification (2 h) ; box cliente ou échec d'ancre : retiré."""
+    maintenant = int(__import__("time").time())
+    fin = drapeau(banc, "proprietaire")
+    assert fin is not None and maintenant + 7000 <= fin <= maintenant + 7300
     banc.cliente()
-    _, pol, _ = banc.run("politique", "pilotage-admin", agent=True)
-    assert pol == {"autorise": False, "consentement": False, "raison": "box cliente : support non ouvert"}
-    banc.run("support", "ouvrir", "s-01", agent=True)               # demandé, pas encore accepté
-    _, pol, _ = banc.run("politique", "pilotage-admin", agent=True)
-    assert pol["autorise"] is False
-    banc.run("support", "accepter", "s-01")
-    _, pol, _ = banc.run("politique", "pilotage-admin", agent=True)
-    assert pol == {"autorise": True, "consentement": False, "raison": "box cliente : support ouvert"}
+    assert drapeau(banc, "proprietaire") is None
+    banc.pairs(("AUTRE" + CLE_MAITRE[5:], "10.64.0.1/32"))          # révocation : la clé du pair change
+    banc.ancre_verifier()
+    assert drapeau(banc, "proprietaire") is None and drapeau(banc, "support-ouvert") is None
+
+
+def test_drapeau_support_ouvert_suit_chaque_cloture(banc):
+    """`support-ouvert` (fin epoch) posé par l'accord local, retiré par la fermeture (détenteur ou maître), le refus,
+    l'expiration constatée, les mains liées et l'échec d'ancre."""
+    banc.cliente()
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    assert drapeau(banc, "support-ouvert") is None                  # en attente : rien
+    _, s, _ = banc.run("support", "accepter", "s-01")
+    assert drapeau(banc, "support-ouvert") == s["fin"]
+    banc.run("support", "fermer", "s-01")                           # détenteur
+    assert drapeau(banc, "support-ouvert") is None
+    banc.run("support", "ouvrir", "s-02", agent=True)
+    banc.run("support", "accepter", "s-02")
+    banc.run("support", "fermer", "s-02", agent=True)               # maître
+    assert drapeau(banc, "support-ouvert") is None
+    banc.run("support", "ouvrir", "s-03", agent=True)
+    banc.run("support", "accepter", "s-03")
     sup = lire_support(banc)
-    sup["fin"] = int(__import__("time").time()) - 1                 # session échue : plus d'admin
-    ecrire_support(banc, sup)
-    _, pol, _ = banc.run("politique", "pilotage-admin", agent=True)
-    assert pol["autorise"] is False
-    ecrire_support(banc, {"id": "s-01", "etat": "ouvert"})          # forme inattendue : fermé
-    _, pol, _ = banc.run("politique", "pilotage-admin", agent=True)
-    assert pol["autorise"] is False
+    sup["fin"] = int(__import__("time").time()) - 1
+    ecrire_support(banc, sup)                                       # échu : constaté à la lecture suivante
+    banc.run("etat", agent=True)
+    assert drapeau(banc, "support-ouvert") is None
+    banc.run("support", "ouvrir", "s-04", agent=True)
+    banc.run("support", "accepter", "s-04")
+    assert drapeau(banc, "support-ouvert") is not None
+    banc.run("mains-liees", "on")
+    assert drapeau(banc, "support-ouvert") is None
+    banc.run("mains-liees", "off")
+    banc.run("support", "ouvrir", "s-05", agent=True)
+    banc.run("support", "accepter", "s-05")
+    assert drapeau(banc, "support-ouvert") is not None
+    banc.pairs(("AUTRE" + CLE_MAITRE[5:], "10.64.0.1/32"))
+    banc.ancre_verifier()                                           # ancre révoquée
+    assert drapeau(banc, "support-ouvert") is None
 
 
-def test_politique_pilotage_admin_sans_ancre(banc_nu):
-    rc, pol, _ = banc_nu.run("politique", "pilotage-admin", agent=True)
-    assert rc == 0 and pol == {"autorise": False, "consentement": False, "raison": "ancre non vérifiée"}
+def test_drapeaux_reprojetes_par_etat_local(banc):
+    """Montée de version / redémarrage : sans drapeau, une box cliente en support ouvert serait en lecture ; le postinst
+    rejoue `secubox-pilotagectl etat` (local), qui reprojette l'état root courant."""
+    banc.cliente()
+    banc.run("support", "ouvrir", "s-01", agent=True)
+    _, s, _ = banc.run("support", "accepter", "s-01")
+    (banc.r / "etc/secubox-pilotage/support-ouvert").unlink()
+    banc.run("etat")
+    assert drapeau(banc, "support-ouvert") == s["fin"]
 
 
 def test_mains_deliees_dossier_relais_absent_cree(banc):
     """R-L5-20 M3 : « off » avec /etc/secubox-pilotage absent : le dossier est créé (root 0755) sans drapeau ; sinon le
     relais, qui lit un dossier absent comme « mains liées », resterait en lecture sans que personne le sache."""
     d = banc.r / "etc/secubox-pilotage"
-    assert not d.exists()
+    __import__("shutil").rmtree(d, ignore_errors=True)              # (l'ancre vérifiée du banc l'a déjà créé)
     rc, sortie, _ = banc.run("mains-liees", "off")
     assert rc == 0 and sortie == {"ok": True, "mains_liees": False}
     assert d.is_dir() and not d.is_symlink() and (d.stat().st_mode & 0o777) == 0o755

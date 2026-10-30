@@ -36,7 +36,7 @@ def test_unite_durcie():
     for d in (
         "User=secubox-pilotage-agent", "Group=secubox-pilotage-agent", "ProtectSystem=strict", "ProtectHome=yes",
         "PrivateTmp=yes", "IPAddressDeny=any", "IPAddressAllow=10.10.0.1 10.64.0.1 localhost",
-        "MemoryMax=48M", "Restart=on-failure", "RestartSec=10", "ReadOnlyPaths=/", "ProtectControlGroups=yes",
+        "MemoryMax=40M", "Restart=on-failure", "RestartSec=10", "ReadOnlyPaths=/", "ProtectControlGroups=yes",
         "ExecStart=/usr/sbin/sbx-pilotage-agent",
     ):
         assert d in u, d
@@ -161,7 +161,7 @@ def test_paquet_coherent():
     c = lire("debian/control")
     assert "Architecture: any" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
-    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.4.0-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.4.1-1~trixie1) trixie;")
     # ancre-verifier lit `wg show` par chemin absolu (/usr/bin/wg)
     assert "wireguard-tools" in re.search(r"^Depends:(.*)$", c, re.M).group(1)
     pi = lire("debian/postinst")
@@ -274,8 +274,8 @@ def test_gomemlimit_sous_memorymax_m13():
     u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
     env = re.findall(r"^Environment=GOMEMLIMIT=(\S+)$", u, re.M)
     (maxi,) = re.findall(r"^MemoryMax=(\S+)$", u, re.M)
-    assert env == ["40MiB"], env
-    assert _octets(env[0]) < _octets(maxi) == 48 << 20
+    assert env == ["32MiB"], env
+    assert _octets(env[0]) < _octets(maxi) == 40 << 20
 
 
 def test_l5_agent_joint_le_relais_seulement():
@@ -286,12 +286,16 @@ def test_l5_agent_joint_le_relais_seulement():
     run = [ligne.strip() for ligne in code.splitlines() if "/run/secubox" in ligne]
     assert run == ["/run/secubox/pilotage-relais.sock rw,"], run
     assert "/etc/secubox-pilotage/ r," in code and "/etc/secubox-pilotage/mains-liees r," in code
+    # R-L5-21 : drapeaux d'échéance relus à chaque message, sans sudo
+    assert "/etc/secubox-pilotage/proprietaire r," in code and "/etc/secubox-pilotage/support-ouvert r," in code
+    pi = lire("debian/postinst")
+    assert "/usr/sbin/secubox-pilotagectl etat >/dev/null" in pi       # reprojection de l'état root à chaque configure
     assert "/etc/secubox-pilotage/relais.pub" not in code and "/var/lib/secubox-pilotage-relais" not in code
     u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
     after = re.search(r"^After=(.*)$", u, re.M).group(1).split()
     assert "secubox-pilotage-relais.socket" in after
     assert "Requires=secubox-pilotage-relais.socket" not in u          # l'agent vit sans relais (L1/L2)
-    assert "MemoryMax=48M" in u and "Environment=GOMEMLIMIT=40MiB" in u
+    assert "MemoryMax=40M" in u and "Environment=GOMEMLIMIT=32MiB" in u
 
 
 def test_acl_en_dependance():

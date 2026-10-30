@@ -149,7 +149,7 @@ def test_scripts_debian_posix():
 
 
 def test_version_montee_et_dependance_au_verificateur():
-    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.4.0-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.4.1-1~trixie1) trixie;")
     c = lire("debian/control")
     # Le vérificateur Ed25519 (tâche 1) est dans secubox-core 1.8.11.
     assert "secubox-core (>= 1.8.11~)" in re.search(r"^Depends:(.*)$", c, re.M).group(1)

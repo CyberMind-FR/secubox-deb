@@ -347,39 +347,6 @@ func analyserChemin(chemin string) (module, reste, requete string, rf *refus) {
 	return module, "/" + reste, requete, nil
 }
 
-// MainsLieesDans : drapeau `mains-liees` projeté par le ctl root dans `dossier`. Dossier ouvert
-// O_DIRECTORY|O_NOFOLLOW, drapeau par dir_fd O_NOFOLLOW ; l'un et l'autre au compte uidRoot, sans
-// écriture pour le groupe ni les autres, drapeau régulier. Mains LIBRES seulement si le dossier est de
-// confiance et le drapeau absent ; tout le reste (dossier absent ou douteux, drapeau douteux) vaut
-// « mains liées » : le défaut sûr ne fait que retirer l'écriture (R-L5-19). Partagée par le relais et
-// par l'agent (portée recalculée avant tout message HTTP, L5 tâche 3) : une seule vérification.
-func MainsLieesDans(dossier string, uidRoot uint32, journal *log.Logger) bool {
-	dir, err := syscall.Open(dossier, syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
-	if err != nil {
-		return true
-	}
-	defer syscall.Close(dir)
-	var st syscall.Stat_t
-	if syscall.Fstat(dir, &st) != nil || st.Uid != uidRoot || st.Mode&0o022 != 0 {
-		return true
-	}
-	fd, err := syscall.Openat(dir, "mains-liees", syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
-	if errors.Is(err, syscall.ENOENT) {
-		return false
-	}
-	if err != nil {
-		return true
-	}
-	defer syscall.Close(fd)
-	// Présent : mains liées, quel que soit son état ; les contrôles ne servent qu'à le dire au journal.
-	if syscall.Fstat(fd, &st) != nil || st.Mode&syscall.S_IFMT != syscall.S_IFREG || st.Uid != uidRoot || st.Mode&0o022 != 0 {
-		if journal != nil {
-			journal.Printf("drapeau des mains liées douteux dans %s : traité comme posé", dossier)
-		}
-	}
-	return true
-}
-
 func (r *Relais) mainsLiees() bool { return MainsLieesDans(r.DossierMainsLiees, r.UIDRoot, r.Journal) }
 
 // socketModule : le chemin de la socket du module si c'en est une (Lstat : jamais un lien).
