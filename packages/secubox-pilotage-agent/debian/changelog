@@ -5,7 +5,7 @@ secubox-pilotage-agent (0.5.1-1~trixie1) trixie; urgency=medium
     allègement réussi, nginx -t passé ; ôté au retour) ; le nom du profil seul ne suffit plus (le pointeur
     /var/lib/secubox/profiles/actif n'est écrit par aucun composant). AppArmor : lecture de ce seul marqueur.
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 14:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 14:00:00 +0100
 
 secubox-pilotage-agent (0.5.0-1~trixie1) trixie; urgency=medium
 
@@ -22,7 +22,7 @@ secubox-pilotage-agent (0.5.0-1~trixie1) trixie; urgency=medium
       admin.<box>, R-L5-27) ;
     - AppArmor : seules écritures /run/secubox/pilotage/.etat.html.tmp et etat.html. Aucune dépendance Go ajoutée.
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 12:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 12:00:00 +0100
 
 secubox-pilotage-agent (0.4.2-1~trixie1) trixie; urgency=medium
 
@@ -33,7 +33,7 @@ secubox-pilotage-agent (0.4.2-1~trixie1) trixie; urgency=medium
     - M6 : fsync du dossier après chaque renommage atomique du ctl.
     - M3 : RSS réel mesuré (34,5 Mio VmHWM, échanges parallèles) ; MemoryMax 48M, GOMEMLIMIT 32MiB.
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 01:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 01:00:00 +0100
 
 secubox-pilotage-agent (0.4.1-1~trixie1) trixie; urgency=medium
 

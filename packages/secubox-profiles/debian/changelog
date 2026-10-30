@@ -7,7 +7,7 @@ secubox-profiles (0.26.2-1~trixie1) trixie; urgency=medium
     ramené à 0755 même s'il existait ; nginx -t en échec rend tout et ôte le marqueur même sur un allègement existant ;
     une sauvegarde aggregator.toml gardée n'est jamais écrasée (renommée .avant-<t>).
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 16:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 16:00:00 +0100
 
 secubox-profiles (0.26.1-1~trixie1) trixie; urgency=medium
 
@@ -23,7 +23,7 @@ secubox-profiles (0.26.1-1~trixie1) trixie; urgency=medium
       pilotage-relais seulement dans distante. Empreintes des profils livrés complétées.
     - M6 : tests du vrai nginx (page servie avec ses en-têtes, refus 403 hors des réseaux admis).
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 14:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 14:00:00 +0100
 
 secubox-profiles (0.26.0-1~trixie1) trixie; urgency=medium
 
@@ -40,7 +40,7 @@ secubox-profiles (0.26.0-1~trixie1) trixie; urgency=medium
     CSP stricte (style par empreinte), nosniff, X-Frame-Options DENY.
   * README : profil distante, page d'état, limites connues sans annuaire (bans fédérés, noms .lan/.mesh, config 4R).
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 12:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 12:00:00 +0100
 
 secubox-profiles (0.25.4-1~trixie1) trixie; urgency=medium
 

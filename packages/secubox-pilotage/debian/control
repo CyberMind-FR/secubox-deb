@@ -9,8 +9,8 @@ Rules-Requires-Root: no
 
 Package: secubox-pilotage
 Architecture: all
-Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core (>= 1.8.10~), nginx, nftables, iproute2, acl, adduser, sudo, zstd, gpgv
-Recommends: apparmor, secubox-p2p (>= 1.19.6~)
+Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core (>= 1.8.10~), nginx, nftables, iproute2, acl, adduser, zstd, gpgv
+Recommends: apparmor, secubox-p2p (>= 1.20.1~)
 Suggests: secubox-pilotage-agent
 Description: SecuBox — maître du pilotage distant du maillage (L1 « Voir », L2 « Agir »)
  Service maître du pilotage distant (TR-369/USP) : reçoit des agents des box, par

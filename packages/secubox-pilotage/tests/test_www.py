@@ -398,14 +398,16 @@ def test_www_lien_symbolique_refuse(banc, tmp_path):
     assert list(cible.iterdir()) == []
 
 
-def test_sudoers_et_paquet():
-    s = (PKG / "sudoers.d/secubox-pilotage-www").read_text()
-    assert "secubox-pilotage ALL=(root) NOPASSWD: /usr/sbin/secubox-pilotage-www *" in s
-    assert "ALL=(ALL)" not in s
+def test_sudoers_mort_retire_et_paquet():
+    """Final : le service maître (NoNewPrivileges) n'appelle jamais le ctl ; seul le ctl root des vhosts le lance. La règle
+    sudoers n'est plus livrée et l'ancienne est retirée à la mise à niveau (rm_conffile)."""
+    assert not (PKG / "sudoers.d").exists()
     rules = (PKG / "debian/rules").read_text()
     assert "install -D -m 755 sbin/secubox-pilotage-www $(P)/usr/sbin/secubox-pilotage-www" in rules
-    assert "install -D -m 0440 sudoers.d/secubox-pilotage-www $(P)/etc/sudoers.d/secubox-pilotage-www" in rules
-    assert "SPDX-License-Identifier" in CTL.read_text()
+    assert "sudoers" not in rules
+    ms = (PKG / "debian/maintscript").read_text()
+    assert "rm_conffile /etc/sudoers.d/secubox-pilotage-www 0.5.3-1~trixie1~" in ms
+    assert "SPDX-License-Identifier" in CTL.read_text() and "SPDX-License-Identifier" in ms
 
 
 @pytest.mark.skipif(not __import__("shutil").which("zstd"), reason="zstd absent")

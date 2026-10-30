@@ -216,7 +216,7 @@ est l'entrée du relais local de la box (`methode`, `chemin` `/api/v1/<module>/�
 
 ## Pages des box sans tête (L5, tâche 4)
 
-`/usr/sbin/secubox-pilotage-www` (root, appelé par `sudo -n` depuis le service ; sudoers `secubox-pilotage-www`) prépare,
+`/usr/sbin/secubox-pilotage-www` (root, lancé par le seul ctl root `secubox-pilotage-vhost` ; aucune règle sudoers depuis 0.5.3) prépare,
 pour chaque version de paquet déclarée par une box, les pages de **cette** version (spec D5 : une page ne parle qu'à l'API de
 sa version). Sortie : une ligne JSON sans chemin ; codes 0, 1 (refus/erreur), 2 (argv ou configuration).
 
@@ -274,7 +274,7 @@ HAProxy TLS 1.3 → sbxwaf → nginx.
   un paquet déclaré avec deux versions n'est pas servi). 64 box et 256 paquets par box au plus.
 - **`secubox-pilotage-vhost`** (root, `python3 -I`, verbes fermés `poser|retirer [--acteur A] <box>`, `synchroniser`, `lister`) :
   lancé par `secubox-pilotage-vhost.path` (plan changé) et `.timer` (toutes les heures), **jamais par le service** — celui-ci tourne
-  `NoNewPrivileges` sans sudo (le sudoers de `secubox-pilotage-www` livré en T4 ne lui sert donc pas ; il reste pour un appel manuel).
+  `NoNewPrivileges` sans sudo (le sudoers de `secubox-pilotage-www` livré en T4, qui ne lui servait pas, est retiré en 0.5.3 par `rm_conffile`).
   `synchroniser` lit le plan à chemin fixe (sans lien, ≤ 1 Mio, validé en entier, sinon code 2 et rien touché), extrait chaque version
   (`secubox-pilotage-www extraire --acteur pilotage`), pose chaque vhost, retire ceux des box sorties du plan, puis `purger`.
   `poser` : server nginx `/etc/nginx/conf.d/secubox-pilotage-admin-<box>.conf` rendu par `pilotage/vhosts.py` sur les versions déjà
@@ -351,6 +351,30 @@ HAProxy TLS 1.3 → sbxwaf → nginx.
   portée de la box.
 - **Reste à T6/T7** : T6 pose `Interface = "distante"` (profil léger) et le DNS public `admin.<box>` (joker du pair) ; T7 : lien vers
   `https://admin.<box>.secubox.in/` dans la page Flotte, message « passez par les actions du pilotage » (R-L5-15), déconnexion.
+
+## Modèle de confiance : un seul propriétaire
+
+Le maillage a **un seul propriétaire**. Tout administrateur réel du maître (`require_jwt`, 2FA du maître) peut piloter
+**toutes** les box du maillage dont il est propriétaire : il n'y a ni partage par box ni rôle intermédiaire. La portée
+reste bornée sur chaque box (mains liées, routes déclarées dans `routes-ouvertes.d`, verbes fermés du ctl L2, accord du
+détenteur pour les actions fortes). Une **box cliente** (détenue par un tiers) n'est pilotable que pendant une session de
+**support ouverte** par son détenteur et avec son **accord** ; hors support : 403. Un maître compromis obtient donc la
+portée administrateur sur les box du maillage, dans ces bornes.
+
+Le code de connexion au vhost d'une box (`GET /boxes/{box}/connexion-vhost`) n'est émis qu'en `Sec-Fetch-Site`
+`same-origin` ou `none` (403 sinon) ; sans cet en-tête (client non navigateur), la garde `require_jwt` seule s'applique.
+
+## À vérifier au banc (T8)
+
+- `nginx -t` réel dans l'unité `secubox-pilotage-vhost.service` : la configuration complète passe par
+  `systemd-run --wait --pipe --collect --quiet /usr/sbin/nginx -t -q` ; la pré-validation du tampon reste dans le bac à sable.
+- `ReadWritePaths` réels de cette unité (`haproxy.toml`, `waf/`, `conf.d`, dossiers HAProxy et certbot, `.well-known`) et
+  `CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_CHOWN CAP_FOWNER` : `haproxyctl vhost add|generate|reload|cert sync`,
+  `secubox-waf-route`, relais-maillage (le mode HAProxy LXC, `lxc-attach`, n'est pas couvert).
+- certbot HTTP-01 en webroot depuis l'unité (`/usr/share/secubox/www/.well-known`).
+- `/data/apt` lu en root et `gpgv` sur `InRelease` par `secubox-pilotage-www`.
+- Basculement réel d'un nom avec `secubox-relais-maillage` (retrait du relais, pose du vhost, retour arrière).
+- Mémoire du profil distant sur gk5 (box légère sans tête).
 
 ## Tests
 `cd packages/secubox-pilotage && python3 -m pytest -q`. `tests/test_contrat_go.py` rejoue contre le vrai canal (et le vrai stockage) les

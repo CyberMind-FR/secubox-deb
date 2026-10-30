@@ -1,10 +1,20 @@
+secubox-pilotage (0.5.3-1~trixie1) trixie; urgency=medium
+
+  * Passe finale L5 (ref #3126) : émission du code de connexion au vhost refusée (403) si `Sec-Fetch-Site` n'est ni
+    `same-origin` ni `none` ; unité root `secubox-pilotage-vhost` bornée (CapabilityBoundingSet, ReadWritePaths exacts,
+    exception RULES-CODE § 10) et `nginx -t` complet par systemd-run ; règle sudoers morte de `secubox-pilotage-www`
+    retirée (rm_conffile), dépendance sudo ôtée ; Recommends secubox-p2p (>= 1.20.1~) ; README : modèle à propriétaire
+    unique et points à vérifier au banc ; dates des entrées remises au 30 octobre 2026.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 18:00:00 +0100
+
 secubox-pilotage (0.5.2-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 7, correction 1/5 (R-L5-34 M3, ref #3126) : README aligné sur la page Flotte (émission du code sans
     `retour`, `retour=/` refusé) ; test : l'émission du code passe par la seule session cookie du maître (nouvel
     onglet, sans Bearer), 401 sans session.
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 14:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 14:00:00 +0100
 
 secubox-pilotage (0.5.1-1~trixie1) trixie; urgency=medium
 
@@ -12,14 +22,14 @@ secubox-pilotage (0.5.1-1~trixie1) trixie; urgency=medium
     Device.X_SECUBOX_Pilotage.Interface = "distante", « locale » sinon) pour le panneau Flotte du maître : box
     distante ouverte par l'émission du code à usage unique, box locale par son lien direct.
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 12:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 12:00:00 +0100
 
 secubox-pilotage (0.5.0-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 6 (E4, ref #3126) : plan d'exposition exposition.json (noms et ports déclarés par les agents,
     Device.X_SECUBOX_Exposure), écrit à chaque tour d'inventaire pour secubox-relais-maillage ; aucune route sans jeton.
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 04:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 04:00:00 +0100
 
 secubox-pilotage (0.4.5-1~trixie1) trixie; urgency=medium
 
@@ -28,7 +38,7 @@ secubox-pilotage (0.4.5-1~trixie1) trixie; urgency=medium
     son bilan ; verrou commun pris sans blocage jusqu'à une échéance (300 s, SECUBOX_PILOTAGE_VERROU_S) puis sortie
     « relais occupé » sans rien modifier, auditée (pilotage_vhost_occupe). Recommends secubox-p2p >= 1.19.6.
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 03:10:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 03:10:00 +0100
 
 secubox-pilotage (0.4.4-1~trixie1) trixie; urgency=medium
 
@@ -38,7 +48,7 @@ secubox-pilotage (0.4.4-1~trixie1) trixie; urgency=medium
     muet retrouve son nom), échec propagé par retirer (ok: false, audit echec) ; retour arrière de poser par étapes
     indépendantes, erreur d'origine conservée. Requiert secubox-p2p >= 1.19.5 pour le basculement.
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 02:10:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 02:10:00 +0100
 
 secubox-pilotage (0.4.3-1~trixie1) trixie; urgency=medium
 
@@ -47,7 +57,7 @@ secubox-pilotage (0.4.3-1~trixie1) trixie; urgency=medium
     outil, marque de reprise, retour arrière symétrique en cas d'échec et au retrait, audit pilotage_vhost_basculer ;
     nom porté par un tiers toujours refusé. Routes du canal des agents déclarées dans tests/publiques-assumees.txt.
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 00:30:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 00:30:00 +0100
 
 secubox-pilotage (0.4.2-1~trixie1) trixie; urgency=medium
 
@@ -108,7 +118,7 @@ secubox-pilotage (0.2.2-1~trixie1) trixie; urgency=medium
     TAILLE_HTTP_MAX (aucun changement de comportement). Rappel : le marqueur du tunnel arrête un relais qui transmettrait
     les en-têtes du client, il ne protège pas contre un processus qui joint la socket (0660).
 
- -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 01:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 01:00:00 +0100
 
 secubox-pilotage (0.2.1-1~trixie1) trixie; urgency=medium
 
