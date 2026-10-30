@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox — redemarrage de prudence de secubox-metrics (remplace RuntimeMaxSec, #3295)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3295
+
+[Service]
+Type=oneshot
+# root : seul ce redemarrage l'exige. try-restart ne demarre rien si l'unite est arretee.
+# A RETIRER (minuterie + cette unite) apres mesure de la RSS sur 24 h.
+ExecStart=/usr/bin/systemctl try-restart secubox-metrics.service

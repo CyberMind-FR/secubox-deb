@@ -36,6 +36,16 @@ sudo apt install secubox-metrics
 
 Configuration file: `/etc/secubox/metrics.toml`
 
+```toml
+[cache]
+intervalle_leger = 60   # s, borne 15..3600 : rafraichissement de fond de waf + connexions (#3295)
+```
+
+Le cache `/var/cache/secubox/metrics-cache.json` voit ses blocs `waf` et `connections` rafraichis en
+fond (l'`overview`, couteux, est conserve). Monte dans l'agregateur, le lifespan ne tourne pas : la
+boucle demarre a la premiere requete vhost-stats. Un redemarrage de prudence toutes les 6 h est porte
+par `secubox-metrics-redemarrage.timer` (a retirer apres mesure de la RSS sur 24 h).
+
 ## API Endpoints
 
 - `GET /api/v1/metrics/status` - Module status

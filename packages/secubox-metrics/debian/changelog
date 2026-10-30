@@ -1,3 +1,12 @@
+secubox-metrics (1.29.9-1~trixie1) trixie; urgency=medium
+
+  * Cache : les blocs waf et connections sont rafraichis en fond toutes les 60 s ([cache]
+    intervalle_leger, borne 15..3600), overview conserve, ecriture atomique (ref #3295).
+  * RuntimeMaxSec remplace par secubox-metrics-redemarrage.timer (try-restart toutes les 6 h) : le
+    redemarrage de prudence n'est plus journalise comme un echec ; a retirer apres mesure RSS 24 h.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 12:00:00 +0100
+
 secubox-metrics (1.29.8-1~trixie1) trixie; urgency=medium
 
   * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte
