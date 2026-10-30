@@ -9,6 +9,20 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-30 — Pilotage distant TR-369 : L2 « Agir » fusionné, non déployé (ref #3126, ref #3242)
+
+- **PR #3278** : ctl root `secubox-pilotagectl` à liste fermée (sudo borné), ancre du maître vérifiée sur le canal réel,
+  services durables seulement (unité ponctuelle, minuterie, non chargée, alias protégé refusés), accord du détenteur sur une
+  box cliente (nom compris), mains liées, support borné sans shell, opérations longues par `systemd-run` avec fin auditée et
+  rattrapée après redémarrage (`fins-recentes`, `boot_id`) ; maître : actions `require_jwt` + confirmation forte, garde
+  serveur « box cliente = support ouvert », flux SSE (jeton revérifié), `Rejoindre` par assistant socket + AppArmor ;
+  `secubox-renommer` (corrige #3242), page de la box dans la Flotte, assist réduit au catalogue unique.
+- Versions (non publiées) : core 1.8.10, pilotage 0.1.2, pilotage-agent 0.2.0, system 1.11.5, premier-pas 0.8.1,
+  annuaire 0.16.3, assist 0.4.0, autoload 0.7.5, aggregator 0.5.3.
+- Revue : SDD tâche par tâche, relecture finale de branche (1 critique : « démarrer » une unité oneshot root contournait
+  l'accord du détenteur ; 4 importants), corrigés, relecture ciblée « prêt à fusionner ».
+- **R33 maintenue** (propriétaire, 2026-10-30) : aucun déploiement ni publication apt avant L5 ; banc T10/T12 ensuite.
+
 ## 2026-10-29 — WAF : PHP2Shell et signatures équivalentes en mode detect, déployés sur gk2 (closes #3257, closes #3273)
 
 - **#3257 (PR #3272, secubox-waf-ng 1.31.0)** : analyseur multipart borné calqué sur `rfc1867.c` (PHP 8.2), signatures
