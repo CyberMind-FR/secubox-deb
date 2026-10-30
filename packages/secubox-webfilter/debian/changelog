@@ -1,3 +1,16 @@
+secubox-webfilter (0.5.3-1~trixie1) trixie; urgency=medium
+
+  * Adresses rémanentes (#3005) : un appareil assigné garde dans la carte appliquée les adresses où on l'a vu pendant
+    [appareils] retention_jours (14 par défaut), pas seulement celles de la table de voisinage à 04:00. Historique
+    remanence.json (par adresse : dernier MAC vu, date), tenu par secubox-webfilter-feed, relu par le contrôleur sans
+    suivre de lien et validé ; une adresse reprise par un autre MAC passe au dernier vu.
+  * Ré-application amortie : une adresse nouvelle d'un appareil assigné (ou une adresse de la carte reprise par un autre
+    MAC) dépose appliquer.demande, au plus une fois par [appareils] reapplication_min (30 par défaut), jamais pendant
+    une application (marqueur application.en-cours) ou une compilation de secubox-dns-listes.
+  * Profil AppArmor : marqueur et historique pour le contrôleur, état de secubox-dns-listes en lecture pour le démon.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 12:00:00 +0100
+
 secubox-webfilter (0.5.2-1~trixie1) trixie; urgency=medium
 
   * Seconde relecture de sécurité (#3205) : Depends: secubox-core (>= 1.8.3) — remise en place des fichiers d'Unbound
