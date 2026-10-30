@@ -291,19 +291,34 @@ def _trace_delegation(request: Request, payload: Dict[str, Any], verdict: str = 
 #     R-L5-9 DÉROGE aux Global Constraints du plan (« HS256 + jwt_secret ») : les
 #     sockets de modules sont souvent en 0666 et `jwt_secret` est lu par tous les
 #     modules ; un module compromis frapperait un jeton administrateur. Les
-#     modules ne lisent que la clé PUBLIQUE, `CLE_PUBLIQUE_RELAIS` ;
+#     modules ne lisent que la clé PUBLIQUE, `DOSSIER_CLE_RELAIS/NOM_CLE_RELAIS` ;
 #   - `aud` = nom de la box (nom court de l'hôte), `sub` = `pilotage:<acteur>@<maître>` ;
 #   - `cible` = le module visé, comparé à l'identité du module qui sert la route ;
 #   - réclamation `pilotage = {acteur, maitre, portee}`, portée `lecture` ou `admin`.
 #
-# CONTRAT DES CLÉS (créées par la tâche 2, à l'installation du relais) :
-#   /etc/secubox/pilotage/relais.key  PEM PKCS#8 Ed25519, 0600, compte du relais
-#                                     (secubox-pilotage) — jamais lue ici ;
-#   /etc/secubox/pilotage/relais.pub  PEM SubjectPublicKeyInfo Ed25519, root:root
-#                                     0644, lisible par les modules.
-# Clé publique absente, illisible ou d'un autre type : AUCUN jeton délégué n'est
-# reconnu. Son chemin est fixe : jamais lu d'un en-tête ni d'une réclamation
+# CONTRAT DES CLÉS (créées par la tâche 2, à l'installation du relais ; R-L5-13) :
+#   /etc/secubox-pilotage/            dossier root:root 0755, HORS de /etc/secubox
+#                                     (qui appartient au compte secubox, ~110 unités) ;
+#   /etc/secubox-pilotage/relais.pub  PEM SubjectPublicKeyInfo Ed25519, root:root
+#                                     0644, lisible par les modules ;
+#   clé privée                        PEM PKCS#8 Ed25519, 0600, au compte du relais
+#                                     (secubox-pilotage), hors de ce dossier public —
+#                                     jamais lue ici.
+# Le dossier est ouvert O_DIRECTORY|O_NOFOLLOW, le fichier par dir_fd O_NOFOLLOW ;
+# l'un et l'autre doivent appartenir à root, sans écriture pour le groupe ni les
+# autres. Sinon, comme si la clé était absente : AUCUN jeton délégué n'est
+# reconnu. Le chemin est fixe : jamais lu d'un en-tête ni d'une réclamation
 # (`kid`, `jku`, `jwk` ignorés).
+#
+# ACTEUR : le relais (tâche 2) le NORMALISE en minuscules avant de frapper le
+# jeton ; ici, un acteur hors `[a-z0-9._-]{1,64}` est refusé, jamais converti.
+#
+# ÉCRITURE FERMÉE PAR DÉFAUT (R-L5-12, #3279 en version minimale) : en portée
+# `admin`, une méthode d'écriture n'est permise que sur une route que le PAQUET
+# du module déclare ouverte, dans
+# `/usr/share/secubox/pilotage/routes-ouvertes.d/<module>.toml` (même règle de
+# propriété que la clé ; fichier invalide = rien d'ouvert). La lecture reste
+# soumise à la seule liste de refus (secrets).
 #
 # CE N'EST PAS UNE SESSION : aucun `jti` du registre, jamais dans la liste des
 # sessions. Il n'est lu qu'en Bearer, jamais dans le cookie, et seulement avec
@@ -320,8 +335,15 @@ DERIVE_PILOTAGE_S = 5
 PORTEES_PILOTAGE = ("lecture", "admin")
 METHODES_LECTURE = ("GET", "HEAD")
 ALGORITHME_PILOTAGE = "EdDSA"
-CLE_PUBLIQUE_RELAIS = "/etc/secubox/pilotage/relais.pub"
+DOSSIER_CLE_RELAIS = "/etc/secubox-pilotage"
+NOM_CLE_RELAIS = "relais.pub"
 _TAILLE_MAX_CLE = 4096
+#: Déclarations d'écriture ouverte livrées par les paquets des modules.
+DOSSIER_ROUTES_OUVERTES = "/usr/share/secubox/pilotage/routes-ouvertes.d"
+_TAILLE_MAX_DECLARATION = 64 * 1024
+METHODES_ECRITURE = ("POST", "PUT", "PATCH", "DELETE")
+#: Propriétaire exigé des fichiers de confiance (clé, déclarations).
+UID_ROOT = 0
 DOSSIER_SOCKETS = "/run/secubox"
 #: Racine d'installation des modules : une route servie depuis
 #: `/usr/lib/secubox/<module>/…` appartient au module `<module>`.
@@ -421,12 +443,20 @@ def module_courant(request) -> str:
         return ""
     if not isinstance(fichier, str) or not os.path.isabs(fichier):
         return ""
+    cle = (RACINE_MODULES, fichier)
+    if cle in _cache_modules:   # M3 : deux realpath par requête, sinon
+        return _cache_modules[cle]
     racine = os.path.realpath(RACINE_MODULES)
     relatif = os.path.relpath(os.path.realpath(fichier), racine)
-    if relatif.startswith("..") or os.path.isabs(relatif):
-        return ""
-    nom = relatif.split(os.sep)[0]
-    return nom if _RE_MODULE.fullmatch(nom) else ""
+    nom = "" if relatif.startswith("..") or os.path.isabs(relatif) else relatif.split(os.sep)[0]
+    nom = nom if _RE_MODULE.fullmatch(nom) else ""
+    if len(_cache_modules) > 4096:
+        _cache_modules.clear()
+    _cache_modules[cle] = nom
+    return nom
+
+
+_cache_modules: Dict[Any, str] = {}
 
 
 def _preuve_socket(request, module: str) -> bool:
@@ -453,33 +483,185 @@ def _preuve_socket(request, module: str) -> bool:
     return chemin == f"{DOSSIER_SOCKETS.rstrip('/')}/{module}.sock"
 
 
+_avertis: set = set()
+
+
+def _avertir_une_fois(cle: Any, message: str, *args: Any) -> None:
+    """M2 : un `log.warning` motivé, une seule fois par `cle` (empreinte d'un fichier, motif) : un fichier refusé
+    ne remplit pas le journal à chaque requête, et un changement de fichier est de nouveau signalé."""
+    if cle in _avertis:
+        return
+    if len(_avertis) > 1024:
+        _avertis.clear()
+    _avertis.add(cle)
+    log.warning(message, *args)
+
+
+def _proprietaire_attendu(chemin: str) -> int:
+    return UID_ROOT
+
+
+def _lire_fichier_root(dossier: str, nom: str, taille_max: int):
+    """(contenu, empreinte) d'un fichier de CONFIANCE : dossier ouvert `O_DIRECTORY|O_NOFOLLOW`, fichier par `dir_fd`
+    `O_NOFOLLOW` ; l'un et l'autre à root, sans écriture pour le groupe ni les autres ; fichier ordinaire, taille
+    bornée. Lève OSError ou ValueError (motif) sinon."""
+    dfd = os.open(dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        sd = os.fstat(dfd)
+        if sd.st_uid != _proprietaire_attendu(dossier) or sd.st_mode & 0o022:
+            raise ValueError(f"dossier {dossier!r} : pas à root, ou inscriptible par le groupe ou les autres")
+        fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+        try:
+            sf = os.fstat(fd)
+            chemin = os.path.join(dossier, nom)
+            if not stat.S_ISREG(sf.st_mode):
+                raise ValueError(f"{chemin!r} : pas un fichier ordinaire")
+            if sf.st_uid != _proprietaire_attendu(chemin) or sf.st_mode & 0o022:
+                raise ValueError(f"{chemin!r} : pas à root, ou inscriptible par le groupe ou les autres")
+            if not 0 < sf.st_size <= taille_max:
+                raise ValueError(f"{chemin!r} : taille {sf.st_size} hors de ]0, {taille_max}]")
+            donnees = os.read(fd, taille_max + 1)
+            return donnees, (dossier, nom, sd.st_ino, sf.st_ino, sf.st_size, sf.st_mtime_ns)
+        finally:
+            os.close(fd)
+    finally:
+        os.close(dfd)
+
+
 _cache_cle: Dict[str, Any] = {"empreinte": None, "cle": None}
 
 
 def _cle_publique_relais():
-    """La clé publique Ed25519 du relais, lue au chemin FIXE `CLE_PUBLIQUE_RELAIS` ; None si absente, illisible,
-    trop grosse ou d'un autre type. Relue quand le fichier change (inode, taille, date)."""
+    """La clé publique Ed25519 du relais, `DOSSIER_CLE_RELAIS/NOM_CLE_RELAIS` (arbre root, R-L5-13) ; None si
+    absente, douteuse (propriétaire, droits, lien), illisible, trop grosse ou d'un autre type — avec un avertissement
+    par empreinte (M2). Relue quand le fichier change."""
+    try:
+        donnees, empreinte = _lire_fichier_root(DOSSIER_CLE_RELAIS, NOM_CLE_RELAIS, _TAILLE_MAX_CLE)
+    except (OSError, ValueError) as e:
+        _avertir_une_fois(("cle", DOSSIER_CLE_RELAIS, str(e)), "cle publique du relais refusee : %r", str(e))
+        return None
+    if _cache_cle["empreinte"] == empreinte:
+        return _cache_cle["cle"]
     try:
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey  # noqa: PLC0415
         from cryptography.hazmat.primitives.serialization import load_pem_public_key  # noqa: PLC0415
-        fd = os.open(CLE_PUBLIQUE_RELAIS, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        try:
-            st = os.fstat(fd)
-            empreinte = (CLE_PUBLIQUE_RELAIS, st.st_ino, st.st_size, st.st_mtime_ns)
-            if not stat.S_ISREG(st.st_mode) or not 0 < st.st_size <= _TAILLE_MAX_CLE:
-                return None
-            if _cache_cle["empreinte"] == empreinte:
-                return _cache_cle["cle"]
-            donnees = os.read(fd, _TAILLE_MAX_CLE + 1)
-        finally:
-            os.close(fd)
         cle = load_pem_public_key(donnees)
-        if not isinstance(cle, Ed25519PublicKey):
-            return None
-        _cache_cle.update(empreinte=empreinte, cle=cle)
-        return cle
-    except Exception:  # noqa: BLE001 — absente ou invalide : aucun jeton délégué
+    except Exception as e:  # noqa: BLE001 — PEM illisible
+        _avertir_une_fois(("cle", empreinte), "cle publique du relais illisible : %r", type(e).__name__)
         return None
+    if not isinstance(cle, Ed25519PublicKey):
+        _avertir_une_fois(("cle", empreinte), "cle publique du relais refusee : %r n'est pas Ed25519",
+                          type(cle).__name__)
+        return None
+    _cache_cle.update(empreinte=empreinte, cle=cle)
+    return cle
+
+
+# Motifs de chemin des déclarations : ancrés `^/…$`, littéraux, `\.` `\-`, classes bornées (une classe niée doit
+# exclure `/`, une classe positive ne contient pas `/`), groupes d'alternatives LITTÉRALES `(a|b)`, quantificateurs
+# `+` et `{n}`/`{n,m}`. Ni `.` nu, ni `*`, ni `?`, ni `|` hors groupe, ni groupe spécial, ni échappement de classe.
+_RE_GROUPE_LITTERAL = re.compile(r"\((?:[A-Za-z0-9_-]+\|)*[A-Za-z0-9_-]+\)")
+_RE_CLASSE_MOTIF = re.compile(r"\[(\^?)([^\]\\]*)\]")
+_RE_RESTE_PERMIS = re.compile(r"[A-Za-z0-9_/:+-]*")
+
+
+def _valider_motif(motif: Any) -> "re.Pattern":
+    if not isinstance(motif, str) or not 3 <= len(motif) <= 256 or not motif.startswith("^/") \
+            or not motif.endswith("$") or motif.endswith("\\$"):
+        raise ValueError(f"motif {motif!r} : ancré `^/…$` attendu (256 caractères au plus)")
+    corps = _RE_GROUPE_LITTERAL.sub("g", motif[1:-1])
+
+    def _classe(m):
+        nie, contenu = m.groups()
+        if not contenu or (nie and "/" not in contenu) or (not nie and "/" in contenu):
+            raise ValueError(f"motif {motif!r} : classe {m.group(0)!r} qui peut franchir `/`")
+        return "c"
+
+    corps = _RE_CLASSE_MOTIF.sub(_classe, corps)
+    corps = re.sub(r"\\[.\-]", "l", corps)
+    corps = re.sub(r"\{\d{1,3}(,\d{1,3})?\}", "q", corps)
+    if not _RE_RESTE_PERMIS.fullmatch(corps):
+        raise ValueError(f"motif {motif!r} : caractère ou construction interdits (motif ouvert)")
+    try:
+        return re.compile(motif)
+    except re.error as e:
+        raise ValueError(f"motif {motif!r} : {e}") from None
+
+
+def valider_routes_ouvertes(texte: str) -> list:
+    """Valide une déclaration `routes-ouvertes.d/<module>.toml` et rend `[(frozenset(méthodes), [motifs])]`.
+
+    Format : `[[routes]]` avec exactement `methodes = ["POST", …]` (parmi POST, PUT, PATCH, DELETE) et
+    `chemins = ["^/…$", …]` (motifs bornés, voir `_valider_motif`), chemins relatifs au module (sans
+    `/api/v1/<module>`). Lève ValueError à la moindre anomalie : un fichier invalide n'ouvre RIEN."""
+    try:
+        import tomllib  # noqa: PLC0415
+    except ImportError:  # pragma: no cover — Python < 3.11
+        import tomli as tomllib  # type: ignore  # noqa: PLC0415
+    doc = tomllib.loads(texte)   # TOMLDecodeError dérive de ValueError
+    if set(doc) != {"routes"} or not isinstance(doc["routes"], list) or not 1 <= len(doc["routes"]) <= 100:
+        raise ValueError("une seule clé `routes`, liste de 1 à 100 tables `[[routes]]`")
+    sortie = []
+    for entree in doc["routes"]:
+        if not isinstance(entree, dict) or set(entree) != {"methodes", "chemins"}:
+            raise ValueError("chaque `[[routes]]` porte exactement `methodes` et `chemins`")
+        methodes, chemins = entree["methodes"], entree["chemins"]
+        if not isinstance(methodes, list) or not methodes or any(m not in METHODES_ECRITURE for m in methodes):
+            raise ValueError(f"methodes {methodes!r} : liste non vide parmi {METHODES_ECRITURE}")
+        if not isinstance(chemins, list) or not 1 <= len(chemins) <= 100:
+            raise ValueError("chemins : liste de 1 à 100 motifs")
+        sortie.append((frozenset(methodes), [_valider_motif(c) for c in chemins]))
+    return sortie
+
+
+_cache_routes: Dict[str, Any] = {}
+
+
+def routes_ouvertes(module: str) -> list:
+    """Les écritures que le paquet de `module` déclare ouvertes au porteur délégué ; [] si aucune déclaration, ou
+    si elle est douteuse (propriétaire, droits, lien) ou invalide — avec un avertissement par empreinte (M2)."""
+    if not _RE_MODULE.fullmatch(module or ""):
+        return []
+    try:
+        donnees, empreinte = _lire_fichier_root(DOSSIER_ROUTES_OUVERTES, f"{module}.toml", _TAILLE_MAX_DECLARATION)
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError) as e:
+        _avertir_une_fois(("routes", module, str(e)), "pilotage : declaration de %r ignoree : %r", module, str(e))
+        return []
+    deja = _cache_routes.get(module)
+    if deja and deja[0] == empreinte:
+        return deja[1]
+    try:
+        routes = valider_routes_ouvertes(donnees.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as e:
+        _avertir_une_fois(("routes", empreinte), "pilotage : declaration de %r invalide : %r", module, str(e))
+        routes = []
+    _cache_routes[module] = (empreinte, routes)
+    return routes
+
+
+def _chemin_du_module(request, module: str) -> str:
+    """Le chemin décodé (casse d'origine), sans le préfixe `/api/v1/<module>` s'il est présent."""
+    chemin = _chemin_requete(request)
+    for _ in range(3):
+        decode = unquote(chemin)
+        if decode == chemin:
+            break
+        chemin = decode
+    segments = chemin.split("/")
+    if len(segments) >= 4 and segments[0] == "" and segments[1].lower() == "api" and segments[2].lower() == "v1" \
+            and segments[3].lower() == module:
+        chemin = "/" + "/".join(segments[4:])
+    return chemin
+
+
+def ecriture_ouverte(request, module: str) -> bool:
+    """Cette écriture (méthode, chemin) est-elle déclarée ouverte par le paquet de `module` ?"""
+    methode = _methode(request)
+    chemin = _chemin_du_module(request, module)
+    return any(methode in methodes and any(m.fullmatch(chemin) for m in motifs)
+               for methodes, motifs in routes_ouvertes(module))
 
 
 def _module_exclu(nom: str) -> bool:
@@ -573,6 +755,32 @@ def _ecrire_audit(entree: Dict[str, Any]) -> None:
         log.warning("audit.log non écrit (%s) : %s", e.__class__.__name__, ligne)
 
 
+_invalides: Dict[str, Any] = {"nombre": 0, "depuis": 0.0}
+
+
+def _horloge() -> float:
+    return time.monotonic()
+
+
+def _compter_invalide(request, motif: str) -> None:
+    """M1 : un jeton dont la signature n'a PAS été vérifiée (n'importe qui peut en présenter) n'est pas audité ; il
+    est compté, et le compte part à la trace et au journal au plus une fois par minute."""
+    _invalides["nombre"] += 1
+    maintenant = _horloge()
+    if _invalides["depuis"] and maintenant - _invalides["depuis"] < 60:
+        return
+    nombre = _invalides["nombre"]
+    _invalides.update(nombre=0, depuis=maintenant)
+    try:
+        _ecrire_trace(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "type": "pilotage",
+                                  "verdict": "refuse", "motif": motif, "nombre": nombre,
+                                  "methode": _methode(request)[:16], "chemin": _chemin_requete(request)[:512],
+                                  "module": module_courant(request)}, ensure_ascii=True))
+    except (TypeError, ValueError) as e:
+        log.warning("pilotage : trace des jetons invalides impossible : %r", str(e))
+    log.warning("pilotage : %d jeton(s) delegue(s) non verifie(s) en une minute (dernier motif : %r)", nombre, motif)
+
+
 def _trace_pilotage(request, verdict: str, motif: str = "", payload: Optional[Dict[str, Any]] = None) -> None:
     """Une ligne par usage du porteur délégué dans la trace des délégations, et, pour un REFUS, aussi dans
     `audit.log`. Acteur, maître, portée seulement quand le jeton a été VÉRIFIÉ (`payload`) ; jamais le jeton.
@@ -595,8 +803,8 @@ def _trace_pilotage(request, verdict: str, motif: str = "", payload: Optional[Di
                            "verdict": verdict, "motif": motif, "compte": champs["compte"], "acteur": champs["acteur"],
                            "maitre": champs["maitre"], "portee": champs["portee"], "methode": champs["methode"],
                            "chemin": champs["chemin"]})
-    except Exception:  # noqa: BLE001 — une trace impossible ne coupe pas la requête
-        pass
+    except Exception as e:  # noqa: BLE001 — une trace impossible ne coupe pas la requête, mais se dit
+        _avertir_une_fois(("trace", type(e).__name__), "pilotage : trace impossible : %r", str(e))
 
 
 def jeton_pilotage_valide(payload: Dict[str, Any], request: Request) -> bool:
@@ -634,16 +842,20 @@ def _porteur_pilotage(request: Request, token: str) -> Optional[Dict[str, Any]]:
     cle = _cle_publique_relais()
     box = nom_box_locale()
     if cle is None or not box or not token:
-        _trace_pilotage(request, "refuse", "cle publique du relais ou nom de box indisponible")
+        _compter_invalide(request, "cle publique du relais ou nom de box indisponible")
         return None
     try:
-        payload = jwt.decode(token, cle, algorithms=[ALGORITHME_PILOTAGE], audience=box,
-                             options={"require": ["exp", "iat", "aud", "sub", "cible"]})
+        # La SIGNATURE seule ici ; audience, échéance et forme sont vérifiées par `_forme_pilotage`, une fois la
+        # signature acquise : un refus après ce point est celui d'un jeton frappé par le relais, donc audité.
+        payload = jwt.decode(token, cle, algorithms=[ALGORITHME_PILOTAGE],
+                             options={"verify_exp": False, "verify_aud": False, "verify_iat": False,
+                                      "verify_nbf": False})
     except (JWTError, ValueError, TypeError):
-        _trace_pilotage(request, "refuse", "jeton invalide (signature, algorithme, audience ou echeance)")
+        _compter_invalide(request, "signature non verifiee ou jeton illisible")
         return None
-    if _forme_pilotage(payload) is None:
-        _trace_pilotage(request, "refuse", "jeton invalide (forme, duree ou reclamation)")
+    if not isinstance(payload, dict) or _forme_pilotage(payload) is None:
+        _trace_pilotage(request, "refuse", "jeton invalide (forme, audience, duree ou reclamation)",
+                        payload if isinstance(payload, dict) else None)
         return None
     module = module_courant(request)
     if not module or payload.get("cible") != module:
@@ -657,18 +869,23 @@ def _porteur_pilotage(request: Request, token: str) -> Optional[Dict[str, Any]]:
         log.warning("pilotage : route exclue %r pour %r", _chemin_requete(request), payload.get("sub"))
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="Route exclue du pilotage délégué (comptes, sessions, secrets)")
-    if payload[PILOTAGE]["portee"] != "admin" and _methode(request) not in METHODES_LECTURE:
+    lecture = _methode(request) in METHODES_LECTURE
+    if payload[PILOTAGE]["portee"] != "admin" and not lecture:
         _trace_pilotage(request, "refuse", "portee lecture", payload)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="Pilotage en lecture seule : écriture refusée")
+    if not lecture and not ecriture_ouverte(request, module):
+        _trace_pilotage(request, "refuse", "ecriture non declaree par le module", payload)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Écriture non ouverte au pilotage délégué par ce module")
     if not jeton_pilotage_valide(payload, request):   # le prédicat public fait foi
         _trace_pilotage(request, "refuse", "predicat jeton_pilotage_valide", payload)
         return None
     marque = _PayloadPilotage(payload)
     try:
         request.state.pilotage = marque
-    except Exception:  # noqa: BLE001 — requête sans état : la marque du payload suffit
-        pass
+    except AttributeError as e:   # requête sans état : la marque du payload suffit
+        _avertir_une_fois(("etat", type(request).__name__), "pilotage : marque non posee sur la requete : %r", str(e))
     return marque
 
 

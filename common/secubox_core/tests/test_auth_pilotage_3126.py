@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import socket
 import threading
 import time
@@ -48,6 +49,12 @@ REPO = Path(__file__).resolve().parents[3]
 CLE = Ed25519PrivateKey.generate()          # celle du relais
 AUTRE_CLE = Ed25519PrivateKey.generate()    # une autre (autre box, attaquant)
 _DEFAUT = object()
+#: Ce que le paquet du module `demo` déclarerait ouvert à l'écriture déléguée (R-L5-12).
+DECLARATION_DEMO = """
+[[routes]]
+methodes = ["POST", "PUT", "PATCH", "DELETE"]
+chemins = ["^/status$", "^/regler$", "^/services/redemarrer$", "^/rules$", "^/etat$"]
+"""
 
 
 def _pem_publique(cle) -> bytes:
@@ -65,9 +72,19 @@ def box(monkeypatch, tmp_path):
     monkeypatch.setattr(auth.user_store, "get_user",
                         lambda s: {"role": "admin", "enabled": True} if s == "gk2" else None)
     monkeypatch.setattr(auth.appareils, "est_admis", lambda s: False)
-    pub = tmp_path / "relais.pub"
-    pub.write_bytes(_pem_publique(CLE))
-    monkeypatch.setattr(auth, "CLE_PUBLIQUE_RELAIS", str(pub), raising=False)
+    monkeypatch.setattr(auth, "UID_ROOT", os.getuid(), raising=False)
+    cles = tmp_path / "etc-secubox-pilotage"
+    cles.mkdir(mode=0o755)
+    (cles / "relais.pub").write_bytes(_pem_publique(CLE))
+    os.chmod(cles / "relais.pub", 0o644)
+    monkeypatch.setattr(auth, "DOSSIER_CLE_RELAIS", str(cles), raising=False)
+    routes = tmp_path / "routes-ouvertes.d"
+    routes.mkdir(mode=0o755)
+    (routes / "demo.toml").write_text(DECLARATION_DEMO, encoding="utf-8")
+    os.chmod(routes / "demo.toml", 0o644)
+    monkeypatch.setattr(auth, "DOSSIER_ROUTES_OUVERTES", str(routes), raising=False)
+    if hasattr(auth, "_invalides"):
+        auth._invalides.update(nombre=0, depuis=0.0)
     monkeypatch.setattr(auth, "AUDIT_PILOTAGE", str(tmp_path / "audit.log"), raising=False)
     trace = tmp_path / "delegation.log"
     monkeypatch.setenv("SECUBOX_TRACE_DELEGATION", str(trace))
@@ -276,7 +293,7 @@ def test_identite_du_module_par_le_fichier_de_la_route():
 
 
 def test_cle_publique_absente_refuse(monkeypatch, tmp_path):
-    monkeypatch.setattr(auth, "CLE_PUBLIQUE_RELAIS", str(tmp_path / "absente.pub"), raising=False)
+    (tmp_path / "etc-secubox-pilotage" / "relais.pub").unlink()
     assert garde("require_jwt", requete(), frappe())[0] == 401
 
 
@@ -287,9 +304,8 @@ def test_cle_publique_absente_refuse(monkeypatch, tmp_path):
     pytest.param(b"x" * 100_000, id="trop-gros"),
 ])
 def test_cle_publique_invalide_refuse(monkeypatch, tmp_path, contenu):
-    f = tmp_path / "relais.pub"
+    f = tmp_path / "etc-secubox-pilotage" / "relais.pub"
     f.write_bytes(contenu)
-    monkeypatch.setattr(auth, "CLE_PUBLIQUE_RELAIS", str(f), raising=False)
     assert garde("require_jwt", requete(), frappe())[0] == 401
 
 
@@ -499,7 +515,8 @@ def test_routes_reelles_de_secrets_refusees(module, methode, chemin, portee):
     ("haproxy", "/config"),
 ])
 def test_chemin_ordinaire_accepte(module, chemin):
-    assert garde("require_jwt", requete("POST", chemin, module=module), frappe(cible=module))[0] == 200
+    for portee in ("lecture", "admin"):
+        assert garde("require_jwt", requete("GET", chemin, module=module), frappe(cible=module, portee=portee))[0] == 200
 
 
 # ── Traçage ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -536,25 +553,47 @@ def test_trace_des_refus(box, tmp_path):
     assert all(x["evenement"] == "pilotage_delegue" and x["module"] == "demo" for x in audit)
 
 
-@pytest.mark.parametrize("jeton,motif", [
-    (frappe(alg="HS256"), "jeton"),
-    (frappe(cle=AUTRE_CLE), "jeton"),
-    (frappe(duree=3600), "jeton"),
-    (frappe(cible="system"), "cible"),
-    ("xxxx.yyyy.zzzz", "jeton"),
+@pytest.mark.parametrize("jeton", [
+    pytest.param(frappe(alg="HS256"), id="hs256"),
+    pytest.param(frappe(cle=AUTRE_CLE), id="autre-cle"),
+    pytest.param("xxxx.yyyy.zzzz", id="illisible"),
 ])
-def test_jeton_invalide_avec_l_entete_trace_comme_refus(box, tmp_path, jeton, motif):
+def test_jeton_non_signe_par_le_relais_compte_pas_audite(box, tmp_path, monkeypatch, jeton):
+    """M1 : un jeton dont la signature n'est pas vérifiée n'est PAS audité (n'importe qui peut en envoyer) ; il est
+    compté, et le compte part au journal au plus une fois par minute."""
+    horloge = [1000.0]
+    monkeypatch.setattr(auth, "_horloge", lambda: horloge[0], raising=False)
+    for _ in range(5):
+        assert garde("require_jwt", requete("GET", "/status"), jeton)[0] == 401
+    assert lignes(tmp_path / "audit.log") == []
+    t = lignes(box)
+    assert len(t) == 1 and t[0]["verdict"] == "refuse" and t[0]["nombre"] == 1 and "signature" in t[0]["motif"], t
+    horloge[0] += 61
+    assert garde("require_jwt", requete("GET", "/status"), jeton)[0] == 401
+    t = lignes(box)
+    assert len(t) == 2 and t[1]["nombre"] == 5, t                 # les 4 suivants + celui-ci
+    texte = box.read_text(encoding="utf-8")
+    assert jeton not in texte and jeton.split(".")[-1] not in texte
+
+
+@pytest.mark.parametrize("jeton,motif", [
+    pytest.param(frappe(duree=3600), "forme", id="trop-long"),
+    pytest.param(frappe(cible="system"), "cible", id="cible"),
+    pytest.param(frappe(aud="gk4"), "forme", id="autre-box"),
+])
+def test_jeton_signe_refuse_est_audite(box, tmp_path, jeton, motif):
+    """Signature vérifiée, jeton refusé : tracé ET audité, avec l'acteur, jamais le jeton."""
     assert garde("require_jwt", requete("GET", "/status"), jeton)[0] == 401
     for f in (box, tmp_path / "audit.log"):
         t = lignes(f)
-        assert len(t) == 1 and t[0]["verdict"] == "refuse" and motif in t[0]["motif"], (f, t)
-        texte = f.read_text(encoding="utf-8")
-        assert jeton not in texte and jeton.split(".")[-1] not in texte
+        assert len(t) == 1 and t[0]["verdict"] == "refuse" and motif in t[0]["motif"] and t[0]["acteur"] == "gerald"
+        assert jeton not in f.read_text(encoding="utf-8")
 
 
 def test_pas_de_trace_sans_l_entete(box, tmp_path):
     """Un Bearer périmé sans l'en-tête du relais (le cas courant) n'est pas un usage du pilotage."""
     garde("require_jwt", requete(relais=False), "xxxx.yyyy.zzzz")
+    garde("require_jwt", requete(relais=False), frappe(cle=AUTRE_CLE))
     assert lignes(box) == [] and lignes(tmp_path / "audit.log") == []
 
 
@@ -597,3 +636,191 @@ def test_tcp_testclient_jeton_ordinaire(monkeypatch):
     r = TestClient(_app_du_module()).post(
         "/regler", headers={"Authorization": f"Bearer {auth.create_token('gk2')}", ENTETE: "1"})
     assert r.status_code == 200
+
+
+# ── R-L5-12 : écriture FERMÉE par défaut, ouverte route par route par le paquet du module ──────────────────────────
+@pytest.mark.parametrize("module,chemin", [("dpi", "/export_flows"), ("wireguard", "/peers"), ("ad-guard", "/export"),
+                                           ("haproxy", "/config"), ("system", "/reboot")])
+def test_ecriture_sur_un_module_non_declare_refusee(box, tmp_path, module, chemin):
+    for m in ("POST", "PUT", "PATCH", "DELETE"):
+        assert garde("require_jwt", requete(m, chemin, module=module), frappe(cible=module))[0] == 403, (m, module)
+    audit = lignes(tmp_path / "audit.log")
+    assert audit and all("declare" in x["motif"] for x in audit)
+
+
+def test_ecriture_hors_declaration_refusee():
+    # module déclaré, route non déclarée ; puis route déclarée, méthode non déclarée
+    assert garde("require_jwt", requete("POST", "/autre"), frappe())[0] == 403
+    assert garde("require_jwt", requete("POST", "/status/x"), frappe())[0] == 403     # ancré : pas de préfixe
+
+
+def test_ecriture_route_declaree_acceptee():
+    for m in ("POST", "PUT", "PATCH", "DELETE"):
+        assert garde("require_jwt", requete(m, "/regler"), frappe())[0] == 200, m
+    assert garde("require_jwt", requete("POST", "/api/v1/demo/regler"), frappe())[0] == 200      # préfixe du module
+    # la liste de refus reste devant : déclarée ou non, une route de secrets est refusée
+    assert garde("require_jwt", requete("POST", "/users"), frappe())[0] == 403
+
+
+def test_lecture_jamais_soumise_a_la_declaration(tmp_path):
+    (tmp_path / "routes-ouvertes.d" / "demo.toml").unlink()
+    assert garde("require_jwt", requete("GET", "/status"), frappe())[0] == 200
+    assert garde("require_jwt", requete("POST", "/status"), frappe())[0] == 403
+
+
+@pytest.mark.parametrize("texte", [
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["/regler$"]', id="non-ancre-debut"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/regler"]', id="non-ancre-fin"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/.*$"]', id="point-etoile"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/a/.+$"]', id="point-plus"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/a.b$"]', id="point-nu"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/a$|^/b"]', id="alternative-nue"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/a/[^x]+$"]', id="classe-sans-barre"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/a/\\\\S+$"]', id="classe-echappee"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/a/(?:x)$"]', id="groupe-special"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/a/(x|.*)$"]', id="groupe-ouvert"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/a/x*$"]', id="etoile"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/a/[$"]', id="motif-invalide"),
+    pytest.param('[[routes]]\nmethodes = ["GET"]\nchemins = ["^/a$"]', id="methode-lecture"),
+    pytest.param('[[routes]]\nmethodes = ["post"]\nchemins = ["^/a$"]', id="methode-minuscule"),
+    pytest.param('[[routes]]\nmethodes = []\nchemins = ["^/a$"]', id="methodes-vides"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = []', id="chemins-vides"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/a$"]\nportee = "x"', id="cle-inconnue"),
+    pytest.param('autre = 1', id="sans-routes"),
+    pytest.param('[[routes]]\nmethodes = "POST"\nchemins = ["^/a$"]', id="methodes-chaine"),
+    pytest.param('[[routes', id="toml-invalide"),
+])
+def test_validateur_refuse_un_fichier_invalide(texte):
+    with pytest.raises(ValueError):
+        auth.valider_routes_ouvertes(texte)
+
+
+def test_validateur_accepte_les_motifs_bornes():
+    r = auth.valider_routes_ouvertes(
+        '[[routes]]\nmethodes = ["POST", "DELETE"]\n'
+        'chemins = ["^/a$", "^/allow/[0-9A-Fa-f:]{17}$", "^/x/[^/]+/(essayer|rejeter)$", "^/pare-feu/ipv6$", '
+        '"^/f\\\\.json$"]\n')
+    assert len(r) == 1 and r[0][0] == frozenset({"POST", "DELETE"}) and len(r[0][1]) == 5
+
+
+@pytest.mark.parametrize("cas", ["fichier-non-root", "dossier-non-root", "fichier-groupe", "dossier-autres",
+                                 "fichier-lien", "invalide"])
+def test_declaration_douteuse_ignoree(box, tmp_path, monkeypatch, cas):
+    routes = tmp_path / "routes-ouvertes.d"
+    f = routes / "demo.toml"
+    if cas == "fichier-non-root" or cas == "dossier-non-root":
+        monkeypatch.setattr(auth, "UID_ROOT", 0, raising=False)
+        cles = tmp_path / "etc-secubox-pilotage"            # la clé reste « root » pour ce test : on l'en distingue
+        monkeypatch.setattr(auth, "_proprietaire_attendu", lambda chemin: os.getuid() if str(cles) in chemin else 0,
+                            raising=False)
+    elif cas == "fichier-groupe":
+        os.chmod(f, 0o664)
+    elif cas == "dossier-autres":
+        os.chmod(routes, 0o757)
+    elif cas == "fichier-lien":
+        vrai = tmp_path / "ailleurs.toml"
+        vrai.write_text(DECLARATION_DEMO, encoding="utf-8")
+        f.unlink()
+        f.symlink_to(vrai)
+    else:
+        f.write_text('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/.*$"]\n', encoding="utf-8")
+    assert garde("require_jwt", requete("POST", "/regler"), frappe())[0] == 403
+    assert garde("require_jwt", requete("GET", "/status"), frappe())[0] == 200
+
+
+@pytest.mark.parametrize("module", ["system", "nac", "ad-guard", "freebox"])
+def test_declarations_livrees_valides_et_reelles(module):
+    """Les 4 modules du banc livrent leur déclaration ; elle est valide, chaque motif vise une route d'écriture qui
+    existe dans l'API du module, et le paquet l'installe."""
+    import itertools
+    import re as _re
+    paquet = REPO / "packages" / f"secubox-{module}"
+    decl = paquet / "pilotage" / "routes-ouvertes.d" / f"{module}.toml"
+    routes = auth.valider_routes_ouvertes(decl.read_text(encoding="utf-8"))
+    reelles = []                                   # (méthode, motif de la route réelle, paramètres → [^/]+)
+    for py in (paquet / "api").rglob("*.py"):
+        source = py.read_text(encoding="utf-8")
+        prefixes = dict(_re.findall(r"(\w+)\s*=\s*APIRouter\([^)]*prefix=\"([^\"]+)\"", source))
+        for objet, methode, chemin in _re.findall(r"@(\w+)\.(post|put|patch|delete)\(\s*\"([^\"]+)\"", source):
+            gabarit = _re.sub(r"\\\{[^}]+\\\}", "[^/]+", _re.escape(prefixes.get(objet, "") + chemin))
+            reelles.append((methode.upper(), _re.compile(gabarit)))
+
+    def exemples(motif: str):
+        """Toutes les chaînes que désigne un motif déclaré (une par alternative), paramètres remplacés."""
+        corps = motif[1:-1].replace("[^/]+", "x").replace("[0-9A-Fa-f:]{17}", "aa:bb:cc:dd:ee:ff").replace("\\.", ".")
+        morceaux = _re.split(r"\(([^)]*)\)", corps)
+        choix = [[m] if k % 2 == 0 else m.split("|") for k, m in enumerate(morceaux)]
+        return ["".join(c) for c in itertools.product(*choix)]
+
+    for methodes, motifs in routes:
+        for motif in motifs:
+            for exemple in exemples(motif.pattern):
+                assert motif.fullmatch(exemple), (module, motif.pattern, exemple)
+                for m in methodes:
+                    assert any(mm == m and r.fullmatch(exemple) for mm, r in reelles), (module, m, exemple)
+    regles = " ".join((paquet / "debian" / f).read_text(encoding="utf-8")
+                      for f in ("rules", f"secubox-{module}.install") if (paquet / "debian" / f).exists())
+    assert "routes-ouvertes.d" in regles
+
+
+# ── R-L5-13 : la clé publique, dans un arbre root ──────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("cas", ["dossier-non-root", "fichier-non-root", "dossier-groupe", "fichier-autres",
+                                 "fichier-lien", "dossier-lien"])
+def test_cle_hors_arbre_root_refusee(box, tmp_path, monkeypatch, cas):
+    cles = tmp_path / "etc-secubox-pilotage"
+    pub = cles / "relais.pub"
+    if cas == "dossier-non-root":
+        monkeypatch.setattr(auth, "_proprietaire_attendu",
+                            lambda chemin: 0 if chemin == str(cles) else os.getuid(), raising=False)
+    elif cas == "fichier-non-root":
+        monkeypatch.setattr(auth, "_proprietaire_attendu",
+                            lambda chemin: 0 if chemin.endswith("relais.pub") else os.getuid(), raising=False)
+    elif cas == "dossier-groupe":
+        os.chmod(cles, 0o775)
+    elif cas == "fichier-autres":
+        os.chmod(pub, 0o646)
+    elif cas == "fichier-lien":
+        vrai = tmp_path / "vraie.pub"
+        vrai.write_bytes(_pem_publique(CLE))
+        pub.unlink()
+        pub.symlink_to(vrai)
+    else:
+        autre = tmp_path / "autre-dossier"
+        cles.rename(autre)
+        cles.symlink_to(autre)
+    assert garde("require_jwt", requete(), frappe())[0] == 401
+
+
+def test_chemin_par_defaut_de_la_cle(monkeypatch):
+    monkeypatch.undo()
+    assert auth.DOSSIER_CLE_RELAIS == "/etc/secubox-pilotage" and auth.NOM_CLE_RELAIS == "relais.pub"
+
+
+# ── M2, M3 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+def test_cle_refusee_avertie_une_fois_par_empreinte(tmp_path):
+    vu = []
+
+    class _H(logging.Handler):
+        def emit(self, record):
+            vu.append(record.getMessage())
+
+    (tmp_path / "etc-secubox-pilotage" / "relais.pub").write_bytes(b"pas une cle")
+    h = _H()
+    logging.getLogger("secubox.auth").addHandler(h)
+    try:
+        for _ in range(3):
+            garde("require_jwt", requete(), frappe())
+    finally:
+        logging.getLogger("secubox.auth").removeHandler(h)
+    cle = [m for m in vu if m.startswith("cle publique du relais")]
+    assert len(cle) == 1, vu
+
+
+def test_module_courant_en_cache(monkeypatch):
+    appels = []
+    vrai = os.path.realpath
+    monkeypatch.setattr(auth.os.path, "realpath", lambda p: appels.append(p) or vrai(p))
+    req = requete(module="cachetest")
+    assert auth.module_courant(req) == "cachetest"
+    n = len(appels)
+    assert auth.module_courant(req) == "cachetest" and len(appels) == n

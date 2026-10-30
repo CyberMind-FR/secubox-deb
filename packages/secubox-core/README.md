@@ -20,20 +20,31 @@ Shared Python modules for all SecuBox services:
   - **Signature Ed25519 (EdDSA), pas HS256** (R-L5-9, dérogation aux Global Constraints du plan L5 qui prévoyaient
     HS256 avec `jwt_secret`) : les sockets de modules sont souvent en 0666 et `jwt_secret` est lu par tous les modules ;
     un module compromis frapperait un jeton administrateur. Le relais `sbx-pilotage-relais` signe avec sa clé PRIVÉE
-    `/etc/secubox/pilotage/relais.key` (PEM PKCS#8 Ed25519, 0600, compte du relais, créée par la tâche 2) ; les modules
-    vérifient avec la clé PUBLIQUE `/etc/secubox/pilotage/relais.pub` (PEM SubjectPublicKeyInfo Ed25519, root:root
-    0644). Chemin fixe, jamais tiré de la requête (`kid`, `jku`, `jwk` ignorés) ; clé absente ou invalide : aucun jeton
-    délégué accepté.
+    (PEM PKCS#8 Ed25519, 0600, compte du relais, créée par la tâche 2) ; les modules vérifient avec la clé PUBLIQUE
+    `/etc/secubox-pilotage/relais.pub` (R-L5-13 : arbre root, HORS de `/etc/secubox` qui appartient au compte
+    `secubox` ; dossier root:root 0755, fichier PEM SubjectPublicKeyInfo Ed25519 root:root 0644). Dossier ouvert
+    `O_DIRECTORY|O_NOFOLLOW`, fichier par `dir_fd` `O_NOFOLLOW` ; propriétaire root et aucune écriture groupe/autres
+    exigés sur l'un et l'autre. Chemin fixe, jamais tiré de la requête (`kid`, `jku`, `jwk` ignorés) ; clé absente,
+    douteuse ou invalide : aucun jeton délégué accepté (un avertissement par empreinte du fichier).
   - Réclamations : `aud` = nom court de l'hôte, `exp - iat ≤ 60` (non échu, `iat` sans avance > 5 s),
     `sub` = `pilotage:<acteur>@<maître>` (`^pilotage:[a-z0-9._-]{1,64}@[a-z0-9-]{1,63}$`, cohérent avec la réclamation),
-    `pilotage = {acteur, maitre, portee}`, et **`cible`** = le module visé.
+    `pilotage = {acteur, maitre, portee}`, et **`cible`** = le module visé. Le relais normalise l'acteur en minuscules ;
+    ici, un acteur hors motif est refusé, jamais converti.
   - `cible` est comparée à l'IDENTITÉ du module qui sert la route : le fichier source de la route résolue sous
     `/usr/lib/secubox/<module>/` (fixé par dpkg, valable dans un processus de groupe, indépendant de la socket). Une
     route de secubox_core n'appartient à aucun module : refus.
   - Bearer seulement, avec l'en-tête `X-SecuBox-Pilotage-Relais` (vidé par `secubox-proxy.conf`, l'agrégateur et
     l'entrée HAProxy). `scope["server"]` est un contrôle de plus : TCP refusé ; socket Unix fournie = celle du module ;
     absent (uvicorn 0.32 de Debian ne le remplit pas pour une socket Unix) = accepté sur signature et `cible`.
-  - Ce n'est pas une session. Portée `lecture` : GET/HEAD seulement (403 sinon) ; portée `admin` : administrateur réel.
+  - **Écriture fermée par défaut** (R-L5-12 ; réalise #3279 en version minimale) : en portée `admin`, une méthode
+    d'écriture n'est acceptée que si le PAQUET du module la déclare dans
+    `/usr/share/secubox/pilotage/routes-ouvertes.d/<module>.toml` (root, sans écriture groupe/autres, même ouverture
+    que la clé) : `[[routes]]` avec `methodes = ["POST", …]` (POST, PUT, PATCH, DELETE) et `chemins = ["^/…$", …]`,
+    chemins relatifs au module. `valider_routes_ouvertes(texte)` refuse tout motif non ancré ou ouvert (`.` nu, `*`,
+    `?`, `|` hors groupe littéral, groupe spécial, classe qui franchit `/`, échappement de classe) : un fichier
+    invalide, douteux ou absent n'ouvre RIEN. Déclarés en L5 : system, nac, ad-guard, freebox.
+  - Ce n'est pas une session. Portée `lecture` : GET/HEAD seulement (403 sinon) ; portée `admin` : administrateur réel,
+    pour les écritures déclarées.
     `est_admin_reel` n'accepte que le payload RENDU par la garde (marque `_PayloadPilotage`, aussi sur
     `request.state.pilotage`), jamais un dict décodé ailleurs ou copié ; `est_personne` est toujours faux.
   - Refusé (403) : modules `MODULES_EXCLUS_PILOTAGE` (auth, vault, portal, assist, premier-pas, users, aggregator,
@@ -42,8 +53,9 @@ Shared Python modules for all SecuBox services:
     `SEGMENTS_EXCLUS_PILOTAGE` (comptes, sessions, secrets, jetons, clés, `credential(s)`, `private`, `psk`,
     `restore`…). Une liste d'ouverture déclarée par module la remplacera (#3279).
   - Chaque usage est tracé dans `/var/log/secubox/delegation.log` (ASCII ; acteur, maître, portée, verdict, méthode,
-    chemin, module ; jamais le jeton) ; chaque REFUS, y compris d'un jeton invalide présenté avec l'en-tête, aussi dans
-    `/var/log/secubox/audit.log` (`evenement: pilotage_delegue`).
+    chemin, module ; jamais le jeton) ; chaque REFUS d'un jeton dont la signature est vérifiée aussi dans
+    `/var/log/secubox/audit.log` (`evenement: pilotage_delegue`). Un jeton non vérifié (signature, illisible) n'est
+    pas audité : il est compté, et le compte part à la trace et au journal au plus une fois par minute.
 - `config.py` - TOML configuration loader
 - `logger.py` - Unified logging
 - `system.py` - System utilities
