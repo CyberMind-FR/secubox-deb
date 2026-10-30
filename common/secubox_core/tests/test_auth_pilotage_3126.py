@@ -689,6 +689,13 @@ def test_lecture_jamais_soumise_a_la_declaration(tmp_path):
     pytest.param('autre = 1', id="sans-routes"),
     pytest.param('[[routes]]\nmethodes = "POST"\nchemins = ["^/a$"]', id="methodes-chaine"),
     pytest.param('[[routes', id="toml-invalide"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/[!-~]+$"]', id="classe-intervalle-barre"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/[.-0]+$"]', id="classe-point-tiret-zero"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/a/[!-~]+$"]', id="classe-intervalle-2e-segment"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/[^/]+$"]', id="premier-segment-variable"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/[a-z]+/x$"]', id="premier-segment-classe"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/(a|b)/x$"]', id="premier-segment-alternative"),
+    pytest.param('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/a+/x$"]', id="premier-segment-quantifie"),
 ])
 def test_validateur_refuse_un_fichier_invalide(texte):
     with pytest.raises(ValueError):
@@ -728,14 +735,32 @@ def test_declaration_douteuse_ignoree(box, tmp_path, monkeypatch, cas):
     assert garde("require_jwt", requete("GET", "/status"), frappe())[0] == 200
 
 
-@pytest.mark.parametrize("module", ["system", "nac", "ad-guard", "freebox"])
-def test_declarations_livrees_valides_et_reelles(module):
-    """Les 4 modules du banc livrent leur déclaration ; elle est valide, chaque motif vise une route d'écriture qui
-    existe dans l'API du module, et le paquet l'installe."""
+#: Toutes les déclarations livrées par les paquets du dépôt (R-L5-16 : glob, pas une liste figée).
+DECLARATIONS = sorted(REPO.glob("packages/*/pilotage/routes-ouvertes.d/*.toml"))
+
+
+def exemples(motif: str):
+    """Toutes les chaînes que désigne un motif déclaré (une par alternative), paramètres remplacés."""
     import itertools
     import re as _re
-    paquet = REPO / "packages" / f"secubox-{module}"
-    decl = paquet / "pilotage" / "routes-ouvertes.d" / f"{module}.toml"
+    corps = motif[1:-1].replace("[^/]+", "x").replace("[0-9A-Fa-f:]{17}", "aa:bb:cc:dd:ee:ff").replace("\\.", ".")
+    morceaux = _re.split(r"\(([^)]*)\)", corps)
+    choix = [[m] if k % 2 == 0 else m.split("|") for k, m in enumerate(morceaux)]
+    return ["".join(c) for c in itertools.product(*choix)]
+
+
+def test_declarations_livrees_presentes():
+    assert {d.stem for d in DECLARATIONS} == {"system", "nac", "ad-guard"}, DECLARATIONS
+
+
+@pytest.mark.parametrize("decl", DECLARATIONS, ids=lambda d: d.stem)
+def test_declarations_livrees_valides_et_reelles(decl):
+    """Chaque déclaration livrée est valide, chaque motif vise une route d'écriture qui existe dans l'API du module,
+    et le paquet l'installe."""
+    import re as _re
+    paquet = decl.parents[2]
+    module = decl.stem
+    assert paquet.name == f"secubox-{module}"
     routes = auth.valider_routes_ouvertes(decl.read_text(encoding="utf-8"))
     reelles = []                                   # (méthode, motif de la route réelle, paramètres → [^/]+)
     for py in (paquet / "api").rglob("*.py"):
@@ -744,13 +769,6 @@ def test_declarations_livrees_valides_et_reelles(module):
         for objet, methode, chemin in _re.findall(r"@(\w+)\.(post|put|patch|delete)\(\s*\"([^\"]+)\"", source):
             gabarit = _re.sub(r"\\\{[^}]+\\\}", "[^/]+", _re.escape(prefixes.get(objet, "") + chemin))
             reelles.append((methode.upper(), _re.compile(gabarit)))
-
-    def exemples(motif: str):
-        """Toutes les chaînes que désigne un motif déclaré (une par alternative), paramètres remplacés."""
-        corps = motif[1:-1].replace("[^/]+", "x").replace("[0-9A-Fa-f:]{17}", "aa:bb:cc:dd:ee:ff").replace("\\.", ".")
-        morceaux = _re.split(r"\(([^)]*)\)", corps)
-        choix = [[m] if k % 2 == 0 else m.split("|") for k, m in enumerate(morceaux)]
-        return ["".join(c) for c in itertools.product(*choix)]
 
     for methodes, motifs in routes:
         for motif in motifs:
@@ -831,26 +849,56 @@ def test_module_courant_en_cache(monkeypatch):
 #: demarrer|arreter|redemarrer, renommer, renouveler-secrets) : elles passent par les actions du pilotage (accord du
 #: détenteur, confirmation forte, une opération longue à la fois), jamais par une page relayée.
 ROUTES_OPERATE_L2 = {
-    "system": ["/reboot", "/shutdown", "/apply_updates", "/settings", "/save_settings", "/service_control",
-               "/service_action", "/restart_services"],
+    "system": ["/reboot", "/shutdown", "/apply_updates", "/check_updates", "/settings", "/save_settings",
+               "/service_control", "/service_action", "/restart_services", "/reload_firewall", "/kiosk/enable",
+               "/kiosk/disable"],
     "nac": [],
     "ad-guard": ["/maintenance/reload"],
     "freebox": ["/autoriser", "/revoquer"],
 }
-_VERBES_L2 = ("reboot", "shutdown", "poweroff", "halt", "apply_updates", "upgrade", "maj", "renommer", "rename",
-              "hostname", "renouveler", "rotate", "service_control", "service_action", "restart_services")
+#: Mots des verbes L2 (et de leurs équivalents) : aucun segment, ni morceau de segment découpé hors [a-z0-9], d'un
+#: chemin qu'ouvre une déclaration ne peut en être un.
+_VERBES_L2 = ("reboot", "shutdown", "poweroff", "halt", "upgrade", "maj", "renommer", "rename", "hostname",
+              "renouveler", "rotate", "restart", "stop", "start", "reload", "kiosk", "redemarrer", "arreter",
+              "demarrer")
+#: Chemins témoins de chaque verbe L2, contrôlés par `fullmatch` contre chaque motif déclaré, sous la racine du
+#: module ET sous chaque premier segment littéral des motifs (`^/blocklist/(re)boot$` ne doit pas passer).
+_TEMOINS_L2 = ("reboot", "shutdown", "poweroff", "halt", "apply_updates", "check_updates", "upgrade", "maj",
+               "maj_paquets", "maj-paquets", "settings", "save_settings", "rename", "renommer", "hostname",
+               "renouveler", "renouveler-secrets", "renouveler_secrets", "rotate", "service_control",
+               "service_action", "restart_services", "restart", "stop", "start", "reload", "reload_firewall",
+               "kiosk/enable", "kiosk/disable")
 
 
-@pytest.mark.parametrize("module", sorted(ROUTES_OPERATE_L2))
-def test_aucune_declaration_n_ouvre_un_verbe_du_ctl_l2(module):
-    decl = REPO / "packages" / f"secubox-{module}" / "pilotage" / "routes-ouvertes.d" / f"{module}.toml"
+@pytest.mark.parametrize("decl", DECLARATIONS, ids=lambda d: d.stem)
+def test_aucune_declaration_n_ouvre_un_verbe_du_ctl_l2(decl):
+    import re as _re
+    module = decl.stem
     routes = auth.valider_routes_ouvertes(decl.read_text(encoding="utf-8"))
-    for methodes, motifs in routes:
-        for motif in motifs:
-            for chemin in ROUTES_OPERATE_L2[module]:
-                assert not motif.fullmatch(chemin), (module, motif.pattern, chemin)
-            for verbe in _VERBES_L2:
-                assert verbe not in motif.pattern.lower(), (module, motif.pattern, verbe)
+    motifs = [m for _, ms in routes for m in ms]
+    racines = {""} | {"/" + m.pattern[2:].split("/")[0] for m in motifs if "/" in m.pattern[2:]}
+    temoins = set(ROUTES_OPERATE_L2.get(module, [])) | {r + "/" + t for r in racines for t in _TEMOINS_L2} \
+        | {r + "/x/" + t for r in racines for t in _TEMOINS_L2}
+    for motif in motifs:
+        # Un paramètre (`[^/]+`, une MAC) accepte n'importe quel nom : on le fige pour que le témoin ne vise que la
+        # partie LITTÉRALE du motif (alternatives comprises) ; la route `DELETE /blocklist/<domaine>` n'est pas un reboot.
+        fige = _re.compile(motif.pattern.replace("[^/]+", "PARAM").replace("[0-9A-Fa-f:]{17}", "MAC"))
+        for chemin in temoins:
+            assert not fige.fullmatch(chemin), (module, motif.pattern, chemin)
+        for exemple in exemples(motif.pattern):
+            morceaux = {p for seg in exemple.lower().split("/") for p in _re.split(r"[^a-z0-9]+", seg) if p}
+            assert not morceaux & set(_VERBES_L2), (module, motif.pattern, exemple, morceaux & set(_VERBES_L2))
+
+
+def test_l_anti_recouvrement_voit_une_alternative_deguisee(tmp_path):
+    """Régression R-L5-16 : `(re)boot` passait le contrôle par sous-chaîne."""
+    import re as _re
+    with pytest.raises(ValueError):                                # au premier segment : refusé par le validateur
+        auth.valider_routes_ouvertes('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/(re)boot$"]\n')
+    routes = auth.valider_routes_ouvertes('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/blocklist/(re)boot$"]\n')
+    assert any(m.fullmatch("/blocklist/reboot") for _, ms in routes for m in ms)
+    morceaux = {p for e in exemples(routes[0][1][0].pattern) for seg in e.split("/") for p in _re.split(r"[^a-z0-9]+", seg) if p}
+    assert "reboot" in morceaux
 
 
 def test_page_systeme_appelle_ces_routes_le_relais_les_refusera(tmp_path, monkeypatch):
@@ -860,6 +908,36 @@ def test_page_systeme_appelle_ces_routes_le_relais_les_refusera(tmp_path, monkey
     (routes / "system.toml").write_bytes((REPO / "packages" / "secubox-system" / "pilotage" / "routes-ouvertes.d"
                                           / "system.toml").read_bytes())
     os.chmod(routes / "system.toml", 0o644)
-    for chemin in ROUTES_OPERATE_L2["system"]:
+    for chemin in ROUTES_OPERATE_L2["system"] + ["/backup", "/set_backup_schedule"]:
         assert garde("require_jwt", requete("POST", chemin, module="system"), frappe(cible="system"))[0] == 403, chemin
     assert garde("require_jwt", requete("POST", "/clear_cache", module="system"), frappe(cible="system"))[0] == 200
+
+
+# ── R-L5-16 : routes fermées (contenu des déclarations) ────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("module,chemin", [
+    ("system", "/kiosk/enable"), ("system", "/kiosk/disable"),        # tty2 en root sans mot de passe
+    ("system", "/backup"), ("system", "/set_backup_schedule"),        # archive avec les clés privées WireGuard
+    ("system", "/reload_firewall"),                                   # verbe reload (service)
+    ("freebox", "/pare-feu/ipv6"), ("freebox", "/autoconfig"), ("freebox", "/upnp"),   # confirme posé par la page
+])
+def test_routes_fermees_par_r_l5_16(module, chemin):
+    decl = REPO / "packages" / f"secubox-{module}" / "pilotage" / "routes-ouvertes.d" / f"{module}.toml"
+    if not decl.exists():
+        return                                                        # aucune écriture ouverte : fermé
+    routes = auth.valider_routes_ouvertes(decl.read_text(encoding="utf-8"))
+    assert not any(m.fullmatch(chemin) for _, ms in routes for m in ms), (module, chemin)
+
+
+# ── R-L5-16 : _invalides sous verrou ───────────────────────────────────────────────────────────────────────────────
+def test_compteur_des_invalides_sous_verrou(monkeypatch):
+    """Les requêtes servies en parallèle (pool de threads de FastAPI) comptent sans en perdre."""
+    monkeypatch.setattr(auth, "_horloge", lambda: 10.0, raising=False)
+    auth._invalides.update(nombre=0, depuis=5.0)                   # fenêtre ouverte : rien n'est émis
+    assert isinstance(auth._verrou_invalides, type(threading.Lock()))
+    req = requete()
+    fils = [threading.Thread(target=lambda: [auth._compter_invalide(req, "x") for _ in range(500)]) for _ in range(8)]
+    for f in fils:
+        f.start()
+    for f in fils:
+        f.join()
+    assert auth._invalides["nombre"] == 4000

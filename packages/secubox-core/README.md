@@ -42,7 +42,11 @@ Shared Python modules for all SecuBox services:
     que la clé) : `[[routes]]` avec `methodes = ["POST", …]` (POST, PUT, PATCH, DELETE) et `chemins = ["^/…$", …]`,
     chemins relatifs au module. `valider_routes_ouvertes(texte)` refuse tout motif non ancré ou ouvert (`.` nu, `*`,
     `?`, `|` hors groupe littéral, groupe spécial, classe qui franchit `/`, échappement de classe) : un fichier
-    invalide, douteux ou absent n'ouvre RIEN. Déclarés en L5 : system, nac, ad-guard, freebox.
+    invalide, douteux ou absent n'ouvre RIEN. Le premier segment doit être littéral, et chaque classe est compilée
+    telle quelle pour vérifier qu'elle n'accepte pas `/` (`[!-~]`, `[.-0]` refusées). Déclarés en L5 : system, nac,
+    ad-guard (freebox : aucune écriture ouverte, ses `confirme` sont posés par la page relayée). Aucune déclaration ne
+    recouvre un verbe du ctl L2 (reboot, mise à jour, service, renommage, renouvellement de secrets, kiosque) : ces
+    actions passent par les actions du pilotage.
   - Ce n'est pas une session. Portée `lecture` : GET/HEAD seulement (403 sinon) ; portée `admin` : administrateur réel,
     pour les écritures déclarées.
     `est_admin_reel` n'accepte que le payload RENDU par la garde (marque `_PayloadPilotage`, aussi sur

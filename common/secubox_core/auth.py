@@ -21,6 +21,7 @@ import re
 import secrets
 import socket
 import stat
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
@@ -563,17 +564,27 @@ def _cle_publique_relais():
 _RE_GROUPE_LITTERAL = re.compile(r"\((?:[A-Za-z0-9_-]+\|)*[A-Za-z0-9_-]+\)")
 _RE_CLASSE_MOTIF = re.compile(r"\[(\^?)([^\]\\]*)\]")
 _RE_RESTE_PERMIS = re.compile(r"[A-Za-z0-9_/:+-]*")
+# Premier segment LITTÉRAL (R-L5-16) : `^/[^/]+$` ouvrirait toutes les routes d'un segment du module.
+_RE_PREMIER_SEGMENT = re.compile(r"\^/(?:[A-Za-z0-9_:-]|\\[.\-])+(?:/|\$$)")
 
 
 def _valider_motif(motif: Any) -> "re.Pattern":
     if not isinstance(motif, str) or not 3 <= len(motif) <= 256 or not motif.startswith("^/") \
             or not motif.endswith("$") or motif.endswith("\\$"):
         raise ValueError(f"motif {motif!r} : ancré `^/…$` attendu (256 caractères au plus)")
+    if not _RE_PREMIER_SEGMENT.match(motif):
+        raise ValueError(f"motif {motif!r} : le premier segment doit être littéral")
     corps = _RE_GROUPE_LITTERAL.sub("g", motif[1:-1])
 
     def _classe(m):
         nie, contenu = m.groups()
-        if not contenu or (nie and "/" not in contenu) or (not nie and "/" in contenu):
+        # La classe telle que `re` l'entend (intervalles compris : `[!-~]`, `[.-0]` contiennent `/`) ne doit pas
+        # accepter `/` (R-L5-16).
+        try:
+            franchit = not contenu or re.fullmatch("[" + nie + contenu + "]", "/") is not None
+        except re.error:
+            franchit = True
+        if franchit:
             raise ValueError(f"motif {motif!r} : classe {m.group(0)!r} qui peut franchir `/`")
         return "c"
 
@@ -756,6 +767,8 @@ def _ecrire_audit(entree: Dict[str, Any]) -> None:
 
 
 _invalides: Dict[str, Any] = {"nombre": 0, "depuis": 0.0}
+#: Les gardes `def` tournent dans le pool de threads de FastAPI : le compteur est partagé (R-L5-16).
+_verrou_invalides = threading.Lock()
 
 
 def _horloge() -> float:
@@ -765,12 +778,13 @@ def _horloge() -> float:
 def _compter_invalide(request, motif: str) -> None:
     """M1 : un jeton dont la signature n'a PAS été vérifiée (n'importe qui peut en présenter) n'est pas audité ; il
     est compté, et le compte part à la trace et au journal au plus une fois par minute."""
-    _invalides["nombre"] += 1
     maintenant = _horloge()
-    if _invalides["depuis"] and maintenant - _invalides["depuis"] < 60:
-        return
-    nombre = _invalides["nombre"]
-    _invalides.update(nombre=0, depuis=maintenant)
+    with _verrou_invalides:
+        _invalides["nombre"] += 1
+        if _invalides["depuis"] and maintenant - _invalides["depuis"] < 60:
+            return
+        nombre = _invalides["nombre"]
+        _invalides.update(nombre=0, depuis=maintenant)
     try:
         _ecrire_trace(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "type": "pilotage",
                                   "verdict": "refuse", "motif": motif, "nombre": nombre,
