@@ -1,3 +1,14 @@
+secubox-nextcloud (1.9.2-1~trixie1) trixie; urgency=medium
+
+  * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte
+    (/etc/os-release, repli trixie), surcharge par SECUBOX_DEBIAN_SUITE ; plus de bookworm en dur.
+  * systemd >= 257 (trixie) en LXC non privilégié : ImportCredential= vidé par drop-in pour
+    journald, sysctl et tmpfiles, seulement si le conteneur a ce systemd (#3274).
+  * debootstrap et sources.list suivent la même suite ; gpg au lieu de gnupg ; version de PHP lue
+    dans le conteneur (8.2 en bookworm, 8.4 en trixie) au lieu de php8.2 en dur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
+
 secubox-nextcloud (1.9.1-1~trixie1) trixie; urgency=medium
 
   * Vhost public livré sans les noms de gk2 (ref #3117) : server_name « nc.* nextcloud.* » (nc.gk2 et
