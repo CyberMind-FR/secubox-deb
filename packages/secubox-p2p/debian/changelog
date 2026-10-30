@@ -1,3 +1,11 @@
+secubox-p2p (1.19.4-1~trixie1) trixie; urgency=medium
+
+  * Relais du maillage : un nom admin.<box>.secubox.in listé par le pilotage du maître (box « distante »,
+    /var/lib/secubox-pilotage-pages/exclusions-relais.json, fichier root non inscriptible, lu sans lien) n'est plus
+    relayé, ni par la synchronisation ni par « relayer » ; les autres noms de la box restent relayés (ref #3126).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 23:30:00 +0100
+
 secubox-p2p (1.19.3-1~trixie1) trixie; urgency=medium
 
   * Un pair approuvé qui revient sous un autre nom d'hôte est renommé chez le maître (demande de jonction, registre
