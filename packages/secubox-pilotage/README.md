@@ -274,23 +274,31 @@ HAProxy TLS 1.3 → sbxwaf → nginx.
   (sinon certbot webroot ; échec ⇒ aucun vhost public) ; `haproxyctl vhost add <dom> sbxwaf_inspector true` (jamais `waf_bypass`) ;
   `secubox-waf-route <dom> 9080` (adresse des voisins du port des vhosts nginx) ; `haproxyctl generate` + reload. `retirer` : server
   nginx (même garde), route sbxwaf (table réécrite atomiquement, voisins intacts), vhost HAProxy (`generate --allow-shrink`).
-  Audit `pilotage_vhost_poser` / `pilotage_vhost_retirer` (`resultat`, `motif`). Au `remove` du paquet, le prerm retire tous les vhosts.
+  Audit `pilotage_vhost_poser` / `pilotage_vhost_retirer` (`resultat` ok|deja|echec, `motif`). **Propriété** (C2) : noms
+  réservés (nom du maître, `www`, `api`, `admin`, `apt`, modules de `/usr/share/secubox/www`) ; un domaine déjà présent dans HAProxy
+  (`haproxyctl vhost list`), la table des routes ou un server nginx étranger est refusé ; ce que le pilotage crée est marqué dans le
+  registre root `/etc/secubox/pilotage-vhosts.json` (0644) AVANT création, et `retirer` refuse tout domaine non marqué. Nom de table
+  HAProxy lu par `vhost list` (I5), codes retour de `vhost remove` et `cert sync` vérifiés. Échec certbot : pas de nouvel essai avant
+  6 h pour ce domaine ; deux synchronisations espacées d'au moins 60 s ; `.path` limité à 3 déclenchements par 10 min, service à 6
+  démarrages par 30 min (I4). Unité en `ProtectSystem=strict` avec `ReadWritePaths` limités (M10). Au `remove` du paquet, le prerm retire tous les vhosts.
 - **Server nginx** : `listen 0.0.0.0:9080`, `server_name admin.<box>.secubox.in` ; `/<module>/` → `alias
   /var/lib/secubox-pilotage-pages/www/<paquet>/<version>/<module>/` (jamais `www/` entier) ; CSP `default-src 'none'` + `script-src`,
-  `style-src`, `connect-src`, `img-src`, `font-src` limités à `'self'`, `frame-ancestors 'none'` ; `nosniff`, `X-Frame-Options: DENY`,
+  `style-src` limités aux chemins des pages servies (`https://admin.<box>/<module>/`, `/pilotage-connexion/`), jamais `/api/`
+  (C1b) ; `connect-src`, `img-src`, `font-src` à `'self'`, `form-action 'none'`, `frame-ancestors 'none'` ; `nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: no-referrer`, `Cache-Control: no-store` ; fichiers en point → 404 (au niveau du serveur ET dans chaque location de
   pages : `^~` coupe la recherche des regex) ; `disable_symlinks if_not_owner` ; `/api/v1/<module>/` → socket du service
   `/relais/<box>/api/v1/<module>/` avec `X-SecuBox-Version-Page: <paquet>=<version>` et `X-SecuBox-Pilotage-Box` posés, `Cookie` et
   marques `X-SecuBox-*` du client effacés, `Set-Cookie` masqué ; pas le snippet `secubox-proxy.conf` (il ajoute
   `Access-Control-Allow-Origin *`). Sur l'admin du maître, `/api/v1/pilotage/relais/` et `/vhost/` rendent 404 et ces en-têtes sont vidés.
-- **Connexion** (`/api/v1/auth/login`, `/login/mfa` du vhost → `/vhost/auth/…` du service → `/run/secubox/auth.sock`) : identifiants
-  DU MAÎTRE (second facteur exigé : la requête n'a jamais la marque LAN). Le jeton du maître ne quitte pas le contrôleur : vérifié (session
-  vivante, administrateur réel, sinon 403), il est échangé contre un **jeton à portée** (`scope = "pilotage-vhost"`, `pilotage_vhost =
-  <box>`, même `sub` et `jti`, `exp` ≤ celle du maître et ≤ 4 h), refusé par toutes les gardes du maître (`_is_scope_token`) et par le
-  vhost d'une autre box. Aucun cookie n'est posé (la page le garde dans le `localStorage` de SON origine) : la session du maître ne
-  s'élargit pas vers l'origine de la box. Déconnexion ou révocation de la session du maître ⇒ jeton à portée mort (même `jti`).
-  Première configuration et enrôlement TOTP : 403 (« à faire sur l'administration du maître ») ; toute autre étape : 404. Audit
-  `pilotage_vhost_session` obligatoire (503 sinon).
+- **Connexion** (R-L5-25 C1c) : les identifiants du maître ne sont saisis **que sur l'origine du maître**. L'administration du
+  maître (`GET /api/v1/pilotage/boxes/<box>/connexion-vhost?retour=/<module>/`, `require_jwt`, donc 2FA du maître) émet un code à usage
+  unique (≤ 60 s, en mémoire du contrôleur, lié à la box, à l'administrateur et à sa session `jti`, audit `pilotage_vhost_code`) et
+  répond 303 vers `https://admin.<box>.secubox.in/pilotage-connexion/#code=…` (fragment : jamais envoyé ni journalisé). Cette page
+  statique du paquet (aucun champ d'identifiants) poste le code à `/api/v1/auth/echanger` (seule route d'auth du vhost), qui le
+  consomme à la première présentation (même refusée) et rend un **jeton à portée** : clé dérivée (HMAC de la clé du maître, M7),
+  `aud = admin.<box>.secubox.in`, `iss = secubox-pilotage-vhost`, `scope = pilotage-vhost`, même `sub`/`jti`, `exp` ≤ maître et ≤ 4 h.
+  Aucun cookie. Session du maître close ou administrateur déchu entre-temps : 401/403. Débit : 10 émissions par administrateur et
+  10 échanges par adresse et par minute (429).
 - **Relais** `GET|HEAD|POST|PUT|PATCH|DELETE /relais/{box}/api/v1/…` : Bearer à portée de CETTE box (401 sinon) ; en-tête de box de nginx
   = box du chemin (404 sinon) ; box inconnue, ambiguë ou non « distante » : 404 ; administrateur réel (403) ; box cliente : session de
   support ouverte requise (403, R-L2-31) ; 429 au-delà de 300 requêtes par minute par (administrateur, box) ; 409 si
@@ -298,10 +306,13 @@ HAProxy TLS 1.3 → sbxwaf → nginx.
   session, portée demandée = `admin`** réduite par `portee_permise` (mains liées ou inconnues ⇒ lecture) puis par l'agent : tout champ
   `acteur`/`portee` du client (corps, requête, en-tête) est ignoré. `demander_http` (audit obligatoire des écritures) ; en-têtes vers la
   box réduits à Content-Type/Accept/If-* (jamais Authorization ni Cookie) ; réponse : Content-Type, ETag, Last-Modified,
-  Content-Disposition seulement (jamais Set-Cookie de la box).
+  réponse jamais exécutable (C1a) : JSON annoncé ⇒ `application/json`, tout autre type ⇒ `application/octet-stream` +
+  `Content-Disposition: attachment` + `CSP: sandbox; default-src 'none'` ; `nosniff` partout ; ETag et Last-Modified seuls
+  repris ; nginx pose aussi ces en-têtes (`always`) sur chaque location `/api/`. Le premier segment du chemin doit être un module
+  du paquet annoncé par la version de page (I6, 409 sinon : modules lus dans l'arbre root des pages).
 - **Limites** : la version comparée est celle que le server nginx sert pour le module (posée par nginx) ; une page chargée avant une
   régénération envoie la nouvelle version (le 409 couvre l'intervalle « box montée, vhost pas encore régénéré »). Une page malveillante
-  d'un paquet signé verrait les identifiants saisis (comme toute page de connexion) : la défense est la signature du dépôt (T4). Un
+  d'un paquet signé ne voit jamais d'identifiants (saisis sur le maître seul) mais pourrait lire le jeton du vhost de sa box. Un
   module seulement monté dans l'agrégateur d'une box légère n'est pas joignable (R-L5-7). Pas de déconnexion côté vhost (jeton jeté
   par la page ; 4 h au plus). L'agrégateur du maître relaie `/api/v1/pilotage/…` en retirant le préfixe : un client pourrait y forger
   `X-SecuBox-Pilotage-Box` — sans effet utile : il faut les identifiants d'un administrateur du maître, et le relais exige le jeton à

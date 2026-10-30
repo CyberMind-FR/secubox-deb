@@ -35,8 +35,9 @@ import re
 import stat
 import subprocess
 import sys
+import socket
 import tempfile
-import tomllib
+import time
 
 LIB = "/usr/lib/secubox/pilotage"
 COMMANDES = {"nginx": "/usr/sbin/nginx", "systemctl": "/usr/bin/systemctl", "haproxyctl": "/usr/sbin/haproxyctl",
@@ -47,6 +48,8 @@ ENTREE_MAX = 1 << 20
 BACKEND_WAF = "sbxwaf_inspector"
 WEBROOT_ACME = "/usr/share/secubox/www"
 PREFIXE_CONF = "secubox-pilotage-admin-"
+CERTBOT_REPOS_S = 6 * 3600     # I4 : pas de nouvel essai certbot pour un même domaine avant 6 h (quota Let's Encrypt)
+PASSE_MIN_S = 60               # I4 : délai minimal entre deux synchronisations
 
 
 class Usage(Exception):
@@ -104,6 +107,15 @@ class Ctx:
         self.journaux = f"{self.r}/var/log/secubox"
         self.pages_base = f"{self.r}/var/lib"
         self.plan = f"{self.r}/var/lib/secubox/pilotage"
+        self.registre = f"{self.r}/etc/secubox/pilotage-vhosts.json"
+        self.maintenant = time.time()
+        if self.substitue and os.environ.get("SBX_MAINTENANT"):
+            try:
+                self.maintenant = float(os.environ["SBX_MAINTENANT"])
+            except ValueError:
+                raise Usage("SBX_MAINTENANT invalide") from None
+        nom = os.environ.get("SBX_NOM_MAITRE") if self.substitue else None
+        self.nom_maitre = (nom if nom is not None else socket.gethostname().split(".")[0]).lower()
 
     def cmd(self, nom):
         return os.path.join(self.bin, nom) if self.bin else COMMANDES[nom]
@@ -336,30 +348,110 @@ def nginx_echanger(ctx, chemin, nouveau):
     return True
 
 
+# --- Registre root du pilotage : marque de propriété, échecs certbot, dernière passe (R-L5-25 C2, I4) -----------------
+
+def lire_registre(ctx):
+    try:
+        fd = os.open(ctx.registre, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return {"domaines": {}, "certbot_echecs": {}, "derniere_passe": 0}
+    except OSError:
+        raise Erreur("registre du pilotage non sûr") from None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != ctx.uid or st.st_mode & 0o022:
+            raise Erreur("registre du pilotage non sûr")
+        d = json.loads(lire_tout(fd) or b"{}")
+    except ValueError:
+        raise Erreur("registre du pilotage illisible") from None
+    finally:
+        os.close(fd)
+    if not isinstance(d, dict):
+        raise Erreur("registre du pilotage illisible")
+    return {"domaines": dict(d.get("domaines") or {}), "certbot_echecs": dict(d.get("certbot_echecs") or {}),
+            "derniere_passe": float(d.get("derniere_passe") or 0)}
+
+
+def ecrire_registre(ctx, reg):
+    ecrire_atomique(ctx.registre, (json.dumps(reg, indent=2, sort_keys=True) + "\n").encode(), 0o644)
+
+
 # --- HAProxy, certificat, route sbxwaf ------------------------------------------------------------------------------
 
-def vhost_present(ctx, dom):
+def vhost_haproxy(ctx, dom):
+    """Nom de la table du vhost `dom` tel que haproxyctl le connaît (I5 : jamais recalculé), None s'il n'existe pas."""
+    p = ctx.lancer("haproxyctl", "vhost", "list")
     try:
-        with open(ctx.toml, "rb") as f:
-            d = tomllib.load(f)
+        d = json.loads(p.stdout.decode("utf-8")) if p.returncode == 0 else None
+    except (UnicodeDecodeError, ValueError):
+        d = None
+    if not isinstance(d, dict) or not isinstance(d.get("vhosts"), list):
+        raise Erreur("haproxyctl vhost list illisible")
+    noms = [v.get("name") for v in d["vhosts"] if isinstance(v, dict) and v.get("domain") == dom]
+    if len(noms) > 1:
+        raise Erreur(f"{dom} déclaré plusieurs fois dans HAProxy")
+    return noms[0] if noms and isinstance(noms[0], str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", noms[0]) else None
+
+
+def route_presente(ctx, dom):
+    try:
+        with open(ctx.routes) as f:
+            t = json.load(f)
     except FileNotFoundError:
         return False
-    except (OSError, tomllib.TOMLDecodeError):
-        raise Erreur("haproxy.toml illisible") from None
-    v = d.get("vhosts") or {}
-    it = v.values() if isinstance(v, dict) else v
-    return any(isinstance(x, dict) and x.get("domain") == dom for x in it)
+    except (OSError, ValueError):
+        raise Erreur("table des routes sbxwaf illisible") from None
+    return isinstance(t, dict) and dom in t
 
 
-def certificat(ctx, box, dom):
+def nginx_etranger(ctx, dom, box):
+    """Un server nginx HORS pilotage porte-t-il déjà ce nom ? (conf.d et sites-enabled, sans suivre de lien)"""
+    motif = re.compile(r"server_name[^;]*\s" + re.escape(dom) + r"[\s;]")
+    for d in (ctx.confd, f"{ctx.r}/etc/nginx/sites-enabled"):
+        try:
+            noms = os.listdir(d)
+        except OSError:
+            continue
+        for n in noms:
+            if n == f"{PREFIXE_CONF}{box}.conf":
+                continue
+            try:
+                fd = os.open(os.path.join(d, n), os.O_RDONLY | os.O_NONBLOCK)
+            except OSError:
+                continue
+            try:
+                if stat.S_ISREG(os.fstat(fd).st_mode) and motif.search(" " + lire_tout(fd).decode("utf-8", "replace")):
+                    return True
+            finally:
+                os.close(fd)
+    return False
+
+
+def noms_reserves(ctx):
+    res = {"www", "api", "admin", "apt", ctx.nom_maitre}
+    try:
+        res |= {n for n in os.listdir(f"{ctx.r}/usr/share/secubox/www") if V.RE_BOX.fullmatch(n)}
+    except OSError:
+        pass
+    return res - {""}
+
+
+def certificat(ctx, box, dom, reg):
     noms = (f"{dom}.pem", f"*.{box}.{V.ZONE}.pem")
     if any(os.path.isfile(os.path.join(ctx.certs, n)) and os.path.getsize(os.path.join(ctx.certs, n)) > 0 for n in noms):
         return
+    dernier = reg["certbot_echecs"].get(dom, 0)
+    if ctx.maintenant - dernier < CERTBOT_REPOS_S:
+        raise Erreur(f"certificat de {dom} : dernier essai en échec il y a moins de {CERTBOT_REPOS_S // 3600} h")
     p = ctx.lancer("certbot", "certonly", "--webroot", "-w", WEBROOT_ACME, "-d", dom, "--non-interactive", "--agree-tos",
                    "--keep-until-expiring", "--register-unsafely-without-email")
     if p.returncode != 0:
+        reg["certbot_echecs"][dom] = ctx.maintenant
+        ecrire_registre(ctx, reg)
         raise Erreur(f"certificat de {dom} impossible (DNS public vers ce maître ?)")
-    ctx.lancer("haproxyctl", "cert", "sync")
+    reg["certbot_echecs"].pop(dom, None)
+    if ctx.lancer("haproxyctl", "cert", "sync").returncode != 0:
+        raise Erreur("certificat émis mais haproxyctl cert sync en échec")
     if not os.path.isfile(os.path.join(ctx.certs, noms[0])):
         raise Erreur("certificat émis mais absent du dossier de HAProxy")
 
@@ -392,7 +484,17 @@ def verrou(ctx):
 
 def poser(ctx, box, pages):
     dom = V.domaine(box)
+    if box in noms_reserves(ctx):
+        raise Erreur(f"nom réservé : {box} (maître, www, api, admin, apt ou module)")
     try:
+        reg = lire_registre(ctx)
+        marque = dom in reg["domaines"]
+        if not marque:
+            # C2 : un domaine déjà servi hors du pilotage n'est jamais pris (ni sa route, ni son vhost)
+            if vhost_haproxy(ctx, dom) is not None or route_presente(ctx, dom) or nginx_etranger(ctx, dom, box):
+                raise Erreur(f"{dom} est déjà servi hors du pilotage : refus")
+            reg["domaines"][dom] = {"box": box, "depuis": int(ctx.maintenant)}
+            ecrire_registre(ctx, reg)   # marque AVANT toute création : un échec plus loin reste retirable
         composees, absentes = [], []
         for paquet, version in pages:
             mods = modules_de(ctx, paquet, version)
@@ -405,10 +507,10 @@ def poser(ctx, box, pages):
         except ValueError as e:
             raise Erreur(f"pages refusées : {e}") from None
         change = nginx_echanger(ctx, conf_de(ctx, box), texte)
-        certificat(ctx, box, dom)
+        certificat(ctx, box, dom, reg)
         regen = False
-        if not vhost_present(ctx, dom):
-            if ctx.lancer("haproxyctl", "vhost", "add", dom, BACKEND_WAF, "true").returncode != 0:
+        if vhost_haproxy(ctx, dom) is None:
+            if ctx.lancer("haproxyctl", "vhost", "add", dom, BACKEND_WAF, "true").returncode != 0 or vhost_haproxy(ctx, dom) is None:
                 raise Erreur("haproxyctl vhost add en échec")
             regen = True
         route = ctx.lancer("secubox-waf-route", dom, str(V.PORT_NGINX))
@@ -418,7 +520,7 @@ def poser(ctx, box, pages):
             if ctx.lancer("haproxyctl", "generate").returncode != 0 or ctx.lancer("haproxyctl", "reload").returncode != 0:
                 raise Erreur("HAProxy n'a pas rechargé")
     except Erreur as e:
-        auditer(ctx, "pilotage_vhost_poser", box=box, domaine=dom, resultat="erreur", motif=str(e))
+        auditer(ctx, "pilotage_vhost_poser", box=box, domaine=dom, resultat="echec", motif=str(e))
         raise
     deja = not change and not regen and not route.stdout.strip()
     auditer(ctx, "pilotage_vhost_poser", box=box, domaine=dom, resultat="deja" if deja else "ok",
@@ -429,16 +531,23 @@ def poser(ctx, box, pages):
 def retirer(ctx, box):
     dom = V.domaine(box)
     try:
+        reg = lire_registre(ctx)
+        if dom not in reg["domaines"]:
+            raise Erreur(f"{dom} n'a pas été créé par le pilotage : rien n'est retiré")
         if os.path.lexists(conf_de(ctx, box)):
             nginx_echanger(ctx, conf_de(ctx, box), None)
         routes_retirer(ctx, dom)
-        if vhost_present(ctx, dom):
-            ctx.lancer("haproxyctl", "vhost", "remove", re.sub(r"[.-]", "_", dom))
+        nom = vhost_haproxy(ctx, dom)
+        if nom is not None:
+            if ctx.lancer("haproxyctl", "vhost", "remove", nom).returncode != 0:
+                raise Erreur("haproxyctl vhost remove en échec : le nom reste servi")
             if ctx.lancer("haproxyctl", "generate", "--allow-shrink").returncode != 0 or \
                     ctx.lancer("haproxyctl", "reload").returncode != 0:
                 raise Erreur("HAProxy n'a pas rechargé : le nom peut rester servi jusqu'au prochain « haproxyctl generate »")
+        reg["domaines"].pop(dom, None)
+        ecrire_registre(ctx, reg)
     except Erreur as e:
-        auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="erreur", motif=str(e))
+        auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="echec", motif=str(e))
         raise
     auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="ok")
     return {"ok": True, "box": box, "domaine": dom}
@@ -456,6 +565,18 @@ def poses(ctx):
 def synchroniser(ctx):
     plan = lire_plan(ctx)
     bilan = {"ok": True, "poses": [], "retires": [], "erreurs": []}
+    reg = lire_registre(ctx)
+    attente = PASSE_MIN_S - (ctx.maintenant - reg["derniere_passe"])
+    if attente > 0:
+        # I4 : un plan qui change sans cesse ne fait pas tourner certbot/HAProxy en boucle (le .path est aussi borné)
+        bilan["attente_s"] = int(attente)
+        if not ctx.substitue:
+            time.sleep(attente)
+            ctx.maintenant = time.time()
+        else:
+            return bilan
+    reg["derniere_passe"] = ctx.maintenant
+    ecrire_registre(ctx, reg)
     en_usage = []
     for box, pages in plan:
         for paquet, version in pages:

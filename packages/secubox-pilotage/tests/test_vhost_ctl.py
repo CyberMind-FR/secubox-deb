@@ -12,6 +12,7 @@ import os
 import re
 import stat
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -80,7 +81,7 @@ case "$1" in
   reload) exit 0 ;;
   generate) bash {HAPROXYCTL} "$@" >/dev/null 2>&1; [ -s {self.r}/haproxy/cfg/haproxy.cfg ] ;;
   # hors root, `vhost add/remove` échouent APRÈS avoir écrit haproxy.toml (chown du cfg régénéré) : le toml fait foi ici
-  vhost) bash {HAPROXYCTL} "$@" >/dev/null 2>&1; exit 0 ;;
+  vhost) [ "$2" = list ] && exec bash {HAPROXYCTL} vhost list 2>/dev/null; bash {HAPROXYCTL} "$@" >/dev/null 2>&1; exit 0 ;;
   *) exec bash {HAPROXYCTL} "$@" ;;
 esac
 """)
@@ -200,7 +201,7 @@ def test_rollback_si_nginx_t_echoue(banc):
     assert banc.conf().read_text() == avant           # ancienne configuration rétablie
     assert [x.name for x in (banc.r / "etc/nginx/conf.d").iterdir()] == [banc.conf().name]   # aucun résidu
     a = banc.audit()[-1]
-    assert a["evenement"] == "pilotage_vhost_poser" and a["resultat"] == "erreur"
+    assert a["evenement"] == "pilotage_vhost_poser" and a["resultat"] == "echec"
 
 
 def test_rollback_premiere_pose_et_pre_validation(banc):
@@ -278,4 +279,110 @@ def test_unites_et_paquet():
     assert "ExecStart=/usr/sbin/secubox-pilotage-vhost synchroniser" in u and "Type=oneshot" in u
     p = (PKG / "systemd/secubox-pilotage-vhost.path").read_text()
     assert "PathChanged=/var/lib/secubox/pilotage/vhosts.json" in p
-    assert "/run/secubox/auth.sock rw," in (PKG / "apparmor/secubox-pilotage-api").read_text()
+    aa = (PKG / "apparmor/secubox-pilotage-api").read_text()
+    assert "auth.sock" not in aa                                    # plus de saisie d'identifiants relayée (C1c)
+    assert "/var/lib/secubox-pilotage-pages/www/*/*/ r," in aa      # I6 : modules d'un paquet servi, lecture seule
+    assert "www-vhost/pilotage-connexion" in rules
+    # I4 : relances bornées
+    assert "StartLimitIntervalSec=" in u and "StartLimitBurst=" in u
+    assert "TriggerLimitIntervalSec=" in p and "TriggerLimitBurst=" in p
+    # M10 : durcissement du ctl root
+    assert "ProtectSystem=strict" in u and "ReadWritePaths=" in u and "PrivateTmp=yes" in u and "NoNewPrivileges=yes" in u
+
+
+# --- R-L5-25 : noms réservés et marque de propriété (C2), codes retour (I5), certbot amorti et passes espacées (I4) ----------
+
+def registre(banc):
+    p = banc.r / "etc/secubox/pilotage-vhosts.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+def ajouter_vhost_etranger(banc, dom, nom="etranger"):
+    banc.toml.write_text(banc.toml.read_text() + f'\n[vhosts.{nom}]\ndomain = "{dom}"\nbackend = "nginx_vhosts"\nenabled = true\nssl = true\n')
+    t = json.loads(banc.routes.read_text())
+    t[dom] = ["192.168.1.200", 9080]
+    banc.routes.write_text(json.dumps(t))
+
+
+def test_box_nommee_comme_un_vhost_existant_refusee(banc):
+    ajouter_vhost_etranger(banc, DOM)
+    toml, routes = banc.toml.read_text(), banc.routes.read_text()
+    r = banc.ctl("poser", "gk5", entree=PAGES)
+    assert r.returncode == 1 and "déjà" in json.loads(r.stdout)["erreur"]
+    assert banc.toml.read_text() == toml and banc.routes.read_text() == routes and not banc.conf().exists()
+    assert not any(x.startswith(("haproxyctl vhost add", "secubox-waf-route", "certbot")) for x in banc.appels())
+
+
+def test_vhost_nginx_existant_non_pilotage_refuse(banc):
+    (banc.r / "etc/nginx/conf.d/autre.conf").write_text(f"server {{ listen 9080; server_name {DOM}; }}\n")
+    r = banc.ctl("poser", "gk5", entree=PAGES)
+    assert r.returncode == 1 and not banc.conf().exists()
+
+
+@pytest.mark.parametrize("box", ["www", "api", "admin", "apt", "gk2", "system"])
+def test_noms_reserves(banc, box):
+    (banc.r / "usr/share/secubox/www/system").mkdir(parents=True)           # module du maître
+    r = banc.ctl("poser", box, entree=PAGES, env={"SBX_NOM_MAITRE": "gk2"})
+    assert r.returncode == 1 and "réservé" in json.loads(r.stdout)["erreur"]
+    assert banc.appels() == []
+
+
+def test_retrait_ne_touche_jamais_un_vhost_non_marque(banc):
+    ajouter_vhost_etranger(banc, DOM)
+    toml, routes = banc.toml.read_text(), banc.routes.read_text()
+    r = banc.ctl("retirer", "gk5")
+    assert r.returncode == 1 and "pilotage" in json.loads(r.stdout)["erreur"]
+    assert banc.toml.read_text() == toml and banc.routes.read_text() == routes
+    assert not any(x.startswith(("haproxyctl vhost remove", "haproxyctl generate")) for x in banc.appels())
+
+
+def test_marque_posee_puis_retiree(banc):
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 0
+    assert DOM in registre(banc)["domaines"]
+    assert stat.S_IMODE((banc.r / "etc/secubox/pilotage-vhosts.json").stat().st_mode) == 0o644
+    assert banc.ctl("retirer", "gk5").returncode == 0
+    assert DOM not in registre(banc)["domaines"]
+
+
+def test_nom_du_vhost_lu_depuis_haproxyctl(banc):
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 0
+    # haproxyctl a nommé la table autrement que la convention supposée : le retrait doit suivre l'outil
+    banc.toml.write_text(banc.toml.read_text().replace("[vhosts.admin_gk5_secubox_in]", "[vhosts.autre_nom]"))
+    assert banc.ctl("retirer", "gk5").returncode == 0
+    assert "haproxyctl vhost remove autre_nom" in banc.appels()
+    assert DOM not in banc.toml.read_text()
+
+
+def test_echec_de_vhost_remove_audite_echec(banc):
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 0
+    script(banc.bin / "haproxyctl", f'echo "haproxyctl $*" >> {banc.journal}\n'
+           f'case "$1 $2" in "vhost list") exec env SECUBOX_HAPROXY_CONF={banc.toml} bash {HAPROXYCTL} vhost list ;; esac\nexit 1\n')
+    r = banc.ctl("retirer", "gk5")
+    assert r.returncode == 1
+    assert banc.audit()[-1]["resultat"] == "echec"
+    assert DOM in registre(banc)["domaines"]   # toujours marqué : un prochain retrait reprendra
+
+
+def test_cert_sync_en_echec_refuse(banc):
+    (banc.r / "data/haproxy/certs/*.gk5.secubox.in.pem").unlink()
+    script(banc.bin / "certbot", f'echo "certbot $*" >> {banc.journal}\nexit 0\n')
+    r = banc.ctl("poser", "gk5", entree=PAGES)     # certbot « réussit » mais cert sync ne pose rien (faux haproxyctl hors root)
+    assert r.returncode == 1 and "certificat" in json.loads(r.stdout)["erreur"]
+    assert banc.audit()[-1]["resultat"] == "echec"
+
+
+def test_echec_certbot_mis_en_cache(banc):
+    (banc.r / "data/haproxy/certs/*.gk5.secubox.in.pem").unlink()
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 1
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 1
+    assert sum(x.startswith("certbot") for x in banc.appels()) == 1       # pas de nouvel essai avant le délai
+    banc.ctl("poser", "gk5", entree=PAGES, env={"SBX_MAINTENANT": str(time.time() + 7 * 3600)})
+    assert sum(x.startswith("certbot") for x in banc.appels()) == 2
+
+
+def test_passes_espacees(banc):
+    (banc.r / "var/lib/secubox/pilotage/vhosts.json").write_text(json.dumps({"boxes": []}))
+    t = time.time()
+    assert banc.ctl("synchroniser", env={"SBX_MAINTENANT": str(t)}).returncode == 0
+    r = banc.ctl("synchroniser", env={"SBX_MAINTENANT": str(t + 5)})
+    assert r.returncode == 0 and json.loads(r.stdout).get("attente_s", 0) >= 50

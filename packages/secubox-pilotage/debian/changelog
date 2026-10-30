@@ -1,3 +1,15 @@
+secubox-pilotage (0.4.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 5, correction 1/5 (R-L5-25, ref #3126) : identifiants du maître saisis seulement sur son origine (code à usage
+    unique ≤ 60 s émis par /boxes/<box>/connexion-vhost, échangé sur le vhost, plus de relais de connexion) ; réponses /api/
+    jamais exécutables (JSON forcé ou pièce jointe en bac à sable, nosniff), CSP des pages sans /api/ ; noms réservés et
+    marque de propriété (registre /etc/secubox/pilotage-vhosts.json) : jamais prendre ni retirer un vhost étranger ;
+    X-Forwarded-For = $remote_addr, débit de l'échange ; .path borné, passes espacées, échecs certbot mis en cache 6 h ;
+    codes retour de haproxyctl vérifiés, nom du vhost lu par « vhost list » ; module relayé ∈ paquet de la page ; clé
+    dérivée, aud et iss propres au jeton du vhost ; unité du ctl root en ProtectSystem=strict.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 21:00:00 +0100
+
 secubox-pilotage (0.4.0-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 5 (ref #3126) : vhost admin.<box>.secubox.in d'une box légère. Plan écrit par le service à chaque tour

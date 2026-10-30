@@ -6,16 +6,23 @@
 # SecuBox Pilotage — vhost admin.<box>.secubox.in des box légères (#3126, L5 tâche 5). Root, oneshot : lit le plan écrit par le
 # service (/var/lib/secubox/pilotage/vhosts.json, chemin fixe, validé en entier), extrait les pages, pose ou retire les vhosts
 # (nginx par double tampon, haproxyctl, secubox-waf-route). Le service lui-même n'a ni sudo ni capacité (NoNewPrivileges).
-# Pas de ProtectSystem : haproxyctl, certbot et nginx écrivent sous /etc, /data, /var/lib et /usr/share/secubox/www/.well-known.
+# M10 (R-L5-25) : ProtectSystem=strict, écritures limitées à ce que haproxyctl, certbot, nginx -t et les deux ctl touchent.
+# I4 : relances bornées (un plan qui change sans cesse ne relance pas certbot ni HAProxy en boucle ; le ctl espace aussi ses passes).
 [Unit]
 Description=SecuBox Pilotage — vhosts des box légères (#3126)
 After=network-online.target nginx.service secubox-pilotage.service
+StartLimitIntervalSec=30min
+StartLimitBurst=6
 
 [Service]
 Type=oneshot
 ExecStart=/usr/sbin/secubox-pilotage-vhost synchroniser
 UMask=0022
 NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/etc/nginx/conf.d /etc/secubox /var/lib/secubox-pilotage-pages /var/log/secubox /var/log/nginx /var/lib/nginx
+ReadWritePaths=-/etc/haproxy -/data/haproxy -/srv/haproxy -/run/haproxy -/etc/letsencrypt -/var/lib/letsencrypt -/var/log/letsencrypt
+ReadWritePaths=-/usr/share/secubox/www/.well-known
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes

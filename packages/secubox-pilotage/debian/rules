@@ -19,6 +19,8 @@ override_dh_auto_install:
 	install -D -m 755 sbin/secubox-pilotage-www $(P)/usr/sbin/secubox-pilotage-www
 	install -D -m 755 sbin/secubox-pilotage-vhost $(P)/usr/sbin/secubox-pilotage-vhost
 	install -D -m 0440 sudoers.d/secubox-pilotage-www $(P)/etc/sudoers.d/secubox-pilotage-www
+	install -d $(P)/usr/share/secubox/pilotage/vhost-www/pilotage-connexion
+	install -m 644 www-vhost/pilotage-connexion/* $(P)/usr/share/secubox/pilotage/vhost-www/pilotage-connexion/
 	install -D -m 644 init_donnees.py $(P)/usr/lib/secubox/pilotage/init_donnees.py
 	install -D -m 644 sysctl/31-secubox-pilotage-nonlocal-bind.conf $(P)/etc/sysctl.d/31-secubox-pilotage-nonlocal-bind.conf
 	install -D -m 644 nginx/pilotage-canal.conf.tpl $(P)/usr/share/secubox/pilotage/pilotage-canal.conf.tpl

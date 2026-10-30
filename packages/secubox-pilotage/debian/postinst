@@ -21,6 +21,8 @@ case "$1" in
     # seulement par les ctl root secubox-pilotage-www et secubox-pilotage-vhost, qui le revérifient (propriétaire, sans lien).
     [ -L /var/lib/secubox-pilotage-pages ] && rm -f /var/lib/secubox-pilotage-pages
     install -d -m 0755 -o root -g root /var/lib/secubox-pilotage-pages
+    # défi ACME du vhost d'une box légère : l'unité du ctl root n'écrit que ce sous-dossier de la racine web (ProtectSystem=strict)
+    if [ -d /usr/share/secubox/www ] && [ ! -L /usr/share/secubox/www/.well-known ]; then install -d -m 0755 /usr/share/secubox/www/.well-known; fi
 
     # Journal d'audit commun : créé comme le fait secubox-core s'il manque (secubox:secubox 0640). Ni propriétaire ni droits ne changent ; le
     # service y AJOUTE des lignes par une ACL nominative, posée par un assistant qui vérifie le fichier (pas un lien, un seul lien dur, propriétaire).
