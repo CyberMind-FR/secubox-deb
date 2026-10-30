@@ -24,6 +24,8 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/lecture"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/operations"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/relais"
 )
 
 // version est posée à la construction (-ldflags -X main.version=...).
@@ -32,6 +34,10 @@ var version = "dev"
 const (
 	reverifMaitre = 300 * time.Second
 	tailleEvents  = 64
+	// L5 : socket du relais local (activation systemd) et arbre root où le ctl projette les mains liées.
+	cheminRelais      = "/run/secubox/pilotage-relais.sock"
+	dossierMainsLiees = "/etc/secubox-pilotage"
+	cachePolitique    = 30 * time.Second
 )
 
 func main() {
@@ -80,6 +86,11 @@ func main() {
 		Resultats: resultats,
 		// I4 (R-L2-47) : à la première ancre vérifiée, les fins enregistrées par le ctl repartent vers le maître.
 		ApresAncre: func(ctx context.Context) { ex.Rattraper(ctx) },
+		// L5 tâche 3 : messages HTTP vers le relais local ; portée recalculée ICI (mains liées relues à chaque
+		// message, même vérification que le relais ; politique du ctl root relue au plus toutes les 30 s).
+		CheminRelais: cheminRelais,
+		PorteeAdmin: canal.PorteeLocale(func() bool { return relais.MainsLieesDans(dossierMainsLiees, 0, nil) },
+			operations.PolitiqueAdmin(lanceurSystemctl(cheminSudo, delaiCtl)), cachePolitique),
 	}, m, operateurBox(nil))
 	if err := cl.Tourner(ctx, ev); err != nil && ctx.Err() == nil {
 		log.Fatalf("canal : %v", err)

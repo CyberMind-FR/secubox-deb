@@ -38,7 +38,8 @@ type fauxMaitre struct {
 	reponses [][]byte
 	notifs   [][]byte
 	bonjour  [][]byte
-	sondages int // GET /requetes reçus
+	http     [][]byte // HTTP_RESP postées à /canal/v1/http (L5)
+	sondages int      // GET /requetes reçus
 	recu     chan struct{}
 
 	echecsNotifs int // nombre de POST /notifs à refuser en 503 avant d'accepter
@@ -75,6 +76,13 @@ func (f *fauxMaitre) handler() http.Handler {
 		b, _ := io.ReadAll(r.Body)
 		f.mu.Lock()
 		f.reponses = append(f.reponses, b)
+		f.mu.Unlock()
+		f.signal()
+	})
+	mux.HandleFunc("/canal/v1/http", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		f.mu.Lock()
+		f.http = append(f.http, b)
 		f.mu.Unlock()
 		f.signal()
 	})

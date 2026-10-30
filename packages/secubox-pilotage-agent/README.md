@@ -331,10 +331,39 @@ l'agent par le canal, qui les remet au relais local. Le relais tourne sous son *
   cle-publique`, qui rend la clé publique par un tube) ; clé publique PEM SPKI `/etc/secubox-pilotage/relais.pub`
   (root:root 0644, dossier root 0755) posée par root. Le relais refuse de démarrer si elle ne correspond pas.
 
+## Message HTTP du canal (L5, tâche 3)
+
+Le maître sert les pages d'une box légère ; leurs appels d'API arrivent par le canal :
+
+- requête `{"msg_id", "type": "HTTP", "body": <entrée du relais>}` (`methode`, `chemin` `/api/v1/<module>/…`,
+  `entetes`, `corps_b64`, `acteur`, `maitre`, `portee`, `version_page`) ;
+- l'agent appelle le relais (`/run/secubox/pilotage-relais.sock`, un objet JSON par connexion) et rend
+  `{"msg_id", "type": "HTTP_RESP", "body": <sortie du relais>}` (`statut`, `entetes`, `corps_b64`) par
+  **`POST /canal/v1/http`**, une réponse par POST (jusqu'à ~5,6 Mo : hors du plafond de 256 Kio de `/reponses`).
+  Un sondage peut alors porter jusqu'à ~5,7 Mo (au lieu de 256 Kio) quand le relais est configuré.
+
+**Portée recalculée par l'agent, jamais crue** : la portée du maître ne peut que réduire.
+
+| Situation sur la box | Portée transmise au relais |
+|---|---|
+| maître demande `lecture` | `lecture` |
+| mains liées (`/etc/secubox-pilotage/mains-liees`, vérification du relais réutilisée : `relais.MainsLieesDans`) | `lecture` (le relais refuse alors toute écriture : 423) |
+| box cliente sans support ouvert (ctl root : `politique pilotage-admin`) | `lecture` |
+| box du propriétaire, ou box cliente pendant un support ouvert, maître demande `admin` | `admin` |
+
+Les mains liées sont relues à chaque message (drapeau root, sans privilège) ; la politique du ctl (une ligne sudo)
+au plus toutes les 30 s. Ancre vérifiée exigée (`AncreOK`, sinon 403). `acteur` et `maitre` : motifs du
+vérificateur (`_RE_ACTEUR`, `_RE_MAITRE` de `secubox_core.auth`, par `relais.Normaliser`), sinon 400 ; l'agent ne
+connaît le maître que par son adresse dans le tunnel (ancrée) : il contrôle la forme de ces noms, pas leur vérité.
+Refus rendus sous la forme du relais : corps > 4 Mio → 413 ; relais absent ou muet → 502 ; délai (relais 30 s
++ 5 s) → 504 ; plus de 4 messages HTTP à la fois, ou un second échange de plus de 256 Kio → 503 ; agent sans
+relais → 501. Journal : méthode, chemin sans requête, acteur, maître, portées demandée/retenue, statut — jamais un
+jeton, un corps ni un en-tête. AppArmor : `/run/secubox/pilotage-relais.sock rw` est la seule socket jointe.
+
 ## Durcissement
 
 Utilisateur `secubox-pilotage-agent`, `ProtectSystem=strict`, `ReadOnlyPaths=/`, aucune capacité ambiante,
-`IPAddressDeny=any` (sauf `10.10.0.1`, `10.64.0.1`, localhost), `MemoryMax=32M` avec `GOMEMLIMIT=24MiB` (le ramasse-miettes
+`IPAddressDeny=any` (sauf `10.10.0.1`, `10.64.0.1`, localhost), `MemoryMax=48M` avec `GOMEMLIMIT=40MiB` (32M/24MiB avant L5 : un message HTTP de 4 Mio vit brièvement en trois copies base64) (le ramasse-miettes
 travaille avant le tueur du cgroup, M13), profil AppArmor enforce
 (`apparmor/usr.sbin.sbx-pilotage-agent` : réseau `inet stream` qualifié, `unix stream`, `netlink raw` pour les adresses
 des interfaces ; ni `inet6` ni écoute ; `/usr/bin/sudo Ux` seul passage privilégié).

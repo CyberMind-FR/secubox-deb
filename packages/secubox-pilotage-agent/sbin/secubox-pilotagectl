@@ -52,7 +52,9 @@ Verbes (liste fermée) :
   mains-liees <on|off>                     LOCAL SEULEMENT
   politique <action>                       {"autorise", "consentement", "raison"} ; actions : releve, reboot,
                                            maj-paquets, service-demarrer, service-arreter, service-redemarrer, renommer,
-                                           renouveler-secrets, support-ouvrir, support-fermer, maillage-rejoindre
+                                           renouveler-secrets, support-ouvrir, support-fermer, maillage-rejoindre,
+                                           pilotage-admin (L5 : portée admin du pilotage HTTP — mains libres et box du
+                                           propriétaire, ou box cliente pendant un support ouvert ; lue par l'agent)
   etat                                     lecture, permise depuis l'agent, NON auditée (sondée chaque minute) :
                                            {"ok", "box", "mains_liees", "canal", "consentements", "support"}, plus
                                            "agent" (ActiveState de l'unité de l'agent) en local ; les expirations
@@ -152,7 +154,7 @@ PREFIXE_OP = "secubox-pilotage-op-"
 CTL = "/usr/sbin/secubox-pilotagectl"
 SERVICE = {"demarrer": "start", "arreter": "stop", "redemarrer": "restart"}
 ACTIONS = ("releve", "reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
-           "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer", "maillage-rejoindre")
+           "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer", "maillage-rejoindre", "pilotage-admin")
 VERBES = ("reboot", "maj-paquets", "service", "renommer", "renouveler-secrets", "support", "consentement",
           "mains-liees", "ancre-verifier", "politique", "etat", "etat-operation", "fins-recentes", "_fin",
           "maillage-rejoindre", "_rejoindre")
@@ -462,8 +464,7 @@ def poser_projection_relais(ctx, liees):
             try:
                 d = os.open("secubox-pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=etc)
             except FileNotFoundError:
-                if not liees:
-                    return True
+                # Créé AUSSI pour « off » (R-L5-20 M3) : le relais lit un dossier absent comme « mains liées ».
                 os.mkdir("secubox-pilotage", 0o755, dir_fd=etc)
                 d = os.open("secubox-pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=etc)
             try:
@@ -510,11 +511,19 @@ def proprietaire(canal):
     return canal == "wg-mesh"
 
 
-def politique(action, liees, du_proprietaire):
+def politique(action, liees, du_proprietaire, support_ouvert=False):
     if action == "releve":
         return True, False, "relevé libre"
     if liees:
         return False, False, "mains liées"
+    if action == "pilotage-admin":
+        # L5 (R-L5-3) : portée admin du pilotage HTTP ; box cliente : seulement pendant un support ouvert. Jamais une
+        # action en soi : `politique` seule la lit (l'agent la relit au plus toutes les 30 s).
+        if du_proprietaire:
+            return True, False, "box du propriétaire"
+        if support_ouvert:
+            return True, False, "box cliente : support ouvert"
+        return False, False, "box cliente : support non ouvert"
     if action == "support-ouvrir":
         return True, True, "accord de la box"
     if action == "maillage-rejoindre" and not du_proprietaire:
@@ -522,6 +531,16 @@ def politique(action, liees, du_proprietaire):
     if not du_proprietaire and action in CONSENTEMENT_CLIENTE:
         return True, True, "box cliente : accord du détenteur"
     return True, False, "box du propriétaire" if du_proprietaire else "box cliente"
+
+
+def support_ouvert_lu(fd, maintenant):
+    """Lecture seule (verrou partagé) : vrai si support.json décrit une session « ouvert » non échue, de forme sûre.
+    Toute autre forme : faux (les expirations, elles, sont écrites par `etat` et par les verbes de support)."""
+    if fd is None:
+        return False
+    sup = lire_json(fd, "support.json", None)
+    return (isinstance(sup, dict) and isinstance(sup.get("id"), str) and RE_SUPPORT.fullmatch(sup["id"]) is not None
+            and sup.get("etat") == "ouvert" and entier(sup.get("fin")) is not None and sup["fin"] > maintenant)
 
 
 def unites_protegees(ctx):
@@ -937,7 +956,9 @@ def executer(ctx, verbe, p):
                 if fd is not None:
                     fcntl.flock(fd, fcntl.LOCK_SH)
                 liees = mains_liees(ctx, fd)
-                canal = canal_verifie(fd, int(time.time()))
+                maintenant = int(time.time())
+                canal = canal_verifie(fd, maintenant)
+                ouvert = p["action"] == "pilotage-admin" and support_ouvert_lu(fd, maintenant)
             finally:
                 if fd is not None:
                     os.close(fd)
@@ -947,7 +968,7 @@ def executer(ctx, verbe, p):
             # R-L2-21 : la politique n'est pas auditée (lecture), mais son refus faute d'ancre l'est, avec le verbe.
             auditer(ctx, "pilotage_refus", verbe=verbe, action=p["action"], refus="ancre non vérifiée")
             return {"autorise": False, "consentement": False, "raison": "ancre non vérifiée"}
-        autorise, consentement, raison = politique(p["action"], liees, proprietaire(canal))
+        autorise, consentement, raison = politique(p["action"], liees, proprietaire(canal), ouvert)
         return {"autorise": autorise, "consentement": consentement, "raison": raison}
 
     if verbe == "_fin":

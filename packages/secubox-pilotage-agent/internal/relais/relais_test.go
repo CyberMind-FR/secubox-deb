@@ -725,13 +725,28 @@ func TestRelaisConnexionsEnAttenteBornees(t *testing.T) {
 // que le tas alloué suive de près le tas vivant ; runtime.MemStats.HeapAlloc y est échantillonné toutes
 // les 200 µs. Le client et le module factice restent dans le parent : leurs tampons ne sont pas comptés.
 // Plafond 40 Mio : sous GOMEMLIMIT=48MiB / MemoryMax=64M de l'unité.
-func TestRelaisMemoireBornee(t *testing.T) {
+func TestRelaisMemoireBornee(t *testing.T) { memoireBornee(t, false) }
+
+// TestRelaisMemoireBorneeChunked (R-L5-20 M2) : même mesure, réponse du module en chunked (Content-Length
+// inconnu, -1 côté client) : le tampon ne doit pas doubler au-delà de CorpsMax.
+func TestRelaisMemoireBorneeChunked(t *testing.T) { memoireBornee(t, true) }
+
+func memoireBornee(t *testing.T, chunked bool) {
 	d := court(t)
 	m := demarrerModule(t, d, "demo")
 	retour := make([]byte, CorpsMax)
 	m.reponse = func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Length", strconv.Itoa(len(retour)))
-		_, _ = w.Write(retour)
+		if !chunked {
+			w.Header().Set("Content-Length", strconv.Itoa(len(retour)))
+			_, _ = w.Write(retour)
+			return
+		}
+		// morceaux de 32 Kio vidés au fil de l'eau : Transfer-Encoding: chunked, aucune longueur annoncée
+		f := w.(http.Flusher)
+		for i := 0; i < len(retour); i += 32 << 10 {
+			_, _ = w.Write(retour[i : i+32<<10])
+			f.Flush()
+		}
 	}
 	sock := filepath.Join(d, "pilotage-relais.sock")
 	enfant := exec.Command(os.Args[0], "-test.run=^TestAideRelaisEnfant$")
@@ -818,4 +833,36 @@ func TestAideRelaisEnfant(t *testing.T) {
 	close(arret)
 	fin()
 	fmt.Printf("PIC=%d\n", pic.Load())
+}
+
+// TestLireCorpsBorneParGrow (R-L5-20 M2) : longueur inconnue (chunked, ContentLength -1) : le tampon croît par
+// paliers bornés, jamais au-delà de CorpsMax+1 (bytes.Buffer doublerait jusqu'à 8 Mio pour 4 Mio lus).
+func TestLireCorpsBorneParGrow(t *testing.T) {
+	for _, connu := range []int64{-1, CorpsMax} {
+		b, err := lireCorps(io.LimitReader(lecteurLent{}, CorpsMax), connu)
+		if err != nil || len(b) != CorpsMax {
+			t.Fatalf("connu=%d : %d octets, %v", connu, len(b), err)
+		}
+		if cap(b) > CorpsMax+1 {
+			t.Fatalf("connu=%d : capacité %d > CorpsMax+1", connu, cap(b))
+		}
+	}
+	// au-delà : CorpsMax+1 octets lus au plus, l'appelant voit le dépassement
+	b, err := lireCorps(io.LimitReader(lecteurLent{}, CorpsMax+10), -1)
+	if err != nil || len(b) != CorpsMax+1 || cap(b) > CorpsMax+1 {
+		t.Fatalf("dépassement : %d octets (cap %d), %v", len(b), cap(b), err)
+	}
+	// petite réponse de longueur inconnue : petit tampon
+	if b, _ := lireCorps(strings.NewReader("ok"), -1); string(b) != "ok" || cap(b) > 64<<10 {
+		t.Fatalf("petite réponse : %q cap %d", b, cap(b))
+	}
+}
+
+// lecteurLent : rend 1000 octets par lecture, comme un flux chunked.
+type lecteurLent struct{}
+
+func (lecteurLent) Read(p []byte) (int, error) {
+	n := min(len(p), 1000)
+	clear(p[:n])
+	return n, nil
 }

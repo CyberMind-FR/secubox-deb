@@ -1,3 +1,19 @@
+secubox-pilotage-agent (0.4.0-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 3 (ref #3126) : message `HTTP` du canal. L'agent appelle le relais local
+    (/run/secubox/pilotage-relais.sock) et rend `HTTP_RESP` par POST /canal/v1/http. Portée RECALCULÉE par
+    l'agent : mains liées (relais.MainsLieesDans, même vérification que le relais) ou box cliente sans support
+    ouvert (ctl root, nouvelle action `politique pilotage-admin`, relue au plus toutes les 30 s) ⇒ lecture ; la
+    portée du maître ne peut que réduire. Acteur/maître aux motifs du vérificateur ; ancre vérifiée exigée ;
+    corps ≤ 4 Mio (413), délai 35 s (504), relais absent 502, 4 messages à la fois (503), un seul gros échange.
+  * Profil AppArmor : la seule socket du relais, le drapeau /etc/secubox-pilotage/mains-liees. Unité : après
+    secubox-pilotage-relais.socket ; MemoryMax 48M, GOMEMLIMIT 40MiB (un échange de 4 Mio en base64).
+  * R-L5-20 : `acl` en dépendance (setfacl de l'ACL d'audit du relais) ; `mains-liees off` crée
+    /etc/secubox-pilotage (root 0755) s'il manque, au lieu de laisser le relais en lecture sans le dire ; test
+    mémoire du relais avec une réponse en chunked.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 21:00:00 +0100
+
 secubox-pilotage-agent (0.3.1-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 2, relecture de sécurité, correction 1/5 (R-L5-19, ref #3126) :

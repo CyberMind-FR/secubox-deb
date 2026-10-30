@@ -24,6 +24,9 @@
 // d'opération (X_SECUBOX_OperationDone) attendent dans Config.Resultats : une goroutine les remet par /notifs et
 // les retire seulement après un 2xx ; un envoi manqué est retenté avec recul, et chaque bonjour (reconnexion) le
 // relance tout de suite.
+//
+// Pilotage HTTP (L5, tâche 3) : un message HTTP passe au relais local (Config.CheminRelais) en tâche de fond, avec
+// une portée recalculée par l'agent (Config.PorteeAdmin) ; sa HTTP_RESP part seule par POST /http. Voir http.go.
 package canal
 
 import (
@@ -121,6 +124,15 @@ type Config struct {
 	// ApresAncre est appelée une fois, à la première vérification réussie de l'ancre (avant le premier bonjour) :
 	// l'agent y renvoie les fins récentes enregistrées par le ctl (I4, R-L2-47) ; nil : rien.
 	ApresAncre func(ctx context.Context)
+	// CheminRelais : socket du relais local (L5, /run/secubox/pilotage-relais.sock) ; vide : tout message HTTP est
+	// refusé (501). Exige Ancre, comme Agir.
+	CheminRelais string
+	// PorteeAdmin dit si la box permet la portée admin MAINTENANT (mains libres et box du propriétaire, ou box cliente
+	// pendant un support accepté) ; voir PorteeLocale. nil : jamais admin. La portée du maître ne peut que réduire.
+	PorteeAdmin func(ctx context.Context) bool
+	DelaiHTTP   time.Duration // délai d'un appel au relais (DelaiHTTPDefaut)
+	// HTTPSimultanes : messages HTTP traités à la fois (HTTPSimultanesDefaut) ; au-delà, 503 tout de suite.
+	HTTPSimultanes int
 }
 
 // Client interroge le maître et lui répond.
@@ -142,6 +154,10 @@ type Client struct {
 	coupure  int64     // instant (Unix) de la coupure à notifier ; 0 : rien à notifier
 	dejaOK   bool      // l'ancre a été vérifiée au moins une fois (M1)
 	reverif  time.Time // dernière revérification demandée par un refus d'Operate (R-L2-24)
+	// L5 : messages HTTP (voir http.go).
+	semHTTP    chan struct{}                                       // plafond de concurrence
+	gros       chan struct{}                                       // un seul échange de plus de seuilGros à la fois (mémoire)
+	posterHTTP func(ctx context.Context, id string, sortie []byte) // remise de la HTTP_RESP, injectable
 }
 
 // NouveauClient prépare le client ; rien n'est envoyé avant Tourner.
@@ -188,6 +204,16 @@ func NouveauClient(c Config, m *modele.Modele, operer func(ctx context.Context, 
 			return errors.New("redirection refusée")
 		},
 	}
+	if c.DelaiHTTP <= 0 {
+		c.DelaiHTTP = DelaiHTTPDefaut
+	}
+	if c.HTTPSimultanes <= 0 {
+		c.HTTPSimultanes = HTTPSimultanesDefaut
+	}
+	if c.CheminRelais != "" && c.Ancre == nil && errCfg == nil {
+		// R-L5-3 : aucun appel au relais sans ancre vérifiée (R-L2-21).
+		errCfg = errors.New("relais (CheminRelais) sans vérification d'ancre (Ancre) : configuration refusée, aucune connexion")
+	}
 	if c.Agir != nil && c.Ancre == nil && errCfg == nil {
 		// M5 : des actions sans vérification de l'ancre du maître ne sont jamais servies.
 		errCfg = errors.New("actions (Agir) sans vérification d'ancre (Ancre) : configuration refusée, aucune connexion")
@@ -196,8 +222,10 @@ func NouveauClient(c Config, m *modele.Modele, operer func(ctx context.Context, 
 	if !strings.Contains(hote, ":") || strings.HasSuffix(hote, "]") {
 		hote = net.JoinHostPort(strings.Trim(hote, "[]"), portCanal)
 	}
-	return &Client{cfg: c, m: m, operer: operer, http: cl, base: "http://" + hote + prefixe, dormir: dormirReel, reprise: time.NewTimer, errCfg: errCfg,
-		horloge: time.Now}
+	cli := &Client{cfg: c, m: m, operer: operer, http: cl, base: "http://" + hote + prefixe, dormir: dormirReel, reprise: time.NewTimer, errCfg: errCfg,
+		horloge: time.Now, semHTTP: make(chan struct{}, c.HTTPSimultanes), gros: make(chan struct{}, 1)}
+	cli.posterHTTP = cli.remettreHTTP
+	return cli
 }
 
 // ipSource accepte une adresse seule ou sa forme CIDR (« 10.10.0.5/24 »).
@@ -456,11 +484,15 @@ func (c *Client) sonder(ctx context.Context) ([]byte, error) {
 	case http.StatusNoContent:
 		return nil, nil
 	case http.StatusOK:
-		b, err := io.ReadAll(io.LimitReader(resp.Body, int64(c.cfg.TailleMax)+1))
+		max := c.cfg.TailleMax
+		if c.cfg.CheminRelais != "" && max < tailleHTTPMax {
+			max = tailleHTTPMax // L5 : un message HTTP porte jusqu'à 4 Mio de corps (base64)
+		}
+		b, err := io.ReadAll(io.LimitReader(resp.Body, int64(max)+1))
 		if err != nil {
 			return nil, err
 		}
-		if len(b) > c.cfg.TailleMax {
+		if len(b) > max {
 			return nil, errTaille
 		}
 		return b, nil
@@ -479,12 +511,21 @@ func (c *Client) poster(ctx context.Context, chemin string, corps any) error {
 	if err != nil {
 		return err
 	}
+	return c.posterBrut(ctx, chemin, bytes.NewReader(b), int64(len(b)))
+}
+
+// posterBrut envoie un corps JSON déjà formé (lu une fois, sans copie) ; tout statut hors 2xx est une erreur.
+func (c *Client) posterBrut(ctx context.Context, chemin string, corps io.Reader, n int64) error {
+	if c.coupe() {
+		return errAncre
+	}
 	ctx, cancel := context.WithTimeout(ctx, delaiPost)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+chemin, bytes.NewReader(b))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+chemin, corps)
 	if err != nil {
 		return err
 	}
+	req.ContentLength = n
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -709,6 +750,15 @@ func (c *Client) traiter(ctx context.Context, brut []byte) ([]reponse, int, erro
 				lances++
 			} else {
 				reps = append(reps, erreur(rq.MsgID, "relevé déjà en cours"))
+			}
+			continue
+		}
+		if rq.Type == TypeHTTP {
+			// L5 : appel du relais local en tâche de fond ; la HTTP_RESP part seule (POST /http), plus tard.
+			if c.lancerHTTP(ctx, rq.MsgID, rq.Body) {
+				lances++
+			} else {
+				reps = append(reps, reponse{MsgID: rq.MsgID, Type: TypeHTTPResp, Body: sortieRefusMap(http.StatusServiceUnavailable, "agent occupé : trop de requêtes HTTP en cours")})
 			}
 			continue
 		}

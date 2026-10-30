@@ -5,7 +5,8 @@
 [Unit]
 Description=SecuBox — agent de pilotage distant (TR-369/USP)
 Documentation=https://secubox.in
-After=network-online.target wg-quick@wg-mesh.service wg-quick@wg-autoload.service
+# L5 : après la socket du relais local (activation systemd), sans en dépendre (l'agent L1/L2 vit sans relais).
+After=network-online.target wg-quick@wg-mesh.service wg-quick@wg-autoload.service secubox-pilotage-relais.socket
 Wants=network-online.target
 
 [Service]
@@ -19,9 +20,11 @@ UMask=0027
 ExecStart=/usr/sbin/sbx-pilotage-agent
 Restart=on-failure
 RestartSec=10
-MemoryMax=32M
+# L5 tâche 3 : 48M (au lieu de 32M) — un message HTTP de 4 Mio de corps vit brièvement en trois copies base64
+# (~5,6 Mo chacune : sondage, message, demande) ; un seul échange de plus de 256 Kio à la fois.
+MemoryMax=48M
 # M13 : borne souple du runtime Go, sous MemoryMax : le ramasse-miettes travaille avant le tueur du cgroup.
-Environment=GOMEMLIMIT=24MiB
+Environment=GOMEMLIMIT=40MiB
 
 # Durcissement : connexion sortante vers le maître seulement ; l'agent lui-même n'a aucune capacité.
 # NoNewPrivileges=no : seulement pour sudo. La seule action privilégiée de l'agent (L2, #3126) est

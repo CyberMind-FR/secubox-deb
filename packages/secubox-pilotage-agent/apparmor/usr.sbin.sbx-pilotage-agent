@@ -66,6 +66,13 @@
   # Réglages et drapeau : ouverts par descripteur, sans suivre de lien, root:root exigé (R36).
   /etc/secubox/pilotage-agent.env r,
   /etc/secubox/pilotage/mains-liees r,
+  # L5 tâche 3 : portée du pilotage HTTP recalculée ici ; drapeau root lu comme le relais (dossier puis drapeau,
+  # sans suivre de lien, root exigé).
+  /etc/secubox-pilotage/ r,
+  /etc/secubox-pilotage/mains-liees r,
+  # L5 tâche 3 : la SEULE socket jointe, celle du relais local (0660, groupe secubox-pilotage-agent ; SO_PEERCRED
+  # vérifié par le relais). Aucune socket de module : le relais seul les appelle, avec son jeton.
+  /run/secubox/pilotage-relais.sock rw,
   /var/lib/secubox/profiles/actif r,
 
   # Les secrets restent interdits, quoi qu'une règle large ajoute un jour.

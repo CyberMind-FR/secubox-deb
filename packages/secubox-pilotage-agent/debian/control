@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-pilotage-agent
 Architecture: any
-Depends: ${misc:Depends}, systemd, adduser, sudo, python3 (>= 3.11), wireguard-tools, secubox-core (>= 1.8.11~)
+Depends: ${misc:Depends}, systemd, adduser, sudo, python3 (>= 3.11), wireguard-tools, acl, secubox-core (>= 1.8.11~)
 Recommends: apparmor
 Description: SecuBox — agent de pilotage distant (TR-369/USP)
  Agent Go de la box pour le pilotage distant du maillage (TR-369/USP) :
@@ -24,8 +24,10 @@ Description: SecuBox — agent de pilotage distant (TR-369/USP)
  cliente), audite chaque demande et lance les opérations longues sous
  systemd-run. L'agent n'ouvre aucun port d'écoute, tourne sous l'utilisateur
  dédié secubox-pilotage-agent, sous AppArmor enforce et sous une unité systemd
- durcie (32 Mo).
+ durcie (48 Mo).
  .
  Box légère (L5) : le relais local sbx-pilotage-relais, sous son propre
  compte, frappe un jeton délégué Ed25519 de 30 s pour les appels des pages
- servies par le maître et les transmet à la socket du module.
+ servies par le maître et les transmet à la socket du module ; l'agent
+ lui remet les messages HTTP du canal, avec une portée qu'il recalcule
+ lui-même (mains liées, support accepté).

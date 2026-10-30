@@ -347,19 +347,20 @@ func analyserChemin(chemin string) (module, reste, requete string, rf *refus) {
 	return module, "/" + reste, requete, nil
 }
 
-// mainsLiees : drapeau `mains-liees` projeté par le ctl root dans DossierMainsLiees. Dossier ouvert
-// O_DIRECTORY|O_NOFOLLOW, drapeau par dir_fd O_NOFOLLOW ; l'un et l'autre au compte UIDRoot, sans
+// MainsLieesDans : drapeau `mains-liees` projeté par le ctl root dans `dossier`. Dossier ouvert
+// O_DIRECTORY|O_NOFOLLOW, drapeau par dir_fd O_NOFOLLOW ; l'un et l'autre au compte uidRoot, sans
 // écriture pour le groupe ni les autres, drapeau régulier. Mains LIBRES seulement si le dossier est de
 // confiance et le drapeau absent ; tout le reste (dossier absent ou douteux, drapeau douteux) vaut
-// « mains liées » : le défaut sûr ne fait que retirer l'écriture (R-L5-19).
-func (r *Relais) mainsLiees() bool {
-	dir, err := syscall.Open(r.DossierMainsLiees, syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+// « mains liées » : le défaut sûr ne fait que retirer l'écriture (R-L5-19). Partagée par le relais et
+// par l'agent (portée recalculée avant tout message HTTP, L5 tâche 3) : une seule vérification.
+func MainsLieesDans(dossier string, uidRoot uint32, journal *log.Logger) bool {
+	dir, err := syscall.Open(dossier, syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return true
 	}
 	defer syscall.Close(dir)
 	var st syscall.Stat_t
-	if syscall.Fstat(dir, &st) != nil || st.Uid != r.UIDRoot || st.Mode&0o022 != 0 {
+	if syscall.Fstat(dir, &st) != nil || st.Uid != uidRoot || st.Mode&0o022 != 0 {
 		return true
 	}
 	fd, err := syscall.Openat(dir, "mains-liees", syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
@@ -371,11 +372,15 @@ func (r *Relais) mainsLiees() bool {
 	}
 	defer syscall.Close(fd)
 	// Présent : mains liées, quel que soit son état ; les contrôles ne servent qu'à le dire au journal.
-	if syscall.Fstat(fd, &st) != nil || st.Mode&syscall.S_IFMT != syscall.S_IFREG || st.Uid != r.UIDRoot || st.Mode&0o022 != 0 {
-		r.Journal.Printf("drapeau des mains liées douteux dans %s : traité comme posé", r.DossierMainsLiees)
+	if syscall.Fstat(fd, &st) != nil || st.Mode&syscall.S_IFMT != syscall.S_IFREG || st.Uid != uidRoot || st.Mode&0o022 != 0 {
+		if journal != nil {
+			journal.Printf("drapeau des mains liées douteux dans %s : traité comme posé", dossier)
+		}
 	}
 	return true
 }
+
+func (r *Relais) mainsLiees() bool { return MainsLieesDans(r.DossierMainsLiees, r.UIDRoot, r.Journal) }
 
 // socketModule : le chemin de la socket du module si c'en est une (Lstat : jamais un lien).
 func (r *Relais) socketModule(module string) (string, bool) {
@@ -515,14 +520,7 @@ func (r *Relais) appeler(sock, methode, reste, requete string, entetes http.Head
 		return Reponse{}, refuser(http.StatusBadGateway, "module injoignable")
 	}
 	defer resp.Body.Close()
-	// Tampon dimensionné d'après Content-Length quand il est connu (pas de doublement en fin de lecture).
-	capacite := int64(64 << 10)
-	if resp.ContentLength >= 0 && resp.ContentLength <= CorpsMax {
-		capacite = resp.ContentLength + bytes.MinRead + 1
-	}
-	tampon := bytes.NewBuffer(make([]byte, 0, capacite))
-	_, err = tampon.ReadFrom(io.LimitReader(resp.Body, CorpsMax+1))
-	b := tampon.Bytes()
+	b, err := lireCorps(resp.Body, resp.ContentLength)
 	if err != nil {
 		var ne net.Error
 		if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()) {
@@ -540,6 +538,36 @@ func (r *Relais) appeler(sock, methode, reste, requete string, entetes http.Head
 		}
 	}
 	return Reponse{Statut: resp.StatusCode, Entetes: out, corps: b}, nil
+}
+
+// lireCorps : CorpsMax+1 octets au plus (l'appelant voit le dépassement). Tampon taillé sur Content-Length
+// quand il est connu (+1 pour constater la fin sans croître) ; sinon (chunked, -1 ; R-L5-20 M2) il double à
+// partir de 64 Kio mais PLAFONNÉ à CorpsMax+1 : jamais les 8 Mio d'un bytes.Buffer pour 4 Mio lus.
+func lireCorps(r io.Reader, connu int64) ([]byte, error) {
+	r = io.LimitReader(r, CorpsMax+1)
+	capacite := 64 << 10
+	if connu >= 0 && connu <= CorpsMax {
+		capacite = int(connu) + 1
+	}
+	b := make([]byte, 0, capacite)
+	for {
+		if len(b) == cap(b) {
+			if cap(b) >= CorpsMax+1 {
+				return b, nil
+			}
+			nb := make([]byte, len(b), min(2*cap(b), CorpsMax+1))
+			copy(nb, b)
+			b = nb
+		}
+		n, err := r.Read(b[len(b):cap(b)])
+		b = b[:len(b)+n]
+		if err == io.EOF {
+			return b, nil
+		}
+		if err != nil {
+			return b, err
+		}
+	}
 }
 
 // ascii : texte venu du client, rendu sûr pour une ligne de journal (ASCII imprimable, borné).
