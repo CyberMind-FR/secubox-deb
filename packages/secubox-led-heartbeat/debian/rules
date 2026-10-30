@@ -1,4 +1,8 @@
 #!/usr/bin/make -f
+# Version amont (sans revision Debian) : nomme /usr/src/secubox-leds-<ver>/ (#3290).
+DKMS_VERSION := $(shell dpkg-parsechangelog -SVersion | sed -e 's/^[0-9]*://' -e 's/-[^-]*$$//')
+DKMS_SRC := debian/secubox-led-heartbeat/usr/src/secubox-leds-$(DKMS_VERSION)
+
 %:
 	dh $@
 
@@ -16,6 +20,13 @@ override_dh_auto_install:
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-pulse
 	install -D -m 755 usr/sbin/secubox-led-trigger \
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-trigger
+	install -D -m 755 usr/sbin/secubox-led-dkms \
+		debian/secubox-led-heartbeat/usr/sbin/secubox-led-dkms
+	# Pilote leds-is31fl319x en sources DKMS (MOCHAbin, noyau stock) #3290
+	install -D -m 644 kmod/leds-is31fl319x.c $(DKMS_SRC)/leds-is31fl319x.c
+	install -D -m 644 kmod/Makefile $(DKMS_SRC)/Makefile
+	sed 's/@VERSION@/$(DKMS_VERSION)/' kmod/dkms.conf > $(DKMS_SRC)/dkms.conf
+	chmod 644 $(DKMS_SRC)/dkms.conf
 	# LED reset tool (I2C recovery)
 	install -D -m 755 usr/sbin/secubox-led-reset \
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-reset

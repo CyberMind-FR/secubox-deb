@@ -1,3 +1,10 @@
+secubox-led-heartbeat (2.2.0-1~trixie1) trixie; urgency=medium
+
+  * Pilote leds-is31fl319x livre par DKMS (ref #3290) : le noyau Debian stock n'active pas CONFIG_LEDS_IS31FL319X. Sources dans /usr/src/secubox-leds-<version>/, add/build/install par secubox-led-dkms depuis le postinst, puis modprobe sans redemarrage. MOCHAbin seulement, et jamais si le bus I2C est neutralise (gk2) ; dkms et linux-headers-arm64 en Recommends ; un echec de build ne fait jamais echouer dpkg ; Secure Boot signale par un message.
+  * kmod : reference Linux v6.12.107, repli devm_mutex_init pour les noyaux < 6.10, parametre write_delay_us (1000 us par defaut) apres chaque ecriture I2C contre le blocage du controleur mv64xxx (6.12.85, mai 2026). Makefile natif (KVER/KDIR), cible deploy retiree.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 12:00:00 +0100
+
 secubox-led-heartbeat (2.1.5-1~bookworm1) bookworm; urgency=medium
 
   * Minuteries : OnActiveSec ajoute (ref #2919). Une minuterie qui n'avait que OnBootSec + OnUnitActiveSec ne se redeclenchait plus apres une reactivation faite apres le demarrage (mise a jour du paquet) : collecte netstats figee depuis le 14/10 et minuteries annuaire depuis le 5/10 sur gk2. OnActiveSec compte depuis l'activation de la minuterie.

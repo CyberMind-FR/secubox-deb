@@ -6,6 +6,16 @@
  *
  * LED driver for the IS31FL319{0,1,3,6,9} to drive 1, 3, 6 or 9 light
  * effect LEDs.
+ *
+ * Out-of-tree copy for SecuBox (MOCHAbin, Debian stock kernel where
+ * CONFIG_LEDS_IS31FL319X is not set), built by DKMS.
+ * Reference: drivers/leds/leds-is31fl319x.c of Linux v6.12.107.
+ * Local changes, kept minimal:
+ *  - devm_mutex_init() fallback for kernels older than 6.10 (6.6 LTS);
+ *  - write_delay_us module parameter (default 1000): pause after each I2C
+ *    register write. The Armada 7040 mv64xxx controller locked up
+ *    ("mv64xxx_i2c_fsm: Ctlr Error") after rapid LED writes on 6.12.85;
+ *    1 ms between writes avoided it. 0 restores upstream behaviour.
  */
 
 #include <linux/err.h>
@@ -18,6 +28,12 @@
 #include <linux/slab.h>
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
+#include <linux/version.h>
+
+static unsigned int write_delay_us = 1000;
+module_param(write_delay_us, uint, 0644);
+MODULE_PARM_DESC(write_delay_us,
+		 "Delay in microseconds after each I2C write (mv64xxx workaround, 0 = none, default 1000)");
 
 /* register numbers */
 #define IS31FL319X_SHUTDOWN		0x00
@@ -189,6 +205,34 @@ static const struct regmap_config is31fl3196_regmap_config = {
 	.num_reg_defaults = ARRAY_SIZE(is31fl3196_reg_defaults),
 };
 
+/*
+ * regmap_write() followed by a short pause, so that the mv64xxx I2C
+ * controller is never hit by back-to-back transactions.
+ */
+static int is31fl319x_write(struct regmap *map, unsigned int reg,
+			    unsigned int val)
+{
+	int ret = regmap_write(map, reg, val);
+	unsigned int delay = READ_ONCE(write_delay_us);
+
+	if (delay)
+		usleep_range(delay, delay + delay / 4 + 1);
+	return ret;
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
+static void is31fl319x_mutex_destroy(void *lock)
+{
+	mutex_destroy(lock);
+}
+
+static int devm_mutex_init(struct device *dev, struct mutex *lock)
+{
+	mutex_init(lock);
+	return devm_add_action_or_reset(dev, is31fl319x_mutex_destroy, lock);
+}
+#endif
+
 static int is31fl3190_brightness_set(struct led_classdev *cdev,
 				     enum led_brightness brightness)
 {
@@ -204,7 +248,7 @@ static int is31fl3190_brightness_set(struct led_classdev *cdev,
 	mutex_lock(&is31->lock);
 
 	/* update PWM register */
-	ret = regmap_write(is31->regmap, IS31FL3190_PWM(chan), brightness);
+	ret = is31fl319x_write(is31->regmap, IS31FL3190_PWM(chan), brightness);
 	if (ret < 0)
 		goto out;
 
@@ -226,15 +270,15 @@ static int is31fl3190_brightness_set(struct led_classdev *cdev,
 
 	if (ctrl > 0) {
 		dev_dbg(&is31->client->dev, "power up %02x\n", ctrl);
-		regmap_write(is31->regmap, IS31FL3190_LEDCONTROL, ctrl);
+		is31fl319x_write(is31->regmap, IS31FL3190_LEDCONTROL, ctrl);
 		/* update PWMs */
-		regmap_write(is31->regmap, IS31FL3190_DATA_UPDATE, 0x00);
+		is31fl319x_write(is31->regmap, IS31FL3190_DATA_UPDATE, 0x00);
 		/* enable chip from shut down and enable all channels */
-		ret = regmap_write(is31->regmap, IS31FL319X_SHUTDOWN, 0x20);
+		ret = is31fl319x_write(is31->regmap, IS31FL319X_SHUTDOWN, 0x20);
 	} else {
 		dev_dbg(&is31->client->dev, "power down\n");
 		/* shut down (no need to clear LEDCONTROL) */
-		ret = regmap_write(is31->regmap, IS31FL319X_SHUTDOWN, 0x01);
+		ret = is31fl319x_write(is31->regmap, IS31FL319X_SHUTDOWN, 0x01);
 	}
 
 out:
@@ -258,7 +302,7 @@ static int is31fl3196_brightness_set(struct led_classdev *cdev,
 	mutex_lock(&is31->lock);
 
 	/* update PWM register */
-	ret = regmap_write(is31->regmap, IS31FL3196_PWM(chan), brightness);
+	ret = is31fl319x_write(is31->regmap, IS31FL3196_PWM(chan), brightness);
 	if (ret < 0)
 		goto out;
 
@@ -286,16 +330,16 @@ static int is31fl3196_brightness_set(struct led_classdev *cdev,
 	if (ctrl1 > 0 || ctrl2 > 0) {
 		dev_dbg(&is31->client->dev, "power up %02x %02x\n",
 			ctrl1, ctrl2);
-		regmap_write(is31->regmap, IS31FL3196_CTRL1, ctrl1);
-		regmap_write(is31->regmap, IS31FL3196_CTRL2, ctrl2);
+		is31fl319x_write(is31->regmap, IS31FL3196_CTRL1, ctrl1);
+		is31fl319x_write(is31->regmap, IS31FL3196_CTRL2, ctrl2);
 		/* update PWMs */
-		regmap_write(is31->regmap, IS31FL3196_DATA_UPDATE, 0x00);
+		is31fl319x_write(is31->regmap, IS31FL3196_DATA_UPDATE, 0x00);
 		/* enable chip from shut down */
-		ret = regmap_write(is31->regmap, IS31FL319X_SHUTDOWN, 0x01);
+		ret = is31fl319x_write(is31->regmap, IS31FL319X_SHUTDOWN, 0x01);
 	} else {
 		dev_dbg(&is31->client->dev, "power down\n");
 		/* shut down (no need to clear CTRL1/2) */
-		ret = regmap_write(is31->regmap, IS31FL319X_SHUTDOWN, 0x00);
+		ret = is31fl319x_write(is31->regmap, IS31FL319X_SHUTDOWN, 0x00);
 	}
 
 out:
@@ -520,7 +564,7 @@ static int is31fl319x_probe(struct i2c_client *client)
 	i2c_set_clientdata(client, is31);
 
 	/* check for write-reply from chip (we can't read any registers) */
-	err = regmap_write(is31->regmap, is31->cdef->reset_reg, 0x00);
+	err = is31fl319x_write(is31->regmap, is31->cdef->reset_reg, 0x00);
 	if (err < 0)
 		return dev_err_probe(dev, err, "no response from chip write\n");
 
@@ -536,7 +580,7 @@ static int is31fl319x_probe(struct i2c_client *client)
 			aggregated_led_microamp = is31->leds[i].max_microamp;
 
 	if (is31->cdef->is_3196or3199)
-		regmap_write(is31->regmap, IS31FL3196_CONFIG2,
+		is31fl319x_write(is31->regmap, IS31FL3196_CONFIG2,
 			     is31fl3196_microamp_to_cs(dev, aggregated_led_microamp) |
 			     is31fl3196_db_to_gain(is31->audio_gain_db));
 	else

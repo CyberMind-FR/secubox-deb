@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-led-dkms (#3290)
+#
+# Construit et installe par DKMS le pilote leds-is31fl319x (LED RGB IS31FL3199
+# du MOCHAbin), absent du noyau Debian stock. Appelé par le postinst/prerm.
+#
+#   secubox-led-dkms install <version>   add + build + install + modprobe
+#   secubox-led-dkms remove  <version>   dkms remove --all
+#
+# Règles :
+#  - UNIQUEMENT sur un MOCHAbin (secubox-led-board) dont le bus I2C n'est pas
+#    neutralisé : gk2 n'a pas de bus I2C (blacklist dans /etc/modprobe.d) ; le
+#    paquet y reste inerte, rien n'est construit ni chargé, aucune levée tentée.
+#  - Le noyau qui fournit déjà le pilote (CONFIG_LEDS_IS31FL319X) : pas de DKMS.
+#  - dkms et linux-headers-arm64 sont en Recommends : leur absence donne un
+#    message, pas un échec.
+#  - « install » sort TOUJOURS 0 : un échec de build ne casse jamais dpkg.
+#  - Secure Boot : message seulement, aucun contournement de la signature.
+#
+# Variables de test (racine simulée) : SECUBOX_LED_BOARD, SECUBOX_DKMS,
+# SECUBOX_MODPROBE, SECUBOX_MODINFO, SECUBOX_MOKUTIL, SECUBOX_KVER,
+# SECUBOX_MODPROBE_D, SECUBOX_I2C_SYS, SECUBOX_MODULES_DIR.
+set -euo pipefail
+readonly MODULE="led-dkms"
+readonly NAME="secubox-leds"
+readonly KMOD="leds-is31fl319x"
+
+BOARD="${SECUBOX_LED_BOARD:-/usr/sbin/secubox-led-board}"
+DKMS="${SECUBOX_DKMS:-dkms}"
+MODPROBE="${SECUBOX_MODPROBE:-modprobe}"
+MODINFO="${SECUBOX_MODINFO:-modinfo}"
+MOKUTIL="${SECUBOX_MOKUTIL:-mokutil}"
+MODPROBE_D="${SECUBOX_MODPROBE_D:-/etc/modprobe.d}"
+I2C_SYS="${SECUBOX_I2C_SYS:-/sys/bus/i2c/devices/i2c-1}"
+MODULES_DIR="${SECUBOX_MODULES_DIR:-/lib/modules}"
+KVER="${SECUBOX_KVER:-$(uname -r)}"
+
+say() { echo "secubox-${MODULE}: $*"; }
+
+# 0 = le bus I2C est neutralisé par la configuration (cas de gk2).
+i2c_neutralise() {
+    local f
+    for f in "$MODPROBE_D"/*.conf; do
+        [[ -r "$f" ]] || continue
+        if grep -Eq '^[[:space:]]*(blacklist[[:space:]]+i2c[-_]mv64xxx|install[[:space:]]+i2c[-_]mv64xxx[[:space:]]+/bin/(false|true))' "$f"; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# 0 = la cible porte les LED et un bus I2C utilisable.
+cible_valide() {
+    if ! "$BOARD" >/dev/null 2>&1; then
+        say "board sans LED SecuBox (pas un MOCHAbin) — rien construit."
+        return 1
+    fi
+    if i2c_neutralise; then
+        say "bus I2C neutralise dans $MODPROBE_D — paquet inerte, rien construit ni charge."
+        return 1
+    fi
+    if [[ ! -e "$I2C_SYS" ]]; then
+        say "bus I2C absent ($I2C_SYS) — rien construit ni charge."
+        return 1
+    fi
+    return 0
+}
+
+# 0 = le noyau fournit déjà le pilote hors DKMS (CONFIG_LEDS_IS31FL319X=m/y).
+pilote_noyau() {
+    local fichier
+    fichier="$("$MODINFO" -k "$KVER" -F filename "$KMOD" 2>/dev/null || true)"
+    [[ -n "$fichier" && "$fichier" != */updates/dkms/* ]]
+}
+
+charger() {
+    if "$MODPROBE" "$KMOD" 2>/dev/null; then
+        say "module $KMOD charge."
+    else
+        say "module $KMOD non charge (overlay Device Tree absent ?) — sera charge au prochain demarrage par modules-load.d."
+    fi
+}
+
+message_signature() {
+    if command -v "$MOKUTIL" >/dev/null 2>&1 &&
+       "$MOKUTIL" --sb-state 2>/dev/null | grep -qi 'SecureBoot enabled'; then
+        say "Secure Boot actif : le module DKMS doit etre signe par une cle MOK inscrite"
+        say "  (dkms la genere dans /var/lib/dkms/mok.key ; l'inscrire avec 'mokutil --import')."
+        say "  Aucun contournement n'est tente : sans signature valide, le noyau refusera le module."
+    fi
+}
+
+do_install() {
+    local ver="$1"
+    cible_valide || return 0
+    if pilote_noyau; then
+        say "le noyau $KVER fournit deja $KMOD — DKMS inutile."
+        charger
+        return 0
+    fi
+    if ! command -v "$DKMS" >/dev/null 2>&1; then
+        say "dkms absent : installer 'dkms' et 'linux-headers-arm64' pour piloter les LED (Recommends)."
+        return 0
+    fi
+    if [[ ! -e "$MODULES_DIR/$KVER/build" ]]; then
+        say "en-tetes du noyau $KVER absents : installer 'linux-headers-arm64', puis"
+        say "  'dkms autoinstall' (ou reconfigurer secubox-led-heartbeat)."
+        return 0
+    fi
+    if ! "$DKMS" status -m "$NAME" -v "$ver" 2>/dev/null | grep -q "$NAME"; then
+        if ! "$DKMS" add -m "$NAME" -v "$ver"; then
+            say "echec de 'dkms add $NAME/$ver' — LED indisponibles, installation poursuivie."
+            return 0
+        fi
+    fi
+    if ! "$DKMS" build -m "$NAME" -v "$ver" -k "$KVER"; then
+        say "echec du build DKMS $NAME/$ver pour $KVER — voir /var/lib/dkms/$NAME/$ver/build/make.log."
+        say "  LED indisponibles, installation poursuivie."
+        message_signature
+        return 0
+    fi
+    if ! "$DKMS" install -m "$NAME" -v "$ver" -k "$KVER" --force; then
+        say "echec de 'dkms install' $NAME/$ver pour $KVER — LED indisponibles, installation poursuivie."
+        message_signature
+        return 0
+    fi
+    message_signature
+    charger
+    return 0
+}
+
+do_remove() {
+    local ver="$1"
+    command -v "$DKMS" >/dev/null 2>&1 || return 0
+    if "$DKMS" status -m "$NAME" -v "$ver" 2>/dev/null | grep -q "$NAME"; then
+        "$DKMS" remove -m "$NAME" -v "$ver" --all || say "echec de 'dkms remove' $NAME/$ver (ignore)."
+    fi
+    return 0
+}
+
+usage() { echo "usage: $0 install|remove <version>" >&2; exit 2; }
+
+[[ $# -eq 2 ]] || usage
+[[ "$2" =~ ^[0-9]+(\.[0-9]+)*$ ]] || usage
+case "$1" in
+    install) do_install "$2" ;;
+    remove)  do_remove "$2" ;;
+    *)       usage ;;
+esac
+exit 0
