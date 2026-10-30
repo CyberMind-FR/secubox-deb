@@ -1514,8 +1514,9 @@ async def apply_profile(req: ApplyProfileRequest, user=Depends(require_jwt)):
     return {"success": True, "profile": req.profile_id}
 
 
-@router.get("/send_test_alert")
+@router.post("/send_test_alert")
 async def send_test_alert(user=Depends(require_jwt)):
+    """Envoie une alerte de test aux webhooks. POST : une action (#3126, R-L5-16)."""
     await _notify_webhooks("alert", {"type": "test", "message": "Test alert"})
     return {"success": True, "message": "Test alert sent"}
 

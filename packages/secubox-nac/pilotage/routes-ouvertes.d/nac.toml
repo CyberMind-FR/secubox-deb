@@ -12,10 +12,12 @@
 methodes = ["POST"]
 chemins = [
     "^/add_to_zone$",
-    "^/(allow|deny)/[0-9A-Fa-f:]{17}$",
+    "^/allow/[0-9A-Fa-f:]{17}$",
+    "^/deny/[0-9A-Fa-f:]{17}$",
     "^/quarantine_client$",
     "^/unquarantine$",
-    "^/(ban_client|unban_client)$",
+    "^/ban_client$",
+    "^/unban_client$",
     "^/set_policy$",
     "^/apply_profile$",
     "^/groups$",

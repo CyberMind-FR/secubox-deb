@@ -66,7 +66,7 @@ L'API tourne sans privilège (`NoNewPrivileges`, aucune capacité) : elle n'appe
 | `lan_allowed`, `lxc_zone` | aucune restriction |
 
 Statut réel : `/var/lib/secubox/nac/nft-applied.json` (repris par `/status`). Les chaînes tournent à
-`priority filter - 5` : un drop est final, un oubli ne rend rien accessible. `GET /sync_zones`
+`priority filter - 5` : un drop est final, un oubli ne rend rien accessible. `POST /sync_zones`
 redemande l'application. Preuve de bout en bout : topologie client/routeur/serveur en espaces de noms.
 
 ### Depuis le LAN du mode routeur (br-lan, 3.9.5, #3206)
@@ -122,4 +122,4 @@ déclare les seules écritures que le porteur délégué du pilotage (portée `a
 qu'appellent ses pages. Toute autre écriture déléguée est refusée par `secubox_core.auth` (403) ; les lectures
 restent soumises à la liste de refus (secrets). Voir le README de secubox-core.
 
-`POST /api/v1/nac/sync_zones` (GET avant 3.9.6) réapplique les zones.
+`POST /api/v1/nac/sync_zones` (GET avant 3.9.6) réapplique les zones. `POST /api/v1/nac/send_test_alert` (GET avant 3.9.6) envoie une alerte de test.

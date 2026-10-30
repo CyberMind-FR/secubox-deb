@@ -62,7 +62,7 @@ async function callUpdateZone(params) {
 }
 
 async function callSendTestAlert(params) {
-    return sbxFetch('/api/v1/nac/send_test_alert', params, 'GET');
+    return sbxFetch('/api/v1/nac/send_test_alert', params, 'POST');
 }
 
 async function callGetPolicy(params) {
