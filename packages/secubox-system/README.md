@@ -76,5 +76,7 @@ restent soumises à la liste de refus (secrets). Voir le README de secubox-core.
 
 `download_diagnostic` et `delete_diagnostic` n'acceptent qu'un nom `<nom>.json` du dossier des diagnostics (1.11.6).
 
-`/reboot`, `/shutdown`, `/apply_updates`, `/settings`, `/service_control`, `/service_action` et `/restart_services` ne sont
-PAS ouvertes au jeton délégué (R-L5-15) : elles passent par les actions du pilotage (L2).
+`/reboot`, `/shutdown`, `/apply_updates`, `/check_updates`, `/settings`, `/service_control`, `/service_action`,
+`/restart_services`, `/reload_firewall`, `/kiosk/*`, `/backup` et `/set_backup_schedule` ne sont PAS ouvertes au jeton
+délégué (R-L5-15, R-L5-16) : les premières passent par les actions du pilotage (L2). `POST /check_updates` et
+`POST /run_diagnostic_test` (GET avant 1.11.6).

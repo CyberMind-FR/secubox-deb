@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """secubox-system — System Hub with Role-Based Access Control (systemd DBus + psutil)"""
-from fastapi import FastAPI, APIRouter, Depends, HTTPException
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_board_info
@@ -716,9 +716,10 @@ def _maj_attend(verbe: str, depuis: int) -> dict:
     raise HTTPException(504, "Aucune réponse du service de mise à jour : l'unité secubox-maj.path est-elle active ?")
 
 
-@router.get("/check_updates")
+@router.post("/check_updates")
 def check_updates(user=Depends(require_jwt)):
-    """apt-get update + simulation, par l'unité root ; renvoie la liste des paquets à mettre à jour."""
+    """apt-get update + simulation, par l'unité root ; renvoie la liste des paquets à mettre à jour.
+    POST : une action (apt-get update en root), jamais une lecture (#3126, R-L5-16)."""
     depuis = int(time.time())
     _maj_demande("verifier")
     e = _maj_attend("verifier", depuis)
@@ -1180,20 +1181,36 @@ async def list_diagnostics(user=Depends(require_jwt)):
 
 
 @router.get("/download_diagnostic")
-async def download_diagnostic(name: str, user=Depends(require_jwt)):
-    """Télécharger un diagnostic."""
-    return json.loads(_fichier_diagnostic(name).read_text())
+def download_diagnostic(name: str, user=Depends(require_jwt)):
+    """Télécharger un diagnostic. `def` : lecture de fichier, dans le pool de threads ; JSON invalide = 422."""
+    try:
+        return json.loads(_fichier_diagnostic(name).read_text())
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(422, "Diagnostic illisible (JSON invalide)") from None
 
 
 @router.post("/delete_diagnostic")
-async def delete_diagnostic(name: str, user=Depends(require_jwt)):
+def delete_diagnostic(name: str, user=Depends(require_jwt)):
     _fichier_diagnostic(name).unlink(missing_ok=True)
     return {"success": True}
 
 
-@router.get("/run_diagnostic_test")
-def run_diagnostic_test(test: str, user=Depends(require_jwt)):
-    """Exécuter un test de diagnostic."""
+@router.post("/run_diagnostic_test")
+async def run_diagnostic_test(request: Request, user=Depends(require_jwt)):
+    """Exécuter un test de diagnostic. POST : exécute une commande (#3126, R-L5-16). Corps `{"test": …}` (ce
+    qu'envoie la vue portée), ou `?test=` comme avant."""
+    test = None
+    try:
+        corps = await request.json()
+        test = corps.get("test") if isinstance(corps, dict) else None
+    except (ValueError, AttributeError):
+        test = None
+    if test is None and hasattr(request, "query_params"):
+        test = request.query_params.get("test")
+    return await asyncio.to_thread(_executer_test_diagnostic, test)
+
+
+def _executer_test_diagnostic(test):
     tests = {
         "network": ["ping", "-c", "3", "1.1.1.1"],
         "dns": ["dig", "+short", "google.com"],

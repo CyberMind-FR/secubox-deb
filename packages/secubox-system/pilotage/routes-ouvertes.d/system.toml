@@ -14,16 +14,16 @@
 # arrêter/redémarrer, renouveler-secrets) et passent par les actions du pilotage : accord du détenteur, confirmation
 # forte, une opération longue à la fois. Appelées par la page, elles reçoivent 403 (« passez par les actions du
 # pilotage », tâche 7).
+#
+# Aussi FERMÉES (R-L5-16) : kiosk/enable|disable (secubox-kiosk-setup crée une connexion root automatique sans mot
+# de passe sur tty2), backup et set_backup_schedule (l'archive contient /etc/wireguard, clés privées, sans rotation
+# ni borne), reload_firewall (verbe reload).
 
 [[routes]]
 methodes = ["POST"]
 chemins = [
-    "^/reload_firewall$",
     "^/sync_time$",
     "^/clear_cache$",
-    "^/backup$",
-    "^/kiosk/(enable|disable)$",
     "^/board/detect$",
     "^/delete_diagnostic$",
-    "^/set_backup_schedule$",
 ]

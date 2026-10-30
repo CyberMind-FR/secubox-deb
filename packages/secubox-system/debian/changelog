@@ -9,6 +9,13 @@ secubox-system (1.11.6-1~trixie1) trixie; urgency=medium
     L2 (reboot, maj-paquets, renommer, service, renouveler-secrets) et passent par les
     actions du pilotage (accord du détenteur, confirmation forte, une opération longue à
     la fois) ; appelées depuis une page relayée, elles reçoivent 403.
+    Fermées aussi (R-L5-16) : kiosk/enable|disable (connexion root automatique sans mot de
+    passe sur tty2), backup et set_backup_schedule (archive avec les clés privées
+    WireGuard, sans rotation ni borne), reload_firewall (verbe reload). Restent ouvertes :
+    sync_time, clear_cache, board/detect, delete_diagnostic.
+  * /check_updates (apt-get update en root) et /run_diagnostic_test (exécute une commande)
+    passent de GET à POST, page système et vue portée comprises ; download_diagnostic et
+    delete_diagnostic en `def`, JSON invalide = 422 (ref #3126, R-L5-16).
   * download_diagnostic et delete_diagnostic : remontée de chemin corrigée (ref #3126,
     relecture de sécurité de L5, R-L5-14). `name=../../…` lisait ou SUPPRIMAIT tout fichier
     accessible au service ; le nom suit désormais un motif strict (`<nom>.json`, sans
