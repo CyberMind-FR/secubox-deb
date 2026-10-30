@@ -1,13 +1,37 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Moteur d'affichage en couches (#3290 tranche 2) : seul écrivain des LED.
+# Root : /sys/class/leds/*/brightness est root:root 0664 (udev) ; aucune
+# écriture hors sysfs, lecture seule de /proc et des caches d'état.
 [Unit]
-Description=SecuBox LED Pulse Daemon - Continuous visual status
-After=network.target secubox-healthbump.service
+Description=SecuBox LED - moteur d'affichage en couches
+After=secubox-leds.service
+Wants=secubox-leds.service
+Conflicts=secubox-healthbump.timer secubox-led-trigger.service secubox-led-heartbeat.service
 
 [Service]
 Type=simple
 ExecCondition=/usr/sbin/secubox-led-board
-ExecStart=/usr/sbin/secubox-led-pulse
+ExecStart=/usr/sbin/secubox-led-pulse servir
 Restart=always
 RestartSec=5
+TimeoutStopSec=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
 
 [Install]
 WantedBy=multi-user.target

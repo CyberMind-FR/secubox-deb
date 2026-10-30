@@ -10,7 +10,7 @@ Rules-Requires-Root: no
 Package: secubox-led-heartbeat
 Architecture: all
 Depends: ${misc:Depends},
-         python3,
+         python3 (>= 3.11),
          secubox-core,
          device-tree-compiler,
          i2c-tools
@@ -30,7 +30,9 @@ Description: SecuBox LED heartbeat status indicator
  (installed by the MOCHAbin provisioning or by hand), so other boards and a
  MOCHAbin without I2C bus pull no kernel headers.
  .
- LED mapping:
-  - LED 1: Health status (pulsing green/yellow/red)
-  - LED 2: Security status (steady, flashing on threat)
-  - LED 3: Capacity (CPU/memory load)
+ Display engine (secubox-led-pulse): ordered layers from
+ /etc/secubox/leds.toml, by default a system layer (CPU, memory, I/O;
+ green/yellow/orange/red, breathing) then a traffic layer (attacks,
+ visits, alerts; cyan/blue/violet/pink, pulses). Shapes: par_led, jauge,
+ mono, double, triple, etale, rotatif. Writes only changed channels,
+ rate-bounded (20 writes/s by default).

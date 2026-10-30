@@ -9,9 +9,10 @@ case "$1" in
         systemctl stop secubox-led-trigger.service 2>/dev/null || true
         # Stop legacy service
         systemctl stop secubox-led-heartbeat.service 2>/dev/null || true
-        # Turn off LEDs
+        # Turn off LEDs (espace : bus I2C fragile, #3290)
         for led in /sys/class/leds/*:led*/brightness; do
             echo 0 > "$led" 2>/dev/null || true
+            sleep 0.05
         done
         ;;
 esac

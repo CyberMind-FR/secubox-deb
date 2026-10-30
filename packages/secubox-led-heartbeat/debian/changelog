@@ -1,3 +1,15 @@
+secubox-led-heartbeat (2.3.0-1~trixie1) trixie; urgency=medium
+
+  * Moteur d'affichage en couches (#3290 tranche 2) : secubox-led-pulse devient le seul ecrivain des LED (Python, /usr/lib/secubox-led-heartbeat/ledcouches.py), pilote par /etc/secubox/leds.toml.
+  * Formes par_led, jauge, mono, double, triple, etale, rotatif ; rythmes fixe, respiration, pulsation, eclats ; couches mono consecutives en rotation (plus de trois couches).
+  * Defaut : couche systeme (CPU, memoire, E/S ; vert, jaune, orange, rouge, respiration) puis couche trafic (attaques, visites, alertes ; cyan, bleu, violet, rose, pulsations), repere de N eclats blancs sur la LED 2.
+  * Sources locales en lecture seule : /proc/stat, /proc/meminfo, cache secubox-metrics (blocages WAF, connexions HTTPS), alertes SOC ; source absente ou perimee = inconnu (gris-bleu), jamais vert.
+  * Ecriture d'un canal seulement sur changement, debit borne (20 ecritures/s par defaut), extinction a l'arret, reprise par secubox-led-reset apres erreurs I2C repetees.
+  * secubox-healthbump.timer, secubox-led-trigger et secubox-led-heartbeat desactives au postinst (memes canaux) ; secubox-led-reset ne relance plus healthbump.
+  * secubox-led demo <forme|couche|toutes> et secubox-led verifier.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 18:00:00 +0100
+
 secubox-led-heartbeat (2.2.1-1~trixie1) trixie; urgency=medium
 
   * Relecture #3290. dkms et linux-headers-arm64 passent en Suggests : apt les installait par defaut, y compris sur gk2 (disque plein) et rpi400 ; le postinst dit quoi installer.

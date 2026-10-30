@@ -64,7 +64,8 @@ fi
 
 # Restart LED services
 log "Restarting LED services..."
-systemctl start secubox-healthbump.timer 2>/dev/null || true
+# secubox-healthbump.timer n'est plus relance : secubox-led-pulse (moteur en
+# couches, #3290) est le seul ecrivain de la puce depuis 2.3.0.
 systemctl start secubox-led-pulse.service 2>/dev/null || true
 
 log "Reset complete"

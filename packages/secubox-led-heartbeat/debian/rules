@@ -18,6 +18,9 @@ override_dh_auto_install:
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-k2000
 	install -D -m 755 usr/sbin/secubox-led-pulse \
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-pulse
+	# Moteur d'affichage en couches (#3290 tranche 2)
+	install -D -m 644 usr/lib/secubox-led-heartbeat/ledcouches.py \
+		debian/secubox-led-heartbeat/usr/lib/secubox-led-heartbeat/ledcouches.py
 	install -D -m 755 usr/sbin/secubox-led-trigger \
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-trigger
 	install -D -m 755 usr/sbin/secubox-led-dkms \
