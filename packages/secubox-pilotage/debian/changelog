@@ -1,3 +1,13 @@
+secubox-pilotage (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 4, correction 1/5 (R-L5-23, ref #3126) : secubox-pilotage-www vérifie InRelease par gpgv (trousseau
+    secubox.gpg) puis Packages contre Release ; sans trousseau, repli annoncé sur un dépôt entièrement root ; dépôt lu
+    par descripteur sans lien ; index divergents refusés ; appelant (SUDO_USER) audité à côté de l'acteur ; seuls les
+    noms réservés .tmp-*/.old-* nettoyés ; écriture à travers un lien de dossier refusée ; échec zstd signalé ;
+    restes de .vu.json nettoyés. Dépendance gpgv.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 15:00:00 +0100
+
 secubox-pilotage (0.3.0-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 4 (ref #3126) : secubox-pilotage-www, ctl root borné (extraire, purger, lister) : pages www/ d'une version

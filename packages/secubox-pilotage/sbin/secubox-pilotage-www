@@ -32,7 +32,6 @@ SBX_MAINTENANT (horloge) et SBX_INTERROMPRE (arrêt avant le renommage) ne valen
 """
 import datetime
 import fcntl
-import glob
 import hashlib
 import json
 import os
@@ -57,7 +56,7 @@ PREFIXE = "usr/share/secubox/www/"
 GARDE = 7 * 24 * 3600
 ENTREE_MAX = 1 << 20
 DECOMPRESSE_MAX = 4 << 30          # toute l'archive : borne contre une bombe de décompression
-DEFAUTS = {"depot_apt": "/data/apt", "suite": "trixie", "taille_max_mio": 64, "fichiers_max": 20000, "deb_max_mio": 512}
+DEFAUTS = {"depot_apt": "/data/apt", "trousseau": "/usr/share/keyrings/secubox.gpg", "suite": "trixie", "taille_max_mio": 64, "fichiers_max": 20000, "deb_max_mio": 512}
 BORNES = {"taille_max_mio": (1, 4096), "fichiers_max": (1, 1_000_000), "deb_max_mio": (1, 8192)}
 
 
@@ -105,8 +104,13 @@ class Ctx:
         self.substitue = bool(racine)
         self.maintenant = time.time()
         if self.substitue and os.environ.get("SBX_MAINTENANT"):
-            self.maintenant = float(os.environ["SBX_MAINTENANT"])
+            try:
+                self.maintenant = float(os.environ["SBX_MAINTENANT"])
+            except ValueError:
+                raise Usage("SBX_MAINTENANT invalide") from None
         self.interrompre = self.substitue and bool(os.environ.get("SBX_INTERROMPRE"))
+        su = os.environ.get("SUDO_USER", "")
+        self.appelant = su if RE_ACTEUR.fullmatch(su) else "inconnu"
         if acteur is not None:
             self.acteur = acteur
         else:
@@ -122,7 +126,17 @@ class Ctx:
         self.conf = self.lire_conf(f"{self.r}/etc/secubox/pilotage-www.toml")
         depot = self.conf["depot_apt"]
         self.depot = f"{self.r}{depot}" if self.substitue and depot == DEFAUTS["depot_apt"] else depot
-        self.uid = os.geteuid()
+        k = self.conf["trousseau"]
+        self.trousseau = f"{self.r}{k}" if self.substitue and k == DEFAUTS["trousseau"] else k
+        self.uid = 0 if not self.substitue else os.geteuid()
+        self.decompresse_max = DECOMPRESSE_MAX
+        try:
+            if self.substitue and os.environ.get("SBX_UID_ATTENDU"):
+                self.uid = int(os.environ["SBX_UID_ATTENDU"])
+            if self.substitue and os.environ.get("SBX_DECOMPRESSE_MAX"):
+                self.decompresse_max = int(os.environ["SBX_DECOMPRESSE_MAX"])
+        except ValueError:
+            raise Usage("surcharge de test invalide") from None
 
     def lire_conf(self, chemin):
         conf = dict(DEFAUTS)
@@ -151,9 +165,9 @@ class Ctx:
                 bas, haut = BORNES[cle]
                 if type(val) is not int or not bas <= val <= haut:
                     raise Usage(f"valeur invalide : {cle}")
-            elif cle == "depot_apt":
+            elif cle in ("depot_apt", "trousseau"):
                 if not isinstance(val, str) or not val.startswith("/") or "\0" in val or "/../" in val + "/":
-                    raise Usage("valeur invalide : depot_apt (chemin absolu)")
+                    raise Usage(f"valeur invalide : {cle} (chemin absolu)")
             elif cle == "suite" and (not isinstance(val, str) or not RE_SUITE.fullmatch(val)):
                 raise Usage("valeur invalide : suite")
             conf[cle] = val
@@ -164,7 +178,8 @@ class Ctx:
 
 def auditer(ctx, evenement, **champs):
     ligne = {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "module": "pilotage",
-             "evenement": evenement, "acteur": ctx.acteur}
+             "evenement": evenement, "acteur": ctx.acteur,
+             "appelant": ctx.appelant}
     ligne.update({k: v for k, v in champs.items() if v is not None})
     donnees = (json.dumps(ligne, ensure_ascii=False) + "\n").encode("utf-8")
     try:
@@ -225,6 +240,9 @@ def ouvrir_www(ctx, creer):
     if stat.S_IMODE(st.st_mode) != 0o755:
         os.fchmod(fd, 0o755)
     fcntl.flock(fd, fcntl.LOCK_EX)
+    for nom in os.listdir(f"/proc/self/fd/{fd}"):
+        if nom.startswith(".vu.json.") and nom.endswith(".tmp"):
+            os.unlink(nom, dir_fd=fd)
     return fd
 
 
@@ -242,27 +260,157 @@ def fsync_dossier(chemin):
 
 # --- Dépôt apt -------------------------------------------------------------------------------------------------------
 
-def chercher(ctx, paquet, version):
-    """(Filename, SHA256, Size) de paquet/version dans les index Packages de la suite."""
-    fichiers = sorted(glob.glob(glob.escape(ctx.depot) + f"/dists/{ctx.conf['suite']}/main/binary-*/Packages"))
-    if not fichiers:
-        raise Erreur("dépôt apt introuvable")
-    for chemin in fichiers:
-        champs = {}
+def ouvrir_chemin(base_fd, rel, repli, uid, dossier=False):
+    """Descend rel composant par composant depuis base_fd, sans jamais suivre de lien (O_NOFOLLOW). En repli (pas de
+    trousseau), chaque étape doit appartenir à root et ne pas être inscriptible par le groupe ou les autres."""
+    fd = os.dup(base_fd)
+    parties = rel.split("/")
+    try:
+        for i, nom in enumerate(parties):
+            dernier = i == len(parties) - 1
+            drapeaux = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | (os.O_DIRECTORY if not dernier or dossier else 0)
+            try:
+                nfd = os.open(nom, drapeaux, dir_fd=fd)
+            except FileNotFoundError:
+                raise Erreur("fichier absent du dépôt") from None
+            except OSError:
+                raise Refus("lien ou type inattendu dans le chemin du dépôt") from None
+            os.close(fd)
+            fd = nfd
+            st = os.fstat(fd)
+            if dernier and not dossier and not stat.S_ISREG(st.st_mode):
+                raise Refus("fichier du dépôt qui n'est pas un fichier ordinaire")
+            if repli:
+                verifier_proprietaire(st, uid)
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def verifier_proprietaire(st, uid):
+    if st.st_uid != uid or st.st_mode & 0o022:
+        raise Refus("trousseau absent et dépôt non sûr (tout l'arbre doit appartenir à root, sans écriture groupe/autres)")
+
+
+def lire_fd(fd, maxi):
+    morceaux, lu = [], 0
+    while bloc := os.read(fd, 1 << 20):
+        lu += len(bloc)
+        if lu > maxi:
+            raise Refus("index du dépôt trop grand")
+        morceaux.append(bloc)
+    return b"".join(morceaux)
+
+
+class Depot:
+    """Dépôt apt ouvert par descripteur. Avec le trousseau : InRelease vérifié par gpgv, puis chaque Packages par la somme
+    de Release. Sans trousseau (repli annoncé, jamais silencieux) : tout le chemin lu appartient à root."""
+
+    def __init__(self, ctx):
+        self.ctx = ctx
+        self.repli = not os.path.exists(ctx.trousseau)
+        if self.repli:
+            err("trousseau absent : repli sur un dépôt entièrement root (signature non vérifiée)")
         try:
-            with open(chemin, "r", encoding="utf-8", errors="replace") as f:
-                for ligne in [*f, "\n"]:
-                    ligne = ligne.rstrip("\n")
-                    if not ligne.strip():
-                        if champs.get("Package") == paquet and champs.get("Version") == version:
-                            return verifier_stanza(champs)
-                        champs = {}
-                    elif not ligne[0].isspace() and ":" in ligne:
-                        cle, _, val = ligne.partition(":")
-                        champs[cle] = val.strip()
+            self.fd = os.open(ctx.depot, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         except OSError:
-            raise Erreur("index du dépôt illisible") from None
-    raise Erreur("version absente du dépôt")
+            raise Erreur("dépôt apt introuvable") from None
+        if self.repli:
+            verifier_proprietaire(os.fstat(self.fd), ctx.uid)
+        self.release = None if self.repli else self.verifier_release()
+
+    def fermer(self):
+        os.close(self.fd)
+
+    def ouvrir(self, rel, dossier=False):
+        return ouvrir_chemin(self.fd, rel, self.repli, self.ctx.uid, dossier)
+
+    def verifier_release(self):
+        suite = f"dists/{self.ctx.conf['suite']}"
+        try:
+            fd = self.ouvrir(f"{suite}/InRelease")
+        except Refus:
+            raise
+        except Erreur:
+            raise Refus("signature du dépôt absente (InRelease)") from None
+        try:
+            signe = lire_fd(fd, 16 << 20)
+        finally:
+            os.close(fd)
+        gpgv = (shutil.which("gpgv") or "gpgv") if self.ctx.substitue else "/usr/bin/gpgv"
+        with tempfile.TemporaryDirectory() as t:
+            sortie_v = os.path.join(t, "Release")
+            p = subprocess.run([gpgv, "--quiet", "--keyring", self.ctx.trousseau, "--output", sortie_v, "-"], input=signe,
+                               capture_output=True, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "GNUPGHOME": t})
+            if p.returncode != 0:
+                raise Refus("signature du dépôt invalide (InRelease)")
+            with open(sortie_v, "rb") as f:
+                texte = f.read().decode("utf-8", "replace")
+        sommes, dans = {}, False
+        for ligne in texte.splitlines():
+            if not ligne[:1].isspace():
+                dans = ligne.strip() == "SHA256:"
+            elif dans:
+                champs = ligne.split()
+                if len(champs) == 3 and RE_SHA256.fullmatch(champs[0]) and champs[1].isdigit():
+                    sommes[champs[2]] = (champs[0], int(champs[1]))
+        return sommes
+
+    def index(self):
+        """[(nom, contenu)] des Packages de la suite, chacun vérifié contre Release (hors repli)."""
+        suite = f"dists/{self.ctx.conf['suite']}"
+        try:
+            dfd = self.ouvrir(f"{suite}/main", dossier=True)
+        except Refus:
+            raise
+        except Erreur:
+            raise Erreur("dépôt apt introuvable") from None
+        try:
+            noms = sorted(n for n in os.listdir(f"/proc/self/fd/{dfd}") if re.fullmatch(r"binary-[a-z0-9-]{1,32}", n))
+        finally:
+            os.close(dfd)
+        res = []
+        for n in noms:
+            rel = f"main/{n}/Packages"
+            try:
+                fd = self.ouvrir(f"{suite}/{rel}")
+            except Refus:
+                raise
+            except Erreur:
+                continue
+            try:
+                contenu = lire_fd(fd, 256 << 20)
+            finally:
+                os.close(fd)
+            if not self.repli:
+                attendu_ = self.release.get(rel)
+                if attendu_ is None or attendu_ != (hashlib.sha256(contenu).hexdigest(), len(contenu)):
+                    raise Refus("index Packages différent de Release signé")
+            res.append(contenu)
+        if not res:
+            raise Erreur("dépôt apt introuvable")
+        return res
+
+
+def chercher(depot, paquet, version):
+    """(Filename, SHA256, Size) de paquet/version ; plusieurs index qui divergent ⇒ refus."""
+    trouves = set()
+    for contenu in depot.index():
+        champs = {}
+        for ligne in [*contenu.decode("utf-8", "replace").splitlines(), ""]:
+            if not ligne.strip():
+                if champs.get("Package") == paquet and champs.get("Version") == version:
+                    trouves.add(verifier_stanza(champs))
+                champs = {}
+            elif not ligne[0].isspace() and ":" in ligne:
+                cle, _, val = ligne.partition(":")
+                champs[cle] = val.strip()
+    if not trouves:
+        raise Erreur("version absente du dépôt")
+    if len({t[1:] for t in trouves}) > 1:
+        raise Refus("sommes divergentes pour cette version dans les index")
+    return sorted(trouves)[0]
 
 
 def verifier_stanza(champs):
@@ -274,22 +422,14 @@ def verifier_stanza(champs):
     return nom, somme, int(taille)
 
 
-def copier_verifie(ctx, nom, somme, taille, dossier):
+def copier_verifie(ctx, depot, nom, somme, taille, dossier):
     """Copie privée du .deb (fichier anonyme dans un dossier root), vérifiée par taille et SHA256 : l'archive lue
     ensuite est celle dont la somme a été vérifiée, même si le dépôt change entre-temps."""
     if taille > ctx.conf["deb_max_mio"] << 20:
         raise Refus("paquet trop gros")
-    reel = os.path.realpath(os.path.join(ctx.depot, nom))
-    if not reel.startswith(os.path.realpath(ctx.depot) + "/pool/"):
-        raise Refus("fichier hors du dépôt")
-    try:
-        src = os.open(reel, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except OSError:
-        raise Erreur("paquet absent du dépôt") from None
+    src = depot.ouvrir(nom)
     copie = tempfile.TemporaryFile(dir=dossier)
     try:
-        if not stat.S_ISREG(os.fstat(src).st_mode):
-            raise Refus("paquet qui n'est pas un fichier ordinaire")
         h, lu = hashlib.sha256(), 0
         while bloc := os.read(src, 1 << 20):
             lu += len(bloc)
@@ -347,7 +487,10 @@ def ouvrir_tar(ctx, f, dossier):
     ext, m = membre_data(f)
     modes = {"": "r|", ".gz": "r|gz", ".xz": "r|xz", ".bz2": "r|bz2"}
     if ext in modes:
-        return tarfile.open(fileobj=m, mode=modes[ext]), None
+        try:
+            return tarfile.open(fileobj=m, mode=modes[ext]), None
+        except (tarfile.TarError, EOFError, OSError):
+            raise Refus("archive illisible") from None
     if ext == ".zst":
         brut = tempfile.TemporaryFile(dir=dossier)
         while d := m.read(1 << 20):
@@ -357,7 +500,13 @@ def ouvrir_tar(ctx, f, dossier):
         p = subprocess.Popen([zstd, "-dcq"], stdin=brut, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                              env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"})
         brut.close()
-        return tarfile.open(fileobj=p.stdout, mode="r|"), p
+        try:
+            return tarfile.open(fileobj=p.stdout, mode="r|"), p
+        except (tarfile.TarError, EOFError, OSError):
+            p.stdout.close()
+            if p.wait() != 0:
+                raise Refus("décompression zstd en échec") from None
+            raise Refus("archive illisible") from None
     raise Refus("compression du .deb non prise en charge")
 
 
@@ -388,7 +537,7 @@ def extraire_dans(ctx, tar, dest):
     racine = PREFIXE.rstrip("/")
     for m in tar:
         decompresse += max(m.size, 0)
-        if decompresse > DECOMPRESSE_MAX:
+        if decompresse > ctx.decompresse_max:
             raise Refus("archive décompressée trop grande")
         n = normaliser(m.name)
         if m.islnk() or m.issym():
@@ -404,6 +553,9 @@ def extraire_dans(ctx, tar, dest):
         if m.mode & 0o6000:
             raise Refus("bit setuid ou setgid dans les pages")
         cible = os.path.join(dest, rel)
+        parent = os.path.dirname(rel)
+        if parent and os.path.realpath(os.path.join(dest, parent)) != os.path.join(os.path.realpath(dest), parent):
+            raise Refus("entrée écrite à travers un lien de dossier")
         if m.isdir():
             os.makedirs(cible, mode=0o755, exist_ok=True)
             os.chmod(cible, 0o755)
@@ -533,7 +685,7 @@ def marquer_vu(ctx, wfd, cles):
 
 def nettoyer_residus(dossier_paquet):
     for nom in os.listdir(dossier_paquet):
-        if nom.startswith((".tmp-", ".old-")) or nom.endswith(".tmp"):
+        if nom.startswith((".tmp-", ".old-")) or (nom.startswith(".") and nom.endswith(".tmp")):
             p = os.path.join(dossier_paquet, nom)
             if os.path.isdir(p) and not os.path.islink(p):
                 shutil.rmtree(p)
@@ -545,12 +697,18 @@ def nettoyer_residus(dossier_paquet):
 
 def extraire(ctx, paquet, version):
     try:
-        nom, somme, taille = chercher(ctx, paquet, version)
+        depot = Depot(ctx)
+        try:
+            nom, somme, taille = chercher(depot, paquet, version)
+        except BaseException:
+            depot.fermer()
+            raise
         wfd = ouvrir_www(ctx, creer=True)
     except Erreur as e:
         auditer(ctx, "pilotage_www_extraire", paquet=paquet, version=version,
                 resultat="refus" if isinstance(e, Refus) else "erreur", motif=str(e))
         raise
+    verif = "proprietaire" if depot.repli else "signature"
     try:
         dp = sous(wfd, paquet)
         try:
@@ -562,15 +720,17 @@ def extraire(ctx, paquet, version):
         if intacte(dp, version, somme):
             marquer_vu(ctx, wfd, [f"{paquet}/{version}"])
             auditer(ctx, "pilotage_www_extraire", paquet=paquet, version=version, resultat="deja")
-            return {"ok": True, "paquet": paquet, "version": version, "deja": True}
+            return {"ok": True, "paquet": paquet, "version": version, "deja": True, "verification": verif}
         tmp = os.path.join(dp, f".tmp-{version}-{os.getpid()}")
         try:
             os.mkdir(tmp, 0o755)
-            with copier_verifie(ctx, nom, somme, taille, sous(wfd)) as deb:
+            with copier_verifie(ctx, depot, nom, somme, taille, sous(wfd)) as deb:
                 tar, proc = ouvrir_tar(ctx, deb, sous(wfd))
                 try:
                     fichiers, liens, total = extraire_dans(ctx, tar, tmp)
                 except (tarfile.TarError, EOFError, OSError) as e:
+                    if proc and proc.wait() != 0:
+                        raise Refus("décompression zstd en échec") from None
                     raise Refus(f"archive illisible ({e.__class__.__name__})") from None
                 finally:
                     tar.close()
@@ -604,10 +764,11 @@ def extraire(ctx, paquet, version):
         marquer_vu(ctx, wfd, [f"{paquet}/{version}"])
         auditer(ctx, "pilotage_www_extraire", paquet=paquet, version=version, resultat="ok",
                 fichiers=len(fichiers), taille=total)
-        return {"ok": True, "paquet": paquet, "version": version, "deja": False, "fichiers": len(fichiers),
+        return {"ok": True, "paquet": paquet, "version": version, "deja": False, "verification": verif, "fichiers": len(fichiers),
                 "taille": total}
     finally:
         os.close(wfd)
+        depot.fermer()
 
 
 def extraites(wfd):

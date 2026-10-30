@@ -213,6 +213,12 @@ pour chaque version de paquet déclarée par une box, les pages de **cette** ver
 sa version). Sortie : une ligne JSON sans chemin ; codes 0, 1 (refus/erreur), 2 (argv ou configuration).
 
 - `extraire [--acteur A] <paquet> <version>` : paquet `^secubox-[a-z0-9-]{1,60}$`, version `^[0-9][A-Za-z0-9.+~:-]{0,62}$`.
+  Chaîne de confiance : `dists/<suite>/InRelease` vérifié par `gpgv` avec le trousseau des clients apt SecuBox
+  (`/usr/share/keyrings/secubox.gpg`, clé TOML `trousseau`), chaque `Packages` vérifié par sa somme dans ce Release, puis le
+  `.deb` par la sienne dans `Packages` (index divergents pour une même version : refus). Trousseau absent : **repli annoncé**
+  sur stderr et dans la sortie (`"verification": "proprietaire"`) : tout le chemin lu (racine, dists/, Packages, pool/,
+  .deb) doit appartenir à root sans écriture groupe/autres, sinon refus. Le dépôt est parcouru par descripteur (O_NOFOLLOW) :
+  un lien dans le chemin du pool est refusé.
   Le `.deb` est trouvé par `dists/<suite>/main/binary-*/Packages` du dépôt local (`Filename` sous `pool/`, `SHA256`, `Size`),
   recopié dans un fichier privé et vérifié (somme ou taille différente : refus, rien sur disque), puis lu en ar + `data.tar`
   (xz, gz, bz2, sans compression ; zst par `/usr/bin/zstd`) **sans dpkg** : aucun script de mainteneur. Seul
@@ -223,13 +229,13 @@ sa version). Sortie : une ligne JSON sans chemin ; codes 0, 1 (refus/erreur), 2 
   ou champ en trop : code 2) ; supprime les versions extraites qu'aucune box ne déclare depuis **7 jours**. Horodatage « dernière
   déclaration » tenu par root dans `www/.vu.json` (une version extraite inconnue de l'état reçoit un délai complet).
 - `lister` : `{"versions": [{paquet, version, taille, date}]}`, non audité.
-- Audit : `pilotage_www_extraire` (`resultat` ok, deja, refus, erreur ; `motif`) et `pilotage_www_purger` (`purgees`) dans
+- Audit (`acteur` déclaré par `--acteur` et `appelant` = SUDO_USER validé, « inconnu » sinon) : `pilotage_www_extraire` (`resultat` ok, deja, refus, erreur ; `motif`) et `pilotage_www_purger` (`purgees`) dans
   `/var/log/secubox/audit.log`, ouvert sans suivre de lien ; audit impossible ⇒ échec.
 - Refus : chemin absolu ou `..`, nom non UTF-8 ou à caractère de contrôle (toute l'archive) ; sous les pages : lien symbolique
-  absolu ou contenant `..`, lien dur vers un fichier hors des pages, fichier spécial, setuid/setgid, entrée en double, plus de
+  absolu ou contenant `..`, écriture à travers un lien de dossier, lien dur vers un fichier hors des pages, fichier spécial, setuid/setgid, entrée en double, plus de
   20 000 entrées ou 64 Mio ; `.deb` > 512 Mio.
 - Configuration facultative `/etc/secubox/pilotage-www.toml` (root, non inscriptible par d'autres) : `depot_apt` (défaut
-  `/data/apt`, R-L5-1), `suite` (`trixie`), `taille_max_mio`, `fichiers_max`, `deb_max_mio`.
+  `/data/apt`, R-L5-1), `trousseau`, `suite` (`trixie`), `taille_max_mio`, `fichiers_max`, `deb_max_mio`.
 - `www/` est créé par le ctl lui-même, par descripteur (pas de tmpfiles : « unsafe path transition » sous
   `/var/lib/secubox/<module>/`), refusé s'il est un lien ou n'appartient pas à root. Pas de profil AppArmor propre au ctl
   (comme les autres assistants root du paquet).
@@ -239,9 +245,14 @@ sa version). Sortie : une ligne JSON sans chemin ; codes 0, 1 (refus/erreur), 2 
 par jour au moins, `purger` avec sur stdin l'union des versions déclarées par toutes les box connues. La liste passe par stdin
 (et non par un fichier que root relirait dans un dossier du service) : aucun chemin choisi par un compte non root n'est ouvert
 par root, et l'entrée est validée en entier avant toute suppression. Le service ne peut, au pire, qu'avancer la purge d'une
-version non déclarée (jamais toucher hors de `www/<paquet>/<version>`). Reste à T5 : la traversée de
-`/var/lib/secubox/pilotage` (0750) par nginx, et la route qui sert les pages avec acteur et portée pris dans la session
-(exigence M3 de T3).
+version non déclarée (jamais toucher hors de `www/<paquet>/<version>`). `--acteur` est déclaré par l'appelant : l'audit
+porte aussi `appelant` (le compte sudo réel). Accepté (M5, R-L5-23) : un appelant autorisé peut faire extraire n'importe
+quelle version publiée du dépôt (bornée par les limites) ; ce n'est pas une élévation.
+
+Exigences pour T5 (I5, R-L5-23) : les pages sont servies depuis un chemin dont **tous les parents appartiennent à root**
+(pas sous `/var/lib/secubox/pilotage`, possédé par le service : déplacer ou recopier `www/`) ; nginx refuse les fichiers en
+point (`.vu.json`, `.<version>.json`, `.tmp-*`) et ne sert que `www/<paquet>/<version>/` ; CSP stricte ; origine distincte
+de l'admin du maître ; la route qui sert les pages prend acteur et portée dans la session `require_jwt` (exigence M3 de T3).
 
 ## Tests
 `cd packages/secubox-pilotage && python3 -m pytest -q`. `tests/test_contrat_go.py` rejoue contre le vrai canal (et le vrai stockage) les
