@@ -1532,7 +1532,7 @@ def logs(lines: int = 100, user=Depends(require_jwt)):
     return {"lines": r.stdout.splitlines()}
 
 
-@router.get("/check_updates")
+@router.post("/check_updates")   # apt update : une action (#3126, R-L5-17)
 def check_updates(user=Depends(require_jwt)):
     """Vérifier les mises à jour."""
     subprocess.run(["apt", "update"], capture_output=True)

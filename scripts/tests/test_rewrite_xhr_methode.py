@@ -68,7 +68,7 @@ def test_aucune_route_get_ne_porte_un_nom_d_action(module):
     (selon `methode_http`) ne peut pas être servi en GET."""
     import re
     depot = Path(__file__).resolve().parents[2]
-    lectures_connues = {"banner"}          # `ban` est un préfixe d'action ; « banner » (bannière) est une lecture
+    lectures_connues = set()               # Final (R-L5-17 M3) : `ban` est exact, « banner » n'a plus besoin d'exception
     ecarts = []
     for py in (depot / "packages" / f"secubox-{module}" / "api").rglob("*.py"):
         for chemin in re.findall(r'@\w+\.get\(\s*"([^"]+)"', py.read_text(encoding="utf-8")):
@@ -77,3 +77,14 @@ def test_aucune_route_get_ne_porte_un_nom_d_action(module):
                         and rewrite_xhr.methode_http(seg.replace("-", "_")) == "POST":
                     ecarts.append((py.name, chemin, seg))
     assert not ecarts, ecarts
+
+
+# ── Final (R-L5-17) : `ban` exact, plus un préfixe qui prend `bandwidth_*` ou `banner` ────────────────────────────────
+@pytest.mark.parametrize("nom", ["ban", "ban_client", "ban_ip", "unban", "unban_client"])
+def test_bannir_part_en_post(nom):
+    assert rewrite_xhr.methode_http(nom) == "POST"
+
+
+@pytest.mark.parametrize("nom", ["bandwidth_rates", "bandwidth_savings", "bandwidth", "banner", "banner_config"])
+def test_bande_passante_et_banniere_restent_des_lectures(nom):
+    assert rewrite_xhr.methode_http(nom) == "GET"

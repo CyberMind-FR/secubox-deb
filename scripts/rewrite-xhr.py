@@ -35,15 +35,16 @@ import sys
 from pathlib import Path
 
 # ── Lecture (GET) ou action (POST), d'après le nom de la méthode RPCD ──
-_PREFIXES_ACTION = ("set_", "apply", "ban", "unban", "add_", "remove_", "delete_",
+_PREFIXES_ACTION = ("set_", "apply", "ban_", "unban", "add_", "remove_", "delete_",
                     "create_", "enable_", "disable_", "restart_", "stop_", "start_",
                     "rollback", "confirm", "purge", "generate_", "reload_")
 # Actions nommées sans suffixe : noms exacts (un préfixe « start » prendrait « startup_info »).
 # #3126 (R-L5-14) : reboot, sync, toggle, reset, flush, et deux actions nommées comme des lectures,
 # preload_url (le serveur va chercher une URL : SSRF en GET) et sync_zones (réapplique les zones NAC).
+# Final (R-L5-17) : « ban » exact et « ban_ » en préfixe (le préfixe nu « ban » prenait bandwidth_* et banner).
 # R-L5-16 : check_updates (apt-get update en root), run_diagnostic_test (exécute une commande), send_test_alert
 # (envoie une alerte), clear_stats (remet à zéro).
-_ACTIONS_EXACTES = frozenset({"restart", "stop", "start", "reload", "reboot", "sync", "toggle", "reset", "flush",
+_ACTIONS_EXACTES = frozenset({"restart", "stop", "start", "reload", "reboot", "ban", "sync", "toggle", "reset", "flush",
                               "preload_url", "sync_zones", "check_updates", "run_diagnostic_test", "send_test_alert",
                               "clear_stats"})
 
