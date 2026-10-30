@@ -1,3 +1,14 @@
+secubox-lyrion (1.7.8-1~trixie1) trixie; urgency=medium
+
+  * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte
+    (/etc/os-release, repli trixie), surcharge par SECUBOX_DEBIAN_SUITE ; plus de bookworm en dur.
+  * systemd >= 257 (trixie) en LXC non privilégié : ImportCredential= vidé par drop-in pour
+    journald, sysctl et tmpfiles, seulement si le conteneur a ce systemd (#3274).
+  * Paquets Perl requis tous présents en trixie (vérifié le 2026-10-30). Clé debian_suite retirée de
+    l'exemple TOML (jamais lue).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
+
 secubox-lyrion (1.7.7-1~trixie1) trixie; urgency=medium
 
   * Vhost public livré sans le nom de gk2 (ref #3117) : server_name « lyrion.* » (lyrion.gk2.secubox.in reste
