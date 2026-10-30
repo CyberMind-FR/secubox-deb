@@ -191,3 +191,10 @@ Une adresse suspecte n'entre pas dans la référence : elle est re-signalée (6 
 ## État en direct (#2706)
 
 `GET /api/v1/ad-guard/statut-direct` (lecture seule, cache 5 s) : résolveur, puits DNS, listes (nombre, âge), capteur DNS, flux de compteurs, clients actifs. Une valeur illisible vaut `null`, jamais un faux OK.
+
+## Pilotage distant (#3126, L5)
+
+`pilotage/routes-ouvertes.d/ad-guard.toml`, installé dans `/usr/share/secubox/pilotage/routes-ouvertes.d/` (root, 0644),
+déclare les seules écritures que le porteur délégué du pilotage (portée `admin`) peut faire sur ce module : celles
+qu'appellent ses pages. Toute autre écriture déléguée est refusée par `secubox_core.auth` (403) ; les lectures
+restent soumises à la liste de refus (secrets). Voir le README de secubox-core.

@@ -5,6 +5,8 @@
 override_dh_auto_install:
 	install -d debian/secubox-ad-guard/usr/lib/secubox/ad-guard
 	cp -r api debian/secubox-ad-guard/usr/lib/secubox/ad-guard/
+	# Écritures ouvertes au pilotage délégué (#3126, R-L5-12) : root, 0644.
+	install -D -m 644 pilotage/routes-ouvertes.d/ad-guard.toml debian/secubox-ad-guard/usr/share/secubox/pilotage/routes-ouvertes.d/ad-guard.toml
 	install -d debian/secubox-ad-guard/usr/share/secubox/www/ad-guard
 	cp -r www/ad-guard/. debian/secubox-ad-guard/usr/share/secubox/www/ad-guard/
 	install -d debian/secubox-ad-guard/usr/share/secubox/www/guardian
