@@ -1,3 +1,10 @@
+secubox-system (1.11.7-1~trixie1) trixie; urgency=medium
+
+  * Passe finale L5 (ref #3126, R-L5-17) : run_diagnostic_test refuse un `test` qui n'est pas une chaîne (422, plus de 500) ; en-tête de
+    routes-ouvertes.d/system.toml : le kiosque et la planification des sauvegardes ne sont plus cités comme ouverts.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 18:00:00 +0100
+
 secubox-system (1.11.6-1~trixie1) trixie; urgency=medium
 
   * Déclare les écritures ouvertes au porteur délégué du pilotage (ref #3126, L5, R-L5-12) :
