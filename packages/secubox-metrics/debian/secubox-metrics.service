@@ -36,11 +36,9 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --log-level warning
 Restart=always
 RestartSec=5
-# Filet de sécurité : la fuite RSS a maintenant sa cause racine traitée
-# (MALLOC_ARENA_MAX + malloc_trim, cf. ci-dessus ; démontage de la double
-# collecte aggregator déjà fait). On garde un redémarrage propre toutes les 6 h
-# par prudence — s'il s'avère inutile après mesure, on pourra le détendre/retirer.
-RuntimeMaxSec=21600
+# Redemarrage de prudence toutes les 6 h : porte par secubox-metrics-redemarrage.timer
+# (try-restart, non journalise comme un echec — RuntimeMaxSec le faisait, #3295).
+# A retirer apres mesure de la RSS sur 24 h.
 # Sandboxing disabled - causes namespace errors with Python symlinks on some kernels
 # PrivateTmp=true
 # ProtectSystem=full

@@ -126,6 +126,11 @@ override_dh_install:
 	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-rapport-waf.service
 	install -D -m 0644 systemd/secubox-metrics-rapport-waf.timer \
 	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-rapport-waf.timer
+	# #3295 — redemarrage de prudence toutes les 6 h (remplace RuntimeMaxSec).
+	install -D -m 0644 systemd/secubox-metrics-redemarrage.service \
+	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-redemarrage.service
+	install -D -m 0644 systemd/secubox-metrics-redemarrage.timer \
+	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-redemarrage.timer
 	# #2146 — historique de la memoire de la box (releve toutes les 5 min).
 	install -D -m 0644 systemd/secubox-metrics-memoire.service \
 	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-memoire.service

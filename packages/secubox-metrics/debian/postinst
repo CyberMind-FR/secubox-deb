@@ -53,6 +53,8 @@ if [ "$1" = "configure" ]; then
         systemctl enable --now secubox-metrics-rapport.timer || true
         systemctl enable --now secubox-metrics-rapport-quotidien.timer || true
         systemctl enable --now secubox-metrics-rapport-waf.timer || true
+        # #3295 — redemarrage de prudence toutes les 6 h (remplace RuntimeMaxSec).
+        systemctl enable --now secubox-metrics-redemarrage.timer || true
         # #2146 — releve de la memoire toutes les 5 min (historique + alerte de fuite noyau).
         systemctl enable --now secubox-metrics-memoire.timer || true
         # #2765 — le releve des courbes est passe a secubox-courbes (#2865, secubox-courbes-serie.timer) : l'ancienne minuterie est retiree.
