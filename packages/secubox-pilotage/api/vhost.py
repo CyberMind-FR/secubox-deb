@@ -221,7 +221,8 @@ def ajouter_routes_vhost(app: FastAPI, stockage, files, audit: Callable[[str, di
         if not agent_sait_http(b.get("agent_version")):
             raise HTTPException(501, "agent de la box trop ancien : 0.4.0 au moins pour servir ses pages")
         corps = await lire_corps(request)
-        brut = request.scope.get("raw_path") or request.url.path.encode()
+        # Certaines versions de serveur ou de client de test laissent la requête dans raw_path : on ne garde que le chemin.
+        brut = (request.scope.get("raw_path") or request.url.path.encode()).split(b"?", 1)[0]
         prefixe = f"/relais/{box}".encode()
         chemin = brut[len(prefixe):].decode("ascii", "replace") if brut.startswith(prefixe + b"/api/v1/") else "/api/v1/" + reste
         if request.url.query:
