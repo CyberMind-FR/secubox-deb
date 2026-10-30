@@ -7,6 +7,7 @@ secubox-cdn (1.5.2-1~trixie1) trixie; urgency=medium
   * /preload_url passe de GET à POST (le serveur va chercher l'URL fournie : SSRF en GET),
     corps {"url": …} ou chaîne JSON ; seules les URL http(s) sont acceptées ; les pages
     portées l'appellent en POST, comme le classe scripts/rewrite-xhr.py (ref #3126, R-L5-14).
+  * /clear_stats passe de GET à POST, page Maintenance comprise (ref #3126, R-L5-16).
 
  -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 11:00:00 +0100
 

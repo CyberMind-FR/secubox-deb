@@ -36,3 +36,10 @@ def test_les_pages_appellent_preload_url_en_post():
     for f in ("view/cdn-cache/maintenance.js", "cdn-cache/api.js"):
         page = (PKG / "www" / "luci-static" / "resources" / f).read_text(encoding="utf-8")
         assert re.findall(r"sbxFetch\('/api/v1/cdn/preload_url',\s*[^,]+,\s*'([A-Z]+)'\)", page) == ["POST"], f
+
+
+def test_clear_stats_est_un_post():
+    """Remet les statistiques à zéro : une action (#3126, R-L5-16)."""
+    assert _methodes_de("/clear_stats") == {"POST"}
+    page = (PKG / "www" / "luci-static" / "resources" / "view" / "cdn-cache" / "maintenance.js").read_text(encoding="utf-8")
+    assert re.findall(r"sbxFetch\('/api/v1/cdn/clear_stats',\s*[^,]+,\s*'([A-Z]+)'\)", page) == ["POST"]

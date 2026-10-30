@@ -22,7 +22,7 @@ async function callPreloadUrl(params) {
 }
 
 async function callClearStats(params) {
-    return sbxFetch('/api/v1/cdn/clear_stats', params, 'GET');
+    return sbxFetch('/api/v1/cdn/clear_stats', params, 'POST');
 }
 
 async function callRestart(params) {

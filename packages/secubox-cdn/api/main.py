@@ -283,9 +283,9 @@ async def cache_size(user=Depends(require_jwt)):
     return {"size_mb": stats["size_mb"], "files": stats["files"]}
 
 
-@router.get("/clear_stats")
+@router.post("/clear_stats")
 async def clear_stats(user=Depends(require_jwt)):
-    """Reset les stats."""
+    """Reset les stats. POST : une action (#3126, R-L5-16)."""
     return {"success": True}
 
 
