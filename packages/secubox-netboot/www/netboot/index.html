@@ -223,10 +223,16 @@
             AUDIT = { audit: ['2026-10-13T08:12:03 publish board=02005e005301 image=secubox-2.39.0 ok', '2026-10-12T17:40:51 overlay apply (simulation)'] };
             SERVEUR = { server: { tftp_root: '/srv/secubox/netboot/tftp', http_root: '/srv/secubox/netboot/http', tftpd: 'active', nginx_sbxboot: 'yes', published_boards: 2 } };
             LIVES = { lives: [{ nom: 'mochabin-live', serveur: '192.0.2.10', http_base: 'http://192.0.2.10:8099/mochabin-live', squashfs: true,
-                                commandes: ['setenv ethact mvpp2-2; setenv ipaddr <ip libre>; setenv serverip 192.0.2.10', 'tftpboot ${loadaddr} mochabin-live/boot.scr; source ${loadaddr}'],
+                                commandes: ['setenv ethact mvpp2-2; setenv autoload no', 'setenv kernel_addr_r 0x08000000; setenv fdt_addr_r 0x0c000000; setenv ramdisk_addr_r 0x0c100000', 'dhcp; setenv serverip 192.0.2.10', 'tftpboot ${loadaddr} mochabin-live/boot.scr; source ${loadaddr}'],
+                                commandes_preparation: [{ role: 'reseau', commande: 'setenv ethact mvpp2-2; setenv autoload no; dhcp; setenv serverip 192.0.2.10; tftpboot ${loadaddr} mochabin-live/fix-bootcmd.scr; source ${loadaddr}' },
+                                                        { role: 'usb', commande: 'usb start; fatload usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}' },
+                                                        { role: 'installe', commande: 'mmc dev 0; fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}' }],
                                 images: [{ nom: 'secubox-isp-mochabin-trixie.img.gz', taille: 2669000177, sha256: '35b4…', signee: true, taille_brute: null }] },
                               { nom: 'espressobin-live', titre: 'ESPRESSObin v7', console: 'ttyMV0,115200', serveur: '192.0.2.42', http_base: 'http://192.0.2.10:8099/espressobin-live', squashfs: true,
-                                commandes: ['setenv ethact neta@30000; setenv ipaddr <ip libre>; setenv serverip 192.0.2.42', 'tftpboot ${loadaddr} espressobin-live/boot.scr; source ${loadaddr}'],
+                                commandes: ['setenv ethact neta@30000; setenv autoload no', 'setenv kernel_addr_r 0x07000000; setenv fdt_addr_r 0x06f00000; setenv ramdisk_addr_r 0x0b000000', 'dhcp; setenv serverip 192.0.2.42', 'tftpboot ${loadaddr} espressobin-live/boot.scr; source ${loadaddr}'],
+                                commandes_preparation: [{ role: 'reseau', commande: 'setenv ethact neta@30000; setenv autoload no; dhcp; setenv serverip 192.0.2.42; tftpboot ${loadaddr} espressobin-live/fix-bootcmd.scr; source ${loadaddr}' },
+                                                        { role: 'usb', commande: 'usb start; load usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}' },
+                                                        { role: 'installe', commande: 'mmc dev 1; load mmc 1:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}' }],
                                 usb: { nom: 'cle-usb.img.gz', taille: 951000000, signee: true, sha256: 'c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00', cle_publique: true },
                                 commandes_usb: [{ role: 'tester', commande: 'usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}' },
                                                 { role: 'autoflash', commande: 'usb start; load usb 0:1 ${loadaddr} autoflash.scr; source ${loadaddr}' }],
@@ -473,17 +479,26 @@
                 ligne(dl, 'Système (HTTP)', lv.squashfs ? pastille('ok', 'servi') : pastille('hors', 'absent'));
                 if (lv.http_base) { const a = el('a', 'mono', lv.http_base + '/images.txt'); a.href = lv.http_base + '/images.txt'; a.target = '_blank'; a.rel = 'noopener'; a.style.color = 'var(--cyan)'; ligne(dl, 'Liste des images', a); }
                 z.appendChild(dl);
-                z.appendChild(el('p', 'note', '1. Par le réseau — console série de la box, câble sur un port qui joint ce maître, U-Boot interrompu :'));
+                z.appendChild(el('p', 'note', '1. Par le réseau — console série de la box, câble sur le port WAN, U-Boot interrompu (adresses sûres et autoload posés avant le dhcp) :'));
                 z.appendChild(blocCopie((lv.commandes || []).join('\n') || '—', 'Commandes U-Boot'));
                 const imgs = lv.images || [];
                 z.appendChild(el('p', 'note', '2. Dans le live (NOM = nom préparé ci-dessous : la box rejoindra seule le maillage) :'));
                 z.appendChild(blocCopie('sbx-netflash --list\nsbx-netflash --image ' + (imgs.length ? imgs[0].nom : 'IMAGE') + ' --nom NOM', 'Commandes du live'));
                 z.appendChild(el('p', 'note', 'L’image s’écrit en flux sur toutes les cartes (téléchargement, décompression, écriture), jamais copiée en mémoire : signature et empreinte vérifiées pendant l’écriture, eMMC invalidée en cas d’échec.'));
+                // #3271 : le U-Boot d'usine garde son bootcmd TFTP/NFS et ses adresses ; le script de préparation (généré
+                // par scripts/uboot-env.py, servi à côté du live, livré sur la partition 1 de l'image) les remplace.
+                const prep = lv.commandes_preparation || [];
+                if (prep.length) {
+                    z.appendChild(el('p', 'note', '3. Après l’installation, l’environnement U-Boot : adresses sûres, port WAN (ethact), autoload no, bootcmd du support installé, bootcmd_netboot de secours (jamais lancé seul), saveenv ; l’ancien bootcmd reste dans bootcmd_avant. Le live le propose à la fin du flash ; avec sbx-netflash … --ecrire-spi, il l’écrit lui-même en SPI quand l’emplacement est vérifié et la SPI saine ; sinon, une fois, à la console U-Boot (compte à rebours interrompu) :'));
+                    const titres = { reseau: 'par le réseau', usb: 'depuis la clé USB', installe: 'depuis la partition installée' };
+                    prep.forEach(p => {
+                        const t = titres[p.role] || p.role;
+                        z.appendChild(el('p', 'note', '· ' + t + ' :'));
+                        z.appendChild(blocCopie(p.commande + '\nreset', 'Préparation U-Boot ' + t));
+                    });
+                }
                 if (/^mochabin/.test(lv.nom || '')) {
-                    // #3271 : le U-Boot d'usine garde son bootcmd TFTP/NFS ; fix-bootcmd.scr (partition 1 de l'image) le remplace.
-                    z.appendChild(el('p', 'note', '3. Après l’installation, une fois, au U-Boot d’usine (compte à rebours interrompu) : pose le bootcmd eMMC (port WAN mvpp2-2 + DHCP, puis boot.scr de l’eMMC), les adresses de chargement (#3091) et enregistre (saveenv) ; l’ancien bootcmd reste dans bootcmd_avant.'));
-                    z.appendChild(blocCopie('fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}\nreset', 'Commande U-Boot : bootcmd eMMC'));
-                    z.appendChild(el('p', 'note', 'Réseau : le port WAN cuivre n’est initialisé que si U-Boot l’a touché (setenv ethact mvpp2-2 puis dhcp ; mvpp2-0 est la cage SFP+). En netboot, c’est la première commande ci-dessus ; après l’installation, le bootcmd posé le fait à chaque démarrage, sinon le système démarré de l’eMMC n’a pas de réseau.'));
+                    z.appendChild(el('p', 'note', 'Réseau : le port WAN cuivre n’est initialisé que si U-Boot l’a touché (setenv ethact mvpp2-2 puis dhcp ; mvpp2-0 est la cage SFP+). En netboot, c’est le bloc 1 ; après l’installation, le bootcmd posé le fait à chaque démarrage, sinon le système démarré de l’eMMC n’a pas de réseau.'));
                 }
                 if (lv.usb) {
                     const p = el('p', 'note', 'Ou par la clé USB finale (le système lui-même, à écrire sur une clé) : ');

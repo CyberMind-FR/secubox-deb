@@ -220,33 +220,37 @@ def test_l_image_mochabin_recoit_fix_bootcmd():
     assert '"${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr"' in bloc and '"${MNT}/boot/fix-bootcmd.scr"' in bloc
 
 
-def test_le_live_mochabin_dit_comment_poser_le_bootcmd_apres_l_installation(live_simule):
+def _stub_preparation(live):
+    _stub(live["bin"], "sbx-uboot-env", f'echo "sbx-uboot-env $*" >> "{live['journal']}"; echo \'     {LIGNE_FIX}\'\n')
+
+
+def test_le_live_propose_la_preparation_u_boot_apres_l_installation(live_simule):
+    """Le message est celui de sbx-uboot-env (même forme pour toutes les cartes), la SPI n'est pas écrite sans option."""
     live = live_simule
+    _stub_preparation(live)
     r = _netflash_main(live, "--srv", "192.0.2.10:8099", "--image", "minimal.img.gz", "--auto", "--no-reboot")
     assert r.returncode == 0, r.stdout + r.stderr
     assert LIGNE_FIX in r.stdout
-    assert "setenv ethact mvpp2-2" in r.stdout and "U-Boot" in r.stdout
-    assert "port" in r.stdout and "initialis" in r.stdout                     # la cause : port touché par U-Boot
+    assert "sbx-uboot-env \n" in live["journal"].read_text() + "\n"
 
 
-def test_le_live_espressobin_ne_donne_pas_la_ligne_de_la_mochabin(live_simule):
+def test_sbx_netflash_n_ecrit_plus_de_ligne_propre_a_une_carte():
+    s = NETFLASH.read_text()
+    assert "mvpp2" not in s and "fix-bootcmd.scr" not in s, "les commandes viennent de sbx-uboot-env (uboot-env.py)"
+
+
+def test_le_live_redemarre_apres_la_preparation_et_jamais_dans_l_outil_de_flash(live_simule):
     live = live_simule
-    r = _netflash_main(live, "--srv", "192.0.2.10:8099", "--dir", "espressobin-live", "--image", "minimal.img.gz",
-                       "--auto", "--no-reboot")
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert LIGNE_FIX not in r.stdout
-
-
-def test_le_live_redemarre_apres_le_message_et_jamais_dans_l_outil_de_flash(live_simule):
-    live = live_simule
-    r = _netflash_main(live, "--srv", "192.0.2.10:8099", "--image", "minimal.img.gz", "--auto")
-    journal = live["journal"].read_text()
-    flash = next(x for x in journal.splitlines() if x.startswith("flash "))
+    _stub_preparation(live)
+    r = _netflash_main(live, "--srv", "192.0.2.10:8099", "--image", "minimal.img.gz", "--auto", "--ecrire-spi")
+    journal = live["journal"].read_text().splitlines()
+    flash = next(x for x in journal if x.startswith("flash "))
     assert "--no-reboot" in flash                                             # sinon il redémarre avant le message
-    assert "systemctl reboot" in journal and LIGNE_FIX in r.stdout
+    i_prep = journal.index("sbx-uboot-env --ecrire-spi")
+    assert i_prep < next(i for i, x in enumerate(journal) if x.startswith("systemctl reboot")), r.stdout
 
 
 def test_la_page_netboot_donne_la_ligne_fix_bootcmd_et_la_cause():
     s = (ICI / "www" / "netboot" / "index.html").read_text()
-    assert LIGNE_FIX in s
+    assert LIGNE_FIX in s                                   # données de démonstration (préparation « installe »)
     assert "setenv ethact mvpp2-2" in s and "n’est initialisé que si U-Boot" in s

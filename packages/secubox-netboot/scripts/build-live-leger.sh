@@ -79,7 +79,8 @@ trap nettoie EXIT
 # Python (python3-argon2) cassaient la configuration de base de debootstrap lorsqu'ils étaient dans --include.
 PAQUETS="systemd-sysv udev kmod linux-image-arm64 initramfs-tools zstd live-boot live-boot-initramfs-tools"
 PAQUETS+=" openssh-server curl ca-certificates openssl xz-utils gzip pv util-linux e2fsprogs parted dosfstools"
-PAQUETS+=" iproute2 iputils-ping procps less nftables python3 python3-argon2"
+# libubootenv-tool : fw_setenv, pour que sbx-uboot-env pose l'environnement U-Boot après le flash (#3271)
+PAQUETS+=" iproute2 iputils-ping procps less nftables python3 python3-argon2 libubootenv-tool"
 log "debootstrap $suite arm64 (minbase)…"
 debootstrap --arch=arm64 --variant=minbase --keyring="$KEYRING" "$suite" "$w/root" "$miroir" > "$w/debootstrap.log" 2>&1 \
     || { tail -n 30 "$w/debootstrap.log" >&2; die "debootstrap a échoué"; }
@@ -158,6 +159,10 @@ install -m0755 "$HERE/installer/sbx-netflash-profil" "$w/root/usr/local/sbin/sbx
 install -m0755 "$FLASHER" "$w/root/usr/local/sbin/secubox-flash-emmc"
 install -d "$w/root/etc/secubox"
 install -m0644 "$pub" "$w/root/etc/secubox/netboot-image.pub"
+# Après le flash (#3271) : sbx-uboot-env propose (ou écrit, sur --ecrire-spi) l'environnement U-Boot de la carte.
+install -m0755 "$HERE/installer/sbx-uboot-env" "$w/root/usr/local/sbin/sbx-uboot-env"
+python3 "$HERE/scripts/uboot-env.py" live-conf "$carte" > "$w/root/etc/secubox/uboot-env.json" \
+    || die "préparation U-Boot de $carte non générée (board/$carte/uboot-env.env)"
 cat > "$w/root/etc/motd" <<EOF
 
   SecuBox — live léger $LIVE_TITRE (#3233)
@@ -202,6 +207,9 @@ setenv bootargs \${bootargs} $LIVE_BOOTARGS
 booti \${kernel_addr_r} \${ramdisk_addr_r}:\${filesize} \${fdt_addr_r}
 EOF
 mkimage -A arm64 -O linux -T script -C none -n "SecuBox live leger USB" -d "$w/boot/boot.cmd" "$w/boot/boot.scr" >/dev/null
+# Préparation de l'environnement U-Boot sur la clé (#3271) : usb start; load usb 0:1 ${loadaddr} fix-bootcmd.scr; …
+prep="$(fix_bootcmd_de "$carte" "$HERE")" || die "script de préparation U-Boot de $carte refusé"
+cp "$prep" "$w/boot/fix-bootcmd.scr"
 
 # ── 4. image : p1 FAT 256 Mo + p2 ext4 à la taille de la racine (+ 30 %) ─────
 racine_mo=$(( $(du -sm "$w/root" | awk '{print $1}') * 13 / 10 + 64 ))

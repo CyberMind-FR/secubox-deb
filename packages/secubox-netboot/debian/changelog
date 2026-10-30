@@ -8,16 +8,28 @@ secubox-netboot (0.8.3-1~trixie1) trixie; urgency=medium
     sa taille (mode « ram ») et le live, qui garde sa pile complète, manquait de mémoire. Mode « ram » retiré :
     téléchargement → décompression → secubox-flash-emmc --stdin (signature et SHA-256 vérifiées au passage, eMMC
     invalidée en cas d'échec). La pile du live n'est plus arrêtée que sous 256 Mo libres.
-  * Après l'installation (ref #3271) : board/mochabin/fix-bootcmd.cmd/.scr, livré sur la partition 1 de l'image
-    comme l'ESPRESSObin (#2826). Il garde l'ancien bootcmd (bootcmd_avant), pose ethact=mvpp2-2, autoload=no, les
-    adresses #3091 (kernel_addr_r 0x08000000, fdt_addr_r 0x0c000000, ramdisk_addr_r 0x0c100000 : un boot.scr d'avant
-    #3091 ne les pose pas) et bootcmd='setenv ethact mvpp2-2; dhcp; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr;
-    source ${loadaddr}' (le port WAN cuivre n'est initialisé pour Linux que si U-Boot l'a touché), puis saveenv.
-    sbx-netflash (live MOCHAbin) et la page netboot donnent la ligne à taper au U-Boot :
-    fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}. sbx-netflash redémarre lui-même après ce
-    message (secubox-flash-emmc toujours en --no-reboot).
+  * Préparation de l'environnement U-Boot, même forme pour la MOCHAbin et l'ESPRESSObin v7 (ref #3271) :
+    board/<carte>/uboot-env.env (données) + live.env → scripts/uboot-env.py génère board/<carte>/fix-bootcmd.cmd/.scr
+    (racine du dépôt, livrés sur la partition 1 de l'image, copiés dans le paquet et servis par le netboot à côté
+    du live). Le script pose les adresses sûres (MOCHAbin 0x08000000/0x0c000000/0x0c100000 #3091, ESPRESSObin
+    0x07000000/0x06f00000/0x0b000000), ethact (mvpp2-2 / neta@30000), autoload=no, le bootcmd du support installé
+    (MOCHAbin : 'setenv ethact mvpp2-2; dhcp; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr; source ${loadaddr}' ;
+    ESPRESSObin : eMMC puis clé USB, #2826) et bootcmd_netboot (secours, jamais lancé seul), garde l'ancien bootcmd
+    dans bootcmd_avant au premier passage seulement (l'ESPRESSObin l'écrasait à chaque passage), puis saveenv.
+    Lancement par le réseau (tftpboot …/fix-bootcmd.scr), la clé USB ou la partition installée.
+  * Blocs U-Boot exacts et complets (ref #3271) : l'en-tête du boot.cmd du live (affiché par la page) vient du
+    générateur : ethact, autoload no, adresses, dhcp puis serverip, tftpboot ${loadaddr}, source. preparation.txt
+    publié à côté du live, rendu par GET /live (commandes_preparation) et la page (étape 3, toutes cartes). README
+    corrigé (0x06d00000 et « flux seulement quand la RAM manque » faux) ; tests : blocs de la page et des README
+    comparés au générateur.
+  * Après le flash, sbx-uboot-env (ref #3271) : le live montre ce qui serait posé et la commande console ; avec
+    sbx-netflash --ecrire-spi, il écrit l'environnement en SPI par fw_setenv, seulement si l'emplacement est vérifié
+    dans la source de U-Boot (0x3f0000, 64 Kio : MOCHAbin 2018.03 = partition « u-boot-env », ESPRESSObin = flash
+    entière), trois lectures identiques, CRC valide, aucun environnement à un autre emplacement connu (MOCHAbin
+    2020.10 : 0x180000) ; sinon rien n'est écrit. Bloc d'avant gardé, relecture vérifiée. libubootenv-tool dans le
+    live léger. board/mochabin/etc/fw_env.config corrigé (/dev/mtd2 0x0, il visait au-delà de mtd0).
 
- -- Gérald Kerma <devel@cybermind.fr>  Thu, 29 Oct 2026 10:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 10:00:00 +0100
 
 secubox-netboot (0.8.2-1~trixie1) trixie; urgency=medium
 

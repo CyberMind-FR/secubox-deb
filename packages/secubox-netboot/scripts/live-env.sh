@@ -33,3 +33,20 @@ charge_live_env() { # CARTE RACINE_DU_PAQUET → variables LIVE_* ; code ≠ 0 e
     done
     [[ "${LIVE_BOOTARGS-x}" =~ ^[A-Za-z0-9_.,=@:/\ -]{0,160}$ ]] || { echo "LIVE_BOOTARGS invalide" >&2; return 1; }
 }
+
+# Préparation de l'environnement U-Boot (#3271) : fix-bootcmd.scr de la carte (board/<carte>/ du paquet installé, ou
+# board/<carte>/ à la racine du dépôt), refusé s'il n'est plus celui que produit scripts/uboot-env.py.
+fix_bootcmd_de() { # CARTE RACINE_DU_PAQUET → chemin du .scr sur stdout ; code ≠ 0 et motif sur stderr si refus
+    local carte="$1" ici="$2" d
+    for d in "$ici/board/$carte" "$ici/../../board/$carte"; do
+        if [ ! -f "$d/fix-bootcmd.scr" ] || [ ! -f "$d/fix-bootcmd.cmd" ]; then continue; fi
+        if ! python3 "$ici/scripts/uboot-env.py" cmd "$carte" | cmp -s - "$d/fix-bootcmd.cmd"; then
+            echo "$d/fix-bootcmd.cmd en retard sur scripts/uboot-env.py : régénérer (uboot-env.py generer)" >&2
+            return 1
+        fi
+        echo "$d/fix-bootcmd.scr"
+        return 0
+    done
+    echo "fix-bootcmd.scr introuvable pour la carte $carte" >&2
+    return 1
+}

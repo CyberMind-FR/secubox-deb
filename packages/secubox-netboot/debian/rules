@@ -16,6 +16,12 @@ override_dh_auto_install:
 	cp -r boot board scripts docs installer debian/secubox-netboot/usr/share/secubox/netboot/
 	# flasheur eMMC embarqué dans le live netbooté (#3079) : une seule source, image/sbin du dépôt
 	install -m0755 ../../image/sbin/secubox-flash-emmc debian/secubox-netboot/usr/share/secubox/netboot/installer/
+	# préparation de l'environnement U-Boot (#3271) : générée dans board/<carte>/ à la racine du dépôt (livrée dans
+	# l'image), servie par le netboot à côté du live
+	for c in mochabin espressobin-v7; do \
+		install -m0644 ../../board/$$c/fix-bootcmd.cmd ../../board/$$c/fix-bootcmd.scr \
+			debian/secubox-netboot/usr/share/secubox/netboot/board/$$c/ || exit 1; \
+	done
 	# vhost de boot + location servis par le rôle serveur (posés par 'serve up')
 	install -d debian/secubox-netboot/usr/share/secubox/netboot/nginx
 	install -m0644 nginx/boot-vhost.conf debian/secubox-netboot/usr/share/secubox/netboot/nginx/

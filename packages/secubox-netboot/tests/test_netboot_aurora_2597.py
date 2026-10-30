@@ -193,6 +193,9 @@ def test_telephone_sans_debordement(navigateur):
 LIVES = {"lives": [{"nom": "mochabin-live", "serveur": "192.0.2.10", "http_base": "http://192.0.2.10:8099/mochabin-live",
                     "squashfs": True, "commandes": ["setenv ethact mvpp2-2; setenv serverip 192.0.2.10",
                                                     "tftpboot ${loadaddr} mochabin-live/boot.scr; source ${loadaddr}"],
+                    "commandes_preparation": [   # #3271 : preparation.txt du live, généré par uboot-env.py
+                        {"role": "usb", "commande": "usb start; fatload usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}"},
+                        {"role": "installe", "commande": "mmc dev 0; fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}"}],
                     "images": [{"nom": "secubox-isp-mochabin-trixie.img.gz", "taille": 2669000177, "sha256": "a" * 64, "signee": True}]}]}
 
 
@@ -201,8 +204,9 @@ def test_3100_netbooter_et_preparer_un_flash(navigateur):
     p.wait_for_selector("#lives pre", state="attached")
     texte = p.inner_text("#lives")
     assert "tftpboot ${loadaddr} mochabin-live/boot.scr" in texte
-    # #3271 : après l'installation, la ligne qui pose le bootcmd eMMC, et pourquoi le port WAN doit être touché
-    assert "fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}" in texte
+    # #3271 : après l'installation, les lignes qui préparent l'environnement U-Boot, et pourquoi le port WAN doit être touché
+    assert "mmc dev 0; fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}\nreset" in texte
+    assert "depuis la clé USB" in texte and "bootcmd_avant" in texte
     assert "n’est initialisé que si U-Boot l’a touché" in texte
     # #3233 : sans --image, sbx-netflash ne fait que lister — la page donne la commande complète
     assert "sbx-netflash --image secubox-isp-mochabin-trixie.img.gz --nom NOM" in texte

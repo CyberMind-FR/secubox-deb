@@ -154,6 +154,27 @@ gzwrite mmc 0 $loadaddr $filesize
 reset
 ```
 
+## Préparer l'environnement U-Boot après l'installation (#3271)
+
+Une fois, au U-Boot (console série, compte à rebours interrompu) : `fix-bootcmd.scr` pose les adresses sûres, le port
+WAN (`ethact`), `autoload no`, le `bootcmd` du support installé et un `bootcmd_netboot` de secours, puis `saveenv` ;
+l'ancien `bootcmd` reste dans `bootcmd_avant`. Le port WAN cuivre `mvpp2-2` n'est initialisé pour Linux que si U-Boot l'a touché : le `bootcmd` posé fait `setenv ethact mvpp2-2; dhcp` à chaque démarrage. Le script est généré par
+`packages/secubox-netboot/scripts/uboot-env.py` (voir le README de `secubox-netboot`). Depuis la partition installée :
+
+<!-- uboot-env: preparation mochabin - installe -->
+```
+mmc dev 0; fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}
+reset
+```
+
+Depuis la clé USB (script copié sur sa partition 1) :
+
+<!-- uboot-env: preparation mochabin - usb -->
+```
+usb start; fatload usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}
+reset
+```
+
 ## Network Interfaces
 
 | Interface | Role | Speed |

@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: sbx-uboot-env (#3271) — DANS LE LIVE, après le flash : préparer l'environnement U-Boot de la carte.
+
+Sans option : montre ce qui serait posé (adresses, ethact, autoload, bootcmd du support installé, bootcmd_netboot),
+l'état de la SPI, et la commande à taper à la console U-Boot. N'écrit RIEN.
+
+--ecrire-spi : écrit l'environnement en SPI par fw_setenv, seulement si TOUT est sûr ; sinon n'écrit rien et donne la
+commande console (code 3). Écrire la SPI est irréversible : il faut
+  - un emplacement VÉRIFIÉ dans la source de U-Boot (/etc/secubox/uboot-env.json, généré par uboot-env.py) ;
+  - le mtd attendu (nom de partition, ou flash entière unique) et assez grand ;
+  - trois lectures identiques du bloc (une SPI instable, vue sur une MOCHAbin du banc, est refusée) ;
+  - un CRC valide à cet emplacement, c'est-à-dire un environnement déjà enregistré par CE U-Boot (sinon fw_setenv
+    repartirait d'un environnement par défaut qui n'est pas celui de la carte) ;
+  - aucun environnement valide à un autre emplacement connu (autre version de U-Boot : ambigu).
+Le bloc d'avant est gardé (env-avant.bin), puis l'écriture est relue et vérifiée variable par variable (code 4 sinon).
+"""
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+import zlib
+from pathlib import Path
+
+CONF = "/etc/secubox/uboot-env.json"
+
+
+def proc_mtd() -> Path:
+    return Path(os.environ.get("SBX_UBOOT_ENV_PROC_MTD", "/proc/mtd"))
+
+
+def dev_dir() -> Path:
+    return Path(os.environ.get("SBX_UBOOT_ENV_DEV", "/dev"))
+
+
+def travail() -> Path:
+    return Path(os.environ.get("SBX_UBOOT_ENV_TRAVAIL", "/run/sbx-uboot-env"))
+
+
+def mtds() -> list:
+    """[(nom_dev, taille, effacement, nom)] lus dans /proc/mtd."""
+    out = []
+    try:
+        texte = proc_mtd().read_text()
+    except OSError:
+        return out
+    for ligne in texte.splitlines():
+        m = re.match(r'^(mtd[0-9]{1,2}): ([0-9a-f]{8}) ([0-9a-f]{8}) "([^"]{0,64})"$', ligne)
+        if m:
+            out.append((m.group(1), int(m.group(2), 16), int(m.group(3), 16), m.group(4)))
+    return out
+
+
+def trouve(cible: str):
+    """« nom@décalage » → (chemin du mtd, décalage) ; « *@décalage » = la flash entière, seul mtd du système."""
+    nom, dec = cible.split("@", 1)
+    liste = mtds()
+    if nom == "*":
+        choix = liste if len(liste) == 1 else []
+    else:
+        choix = [m for m in liste if m[3] == nom]
+    if len(choix) != 1:
+        return None, int(dec, 16), 0
+    return dev_dir() / choix[0][0], int(dec, 16), choix[0][1]
+
+
+def lire_bloc(dev: Path, off: int, taille: int) -> bytes:
+    with open(dev, "rb") as f:
+        f.seek(off)
+        return f.read(taille)
+
+
+def crc_ok(b: bytes, taille: int) -> bool:
+    return len(b) == taille and struct.unpack("<I", b[:4])[0] == zlib.crc32(b[4:])
+
+
+def variables_de(b: bytes) -> dict:
+    out = {}
+    for e in b[4:].split(b"\0\0", 1)[0].split(b"\0"):
+        if b"=" in e:
+            k, v = e.split(b"=", 1)
+            out[k.decode("utf-8", "replace")] = v.decode("utf-8", "replace")
+    return out
+
+
+def lecture_stable(dev: Path, off: int, taille: int):
+    lus = [lire_bloc(dev, off, taille) for _ in range(3)]
+    if len({hashlib.sha256(x).hexdigest() for x in lus}) != 1:
+        return None
+    return lus[0]
+
+
+def console(c: dict) -> str:
+    return "\n".join(f"     {x}" for x in c["console"])
+
+
+def a_poser(c: dict, avant: dict) -> list:
+    v = [(k, x) for k, x in c["variables"]]
+    if not avant.get("bootcmd_avant") and avant.get("bootcmd"):
+        v.insert(0, ("bootcmd_avant", avant["bootcmd"]))
+    return v
+
+
+def verifie(c: dict, env: dict):
+    """→ (dev, off, taille, secteur, bloc, motif_de_refus)"""
+    taille, secteur = int(env["taille"], 16), int(env["secteur"], 16)
+    if not env.get("verifie"):
+        return None, 0, taille, secteur, None, "emplacement de l'environnement non vérifié dans la source de U-Boot"
+    dev, off, taille_mtd = trouve(env["cible"])
+    if dev is None:
+        return None, off, taille, secteur, None, f"mtd introuvable pour {env['cible']} (/proc/mtd)"
+    if off + taille > taille_mtd:
+        return None, off, taille, secteur, None, f"{dev.name} trop petit pour {env['cible']}"
+    try:
+        bloc = lecture_stable(dev, off, taille)
+    except OSError as e:
+        return None, off, taille, secteur, None, f"lecture de {dev} impossible : {e}"
+    if bloc is None:
+        return None, off, taille, secteur, None, "SPI instable : trois lectures du même bloc diffèrent"
+    if not crc_ok(bloc, taille):
+        return dev, off, taille, secteur, bloc, ("CRC invalide : aucun environnement enregistré par ce U-Boot à cet "
+                                                 "emplacement (ou autre version de U-Boot)")
+    for autre in env.get("autres", []):
+        d2, o2, t2 = trouve(autre)
+        try:
+            if d2 is not None and o2 + taille <= t2 and crc_ok(lire_bloc(d2, o2, taille), taille):
+                return dev, off, taille, secteur, bloc, f"environnement valide aussi à {autre} : version de U-Boot ambiguë"
+        except OSError:
+            pass
+    return dev, off, taille, secteur, bloc, ""
+
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(prog="sbx-uboot-env")
+    p.add_argument("--conf", default=CONF)
+    p.add_argument("--ecrire-spi", action="store_true", help="écrire l'environnement en SPI (irréversible)")
+    a = p.parse_args(argv)
+    try:
+        c = json.loads(Path(a.conf).read_text())
+    except (OSError, ValueError) as e:
+        print(f"[sbx-uboot-env] configuration illisible ({a.conf}) : {e}")
+        return 2
+    env = c["env"]
+    print("=" * 86)
+    print(f" Préparation de l'environnement U-Boot — {c['titre']} (#3271)")
+    dev, off, taille, secteur, bloc, refus = verifie(c, env)
+    avant = variables_de(bloc) if bloc is not None and not refus else {}
+    print(" À poser :")
+    for k, v in a_poser(c, avant):
+        print(f"   {k}={v}")
+    if not refus and not shutil.which("fw_setenv"):
+        refus = "fw_setenv absent (paquet libubootenv-tool)"
+    if refus:
+        print(f" SPI : {refus}.")
+    else:
+        print(f" SPI : environnement valide en {dev} à {off:#x} ({taille:#x} octets), emplacement vérifié ({env['source']}).")
+    if not a.ecrire_spi:
+        if not refus:
+            print(" Pour l'écrire depuis Linux : sbx-uboot-env --ecrire-spi   (ou sbx-netflash … --ecrire-spi)")
+        print(" Sinon, une fois, à la console U-Boot (compte à rebours interrompu) :")
+        print(console(c))
+        print("=" * 86)
+        return 0
+    if refus:
+        print(" SPI NON écrite. À la console U-Boot, une fois (compte à rebours interrompu) :")
+        print(console(c))
+        print("=" * 86)
+        return 3
+    t = travail()
+    t.mkdir(parents=True, exist_ok=True)
+    (t / "env-avant.bin").write_bytes(bloc)
+    with tempfile.TemporaryDirectory(dir=t) as d:
+        cfg, script = Path(d) / "fw_env.config", Path(d) / "script"
+        cfg.write_text(f"{dev} {off:#x} {taille:#x} {secteur:#x}\n")
+        script.write_text("".join(f"{k} {v}\n" for k, v in a_poser(c, avant)))
+        r = subprocess.run(["fw_setenv", "-c", str(cfg), "-s", str(script)], capture_output=True, text=True)
+    attendu = dict(a_poser(c, avant))
+    apres = lecture_stable(dev, off, taille)
+    lu = variables_de(apres) if apres is not None and crc_ok(apres, taille) else {}
+    faux = [k for k, v in attendu.items() if lu.get(k) != v]
+    if r.returncode != 0 or faux or any(lu.get(k) != v for k, v in avant.items() if k not in attendu):
+        print(f" ÉCHEC de l'écriture ou de la relecture (fw_setenv={r.returncode}, variables fausses : {faux or '-'}) : "
+              f"{r.stderr.strip()}")
+        print(f" Bloc d'avant gardé : {t / 'env-avant.bin'}. U-Boot repartira au pire sur son environnement par défaut.")
+        print(" À la console U-Boot (compte à rebours interrompu) :")
+        print(console(c))
+        print("=" * 86)
+        return 4
+    print(f" SPI écrit et relu : {len(attendu)} variables posées, le reste de l'environnement est gardé.")
+    print(f" Bloc d'avant : {t / 'env-avant.bin'}. Revenir en arrière, à la console : "
+          'setenv bootcmd "${bootcmd_avant}"; saveenv')
+    print("=" * 86)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
