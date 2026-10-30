@@ -9,6 +9,20 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-30 — Pilotage distant TR-369 : L5 « box légère / headless » fusionné, non déployé (ref #3126)
+
+- **PR #3300** : une box sans interface web est administrée depuis le maître. Jeton délégué Ed25519 de 30 s frappé par
+  le relais local `sbx-pilotage-relais` (compte dédié, SO_PEERCRED, AppArmor) ; écritures fermées par défaut sauf routes
+  déclarées par paquet ; message HTTP du canal, portée recalculée par l'agent (drapeaux root mains liées, support,
+  propriétaire) ; pages de la version de la box extraites sur le maître (`secubox-pilotage-www`, InRelease gpgv) ; vhost
+  `admin.<box>` servi par le maître (connexion sur le maître, code à usage unique, Sec-Fetch-Site, CSP stricte) avec
+  basculement « locale ⇄ distante » coordonné avec `secubox-relais-maillage` ; relais des noms sans webos ; profil léger
+  `distante` (marqueur root, page d'état LAN) ; colonne Ouvrir de la Flotte ; tous les profils gardent l'agent.
+- Revue : SDD sur 7 tâches, relecture de sécurité à chaque tour, relecture finale de branche (0 critique, 3 importants
+  corrigés), défaut de chemin relayé (`?x=1?x=1`) trouvé par la CI et corrigé. Mesure gk5 (ESPRESSObin 951 Mo) : 534 Mo
+  disponibles sans webui ni annuaire. Maquette des écrans faite pour le propriétaire.
+- **R33** : rien déployé ni publié ; banc T8 (gk6 maître, gk5 `distante`) sur accord explicite du propriétaire.
+
 ## 2026-10-30 — couture.gk2 : 502 après redémarrage corrigée, frontal permanent (closes #3294) ; metrics (ref #3295)
 
 - Cause : le frontal FastAPI d'Atelier Partagé vit dans le conteneur `streamlit` (`start.auto=0`) ; `streamlitctl boot`

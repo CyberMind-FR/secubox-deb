@@ -176,11 +176,13 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 0000000000. **WAF et vulnérabilités (2026-10-29)** : #3257 et #3273 déployés sur gk2 en mode detect (waf-ng 1.32.0) —
   étalonner les seuils provisoires sur le trafic réel, construire l'amd64, observer C1/HTTP/2. **Conteneurs trixie (#3274,
   PR #3275)** : roundcube fait ; `mail` revenu à bookworm (snap1) — préparer à froid la configuration Dovecot 2.4 sur `snap2`,
-  puis repasser `mail` ; mémoire `project_lxc_trixie_migration_3274` avant tout autre LXC. **Pilotage L2 (#3126)** : FUSIONNÉ
-  (PR #3278), NON déployé ni publié (R33 maintenue par le propriétaire le 2026-10-30) — **suivant : L5 « interface headless »**
-  (plan `docs/superpowers/plans/` L5), puis banc T10/T12 (gk2, gk1, gk4) : sudo/AppArmor sous charge, `ExecStopPost=+`, polkit
-  du renommage, SSE via sbxwaf, profil de l'assistant d'invitation (ledger `.superpowers/sdd/2026-10-28-pilotage-l2-agir/`
-  dans le worktree 3126). Issue p2p #3277 (automesh.json périmé).
+  puis repasser `mail` ; mémoire `project_lxc_trixie_migration_3274` avant tout autre LXC. **Pilotage L2 + L5 (#3126)** : FUSIONNÉS
+  (PR #3278, PR #3300 le 2026-10-30), NON déployés ni publiés (R33) — **suivant : banc T8, sur accord explicite du
+  propriétaire** : gk6 = maître de test, gk5 (ESPRESSObin) réinstallée en profil `distante`, gk4 agent ; vérifier au banc :
+  `nginx -t` réel dans l'unité du vhost, capacités/écritures réelles, certbot HTTP-01, `/data/apt` + gpgv, basculement
+  locale ⇄ distante réel avec `secubox-relais-maillage`, mémoire du profil `distante` ; plus les points L2 (sudo/AppArmor
+  sous charge, `ExecStopPost=+`, polkit du renommage, SSE via sbxwaf). Suites : #3279, #3298, #3288, #3289, #3292.
+  Issue p2p #3277 (automesh.json périmé).
   **Veille des vulnérabilités #3269** : design doc à écrire. **Netboot #3271** : relecture, PR, images à régénérer.
 
 000000000. **Sécurité et pilotage distant (2026-10-28)** : #3243 — 1.8.8, nettoyage des images + firstboot
