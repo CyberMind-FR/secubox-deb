@@ -10,7 +10,7 @@ from api.state import load_profile
 
 PROFILES_DIR = Path(__file__).resolve().parent.parent / "profiles"
 PROFILE_FILES = sorted(PROFILES_DIR.glob("*.toml"))
-EXPECTED = {"full", "lite", "secure-gateway", "media-lab", "minimal", "isp"}   # isp : #3258 (audit R3)
+EXPECTED = {"full", "lite", "secure-gateway", "media-lab", "minimal", "isp", "distante"}   # isp : #3258 ; distante : #3126 L5
 
 
 def test_all_profiles_ship():
@@ -35,7 +35,7 @@ def test_protected_core_present_in_every_profile():
 
 
 # `minimal` (#2838) est une box SANS ECRAN (ESPRESSObin) : ni kiosque, ni console locale, par construction (secubox-minimal n'installe ni l'un ni l'autre).
-SANS_ECRAN = {"minimal"}
+SANS_ECRAN = {"minimal", "distante"}   # distante : #3126 L5, box légère sans interface locale
 
 
 @pytest.mark.parametrize("path", [p for p in PROFILE_FILES if p.stem not in SANS_ECRAN], ids=lambda p: p.stem)

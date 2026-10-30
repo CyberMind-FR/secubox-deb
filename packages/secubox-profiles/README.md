@@ -80,6 +80,57 @@ mappe chaque module vers son paquet Debian (`dpkg -S` sur les units, repli
 Un module dont le paquet reste introuvable part dans `unresolved` (imprimé sur
 stderr, `⚠️`) — jamais silencieusement omis de l'installateur.
 
+## Profil léger « distante » (#3126 L5, tâche 7)
+
+Variante de `minimal` pour une carte de 1 Go **sans interface d'administration locale** : la box est administrée par le
+maître (pilotage TR-369). L'agent de pilotage déclare alors `Device.X_SECUBOX_Pilotage.Interface = "distante"` et le
+maître sert lui-même `admin.<box>.secubox.in` (basculement « locale ⇄ distante », R-L5-27) ; le panneau « Flotte » du
+maître ouvre la box par l'émission d'un code à usage unique.
+
+- **Allumés** : socle (core, agrégateur, auth, system, network-ready, runtime, firstboot, net-fallback, autoload-agent,
+  premier-pas), maillage (p2p, meshname), **pilotage** (`pilotage-agent`, `pilotage-relais`), boîtier de garde
+  (webfilter, webfilter-feed, nac, freebox, ipv6guard) et **un seul groupe** `group@distante`.
+- **Groupe** `secubox-group@distante` (`groups/distante.conf`, livré sous `/usr/share/secubox/profiles/groups/` — jamais
+  dans `/etc/secubox/groups.d`, où il couperait le groupe des modules déclarés des autres profils) : hub, hardening,
+  dns-guard, ad-guard, wireguard dans un interpréteur ; drop-in `secubox-group@distante.service.d/distante.conf` :
+  `--veille 600 --veille-modules hub,hardening` (les fonctions de filtrage et le tunnel ne dorment jamais). Aucun module
+  à socket dédiée, root, polkit ou compte propre dans le groupe.
+- **Éteints** : nginx d'administration, portal, haproxy, WAF, waker, kiosque, console, **annuaire et assist**
+  (R-L5-28, #3292), `groupe-declares` (ad-guard est servi par le groupe : jamais deux serveurs sur une socket).
+- **`front_web = "etat"`** (`api/front_web.py`, après un apply complet réussi, audit `profiles_front_web`) : chaque
+  entrée de `/etc/nginx/sites-enabled` est mise de côté dans `/var/lib/secubox-profiles/allegement/` (root 0700, jamais
+  effacée), le gabarit `nginx/etat.conf` devient le seul site (`sites-available/secubox-etat`), `nginx -t` valide (échec :
+  tout est rendu, rien n'est rechargé). Tout autre profil rend les sites et `aggregator.toml` d'origine.
+- **`agregateur = "relais"`** : `/etc/secubox/aggregator.toml` sauvegardé puis remplacé par `modules = []` : l'agrégateur
+  ne monte plus rien et relaie vers les sockets (un module seulement monté n'est plus joignable, R-L5-7).
+
+### Page d'état locale (`/etat`)
+
+Page HTML statique écrite par l'agent de pilotage toutes les 60 s (`/run/secubox/pilotage/etat.html`) : nom, maître
+joignable ou non, mains liées, mémoire, services en échec. Aucun secret ni donnée personnelle (ni adresse, ni clé, ni
+jeton, ni nom d'utilisateur). Gabarit `etat` : port 80, **LAN seulement** (`allow` 127.0.0.1, ::1, 10/8, 172.16/12,
+192.168/16, fc00::/7, fe80::/10 ; `deny all`), une seule page (`/` → 302 `/etat`, tout le reste 404), GET seulement,
+aucun relais vers une API ; CSP `default-src 'none'` + `style-src` limité à l'empreinte de la feuille de style de la
+page, `frame-ancestors 'none'`, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `no-store`.
+
+### Limites connues (sans annuaire)
+
+L'annuaire apportait à une box trois fonctions qui **ne sont plus appliquées localement** sous ce profil (rien n'est
+réimplémenté ici ; suite à créer) :
+
+1. **Bans fédérés** (`secubox-annuaire-bans-apply`) : l'union des bans du maillage n'est plus chargée dans nft. La box
+   garde son pare-feu local (DEFAULT DROP) ; seuls les bans fédérés manquent. Piste : le maître pousse la liste par le
+   canal du pilotage (Operate d'action vers un verbe borné du ctl root, `secubox-pilotagectl bans-appliquer`, ensemble
+   nft dédié remplacé atomiquement), sans interpréteur résident.
+2. **Noms `.lan` / `.mesh`** (`secubox-annuaire-noms`) : la box ne publie plus ces noms (Unbound local, Bonjour). Le
+   relais de noms du maître lit déjà le plan d'exposition de l'agent (T6) pour les noms publics ; pour les noms locaux,
+   piste : fichier de zone poussé par le maître par le même canal, chargé par `unbound-control` (verrou, #2979).
+3. **Configuration répliquée 4R** (`secubox-annuaire-apply`) : plus de réplication gondwana. Piste : opération du
+   pilotage « appliquer la configuration » (double tampon + rollback 4R côté ctl root), déclenchée par le maître.
+
+Mesure à faire sur la carte (gk5) après installation : `scripts/bench/mesure-box.sh` (RAM disponible ≥ 250 Mo, swap
+≤ 50 %, CPU au repos ≤ 25 %, aucun service en boucle, démarrage ≤ 3 min).
+
 ## Fichiers
 
 | Chemin | Rôle |

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Empreintes (sha256) des versions LIVRÉES des profils de référence, tirées de l'historique git (#3218).
 # Générées par scripts/gen-empreintes-livrees.py ; lues par scripts/maj-references.py (postinst).
+9074ad96d8eeb5b935ce8d861ca69961dea738982cd3211b6d3e50b63d9e80cd  distante.toml
 2f7902761fa6417271023ec0bbe886e21a2cef68a059c82c66c9d260e340d9c7  full.toml
 74683ca0751e38529099bb89935ac03bdc75ec08bc2c2e63115f61686d8e692d  full.toml
 75d02658158ce1c02407c25c685b985b06848a2ccc5891a587bef6b262df4296  full.toml

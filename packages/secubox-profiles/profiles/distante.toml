@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Profil d'activation « distante » (#3126 L5 tâche 7, variante de minimal, #3218) : box légère SANS interface
+# d'administration locale, administrée par le maître (pilotage TR-369 : l'agent déclare Interface = "distante", le
+# maître sert admin.<box>.secubox.in lui-même, R-L5-27). Cible : carte de 1 Go (ESPRESSObin gk5 : 534 Mo disponibles
+# mesurés sans webui ni annuaire, le 2026-10-30).
+#   - front_web = "etat" : nginx ne sert plus QUE la page d'état locale /etat (gabarit nginx/etat.conf, LAN seulement,
+#     statique, écrite par l'agent de pilotage) ; les sites d'administration sont mis de côté et rendus par tout autre
+#     profil (api/front_web.py). Ni portal, ni haproxy, ni WAF, ni hub en service propre, ni waker.
+#   - agregateur = "relais" : l'agrégateur ne monte plus aucun module (aggregator.toml : modules = []), il relaie
+#     vers les sockets ; aggregator.toml d'origine rendu par tout autre profil.
+#   - modules Python groupés dans UN interpréteur : secubox-group@distante (groups/distante.conf), avec veille des
+#     modules d'affichage (hub, hardening) ; les fonctions du boîtier de garde ne dorment jamais.
+#   - ni annuaire ni assist (R-L5-28, #3292) : voir le README, « limites connues » (bans fédérés, noms .lan/.mesh,
+#     configuration répliquée 4R ne sont plus appliqués localement).
+# Restent dans leur propre service (compte dédié, root, polkit ou socket dédiée) : auth, system, nac, webfilter,
+# freebox, ipv6guard, p2p, premier-pas, autoload-agent.
+name  = "distante"
+label = "Distante — boîtier de garde sans interface locale, administré par le maître"
+front_web  = "etat"
+agregateur = "relais"
+menu_off = [
+  "zkp", "assist", "annuaire", "fleet", "ksm", "premier-pas-maitre", "centers",
+  "dpi", "ndpid", "mediaflow", "admin", "profiles", "network-anomaly", "netdiag", "grafana", "glances", "toolbox",
+]
+minuteurs_off = [
+  "dpi-resume", "yt-dlp-refresh",
+  "courbes-serie", "metrics-publish", "netstats", "network-anomaly-collecte", "profiles-releve",
+  "cache-warm@jitsi", "cache-warm@metacatalog",
+  "streamlit-idle",
+]
+proteges_off = ["profiles"]
+on = [
+  # Socle : API (relais pur), connexion, système.
+  "core", "aggregator", "auth", "system",
+  "network-ready", "runtime", "firstboot", "net-fallback",
+  "autoload-agent", "premier-pas",
+  # Un seul interpréteur pour hub, hardening, dns-guard, ad-guard, wireguard (groups/distante.conf).
+  "group@distante",
+  # Maillage et pilotage : la box rejoint son maître, qui l'administre.
+  "p2p", "meshname", "pilotage-agent", "pilotage-relais",
+  # Fonctions du boîtier de garde (services propres : compte dédié ou socket dédiée).
+  "webfilter", "webfilter-feed", "nac", "freebox", "ipv6guard",
+]

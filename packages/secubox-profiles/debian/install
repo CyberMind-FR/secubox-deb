@@ -12,3 +12,5 @@ menu.d/11-profiles.json usr/share/secubox/menu.d/
 nginx/profiles.conf    etc/nginx/secubox-routes.d/
 templates/waking.html  usr/share/secubox/www/waking/
 nginx/secubox-waking.conf  etc/nginx/snippets/
+groups/distante.conf   usr/share/secubox/profiles/groups/
+nginx/etat.conf        usr/share/secubox/profiles/nginx/

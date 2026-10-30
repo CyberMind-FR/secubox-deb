@@ -44,6 +44,10 @@ class Profile:
     minuteurs_off: frozenset[str] = frozenset()
     # #3218 : modules protégés que CE profil coupe quand même — seulement ceux de PROTEGES_COUPABLES (une voie de secours existe).
     proteges_off: frozenset[str] = frozenset()
+    # #3126 L5 tâche 7 : profil léger « distante ». front_web = "etat" : nginx réduit à la page d'état locale ;
+    # agregateur = "relais" : aggregator.toml sans montage. Absents : rien n'est touché (voir api/front_web.py).
+    front_web: str | None = None
+    agregateur: str | None = None
 
 
 def _liste(d: dict, cle: str, path: Path) -> list[str]:
@@ -85,9 +89,14 @@ def parse_profile(texte: str, path: Path) -> Profile:
     interdits = sorted(set(proteges) - PROTEGES_COUPABLES)
     if interdits:
         raise StateError(f"{path}: 'proteges_off' ne peut couper que {sorted(PROTEGES_COUPABLES)} (refusé : {interdits})")
+    front_web, agregateur = d.get("front_web"), d.get("agregateur")
+    if front_web not in (None, "etat"):
+        raise StateError(f"{path}: front_web={front_web!r} invalide (seule valeur : \"etat\")")
+    if agregateur not in (None, "relais"):
+        raise StateError(f"{path}: agregateur={agregateur!r} invalide (seule valeur : \"relais\")")
     return Profile(name=name, label=d.get("label", name), on=frozenset(on),
                    menu_off=frozenset(_liste(d, "menu_off", path)), minuteurs_off=frozenset(minuteurs),
-                   proteges_off=frozenset(proteges))
+                   proteges_off=frozenset(proteges), front_web=front_web, agregateur=agregateur)
 
 
 def load_pins(path: Path) -> dict[str, str]:
