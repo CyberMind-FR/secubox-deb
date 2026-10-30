@@ -164,9 +164,13 @@ Un nœud sans accès Internet (ex. gk3) est servi par un nœud qui en a un (ex. 
 |---|---|---|
 | `secubox-relais-maillage relayer <nom> <ip-maillée> [port]` | relais | Relaie un nom : pair vérifié, DNS public vérifié, certificat (joker s'il existe), vhost HAProxy derrière le WAF, route sbxwaf |
 | `secubox-relais-maillage retirer <nom>` | relais | Retire le vhost et la route (certificat et DNS inchangés) |
+| `secubox-relais-maillage relayer --sans-sonde <nom> <ip-maillée> [port]` | relais | Rétablissement (retour arrière du pilotage, #3126) : mêmes contrôles et mêmes vhost/route, sans sonde du pair ni DNS |
+| `secubox-relais-maillage pair-de <box>` | relais | IP maillée du pair `<box>` (wg_mesh.json, présent une fois et connu de wg-mesh) |
 | `secubox-relais-maillage etat` | relais | Noms relayés vers le maillage |
 | `secubox-relais-maillage ouvrir <ip-relais> [port]` | pair | Port des vhosts ouvert au seul relais ; nginx croit l'adresse de visiteur qu'il transmet |
 | `secubox-relais-maillage synchroniser` | partout | Minuteur horaire `secubox-relais-maillage.timer` (voir ci-dessous) |
+
+`relayer`, `retirer` et `synchroniser` tiennent le verrou commun `/var/lib/secubox-pilotage-pages/verrou-relais.lock` (flock) pendant toute leur passe, comme `secubox-pilotage-vhost` pendant un basculement (#3126). Un `admin.<box>` listé dans `exclusions-relais.json` n'est ni créé ni retiré ; fichier présent mais non sûr : aucun `admin.<box>` créé ni retiré dans le doute.
 
 **Exposition par défaut (`synchroniser`).**
 - *Sur un satellite* : le port est ouvert au maître maillé.
