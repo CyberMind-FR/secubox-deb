@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Reprise du bus I2C des LED (#3290) : lancée par OnFailure= de
+# secubox-led-pulse quand il sort en 75 (erreurs d'écriture répétées).
+# secubox-led-reset recharge leds-is31fl319x (rmmod/modprobe) puis relance
+# le moteur. Une fois par 10 min au plus : un bus vraiment bloqué (Ctlr Error)
+# ne se débloque qu'au redémarrage, inutile de marteler.
+[Unit]
+Description=SecuBox LED - reprise du bus I2C (rechargement du pilote)
+StartLimitIntervalSec=600
+StartLimitBurst=1
+
+[Service]
+Type=oneshot
+ExecCondition=/usr/sbin/secubox-led-board
+ExecStart=/usr/sbin/secubox-led-reset
+TimeoutStartSec=60

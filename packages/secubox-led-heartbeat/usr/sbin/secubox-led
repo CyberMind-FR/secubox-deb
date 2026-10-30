@@ -58,6 +58,11 @@ SecuBox LED Control
 Usage:
   secubox-led <layer> <status>
   secubox-led all <status>
+  secubox-led demo <forme|couche|toutes> [--duree S] [--niveau 0-3] [--rythme R]
+  secubox-led verifier
+
+Formes (demo) : par_led jauge mono double triple etale rotatif
+Couches (demo) : celles de /etc/secubox/leds.toml (systeme, trafic), ou toutes
 
 Layers:
   hw, 1, bottom    LED1 - Hardware layer (network, CPU, memory)
@@ -81,6 +86,44 @@ Examples:
 EOF
     exit 1
 }
+
+# Moteur en couches (#3290) : demo et verification. La demo arrete le demon
+# le temps de l'affichage (un seul ecrivain sur la puce) puis le relance.
+case "${1:-}" in
+    demo)
+        shift
+        PULSE=/usr/sbin/secubox-led-pulse
+        if [ "${SECUBOX_TEST:-}" = 1 ] && [ "$(id -u)" -ne 0 ]; then
+            PULSE="${SECUBOX_LED_PULSE:-$PULSE}"
+        fi
+        [ $# -ge 1 ] || { "$PULSE" demo --help; exit 1; }
+        relancer=0
+        if systemctl is-active --quiet secubox-led-pulse.service 2>/dev/null; then
+            relancer=1
+        fi
+        # Quoi qu'il arrive (fin, erreur, HUP a la fermeture SSH, INT, TERM) :
+        # le demon est relance s'il tournait. La demo eteint elle-meme les LED
+        # (SIGTERM/SIGHUP -> extinction propre cote Python).
+        fin() {
+            trap - EXIT HUP INT TERM
+            if [ "$relancer" -eq 1 ]; then
+                systemctl start secubox-led-pulse.service || true
+            fi
+        }
+        trap fin EXIT
+        trap 'exit 130' HUP INT TERM
+        if [ "$relancer" -eq 1 ] && ! systemctl stop secubox-led-pulse.service; then
+            echo "secubox-led : arret de secubox-led-pulse impossible, demo annulee (un seul ecrivain sur la puce)" >&2
+            exit 1
+        fi
+        rc=0
+        "$PULSE" demo "$@" || rc=$?
+        exit "$rc"
+        ;;
+    verifier)
+        exec /usr/sbin/secubox-led-pulse verifier
+        ;;
+esac
 
 [ $# -lt 2 ] && usage
 

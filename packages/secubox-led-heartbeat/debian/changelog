@@ -1,3 +1,42 @@
+secubox-led-heartbeat (2.3.3-1~trixie1) trixie; urgency=medium
+
+  * Reprise I2C (#3290, banc gk6) : ecriture sysfs sans tampon Python (os.write) ; l'erreur apres rmmod ne reste plus dans un tampon vide a la sortie, qui donnait le code 120 en boucle.
+  * secubox-led-pulse sort par os._exit avec le code du moteur ; exception inattendue = sortie 75 ; LEDs absentes au demarrage : attente de 60 s sans ecrire, puis sortie 75.
+  * Unite : RestartMode=direct, OnFailure= (reprise) seulement sur vraie sortie 75, plus a chaque redemarrage.
+  * secubox-led-reset : relance du moteur en --no-block, a la fin seulement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 22:00:00 +0100
+
+secubox-led-heartbeat (2.3.2-1~trixie1) trixie; urgency=medium
+
+  * Profil AppArmor secubox-led-pulse : il s'applique aussi a ExecCondition (secubox-led-board), qui ne pouvait plus s'executer (rc=126 sur gk6, service saute). Ajout de env, bash, tr, grep en ix, lecture de /proc/device-tree, /sys/firmware/devicetree, /sys/devices/**/name, /proc/diskstats.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 21:00:00 +0100
+
+secubox-led-heartbeat (2.3.1-1~trixie1) trixie; urgency=medium
+
+  * Relecture de securite du moteur en couches (#3290) : fichiers d'etat lus sans suivre de lien ni bloquer (O_NOFOLLOW|O_NONBLOCK), fichier regulier, proprietaire root ou producteur (secubox, secubox-metrics, secubox-soc), non inscriptible par tous, 1 Mio au plus.
+  * JSON piege (profondeur, grands entiers, NaN, Inf, types inattendus) => source inconnue, jamais de plantage ni de vert ; horodatage interne prioritaire sur la date du fichier.
+  * Alertes : fraicheur d'un jour et SOC arrete (socket absente) => inconnu.
+  * Configuration validee par types ; debit_max borne a 50 ; 10 ms au moins entre deux ecritures I2C ; leds.toml refuse s'il n'est pas root:root non inscriptible par d'autres (postinst : root:root 0644).
+  * Reprise I2C : sortie 75 puis OnFailure=secubox-led-reprise.service (secubox-led-reset, 1 fois / 10 min), plus de systemd-run.
+  * Unite durcie (UMask, RestrictSUIDSGID, ProtectKernelLogs, RestrictNamespaces, PrivateDevices, MemoryMax=64M), profil AppArmor secubox-led-pulse en enforce, exception root ecrite dans RULES-CODE.
+  * secubox-led demo : trap qui relance le demon sur EXIT/HUP/INT/TERM ; demo annulee si l'arret du demon echoue.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 20:00:00 +0100
+
+secubox-led-heartbeat (2.3.0-1~trixie1) trixie; urgency=medium
+
+  * Moteur d'affichage en couches (#3290 tranche 2) : secubox-led-pulse devient le seul ecrivain des LED (Python, /usr/lib/secubox-led-heartbeat/ledcouches.py), pilote par /etc/secubox/leds.toml.
+  * Formes par_led, jauge, mono, double, triple, etale, rotatif ; rythmes fixe, respiration, pulsation, eclats ; couches mono consecutives en rotation (plus de trois couches).
+  * Defaut : couche systeme (CPU, memoire, E/S ; vert, jaune, orange, rouge, respiration) puis couche trafic (attaques, visites, alertes ; cyan, bleu, violet, rose, pulsations), repere de N eclats blancs sur la LED 2.
+  * Sources locales en lecture seule : /proc/stat, /proc/meminfo, cache secubox-metrics (blocages WAF, connexions HTTPS), alertes SOC ; source absente ou perimee = inconnu (gris-bleu), jamais vert.
+  * Ecriture d'un canal seulement sur changement, debit borne (20 ecritures/s par defaut), extinction a l'arret, reprise par secubox-led-reset apres erreurs I2C repetees.
+  * secubox-healthbump.timer, secubox-led-trigger et secubox-led-heartbeat desactives au postinst (memes canaux) ; secubox-led-reset ne relance plus healthbump.
+  * secubox-led demo <forme|couche|toutes> et secubox-led verifier.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 18:00:00 +0100
+
 secubox-led-heartbeat (2.2.1-1~trixie1) trixie; urgency=medium
 
   * Relecture #3290. dkms et linux-headers-arm64 passent en Suggests : apt les installait par defaut, y compris sur gk2 (disque plein) et rpi400 ; le postinst dit quoi installer.
