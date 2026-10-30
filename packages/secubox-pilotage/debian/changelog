@@ -1,3 +1,12 @@
+secubox-pilotage (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 4 (ref #3126) : secubox-pilotage-www, ctl root borné (extraire, purger, lister) : pages www/ d'une version
+    de paquet extraites du dépôt apt local (somme SHA256 de l'index vérifiée, sans dpkg), sous
+    /var/lib/secubox/pilotage/www/<paquet>/<version>/ ; purge des versions non déclarées depuis 7 jours ; audit ;
+    sudoers ; dépendances sudo et zstd.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 12:00:00 +0100
+
 secubox-pilotage (0.2.2-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 3, correction 2/5 (R-L5-22 M4, ref #3126) : commentaire de HTTP_INCONNUS_PAR_MINUTE séparé de celui de

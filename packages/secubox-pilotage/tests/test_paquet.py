@@ -141,7 +141,7 @@ def test_controle_debian():
     assert "Package: secubox-pilotage\n" in c and "Architecture: all" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
     ch = lire("debian/changelog").splitlines()[0]
-    assert ch.startswith("secubox-pilotage (0.2.2-1~trixie1) trixie;")
+    assert ch.startswith("secubox-pilotage (0.3.0-1~trixie1) trixie;")
 
 
 def test_postinst_et_prerm():
@@ -227,7 +227,8 @@ def test_la_doc_du_marqueur_dit_ce_qu_il_protege_et_ce_qu_il_ne_protege_pas():
     nginx), PAS un processus qui joint directement la socket : celui-là forge aussi le marqueur. Contre lui, la barrière est la socket
     (0660, groupe www-data). Aucun texte ne doit promettre le contraire."""
     import api.canal as canal
-    entree = lire("debian/changelog").split("\n -- ", 1)[0]
+    # l'entrée qui documente le marqueur (0.2.2), pas forcément la plus récente
+    entree = next(e for e in lire("debian/changelog").split("\n -- ") if "HTTP_INCONNUS_PAR_MINUTE" in e)
     for texte in (canal.__doc__, entree, lire("README.md")):
         assert "processus local du groupe www-data) ne choisit pas" not in texte
         assert "processus local qui joindrait la socket ne choisit plus" not in texte

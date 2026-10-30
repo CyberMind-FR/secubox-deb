@@ -206,6 +206,43 @@ est l'entrée du relais local de la box (`methode`, `chemin` `/api/v1/<module>/�
 - Audit : chaque écriture (POST/PUT/PATCH/DELETE) `pilotage_http` avant l'envoi (`etat: demande`) et à la réponse
   (`etat: rendu`, `statut`) ; jamais le corps ni la requête `?…`. Le corps d'une page n'est jamais rangé en base.
 
+## Pages des box sans tête (L5, tâche 4)
+
+`/usr/sbin/secubox-pilotage-www` (root, appelé par `sudo -n` depuis le service ; sudoers `secubox-pilotage-www`) prépare,
+pour chaque version de paquet déclarée par une box, les pages de **cette** version (spec D5 : une page ne parle qu'à l'API de
+sa version). Sortie : une ligne JSON sans chemin ; codes 0, 1 (refus/erreur), 2 (argv ou configuration).
+
+- `extraire [--acteur A] <paquet> <version>` : paquet `^secubox-[a-z0-9-]{1,60}$`, version `^[0-9][A-Za-z0-9.+~:-]{0,62}$`.
+  Le `.deb` est trouvé par `dists/<suite>/main/binary-*/Packages` du dépôt local (`Filename` sous `pool/`, `SHA256`, `Size`),
+  recopié dans un fichier privé et vérifié (somme ou taille différente : refus, rien sur disque), puis lu en ar + `data.tar`
+  (xz, gz, bz2, sans compression ; zst par `/usr/bin/zstd`) **sans dpkg** : aucun script de mainteneur. Seul
+  `usr/share/secubox/www/` est copié (chemin des pages vérifié sur secubox-dns, secubox-admin, secubox-ad-guard) vers
+  `/var/lib/secubox/pilotage/www/<paquet>/<version>/` (root, fichiers 0644, dossiers 0755 ; manifeste `.<version>.json` à côté).
+  Dossier temporaire frère puis renommage ; version présente et intacte (manifeste, sommes, modes) : `{"deja": true}`.
+- `purger [--acteur A]` : lit sur **stdin** `{"en_usage": [{"paquet": …, "version": …}, …]}` (≤ 1 Mio, motifs entiers ; clé
+  ou champ en trop : code 2) ; supprime les versions extraites qu'aucune box ne déclare depuis **7 jours**. Horodatage « dernière
+  déclaration » tenu par root dans `www/.vu.json` (une version extraite inconnue de l'état reçoit un délai complet).
+- `lister` : `{"versions": [{paquet, version, taille, date}]}`, non audité.
+- Audit : `pilotage_www_extraire` (`resultat` ok, deja, refus, erreur ; `motif`) et `pilotage_www_purger` (`purgees`) dans
+  `/var/log/secubox/audit.log`, ouvert sans suivre de lien ; audit impossible ⇒ échec.
+- Refus : chemin absolu ou `..`, nom non UTF-8 ou à caractère de contrôle (toute l'archive) ; sous les pages : lien symbolique
+  absolu ou contenant `..`, lien dur vers un fichier hors des pages, fichier spécial, setuid/setgid, entrée en double, plus de
+  20 000 entrées ou 64 Mio ; `.deb` > 512 Mio.
+- Configuration facultative `/etc/secubox/pilotage-www.toml` (root, non inscriptible par d'autres) : `depot_apt` (défaut
+  `/data/apt`, R-L5-1), `suite` (`trixie`), `taille_max_mio`, `fichiers_max`, `deb_max_mio`.
+- `www/` est créé par le ctl lui-même, par descripteur (pas de tmpfiles : « unsafe path transition » sous
+  `/var/lib/secubox/<module>/`), refusé s'il est un lien ou n'appartient pas à root. Pas de profil AppArmor propre au ctl
+  (comme les autres assistants root du paquet).
+
+**Contrat pour T5** (service du maître) : le service appelle `sudo -n /usr/sbin/secubox-pilotage-www extraire --acteur
+<admin de la session require_jwt> <paquet> <version>` pour chaque paquet déclaré dans `Device.X_SECUBOX_Packages`, et, une fois
+par jour au moins, `purger` avec sur stdin l'union des versions déclarées par toutes les box connues. La liste passe par stdin
+(et non par un fichier que root relirait dans un dossier du service) : aucun chemin choisi par un compte non root n'est ouvert
+par root, et l'entrée est validée en entier avant toute suppression. Le service ne peut, au pire, qu'avancer la purge d'une
+version non déclarée (jamais toucher hors de `www/<paquet>/<version>`). Reste à T5 : la traversée de
+`/var/lib/secubox/pilotage` (0750) par nginx, et la route qui sert les pages avec acteur et portée pris dans la session
+(exigence M3 de T3).
+
 ## Tests
 `cd packages/secubox-pilotage && python3 -m pytest -q`. `tests/test_contrat_go.py` rejoue contre le vrai canal (et le vrai stockage) les
 enveloppes figées par le client Go (`packages/secubox-pilotage-agent/internal/canal/testdata/contrat/`, régénérées par son test

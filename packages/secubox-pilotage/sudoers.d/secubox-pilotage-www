@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# secubox-pilotage (#3126, L5 tâche 4) : le service du maître (non root) fait extraire et purger les pages www/ des
+# versions déclarées par les box. Argv borné au ctl ; toute la validation (verbes fermés, motifs entiers du paquet et
+# de la version, contenu de l'archive, entrée de purge) vit dans /usr/sbin/secubox-pilotage-www. Jamais un autre programme.
+secubox-pilotage ALL=(root) NOPASSWD: /usr/sbin/secubox-pilotage-www *
