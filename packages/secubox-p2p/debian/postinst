@@ -96,6 +96,12 @@ case "$1" in
         systemctl enable secubox-p2p.service
         # #2475 : la minuterie ne fait rien tant qu'aucun code n'est déposé (ConditionPathExists)
         install -d -m 0700 -o secubox -g secubox /var/lib/secubox/p2p 2>/dev/null || true
+        # #3126 : le pilotage (compte secubox-pilotage) ne lit pas p2p/ (0700) mais la projection des pairs ENRÔLÉS (nom, adresse de
+        # maillage, empreinte ; aucun secret), republiée ici depuis peers.json puis à chaque écriture du registre par l'API.
+        [ -L /var/lib/secubox/p2p-public ] && rm -f /var/lib/secubox/p2p-public
+        install -d -o secubox -g secubox -m 0755 /var/lib/secubox/p2p-public
+        runuser -u secubox -- python3 -I /usr/lib/secubox/p2p/api/pairs_enroles.py \
+            || echo "secubox-p2p : projection des pairs enrôlés non publiée (le pilotage ne reconnaîtra aucune box du maillage)" >&2
         systemctl enable secubox-automesh.timer >/dev/null 2>&1 || true
         systemctl start secubox-automesh.timer >/dev/null 2>&1 || true
         systemctl start secubox-p2p.service || true

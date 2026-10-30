@@ -189,7 +189,7 @@ def test_assistant_compteur_illisible_ou_lien_refuse(tmp_path):
 
 
 def test_assistant_audite_l_emission_sans_le_code(tmp_path):
-    """Sous le profil (audit.log en ajout seul), l'audit de sbx-mesh-invite (open « a » = O_CREAT) est refusé : l'assistant
+    """L'audit de sbx-mesh-invite (open « a » = O_CREAT) ne compte pas : l'assistant
     écrit lui-même la ligne, sans O_CREAT, et ne rend pas le code si l'audit échoue (fermé par défaut)."""
     a = charger_assistant()
     journal = tmp_path / "audit.log"

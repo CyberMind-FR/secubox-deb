@@ -36,8 +36,8 @@ profile secubox-pilotage-invite /usr/sbin/secubox-pilotage-invite {
   /var/lib/secubox/p2p/master-link/ r,
   /var/lib/secubox/p2p/master-link/** rwk,
 
-  # Audit commun en ajout seul (jamais créé ni tronqué).
-  /var/log/secubox/audit.log a,
+  # Audit commun : `w` (pas `a` seul, qui refuse write() après une ouverture O_APPEND réussie, #3126) ; le code n'ouvre ni en création ni en troncature.
+  /var/log/secubox/audit.log w,
 
   # `ip` (iproute2) : adresses et routes par netlink.
   /{,usr/}{,s}bin/ip rix,

@@ -18,8 +18,8 @@ Seul le service du maître joint la socket (0600, secubox-pilotage). Il ne peut 
             en cas d'autre échec
 
 Le code porte un jeton : il n'est écrit que sur la connexion, jamais dans le journal (stderr ne reçoit que le code de sortie).
-Audit : `pilotage_code_emis {nom, ttl}` dans /var/log/secubox/audit.log, ouvert en ajout SANS création (le profil AppArmor
-n'accorde que `a` ; l'audit propre de sbx-mesh-invite, ouvert avec création, y est refusé). Audit impossible : rien n'est rendu.
+Audit : `pilotage_code_emis {nom, ttl}` dans /var/log/secubox/audit.log, ouvert en ajout SANS création ni
+troncature (profil AppArmor en `w` : `a` seul refusait write() après l'ouverture, banc gk2 #3126). Audit impossible : rien n'est rendu.
 """
 import fcntl
 import json

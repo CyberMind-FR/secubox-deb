@@ -1,3 +1,17 @@
+secubox-pilotage (0.5.4-1~trixie1) trixie; urgency=medium
+
+  * Banc gk2 (ref #3126) : l'identité du maillage vient de la projection publique
+    /var/lib/secubox/p2p-public/pairs-enroles.json (secubox-p2p >= 1.20.2) et non plus de
+    /var/lib/secubox/p2p/peers.json (0700 secubox, illisible : toute box recevait 403 « box inconnue ») ;
+    fichier absent ou illisible : refus propre, une ligne de journal par changement d'état.
+  * Audit : profils AppArmor secubox-pilotage-api et secubox-pilotage-invite en `w` sur audit.log
+    (avec `a` seul, l'ouverture O_WRONLY|O_APPEND passait mais write() était refusé : EACCES) ; le code
+    n'ouvre toujours ni en création ni en troncature.
+  * Test « droits réels » : chaque fichier lu dans l'état d'un autre paquet est atteignable avec les
+    modes posés par son postinst ; aucun profil du dépôt n'accorde audit.log en `a` seul.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 20:00:00 +0100
+
 secubox-pilotage (0.5.3-1~trixie1) trixie; urgency=medium
 
   * Passe finale L5 (ref #3126) : émission du code de connexion au vhost refusée (403) si `Sec-Fetch-Site` n'est ni

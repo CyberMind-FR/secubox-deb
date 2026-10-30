@@ -18,7 +18,8 @@ du catalogue fermé, le journal des opérations et les sessions de support (voir
 | Canal | `/run/secubox/pilotage-canal.sock` (0660, groupe `www-data`, créée par systemd), jamais exposée hors de l'écouteur nginx ; `/canal/v1/bonjour` : un par box et par 10 s (429 au-delà) |
 | Processus | une seule boucle asyncio, les deux applis en `lifespan="on"` (les files sont en mémoire, la relève est partagée) ; code de sortie 1 si l'une ne démarre pas (le code d'un `SystemExit` d'uvicorn est journalisé) |
 | Données | `/var/lib/secubox/pilotage/` (0750 `secubox-pilotage`), préparé par le postinst par descripteur (`init_donnees.py`) : systemd-tmpfiles refuse ce chemin ; SQLite en `temp_store=MEMORY` (le profil ne donne pas `/tmp`) |
-| Audit | `/var/log/secubox/audit.log` (propriétaire et droits inchangés) ; AppArmor en ajout seul ; ACL `u:secubox-pilotage:rw-` posée par `secubox-pilotage-audit-acl` (reposée après chaque rotation par l'unité de l'écouteur), retirée par le postrm au `remove` et au `purge` (journal courant et journaux tournés, jamais à travers un lien ; rien à l'`upgrade`) |
+| Identité | adresse source du tunnel : `10.10.0.0/24` → projection `/var/lib/secubox/p2p-public/pairs-enroles.json` publiée par secubox-p2p (pairs enrôlés seulement ; `/var/lib/secubox/p2p` est 0700 et n'est jamais lu) ; `10.64.0.0/16` → `/var/lib/secubox/autoload-public/pairs-publics.json`. Fichier absent ou illisible : aucune box identifiée (403), une ligne de journal par changement d'état |
+| Audit | `/var/log/secubox/audit.log` (propriétaire et droits inchangés) ; AppArmor `w` (pas `a` seul, qui refuse `write()` après l'ouverture `O_APPEND`, banc gk2) et ajout seul tenu par le code (ni création ni troncature) ; ACL `u:secubox-pilotage:rw-` posée par `secubox-pilotage-audit-acl` (reposée après chaque rotation par l'unité de l'écouteur), retirée par le postrm au `remove` et au `purge` (journal courant et journaux tournés, jamais à travers un lien ; rien à l'`upgrade`) |
 | AppArmor | `secubox-pilotage-api` et `secubox-pilotage-invite` (assistant de jonction), enforce ; déchargés par le postrm au `remove` |
 | Menu | aucune entrée propre : le panneau « Pilotage » est dans la page Flotte de secubox-annuaire ; paquet `hors-arbre` des méta-paquets (installé à la demande) |
 
@@ -117,7 +118,7 @@ Catalogue fermé (`pilotage/operations.py`) :
 | `maj-paquets` | `Device.X_SECUBOX_Packages.MettreAJour()` | aucun | non |
 | `service-demarrer`, `service-redemarrer` | `Device.X_SECUBOX_Services.Agir()` | `unite` (`^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service\|timer)$`) | non |
 | `service-arreter` | `Device.X_SECUBOX_Services.Agir()` | `unite` | oui |
-| `renommer` | `Device.X_SECUBOX_Nom.Renommer()` | `nom` (libellé DNS) ; nom déjà porté par une box connue, un pair enrôlé de `peers.json` ou le maître : 409 | oui |
+| `renommer` | `Device.X_SECUBOX_Nom.Renommer()` | `nom` (libellé DNS) ; nom déjà porté par une box connue, un pair enrôlé de la projection `p2p-public/pairs-enroles.json` ou le maître : 409 | oui |
 | `renouveler` | `Device.X_SECUBOX_Secrets.Renouveler()` | aucun | oui |
 
 - **Confirmation forte** (box du propriétaire, réseau `maillage`) : `confirmation` doit être **exactement** le nom de la box, sinon 400,
