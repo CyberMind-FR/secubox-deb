@@ -5,8 +5,8 @@
 #
 # Écritures ouvertes au porteur délégué du pilotage (#3126, L5 ; R-L5-12, #3279 en version minimale).
 # Installé dans /usr/share/secubox/pilotage/routes-ouvertes.d/system.toml (root, 0644). Seules les écritures que
-# les pages du module appellent : www/system/index.html (actions rapides, paquets, réglages, kiosque, carte) et
-# la vue portée system-hub (diagnostics, planification des sauvegardes). Les sessions restent refusées par la
+# les pages du module appellent : www/system/index.html (actions rapides, paquets, réglages, carte) et
+# la vue portée system-hub (diagnostics). Les sessions restent refusées par la
 # liste de refus de secubox_core.auth ; restore_config n'est pas ouverte.
 #
 # FERMÉES au jeton délégué (R-L5-15) : reboot, shutdown, apply_updates, settings (renommage), service_control,

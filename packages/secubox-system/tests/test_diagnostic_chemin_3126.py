@@ -104,3 +104,27 @@ def test_run_diagnostic_test_lit_le_corps(monkeypatch):
 
     r = asyncio.run(m.run_diagnostic_test(Req(), user={}))
     assert r["test"] == "disk" and r["success"] is True
+
+
+@pytest.mark.parametrize("valeur", [["disk"], {"disk": 1}, 3, None])
+def test_run_diagnostic_test_hors_chaine_refuse_422(valeur):
+    """R-L5-17 M4 : un `test` qui n'est pas une chaîne (liste, objet : non hachable) donnait un 500 ; c'est un 422."""
+    m = importlib.util.module_from_spec(importlib.util.spec_from_file_location("api_sys_rdt422", SYSTEM / "api" / "main.py"))
+    m.__spec__.loader.exec_module(m)
+
+    class Req:
+        query_params = {}
+
+        async def json(self):
+            return {"test": valeur}
+
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(m.run_diagnostic_test(Req(), user={}))
+    assert e.value.status_code == 422
+
+
+def test_entete_des_routes_ouvertes_sans_kiosque_ni_sauvegardes():
+    """R-L5-17 M6 : l'en-tête ne présente plus le kiosque ni la planification des sauvegardes comme écritures ouvertes."""
+    texte = (SYSTEM / "pilotage" / "routes-ouvertes.d" / "system.toml").read_text(encoding="utf-8")
+    ouvertes = texte.split("FERMÉES", 1)[0].lower()
+    assert "kiosque" not in ouvertes and "sauvegarde" not in ouvertes

@@ -1207,6 +1207,8 @@ async def run_diagnostic_test(request: Request, user=Depends(require_jwt)):
         test = None
     if test is None and hasattr(request, "query_params"):
         test = request.query_params.get("test")
+    if not isinstance(test, str):          # R-L5-17 M4 : une liste ou un objet n'est pas un nom de test (plus de 500)
+        raise HTTPException(422, "test : nom de test attendu")
     return await asyncio.to_thread(_executer_test_diagnostic, test)
 
 
