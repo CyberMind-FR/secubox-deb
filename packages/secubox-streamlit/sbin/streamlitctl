@@ -3083,18 +3083,55 @@ cmd_app_env() {
 
 # boot — au démarrage de la box (secubox-streamlit-demarrage.service) : le
 # conteneur n'est démarré QUE si une appli publiée doit rester active
-# (autostart posé par la publication). Sinon il reste arrêté : le parc dort
-# par conception (#982), rien n'est démarré « au cas où ».
+# (autostart posé par la publication) OU si un frontal web permanent est
+# déclaré actif ([frontaux.<nom>], #3294) ; l'unité de chaque frontal est
+# ensuite démarrée dans le conteneur si elle ne l'est pas. Sinon il reste
+# arrêté : le parc dort par conception (#982), rien n'est démarré « au cas où ».
 cmd_boot() {
     if ! lxc_exists; then
         log "boot: conteneur absent — rien à démarrer"
         return 0
     fi
+    local unites="" u publiee=0
     if [ -f "$CONF_PATH" ] && grep -qE '^[[:space:]]*autostart_publication[[:space:]]*=[[:space:]]*true' "$CONF_PATH"; then
-        cmd_start
-    else
-        log "boot: aucune appli publiée à garder active — conteneur laissé arrêté"
+        publiee=1
     fi
+    if [ -f "$CONF_PATH" ]; then
+        unites=$(_publication frontal-unites) || { error "boot: frontaux illisibles"; unites=""; }
+    fi
+    if [ "$publiee" = 0 ] && [ -z "$unites" ]; then
+        log "boot: aucune appli publiée ni frontal à garder actif — conteneur laissé arrêté"
+        return 0
+    fi
+    cmd_start
+    for u in $unites; do
+        # Déjà validée par publication.py ; revérifiée ici : le TOML n'est jamais une commande.
+        [[ "$u" =~ ^[a-z0-9@._-]{1,64}\.service$ && "$u" != -* ]] || { error "boot: unité refusée : $(printf '%q' "$u")"; continue; }
+        if lxc-attach -n "$LXC_NAME" -- systemctl is-active --quiet "$u"; then
+            log "boot: frontal $u déjà actif"
+        elif lxc-attach -n "$LXC_NAME" -- systemctl start "$u"; then
+            log "boot: frontal $u démarré"
+        else
+            error "boot: frontal $u non démarré"
+        fi
+    done
+}
+
+# frontal list | set <nom> --domaine D --cible IP:PORT --unite U [--sante /chemin]
+#   [--reprendre fichier.conf] [--inactif] [--par qui] [--apply] | remove <nom> [--par qui] [--apply]
+# Frontaux web permanents hébergés dans le conteneur (#3294) : déclaration TOML, vhost
+# nginx :9080 généré avec les pages d'erreur SecuBox ; route sbxwaf jamais touchée. À blanc
+# sans --apply ; audité.
+cmd_frontal() {
+    local verbe="${1:-}"; shift || true
+    case "$verbe" in
+        list)   _publication frontal-lister ;;
+        set)    _publication frontal-poser "$@" --lxc-config "$LXC_PATH/config" ;;
+        remove) _publication frontal-retirer "$@" ;;
+        *)
+            error "Usage: streamlitctl frontal list | set <nom> --domaine D --cible IP:PORT --unite U [--sante /chemin] [--reprendre fichier.conf] [--inactif] [--par qui] [--apply] | remove <nom> [--par qui] [--apply]"
+            return 64 ;;
+    esac
 }
 
 # ─────────────────────────────────────────────────────────────────────
@@ -3193,6 +3230,31 @@ case "${1:-}:${2:-}" in
             esac
         done
         [ -z "$_attendu" ] || _refuser "--$_attendu" ;;
+    frontal:set|frontal:remove)
+        # Nom strict ; options en liste blanche, chaque valeur au motif de son option (publication.py revalide tout).
+        [[ "${3:-}" =~ ^[a-z0-9-]{1,40}$ ]] || _refuser "${3:-}"
+        _attendu=""
+        for _a in "${@:4}"; do
+            if [ -n "$_attendu" ]; then
+                case "$_attendu" in
+                    par) _acteur_admis "$_a" || _refuser "$_a" ;;
+                    domaine) [[ "$_a" =~ ^[a-z0-9][a-z0-9.-]{0,252}$ ]] || _refuser "$_a" ;;
+                    cible) [[ "$_a" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}:[0-9]{1,5}$ ]] || _refuser "$_a" ;;
+                    unite) [[ "$_a" =~ ^[a-z0-9@._-]{1,64}\.service$ && "$_a" != -* ]] || _refuser "$_a" ;;
+                    sante) [[ "$_a" =~ ^(/[A-Za-z0-9._~/-]{0,127})?$ ]] || _refuser "$_a" ;;
+                    reprendre) [[ "$_a" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}\.conf$ ]] || _refuser "$_a" ;;
+                esac
+                _attendu=""
+                continue
+            fi
+            case "$2:$_a" in
+                set:--apply|remove:--apply|set:--inactif) ;;
+                set:--par|remove:--par) _attendu=par ;;
+                set:--domaine|set:--cible|set:--unite|set:--sante|set:--reprendre) _attendu="${_a#--}" ;;
+                *) _refuser "$_a" ;;
+            esac
+        done
+        [ -z "$_attendu" ] || _refuser "--$_attendu" ;;
     instance:start|instance:stop|gitea:push)
         _exiger_nom "${3:-}" ;;
     gitea:clone)
@@ -3214,6 +3276,7 @@ case "${1:-}" in
     stop)       cmd_stop ;;
     restart)    cmd_stop; sleep 1; cmd_start ;;
     boot)       cmd_boot ;;
+    frontal)    cmd_frontal "${@:2}" ;;
 
     app)
         case "${2:-}" in
@@ -3287,7 +3350,14 @@ Container:
   start         Start container
   stop          Stop container
   restart       Restart container
-  boot          Start container at boot only if a published app must stay up
+  boot          Start container at boot only if a published app or a declared web frontal must stay up
+
+Frontaux web permanents (#3294) :
+  frontal list                                   Declared frontals and vhost state (JSON)
+  frontal set <nom> --domaine D --cible IP:PORT --unite U.service [--sante /chemin]
+              [--reprendre fichier.conf] [--inactif] [--par who] [--apply]
+                                                 Declare + generate nginx :9080 vhost (error pages); dry-run by default
+  frontal remove <nom> [--par who] [--apply]     Remove declaration and generated vhost
 
 Apps:
   app list              List all apps (directories only, legacy)
