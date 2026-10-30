@@ -1150,10 +1150,30 @@ async def collect_diagnostics(user=Depends(require_jwt)):
     return diag
 
 
+DIAG_DIR = Path("/var/lib/secubox/diagnostics")
+# Un rapport : un nom simple en .json, sans séparateur ni point de tête (relecture de sécurité de #3126, R-L5-14 :
+# `name=../../…` lisait ou SUPPRIMAIT tout fichier accessible au service).
+_RE_DIAGNOSTIC = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}\.json")
+
+
+def _fichier_diagnostic(name: str) -> Path:
+    """Le rapport `name` du dossier des diagnostics : motif strict, puis résolution CONFINÉE au dossier (un lien
+    symbolique qui en sort est refusé). 400 sinon ; 404 si absent."""
+    if not isinstance(name, str) or not _RE_DIAGNOSTIC.fullmatch(name):
+        raise HTTPException(400, "Nom de diagnostic invalide")
+    dossier = DIAG_DIR.resolve()
+    f = (DIAG_DIR / name).resolve()
+    if f.parent != dossier:
+        raise HTTPException(400, "Nom de diagnostic invalide")
+    if not f.is_file():
+        raise HTTPException(404, "Diagnostic not found")
+    return f
+
+
 @router.get("/list_diagnostics")
 async def list_diagnostics(user=Depends(require_jwt)):
     """Lister les rapports de diagnostic."""
-    diag_dir = Path("/var/lib/secubox/diagnostics")
+    diag_dir = DIAG_DIR
     if not diag_dir.exists():
         return []
     return [{"name": f.name, "size": f.stat().st_size} for f in diag_dir.glob("*.json")]
@@ -1162,15 +1182,12 @@ async def list_diagnostics(user=Depends(require_jwt)):
 @router.get("/download_diagnostic")
 async def download_diagnostic(name: str, user=Depends(require_jwt)):
     """Télécharger un diagnostic."""
-    f = Path(f"/var/lib/secubox/diagnostics/{name}")
-    if not f.exists():
-        raise HTTPException(404, "Diagnostic not found")
-    return json.loads(f.read_text())
+    return json.loads(_fichier_diagnostic(name).read_text())
 
 
 @router.post("/delete_diagnostic")
 async def delete_diagnostic(name: str, user=Depends(require_jwt)):
-    Path(f"/var/lib/secubox/diagnostics/{name}").unlink(missing_ok=True)
+    _fichier_diagnostic(name).unlink(missing_ok=True)
     return {"success": True}
 
 

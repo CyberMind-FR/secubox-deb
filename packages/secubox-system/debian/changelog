@@ -1,3 +1,17 @@
+secubox-system (1.11.6-1~trixie1) trixie; urgency=medium
+
+  * Déclare les écritures ouvertes au porteur délégué du pilotage (ref #3126, L5, R-L5-12) :
+    /usr/share/secubox/pilotage/routes-ouvertes.d/system.toml (root, 0644), seulement les
+    routes d'écriture que les pages du module appellent ; secubox_core.auth refuse toute
+    autre écriture déléguée.
+  * download_diagnostic et delete_diagnostic : remontée de chemin corrigée (ref #3126,
+    relecture de sécurité de L5, R-L5-14). `name=../../…` lisait ou SUPPRIMAIT tout fichier
+    accessible au service ; le nom suit désormais un motif strict (`<nom>.json`, sans
+    séparateur) et la résolution est confinée au dossier des diagnostics (lien qui en sort
+    refusé, 400). La vue portée system-hub appelle /reboot en POST (la route l'était déjà).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 15:00:00 +0100
+
 secubox-system (1.11.5-1~trixie1) trixie; urgency=medium
 
   * POST /settings (ref #3242, ref #3126 L2 tâche 5) : le renommage passe par l'unité root

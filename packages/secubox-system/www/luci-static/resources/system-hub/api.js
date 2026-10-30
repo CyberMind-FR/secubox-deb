@@ -67,7 +67,7 @@ async function callSetBackupSchedule(params) {
 }
 
 async function callReboot(params) {
-    return sbxFetch('/api/v1/system/reboot', params, 'GET');
+    return sbxFetch('/api/v1/system/reboot', params, 'POST');
 }
 
 async function callGetStorage(params) {

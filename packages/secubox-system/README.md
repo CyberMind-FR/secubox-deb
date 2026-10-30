@@ -66,3 +66,12 @@ Configuration file: `/etc/secubox/system.toml`
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
 See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+
+## Pilotage distant (#3126, L5)
+
+`pilotage/routes-ouvertes.d/system.toml`, installé dans `/usr/share/secubox/pilotage/routes-ouvertes.d/` (root, 0644),
+déclare les seules écritures que le porteur délégué du pilotage (portée `admin`) peut faire sur ce module : celles
+qu'appellent ses pages. Toute autre écriture déléguée est refusée par `secubox_core.auth` (403) ; les lectures
+restent soumises à la liste de refus (secrets). Voir le README de secubox-core.
+
+`download_diagnostic` et `delete_diagnostic` n'acceptent qu'un nom `<nom>.json` du dossier des diagnostics (1.11.6).
