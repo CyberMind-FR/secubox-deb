@@ -30,12 +30,11 @@ def test_le_live_recupere_son_rootfs_en_http_et_garde_la_cle_privee_sur_le_serve
 
 
 def test_le_flash_verifie_la_signature_avant_d_ecrire():
+    # #3271 : la signature est vérifiée EN FLUX par secubox-flash-emmc ; un échec invalide l'eMMC
     s = FLASH.read_text()
-    v = s.index("openssl dgst -sha256 -verify")
-    e = s.index("exec secubox-flash-emmc")
-    assert v < e
-    assert "SIGNATURE INVALIDE" in s and 'rm -f "$dest" "$dest.sig"' in s
-    assert "MemAvailable" in s                    # l'image transite par la RAM
+    assert 'opts=(--stdin "$format" --sig "$TRAVAIL/$image.sig" --pub "$PUB" --sha256 "$sha" --auto --no-reboot)' in s
+    f = (ICI.parents[1] / "image" / "sbin" / "secubox-flash-emmc").read_text()
+    assert 'openssl dgst -sha256 -verify "$pub" -signature "$sig"' in f
 
 
 def test_le_flash_refuse_un_nom_avec_chemin():
@@ -197,13 +196,11 @@ def test_sbx_netflash_montre_l_erreur_du_telechargement_de_la_liste():
     assert "2>&1" not in ligne
 
 
-def test_l_image_a_son_propre_tmpfs_a_sa_taille():
-    # DUT 2026-10-24 : /run est un tmpfs à 10 % de la RAM (792 Mo sur 8 Go) ; curl (23) à 790 Mo.
+def test_l_image_ne_passe_plus_par_un_tmpfs():
+    # DUT 2026-10-24 : /run est un tmpfs à 10 % de la RAM ; #3271 : le tmpfs à la taille de l'image épuisait la
+    # mémoire d'un live complet. L'image s'écrit en flux (test_netboot_mochabin_3271).
     s = FLASH.read_text()
-    assert 'mount -t tmpfs -o "size=$' in s
-    i_mount, i_dl = s.index("mount -t tmpfs"), s.index('telecharge "$BASE/$image"')
-    assert i_mount < i_dl
-    assert 'dest="$TRAVAIL/image/$image"' in s
+    assert "mount -t tmpfs" not in s and 'dest="$TRAVAIL/image/$image"' not in s
 
 
 def test_le_live_demarre_en_mode_normal():
@@ -215,9 +212,8 @@ def test_le_live_demarre_en_mode_normal():
 
 def test_sbx_netflash_libere_la_memoire_seulement_si_elle_manque():
     # DUT 2026-10-24 : pile SecuBox du live à 6,9 Go sur 8 ; arrêt manuel des services → 5,2 Go libres.
+    # #3271 : en flux, quelques Mo suffisent ; la pile n'est arrêtée qu'au plus bas (256 Mo)
     s = FLASH.read_text()
-    i_test, i_lib, i_fail = s.index('if [ "$dispo" -le "$besoin" ]'), s.index("libere_memoire"), s.index("mémoire insuffisante")
-    assert i_test < s.index("libere_memoire\n") if "libere_memoire\n" in s else True
+    assert 'if [ "${dispo:-0}" -le $(( 256 * 1048576 )) ]; then libere_memoire; fi' in s
     assert "systemctl stop 'secubox-*'" in s
     assert "pkill -x" in s
-    assert s.count('dispo="$(awk') == 2   # nouvelle mesure après libération

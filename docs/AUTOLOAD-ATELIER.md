@@ -46,7 +46,7 @@ Accès distant : le tunnel est **sortant** vers `admin.gk2.secubox.in`, le clien
 2. Émettre le jeton : `autoloadctl emettre --client <client> --profil minimal --lot <lot>` (affiché une seule fois).
 3. Écrire `reponses.toml` depuis `/usr/share/doc/secubox-premier-pas/examples/reponses-autoload.toml` avec `profil = "minimal"` ; garder `jeton = "ref:/etc/secubox/secrets/autoload-jeton"`.
 4. `printf '%s' "$JETON" | autoload-atelier preparer --reponses reponses.toml --boot /mnt/boot --homedir /etc/secubox/secrets/provisioning-gnupg --jeton-stdin`, puis `autoload-atelier verifier --boot /mnt/boot`.
-5. Démarrer la carte : par la carte uSD, ou par l'USB avec `usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}` (console série 115200 8N1). Pour fixer le démarrage eMMC puis USB : `load usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}`.
+5. Démarrer la carte : par la carte uSD, ou par l'USB avec `usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}` (console série 115200 8N1). Pour préparer l'environnement U-Boot (démarrage eMMC puis USB, adresses sûres, #3271) : `usb start; load usb 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}` (ancien nom : `fix-bootcmd.scr`), puis `reset`.
 6. Suivre : `autoload-agentctl etat`, rapport final : `autoload-agentctl rapport`.
 
 Limite : l'ESPRESSObin n'a pas d'écran ; le délai de grâce du pré-rapport (15 min) se suit par l'infrastructure (`autoloadctl`), pas sur place.

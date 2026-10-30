@@ -203,6 +203,26 @@ Marvell>> source $loadaddr
 Marvell>> reset
 ```
 
+## Préparer l'environnement U-Boot après l'installation (#3271)
+
+Seule voie : sous le noyau Debian de la carte, la SPI n'est pas exposée à Linux (`/proc/mtd` vide). Une fois, au U-Boot (console série, compte à rebours interrompu) : `secubox-uboot-env.scr` pose les adresses sûres, le port
+WAN (`ethact`), `autoload no`, le `bootcmd` du support installé et un `bootcmd_netboot` de secours, puis `saveenv` ;
+l'ancien `bootcmd` reste dans `bootcmd_avant`. Le `bootcmd` posé lit `boot.scr` sur l'eMMC (`mmc 1`), puis `boot-usb.scr` sur la clé. Le script est généré par
+`packages/secubox-netboot/scripts/uboot-env.py` (voir le README de `secubox-netboot`). Depuis la partition installée :
+
+<!-- uboot-env: preparation espressobin-v7 - installe -->
+```
+mmc dev 1; load mmc 1:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}
+reset
+```
+
+Depuis la clé USB (script copié sur sa partition 1) :
+
+```
+usb start; load usb 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}
+reset
+```
+
 ## Alternative: Flash from SD Card
 
 If using SD card instead of USB:

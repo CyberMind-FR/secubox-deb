@@ -124,6 +124,11 @@ install -m0755 "$HERE/installer/sbx-netflash-profil" "$w/rootfs/usr/local/sbin/s
 install -m0755 "$FLASHER" "$w/rootfs/usr/local/sbin/secubox-flash-emmc"
 mkdir -p "$w/rootfs/etc/secubox"
 install -m0644 "$PUB" "$w/rootfs/etc/secubox/netboot-image.pub"
+# Après le flash (#3271) : sbx-uboot-env affiche les commandes U-Boot qui lancent secubox-uboot-env.scr (diagnostic
+# seulement : rien n'est écrit en SPI depuis Linux, R-3271-1).
+install -m0755 "$HERE/installer/sbx-uboot-env" "$w/rootfs/usr/local/sbin/sbx-uboot-env"
+python3 "$HERE/scripts/uboot-env.py" live-conf "$carte" --serveur "${tftp_ip:-${srv%%:*}}" --nom "$nom" \
+    > "$w/rootfs/etc/secubox/uboot-env.json" || die "préparation U-Boot de $carte non générée (board/$carte/uboot-env.env)"
 chroot "$w/rootfs" /bin/sh -c 'command -v openssl >/dev/null && (command -v curl >/dev/null || command -v wget >/dev/null)' \
     || die "le rootfs du live n'a pas openssl et curl/wget : sbx-netflash ne pourrait pas vérifier ni télécharger"
 log "mksquashfs (xz)…"
@@ -132,10 +137,12 @@ mksquashfs "$w/rootfs" "$w/out/http/filesystem.squashfs" -comp xz -noappend -no-
 # ── 4. script de démarrage U-Boot ────────────────────────────────────────────
 srv_ip="${srv%%:*}"
 [ -n "$tftp_ip" ] || tftp_ip="$srv_ip"
+# ── en-tête du boot.cmd : le bloc à taper au U-Boot usine, généré (#3271), lu par l'API et affiché par la page
+entete="$(python3 "$HERE/scripts/uboot-env.py" netboot "$carte" --serveur "$tftp_ip" --nom "$nom" | sed 's/^/#   /')" \
+    || die "bloc U-Boot du netboot non généré pour $carte"
 cat > "$w/boot.cmd" <<EOF
 # SecuBox $LIVE_TITRE — live réseau (#3079, #3233). Depuis le U-Boot usine (console série) :
-#   setenv ethact $LIVE_ETHACT; setenv ipaddr <ip libre>; setenv serverip $tftp_ip
-#   tftpboot $LIVE_SCRIPT_ADDR $nom/boot.scr; source $LIVE_SCRIPT_ADDR
+$entete
 # Réglages de la carte : board/$carte/live.env (adresses hors zone réservée du firmware, options du noyau).
 setenv serverip $tftp_ip
 setenv kernel_addr_r $LIVE_KERNEL_ADDR
@@ -150,6 +157,16 @@ booti \${kernel_addr_r} \${ramdisk_addr_r}:\${filesize} \${fdt_addr_r}
 EOF
 cp "$w/boot.cmd" "$w/out/tftp/boot.cmd"
 mkimage -A arm64 -O linux -T script -C none -n "SecuBox live netboot" -d "$w/boot.cmd" "$w/out/tftp/boot.scr" >/dev/null
+# Environnement U-Boot (#3271), déposé à côté de boot.scr (TFTP) et dans le dossier HTTP de la carte :
+# tftpboot ${loadaddr} <live>/secubox-uboot-env.scr. preparation.txt (« rôle<TAB>commande ») donne à la page les deux
+# commandes exactes (depuis le netboot, depuis la partition installée).
+prep="$(uboot_env_scr_de "$carte" "$HERE")" || die "script secubox-uboot-env de $carte refusé"
+cp "$prep" "$w/out/tftp/secubox-uboot-env.scr"
+cp "${prep%.scr}.cmd" "$w/out/tftp/secubox-uboot-env.cmd"
+cp "$prep" "$w/out/http/secubox-uboot-env.scr"
+cp "${prep%.scr}.cmd" "$w/out/http/secubox-uboot-env.cmd"
+python3 "$HERE/scripts/uboot-env.py" preparation "$carte" --serveur "$tftp_ip" --nom "$nom" > "$w/out/tftp/preparation.txt" \
+    || die "lignes de préparation U-Boot non générées"
 
 # ── 5. images eMMC signées ───────────────────────────────────────────────────
 : > "$w/out/http/images.txt"

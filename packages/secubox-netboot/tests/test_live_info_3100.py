@@ -16,7 +16,7 @@ sys.path.insert(0, str(RACINE / "common"))
 
 BOOT_CMD = """# SecuBox MOCHAbin — live réseau (#3079). Depuis le U-Boot usine, câble sur le WAN 1G (mvpp2-2) :
 #   setenv ethact mvpp2-2; setenv ipaddr <ip libre>; setenv serverip 192.168.1.200
-#   tftpboot ${scriptaddr} mochabin-live/boot.scr; source ${scriptaddr}
+#   tftpboot ${loadaddr} mochabin-live/boot.scr; source ${loadaddr}
 # Le live garde le réseau de l'initrd (ip=dhcp) : mv88e6xxx bloqué.
 setenv serverip 192.168.1.200
 setenv kernel_addr_r 0x08000000
@@ -69,7 +69,7 @@ def test_live_decrit_le_boot_cmd_servi(racines):
     assert live["http_base"] == "http://192.168.1.200:8099/mochabin-live"
     assert live["commandes"] == [
         "setenv ethact mvpp2-2; setenv ipaddr <ip libre>; setenv serverip 192.168.1.200",
-        "tftpboot ${scriptaddr} mochabin-live/boot.scr; source ${scriptaddr}",
+        "tftpboot ${loadaddr} mochabin-live/boot.scr; source ${loadaddr}",
     ]
     assert live["squashfs"] is True
     assert live["images"] == [
