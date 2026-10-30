@@ -68,7 +68,9 @@ Refus d'identité du canal (`pilotage_identite_refusee`) : une ligne par adresse
 `GET /boxes` (résumé par box) porte aussi `interface` (L5 tâche 7) : `distante` si l'agent déclare
 `Device.X_SECUBOX_Pilotage.Interface = "distante"` (profil léger de secubox-profiles), `locale` sinon (agent plus ancien,
 valeur absente ou hors liste). Le panneau « Flotte » (secubox-annuaire, `/fleet/`) en tire le lien d'ouverture de la box :
-`distante` ⇒ `/api/v1/pilotage/boxes/<box>/connexion-vhost?retour=/` (émission du code à usage unique, contrat T5) ;
+`distante` ⇒ `/api/v1/pilotage/boxes/<box>/connexion-vhost` sans `retour` (racine ; `retour=/` est refusé, 422 : seul
+`/<module>/` est admis), ouvert dans un nouvel onglet, donc authentifié par le **cookie de session** du maître (GET :
+`require_jwt` l'accepte sans garde d'origine ; test `test_emission_du_code_par_la_seule_session_cookie`) ;
 `locale` ⇒ `https://admin.<box>.secubox.in/`.
 
 ## Actions (L2, tâche 6)
@@ -324,7 +326,7 @@ HAProxy TLS 1.3 → sbxwaf → nginx.
   `pilotage_vhost_basculer` (`sens` distante|locale, `resultat`, `route`). Un nom porté par autre chose (vhost manuel, autre
   module, route vers une autre adresse) reste refusé (C2). Les autres noms de la box (hall, acces, waf…) ne sont jamais touchés.
 - **Contrat pour T7 (panneau « Flotte » du maître, point d'entrée unique)** : box distante ⇒ ouvrir
-  `https://<admin du maître>/api/v1/pilotage/boxes/<box>/connexion-vhost?retour=/<module>/` (émission du code, puis redirection) ;
+  `https://<admin du maître>/api/v1/pilotage/boxes/<box>/connexion-vhost` (`?retour=/<module>/` facultatif ; la Flotte l'omet) ;
   box locale ⇒ lien direct actuel `https://admin.<box>.secubox.in/`.
 - **Exceptions de garde** (M6, listées aussi dans `tests/publiques-assumees.txt`) : l'émission du code est un GET (lien de navigation
   porté par la session du maître) qui crée un état éphémère ; `POST /vhost/auth/echanger` n'a pas de garde (amorçage

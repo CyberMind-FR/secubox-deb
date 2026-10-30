@@ -566,3 +566,21 @@ def test_gabarit_content_disposition_et_xff():
     bloc = conf.split("location ^~ /api/v1/system/ {", 1)[1].split("\n    }", 1)[0]
     # M3 : l'« attachment » du contrôleur n'est plus effacé par nginx
     assert "proxy_hide_header Content-Disposition;" not in bloc
+
+
+def test_emission_du_code_par_la_seule_session_cookie(w):
+    """T7 R-L5-34 M3 : le panneau Flotte ouvre l'émission dans un NOUVEL ONGLET, qui n'envoie que le cookie de session du
+    maître (jamais le Bearer de localStorage) : la vraie garde require_jwt doit l'accepter (GET, sans garde d'origine)."""
+    w.app.dependency_overrides.clear()
+    jeton = w.jeton_maitre("alice")
+
+    async def cas():
+        async with w.client() as c:
+            c.cookies.set(auth.SESSION_COOKIE, jeton)
+            r = await c.get("/boxes/gk5/connexion-vhost")   # sans retour : la Flotte ouvre la racine (retour=/ refusé, 422)
+            sans = await httpx.AsyncClient(transport=httpx.ASGITransport(app=w.app), base_url="http://t").get(
+                "/boxes/gk5/connexion-vhost")
+        return r, sans
+    r, sans = asyncio.run(cas())
+    assert r.status_code == 303 and "#code=" in r.headers["location"]
+    assert sans.status_code == 401

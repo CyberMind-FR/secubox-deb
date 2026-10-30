@@ -1,3 +1,11 @@
+secubox-pilotage (0.5.2-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 7, correction 1/5 (R-L5-34 M3, ref #3126) : README aligné sur la page Flotte (émission du code sans
+    `retour`, `retour=/` refusé) ; test : l'émission du code passe par la seule session cookie du maître (nouvel
+    onglet, sans Bearer), 401 sans session.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 14:00:00 +0100
+
 secubox-pilotage (0.5.1-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 7 (ref #3126) : le résumé GET /boxes porte `interface` (« distante » si l'agent déclare
