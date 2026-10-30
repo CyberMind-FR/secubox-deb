@@ -1,3 +1,13 @@
+secubox-annuaire (0.16.4-1~trixie1) trixie; urgency=medium
+
+  * Page Flotte, panneau Pilotage (#3126 L5 tâche 7, R-L5-27) : point d'entrée unique vers l'interface de chaque box.
+    Colonne « Interface » : box « distante » ouverte par l'émission du code à usage unique du maître
+    (/api/v1/pilotage/boxes/<box>/connexion-vhost, puis admin.<box> servi par le pilotage) ; box « locale » (ou maître
+    sans le champ) par le lien direct https://admin.<box>.secubox.in/. Nouvel onglet, noopener noreferrer ; nom hors
+    motif ou box cliente : aucun lien ; construit par createElement, le clic sur le lien n'ouvre pas la page de la box.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 12:00:00 +0100
+
 secubox-annuaire (0.16.3-1~trixie1) trixie; urgency=medium
 
   * Page Flotte : page de la box (#3126 L2 « Agir », tâche 8). Une ligne du panneau « Pilotage » ouvre la box : catalogue
