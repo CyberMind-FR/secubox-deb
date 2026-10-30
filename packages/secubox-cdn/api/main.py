@@ -12,7 +12,7 @@ Features:
 - Gossip protocol for cache invalidation
 - Bandwidth savings through edge caching
 """
-from fastapi import FastAPI, APIRouter, Depends, HTTPException
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
@@ -180,10 +180,18 @@ async def purge_expired(user=Depends(require_jwt)):
     return {"purged": purged}
 
 
-@router.get("/preload_url")
-async def preload_url(url: str, user=Depends(require_jwt)):
-    """Pré-charger une URL dans le cache."""
+@router.post("/preload_url")
+async def preload_url(request: Request, user=Depends(require_jwt)):
+    """Pré-charger une URL dans le cache. POST : le serveur va chercher l'URL fournie, c'est une action (#3126,
+    R-L5-14). Corps : `{"url": "…"}`, ou la chaîne JSON seule (ce qu'envoie la page portée)."""
     import httpx
+    try:
+        corps = await request.json()
+    except ValueError:
+        corps = None
+    url = corps.get("url") if isinstance(corps, dict) else corps
+    if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="url http(s) attendue")
     try:
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.get(url)

@@ -18,7 +18,7 @@ async function callPurgeExpired(params) {
 }
 
 async function callPreloadUrl(params) {
-    return sbxFetch('/api/v1/cdn/preload_url', params, 'GET');
+    return sbxFetch('/api/v1/cdn/preload_url', params, 'POST');
 }
 
 async function callClearStats(params) {

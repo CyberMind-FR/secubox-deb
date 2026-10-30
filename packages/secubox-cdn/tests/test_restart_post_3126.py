@@ -25,3 +25,14 @@ def test_la_page_appelle_restart_en_post():
     page = (PKG / "www" / "luci-static" / "resources" / "view" / "cdn-cache" / "maintenance.js").read_text(encoding="utf-8")
     appels = re.findall(r"sbxFetch\('/api/v1/cdn/restart',\s*[^,]+,\s*'([A-Z]+)'\)", page)
     assert appels == ["POST"]
+
+
+def test_preload_url_est_un_post():
+    """Le serveur va chercher l'URL fournie (SSRF) : une action, jamais une lecture (#3126, R-L5-14)."""
+    assert _methodes_de("/preload_url") == {"POST"}
+
+
+def test_les_pages_appellent_preload_url_en_post():
+    for f in ("view/cdn-cache/maintenance.js", "cdn-cache/api.js"):
+        page = (PKG / "www" / "luci-static" / "resources" / f).read_text(encoding="utf-8")
+        assert re.findall(r"sbxFetch\('/api/v1/cdn/preload_url',\s*[^,]+,\s*'([A-Z]+)'\)", page) == ["POST"], f
