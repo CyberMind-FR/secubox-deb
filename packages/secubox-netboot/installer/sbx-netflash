@@ -15,8 +15,8 @@
 # #3271 : une MOCHAbin de 8 Go copiait l'image dans un tmpfs à sa taille (la mémoire « semblait » suffire) et le live,
 #   qui garde sa pile complète, manquait de mémoire ; le flux, lui, ne tient que quelques Mo.
 #
-# Après l'écriture (#3271) : sbx-uboot-env propose l'environnement U-Boot de la carte (adresses sûres, port WAN,
-#   autoload, bootcmd du support installé) et la commande console ; --ecrire-spi le fait écrire en SPI quand c'est sûr.
+# Après l'écriture (#3271) : sbx-uboot-env --commandes affiche les commandes U-Boot qui lancent le script d'environnement de la carte
+#   (adresses sûres, port WAN, autoload, bootcmd du support installé). Rien n'est écrit en SPI depuis Linux (R-3271-1).
 # Serveur : --srv HOTE[:PORT], sinon l'hôte de `fetch=` (ou `sbx_srv=`) de la ligne de commande du noyau.
 # Avec --nom (#3100) : le maître sert un lot signé (GET http://SRV/lot-flash?nom=NOM, même clé que les images) ;
 # après l'écriture de l'image (--no-reboot), on dépose sur l'eMMC le code de jonction (p2, 0600), l'ancre du maître
@@ -26,7 +26,7 @@ set -euo pipefail
 PUB=/etc/secubox/netboot-image.pub
 TRAVAIL=/run/sbx-netflash
 JOURNAL=/var/log/sbx-netflash.log
-srv="" dir="" image="" auto=0 liste=0 nom="" reboot_demande=1 ecrire_spi=0
+srv="" dir="" image="" auto=0 liste=0 nom="" reboot_demande=1
 
 usage() {
     cat <<EOF
@@ -37,8 +37,6 @@ sbx-netflash — écrit sur l'eMMC une image signée servie par le serveur de bo
   sbx-netflash --image NOM.img.gz --auto      sans confirmation
   sbx-netflash --image NOM.img.gz --nom NOM   en plus : dépose le code de jonction, l'ancre du maître et le profil
 Options : --nom NOM  --srv HOTE[:PORT]  --dir DOSSIER  --no-reboot
-          --ecrire-spi   après l'écriture, pose l'environnement U-Boot en SPI (sbx-uboot-env --ecrire-spi :
-                         seulement si l'emplacement est vérifié et la SPI saine ; sinon, la commande console)
 EOF
 }
 
@@ -188,7 +186,6 @@ while [ $# -gt 0 ]; do case "$1" in
     --auto) auto=1; shift ;;
     --list) liste=1; shift ;;
     --no-reboot) reboot_demande=0; shift ;;
-    --ecrire-spi) ecrire_spi=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;
 esac; done
@@ -304,23 +301,27 @@ else
     st=("${PIPESTATUS[@]}")
 fi
 set -e
-[ "${st[1]}" -eq 0 ] || fail "écriture en flux refusée ou interrompue (téléchargement=${st[0]}, flash=${st[1]}) : eMMC invalidée si elle avait été entamée"
+verifie_flux_ecrit
 rm -f "$TRAVAIL/$image.sig"
 [ -n "$nom" ] || termine
 depose_lot_et_termine
 }
 
+# Une coupure (réseau, signature, empreinte) laisse l'eMMC invalidée par secubox-flash-emmc : on le dit sans détour.
+verifie_flux_ecrit() { # st=(téléchargement flash)
+    [ "${st[1]}" -eq 0 ] || fail "écriture en flux refusée ou interrompue (téléchargement=${st[0]}, flash=${st[1]}) : eMMC non amorçable, relancer sbx-netflash"
+}
+
 # Après l'installation (#3271) : le U-Boot d'usine garde son bootcmd TFTP/NFS et ses adresses (noyau Debian sur la zone
-# réservée, initrd absent, port WAN de la MOCHAbin jamais initialisé). sbx-uboot-env montre ce qu'il faut poser et la
-# commande console ; avec --ecrire-spi, il l'écrit lui-même en SPI quand c'est sûr. Jamais bloquant : l'image est écrite.
+# réservée, initrd absent, port WAN de la MOCHAbin jamais initialisé). sbx-uboot-env --commandes affiche les commandes
+# U-Boot qui lancent le script d'environnement de la carte (netboot ou partition installée). Rien n'est écrit en SPI depuis Linux :
+# /proc/mtd est vide sous le noyau Debian de ces cartes (R-3271-1).
 prepare_uboot() {
-    local rc=0
-    if ! command -v sbx-uboot-env >/dev/null 2>&1; then
-        log "sbx-uboot-env absent de ce live : préparer l'environnement U-Boot à la console (page NetBoot, étape 3)"
-        return 0
+    if command -v sbx-uboot-env >/dev/null 2>&1; then
+        sbx-uboot-env --commandes || log "sbx-uboot-env en échec : commandes U-Boot sur la page NetBoot (étape 3)"
+    else
+        log "sbx-uboot-env absent de ce live : commandes U-Boot sur la page NetBoot (étape 3)"
     fi
-    if [ "$ecrire_spi" -eq 1 ]; then sbx-uboot-env --ecrire-spi || rc=$?; else sbx-uboot-env || rc=$?; fi
-    [ "$rc" -eq 0 ] || log "environnement U-Boot NON écrit (code $rc) : taper à la console la commande ci-dessus"
     return 0
 }
 

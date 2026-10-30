@@ -124,12 +124,11 @@ install -m0755 "$HERE/installer/sbx-netflash-profil" "$w/rootfs/usr/local/sbin/s
 install -m0755 "$FLASHER" "$w/rootfs/usr/local/sbin/secubox-flash-emmc"
 mkdir -p "$w/rootfs/etc/secubox"
 install -m0644 "$PUB" "$w/rootfs/etc/secubox/netboot-image.pub"
-# Après le flash (#3271) : sbx-uboot-env propose (ou écrit, sur --ecrire-spi) l'environnement U-Boot de la carte.
+# Après le flash (#3271) : sbx-uboot-env affiche les commandes U-Boot qui lancent secubox-uboot-env.scr (diagnostic
+# seulement : rien n'est écrit en SPI depuis Linux, R-3271-1).
 install -m0755 "$HERE/installer/sbx-uboot-env" "$w/rootfs/usr/local/sbin/sbx-uboot-env"
-python3 "$HERE/scripts/uboot-env.py" live-conf "$carte" > "$w/rootfs/etc/secubox/uboot-env.json" \
-    || die "préparation U-Boot de $carte non générée (board/$carte/uboot-env.env)"
-chroot "$w/rootfs" /bin/sh -c 'command -v fw_setenv >/dev/null' \
-    || log "AVERTISSEMENT : pas de fw_setenv dans le live (libubootenv-tool) : la SPI ne pourra pas être écrite depuis Linux"
+python3 "$HERE/scripts/uboot-env.py" live-conf "$carte" --serveur "${tftp_ip:-${srv%%:*}}" --nom "$nom" \
+    > "$w/rootfs/etc/secubox/uboot-env.json" || die "préparation U-Boot de $carte non générée (board/$carte/uboot-env.env)"
 chroot "$w/rootfs" /bin/sh -c 'command -v openssl >/dev/null && (command -v curl >/dev/null || command -v wget >/dev/null)' \
     || die "le rootfs du live n'a pas openssl et curl/wget : sbx-netflash ne pourrait pas vérifier ni télécharger"
 log "mksquashfs (xz)…"
@@ -158,11 +157,14 @@ booti \${kernel_addr_r} \${ramdisk_addr_r}:\${filesize} \${fdt_addr_r}
 EOF
 cp "$w/boot.cmd" "$w/out/tftp/boot.cmd"
 mkimage -A arm64 -O linux -T script -C none -n "SecuBox live netboot" -d "$w/boot.cmd" "$w/out/tftp/boot.scr" >/dev/null
-# Préparation de l'environnement U-Boot (#3271), servie à côté du live : tftpboot …/fix-bootcmd.scr. preparation.txt
-# (« rôle<TAB>commande ») donne à la page les trois façons de la lancer (réseau, clé USB, partition installée).
-prep="$(fix_bootcmd_de "$carte" "$HERE")" || die "script de préparation U-Boot de $carte refusé"
-cp "$prep" "$w/out/tftp/fix-bootcmd.scr"
-cp "${prep%.scr}.cmd" "$w/out/tftp/fix-bootcmd.cmd"
+# Environnement U-Boot (#3271), déposé à côté de boot.scr (TFTP) et dans le dossier HTTP de la carte :
+# tftpboot ${loadaddr} <live>/secubox-uboot-env.scr. preparation.txt (« rôle<TAB>commande ») donne à la page les deux
+# commandes exactes (depuis le netboot, depuis la partition installée).
+prep="$(uboot_env_scr_de "$carte" "$HERE")" || die "script secubox-uboot-env de $carte refusé"
+cp "$prep" "$w/out/tftp/secubox-uboot-env.scr"
+cp "${prep%.scr}.cmd" "$w/out/tftp/secubox-uboot-env.cmd"
+cp "$prep" "$w/out/http/secubox-uboot-env.scr"
+cp "${prep%.scr}.cmd" "$w/out/http/secubox-uboot-env.cmd"
 python3 "$HERE/scripts/uboot-env.py" preparation "$carte" --serveur "$tftp_ip" --nom "$nom" > "$w/out/tftp/preparation.txt" \
     || die "lignes de préparation U-Boot non générées"
 

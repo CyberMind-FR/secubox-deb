@@ -552,17 +552,17 @@ def _cle_usb(d: Path) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, str]]]:
     return cle, cmds
 
 
-_RE_PREPARATION = re.compile(r"^(reseau|usb|installe)\t([ -~]{1,200})$")
+_RE_PREPARATION = re.compile(r"^(reseau|installe)\t([ -~]{1,200})$")
 
 
 def _preparation(d: Path) -> List[Dict[str, str]]:
     """preparation.txt du live (#3271, généré par scripts/uboot-env.py) : « rôle<TAB>commande » pour lancer
-    fix-bootcmd.scr par le réseau, la clé USB ou la partition installée. Rôle inconnu, commande qui ne charge pas
-    fix-bootcmd.scr, ligne trop longue ou non imprimable : écartés."""
+    secubox-uboot-env.scr depuis le netboot ou la partition installée. Rôle inconnu, commande qui ne charge pas
+    secubox-uboot-env.scr, ligne trop longue ou non imprimable : écartés."""
     out: List[Dict[str, str]] = []
     for ligne in (_lire_court(d / "preparation.txt") or "").splitlines():
         m = _RE_PREPARATION.fullmatch(ligne)
-        if m and m.group(2).endswith("fix-bootcmd.scr; source ${loadaddr}") and len(out) < 3:
+        if m and m.group(2).endswith("secubox-uboot-env.scr; source ${loadaddr}") and len(out) < 2:
             out.append({"role": m.group(1), "commande": m.group(2)})
     return out
 

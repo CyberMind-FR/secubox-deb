@@ -30,14 +30,6 @@ def test_aucune_commande_netboot_ne_depend_de_scriptaddr():
     assert fautifs == [], "le U-Boot d'usine Marvell n'a pas de scriptaddr"
 
 
-@pytest.mark.parametrize("carte", CARTES)
-def test_le_script_netboot_se_charge_a_loadaddr(carte):
-    r = subprocess.run(["bash", "-c", '. "$0"; charge_live_env "$1" "$2" && printf %s "$LIVE_SCRIPT_ADDR"',
-                        str(ICI / "scripts" / "live-env.sh"), carte, str(ICI)], capture_output=True, text=True, timeout=60)
-    assert r.returncode == 0, r.stderr
-    assert r.stdout == "${loadaddr}"
-
-
 def _boot_cmd_rendu(builder, carte):
     """Le gabarit boot.cmd du script de construction, rendu avec le live.env réel de la carte."""
     s = (ICI / "scripts" / builder).read_text()
@@ -154,9 +146,9 @@ def test_le_mode_ram_a_disparu_du_live():
 
 
 # ── 3. bootcmd vers l'eMMC après installation ────────────────────────────────────────────────────────────────────
-FIX = RACINE / "board" / "mochabin" / "fix-bootcmd.cmd"
-FIX_SCR = RACINE / "board" / "mochabin" / "fix-bootcmd.scr"
-LIGNE_FIX = "fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}"
+FIX = RACINE / "board" / "mochabin" / "secubox-uboot-env.cmd"
+FIX_SCR = RACINE / "board" / "mochabin" / "secubox-uboot-env.scr"
+LIGNE_FIX = "fatload mmc 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}"
 BOOTCMD = "setenv ethact mvpp2-2; dhcp; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr; source ${loadaddr}"
 ADRESSES_3091 = {"kernel_addr_r": 0x08000000, "fdt_addr_r": 0x0c000000, "ramdisk_addr_r": 0x0c100000}
 RESERVE = (0x04000000, 0x05400000)          # PSCI + TEE vus dans les traces du noyau (0x04000000-0x053fffff)
@@ -205,7 +197,7 @@ def test_fix_bootcmd_scr_compile_et_synchrone_avec_le_source():
     import struct
     import zlib
     scr = FIX_SCR.read_bytes()
-    assert len(scr) > 64, "fix-bootcmd.scr non compilé"
+    assert len(scr) > 64, "secubox-uboot-env.scr non compilé"
     magic, hcrc, _, taille, _, _, dcrc, os_, arch, type_, comp = struct.unpack(">IIIIIIIBBBB", scr[:32])
     assert (magic, os_, arch, type_, comp) == (0x27051956, 5, 0x16, 6, 0)       # script U-Boot arm64 non compressé
     assert zlib.crc32(scr[:4] + b"\0\0\0\0" + scr[8:64]) == hcrc
@@ -216,8 +208,8 @@ def test_fix_bootcmd_scr_compile_et_synchrone_avec_le_source():
 
 
 def test_l_image_mochabin_recoit_fix_bootcmd():
-    bloc = (RACINE / "image" / "build-image.sh").read_text().split("# fix-bootcmd (#2826)", 1)[1].split("# Démonter", 1)[0]
-    assert '"${SCRIPT_DIR}/../board/${BOARD}/fix-bootcmd.scr"' in bloc and '"${MNT}/boot/fix-bootcmd.scr"' in bloc
+    bloc = (RACINE / "image" / "build-image.sh").read_text().split("# secubox-uboot-env (#3271", 1)[1].split("# Démonter", 1)[0]
+    assert '"${SCRIPT_DIR}/../board/${BOARD}/secubox-uboot-env.scr"' in bloc and '"${MNT}/boot/secubox-uboot-env.scr"' in bloc
 
 
 def _stub_preparation(live):
@@ -231,22 +223,22 @@ def test_le_live_propose_la_preparation_u_boot_apres_l_installation(live_simule)
     r = _netflash_main(live, "--srv", "192.0.2.10:8099", "--image", "minimal.img.gz", "--auto", "--no-reboot")
     assert r.returncode == 0, r.stdout + r.stderr
     assert LIGNE_FIX in r.stdout
-    assert "sbx-uboot-env \n" in live["journal"].read_text() + "\n"
+    assert "sbx-uboot-env --commandes\n" in live["journal"].read_text()
 
 
 def test_sbx_netflash_n_ecrit_plus_de_ligne_propre_a_une_carte():
     s = NETFLASH.read_text()
-    assert "mvpp2" not in s and "fix-bootcmd.scr" not in s, "les commandes viennent de sbx-uboot-env (uboot-env.py)"
+    assert "mvpp2" not in s and "uboot-env.scr" not in s, "les commandes viennent de sbx-uboot-env (uboot-env.py)"
 
 
 def test_le_live_redemarre_apres_la_preparation_et_jamais_dans_l_outil_de_flash(live_simule):
     live = live_simule
     _stub_preparation(live)
-    r = _netflash_main(live, "--srv", "192.0.2.10:8099", "--image", "minimal.img.gz", "--auto", "--ecrire-spi")
+    r = _netflash_main(live, "--srv", "192.0.2.10:8099", "--image", "minimal.img.gz", "--auto")
     journal = live["journal"].read_text().splitlines()
     flash = next(x for x in journal if x.startswith("flash "))
     assert "--no-reboot" in flash                                             # sinon il redémarre avant le message
-    i_prep = journal.index("sbx-uboot-env --ecrire-spi")
+    i_prep = journal.index("sbx-uboot-env --commandes")
     assert i_prep < next(i for i, x in enumerate(journal) if x.startswith("systemctl reboot")), r.stdout
 
 

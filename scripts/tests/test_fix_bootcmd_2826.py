@@ -10,8 +10,8 @@ from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[2]
 BOARD = RACINE / "board" / "espressobin-v7"
-CMD = (BOARD / "fix-bootcmd.cmd").read_text()
-SCR = (BOARD / "fix-bootcmd.scr").read_bytes()
+CMD = (BOARD / "secubox-uboot-env.cmd").read_text()   # renommé #3271 (alias fix-bootcmd.scr dans l'image)
+SCR = (BOARD / "secubox-uboot-env.scr").read_bytes()
 BUILD = (RACINE / "image" / "build-image.sh").read_text()
 
 
@@ -20,7 +20,7 @@ def test_l_ancien_bootcmd_est_sauvegarde_avant_d_etre_remplace():
 
 
 def test_le_nouveau_bootcmd_essaie_l_emmc_puis_l_usb():
-    ligne = next(l for l in CMD.splitlines() if l.startswith("setenv bootcmd '"))
+    ligne = next(x for x in CMD.splitlines() if x.startswith("setenv bootcmd '"))
     assert ligne.index("mmc dev 1") < ligne.index("load mmc 1:1 ${loadaddr} boot.scr") < ligne.index("usb start") < ligne.index("load usb 0:1 ${loadaddr} boot-usb.scr")
     assert ligne.count("source ${loadaddr}") == 2, "un echec de l'eMMC doit laisser la main au repli USB"
 
@@ -37,4 +37,4 @@ def test_le_binaire_compile_est_un_script_uboot_synchrone_avec_le_source():
 
 def test_la_construction_livre_le_script_sans_dependre_de_mkimage():
     bloc = BUILD.split("# Script USB (#2816, #2824)", 1)[1].split("# Démonter", 1)[0]
-    assert "fix-bootcmd.scr" in bloc and bloc.index("fix-bootcmd.scr") < bloc.index("if command -v mkimage")
+    assert "secubox-uboot-env.scr" in bloc and bloc.index("secubox-uboot-env.scr") < bloc.index("if command -v mkimage")

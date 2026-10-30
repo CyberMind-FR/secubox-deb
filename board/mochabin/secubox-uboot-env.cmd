@@ -3,7 +3,7 @@
 # SecuBox U-Boot — préparation de l'environnement, MOCHAbin (#3271, modèle #2826).
 # FICHIER GÉNÉRÉ par packages/secubox-netboot/scripts/uboot-env.py depuis
 #   packages/secubox-netboot/board/mochabin/live.env et uboot-env.env : ne pas l'éditer à la main.
-# Compile : mkimage -A arm64 -O linux -T script -C none -n "SecuBox fix bootcmd" -d fix-bootcmd.cmd fix-bootcmd.scr
+# Compile : mkimage -A arm64 -O linux -T script -C none -n "SecuBox uboot env" -d secubox-uboot-env.cmd secubox-uboot-env.scr
 #
 # Pose, puis enregistre (saveenv) :
 #   - adresses sûres : kernel_addr_r 0x08000000, fdt_addr_r 0x0c000000, ramdisk_addr_r 0x0c100000 ;
@@ -15,9 +15,9 @@
 #   - l'ancien bootcmd dans bootcmd_avant, au premier passage seulement.
 #
 # Lancer, au choix (console série 115200 8N1, compte à rebours interrompu), puis : reset
-#   réseau    : setenv ethact mvpp2-2; setenv autoload no; dhcp; setenv serverip <IP du maître>; tftpboot ${loadaddr} mochabin-live/fix-bootcmd.scr; source ${loadaddr}
-#   clé USB   : usb start; fatload usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}
-#   installée : mmc dev 0; fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}
+#   réseau    : setenv ethact mvpp2-2; setenv autoload no; dhcp; setenv serverip <IP du maître>; tftpboot ${loadaddr} mochabin-live/secubox-uboot-env.scr; source ${loadaddr}
+#   clé USB   : usb start; fatload usb 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}
+#   installée : mmc dev 0; fatload mmc 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}
 
 echo "============================================"
 echo "SecuBox MOCHAbin - preparation environnement U-Boot"

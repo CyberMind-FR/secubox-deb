@@ -35,8 +35,8 @@ ATTENDU = {
         "titre": "MOCHAbin", "ethact": "mvpp2-2", "nom": "mochabin-live",
         "adresses": {"kernel_addr_r": "0x08000000", "fdt_addr_r": "0x0c000000", "ramdisk_addr_r": "0x0c100000"},
         "bootcmd": "setenv ethact mvpp2-2; dhcp; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr; source ${loadaddr}",
-        "usb": "usb start; fatload usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}",
-        "installe": "mmc dev 0; fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}",
+        "usb": "usb start; fatload usb 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}",
+        "installe": "mmc dev 0; fatload mmc 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}",
     },
     "espressobin-v7": {
         "titre": "ESPRESSObin v7", "ethact": "neta@30000", "nom": "espressobin-live",
@@ -44,8 +44,8 @@ ATTENDU = {
         # #2826, validé sur la carte : eMMC (mmc 1) puis la clé USB
         "bootcmd": "mmc dev 1; if load mmc 1:1 ${loadaddr} boot.scr; then source ${loadaddr}; fi; usb start; "
                    "if load usb 0:1 ${loadaddr} boot-usb.scr; then source ${loadaddr}; fi",
-        "usb": "usb start; load usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}",
-        "installe": "mmc dev 1; load mmc 1:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}",
+        "usb": "usb start; load usb 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}",
+        "installe": "mmc dev 1; load mmc 1:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}",
     },
 }
 
@@ -63,7 +63,7 @@ def netboot_attendu(carte, srv):
 def reseau_attendu(carte, srv):
     a = ATTENDU[carte]
     return (f"setenv ethact {a['ethact']}; setenv autoload no; dhcp; setenv serverip {srv}; "
-            f"tftpboot ${{loadaddr}} {a['nom']}/fix-bootcmd.scr; source ${{loadaddr}}")
+            f"tftpboot ${{loadaddr}} {a['nom']}/secubox-uboot-env.scr; source ${{loadaddr}}")
 
 
 def gen(*args):
@@ -73,7 +73,7 @@ def gen(*args):
 
 
 def cmd_de(carte):
-    return (RACINE / "board" / carte / "fix-bootcmd.cmd").read_text()
+    return (RACINE / "board" / carte / "secubox-uboot-env.cmd").read_text()
 
 
 def corps(texte):
@@ -90,7 +90,7 @@ def setenv(texte, var):
 # ── 1. Scripts .cmd/.scr de préparation (sources versionnées, générées) ───────────────────────────────────────────
 @pytest.mark.parametrize("carte", CARTES)
 def test_le_cmd_versionne_est_celui_du_generateur(carte):
-    assert gen("cmd", carte) == cmd_de(carte), "board/<carte>/fix-bootcmd.cmd à régénérer : scripts/uboot-env.py generer"
+    assert gen("cmd", carte) == cmd_de(carte), "board/<carte>/secubox-uboot-env.cmd à régénérer : scripts/uboot-env.py generer"
 
 
 @pytest.mark.parametrize("carte", CARTES)
@@ -158,17 +158,18 @@ def test_l_entete_documente_les_trois_lancements_et_mkimage(carte):
     tete = "\n".join(x for x in t.splitlines() if x.startswith("#"))
     assert a["usb"] in tete and a["installe"] in tete and reseau_attendu(carte, "<IP du maître>") in tete
     assert "reset" in tete
-    assert 'mkimage -A arm64 -O linux -T script -C none -n "SecuBox fix bootcmd" -d fix-bootcmd.cmd fix-bootcmd.scr' in tete
+    assert ('mkimage -A arm64 -O linux -T script -C none -n "SecuBox uboot env" -d secubox-uboot-env.cmd '
+            'secubox-uboot-env.scr') in tete
     assert "GÉNÉRÉ" in tete and "scripts/uboot-env.py" in tete
 
 
 @pytest.mark.parametrize("carte", CARTES)
 def test_le_scr_est_le_cmd_compile_par_mkimage(carte):
-    scr = (RACINE / "board" / carte / "fix-bootcmd.scr").read_bytes()
+    scr = (RACINE / "board" / carte / "secubox-uboot-env.scr").read_bytes()
     cmd = cmd_de(carte).encode()
     magic, hcrc, _t, taille, _l, _e, dcrc, os_, arch, typ, comp = struct.unpack(">7I4B", scr[:32])
     assert magic == 0x27051956 and (os_, arch, typ, comp) == (5, 22, 6, 0)     # linux, arm64, script, none
-    assert scr[32:64].rstrip(b"\0") == b"SecuBox fix bootcmd"
+    assert scr[32:64].rstrip(b"\0") == b"SecuBox uboot env"
     assert zlib.crc32(scr[:4] + b"\0\0\0\0" + scr[8:64]) == hcrc
     data = scr[64:64 + taille]
     assert zlib.crc32(data) == dcrc
@@ -193,8 +194,7 @@ def test_bloc_netboot_exact_et_complet(carte):
 @pytest.mark.parametrize("carte", CARTES)
 def test_lignes_de_preparation(carte):
     lignes = [x.split("\t") for x in gen("preparation", carte, "--serveur", "192.0.2.10").splitlines()]
-    assert lignes == [["reseau", reseau_attendu(carte, "192.0.2.10")], ["usb", ATTENDU[carte]["usb"]],
-                      ["installe", ATTENDU[carte]["installe"]]]
+    assert lignes == [["reseau", reseau_attendu(carte, "192.0.2.10")], ["installe", ATTENDU[carte]["installe"]]]
 
 
 @pytest.mark.parametrize("carte", CARTES)
@@ -215,7 +215,7 @@ def test_le_boot_cmd_du_live_documente_le_bloc_genere(carte):
 
 def test_le_live_publie_le_script_de_preparation_a_cote_du_boot_scr():
     s = (ICI / "scripts" / "build-live-netboot.sh").read_text()
-    assert "fix-bootcmd.scr" in s and "preparation.txt" in s
+    assert "secubox-uboot-env.scr" in s and "preparation.txt" in s
     assert 'uboot-env.py" preparation "$carte" --serveur "$tftp_ip" --nom "$nom"' in s
 
 
@@ -228,15 +228,14 @@ def test_la_page_de_demonstration_affiche_les_blocs_generes():
     demo = _page_demo()
     for carte, srv in (("mochabin", "192.0.2.10"), ("espressobin-v7", "192.0.2.42")):
         assert "commandes: [" + ", ".join(f"'{x}'" for x in netboot_attendu(carte, srv)) + "]" in demo, carte
-        for role, cmd in (("reseau", reseau_attendu(carte, srv)), ("usb", ATTENDU[carte]["usb"]),
-                          ("installe", ATTENDU[carte]["installe"])):
+        for role, cmd in (("reseau", reseau_attendu(carte, srv)), ("installe", ATTENDU[carte]["installe"])):
             assert f"{{ role: '{role}', commande: '{cmd}' }}" in demo, (carte, role)
 
 
 def test_la_page_n_a_plus_de_commande_ecrite_en_dur_pour_une_carte():
     page = (ICI / "www" / "netboot" / "index.html").read_text()
     code = page.split("function rendreLive(", 1)[1].split("\n        function ", 1)[0]
-    assert "fix-bootcmd.scr" not in code and "commandes_preparation" in code
+    assert "uboot-env.scr; source" not in code and "commandes_preparation" in code
 
 
 DOCS = (ICI / "README.md", RACINE / "board" / "mochabin" / "README.md", RACINE / "board" / "espressobin-v7" / "README.md")
@@ -281,8 +280,8 @@ def test_api_rend_les_lignes_de_preparation_validees(api):
     _, c, d = api
     bon = gen("preparation", "mochabin", "--serveur", "192.0.2.10")
     (d / "preparation.txt").write_text(bon + "installe\tmmc dev 0; fatload mmc 0:1 ${loadaddr} autre.scr; source ${loadaddr}\n"
-                                       "inconnu\tusb start; fatload usb 0:1 ${loadaddr} fix-bootcmd.scr\n"
-                                       "usb\t" + "x" * 300 + "fix-bootcmd.scr\n")
+                                       "inconnu\tusb start; fatload usb 0:1 ${loadaddr} secubox-uboot-env.scr\n"
+                                       "usb\t" + "x" * 300 + "secubox-uboot-env.scr\n")
     live = c.get("/live").json()["lives"][0]
     assert live["commandes_preparation"] == [{"role": r, "commande": x} for r, x in
                                              (line.split("\t") for line in bon.splitlines())]
@@ -293,21 +292,22 @@ def test_api_sans_preparation_liste_vide(api):
     assert c.get("/live").json()["lives"][0]["commandes_preparation"] == []
 
 
-# ── 3. Dans le live : écrire la SPI seulement quand c'est sûr ─────────────────────────────────────────────────────
-@pytest.mark.parametrize("carte,cible,autres", [("mochabin", "u-boot-env@0x0", ["firmware@0x180000"]),
-                                                ("espressobin-v7", "*@0x3f0000", [])])
-def test_conf_du_live_offsets_verifies_dans_la_source(carte, cible, autres):
-    c = json.loads(gen("live-conf", carte))
-    assert c["carte"] == carte and c["env"]["cible"] == cible and c["env"]["autres"] == autres
-    assert c["env"]["taille"] == "0x10000" and c["env"]["secteur"] == "0x10000" and c["env"]["verifie"] is True
+# ── 3. Dans le live : diagnostic seulement (R-3271-1 : pas de MTD sous le noyau Debian, SPI instable au banc) ─────
+@pytest.mark.parametrize("carte,mtd", [("mochabin", "u-boot-env"), ("espressobin-v7", "*")])
+def test_conf_du_live_commandes_et_script(carte, mtd):
+    c = json.loads(gen("live-conf", carte, "--serveur", "192.0.2.10"))
+    assert c["carte"] == carte and c["env"]["mtd"] == mtd and c["env"]["spi"] == "0x3f0000"
     assert "include/configs/mvebu_armada-common.h" in c["env"]["source"]
-    a = ATTENDU[carte]
-    v = dict(c["variables"])
-    assert v["bootcmd"] == a["bootcmd"] and v["ethact"] == a["ethact"] and v["autoload"] == "no"
-    assert {k: v[k] for k in a["adresses"]} == a["adresses"]
-    assert list(dict(c["variables"])) == ["kernel_addr_r", "fdt_addr_r", "ramdisk_addr_r", "ethact", "autoload",
-                                          "bootcmd_netboot", "bootcmd"]
-    assert c["console"] == [a["installe"], "reset"]
+    assert c["commandes"] == [["reseau", reseau_attendu(carte, "192.0.2.10")], ["installe", ATTENDU[carte]["installe"]]]
+    assert c["cmd"] == cmd_de(carte)
+
+
+def test_plus_aucune_ecriture_spi_depuis_linux():
+    for f in (OUTIL, ICI / "installer" / "sbx-netflash", GEN, ICI / "scripts" / "build-live-netboot.sh",
+              ICI / "scripts" / "build-live-leger.sh"):
+        t = f.read_text()
+        assert "fw_setenv" not in t and "--ecrire-spi" not in t and "fw_env.config" not in t, f.name
+    assert "libubootenv-tool" not in (ICI / "scripts" / "build-live-leger.sh").read_text()
 
 
 def test_fw_env_config_de_l_image_mochabin_vise_la_partition_u_boot_env():
@@ -316,187 +316,93 @@ def test_fw_env_config_de_l_image_mochabin_vise_la_partition_u_boot_env():
     assert lignes == [["/dev/mtd2", "0x0", "0x10000", "0x10000"]]
 
 
-TAILLE = 0x10000
-
-
-def bloc_env(variables, taille=TAILLE):
-    data = b"".join(f"{k}={v}".encode() + b"\0" for k, v in variables.items()) + b"\0"
-    data = data.ljust(taille - 4, b"\0")
-    return struct.pack("<I", zlib.crc32(data)) + data
-
-
-def lit_env(b):
-    data = b[4:]
-    assert struct.unpack("<I", b[:4])[0] == zlib.crc32(data), "CRC"
-    out = {}
-    for e in data.split(b"\0\0", 1)[0].split(b"\0"):
-        if e:
-            k, v = e.decode().split("=", 1)
-            out[k] = v
-    return out
-
-
-USINE = {"bootcmd": "run get_images; run set_bootargs; booti $kernel_addr_r $ramdisk_addr_r $fdt_addr_r",
-         "loadaddr": "0x6000000", "ethact": "mvpp2-0", "ethaddr": "00:51:82:11:22:00"}
-
-
-@pytest.fixture
-def banc(tmp_path):
-    """Une SPI simulée : /proc/mtd, fichiers « mtd », fw_setenv minimal (même format que libubootenv) qui journalise."""
-    proc, dev, bin_ = tmp_path / "mtd", tmp_path / "dev", tmp_path / "bin"
-    dev.mkdir()
-    bin_.mkdir()
-    journal = tmp_path / "journal"
-    fw = bin_ / "fw_setenv"
-    fw.write_text(f"""#!{sys.executable}
-import struct, sys, zlib
-args = sys.argv[1:]
-cfg, script = args[args.index("-c") + 1], args[args.index("-s") + 1]
-open({str(journal)!r}, "a").write("fw_setenv " + " ".join(args) + "\\n" + open(cfg).read() + open(script).read())
-d, off, taille = open(cfg).read().split()[:3]
-off, taille = int(off, 16), int(taille, 16)
-f = open(d, "r+b"); f.seek(off); b = f.read(taille)
-data = b[4:]
-if struct.unpack("<I", b[:4])[0] != zlib.crc32(data):
-    sys.exit(1)
-env = dict(e.decode().split("=", 1) for e in data.split(b"\\0\\0", 1)[0].split(b"\\0") if e)
-for ligne in open(script).read().splitlines():
-    if ligne.strip() and not ligne.startswith("#"):
-        k, _, v = ligne.partition(" ")
-        env[k] = v
-nd = (b"".join(f"{{k}}={{v}}".encode() + b"\\0" for k, v in env.items()) + b"\\0").ljust(taille - 4, b"\\0")
-f.seek(off); f.write(struct.pack("<I", zlib.crc32(nd)) + nd)
-""")
-    fw.chmod(0o755)
-    return {"tmp": tmp_path, "proc": proc, "dev": dev, "bin": bin_, "journal": journal}
-
-
-def mochabin_spi(banc, env=USINE, autre=None):
-    banc["proc"].write_text('dev:    size   erasesize  name\nmtd0: 003e0000 00010000 "firmware"\n'
-                            'mtd1: 00010000 00010000 "hw-info"\nmtd2: 00010000 00010000 "u-boot-env"\n')
-    fw = bytearray(b"\xff" * 0x3e0000)
-    if autre is not None:
-        fw[0x180000:0x190000] = bloc_env(autre)
-    (banc["dev"] / "mtd0").write_bytes(bytes(fw))
-    (banc["dev"] / "mtd1").write_bytes(b"\xff" * TAILLE)
-    (banc["dev"] / "mtd2").write_bytes(bloc_env(env) if env is not None else b"\xff" * TAILLE)
-
-
-def conf(banc, carte, **modif):
-    c = json.loads(gen("live-conf", carte))
-    c["env"].update(modif)
-    f = banc["tmp"] / f"{carte}.json"
-    f.write_text(json.dumps(c))
+def _conf(tmp_path, carte):
+    f = tmp_path / f"{carte}.json"
+    f.write_text(gen("live-conf", carte, "--serveur", "192.0.2.10"))
     return f
 
 
-def outil(banc, conf_f, *args):
-    env = {**os.environ, "PATH": f"{banc['bin']}:{os.environ['PATH']}", "SBX_UBOOT_ENV_PROC_MTD": str(banc["proc"]),
-           "SBX_UBOOT_ENV_DEV": str(banc["dev"]), "SBX_UBOOT_ENV_TRAVAIL": str(banc["tmp"] / "travail")}
-    return subprocess.run([sys.executable, str(OUTIL), "--conf", str(conf_f), *args],
-                          capture_output=True, text=True, timeout=60, env=env)
+def _outil(tmp_path, conf_f, proc, *args):
+    p = tmp_path / "mtd"
+    p.write_text(proc)
+    return subprocess.run([sys.executable, str(OUTIL), "--conf", str(conf_f), *args], capture_output=True, text=True,
+                          timeout=60, env={**os.environ, "SBX_UBOOT_ENV_PROC_MTD": str(p)})
 
 
-def journal(banc):
-    return banc["journal"].read_text() if banc["journal"].exists() else ""
+PROC_VIDE = "dev:    size   erasesize  name\n"
+PROC_MOCHABIN = ('dev:    size   erasesize  name\nmtd0: 003e0000 00010000 "firmware"\n'
+                 'mtd1: 00010000 00010000 "hw-info"\nmtd2: 00010000 00010000 "u-boot-env"\n')
 
 
-def test_sans_option_le_live_propose_et_n_ecrit_rien(banc):
-    mochabin_spi(banc)
-    avant = (banc["dev"] / "mtd2").read_bytes()
-    r = outil(banc, conf(banc, "mochabin"))
-    assert r.returncode == 0, r.stderr
-    assert journal(banc) == "" and (banc["dev"] / "mtd2").read_bytes() == avant
-    assert "--ecrire-spi" in r.stdout and ATTENDU["mochabin"]["installe"] in r.stdout
-    assert ATTENDU["mochabin"]["bootcmd"] in r.stdout                  # ce qui serait posé
+@pytest.mark.parametrize("carte", CARTES)
+def test_spi_non_exposee_dit_le_en_une_ligne_et_code_non_nul(tmp_path, carte):
+    r = _outil(tmp_path, _conf(tmp_path, carte), PROC_VIDE, "--afficher")
+    assert r.returncode == 5, r.stdout + r.stderr
+    assert "la SPI n'est pas exposée sous ce noyau : utilisez secubox-uboot-env.scr depuis U-Boot" in r.stdout
+    assert ATTENDU[carte]["installe"] in r.stdout and reseau_attendu(carte, "192.0.2.10") in r.stdout
 
 
-def test_avec_option_la_spi_est_ecrite_puis_relue(banc):
-    mochabin_spi(banc)
-    r = outil(banc, conf(banc, "mochabin"), "--ecrire-spi")
+def test_afficher_montre_les_commandes_et_le_script(tmp_path):
+    r = _outil(tmp_path, _conf(tmp_path, "mochabin"), PROC_MOCHABIN, "--afficher")
     assert r.returncode == 0, r.stdout + r.stderr
-    j = journal(banc)
-    assert f"{banc['dev']}/mtd2 0x0 0x10000 0x10000" in j
-    env = lit_env((banc["dev"] / "mtd2").read_bytes())
-    a = ATTENDU["mochabin"]
-    assert env["bootcmd"] == a["bootcmd"] and env["ethact"] == "mvpp2-2" and env["autoload"] == "no"
-    assert env["bootcmd_avant"] == USINE["bootcmd"]
-    assert {k: env[k] for k in a["adresses"]} == a["adresses"]
-    assert env["ethaddr"] == USINE["ethaddr"], "le reste de l'environnement est gardé"
-    assert "écrit et relu" in r.stdout
-    sauvegarde = banc["tmp"] / "travail" / "env-avant.bin"
-    assert lit_env(sauvegarde.read_bytes()) == USINE
+    assert cmd_de("mochabin") in r.stdout
+    assert ATTENDU["mochabin"]["installe"] in r.stdout and "u-boot-env" in r.stdout
 
 
-def test_bootcmd_avant_deja_present_n_est_pas_ecrase(banc):
-    mochabin_spi(banc, env={**USINE, "bootcmd_avant": "run vieux"})
-    r = outil(banc, conf(banc, "mochabin"), "--ecrire-spi")
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert lit_env((banc["dev"] / "mtd2").read_bytes())["bootcmd_avant"] == "run vieux"
+def test_commandes_seules_pour_la_fin_du_flash(tmp_path):
+    r = _outil(tmp_path, _conf(tmp_path, "mochabin"), PROC_VIDE, "--commandes")
+    assert r.returncode == 0
+    lignes = r.stdout
+    assert lignes.index(reseau_attendu("mochabin", "192.0.2.10")) < lignes.index(ATTENDU["mochabin"]["installe"])
+    assert "setenv bootcmd '" not in lignes                       # pas le script entier : les commandes
+    assert "reset" in lignes
 
 
-def test_espressobin_flash_entiere_offset_absolu(banc):
-    banc["proc"].write_text('dev:    size   erasesize  name\nmtd0: 00400000 00010000 "spi0.0"\n')
-    spi = bytearray(b"\xff" * 0x400000)
-    spi[0x3f0000:] = bloc_env(USINE)
-    (banc["dev"] / "mtd0").write_bytes(bytes(spi))
-    r = outil(banc, conf(banc, "espressobin-v7"), "--ecrire-spi")
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert f"{banc['dev']}/mtd0 0x3f0000 0x10000 0x10000" in journal(banc)
-    env = lit_env((banc["dev"] / "mtd0").read_bytes()[0x3f0000:])
-    assert env["bootcmd"] == ATTENDU["espressobin-v7"]["bootcmd"]
+def test_configuration_malformee_sans_trace(tmp_path):
+    f = tmp_path / "casse.json"
+    f.write_text(json.dumps({"carte": "mochabin"}))
+    r = _outil(tmp_path, f, PROC_VIDE, "--afficher")
+    assert r.returncode == 2 and "Traceback" not in r.stderr and "configuration" in r.stdout
 
 
-@pytest.mark.parametrize("cas", ["crc", "absente", "ambigu", "non_verifie", "sans_fw_setenv"])
-def test_refus_sans_ecriture_et_commande_console(banc, cas):
-    modif = {}
-    if cas == "crc":
-        mochabin_spi(banc, env=None)                      # SPI effacée : U-Boot tourne sur son env par défaut
-    elif cas == "absente":
-        mochabin_spi(banc)
-        banc["proc"].write_text('dev:    size   erasesize  name\nmtd0: 003e0000 00010000 "firmware"\n')
-    elif cas == "ambigu":
-        mochabin_spi(banc, autre=USINE)                   # env valide aussi à 0x180000 : U-Boot 2020.10 ?
-    elif cas == "non_verifie":
-        mochabin_spi(banc)
-        modif = {"verifie": False}
-    else:
-        mochabin_spi(banc)
-        (banc["bin"] / "fw_setenv").unlink()
-    avant = (banc["dev"] / "mtd2").read_bytes()
-    r = outil(banc, conf(banc, "mochabin", **modif), "--ecrire-spi")
-    assert r.returncode == 3, r.stdout + r.stderr
-    assert (banc["dev"] / "mtd2").read_bytes() == avant and "fw_setenv" not in journal(banc)
-    assert "SPI NON écrite" in r.stdout and ATTENDU["mochabin"]["installe"] in r.stdout
+def test_le_readme_dit_que_le_bootcmd_mochabin_enchaine_par_point_virgule():
+    doc = (ICI / "README.md").read_text()
+    assert "enchaîne par `;`" in doc and "validée au banc" in doc
 
 
-def _module_outil():
-    loader = importlib.machinery.SourceFileLoader("sbx_uboot_env", str(OUTIL))
-    spec = importlib.util.spec_from_loader("sbx_uboot_env", loader)
-    m = importlib.util.module_from_spec(spec)
-    loader.exec_module(m)
-    return m
+def test_le_readme_explique_l_abandon_de_l_ecriture_depuis_linux():
+    doc = (ICI / "README.md").read_text()
+    assert "spi-orion" in doc and "/proc/mtd" in doc and "instable" in doc
 
 
-def test_spi_instable_refus(banc, monkeypatch, capsys):
-    mochabin_spi(banc)
-    m = _module_outil()
-    lectures = iter([bloc_env(USINE), bloc_env({**USINE, "x": "1"}), bloc_env(USINE)] * 3)
-    monkeypatch.setattr(m, "lire_bloc", lambda dev, off, taille: next(lectures))
-    monkeypatch.setenv("SBX_UBOOT_ENV_PROC_MTD", str(banc["proc"]))
-    monkeypatch.setenv("SBX_UBOOT_ENV_DEV", str(banc["dev"]))
-    monkeypatch.setenv("PATH", f"{banc['bin']}:{os.environ['PATH']}")
-    assert m.main(["--conf", str(conf(banc, "mochabin")), "--ecrire-spi"]) == 3
-    assert "instable" in capsys.readouterr().out and journal(banc) == ""
+def test_sous_processus_bornes_dans_le_temps():
+    appels = re.findall(r"subprocess\.run\((.*?)\)\n", GEN.read_text(), re.S)
+    assert appels and all("timeout=" in a for a in appels)
 
 
-def test_relecture_fausse_apres_ecriture_signalee(banc):
-    mochabin_spi(banc)
-    fw = banc["bin"] / "fw_setenv"
-    fw.write_text("#!/bin/sh\nexit 0\n")                  # « réussit » sans rien écrire
-    r = outil(banc, conf(banc, "mochabin"), "--ecrire-spi")
-    assert r.returncode == 4
-    assert "relecture" in r.stdout and ATTENDU["mochabin"]["installe"] in r.stdout
+@pytest.mark.parametrize("carte", CARTES)
+def test_procedure_en_trois_lignes_par_carte_au_readme(carte):
+    doc = (ICI / "README.md").read_text()
+    bloc = doc.split(f"<!-- procedure: {carte} -->", 1)[1].split("<!-- /procedure -->", 1)[0]
+    lignes = [x for x in bloc.strip().splitlines() if x.strip()]
+    assert len(lignes) == 3, lignes
+    assert ATTENDU[carte]["installe"] in bloc and "secubox-uboot-env.scr" in lignes[1]
+
+
+# ── Image : le script est sur la partition de démarrage (FAT) ───────────────────────────────────────────────────────
+def test_l_image_porte_secubox_uboot_env_scr_et_l_alias_fix_bootcmd():
+    b = (RACINE / "image" / "build-image.sh").read_text()
+    bloc = b.split("# Script USB (#2816, #2824)", 1)[1].split("# Démonter", 1)[0]
+    assert 'board/${BOARD}/secubox-uboot-env.scr" "${MNT}/boot/secubox-uboot-env.scr"' in bloc
+    assert 'board/${BOARD}/secubox-uboot-env.cmd" "${MNT}/boot/secubox-uboot-env.cmd"' in bloc
+    assert '"${MNT}/boot/secubox-uboot-env.scr" "${MNT}/boot/fix-bootcmd.scr"' in bloc     # alias une version (#2826)
+    assert bloc.index("secubox-uboot-env.scr") < bloc.index("if command -v mkimage")
+
+
+def test_le_netboot_depose_le_script_a_cote_de_boot_scr():
+    s = (ICI / "scripts" / "build-live-netboot.sh").read_text()
+    assert 'cp "$prep" "$w/out/tftp/secubox-uboot-env.scr"' in s and 'cp "$prep" "$w/out/http/secubox-uboot-env.scr"' in s
+    assert 'cp "$prep" "$w/boot/secubox-uboot-env.scr"' in (ICI / "scripts" / "build-live-leger.sh").read_text()
 
 
 # ── sbx-netflash : la préparation est proposée après le flash, écrite seulement sur option ────────────────────────
@@ -509,36 +415,25 @@ def _termine(tmp_path, *args):
     j = tmp_path / "j"
     (bin_ / "sbx-uboot-env").write_text(f'#!/bin/sh\necho "sbx-uboot-env $*" >> "{j}"\n')
     (bin_ / "sbx-uboot-env").chmod(0o755)
-    script = 'SBX_NETFLASH_SOURCE=1 source "$0"; reboot_demande=0; ecrire_spi="$1"; termine'
+    script = 'SBX_NETFLASH_SOURCE=1 source "$0"; reboot_demande=0; termine'
     r = subprocess.run(["bash", "-c", script, str(NETFLASH), *args], capture_output=True, text=True, timeout=60,
                        env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"})
     return r, (j.read_text() if j.exists() else "")
 
 
-def test_netflash_propose_la_preparation_sans_ecrire():
+def test_netflash_affiche_les_commandes_u_boot_en_fin_de_flash():
     import tempfile
     with tempfile.TemporaryDirectory() as d:
-        r, j = _termine(Path(d), "0")
+        r, j = _termine(Path(d))
     assert r.returncode == 0, r.stderr
-    assert j.strip() == "sbx-uboot-env"
-
-
-def test_netflash_ecrit_la_spi_sur_option_explicite():
-    import tempfile
-    with tempfile.TemporaryDirectory() as d:
-        r, j = _termine(Path(d), "1")
-    assert r.returncode == 0, r.stderr
-    assert j.strip() == "sbx-uboot-env --ecrire-spi"
-    s = NETFLASH.read_text()
-    assert "--ecrire-spi) ecrire_spi=1" in s and "ecrire_spi=0" in s
+    assert j.strip() == "sbx-uboot-env --commandes"
 
 
 def test_les_lives_embarquent_l_outil_et_sa_conf():
     for b in ("build-live-netboot.sh", "build-live-leger.sh"):
         s = (ICI / "scripts" / b).read_text()
-        assert "installer/sbx-uboot-env" in s and 'uboot-env.py" live-conf "$carte"' in s, b
+        assert "installer/sbx-uboot-env" in s and 'uboot-env.py" live-conf "$carte" --serveur' in s, b
         assert "/etc/secubox/uboot-env.json" in s, b
-    assert "libubootenv-tool" in (ICI / "scripts" / "build-live-leger.sh").read_text()
 
 
 @pytest.mark.parametrize("carte", CARTES)
@@ -546,3 +441,25 @@ def test_les_echo_du_script_restent_en_ascii_simple(carte):
     for x in corps(cmd_de(carte)):
         if x.startswith("echo "):
             assert x.isascii() and not set(x) & set("'#<>"), x
+
+
+# ── M6 / M7 ──────────────────────────────────────────────────────────────────────────────────────────────────────
+def test_coupure_pendant_le_flash_dit_emmc_non_amorcable(tmp_path):
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    for nom, corps_ in {"curl": "head -c 1000 /dev/urandom; exit 18\n", "secubox-flash-emmc": "cat >/dev/null; exit 1\n",
+                        "pv": "cat\n", "sleep": "exit 0\n"}.items():
+        (bin_ / nom).write_text("#!/usr/bin/env bash\n" + corps_)
+        (bin_ / nom).chmod(0o755)
+    script = ('SBX_NETFLASH_SOURCE=1 source "$0"; fail() { echo "$*"; exit 1; }; log() { echo "$*"; }; '
+              'ecrire_flux() { :; }; st=(18 1); verifie_flux_ecrit')
+    r = subprocess.run(["bash", "-c", script, str(ICI / "installer" / "sbx-netflash")], capture_output=True, text=True,
+                       timeout=60, env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"})
+    assert r.returncode == 1
+    assert "eMMC non amorçable, relancer sbx-netflash" in r.stdout
+
+
+def test_live_script_addr_retire():
+    fichiers = [*(ICI / "board").glob("*/live.env"), *(ICI / "scripts").glob("*.sh")]
+    fautifs = [f.name for f in fichiers if "LIVE_SCRIPT_ADDR" in f.read_text()]
+    assert fautifs == []

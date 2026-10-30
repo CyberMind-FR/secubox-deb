@@ -28,25 +28,25 @@ charge_live_env() { # CARTE RACINE_DU_PAQUET → variables LIVE_* ; code ≠ 0 e
     [[ "${LIVE_PILOTE:-}" =~ ^[a-z0-9_]{1,32}$ ]] || { echo "LIVE_PILOTE invalide" >&2; return 1; }
     [[ "${LIVE_CONSOLE:-}" =~ ^tty[A-Za-z0-9]{1,8},[0-9]{4,7}$ ]] || { echo "LIVE_CONSOLE invalide" >&2; return 1; }
     [[ "${LIVE_ETHACT:-}" =~ ^[a-z0-9@_-]{1,32}$ ]] || { echo "LIVE_ETHACT invalide" >&2; return 1; }
-    for a in "${LIVE_SCRIPT_ADDR:-}" "${LIVE_KERNEL_ADDR:-}" "${LIVE_FDT_ADDR:-}" "${LIVE_RAMDISK_ADDR:-}"; do
+    for a in "${LIVE_KERNEL_ADDR:-}" "${LIVE_FDT_ADDR:-}" "${LIVE_RAMDISK_ADDR:-}"; do
         [[ "$a" =~ ^(0x[0-9a-fA-F]{6,8}|\$\{[a-z_]{1,24}\})$ ]] || { echo "adresse de chargement invalide : $a" >&2; return 1; }
     done
     [[ "${LIVE_BOOTARGS-x}" =~ ^[A-Za-z0-9_.,=@:/\ -]{0,160}$ ]] || { echo "LIVE_BOOTARGS invalide" >&2; return 1; }
 }
 
-# Préparation de l'environnement U-Boot (#3271) : fix-bootcmd.scr de la carte (board/<carte>/ du paquet installé, ou
+# Préparation de l'environnement U-Boot (#3271) : secubox-uboot-env.scr de la carte (board/<carte>/ du paquet installé, ou
 # board/<carte>/ à la racine du dépôt), refusé s'il n'est plus celui que produit scripts/uboot-env.py.
-fix_bootcmd_de() { # CARTE RACINE_DU_PAQUET → chemin du .scr sur stdout ; code ≠ 0 et motif sur stderr si refus
+uboot_env_scr_de() { # CARTE RACINE_DU_PAQUET → chemin du .scr sur stdout ; code ≠ 0 et motif sur stderr si refus
     local carte="$1" ici="$2" d
     for d in "$ici/board/$carte" "$ici/../../board/$carte"; do
-        if [ ! -f "$d/fix-bootcmd.scr" ] || [ ! -f "$d/fix-bootcmd.cmd" ]; then continue; fi
-        if ! python3 "$ici/scripts/uboot-env.py" cmd "$carte" | cmp -s - "$d/fix-bootcmd.cmd"; then
-            echo "$d/fix-bootcmd.cmd en retard sur scripts/uboot-env.py : régénérer (uboot-env.py generer)" >&2
+        if [ ! -f "$d/secubox-uboot-env.scr" ] || [ ! -f "$d/secubox-uboot-env.cmd" ]; then continue; fi
+        if ! python3 "$ici/scripts/uboot-env.py" cmd "$carte" | cmp -s - "$d/secubox-uboot-env.cmd"; then
+            echo "$d/secubox-uboot-env.cmd en retard sur scripts/uboot-env.py : régénérer (uboot-env.py generer)" >&2
             return 1
         fi
-        echo "$d/fix-bootcmd.scr"
+        echo "$d/secubox-uboot-env.scr"
         return 0
     done
-    echo "fix-bootcmd.scr introuvable pour la carte $carte" >&2
+    echo "secubox-uboot-env.scr introuvable pour la carte $carte" >&2
     return 1
 }

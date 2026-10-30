@@ -224,15 +224,13 @@
             SERVEUR = { server: { tftp_root: '/srv/secubox/netboot/tftp', http_root: '/srv/secubox/netboot/http', tftpd: 'active', nginx_sbxboot: 'yes', published_boards: 2 } };
             LIVES = { lives: [{ nom: 'mochabin-live', serveur: '192.0.2.10', http_base: 'http://192.0.2.10:8099/mochabin-live', squashfs: true,
                                 commandes: ['setenv ethact mvpp2-2; setenv autoload no', 'setenv kernel_addr_r 0x08000000; setenv fdt_addr_r 0x0c000000; setenv ramdisk_addr_r 0x0c100000', 'dhcp; setenv serverip 192.0.2.10', 'tftpboot ${loadaddr} mochabin-live/boot.scr; source ${loadaddr}'],
-                                commandes_preparation: [{ role: 'reseau', commande: 'setenv ethact mvpp2-2; setenv autoload no; dhcp; setenv serverip 192.0.2.10; tftpboot ${loadaddr} mochabin-live/fix-bootcmd.scr; source ${loadaddr}' },
-                                                        { role: 'usb', commande: 'usb start; fatload usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}' },
-                                                        { role: 'installe', commande: 'mmc dev 0; fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}' }],
+                                commandes_preparation: [{ role: 'reseau', commande: 'setenv ethact mvpp2-2; setenv autoload no; dhcp; setenv serverip 192.0.2.10; tftpboot ${loadaddr} mochabin-live/secubox-uboot-env.scr; source ${loadaddr}' },
+                                                        { role: 'installe', commande: 'mmc dev 0; fatload mmc 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}' }],
                                 images: [{ nom: 'secubox-isp-mochabin-trixie.img.gz', taille: 2669000177, sha256: '35b4…', signee: true, taille_brute: null }] },
                               { nom: 'espressobin-live', titre: 'ESPRESSObin v7', console: 'ttyMV0,115200', serveur: '192.0.2.42', http_base: 'http://192.0.2.10:8099/espressobin-live', squashfs: true,
                                 commandes: ['setenv ethact neta@30000; setenv autoload no', 'setenv kernel_addr_r 0x07000000; setenv fdt_addr_r 0x06f00000; setenv ramdisk_addr_r 0x0b000000', 'dhcp; setenv serverip 192.0.2.42', 'tftpboot ${loadaddr} espressobin-live/boot.scr; source ${loadaddr}'],
-                                commandes_preparation: [{ role: 'reseau', commande: 'setenv ethact neta@30000; setenv autoload no; dhcp; setenv serverip 192.0.2.42; tftpboot ${loadaddr} espressobin-live/fix-bootcmd.scr; source ${loadaddr}' },
-                                                        { role: 'usb', commande: 'usb start; load usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}' },
-                                                        { role: 'installe', commande: 'mmc dev 1; load mmc 1:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}' }],
+                                commandes_preparation: [{ role: 'reseau', commande: 'setenv ethact neta@30000; setenv autoload no; dhcp; setenv serverip 192.0.2.42; tftpboot ${loadaddr} espressobin-live/secubox-uboot-env.scr; source ${loadaddr}' },
+                                                        { role: 'installe', commande: 'mmc dev 1; load mmc 1:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}' }],
                                 usb: { nom: 'cle-usb.img.gz', taille: 951000000, signee: true, sha256: 'c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00', cle_publique: true },
                                 commandes_usb: [{ role: 'tester', commande: 'usb start; load usb 0:1 ${loadaddr} boot-usb.scr; source ${loadaddr}' },
                                                 { role: 'autoflash', commande: 'usb start; load usb 0:1 ${loadaddr} autoflash.scr; source ${loadaddr}' }],
@@ -489,8 +487,8 @@
                 // par scripts/uboot-env.py, servi à côté du live, livré sur la partition 1 de l'image) les remplace.
                 const prep = lv.commandes_preparation || [];
                 if (prep.length) {
-                    z.appendChild(el('p', 'note', '3. Après l’installation, l’environnement U-Boot : adresses sûres, port WAN (ethact), autoload no, bootcmd du support installé, bootcmd_netboot de secours (jamais lancé seul), saveenv ; l’ancien bootcmd reste dans bootcmd_avant. Le live le propose à la fin du flash ; avec sbx-netflash … --ecrire-spi, il l’écrit lui-même en SPI quand l’emplacement est vérifié et la SPI saine ; sinon, une fois, à la console U-Boot (compte à rebours interrompu) :'));
-                    const titres = { reseau: 'par le réseau', usb: 'depuis la clé USB', installe: 'depuis la partition installée' };
+                    z.appendChild(el('p', 'note', '3. Après l’installation, une fois, à la console U-Boot (compte à rebours interrompu) : secubox-uboot-env.scr pose l’environnement de base (adresses sûres, port WAN ethact, autoload no, bootcmd du support installé, bootcmd_netboot de secours jamais lancé seul) puis saveenv ; l’ancien bootcmd reste dans bootcmd_avant. C’est la seule voie : sous le noyau Debian de ces cartes, la SPI n’est pas exposée à Linux. Le live affiche ces commandes à la fin du flash.'));
+                    const titres = { reseau: 'depuis le netboot', installe: 'depuis la partition installée' };
                     prep.forEach(p => {
                         const t = titres[p.role] || p.role;
                         z.appendChild(el('p', 'note', '· ' + t + ' :'));

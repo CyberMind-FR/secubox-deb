@@ -262,7 +262,8 @@ Publiée avec `--publier`, la clé apparaît sur la page `/netboot/` (`cle-usb.i
 
 Le U-Boot d'usine Marvell (MOCHAbin : 2018.03, relevé le 2026-10-29) n'a pas de `scriptaddr`, garde `ethact=mvpp2-0`
 (cage SFP+ sur la MOCHAbin), un `bootcmd` TFTP/NFS et des adresses qui posent un noyau Debian (~37 Mo) sur la zone
-réservée du firmware. Un même script par carte, `fix-bootcmd.scr`, pose et enregistre (`saveenv`) :
+réservée du firmware. Un même script par carte, **`secubox-uboot-env.scr`** (source `secubox-uboot-env.cmd`), pose et
+enregistre (`saveenv`) :
 
 - les adresses sûres (`kernel_addr_r`, `fdt_addr_r`, `ramdisk_addr_r` : celles de `board/<carte>/live.env`) ;
 - `ethact` (port WAN : `mvpp2-2` sur la MOCHAbin, `neta@30000` sur l'ESPRESSObin v7) et `autoload no` ;
@@ -270,13 +271,29 @@ réservée du firmware. Un même script par carte, `fix-bootcmd.scr`, pose et en
   ESPRESSObin v7 : `boot.scr` de l'eMMC `mmc 1`, puis `boot-usb.scr` de la clé) ;
 - `bootcmd_netboot` : secours netboot, **jamais lancé seul** (un DHCP du WAN ne doit pas pouvoir démarrer la box) ;
   à la console : `setenv serverip <IP du maître>; run bootcmd_netboot` ;
-- l'ancien `bootcmd` dans `bootcmd_avant`, au premier passage seulement. Retour : `setenv bootcmd "${bootcmd_avant}"; saveenv`.
+- l'ancien `bootcmd` dans `bootcmd_avant`, seulement s'il n'existe pas déjà. Retour : `setenv bootcmd "${bootcmd_avant}"; saveenv`.
+
+Le `bootcmd` MOCHAbin enchaîne par `;` (`setenv ethact mvpp2-2; dhcp; mmc dev 0; fatload …; source …`) : un `dhcp`
+raté n'empêche pas le démarrage. C'est la séquence validée au banc le 2026-10-29 ; ne pas en changer la forme (`&&`,
+`if … then`) sans nouvel essai sur la carte.
+
+**Pourquoi pas depuis Linux (R-3271-1).** L'écriture de l'environnement par `fw_setenv` depuis le live est
+abandonnée : sous le noyau Debian 6.12 de ces cartes, sans pilote `spi-orion`, `/proc/mtd` est vide (la SPI n'est pas
+exposée), et une MOCHAbin du banc a une SPI instable. Le script, lancé depuis U-Boot (partition `/boot` de l'image ou
+dossier netboot de la carte), est la seule voie. `sbx-uboot-env` (dans le live) n'est plus qu'un diagnostic :
+`--commandes` (affiché à la fin du flash par `sbx-netflash`), `--afficher` (commandes, script de référence, et la ligne
+« la SPI n'est pas exposée sous ce noyau : utilisez secubox-uboot-env.scr depuis U-Boot », code 5, quand `/proc/mtd` ne
+liste pas le mtd attendu).
+
+**Où est le script.** À la racine de la partition de démarrage (FAT) de l'image (`image/build-image.sh` ; alias
+`fix-bootcmd.scr` le temps d'une version, pour les procédures #2826), et dans le dossier netboot de la carte, à côté de
+`boot.scr` (TFTP et HTTP, `build-live-netboot.sh`), ainsi que sur la clé du live léger.
 
 **Sources.** `board/<carte>/live.env` et `board/<carte>/uboot-env.env` (données, jamais exécutées). Le générateur
-`scripts/uboot-env.py` en tire tout ce qui se tape ou s'exécute dans U-Boot : `fix-bootcmd.cmd`/`.scr` (versionnés dans
-`board/<carte>/` à la racine du dépôt, livrés sur la partition 1 de l'image et servis par le netboot à côté du live),
-l'en-tête du `boot.cmd` du live (bloc netboot affiché par la page), `preparation.txt` et la configuration du live.
-Les blocs de cette page sont vérifiés contre lui (`tests/test_uboot_env_3271.py`). Régénérer après toute modification :
+`scripts/uboot-env.py` en tire `secubox-uboot-env.cmd`/`.scr` (versionnés dans `board/<carte>/` à la racine du dépôt ;
+le `.cmd` est la référence, le `.scr` sa compilation, vérifiée par les tests), l'en-tête du `boot.cmd` du live (bloc
+netboot affiché par la page), `preparation.txt` et la configuration du diagnostic. Les blocs de cette page sont
+vérifiés contre lui (`tests/test_uboot_env_3271.py`). Régénérer après toute modification :
 
 ```
 python3 scripts/uboot-env.py generer --mkimage ~/CyberMindStudio/secubox-openwrt/secubox-tools/openwrt/staging_dir/host/bin/mkimage
@@ -284,7 +301,23 @@ python3 scripts/uboot-env.py generer --mkimage ~/CyberMindStudio/secubox-openwrt
 
 (`mkimage` de la chaîne OpenWrt locale, 2024.07 ; `SOURCE_DATE_EPOCH` fixé, le `.scr` ne change que si le `.cmd` change.)
 
-**Netboot MOCHAbin** (console série `ttyS0`, câble sur le port WAN cuivre) :
+**Procédure, MOCHAbin** (console série `ttyS0`) :
+
+<!-- procedure: mochabin -->
+1. Après le flash, au redémarrage, interrompre le compte à rebours de U-Boot.
+2. `mmc dev 0; fatload mmc 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}` (ou depuis le netboot : `setenv ethact mvpp2-2; setenv autoload no; dhcp; setenv serverip 192.168.1.200; tftpboot ${loadaddr} mochabin-live/secubox-uboot-env.scr; source ${loadaddr}`).
+3. `reset` : la carte démarre seule sur l'eMMC, WAN initialisé ; l'ancien `bootcmd` reste dans `bootcmd_avant`.
+<!-- /procedure -->
+
+**Procédure, ESPRESSObin v7** (console série `ttyMV0`) :
+
+<!-- procedure: espressobin-v7 -->
+1. Après le flash, au redémarrage, interrompre le compte à rebours de U-Boot.
+2. `mmc dev 1; load mmc 1:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}` (ou depuis le netboot : `setenv ethact neta@30000; setenv autoload no; dhcp; setenv serverip 192.168.42.1; tftpboot ${loadaddr} espressobin-live/secubox-uboot-env.scr; source ${loadaddr}`).
+3. `reset` : la carte démarre seule sur l'eMMC (puis la clé USB en repli) ; l'ancien `bootcmd` reste dans `bootcmd_avant`.
+<!-- /procedure -->
+
+**Netboot MOCHAbin** (câble sur le port WAN cuivre) :
 
 <!-- uboot-env: netboot mochabin 192.168.1.200 -->
 ```
@@ -294,64 +327,36 @@ dhcp; setenv serverip 192.168.1.200
 tftpboot ${loadaddr} mochabin-live/boot.scr; source ${loadaddr}
 ```
 
-**Lancer la préparation**, une fois, après l'installation (U-Boot interrompu), puis `reset`. MOCHAbin :
+**Commandes exactes**, à copier (MOCHAbin, puis ESPRESSObin v7) :
 
 <!-- uboot-env: preparation mochabin 192.168.1.200 reseau -->
 ```
-setenv ethact mvpp2-2; setenv autoload no; dhcp; setenv serverip 192.168.1.200; tftpboot ${loadaddr} mochabin-live/fix-bootcmd.scr; source ${loadaddr}
-reset
-```
-
-<!-- uboot-env: preparation mochabin 192.168.1.200 usb -->
-```
-usb start; fatload usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}
+setenv ethact mvpp2-2; setenv autoload no; dhcp; setenv serverip 192.168.1.200; tftpboot ${loadaddr} mochabin-live/secubox-uboot-env.scr; source ${loadaddr}
 reset
 ```
 
 <!-- uboot-env: preparation mochabin 192.168.1.200 installe -->
 ```
-mmc dev 0; fatload mmc 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}
+mmc dev 0; fatload mmc 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}
 reset
 ```
-
-ESPRESSObin v7 :
 
 <!-- uboot-env: preparation espressobin-v7 192.168.42.1 reseau -->
 ```
-setenv ethact neta@30000; setenv autoload no; dhcp; setenv serverip 192.168.42.1; tftpboot ${loadaddr} espressobin-live/fix-bootcmd.scr; source ${loadaddr}
-reset
-```
-
-<!-- uboot-env: preparation espressobin-v7 192.168.42.1 usb -->
-```
-usb start; load usb 0:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}
+setenv ethact neta@30000; setenv autoload no; dhcp; setenv serverip 192.168.42.1; tftpboot ${loadaddr} espressobin-live/secubox-uboot-env.scr; source ${loadaddr}
 reset
 ```
 
 <!-- uboot-env: preparation espressobin-v7 192.168.42.1 installe -->
 ```
-mmc dev 1; load mmc 1:1 ${loadaddr} fix-bootcmd.scr; source ${loadaddr}
+mmc dev 1; load mmc 1:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}
 reset
 ```
 
-**Depuis le live, après le flash.** `sbx-netflash` lance `sbx-uboot-env` : il montre ce qui serait posé, l'état de la
-SPI et la commande console, sans rien écrire. Avec `sbx-netflash … --ecrire-spi` (ou `sbx-uboot-env --ecrire-spi`), il
-écrit l'environnement en SPI par `fw_setenv` (`libubootenv-tool`), **seulement si** :
-
-- l'emplacement est vérifié dans la source de U-Boot (`/etc/secubox/uboot-env.json`, tiré de `uboot-env.env`) ;
-- le mtd attendu existe : partition `u-boot-env` (MOCHAbin, `armada-7040-mochabin.dts`) ou flash entière, seul mtd
-  (ESPRESSObin v7, offset absolu `0x3f0000`) ;
-- trois lectures du bloc sont identiques (SPI instable : refus) ;
-- le CRC est valide à cet emplacement (environnement déjà enregistré par ce U-Boot) ;
-- aucun environnement valide à un autre emplacement connu (MOCHAbin sous U-Boot 2020.10 : `0x180000`).
-
-Sinon rien n'est écrit (code 3) et la commande console s'affiche. Le bloc d'avant est gardé
-(`/run/sbx-uboot-env/env-avant.bin`) et l'écriture est relue variable par variable (code 4 si elle diffère).
-
-| Carte | Environnement (source) | Linux |
-|---|---|---|
-| MOCHAbin | SPI `0x3f0000`, 64 Kio (U-Boot Globalscale 2018.03, `mvebu_armada-common.h`) ; 2020.10 : `0x180000` | `mtd` « u-boot-env », décalage 0 |
-| ESPRESSObin v7 | SPI `0x3f0000`, 64 Kio (2017.03, 2018.03, 2020.10) | flash entière, décalage `0x3f0000` |
+| Carte | Environnement (source, diagnostic seulement) |
+|---|---|
+| MOCHAbin | SPI `0x3f0000`, 64 Kio (U-Boot Globalscale 2018.03, `mvebu_armada-common.h`) ; 2020.10 : `0x180000` |
+| ESPRESSObin v7 | SPI `0x3f0000`, 64 Kio (2017.03, 2018.03, 2020.10) |
 
 ---
 
