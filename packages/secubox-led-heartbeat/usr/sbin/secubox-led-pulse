@@ -8,10 +8,19 @@
 Remplace depuis 2.3.0 l'ancien démon shell (3 LED santé/services/sécurité) et
 le minuteur secubox-healthbump : un seul écrivain sur la puce IS31FL3199.
 Voir /usr/lib/secubox-led-heartbeat/ledcouches.py et /etc/secubox/leds.toml."""
+import os
 import sys
 
 sys.path.insert(0, "/usr/lib/secubox-led-heartbeat")
 
 from ledcouches import main  # noqa: E402
 
-sys.exit(main())
+code = main()
+# Sortie sans finalisation de l'interpréteur : un vidage de flux en échec y
+# donnerait 120 au lieu du code du moteur (0, 1, 2 ou 75), vu sur gk6.
+for flux in (sys.stdout, sys.stderr):
+    try:
+        flux.flush()
+    except (OSError, ValueError):
+        pass
+os._exit(code if isinstance(code, int) else 1)

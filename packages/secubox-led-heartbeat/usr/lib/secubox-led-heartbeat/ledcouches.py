@@ -635,9 +635,18 @@ class EcrivainSysfs:
     def __init__(self, base=BASE_LEDS):
         self.base = Path(base)
 
+    def _ecrire(self, chemin, texte: str):
+        # Sans tampon Python : l'erreur (ENODEV, ENOENT après rmmod) sort ici
+        # et ne reste pas dans un tampon vidé à la sortie de l'interpréteur
+        # (sortie 120 vue sur gk6).
+        fd = os.open(chemin, os.O_WRONLY | os.O_TRUNC | os.O_CLOEXEC)
+        try:
+            os.write(fd, texte.encode())
+        finally:
+            os.close(fd)
+
     def ecrire(self, canal: str, valeur: int):
-        with open(self.base / canal / "brightness", "w") as f:
-            f.write(str(int(valeur)))
+        self._ecrire(self.base / canal / "brightness", str(int(valeur)))
 
     def liberer_declencheurs(self):
         """Retire les déclencheurs noyau (heartbeat, timer) posés par
@@ -645,8 +654,7 @@ class EcrivainSysfs:
         for i in range(1, NB_LEDS + 1):
             for c in COULEURS:
                 try:
-                    with open(self.base / f"{c}:led{i}" / "trigger", "w") as f:
-                        f.write("none")
+                    self._ecrire(self.base / f"{c}:led{i}" / "trigger", "none")
                 except OSError:
                     pass
                 time.sleep(0.05)
@@ -751,6 +759,19 @@ def boucle(cfg, ordo, rendu, horloge, attendre, duree=None, arret=lambda: False,
         attendre(cfg.pas)
 
 
+def attendre_leds(base, delai=60.0, pause=None) -> bool:
+    """Attend que le pilote expose les 9 canaux (module en cours de
+    chargement après une reprise), sans écrire. Vrai si présents."""
+    pause = pause or time.sleep
+    attendu = [Path(base, f"{c}:led{i}", "brightness")
+               for i in range(1, NB_LEDS + 1) for c in COULEURS]
+    for _ in range(max(1, int(delai / 2))):
+        if all(p.exists() for p in attendu):
+            return True
+        pause(2)
+    return all(p.exists() for p in attendu)
+
+
 def servir(cfg):
     """Démon. Après erreurs I2C répétées, sort en CODE_REPRISE : l'unité
     (RestartPreventExitStatus=75) passe en échec et OnFailure= lance
@@ -775,6 +796,9 @@ def servir(cfg):
              ", ".join(c.nom for c in cfg.couches), cfg.debit_max)
     try:
         boucle(cfg, ordo, rendu, time.monotonic, time.sleep, arret=lambda: arret["demande"])
+    except Exception:                               # jamais un code imprévu
+        log.exception("erreur inattendue du moteur : sortie %d", CODE_REPRISE)
+        arret["reprise"] = True
     finally:
         rendu.eteindre()
     return CODE_REPRISE if arret["reprise"] else 0
@@ -874,9 +898,10 @@ def main(argv=None):
                   + " ".join(f"{s}={'inconnu' if n is None else n}"
                              for s, n in zip(c.sources, niv)))
         return 0
-    if os.environ.get("SECUBOX_TEST") != "1" and not Path(cfg.base, "red:led1").exists():
-        log.error("aucune LED IS31FL3199 sous %s", cfg.base)
-        return 1
+    if os.environ.get("SECUBOX_TEST") != "1" and not attendre_leds(cfg.base):
+        log.error("aucune LED IS31FL3199 sous %s après 60 s : sortie %d (reprise)",
+                  cfg.base, CODE_REPRISE)
+        return CODE_REPRISE
     return servir(cfg)
 
 

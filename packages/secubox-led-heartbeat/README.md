@@ -9,7 +9,7 @@ Displays system health, security status, and resource usage via the IS31FL3199 I
 
 Depuis 2.3.0, l'affichage est un moteur en couches (`secubox-led-pulse`), voir plus bas.
 
-Paquet Debian : version `2.3.2-1~trixie1`, architecture `all`.
+Paquet Debian : version `2.3.3-1~trixie1`, architecture `all`.
 
 ## Contenu
 

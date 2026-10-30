@@ -418,4 +418,4 @@ def test_paquet_coherent():
     assert "disable --now" in post and "secubox-healthbump.timer" in post
     reset = (PKG / "usr" / "sbin" / "secubox-led-reset").read_text()
     assert "systemctl start secubox-healthbump.timer" not in reset
-    assert "2.3.2-1~trixie1" in (PKG / "debian" / "changelog").read_text().splitlines()[0]
+    assert "2.3.3-1~trixie1" in (PKG / "debian" / "changelog").read_text().splitlines()[0]

@@ -350,3 +350,109 @@ def test_profil_couvre_tout_ce_que_l_unite_execute_et_lit():
     assert "subprocess" not in src and "os.exec" not in src and "os.system" not in src
     # la reprise ne partage pas le profil (modprobe/rmmod/systemctl)
     assert "AppArmorProfile" not in (PKG / "systemd/secubox-led-reprise.service").read_text()
+
+
+# ---------- correction 3 : reprise sur gk6 (status=120 en boucle) ----------
+
+def _arbre_leds(base):
+    for i in (1, 2, 3):
+        for c in lc.COULEURS:
+            d = base / f"{c}:led{i}"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "brightness").write_text("0")
+            (d / "trigger").write_text("none")
+
+
+def _retirer_leds(base):
+    import shutil
+    shutil.rmtree(base)
+    base.mkdir()
+
+
+def test_leds_absentes_puis_presentes(tmp_path):
+    base = tmp_path / "leds"
+    base.mkdir()
+    appels = []
+
+    def pause(d):
+        appels.append(d)
+        if len(appels) == 3:
+            _arbre_leds(base)                 # modprobe fini
+    assert lc.attendre_leds(str(base), delai=60, pause=pause) is True
+    assert len(appels) == 3
+
+
+def test_leds_toujours_absentes_sortie_75(tmp_path, monkeypatch):
+    base = tmp_path / "leds"
+    base.mkdir()
+    monkeypatch.setattr(lc, "BASE_LEDS", str(base))
+    monkeypatch.setattr(lc.time, "sleep", lambda d: None)
+    monkeypatch.delenv("SECUBOX_TEST", raising=False)
+    assert lc.main(["--config", str(tmp_path / "absent.toml"), "servir"]) == lc.CODE_REPRISE
+
+
+def test_erreur_ecriture_puis_module_recharge(tmp_path, monkeypatch):
+    import signal as sig
+    base = tmp_path / "leds"
+    _arbre_leds(base)
+    cfg = lc.charger_config(None)
+    cfg.base = str(base)
+    n = {"k": 0}
+
+    def rmmod_au_milieu(d):
+        n["k"] += 1
+        if n["k"] == 30:
+            _retirer_leds(base)               # rmmod pendant le service
+    monkeypatch.setattr(lc.time, "sleep", rmmod_au_milieu)
+    assert lc.servir(cfg) == lc.CODE_REPRISE
+    _arbre_leds(base)                         # secubox-led-reset : modprobe
+    n["k"] = 0
+
+    def puis_arret(d):
+        n["k"] += 1
+        if n["k"] == 40:
+            os.kill(os.getpid(), sig.SIGTERM)
+    monkeypatch.setattr(lc.time, "sleep", puis_arret)
+    assert lc.servir(cfg) == 0
+    assert all((base / f"{c}:led{i}" / "brightness").read_text() == "0"
+               for i in (1, 2, 3) for c in lc.COULEURS)   # éteint à l'arrêt
+
+
+def test_exception_inattendue_sortie_75(tmp_path, monkeypatch):
+    base = tmp_path / "leds"
+    _arbre_leds(base)
+    cfg = lc.charger_config(None)
+    cfg.base = str(base)
+    monkeypatch.setattr(lc.time, "sleep", lambda d: None)
+
+    def boum(*a, **k):
+        raise RuntimeError("inattendu")
+    monkeypatch.setattr(lc, "boucle", boum)
+    assert lc.servir(cfg) == lc.CODE_REPRISE
+
+
+def test_ecriture_sysfs_sans_tampon(tmp_path):
+    d = tmp_path / "red:led1"
+    d.mkdir()
+    (d / "brightness").symlink_to("/dev/full")
+    with pytest.raises(OSError):
+        lc.EcrivainSysfs(str(tmp_path)).ecrire("red:led1", 5)
+    src = (PKG / "usr/lib/secubox-led-heartbeat/ledcouches.py").read_text()
+    ecr = src[src.index("class EcrivainSysfs"):src.index("class EcrivainTexte")]
+    assert "os.write" in ecr and "open(" not in ecr.replace("os.open(", "")
+
+
+def test_sortie_sans_vidage_python_ni_120():
+    lanceur = (PKG / "usr/sbin/secubox-led-pulse").read_text()
+    assert "os._exit" in lanceur
+
+
+def test_unite_reprise_sans_boucle():
+    u = (PKG / "systemd/secubox-led-pulse.service").read_text()
+    assert "RestartMode=direct" in u            # OnFailure seulement sur vrai échec
+    reset = (PKG / "usr/sbin/secubox-led-reset").read_text()
+    debut = reset.index("systemctl start --no-block secubox-led-pulse.service")
+    assert debut > reset.index("modprobe")       # relancé seulement à la fin
+    entre = [li for li in reset[reset.index("modprobe"):debut].splitlines()
+             if li.strip().startswith("systemctl") and "secubox-led-pulse" in li]
+    assert entre == ["systemctl reset-failed secubox-led-pulse.service 2>/dev/null || true"]

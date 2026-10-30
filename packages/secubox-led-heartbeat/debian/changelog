@@ -1,3 +1,12 @@
+secubox-led-heartbeat (2.3.3-1~trixie1) trixie; urgency=medium
+
+  * Reprise I2C (#3290, banc gk6) : ecriture sysfs sans tampon Python (os.write) ; l'erreur apres rmmod ne reste plus dans un tampon vide a la sortie, qui donnait le code 120 en boucle.
+  * secubox-led-pulse sort par os._exit avec le code du moteur ; exception inattendue = sortie 75 ; LEDs absentes au demarrage : attente de 60 s sans ecrire, puis sortie 75.
+  * Unite : RestartMode=direct, OnFailure= (reprise) seulement sur vraie sortie 75, plus a chaque redemarrage.
+  * secubox-led-reset : relance du moteur en --no-block, a la fin seulement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 22:00:00 +0100
+
 secubox-led-heartbeat (2.3.2-1~trixie1) trixie; urgency=medium
 
   * Profil AppArmor secubox-led-pulse : il s'applique aussi a ExecCondition (secubox-led-board), qui ne pouvait plus s'executer (rc=126 sur gk6, service saute). Ajout de env, bash, tr, grep en ix, lecture de /proc/device-tree, /sys/firmware/devicetree, /sys/devices/**/name, /proc/diskstats.
