@@ -1,3 +1,11 @@
+secubox-streamlit (1.7.4-1~trixie1) trixie; urgency=medium
+
+  * `frontal set --reprendre-publication <appli>` (ref #3294) : reprise d'une publication Streamlit
+    du même domaine (couture.gk2) en gardant HAProxy et la route sbxwaf ; vhost remplacé avec
+    sauvegarde, instance désactivée sans toucher à l'appli, retour arrière complet, audit.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 17:00:00 +0100
+
 secubox-streamlit (1.7.3-1~trixie1) trixie; urgency=medium
 
   * Frontaux, relecture de sécurité (ref #3294) : cible limitée à l'adresse du conteneur streamlit ;

@@ -110,6 +110,12 @@ enabled = true                      # false: kept declared, not started at boot
   `is-active`; the outcome (`actif`, `deja-actif`, `echec`, `conteneur-indisponible`) is logged and audited
   (`frontal-boot`), never blocking.
 - The sbxwaf route and the HAProxy vhost of the domain are never touched (warning if the route is missing).
+- `--reprendre-publication <app>`: when the SAME domain is already published by that Streamlit app
+  (`[instances.<id>]`), the HAProxy vhost (must be `nginx_vhosts`) and the sbxwaf route (must target nginx :9080)
+  are kept as they are; the nginx vhost is replaced (timestamped backups, `nginx -t`, rollback), the instance gets
+  `enabled = false`, `autostart = false` and loses `domain` (the app and its code stay), and the frontal is declared.
+  Any failure restores the previous TOML and vhost exactly. Refused if the app publishes another domain, or if
+  HAProxy / the route point elsewhere. Audited (`publication_reprise`, `instances_reprises`).
 - `frontal remove` does NOT restore a taken-over file: put back `sites-available/<file>.avant-frontal-<UTC>` by
   hand (and its sites-enabled link) if needed.
 - Known debt: sudoers grants `secubox` `/usr/sbin/streamlitctl` with ANY arguments; only the argument guard of
@@ -121,7 +127,8 @@ Couture on gk2 (once):
 
 ```
 streamlitctl frontal set couture --domaine couture.gk2.secubox.in --cible 10.100.0.50:8601 \
-  --unite atelier-partage-web.service --sante /healthz --reprendre atelier-couture.conf --par gk2 --apply
+  --unite atelier-partage-web.service --sante /healthz --reprendre atelier-couture.conf \\
+  --reprendre-publication atelier-partage-1 --par gk2 --apply
 ```
 
 ## Sécurité : ce que le conteneur isole, et ce qu'il n'isole pas (#3247)

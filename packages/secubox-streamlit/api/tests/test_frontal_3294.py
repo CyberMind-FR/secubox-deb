@@ -359,3 +359,95 @@ def test_garde_fou_bash(box):
                   ["--par"]):
         r = box.ctl("frontal", "set", *COUTURE, *extra)
         assert r.returncode == 64, extra
+
+
+# ─── Reprise d'une publication Streamlit existante (gk2 : [instances.couture]) ─────────────────
+
+PUB = ('\n[apps.atelier-partage-1]\npath = "streamlit_app.py"\nenabled = true\nautostart = false\n'
+       '\n[instances.couture]\napp = "atelier-partage-1"\nport = 8529\nenabled = true\nautostart = true\n'
+       'emancipated = true\ndomain = "couture.gk2.secubox.in"\n')
+
+
+def _gk2(box, backend="nginx_vhosts", route=("192.168.1.200", 9080)):
+    box.conf.write_text(box.conf.read_text() + PUB)
+    box.routes.write_text(json.dumps({"couture.gk2.secubox.in": list(route)}))
+    (box.journal.parent / "haproxy.toml").write_text(
+        f'[vhosts.couture_gk2_secubox_in]\ndomain = "couture.gk2.secubox.in"\nbackend = "{backend}"\n')
+    _pose_main(box)
+    return box.conf.read_text(), box.routes.read_text(), (box.journal.parent / "haproxy.toml").read_text()
+
+
+REPRISE = ["--reprendre", "atelier-couture.conf", "--reprendre-publication", "atelier-partage-1"]
+
+
+def test_publication_existante_sans_reprise_refusee(box):
+    _gk2(box)
+    r = box.ctl("frontal", "set", *COUTURE, "--reprendre", "atelier-couture.conf", "--apply")
+    assert r.returncode == 4 and "reprendre-publication" in r.stdout + r.stderr
+
+
+def test_reprise_de_publication_reussie(box):
+    _avant, routes, ha = _gk2(box)
+    r = box.ctl("frontal", "set", *COUTURE, *REPRISE, "--par", "gk2", "--apply")
+    assert r.returncode == 0, r.stderr + r.stdout
+    import tomllib
+    c = tomllib.loads(box.conf.read_text())
+    inst = c["instances"]["couture"]
+    assert inst["enabled"] is False and inst["autostart"] is False and "domain" not in inst
+    assert c["apps"]["atelier-partage-1"]["path"] == "streamlit_app.py"          # appli gardée
+    assert c["frontaux"]["couture"]["unite"] == "atelier-partage-web.service"
+    assert box.routes.read_text() == routes and (box.journal.parent / "haproxy.toml").read_text() == ha
+    assert (box.nginx / "sites-enabled" / "streamlit-frontal-couture.conf").is_symlink()
+    assert not (box.nginx / "sites-enabled" / "atelier-couture.conf").exists()
+    a = json.loads(box.audit.read_text().splitlines()[-1])
+    assert a["publication_reprise"] == "atelier-partage-1" and a["instances_reprises"] == ["couture"]
+
+
+def test_reprise_de_publication_nginx_t_en_echec_tout_intact(box):
+    avant, _r, _h = _gk2(box)
+    bin_ = box.env["PATH"].split(":")[0]
+    _exe(Path(bin_) / "nginx",
+         f'#!/bin/bash\n[ -e "{box.nginx}/sites-enabled/streamlit-frontal-couture.conf" ] && '
+         '{ echo "nginx: [emerg] faux" >&2; exit 1; }\nexit 0\n')
+    r = box.ctl("frontal", "set", *COUTURE, *REPRISE, "--apply")
+    assert r.returncode != 0
+    assert box.conf.read_text() == avant
+    assert (box.nginx / "sites-available" / "atelier-couture.conf").read_text() == MAIN
+    assert (box.nginx / "sites-enabled" / "atelier-couture.conf").is_symlink()
+    assert not (box.nginx / "sites-available" / "streamlit-frontal-couture.conf").exists()
+
+
+def test_reprise_de_publication_domaine_different_refusee(box):
+    avant, _r, _h = _gk2(box)
+    r = box.ctl("frontal", "set", *_remplace("--domaine", "atelier.gk2.secubox.in"),
+                "--reprendre-publication", "atelier-partage-1", "--apply")
+    assert r.returncode != 0
+    assert box.conf.read_text() == avant
+
+
+def test_reprise_de_publication_haproxy_ou_route_ailleurs_refusee(box):
+    for kw in ({"backend": "autre"}, {"route": ("10.100.0.50", 8529)}):
+        b = box
+        b.conf.write_text("[main]\nenabled = true\n")
+        for f in (b.nginx / "sites-enabled").iterdir():
+            f.unlink()
+        for f in (b.nginx / "sites-available").iterdir():
+            f.unlink()
+        avant, _r, _h = _gk2(b, **kw)
+        r = b.ctl("frontal", "set", *COUTURE, *REPRISE, "--apply")
+        assert r.returncode != 0, kw
+        assert b.conf.read_text() == avant
+
+
+def test_reprise_de_publication_exige_route_et_haproxy_presents(box):
+    avant, _r, _h = _gk2(box)
+    box.routes.write_text("{}")
+    r = box.ctl("frontal", "set", *COUTURE, *REPRISE, "--apply")
+    assert r.returncode != 0 and box.conf.read_text() == avant
+
+
+def test_reprise_de_publication_d_une_autre_appli_refusee(box):
+    avant, _r, _h = _gk2(box)
+    r = box.ctl("frontal", "set", *COUTURE, "--reprendre", "atelier-couture.conf",
+                "--reprendre-publication", "autre-appli", "--apply")
+    assert r.returncode != 0 and box.conf.read_text() == avant
