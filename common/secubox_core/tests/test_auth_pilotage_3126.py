@@ -888,6 +888,49 @@ def test_aucune_declaration_n_ouvre_un_verbe_du_ctl_l2(decl):
         for exemple in exemples(motif.pattern):
             morceaux = {p for seg in exemple.lower().split("/") for p in _re.split(r"[^a-z0-9]+", seg) if p}
             assert not morceaux & set(_VERBES_L2), (module, motif.pattern, exemple, morceaux & set(_VERBES_L2))
+    # R-L5-17 M1 : en plus des témoins, chaque motif contre les routes littérales RÉELLES du module (décorateurs FastAPI).
+    assert not _recouvrements(routes, routes_litterales(decl.parents[2])), module
+
+
+def routes_litterales(paquet: Path) -> set:
+    """(méthode, chemin) sans paramètre servis par l'API du paquet (préfixe d'APIRouter compris)."""
+    import re as _re
+    chemins = set()
+    for py in (paquet / "api").rglob("*.py"):
+        source = py.read_text(encoding="utf-8")
+        prefixes = dict(_re.findall(r"(\w+)\s*=\s*APIRouter\([^)]*prefix=\"([^\"]+)\"", source))
+        for objet, methode, chemin in _re.findall(r"@(\w+)\.(get|post|put|patch|delete)\(\s*\"([^\"]*)\"", source):
+            complet = prefixes.get(objet, "") + chemin
+            if "{" not in complet:
+                chemins.add((methode.upper(), complet))
+    return chemins
+
+
+def _recouvrements(routes, litterales) -> list:
+    """(motif, route) fautifs : une route littérale de MÊME méthode atteinte par un motif À PARAMÈTRE (elle serait servie à
+    la place de la route paramétrée, donc ouverte sans être déclarée), ou une route atteinte qui porte un verbe du ctl L2.
+    Une route littérale d'une autre méthode n'est pas atteinte : FastAPI sert alors la route paramétrée."""
+    import re as _re
+    fautes = []
+    for methodes, motifs in routes:
+        for motif in motifs:
+            parametre = "[^/]+" in motif.pattern or "{17}" in motif.pattern
+            for methode, route in litterales:
+                if methode not in methodes or not motif.fullmatch(route):
+                    continue
+                morceaux = {p for seg in route.lower().split("/") for p in _re.split(r"[^a-z0-9]+", seg) if p}
+                if parametre or morceaux & set(_VERBES_L2):
+                    fautes.append((motif.pattern, route))
+    return fautes
+
+
+def test_l_anti_recouvrement_voit_les_routes_reelles():
+    """Un motif à paramètre qui atteint une route littérale réelle (`^/services/[^/]+$` sur `/services/restart_all`), ou un
+    motif qui atteint une route réelle portant un verbe L2, est refusé."""
+    routes = auth.valider_routes_ouvertes('[[routes]]\nmethodes = ["POST"]\nchemins = ["^/services/[^/]+$", "^/etat$"]\n')
+    assert _recouvrements(routes, {("POST", "/services/restart_all"), ("POST", "/etat")}) == \
+        [("^/services/[^/]+$", "/services/restart_all")]
+    assert _recouvrements(routes, {("POST", "/etat"), ("GET", "/services/liste")}) == []
 
 
 def test_l_anti_recouvrement_voit_une_alternative_deguisee(tmp_path):
@@ -932,7 +975,8 @@ def test_routes_fermees_par_r_l5_16(module, chemin):
 def test_compteur_des_invalides_sous_verrou(monkeypatch):
     """Les requêtes servies en parallèle (pool de threads de FastAPI) comptent sans en perdre."""
     monkeypatch.setattr(auth, "_horloge", lambda: 10.0, raising=False)
-    auth._invalides.update(nombre=0, depuis=5.0)                   # fenêtre ouverte : rien n'est émis
+    # R-L5-17 M5 : un compteur propre au test, rendu par monkeypatch (aucun état laissé aux tests suivants)
+    monkeypatch.setattr(auth, "_invalides", {"nombre": 0, "depuis": 5.0})   # fenêtre ouverte : rien n'est émis
     assert isinstance(auth._verrou_invalides, type(threading.Lock()))
     req = requete()
     fils = [threading.Thread(target=lambda: [auth._compter_invalide(req, "x") for _ in range(500)]) for _ in range(8)]
