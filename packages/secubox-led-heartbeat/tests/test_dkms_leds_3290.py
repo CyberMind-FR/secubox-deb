@@ -49,10 +49,10 @@ def test_version_dkms_vient_du_changelog():
     for f in ("leds-is31fl319x.c", "Makefile"):
         assert f"kmod/{f} $(DKMS_SRC)/{f}" in RULES
     premiere = CHANGELOG.splitlines()[0]
-    assert premiere.startswith("secubox-led-heartbeat (2.3.1-1~trixie1) trixie;")
+    assert premiere.startswith("secubox-led-heartbeat (2.3.2-1~trixie1) trixie;")
     # la version amont calculée comme debian/rules le fait
     ver = re.match(r"\S+ \(([^)]+)\)", premiere).group(1)
-    assert re.sub(r"-[^-]*$", "", ver) == "2.3.1"
+    assert re.sub(r"-[^-]*$", "", ver) == "2.3.2"
 
 
 def champ(nom):

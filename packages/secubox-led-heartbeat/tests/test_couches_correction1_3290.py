@@ -257,7 +257,7 @@ def test_profil_apparmor():
     assert "/usr/sbin/secubox-led-pulse" in prof
     assert re.search(r"/sys/devices/\S*leds/\S*brightness\S* r?w,", prof)
     assert "deny /etc/secubox/secrets/** r," in prof
-    assert " ix," not in prof.replace("python3* rix", "")   # aucun autre exécutable
+    assert " ux," not in prof and " px," not in prof   # aucun exécutable hors profil
     assert "/var/cache/secubox/metrics-cache.json r," in prof
     rules = (PKG / "debian/rules").read_text()
     assert "etc/apparmor.d/secubox-led-pulse" in rules
@@ -323,3 +323,30 @@ def test_demo_service_inactif_non_relance(tmp_path):
 def test_demo_python_eteint_sur_sigterm():
     src = (PKG / "usr/lib/secubox-led-heartbeat/ledcouches.py").read_text()
     assert "signal.SIGHUP" in src
+
+
+# ---------- correction 2 : le profil couvre aussi ExecCondition (gk6, rc=126) ----------
+
+def test_profil_couvre_tout_ce_que_l_unite_execute_et_lit():
+    prof = (PKG / "apparmor/secubox-led-pulse").read_text()
+    unite = (PKG / "systemd/secubox-led-pulse.service").read_text()
+    # ExecCondition=/usr/sbin/secubox-led-board : script bash via /usr/bin/env, tr, grep
+    assert "ExecCondition=/usr/sbin/secubox-led-board" in unite
+    board = (PKG / "usr/sbin/secubox-led-board").read_text()
+    assert board.startswith("#!/usr/bin/env bash")
+    for exe in ("/usr/sbin/secubox-led-board", "/usr/bin/env", "/{,usr/}bin/bash",
+                "/{,usr/}bin/tr", "/{,usr/}bin/grep", "/usr/bin/python3*"):
+        assert re.search(re.escape(exe) + r" r?ix,", prof), exe
+    for lecture in ("@{PROC}/device-tree/** r,", "@{PROC}/stat r,", "@{PROC}/meminfo r,",
+                    "@{PROC}/diskstats r,", "/sys/class/leds/ r,",
+                    "/var/cache/secubox/metrics-cache.json r,",
+                    "/var/lib/secubox/soc/alerts.json r,", "/etc/secubox/leds.toml r,",
+                    "/usr/lib/python3/** r,", "/usr/lib/secubox-led-heartbeat/** r,",
+                    "/sys/devices/**/leds/{red,green,blue}:led[123]/brightness rw,",
+                    "/sys/devices/**/name r,"):
+        assert lecture in prof, lecture
+    # le module Python n'exécute rien (pas de subprocess, pas d'os.exec*)
+    src = (PKG / "usr/lib/secubox-led-heartbeat/ledcouches.py").read_text()
+    assert "subprocess" not in src and "os.exec" not in src and "os.system" not in src
+    # la reprise ne partage pas le profil (modprobe/rmmod/systemctl)
+    assert "AppArmorProfile" not in (PKG / "systemd/secubox-led-reprise.service").read_text()

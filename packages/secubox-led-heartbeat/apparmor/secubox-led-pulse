@@ -6,7 +6,14 @@
 # Profil AppArmor ENFORCE du moteur d'affichage des LED MOCHAbin (#3290). Root
 # (sysfs root:root) mais n'ÉCRIT que brightness et trigger des 9 canaux de la puce
 # IS31FL3199 ; LIT /proc/stat, /proc/meminfo, leds.toml et les fichiers d'état des
-# sources. Aucun shell, aucun autre exécutable, aucun réseau, aucun secret.
+# sources. Aucun réseau, aucun secret.
+#
+# Le profil s'applique à TOUTES les commandes de l'unité (AppArmorProfile=), donc
+# aussi à ExecCondition=/usr/sbin/secubox-led-board (2.3.1 : rc=126 sur gk6).
+# Exécutables, liste exhaustive :
+#   secubox-led-board : /usr/bin/env -> bash, tr, grep (garde MOCHAbin) ;
+#   secubox-led-pulse : python3 seul (ledcouches.py ne lance aucune commande).
+# secubox-led-reprise.service (modprobe, rmmod, systemctl) n'a pas ce profil.
 
 #include <tunables/global>
 
@@ -17,7 +24,18 @@ profile secubox-led-pulse /usr/sbin/secubox-led-pulse {
 
   /usr/sbin/secubox-led-pulse r,
   /usr/bin/python3* rix,
-  /usr/lib/python3/dist-packages/** r,
+
+  # Garde secubox-led-board (ExecCondition)
+  /usr/sbin/secubox-led-board rix,
+  /usr/bin/env rix,
+  /{,usr/}bin/bash rix,
+  /{,usr/}bin/tr rix,
+  /{,usr/}bin/grep rix,
+  @{PROC}/device-tree/ r,
+  @{PROC}/device-tree/** r,
+  /sys/firmware/devicetree/** r,           # cible de /proc/device-tree
+  /sys/devices/**/name r,                  # repli : /sys/class/leds/*/device/name
+  /usr/lib/python3/** r,
   /usr/lib/python3.*/** r,
   /usr/lib/secubox-led-heartbeat/ r,
   /usr/lib/secubox-led-heartbeat/** r,
@@ -27,6 +45,7 @@ profile secubox-led-pulse /usr/sbin/secubox-led-pulse {
 
   @{PROC}/stat r,
   @{PROC}/meminfo r,
+  @{PROC}/diskstats r,                     # réservé (source E/S par disque)
 
   # Sources par défaut de leds.toml ; une source ajoutée ailleurs reste « inconnue ».
   /var/cache/secubox/metrics-cache.json r,

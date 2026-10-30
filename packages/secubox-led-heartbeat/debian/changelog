@@ -1,3 +1,9 @@
+secubox-led-heartbeat (2.3.2-1~trixie1) trixie; urgency=medium
+
+  * Profil AppArmor secubox-led-pulse : il s'applique aussi a ExecCondition (secubox-led-board), qui ne pouvait plus s'executer (rc=126 sur gk6, service saute). Ajout de env, bash, tr, grep en ix, lecture de /proc/device-tree, /sys/firmware/devicetree, /sys/devices/**/name, /proc/diskstats.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 21:00:00 +0100
+
 secubox-led-heartbeat (2.3.1-1~trixie1) trixie; urgency=medium
 
   * Relecture de securite du moteur en couches (#3290) : fichiers d'etat lus sans suivre de lien ni bloquer (O_NOFOLLOW|O_NONBLOCK), fichier regulier, proprietaire root ou producteur (secubox, secubox-metrics, secubox-soc), non inscriptible par tous, 1 Mio au plus.
