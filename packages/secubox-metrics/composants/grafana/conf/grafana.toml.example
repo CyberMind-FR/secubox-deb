@@ -10,7 +10,9 @@ ip           = "10.100.0.70"
 gateway      = "10.100.0.1"
 bridge       = "br-lxc"
 path         = "/data/lxc"
-debian_suite = "bookworm"
+# Suite Debian du conteneur : celle de l'hôte (dernière stable, trixie
+# aujourd'hui), jamais figée ici (#3285). Surcharge ponctuelle par
+# l'environnement SECUBOX_DEBIAN_SUITE de l'installateur.
 
 # ── Grafana daemon (inside the LXC) ───────────────────────────────────
 [grafana]
