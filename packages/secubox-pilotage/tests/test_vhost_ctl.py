@@ -489,3 +489,117 @@ def test_verrou_libre_pendant_l_espacement(banc):
     assert r.returncode == 0 and time.time() - debut < 2
     p.kill()
     p.wait()
+
+
+# --- R-L5-27 : basculement locale (relais-maillage) ⇄ distante (pilotage) ----------------------------------------------
+
+EXCL = "var/lib/secubox-pilotage-pages/exclusions-relais.json"
+IP_PAIR = "10.10.0.5"
+
+
+def relais_factice(banc):
+    """secubox-relais-maillage factice : relayer/retirer par les VRAIS haproxyctl (wrapper du banc) et la table des routes."""
+    script(banc.bin / "secubox-relais-maillage", f'''echo "secubox-relais-maillage $*" >> {banc.journal}
+[ -e {banc.r}/ECHEC_RELAIS_$1 ] && exit 1
+case "$1" in
+  retirer)
+    nom=$({banc.bin}/haproxyctl vhost list | python3 -c 'import json,sys; print(" ".join(v["name"] for v in json.load(sys.stdin)["vhosts"] if v["domain"]==sys.argv[1]))' "$2")
+    [ -n "$nom" ] && {banc.bin}/haproxyctl vhost remove "$nom" >/dev/null
+    python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); d.pop(sys.argv[2],None); json.dump(d,open(p,"w"))' {banc.routes} "$2" ;;
+  relayer)
+    {banc.bin}/haproxyctl vhost add "$2" sbxwaf_inspector true >/dev/null
+    python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); d[sys.argv[2]]=[sys.argv[3],int(sys.argv[4])]; json.dump(d,open(p,"w"))' {banc.routes} "$2" "$3" "$4" ;;
+esac
+''')
+
+
+def relayer_par_le_maillage(banc, dom=DOM, ip=IP_PAIR):
+    banc.toml.write_text(banc.toml.read_text() + f'\n[vhosts.{dom.replace(".", "_").replace("-", "_")}]\ndomain = "{dom}"\n'
+                         'backend = "sbxwaf_inspector"\nenabled = true\nssl = true\n')
+    t = json.loads(banc.routes.read_text())
+    t[dom] = [ip, 9080]
+    t["hall.gk5.secubox.in"] = [ip, 9080]          # autre nom de la box : jamais touché
+    banc.routes.write_text(json.dumps(t))
+
+
+def exclusions(banc):
+    p = banc.r / EXCL
+    return json.loads(p.read_text())["noms"] if p.exists() else []
+
+
+@pytest.fixture
+def relais(banc):
+    relais_factice(banc)
+    relayer_par_le_maillage(banc)
+    return banc
+
+
+def test_basculement_locale_vers_distante_puis_retour(relais):
+    banc = relais
+    r = banc.ctl("poser", "--acteur", "alice", "gk5", entree=PAGES)
+    assert r.returncode == 0, r.stdout + r.stderr
+    routes = json.loads(banc.routes.read_text())
+    assert routes[DOM] == ["192.168.1.200", 9080]                 # le nom vise désormais le nginx du maître
+    assert routes["hall.gk5.secubox.in"] == [IP_PAIR, 9080]       # les autres noms de la box intacts
+    assert banc.toml.read_text().count(f'domain = "{DOM}"') == 1  # jamais deux vhosts pour un nom
+    assert exclusions(banc) == [DOM]
+    assert f"secubox-relais-maillage retirer {DOM}" in banc.appels()
+    reg = registre(banc)["domaines"][DOM]
+    assert reg["repris_de"] == "relais-maillage" and reg["route_avant"] == [IP_PAIR, 9080]
+    a = [x for x in banc.audit() if x["evenement"] == "pilotage_vhost_basculer"]
+    assert a[-1]["sens"] == "distante" and a[-1]["resultat"] == "ok" and a[-1]["acteur"] == "alice"
+    # retour : le pilotage rend le nom à relais-maillage
+    r = banc.ctl("retirer", "--acteur", "alice", "gk5")
+    assert r.returncode == 0, r.stdout + r.stderr
+    routes = json.loads(banc.routes.read_text())
+    assert routes[DOM] == [IP_PAIR, 9080] and routes["hall.gk5.secubox.in"] == [IP_PAIR, 9080]
+    assert exclusions(banc) == [] and not banc.conf().exists()
+    assert banc.toml.read_text().count(f'domain = "{DOM}"') == 1
+    assert DOM not in registre(banc)["domaines"]
+    a = [x for x in banc.audit() if x["evenement"] == "pilotage_vhost_basculer"]
+    assert a[-1]["sens"] == "locale" and a[-1]["resultat"] == "ok"
+
+
+@pytest.mark.parametrize("panne", ["relais_retirer", "nginx", "haproxy_add"])
+def test_echec_au_milieu_etat_locale_intact(relais, panne):
+    banc = relais
+    routes_avant = json.loads(banc.routes.read_text())
+    if panne == "relais_retirer":
+        (banc.r / "ECHEC_RELAIS_retirer").touch()
+    elif panne == "nginx":
+        (banc.r / "ECHEC_T").touch()
+    else:
+        (banc.r / "data/haproxy/certs/*.gk5.secubox.in.pem").unlink()   # certificat impossible après la reprise
+    r = banc.ctl("poser", "gk5", entree=PAGES)
+    assert r.returncode == 1
+    assert json.loads(banc.routes.read_text()) == routes_avant
+    assert banc.toml.read_text().count(f'domain = "{DOM}"') == 1
+    assert exclusions(banc) == [] and not banc.conf().exists()
+    reg = registre(banc)
+    assert reg is None or DOM not in reg["domaines"]
+    a = [x for x in banc.audit() if x["evenement"] == "pilotage_vhost_basculer"]
+    assert any(x["sens"] == "distante" and x["resultat"] == "echec" for x in a)
+    if panne != "relais_retirer":   # le relais avait été retiré : son retour est audité
+        assert a[-1]["sens"] == "locale" and a[-1]["resultat"] == "ok"
+
+
+def test_domaine_porte_par_un_tiers_refuse_meme_vers_un_pair(banc):
+    relais_factice(banc)
+    ajouter_vhost_etranger(banc, DOM)    # vhost manuel vers nginx_vhosts : ni relais-maillage ni pilotage
+    r = banc.ctl("poser", "gk5", entree=PAGES)
+    assert r.returncode == 1 and "déjà" in json.loads(r.stdout)["erreur"]
+    assert not any(x.startswith("secubox-relais-maillage") for x in banc.appels())
+
+
+def test_route_vers_un_pair_mais_server_nginx_etranger_refuse(relais):
+    banc = relais
+    (banc.r / "etc/nginx/conf.d/autre.conf").write_text(f"server {{ listen 9080; server_name {DOM}; }}\n")
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 1
+    assert not any(x.startswith("secubox-relais-maillage") for x in banc.appels())
+
+
+def test_exclusions_fichier_root(relais):
+    banc = relais
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 0
+    st = (banc.r / EXCL).stat()
+    assert stat.S_IMODE(st.st_mode) == 0o644 and st.st_uid == os.getuid()

@@ -300,6 +300,20 @@ HAProxy TLS 1.3 → sbxwaf → nginx.
   `aud = admin.<box>.secubox.in`, `iss = secubox-pilotage-vhost`, `scope = pilotage-vhost`, même `sub`/`jti`, `exp` ≤ maître et ≤ 4 h.
   Aucun cookie. Session du maître close ou administrateur déchu entre-temps : 401/403. Débit : 10 émissions par administrateur et
   10 échanges par adresse et par minute (429).
+- **Basculement locale ⇄ distante** (R-L5-27) : jamais deux vhosts pour un nom. « Locale » : `secubox-relais-maillage` relaie
+  `admin.<box>` vers le nginx de la box (vhost HAProxy vers sbxwaf_inspector, route sbxwaf vers l'IP maillée 10.10.0.x du pair).
+  « Distante » : le pilotage le sert. Source de vérité : la déclaration `Interface = "distante"` de l'inventaire (plan) + le
+  registre root. `poser` d'un nom non marqué mais EXACTEMENT porté par relais-maillage (et par rien d'autre : aucun server nginx
+  d'ici) : exclusion écrite d'abord (`/var/lib/secubox-pilotage-pages/exclusions-relais.json`, root 0644, que relais-maillage
+  honore pour les seuls noms `admin.<box>.secubox.in`), marque avec `repris_de` et `route_avant`, `secubox-relais-maillage retirer
+  <dom>` (vérifié), puis la pose normale ; échec à n'importe quelle étape ⇒ retour « locale » (retrait de ce que le pilotage a
+  posé, exclusion levée, `secubox-relais-maillage relayer <dom> <ip> <port>`, marque ôtée). `retirer` d'un nom repris : retrait
+  du vhost pilotage puis même retour, immédiat (sinon à la passe suivante du relais, l'exclusion étant levée). Audit
+  `pilotage_vhost_basculer` (`sens` distante|locale, `resultat`, `route`). Un nom porté par autre chose (vhost manuel, autre
+  module, route vers une autre adresse) reste refusé (C2). Les autres noms de la box (hall, acces, waf…) ne sont jamais touchés.
+- **Contrat pour T7 (panneau « Flotte » du maître, point d'entrée unique)** : box distante ⇒ ouvrir
+  `https://<admin du maître>/api/v1/pilotage/boxes/<box>/connexion-vhost?retour=/<module>/` (émission du code, puis redirection) ;
+  box locale ⇒ lien direct actuel `https://admin.<box>.secubox.in/`.
 - **Exceptions de garde** (M6, listées aussi dans `tests/publiques-assumees.txt`) : l'émission du code est un GET (lien de navigation
   porté par la session du maître) qui crée un état éphémère ; `POST /vhost/auth/echanger` n'a pas de garde (amorçage
   d'authentification) mais n'accepte qu'un code à usage unique ≤ 60 s émis sous `require_jwt`, avec un débit par adresse.

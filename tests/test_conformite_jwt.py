@@ -106,6 +106,19 @@ def _routes_du_fichier(chemin: Path):
     except SyntaxError:  # fichier non-Python valide : rien à dire dessus
         return
 
+    # Listes de gardes NOMMÉES (`garde = [Depends(require_jwt)]`, puis `dependencies=garde`) : forme de secubox-pilotage.
+    # Un nom n'est une garde que si TOUTES ses affectations dans le fichier en contiennent une.
+    affectations: dict = {}
+    for n in ast.walk(arbre):
+        if isinstance(n, ast.Assign):
+            for cible in n.targets:
+                if isinstance(cible, ast.Name):
+                    affectations.setdefault(cible.id, []).append(any(_est_garde(x) for x in ast.walk(n.value)))
+    gardes_nommees = {nom for nom, vus in affectations.items() if vus and all(vus)}
+
+    def _garde_ou_nom(x: ast.AST) -> bool:
+        return _est_garde(x) or (isinstance(x, ast.Name) and x.id in gardes_nommees)
+
     for noeud in ast.walk(arbre):
         if not isinstance(noeud, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -126,7 +139,8 @@ def _routes_du_fichier(chemin: Path):
                 continue
             route = route or "(prefixe du routeur)"
 
-            deco_garde = any(_est_garde(n) for n in ast.walk(deco))
+            deco_garde = any(_est_garde(n) for n in ast.walk(deco)) or any(
+                kw.arg == "dependencies" and _garde_ou_nom(kw.value) for kw in deco.keywords)
             yield deco.func.attr.upper(), route, (deco_garde or signature_gardee)
 
 
@@ -227,6 +241,24 @@ def test_le_scanner_voit_les_deux_formes_de_garde(tmp_path):
     assert vu[("GET", "/a")] is True, "dependencies=[...] non reconnu"
     assert vu[("POST", "/b")] is True, "user=Depends(...) non reconnu"
     assert vu[("GET", "/c")] is False, "route nue non détectée"
+
+
+def test_le_scanner_resout_une_liste_de_gardes_nommee(tmp_path):
+    """`garde = [Depends(require_jwt)]` puis `dependencies=garde` (forme de secubox-pilotage) : gardée ; un nom sans garde, non."""
+    f = tmp_path / "main.py"
+    f.write_text(
+        "def creer():\n"
+        "    garde = [Depends(require_jwt)]\n"
+        "    vide = []\n"
+        "    @app.get('/a', dependencies=garde)\n"
+        "    async def a(): ...\n"
+        "    @app.get('/b', dependencies=vide)\n"
+        "    async def b(): ...\n",
+        encoding="utf-8",
+    )
+    vu = {(m, r): g for m, r, g in _routes_du_fichier(f)}
+    assert vu[("GET", "/a")] is True, "dependencies=<liste nommée de gardes> non reconnu"
+    assert vu[("GET", "/b")] is False, "liste nommée sans garde prise pour une garde"
 
 
 def test_publiques_assumees_sans_ligne_morte():

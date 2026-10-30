@@ -1,3 +1,12 @@
+secubox-pilotage (0.4.3-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 5, correction 3/5 (R-L5-27, ref #3126) : basculement par box locale (secubox-relais-maillage) ⇄ distante
+    (pilotage) pour admin.<box>, jamais deux vhosts pour un nom : exclusion root lue par le relais, retrait par son
+    outil, marque de reprise, retour arrière symétrique en cas d'échec et au retrait, audit pilotage_vhost_basculer ;
+    nom porté par un tiers toujours refusé. Routes du canal des agents déclarées dans tests/publiques-assumees.txt.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 00:30:00 +0100
+
 secubox-pilotage (0.4.2-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 5, correction 2/5 (R-L5-26, ref #3126) : registre de propriété des vhosts dans l'arbre root des pages

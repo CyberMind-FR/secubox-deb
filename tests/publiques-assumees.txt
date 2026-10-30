@@ -108,3 +108,8 @@ secubox-webos GET /waf/qui-frappe       # caracterisation d'attaquants, deja agr
 secubox-webos GET /actions/{module}/{action} # A CONFIRMER — un GET nomme « actions » sur un routeur public : a relire
 secubox-autoload POST /enrol            # preuve = le jeton a usage unique (128 bits, refus uniforme, essais limites par source, #2190)
 secubox-pilotage POST /vhost/auth/echanger   # amorçage du vhost d'une box légère (#3126 L5) : code à usage unique ≤ 60 s émis sous require_jwt du maître, lié box+admin+jti, débit par adresse ; joint par le seul server nginx de la box
+secubox-pilotage GET /canal/v1/requetes      # canal TR-369 des agents (#3126) : socket 0660 www-data, jointe par le seul écouteur nginx des IP de tunnel ; box identifiée par l'adresse WireGuard du pair (marque X-SecuBox-Pilotage-Tunnel exigée, 403 audité sinon)
+secubox-pilotage POST /canal/v1/bonjour      # idem canal des agents : identité = adresse du tunnel, jamais un jeton (l'agent n'en a pas)
+secubox-pilotage POST /canal/v1/http         # idem canal des agents : HTTP_RESP d'une requête émise par le maître, msg_id attendu
+secubox-pilotage POST /canal/v1/notifs       # idem canal des agents
+secubox-pilotage POST /canal/v1/reponses     # idem canal des agents

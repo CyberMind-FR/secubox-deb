@@ -41,7 +41,7 @@ import time
 import tomllib
 
 LIB = "/usr/lib/secubox/pilotage"
-COMMANDES = {"nginx": "/usr/sbin/nginx", "systemctl": "/usr/bin/systemctl", "haproxyctl": "/usr/sbin/haproxyctl",
+COMMANDES = {"secubox-relais-maillage": "/usr/sbin/secubox-relais-maillage", "nginx": "/usr/sbin/nginx", "systemctl": "/usr/bin/systemctl", "haproxyctl": "/usr/sbin/haproxyctl",
              "secubox-waf-route": "/usr/sbin/secubox-waf-route", "certbot": "/usr/bin/certbot",
              "secubox-pilotage-www": "/usr/sbin/secubox-pilotage-www"}
 RE_ACTEUR = re.compile(r"[a-z_][a-z0-9_.@-]{0,63}")
@@ -464,6 +464,12 @@ def migrer_registre(ctx):
 
 def vhost_haproxy(ctx, dom):
     """Nom de la table du vhost `dom` tel que haproxyctl le connaît (I5 : jamais recalculé), None s'il n'existe pas."""
+    v = vhost_info(ctx, dom)
+    return v["name"] if v else None
+
+
+def vhost_info(ctx, dom):
+    """{name, backend} du vhost `dom` selon `haproxyctl vhost list`, None s'il n'existe pas."""
     p = ctx.lancer("haproxyctl", "vhost", "list")
     try:
         d = json.loads(p.stdout.decode("utf-8")) if p.returncode == 0 else None
@@ -471,10 +477,93 @@ def vhost_haproxy(ctx, dom):
         d = None
     if not isinstance(d, dict) or not isinstance(d.get("vhosts"), list):
         raise Erreur("haproxyctl vhost list illisible")
-    noms = [v.get("name") for v in d["vhosts"] if isinstance(v, dict) and v.get("domain") == dom]
-    if len(noms) > 1:
+    vs = [v for v in d["vhosts"] if isinstance(v, dict) and v.get("domain") == dom]
+    if len(vs) > 1:
         raise Erreur(f"{dom} déclaré plusieurs fois dans HAProxy")
-    return noms[0] if noms and isinstance(noms[0], str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", noms[0]) else None
+    if not vs or not isinstance(vs[0].get("name"), str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", vs[0]["name"]):
+        return None
+    return {"name": vs[0]["name"], "backend": str(vs[0].get("backend") or "")}
+
+
+def lire_route(ctx, dom):
+    try:
+        with open(ctx.routes) as f:
+            t = json.load(f)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        raise Erreur("table des routes sbxwaf illisible") from None
+    return t.get(dom) if isinstance(t, dict) else None
+
+
+# --- Basculement locale (relais-maillage) ⇄ distante (pilotage), R-L5-27 -------------------------------------------
+
+RE_IP_MAILLAGE = re.compile(r"10\.10\.0\.([0-9]{1,3})")
+
+
+def tenu_par_relais(ctx, dom, box):
+    """(ip, port) si `admin.<box>` est EXACTEMENT ce que pose secubox-relais-maillage (vhost HAProxy vers sbxwaf_inspector, route
+    sbxwaf vers l'IP maillée d'un pair wg-mesh 10.10.0.x, aucun server nginx d'ici pour ce nom) ; None sinon (tiers : refus)."""
+    v, route = vhost_info(ctx, dom), lire_route(ctx, dom)
+    if v is None or v["backend"] != BACKEND_WAF or not isinstance(route, list) or len(route) != 2:
+        return None
+    ip, port = route
+    m = RE_IP_MAILLAGE.fullmatch(ip) if isinstance(ip, str) else None
+    if m is None or not 1 <= int(m.group(1)) <= 254 or isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        return None
+    if nginx_etranger(ctx, dom, box):
+        return None
+    return ip, port
+
+
+def lire_exclusions(ctx):
+    dfd = _dossier_registre(ctx)
+    if dfd is None:
+        return []
+    try:
+        brut = _lire_fichier_root(ctx, dfd, "exclusions-relais.json")
+    finally:
+        os.close(dfd)
+    try:
+        d = json.loads(brut) if brut else {}
+    except ValueError:
+        raise Erreur("exclusions du relais illisibles") from None
+    return sorted({n for n in (d.get("noms") or []) if isinstance(n, str)}) if isinstance(d, dict) else []
+
+
+def ecrire_exclusions(ctx, noms):
+    """Liste des noms `admin.<box>` que secubox-relais-maillage ne doit plus relayer (fichier root 0644, même règle que le registre ;
+    relais-maillage n'honore que des noms admin.<box>.secubox.in exacts)."""
+    dfd = _dossier_registre(ctx, creer=True)
+    os.close(dfd)
+    ecrire_atomique(os.path.join(ctx.registre_dossier, "exclusions-relais.json"),
+                    (json.dumps({"noms": sorted(set(noms))}, indent=2) + "\n").encode(), 0o644)
+
+
+def vers_locale(ctx, box, dom, ip, port, acteur_motif=None):
+    """Rend le nom à relais-maillage : retrait de ce que le pilotage a posé (nginx, route, vhost), exclusion levée, relais rétabli
+    par SON outil. Rend vrai si tout est revenu ; audité (pilotage_vhost_basculer, sens=locale)."""
+    ok = True
+    try:
+        if os.path.lexists(conf_de(ctx, box)):
+            nginx_echanger(ctx, conf_de(ctx, box), None)
+    except Erreur:
+        ok = False
+    try:
+        routes_retirer(ctx, dom)
+        nom = vhost_haproxy(ctx, dom)
+        if nom is not None and ctx.lancer("haproxyctl", "vhost", "remove", nom).returncode != 0:
+            ok = False
+        ecrire_exclusions(ctx, [n for n in lire_exclusions(ctx) if n != dom])
+    except Erreur:
+        ok = False
+    if ctx.lancer("secubox-relais-maillage", "relayer", dom, ip, str(port)).returncode != 0:
+        ok = False   # l'exclusion est levée : la passe suivante de relais-maillage reprendra le nom
+    if ctx.lancer("haproxyctl", "generate", "--allow-shrink").returncode != 0 or ctx.lancer("haproxyctl", "reload").returncode != 0:
+        ok = False
+    auditer(ctx, "pilotage_vhost_basculer", box=box, domaine=dom, sens="locale", resultat="ok" if ok else "echec",
+            motif=acteur_motif, route=f"{ip}:{port}")
+    return ok
 
 
 def route_presente(ctx, dom):
@@ -599,6 +688,7 @@ def poser(ctx, box, pages):
     dom = V.domaine(box)
     if box in noms_reserves(ctx):
         raise Erreur(f"nom réservé : {box} (maître, www, api, admin, apt ou module)")
+    reprise, bascule = None, False
     try:
         reg = lire_registre(ctx)
         marque = dom in reg["domaines"]
@@ -606,12 +696,25 @@ def poser(ctx, box, pages):
             # M5 : HAProxy en conteneur (lxc-attach) n'est pas rechargeable depuis l'unité durcie du ctl (ProtectSystem=strict)
             raise Erreur("HAProxy en mode lxc : non pris en charge par secubox-pilotage-vhost (mode native requis)")
         if not marque:
-            # C2 : un domaine déjà servi hors du pilotage n'est jamais pris (ni sa route, ni son vhost, ni son certificat)
+            # C2 : un domaine déjà servi hors du pilotage n'est jamais pris (ni sa route, ni son vhost, ni son certificat)…
             if vhost_haproxy(ctx, dom) is not None or route_presente(ctx, dom) or nginx_etranger(ctx, dom, box) \
                     or os.path.lexists(os.path.join(ctx.certs, f"{dom}.pem")):
-                raise Erreur(f"{dom} est déjà servi hors du pilotage : refus")
-            reg["domaines"][dom] = {"box": box, "depuis": int(ctx.maintenant)}
+                # … sauf s'il est EXACTEMENT l'exposition relayée de secubox-relais-maillage : basculement (R-L5-27)
+                reprise = tenu_par_relais(ctx, dom, box)
+                if reprise is None:
+                    raise Erreur(f"{dom} est déjà servi hors du pilotage : refus")
+            entree = {"box": box, "depuis": int(ctx.maintenant)}
+            if reprise is not None:
+                entree.update({"repris_de": "relais-maillage", "route_avant": list(reprise)})
+                # exclusion AVANT le retrait : relais-maillage ne recrée pas le nom entre deux étapes
+                ecrire_exclusions(ctx, [*lire_exclusions(ctx), dom])
+            reg["domaines"][dom] = entree
             ecrire_registre(ctx, reg)   # marque AVANT toute création : un échec plus loin reste retirable
+            if reprise is not None:
+                bascule = True
+                if ctx.lancer("secubox-relais-maillage", "retirer", dom).returncode != 0 or vhost_haproxy(ctx, dom) is not None \
+                        or route_presente(ctx, dom):
+                    raise Erreur("secubox-relais-maillage retirer en échec : nom laissé au relais")
         composees, absentes = [], []
         for paquet, version in pages:
             mods = modules_de(ctx, paquet, version)
@@ -638,7 +741,20 @@ def poser(ctx, box, pages):
                 raise Erreur("HAProxy n'a pas rechargé")
     except Erreur as e:
         auditer(ctx, "pilotage_vhost_poser", box=box, domaine=dom, resultat="echec", motif=str(e))
+        if reprise is not None:
+            # échec à n'importe quelle étape du basculement : retour à l'état « locale » (relais-maillage), marque ôtée
+            auditer(ctx, "pilotage_vhost_basculer", box=box, domaine=dom, sens="distante", resultat="echec", motif=str(e))
+            if bascule:
+                vers_locale(ctx, box, dom, *reprise, acteur_motif="retour après échec")
+            else:
+                ecrire_exclusions(ctx, [n for n in lire_exclusions(ctx) if n != dom])
+            reg = lire_registre(ctx)
+            reg["domaines"].pop(dom, None)
+            ecrire_registre(ctx, reg)
         raise
+    if reprise is not None:
+        auditer(ctx, "pilotage_vhost_basculer", box=box, domaine=dom, sens="distante", resultat="ok",
+                route=f"{reprise[0]}:{reprise[1]}")
     deja = not change and not regen and not route.stdout.strip()
     auditer(ctx, "pilotage_vhost_poser", box=box, domaine=dom, resultat="deja" if deja else "ok",
             pages=len(composees), absentes=absentes or None)
@@ -661,12 +777,16 @@ def retirer(ctx, box):
             if ctx.lancer("haproxyctl", "generate", "--allow-shrink").returncode != 0 or \
                     ctx.lancer("haproxyctl", "reload").returncode != 0:
                 raise Erreur("HAProxy n'a pas rechargé : le nom peut rester servi jusqu'au prochain « haproxyctl generate »")
-        reg["domaines"].pop(dom, None)
+        entree = reg["domaines"].pop(dom, None) or {}
         ecrire_registre(ctx, reg)
     except Erreur as e:
         auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="echec", motif=str(e))
         raise
     auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="ok")
+    avant = entree.get("route_avant")
+    if entree.get("repris_de") == "relais-maillage" and isinstance(avant, list) and len(avant) == 2:
+        # distante → locale (R-L5-27) : le nom revient à relais-maillage, tout de suite (sinon à sa passe suivante)
+        vers_locale(ctx, box, dom, str(avant[0]), int(avant[1]))
     return {"ok": True, "box": box, "domaine": dom}
 
 
