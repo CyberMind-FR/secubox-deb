@@ -1,3 +1,11 @@
+secubox-p2p (1.20.1-1~trixie1) trixie; urgency=medium
+
+  * Relais du maillage (R-L5-33, ref #3126) : plan d'exposition du pilotage lu seulement pour un pair sans webos, jamais de
+    retrait de nom venu du plan ; dossier et fichier au compte secubox-pilotage ou root ; au plus nouveaux_noms_max (3)
+    nouveaux noms par passe et par box ; suffixe dérivé de la zone du relais ; python3 -I.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 05:00:00 +0100
+
 secubox-p2p (1.20.0-1~trixie1) trixie; urgency=medium
 
   * Relais du maillage (#3126 L5 tâche 6, E4, ref #3126) : synchroniser lit les noms d'un pair connu du pilotage dans

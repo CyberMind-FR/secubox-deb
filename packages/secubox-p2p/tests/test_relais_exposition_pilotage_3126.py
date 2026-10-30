@@ -24,6 +24,7 @@ class RelaisPilote(Relais):
         super().__init__(tmp)
         self.dossier = self.r / "var/lib/secubox/pilotage"
         self.dossier.mkdir(parents=True)
+        os.chmod(self.dossier, 0o750)
         self.plan = self.dossier / "exposition.json"
         log = f'echo "$(basename "$0") $*" >> {self.journal}\n'
         noms = json.dumps({"domaine": "gk5.secubox.in", "noms": [ADMIN, HALL]})
@@ -67,11 +68,49 @@ def test_box_sans_webos_noms_relayes_depuis_le_pilotage(rel):
     assert "pilotage" in r.stdout
 
 
-def test_pilotage_prime_sur_webos_pour_un_pair_connu(rel):
+def test_webos_prime_sur_le_plan_quand_il_repond(rel):
+    """R-L5-33 I1 : le plan ne sert qu'à un pair SANS webos joignable."""
     rel.ecrire_plan(noms=(MEET,))
     sync(rel)
     t = rel.table()
-    assert t[MEET] == [IP5, 9080] and HALL not in t and ADMIN not in t
+    assert t[ADMIN] == [IP5, 9080] and t[HALL] == [IP5, 9080] and MEET not in t
+
+
+def test_box_avec_webos_et_plan_vide_noms_gardes(rel):
+    sync(rel)
+    rel.ecrire_plan(noms=())
+    for _ in range(3):
+        sync(rel)
+    t = rel.table()
+    assert t[ADMIN] == [IP5, 9080] and t[HALL] == [IP5, 9080]
+
+
+def test_box_sans_webos_plan_vide_aucun_retrait(rel):
+    rel.sans_webos()
+    rel.ecrire_plan(noms=(HALL, MEET))
+    sync(rel)
+    rel.ecrire_plan(noms=())
+    for _ in range(3):   # le retrait #3132 se fait en deux relevés : trois passes
+        sync(rel)
+    t = rel.table()
+    assert t[HALL] == [IP5, 9080] and t[MEET] == [IP5, 9080]
+
+
+def test_nouveaux_noms_bornes_par_passe(rel):
+    rel.sans_webos()
+    rel.ecrire_plan(noms=[f"s{i}.gk5.secubox.in" for i in range(10)])
+    sync(rel)
+    assert len([n for n in rel.table() if n.endswith(".gk5.secubox.in")]) == 3
+    sync(rel)
+    assert len([n for n in rel.table() if n.endswith(".gk5.secubox.in")]) == 6
+
+
+def test_nouveaux_noms_borne_reglable(rel):
+    rel.sans_webos()
+    (rel.r / "etc/secubox/relais-maillage.toml").write_text("nouveaux_noms_max = 5\n")
+    rel.ecrire_plan(noms=[f"s{i}.gk5.secubox.in" for i in range(10)])
+    sync(rel)
+    assert len([n for n in rel.table() if n.endswith(".gk5.secubox.in")]) == 5
 
 
 def test_pilotage_absent_ancien_chemin(rel):
@@ -86,10 +125,25 @@ def test_pilotage_absent_et_sans_webos_rien(rel):
     assert set(rel.table()) == {"hall.gk2.secubox.in"}
 
 
-@pytest.mark.parametrize("cas", ["json_invalide", "version", "perime", "lien", "inscriptible", "pair_inconnu", "nom_autre_box",
+@pytest.mark.parametrize("cas", ["json_invalide", "version", "perime", "futur", "geant_valide", "lien_physique",
+                                 "proprietaire_etranger", "dossier_inscriptible", "lien", "inscriptible", "pair_inconnu", "nom_autre_box",
                                  "geant", "pas_un_fichier", "boxes_pas_liste"])
-def test_plan_mauvais_ancien_chemin(rel, cas):
-    if cas == "json_invalide":
+def test_plan_mauvais_ancien_chemin(rel, cas, monkeypatch):
+    rel.sans_webos()   # le plan n'est lu que pour un pair sans webos : un plan rejeté ne doit rien relayer
+    if cas == "futur":
+        rel.ecrire_plan(releve_le=time.time() + 3600)
+    elif cas == "geant_valide":
+        rel.ecrire_plan(remplissage="x" * (1 << 20))
+    elif cas == "lien_physique":
+        rel.ecrire_plan()
+        os.link(rel.plan, rel.r / "double.json")
+    elif cas == "proprietaire_etranger":   # compte du service attendu : 4242 (racine de test), le fichier est à nous
+        rel.ecrire_plan()
+        monkeypatch.setenv("SBX_RELAIS_UID_PILOTAGE", "4242")
+    elif cas == "dossier_inscriptible":
+        rel.ecrire_plan()
+        os.chmod(rel.dossier, 0o777)
+    elif cas == "json_invalide":
         rel.ecrire_plan(brut="{pas du json")
     elif cas == "version":
         rel.ecrire_plan(brut=json.dumps({"version": 2, "boxes": []}))
@@ -113,9 +167,10 @@ def test_plan_mauvais_ancien_chemin(rel, cas):
         rel.plan.mkdir()
     elif cas == "boxes_pas_liste":
         rel.ecrire_plan(brut=json.dumps({"version": 1, "boxes": {"a": 1}}))
-    sync(rel)
+    r = rel.lancer("synchroniser", **({"SBX_RELAIS_UID_PILOTAGE": "4242"} if cas == "proprietaire_etranger" else {}))
+    assert r.returncode == 0, r.stdout + r.stderr
     t = rel.table()
-    assert t[ADMIN] == [IP5, 9080] and t[HALL] == [IP5, 9080] and MEET not in t
+    assert set(t) == {"hall.gk2.secubox.in"}
     assert "meet.gk4.secubox.in" not in t and "meet.gk7.secubox.in" not in t
 
 
@@ -123,13 +178,14 @@ def test_noms_invalides_ou_hors_domaine_ignores(rel):
     rel.sans_webos()
     rel.ecrire_plan(noms=(MEET, "hall.gk2.secubox.in", "hub.gk4.secubox.in", "evil.com", "a.b.gk5.secubox.in",
                           "HUB.gk5.secubox.in", "x" * 41 + ".gk5.secubox.in", "-x.gk5.secubox.in", "gk5.secubox.in",
-                          "wpad.gk5.secubox.in", 7, None, "a b.gk5.secubox.in", "z.gk5.secubox.in;rm"))
+                          "wpad.gk5.secubox.in", "*.gk5.secubox.in", 7, None, "a b.gk5.secubox.in", "z.gk5.secubox.in;rm"))
     sync(rel)
     assert set(rel.table()) == {"hall.gk2.secubox.in", MEET}
 
 
 def test_plan_trop_de_noms_borne(rel):
     rel.sans_webos()
+    (rel.r / "etc/secubox/relais-maillage.toml").write_text("nouveaux_noms_max = 500\n")
     rel.ecrire_plan(noms=[f"s{i}.gk5.secubox.in" for i in range(200)])
     sync(rel)
     assert len([n for n in rel.table() if n.endswith(".gk5.secubox.in")]) == 64
@@ -143,6 +199,13 @@ def test_box_distante_admin_jamais_publie(rel):
     t = rel.table()
     assert ADMIN not in t and t[HALL] == [IP5, 9080]
     assert f'domain = "{ADMIN}"' not in rel.toml.read_text()
+
+
+def test_joker_seul_jamais_relaye(rel):
+    rel.sans_webos()
+    rel.ecrire_plan(noms=("*.gk5.secubox.in",))
+    sync(rel)
+    assert set(rel.table()) == {"hall.gk2.secubox.in"}
 
 
 def test_box_distante_admin_existant_jamais_retire(rel):
@@ -176,6 +239,7 @@ def test_ports_du_plan_jamais_relayes(rel):
 
 def test_synchroniser_tient_le_verrou_commun_pendant_la_lecture_du_plan(rel):
     import fcntl
+    rel.sans_webos()
     rel.ecrire_plan()
     rel.verrou.touch()
     os.chmod(rel.verrou, 0o600)
