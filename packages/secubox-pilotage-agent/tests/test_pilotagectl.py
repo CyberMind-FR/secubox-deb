@@ -348,6 +348,10 @@ def test_mains_liees_refuse_tout_sauf_releve(banc):
     assert rc == 0 and sortie == {"ok": True, "mains_liees": True}
     drapeau = banc.r / "etc/secubox/pilotage/mains-liees"
     assert drapeau.is_file() and (drapeau.stat().st_mode & 0o022) == 0      # projection lue par l'agent (L1)
+    # R-L5-19 : projection lue par le relais (L5), dans l'arbre root /etc/secubox-pilotage, posée atomiquement
+    relais = banc.r / "etc/secubox-pilotage/mains-liees"
+    assert relais.is_file() and not relais.is_symlink() and (relais.stat().st_mode & 0o777) == 0o644
+    assert ((banc.r / "etc/secubox-pilotage").stat().st_mode & 0o777) == 0o755
     for action in ACTIONS:
         _, pol, _ = banc.run("politique", action, agent=True)
         if action == "releve":
@@ -368,6 +372,7 @@ def test_mains_liees_refuse_tout_sauf_releve(banc):
     assert pol["autorise"] is False and pol["raison"] == "mains liées"
     rc, sortie, _ = banc.run("mains-liees", "off")
     assert rc == 0 and sortie == {"ok": True, "mains_liees": False}
+    assert not relais.exists()
     _, pol, _ = banc.run("politique", "reboot", agent=True)
     assert pol["autorise"] is True
     bascules = [e["etat"] for e in banc.audit() if e["evenement"] == "mains_liees"]

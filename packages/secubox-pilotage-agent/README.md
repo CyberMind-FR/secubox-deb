@@ -313,11 +313,18 @@ l'agent par le canal, qui les remet au relais local. Le relais tourne sous son *
 - **En-têtes** : seuls `Content-Type`, `Accept`, `If-*` passent ; `Authorization`, `Cookie`, `X-SecuBox-*` et le
   reste sont effacés ; le relais pose `Authorization: Bearer <jeton>` et `X-SecuBox-Pilotage-Relais`. En retour,
   jamais `Set-Cookie`.
-- **Mains liées** : portée `lecture`, ou drapeau `/etc/secubox/pilotage/mains-liees` présent → toute méthode autre
-  que GET/HEAD est refusée **423** avant tout appel.
-- **Bornes** : corps ≤ 8 Mio dans les deux sens (413), délai 30 s (504), deux appels simultanés.
-- **Audit** : chaque refus, une ligne JSON ajoutée à `/var/log/secubox/audit.log` si le compte peut y écrire
-  (fichier du compte `secubox`, jamais créé par le relais) ; sinon la même ligne au journal du service. Jamais le
+- **Mains liées** : portée `lecture`, ou drapeau `/etc/secubox-pilotage/mains-liees` → toute méthode autre que
+  GET/HEAD est refusée **423** avant tout appel. Ce drapeau est la projection du ctl root (`mains-liees on|off`),
+  dans l'arbre root (R-L5-19) : jamais `/etc/secubox/pilotage`, que le compte partagé `secubox` peut modifier.
+  Dossier ou drapeau douteux (absent, pas à root, inscriptible par d'autres, lien) : mains liées.
+- **Bornes** : corps ≤ **4 Mio** dans les deux sens (413) — écart voulu au brief (8 Mio, R-L5-19) : deux appels
+  simultanés de taille maximale tiennent sous `MemoryMax=64M` (~31 Mio de tas mesurés, `TestRelaisMemoireBornee`) ;
+  délai 30 s (504) ; deux appels simultanés, huit connexions au plus (en cours ou en attente), demande lue en 10 s ;
+  GET/HEAD avec corps et caractères de contrôle dans la requête (`%00`…) refusés (400).
+- **Audit** : chaque refus, une ligne JSON ajoutée à `/var/log/secubox/audit.log` (fichier du compte `secubox`,
+  jamais créé par le relais) grâce à l'ACL d'écriture seule posée par `secubox-pilotage-relais-acl` (root, fichier
+  vérifié par descripteur ; postinst et `ExecStartPre=-+` à chaque démarrage, la rotation la retire) ; sans ACL, la
+  même ligne au journal du service. Jamais le
   jeton, le corps, la requête ni les en-têtes.
 - **Clés** (R-L5-13, R-L5-18) : clé privée PEM PKCS#8 `/var/lib/secubox-pilotage-relais/relais.key` (0600, dossier
   0700, compte du relais), créée par le postinst **sous le compte du relais** (`runuser … sbx-pilotage-relais

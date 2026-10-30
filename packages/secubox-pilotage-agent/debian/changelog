@@ -1,3 +1,21 @@
+secubox-pilotage-agent (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 2, relecture de sécurité, correction 1/5 (R-L5-19, ref #3126) :
+    - I1 : le relais lit les mains liées UNIQUEMENT dans /etc/secubox-pilotage/mains-liees (arbre root),
+      dossier O_DIRECTORY|O_NOFOLLOW, drapeau par dir_fd O_NOFOLLOW, root et sans écriture groupe/autres ;
+      sinon (dossier absent ou douteux, drapeau douteux) : mains liées. Le ctl root y projette l'état
+      (`mains-liees on|off`, écriture atomique) ; le postinst y reporte l'état root existant.
+    - I2 : corps plafonné à 4 Mio dans les deux sens (413), écart au brief (8 Mio) pour MemoryMax=64M ; corps
+      base64 libéré dès le décodage, réponse encodée en base64 au fil de l'écriture, tampon de réponse dimensionné
+      sur Content-Length ; deux appels simultanés : ~31 Mio de tas mesurés (relais seul).
+    - Connexions bornées à 8 (en cours ou en attente), demande à lire en 10 s ; GET/HEAD avec corps : 400 ;
+      `uid=?` audité quand SO_PEERCRED échoue ; caractères de contrôle (%00…) refusés dans la requête.
+    - Audit : `secubox-pilotage-relais-acl` (root, fichier vérifié par descripteur) pose une ACL d'écriture seule
+      sur audit.log au postinst et à chaque démarrage (ExecStartPre=-+).
+    - Unité : LimitCORE=0, ProtectProc=invisible. Postinst : socket du relais non activée sans clé publique.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 18:00:00 +0100
+
 secubox-pilotage-agent (0.3.0-1~trixie1) trixie; urgency=medium
 
   * L5 « Box légère », tâche 2 (ref #3126) : relais local `sbx-pilotage-relais`.

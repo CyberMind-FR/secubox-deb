@@ -32,6 +32,7 @@ case "$1" in
     fi
     # Clé privée créée (si absente) PAR LE COMPTE DU RELAIS, jamais lue ici ; la clé publique revient par un tube
     # et root la pose (root:root 0644), par renommage atomique. Rejouée à chaque configuration : concordance garantie.
+    relais_pret=0
     if pub=$(runuser -u secubox-pilotage-relais -- /usr/sbin/sbx-pilotage-relais cle-publique); then
       case "$pub" in
         "-----BEGIN PUBLIC KEY-----"*"-----END PUBLIC KEY-----")
@@ -40,17 +41,38 @@ case "$1" in
           chown root:root "$tmp"
           chmod 0644 "$tmp"
           mv -f "$tmp" /etc/secubox-pilotage/relais.pub
+          [ -s /etc/secubox-pilotage/relais.pub ] && relais_pret=1
           ;;
         *) echo "secubox-pilotage-agent : clé publique du relais illisible, non posée" >&2 ;;
       esac
     else
       echo "secubox-pilotage-agent : clé du relais non créée : aucun jeton délégué ne sera reconnu" >&2
     fi
+    # Mise à niveau (R-L5-19) : le relais lit les mains liées dans l'arbre root ; l'état root du ctl y est projeté.
+    if [ -e /var/lib/secubox-pilotagectl/mains-liees ]; then
+      tmp=$(mktemp /etc/secubox-pilotage/.mains-liees.XXXXXX)
+      chmod 0644 "$tmp"
+      mv -f "$tmp" /etc/secubox-pilotage/mains-liees
+    else
+      rm -f /etc/secubox-pilotage/mains-liees
+    fi
+    # Ajout des refus du relais à audit.log (ACL d'écriture seule, fichier vérifié ; reposée à chaque démarrage).
+    if command -v setfacl >/dev/null 2>&1; then
+      /usr/sbin/secubox-pilotage-relais-acl \
+        || echo "secubox-pilotage-agent : ACL du journal d'audit non posée : les refus du relais iront au journal du service" >&2
+    fi
     # Chroot d'image (pas de systemd en marche) : rien à activer ici.
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload || true
       systemctl enable --now secubox-pilotage-agent.service || true
-      systemctl enable --now secubox-pilotage-relais.socket || true
+      # Minor 9 : sans clé publique posée, aucun module ne reconnaîtrait le jeton : la socket n'est pas ouverte
+      # (configuration réussie quand même, code 0 : le reste du paquet fonctionne ; relancer dpkg-reconfigure).
+      if [ "$relais_pret" = 1 ]; then
+        systemctl enable --now secubox-pilotage-relais.socket || true
+      else
+        echo "secubox-pilotage-agent : relais NON activé (clé publique absente) ; corriger puis dpkg-reconfigure secubox-pilotage-agent" >&2
+        systemctl disable --now secubox-pilotage-relais.socket 2>/dev/null || true
+      fi
       # mise à jour : le nouveau binaire doit être relancé
       if [ -n "$2" ]; then
         systemctl restart secubox-pilotage-agent.service || true

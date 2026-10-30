@@ -20,14 +20,20 @@ Group=secubox-pilotage-relais
 # connecter. Ce groupe ne lui ouvre aucun fichier : son profil AppArmor ne lit que sa clé, la clé publique, le
 # drapeau des mains liées et le nom d'hôte.
 SupplementaryGroups=secubox
+# Root (« + », hors bac à sable) : ACL d'ajout du relais sur audit.log, reposée à chaque démarrage (la rotation
+# recrée le fichier sans elle). « - » : un échec n'empêche pas le démarrage, les refus vont alors au journal.
+ExecStartPre=-+/usr/sbin/secubox-pilotage-relais-acl
 ExecStart=/usr/sbin/sbx-pilotage-relais
 AppArmorProfile=/usr/sbin/sbx-pilotage-relais
 Restart=on-failure
 RestartSec=5
-# Deux appels à la fois au plus, corps ≤ 8 Mio dans les deux sens : ~40 Mio au pire par appel.
+# Deux appels à la fois au plus, corps ≤ 4 Mio dans les deux sens (R-L5-19) : ~31 Mio de tas mesurés au pire.
 MemoryMax=64M
 Environment=GOMEMLIMIT=48MiB
 UMask=0077
+# Aucun vidage mémoire (la clé privée y serait) ; les autres processus invisibles dans /proc.
+LimitCORE=0
+ProtectProc=invisible
 
 NoNewPrivileges=yes
 CapabilityBoundingSet=

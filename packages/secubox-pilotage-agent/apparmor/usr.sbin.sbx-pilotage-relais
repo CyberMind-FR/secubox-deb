@@ -30,7 +30,8 @@
   # --- Appels : sockets des modules ; drapeau des mains liées (projection du ctl root) ; nom de la box.
   /run/secubox/ r,
   /run/secubox/*.sock rw,
-  /etc/secubox/pilotage/mains-liees r,
+  # Drapeau des mains liées : projection du ctl root dans l'arbre root (R-L5-19), jamais sous /etc/secubox.
+  /etc/secubox-pilotage/mains-liees r,
   @{PROC}/sys/kernel/hostname r,
   /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
 

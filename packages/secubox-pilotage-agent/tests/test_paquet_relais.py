@@ -62,11 +62,15 @@ def test_unite_du_relais_durcie():
         "SupplementaryGroups": "secubox",
         "ReadWritePaths": "-/var/log/secubox",
         "Requires": "secubox-pilotage-relais.socket",
+        # R-L5-19 (minor 7) : aucun vidage mémoire (clé privée), /proc des autres processus invisible.
+        "LimitCORE": "0", "ProtectProc": "invisible",
+        # Ajout à audit.log : l'ACL est reposée à chaque démarrage (la rotation recrée le fichier sans elle).
+        "ExecStartPre": "-+/usr/sbin/secubox-pilotage-relais-acl",
     }
     for k, v in attendu.items():
         assert d.get(k) == [v], (k, d.get(k))
     # /run/secubox est partagé : ni RuntimeDirectory (systemd l'effacerait à l'arrêt), ni rm de la socket (systemd la crée).
-    assert "RuntimeDirectory" not in d and "ExecStartPre" not in d
+    assert "RuntimeDirectory" not in d
     # La clé privée n'est jamais écrite par le service (créée par le postinst) : son dossier n'est pas inscriptible.
     assert "StateDirectory" not in d
     assert "secubox-pilotage-relais.socket" in d["After"][0].split()
@@ -84,7 +88,10 @@ def test_apparmor_du_relais():
     # Réseau : sockets Unix seulement, jamais inet.
     assert re.search(r"^\s*network \([^)]*\) unix stream,", code, re.M)
     assert "inet" not in code
-    for regle in ("/var/lib/secubox-pilotage-relais/relais.key rl,", "/etc/secubox-pilotage/relais.pub r,",
+    # R-L5-19 (I1) : le drapeau des mains liées est lu dans l'arbre root, JAMAIS sous /etc/secubox (compte secubox).
+    assert "/etc/secubox/pilotage" not in code
+    for regle in ("/etc/secubox-pilotage/mains-liees r,",
+                  "/var/lib/secubox-pilotage-relais/relais.key rl,", "/etc/secubox-pilotage/relais.pub r,",
                   "/run/secubox/*.sock rw,", "/var/log/secubox/audit.log w,", "@{PROC}/sys/kernel/hostname r,",
                   "deny /etc/secubox/secrets/** rwx,", "deny /etc/shadow r,"):
         assert regle in code, regle
@@ -94,6 +101,7 @@ def test_apparmor_du_relais():
 
 def test_regles_installent_le_relais():
     r = lire("debian/rules")
+    assert "install -D -m 0755 sbin/secubox-pilotage-relais-acl $(P)/usr/sbin/secubox-pilotage-relais-acl" in r
     assert "go build -ldflags \"-s -w -X main.version=$(VERSION)\" -o debian/sbx-pilotage-relais ./cmd/sbx-pilotage-relais" in r
     for m in ("install -D -m 0755 debian/sbx-pilotage-relais $(P)/usr/sbin/sbx-pilotage-relais",
               f"install -D -m 0644 {SERVICE} $(P)/lib/systemd/system/secubox-pilotage-relais.service",
@@ -111,8 +119,16 @@ def test_postinst_compte_cles_et_activation():
               "apparmor_parser -r /etc/apparmor.d/usr.sbin.sbx-pilotage-relais",
               "runuser -u secubox-pilotage-relais -- /usr/sbin/sbx-pilotage-relais cle-publique",
               "chown root:root", "chmod 0644", "/etc/secubox-pilotage/relais.pub",
-              "systemctl enable --now secubox-pilotage-relais.socket"):
+              "systemctl enable --now secubox-pilotage-relais.socket",
+              "/usr/sbin/secubox-pilotage-relais-acl"):
         assert m in p, m
+    # Minor 9 : la socket n'est activée que si la clé publique est posée.
+    bloc = p[p.index("relais_pret="):]
+    assert 'if [ "$relais_pret" = 1 ]' in bloc and bloc.index('if [ "$relais_pret" = 1 ]') < bloc.index(
+        "systemctl enable --now secubox-pilotage-relais.socket")
+    assert "[ -s /etc/secubox-pilotage/relais.pub ]" in p
+    # Mise à niveau : l'état root des mains liées est projeté dans l'arbre du relais.
+    assert "/var/lib/secubox-pilotagectl/mains-liees" in p and "/etc/secubox-pilotage/mains-liees" in p
     # La clé publique n'est posée qu'après le chargement du profil, et par root (jamais par le relais).
     assert p.index("apparmor_parser -r /etc/apparmor.d/usr.sbin.sbx-pilotage-relais") < p.index("runuser -u")
     # Jamais la clé privée dans le postinst : il ne la lit ni ne la copie.
@@ -133,7 +149,7 @@ def test_scripts_debian_posix():
 
 
 def test_version_montee_et_dependance_au_verificateur():
-    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.3.0-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.3.1-1~trixie1) trixie;")
     c = lire("debian/control")
     # Le vérificateur Ed25519 (tâche 1) est dans secubox-core 1.8.11.
     assert "secubox-core (>= 1.8.11~)" in re.search(r"^Depends:(.*)$", c, re.M).group(1)
@@ -143,3 +159,52 @@ def test_entetes_spdx_du_relais():
     fichiers = [SERVICE, SOCKET, PROFIL] + [str(f.relative_to(RACINE)) for f in (RACINE / "internal" / "relais").glob("*.go")]
     for rel in fichiers:
         assert "LicenseRef-CMSD-1.0" in lire(rel), rel
+
+
+def _banc_acl(tmp_path, monkeypatch):
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    appels = tmp_path / "appels"
+    faux = bin_ / "setfacl"
+    faux.write_text(f'#!/bin/sh\necho "$@" >> {appels}\nls -lL "$3" >> {appels}\n', encoding="utf-8")
+    faux.chmod(0o755)
+    journal = tmp_path / "audit.log"
+    journal.write_text("")
+    import os
+    import pwd
+    nom = pwd.getpwuid(os.getuid()).pw_name
+    env = {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin"}
+    def lancer(*args):
+        return subprocess.run(["python3", "-I", str(RACINE / "sbin/secubox-pilotage-relais-acl"), "--fichier", str(journal),
+                               "--proprietaire", nom, *args], env=env, capture_output=True, text=True, timeout=30)
+    return journal, appels, lancer
+
+
+def test_acl_audit_posee_sur_le_fichier_verifie(tmp_path, monkeypatch):
+    """Minor 6 : comme secubox-pilotage-audit-acl — fichier ouvert O_NOFOLLOW, vérifié sur le descripteur,
+    ACL d'ÉCRITURE seule (l'ajout O_APPEND du relais) posée sur /proc/self/fd/N."""
+    journal, appels, lancer = _banc_acl(tmp_path, monkeypatch)
+    r = lancer()
+    assert r.returncode == 0, r.stderr
+    ligne = appels.read_text().splitlines()[0]
+    assert ligne.startswith("-m u:secubox-pilotage-relais:-w- /proc/self/fd/"), ligne
+
+
+def test_acl_audit_refusee_sur_lien_ou_autre_proprietaire(tmp_path, monkeypatch):
+    journal, appels, lancer = _banc_acl(tmp_path, monkeypatch)
+    cible = tmp_path / "secret"
+    cible.write_text("")
+    journal.unlink()
+    journal.symlink_to(cible)
+    assert lancer().returncode == 1
+    journal.unlink()
+    journal.write_text("")
+    r = subprocess.run(["python3", "-I", str(RACINE / "sbin/secubox-pilotage-relais-acl"), "--fichier", str(journal),
+                        "--proprietaire", "root"], capture_output=True, text=True, timeout=30)
+    import os
+    if os.getuid() != 0:
+        assert r.returncode == 1
+    assert not appels.exists()
+    # Journal absent (box neuve) : rien à faire, succès.
+    journal.unlink()
+    assert lancer().returncode == 0

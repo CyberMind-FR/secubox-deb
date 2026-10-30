@@ -269,6 +269,7 @@ class Ctx:
         self.etat = f"{self.r}/var/lib/secubox-pilotagectl"
         self.journaux = f"{self.r}/var/log/secubox"
         self.etc_secubox = f"{self.r}/etc/secubox"
+        self.etc = f"{self.r}/etc"
         self.modules = f"{self.r}/etc/secubox/modules.d"
         self.net = f"{self.r}/sys/class/net"
         self.ancre = f"{self.r}/etc/secubox/p2p/ancre-maitre.json"
@@ -445,6 +446,39 @@ def poser_projection(ctx, liees):
                 os.close(d)
         finally:
             os.close(sec)
+    except OSError:
+        return False
+    return True
+
+
+def poser_projection_relais(ctx, liees):
+    """R-L5-19 : projection lue par le relais local (L5), dans l'arbre ROOT /etc/secubox-pilotage (dossier root 0755,
+    créé par le postinst ou ici), jamais sous /etc/secubox (compte partagé secubox). Écriture atomique par
+    descripteur ; un dossier qui n'est pas à root ou inscriptible par d'autres n'est pas touché (le relais le traite
+    alors comme « mains liées »)."""
+    try:
+        etc = os.open(ctx.etc, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            try:
+                d = os.open("secubox-pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=etc)
+            except FileNotFoundError:
+                if not liees:
+                    return True
+                os.mkdir("secubox-pilotage", 0o755, dir_fd=etc)
+                d = os.open("secubox-pilotage", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=etc)
+            try:
+                st = os.fstat(d)
+                if st.st_uid != os.geteuid() or st.st_mode & 0o022:
+                    return False
+                os.fchmod(d, 0o755)
+                if liees:
+                    ecrire(d, "mains-liees", b"", 0o644)
+                else:
+                    retirer(d, "mains-liees")
+            finally:
+                os.close(d)
+        finally:
+            os.close(etc)
     except OSError:
         return False
     return True
@@ -1147,6 +1181,8 @@ def basculer_mains(ctx, fd, liees, maintenant):
     else:
         retirer(fd, "mains-liees")
     projection = poser_projection(ctx, liees)
+    if not poser_projection_relais(ctx, liees):
+        err("projection /etc/secubox-pilotage/mains-liees non posée (dossier non fiable) ; le relais se tient en lecture")
     auditer(ctx, "mains_liees", etat="on" if liees else "off")
     res = {"ok": True, "mains_liees": liees}
     if not projection:
